@@ -32,14 +32,20 @@ describe('mobile settings system back', () => {
     expect(resolveMobileSettingsPopAction({
       nextState: createMobileSettingsHistoryState(null),
       settingsOpen: true,
-      settingsDetailView: 'skills',
-    })).toBe('back-to-list');
+      settingsDetailView: 'update',
+    })).toBe('close-settings');
 
     expect(resolveMobileSettingsPopAction({
-      nextState: null,
+      nextState: createMobileSettingsHistoryState(null),
       settingsOpen: true,
-      settingsDetailView: 'portRelay',
-    })).toBe('close-settings');
+      settingsDetailView: 'connectionStatus',
+    })).toBe('back-to-root');
+
+    expect(resolveMobileSettingsPopAction({
+      nextState: createMobileSettingsHistoryState(null),
+      settingsOpen: true,
+      settingsDetailView: 'database',
+    })).toBe('back-to-root');
 
     expect(resolveMobileSettingsPopAction({
       nextState: null,

@@ -1,19 +1,17 @@
-export type MobileSettingsHistoryDetail =
-  | 'update'
-  | 'skills'
-  | 'tokenStats'
-  | 'ccSwitch'
-  | 'database'
-  | 'portRelay'
-  | 'connectionStatus'
-  | 'debugLogs';
+import {
+  isSettingsDetailId,
+  settingsPageKind,
+  type SettingsDetailId,
+} from '../settings/settingsNavigation';
+
+export type MobileSettingsHistoryDetail = SettingsDetailId;
 
 export type MobileSettingsHistoryState = {
   wheelMakerHistory: 'mobile-settings';
   detail: MobileSettingsHistoryDetail | null;
 };
 
-export type MobileSettingsPopAction = 'back-to-list' | 'close-settings' | 'none';
+export type MobileSettingsPopAction = 'back-to-root' | 'close-settings' | 'none';
 export type MobileSettingsHistoryWriteAction = 'push' | 'replace' | 'none';
 
 const MOBILE_SETTINGS_HISTORY_MARKER = 'mobile-settings';
@@ -35,14 +33,7 @@ export function isMobileSettingsHistoryState(input: unknown): input is MobileSet
   return state.wheelMakerHistory === MOBILE_SETTINGS_HISTORY_MARKER
     && (
       state.detail === null
-      || state.detail === 'update'
-      || state.detail === 'skills'
-      || state.detail === 'tokenStats'
-      || state.detail === 'ccSwitch'
-      || state.detail === 'database'
-      || state.detail === 'portRelay'
-      || state.detail === 'connectionStatus'
-      || state.detail === 'debugLogs'
+      || isSettingsDetailId(state.detail)
     );
 }
 
@@ -84,8 +75,12 @@ export function resolveMobileSettingsPopAction({
   if (!settingsOpen) {
     return 'none';
   }
-  if (settingsDetailView !== null) {
-    return isMobileSettingsHistoryState(nextState) ? 'back-to-list' : 'close-settings';
+  const currentKind = settingsPageKind(settingsDetailView);
+  if (currentKind === 'child') {
+    return isMobileSettingsHistoryState(nextState) ? 'back-to-root' : 'close-settings';
+  }
+  if (currentKind === 'peer') {
+    return 'close-settings';
   }
   return isMobileSettingsHistoryState(nextState) ? 'none' : 'close-settings';
 }

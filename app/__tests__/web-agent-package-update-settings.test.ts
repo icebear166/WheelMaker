@@ -6,7 +6,8 @@ describe('agent package update settings UI source structure', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
 
-    expect(mainTsx).toContain("type SettingsDetailView = 'update' | 'skills' | 'tokenStats' | 'ccSwitch' | 'database' | 'portRelay' | 'connectionStatus' | 'debugLogs' | null;");
+    expect(mainTsx).toContain("} from './settings/settingsNavigation';");
+    expect(mainTsx).toContain('type SettingsDetailView = SettingsDetailId | null;');
     expect(mainTsx).toContain("settingsDetailView === 'update'");
     expect(mainTsx).toContain('renderUpdateSettingsDetail(options)');
     expect(mainTsx).not.toContain("renderSettingsSection('More'");
@@ -30,8 +31,8 @@ describe('agent package update settings UI source structure', () => {
     expect(debugSection).not.toContain("setSettingsDetailView('tokenStats')");
     expect(debugSection).not.toContain("setSettingsDetailView('ccSwitch')");
     expect(debugSection).not.toContain("setSettingsDetailView('portRelay')");
-    expect(debugSection.indexOf("setSettingsDetailView('database')")).toBeGreaterThanOrEqual(0);
-    expect(debugSection.indexOf("setSettingsDetailView('database')")).toBeLessThan(debugSection.indexOf('requestClearLocalCache'));
+    expect(debugSection.indexOf("openSettingsChild('database')")).toBeGreaterThanOrEqual(0);
+    expect(debugSection.indexOf("openSettingsChild('database')")).toBeLessThan(debugSection.indexOf('requestClearLocalCache'));
     expect(debugSection.indexOf('requestClearLocalCache')).toBeLessThan(debugSection.indexOf('handleRegistryDebugLogout'));
   });
 
@@ -340,23 +341,27 @@ describe('agent package update settings UI source structure', () => {
     expect(activityBar).toContain('codicon-cloud-download');
     expect(activityBar).toContain('codicon-graph-line');
     expect(activityBar).toContain('codicon-radio-tower');
-    expect(activityBar).toContain("openSettingsDetail('update')");
-    expect(activityBar).toContain("openSettingsDetail('tokenStats')");
+    expect(activityBar).toContain("openSettingsPeer('update')");
+    expect(activityBar).toContain("openSettingsPeer('tokenStats')");
+    expect(activityBar).toContain("openSettingsPeer('ccSwitch')");
     expect(activityBar).toContain('handleDesktopPortRelaySelect');
     expect(activityBar.indexOf("title={reconnecting ? 'Reconnecting...' : 'Refresh project'}")).toBeLessThan(
+      activityBar.indexOf('title="Settings"'),
+    );
+    expect(activityBar.indexOf('title="Settings"')).toBeLessThan(
       activityBar.indexOf('title="Update"'),
     );
+    expect(activityBar.indexOf('title="Update"')).toBeLessThan(activityBar.indexOf('title="Skills"'));
+    expect(activityBar.indexOf('title="Skills"')).toBeLessThan(activityBar.indexOf('title="Port Relay"'));
+    expect(activityBar.indexOf('title="Port Relay"')).toBeLessThan(activityBar.indexOf('title="Token Stats"'));
+    expect(activityBar.indexOf('title="Token Stats"')).toBeLessThan(activityBar.indexOf('title="CC Switch"'));
     expect(activityBar.indexOf('title="Update"')).toBeLessThan(activityBar.indexOf('title="Token Stats"'));
-    expect(activityBar.indexOf('title="Token Stats"')).toBeLessThan(activityBar.indexOf('title="Settings"'));
-    expect(activityBar.indexOf('title="Port Relay"')).toBeLessThan(
-      activityBar.indexOf("title={reconnecting ? 'Reconnecting...' : 'Refresh project'}"),
-    );
     expect(activityBar).toContain("settingsDetailView === 'update'");
     expect(activityBar).toContain("settingsDetailView === 'tokenStats'");
     expect(activityBar).toContain("settingsDetailView === 'portRelay'");
+    expect(activityBar).toContain("settingsDetailView === 'ccSwitch'");
     expect(activityBar).toContain("!isShortcutSettingsDetailActive");
-    expect(mainTsx).toContain("settingsDetailView === 'skills' ||");
-    expect(mainTsx).toContain("settingsDetailView === 'portRelay'");
+    expect(mainTsx).toContain('const isShortcutSettingsDetailActive = sidebarSettingsOpen && isSettingsPeerDetail(settingsDetailView);');
 
     const floatingStart = mainTsx.indexOf('const floatingControlStack = !isWide ? (');
     const mobileBarStart = mainTsx.indexOf('const mobileSettingsShortcutBar = !isWide && sidebarSettingsOpen ? (', floatingStart);

@@ -104,7 +104,7 @@ describe('web responsive shell split', () => {
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
     const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
 
-    expect(mainTsx).toMatch(/const wideSidebarMain = sidebarSettingsOpen\s*\?\s*renderSettingsContent\(false\)/);
+    expect(mainTsx).toMatch(/const wideSidebarMain = sidebarSettingsOpen\s*\?\s*renderSettingsContent\(false, \{ hideDetailHeader: isSettingsPeerDetail\(settingsDetailView\) \}\)/);
     expect(mainTsx).toContain('<div className="sidebar-scroll">');
 
     const workspaceLeftBlock = cssRuleBlock(stylesCss, '.workspace-left');

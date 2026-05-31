@@ -10,7 +10,7 @@ describe('connection settings UI source structure', () => {
     expect(mainTsx).toContain("case 'connectionStatus':");
     expect(mainTsx).toContain('renderConnectionStatusSettingsDetail(options)');
     expect(mainTsx).toContain("renderSettingsSection('Connection'");
-    expect(mainTsx).toContain("openSettingsDetail('connectionStatus')");
+    expect(mainTsx).toContain("openSettingsChild('connectionStatus')");
     expect(mainTsx).toContain('Connection Status');
     expect(mainTsx).toContain('Local Hub Read');
     expect(mainTsx).toContain('checked={localHubReadEnabled}');

@@ -179,6 +179,14 @@ import {
   resolveMobileSettingsPopAction,
   type MobileSettingsHistoryDetail,
 } from './services/mobileSettingsHistory';
+import {
+  isSettingsPeerDetail,
+  mobileSettingsShortcutIndex,
+  settingsPageKind,
+  type SettingsChildDetail,
+  type SettingsDetailId,
+  type SettingsPeerDetail,
+} from './settings/settingsNavigation';
 import { installMobileViewportZoomGuard } from './services/mobileViewportZoomGuard';
 import { resolveLayoutMode } from './services/responsiveLayout';
 import {
@@ -429,8 +437,8 @@ type ConfirmTarget =
       projectName?: string;
       includeProjects?: boolean;
     };
-type SettingsDetailView = 'update' | 'skills' | 'tokenStats' | 'ccSwitch' | 'database' | 'portRelay' | 'connectionStatus' | 'debugLogs' | null;
-type ActiveSettingsDetailView = Exclude<SettingsDetailView, null>;
+type SettingsDetailView = SettingsDetailId | null;
+type ActiveSettingsDetailView = SettingsDetailId;
 type SettingsDetailShellOptions = {
   hideDetailHeader?: boolean;
 };
@@ -6559,10 +6567,65 @@ function App() {
       window.removeEventListener('pointerdown', onPointerDown);
     };
   }, [cancelGestureNavigation, gestureNavigationExpanded]);
+  const closeSettingsPanel = useCallback(() => {
+    if (isWide) {
+      setPortRelayFrameOpen(false);
+    }
+    setSettingsDetailView(null);
+    setSidebarSettingsOpen(false);
+  }, [isWide, setSidebarSettingsOpen]);
+  const openSettingsRoot = useCallback(() => {
+    if (isWide) {
+      setPortRelayFrameOpen(false);
+    }
+    setSettingsDetailView(null);
+    setSidebarSettingsOpen(true);
+    setSidebarCollapsed(false);
+  }, [isWide, setSidebarCollapsed, setSidebarSettingsOpen]);
+  const openSettingsPeer = useCallback((detail: SettingsPeerDetail) => {
+    if (isWide && sidebarSettingsOpen && settingsDetailView === detail) {
+      closeSettingsPanel();
+      return;
+    }
+    if (isWide && detail !== 'portRelay') {
+      setPortRelayFrameOpen(false);
+    }
+    setSidebarSettingsOpen(true);
+    setSidebarCollapsed(false);
+    if (detail === 'skills') {
+      setSkillsError('');
+    }
+    if (detail === 'tokenStats') {
+      setTokenStatsError('');
+    }
+    if (detail === 'portRelay') {
+      setPortRelayError('');
+    }
+    setSettingsDetailView(detail);
+  }, [closeSettingsPanel, isWide, setSidebarCollapsed, setSidebarSettingsOpen, settingsDetailView, sidebarSettingsOpen]);
+  const openSettingsChild = useCallback((detail: SettingsChildDetail) => {
+    if (isWide) {
+      setPortRelayFrameOpen(false);
+    }
+    setSidebarSettingsOpen(true);
+    setSidebarCollapsed(false);
+    if (detail === 'database') {
+      openDatabasePanel();
+    }
+    setSettingsDetailView(detail);
+  }, [isWide, setSidebarCollapsed, setSidebarSettingsOpen]);
+  const openSettingsDetail = useCallback((detail: SettingsDetailId) => {
+    if (isSettingsPeerDetail(detail)) {
+      openSettingsPeer(detail);
+      return;
+    }
+    openSettingsChild(detail);
+  }, [openSettingsChild, openSettingsPeer]);
   const handleDesktopActivitySelect = useCallback((nextTab: Tab) => {
     setPortRelayFrameOpen(false);
     if (sidebarSettingsOpen) {
       setSidebarSettingsOpen(false);
+      setSettingsDetailView(null);
       if (nextTab !== tab) {
         setTab(nextTab);
       }
@@ -6577,56 +6640,24 @@ function App() {
     setSidebarCollapsed(false);
   }, [sidebarSettingsOpen, tab, setSidebarSettingsOpen, setSidebarCollapsed, setTab]);
   const handleDesktopSettingsSelect = useCallback(() => {
-    setPortRelayFrameOpen(false);
-    if (sidebarSettingsOpen && (
-      settingsDetailView === 'update' ||
-      settingsDetailView === 'skills' ||
-      settingsDetailView === 'tokenStats' ||
-      settingsDetailView === 'portRelay'
-    )) {
-      setSettingsDetailView(null);
-      setSidebarSettingsOpen(true);
-      setSidebarCollapsed(false);
+    if (sidebarSettingsOpen && settingsDetailView === null) {
+      closeSettingsPanel();
       return;
     }
-    const nextOpen = !sidebarSettingsOpen;
-    setSidebarSettingsOpen(nextOpen);
-    if (nextOpen) {
-      setSettingsDetailView(null);
-      setSidebarCollapsed(false);
-    }
-  }, [sidebarSettingsOpen, settingsDetailView, setSidebarSettingsOpen, setSidebarCollapsed]);
-  const openSettingsDetail = useCallback((detail: Exclude<SettingsDetailView, null>) => {
-    if (detail !== 'portRelay') {
-      setPortRelayFrameOpen(false);
-    }
-    setSidebarSettingsOpen(true);
-    setSidebarCollapsed(false);
-    if (detail === 'skills') {
-      setSkillsError('');
-    }
-    if (detail === 'tokenStats') {
-      setTokenStatsError('');
-    }
-    if (detail === 'database') {
-      openDatabasePanel();
-    }
-    if (detail === 'portRelay') {
-      setPortRelayError('');
-    }
-    setSettingsDetailView(detail);
-  }, [setSidebarSettingsOpen, setSidebarCollapsed]);
+    openSettingsRoot();
+  }, [closeSettingsPanel, openSettingsRoot, sidebarSettingsOpen, settingsDetailView]);
   const handleDesktopPortRelaySelect = useCallback(() => {
-    setSidebarSettingsOpen(true);
-    setSidebarCollapsed(false);
-    setSettingsDetailView('portRelay');
-    setPortRelayError('');
+    if (sidebarSettingsOpen && settingsDetailView === 'portRelay') {
+      closeSettingsPanel();
+      return;
+    }
+    openSettingsPeer('portRelay');
     if (!portRelayReady || !portRelayFrameUrl) {
       setPortRelayFrameOpen(false);
       return;
     }
     setPortRelayFrameOpen(open => !open);
-  }, [portRelayFrameUrl, portRelayReady, setSidebarCollapsed, setSidebarSettingsOpen]);
+  }, [closeSettingsPanel, openSettingsPeer, portRelayFrameUrl, portRelayReady, settingsDetailView, sidebarSettingsOpen]);
   const handlePortRelayFloatingToggle = useCallback(() => {
     if (floatingClickCooldownUntilRef.current > Date.now()) {
       return;
@@ -6753,7 +6784,7 @@ function App() {
         settingsOpen: sidebarSettingsOpenRef.current,
         settingsDetailView: settingsDetailViewRef.current as MobileSettingsHistoryDetail | null,
       });
-      if (action === 'back-to-list') {
+      if (action === 'back-to-root') {
         setSettingsDetailView(null);
         return;
       }
@@ -6766,34 +6797,48 @@ function App() {
     return () => window.removeEventListener('popstate', handleMobileSettingsPopState);
   }, [setSidebarSettingsOpen]);
   const handleSettingsDetailBack = useCallback(() => {
-    if (!isWide && sidebarSettingsOpen && settingsDetailView !== null && mobileSettingsHistoryKeyRef.current !== null) {
+    const currentKind = settingsPageKind(settingsDetailView);
+    if (!isWide && sidebarSettingsOpen && currentKind === 'child' && mobileSettingsHistoryKeyRef.current !== null) {
       window.history.back();
       return;
     }
-    setSettingsDetailView(null);
-  }, [isWide, sidebarSettingsOpen, settingsDetailView]);
+    if (currentKind === 'child') {
+      openSettingsRoot();
+      return;
+    }
+    closeSettingsPanel();
+  }, [closeSettingsPanel, isWide, openSettingsRoot, sidebarSettingsOpen, settingsDetailView]);
   const handleMobileSettingsBackButton = useCallback(() => {
     if (!isWide && sidebarSettingsOpen && mobileSettingsHistoryKeyRef.current !== null) {
       window.history.back();
       return;
     }
-    if (settingsDetailView !== null) {
+    if (settingsPageKind(settingsDetailView) === 'child') {
       setSettingsDetailView(null);
       return;
     }
-    setSidebarSettingsOpen(false);
-  }, [isWide, sidebarSettingsOpen, settingsDetailView, setSidebarSettingsOpen]);
+    closeSettingsPanel();
+  }, [closeSettingsPanel, isWide, sidebarSettingsOpen, settingsDetailView]);
   const handleMobileSettingsRootShortcut = useCallback(() => {
-    if (settingsDetailView !== null) {
-      setSettingsDetailView(null);
+    const currentKind = settingsPageKind(settingsDetailView);
+    if (currentKind === 'root') {
+      return;
     }
-  }, [settingsDetailView]);
-  const openMobileSettingsShortcutDetail = useCallback((detail: Exclude<SettingsDetailView, null>) => {
-    if (!isWide && sidebarSettingsOpen && settingsDetailView !== detail) {
+    if (!isWide && sidebarSettingsOpen && currentKind === 'child' && mobileSettingsHistoryKeyRef.current !== null) {
+      window.history.back();
+      return;
+    }
+    setSettingsDetailView(null);
+  }, [isWide, settingsDetailView, sidebarSettingsOpen]);
+  const openMobileSettingsShortcutDetail = useCallback((detail: SettingsPeerDetail) => {
+    if (settingsDetailView === detail) {
+      return;
+    }
+    if (!isWide && sidebarSettingsOpen) {
       mobileSettingsReplaceRootHistoryRef.current = true;
     }
-    openSettingsDetail(detail);
-  }, [isWide, openSettingsDetail, settingsDetailView, sidebarSettingsOpen]);
+    openSettingsPeer(detail);
+  }, [isWide, openSettingsPeer, settingsDetailView, sidebarSettingsOpen]);
   const clampDesktopSidebarWidthForViewport = useCallback((width: number) => {
     const viewportMax = windowWidth > 0
       ? Math.floor(windowWidth * DESKTOP_SIDEBAR_VIEWPORT_MAX_RATIO)
@@ -14502,7 +14547,7 @@ function App() {
         <button
           type="button"
           className="settings-row settings-detail-row"
-          onClick={() => openSettingsDetail('connectionStatus')}
+          onClick={() => openSettingsChild('connectionStatus')}
         >
           <span>
             <span className="codicon codicon-radio-tower settings-row-icon" aria-hidden="true" />
@@ -14670,9 +14715,7 @@ function App() {
         <button
           type="button"
           className="settings-row settings-detail-row"
-          onClick={() => {
-            setSettingsDetailView('debugLogs');
-          }}
+          onClick={() => openSettingsChild('debugLogs')}
         >
           <span>
             <span className="codicon codicon-output settings-row-icon" aria-hidden="true" />
@@ -14683,10 +14726,7 @@ function App() {
         <button
           type="button"
           className="settings-row settings-detail-row"
-          onClick={() => {
-            setSettingsDetailView('database');
-            openDatabasePanel();
-          }}
+          onClick={() => openSettingsChild('database')}
         >
           <span>
             <span className="codicon codicon-database settings-row-icon" aria-hidden="true" />
@@ -15323,8 +15363,11 @@ function App() {
     const mobileSidebarMain = !isWide
       ? tab === 'chat' && !isWide ? renderMobileChatSessionSheet() : renderSidebarMain()
       : null;
+    const wideSettingsTitle = settingsDetailView
+      ? settingsDetailTitle(settingsDetailView).toUpperCase()
+      : 'SETTINGS';
     const wideSidebarTitle = sidebarSettingsOpen
-      ? 'SETTINGS'
+      ? wideSettingsTitle
       : tab === 'chat'
       ? 'CHAT'
       : tab === 'file'
@@ -15332,7 +15375,7 @@ function App() {
       : 'SOURCE CONTROL';
     const chatSidebarTitleSearchOpen = tab === 'chat' && !sidebarSettingsOpen && sessionSearchHeaderExpanded;
     const wideSidebarMain = sidebarSettingsOpen
-      ? renderSettingsContent(false)
+      ? renderSettingsContent(false, { hideDetailHeader: isSettingsPeerDetail(settingsDetailView) })
       : tab === 'chat' ? renderWideProjectSessionNav() : renderSidebarMain(false);
 
     return (
@@ -16949,12 +16992,7 @@ function App() {
   ) : (
     <span className="codicon codicon-refresh" />
   );
-  const isShortcutSettingsDetailActive = sidebarSettingsOpen && (
-    settingsDetailView === 'update' ||
-    settingsDetailView === 'skills' ||
-    settingsDetailView === 'tokenStats' ||
-    settingsDetailView === 'portRelay'
-  );
+  const isShortcutSettingsDetailActive = sidebarSettingsOpen && isSettingsPeerDetail(settingsDetailView);
 
   const desktopActivityBar = isWide ? (
     <nav className="desktop-activity-bar" aria-label="Workspace navigation">
@@ -16986,15 +17024,6 @@ function App() {
         >
           <span className="codicon codicon-source-control" />
         </button>
-        <button
-          type="button"
-          className={`desktop-activity-button${sidebarSettingsOpen && settingsDetailView === 'portRelay' ? ' active' : ''}`}
-          onClick={handleDesktopPortRelaySelect}
-          title="Port Relay"
-          aria-label="Port Relay"
-        >
-          <span className="codicon codicon-radio-tower" />
-        </button>
       </div>
       <div className="desktop-activity-secondary">
         <button
@@ -17013,8 +17042,17 @@ function App() {
         </button>
         <button
           type="button"
+          className={`desktop-activity-button${sidebarSettingsOpen && !isShortcutSettingsDetailActive ? ' active' : ''}`}
+          onClick={handleDesktopSettingsSelect}
+          title="Settings"
+          aria-label="Settings"
+        >
+          <span className="codicon codicon-settings-gear" />
+        </button>
+        <button
+          type="button"
           className={`desktop-activity-button${sidebarSettingsOpen && settingsDetailView === 'update' ? ' active' : ''}`}
-          onClick={() => openSettingsDetail('update')}
+          onClick={() => openSettingsPeer('update')}
           title="Update"
           aria-label="Update"
         >
@@ -17023,7 +17061,7 @@ function App() {
         <button
           type="button"
           className={`desktop-activity-button${sidebarSettingsOpen && settingsDetailView === 'skills' ? ' active' : ''}`}
-          onClick={() => openSettingsDetail('skills')}
+          onClick={() => openSettingsPeer('skills')}
           title="Skills"
           aria-label="Skills"
         >
@@ -17031,8 +17069,17 @@ function App() {
         </button>
         <button
           type="button"
+          className={`desktop-activity-button${sidebarSettingsOpen && settingsDetailView === 'portRelay' ? ' active' : ''}`}
+          onClick={handleDesktopPortRelaySelect}
+          title="Port Relay"
+          aria-label="Port Relay"
+        >
+          <span className="codicon codicon-radio-tower" />
+        </button>
+        <button
+          type="button"
           className={`desktop-activity-button${sidebarSettingsOpen && settingsDetailView === 'tokenStats' ? ' active' : ''}`}
-          onClick={() => openSettingsDetail('tokenStats')}
+          onClick={() => openSettingsPeer('tokenStats')}
           title="Token Stats"
           aria-label="Token Stats"
         >
@@ -17040,12 +17087,12 @@ function App() {
         </button>
         <button
           type="button"
-          className={`desktop-activity-button${sidebarSettingsOpen && !isShortcutSettingsDetailActive ? ' active' : ''}`}
-          onClick={handleDesktopSettingsSelect}
-          title="Settings"
-          aria-label="Settings"
+          className={`desktop-activity-button${sidebarSettingsOpen && settingsDetailView === 'ccSwitch' ? ' active' : ''}`}
+          onClick={() => openSettingsPeer('ccSwitch')}
+          title="CC Switch"
+          aria-label="CC Switch"
         >
-          <span className="codicon codicon-settings-gear" />
+          <span className="codicon codicon-arrow-swap" />
         </button>
       </div>
     </nav>
@@ -17317,18 +17364,7 @@ function App() {
   const mobileSettingsActions = settingsDetailView
     ? renderSettingsDetailActions(settingsDetailView)
     : <span className="mobile-settings-action-spacer" aria-hidden="true" />;
-  const mobileSettingsShortcutActiveIndex =
-    settingsDetailView === 'update'
-      ? 1
-      : settingsDetailView === 'skills'
-        ? 2
-        : settingsDetailView === 'portRelay'
-          ? 3
-          : settingsDetailView === 'tokenStats'
-            ? 4
-            : settingsDetailView === 'ccSwitch'
-              ? 5
-              : 0;
+  const mobileSettingsShortcutActiveIndex = mobileSettingsShortcutIndex(settingsDetailView);
   const mobileSettingsRootShortcutActive = mobileSettingsShortcutActiveIndex === 0;
   const mobileSettingsShortcutBar = !isWide && sidebarSettingsOpen ? (
     <nav

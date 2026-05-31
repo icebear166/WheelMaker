@@ -1490,7 +1490,7 @@ describe('web chat integration', () => {
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'main.tsx'));
     const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
 
-    expect(mainTsx).toContain("type SettingsDetailView = 'update' | 'skills' | 'tokenStats' | 'ccSwitch' | 'database' | 'portRelay' | 'connectionStatus' | 'debugLogs' | null;");
+    expect(mainTsx).toContain('type SettingsDetailView = SettingsDetailId | null;');
     expect(mainTsx).toContain('const [settingsDetailView, setSettingsDetailView] = useState<SettingsDetailView>(null);');
     expect(mainTsx).toContain('const [mobileProjectActionMenu, setMobileProjectActionMenu] = useState<MobileProjectActionMenuState | null>(null);');
     expect(mainTsx).toContain('const refreshMobileChatProjectSessions = async () => {');
@@ -1506,7 +1506,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className="mobile-project-session-error"');
     expect(mainTsx).toContain('if (!isWide) setDrawerOpen(false);');
     expect(mainTsx).toContain("tab === 'chat' && !isWide ? renderMobileChatSessionSheet() : renderSidebarMain()");
-    expect(mainTsx).toContain("openSettingsDetail('tokenStats')");
+    expect(mainTsx).toContain("openSettingsPeer('tokenStats')");
     expect(mainTsx).toContain("settingsDetailView === 'tokenStats'");
     expect(mainTsx).toContain('const renderSettingsSection = (title: string, rows: React.ReactNode, icon?: string) => (');
     expect(mainTsx).toContain("renderSettingsSection('Appearance'");
@@ -1521,7 +1521,7 @@ describe('web chat integration', () => {
     expect(appearanceSettingsIndex).toBeLessThan(chatSettingsIndex);
     expect(chatSettingsIndex).toBeLessThan(codeDisplaySettingsIndex);
     expect(codeDisplaySettingsIndex).toBeLessThan(debugSettingsIndex);
-    expect(mainTsx).toContain("setSettingsDetailView('database');");
+    expect(mainTsx).toContain("openSettingsChild('database')");
     expect(mainTsx).toContain("settingsDetailView === 'database'");
     expect(mainTsx).toContain('renderDatabaseSettingsDetail(options)');
     expect(mainTsx).toContain('className="settings-section-title"');
@@ -1666,7 +1666,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain("tab === 'chat' && !isWide ? renderMobileChatSessionSheet() : renderSidebarMain()");
     expect(mainTsx).toContain("tab === 'chat' ? renderWideProjectSessionNav() : renderSidebarMain(false)");
     expect(mainTsx).toContain('const wideSidebarMain = sidebarSettingsOpen');
-    expect(mainTsx).toContain('? renderSettingsContent(false)');
+    expect(mainTsx).toContain("? renderSettingsContent(false, { hideDetailHeader: isSettingsPeerDetail(settingsDetailView) })");
     expect(mainTsx).toContain('const wideSidebarTitle = sidebarSettingsOpen');
     expect(mainTsx).toContain('className={`sidebar-title-row${chatSidebarTitleSearchOpen ? \' search-open\' : \'\'}`}');
     expect(mainTsx).toContain('const handleDesktopActivitySelect = useCallback((nextTab: Tab) => {');

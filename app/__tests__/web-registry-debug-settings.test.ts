@@ -42,7 +42,7 @@ describe('web registry debug settings', () => {
     const debugSectionStart = mainTsx.indexOf("renderSettingsSection('Debug'");
     const debugSectionEnd = mainTsx.indexOf("), 'bug')", debugSectionStart);
     const debugSection = mainTsx.slice(debugSectionStart, debugSectionEnd);
-    expect(debugSection).toContain("setSettingsDetailView('debugLogs')");
+    expect(debugSection).toContain("openSettingsChild('debugLogs')");
     expect(debugSection).toContain('Logs');
     expect(debugSection).toContain('Logout');
     expect(debugSection).toContain('handleRegistryDebugLogout');

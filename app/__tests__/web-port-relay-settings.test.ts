@@ -7,7 +7,7 @@ const stylesCss = fs.readFileSync(path.join(root, 'web/src/styles.css'), 'utf8')
 
 describe('port relay settings UI source structure', () => {
   test('adds Port Relay as a settings detail and mobile shortcut bar entry', () => {
-    expect(mainTsx).toContain("type SettingsDetailView = 'update' | 'skills' | 'tokenStats' | 'ccSwitch' | 'database' | 'portRelay' | 'connectionStatus' | 'debugLogs' | null;");
+    expect(mainTsx).toContain('type SettingsDetailView = SettingsDetailId | null;');
     expect(mainTsx).toContain("settingsDetailView === 'portRelay'");
     expect(mainTsx).toContain('renderPortRelaySettingsDetail(options)');
     expect(mainTsx).toContain("setSettingsDetailView('portRelay')");
@@ -104,7 +104,7 @@ describe('port relay settings UI source structure', () => {
     expect(mainTsx).toContain("const refreshPortRelayStatus = useCallback(async (options?: {silent?: boolean}) => {");
   });
 
-  test('places desktop Port Relay shortcut with primary workspace tabs after Git', () => {
+  test('places desktop Port Relay shortcut with settings peers after Skills', () => {
     const activityBarStart = mainTsx.indexOf('const desktopActivityBar = isWide ? (');
     const activityBarEnd = mainTsx.indexOf('const floatingControlStack = !isWide ? (', activityBarStart);
     const activityBar = mainTsx.slice(activityBarStart, activityBarEnd);
@@ -113,9 +113,10 @@ describe('port relay settings UI source structure', () => {
     const primary = activityBar.slice(primaryStart, secondaryStart);
     const secondary = activityBar.slice(secondaryStart);
 
-    expect(primary.indexOf('title="Git"')).toBeLessThan(primary.indexOf('title="Port Relay"'));
-    expect(primary).toContain('onClick={handleDesktopPortRelaySelect}');
-    expect(secondary).not.toContain('title="Port Relay"');
+    expect(primary).not.toContain('title="Port Relay"');
+    expect(secondary.indexOf('title="Skills"')).toBeLessThan(secondary.indexOf('title="Port Relay"'));
+    expect(secondary.indexOf('title="Port Relay"')).toBeLessThan(secondary.indexOf('title="Token Stats"'));
+    expect(secondary).toContain('onClick={handleDesktopPortRelaySelect}');
   });
 
   test('turns chat localhost links into relay iframe actions for the current project hub', () => {

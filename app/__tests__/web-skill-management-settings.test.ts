@@ -7,7 +7,7 @@ const stylesCss = fs.readFileSync(path.join(root, 'web/src/styles.css'), 'utf8')
 
 describe('skill management settings UI source structure', () => {
   test('adds Skills as a settings detail and mobile shortcut bar entry', () => {
-    expect(mainTsx).toContain("type SettingsDetailView = 'update' | 'skills' | 'tokenStats' | 'ccSwitch' | 'database' | 'portRelay' | 'connectionStatus' | 'debugLogs' | null;");
+    expect(mainTsx).toContain('type SettingsDetailView = SettingsDetailId | null;');
     expect(mainTsx).toContain("settingsDetailView === 'skills'");
     expect(mainTsx).toContain('renderSkillsSettingsDetail(options)');
     expect(mainTsx).not.toContain("renderSettingsSection('More'");
@@ -26,7 +26,7 @@ describe('skill management settings UI source structure', () => {
     const activityBar = mainTsx.slice(activityBarStart, activityBarEnd);
 
     expect(activityBar).toContain('codicon-extensions');
-    expect(activityBar).toContain("openSettingsDetail('skills')");
+    expect(activityBar).toContain("openSettingsPeer('skills')");
     expect(activityBar.indexOf('title="Update"')).toBeLessThan(activityBar.indexOf('title="Skills"'));
     expect(activityBar.indexOf('title="Skills"')).toBeLessThan(activityBar.indexOf('title="Token Stats"'));
     expect(activityBar).toContain("settingsDetailView === 'skills'");
