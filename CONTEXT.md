@@ -85,8 +85,8 @@ The IndexedDB cache that stores only raw turns from the contiguous finished pref
 _Avoid_: Sparse cache, full local history, IndexedDB message store
 
 **Cache Reset Boundary**:
-The incompatible-schema recovery rule: preserve only token/auth credentials, delete all other local persistent workspace/app cache, and recreate IndexedDB tables from the current schema.
-_Avoid_: Partial table migration, chat-only compatibility shim, best-effort old row reuse
+The incompatible chat-cache recovery rule: preserve global user settings and project UI state, delete only incompatible chat/cache rows, and let registry/session reads rebuild chat data.
+_Avoid_: Partial chat row migration, best-effort old chat row reuse, destructive global settings reset during cache recovery
 
 **Read Repair**:
 The client pull operation that asks `session.read` for the authoritative continuous turn range after a **Finished Cursor**.

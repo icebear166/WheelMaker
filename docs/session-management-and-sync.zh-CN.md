@@ -175,7 +175,7 @@ type Cursor = { turnIndex: number };
 - 本地 raw turn identity 是 `sessionId:turnIndex`，但 wire/read 的 turn body 内不携带 `sessionId`。
 - 本地持久缓存只保存 raw finished prefix：`1..Finished Cursor`。
 - cursor 是本地已连续缓存 finished turn 的最大 `turnIndex`；如果本地缓存出现缺口，cursor 必须回退到缺口前。
-- IndexedDB 保存 raw `turnsJson` 和 `cursorJson`；旧 `messagesJson` 或旧 schema/version 检测失败时，不做兼容迁移，除 token / 认证凭据外清空本地持久缓存并重建表，再由 `session.read` 重新补。
+- IndexedDB 保存 raw `turnsJson` 和 `cursorJson`；旧 `messagesJson` 或 chat cache 格式检测失败时，不做兼容迁移，只清理 chat/cache 表，保留全局用户配置，再由 `session.read` 重新补。
 - finished prefix 变更后 5 秒 debounce 持久化；切换 session、切后台、断连前需要 flush。
 - app/web 不维护有容量上限的运行集合。收到 `session.message` 的 session、被 hydrate 的 session、被 read 的 session、以及用户选择的 session 都进入内存 runtime store，直到页面生命周期结束或显式清除/reload。
 - 用户打开 session 时，先 hydrate 本地 finished prefix；如果内存缺失或需要恢复可见内容，再调用 `session.read(after=Finished Cursor)`。
@@ -339,7 +339,7 @@ manifest 记录 `gapCount`。WMT2 slot 不能使用 `len=0` 表示 gap，因为�
 - 上滑/下滑只调整窗口，不触发 server read。
 - 用户在底部时，新 turn 自动跟随；用户上翻后，新 turn 不强制跳底。
 - 服务端和 app/web 同步升级，不保留旧 message/read wire 兼容。
-- IndexedDB / 本地持久 cache schema 不做兼容迁移；版本不匹配或旧格式检测失败时，除 token / 认证凭据外清空本地持久缓存并重建表，由 server read 重新补。
+- IndexedDB / 本地持久 chat cache schema 不做兼容迁移；旧格式检测失败时，只清理 chat/cache 表并保留全局用户配置，由 server read 重新补。
 
 非目标：
 
@@ -675,7 +675,7 @@ wm_chat_session_content
   - 最终 cursor 取 `min(cursorJson.turnIndex, actualPrefix)`.
   - 丢弃 cursor 之后的 durable turns。
   - 修正 IndexedDB 为一致状态。
-- DB schema 不兼容旧 `messagesJson` decoded message 格式；检测到旧版本或旧格式时，不做表级迁移，除 token / 认证凭据外删除本地持久缓存并重建 IndexedDB 表。
+- DB schema 不兼容旧 `messagesJson` decoded message 格式；检测到旧 chat cache 格式时，不做表级迁移，只删除 chat/cache 表并保留全局用户配置。
 
 #### 9.2 Persist
 
@@ -933,7 +933,7 @@ type ScrollAnchor = {
 - `chatWire.ts`：做 raw turn shape 校验和旧 payload 拒绝，不 decode 业务内容。
 - `chatTurnStores.ts`：维护 Finished Store、Live Turn Buffer、Finished Cursor、read response reconcile、gap repair 判定。
 - `main.tsx` / 后续可抽出的 runtime store 模块：维护无容量上限的内存 turn stores，并基于 store keys 处理重连后 read trigger。
-- `workspacePersistence.ts` / `workspaceStore.ts`：只负责 raw `turnsJson`、`cursorJson`、schema/version 检查、除 token 外的全量本地缓存清理、重建表、5 秒 debounce persist 和 flush。
+- `workspacePersistence.ts` / `workspaceStore.ts`：只负责 raw `turnsJson`、`cursorJson`、chat cache 格式检查、chat/cache 表清理、5 秒 debounce persist 和 flush；全局用户配置不参与 chat cache 恢复清理。
 - `chatDisplayIndex.ts`：从 raw source store 派生轻量 Display Index，只做浅分类和 metadata，不保存完整 decoded message。
 - `ChatVirtuosoTurnList.tsx`：封装 `react-virtuoso`，拥有 visible + overscan、内部高度测量、tail lock、scroll-to-bottom；`main.tsx` 不直接操作 Virtuoso API。
 - `main.tsx`：保留项目/session 选择、事件分发和 React 状态编排，不再直接实现 read repair、IndexedDB raw turn 合并、显示索引和滚动窗口。
