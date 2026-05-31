@@ -149,9 +149,24 @@ function Assert-ReleaseDoesNotExist {
     Write-Host ("[whatif] gh release view {0} --repo {1}" -f $script:Tag, $script:RepoSlug)
     return
   }
-  & gh release view $script:Tag --repo $script:RepoSlug *> $null
-  if ($LASTEXITCODE -ne 0) { return }
-  throw ("GitHub release already exists for tag: {0}" -f $script:Tag)
+  if (Test-GitHubReleaseExists -Tag $script:Tag -RepoSlug $script:RepoSlug) {
+    throw ("GitHub release already exists for tag: {0}" -f $script:Tag)
+  }
+}
+
+function Test-GitHubReleaseExists {
+  param(
+    [Parameter(Mandatory = $true)][string]$Tag,
+    [Parameter(Mandatory = $true)][string]$RepoSlug
+  )
+  $previousErrorActionPreference = $ErrorActionPreference
+  try {
+    $ErrorActionPreference = "Continue"
+    & gh release view $Tag --repo $RepoSlug *> $null
+    return $LASTEXITCODE -eq 0
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+  }
 }
 
 function Get-FileSha256 {

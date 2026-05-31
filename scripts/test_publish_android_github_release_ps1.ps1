@@ -43,6 +43,8 @@ Assert-Contains -Label "publish_android_github_release.ps1" -Text $script -Needl
 Assert-Contains -Label "publish_android_github_release.ps1" -Text $script -Needle "gh auth status"
 Assert-Contains -Label "publish_android_github_release.ps1" -Text $script -Needle "gh release create"
 Assert-Contains -Label "publish_android_github_release.ps1" -Text $script -Needle "gh release view"
+Assert-Contains -Label "publish_android_github_release.ps1" -Text $script -Needle 'Test-GitHubReleaseExists'
+Assert-Contains -Label "publish_android_github_release.ps1" -Text $script -Needle '$previousErrorActionPreference = $ErrorActionPreference'
 Assert-Contains -Label "publish_android_github_release.ps1" -Text $script -Needle "git status --porcelain"
 Assert-Contains -Label "publish_android_github_release.ps1" -Text $script -Needle '$status = @(Get-GitLines'
 Assert-Contains -Label "publish_android_github_release.ps1" -Text $script -Needle "git fetch origin"
