@@ -60,6 +60,8 @@ Assert-Contains -Label "publish_android.ps1" -Text $script -Needle "gradle-home"
 Assert-Contains -Label "publish_android.ps1" -Text $script -Needle "https.protocols=TLSv1.2"
 Assert-Contains -Label "publish_android.ps1" -Text $script -Needle "GetPathRoot"
 Assert-Contains -Label "publish_android.ps1" -Text $script -Needle "android-release.json"
+Assert-Contains -Label "publish_android.ps1" -Text $script -Needle "Get-FileSha256"
+Assert-NotContains -Label "publish_android.ps1" -Text $script -Needle "Get-FileHash"
 Assert-NotContains -Label "publish_android.ps1" -Text $script -Needle ".wheelmaker\web\mobile\android"
 Assert-NotContains -Label "publish_android.ps1" -Text $script -Needle "mobile\android\app\src\main\assets\wheelmaker-web"
 

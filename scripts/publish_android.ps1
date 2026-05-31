@@ -165,13 +165,29 @@ function Copy-AndroidOutputs {
   Copy-Item -LiteralPath $apk.FullName -Destination $target -Force
 }
 
+function Get-FileSha256 {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  $stream = [System.IO.File]::OpenRead($Path)
+  try {
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+      $bytes = $sha256.ComputeHash($stream)
+      return ([System.BitConverter]::ToString($bytes)).Replace("-", "").ToLowerInvariant()
+    } finally {
+      $sha256.Dispose()
+    }
+  } finally {
+    $stream.Dispose()
+  }
+}
+
 function Write-AndroidReleaseManifest {
   Assert-Command -Name "git" -Hint "Install Git and ensure git.exe is available."
   $apkPath = Join-Path $script:OutputDir "WheelMakerAndroid.apk"
   $apkHash = ""
   $apkSize = 0
   if (-not $WhatIf -and (Test-Path -LiteralPath $apkPath)) {
-    $apkHash = (Get-FileHash -LiteralPath $apkPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $apkHash = Get-FileSha256 -Path $apkPath
     $apkSize = (Get-Item -LiteralPath $apkPath).Length
   }
   $manifest = [ordered]@{
