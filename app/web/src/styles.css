@@ -7659,6 +7659,11 @@ textarea,
   color: #ff6b62;
 }
 
+.chat-composer-stop-trigger.cancelling {
+  color: color-mix(in srgb, var(--muted) 86%, var(--text));
+  opacity: 0.72;
+}
+
 .chat-composer-stop-trigger:disabled {
   cursor: default;
 }
@@ -7676,7 +7681,7 @@ textarea,
   transform-origin: center;
 }
 
-.chat-composer-stop-trigger.active .codicon {
+.chat-composer-stop-trigger.active:not(.cancelling) .codicon {
   animation: chatStopBreath 1.55s ease-in-out infinite;
 }
 
@@ -7695,7 +7700,7 @@ textarea,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .chat-composer-stop-trigger.active .codicon {
+  .chat-composer-stop-trigger.active:not(.cancelling) .codicon {
     animation: none;
   }
 }

@@ -152,8 +152,10 @@ describe('web chat turn rendering', () => {
     expect(main).toContain('const cancelSelectedChatPrompt = async () => {');
     expect(main).toContain('service.cancelProjectSession(selectedKey.projectId, selectedKey.sessionId)');
     expect(main).toContain('className="chat-composer-input-row"');
-    expect(main).toContain('className={`chat-composer-stop-trigger${selectedChatPromptRunning ? \' active\' : \'\'}`}');
+    expect(main).toContain("const chatComposerStopTriggerClassName = `chat-composer-stop-trigger${selectedChatPromptRunning ? ' active' : ''}${selectedChatPromptCancelling ? ' cancelling' : ''}`;");
+    expect(main).toContain('className={chatComposerStopTriggerClassName}');
     expect(main).toContain('disabled={!selectedChatPromptRunning || selectedChatPromptCancelling}');
+    expect(main).toContain("selectedChatPromptCancelling ? 'codicon-loading codicon-modifier-spin' : 'codicon-stop-circle'");
   });
 
   test('shows a scroll-to-bottom button when the user is away from the bottom', () => {

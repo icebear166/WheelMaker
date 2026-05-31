@@ -15473,6 +15473,7 @@ function App() {
     );
   const selectedChatPromptCancelling =
     !!selectedChatEncodedKey && chatCancellingRuntimeKey === selectedChatEncodedKey;
+  const chatComposerStopTriggerClassName = `chat-composer-stop-trigger${selectedChatPromptRunning ? ' active' : ''}${selectedChatPromptCancelling ? ' cancelling' : ''}`;
 
   const latestSelectableAssistantReply = (() => {
     if (selectedPendingPrompt) {
@@ -16128,14 +16129,15 @@ function App() {
                   ) : null}
                   <button
                     type="button"
-                    className={`chat-composer-stop-trigger${selectedChatPromptRunning ? ' active' : ''}`}
+                    className={chatComposerStopTriggerClassName}
                     onPointerDown={event => event.preventDefault()}
                     onClick={() => cancelSelectedChatPrompt().catch(() => undefined)}
                     disabled={!selectedChatPromptRunning || selectedChatPromptCancelling}
-                    title={selectedChatPromptRunning ? 'Cancel prompt' : 'No prompt running'}
+                    title={selectedChatPromptCancelling ? 'Cancelling prompt' : selectedChatPromptRunning ? 'Cancel prompt' : 'No prompt running'}
                     aria-label="Cancel prompt"
+                    aria-busy={selectedChatPromptCancelling}
                   >
-                    <span className="codicon codicon-stop-circle" aria-hidden="true" />
+                    <span className={`codicon ${selectedChatPromptCancelling ? 'codicon-loading codicon-modifier-spin' : 'codicon-stop-circle'}`} aria-hidden="true" />
                   </button>
                 </div>
                 <div className="chat-composer-toolbar-actions">
