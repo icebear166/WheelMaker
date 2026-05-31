@@ -26,6 +26,22 @@ function Assert-NotContains {
   }
 }
 
+function Assert-NoBatchIfBlocks {
+  param([string]$Text)
+
+  $lines = $Text -split "`r?`n"
+  $bad = @()
+  for ($i = 0; $i -lt $lines.Count; $i++) {
+    $line = $lines[$i]
+    if ($line -match '^\s*if\b.*\(\s*$' -or $line -match '^\s*\)\s*$') {
+      $bad += ("{0}: {1}" -f ($i + 1), $line)
+    }
+  }
+  if ($bad.Count -gt 0) {
+    throw "deploy.bat should not use parenthesized batch if blocks:`n$($bad -join "`n")"
+  }
+}
+
 Assert-Contains -Text $deployBat -Needle "WheelMaker All-in-One Deploy"
 Assert-Contains -Text $deployBat -Needle "wheelmaker-deploy.exe"
 Assert-Contains -Text $deployBat -Needle ".wheelmaker\build\bootstrap"
@@ -63,5 +79,6 @@ Assert-NotContains -Text $deployBat -Needle "syncing app Web dependencies"
 Assert-NotContains -Text $deployBat -Needle "publish_desktop.ps1"
 Assert-NotContains -Text $deployBat -Needle "publish-desktop.bat"
 Assert-NotContains -Text $deployBat -Needle "if not defined WHEELMAKER_DEPLOY_STAY_OPEN if not defined WHEELMAKER_DEPLOY_NO_PAUSE ("
+Assert-NoBatchIfBlocks -Text $deployBat
 
 Write-Host "deploy.bat deploy-cli wrapper checks passed"
