@@ -186,6 +186,30 @@ func TestDeployPipelineOrder(t *testing.T) {
 	}
 }
 
+func TestDeployReportsBuildProgress(t *testing.T) {
+	h := newDeployHarness(t)
+	var progress []string
+	h.deps.Report = func(message string) {
+		progress = append(progress, message)
+	}
+	if err := runDeployWithDeps(context.Background(), h.cfg, h.deps); err != nil {
+		t.Fatalf("runDeployWithDeps: %v", err)
+	}
+	assertEventsContainInOrder(t, progress,
+		"checking deploy prerequisites",
+		"pulling latest source",
+		"syncing Web dependencies",
+		"building wheelmaker",
+		"building wheelmaker-monitor",
+		"building wheelmaker-updater",
+		"building wheelmaker-deploy",
+		"publishing Web",
+		"installing wheelmaker",
+		"configuring services",
+		"starting services",
+	)
+}
+
 func TestUpdatePipelineSkipsUpdaterAndConfig(t *testing.T) {
 	h := newDeployHarness(t)
 	h.cfg.Mode = modeUpdate

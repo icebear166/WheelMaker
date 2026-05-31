@@ -29,7 +29,13 @@ function Assert-NotContains {
 Assert-Contains -Text $deployBat -Needle "WheelMaker All-in-One Deploy"
 Assert-Contains -Text $deployBat -Needle "wheelmaker-deploy.exe"
 Assert-Contains -Text $deployBat -Needle ".wheelmaker\build\bootstrap"
+Assert-Contains -Text $deployBat -Needle "Windows service deployment requires Administrator privileges"
+Assert-Contains -Text $deployBat -Needle "Start-Process"
+Assert-Contains -Text $deployBat -Needle "Verb RunAs"
+Assert-Contains -Text $deployBat -Needle "WHEELMAKER_DEPLOY_ELEVATED"
+Assert-Contains -Text $deployBat -Needle "pause"
 Assert-Contains -Text $deployBat -Needle "go build"
+Assert-Contains -Text $deployBat -Needle "[INFO] Running wheelmaker-deploy deploy"
 Assert-Contains -Text $deployBat -Needle " deploy "
 Assert-NotContains -Text $deployBat -Needle 'scripts\refresh_server.ps1'
 Assert-NotContains -Text $deployBat -Needle 'pushd "%~dp0app"'

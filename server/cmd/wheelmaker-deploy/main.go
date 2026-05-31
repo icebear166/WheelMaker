@@ -88,6 +88,7 @@ type deployDeps struct {
 	Services deployService
 	Now      func() time.Time
 	Record   func(string)
+	Report   func(string)
 }
 
 func main() {
@@ -220,6 +221,7 @@ func defaultDeps(cfg deployConfig) deployDeps {
 		Runner:   runner,
 		Services: newServiceManager(cfg, runner),
 		Now:      func() time.Time { return time.Now().UTC() },
+		Report:   func(message string) { fmt.Println("[deploy] " + message) },
 	}
 }
 
@@ -229,15 +231,28 @@ func (d deployDeps) record(event string) {
 	}
 }
 
+func (d deployDeps) report(format string, args ...any) {
+	if d.Report != nil {
+		d.Report(fmt.Sprintf(format, args...))
+	}
+}
+
 func runDeployWithDeps(ctx context.Context, cfg deployConfig, deps deployDeps) error {
 	cfg.Mode = modeDeploy
 	cfg = resolveDefaults(cfg)
 	deps = resolveDeps(cfg, deps)
+	deps.report("checking deploy prerequisites")
 	if err := deps.Services.CheckDeployPrerequisites(ctx); err != nil {
 		return err
 	}
+	if !cfg.NoPull {
+		deps.report("pulling latest source")
+	}
 	if err := pullLatest(ctx, cfg, deps); err != nil {
 		return err
+	}
+	if !cfg.NoWeb && !cfg.NoNPM {
+		deps.report("syncing Web dependencies")
 	}
 	if err := syncAppNPM(ctx, cfg, deps); err != nil {
 		return err
@@ -245,10 +260,14 @@ func runDeployWithDeps(ctx context.Context, cfg deployConfig, deps deployDeps) e
 	if err := buildBinaries(ctx, cfg, deps, !cfg.NoUpdater); err != nil {
 		return err
 	}
+	if !cfg.NoWeb && !cfg.NoBuild && !cfg.NoInstall {
+		deps.report("publishing Web")
+	}
 	if err := publishWeb(ctx, cfg, deps); err != nil {
 		return err
 	}
 	if !cfg.NoRestart {
+		deps.report("stopping services")
 		if err := deps.Services.Stop(ctx, !cfg.NoUpdater); err != nil {
 			return err
 		}
@@ -256,21 +275,28 @@ func runDeployWithDeps(ctx context.Context, cfg deployConfig, deps deployDeps) e
 	if err := installBuiltBinaries(cfg, deps, !cfg.NoUpdater); err != nil {
 		return err
 	}
+	deps.report("ensuring config")
 	if _, err := ensureConfig(cfg, deps); err != nil {
 		return err
 	}
+	deps.report("writing helper wrappers")
 	if err := writeHelperWrappers(cfg, deps); err != nil {
 		return err
 	}
 	if !cfg.NoConfig {
+		deps.report("configuring services")
 		if err := deps.Services.Configure(ctx); err != nil {
 			return err
 		}
+	}
+	if !cfg.NoBuild && !cfg.NoInstall && !cfg.NoWeb {
+		deps.report("writing release manifest")
 	}
 	if err := writeReleaseManifest(ctx, cfg, deps); err != nil {
 		return err
 	}
 	if !cfg.NoRestart {
+		deps.report("starting services")
 		if err := deps.Services.Start(ctx, true); err != nil {
 			return err
 		}
@@ -284,8 +310,14 @@ func runUpdateWithDeps(ctx context.Context, cfg deployConfig, deps deployDeps) e
 	cfg.NoConfig = true
 	cfg = resolveDefaults(cfg)
 	deps = resolveDeps(cfg, deps)
+	if !cfg.NoPull {
+		deps.report("pulling latest source")
+	}
 	if err := pullLatest(ctx, cfg, deps); err != nil {
 		return err
+	}
+	if !cfg.NoWeb && !cfg.NoNPM {
+		deps.report("syncing Web dependencies")
 	}
 	if err := syncAppNPM(ctx, cfg, deps); err != nil {
 		return err
@@ -293,10 +325,14 @@ func runUpdateWithDeps(ctx context.Context, cfg deployConfig, deps deployDeps) e
 	if err := buildBinaries(ctx, cfg, deps, false); err != nil {
 		return err
 	}
+	if !cfg.NoWeb && !cfg.NoBuild && !cfg.NoInstall {
+		deps.report("publishing Web")
+	}
 	if err := publishWeb(ctx, cfg, deps); err != nil {
 		return err
 	}
 	if !cfg.NoRestart {
+		deps.report("stopping services")
 		if err := deps.Services.Stop(ctx, false); err != nil {
 			return err
 		}
@@ -304,10 +340,14 @@ func runUpdateWithDeps(ctx context.Context, cfg deployConfig, deps deployDeps) e
 	if err := installBuiltBinaries(cfg, deps, false); err != nil {
 		return err
 	}
+	if !cfg.NoBuild && !cfg.NoInstall && !cfg.NoWeb {
+		deps.report("writing release manifest")
+	}
 	if err := writeReleaseManifest(ctx, cfg, deps); err != nil {
 		return err
 	}
 	if !cfg.NoRestart {
+		deps.report("starting services")
 		if err := deps.Services.Start(ctx, false); err != nil {
 			return err
 		}
@@ -319,6 +359,9 @@ func runBootstrapUpdateWithDeps(ctx context.Context, cfg deployConfig, deps depl
 	cfg.Mode = modeBootstrapUpdate
 	cfg = resolveDefaults(cfg)
 	deps = resolveDeps(cfg, deps)
+	if !cfg.NoPull {
+		deps.report("pulling latest source")
+	}
 	if err := pullLatest(ctx, cfg, deps); err != nil {
 		return err
 	}
@@ -326,6 +369,7 @@ func runBootstrapUpdateWithDeps(ctx context.Context, cfg deployConfig, deps depl
 	if err := os.MkdirAll(filepath.Dir(next), 0o755); err != nil {
 		return fmt.Errorf("create bootstrap build dir: %w", err)
 	}
+	deps.report("building bootstrap deploy CLI -> %s", next)
 	if _, err := deps.Runner.Run(ctx, filepath.Join(cfg.RepoRoot, "server"), "go", "build", "-o", next, "./cmd/wheelmaker-deploy"); err != nil {
 		return err
 	}
@@ -333,6 +377,7 @@ func runBootstrapUpdateWithDeps(ctx context.Context, cfg deployConfig, deps depl
 	if cfg.NoWeb {
 		args = append(args, "--no-web")
 	}
+	deps.report("running bootstrap update with %s", next)
 	_, err := deps.Runner.Run(ctx, cfg.RepoRoot, next, args...)
 	return err
 }
@@ -427,6 +472,7 @@ func buildBinaries(ctx context.Context, cfg deployConfig, deps deployDeps, inclu
 		if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 			return fmt.Errorf("create build dir: %w", err)
 		}
+		deps.report("building %s -> %s", build.label, out)
 		if _, err := deps.Runner.Run(ctx, filepath.Join(cfg.RepoRoot, "server"), "go", "build", "-o", out, build.pkg); err != nil {
 			return err
 		}
@@ -457,6 +503,7 @@ func installBuiltBinaries(cfg deployConfig, deps deployDeps, includeUpdater bool
 	for _, name := range names {
 		src := filepath.Join(cfg.BuildRoot, binaryName(name))
 		dst := filepath.Join(cfg.InstallDir, binaryName(name))
+		deps.report("installing %s -> %s", name, dst)
 		if err := copyFileReplace(src, dst); err != nil {
 			return fmt.Errorf("install %s: %w", name, err)
 		}
