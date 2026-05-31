@@ -2,7 +2,12 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $deployBatPath = Join-Path $repoRoot "deploy.bat"
+$deployPs1Path = Join-Path $repoRoot "scripts\deploy-windows.ps1"
 $deployBat = Get-Content -LiteralPath $deployBatPath -Raw
+if (-not (Test-Path $deployPs1Path)) {
+  throw "scripts\deploy-windows.ps1 is missing"
+}
+$deployPs1 = Get-Content -LiteralPath $deployPs1Path -Raw
 
 function Assert-Contains {
   param(
@@ -42,34 +47,26 @@ function Assert-NoBatchIfBlocks {
   }
 }
 
-Assert-Contains -Text $deployBat -Needle "WheelMaker All-in-One Deploy"
-Assert-Contains -Text $deployBat -Needle "wheelmaker-deploy.exe"
-Assert-Contains -Text $deployBat -Needle ".wheelmaker\build\bootstrap"
-Assert-Contains -Text $deployBat -Needle "WHEELMAKER_DEPLOY_STAY_OPEN"
-Assert-Contains -Text $deployBat -Needle "WHEELMAKER_DEPLOY_LAUNCH_DRY_RUN"
-Assert-Contains -Text $deployBat -Needle "Dry-run stable window command"
-Assert-Contains -Text $deployBat -Needle ":LaunchStableWindow"
-Assert-Contains -Text $deployBat -Needle "goto StableWindowReady"
-Assert-Contains -Text $deployBat -Needle ":StableWindowReady"
-Assert-Contains -Text $deployBat -Needle 'start "WheelMaker Deploy" "%ComSpec%" /k call "%~f0" %*'
-Assert-Contains -Text $deployBat -Needle ".wheelmaker\log\deploy.bat.log"
-Assert-Contains -Text $deployBat -Needle "Windows service deployment requires Administrator privileges"
-Assert-Contains -Text $deployBat -Needle "Start-Process"
-Assert-Contains -Text $deployBat -Needle "cmd.exe"
-Assert-Contains -Text $deployBat -Needle "/k"
-Assert-Contains -Text $deployBat -Needle "Verb RunAs"
-Assert-Contains -Text $deployBat -Needle "WHEELMAKER_DEPLOY_ELEVATED"
-Assert-Contains -Text $deployBat -Needle "WHEELMAKER_DEPLOY_NO_PAUSE"
-Assert-Contains -Text $deployBat -Needle "WHEELMAKER_DEPLOY_FORCE_NOT_ADMIN"
-Assert-Contains -Text $deployBat -Needle "WHEELMAKER_DEPLOY_ELEVATE_DRY_RUN"
-Assert-Contains -Text $deployBat -Needle "Dry-run administrator relaunch command"
-Assert-Contains -Text $deployBat -Needle "administrator relaunch exited with code"
-Assert-Contains -Text $deployBat -Needle "EnableDelayedExpansion"
-Assert-Contains -Text $deployBat -Needle "!_ELEVATE_EXIT!"
-Assert-Contains -Text $deployBat -Needle "pause"
-Assert-Contains -Text $deployBat -Needle "go build"
-Assert-Contains -Text $deployBat -Needle "[INFO] Running wheelmaker-deploy deploy"
-Assert-Contains -Text $deployBat -Needle " deploy "
+Assert-Contains -Text $deployBat -Needle "scripts\deploy-windows.ps1"
+Assert-Contains -Text $deployBat -Needle "powershell.exe"
+Assert-NotContains -Text $deployBat -Needle "set "
+Assert-NotContains -Text $deployBat -Needle "Start-Process"
+Assert-NotContains -Text $deployBat -Needle "cmd.exe"
+Assert-NotContains -Text $deployBat -Needle "EnableDelayedExpansion"
+
+Assert-Contains -Text $deployPs1 -Needle "WheelMaker All-in-One Deploy"
+Assert-Contains -Text $deployPs1 -Needle "wheelmaker-deploy.exe"
+Assert-Contains -Text $deployPs1 -Needle ".wheelmaker\build\bootstrap"
+Assert-Contains -Text $deployPs1 -Needle ".wheelmaker\log\deploy.bat.log"
+Assert-Contains -Text $deployPs1 -Needle "Windows service deployment requires Administrator privileges"
+Assert-Contains -Text $deployPs1 -Needle "Start-Process"
+Assert-Contains -Text $deployPs1 -Needle "Verb RunAs"
+Assert-Contains -Text $deployPs1 -Needle "WHEELMAKER_DEPLOY_NO_PAUSE"
+Assert-Contains -Text $deployPs1 -Needle "WHEELMAKER_DEPLOY_FORCE_NOT_ADMIN"
+Assert-Contains -Text $deployPs1 -Needle "WHEELMAKER_DEPLOY_ELEVATE_DRY_RUN"
+Assert-Contains -Text $deployPs1 -Needle "Dry-run administrator relaunch command"
+Assert-Contains -Text $deployPs1 -Needle "go build"
+Assert-Contains -Text $deployPs1 -Needle "Running wheelmaker-deploy deploy"
 Assert-NotContains -Text $deployBat -Needle 'scripts\refresh_server.ps1'
 Assert-NotContains -Text $deployBat -Needle 'pushd "%~dp0app"'
 Assert-NotContains -Text $deployBat -Needle "npm run build:web:release"
@@ -78,7 +75,6 @@ Assert-NotContains -Text $deployBat -Needle "call npm ci --include=dev"
 Assert-NotContains -Text $deployBat -Needle "syncing app Web dependencies"
 Assert-NotContains -Text $deployBat -Needle "publish_desktop.ps1"
 Assert-NotContains -Text $deployBat -Needle "publish-desktop.bat"
-Assert-NotContains -Text $deployBat -Needle "if not defined WHEELMAKER_DEPLOY_STAY_OPEN if not defined WHEELMAKER_DEPLOY_NO_PAUSE ("
 Assert-NoBatchIfBlocks -Text $deployBat
 
 Write-Host "deploy.bat deploy-cli wrapper checks passed"
