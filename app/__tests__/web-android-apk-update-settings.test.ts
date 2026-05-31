@@ -23,10 +23,15 @@ describe('android apk update settings card', () => {
     const updateDetailEnd = mainTsx.indexOf('const renderTokenStatsSettingsDetail', updateDetailStart);
     const updateDetail = mainTsx.slice(updateDetailStart, updateDetailEnd);
     expect(updateDetail.indexOf('android-apk-update-card')).toBeGreaterThanOrEqual(0);
-    expect(updateDetail.indexOf('android-apk-update-card')).toBeLessThan(updateDetail.indexOf('wheelmaker-update-all-btn'));
+    expect(updateDetail.indexOf('android-apk-update-card')).toBeLessThan(updateDetail.indexOf('update-summary-bar'));
+    expect(updateDetail.indexOf('update-summary-bar')).toBeLessThan(updateDetail.indexOf('agent-package-hub-list'));
     expect(updateDetail).toContain('androidApkUpdateSupported ?');
+    expect(updateDetail).toContain('android-apk-update-heading');
+    expect(updateDetail).toContain('android-apk-update-meta-grid');
 
     expect(stylesCss).toContain('.android-apk-update-card');
+    expect(stylesCss).toContain('.android-apk-update-heading');
+    expect(stylesCss).toContain('.android-apk-update-meta-grid');
     expect(stylesCss).toContain('.android-apk-update-actions');
   });
 });

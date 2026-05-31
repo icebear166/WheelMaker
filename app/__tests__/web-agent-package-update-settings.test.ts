@@ -98,6 +98,12 @@ describe('agent package update settings UI source structure', () => {
     expect(mainTsx).toContain('loading: wheelMaker?.loading === true,');
     expect(mainTsx).toContain('pending: wheelMakerPending || wheelMakerUpdateAllPending,');
     expect(mainTsx).toContain('disabled={wheelMakerUpdateAllPending || wheelMakerPending || wheelMakerData?.pendingSignal === true}');
+    expect(mainTsx).toContain('const wheelMakerUpdateAvailableCount = updateHubCards.filter');
+    expect(mainTsx).toContain('const npmUpdateAvailableCount = updateHubCards.reduce');
+    expect(mainTsx).toContain('const updateSummaryScanning =');
+    expect(mainTsx).toContain('className="update-summary-bar"');
+    expect(mainTsx).toContain('className="update-summary-metrics"');
+    expect(mainTsx).toContain('className="update-summary-value"');
     expect(mainTsx).toContain('className="wheelmaker-update-all-btn"');
     expect(mainTsx).toContain("requestWheelMakerUpdateAll(updateHubCards.map(card => card.hubId))");
     expect(mainTsx).toContain("wheelMakerUpdateAllPending ? 'Updating All Hubs...' : 'Update All Hubs'");
@@ -122,6 +128,9 @@ describe('agent package update settings UI source structure', () => {
     expect(settingsDetailBodyBlock).toContain('scrollbar-gutter: stable;');
     expect(stylesCss).toContain('.wheelmaker-update-panel');
     expect(stylesCss).toContain('.wheelmaker-update-all-btn');
+    expect(stylesCss).toContain('.update-summary-bar');
+    expect(stylesCss).toContain('.update-summary-metrics');
+    expect(stylesCss).toContain('.update-summary-bar .wheelmaker-update-all-btn');
     expect(stylesCss).toContain('.wheelmaker-update-version-line');
     expect(stylesCss).toContain('.wheelmaker-update-ref-tag');
     expect(stylesCss).toContain('.wheelmaker-update-sha-line');
@@ -167,6 +176,27 @@ describe('agent package update settings UI source structure', () => {
     const mobileNpmBlock = stylesCss.match(/@media \(max-width: 560px\) \{[\s\S]*?\.wheelmaker-update-panel \{/m)?.[0] ?? '';
     expect(mobileNpmBlock).not.toContain('grid-template-columns: 1fr;');
     expect(mobileNpmBlock).not.toContain('width: 100%;');
+  });
+
+  test('places update summary between APK update and hub cards', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+
+    const updateDetailStart = mainTsx.indexOf('const renderUpdateSettingsDetail');
+    const updateDetailEnd = mainTsx.indexOf('const renderTokenStatsSettingsDetail', updateDetailStart);
+    expect(updateDetailStart).toBeGreaterThanOrEqual(0);
+    expect(updateDetailEnd).toBeGreaterThan(updateDetailStart);
+    const updateDetail = mainTsx.slice(updateDetailStart, updateDetailEnd);
+
+    const apkIndex = updateDetail.indexOf('android-apk-update-card');
+    const summaryIndex = updateDetail.indexOf('update-summary-bar');
+    const hubListIndex = updateDetail.indexOf('agent-package-hub-list');
+    const summaryButtonIndex = updateDetail.indexOf('className="wheelmaker-update-all-btn"', summaryIndex);
+    expect(apkIndex).toBeGreaterThanOrEqual(0);
+    expect(summaryIndex).toBeGreaterThan(apkIndex);
+    expect(hubListIndex).toBeGreaterThan(summaryIndex);
+    expect(summaryButtonIndex).toBeGreaterThan(summaryIndex);
+    expect(summaryButtonIndex).toBeLessThan(hubListIndex);
   });
 
   test('makes WheelMaker release identity and SHA rows visually distinct', () => {

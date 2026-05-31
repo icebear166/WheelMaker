@@ -13550,6 +13550,18 @@ function App() {
     const androidApkUpdateStatus = resolveAndroidApkUpdateStatus(androidApkLocalRelease, androidApkLatestRelease);
     const androidApkCurrentSha = androidApkLocalRelease?.apkSha256 || '';
     const androidApkLatestSha = androidApkLatestRelease?.apk.sha256 || '';
+    const wheelMakerUpdateAvailableCount = updateHubCards.filter(card => {
+      const data = card.wheelMaker?.data;
+      return data?.status === 'update_available' || data?.status === 'update_pending';
+    }).length;
+    const npmUpdateAvailableCount = updateHubCards.reduce(
+      (total, card) => total + deriveNpmPackageUpdateTargets(card.agentPackage?.hub?.packages ?? []).length,
+      0,
+    );
+    const updateSummaryScanning =
+      wheelMakerUpdatesLoading ||
+      agentPackagesLoading ||
+      updateHubCards.some(card => card.wheelMaker?.loading === true || card.agentPackage?.loading === true);
     const androidApkInstallDisabled =
       androidApkInstallPending ||
       androidApkUpdateLoading ||
@@ -13561,85 +13573,108 @@ function App() {
       <>
         {androidApkUpdateSupported ? (
           <div className="settings-metadata-card android-apk-update-card">
-            <div className="wheelmaker-update-panel android-apk-update-panel">
-              <div className="wheelmaker-update-title-line">
-                <span className="wheelmaker-update-scope">Android APK</span>
-                <span className={`agent-package-status status-${androidApkUpdateStatus}`}>
-                  {androidApkUpdateLoading ? 'Checking' : androidApkUpdateStatusLabel(androidApkUpdateStatus)}
+            <div className="android-apk-update-heading">
+              <div className="android-apk-update-title-stack">
+                <div className="android-apk-update-title-line">
+                  <span className="codicon codicon-device-mobile" aria-hidden="true" />
+                  <span className="wheelmaker-update-scope">Android APK</span>
+                </div>
+                <span className="android-apk-update-subtitle">Wheel Maker app package</span>
+              </div>
+              <span className={`agent-package-status status-${androidApkUpdateStatus}`}>
+                {androidApkUpdateLoading ? 'Checking' : androidApkUpdateStatusLabel(androidApkUpdateStatus)}
+              </span>
+            </div>
+            <div className="android-apk-update-meta-grid">
+              <div className="android-apk-update-meta-item" title={`Current ${androidApkCurrentSha || '-'}`}>
+                <span className="android-apk-update-meta-label">Current</span>
+                <span className="android-apk-update-meta-value">
+                  {androidApkLocalRelease?.versionName
+                    ? `v${androidApkLocalRelease.versionName} (${androidApkLocalRelease.versionCode || '-'})`
+                    : '-'}
+                </span>
+                <span className="android-apk-update-meta-subvalue">{shortGitSha(androidApkCurrentSha)}</span>
+              </div>
+              <div className="android-apk-update-meta-item" title={`Latest ${androidApkLatestSha || '-'}`}>
+                <span className="android-apk-update-meta-label">Latest</span>
+                <span className="android-apk-update-meta-value">{androidApkLatestRelease?.tagName || '-'}</span>
+                <span className="android-apk-update-meta-subvalue">{shortGitSha(androidApkLatestSha)}</span>
+              </div>
+              <div className="android-apk-update-meta-item">
+                <span className="android-apk-update-meta-label">Published</span>
+                <span className="android-apk-update-meta-value">{formatWheelMakerDateTime(androidApkLatestRelease?.publishedAt || '')}</span>
+                <span className="android-apk-update-meta-subvalue">
+                  {androidApkLatestRelease?.apk.size ? formatChatAttachmentSize(androidApkLatestRelease.apk.size) : 'Size unknown'}
                 </span>
               </div>
-              <div className="wheelmaker-update-version-line">
-                <span className="wheelmaker-update-ref-tag">{androidApkLatestRelease?.tagName || 'Latest release'}</span>
-                <span className="wheelmaker-update-behind">
-                  {androidApkLatestRelease?.apk.size ? formatChatAttachmentSize(androidApkLatestRelease.apk.size) : 'APK size unknown'}
+              <div className="android-apk-update-meta-item">
+                <span className="android-apk-update-meta-label">Install</span>
+                <span className="android-apk-update-meta-value">
+                  {androidApkLocalRelease
+                    ? androidApkLocalRelease.canRequestPackageInstalls === false ? 'Permission needed' : 'Ready'
+                    : '-'}
                 </span>
+                <span className="android-apk-update-meta-subvalue">{androidApkInstallStatus ? androidApkInstallStatusLabel(androidApkInstallStatus) : '-'}</span>
               </div>
-              <div className="wheelmaker-update-sha-lines">
-                <div
-                  className="wheelmaker-update-sha-line"
-                  title={`Current ${androidApkCurrentSha || '-'} ${formatWheelMakerDateTime(androidApkLocalRelease?.builtAt || '')}`}
-                >
-                  <span className="wheelmaker-update-sha-label">Current</span>
-                  <span className="wheelmaker-update-sha-value">{shortGitSha(androidApkCurrentSha)}</span>
-                  <span className="wheelmaker-update-sha-time">
-                    {androidApkLocalRelease?.versionName
-                      ? `v${androidApkLocalRelease.versionName} (${androidApkLocalRelease.versionCode || '-'})`
-                      : formatWheelMakerDateTime(androidApkLocalRelease?.builtAt || '')}
-                  </span>
-                </div>
-                <div
-                  className="wheelmaker-update-sha-line"
-                  title={`Latest ${androidApkLatestSha || '-'} ${formatWheelMakerDateTime(androidApkLatestRelease?.publishedAt || '')}`}
-                >
-                  <span className="wheelmaker-update-sha-label">Latest</span>
-                  <span className="wheelmaker-update-sha-value">{shortGitSha(androidApkLatestSha)}</span>
-                  <span className="wheelmaker-update-sha-time">{formatWheelMakerDateTime(androidApkLatestRelease?.publishedAt || '')}</span>
-                </div>
-              </div>
-              {androidApkUpdateError ? (
-                <div className="settings-metadata-error">{androidApkUpdateError}</div>
-              ) : null}
-              {androidApkInstallStatus ? (
-                <div className="settings-metadata-line android-apk-update-install-state">
-                  {androidApkInstallStatusLabel(androidApkInstallStatus)}
-                </div>
-              ) : null}
-              <div className="android-apk-update-actions">
-                <button
-                  type="button"
-                  className="wheelmaker-update-action-btn android-apk-update-action-btn"
-                  disabled={androidApkUpdateLoading}
-                  onClick={() => refreshAndroidApkUpdate().catch(() => undefined)}
-                >
-                  {androidApkUpdateLoading ? 'Checking...' : 'Check'}
-                </button>
-                <button
-                  type="button"
-                  className="wheelmaker-update-action-btn android-apk-update-action-btn primary"
-                  disabled={androidApkInstallDisabled}
-                  onClick={() => requestAndroidApkInstall().catch(() => undefined)}
-                >
-                  {androidApkInstallPending ? 'Preparing...' : 'Download and Install'}
-                </button>
-              </div>
+            </div>
+            {androidApkUpdateError ? (
+              <div className="settings-metadata-error">{androidApkUpdateError}</div>
+            ) : null}
+            <div className="android-apk-update-actions">
+              <button
+                type="button"
+                className="wheelmaker-update-action-btn android-apk-update-action-btn"
+                disabled={androidApkUpdateLoading}
+                onClick={() => refreshAndroidApkUpdate().catch(() => undefined)}
+              >
+                {androidApkUpdateLoading ? 'Checking...' : 'Check'}
+              </button>
+              <button
+                type="button"
+                className="wheelmaker-update-action-btn android-apk-update-action-btn primary"
+                disabled={androidApkInstallDisabled}
+                onClick={() => requestAndroidApkInstall().catch(() => undefined)}
+              >
+                {androidApkInstallPending ? 'Preparing...' : 'Download and Install'}
+              </button>
             </div>
           </div>
         ) : null}
-        <button
-          type="button"
-          className="wheelmaker-update-all-btn"
-          disabled={updateHubCards.length === 0 || wheelMakerUpdateAllPending}
-          onClick={() => requestWheelMakerUpdateAll(updateHubCards.map(card => card.hubId))}
-        >
-          <span
-            className={`codicon ${
-              wheelMakerUpdateAllPending
-                ? 'codicon-loading codicon-modifier-spin'
-                : 'codicon-cloud-download'
-            }`}
-          />
-          <span>{wheelMakerUpdateAllPending ? 'Updating All Hubs...' : 'Update All Hubs'}</span>
-        </button>
+        <div className="update-summary-bar">
+          <div className="update-summary-metrics">
+            <div className="update-summary-metric">
+              <span className="update-summary-value">{updateHubCards.length}</span>
+              <span className="update-summary-label">Hubs</span>
+            </div>
+            <div className="update-summary-metric">
+              <span className="update-summary-value">{wheelMakerUpdateAvailableCount}</span>
+              <span className="update-summary-label">Release updates</span>
+            </div>
+            <div className="update-summary-metric">
+              <span className="update-summary-value">{npmUpdateAvailableCount}</span>
+              <span className="update-summary-label">NPM updates</span>
+            </div>
+            <div className="update-summary-metric update-summary-state">
+              <span className={`codicon ${updateSummaryScanning ? 'codicon-loading codicon-modifier-spin' : 'codicon-check'}`} aria-hidden="true" />
+              <span className="update-summary-label">{updateSummaryScanning ? 'Scanning' : 'Current scan idle'}</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="wheelmaker-update-all-btn"
+            disabled={updateHubCards.length === 0 || wheelMakerUpdateAllPending}
+            onClick={() => requestWheelMakerUpdateAll(updateHubCards.map(card => card.hubId))}
+          >
+            <span
+              className={`codicon ${
+                wheelMakerUpdateAllPending
+                  ? 'codicon-loading codicon-modifier-spin'
+                  : 'codicon-cloud-download'
+              }`}
+            />
+            <span>{wheelMakerUpdateAllPending ? 'Updating All Hubs...' : 'Update All Hubs'}</span>
+          </button>
+        </div>
         {(wheelMakerUpdatesLoading || agentPackagesLoading) && updateHubCards.length === 0 ? (
           <div className="muted block">Scanning hubs...</div>
         ) : null}
@@ -13676,10 +13711,17 @@ function App() {
             return (
               <div key={`update-hub:${card.hubId}`} className="settings-metadata-card agent-package-hub-card">
                 <div className="settings-metadata-line settings-metadata-line-tags update-hub-header">
-                  <span className={`wide-project-hub-tag ${tagVariantClass('wide-project-hub', card.hubId)}`}>
-                    <span className="wide-project-hub-dot" aria-hidden="true" />
-                    <span className="wide-project-hub-label">{card.hubId}</span>
-                  </span>
+                  <div className="update-hub-title-stack">
+                    <span className={`wide-project-hub-tag ${tagVariantClass('wide-project-hub', card.hubId)}`}>
+                      <span className="wide-project-hub-dot" aria-hidden="true" />
+                      <span className="wide-project-hub-label">{card.hubId}</span>
+                    </span>
+                    <span className="update-hub-summary">
+                      {wheelMaker?.loading ? 'Checking release' : wheelMakerUpdateStatusLabel(wheelMakerStatus)}
+                      {' / '}
+                      {npmPackageUpdateSummary(npmUpdateTargets.length)}
+                    </span>
+                  </div>
                   {wheelMaker?.loading || agentCard?.loading ? (
                     <span className="wide-session-agent-tag">Scanning</span>
                   ) : null}
