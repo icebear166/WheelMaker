@@ -33,6 +33,8 @@ Assert-Contains -Text $deployBat -Needle "Windows service deployment requires Ad
 Assert-Contains -Text $deployBat -Needle "Start-Process"
 Assert-Contains -Text $deployBat -Needle "Verb RunAs"
 Assert-Contains -Text $deployBat -Needle "WHEELMAKER_DEPLOY_ELEVATED"
+Assert-Contains -Text $deployBat -Needle "WHEELMAKER_DEPLOY_NO_PAUSE"
+Assert-Contains -Text $deployBat -Needle "administrator relaunch exited with code"
 Assert-Contains -Text $deployBat -Needle "pause"
 Assert-Contains -Text $deployBat -Needle "go build"
 Assert-Contains -Text $deployBat -Needle "[INFO] Running wheelmaker-deploy deploy"
