@@ -12,6 +12,14 @@ import remarkGfm from 'remark-gfm';
 
 declare const require: (id: string) => any;
 
+declare global {
+  interface Window {
+    WheelMakerAndroidBack?: {
+      handleBack: () => boolean;
+    };
+  }
+}
+
 import { getDefaultRegistryAddress, toRegistryWsUrl } from './runtime';
 import { appendPortRelayAutoAuthCode, appendPortRelayOpenPath, parsePortRelayLocalHttpUrl, resolvePortRelayOpenUrl } from './portRelayUrl';
 import type { PortRelayLocalHttpUrl } from './portRelayUrl';
@@ -6830,6 +6838,29 @@ function App() {
     }
     setSettingsDetailView(null);
   }, [isWide, settingsDetailView, sidebarSettingsOpen]);
+  const handleAndroidNativeBack = useCallback(() => {
+    if (isWide || !sidebarSettingsOpenRef.current) {
+      return false;
+    }
+    const currentKind = settingsPageKind(settingsDetailViewRef.current);
+    mobileSettingsHistoryKeyRef.current = null;
+    mobileSettingsReplaceRootHistoryRef.current = false;
+    setSettingsDetailView(null);
+    if (currentKind !== 'child') {
+      setSidebarSettingsOpen(false);
+    }
+    return true;
+  }, [isWide, setSidebarSettingsOpen]);
+  useEffect(() => {
+    window.WheelMakerAndroidBack = {
+      handleBack: handleAndroidNativeBack,
+    };
+    return () => {
+      if (window.WheelMakerAndroidBack?.handleBack === handleAndroidNativeBack) {
+        delete window.WheelMakerAndroidBack;
+      }
+    };
+  }, [handleAndroidNativeBack]);
   const openMobileSettingsShortcutDetail = useCallback((detail: SettingsPeerDetail) => {
     if (settingsDetailView === detail) {
       return;

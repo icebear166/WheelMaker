@@ -115,6 +115,10 @@ describe('mobile settings system back', () => {
     expect(main).toContain('handleMobileSettingsBackButton');
     expect(main).toContain('handleMobileSettingsRootShortcut');
     expect(main).toContain('openMobileSettingsShortcutDetail');
+    expect(main).toContain('const handleAndroidNativeBack = useCallback(() => {');
+    expect(main).toContain('window.WheelMakerAndroidBack = {');
+    expect(main).toContain('handleBack: handleAndroidNativeBack');
+    expect(main).toContain('settingsPageKind(settingsDetailViewRef.current)');
     expect(main).toContain('renderSettingsDetailActions(settingsDetailView)');
     expect(main).not.toContain('mobileSettingsSwipe');
   });

@@ -79,6 +79,16 @@ class MainActivity : Activity() {
     }
 
     override fun onBackPressed() {
+        webView.evaluateJavascript(ANDROID_BACK_SCRIPT) { rawResult ->
+            val consumed = rawResult == "true"
+            if (consumed) {
+                return@evaluateJavascript
+            }
+            performDefaultBackNavigation()
+        }
+    }
+
+    private fun performDefaultBackNavigation() {
         if (webView.canGoBack()) {
             webView.goBack()
             return
@@ -307,6 +317,7 @@ class MainActivity : Activity() {
         private const val FILE_CHOOSER_REQUEST_CODE = 1002
         private const val NATIVE_SPEECH_PERMISSION_REQUEST_CODE = 1003
         private const val NOTIFICATION_PERMISSION_REQUEST_CODE = 1004
+        private const val ANDROID_BACK_SCRIPT = "(function(){try{var handler=window.WheelMakerAndroidBack&&window.WheelMakerAndroidBack.handleBack;if(typeof handler==='function'){return handler()===true;}}catch(error){}return false;})()"
         private val APP_BACKGROUND_COLOR = Color.rgb(11, 18, 32)
     }
 }
