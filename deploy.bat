@@ -3,12 +3,20 @@ set "_DEPLOY_LOG_DIR=%USERPROFILE%\.wheelmaker\log"
 set "_DEPLOY_LOG_FILE=%USERPROFILE%\.wheelmaker\log\deploy.bat.log"
 if not exist "%_DEPLOY_LOG_DIR%" mkdir "%_DEPLOY_LOG_DIR%" >nul 2>&1
 >>"%_DEPLOY_LOG_FILE%" echo [%date% %time%] deploy.bat entered args=%*
-if not defined WHEELMAKER_DEPLOY_STAY_OPEN if not defined WHEELMAKER_DEPLOY_NO_PAUSE (
-  >>"%_DEPLOY_LOG_FILE%" echo [%date% %time%] opening stable cmd /k window
-  set "WHEELMAKER_DEPLOY_STAY_OPEN=1"
-  start "WheelMaker Deploy" "%ComSpec%" /k call "%~f0" %*
-  exit /b 0
-)
+if defined WHEELMAKER_DEPLOY_STAY_OPEN goto StableWindowReady
+if defined WHEELMAKER_DEPLOY_NO_PAUSE goto StableWindowReady
+>>"%_DEPLOY_LOG_FILE%" echo [%date% %time%] opening stable cmd /k window
+if not defined WHEELMAKER_DEPLOY_LAUNCH_DRY_RUN goto LaunchStableWindow
+echo [INFO] Dry-run stable window command:
+echo start "WheelMaker Deploy" "%ComSpec%" /k call "%~f0" %*
+exit /b 0
+
+:LaunchStableWindow
+set "WHEELMAKER_DEPLOY_STAY_OPEN=1"
+start "WheelMaker Deploy" "%ComSpec%" /k call "%~f0" %*
+exit /b 0
+
+:StableWindowReady
 setlocal EnableExtensions EnableDelayedExpansion
 title WheelMaker Deploy
 
