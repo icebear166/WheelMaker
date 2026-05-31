@@ -1,5 +1,5 @@
 @echo off
-setlocal
+setlocal EnableExtensions EnableDelayedExpansion
 title WheelMaker Deploy
 
 set "_REPO=%~dp0"
@@ -29,13 +29,13 @@ if "%_NEEDS_ADMIN%"=="1" (
     set "WHEELMAKER_DEPLOY_BAT=%~f0"
     set "WHEELMAKER_DEPLOY_ARGS=%_ARGS%"
     set "WHEELMAKER_DEPLOY_ELEVATED=1"
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "$bat=$env:WHEELMAKER_DEPLOY_BAT; $argLine=$env:WHEELMAKER_DEPLOY_ARGS; $proc=Start-Process -FilePath $bat -ArgumentList $argLine -Verb RunAs -Wait -PassThru; exit $proc.ExitCode"
-    set "_ELEVATE_EXIT=%errorlevel%"
-    if not "%_ELEVATE_EXIT%"=="0" (
-      echo [FAILED] administrator relaunch exited with code %_ELEVATE_EXIT%
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$bat=$env:WHEELMAKER_DEPLOY_BAT; $argLine=$env:WHEELMAKER_DEPLOY_ARGS; $q=[char]34; $cmdLine='/k call ' + $q + $bat + $q; if ($argLine) { $cmdLine += ' ' + $argLine }; $proc=Start-Process -FilePath 'cmd.exe' -ArgumentList $cmdLine -Verb RunAs -Wait -PassThru; exit $proc.ExitCode"
+    set "_ELEVATE_EXIT=!errorlevel!"
+    if not "!_ELEVATE_EXIT!"=="0" (
+      echo [FAILED] administrator relaunch exited with code !_ELEVATE_EXIT!
       if "%_PAUSE_ON_EXIT%"=="1" pause
     )
-    exit /b %_ELEVATE_EXIT%
+    exit /b !_ELEVATE_EXIT!
   )
 )
 
