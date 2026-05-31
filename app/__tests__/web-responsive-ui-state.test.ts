@@ -28,6 +28,9 @@ describe('web responsive ui state', () => {
 
     const {
       FLOATING_CONTROL_DEFAULT_Y_RATIO,
+      FLOATING_CONTROL_DEFAULT_IDLE_OPACITY,
+      FLOATING_CONTROL_IDLE_OPACITY_MAX,
+      FLOATING_CONTROL_IDLE_OPACITY_MIN,
       FLOATING_CONTROL_COMPOSER_GAP_PX,
       floatingControlTopFromYRatio,
       floatingControlYRatioFromLegacySlot,
@@ -36,14 +39,22 @@ describe('web responsive ui state', () => {
       resolveFloatingControlDefaultBounds,
       resolveFloatingControlYRatioForBoundsChange,
       resolveFloatingControlYRatioForStableTop,
+      sanitizeFloatingControlIdleOpacity,
       sanitizeFloatingControlYRatio,
     } = require(modulePath);
 
     expect(FLOATING_CONTROL_DEFAULT_Y_RATIO).toBe(0.25);
+    expect(FLOATING_CONTROL_DEFAULT_IDLE_OPACITY).toBe(0.34);
+    expect(FLOATING_CONTROL_IDLE_OPACITY_MIN).toBe(0.1);
+    expect(FLOATING_CONTROL_IDLE_OPACITY_MAX).toBe(0.8);
     expect(FLOATING_CONTROL_COMPOSER_GAP_PX).toBe(12);
     expect(sanitizeFloatingControlYRatio(-0.4)).toBe(0);
     expect(sanitizeFloatingControlYRatio(1.4)).toBe(1);
     expect(sanitizeFloatingControlYRatio(Number.NaN)).toBe(0.25);
+    expect(sanitizeFloatingControlIdleOpacity(-0.4)).toBe(0.1);
+    expect(sanitizeFloatingControlIdleOpacity(1.4)).toBe(0.8);
+    expect(sanitizeFloatingControlIdleOpacity(Number.NaN)).toBe(0.34);
+    expect(sanitizeFloatingControlIdleOpacity(0.555)).toBe(0.56);
     expect(floatingControlTopFromYRatio(0.4, 10, 210)).toBe(90);
     expect(floatingControlYRatioFromTop(90, 10, 210)).toBe(0.4);
     expect(floatingControlYRatioFromTop(999, 10, 210)).toBe(1);
@@ -236,6 +247,7 @@ describe('web responsive ui state', () => {
       pinnedProjectIds: ['project-c', 'project-a', 'project-c'],
       floatingControlYRatio: 0.42,
       floatingControlSide: 'left',
+      floatingControlIdleOpacity: 0.55,
       chatConfigOverflowOpen: true,
       chatKeyboardInset: 120,
       floatingKeyboardOffset: 120,
@@ -266,10 +278,13 @@ describe('web responsive ui state', () => {
       drawerOpen: true,
       floatingControlYRatio: 0.42,
       floatingControlSide: 'left',
+      floatingControlIdleOpacity: 0.55,
       chatConfigOverflowOpen: true,
     });
     expect(createWorkspaceUiState({ floatingControlSide: 'invalid' }).mobile.floatingControlSide).toBe('right');
     expect(createWorkspaceUiState({ floatingControlYRatio: 3 }).mobile.floatingControlYRatio).toBe(1);
+    expect(createWorkspaceUiState({ floatingControlIdleOpacity: 0.02 }).mobile.floatingControlIdleOpacity).toBe(0.1);
+    expect(createWorkspaceUiState({ floatingControlIdleOpacity: 0.93 }).mobile.floatingControlIdleOpacity).toBe(0.8);
 
     state = workspaceUiReducer(state, {
       type: 'layout/modeChanged',
@@ -284,6 +299,7 @@ describe('web responsive ui state', () => {
     expect(state.desktop.sidebarWidth).toBe(420);
     expect(state.mobile.floatingControlYRatio).toBe(0.42);
     expect(state.mobile.floatingControlSide).toBe('left');
+    expect(state.mobile.floatingControlIdleOpacity).toBe(0.55);
     expect(state.mobile.drawerOpen).toBe(false);
     expect(state.mobile.chatConfigOverflowOpen).toBe(false);
     expect(state.transient.chatKeyboardInset).toBe(0);
@@ -310,6 +326,13 @@ describe('web responsive ui state', () => {
     });
 
     expect(state.mobile.floatingControlYRatio).toBe(0.83);
+
+    state = workspaceUiReducer(state, {
+      type: 'mobile/setFloatingControlIdleOpacity',
+      next: 0.74,
+    });
+
+    expect(state.mobile.floatingControlIdleOpacity).toBe(0.74);
 
     state = workspaceUiReducer(state, {
       type: 'desktop/setSidebarWidth',
@@ -360,11 +383,14 @@ describe('web responsive ui state', () => {
     expect(mainTsx).toContain('desktopSidebarWidth: globalState.desktopSidebarWidth');
     expect(mainTsx).toContain('pinnedProjectIds: globalState.pinnedProjectIds ?? []');
     expect(mainTsx).toContain('floatingControlSide: globalState.floatingControlSide ?? readPortRelayFloatingSide() ?? \'right\'');
-    expect(mainTsx).toContain('floatingControlYRatio,\n      floatingControlSide,\n      desktopSidebarWidth,');
+    expect(mainTsx).toContain('floatingControlIdleOpacity: globalState.floatingControlIdleOpacity,');
+    expect(mainTsx).toContain('floatingControlYRatio,\n      floatingControlSide,\n      floatingControlIdleOpacity,\n      desktopSidebarWidth,');
     expect(mainTsx).toContain('const desktopSidebarWidth = workspaceUiState.desktop.sidebarWidth;');
+    expect(mainTsx).toContain('const floatingControlIdleOpacity = workspaceUiState.mobile.floatingControlIdleOpacity;');
     expect(mainTsx).toContain('const collapsedProjectIds = workspaceUiState.shared.collapsedProjectIds;');
     expect(mainTsx).toContain('const pinnedProjectIds = workspaceUiState.shared.pinnedProjectIds;');
     expect(mainTsx).toContain("dispatchWorkspaceUi({ type: 'desktop/setSidebarWidth', next });");
+    expect(mainTsx).toContain("dispatchWorkspaceUi({ type: 'mobile/setFloatingControlIdleOpacity', next });");
     expect(mainTsx).toContain("dispatchWorkspaceUi({ type: 'shared/setCollapsedProjectIds', next });");
     expect(mainTsx).toContain("dispatchWorkspaceUi({ type: 'shared/setPinnedProjectIds', next });");
   });
@@ -380,20 +406,24 @@ describe('web responsive ui state', () => {
     expect(persistenceTs).toContain("export type PersistedFloatingControlSide = 'left' | 'right';");
     expect(persistenceTs).toContain('floatingControlYRatio: number;');
     expect(persistenceTs).toContain('floatingControlSide: PersistedFloatingControlSide;');
+    expect(persistenceTs).toContain('floatingControlIdleOpacity: number;');
     expect(persistenceTs).not.toContain('useLatestPromptTitle: boolean;');
     expect(persistenceTs).toContain("desktopSidebarWidth: 'desktopSidebarWidth',");
     expect(persistenceTs).toContain("floatingControlYRatio: 'floatingControlYRatio',");
     expect(persistenceTs).toContain("floatingControlSlot: 'floatingControlSlot',");
     expect(persistenceTs).toContain("floatingControlSide: 'floatingControlSide',");
+    expect(persistenceTs).toContain("floatingControlIdleOpacity: 'floatingControlIdleOpacity',");
     expect(persistenceTs).not.toContain("useLatestPromptTitle: 'useLatestPromptTitle',");
     expect(persistenceTs).toContain('desktopSidebarWidth: 380,');
     expect(persistenceTs).toContain('floatingControlYRatio: FLOATING_CONTROL_DEFAULT_Y_RATIO,');
     expect(persistenceTs).toContain("floatingControlSide: 'right',");
+    expect(persistenceTs).toContain('floatingControlIdleOpacity: FLOATING_CONTROL_DEFAULT_IDLE_OPACITY,');
     expect(persistenceTs).not.toContain('useLatestPromptTitle: false,');
     expect(persistenceTs).not.toContain('useLatestPromptTitle: typeof input.useLatestPromptTitle');
     expect(persistenceTs).toContain('desktopSidebarWidth: sanitizeDesktopSidebarWidth(input.desktopSidebarWidth, base.desktopSidebarWidth),');
     expect(persistenceTs).toContain('floatingControlYRatio,');
     expect(persistenceTs).toContain('floatingControlSide: sanitizeFloatingControlSide(input.floatingControlSide, base.floatingControlSide),');
+    expect(persistenceTs).toContain('floatingControlIdleOpacity: sanitizeFloatingControlIdleOpacity(input.floatingControlIdleOpacity, base.floatingControlIdleOpacity),');
     expect(persistenceTs).toContain(
       '{k: GLOBAL_KEYS.desktopSidebarWidth, v: serialize(this.state.global.desktopSidebarWidth), updatedAt: now}',
     );
@@ -406,6 +436,9 @@ describe('web responsive ui state', () => {
     );
     expect(persistenceTs).toContain(
       '{k: GLOBAL_KEYS.floatingControlSide, v: serialize(next.floatingControlSide), updatedAt: now}',
+    );
+    expect(persistenceTs).toContain(
+      '{k: GLOBAL_KEYS.floatingControlIdleOpacity, v: serialize(next.floatingControlIdleOpacity), updatedAt: now}',
     );
     expect(persistenceTs).not.toContain('next.useLatestPromptTitle');
   });

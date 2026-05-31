@@ -3,7 +3,10 @@ import type {
   PersistedFloatingControlSide,
   PersistedTab,
 } from './workspacePersistence';
-import { sanitizeFloatingControlYRatio } from './mobileFloatingControls';
+import {
+  sanitizeFloatingControlIdleOpacity,
+  sanitizeFloatingControlYRatio,
+} from './mobileFloatingControls';
 
 export type WorkspaceUiStateValue<T> = T | ((current: T) => T);
 
@@ -39,6 +42,7 @@ export type WorkspaceUiState = {
     drawerOpen: boolean;
     floatingControlYRatio: number;
     floatingControlSide: PersistedFloatingControlSide;
+    floatingControlIdleOpacity: number;
     chatConfigOverflowOpen: boolean;
   };
   transient: {
@@ -59,6 +63,7 @@ export type WorkspaceUiStateInput = {
   drawerOpen?: unknown;
   floatingControlYRatio?: unknown;
   floatingControlSide?: unknown;
+  floatingControlIdleOpacity?: unknown;
   chatConfigOverflowOpen?: unknown;
   chatKeyboardInset?: unknown;
   floatingKeyboardOffset?: unknown;
@@ -80,6 +85,10 @@ export type WorkspaceUiAction =
   | {
       type: 'mobile/setFloatingControlSide';
       next: WorkspaceUiStateValue<PersistedFloatingControlSide>;
+    }
+  | {
+      type: 'mobile/setFloatingControlIdleOpacity';
+      next: WorkspaceUiStateValue<number>;
     }
   | {
       type: 'mobile/setChatConfigOverflowOpen';
@@ -162,6 +171,7 @@ export function createWorkspaceUiState(input: WorkspaceUiStateInput = {}): Works
       drawerOpen: typeof input.drawerOpen === 'boolean' ? input.drawerOpen : false,
       floatingControlYRatio: sanitizeFloatingControlYRatio(input.floatingControlYRatio),
       floatingControlSide: sanitizeFloatingControlSide(input.floatingControlSide),
+      floatingControlIdleOpacity: sanitizeFloatingControlIdleOpacity(input.floatingControlIdleOpacity),
       chatConfigOverflowOpen:
         typeof input.chatConfigOverflowOpen === 'boolean'
           ? input.chatConfigOverflowOpen
@@ -260,6 +270,17 @@ export function workspaceUiReducer(
           ...state.mobile,
           floatingControlSide: sanitizeFloatingControlSide(
             resolveNext(state.mobile.floatingControlSide, action.next),
+          ),
+        },
+      };
+    case 'mobile/setFloatingControlIdleOpacity':
+      return {
+        ...state,
+        mobile: {
+          ...state.mobile,
+          floatingControlIdleOpacity: sanitizeFloatingControlIdleOpacity(
+            resolveNext(state.mobile.floatingControlIdleOpacity, action.next),
+            state.mobile.floatingControlIdleOpacity,
           ),
         },
       };

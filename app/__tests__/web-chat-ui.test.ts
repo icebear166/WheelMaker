@@ -1426,9 +1426,11 @@ describe('web chat integration', () => {
 
     expect(mainTsx).toContain('const FLOATING_CONTROL_IDLE_DELAY_MS = 3000;');
     expect(mainTsx).toContain('const [floatingControlsIdle, setFloatingControlsIdle] = useState(false);');
+    expect(mainTsx).toContain('const floatingControlIdleOpacityPercent = Math.round(floatingControlIdleOpacity * 100);');
     expect(mainTsx).toContain('const floatingControlsIdleBlocked =');
     expect(mainTsx).toContain('const wakeFloatingControls = useCallback(() => {');
     expect(mainTsx).toContain('data-idle={floatingControlsIdle}');
+    expect(mainTsx).toContain("'--floating-control-idle-opacity': String(floatingControlIdleOpacity),");
     expect(mainTsx).toContain('onPointerDownCapture={wakeFloatingControls}');
     expect(mainTsx).toContain('data-backdrop-tone={floatingBackdropTone}');
     expect(mainTsx).toContain('requestFloatingBackdropToneMeasure');
@@ -1453,7 +1455,7 @@ describe('web chat integration', () => {
       /\.floating-control-stack\[data-backdrop-tone='light'\] \.floating-nav-group,[\s\S]*\.floating-control-stack\[data-backdrop-tone='light'\] \.drawer-toggle-bubble \{[\s\S]*background: color-mix\(in srgb, var\(--panel\) 88%, transparent\);[\s\S]*backdrop-filter: blur\(8px\);[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
-      /\.floating-control-stack\[data-idle='true'\] \{[\s\S]*opacity: 0\.34;[\s\S]*\}/,
+      /\.floating-control-stack\[data-idle='true'\] \{[\s\S]*opacity: var\(--floating-control-idle-opacity, 0\.34\);[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
       /\.floating-control-stack\[data-idle='true'\] \.floating-nav-group,[\s\S]*\.floating-control-stack\[data-idle='true'\] \.drawer-toggle-bubble,[\s\S]*\.floating-control-stack\[data-idle='true'\] \.gesture-nav-button \{[\s\S]*background: transparent;[\s\S]*box-shadow: none;[\s\S]*backdrop-filter: none;[\s\S]*\}/,
@@ -1510,6 +1512,13 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain("settingsDetailView === 'tokenStats'");
     expect(mainTsx).toContain('const renderSettingsSection = (title: string, rows: React.ReactNode, icon?: string) => (');
     expect(mainTsx).toContain("renderSettingsSection('Appearance'");
+    expect(mainTsx).toContain('3tap Idle Opacity');
+    expect(mainTsx).toContain('{floatingControlIdleOpacityPercent}%');
+    expect(mainTsx).toContain('value={floatingControlIdleOpacityPercent}');
+    expect(mainTsx).toContain('min={10}');
+    expect(mainTsx).toContain('max={80}');
+    expect(mainTsx).toContain('step={5}');
+    expect(mainTsx).toContain('onChange={event => setFloatingControlIdleOpacity(Number(event.target.value) / 100)}');
     expect(mainTsx).toContain("renderSettingsSection('Chat'");
     expect(mainTsx).toContain("renderSettingsSection('Code Display'");
     expect(mainTsx).toContain("renderSettingsSection('Debug'");
@@ -1519,6 +1528,9 @@ describe('web chat integration', () => {
     const codeDisplaySettingsIndex = mainTsx.indexOf("renderSettingsSection('Code Display'");
     const debugSettingsIndex = mainTsx.indexOf("renderSettingsSection('Debug'");
     expect(appearanceSettingsIndex).toBeLessThan(chatSettingsIndex);
+    const appearanceSection = mainTsx.slice(appearanceSettingsIndex, chatSettingsIndex);
+    expect(appearanceSection).toContain('!isWide ? (');
+    expect(appearanceSection).toContain('3tap Idle Opacity');
     expect(chatSettingsIndex).toBeLessThan(codeDisplaySettingsIndex);
     expect(codeDisplaySettingsIndex).toBeLessThan(debugSettingsIndex);
     expect(mainTsx).toContain("openSettingsChild('database')");
@@ -1552,6 +1564,9 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.settings-detail-row {');
     expect(stylesCss).toContain('.settings-section-title {');
     expect(stylesCss).toContain('.settings-row {');
+    expect(stylesCss).toContain('.settings-range-row {');
+    expect(stylesCss).toContain('.settings-range-control {');
+    expect(stylesCss).toContain('.settings-range-value {');
     expect(stylesCss).toContain('.settings-danger-row {');
     expect(stylesCss).toContain('.settings-metadata-list {');
     expect(stylesCss).toContain('.settings-database-dump {');

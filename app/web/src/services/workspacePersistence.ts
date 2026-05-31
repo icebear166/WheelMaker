@@ -28,8 +28,10 @@ import {
   type SpeechSettings,
 } from '../features/speech/speechSettings';
 import {
+  FLOATING_CONTROL_DEFAULT_IDLE_OPACITY,
   FLOATING_CONTROL_DEFAULT_Y_RATIO,
   floatingControlYRatioFromLegacySlot,
+  sanitizeFloatingControlIdleOpacity,
   sanitizeFloatingControlYRatio,
 } from './mobileFloatingControls';
 
@@ -91,6 +93,7 @@ export type PersistedGlobalState = {
   selectedChatSessionId: string;
   floatingControlYRatio: number;
   floatingControlSide: PersistedFloatingControlSide;
+  floatingControlIdleOpacity: number;
   desktopSidebarWidth: number;
   collapsedProjectIds: string[];
   desktopCollapsedProjectIds: string[];
@@ -169,6 +172,7 @@ const GLOBAL_KEYS = {
   floatingControlYRatio: 'floatingControlYRatio',
   floatingControlSlot: 'floatingControlSlot',
   floatingControlSide: 'floatingControlSide',
+  floatingControlIdleOpacity: 'floatingControlIdleOpacity',
   desktopSidebarWidth: 'desktopSidebarWidth',
   collapsedProjectIds: 'collapsedProjectIds',
   desktopCollapsedProjectIds: 'desktopCollapsedProjectIds',
@@ -205,6 +209,7 @@ function defaultGlobalState(): PersistedGlobalState {
     selectedChatSessionId: '',
     floatingControlYRatio: FLOATING_CONTROL_DEFAULT_Y_RATIO,
     floatingControlSide: 'right',
+    floatingControlIdleOpacity: FLOATING_CONTROL_DEFAULT_IDLE_OPACITY,
     desktopSidebarWidth: 380,
     collapsedProjectIds: [],
     desktopCollapsedProjectIds: [],
@@ -422,6 +427,7 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
     selectedChatSessionId: typeof input.selectedChatSessionId === 'string' ? input.selectedChatSessionId : base.selectedChatSessionId,
     floatingControlYRatio,
     floatingControlSide: sanitizeFloatingControlSide(input.floatingControlSide, base.floatingControlSide),
+    floatingControlIdleOpacity: sanitizeFloatingControlIdleOpacity(input.floatingControlIdleOpacity, base.floatingControlIdleOpacity),
     desktopSidebarWidth: sanitizeDesktopSidebarWidth(input.desktopSidebarWidth, base.desktopSidebarWidth),
     collapsedProjectIds,
     desktopCollapsedProjectIds: collapsedProjectIds,
@@ -553,8 +559,6 @@ class WorkspaceDatabase {
       const req = globalThis.indexedDB.open(WORKSPACE_DB_NAME, WORKSPACE_DB_VERSION);
       req.onupgradeneeded = (event) => {
         const db = req.result;
-        const tx = req.transaction;
-        const oldVersion = event.oldVersion;
         if (!db.objectStoreNames.contains(TABLE_GLOBAL_KV)) {
           db.createObjectStore(TABLE_GLOBAL_KV, {keyPath: 'k'});
         }
@@ -578,22 +582,6 @@ class WorkspaceDatabase {
         }
         if (!db.objectStoreNames.contains(TABLE_META)) {
           db.createObjectStore(TABLE_META, {keyPath: 'k'});
-        }
-        if (oldVersion > 0 && oldVersion < 6 && tx) {
-          for (const name of [
-            TABLE_GLOBAL_KV,
-            TABLE_PROJECT_STATE,
-            TABLE_PROJECT_COMMITS,
-            TABLE_CHAT_SESSION_INDEX,
-            TABLE_CHAT_SESSION_CONTENT,
-            TABLE_FILE_CACHE,
-            TABLE_DIFF_CACHE,
-            TABLE_META,
-          ]) {
-            if (db.objectStoreNames.contains(name)) {
-              tx.objectStore(name).clear();
-            }
-          }
         }
       };
       req.onsuccess = () => resolve(req.result);
@@ -828,21 +816,27 @@ export class WorkspacePersistenceRepository {
   }
 
   private async resetPersistentCacheAfterIncompatibleSchema(): Promise<void> {
-    const localIdentity = this.readLocalIdentityState();
-    const preservedToken = localIdentity.token || this.state.global.token;
-    const preservedAddress = localIdentity.address || this.state.global.address;
-    this.state = defaultWorkspaceState();
-    this.state.global.token = preservedToken;
-    this.state.global.address = preservedAddress;
-    this.saveLocalIdentityState({address: preservedAddress, token: preservedToken});
-    for (const key of Object.keys(this.projectCommits)) {
-      delete this.projectCommits[key];
-    }
     this.chatSessionIndex.clear();
     this.chatSessionContent.clear();
     this.diffCache.clear();
     this.fileCache.clear();
-    await this.saveAllStateToDb();
+    const now = Date.now();
+    await this.db.clearStores([
+      TABLE_CHAT_SESSION_INDEX,
+      TABLE_CHAT_SESSION_CONTENT,
+      TABLE_DIFF_CACHE,
+      TABLE_FILE_CACHE,
+    ]);
+    await this.db.putRow(TABLE_META, {
+      k: 'schemaVersion',
+      v: serialize(WORKSPACE_DB_VERSION),
+      updatedAt: now,
+    });
+    await this.db.putRow(TABLE_META, {
+      k: 'incompatibleChatCacheClearedAt',
+      v: serialize(new Date(now).toISOString()),
+      updatedAt: now,
+    });
   }
   private restoreDiffCache(rows: RawDiffCacheRow[]): void {
     this.diffCache.clear();
@@ -905,6 +899,7 @@ export class WorkspacePersistenceRepository {
       {k: GLOBAL_KEYS.selectedChatSessionId, v: serialize(this.state.global.selectedChatSessionId), updatedAt: now},
       {k: GLOBAL_KEYS.floatingControlYRatio, v: serialize(this.state.global.floatingControlYRatio), updatedAt: now},
       {k: GLOBAL_KEYS.floatingControlSide, v: serialize(this.state.global.floatingControlSide), updatedAt: now},
+      {k: GLOBAL_KEYS.floatingControlIdleOpacity, v: serialize(this.state.global.floatingControlIdleOpacity), updatedAt: now},
       {k: GLOBAL_KEYS.desktopSidebarWidth, v: serialize(this.state.global.desktopSidebarWidth), updatedAt: now},
       {k: GLOBAL_KEYS.collapsedProjectIds, v: serialize(this.state.global.collapsedProjectIds), updatedAt: now},
       {k: GLOBAL_KEYS.desktopCollapsedProjectIds, v: serialize(this.state.global.desktopCollapsedProjectIds), updatedAt: now},
@@ -1256,6 +1251,7 @@ export class WorkspacePersistenceRepository {
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.selectedChatSessionId, v: serialize(next.selectedChatSessionId), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.floatingControlYRatio, v: serialize(next.floatingControlYRatio), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.floatingControlSide, v: serialize(next.floatingControlSide), updatedAt: now});
+      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.floatingControlIdleOpacity, v: serialize(next.floatingControlIdleOpacity), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.desktopSidebarWidth, v: serialize(next.desktopSidebarWidth), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.collapsedProjectIds, v: serialize(next.collapsedProjectIds), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.desktopCollapsedProjectIds, v: serialize(next.desktopCollapsedProjectIds), updatedAt: now});

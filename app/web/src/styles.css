@@ -2756,7 +2756,7 @@ textarea,
 }
 
 .floating-control-stack[data-idle='true'] {
-  opacity: 0.34;
+  opacity: var(--floating-control-idle-opacity, 0.34);
   filter: none;
 }
 
@@ -3548,6 +3548,32 @@ textarea,
 
 .sidebar-setting-row {
   background: transparent;
+}
+
+.settings-range-row {
+  gap: 12px;
+}
+
+.settings-range-control {
+  min-width: 124px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.settings-range-control input[type='range'] {
+  width: 96px;
+  accent-color: var(--accent);
+}
+
+.settings-range-value {
+  min-width: 34px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .settings-danger-row {

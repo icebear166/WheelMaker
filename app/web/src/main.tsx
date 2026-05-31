@@ -3110,11 +3110,14 @@ function App() {
         pinnedProjectIds: globalState.pinnedProjectIds ?? [],
         floatingControlYRatio: globalState.floatingControlYRatio ?? readPortRelayFloatingYRatio() ?? FLOATING_CONTROL_DEFAULT_Y_RATIO,
         floatingControlSide: globalState.floatingControlSide ?? readPortRelayFloatingSide() ?? 'right',
+        floatingControlIdleOpacity: globalState.floatingControlIdleOpacity,
       }),
   );
   const tab = workspaceUiState.shared.tab as Tab;
   const floatingControlYRatio = workspaceUiState.mobile.floatingControlYRatio;
   const floatingControlSide = workspaceUiState.mobile.floatingControlSide;
+  const floatingControlIdleOpacity = workspaceUiState.mobile.floatingControlIdleOpacity;
+  const floatingControlIdleOpacityPercent = Math.round(floatingControlIdleOpacity * 100);
   const floatingDragState = workspaceUiState.transient.floatingDragState as FloatingDragState | null;
   const floatingKeyboardOffset = workspaceUiState.transient.floatingKeyboardOffset;
   const sidebarCollapsed = workspaceUiState.desktop.sidebarCollapsed;
@@ -3173,6 +3176,12 @@ function App() {
   const setFloatingControlSide = useCallback(
     (next: WorkspaceUiStateValue<PersistedFloatingControlSide>) => {
       dispatchWorkspaceUi({ type: 'mobile/setFloatingControlSide', next });
+    },
+    [],
+  );
+  const setFloatingControlIdleOpacity = useCallback(
+    (next: WorkspaceUiStateValue<number>) => {
+      dispatchWorkspaceUi({ type: 'mobile/setFloatingControlIdleOpacity', next });
     },
     [],
   );
@@ -5608,6 +5617,7 @@ function App() {
       selectedProjectId: projectId,
       floatingControlYRatio,
       floatingControlSide,
+      floatingControlIdleOpacity,
       desktopSidebarWidth,
       collapsedProjectIds,
       pinnedProjectIds,
@@ -5633,6 +5643,7 @@ function App() {
     projectId,
     floatingControlYRatio,
     floatingControlSide,
+    floatingControlIdleOpacity,
     desktopSidebarWidth,
     collapsedProjectIds,
     pinnedProjectIds,
@@ -5961,9 +5972,10 @@ function App() {
       !isWide
         ? ({
             top: `${effectiveFloatingControlTop}px`,
-          } as const)
+            '--floating-control-idle-opacity': String(floatingControlIdleOpacity),
+          } as React.CSSProperties)
         : undefined,
-    [effectiveFloatingControlTop, isWide],
+    [effectiveFloatingControlTop, floatingControlIdleOpacity, isWide],
   );
   const floatingDragVisualState =
     floatingDragState?.active
@@ -14446,6 +14458,26 @@ function App() {
               onChange={e => setGestureNavigation(e.target.checked)}
             />
           </label>
+          {!isWide ? (
+            <label className="settings-row sidebar-setting-row settings-range-row">
+              <span>
+                <span className="codicon codicon-eye settings-row-icon" aria-hidden="true" />
+                3tap Idle Opacity
+              </span>
+              <span className="settings-range-control">
+                <input
+                  type="range"
+                  min={10}
+                  max={80}
+                  step={5}
+                  value={floatingControlIdleOpacityPercent}
+                  onChange={event => setFloatingControlIdleOpacity(Number(event.target.value) / 100)}
+                  aria-label="3tap idle opacity"
+                />
+                <span className="settings-range-value">{floatingControlIdleOpacityPercent}%</span>
+              </span>
+            </label>
+          ) : null}
         </>
         ), 'paintcan')}
         {renderSettingsSection('Chat', (
