@@ -131,6 +131,16 @@ import {
   createNotificationProvider,
   type WheelMakerNotificationPermissionState,
 } from './notifications/provider';
+import {
+  GITHUB_ANDROID_LATEST_RELEASE_API,
+  createAndroidApkUpdateBridge,
+  parseAndroidLatestRelease,
+  resolveAndroidApkUpdateStatus,
+  type AndroidApkInstallResult,
+  type AndroidApkLatestRelease,
+  type AndroidApkLocalRelease,
+  type AndroidApkUpdateStatus,
+} from './androidApkUpdate';
 import { mergeChatSessionList, shouldUpdateCurrentProjectSessions } from './chat/chatIndexState';
 import {
   resolveChatListSelection,
@@ -943,6 +953,34 @@ function formatWheelMakerDateTime(value: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function androidApkUpdateStatusLabel(status: AndroidApkUpdateStatus): string {
+  switch (status) {
+    case 'up_to_date':
+      return 'Up to date';
+    case 'update_available':
+      return 'Update available';
+    default:
+      return 'Unknown';
+  }
+}
+
+function androidApkInstallStatusLabel(status: string): string {
+  switch (status) {
+    case 'permission_required':
+      return 'Install permission required';
+    case 'downloading':
+      return 'Downloading APK';
+    case 'downloaded':
+      return 'APK downloaded';
+    case 'installing':
+      return 'Opening installer';
+    case 'failed':
+      return 'Install failed';
+    default:
+      return status;
+  }
 }
 
 function clampFloatingTop(top: number, minTop: number, maxTop: number): number {
@@ -3175,6 +3213,14 @@ function App() {
   const [wheelMakerUpdatesError, setWheelMakerUpdatesError] = useState('');
   const [wheelMakerUpdatePendingHubId, setWheelMakerUpdatePendingHubId] = useState('');
   const [wheelMakerUpdateAllPending, setWheelMakerUpdateAllPending] = useState(false);
+  const androidApkUpdateBridge = useMemo(() => createAndroidApkUpdateBridge(), []);
+  const [androidApkUpdateSupported, setAndroidApkUpdateSupported] = useState(false);
+  const [androidApkLocalRelease, setAndroidApkLocalRelease] = useState<AndroidApkLocalRelease | null>(null);
+  const [androidApkLatestRelease, setAndroidApkLatestRelease] = useState<AndroidApkLatestRelease | null>(null);
+  const [androidApkUpdateLoading, setAndroidApkUpdateLoading] = useState(false);
+  const [androidApkUpdateError, setAndroidApkUpdateError] = useState('');
+  const [androidApkInstallStatus, setAndroidApkInstallStatus] = useState('');
+  const [androidApkInstallPending, setAndroidApkInstallPending] = useState(false);
   const wheelMakerUpdatePollTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const wheelMakerUpdatePollHubIdsRef = useRef<Set<string>>(new Set());
   const refreshWheelMakerUpdateHubRef = useRef<((hubId: string) => Promise<void>) | null>(null);
@@ -10655,6 +10701,73 @@ function App() {
     }
   }, [clearWheelMakerUpdatePollTimer, refreshProjectHubSnapshot, scheduleWheelMakerUpdatePoll]);
 
+  const refreshAndroidApkUpdate = useCallback(async () => {
+    const supported = androidApkUpdateBridge.isSupported();
+    setAndroidApkUpdateSupported(supported);
+    if (!supported) {
+      setAndroidApkLocalRelease(null);
+      setAndroidApkLatestRelease(null);
+      setAndroidApkUpdateError('');
+      setAndroidApkInstallStatus('');
+      return;
+    }
+    setAndroidApkUpdateLoading(true);
+    setAndroidApkUpdateError('');
+    try {
+      const local = await androidApkUpdateBridge.getLocalRelease();
+      setAndroidApkLocalRelease(local);
+      const response = await fetch(GITHUB_ANDROID_LATEST_RELEASE_API, {
+        cache: 'no-store',
+        headers: {
+          Accept: 'application/vnd.github+json',
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`GitHub release check failed (${response.status})`);
+      }
+      const latest = parseAndroidLatestRelease(await response.json());
+      if (!latest) {
+        throw new Error('Latest Android APK release asset not found.');
+      }
+      setAndroidApkLatestRelease(latest);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setAndroidApkUpdateError(message);
+    } finally {
+      setAndroidApkUpdateLoading(false);
+    }
+  }, [androidApkUpdateBridge]);
+
+  const requestAndroidApkInstall = useCallback(async () => {
+    if (!androidApkLatestRelease?.apk.downloadUrl) {
+      setAndroidApkUpdateError('Latest Android APK release asset not found.');
+      return;
+    }
+    setAndroidApkInstallPending(true);
+    setAndroidApkInstallStatus('');
+    setAndroidApkUpdateError('');
+    try {
+      const result: AndroidApkInstallResult = await androidApkUpdateBridge.installLatest({
+        downloadUrl: androidApkLatestRelease.apk.downloadUrl,
+        expectedSha256: androidApkLatestRelease.apk.sha256,
+        expectedSize: androidApkLatestRelease.apk.size,
+        tagName: androidApkLatestRelease.tagName,
+      });
+      setAndroidApkInstallStatus(result.status || '');
+      if (!result.ok) {
+        throw new Error(result.error || 'APK install request failed.');
+      }
+      if (result.status === 'permission_required') {
+        setAndroidApkInstallPending(false);
+        setAndroidApkUpdateError('Install permission required. Enable Install unknown apps, then retry.');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setAndroidApkInstallPending(false);
+      setAndroidApkUpdateError(message);
+    }
+  }, [androidApkLatestRelease, androidApkUpdateBridge]);
+
   useEffect(() => {
     refreshWheelMakerUpdateHubRef.current = refreshWheelMakerUpdateHub;
   }, [refreshWheelMakerUpdateHub]);
@@ -10755,7 +10868,32 @@ function App() {
     }
     refreshWheelMakerUpdates().catch(() => undefined);
     refreshAgentPackages().catch(() => undefined);
-  }, [clearWheelMakerUpdatePollTimer, settingsDetailView, refreshAgentPackages, refreshWheelMakerUpdates]);
+    refreshAndroidApkUpdate().catch(() => undefined);
+  }, [clearWheelMakerUpdatePollTimer, settingsDetailView, refreshAgentPackages, refreshAndroidApkUpdate, refreshWheelMakerUpdates]);
+
+  useEffect(() => {
+    if (!androidApkUpdateSupported) {
+      return undefined;
+    }
+    const listener = (event: Event) => {
+      const detail = (event as CustomEvent<{status?: string; error?: string}>).detail ?? {};
+      const status = detail.status || '';
+      if (status) {
+        setAndroidApkInstallStatus(status);
+      }
+      if (status === 'failed') {
+        setAndroidApkInstallPending(false);
+        setAndroidApkUpdateError(detail.error || 'APK install failed.');
+      } else if (status === 'permission_required') {
+        setAndroidApkInstallPending(false);
+        setAndroidApkUpdateError('Install permission required. Enable Install unknown apps, then retry.');
+      } else if (status === 'installing') {
+        setAndroidApkInstallPending(false);
+      }
+    };
+    window.addEventListener('wheelmaker:android-apk-update', listener);
+    return () => window.removeEventListener('wheelmaker:android-apk-update', listener);
+  }, [androidApkUpdateSupported]);
 
   const clearSkillOperationPollTimer = useCallback(() => {
     if (skillOperationPollTimerRef.current) {
@@ -13408,10 +13546,85 @@ function App() {
       options,
     );
 
-  const renderUpdateSettingsDetail = (options?: SettingsDetailShellOptions) =>
-    renderSettingsDetailShell(
+  const renderUpdateSettingsDetail = (options?: SettingsDetailShellOptions) => {
+    const androidApkUpdateStatus = resolveAndroidApkUpdateStatus(androidApkLocalRelease, androidApkLatestRelease);
+    const androidApkCurrentSha = androidApkLocalRelease?.apkSha256 || '';
+    const androidApkLatestSha = androidApkLatestRelease?.apk.sha256 || '';
+    const androidApkInstallDisabled =
+      androidApkInstallPending ||
+      androidApkUpdateLoading ||
+      !androidApkLatestRelease?.apk.downloadUrl ||
+      !androidApkLatestSha ||
+      androidApkUpdateStatus === 'up_to_date';
+    return renderSettingsDetailShell(
       'Update',
       <>
+        {androidApkUpdateSupported ? (
+          <div className="settings-metadata-card android-apk-update-card">
+            <div className="wheelmaker-update-panel android-apk-update-panel">
+              <div className="wheelmaker-update-title-line">
+                <span className="wheelmaker-update-scope">Android APK</span>
+                <span className={`agent-package-status status-${androidApkUpdateStatus}`}>
+                  {androidApkUpdateLoading ? 'Checking' : androidApkUpdateStatusLabel(androidApkUpdateStatus)}
+                </span>
+              </div>
+              <div className="wheelmaker-update-version-line">
+                <span className="wheelmaker-update-ref-tag">{androidApkLatestRelease?.tagName || 'Latest release'}</span>
+                <span className="wheelmaker-update-behind">
+                  {androidApkLatestRelease?.apk.size ? formatChatAttachmentSize(androidApkLatestRelease.apk.size) : 'APK size unknown'}
+                </span>
+              </div>
+              <div className="wheelmaker-update-sha-lines">
+                <div
+                  className="wheelmaker-update-sha-line"
+                  title={`Current ${androidApkCurrentSha || '-'} ${formatWheelMakerDateTime(androidApkLocalRelease?.builtAt || '')}`}
+                >
+                  <span className="wheelmaker-update-sha-label">Current</span>
+                  <span className="wheelmaker-update-sha-value">{shortGitSha(androidApkCurrentSha)}</span>
+                  <span className="wheelmaker-update-sha-time">
+                    {androidApkLocalRelease?.versionName
+                      ? `v${androidApkLocalRelease.versionName} (${androidApkLocalRelease.versionCode || '-'})`
+                      : formatWheelMakerDateTime(androidApkLocalRelease?.builtAt || '')}
+                  </span>
+                </div>
+                <div
+                  className="wheelmaker-update-sha-line"
+                  title={`Latest ${androidApkLatestSha || '-'} ${formatWheelMakerDateTime(androidApkLatestRelease?.publishedAt || '')}`}
+                >
+                  <span className="wheelmaker-update-sha-label">Latest</span>
+                  <span className="wheelmaker-update-sha-value">{shortGitSha(androidApkLatestSha)}</span>
+                  <span className="wheelmaker-update-sha-time">{formatWheelMakerDateTime(androidApkLatestRelease?.publishedAt || '')}</span>
+                </div>
+              </div>
+              {androidApkUpdateError ? (
+                <div className="settings-metadata-error">{androidApkUpdateError}</div>
+              ) : null}
+              {androidApkInstallStatus ? (
+                <div className="settings-metadata-line android-apk-update-install-state">
+                  {androidApkInstallStatusLabel(androidApkInstallStatus)}
+                </div>
+              ) : null}
+              <div className="android-apk-update-actions">
+                <button
+                  type="button"
+                  className="wheelmaker-update-action-btn android-apk-update-action-btn"
+                  disabled={androidApkUpdateLoading}
+                  onClick={() => refreshAndroidApkUpdate().catch(() => undefined)}
+                >
+                  {androidApkUpdateLoading ? 'Checking...' : 'Check'}
+                </button>
+                <button
+                  type="button"
+                  className="wheelmaker-update-action-btn android-apk-update-action-btn primary"
+                  disabled={androidApkInstallDisabled}
+                  onClick={() => requestAndroidApkInstall().catch(() => undefined)}
+                >
+                  {androidApkInstallPending ? 'Preparing...' : 'Download and Install'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
         <button
           type="button"
           className="wheelmaker-update-all-btn"
@@ -13605,6 +13818,7 @@ function App() {
       renderSettingsDetailActions('update'),
       options,
     );
+  };
 
   const renderTokenStatsSettingsDetail = (options?: SettingsDetailShellOptions) =>
     renderSettingsDetailShell(

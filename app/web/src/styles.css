@@ -1127,6 +1127,40 @@ textarea,
   opacity: 0.58;
 }
 
+.android-apk-update-card {
+  border-left: 3px solid color-mix(in srgb, var(--accent) 58%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel-2) 96%, var(--panel));
+  padding: 12px 13px;
+}
+
+.android-apk-update-panel {
+  row-gap: 7px;
+}
+
+.android-apk-update-install-state {
+  grid-column: 1 / -1;
+  color: var(--muted);
+}
+
+.android-apk-update-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.android-apk-update-action-btn {
+  min-width: 84px;
+  padding: 0 12px;
+}
+
+.android-apk-update-action-btn.primary {
+  min-width: 142px;
+  font-weight: 700;
+}
+
 .agent-package-hub-card {
   gap: 11px;
   border-left: 3px solid color-mix(in srgb, var(--accent) 62%, var(--border));

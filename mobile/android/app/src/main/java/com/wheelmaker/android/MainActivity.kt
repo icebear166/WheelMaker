@@ -38,6 +38,7 @@ class MainActivity : Activity() {
     private lateinit var webSourceRuntime: WebSourceRuntime
     private lateinit var androidSpeechRuntime: AndroidSpeechRuntime
     private lateinit var androidNotificationRuntime: AndroidNotificationRuntime
+    private lateinit var androidApkUpdateRuntime: AndroidApkUpdateRuntime
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
     private var pendingAudioPermissionRequest: PermissionRequest? = null
 
@@ -51,6 +52,7 @@ class MainActivity : Activity() {
         webView = WebView(this)
         androidSpeechRuntime = AndroidSpeechRuntime(this, webView, NATIVE_SPEECH_PERMISSION_REQUEST_CODE)
         androidNotificationRuntime = AndroidNotificationRuntime(this, webView, NOTIFICATION_PERMISSION_REQUEST_CODE)
+        androidApkUpdateRuntime = AndroidApkUpdateRuntime(this, webView)
         webView.setBackgroundColor(APP_BACKGROUND_COLOR)
         configureWindowInsets(rootView)
         configureWebView(webView)
@@ -156,7 +158,12 @@ class MainActivity : Activity() {
             enqueueDownload(url, userAgent, contentDisposition, mimeType)
         }
         target.addJavascriptInterface(
-            WheelMakerBridge(webSourceRuntime, androidSpeechRuntime, androidNotificationRuntime),
+            WheelMakerBridge(
+                webSourceRuntime,
+                androidSpeechRuntime,
+                androidNotificationRuntime,
+                androidApkUpdateRuntime
+            ),
             "WheelMakerAndroidNative"
         )
     }

@@ -6,7 +6,8 @@ import org.json.JSONObject
 class WheelMakerBridge(
     private val webSourceRuntime: WebSourceRuntime,
     private val androidSpeechRuntime: AndroidSpeechRuntime,
-    private val androidNotificationRuntime: AndroidNotificationRuntime
+    private val androidNotificationRuntime: AndroidNotificationRuntime,
+    private val androidApkUpdateRuntime: AndroidApkUpdateRuntime
 ) {
     @JavascriptInterface
     fun getWebSourceState(): String = webSourceStateToJson(webSourceRuntime.state())
@@ -44,4 +45,10 @@ class WheelMakerBridge(
 
     @JavascriptInterface
     fun showNotification(rawJson: String): String = androidNotificationRuntime.showNotification(rawJson)
+
+    @JavascriptInterface
+    fun getAndroidReleaseState(): String = androidApkUpdateRuntime.getReleaseState()
+
+    @JavascriptInterface
+    fun installAndroidRelease(rawJson: String): String = androidApkUpdateRuntime.installRelease(rawJson)
 }
