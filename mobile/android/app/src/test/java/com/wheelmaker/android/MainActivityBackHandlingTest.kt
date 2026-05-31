@@ -26,4 +26,21 @@ class MainActivityBackHandlingTest {
         assertTrue(mainActivity.contains("webView.goBack()"))
         assertTrue(mainActivity.contains("super.onBackPressed()"))
     }
+
+    @Test
+    fun androidBackRegistersOnBackInvokedCallbackForModernSystemBack() {
+        val mainActivity = source
+
+        assertTrue(mainActivity.contains("import android.window.OnBackInvokedCallback"))
+        assertTrue(mainActivity.contains("import android.window.OnBackInvokedDispatcher"))
+        assertTrue(mainActivity.contains("private var systemBackCallback: OnBackInvokedCallback? = null"))
+        assertTrue(mainActivity.contains("registerSystemBackCallback()"))
+        assertTrue(mainActivity.contains("unregisterSystemBackCallback()"))
+        assertTrue(mainActivity.contains("Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU"))
+        assertTrue(mainActivity.contains("OnBackInvokedCallback {"))
+        assertTrue(mainActivity.contains("handleSystemBack()"))
+        assertTrue(mainActivity.contains("onBackInvokedDispatcher.registerOnBackInvokedCallback("))
+        assertTrue(mainActivity.contains("OnBackInvokedDispatcher.PRIORITY_DEFAULT"))
+        assertTrue(mainActivity.contains("onBackInvokedDispatcher.unregisterOnBackInvokedCallback"))
+    }
 }

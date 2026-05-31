@@ -22,6 +22,8 @@ import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
+import android.window.OnBackInvokedCallback
+import android.window.OnBackInvokedDispatcher
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.core.graphics.Insets
@@ -42,6 +44,7 @@ class MainActivity : Activity() {
     private lateinit var androidApkUpdateRuntime: AndroidApkUpdateRuntime
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
     private var pendingAudioPermissionRequest: PermissionRequest? = null
+    private var systemBackCallback: OnBackInvokedCallback? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,6 +65,7 @@ class MainActivity : Activity() {
             FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         )
         setContentView(rootView)
+        registerSystemBackCallback()
         webView.loadUrl(notificationTargetUrl(intent) ?: ANDROID_APP_ORIGIN)
     }
 
@@ -73,6 +77,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        unregisterSystemBackCallback()
         if (::androidSpeechRuntime.isInitialized) {
             androidSpeechRuntime.stopForAppBackground()
         }
@@ -80,6 +85,10 @@ class MainActivity : Activity() {
     }
 
     override fun onBackPressed() {
+        handleSystemBack()
+    }
+
+    private fun handleSystemBack() {
         webView.evaluateJavascript(ANDROID_BACK_SCRIPT) { rawResult ->
             val consumed = rawResult == "true"
             if (consumed) {
@@ -87,6 +96,30 @@ class MainActivity : Activity() {
             }
             performDefaultBackNavigation()
         }
+    }
+
+    private fun registerSystemBackCallback() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return
+        }
+        val callback = OnBackInvokedCallback {
+            handleSystemBack()
+        }
+        systemBackCallback = callback
+        onBackInvokedDispatcher.registerOnBackInvokedCallback(
+            OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+            callback
+        )
+    }
+
+    private fun unregisterSystemBackCallback() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return
+        }
+        systemBackCallback?.let { callback ->
+            onBackInvokedDispatcher.unregisterOnBackInvokedCallback(callback)
+        }
+        systemBackCallback = null
     }
 
     private fun performDefaultBackNavigation() {
