@@ -15,6 +15,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.webkit.CookieManager
 import android.webkit.PermissionRequest
 import android.webkit.URLUtil
 import android.webkit.ValueCallback
@@ -137,6 +138,8 @@ class MainActivity : Activity() {
         target.settings.allowFileAccess = true
         target.settings.mediaPlaybackRequiresUserGesture = false
         target.settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+        CookieManager.getInstance().setAcceptCookie(true)
+        CookieManager.getInstance().setAcceptThirdPartyCookies(target, true)
         target.webViewClient = StableOriginWebViewClient(this, webSourceRuntime)
         target.webChromeClient = object : WebChromeClient() {
             override fun onPermissionRequest(request: PermissionRequest) {
