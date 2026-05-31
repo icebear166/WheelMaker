@@ -83,6 +83,7 @@ export type PersistedGlobalState = {
   registryDebug: boolean;
   disableFileCache: boolean;
   localHubReadEnabled: boolean;
+  promptCompletionNotificationsEnabled: boolean;
   gestureNavigation: boolean;
   tab: PersistedTab;
   selectedProjectId: string;
@@ -159,6 +160,7 @@ const GLOBAL_KEYS = {
   registryDebug: 'registryDebug',
   disableFileCache: 'disableFileCache',
   localHubReadEnabled: 'localHubReadEnabled',
+  promptCompletionNotificationsEnabled: 'promptCompletionNotificationsEnabled',
   gestureNavigation: 'gestureNavigation',
   tab: 'tab',
   selectedProjectId: 'selectedProjectId',
@@ -195,6 +197,7 @@ function defaultGlobalState(): PersistedGlobalState {
     registryDebug: false,
     disableFileCache: false,
     localHubReadEnabled: true,
+    promptCompletionNotificationsEnabled: false,
     gestureNavigation: false,
     tab: 'file',
     selectedProjectId: '',
@@ -411,6 +414,7 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
     registryDebug: typeof input.registryDebug === 'boolean' ? input.registryDebug : base.registryDebug,
     disableFileCache: typeof input.disableFileCache === 'boolean' ? input.disableFileCache : base.disableFileCache,
     localHubReadEnabled: typeof input.localHubReadEnabled === 'boolean' ? input.localHubReadEnabled : base.localHubReadEnabled,
+    promptCompletionNotificationsEnabled: typeof input.promptCompletionNotificationsEnabled === 'boolean' ? input.promptCompletionNotificationsEnabled : base.promptCompletionNotificationsEnabled,
     gestureNavigation: typeof input.gestureNavigation === 'boolean' ? input.gestureNavigation : base.gestureNavigation,
     tab: input.tab === 'chat' || input.tab === 'git' ? input.tab : 'file',
     selectedProjectId: typeof input.selectedProjectId === 'string' ? input.selectedProjectId : base.selectedProjectId,
@@ -893,6 +897,7 @@ export class WorkspacePersistenceRepository {
       {k: GLOBAL_KEYS.registryDebug, v: serialize(this.state.global.registryDebug), updatedAt: now},
       {k: GLOBAL_KEYS.disableFileCache, v: serialize(this.state.global.disableFileCache), updatedAt: now},
       {k: GLOBAL_KEYS.localHubReadEnabled, v: serialize(this.state.global.localHubReadEnabled), updatedAt: now},
+      {k: GLOBAL_KEYS.promptCompletionNotificationsEnabled, v: serialize(this.state.global.promptCompletionNotificationsEnabled), updatedAt: now},
       {k: GLOBAL_KEYS.gestureNavigation, v: serialize(this.state.global.gestureNavigation), updatedAt: now},
       {k: GLOBAL_KEYS.tab, v: serialize(this.state.global.tab), updatedAt: now},
       {k: GLOBAL_KEYS.selectedProjectId, v: serialize(this.state.global.selectedProjectId), updatedAt: now},
@@ -1243,6 +1248,7 @@ export class WorkspacePersistenceRepository {
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.registryDebug, v: serialize(next.registryDebug), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.disableFileCache, v: serialize(next.disableFileCache), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.localHubReadEnabled, v: serialize(next.localHubReadEnabled), updatedAt: now});
+      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.promptCompletionNotificationsEnabled, v: serialize(next.promptCompletionNotificationsEnabled), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.gestureNavigation, v: serialize(next.gestureNavigation), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.tab, v: serialize(next.tab), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.selectedProjectId, v: serialize(next.selectedProjectId), updatedAt: now});

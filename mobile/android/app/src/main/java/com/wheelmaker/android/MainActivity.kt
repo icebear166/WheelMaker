@@ -37,6 +37,7 @@ class MainActivity : Activity() {
     private lateinit var webView: WebView
     private lateinit var webSourceRuntime: WebSourceRuntime
     private lateinit var androidSpeechRuntime: AndroidSpeechRuntime
+    private lateinit var androidNotificationRuntime: AndroidNotificationRuntime
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
     private var pendingAudioPermissionRequest: PermissionRequest? = null
 
@@ -49,6 +50,7 @@ class MainActivity : Activity() {
         rootView.setBackgroundColor(APP_BACKGROUND_COLOR)
         webView = WebView(this)
         androidSpeechRuntime = AndroidSpeechRuntime(this, webView, NATIVE_SPEECH_PERMISSION_REQUEST_CODE)
+        androidNotificationRuntime = AndroidNotificationRuntime(this, webView, NOTIFICATION_PERMISSION_REQUEST_CODE)
         webView.setBackgroundColor(APP_BACKGROUND_COLOR)
         configureWindowInsets(rootView)
         configureWebView(webView)
@@ -57,7 +59,7 @@ class MainActivity : Activity() {
             FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         )
         setContentView(rootView)
-        webView.loadUrl(ANDROID_APP_ORIGIN)
+        webView.loadUrl(notificationTargetUrl(intent) ?: ANDROID_APP_ORIGIN)
     }
 
     override fun onPause() {
@@ -82,6 +84,12 @@ class MainActivity : Activity() {
         super.onBackPressed()
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleNotificationIntent(intent)
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
             deliverFileChooserResult(resultCode, data)
@@ -93,6 +101,9 @@ class MainActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (::androidSpeechRuntime.isInitialized && androidSpeechRuntime.onRequestPermissionsResult(requestCode, grantResults)) {
+            return
+        }
+        if (::androidNotificationRuntime.isInitialized && androidNotificationRuntime.onRequestPermissionsResult(requestCode, grantResults)) {
             return
         }
         if (requestCode != AUDIO_PERMISSION_REQUEST_CODE) return
@@ -144,7 +155,16 @@ class MainActivity : Activity() {
         target.setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
             enqueueDownload(url, userAgent, contentDisposition, mimeType)
         }
-        target.addJavascriptInterface(WheelMakerBridge(webSourceRuntime, androidSpeechRuntime), "WheelMakerAndroidNative")
+        target.addJavascriptInterface(
+            WheelMakerBridge(webSourceRuntime, androidSpeechRuntime, androidNotificationRuntime),
+            "WheelMakerAndroidNative"
+        )
+    }
+
+    private fun handleNotificationIntent(intent: Intent?) {
+        notificationTargetUrl(intent)?.let { targetUrl ->
+            webView.loadUrl(targetUrl)
+        }
     }
 
     private fun createAndroidFileChooserIntent(fileChooserParams: WebChromeClient.FileChooserParams): Intent {
@@ -279,6 +299,7 @@ class MainActivity : Activity() {
         private const val AUDIO_PERMISSION_REQUEST_CODE = 1001
         private const val FILE_CHOOSER_REQUEST_CODE = 1002
         private const val NATIVE_SPEECH_PERMISSION_REQUEST_CODE = 1003
+        private const val NOTIFICATION_PERMISSION_REQUEST_CODE = 1004
         private val APP_BACKGROUND_COLOR = Color.rgb(11, 18, 32)
     }
 }

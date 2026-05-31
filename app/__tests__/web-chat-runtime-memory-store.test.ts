@@ -32,6 +32,6 @@ describe('web chat runtime memory store', () => {
     expect(main).not.toContain('if (!isSelectedSession && !chatActiveRuntimeSetRef.current.isActive(runtimeKey))');
     expect(main).toContain('if (!knownSession && !isSelectedSession) {');
     expect(main).toContain('refreshChatProjectSessions(eventProjectId).catch(() => undefined);');
-    expect(main).toContain('maybeNotifyChatMessage(message, existingSession, eventProjectId);');
+    expect(main).toContain('maybeNotifyPromptCompletion(message, existingSession, eventProjectId);');
   });
 });

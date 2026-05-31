@@ -122,6 +122,15 @@ import {
 } from './chat/chatScrollIntent';
 import { resolveChatScrollBottomButtonOffset } from './services/chatScrollBottomButton';
 import { resolvePromptDoneStatus, resolvePromptTurnStatus, type ChatPromptStatus } from './chat/chatPromptStatus';
+import {
+  buildPromptCompletionNotification,
+  promptCompletionNotificationKey,
+  shouldNotifyPromptCompletion,
+} from './notifications/promptCompletion';
+import {
+  createNotificationProvider,
+  type WheelMakerNotificationPermissionState,
+} from './notifications/provider';
 import { mergeChatSessionList, shouldUpdateCurrentProjectSessions } from './chat/chatIndexState';
 import {
   resolveChatListSelection,
@@ -1006,6 +1015,32 @@ function settingsDetailTitle(detail: ActiveSettingsDetailView): string {
     case 'debugLogs':
       return 'Logs';
   }
+}
+
+function readPromptCompletionNotificationTarget(): ChatSessionKey | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  const url = new URL(window.location.href);
+  const searchParams = url.searchParams;
+  const projectId = searchParams.get('wmProjectId')?.trim() ?? '';
+  const sessionId = searchParams.get('wmSessionId')?.trim() ?? '';
+  return chatSessionKeyFromParts(projectId, sessionId);
+}
+
+function clearPromptCompletionNotificationTargetFromUrl(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  const url = new URL(window.location.href);
+  const searchParams = url.searchParams;
+  if (!searchParams.has('wmProjectId') && !searchParams.has('wmSessionId')) {
+    return;
+  }
+  searchParams.delete('wmProjectId');
+  searchParams.delete('wmSessionId');
+  const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+  window.history.replaceState(window.history.state, '', nextUrl);
 }
 
 const AGENT_TAG_VARIANT_INDEX: Record<string, number> = {
@@ -2936,6 +2971,14 @@ function App() {
       ? persistedGlobal.localHubReadEnabled
       : true,
   );
+  const [promptCompletionNotificationsEnabled, setPromptCompletionNotificationsEnabled] = useState(
+    typeof persistedGlobal.promptCompletionNotificationsEnabled === 'boolean'
+      ? persistedGlobal.promptCompletionNotificationsEnabled
+      : false,
+  );
+  const notificationProvider = useMemo(() => createNotificationProvider(), []);
+  const [notificationPermissionState, setNotificationPermissionState] =
+    useState<WheelMakerNotificationPermissionState>('unsupported');
   const [speechSettings, setSpeechSettings] = useState(() =>
     normalizeSpeechSettings(persistedGlobal.speechSettings ?? DEFAULT_SPEECH_SETTINGS),
   );
@@ -3386,7 +3429,11 @@ function App() {
     workspaceStore.rememberChatSessionTurns(key.projectId, key.sessionId, state?.finished ?? []);
   }, 5000));
   const chatMessagesRef = useRef<RegistryChatMessage[]>([]);
-  const notifiedChatMessageIdsRef = useRef<Set<string>>(new Set());
+  const notifiedPromptCompletionIdsRef = useRef<Set<string>>(new Set());
+  const promptCompletionNotificationsEnabledRef = useRef(promptCompletionNotificationsEnabled);
+  const pendingNotificationTargetRef = useRef<ChatSessionKey | null>(
+    readPromptCompletionNotificationTarget(),
+  );
   const chatIndexFullRefreshInFlightRef = useRef(false);
   const chatIndexFullRefreshDirtyRef = useRef(false);
   const chatProjectRefreshInFlightRef = useRef<Record<string, boolean>>({});
@@ -5419,6 +5466,40 @@ function App() {
   }, [localHubReadEnabled, registryHubs]);
 
   useEffect(() => {
+    promptCompletionNotificationsEnabledRef.current = promptCompletionNotificationsEnabled;
+  }, [promptCompletionNotificationsEnabled]);
+
+  useEffect(() => {
+    let cancelled = false;
+    notificationProvider.getPermissionState().then(state => {
+      if (!cancelled) {
+        setNotificationPermissionState(state);
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setNotificationPermissionState('unsupported');
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [notificationProvider]);
+
+  const handlePromptCompletionNotificationsChange = (enabled: boolean) => {
+    if (!enabled) {
+      setPromptCompletionNotificationsEnabled(false);
+      return;
+    }
+    notificationProvider.requestPermission().then(state => {
+      setNotificationPermissionState(state);
+      setPromptCompletionNotificationsEnabled(state === 'granted');
+    }).catch(() => {
+      setNotificationPermissionState('unsupported');
+      setPromptCompletionNotificationsEnabled(false);
+    });
+  };
+
+  useEffect(() => {
     return service.onLocalHubReadStatusChange(() => {
       setLocalHubReadStatuses(service.getLocalHubReadStatuses(registryHubs));
     });
@@ -5459,6 +5540,7 @@ function App() {
       hideToolCalls,
       registryDebug,
       localHubReadEnabled,
+      promptCompletionNotificationsEnabled,
       gestureNavigation,
       tab,
       selectedProjectId: projectId,
@@ -5483,6 +5565,7 @@ function App() {
     hideToolCalls,
     registryDebug,
     localHubReadEnabled,
+    promptCompletionNotificationsEnabled,
     gestureNavigation,
     tab,
     projectId,
@@ -9846,46 +9929,45 @@ function App() {
     service.close();
   };
 
-  const maybeNotifyChatMessage = (
+  const maybeNotifyPromptCompletion = (
     message: RegistryChatMessage,
     session?: RegistryChatSession,
     activeProjectId = '',
   ) => {
-    const runtimeKey = buildChatRuntimeKey(activeProjectId, message.sessionId);
-    const messageKey = `${runtimeKey}:${message.turnIndex}`;
-    if (!message.sessionId || msgRole(message.method) === 'user') {
+    if (message.method !== 'prompt_done') {
       return;
     }
-    if (notifiedChatMessageIdsRef.current.has(messageKey)) {
+    const notificationKey = promptCompletionNotificationKey(activeProjectId, message);
+    if (notifiedPromptCompletionIdsRef.current.has(notificationKey)) {
       return;
     }
-    const isVisible =
-      typeof document !== 'undefined' && document.visibilityState === 'visible';
-    if (isVisible && runtimeKey && encodeChatSessionKey(selectedChatKeyRef.current) === runtimeKey) {
+    const documentVisibility =
+      typeof document !== 'undefined' ? document.visibilityState : 'hidden';
+    if (!shouldNotifyPromptCompletion({
+      enabled: promptCompletionNotificationsEnabledRef.current,
+      message,
+      projectId: activeProjectId,
+      selectedRuntimeKey: encodeChatSessionKey(selectedChatKeyRef.current),
+      documentVisibility,
+      activeTab: tabRef.current,
+    })) {
       return;
     }
 
-    const text = msgText(message.method, message.param).trim();
-    const body = text
-      ? text.length > 120
-        ? `${text.slice(0, 120)}...`
-        : text
-      : 'New chat message';
-
-    notifiedChatMessageIdsRef.current.add(messageKey);
-    if (notifiedChatMessageIdsRef.current.size > 500) {
-      const first = notifiedChatMessageIdsRef.current.values().next().value;
+    notifiedPromptCompletionIdsRef.current.add(notificationKey);
+    if (notifiedPromptCompletionIdsRef.current.size > 500) {
+      const first = notifiedPromptCompletionIdsRef.current.values().next().value;
       if (first) {
-        notifiedChatMessageIdsRef.current.delete(first);
+        notifiedPromptCompletionIdsRef.current.delete(first);
       }
     }
 
-    const sessionDisplayTitle = resolveSessionDisplayTitle(session);
-    const title = sessionDisplayTitle
-      ? `Chat: ${sessionDisplayTitle}`
-      : 'WheelMaker Chat';
-    pwaFoundation.pushDemo
-      .showLocalNotification({ title, body, url: '/' })
+    const payload = buildPromptCompletionNotification({
+      projectId: activeProjectId,
+      message,
+      session,
+    });
+    notificationProvider.show(payload)
       .catch(() => undefined);
   };
 
@@ -12113,6 +12195,27 @@ function App() {
     }
   };
 
+  const applyPendingNotificationTarget = async () => {
+    const target = pendingNotificationTargetRef.current;
+    if (!target || !connected) {
+      return;
+    }
+    if (!projectsRef.current.some(item => item.projectId === target.projectId)) {
+      await refreshChatIndex({force: true});
+      if (!projectsRef.current.some(item => item.projectId === target.projectId)) {
+        return;
+      }
+    }
+    pendingNotificationTargetRef.current = null;
+    clearPromptCompletionNotificationTargetFromUrl();
+    await refreshChatProjectSessions(target.projectId, {force: true});
+    await selectProjectChatSession(target.projectId, target.sessionId);
+  };
+
+  useEffect(() => {
+    applyPendingNotificationTarget().catch(() => undefined);
+  }, [connected, projectIdListKey]);
+
   const refreshMobileChatProjectSessions = async () => {
     await refreshChatIndex();
   };
@@ -12199,7 +12302,7 @@ function App() {
           refreshChatProjectSessions(eventProjectId).catch(() => undefined);
         }
         const existingSession = knownProjectSessions.find(item => item.sessionId === sessionId);
-        maybeNotifyChatMessage(message, existingSession, eventProjectId);
+        maybeNotifyPromptCompletion(message, existingSession, eventProjectId);
 
         const turnState = ensureChatTurnStore(runtimeKey);
         const incomingTurn = normalizedPayload?.turn ?? {
@@ -14026,6 +14129,30 @@ function App() {
             onChange={e => setHideToolCalls(e.target.checked)}
           />
         </label>
+        <div className="voice-input-settings-menu">
+          <label className="settings-row sidebar-setting-row">
+            <span>
+              <span className="codicon codicon-bell settings-row-icon" aria-hidden="true" />
+              Prompt Completion Notifications
+            </span>
+            <input
+              type="checkbox"
+              checked={promptCompletionNotificationsEnabled}
+              onChange={event => {
+                if (!event.target.checked) {
+                  setPromptCompletionNotificationsEnabled(false);
+                  return;
+                }
+                handlePromptCompletionNotificationsChange(true);
+              }}
+            />
+          </label>
+          {notificationPermissionState === 'denied' ? (
+            <div className="voice-input-settings-nested">
+              <div className="settings-metadata-line">Blocked by system permission</div>
+            </div>
+          ) : null}
+        </div>
         <div className="voice-input-settings-menu">
           <label className="settings-row sidebar-setting-row">
             <span>

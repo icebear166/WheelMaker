@@ -86,19 +86,20 @@ describe('web reconnect fallback behavior', () => {
     expect(mainTsx).toContain('shouldDisconnectOnBackground: () => !isVoiceInputActive(),');
   });
 
-  test('triggers local push notification for incoming chat messages', () => {
+  test('triggers local notification for completed prompts only', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(
       path.join(projectRoot, 'web', 'src', 'main.tsx'),
       'utf8',
     );
 
-    expect(mainTsx).toContain('const maybeNotifyChatMessage = (');
+    expect(mainTsx).toContain('const maybeNotifyPromptCompletion = (');
     expect(mainTsx).toContain('message: RegistryChatMessage,');
     expect(mainTsx).toContain('session?: RegistryChatSession,');
     expect(mainTsx).toContain('const normalizedPayload = normalizeSessionMessagePayload(payload);');
-    expect(mainTsx).toContain('maybeNotifyChatMessage(message, existingSession, eventProjectId);');
-    expect(mainTsx).toContain(".showLocalNotification({ title, body, url: '/' })");
+    expect(mainTsx).toContain('maybeNotifyPromptCompletion(message, existingSession, eventProjectId);');
+    expect(mainTsx).toContain("message.method !== 'prompt_done'");
+    expect(mainTsx).toContain('notificationProvider.show(payload)');
   });
 
   test('reloads selected file after reconnect success', () => {

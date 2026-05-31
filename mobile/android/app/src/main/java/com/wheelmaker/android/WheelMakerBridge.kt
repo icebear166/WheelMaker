@@ -5,7 +5,8 @@ import org.json.JSONObject
 
 class WheelMakerBridge(
     private val webSourceRuntime: WebSourceRuntime,
-    private val androidSpeechRuntime: AndroidSpeechRuntime
+    private val androidSpeechRuntime: AndroidSpeechRuntime,
+    private val androidNotificationRuntime: AndroidNotificationRuntime
 ) {
     @JavascriptInterface
     fun getWebSourceState(): String = webSourceStateToJson(webSourceRuntime.state())
@@ -34,4 +35,13 @@ class WheelMakerBridge(
 
     @JavascriptInterface
     fun cancelSpeech(streamId: String, reason: String): String = androidSpeechRuntime.cancel(streamId, reason)
+
+    @JavascriptInterface
+    fun requestNotificationPermission(): String = androidNotificationRuntime.requestPermission()
+
+    @JavascriptInterface
+    fun getNotificationPermissionState(): String = androidNotificationRuntime.getPermissionState()
+
+    @JavascriptInterface
+    fun showNotification(rawJson: String): String = androidNotificationRuntime.showNotification(rawJson)
 }
