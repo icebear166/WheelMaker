@@ -14462,7 +14462,7 @@ function App() {
             <label className="settings-row sidebar-setting-row settings-range-row">
               <span>
                 <span className="codicon codicon-eye settings-row-icon" aria-hidden="true" />
-                3tap Idle Opacity
+                Inactive Visibility
               </span>
               <span className="settings-range-control">
                 <input
@@ -14472,7 +14472,7 @@ function App() {
                   step={5}
                   value={floatingControlIdleOpacityPercent}
                   onChange={event => setFloatingControlIdleOpacity(Number(event.target.value) / 100)}
-                  aria-label="3tap idle opacity"
+                  aria-label="Inactive visibility"
                 />
                 <span className="settings-range-value">{floatingControlIdleOpacityPercent}%</span>
               </span>

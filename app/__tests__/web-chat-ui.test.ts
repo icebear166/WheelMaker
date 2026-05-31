@@ -1512,7 +1512,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain("settingsDetailView === 'tokenStats'");
     expect(mainTsx).toContain('const renderSettingsSection = (title: string, rows: React.ReactNode, icon?: string) => (');
     expect(mainTsx).toContain("renderSettingsSection('Appearance'");
-    expect(mainTsx).toContain('3tap Idle Opacity');
+    expect(mainTsx).toContain('Inactive Visibility');
     expect(mainTsx).toContain('{floatingControlIdleOpacityPercent}%');
     expect(mainTsx).toContain('value={floatingControlIdleOpacityPercent}');
     expect(mainTsx).toContain('min={10}');
@@ -1530,7 +1530,7 @@ describe('web chat integration', () => {
     expect(appearanceSettingsIndex).toBeLessThan(chatSettingsIndex);
     const appearanceSection = mainTsx.slice(appearanceSettingsIndex, chatSettingsIndex);
     expect(appearanceSection).toContain('!isWide ? (');
-    expect(appearanceSection).toContain('3tap Idle Opacity');
+    expect(appearanceSection).toContain('Inactive Visibility');
     expect(chatSettingsIndex).toBeLessThan(codeDisplaySettingsIndex);
     expect(codeDisplaySettingsIndex).toBeLessThan(debugSettingsIndex);
     expect(mainTsx).toContain("openSettingsChild('database')");
