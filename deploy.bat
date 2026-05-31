@@ -21,23 +21,31 @@ echo.
 
 set "_NEEDS_ADMIN=1"
 if not "%_ARGS:--no-config=%"=="%_ARGS%" set "_NEEDS_ADMIN=0"
-if "%_NEEDS_ADMIN%"=="1" (
-  powershell -NoProfile -ExecutionPolicy Bypass -Command "if (([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { exit 0 } else { exit 1 }" >nul 2>&1
-  if errorlevel 1 (
-    echo [INFO] Windows service deployment requires Administrator privileges.
-    echo [INFO] Relaunching deploy.bat as Administrator...
-    set "WHEELMAKER_DEPLOY_BAT=%~f0"
-    set "WHEELMAKER_DEPLOY_ARGS=%_ARGS%"
-    set "WHEELMAKER_DEPLOY_ELEVATED=1"
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "$bat=$env:WHEELMAKER_DEPLOY_BAT; $argLine=$env:WHEELMAKER_DEPLOY_ARGS; $q=[char]34; $cmdLine='/k call ' + $q + $bat + $q; if ($argLine) { $cmdLine += ' ' + $argLine }; $proc=Start-Process -FilePath 'cmd.exe' -ArgumentList $cmdLine -Verb RunAs -Wait -PassThru; exit $proc.ExitCode"
-    set "_ELEVATE_EXIT=!errorlevel!"
-    if not "!_ELEVATE_EXIT!"=="0" (
-      echo [FAILED] administrator relaunch exited with code !_ELEVATE_EXIT!
-      if "%_PAUSE_ON_EXIT%"=="1" pause
-    )
-    exit /b !_ELEVATE_EXIT!
-  )
+if not "%_NEEDS_ADMIN%"=="1" goto AfterAdminCheck
+
+if defined WHEELMAKER_DEPLOY_FORCE_NOT_ADMIN goto RequireAdministrator
+powershell -NoProfile -ExecutionPolicy Bypass -Command "if (([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { exit 0 } else { exit 1 }" >nul 2>&1
+if not errorlevel 1 goto AfterAdminCheck
+
+:RequireAdministrator
+echo [INFO] Windows service deployment requires Administrator privileges.
+echo [INFO] Relaunching deploy.bat as Administrator...
+set "WHEELMAKER_DEPLOY_BAT=%~f0"
+set "WHEELMAKER_DEPLOY_ARGS=%_ARGS%"
+set "WHEELMAKER_DEPLOY_ELEVATED=1"
+if defined WHEELMAKER_DEPLOY_ELEVATE_DRY_RUN (
+  echo [INFO] Dry-run administrator relaunch command:
+  echo cmd.exe /k call "%~f0" %*
+  exit /b 0
 )
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$bat=$env:WHEELMAKER_DEPLOY_BAT; $argLine=$env:WHEELMAKER_DEPLOY_ARGS; $q=[char]34; $cmdLine='/k call ' + $q + $bat + $q; if ($argLine) { $cmdLine += ' ' + $argLine }; $proc=Start-Process -FilePath 'cmd.exe' -ArgumentList $cmdLine -Verb RunAs -Wait -PassThru; exit $proc.ExitCode"
+set "_ELEVATE_EXIT=!errorlevel!"
+if "!_ELEVATE_EXIT!"=="0" exit /b 0
+echo [FAILED] administrator relaunch exited with code !_ELEVATE_EXIT!
+if "%_PAUSE_ON_EXIT%"=="1" pause
+exit /b !_ELEVATE_EXIT!
+
+:AfterAdminCheck
 
 echo [INFO] Building bootstrap wheelmaker-deploy.exe...
 where go >nul 2>&1
