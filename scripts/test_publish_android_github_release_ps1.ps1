@@ -44,6 +44,7 @@ Assert-Contains -Label "publish_android_github_release.ps1" -Text $script -Needl
 Assert-Contains -Label "publish_android_github_release.ps1" -Text $script -Needle "gh release create"
 Assert-Contains -Label "publish_android_github_release.ps1" -Text $script -Needle "gh release view"
 Assert-Contains -Label "publish_android_github_release.ps1" -Text $script -Needle "git status --porcelain"
+Assert-Contains -Label "publish_android_github_release.ps1" -Text $script -Needle '$status = @(Get-GitLines'
 Assert-Contains -Label "publish_android_github_release.ps1" -Text $script -Needle "git fetch origin"
 Assert-Contains -Label "publish_android_github_release.ps1" -Text $script -Needle "SHA256"
 Assert-NotContains -Label "publish_android_github_release.ps1" -Text $script -Needle "Get-FileHash"

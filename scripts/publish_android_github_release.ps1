@@ -87,7 +87,7 @@ function Assert-CleanWorkingTree {
     Write-Host "[whatif] git status --porcelain"
     return
   }
-  $status = Get-GitLines -Arguments @("status", "--porcelain")
+  $status = @(Get-GitLines -Arguments @("status", "--porcelain"))
   if ($status.Count -eq 0) { return }
   throw "working tree has uncommitted changes. Commit first, or pass -AllowDirty to publish a non-reproducible local build."
 }
