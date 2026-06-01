@@ -3248,7 +3248,10 @@ function App() {
   const [androidApkInstallPending, setAndroidApkInstallPending] = useState(false);
   const wheelMakerUpdatePollTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const wheelMakerUpdatePollHubIdsRef = useRef<Set<string>>(new Set());
-  const refreshWheelMakerUpdateHubRef = useRef<((hubId: string) => Promise<void>) | null>(null);
+  const refreshWheelMakerUpdateHubRef = useRef<((hubId: string, options?: {force?: boolean; silent?: boolean}) => Promise<void>) | null>(null);
+  const refreshWheelMakerUpdatesRef = useRef<((options?: {force?: boolean}) => Promise<void>) | null>(null);
+  const refreshAgentPackagesRef = useRef<((options?: {silent?: boolean}) => Promise<void>) | null>(null);
+  const refreshAndroidApkUpdateRef = useRef<(() => Promise<void>) | null>(null);
   const [agentPackageHubs, setAgentPackageHubs] = useState<Record<string, AgentPackageHubView>>({});
   const [agentPackagesLoading, setAgentPackagesLoading] = useState(false);
   const [agentPackagesError, setAgentPackagesError] = useState('');
@@ -10658,6 +10661,13 @@ function App() {
     wheelMakerUpdatePollHubIdsRef.current.clear();
   }, []);
 
+  const clearAgentPackageScanPollTimer = useCallback(() => {
+    if (agentPackageScanPollTimerRef.current) {
+      window.clearTimeout(agentPackageScanPollTimerRef.current);
+      agentPackageScanPollTimerRef.current = null;
+    }
+  }, []);
+
   const scheduleWheelMakerUpdatePoll = useCallback((hubIds: string | string[]) => {
     const ids = Array.isArray(hubIds) ? hubIds : [hubIds];
     ids
@@ -10674,19 +10684,21 @@ function App() {
       if (settingsDetailViewRef.current !== 'update') {
         return;
       }
-      Promise.all(pendingHubIds.map(hubId => refreshWheelMakerUpdateHubRef.current?.(hubId))).catch(() => undefined);
+      Promise.all(pendingHubIds.map(hubId => refreshWheelMakerUpdateHubRef.current?.(hubId, {silent: true}))).catch(() => undefined);
     }, WHEELMAKER_UPDATE_REMOTE_POLL_DELAY_MS);
   }, []);
 
-  const refreshWheelMakerUpdateHub = useCallback(async (hubId: string, options: {force?: boolean} = {}) => {
-    setWheelMakerUpdateHubs(prev => ({
-      ...prev,
-      [hubId]: {
-        ...(prev[hubId] ?? {hubId, loading: false, error: '', data: null}),
-        loading: true,
-        error: '',
-      },
-    }));
+  const refreshWheelMakerUpdateHub = useCallback(async (hubId: string, options: {force?: boolean; silent?: boolean} = {}) => {
+    if (!options.silent) {
+      setWheelMakerUpdateHubs(prev => ({
+        ...prev,
+        [hubId]: {
+          ...(prev[hubId] ?? {hubId, loading: false, error: '', data: null}),
+          loading: true,
+          error: '',
+        },
+      }));
+    }
     try {
       const result = await service.queryWheelMakerUpdate(hubId, options);
       setWheelMakerUpdateHubs(prev => ({
@@ -10856,13 +10868,12 @@ function App() {
     refreshWheelMakerUpdateHubRef.current = refreshWheelMakerUpdateHub;
   }, [refreshWheelMakerUpdateHub]);
 
-  const refreshAgentPackages = useCallback(async () => {
-    if (agentPackageScanPollTimerRef.current) {
-      window.clearTimeout(agentPackageScanPollTimerRef.current);
-      agentPackageScanPollTimerRef.current = null;
+  const refreshAgentPackages = useCallback(async (options: {silent?: boolean} = {}) => {
+    clearAgentPackageScanPollTimer();
+    if (!options.silent) {
+      setAgentPackagesLoading(true);
+      setAgentPackagesError('');
     }
-    setAgentPackagesLoading(true);
-    setAgentPackagesError('');
     try {
       const hubIds = await refreshProjectHubSnapshot();
       if (hubIds.length === 0) {
@@ -10875,7 +10886,7 @@ function App() {
         hubIds.forEach(hubId => {
           next[hubId] = {
             hubId,
-            loading: true,
+            loading: !options.silent,
             error: '',
             updatedAt: prev[hubId]?.updatedAt || '',
             hub: prev[hubId]?.hub ?? null,
@@ -10934,26 +10945,48 @@ function App() {
       if (responses.some(entry => !('error' in entry) && entry.result.operation?.running)) {
         agentPackageScanPollTimerRef.current = window.setTimeout(() => {
           agentPackageScanPollTimerRef.current = null;
-          refreshAgentPackages().catch(() => undefined);
+          if (settingsDetailViewRef.current !== 'update') {
+            return;
+          }
+          refreshAgentPackagesRef.current?.({silent: true}).catch(() => undefined);
         }, 1000);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setAgentPackagesError(message);
     } finally {
-      setAgentPackagesLoading(false);
+      if (!options.silent) {
+        setAgentPackagesLoading(false);
+      }
     }
-  }, [refreshProjectHubSnapshot]);
+  }, [clearAgentPackageScanPollTimer, refreshProjectHubSnapshot]);
+
+  useEffect(() => {
+    refreshWheelMakerUpdatesRef.current = refreshWheelMakerUpdates;
+  }, [refreshWheelMakerUpdates]);
+
+  useEffect(() => {
+    refreshAgentPackagesRef.current = refreshAgentPackages;
+  }, [refreshAgentPackages]);
+
+  useEffect(() => {
+    refreshAndroidApkUpdateRef.current = refreshAndroidApkUpdate;
+  }, [refreshAndroidApkUpdate]);
 
   useEffect(() => {
     if (settingsDetailView !== 'update') {
       clearWheelMakerUpdatePollTimer();
+      clearAgentPackageScanPollTimer();
       return;
     }
-    refreshWheelMakerUpdates().catch(() => undefined);
-    refreshAgentPackages().catch(() => undefined);
-    refreshAndroidApkUpdate().catch(() => undefined);
-  }, [clearWheelMakerUpdatePollTimer, settingsDetailView, refreshAgentPackages, refreshAndroidApkUpdate, refreshWheelMakerUpdates]);
+    refreshWheelMakerUpdatesRef.current?.().catch(() => undefined);
+    refreshAgentPackagesRef.current?.().catch(() => undefined);
+    refreshAndroidApkUpdateRef.current?.().catch(() => undefined);
+    return () => {
+      clearWheelMakerUpdatePollTimer();
+      clearAgentPackageScanPollTimer();
+    };
+  }, [clearAgentPackageScanPollTimer, clearWheelMakerUpdatePollTimer, settingsDetailView]);
 
   useEffect(() => {
     if (!androidApkUpdateSupported) {

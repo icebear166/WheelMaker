@@ -52,7 +52,7 @@ describe('agent package update settings UI source structure', () => {
     expect(mainTsx).toContain('const scheduleWheelMakerUpdatePoll = useCallback((hubIds: string | string[]) =>');
     expect(mainTsx).toContain('result.remoteRefreshRunning');
     expect(mainTsx).toContain('scheduleWheelMakerUpdatePoll(hubId)');
-    expect(mainTsx).toContain('refreshWheelMakerUpdateHubRef.current?.(hubId)');
+    expect(mainTsx).toContain('refreshWheelMakerUpdateHubRef.current?.(hubId, {silent: true})');
     expect(mainTsx).toContain("kind: 'wheelMakerUpdate'");
     expect(mainTsx).toContain("kind: 'wheelMakerUpdateAll'");
     expect(mainTsx).toContain('requestWheelMakerUpdatePublish');
@@ -145,6 +145,33 @@ describe('agent package update settings UI source structure', () => {
     expect(stylesCss).toContain('.agent-package-agent-tags');
     expect(stylesCss).toContain('.agent-package-version-status');
     expect(stylesCss).toContain('.agent-package-action-btn');
+  });
+
+  test('keeps Update page scan polling scoped to the active Update detail', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+
+    expect(mainTsx).toContain('const refreshWheelMakerUpdatesRef = useRef<((options?: {force?: boolean}) => Promise<void>) | null>(null);');
+    expect(mainTsx).toContain('const refreshAgentPackagesRef = useRef<((options?: {silent?: boolean}) => Promise<void>) | null>(null);');
+    expect(mainTsx).toContain('const refreshAndroidApkUpdateRef = useRef<(() => Promise<void>) | null>(null);');
+    expect(mainTsx).toContain('const clearAgentPackageScanPollTimer = useCallback(() => {');
+    expect(mainTsx).toContain('clearAgentPackageScanPollTimer();');
+    expect(mainTsx).toContain('if (!options.silent) {');
+    expect(mainTsx).toContain('loading: !options.silent,');
+    expect(mainTsx).toContain("if (settingsDetailViewRef.current !== 'update') {");
+    expect(mainTsx).toContain('refreshAgentPackagesRef.current?.({silent: true}).catch(() => undefined);');
+
+    const updateEntryEffectStart = mainTsx.indexOf("if (settingsDetailView !== 'update') {\n      clearWheelMakerUpdatePollTimer();\n      clearAgentPackageScanPollTimer();");
+    expect(updateEntryEffectStart).toBeGreaterThanOrEqual(0);
+    const updateEntryEffectEnd = mainTsx.indexOf('}, [clearAgentPackageScanPollTimer, clearWheelMakerUpdatePollTimer, settingsDetailView]);', updateEntryEffectStart);
+    expect(updateEntryEffectEnd).toBeGreaterThan(updateEntryEffectStart);
+    const updateEntryEffect = mainTsx.slice(updateEntryEffectStart, updateEntryEffectEnd);
+    expect(updateEntryEffect).toContain('refreshWheelMakerUpdatesRef.current?.().catch(() => undefined);');
+    expect(updateEntryEffect).toContain('refreshAgentPackagesRef.current?.().catch(() => undefined);');
+    expect(updateEntryEffect).toContain('refreshAndroidApkUpdateRef.current?.().catch(() => undefined);');
+    expect(updateEntryEffect).not.toContain('refreshWheelMakerUpdates().catch(() => undefined);');
+    expect(updateEntryEffect).not.toContain('refreshAgentPackages().catch(() => undefined);');
+    expect(updateEntryEffect).not.toContain('refreshAndroidApkUpdate().catch(() => undefined);');
   });
 
   test('does not use one hub package operation to disable every hub action', () => {
