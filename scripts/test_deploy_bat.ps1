@@ -4,10 +4,9 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $deployBatPath = Join-Path $repoRoot "deploy.bat"
 $deployPs1Path = Join-Path $repoRoot "scripts\deploy-windows.ps1"
 $deployBat = Get-Content -LiteralPath $deployBatPath -Raw
-if (-not (Test-Path $deployPs1Path)) {
-  throw "scripts\deploy-windows.ps1 is missing"
+if (Test-Path $deployPs1Path) {
+  throw "scripts\deploy-windows.ps1 should not exist; Windows deploy must be contained in deploy.bat"
 }
-$deployPs1 = Get-Content -LiteralPath $deployPs1Path -Raw
 
 function Assert-Contains {
   param(
@@ -35,6 +34,10 @@ function Assert-NoBatchIfBlocks {
   param([string]$Text)
 
   $lines = $Text -split "`r?`n"
+  $markerIndex = [Array]::IndexOf($lines, "# POWERSHELL")
+  if ($markerIndex -ge 0) {
+    $lines = $lines[0..($markerIndex - 1)]
+  }
   $bad = @()
   for ($i = 0; $i -lt $lines.Count; $i++) {
     $line = $lines[$i]
@@ -47,25 +50,24 @@ function Assert-NoBatchIfBlocks {
   }
 }
 
-Assert-Contains -Text $deployBat -Needle "scripts\deploy-windows.ps1"
 Assert-Contains -Text $deployBat -Needle "powershell.exe"
-Assert-NotContains -Text $deployBat -Needle "set "
 Assert-NotContains -Text $deployBat -Needle "Start-Process"
 Assert-NotContains -Text $deployBat -Needle "cmd.exe"
 Assert-NotContains -Text $deployBat -Needle "EnableDelayedExpansion"
 
-Assert-Contains -Text $deployPs1 -Needle "WheelMaker All-in-One Deploy"
-Assert-Contains -Text $deployPs1 -Needle "wheelmaker-deploy.exe"
-Assert-Contains -Text $deployPs1 -Needle ".wheelmaker\build\bootstrap"
-Assert-Contains -Text $deployPs1 -Needle ".wheelmaker\log\deploy.bat.log"
-Assert-Contains -Text $deployPs1 -Needle "WHEELMAKER_DEPLOY_NO_PAUSE"
-Assert-Contains -Text $deployPs1 -Needle "go build"
-Assert-Contains -Text $deployPs1 -Needle "Using existing bootstrap"
-Assert-Contains -Text $deployPs1 -Needle "No existing wheelmaker-deploy.exe"
-Assert-Contains -Text $deployPs1 -Needle "Running wheelmaker-deploy deploy"
-Assert-NotContains -Text $deployPs1 -Needle "Verb RunAs"
-Assert-NotContains -Text $deployPs1 -Needle "Windows service deployment requires Administrator privileges"
+Assert-Contains -Text $deployBat -Needle "WheelMaker All-in-One Deploy"
+Assert-Contains -Text $deployBat -Needle "wheelmaker-deploy.exe"
+Assert-Contains -Text $deployBat -Needle ".wheelmaker\build\bootstrap"
+Assert-Contains -Text $deployBat -Needle ".wheelmaker\log\deploy.bat.log"
+Assert-Contains -Text $deployBat -Needle "WHEELMAKER_DEPLOY_NO_PAUSE"
+Assert-Contains -Text $deployBat -Needle "go build"
+Assert-Contains -Text $deployBat -Needle "Using existing bootstrap"
+Assert-Contains -Text $deployBat -Needle "No existing wheelmaker-deploy.exe"
+Assert-Contains -Text $deployBat -Needle "Running wheelmaker-deploy deploy"
+Assert-NotContains -Text $deployBat -Needle "Verb RunAs"
+Assert-NotContains -Text $deployBat -Needle "Windows service deployment requires Administrator privileges"
 Assert-NotContains -Text $deployBat -Needle 'scripts\refresh_server.ps1'
+Assert-NotContains -Text $deployBat -Needle 'scripts\deploy-windows.ps1'
 Assert-NotContains -Text $deployBat -Needle 'pushd "%~dp0app"'
 Assert-NotContains -Text $deployBat -Needle "npm run build:web:release"
 Assert-NotContains -Text $deployBat -Needle "[FAILED] web publish exited with code"
