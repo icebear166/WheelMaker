@@ -20,9 +20,9 @@ func TestWindowsRuntimeTasksRunAsInteractiveUser(t *testing.T) {
 	}
 
 	stateDir := filepath.Dir(h.cfg.InstallDir)
-	assertWindowsTaskRegisterContains(t, events, windowsHubService, "Register-ScheduledTask", "New-ScheduledTaskPrincipal", "Interactive", "-d", "--dir", stateDir)
-	assertWindowsTaskRegisterContains(t, events, windowsMonitorService, "Register-ScheduledTask", "New-ScheduledTaskPrincipal", "Interactive", "--dir", stateDir)
-	assertWindowsTaskRegisterContains(t, events, windowsUpdaterService, "Register-ScheduledTask", "New-ScheduledTaskPrincipal", "Interactive", "--repo", h.cfg.RepoRoot, "--install-dir", h.cfg.InstallDir)
+	assertWindowsTaskRegisterContains(t, events, windowsHubService, "Register-ScheduledTask", "New-ScheduledTaskPrincipal", "Interactive", "Limited", "-d", "--dir", stateDir)
+	assertWindowsTaskRegisterContains(t, events, windowsMonitorService, "Register-ScheduledTask", "New-ScheduledTaskPrincipal", "Interactive", "Limited", "--dir", stateDir)
+	assertWindowsTaskRegisterContains(t, events, windowsUpdaterService, "Register-ScheduledTask", "New-ScheduledTaskPrincipal", "Interactive", "Limited", "--repo", h.cfg.RepoRoot, "--install-dir", h.cfg.InstallDir)
 	assertEventsDoNotContain(t, events, "sc.exe create")
 }
 
