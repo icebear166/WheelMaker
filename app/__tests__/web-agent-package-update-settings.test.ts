@@ -132,6 +132,13 @@ describe('agent package update settings UI source structure', () => {
     expect(stylesCss).toContain('.update-summary-bar');
     expect(stylesCss).toContain('.update-summary-metrics');
     expect(stylesCss).toContain('.update-summary-bar .wheelmaker-update-all-btn');
+    const updateSummaryBarBlock = stylesCss.match(/\.update-summary-bar \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(updateSummaryBarBlock).toContain('display: flex;');
+    expect(updateSummaryBarBlock).toContain('flex-wrap: wrap;');
+    const updateSummaryMetricsBlock = stylesCss.match(/\.update-summary-metrics \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(updateSummaryMetricsBlock).toContain('display: flex;');
+    expect(updateSummaryMetricsBlock).toContain('flex-wrap: wrap;');
+    expect(updateSummaryMetricsBlock).not.toContain('grid-template-columns: repeat(4, minmax(0, auto));');
     expect(stylesCss).toContain('.wheelmaker-update-version-line');
     expect(stylesCss).toContain('.wheelmaker-update-ref-tag');
     expect(stylesCss).toContain('.wheelmaker-update-sha-line');
