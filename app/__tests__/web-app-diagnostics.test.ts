@@ -2,6 +2,8 @@ import {
   appDiagnosticStore,
   createAppDiagnosticStore,
   filterAppDiagnosticRecords,
+  formatAppDiagnosticRecordLine,
+  serializeAppDiagnosticRecords,
 } from '../web/src/debug/appDiagnostics';
 import {
   formatVoiceInputDiagnosticError,
@@ -29,6 +31,30 @@ describe('app diagnostics', () => {
       'finish_without_stream',
       'start_failed',
     ]);
+  });
+
+  test('formats workspace diagnostics as compact one-line records', () => {
+    const store = createAppDiagnosticStore(() => new Date(2026, 0, 1, 0, 0, 1).getTime());
+    store.record({
+      category: 'workspace',
+      level: 'info',
+      event: 'select_session',
+      details: {
+        projectId: 'hub-a:app',
+        sessionId: 'session-1',
+        durationMs: 42,
+        skipped: false,
+      },
+    });
+
+    const [record] = store.getRecords();
+    const line = formatAppDiagnosticRecordLine(record);
+
+    expect(line).toBe(
+      '00:00:01.000 info workspace select_session projectId=hub-a:app sessionId=session-1 durationMs=42 skipped=false',
+    );
+    expect(line).not.toContain('\n');
+    expect(serializeAppDiagnosticRecords([record])).toBe(`${line}\n`);
   });
 
   test('voice diagnostics redact sensitive fields before storing and logging', () => {

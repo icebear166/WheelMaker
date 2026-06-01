@@ -5,6 +5,8 @@ import {
   normalizeSessionReadPayload,
 } from '../chat/chatWire';
 import type {
+  RegistryDebugUploadLogPayload,
+  RegistryDebugUploadLogResponse,
   RegistryEnvelope,
   RegistryFsInfo,
   RegistryFsListResponse,
@@ -586,6 +588,19 @@ export class RegistryRepository {
 
   async listProjects(): Promise<RegistryProject[]> {
     return (await this.listProjectSnapshot()).projects;
+  }
+
+  async uploadDebugLog(payload: RegistryDebugUploadLogPayload): Promise<RegistryDebugUploadLogResponse> {
+    const resp = await this.client.request({
+      method: 'debug.uploadLog',
+      payload,
+      timeoutMs: 15000,
+    });
+    const body = (resp.payload ?? {}) as Partial<RegistryDebugUploadLogResponse>;
+    return {
+      ok: body.ok === true,
+      fileName: body.fileName ?? '',
+    };
   }
 
   async getPortRelayStatus(): Promise<RegistryPortRelaySnapshot> {

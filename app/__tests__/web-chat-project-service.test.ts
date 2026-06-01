@@ -196,4 +196,32 @@ describe('registry workspace project-scoped chat service methods', () => {
       'Project is no longer available',
     );
   });
+
+  test('uploads app diagnostics to the registry repository', async () => {
+    const service = new RegistryWorkspaceService();
+    const repository = {
+      uploadDebugLog: jest.fn().mockResolvedValue({ ok: true, fileName: 'client.log' }),
+    };
+
+    Object.assign(service as unknown as { repository: unknown; session: unknown }, {
+      repository,
+      session: {
+        projects: [],
+        hubs: [],
+        selectedProjectId: '',
+        fileEntries: [],
+      },
+    });
+
+    const response = await (service as any).uploadDebugLog({
+      source: 'web',
+      text: 'one line\n',
+    });
+
+    expect(repository.uploadDebugLog).toHaveBeenCalledWith({
+      source: 'web',
+      text: 'one line\n',
+    });
+    expect(response).toEqual({ ok: true, fileName: 'client.log' });
+  });
 });

@@ -49,10 +49,15 @@ describe('workspace project lightweight UI wiring', () => {
   test('chat session selection syncs workspace project without waiting for file/git loads', () => {
     const main = readMain();
     const body = extractFunctionBody(main, 'selectProjectChatSession');
+    const syncBody = extractFunctionBody(main, 'syncWorkspaceProject');
 
     expect(body).toContain('syncWorkspaceProject(targetProjectId');
     expect(body).toContain("reason: 'chat'");
     expect(body).not.toContain('switchProject(');
+    expect(syncBody).toContain("if (options?.reason !== 'chat') {");
+    const chatSkipBlock = syncBody.slice(syncBody.indexOf("if (options?.reason !== 'chat') {"));
+    expect(chatSkipBlock).toContain("tabRef.current === 'file'");
+    expect(chatSkipBlock).toContain("tabRef.current === 'git'");
   });
 
   test('pc file and git sidebars render the workspace selector above section titles', () => {

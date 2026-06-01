@@ -133,6 +133,16 @@ type SyncCheckResponsePayload struct {
 	StaleDomains []string `json:"staleDomains"`
 }
 
+type DebugUploadLogPayload struct {
+	Source string `json:"source"`
+	Text   string `json:"text"`
+}
+
+type DebugUploadLogResponsePayload struct {
+	OK       bool   `json:"ok"`
+	FileName string `json:"fileName"`
+}
+
 type ProjectListItem struct {
 	ProjectID     string                `json:"projectId"`
 	Name          string                `json:"name"`

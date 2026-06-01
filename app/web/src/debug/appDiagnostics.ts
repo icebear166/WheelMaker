@@ -1,5 +1,5 @@
-export type AppDiagnosticCategory = 'voice';
-export type AppDiagnosticLevel = 'debug' | 'warn' | 'error';
+export type AppDiagnosticCategory = 'voice' | 'workspace';
+export type AppDiagnosticLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export type AppDiagnosticRecord = {
   id: number;
@@ -84,6 +84,42 @@ export function filterAppDiagnosticRecords(
 ): AppDiagnosticRecord[] {
   const levels = new Set(filter.levels);
   return records.filter(record => record.category === filter.category && levels.has(record.level));
+}
+
+function formatDiagnosticDetailValue(value: unknown): string {
+  if (typeof value === 'string') {
+    return value.replace(/\s+/g, ' ');
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  if (value === null) {
+    return 'null';
+  }
+  if (value === undefined) {
+    return 'undefined';
+  }
+  return (JSON.stringify(value) ?? String(value)).replace(/\s+/g, ' ');
+}
+
+export function formatAppDiagnosticRecordLine(record: AppDiagnosticRecord): string {
+  const detailParts = Object.entries(record.details).map(
+    ([key, value]) => `${key}=${formatDiagnosticDetailValue(value)}`,
+  );
+  return [
+    record.timeText,
+    record.level,
+    record.category,
+    record.event,
+    ...detailParts,
+  ].join(' ');
+}
+
+export function serializeAppDiagnosticRecords(records: AppDiagnosticRecord[]): string {
+  if (records.length === 0) {
+    return '';
+  }
+  return `${records.map(formatAppDiagnosticRecordLine).join('\n')}\n`;
 }
 
 function cloneRecords(records: AppDiagnosticRecord[]): AppDiagnosticRecord[] {

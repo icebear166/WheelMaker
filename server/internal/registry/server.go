@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -22,6 +24,7 @@ const (
 	defaultRequestTimeout  = 10 * time.Second
 	clientIdleTimeout      = 5 * time.Minute
 	removedChatSendMethod  = rp.LegacyRegistryMethodChatSend
+	maxDebugUploadLogBytes = 512 * 1024
 )
 
 // Config configures the project registry server.
@@ -30,6 +33,7 @@ type Config struct {
 	Token           string
 	ProtocolVersion string
 	ServerVersion   string
+	LogDir          string
 }
 
 type peerConn struct {
@@ -136,6 +140,9 @@ func New(cfg Config) *Server {
 	}
 	if cfg.ServerVersion == "" {
 		cfg.ServerVersion = defaultServerVersion
+	}
+	if cfg.LogDir == "" {
+		cfg.LogDir = defaultDebugUploadLogDir()
 	}
 	s := &Server{
 		cfg:          cfg,
@@ -288,6 +295,8 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 			s.handleHubSessionEvent(state.peer, state, in, registrySessionEventMethod(in.Method))
 		case in.Method == rp.RegistryMethodProjectList:
 			s.handleProjectList(state.peer, state, in)
+		case in.Method == rp.RegistryMethodDebugUploadLog:
+			s.handleDebugUploadLog(state.peer, in)
 		case in.Method == rp.RegistryMethodProjectSyncCheck:
 			s.handleProjectSyncCheck(state.peer, state, in)
 		case in.Method == rp.RegistryMethodMonitorListHub:
@@ -679,6 +688,52 @@ func (s *Server) handleProjectList(peer *peerConn, state *connectionState, in en
 		"projects": items,
 		"hubs":     s.snapshotProjectListHubs(state.scopeHubID),
 	})
+}
+
+func (s *Server) handleDebugUploadLog(peer *peerConn, in envelope) {
+	resp := s.debugUploadLogEnvelope(in)
+	resp.RequestID = in.RequestID
+	_ = peer.write(resp)
+}
+
+func (s *Server) debugUploadLogEnvelope(in envelope) envelope {
+	var payload debugUploadLogPayload
+	if err := decodePayload(in.Payload, &payload); err != nil {
+		return s.errorEnvelope(in.Method, codeInvalidArgument, "invalid debug.uploadLog payload", nil)
+	}
+	if payload.Text == "" {
+		return s.errorEnvelope(in.Method, codeInvalidArgument, "text is required", nil)
+	}
+	if len([]byte(payload.Text)) > maxDebugUploadLogBytes {
+		return s.errorEnvelope(in.Method, codeInvalidArgument, "text is too large", map[string]any{
+			"maxBytes": maxDebugUploadLogBytes,
+		})
+	}
+	if err := os.MkdirAll(s.cfg.LogDir, 0755); err != nil {
+		return s.errorEnvelope(in.Method, codeInternal, "create log directory failed", nil)
+	}
+
+	now := time.Now().UTC()
+	fileName := fmt.Sprintf(
+		"%s-diagnostics-%s-%d-%d.log",
+		sanitizeDebugLogSource(payload.Source),
+		now.Format("20060102-150405.000"),
+		now.UnixNano(),
+		in.RequestID,
+	)
+	path := filepath.Join(s.cfg.LogDir, fileName)
+	if err := os.WriteFile(path, []byte(payload.Text), 0644); err != nil {
+		return s.errorEnvelope(in.Method, codeInternal, "write debug log failed", nil)
+	}
+
+	return envelope{
+		Type:   rp.RegistryEnvelopeTypeResponse,
+		Method: in.Method,
+		Payload: rp.MustRaw(debugUploadLogResponsePayload{
+			OK:       true,
+			FileName: fileName,
+		}),
+	}
 }
 
 func (s *Server) handleMonitorListHub(peer *peerConn, state *connectionState, in envelope) {
@@ -1249,4 +1304,37 @@ func relayControlSecure(r *http.Request) bool {
 		return true
 	}
 	return r.TLS != nil
+}
+
+func defaultDebugUploadLogDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
+		return filepath.Join(".", "log")
+	}
+	return filepath.Join(home, ".wheelmaker", "log")
+}
+
+func sanitizeDebugLogSource(source string) string {
+	source = strings.ToLower(strings.TrimSpace(source))
+	var b strings.Builder
+	for _, r := range source {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '-' || r == '_' || r == '.':
+			b.WriteRune(r)
+		default:
+			b.WriteRune('-')
+		}
+		if b.Len() >= 48 {
+			break
+		}
+	}
+	cleaned := strings.Trim(b.String(), "-_.")
+	if cleaned == "" {
+		return "client"
+	}
+	return cleaned
 }

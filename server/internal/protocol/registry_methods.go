@@ -37,6 +37,7 @@ const (
 	RegistryRouteSpeech          RegistryRouteKind = "speech"
 	RegistryRouteClientEvent     RegistryRouteKind = "client_event"
 	RegistryRouteLocalRead       RegistryRouteKind = "local_read"
+	RegistryRouteDebug           RegistryRouteKind = "debug"
 )
 
 const (
@@ -45,6 +46,7 @@ const (
 	RegistryMethodLocalReadProof    = "local_read.proof"
 	RegistryMethodBatch             = "batch"
 	RegistryMethodHubPing           = "hub.ping"
+	RegistryMethodDebugUploadLog    = "debug.uploadLog"
 
 	RegistryMethodRegistryReportProjects = "registry.reportProjects"
 	RegistryMethodRegistryUpdateProject  = "registry.updateProject"
@@ -141,6 +143,7 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodLocalReadProof:    registryMethod(RegistryMethodLocalReadProof, RegistryRouteLocalRead, []RegistryRole{RegistryRoleLocalRead}),
 	RegistryMethodBatch:             registryMethod(RegistryMethodBatch, RegistryRouteBatch, []RegistryRole{RegistryRoleClient, RegistryRoleMonitor}),
 	RegistryMethodHubPing:           registryMethod(RegistryMethodHubPing, RegistryRouteHubControl, []RegistryRole{RegistryRoleHub}),
+	RegistryMethodDebugUploadLog:    registryMethod(RegistryMethodDebugUploadLog, RegistryRouteDebug, []RegistryRole{RegistryRoleClient}),
 
 	RegistryMethodRegistryReportProjects: registryMethod(RegistryMethodRegistryReportProjects, RegistryRouteHubReport, []RegistryRole{RegistryRoleHub}),
 	RegistryMethodRegistryUpdateProject:  registryMethod(RegistryMethodRegistryUpdateProject, RegistryRouteHubReport, []RegistryRole{RegistryRoleHub}),

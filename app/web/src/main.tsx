@@ -281,9 +281,12 @@ import {DEFAULT_SPEECH_SETTINGS, SPEECH_MODEL_OPTIONS, normalizeSpeechSettings} 
 import {
   appDiagnosticStore,
   filterAppDiagnosticRecords,
+  formatAppDiagnosticRecordLine,
+  serializeAppDiagnosticRecords,
   type AppDiagnosticCategory,
   type AppDiagnosticRecord,
 } from './debug/appDiagnostics';
+import {startWorkspaceDiagnosticSpan} from './debug/workspaceDiagnostics';
 import {
   formatVoiceInputDiagnosticError,
   logVoiceInputDiagnostic,
@@ -3044,7 +3047,9 @@ function App() {
   );
   const [registryDebugRecords, setRegistryDebugRecords] = useState(registryDebugStore.getRecords());
   const [appDiagnosticRecords, setAppDiagnosticRecords] = useState<AppDiagnosticRecord[]>(appDiagnosticStore.getRecords());
-  const [selectedDiagnosticCategory, setSelectedDiagnosticCategory] = useState<AppDiagnosticCategory>('voice');
+  const [selectedDiagnosticCategory, setSelectedDiagnosticCategory] = useState<AppDiagnosticCategory>('workspace');
+  const [debugLogUploading, setDebugLogUploading] = useState(false);
+  const [debugLogUploadMessage, setDebugLogUploadMessage] = useState('');
   const [selectedRegistryDebugRecordId, setSelectedRegistryDebugRecordId] = useState<number | null>(null);
   const [selectedRegistryDebugScope, setSelectedRegistryDebugScope] = useState('All');
   const [selectedRegistryDebugSessionId, setSelectedRegistryDebugSessionId] = useState('All');
@@ -8109,6 +8114,14 @@ function App() {
   ) => {
     if (!activeProjectId || !sessionId) return false;
     const runtimeKey = buildChatRuntimeKey(activeProjectId, sessionId);
+    const finishLoadDiagnostic = startWorkspaceDiagnosticSpan('load_chat_session', {
+      projectId: activeProjectId,
+      sessionId,
+      incremental: options?.incremental ?? true,
+      forceFull: options?.forceFull === true,
+    });
+    let loaded = false;
+    let loadError = '';
     setChatLoading(true);
     try {
       const requestedIncremental = options?.forceFull
@@ -8203,11 +8216,17 @@ function App() {
           knownSession?.lastDoneTurnIndex ?? 0,
         ).catch(() => undefined);
       }
+      loaded = canApplyLoadedSelection;
       return canApplyLoadedSelection;
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      loadError = err instanceof Error ? err.message : String(err);
+      setError(loadError);
       return false;
     } finally {
+      finishLoadDiagnostic({
+        ok: loaded,
+        ...(loadError ? {error: loadError} : {}),
+      }, loadError ? 'error' : 'info');
       setChatLoading(false);
     }
   };
@@ -8303,8 +8322,15 @@ function App() {
     preferredSelection = '',
   ) => {
     if (!activeProjectId) return;
+    const finishLoadListDiagnostic = startWorkspaceDiagnosticSpan('load_chat_sessions', {
+      projectId: activeProjectId,
+      preferredSelection,
+    });
+    let sessionCount = 0;
+    let loadListError = '';
     try {
       const listedSessions = sortChatSessions(await service.listProjectSessions(activeProjectId));
+      sessionCount = listedSessions.length;
       const knownSessions = knownChatSessionsForProject(activeProjectId);
       const nextSessions = mergeChatSessionList(knownSessions, listedSessions);
       setProjectSessionsByProjectId(prev => ({
@@ -8365,7 +8391,14 @@ function App() {
         selectionSnapshot: runtimeKey,
       }).catch(() => undefined);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      loadListError = err instanceof Error ? err.message : String(err);
+      setError(loadListError);
+    } finally {
+      finishLoadListDiagnostic({
+        ok: !loadListError,
+        sessionCount,
+        ...(loadListError ? {error: loadListError} : {}),
+      }, loadListError ? 'error' : 'info');
     }
   };
 
@@ -9925,6 +9958,12 @@ function App() {
     if (connectInFlightRef.current) {
       return;
     }
+    const finishConnectDiagnostic = startWorkspaceDiagnosticSpan('connect_registry', {
+      silentReconnect,
+    });
+    let connectError = '';
+    let reconnectScheduled = false;
+    let connectedProjectId = '';
     connectInFlightRef.current = true;
     const trimmedToken = tokenRef.current.trim();
     const nextAddress = addressRef.current.trim();
@@ -9938,6 +9977,7 @@ function App() {
     try {
       const ws = toRegistryWsUrl(nextAddress);
       const result = await workspaceController.connect(ws, trimmedToken, {disableFileCache});
+      connectedProjectId = result.hydrated.projectId;
       submitDesktopRemoteWebCandidate(ws);
       const persistedSelectedChatKey = workspaceStore.migrateSelectedChatSessionKey(result.hydrated.projectId);
       const preferredSelectedChatKey =
@@ -10003,6 +10043,7 @@ function App() {
         .catch(() => undefined);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      connectError = message;
       if (silentReconnect) {
         const reconnectStartedAt = reconnectStartedAtRef.current ?? Date.now();
         reconnectStartedAtRef.current = reconnectStartedAt;
@@ -10010,6 +10051,7 @@ function App() {
         if (elapsed < RECONNECT_GRACE_PERIOD_MS) {
           setError('');
           setReconnecting(true);
+          reconnectScheduled = true;
           scheduleReconnectAttempt();
           return;
         }
@@ -10024,6 +10066,12 @@ function App() {
       }
       setError(message);
     } finally {
+      finishConnectDiagnostic({
+        ok: !connectError,
+        reconnectScheduled,
+        projectId: connectedProjectId,
+        ...(connectError ? {error: connectError} : {}),
+      }, connectError && !reconnectScheduled ? 'error' : 'info');
       connectInFlightRef.current = false;
       setAutoConnecting(false);
     }
@@ -11603,8 +11651,16 @@ function App() {
     nextProjectId: string,
     options?: {reason?: 'chat' | 'manual'},
   ) => {
+    const syncReason = options?.reason ?? 'manual';
+    const finishSyncDiagnostic = startWorkspaceDiagnosticSpan('sync_workspace_project', {
+      reason: syncReason,
+      fromProjectId: projectIdRef.current,
+      projectId: nextProjectId,
+      tab: tabRef.current,
+    });
     if (!nextProjectId || nextProjectId === projectIdRef.current) {
       setWorkspaceProjectMenuOpen(false);
+      finishSyncDiagnostic({skipped: true, skipReason: nextProjectId ? 'same_project' : 'missing_project'});
       return;
     }
     if (!projectsRef.current.some(item => item.projectId === nextProjectId)) {
@@ -11612,6 +11668,7 @@ function App() {
         setError('Project is no longer available');
       }
       setWorkspaceProjectMenuOpen(false);
+      finishSyncDiagnostic({ok: false, error: 'Project is no longer available'}, 'error');
       return;
     }
 
@@ -11646,20 +11703,25 @@ function App() {
       setWorkspaceProjectMenuOpen(false);
       setError('');
 
-      if (tabRef.current === 'file') {
-        loadDirectory('.', {projectId: nextProjectId}).catch(err =>
-          setError(err instanceof Error ? err.message : String(err)),
-        );
-      } else if (tabRef.current === 'git') {
-        loadGit().catch(err =>
-          setGitError(err instanceof Error ? err.message : String(err)),
-        );
-      }
-    } catch (err) {
       if (options?.reason !== 'chat') {
-        setError(err instanceof Error ? err.message : String(err));
+        if (tabRef.current === 'file') {
+          loadDirectory('.', {projectId: nextProjectId}).catch(err =>
+            setError(err instanceof Error ? err.message : String(err)),
+          );
+        } else if (tabRef.current === 'git') {
+          loadGit().catch(err =>
+            setGitError(err instanceof Error ? err.message : String(err)),
+          );
+        }
+      }
+      finishSyncDiagnostic({ok: true, loadedSurface: options?.reason === 'chat' ? 'none' : tabRef.current});
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (options?.reason !== 'chat') {
+        setError(message);
       }
       setWorkspaceProjectMenuOpen(false);
+      finishSyncDiagnostic({ok: false, error: message}, 'error');
     }
   };
 
@@ -11696,33 +11758,51 @@ function App() {
     if (!targetProjectId || !sessionId) return;
     const nextSelectedKey = chatSessionKeyFromParts(targetProjectId, sessionId);
     if (!nextSelectedKey) return;
+    const finishSelectDiagnostic = startWorkspaceDiagnosticSpan('select_session', {
+      projectId: targetProjectId,
+      sessionId,
+      currentProjectId: projectIdRef.current,
+    });
+    let selected = false;
+    let selectError = '';
     const targetTurnIndex = Number.isFinite(options?.targetTurnIndex)
       ? Math.max(0, Math.trunc(options?.targetTurnIndex ?? 0))
       : 0;
-    const hasTargetTurnIndex = targetTurnIndex > 0;
-    workspaceStore.rememberSelectedChatSessionKey(nextSelectedKey);
-    syncWorkspaceProject(targetProjectId, {reason: 'chat'}).catch(() => undefined);
-    setWideProjectActionMenu(null);
-    setMobileProjectActionMenu(null);
-    if (options?.closeMobileDrawer) {
-      setDrawerOpen(false);
+    try {
+      const hasTargetTurnIndex = targetTurnIndex > 0;
+      workspaceStore.rememberSelectedChatSessionKey(nextSelectedKey);
+      syncWorkspaceProject(targetProjectId, {reason: 'chat'}).catch(() => undefined);
+      setWideProjectActionMenu(null);
+      setMobileProjectActionMenu(null);
+      if (options?.closeMobileDrawer) {
+        setDrawerOpen(false);
+      }
+      setTab('chat');
+      applySelectedChatKey(nextSelectedKey);
+      const runtimeKey = encodeChatSessionKey(nextSelectedKey);
+      setChatMessages([]);
+      setVisibleChatMessagesForRuntimeKey(
+        runtimeKey,
+        hydrateChatSessionContentFromCache(sessionId, targetProjectId),
+        hasTargetTurnIndex ? {revealTurnIndex: targetTurnIndex} : {resetToLatest: true},
+      );
+      selected = await loadChatSession(sessionId, targetProjectId, {
+        incremental: !hasTargetTurnIndex,
+        forceFull: hasTargetTurnIndex,
+        preserveUserSelection: true,
+        selectionSnapshot: runtimeKey,
+        revealTurnIndex: targetTurnIndex,
+      });
+    } catch (err) {
+      selectError = err instanceof Error ? err.message : String(err);
+      throw err;
+    } finally {
+      finishSelectDiagnostic({
+        ok: selected,
+        targetTurnIndex,
+        ...(selectError ? {error: selectError} : {}),
+      }, selectError ? 'error' : 'info');
     }
-    setTab('chat');
-    applySelectedChatKey(nextSelectedKey);
-    const runtimeKey = encodeChatSessionKey(nextSelectedKey);
-    setChatMessages([]);
-    setVisibleChatMessagesForRuntimeKey(
-      runtimeKey,
-      hydrateChatSessionContentFromCache(sessionId, targetProjectId),
-      hasTargetTurnIndex ? {revealTurnIndex: targetTurnIndex} : {resetToLatest: true},
-    );
-    await loadChatSession(sessionId, targetProjectId, {
-      incremental: !hasTargetTurnIndex,
-      forceFull: hasTargetTurnIndex,
-      preserveUserSelection: true,
-      selectionSnapshot: runtimeKey,
-      revealTurnIndex: targetTurnIndex,
-    });
   };
 
   const selectWideProjectSession = async (targetProjectId: string, sessionId: string) => {
@@ -12297,6 +12377,12 @@ function App() {
   const refreshProject = async (options?: {silent?: boolean}) => {
     if (!connected || !projectId) return;
     if (refreshInFlightRef.current) return;
+    const finishRefreshProjectDiagnostic = startWorkspaceDiagnosticSpan('refresh_project', {
+      projectId,
+      silent: options?.silent === true,
+    });
+    let refreshProjectError = '';
+    let staleDomains: string[] = [];
     refreshInFlightRef.current = true;
     const silent = !!options?.silent;
     const latestProject = currentProjectRef.current;
@@ -12311,6 +12397,7 @@ function App() {
         knownGitRev: knownGitRevRef.current,
         knownWorktreeRev: knownWorktreeRevRef.current,
       });
+      staleDomains = sync.staleDomains;
       const needsProjectOrFsRefresh = sync.staleDomains.some(
         domain => domain === 'fs' || domain === 'project',
       );
@@ -12342,11 +12429,19 @@ function App() {
       if (!silent) {
         setHasPendingProjectUpdates(false);
       }
+    } catch (err) {
+      refreshProjectError = err instanceof Error ? err.message : String(err);
+      throw err;
     } finally {
       refreshInFlightRef.current = false;
       if (!silent) {
         setRefreshingProject(false);
       }
+      finishRefreshProjectDiagnostic({
+        ok: !refreshProjectError,
+        staleDomains,
+        ...(refreshProjectError ? {error: refreshProjectError} : {}),
+      }, refreshProjectError ? 'error' : 'info');
     }
   };
 
@@ -12426,13 +12521,18 @@ function App() {
       chatIndexFullRefreshDirtyRef.current = true;
       return;
     }
+    const finishRefreshDiagnostic = startWorkspaceDiagnosticSpan('refresh_chat_index', {
+      force: options?.force === true,
+    });
+    let projectCount = 0;
+    let refreshError = '';
     chatIndexFullRefreshInFlightRef.current = true;
     setMobileProjectSessionsRefreshing(true);
-    setRefreshingProject(true);
     try {
       do {
         chatIndexFullRefreshDirtyRef.current = false;
         const latestProjects = await service.listProjects();
+        projectCount = latestProjects.length;
         setProjects(latestProjects);
         setHasPendingProjectUpdates(false);
         await Promise.all(
@@ -12442,11 +12542,16 @@ function App() {
         );
       } while (chatIndexFullRefreshDirtyRef.current);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      refreshError = err instanceof Error ? err.message : String(err);
+      setError(refreshError);
     } finally {
       chatIndexFullRefreshInFlightRef.current = false;
       setMobileProjectSessionsRefreshing(false);
-      setRefreshingProject(false);
+      finishRefreshDiagnostic({
+        ok: !refreshError,
+        projectCount,
+        ...(refreshError ? {error: refreshError} : {}),
+      }, refreshError ? 'error' : 'info');
     }
   };
 
@@ -14310,31 +14415,56 @@ function App() {
     );
   };
 
+  const uploadDebugLogs = async () => {
+    const records = filterAppDiagnosticRecords(appDiagnosticRecords, {
+      category: selectedDiagnosticCategory,
+      levels: ['info', 'warn', 'error'],
+    });
+    if (records.length === 0 || debugLogUploading) {
+      return;
+    }
+    const finish = startWorkspaceDiagnosticSpan('upload_debug_log', {
+      category: selectedDiagnosticCategory,
+      count: records.length,
+    });
+    setDebugLogUploading(true);
+    setDebugLogUploadMessage('');
+    try {
+      const result = await service.uploadDebugLog({
+        source: 'web',
+        text: serializeAppDiagnosticRecords(records),
+      });
+      finish({ok: result.ok, fileName: result.fileName});
+      setDebugLogUploadMessage(result.fileName ? `Uploaded ${result.fileName}` : 'Uploaded');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      finish({ok: false, error: message}, 'error');
+      setDebugLogUploadMessage(message);
+    } finally {
+      setDebugLogUploading(false);
+    }
+  };
+
   const renderDebugLogsSettingsDetail = (options?: SettingsDetailShellOptions) => {
     const records = filterAppDiagnosticRecords(appDiagnosticRecords, {
       category: selectedDiagnosticCategory,
-      levels: ['warn', 'error'],
+      levels: ['info', 'warn', 'error'],
     });
     return renderSettingsDetailShell(
       'Logs',
       <div className="debug-log-detail">
         <div className="debug-log-list" aria-live="polite">
           {records.length === 0 ? (
-            <div className="debug-log-empty">No warning or error logs yet.</div>
+            <div className="debug-log-empty">No logs yet.</div>
           ) : (
             records.map(record => (
-              <article key={record.id} className={`debug-log-entry ${record.level}`}>
-                <div className="debug-log-entry-header">
-                  <span className="debug-log-time">{record.timeText}</span>
-                  <span className={`debug-log-level ${record.level}`}>{record.level}</span>
-                </div>
-                <div className="debug-log-event">{record.event}</div>
-                {Object.keys(record.details).length > 0 ? (
-                  <pre className="debug-log-details">
-                    {JSON.stringify(record.details, null, 2)}
-                  </pre>
-                ) : null}
-              </article>
+              <div
+                key={record.id}
+                className={`debug-log-line ${record.level}`}
+                title={formatAppDiagnosticRecordLine(record)}
+              >
+                {formatAppDiagnosticRecordLine(record)}
+              </div>
             ))
           )}
         </div>
@@ -14346,9 +14476,23 @@ function App() {
               value={selectedDiagnosticCategory}
               onChange={event => setSelectedDiagnosticCategory(event.target.value as AppDiagnosticCategory)}
             >
+              <option value="workspace">Workspace</option>
               <option value="voice">Voice</option>
             </select>
           </label>
+          <div className="debug-log-actions">
+            <button
+              type="button"
+              className="settings-detail-action-btn"
+              disabled={records.length === 0 || debugLogUploading}
+              onClick={() => uploadDebugLogs().catch(() => undefined)}
+            >
+              {debugLogUploading ? 'Uploading...' : 'Upload Log'}
+            </button>
+            {debugLogUploadMessage ? (
+              <span className="debug-log-upload-status">{debugLogUploadMessage}</span>
+            ) : null}
+          </div>
         </div>
       </div>,
       undefined,

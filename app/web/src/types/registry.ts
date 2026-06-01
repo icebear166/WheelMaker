@@ -53,6 +53,16 @@ export interface RegistrySpeechErrorEvent {
   retryable: boolean;
 }
 
+export interface RegistryDebugUploadLogPayload {
+  source: string;
+  text: string;
+}
+
+export interface RegistryDebugUploadLogResponse {
+  ok: boolean;
+  fileName: string;
+}
+
 export interface RegistryEnvelope<TPayload = unknown> {
   requestId?: number;
   type: RegistryMessageType;

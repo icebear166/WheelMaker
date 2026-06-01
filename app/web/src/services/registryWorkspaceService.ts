@@ -5,6 +5,8 @@ import type {RegistryDebugConnection} from '../debug/registryDebug';
 import {LocalHubReadManager, type LocalHubReadStatus} from './localHubReadManager';
 import type {
   RegistryEnvelope,
+  RegistryDebugUploadLogPayload,
+  RegistryDebugUploadLogResponse,
   RegistryFsInfo,
   RegistryFsEntry,
   RegistryGitCommit,
@@ -335,6 +337,13 @@ export class RegistryWorkspaceService {
 
   async listProjects(): Promise<RegistryProject[]> {
     return (await this.listProjectSnapshot()).projects;
+  }
+
+  async uploadDebugLog(payload: RegistryDebugUploadLogPayload): Promise<RegistryDebugUploadLogResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.uploadDebugLog(payload);
   }
 
   async listProjectSnapshot(): Promise<RegistryProjectListResponse> {

@@ -5,6 +5,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -49,6 +51,57 @@ func TestConnectInit(t *testing.T) {
 	}
 	if resp.Payload["serverInfo"] == nil {
 		t.Fatalf("missing serverInfo: %#v", resp.Payload)
+	}
+}
+
+func TestDebugUploadLogWritesClientLog(t *testing.T) {
+	logDir := t.TempDir()
+	s := New(Config{LogDir: logDir})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	client := dialWS(t, ts.URL+"/ws")
+	defer client.Close()
+	mustWriteJSON(t, client, testEnvelope{
+		RequestID: 1,
+		Type:      "request",
+		Method:    "connect.init",
+		Payload: map[string]any{
+			"clientName":      "wm-web",
+			"clientVersion":   "0.1.0",
+			"protocolVersion": "2.3",
+			"role":            "client",
+			"token":           "",
+		},
+	})
+	_ = mustReadEnvelope(t, client)
+
+	mustWriteJSON(t, client, testEnvelope{
+		RequestID: 2,
+		Type:      "request",
+		Method:    "debug.uploadLog",
+		Payload: map[string]any{
+			"source": "web",
+			"text":   "00:00:01.000 info workspace select_session durationMs=42\n",
+		},
+	})
+	resp := mustReadEnvelope(t, client)
+	if resp.Type != "response" || resp.Method != "debug.uploadLog" {
+		t.Fatalf("unexpected response: %#v", resp)
+	}
+	if resp.Payload["ok"] != true {
+		t.Fatalf("ok=%v, want true", resp.Payload["ok"])
+	}
+	fileName, _ := resp.Payload["fileName"].(string)
+	if fileName == "" || strings.Contains(fileName, "/") || strings.Contains(fileName, "\\") {
+		t.Fatalf("unsafe fileName=%q", fileName)
+	}
+	data, err := os.ReadFile(filepath.Join(logDir, fileName))
+	if err != nil {
+		t.Fatalf("read uploaded log: %v", err)
+	}
+	if !strings.Contains(string(data), "workspace select_session durationMs=42") {
+		t.Fatalf("uploaded log content=%q", string(data))
 	}
 }
 

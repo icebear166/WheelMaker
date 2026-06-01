@@ -78,9 +78,14 @@ func runRegistryServer(addr, token string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	logDir := ""
+	if home, err := os.UserHomeDir(); err == nil {
+		logDir = wheelmakerLogDir(home)
+	}
 	s := registry.New(registry.Config{
-		Addr:  addr,
-		Token: token,
+		Addr:   addr,
+		Token:  token,
+		LogDir: logDir,
 	})
 	return s.Run(ctx)
 }
@@ -164,8 +169,9 @@ func runRegistryWorker(stateDir string) error {
 	defer stop()
 	registryScopedLogger.Info("worker start addr=%s", addr)
 	s := registry.New(registry.Config{
-		Addr:  addr,
-		Token: cfg.Registry.Token,
+		Addr:   addr,
+		Token:  cfg.Registry.Token,
+		LogDir: filepath.Join(baseDir, "log"),
 	})
 	if err := s.Run(ctx); err != nil {
 		registryScopedLogger.Error("worker run failed err=%v", err)

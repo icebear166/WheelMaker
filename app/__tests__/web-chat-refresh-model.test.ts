@@ -6,6 +6,25 @@ function readMain(): string {
   return fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
 }
 
+function extractFunctionBody(source: string, functionName: string): string {
+  const marker = `const ${functionName} = async`;
+  const start = source.indexOf(marker);
+  expect(start).toBeGreaterThanOrEqual(0);
+  const arrowStart = source.indexOf(') => {', start);
+  expect(arrowStart).toBeGreaterThanOrEqual(0);
+  const bodyStart = source.indexOf('{', arrowStart);
+  let depth = 0;
+  for (let index = bodyStart; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === '{') depth += 1;
+    if (char === '}') {
+      depth -= 1;
+      if (depth === 0) return source.slice(bodyStart, index + 1);
+    }
+  }
+  throw new Error(`Unable to extract ${functionName}`);
+}
+
 describe('web chat refresh model', () => {
   test('mobile drawer open does not trigger an online chat session fan-out', () => {
     const main = readMain();
@@ -32,6 +51,15 @@ describe('web chat refresh model', () => {
     expect(main).toContain('refreshChatProjectSessions(eventProjectId)');
     expect(main).toContain('const runtimeKey = buildChatRuntimeKey(eventProjectId, sessionId);');
     expect(main).not.toContain('const targetProjectId = eventProjectId || projectIdRef.current;');
+  });
+
+  test('chat index refresh does not drive the project loading spinner', () => {
+    const main = readMain();
+    const refreshChatIndexBody = extractFunctionBody(main, 'refreshChatIndex');
+
+    expect(refreshChatIndexBody).toContain('setMobileProjectSessionsRefreshing(true)');
+    expect(refreshChatIndexBody).not.toContain('setRefreshingProject(true)');
+    expect(refreshChatIndexBody).not.toContain('setRefreshingProject(false)');
   });
 
   test('project session lists are never mirrored from unscoped chatSessions state', () => {

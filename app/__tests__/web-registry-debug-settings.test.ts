@@ -53,20 +53,28 @@ describe('web registry debug settings', () => {
     expect(mainTsx).not.toContain('registryDebugRecordsJson');
   });
 
-  test('renders warning and error logs with a bottom category selector', () => {
+  test('renders compact uploadable logs with a bottom category selector', () => {
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
     const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
 
     expect(mainTsx).toContain('appDiagnosticStore,');
     expect(mainTsx).toContain('filterAppDiagnosticRecords,');
+    expect(mainTsx).toContain('formatAppDiagnosticRecordLine,');
+    expect(mainTsx).toContain('serializeAppDiagnosticRecords,');
     expect(mainTsx).toContain('const [appDiagnosticRecords, setAppDiagnosticRecords] = useState');
-    expect(mainTsx).toContain("const [selectedDiagnosticCategory, setSelectedDiagnosticCategory] = useState<AppDiagnosticCategory>('voice');");
-    expect(mainTsx).toContain("levels: ['warn', 'error']");
+    expect(mainTsx).toContain("const [selectedDiagnosticCategory, setSelectedDiagnosticCategory] = useState<AppDiagnosticCategory>('workspace');");
+    expect(mainTsx).toContain("levels: ['info', 'warn', 'error']");
+    expect(mainTsx).toContain('const uploadDebugLogs = async () => {');
+    expect(mainTsx).toContain('await service.uploadDebugLog({');
+    expect(mainTsx).toContain('text: serializeAppDiagnosticRecords(records),');
+    expect(mainTsx).toContain('formatAppDiagnosticRecordLine(record)');
     expect(mainTsx).toContain('className="debug-log-detail-footer"');
+    expect(mainTsx).toContain('<option value="workspace">Workspace</option>');
     expect(mainTsx).toContain('<option value="voice">Voice</option>');
-    expect(mainTsx).toContain('No warning or error logs yet.');
+    expect(mainTsx).toContain('No logs yet.');
+    expect(mainTsx).toContain('Upload Log');
     expect(stylesCss).toContain('.debug-log-detail-footer');
-    expect(stylesCss).toContain('.debug-log-entry.error');
+    expect(stylesCss).toContain('.debug-log-line.error');
   });
 
   test('places debug maintenance settings at the bottom after code display', () => {
