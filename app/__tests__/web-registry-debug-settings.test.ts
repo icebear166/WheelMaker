@@ -75,6 +75,10 @@ describe('web registry debug settings', () => {
     expect(mainTsx).toContain('Upload Log');
     expect(stylesCss).toContain('.debug-log-detail-footer');
     expect(stylesCss).toContain('.debug-log-line.error');
+    const debugLogLineRule = stylesCss.match(/\.debug-log-line\s*\{[^}]+\}/)?.[0] ?? '';
+    expect(debugLogLineRule).toContain('white-space: pre-wrap;');
+    expect(debugLogLineRule).toContain('overflow-wrap: anywhere;');
+    expect(debugLogLineRule).not.toContain('text-overflow: ellipsis;');
   });
 
   test('places debug maintenance settings at the bottom after code display', () => {

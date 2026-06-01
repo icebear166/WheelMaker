@@ -3669,9 +3669,8 @@ textarea,
   font-size: 10.5px;
   line-height: 1.35;
   padding: 6px 7px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .debug-log-line.info {
