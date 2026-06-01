@@ -9,6 +9,7 @@ import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URI
+import java.util.Locale
 
 class StableOriginWebViewClient(
     private val context: Context,
@@ -66,7 +67,7 @@ class StableOriginWebViewClient(
             }
             val headers = responseHeadersForRemoteAsset(assetName, connection.getHeaderField("Cache-Control"))
             WebResourceResponse(
-                mimeTypeFromHeader(connection.contentType, assetName),
+                contentTypeForRemoteAsset(connection.contentType, assetName),
                 null,
                 status,
                 connection.responseMessage ?: "OK",
@@ -190,6 +191,15 @@ fun contentTypeForAsset(assetName: String): String {
     }
 }
 
+fun contentTypeForRemoteAsset(contentType: String?, assetName: String): String {
+    val upstreamType = normalizedContentType(contentType)
+    val assetType = contentTypeForAsset(assetName)
+    if (shouldPreferAssetContentType(assetName, assetType, upstreamType)) {
+        return assetType
+    }
+    return upstreamType ?: assetType
+}
+
 fun responseHeadersForAsset(assetName: String): Map<String, String> {
     val baseName = assetName.substringAfterLast('/')
     val cacheControl = when {
@@ -224,10 +234,23 @@ fun shouldBypassRemoteUrlConnectionCache(assetName: String): Boolean {
     }
 }
 
-private fun mimeTypeFromHeader(contentType: String?, assetName: String): String {
+private fun normalizedContentType(contentType: String?): String? {
     return contentType
         ?.substringBefore(';')
         ?.trim()
+        ?.lowercase(Locale.US)
         ?.takeIf { it.isNotBlank() }
-        ?: contentTypeForAsset(assetName)
+}
+
+private fun shouldPreferAssetContentType(assetName: String, assetType: String, upstreamType: String?): Boolean {
+    if (assetType == "application/octet-stream") return false
+    if (isFontAsset(assetName)) return true
+    return upstreamType == null || upstreamType == "application/octet-stream" || upstreamType == "binary/octet-stream"
+}
+
+private fun isFontAsset(assetName: String): Boolean {
+    return assetName.endsWith(".woff2") ||
+        assetName.endsWith(".woff") ||
+        assetName.endsWith(".ttf") ||
+        assetName.endsWith(".eot")
 }

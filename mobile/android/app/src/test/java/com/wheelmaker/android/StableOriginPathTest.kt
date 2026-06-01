@@ -128,4 +128,52 @@ class StableOriginPathTest {
         assertEquals("font/ttf", contentTypeForAsset("codicon.abc123.ttf"))
         assertEquals("application/vnd.ms-fontobject", contentTypeForAsset("legacy.abc123.eot"))
     }
+
+    @Test
+    fun remoteFontContentTypesPreferAssetExtensionOverGenericUpstreamHeaders() {
+        assertEquals(
+            "font/ttf",
+            contentTypeForRemoteAsset("application/octet-stream", "codicon.abc123.ttf")
+        )
+        assertEquals(
+            "font/woff",
+            contentTypeForRemoteAsset("application/font-woff", "seti.abc123.woff")
+        )
+        assertEquals(
+            "font/woff2",
+            contentTypeForRemoteAsset("binary/octet-stream", "font.abc123.woff2")
+        )
+    }
+
+    @Test
+    fun remoteStaticContentTypesUseAssetExtensionWhenUpstreamIsGeneric() {
+        assertEquals(
+            "application/javascript",
+            contentTypeForRemoteAsset("application/octet-stream", "bundle.abc123.js")
+        )
+        assertEquals(
+            "text/css",
+            contentTypeForRemoteAsset("application/octet-stream", "bundle.abc123.css")
+        )
+        assertEquals(
+            "image/svg+xml",
+            contentTypeForRemoteAsset("application/octet-stream", "icons/logo.svg")
+        )
+    }
+
+    @Test
+    fun remoteGenericContentTypeMatchingIsCaseInsensitive() {
+        assertEquals(
+            "text/css",
+            contentTypeForRemoteAsset("Application/Octet-Stream", "bundle.abc123.css")
+        )
+    }
+
+    @Test
+    fun remoteContentTypesKeepSpecificUpstreamHeadersForUnknownAssets() {
+        assertEquals(
+            "text/plain",
+            contentTypeForRemoteAsset("text/plain; charset=utf-8", "debug.log")
+        )
+    }
 }
