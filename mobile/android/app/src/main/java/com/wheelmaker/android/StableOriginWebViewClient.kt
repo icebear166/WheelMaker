@@ -1,7 +1,6 @@
 package com.wheelmaker.android
 
 import android.content.Context
-import android.graphics.Bitmap
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -16,30 +15,13 @@ class StableOriginWebViewClient(
     private val context: Context,
     private val webSourceRuntime: WebSourceRuntime
 ) : WebViewClient() {
-    override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
-        logWebDiag("page started url=$url")
-        super.onPageStarted(view, url, favicon)
-    }
-
-    override fun onPageFinished(view: WebView, url: String) {
-        logWebDiag("page finished url=$url")
-        super.onPageFinished(view, url)
-    }
-
     override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
         val uri = request.url ?: return null
         if (uri.scheme != "https" || uri.host != "appassets.androidplatform.net") {
             return null
         }
         val assetName = assetNameForStablePath(uri.encodedPath ?: "/")
-        val shouldLog = shouldLogStableOriginAsset(assetName)
-        if (shouldLog) {
-            logWebDiag("webView request method=${request.method} asset=$assetName url=$uri")
-        }
         nativeShellStubAsset(assetName)?.let { stub ->
-            if (shouldLog) {
-                logWebDiag("webView native stub asset=$assetName contentType=${stub.contentType}")
-            }
             return WebResourceResponse(
                 stub.contentType,
                 "utf-8",
@@ -50,31 +32,19 @@ class StableOriginWebViewClient(
             )
         }
         if (shouldBlockStableOriginAsset(assetName)) {
-            if (shouldLog) {
-                logWebDiag("webView blocked asset=$assetName")
-            }
             return notFoundResponse()
         }
         val remoteBase = webSourceRuntime.remoteBaseForRequest()
-        if (shouldLog) {
-            logWebDiag(
-                "webView candidates asset=$assetName source=${if (remoteBase.isBlank()) STABLE_ORIGIN_SOURCE_EMBEDDED else STABLE_ORIGIN_SOURCE_REMOTE} " +
-                    "remoteBase=${remoteBase.ifBlank { "<empty>" }}"
-            )
-        }
         for (candidate in stableOriginAssetCandidates(assetName, remoteBase)) {
             when (candidate.source) {
-                STABLE_ORIGIN_SOURCE_REMOTE -> remoteResponse(candidate.assetName, remoteBase, shouldLog)?.let { return it }
-                STABLE_ORIGIN_SOURCE_EMBEDDED -> embeddedResponse(candidate.assetName, shouldLog)?.let { return it }
+                STABLE_ORIGIN_SOURCE_REMOTE -> remoteResponse(candidate.assetName, remoteBase)?.let { return it }
+                STABLE_ORIGIN_SOURCE_EMBEDDED -> embeddedResponse(candidate.assetName)?.let { return it }
             }
-        }
-        if (shouldLog) {
-            logWebDiag("webView notFound asset=$assetName")
         }
         return notFoundResponse()
     }
 
-    private fun remoteResponse(assetName: String, remoteBase: String, shouldLog: Boolean): WebResourceResponse? {
+    private fun remoteResponse(assetName: String, remoteBase: String): WebResourceResponse? {
         if (remoteBase.isBlank()) return null
         var connection: HttpURLConnection? = null
         return try {
@@ -90,48 +60,28 @@ class StableOriginWebViewClient(
                 connection.setRequestProperty("Cache-Control", "no-cache")
                 connection.setRequestProperty("Pragma", "no-cache")
             }
-            if (shouldLog) {
-                logWebDiag("remote fetch start asset=$assetName url=$url useCaches=${connection.useCaches}")
-            }
             val status = connection.responseCode
             if (status !in 200..299) {
-                if (shouldLog) {
-                    logWebDiag("remote fetch status asset=$assetName status=$status url=$url")
-                }
                 connection.disconnect()
                 return null
             }
             val headers = responseHeadersForRemoteAsset(assetName, connection.getHeaderField("Cache-Control"))
-            val servedContentType = contentTypeForRemoteAsset(connection.contentType, assetName)
-            if (shouldLog) {
-                logWebDiag(
-                    "remote fetch success asset=$assetName status=$status upstreamType=${connection.contentType ?: "<empty>"} " +
-                        "servedType=$servedContentType upstreamCache=${connection.getHeaderField("Cache-Control") ?: "<empty>"} " +
-                        "servedCache=${headers["Cache-Control"] ?: "<empty>"} url=$url"
-                )
-            }
             WebResourceResponse(
-                servedContentType,
+                contentTypeForRemoteAsset(connection.contentType, assetName),
                 null,
                 status,
                 connection.responseMessage ?: "OK",
                 headers,
                 connection.inputStream
             )
-        } catch (error: Exception) {
-            if (shouldLog) {
-                logWebDiag("remote fetch error asset=$assetName error=${error.javaClass.simpleName}:${error.message ?: "<empty>"}")
-            }
+        } catch (_: Exception) {
             connection?.disconnect()
             null
         }
     }
 
-    private fun embeddedResponse(assetName: String, shouldLog: Boolean): WebResourceResponse? {
+    private fun embeddedResponse(assetName: String): WebResourceResponse? {
         val stream = openEmbeddedAsset(assetName) ?: return null
-        if (shouldLog) {
-            logWebDiag("embedded asset asset=$assetName contentType=${contentTypeForAsset(assetName)}")
-        }
         return WebResourceResponse(
             contentTypeForAsset(assetName),
             null,
