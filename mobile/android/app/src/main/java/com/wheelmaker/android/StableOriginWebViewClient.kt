@@ -39,11 +39,12 @@ class StableOriginWebViewClient(
             val suffix = if (assetName == "index.html") "" else assetName
             val url = URI(remoteBase).resolve(suffix).toURL()
             connection = url.openConnection() as HttpURLConnection
-            connection.useCaches = false
+            val bypassCache = shouldBypassRemoteUrlConnectionCache(assetName)
+            connection.useCaches = !bypassCache
             connection.connectTimeout = 5000
             connection.readTimeout = 15000
             connection.instanceFollowRedirects = true
-            if (requestCacheControlForRemoteAsset(assetName) != null) {
+            if (bypassCache) {
                 connection.setRequestProperty("Cache-Control", "no-cache")
                 connection.setRequestProperty("Pragma", "no-cache")
             }
@@ -153,11 +154,11 @@ fun responseHeadersForRemoteAsset(assetName: String, upstreamCacheControl: Strin
     return responseHeadersForAsset(assetName)
 }
 
-private fun requestCacheControlForRemoteAsset(assetName: String): String? {
+fun shouldBypassRemoteUrlConnectionCache(assetName: String): Boolean {
     val baseName = assetName.substringAfterLast('/')
     return when (responseHeadersForAsset(baseName)["Cache-Control"]) {
-        "no-store", "no-cache", "no-cache, must-revalidate" -> "no-cache"
-        else -> null
+        "no-store", "no-cache", "no-cache, must-revalidate" -> true
+        else -> false
     }
 }
 

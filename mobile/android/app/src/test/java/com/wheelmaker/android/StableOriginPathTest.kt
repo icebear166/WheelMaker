@@ -46,4 +46,32 @@ class StableOriginPathTest {
             responseHeadersForRemoteAsset("runtime-config.js", "public, max-age=31536000")["Cache-Control"]
         )
     }
+
+    @Test
+    fun remoteCacheBypassOnlyAppliesToVolatileAssets() {
+        assertTrue(shouldBypassRemoteUrlConnectionCache("index.html"))
+        assertTrue(shouldBypassRemoteUrlConnectionCache("service-worker.js"))
+        assertTrue(shouldBypassRemoteUrlConnectionCache("web-build.json"))
+        assertTrue(shouldBypassRemoteUrlConnectionCache("runtime-config.js"))
+
+        assertFalse(shouldBypassRemoteUrlConnectionCache("bundle.abc123.js"))
+        assertFalse(shouldBypassRemoteUrlConnectionCache("bundle.abc123.css"))
+        assertFalse(shouldBypassRemoteUrlConnectionCache("font.abc123.woff2"))
+    }
+
+    @Test
+    fun remoteResponsesKeepHashedAssetsCacheable() {
+        assertEquals(
+            "public, max-age=31536000, immutable",
+            responseHeadersForRemoteAsset("bundle.abc123.js", "no-store")["Cache-Control"]
+        )
+        assertEquals(
+            "public, max-age=31536000, immutable",
+            responseHeadersForRemoteAsset("bundle.abc123.css", "no-store")["Cache-Control"]
+        )
+        assertEquals(
+            "public, max-age=31536000, immutable",
+            responseHeadersForRemoteAsset("font.abc123.woff2", "no-store")["Cache-Control"]
+        )
+    }
 }

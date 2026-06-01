@@ -12,9 +12,9 @@ class MainActivityWebCacheTest {
         ))
 
     @Test
-    fun webViewDoesNotLoadWorkspaceShellFromHttpCache() {
+    fun webViewKeepsHttpCacheForHashedRemoteAssets() {
         val mainActivity = source
 
-        assertTrue(mainActivity.contains("target.settings.cacheMode = WebSettings.LOAD_NO_CACHE"))
+        assertTrue(mainActivity.contains("target.settings.cacheMode = WebSettings.LOAD_DEFAULT"))
     }
 }
