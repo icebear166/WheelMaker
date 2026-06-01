@@ -107,6 +107,13 @@ export function getNativeWebSourceBridge(): NativeWebSourceBridge | null {
   return nativeWindow.WheelMakerDesktop ?? null;
 }
 
+export function isNativeWebViewHost(
+  target: unknown = typeof window === 'undefined' ? undefined : window,
+): boolean {
+  const nativeWindow = target as Partial<NativeWindow> | undefined;
+  return Boolean(nativeWindow?.WheelMakerAndroid || nativeWindow?.WheelMakerAndroidNative);
+}
+
 export function submitNativeRemoteWebCandidate(registryAddress: string): void {
   const bridge = getNativeWebSourceBridge();
   const submit = bridge?.setRemoteWebCandidate;

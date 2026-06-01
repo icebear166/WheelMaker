@@ -20,7 +20,7 @@ class StableOriginWebViewClient(
             return null
         }
         val assetName = assetNameForStablePath(uri.encodedPath ?: "/")
-        if (assetName == "ws") {
+        if (shouldBlockStableOriginAsset(assetName)) {
             return notFoundResponse()
         }
         val remoteBase = webSourceRuntime.remoteBaseForRequest()
@@ -113,6 +113,11 @@ fun assetNameForStablePath(path: String): String {
 fun isWorkspaceRoute(assetName: String): Boolean {
     val baseName = assetName.substringAfterLast('/')
     return baseName.isNotBlank() && !baseName.contains('.')
+}
+
+fun shouldBlockStableOriginAsset(assetName: String): Boolean {
+    val baseName = assetName.substringAfterLast('/')
+    return baseName == "ws" || baseName == "service-worker.js"
 }
 
 data class StableOriginAssetCandidate(

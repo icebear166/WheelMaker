@@ -28,6 +28,17 @@ class StableOriginPathTest {
     }
 
     @Test
+    fun blocksBrowserPwaServiceWorkerInNativeStableOrigin() {
+        assertTrue(shouldBlockStableOriginAsset("service-worker.js"))
+        assertTrue(shouldBlockStableOriginAsset("nested/service-worker.js"))
+        assertTrue(shouldBlockStableOriginAsset("ws"))
+
+        assertFalse(shouldBlockStableOriginAsset("web-build.json"))
+        assertFalse(shouldBlockStableOriginAsset("runtime-config.js"))
+        assertFalse(shouldBlockStableOriginAsset("bundle.abc123.js"))
+    }
+
+    @Test
     fun remoteModeDoesNotUseEmbeddedAssetFallbackCandidates() {
         assertEquals(
             listOf(StableOriginAssetCandidate("remote", "bundle.abc123.js")),
