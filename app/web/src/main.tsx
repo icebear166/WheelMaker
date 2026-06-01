@@ -287,7 +287,7 @@ import {
   type AppDiagnosticCategory,
   type AppDiagnosticRecord,
 } from './debug/appDiagnostics';
-import {drainNativeWebDiagnosticsToAppLog} from './debug/nativeWebDiagnostics';
+import {drainNativeWebDiagnosticsToAppLog, setNativeDebugLoggingEnabled} from './debug/nativeWebDiagnostics';
 import {startWorkspaceDiagnosticSpan} from './debug/workspaceDiagnostics';
 import {
   formatVoiceInputDiagnosticError,
@@ -3186,7 +3186,7 @@ function App() {
   );
   const [registryDebugRecords, setRegistryDebugRecords] = useState(registryDebugStore.getRecords());
   const [appDiagnosticRecords, setAppDiagnosticRecords] = useState<AppDiagnosticRecord[]>(appDiagnosticStore.getRecords());
-  const [selectedDiagnosticCategory, setSelectedDiagnosticCategory] = useState<AppDiagnosticCategory>('workspace');
+  const [selectedDiagnosticCategory, setSelectedDiagnosticCategory] = useState<AppDiagnosticCategory>('http');
   const [debugLogUploading, setDebugLogUploading] = useState(false);
   const [debugLogUploadMessage, setDebugLogUploadMessage] = useState('');
   const [selectedRegistryDebugRecordId, setSelectedRegistryDebugRecordId] = useState<number | null>(null);
@@ -5667,7 +5667,7 @@ function App() {
   useEffect(() => appDiagnosticStore.subscribe(setAppDiagnosticRecords), []);
 
   useEffect(() => {
-    if (!isNativeShellHost()) {
+    if (!registryDebug || !isNativeShellHost()) {
       return undefined;
     }
     let cancelled = false;
@@ -5682,17 +5682,18 @@ function App() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, []);
+  }, [registryDebug]);
 
   useEffect(() => {
-    if (settingsDetailView !== 'debugLogs') {
+    if (!registryDebug || settingsDetailView !== 'debugLogs') {
       return;
     }
     void drainNativeWebDiagnosticsToAppLog();
-  }, [settingsDetailView]);
+  }, [registryDebug, settingsDetailView]);
 
   useEffect(() => {
     registryDebugStore.setEnabled(registryDebug);
+    void setNativeDebugLoggingEnabled(registryDebug);
     if (registryDebug) {
       setRegistryDebugPanelOpen(true);
     } else {
@@ -14976,6 +14977,7 @@ function App() {
               value={selectedDiagnosticCategory}
               onChange={event => setSelectedDiagnosticCategory(event.target.value as AppDiagnosticCategory)}
             >
+              <option value="http">HTTP</option>
               <option value="workspace">Workspace</option>
               <option value="voice">Voice</option>
             </select>

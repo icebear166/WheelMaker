@@ -9,6 +9,7 @@ import {
 } from '../shell/native/webSource';
 
 type NativeWebDiagnosticBridge = Pick<NativeWebSourceBridge, 'drainWebDiagnostics'>;
+type NativeDebugLoggingBridge = Pick<NativeWebSourceBridge, 'setDebugLoggingEnabled'>;
 type UploadableDiagnosticLevel = Extract<AppDiagnosticLevel, 'info' | 'warn' | 'error'>;
 
 const UPLOADABLE_LEVELS = new Set<UploadableDiagnosticLevel>(['info', 'warn', 'error']);
@@ -56,7 +57,7 @@ export async function drainNativeWebDiagnosticsToAppLog(
       continue;
     }
     appDiagnosticStore.record({
-      category: 'workspace',
+      category: 'http',
       level,
       event: typeof record.event === 'string' && record.event ? record.event : 'android_web',
       details: isDetails(record.details) ? record.details : {},
@@ -64,4 +65,20 @@ export async function drainNativeWebDiagnosticsToAppLog(
     count += 1;
   }
   return count;
+}
+
+export async function setNativeDebugLoggingEnabled(
+  enabled: boolean,
+  bridge: NativeDebugLoggingBridge | null = getNativeWebSourceBridge(),
+): Promise<boolean> {
+  const setEnabled = bridge?.setDebugLoggingEnabled;
+  if (!setEnabled) {
+    return false;
+  }
+  try {
+    await Promise.resolve(setEnabled(enabled));
+    return true;
+  } catch {
+    return false;
+  }
 }

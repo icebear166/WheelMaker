@@ -137,6 +137,20 @@ describe('native Web source helpers', () => {
     expect(native.drainWebDiagnostics).toHaveBeenCalledTimes(1);
   });
 
+  test('wraps Android native debug logging switch', async () => {
+    const native = {
+      setDebugLoggingEnabled: jest.fn((enabled: boolean) => JSON.stringify({enabled})),
+    };
+    (globalThis as {window?: unknown}).window = {
+      WheelMakerAndroidNative: native,
+    };
+
+    const bridge = getNativeWebSourceBridge();
+
+    await expect(bridge?.setDebugLoggingEnabled?.(true)).resolves.toEqual({enabled: true});
+    expect(native.setDebugLoggingEnabled).toHaveBeenCalledWith(true);
+  });
+
   test('falls back to Desktop bridge when Android bridge is absent', () => {
     const bridge = {
       enabled: true,

@@ -43,6 +43,7 @@ class MainActivity : Activity() {
     private lateinit var androidNotificationRuntime: AndroidNotificationRuntime
     private lateinit var androidApkUpdateRuntime: AndroidApkUpdateRuntime
     private lateinit var androidWebDiagnostics: AndroidWebDiagnostics
+    private lateinit var androidDebugLoggingStore: AndroidDebugLoggingStore
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
     private var pendingAudioPermissionRequest: PermissionRequest? = null
     private var systemBackCallback: OnBackInvokedCallback? = null
@@ -50,8 +51,9 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         webSourceRuntime = WebSourceRuntime(SharedPreferencesWebSourceStore(this))
-        androidWebDiagnostics = AndroidWebDiagnostics()
-        val webSourceState = webSourceRuntime.refreshActualSource()
+        androidDebugLoggingStore = SharedPreferencesAndroidDebugLoggingStore(this)
+        androidWebDiagnostics = AndroidWebDiagnostics(enabled = androidDebugLoggingStore.loadDebugLoggingEnabled())
+        val webSourceState = webSourceRuntime.state()
         androidWebDiagnostics.record("startup_web_source", mapOf(
             "preference" to webSourceState.preference,
             "actualSource" to webSourceState.actualSource,
@@ -217,7 +219,8 @@ class MainActivity : Activity() {
                 androidSpeechRuntime,
                 androidNotificationRuntime,
                 androidApkUpdateRuntime,
-                androidWebDiagnostics
+                androidWebDiagnostics,
+                androidDebugLoggingStore
             ),
             "WheelMakerAndroidNative"
         )

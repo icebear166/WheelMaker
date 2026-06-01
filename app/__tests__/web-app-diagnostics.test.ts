@@ -95,7 +95,7 @@ describe('app diagnostics', () => {
     );
   });
 
-  test('drains native Web diagnostics into workspace app diagnostics', async () => {
+  test('drains native Web diagnostics into HTTP app diagnostics', async () => {
     const bridge = {
       drainWebDiagnostics: jest.fn(() => Promise.resolve({
         records: [
@@ -117,7 +117,7 @@ describe('app diagnostics', () => {
     expect(count).toBe(1);
     expect(appDiagnosticStore.getRecords()).toEqual([
       expect.objectContaining({
-        category: 'workspace',
+        category: 'http',
         level: 'info',
         event: 'android_web',
         details: {

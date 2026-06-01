@@ -14,7 +14,7 @@ class AndroidWebDiagnosticsTest {
 
     @Test
     fun drainsNativeWebEventsAsUploadableDiagnostics() {
-        val diagnostics = AndroidWebDiagnostics(capacity = 3, now = { 1234L })
+        val diagnostics = AndroidWebDiagnostics(capacity = 3, enabled = true, now = { 1234L })
 
         diagnostics.record(
             "remote_asset_success",
@@ -44,7 +44,7 @@ class AndroidWebDiagnosticsTest {
 
     @Test
     fun keepsMostRecentNativeWebDiagnosticsWithinCapacity() {
-        val diagnostics = AndroidWebDiagnostics(capacity = 2, now = { 1000L })
+        val diagnostics = AndroidWebDiagnostics(capacity = 2, enabled = true, now = { 1000L })
 
         diagnostics.record("first")
         diagnostics.record("second")
@@ -68,14 +68,34 @@ class AndroidWebDiagnosticsTest {
     }
 
     @Test
+    fun diagnosticsAreDisabledByDefaultAndClearedWhenDisabled() {
+        val diagnostics = AndroidWebDiagnostics(capacity = 3, now = { 1000L })
+
+        diagnostics.record("disabled")
+        assertEquals(0, JSONObject(diagnostics.drainJson()).getJSONArray("records").length())
+
+        diagnostics.setEnabled(true)
+        diagnostics.record("enabled")
+        assertEquals(1, JSONObject(diagnostics.drainJson()).getJSONArray("records").length())
+
+        diagnostics.record("before_disable")
+        diagnostics.setEnabled(false)
+        assertEquals(0, JSONObject(diagnostics.drainJson()).getJSONArray("records").length())
+    }
+
+    @Test
     fun mainActivitySharesNativeWebDiagnosticsBetweenClientAndBridge() {
         val mainActivity = source("src/main/java/com/wheelmaker/android/MainActivity.kt")
         val bridge = source("src/main/java/com/wheelmaker/android/WheelMakerBridge.kt")
 
         assertTrue(mainActivity.contains("private lateinit var androidWebDiagnostics: AndroidWebDiagnostics"))
+        assertTrue(mainActivity.contains("private lateinit var androidDebugLoggingStore: AndroidDebugLoggingStore"))
+        assertTrue(mainActivity.contains("AndroidWebDiagnostics(enabled = androidDebugLoggingStore.loadDebugLoggingEnabled())"))
+        assertFalse(mainActivity.contains("webSourceRuntime.refreshActualSource()"))
         assertTrue(mainActivity.contains("StableOriginWebViewClient(this, webSourceRuntime, androidWebDiagnostics)"))
         assertTrue(mainActivity.contains("WheelMakerBridge("))
         assertTrue(mainActivity.contains("androidWebDiagnostics"))
         assertTrue(bridge.contains("fun drainWebDiagnostics(): String"))
+        assertTrue(bridge.contains("fun setDebugLoggingEnabled(enabled: Boolean): String"))
     }
 }

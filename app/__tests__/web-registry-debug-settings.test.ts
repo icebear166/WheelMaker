@@ -30,6 +30,7 @@ describe('web registry debug settings', () => {
     expect(mainTsx).toContain('const [registryDebug, setRegistryDebug] = useState(');
     expect(mainTsx).toContain('const [registryDebugPanelOpen, setRegistryDebugPanelOpen] = useState(');
     expect(mainTsx).toContain('registryDebugStore.setEnabled(registryDebug);');
+    expect(mainTsx).toContain('setNativeDebugLoggingEnabled(registryDebug);');
     expect(mainTsx).toContain("renderSettingsSection('Debug'");
     expect(mainTsx).toContain('Debug');
     expect(mainTsx).toContain("'debugLogs'");
@@ -62,7 +63,7 @@ describe('web registry debug settings', () => {
     expect(mainTsx).toContain('formatAppDiagnosticRecordLine,');
     expect(mainTsx).toContain('serializeAppDiagnosticRecords,');
     expect(mainTsx).toContain('const [appDiagnosticRecords, setAppDiagnosticRecords] = useState');
-    expect(mainTsx).toContain("const [selectedDiagnosticCategory, setSelectedDiagnosticCategory] = useState<AppDiagnosticCategory>('workspace');");
+    expect(mainTsx).toContain("const [selectedDiagnosticCategory, setSelectedDiagnosticCategory] = useState<AppDiagnosticCategory>('http');");
     expect(mainTsx).toContain("levels: ['info', 'warn', 'error']");
     expect(mainTsx).toContain('const uploadDebugLogs = async () => {');
     expect(mainTsx).toContain('await service.uploadDebugLog({');
@@ -70,6 +71,7 @@ describe('web registry debug settings', () => {
     expect(mainTsx).toContain('formatAppDiagnosticRecordLine(record)');
     expect(mainTsx).toContain('className="debug-log-detail-footer"');
     expect(mainTsx).toContain('<option value="workspace">Workspace</option>');
+    expect(mainTsx).toContain('<option value="http">HTTP</option>');
     expect(mainTsx).toContain('<option value="voice">Voice</option>');
     expect(mainTsx).toContain('No logs yet.');
     expect(mainTsx).toContain('Upload Log');

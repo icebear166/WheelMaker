@@ -2,9 +2,7 @@ package com.wheelmaker.android
 
 import android.content.Context
 import org.json.JSONObject
-import java.net.HttpURLConnection
 import java.net.URI
-import java.net.URL
 import java.util.Locale
 
 interface WebSourceStore {
@@ -43,7 +41,9 @@ class InMemoryWebSourceStore(private var config: WebSourceConfig) : WebSourceSto
 
 class WebSourceRuntime(private val store: WebSourceStore) {
     private var config: WebSourceConfig = store.load().sanitize()
-    private var actualSource: String = actualSourceForConfig(config)
+    private var actualSource: String = WEB_ACTUAL_EMBEDDED
+    private var sourceLocked: Boolean = false
+    private var activeRemoteBase: String = ""
 
     @Synchronized
     fun state(): WebSourceState = stateForConfig(config, actualSource)
@@ -52,7 +52,10 @@ class WebSourceRuntime(private val store: WebSourceStore) {
     fun setPreference(preference: String): WebSourceState {
         val cleanPreference = if (preference == WEB_SOURCE_EMBEDDED) WEB_SOURCE_EMBEDDED else WEB_SOURCE_AUTO
         config = config.copy(webSourcePreference = cleanPreference).sanitize()
-        actualSource = actualSourceForConfig(config)
+        if (!sourceLocked) {
+            actualSource = WEB_ACTUAL_EMBEDDED
+            activeRemoteBase = ""
+        }
         store.save(config)
         return state()
     }
@@ -68,21 +71,54 @@ class WebSourceRuntime(private val store: WebSourceStore) {
         } else {
             config.copy(remoteWebUrl = "", remoteWebRegistryOrigin = "")
         }.sanitize()
-        actualSource = actualSourceForConfig(config)
+        if (!sourceLocked) {
+            actualSource = WEB_ACTUAL_EMBEDDED
+            activeRemoteBase = ""
+        }
         store.save(config)
         return state()
     }
 
     @Synchronized
     fun refreshActualSource(): WebSourceState {
-        actualSource = if (
+        sourceLocked = false
+        actualSource = WEB_ACTUAL_EMBEDDED
+        activeRemoteBase = ""
+        return state()
+    }
+
+    @Synchronized
+    fun isSourceLocked(): Boolean = sourceLocked
+
+    @Synchronized
+    fun remoteBaseForSourceSelection(): String {
+        if (sourceLocked) {
+            return remoteBaseForRequest()
+        }
+        return if (
             config.webSourcePreference == WEB_SOURCE_AUTO &&
-            config.remoteWebUrl.isNotBlank() &&
-            probeRemote(config.remoteWebUrl)
+            config.remoteWebUrl.isNotBlank()
         ) {
-            WEB_ACTUAL_REMOTE
+            config.remoteWebUrl
         } else {
-            WEB_ACTUAL_EMBEDDED
+            ""
+        }
+    }
+
+    @Synchronized
+    fun lockActualSource(source: String): WebSourceState {
+        if (!sourceLocked) {
+            actualSource = if (
+                source == WEB_ACTUAL_REMOTE &&
+                config.webSourcePreference == WEB_SOURCE_AUTO &&
+                config.remoteWebUrl.isNotBlank()
+            ) {
+                WEB_ACTUAL_REMOTE
+            } else {
+                WEB_ACTUAL_EMBEDDED
+            }
+            activeRemoteBase = if (actualSource == WEB_ACTUAL_REMOTE) config.remoteWebUrl else ""
+            sourceLocked = true
         }
         return state()
     }
@@ -91,29 +127,11 @@ class WebSourceRuntime(private val store: WebSourceStore) {
     fun remoteBaseForRequest(): String {
         return if (
             actualSource == WEB_ACTUAL_REMOTE &&
-            config.webSourcePreference == WEB_SOURCE_AUTO
+            activeRemoteBase.isNotBlank()
         ) {
-            config.remoteWebUrl
+            activeRemoteBase
         } else {
             ""
-        }
-    }
-
-    private fun probeRemote(remoteWebUrl: String): Boolean {
-        var connection: HttpURLConnection? = null
-        return try {
-            connection = URL(remoteWebUrl).openConnection() as HttpURLConnection
-            connection.connectTimeout = 3000
-            connection.readTimeout = 3000
-            connection.requestMethod = "GET"
-            connection.instanceFollowRedirects = true
-            val ok = connection.responseCode in 200..299
-            connection.inputStream.close()
-            ok
-        } catch (_: Exception) {
-            false
-        } finally {
-            connection?.disconnect()
         }
     }
 }

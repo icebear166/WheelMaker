@@ -1,4 +1,4 @@
-export type AppDiagnosticCategory = 'voice' | 'workspace';
+export type AppDiagnosticCategory = 'voice' | 'workspace' | 'http';
 export type AppDiagnosticLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export type AppDiagnosticRecord = {

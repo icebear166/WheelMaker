@@ -43,6 +43,7 @@ class StableOriginWebViewClient(
             recordDiagnostic(assetName, "blocked_stable_origin_asset", level = "warn")
             return notFoundResponse()
         }
+        selectSourceResponse(assetName)?.let { return it }
         val remoteBase = webSourceRuntime.remoteBaseForRequest()
         val candidates = stableOriginAssetCandidates(assetName, remoteBase)
         recordDiagnostic(assetName, "stable_origin_candidates", mapOf(
@@ -59,6 +60,38 @@ class StableOriginWebViewClient(
             "remoteBase" to remoteBase
         ), level = "warn")
         return notFoundResponse()
+    }
+
+    private fun selectSourceResponse(assetName: String): WebResourceResponse? {
+        if (webSourceRuntime.isSourceLocked() || !shouldSelectStableOriginSource(assetName)) {
+            return null
+        }
+        val remoteBase = webSourceRuntime.remoteBaseForSourceSelection()
+        if (remoteBase.isNotBlank()) {
+            recordDiagnostic(assetName, "source_select_remote_start", mapOf(
+                "remoteBase" to remoteBase
+            ))
+            for (candidate in stableOriginAssetCandidates(assetName, remoteBase)) {
+                if (candidate.source != STABLE_ORIGIN_SOURCE_REMOTE) {
+                    continue
+                }
+                remoteResponse(candidate.assetName, remoteBase)?.let { response ->
+                    webSourceRuntime.lockActualSource(WEB_ACTUAL_REMOTE)
+                    recordDiagnostic(assetName, "source_locked", mapOf(
+                        "actualSource" to WEB_ACTUAL_REMOTE,
+                        "remoteBase" to remoteBase,
+                        "servedAsset" to candidate.assetName
+                    ))
+                    return response
+                }
+            }
+        }
+        webSourceRuntime.lockActualSource(WEB_ACTUAL_EMBEDDED)
+        recordDiagnostic(assetName, "source_locked", mapOf(
+            "actualSource" to WEB_ACTUAL_EMBEDDED,
+            "remoteBase" to remoteBase
+        ))
+        return null
     }
 
     private fun remoteResponse(assetName: String, remoteBase: String): WebResourceResponse? {
@@ -198,6 +231,10 @@ fun isWorkspaceRoute(assetName: String): Boolean {
 fun shouldBlockStableOriginAsset(assetName: String): Boolean {
     val baseName = assetName.substringAfterLast('/')
     return baseName == "ws"
+}
+
+fun shouldSelectStableOriginSource(assetName: String): Boolean {
+    return assetName == "index.html" || isWorkspaceRoute(assetName)
 }
 
 fun shouldRecordStableOriginDiagnosticAsset(assetName: String): Boolean {

@@ -8,7 +8,8 @@ class WheelMakerBridge(
     private val androidSpeechRuntime: AndroidSpeechRuntime,
     private val androidNotificationRuntime: AndroidNotificationRuntime,
     private val androidApkUpdateRuntime: AndroidApkUpdateRuntime,
-    private val androidWebDiagnostics: AndroidWebDiagnostics
+    private val androidWebDiagnostics: AndroidWebDiagnostics,
+    private val androidDebugLoggingStore: AndroidDebugLoggingStore
 ) {
     @JavascriptInterface
     fun getWebSourceState(): String = webSourceStateToJson(webSourceRuntime.state())
@@ -47,6 +48,15 @@ class WheelMakerBridge(
 
     @JavascriptInterface
     fun drainWebDiagnostics(): String = androidWebDiagnostics.drainJson()
+
+    @JavascriptInterface
+    fun setDebugLoggingEnabled(enabled: Boolean): String {
+        androidDebugLoggingStore.saveDebugLoggingEnabled(enabled)
+        androidWebDiagnostics.setEnabled(enabled)
+        return JSONObject()
+            .put("enabled", androidWebDiagnostics.isEnabled())
+            .toString()
+    }
 
     @JavascriptInterface
     fun startSpeech(rawJson: String): String = androidSpeechRuntime.start(rawJson)
