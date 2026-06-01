@@ -30,21 +30,21 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('setChatFilePeek({');
   });
 
-  test('desktop shell renders an optional third code peek column', () => {
+  test('desktop shell renders an optional third chat preview column', () => {
     const shellTsx = readSourceText(shellPath);
     const mainTsx = readSourceText(mainPath);
 
     expect(shellTsx).toContain('desktopPeek: ReactNode;');
     expect(shellTsx).toContain('{desktopPeek}');
-    expect(mainTsx).toContain('desktopPeek={chatFilePeekDesktopPane}');
-    expect(mainTsx).toContain('mobileOverlay={chatFilePeekMobileOverlay}');
+    expect(mainTsx).toContain('desktopPeek={chatPreviewDesktopPane}');
+    expect(mainTsx).toContain('mobileOverlay={chatPreviewMobileOverlay}');
   });
 
   test('peek viewer CSS defines desktop width limits and mobile full-screen overlay', () => {
     const mainTsx = readSourceText(mainPath);
     const stylesCss = readSourceText(stylesPath);
 
-    const desktopPane = cssRuleBlock(stylesCss, '.chat-file-peek-pane');
+    const desktopPane = cssRuleBlock(stylesCss, '.chat-preview-pane');
     expect(desktopPane).toContain('width: var(--chat-file-peek-width, 520px);');
     expect(desktopPane).toContain('min-width: 360px;');
     expect(desktopPane).toContain('max-width: min(1520px, 80vw);');
@@ -54,12 +54,12 @@ describe('web chat file peek viewer', () => {
     const workspaceRight = cssRuleBlock(stylesCss, '.workspace-right');
     expect(workspaceRight).toContain('min-width: 420px;');
 
-    const mobileOverlay = cssRuleBlock(stylesCss, '.chat-file-peek-mobile-overlay');
+    const mobileOverlay = cssRuleBlock(stylesCss, '.chat-preview-mobile-overlay');
     expect(mobileOverlay).toContain('position: fixed;');
     expect(mobileOverlay).toContain('inset: 0;');
     expect(mobileOverlay).toContain('z-index: 70;');
 
-    expect(stylesCss).toContain(".narrow-shell[data-chat-file-peek-open='true'] .floating-control-stack-layer");
+    expect(stylesCss).toContain(".narrow-shell[data-chat-preview-open='true'] .floating-control-stack-layer");
   });
 
   test('peek viewer uses direct jumps and has an explicit File tab handoff', () => {
@@ -86,5 +86,23 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('Failed to load file');
     expect(mainTsx).toContain('createChatFilePeekHistoryState()');
     expect(mainTsx).toContain('closeChatFilePeek();');
+  });
+
+  test('preview chrome uses the chat-height single-line title bar', () => {
+    const mainTsx = readSourceText(mainPath);
+    const stylesCss = readSourceText(stylesPath);
+
+    const toolbar = cssRuleBlock(stylesCss, '.chat-preview-toolbar');
+    expect(toolbar).toContain('height: 30px;');
+    expect(toolbar).toContain('min-height: 30px;');
+    expect(toolbar).toContain('max-height: 30px;');
+
+    const title = cssRuleBlock(stylesCss, '.chat-preview-title');
+    expect(title).toContain('white-space: nowrap;');
+    expect(title).toContain('text-overflow: ellipsis;');
+
+    expect(mainTsx).toContain('className="chat-preview-title"');
+    expect(mainTsx).not.toContain('className="chat-file-peek-name"');
+    expect(mainTsx).not.toContain('className="chat-file-peek-path"');
   });
 });

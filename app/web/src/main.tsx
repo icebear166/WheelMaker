@@ -544,6 +544,7 @@ type ChatFilePeekState = {
   loading: boolean;
   error: string;
 };
+type PortRelayFramePlacement = 'main' | 'chatPreview';
 type SetiThemeSection = {
   file: string;
   fileExtensions?: Record<string, string>;
@@ -3430,6 +3431,7 @@ function App() {
   const [portRelayKnownAccessCodeGeneration, setPortRelayKnownAccessCodeGeneration] = useState<number | null>(null);
   const [portRelayCodeCopied, setPortRelayCodeCopied] = useState(false);
   const [portRelayFrameOpen, setPortRelayFrameOpen] = useState(false);
+  const [portRelayFramePlacement, setPortRelayFramePlacement] = useState<PortRelayFramePlacement>('main');
   const [portRelayFramePath, setPortRelayFramePath] = useState('');
   const [portRelayFrameAutoOpenPending, setPortRelayFrameAutoOpenPending] = useState(false);
   const [portRelayTargetMenuOpen, setPortRelayTargetMenuOpen] = useState(false);
@@ -3472,7 +3474,7 @@ function App() {
     () => orderPortRelayTargetsForMenu(portRelayTargets, activePortRelayTarget),
     [activePortRelayTarget, portRelayTargets],
   );
-  const mobilePortRelayFrameOpen = !isWide && portRelayFrameOpen && !!portRelayFrameUrl;
+  const mobilePortRelayFrameOpen = !isWide && portRelayFrameOpen && portRelayFramePlacement === 'main' && !!portRelayFrameUrl;
 
   useEffect(() => {
     if (!portRelayReady || !portRelayFrameUrl) {
@@ -3605,6 +3607,8 @@ function App() {
   const [chatFilePeekWidth, setChatFilePeekWidth] = useState(CHAT_FILE_PEEK_WIDTH_DEFAULT);
   const [chatFilePeekDraftWidth, setChatFilePeekDraftWidth] = useState<number | null>(null);
   const [chatFilePeekResizing, setChatFilePeekResizing] = useState(false);
+  const chatPortRelayPreviewOpen = portRelayFrameOpen && portRelayFramePlacement === 'chatPreview' && !!portRelayFrameUrl;
+  const chatPreviewOpen = !!chatFilePeek || chatPortRelayPreviewOpen;
   const liveRefreshTimerRef = useRef<number | null>(null);
   const refreshInFlightRef = useRef(false);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -6824,10 +6828,12 @@ function App() {
     openSettingsPeer('portRelay');
     if (!portRelayReady || !portRelayFrameUrl) {
       setPortRelayFrameOpen(false);
+      setPortRelayFramePlacement('main');
       return;
     }
-    setPortRelayFrameOpen(open => !open);
-  }, [closeSettingsPanel, openSettingsPeer, portRelayFrameUrl, portRelayReady, settingsDetailView, sidebarSettingsOpen]);
+    setPortRelayFramePlacement('main');
+    setPortRelayFrameOpen(open => (portRelayFramePlacement === 'main' ? !open : true));
+  }, [closeSettingsPanel, openSettingsPeer, portRelayFramePlacement, portRelayFrameUrl, portRelayReady, settingsDetailView, sidebarSettingsOpen]);
   const handlePortRelayFloatingToggle = useCallback(() => {
     if (floatingClickCooldownUntilRef.current > Date.now()) {
       return;
@@ -6835,10 +6841,12 @@ function App() {
     setPortRelayTargetMenuOpen(false);
     if (!portRelayReady || !portRelayFrameUrl) {
       setPortRelayFrameOpen(false);
+      setPortRelayFramePlacement('main');
       return;
     }
     setDrawerOpen(false);
     setSidebarSettingsOpen(false);
+    setPortRelayFramePlacement('main');
     setPortRelayFrameOpen(open => !open);
   }, [portRelayFrameUrl, portRelayReady, setDrawerOpen, setSidebarSettingsOpen]);
   const handlePortRelayFloatingPointerDown = useCallback(
@@ -7004,10 +7012,18 @@ function App() {
     chatFilePeekReadSeqRef.current += 1;
     setChatFilePeek(null);
   }, []);
+  const closeChatPortRelayPreview = useCallback(() => {
+    setPortRelayFrameOpen(false);
+    setPortRelayFramePlacement('main');
+  }, []);
+  const closeChatPreview = useCallback(() => {
+    closeChatFilePeek();
+    closeChatPortRelayPreview();
+  }, [closeChatFilePeek, closeChatPortRelayPreview]);
   const handleAndroidNativeBack = useCallback(() => {
-    if (!isWide && chatFilePeekRef.current) {
+    if (!isWide && (chatFilePeekRef.current || chatPortRelayPreviewOpen)) {
       chatFilePeekHistoryActiveRef.current = false;
-      closeChatFilePeek();
+      closeChatPreview();
       return true;
     }
     if (isWide || !sidebarSettingsOpenRef.current) {
@@ -7021,7 +7037,7 @@ function App() {
       setSidebarSettingsOpen(false);
     }
     return true;
-  }, [closeChatFilePeek, isWide, setSidebarSettingsOpen]);
+  }, [chatPortRelayPreviewOpen, closeChatPreview, isWide, setSidebarSettingsOpen]);
   useEffect(() => {
     window.WheelMakerAndroidBack = {
       handleBack: handleAndroidNativeBack,
@@ -7158,7 +7174,7 @@ function App() {
     setChatFilePeekResizing(false);
   }, []);
   const beginChatFilePeekResize = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
-    if (!isWide || !chatFilePeek) return;
+    if (!isWide || !chatPreviewOpen) return;
     event.preventDefault();
     event.stopPropagation();
     chatFilePeekResizeRef.current = {
@@ -7170,7 +7186,7 @@ function App() {
     setChatFilePeekDraftWidth(effectiveChatFilePeekWidth);
     setChatFilePeekResizing(true);
     event.currentTarget.setPointerCapture(event.pointerId);
-  }, [chatFilePeek, effectiveChatFilePeekWidth, isWide]);
+  }, [chatPreviewOpen, effectiveChatFilePeekWidth, isWide]);
   const moveChatFilePeekResize = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
     const resizeState = chatFilePeekResizeRef.current;
     if (!resizeState || resizeState.pointerId !== event.pointerId) {
@@ -8044,10 +8060,11 @@ function App() {
         ? Math.trunc(line)
         : null;
     setError('');
+    setPortRelayFrameOpen(false);
+    setPortRelayFramePlacement('main');
     if (!isWide) {
       setDrawerOpen(false);
       setChatQuickSwitchMenuOpen(false);
-      setPortRelayFrameOpen(false);
       if (!chatFilePeekHistoryActiveRef.current) {
         window.history.pushState(createChatFilePeekHistoryState(), '', window.location.href);
         chatFilePeekHistoryActiveRef.current = true;
@@ -8082,11 +8099,11 @@ function App() {
       if (!chatFilePeekHistoryActiveRef.current) return;
       if (isChatFilePeekHistoryState(event.state)) return;
       chatFilePeekHistoryActiveRef.current = false;
-      closeChatFilePeek();
+      closeChatPreview();
     };
     window.addEventListener('popstate', handleChatFilePeekPopState);
     return () => window.removeEventListener('popstate', handleChatFilePeekPopState);
-  }, [closeChatFilePeek]);
+  }, [closeChatPreview]);
 
   useEffect(() => {
     if (isWide) {
@@ -10856,7 +10873,7 @@ function App() {
   const enablePortRelayForTarget = useCallback(async (
     target: PortRelayTarget | null,
     listenPortValue = portRelayListenPort,
-    options: {framePath?: string; openFrame?: boolean} = {},
+    options: {framePath?: string; openFrame?: boolean; framePlacement?: PortRelayFramePlacement} = {},
   ) => {
     const normalizedTarget = normalizePortRelayTarget(target);
     const listenPort = Number(listenPortValue);
@@ -10866,6 +10883,9 @@ function App() {
     }
     if (options.framePath !== undefined) {
       setPortRelayFramePath(options.framePath);
+    }
+    if (options.framePlacement) {
+      setPortRelayFramePlacement(options.framePlacement);
     }
     const accessCode = portRelayAccessCode || generatePortRelayAccessCode();
     setPortRelayAccessCode(accessCode);
@@ -11002,7 +11022,7 @@ function App() {
     }
     setPortRelayMenuSwitchingTarget(target);
     try {
-      await enablePortRelayForTarget(target, String(portRelaySnapshot.listenPort || portRelayListenPort), {framePath: '', openFrame: true});
+      await enablePortRelayForTarget(target, String(portRelaySnapshot.listenPort || portRelayListenPort), {framePath: '', openFrame: true, framePlacement: 'main'});
       setPortRelayFrameOpen(true);
     } finally {
       setPortRelayMenuSwitchingTarget(null);
@@ -11069,6 +11089,17 @@ function App() {
       setSettingsDetailView('portRelay');
       return;
     }
+    setPortRelayFramePlacement('chatPreview');
+    chatFilePeekReadSeqRef.current += 1;
+    setChatFilePeek(null);
+    if (!isWide) {
+      setDrawerOpen(false);
+      setChatQuickSwitchMenuOpen(false);
+      if (!chatFilePeekHistoryActiveRef.current) {
+        window.history.pushState(createChatFilePeekHistoryState(), '', window.location.href);
+        chatFilePeekHistoryActiveRef.current = true;
+      }
+    }
     const nextTargets = upsertPortRelayTarget(portRelayTargets, target);
     setPortRelayTargets(nextTargets);
     setSelectedPortRelayTarget(target);
@@ -11097,10 +11128,12 @@ function App() {
     await enablePortRelayForTarget(target, portRelayListenPort, {
       framePath: localUrl.path,
       openFrame: true,
+      framePlacement: 'chatPreview',
     });
   }, [
     currentProject?.hubId,
     enablePortRelayForTarget,
+    isWide,
     persistPortRelaySettings,
     portRelayAccessCodeUnknown,
     portRelayListenPort,
@@ -11111,6 +11144,7 @@ function App() {
     portRelaySnapshot.status,
     portRelaySnapshot.targetPort,
     portRelayTargets,
+    setDrawerOpen,
     setSidebarCollapsed,
     setSidebarSettingsOpen,
   ]);
@@ -16760,7 +16794,6 @@ function App() {
   };
   const renderChatFilePeekSurface = (mode: 'desktop' | 'mobile') => {
     if (!chatFilePeek) return null;
-    const fileName = chatFilePeek.path.split('/').pop() || chatFilePeek.path;
     const title = chatFilePeek.targetLine
       ? `${chatFilePeek.path}:${chatFilePeek.targetLine}`
       : chatFilePeek.path;
@@ -16769,23 +16802,20 @@ function App() {
         className={`chat-file-peek-surface ${mode}`}
         aria-label="Chat file preview"
       >
-        <div className="chat-file-peek-toolbar">
+        <div className="chat-preview-toolbar">
           <button
             type="button"
-            className="chat-file-peek-icon-button"
+            className="chat-preview-icon-button"
             onClick={closeChatFilePeekFromChrome}
             title={mode === 'mobile' ? 'Back' : 'Close preview'}
             aria-label={mode === 'mobile' ? 'Back' : 'Close preview'}
           >
             <span className={`codicon ${mode === 'mobile' ? 'codicon-arrow-left' : 'codicon-close'}`} />
           </button>
-          <div className="chat-file-peek-title" title={title}>
-            <span className="chat-file-peek-name">{fileName}</span>
-            <span className="chat-file-peek-path">{title}</span>
-          </div>
+          <div className="chat-preview-title" title={title}>{title}</div>
           <button
             type="button"
-            className="chat-file-peek-icon-button"
+            className="chat-preview-icon-button"
             onClick={openPeekFileInFullFileTab}
             title="Open in File tab"
             aria-label="Open in File tab"
@@ -16799,8 +16829,45 @@ function App() {
       </section>
     );
   };
-  const renderPortRelayFrameSurface = (mode: 'desktop' | 'mobile') => (
+  const closePortRelayFrameFromChrome = useCallback(() => {
+    if (!isWide && portRelayFramePlacement === 'chatPreview' && chatFilePeekHistoryActiveRef.current) {
+      window.history.back();
+      return;
+    }
+    setPortRelayFrameOpen(false);
+    if (portRelayFramePlacement === 'chatPreview') {
+      setPortRelayFramePlacement('main');
+    }
+  }, [isWide, portRelayFramePlacement]);
+  const openPortRelayPreviewInBrowser = useCallback(() => {
+    if (!portRelayFrameUrl) return;
+    window.open(portRelayFrameUrl, '_blank', 'noopener,noreferrer');
+  }, [portRelayFrameUrl]);
+  const renderPortRelayFrameSurface = (mode: 'desktop' | 'mobile', options: {chrome?: boolean} = {}) => (
     <div className={`port-relay-frame-surface ${mode}`}>
+      {options.chrome ? (
+        <div className="chat-preview-toolbar">
+          <button
+            type="button"
+            className="chat-preview-icon-button"
+            onClick={closePortRelayFrameFromChrome}
+            title={mode === 'mobile' ? 'Back' : 'Close preview'}
+            aria-label={mode === 'mobile' ? 'Back' : 'Close preview'}
+          >
+            <span className={`codicon ${mode === 'mobile' ? 'codicon-arrow-left' : 'codicon-close'}`} />
+          </button>
+          <div className="chat-preview-title" title={portRelayFrameUrl}>{portRelayFrameUrl}</div>
+          <button
+            type="button"
+            className="chat-preview-icon-button"
+            onClick={openPortRelayPreviewInBrowser}
+            title="Open relay page in browser"
+            aria-label="Open relay page in browser"
+          >
+            <span className="codicon codicon-link-external" />
+          </button>
+        </div>
+      ) : null}
       <iframe
         title="Port Relay"
         src={portRelayFrameUrl}
@@ -16831,7 +16898,7 @@ function App() {
     const activeChatSlashCommand = chatSlashMenuVisible
       ? chatSlashMenuOptions[Math.max(0, Math.min(chatSlashActiveIndex, chatSlashMenuOptions.length - 1))]
       : null;
-    if (isWide && portRelayFrameOpen && portRelayFrameUrl) {
+    if (isWide && portRelayFrameOpen && portRelayFramePlacement === 'main' && portRelayFrameUrl) {
       return renderPortRelayFrameSurface('desktop');
     }
     const renderChatConfigValueMenu = (option: RegistrySessionConfigOption) => {
@@ -17914,7 +17981,7 @@ function App() {
     </div>
   ) : null;
 
-  const chatQuickSwitchMenu = chatQuickSwitchMenuOpen && tab === 'chat' && !sidebarSettingsOpen && !mobilePortRelayFrameOpen && !chatFilePeek ? (
+  const chatQuickSwitchMenu = chatQuickSwitchMenuOpen && tab === 'chat' && !sidebarSettingsOpen && !mobilePortRelayFrameOpen && !chatPreviewOpen ? (
     <ChatQuickSwitchMenu
       ref={chatQuickSwitchMenuRef}
       sections={mobileChatQuickSwitchSections}
@@ -18246,33 +18313,35 @@ function App() {
   const portRelayMobileFrameOverlay = mobilePortRelayFrameOpen
     ? renderPortRelayFrameSurface('mobile')
     : null;
-  const chatFilePeekDesktopPane = isWide && chatFilePeek ? (
+  const renderChatPortRelayPreviewSurface = (mode: 'desktop' | 'mobile') =>
+    renderPortRelayFrameSurface(mode, {chrome: true});
+  const chatPreviewDesktopPane = isWide && chatPreviewOpen ? (
     <aside
-      className="chat-file-peek-pane"
+      className="chat-preview-pane"
       style={{ '--chat-file-peek-width': `${effectiveChatFilePeekWidth}px` } as React.CSSProperties}
     >
       <button
         type="button"
         className={`chat-file-peek-resize-handle${chatFilePeekResizing ? ' resizing' : ''}`}
-        aria-label="Resize file preview"
-        title="Resize file preview"
+        aria-label="Resize preview"
+        title="Resize preview"
         onPointerDown={beginChatFilePeekResize}
         onPointerMove={moveChatFilePeekResize}
         onPointerUp={finishChatFilePeekResize}
         onPointerCancel={finishChatFilePeekResize}
         onLostPointerCapture={commitChatFilePeekResize}
       />
-      {renderChatFilePeekSurface('desktop')}
+      {chatFilePeek ? renderChatFilePeekSurface('desktop') : renderChatPortRelayPreviewSurface('desktop')}
     </aside>
   ) : null;
-  const chatFilePeekMobileOverlay = !isWide && chatFilePeek ? (
+  const chatPreviewMobileOverlay = !isWide && chatPreviewOpen ? (
     <div
-      className="chat-file-peek-mobile-overlay"
+      className="chat-preview-mobile-overlay"
       role="dialog"
       aria-modal="true"
-      aria-label="Chat file preview"
+      aria-label="Chat preview"
     >
-      {renderChatFilePeekSurface('mobile')}
+      {chatFilePeek ? renderChatFilePeekSurface('mobile') : renderChatPortRelayPreviewSurface('mobile')}
     </div>
   ) : null;
 
@@ -18637,12 +18706,12 @@ function App() {
         themeMode={themeMode}
         setiFontCss={setiFontCss}
         desktopActivityBar={desktopActivityBar}
-        desktopPeek={chatFilePeekDesktopPane}
+        desktopPeek={chatPreviewDesktopPane}
         desktopSidebarWidth={effectiveDesktopSidebarWidth}
         floatingControlStack={floatingControlStack}
         floatingControlSide={floatingControlSide}
         mobileSettingsScreen={mobileSettingsScreen}
-        mobileOverlay={chatFilePeekMobileOverlay}
+        mobileOverlay={chatPreviewMobileOverlay}
         sidebar={renderSidebar()}
         main={renderMain()}
         sidebarCollapsed={sidebarCollapsed}
