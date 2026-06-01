@@ -122,8 +122,6 @@ You can also call the CLI directly:
 ~/.wheelmaker/bin/wheelmaker-deploy service restart
 ```
 
-The legacy `scripts/refresh_server.ps1`, `scripts/refresh_server.sh`, and `scripts/refresh_server_linux.sh` scripts are kept for compatibility, but the new deploy path does not call them.
-
 The deploy scripts do not install or configure Nginx, Caddy, certificates, or public ports. Point your own reverse proxy at this contract:
 
 | External path | Local target |
@@ -612,7 +610,6 @@ npm run build:web:release
 Script overview:
 
 - `deploy.bat` / `deploy.sh` — build a temporary `wheelmaker-deploy` CLI and run the unified deploy flow
-- `scripts\refresh_server.ps1`, `scripts\refresh_server.sh`, `scripts\refresh_server_linux.sh` — legacy compatibility deploy scripts
 - `update-publish.bat` / `update-publish.sh` — signal `WheelMakerUpdater` to run the deploy CLI update path
 - `app\scripts\export_web_release.ps1` — export Web assets to `~\.wheelmaker\web`
 
