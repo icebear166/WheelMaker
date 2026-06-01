@@ -1574,6 +1574,34 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.settings-database-dump {');
   });
 
+  test('drawer session rails use slim flush scrollbars without reserved right gutter', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
+    const railSelectors = [
+      '.workspace-left .sidebar-scroll',
+      '.drawer .sidebar-scroll',
+      '.wide-project-session-nav',
+      '.mobile-project-session-nav',
+    ];
+
+    for (const selector of railSelectors) {
+      const railBlock = cssRuleBlockContainingSelector(stylesCss, selector);
+      expect(railBlock).toContain('scrollbar-gutter: auto;');
+      expect(railBlock).toContain('scrollbar-width: thin;');
+
+      const scrollbarBlock = cssRuleBlockContainingSelector(stylesCss, `${selector}::-webkit-scrollbar`);
+      expect(scrollbarBlock).toContain('width: 4px;');
+
+      const thumbBlock = cssRuleBlockContainingSelector(stylesCss, `${selector}::-webkit-scrollbar-thumb`);
+      expect(thumbBlock).toContain('border-left: 1px solid transparent;');
+      expect(thumbBlock).toContain('border-right: 0;');
+      expect(thumbBlock).not.toContain('border: 2px solid transparent;');
+
+      const trackBlock = cssRuleBlockContainingSelector(stylesCss, `${selector}::-webkit-scrollbar-track`);
+      expect(trackBlock).toContain('background: transparent;');
+    }
+  });
+
   test('wide layout uses a project session rail instead of the header project picker', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'main.tsx'));

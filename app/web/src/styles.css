@@ -3331,7 +3331,9 @@ textarea,
 .workspace-left .sidebar-scroll {
   overflow-x: hidden;
   overflow-y: auto;
-  scrollbar-gutter: stable;
+  scrollbar-gutter: auto;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted) 46%, transparent) transparent;
 }
 
 .sidebar-title-row {
@@ -4640,6 +4642,9 @@ textarea,
 .wide-project-session-nav {
   padding: 8px 7px 16px;
   overflow: auto;
+  scrollbar-gutter: auto;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted) 46%, transparent) transparent;
 }
 
 .session-search-control {
@@ -5653,6 +5658,9 @@ textarea,
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: auto;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted) 46%, transparent) transparent;
   padding: 9px 7px calc(env(safe-area-inset-bottom, 0px) + 18px);
 }
 
@@ -9233,6 +9241,12 @@ textarea,
   box-shadow: 0 0 0 rgba(0, 0, 0, 0);
 }
 
+.drawer .sidebar-scroll {
+  scrollbar-gutter: auto;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted) 46%, transparent) transparent;
+}
+
 .narrow-shell[data-floating-control-side='left'] .drawer {
   inset: 0 0 0 auto;
   width: min(440px, calc(100vw - var(--mobile-floating-control-lane) - env(safe-area-inset-left, 0px)));
@@ -9281,6 +9295,34 @@ textarea,
 }
 
 ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.workspace-left .sidebar-scroll::-webkit-scrollbar,
+.drawer .sidebar-scroll::-webkit-scrollbar,
+.wide-project-session-nav::-webkit-scrollbar,
+.mobile-project-session-nav::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.workspace-left .sidebar-scroll::-webkit-scrollbar-thumb,
+.drawer .sidebar-scroll::-webkit-scrollbar-thumb,
+.wide-project-session-nav::-webkit-scrollbar-thumb,
+.mobile-project-session-nav::-webkit-scrollbar-thumb {
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 1px solid transparent;
+  border-radius: 999px 0 0 999px;
+  background: color-mix(in srgb, var(--muted) 48%, transparent);
+  background-clip: padding-box;
+}
+
+.workspace-left .sidebar-scroll::-webkit-scrollbar-track,
+.drawer .sidebar-scroll::-webkit-scrollbar-track,
+.wide-project-session-nav::-webkit-scrollbar-track,
+.mobile-project-session-nav::-webkit-scrollbar-track {
   background: transparent;
 }
 

@@ -113,6 +113,8 @@ describe('web responsive shell split', () => {
     const wideSidebarScrollBlock = cssRuleBlock(stylesCss, '.workspace-left .sidebar-scroll');
     expect(wideSidebarScrollBlock).toContain('overflow-x: hidden;');
     expect(wideSidebarScrollBlock).toContain('overflow-y: auto;');
-    expect(wideSidebarScrollBlock).toContain('scrollbar-gutter: stable;');
+    expect(wideSidebarScrollBlock).toContain('scrollbar-gutter: auto;');
+    expect(wideSidebarScrollBlock).toContain('scrollbar-width: thin;');
+    expect(wideSidebarScrollBlock).not.toContain('scrollbar-gutter: stable;');
   });
 });
