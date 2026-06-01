@@ -1818,6 +1818,7 @@ func TestCodexAppPromptMapsResourceLinks(t *testing.T) {
 	for _, want := range []string{
 		"# Files mentioned by the user:",
 		"## acp-protocol-full.zh-CN.md: D:/Code/WheelMaker/docs/acp-protocol-full.zh-CN.md",
+		"## pixel.png: D:/tmp/pixel.png",
 		"## My request for Codex:",
 		"what is this file for",
 		"https://example.com/spec",
@@ -1835,7 +1836,7 @@ func TestCodexAppPromptMapsResourceLinks(t *testing.T) {
 	}
 }
 
-func TestCodexAppPromptMapsImageResourceLinkToLocalImage(t *testing.T) {
+func TestCodexAppPromptMapsImageResourceLinkToPromptPathAndLocalImage(t *testing.T) {
 	input, err := codexappPromptToInput([]protocol.ContentBlock{
 		{
 			Type:     protocol.ContentBlockTypeResourceLink,
@@ -1847,11 +1848,14 @@ func TestCodexAppPromptMapsImageResourceLinkToLocalImage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("codexappPromptToInput: %v", err)
 	}
-	if len(input) != 1 {
-		t.Fatalf("input len=%d, want 1: %#v", len(input), input)
+	if len(input) != 2 {
+		t.Fatalf("input len=%d, want prompt text + localImage: %#v", len(input), input)
 	}
-	if input[0].Type != "localImage" || filepath.ToSlash(input[0].Path) != "D:/tmp/pixel.png" {
-		t.Fatalf("image resource link input=%#v, want localImage", input[0])
+	if input[0].Type != "text" || !strings.Contains(input[0].Text, "## pixel.png: D:/tmp/pixel.png") {
+		t.Fatalf("image resource link prompt=%#v, want path mention", input[0])
+	}
+	if input[1].Type != "localImage" || filepath.ToSlash(input[1].Path) != "D:/tmp/pixel.png" {
+		t.Fatalf("image resource link input=%#v, want localImage", input[1])
 	}
 }
 

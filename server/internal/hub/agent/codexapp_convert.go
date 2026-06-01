@@ -687,7 +687,7 @@ func codexappPromptFileMentions(blocks []protocol.ContentBlock) ([]codexappFileM
 		if err != nil {
 			return nil, err
 		}
-		if !ok || codexappResourceLinkIsImage(block, path) {
+		if !ok {
 			continue
 		}
 		mentions = append(mentions, codexappFileMention{
