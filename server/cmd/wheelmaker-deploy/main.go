@@ -894,6 +894,17 @@ func launchAgentPlistContent(label string, workingDir string, binary string, arg
   <string>`)
 	b.WriteString(xmlEscape(workingDir))
 	b.WriteString(`</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>`)
+	b.WriteString(xmlEscape(os.Getenv("PATH")))
+	b.WriteString(`</string>
+    <key>HOME</key>
+    <string>`)
+	b.WriteString(xmlEscape(os.Getenv("HOME")))
+	b.WriteString(`</string>
+  </dict>
   <key>ProgramArguments</key>
   <array>
     <string>`)

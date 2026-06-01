@@ -439,8 +439,21 @@ func TestLinuxUnitContentRequiresRestartAlways(t *testing.T) {
 }
 
 func TestMacOSPlistContent(t *testing.T) {
+	t.Setenv("PATH", "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin")
+	t.Setenv("HOME", "/Users/me")
+
 	plist := launchAgentPlistContent("com.wheelmaker.hub", "/repo", "/Users/me/.wheelmaker/bin/wheelmaker", []string{"-d"})
-	for _, needle := range []string{"com.wheelmaker.hub", "<key>ProgramArguments</key>", "<string>-d</string>", "<key>KeepAlive</key>"} {
+	for _, needle := range []string{
+		"com.wheelmaker.hub",
+		"<key>ProgramArguments</key>",
+		"<string>-d</string>",
+		"<key>KeepAlive</key>",
+		"<key>EnvironmentVariables</key>",
+		"<key>PATH</key>",
+		"<string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>",
+		"<key>HOME</key>",
+		"<string>/Users/me</string>",
+	} {
 		if !strings.Contains(plist, needle) {
 			t.Fatalf("plist missing %s:\n%s", needle, plist)
 		}
