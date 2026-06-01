@@ -41,12 +41,15 @@ describe('web chat file peek viewer', () => {
   });
 
   test('peek viewer CSS defines desktop width limits and mobile full-screen overlay', () => {
+    const mainTsx = readSourceText(mainPath);
     const stylesCss = readSourceText(stylesPath);
 
     const desktopPane = cssRuleBlock(stylesCss, '.chat-file-peek-pane');
     expect(desktopPane).toContain('width: var(--chat-file-peek-width, 520px);');
     expect(desktopPane).toContain('min-width: 360px;');
-    expect(desktopPane).toContain('max-width: min(760px, 55vw);');
+    expect(desktopPane).toContain('max-width: min(1520px, 80vw);');
+    expect(mainTsx).toContain('const CHAT_FILE_PEEK_WIDTH_MAX = 1520;');
+    expect(mainTsx).toContain('const CHAT_FILE_PEEK_VIEWPORT_MAX_RATIO = 0.8;');
 
     const workspaceRight = cssRuleBlock(stylesCss, '.workspace-right');
     expect(workspaceRight).toContain('min-width: 420px;');

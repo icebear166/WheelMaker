@@ -4579,7 +4579,7 @@ textarea,
   position: relative;
   width: var(--chat-file-peek-width, 520px);
   min-width: 360px;
-  max-width: min(760px, 55vw);
+  max-width: min(1520px, 80vw);
   flex: 0 0 var(--chat-file-peek-width, 520px);
   min-height: 0;
   display: flex;
