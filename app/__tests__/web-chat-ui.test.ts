@@ -1590,7 +1590,12 @@ describe('web chat integration', () => {
       expect(railBlock).toContain('scrollbar-width: thin;');
 
       const scrollbarBlock = cssRuleBlockContainingSelector(stylesCss, `${selector}::-webkit-scrollbar`);
-      expect(scrollbarBlock).toContain('width: 4px;');
+      expect(scrollbarBlock).toContain('width: 3px;');
+
+      const buttonBlock = cssRuleBlockContainingSelector(stylesCss, `${selector}::-webkit-scrollbar-button`);
+      expect(buttonBlock).toContain('display: none;');
+      expect(buttonBlock).toContain('width: 0;');
+      expect(buttonBlock).toContain('height: 0;');
 
       const thumbBlock = cssRuleBlockContainingSelector(stylesCss, `${selector}::-webkit-scrollbar-thumb`);
       expect(thumbBlock).toContain('border-left: 1px solid transparent;');
