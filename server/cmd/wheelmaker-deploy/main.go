@@ -727,6 +727,12 @@ func cleanupDeployArtifacts(cfg deployConfig, deps deployDeps) error {
 		filepath.Join(home, "cache", "go-build"),
 		filepath.Join(home, "tmp"),
 	}
+	for _, name := range legacyHomeScriptNames() {
+		targets = append(targets, filepath.Join(home, name))
+	}
+	for _, name := range staleHelperWrapperNames() {
+		targets = append(targets, filepath.Join(home, name))
+	}
 	var errs []error
 	for _, target := range targets {
 		if err := removeWithinRoot(home, target); err != nil {
@@ -741,6 +747,22 @@ func cleanupDeployArtifacts(cfg deployConfig, deps deployDeps) error {
 	}
 	deps.record("cleanup artifacts")
 	return errors.Join(errs...)
+}
+
+func legacyHomeScriptNames() []string {
+	return []string{
+		"refresh_server.ps1",
+		"refresh_server.sh",
+		"refresh_server_linux.sh",
+		"deploy-windows.ps1",
+	}
+}
+
+func staleHelperWrapperNames() []string {
+	if runtime.GOOS == "windows" {
+		return []string{"start.sh", "stop.sh", "restart.sh", "status.sh"}
+	}
+	return []string{"start.bat", "stop.bat", "restart.bat", "status.bat"}
 }
 
 func removeRootWebDevLogs(home string) error {

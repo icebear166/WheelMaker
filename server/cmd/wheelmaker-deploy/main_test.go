@@ -311,6 +311,9 @@ func TestCleanupDeployArtifactsPrunesRegenerableFiles(t *testing.T) {
 		filepath.Join(home, "web-dev.log"),
 		filepath.Join(home, "web-dev-8083.log"),
 		filepath.Join(home, "web-dev.err.log"),
+		filepath.Join(home, "refresh_server.ps1"),
+		filepath.Join(home, "refresh_server.sh"),
+		filepath.Join(home, "refresh_server_linux.sh"),
 		filepath.Join(home, "logs", "20260501_030000", "web-dev.log"),
 		filepath.Join(home, "logs", "20260502_030000", "web-dev.log"),
 		filepath.Join(home, "logs", "20260503_030000", "web-dev.log"),
@@ -330,6 +333,12 @@ func TestCleanupDeployArtifactsPrunesRegenerableFiles(t *testing.T) {
 	} {
 		writeTestFile(t, path, "keep")
 	}
+	for _, name := range platformStaleWrapperNames() {
+		writeTestFile(t, filepath.Join(home, name), "stale wrapper")
+	}
+	for _, name := range platformCurrentWrapperNames() {
+		writeTestFile(t, filepath.Join(home, name), "keep")
+	}
 
 	if err := cleanupDeployArtifacts(h.cfg, h.deps); err != nil {
 		t.Fatalf("cleanupDeployArtifacts: %v", err)
@@ -343,9 +352,15 @@ func TestCleanupDeployArtifactsPrunesRegenerableFiles(t *testing.T) {
 		filepath.Join(home, "web-dev.log"),
 		filepath.Join(home, "web-dev-8083.log"),
 		filepath.Join(home, "web-dev.err.log"),
+		filepath.Join(home, "refresh_server.ps1"),
+		filepath.Join(home, "refresh_server.sh"),
+		filepath.Join(home, "refresh_server_linux.sh"),
 		filepath.Join(home, "logs", "20260501_030000"),
 	} {
 		assertFileMissing(t, path)
+	}
+	for _, name := range platformStaleWrapperNames() {
+		assertFileMissing(t, filepath.Join(home, name))
 	}
 	for _, path := range []string{
 		filepath.Join(home, "logs", "20260502_030000"),
@@ -365,6 +380,9 @@ func TestCleanupDeployArtifactsPrunesRegenerableFiles(t *testing.T) {
 		filepath.Join(home, "log", "hub.log"),
 	} {
 		assertFileContains(t, path, "keep")
+	}
+	for _, name := range platformCurrentWrapperNames() {
+		assertFileContains(t, filepath.Join(home, name), "keep")
 	}
 	assertEventsContainInOrder(t, *h.events, "cleanup artifacts")
 }
@@ -502,4 +520,18 @@ func writeTestFile(t *testing.T, path string, body string) {
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
+}
+
+func platformStaleWrapperNames() []string {
+	if runtime.GOOS == "windows" {
+		return []string{"start.sh", "stop.sh", "restart.sh", "status.sh"}
+	}
+	return []string{"start.bat", "stop.bat", "restart.bat", "status.bat"}
+}
+
+func platformCurrentWrapperNames() []string {
+	if runtime.GOOS == "windows" {
+		return []string{"start.bat", "stop.bat", "restart.bat", "status.bat"}
+	}
+	return []string{"start.sh", "stop.sh", "restart.sh", "status.sh"}
 }
