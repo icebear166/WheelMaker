@@ -27,6 +27,8 @@ const (
 	modeDoctor          runMode = "doctor"
 )
 
+var errElevatedChildCompleted = errors.New("elevated child completed deployment")
+
 type deployConfig struct {
 	Mode          runMode
 	ServiceAction string
@@ -93,6 +95,9 @@ type deployDeps struct {
 
 func main() {
 	if err := run(context.Background(), os.Args[1:]); err != nil {
+		if errors.Is(err, errElevatedChildCompleted) {
+			os.Exit(0)
+		}
 		fmt.Fprintf(os.Stderr, "wheelmaker-deploy: %v\n", err)
 		os.Exit(1)
 	}
@@ -197,6 +202,9 @@ func runService(_ context.Context, cfg deployConfig) error {
 	ctx := context.Background()
 	cfg = resolveDefaults(cfg)
 	deps := defaultDeps(cfg)
+	if err := deps.Services.CheckDeployPrerequisites(ctx); err != nil {
+		return err
+	}
 	switch cfg.ServiceAction {
 	case "start":
 		return deps.Services.Start(ctx, true)

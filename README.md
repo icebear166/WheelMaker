@@ -48,7 +48,7 @@ Requirements:
 - **Node.js 22.11+**
 - `git`
 - `npm`
-- an elevated Windows terminal on Windows
+- Windows will request UAC elevation from `wheelmaker-deploy` when service work is needed
 - `launchctl` on macOS, or `systemctl --user` on Linux
 - on Linux, lingering enabled for the deploy user:
 
@@ -66,7 +66,9 @@ deploy.bat
 bash deploy.sh
 ```
 
-`deploy.bat` and `deploy.sh` only prepare the bootstrap environment: each run builds a fresh temporary `wheelmaker-deploy` CLI under `~/.wheelmaker/build/bootstrap`, then calls `wheelmaker-deploy deploy`.
+`deploy.bat` and `deploy.sh` only prepare the bootstrap environment: when Go and the deploy source are available they refresh the temporary `wheelmaker-deploy` CLI under `~/.wheelmaker/build/bootstrap`; otherwise they reuse an existing bootstrap CLI and fail clearly if none exists. All deploy flow, service setup, elevation, and platform differences live in `wheelmaker-deploy`.
+
+On Windows, the deploy CLI configures server-mode Windows Services. First-time service creation may prompt for the current account password so the services can run under that account and start after reboot without an interactive login.
 
 After the initial service setup, request an updater-driven update and Web publish without recreating service files:
 

@@ -64,14 +64,19 @@ try {
 
   $bootstrapDir = Join-Path $homeDir ".wheelmaker\build\bootstrap"
   $deployExe = Join-Path $bootstrapDir "wheelmaker-deploy.exe"
+  $deploySourceDir = Join-Path $repoRoot "server\cmd\wheelmaker-deploy"
+  $goCommand = Get-Command go -ErrorAction SilentlyContinue
 
-  Write-Deploy "Building bootstrap wheelmaker-deploy.exe..."
-  if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
-    throw "Go is required to build wheelmaker-deploy.exe"
+  if ($goCommand -and (Test-Path -LiteralPath $deploySourceDir)) {
+    Write-Deploy "Building bootstrap wheelmaker-deploy.exe..."
+    New-Item -ItemType Directory -Force -Path $bootstrapDir | Out-Null
+    Write-Deploy "Running go build for wheelmaker-deploy.exe"
+    Invoke-Checked -FilePath "go" -Arguments @("build", "-o", $deployExe, ".\cmd\wheelmaker-deploy") -WorkingDirectory (Join-Path $repoRoot "server")
+  } elseif (Test-Path -LiteralPath $deployExe) {
+    Write-Deploy "Using existing bootstrap wheelmaker-deploy.exe: $deployExe"
+  } else {
+    throw "No existing wheelmaker-deploy.exe and Go/source are unavailable to build it"
   }
-  New-Item -ItemType Directory -Force -Path $bootstrapDir | Out-Null
-  Write-Deploy "Running go build for wheelmaker-deploy.exe"
-  Invoke-Checked -FilePath "go" -Arguments @("build", "-o", $deployExe, ".\cmd\wheelmaker-deploy") -WorkingDirectory (Join-Path $repoRoot "server")
 
   Write-Deploy "Running wheelmaker-deploy deploy..."
   Write-Deploy "Bootstrap CLI: $deployExe"
