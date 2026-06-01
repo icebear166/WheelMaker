@@ -15,56 +15,12 @@ function Write-Fail {
   Write-Host "[FAILED] $Message" -ForegroundColor Red
 }
 
-function Quote-CommandArgument {
-  param([Parameter(Mandatory = $true)][string]$Value)
-
-  if ($Value -notmatch '[\s"]') {
-    return $Value
-  }
-  return '"' + ($Value -replace '"', '\"') + '"'
-}
-
-function Test-IsAdministrator {
-  $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
-  $principal = [Security.Principal.WindowsPrincipal]$identity
-  return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-}
-
 function Wait-ForExit {
   if ($env:WHEELMAKER_DEPLOY_NO_PAUSE) {
     return
   }
   Write-Host
   Read-Host "Press Enter to close"
-}
-
-function Invoke-ElevatedSelf {
-  param([string[]]$ArgsToForward)
-
-  Write-Deploy "Windows service deployment requires Administrator privileges."
-  Write-Deploy "Relaunching deploy-windows.ps1 as Administrator..."
-
-  $quoted = @(
-    "-NoLogo",
-    "-NoProfile",
-    "-ExecutionPolicy",
-    "Bypass",
-    "-File",
-    (Quote-CommandArgument $PSCommandPath)
-  )
-  foreach ($arg in $ArgsToForward) {
-    $quoted += Quote-CommandArgument $arg
-  }
-  $argumentLine = $quoted -join " "
-
-  if ($env:WHEELMAKER_DEPLOY_ELEVATE_DRY_RUN) {
-    Write-Deploy "Dry-run administrator relaunch command:"
-    Write-Host "powershell.exe $argumentLine"
-    return 0
-  }
-
-  $proc = Start-Process -FilePath "powershell.exe" -ArgumentList $argumentLine -Verb RunAs -Wait -PassThru
-  return $proc.ExitCode
 }
 
 function Invoke-Checked {
@@ -88,14 +44,6 @@ function Invoke-Checked {
   }
 }
 
-function Test-ArgPresent {
-  param(
-    [string[]]$ArgsToSearch,
-    [string]$Name
-  )
-  return $ArgsToSearch -contains $Name
-}
-
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $homeDir = [Environment]::GetFolderPath("UserProfile")
 $logDir = Join-Path $homeDir ".wheelmaker\log"
@@ -113,20 +61,6 @@ try {
   Write-Host
   Write-Host "============================================"
   Write-Host
-
-  $needsAdmin = -not (Test-ArgPresent -ArgsToSearch $DeployArgs -Name "--no-config")
-  if ($env:WHEELMAKER_DEPLOY_FORCE_NOT_ADMIN) {
-    $isAdmin = $false
-  } else {
-    $isAdmin = Test-IsAdministrator
-  }
-  if ($needsAdmin -and -not $isAdmin) {
-    $exitCode = Invoke-ElevatedSelf -ArgsToForward $DeployArgs
-    if ($exitCode -ne 0) {
-      throw "administrator relaunch exited with code $exitCode"
-    }
-    exit 0
-  }
 
   $bootstrapDir = Join-Path $homeDir ".wheelmaker\build\bootstrap"
   $deployExe = Join-Path $bootstrapDir "wheelmaker-deploy.exe"
