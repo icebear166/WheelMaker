@@ -66,7 +66,10 @@ describe('mobile chat quick switch UI source structure', () => {
     expect(stylesCss).not.toContain('.chat-quick-switch-item[data-selected=\'true\']::before');
     expect(cssBlock('.chat-quick-switch-menu')).not.toContain('overflow-y: auto;');
     expect(cssBlock('.chat-quick-switch-menu')).toContain('overflow: visible;');
-    expect(cssBlock('.chat-quick-switch-item')).toContain('min-height: 32px;');
+    expect(cssBlock(".chat-quick-switch-menu[data-placement='desktop']")).toContain('overflow: visible;');
+    expect(cssBlock(".chat-quick-switch-menu[data-placement='desktop']")).not.toContain('overflow: auto;');
+    expect(cssBlock('.chat-quick-switch-item')).toContain('min-height: 34px;');
+    expect(cssBlock('.chat-quick-switch-title')).toContain('font-size: 12.5px;');
     expect(stylesCss).toContain('.chat-quick-switch-empty');
   });
 });

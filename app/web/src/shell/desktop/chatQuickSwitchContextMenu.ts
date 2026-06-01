@@ -5,7 +5,6 @@ export type DesktopChatQuickSwitchContextMenuStyle = {
   left: number;
   top: number;
   width: number;
-  maxHeight: number;
 };
 
 export type DesktopChatQuickSwitchContextMenuResult =
@@ -79,7 +78,7 @@ export function resolveDesktopChatQuickSwitchContextMenu({
     positiveNumberOr(preferredWidth, 320),
     safeViewportWidth - safeMargin * 2,
   ));
-  const maxHeight = Math.max(0, Math.min(
+  const placementHeight = Math.max(0, Math.min(
     positiveNumberOr(preferredMaxHeight, 280),
     safeViewportHeight - safeMargin * 2,
   ));
@@ -91,7 +90,7 @@ export function resolveDesktopChatQuickSwitchContextMenu({
   const top = clamp(
     finiteNumberOr(clientY, safeMargin),
     safeMargin,
-    Math.max(safeMargin, safeViewportHeight - maxHeight - safeMargin),
+    Math.max(safeMargin, safeViewportHeight - placementHeight - safeMargin),
   );
 
   return {
@@ -101,7 +100,6 @@ export function resolveDesktopChatQuickSwitchContextMenu({
       left: Math.round(left),
       top: Math.round(top),
       width: Math.round(width),
-      maxHeight: Math.round(maxHeight),
     },
   };
 }

@@ -2867,7 +2867,7 @@ textarea,
 
 .chat-quick-switch-menu[data-placement='desktop'] {
   right: auto;
-  overflow: auto;
+  overflow: visible;
 }
 
 .chat-quick-switch-project + .chat-quick-switch-project {
@@ -2889,7 +2889,7 @@ textarea,
 .chat-quick-switch-project-name {
   min-width: 0;
   flex: 1;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2897,9 +2897,9 @@ textarea,
 }
 
 .chat-quick-switch-project-hub {
-  max-width: 88px;
-  height: 16px;
-  padding: 0 5px;
+  max-width: 96px;
+  height: 18px;
+  padding: 0 6px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--muted) 12%, transparent);
   color: color-mix(in srgb, var(--muted) 88%, var(--text));
@@ -2909,7 +2909,7 @@ textarea,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 600;
   line-height: 1;
 }
@@ -2922,7 +2922,7 @@ textarea,
 
 .chat-quick-switch-item {
   width: 100%;
-  min-height: 32px;
+  min-height: 34px;
   border: 0;
   border-radius: 5px;
   background: transparent;
@@ -2948,15 +2948,15 @@ textarea,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 500;
-  line-height: 1.18;
+  line-height: 1.2;
 }
 
 .chat-quick-switch-time {
   color: var(--muted);
-  font-size: 10px;
-  line-height: 1;
+  font-size: 11px;
+  line-height: 1.1;
   white-space: nowrap;
 }
 

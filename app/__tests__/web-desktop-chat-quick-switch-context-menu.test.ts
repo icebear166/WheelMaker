@@ -27,7 +27,6 @@ describe('desktop chat quick switch context menu', () => {
         left: 280,
         top: 180,
         width: 320,
-        maxHeight: 280,
       },
     });
   });
@@ -117,7 +116,6 @@ describe('desktop chat quick switch context menu', () => {
         left: 572,
         top: 312,
         width: 320,
-        maxHeight: 280,
       },
     });
   });
