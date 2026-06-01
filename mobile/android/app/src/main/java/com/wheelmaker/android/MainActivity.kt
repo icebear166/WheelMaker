@@ -17,8 +17,12 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.PermissionRequest
+import android.webkit.ServiceWorkerClient
+import android.webkit.ServiceWorkerController
 import android.webkit.URLUtil
 import android.webkit.ValueCallback
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -49,7 +53,11 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         webSourceRuntime = WebSourceRuntime(SharedPreferencesWebSourceStore(this))
-        webSourceRuntime.refreshActualSource()
+        val webSourceState = webSourceRuntime.refreshActualSource()
+        logWebDiag(
+            "startup webSource preference=${webSourceState.preference} actual=${webSourceState.actualSource} " +
+                "remoteUrl=${webSourceState.remoteUrl.ifBlank { "<empty>" }}"
+        )
 
         rootView = FrameLayout(this)
         rootView.setBackgroundColor(APP_BACKGROUND_COLOR)
@@ -173,6 +181,7 @@ class MainActivity : Activity() {
         target.settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(target, true)
+        configureServiceWorkerDiagnostics()
         target.webViewClient = StableOriginWebViewClient(this, webSourceRuntime)
         target.webChromeClient = object : WebChromeClient() {
             override fun onPermissionRequest(request: PermissionRequest) {
@@ -328,6 +337,25 @@ class MainActivity : Activity() {
         pendingAudioPermissionRequest?.deny()
         pendingAudioPermissionRequest = request
         ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), AUDIO_PERMISSION_REQUEST_CODE)
+    }
+
+    private fun configureServiceWorkerDiagnostics() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
+            logWebDiag("serviceWorker diagnostics unavailable sdk=${Build.VERSION.SDK_INT}")
+            return
+        }
+        ServiceWorkerController.getInstance().setServiceWorkerClient(object : ServiceWorkerClient() {
+            override fun shouldInterceptRequest(request: WebResourceRequest): WebResourceResponse? {
+                val uri = request.url ?: return null
+                if (shouldLogStableOriginRequest(uri)) {
+                    logWebDiag(
+                        "serviceWorker request method=${request.method} url=$uri"
+                    )
+                }
+                return null
+            }
+        })
+        logWebDiag("serviceWorker diagnostics enabled sdk=${Build.VERSION.SDK_INT}")
     }
 
     private fun enqueueDownload(url: String, userAgent: String, contentDisposition: String, mimeType: String) {
