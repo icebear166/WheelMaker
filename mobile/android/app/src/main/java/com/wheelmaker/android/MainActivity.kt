@@ -166,7 +166,7 @@ class MainActivity : Activity() {
         target.settings.javaScriptEnabled = true
         target.settings.domStorageEnabled = true
         target.settings.databaseEnabled = true
-        target.settings.cacheMode = WebSettings.LOAD_DEFAULT
+        target.settings.cacheMode = WebSettings.LOAD_NO_CACHE
         target.settings.allowContentAccess = true
         target.settings.allowFileAccess = true
         target.settings.mediaPlaybackRequiresUserGesture = false

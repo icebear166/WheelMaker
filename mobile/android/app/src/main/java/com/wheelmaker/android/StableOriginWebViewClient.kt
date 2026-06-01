@@ -39,16 +39,20 @@ class StableOriginWebViewClient(
             val suffix = if (assetName == "index.html") "" else assetName
             val url = URI(remoteBase).resolve(suffix).toURL()
             connection = url.openConnection() as HttpURLConnection
+            connection.useCaches = false
             connection.connectTimeout = 5000
             connection.readTimeout = 15000
             connection.instanceFollowRedirects = true
+            if (requestCacheControlForRemoteAsset(assetName) != null) {
+                connection.setRequestProperty("Cache-Control", "no-cache")
+                connection.setRequestProperty("Pragma", "no-cache")
+            }
             val status = connection.responseCode
             if (status !in 200..299) {
                 connection.disconnect()
                 return null
             }
-            val headers = responseHeadersForAsset(assetName).toMutableMap()
-            connection.getHeaderField("Cache-Control")?.let { headers["Cache-Control"] = it }
+            val headers = responseHeadersForRemoteAsset(assetName, connection.getHeaderField("Cache-Control"))
             WebResourceResponse(
                 mimeTypeFromHeader(connection.contentType, assetName),
                 null,
@@ -137,7 +141,24 @@ fun responseHeadersForAsset(assetName: String): Map<String, String> {
             "public, max-age=31536000, immutable"
         else -> "no-cache"
     }
-    return mapOf("Cache-Control" to cacheControl)
+    val headers = mutableMapOf("Cache-Control" to cacheControl)
+    if (cacheControl == "no-store" || cacheControl.startsWith("no-cache")) {
+        headers["Pragma"] = "no-cache"
+        headers["Expires"] = "0"
+    }
+    return headers
+}
+
+fun responseHeadersForRemoteAsset(assetName: String, upstreamCacheControl: String?): Map<String, String> {
+    return responseHeadersForAsset(assetName)
+}
+
+private fun requestCacheControlForRemoteAsset(assetName: String): String? {
+    val baseName = assetName.substringAfterLast('/')
+    return when (responseHeadersForAsset(baseName)["Cache-Control"]) {
+        "no-store", "no-cache", "no-cache, must-revalidate" -> "no-cache"
+        else -> null
+    }
 }
 
 private fun mimeTypeFromHeader(contentType: String?, assetName: String): String {

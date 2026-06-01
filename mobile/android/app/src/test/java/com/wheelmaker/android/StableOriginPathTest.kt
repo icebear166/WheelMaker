@@ -26,4 +26,24 @@ class StableOriginPathTest {
         assertTrue(isWorkspaceRoute("settings/update"))
         assertFalse(isWorkspaceRoute("bundle.abc.js"))
     }
+
+    @Test
+    fun remoteResponsesKeepClientFreshnessHeadersForVolatileAssets() {
+        assertEquals(
+            "no-cache, must-revalidate",
+            responseHeadersForRemoteAsset("index.html", "public, max-age=31536000")["Cache-Control"]
+        )
+        assertEquals(
+            "no-cache, must-revalidate",
+            responseHeadersForRemoteAsset("service-worker.js", "public, max-age=31536000")["Cache-Control"]
+        )
+        assertEquals(
+            "no-store",
+            responseHeadersForRemoteAsset("web-build.json", "public, max-age=31536000")["Cache-Control"]
+        )
+        assertEquals(
+            "no-store",
+            responseHeadersForRemoteAsset("runtime-config.js", "public, max-age=31536000")["Cache-Control"]
+        )
+    }
 }
