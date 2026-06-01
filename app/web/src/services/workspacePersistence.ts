@@ -201,7 +201,7 @@ function defaultGlobalState(): PersistedGlobalState {
     registryDebug: false,
     disableFileCache: false,
     localHubReadEnabled: true,
-    promptCompletionNotificationsEnabled: false,
+    promptCompletionNotificationsEnabled: true,
     gestureNavigation: false,
     tab: 'file',
     selectedProjectId: '',

@@ -3028,7 +3028,7 @@ function App() {
   const [promptCompletionNotificationsEnabled, setPromptCompletionNotificationsEnabled] = useState(
     typeof persistedGlobal.promptCompletionNotificationsEnabled === 'boolean'
       ? persistedGlobal.promptCompletionNotificationsEnabled
-      : false,
+      : true,
   );
   const notificationProvider = useMemo(() => createNotificationProvider(), []);
   const [notificationPermissionState, setNotificationPermissionState] =
@@ -14497,7 +14497,7 @@ function App() {
           <label className="settings-row sidebar-setting-row">
             <span>
               <span className="codicon codicon-bell settings-row-icon" aria-hidden="true" />
-              Prompt Completion Notifications
+              Notifications
             </span>
             <input
               type="checkbox"

@@ -15,11 +15,13 @@ describe('chat prompt completion notification settings', () => {
     const connectionSectionStart = mainTsx.indexOf("renderSettingsSection('Connection'");
     const chatSection = mainTsx.slice(chatSectionStart, connectionSectionStart);
 
-    expect(chatSection).toContain('Prompt Completion Notifications');
+    expect(chatSection).toContain('Notifications');
+    expect(chatSection).not.toContain('Prompt Completion Notifications');
     expect(chatSection).toContain('promptCompletionNotificationsEnabled');
     expect(chatSection).toContain('setPromptCompletionNotificationsEnabled');
+    expect(mainTsx).toContain('typeof persistedGlobal.promptCompletionNotificationsEnabled === \'boolean\'\n      ? persistedGlobal.promptCompletionNotificationsEnabled\n      : true,');
     expect(persistenceTs).toContain('promptCompletionNotificationsEnabled: boolean;');
-    expect(persistenceTs).toContain('promptCompletionNotificationsEnabled: false,');
+    expect(persistenceTs).toContain('promptCompletionNotificationsEnabled: true,');
     expect(persistenceTs).toContain('typeof input.promptCompletionNotificationsEnabled ===');
   });
 
