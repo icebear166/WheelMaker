@@ -13,6 +13,7 @@ type ShellContentProps = {
 
 export type DesktopShellProps = ShellContentProps & {
   desktopActivityBar: ReactNode;
+  desktopPeek: ReactNode;
   sidebarCollapsed: boolean;
   desktopSidebarWidth: number;
 };
@@ -21,6 +22,7 @@ export type MobileShellProps = ShellContentProps & {
   floatingControlStack: ReactNode;
   floatingControlSide: 'left' | 'right';
   mobileSettingsScreen: ReactNode;
+  mobileOverlay: ReactNode;
   drawerOpen: boolean;
   onCloseDrawer: () => void;
 };
@@ -34,6 +36,7 @@ export function DesktopShell({
   themeMode,
   setiFontCss,
   desktopActivityBar,
+  desktopPeek,
   sidebar,
   main,
   sidebarCollapsed,
@@ -53,6 +56,7 @@ export function DesktopShell({
             <aside className="workspace-left">{sidebar}</aside>
           ) : null}
           <main className="workspace-right">{main}</main>
+          {desktopPeek}
         </div>
       </div>
     </div>
@@ -65,6 +69,7 @@ export function MobileShell({
   floatingControlStack,
   floatingControlSide,
   mobileSettingsScreen,
+  mobileOverlay,
   sidebar,
   main,
   drawerOpen,
@@ -74,10 +79,12 @@ export function MobileShell({
     <div
       className={`workspace theme-${themeMode} narrow-shell`}
       data-floating-control-side={floatingControlSide}
+      data-chat-file-peek-open={mobileOverlay ? 'true' : undefined}
     >
       <style>{setiFontCss}</style>
       {floatingControlStack}
       {mobileSettingsScreen}
+      {mobileOverlay}
 
       <div className="body">
         <main className="workspace-right">{main}</main>

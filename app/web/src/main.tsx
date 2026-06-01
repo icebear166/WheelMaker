@@ -535,6 +535,14 @@ type DesktopSidebarResizeState = {
   startWidth: number;
   currentWidth: number;
 };
+type ChatFilePeekState = {
+  path: string;
+  targetLine: number | null;
+  content: string;
+  info: RegistryFsInfo | null;
+  loading: boolean;
+  error: string;
+};
 type SetiThemeSection = {
   file: string;
   fileExtensions?: Record<string, string>;
@@ -685,6 +693,12 @@ const fileMemoryCacheKey = (activeProjectId: string, path: string) => `${activeP
 const PROJECT_PIN_LONG_PRESS_MS = 450;
 const PROJECT_SESSION_LONG_PRESS_MS = 450;
 const DESKTOP_SIDEBAR_VIEWPORT_MAX_RATIO = 0.45;
+const CHAT_FILE_PEEK_WIDTH_DEFAULT = 520;
+const CHAT_FILE_PEEK_WIDTH_MIN = 360;
+const CHAT_FILE_PEEK_WIDTH_MAX = 760;
+const CHAT_FILE_PEEK_VIEWPORT_MAX_RATIO = 0.55;
+const CHAT_FILE_PEEK_MAIN_MIN_WIDTH = 420;
+const CHAT_FILE_PEEK_HISTORY_KIND = 'wheelmaker:chat-file-peek';
 const FLOATING_CONTROL_IDLE_DELAY_MS = 3000;
 const PORT_RELAY_FLOATING_Y_RATIO_STORAGE_KEY = 'wheelmaker:portRelayFloatingYRatio';
 const PORT_RELAY_FLOATING_SLOT_STORAGE_KEY = 'wheelmaker:portRelayFloatingSlot';
@@ -2053,6 +2067,18 @@ function isImageFile(path: string, mimeType?: string): boolean {
   return inferImageMimeType(path) !== '';
 }
 
+function createChatFilePeekHistoryState(): {kind: typeof CHAT_FILE_PEEK_HISTORY_KIND} {
+  return {kind: CHAT_FILE_PEEK_HISTORY_KIND};
+}
+
+function isChatFilePeekHistoryState(value: unknown): value is {kind: typeof CHAT_FILE_PEEK_HISTORY_KIND} {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as {kind?: unknown}).kind === CHAT_FILE_PEEK_HISTORY_KIND
+  );
+}
+
 function encodeUtf8ToBase64(value: string): string {
   try {
     if (typeof TextEncoder !== 'undefined') {
@@ -2629,11 +2655,13 @@ type MarkdownPreviewProps = {
   codeTabSize: number;
   wrap: boolean;
   lineNumbers: boolean;
+  targetLine?: number | null;
 };
 
 type HtmlPreviewProps = {
   content: string;
   scriptsEnabled: boolean;
+  targetLine?: number | null;
 };
 
 type MarkdownImageExportRequest = {
@@ -2717,7 +2745,63 @@ const markdownPreviewPropsEqual = (
   prev.codeLineHeight === next.codeLineHeight &&
   prev.codeTabSize === next.codeTabSize &&
   prev.wrap === next.wrap &&
-  prev.lineNumbers === next.lineNumbers;
+  prev.lineNumbers === next.lineNumbers &&
+  prev.targetLine === next.targetLine;
+
+function sourceLineRange(node: unknown): {start: number; end: number} | null {
+  const position = (node as {
+    position?: {
+      start?: {line?: unknown};
+      end?: {line?: unknown};
+    };
+  } | null)?.position;
+  const start = Number(position?.start?.line);
+  const end = Number(position?.end?.line);
+  if (!Number.isFinite(start) || start <= 0) return null;
+  return {
+    start,
+    end: Number.isFinite(end) && end >= start ? end : start,
+  };
+}
+
+function markdownSourceTargetProps(node: unknown, targetLine?: number | null) {
+  if (!targetLine) return {};
+  const range = sourceLineRange(node);
+  if (!range) return {};
+  const isTarget = targetLine >= range.start && targetLine <= range.end;
+  return {
+    'data-source-line-start': String(range.start),
+    'data-source-line-end': String(range.end),
+    'data-source-line-target': isTarget ? 'true' : undefined,
+  };
+}
+
+function scrollHtmlPreviewFrameToLine(
+  frame: HTMLIFrameElement,
+  content: string,
+  targetLine?: number | null,
+) {
+  if (!targetLine) return;
+  try {
+    const documentElement = frame.contentDocument?.documentElement;
+    const scrollRoot = frame.contentDocument?.scrollingElement ?? documentElement;
+    if (!scrollRoot) return;
+    const totalLines = Math.max(1, content.split('\n').length);
+    const ratio = Math.min(1, Math.max(0, (targetLine - 1) / Math.max(1, totalLines - 1)));
+    const maxScrollTop = Math.max(0, scrollRoot.scrollHeight - scrollRoot.clientHeight);
+    scrollRoot.scrollTop = Math.round(maxScrollTop * ratio);
+    frame.contentDocument?.body?.classList.add('wm-html-source-target');
+    window.setTimeout(() => {
+      try {
+        frame.contentDocument?.body?.classList.remove('wm-html-source-target');
+      } catch {
+        // The sandboxed preview can become unavailable while the timer is pending.
+      }
+    }, 1200);
+  } catch {
+    // Sandboxed iframe access is best-effort; source views still have exact jumps.
+  }
+}
 
 const MarkdownPreview = React.memo(function MarkdownPreview({
   content,
@@ -2729,6 +2813,7 @@ const MarkdownPreview = React.memo(function MarkdownPreview({
   codeTabSize,
   wrap,
   lineNumbers,
+  targetLine,
 }: MarkdownPreviewProps) {
   const markdownComponents = useMemo<Components>(
     () => ({
@@ -2746,6 +2831,56 @@ const MarkdownPreview = React.memo(function MarkdownPreview({
           wrap,
           lineNumbers,
         }),
+      p: ({ node, children, ...props }) => (
+        <p {...props} {...markdownSourceTargetProps(node, targetLine)}>
+          {children}
+        </p>
+      ),
+      li: ({ node, children, ...props }) => (
+        <li {...props} {...markdownSourceTargetProps(node, targetLine)}>
+          {children}
+        </li>
+      ),
+      blockquote: ({ node, children, ...props }) => (
+        <blockquote {...props} {...markdownSourceTargetProps(node, targetLine)}>
+          {children}
+        </blockquote>
+      ),
+      h1: ({ node, children, ...props }) => (
+        <h1 {...props} {...markdownSourceTargetProps(node, targetLine)}>
+          {children}
+        </h1>
+      ),
+      h2: ({ node, children, ...props }) => (
+        <h2 {...props} {...markdownSourceTargetProps(node, targetLine)}>
+          {children}
+        </h2>
+      ),
+      h3: ({ node, children, ...props }) => (
+        <h3 {...props} {...markdownSourceTargetProps(node, targetLine)}>
+          {children}
+        </h3>
+      ),
+      h4: ({ node, children, ...props }) => (
+        <h4 {...props} {...markdownSourceTargetProps(node, targetLine)}>
+          {children}
+        </h4>
+      ),
+      h5: ({ node, children, ...props }) => (
+        <h5 {...props} {...markdownSourceTargetProps(node, targetLine)}>
+          {children}
+        </h5>
+      ),
+      h6: ({ node, children, ...props }) => (
+        <h6 {...props} {...markdownSourceTargetProps(node, targetLine)}>
+          {children}
+        </h6>
+      ),
+      table: ({ node, children, ...props }) => (
+        <table {...props} {...markdownSourceTargetProps(node, targetLine)}>
+          {children}
+        </table>
+      ),
     }),
     [
       themeMode,
@@ -2756,6 +2891,7 @@ const MarkdownPreview = React.memo(function MarkdownPreview({
       codeTabSize,
       wrap,
       lineNumbers,
+      targetLine,
     ],
   );
   const markdownCapabilities = useMarkdownCapabilityPlugins(content);
@@ -2779,6 +2915,7 @@ const MarkdownPreview = React.memo(function MarkdownPreview({
 const HtmlPreview = React.memo(function HtmlPreview({
   content,
   scriptsEnabled,
+  targetLine,
 }: HtmlPreviewProps) {
   return (
     <div className="html-preview">
@@ -2787,6 +2924,7 @@ const HtmlPreview = React.memo(function HtmlPreview({
         title="HTML preview"
         sandbox={scriptsEnabled ? 'allow-scripts' : ''}
         srcDoc={content}
+        onLoad={event => scrollHtmlPreviewFrameToLine(event.currentTarget, content, targetLine)}
       />
     </div>
   );
@@ -3459,6 +3597,15 @@ function App() {
   const [htmlPreviewEnabled, setHtmlPreviewEnabled] = useState(false);
   const [htmlPreviewScriptsEnabled, setHtmlPreviewScriptsEnabled] = useState(false);
   const fileScrollRef = useRef<HTMLDivElement | null>(null);
+  const [chatFilePeek, setChatFilePeek] = useState<ChatFilePeekState | null>(null);
+  const chatFilePeekRef = useRef<ChatFilePeekState | null>(null);
+  const chatFilePeekScrollRef = useRef<HTMLDivElement | null>(null);
+  const chatFilePeekReadSeqRef = useRef(0);
+  const chatFilePeekHistoryActiveRef = useRef(false);
+  const chatFilePeekResizeRef = useRef<DesktopSidebarResizeState | null>(null);
+  const [chatFilePeekWidth, setChatFilePeekWidth] = useState(CHAT_FILE_PEEK_WIDTH_DEFAULT);
+  const [chatFilePeekDraftWidth, setChatFilePeekDraftWidth] = useState<number | null>(null);
+  const [chatFilePeekResizing, setChatFilePeekResizing] = useState(false);
   const liveRefreshTimerRef = useRef<number | null>(null);
   const refreshInFlightRef = useRef(false);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -6854,7 +7001,16 @@ function App() {
     }
     setSettingsDetailView(null);
   }, [isWide, settingsDetailView, sidebarSettingsOpen]);
+  const closeChatFilePeek = useCallback(() => {
+    chatFilePeekReadSeqRef.current += 1;
+    setChatFilePeek(null);
+  }, []);
   const handleAndroidNativeBack = useCallback(() => {
+    if (!isWide && chatFilePeekRef.current) {
+      chatFilePeekHistoryActiveRef.current = false;
+      closeChatFilePeek();
+      return true;
+    }
     if (isWide || !sidebarSettingsOpenRef.current) {
       return false;
     }
@@ -6866,7 +7022,7 @@ function App() {
       setSidebarSettingsOpen(false);
     }
     return true;
-  }, [isWide, setSidebarSettingsOpen]);
+  }, [closeChatFilePeek, isWide, setSidebarSettingsOpen]);
   useEffect(() => {
     window.WheelMakerAndroidBack = {
       handleBack: handleAndroidNativeBack,
@@ -6970,6 +7126,82 @@ function App() {
       ),
     );
   }, [clampDesktopSidebarWidthForViewport, setDesktopSidebarWidth]);
+  const clampChatFilePeekWidthForViewport = useCallback((width: number) => {
+    const viewportMax = windowWidth > 0
+      ? Math.floor(windowWidth * CHAT_FILE_PEEK_VIEWPORT_MAX_RATIO)
+      : CHAT_FILE_PEEK_WIDTH_MAX;
+    const occupiedWidth = sidebarCollapsed ? 48 : effectiveDesktopSidebarWidth + 48;
+    const middlePreservingMax = windowWidth > 0
+      ? windowWidth - occupiedWidth - CHAT_FILE_PEEK_MAIN_MIN_WIDTH
+      : CHAT_FILE_PEEK_WIDTH_MAX;
+    const maxWidth = Math.max(
+      CHAT_FILE_PEEK_WIDTH_MIN,
+      Math.min(CHAT_FILE_PEEK_WIDTH_MAX, viewportMax, middlePreservingMax),
+    );
+    return Math.min(
+      maxWidth,
+      Math.max(CHAT_FILE_PEEK_WIDTH_MIN, Math.round(width)),
+    );
+  }, [effectiveDesktopSidebarWidth, sidebarCollapsed, windowWidth]);
+  const effectiveChatFilePeekWidth = useMemo(
+    () => clampChatFilePeekWidthForViewport(
+      chatFilePeekDraftWidth ?? chatFilePeekWidth,
+    ),
+    [chatFilePeekDraftWidth, chatFilePeekWidth, clampChatFilePeekWidthForViewport],
+  );
+  const commitChatFilePeekResize = useCallback(() => {
+    const resizeState = chatFilePeekResizeRef.current;
+    if (resizeState) {
+      setChatFilePeekWidth(resizeState.currentWidth);
+    }
+    chatFilePeekResizeRef.current = null;
+    setChatFilePeekDraftWidth(null);
+    setChatFilePeekResizing(false);
+  }, []);
+  const beginChatFilePeekResize = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    if (!isWide || !chatFilePeek) return;
+    event.preventDefault();
+    event.stopPropagation();
+    chatFilePeekResizeRef.current = {
+      pointerId: event.pointerId,
+      originX: event.clientX,
+      startWidth: effectiveChatFilePeekWidth,
+      currentWidth: effectiveChatFilePeekWidth,
+    };
+    setChatFilePeekDraftWidth(effectiveChatFilePeekWidth);
+    setChatFilePeekResizing(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }, [chatFilePeek, effectiveChatFilePeekWidth, isWide]);
+  const moveChatFilePeekResize = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    const resizeState = chatFilePeekResizeRef.current;
+    if (!resizeState || resizeState.pointerId !== event.pointerId) {
+      return;
+    }
+    event.preventDefault();
+    const nextWidth = resizeState.startWidth + resizeState.originX - event.clientX;
+    const clampedWidth = clampChatFilePeekWidthForViewport(nextWidth);
+    chatFilePeekResizeRef.current = {
+      ...resizeState,
+      currentWidth: clampedWidth,
+    };
+    setChatFilePeekDraftWidth(clampedWidth);
+  }, [clampChatFilePeekWidthForViewport]);
+  const finishChatFilePeekResize = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    const resizeState = chatFilePeekResizeRef.current;
+    if (!resizeState || resizeState.pointerId !== event.pointerId) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    commitChatFilePeekResize();
+    try {
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+    } catch {
+      // Pointer capture may already be released by the browser.
+    }
+  }, [commitChatFilePeekResize]);
   const getWideProjectAgents = useCallback(
     (projectItem: RegistryProject, sessions: RegistryChatSession[]): string[] => {
       const seen = new Set<string>();
@@ -7210,6 +7442,7 @@ function App() {
   projectsRef.current = projects;
   expandedDirsRef.current = expandedDirs;
   selectedFileRef.current = selectedFile;
+  chatFilePeekRef.current = chatFilePeek;
 
   const worktreeActive = selectedDiffSource === 'worktree';
 
@@ -7370,11 +7603,14 @@ function App() {
     window.requestAnimationFrame(() => restoreOnNextFrame(0));
   };
 
-  const scrollToFileLine = (line: number) => {
-    const container = fileScrollRef.current;
-    if (!container) return;
+  const jumpToFileLineNow = (
+    container: HTMLElement,
+    line: number,
+    options?: {content?: string},
+  ) => {
+    const normalizedLine = Math.max(1, Math.trunc(line));
     const lineElement = container.querySelector(
-      `.code-wrap [data-line-number="${line}"]`,
+      `.code-wrap [data-line-number="${normalizedLine}"]`,
     ) as HTMLElement | null;
     if (lineElement) {
       const containerRect = container.getBoundingClientRect();
@@ -7384,23 +7620,29 @@ function App() {
         containerRect.top -
         container.clientHeight / 2 +
         lineRect.height / 2;
-      container.scrollTo({
-        top: container.scrollTop + delta,
-        behavior: 'smooth',
-      });
-    } else {
-      const codeElement = container.querySelector(
-        '.code-wrap pre code',
-      ) as HTMLElement | null;
-      const lineHeight = codeElement
-        ? Number.parseFloat(window.getComputedStyle(codeElement).lineHeight) ||
-          20
-        : 20;
-      container.scrollTo({
-        top: Math.max(0, (line - 1) * lineHeight),
-        behavior: 'smooth',
-      });
+      const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+      container.scrollTop = Math.min(maxScrollTop, Math.max(0, container.scrollTop + delta));
+      return;
     }
+    const codeElement = container.querySelector(
+      '.code-wrap pre code',
+    ) as HTMLElement | null;
+    const lineHeight = codeElement
+      ? Number.parseFloat(window.getComputedStyle(codeElement).lineHeight) ||
+        Math.max(12, codeFontSize * codeLineHeight)
+      : Math.max(12, codeFontSize * codeLineHeight);
+    const contentLineCount = Math.max(1, options?.content?.split('\n').length ?? normalizedLine);
+    const maxLine = Math.max(1, Math.min(normalizedLine, contentLineCount));
+    const centeredTop =
+      (maxLine - 1) * lineHeight - container.clientHeight / 2 + lineHeight / 2;
+    const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+    container.scrollTop = Math.min(maxScrollTop, Math.max(0, Math.round(centeredTop)));
+  };
+
+  const scrollToFileLine = (line: number) => {
+    const container = fileScrollRef.current;
+    if (!container) return;
+    jumpToFileLineNow(container, line, {content: fileContent});
   };
 
   useEffect(() => {
@@ -7440,6 +7682,76 @@ function App() {
 
     window.requestAnimationFrame(() => runScroll(0));
   }, [pendingFileJump, tab, fileLoading, selectedFile, fileContent]);
+
+  const jumpToMarkdownPreviewLineNow = (
+    container: HTMLElement,
+    line: number,
+    content: string,
+  ) => {
+    const exactTarget = container.querySelector(
+      `[data-source-line-target="true"]`,
+    ) as HTMLElement | null;
+    if (exactTarget) {
+      const containerRect = container.getBoundingClientRect();
+      const targetRect = exactTarget.getBoundingClientRect();
+      const delta =
+        targetRect.top -
+        containerRect.top -
+        container.clientHeight / 2 +
+        targetRect.height / 2;
+      const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+      container.scrollTop = Math.min(maxScrollTop, Math.max(0, container.scrollTop + delta));
+      return;
+    }
+    const totalLines = Math.max(1, content.split('\n').length);
+    const ratio = Math.min(1, Math.max(0, (line - 1) / Math.max(1, totalLines - 1)));
+    const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+    container.scrollTop = Math.round(maxScrollTop * ratio);
+  };
+
+  useEffect(() => {
+    if (!chatFilePeek || chatFilePeek.loading || chatFilePeek.error || !chatFilePeek.targetLine) return;
+    const targetLine = chatFilePeek.targetLine;
+    const targetPath = chatFilePeek.path;
+    const targetContent = chatFilePeek.content;
+    const isMarkdownPreview = isMarkdownPath(targetPath);
+    const isHtmlPreview = isHtmlPath(targetPath);
+    const isImagePreview = isImageFile(targetPath, chatFilePeek.info?.mimeType);
+    if (isHtmlPreview || isImagePreview) return;
+
+    const maxAttempts = 16;
+    const runJump = (attempt: number) => {
+      if (chatFilePeekRef.current?.path !== targetPath) return;
+      const container = chatFilePeekScrollRef.current;
+      if (!container) {
+        if (attempt < maxAttempts) {
+          window.requestAnimationFrame(() => runJump(attempt + 1));
+        }
+        return;
+      }
+      if (isMarkdownPreview) {
+        jumpToMarkdownPreviewLineNow(container, targetLine, targetContent);
+        return;
+      }
+      const exactLineElement = container.querySelector(
+        `.code-wrap [data-line-number="${targetLine}"]`,
+      );
+      if (!exactLineElement && attempt < maxAttempts) {
+        window.requestAnimationFrame(() => runJump(attempt + 1));
+        return;
+      }
+      jumpToFileLineNow(container, targetLine, {content: targetContent});
+    };
+
+    window.requestAnimationFrame(() => runJump(0));
+  }, [
+    chatFilePeek?.path,
+    chatFilePeek?.targetLine,
+    chatFilePeek?.content,
+    chatFilePeek?.loading,
+    chatFilePeek?.error,
+    chatFilePeek?.info?.mimeType,
+  ]);
 
   const navigateSearchMatch = (delta: 1 | -1) => {
     if (fileSearchMatches.length === 0) return;
@@ -7654,6 +7966,134 @@ function App() {
     }
   };
 
+  const readChatFilePeek = useCallback(async (path: string, targetLine: number | null) => {
+    const targetProjectId = projectIdRef.current || projectId;
+    if (!path || !targetProjectId) return;
+    const requestSeq = chatFilePeekReadSeqRef.current + 1;
+    chatFilePeekReadSeqRef.current = requestSeq;
+    setChatFilePeek({
+      path,
+      targetLine,
+      content: '',
+      info: null,
+      loading: true,
+      error: '',
+    });
+    try {
+      const info = await service.getProjectFileInfo(targetProjectId, path);
+      if (requestSeq !== chatFilePeekReadSeqRef.current || projectIdRef.current !== targetProjectId) return;
+      if ((info.size ?? 0) > LARGE_FILE_CONFIRM_BYTES) {
+        const sizeMB = ((info.size ?? 0) / (1024 * 1024)).toFixed(1);
+        const confirmed = window.confirm(
+          `This file is ${sizeMB} MB. Load full content now?`,
+        );
+        if (!confirmed) {
+          setChatFilePeek(current =>
+            current && current.path === path
+              ? {
+                  ...current,
+                  info,
+                  loading: false,
+                  error: 'File load cancelled.',
+                }
+              : current,
+          );
+          return;
+        }
+      }
+      setChatFilePeek(current =>
+        current && current.path === path
+          ? {
+              ...current,
+              info,
+            }
+          : current,
+      );
+      const result = await service.readProjectFile(path, targetProjectId);
+      if (requestSeq !== chatFilePeekReadSeqRef.current || projectIdRef.current !== targetProjectId) return;
+      setChatFilePeek(current =>
+        current && current.path === path
+          ? {
+              ...current,
+              content: result.content,
+              info,
+              loading: false,
+              error: '',
+            }
+          : current,
+      );
+    } catch (err) {
+      if (requestSeq !== chatFilePeekReadSeqRef.current || projectIdRef.current !== targetProjectId) return;
+      const reason = err instanceof Error ? err.message : String(err);
+      setChatFilePeek(current =>
+        current && current.path === path
+          ? {
+              ...current,
+              content: '',
+              info: null,
+              loading: false,
+              error: `Failed to load file: ${reason}`,
+            }
+          : current,
+      );
+    }
+  }, [projectId]);
+
+  const openChatFilePeek = useCallback((path: string, line: number | null) => {
+    const normalizedLine =
+      typeof line === 'number' && Number.isFinite(line) && line > 0
+        ? Math.trunc(line)
+        : null;
+    setError('');
+    if (!isWide) {
+      setDrawerOpen(false);
+      setChatQuickSwitchMenuOpen(false);
+      setPortRelayFrameOpen(false);
+      if (!chatFilePeekHistoryActiveRef.current) {
+        window.history.pushState(createChatFilePeekHistoryState(), '', window.location.href);
+        chatFilePeekHistoryActiveRef.current = true;
+      }
+    }
+    readChatFilePeek(path, normalizedLine).catch(() => undefined);
+  }, [isWide, readChatFilePeek, setDrawerOpen]);
+
+  const closeChatFilePeekFromChrome = useCallback(() => {
+    if (!isWide && chatFilePeekHistoryActiveRef.current) {
+      window.history.back();
+      return;
+    }
+    closeChatFilePeek();
+  }, [closeChatFilePeek, isWide]);
+
+  const openPeekFileInFullFileTab = useCallback(() => {
+    if (!chatFilePeek) return;
+    closeChatFilePeek();
+    chatFilePeekHistoryActiveRef.current = false;
+    setTab('file');
+    setSelectedFile(chatFilePeek.path);
+    if (chatFilePeek.targetLine) {
+      setPendingFileJump({ path: chatFilePeek.path, line: chatFilePeek.targetLine });
+    } else {
+      setPendingFileJump(null);
+    }
+  }, [chatFilePeek, closeChatFilePeek, setTab]);
+
+  useEffect(() => {
+    const handleChatFilePeekPopState = (event: PopStateEvent) => {
+      if (!chatFilePeekHistoryActiveRef.current) return;
+      if (isChatFilePeekHistoryState(event.state)) return;
+      chatFilePeekHistoryActiveRef.current = false;
+      closeChatFilePeek();
+    };
+    window.addEventListener('popstate', handleChatFilePeekPopState);
+    return () => window.removeEventListener('popstate', handleChatFilePeekPopState);
+  }, [closeChatFilePeek]);
+
+  useEffect(() => {
+    if (isWide) {
+      chatFilePeekHistoryActiveRef.current = false;
+    }
+  }, [isWide]);
 
   useEffect(() => {
     if (!selectedFile) {
@@ -16051,13 +16491,7 @@ function App() {
                 return;
               }
               event.preventDefault();
-              if (jumpLine) {
-                setPendingFileJump({ path: targetFile.path, line: jumpLine });
-              } else {
-                setPendingFileJump(null);
-              }
-              setTab('file');
-              setSelectedFile(targetFile.path);
+              openChatFilePeek(targetFile.path, jumpLine ?? null);
             }}
           >
             <>
@@ -16072,6 +16506,7 @@ function App() {
     }),
     [
       currentProject?.path,
+      openChatFilePeek,
       openChatPortRelayLink,
       renderChatInlineCode,
     ],
@@ -16254,6 +16689,116 @@ function App() {
       renderChatMessageTurn(sourceMessage)
     ) : null;
     return content;
+  };
+  const renderChatFilePeekBody = () => {
+    if (!chatFilePeek) return null;
+    const chatFilePeekIsMarkdown = isMarkdownPath(chatFilePeek.path);
+    const chatFilePeekIsHtml = isHtmlPath(chatFilePeek.path);
+    const chatFilePeekIsImage = isImageFile(
+      chatFilePeek.path,
+      chatFilePeek.info?.mimeType,
+    );
+    if (chatFilePeek.loading) {
+      return <div className="muted block">Loading file...</div>;
+    }
+    if (chatFilePeek.error) {
+      return (
+        <div className="chat-file-peek-error" role="alert">
+          <span className="codicon codicon-error" />
+          <span>{chatFilePeek.error || 'Failed to load file'}</span>
+        </div>
+      );
+    }
+    if (chatFilePeekIsImage) {
+      const imageSrc = buildImageDataUrl({
+        content: chatFilePeek.content,
+        path: chatFilePeek.path,
+        mimeType: chatFilePeek.info?.mimeType,
+        isBinary: chatFilePeek.info?.isBinary,
+      });
+      return imageSrc ? (
+        <div className="file-image-preview-wrap chat-file-peek-image-wrap">
+          <img
+            className="file-image-preview"
+            src={imageSrc}
+            alt={chatFilePeek.path.split('/').pop() || 'image preview'}
+          />
+        </div>
+      ) : (
+        <div className="muted block">Image content is unavailable.</div>
+      );
+    }
+    if (chatFilePeekIsMarkdown) {
+      return (
+        <MarkdownPreview
+          content={chatFilePeek.content}
+          themeMode={themeMode}
+          codeTheme={codeTheme}
+          codeFont={codeFont}
+          codeFontSize={codeFontSize}
+          codeLineHeight={codeLineHeight}
+          codeTabSize={codeTabSize}
+          wrap={wrapLines}
+          lineNumbers={showLineNumbers}
+          targetLine={chatFilePeek.targetLine}
+        />
+      );
+    }
+    if (chatFilePeekIsHtml) {
+      return (
+        <HtmlPreview
+          content={chatFilePeek.content}
+          scriptsEnabled={htmlPreviewScriptsEnabled}
+          targetLine={chatFilePeek.targetLine}
+        />
+      );
+    }
+    return renderCodePane(
+      chatFilePeek.content,
+      false,
+      detectCodeLanguage(chatFilePeek.path),
+    );
+  };
+  const renderChatFilePeekSurface = (mode: 'desktop' | 'mobile') => {
+    if (!chatFilePeek) return null;
+    const fileName = chatFilePeek.path.split('/').pop() || chatFilePeek.path;
+    const title = chatFilePeek.targetLine
+      ? `${chatFilePeek.path}:${chatFilePeek.targetLine}`
+      : chatFilePeek.path;
+    return (
+      <section
+        className={`chat-file-peek-surface ${mode}`}
+        aria-label="Chat file preview"
+      >
+        <div className="chat-file-peek-toolbar">
+          <button
+            type="button"
+            className="chat-file-peek-icon-button"
+            onClick={closeChatFilePeekFromChrome}
+            title={mode === 'mobile' ? 'Back' : 'Close preview'}
+            aria-label={mode === 'mobile' ? 'Back' : 'Close preview'}
+          >
+            <span className={`codicon ${mode === 'mobile' ? 'codicon-arrow-left' : 'codicon-close'}`} />
+          </button>
+          <div className="chat-file-peek-title" title={title}>
+            <span className="chat-file-peek-name">{fileName}</span>
+            <span className="chat-file-peek-path">{title}</span>
+          </div>
+          <button
+            type="button"
+            className="chat-file-peek-icon-button"
+            onClick={openPeekFileInFullFileTab}
+            title="Open in File tab"
+            aria-label="Open in File tab"
+          >
+            <span className="codicon codicon-go-to-file" />
+          </button>
+        </div>
+        <div ref={chatFilePeekScrollRef} className="chat-file-peek-scroll">
+          {renderChatFilePeekBody()}
+        </div>
+      </section>
+    );
   };
   const renderPortRelayFrameSurface = (mode: 'desktop' | 'mobile') => (
     <div className={`port-relay-frame-surface ${mode}`}>
@@ -17370,7 +17915,7 @@ function App() {
     </div>
   ) : null;
 
-  const chatQuickSwitchMenu = chatQuickSwitchMenuOpen && tab === 'chat' && !sidebarSettingsOpen && !mobilePortRelayFrameOpen ? (
+  const chatQuickSwitchMenu = chatQuickSwitchMenuOpen && tab === 'chat' && !sidebarSettingsOpen && !mobilePortRelayFrameOpen && !chatFilePeek ? (
     <ChatQuickSwitchMenu
       ref={chatQuickSwitchMenuRef}
       sections={mobileChatQuickSwitchSections}
@@ -17702,6 +18247,35 @@ function App() {
   const portRelayMobileFrameOverlay = mobilePortRelayFrameOpen
     ? renderPortRelayFrameSurface('mobile')
     : null;
+  const chatFilePeekDesktopPane = isWide && chatFilePeek ? (
+    <aside
+      className="chat-file-peek-pane"
+      style={{ '--chat-file-peek-width': `${effectiveChatFilePeekWidth}px` } as React.CSSProperties}
+    >
+      <button
+        type="button"
+        className={`chat-file-peek-resize-handle${chatFilePeekResizing ? ' resizing' : ''}`}
+        aria-label="Resize file preview"
+        title="Resize file preview"
+        onPointerDown={beginChatFilePeekResize}
+        onPointerMove={moveChatFilePeekResize}
+        onPointerUp={finishChatFilePeekResize}
+        onPointerCancel={finishChatFilePeekResize}
+        onLostPointerCapture={commitChatFilePeekResize}
+      />
+      {renderChatFilePeekSurface('desktop')}
+    </aside>
+  ) : null;
+  const chatFilePeekMobileOverlay = !isWide && chatFilePeek ? (
+    <div
+      className="chat-file-peek-mobile-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Chat file preview"
+    >
+      {renderChatFilePeekSurface('mobile')}
+    </div>
+  ) : null;
 
   const archiveTarget = confirmTarget?.kind === 'archive' ? confirmTarget : null;
   const deleteTarget = confirmTarget?.kind === 'delete' ? confirmTarget : null;
@@ -18064,10 +18638,12 @@ function App() {
         themeMode={themeMode}
         setiFontCss={setiFontCss}
         desktopActivityBar={desktopActivityBar}
+        desktopPeek={chatFilePeekDesktopPane}
         desktopSidebarWidth={effectiveDesktopSidebarWidth}
         floatingControlStack={floatingControlStack}
         floatingControlSide={floatingControlSide}
         mobileSettingsScreen={mobileSettingsScreen}
+        mobileOverlay={chatFilePeekMobileOverlay}
         sidebar={renderSidebar()}
         main={renderMain()}
         sidebarCollapsed={sidebarCollapsed}
