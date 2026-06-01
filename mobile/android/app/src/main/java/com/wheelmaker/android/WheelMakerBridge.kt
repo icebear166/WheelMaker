@@ -7,14 +7,22 @@ class WheelMakerBridge(
     private val webSourceRuntime: WebSourceRuntime,
     private val androidSpeechRuntime: AndroidSpeechRuntime,
     private val androidNotificationRuntime: AndroidNotificationRuntime,
-    private val androidApkUpdateRuntime: AndroidApkUpdateRuntime
+    private val androidApkUpdateRuntime: AndroidApkUpdateRuntime,
+    private val androidWebDiagnostics: AndroidWebDiagnostics
 ) {
     @JavascriptInterface
     fun getWebSourceState(): String = webSourceStateToJson(webSourceRuntime.state())
 
     @JavascriptInterface
     fun setWebSourcePreference(preference: String): String {
-        return webSourceStateToJson(webSourceRuntime.setPreference(preference))
+        val state = webSourceRuntime.setPreference(preference)
+        androidWebDiagnostics.record("set_web_source_preference", mapOf(
+            "preference" to state.preference,
+            "actualSource" to state.actualSource,
+            "remoteUrl" to state.remoteUrl,
+            "remoteHost" to state.remoteHost
+        ))
+        return webSourceStateToJson(state)
     }
 
     @JavascriptInterface
@@ -25,8 +33,20 @@ class WheelMakerBridge(
             registryAddress = input.optString("registryAddress"),
             remoteWebUrl = input.optString("remoteWebUrl")
         )
-        return webSourceStateToJson(webSourceRuntime.setRemoteCandidate(candidate))
+        val state = webSourceRuntime.setRemoteCandidate(candidate)
+        androidWebDiagnostics.record("set_remote_web_candidate", mapOf(
+            "candidateSource" to candidate.source,
+            "registryAddress" to candidate.registryAddress,
+            "candidateRemoteWebUrl" to candidate.remoteWebUrl,
+            "actualSource" to state.actualSource,
+            "remoteUrl" to state.remoteUrl,
+            "remoteHost" to state.remoteHost
+        ))
+        return webSourceStateToJson(state)
     }
+
+    @JavascriptInterface
+    fun drainWebDiagnostics(): String = androidWebDiagnostics.drainJson()
 
     @JavascriptInterface
     fun startSpeech(rawJson: String): String = androidSpeechRuntime.start(rawJson)

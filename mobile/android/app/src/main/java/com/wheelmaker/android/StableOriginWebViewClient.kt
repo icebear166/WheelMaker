@@ -13,7 +13,8 @@ import java.util.Locale
 
 class StableOriginWebViewClient(
     private val context: Context,
-    private val webSourceRuntime: WebSourceRuntime
+    private val webSourceRuntime: WebSourceRuntime,
+    private val diagnostics: AndroidWebDiagnostics
 ) : WebViewClient() {
     override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
         val uri = request.url ?: return null
@@ -21,7 +22,14 @@ class StableOriginWebViewClient(
             return null
         }
         val assetName = assetNameForStablePath(uri.encodedPath ?: "/")
+        recordDiagnostic(assetName, "stable_origin_request", mapOf(
+            "method" to request.method,
+            "path" to (uri.encodedPath ?: "/")
+        ))
         nativeShellStubAsset(assetName)?.let { stub ->
+            recordDiagnostic(assetName, "native_stub_asset", mapOf(
+                "contentType" to stub.contentType
+            ))
             return WebResourceResponse(
                 stub.contentType,
                 "utf-8",
@@ -32,20 +40,34 @@ class StableOriginWebViewClient(
             )
         }
         if (shouldBlockStableOriginAsset(assetName)) {
+            recordDiagnostic(assetName, "blocked_stable_origin_asset", level = "warn")
             return notFoundResponse()
         }
         val remoteBase = webSourceRuntime.remoteBaseForRequest()
-        for (candidate in stableOriginAssetCandidates(assetName, remoteBase)) {
+        val candidates = stableOriginAssetCandidates(assetName, remoteBase)
+        recordDiagnostic(assetName, "stable_origin_candidates", mapOf(
+            "remoteBase" to remoteBase,
+            "candidates" to candidates.joinToString(",") { "${it.source}:${it.assetName}" }
+        ))
+        for (candidate in candidates) {
             when (candidate.source) {
                 STABLE_ORIGIN_SOURCE_REMOTE -> remoteResponse(candidate.assetName, remoteBase)?.let { return it }
                 STABLE_ORIGIN_SOURCE_EMBEDDED -> embeddedResponse(candidate.assetName)?.let { return it }
             }
         }
+        recordDiagnostic(assetName, "stable_origin_not_found", mapOf(
+            "remoteBase" to remoteBase
+        ), level = "warn")
         return notFoundResponse()
     }
 
     private fun remoteResponse(assetName: String, remoteBase: String): WebResourceResponse? {
-        if (remoteBase.isBlank()) return null
+        if (remoteBase.isBlank()) {
+            recordDiagnostic(assetName, "remote_asset_skipped", mapOf(
+                "reason" to "empty_remote_base"
+            ))
+            return null
+        }
         var connection: HttpURLConnection? = null
         return try {
             val suffix = if (assetName == "index.html") "" else assetName
@@ -60,28 +82,63 @@ class StableOriginWebViewClient(
                 connection.setRequestProperty("Cache-Control", "no-cache")
                 connection.setRequestProperty("Pragma", "no-cache")
             }
+            recordDiagnostic(assetName, "remote_asset_fetch", mapOf(
+                "url" to url.toString(),
+                "useCaches" to connection.useCaches,
+                "bypassCache" to bypassCache
+            ))
             val status = connection.responseCode
+            val upstreamCacheControl = connection.getHeaderField("Cache-Control")
             if (status !in 200..299) {
+                recordDiagnostic(assetName, "remote_asset_status", mapOf(
+                    "url" to url.toString(),
+                    "status" to status,
+                    "responseMessage" to (connection.responseMessage ?: ""),
+                    "upstreamCacheControl" to upstreamCacheControl
+                ), level = "warn")
                 connection.disconnect()
                 return null
             }
-            val headers = responseHeadersForRemoteAsset(assetName, connection.getHeaderField("Cache-Control"))
+            val upstreamContentType = connection.contentType
+            val servedContentType = contentTypeForRemoteAsset(upstreamContentType, assetName)
+            val headers = responseHeadersForRemoteAsset(assetName, upstreamCacheControl)
+            recordDiagnostic(assetName, "remote_asset_success", mapOf(
+                "url" to url.toString(),
+                "status" to status,
+                "upstreamContentType" to (upstreamContentType ?: ""),
+                "servedContentType" to servedContentType,
+                "upstreamCacheControl" to (upstreamCacheControl ?: ""),
+                "servedCacheControl" to (headers["Cache-Control"] ?: ""),
+                "useCaches" to connection.useCaches
+            ))
             WebResourceResponse(
-                contentTypeForRemoteAsset(connection.contentType, assetName),
+                servedContentType,
                 null,
                 status,
                 connection.responseMessage ?: "OK",
                 headers,
                 connection.inputStream
             )
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            recordDiagnostic(assetName, "remote_asset_error", mapOf(
+                "errorType" to error.javaClass.simpleName,
+                "message" to (error.message ?: "")
+            ), level = "warn")
             connection?.disconnect()
             null
         }
     }
 
     private fun embeddedResponse(assetName: String): WebResourceResponse? {
-        val stream = openEmbeddedAsset(assetName) ?: return null
+        val stream = openEmbeddedAsset(assetName)
+        if (stream == null) {
+            recordDiagnostic(assetName, "embedded_asset_missing", level = "warn")
+            return null
+        }
+        recordDiagnostic(assetName, "embedded_asset_success", mapOf(
+            "contentType" to contentTypeForAsset(assetName),
+            "cacheControl" to (responseHeadersForAsset(assetName)["Cache-Control"] ?: "")
+        ))
         return WebResourceResponse(
             contentTypeForAsset(assetName),
             null,
@@ -110,6 +167,18 @@ class StableOriginWebViewClient(
             ByteArrayInputStream("not found".toByteArray())
         )
     }
+
+    private fun recordDiagnostic(
+        assetName: String,
+        nativeEvent: String,
+        details: Map<String, Any?> = emptyMap(),
+        level: String = "info"
+    ) {
+        if (!shouldRecordStableOriginDiagnosticAsset(assetName)) {
+            return
+        }
+        diagnostics.record(nativeEvent, mapOf("asset" to assetName) + details, level)
+    }
 }
 
 fun assetNameForStablePath(path: String): String {
@@ -129,6 +198,18 @@ fun isWorkspaceRoute(assetName: String): Boolean {
 fun shouldBlockStableOriginAsset(assetName: String): Boolean {
     val baseName = assetName.substringAfterLast('/')
     return baseName == "ws"
+}
+
+fun shouldRecordStableOriginDiagnosticAsset(assetName: String): Boolean {
+    val baseName = assetName.substringAfterLast('/')
+    return baseName == "index.html" ||
+        baseName == "service-worker.js" ||
+        baseName == "manifest.webmanifest" ||
+        isWorkspaceRoute(assetName) ||
+        assetName.endsWith(".js") ||
+        assetName.endsWith(".css") ||
+        assetName.endsWith(".json") ||
+        assetName.endsWith(".webmanifest")
 }
 
 data class NativeShellStubAsset(

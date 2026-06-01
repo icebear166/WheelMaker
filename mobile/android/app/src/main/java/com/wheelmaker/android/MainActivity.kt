@@ -42,6 +42,7 @@ class MainActivity : Activity() {
     private lateinit var androidSpeechRuntime: AndroidSpeechRuntime
     private lateinit var androidNotificationRuntime: AndroidNotificationRuntime
     private lateinit var androidApkUpdateRuntime: AndroidApkUpdateRuntime
+    private lateinit var androidWebDiagnostics: AndroidWebDiagnostics
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
     private var pendingAudioPermissionRequest: PermissionRequest? = null
     private var systemBackCallback: OnBackInvokedCallback? = null
@@ -49,7 +50,14 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         webSourceRuntime = WebSourceRuntime(SharedPreferencesWebSourceStore(this))
-        webSourceRuntime.refreshActualSource()
+        androidWebDiagnostics = AndroidWebDiagnostics()
+        val webSourceState = webSourceRuntime.refreshActualSource()
+        androidWebDiagnostics.record("startup_web_source", mapOf(
+            "preference" to webSourceState.preference,
+            "actualSource" to webSourceState.actualSource,
+            "remoteUrl" to webSourceState.remoteUrl,
+            "remoteHost" to webSourceState.remoteHost
+        ))
 
         rootView = FrameLayout(this)
         rootView.setBackgroundColor(APP_BACKGROUND_COLOR)
@@ -173,7 +181,7 @@ class MainActivity : Activity() {
         target.settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(target, true)
-        target.webViewClient = StableOriginWebViewClient(this, webSourceRuntime)
+        target.webViewClient = StableOriginWebViewClient(this, webSourceRuntime, androidWebDiagnostics)
         target.webChromeClient = object : WebChromeClient() {
             override fun onPermissionRequest(request: PermissionRequest) {
                 if (request.resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) {
@@ -208,7 +216,8 @@ class MainActivity : Activity() {
                 webSourceRuntime,
                 androidSpeechRuntime,
                 androidNotificationRuntime,
-                androidApkUpdateRuntime
+                androidApkUpdateRuntime,
+                androidWebDiagnostics
             ),
             "WheelMakerAndroidNative"
         )

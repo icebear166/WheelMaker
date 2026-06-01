@@ -16,6 +16,16 @@ export type NativeRemoteWebCandidate = {
   remoteWebUrl: string;
 };
 
+export type NativeWebDiagnosticRecord = {
+  level?: 'info' | 'warn' | 'error';
+  event?: string;
+  details?: Record<string, unknown>;
+};
+
+export type NativeWebDiagnosticsPayload = {
+  records?: NativeWebDiagnosticRecord[];
+};
+
 export type NativeWebSourceBridge = {
   enabled?: boolean;
   getWebSourceState?: () => Promise<NativeWebSourceState> | NativeWebSourceState;
@@ -25,12 +35,14 @@ export type NativeWebSourceBridge = {
   setRemoteWebCandidate?: (
     candidate: NativeRemoteWebCandidate,
   ) => Promise<NativeWebSourceState> | NativeWebSourceState;
+  drainWebDiagnostics?: () => Promise<NativeWebDiagnosticsPayload> | NativeWebDiagnosticsPayload;
 };
 
 type AndroidNativeBridge = {
   getWebSourceState?: () => string;
   setWebSourcePreference?: (preference: NativeWebSourcePreference) => string;
   setRemoteWebCandidate?: (candidateJson: string) => string;
+  drainWebDiagnostics?: () => string;
 };
 
 type NativeWindow = Window & {
@@ -41,6 +53,10 @@ type NativeWindow = Window & {
 
 function parseNativeState(value: string | undefined): NativeWebSourceState {
   return JSON.parse(value ?? '{}') as NativeWebSourceState;
+}
+
+function parseNativeWebDiagnostics(value: string | undefined): NativeWebDiagnosticsPayload {
+  return JSON.parse(value ?? '{}') as NativeWebDiagnosticsPayload;
 }
 
 function isLoopbackHost(hostname: string): boolean {
@@ -59,6 +75,9 @@ function wrapAndroidNativeBridge(native: AndroidNativeBridge): NativeWebSourceBr
       : undefined,
     setRemoteWebCandidate: native.setRemoteWebCandidate
       ? candidate => Promise.resolve(parseNativeState(native.setRemoteWebCandidate?.(JSON.stringify(candidate))))
+      : undefined,
+    drainWebDiagnostics: native.drainWebDiagnostics
+      ? () => Promise.resolve(parseNativeWebDiagnostics(native.drainWebDiagnostics?.()))
       : undefined,
   };
 }

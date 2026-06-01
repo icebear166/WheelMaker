@@ -111,6 +111,32 @@ describe('native Web source helpers', () => {
     }));
   });
 
+  test('wraps Android native Web diagnostics drain payload', async () => {
+    const payload = {
+      records: [
+        {
+          level: 'info',
+          event: 'android_web',
+          details: {
+            nativeEvent: 'remote_asset_success',
+            asset: 'index.html',
+          },
+        },
+      ],
+    };
+    const native = {
+      drainWebDiagnostics: jest.fn(() => JSON.stringify(payload)),
+    };
+    (globalThis as {window?: unknown}).window = {
+      WheelMakerAndroidNative: native,
+    };
+
+    const bridge = getNativeWebSourceBridge();
+
+    await expect(bridge?.drainWebDiagnostics?.()).resolves.toEqual(payload);
+    expect(native.drainWebDiagnostics).toHaveBeenCalledTimes(1);
+  });
+
   test('falls back to Desktop bridge when Android bridge is absent', () => {
     const bridge = {
       enabled: true,

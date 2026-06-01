@@ -287,6 +287,7 @@ import {
   type AppDiagnosticCategory,
   type AppDiagnosticRecord,
 } from './debug/appDiagnostics';
+import {drainNativeWebDiagnosticsToAppLog} from './debug/nativeWebDiagnostics';
 import {startWorkspaceDiagnosticSpan} from './debug/workspaceDiagnostics';
 import {
   formatVoiceInputDiagnosticError,
@@ -5664,6 +5665,31 @@ function App() {
   }, []);
 
   useEffect(() => appDiagnosticStore.subscribe(setAppDiagnosticRecords), []);
+
+  useEffect(() => {
+    if (!isNativeShellHost()) {
+      return undefined;
+    }
+    let cancelled = false;
+    const drain = () => {
+      if (!cancelled) {
+        void drainNativeWebDiagnosticsToAppLog();
+      }
+    };
+    drain();
+    const interval = window.setInterval(drain, 20000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (settingsDetailView !== 'debugLogs') {
+      return;
+    }
+    void drainNativeWebDiagnosticsToAppLog();
+  }, [settingsDetailView]);
 
   useEffect(() => {
     registryDebugStore.setEnabled(registryDebug);
@@ -14889,7 +14915,8 @@ function App() {
   };
 
   const uploadDebugLogs = async () => {
-    const records = filterAppDiagnosticRecords(appDiagnosticRecords, {
+    await drainNativeWebDiagnosticsToAppLog();
+    const records = filterAppDiagnosticRecords(appDiagnosticStore.getRecords(), {
       category: selectedDiagnosticCategory,
       levels: ['info', 'warn', 'error'],
     });

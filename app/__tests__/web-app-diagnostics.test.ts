@@ -5,6 +5,7 @@ import {
   formatAppDiagnosticRecordLine,
   serializeAppDiagnosticRecords,
 } from '../web/src/debug/appDiagnostics';
+import {drainNativeWebDiagnosticsToAppLog} from '../web/src/debug/nativeWebDiagnostics';
 import {
   formatVoiceInputDiagnosticError,
   logVoiceInputDiagnostic,
@@ -92,5 +93,39 @@ describe('app diagnostics', () => {
     expect(formatVoiceInputDiagnosticError(error)).toBe(
       'speech provider start failed: speech provider unavailable',
     );
+  });
+
+  test('drains native Web diagnostics into workspace app diagnostics', async () => {
+    const bridge = {
+      drainWebDiagnostics: jest.fn(() => Promise.resolve({
+        records: [
+          {
+            level: 'info',
+            event: 'android_web',
+            details: {
+              nativeEvent: 'remote_asset_success',
+              asset: 'index.html',
+              status: 200,
+            },
+          },
+        ],
+      })),
+    };
+
+    const count = await drainNativeWebDiagnosticsToAppLog(bridge);
+
+    expect(count).toBe(1);
+    expect(appDiagnosticStore.getRecords()).toEqual([
+      expect.objectContaining({
+        category: 'workspace',
+        level: 'info',
+        event: 'android_web',
+        details: {
+          nativeEvent: 'remote_asset_success',
+          asset: 'index.html',
+          status: 200,
+        },
+      }),
+    ]);
   });
 });
