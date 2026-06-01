@@ -96,6 +96,7 @@ The deploy CLI flow will:
   - Linux: `wheelmaker-hub.service`, `wheelmaker-monitor.service`, `wheelmaker-updater.service`
 - write `~/.wheelmaker/release.json` with the published Git SHA
 - start services
+- clean regenerable deploy artifacts: Android JVM probe builds, `~/.wheelmaker/cache/go-build`, `~/.wheelmaker/tmp`, root `web-dev*.log`, and old `~/.wheelmaker/logs/<timestamp>` backups beyond the latest 3
 
 Lifecycle commands after deployment on Windows:
 

@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 )
@@ -309,6 +310,10 @@ func runDeployWithDeps(ctx context.Context, cfg deployConfig, deps deployDeps) e
 			return err
 		}
 	}
+	deps.report("cleaning deploy artifacts")
+	if err := cleanupDeployArtifacts(cfg, deps); err != nil {
+		deps.report("cleanup warning: %v", err)
+	}
 	return nil
 }
 
@@ -359,6 +364,10 @@ func runUpdateWithDeps(ctx context.Context, cfg deployConfig, deps deployDeps) e
 		if err := deps.Services.Start(ctx, false); err != nil {
 			return err
 		}
+	}
+	deps.report("cleaning deploy artifacts")
+	if err := cleanupDeployArtifacts(cfg, deps); err != nil {
+		deps.report("cleanup warning: %v", err)
 	}
 	return nil
 }
@@ -707,6 +716,111 @@ func writeReleaseManifest(ctx context.Context, cfg deployConfig, deps deployDeps
 		return fmt.Errorf("write release manifest: %w", err)
 	}
 	deps.record("write release")
+	return nil
+}
+
+func cleanupDeployArtifacts(cfg deployConfig, deps deployDeps) error {
+	home := wheelMakerHome(cfg)
+	targets := []string{
+		filepath.Join(home, "build", "mobile", "android", "probe-with-jvmargs"),
+		filepath.Join(home, "build", "mobile", "android", "probe-no-jvmargs"),
+		filepath.Join(home, "cache", "go-build"),
+		filepath.Join(home, "tmp"),
+	}
+	var errs []error
+	for _, target := range targets {
+		if err := removeWithinRoot(home, target); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if err := removeRootWebDevLogs(home); err != nil {
+		errs = append(errs, err)
+	}
+	if err := pruneTimestampLogDirs(filepath.Join(home, "logs"), 3); err != nil {
+		errs = append(errs, err)
+	}
+	deps.record("cleanup artifacts")
+	return errors.Join(errs...)
+}
+
+func removeRootWebDevLogs(home string) error {
+	entries, err := os.ReadDir(home)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read home for web dev logs: %w", err)
+	}
+	var errs []error
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		matched, err := filepath.Match("web-dev*.log", entry.Name())
+		if err != nil {
+			return err
+		}
+		if !matched {
+			continue
+		}
+		if err := removeWithinRoot(home, filepath.Join(home, entry.Name())); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func pruneTimestampLogDirs(logDir string, keep int) error {
+	entries, err := os.ReadDir(logDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read historical logs: %w", err)
+	}
+	var dirs []string
+	for _, entry := range entries {
+		if entry.IsDir() && isTimestampLogDir(entry.Name()) {
+			dirs = append(dirs, entry.Name())
+		}
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(dirs)))
+	if len(dirs) <= keep {
+		return nil
+	}
+	var errs []error
+	for _, name := range dirs[keep:] {
+		if err := removeWithinRoot(logDir, filepath.Join(logDir, name)); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+func isTimestampLogDir(name string) bool {
+	_, err := time.Parse("20060102_150405", name)
+	return err == nil
+}
+
+func removeWithinRoot(root string, target string) error {
+	rootAbs, err := filepath.Abs(root)
+	if err != nil {
+		return fmt.Errorf("resolve cleanup root: %w", err)
+	}
+	targetAbs, err := filepath.Abs(target)
+	if err != nil {
+		return fmt.Errorf("resolve cleanup target: %w", err)
+	}
+	rel, err := filepath.Rel(rootAbs, targetAbs)
+	if err != nil {
+		return fmt.Errorf("check cleanup target %s: %w", target, err)
+	}
+	if rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) || filepath.IsAbs(rel) {
+		return fmt.Errorf("refusing to remove path outside cleanup root: %s", target)
+	}
+	if err := os.RemoveAll(targetAbs); err != nil {
+		return fmt.Errorf("remove %s: %w", target, err)
+	}
 	return nil
 }
 

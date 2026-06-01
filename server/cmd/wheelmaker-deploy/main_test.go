@@ -178,6 +178,7 @@ func TestDeployPipelineOrder(t *testing.T) {
 		"service configure",
 		"write release",
 		"service start all",
+		"cleanup artifacts",
 	}
 	if diff := cmpStringSlices(*h.events, want); diff != "" {
 		t.Fatal(diff)
@@ -208,6 +209,7 @@ func TestDeployReportsBuildProgress(t *testing.T) {
 		"installing wheelmaker",
 		"configuring services",
 		"starting services",
+		"cleaning deploy artifacts",
 	)
 }
 
@@ -222,6 +224,7 @@ func TestUpdatePipelineSkipsUpdaterAndConfig(t *testing.T) {
 	}
 	assertEventsDoNotContain(t, *h.events, "wheelmaker-updater")
 	assertEventsDoNotContain(t, *h.events, "service configure")
+	assertEventsContainInOrder(t, *h.events, "cleanup artifacts")
 }
 
 func TestEnsureConfigWritesRunnableWheelMakerDefault(t *testing.T) {
@@ -295,6 +298,75 @@ func TestWriteHelperWrappers(t *testing.T) {
 	assertFileMissing(t, filepath.Join(wheelMakerHome, "stop.bat"))
 	assertFileMissing(t, filepath.Join(wheelMakerHome, "restart.bat"))
 	assertFileMissing(t, filepath.Join(wheelMakerHome, "status.bat"))
+}
+
+func TestCleanupDeployArtifactsPrunesRegenerableFiles(t *testing.T) {
+	h := newDeployHarness(t)
+	home := filepath.Join(h.home, ".wheelmaker")
+	for _, path := range []string{
+		filepath.Join(home, "build", "mobile", "android", "probe-with-jvmargs", "gradle-home", "cache.bin"),
+		filepath.Join(home, "build", "mobile", "android", "probe-no-jvmargs", "gradle-home", "cache.bin"),
+		filepath.Join(home, "cache", "go-build", "cache.bin"),
+		filepath.Join(home, "tmp", "apk-download", "payload.apk"),
+		filepath.Join(home, "web-dev.log"),
+		filepath.Join(home, "web-dev-8083.log"),
+		filepath.Join(home, "web-dev.err.log"),
+		filepath.Join(home, "logs", "20260501_030000", "web-dev.log"),
+		filepath.Join(home, "logs", "20260502_030000", "web-dev.log"),
+		filepath.Join(home, "logs", "20260503_030000", "web-dev.log"),
+		filepath.Join(home, "logs", "20260504_030000", "web-dev.log"),
+	} {
+		writeTestFile(t, path, "garbage")
+	}
+	for _, path := range []string{
+		filepath.Join(home, "config.json"),
+		filepath.Join(home, "db", "client.sqlite3"),
+		filepath.Join(home, "web", "index.html"),
+		filepath.Join(home, "mobile", "android", "WheelMakerAndroid.apk"),
+		filepath.Join(home, "desktop", "WheelMakerDesktop.exe"),
+		filepath.Join(home, "build", runtime.GOOS+"_"+runtime.GOARCH, binaryName("wheelmaker")),
+		filepath.Join(home, "build", "mobile", "android", "gradle-home", "cache.bin"),
+		filepath.Join(home, "log", "hub.log"),
+	} {
+		writeTestFile(t, path, "keep")
+	}
+
+	if err := cleanupDeployArtifacts(h.cfg, h.deps); err != nil {
+		t.Fatalf("cleanupDeployArtifacts: %v", err)
+	}
+
+	for _, path := range []string{
+		filepath.Join(home, "build", "mobile", "android", "probe-with-jvmargs"),
+		filepath.Join(home, "build", "mobile", "android", "probe-no-jvmargs"),
+		filepath.Join(home, "cache", "go-build"),
+		filepath.Join(home, "tmp"),
+		filepath.Join(home, "web-dev.log"),
+		filepath.Join(home, "web-dev-8083.log"),
+		filepath.Join(home, "web-dev.err.log"),
+		filepath.Join(home, "logs", "20260501_030000"),
+	} {
+		assertFileMissing(t, path)
+	}
+	for _, path := range []string{
+		filepath.Join(home, "logs", "20260502_030000"),
+		filepath.Join(home, "logs", "20260503_030000"),
+		filepath.Join(home, "logs", "20260504_030000"),
+	} {
+		assertPathExists(t, path)
+	}
+	for _, path := range []string{
+		filepath.Join(home, "config.json"),
+		filepath.Join(home, "db", "client.sqlite3"),
+		filepath.Join(home, "web", "index.html"),
+		filepath.Join(home, "mobile", "android", "WheelMakerAndroid.apk"),
+		filepath.Join(home, "desktop", "WheelMakerDesktop.exe"),
+		filepath.Join(home, "build", runtime.GOOS+"_"+runtime.GOARCH, binaryName("wheelmaker")),
+		filepath.Join(home, "build", "mobile", "android", "gradle-home", "cache.bin"),
+		filepath.Join(home, "log", "hub.log"),
+	} {
+		assertFileContains(t, path, "keep")
+	}
+	assertEventsContainInOrder(t, *h.events, "cleanup artifacts")
 }
 
 func TestBootstrapBuildsTempDeployAndExecsUpdate(t *testing.T) {
@@ -412,5 +484,22 @@ func assertFileMissing(t *testing.T, path string) {
 		t.Fatalf("%s should not exist", path)
 	} else if !os.IsNotExist(err) {
 		t.Fatalf("stat %s: %v", path, err)
+	}
+}
+
+func assertPathExists(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("%s should exist: %v", path, err)
+	}
+}
+
+func writeTestFile(t *testing.T, path string, body string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
 	}
 }
