@@ -178,7 +178,6 @@ func parseArgs(args []string) (deployConfig, error) {
 		cfg.NoInstall = true
 		cfg.NoRestart = true
 		cfg.NoConfig = true
-		cfg.NoWeb = true
 		cfg.NoUpdater = true
 	}
 	return cfg, nil

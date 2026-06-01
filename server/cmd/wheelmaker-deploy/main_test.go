@@ -45,6 +45,20 @@ func TestParseUpdateDefaults(t *testing.T) {
 	}
 }
 
+func TestParseBootstrapUpdatePublishesWebByDefault(t *testing.T) {
+	cfg := parseDeployArgsForTest(t, []string{"bootstrap-update"})
+	if cfg.Mode != modeBootstrapUpdate {
+		t.Fatalf("mode=%v", cfg.Mode)
+	}
+	if cfg.NoWeb {
+		t.Fatalf("bootstrap-update should publish web by default: %+v", cfg)
+	}
+	explicitNoWeb := parseDeployArgsForTest(t, []string{"bootstrap-update", "--no-web"})
+	if !explicitNoWeb.NoWeb {
+		t.Fatalf("bootstrap-update --no-web should disable web publish: %+v", explicitNoWeb)
+	}
+}
+
 func TestReservedCommandsReturnNotImplemented(t *testing.T) {
 	for _, args := range [][]string{{"upgrade-updater"}, {"service", "uninstall"}} {
 		err := runDeployCLIForTest(t, args)
