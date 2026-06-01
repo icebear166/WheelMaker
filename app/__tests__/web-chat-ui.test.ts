@@ -724,7 +724,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain("if (event.key === 'Escape') {");
     expect(mainTsx).toContain("if (tab !== 'chat' || sidebarSettingsOpen) {");
     expect(mainTsx).toContain('chatHubMenuRef.current?.contains(target)');
-    expect(mainTsx).toContain("aria-label={mobile ? `Show connected hubs, ${chatHubSummaryLabel}, ${chatHubProjectLabel}` : 'Show connected hubs'}");
+    expect(mainTsx).toContain("aria-label={`Show connected hubs, ${chatHubSummaryLabel}, ${chatHubProjectLabel}`}");
     expect(mainTsx).toContain('aria-expanded={chatHubMenuOpen}');
     expect(mainTsx).toContain("const chatHubSummaryLabel = `${hubCount} ${hubCount === 1 ? 'Hub' : 'Hubs'}`;");
     expect(mainTsx).toContain("const chatHubProjectLabel = `${projectCount} ${projectCount === 1 ? 'Project' : 'Projects'}`;");
@@ -753,7 +753,7 @@ describe('web chat integration', () => {
       /<div className="mobile-chat-toolbar" aria-label="Chat tools">[\s\S]*?title="Open settings"[\s\S]*?<\/div>[\s\S]*?\{renderChatHubSummary\(true\)\}[\s\S]*?\{renderChatHeaderSearchControls\(true\)\}/,
     );
     expect(mainTsx).toMatch(
-      /<div className=\{`sidebar-title-row\$\{chatSidebarTitleSearchOpen \? ' search-open' : ''\}`\}>[\s\S]*?<span className="sidebar-title-text">\{wideSidebarTitle\}<\/span>[\s\S]*?\{renderChatHubSummary\(\)\}[\s\S]*?\{renderChatHeaderSearchControls\(false\)\}/,
+      /<div className=\{`sidebar-title-row\$\{chatSidebarTitleSearchOpen \? ' search-open' : ''\}`\}>[\s\S]*?\{tab === 'chat' && !sidebarSettingsOpen \? \([\s\S]*?\{!chatSidebarTitleSearchOpen \? <span className="sidebar-title-text">\{wideSidebarTitle\}<\/span> : null\}[\s\S]*?<div className="chat-sidebar-title-actions">[\s\S]*?\{renderChatHubSummary\(\)\}[\s\S]*?\{renderChatHeaderSearchControls\(false\)\}/,
     );
     const renderMainStart = mainTsx.indexOf('const renderMain = () => {');
     const chatMainStart = mainTsx.indexOf("if (tab === 'chat') {", renderMainStart);
@@ -790,6 +790,8 @@ describe('web chat integration', () => {
     const mobileChatHubSlotBlock = stylesCss.match(/\.mobile-chat-hub-slot \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(mobileChatHubSlotBlock).toContain('margin-left: auto;');
     expect(stylesCss).toContain('.sidebar-title-row .chat-hub-summary {');
+    expect(stylesCss).toContain('.chat-sidebar-title-actions {');
+    expect(stylesCss).toContain('.sidebar-title-row.search-open .chat-sidebar-title-actions {');
     expect(stylesCss).toContain('.chat-hub-summary {');
     expect(stylesCss).toContain('.chat-hub-summary-button {');
     expect(stylesCss).toContain('.mobile-chat-drawer-header .chat-header-search-control.compact .session-search-icon-btn {');

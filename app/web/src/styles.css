@@ -3358,9 +3358,31 @@ textarea,
   text-overflow: ellipsis;
 }
 
+.chat-sidebar-title-actions {
+  min-width: 0;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
 .sidebar-title-row .chat-hub-summary {
   margin-left: 0;
   position: static;
+}
+
+.sidebar-title-row .chat-hub-summary-button {
+  max-width: min(154px, 48vw);
+}
+
+.sidebar-title-row .chat-header-search-wrap {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+.sidebar-title-row .chat-header-search-status {
+  display: none;
 }
 
 .sidebar-title-row .chat-hub-popover {
@@ -3371,11 +3393,25 @@ textarea,
 }
 
 .sidebar-title-row.search-open {
+  flex: 0 0 34px;
+  min-height: 34px;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 8px;
+}
+
+.sidebar-title-row.search-open .chat-sidebar-title-actions {
+  flex: 1 1 auto;
+  margin-left: 0;
+  justify-content: flex-start;
+}
+
+.sidebar-title-row.search-open .chat-hub-summary {
   flex: 0 0 auto;
-  min-height: 58px;
-  align-items: stretch;
-  justify-content: center;
-  padding: 6px 8px;
+}
+
+.sidebar-title-row.search-open .chat-header-search-wrap {
+  min-width: 0;
 }
 
 .sidebar-title-row .chat-header-search-control.compact {
@@ -5603,6 +5639,9 @@ textarea,
 }
 
 .mobile-chat-drawer-header .chat-hub-summary-copy {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
   line-height: 1;
 }
 
@@ -6497,9 +6536,10 @@ textarea,
 .chat-hub-summary-copy {
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  line-height: 1.05;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  line-height: 1;
 }
 
 .chat-hub-summary-project-label {

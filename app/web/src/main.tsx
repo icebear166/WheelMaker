@@ -5779,7 +5779,7 @@ function App() {
         <button
           type="button"
           className="chat-hub-summary-button"
-          aria-label={mobile ? `Show connected hubs, ${chatHubSummaryLabel}, ${chatHubProjectLabel}` : 'Show connected hubs'}
+          aria-label={`Show connected hubs, ${chatHubSummaryLabel}, ${chatHubProjectLabel}`}
           aria-haspopup="menu"
           aria-expanded={chatHubMenuOpen}
           onClick={() => {
@@ -5790,14 +5790,10 @@ function App() {
             setChatHubMenuOpen(open => !open);
           }}
         >
-          {mobile ? (
-            <span className="chat-hub-summary-copy">
-              <span className="chat-hub-summary-label">{chatHubSummaryLabel}</span>
-              <span className="chat-hub-summary-project-label">{chatHubProjectLabel}</span>
-            </span>
-          ) : (
+          <span className="chat-hub-summary-copy">
             <span className="chat-hub-summary-label">{chatHubSummaryLabel}</span>
-          )}
+            <span className="chat-hub-summary-project-label">{chatHubProjectLabel}</span>
+          </span>
           <span className="codicon codicon-chevron-down" aria-hidden="true" />
         </button>
         {chatHubMenuOpen ? (
@@ -15490,16 +15486,16 @@ function App() {
         ) : null}
         {isWide ? (
           <div className={`sidebar-title-row${chatSidebarTitleSearchOpen ? ' search-open' : ''}`}>
-            {chatSidebarTitleSearchOpen ? renderChatHeaderSearchControls(false) : (
+            {tab === 'chat' && !sidebarSettingsOpen ? (
               <>
-                <span className="sidebar-title-text">{wideSidebarTitle}</span>
-                {tab === 'chat' && !sidebarSettingsOpen ? (
-                  <>
-                    {renderChatHubSummary()}
-                    {renderChatHeaderSearchControls(false)}
-                  </>
-                ) : null}
+                {!chatSidebarTitleSearchOpen ? <span className="sidebar-title-text">{wideSidebarTitle}</span> : null}
+                <div className="chat-sidebar-title-actions">
+                  {renderChatHubSummary()}
+                  {renderChatHeaderSearchControls(false)}
+                </div>
               </>
+            ) : (
+              <span className="sidebar-title-text">{wideSidebarTitle}</span>
             )}
           </div>
         ) : null}

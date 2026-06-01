@@ -60,6 +60,8 @@ describe('web session search UI wiring', () => {
     const wideHeader = main.slice(wideHeaderStart, wideHeaderEnd);
     expect(wideHeader).toContain('renderChatHeaderSearchControls(false)');
     expect(wideHeader).toContain('renderChatHubSummary()');
+    expect(wideHeader).toContain('className="chat-sidebar-title-actions"');
+    expect(wideHeader).toContain('{!chatSidebarTitleSearchOpen ? <span className="sidebar-title-text">{wideSidebarTitle}</span> : null}');
     expect(wideHeader.indexOf('renderChatHubSummary()')).toBeLessThan(wideHeader.lastIndexOf('renderChatHeaderSearchControls(false)'));
 
     const wideNavStart = main.indexOf('const renderWideProjectSessionNav = () =>');
@@ -82,8 +84,14 @@ describe('web session search UI wiring', () => {
     expect(styles).toContain('.chat-header-search-control.open');
     expect(styles).toContain('.chat-header-search-status');
     expect(styles).toContain('.sidebar-title-row.search-open');
+    expect(styles).toContain('.chat-sidebar-title-actions');
+    expect(styles).toContain('.sidebar-title-row.search-open .chat-sidebar-title-actions');
     expect(styles).toContain('.mobile-chat-drawer-header.search-open');
     expect(styles).not.toContain('min-height: calc(var(--wm-safe-area-top) + 66px);');
+    const desktopSearchOpenBlock = styles.match(/\.sidebar-title-row\.search-open \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(desktopSearchOpenBlock).toContain('flex: 0 0 34px;');
+    expect(desktopSearchOpenBlock).toContain('min-height: 34px;');
+    expect(desktopSearchOpenBlock).not.toContain('min-height: 58px;');
   });
 
   test('renders full Hub labels and aggregate header search status text', () => {
@@ -93,6 +101,16 @@ describe('web session search UI wiring', () => {
 
     expect(main).toContain("const chatHubSummaryLabel = `${hubCount} ${hubCount === 1 ? 'Hub' : 'Hubs'}`;");
     expect(main).toContain("const chatHubProjectLabel = `${projectCount} ${projectCount === 1 ? 'Project' : 'Projects'}`;");
+    const hubSummaryStart = main.indexOf('const renderChatHubSummary = useCallback((mobile = false) => {');
+    const hubSummaryEnd = main.indexOf('const floatingBaseBounds = useMemo(() => {', hubSummaryStart);
+    expect(hubSummaryStart).toBeGreaterThanOrEqual(0);
+    expect(hubSummaryEnd).toBeGreaterThan(hubSummaryStart);
+    const hubSummary = main.slice(hubSummaryStart, hubSummaryEnd);
+    expect(hubSummary).toContain('<span className="chat-hub-summary-copy">');
+    expect(hubSummary.indexOf('<span className="chat-hub-summary-label">{chatHubSummaryLabel}</span>')).toBeLessThan(
+      hubSummary.indexOf('<span className="chat-hub-summary-project-label">{chatHubProjectLabel}</span>'),
+    );
+    expect(hubSummary).not.toContain('{mobile ? (');
     expect(main).toContain('const sessionSearchProjectDoneCount = useMemo(');
     expect(main).toContain("`Searching ${sessionSearchProjectDoneCount}/${sortedProjectItems.length} projects`");
     expect(main).toContain('parts.push(`${sessionSearchErrorCount} error${sessionSearchErrorCount === 1 ? \'\' : \'s\'}`);');
@@ -105,8 +123,14 @@ describe('web session search UI wiring', () => {
     expect(main).not.toContain("row.result.source !== 'title'");
     expect(main).toContain('title={title}');
 
-    const hubButtonBlock = styles.match(/\.chat-hub-summary-button \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const hubButtonBlock = (styles.match(/\.chat-hub-summary-button \{[\s\S]*?\n\}/g) ?? [])
+      .find(block => block.includes('height: 24px;')) ?? '';
     expect(hubButtonBlock).toContain('white-space: nowrap;');
+    const hubSummaryCopyBlock = (styles.match(/(?:^|\n)\.chat-hub-summary-copy \{[\s\S]*?\n\}/g) ?? [])[0] ?? '';
+    expect(hubSummaryCopyBlock).toContain('flex-direction: row;');
+    expect(hubSummaryCopyBlock).toContain('gap: 4px;');
+    const mobileHubSummaryCopyBlock = styles.match(/\.mobile-chat-drawer-header \.chat-hub-summary-copy \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(mobileHubSummaryCopyBlock).toContain('flex-direction: column;');
     expect(styles).not.toContain('.chat-hub-summary-label {\n  display: none;');
     expect(styles).not.toContain('.chat-hub-summary-count {');
   });
