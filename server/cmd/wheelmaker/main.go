@@ -38,12 +38,13 @@ func run() error {
 	registryServer := fs.Bool("registry-server", false, "run registry websocket server mode")
 	registryAddr := fs.String("registry-addr", ":9630", "registry websocket listen address")
 	registryToken := fs.String("registry-token", "", "registry shared token (optional)")
+	wmDir := fs.String("dir", "", "WheelMaker home directory (default: ~/.wheelmaker)")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return err
 	}
 
 	if !*registryServer && !*registryWorker && !*hubWorker && !*daemonWorker {
-		ranAsService, err := runAsWindowsServiceIfNeeded(fs.Args())
+		ranAsService, err := runAsWindowsServiceIfNeeded(fs.Args(), *wmDir)
 		if err != nil {
 			return err
 		}
@@ -56,20 +57,20 @@ func run() error {
 	case *registryServer:
 		return runRegistryServer(*registryAddr, *registryToken)
 	case *registryWorker:
-		return runRegistryWorker()
+		return runRegistryWorker(*wmDir)
 	case *hubWorker:
-		return runHubWorker()
+		return runHubWorker(*wmDir)
 	case *daemonWorker:
-		return runHubWorker()
+		return runHubWorker(*wmDir)
 	case *daemonMode:
 		restoreStdio, err := redirectProcessStdioToDevNull()
 		if err != nil {
 			return err
 		}
 		defer restoreStdio()
-		return runGuardian(fs.Args())
+		return runGuardian(fs.Args(), *wmDir)
 	default:
-		return runHubWorker()
+		return runHubWorker(*wmDir)
 	}
 }
 
@@ -84,20 +85,21 @@ func runRegistryServer(addr, token string) error {
 	return s.Run(ctx)
 }
 
-func runHubWorker() error {
+func runHubWorker(stateDir string) error {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("home dir: %w", err)
 	}
 
-	cfgPath := filepath.Join(home, ".wheelmaker", "config.json")
-	dbPath := filepath.Join(home, ".wheelmaker", "db", "client.sqlite3")
+	baseDir := wheelMakerStateDir(home, stateDir)
+	cfgPath := filepath.Join(baseDir, "config.json")
+	dbPath := filepath.Join(baseDir, "db", "client.sqlite3")
 
 	cfg, err := logger.LoadConfig(cfgPath)
 	if err != nil {
 		return fmt.Errorf("cannot load config.json at %s: %w\n\nCreate one based on config.example.json in the project root.", cfgPath, err)
 	}
-	hubLogPath := filepath.Join(wheelmakerLogDir(home), "hub.log")
+	hubLogPath := filepath.Join(baseDir, "log", "hub.log")
 
 	if err := logger.Setup(logger.LoggerConfig{
 		Level:   logger.ParseLevel(cfg.Log.Level),
@@ -127,17 +129,18 @@ func runHubWorker() error {
 	return nil
 }
 
-func runRegistryWorker() error {
+func runRegistryWorker(stateDir string) error {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("home dir: %w", err)
 	}
-	cfgPath := filepath.Join(home, ".wheelmaker", "config.json")
+	baseDir := wheelMakerStateDir(home, stateDir)
+	cfgPath := filepath.Join(baseDir, "config.json")
 	cfg, err := logger.LoadConfig(cfgPath)
 	if err != nil {
 		return fmt.Errorf("cannot load config.json at %s: %w\n\nCreate one based on config.example.json in the project root.", cfgPath, err)
 	}
-	regLog := filepath.Join(wheelmakerLogDir(home), "registry.log")
+	regLog := filepath.Join(baseDir, "log", "registry.log")
 
 	if err := logger.Setup(logger.LoggerConfig{
 		Level:   logger.ParseLevel(cfg.Log.Level),
@@ -176,13 +179,20 @@ func wheelmakerLogDir(home string) string {
 	return filepath.Join(home, ".wheelmaker", "log")
 }
 
-func runAsWindowsServiceIfNeeded(workerArgs []string) (bool, error) {
+func runAsWindowsServiceIfNeeded(workerArgs []string, stateDir string) (bool, error) {
 	sanitizedArgs := sanitizeWorkerArgs(workerArgs)
 	return winsvc.RunIfWindowsService(
 		wheelmakerWindowsServiceName,
 		func(ctx context.Context) error {
-			return runGuardianWithContext(ctx, sanitizedArgs)
+			return runGuardianWithContext(ctx, sanitizedArgs, stateDir)
 		},
 		nil,
 	)
+}
+
+func wheelMakerStateDir(home string, override string) string {
+	if override != "" {
+		return filepath.Clean(override)
+	}
+	return filepath.Join(home, ".wheelmaker")
 }

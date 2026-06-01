@@ -40,10 +40,11 @@ func (m serviceManager) CheckDeployPrerequisites(ctx context.Context) error {
 }
 
 func (m serviceManager) Configure(ctx context.Context) error {
-	if err := m.ensureService(ctx, windowsHubService, filepath.Join(m.cfg.InstallDir, "wheelmaker.exe"), ""); err != nil {
+	stateDir := filepath.Dir(m.cfg.InstallDir)
+	if err := m.ensureService(ctx, windowsHubService, filepath.Join(m.cfg.InstallDir, "wheelmaker.exe"), windowsStateDirArgs(stateDir)); err != nil {
 		return err
 	}
-	if err := m.ensureService(ctx, windowsMonitorService, filepath.Join(m.cfg.InstallDir, "wheelmaker-monitor.exe"), ""); err != nil {
+	if err := m.ensureService(ctx, windowsMonitorService, filepath.Join(m.cfg.InstallDir, "wheelmaker-monitor.exe"), windowsStateDirArgs(stateDir)); err != nil {
 		return err
 	}
 	if !m.cfg.NoUpdater {
@@ -109,4 +110,8 @@ func (m serviceManager) serviceNames(includeUpdater bool) []string {
 
 func psQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
+}
+
+func windowsStateDirArgs(stateDir string) string {
+	return fmt.Sprintf(`--dir "%s"`, strings.ReplaceAll(stateDir, `"`, `\"`))
 }

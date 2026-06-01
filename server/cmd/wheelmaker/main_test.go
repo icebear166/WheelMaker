@@ -25,6 +25,19 @@ func TestSanitizeWorkerArgs(t *testing.T) {
 	}
 }
 
+func TestWorkerArgsWithStateDirAddsExplicitDir(t *testing.T) {
+	got := workerArgsWithStateDir([]string{"--foo", "bar"}, `C:\Users\me\.wheelmaker`)
+	want := []string{"--foo", "bar", "--dir", `C:\Users\me\.wheelmaker`}
+	if len(got) != len(want) {
+		t.Fatalf("workerArgsWithStateDir()=%v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("workerArgsWithStateDir()=%v, want %v", got, want)
+		}
+	}
+}
+
 func TestGuardianWorkerSpecsSkipRegistryWorkerWhenRegistryListenDisabled(t *testing.T) {
 	cfg := shared.RegistryConfig{
 		Listen: false,

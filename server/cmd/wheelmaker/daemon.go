@@ -27,13 +27,13 @@ type workerSpec struct {
 	keepPID    int
 }
 
-func runGuardian(workerArgs []string) error {
+func runGuardian(workerArgs []string, stateDir string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	return runGuardianWithContext(ctx, workerArgs)
+	return runGuardianWithContext(ctx, workerArgs, stateDir)
 }
 
-func runGuardianWithContext(ctx context.Context, workerArgs []string) error {
+func runGuardianWithContext(ctx context.Context, workerArgs []string, stateDir string) error {
 	releaseSingleton, err := acquireGuardianSingleton()
 	if err != nil {
 		return err
@@ -45,9 +45,9 @@ func runGuardianWithContext(ctx context.Context, workerArgs []string) error {
 		return fmt.Errorf("resolve executable path: %w", err)
 	}
 	exeName := filepath.Base(exePath)
-	baseArgs := sanitizeWorkerArgs(workerArgs)
+	baseArgs := workerArgsWithStateDir(sanitizeWorkerArgs(workerArgs), stateDir)
 
-	registryCfg, err := loadGuardianRegistryConfig()
+	registryCfg, err := loadGuardianRegistryConfig(stateDir)
 	if err != nil {
 		return err
 	}
@@ -79,12 +79,12 @@ func runGuardianWithContext(ctx context.Context, workerArgs []string) error {
 	}
 }
 
-func loadGuardianRegistryConfig() (shared.RegistryConfig, error) {
+func loadGuardianRegistryConfig(stateDir string) (shared.RegistryConfig, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return shared.RegistryConfig{}, fmt.Errorf("home dir: %w", err)
 	}
-	cfgPath := filepath.Join(home, ".wheelmaker", "config.json")
+	cfgPath := filepath.Join(wheelMakerStateDir(home, stateDir), "config.json")
 	cfg, err := shared.LoadConfig(cfgPath)
 	if err != nil {
 		return shared.RegistryConfig{}, fmt.Errorf("cannot load config.json at %s: %w", cfgPath, err)
@@ -112,6 +112,15 @@ func sanitizeWorkerArgs(args []string) []string {
 			out = append(out, arg)
 		}
 	}
+	return out
+}
+
+func workerArgsWithStateDir(args []string, stateDir string) []string {
+	if stateDir == "" {
+		return args
+	}
+	out := append([]string{}, args...)
+	out = append(out, "--dir", filepath.Clean(stateDir))
 	return out
 }
 
