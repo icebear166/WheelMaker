@@ -105,19 +105,19 @@ func serveRemoteDesktopAsset(w http.ResponseWriter, r *http.Request, name string
 	if !ok {
 		return false
 	}
-	if serveRemoteDesktopAssetURL(w, r, remoteURL, webSource) {
+	if serveRemoteDesktopAssetURL(w, r, remoteURL, name, webSource) {
 		return true
 	}
 	if isWorkspaceRoute(name) {
 		indexURL, ok := buildDesktopRemoteAssetURL(remoteBase, "index.html")
 		if ok && indexURL != remoteURL {
-			return serveRemoteDesktopAssetURL(w, r, indexURL, webSource)
+			return serveRemoteDesktopAssetURL(w, r, indexURL, "index.html", webSource)
 		}
 	}
 	return false
 }
 
-func serveRemoteDesktopAssetURL(w http.ResponseWriter, r *http.Request, remoteURL string, webSource *desktopWebSourceRuntime) bool {
+func serveRemoteDesktopAssetURL(w http.ResponseWriter, r *http.Request, remoteURL string, name string, webSource *desktopWebSourceRuntime) bool {
 	resp, err := webSource.httpClient().Get(remoteURL)
 	if err != nil {
 		return false
@@ -125,6 +125,7 @@ func serveRemoteDesktopAssetURL(w http.ResponseWriter, r *http.Request, remoteUR
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotModified {
 		copyDesktopRemoteHeaders(w.Header(), resp.Header)
+		setDesktopAssetCacheControl(w.Header(), name)
 		w.WriteHeader(http.StatusNotModified)
 		webSource.SetActualSource(desktopWebSourceActualRemote)
 		return true
@@ -137,6 +138,7 @@ func serveRemoteDesktopAssetURL(w http.ResponseWriter, r *http.Request, remoteUR
 		return false
 	}
 	copyDesktopRemoteHeaders(w.Header(), resp.Header)
+	setDesktopAssetCacheControl(w.Header(), name)
 	w.WriteHeader(resp.StatusCode)
 	if r.Method != http.MethodHead {
 		_, _ = w.Write(data)
@@ -171,6 +173,10 @@ func serveEmbeddedDesktopAsset(w http.ResponseWriter, r *http.Request, assets fs
 func setDesktopAssetCacheControl(header http.Header, name string) {
 	if value := desktopAssetCacheControl(name); value != "" {
 		header.Set("Cache-Control", value)
+		if value == "no-store" || strings.HasPrefix(value, "no-cache") {
+			header.Set("Pragma", "no-cache")
+			header.Set("Expires", "0")
+		}
 	}
 }
 
@@ -185,7 +191,7 @@ func desktopAssetCacheControl(name string) string {
 	if isImmutableDesktopAsset(base) {
 		return "public, max-age=31536000, immutable"
 	}
-	return ""
+	return "no-cache"
 }
 
 func isImmutableDesktopAsset(base string) bool {
@@ -194,7 +200,7 @@ func isImmutableDesktopAsset(base string) bool {
 		return true
 	}
 	switch ext {
-	case ".woff", ".woff2", ".ttf", ".eot", ".svg":
+	case ".woff", ".woff2", ".svg":
 		return true
 	default:
 		return false
@@ -218,7 +224,6 @@ func buildDesktopRemoteAssetURL(remoteBase string, name string) (string, bool) {
 
 func copyDesktopRemoteHeaders(dst http.Header, src http.Header) {
 	for _, key := range []string{
-		"Cache-Control",
 		"Content-Type",
 		"ETag",
 		"Last-Modified",

@@ -487,6 +487,74 @@ func TestDesktopAssetHandlerPrefersRemoteAndFallsBackToEmbedded(t *testing.T) {
 	}
 }
 
+func TestDesktopAssetHandlerRemoteResponsesUseClientFreshnessHeaders(t *testing.T) {
+	remote := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/", "/index.html", "/service-worker.js":
+			w.Header().Set("Cache-Control", "public, max-age=31536000")
+			_, _ = io.WriteString(w, "<html>remote shell</html>")
+		case "/runtime-config.js", "/web-build.json":
+			w.Header().Set("Cache-Control", "public, max-age=31536000")
+			_, _ = io.WriteString(w, "{}")
+		case "/bundle.abc123.js", "/bundle.abc123.css", "/font.abc123.woff2", "/logo.svg":
+			w.Header().Set("Cache-Control", "no-store")
+			_, _ = io.WriteString(w, "remote asset")
+		case "/misc.txt":
+			_, _ = io.WriteString(w, "remote misc")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer remote.Close()
+
+	runtime := newDesktopWebSourceRuntime(&memoryDesktopWebSourceConfigStore{config: desktopWebSourceConfig{
+		WebSourcePreference: desktopWebSourcePreferenceAuto,
+	}}, remote.Client())
+	runtime.mu.Lock()
+	runtime.config.WebSourcePreference = desktopWebSourcePreferenceAuto
+	runtime.config.RemoteWebURL = remote.URL + "/"
+	runtime.actual = desktopWebSourceActualRemote
+	runtime.actualRemoteURL = remote.URL + "/"
+	runtime.mu.Unlock()
+	handler := newDesktopAssetHandlerWithWebSource(fstest.MapFS{
+		"index.html": {Data: []byte("<html>embedded</html>")},
+	}, runtime)
+
+	tests := []struct {
+		path       string
+		cache      string
+		wantPragma bool
+	}{
+		{path: "/", cache: "no-cache, must-revalidate", wantPragma: true},
+		{path: "/index.html", cache: "no-cache, must-revalidate", wantPragma: true},
+		{path: "/service-worker.js", cache: "no-cache, must-revalidate", wantPragma: true},
+		{path: "/runtime-config.js", cache: "no-store", wantPragma: true},
+		{path: "/web-build.json", cache: "no-store", wantPragma: true},
+		{path: "/bundle.abc123.js", cache: "public, max-age=31536000, immutable"},
+		{path: "/bundle.abc123.css", cache: "public, max-age=31536000, immutable"},
+		{path: "/font.abc123.woff2", cache: "public, max-age=31536000, immutable"},
+		{path: "/logo.svg", cache: "public, max-age=31536000, immutable"},
+		{path: "/misc.txt", cache: "no-cache", wantPragma: true},
+	}
+
+	for _, tt := range tests {
+		req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if got := rec.Header().Get("Cache-Control"); got != tt.cache {
+			t.Fatalf("%s Cache-Control=%q want %q", tt.path, got, tt.cache)
+		}
+		if tt.wantPragma {
+			if got := rec.Header().Get("Pragma"); got != "no-cache" {
+				t.Fatalf("%s Pragma=%q want no-cache", tt.path, got)
+			}
+			if got := rec.Header().Get("Expires"); got != "0" {
+				t.Fatalf("%s Expires=%q want 0", tt.path, got)
+			}
+		}
+	}
+}
+
 func TestDesktopAssetHandlerFallsBackToRemoteIndexForWorkspaceRoute(t *testing.T) {
 	remote := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/index.html" || r.URL.Path == "/" {
