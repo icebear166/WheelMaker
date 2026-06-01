@@ -23,16 +23,17 @@ class StableOriginWebViewClient(
         if (assetName == "ws") {
             return notFoundResponse()
         }
-        remoteResponse(assetName)?.let { return it }
-        embeddedResponse(assetName)?.let { return it }
-        if (isWorkspaceRoute(assetName)) {
-            return embeddedResponse("index.html") ?: notFoundResponse()
+        val remoteBase = webSourceRuntime.remoteBaseForRequest()
+        for (candidate in stableOriginAssetCandidates(assetName, remoteBase)) {
+            when (candidate.source) {
+                STABLE_ORIGIN_SOURCE_REMOTE -> remoteResponse(candidate.assetName, remoteBase)?.let { return it }
+                STABLE_ORIGIN_SOURCE_EMBEDDED -> embeddedResponse(candidate.assetName)?.let { return it }
+            }
         }
         return notFoundResponse()
     }
 
-    private fun remoteResponse(assetName: String): WebResourceResponse? {
-        val remoteBase = webSourceRuntime.remoteBaseForRequest()
+    private fun remoteResponse(assetName: String, remoteBase: String): WebResourceResponse? {
         if (remoteBase.isBlank()) return null
         var connection: HttpURLConnection? = null
         return try {
@@ -112,6 +113,24 @@ fun assetNameForStablePath(path: String): String {
 fun isWorkspaceRoute(assetName: String): Boolean {
     val baseName = assetName.substringAfterLast('/')
     return baseName.isNotBlank() && !baseName.contains('.')
+}
+
+data class StableOriginAssetCandidate(
+    val source: String,
+    val assetName: String
+)
+
+const val STABLE_ORIGIN_SOURCE_REMOTE = "remote"
+const val STABLE_ORIGIN_SOURCE_EMBEDDED = "embedded"
+
+fun stableOriginAssetCandidates(assetName: String, remoteBase: String): List<StableOriginAssetCandidate> {
+    val remoteActive = remoteBase.isNotBlank()
+    val source = if (remoteActive) STABLE_ORIGIN_SOURCE_REMOTE else STABLE_ORIGIN_SOURCE_EMBEDDED
+    val candidates = mutableListOf(StableOriginAssetCandidate(source, assetName))
+    if (isWorkspaceRoute(assetName) && assetName != "index.html") {
+        candidates += StableOriginAssetCandidate(source, "index.html")
+    }
+    return candidates
 }
 
 fun contentTypeForAsset(assetName: String): String {

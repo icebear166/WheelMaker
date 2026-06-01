@@ -28,6 +28,36 @@ class StableOriginPathTest {
     }
 
     @Test
+    fun remoteModeDoesNotUseEmbeddedAssetFallbackCandidates() {
+        assertEquals(
+            listOf(StableOriginAssetCandidate("remote", "bundle.abc123.js")),
+            stableOriginAssetCandidates("bundle.abc123.js", "https://workspace.example.com/")
+        )
+    }
+
+    @Test
+    fun remoteModeFallsBackWorkspaceRoutesToRemoteIndexOnly() {
+        assertEquals(
+            listOf(
+                StableOriginAssetCandidate("remote", "settings/update"),
+                StableOriginAssetCandidate("remote", "index.html")
+            ),
+            stableOriginAssetCandidates("settings/update", "https://workspace.example.com/")
+        )
+    }
+
+    @Test
+    fun embeddedModeKeepsEmbeddedWorkspaceRouteFallback() {
+        assertEquals(
+            listOf(
+                StableOriginAssetCandidate("embedded", "settings/update"),
+                StableOriginAssetCandidate("embedded", "index.html")
+            ),
+            stableOriginAssetCandidates("settings/update", "")
+        )
+    }
+
+    @Test
     fun remoteResponsesKeepClientFreshnessHeadersForVolatileAssets() {
         assertEquals(
             "no-cache, must-revalidate",
