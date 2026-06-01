@@ -653,14 +653,21 @@ func writeHelperWrappers(cfg deployConfig, deps deployDeps) error {
 	if err := os.MkdirAll(home, 0o755); err != nil {
 		return fmt.Errorf("create helper dir: %w", err)
 	}
-	for name, body := range windows {
-		if err := os.WriteFile(filepath.Join(home, name), []byte(body), 0o644); err != nil {
-			return fmt.Errorf("write %s: %w", name, err)
+	active := unix
+	stale := windows
+	mode := os.FileMode(0o755)
+	if runtime.GOOS == "windows" {
+		active = windows
+		stale = unix
+		mode = 0o644
+	}
+	for name := range stale {
+		if err := os.Remove(filepath.Join(home, name)); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove stale %s: %w", name, err)
 		}
 	}
-	for name, body := range unix {
-		path := filepath.Join(home, name)
-		if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
+	for name, body := range active {
+		if err := os.WriteFile(filepath.Join(home, name), []byte(body), mode); err != nil {
 			return fmt.Errorf("write %s: %w", name, err)
 		}
 	}

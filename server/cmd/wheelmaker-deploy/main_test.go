@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -261,17 +262,39 @@ func TestEnsureConfigWritesRunnableWheelMakerDefault(t *testing.T) {
 
 func TestWriteHelperWrappers(t *testing.T) {
 	h := newDeployHarness(t)
+	wheelMakerHome := filepath.Join(h.home, ".wheelmaker")
+	if err := os.MkdirAll(wheelMakerHome, 0o755); err != nil {
+		t.Fatalf("mkdir wheelmaker home: %v", err)
+	}
+	for _, stale := range []string{"start.bat", "stop.bat", "restart.bat", "status.bat", "start.sh", "stop.sh", "restart.sh", "status.sh"} {
+		if err := os.WriteFile(filepath.Join(wheelMakerHome, stale), []byte("stale"), 0o644); err != nil {
+			t.Fatalf("write stale wrapper: %v", err)
+		}
+	}
 	if err := writeHelperWrappers(h.cfg, h.deps); err != nil {
 		t.Fatalf("writeHelperWrappers: %v", err)
 	}
-	assertFileContains(t, filepath.Join(h.home, ".wheelmaker", "start.bat"), "wheelmaker-deploy.exe")
-	assertFileContains(t, filepath.Join(h.home, ".wheelmaker", "start.bat"), "service start")
-	assertFileContains(t, filepath.Join(h.home, ".wheelmaker", "stop.bat"), "service stop")
-	assertFileContains(t, filepath.Join(h.home, ".wheelmaker", "restart.bat"), "service restart")
-	assertFileContains(t, filepath.Join(h.home, ".wheelmaker", "status.bat"), "service status")
-	assertFileContains(t, filepath.Join(h.home, ".wheelmaker", "start.sh"), "wheelmaker-deploy")
-	assertFileContains(t, filepath.Join(h.home, ".wheelmaker", "start.sh"), "service start")
-	assertFileContains(t, filepath.Join(h.home, ".wheelmaker", "stop.sh"), "service stop")
+	if runtime.GOOS == "windows" {
+		assertFileContains(t, filepath.Join(wheelMakerHome, "start.bat"), "wheelmaker-deploy.exe")
+		assertFileContains(t, filepath.Join(wheelMakerHome, "start.bat"), "service start")
+		assertFileContains(t, filepath.Join(wheelMakerHome, "stop.bat"), "service stop")
+		assertFileContains(t, filepath.Join(wheelMakerHome, "restart.bat"), "service restart")
+		assertFileContains(t, filepath.Join(wheelMakerHome, "status.bat"), "service status")
+		assertFileMissing(t, filepath.Join(wheelMakerHome, "start.sh"))
+		assertFileMissing(t, filepath.Join(wheelMakerHome, "stop.sh"))
+		assertFileMissing(t, filepath.Join(wheelMakerHome, "restart.sh"))
+		assertFileMissing(t, filepath.Join(wheelMakerHome, "status.sh"))
+		return
+	}
+	assertFileContains(t, filepath.Join(wheelMakerHome, "start.sh"), "wheelmaker-deploy")
+	assertFileContains(t, filepath.Join(wheelMakerHome, "start.sh"), "service start")
+	assertFileContains(t, filepath.Join(wheelMakerHome, "stop.sh"), "service stop")
+	assertFileContains(t, filepath.Join(wheelMakerHome, "restart.sh"), "service restart")
+	assertFileContains(t, filepath.Join(wheelMakerHome, "status.sh"), "service status")
+	assertFileMissing(t, filepath.Join(wheelMakerHome, "start.bat"))
+	assertFileMissing(t, filepath.Join(wheelMakerHome, "stop.bat"))
+	assertFileMissing(t, filepath.Join(wheelMakerHome, "restart.bat"))
+	assertFileMissing(t, filepath.Join(wheelMakerHome, "status.bat"))
 }
 
 func TestBootstrapBuildsTempDeployAndExecsUpdate(t *testing.T) {
@@ -380,5 +403,14 @@ func assertFileContains(t *testing.T, path string, needle string) {
 	}
 	if !strings.Contains(string(raw), needle) {
 		t.Fatalf("%s missing %q:\n%s", path, needle, string(raw))
+	}
+}
+
+func assertFileMissing(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Stat(path); err == nil {
+		t.Fatalf("%s should not exist", path)
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("stat %s: %v", path, err)
 	}
 }

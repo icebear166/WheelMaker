@@ -64,7 +64,7 @@ go build -o bin/windows_amd64/wheelmaker-updater.exe ./cmd/wheelmaker-updater/
 # Root-level helper scripts
 ../deploy.bat                    # build temporary wheelmaker-deploy and run full deploy
 ../deploy.sh                     # macOS/Linux full deploy
-# deployed wrappers under ~/.wheelmaker: start/stop/restart/status .bat and .sh
+# deployed wrappers under ~/.wheelmaker: Windows .bat, macOS/Linux .sh
 ```
 
 ## Key Invariants (do not break)

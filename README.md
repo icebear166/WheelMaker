@@ -89,7 +89,7 @@ The deploy CLI flow will:
 - stop services before replacing binaries
 - install binaries to `~/.wheelmaker/bin`
 - preserve an existing `~/.wheelmaker/config.json`, or create a runnable default for this WheelMaker checkout with the registry listening locally
-- generate `start`, `stop`, `restart`, and `status` wrapper scripts under `~/.wheelmaker`
+- generate platform-specific `start`, `stop`, `restart`, and `status` wrapper scripts under `~/.wheelmaker`
 - register or update services:
   - Windows: `WheelMaker`, `WheelMakerMonitor`, `WheelMakerUpdater`
   - macOS: `com.wheelmaker.hub`, `com.wheelmaker.monitor`, `com.wheelmaker.updater`
@@ -97,7 +97,7 @@ The deploy CLI flow will:
 - write `~/.wheelmaker/release.json` with the published Git SHA
 - start services
 
-Lifecycle commands after deployment:
+Lifecycle commands after deployment on Windows:
 
 ```powershell
 ~/.wheelmaker/start.bat
@@ -105,6 +105,8 @@ Lifecycle commands after deployment:
 ~/.wheelmaker/restart.bat
 ~/.wheelmaker/status.bat
 ```
+
+Lifecycle commands after deployment on macOS/Linux:
 
 ```bash
 ~/.wheelmaker/start.sh
@@ -415,12 +417,16 @@ On iOS, the installed app opens from the home screen in a standalone-style windo
 
 ### 8. Service operations
 
+Windows:
+
 ```powershell
 ~/.wheelmaker/start.bat
 ~/.wheelmaker/stop.bat
 ~/.wheelmaker/restart.bat
 ~/.wheelmaker/status.bat
 ```
+
+macOS/Linux:
 
 ```bash
 ~/.wheelmaker/start.sh
