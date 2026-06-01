@@ -114,6 +114,17 @@ export function isNativeWebViewHost(
   return Boolean(nativeWindow?.WheelMakerAndroid || nativeWindow?.WheelMakerAndroidNative);
 }
 
+export function isNativeShellHost(
+  target: unknown = typeof window === 'undefined' ? undefined : window,
+): boolean {
+  const nativeWindow = target as Partial<NativeWindow> | undefined;
+  return Boolean(
+    nativeWindow?.WheelMakerAndroid ||
+    nativeWindow?.WheelMakerAndroidNative ||
+    nativeWindow?.WheelMakerDesktop,
+  );
+}
+
 export function submitNativeRemoteWebCandidate(registryAddress: string): void {
   const bridge = getNativeWebSourceBridge();
   const submit = bridge?.setRemoteWebCandidate;

@@ -254,17 +254,12 @@ server {
         add_header Cache-Control "no-cache, must-revalidate" always;
     }
 
-    location = /runtime-config.js {
-        try_files /runtime-config.js =404;
-        add_header Cache-Control "no-store" always;
+    location = /manifest.webmanifest {
+        try_files /manifest.webmanifest =404;
+        add_header Cache-Control "no-cache, must-revalidate" always;
     }
 
-    location = /web-build.json {
-        try_files /web-build.json =404;
-        add_header Cache-Control "no-store" always;
-    }
-
-    location ~* ^/bundle\..+\.(js|css)$ {
+    location ~* \.[a-z0-9]+$ {
         try_files $uri =404;
         add_header Cache-Control "public, max-age=31536000, immutable" always;
     }
@@ -327,8 +322,7 @@ This will:
 
 1. build the Web frontend
 2. export the assets to `~\.wheelmaker\web`
-3. write `web-build.json` for PWA freshness checks
-4. refresh the files served by the Nginx root path
+3. refresh the files served by the Nginx root path
 
 ### 6. Build Android APK
 
@@ -372,7 +366,6 @@ WheelMaker Web already ships with:
 - `manifest.webmanifest`
 - `service-worker.js`
 - `display: "standalone"`
-- `web-build.json` freshness metadata
 
 So once the site is served over **HTTPS**, modern browsers can install it as a local PWA.
 
@@ -413,7 +406,7 @@ On iOS, the installed app opens from the home screen in a standalone-style windo
 
 - the app opens without normal browser tabs
 - the service worker keeps notifications available but does not persist the HTML/JS/CSS app shell
-- the app checks `web-build.json` on startup and resume; if a new published SHA is detected, it activates the latest service worker, clears old WheelMaker PWA caches, and reloads once
+- app updates are picked up through the revalidated `index.html` on refresh or reopen
 - local notifications and PWA-related capabilities can be enabled by the browser when supported
 
 ### 8. Service operations

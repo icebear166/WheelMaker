@@ -16,8 +16,6 @@ describe('web release exporter', () => {
       env: {
         ...process.env,
         WHEELMAKER_WEB_TARGET: target,
-        WHEELMAKER_WEB_BUILD_SHA: 'sha-for-test',
-        WHEELMAKER_WEB_BUILD_TIME: '2026-05-29T00:00:00.000Z',
       },
       encoding: 'utf8',
     });
@@ -27,15 +25,8 @@ describe('web release exporter', () => {
     expect(fs.existsSync(path.join(target, 'service-worker.js'))).toBe(true);
     expect(fs.existsSync(path.join(target, 'icons', 'icon.svg'))).toBe(true);
     expect(fs.existsSync(path.join(target, 'icons', 'icon.png'))).toBe(false);
-
-    const buildManifest = JSON.parse(fs.readFileSync(path.join(target, 'web-build.json'), 'utf8'));
-    expect(buildManifest).toMatchObject({
-      schemaVersion: 1,
-      sha: 'sha-for-test',
-      builtAt: '2026-05-29T00:00:00.000Z',
-    });
-    expect(buildManifest.assets['bundle.test.js']).toMatch(/^sha256:[a-f0-9]{64}$/);
-    expect(buildManifest.assets['bundle.test.css']).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(fs.existsSync(path.join(target, 'web-build.json'))).toBe(false);
+    expect(fs.existsSync(path.join(target, 'runtime-config.js'))).toBe(false);
   });
 
   test('release script is wired through npm without powershell', () => {

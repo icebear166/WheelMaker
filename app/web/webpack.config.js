@@ -1,25 +1,11 @@
 const path = require('path');
 const os = require('os');
-const { execFileSync } = require('child_process');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const TerserPlugin = require('terser-webpack-plugin');
-const webpack = require('webpack');
 
 function envFlag(value) {
   return ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase());
-}
-
-function gitValue(args) {
-  try {
-    return execFileSync('git', args, {
-      cwd: path.resolve(__dirname, '..'),
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
-  } catch {
-    return '';
-  }
 }
 
 function jsFilename(isProduction) {
@@ -54,13 +40,10 @@ module.exports = (_env = {}, argv = {}) => {
   const webTarget = process.env.WHEELMAKER_WEB_TARGET
     ? path.resolve(process.env.WHEELMAKER_WEB_TARGET)
     : path.join(os.homedir(), '.wheelmaker', 'web');
-  const webBuildSha = process.env.WHEELMAKER_WEB_BUILD_SHA || gitValue(['rev-parse', 'HEAD']);
-  const webBuildTime = process.env.WHEELMAKER_WEB_BUILD_TIME || new Date().toISOString();
 
   return {
     mode,
     entry: {
-      'runtime-config': path.resolve(__dirname, 'public/runtime-config.js'),
       bundle: path.resolve(__dirname, 'src/main.tsx'),
     },
     output: {
@@ -107,10 +90,6 @@ module.exports = (_env = {}, argv = {}) => {
       new HtmlWebpackPlugin({
         template: path.resolve(__dirname, 'public/index.html'),
         inject: false,
-      }),
-      new webpack.DefinePlugin({
-        __WHEELMAKER_WEB_BUILD_SHA__: JSON.stringify(webBuildSha),
-        __WHEELMAKER_WEB_BUILD_TIME__: JSON.stringify(webBuildTime),
       }),
       ...(isProduction ? [new MiniCssExtractPlugin({
         filename: cssFilename(isProduction),

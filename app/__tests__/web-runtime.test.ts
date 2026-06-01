@@ -1,10 +1,6 @@
 import {getDefaultRegistryAddress, toRegistryWsUrl} from '../web/src/runtime';
 
 type TestWindow = {
-  __WHEELMAKER_RUNTIME_CONFIG__?: {
-    defaultRegistryAddress?: string;
-    defaultRegistryPort?: number;
-  };
   location: {
     hostname: string;
     host: string;
@@ -47,9 +43,6 @@ describe('runtime Registry address resolution', () => {
 
   test('does not infer Registry address from Android appassets origin', () => {
     setWindow({
-      __WHEELMAKER_RUNTIME_CONFIG__: {
-        defaultRegistryPort: 9630,
-      },
       location: {
         hostname: 'appassets.androidplatform.net',
         host: 'appassets.androidplatform.net',
@@ -58,6 +51,22 @@ describe('runtime Registry address resolution', () => {
     });
 
     expect(getDefaultRegistryAddress()).toBe('127.0.0.1:9630');
+  });
+
+  test('ignores legacy runtime config globals', () => {
+    setWindow({
+      __WHEELMAKER_RUNTIME_CONFIG__: {
+        defaultRegistryAddress: 'ws://legacy.example/ws',
+        defaultRegistryPort: 28800,
+      },
+      location: {
+        hostname: 'workspace.example.com',
+        host: 'workspace.example.com',
+        protocol: 'https:',
+      },
+    } as unknown as TestWindow);
+
+    expect(getDefaultRegistryAddress()).toBe('wss://workspace.example.com/ws');
   });
 
   test('still infers same-origin WebSocket for normal HTTPS host', () => {

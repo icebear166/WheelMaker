@@ -86,6 +86,9 @@ func newDesktopAssetHandlerWithWebSource(assets fs.FS, webSource *desktopWebSour
 			http.NotFound(w, r)
 			return
 		}
+		if serveDesktopNativeShellStubAsset(w, r, name) {
+			return
+		}
 		if webSource != nil && serveRemoteDesktopAsset(w, r, name, webSource) {
 			return
 		}
@@ -94,6 +97,43 @@ func newDesktopAssetHandlerWithWebSource(assets fs.FS, webSource *desktopWebSour
 		}
 		serveEmbeddedDesktopAsset(w, r, assets, name)
 	})
+}
+
+type desktopNativeShellStubAsset struct {
+	body        string
+	contentType string
+}
+
+func serveDesktopNativeShellStubAsset(w http.ResponseWriter, r *http.Request, name string) bool {
+	stub, ok := desktopNativeShellStubAssetForName(name)
+	if !ok {
+		return false
+	}
+	header := w.Header()
+	header.Set("Content-Type", stub.contentType)
+	setDesktopAssetCacheControl(header, name)
+	w.WriteHeader(http.StatusOK)
+	if r.Method != http.MethodHead {
+		_, _ = io.WriteString(w, stub.body)
+	}
+	return true
+}
+
+func desktopNativeShellStubAssetForName(name string) (desktopNativeShellStubAsset, bool) {
+	switch path.Base(name) {
+	case "service-worker.js":
+		return desktopNativeShellStubAsset{
+			body:        "/* native shell: service worker disabled */\n",
+			contentType: "application/javascript",
+		}, true
+	case "manifest.webmanifest":
+		return desktopNativeShellStubAsset{
+			body:        `{"name":"WheelMaker","short_name":"WheelMaker","start_url":"/","display":"standalone","icons":[]}`,
+			contentType: "application/manifest+json",
+		}, true
+	default:
+		return desktopNativeShellStubAsset{}, false
+	}
 }
 
 func serveRemoteDesktopAsset(w http.ResponseWriter, r *http.Request, name string, webSource *desktopWebSourceRuntime) bool {
@@ -182,29 +222,16 @@ func setDesktopAssetCacheControl(header http.Header, name string) {
 
 func desktopAssetCacheControl(name string) string {
 	base := path.Base(name)
-	switch base {
-	case "index.html", "service-worker.js":
+	if base == "index.html" || isWorkspaceRoute(name) {
 		return "no-cache, must-revalidate"
-	case "runtime-config.js", "web-build.json":
+	}
+	if _, ok := desktopNativeShellStubAssetForName(name); ok {
 		return "no-store"
 	}
-	if isImmutableDesktopAsset(base) {
+	if path.Ext(base) != "" {
 		return "public, max-age=31536000, immutable"
 	}
-	return "no-cache"
-}
-
-func isImmutableDesktopAsset(base string) bool {
-	ext := strings.ToLower(path.Ext(base))
-	if strings.HasPrefix(base, "bundle.") && (ext == ".js" || ext == ".css") {
-		return true
-	}
-	switch ext {
-	case ".woff", ".woff2", ".svg":
-		return true
-	default:
-		return false
-	}
+	return "no-cache, must-revalidate"
 }
 
 func buildDesktopRemoteAssetURL(remoteBase string, name string) (string, bool) {

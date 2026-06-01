@@ -1,6 +1,7 @@
 import {
   getNativeWebSourceBridge,
   inferNativeRemoteWebCandidate,
+  isNativeShellHost,
   isNativeWebViewHost,
   submitNativeRemoteWebCandidate,
 } from '../web/src/shell/native/webSource';
@@ -53,6 +54,13 @@ describe('native Web source helpers', () => {
     expect(isNativeWebViewHost({WheelMakerAndroid: {enabled: true}})).toBe(true);
     expect(isNativeWebViewHost({WheelMakerDesktop: {enabled: true}})).toBe(false);
     expect(isNativeWebViewHost({})).toBe(false);
+  });
+
+  test('detects all native shell hosts for browser-only features', () => {
+    expect(isNativeShellHost({WheelMakerAndroidNative: {}})).toBe(true);
+    expect(isNativeShellHost({WheelMakerAndroid: {enabled: true}})).toBe(true);
+    expect(isNativeShellHost({WheelMakerDesktop: {enabled: true}})).toBe(true);
+    expect(isNativeShellHost({})).toBe(false);
   });
 
   test('wraps Android native bridge when JavaScript facade is absent', async () => {

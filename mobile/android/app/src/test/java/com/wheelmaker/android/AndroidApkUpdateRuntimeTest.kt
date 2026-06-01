@@ -53,5 +53,6 @@ class AndroidApkUpdateRuntimeTest {
         assertTrue(runtime.contains("Intent.ACTION_INSTALL_PACKAGE"))
         assertTrue(runtime.contains("FLAG_GRANT_READ_URI_PERMISSION"))
         assertTrue(runtime.contains("wheelmaker:android-apk-update"))
+        assertTrue(!runtime.contains("web-build.json"))
     }
 }

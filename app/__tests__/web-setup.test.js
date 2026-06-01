@@ -29,7 +29,7 @@ describe('web runtime setup', () => {
       fs.existsSync(
         path.join(projectRoot, 'web', 'public', 'runtime-config.js'),
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   test('includes pwa foundation modules and runtime integration', () => {
@@ -76,7 +76,7 @@ describe('web runtime setup', () => {
     expect(sw).toContain("event.data?.type === 'WM_PWA_NOTIFY'");
   });
 
-  test('service worker does not persist the app shell or version probe', () => {
+  test('service worker does not persist the app shell', () => {
     const projectRoot = path.join(__dirname, '..');
     const sw = fs.readFileSync(
       path.join(projectRoot, 'web', 'public', 'service-worker.js'),
@@ -88,8 +88,6 @@ describe('web runtime setup', () => {
     expect(sw).toContain("const ICON_ASSETS = ['/icons/icon.svg']");
     expect(sw).not.toContain("'/bundle.js'");
     expect(sw).not.toContain("'/bundle.css'");
-    expect(sw).toContain("url.pathname.endsWith('/runtime-config.js')) return;");
-    expect(sw).toContain("url.pathname.endsWith('/web-build.json')) return;");
     expect(sw).toContain("event.data?.type === 'WM_PWA_NOTIFY'");
     expect(sw).toContain("if (req.mode === 'navigate')");
   });
@@ -189,17 +187,15 @@ describe('web runtime setup', () => {
     expect(typeof cssPlugin.options.chunkFilename).toBe('function');
     const bundleJsName = webpackConfig.output.filename({chunk: {name: 'bundle'}});
     const asyncJsName = webpackConfig.output.chunkFilename({chunk: {name: '9452'}});
-    const runtimeJsName = webpackConfig.output.filename({chunk: {name: 'runtime-config'}});
     const bundleCssName = cssPlugin.options.filename({chunk: {name: 'bundle'}});
     const asyncCssName = cssPlugin.options.chunkFilename({chunk: {name: '7955'}});
 
     expect(cssUses.some(item => item.includes('mini-css-extract-plugin'))).toBe(true);
     expect(cssUses).not.toContain('style-loader');
     expect(pluginNames).toContain('MiniCssExtractPlugin');
-    expect(pluginNames).toContain('DefinePlugin');
     expect(bundleJsName).toBe('bundle.[contenthash].js');
     expect(asyncJsName).toBe('[name].[contenthash].js');
-    expect(runtimeJsName).toBe('[name].js');
+    expect(webpackConfig.entry).toEqual({bundle: path.resolve(projectRoot, 'web', 'src/main.tsx')});
     expect(bundleCssName).toBe('bundle.[contenthash].css');
     expect(asyncCssName).toBe('[name].[contenthash].css');
     expect(indexHtml).toContain('htmlWebpackPlugin.files.css');

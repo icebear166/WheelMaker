@@ -1,8 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 
-describe('native WebView PWA gating', () => {
-  test('keeps browser PWA registration guarded away from native WebView hosts', () => {
+describe('native shell PWA gating', () => {
+  test('keeps browser PWA registration guarded away from native shell hosts', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(
       path.join(projectRoot, 'web', 'src', 'main.tsx'),
@@ -10,13 +10,13 @@ describe('native WebView PWA gating', () => {
     );
 
     expect(mainTsx).toContain("import {cleanupNativeWebViewPWA} from './pwa/nativePwaGuard';");
-    expect(mainTsx).toContain("import {isNativeWebViewHost} from './shell/native/webSource';");
-    expect(mainTsx).toContain('const nativeWebViewHost = isNativeWebViewHost();');
-    expect(mainTsx).toContain('if (nativeWebViewHost) {');
+    expect(mainTsx).toContain("import {isNativeShellHost} from './shell/native/webSource';");
+    expect(mainTsx).toContain('const nativeShellHost = isNativeShellHost();');
+    expect(mainTsx).toContain('if (nativeShellHost) {');
     expect(mainTsx).toContain('cleanupNativeWebViewPWA().catch(() => undefined);');
-    expect(mainTsx).toContain('if (!nativeWebViewHost) {');
-    expect(mainTsx).toContain('installWebFreshnessAutoRefresh({');
-    expect(mainTsx).toContain("if (!nativeWebViewHost && 'serviceWorker' in navigator && window.isSecureContext) {");
+    expect(mainTsx).not.toContain('installWebFreshnessAutoRefresh');
+    expect(mainTsx).not.toContain('./pwa/webFreshness');
+    expect(mainTsx).toContain("if (!nativeShellHost && 'serviceWorker' in navigator && window.isSecureContext) {");
   });
 
   test('does not remove browser PWA assets or notification handling', () => {

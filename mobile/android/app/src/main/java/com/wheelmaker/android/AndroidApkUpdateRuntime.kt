@@ -33,15 +33,14 @@ class AndroidApkUpdateRuntime(
         return try {
             val packageInfo = activity.packageManager.getInstalledPackageInfo(activity.packageName)
             val sourceApk = File(activity.applicationInfo.sourceDir)
-            val webBuild = readEmbeddedWebBuild()
             JSONObject()
                 .put("supported", true)
                 .put("packageName", activity.packageName)
                 .put("versionName", packageInfo.versionName ?: "")
                 .put("versionCode", packageInfo.longVersionCodeCompat())
                 .put("apkSha256", fileSha256(sourceApk))
-                .put("buildSha", webBuild.optString("sha"))
-                .put("builtAt", webBuild.optString("builtAt"))
+                .put("buildSha", "")
+                .put("builtAt", "")
                 .put("canRequestPackageInstalls", canRequestPackageInstalls())
                 .toString()
         } catch (error: Exception) {
@@ -146,16 +145,6 @@ class AndroidApkUpdateRuntime(
         )
         activity.runOnUiThread {
             activity.startActivity(intent)
-        }
-    }
-
-    private fun readEmbeddedWebBuild(): JSONObject {
-        return try {
-            activity.assets.open("web-build.json").bufferedReader().use { reader ->
-                JSONObject(reader.readText())
-            }
-        } catch (_: Exception) {
-            JSONObject()
         }
     }
 

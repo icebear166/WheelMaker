@@ -20,6 +20,16 @@ class StableOriginWebViewClient(
             return null
         }
         val assetName = assetNameForStablePath(uri.encodedPath ?: "/")
+        nativeShellStubAsset(assetName)?.let { stub ->
+            return WebResourceResponse(
+                stub.contentType,
+                "utf-8",
+                200,
+                "OK",
+                noStoreHeaders(),
+                ByteArrayInputStream(stub.body.toByteArray())
+            )
+        }
         if (shouldBlockStableOriginAsset(assetName)) {
             return notFoundResponse()
         }
@@ -95,7 +105,7 @@ class StableOriginWebViewClient(
             "utf-8",
             404,
             "Not Found",
-            mapOf("Cache-Control" to "no-store"),
+            noStoreHeaders(),
             ByteArrayInputStream("not found".toByteArray())
         )
     }
@@ -117,7 +127,30 @@ fun isWorkspaceRoute(assetName: String): Boolean {
 
 fun shouldBlockStableOriginAsset(assetName: String): Boolean {
     val baseName = assetName.substringAfterLast('/')
-    return baseName == "ws" || baseName == "service-worker.js"
+    return baseName == "ws"
+}
+
+data class NativeShellStubAsset(
+    val body: String,
+    val contentType: String
+)
+
+fun shouldServeNativeShellStubAsset(assetName: String): Boolean {
+    return nativeShellStubAsset(assetName) != null
+}
+
+fun nativeShellStubAsset(assetName: String): NativeShellStubAsset? {
+    return when (assetName.substringAfterLast('/')) {
+        "service-worker.js" -> NativeShellStubAsset(
+            "/* native shell: service worker disabled */\n",
+            "application/javascript"
+        )
+        "manifest.webmanifest" -> NativeShellStubAsset(
+            """{"name":"WheelMaker","short_name":"WheelMaker","start_url":"/","display":"standalone","icons":[]}""",
+            "application/manifest+json"
+        )
+        else -> null
+    }
 }
 
 data class StableOriginAssetCandidate(
@@ -151,6 +184,8 @@ fun contentTypeForAsset(assetName: String): String {
         assetName.endsWith(".ico") -> "image/x-icon"
         assetName.endsWith(".woff2") -> "font/woff2"
         assetName.endsWith(".woff") -> "font/woff"
+        assetName.endsWith(".ttf") -> "font/ttf"
+        assetName.endsWith(".eot") -> "application/vnd.ms-fontobject"
         else -> "application/octet-stream"
     }
 }
@@ -158,13 +193,8 @@ fun contentTypeForAsset(assetName: String): String {
 fun responseHeadersForAsset(assetName: String): Map<String, String> {
     val baseName = assetName.substringAfterLast('/')
     val cacheControl = when {
-        baseName == "index.html" || baseName == "service-worker.js" -> "no-cache, must-revalidate"
-        baseName == "runtime-config.js" || baseName == "web-build.json" -> "no-store"
-        baseName.startsWith("bundle.") && (baseName.endsWith(".js") || baseName.endsWith(".css")) ->
-            "public, max-age=31536000, immutable"
-        baseName.endsWith(".svg") || baseName.endsWith(".woff") || baseName.endsWith(".woff2") ->
-            "public, max-age=31536000, immutable"
-        else -> "no-cache"
+        baseName == "index.html" || !baseName.contains('.') -> "no-cache, must-revalidate"
+        else -> "public, max-age=31536000, immutable"
     }
     val headers = mutableMapOf("Cache-Control" to cacheControl)
     if (cacheControl == "no-store" || cacheControl.startsWith("no-cache")) {
@@ -172,6 +202,14 @@ fun responseHeadersForAsset(assetName: String): Map<String, String> {
         headers["Expires"] = "0"
     }
     return headers
+}
+
+fun noStoreHeaders(): Map<String, String> {
+    return mapOf(
+        "Cache-Control" to "no-store",
+        "Pragma" to "no-cache",
+        "Expires" to "0"
+    )
 }
 
 fun responseHeadersForRemoteAsset(assetName: String, upstreamCacheControl: String?): Map<String, String> {

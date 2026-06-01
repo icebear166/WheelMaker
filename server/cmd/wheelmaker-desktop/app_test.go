@@ -146,11 +146,14 @@ func TestDesktopAssetHandlerServesStaticAsset(t *testing.T) {
 
 func TestDesktopAssetHandlerSetsFreshWebCacheHeaders(t *testing.T) {
 	handler := newDesktopAssetHandler(fstest.MapFS{
-		"index.html":        {Data: []byte("<html></html>")},
-		"service-worker.js": {Data: []byte("self.addEventListener('install', () => {})")},
-		"runtime-config.js": {Data: []byte("window.__WHEELMAKER_RUNTIME_CONFIG__ = {};")},
-		"web-build.json":    {Data: []byte(`{"sha":"abc"}`)},
-		"bundle.abc123.js":  {Data: []byte("console.log('wm')")},
+		"index.html":              {Data: []byte("<html></html>")},
+		"service-worker.js":       {Data: []byte("self.addEventListener('install', () => {})")},
+		"manifest.webmanifest":    {Data: []byte(`{"name":"real manifest"}`)},
+		"bundle.abc123.js":        {Data: []byte("console.log('wm')")},
+		"font.abc123.woff2":       {Data: []byte("font")},
+		"codicon.abc123.ttf":      {Data: []byte("font")},
+		"legacy.abc123.eot":       {Data: []byte("font")},
+		"unexpected.abc123.asset": {Data: []byte("asset")},
 	})
 
 	tests := []struct {
@@ -159,10 +162,13 @@ func TestDesktopAssetHandlerSetsFreshWebCacheHeaders(t *testing.T) {
 	}{
 		{path: "/", want: "no-cache, must-revalidate"},
 		{path: "/index.html", want: "no-cache, must-revalidate"},
-		{path: "/service-worker.js", want: "no-cache, must-revalidate"},
-		{path: "/runtime-config.js", want: "no-store"},
-		{path: "/web-build.json", want: "no-store"},
+		{path: "/service-worker.js", want: "no-store"},
+		{path: "/manifest.webmanifest", want: "no-store"},
 		{path: "/bundle.abc123.js", want: "public, max-age=31536000, immutable"},
+		{path: "/font.abc123.woff2", want: "public, max-age=31536000, immutable"},
+		{path: "/codicon.abc123.ttf", want: "public, max-age=31536000, immutable"},
+		{path: "/legacy.abc123.eot", want: "public, max-age=31536000, immutable"},
+		{path: "/unexpected.abc123.asset", want: "public, max-age=31536000, immutable"},
 	}
 
 	for _, tt := range tests {
@@ -171,6 +177,41 @@ func TestDesktopAssetHandlerSetsFreshWebCacheHeaders(t *testing.T) {
 		handler.ServeHTTP(rec, req)
 		if got := rec.Header().Get("Cache-Control"); got != tt.want {
 			t.Fatalf("%s Cache-Control=%q want %q", tt.path, got, tt.want)
+		}
+	}
+}
+
+func TestDesktopAssetHandlerServesNativeShellPWAStubs(t *testing.T) {
+	handler := newDesktopAssetHandler(fstest.MapFS{
+		"index.html":           {Data: []byte("<html></html>")},
+		"service-worker.js":    {Data: []byte("self.addEventListener('install', () => {})")},
+		"manifest.webmanifest": {Data: []byte(`{"name":"real manifest"}`)},
+	})
+
+	tests := []struct {
+		path        string
+		contentType string
+		body        string
+	}{
+		{path: "/service-worker.js", contentType: "application/javascript", body: "disabled"},
+		{path: "/manifest.webmanifest", contentType: "application/manifest+json", body: `"icons":[]`},
+	}
+
+	for _, tt := range tests {
+		req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s status=%d want %d", tt.path, rec.Code, http.StatusOK)
+		}
+		if got := rec.Header().Get("Content-Type"); got != tt.contentType {
+			t.Fatalf("%s Content-Type=%q want %q", tt.path, got, tt.contentType)
+		}
+		if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+			t.Fatalf("%s Cache-Control=%q want no-store", tt.path, got)
+		}
+		if got := rec.Body.String(); !strings.Contains(got, tt.body) {
+			t.Fatalf("%s body=%q should contain %q", tt.path, got, tt.body)
 		}
 	}
 }
@@ -488,19 +529,18 @@ func TestDesktopAssetHandlerPrefersRemoteAndFallsBackToEmbedded(t *testing.T) {
 }
 
 func TestDesktopAssetHandlerRemoteResponsesUseClientFreshnessHeaders(t *testing.T) {
+	var pwaAssetRemoteRequests int
 	remote := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/", "/index.html", "/service-worker.js":
+		case "/", "/index.html":
 			w.Header().Set("Cache-Control", "public, max-age=31536000")
 			_, _ = io.WriteString(w, "<html>remote shell</html>")
-		case "/runtime-config.js", "/web-build.json":
-			w.Header().Set("Cache-Control", "public, max-age=31536000")
-			_, _ = io.WriteString(w, "{}")
-		case "/bundle.abc123.js", "/bundle.abc123.css", "/font.abc123.woff2", "/logo.svg":
+		case "/service-worker.js", "/manifest.webmanifest":
+			pwaAssetRemoteRequests++
+			http.Error(w, "native shell should not request this asset", http.StatusInternalServerError)
+		case "/bundle.abc123.js", "/bundle.abc123.css", "/font.abc123.woff2", "/codicon.abc123.ttf", "/logo.svg", "/misc.txt":
 			w.Header().Set("Cache-Control", "no-store")
 			_, _ = io.WriteString(w, "remote asset")
-		case "/misc.txt":
-			_, _ = io.WriteString(w, "remote misc")
 		default:
 			http.NotFound(w, r)
 		}
@@ -527,14 +567,14 @@ func TestDesktopAssetHandlerRemoteResponsesUseClientFreshnessHeaders(t *testing.
 	}{
 		{path: "/", cache: "no-cache, must-revalidate", wantPragma: true},
 		{path: "/index.html", cache: "no-cache, must-revalidate", wantPragma: true},
-		{path: "/service-worker.js", cache: "no-cache, must-revalidate", wantPragma: true},
-		{path: "/runtime-config.js", cache: "no-store", wantPragma: true},
-		{path: "/web-build.json", cache: "no-store", wantPragma: true},
+		{path: "/service-worker.js", cache: "no-store", wantPragma: true},
+		{path: "/manifest.webmanifest", cache: "no-store", wantPragma: true},
 		{path: "/bundle.abc123.js", cache: "public, max-age=31536000, immutable"},
 		{path: "/bundle.abc123.css", cache: "public, max-age=31536000, immutable"},
 		{path: "/font.abc123.woff2", cache: "public, max-age=31536000, immutable"},
+		{path: "/codicon.abc123.ttf", cache: "public, max-age=31536000, immutable"},
 		{path: "/logo.svg", cache: "public, max-age=31536000, immutable"},
-		{path: "/misc.txt", cache: "no-cache", wantPragma: true},
+		{path: "/misc.txt", cache: "public, max-age=31536000, immutable"},
 	}
 
 	for _, tt := range tests {
@@ -552,6 +592,9 @@ func TestDesktopAssetHandlerRemoteResponsesUseClientFreshnessHeaders(t *testing.
 				t.Fatalf("%s Expires=%q want 0", tt.path, got)
 			}
 		}
+	}
+	if pwaAssetRemoteRequests != 0 {
+		t.Fatalf("native shell PWA assets reached remote server %d times", pwaAssetRemoteRequests)
 	}
 }
 

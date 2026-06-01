@@ -113,8 +113,6 @@ self.addEventListener('fetch', event => {
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/ws')) return;
   if (url.pathname.endsWith('/service-worker.js')) return;
-  if (url.pathname.endsWith('/runtime-config.js')) return;
-  if (url.pathname.endsWith('/web-build.json')) return;
 
   if (req.mode === 'navigate') {
     event.respondWith(networkFirst(req));

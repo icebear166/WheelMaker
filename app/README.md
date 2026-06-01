@@ -6,7 +6,7 @@ Windows `WheelMakerDesktop` executable both use this same React/webpack output.
 ## Directory Layout
 
 - `web/src`: pure React UI entry and pages
-- `web/public`: web static template and runtime config
+- `web/public`: web static template and PWA assets
 - `scripts/export_web_release.js`: export web files for static hosting
 
 ## Commands
@@ -14,28 +14,16 @@ Windows `WheelMakerDesktop` executable both use this same React/webpack output.
 - `npm run web`: start pure React web dev server on `:8080`
 - `npm run start`: alias for `npm run web`
 - `npm run build:web`: build web files to `~/.wheelmaker/web` by default
-- `npm run build:web:release`: build hashed web assets and export deployable files with `web-build.json`
+- `npm run build:web:release`: build hashed web assets and export deployable files
 - `npm run tsc:web`: type-check the web code
-
-## Runtime Config
-
-Web runtime config file:
-
-- `web/public/runtime-config.js`
-
-Fields:
-
-- `defaultRegistryAddress`
-- `defaultRegistryPort`
-- `remoteWebUrl`
 
 ## Release Model
 
 1. Browser/static release:
    - `npm run build:web:release`
    - Serve the exported web root.
-   - Keep `/`, `/index.html`, `/service-worker.js`, `/runtime-config.js`, and `/web-build.json` revalidatable or uncached.
-   - Serve `bundle.<contenthash>.js` and `bundle.<contenthash>.css` with long immutable cache headers.
+   - Keep `/`, `/index.html`, `/service-worker.js`, and `/manifest.webmanifest` revalidatable.
+   - Serve hashed/static files such as JS, CSS, fonts, and icons with long immutable cache headers.
 
 2. Desktop release:
    - Run `publish-desktop.bat` from the repository root.

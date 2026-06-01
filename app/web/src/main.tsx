@@ -38,7 +38,6 @@ import {
 } from './portRelayTargets';
 import { initializePWAFoundation } from './pwa';
 import {cleanupNativeWebViewPWA} from './pwa/nativePwaGuard';
-import { installWebFreshnessAutoRefresh } from './pwa/webFreshness';
 import { DesktopTitleBar } from './shell/DesktopTitleBar';
 import {resolveDesktopChatQuickSwitchContextMenu} from './shell/desktop/chatQuickSwitchContextMenu';
 import {
@@ -46,7 +45,7 @@ import {
   submitDesktopRemoteWebCandidate,
   type DesktopWebSourceState,
 } from './shell/desktop/webSource';
-import {isNativeWebViewHost} from './shell/native/webSource';
+import {isNativeShellHost} from './shell/native/webSource';
 import { ResponsiveShell } from './shell/ResponsiveShell';
 import {
   getLatestSessionReadCursor,
@@ -664,17 +663,9 @@ function ThinkingBlock({ content, isStreaming }: ThinkingBlockProps) {
 }
 
 const pwaFoundation = initializePWAFoundation();
-const nativeWebViewHost = isNativeWebViewHost();
-if (nativeWebViewHost) {
+const nativeShellHost = isNativeShellHost();
+if (nativeShellHost) {
   cleanupNativeWebViewPWA().catch(() => undefined);
-}
-if (!nativeWebViewHost) {
-  installWebFreshnessAutoRefresh({
-    currentBuild: {
-      sha: __WHEELMAKER_WEB_BUILD_SHA__,
-      builtAt: __WHEELMAKER_WEB_BUILD_TIME__,
-    },
-  });
 }
 const registryDebugStore = createRegistryDebugStore();
 const service = new RegistryWorkspaceService(registryDebugStore.recordCaptureEvent);
@@ -18677,7 +18668,7 @@ function App() {
   );
 }
 
-if (!nativeWebViewHost && 'serviceWorker' in navigator && window.isSecureContext) {
+if (!nativeShellHost && 'serviceWorker' in navigator && window.isSecureContext) {
   window.addEventListener('load', () => {
     let reloading = false;
     // Reload when a new service worker takes control (after skipWaiting).

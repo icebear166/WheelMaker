@@ -28,11 +28,17 @@ class StableOriginPathTest {
     }
 
     @Test
-    fun blocksBrowserPwaServiceWorkerInNativeStableOrigin() {
-        assertTrue(shouldBlockStableOriginAsset("service-worker.js"))
-        assertTrue(shouldBlockStableOriginAsset("nested/service-worker.js"))
+    fun servesBrowserPwaAssetsAsNativeShellStubs() {
+        assertTrue(shouldServeNativeShellStubAsset("service-worker.js"))
+        assertTrue(shouldServeNativeShellStubAsset("nested/service-worker.js"))
+        assertTrue(shouldServeNativeShellStubAsset("manifest.webmanifest"))
+        assertTrue(nativeShellStubAsset("service-worker.js")!!.body.contains("disabled"))
+        assertTrue(nativeShellStubAsset("manifest.webmanifest")!!.body.contains("\"icons\":[]"))
+
         assertTrue(shouldBlockStableOriginAsset("ws"))
 
+        assertFalse(shouldServeNativeShellStubAsset("web-build.json"))
+        assertFalse(shouldServeNativeShellStubAsset("runtime-config.js"))
         assertFalse(shouldBlockStableOriginAsset("web-build.json"))
         assertFalse(shouldBlockStableOriginAsset("runtime-config.js"))
         assertFalse(shouldBlockStableOriginAsset("bundle.abc123.js"))
@@ -76,32 +82,25 @@ class StableOriginPathTest {
         )
         assertEquals(
             "no-cache, must-revalidate",
-            responseHeadersForRemoteAsset("service-worker.js", "public, max-age=31536000")["Cache-Control"]
-        )
-        assertEquals(
-            "no-store",
-            responseHeadersForRemoteAsset("web-build.json", "public, max-age=31536000")["Cache-Control"]
-        )
-        assertEquals(
-            "no-store",
-            responseHeadersForRemoteAsset("runtime-config.js", "public, max-age=31536000")["Cache-Control"]
+            responseHeadersForRemoteAsset("settings/update", "public, max-age=31536000")["Cache-Control"]
         )
     }
 
     @Test
     fun remoteCacheBypassOnlyAppliesToVolatileAssets() {
         assertTrue(shouldBypassRemoteUrlConnectionCache("index.html"))
-        assertTrue(shouldBypassRemoteUrlConnectionCache("service-worker.js"))
-        assertTrue(shouldBypassRemoteUrlConnectionCache("web-build.json"))
-        assertTrue(shouldBypassRemoteUrlConnectionCache("runtime-config.js"))
+        assertTrue(shouldBypassRemoteUrlConnectionCache("settings/update"))
 
         assertFalse(shouldBypassRemoteUrlConnectionCache("bundle.abc123.js"))
         assertFalse(shouldBypassRemoteUrlConnectionCache("bundle.abc123.css"))
         assertFalse(shouldBypassRemoteUrlConnectionCache("font.abc123.woff2"))
+        assertFalse(shouldBypassRemoteUrlConnectionCache("codicon.abc123.ttf"))
+        assertFalse(shouldBypassRemoteUrlConnectionCache("legacy.abc123.eot"))
+        assertFalse(shouldBypassRemoteUrlConnectionCache("asset.abc123.bin"))
     }
 
     @Test
-    fun remoteResponsesKeepHashedAssetsCacheable() {
+    fun remoteResponsesKeepStaticAssetsCacheableByDefault() {
         assertEquals(
             "public, max-age=31536000, immutable",
             responseHeadersForRemoteAsset("bundle.abc123.js", "no-store")["Cache-Control"]
@@ -114,5 +113,19 @@ class StableOriginPathTest {
             "public, max-age=31536000, immutable",
             responseHeadersForRemoteAsset("font.abc123.woff2", "no-store")["Cache-Control"]
         )
+        assertEquals(
+            "public, max-age=31536000, immutable",
+            responseHeadersForRemoteAsset("codicon.abc123.ttf", "no-store")["Cache-Control"]
+        )
+        assertEquals(
+            "public, max-age=31536000, immutable",
+            responseHeadersForRemoteAsset("asset.abc123.bin", "no-store")["Cache-Control"]
+        )
+    }
+
+    @Test
+    fun contentTypesCoverFontAssets() {
+        assertEquals("font/ttf", contentTypeForAsset("codicon.abc123.ttf"))
+        assertEquals("application/vnd.ms-fontobject", contentTypeForAsset("legacy.abc123.eot"))
     }
 }
