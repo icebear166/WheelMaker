@@ -460,11 +460,17 @@ describe('web responsive ui state', () => {
     expect(readTagIndex).toBeGreaterThan(colorSquareIndex);
     expect(mainTsx).not.toContain('className="chat-hub-color-trigger"');
     expect(mainTsx).not.toContain('className={`chat-hub-visibility-check ${visibilityState}`}');
-    expect(mainTsx).toContain("const hubEnabled = visibilityState !== 'unchecked';");
+    expect(mainTsx).not.toContain("const hubEnabled = visibilityState !== 'unchecked';");
+    expect(mainTsx).not.toContain('const visibilityState = resolveHubVisibilityState(treeItem.projects, hiddenProjectIds);');
+    expect(mainTsx).not.toContain('const hubToggleLabel = hubEnabled');
     expect(mainTsx).toContain('className={`chat-hub-tree${expanded ? \' expanded\' : \'\'}${colorMenuOpen ? \' color-open\' : \'\'}`}');
-    expect(mainTsx).toContain('className={`chat-hub-visibility-cube ${hubEnabled ? \'enabled\' : \'disabled\'} ${visibilityState}`}');
-    expect(mainTsx).toContain('aria-pressed={hubEnabled}');
-    expect(mainTsx).toContain('toggleHubVisibility(current, treeItem.projects, visibilityState === \'unchecked\')');
+    expect(mainTsx).toContain('className="chat-hub-project-toggle"');
+    expect(mainTsx).toContain("className={`codicon ${expanded ? 'codicon-folder-opened' : 'codicon-folder'} chat-hub-project-toggle-icon`}");
+    expect(mainTsx).toContain('style={hubAccentStyle(hub.hubId)}');
+    expect(mainTsx).not.toContain('className="chat-hub-disclosure"');
+    expect(mainTsx).not.toContain('className={`chat-hub-visibility-cube');
+    expect(mainTsx).not.toContain('aria-pressed={hubEnabled}');
+    expect(mainTsx).not.toContain('toggleHubVisibility(current, treeItem.projects');
     expect(mainTsx).toContain('resolveHubColor,');
     expect(mainTsx).toContain('resolveHubColorVariantIndex,');
     expect(mainTsx).toContain("if (prefix === 'wide-project-hub' || prefix === 'token-stats-pill-hub') {");
@@ -475,10 +481,15 @@ describe('web responsive ui state', () => {
     expect(mainTsx).not.toContain('className="chat-hub-color-toolbar"');
     expect(mainTsx).not.toContain('className="chat-hub-color-title"');
     expect(mainTsx).not.toContain('>Hub color</span>');
-    expect(mainTsx).toContain('className="chat-hub-color-actions"');
-    expect(mainTsx).toContain('className={`chat-hub-color-default${hubColors[hub.hubId] ? \'\' : \' selected\'}`}');
-    expect(mainTsx).toContain('className="chat-hub-color-default-swatch"');
-    expect(mainTsx).toContain('style={hubDefaultAccentStyle(hub.hubId)}');
+    expect(mainTsx).toContain('const defaultHubColor = resolveDefaultHubColor(hub.hubId);');
+    expect(mainTsx).toContain('const defaultSwatch = color === defaultHubColor;');
+    expect(mainTsx).toContain("className={`chat-hub-color-swatch${currentHubColor === color ? ' selected' : ''}${defaultSwatch ? ' default' : ''}`}");
+    expect(mainTsx).toContain("setHubColorPreference(current, hub.hubId, defaultSwatch ? '' : color)");
+    expect(mainTsx).toContain('{defaultSwatch ? <span className="chat-hub-color-default-badge" aria-hidden="true">D</span> : null}');
+    expect(mainTsx).not.toContain('className="chat-hub-color-actions"');
+    expect(mainTsx).not.toContain('className={`chat-hub-color-default');
+    expect(mainTsx).not.toContain('className="chat-hub-color-default-swatch"');
+    expect(mainTsx).not.toContain('style={hubDefaultAccentStyle(hub.hubId)}');
     expect(mainTsx).toContain('className="chat-hub-color-custom"');
     expect(mainTsx).toContain('className="chat-hub-color-custom-header"');
     expect(mainTsx).toContain('className="chat-hub-color-custom-preview"');
@@ -509,19 +520,22 @@ describe('web responsive ui state', () => {
     expect(treeBlock).toContain('--chat-hub-color-chip-width: 36px;');
     expect(treeBlock).toContain('--chat-hub-color-chip-height: 20px;');
     expect(treeBlock).toContain('--chat-hub-color-chip-radius: 6px;');
-    expect(stylesCss).toContain('.chat-hub-tree.expanded .chat-hub-disclosure {');
+    expect(stylesCss).not.toContain('.chat-hub-tree.expanded .chat-hub-disclosure {');
     const colorOpenBlock = stylesCss.match(/\.chat-hub-tree\.color-open \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(colorOpenBlock).toContain('min-height: calc(36px + var(--chat-hub-color-palette-clearance));');
-    expect(colorOpenBlock).toContain('--chat-hub-color-palette-clearance: 336px;');
+    expect(colorOpenBlock).toContain('--chat-hub-color-palette-clearance: 286px;');
     const colorOpenProjectListBlock = stylesCss.match(/\.chat-hub-tree\.color-open \.chat-hub-project-list \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(colorOpenProjectListBlock).toContain('margin-top: var(--chat-hub-color-palette-clearance);');
     expect(stylesCss).toContain('.chat-hub-color-palette::before {');
 
     const rowBlock = stylesCss.match(/\.chat-hub-row,\n\.chat-hub-empty \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(rowBlock).toContain('grid-template-columns: 16px 24px minmax(0, 1fr) 40px auto;');
+    expect(rowBlock).toContain('grid-template-columns: 24px minmax(0, 1fr) 40px auto;');
 
-    const disclosureBlock = stylesCss.match(/\.chat-hub-disclosure \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(disclosureBlock).toContain('width: 16px;');
+    const hubProjectToggleBlock = stylesCss.match(/\.chat-hub-project-toggle \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(hubProjectToggleBlock).toContain('width: 24px;');
+    expect(hubProjectToggleBlock).toContain('height: 24px;');
+    const hubProjectToggleIconBlock = stylesCss.match(/\.chat-hub-project-toggle-icon \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(hubProjectToggleIconBlock).toContain('color: var(--hub-accent);');
 
     const swatchBlock = stylesCss.match(/\.chat-hub-color-swatch \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(swatchBlock).toContain('var(--swatch-color)');
@@ -553,8 +567,7 @@ describe('web responsive ui state', () => {
     expect(colorSquareOpenBlock).toContain('border-color: transparent;');
     expect(colorSquareOpenBlock).toContain('background: color-mix(in srgb, var(--hub-accent) 5%, transparent);');
 
-    const visibilityHoverBlock = stylesCss.match(/\.chat-hub-visibility-cube:hover \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(visibilityHoverBlock).not.toContain('color:');
+    expect(stylesCss).not.toContain('.chat-hub-visibility-cube');
 
     const paletteBlock = stylesCss.match(/\.chat-hub-color-palette \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(paletteBlock).toContain('position: absolute;');
@@ -571,6 +584,10 @@ describe('web responsive ui state', () => {
     expect(selectedSwatchBlock).toContain('0 0 0 2px color-mix(in srgb, var(--panel) 80%, transparent)');
     expect(selectedSwatchBlock).not.toContain('0 0 16px');
     expect(stylesCss).toContain('.chat-hub-color-swatch.selected::after {');
+    const defaultBadgeBlock = stylesCss.match(/\.chat-hub-color-default-badge \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(defaultBadgeBlock).toContain('position: absolute;');
+    expect(defaultBadgeBlock).toContain('left: 3px;');
+    expect(defaultBadgeBlock).toContain('bottom: 2px;');
 
     const nativeColorInputBlock = mainTsx.match(/<input[\s\S]*?type="color"[\s\S]*?>/)?.[0] ?? '';
     expect(nativeColorInputBlock).toBe('');
@@ -579,21 +596,15 @@ describe('web responsive ui state', () => {
     expect(customPickerBlock).toContain('display: grid;');
     expect(customPickerBlock).toContain('gap: 7px;');
 
-    const defaultColorBlock = stylesCss.match(/\.chat-hub-color-default \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(defaultColorBlock).toContain('height: 36px;');
-    expect(defaultColorBlock).toContain('grid-template-columns: minmax(0, 1fr) var(--chat-hub-color-chip-width);');
-    expect(defaultColorBlock).not.toContain('font-size: 11px;');
-    expect(defaultColorBlock).not.toContain('font-weight: 700;');
-    const colorLabelBlock = stylesCss.match(/\.chat-hub-color-default-label,\n\.chat-hub-color-custom-label \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(stylesCss).not.toContain('.chat-hub-color-default {');
+    expect(stylesCss).not.toContain('.chat-hub-color-default-label');
+    expect(stylesCss).not.toContain('.chat-hub-color-default-swatch');
+    const colorLabelBlock = stylesCss.match(/\.chat-hub-color-custom-label \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(colorLabelBlock).toContain('font-size: 11px;');
     expect(colorLabelBlock).toContain('font-weight: 700;');
     expect(colorLabelBlock).toContain('color: color-mix(in srgb, var(--text) 86%, var(--muted));');
     const customHeaderBlock = stylesCss.match(/\.chat-hub-color-custom-header \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(customHeaderBlock).toContain('grid-template-columns: minmax(0, 1fr) var(--chat-hub-color-chip-width);');
-    const defaultSwatchBlock = stylesCss.match(/\.chat-hub-color-default-swatch \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(defaultSwatchBlock).toContain('width: var(--chat-hub-color-chip-width);');
-    expect(defaultSwatchBlock).toContain('height: var(--chat-hub-color-chip-height);');
-    expect(defaultSwatchBlock).toContain('border-radius: var(--chat-hub-color-chip-radius);');
     const customPreviewBlock = stylesCss.match(/\.chat-hub-color-custom-preview \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(customPreviewBlock).toContain('width: var(--chat-hub-color-chip-width);');
     expect(customPreviewBlock).toContain('height: var(--chat-hub-color-chip-height);');
@@ -610,9 +621,11 @@ describe('web responsive ui state', () => {
 
     const projectListBlock = Array.from(stylesCss.matchAll(/\.chat-hub-project-list \{[\s\S]*?\n\}/g))
       .map(match => match[0])
-      .find(block => block.includes('margin: 4px 6px 6px 28px;')) ?? '';
-    expect(projectListBlock).toContain('margin: 4px 6px 6px 28px;');
-    expect(projectListBlock).toContain('border-radius: 7px;');
+      .find(block => block.includes('margin: 2px 6px 6px 30px;')) ?? '';
+    expect(projectListBlock).toContain('margin: 2px 6px 6px 30px;');
+    expect(projectListBlock).not.toContain('border-radius:');
+    expect(projectListBlock).not.toContain('background:');
+    expect(projectListBlock).not.toContain('box-shadow:');
     expect(projectListBlock).not.toContain('margin: 3px 6px 6px 54px;');
     expect(projectListBlock).not.toContain('border-left:');
   });

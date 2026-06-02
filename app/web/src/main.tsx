@@ -168,10 +168,8 @@ import {
   resolveDefaultHubColor,
   resolveHubColor,
   resolveHubColorVariantIndex,
-  resolveHubVisibilityState,
   setHubColorPreference,
   splitProjectsByVisibility,
-  toggleHubVisibility,
   toggleProjectVisibility,
   type HubColorHsv,
 } from './services/hubProjectPreferences';
@@ -4821,10 +4819,6 @@ function App() {
     const color = resolveHubColor(hubColors, hubId);
     return {'--hub-accent': color, '--pill-accent': color} as React.CSSProperties;
   }, [hubColors]);
-  const hubDefaultAccentStyle = useCallback((hubId: string): React.CSSProperties => {
-    const color = resolveDefaultHubColor(hubId);
-    return {'--hub-accent': color, '--pill-accent': color} as React.CSSProperties;
-  }, []);
   const applyHubColorSvPointer = useCallback((
     hubId: string,
     hsv: HubColorHsv,
@@ -6170,14 +6164,10 @@ function App() {
               registryHubs.map(hub => {
                 const treeItem = chatHubTreeItems.find(item => item.hubId === hub.hubId) ?? {hubId: hub.hubId, projects: []};
                 const readStatus = localHubReadStatuses[hub.hubId] ?? 'Remote';
-                const visibilityState = resolveHubVisibilityState(treeItem.projects, hiddenProjectIds);
                 const expanded = effectiveExpandedHubIds.includes(hub.hubId);
-                const hubEnabled = visibilityState !== 'unchecked';
-                const hubToggleLabel = hubEnabled
-                  ? `Hide all projects in ${hub.hubId}`
-                  : `Show all projects in ${hub.hubId}`;
                 const colorMenuOpen = chatHubColorMenuHubId === hub.hubId;
                 const currentHubColor = resolveHubColor(hubColors, hub.hubId);
+                const defaultHubColor = resolveDefaultHubColor(hub.hubId);
                 const currentHubHsv = hubColorToHsv(currentHubColor);
                 const currentHubHueColor = hubHsvToColor({h: currentHubHsv.h, s: 1, v: 1});
                 const customHubColorStyle = {
@@ -6192,9 +6182,10 @@ function App() {
                     <div className="chat-hub-row">
                       <button
                         type="button"
-                        className="chat-hub-disclosure"
+                        className="chat-hub-project-toggle"
                         aria-label={expanded ? `Collapse ${hub.hubId}` : `Expand ${hub.hubId}`}
                         aria-expanded={expanded}
+                        style={hubAccentStyle(hub.hubId)}
                         onClick={() => {
                           const next = expanded
                             ? effectiveExpandedHubIds.filter(hubId => hubId !== hub.hubId)
@@ -6202,21 +6193,7 @@ function App() {
                           setExpandedHubIds(next.length > 0 ? next : [HUB_TREE_EMPTY_EXPANDED_SENTINEL]);
                         }}
                       >
-                        <span className={`codicon ${expanded ? 'codicon-chevron-down' : 'codicon-chevron-right'}`} />
-                      </button>
-                      <button
-                        type="button"
-                        className={`chat-hub-visibility-cube ${hubEnabled ? 'enabled' : 'disabled'} ${visibilityState}`}
-                        aria-label={hubToggleLabel}
-                        aria-pressed={hubEnabled}
-                        style={hubEnabled ? hubAccentStyle(hub.hubId) : undefined}
-                        onClick={() => {
-                          setHiddenProjectIds(current =>
-                            toggleHubVisibility(current, treeItem.projects, visibilityState === 'unchecked'),
-                          );
-                        }}
-                      >
-                        <span className="codicon codicon-package" aria-hidden="true" />
+                        <span className={`codicon ${expanded ? 'codicon-folder-opened' : 'codicon-folder'} chat-hub-project-toggle-icon`} aria-hidden="true" />
                       </button>
                       <span className="chat-hub-row-name">{hub.hubId}</span>
                       <button
@@ -6236,67 +6213,62 @@ function App() {
                     {colorMenuOpen ? (
                       <div className="chat-hub-color-palette" aria-label={`Color options for ${hub.hubId}`}>
                         <div className="chat-hub-color-grid">
-                          {HUB_COLOR_PRESETS.map(color => (
-                            <button
-                              key={`${hub.hubId}:${color}`}
-                              type="button"
-                              className={`chat-hub-color-swatch${hubColors[hub.hubId] === color ? ' selected' : ''}`}
-                              style={{'--swatch-color': color} as React.CSSProperties}
-                              aria-label={`Set ${hub.hubId} color to ${color}`}
-                              onClick={() => setHubColors(current => setHubColorPreference(current, hub.hubId, color))}
-                            />
-                          ))}
+                          {HUB_COLOR_PRESETS.map(color => {
+                            const defaultSwatch = color === defaultHubColor;
+                            return (
+                              <button
+                                key={`${hub.hubId}:${color}`}
+                                type="button"
+                                className={`chat-hub-color-swatch${currentHubColor === color ? ' selected' : ''}${defaultSwatch ? ' default' : ''}`}
+                                style={{'--swatch-color': color} as React.CSSProperties}
+                                aria-label={defaultSwatch ? `Restore default color for ${hub.hubId}` : `Set ${hub.hubId} color to ${color}`}
+                                onClick={() => setHubColors(current =>
+                                  setHubColorPreference(current, hub.hubId, defaultSwatch ? '' : color)
+                                )}
+                              >
+                                {defaultSwatch ? <span className="chat-hub-color-default-badge" aria-hidden="true">D</span> : null}
+                              </button>
+                            );
+                          })}
                         </div>
-                        <div className="chat-hub-color-actions">
-                          <button
-                            type="button"
-                            className={`chat-hub-color-default${hubColors[hub.hubId] ? '' : ' selected'}`}
-                            aria-label={`Use default color for ${hub.hubId}`}
-                            style={hubDefaultAccentStyle(hub.hubId)}
-                            onClick={() => setHubColors(current => setHubColorPreference(current, hub.hubId, ''))}
+                        <div className="chat-hub-color-custom" style={customHubColorStyle}>
+                          <div className="chat-hub-color-custom-header">
+                            <span className="chat-hub-color-custom-label">Custom</span>
+                            <span className="chat-hub-color-custom-preview" aria-hidden="true" />
+                          </div>
+                          <div
+                            className="chat-hub-color-sv"
+                            role="slider"
+                            tabIndex={0}
+                            aria-label={`Set saturation and brightness for ${hub.hubId}`}
+                            aria-valuetext={`${Math.round(currentHubHsv.s * 100)}% saturation, ${Math.round(currentHubHsv.v * 100)}% brightness`}
+                            onPointerDown={event => applyHubColorSvPointer(hub.hubId, currentHubHsv, event)}
+                            onPointerMove={event => {
+                              if (event.pointerType === 'mouse' && event.buttons === 0) {
+                                return;
+                              }
+                              applyHubColorSvPointer(hub.hubId, currentHubHsv, event);
+                            }}
                           >
-                            <span className="chat-hub-color-default-label">Default</span>
-                            <span className="chat-hub-color-default-swatch" aria-hidden="true" />
-                          </button>
-                          <div className="chat-hub-color-custom" style={customHubColorStyle}>
-                            <div className="chat-hub-color-custom-header">
-                              <span className="chat-hub-color-custom-label">Custom</span>
-                              <span className="chat-hub-color-custom-preview" aria-hidden="true" />
-                            </div>
-                            <div
-                              className="chat-hub-color-sv"
-                              role="slider"
-                              tabIndex={0}
-                              aria-label={`Set saturation and brightness for ${hub.hubId}`}
-                              aria-valuetext={`${Math.round(currentHubHsv.s * 100)}% saturation, ${Math.round(currentHubHsv.v * 100)}% brightness`}
-                              onPointerDown={event => applyHubColorSvPointer(hub.hubId, currentHubHsv, event)}
-                              onPointerMove={event => {
-                                if (event.pointerType === 'mouse' && event.buttons === 0) {
-                                  return;
-                                }
-                                applyHubColorSvPointer(hub.hubId, currentHubHsv, event);
-                              }}
-                            >
-                              <span className="chat-hub-color-sv-thumb" aria-hidden="true" />
-                            </div>
-                            <div
-                              className="chat-hub-color-hue"
-                              role="slider"
-                              tabIndex={0}
-                              aria-label={`Set hue for ${hub.hubId}`}
-                              aria-valuemin={0}
-                              aria-valuemax={360}
-                              aria-valuenow={currentHubHsv.h}
-                              onPointerDown={event => applyHubColorHuePointer(hub.hubId, currentHubHsv, event)}
-                              onPointerMove={event => {
-                                if (event.pointerType === 'mouse' && event.buttons === 0) {
-                                  return;
-                                }
-                                applyHubColorHuePointer(hub.hubId, currentHubHsv, event);
-                              }}
-                            >
-                              <span className="chat-hub-color-hue-thumb" aria-hidden="true" />
-                            </div>
+                            <span className="chat-hub-color-sv-thumb" aria-hidden="true" />
+                          </div>
+                          <div
+                            className="chat-hub-color-hue"
+                            role="slider"
+                            tabIndex={0}
+                            aria-label={`Set hue for ${hub.hubId}`}
+                            aria-valuemin={0}
+                            aria-valuemax={360}
+                            aria-valuenow={currentHubHsv.h}
+                            onPointerDown={event => applyHubColorHuePointer(hub.hubId, currentHubHsv, event)}
+                            onPointerMove={event => {
+                              if (event.pointerType === 'mouse' && event.buttons === 0) {
+                                return;
+                              }
+                              applyHubColorHuePointer(hub.hubId, currentHubHsv, event);
+                            }}
+                          >
+                            <span className="chat-hub-color-hue-thumb" aria-hidden="true" />
                           </div>
                         </div>
                       </div>
@@ -6349,9 +6321,7 @@ function App() {
     chatHubTreeItems,
     effectiveExpandedHubIds,
     hiddenProjectIdSet,
-    hiddenProjectIds,
     hubAccentStyle,
-    hubDefaultAccentStyle,
     hubColors,
     localHubReadStatuses,
     projects.length,
