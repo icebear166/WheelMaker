@@ -6114,8 +6114,8 @@ function App() {
                   : `Show all projects in ${hub.hubId}`;
                 const colorMenuOpen = chatHubColorMenuHubId === hub.hubId;
                 const currentHubColor = hubColors[hub.hubId] || HUB_COLOR_PRESETS[0];
-                return (
-                  <div key={hub.hubId} className={`chat-hub-tree${colorMenuOpen ? ' color-open' : ''}`}>
+                    return (
+                      <div key={hub.hubId} className={`chat-hub-tree${expanded ? ' expanded' : ''}${colorMenuOpen ? ' color-open' : ''}`}>
                     <div className="chat-hub-row">
                       <button
                         type="button"
@@ -6162,34 +6162,36 @@ function App() {
                     </div>
                     {colorMenuOpen ? (
                       <div className="chat-hub-color-palette" aria-label={`Color options for ${hub.hubId}`}>
-                        <div className="chat-hub-color-palette-top">
-                          <button
-                            type="button"
-                            className={`chat-hub-color-mode chat-hub-color-default${hubColors[hub.hubId] ? '' : ' selected'}`}
-                            onClick={() => setHubColors(current => setHubColorPreference(current, hub.hubId, ''))}
-                          >
-                            <span className="chat-hub-color-mode-label">Default</span>
-                            <span className="chat-hub-color-mode-preview default" aria-hidden="true" />
-                          </button>
-                          <label className={`chat-hub-color-mode chat-hub-color-custom${hubColors[hub.hubId] ? ' selected' : ''}`}>
-                            <span className="chat-hub-color-mode-label">Custom</span>
-                            <span
-                              className="chat-hub-color-mode-preview custom"
-                              style={hubAccentStyle(hub.hubId)}
-                              aria-hidden="true"
-                            />
-                            <input
-                              type="color"
-                              value={currentHubColor}
-                              aria-label={`Custom color for ${hub.hubId}`}
-                              onChange={event => {
-                                const customHubColor = event.currentTarget.value;
-                                setHubColors(current =>
-                                  setHubColorPreference(current, hub.hubId, customHubColor),
-                                );
-                              }}
-                            />
-                          </label>
+                        <div className="chat-hub-color-toolbar">
+                          <span className="chat-hub-color-title">Hub color</span>
+                          <div className="chat-hub-color-tools">
+                            <button
+                              type="button"
+                              className={`chat-hub-color-reset${hubColors[hub.hubId] ? '' : ' selected'}`}
+                              aria-label={`Use default color for ${hub.hubId}`}
+                              onClick={() => setHubColors(current => setHubColorPreference(current, hub.hubId, ''))}
+                            >
+                              Default
+                            </button>
+                            <label className="chat-hub-color-well">
+                              <span
+                                className="chat-hub-color-well-swatch"
+                                style={hubAccentStyle(hub.hubId)}
+                                aria-hidden="true"
+                              />
+                              <input
+                                type="color"
+                                value={currentHubColor}
+                                aria-label={`Custom color for ${hub.hubId}`}
+                                onChange={event => {
+                                  const customHubColor = event.currentTarget.value;
+                                  setHubColors(current =>
+                                    setHubColorPreference(current, hub.hubId, customHubColor),
+                                  );
+                                }}
+                              />
+                            </label>
+                          </div>
                         </div>
                         <div className="chat-hub-color-grid">
                           {HUB_COLOR_PRESETS.map(color => (

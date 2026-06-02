@@ -440,7 +440,7 @@ describe('web responsive ui state', () => {
     expect(mainTsx).toContain('const visibleProjectItems = visibility.visibleProjects;');
     expect(mainTsx).toContain('const hiddenProjectItems = visibility.hiddenProjects;');
     expect(mainTsx).toContain('className="chat-hidden-project-row"');
-    expect(mainTsx).toContain('className={`chat-hub-tree${colorMenuOpen ? \' color-open\' : \'\'}`}');
+    expect(mainTsx).toContain('className={`chat-hub-tree${expanded ? \' expanded\' : \'\'}${colorMenuOpen ? \' color-open\' : \'\'}`}');
   });
 
   test('renders hub display preferences with isolated square color controls', () => {
@@ -461,13 +461,17 @@ describe('web responsive ui state', () => {
     expect(mainTsx).not.toContain('className="chat-hub-color-trigger"');
     expect(mainTsx).not.toContain('className={`chat-hub-visibility-check ${visibilityState}`}');
     expect(mainTsx).toContain("const hubEnabled = visibilityState !== 'unchecked';");
-    expect(mainTsx).toContain('className={`chat-hub-tree${colorMenuOpen ? \' color-open\' : \'\'}`}');
+    expect(mainTsx).toContain('className={`chat-hub-tree${expanded ? \' expanded\' : \'\'}${colorMenuOpen ? \' color-open\' : \'\'}`}');
     expect(mainTsx).toContain('className={`chat-hub-visibility-cube ${hubEnabled ? \'enabled\' : \'disabled\'} ${visibilityState}`}');
     expect(mainTsx).toContain('aria-pressed={hubEnabled}');
     expect(mainTsx).toContain('toggleHubVisibility(current, treeItem.projects, visibilityState === \'unchecked\')');
     expect(mainTsx).toContain("style={{'--swatch-color': color} as React.CSSProperties}");
-    expect(mainTsx).toContain('className="chat-hub-color-mode-preview default"');
-    expect(mainTsx).toContain('className="chat-hub-color-mode-preview custom"');
+    expect(mainTsx).toContain('className="chat-hub-color-toolbar"');
+    expect(mainTsx).toContain('className="chat-hub-color-title"');
+    expect(mainTsx).toContain('className={`chat-hub-color-reset${hubColors[hub.hubId] ? \'\' : \' selected\'}`}');
+    expect(mainTsx).toContain('className="chat-hub-color-well"');
+    expect(mainTsx).toContain('className="chat-hub-color-well-swatch"');
+    expect(mainTsx).not.toContain('className={`chat-hub-color-mode chat-hub-color-custom');
 
     const popoverBlock = stylesCss.match(/\.chat-hub-popover \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(popoverBlock).toContain('width: min(340px, calc(100vw - 24px));');
@@ -475,8 +479,15 @@ describe('web responsive ui state', () => {
 
     const treeBlock = stylesCss.match(/(?:^|\n)\.chat-hub-tree \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(treeBlock).toContain('position: relative;');
+    expect(stylesCss).toContain('.chat-hub-tree.expanded .chat-hub-disclosure {');
     expect(stylesCss).toContain('.chat-hub-tree.color-open {');
     expect(stylesCss).toContain('.chat-hub-color-palette::before {');
+
+    const rowBlock = stylesCss.match(/\.chat-hub-row,\n\.chat-hub-empty \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(rowBlock).toContain('grid-template-columns: 16px 24px minmax(0, 1fr) 28px auto;');
+
+    const disclosureBlock = stylesCss.match(/\.chat-hub-disclosure \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(disclosureBlock).toContain('width: 16px;');
 
     const swatchBlock = stylesCss.match(/\.chat-hub-color-swatch \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(swatchBlock).toContain('background: var(--swatch-color);');
@@ -488,11 +499,17 @@ describe('web responsive ui state', () => {
     expect(paletteBlock).toContain('width: min(286px, calc(100% - 16px));');
 
     const customInputBlock = stylesCss.match(/\.chat-hub-color-custom input \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(customInputBlock).toContain('pointer-events: auto;');
-    expect(customInputBlock).not.toContain('pointer-events: none;');
+    expect(customInputBlock).toBe('');
 
-    const defaultPreviewBlock = stylesCss.match(/\.chat-hub-color-mode-preview\.default \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(defaultPreviewBlock).toContain('background: var(--accent);');
+    const wellInputBlock = stylesCss.match(/\.chat-hub-color-well input \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(wellInputBlock).toContain('pointer-events: auto;');
+    expect(wellInputBlock).not.toContain('pointer-events: none;');
+
+    const projectListBlock = stylesCss.match(/\.chat-hub-project-list \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(projectListBlock).toContain('margin: 4px 6px 6px 28px;');
+    expect(projectListBlock).toContain('border-radius: 7px;');
+    expect(projectListBlock).not.toContain('margin: 3px 6px 6px 54px;');
+    expect(projectListBlock).not.toContain('border-left:');
   });
 
   test('captures custom hub color before dispatching a deferred updater', () => {
@@ -501,11 +518,12 @@ describe('web responsive ui state', () => {
       .readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8')
       .replace(/\r\n/g, '\n');
 
-    const customColorHandlerStart = mainTsx.indexOf('onChange={event => {\n                                const customHubColor = event.currentTarget.value;');
+    const customColorHandlerStart = mainTsx.indexOf('onChange={event => {', mainTsx.indexOf('className="chat-hub-color-well"'));
     expect(customColorHandlerStart).toBeGreaterThanOrEqual(0);
     const customColorHandlerEnd = mainTsx.indexOf('                              }}', customColorHandlerStart);
     expect(customColorHandlerEnd).toBeGreaterThan(customColorHandlerStart);
     const customColorHandler = mainTsx.slice(customColorHandlerStart, customColorHandlerEnd);
+    expect(customColorHandler).toContain('const customHubColor = event.currentTarget.value;');
     expect(customColorHandler).toContain('setHubColorPreference(current, hub.hubId, customHubColor)');
     expect(customColorHandler).not.toContain('setHubColorPreference(current, hub.hubId, event.currentTarget.value)');
   });

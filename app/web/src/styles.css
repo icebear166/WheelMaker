@@ -6826,9 +6826,9 @@ textarea,
 .chat-hub-empty {
   min-height: 36px;
   display: grid;
-  grid-template-columns: 20px 26px minmax(0, 1fr) 32px auto;
+  grid-template-columns: 16px 24px minmax(0, 1fr) 28px auto;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   padding: 4px 6px;
   border-radius: 6px;
   font-size: 12px;
@@ -6845,8 +6845,8 @@ textarea,
 .chat-hub-disclosure,
 .chat-hub-visibility-cube,
 .chat-hub-color-square,
-.chat-hub-color-mode,
-.chat-hub-color-custom,
+.chat-hub-color-reset,
+.chat-hub-color-well,
 .chat-hub-color-swatch,
 .chat-hub-project-row {
   border: none;
@@ -6860,32 +6860,38 @@ textarea,
 
 .chat-hub-disclosure,
 .chat-hub-color-square {
-  width: 20px;
+  width: 18px;
   height: 20px;
   border-radius: 5px;
 }
 
 .chat-hub-disclosure {
-  width: 20px;
+  width: 16px;
+  color: color-mix(in srgb, var(--muted) 86%, var(--text));
+}
+
+.chat-hub-tree.expanded .chat-hub-disclosure {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: color-mix(in srgb, var(--accent) 74%, var(--text));
 }
 
 .chat-hub-disclosure:hover,
 .chat-hub-visibility-cube:hover,
 .chat-hub-color-square:hover,
-.chat-hub-color-mode:hover,
-.chat-hub-project-row:hover,
-.chat-hub-color-custom:hover {
+.chat-hub-color-reset:hover,
+.chat-hub-color-well:hover,
+.chat-hub-project-row:hover {
   background: color-mix(in srgb, var(--hover) 86%, transparent);
   color: var(--text);
 }
 
 .chat-hub-visibility-cube {
   --hub-accent: var(--accent);
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   border-radius: 6px;
   color: var(--hub-accent);
-  font-size: 21px;
+  font-size: 20px;
 }
 
 .chat-hub-visibility-cube.enabled {
@@ -6903,8 +6909,8 @@ textarea,
 
 .chat-hub-color-square {
   --hub-accent: var(--accent);
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border: 1px solid color-mix(in srgb, var(--hub-accent) 58%, var(--border));
   border-radius: 8px;
   background: color-mix(in srgb, var(--hub-accent) 12%, var(--panel-2));
@@ -6917,8 +6923,8 @@ textarea,
 }
 
 .chat-hub-color-square-fill {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   border-radius: 5px;
   background: var(--hub-accent);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
@@ -6979,11 +6985,28 @@ textarea,
   transform: rotate(45deg);
 }
 
-.chat-hub-color-palette-top {
+.chat-hub-color-toolbar {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
+}
+
+.chat-hub-color-title {
+  min-width: 0;
+  color: color-mix(in srgb, var(--muted) 84%, var(--text));
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-hub-color-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .chat-hub-color-grid {
@@ -7002,57 +7025,44 @@ textarea,
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 
-.chat-hub-color-mode {
-  min-width: 0;
-  height: 38px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 28px;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
-  border-radius: 7px;
-  padding: 0 8px;
-  color: color-mix(in srgb, var(--text) 82%, var(--muted));
-  background: color-mix(in srgb, var(--panel) 78%, transparent);
-  font-size: 11px;
-  font-weight: 700;
-  text-align: left;
-  overflow: hidden;
-}
-
-.chat-hub-color-mode-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.chat-hub-color-swatch.selected,
-.chat-hub-color-mode.selected {
-  border-color: color-mix(in srgb, var(--accent) 64%, transparent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent),
-    0 0 16px color-mix(in srgb, var(--accent) 16%, transparent);
-}
-
-.chat-hub-color-mode-preview {
-  --hub-accent: var(--accent);
-  width: 26px;
-  height: 26px;
-  border: 1px solid color-mix(in srgb, var(--hub-accent) 64%, var(--border));
+.chat-hub-color-reset {
+  height: 24px;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
   border-radius: 6px;
+  padding: 0 8px;
+  color: color-mix(in srgb, var(--muted) 90%, var(--text));
+  background: color-mix(in srgb, var(--panel) 80%, transparent);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.chat-hub-color-reset.selected {
+  border-color: color-mix(in srgb, var(--accent) 58%, transparent);
+  color: color-mix(in srgb, var(--accent) 76%, var(--text));
+  background: color-mix(in srgb, var(--accent) 11%, var(--panel));
+}
+
+.chat-hub-color-well {
+  --hub-accent: var(--accent);
+  position: relative;
+  width: 30px;
+  height: 24px;
+  border: 1px solid color-mix(in srgb, var(--hub-accent) 60%, var(--border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--hub-accent) 12%, var(--panel));
+  overflow: hidden;
+}
+
+.chat-hub-color-well-swatch {
+  --hub-accent: var(--accent);
+  width: 20px;
+  height: 16px;
+  border-radius: 4px;
   background: var(--hub-accent);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
 }
 
-.chat-hub-color-mode-preview.default {
-  background: var(--accent);
-}
-
-.chat-hub-color-custom {
-  position: relative;
-}
-
-.chat-hub-color-custom input {
+.chat-hub-color-well input {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -7065,10 +7075,23 @@ textarea,
   pointer-events: auto;
 }
 
+.chat-hub-color-well:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 72%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.chat-hub-color-swatch.selected {
+  border-color: color-mix(in srgb, var(--accent) 64%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent),
+    0 0 16px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
 .chat-hub-project-list {
-  margin: 3px 6px 6px 54px;
-  padding-left: 8px;
-  border-left: 1px dashed color-mix(in srgb, var(--border) 86%, transparent);
+  margin: 4px 6px 6px 28px;
+  padding: 4px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--panel-2) 42%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 62%, transparent);
 }
 
 .chat-hub-project-row {
