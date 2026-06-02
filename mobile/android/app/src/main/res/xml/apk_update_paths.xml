@@ -3,4 +3,7 @@
     <cache-path
         name="apk_updates"
         path="apk-updates/" />
+    <cache-path
+        name="image_shares"
+        path="image-shares/" />
 </paths>

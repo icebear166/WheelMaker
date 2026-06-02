@@ -42,6 +42,7 @@ class MainActivity : Activity() {
     private lateinit var androidSpeechRuntime: AndroidSpeechRuntime
     private lateinit var androidNotificationRuntime: AndroidNotificationRuntime
     private lateinit var androidApkUpdateRuntime: AndroidApkUpdateRuntime
+    private lateinit var androidImageShareRuntime: AndroidImageShareRuntime
     private lateinit var androidWebDiagnostics: AndroidWebDiagnostics
     private lateinit var androidDiagnosticLogLevelStore: AndroidDiagnosticLogLevelStore
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
@@ -67,6 +68,7 @@ class MainActivity : Activity() {
         androidSpeechRuntime = AndroidSpeechRuntime(this, webView, NATIVE_SPEECH_PERMISSION_REQUEST_CODE)
         androidNotificationRuntime = AndroidNotificationRuntime(this, webView, NOTIFICATION_PERMISSION_REQUEST_CODE)
         androidApkUpdateRuntime = AndroidApkUpdateRuntime(this, webView)
+        androidImageShareRuntime = AndroidImageShareRuntime(this)
         webView.setBackgroundColor(APP_BACKGROUND_COLOR)
         configureWindowInsets(rootView)
         configureWebView(webView)
@@ -219,6 +221,7 @@ class MainActivity : Activity() {
                 androidSpeechRuntime,
                 androidNotificationRuntime,
                 androidApkUpdateRuntime,
+                androidImageShareRuntime,
                 androidWebDiagnostics,
                 androidDiagnosticLogLevelStore
             ),

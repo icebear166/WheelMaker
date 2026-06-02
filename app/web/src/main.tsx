@@ -106,9 +106,9 @@ import {
 } from './chat/chatPromptAttachments';
 import {
   buildPromptMarkdownImageFileName,
-  downloadBlobAsFile,
   renderMarkdownElementToPngBlob,
 } from './chatMarkdownImageExport';
+import { outputResponseImage } from './responseImageOutput';
 import {RegistryDebugPanel} from './debug/RegistryDebugPanel';
 import {createRegistryDebugStore} from './debug/registryDebug';
 import type {RegistryDebugRecord} from './debug/registryDebug';
@@ -1580,6 +1580,7 @@ type ChatTurnViewProps = {
   markdownComponents: Components;
   markdownUrlTransform: (value: string) => string;
   copyDisabled?: boolean;
+  exportBusy?: boolean;
   onCopyPromptDone?: () => void;
   onExportPromptDoneImage?: () => void;
   optionReplies?: ChatOptionReply[];
@@ -1599,6 +1600,7 @@ const ChatTurnView = React.memo(function ChatTurnView({
   markdownComponents,
   markdownUrlTransform,
   copyDisabled = true,
+  exportBusy = false,
   onCopyPromptDone,
   onExportPromptDoneImage,
   optionReplies = [],
@@ -1729,7 +1731,8 @@ const ChatTurnView = React.memo(function ChatTurnView({
             type="button"
             className="chat-prompt-action-button"
             onClick={() => onExportPromptDoneImage?.()}
-            disabled={copyDisabled}
+            disabled={copyDisabled || exportBusy}
+            aria-busy={exportBusy}
             title="Export response image"
             aria-label="Export response markdown image"
           >
@@ -2678,7 +2681,8 @@ type MarkdownImageExportSurfaceProps = {
   markdownComponents: Components;
   markdownUrlTransform: (value: string) => string;
   onComplete: () => void;
-  onError: (message: string) => void;
+  onRenderError: (message: string) => void;
+  onShareError: (message: string) => void;
 };
 
 const markdownPreRenderer: NonNullable<Components['pre']> = ({ children }) => (
@@ -2938,7 +2942,8 @@ const MarkdownImageExportSurface = React.memo(function MarkdownImageExportSurfac
   markdownComponents,
   markdownUrlTransform,
   onComplete,
-  onError,
+  onRenderError,
+  onShareError,
 }: MarkdownImageExportSurfaceProps) {
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const markdownCapabilities = useMarkdownCapabilityPlugins(request.content);
@@ -2950,19 +2955,37 @@ const MarkdownImageExportSurface = React.memo(function MarkdownImageExportSurfac
       if (!surface) {
         return;
       }
+      let blob: Blob;
       try {
         const backgroundColor = getComputedStyle(surface).backgroundColor || '#ffffff';
-        const blob = await renderMarkdownElementToPngBlob(surface, {
+        blob = await renderMarkdownElementToPngBlob(surface, {
           backgroundColor,
+        });
+      } catch (err) {
+        if (!cancelled) {
+          onRenderError(err instanceof Error ? err.message : String(err));
+        }
+        return;
+      }
+      if (cancelled) {
+        return;
+      }
+      try {
+        const result = await outputResponseImage({
+          blob,
+          fileName: request.fileName,
         });
         if (cancelled) {
           return;
         }
-        downloadBlobAsFile(blob, request.fileName);
+        if (!result.ok) {
+          onShareError(result.error || result.status);
+          return;
+        }
         onComplete();
       } catch (err) {
         if (!cancelled) {
-          onError(err instanceof Error ? err.message : String(err));
+          onShareError(err instanceof Error ? err.message : String(err));
         }
       }
     })();
@@ -2975,7 +2998,8 @@ const MarkdownImageExportSurface = React.memo(function MarkdownImageExportSurfac
     markdownComponents,
     markdownUrlTransform,
     onComplete,
-    onError,
+    onRenderError,
+    onShareError,
   ]);
 
   return (
@@ -3739,6 +3763,7 @@ function App() {
   const [chatPendingPromptsByKey, setChatPendingPromptsByKey] = useState<Record<string, PendingChatPrompt>>({});
   const [chatCancellingRuntimeKey, setChatCancellingRuntimeKey] = useState('');
   const [markdownImageExportRequest, setMarkdownImageExportRequest] = useState<MarkdownImageExportRequest | null>(null);
+  const [exportingMarkdownImageTurnIndex, setExportingMarkdownImageTurnIndex] = useState<number | null>(null);
   const markdownImageExportIdRef = useRef(0);
   const chatComposerTextRef = useRef('');
   const chatAttachmentsRef = useRef<ChatAttachment[]>([]);
@@ -16602,12 +16627,16 @@ function App() {
   };
 
   const exportPromptDoneMarkdownImage = async (doneTurnIndex: number) => {
+    if (exportingMarkdownImageTurnIndex !== null) {
+      return;
+    }
     const result = buildPromptDoneCopyRange(selectedFullChatMessages, doneTurnIndex);
     if (!result.ok) {
       return;
     }
     markdownImageExportIdRef.current += 1;
     setError('');
+    setExportingMarkdownImageTurnIndex(doneTurnIndex);
     setMarkdownImageExportRequest({
       id: markdownImageExportIdRef.current,
       content: result.markdown,
@@ -16617,11 +16646,19 @@ function App() {
 
   const completeMarkdownImageExport = useCallback(() => {
     setMarkdownImageExportRequest(null);
+    setExportingMarkdownImageTurnIndex(null);
   }, []);
 
   const failMarkdownImageExport = useCallback((message: string) => {
     setMarkdownImageExportRequest(null);
+    setExportingMarkdownImageTurnIndex(null);
     setError(`Failed to export response image: ${message}`);
+  }, []);
+
+  const failMarkdownImageShare = useCallback((message: string) => {
+    setMarkdownImageExportRequest(null);
+    setExportingMarkdownImageTurnIndex(null);
+    setError(`Failed to share response image: ${message}`);
   }, []);
 
   const selectedChatHasOpenPromptTurn = selectedFullChatMessages.some(message =>
@@ -16719,6 +16756,7 @@ function App() {
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}
           copyDisabled={copyRange ? !copyRange.ok : true}
+          exportBusy={message.method === 'prompt_done' && exportingMarkdownImageTurnIndex !== null}
           optionReplies={optionReplies}
           optionRepliesDisabled={chatSending}
           confirmationReply={confirmationReply}
@@ -18762,7 +18800,8 @@ function App() {
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}
           onComplete={completeMarkdownImageExport}
-          onError={failMarkdownImageExport}
+          onRenderError={failMarkdownImageExport}
+          onShareError={failMarkdownImageShare}
         />
       ) : null}
       {appRenameDialog}

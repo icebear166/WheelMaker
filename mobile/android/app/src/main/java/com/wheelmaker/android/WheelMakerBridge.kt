@@ -8,6 +8,7 @@ class WheelMakerBridge(
     private val androidSpeechRuntime: AndroidSpeechRuntime,
     private val androidNotificationRuntime: AndroidNotificationRuntime,
     private val androidApkUpdateRuntime: AndroidApkUpdateRuntime,
+    private val androidImageShareRuntime: AndroidImageShareRuntime,
     private val androidWebDiagnostics: AndroidWebDiagnostics,
     private val androidDiagnosticLogLevelStore: AndroidDiagnosticLogLevelStore
 ) {
@@ -81,4 +82,7 @@ class WheelMakerBridge(
 
     @JavascriptInterface
     fun installAndroidRelease(rawJson: String): String = androidApkUpdateRuntime.installRelease(rawJson)
+
+    @JavascriptInterface
+    fun shareResponseImage(rawJson: String): String = androidImageShareRuntime.shareResponseImage(rawJson)
 }

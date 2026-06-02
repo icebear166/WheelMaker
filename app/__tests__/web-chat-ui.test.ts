@@ -379,6 +379,7 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('gitStatusSummary');
     expect(mainTsx).not.toContain('chat-thought-label');
     expect(mainTsx).toContain("import { buildPromptDoneCopyRange } from './chat/chatCopyRange';");
+    expect(mainTsx).toContain("import { outputResponseImage } from './responseImageOutput';");
     expect(mainTsx).toContain('const copyRange = message.method === \'prompt_done\'');
     expect(mainTsx).toContain('className="chat-prompt-actions"');
     expect(mainTsx).toContain('className="chat-prompt-action-button"');
@@ -388,6 +389,11 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('codicon codicon-device-camera');
     expect(mainTsx).toContain('onExportPromptDoneImage');
     expect(mainTsx).toContain('exportPromptDoneMarkdownImage(doneTurnIndex)');
+    expect(mainTsx).toContain('exportingMarkdownImageTurnIndex');
+    expect(mainTsx).toContain('disabled={copyDisabled || exportBusy}');
+    expect(mainTsx).toContain('aria-busy={exportBusy}');
+    expect(mainTsx).toContain('outputResponseImage({');
+    expect(mainTsx).toContain('setError(`Failed to share response image: ${message}`);');
     expect(mainTsx).toContain('img: ({ src, alt, ...rest }) => (');
     expect(mainTsx).toContain('crossOrigin="anonymous"');
     expect(stylesCss).toContain('.chat-prompt-actions {');
