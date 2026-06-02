@@ -5758,6 +5758,14 @@ textarea,
   flex: 0 0 auto;
   max-width: min(136px, 40vw);
   margin-left: 0;
+  position: static;
+}
+
+.mobile-chat-drawer-header .chat-hub-popover {
+  left: 7px;
+  right: 7px;
+  width: auto;
+  max-width: none;
 }
 
 .mobile-chat-drawer-header .session-search-control,

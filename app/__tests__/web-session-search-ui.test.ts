@@ -147,4 +147,18 @@ describe('web session search UI wiring', () => {
     expect(sidebarPopoverBlock).toContain('max-width: calc(100vw - 24px);');
     expect(sidebarPopoverBlock).not.toContain('max-width: none;');
   });
+
+  test('keeps the mobile Hub popover inside the drawer header frame', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const styles = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+
+    const mobileSummaryBlock = styles.match(/\.mobile-chat-drawer-header \.chat-hub-summary \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(mobileSummaryBlock).toContain('position: static;');
+
+    const mobilePopoverBlock = styles.match(/\.mobile-chat-drawer-header \.chat-hub-popover \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(mobilePopoverBlock).toContain('left: 7px;');
+    expect(mobilePopoverBlock).toContain('right: 7px;');
+    expect(mobilePopoverBlock).toContain('width: auto;');
+    expect(mobilePopoverBlock).toContain('max-width: none;');
+  });
 });
