@@ -163,6 +163,8 @@ import { sortProjectsByPin, togglePinnedProjectId } from './services/projectNavi
 import {
   HUB_COLOR_PRESETS,
   findNextVisibleProject,
+  hubColorToHsv,
+  hubHsvToColor,
   resolveDefaultHubColor,
   resolveHubColor,
   resolveHubColorVariantIndex,
@@ -171,6 +173,7 @@ import {
   splitProjectsByVisibility,
   toggleHubVisibility,
   toggleProjectVisibility,
+  type HubColorHsv,
 } from './services/hubProjectPreferences';
 import { triggerMobileHaptic } from './services/mobileHaptics';
 import {
@@ -4821,6 +4824,45 @@ function App() {
     const color = resolveDefaultHubColor(hubId);
     return {'--hub-accent': color, '--pill-accent': color} as React.CSSProperties;
   }, []);
+  const applyHubColorSvPointer = useCallback((
+    hubId: string,
+    hsv: HubColorHsv,
+    event: React.PointerEvent<HTMLElement>,
+  ) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) {
+      return;
+    }
+    event.preventDefault();
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture may fail for synthetic or already-ended pointer events.
+    }
+    const saturation = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    const brightness = 1 - Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+    const nextColor = hubHsvToColor({h: hsv.h, s: saturation, v: brightness});
+    setHubColors(current => setHubColorPreference(current, hubId, nextColor));
+  }, [setHubColors]);
+  const applyHubColorHuePointer = useCallback((
+    hubId: string,
+    hsv: HubColorHsv,
+    event: React.PointerEvent<HTMLElement>,
+  ) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0) {
+      return;
+    }
+    event.preventDefault();
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture may fail for synthetic or already-ended pointer events.
+    }
+    const hueRatio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    const nextColor = hubHsvToColor({h: hueRatio * 360, s: hsv.s || 1, v: hsv.v || 1});
+    setHubColors(current => setHubColorPreference(current, hubId, nextColor));
+  }, [setHubColors]);
   const sessionSearchSections = useMemo(
     () => buildSessionSearchSections({
       projects: visibleProjectItems,
@@ -5732,10 +5774,21 @@ function App() {
   useEffect(() => {
     if (!chatHubMenuOpen) return;
     const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as Node | null;
-      if (target && chatHubMenuRef.current?.contains(target)) return;
-      setChatHubMenuOpen(false);
-      setChatHubColorMenuHubId('');
+      if (!chatHubMenuRef.current) return;
+      if (!chatHubMenuRef.current.contains(event.target as Node)) {
+        setChatHubMenuOpen(false);
+        setChatHubColorMenuHubId('');
+        return;
+      }
+      const targetElement = event.target instanceof Element ? event.target : null;
+      if (
+        chatHubColorMenuHubId &&
+        targetElement &&
+        !targetElement.closest('.chat-hub-color-palette') &&
+        !targetElement.closest('.chat-hub-color-square')
+      ) {
+        setChatHubColorMenuHubId('');
+      }
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -5749,7 +5802,7 @@ function App() {
       window.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [chatHubMenuOpen]);
+  }, [chatHubColorMenuHubId, chatHubMenuOpen]);
 
   useEffect(() => {
     if (tab !== 'chat' || sidebarSettingsOpen) {
@@ -6054,6 +6107,7 @@ function App() {
     setChatConfigMenuOptionId('');
     setChatConfigOverflowOpen(false);
     setChatHubMenuOpen(false);
+    setChatHubColorMenuHubId('');
   }, [setChatConfigOverflowOpen]);
   const handleMobileBreadcrumbProjectClick = useCallback(() => {
     closeMobileDrawerCompanionOverlays();
@@ -6099,6 +6153,7 @@ function App() {
             setChatFileMentionMenuOpen(false);
             setChatConfigMenuOptionId('');
             setChatConfigOverflowOpen(false);
+            setChatHubColorMenuHubId('');
             setChatHubMenuOpen(open => !open);
           }}
         >
@@ -6122,6 +6177,15 @@ function App() {
                   : `Show all projects in ${hub.hubId}`;
                 const colorMenuOpen = chatHubColorMenuHubId === hub.hubId;
                 const currentHubColor = resolveHubColor(hubColors, hub.hubId);
+                const currentHubHsv = hubColorToHsv(currentHubColor);
+                const currentHubHueColor = hubHsvToColor({h: currentHubHsv.h, s: 1, v: 1});
+                const customHubColorStyle = {
+                  ...hubAccentStyle(hub.hubId),
+                  '--hub-custom-hue': currentHubHueColor,
+                  '--hub-custom-s': `${currentHubHsv.s * 100}%`,
+                  '--hub-custom-v': `${(1 - currentHubHsv.v) * 100}%`,
+                  '--hub-custom-h': `${(currentHubHsv.h / 360) * 100}%`,
+                } as React.CSSProperties;
                     return (
                       <div key={hub.hubId} className={`chat-hub-tree${expanded ? ' expanded' : ''}${colorMenuOpen ? ' color-open' : ''}`}>
                     <div className="chat-hub-row">
@@ -6193,21 +6257,46 @@ function App() {
                             <span className="chat-hub-color-default-label">Default</span>
                             <span className="chat-hub-color-default-swatch" aria-hidden="true" />
                           </button>
-                          <label className="chat-hub-color-custom-picker" style={hubAccentStyle(hub.hubId)}>
-                            <span className="chat-hub-color-custom-label">Custom</span>
-                            <span className="chat-hub-color-custom-swatch" aria-hidden="true" />
-                            <input
-                              type="color"
-                              value={currentHubColor}
-                              aria-label={`Custom color for ${hub.hubId}`}
-                              onChange={event => {
-                                const customHubColor = event.currentTarget.value;
-                                setHubColors(current =>
-                                  setHubColorPreference(current, hub.hubId, customHubColor),
-                                );
+                          <div className="chat-hub-color-custom" style={customHubColorStyle}>
+                            <div className="chat-hub-color-custom-header">
+                              <span className="chat-hub-color-custom-label">Custom</span>
+                              <span className="chat-hub-color-custom-preview" aria-hidden="true" />
+                            </div>
+                            <div
+                              className="chat-hub-color-sv"
+                              role="slider"
+                              tabIndex={0}
+                              aria-label={`Set saturation and brightness for ${hub.hubId}`}
+                              aria-valuetext={`${Math.round(currentHubHsv.s * 100)}% saturation, ${Math.round(currentHubHsv.v * 100)}% brightness`}
+                              onPointerDown={event => applyHubColorSvPointer(hub.hubId, currentHubHsv, event)}
+                              onPointerMove={event => {
+                                if (event.pointerType === 'mouse' && event.buttons === 0) {
+                                  return;
+                                }
+                                applyHubColorSvPointer(hub.hubId, currentHubHsv, event);
                               }}
-                            />
-                          </label>
+                            >
+                              <span className="chat-hub-color-sv-thumb" aria-hidden="true" />
+                            </div>
+                            <div
+                              className="chat-hub-color-hue"
+                              role="slider"
+                              tabIndex={0}
+                              aria-label={`Set hue for ${hub.hubId}`}
+                              aria-valuemin={0}
+                              aria-valuemax={360}
+                              aria-valuenow={currentHubHsv.h}
+                              onPointerDown={event => applyHubColorHuePointer(hub.hubId, currentHubHsv, event)}
+                              onPointerMove={event => {
+                                if (event.pointerType === 'mouse' && event.buttons === 0) {
+                                  return;
+                                }
+                                applyHubColorHuePointer(hub.hubId, currentHubHsv, event);
+                              }}
+                            >
+                              <span className="chat-hub-color-hue-thumb" aria-hidden="true" />
+                            </div>
+                          </div>
                         </div>
                       </div>
                     ) : null}
@@ -6252,6 +6341,8 @@ function App() {
       </div>
     );
   }, [
+    applyHubColorHuePointer,
+    applyHubColorSvPointer,
     chatHubColorMenuHubId,
     chatHubMenuOpen,
     chatHubTreeItems,

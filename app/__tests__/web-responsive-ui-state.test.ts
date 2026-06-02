@@ -479,10 +479,19 @@ describe('web responsive ui state', () => {
     expect(mainTsx).toContain('className={`chat-hub-color-default${hubColors[hub.hubId] ? \'\' : \' selected\'}`}');
     expect(mainTsx).toContain('className="chat-hub-color-default-swatch"');
     expect(mainTsx).toContain('style={hubDefaultAccentStyle(hub.hubId)}');
-    expect(mainTsx).toContain('className="chat-hub-color-custom-picker"');
-    expect(mainTsx).toContain('className="chat-hub-color-custom-label">Custom</span>');
-    expect(mainTsx).toContain('className="chat-hub-color-custom-swatch"');
+    expect(mainTsx).toContain('className="chat-hub-color-custom"');
+    expect(mainTsx).toContain('className="chat-hub-color-custom-header"');
+    expect(mainTsx).toContain('className="chat-hub-color-custom-preview"');
+    expect(mainTsx).toContain('className="chat-hub-color-sv"');
+    expect(mainTsx).toContain('className="chat-hub-color-sv-thumb"');
+    expect(mainTsx).toContain('className="chat-hub-color-hue"');
+    expect(mainTsx).toContain('className="chat-hub-color-hue-thumb"');
+    expect(mainTsx).toContain('applyHubColorSvPointer(hub.hubId, currentHubHsv, event)');
+    expect(mainTsx).toContain('applyHubColorHuePointer(hub.hubId, currentHubHsv, event)');
+    expect(mainTsx).not.toContain('type="color"');
     expect(mainTsx).not.toContain('className={`chat-hub-color-mode chat-hub-color-custom');
+    expect(mainTsx).toContain('if (!chatHubMenuRef.current.contains(event.target as Node)) {');
+    expect(mainTsx).toContain("setChatHubColorMenuHubId('');");
 
     const popoverBlock = stylesCss.match(/\.chat-hub-popover \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(popoverBlock).toContain('width: min(340px, calc(100vw - 24px));');
@@ -493,7 +502,7 @@ describe('web responsive ui state', () => {
     expect(stylesCss).toContain('.chat-hub-tree.expanded .chat-hub-disclosure {');
     const colorOpenBlock = stylesCss.match(/\.chat-hub-tree\.color-open \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(colorOpenBlock).toContain('min-height: calc(36px + var(--chat-hub-color-palette-clearance));');
-    expect(colorOpenBlock).toContain('--chat-hub-color-palette-clearance: 134px;');
+    expect(colorOpenBlock).toContain('--chat-hub-color-palette-clearance: 306px;');
     const colorOpenProjectListBlock = stylesCss.match(/\.chat-hub-tree\.color-open \.chat-hub-project-list \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(colorOpenProjectListBlock).toContain('margin-top: var(--chat-hub-color-palette-clearance);');
     expect(stylesCss).toContain('.chat-hub-color-palette::before {');
@@ -514,6 +523,7 @@ describe('web responsive ui state', () => {
       .find(block => block.includes('--hub-accent')) ?? '';
     expect(colorSquareBlock).toContain('width: 24px;');
     expect(colorSquareBlock).toContain('height: 24px;');
+    expect(colorSquareBlock).toContain('border: 1px solid transparent;');
     expect(colorSquareBlock).toContain('background: color-mix(in srgb, var(--panel-2) 78%, transparent);');
     expect(colorSquareBlock).not.toContain('linear-gradient');
     expect(colorSquareBlock).not.toContain('0 5px 14px');
@@ -536,22 +546,26 @@ describe('web responsive ui state', () => {
     expect(colorGridBlock).toContain('grid-template-columns: repeat(5, minmax(0, 1fr));');
 
     const selectedSwatchBlock = stylesCss.match(/\.chat-hub-color-swatch\.selected \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(selectedSwatchBlock).toContain('box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--swatch-color) 68%, var(--text));');
+    expect(selectedSwatchBlock).toContain('inset 0 0 0 1px rgba(255, 255, 255, 0.24)');
+    expect(selectedSwatchBlock).toContain('0 0 0 2px color-mix(in srgb, var(--panel) 80%, transparent)');
     expect(selectedSwatchBlock).not.toContain('0 0 16px');
     expect(stylesCss).toContain('.chat-hub-color-swatch.selected::after {');
 
-    const customInputBlock = stylesCss.match(/\.chat-hub-color-custom input \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(customInputBlock).toBe('');
+    const nativeColorInputBlock = mainTsx.match(/<input[\s\S]*?type="color"[\s\S]*?>/)?.[0] ?? '';
+    expect(nativeColorInputBlock).toBe('');
 
-    const customPickerBlock = Array.from(stylesCss.matchAll(/\.chat-hub-color-custom-picker \{[\s\S]*?\n\}/g))
-      .map(match => match[0])
-      .find(block => block.includes('position: relative;')) ?? '';
-    expect(customPickerBlock).toContain('grid-template-columns: minmax(0, 1fr) 26px;');
-    expect(customPickerBlock).toContain('position: relative;');
+    const customPickerBlock = stylesCss.match(/\.chat-hub-color-custom \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(customPickerBlock).toContain('display: grid;');
+    expect(customPickerBlock).toContain('gap: 7px;');
 
-    const customPickerInputBlock = stylesCss.match(/\.chat-hub-color-custom-picker input \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(customPickerInputBlock).toContain('pointer-events: auto;');
-    expect(customPickerInputBlock).not.toContain('pointer-events: none;');
+    const svBlock = stylesCss.match(/\.chat-hub-color-sv \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(svBlock).toContain('touch-action: none;');
+    expect(svBlock).toContain('aspect-ratio: 2 / 1;');
+    expect(svBlock).toContain('var(--hub-custom-hue)');
+
+    const hueBlock = stylesCss.match(/\.chat-hub-color-hue \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(hueBlock).toContain('touch-action: none;');
+    expect(hueBlock).toContain('linear-gradient(to right');
 
     const projectListBlock = Array.from(stylesCss.matchAll(/\.chat-hub-project-list \{[\s\S]*?\n\}/g))
       .map(match => match[0])
@@ -568,14 +582,13 @@ describe('web responsive ui state', () => {
       .readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8')
       .replace(/\r\n/g, '\n');
 
-    const customColorHandlerStart = mainTsx.indexOf('onChange={event => {', mainTsx.indexOf('className="chat-hub-color-custom-picker"'));
+    const customColorHandlerStart = mainTsx.indexOf('const nextColor = hubHsvToColor(', mainTsx.indexOf('const applyHubColorSvPointer = useCallback('));
     expect(customColorHandlerStart).toBeGreaterThanOrEqual(0);
-    const customColorHandlerEnd = mainTsx.indexOf('                              }}', customColorHandlerStart);
+    const customColorHandlerEnd = mainTsx.indexOf('setHubColors(current =>', customColorHandlerStart);
     expect(customColorHandlerEnd).toBeGreaterThan(customColorHandlerStart);
     const customColorHandler = mainTsx.slice(customColorHandlerStart, customColorHandlerEnd);
-    expect(customColorHandler).toContain('const customHubColor = event.currentTarget.value;');
-    expect(customColorHandler).toContain('setHubColorPreference(current, hub.hubId, customHubColor)');
-    expect(customColorHandler).not.toContain('setHubColorPreference(current, hub.hubId, event.currentTarget.value)');
+    expect(customColorHandler).toContain('const nextColor = hubHsvToColor(');
+    expect(customColorHandler).not.toContain('event.currentTarget.value');
   });
 
   test('persists desktop sidebar width as global app state', () => {

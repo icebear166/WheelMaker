@@ -729,7 +729,9 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('if (!chatHubMenuOpen) return;');
     expect(mainTsx).toContain("if (event.key === 'Escape') {");
     expect(mainTsx).toContain("if (tab !== 'chat' || sidebarSettingsOpen) {");
-    expect(mainTsx).toContain('chatHubMenuRef.current?.contains(target)');
+    expect(mainTsx).toContain('if (!chatHubMenuRef.current.contains(event.target as Node)) {');
+    expect(mainTsx).toContain("!targetElement.closest('.chat-hub-color-palette')");
+    expect(mainTsx).toContain("!targetElement.closest('.chat-hub-color-square')");
     expect(mainTsx).toContain("aria-label={`Show connected hubs, ${chatHubSummaryLabel}, ${chatHubProjectLabel}`}");
     expect(mainTsx).toContain('aria-expanded={chatHubMenuOpen}');
     expect(mainTsx).toContain("const chatHubSummaryLabel = `${hubCount} ${hubCount === 1 ? 'Hub' : 'Hubs'}`;");

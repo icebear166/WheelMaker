@@ -147,4 +147,27 @@ describe('web hub project preferences', () => {
     expect(resolveHubColor({'ks-hub': '#ABCDEF'}, 'ks-hub')).toBe('#abcdef');
     expect(resolveHubColor({}, 'ks-hub')).toBe(resolveDefaultHubColor('ks-hub'));
   });
+
+  test('converts between hsv picker values and sanitized hub colors', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const modulePath = path.join(projectRoot, 'web', 'src', 'services', 'hubProjectPreferences.ts');
+
+    expect(fs.existsSync(modulePath)).toBe(true);
+
+    const {
+      hubColorToHsv,
+      hubHsvToColor,
+    } = require(modulePath);
+
+    expect(hubHsvToColor({h: 0, s: 1, v: 1})).toBe('#ff0000');
+    expect(hubHsvToColor({h: 120, s: 1, v: 1})).toBe('#00ff00');
+    expect(hubHsvToColor({h: 240, s: 1, v: 1})).toBe('#0000ff');
+    expect(hubHsvToColor({h: 420, s: 2, v: -1})).toBe('#000000');
+    expect(hubColorToHsv('#4f86c6')).toEqual({
+      h: 212,
+      s: 0.6,
+      v: 0.78,
+    });
+    expect(hubColorToHsv('red')).toEqual({h: 0, s: 0, v: 0});
+  });
 });
