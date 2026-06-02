@@ -443,6 +443,23 @@ describe('web responsive ui state', () => {
     expect(mainTsx).toContain('className={`chat-hub-tree${expanded ? \' expanded\' : \'\'}${colorMenuOpen ? \' color-open\' : \'\'}`}');
   });
 
+  test('keeps mobile drawer open while toggling hub project visibility', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = fs
+      .readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8')
+      .replace(/\r\n/g, '\n');
+
+    expect(mainTsx).toContain('options?: {preserveFileView?: boolean; keepMobileDrawerOpen?: boolean}');
+    expect(mainTsx).toContain("if (!isWide && options?.keepMobileDrawerOpen !== true) setDrawerOpen(false);");
+    expect(mainTsx).toContain("options?: {reason?: 'chat' | 'manual'; keepMobileDrawerOpen?: boolean}");
+    expect(mainTsx).toContain('keepMobileDrawerOpen: options?.keepMobileDrawerOpen,');
+    expect(mainTsx).toContain("syncWorkspaceProject(nextProject.projectId, {reason: 'chat', keepMobileDrawerOpen: chatHubMenuOpen}).catch(() => undefined);");
+    expect(mainTsx).toContain('onClick={event => {');
+    expect(mainTsx).toContain('event.stopPropagation();');
+    expect(mainTsx).toContain('toggleProjectVisibility(current, projectItem.projectId, !visible)');
+    expect(mainTsx).not.toContain("syncWorkspaceProject(nextProject.projectId, {reason: 'chat'}).catch(() => undefined);");
+  });
+
   test('renders hub display preferences with isolated square color controls', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs

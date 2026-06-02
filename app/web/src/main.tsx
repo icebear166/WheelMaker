@@ -6283,7 +6283,8 @@ function App() {
                               className={`chat-hub-project-row${visible ? '' : ' hidden'}`}
                               role="checkbox"
                               aria-checked={visible}
-                              onClick={() => {
+                              onClick={event => {
+                                event.stopPropagation();
                                 setHiddenProjectIds(current =>
                                   toggleProjectVisibility(current, projectItem.projectId, !visible),
                                 );
@@ -7903,7 +7904,7 @@ function App() {
       selectedDiff: string;
       cachedDiffText: string;
     },
-    options?: {preserveFileView?: boolean},
+    options?: {preserveFileView?: boolean; keepMobileDrawerOpen?: boolean},
   ) => {
     const preserveFileView =
       options?.preserveFileView === true &&
@@ -7954,7 +7955,7 @@ function App() {
     setProjectMenuOpen(false);
     setWorkspaceProjectMenuOpen(false);
     setSidebarSettingsOpen(false);
-    if (!isWide) setDrawerOpen(false);
+    if (!isWide && options?.keepMobileDrawerOpen !== true) setDrawerOpen(false);
   };
 
   const togglePinSelectedFile = () => {
@@ -12553,7 +12554,7 @@ function App() {
 
   const syncWorkspaceProject = async (
     nextProjectId: string,
-    options?: {reason?: 'chat' | 'manual'},
+    options?: {reason?: 'chat' | 'manual'; keepMobileDrawerOpen?: boolean},
   ) => {
     const syncReason = options?.reason ?? 'manual';
     const finishSyncDiagnostic = startWorkspaceDiagnosticSpan('sync_workspace_project', {
@@ -12603,7 +12604,9 @@ function App() {
       });
       skipNextSelectedFileAutoReadRef.current =
         tabRef.current !== 'file' && !!result.hydrated.selectedFile;
-      applyHydratedProjectState(result.hydrated);
+      applyHydratedProjectState(result.hydrated, {
+        keepMobileDrawerOpen: options?.keepMobileDrawerOpen,
+      });
       setWorkspaceProjectMenuOpen(false);
       setError('');
 
@@ -12726,11 +12729,11 @@ function App() {
     if (!nextProject) {
       return;
     }
-    syncWorkspaceProject(nextProject.projectId, {reason: 'chat'}).catch(() => undefined);
+    syncWorkspaceProject(nextProject.projectId, {reason: 'chat', keepMobileDrawerOpen: chatHubMenuOpen}).catch(() => undefined);
     if (connected) {
       loadChatSessions(nextProject.projectId, '').catch(() => undefined);
     }
-  }, [connected, hiddenProjectIdSet, hiddenProjectIds, selectedChatKey?.projectId, sortedProjectItems, tab]);
+  }, [chatHubMenuOpen, connected, hiddenProjectIdSet, hiddenProjectIds, selectedChatKey?.projectId, sortedProjectItems, tab]);
 
   const handleSessionSearchResultClick = async (
     targetProjectId: string,
