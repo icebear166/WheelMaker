@@ -245,6 +245,12 @@ describe('web responsive ui state', () => {
       drawerOpen: true,
       collapsedProjectIds: ['project-a', 'project-b', 'project-a'],
       pinnedProjectIds: ['project-c', 'project-a', 'project-c'],
+      hiddenProjectIds: ['project-b', 'project-a', 'project-b'],
+      expandedHubIds: ['hub-a', 'hub-b', 'hub-a'],
+      hubColors: {
+        'hub-a': '#00A6A6',
+        'hub-b': 'red',
+      },
       floatingControlYRatio: 0.42,
       floatingControlSide: 'left',
       floatingControlIdleOpacity: 0.55,
@@ -267,6 +273,9 @@ describe('web responsive ui state', () => {
       settingsOpen: true,
       collapsedProjectIds: ['project-a', 'project-b'],
       pinnedProjectIds: ['project-c', 'project-a'],
+      hiddenProjectIds: ['project-b', 'project-a'],
+      expandedHubIds: ['hub-a', 'hub-b'],
+      hubColors: {'hub-a': '#00a6a6'},
     });
     expect(state.desktop).toMatchObject({
       sidebarCollapsed: true,
@@ -295,6 +304,9 @@ describe('web responsive ui state', () => {
     expect(state.shared.settingsOpen).toBe(true);
     expect(state.shared.collapsedProjectIds).toEqual(['project-a', 'project-b']);
     expect(state.shared.pinnedProjectIds).toEqual(['project-c', 'project-a']);
+    expect(state.shared.hiddenProjectIds).toEqual(['project-b', 'project-a']);
+    expect(state.shared.expandedHubIds).toEqual(['hub-a', 'hub-b']);
+    expect(state.shared.hubColors).toEqual({'hub-a': '#00a6a6'});
     expect(state.desktop.sidebarCollapsed).toBe(true);
     expect(state.desktop.sidebarWidth).toBe(420);
     expect(state.mobile.floatingControlYRatio).toBe(0.42);
@@ -312,6 +324,27 @@ describe('web responsive ui state', () => {
     });
 
     expect(state.shared.pinnedProjectIds).toEqual(['project-b', 'project-c']);
+
+    state = workspaceUiReducer(state, {
+      type: 'shared/setHiddenProjectIds',
+      next: ['project-d', 'project-d', 'project-a'],
+    });
+
+    expect(state.shared.hiddenProjectIds).toEqual(['project-d', 'project-a']);
+
+    state = workspaceUiReducer(state, {
+      type: 'shared/setExpandedHubIds',
+      next: ['hub-c', 'hub-c', 'hub-a'],
+    });
+
+    expect(state.shared.expandedHubIds).toEqual(['hub-c', 'hub-a']);
+
+    state = workspaceUiReducer(state, {
+      type: 'shared/setHubColors',
+      next: {'hub-c': '#ABCDEF', 'hub-d': 'red'},
+    });
+
+    expect(state.shared.hubColors).toEqual({'hub-c': '#abcdef'});
 
     state = workspaceUiReducer(state, {
       type: 'mobile/setFloatingControlSide',
@@ -384,6 +417,9 @@ describe('web responsive ui state', () => {
     expect(mainTsx).toContain('collapsedProjectIds: globalState.collapsedProjectIds ?? globalState.desktopCollapsedProjectIds ?? []');
     expect(mainTsx).toContain('desktopSidebarWidth: globalState.desktopSidebarWidth');
     expect(mainTsx).toContain('pinnedProjectIds: globalState.pinnedProjectIds ?? []');
+    expect(mainTsx).toContain('hiddenProjectIds: globalState.hiddenProjectIds ?? []');
+    expect(mainTsx).toContain('expandedHubIds: globalState.expandedHubIds ?? []');
+    expect(mainTsx).toContain('hubColors: globalState.hubColors ?? {}');
     expect(mainTsx).toContain('floatingControlSide: globalState.floatingControlSide ?? readPortRelayFloatingSide() ?? \'right\'');
     expect(mainTsx).toContain('floatingControlIdleOpacity: globalState.floatingControlIdleOpacity,');
     expect(mainTsx).toContain('floatingControlYRatio,\n      floatingControlSide,\n      floatingControlIdleOpacity,\n      desktopSidebarWidth,');
@@ -391,10 +427,20 @@ describe('web responsive ui state', () => {
     expect(mainTsx).toContain('const floatingControlIdleOpacity = workspaceUiState.mobile.floatingControlIdleOpacity;');
     expect(mainTsx).toContain('const collapsedProjectIds = workspaceUiState.shared.collapsedProjectIds;');
     expect(mainTsx).toContain('const pinnedProjectIds = workspaceUiState.shared.pinnedProjectIds;');
+    expect(mainTsx).toContain('const hiddenProjectIds = workspaceUiState.shared.hiddenProjectIds;');
+    expect(mainTsx).toContain('const expandedHubIds = workspaceUiState.shared.expandedHubIds;');
+    expect(mainTsx).toContain('const hubColors = workspaceUiState.shared.hubColors;');
     expect(mainTsx).toContain("dispatchWorkspaceUi({ type: 'desktop/setSidebarWidth', next });");
     expect(mainTsx).toContain("dispatchWorkspaceUi({ type: 'mobile/setFloatingControlIdleOpacity', next });");
     expect(mainTsx).toContain("dispatchWorkspaceUi({ type: 'shared/setCollapsedProjectIds', next });");
     expect(mainTsx).toContain("dispatchWorkspaceUi({ type: 'shared/setPinnedProjectIds', next });");
+    expect(mainTsx).toContain("dispatchWorkspaceUi({ type: 'shared/setHiddenProjectIds', next });");
+    expect(mainTsx).toContain("dispatchWorkspaceUi({ type: 'shared/setExpandedHubIds', next });");
+    expect(mainTsx).toContain("dispatchWorkspaceUi({ type: 'shared/setHubColors', next });");
+    expect(mainTsx).toContain('const visibleProjectItems = visibility.visibleProjects;');
+    expect(mainTsx).toContain('const hiddenProjectItems = visibility.hiddenProjects;');
+    expect(mainTsx).toContain('className="chat-hidden-project-row"');
+    expect(mainTsx).toContain('className="chat-hub-tree"');
   });
 
   test('persists desktop sidebar width as global app state', () => {
@@ -405,29 +451,50 @@ describe('web responsive ui state', () => {
     );
 
     expect(persistenceTs).toContain('desktopSidebarWidth: number;');
+    expect(persistenceTs).toContain('hubColors: Record<string, string>;');
+    expect(persistenceTs).toContain('hiddenProjectIds: string[];');
+    expect(persistenceTs).toContain('expandedHubIds: string[];');
     expect(persistenceTs).toContain("export type PersistedFloatingControlSide = 'left' | 'right';");
     expect(persistenceTs).toContain('floatingControlYRatio: number;');
     expect(persistenceTs).toContain('floatingControlSide: PersistedFloatingControlSide;');
     expect(persistenceTs).toContain('floatingControlIdleOpacity: number;');
     expect(persistenceTs).not.toContain('useLatestPromptTitle: boolean;');
     expect(persistenceTs).toContain("desktopSidebarWidth: 'desktopSidebarWidth',");
+    expect(persistenceTs).toContain("hubColors: 'hubColors',");
+    expect(persistenceTs).toContain("hiddenProjectIds: 'hiddenProjectIds',");
+    expect(persistenceTs).toContain("expandedHubIds: 'expandedHubIds',");
     expect(persistenceTs).toContain("floatingControlYRatio: 'floatingControlYRatio',");
     expect(persistenceTs).toContain("floatingControlSlot: 'floatingControlSlot',");
     expect(persistenceTs).toContain("floatingControlSide: 'floatingControlSide',");
     expect(persistenceTs).toContain("floatingControlIdleOpacity: 'floatingControlIdleOpacity',");
     expect(persistenceTs).not.toContain("useLatestPromptTitle: 'useLatestPromptTitle',");
     expect(persistenceTs).toContain('desktopSidebarWidth: 380,');
+    expect(persistenceTs).toContain('hubColors: {},');
+    expect(persistenceTs).toContain('hiddenProjectIds: [],');
+    expect(persistenceTs).toContain('expandedHubIds: [],');
     expect(persistenceTs).toContain('floatingControlYRatio: FLOATING_CONTROL_DEFAULT_Y_RATIO,');
     expect(persistenceTs).toContain("floatingControlSide: 'right',");
     expect(persistenceTs).toContain('floatingControlIdleOpacity: FLOATING_CONTROL_DEFAULT_IDLE_OPACITY,');
     expect(persistenceTs).not.toContain('useLatestPromptTitle: false,');
     expect(persistenceTs).not.toContain('useLatestPromptTitle: typeof input.useLatestPromptTitle');
     expect(persistenceTs).toContain('desktopSidebarWidth: sanitizeDesktopSidebarWidth(input.desktopSidebarWidth, base.desktopSidebarWidth),');
+    expect(persistenceTs).toContain('hubColors: sanitizeHubColorMap(input.hubColors),');
+    expect(persistenceTs).toContain('hiddenProjectIds,');
+    expect(persistenceTs).toContain('expandedHubIds,');
     expect(persistenceTs).toContain('floatingControlYRatio,');
     expect(persistenceTs).toContain('floatingControlSide: sanitizeFloatingControlSide(input.floatingControlSide, base.floatingControlSide),');
     expect(persistenceTs).toContain('floatingControlIdleOpacity: sanitizeFloatingControlIdleOpacity(input.floatingControlIdleOpacity, base.floatingControlIdleOpacity),');
     expect(persistenceTs).toContain(
       '{k: GLOBAL_KEYS.desktopSidebarWidth, v: serialize(this.state.global.desktopSidebarWidth), updatedAt: now}',
+    );
+    expect(persistenceTs).toContain(
+      '{k: GLOBAL_KEYS.hubColors, v: serialize(this.state.global.hubColors), updatedAt: now}',
+    );
+    expect(persistenceTs).toContain(
+      '{k: GLOBAL_KEYS.hiddenProjectIds, v: serialize(this.state.global.hiddenProjectIds), updatedAt: now}',
+    );
+    expect(persistenceTs).toContain(
+      '{k: GLOBAL_KEYS.expandedHubIds, v: serialize(this.state.global.expandedHubIds), updatedAt: now}',
     );
     expect(persistenceTs).not.toContain('GLOBAL_KEYS.useLatestPromptTitle');
     expect(persistenceTs).toContain(
@@ -441,6 +508,15 @@ describe('web responsive ui state', () => {
     );
     expect(persistenceTs).toContain(
       '{k: GLOBAL_KEYS.floatingControlIdleOpacity, v: serialize(next.floatingControlIdleOpacity), updatedAt: now}',
+    );
+    expect(persistenceTs).toContain(
+      '{k: GLOBAL_KEYS.hubColors, v: serialize(next.hubColors), updatedAt: now}',
+    );
+    expect(persistenceTs).toContain(
+      '{k: GLOBAL_KEYS.hiddenProjectIds, v: serialize(next.hiddenProjectIds), updatedAt: now}',
+    );
+    expect(persistenceTs).toContain(
+      '{k: GLOBAL_KEYS.expandedHubIds, v: serialize(next.expandedHubIds), updatedAt: now}',
     );
     expect(persistenceTs).not.toContain('next.useLatestPromptTitle');
   });

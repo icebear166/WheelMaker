@@ -160,6 +160,16 @@ import {
 } from './chat/chatSelectionGuard';
 import { RegistryWorkspaceService } from './services/registryWorkspaceService';
 import { sortProjectsByPin, togglePinnedProjectId } from './services/projectNavigation';
+import {
+  HUB_COLOR_PRESETS,
+  findNextVisibleProject,
+  resolveHubVisibilityState,
+  setHubColorPreference,
+  splitProjectsByVisibility,
+  toggleHubVisibility,
+  toggleProjectVisibility,
+  type HubVisibilityState,
+} from './services/hubProjectPreferences';
 import { triggerMobileHaptic } from './services/mobileHaptics';
 import {
   FLOATING_CONTROL_DEFAULT_Y_RATIO,
@@ -694,6 +704,7 @@ const CHAT_ATTACHMENT_CHUNK_SIZE = 1024 * 1024;
 const CHAT_CONFIG_PRIORITY_IDS = ['mode', 'model', 'effort'] as const;
 const CHAT_CONFIG_PRIORITY_MATCHERS = ['mode', 'model', 'effort', 'thought'] as const;
 const CHAT_CONFIG_INLINE_LIMIT = 3;
+const HUB_TREE_EMPTY_EXPANDED_SENTINEL = '__hub_tree_empty__';
 function estimateSessionReadPayloadBytes(result: RegistrySessionReadResponse): number {
   try {
     return new TextEncoder().encode(JSON.stringify(result)).length;
@@ -1153,6 +1164,17 @@ function tagVariantClass(prefix: string, value: string): string {
     hash = (hash * 31 + normalized.charCodeAt(index)) >>> 0;
   }
   return `${prefix}-${hash % 8}`;
+}
+
+function projectHubId(project: Pick<RegistryProject, 'hubId'>): string {
+  return project.hubId || 'local';
+}
+
+function hubCheckboxIcon(state: HubVisibilityState): string {
+  if (state === 'checked') {
+    return 'codicon-check';
+  }
+  return state === 'mixed' ? 'codicon-chrome-minimize' : '';
 }
 
 
@@ -3286,6 +3308,9 @@ function App() {
         collapsedProjectIds: globalState.collapsedProjectIds ?? globalState.desktopCollapsedProjectIds ?? [],
         desktopSidebarWidth: globalState.desktopSidebarWidth,
         pinnedProjectIds: globalState.pinnedProjectIds ?? [],
+        hiddenProjectIds: globalState.hiddenProjectIds ?? [],
+        expandedHubIds: globalState.expandedHubIds ?? [],
+        hubColors: globalState.hubColors ?? {},
         floatingControlYRatio: globalState.floatingControlYRatio ?? readPortRelayFloatingYRatio() ?? FLOATING_CONTROL_DEFAULT_Y_RATIO,
         floatingControlSide: globalState.floatingControlSide ?? readPortRelayFloatingSide() ?? 'right',
         floatingControlIdleOpacity: globalState.floatingControlIdleOpacity,
@@ -3302,6 +3327,9 @@ function App() {
   const desktopSidebarWidth = workspaceUiState.desktop.sidebarWidth;
   const collapsedProjectIds = workspaceUiState.shared.collapsedProjectIds;
   const pinnedProjectIds = workspaceUiState.shared.pinnedProjectIds;
+  const hiddenProjectIds = workspaceUiState.shared.hiddenProjectIds;
+  const expandedHubIds = workspaceUiState.shared.expandedHubIds;
+  const hubColors = workspaceUiState.shared.hubColors;
   const drawerOpen = workspaceUiState.mobile.drawerOpen;
   const sidebarSettingsOpen = workspaceUiState.shared.settingsOpen;
   const chatConfigOverflowOpen = workspaceUiState.mobile.chatConfigOverflowOpen;
@@ -3383,6 +3411,15 @@ function App() {
   }, []);
   const setPinnedProjectIds = useCallback((next: WorkspaceUiStateValue<string[]>) => {
     dispatchWorkspaceUi({ type: 'shared/setPinnedProjectIds', next });
+  }, []);
+  const setHiddenProjectIds = useCallback((next: WorkspaceUiStateValue<string[]>) => {
+    dispatchWorkspaceUi({ type: 'shared/setHiddenProjectIds', next });
+  }, []);
+  const setExpandedHubIds = useCallback((next: WorkspaceUiStateValue<string[]>) => {
+    dispatchWorkspaceUi({ type: 'shared/setExpandedHubIds', next });
+  }, []);
+  const setHubColors = useCallback((next: WorkspaceUiStateValue<Record<string, string>>) => {
+    dispatchWorkspaceUi({ type: 'shared/setHubColors', next });
   }, []);
   const setDrawerOpen = useCallback((next: WorkspaceUiStateValue<boolean>) => {
     dispatchWorkspaceUi({ type: 'mobile/setDrawerOpen', next });
@@ -3811,6 +3848,7 @@ function App() {
   const [chatAttachmentTrayOpen, setChatAttachmentTrayOpen] = useState(false);
   const [chatConfigMenuOptionId, setChatConfigMenuOptionId] = useState('');
   const [chatHubMenuOpen, setChatHubMenuOpen] = useState(false);
+  const [chatHubColorMenuHubId, setChatHubColorMenuHubId] = useState('');
   const chatHubMenuRef = useRef<HTMLDivElement | null>(null);
   const [chatQuickSwitchMenuOpen, setChatQuickSwitchMenuOpen] = useState(false);
   const [chatQuickSwitchMenuPlacement, setChatQuickSwitchMenuPlacement] = useState<ChatQuickSwitchMenuPlacement>({kind: 'mobile'});
@@ -4741,13 +4779,56 @@ function App() {
     [projects],
   );
   const sortedProjectItems = useMemo(() => sortProjectsByPin(projects, pinnedProjectIds), [projects, pinnedProjectIds]);
+  const visibility = useMemo(
+    () => splitProjectsByVisibility(sortedProjectItems, hiddenProjectIds),
+    [hiddenProjectIds, sortedProjectItems],
+  );
+  const visibleProjectItems = visibility.visibleProjects;
+  const hiddenProjectItems = visibility.hiddenProjects;
+  const hiddenProjectIdSet = useMemo(() => new Set(hiddenProjectIds), [hiddenProjectIds]);
+  const chatHubTreeItems = useMemo(() => {
+    const hubIds: string[] = [];
+    const addHubId = (hubId: string) => {
+      if (hubId && !hubIds.includes(hubId)) {
+        hubIds.push(hubId);
+      }
+    };
+    registryHubs.forEach(hub => addHubId(hub.hubId));
+    sortedProjectItems.forEach(projectItem => addHubId(projectHubId(projectItem)));
+    return hubIds.map(hubId => ({
+      hubId,
+      projects: sortedProjectItems.filter(projectItem => projectHubId(projectItem) === hubId),
+    }));
+  }, [registryHubs, sortedProjectItems]);
+  const defaultExpandedHubIds = useMemo(() => {
+    const next = new Set<string>();
+    const selectedProject = selectedChatKey?.projectId
+      ? sortedProjectItems.find(projectItem => projectItem.projectId === selectedChatKey.projectId)
+      : null;
+    if (selectedProject) {
+      next.add(projectHubId(selectedProject));
+    }
+    hiddenProjectItems.forEach(projectItem => next.add(projectHubId(projectItem)));
+    return Array.from(next);
+  }, [hiddenProjectItems, selectedChatKey?.projectId, sortedProjectItems]);
+  const savedExpandedHubIds = useMemo(
+    () => expandedHubIds.filter(hubId => hubId !== HUB_TREE_EMPTY_EXPANDED_SENTINEL),
+    [expandedHubIds],
+  );
+  const effectiveExpandedHubIds = expandedHubIds.length > 0 ? savedExpandedHubIds : defaultExpandedHubIds;
+  const hubAccentStyle = useCallback((hubId: string): React.CSSProperties | undefined => {
+    const color = hubColors[hubId];
+    return color
+      ? ({'--hub-accent': color, '--pill-accent': color} as React.CSSProperties)
+      : undefined;
+  }, [hubColors]);
   const sessionSearchSections = useMemo(
     () => buildSessionSearchSections({
-      projects: sortedProjectItems,
+      projects: visibleProjectItems,
       sessionsByProjectId: projectSessionsByProjectId,
       resultsByProjectId: searchResultsByProjectId,
     }),
-    [projectSessionsByProjectId, searchResultsByProjectId, sortedProjectItems],
+    [projectSessionsByProjectId, searchResultsByProjectId, visibleProjectItems],
   );
   const sessionSearchResultCount = useMemo(
     () => sessionSearchSections.reduce((sum, section) => sum + section.rows.length, 0),
@@ -4759,21 +4840,21 @@ function App() {
     if (!activeSessionSearchId) {
       return 0;
     }
-    return sortedProjectItems.reduce(
+    return visibleProjectItems.reduce(
       (sum, item) => sum + (sessionSearchDoneByProjectId[item.projectId] === true ? 1 : 0),
       0,
     );
-  }, [activeSessionSearchId, sessionSearchDoneByProjectId, sortedProjectItems]);
+  }, [activeSessionSearchId, sessionSearchDoneByProjectId, visibleProjectItems]);
   const sessionSearchErrorCount = useMemo(
     () => Object.values(sessionSearchErrorsByProjectId).filter(message => message.trim()).length,
     [sessionSearchErrorsByProjectId],
   );
   const sessionSearchAllDone = useMemo(() => {
-    if (!activeSessionSearchId || sortedProjectItems.length === 0) {
+    if (!activeSessionSearchId || visibleProjectItems.length === 0) {
       return false;
     }
-    return sortedProjectItems.every(item => sessionSearchDoneByProjectId[item.projectId] === true);
-  }, [activeSessionSearchId, sessionSearchDoneByProjectId, sortedProjectItems]);
+    return visibleProjectItems.every(item => sessionSearchDoneByProjectId[item.projectId] === true);
+  }, [activeSessionSearchId, sessionSearchDoneByProjectId, visibleProjectItems]);
   const sessionSearchStatusParts = useMemo(() => {
     if (!sessionSearchActive) {
       return [];
@@ -4782,7 +4863,7 @@ function App() {
     const parts = sessionSearchAllDone
       ? [resultLabel]
       : [
-          `Searching ${sessionSearchProjectDoneCount}/${sortedProjectItems.length} projects`,
+          `Searching ${sessionSearchProjectDoneCount}/${visibleProjectItems.length} projects`,
           resultLabel,
         ];
     if (sessionSearchErrorCount > 0) {
@@ -4795,7 +4876,7 @@ function App() {
     sessionSearchErrorCount,
     sessionSearchProjectDoneCount,
     sessionSearchResultCount,
-    sortedProjectItems.length,
+    visibleProjectItems.length,
   ]);
   useEffect(() => {
     if (!sessionSearchHeaderExpanded) {
@@ -4811,11 +4892,11 @@ function App() {
   }, [sessionSearchHeaderExpanded]);
   const mobileChatQuickSwitchSections = useMemo(
     () => buildMobileChatQuickSwitchSections({
-      projects: sortedProjectItems,
+      projects: visibleProjectItems,
       sessionsByProjectId: projectSessionsByProjectId,
       limit: 6,
     }),
-    [projectSessionsByProjectId, sortedProjectItems],
+    [projectSessionsByProjectId, visibleProjectItems],
   );
   const mobileChatQuickSwitchMenuStyle = useMemo<React.CSSProperties>(() => ({
     top: portRelayReady && portRelayFrameUrl ? 56 : 0,
@@ -4868,7 +4949,7 @@ function App() {
   }, []);
   const cancelSessionSearch = useCallback(async (
     searchId = activeSessionSearchIdRef.current,
-    projectItems = sortedProjectItems,
+    projectItems = visibleProjectItems,
   ) => {
     const normalizedSearchId = searchId.trim();
     if (!normalizedSearchId) {
@@ -4879,7 +4960,7 @@ function App() {
         service.cancelProjectSessionSearch(projectItem.projectId, normalizedSearchId),
       ),
     );
-  }, [sortedProjectItems]);
+  }, [visibleProjectItems]);
 
   const querySessionSearch = useCallback(async (
     searchId = activeSessionSearchIdRef.current,
@@ -4889,7 +4970,7 @@ function App() {
       return false;
     }
     const doneSnapshot = sessionSearchDoneByProjectIdRef.current;
-    const pendingProjects = sortedProjectItems.filter(projectItem =>
+    const pendingProjects = visibleProjectItems.filter(projectItem =>
       doneSnapshot[projectItem.projectId] !== true,
     );
     if (pendingProjects.length === 0) {
@@ -4936,7 +5017,7 @@ function App() {
       ? 0
       : sessionSearchUnchangedPollsRef.current + 1;
     return anyChanged;
-  }, [sortedProjectItems]);
+  }, [visibleProjectItems]);
 
   const clearSessionSearchState = useCallback(() => {
     activeSessionSearchIdRef.current = '';
@@ -4954,11 +5035,11 @@ function App() {
 
   const exitSessionSearch = useCallback(async () => {
     const searchId = activeSessionSearchIdRef.current;
-    const projectItems = sortedProjectItems;
+    const projectItems = visibleProjectItems;
     clearSessionSearchState();
     setSessionSearchOpen(false);
     await cancelSessionSearch(searchId, projectItems);
-  }, [cancelSessionSearch, clearSessionSearchState, sortedProjectItems]);
+  }, [cancelSessionSearch, clearSessionSearchState, visibleProjectItems]);
 
   const startSessionSearch = useCallback(async () => {
     const query = sessionSearchInput.trim();
@@ -4967,7 +5048,7 @@ function App() {
       return;
     }
     const previousSearchId = activeSessionSearchIdRef.current;
-    const projectItems = sortedProjectItems;
+    const projectItems = visibleProjectItems;
     if (previousSearchId) {
       await cancelSessionSearch(previousSearchId, projectItems);
     }
@@ -5006,7 +5087,7 @@ function App() {
     if (activeSessionSearchIdRef.current === searchId) {
       querySessionSearch(searchId).catch(() => undefined);
     }
-  }, [cancelSessionSearch, exitSessionSearch, querySessionSearch, sessionSearchInput, sortedProjectItems]);
+  }, [cancelSessionSearch, exitSessionSearch, querySessionSearch, sessionSearchInput, visibleProjectItems]);
 
   useEffect(() => {
     if (!activeSessionSearchId || tab !== 'chat') {
@@ -5027,8 +5108,8 @@ function App() {
         return;
       }
       const doneSnapshot = sessionSearchDoneByProjectIdRef.current;
-      const allDone = sortedProjectItems.length > 0 &&
-        sortedProjectItems.every(projectItem => doneSnapshot[projectItem.projectId] === true);
+      const allDone = visibleProjectItems.length > 0 &&
+        visibleProjectItems.every(projectItem => doneSnapshot[projectItem.projectId] === true);
       if (allDone) {
         return;
       }
@@ -5048,7 +5129,7 @@ function App() {
         sessionSearchPollTimerRef.current = null;
       }
     };
-  }, [activeSessionSearchId, querySessionSearch, sortedProjectItems, tab]);
+  }, [activeSessionSearchId, querySessionSearch, visibleProjectItems, tab]);
   useEffect(() => {
     floatingDragStateRef.current = floatingDragState;
   }, [floatingDragState]);
@@ -5655,10 +5736,12 @@ function App() {
       const target = event.target as Node | null;
       if (target && chatHubMenuRef.current?.contains(target)) return;
       setChatHubMenuOpen(false);
+      setChatHubColorMenuHubId('');
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setChatHubMenuOpen(false);
+        setChatHubColorMenuHubId('');
       }
     };
     window.addEventListener('pointerdown', onPointerDown);
@@ -5672,6 +5755,7 @@ function App() {
   useEffect(() => {
     if (tab !== 'chat' || sidebarSettingsOpen) {
       setChatHubMenuOpen(false);
+      setChatHubColorMenuHubId('');
     }
   }, [sidebarSettingsOpen, tab]);
 
@@ -5843,6 +5927,9 @@ function App() {
       desktopSidebarWidth,
       collapsedProjectIds,
       pinnedProjectIds,
+      hiddenProjectIds,
+      expandedHubIds,
+      hubColors,
     });
   }, [
     address,
@@ -5870,6 +5957,9 @@ function App() {
     desktopSidebarWidth,
     collapsedProjectIds,
     pinnedProjectIds,
+    hiddenProjectIds,
+    expandedHubIds,
+    hubColors,
   ]);
 
   useEffect(() => {
@@ -6020,16 +6110,128 @@ function App() {
           <span className="codicon codicon-chevron-down" aria-hidden="true" />
         </button>
         {chatHubMenuOpen ? (
-          <div className="chat-hub-popover" role="menu">
+          <div className="chat-hub-popover" role="dialog" aria-label="Hub and project display preferences">
             {registryHubs.length > 0 ? (
               registryHubs.map(hub => {
+                const treeItem = chatHubTreeItems.find(item => item.hubId === hub.hubId) ?? {hubId: hub.hubId, projects: []};
                 const readStatus = localHubReadStatuses[hub.hubId] ?? 'Remote';
+                const visibilityState = resolveHubVisibilityState(treeItem.projects, hiddenProjectIds);
+                const expanded = effectiveExpandedHubIds.includes(hub.hubId);
+                const checkIcon = hubCheckboxIcon(visibilityState);
+                const ariaChecked = visibilityState === 'mixed' ? 'mixed' : visibilityState === 'checked';
+                const colorMenuOpen = chatHubColorMenuHubId === hub.hubId;
                 return (
-                  <div key={hub.hubId} className="chat-hub-row" role="menuitem">
-                    <span className="chat-hub-row-name">{hub.hubId}</span>
-                    <span className={`chat-hub-read-tag ${readStatus.toLowerCase()}`}>
-                      {readStatus}
-                    </span>
+                  <div key={hub.hubId} className="chat-hub-tree">
+                    <div className="chat-hub-row">
+                      <button
+                        type="button"
+                        className="chat-hub-disclosure"
+                        aria-label={expanded ? `Collapse ${hub.hubId}` : `Expand ${hub.hubId}`}
+                        aria-expanded={expanded}
+                        onClick={() => {
+                          const next = expanded
+                            ? effectiveExpandedHubIds.filter(hubId => hubId !== hub.hubId)
+                            : [...effectiveExpandedHubIds, hub.hubId];
+                          setExpandedHubIds(next.length > 0 ? next : [HUB_TREE_EMPTY_EXPANDED_SENTINEL]);
+                        }}
+                      >
+                        <span className={`codicon ${expanded ? 'codicon-chevron-down' : 'codicon-chevron-right'}`} />
+                      </button>
+                      <button
+                        type="button"
+                        className="chat-hub-color-trigger"
+                        aria-label={`Set color for ${hub.hubId}`}
+                        aria-expanded={colorMenuOpen}
+                        style={hubAccentStyle(hub.hubId)}
+                        onClick={() => setChatHubColorMenuHubId(current => (current === hub.hubId ? '' : hub.hubId))}
+                      >
+                        <span className="chat-hub-color-dot" aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        className={`chat-hub-visibility-check ${visibilityState}`}
+                        role="checkbox"
+                        aria-checked={ariaChecked}
+                        aria-label={`${visibilityState === 'checked' ? 'Hide' : 'Show'} ${hub.hubId} projects`}
+                        onClick={() => {
+                          setHiddenProjectIds(current =>
+                            toggleHubVisibility(current, treeItem.projects, visibilityState !== 'checked'),
+                          );
+                        }}
+                      >
+                        {checkIcon ? <span className={`codicon ${checkIcon}`} aria-hidden="true" /> : null}
+                      </button>
+                      <span className="chat-hub-row-name">{hub.hubId}</span>
+                      <span className={`chat-hub-read-tag ${readStatus.toLowerCase()}`}>
+                        {readStatus}
+                      </span>
+                    </div>
+                    {colorMenuOpen ? (
+                      <div className="chat-hub-color-palette" aria-label={`Color options for ${hub.hubId}`}>
+                        <button
+                          type="button"
+                          className={`chat-hub-color-swatch default${hubColors[hub.hubId] ? '' : ' selected'}`}
+                          onClick={() => setHubColors(current => setHubColorPreference(current, hub.hubId, ''))}
+                        >
+                          Default
+                        </button>
+                        {HUB_COLOR_PRESETS.map(color => (
+                          <button
+                            key={`${hub.hubId}:${color}`}
+                            type="button"
+                            className={`chat-hub-color-swatch${hubColors[hub.hubId] === color ? ' selected' : ''}`}
+                            style={{'--hub-accent': color} as React.CSSProperties}
+                            aria-label={`Set ${hub.hubId} color to ${color}`}
+                            onClick={() => setHubColors(current => setHubColorPreference(current, hub.hubId, color))}
+                          >
+                            <span className="chat-hub-color-dot" aria-hidden="true" />
+                          </button>
+                        ))}
+                        <label className="chat-hub-color-custom">
+                          <span className="codicon codicon-symbol-color" aria-hidden="true" />
+                          <input
+                            type="color"
+                            value={hubColors[hub.hubId] || HUB_COLOR_PRESETS[0]}
+                            aria-label={`Custom color for ${hub.hubId}`}
+                            onChange={event =>
+                              setHubColors(current =>
+                                setHubColorPreference(current, hub.hubId, event.currentTarget.value),
+                              )
+                            }
+                          />
+                        </label>
+                      </div>
+                    ) : null}
+                    {expanded ? (
+                      <div className="chat-hub-project-list">
+                        {treeItem.projects.map(projectItem => {
+                          const visible = !hiddenProjectIdSet.has(projectItem.projectId);
+                          return (
+                            <button
+                              key={`${hub.hubId}:project:${projectItem.projectId}`}
+                              type="button"
+                              className={`chat-hub-project-row${visible ? '' : ' hidden'}`}
+                              role="checkbox"
+                              aria-checked={visible}
+                              onClick={() => {
+                                setHiddenProjectIds(current =>
+                                  toggleProjectVisibility(current, projectItem.projectId, !visible),
+                                );
+                              }}
+                              title={projectItem.path || projectItem.projectId}
+                            >
+                              <span className="chat-hub-project-check" aria-hidden="true">
+                                {visible ? <span className="codicon codicon-check" /> : null}
+                              </span>
+                              <span className="chat-hub-project-name">{projectItem.name}</span>
+                            </button>
+                          );
+                        })}
+                        {treeItem.projects.length === 0 ? (
+                          <div className="chat-hub-project-empty">No projects</div>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 );
               })
@@ -6040,7 +6242,77 @@ function App() {
         ) : null}
       </div>
     );
-  }, [chatHubMenuOpen, localHubReadStatuses, projects.length, registryHubs, setChatConfigOverflowOpen]);
+  }, [
+    chatHubColorMenuHubId,
+    chatHubMenuOpen,
+    chatHubTreeItems,
+    effectiveExpandedHubIds,
+    hiddenProjectIdSet,
+    hiddenProjectIds,
+    hubAccentStyle,
+    hubColors,
+    localHubReadStatuses,
+    projects.length,
+    registryHubs,
+    setChatConfigOverflowOpen,
+    setExpandedHubIds,
+    setHiddenProjectIds,
+    setHubColors,
+  ]);
+  const renderHiddenProjectRows = (mobile = false) => {
+    if (hiddenProjectItems.length === 0) {
+      return null;
+    }
+    return (
+      <div className={`chat-hidden-project-list${mobile ? ' mobile' : ''}`}>
+        {hiddenProjectItems.map(projectItem => {
+          const hubId = projectHubId(projectItem);
+          const projectHubVariant = tagVariantClass('wide-project-hub', hubId);
+          return (
+            <div key={`hidden-project:${projectItem.projectId}`} className="chat-hidden-project-row">
+              <div className={`wide-project-row${mobile ? ' mobile-project-row' : ''}`}>
+                <div className={`wide-project-toggle chat-hidden-project-toggle${mobile ? ' mobile-project-toggle' : ''}`}>
+                  <span className="wide-project-folder-wrap chat-hidden-project-folder-wrap">
+                    <span
+                      className={`codicon codicon-folder wide-project-folder-icon chat-hidden-project-folder ${projectHubVariant}`}
+                      style={hubAccentStyle(hubId)}
+                    />
+                  </span>
+                  <span className="wide-project-title-group">
+                    <span className="wide-project-name" title={projectItem.name}>
+                      {projectItem.name}
+                    </span>
+                    <span
+                      className={`wide-project-hub-tag ${projectHubVariant}`}
+                      style={hubAccentStyle(hubId)}
+                    >
+                      <span className="wide-project-hub-dot" aria-hidden="true" />
+                      <span className="wide-project-hub-label">{hubId}</span>
+                    </span>
+                  </span>
+                </div>
+                <div className={`wide-project-actions${mobile ? ' mobile-project-actions' : ''}`}>
+                  <button
+                    type="button"
+                    className="wide-project-action-btn chat-hidden-project-restore-btn"
+                    title={`Show ${projectItem.name}`}
+                    aria-label={`Show hidden project ${projectItem.name}`}
+                    onClick={() => {
+                      setHiddenProjectIds(current =>
+                        toggleProjectVisibility(current, projectItem.projectId, true),
+                      );
+                    }}
+                  >
+                    <span className="codicon codicon-eye" aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
   const floatingBaseBounds = useMemo(() => {
     if (isWide) {
       return { minTop: 0, maxTop: 0 };
@@ -12370,6 +12642,25 @@ function App() {
     await selectProjectChatSession(targetProjectId, sessionId);
   };
 
+  useEffect(() => {
+    const selectedProjectId = selectedChatKey?.projectId ?? '';
+    if (tab !== 'chat' || !selectedProjectId || !hiddenProjectIdSet.has(selectedProjectId)) {
+      return;
+    }
+    const nextProject = findNextVisibleProject(sortedProjectItems, hiddenProjectIds, selectedProjectId);
+    workspaceStore.rememberSelectedChatSessionKey(null);
+    applySelectedChatKey(null);
+    setChatMessages([]);
+    setVisibleChatMessagesForRuntimeKey('', [], {resetToLatest: true});
+    if (!nextProject) {
+      return;
+    }
+    syncWorkspaceProject(nextProject.projectId, {reason: 'chat'}).catch(() => undefined);
+    if (connected) {
+      loadChatSessions(nextProject.projectId, '').catch(() => undefined);
+    }
+  }, [connected, hiddenProjectIdSet, hiddenProjectIds, selectedChatKey?.projectId, sortedProjectItems, tab]);
+
   const handleSessionSearchResultClick = async (
     targetProjectId: string,
     row: SessionSearchSectionRow,
@@ -12552,8 +12843,8 @@ function App() {
     const body = (
       <>
         {sessionSearchSections.map(section => {
-          const projectHub = section.project.hubId || 'local';
-          const projectHubVariant = tagVariantClass('wide-project-hub', section.project.hubId || 'local');
+          const projectHub = projectHubId(section.project);
+          const projectHubVariant = tagVariantClass('wide-project-hub', projectHub);
           return (
             <div
               key={`session-search-project:${section.project.projectId}`}
@@ -12562,13 +12853,16 @@ function App() {
               <div className={`wide-project-row session-search-project-row${mobile ? ' mobile-project-row' : ''}`}>
                 <div className="wide-project-toggle session-search-project-label">
                   <span className="wide-project-folder-wrap">
-                    <span className={`codicon codicon-search wide-project-folder-icon ${projectHubVariant}`} />
+                    <span
+                      className={`codicon codicon-search wide-project-folder-icon ${projectHubVariant}`}
+                      style={hubAccentStyle(projectHub)}
+                    />
                   </span>
                   <span className="wide-project-title-group">
                     <span className="wide-project-name" title={section.project.name}>
                       {section.project.name}
                     </span>
-                    <span className={`wide-project-hub-tag ${projectHubVariant}`}>
+                    <span className={`wide-project-hub-tag ${projectHubVariant}`} style={hubAccentStyle(projectHub)}>
                       <span className="wide-project-hub-dot" aria-hidden="true" />
                       <span className="wide-project-hub-label">{projectHub}</span>
                     </span>
@@ -14495,7 +14789,10 @@ function App() {
               <div key={`update-hub:${card.hubId}`} className="settings-metadata-card agent-package-hub-card">
                 <div className="settings-metadata-line settings-metadata-line-tags update-hub-header">
                   <div className="update-hub-title-stack">
-                    <span className={`wide-project-hub-tag ${tagVariantClass('wide-project-hub', card.hubId)}`}>
+                    <span
+                      className={`wide-project-hub-tag ${tagVariantClass('wide-project-hub', card.hubId)}`}
+                      style={hubAccentStyle(card.hubId)}
+                    >
                       <span className="wide-project-hub-dot" aria-hidden="true" />
                       <span className="wide-project-hub-label">{card.hubId}</span>
                     </span>
@@ -14669,7 +14966,11 @@ function App() {
                   {card.agentTag}
                 </span>
                 {card.hubTags.map(hubTag => (
-                  <span key={hubTag} className={`token-stats-pill ${tokenTagVariantClass('hub', hubTag)}`}>
+                  <span
+                    key={hubTag}
+                    className={`token-stats-pill ${tokenTagVariantClass('hub', hubTag)}`}
+                    style={hubAccentStyle(hubTag)}
+                  >
                     {hubTag}
                   </span>
                 ))}
@@ -14730,7 +15031,10 @@ function App() {
         <div className="settings-metadata-list">
           <div className="settings-metadata-card">
             <div className="settings-metadata-line settings-metadata-line-tags">
-              <span className={`wide-project-hub-tag ${tagVariantClass('wide-project-hub', activeHub)}`}>
+              <span
+                className={`wide-project-hub-tag ${tagVariantClass('wide-project-hub', activeHub)}`}
+                style={hubAccentStyle(activeHub)}
+              >
                 <span className="wide-project-hub-dot" aria-hidden="true" />
                 <span className="wide-project-hub-label">Hub: {activeHub}</span>
               </span>
@@ -14742,7 +15046,10 @@ function App() {
           {profileCards.map(card => (
             <div key={`cc-switch:${card.projectId}`} className="settings-metadata-card">
               <div className="settings-metadata-line settings-metadata-line-tags">
-                <span className={`wide-project-hub-tag ${tagVariantClass('wide-project-hub', card.projectHub)}`}>
+                <span
+                  className={`wide-project-hub-tag ${tagVariantClass('wide-project-hub', card.projectHub)}`}
+                  style={hubAccentStyle(card.projectHub)}
+                >
                   <span className="wide-project-hub-dot" aria-hidden="true" />
                   <span className="wide-project-hub-label">{card.projectHub}</span>
                 </span>
@@ -15596,7 +15903,7 @@ function App() {
               <span>No projects available.</span>
             </div>
           ) : null}
-          {sortedProjectItems.map(projectItem => {
+          {visibleProjectItems.map(projectItem => {
             const targetProjectId = projectItem.projectId;
             const projectSessions = projectSessionsByProjectId[targetProjectId] ?? [];
             const collapsed = collapsedProjectIds.includes(targetProjectId);
@@ -15632,6 +15939,7 @@ function App() {
                     <span className="wide-project-folder-wrap">
                       <span
                         className={`codicon ${collapsed ? 'codicon-folder' : 'codicon-folder-opened'} wide-project-folder-icon ${projectHubVariant}`}
+                        style={hubAccentStyle(projectHub)}
                       />
                       {pinnedProject ? (
                         <span className="codicon codicon-pinned wide-project-pin-badge" aria-hidden="true" />
@@ -15643,6 +15951,7 @@ function App() {
                       </span>
                       <span
                         className={`wide-project-hub-tag ${projectHubVariant}`}
+                        style={hubAccentStyle(projectHub)}
                       >
                         <span className="wide-project-hub-dot" aria-hidden="true" />
                         <span className="wide-project-hub-label">{projectHub}</span>
@@ -15750,6 +16059,7 @@ function App() {
               </div>
             );
           })}
+          {renderHiddenProjectRows(true)}
         </div>
         )}
         {(() => {
@@ -15895,7 +16205,7 @@ function App() {
         {projects.length === 0 ? (
           <div className="chat-empty-hint">No projects available.</div>
         ) : null}
-        {sessionSearchActive ? renderSessionSearchResults(false) : sortedProjectItems.map(projectItem => {
+        {sessionSearchActive ? renderSessionSearchResults(false) : visibleProjectItems.map(projectItem => {
           const targetProjectId = projectItem.projectId;
           const projectSessions = projectSessionsByProjectId[targetProjectId] ?? [];
           const collapsed = collapsedProjectIds.includes(targetProjectId);
@@ -15932,6 +16242,7 @@ function App() {
                   <span className="wide-project-folder-wrap">
                     <span
                       className={`codicon ${collapsed ? 'codicon-folder' : 'codicon-folder-opened'} wide-project-folder-icon ${projectHubVariant}`}
+                      style={hubAccentStyle(projectHub)}
                     />
                     {pinnedProject ? (
                       <span className="codicon codicon-pinned wide-project-pin-badge" aria-hidden="true" />
@@ -15943,6 +16254,7 @@ function App() {
                     </span>
                     <span
                       className={`wide-project-hub-tag ${projectHubVariant}`}
+                      style={hubAccentStyle(projectHub)}
                     >
                       <span className="wide-project-hub-dot" aria-hidden="true" />
                       <span className="wide-project-hub-label">{projectHub}</span>
@@ -16156,6 +16468,7 @@ function App() {
             </div>
           );
         })}
+        {!sessionSearchActive ? renderHiddenProjectRows(false) : null}
       </div>
     );
   };

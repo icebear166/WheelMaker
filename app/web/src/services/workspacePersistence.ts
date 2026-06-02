@@ -34,6 +34,7 @@ import {
   sanitizeFloatingControlIdleOpacity,
   sanitizeFloatingControlYRatio,
 } from './mobileFloatingControls';
+import { sanitizeHubColorMap } from './hubProjectPreferences';
 
 export type PersistedTab = 'chat' | 'file' | 'git';
 export type PersistedThemeMode = 'dark' | 'light';
@@ -100,6 +101,9 @@ export type PersistedGlobalState = {
   collapsedProjectIds: string[];
   desktopCollapsedProjectIds: string[];
   pinnedProjectIds: string[];
+  hubColors: Record<string, string>;
+  hiddenProjectIds: string[];
+  expandedHubIds: string[];
   portRelayTargets: PortRelayTarget[];
   selectedPortRelayTarget: PortRelayTarget | null;
   portRelayListenPort: number;
@@ -180,6 +184,9 @@ const GLOBAL_KEYS = {
   collapsedProjectIds: 'collapsedProjectIds',
   desktopCollapsedProjectIds: 'desktopCollapsedProjectIds',
   pinnedProjectIds: 'pinnedProjectIds',
+  hubColors: 'hubColors',
+  hiddenProjectIds: 'hiddenProjectIds',
+  expandedHubIds: 'expandedHubIds',
   portRelayTargets: 'portRelayTargets',
   selectedPortRelayTarget: 'selectedPortRelayTarget',
   portRelayListenPort: 'portRelayListenPort',
@@ -218,6 +225,9 @@ function defaultGlobalState(): PersistedGlobalState {
     collapsedProjectIds: [],
     desktopCollapsedProjectIds: [],
     pinnedProjectIds: [],
+    hubColors: {},
+    hiddenProjectIds: [],
+    expandedHubIds: [],
     portRelayTargets: [],
     selectedPortRelayTarget: null,
     portRelayListenPort: 28810,
@@ -389,6 +399,12 @@ function sanitizeProjectCommitsState(input: Partial<PersistedProjectCommitsState
   };
 }
 
+function sanitizeStringList(value: unknown, fallback: string[] = []): string[] {
+  return Array.isArray(value)
+    ? Array.from(new Set(value.filter(item => typeof item === 'string' && item)))
+    : fallback;
+}
+
 type PersistedGlobalStateInput = Partial<PersistedGlobalState> & {
   floatingControlSlot?: unknown;
 };
@@ -404,6 +420,8 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
   const pinnedProjectIds = Array.isArray(input.pinnedProjectIds)
     ? Array.from(new Set(input.pinnedProjectIds.filter(item => typeof item === 'string' && item)))
     : base.pinnedProjectIds;
+  const hiddenProjectIds = sanitizeStringList(input.hiddenProjectIds, base.hiddenProjectIds);
+  const expandedHubIds = sanitizeStringList(input.expandedHubIds, base.expandedHubIds);
   const legacyFloatingControlYRatio = floatingControlYRatioFromLegacySlot(input.floatingControlSlot);
   const floatingControlYRatio = sanitizeFloatingControlYRatio(
     input.floatingControlYRatio,
@@ -447,6 +465,9 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
     collapsedProjectIds,
     desktopCollapsedProjectIds: collapsedProjectIds,
     pinnedProjectIds,
+    hubColors: sanitizeHubColorMap(input.hubColors),
+    hiddenProjectIds,
+    expandedHubIds,
     portRelayTargets: normalizePortRelayTargets(input.portRelayTargets),
     selectedPortRelayTarget: normalizePortRelayTarget(input.selectedPortRelayTarget),
     portRelayListenPort: normalizePortRelayListenPort(input.portRelayListenPort, base.portRelayListenPort),
@@ -920,6 +941,9 @@ export class WorkspacePersistenceRepository {
       {k: GLOBAL_KEYS.collapsedProjectIds, v: serialize(this.state.global.collapsedProjectIds), updatedAt: now},
       {k: GLOBAL_KEYS.desktopCollapsedProjectIds, v: serialize(this.state.global.desktopCollapsedProjectIds), updatedAt: now},
       {k: GLOBAL_KEYS.pinnedProjectIds, v: serialize(this.state.global.pinnedProjectIds), updatedAt: now},
+      {k: GLOBAL_KEYS.hubColors, v: serialize(this.state.global.hubColors), updatedAt: now},
+      {k: GLOBAL_KEYS.hiddenProjectIds, v: serialize(this.state.global.hiddenProjectIds), updatedAt: now},
+      {k: GLOBAL_KEYS.expandedHubIds, v: serialize(this.state.global.expandedHubIds), updatedAt: now},
       {k: GLOBAL_KEYS.portRelayTargets, v: serialize(this.state.global.portRelayTargets), updatedAt: now},
       {k: GLOBAL_KEYS.selectedPortRelayTarget, v: serialize(this.state.global.selectedPortRelayTarget), updatedAt: now},
       {k: GLOBAL_KEYS.portRelayListenPort, v: serialize(this.state.global.portRelayListenPort), updatedAt: now},
@@ -1273,6 +1297,9 @@ export class WorkspacePersistenceRepository {
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.collapsedProjectIds, v: serialize(next.collapsedProjectIds), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.desktopCollapsedProjectIds, v: serialize(next.desktopCollapsedProjectIds), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.pinnedProjectIds, v: serialize(next.pinnedProjectIds), updatedAt: now});
+      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.hubColors, v: serialize(next.hubColors), updatedAt: now});
+      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.hiddenProjectIds, v: serialize(next.hiddenProjectIds), updatedAt: now});
+      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.expandedHubIds, v: serialize(next.expandedHubIds), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.portRelayTargets, v: serialize(next.portRelayTargets), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.selectedPortRelayTarget, v: serialize(next.selectedPortRelayTarget), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.portRelayListenPort, v: serialize(next.portRelayListenPort), updatedAt: now});

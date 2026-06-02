@@ -7,6 +7,7 @@ import {
   sanitizeFloatingControlIdleOpacity,
   sanitizeFloatingControlYRatio,
 } from './mobileFloatingControls';
+import { sanitizeHubColorMap } from './hubProjectPreferences';
 
 export type WorkspaceUiStateValue<T> = T | ((current: T) => T);
 
@@ -33,6 +34,9 @@ export type WorkspaceUiState = {
     settingsOpen: boolean;
     collapsedProjectIds: string[];
     pinnedProjectIds: string[];
+    hiddenProjectIds: string[];
+    expandedHubIds: string[];
+    hubColors: Record<string, string>;
   };
   desktop: {
     sidebarCollapsed: boolean;
@@ -60,6 +64,9 @@ export type WorkspaceUiStateInput = {
   collapsedProjectIds?: unknown;
   desktopCollapsedProjectIds?: unknown;
   pinnedProjectIds?: unknown;
+  hiddenProjectIds?: unknown;
+  expandedHubIds?: unknown;
+  hubColors?: unknown;
   drawerOpen?: unknown;
   floatingControlYRatio?: unknown;
   floatingControlSide?: unknown;
@@ -75,6 +82,9 @@ export type WorkspaceUiAction =
   | { type: 'shared/setSettingsOpen'; next: WorkspaceUiStateValue<boolean> }
   | { type: 'shared/setCollapsedProjectIds'; next: WorkspaceUiStateValue<string[]> }
   | { type: 'shared/setPinnedProjectIds'; next: WorkspaceUiStateValue<string[]> }
+  | { type: 'shared/setHiddenProjectIds'; next: WorkspaceUiStateValue<string[]> }
+  | { type: 'shared/setExpandedHubIds'; next: WorkspaceUiStateValue<string[]> }
+  | { type: 'shared/setHubColors'; next: WorkspaceUiStateValue<Record<string, string>> }
   | { type: 'desktop/setSidebarCollapsed'; next: WorkspaceUiStateValue<boolean> }
   | { type: 'desktop/setSidebarWidth'; next: WorkspaceUiStateValue<number> }
   | { type: 'mobile/setDrawerOpen'; next: WorkspaceUiStateValue<boolean> }
@@ -161,6 +171,9 @@ export function createWorkspaceUiState(input: WorkspaceUiStateInput = {}): Works
           : input.desktopCollapsedProjectIds,
       ),
       pinnedProjectIds: sanitizeStringList(input.pinnedProjectIds),
+      hiddenProjectIds: sanitizeStringList(input.hiddenProjectIds),
+      expandedHubIds: sanitizeStringList(input.expandedHubIds),
+      hubColors: sanitizeHubColorMap(input.hubColors),
     },
     desktop: {
       sidebarCollapsed:
@@ -260,6 +273,36 @@ export function workspaceUiReducer(
           ...state.mobile,
           floatingControlYRatio: sanitizeFloatingControlYRatio(
             resolveNext(state.mobile.floatingControlYRatio, action.next),
+          ),
+        },
+      };
+    case 'shared/setHiddenProjectIds':
+      return {
+        ...state,
+        shared: {
+          ...state.shared,
+          hiddenProjectIds: sanitizeStringList(
+            resolveNext(state.shared.hiddenProjectIds, action.next),
+          ),
+        },
+      };
+    case 'shared/setExpandedHubIds':
+      return {
+        ...state,
+        shared: {
+          ...state.shared,
+          expandedHubIds: sanitizeStringList(
+            resolveNext(state.shared.expandedHubIds, action.next),
+          ),
+        },
+      };
+    case 'shared/setHubColors':
+      return {
+        ...state,
+        shared: {
+          ...state.shared,
+          hubColors: sanitizeHubColorMap(
+            resolveNext(state.shared.hubColors, action.next),
           ),
         },
       };

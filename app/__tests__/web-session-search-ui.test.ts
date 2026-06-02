@@ -112,7 +112,7 @@ describe('web session search UI wiring', () => {
     );
     expect(hubSummary).not.toContain('{mobile ? (');
     expect(main).toContain('const sessionSearchProjectDoneCount = useMemo(');
-    expect(main).toContain("`Searching ${sessionSearchProjectDoneCount}/${sortedProjectItems.length} projects`");
+    expect(main).toContain("`Searching ${sessionSearchProjectDoneCount}/${visibleProjectItems.length} projects`");
     expect(main).toContain('parts.push(`${sessionSearchErrorCount} error${sessionSearchErrorCount === 1 ? \'\' : \'s\'}`);');
     expect(main).toContain('sessionSearchStatusParts.join(\' · \')');
     expect(main).not.toContain('className="chat-hub-summary-count"');
