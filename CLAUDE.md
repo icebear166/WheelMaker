@@ -18,6 +18,7 @@ WheelMaker/
 - Web 构建产物直接输出到 `~/.wheelmaker/web`，不再经过 `app/dist`
 - 禁止无意义的 `strings.TrimSpace`：仅允许在明确的输入边界归一化场景使用，禁止在内部链路重复清洗
 - 任何 bug 修复前，先向用户说明原因和方案，待用户确认后再修复
+- 需求澄清、方案选择、设计讨论只用文字对话；不要主动提议用浏览器/Web 可视化伴随工具展示选项
 - 当用户要求“更新发布工程”或同义表达时，Windows 调用根目录 `update-publish.bat`，macOS/Linux 调用根目录 `update-publish.sh`，通过 `WheelMakerUpdater` 异步执行完整更新发布；不要调用需要管理员交互/服务重建的 `deploy.bat` 或 `deploy.sh`
 
 ## Completion Gate (Highest Priority)
