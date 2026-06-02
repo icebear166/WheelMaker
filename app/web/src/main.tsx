@@ -328,6 +328,7 @@ import type {
   RegistrySpeechErrorEvent,
   RegistrySessionContentBlock,
   RegistrySessionConfigOption,
+  RegistrySessionReadResponse,
   RegistrySessionSummary,
   RegistrySessionTurn,
   RegistryFsEntry,
@@ -683,6 +684,7 @@ const CODE_LINE_HEIGHT_OPTIONS = [1.35, 1.45, 1.5, 1.6, 1.7] as const;
 const CODE_TAB_SIZE_OPTIONS = [2, 4, 8] as const;
 const RECONNECT_RETRY_DELAY_MS = 1000;
 const RECONNECT_GRACE_PERIOD_MS = 30_000;
+const PROJECT_REFRESH_POLL_INTERVAL_MS = 30_000;
 const CHAT_NEW_DRAFT_SESSION_KEY = '__new__';
 const CHAT_DRAFT_KEY_PROJECT_FALLBACK = '__no_project__';
 const CHAT_AUTO_SCROLL_BOTTOM_THRESHOLD = 80;
@@ -692,6 +694,14 @@ const CHAT_ATTACHMENT_CHUNK_SIZE = 1024 * 1024;
 const CHAT_CONFIG_PRIORITY_IDS = ['mode', 'model', 'effort'] as const;
 const CHAT_CONFIG_PRIORITY_MATCHERS = ['mode', 'model', 'effort', 'thought'] as const;
 const CHAT_CONFIG_INLINE_LIMIT = 3;
+function estimateSessionReadPayloadBytes(result: RegistrySessionReadResponse): number {
+  try {
+    return new TextEncoder().encode(JSON.stringify(result)).length;
+  } catch {
+    return 0;
+  }
+}
+
 const fileMemoryCacheKey = (activeProjectId: string, path: string) => `${activeProjectId}\n${path}`;
 const PROJECT_PIN_LONG_PRESS_MS = 450;
 const PROJECT_SESSION_LONG_PRESS_MS = 450;
@@ -8657,12 +8667,35 @@ function App() {
         existingMessages.length === 0 &&
         checkpointTurnIndex > 0;
       const useIncremental = requestedIncremental && !fallbackToFullRead;
-      const readResult = await readProjectSessionWithStaleCacheRepair(
-        activeProjectId,
+      const requestedAfterTurnIndex = useIncremental ? checkpointTurnIndex : 0;
+      const finishSessionReadDiagnostic = startWorkspaceDiagnosticSpan('session_read', {
+        projectId: activeProjectId,
         sessionId,
-        useIncremental ? checkpointTurnIndex : 0,
-      );
+        requestedAfterTurnIndex: requestedAfterTurnIndex,
+        cacheHit: existingMessages.length > 0,
+        fallbackToFullRead,
+      });
+      let readResult: Awaited<ReturnType<typeof readProjectSessionWithStaleCacheRepair>>;
+      try {
+        readResult = await readProjectSessionWithStaleCacheRepair(
+          activeProjectId,
+          sessionId,
+          requestedAfterTurnIndex,
+        );
+      } catch (err) {
+        const readError = err instanceof Error ? err.message : String(err);
+        finishSessionReadDiagnostic({ok: false, error: readError}, 'error');
+        throw err;
+      }
       const {result, appliedAfterTurnIndex} = readResult;
+      finishSessionReadDiagnostic({
+        ok: true,
+        appliedAfterTurnIndex,
+        latestTurnIndex: result.latestTurnIndex,
+        turnCount: result.turns.length,
+        messageCount: result.messages.length,
+        payloadBytes: estimateSessionReadPayloadBytes(result),
+      });
       const selectionSnapshot = options?.selectionSnapshot ?? '';
       if (
         options?.preserveUserSelection &&
@@ -13283,7 +13316,7 @@ function App() {
     }
     const timer = window.setInterval(() => {
       refreshProject({silent: true}).catch(() => undefined);
-    }, 15000);
+    }, PROJECT_REFRESH_POLL_INTERVAL_MS);
     return () => {
       window.clearInterval(timer);
     };

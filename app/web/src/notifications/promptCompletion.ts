@@ -2,6 +2,7 @@ import type {
   RegistryChatMessage,
   RegistrySessionSummary,
 } from '../types/registry';
+import {resolveChatSessionTitle} from '../chat/chatSessionTitle';
 
 export type WheelMakerNotificationType = 'chat.prompt.completed';
 
@@ -91,7 +92,7 @@ export function buildPromptCompletionNotification(input: {
   session?: Pick<RegistrySessionSummary, 'sessionId' | 'title'>;
 }): WheelMakerNotificationPayload {
   const status = resolvePromptCompletionStatus(input.message.param);
-  const sessionTitle = input.session?.title || input.message.sessionId;
+  const sessionTitle = resolveChatSessionTitle(input.session?.title ?? '') || input.message.sessionId;
   const projectId = input.projectId;
   const sessionId = input.message.sessionId;
   const turnIndex = Math.max(0, Math.trunc(Number(input.message.turnIndex) || 0));
@@ -101,8 +102,8 @@ export function buildPromptCompletionNotification(input: {
     projectId,
     sessionId,
     turnIndex,
-    title: notificationTitle(status),
-    body: sessionTitle,
+    title: sessionTitle,
+    body: notificationTitle(status),
     status,
     url: `/?wmProjectId=${encodeURIComponent(projectId)}&wmSessionId=${encodeURIComponent(sessionId)}`,
   };

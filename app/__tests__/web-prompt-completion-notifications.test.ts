@@ -82,7 +82,7 @@ describe('prompt completion notifications', () => {
     })).toBe(true);
   });
 
-  test('builds privacy-preserving payload and stable dedupe key', () => {
+  test('builds privacy-preserving payload with the session display title and stable dedupe key', () => {
     const promptDone = message('prompt_done', 9, {
       stopReason: 'failed',
       message: 'agent crashed with a very long diagnostic',
@@ -99,13 +99,33 @@ describe('prompt completion notifications', () => {
       sessionId: 'sess-1',
       turnIndex: 9,
       status: 'failed',
-      title: 'Prompt failed',
+      title: 'Build Android',
+      body: 'Prompt failed',
     });
-    expect(payload.body).toContain('Build Android');
+    expect(payload.body).not.toContain('Build Android');
     expect(payload.body).not.toContain('agent crashed');
     expect(payload.body).not.toContain('assistant answer');
     expect(payload.url).toContain('wmProjectId=proj-1');
     expect(payload.url).toContain('wmSessionId=sess-1');
     expect(promptCompletionNotificationKey('proj-1', promptDone)).toBe('proj-1:sess-1:9');
+  });
+
+  test('uses the same resolved session title as the chat list', () => {
+    const promptDone = message('prompt_done', 10);
+    const payload = buildPromptCompletionNotification({
+      message: promptDone,
+      projectId: 'proj-1',
+      session: {
+        ...session,
+        title: JSON.stringify({
+          first: 'Original prompt title',
+          last: 'Latest prompt title',
+          manual: 'Manual session title',
+        }),
+      },
+    });
+
+    expect(payload.title).toBe('Manual session title');
+    expect(payload.body).toBe('Prompt completed');
   });
 });

@@ -62,6 +62,26 @@ describe('web chat refresh model', () => {
     expect(refreshChatIndexBody).not.toContain('setRefreshingProject(false)');
   });
 
+  test('silent project freshness polling runs at a 30 second cadence', () => {
+    const main = readMain();
+
+    expect(main).toContain('const PROJECT_REFRESH_POLL_INTERVAL_MS = 30_000;');
+    expect(main).toContain('}, PROJECT_REFRESH_POLL_INTERVAL_MS);');
+    expect(main).not.toContain('}, 15000);');
+  });
+
+  test('new project sessions are cached before selecting the session', () => {
+    const main = readMain();
+    const body = extractFunctionBody(main, 'handleProjectCreateSession');
+
+    expect(body.indexOf('workspaceStore.rememberChatSession(targetProjectId, session, {turnIndex: 0});'))
+      .toBeLessThan(body.indexOf('await selectProjectChatSession(targetProjectId, session.sessionId, options);'));
+    expect(body.indexOf('setProjectSessionsByProjectId(prev => ({'))
+      .toBeLessThan(body.indexOf('await selectProjectChatSession(targetProjectId, session.sessionId, options);'));
+    expect(body.indexOf('chatMessageStoreRef.current[runtimeKey] = [];'))
+      .toBeLessThan(body.indexOf('await selectProjectChatSession(targetProjectId, session.sessionId, options);'));
+  });
+
   test('project session lists are never mirrored from unscoped chatSessions state', () => {
     const main = readMain();
 
