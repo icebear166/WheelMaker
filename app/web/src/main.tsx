@@ -168,7 +168,6 @@ import {
   splitProjectsByVisibility,
   toggleHubVisibility,
   toggleProjectVisibility,
-  type HubVisibilityState,
 } from './services/hubProjectPreferences';
 import { triggerMobileHaptic } from './services/mobileHaptics';
 import {
@@ -1169,14 +1168,6 @@ function tagVariantClass(prefix: string, value: string): string {
 function projectHubId(project: Pick<RegistryProject, 'hubId'>): string {
   return project.hubId || 'local';
 }
-
-function hubCheckboxIcon(state: HubVisibilityState): string {
-  if (state === 'checked') {
-    return 'codicon-check';
-  }
-  return state === 'mixed' ? 'codicon-chrome-minimize' : '';
-}
-
 
 function normalizeChatSlashCommandName(name: string): string {
   const normalized = name.trim();
@@ -6117,12 +6108,14 @@ function App() {
                 const readStatus = localHubReadStatuses[hub.hubId] ?? 'Remote';
                 const visibilityState = resolveHubVisibilityState(treeItem.projects, hiddenProjectIds);
                 const expanded = effectiveExpandedHubIds.includes(hub.hubId);
-                const checkIcon = hubCheckboxIcon(visibilityState);
-                const ariaChecked = visibilityState === 'mixed' ? 'mixed' : visibilityState === 'checked';
+                const hubEnabled = visibilityState !== 'unchecked';
+                const hubToggleLabel = hubEnabled
+                  ? `Hide all projects in ${hub.hubId}`
+                  : `Show all projects in ${hub.hubId}`;
                 const colorMenuOpen = chatHubColorMenuHubId === hub.hubId;
                 const currentHubColor = hubColors[hub.hubId] || HUB_COLOR_PRESETS[0];
                 return (
-                  <div key={hub.hubId} className="chat-hub-tree">
+                  <div key={hub.hubId} className={`chat-hub-tree${colorMenuOpen ? ' color-open' : ''}`}>
                     <div className="chat-hub-row">
                       <button
                         type="button"
@@ -6140,17 +6133,17 @@ function App() {
                       </button>
                       <button
                         type="button"
-                        className={`chat-hub-visibility-check ${visibilityState}`}
-                        role="checkbox"
-                        aria-checked={ariaChecked}
-                        aria-label={`${visibilityState === 'checked' ? 'Hide' : 'Show'} ${hub.hubId} projects`}
+                        className={`chat-hub-visibility-cube ${hubEnabled ? 'enabled' : 'disabled'} ${visibilityState}`}
+                        aria-label={hubToggleLabel}
+                        aria-pressed={hubEnabled}
+                        style={hubEnabled ? hubAccentStyle(hub.hubId) : undefined}
                         onClick={() => {
                           setHiddenProjectIds(current =>
-                            toggleHubVisibility(current, treeItem.projects, visibilityState !== 'checked'),
+                            toggleHubVisibility(current, treeItem.projects, visibilityState === 'unchecked'),
                           );
                         }}
                       >
-                        {checkIcon ? <span className={`codicon ${checkIcon}`} aria-hidden="true" /> : null}
+                        <span className="codicon codicon-package" aria-hidden="true" />
                       </button>
                       <span className="chat-hub-row-name">{hub.hubId}</span>
                       <button
@@ -6172,13 +6165,19 @@ function App() {
                         <div className="chat-hub-color-palette-top">
                           <button
                             type="button"
-                            className={`chat-hub-color-default${hubColors[hub.hubId] ? '' : ' selected'}`}
+                            className={`chat-hub-color-mode chat-hub-color-default${hubColors[hub.hubId] ? '' : ' selected'}`}
                             onClick={() => setHubColors(current => setHubColorPreference(current, hub.hubId, ''))}
                           >
-                            Default
+                            <span className="chat-hub-color-mode-label">Default</span>
+                            <span className="chat-hub-color-mode-preview default" aria-hidden="true" />
                           </button>
-                          <label className="chat-hub-color-custom">
-                            <span className="chat-hub-color-custom-copy">Custom</span>
+                          <label className={`chat-hub-color-mode chat-hub-color-custom${hubColors[hub.hubId] ? ' selected' : ''}`}>
+                            <span className="chat-hub-color-mode-label">Custom</span>
+                            <span
+                              className="chat-hub-color-mode-preview custom"
+                              style={hubAccentStyle(hub.hubId)}
+                              aria-hidden="true"
+                            />
                             <input
                               type="color"
                               value={currentHubColor}
