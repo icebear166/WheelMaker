@@ -502,13 +502,13 @@ describe('web responsive ui state', () => {
     expect(stylesCss).toContain('.chat-hub-tree.expanded .chat-hub-disclosure {');
     const colorOpenBlock = stylesCss.match(/\.chat-hub-tree\.color-open \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(colorOpenBlock).toContain('min-height: calc(36px + var(--chat-hub-color-palette-clearance));');
-    expect(colorOpenBlock).toContain('--chat-hub-color-palette-clearance: 348px;');
+    expect(colorOpenBlock).toContain('--chat-hub-color-palette-clearance: 430px;');
     const colorOpenProjectListBlock = stylesCss.match(/\.chat-hub-tree\.color-open \.chat-hub-project-list \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(colorOpenProjectListBlock).toContain('margin-top: var(--chat-hub-color-palette-clearance);');
     expect(stylesCss).toContain('.chat-hub-color-palette::before {');
 
     const rowBlock = stylesCss.match(/\.chat-hub-row,\n\.chat-hub-empty \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(rowBlock).toContain('grid-template-columns: 16px 24px minmax(0, 1fr) 24px auto;');
+    expect(rowBlock).toContain('grid-template-columns: 16px 24px minmax(0, 1fr) 28px auto;');
 
     const disclosureBlock = stylesCss.match(/\.chat-hub-disclosure \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(disclosureBlock).toContain('width: 16px;');
@@ -521,7 +521,7 @@ describe('web responsive ui state', () => {
     const colorSquareBlock = Array.from(stylesCss.matchAll(/\.chat-hub-color-square \{[\s\S]*?\n\}/g))
       .map(match => match[0])
       .find(block => block.includes('--hub-accent')) ?? '';
-    expect(colorSquareBlock).toContain('width: 24px;');
+    expect(colorSquareBlock).toContain('width: 28px;');
     expect(colorSquareBlock).toContain('height: 24px;');
     expect(colorSquareBlock).toContain('border: 1px solid transparent;');
     expect(colorSquareBlock).toContain('background: transparent;');
@@ -529,7 +529,7 @@ describe('web responsive ui state', () => {
     expect(colorSquareBlock).not.toContain('0 5px 14px');
 
     const colorSquareFillBlock = stylesCss.match(/\.chat-hub-color-square-fill \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(colorSquareFillBlock).toContain('width: 18px;');
+    expect(colorSquareFillBlock).toContain('width: 22px;');
     expect(colorSquareFillBlock).toContain('height: 18px;');
     expect(colorSquareFillBlock).toContain('background: var(--hub-accent);');
     expect(colorSquareFillBlock).not.toContain('linear-gradient');
@@ -545,6 +545,8 @@ describe('web responsive ui state', () => {
     expect(paletteBlock).toContain('position: absolute;');
     expect(paletteBlock).toContain('right: 8px;');
     expect(paletteBlock).toContain('width: min(248px, calc(100% - 16px));');
+    const paletteArrowBlock = stylesCss.match(/\.chat-hub-color-palette::before \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(paletteArrowBlock).toContain('right: 68px;');
 
     const colorGridBlock = stylesCss.match(/\.chat-hub-color-grid \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(colorGridBlock).toContain('grid-template-columns: repeat(5, minmax(0, 1fr));');

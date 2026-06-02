@@ -6819,7 +6819,7 @@ textarea,
 }
 
 .chat-hub-tree.color-open {
-  --chat-hub-color-palette-clearance: 348px;
+  --chat-hub-color-palette-clearance: 430px;
   z-index: 3;
   min-height: calc(36px + var(--chat-hub-color-palette-clearance));
 }
@@ -6832,7 +6832,7 @@ textarea,
 .chat-hub-empty {
   min-height: 36px;
   display: grid;
-  grid-template-columns: 16px 24px minmax(0, 1fr) 24px auto;
+  grid-template-columns: 16px 24px minmax(0, 1fr) 28px auto;
   align-items: center;
   gap: 6px;
   padding: 4px 6px;
@@ -6916,7 +6916,7 @@ textarea,
 
 .chat-hub-color-square {
   --hub-accent: var(--accent);
-  width: 24px;
+  width: 28px;
   height: 24px;
   border: 1px solid transparent;
   border-radius: 6px;
@@ -6931,7 +6931,7 @@ textarea,
 }
 
 .chat-hub-color-square-fill {
-  width: 18px;
+  width: 22px;
   height: 18px;
   border-radius: 5px;
   background: var(--hub-accent);
@@ -6986,7 +6986,7 @@ textarea,
   content: "";
   position: absolute;
   top: -7px;
-  right: 70px;
+  right: 68px;
   width: 12px;
   height: 12px;
   border-left: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
