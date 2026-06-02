@@ -6792,6 +6792,7 @@ textarea,
 }
 
 .chat-hub-popover {
+  --chat-hub-popover-viewport-offset: 96px;
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
@@ -6799,7 +6800,8 @@ textarea,
   width: min(340px, calc(100vw - 24px));
   min-width: 0;
   max-width: calc(100vw - 24px);
-  max-height: min(420px, calc(100vh - 120px));
+  max-height: calc(100vh - var(--chat-hub-popover-viewport-offset));
+  max-height: calc(100dvh - var(--chat-hub-popover-viewport-offset));
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -6817,12 +6819,12 @@ textarea,
 .chat-hub-tree {
   position: relative;
   --chat-hub-color-chip-width: 36px;
-  --chat-hub-color-chip-height: 24px;
+  --chat-hub-color-chip-height: 20px;
   --chat-hub-color-chip-radius: 6px;
 }
 
 .chat-hub-tree.color-open {
-  --chat-hub-color-palette-clearance: 430px;
+  --chat-hub-color-palette-clearance: 336px;
   z-index: 3;
   min-height: calc(36px + var(--chat-hub-color-palette-clearance));
 }
@@ -6920,7 +6922,7 @@ textarea,
 .chat-hub-color-square {
   --hub-accent: var(--accent);
   width: 40px;
-  height: 28px;
+  height: 24px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
@@ -7025,7 +7027,7 @@ textarea,
 .chat-hub-color-default {
   --hub-accent: var(--accent);
   min-width: 0;
-  height: 40px;
+  height: 36px;
   border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   border-radius: 6px;
   padding: 4px 6px;

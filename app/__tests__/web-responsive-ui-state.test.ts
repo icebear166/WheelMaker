@@ -493,19 +493,26 @@ describe('web responsive ui state', () => {
     expect(mainTsx).toContain('if (!chatHubMenuRef.current.contains(event.target as Node)) {');
     expect(mainTsx).toContain("setChatHubColorMenuHubId('');");
 
-    const popoverBlock = stylesCss.match(/\.chat-hub-popover \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const popoverBlock = Array.from(stylesCss.matchAll(/\.chat-hub-popover \{[\s\S]*?\n\}/g))
+      .map(match => match[0])
+      .find(block => block.includes('position: absolute;')) ?? '';
     expect(popoverBlock).toContain('width: min(340px, calc(100vw - 24px));');
     expect(popoverBlock).toContain('min-width: 0;');
+    expect(popoverBlock).toContain('--chat-hub-popover-viewport-offset: 96px;');
+    expect(popoverBlock).toContain('max-height: calc(100vh - var(--chat-hub-popover-viewport-offset));');
+    expect(popoverBlock).toContain('max-height: calc(100dvh - var(--chat-hub-popover-viewport-offset));');
+    expect(popoverBlock).toContain('overflow: auto;');
+    expect(popoverBlock).not.toContain('min(420px');
 
     const treeBlock = stylesCss.match(/(?:^|\n)\.chat-hub-tree \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(treeBlock).toContain('position: relative;');
     expect(treeBlock).toContain('--chat-hub-color-chip-width: 36px;');
-    expect(treeBlock).toContain('--chat-hub-color-chip-height: 24px;');
+    expect(treeBlock).toContain('--chat-hub-color-chip-height: 20px;');
     expect(treeBlock).toContain('--chat-hub-color-chip-radius: 6px;');
     expect(stylesCss).toContain('.chat-hub-tree.expanded .chat-hub-disclosure {');
     const colorOpenBlock = stylesCss.match(/\.chat-hub-tree\.color-open \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(colorOpenBlock).toContain('min-height: calc(36px + var(--chat-hub-color-palette-clearance));');
-    expect(colorOpenBlock).toContain('--chat-hub-color-palette-clearance: 430px;');
+    expect(colorOpenBlock).toContain('--chat-hub-color-palette-clearance: 336px;');
     const colorOpenProjectListBlock = stylesCss.match(/\.chat-hub-tree\.color-open \.chat-hub-project-list \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(colorOpenProjectListBlock).toContain('margin-top: var(--chat-hub-color-palette-clearance);');
     expect(stylesCss).toContain('.chat-hub-color-palette::before {');
@@ -529,7 +536,7 @@ describe('web responsive ui state', () => {
       .map(match => match[0])
       .find(block => block.includes('--hub-accent')) ?? '';
     expect(colorSquareBlock).toContain('width: 40px;');
-    expect(colorSquareBlock).toContain('height: 28px;');
+    expect(colorSquareBlock).toContain('height: 24px;');
     expect(colorSquareBlock).toContain('border: 1px solid transparent;');
     expect(colorSquareBlock).toContain('background: transparent;');
     expect(colorSquareBlock).not.toContain('linear-gradient');
@@ -573,7 +580,7 @@ describe('web responsive ui state', () => {
     expect(customPickerBlock).toContain('gap: 7px;');
 
     const defaultColorBlock = stylesCss.match(/\.chat-hub-color-default \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(defaultColorBlock).toContain('height: 40px;');
+    expect(defaultColorBlock).toContain('height: 36px;');
     expect(defaultColorBlock).toContain('grid-template-columns: minmax(0, 1fr) var(--chat-hub-color-chip-width);');
     const customHeaderBlock = stylesCss.match(/\.chat-hub-color-custom-header \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(customHeaderBlock).toContain('grid-template-columns: minmax(0, 1fr) var(--chat-hub-color-chip-width);');
