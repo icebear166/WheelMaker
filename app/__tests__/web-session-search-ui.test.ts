@@ -139,9 +139,12 @@ describe('web session search UI wiring', () => {
     const projectRoot = path.join(__dirname, '..');
     const styles = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
 
+    const popoverBlock = styles.match(/(?:^|\n)\.chat-hub-popover \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(popoverBlock).toContain('width: min(340px, calc(100vw - 24px));');
     const sidebarPopoverBlock = styles.match(/\.sidebar-title-row \.chat-hub-popover \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(sidebarPopoverBlock).toContain('left: 12px;');
-    expect(sidebarPopoverBlock).toContain('right: 12px;');
-    expect(sidebarPopoverBlock).toContain('max-width: none;');
+    expect(sidebarPopoverBlock).toContain('right: auto;');
+    expect(sidebarPopoverBlock).toContain('max-width: calc(100vw - 24px);');
+    expect(sidebarPopoverBlock).not.toContain('max-width: none;');
   });
 });

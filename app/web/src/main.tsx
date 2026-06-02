@@ -6120,6 +6120,7 @@ function App() {
                 const checkIcon = hubCheckboxIcon(visibilityState);
                 const ariaChecked = visibilityState === 'mixed' ? 'mixed' : visibilityState === 'checked';
                 const colorMenuOpen = chatHubColorMenuHubId === hub.hubId;
+                const currentHubColor = hubColors[hub.hubId] || HUB_COLOR_PRESETS[0];
                 return (
                   <div key={hub.hubId} className="chat-hub-tree">
                     <div className="chat-hub-row">
@@ -6139,16 +6140,6 @@ function App() {
                       </button>
                       <button
                         type="button"
-                        className="chat-hub-color-trigger"
-                        aria-label={`Set color for ${hub.hubId}`}
-                        aria-expanded={colorMenuOpen}
-                        style={hubAccentStyle(hub.hubId)}
-                        onClick={() => setChatHubColorMenuHubId(current => (current === hub.hubId ? '' : hub.hubId))}
-                      >
-                        <span className="chat-hub-color-dot" aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
                         className={`chat-hub-visibility-check ${visibilityState}`}
                         role="checkbox"
                         aria-checked={ariaChecked}
@@ -6162,44 +6153,56 @@ function App() {
                         {checkIcon ? <span className={`codicon ${checkIcon}`} aria-hidden="true" /> : null}
                       </button>
                       <span className="chat-hub-row-name">{hub.hubId}</span>
+                      <button
+                        type="button"
+                        className="chat-hub-color-square"
+                        aria-label={`Set color for ${hub.hubId}`}
+                        aria-expanded={colorMenuOpen}
+                        style={hubAccentStyle(hub.hubId)}
+                        onClick={() => setChatHubColorMenuHubId(current => (current === hub.hubId ? '' : hub.hubId))}
+                      >
+                        <span className="chat-hub-color-square-fill" aria-hidden="true" />
+                      </button>
                       <span className={`chat-hub-read-tag ${readStatus.toLowerCase()}`}>
                         {readStatus}
                       </span>
                     </div>
                     {colorMenuOpen ? (
                       <div className="chat-hub-color-palette" aria-label={`Color options for ${hub.hubId}`}>
-                        <button
-                          type="button"
-                          className={`chat-hub-color-swatch default${hubColors[hub.hubId] ? '' : ' selected'}`}
-                          onClick={() => setHubColors(current => setHubColorPreference(current, hub.hubId, ''))}
-                        >
-                          Default
-                        </button>
-                        {HUB_COLOR_PRESETS.map(color => (
+                        <div className="chat-hub-color-palette-top">
                           <button
-                            key={`${hub.hubId}:${color}`}
                             type="button"
-                            className={`chat-hub-color-swatch${hubColors[hub.hubId] === color ? ' selected' : ''}`}
-                            style={{'--hub-accent': color} as React.CSSProperties}
-                            aria-label={`Set ${hub.hubId} color to ${color}`}
-                            onClick={() => setHubColors(current => setHubColorPreference(current, hub.hubId, color))}
+                            className={`chat-hub-color-default${hubColors[hub.hubId] ? '' : ' selected'}`}
+                            onClick={() => setHubColors(current => setHubColorPreference(current, hub.hubId, ''))}
                           >
-                            <span className="chat-hub-color-dot" aria-hidden="true" />
+                            Default
                           </button>
-                        ))}
-                        <label className="chat-hub-color-custom">
-                          <span className="codicon codicon-symbol-color" aria-hidden="true" />
-                          <input
-                            type="color"
-                            value={hubColors[hub.hubId] || HUB_COLOR_PRESETS[0]}
-                            aria-label={`Custom color for ${hub.hubId}`}
-                            onChange={event =>
-                              setHubColors(current =>
-                                setHubColorPreference(current, hub.hubId, event.currentTarget.value),
-                              )
-                            }
-                          />
-                        </label>
+                          <label className="chat-hub-color-custom">
+                            <span className="chat-hub-color-custom-copy">Custom</span>
+                            <input
+                              type="color"
+                              value={currentHubColor}
+                              aria-label={`Custom color for ${hub.hubId}`}
+                              onChange={event =>
+                                setHubColors(current =>
+                                  setHubColorPreference(current, hub.hubId, event.currentTarget.value),
+                                )
+                              }
+                            />
+                          </label>
+                        </div>
+                        <div className="chat-hub-color-grid">
+                          {HUB_COLOR_PRESETS.map(color => (
+                            <button
+                              key={`${hub.hubId}:${color}`}
+                              type="button"
+                              className={`chat-hub-color-swatch${hubColors[hub.hubId] === color ? ' selected' : ''}`}
+                              style={{'--swatch-color': color} as React.CSSProperties}
+                              aria-label={`Set ${hub.hubId} color to ${color}`}
+                              onClick={() => setHubColors(current => setHubColorPreference(current, hub.hubId, color))}
+                            />
+                          ))}
+                        </div>
                       </div>
                     ) : null}
                     {expanded ? (

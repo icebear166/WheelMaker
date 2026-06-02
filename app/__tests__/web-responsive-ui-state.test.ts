@@ -443,6 +443,37 @@ describe('web responsive ui state', () => {
     expect(mainTsx).toContain('className="chat-hub-tree"');
   });
 
+  test('renders hub display preferences with isolated square color controls', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = fs
+      .readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8')
+      .replace(/\r\n/g, '\n');
+    const stylesCss = fs
+      .readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8')
+      .replace(/\r\n/g, '\n');
+
+    const hubNameIndex = mainTsx.indexOf('<span className="chat-hub-row-name">{hub.hubId}</span>');
+    const colorSquareIndex = mainTsx.indexOf('className="chat-hub-color-square"', hubNameIndex);
+    const readTagIndex = mainTsx.indexOf('className={`chat-hub-read-tag ${readStatus.toLowerCase()}`}', hubNameIndex);
+    expect(hubNameIndex).toBeGreaterThanOrEqual(0);
+    expect(colorSquareIndex).toBeGreaterThan(hubNameIndex);
+    expect(readTagIndex).toBeGreaterThan(colorSquareIndex);
+    expect(mainTsx).not.toContain('className="chat-hub-color-trigger"');
+    expect(mainTsx).toContain("style={{'--swatch-color': color} as React.CSSProperties}");
+
+    const popoverBlock = stylesCss.match(/\.chat-hub-popover \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(popoverBlock).toContain('width: min(340px, calc(100vw - 24px));');
+    expect(popoverBlock).toContain('min-width: 0;');
+
+    const swatchBlock = stylesCss.match(/\.chat-hub-color-swatch \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(swatchBlock).toContain('background: var(--swatch-color);');
+    expect(swatchBlock).not.toContain('--hub-accent');
+
+    const customInputBlock = stylesCss.match(/\.chat-hub-color-custom input \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(customInputBlock).toContain('pointer-events: auto;');
+    expect(customInputBlock).not.toContain('pointer-events: none;');
+  });
+
   test('persists desktop sidebar width as global app state', () => {
     const projectRoot = path.join(__dirname, '..');
     const persistenceTs = fs.readFileSync(
