@@ -69,6 +69,7 @@ func newACPFactoryWithDefaults() *ACPFactory {
 	}{
 		{provider: protocol.ACPProviderClaude, build: func() ACPProvider { return NewClaudeProvider() }},
 		{provider: protocol.ACPProviderCopilot, build: func() ACPProvider { return NewCopilotProvider() }},
+		{provider: protocol.ACPProviderFlicker, build: func() ACPProvider { return NewFlickerProvider() }},
 		{provider: protocol.ACPProviderOpenCode, build: func() ACPProvider { return NewOpenCodeProvider() }},
 		{provider: protocol.ACPProviderCodeBuddy, build: func() ACPProvider { return NewCodeBuddyProvider() }},
 	}
@@ -157,6 +158,7 @@ func (f *ACPFactory) PreferredName() string {
 		protocol.ACPProviderCodex,
 		protocol.ACPProviderClaude,
 		protocol.ACPProviderCopilot,
+		protocol.ACPProviderFlicker,
 		protocol.ACPProviderOpenCode,
 		protocol.ACPProviderCodeBuddy,
 	}

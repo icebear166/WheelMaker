@@ -211,6 +211,33 @@ func TestCopilotACPProvider_LaunchArgs(t *testing.T) {
 	}
 }
 
+func TestFlickerACPProvider_LaunchArgs(t *testing.T) {
+	p := NewFlickerProvider()
+	p.resolveBinary = func(name string, configuredPath string) (string, error) {
+		if name != "myflicker" {
+			t.Fatalf("resolveBinary name=%q, want myflicker", name)
+		}
+		if configuredPath != "" {
+			t.Fatalf("resolveBinary configuredPath=%q, want empty", configuredPath)
+		}
+		return "/usr/bin/myflicker", nil
+	}
+
+	exe, args, env, err := p.Launch()
+	if err != nil {
+		t.Fatalf("launch: %v", err)
+	}
+	if exe != "/usr/bin/myflicker" {
+		t.Fatalf("exe=%q", exe)
+	}
+	if !reflect.DeepEqual(args, []string{"acp"}) {
+		t.Fatalf("args=%v", args)
+	}
+	if len(env) != 0 {
+		t.Fatalf("env=%v, want empty", env)
+	}
+}
+
 func TestOpenCodeACPProvider_LaunchArgs(t *testing.T) {
 	p := NewOpenCodeProvider()
 	p.resolveBinary = func(name string, configuredPath string) (string, error) {
@@ -266,8 +293,6 @@ func TestCodeBuddyACPProvider_LaunchArgs(t *testing.T) {
 }
 
 func TestParseACPProviderCodexAliases(t *testing.T) {
-	removedProviderName := strings.Join([]string{"my", "flicker"}, "")
-
 	provider, ok := protocol.ParseACPProvider("codex")
 	if !ok {
 		t.Fatal("ParseACPProvider(codex) returned ok=false")
@@ -281,27 +306,45 @@ func TestParseACPProviderCodexAliases(t *testing.T) {
 	if _, ok := protocol.ParseACPProvider("codex-app"); ok {
 		t.Fatal("ParseACPProvider accepted legacy codex-app alias")
 	}
-	if _, ok := protocol.ParseACPProvider(removedProviderName); ok {
-		t.Fatal("ParseACPProvider accepted removed provider")
+	provider, ok = protocol.ParseACPProvider("flicker")
+	if !ok {
+		t.Fatal("ParseACPProvider(flicker) returned ok=false")
+	}
+	if provider != protocol.ACPProviderFlicker {
+		t.Fatalf("flicker provider=%q, want %q", provider, protocol.ACPProviderFlicker)
+	}
+	if _, ok := protocol.ParseACPProvider("myflicker"); ok {
+		t.Fatal("ParseACPProvider accepted executable name as provider")
 	}
 
+	foundFlicker := false
 	for _, name := range protocol.ACPProviderNames() {
 		if name == "codexapp" {
 			t.Fatalf("ACPProviderNames exposes codexapp alias: %v", protocol.ACPProviderNames())
 		}
-		if name == removedProviderName {
-			t.Fatalf("ACPProviderNames exposes removed provider: %v", protocol.ACPProviderNames())
+		if name == "myflicker" {
+			t.Fatalf("ACPProviderNames exposes executable name: %v", protocol.ACPProviderNames())
 		}
+		if name == "flicker" {
+			foundFlicker = true
+		}
+	}
+	if !foundFlicker {
+		t.Fatalf("ACPProviderNames missing flicker: %v", protocol.ACPProviderNames())
 	}
 }
 
 func TestProviderPresetByNameRejectsRemovedProvider(t *testing.T) {
-	removedProviderName := strings.Join([]string{"my", "flicker"}, "")
 	if _, ok := providerPresetByName("codexapp"); ok {
 		t.Fatal("providerPresetByName accepted removed codexapp alias")
 	}
-	if _, ok := providerPresetByName(removedProviderName); ok {
-		t.Fatal("providerPresetByName accepted removed provider")
+	if preset, ok := providerPresetByName("flicker"); !ok {
+		t.Fatal("providerPresetByName(flicker) returned ok=false")
+	} else if preset.BinaryName != "myflicker" {
+		t.Fatalf("flicker binary=%q, want myflicker", preset.BinaryName)
+	}
+	if _, ok := providerPresetByName("myflicker"); ok {
+		t.Fatal("providerPresetByName accepted executable name as provider")
 	}
 }
 
