@@ -474,6 +474,21 @@ describe('web responsive ui state', () => {
     expect(customInputBlock).not.toContain('pointer-events: none;');
   });
 
+  test('captures custom hub color before dispatching a deferred updater', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = fs
+      .readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8')
+      .replace(/\r\n/g, '\n');
+
+    const customColorHandlerStart = mainTsx.indexOf('onChange={event => {\n                                const customHubColor = event.currentTarget.value;');
+    expect(customColorHandlerStart).toBeGreaterThanOrEqual(0);
+    const customColorHandlerEnd = mainTsx.indexOf('                              }}', customColorHandlerStart);
+    expect(customColorHandlerEnd).toBeGreaterThan(customColorHandlerStart);
+    const customColorHandler = mainTsx.slice(customColorHandlerStart, customColorHandlerEnd);
+    expect(customColorHandler).toContain('setHubColorPreference(current, hub.hubId, customHubColor)');
+    expect(customColorHandler).not.toContain('setHubColorPreference(current, hub.hubId, event.currentTarget.value)');
+  });
+
   test('persists desktop sidebar width as global app state', () => {
     const projectRoot = path.join(__dirname, '..');
     const persistenceTs = fs.readFileSync(

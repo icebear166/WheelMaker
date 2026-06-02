@@ -6183,11 +6183,12 @@ function App() {
                               type="color"
                               value={currentHubColor}
                               aria-label={`Custom color for ${hub.hubId}`}
-                              onChange={event =>
+                              onChange={event => {
+                                const customHubColor = event.currentTarget.value;
                                 setHubColors(current =>
-                                  setHubColorPreference(current, hub.hubId, event.currentTarget.value),
-                                )
-                              }
+                                  setHubColorPreference(current, hub.hubId, customHubColor),
+                                );
+                              }}
                             />
                           </label>
                         </div>
