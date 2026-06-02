@@ -39,6 +39,8 @@ class AndroidImageShareRuntimeTest {
         assertTrue(runtime.contains("Intent.ACTION_SEND"))
         assertTrue(runtime.contains("image/png"))
         assertTrue(runtime.contains("Intent.EXTRA_STREAM"))
+        assertTrue(runtime.contains("ClipData.newUri"))
+        assertTrue(runtime.contains("clipData = ClipData.newUri"))
         assertTrue(runtime.contains("Intent.FLAG_GRANT_READ_URI_PERMISSION"))
         assertTrue(runtime.contains("Intent.createChooser"))
         assertTrue(runtime.contains("FileProvider.getUriForFile"))

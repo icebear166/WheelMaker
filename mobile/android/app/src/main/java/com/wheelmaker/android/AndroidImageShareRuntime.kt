@@ -1,6 +1,7 @@
 package com.wheelmaker.android
 
 import android.content.ActivityNotFoundException
+import android.content.ClipData
 import android.content.Intent
 import android.os.Looper
 import android.util.Base64
@@ -76,6 +77,8 @@ class AndroidImageShareRuntime(
         val sendIntent = Intent(Intent.ACTION_SEND).apply {
             type = RESPONSE_IMAGE_MIME_TYPE
             putExtra(Intent.EXTRA_STREAM, imageUri)
+            putExtra(Intent.EXTRA_TITLE, "WheelMaker response image")
+            clipData = ClipData.newUri(activity.contentResolver, "WheelMaker response image", imageUri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         val chooser = Intent.createChooser(sendIntent, "Share response image").apply {
