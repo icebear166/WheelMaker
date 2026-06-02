@@ -499,6 +499,9 @@ describe('web responsive ui state', () => {
 
     const treeBlock = stylesCss.match(/(?:^|\n)\.chat-hub-tree \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(treeBlock).toContain('position: relative;');
+    expect(treeBlock).toContain('--chat-hub-color-chip-width: 36px;');
+    expect(treeBlock).toContain('--chat-hub-color-chip-height: 24px;');
+    expect(treeBlock).toContain('--chat-hub-color-chip-radius: 6px;');
     expect(stylesCss).toContain('.chat-hub-tree.expanded .chat-hub-disclosure {');
     const colorOpenBlock = stylesCss.match(/\.chat-hub-tree\.color-open \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(colorOpenBlock).toContain('min-height: calc(36px + var(--chat-hub-color-palette-clearance));');
@@ -508,7 +511,7 @@ describe('web responsive ui state', () => {
     expect(stylesCss).toContain('.chat-hub-color-palette::before {');
 
     const rowBlock = stylesCss.match(/\.chat-hub-row,\n\.chat-hub-empty \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(rowBlock).toContain('grid-template-columns: 16px 24px minmax(0, 1fr) 28px auto;');
+    expect(rowBlock).toContain('grid-template-columns: 16px 24px minmax(0, 1fr) 40px auto;');
 
     const disclosureBlock = stylesCss.match(/\.chat-hub-disclosure \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(disclosureBlock).toContain('width: 16px;');
@@ -516,21 +519,26 @@ describe('web responsive ui state', () => {
     const swatchBlock = stylesCss.match(/\.chat-hub-color-swatch \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(swatchBlock).toContain('var(--swatch-color)');
     expect(swatchBlock).toContain('background: var(--swatch-color);');
+    expect(swatchBlock).toContain('width: var(--chat-hub-color-chip-width);');
+    expect(swatchBlock).toContain('height: var(--chat-hub-color-chip-height);');
+    expect(swatchBlock).toContain('border-radius: var(--chat-hub-color-chip-radius);');
+    expect(swatchBlock).toContain('justify-self: center;');
     expect(swatchBlock).not.toContain('--hub-accent');
 
     const colorSquareBlock = Array.from(stylesCss.matchAll(/\.chat-hub-color-square \{[\s\S]*?\n\}/g))
       .map(match => match[0])
       .find(block => block.includes('--hub-accent')) ?? '';
-    expect(colorSquareBlock).toContain('width: 28px;');
-    expect(colorSquareBlock).toContain('height: 24px;');
+    expect(colorSquareBlock).toContain('width: 40px;');
+    expect(colorSquareBlock).toContain('height: 28px;');
     expect(colorSquareBlock).toContain('border: 1px solid transparent;');
     expect(colorSquareBlock).toContain('background: transparent;');
     expect(colorSquareBlock).not.toContain('linear-gradient');
     expect(colorSquareBlock).not.toContain('0 5px 14px');
 
     const colorSquareFillBlock = stylesCss.match(/\.chat-hub-color-square-fill \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(colorSquareFillBlock).toContain('width: 22px;');
-    expect(colorSquareFillBlock).toContain('height: 18px;');
+    expect(colorSquareFillBlock).toContain('width: var(--chat-hub-color-chip-width);');
+    expect(colorSquareFillBlock).toContain('height: var(--chat-hub-color-chip-height);');
+    expect(colorSquareFillBlock).toContain('border-radius: var(--chat-hub-color-chip-radius);');
     expect(colorSquareFillBlock).toContain('background: var(--hub-accent);');
     expect(colorSquareFillBlock).not.toContain('linear-gradient');
 
@@ -546,7 +554,7 @@ describe('web responsive ui state', () => {
     expect(paletteBlock).toContain('right: 8px;');
     expect(paletteBlock).toContain('width: min(248px, calc(100% - 16px));');
     const paletteArrowBlock = stylesCss.match(/\.chat-hub-color-palette::before \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(paletteArrowBlock).toContain('right: 68px;');
+    expect(paletteArrowBlock).toContain('right: 66px;');
 
     const colorGridBlock = stylesCss.match(/\.chat-hub-color-grid \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(colorGridBlock).toContain('grid-template-columns: repeat(5, minmax(0, 1fr));');
@@ -565,15 +573,18 @@ describe('web responsive ui state', () => {
     expect(customPickerBlock).toContain('gap: 7px;');
 
     const defaultColorBlock = stylesCss.match(/\.chat-hub-color-default \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(defaultColorBlock).toContain('grid-template-columns: minmax(0, 1fr) 18px;');
+    expect(defaultColorBlock).toContain('height: 40px;');
+    expect(defaultColorBlock).toContain('grid-template-columns: minmax(0, 1fr) var(--chat-hub-color-chip-width);');
     const customHeaderBlock = stylesCss.match(/\.chat-hub-color-custom-header \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(customHeaderBlock).toContain('grid-template-columns: minmax(0, 1fr) 18px;');
+    expect(customHeaderBlock).toContain('grid-template-columns: minmax(0, 1fr) var(--chat-hub-color-chip-width);');
     const defaultSwatchBlock = stylesCss.match(/\.chat-hub-color-default-swatch \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(defaultSwatchBlock).toContain('width: 18px;');
-    expect(defaultSwatchBlock).toContain('height: 18px;');
+    expect(defaultSwatchBlock).toContain('width: var(--chat-hub-color-chip-width);');
+    expect(defaultSwatchBlock).toContain('height: var(--chat-hub-color-chip-height);');
+    expect(defaultSwatchBlock).toContain('border-radius: var(--chat-hub-color-chip-radius);');
     const customPreviewBlock = stylesCss.match(/\.chat-hub-color-custom-preview \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(customPreviewBlock).toContain('width: 18px;');
-    expect(customPreviewBlock).toContain('height: 18px;');
+    expect(customPreviewBlock).toContain('width: var(--chat-hub-color-chip-width);');
+    expect(customPreviewBlock).toContain('height: var(--chat-hub-color-chip-height);');
+    expect(customPreviewBlock).toContain('border-radius: var(--chat-hub-color-chip-radius);');
 
     const svBlock = stylesCss.match(/\.chat-hub-color-sv \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(svBlock).toContain('touch-action: none;');

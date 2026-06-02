@@ -6816,6 +6816,9 @@ textarea,
 
 .chat-hub-tree {
   position: relative;
+  --chat-hub-color-chip-width: 36px;
+  --chat-hub-color-chip-height: 24px;
+  --chat-hub-color-chip-radius: 6px;
 }
 
 .chat-hub-tree.color-open {
@@ -6832,7 +6835,7 @@ textarea,
 .chat-hub-empty {
   min-height: 36px;
   display: grid;
-  grid-template-columns: 16px 24px minmax(0, 1fr) 28px auto;
+  grid-template-columns: 16px 24px minmax(0, 1fr) 40px auto;
   align-items: center;
   gap: 6px;
   padding: 4px 6px;
@@ -6916,8 +6919,8 @@ textarea,
 
 .chat-hub-color-square {
   --hub-accent: var(--accent);
-  width: 28px;
-  height: 24px;
+  width: 40px;
+  height: 28px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
@@ -6931,9 +6934,9 @@ textarea,
 }
 
 .chat-hub-color-square-fill {
-  width: 22px;
-  height: 18px;
-  border-radius: 5px;
+  width: var(--chat-hub-color-chip-width);
+  height: var(--chat-hub-color-chip-height);
+  border-radius: var(--chat-hub-color-chip-radius);
   background: var(--hub-accent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, rgba(255, 255, 255, 0.22) 70%, var(--hub-accent));
 }
@@ -6986,7 +6989,7 @@ textarea,
   content: "";
   position: absolute;
   top: -7px;
-  right: 68px;
+  right: 66px;
   width: 12px;
   height: 12px;
   border-left: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
@@ -7005,10 +7008,11 @@ textarea,
 .chat-hub-color-swatch {
   --swatch-color: var(--accent);
   position: relative;
-  width: 100%;
-  height: 28px;
+  width: var(--chat-hub-color-chip-width);
+  height: var(--chat-hub-color-chip-height);
+  justify-self: center;
   border: 1px solid color-mix(in srgb, var(--swatch-color) 46%, var(--border));
-  border-radius: 6px;
+  border-radius: var(--chat-hub-color-chip-radius);
   background: var(--swatch-color);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.13);
 }
@@ -7021,7 +7025,7 @@ textarea,
 .chat-hub-color-default {
   --hub-accent: var(--accent);
   min-width: 0;
-  height: 34px;
+  height: 40px;
   border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   border-radius: 6px;
   padding: 4px 6px;
@@ -7031,7 +7035,7 @@ textarea,
   font-size: 11px;
   font-weight: 700;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 18px;
+  grid-template-columns: minmax(0, 1fr) var(--chat-hub-color-chip-width);
   align-items: center;
   gap: 6px;
   text-align: left;
@@ -7063,7 +7067,7 @@ textarea,
 .chat-hub-color-custom-header {
   min-height: 22px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 18px;
+  grid-template-columns: minmax(0, 1fr) var(--chat-hub-color-chip-width);
   align-items: center;
   gap: 8px;
 }
@@ -7078,21 +7082,21 @@ textarea,
 }
 
 .chat-hub-color-default-swatch {
-  width: 18px;
-  height: 18px;
+  width: var(--chat-hub-color-chip-width);
+  height: var(--chat-hub-color-chip-height);
   justify-self: end;
   border: 1px solid color-mix(in srgb, var(--hub-accent) 48%, rgba(255, 255, 255, 0.2));
-  border-radius: 5px;
+  border-radius: var(--chat-hub-color-chip-radius);
   background: var(--hub-accent);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.13);
 }
 
 .chat-hub-color-custom-preview {
-  width: 18px;
-  height: 18px;
+  width: var(--chat-hub-color-chip-width);
+  height: var(--chat-hub-color-chip-height);
   justify-self: end;
   border: 1px solid color-mix(in srgb, var(--hub-accent) 54%, rgba(255, 255, 255, 0.22));
-  border-radius: 5px;
+  border-radius: var(--chat-hub-color-chip-radius);
   background: var(--hub-accent);
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.14),
