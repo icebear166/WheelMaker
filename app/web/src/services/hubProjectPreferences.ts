@@ -10,12 +10,23 @@ export const HUB_COLOR_PRESETS = [
   '#2f9e44',
   '#bc6c25',
   '#4f86c6',
-  '#d65db1',
+  '#c879ff',
   '#ff6b6b',
   '#f9c74f',
   '#7b6cb8',
   '#038c7f',
-  '#f3722c',
+  '#d9480f',
+];
+
+export const HUB_DEFAULT_COLORS = [
+  '#00a6a6',
+  '#2f9e44',
+  '#bc6c25',
+  '#4f86c6',
+  '#c879ff',
+  '#d9480f',
+  '#038c7f',
+  '#7b6cb8',
 ];
 
 const HUB_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
@@ -32,15 +43,17 @@ export function sanitizeHubColor(value: unknown): string {
     : '';
 }
 
-export function resolveDefaultHubColor(hubId: string): string {
-  if (!hubId) {
-    return HUB_COLOR_PRESETS[0];
-  }
+export function resolveHubColorVariantIndex(hubId: string): number {
+  const normalized = hubId.trim().toLowerCase();
   let hash = 0;
-  for (let index = 0; index < hubId.length; index += 1) {
-    hash = ((hash * 31) + hubId.charCodeAt(index)) >>> 0;
+  for (let index = 0; index < normalized.length; index += 1) {
+    hash = ((hash * 31) + normalized.charCodeAt(index)) >>> 0;
   }
-  return HUB_COLOR_PRESETS[hash % HUB_COLOR_PRESETS.length];
+  return hash % HUB_DEFAULT_COLORS.length;
+}
+
+export function resolveDefaultHubColor(hubId: string): string {
+  return HUB_DEFAULT_COLORS[resolveHubColorVariantIndex(hubId)] ?? HUB_DEFAULT_COLORS[0];
 }
 
 export function resolveHubColor(hubColors: Record<string, unknown>, hubId: string): string {

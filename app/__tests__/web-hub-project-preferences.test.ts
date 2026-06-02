@@ -112,18 +112,38 @@ describe('web hub project preferences', () => {
     expect(fs.existsSync(modulePath)).toBe(true);
 
     const {
-      HUB_COLOR_PRESETS,
+      HUB_DEFAULT_COLORS,
+      resolveHubColorVariantIndex,
       resolveDefaultHubColor,
       resolveHubColor,
     } = require(modulePath);
 
     const hubIds = ['ks-hub', 'ks-mac', 'local-hub', 'tools-hub'];
     const defaultColors = hubIds.map(resolveDefaultHubColor);
+    const variantIndex = (value: string) => {
+      const normalized = value.trim().toLowerCase();
+      let hash = 0;
+      for (let index = 0; index < normalized.length; index += 1) {
+        hash = (hash * 31 + normalized.charCodeAt(index)) >>> 0;
+      }
+      return hash % 8;
+    };
 
+    expect(HUB_DEFAULT_COLORS).toEqual([
+      '#00a6a6',
+      '#2f9e44',
+      '#bc6c25',
+      '#4f86c6',
+      '#c879ff',
+      '#d9480f',
+      '#038c7f',
+      '#7b6cb8',
+    ]);
     expect(defaultColors.every(color => /^#[0-9a-f]{6}$/.test(color))).toBe(true);
     expect(resolveDefaultHubColor('ks-hub')).toBe(resolveDefaultHubColor('ks-hub'));
+    expect(resolveHubColorVariantIndex('Local-Hub')).toBe(variantIndex('Local-Hub'));
+    expect(resolveDefaultHubColor('local-hub')).toBe(HUB_DEFAULT_COLORS[variantIndex('local-hub')]);
     expect(new Set(defaultColors).size).toBeGreaterThan(1);
-    expect(defaultColors).not.toEqual(hubIds.map(() => HUB_COLOR_PRESETS[0]));
     expect(resolveHubColor({'ks-hub': '#ABCDEF'}, 'ks-hub')).toBe('#abcdef');
     expect(resolveHubColor({}, 'ks-hub')).toBe(resolveDefaultHubColor('ks-hub'));
   });

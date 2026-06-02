@@ -6819,14 +6819,20 @@ textarea,
 }
 
 .chat-hub-tree.color-open {
+  --chat-hub-color-palette-clearance: 134px;
   z-index: 3;
+  min-height: calc(36px + var(--chat-hub-color-palette-clearance));
+}
+
+.chat-hub-tree.color-open .chat-hub-project-list {
+  margin-top: var(--chat-hub-color-palette-clearance);
 }
 
 .chat-hub-row,
 .chat-hub-empty {
   min-height: 36px;
   display: grid;
-  grid-template-columns: 16px 24px minmax(0, 1fr) 28px auto;
+  grid-template-columns: 16px 24px minmax(0, 1fr) 24px auto;
   align-items: center;
   gap: 6px;
   padding: 4px 6px;
@@ -6912,36 +6918,28 @@ textarea,
 
 .chat-hub-color-square {
   --hub-accent: var(--accent);
-  width: 28px;
-  height: 28px;
-  border: 1px solid color-mix(in srgb, var(--hub-accent) 54%, var(--border));
-  border-radius: 9px;
-  background:
-    linear-gradient(145deg,
-      color-mix(in srgb, var(--hub-accent) 18%, var(--panel-2)),
-      color-mix(in srgb, var(--panel) 88%, transparent));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.09),
-    0 5px 14px color-mix(in srgb, var(--hub-accent) 12%, transparent);
+  width: 24px;
+  height: 24px;
+  border: 1px solid color-mix(in srgb, var(--hub-accent) 44%, var(--border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--panel-2) 78%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .chat-hub-color-square[aria-expanded="true"] {
-  border-color: color-mix(in srgb, var(--hub-accent) 72%, transparent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--hub-accent) 28%, transparent),
-    0 0 18px color-mix(in srgb, var(--hub-accent) 24%, transparent);
+  border-color: color-mix(in srgb, var(--hub-accent) 62%, var(--border));
+  background: color-mix(in srgb, var(--hub-accent) 13%, var(--panel-2));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 0 0 1px color-mix(in srgb, var(--hub-accent) 12%, transparent);
 }
 
 .chat-hub-color-square-fill {
-  width: 19px;
-  height: 19px;
-  border-radius: 6px;
-  background:
-    linear-gradient(135deg,
-      color-mix(in srgb, var(--hub-accent) 76%, white),
-      var(--hub-accent));
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.24),
-    inset 0 -5px 12px rgba(0, 0, 0, 0.14);
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: var(--hub-accent);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 
 .chat-hub-row-name {
@@ -6975,10 +6973,10 @@ textarea,
   z-index: 6;
   width: min(248px, calc(100% - 16px));
   margin: 0;
-  padding: 9px;
+  padding: 8px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
   border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
   border-radius: 8px;
   background:
@@ -7005,43 +7003,36 @@ textarea,
 .chat-hub-color-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 7px;
+  gap: 6px;
 }
 
 .chat-hub-color-swatch {
   --swatch-color: var(--accent);
+  position: relative;
   width: 100%;
-  height: 30px;
-  border: 1px solid color-mix(in srgb, var(--swatch-color) 54%, var(--border));
-  border-radius: 8px;
-  background:
-    linear-gradient(135deg,
-      color-mix(in srgb, var(--swatch-color) 78%, white),
-      var(--swatch-color));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    inset 0 -8px 14px rgba(0, 0, 0, 0.12);
+  height: 28px;
+  border: 1px solid color-mix(in srgb, var(--swatch-color) 46%, var(--border));
+  border-radius: 6px;
+  background: var(--swatch-color);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.13);
 }
 
 .chat-hub-color-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
+  gap: 6px;
 }
 
 .chat-hub-color-default,
 .chat-hub-color-custom-picker {
   --hub-accent: var(--accent);
   min-width: 0;
-  height: 42px;
+  height: 36px;
   border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
-  border-radius: 8px;
-  padding: 5px 6px;
+  border-radius: 6px;
+  padding: 5px;
   color: color-mix(in srgb, var(--text) 86%, var(--muted));
-  background:
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--panel-2) 82%, transparent),
-      color-mix(in srgb, var(--panel) 74%, transparent));
+  background: color-mix(in srgb, var(--panel-2) 54%, transparent);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   font-size: 11px;
   font-weight: 700;
@@ -7049,7 +7040,7 @@ textarea,
 
 .chat-hub-color-default {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 30px;
+  grid-template-columns: minmax(0, 1fr) 24px;
   gap: 6px;
   text-align: left;
 }
@@ -7057,19 +7048,16 @@ textarea,
 .chat-hub-color-default.selected,
 .chat-hub-color-custom-picker:focus-within {
   border-color: color-mix(in srgb, var(--hub-accent) 62%, transparent);
-  background:
-    linear-gradient(180deg,
-      color-mix(in srgb, var(--hub-accent) 13%, var(--panel-2)),
-      color-mix(in srgb, var(--panel) 78%, transparent));
+  background: color-mix(in srgb, var(--hub-accent) 10%, var(--panel-2));
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--hub-accent) 18%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--hub-accent) 12%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.07);
 }
 
 .chat-hub-color-custom-picker {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 38px;
+  grid-template-columns: minmax(0, 1fr) 26px;
   gap: 6px;
 }
 
@@ -7085,16 +7073,11 @@ textarea,
 .chat-hub-color-default-swatch,
 .chat-hub-color-custom-swatch {
   width: 100%;
-  height: 28px;
-  border: 1px solid color-mix(in srgb, var(--hub-accent) 56%, rgba(255, 255, 255, 0.2));
-  border-radius: 7px;
-  background:
-    linear-gradient(135deg,
-      color-mix(in srgb, var(--hub-accent) 76%, white),
-      var(--hub-accent));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    inset 0 -8px 14px rgba(0, 0, 0, 0.16);
+  height: 24px;
+  border: 1px solid color-mix(in srgb, var(--hub-accent) 48%, rgba(255, 255, 255, 0.2));
+  border-radius: 5px;
+  background: var(--hub-accent);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.13);
 }
 
 .chat-hub-color-custom-picker input {
@@ -7111,10 +7094,20 @@ textarea,
 }
 
 .chat-hub-color-swatch.selected {
-  border-color: rgba(255, 255, 255, 0.74);
-  box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--swatch-color) 66%, transparent),
-    inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+  border-color: color-mix(in srgb, var(--swatch-color) 64%, var(--text));
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--swatch-color) 68%, var(--text));
+}
+
+.chat-hub-color-swatch.selected::after {
+  content: "";
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  width: 7px;
+  height: 4px;
+  border-left: 1.5px solid rgba(255, 255, 255, 0.86);
+  border-bottom: 1.5px solid rgba(255, 255, 255, 0.86);
+  transform: rotate(-45deg);
 }
 
 .chat-hub-project-list {

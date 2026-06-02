@@ -165,6 +165,7 @@ import {
   findNextVisibleProject,
   resolveDefaultHubColor,
   resolveHubColor,
+  resolveHubColorVariantIndex,
   resolveHubVisibilityState,
   setHubColorPreference,
   splitProjectsByVisibility,
@@ -1153,6 +1154,9 @@ function normalizeAgentTypeName(value?: string | null): string {
 
 function tagVariantClass(prefix: string, value: string): string {
   const normalized = normalizeAgentTypeName(value).toLowerCase();
+  if (prefix === 'wide-project-hub' || prefix === 'token-stats-pill-hub') {
+    return `${prefix}-${resolveHubColorVariantIndex(normalized)}`;
+  }
   if (prefix === 'wide-session-agent' || prefix === 'token-stats-pill-agent') {
     const explicitIndex = AGENT_TAG_VARIANT_INDEX[normalized];
     if (typeof explicitIndex === 'number') {
