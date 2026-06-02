@@ -32,6 +32,21 @@ export function sanitizeHubColor(value: unknown): string {
     : '';
 }
 
+export function resolveDefaultHubColor(hubId: string): string {
+  if (!hubId) {
+    return HUB_COLOR_PRESETS[0];
+  }
+  let hash = 0;
+  for (let index = 0; index < hubId.length; index += 1) {
+    hash = ((hash * 31) + hubId.charCodeAt(index)) >>> 0;
+  }
+  return HUB_COLOR_PRESETS[hash % HUB_COLOR_PRESETS.length];
+}
+
+export function resolveHubColor(hubColors: Record<string, unknown>, hubId: string): string {
+  return sanitizeHubColor(hubColors[hubId]) || resolveDefaultHubColor(hubId);
+}
+
 export function sanitizeHubColorMap(value: unknown): Record<string, string> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return {};

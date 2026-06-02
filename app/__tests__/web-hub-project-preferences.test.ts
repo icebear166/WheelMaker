@@ -104,4 +104,27 @@ describe('web hub project preferences', () => {
     });
     expect(setHubColorPreference({'hub-a': '#abcdef'}, 'hub-a', '')).toEqual({});
   });
+
+  test('resolves stable default hub colors from hub ids while honoring custom preferences', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const modulePath = path.join(projectRoot, 'web', 'src', 'services', 'hubProjectPreferences.ts');
+
+    expect(fs.existsSync(modulePath)).toBe(true);
+
+    const {
+      HUB_COLOR_PRESETS,
+      resolveDefaultHubColor,
+      resolveHubColor,
+    } = require(modulePath);
+
+    const hubIds = ['ks-hub', 'ks-mac', 'local-hub', 'tools-hub'];
+    const defaultColors = hubIds.map(resolveDefaultHubColor);
+
+    expect(defaultColors.every(color => /^#[0-9a-f]{6}$/.test(color))).toBe(true);
+    expect(resolveDefaultHubColor('ks-hub')).toBe(resolveDefaultHubColor('ks-hub'));
+    expect(new Set(defaultColors).size).toBeGreaterThan(1);
+    expect(defaultColors).not.toEqual(hubIds.map(() => HUB_COLOR_PRESETS[0]));
+    expect(resolveHubColor({'ks-hub': '#ABCDEF'}, 'ks-hub')).toBe('#abcdef');
+    expect(resolveHubColor({}, 'ks-hub')).toBe(resolveDefaultHubColor('ks-hub'));
+  });
 });

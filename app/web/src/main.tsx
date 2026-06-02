@@ -163,6 +163,8 @@ import { sortProjectsByPin, togglePinnedProjectId } from './services/projectNavi
 import {
   HUB_COLOR_PRESETS,
   findNextVisibleProject,
+  resolveDefaultHubColor,
+  resolveHubColor,
   resolveHubVisibilityState,
   setHubColorPreference,
   splitProjectsByVisibility,
@@ -4807,12 +4809,14 @@ function App() {
     [expandedHubIds],
   );
   const effectiveExpandedHubIds = expandedHubIds.length > 0 ? savedExpandedHubIds : defaultExpandedHubIds;
-  const hubAccentStyle = useCallback((hubId: string): React.CSSProperties | undefined => {
-    const color = hubColors[hubId];
-    return color
-      ? ({'--hub-accent': color, '--pill-accent': color} as React.CSSProperties)
-      : undefined;
+  const hubAccentStyle = useCallback((hubId: string): React.CSSProperties => {
+    const color = resolveHubColor(hubColors, hubId);
+    return {'--hub-accent': color, '--pill-accent': color} as React.CSSProperties;
   }, [hubColors]);
+  const hubDefaultAccentStyle = useCallback((hubId: string): React.CSSProperties => {
+    const color = resolveDefaultHubColor(hubId);
+    return {'--hub-accent': color, '--pill-accent': color} as React.CSSProperties;
+  }, []);
   const sessionSearchSections = useMemo(
     () => buildSessionSearchSections({
       projects: visibleProjectItems,
@@ -6113,7 +6117,7 @@ function App() {
                   ? `Hide all projects in ${hub.hubId}`
                   : `Show all projects in ${hub.hubId}`;
                 const colorMenuOpen = chatHubColorMenuHubId === hub.hubId;
-                const currentHubColor = hubColors[hub.hubId] || HUB_COLOR_PRESETS[0];
+                const currentHubColor = resolveHubColor(hubColors, hub.hubId);
                     return (
                       <div key={hub.hubId} className={`chat-hub-tree${expanded ? ' expanded' : ''}${colorMenuOpen ? ' color-open' : ''}`}>
                     <div className="chat-hub-row">
@@ -6162,37 +6166,6 @@ function App() {
                     </div>
                     {colorMenuOpen ? (
                       <div className="chat-hub-color-palette" aria-label={`Color options for ${hub.hubId}`}>
-                        <div className="chat-hub-color-toolbar">
-                          <span className="chat-hub-color-title">Hub color</span>
-                          <div className="chat-hub-color-tools">
-                            <button
-                              type="button"
-                              className={`chat-hub-color-reset${hubColors[hub.hubId] ? '' : ' selected'}`}
-                              aria-label={`Use default color for ${hub.hubId}`}
-                              onClick={() => setHubColors(current => setHubColorPreference(current, hub.hubId, ''))}
-                            >
-                              Default
-                            </button>
-                            <label className="chat-hub-color-well">
-                              <span
-                                className="chat-hub-color-well-swatch"
-                                style={hubAccentStyle(hub.hubId)}
-                                aria-hidden="true"
-                              />
-                              <input
-                                type="color"
-                                value={currentHubColor}
-                                aria-label={`Custom color for ${hub.hubId}`}
-                                onChange={event => {
-                                  const customHubColor = event.currentTarget.value;
-                                  setHubColors(current =>
-                                    setHubColorPreference(current, hub.hubId, customHubColor),
-                                  );
-                                }}
-                              />
-                            </label>
-                          </div>
-                        </div>
                         <div className="chat-hub-color-grid">
                           {HUB_COLOR_PRESETS.map(color => (
                             <button
@@ -6204,6 +6177,33 @@ function App() {
                               onClick={() => setHubColors(current => setHubColorPreference(current, hub.hubId, color))}
                             />
                           ))}
+                        </div>
+                        <div className="chat-hub-color-actions">
+                          <button
+                            type="button"
+                            className={`chat-hub-color-default${hubColors[hub.hubId] ? '' : ' selected'}`}
+                            aria-label={`Use default color for ${hub.hubId}`}
+                            style={hubDefaultAccentStyle(hub.hubId)}
+                            onClick={() => setHubColors(current => setHubColorPreference(current, hub.hubId, ''))}
+                          >
+                            <span className="chat-hub-color-default-label">Default</span>
+                            <span className="chat-hub-color-default-swatch" aria-hidden="true" />
+                          </button>
+                          <label className="chat-hub-color-custom-picker" style={hubAccentStyle(hub.hubId)}>
+                            <span className="chat-hub-color-custom-label">Custom</span>
+                            <span className="chat-hub-color-custom-swatch" aria-hidden="true" />
+                            <input
+                              type="color"
+                              value={currentHubColor}
+                              aria-label={`Custom color for ${hub.hubId}`}
+                              onChange={event => {
+                                const customHubColor = event.currentTarget.value;
+                                setHubColors(current =>
+                                  setHubColorPreference(current, hub.hubId, customHubColor),
+                                );
+                              }}
+                            />
+                          </label>
                         </div>
                       </div>
                     ) : null}
@@ -6255,6 +6255,7 @@ function App() {
     hiddenProjectIdSet,
     hiddenProjectIds,
     hubAccentStyle,
+    hubDefaultAccentStyle,
     hubColors,
     localHubReadStatuses,
     projects.length,
