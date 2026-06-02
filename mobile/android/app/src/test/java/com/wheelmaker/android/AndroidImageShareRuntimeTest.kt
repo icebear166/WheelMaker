@@ -33,6 +33,9 @@ class AndroidImageShareRuntimeTest {
     fun runtimeUsesSystemImageShareIntentWithoutLocalSaveFallback() {
         val runtime = source("src/main/java/com/wheelmaker/android/AndroidImageShareRuntime.kt")
 
+        assertTrue(runtime.contains("RESPONSE_IMAGE_SHARE_FILE_NAME = \"wheelmaker-response-share.png\""))
+        assertTrue(runtime.contains("cleanupResponseImageShareDirectory(outputDir)"))
+        assertTrue(runtime.contains("outputDir.deleteRecursively()"))
         assertTrue(runtime.contains("Intent.ACTION_SEND"))
         assertTrue(runtime.contains("image/png"))
         assertTrue(runtime.contains("Intent.EXTRA_STREAM"))

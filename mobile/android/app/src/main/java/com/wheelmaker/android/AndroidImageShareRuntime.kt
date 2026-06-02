@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicReference
 private const val RESPONSE_IMAGE_MIME_TYPE = "image/png"
 private const val RESPONSE_IMAGE_DATA_URL_PREFIX = "data:image/png;base64,"
 private const val RESPONSE_IMAGE_SHARE_TIMEOUT_SECONDS = 2L
+private const val RESPONSE_IMAGE_SHARE_FILE_NAME = "wheelmaker-response-share.png"
 
 class AndroidImageShareRuntime(
     private val activity: MainActivity
@@ -24,7 +25,6 @@ class AndroidImageShareRuntime(
         } catch (_: Exception) {
             return androidImageShareResultJson(false, "invalid_payload", "invalid_payload")
         }
-        val fileName = sanitizeResponseImageFileName(input.optString("fileName"))
         val dataUrl = input.optString("dataUrl")
         if (dataUrl.isBlank()) {
             return androidImageShareResultJson(false, "invalid_payload", "missing_data_url")
@@ -38,7 +38,7 @@ class AndroidImageShareRuntime(
             return androidImageShareResultJson(false, "decode_failed", "decode_failed")
         }
         val imageFile = try {
-            writeResponseImage(fileName, bytes)
+            writeResponseImage(bytes)
         } catch (error: Exception) {
             return androidImageShareResultJson(false, "write_failed", error.message ?: "write_failed")
         }
@@ -52,12 +52,19 @@ class AndroidImageShareRuntime(
         }
     }
 
-    private fun writeResponseImage(fileName: String, bytes: ByteArray): File {
+    private fun writeResponseImage(bytes: ByteArray): File {
         val outputDir = File(activity.cacheDir, "image-shares")
+        cleanupResponseImageShareDirectory(outputDir)
         outputDir.mkdirs()
-        val output = File(outputDir, fileName)
+        val output = File(outputDir, RESPONSE_IMAGE_SHARE_FILE_NAME)
         output.writeBytes(bytes)
         return output
+    }
+
+    private fun cleanupResponseImageShareDirectory(outputDir: File) {
+        if (outputDir.exists()) {
+            outputDir.deleteRecursively()
+        }
     }
 
     private fun startShareChooser(imageFile: File) {
@@ -98,11 +105,6 @@ class AndroidImageShareRuntime(
         }
         errorRef.get()?.let { throw it }
     }
-}
-
-private fun sanitizeResponseImageFileName(value: String): String {
-    val cleaned = value.replace(Regex("[^A-Za-z0-9._-]"), "_")
-    return if (cleaned.endsWith(".png") && cleaned != ".png") cleaned else "wheelmaker-response.png"
 }
 
 private fun androidImageShareResultJson(ok: Boolean, status: String, error: String = ""): String {
