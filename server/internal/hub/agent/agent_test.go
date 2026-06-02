@@ -211,127 +211,6 @@ func TestCopilotACPProvider_LaunchArgs(t *testing.T) {
 	}
 }
 
-func TestFlickerACPProvider_LaunchArgs(t *testing.T) {
-	p := NewFlickerProvider()
-	p.resolveBinary = func(name string, configuredPath string) (string, error) {
-		if name != "myflicker" {
-			t.Fatalf("resolveBinary name=%q, want myflicker", name)
-		}
-		if configuredPath != "" {
-			t.Fatalf("resolveBinary configuredPath=%q, want empty", configuredPath)
-		}
-		return "/usr/bin/myflicker", nil
-	}
-
-	exe, args, env, err := p.Launch()
-	if err != nil {
-		t.Fatalf("launch: %v", err)
-	}
-	if exe != "/usr/bin/myflicker" {
-		t.Fatalf("exe=%q", exe)
-	}
-	if !reflect.DeepEqual(args, []string{"--approval-mode", "yolo", "--thinking-level", "xhigh", "acp"}) {
-		t.Fatalf("args=%v", args)
-	}
-	if len(env) != 0 {
-		t.Fatalf("env=%v, want empty", env)
-	}
-}
-
-func TestFlickrAgentSessionNewReturnsStableOptionsFromModels(t *testing.T) {
-	conn := &fakeFlickrConn{}
-	inst := newFlickrAgentInstance(conn)
-
-	got, err := inst.SessionNew(context.Background(), protocol.SessionNewParams{CWD: t.TempDir()})
-	if err != nil {
-		t.Fatalf("SessionNew: %v", err)
-	}
-	if got.SessionID != "flickr-session-1" {
-		t.Fatalf("sessionId=%q", got.SessionID)
-	}
-	wantOrder := []string{
-		protocol.ConfigOptionIDApprovalPreset,
-		protocol.ConfigOptionIDModel,
-		protocol.ConfigOptionIDReasoningEffort,
-	}
-	if gotOrder := configOptionIDs(got.ConfigOptions); !reflect.DeepEqual(gotOrder, wantOrder) {
-		t.Fatalf("config option order=%v, want %v", gotOrder, wantOrder)
-	}
-	if currentConfigValue(got.ConfigOptions, protocol.ConfigOptionIDApprovalPreset) != "yolo" {
-		t.Fatalf("approval option=%#v, want yolo", got.ConfigOptions)
-	}
-	if currentConfigValue(got.ConfigOptions, protocol.ConfigOptionIDReasoningEffort) != "xhigh" {
-		t.Fatalf("effort option=%#v, want xhigh", got.ConfigOptions)
-	}
-	if currentConfigValue(got.ConfigOptions, protocol.ConfigOptionIDModel) != "wanqing/gpt-5.5" {
-		t.Fatalf("model option=%#v, want current flicker model", got.ConfigOptions)
-	}
-	modelOpt := configOptionByID(got.ConfigOptions, protocol.ConfigOptionIDModel)
-	if modelOpt == nil || len(modelOpt.Options) != 2 {
-		t.Fatalf("model options=%#v, want two dynamic models", modelOpt)
-	}
-}
-
-func TestFlickrAgentSetModelUsesFlickerSetModel(t *testing.T) {
-	conn := &fakeFlickrConn{}
-	inst := newFlickrAgentInstance(conn)
-	if _, err := inst.SessionNew(context.Background(), protocol.SessionNewParams{CWD: t.TempDir()}); err != nil {
-		t.Fatalf("SessionNew: %v", err)
-	}
-
-	opts, err := inst.SessionSetConfigOption(context.Background(), protocol.SessionSetConfigOptionParams{
-		SessionID: "flickr-session-1",
-		ConfigID:  protocol.ConfigOptionIDModel,
-		Value:     "wanqing/auto",
-	})
-	if err != nil {
-		t.Fatalf("SessionSetConfigOption model: %v", err)
-	}
-	if conn.setModelValue != "wanqing/auto" {
-		t.Fatalf("setModelValue=%q, want wanqing/auto", conn.setModelValue)
-	}
-	if currentConfigValue(opts, protocol.ConfigOptionIDModel) != "wanqing/auto" {
-		t.Fatalf("returned model option=%#v, want updated model", opts)
-	}
-}
-
-func TestFlickrAgentAcceptsOnlyBoundAccessAndEffort(t *testing.T) {
-	conn := &fakeFlickrConn{}
-	inst := newFlickrAgentInstance(conn)
-	if _, err := inst.SessionNew(context.Background(), protocol.SessionNewParams{CWD: t.TempDir()}); err != nil {
-		t.Fatalf("SessionNew: %v", err)
-	}
-
-	if _, err := inst.SessionSetConfigOption(context.Background(), protocol.SessionSetConfigOptionParams{
-		SessionID: "flickr-session-1",
-		ConfigID:  protocol.ConfigOptionIDApprovalPreset,
-		Value:     "yolo",
-	}); err != nil {
-		t.Fatalf("SessionSetConfigOption yolo: %v", err)
-	}
-	if _, err := inst.SessionSetConfigOption(context.Background(), protocol.SessionSetConfigOptionParams{
-		SessionID: "flickr-session-1",
-		ConfigID:  protocol.ConfigOptionIDReasoningEffort,
-		Value:     "xhigh",
-	}); err != nil {
-		t.Fatalf("SessionSetConfigOption xhigh: %v", err)
-	}
-	if _, err := inst.SessionSetConfigOption(context.Background(), protocol.SessionSetConfigOptionParams{
-		SessionID: "flickr-session-1",
-		ConfigID:  protocol.ConfigOptionIDApprovalPreset,
-		Value:     "auto",
-	}); err == nil {
-		t.Fatalf("SessionSetConfigOption auto should fail because flicker cannot hot-switch access")
-	}
-	if _, err := inst.SessionSetConfigOption(context.Background(), protocol.SessionSetConfigOptionParams{
-		SessionID: "flickr-session-1",
-		ConfigID:  protocol.ConfigOptionIDReasoningEffort,
-		Value:     "high",
-	}); err == nil {
-		t.Fatalf("SessionSetConfigOption high should fail because flicker cannot hot-switch effort")
-	}
-}
-
 func TestOpenCodeACPProvider_LaunchArgs(t *testing.T) {
 	p := NewOpenCodeProvider()
 	p.resolveBinary = func(name string, configuredPath string) (string, error) {
@@ -387,6 +266,8 @@ func TestCodeBuddyACPProvider_LaunchArgs(t *testing.T) {
 }
 
 func TestParseACPProviderCodexAliases(t *testing.T) {
+	removedProviderName := strings.Join([]string{"my", "flicker"}, "")
+
 	provider, ok := protocol.ParseACPProvider("codex")
 	if !ok {
 		t.Fatal("ParseACPProvider(codex) returned ok=false")
@@ -400,45 +281,27 @@ func TestParseACPProviderCodexAliases(t *testing.T) {
 	if _, ok := protocol.ParseACPProvider("codex-app"); ok {
 		t.Fatal("ParseACPProvider accepted legacy codex-app alias")
 	}
-	provider, ok = protocol.ParseACPProvider("flicker")
-	if !ok {
-		t.Fatal("ParseACPProvider(flicker) returned ok=false")
-	}
-	if provider != protocol.ACPProviderFlicker {
-		t.Fatalf("flicker provider=%q, want %q", provider, protocol.ACPProviderFlicker)
-	}
-	if _, ok := protocol.ParseACPProvider("myflicker"); ok {
-		t.Fatal("ParseACPProvider accepted executable name as provider")
+	if _, ok := protocol.ParseACPProvider(removedProviderName); ok {
+		t.Fatal("ParseACPProvider accepted removed provider")
 	}
 
-	foundFlicker := false
 	for _, name := range protocol.ACPProviderNames() {
 		if name == "codexapp" {
 			t.Fatalf("ACPProviderNames exposes codexapp alias: %v", protocol.ACPProviderNames())
 		}
-		if name == "myflicker" {
-			t.Fatalf("ACPProviderNames exposes executable name: %v", protocol.ACPProviderNames())
+		if name == removedProviderName {
+			t.Fatalf("ACPProviderNames exposes removed provider: %v", protocol.ACPProviderNames())
 		}
-		if name == "flicker" {
-			foundFlicker = true
-		}
-	}
-	if !foundFlicker {
-		t.Fatalf("ACPProviderNames missing flicker: %v", protocol.ACPProviderNames())
 	}
 }
 
 func TestProviderPresetByNameRejectsRemovedProvider(t *testing.T) {
+	removedProviderName := strings.Join([]string{"my", "flicker"}, "")
 	if _, ok := providerPresetByName("codexapp"); ok {
 		t.Fatal("providerPresetByName accepted removed codexapp alias")
 	}
-	if preset, ok := providerPresetByName("flicker"); !ok {
-		t.Fatal("providerPresetByName(flicker) returned ok=false")
-	} else if preset.BinaryName != "myflicker" {
-		t.Fatalf("flicker binary=%q, want myflicker", preset.BinaryName)
-	}
-	if _, ok := providerPresetByName("myflicker"); ok {
-		t.Fatal("providerPresetByName accepted executable name as provider")
+	if _, ok := providerPresetByName(removedProviderName); ok {
+		t.Fatal("providerPresetByName accepted removed provider")
 	}
 }
 
@@ -2702,68 +2565,6 @@ func currentConfigValue(opts []protocol.ConfigOption, id string) string {
 	}
 	return ""
 }
-
-func configOptionByID(opts []protocol.ConfigOption, id string) *protocol.ConfigOption {
-	for i := range opts {
-		if opts[i].ID == id {
-			return &opts[i]
-		}
-	}
-	return nil
-}
-
-func configOptionIDs(opts []protocol.ConfigOption) []string {
-	ids := make([]string, 0, len(opts))
-	for _, opt := range opts {
-		ids = append(ids, opt.ID)
-	}
-	return ids
-}
-
-type fakeFlickrConn struct {
-	req           ACPRequestHandler
-	resp          ACPResponseHandler
-	setModelValue string
-}
-
-func (f *fakeFlickrConn) Send(_ context.Context, method string, params any, result any) error {
-	switch method {
-	case protocol.MethodInitialize:
-		return assignResult(result, protocol.InitializeResult{ProtocolVersion: json.Number("1")})
-	case protocol.MethodSessionNew:
-		raw := map[string]any{
-			"sessionId": "flickr-session-1",
-			"models": map[string]any{
-				"currentModelId": "wanqing/gpt-5.5",
-				"availableModels": []map[string]any{
-					{"modelId": "wanqing/auto", "name": "Auto"},
-					{"modelId": "wanqing/gpt-5.5", "name": "GPT-5.5"},
-				},
-			},
-		}
-		return assignResult(result, raw)
-	case "session/set_model":
-		var p struct {
-			ModelID string `json:"modelId"`
-		}
-		if err := remarshal(params, &p); err != nil {
-			return err
-		}
-		f.setModelValue = p.ModelID
-		return assignResult(result, map[string]any{})
-	case protocol.MethodSessionPrompt:
-		return assignResult(result, protocol.SessionPromptResult{StopReason: protocol.StopReasonEndTurn})
-	}
-	return nil
-}
-
-func (f *fakeFlickrConn) Notify(_ string, _ any) error { return nil }
-
-func (f *fakeFlickrConn) OnACPRequest(h ACPRequestHandler) { f.req = h }
-
-func (f *fakeFlickrConn) OnACPResponse(h ACPResponseHandler) { f.resp = h }
-
-func (f *fakeFlickrConn) Close() error { return nil }
 
 func waitForActiveTurn(t *testing.T, conn *codexappConn, want string) {
 	t.Helper()

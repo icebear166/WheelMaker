@@ -79,10 +79,6 @@ func newACPFactoryWithDefaults() *ACPFactory {
 		}
 		f.Register(candidate.provider, providerInstanceCreator(prov))
 	}
-	flickerProvider := NewFlickerProvider()
-	if isProviderAvailable(flickerProvider) {
-		f.Register(protocol.ACPProviderFlicker, flickrAgentInstanceCreator(flickerProvider))
-	}
 	if len(f.Names()) == 0 {
 		agentLogger().Warn("no available ACP providers detected")
 	}
@@ -161,7 +157,6 @@ func (f *ACPFactory) PreferredName() string {
 		protocol.ACPProviderCodex,
 		protocol.ACPProviderClaude,
 		protocol.ACPProviderCopilot,
-		protocol.ACPProviderFlicker,
 		protocol.ACPProviderOpenCode,
 		protocol.ACPProviderCodeBuddy,
 	}

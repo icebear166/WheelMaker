@@ -116,22 +116,16 @@ func (i *instance) SessionNew(ctx context.Context, p protocol.SessionNewParams) 
 		return protocol.SessionNewResult{}, err
 	}
 
-	i.bindSessionID(out.SessionID)
+	if sid := strings.TrimSpace(out.SessionID); sid != "" {
+		if binder, ok := i.conn.(sessionBinder); ok {
+			binder.BindSessionID(sid)
+		}
+		i.mu.Lock()
+		i.acpSessionID = sid
+		i.acpSessionReady = true
+		i.mu.Unlock()
+	}
 	return out, nil
-}
-
-func (i *instance) bindSessionID(sessionID string) {
-	sid := strings.TrimSpace(sessionID)
-	if sid == "" {
-		return
-	}
-	if binder, ok := i.conn.(sessionBinder); ok {
-		binder.BindSessionID(sid)
-	}
-	i.mu.Lock()
-	i.acpSessionID = sid
-	i.acpSessionReady = true
-	i.mu.Unlock()
 }
 
 func (i *instance) SessionLoad(ctx context.Context, p protocol.SessionLoadParams) (protocol.SessionLoadResult, error) {
