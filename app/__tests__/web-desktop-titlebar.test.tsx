@@ -62,7 +62,8 @@ describe('desktop title bar', () => {
 
     const root = renderer!.root;
     expect(root.findByProps({'data-desktop-titlebar': true})).toBeDefined();
-    expect(root.findByType('img').props.src).toBe('/icons/icon.svg');
+    expect(root.findAllByType('img')).toHaveLength(0);
+    expect(root.findByProps({className: 'desktop-titlebar-icon'}).type).toBe('svg');
     expect(root.findAllByProps({className: 'desktop-titlebar-title'})).toHaveLength(0);
     expect(root.findByProps({className: 'desktop-titlebar-app-title'}).props.children).toBe('WheelMaker - ');
     expect(root.findAllByProps({className: 'desktop-titlebar-source-select'})).toHaveLength(0);

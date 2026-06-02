@@ -92,7 +92,7 @@ describe('web runtime setup', () => {
     expect(sw).toContain("if (req.mode === 'navigate')");
   });
 
-  test('uses the current WheelMaker brand icon for PWA and desktop publishing', () => {
+  test('uses the current WheelMaker brand icon for PWA without hard-linking the shell favicon', () => {
     const projectRoot = path.join(__dirname, '..');
     const iconPath = path.join(projectRoot, 'web', 'public', 'icons', 'icon.svg');
     const manifest = JSON.parse(
@@ -119,8 +119,10 @@ describe('web runtime setup', () => {
     expect(iconText).toContain('viewBox="0 0 1536 1536"');
     expect(serviceWorker).toContain('/icons/icon.svg');
     expect(serviceWorker).not.toContain('/icons/icon.png');
-    expect(indexHtml).toContain('href="/icons/icon.svg"');
+    expect(indexHtml).not.toContain('href="/icons/icon.svg"');
     expect(indexHtml).not.toContain('href="/icons/icon.png"');
+    expect(indexHtml).not.toContain('rel="icon"');
+    expect(indexHtml).not.toContain('rel="apple-touch-icon"');
   });
 
   test('webpack output path can be redirected for desktop staging', () => {
