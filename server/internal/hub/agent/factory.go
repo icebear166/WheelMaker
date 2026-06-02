@@ -69,7 +69,6 @@ func newACPFactoryWithDefaults() *ACPFactory {
 	}{
 		{provider: protocol.ACPProviderClaude, build: func() ACPProvider { return NewClaudeProvider() }},
 		{provider: protocol.ACPProviderCopilot, build: func() ACPProvider { return NewCopilotProvider() }},
-		{provider: protocol.ACPProviderFlicker, build: func() ACPProvider { return NewFlickerProvider() }},
 		{provider: protocol.ACPProviderOpenCode, build: func() ACPProvider { return NewOpenCodeProvider() }},
 		{provider: protocol.ACPProviderCodeBuddy, build: func() ACPProvider { return NewCodeBuddyProvider() }},
 	}
@@ -79,6 +78,10 @@ func newACPFactoryWithDefaults() *ACPFactory {
 			continue
 		}
 		f.Register(candidate.provider, providerInstanceCreator(prov))
+	}
+	flickerProvider := NewFlickerProvider()
+	if isProviderAvailable(flickerProvider) {
+		f.Register(protocol.ACPProviderFlicker, flickrAgentInstanceCreator(flickerProvider))
 	}
 	if len(f.Names()) == 0 {
 		agentLogger().Warn("no available ACP providers detected")

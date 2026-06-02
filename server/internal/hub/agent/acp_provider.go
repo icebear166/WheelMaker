@@ -58,7 +58,7 @@ var (
 	FlickerACPProviderPreset = ACPProviderPreset{
 		Name:                   "flicker",
 		BinaryName:             "myflicker",
-		Args:                   []string{"acp"},
+		Args:                   []string{"--approval-mode", "yolo", "--thinking-level", "xhigh", "acp"},
 		MissingPathErrTemplate: "flicker: myflicker binary not found in PATH: %v",
 		SkillProjectDirs:       []string{".agents/skills"},
 		SkillUserDirs:          []string{"~/.agents/skills"},

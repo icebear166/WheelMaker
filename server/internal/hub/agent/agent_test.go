@@ -230,11 +230,97 @@ func TestFlickerACPProvider_LaunchArgs(t *testing.T) {
 	if exe != "/usr/bin/myflicker" {
 		t.Fatalf("exe=%q", exe)
 	}
-	if !reflect.DeepEqual(args, []string{"acp"}) {
+	if !reflect.DeepEqual(args, []string{"--approval-mode", "yolo", "--thinking-level", "xhigh", "acp"}) {
 		t.Fatalf("args=%v", args)
 	}
 	if len(env) != 0 {
 		t.Fatalf("env=%v, want empty", env)
+	}
+}
+
+func TestFlickrAgentSessionNewReturnsStableOptionsFromModels(t *testing.T) {
+	conn := &fakeFlickrConn{}
+	inst := newFlickrAgentInstance(conn)
+
+	got, err := inst.SessionNew(context.Background(), protocol.SessionNewParams{CWD: t.TempDir()})
+	if err != nil {
+		t.Fatalf("SessionNew: %v", err)
+	}
+	if got.SessionID != "flickr-session-1" {
+		t.Fatalf("sessionId=%q", got.SessionID)
+	}
+	if currentConfigValue(got.ConfigOptions, protocol.ConfigOptionIDApprovalPreset) != "yolo" {
+		t.Fatalf("approval option=%#v, want yolo", got.ConfigOptions)
+	}
+	if currentConfigValue(got.ConfigOptions, protocol.ConfigOptionIDReasoningEffort) != "xhigh" {
+		t.Fatalf("effort option=%#v, want xhigh", got.ConfigOptions)
+	}
+	if currentConfigValue(got.ConfigOptions, protocol.ConfigOptionIDModel) != "wanqing/gpt-5.5" {
+		t.Fatalf("model option=%#v, want current flicker model", got.ConfigOptions)
+	}
+	modelOpt := configOptionByID(got.ConfigOptions, protocol.ConfigOptionIDModel)
+	if modelOpt == nil || len(modelOpt.Options) != 2 {
+		t.Fatalf("model options=%#v, want two dynamic models", modelOpt)
+	}
+}
+
+func TestFlickrAgentSetModelUsesFlickerSetModel(t *testing.T) {
+	conn := &fakeFlickrConn{}
+	inst := newFlickrAgentInstance(conn)
+	if _, err := inst.SessionNew(context.Background(), protocol.SessionNewParams{CWD: t.TempDir()}); err != nil {
+		t.Fatalf("SessionNew: %v", err)
+	}
+
+	opts, err := inst.SessionSetConfigOption(context.Background(), protocol.SessionSetConfigOptionParams{
+		SessionID: "flickr-session-1",
+		ConfigID:  protocol.ConfigOptionIDModel,
+		Value:     "wanqing/auto",
+	})
+	if err != nil {
+		t.Fatalf("SessionSetConfigOption model: %v", err)
+	}
+	if conn.setModelValue != "wanqing/auto" {
+		t.Fatalf("setModelValue=%q, want wanqing/auto", conn.setModelValue)
+	}
+	if currentConfigValue(opts, protocol.ConfigOptionIDModel) != "wanqing/auto" {
+		t.Fatalf("returned model option=%#v, want updated model", opts)
+	}
+}
+
+func TestFlickrAgentAcceptsOnlyBoundAccessAndEffort(t *testing.T) {
+	conn := &fakeFlickrConn{}
+	inst := newFlickrAgentInstance(conn)
+	if _, err := inst.SessionNew(context.Background(), protocol.SessionNewParams{CWD: t.TempDir()}); err != nil {
+		t.Fatalf("SessionNew: %v", err)
+	}
+
+	if _, err := inst.SessionSetConfigOption(context.Background(), protocol.SessionSetConfigOptionParams{
+		SessionID: "flickr-session-1",
+		ConfigID:  protocol.ConfigOptionIDApprovalPreset,
+		Value:     "yolo",
+	}); err != nil {
+		t.Fatalf("SessionSetConfigOption yolo: %v", err)
+	}
+	if _, err := inst.SessionSetConfigOption(context.Background(), protocol.SessionSetConfigOptionParams{
+		SessionID: "flickr-session-1",
+		ConfigID:  protocol.ConfigOptionIDReasoningEffort,
+		Value:     "xhigh",
+	}); err != nil {
+		t.Fatalf("SessionSetConfigOption xhigh: %v", err)
+	}
+	if _, err := inst.SessionSetConfigOption(context.Background(), protocol.SessionSetConfigOptionParams{
+		SessionID: "flickr-session-1",
+		ConfigID:  protocol.ConfigOptionIDApprovalPreset,
+		Value:     "auto",
+	}); err == nil {
+		t.Fatalf("SessionSetConfigOption auto should fail because flicker cannot hot-switch access")
+	}
+	if _, err := inst.SessionSetConfigOption(context.Background(), protocol.SessionSetConfigOptionParams{
+		SessionID: "flickr-session-1",
+		ConfigID:  protocol.ConfigOptionIDReasoningEffort,
+		Value:     "high",
+	}); err == nil {
+		t.Fatalf("SessionSetConfigOption high should fail because flicker cannot hot-switch effort")
 	}
 }
 
@@ -2608,6 +2694,60 @@ func currentConfigValue(opts []protocol.ConfigOption, id string) string {
 	}
 	return ""
 }
+
+func configOptionByID(opts []protocol.ConfigOption, id string) *protocol.ConfigOption {
+	for i := range opts {
+		if opts[i].ID == id {
+			return &opts[i]
+		}
+	}
+	return nil
+}
+
+type fakeFlickrConn struct {
+	req           ACPRequestHandler
+	resp          ACPResponseHandler
+	setModelValue string
+}
+
+func (f *fakeFlickrConn) Send(_ context.Context, method string, params any, result any) error {
+	switch method {
+	case protocol.MethodInitialize:
+		return assignResult(result, protocol.InitializeResult{ProtocolVersion: json.Number("1")})
+	case protocol.MethodSessionNew:
+		raw := map[string]any{
+			"sessionId": "flickr-session-1",
+			"models": map[string]any{
+				"currentModelId": "wanqing/gpt-5.5",
+				"availableModels": []map[string]any{
+					{"modelId": "wanqing/auto", "name": "Auto"},
+					{"modelId": "wanqing/gpt-5.5", "name": "GPT-5.5"},
+				},
+			},
+		}
+		return assignResult(result, raw)
+	case "session/set_model":
+		var p struct {
+			ModelID string `json:"modelId"`
+		}
+		if err := remarshal(params, &p); err != nil {
+			return err
+		}
+		f.setModelValue = p.ModelID
+		return assignResult(result, map[string]any{})
+	case protocol.MethodSessionPrompt:
+		return assignResult(result, protocol.SessionPromptResult{StopReason: protocol.StopReasonEndTurn})
+	}
+	return nil
+}
+
+func (f *fakeFlickrConn) Notify(_ string, _ any) error { return nil }
+
+func (f *fakeFlickrConn) OnACPRequest(h ACPRequestHandler) { f.req = h }
+
+func (f *fakeFlickrConn) OnACPResponse(h ACPResponseHandler) { f.resp = h }
+
+func (f *fakeFlickrConn) Close() error { return nil }
 
 func waitForActiveTurn(t *testing.T, conn *codexappConn, want string) {
 	t.Helper()
