@@ -184,37 +184,35 @@ func (a *flickrAgent) setOptions(options []protocol.ConfigOption) {
 }
 
 func flickrOptions(models flickrModels) []protocol.ConfigOption {
-	options := []protocol.ConfigOption{
-		{
-			ID:           protocol.ConfigOptionIDApprovalPreset,
-			Name:         "Access",
-			Category:     protocol.ConfigOptionCategoryApprovalPreset,
-			Type:         "select",
-			CurrentValue: flickrDefaultApprovalPreset,
-			Options: []protocol.ConfigOptionValue{
-				{Value: "default", Name: "Default"},
-				{Value: "autoEdit", Name: "Auto Edit"},
-				{Value: "yolo", Name: "YOLO"},
-			},
+	accessOption := protocol.ConfigOption{
+		ID:           protocol.ConfigOptionIDApprovalPreset,
+		Name:         "Access",
+		Category:     protocol.ConfigOptionCategoryApprovalPreset,
+		Type:         "select",
+		CurrentValue: flickrDefaultApprovalPreset,
+		Options: []protocol.ConfigOptionValue{
+			{Value: "default", Name: "Default"},
+			{Value: "autoEdit", Name: "Auto Edit"},
+			{Value: "yolo", Name: "YOLO"},
 		},
-		{
-			ID:           protocol.ConfigOptionIDReasoningEffort,
-			Name:         "Reasoning Effort",
-			Category:     protocol.ConfigOptionCategoryThoughtLv,
-			Type:         "select",
-			CurrentValue: flickrDefaultReasoningEffort,
-			Options: []protocol.ConfigOptionValue{
-				{Value: "low", Name: "Low"},
-				{Value: "medium", Name: "Medium"},
-				{Value: "high", Name: "High"},
-				{Value: "max", Name: "Max"},
-				{Value: "xhigh", Name: "X High"},
-				{Value: "maxOrXhigh", Name: "Max or X High"},
-			},
+	}
+	effortOption := protocol.ConfigOption{
+		ID:           protocol.ConfigOptionIDReasoningEffort,
+		Name:         "Reasoning Effort",
+		Category:     protocol.ConfigOptionCategoryThoughtLv,
+		Type:         "select",
+		CurrentValue: flickrDefaultReasoningEffort,
+		Options: []protocol.ConfigOptionValue{
+			{Value: "low", Name: "Low"},
+			{Value: "medium", Name: "Medium"},
+			{Value: "high", Name: "High"},
+			{Value: "max", Name: "Max"},
+			{Value: "xhigh", Name: "X High"},
+			{Value: "maxOrXhigh", Name: "Max or X High"},
 		},
 	}
 	if len(models.AvailableModels) == 0 && strings.TrimSpace(models.CurrentModelID) == "" {
-		return options
+		return []protocol.ConfigOption{accessOption, effortOption}
 	}
 	modelOption := protocol.ConfigOption{
 		ID:           protocol.ConfigOptionIDModel,
@@ -224,8 +222,7 @@ func flickrOptions(models flickrModels) []protocol.ConfigOption {
 		CurrentValue: strings.TrimSpace(models.CurrentModelID),
 		Options:      flickrModelOptions(models.AvailableModels),
 	}
-	options = append(options, modelOption)
-	return options
+	return []protocol.ConfigOption{accessOption, modelOption, effortOption}
 }
 
 func flickrModelOptions(models []flickrModel) []protocol.ConfigOptionValue {

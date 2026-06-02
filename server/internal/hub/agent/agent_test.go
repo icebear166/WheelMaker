@@ -249,6 +249,14 @@ func TestFlickrAgentSessionNewReturnsStableOptionsFromModels(t *testing.T) {
 	if got.SessionID != "flickr-session-1" {
 		t.Fatalf("sessionId=%q", got.SessionID)
 	}
+	wantOrder := []string{
+		protocol.ConfigOptionIDApprovalPreset,
+		protocol.ConfigOptionIDModel,
+		protocol.ConfigOptionIDReasoningEffort,
+	}
+	if gotOrder := configOptionIDs(got.ConfigOptions); !reflect.DeepEqual(gotOrder, wantOrder) {
+		t.Fatalf("config option order=%v, want %v", gotOrder, wantOrder)
+	}
 	if currentConfigValue(got.ConfigOptions, protocol.ConfigOptionIDApprovalPreset) != "yolo" {
 		t.Fatalf("approval option=%#v, want yolo", got.ConfigOptions)
 	}
@@ -2702,6 +2710,14 @@ func configOptionByID(opts []protocol.ConfigOption, id string) *protocol.ConfigO
 		}
 	}
 	return nil
+}
+
+func configOptionIDs(opts []protocol.ConfigOption) []string {
+	ids := make([]string, 0, len(opts))
+	for _, opt := range opts {
+		ids = append(ids, opt.ID)
+	}
+	return ids
 }
 
 type fakeFlickrConn struct {
