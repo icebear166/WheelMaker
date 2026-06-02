@@ -4,42 +4,57 @@ import path from 'path';
 describe('web registry debug settings', () => {
   const projectRoot = path.join(__dirname, '..');
 
-  test('persists registry debug as a default-off global setting', () => {
+  test('persists message viewer and log level as separate global settings', () => {
     const workspacePersistence = fs.readFileSync(
       path.join(projectRoot, 'web', 'src', 'services', 'workspacePersistence.ts'),
       'utf8',
     );
 
-    expect(workspacePersistence).toContain('registryDebug: boolean;');
-    expect(workspacePersistence).toContain("registryDebug: 'registryDebug',");
-    expect(workspacePersistence).toContain('registryDebug: false,');
+    expect(workspacePersistence).toContain("export type PersistedLogLevel = 'debug' | 'info' | 'warning' | 'error';");
+    expect(workspacePersistence).toContain('messageViewerEnabled: boolean;');
+    expect(workspacePersistence).toContain('logLevel: PersistedLogLevel;');
+    expect(workspacePersistence).toContain("messageViewerEnabled: 'messageViewerEnabled',");
+    expect(workspacePersistence).toContain("logLevel: 'logLevel',");
+    expect(workspacePersistence).toContain('messageViewerEnabled: false,');
+    expect(workspacePersistence).toContain("logLevel: 'warning',");
     expect(workspacePersistence).toContain(
-      "registryDebug: typeof input.registryDebug === 'boolean' ? input.registryDebug : base.registryDebug",
+      "messageViewerEnabled: typeof input.messageViewerEnabled === 'boolean' ? input.messageViewerEnabled : base.messageViewerEnabled",
     );
     expect(workspacePersistence).toContain(
-      '{k: GLOBAL_KEYS.registryDebug, v: serialize(next.registryDebug), updatedAt: now}',
+      'logLevel: normalizePersistedLogLevel(input.logLevel, base.logLevel)',
     );
+    expect(workspacePersistence).toContain(
+      '{k: GLOBAL_KEYS.messageViewerEnabled, v: serialize(next.messageViewerEnabled), updatedAt: now}',
+    );
+    expect(workspacePersistence).toContain(
+      '{k: GLOBAL_KEYS.logLevel, v: serialize(next.logLevel), updatedAt: now}',
+    );
+    expect(workspacePersistence).not.toContain('registryDebug: boolean;');
   });
 
-  test('adds a settings debug switch and open button without making records persistent', () => {
+  test('adds separate message viewer and log level controls without making records persistent', () => {
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
 
     expect(mainTsx).toContain("import {createRegistryDebugStore} from './debug/registryDebug';");
     expect(mainTsx).toContain('const registryDebugStore = createRegistryDebugStore();');
     expect(mainTsx).toContain('const service = new RegistryWorkspaceService(registryDebugStore.recordCaptureEvent);');
-    expect(mainTsx).toContain('const [registryDebug, setRegistryDebug] = useState(');
-    expect(mainTsx).toContain('const [registryDebugPanelOpen, setRegistryDebugPanelOpen] = useState(');
-    expect(mainTsx).toContain('registryDebugStore.setEnabled(registryDebug);');
-    expect(mainTsx).toContain('setNativeDebugLoggingEnabled(registryDebug);');
+    expect(mainTsx).toContain('const [messageViewerEnabled, setMessageViewerEnabled] = useState(');
+    expect(mainTsx).toContain('const [logLevel, setLogLevel] = useState(');
+    expect(mainTsx).toContain('registryDebugStore.setEnabled(messageViewerEnabled);');
+    expect(mainTsx).toContain('appDiagnosticStore.setLogLevel(logLevel);');
+    expect(mainTsx).toContain('setNativeDiagnosticLogLevel(logLevel);');
     expect(mainTsx).toContain("renderSettingsSection('Debug'");
-    expect(mainTsx).toContain('Debug');
+    expect(mainTsx).toContain('Message Viewer');
+    expect(mainTsx).toContain('Log Level');
     expect(mainTsx).toContain("'debugLogs'");
     expect(mainTsx).toContain("settingsDetailView === 'debugLogs'");
     expect(mainTsx).toContain('renderDebugLogsSettingsDetail(options)');
-    expect(mainTsx).toContain('checked={registryDebug}');
-    expect(mainTsx).toContain('onChange={event => setRegistryDebug(event.target.checked)}');
-    expect(mainTsx).toContain('disabled={!registryDebug}');
-    expect(mainTsx).toContain('setRegistryDebugPanelOpen(true)');
+    expect(mainTsx).toContain('checked={messageViewerEnabled}');
+    expect(mainTsx).toContain('onChange={event => setMessageViewerEnabled(event.target.checked)}');
+    expect(mainTsx).toContain('value={logLevel}');
+    expect(mainTsx).toContain('onChange={event => setLogLevel(normalizeAppDiagnosticLogLevel(event.target.value))}');
+    expect(mainTsx).not.toContain('Open Debug Panel');
+    expect(mainTsx).not.toContain('disabled={!registryDebug}');
     const debugSectionStart = mainTsx.indexOf("renderSettingsSection('Debug'");
     const debugSectionEnd = mainTsx.indexOf("), 'bug')", debugSectionStart);
     const debugSection = mainTsx.slice(debugSectionStart, debugSectionEnd);
@@ -64,7 +79,7 @@ describe('web registry debug settings', () => {
     expect(mainTsx).toContain('serializeAppDiagnosticRecords,');
     expect(mainTsx).toContain('const [appDiagnosticRecords, setAppDiagnosticRecords] = useState');
     expect(mainTsx).toContain("const [selectedDiagnosticCategory, setSelectedDiagnosticCategory] = useState<AppDiagnosticCategory>('http');");
-    expect(mainTsx).toContain("levels: ['info', 'warn', 'error']");
+    expect(mainTsx).toContain('levels: appDiagnosticLevelsAtOrAbove(logLevel)');
     expect(mainTsx).toContain('const uploadDebugLogs = async () => {');
     expect(mainTsx).toContain('await service.uploadDebugLog({');
     expect(mainTsx).toContain('text: serializeAppDiagnosticRecords(records),');
@@ -92,7 +107,8 @@ describe('web registry debug settings', () => {
     expect(mainTsx).not.toContain("renderSettingsSection('More'");
 
     const debugSection = mainTsx.slice(debugSectionIndex);
-    expect(debugSection.indexOf('Open Debug Panel')).toBeLessThan(debugSection.indexOf('Logs'));
+    expect(debugSection.indexOf('Message Viewer')).toBeLessThan(debugSection.indexOf('Log Level'));
+    expect(debugSection.indexOf('Log Level')).toBeLessThan(debugSection.indexOf('Logs'));
     expect(debugSection.indexOf('Logs')).toBeLessThan(debugSection.indexOf('Database'));
     expect(debugSection.indexOf('Database')).toBeLessThan(debugSection.indexOf('Clear Local Cache'));
     expect(debugSection.indexOf('Clear Local Cache')).toBeLessThan(debugSection.indexOf('Logout'));

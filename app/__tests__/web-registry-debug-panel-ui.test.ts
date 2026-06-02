@@ -29,11 +29,13 @@ describe('web registry debug panel ui', () => {
     expect(panelTsx).not.toContain('followOutput');
     expect(panelTsx).not.toContain('payload summary');
     expect(panelTsx).not.toContain('registry-debug-payload-summary');
+    expect(panelTsx).toContain('<span>Message Viewer</span>');
+    expect(panelTsx).not.toContain('Registry Debug');
     expect(panelTsx).not.toContain('Logout');
     expect(panelTsx).not.toContain('onLogout');
   });
 
-  test('main renders the panel only for open desktop debug mode', () => {
+  test('main renders the message viewer only for enabled desktop viewer mode', () => {
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
 
     expect(mainTsx).toContain("import {RegistryDebugPanel} from './debug/RegistryDebugPanel';");
@@ -41,12 +43,13 @@ describe('web registry debug panel ui', () => {
     expect(mainTsx).toContain('const [selectedRegistryDebugRecordId, setSelectedRegistryDebugRecordId] = useState<number | null>(null);');
     expect(mainTsx).toContain('const [selectedRegistryDebugScope, setSelectedRegistryDebugScope] = useState');
     expect(mainTsx).toContain('const registryDebugSessionLabels = useMemo');
-    expect(mainTsx).toContain('const registryDebugPanel = isWide && registryDebug && registryDebugPanelOpen ? (');
+    expect(mainTsx).toContain('const registryDebugPanel = isWide && messageViewerEnabled ? (');
     expect(mainTsx).toContain('<RegistryDebugPanel');
     expect(mainTsx).toContain('records={registryDebugRecords}');
     expect(mainTsx).toContain('selectedScope={selectedRegistryDebugScope}');
     expect(mainTsx).toContain('sessionLabels={registryDebugSessionLabels}');
     expect(mainTsx).toContain('onClear={() => registryDebugStore.clear()}');
+    expect(mainTsx).toContain('onClose={() => setMessageViewerEnabled(false)}');
     expect(mainTsx).not.toContain('onLogout={handleRegistryDebugLogout}');
   });
 

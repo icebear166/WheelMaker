@@ -137,9 +137,9 @@ describe('native Web source helpers', () => {
     expect(native.drainWebDiagnostics).toHaveBeenCalledTimes(1);
   });
 
-  test('wraps Android native debug logging switch', async () => {
+  test('wraps Android native diagnostic log level setting', async () => {
     const native = {
-      setDebugLoggingEnabled: jest.fn((enabled: boolean) => JSON.stringify({enabled})),
+      setDiagnosticLogLevel: jest.fn((logLevel: string) => JSON.stringify({logLevel})),
     };
     (globalThis as {window?: unknown}).window = {
       WheelMakerAndroidNative: native,
@@ -147,8 +147,8 @@ describe('native Web source helpers', () => {
 
     const bridge = getNativeWebSourceBridge();
 
-    await expect(bridge?.setDebugLoggingEnabled?.(true)).resolves.toEqual({enabled: true});
-    expect(native.setDebugLoggingEnabled).toHaveBeenCalledWith(true);
+    await expect(bridge?.setDiagnosticLogLevel?.('warning')).resolves.toEqual({logLevel: 'warning'});
+    expect(native.setDiagnosticLogLevel).toHaveBeenCalledWith('warning');
   });
 
   test('falls back to Desktop bridge when Android bridge is absent', () => {

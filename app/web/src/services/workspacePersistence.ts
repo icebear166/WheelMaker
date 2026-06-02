@@ -38,6 +38,7 @@ import {
 export type PersistedTab = 'chat' | 'file' | 'git';
 export type PersistedThemeMode = 'dark' | 'light';
 export type PersistedFloatingControlSide = 'left' | 'right';
+export type PersistedLogLevel = 'debug' | 'info' | 'warning' | 'error';
 
 export type DiffCacheEntry = {
   diff: string;
@@ -82,7 +83,8 @@ export type PersistedGlobalState = {
   wrapLines: boolean;
   showLineNumbers: boolean;
   hideToolCalls: boolean;
-  registryDebug: boolean;
+  messageViewerEnabled: boolean;
+  logLevel: PersistedLogLevel;
   disableFileCache: boolean;
   localHubReadEnabled: boolean;
   promptCompletionNotificationsEnabled: boolean;
@@ -160,7 +162,8 @@ const GLOBAL_KEYS = {
   wrapLines: 'wrapLines',
   showLineNumbers: 'showLineNumbers',
   hideToolCalls: 'hideToolCalls',
-  registryDebug: 'registryDebug',
+  messageViewerEnabled: 'messageViewerEnabled',
+  logLevel: 'logLevel',
   disableFileCache: 'disableFileCache',
   localHubReadEnabled: 'localHubReadEnabled',
   promptCompletionNotificationsEnabled: 'promptCompletionNotificationsEnabled',
@@ -198,7 +201,8 @@ function defaultGlobalState(): PersistedGlobalState {
     wrapLines: false,
     showLineNumbers: true,
     hideToolCalls: true,
-    registryDebug: false,
+    messageViewerEnabled: false,
+    logLevel: 'warning',
     disableFileCache: false,
     localHubReadEnabled: true,
     promptCompletionNotificationsEnabled: true,
@@ -332,6 +336,16 @@ function samePersistedTurns(left: RegistrySessionTurn[], right: RegistrySessionT
   return true;
 }
 
+function normalizePersistedLogLevel(value: unknown, fallback: PersistedLogLevel): PersistedLogLevel {
+  if (value === 'debug' || value === 'info' || value === 'warning' || value === 'error') {
+    return value;
+  }
+  if (value === 'warn') {
+    return 'warning';
+  }
+  return fallback;
+}
+
 export function reconcilePersistedChatSessionCache(
   session: RegistryChatSession,
   cursor: Partial<PersistedChatCursor> | undefined,
@@ -416,7 +430,8 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
     wrapLines: typeof input.wrapLines === 'boolean' ? input.wrapLines : base.wrapLines,
     showLineNumbers: typeof input.showLineNumbers === 'boolean' ? input.showLineNumbers : base.showLineNumbers,
     hideToolCalls: typeof input.hideToolCalls === 'boolean' ? input.hideToolCalls : base.hideToolCalls,
-    registryDebug: typeof input.registryDebug === 'boolean' ? input.registryDebug : base.registryDebug,
+    messageViewerEnabled: typeof input.messageViewerEnabled === 'boolean' ? input.messageViewerEnabled : base.messageViewerEnabled,
+    logLevel: normalizePersistedLogLevel(input.logLevel, base.logLevel),
     disableFileCache: typeof input.disableFileCache === 'boolean' ? input.disableFileCache : base.disableFileCache,
     localHubReadEnabled: typeof input.localHubReadEnabled === 'boolean' ? input.localHubReadEnabled : base.localHubReadEnabled,
     promptCompletionNotificationsEnabled: typeof input.promptCompletionNotificationsEnabled === 'boolean' ? input.promptCompletionNotificationsEnabled : base.promptCompletionNotificationsEnabled,
@@ -888,7 +903,8 @@ export class WorkspacePersistenceRepository {
       {k: GLOBAL_KEYS.wrapLines, v: serialize(this.state.global.wrapLines), updatedAt: now},
       {k: GLOBAL_KEYS.showLineNumbers, v: serialize(this.state.global.showLineNumbers), updatedAt: now},
       {k: GLOBAL_KEYS.hideToolCalls, v: serialize(this.state.global.hideToolCalls), updatedAt: now},
-      {k: GLOBAL_KEYS.registryDebug, v: serialize(this.state.global.registryDebug), updatedAt: now},
+      {k: GLOBAL_KEYS.messageViewerEnabled, v: serialize(this.state.global.messageViewerEnabled), updatedAt: now},
+      {k: GLOBAL_KEYS.logLevel, v: serialize(this.state.global.logLevel), updatedAt: now},
       {k: GLOBAL_KEYS.disableFileCache, v: serialize(this.state.global.disableFileCache), updatedAt: now},
       {k: GLOBAL_KEYS.localHubReadEnabled, v: serialize(this.state.global.localHubReadEnabled), updatedAt: now},
       {k: GLOBAL_KEYS.promptCompletionNotificationsEnabled, v: serialize(this.state.global.promptCompletionNotificationsEnabled), updatedAt: now},
@@ -1240,7 +1256,8 @@ export class WorkspacePersistenceRepository {
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.wrapLines, v: serialize(next.wrapLines), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.showLineNumbers, v: serialize(next.showLineNumbers), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.hideToolCalls, v: serialize(next.hideToolCalls), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.registryDebug, v: serialize(next.registryDebug), updatedAt: now});
+      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.messageViewerEnabled, v: serialize(next.messageViewerEnabled), updatedAt: now});
+      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.logLevel, v: serialize(next.logLevel), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.disableFileCache, v: serialize(next.disableFileCache), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.localHubReadEnabled, v: serialize(next.localHubReadEnabled), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.promptCompletionNotificationsEnabled, v: serialize(next.promptCompletionNotificationsEnabled), updatedAt: now});

@@ -1,5 +1,6 @@
 import {
   appDiagnosticStore,
+  type AppDiagnosticLogLevel,
   type AppDiagnosticLevel,
 } from './appDiagnostics';
 import {
@@ -9,7 +10,7 @@ import {
 } from '../shell/native/webSource';
 
 type NativeWebDiagnosticBridge = Pick<NativeWebSourceBridge, 'drainWebDiagnostics'>;
-type NativeDebugLoggingBridge = Pick<NativeWebSourceBridge, 'setDebugLoggingEnabled'>;
+type NativeDiagnosticLogLevelBridge = Pick<NativeWebSourceBridge, 'setDiagnosticLogLevel'>;
 type UploadableDiagnosticLevel = Extract<AppDiagnosticLevel, 'info' | 'warn' | 'error'>;
 
 const UPLOADABLE_LEVELS = new Set<UploadableDiagnosticLevel>(['info', 'warn', 'error']);
@@ -56,27 +57,29 @@ export async function drainNativeWebDiagnosticsToAppLog(
     if (!level) {
       continue;
     }
-    appDiagnosticStore.record({
+    const stored = appDiagnosticStore.record({
       category: 'http',
       level,
       event: typeof record.event === 'string' && record.event ? record.event : 'android_web',
       details: isDetails(record.details) ? record.details : {},
     });
-    count += 1;
+    if (stored) {
+      count += 1;
+    }
   }
   return count;
 }
 
-export async function setNativeDebugLoggingEnabled(
-  enabled: boolean,
-  bridge: NativeDebugLoggingBridge | null = getNativeWebSourceBridge(),
+export async function setNativeDiagnosticLogLevel(
+  logLevel: AppDiagnosticLogLevel,
+  bridge: NativeDiagnosticLogLevelBridge | null = getNativeWebSourceBridge(),
 ): Promise<boolean> {
-  const setEnabled = bridge?.setDebugLoggingEnabled;
-  if (!setEnabled) {
+  const setLogLevel = bridge?.setDiagnosticLogLevel;
+  if (!setLogLevel) {
     return false;
   }
   try {
-    await Promise.resolve(setEnabled(enabled));
+    await Promise.resolve(setLogLevel(logLevel));
     return true;
   } catch {
     return false;

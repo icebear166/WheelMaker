@@ -369,7 +369,7 @@ export function RegistryDebugPanel({
       >
         <div className="registry-debug-title">
           <span className="codicon codicon-debug-alt" />
-          <span>Registry Debug</span>
+          <span>Message Viewer</span>
           <span className="registry-debug-count">{records.length}</span>
         </div>
         <div className="registry-debug-actions">

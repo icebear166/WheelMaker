@@ -281,13 +281,15 @@ import {isSpeechErrorEvent, isSpeechTranscriptEvent} from './features/speech/reg
 import {DEFAULT_SPEECH_SETTINGS, SPEECH_MODEL_OPTIONS, normalizeSpeechSettings} from './features/speech/speechSettings';
 import {
   appDiagnosticStore,
+  appDiagnosticLevelsAtOrAbove,
   filterAppDiagnosticRecords,
   formatAppDiagnosticRecordLine,
+  normalizeAppDiagnosticLogLevel,
   serializeAppDiagnosticRecords,
   type AppDiagnosticCategory,
   type AppDiagnosticRecord,
 } from './debug/appDiagnostics';
-import {drainNativeWebDiagnosticsToAppLog, setNativeDebugLoggingEnabled} from './debug/nativeWebDiagnostics';
+import {drainNativeWebDiagnosticsToAppLog, setNativeDiagnosticLogLevel} from './debug/nativeWebDiagnostics';
 import {startWorkspaceDiagnosticSpan} from './debug/workspaceDiagnostics';
 import {
   formatVoiceInputDiagnosticError,
@@ -3152,10 +3154,13 @@ function App() {
       ? persistedGlobal.hideToolCalls
       : true,
   );
-  const [registryDebug, setRegistryDebug] = useState(
-    typeof persistedGlobal.registryDebug === 'boolean'
-      ? persistedGlobal.registryDebug
+  const [messageViewerEnabled, setMessageViewerEnabled] = useState(
+    typeof persistedGlobal.messageViewerEnabled === 'boolean'
+      ? persistedGlobal.messageViewerEnabled
       : false,
+  );
+  const [logLevel, setLogLevel] = useState(
+    normalizeAppDiagnosticLogLevel(persistedGlobal.logLevel),
   );
   const [disableFileCache, setDisableFileCache] = useState(
     typeof persistedGlobal.disableFileCache === 'boolean'
@@ -3179,11 +3184,6 @@ function App() {
     normalizeSpeechSettings(persistedGlobal.speechSettings ?? DEFAULT_SPEECH_SETTINGS),
   );
   const [webSourceState, setWebSourceState] = useState<DesktopWebSourceState | null>(null);
-  const [registryDebugPanelOpen, setRegistryDebugPanelOpen] = useState(
-    typeof persistedGlobal.registryDebug === 'boolean'
-      ? persistedGlobal.registryDebug
-      : false,
-  );
   const [registryDebugRecords, setRegistryDebugRecords] = useState(registryDebugStore.getRecords());
   const [appDiagnosticRecords, setAppDiagnosticRecords] = useState<AppDiagnosticRecord[]>(appDiagnosticStore.getRecords());
   const [selectedDiagnosticCategory, setSelectedDiagnosticCategory] = useState<AppDiagnosticCategory>('http');
@@ -5667,7 +5667,12 @@ function App() {
   useEffect(() => appDiagnosticStore.subscribe(setAppDiagnosticRecords), []);
 
   useEffect(() => {
-    if (!registryDebug || !isNativeShellHost()) {
+    appDiagnosticStore.setLogLevel(logLevel);
+    void setNativeDiagnosticLogLevel(logLevel);
+  }, [logLevel]);
+
+  useEffect(() => {
+    if (!isNativeShellHost()) {
       return undefined;
     }
     let cancelled = false;
@@ -5682,28 +5687,24 @@ function App() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [registryDebug]);
+  }, [logLevel]);
 
   useEffect(() => {
-    if (!registryDebug || settingsDetailView !== 'debugLogs') {
+    if (settingsDetailView !== 'debugLogs') {
       return;
     }
     void drainNativeWebDiagnosticsToAppLog();
-  }, [registryDebug, settingsDetailView]);
+  }, [logLevel, settingsDetailView]);
 
   useEffect(() => {
-    registryDebugStore.setEnabled(registryDebug);
-    void setNativeDebugLoggingEnabled(registryDebug);
-    if (registryDebug) {
-      setRegistryDebugPanelOpen(true);
-    } else {
-      setRegistryDebugPanelOpen(false);
+    registryDebugStore.setEnabled(messageViewerEnabled);
+    if (!messageViewerEnabled) {
       setSelectedRegistryDebugRecordId(null);
       setSelectedRegistryDebugScope('All');
       setSelectedRegistryDebugSessionId('All');
       setRegistryDebugIncludeMultiSessionRecords(false);
     }
-  }, [registryDebug]);
+  }, [messageViewerEnabled]);
 
   useEffect(() => {
     workspaceStore.setDisableFileCache(disableFileCache);
@@ -5794,7 +5795,8 @@ function App() {
       wrapLines,
       showLineNumbers,
       hideToolCalls,
-      registryDebug,
+      messageViewerEnabled,
+      logLevel,
       localHubReadEnabled,
       promptCompletionNotificationsEnabled,
       gestureNavigation,
@@ -5820,7 +5822,8 @@ function App() {
     wrapLines,
     showLineNumbers,
     hideToolCalls,
-    registryDebug,
+    messageViewerEnabled,
+    logLevel,
     localHubReadEnabled,
     promptCompletionNotificationsEnabled,
     gestureNavigation,
@@ -10587,7 +10590,7 @@ function App() {
     setError('');
     setAutoConnecting(false);
     setReconnecting(false);
-    setRegistryDebugPanelOpen(false);
+    setMessageViewerEnabled(false);
     setConnected(false);
     clearChatRuntimeState();
     service.close();
@@ -14919,7 +14922,7 @@ function App() {
     await drainNativeWebDiagnosticsToAppLog();
     const records = filterAppDiagnosticRecords(appDiagnosticStore.getRecords(), {
       category: selectedDiagnosticCategory,
-      levels: ['info', 'warn', 'error'],
+      levels: appDiagnosticLevelsAtOrAbove(logLevel),
     });
     if (records.length === 0 || debugLogUploading) {
       return;
@@ -14949,7 +14952,7 @@ function App() {
   const renderDebugLogsSettingsDetail = (options?: SettingsDetailShellOptions) => {
     const records = filterAppDiagnosticRecords(appDiagnosticRecords, {
       category: selectedDiagnosticCategory,
-      levels: ['info', 'warn', 'error'],
+      levels: appDiagnosticLevelsAtOrAbove(logLevel),
     });
     return renderSettingsDetailShell(
       'Logs',
@@ -15416,14 +15419,30 @@ function App() {
         <>
         <label className="settings-row sidebar-setting-row">
           <span>
-            <span className="codicon codicon-bug settings-row-icon" aria-hidden="true" />
-            Debug
+            <span className="codicon codicon-eye settings-row-icon" aria-hidden="true" />
+            Message Viewer
           </span>
           <input
             type="checkbox"
-            checked={registryDebug}
-            onChange={event => setRegistryDebug(event.target.checked)}
+            checked={messageViewerEnabled}
+            onChange={event => setMessageViewerEnabled(event.target.checked)}
           />
+        </label>
+        <label className="settings-row sidebar-setting-row">
+          <span>
+            <span className="codicon codicon-list-filter settings-row-icon" aria-hidden="true" />
+            Log Level
+          </span>
+          <select
+            className="sidebar-setting-select"
+            value={logLevel}
+            onChange={event => setLogLevel(normalizeAppDiagnosticLogLevel(event.target.value))}
+          >
+            <option value="debug">Debug</option>
+            <option value="info">Info</option>
+            <option value="warning">Warning</option>
+            <option value="error">Error</option>
+          </select>
         </label>
         <label className="settings-row sidebar-setting-row">
           <span>
@@ -15436,20 +15455,6 @@ function App() {
             onChange={event => setDisableFileCache(event.target.checked)}
           />
         </label>
-        <button
-          type="button"
-          className="settings-row settings-detail-row"
-          disabled={!registryDebug}
-          onClick={() => {
-            setRegistryDebugPanelOpen(true);
-          }}
-        >
-          <span>
-            <span className="codicon codicon-debug-alt settings-row-icon" aria-hidden="true" />
-            Open Debug Panel
-          </span>
-          <span className="codicon codicon-chevron-right" />
-        </button>
         <button
           type="button"
           className="settings-row settings-detail-row"
@@ -18711,7 +18716,7 @@ function App() {
       </div>
     </div>
   ) : null;
-  const registryDebugPanel = isWide && registryDebug && registryDebugPanelOpen ? (
+  const registryDebugPanel = isWide && messageViewerEnabled ? (
     <RegistryDebugPanel
       records={registryDebugRecords}
       selectedRecordId={selectedRegistryDebugRecordId}
@@ -18724,7 +18729,7 @@ function App() {
       includeMultiSessionRecords={registryDebugIncludeMultiSessionRecords}
       onIncludeMultiSessionRecordsChange={setRegistryDebugIncludeMultiSessionRecords}
       onClear={() => registryDebugStore.clear()}
-      onClose={() => setRegistryDebugPanelOpen(false)}
+      onClose={() => setMessageViewerEnabled(false)}
     />
   ) : null;
 

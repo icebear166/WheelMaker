@@ -9,7 +9,7 @@ class WheelMakerBridge(
     private val androidNotificationRuntime: AndroidNotificationRuntime,
     private val androidApkUpdateRuntime: AndroidApkUpdateRuntime,
     private val androidWebDiagnostics: AndroidWebDiagnostics,
-    private val androidDebugLoggingStore: AndroidDebugLoggingStore
+    private val androidDiagnosticLogLevelStore: AndroidDiagnosticLogLevelStore
 ) {
     @JavascriptInterface
     fun getWebSourceState(): String = webSourceStateToJson(webSourceRuntime.state())
@@ -50,11 +50,11 @@ class WheelMakerBridge(
     fun drainWebDiagnostics(): String = androidWebDiagnostics.drainJson()
 
     @JavascriptInterface
-    fun setDebugLoggingEnabled(enabled: Boolean): String {
-        androidDebugLoggingStore.saveDebugLoggingEnabled(enabled)
-        androidWebDiagnostics.setEnabled(enabled)
+    fun setDiagnosticLogLevel(logLevel: String): String {
+        androidDiagnosticLogLevelStore.saveDiagnosticLogLevel(logLevel)
+        androidWebDiagnostics.setLogLevel(logLevel)
         return JSONObject()
-            .put("enabled", androidWebDiagnostics.isEnabled())
+            .put("logLevel", androidWebDiagnostics.getLogLevel())
             .toString()
     }
 

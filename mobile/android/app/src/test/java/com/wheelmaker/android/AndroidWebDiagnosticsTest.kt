@@ -14,7 +14,7 @@ class AndroidWebDiagnosticsTest {
 
     @Test
     fun drainsNativeWebEventsAsUploadableDiagnostics() {
-        val diagnostics = AndroidWebDiagnostics(capacity = 3, enabled = true, now = { 1234L })
+        val diagnostics = AndroidWebDiagnostics(capacity = 3, logLevel = "info", now = { 1234L })
 
         diagnostics.record(
             "remote_asset_success",
@@ -44,7 +44,7 @@ class AndroidWebDiagnosticsTest {
 
     @Test
     fun keepsMostRecentNativeWebDiagnosticsWithinCapacity() {
-        val diagnostics = AndroidWebDiagnostics(capacity = 2, enabled = true, now = { 1000L })
+        val diagnostics = AndroidWebDiagnostics(capacity = 2, logLevel = "info", now = { 1000L })
 
         diagnostics.record("first")
         diagnostics.record("second")
@@ -68,19 +68,23 @@ class AndroidWebDiagnosticsTest {
     }
 
     @Test
-    fun diagnosticsAreDisabledByDefaultAndClearedWhenDisabled() {
+    fun diagnosticsDefaultToWarningLogLevelAndFilterLowerLevels() {
         val diagnostics = AndroidWebDiagnostics(capacity = 3, now = { 1000L })
 
-        diagnostics.record("disabled")
-        assertEquals(0, JSONObject(diagnostics.drainJson()).getJSONArray("records").length())
+        diagnostics.record("info_ignored")
+        diagnostics.record("warn_kept", level = "warn")
+        diagnostics.record("error_kept", level = "error")
 
-        diagnostics.setEnabled(true)
-        diagnostics.record("enabled")
-        assertEquals(1, JSONObject(diagnostics.drainJson()).getJSONArray("records").length())
+        var records = JSONObject(diagnostics.drainJson()).getJSONArray("records")
+        assertEquals(2, records.length())
+        assertEquals("warn_kept", records.getJSONObject(0).getJSONObject("details").getString("nativeEvent"))
+        assertEquals("error_kept", records.getJSONObject(1).getJSONObject("details").getString("nativeEvent"))
 
-        diagnostics.record("before_disable")
-        diagnostics.setEnabled(false)
-        assertEquals(0, JSONObject(diagnostics.drainJson()).getJSONArray("records").length())
+        diagnostics.setLogLevel("info")
+        diagnostics.record("info_kept")
+        records = JSONObject(diagnostics.drainJson()).getJSONArray("records")
+        assertEquals(1, records.length())
+        assertEquals("info_kept", records.getJSONObject(0).getJSONObject("details").getString("nativeEvent"))
     }
 
     @Test
@@ -89,13 +93,13 @@ class AndroidWebDiagnosticsTest {
         val bridge = source("src/main/java/com/wheelmaker/android/WheelMakerBridge.kt")
 
         assertTrue(mainActivity.contains("private lateinit var androidWebDiagnostics: AndroidWebDiagnostics"))
-        assertTrue(mainActivity.contains("private lateinit var androidDebugLoggingStore: AndroidDebugLoggingStore"))
-        assertTrue(mainActivity.contains("AndroidWebDiagnostics(enabled = androidDebugLoggingStore.loadDebugLoggingEnabled())"))
+        assertTrue(mainActivity.contains("private lateinit var androidDiagnosticLogLevelStore: AndroidDiagnosticLogLevelStore"))
+        assertTrue(mainActivity.contains("AndroidWebDiagnostics(logLevel = androidDiagnosticLogLevelStore.loadDiagnosticLogLevel())"))
         assertFalse(mainActivity.contains("webSourceRuntime.refreshActualSource()"))
         assertTrue(mainActivity.contains("StableOriginWebViewClient(this, webSourceRuntime, androidWebDiagnostics)"))
         assertTrue(mainActivity.contains("WheelMakerBridge("))
         assertTrue(mainActivity.contains("androidWebDiagnostics"))
         assertTrue(bridge.contains("fun drainWebDiagnostics(): String"))
-        assertTrue(bridge.contains("fun setDebugLoggingEnabled(enabled: Boolean): String"))
+        assertTrue(bridge.contains("fun setDiagnosticLogLevel(logLevel: String): String"))
     }
 }

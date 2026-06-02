@@ -1,5 +1,6 @@
 export type AppDiagnosticCategory = 'voice' | 'workspace' | 'http';
 export type AppDiagnosticLevel = 'debug' | 'info' | 'warn' | 'error';
+export type AppDiagnosticLogLevel = 'debug' | 'info' | 'warning' | 'error';
 
 export type AppDiagnosticRecord = {
   id: number;
@@ -28,13 +29,28 @@ export type AppDiagnosticSubscriber = (records: AppDiagnosticRecord[]) => void;
 export type AppDiagnosticStore = {
   clear: () => void;
   getRecords: () => AppDiagnosticRecord[];
-  record: (input: AppDiagnosticInput) => void;
+  getLogLevel: () => AppDiagnosticLogLevel;
+  setLogLevel: (level: AppDiagnosticLogLevel) => void;
+  record: (input: AppDiagnosticInput) => boolean;
   subscribe: (subscriber: AppDiagnosticSubscriber) => () => void;
 };
 
 const MAX_APP_DIAGNOSTIC_RECORDS = 200;
 const SENSITIVE_DETAIL_KEYS = new Set(['apiKey', 'streamId']);
 const OMITTED_DETAIL_KEYS = new Set(['pcm', 'base64']);
+const APP_DIAGNOSTIC_LEVEL_ORDER: Record<AppDiagnosticLevel, number> = {
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3,
+};
+const APP_DIAGNOSTIC_LOG_LEVEL_MINIMUM: Record<AppDiagnosticLogLevel, AppDiagnosticLevel> = {
+  debug: 'debug',
+  info: 'info',
+  warning: 'warn',
+  error: 'error',
+};
+const APP_DIAGNOSTIC_LEVELS: AppDiagnosticLevel[] = ['debug', 'info', 'warn', 'error'];
 
 function pad(value: number, length: number): string {
   return String(value).padStart(length, '0');
@@ -76,6 +92,25 @@ function sanitizeDiagnosticValue(value: unknown, depth: number): unknown {
 
 export function sanitizeAppDiagnosticDetails(details: Record<string, unknown> = {}): Record<string, unknown> {
   return sanitizeDiagnosticValue(details, 0) as Record<string, unknown>;
+}
+
+export function normalizeAppDiagnosticLogLevel(
+  value: unknown,
+  fallback: AppDiagnosticLogLevel = 'warning',
+): AppDiagnosticLogLevel {
+  if (value === 'debug' || value === 'info' || value === 'warning' || value === 'error') {
+    return value;
+  }
+  if (value === 'warn') {
+    return 'warning';
+  }
+  return fallback;
+}
+
+export function appDiagnosticLevelsAtOrAbove(logLevel: AppDiagnosticLogLevel): AppDiagnosticLevel[] {
+  const minimumLevel = APP_DIAGNOSTIC_LOG_LEVEL_MINIMUM[logLevel];
+  const minimumOrder = APP_DIAGNOSTIC_LEVEL_ORDER[minimumLevel];
+  return APP_DIAGNOSTIC_LEVELS.filter(level => APP_DIAGNOSTIC_LEVEL_ORDER[level] >= minimumOrder);
 }
 
 export function filterAppDiagnosticRecords(
@@ -126,9 +161,18 @@ function cloneRecords(records: AppDiagnosticRecord[]): AppDiagnosticRecord[] {
   return records.slice();
 }
 
-export function createAppDiagnosticStore(now: () => number = () => Date.now()): AppDiagnosticStore {
+function shouldRecordAppDiagnostic(level: AppDiagnosticLevel, logLevel: AppDiagnosticLogLevel): boolean {
+  const minimumLevel = APP_DIAGNOSTIC_LOG_LEVEL_MINIMUM[logLevel];
+  return APP_DIAGNOSTIC_LEVEL_ORDER[level] >= APP_DIAGNOSTIC_LEVEL_ORDER[minimumLevel];
+}
+
+export function createAppDiagnosticStore(
+  now: () => number = () => Date.now(),
+  initialLogLevel: AppDiagnosticLogLevel = 'warning',
+): AppDiagnosticStore {
   let nextId = 1;
   let records: AppDiagnosticRecord[] = [];
+  let logLevel = normalizeAppDiagnosticLogLevel(initialLogLevel);
   const subscribers = new Set<AppDiagnosticSubscriber>();
 
   const notify = () => {
@@ -144,7 +188,14 @@ export function createAppDiagnosticStore(now: () => number = () => Date.now()): 
       notify();
     },
     getRecords: () => cloneRecords(records),
+    getLogLevel: () => logLevel,
+    setLogLevel: nextLogLevel => {
+      logLevel = normalizeAppDiagnosticLogLevel(nextLogLevel, logLevel);
+    },
     record: input => {
+      if (!shouldRecordAppDiagnostic(input.level, logLevel)) {
+        return false;
+      }
       const timestamp = now();
       records = [
         ...records,
@@ -160,6 +211,7 @@ export function createAppDiagnosticStore(now: () => number = () => Date.now()): 
       ].slice(-MAX_APP_DIAGNOSTIC_RECORDS);
       nextId += 1;
       notify();
+      return true;
     },
     subscribe: subscriber => {
       subscribers.add(subscriber);

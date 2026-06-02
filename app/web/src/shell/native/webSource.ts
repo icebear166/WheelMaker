@@ -1,5 +1,6 @@
 export type NativeWebSourcePreference = 'auto' | 'embedded';
 export type NativeWebSourceActual = 'embedded' | 'remote';
+export type NativeDiagnosticLogLevel = 'debug' | 'info' | 'warning' | 'error';
 
 export type NativeWebSourceState = {
   preference: NativeWebSourcePreference;
@@ -26,8 +27,8 @@ export type NativeWebDiagnosticsPayload = {
   records?: NativeWebDiagnosticRecord[];
 };
 
-export type NativeDebugLoggingState = {
-  enabled?: boolean;
+export type NativeDiagnosticLogLevelState = {
+  logLevel?: NativeDiagnosticLogLevel;
 };
 
 export type NativeWebSourceBridge = {
@@ -40,7 +41,9 @@ export type NativeWebSourceBridge = {
     candidate: NativeRemoteWebCandidate,
   ) => Promise<NativeWebSourceState> | NativeWebSourceState;
   drainWebDiagnostics?: () => Promise<NativeWebDiagnosticsPayload> | NativeWebDiagnosticsPayload;
-  setDebugLoggingEnabled?: (enabled: boolean) => Promise<NativeDebugLoggingState> | NativeDebugLoggingState;
+  setDiagnosticLogLevel?: (
+    logLevel: NativeDiagnosticLogLevel,
+  ) => Promise<NativeDiagnosticLogLevelState> | NativeDiagnosticLogLevelState;
 };
 
 type AndroidNativeBridge = {
@@ -48,7 +51,7 @@ type AndroidNativeBridge = {
   setWebSourcePreference?: (preference: NativeWebSourcePreference) => string;
   setRemoteWebCandidate?: (candidateJson: string) => string;
   drainWebDiagnostics?: () => string;
-  setDebugLoggingEnabled?: (enabled: boolean) => string;
+  setDiagnosticLogLevel?: (logLevel: NativeDiagnosticLogLevel) => string;
 };
 
 type NativeWindow = Window & {
@@ -65,8 +68,8 @@ function parseNativeWebDiagnostics(value: string | undefined): NativeWebDiagnost
   return JSON.parse(value ?? '{}') as NativeWebDiagnosticsPayload;
 }
 
-function parseNativeDebugLoggingState(value: string | undefined): NativeDebugLoggingState {
-  return JSON.parse(value ?? '{}') as NativeDebugLoggingState;
+function parseNativeDiagnosticLogLevelState(value: string | undefined): NativeDiagnosticLogLevelState {
+  return JSON.parse(value ?? '{}') as NativeDiagnosticLogLevelState;
 }
 
 function isLoopbackHost(hostname: string): boolean {
@@ -89,8 +92,8 @@ function wrapAndroidNativeBridge(native: AndroidNativeBridge): NativeWebSourceBr
     drainWebDiagnostics: native.drainWebDiagnostics
       ? () => Promise.resolve(parseNativeWebDiagnostics(native.drainWebDiagnostics?.()))
       : undefined,
-    setDebugLoggingEnabled: native.setDebugLoggingEnabled
-      ? enabled => Promise.resolve(parseNativeDebugLoggingState(native.setDebugLoggingEnabled?.(enabled)))
+    setDiagnosticLogLevel: native.setDiagnosticLogLevel
+      ? logLevel => Promise.resolve(parseNativeDiagnosticLogLevelState(native.setDiagnosticLogLevel?.(logLevel)))
       : undefined,
   };
 }

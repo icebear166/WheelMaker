@@ -1,8 +1,10 @@
 import {
   appDiagnosticStore,
+  appDiagnosticLevelsAtOrAbove,
   createAppDiagnosticStore,
   filterAppDiagnosticRecords,
   formatAppDiagnosticRecordLine,
+  normalizeAppDiagnosticLogLevel,
   serializeAppDiagnosticRecords,
 } from '../web/src/debug/appDiagnostics';
 import {drainNativeWebDiagnosticsToAppLog} from '../web/src/debug/nativeWebDiagnostics';
@@ -14,11 +16,46 @@ import {
 describe('app diagnostics', () => {
   afterEach(() => {
     appDiagnosticStore.clear();
+    appDiagnosticStore.setLogLevel('warning');
     jest.restoreAllMocks();
   });
 
-  test('stores recent warning and error diagnostics by category', () => {
+  test('defaults to warning log level and filters records below the current level', () => {
     const store = createAppDiagnosticStore(() => 1000);
+    store.record({category: 'voice', level: 'debug', event: 'start_requested'});
+    store.record({category: 'voice', level: 'info', event: 'stream_open'});
+    store.record({category: 'voice', level: 'warn', event: 'finish_without_stream'});
+    store.record({category: 'voice', level: 'error', event: 'start_failed'});
+
+    expect(store.getLogLevel()).toBe('warning');
+    expect(store.getRecords().map(record => record.event)).toEqual([
+      'finish_without_stream',
+      'start_failed',
+    ]);
+
+    store.setLogLevel('info');
+    store.record({category: 'voice', level: 'info', event: 'stream_reopened'});
+
+    expect(store.getRecords().map(record => record.event)).toEqual([
+      'finish_without_stream',
+      'start_failed',
+      'stream_reopened',
+    ]);
+  });
+
+  test('normalizes app diagnostic log levels and expands uploadable levels', () => {
+    expect(normalizeAppDiagnosticLogLevel('debug')).toBe('debug');
+    expect(normalizeAppDiagnosticLogLevel('info')).toBe('info');
+    expect(normalizeAppDiagnosticLogLevel('warn')).toBe('warning');
+    expect(normalizeAppDiagnosticLogLevel('warning')).toBe('warning');
+    expect(normalizeAppDiagnosticLogLevel('error')).toBe('error');
+    expect(normalizeAppDiagnosticLogLevel('trace')).toBe('warning');
+    expect(appDiagnosticLevelsAtOrAbove('warning')).toEqual(['warn', 'error']);
+    expect(appDiagnosticLevelsAtOrAbove('info')).toEqual(['info', 'warn', 'error']);
+  });
+
+  test('filters recent warning and error diagnostics by category', () => {
+    const store = createAppDiagnosticStore(() => 1000, 'debug');
     store.record({category: 'voice', level: 'debug', event: 'start_requested'});
     store.record({category: 'voice', level: 'warn', event: 'finish_without_stream'});
     store.record({category: 'voice', level: 'error', event: 'start_failed'});
@@ -35,7 +72,7 @@ describe('app diagnostics', () => {
   });
 
   test('formats workspace diagnostics as compact one-line records', () => {
-    const store = createAppDiagnosticStore(() => new Date(2026, 0, 1, 0, 0, 1).getTime());
+    const store = createAppDiagnosticStore(() => new Date(2026, 0, 1, 0, 0, 1).getTime(), 'debug');
     store.record({
       category: 'workspace',
       level: 'info',
@@ -103,9 +140,18 @@ describe('app diagnostics', () => {
             level: 'info',
             event: 'android_web',
             details: {
-              nativeEvent: 'remote_asset_success',
+              nativeEvent: 'remote_asset_success_ignored',
               asset: 'index.html',
               status: 200,
+            },
+          },
+          {
+            level: 'warn',
+            event: 'android_web',
+            details: {
+              nativeEvent: 'remote_asset_failed',
+              asset: 'bundle.js',
+              status: 404,
             },
           },
         ],
@@ -118,12 +164,12 @@ describe('app diagnostics', () => {
     expect(appDiagnosticStore.getRecords()).toEqual([
       expect.objectContaining({
         category: 'http',
-        level: 'info',
+        level: 'warn',
         event: 'android_web',
         details: {
-          nativeEvent: 'remote_asset_success',
-          asset: 'index.html',
-          status: 200,
+          nativeEvent: 'remote_asset_failed',
+          asset: 'bundle.js',
+          status: 404,
         },
       }),
     ]);

@@ -6,45 +6,44 @@ import org.json.JSONObject
 import java.util.ArrayDeque
 import java.util.Locale
 
-interface AndroidDebugLoggingStore {
-    fun loadDebugLoggingEnabled(): Boolean
-    fun saveDebugLoggingEnabled(enabled: Boolean)
+interface AndroidDiagnosticLogLevelStore {
+    fun loadDiagnosticLogLevel(): String
+    fun saveDiagnosticLogLevel(logLevel: String)
 }
 
-class SharedPreferencesAndroidDebugLoggingStore(context: Context) : AndroidDebugLoggingStore {
+class SharedPreferencesAndroidDiagnosticLogLevelStore(context: Context) : AndroidDiagnosticLogLevelStore {
     private val prefs = context.getSharedPreferences("wheelmaker_debug", Context.MODE_PRIVATE)
 
-    override fun loadDebugLoggingEnabled(): Boolean = prefs.getBoolean("debugLoggingEnabled", false)
+    override fun loadDiagnosticLogLevel(): String =
+        normalizedDiagnosticLogLevelSetting(prefs.getString("diagnosticLogLevel", null) ?: "warning")
 
-    override fun saveDebugLoggingEnabled(enabled: Boolean) {
+    override fun saveDiagnosticLogLevel(logLevel: String) {
         prefs.edit()
-            .putBoolean("debugLoggingEnabled", enabled)
+            .putString("diagnosticLogLevel", normalizedDiagnosticLogLevelSetting(logLevel))
             .apply()
     }
 }
 
 class AndroidWebDiagnostics(
     private val capacity: Int = 120,
-    enabled: Boolean = false,
+    logLevel: String = "warning",
     private val now: () -> Long = { System.currentTimeMillis() }
 ) {
     private val records = ArrayDeque<AndroidWebDiagnosticRecord>()
-    private var enabled: Boolean = enabled
+    private var logLevel: String = normalizedDiagnosticLogLevelSetting(logLevel)
 
     @Synchronized
-    fun isEnabled(): Boolean = enabled
+    fun getLogLevel(): String = logLevel
 
     @Synchronized
-    fun setEnabled(enabled: Boolean) {
-        this.enabled = enabled
-        if (!enabled) {
-            records.clear()
-        }
+    fun setLogLevel(logLevel: String) {
+        this.logLevel = normalizedDiagnosticLogLevelSetting(logLevel)
     }
 
     @Synchronized
     fun record(nativeEvent: String, details: Map<String, Any?> = emptyMap(), level: String = "info") {
-        if (!enabled) {
+        val normalizedLevel = normalizedDiagnosticLevel(level)
+        if (!shouldRecordDiagnosticLevel(normalizedLevel, logLevel)) {
             return
         }
         val timestamp = now()
@@ -60,7 +59,7 @@ class AndroidWebDiagnostics(
         }
         records.addLast(
             AndroidWebDiagnosticRecord(
-                level = normalizedDiagnosticLevel(level),
+                level = normalizedLevel,
                 details = recordDetails
             )
         )
@@ -100,10 +99,38 @@ private fun cleanNativeEvent(nativeEvent: String): String {
 
 private fun normalizedDiagnosticLevel(level: String): String {
     return when (level.lowercase(Locale.US)) {
+        "debug" -> "info"
         "warn" -> "warn"
+        "warning" -> "warn"
         "error" -> "error"
         else -> "info"
     }
+}
+
+private fun normalizedDiagnosticLogLevelSetting(logLevel: String): String {
+    return when (logLevel.lowercase(Locale.US)) {
+        "debug" -> "debug"
+        "info" -> "info"
+        "warn" -> "warning"
+        "warning" -> "warning"
+        "error" -> "error"
+        else -> "warning"
+    }
+}
+
+private fun diagnosticLevelOrder(level: String): Int {
+    return when (level) {
+        "debug" -> 0
+        "info" -> 1
+        "warn" -> 2
+        "warning" -> 2
+        "error" -> 3
+        else -> 2
+    }
+}
+
+private fun shouldRecordDiagnosticLevel(recordLevel: String, logLevel: String): Boolean {
+    return diagnosticLevelOrder(recordLevel) >= diagnosticLevelOrder(logLevel)
 }
 
 private fun detailsToJson(details: Map<String, Any?>): JSONObject {
