@@ -229,8 +229,8 @@ server {
     listen 28800 ssl;
     server_name _;
 
-    ssl_certificate         D:/Nginx/cert/stunnel.pem;
-    ssl_certificate_key     D:/Nginx/cert/stunnel.pem;
+    ssl_certificate         D:/Nginx/cert/fullchain.pem;
+    ssl_certificate_key     D:/Nginx/cert/privkey.pem;
     ssl_trusted_certificate D:/Nginx/cert/uca.pem;
 
     ssl_protocols TLSv1.2 TLSv1.3;
