@@ -372,7 +372,9 @@ describe('web responsive ui state', () => {
 
   test('main web app uses the responsive layout and workspace ui state modules', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs
+      .readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8')
+      .replace(/\r\n/g, '\n');
 
     expect(mainTsx).toContain("from './services/responsiveLayout'");
     expect(mainTsx).toContain("from './services/workspaceUiState'");

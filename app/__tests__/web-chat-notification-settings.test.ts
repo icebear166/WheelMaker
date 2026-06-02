@@ -3,9 +3,13 @@ import path from 'path';
 
 describe('chat prompt completion notification settings', () => {
   const projectRoot = path.join(__dirname, '..');
+  const readMainSource = () =>
+    fs
+      .readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8')
+      .replace(/\r\n/g, '\n');
 
   test('adds prompt completion notifications to chat settings and persistence', () => {
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = readMainSource();
     const persistenceTs = fs.readFileSync(
       path.join(projectRoot, 'web', 'src', 'services', 'workspacePersistence.ts'),
       'utf8',
@@ -26,7 +30,7 @@ describe('chat prompt completion notification settings', () => {
   });
 
   test('routes session.message through prompt completion notification policy', () => {
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = readMainSource();
 
     expect(mainTsx).toContain("from './notifications/promptCompletion'");
     expect(mainTsx).toContain("from './notifications/provider'");
@@ -42,7 +46,7 @@ describe('chat prompt completion notification settings', () => {
   });
 
   test('consumes notification deep links for project and session selection', () => {
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = readMainSource();
 
     expect(mainTsx).toContain('const pendingNotificationTargetRef = useRef<ChatSessionKey | null>(');
     expect(mainTsx).toContain("searchParams.get('wmProjectId')");

@@ -156,7 +156,9 @@ describe('agent package update settings UI source structure', () => {
 
   test('keeps Update page scan polling scoped to the active Update detail', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs
+      .readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8')
+      .replace(/\r\n/g, '\n');
 
     expect(mainTsx).toContain('const refreshWheelMakerUpdatesRef = useRef<((options?: {force?: boolean}) => Promise<void>) | null>(null);');
     expect(mainTsx).toContain('const refreshAgentPackagesRef = useRef<((options?: {silent?: boolean}) => Promise<void>) | null>(null);');
