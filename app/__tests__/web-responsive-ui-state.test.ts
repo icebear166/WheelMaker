@@ -582,6 +582,12 @@ describe('web responsive ui state', () => {
     const defaultColorBlock = stylesCss.match(/\.chat-hub-color-default \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(defaultColorBlock).toContain('height: 36px;');
     expect(defaultColorBlock).toContain('grid-template-columns: minmax(0, 1fr) var(--chat-hub-color-chip-width);');
+    expect(defaultColorBlock).not.toContain('font-size: 11px;');
+    expect(defaultColorBlock).not.toContain('font-weight: 700;');
+    const colorLabelBlock = stylesCss.match(/\.chat-hub-color-default-label,\n\.chat-hub-color-custom-label \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(colorLabelBlock).toContain('font-size: 11px;');
+    expect(colorLabelBlock).toContain('font-weight: 700;');
+    expect(colorLabelBlock).toContain('color: color-mix(in srgb, var(--text) 86%, var(--muted));');
     const customHeaderBlock = stylesCss.match(/\.chat-hub-color-custom-header \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(customHeaderBlock).toContain('grid-template-columns: minmax(0, 1fr) var(--chat-hub-color-chip-width);');
     const defaultSwatchBlock = stylesCss.match(/\.chat-hub-color-default-swatch \{[\s\S]*?\n\}/)?.[0] ?? '';
