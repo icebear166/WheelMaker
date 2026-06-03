@@ -32,4 +32,17 @@ describe('session archive UI source integration', () => {
     expect(main).toContain('for (const candidate of candidates)');
     expect(main).not.toContain('Promise.all(candidates.map');
   });
+
+  test('renders older toggle as a muted session row without chevron icons', () => {
+    const helperStart = main.indexOf('const renderProjectSessionRowsWithOlderFolding = (');
+    const helperEnd = main.indexOf('const renderSessionSearchRow = (', helperStart);
+    const helperSource = main.slice(helperStart, helperEnd);
+
+    expect(helperSource).toContain('session-older-toggle');
+    expect(helperSource).toContain('session-older-leading');
+    expect(helperSource).toContain('...');
+    expect(helperSource).toContain('Show ${hiddenOlderCount} older');
+    expect(helperSource).not.toContain('codicon-chevron-up');
+    expect(helperSource).not.toContain('codicon-chevron-down');
+  });
 });

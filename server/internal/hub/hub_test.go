@@ -712,6 +712,129 @@ func TestReporterForwardsSessionSearchRequests(t *testing.T) {
 	}
 }
 
+func TestReporterForwardsSessionArchiveRecoveryRequests(t *testing.T) {
+	upgrader := websocket.Upgrader{}
+	reqSeen := make(chan testEnvelope, 3)
+	respSeen := make(chan testEnvelope, 3)
+	errSeen := make(chan error, 1)
+	methods := []string{
+		rp.RegistryMethodSessionArchiveList,
+		rp.RegistryMethodSessionArchiveRead,
+		rp.RegistryMethodSessionArchiveRestore,
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ws, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			errSeen <- err
+			return
+		}
+		defer ws.Close()
+
+		initReq := mustReadEnvelope(t, ws)
+		if initReq.Method != "connect.init" {
+			errSeen <- fmt.Errorf("init method=%q", initReq.Method)
+			return
+		}
+		mustWriteJSON(t, ws, testEnvelope{
+			RequestID: initReq.RequestID,
+			Type:      "response",
+			Method:    "connect.init",
+			Payload: map[string]any{
+				"ok": true,
+				"principal": map[string]any{
+					"role":            "hub",
+					"hubId":           "hub-session-archive",
+					"connectionEpoch": 1,
+				},
+				"serverInfo": map[string]any{
+					"serverVersion":   "test",
+					"protocolVersion": rp.DefaultProtocolVersion,
+				},
+				"features":       map[string]any{},
+				"hashAlgorithms": []string{"sha256"},
+			},
+		})
+
+		reportReq := mustReadEnvelope(t, ws)
+		if reportReq.Method != "registry.reportProjects" {
+			errSeen <- fmt.Errorf("report method=%q", reportReq.Method)
+			return
+		}
+		mustWriteJSON(t, ws, testEnvelope{
+			RequestID: reportReq.RequestID,
+			Type:      "response",
+			Method:    "registry.reportProjects",
+			Payload: map[string]any{
+				"ok": true,
+			},
+		})
+
+		for index, method := range methods {
+			request := testEnvelope{
+				RequestID: int64(201 + index),
+				Type:      "request",
+				Method:    method,
+				ProjectID: "hub-session-archive:proj1",
+				Payload: map[string]any{
+					"sessionId": "sess-archive",
+				},
+			}
+			mustWriteJSON(t, ws, request)
+			reqSeen <- request
+
+			_ = ws.SetReadDeadline(time.Now().Add(1500 * time.Millisecond))
+			respSeen <- mustReadEnvelope(t, ws)
+		}
+	}))
+
+	t.Cleanup(ts.Close)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	reporter := NewReporter(ReporterConfig{
+		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		HubID:             "hub-session-archive",
+		ReconnectInterval: 50 * time.Millisecond,
+	}, []ProjectInfo{{Name: "proj1", Path: t.TempDir(), Online: true}})
+	handler := &stubSessionHandler{}
+	reporter.RegisterSessionHandler(rp.ProjectID("hub-session-archive", "proj1"), handler)
+
+	done := make(chan error, 1)
+	go func() { done <- reporter.Run(ctx) }()
+	defer func() {
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Fatal("reporter did not stop")
+		}
+	}()
+
+	for _, method := range methods {
+		select {
+		case err := <-errSeen:
+			t.Fatalf("fake registry error: %v", err)
+		case <-reqSeen:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("did not receive %s request", method)
+		}
+
+		select {
+		case err := <-errSeen:
+			t.Fatalf("fake registry error: %v", err)
+		case resp := <-respSeen:
+			if resp.Type != "response" || resp.Method != method {
+				t.Fatalf("unexpected %s response: %#v", method, resp)
+			}
+			if handler.lastMethod != method || !strings.Contains(handler.lastBody, `"sessionId":"sess-archive"`) {
+				t.Fatalf("handler saw method=%q body=%q, want %s payload", handler.lastMethod, handler.lastBody, method)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("did not receive %s response from reporter", method)
+		}
+	}
+}
+
 func TestReporterRespondsToSessionAttachmentRequests(t *testing.T) {
 	addr := newRegistryServer(t, registry.New(registry.Config{}).Handler())
 	ctx, cancel := context.WithCancel(context.Background())

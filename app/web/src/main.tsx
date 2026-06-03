@@ -13222,7 +13222,7 @@ function App() {
             className={`wide-session-row session-older-toggle${mobile ? ' mobile-session-row' : ''}`}
             onClick={() => toggleOlderSessionsExpanded(targetProjectId)}
           >
-            <span className={`codicon ${split.expanded ? 'codicon-chevron-up' : 'codicon-chevron-down'}`} />
+            <span className="session-older-leading" aria-hidden="true">...</span>
             <span className="wide-session-title">
               {split.expanded ? 'Show less' : `Show ${hiddenOlderCount} older`}
             </span>

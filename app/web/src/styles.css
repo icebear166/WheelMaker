@@ -5069,7 +5069,30 @@ textarea,
 }
 
 .session-older-toggle {
-  color: color-mix(in srgb, var(--muted) 88%, transparent);
+  grid-template-columns: 18px minmax(0, 1fr) auto auto;
+  color: color-mix(in srgb, var(--muted) 58%, transparent);
+}
+
+.session-older-toggle .wide-session-title {
+  color: color-mix(in srgb, var(--muted) 62%, transparent);
+  font-weight: 500;
+}
+
+.session-older-leading {
+  width: 18px;
+  color: color-mix(in srgb, var(--muted) 42%, transparent);
+  font-size: 11px;
+  line-height: 1;
+  text-align: center;
+}
+
+.session-older-toggle:hover {
+  color: color-mix(in srgb, var(--text) 72%, transparent);
+}
+
+.session-older-toggle:hover .wide-session-title,
+.session-older-toggle:hover .session-older-leading {
+  color: color-mix(in srgb, var(--text) 68%, transparent);
 }
 
 .archived-session-restore-popover {
