@@ -38,7 +38,9 @@ describe('web registry debug panel ui', () => {
   test('main renders the message viewer only for enabled desktop viewer mode', () => {
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
 
-    expect(mainTsx).toContain("import {RegistryDebugPanel} from './debug/RegistryDebugPanel';");
+    expect(mainTsx).not.toContain("import {RegistryDebugPanel} from './debug/RegistryDebugPanel';");
+    expect(mainTsx).toContain("React.lazy(() => import('./debug/RegistryDebugPanel')");
+    expect(mainTsx).toContain('<React.Suspense fallback={null}>');
     expect(mainTsx).toContain('const [registryDebugRecords, setRegistryDebugRecords] = useState(');
     expect(mainTsx).toContain('const [selectedRegistryDebugRecordId, setSelectedRegistryDebugRecordId] = useState<number | null>(null);');
     expect(mainTsx).toContain('const [selectedRegistryDebugScope, setSelectedRegistryDebugScope] = useState');

@@ -120,7 +120,6 @@ import {
   renderMarkdownElementToPngBlob,
 } from './chatMarkdownImageExport';
 import { outputResponseImage } from './responseImageOutput';
-import {RegistryDebugPanel} from './debug/RegistryDebugPanel';
 import {createRegistryDebugStore} from './debug/registryDebug';
 import type {RegistryDebugRecord} from './debug/registryDebug';
 import {
@@ -378,6 +377,10 @@ import type {
   RegistryFileIndexStatusResponse,
 } from './types/registry';
 import './styles.css';
+
+const RegistryDebugPanel = React.lazy(() => import('./debug/RegistryDebugPanel').then(module => ({
+  default: module.RegistryDebugPanel,
+})));
 
 type Tab = 'chat' | 'file' | 'git';
 type ThemeMode = 'dark' | 'light';
@@ -20436,20 +20439,22 @@ function App() {
     </div>
   ) : null;
   const registryDebugPanel = isWide && messageViewerEnabled ? (
-    <RegistryDebugPanel
-      records={registryDebugRecords}
-      selectedRecordId={selectedRegistryDebugRecordId}
-      onSelectedRecordIdChange={setSelectedRegistryDebugRecordId}
-      selectedScope={selectedRegistryDebugScope}
-      onSelectedScopeChange={setSelectedRegistryDebugScope}
-      selectedSessionId={selectedRegistryDebugSessionId}
-      onSelectedSessionIdChange={setSelectedRegistryDebugSessionId}
-      sessionLabels={registryDebugSessionLabels}
-      includeMultiSessionRecords={registryDebugIncludeMultiSessionRecords}
-      onIncludeMultiSessionRecordsChange={setRegistryDebugIncludeMultiSessionRecords}
-      onClear={() => registryDebugStore.clear()}
-      onClose={() => setMessageViewerEnabled(false)}
-    />
+    <React.Suspense fallback={null}>
+      <RegistryDebugPanel
+        records={registryDebugRecords}
+        selectedRecordId={selectedRegistryDebugRecordId}
+        onSelectedRecordIdChange={setSelectedRegistryDebugRecordId}
+        selectedScope={selectedRegistryDebugScope}
+        onSelectedScopeChange={setSelectedRegistryDebugScope}
+        selectedSessionId={selectedRegistryDebugSessionId}
+        onSelectedSessionIdChange={setSelectedRegistryDebugSessionId}
+        sessionLabels={registryDebugSessionLabels}
+        includeMultiSessionRecords={registryDebugIncludeMultiSessionRecords}
+        onIncludeMultiSessionRecordsChange={setRegistryDebugIncludeMultiSessionRecords}
+        onClear={() => registryDebugStore.clear()}
+        onClose={() => setMessageViewerEnabled(false)}
+      />
+    </React.Suspense>
   ) : null;
 
   return (
