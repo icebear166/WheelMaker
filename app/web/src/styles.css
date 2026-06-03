@@ -9444,30 +9444,26 @@ textarea,
   justify-content: center;
 }
 
-.chat-slash-button {
-  color: color-mix(in srgb, var(--accent) 72%, var(--text));
-}
-
-.chat-file-mention-trigger-button {
-  color: color-mix(in srgb, #8bd5ff 82%, var(--text));
-}
-
+.chat-slash-button,
+.chat-file-mention-trigger-button,
 .chat-attachment-plus-button {
   color: color-mix(in srgb, var(--accent) 72%, var(--text));
 }
 
-.chat-slash-symbol {
-  font-family: var(--font-mono);
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1;
+.chat-composer-tool-glyph {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  line-height: 16px;
 }
 
+.chat-slash-symbol,
 .chat-at-symbol {
   font-family: var(--font-mono);
-  font-size: 14px;
   font-weight: 700;
-  line-height: 1;
 }
 
 .chat-attach-button {

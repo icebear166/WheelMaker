@@ -929,8 +929,8 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('<span className="chat-attachment-action-label">Code</span>');
     expect(mainTsx).toContain('<span className="chat-attachment-action-label">File</span>');
     expect(mainTsx).toContain('<span className="chat-attachment-action-label">Photo</span>');
-    expect(mainTsx).toContain('className="chat-slash-symbol"');
-    expect(mainTsx).toContain('<span className="chat-at-symbol">@</span>');
+    expect(mainTsx).toContain('className="chat-composer-tool-glyph chat-slash-symbol"');
+    expect(mainTsx).toContain('<span className="chat-composer-tool-glyph chat-at-symbol">@</span>');
     expect(mainTsx).not.toContain('className="chat-tool-button chat-mention-button"');
     expect(mainTsx).toContain('title="Mention files"');
     expect(mainTsx).toContain('aria-label="Mention files"');
@@ -1184,10 +1184,11 @@ describe('web chat integration', () => {
       /\.chat-tool-button \{[\s\S]*border: none;[\s\S]*background: transparent;/,
     );
     expect(stylesCss).toMatch(
-      /\.chat-slash-button \{[\s\S]*color: color-mix\(in srgb, var\(--accent\) 72%, var\(--text\)\);[\s\S]*\}/,
+      /\.chat-slash-button,\s*\.chat-file-mention-trigger-button,\s*\.chat-attachment-plus-button \{[\s\S]*color: color-mix\(in srgb, var\(--accent\) 72%, var\(--text\)\);[\s\S]*\}/,
     );
-    expect(stylesCss).toContain('.chat-slash-symbol {');
-    expect(stylesCss).toContain('.chat-file-mention-trigger-button {');
+    expect(stylesCss).toContain('.chat-composer-tool-glyph {');
+    expect(stylesCss).toContain('.chat-slash-symbol,');
+    expect(stylesCss).toContain('.chat-file-mention-trigger-button,');
     expect(stylesCss).toContain('.chat-at-symbol {');
     expect(stylesCss).toContain('.chat-attachment-plus-button {');
     expect(stylesCss).toContain('.chat-attachment-action-tray {');
@@ -1994,7 +1995,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('const openChatFileMentionShortcut = useCallback(() => {');
     expect(mainTsx).toContain('className="chat-tool-button chat-file-mention-trigger-button"');
     expect(mainTsx).toContain('aria-label="Mention files"');
-    expect(mainTsx).toContain('<span className="chat-at-symbol">@</span>');
+    expect(mainTsx).toContain('<span className="chat-composer-tool-glyph chat-at-symbol">@</span>');
     expect(mainTsx).toContain('!selectedChatPromptRunning ? (');
     expect(mainTsx).toContain('className="chat-tool-button chat-attachment-plus-button"');
     expect(mainTsx).toContain(') : (');
@@ -2016,6 +2017,12 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-file-mention-trigger-button');
     expect(stylesCss).toContain('.chat-at-symbol');
     expect(stylesCss).toContain('.chat-file-mention-remove');
+    expect(mainTsx).toContain('className="chat-composer-tool-glyph chat-slash-symbol"');
+    expect(mainTsx).toContain('className="chat-composer-tool-glyph chat-at-symbol"');
+    expect(mainTsx).toContain('className="codicon codicon-add chat-composer-tool-glyph"');
+    expect(stylesCss).toMatch(/\.chat-slash-button,\s*\.chat-file-mention-trigger-button,\s*\.chat-attachment-plus-button \{[\s\S]*color: color-mix\(in srgb, var\(--accent\) 72%, var\(--text\)\);[\s\S]*\}/);
+    expect(stylesCss).toMatch(/\.chat-composer-tool-glyph \{[\s\S]*width: 16px;[\s\S]*height: 16px;[\s\S]*font-size: 15px;[\s\S]*line-height: 16px;[\s\S]*\}/);
+    expect(stylesCss).not.toContain('.chat-file-mention-trigger-button {\n  color: color-mix(in srgb, #8bd5ff 82%, var(--text));\n}');
     expect(stylesCss).toMatch(/\.chat-file-mention-option \{[\s\S]*grid-template-columns: 16px minmax\(0, auto\) minmax\(0, 1fr\);/);
     expect(stylesCss).toMatch(/\.chat-file-mention-chip \{[\s\S]*max-width: 190px;/);
     expect(stylesCss).toMatch(/\.chat-composer-stop-trigger \{[\s\S]*color: #f85149;[\s\S]*opacity: 1;/);

@@ -19028,7 +19028,7 @@ function App() {
                     aria-haspopup="listbox"
                     aria-expanded={chatPromptMenuOpen}
                   >
-                    <span className="chat-slash-symbol">/</span>
+                    <span className="chat-composer-tool-glyph chat-slash-symbol">/</span>
                   </button>
                   <button
                     type="button"
@@ -19041,7 +19041,7 @@ function App() {
                     aria-haspopup="listbox"
                     aria-expanded={chatFileMentionMenuOpen}
                   >
-                    <span className="chat-at-symbol">@</span>
+                    <span className="chat-composer-tool-glyph chat-at-symbol">@</span>
                   </button>
                   {!selectedChatPromptRunning ? (
                     <button
@@ -19055,7 +19055,7 @@ function App() {
                       aria-haspopup="menu"
                       aria-expanded={chatAttachmentTrayOpen}
                     >
-                      <span className="codicon codicon-add" aria-hidden="true" />
+                      <span className="codicon codicon-add chat-composer-tool-glyph" aria-hidden="true" />
                     </button>
                   ) : (
                     <button
