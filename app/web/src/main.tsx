@@ -302,13 +302,7 @@ import {isSpeechErrorEvent, isSpeechTranscriptEvent} from './features/speech/reg
 import {DEFAULT_SPEECH_SETTINGS, SPEECH_MODEL_OPTIONS, normalizeSpeechSettings} from './features/speech/speechSettings';
 import {
   appDiagnosticStore,
-  appDiagnosticLevelsAtOrAbove,
-  filterAppDiagnosticRecords,
-  formatAppDiagnosticRecordLine,
   normalizeAppDiagnosticLogLevel,
-  serializeAppDiagnosticRecords,
-  type AppDiagnosticCategory,
-  type AppDiagnosticRecord,
 } from './debug/appDiagnostics';
 import {drainNativeWebDiagnosticsToAppLog, setNativeDiagnosticLogLevel} from './debug/nativeWebDiagnostics';
 import {startWorkspaceDiagnosticSpan} from './debug/workspaceDiagnostics';
@@ -320,11 +314,6 @@ import {
 } from './features/speech/voiceInputDiagnostics';
 import {VoiceInputButton, type VoiceInputInteractionMode} from './features/speech/VoiceInputButton';
 import {VoiceRecordingBar} from './features/speech/VoiceRecordingBar';
-import {
-  resolveRegistryConnectionStatus,
-  resolveVoiceCapabilityStatus,
-  resolveWebResourceConnectionStatus,
-} from './settings/connectionStatus';
 import { WorkspaceController } from './services/workspaceController';
 import { WorkspaceStore } from './services/workspaceStore';
 import {
@@ -380,6 +369,12 @@ import './styles.css';
 
 const RegistryDebugPanel = React.lazy(() => import('./debug/RegistryDebugPanel').then(module => ({
   default: module.RegistryDebugPanel,
+})));
+const DebugLogsSettingsDetail = React.lazy(() => import('./debug/DebugLogsSettingsDetail').then(module => ({
+  default: module.DebugLogsSettingsDetail,
+})));
+const ConnectionStatusSettingsDetail = React.lazy(() => import('./settings/ConnectionStatusSettingsDetail').then(module => ({
+  default: module.ConnectionStatusSettingsDetail,
 })));
 
 type Tab = 'chat' | 'file' | 'git';
@@ -3362,10 +3357,6 @@ function App() {
   );
   const [webSourceState, setWebSourceState] = useState<DesktopWebSourceState | null>(null);
   const [registryDebugRecords, setRegistryDebugRecords] = useState(registryDebugStore.getRecords());
-  const [appDiagnosticRecords, setAppDiagnosticRecords] = useState<AppDiagnosticRecord[]>(appDiagnosticStore.getRecords());
-  const [selectedDiagnosticCategory, setSelectedDiagnosticCategory] = useState<AppDiagnosticCategory>('http');
-  const [debugLogUploading, setDebugLogUploading] = useState(false);
-  const [debugLogUploadMessage, setDebugLogUploadMessage] = useState('');
   const [selectedRegistryDebugRecordId, setSelectedRegistryDebugRecordId] = useState<number | null>(null);
   const [selectedRegistryDebugScope, setSelectedRegistryDebugScope] = useState('All');
   const [selectedRegistryDebugSessionId, setSelectedRegistryDebugSessionId] = useState('All');
@@ -6226,8 +6217,6 @@ function App() {
     });
   }, []);
 
-  useEffect(() => appDiagnosticStore.subscribe(setAppDiagnosticRecords), []);
-
   useEffect(() => {
     appDiagnosticStore.setLogLevel(logLevel);
     void setNativeDiagnosticLogLevel(logLevel);
@@ -6250,13 +6239,6 @@ function App() {
       window.clearInterval(interval);
     };
   }, [logLevel]);
-
-  useEffect(() => {
-    if (settingsDetailView !== 'debugLogs') {
-      return;
-    }
-    void drainNativeWebDiagnosticsToAppLog();
-  }, [logLevel, settingsDetailView]);
 
   useEffect(() => {
     registryDebugStore.setEnabled(messageViewerEnabled);
@@ -16528,165 +16510,40 @@ function App() {
     );
   };
 
-  const uploadDebugLogs = async () => {
-    await drainNativeWebDiagnosticsToAppLog();
-    const records = filterAppDiagnosticRecords(appDiagnosticStore.getRecords(), {
-      category: selectedDiagnosticCategory,
-      levels: appDiagnosticLevelsAtOrAbove(logLevel),
-    });
-    if (records.length === 0 || debugLogUploading) {
-      return;
-    }
-    const finish = startWorkspaceDiagnosticSpan('upload_debug_log', {
-      category: selectedDiagnosticCategory,
-      count: records.length,
-    });
-    setDebugLogUploading(true);
-    setDebugLogUploadMessage('');
-    try {
-      const result = await service.uploadDebugLog({
-        source: 'web',
-        text: serializeAppDiagnosticRecords(records),
-      });
-      finish({ok: result.ok, fileName: result.fileName});
-      setDebugLogUploadMessage(result.fileName ? `Uploaded ${result.fileName}` : 'Uploaded');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      finish({ok: false, error: message}, 'error');
-      setDebugLogUploadMessage(message);
-    } finally {
-      setDebugLogUploading(false);
-    }
-  };
-
-  const renderDebugLogsSettingsDetail = (options?: SettingsDetailShellOptions) => {
-    const records = filterAppDiagnosticRecords(appDiagnosticRecords, {
-      category: selectedDiagnosticCategory,
-      levels: appDiagnosticLevelsAtOrAbove(logLevel),
-    });
-    return renderSettingsDetailShell(
+  const renderDebugLogsSettingsDetail = (options?: SettingsDetailShellOptions) =>
+    renderSettingsDetailShell(
       'Logs',
-      <div className="debug-log-detail">
-        <div className="debug-log-list" aria-live="polite">
-          {records.length === 0 ? (
-            <div className="debug-log-empty">No logs yet.</div>
-          ) : (
-            records.map(record => (
-              <div
-                key={record.id}
-                className={`debug-log-line ${record.level}`}
-                title={formatAppDiagnosticRecordLine(record)}
-              >
-                {formatAppDiagnosticRecordLine(record)}
-              </div>
-            ))
-          )}
-        </div>
-        <div className="debug-log-detail-footer">
-          <label className="debug-log-category-label">
-            <span>Category</span>
-            <select
-              className="sidebar-setting-select"
-              value={selectedDiagnosticCategory}
-              onChange={event => setSelectedDiagnosticCategory(event.target.value as AppDiagnosticCategory)}
-            >
-              <option value="http">HTTP</option>
-              <option value="workspace">Workspace</option>
-              <option value="voice">Voice</option>
-            </select>
-          </label>
-          <div className="debug-log-actions">
-            <button
-              type="button"
-              className="settings-detail-action-btn"
-              disabled={records.length === 0 || debugLogUploading}
-              onClick={() => uploadDebugLogs().catch(() => undefined)}
-            >
-              {debugLogUploading ? 'Uploading...' : 'Upload Log'}
-            </button>
-            {debugLogUploadMessage ? (
-              <span className="debug-log-upload-status">{debugLogUploadMessage}</span>
-            ) : null}
-          </div>
-        </div>
-      </div>,
+      <React.Suspense fallback={null}>
+        <DebugLogsSettingsDetail
+          logLevel={logLevel}
+          uploadDebugLog={payload => service.uploadDebugLog(payload)}
+        />
+      </React.Suspense>,
       undefined,
       options,
     );
-  };
 
-  const renderConnectionStatusSettingsDetail = (options?: SettingsDetailShellOptions) => {
-    const webStatus = resolveWebResourceConnectionStatus(webSourceState);
-    const registryStatus = resolveRegistryConnectionStatus({
-      connected,
-      reconnecting,
-      autoConnecting,
-      address,
-    });
-    const voiceStatus = resolveVoiceCapabilityStatus({
-      speechEnabled: speechSettings.enabled,
-      androidNativeHost: isAndroidNativeSpeechHost(),
-      androidNativeAvailable: !!getAndroidNativeSpeechBridge(),
-    });
-    return renderSettingsDetailShell(
+  const renderConnectionStatusSettingsDetail = (options?: SettingsDetailShellOptions) =>
+    renderSettingsDetailShell(
       'Connection Status',
-      <div className="settings-metadata-list settings-connection-status-list">
-        <div className="settings-metadata-card">
-          <div className="settings-metadata-line settings-metadata-line-tags">
-            <span className="settings-metadata-title">Registry</span>
-            <span className="agent-package-status">{registryStatus.label}</span>
-          </div>
-          <div className="settings-metadata-line settings-connection-value" title={registryStatus.detail}>
-            {registryStatus.detail}
-          </div>
-        </div>
-        <div className="settings-metadata-card">
-          <div className="settings-metadata-line settings-metadata-line-tags">
-            <span className="settings-metadata-title">Web Resources</span>
-            <span className="agent-package-status">{webStatus.label}</span>
-          </div>
-          <div className="settings-metadata-line settings-connection-value" title={webStatus.detail}>
-            {webStatus.detail}
-          </div>
-          {webStatus.remoteUrl ? (
-            <div className="settings-metadata-line settings-connection-value" title={webStatus.remoteUrl}>
-              Remote URL: {webStatus.remoteUrl}
-            </div>
-          ) : null}
-        </div>
-        <div className="settings-metadata-card">
-          <div className="settings-metadata-line settings-metadata-line-tags">
-            <span className="settings-metadata-title">Voice Input</span>
-            <span className="agent-package-status">{voiceStatus.label}</span>
-          </div>
-          <div className="settings-metadata-line settings-connection-value" title={voiceStatus.detail}>
-            {voiceStatus.detail}
-          </div>
-        </div>
-        <div className="settings-metadata-card">
-          <div className="settings-metadata-line settings-metadata-line-tags">
-            <span className="settings-metadata-title">Local Hub Read</span>
-            <span className="agent-package-status">{localHubReadEnabled ? 'Enabled' : 'Disabled'}</span>
-          </div>
-          {registryHubs.length === 0 ? (
-            <div className="settings-metadata-line">No hubs available.</div>
-          ) : (
-            registryHubs.map(hub => {
-              const readStatus = localHubReadStatuses[hub.hubId] ?? 'Remote';
-              return (
-                <div key={`connection-hub:${hub.hubId}`} className="settings-metadata-line settings-metadata-line-tags">
-                  <span className="settings-metadata-title" title={hub.hubId}>{hub.hubId}</span>
-                  <span className={`chat-hub-read-tag ${readStatus.toLowerCase()}`}>{readStatus}</span>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>,
+      <React.Suspense fallback={null}>
+        <ConnectionStatusSettingsDetail
+          webSourceState={webSourceState}
+          connected={connected}
+          reconnecting={reconnecting}
+          autoConnecting={autoConnecting}
+          address={address}
+          speechEnabled={speechSettings.enabled}
+          androidNativeHost={isAndroidNativeSpeechHost()}
+          androidNativeAvailable={!!getAndroidNativeSpeechBridge()}
+          localHubReadEnabled={localHubReadEnabled}
+          registryHubs={registryHubs}
+          localHubReadStatuses={localHubReadStatuses}
+        />
+      </React.Suspense>,
       undefined,
       options,
     );
-  };
 
   const renderSettingsContent = (
     showSectionTitle: boolean,
