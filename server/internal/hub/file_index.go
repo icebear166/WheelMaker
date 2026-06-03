@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,6 +24,11 @@ const (
 	projectFileIndexDefaultLimit    = 20
 	projectFileIndexMaxLimit        = 100
 	projectFileIndexQuerySessionTTL = 30 * time.Second
+
+	projectFileIndexSnapshotIdleTTL                 = 5 * time.Minute
+	projectFileIndexMaxLoadedSnapshots              = 3
+	projectFileIndexMaxQuerySessionCandidates       = 100_000
+	projectFileIndexMaxQuerySessionCandidateIndexes = 500_000
 )
 
 type projectFileIndexManager struct {
@@ -45,15 +51,17 @@ type projectFileIndexProject struct {
 }
 
 type projectFileIndexSnapshot struct {
-	ProjectID string
-	Name      string
-	Path      string
-	Status    string
-	FileCount int
-	IndexedAt string
-	IndexPath string
-	Paths     []string
-	Entries   []projectFileIndexEntry
+	ProjectID  string
+	Name       string
+	Path       string
+	Status     string
+	FileCount  int
+	IndexedAt  string
+	IndexPath  string
+	Paths      []string
+	Entries    []projectFileIndexEntry
+	Loaded     bool
+	LastUsedAt time.Time
 }
 
 type projectFileIndexStatusResponse struct {
@@ -111,23 +119,21 @@ type projectFileIndexQuerySession struct {
 	query     string
 	queryID   int
 	all       bool
-	indexes   []int
+	indexes   []int32
 	updatedAt time.Time
 }
 
 type projectFileIndexEntry struct {
-	path      string
-	name      string
-	lowerPath string
-	lowerName string
+	name string
 }
 
 type projectFileIndexCandidateSet struct {
 	all     bool
-	indexes []int
+	indexes []int32
 }
 
 type projectFileIndexEntrySource struct {
+	paths      []string
 	entries    []projectFileIndexEntry
 	candidates projectFileIndexCandidateSet
 	names      bool
@@ -217,15 +223,17 @@ func (m *projectFileIndexManager) rebuildNow(ctx context.Context, project projec
 		return projectFileIndexSnapshot{}, err
 	}
 	snapshot := projectFileIndexSnapshot{
-		ProjectID: project.ProjectID,
-		Name:      project.Name,
-		Path:      project.Root,
-		Status:    projectFileIndexStatusIndexed,
-		FileCount: len(paths),
-		IndexedAt: m.now().UTC().Format(time.RFC3339),
-		IndexPath: m.indexPath(project.Name),
-		Paths:     paths,
-		Entries:   buildProjectFileIndexEntries(paths),
+		ProjectID:  project.ProjectID,
+		Name:       project.Name,
+		Path:       project.Root,
+		Status:     projectFileIndexStatusIndexed,
+		FileCount:  len(paths),
+		IndexedAt:  m.now().UTC().Format(time.RFC3339),
+		IndexPath:  m.indexPath(project.Name),
+		Paths:      paths,
+		Entries:    buildProjectFileIndexEntries(paths),
+		Loaded:     true,
+		LastUsedAt: m.now(),
 	}
 	m.mu.Lock()
 	m.snapshots[project.ProjectID] = snapshot
@@ -239,10 +247,11 @@ func (m *projectFileIndexManager) status(projects []projectFileIndexProject) pro
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.pruneQuerySessionsLocked()
+	m.pruneSnapshotsLocked()
 	out := make([]projectFileIndexStatus, 0, len(projects))
 	for _, project := range projects {
 		project = normalizeProjectFileIndexProject(project)
-		snapshot := m.snapshotLocked(project)
+		snapshot := m.statusSnapshotLocked(project)
 		running := m.running[project.ProjectID]
 		status := snapshot.Status
 		if status == "" {
@@ -282,7 +291,7 @@ func (m *projectFileIndexManager) search(ctx context.Context, project projectFil
 	query := strings.TrimSpace(req.Query)
 
 	m.mu.Lock()
-	snapshot := m.snapshotLocked(project)
+	snapshot := m.searchSnapshotLocked(project)
 	running := m.running[project.ProjectID]
 	status := snapshot.Status
 	if status == "" {
@@ -306,6 +315,7 @@ func (m *projectFileIndexManager) search(ctx context.Context, project projectFil
 			Error:          errText,
 		}, nil
 	}
+	paths := snapshot.Paths
 	entries := snapshot.Entries
 	workingCandidates := m.workingCandidateSetLocked(project.ProjectID, len(entries), query, req)
 	m.mu.Unlock()
@@ -318,14 +328,15 @@ func (m *projectFileIndexManager) search(ctx context.Context, project projectFil
 			if len(results) >= limit {
 				break
 			}
+			index := len(results)
 			results = append(results, projectFileIndexSearchResult{
-				Path: entry.path,
+				Path: paths[index],
 				Name: entry.name,
 			})
 		}
 	} else {
 		var ranked []projectFileIndexRankedPath
-		ranked, nextCandidates = rankProjectFileIndexEntries(query, entries, workingCandidates)
+		ranked, nextCandidates = rankProjectFileIndexEntries(query, paths, entries, workingCandidates)
 		results = make([]projectFileIndexSearchResult, 0, minInt(limit, len(ranked)))
 		for _, item := range ranked {
 			if len(results) >= limit {
@@ -333,7 +344,7 @@ func (m *projectFileIndexManager) search(ctx context.Context, project projectFil
 			}
 			entry := entries[item.index]
 			results = append(results, projectFileIndexSearchResult{
-				Path:  entry.path,
+				Path:  paths[item.index],
 				Name:  entry.name,
 				Score: item.score,
 			})
@@ -342,6 +353,7 @@ func (m *projectFileIndexManager) search(ctx context.Context, project projectFil
 
 	m.mu.Lock()
 	m.storeQuerySessionLocked(project.ProjectID, query, req, nextCandidates)
+	m.pruneSnapshotsLocked()
 	m.mu.Unlock()
 
 	return projectFileIndexSearchResponse{
@@ -407,19 +419,67 @@ func (m *projectFileIndexManager) indexPath(projectName string) string {
 	return filepath.Join(m.baseDir, "db", "ext", fileIndexSafePathPart(projectName), "file-index.txt")
 }
 
-func (m *projectFileIndexManager) snapshotLocked(project projectFileIndexProject) projectFileIndexSnapshot {
+func (m *projectFileIndexManager) statusSnapshotLocked(project projectFileIndexProject) projectFileIndexSnapshot {
 	if snapshot, ok := m.snapshots[project.ProjectID]; ok {
 		snapshot.Name = project.Name
 		snapshot.Path = project.Root
-		if len(snapshot.Entries) != len(snapshot.Paths) {
+		m.snapshots[project.ProjectID] = snapshot
+		return snapshot
+	}
+	snapshot := m.loadSnapshotMetadataFromDiskLocked(project)
+	m.snapshots[project.ProjectID] = snapshot
+	return snapshot
+}
+
+func (m *projectFileIndexManager) searchSnapshotLocked(project projectFileIndexProject) projectFileIndexSnapshot {
+	if snapshot, ok := m.snapshots[project.ProjectID]; ok {
+		snapshot.Name = project.Name
+		snapshot.Path = project.Root
+		if !snapshot.Loaded && len(snapshot.Paths) > 0 {
+			if len(snapshot.Entries) != len(snapshot.Paths) {
+				snapshot.Entries = buildProjectFileIndexEntries(snapshot.Paths)
+			}
+			snapshot.Loaded = true
+		} else if !snapshot.Loaded {
+			snapshot = m.loadSnapshotFromDiskLocked(project)
+		} else if len(snapshot.Entries) != len(snapshot.Paths) {
 			snapshot.Entries = buildProjectFileIndexEntries(snapshot.Paths)
+		}
+		if snapshot.Loaded {
+			snapshot.LastUsedAt = m.now()
 		}
 		m.snapshots[project.ProjectID] = snapshot
 		return snapshot
 	}
 	snapshot := m.loadSnapshotFromDiskLocked(project)
+	if snapshot.Loaded {
+		snapshot.LastUsedAt = m.now()
+	}
 	m.snapshots[project.ProjectID] = snapshot
 	return snapshot
+}
+
+func (m *projectFileIndexManager) loadSnapshotMetadataFromDiskLocked(project projectFileIndexProject) projectFileIndexSnapshot {
+	indexPath := m.indexPath(project.Name)
+	fileCount, indexedAt, err := readProjectFileIndexMetadata(indexPath)
+	if err != nil {
+		return projectFileIndexSnapshot{
+			ProjectID: project.ProjectID,
+			Name:      project.Name,
+			Path:      project.Root,
+			Status:    projectFileIndexStatusMissing,
+			IndexPath: indexPath,
+		}
+	}
+	return projectFileIndexSnapshot{
+		ProjectID: project.ProjectID,
+		Name:      project.Name,
+		Path:      project.Root,
+		Status:    projectFileIndexStatusIndexed,
+		FileCount: fileCount,
+		IndexedAt: indexedAt,
+		IndexPath: indexPath,
+	}
 }
 
 func (m *projectFileIndexManager) loadSnapshotFromDiskLocked(project projectFileIndexProject) projectFileIndexSnapshot {
@@ -440,16 +500,58 @@ func (m *projectFileIndexManager) loadSnapshotFromDiskLocked(project projectFile
 		indexedAt = info.ModTime().UTC().Format(time.RFC3339)
 	}
 	return projectFileIndexSnapshot{
-		ProjectID: project.ProjectID,
-		Name:      project.Name,
-		Path:      project.Root,
-		Status:    projectFileIndexStatusIndexed,
-		FileCount: len(paths),
-		IndexedAt: indexedAt,
-		IndexPath: indexPath,
-		Paths:     paths,
-		Entries:   buildProjectFileIndexEntries(paths),
+		ProjectID:  project.ProjectID,
+		Name:       project.Name,
+		Path:       project.Root,
+		Status:     projectFileIndexStatusIndexed,
+		FileCount:  len(paths),
+		IndexedAt:  indexedAt,
+		IndexPath:  indexPath,
+		Paths:      paths,
+		Entries:    buildProjectFileIndexEntries(paths),
+		Loaded:     true,
+		LastUsedAt: m.now(),
 	}
+}
+
+func readProjectFileIndexMetadata(indexPath string) (int, string, error) {
+	info, err := os.Stat(indexPath)
+	if err != nil {
+		return 0, "", err
+	}
+	file, err := os.Open(indexPath)
+	if err != nil {
+		return 0, "", err
+	}
+	defer file.Close()
+
+	buf := make([]byte, 64*1024)
+	count := 0
+	hasAny := false
+	lastWasNewline := false
+	for {
+		n, readErr := file.Read(buf)
+		if n > 0 {
+			hasAny = true
+			chunk := buf[:n]
+			for _, b := range chunk {
+				if b == '\n' {
+					count++
+				}
+			}
+			lastWasNewline = chunk[n-1] == '\n'
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			return 0, "", readErr
+		}
+	}
+	if hasAny && !lastWasNewline {
+		count++
+	}
+	return count, info.ModTime().UTC().Format(time.RFC3339), nil
 }
 
 func (m *projectFileIndexManager) workingCandidateSetLocked(projectID string, entryCount int, query string, req projectFileIndexSearchRequest) projectFileIndexCandidateSet {
@@ -470,9 +572,9 @@ func (m *projectFileIndexManager) workingCandidateSetLocked(projectID string, en
 		if session.all {
 			return projectFileIndexCandidateSet{all: true}
 		}
-		indexes := make([]int, 0, len(session.indexes))
+		indexes := make([]int32, 0, len(session.indexes))
 		for _, index := range session.indexes {
-			if index >= 0 && index < entryCount {
+			if index >= 0 && int(index) < entryCount {
 				indexes = append(indexes, index)
 			}
 		}
@@ -487,14 +589,25 @@ func (m *projectFileIndexManager) storeQuerySessionLocked(projectID string, quer
 		return
 	}
 	key := projectID + "\x00" + querySessionID
-	m.querySessions[key] = projectFileIndexQuerySession{
+	session := projectFileIndexQuerySession{
 		query:     query,
 		queryID:   req.QueryID,
-		all:       candidates.all,
-		indexes:   append([]int(nil), candidates.indexes...),
 		updatedAt: m.now(),
 	}
+	if candidates.all || len(candidates.indexes) > projectFileIndexMaxQuerySessionCandidates {
+		session.all = true
+	} else {
+		session.indexes = append([]int32(nil), candidates.indexes...)
+	}
+	m.querySessions[key] = projectFileIndexQuerySession{
+		query:     session.query,
+		queryID:   session.queryID,
+		all:       session.all,
+		indexes:   session.indexes,
+		updatedAt: session.updatedAt,
+	}
 	m.pruneQuerySessionsLocked()
+	m.pruneQuerySessionMemoryLocked()
 }
 
 func (m *projectFileIndexManager) clearQuerySessionsLocked(projectID string) {
@@ -513,6 +626,75 @@ func (m *projectFileIndexManager) pruneQuerySessionsLocked() {
 			delete(m.querySessions, key)
 		}
 	}
+}
+
+func (m *projectFileIndexManager) pruneQuerySessionMemoryLocked() {
+	total := 0
+	type sessionAge struct {
+		key       string
+		updatedAt time.Time
+		count     int
+	}
+	sessions := []sessionAge{}
+	for key, session := range m.querySessions {
+		if session.all || len(session.indexes) == 0 {
+			continue
+		}
+		count := len(session.indexes)
+		total += count
+		sessions = append(sessions, sessionAge{key: key, updatedAt: session.updatedAt, count: count})
+	}
+	if total <= projectFileIndexMaxQuerySessionCandidateIndexes {
+		return
+	}
+	sort.Slice(sessions, func(i, j int) bool {
+		return sessions[i].updatedAt.Before(sessions[j].updatedAt)
+	})
+	for _, session := range sessions {
+		if total <= projectFileIndexMaxQuerySessionCandidateIndexes {
+			return
+		}
+		delete(m.querySessions, session.key)
+		total -= session.count
+	}
+}
+
+func (m *projectFileIndexManager) pruneSnapshotsLocked() {
+	now := m.now()
+	loaded := []projectFileIndexSnapshot{}
+	for projectID, snapshot := range m.snapshots {
+		if !snapshot.Loaded {
+			continue
+		}
+		if m.running[projectID] {
+			continue
+		}
+		if !snapshot.LastUsedAt.IsZero() && now.Sub(snapshot.LastUsedAt) > projectFileIndexSnapshotIdleTTL {
+			m.snapshots[projectID] = snapshot.releaseLoadedData()
+			continue
+		}
+		loaded = append(loaded, snapshot)
+	}
+	if len(loaded) <= projectFileIndexMaxLoadedSnapshots {
+		return
+	}
+	sort.Slice(loaded, func(i, j int) bool {
+		return loaded[i].LastUsedAt.Before(loaded[j].LastUsedAt)
+	})
+	for _, snapshot := range loaded[:len(loaded)-projectFileIndexMaxLoadedSnapshots] {
+		if m.running[snapshot.ProjectID] {
+			continue
+		}
+		m.snapshots[snapshot.ProjectID] = snapshot.releaseLoadedData()
+	}
+}
+
+func (s projectFileIndexSnapshot) releaseLoadedData() projectFileIndexSnapshot {
+	s.Paths = nil
+	s.Entries = nil
+	s.Loaded = false
+	s.LastUsedAt = time.Time{}
+	return s
 }
 
 func scanGitProjectFileIndex(ctx context.Context, root string) ([]string, error) {
@@ -624,15 +806,19 @@ func parseProjectFileIndexLines(raw string) []string {
 func buildProjectFileIndexEntries(paths []string) []projectFileIndexEntry {
 	entries := make([]projectFileIndexEntry, 0, len(paths))
 	for _, path := range paths {
-		name := filepath.Base(filepath.FromSlash(path))
 		entries = append(entries, projectFileIndexEntry{
-			path:      path,
-			name:      name,
-			lowerPath: strings.ToLower(path),
-			lowerName: strings.ToLower(name),
+			name: projectFileIndexBaseName(path),
 		})
 	}
 	return entries
+}
+
+func projectFileIndexBaseName(path string) string {
+	index := strings.LastIndex(path, "/")
+	if index < 0 {
+		return path
+	}
+	return path[index+1:]
 }
 
 func (s projectFileIndexEntrySource) Len() int {
@@ -643,54 +829,55 @@ func (s projectFileIndexEntrySource) Len() int {
 }
 
 func (s projectFileIndexEntrySource) String(i int) string {
-	entry := s.entries[s.entryIndex(i)]
+	index := s.entryIndex(i)
 	if s.names {
-		return entry.name
+		return s.entries[index].name
 	}
-	return entry.path
+	return s.paths[index]
 }
 
 func (s projectFileIndexEntrySource) entryIndex(i int) int {
 	if s.candidates.all {
 		return i
 	}
-	return s.candidates.indexes[i]
+	return int(s.candidates.indexes[i])
 }
 
-func rankProjectFileIndexEntries(query string, entries []projectFileIndexEntry, candidates projectFileIndexCandidateSet) ([]projectFileIndexRankedPath, projectFileIndexCandidateSet) {
+func rankProjectFileIndexEntries(query string, paths []string, entries []projectFileIndexEntry, candidates projectFileIndexCandidateSet) ([]projectFileIndexRankedPath, projectFileIndexCandidateSet) {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil, projectFileIndexCandidateSet{all: true}
 	}
 	scoreByIndex := make(map[int]int, minInt(projectFileIndexCandidateLen(entries, candidates), len(entries)))
 	lowerQuery := strings.ToLower(query)
-	nameSource := projectFileIndexEntrySource{entries: entries, candidates: candidates, names: true}
+	nameSource := projectFileIndexEntrySource{paths: paths, entries: entries, candidates: candidates, names: true}
 	for _, match := range fuzzy.FindFromNoSort(query, nameSource) {
 		index := nameSource.entryIndex(match.Index)
 		entry := entries[index]
 		score := 2_000_000 + match.Score
-		if strings.HasPrefix(entry.lowerName, lowerQuery) {
+		lowerName := strings.ToLower(entry.name)
+		if strings.HasPrefix(lowerName, lowerQuery) {
 			score += 100_000
-		} else if strings.Contains(entry.lowerName, lowerQuery) {
+		} else if strings.Contains(lowerName, lowerQuery) {
 			score += 50_000
 		}
 		scoreByIndex[index] = maxInt(scoreByIndex[index], score)
 	}
-	pathSource := projectFileIndexEntrySource{entries: entries, candidates: candidates}
+	pathSource := projectFileIndexEntrySource{paths: paths, entries: entries, candidates: candidates}
 	for _, match := range fuzzy.FindFromNoSort(query, pathSource) {
 		index := pathSource.entryIndex(match.Index)
-		entry := entries[index]
 		score := 1_000_000 + match.Score
-		if strings.HasPrefix(entry.lowerPath, lowerQuery) {
+		lowerPath := strings.ToLower(paths[index])
+		if strings.HasPrefix(lowerPath, lowerQuery) {
 			score += 100_000
-		} else if strings.Contains(entry.lowerPath, lowerQuery) {
+		} else if strings.Contains(lowerPath, lowerQuery) {
 			score += 50_000
 		}
 		scoreByIndex[index] = maxInt(scoreByIndex[index], score)
 	}
 	ranked := make([]projectFileIndexRankedPath, 0, len(scoreByIndex))
 	for index, score := range scoreByIndex {
-		ranked = append(ranked, projectFileIndexRankedPath{index: index, path: entries[index].path, score: score})
+		ranked = append(ranked, projectFileIndexRankedPath{index: index, path: paths[index], score: score})
 	}
 	sort.Slice(ranked, func(i, j int) bool {
 		if ranked[i].score != ranked[j].score {
@@ -698,9 +885,9 @@ func rankProjectFileIndexEntries(query string, entries []projectFileIndexEntry, 
 		}
 		return ranked[i].path < ranked[j].path
 	})
-	indexes := make([]int, 0, len(ranked))
+	indexes := make([]int32, 0, len(ranked))
 	for _, item := range ranked {
-		indexes = append(indexes, item.index)
+		indexes = append(indexes, int32(item.index))
 	}
 	return ranked, projectFileIndexCandidateSet{indexes: indexes}
 }

@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -2299,6 +2300,187 @@ func TestProjectFileIndexQuerySessionNarrowsBeyondInitialTopSet(t *testing.T) {
 	}
 }
 
+func TestProjectFileIndexStatusDoesNotLoadSearchSnapshot(t *testing.T) {
+	baseDir := t.TempDir()
+	manager := newProjectFileIndexManager(baseDir)
+	project := projectFileIndexProject{ProjectID: "hub-a:large-status", Name: "large-status", Root: t.TempDir()}
+	if err := manager.writeIndexFile(project, []string{
+		"src/MobileInstance.ts",
+		"src/components/ProfileCard.tsx",
+	}); err != nil {
+		t.Fatalf("writeIndexFile: %v", err)
+	}
+
+	status := manager.status([]projectFileIndexProject{project})
+	if len(status.Projects) != 1 {
+		t.Fatalf("status projects=%+v, want one project", status.Projects)
+	}
+	if status.Projects[0].Status != projectFileIndexStatusIndexed || status.Projects[0].FileCount != 2 {
+		t.Fatalf("status project=%+v, want indexed count 2", status.Projects[0])
+	}
+
+	manager.mu.Lock()
+	snapshot := manager.snapshots[project.ProjectID]
+	manager.mu.Unlock()
+	if snapshot.Loaded || len(snapshot.Paths) != 0 || len(snapshot.Entries) != 0 {
+		t.Fatalf("status loaded snapshot=%+v, want metadata only", snapshot)
+	}
+
+	resp, err := manager.search(context.Background(), project, projectFileIndexSearchRequest{
+		Query: "MI",
+		Limit: 20,
+	})
+	if err != nil {
+		t.Fatalf("search after metadata status: %v", err)
+	}
+	if len(resp.Results) == 0 || resp.Results[0].Path != "src/MobileInstance.ts" {
+		t.Fatalf("search results=%+v, want MobileInstance after lazy load", resp.Results)
+	}
+}
+
+func TestProjectFileIndexPrunesIdleAndLeastRecentlyUsedLoadedSnapshots(t *testing.T) {
+	baseDir := t.TempDir()
+	now := time.Date(2026, 6, 3, 12, 0, 0, 0, time.UTC)
+	manager := newProjectFileIndexManager(baseDir)
+	manager.now = func() time.Time { return now }
+
+	projects := make([]projectFileIndexProject, 0, projectFileIndexMaxLoadedSnapshots+1)
+	for i := 0; i < projectFileIndexMaxLoadedSnapshots+1; i++ {
+		project := projectFileIndexProject{
+			ProjectID: fmt.Sprintf("hub-a:lru-%d", i),
+			Name:      fmt.Sprintf("lru-%d", i),
+			Root:      t.TempDir(),
+		}
+		if err := manager.writeIndexFile(project, []string{fmt.Sprintf("src/Mobile%d.ts", i)}); err != nil {
+			t.Fatalf("writeIndexFile %s: %v", project.ProjectID, err)
+		}
+		projects = append(projects, project)
+	}
+
+	for i, project := range projects {
+		now = now.Add(time.Second)
+		resp, err := manager.search(context.Background(), project, projectFileIndexSearchRequest{
+			Query: "Mobile",
+			Limit: 1,
+		})
+		if err != nil {
+			t.Fatalf("search %s: %v", project.ProjectID, err)
+		}
+		if len(resp.Results) != 1 {
+			t.Fatalf("search %s results=%+v, want one result", project.ProjectID, resp.Results)
+		}
+		if loaded := loadedFileIndexSnapshotCountForTest(manager); loaded > projectFileIndexMaxLoadedSnapshots {
+			t.Fatalf("after search %d loaded snapshots=%d, want <= %d", i, loaded, projectFileIndexMaxLoadedSnapshots)
+		}
+	}
+
+	manager.mu.Lock()
+	oldest := manager.snapshots[projects[0].ProjectID]
+	manager.mu.Unlock()
+	if oldest.Loaded || len(oldest.Paths) != 0 || len(oldest.Entries) != 0 {
+		t.Fatalf("oldest snapshot=%+v, want LRU metadata only", oldest)
+	}
+
+	now = now.Add(projectFileIndexSnapshotIdleTTL + time.Second)
+	_ = manager.status(projects)
+	if loaded := loadedFileIndexSnapshotCountForTest(manager); loaded != 0 {
+		t.Fatalf("loaded snapshots after idle prune=%d, want 0", loaded)
+	}
+
+	resp, err := manager.search(context.Background(), projects[0], projectFileIndexSearchRequest{
+		Query: "Mobile0",
+		Limit: 1,
+	})
+	if err != nil {
+		t.Fatalf("search reloaded snapshot: %v", err)
+	}
+	if len(resp.Results) != 1 || resp.Results[0].Path != "src/Mobile0.ts" {
+		t.Fatalf("reload results=%+v, want Mobile0", resp.Results)
+	}
+}
+
+func TestProjectFileIndexEntriesAvoidPathAndLowercaseStringCopies(t *testing.T) {
+	entryType := reflect.TypeOf(projectFileIndexEntry{})
+	for _, fieldName := range []string{"path", "lowerPath", "lowerName"} {
+		if _, ok := entryType.FieldByName(fieldName); ok {
+			t.Fatalf("projectFileIndexEntry should not keep %s string copies", fieldName)
+		}
+	}
+	entries := buildProjectFileIndexEntries([]string{"Engine/Source/Runtime/MobileInstance.ts"})
+	if len(entries) != 1 || entries[0].name != "MobileInstance.ts" {
+		t.Fatalf("entries=%+v, want basename retained for search display", entries)
+	}
+}
+
+func TestProjectFileIndexQuerySessionsUseCompactIndexesAndMemoryCaps(t *testing.T) {
+	sessionType := reflect.TypeOf(projectFileIndexQuerySession{})
+	indexesField, ok := sessionType.FieldByName("indexes")
+	if !ok {
+		t.Fatalf("projectFileIndexQuerySession missing indexes field")
+	}
+	if indexesField.Type.String() != "[]int32" {
+		t.Fatalf("query session indexes type=%s, want []int32", indexesField.Type)
+	}
+
+	manager := newProjectFileIndexManager(t.TempDir())
+	project := projectFileIndexProject{ProjectID: "hub-a:wide", Name: "wide", Root: t.TempDir()}
+	paths := make([]string, 0, 100_001)
+	for i := 0; i < 100_001; i++ {
+		paths = append(paths, fmt.Sprintf("src/match-%06d.ts", i))
+	}
+	manager.snapshots[project.ProjectID] = projectFileIndexSnapshot{
+		ProjectID: project.ProjectID,
+		Name:      project.Name,
+		Path:      project.Root,
+		Status:    projectFileIndexStatusIndexed,
+		FileCount: len(paths),
+		Paths:     paths,
+		Entries:   buildProjectFileIndexEntries(paths),
+		Loaded:    true,
+	}
+	_, err := manager.search(context.Background(), project, projectFileIndexSearchRequest{
+		Query:          "m",
+		QuerySessionID: "too-wide",
+		QueryID:        1,
+		Limit:          1,
+	})
+	if err != nil {
+		t.Fatalf("wide search: %v", err)
+	}
+	manager.mu.Lock()
+	wideSession := manager.querySessions[project.ProjectID+"\x00too-wide"]
+	manager.mu.Unlock()
+	if !wideSession.all || len(wideSession.indexes) != 0 {
+		t.Fatalf("wide session=%+v, want full-scan fallback instead of capped partial indexes", wideSession)
+	}
+
+	paths = paths[:90_000]
+	manager.snapshots[project.ProjectID] = projectFileIndexSnapshot{
+		ProjectID: project.ProjectID,
+		Name:      project.Name,
+		Path:      project.Root,
+		Status:    projectFileIndexStatusIndexed,
+		FileCount: len(paths),
+		Paths:     paths,
+		Entries:   buildProjectFileIndexEntries(paths),
+		Loaded:    true,
+	}
+	for i := 0; i < 6; i++ {
+		_, err := manager.search(context.Background(), project, projectFileIndexSearchRequest{
+			Query:          "m",
+			QuerySessionID: fmt.Sprintf("session-%d", i),
+			QueryID:        1,
+			Limit:          1,
+		})
+		if err != nil {
+			t.Fatalf("session search %d: %v", i, err)
+		}
+	}
+	if total := querySessionCandidateIndexCountForTest(manager); total > 500_000 {
+		t.Fatalf("query session candidate indexes=%d, want <= 500000", total)
+	}
+}
+
 func TestProjectFileIndexStartRebuildDedupesRunningProjectAndKeepsStatus(t *testing.T) {
 	root := t.TempDir()
 	writeProjectFileForFileIndexTest(t, root, "src/MobileInstance.ts", "export const mobile = true;\n")
@@ -2368,6 +2550,28 @@ func waitForFileIndexStatusForTest(t *testing.T, manager *projectFileIndexManage
 	}
 	status := manager.status([]projectFileIndexProject{project})
 	t.Fatalf("timed out waiting for index status %q, got %+v", want, status)
+}
+
+func loadedFileIndexSnapshotCountForTest(manager *projectFileIndexManager) int {
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+	count := 0
+	for _, snapshot := range manager.snapshots {
+		if snapshot.Loaded {
+			count++
+		}
+	}
+	return count
+}
+
+func querySessionCandidateIndexCountForTest(manager *projectFileIndexManager) int {
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+	total := 0
+	for _, session := range manager.querySessions {
+		total += len(session.indexes)
+	}
+	return total
 }
 
 func writeMonitorFile(path string, content string) error {
