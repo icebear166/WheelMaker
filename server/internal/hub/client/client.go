@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -579,10 +580,15 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 		if err := decodeSessionRequestPayload(payload, &req); err != nil {
 			return nil, fmt.Errorf("invalid session.archive payload: %w", err)
 		}
-		if err := c.ArchiveSession(ctx, req.SessionID); err != nil {
+		warning, err := c.archiveSession(ctx, req.SessionID)
+		if err != nil {
 			return nil, err
 		}
-		return map[string]any{"ok": true, "sessionId": strings.TrimSpace(req.SessionID)}, nil
+		resp := map[string]any{"ok": true, "sessionId": strings.TrimSpace(req.SessionID)}
+		if warning != "" {
+			resp["warning"] = warning
+		}
+		return resp, nil
 	case acp.RegistryMethodSessionArchiveList:
 		return c.ListArchivedSessions(ctx)
 	case acp.RegistryMethodSessionArchiveRead:
@@ -924,43 +930,54 @@ func (c *Client) deleteActiveSession(ctx context.Context, sessionID string, reje
 }
 
 func (c *Client) ArchiveSession(ctx context.Context, sessionID string) error {
+	_, err := c.archiveSession(ctx, sessionID)
+	return err
+}
+
+func (c *Client) archiveSession(ctx context.Context, sessionID string) (string, error) {
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
-		return fmt.Errorf("session id is required")
+		return "", fmt.Errorf("session id is required")
 	}
 	if c.sessionIsRunning(sessionID) {
-		return fmt.Errorf("session %s is running", sessionID)
+		return "", fmt.Errorf("session %s is running", sessionID)
 	}
 
 	rec, err := c.store.LoadSession(ctx, c.projectName, sessionID)
 	if err != nil {
-		return fmt.Errorf("load session: %w", err)
+		return "", fmt.Errorf("load session: %w", err)
 	}
 	if rec == nil {
-		return fmt.Errorf("session not found: %s", sessionID)
+		return "", fmt.Errorf("session not found: %s", sessionID)
 	}
 	latestTurnIndex := sessionSyncLatestPersistedTurnIndex(rec.SessionSyncJSON)
 	if latestTurnIndex < 3 {
-		return c.deleteActiveSession(ctx, sessionID, false)
+		return "", c.deleteActiveSession(ctx, sessionID, false)
 	}
 	if c.archiveStore == nil {
-		return fmt.Errorf("session archive store is required")
+		return "", fmt.Errorf("session archive store is required")
 	}
 	alreadyArchived, err := c.archiveStore.HasSession(ctx, c.projectName, sessionID)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if alreadyArchived {
-		return c.deleteActiveSession(ctx, sessionID, false)
+		return "", c.deleteActiveSession(ctx, sessionID, false)
 	}
 	contents, gapCount, err := c.sessionRecorder.ReadPersistedTurnContentsForArchive(ctx, sessionID, latestTurnIndex)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if _, _, err := c.archiveStore.AppendSession(ctx, *rec, contents, gapCount); err != nil {
-		return err
+		return "", err
 	}
-	return c.deleteActiveSession(ctx, sessionID, false)
+	nativeUpdate := c.syncNativeArchiveState(ctx, rec.AgentType, sessionID, true)
+	if nativeUpdate.NativeArchivedAt != "" || nativeUpdate.NativeSyncWarning != "" {
+		if err := c.archiveStore.UpdateNativeSync(ctx, c.projectName, sessionID, nativeUpdate); err != nil {
+			hubLogger(c.projectName).Warn("update native archive sync failed session=%s err=%v", sessionID, err)
+		}
+	}
+	return nativeUpdate.NativeSyncWarning, c.deleteActiveSession(ctx, sessionID, false)
 }
 
 func (c *Client) ListArchivedSessions(ctx context.Context) (map[string]any, error) {
@@ -1051,8 +1068,9 @@ func (c *Client) RestoreArchivedSession(ctx context.Context, sessionID string) (
 		return nil, fmt.Errorf("save restored session: %w", err)
 	}
 
+	nativeUpdate := c.syncNativeArchiveState(ctx, entry.AgentType, sessionID, false)
 	restoredAt := time.Now().UTC().Format(time.RFC3339)
-	if _, err := c.archiveStore.MarkRestored(ctx, c.projectName, sessionID, restoredAt, sessionArchiveNativeSyncUpdate{}); err != nil {
+	if _, err := c.archiveStore.MarkRestored(ctx, c.projectName, sessionID, restoredAt, nativeUpdate); err != nil {
 		_ = c.store.DeleteSession(context.Background(), c.projectName, sessionID)
 		_ = c.sessionRecorder.DeleteSessionData(context.Background(), sessionID)
 		return nil, fmt.Errorf("mark archive restored: %w", err)
@@ -1061,7 +1079,11 @@ func (c *Client) RestoreArchivedSession(ctx context.Context, sessionID string) (
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"ok": true, "sessionId": sessionID, "session": summary}, nil
+	resp := map[string]any{"ok": true, "sessionId": sessionID, "session": summary}
+	if nativeUpdate.NativeSyncWarning != "" {
+		resp["warning"] = nativeUpdate.NativeSyncWarning
+	}
+	return resp, nil
 }
 
 func archiveSummaryFromEntry(entry sessionArchiveManifestEntry) sessionArchiveSummary {
@@ -1108,6 +1130,78 @@ func parseArchiveEntryTime(values ...string) time.Time {
 		}
 	}
 	return time.Now().UTC()
+}
+
+func (c *Client) syncNativeArchiveState(ctx context.Context, agentType, sessionID string, archived bool) sessionArchiveNativeSyncUpdate {
+	update := sessionArchiveNativeSyncUpdate{}
+	agentType = normalizeAgentType(agentType)
+	sessionID = strings.TrimSpace(sessionID)
+	if agentType == "" || sessionID == "" || c == nil || c.registry == nil {
+		return update
+	}
+	if agentType != string(acp.ACPProviderCodex) {
+		return update
+	}
+	creator := c.registry.CreatorByName(agentType)
+	if creator == nil {
+		return update
+	}
+	inst, err := creator(agent.WithProjectName(ctx, c.projectName), c.cwd)
+	if err != nil {
+		update.NativeSyncWarning = nativeArchiveWarning(archived, err)
+		return update
+	}
+	defer func() { _ = inst.Close() }()
+
+	clientCaps := acp.ClientCapabilities{
+		FS: &acp.FSCapabilities{
+			ReadTextFile:  true,
+			WriteTextFile: true,
+		},
+		Terminal: true,
+	}
+	if _, err := inst.Initialize(ctx, acp.InitializeParams{
+		ProtocolVersion:    acpClientProtocolVersion,
+		ClientCapabilities: clientCaps,
+		ClientInfo:         acpClientInfo,
+	}); err != nil {
+		update.NativeSyncWarning = nativeArchiveWarning(archived, err)
+		return update
+	}
+	archiver, ok := inst.(agent.SessionArchiver)
+	if !ok {
+		return update
+	}
+	if archived {
+		err = archiver.ArchiveSession(ctx, sessionID)
+	} else {
+		err = archiver.UnarchiveSession(ctx, sessionID)
+	}
+	if errors.Is(err, agent.ErrSessionArchiveUnsupported) {
+		return update
+	}
+	if err != nil {
+		update.NativeSyncWarning = nativeArchiveWarning(archived, err)
+		return update
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	if archived {
+		update.NativeArchivedAt = now
+	} else {
+		update.NativeUnarchivedAt = now
+	}
+	return update
+}
+
+func nativeArchiveWarning(archived bool, err error) string {
+	if err == nil {
+		return ""
+	}
+	action := "archive"
+	if !archived {
+		action = "unarchive"
+	}
+	return fmt.Sprintf("native %s sync failed: %v", action, err)
 }
 
 func (c *Client) sessionIsRunning(sessionID string) bool {

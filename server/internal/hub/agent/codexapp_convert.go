@@ -187,6 +187,10 @@ type appServerThreadReadParams struct {
 	IncludeTurns bool   `json:"includeTurns"`
 }
 
+type appServerThreadArchiveParams struct {
+	ThreadID string `json:"threadId"`
+}
+
 type appServerTurnStartParams struct {
 	ThreadID       string               `json:"threadId"`
 	Input          []appServerUserInput `json:"input"`
@@ -838,10 +842,7 @@ func codexappWriteImageArtifact(projectName string, sessionID string, block prot
 
 // CleanupSessionArtifacts removes artifacts owned by an agent session.
 func CleanupSessionArtifacts(projectName, agentType, sessionID string) error {
-	normalizedAgentType := strings.ToLower(strings.TrimSpace(agentType))
-	if normalizedAgentType != string(protocol.ACPProviderCodex) {
-		return nil
-	}
+	_ = agentType
 	return cleanupCodexappSessionArtifacts(projectName, sessionID)
 }
 

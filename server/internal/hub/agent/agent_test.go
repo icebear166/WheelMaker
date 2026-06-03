@@ -1621,6 +1621,56 @@ func TestCodexAppSessionLoadReadsThreadWhenResumeTurnsAreNotFull(t *testing.T) {
 	}
 }
 
+func TestCodexAppArchiveSessionCallsThreadArchive(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	tr.onSend = func(msg map[string]any) {
+		method, _ := msg["method"].(string)
+		id := msg["id"]
+		switch method {
+		case "thread/archive":
+			params := msg["params"].(map[string]any)
+			if params["threadId"] != "thread-archive" {
+				t.Errorf("thread/archive params=%#v", params)
+			}
+			_ = tr.emit(map[string]any{"id": id, "result": map[string]any{}})
+		default:
+			t.Errorf("unexpected app-server method %q", method)
+		}
+	}
+
+	conn := newCodexappConnWithRuntime(rt, t.TempDir())
+	if err := conn.ArchiveSession(context.Background(), "thread-archive"); err != nil {
+		t.Fatalf("ArchiveSession: %v", err)
+	}
+}
+
+func TestCodexAppUnarchiveSessionCallsThreadUnarchive(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	tr.onSend = func(msg map[string]any) {
+		method, _ := msg["method"].(string)
+		id := msg["id"]
+		switch method {
+		case "thread/unarchive":
+			params := msg["params"].(map[string]any)
+			if params["threadId"] != "thread-unarchive" {
+				t.Errorf("thread/unarchive params=%#v", params)
+			}
+			_ = tr.emit(map[string]any{"id": id, "result": map[string]any{}})
+		default:
+			t.Errorf("unexpected app-server method %q", method)
+		}
+	}
+
+	conn := newCodexappConnWithRuntime(rt, t.TempDir())
+	if err := conn.UnarchiveSession(context.Background(), "thread-unarchive"); err != nil {
+		t.Fatalf("UnarchiveSession: %v", err)
+	}
+}
+
 func TestCodexAppSessionLoadRecreatesUnmaterializedThreadInternally(t *testing.T) {
 	oldMapPath := codexappSessionMapPathFunc
 	mapPath := filepath.Join(t.TempDir(), "codexapp-session-map.json")
@@ -2009,6 +2059,32 @@ func TestCodexAppCleanupSessionArtifactsRemovesAttachmentDirectory(t *testing.T)
 	}
 	if _, err := os.Stat(attachmentDir); !os.IsNotExist(err) {
 		t.Fatalf("attachment dir stat err=%v, want removed", err)
+	}
+}
+
+func TestCleanupSessionArtifactsRemovesAttachmentsForAnyAgent(t *testing.T) {
+	oldRoot := codexappArtifactRootPathFunc
+	artifactRoot := t.TempDir()
+	codexappArtifactRootPathFunc = func() (string, error) { return artifactRoot, nil }
+	t.Cleanup(func() { codexappArtifactRootPathFunc = oldRoot })
+
+	dir, err := codexappImageArtifactDir("Proj:Name", "thread-claude")
+	if err != nil {
+		t.Fatalf("codexappImageArtifactDir: %v", err)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("MkdirAll attachments: %v", err)
+	}
+	path := filepath.Join(dir, "attachment.txt")
+	if err := os.WriteFile(path, []byte("owned by wheelmaker"), 0o600); err != nil {
+		t.Fatalf("WriteFile attachment: %v", err)
+	}
+
+	if err := CleanupSessionArtifacts("Proj:Name", string(protocol.ACPProviderClaude), "thread-claude"); err != nil {
+		t.Fatalf("CleanupSessionArtifacts: %v", err)
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("attachment dir stat err=%v, want removed for claude", err)
 	}
 }
 

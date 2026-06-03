@@ -285,7 +285,7 @@ git commit -m "feat: restore archived sessions"
 - Modify: `server/internal/hub/client/session_recovery.go`
 - Modify: `server/internal/hub/client/client_test.go`
 
-- [ ] **Step 1: Write failing native sync and cleanup tests**
+- [x] **Step 1: Write failing native sync and cleanup tests**
 
 Add tests:
 
@@ -299,7 +299,7 @@ func TestArchiveSessionNativeWarningDoesNotRollbackWheelMakerArchive(t *testing.
 
 The Codex App tests use the existing fake transport pattern in `agent_test.go` and assert outgoing methods `thread/archive` and `thread/unarchive` with `threadId`.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run:
 
@@ -311,7 +311,7 @@ go test ./internal/hub/client -run "ResumeListExcludesArchived|NativeWarning" -c
 
 Expected: missing capability methods and old cleanup behavior.
 
-- [ ] **Step 3: Add optional agent capability**
+- [x] **Step 3: Add optional agent capability**
 
 Add in `instance.go`:
 
@@ -324,7 +324,7 @@ type SessionArchiver interface {
 
 Implement these methods on `*instance`; they delegate to the underlying conn when the conn implements `SessionArchiver`, otherwise return `ErrSessionArchiveUnsupported`.
 
-- [ ] **Step 4: Add Codex App native methods**
+- [x] **Step 4: Add Codex App native methods**
 
 Add to `codexappConn`:
 
@@ -335,7 +335,7 @@ func (c *codexappConn) UnarchiveSession(ctx context.Context, sessionID string) e
 
 Each resolves `threadID := firstNonEmptyString(codexappMappedThreadID(sessionID), c.runtimeThreadIDForSession(sessionID), sessionID)` and calls `c.runtime.request(ctx, "thread/archive", appServerThreadArchiveParams{ThreadID: threadID}, &ignored)` or `thread/unarchive`.
 
-- [ ] **Step 5: Add client best-effort native sync**
+- [x] **Step 5: Add client best-effort native sync**
 
 Add helper in `client.go`:
 
@@ -345,15 +345,15 @@ func (c *Client) syncNativeArchiveState(ctx context.Context, agentType, sessionI
 
 It creates a short-lived agent instance through the existing agent creator, initializes it with the project CWD, calls `ArchiveSession` or `UnarchiveSession` when supported, closes it, and returns a warning string on failure. Unsupported capability returns empty warning.
 
-- [ ] **Step 6: Wire native sync to archive/restore**
+- [x] **Step 6: Wire native sync to archive/restore**
 
 `ArchiveSession` stores native archive metadata after `AppendSession` succeeds and before `deleteActiveSession`. `RestoreArchivedSession` stores native unarchive metadata after the normal session row and turn files are recreated.
 
-- [ ] **Step 7: Extend managed session ids**
+- [x] **Step 7: Extend managed session ids**
 
 Update `managedSessionIDs` so it adds every archive manifest entry with empty `RestoredAt`.
 
-- [ ] **Step 8: Make cleanup provider-neutral**
+- [x] **Step 8: Make cleanup provider-neutral**
 
 Replace the `agentType == codex` branch with cleanup of:
 
@@ -363,11 +363,11 @@ Replace the `agentType == codex` branch with cleanup of:
 
 for all agent types. Keep removal scoped to that attachments directory.
 
-- [ ] **Step 9: Verify GREEN**
+- [x] **Step 9: Verify GREEN**
 
 Run the Task 4 test commands and confirm exit code 0.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```powershell
 git add server/internal/hub/agent server/internal/hub/client

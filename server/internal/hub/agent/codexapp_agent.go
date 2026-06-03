@@ -722,6 +722,28 @@ func (c *codexappConn) sendSessionList(ctx context.Context, p protocol.SessionLi
 	return assignResult(result, out)
 }
 
+func (c *codexappConn) ArchiveSession(ctx context.Context, sessionID string) error {
+	return c.sendThreadArchiveState(ctx, sessionID, true)
+}
+
+func (c *codexappConn) UnarchiveSession(ctx context.Context, sessionID string) error {
+	return c.sendThreadArchiveState(ctx, sessionID, false)
+}
+
+func (c *codexappConn) sendThreadArchiveState(ctx context.Context, sessionID string, archived bool) error {
+	sessionID = strings.TrimSpace(sessionID)
+	threadID := firstNonEmptyString(codexappMappedThreadID(sessionID), c.runtimeThreadIDForSession(sessionID), sessionID)
+	if threadID == "" {
+		return errors.New("codexapp archive requires sessionId")
+	}
+	method := "thread/unarchive"
+	if archived {
+		method = "thread/archive"
+	}
+	var ignored json.RawMessage
+	return c.runtime.request(ctx, method, appServerThreadArchiveParams{ThreadID: threadID}, &ignored)
+}
+
 func (c *codexappConn) sendSessionPrompt(ctx context.Context, p protocol.SessionPromptParams, result any) error {
 	threadID := c.runtimeThreadIDForSession(p.SessionID)
 	if threadID == "" {

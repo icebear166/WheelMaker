@@ -25,24 +25,28 @@ import (
 )
 
 type testInjectedInstance struct {
-	name        string
-	sessionID   string
-	alive       bool
-	callbacks   agent.Callbacks
-	promptFn    func(context.Context, string) (<-chan acp.SessionUpdateParams, acp.SessionPromptResult, error)
-	lastPrompt  []acp.ContentBlock
-	cancelFn    func() error
-	initResult  acp.InitializeResult
-	loadResult  acp.SessionLoadResult
-	loadUpdates []acp.SessionUpdateParams
-	loadErr     error
-	newResult   *acp.SessionNewResult
-	listResult  acp.SessionListResult
-	listErr     error
-	setConfigFn func(context.Context, acp.SessionSetConfigOptionParams) ([]acp.ConfigOption, error)
-	setCalls    []acp.SessionSetConfigOptionParams
-	skills      []agent.SkillDescriptor
-	skillsErr   error
+	name           string
+	sessionID      string
+	alive          bool
+	callbacks      agent.Callbacks
+	promptFn       func(context.Context, string) (<-chan acp.SessionUpdateParams, acp.SessionPromptResult, error)
+	lastPrompt     []acp.ContentBlock
+	cancelFn       func() error
+	initResult     acp.InitializeResult
+	loadResult     acp.SessionLoadResult
+	loadUpdates    []acp.SessionUpdateParams
+	loadErr        error
+	newResult      *acp.SessionNewResult
+	listResult     acp.SessionListResult
+	listErr        error
+	setConfigFn    func(context.Context, acp.SessionSetConfigOptionParams) ([]acp.ConfigOption, error)
+	setCalls       []acp.SessionSetConfigOptionParams
+	skills         []agent.SkillDescriptor
+	skillsErr      error
+	archiveErr     error
+	unarchiveErr   error
+	archiveCalls   []string
+	unarchiveCalls []string
 }
 
 func (c *Client) InjectForwarder(agentName, sessionID string, promptFn func(context.Context, string) (<-chan acp.SessionUpdateParams, acp.SessionPromptResult, error), cancelFn func() error) {
@@ -223,6 +227,16 @@ func (i *testInjectedInstance) ListSkills(context.Context, string) ([]agent.Skil
 		return nil, i.skillsErr
 	}
 	return append([]agent.SkillDescriptor(nil), i.skills...), nil
+}
+
+func (i *testInjectedInstance) ArchiveSession(_ context.Context, sessionID string) error {
+	i.archiveCalls = append(i.archiveCalls, sessionID)
+	return i.archiveErr
+}
+
+func (i *testInjectedInstance) UnarchiveSession(_ context.Context, sessionID string) error {
+	i.unarchiveCalls = append(i.unarchiveCalls, sessionID)
+	return i.unarchiveErr
 }
 
 func (i *testInjectedInstance) Close() error { return nil }
@@ -5700,6 +5714,80 @@ func TestHandleSessionRequestSessionArchiveRestoreRejectsAlreadyRestored(t *test
 	_, err := c.HandleSessionRequest(ctx, "session.archive.restore", "proj1", json.RawMessage(`{"sessionId":"restore-restored"}`))
 	if err == nil || !strings.Contains(err.Error(), "already restored") {
 		t.Fatalf("session.archive.restore err = %v, want already restored", err)
+	}
+}
+
+func TestArchiveSessionNativeWarningDoesNotRollbackWheelMakerArchive(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	historyRoot := filepath.Join(t.TempDir(), "db", "session")
+	c.SetSessionHistoryRoot(historyRoot)
+	ctx := context.Background()
+	inst := &testInjectedInstance{name: "codex", archiveErr: errors.New("native archive unavailable")}
+	c.registry = agent.DefaultACPFactory().Clone()
+	c.registry.Register(acp.ACPProviderCodex, func(context.Context, string) (agent.Instance, error) { return inst, nil })
+
+	if _, err := c.sessionRecorder.turnStore.WriteTurns(ctx, c.projectName, "native-warning", 1, []string{"native-1", "native-2", "native-3"}); err != nil {
+		t.Fatalf("WriteTurns: %v", err)
+	}
+	now := time.Date(2026, 5, 15, 10, 0, 0, 0, time.UTC)
+	if err := c.store.SaveSession(ctx, &SessionRecord{
+		ID:              "native-warning",
+		ProjectName:     "proj1",
+		Status:          SessionPersisted,
+		AgentType:       "codex",
+		Title:           "Native Warning",
+		SessionSyncJSON: sessionSyncJSON(3),
+		CreatedAt:       now,
+		LastActiveAt:    now,
+	}); err != nil {
+		t.Fatalf("SaveSession: %v", err)
+	}
+
+	resp, err := c.HandleSessionRequest(ctx, "session.archive", "proj1", json.RawMessage(`{"sessionId":"native-warning"}`))
+	if err != nil {
+		t.Fatalf("HandleSessionRequest(session.archive): %v", err)
+	}
+	body := resp.(map[string]any)
+	if warning, _ := body["warning"].(string); !strings.Contains(warning, "native archive unavailable") {
+		t.Fatalf("warning = %#v, want native archive warning", body["warning"])
+	}
+	if len(inst.archiveCalls) != 1 || inst.archiveCalls[0] != "native-warning" {
+		t.Fatalf("archive calls = %#v, want native-warning", inst.archiveCalls)
+	}
+	if stored, err := c.store.LoadSession(ctx, "proj1", "native-warning"); err != nil {
+		t.Fatalf("LoadSession: %v", err)
+	} else if stored != nil {
+		t.Fatalf("session still active after warning archive: %#v", stored)
+	}
+	manifest := readArchiveManifestForTest(t, historyRoot, "proj1")
+	if warning := manifest.Sessions["native-warning"].NativeSyncWarning; !strings.Contains(warning, "native archive unavailable") {
+		t.Fatalf("manifest native warning = %q", warning)
+	}
+}
+
+func TestSessionResumeListExcludesArchivedUnrestoredSessions(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	c.SetSessionHistoryRoot(filepath.Join(t.TempDir(), "db", "session"))
+	ctx := context.Background()
+
+	archiveLongSessionForStoreTest(t, c, ctx, "resume-archived", "Resume Archived", "claude", time.Date(2026, 5, 15, 10, 0, 0, 0, time.UTC), []string{"resume-1", "resume-2", "resume-3"})
+
+	managed, err := c.recovery().managedSessionIDs(ctx)
+	if err != nil {
+		t.Fatalf("managedSessionIDs: %v", err)
+	}
+	if !managed["resume-archived"] {
+		t.Fatalf("managed ids = %#v, want archived session id included", managed)
+	}
+	if _, err := c.archiveStore.MarkRestored(ctx, "proj1", "resume-archived", "2026-05-17T00:00:00Z", sessionArchiveNativeSyncUpdate{}); err != nil {
+		t.Fatalf("MarkRestored: %v", err)
+	}
+	managed, err = c.recovery().managedSessionIDs(ctx)
+	if err != nil {
+		t.Fatalf("managedSessionIDs after restore: %v", err)
+	}
+	if managed["resume-archived"] {
+		t.Fatalf("managed ids = %#v, want restored archive id removed", managed)
 	}
 }
 

@@ -34,6 +34,13 @@ type Instance interface {
 	Close() error
 }
 
+var ErrSessionArchiveUnsupported = errors.New("session archive unsupported")
+
+type SessionArchiver interface {
+	ArchiveSession(ctx context.Context, sessionID string) error
+	UnarchiveSession(ctx context.Context, sessionID string) error
+}
+
 type instance struct {
 	name      string
 	conn      Conn
@@ -224,6 +231,28 @@ func (i *instance) SessionSetConfigOption(ctx context.Context, p protocol.Sessio
 		return wrapped.ConfigOptions, nil
 	}
 	return opts, nil
+}
+
+func (i *instance) ArchiveSession(ctx context.Context, sessionID string) error {
+	if err := i.ensureConn(); err != nil {
+		return err
+	}
+	archiver, ok := i.conn.(SessionArchiver)
+	if !ok {
+		return ErrSessionArchiveUnsupported
+	}
+	return archiver.ArchiveSession(ctx, sessionID)
+}
+
+func (i *instance) UnarchiveSession(ctx context.Context, sessionID string) error {
+	if err := i.ensureConn(); err != nil {
+		return err
+	}
+	archiver, ok := i.conn.(SessionArchiver)
+	if !ok {
+		return ErrSessionArchiveUnsupported
+	}
+	return archiver.UnarchiveSession(ctx, sessionID)
 }
 
 func (i *instance) HandleACPResponse(_ context.Context, method string, params json.RawMessage) {

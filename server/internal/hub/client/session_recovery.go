@@ -164,6 +164,17 @@ func (r *sessionRecovery) managedSessionIDs(ctx context.Context) (map[string]boo
 	for _, rec := range recs {
 		managed[rec.ID] = true
 	}
+	if r.client.archiveStore != nil {
+		archived, err := r.client.archiveStore.ListSessions(ctx, r.client.projectName)
+		if err != nil {
+			return nil, err
+		}
+		for _, entry := range archived {
+			if strings.TrimSpace(entry.SessionID) != "" {
+				managed[entry.SessionID] = true
+			}
+		}
+	}
 	return managed, nil
 }
 
