@@ -583,6 +583,24 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 			return nil, err
 		}
 		return map[string]any{"ok": true, "sessionId": strings.TrimSpace(req.SessionID)}, nil
+	case acp.RegistryMethodSessionArchiveList:
+		return c.ListArchivedSessions(ctx)
+	case acp.RegistryMethodSessionArchiveRead:
+		var req struct {
+			SessionID string `json:"sessionId"`
+		}
+		if err := decodeSessionRequestPayload(payload, &req); err != nil {
+			return nil, fmt.Errorf("invalid session.archive.read payload: %w", err)
+		}
+		return c.ReadArchivedSession(ctx, req.SessionID)
+	case acp.RegistryMethodSessionArchiveRestore:
+		var req struct {
+			SessionID string `json:"sessionId"`
+		}
+		if err := decodeSessionRequestPayload(payload, &req); err != nil {
+			return nil, fmt.Errorf("invalid session.archive.restore payload: %w", err)
+		}
+		return c.RestoreArchivedSession(ctx, req.SessionID)
 	case acp.RegistryMethodSessionDelete:
 		var req struct {
 			SessionID string `json:"sessionId"`
@@ -943,6 +961,153 @@ func (c *Client) ArchiveSession(ctx context.Context, sessionID string) error {
 		return err
 	}
 	return c.deleteActiveSession(ctx, sessionID, false)
+}
+
+func (c *Client) ListArchivedSessions(ctx context.Context) (map[string]any, error) {
+	if c.archiveStore == nil {
+		return nil, fmt.Errorf("session archive store is required")
+	}
+	entries, err := c.archiveStore.ListSessions(ctx, c.projectName)
+	if err != nil {
+		return nil, err
+	}
+	sessions := make([]sessionArchiveSummary, 0, len(entries))
+	for _, entry := range entries {
+		sessions = append(sessions, archiveSummaryFromEntry(entry))
+	}
+	return map[string]any{"sessions": sessions}, nil
+}
+
+func (c *Client) ReadArchivedSession(ctx context.Context, sessionID string) (map[string]any, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil, fmt.Errorf("session id is required")
+	}
+	if c.archiveStore == nil {
+		return nil, fmt.Errorf("session archive store is required")
+	}
+	entry, contents, err := c.archiveStore.ReadSession(ctx, c.projectName, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	turns := archiveTurnsFromContents(contents)
+	return map[string]any{
+		"sessionId":       sessionID,
+		"session":         archiveSummaryFromEntry(entry),
+		"turns":           turns,
+		"messages":        []any{},
+		"latestTurnIndex": int64(len(turns)),
+		"readOnly":        true,
+	}, nil
+}
+
+func (c *Client) RestoreArchivedSession(ctx context.Context, sessionID string) (map[string]any, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil, fmt.Errorf("session id is required")
+	}
+	if c.archiveStore == nil {
+		return nil, fmt.Errorf("session archive store is required")
+	}
+	if c.store == nil {
+		return nil, fmt.Errorf("session store is required")
+	}
+	if c.sessionRecorder == nil || c.sessionRecorder.turnStore == nil {
+		return nil, fmt.Errorf("session turn store is required")
+	}
+
+	entry, contents, err := c.archiveStore.ReadSession(ctx, c.projectName, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	existing, err := c.store.LoadSession(ctx, c.projectName, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("load session: %w", err)
+	}
+	if existing != nil {
+		return nil, fmt.Errorf("session already exists: %s", sessionID)
+	}
+	if err := c.sessionRecorder.DeleteSessionData(ctx, sessionID); err != nil {
+		return nil, fmt.Errorf("reset restored session data: %w", err)
+	}
+	if _, err := WriteSessionTurnFiles(ctx, c.sessionRecorder.turnStore.root, c.projectName, sessionID, 1, contents); err != nil {
+		return nil, fmt.Errorf("restore session turns: %w", err)
+	}
+
+	createdAt := parseArchiveEntryTime(entry.CreatedAt, entry.ArchivedAt)
+	updatedAt := parseArchiveEntryTime(entry.UpdatedAt, entry.ArchivedAt)
+	rec := &SessionRecord{
+		ID:              sessionID,
+		ProjectName:     c.projectName,
+		Status:          SessionPersisted,
+		AgentType:       normalizeAgentType(entry.AgentType),
+		Title:           strings.TrimSpace(entry.Title),
+		SessionSyncJSON: sessionSyncJSON(int64(len(contents))),
+		CreatedAt:       createdAt,
+		LastActiveAt:    updatedAt,
+	}
+	if err := c.store.SaveSession(ctx, rec); err != nil {
+		_ = c.sessionRecorder.DeleteSessionData(context.Background(), sessionID)
+		return nil, fmt.Errorf("save restored session: %w", err)
+	}
+
+	restoredAt := time.Now().UTC().Format(time.RFC3339)
+	if _, err := c.archiveStore.MarkRestored(ctx, c.projectName, sessionID, restoredAt, sessionArchiveNativeSyncUpdate{}); err != nil {
+		_ = c.store.DeleteSession(context.Background(), c.projectName, sessionID)
+		_ = c.sessionRecorder.DeleteSessionData(context.Background(), sessionID)
+		return nil, fmt.Errorf("mark archive restored: %w", err)
+	}
+	summary, err := c.sessionRecorder.ReadSessionSummary(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"ok": true, "sessionId": sessionID, "session": summary}, nil
+}
+
+func archiveSummaryFromEntry(entry sessionArchiveManifestEntry) sessionArchiveSummary {
+	return sessionArchiveSummary{
+		SessionID:          strings.TrimSpace(entry.SessionID),
+		ProjectName:        strings.TrimSpace(entry.ProjectName),
+		Title:              strings.TrimSpace(entry.Title),
+		AgentType:          normalizeAgentType(entry.AgentType),
+		CreatedAt:          strings.TrimSpace(entry.CreatedAt),
+		UpdatedAt:          strings.TrimSpace(entry.UpdatedAt),
+		ArchivedAt:         strings.TrimSpace(entry.ArchivedAt),
+		RestoredAt:         strings.TrimSpace(entry.RestoredAt),
+		TurnCount:          entry.TurnCount,
+		GapCount:           entry.GapCount,
+		NativeArchivedAt:   strings.TrimSpace(entry.NativeArchivedAt),
+		NativeUnarchivedAt: strings.TrimSpace(entry.NativeUnarchivedAt),
+		NativeSyncWarning:  strings.TrimSpace(entry.NativeSyncWarning),
+	}
+}
+
+func archiveTurnsFromContents(contents []string) []sessionViewTurn {
+	turns := make([]sessionViewTurn, 0, len(contents))
+	for index, content := range contents {
+		turns = append(turns, sessionViewTurn{
+			TurnIndex: int64(index + 1),
+			Content:   content,
+			Finished:  true,
+		})
+	}
+	return turns
+}
+
+func parseArchiveEntryTime(values ...string) time.Time {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if parsed, err := time.Parse(time.RFC3339, value); err == nil {
+			return parsed.UTC()
+		}
+		if parsed, err := time.Parse(time.RFC3339Nano, value); err == nil {
+			return parsed.UTC()
+		}
+	}
+	return time.Now().UTC()
 }
 
 func (c *Client) sessionIsRunning(sessionID string) bool {

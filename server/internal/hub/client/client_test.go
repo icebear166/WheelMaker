@@ -5544,6 +5544,165 @@ func TestSessionArchiveStoreMarkRestoredHidesEntryFromList(t *testing.T) {
 	}
 }
 
+func TestHandleSessionRequestSessionArchiveListReturnsArchivedSessions(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	c.SetSessionHistoryRoot(filepath.Join(t.TempDir(), "db", "session"))
+	ctx := context.Background()
+
+	archiveLongSessionForStoreTest(t, c, ctx, "list-older", "List Older", "claude", time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC), []string{"older-1", "older-2", "older-3"})
+	archiveLongSessionForStoreTest(t, c, ctx, "list-newer", "List Newer", "claude", time.Date(2026, 5, 15, 10, 0, 0, 0, time.UTC), []string{"newer-1", "newer-2", "newer-3"})
+
+	resp, err := c.HandleSessionRequest(ctx, "session.archive.list", "proj1", nil)
+	if err != nil {
+		t.Fatalf("HandleSessionRequest(session.archive.list): %v", err)
+	}
+	body := resp.(map[string]any)
+	sessions := body["sessions"].([]sessionArchiveSummary)
+	if len(sessions) != 2 {
+		t.Fatalf("sessions len = %d, want 2: %#v", len(sessions), sessions)
+	}
+	if sessions[0].SessionID != "list-newer" || sessions[1].SessionID != "list-older" {
+		t.Fatalf("session order = %s,%s, want list-newer,list-older", sessions[0].SessionID, sessions[1].SessionID)
+	}
+	if sessions[0].TurnCount != 3 || sessions[0].GapCount != 0 || sessions[0].ArchivedAt == "" {
+		t.Fatalf("session summary = %#v, want archive counters and archivedAt", sessions[0])
+	}
+}
+
+func TestHandleSessionRequestSessionArchiveReadReturnsReadOnlyTurns(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	c.SetSessionHistoryRoot(filepath.Join(t.TempDir(), "db", "session"))
+	ctx := context.Background()
+
+	archiveLongSessionForStoreTest(t, c, ctx, "read-protocol", "Read Protocol", "claude", time.Date(2026, 5, 15, 10, 0, 0, 0, time.UTC), []string{"read-1", "read-2", "read-3"})
+
+	resp, err := c.HandleSessionRequest(ctx, "session.archive.read", "proj1", json.RawMessage(`{"sessionId":"read-protocol"}`))
+	if err != nil {
+		t.Fatalf("HandleSessionRequest(session.archive.read): %v", err)
+	}
+	body := resp.(map[string]any)
+	if body["sessionId"] != "read-protocol" || body["readOnly"] != true || body["latestTurnIndex"] != int64(3) {
+		t.Fatalf("archive read envelope = %#v, want readOnly session with latestTurnIndex 3", body)
+	}
+	summary := body["session"].(sessionArchiveSummary)
+	if summary.SessionID != "read-protocol" || summary.TurnCount != 3 {
+		t.Fatalf("archive read summary = %#v", summary)
+	}
+	turns := body["turns"].([]sessionViewTurn)
+	if len(turns) != 3 {
+		t.Fatalf("turns len = %d, want 3", len(turns))
+	}
+	if turns[0].TurnIndex != 1 || turns[2].TurnIndex != 3 || turns[1].Content != "read-2" {
+		t.Fatalf("turns = %#v, want indexed archived contents", turns)
+	}
+	if messages, ok := body["messages"].([]any); !ok || len(messages) != 0 {
+		t.Fatalf("messages = %#v, want empty []any", body["messages"])
+	}
+}
+
+func TestHandleSessionRequestSessionArchiveReadRejectsRestoredSession(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	c.SetSessionHistoryRoot(filepath.Join(t.TempDir(), "db", "session"))
+	ctx := context.Background()
+
+	archiveLongSessionForStoreTest(t, c, ctx, "read-restored", "Read Restored", "claude", time.Date(2026, 5, 15, 10, 0, 0, 0, time.UTC), []string{"read-1", "read-2", "read-3"})
+	if _, err := c.archiveStore.MarkRestored(ctx, "proj1", "read-restored", "2026-05-17T00:00:00Z", sessionArchiveNativeSyncUpdate{}); err != nil {
+		t.Fatalf("MarkRestored: %v", err)
+	}
+
+	_, err := c.HandleSessionRequest(ctx, "session.archive.read", "proj1", json.RawMessage(`{"sessionId":"read-restored"}`))
+	if err == nil || !strings.Contains(err.Error(), "already restored") {
+		t.Fatalf("session.archive.read err = %v, want already restored", err)
+	}
+}
+
+func TestHandleSessionRequestSessionArchiveRestoreRecreatesSessionAndTurns(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	historyRoot := filepath.Join(t.TempDir(), "db", "session")
+	c.SetSessionHistoryRoot(historyRoot)
+	ctx := context.Background()
+
+	archiveLongSessionForStoreTest(t, c, ctx, "restore-protocol", "Restore Protocol", "claude", time.Date(2026, 5, 15, 10, 0, 0, 0, time.UTC), []string{"restore-1", "restore-2", "restore-3"})
+
+	resp, err := c.HandleSessionRequest(ctx, "session.archive.restore", "proj1", json.RawMessage(`{"sessionId":"restore-protocol"}`))
+	if err != nil {
+		t.Fatalf("HandleSessionRequest(session.archive.restore): %v", err)
+	}
+	body := resp.(map[string]any)
+	if body["ok"] != true || body["sessionId"] != "restore-protocol" {
+		t.Fatalf("restore response = %#v, want ok true", body)
+	}
+	summary := body["session"].(sessionViewSummary)
+	if summary.SessionID != "restore-protocol" || summary.LatestTurnIndex != 3 || summary.AgentType != "claude" {
+		t.Fatalf("restore summary = %#v, want restored session summary", summary)
+	}
+	stored, err := c.store.LoadSession(ctx, "proj1", "restore-protocol")
+	if err != nil {
+		t.Fatalf("LoadSession after restore: %v", err)
+	}
+	if stored == nil {
+		t.Fatal("restored session row missing")
+	}
+	if latest := sessionSyncLatestPersistedTurnIndex(stored.SessionSyncJSON); latest != 3 {
+		t.Fatalf("latest persisted turn index = %d, want 3", latest)
+	}
+	readResp, err := c.HandleSessionRequest(ctx, "session.read", "proj1", json.RawMessage(`{"sessionId":"restore-protocol"}`))
+	if err != nil {
+		t.Fatalf("HandleSessionRequest(session.read) after restore: %v", err)
+	}
+	readBody := readResp.(map[string]any)
+	turns := readBody["turns"].([]sessionViewTurn)
+	if len(turns) != 3 || turns[0].Content != "restore-1" || turns[2].Content != "restore-3" {
+		t.Fatalf("restored turns = %#v, want archived contents", turns)
+	}
+	manifest := readArchiveManifestForTest(t, historyRoot, "proj1")
+	if manifest.Sessions["restore-protocol"].RestoredAt == "" {
+		t.Fatalf("manifest restoredAt missing: %#v", manifest.Sessions["restore-protocol"])
+	}
+}
+
+func TestHandleSessionRequestSessionArchiveRestoreRejectsExistingSession(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	c.SetSessionHistoryRoot(filepath.Join(t.TempDir(), "db", "session"))
+	ctx := context.Background()
+	now := time.Date(2026, 5, 15, 10, 0, 0, 0, time.UTC)
+
+	archiveLongSessionForStoreTest(t, c, ctx, "restore-existing", "Restore Existing", "claude", now, []string{"restore-1", "restore-2", "restore-3"})
+	if err := c.store.SaveSession(ctx, &SessionRecord{
+		ID:              "restore-existing",
+		ProjectName:     "proj1",
+		Status:          SessionPersisted,
+		AgentType:       "claude",
+		Title:           "Existing",
+		SessionSyncJSON: sessionSyncJSON(0),
+		CreatedAt:       now,
+		LastActiveAt:    now,
+	}); err != nil {
+		t.Fatalf("SaveSession existing: %v", err)
+	}
+
+	_, err := c.HandleSessionRequest(ctx, "session.archive.restore", "proj1", json.RawMessage(`{"sessionId":"restore-existing"}`))
+	if err == nil || !strings.Contains(err.Error(), "session already exists") {
+		t.Fatalf("session.archive.restore err = %v, want session already exists", err)
+	}
+}
+
+func TestHandleSessionRequestSessionArchiveRestoreRejectsAlreadyRestored(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	c.SetSessionHistoryRoot(filepath.Join(t.TempDir(), "db", "session"))
+	ctx := context.Background()
+
+	archiveLongSessionForStoreTest(t, c, ctx, "restore-restored", "Restore Restored", "claude", time.Date(2026, 5, 15, 10, 0, 0, 0, time.UTC), []string{"restore-1", "restore-2", "restore-3"})
+	if _, err := c.archiveStore.MarkRestored(ctx, "proj1", "restore-restored", "2026-05-17T00:00:00Z", sessionArchiveNativeSyncUpdate{}); err != nil {
+		t.Fatalf("MarkRestored: %v", err)
+	}
+
+	_, err := c.HandleSessionRequest(ctx, "session.archive.restore", "proj1", json.RawMessage(`{"sessionId":"restore-restored"}`))
+	if err == nil || !strings.Contains(err.Error(), "already restored") {
+		t.Fatalf("session.archive.restore err = %v, want already restored", err)
+	}
+}
+
 func TestHandleSessionRequestSessionMutationsRejectRunningSession(t *testing.T) {
 	for _, method := range []string{"session.archive", "session.delete", "session.reload"} {
 		t.Run(method, func(t *testing.T) {

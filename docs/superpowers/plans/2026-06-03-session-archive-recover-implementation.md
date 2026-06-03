@@ -184,7 +184,7 @@ git commit -m "feat: add archive store read helpers"
 - Modify: `server/internal/hub/client/client.go`
 - Modify: `server/internal/hub/client/client_test.go`
 
-- [ ] **Step 1: Write failing protocol tests**
+- [x] **Step 1: Write failing protocol tests**
 
 Add these tests to `client_test.go`:
 
@@ -205,7 +205,7 @@ map[string]any{"sessionId": "sess-archive", "readOnly": true, "latestTurnIndex":
 map[string]any{"ok": true, "sessionId": "sess-archive", "session": map[string]any{...}}
 ```
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run:
 
@@ -216,7 +216,7 @@ go test ./internal/hub/client -run "SessionArchive(List|Read|Restore)" -count=1
 
 Expected: unsupported session method failures.
 
-- [ ] **Step 3: Add request handlers**
+- [x] **Step 3: Add request handlers**
 
 Add cases in `HandleSessionRequest`:
 
@@ -231,7 +231,7 @@ case acp.RegistryMethodSessionArchiveRestore:
 
 Each request validates `sessionId` for read/restore.
 
-- [ ] **Step 4: Implement list/read response conversion**
+- [x] **Step 4: Implement list/read response conversion**
 
 Add helpers:
 
@@ -244,7 +244,7 @@ func archiveTurnsFromContents(contents []string) []sessionViewTurn
 
 `ReadArchivedSession` returns `messages: []` only if the existing frontend type requires it, and always returns `readOnly: true`.
 
-- [ ] **Step 5: Implement restore**
+- [x] **Step 5: Implement restore**
 
 Add:
 
@@ -263,11 +263,11 @@ Flow:
 7. Mark manifest restored with current UTC timestamp and native warning.
 8. Return restored `sessionViewSummary`.
 
-- [ ] **Step 6: Verify GREEN**
+- [x] **Step 6: Verify GREEN**
 
 Run the Task 3 client tests and confirm exit code 0.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add server/internal/hub/client/client.go server/internal/hub/client/client_test.go

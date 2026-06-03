@@ -65,6 +65,22 @@ type sessionArchiveManifestEntry struct {
 	NativeSyncWarning  string `json:"nativeSyncWarning,omitempty"`
 }
 
+type sessionArchiveSummary struct {
+	SessionID          string `json:"sessionId"`
+	ProjectName        string `json:"projectName"`
+	Title              string `json:"title,omitempty"`
+	AgentType          string `json:"agentType,omitempty"`
+	CreatedAt          string `json:"createdAt,omitempty"`
+	UpdatedAt          string `json:"updatedAt,omitempty"`
+	ArchivedAt         string `json:"archivedAt"`
+	RestoredAt         string `json:"restoredAt,omitempty"`
+	TurnCount          int    `json:"turnCount"`
+	GapCount           int    `json:"gapCount"`
+	NativeArchivedAt   string `json:"nativeArchivedAt,omitempty"`
+	NativeUnarchivedAt string `json:"nativeUnarchivedAt,omitempty"`
+	NativeSyncWarning  string `json:"nativeSyncWarning,omitempty"`
+}
+
 type sessionArchiveNativeSyncUpdate struct {
 	NativeArchivedAt   string
 	NativeUnarchivedAt string
