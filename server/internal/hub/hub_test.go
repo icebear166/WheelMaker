@@ -2252,6 +2252,53 @@ func TestProjectFileIndexRebuildWritesGitIgnoredLineIndexAndSearchesFuzzy(t *tes
 	}
 }
 
+func TestProjectFileIndexQuerySessionNarrowsBeyondInitialTopSet(t *testing.T) {
+	manager := newProjectFileIndexManager(t.TempDir())
+	project := projectFileIndexProject{ProjectID: "hub-a:large", Name: "large", Root: t.TempDir()}
+	initialMatchCount := 7000
+	paths := make([]string, 0, initialMatchCount+1)
+	for i := 0; i < initialMatchCount; i++ {
+		paths = append(paths, fmt.Sprintf("src/m%04d.ts", i))
+	}
+	paths = append(paths, "src/MobileInstance.ts")
+	manager.snapshots[project.ProjectID] = projectFileIndexSnapshot{
+		ProjectID: project.ProjectID,
+		Name:      project.Name,
+		Path:      project.Root,
+		Status:    projectFileIndexStatusIndexed,
+		FileCount: len(paths),
+		Paths:     paths,
+	}
+
+	first, err := manager.search(context.Background(), project, projectFileIndexSearchRequest{
+		Query:          "m",
+		QuerySessionID: "session-large",
+		QueryID:        1,
+		Limit:          20,
+	})
+	if err != nil {
+		t.Fatalf("search m: %v", err)
+	}
+	for _, result := range first.Results {
+		if result.Path == "src/MobileInstance.ts" {
+			t.Fatalf("first query unexpectedly returned target in capped UI results: %+v", first.Results)
+		}
+	}
+
+	refined, err := manager.search(context.Background(), project, projectFileIndexSearchRequest{
+		Query:          "mi",
+		QuerySessionID: "session-large",
+		QueryID:        2,
+		Limit:          20,
+	})
+	if err != nil {
+		t.Fatalf("search mi: %v", err)
+	}
+	if len(refined.Results) == 0 || refined.Results[0].Path != "src/MobileInstance.ts" {
+		t.Fatalf("refined results=%+v, want MobileInstance despite first query cap", refined.Results)
+	}
+}
+
 func TestProjectFileIndexStartRebuildDedupesRunningProjectAndKeepsStatus(t *testing.T) {
 	root := t.TempDir()
 	writeProjectFileForFileIndexTest(t, root, "src/MobileInstance.ts", "export const mobile = true;\n")
