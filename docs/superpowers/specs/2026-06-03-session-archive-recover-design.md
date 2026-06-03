@@ -1,205 +1,228 @@
-# Session Archive, Recover, And Older Session Folding Design
+# Session 归档、恢复与旧会话折叠设计
 
-Date: 2026-06-03
+日期：2026-06-03
 
-## Goal
+## 目标
 
-Improve chat session navigation and archive management across all projects:
+改进 Chat 会话导航和跨 Project 的归档管理：
 
-1. Fold older sessions in each Project by default.
-2. Add an Archive menu next to the session search control.
-3. Let users batch archive old sessions without adding a server-side bulk archive protocol.
-4. Add a real Recover flow for archived sessions, including read-only preview and confirmed restore.
-5. Keep WheelMaker archive state authoritative while optionally syncing native Codex App archive state.
+1. 每个 Project 下自动折叠较旧的 session。
+2. 在 session 搜索按钮旁增加 Archive 菜单。
+3. 支持一次性批量归档旧 session，但不新增服务端批量归档协议。
+4. 支持真正的 Recover 流程：先只读预览归档对话，再确认恢复到普通 session list。
+5. WheelMaker archive store 是归档/恢复的 source of truth；Codex App 原生 archive/unarchive 只做同步增强。
 
-## Existing Context
+## 当前上下文
 
-The current `session.archive` protocol is project-scoped and removes a non-running normal session from the regular chat list. Long sessions are written to `~/.wheelmaker/db/session-archive/<projectName>/archive.pack` and indexed by `manifest.json`; short sessions are deleted without an archive record. Existing archive v1 explicitly does not provide archive list, read, or restore APIs.
+现有 `session.archive` 是 project-scoped Registry 方法。它会把非 running 的普通 session 移出常规 chat list：
 
-`session.delete` is a hard WheelMaker delete. It removes the normal session record and local session data. It does not write to the archive store.
+- 长 session 写入 `~/.wheelmaker/db/session-archive/<projectName>/archive.pack`，并在 `manifest.json` 中登记。
+- 短 session 直接删除，不写 archive pack 或 manifest。
+- 当前 v1 文档明确写着：归档后不支持恢复，也没有归档列表/读取 API。
 
-The app already has project-scoped session search in the chat session navigation. Search mode is separate from the normal Project/session list.
+`session.delete` 是 WheelMaker 硬删除，不写 archive store。
 
-ACP currently exposes session lifecycle methods such as `session/new`, `session/load`, `session/list`, `session/prompt`, and `session/cancel`. It does not expose a standard archive, unarchive, restore, or delete session method.
+ACP 当前只定义了 `session/new`、`session/load`、`session/list`、`session/prompt`、`session/cancel` 等生命周期方法，没有标准的 archive、unarchive、restore 或 delete session 方法。
 
-The installed Codex App Server schema from `codex-cli 0.133.0` includes native `thread/archive` and `thread/unarchive` requests, with `thread/archived` and `thread/unarchived` notifications. The current WheelMaker Codex App adapter does not yet expose these methods. The schema does not expose a `thread/delete` request.
+已确认本机 `codex-cli 0.133.0` 生成的 Codex App Server schema 包含：
 
-## Non-Goals
+- `thread/archive { threadId }`
+- `thread/unarchive { threadId }`
+- `thread/archived`
+- `thread/unarchived`
 
-- Do not add `session.archive.bulk`.
-- Do not add a persistent automatic archive policy or background scheduler.
-- Do not add fuzzy matching or archive search.
-- Do not make archived preview writable.
-- Do not delete native agent histories from `.codex`, `.claude`, `.copilot`, or other provider stores.
-- Do not expose `codexapp` as a public agent identity. `codexapp*` names may remain internal bridge implementation names.
+当前 WheelMaker 的 Codex App adapter 还没有接这两个方法。schema 中没有看到 `thread/delete`。
 
-## Confirmed Product Decisions
+## 非目标
 
-- Age checks use session `updatedAt`, meaning last active time.
-- A session is older than N days only when `now - updatedAt > N * 24h`.
-- Invalid or missing `updatedAt` is excluded from older folding and automatic batch archive candidates.
-- Older folding threshold is 5 days.
-- Batch archive options are one-shot actions for sessions older than 7 days or 14 days.
-- Batch archive runs from the frontend by serially calling existing single-session `session.archive`.
-- Batch archive covers all known Projects, including Projects hidden in the Chat UI.
-- Batch archive is not limited by current Project expansion, `Show older`, search state, or visible rows.
-- Batch archive skips running sessions when building candidates; server errors remain the final truth during execution.
-- Batch archive requires a confirmation after candidate counting and before execution.
-- Batch archive is fully serial, not concurrent.
-- Recover is a real restore into the normal session list.
-- Recover mode reuses the chat session navigation area instead of a separate modal list.
-- Clicking an archived session previews it read-only on the right.
-- The selected archived row shows a Restore action.
-- Restore requires a confirmation dialog.
-- Restore success exits Archived mode, refreshes the target Project session list, and opens the restored normal session.
-- Search mode and Archived mode are mutually exclusive.
-- Archive button is placed to the left of the search button and is hidden while search is expanded or active.
-- Older folding expansion state is stored per Project in `sessionStorage`, so reload in the same tab can preserve it while an app/window restart may reset it.
+- 不新增 `session.archive.bulk`。
+- 不做持久化的自动归档策略。
+- 不做后台定时归档任务。
+- 不做 archive search 或 fuzzy search。
+- 不允许归档预览直接编辑或发送消息。
+- 不删除 `.codex`、`.claude`、`.copilot` 等 agent 原生历史。
+- 不重新暴露 `codexapp` 作为公开 agent identity；`codexapp*` 可以继续作为内部 bridge 命名。
 
-## Frontend Behavior
+## 已确认的产品规则
 
-### Older Session Folding
+- 所有时间判断都使用 session 的 `updatedAt`，也就是最后活跃时间。
+- “超过 N 天”定义为 `now - updatedAt > N * 24h`。
+- `updatedAt` 缺失或无法解析的 session 不参与 older folding，也不进入自动批量归档候选。
+- 每个 Project 下超过 5 天的 session 进入 older 分组。
+- older session 数量大于 1 时自动折叠；只有 0 或 1 条 older session 时不折叠。
+- `Archive > 7 days` 和 `Archive > 14 days` 是一次性操作，不保存长期策略。
+- 批量归档由前端逐个调用现有 `session.archive`，完全串行执行，不并发。
+- 批量归档覆盖所有已知 Project，包括 Chat UI 中隐藏的 Project。
+- 批量归档不受 Project 折叠状态、`Show older` 状态、搜索状态、当前可见行影响。
+- 构建批量候选时跳过 running session；执行时如果服务端仍返回 running 或其他错误，以服务端结果为准。
+- 批量归档执行前必须先计算候选数量并弹确认。
+- Recover 必须是真恢复，恢复后 session 回到普通 session list，可打开查看，也可以继续发送消息。
+- Recover 模式复用 chat session 区域，不使用独立列表弹窗。
+- 点击归档 session 后，右侧加载只读对话预览，不立即恢复。
+- 被选中的归档 row 上显示 Restore 操作。
+- 点击 Restore 后弹确认框，确认后才调用恢复协议。
+- 恢复成功后退出 Archived 模式，刷新对应 Project 的普通 session list，并打开恢复出来的普通 session。
+- 搜索模式和 Archived 模式互斥。
+- Archive 按钮放在搜索按钮左侧；搜索展开或搜索 active 时隐藏 Archive 按钮。
+- `Show older` 展开状态按 Project 写入 `sessionStorage`，同一 tab 刷新页面不丢；关闭 App/重启后可以重置。
 
-For each Project in the normal chat session list:
+## 前端行为
 
-1. Split sessions by `updatedAt`.
-2. Recent sessions are those where `now - updatedAt <= 5 * 24h`.
-3. Older sessions are those where `now - updatedAt > 5 * 24h`.
-4. If older session count is greater than 1, hide all older sessions by default and render a `Show N older` row.
-5. If older session count is 0 or 1, render all sessions normally.
-6. When the user clicks `Show N older`, render the older sessions and a `Show less` row for that Project.
+### 旧 session 折叠
 
-The expansion key is project-scoped and stored in `sessionStorage`, for example:
+普通 chat session list 中，每个 Project 独立处理：
+
+1. 按 `updatedAt` 把 session 分成 recent 和 older。
+2. recent：`now - updatedAt <= 5 * 24h`。
+3. older：`now - updatedAt > 5 * 24h`。
+4. older 数量大于 1 时，默认隐藏全部 older session，只显示 `Show N older`。
+5. older 数量为 0 或 1 时，正常显示，不折叠。
+6. 点击 `Show N older` 后显示该 Project 下所有 older session，并显示 `Show less`。
+
+展开状态存入 `sessionStorage`，建议 key：
 
 ```text
 wheelmaker.chat.olderSessionsExpanded.v1
 ```
 
-The stored value is a JSON object keyed by project id. Invalid JSON or unknown keys are ignored. The state only affects normal session list rendering. It does not affect search results, Archived mode, batch archive candidates, or hidden Project inclusion.
+值是按 project id 索引的 JSON object。无效 JSON 或未知 key 直接忽略。
 
-### Archive Menu
+该状态只影响普通 session list 渲染，不影响：
 
-Render an Archive icon button with `codicon-archive` next to the existing session search control:
+- search results；
+- Archived 模式；
+- 批量归档候选；
+- hidden Project 是否纳入批量归档。
 
-- Desktop: in the chat sidebar title actions, to the left of search.
-- Mobile: in the mobile chat toolbar, to the left of search.
-- Hide the Archive button while search is expanded or an active search is present.
+### Archive 菜单
 
-Clicking the Archive button opens a compact menu with:
+Archive 按钮使用 `codicon-archive`，位置：
+
+- desktop：chat sidebar title actions 中，搜索按钮左侧；
+- mobile：mobile chat toolbar 中，搜索按钮左侧。
+
+搜索展开或 active search 存在时隐藏 Archive 按钮。
+
+点击 Archive 按钮打开菜单：
 
 1. `Archive > 7 days`
 2. `Archive > 14 days`
 3. `Recover...`
 
-Opening `Recover...` exits search mode if needed and enters Archived mode.
+点击 `Recover...` 时，如果当前处于搜索模式，先退出搜索，再进入 Archived 模式。
 
-### Batch Archive Flow
+### 批量归档流程
 
-When the user selects `Archive > N days`:
+用户点击 `Archive > N days` 后：
 
-1. Build candidates from the latest frontend `projectSessionsByProjectId` across all known Projects.
-2. Include sessions where:
-   - `updatedAt` parses successfully;
-   - `now - updatedAt > N * 24h`;
-   - `running` is not true.
-3. Include hidden Projects and collapsed Projects.
-4. Ignore `Show older` state.
-5. If no candidates exist, show a lightweight notice such as `No sessions older than 7 days`.
-6. If candidates exist, show a confirmation dialog with count and Project count.
-7. On confirmation, execute serially:
-   - call `service.archiveProjectSession(projectId, sessionId)`;
-   - update progress after each result;
-   - remove successful sessions from local normal session state;
-   - record failures and continue.
+1. 前端基于最新 `projectSessionsByProjectId`，从所有已知 Project 收集候选。
+2. 候选条件：
+   - `updatedAt` 可解析；
+   - `now - updatedAt > N * 24h`；
+   - `running !== true`。
+3. hidden Project 和 collapsed Project 都要纳入。
+4. 忽略 `Show older` 状态。
+5. 候选数为 0 时，显示轻量提示，例如 `No sessions older than 7 days`。
+6. 候选数大于 0 时，弹确认框，显示总数量和 Project 数量，例如：
 
-The progress UI should show at least:
+```text
+Archive 38 sessions older than 7 days across 6 projects?
+```
 
-- total candidate count;
-- completed count;
-- current session title or Project title;
-- archived count;
-- failed count.
+7. 用户确认后完全串行执行：
+   - 调用 `service.archiveProjectSession(projectId, sessionId)`；
+   - 每完成一条就更新进度；
+   - 成功则从普通 session list 本地状态中移除；
+   - 失败则记录错误并继续下一条。
 
-The final result should show:
+进度 UI 至少显示：
+
+- 总候选数；
+- 已完成数；
+- 当前处理 session title 或 Project；
+- 成功归档数；
+- 失败数。
+
+结束后显示 summary：
 
 ```text
 Archived X, failed Y
 ```
 
-If failures exist, show rows with Project name, session title or id, and the error message. Running errors that still occur from the server are treated as per-session failures or skipped rows in the summary; they must not stop the remaining serial run.
+如果有失败项，展示 Project 名称、session title 或 id、错误信息。单条失败不得中断剩余候选。
 
-### Archived Mode
+### Archived 模式
 
-Archived mode replaces the normal session navigation body. It keeps the same overall chat shell.
+Archived 模式替换普通 session navigation body，但保留整体 chat shell。
 
-Entry:
+进入：
 
-- User clicks Archive menu `Recover...`.
-- UI fan-outs `session.archive.list` to all known Projects, including Projects hidden in the Chat UI.
-- Ordinary session search is exited.
+- 用户点击 Archive 菜单中的 `Recover...`。
+- UI 对所有已知 Project fan-out 调用 `session.archive.list`，包括 Chat UI 中隐藏的 Project。
+- 退出普通 session search。
 
-Header:
+Header：
 
-- Shows `Archived`.
-- Shows a `Cancel` button.
-- `Cancel` exits Archived mode, clears archived selection and preview, and restores the normal session list.
+- 显示 `Archived`。
+- 显示 `Cancel` 按钮。
+- 点击 `Cancel` 退出 Archived 模式，清空归档选择和只读预览，恢复普通 session list。
 
-List:
+左侧列表：
 
-- Group archived records by Project.
-- Render Project ordering consistent with the normal Project list.
-- Render session rows with title, agent tag, original updated time, and archived time.
-- Records with non-empty `restoredAt` are not shown by default because `session.archive.list` filters them out.
+- 按 Project 分组展示归档记录。
+- Project 顺序与普通 Project list 一致。
+- session row 展示 title、agent tag、原 `updatedAt`、`archivedAt`。
+- `session.archive.list` 默认只返回 `restoredAt` 为空的记录，所以已恢复记录默认不显示。
 
-Selecting an archived row:
+点击 archived row：
 
-1. Calls `session.archive.read` for that Project and session id.
-2. Loads the returned turns/messages into the right chat content area.
-3. Marks the selected archived row as selected.
-4. Shows a `Restore` action as a floating or inline action on the selected row.
-5. Puts the chat content area in read-only mode.
+1. 调用该 Project 的 `session.archive.read`。
+2. 右侧 chat 内容区加载返回的 turns/messages。
+3. 该 archived row 进入 selected 状态。
+4. selected row 上显示 `Restore` 浮层或 inline 操作按钮。
+5. chat 内容区进入只读模式。
 
-Read-only preview:
+只读预览：
 
-- Composer is hidden or disabled.
-- Sending, canceling, config updates, attachment upload, and voice input are unavailable.
-- Preview does not update normal selected chat persistence.
-- Preview does not update read cursors.
-- Preview does not write the ordinary chat durable cache as if this were an active normal session.
+- composer 隐藏或禁用。
+- 禁止发送、取消、配置更新、附件上传、语音输入。
+- 不更新普通 selected chat persistence。
+- 不更新 read cursor。
+- 不把预览内容写入普通 chat durable cache。
 
-Restore:
+Restore：
 
-1. User clicks `Restore` on the selected archived row.
-2. UI opens a confirmation dialog:
+1. 用户点击 selected archived row 上的 `Restore`。
+2. UI 弹确认框：
 
 ```text
 Restore this archived session to the active chat list?
 ```
 
-3. On confirmation, call `session.archive.restore`.
-4. On success:
-   - exit Archived mode;
-   - refresh the target Project session list;
-   - select and open the restored normal session;
-   - restore normal composer behavior.
-5. On failure:
-   - remain in Archived mode;
-   - keep the preview visible;
-   - show row-level or dialog-level error text.
+3. 确认后调用 `session.archive.restore`。
+4. 成功后：
+   - 退出 Archived 模式；
+   - 刷新目标 Project session list；
+   - 选中并打开恢复出来的普通 session；
+   - 恢复正常 composer 行为。
+5. 失败时：
+   - 留在 Archived 模式；
+   - 保留只读预览；
+   - 显示 row-level 或 dialog-level 错误。
 
-## Server Protocol
+## 服务端协议
 
-All new methods remain project-scoped and route through the existing `session.*` Registry forwarding model.
+新增协议都保持 project-scoped，继续走现有 `session.*` Registry forwarding 模型。
 
 ### `session.archive.list`
 
-Request payload:
+请求：
 
 ```ts
 type SessionArchiveListRequest = {};
 ```
 
-Response payload:
+响应：
 
 ```ts
 type SessionArchiveListResponse = {
@@ -223,17 +246,17 @@ type SessionArchiveSummary = {
 };
 ```
 
-Behavior:
+行为：
 
-- Read the Project archive manifest.
-- Return only records without `restoredAt`.
-- Sort by `updatedAt` descending, falling back to `archivedAt` descending, then `sessionId`.
-- Missing archive store or manifest returns an empty list.
-- Corrupt manifest returns a clear project-level error.
+- 读取当前 Project 的 archive manifest。
+- 只返回 `restoredAt` 为空的记录。
+- 排序：`updatedAt` desc，缺失时用 `archivedAt` desc，再用 `sessionId` 稳定排序。
+- archive store 或 manifest 不存在时返回空列表。
+- manifest 损坏时返回清晰的 project-level error。
 
 ### `session.archive.read`
 
-Request payload:
+请求：
 
 ```ts
 type SessionArchiveReadRequest = {
@@ -241,7 +264,7 @@ type SessionArchiveReadRequest = {
 };
 ```
 
-Response payload should mirror enough of `session.read` for the existing chat renderer:
+响应要尽量贴近现有 `session.read`，方便复用 chat renderer：
 
 ```ts
 type SessionArchiveReadResponse = {
@@ -254,23 +277,23 @@ type SessionArchiveReadResponse = {
 };
 ```
 
-Behavior:
+行为：
 
-- Validate `sessionId`.
-- Look up the manifest entry.
-- Reject missing or restored entries with a clear error.
-- Read the WMSA segment from `archive.pack` using `offset` and `length`.
-- Verify segment header, session id, codec, compressed length, uncompressed length, and SHA-256 fields.
-- Decompress gzip payload.
-- Parse WMT2 turns.
-- Convert turn contents using the same read path or parser used by normal `session.read` so the frontend renderer receives familiar data.
-- Return archive gap turns as readable gap entries; do not drop them.
-- Do not recreate a normal session.
-- Do not update read cursors or normal session sync.
+- 校验 `sessionId`。
+- 从 manifest 查找 entry。
+- entry 不存在或已经 `restoredAt` 时返回明确错误。
+- 按 `offset` 和 `length` 从 `archive.pack` 读取 WMSA segment。
+- 校验 segment header、session id、codec、压缩长度、解压长度、SHA-256。
+- gzip 解压。
+- 解析 WMT2 turns。
+- 使用与普通 `session.read` 相同或共享的转换逻辑，把 turn contents 转为前端可渲染的数据。
+- archive gap turn 要作为可读 gap 展示，不要丢弃。
+- 不创建普通 session。
+- 不更新 read cursor 或普通 session sync。
 
 ### `session.archive.restore`
 
-Request payload:
+请求：
 
 ```ts
 type SessionArchiveRestoreRequest = {
@@ -278,7 +301,7 @@ type SessionArchiveRestoreRequest = {
 };
 ```
 
-Response payload:
+响应：
 
 ```ts
 type SessionArchiveRestoreResponse = {
@@ -289,58 +312,62 @@ type SessionArchiveRestoreResponse = {
 };
 ```
 
-Behavior:
+行为：
 
-1. Validate `sessionId`.
-2. Load the archive manifest entry.
-3. Reject if `restoredAt` is already set.
-4. Reject if a normal session with the same id already exists, unless a future implementation explicitly chooses idempotent restore.
-5. Read and verify archive payload exactly as `session.archive.read` does.
-6. Recreate ordinary session turn files from the WMT2 payload.
-7. Recreate the `sessions` table row with:
-   - `ID = sessionId`;
-   - `ProjectName = current project`;
-   - `Status = SessionPersisted`;
-   - `AgentType = entry.AgentType`;
-   - `Title = entry.Title`;
-   - `CreatedAt = entry.CreatedAt` when present, otherwise `entry.ArchivedAt`;
-   - `LastActiveAt = entry.UpdatedAt` when present, otherwise `entry.ArchivedAt`;
-   - `SessionSyncJSON.latestPersistedTurnIndex = turnCount`.
-8. Best-effort native unarchive for agents that support it.
-9. Mark manifest entry `restoredAt = now` and record native sync metadata.
-10. Return the restored session summary and any native sync warning.
+1. 校验 `sessionId`。
+2. 加载 archive manifest entry。
+3. 如果 `restoredAt` 已存在，返回已恢复错误。
+4. 如果普通 session store 中已经存在同 id session，返回 `session already exists`，除非实现计划明确选择幂等 restore。
+5. 按 `session.archive.read` 同样的规则读取并校验 archive payload。
+6. 从 WMT2 payload 重建普通 session turn files。
+7. 重建 `sessions` 表记录：
+   - `ID = sessionId`；
+   - `ProjectName = current project`；
+   - `Status = SessionPersisted`；
+   - `AgentType = entry.AgentType`；
+   - `Title = entry.Title`；
+   - `CreatedAt = entry.CreatedAt`，缺失时用 `entry.ArchivedAt`；
+   - `LastActiveAt = entry.UpdatedAt`，缺失时用 `entry.ArchivedAt`；
+   - `SessionSyncJSON.latestPersistedTurnIndex = turnCount`。
+8. 对支持 native unarchive 的 agent 执行 best-effort native unarchive。
+9. manifest entry 写入 `restoredAt = now`，同时记录 native sync metadata。
+10. 返回恢复后的 session summary 和 warning。
 
-Restore must be careful about ordering. The normal session row and turn files should not be left half-created if WMSA verification or turn decode fails. Native unarchive failure does not roll back the WheelMaker restore. If manifest marking fails after the normal session has been restored, the error should be reported clearly so a retry or repair can resolve the inconsistent state.
+恢复顺序要谨慎：
 
-### Existing `session.archive`
+- WMSA 校验或 turn decode 失败时，不应留下半恢复的普通 session row 或 turn files。
+- native unarchive 失败不回滚 WheelMaker restore。
+- 如果普通 session 已恢复但 manifest 标记失败，要返回清晰错误，方便后续 retry 或 repair。
 
-The existing single-session `session.archive` remains the only archive execution method.
+### 现有 `session.archive`
 
-Changes:
+继续使用现有单条归档协议，作为唯一执行归档的服务端方法。
 
-- After WheelMaker archive store append succeeds and before or after active session removal, perform best-effort native archive for agents that support it.
-- Native archive failure must not roll back the WheelMaker archive.
-- The response may include `warning`.
-- The archive manifest should record native sync metadata:
-  - `nativeArchivedAt` when successful;
-  - `nativeSyncWarning` when failed.
+扩展行为：
 
-Short sessions with `latestPersistedTurnIndex < 3` continue to be deleted without writing archive pack or manifest. Native archive for such sessions is not required because there is no WheelMaker archive record to recover.
+- WheelMaker archive store 写入成功后，对支持 native archive 的 agent 做 best-effort native archive。
+- native archive 失败不回滚 WheelMaker archive。
+- 响应可以包含 `warning`。
+- manifest 记录 native sync 信息：
+  - 成功：`nativeArchivedAt`；
+  - 失败：`nativeSyncWarning`。
 
-### Existing `session.delete`
+`latestPersistedTurnIndex < 3` 的短 session 继续直接删除，不写 archive pack 或 manifest。因为没有 WheelMaker archive record，不要求 native archive。
 
-`session.delete` remains WheelMaker hard delete:
+### 现有 `session.delete`
 
-- no archive pack write;
-- no manifest tombstone;
-- no native Codex delete because no `thread/delete` method is available in the checked Codex App schema;
-- unified WheelMaker artifact cleanup still applies.
+`session.delete` 继续作为 WheelMaker 硬删除：
 
-## Archive Manifest Extension
+- 不写 archive pack；
+- 不写 manifest tombstone；
+- 不调用 Codex native delete，因为当前 Codex App schema 没有 `thread/delete`；
+- 仍执行统一 WheelMaker artifact cleanup。
 
-Manifest version can remain backward-compatible if the new fields are optional.
+## Archive Manifest 扩展
 
-Add optional fields to each session entry:
+manifest 可以保持向后兼容，新字段都是 optional。
+
+每个 session entry 增加：
 
 ```go
 RestoredAt          string `json:"restoredAt,omitempty"`
@@ -349,40 +376,40 @@ NativeUnarchivedAt  string `json:"nativeUnarchivedAt,omitempty"`
 NativeSyncWarning   string `json:"nativeSyncWarning,omitempty"`
 ```
 
-Existing v1 entries without these fields remain valid.
+旧 v1 entry 没有这些字段仍然有效。
 
-`restoredAt` is the source of truth for whether a record appears in Recover mode.
+`restoredAt` 是 Recover 是否展示该记录的 source of truth。
 
-## Archive Store Read/Restore Internals
+## Archive Store 读写内部设计
 
-Extend `sessionArchiveStore` with read-oriented helpers:
+扩展 `sessionArchiveStore` 的读/恢复 helper：
 
 - `ListSessions(ctx, projectName) ([]sessionArchiveManifestEntry, error)`
 - `ReadSession(ctx, projectName, sessionID) (entry, contents, error)`
 - `MarkRestored(ctx, projectName, sessionID, restoredAt, nativeWarning) (entry, error)`
 - `UpdateNativeSync(ctx, projectName, sessionID, fields) error`
 
-The WMSA read path should:
+WMSA read path：
 
-1. open `archive.pack`;
-2. read `offset:length`;
-3. validate magic `WMSA`;
-4. validate segment version and codec;
-5. validate embedded session id;
-6. validate compressed and uncompressed lengths;
-7. validate SHA-256 hashes where manifest values are present;
-8. decompress gzip;
-9. parse WMT2 payload into turn content strings.
+1. 打开 `archive.pack`。
+2. 读取 `offset:length`。
+3. 校验 magic `WMSA`。
+4. 校验 segment version 和 codec。
+5. 校验 segment 内嵌 session id。
+6. 校验 compressed / uncompressed length。
+7. manifest 中有 SHA-256 时校验 hash。
+8. gzip 解压。
+9. 解析 WMT2 payload，得到 turn content strings。
 
-The restore path should write ordinary turn files through existing session turn store primitives where possible, instead of hand-encoding independent WMT2 variants. If a direct writer helper is missing, add one close to the existing turn store boundary so archive restore does not duplicate low-level file format logic.
+restore 写普通 turn files 时，应尽量复用现有 session turn store 边界，而不是另写一份 WMT2 编码逻辑。如果现有 writer helper 不足，可以在 turn store 附近补一个小 helper。
 
-## Agent Native Archive Sync
+## Agent native archive sync
 
-### Boundary
+### 边界
 
-Do not let `client.Client` call Codex App runtime internals directly. The native sync boundary belongs in the agent layer.
+不要让 `client.Client` 直接调用 Codex App runtime 内部对象。native sync 边界应该在 agent 层。
 
-Add a small optional interface, for example:
+可以新增一个小的 optional interface：
 
 ```go
 type SessionArchiver interface {
@@ -391,135 +418,142 @@ type SessionArchiver interface {
 }
 ```
 
-`agent.Instance` can expose this by direct methods, or `client.Client` can type-assert an optional capability on the runtime instance. The implementation plan should choose the approach that best matches local `agent.Instance` patterns.
+实现计划可以选择：
+
+- 直接扩展 `agent.Instance`；
+- 或让 `client.Client` 对 runtime instance 做 optional capability type assertion。
+
+具体选哪种，以现有 `agent.Instance` 模式下最小、最清晰的改动为准。
 
 ### Codex App
 
-`codexappConn` implements native sync by calling:
+`codexappConn` 实现 native sync：
 
-- `thread/archive` with `{threadId}`
-- `thread/unarchive` with `{threadId}`
+- archive：调用 `thread/archive { threadId }`；
+- unarchive：调用 `thread/unarchive { threadId }`。
 
-Thread id resolution must follow existing ACP session id to runtime thread id mapping:
+thread id 解析遵循现有 ACP session id 到 runtime thread id 的映射：
 
-- archive and unarchive should resolve the ACP session id to the runtime thread id when a mapping exists;
-- if no mapping exists, use the ACP session id directly.
+- 如果存在 mapping，使用 runtime thread id；
+- 如果没有 mapping，直接使用 ACP session id。
 
-Native sync should not start a new thread. If the underlying Codex App thread is missing, return a warning and leave WheelMaker state authoritative.
+native sync 不应该创建新 thread。如果底层 Codex App thread 已不存在，返回 warning，WheelMaker manifest 仍是 source of truth。
 
-### Other Agents
+### 其他 agent
 
-Other agents do not implement native archive sync. Unsupported native sync is not a user-visible error.
+其他 agent 不实现 native archive sync。unsupported native sync 不是用户可见错误。
 
-## Resume Filtering Risk
+## Resume 风险处理
 
-Currently native resume scans exclude ordinary managed session ids from `sessions`. After archive, a session no longer exists in `sessions`, while native provider history may still exist. Without a guard, an archived native session could reappear under `Resume session`.
+当前 native resume scan 只排除普通 `sessions` 表里的 managed session id。session 被 archive 后不再存在于 `sessions`，但 agent 原生历史可能仍然存在。如果不处理，已归档 session 可能重新出现在 `Resume session` 入口。
 
-Fix:
+处理方式：
 
-- Extend managed id calculation for `session.resume.list` to include archive manifest records with empty `restoredAt`.
-- This prevents archived sessions from being imported through native Resume.
-- Recover mode remains the only way to restore WheelMaker archived sessions.
+- 扩展 `session.resume.list` 的 managed id 计算。
+- managed id 包含普通 `sessions` 表记录，也包含 archive manifest 中 `restoredAt` 为空的 session id。
+- 这样已归档未恢复 session 不会通过 native Resume 重新导入。
+- Recover 是恢复 WheelMaker archived session 的唯一入口。
 
-The filter is based on WheelMaker archive manifest, not native Codex archive state.
+该过滤以 WheelMaker archive manifest 为准，而不是以 Codex native archive state 为准。
 
-## Unified Artifact Cleanup
+## 统一 artifact cleanup
 
-WheelMaker-owned session artifacts should be cleaned uniformly for all agents.
+WheelMaker-owned session artifacts 应该对所有 agent 统一清理。
 
-Current cleanup only runs attachment cleanup for `agentType == codex`. This is too provider-specific for a WheelMaker-owned path. Replace it with a provider-neutral cleanup that removes:
+当前 cleanup 只对 `agentType == codex` 清理附件目录，这不应该成为长期语义。应改成 provider-neutral cleanup，清理：
 
 ```text
 ~/.wheelmaker/db/session/<projectName>/<sessionId>/attachments
 ```
 
-or the equivalent configured artifact root.
+或等价的已配置 artifact root。
 
-The cleanup must not delete native provider histories. It only removes WheelMaker-created transient artifacts, such as uploaded or converted local attachments.
+该 cleanup 只删除 WheelMaker 创建的临时资源，例如上传或转换后的本地附件；不能删除 agent 原生历史。
 
-## Error Handling
+## 错误处理
 
-Batch archive:
+批量归档：
 
-- A failed per-session `session.archive` call records the error and continues.
-- The final summary must include failures.
-- The frontend should not pretend native sync warnings are hard failures.
+- 单条 `session.archive` 失败时记录错误并继续。
+- 最终 summary 必须展示失败项。
+- native sync warning 不算硬失败。
 
-Native sync:
+native sync：
 
-- Native archive/unarchive failure returns or records `warning`.
-- WheelMaker archive/restore remains successful when the WheelMaker source of truth was updated correctly.
-- UI shows warnings in batch summaries or restore result details.
+- native archive/unarchive 失败返回或记录 `warning`。
+- WheelMaker archive/restore 状态正确更新后，native sync 失败不回滚。
+- UI 在 batch summary 或 restore result 中展示 warning。
 
-Archive read:
+archive read：
 
-- Corrupt WMSA segment, checksum mismatch, missing pack file, gzip failure, or WMT2 decode failure returns an explicit error.
-- Read failure does not mark a record restored.
+- WMSA segment 损坏、checksum 不匹配、pack 文件缺失、gzip 失败、WMT2 decode 失败，都返回明确错误。
+- read 失败不能把记录标记为 restored。
 
-Restore:
+restore：
 
-- Missing archive entry returns `session archive not found`.
-- Already restored entry returns `session archive already restored`.
-- Normal session id collision returns `session already exists`.
-- Native unarchive warning does not fail restore.
+- archive entry 不存在：返回 `session archive not found`。
+- 已恢复：返回 `session archive already restored`。
+- 普通 session id 冲突：返回 `session already exists`。
+- native unarchive warning 不导致 restore 失败。
 
-## Testing
+## 测试计划
 
-### Server Tests
+### 服务端测试
 
-- `session.archive.list` returns only un-restored entries.
-- `session.archive.list` sorts records stably.
-- `session.archive.read` reads WMSA/gzip/WMT2 and returns data compatible with normal chat rendering.
-- `session.archive.read` rejects restored entries.
-- `session.archive.read` surfaces pack corruption and hash mismatch.
-- `session.archive.restore` recreates session row and ordinary turn files.
-- `session.archive.restore` sets `SessionSyncJSON.latestPersistedTurnIndex`.
-- `session.archive.restore` marks `restoredAt`.
-- Restore followed by `session.list` shows the session.
-- Restore followed by `session.read` shows the restored history.
-- Restore of an already restored entry returns a clear error.
-- `session.resume.list` excludes archived but not restored session ids.
-- Unified artifact cleanup runs for non-codex agent types too.
-- Codex App native archive calls `thread/archive`.
-- Codex App native unarchive calls `thread/unarchive`.
-- Native sync errors are returned as warnings and do not roll back WheelMaker archive/restore.
-- `session.delete` does not call any native thread delete.
+- `session.archive.list` 只返回未恢复 entry。
+- `session.archive.list` 排序稳定。
+- `session.archive.read` 能读取 WMSA/gzip/WMT2，并返回 chat renderer 可用数据。
+- `session.archive.read` 拒绝已恢复 entry。
+- `session.archive.read` 能暴露 pack 损坏和 hash mismatch。
+- `session.archive.restore` 重建 session row 和普通 turn files。
+- `session.archive.restore` 设置 `SessionSyncJSON.latestPersistedTurnIndex`。
+- `session.archive.restore` 写入 `restoredAt`。
+- restore 后 `session.list` 能看到该 session。
+- restore 后 `session.read` 能读到历史。
+- 对已恢复 entry 再 restore 返回清晰错误。
+- `session.resume.list` 排除 archived 但未 restored 的 session id。
+- artifact cleanup 对非 codex agent 也执行。
+- Codex App native archive 调用 `thread/archive`。
+- Codex App native unarchive 调用 `thread/unarchive`。
+- native sync error 作为 warning 返回，不回滚 WheelMaker archive/restore。
+- `session.delete` 不调用任何 native thread delete。
 
-### Frontend Tests
+### 前端测试
 
-- Older sessions older than 5 days collapse only when count is greater than 1.
-- A single older session remains visible.
-- `Show N older` expands and `Show less` collapses.
-- Per-Project older expansion state round-trips through `sessionStorage`.
-- Archive button appears to the left of search.
-- Archive button hides while search is open or active.
-- Batch archive candidate calculation includes hidden Projects and ignores UI folding.
-- Batch archive excludes missing/invalid `updatedAt` and running sessions.
-- Batch archive confirms before execution.
-- Batch archive calls `archiveProjectSession` serially.
-- Batch archive progress increments after each session.
-- Batch archive failure continues to the next candidate.
-- `Recover...` enters Archived mode and fan-outs archive list calls.
-- `Cancel` exits Archived mode.
-- Clicking an archived row calls `session.archive.read`.
-- Archived preview renders read-only and disables composer actions.
-- Selected archived row shows Restore.
-- Restore opens confirmation before calling `session.archive.restore`.
-- Restore success exits Archived mode, refreshes sessions, and selects the restored session.
-- Restore failure stays in Archived mode and displays an error.
+- 超过 5 天的 older session 数量大于 1 时显示 `Show N older`。
+- 只有一条 older session 时不折叠。
+- `Show N older` 展开后，`Show less` 可以收回。
+- 每个 Project 的 older 展开状态可写入/读取 `sessionStorage`。
+- Archive 按钮位于搜索按钮左侧。
+- 搜索展开或 active 时隐藏 Archive 按钮。
+- 批量归档候选包含 hidden Project，并忽略 UI folding。
+- 批量归档排除 invalid/missing `updatedAt` 和 running sessions。
+- 批量归档执行前弹确认。
+- 批量归档串行调用 `archiveProjectSession`。
+- 每完成一条，进度递增。
+- 单条失败后继续下一条。
+- `Recover...` 进入 Archived 模式，并 fan-out 调用 archive list。
+- `Cancel` 退出 Archived 模式。
+- 点击 archived row 调用 `session.archive.read`。
+- Archived preview 只读并禁用 composer actions。
+- selected archived row 显示 Restore。
+- Restore 先弹确认，再调用 `session.archive.restore`。
+- Restore 成功后退出 Archived 模式、刷新 session list、选中恢复后的普通 session。
+- Restore 失败后留在 Archived 模式并显示错误。
 
-## Documentation Updates
+## 文档更新
 
-Update `docs/session-management-and-sync.zh-CN.md` after implementation to replace the v1 note that archive has no list/read/restore API.
+实现完成后需要更新：
 
-Update `docs/codex-app-server-acp-bridge.zh-CN.md` after implementation to document `thread/archive` and `thread/unarchive` mapping.
+- `docs/session-management-and-sync.zh-CN.md`：移除“archive v1 不支持 list/read/restore”的旧说明，补充新协议。
+- `docs/codex-app-server-acp-bridge.zh-CN.md`：补充 Codex App `thread/archive` / `thread/unarchive` 映射。
 
-## Open Implementation Notes
+## 实现计划阶段待定的技术选择
 
-These are implementation choices, not unresolved product requirements:
+以下不是产品需求悬而未决，而是实现计划中可以按代码结构选择的技术细节：
 
-- Whether optional native archive support is added directly to `agent.Instance` or via a smaller optional interface asserted by `client.Client`.
-- Whether `session.archive.read` reuses the exact `session.read` conversion path directly or introduces a shared helper for archived and normal turn content.
-- Whether read-only archived preview uses a separate in-memory store or a flagged branch in existing selected chat state.
+- native archive support 是直接扩展 `agent.Instance`，还是通过 optional interface type assertion。
+- `session.archive.read` 是直接复用现有 `session.read` 转换路径，还是抽出一个 archived/normal 共享 helper。
+- Archived 只读预览使用独立 in-memory store，还是在现有 selected chat state 上加只读分支。
 
-The product behavior is fixed by this design; these choices should be resolved in the implementation plan based on the smallest clean change to the current codebase.
+产品行为以本文档为准；这些技术选择应在实现计划中按最小清晰改动确定。
