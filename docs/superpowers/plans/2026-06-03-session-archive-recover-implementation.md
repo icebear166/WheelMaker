@@ -97,7 +97,7 @@ git commit -m "feat: register session archive recovery methods"
 - Modify: `server/internal/hub/client/session_archive.go`
 - Modify: `server/internal/hub/client/client_test.go`
 
-- [ ] **Step 1: Write failing store tests through client archive setup**
+- [x] **Step 1: Write failing store tests through client archive setup**
 
 Extend existing archive tests in `client_test.go` with these test names:
 
@@ -110,7 +110,7 @@ func TestSessionArchiveStoreMarkRestoredHidesEntryFromList(t *testing.T)
 
 The tests create long sessions with `latestPersistedTurnIndex >= 3`, archive them through the current path, then call the new archive store helpers directly.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run:
 
@@ -121,7 +121,7 @@ go test ./internal/hub/client -run "SessionArchiveStore(List|Read|Mark)" -count=
 
 Expected: compile failure because helpers and manifest fields are missing.
 
-- [ ] **Step 3: Add manifest fields and list helper**
+- [x] **Step 3: Add manifest fields and list helper**
 
 Extend `sessionArchiveManifestEntry`:
 
@@ -140,7 +140,7 @@ func (s *sessionArchiveStore) ListSessions(ctx context.Context, projectName stri
 
 Return only entries with empty `RestoredAt`, sorted by `UpdatedAt` desc, then `ArchivedAt` desc, then `SessionID` asc.
 
-- [ ] **Step 4: Add WMSA/WMT2 read helper**
+- [x] **Step 4: Add WMSA/WMT2 read helper**
 
 Add:
 
@@ -150,7 +150,7 @@ func (s *sessionArchiveStore) ReadSession(ctx context.Context, projectName, sess
 
 The helper reads `archive.pack` at `Offset:Length`, checks magic `WMSA`, version 1, gzip codec, embedded session id, compressed length, uncompressed length, segment SHA-256, uncompressed SHA-256, gzip decode, WMT2 magic/version/chunk metadata, and returns ordered turn content strings.
 
-- [ ] **Step 5: Add restore marker and native sync metadata helpers**
+- [x] **Step 5: Add restore marker and native sync metadata helpers**
 
 Add:
 
@@ -167,11 +167,11 @@ func (s *sessionArchiveStore) UpdateNativeSync(ctx context.Context, projectName,
 
 Both helpers rewrite the manifest atomically with existing `writeManifestLocked`.
 
-- [ ] **Step 6: Verify GREEN**
+- [x] **Step 6: Verify GREEN**
 
 Run the Task 2 client tests and confirm exit code 0.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add server/internal/hub/client/session_archive.go server/internal/hub/client/client_test.go

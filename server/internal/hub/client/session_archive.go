@@ -12,6 +12,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -58,6 +59,16 @@ type sessionArchiveManifestEntry struct {
 	ArchivedAt         string `json:"archivedAt"`
 	CreatedAt          string `json:"createdAt,omitempty"`
 	UpdatedAt          string `json:"updatedAt,omitempty"`
+	RestoredAt         string `json:"restoredAt,omitempty"`
+	NativeArchivedAt   string `json:"nativeArchivedAt,omitempty"`
+	NativeUnarchivedAt string `json:"nativeUnarchivedAt,omitempty"`
+	NativeSyncWarning  string `json:"nativeSyncWarning,omitempty"`
+}
+
+type sessionArchiveNativeSyncUpdate struct {
+	NativeArchivedAt   string
+	NativeUnarchivedAt string
+	NativeSyncWarning  string
 }
 
 func newSessionArchiveStore(root string) *sessionArchiveStore {
@@ -164,6 +175,277 @@ func (s *sessionArchiveStore) AppendSession(ctx context.Context, rec SessionReco
 		return sessionArchiveManifestEntry{}, false, err
 	}
 	return entry, true, nil
+}
+
+func (s *sessionArchiveStore) ListSessions(ctx context.Context, projectName string) ([]sessionArchiveManifestEntry, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if s == nil || strings.TrimSpace(s.root) == "" {
+		return nil, fmt.Errorf("session archive store is required")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	manifest, err := s.readManifestLocked(projectName)
+	if err != nil {
+		return nil, err
+	}
+	entries := make([]sessionArchiveManifestEntry, 0, len(manifest.Sessions))
+	for _, entry := range manifest.Sessions {
+		if strings.TrimSpace(entry.RestoredAt) != "" {
+			continue
+		}
+		entries = append(entries, entry)
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		left := archiveSortTime(entries[i])
+		right := archiveSortTime(entries[j])
+		if left == right {
+			return entries[i].SessionID < entries[j].SessionID
+		}
+		return left > right
+	})
+	return entries, nil
+}
+
+func (s *sessionArchiveStore) ReadSession(ctx context.Context, projectName, sessionID string) (sessionArchiveManifestEntry, []string, error) {
+	if err := ctx.Err(); err != nil {
+		return sessionArchiveManifestEntry{}, nil, err
+	}
+	if s == nil || strings.TrimSpace(s.root) == "" {
+		return sessionArchiveManifestEntry{}, nil, fmt.Errorf("session archive store is required")
+	}
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return sessionArchiveManifestEntry{}, nil, fmt.Errorf("session id is required")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	manifest, err := s.readManifestLocked(projectName)
+	if err != nil {
+		return sessionArchiveManifestEntry{}, nil, err
+	}
+	entry, ok := manifest.Sessions[sessionID]
+	if !ok {
+		return sessionArchiveManifestEntry{}, nil, fmt.Errorf("session archive not found: %s", sessionID)
+	}
+	if strings.TrimSpace(entry.RestoredAt) != "" {
+		return sessionArchiveManifestEntry{}, nil, fmt.Errorf("session archive already restored: %s", sessionID)
+	}
+	contents, err := s.readSessionContentsLocked(ctx, projectName, entry)
+	if err != nil {
+		return sessionArchiveManifestEntry{}, nil, err
+	}
+	return entry, contents, nil
+}
+
+func (s *sessionArchiveStore) MarkRestored(ctx context.Context, projectName, sessionID, restoredAt string, nativeUpdate sessionArchiveNativeSyncUpdate) (sessionArchiveManifestEntry, error) {
+	if err := ctx.Err(); err != nil {
+		return sessionArchiveManifestEntry{}, err
+	}
+	if s == nil || strings.TrimSpace(s.root) == "" {
+		return sessionArchiveManifestEntry{}, fmt.Errorf("session archive store is required")
+	}
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return sessionArchiveManifestEntry{}, fmt.Errorf("session id is required")
+	}
+	restoredAt = strings.TrimSpace(restoredAt)
+	if restoredAt == "" {
+		restoredAt = time.Now().UTC().Format(time.RFC3339)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	manifest, err := s.readManifestLocked(projectName)
+	if err != nil {
+		return sessionArchiveManifestEntry{}, err
+	}
+	entry, ok := manifest.Sessions[sessionID]
+	if !ok {
+		return sessionArchiveManifestEntry{}, fmt.Errorf("session archive not found: %s", sessionID)
+	}
+	if strings.TrimSpace(entry.RestoredAt) != "" {
+		return sessionArchiveManifestEntry{}, fmt.Errorf("session archive already restored: %s", sessionID)
+	}
+	entry.RestoredAt = restoredAt
+	applySessionArchiveNativeSyncUpdate(&entry, nativeUpdate)
+	manifest.Sessions[sessionID] = entry
+	manifest.UpdatedAt = restoredAt
+	if err := s.writeManifestLocked(projectName, manifest); err != nil {
+		return sessionArchiveManifestEntry{}, err
+	}
+	return entry, nil
+}
+
+func (s *sessionArchiveStore) UpdateNativeSync(ctx context.Context, projectName, sessionID string, update sessionArchiveNativeSyncUpdate) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if s == nil || strings.TrimSpace(s.root) == "" {
+		return fmt.Errorf("session archive store is required")
+	}
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return fmt.Errorf("session id is required")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	manifest, err := s.readManifestLocked(projectName)
+	if err != nil {
+		return err
+	}
+	entry, ok := manifest.Sessions[sessionID]
+	if !ok {
+		return fmt.Errorf("session archive not found: %s", sessionID)
+	}
+	applySessionArchiveNativeSyncUpdate(&entry, update)
+	manifest.Sessions[sessionID] = entry
+	manifest.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	return s.writeManifestLocked(projectName, manifest)
+}
+
+func (s *sessionArchiveStore) readSessionContentsLocked(ctx context.Context, projectName string, entry sessionArchiveManifestEntry) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(entry.Storage) != "pack" {
+		return nil, fmt.Errorf("unsupported archive storage: %s", entry.Storage)
+	}
+	if strings.TrimSpace(entry.File) == "" {
+		return nil, fmt.Errorf("archive file is required")
+	}
+	if entry.Offset < 0 || entry.Length <= 0 {
+		return nil, fmt.Errorf("invalid archive segment bounds")
+	}
+	packPath := filepath.Join(s.projectDir(projectName), entry.File)
+	f, err := os.Open(packPath)
+	if err != nil {
+		return nil, fmt.Errorf("open archive pack: %w", err)
+	}
+	defer f.Close()
+	segment := make([]byte, entry.Length)
+	if _, err := f.ReadAt(segment, entry.Offset); err != nil {
+		return nil, fmt.Errorf("read archive segment: %w", err)
+	}
+	return decodeArchiveSegment(entry, segment)
+}
+
+func decodeArchiveSegment(entry sessionArchiveManifestEntry, segment []byte) ([]string, error) {
+	if strings.TrimSpace(entry.SHA256) != "" {
+		if got := sha256Hex(segment); got != strings.TrimSpace(entry.SHA256) {
+			return nil, fmt.Errorf("archive segment sha256 mismatch: got %s want %s", got, entry.SHA256)
+		}
+	}
+	if len(segment) < 26 {
+		return nil, fmt.Errorf("archive segment too short")
+	}
+	if string(segment[0:4]) != sessionArchiveSegmentMagic {
+		return nil, fmt.Errorf("invalid archive segment magic")
+	}
+	if version := binary.LittleEndian.Uint16(segment[4:6]); version != sessionArchiveSegmentVersion {
+		return nil, fmt.Errorf("unsupported archive segment version %d", version)
+	}
+	if codec := segment[6]; codec != sessionArchiveCodecGzip {
+		return nil, fmt.Errorf("unsupported archive codec %d", codec)
+	}
+	sessionIDLen := int(binary.LittleEndian.Uint16(segment[8:10]))
+	compressedLen := int64(binary.LittleEndian.Uint64(segment[10:18]))
+	uncompressedLen := int64(binary.LittleEndian.Uint64(segment[18:26]))
+	payloadStart := 26 + sessionIDLen
+	payloadEnd := payloadStart + int(compressedLen)
+	if sessionIDLen <= 0 || payloadStart > len(segment) || payloadEnd != len(segment) {
+		return nil, fmt.Errorf("invalid archive segment payload bounds")
+	}
+	if gotSessionID := string(segment[26:payloadStart]); gotSessionID != strings.TrimSpace(entry.SessionID) {
+		return nil, fmt.Errorf("archive segment session id = %q, want %q", gotSessionID, entry.SessionID)
+	}
+	if entry.UncompressedLength > 0 && uncompressedLen != entry.UncompressedLength {
+		return nil, fmt.Errorf("archive uncompressed length = %d, want %d", uncompressedLen, entry.UncompressedLength)
+	}
+	reader, err := gzip.NewReader(bytes.NewReader(segment[payloadStart:payloadEnd]))
+	if err != nil {
+		return nil, fmt.Errorf("open archive gzip payload: %w", err)
+	}
+	defer reader.Close()
+	raw, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("read archive gzip payload: %w", err)
+	}
+	if int64(len(raw)) != uncompressedLen {
+		return nil, fmt.Errorf("archive gzip length = %d, want %d", len(raw), uncompressedLen)
+	}
+	if strings.TrimSpace(entry.UncompressedSHA256) != "" {
+		if got := sha256Hex(raw); got != strings.TrimSpace(entry.UncompressedSHA256) {
+			return nil, fmt.Errorf("archive payload sha256 mismatch: got %s want %s", got, entry.UncompressedSHA256)
+		}
+	}
+	return decodeArchiveWMT2(entry, raw)
+}
+
+func decodeArchiveWMT2(entry sessionArchiveManifestEntry, raw []byte) ([]string, error) {
+	if len(raw) < sessionTurnFilePreambleSize {
+		return nil, fmt.Errorf("archive WMT2 payload too short")
+	}
+	if string(raw[0:4]) != sessionTurnFileMagic {
+		return nil, fmt.Errorf("invalid archive WMT2 magic")
+	}
+	if version := binary.LittleEndian.Uint16(raw[4:6]); version != sessionTurnFileVersion {
+		return nil, fmt.Errorf("unsupported archive WMT2 version %d", version)
+	}
+	code := raw[6]
+	if code > sessionArchiveMaxChunkCode {
+		return nil, fmt.Errorf("unsupported archive WMT2 chunk size code %d", code)
+	}
+	if raw[7] != sessionTurnFileReservedByte {
+		return nil, fmt.Errorf("unsupported archive WMT2 reserved byte %d", raw[7])
+	}
+	capacity := int(sessionTurnCapacityForCode(code))
+	if entry.TurnCount < 0 || entry.TurnCount > capacity {
+		return nil, fmt.Errorf("archive turn count %d exceeds capacity %d", entry.TurnCount, capacity)
+	}
+	headerSize := sessionTurnFilePreambleSize + capacity*sessionTurnFileMetaSize
+	if len(raw) < headerSize {
+		return nil, fmt.Errorf("archive WMT2 header too short")
+	}
+	contents := make([]string, 0, entry.TurnCount)
+	for slot := 0; slot < entry.TurnCount; slot++ {
+		pos := sessionTurnFilePreambleSize + slot*sessionTurnFileMetaSize
+		offset := binary.LittleEndian.Uint32(raw[pos : pos+4])
+		length := binary.LittleEndian.Uint32(raw[pos+4 : pos+8])
+		if offset == 0 || length == 0 {
+			return nil, fmt.Errorf("archive turn %d is missing", slot+1)
+		}
+		end := int(offset) + int(length)
+		if int(offset) < headerSize || end > len(raw) {
+			return nil, fmt.Errorf("archive turn %d points outside payload", slot+1)
+		}
+		contents = append(contents, string(raw[int(offset):end]))
+	}
+	return contents, nil
+}
+
+func archiveSortTime(entry sessionArchiveManifestEntry) string {
+	if updatedAt := strings.TrimSpace(entry.UpdatedAt); updatedAt != "" {
+		return updatedAt
+	}
+	return strings.TrimSpace(entry.ArchivedAt)
+}
+
+func applySessionArchiveNativeSyncUpdate(entry *sessionArchiveManifestEntry, update sessionArchiveNativeSyncUpdate) {
+	if entry == nil {
+		return
+	}
+	if value := strings.TrimSpace(update.NativeArchivedAt); value != "" {
+		entry.NativeArchivedAt = value
+	}
+	if value := strings.TrimSpace(update.NativeUnarchivedAt); value != "" {
+		entry.NativeUnarchivedAt = value
+	}
+	entry.NativeSyncWarning = strings.TrimSpace(update.NativeSyncWarning)
 }
 
 func (s *sessionArchiveStore) readManifestLocked(projectName string) (sessionArchiveManifest, error) {

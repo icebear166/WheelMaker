@@ -2866,6 +2866,10 @@ type archiveManifestEntryForTest struct {
 	ArchivedAt         string `json:"archivedAt"`
 	CreatedAt          string `json:"createdAt"`
 	UpdatedAt          string `json:"updatedAt"`
+	RestoredAt         string `json:"restoredAt"`
+	NativeArchivedAt   string `json:"nativeArchivedAt"`
+	NativeUnarchivedAt string `json:"nativeUnarchivedAt"`
+	NativeSyncWarning  string `json:"nativeSyncWarning"`
 }
 
 func readArchiveManifestForTest(t *testing.T, historyRoot, projectName string) archiveManifestForTest {
@@ -2976,6 +2980,34 @@ func decodeWMT2ContentsForTest(t *testing.T, raw []byte, turnCount int) []string
 		contents = append(contents, string(raw[int(offset):end]))
 	}
 	return contents
+}
+
+func archiveLongSessionForStoreTest(t *testing.T, c *Client, ctx context.Context, sessionID, title, agentType string, updatedAt time.Time, contents []string) {
+	t.Helper()
+	if c == nil || c.sessionRecorder == nil || c.sessionRecorder.turnStore == nil {
+		t.Fatal("session test client with turn store is required")
+	}
+	if len(contents) < 3 {
+		t.Fatalf("archiveLongSessionForStoreTest requires at least 3 turns, got %d", len(contents))
+	}
+	if _, err := c.sessionRecorder.turnStore.WriteTurns(ctx, c.projectName, sessionID, 1, contents); err != nil {
+		t.Fatalf("WriteTurns: %v", err)
+	}
+	if err := c.store.SaveSession(ctx, &SessionRecord{
+		ID:              sessionID,
+		ProjectName:     c.projectName,
+		Status:          SessionPersisted,
+		AgentType:       agentType,
+		Title:           title,
+		SessionSyncJSON: sessionSyncJSON(int64(len(contents))),
+		CreatedAt:       updatedAt.Add(-time.Hour),
+		LastActiveAt:    updatedAt,
+	}); err != nil {
+		t.Fatalf("SaveSession: %v", err)
+	}
+	if err := c.ArchiveSession(ctx, sessionID); err != nil {
+		t.Fatalf("ArchiveSession(%s): %v", sessionID, err)
+	}
 }
 
 func TestSessionViewCreatedEventSilentlyHandlesMalformedTitle(t *testing.T) {
@@ -5399,6 +5431,116 @@ func TestHandleSessionRequestSessionArchiveFillsMissingTurnsWithGap(t *testing.T
 		if !strings.Contains(content, "session/archive_gap") || !strings.Contains(content, "missing_turn") {
 			t.Fatalf("content[%d] = %s, want archive gap turn", i, content)
 		}
+	}
+}
+
+func TestSessionArchiveStoreListSessionsExcludesRestoredAndSorts(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	historyRoot := filepath.Join(t.TempDir(), "db", "session")
+	c.SetSessionHistoryRoot(historyRoot)
+	ctx := context.Background()
+
+	archiveLongSessionForStoreTest(t, c, ctx, "older", "Older", "claude", time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC), []string{"older-1", "older-2", "older-3"})
+	archiveLongSessionForStoreTest(t, c, ctx, "newer", "Newer", "claude", time.Date(2026, 5, 15, 10, 0, 0, 0, time.UTC), []string{"newer-1", "newer-2", "newer-3"})
+	archiveLongSessionForStoreTest(t, c, ctx, "restored", "Restored", "claude", time.Date(2026, 5, 16, 10, 0, 0, 0, time.UTC), []string{"restored-1", "restored-2", "restored-3"})
+
+	if _, err := c.archiveStore.MarkRestored(ctx, "proj1", "restored", "2026-05-17T00:00:00Z", sessionArchiveNativeSyncUpdate{}); err != nil {
+		t.Fatalf("MarkRestored: %v", err)
+	}
+	entries, err := c.archiveStore.ListSessions(ctx, "proj1")
+	if err != nil {
+		t.Fatalf("ListSessions: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("entries len = %d, want 2: %#v", len(entries), entries)
+	}
+	if entries[0].SessionID != "newer" || entries[1].SessionID != "older" {
+		t.Fatalf("entry order = %s,%s, want newer,older", entries[0].SessionID, entries[1].SessionID)
+	}
+	for _, entry := range entries {
+		if entry.SessionID == "restored" {
+			t.Fatalf("restored entry returned in list: %#v", entry)
+		}
+	}
+}
+
+func TestSessionArchiveStoreReadSessionValidatesPackAndReturnsTurns(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	historyRoot := filepath.Join(t.TempDir(), "db", "session")
+	c.SetSessionHistoryRoot(historyRoot)
+	ctx := context.Background()
+
+	archiveLongSessionForStoreTest(t, c, ctx, "readable", "Readable", "claude", time.Date(2026, 5, 15, 10, 0, 0, 0, time.UTC), []string{"turn-one", "turn-two", "turn-three"})
+
+	entry, contents, err := c.archiveStore.ReadSession(ctx, "proj1", "readable")
+	if err != nil {
+		t.Fatalf("ReadSession: %v", err)
+	}
+	if entry.SessionID != "readable" {
+		t.Fatalf("entry sessionID = %q, want readable", entry.SessionID)
+	}
+	if strings.Join(contents, "|") != "turn-one|turn-two|turn-three" {
+		t.Fatalf("contents = %#v, want original turns", contents)
+	}
+}
+
+func TestSessionArchiveStoreReadSessionRejectsHashMismatch(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	historyRoot := filepath.Join(t.TempDir(), "db", "session")
+	c.SetSessionHistoryRoot(historyRoot)
+	ctx := context.Background()
+
+	archiveLongSessionForStoreTest(t, c, ctx, "corrupt", "Corrupt", "claude", time.Date(2026, 5, 15, 10, 0, 0, 0, time.UTC), []string{"turn-one", "turn-two", "turn-three"})
+	manifest := readArchiveManifestForTest(t, historyRoot, "proj1")
+	entry := manifest.Sessions["corrupt"]
+	packPath := filepath.Join(filepath.Dir(historyRoot), "session-archive", safeHistoryPathPart("proj1"), entry.File)
+	f, err := os.OpenFile(packPath, os.O_RDWR, 0)
+	if err != nil {
+		t.Fatalf("OpenFile archive pack: %v", err)
+	}
+	if _, err := f.WriteAt([]byte{0xff}, entry.Offset+entry.Length-1); err != nil {
+		_ = f.Close()
+		t.Fatalf("corrupt archive pack: %v", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("close archive pack: %v", err)
+	}
+
+	_, _, err = c.archiveStore.ReadSession(ctx, "proj1", "corrupt")
+	if err == nil || !strings.Contains(err.Error(), "sha256") {
+		t.Fatalf("ReadSession err = %v, want sha256 mismatch", err)
+	}
+}
+
+func TestSessionArchiveStoreMarkRestoredHidesEntryFromList(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	historyRoot := filepath.Join(t.TempDir(), "db", "session")
+	c.SetSessionHistoryRoot(historyRoot)
+	ctx := context.Background()
+
+	archiveLongSessionForStoreTest(t, c, ctx, "restore-marker", "Restore Marker", "claude", time.Date(2026, 5, 15, 10, 0, 0, 0, time.UTC), []string{"turn-one", "turn-two", "turn-three"})
+
+	updated, err := c.archiveStore.MarkRestored(ctx, "proj1", "restore-marker", "2026-05-17T00:00:00Z", sessionArchiveNativeSyncUpdate{
+		NativeUnarchivedAt: "2026-05-17T00:00:01Z",
+		NativeSyncWarning:  "native warning",
+	})
+	if err != nil {
+		t.Fatalf("MarkRestored: %v", err)
+	}
+	if updated.RestoredAt != "2026-05-17T00:00:00Z" || updated.NativeUnarchivedAt != "2026-05-17T00:00:01Z" || updated.NativeSyncWarning != "native warning" {
+		t.Fatalf("updated entry = %#v, want restored/native fields", updated)
+	}
+	entries, err := c.archiveStore.ListSessions(ctx, "proj1")
+	if err != nil {
+		t.Fatalf("ListSessions: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("entries len = %d, want 0 after restored marker: %#v", len(entries), entries)
+	}
+	manifest := readArchiveManifestForTest(t, historyRoot, "proj1")
+	entry := manifest.Sessions["restore-marker"]
+	if entry.RestoredAt != "2026-05-17T00:00:00Z" || entry.NativeUnarchivedAt != "2026-05-17T00:00:01Z" || entry.NativeSyncWarning != "native warning" {
+		t.Fatalf("manifest entry = %#v, want restored/native fields", entry)
 	}
 }
 
