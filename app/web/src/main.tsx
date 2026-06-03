@@ -228,9 +228,7 @@ import {
   type FloatingBackdropTone,
 } from './services/floatingBackdropTone';
 import {
-  buildTokenStatCards,
   type TokenProviderSectionView,
-  type TokenStatCardView,
 } from './tokenStatsView';
 import {
   AGENT_PACKAGE_SCAN_TIMEOUT_MS,
@@ -375,6 +373,9 @@ const DebugLogsSettingsDetail = React.lazy(() => import('./debug/DebugLogsSettin
 })));
 const ConnectionStatusSettingsDetail = React.lazy(() => import('./settings/ConnectionStatusSettingsDetail').then(module => ({
   default: module.ConnectionStatusSettingsDetail,
+})));
+const TokenStatsSettingsDetail = React.lazy(() => import('./settings/TokenStatsSettingsDetail').then(module => ({
+  default: module.TokenStatsSettingsDetail,
 })));
 
 type Tab = 'chat' | 'file' | 'git';
@@ -11698,11 +11699,6 @@ function App() {
       : tagVariantClass('token-stats-pill-hub', value);
   }, []);
 
-  const tokenStatCards = useMemo(
-    (): TokenStatCardView[] => buildTokenStatCards(tokenStatsProviders),
-    [tokenStatsProviders],
-  );
-
   const refreshTokenStats = useCallback(async () => {
     setTokenStatsLoading(true);
     setTokenStatsError('');
@@ -16172,52 +16168,16 @@ function App() {
   const renderTokenStatsSettingsDetail = (options?: SettingsDetailShellOptions) =>
     renderSettingsDetailShell(
       'Token Stats',
-      <>
-        {tokenStatsUpdatedAt ? (
-          <div className="muted block">Updated: {tokenStatsUpdatedAt}</div>
-        ) : null}
-        {tokenStatsLoading ? (
-          <div className="muted block">Scanning online hubs...</div>
-        ) : null}
-        {tokenStatsError ? (
-          <div className="muted block settings-metadata-error">{tokenStatsError}</div>
-        ) : null}
-        {!tokenStatsLoading && tokenStatCards.length === 0 && !tokenStatsError ? (
-          <div className="muted block">No token accounts discovered.</div>
-        ) : null}
-        <div className="settings-metadata-list token-stats-account-list-flat">
-          {tokenStatCards.map(card => (
-            <div key={card.id} className="settings-metadata-card">
-              <div className="settings-metadata-line settings-metadata-line-tags">
-                <span className={`token-stats-pill ${tokenTagVariantClass('agent', card.agentTag)}`}>
-                  {card.agentTag}
-                </span>
-                {card.hubTags.map(hubTag => (
-                  <span
-                    key={hubTag}
-                    className={`token-stats-pill ${tokenTagVariantClass('hub', hubTag)}`}
-                    style={hubAccentStyle(hubTag)}
-                  >
-                    {hubTag}
-                  </span>
-                ))}
-              </div>
-              <div className="settings-metadata-line settings-metadata-line-primary">
-                <span className="settings-metadata-title">{card.accountName}</span>
-              </div>
-              {card.message ? (
-                <div className="settings-metadata-error">{card.message}</div>
-              ) : null}
-              {card.secondaryLine ? (
-                <div className="settings-metadata-line">{card.secondaryLine}</div>
-              ) : null}
-              {card.tertiaryLine ? (
-                <div className="settings-metadata-line">{card.tertiaryLine}</div>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      </>,
+      <React.Suspense fallback={null}>
+        <TokenStatsSettingsDetail
+          providers={tokenStatsProviders}
+          updatedAt={tokenStatsUpdatedAt}
+          loading={tokenStatsLoading}
+          error={tokenStatsError}
+          tagVariantClass={tokenTagVariantClass}
+          hubAccentStyle={hubAccentStyle}
+        />
+      </React.Suspense>,
       renderSettingsDetailActions('tokenStats'),
       options,
     );
