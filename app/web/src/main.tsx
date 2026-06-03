@@ -4489,17 +4489,6 @@ function App() {
     });
   }, [setChatConfigOverflowOpen]);
 
-  const openChatFileMentionMenu = useCallback(() => {
-    setChatPromptMenuOpen(false);
-    setChatAttachmentTrayOpen(false);
-    setChatConfigMenuOptionId('');
-    setChatConfigOverflowOpen(false);
-    setChatFileMentionMenuOpen(value => !value);
-    window.requestAnimationFrame(() => {
-      chatComposerTextareaRef.current?.focus();
-    });
-  }, [setChatConfigOverflowOpen]);
-
   const toggleChatAttachmentTray = useCallback(() => {
     setChatPromptMenuOpen(false);
     setChatFileMentionMenuOpen(false);
@@ -4510,11 +4499,6 @@ function App() {
       chatComposerTextareaRef.current?.focus();
     });
   }, [setChatConfigOverflowOpen]);
-
-  const handleChatAttachmentTrayCode = useCallback(() => {
-    closeChatAttachmentTray();
-    openChatFileMentionMenu();
-  }, [closeChatAttachmentTray, openChatFileMentionMenu]);
 
   const getChatDraftGeneration = useCallback((draftKey: string) => {
     const normalizedDraftKey = draftKey.trim();
@@ -4695,6 +4679,50 @@ function App() {
     },
     [clearChatFileMentionSearchTimer, resetChatFileMentionSearchSession, runChatFileMentionSearch],
   );
+
+  const openChatFileMentionShortcut = useCallback(() => {
+    const input = chatComposerTextareaRef.current;
+    const text = chatComposerTextRef.current;
+    const rawSelectionStart = input?.selectionStart ?? text.length;
+    const rawSelectionEnd = input?.selectionEnd ?? rawSelectionStart;
+    const selectionStart = Math.max(0, Math.min(text.length, rawSelectionStart));
+    const selectionEnd = Math.max(selectionStart, Math.min(text.length, rawSelectionEnd));
+    const existingQuery = selectionStart === selectionEnd
+      ? resolveChatFileMentionQuery(text, selectionStart)
+      : null;
+
+    setChatPromptMenuOpen(false);
+    setChatAttachmentTrayOpen(false);
+    setChatConfigMenuOptionId('');
+    setChatConfigOverflowOpen(false);
+
+    if (existingQuery) {
+      scheduleChatFileMentionSearch(text, selectionStart);
+      window.requestAnimationFrame(() => {
+        const nextInput = chatComposerTextareaRef.current;
+        if (!nextInput) {
+          return;
+        }
+        nextInput.focus();
+        nextInput.setSelectionRange(selectionStart, selectionStart);
+      });
+      return;
+    }
+
+    const prefix = selectionStart > 0 && !/\s/.test(text[selectionStart - 1]) ? ' @' : '@';
+    const nextText = `${text.slice(0, selectionStart)}${prefix}${text.slice(selectionEnd)}`;
+    const nextSelectionStart = selectionStart + prefix.length;
+    updateChatComposerText(nextText);
+    scheduleChatFileMentionSearch(nextText, nextSelectionStart);
+    window.requestAnimationFrame(() => {
+      const nextInput = chatComposerTextareaRef.current;
+      if (!nextInput) {
+        return;
+      }
+      nextInput.focus();
+      nextInput.setSelectionRange(nextSelectionStart, nextSelectionStart);
+    });
+  }, [scheduleChatFileMentionSearch, setChatConfigOverflowOpen, updateChatComposerText]);
 
   const applyChatFileMentionResult = useCallback(
     (result: RegistryFileIndexSearchResult) => {
@@ -18129,6 +18157,12 @@ function App() {
     !!selectedChatEncodedKey && chatCancellingRuntimeKey === selectedChatEncodedKey;
   const chatComposerStopTriggerClassName = `chat-composer-stop-trigger${selectedChatPromptRunning ? ' active' : ''}${selectedChatPromptCancelling ? ' cancelling' : ''}`;
 
+  useEffect(() => {
+    if (selectedChatPromptRunning) {
+      setChatAttachmentTrayOpen(false);
+    }
+  }, [selectedChatPromptRunning]);
+
   const latestSelectableAssistantReply = (() => {
     if (selectedPendingPrompt) {
       return {
@@ -18679,7 +18713,7 @@ function App() {
                       <span className="chat-file-mention-chip-name">{mention.name}</span>
                       <button
                         type="button"
-                        className="chat-attachment-remove"
+                        className="chat-file-mention-remove"
                         onClick={() => removeChatFileMention(mention.path)}
                         title="Remove file"
                         aria-label={`Remove ${mention.name}`}
@@ -18941,8 +18975,8 @@ function App() {
                           onClick={() => applyChatFileMentionResult(result)}
                         >
                           <span className="codicon codicon-file-code" aria-hidden="true" />
-                          <span className="chat-file-mention-path">{result.path}</span>
                           <span className="chat-file-mention-name">{name}</span>
+                          <span className="chat-file-mention-path">{result.path}</span>
                         </button>
                       );
                     })
@@ -18998,37 +19032,52 @@ function App() {
                   </button>
                   <button
                     type="button"
-                    ref={chatAttachmentTrayButtonRef}
-                    className="chat-tool-button chat-attachment-plus-button"
+                    ref={chatFileMentionButtonRef}
+                    className="chat-tool-button chat-file-mention-trigger-button"
                     onPointerDown={event => event.preventDefault()}
-                    onClick={toggleChatAttachmentTray}
-                    title="Tools"
-                    aria-label="Open composer tools"
-                    aria-haspopup="menu"
-                    aria-expanded={chatAttachmentTrayOpen}
+                    onClick={openChatFileMentionShortcut}
+                    title="Mention files"
+                    aria-label="Mention files"
+                    aria-haspopup="listbox"
+                    aria-expanded={chatFileMentionMenuOpen}
                   >
-                    <span className="codicon codicon-add" aria-hidden="true" />
+                    <span className="chat-at-symbol">@</span>
                   </button>
-                  {chatAttachmentTrayOpen ? (
+                  {!selectedChatPromptRunning ? (
+                    <button
+                      type="button"
+                      ref={chatAttachmentTrayButtonRef}
+                      className="chat-tool-button chat-attachment-plus-button"
+                      onPointerDown={event => event.preventDefault()}
+                      onClick={toggleChatAttachmentTray}
+                      title="Tools"
+                      aria-label="Open composer tools"
+                      aria-haspopup="menu"
+                      aria-expanded={chatAttachmentTrayOpen}
+                    >
+                      <span className="codicon codicon-add" aria-hidden="true" />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className={chatComposerStopTriggerClassName}
+                      onPointerDown={event => event.preventDefault()}
+                      onClick={() => cancelSelectedChatPrompt().catch(() => undefined)}
+                      disabled={selectedChatPromptCancelling}
+                      title={selectedChatPromptCancelling ? 'Cancelling prompt' : 'Cancel prompt'}
+                      aria-label="Cancel prompt"
+                      aria-busy={selectedChatPromptCancelling}
+                    >
+                      <span className={`codicon ${selectedChatPromptCancelling ? 'codicon-loading codicon-modifier-spin' : 'codicon-stop-circle'}`} aria-hidden="true" />
+                    </button>
+                  )}
+                  {!selectedChatPromptRunning && chatAttachmentTrayOpen ? (
                     <div
                       ref={chatAttachmentTrayRef}
                       className="chat-attachment-action-tray"
                       role="menu"
                       aria-label="Composer tools"
                     >
-                      <button
-                        type="button"
-                        ref={chatFileMentionButtonRef}
-                        className="chat-attachment-action-button code"
-                        onPointerDown={event => event.preventDefault()}
-                        onClick={handleChatAttachmentTrayCode}
-                        title="Mention files"
-                        aria-label="Mention files"
-                        role="menuitem"
-                      >
-                        <span className="codicon codicon-file-code" aria-hidden="true" />
-                        <span className="chat-attachment-action-label">Code</span>
-                      </button>
                       <button
                         type="button"
                         className="chat-attachment-action-button file"
@@ -19069,18 +19118,6 @@ function App() {
                       </button>
                     </div>
                   ) : null}
-                  <button
-                    type="button"
-                    className={chatComposerStopTriggerClassName}
-                    onPointerDown={event => event.preventDefault()}
-                    onClick={() => cancelSelectedChatPrompt().catch(() => undefined)}
-                    disabled={!selectedChatPromptRunning || selectedChatPromptCancelling}
-                    title={selectedChatPromptCancelling ? 'Cancelling prompt' : selectedChatPromptRunning ? 'Cancel prompt' : 'No prompt running'}
-                    aria-label="Cancel prompt"
-                    aria-busy={selectedChatPromptCancelling}
-                  >
-                    <span className={`codicon ${selectedChatPromptCancelling ? 'codicon-loading codicon-modifier-spin' : 'codicon-stop-circle'}`} aria-hidden="true" />
-                  </button>
                 </div>
                 <div className="chat-composer-toolbar-actions">
                   {selectedChatConfigOptions.length > 0 ? (

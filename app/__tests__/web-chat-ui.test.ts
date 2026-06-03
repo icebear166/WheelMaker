@@ -911,7 +911,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className="chat-composer-action-column"');
     expect(mainTsx).toContain('className="chat-composer-toolbar-actions"');
     expect(mainTsx).not.toContain('className={`chat-cancel-button${selectedChatPromptRunning ? \' active\' : \'\'}`}');
-    expect(mainTsx).toContain('title={selectedChatPromptCancelling ? \'Cancelling prompt\' : selectedChatPromptRunning ? \'Cancel prompt\' : \'No prompt running\'}');
+    expect(mainTsx).toContain('title={selectedChatPromptCancelling ? \'Cancelling prompt\' : \'Cancel prompt\'}');
     expect(mainTsx).toContain('aria-label="Cancel prompt"');
     expect(mainTsx).toContain("className={`codicon ${selectedChatPromptCancelling ? 'codicon-loading codicon-modifier-spin' : 'codicon-stop-circle'}`}");
     expect(mainTsx).not.toContain("className=\"codicon codicon-debug-stop\"");
@@ -922,13 +922,15 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('aria-label="Open composer tools"');
     expect(mainTsx).toContain('aria-expanded={chatAttachmentTrayOpen}');
     expect(mainTsx).toContain('className="chat-attachment-action-tray"');
-    expect(mainTsx).toContain('className="chat-attachment-action-button code"');
+    expect(mainTsx).toContain('className="chat-tool-button chat-file-mention-trigger-button"');
     expect(mainTsx).toContain('className="chat-attachment-action-button file"');
     expect(mainTsx).toContain('className="chat-attachment-action-button photo"');
-    expect(mainTsx).toContain('<span className="chat-attachment-action-label">Code</span>');
+    expect(mainTsx).not.toContain('className="chat-attachment-action-button code"');
+    expect(mainTsx).not.toContain('<span className="chat-attachment-action-label">Code</span>');
     expect(mainTsx).toContain('<span className="chat-attachment-action-label">File</span>');
     expect(mainTsx).toContain('<span className="chat-attachment-action-label">Photo</span>');
     expect(mainTsx).toContain('className="chat-slash-symbol"');
+    expect(mainTsx).toContain('<span className="chat-at-symbol">@</span>');
     expect(mainTsx).not.toContain('className="chat-tool-button chat-mention-button"');
     expect(mainTsx).toContain('title="Mention files"');
     expect(mainTsx).toContain('aria-label="Mention files"');
@@ -938,7 +940,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('aria-label="File mentions"');
     expect(mainTsx).toContain('Index not built');
     expect(mainTsx).toContain('No files found');
-    expect(mainTsx).toContain('const openChatFileMentionMenu = useCallback(() => {');
+    expect(mainTsx).toContain('const openChatFileMentionShortcut = useCallback(() => {');
     expect(mainTsx).not.toContain('className="chat-tool-button chat-skill-button"');
     expect(mainTsx).not.toContain('codicon-wand');
     expect(mainTsx).not.toContain('codicon-symbol-keyword');
@@ -994,7 +996,8 @@ describe('web chat integration', () => {
     const stopTriggerBlock = mainTsx.slice(stopTriggerStart, stopTriggerEnd);
     expect(stopTriggerBlock).toContain('onPointerDown={event => event.preventDefault()}');
     expect(stopTriggerBlock).toContain('onClick={() => cancelSelectedChatPrompt().catch(() => undefined)}');
-    expect(stopTriggerBlock).toContain('disabled={!selectedChatPromptRunning || selectedChatPromptCancelling}');
+    expect(stopTriggerBlock).toContain('disabled={selectedChatPromptCancelling}');
+    expect(stopTriggerBlock).not.toContain('disabled={!selectedChatPromptRunning || selectedChatPromptCancelling}');
     expect(stopTriggerBlock).toContain("className={`codicon ${selectedChatPromptCancelling ? 'codicon-loading codicon-modifier-spin' : 'codicon-stop-circle'}`}");
     expect(stopTriggerBlock).not.toContain('codicon-debug-stop');
     expect(stopTriggerBlock).not.toContain('chat-stop-glyph');
@@ -1002,7 +1005,7 @@ describe('web chat integration', () => {
     expect(stopTriggerBlock).toContain('aria-busy={selectedChatPromptCancelling}');
 
     const promptMenuOpenStart = mainTsx.indexOf('const openChatPromptMenu = useCallback(() => {');
-    const promptMenuOpenEnd = mainTsx.indexOf('const openChatFileMentionMenu = useCallback(() => {', promptMenuOpenStart);
+    const promptMenuOpenEnd = mainTsx.indexOf('const toggleChatAttachmentTray = useCallback(() => {', promptMenuOpenStart);
     expect(promptMenuOpenStart).toBeGreaterThanOrEqual(0);
     expect(promptMenuOpenEnd).toBeGreaterThan(promptMenuOpenStart);
     const promptMenuOpenBody = mainTsx.slice(promptMenuOpenStart, promptMenuOpenEnd);
@@ -1011,17 +1014,19 @@ describe('web chat integration', () => {
     expect(promptMenuOpenBody).toContain('chatComposerTextareaRef.current?.focus();');
     expect(promptMenuOpenBody).not.toContain('chatComposerTextareaRef.current?.blur();');
 
-    const fileMentionMenuOpenStart = mainTsx.indexOf('const openChatFileMentionMenu = useCallback(() => {');
-    const fileMentionMenuOpenEnd = mainTsx.indexOf('const getChatDraftGeneration = useCallback', fileMentionMenuOpenStart);
-    expect(fileMentionMenuOpenStart).toBeGreaterThanOrEqual(0);
-    expect(fileMentionMenuOpenEnd).toBeGreaterThan(fileMentionMenuOpenStart);
-    const fileMentionMenuOpenBody = mainTsx.slice(fileMentionMenuOpenStart, fileMentionMenuOpenEnd);
-    expect(fileMentionMenuOpenBody).toContain('setChatPromptMenuOpen(false);');
-    expect(fileMentionMenuOpenBody).toContain('setChatAttachmentTrayOpen(false);');
-    expect(fileMentionMenuOpenBody).toContain('setChatConfigMenuOptionId(\'\');');
-    expect(fileMentionMenuOpenBody).toContain('setChatConfigOverflowOpen(false);');
-    expect(fileMentionMenuOpenBody).toContain('setChatFileMentionMenuOpen(value => !value);');
-    expect(fileMentionMenuOpenBody).not.toContain('updateChatComposerText');
+    const fileMentionShortcutStart = mainTsx.indexOf('const openChatFileMentionShortcut = useCallback(() => {');
+    const fileMentionShortcutEnd = mainTsx.indexOf('const applyChatFileMentionResult = useCallback', fileMentionShortcutStart);
+    expect(fileMentionShortcutStart).toBeGreaterThanOrEqual(0);
+    expect(fileMentionShortcutEnd).toBeGreaterThan(fileMentionShortcutStart);
+    const fileMentionShortcutBody = mainTsx.slice(fileMentionShortcutStart, fileMentionShortcutEnd);
+    expect(fileMentionShortcutBody).toContain('setChatPromptMenuOpen(false);');
+    expect(fileMentionShortcutBody).toContain('setChatAttachmentTrayOpen(false);');
+    expect(fileMentionShortcutBody).toContain('setChatConfigMenuOptionId(\'\');');
+    expect(fileMentionShortcutBody).toContain('setChatConfigOverflowOpen(false);');
+    expect(fileMentionShortcutBody).toContain('resolveChatFileMentionQuery(text, selectionStart)');
+    expect(fileMentionShortcutBody).toContain("const prefix = selectionStart > 0 && !/\\s/.test(text[selectionStart - 1]) ? ' @' : '@';");
+    expect(fileMentionShortcutBody).toContain('updateChatComposerText(nextText);');
+    expect(fileMentionShortcutBody).toContain('scheduleChatFileMentionSearch(nextText, nextSelectionStart);');
 
     const toolsStart = mainTsx.indexOf('className="chat-composer-tools"');
     const toolsEnd = mainTsx.indexOf('className="chat-config-options-wrap"', toolsStart);
@@ -1029,6 +1034,7 @@ describe('web chat integration', () => {
     expect(toolsEnd).toBeGreaterThan(toolsStart);
     const toolsBlock = mainTsx.slice(toolsStart, toolsEnd);
     expect(toolsBlock).toContain('chat-slash-button');
+    expect(toolsBlock).toContain('chat-file-mention-trigger-button');
     expect(toolsBlock).toContain('chat-attachment-plus-button');
     expect(toolsBlock).toContain('chat-attachment-action-tray');
     expect(toolsBlock).not.toContain('chat-mention-button');
@@ -1181,6 +1187,8 @@ describe('web chat integration', () => {
       /\.chat-slash-button \{[\s\S]*color: color-mix\(in srgb, var\(--accent\) 72%, var\(--text\)\);[\s\S]*\}/,
     );
     expect(stylesCss).toContain('.chat-slash-symbol {');
+    expect(stylesCss).toContain('.chat-file-mention-trigger-button {');
+    expect(stylesCss).toContain('.chat-at-symbol {');
     expect(stylesCss).toContain('.chat-attachment-plus-button {');
     expect(stylesCss).toContain('.chat-attachment-action-tray {');
     expect(stylesCss).not.toContain('.chat-attachment-action-tray::after {');
@@ -1241,7 +1249,11 @@ describe('web chat integration', () => {
     const toolsBlock = mainTsx.slice(toolsStart, toolsEnd);
     expect(toolsBlock).toContain('className="chat-composer-skill-trigger chat-slash-button"');
     expect(toolsBlock).toContain('onClick={openChatPromptMenu}');
+    expect(toolsBlock).toContain('className="chat-tool-button chat-file-mention-trigger-button"');
+    expect(toolsBlock).toContain('onClick={openChatFileMentionShortcut}');
     expect(toolsBlock.indexOf('chat-slash-button')).toBeLessThan(toolsBlock.indexOf('chat-attachment-plus-button'));
+    expect(toolsBlock.indexOf('chat-slash-button')).toBeLessThan(toolsBlock.indexOf('chat-file-mention-trigger-button'));
+    expect(toolsBlock.indexOf('chat-file-mention-trigger-button')).toBeLessThan(toolsBlock.indexOf('chat-attachment-plus-button'));
     expect(toolsBlock.indexOf('chat-attachment-plus-button')).toBeLessThan(toolsBlock.indexOf('className={chatComposerStopTriggerClassName}'));
 
     const toolbarStart = mainTsx.indexOf('className="chat-composer-toolbar"');
@@ -1272,7 +1284,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('resizeChatComposerTextarea({scrollToEnd: true})');
   });
 
-  test('collapses code, file, and photo actions behind a plus tray', () => {
+  test('keeps file and photo actions behind a plus tray while file mentions use the @ shortcut', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'main.tsx'));
     const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
@@ -1304,8 +1316,9 @@ describe('web chat integration', () => {
     const toolsStart = mainTsx.indexOf('className="chat-composer-tools"');
     const toolsEnd = mainTsx.indexOf('className="chat-config-options-wrap"', toolsStart);
     const toolsBlock = mainTsx.slice(toolsStart, toolsEnd);
+    expect(toolsBlock).toContain('chat-file-mention-trigger-button');
     expect(toolsBlock).toContain('chat-attachment-plus-button');
-    expect(toolsBlock).toContain('chat-attachment-action-button code');
+    expect(toolsBlock).not.toContain('chat-attachment-action-button code');
     expect(toolsBlock).toContain('chat-attachment-action-button file');
     expect(toolsBlock).toContain('chat-attachment-action-button photo');
     expect(toolsBlock).toContain('codicon-attach');
@@ -1971,5 +1984,40 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-file-mention-chip');
     expect(stylesCss).toContain('.chat-file-mention-option');
     expect(stylesCss).toContain('.chat-file-mention-path');
+  });
+
+  test('chat composer uses compact file mention pins and running plus-slot cancel', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'main.tsx'));
+    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
+
+    expect(mainTsx).toContain('const openChatFileMentionShortcut = useCallback(() => {');
+    expect(mainTsx).toContain('className="chat-tool-button chat-file-mention-trigger-button"');
+    expect(mainTsx).toContain('aria-label="Mention files"');
+    expect(mainTsx).toContain('<span className="chat-at-symbol">@</span>');
+    expect(mainTsx).toContain('!selectedChatPromptRunning ? (');
+    expect(mainTsx).toContain('className="chat-tool-button chat-attachment-plus-button"');
+    expect(mainTsx).toContain(') : (');
+    expect(mainTsx).toContain('className={chatComposerStopTriggerClassName}');
+    expect(mainTsx).not.toContain('disabled={!selectedChatPromptRunning || selectedChatPromptCancelling}');
+    expect(mainTsx).toContain('disabled={selectedChatPromptCancelling}');
+    expect(mainTsx).toContain('className="chat-file-mention-remove"');
+    expect(mainTsx).toContain('<span className="chat-file-mention-name">{name}</span>');
+    expect(mainTsx).toContain('<span className="chat-file-mention-path">{result.path}</span>');
+
+    const toolsStart = mainTsx.indexOf('className="chat-composer-tools"');
+    const toolsEnd = mainTsx.indexOf('className="chat-config-options-wrap"', toolsStart);
+    expect(toolsStart).toBeGreaterThanOrEqual(0);
+    expect(toolsEnd).toBeGreaterThan(toolsStart);
+    const toolsBlock = mainTsx.slice(toolsStart, toolsEnd);
+    expect(toolsBlock.indexOf('chat-slash-button')).toBeLessThan(toolsBlock.indexOf('chat-file-mention-trigger-button'));
+    expect(toolsBlock.indexOf('chat-file-mention-trigger-button')).toBeLessThan(toolsBlock.indexOf('chat-attachment-plus-button'));
+
+    expect(stylesCss).toContain('.chat-file-mention-trigger-button');
+    expect(stylesCss).toContain('.chat-at-symbol');
+    expect(stylesCss).toContain('.chat-file-mention-remove');
+    expect(stylesCss).toMatch(/\.chat-file-mention-option \{[\s\S]*grid-template-columns: 16px minmax\(0, auto\) minmax\(0, 1fr\);/);
+    expect(stylesCss).toMatch(/\.chat-file-mention-chip \{[\s\S]*max-width: 190px;/);
+    expect(stylesCss).toMatch(/\.chat-composer-stop-trigger \{[\s\S]*color: #f85149;[\s\S]*opacity: 1;/);
   });
 });

@@ -142,7 +142,7 @@ describe('web chat turn rendering', () => {
     expect(main).not.toContain("copyDisabled={failed ? true :");
   });
 
-  test('renders a persistent composer cancel button driven by running session state', () => {
+  test('renders a composer cancel button in the plus slot while a prompt is running', () => {
     const main = readMain();
 
     expect(main).toContain('const selectedChatPromptRunning =');
@@ -153,8 +153,13 @@ describe('web chat turn rendering', () => {
     expect(main).toContain('service.cancelProjectSession(selectedKey.projectId, selectedKey.sessionId)');
     expect(main).toContain('className="chat-composer-input-row"');
     expect(main).toContain("const chatComposerStopTriggerClassName = `chat-composer-stop-trigger${selectedChatPromptRunning ? ' active' : ''}${selectedChatPromptCancelling ? ' cancelling' : ''}`;");
+    expect(main).toContain('!selectedChatPromptRunning ? (');
+    expect(main).toContain('className="chat-tool-button chat-attachment-plus-button"');
+    expect(main).toContain(') : (');
     expect(main).toContain('className={chatComposerStopTriggerClassName}');
-    expect(main).toContain('disabled={!selectedChatPromptRunning || selectedChatPromptCancelling}');
+    expect(main).toContain('disabled={selectedChatPromptCancelling}');
+    expect(main).not.toContain('disabled={!selectedChatPromptRunning || selectedChatPromptCancelling}');
+    expect(main).not.toContain('No prompt running');
     expect(main).toContain("selectedChatPromptCancelling ? 'codicon-loading codicon-modifier-spin' : 'codicon-stop-circle'");
   });
 
