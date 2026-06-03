@@ -6,9 +6,12 @@ describe('web code layout', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
     const shikiRenderer = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'services', 'shikiRenderer.ts'), 'utf8');
+    const shikiSettings = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'services', 'shikiSettings.ts'), 'utf8');
     const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
 
-    expect(mainTsx).toContain("from './services/shikiRenderer'");
+    expect(mainTsx).toContain("from './services/shikiSettings'");
+    expect(mainTsx).toContain("import('./services/shikiRenderer')");
+    expect(mainTsx).not.toContain("from './services/shikiRenderer'");
     expect(mainTsx).toContain('renderShikiHtml');
     expect(mainTsx).toContain('renderShikiDiffHtml');
     expect(mainTsx).toContain("require('gitdiff-parser')");
@@ -26,7 +29,7 @@ describe('web code layout', () => {
     expect(mainTsx).toContain('codeTabSize={codeTabSize}');
     expect(mainTsx).toContain("dangerouslySetInnerHTML={{__html: diffHtml || '<pre><code> </code></pre>'}}");
     expect(shikiRenderer).toContain('transformers: [buildLineTransformer(');
-    expect(shikiRenderer).toContain('export type DiffRenderLine = {');
+    expect(shikiSettings).toContain('export type DiffRenderLine = {');
     expect(shikiRenderer).toContain('export async function renderShikiDiffHtml');
     expect(shikiRenderer).toContain('data-line-kind');
     expect(shikiRenderer).toContain('wm-shiki-diff-line');
@@ -39,8 +42,9 @@ describe('web code layout', () => {
     expect(mainTsx).toContain("return 'python';");
     expect(mainTsx).toContain("case 'ps1':");
     expect(mainTsx).toContain("return 'powershell';");
-    expect(shikiRenderer).toContain('CODE_FONT_OPTIONS');
-    expect(shikiRenderer).toContain('resolveCodeFontFamily');
+    expect(shikiRenderer).toContain("from './shikiSettings'");
+    expect(shikiSettings).toContain('CODE_FONT_OPTIONS');
+    expect(shikiSettings).toContain('resolveCodeFontFamily');
     expect(mainTsx).toContain("const VS_CODE_EDITOR_FONT_FAMILY = \"Consolas, 'Courier New', monospace\";");
     expect(mainTsx).toContain('codeFontFamily || VS_CODE_EDITOR_FONT_FAMILY');
     expect(mainTsx).not.toContain("from 'react-diff-viewer-continued'");

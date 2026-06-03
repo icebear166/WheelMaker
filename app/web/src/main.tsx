@@ -264,13 +264,11 @@ import {
   DEFAULT_CODE_THEME,
   isCodeFontId,
   isCodeThemeId,
-  renderShikiDiffHtml,
-  renderShikiHtml,
   resolveCodeFontFamily,
   type CodeFontId,
   type CodeThemeId,
   type DiffRenderLine,
-} from './services/shikiRenderer';
+} from './services/shikiSettings';
 import {createVoiceInputSession, type VoiceInputSession} from './features/speech/useVoiceInputController';
 import {
   VOICE_LONG_TIMEOUT_MS,
@@ -769,6 +767,7 @@ const EMPTY_CHAT_COMPOSER_DRAFT: ChatComposerDraft = { text: '', attachments: []
 const DEFAULT_PORT_RELAY_SNAPSHOT: RegistryPortRelaySnapshot = {ok: true, enabled: false, status: 'Disabled'};
 let mermaidRenderSequence = 0;
 let mermaidModulePromise: Promise<typeof import('mermaid').default> | null = null;
+let shikiRendererModulePromise: Promise<typeof import('./services/shikiRenderer')> | null = null;
 
 function isRegistryChatContentBlock(block: RegistryChatContentBlock | undefined): block is RegistryChatContentBlock {
   return !!block && typeof block.type === 'string' && block.type.length > 0;
@@ -953,6 +952,17 @@ function loadMermaid(): Promise<typeof import('mermaid').default> {
       });
   }
   return mermaidModulePromise;
+}
+
+function loadShikiRenderer(): Promise<typeof import('./services/shikiRenderer')> {
+  if (!shikiRendererModulePromise) {
+    shikiRendererModulePromise = import('./services/shikiRenderer')
+      .catch(error => {
+        shikiRendererModulePromise = null;
+        throw error;
+      });
+  }
+  return shikiRendererModulePromise;
 }
 
 function markdownNeedsMath(content: string): boolean {
@@ -2682,6 +2692,7 @@ function ShikiCodeBlock({
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      const { renderShikiHtml } = await loadShikiRenderer();
       const nextHtml = await renderShikiHtml({
         code: content,
         language,
@@ -3201,6 +3212,7 @@ function ShikiDiffPane({
 
     setDiffHtml('');
     (async () => {
+      const { renderShikiDiffHtml } = await loadShikiRenderer();
       const nextDiffHtml = await renderShikiDiffHtml({
         lines,
         language,
