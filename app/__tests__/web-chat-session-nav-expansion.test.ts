@@ -14,7 +14,9 @@ describe('web chat session navigation expansion', () => {
     expect(main).not.toContain('new IntersectionObserver');
     expect(main).not.toContain('wide-project-session-sentinel');
     expect(styles).not.toContain('.wide-project-session-sentinel');
-    expect(main).toContain('projectSessions.map(session => {');
+    expect(main).toContain('const renderProjectSessionRowsWithOlderFolding = (');
+    expect(main).toContain('renderProjectSessionRowsWithOlderFolding(targetProjectId, projectSessions, true)');
+    expect(main).toContain('renderProjectSessionRowsWithOlderFolding(targetProjectId, projectSessions, false)');
     expect(main).toContain('selectedChatEncodedKey === buildChatRuntimeKey(targetProjectId, session.sessionId)');
   });
 });

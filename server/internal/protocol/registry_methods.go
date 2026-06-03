@@ -93,6 +93,10 @@ const (
 	RegistryMethodFSSearch = "fs.search"
 	RegistryMethodFSGrep   = "fs.grep"
 
+	RegistryMethodFSIndexStatus  = "fs.index.status"
+	RegistryMethodFSIndexRebuild = "fs.index.rebuild"
+	RegistryMethodFSIndexSearch  = "fs.index.search"
+
 	RegistryMethodGitRefs                = "git.refs"
 	RegistryMethodGitBranchesLegacy      = "git.branches"
 	RegistryMethodGitLog                 = "git.log"
@@ -191,6 +195,10 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodFSRead:   registryLocalReadProjectMethod(RegistryMethodFSRead),
 	RegistryMethodFSSearch: registryLocalReadProjectMethod(RegistryMethodFSSearch),
 	RegistryMethodFSGrep:   registryLocalReadProjectMethod(RegistryMethodFSGrep),
+
+	RegistryMethodFSIndexStatus:  registryHubCommandMethod(RegistryMethodFSIndexStatus),
+	RegistryMethodFSIndexRebuild: registryLocalReadProjectMethod(RegistryMethodFSIndexRebuild),
+	RegistryMethodFSIndexSearch:  registryLocalReadProjectMethod(RegistryMethodFSIndexSearch),
 
 	RegistryMethodGitRefs:                registryLocalReadProjectMethod(RegistryMethodGitRefs),
 	RegistryMethodGitLog:                 registryLocalReadProjectMethod(RegistryMethodGitLog),

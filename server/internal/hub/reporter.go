@@ -90,6 +90,7 @@ type Reporter struct {
 	monitorCore     *MonitorCore
 	toolHandler     toolCommandHandler
 	relayClient     *portrelay.HubClient
+	fileIndex       *projectFileIndexManager
 
 	localReadMu         sync.RWMutex
 	localReadServer     *http.Server
@@ -148,6 +149,7 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 			MonitorBaseDir: monitorBase,
 		}),
 		relayClient: portrelay.NewHubClient(),
+		fileIndex:   newProjectFileIndexManager(monitorBase),
 	}
 	r.requestSeq.Store(2)
 	return r
@@ -443,6 +445,8 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 		r.replyCmdSkills(conn, in)
 	case rp.RegistryMethodCmdToken:
 		r.replyCmdToken(conn, in)
+	case rp.RegistryMethodFSIndexStatus:
+		r.replyFSIndexStatus(conn, in)
 	case rp.RegistryMethodRelayOpen:
 		r.replyRelayOpen(conn, in)
 	case rp.RegistryMethodRelayClose:
@@ -457,6 +461,10 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 		r.replyFSSearch(conn, in)
 	case rp.RegistryMethodFSGrep:
 		r.replyFSGrep(conn, in)
+	case rp.RegistryMethodFSIndexRebuild:
+		r.replyFSIndexRebuild(conn, in)
+	case rp.RegistryMethodFSIndexSearch:
+		r.replyFSIndexSearch(conn, in)
 	case rp.RegistryMethodGitRefs, rp.RegistryMethodGitBranchesLegacy:
 		r.replyGitRefs(conn, in)
 	case rp.RegistryMethodGitLog:
@@ -871,6 +879,10 @@ func (r *Reporter) handleLocalReadRequest(conn *websocket.Conn, in envelope) {
 		r.replyFSSearch(conn, in)
 	case rp.RegistryMethodFSGrep:
 		r.replyFSGrep(conn, in)
+	case rp.RegistryMethodFSIndexRebuild:
+		r.replyFSIndexRebuild(conn, in)
+	case rp.RegistryMethodFSIndexSearch:
+		r.replyFSIndexSearch(conn, in)
 	case rp.RegistryMethodGitRefs:
 		r.replyGitRefs(conn, in)
 	case rp.RegistryMethodGitLog:
@@ -969,6 +981,58 @@ func (r *Reporter) replyLocalReadProjectSyncCheck(conn *websocket.Conn, in envel
 			WorktreeRev:  project.Git.WorktreeRev,
 			StaleDomains: stale,
 		}),
+	})
+}
+
+func (r *Reporter) replyFSIndexStatus(conn *websocket.Conn, req envelope) {
+	resp := r.ensureFileIndexManager().status(r.projectFileIndexProjects())
+	resp.HubID = r.cfg.HubID
+	_ = r.writeJSON(conn, "->", envelope{
+		RequestID: req.RequestID,
+		Type:      rp.RegistryEnvelopeTypeResponse,
+		Method:    req.Method,
+		Payload:   rp.MustRaw(resp),
+	})
+}
+
+func (r *Reporter) replyFSIndexRebuild(conn *websocket.Conn, req envelope) {
+	project, err := r.projectFileIndexProject(req.ProjectID)
+	if err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, err.Error())
+		return
+	}
+	resp := r.ensureFileIndexManager().startRebuild(context.Background(), project)
+	_ = r.writeJSON(conn, "->", envelope{
+		RequestID: req.RequestID,
+		Type:      rp.RegistryEnvelopeTypeResponse,
+		Method:    req.Method,
+		ProjectID: req.ProjectID,
+		Payload:   rp.MustRaw(resp),
+	})
+}
+
+func (r *Reporter) replyFSIndexSearch(conn *websocket.Conn, req envelope) {
+	var payload projectFileIndexSearchRequest
+	if err := decodePayload(req.Payload, &payload); err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid fs.index.search payload")
+		return
+	}
+	project, err := r.projectFileIndexProject(req.ProjectID)
+	if err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, err.Error())
+		return
+	}
+	resp, err := r.ensureFileIndexManager().search(context.Background(), project, payload)
+	if err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInternal, err.Error())
+		return
+	}
+	_ = r.writeJSON(conn, "->", envelope{
+		RequestID: req.RequestID,
+		Type:      rp.RegistryEnvelopeTypeResponse,
+		Method:    req.Method,
+		ProjectID: req.ProjectID,
+		Payload:   rp.MustRaw(resp),
 	})
 }
 
@@ -1949,6 +2013,67 @@ func (r *Reporter) projectRoot(projectID string) (string, error) {
 		return "", fmt.Errorf("resolve project path: %w", err)
 	}
 	return abs, nil
+}
+
+func (r *Reporter) ensureFileIndexManager() *projectFileIndexManager {
+	if r.fileIndex != nil {
+		return r.fileIndex
+	}
+	r.fileIndex = newProjectFileIndexManager(r.cfg.MonitorBaseDir)
+	return r.fileIndex
+}
+
+func (r *Reporter) projectFileIndexProjects() []projectFileIndexProject {
+	projects := r.projectsSnapshot()
+	out := make([]projectFileIndexProject, 0, len(projects))
+	for _, project := range projects {
+		name := strings.TrimSpace(project.Name)
+		if name == "" {
+			continue
+		}
+		root := strings.TrimSpace(project.Path)
+		if root != "" {
+			if abs, err := filepath.Abs(root); err == nil {
+				root = abs
+			}
+		}
+		out = append(out, projectFileIndexProject{
+			ProjectID: rp.ProjectID(r.cfg.HubID, name),
+			Name:      name,
+			Root:      root,
+		})
+	}
+	return out
+}
+
+func (r *Reporter) projectFileIndexProject(projectID string) (projectFileIndexProject, error) {
+	projectID = strings.TrimSpace(projectID)
+	if projectID == "" {
+		return projectFileIndexProject{}, fmt.Errorf("projectId is required")
+	}
+	r.mu.RLock()
+	project, ok := r.projectsByID[projectID]
+	r.mu.RUnlock()
+	if !ok {
+		return projectFileIndexProject{}, fmt.Errorf("project %q not found", projectID)
+	}
+	name := strings.TrimSpace(project.Name)
+	if name == "" {
+		return projectFileIndexProject{}, fmt.Errorf("project %q has empty name", projectID)
+	}
+	root := strings.TrimSpace(project.Path)
+	if root == "" {
+		return projectFileIndexProject{}, fmt.Errorf("project %q has empty path", projectID)
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		return projectFileIndexProject{}, fmt.Errorf("resolve project path: %w", err)
+	}
+	return projectFileIndexProject{
+		ProjectID: rp.ProjectID(r.cfg.HubID, name),
+		Name:      name,
+		Root:      abs,
+	}, nil
 }
 
 func (r *Reporter) projectsSnapshot() []ProjectInfo {

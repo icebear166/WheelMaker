@@ -375,6 +375,9 @@ import type {
   RegistryTokenScanResult,
   RegistryWheelMakerUpdateResponse,
   RegistrySpeechTranscriptEvent,
+  RegistryFileIndexSearchResult,
+  RegistryFileIndexStatus,
+  RegistryFileIndexStatusResponse,
 } from './types/registry';
 import './styles.css';
 
@@ -396,6 +399,10 @@ type ChatAttachment = {
   uploadId?: string;
   attachmentId?: string;
   error?: string;
+};
+type ChatFileMention = {
+  path: string;
+  name: string;
 };
 type WideProjectActionMenuState = {
   projectId: string;
@@ -525,6 +532,7 @@ type SkillInstallTarget = {
 type ChatComposerDraft = {
   text: string;
   attachments: ChatAttachment[];
+  fileMentions: ChatFileMention[];
 };
 type PendingChatPrompt = {
   sessionId: string;
@@ -754,7 +762,10 @@ const FLOATING_CONTROL_IDLE_DELAY_MS = 3000;
 const PORT_RELAY_FLOATING_Y_RATIO_STORAGE_KEY = 'wheelmaker:portRelayFloatingYRatio';
 const PORT_RELAY_FLOATING_SLOT_STORAGE_KEY = 'wheelmaker:portRelayFloatingSlot';
 const PORT_RELAY_FLOATING_SIDE_STORAGE_KEY = 'wheelmaker:portRelayFloatingSide';
-const EMPTY_CHAT_COMPOSER_DRAFT: ChatComposerDraft = { text: '', attachments: [] };
+const PROJECT_INDEX_SCAN_CONCURRENCY = 2;
+const CHAT_FILE_MENTION_SEARCH_LIMIT = 20;
+const CHAT_FILE_MENTION_DEBOUNCE_MS = 140;
+const EMPTY_CHAT_COMPOSER_DRAFT: ChatComposerDraft = { text: '', attachments: [], fileMentions: [] };
 const DEFAULT_PORT_RELAY_SNAPSHOT: RegistryPortRelaySnapshot = {ok: true, enabled: false, status: 'Disabled'};
 let mermaidRenderSequence = 0;
 let mermaidModulePromise: Promise<typeof import('mermaid').default> | null = null;
@@ -765,6 +776,79 @@ function isRegistryChatContentBlock(block: RegistryChatContentBlock | undefined)
 
 function isChatAttachmentUploadPending(attachment: ChatAttachment): boolean {
   return attachment.status === 'uploading';
+}
+
+function chatFileMentionName(path: string): string {
+  const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '');
+  const parts = normalized.split('/').filter(Boolean);
+  return parts[parts.length - 1] || normalized || 'file';
+}
+
+function dedupeChatFileMentionsByPath(items: ChatFileMention[]): ChatFileMention[] {
+  const seen = new Set<string>();
+  const out: ChatFileMention[] = [];
+  for (const item of items) {
+    const path = item.path.trim();
+    if (!path || seen.has(path)) {
+      continue;
+    }
+    seen.add(path);
+    out.push({path, name: item.name.trim() || chatFileMentionName(path)});
+  }
+  return out;
+}
+
+function chatFileMentionsEqual(left: ChatFileMention[], right: ChatFileMention[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  return left.every((item, index) => item.path === right[index]?.path && item.name === right[index]?.name);
+}
+
+function resolveChatFileMentionQuery(text: string, cursor: number): {start: number; end: number; query: string} | null {
+  const safeCursor = Math.max(0, Math.min(text.length, cursor));
+  const beforeCursor = text.slice(0, safeCursor);
+  const atIndex = beforeCursor.lastIndexOf('@');
+  if (atIndex < 0) {
+    return null;
+  }
+  if (atIndex > 0 && !/\s/.test(beforeCursor[atIndex - 1])) {
+    return null;
+  }
+  const query = beforeCursor.slice(atIndex + 1);
+  if (/\s/.test(query)) {
+    return null;
+  }
+  return {start: atIndex, end: safeCursor, query};
+}
+
+function removeChatFileMentionTriggerToken(text: string, start: number, end: number): {text: string; selectionStart: number} {
+  const nextText = `${text.slice(0, start)}${text.slice(end)}`;
+  return {text: nextText, selectionStart: start};
+}
+
+function registryResourceLinkHasScheme(uri: string): boolean {
+  return /^[A-Za-z][A-Za-z0-9+.-]*:/.test(uri.trim());
+}
+
+function isProjectFileMentionBlock(block: RegistryChatContentBlock): boolean {
+  return block.type === 'resource_link' &&
+    typeof block.uri === 'string' &&
+    block.uri.trim().length > 0 &&
+    !registryResourceLinkHasScheme(block.uri);
+}
+
+function projectFileIndexStatusLabel(status: string): string {
+  switch (status) {
+    case 'indexed':
+      return 'Indexed';
+    case 'scanning':
+      return 'Scanning';
+    case 'error':
+      return 'Error';
+    default:
+      return 'Not indexed';
+  }
 }
 
 function chatAttachmentPreviewSrc(attachment: ChatAttachment): string {
@@ -3488,6 +3572,7 @@ function App() {
   const refreshWheelMakerUpdateHubRef = useRef<((hubId: string, options?: {force?: boolean; silent?: boolean}) => Promise<void>) | null>(null);
   const refreshWheelMakerUpdatesRef = useRef<((options?: {force?: boolean}) => Promise<void>) | null>(null);
   const refreshAgentPackagesRef = useRef<((options?: {silent?: boolean}) => Promise<void>) | null>(null);
+  const refreshProjectFileIndexesRef = useRef<((hubIds: string | string[], options?: {silent?: boolean}) => Promise<void>) | null>(null);
   const refreshAndroidApkUpdateRef = useRef<(() => Promise<void>) | null>(null);
   const [agentPackageHubs, setAgentPackageHubs] = useState<Record<string, AgentPackageHubView>>({});
   const [agentPackagesLoading, setAgentPackagesLoading] = useState(false);
@@ -3495,7 +3580,14 @@ function App() {
   const [agentPackageActionPendingKey, setAgentPackageActionPendingKey] = useState('');
   const [agentPackageHubUpdatePendingId, setAgentPackageHubUpdatePendingId] = useState('');
   const [expandedNpmUpdateHubIds, setExpandedNpmUpdateHubIds] = useState<Record<string, boolean>>({});
+  const [expandedProjectIndexHubIds, setExpandedProjectIndexHubIds] = useState<Record<string, boolean>>({});
+  const [projectIndexByHubId, setProjectIndexByHubId] = useState<Record<string, RegistryFileIndexStatusResponse>>({});
+  const [projectIndexLoading, setProjectIndexLoading] = useState(false);
+  const [projectIndexError, setProjectIndexError] = useState('');
+  const [projectIndexScanPendingByProjectId, setProjectIndexScanPendingByProjectId] = useState<Record<string, boolean>>({});
+  const [projectIndexScanAllPendingByHubId, setProjectIndexScanAllPendingByHubId] = useState<Record<string, boolean>>({});
   const agentPackageScanPollTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const projectIndexPollTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const [skillHubs, setSkillHubs] = useState<Record<string, SkillHubView>>({});
   const [skillsLoading, setSkillsLoading] = useState(false);
   const [skillsError, setSkillsError] = useState('');
@@ -3832,8 +3924,9 @@ function App() {
   const [chatConfigUpdatingKey, setChatConfigUpdatingKey] = useState('');
   const [chatComposerText, setChatComposerText] = useState('');
   const [chatAttachments, setChatAttachments] = useState<ChatAttachment[]>([]);
+  const [chatFileMentions, setChatFileMentions] = useState<ChatFileMention[]>([]);
   const chatAttachmentUploadPending = chatAttachments.some(isChatAttachmentUploadPending);
-  const chatComposerHasSendableContent = chatComposerText.trim().length > 0 || chatAttachments.length > 0;
+  const chatComposerHasSendableContent = chatComposerText.trim().length > 0 || chatAttachments.length > 0 || chatFileMentions.length > 0;
   const [voiceRecording, setVoiceRecording] = useState(false);
   const [voiceRecordingStatus, setVoiceRecordingStatus] = useState<VoiceRecordingStatus>('recording');
   const [voiceCancelIntent, setVoiceCancelIntent] = useState(false);
@@ -3849,6 +3942,7 @@ function App() {
   const markdownImageExportIdRef = useRef(0);
   const chatComposerTextRef = useRef('');
   const chatAttachmentsRef = useRef<ChatAttachment[]>([]);
+  const chatFileMentionsRef = useRef<ChatFileMention[]>([]);
   const chatComposerDraftsRef = useRef<Record<string, ChatComposerDraft>>({});
   const chatPendingPromptsByKeyRef = useRef<Record<string, PendingChatPrompt>>({});
   const chatPendingPromptTimersRef = useRef<Record<string, number>>({});
@@ -3880,6 +3974,12 @@ function App() {
   const androidSpeechRuntimeRef = useRef<AndroidNativeSpeechRuntime | null>(null);
   const [chatPromptMenuOpen, setChatPromptMenuOpen] = useState(false);
   const [chatFileMentionMenuOpen, setChatFileMentionMenuOpen] = useState(false);
+  const [chatFileMentionResults, setChatFileMentionResults] = useState<RegistryFileIndexSearchResult[]>([]);
+  const [chatFileMentionQuery, setChatFileMentionQuery] = useState('');
+  const [chatFileMentionLoading, setChatFileMentionLoading] = useState(false);
+  const [chatFileMentionError, setChatFileMentionError] = useState('');
+  const [chatFileMentionIndexed, setChatFileMentionIndexed] = useState(true);
+  const [chatFileMentionActiveIndex, setChatFileMentionActiveIndex] = useState(0);
   const [chatAttachmentTrayOpen, setChatAttachmentTrayOpen] = useState(false);
   const [chatConfigMenuOptionId, setChatConfigMenuOptionId] = useState('');
   const [chatHubMenuOpen, setChatHubMenuOpen] = useState(false);
@@ -3889,6 +3989,10 @@ function App() {
   const [chatQuickSwitchMenuPlacement, setChatQuickSwitchMenuPlacement] = useState<ChatQuickSwitchMenuPlacement>({kind: 'mobile'});
   const chatQuickSwitchMenuRef = useRef<HTMLDivElement | null>(null);
   const [chatSlashActiveIndex, setChatSlashActiveIndex] = useState(0);
+  const chatFileMentionQuerySessionIdRef = useRef(`file-query-${Date.now()}`);
+  const chatFileMentionQueryIdRef = useRef(0);
+  const chatFileMentionSearchTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const chatFileMentionSearchGenerationRef = useRef(0);
   const [resumeSessions, setResumeSessions] = useState<RegistryResumableSession[]>([]);
   const [resumeLoading, setResumeLoading] = useState(false);
 
@@ -4270,15 +4374,39 @@ function App() {
     activeItem.scrollIntoView({ block: 'nearest' });
   }, [chatSlashMenuVisible, chatSlashActiveIndex, chatSlashMenuOptions]);
 
+  useEffect(() => {
+    if (!chatFileMentionMenuOpen) {
+      setChatFileMentionActiveIndex(0);
+      return;
+    }
+    setChatFileMentionActiveIndex(prev => Math.max(0, Math.min(prev, chatFileMentionResults.length - 1)));
+  }, [chatFileMentionMenuOpen, chatFileMentionResults]);
+
+  useEffect(() => {
+    if (!chatFileMentionMenuOpen) {
+      return;
+    }
+    const menu = chatFileMentionMenuRef.current;
+    if (!menu) {
+      return;
+    }
+    const activeItem = menu.querySelector<HTMLElement>('.chat-file-mention-option.active');
+    if (!activeItem) {
+      return;
+    }
+    activeItem.scrollIntoView({ block: 'nearest' });
+  }, [chatFileMentionMenuOpen, chatFileMentionActiveIndex, chatFileMentionResults]);
+
   const saveChatComposerDraft = useCallback(
-    (draftKey: string, text: string, attachments: ChatAttachment[]) => {
+    (draftKey: string, text: string, attachments: ChatAttachment[], fileMentions: ChatFileMention[]) => {
       const normalizedKey = draftKey.trim();
       if (!normalizedKey) {
         return;
       }
       const prev = chatComposerDraftsRef.current;
       const existing = prev[normalizedKey] ?? EMPTY_CHAT_COMPOSER_DRAFT;
-      const hasContent = text.length > 0 || attachments.length > 0;
+      const normalizedMentions = dedupeChatFileMentionsByPath(fileMentions);
+      const hasContent = text.length > 0 || attachments.length > 0 || normalizedMentions.length > 0;
       if (!hasContent) {
         if (!(normalizedKey in prev)) {
           return;
@@ -4289,7 +4417,7 @@ function App() {
         setChatComposerDrafts(next);
         return;
       }
-      if (existing.text === text && existing.attachments === attachments) {
+      if (existing.text === text && existing.attachments === attachments && chatFileMentionsEqual(existing.fileMentions, normalizedMentions)) {
         return;
       }
       const next = {
@@ -4297,6 +4425,7 @@ function App() {
         [normalizedKey]: {
           text,
           attachments,
+          fileMentions: normalizedMentions,
         },
       };
       chatComposerDraftsRef.current = next;
@@ -4312,6 +4441,7 @@ function App() {
         currentChatDraftKeyRef.current,
         nextText,
         chatAttachmentsRef.current,
+        chatFileMentionsRef.current,
       );
     },
     [saveChatComposerDraft],
@@ -4365,6 +4495,9 @@ function App() {
     setChatConfigMenuOptionId('');
     setChatConfigOverflowOpen(false);
     setChatFileMentionMenuOpen(value => !value);
+    window.requestAnimationFrame(() => {
+      chatComposerTextareaRef.current?.focus();
+    });
   }, [setChatConfigOverflowOpen]);
 
   const toggleChatAttachmentTray = useCallback(() => {
@@ -4428,6 +4561,7 @@ function App() {
           normalizedDraftKey,
           chatComposerTextRef.current,
           next,
+          chatFileMentionsRef.current,
         );
         if (next.length === 0 && chatFileInputRef.current) {
           chatFileInputRef.current.value = '';
@@ -4441,9 +4575,163 @@ function App() {
       if (next === currentDraft.attachments) {
         return;
       }
-      saveChatComposerDraft(normalizedDraftKey, currentDraft.text, next);
+      saveChatComposerDraft(normalizedDraftKey, currentDraft.text, next, currentDraft.fileMentions);
     },
     [getChatDraftGeneration, saveChatComposerDraft],
+  );
+
+  const applyChatFileMentions = useCallback(
+    (
+      updater: (current: ChatFileMention[]) => ChatFileMention[],
+      draftKey = currentChatDraftKeyRef.current,
+    ) => {
+      const normalizedDraftKey = draftKey.trim();
+      if (!normalizedDraftKey) {
+        return;
+      }
+      if (normalizedDraftKey === currentChatDraftKeyRef.current) {
+        const next = dedupeChatFileMentionsByPath(updater(chatFileMentionsRef.current));
+        chatFileMentionsRef.current = next;
+        setChatFileMentions(next);
+        saveChatComposerDraft(
+          normalizedDraftKey,
+          chatComposerTextRef.current,
+          chatAttachmentsRef.current,
+          next,
+        );
+        return;
+      }
+      const currentDraft =
+        chatComposerDraftsRef.current[normalizedDraftKey] ??
+        EMPTY_CHAT_COMPOSER_DRAFT;
+      const next = dedupeChatFileMentionsByPath(updater(currentDraft.fileMentions));
+      saveChatComposerDraft(normalizedDraftKey, currentDraft.text, currentDraft.attachments, next);
+    },
+    [saveChatComposerDraft],
+  );
+
+  const clearChatFileMentionSearchTimer = useCallback(() => {
+    if (chatFileMentionSearchTimerRef.current !== null) {
+      window.clearTimeout(chatFileMentionSearchTimerRef.current);
+      chatFileMentionSearchTimerRef.current = null;
+    }
+  }, []);
+
+  const resetChatFileMentionSearchSession = useCallback(() => {
+    clearChatFileMentionSearchTimer();
+    chatFileMentionQuerySessionIdRef.current = `file-query-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    chatFileMentionQueryIdRef.current = 0;
+    chatFileMentionSearchGenerationRef.current += 1;
+    setChatFileMentionQuery('');
+    setChatFileMentionResults([]);
+    setChatFileMentionLoading(false);
+    setChatFileMentionError('');
+    setChatFileMentionIndexed(true);
+    setChatFileMentionActiveIndex(0);
+  }, [clearChatFileMentionSearchTimer]);
+
+  const runChatFileMentionSearch = useCallback(
+    async (query: string, generation: number) => {
+      const activeProjectId = selectedChatKeyRef.current?.projectId || projectIdRef.current;
+      if (!activeProjectId) {
+        setChatFileMentionError('Select a chat session first.');
+        setChatFileMentionLoading(false);
+        return;
+      }
+      const queryId = chatFileMentionQueryIdRef.current + 1;
+      chatFileMentionQueryIdRef.current = queryId;
+      setChatFileMentionLoading(true);
+      setChatFileMentionError('');
+      try {
+        const response = await service.searchFileIndex(activeProjectId, {
+          query,
+          querySessionId: chatFileMentionQuerySessionIdRef.current,
+          queryId,
+          limit: CHAT_FILE_MENTION_SEARCH_LIMIT,
+        });
+        if (generation !== chatFileMentionSearchGenerationRef.current) {
+          return;
+        }
+        setChatFileMentionIndexed(response.indexed);
+        setChatFileMentionResults(response.results ?? []);
+        setChatFileMentionActiveIndex(0);
+        setChatFileMentionError(response.error || '');
+      } catch (err) {
+        if (generation !== chatFileMentionSearchGenerationRef.current) {
+          return;
+        }
+        setChatFileMentionResults([]);
+        setChatFileMentionIndexed(true);
+        setChatFileMentionError(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (generation === chatFileMentionSearchGenerationRef.current) {
+          setChatFileMentionLoading(false);
+        }
+      }
+    },
+    [],
+  );
+
+  const scheduleChatFileMentionSearch = useCallback(
+    (text: string, cursor: number) => {
+      const mentionQuery = resolveChatFileMentionQuery(text, cursor);
+      clearChatFileMentionSearchTimer();
+      if (!mentionQuery) {
+        setChatFileMentionMenuOpen(false);
+        resetChatFileMentionSearchSession();
+        return;
+      }
+      setChatPromptMenuOpen(false);
+      setChatAttachmentTrayOpen(false);
+      setChatFileMentionMenuOpen(true);
+      setChatFileMentionQuery(mentionQuery.query);
+      setChatFileMentionLoading(true);
+      const generation = chatFileMentionSearchGenerationRef.current + 1;
+      chatFileMentionSearchGenerationRef.current = generation;
+      chatFileMentionSearchTimerRef.current = window.setTimeout(() => {
+        chatFileMentionSearchTimerRef.current = null;
+        runChatFileMentionSearch(mentionQuery.query, generation).catch(() => undefined);
+      }, CHAT_FILE_MENTION_DEBOUNCE_MS);
+    },
+    [clearChatFileMentionSearchTimer, resetChatFileMentionSearchSession, runChatFileMentionSearch],
+  );
+
+  const applyChatFileMentionResult = useCallback(
+    (result: RegistryFileIndexSearchResult) => {
+      const path = result.path.trim();
+      if (!path) {
+        return;
+      }
+      const input = chatComposerTextareaRef.current;
+      const selectionStart = input?.selectionStart ?? chatComposerTextRef.current.length;
+      const mentionQuery = resolveChatFileMentionQuery(chatComposerTextRef.current, selectionStart);
+      const removed = mentionQuery
+        ? removeChatFileMentionTriggerToken(chatComposerTextRef.current, mentionQuery.start, mentionQuery.end)
+        : {text: chatComposerTextRef.current, selectionStart};
+      applyChatFileMentions(current => [
+        ...current,
+        {path, name: result.name?.trim() || chatFileMentionName(path)},
+      ]);
+      updateChatComposerText(removed.text);
+      setChatFileMentionMenuOpen(false);
+      resetChatFileMentionSearchSession();
+      window.requestAnimationFrame(() => {
+        const nextInput = chatComposerTextareaRef.current;
+        if (!nextInput) {
+          return;
+        }
+        nextInput.focus();
+        nextInput.setSelectionRange(removed.selectionStart, removed.selectionStart);
+      });
+    },
+    [applyChatFileMentions, resetChatFileMentionSearchSession, updateChatComposerText],
+  );
+
+  const removeChatFileMention = useCallback(
+    (path: string) => {
+      applyChatFileMentions(current => current.filter(item => item.path !== path));
+    },
+    [applyChatFileMentions],
   );
 
   const appendChatAttachments = useCallback(
@@ -4725,6 +5013,10 @@ function App() {
   }, [chatAttachments]);
 
   useEffect(() => {
+    chatFileMentionsRef.current = chatFileMentions;
+  }, [chatFileMentions]);
+
+  useEffect(() => {
     connectedRef.current = connected;
   }, [connected]);
 
@@ -4759,8 +5051,9 @@ function App() {
         window.clearTimeout(timerId);
       }
       chatPendingPromptTimersRef.current = {};
+      clearChatFileMentionSearchTimer();
     };
-  }, []);
+  }, [clearChatFileMentionSearchTimer]);
 
   useEffect(() => {
     chatMessagesRef.current = chatMessages;
@@ -4776,6 +5069,10 @@ function App() {
     if (chatAttachmentsRef.current !== draft.attachments) {
       chatAttachmentsRef.current = draft.attachments;
       setChatAttachments(draft.attachments);
+    }
+    if (chatFileMentionsRef.current !== draft.fileMentions) {
+      chatFileMentionsRef.current = draft.fileMentions;
+      setChatFileMentions(draft.fileMentions);
     }
     if (draft.attachments.length === 0 && chatFileInputRef.current) {
       chatFileInputRef.current.value = '';
@@ -5452,12 +5749,13 @@ function App() {
   }, [
     isWide,
     tab,
-    measureChatComposerTop,
-    chatComposerText,
-    chatAttachments.length,
-    voiceRecording,
-    chatKeyboardInset,
-    windowHeight,
+        measureChatComposerTop,
+        chatComposerText,
+        chatAttachments.length,
+        chatFileMentions.length,
+        voiceRecording,
+        chatKeyboardInset,
+        windowHeight,
   ]);
 
   useEffect(() => {
@@ -9401,10 +9699,13 @@ function App() {
     chatAttachmentsRef.current.forEach(revokeChatAttachmentObjectUrl);
     chatComposerTextRef.current = '';
     chatAttachmentsRef.current = [];
+    chatFileMentionsRef.current = [];
     bumpChatDraftGeneration(currentChatDraftKeyRef.current);
     setChatComposerText('');
     setChatAttachments([]);
-    saveChatComposerDraft(currentChatDraftKeyRef.current, '', []);
+    setChatFileMentions([]);
+    setChatFileMentionMenuOpen(false);
+    saveChatComposerDraft(currentChatDraftKeyRef.current, '', [], []);
     if (chatFileInputRef.current) {
       chatFileInputRef.current.value = '';
     }
@@ -9422,7 +9723,7 @@ function App() {
     const draft = chatComposerDraftsRef.current[normalizedDraftKey];
     draft?.attachments.forEach(revokeChatAttachmentObjectUrl);
     bumpChatDraftGeneration(normalizedDraftKey);
-    saveChatComposerDraft(normalizedDraftKey, '', []);
+    saveChatComposerDraft(normalizedDraftKey, '', [], []);
   };
 
   const clearPendingChatPromptTimer = (runtimeKey: string) => {
@@ -9978,12 +10279,13 @@ function App() {
       return;
     }
     const sourceAttachments = options.attachmentsOverride ?? chatAttachments;
+    const sourceFileMentions = chatFileMentionsRef.current;
     const trimmedText = (options.textOverride ?? chatComposerText).trim();
-    if (trimmedText === '/cancel' && sourceAttachments.length === 0 && !options.blocksOverride) {
+    if (trimmedText === '/cancel' && sourceAttachments.length === 0 && sourceFileMentions.length === 0 && !options.blocksOverride) {
       setError('Use the stop button to cancel in app.');
       return;
     }
-    if (!options.blocksOverride && !trimmedText && sourceAttachments.length === 0) {
+    if (!options.blocksOverride && !trimmedText && sourceAttachments.length === 0 && sourceFileMentions.length === 0) {
       return;
     }
     if (options.blocksOverride && options.blocksOverride.length === 0) {
@@ -10020,10 +10322,15 @@ function App() {
         if (trimmedText) {
           blocks.push({ type: 'text', text: trimmedText });
         }
+        blocks.push(...sourceFileMentions.map(mention => ({
+          type: 'resource_link' as const,
+          uri: mention.path,
+          name: mention.name,
+        })));
         blocks.push(...uploadedAttachments.map(attachment => attachment.block).filter(isRegistryChatContentBlock));
       }
       if (blocks.length === 0) return;
-      const firstAttachmentName = uploadedAttachments[0]?.name || '';
+      const firstAttachmentName = sourceFileMentions[0]?.name || uploadedAttachments[0]?.name || '';
       const previewText = trimmedText || firstAttachmentName || msgText('prompt_request', {contentBlocks: blocks}).trim();
       const createdAt = new Date().toISOString();
       rememberPendingChatPrompt(runtimeKey, {
@@ -10892,6 +11199,9 @@ function App() {
       if (blockType !== 'image' && blockType !== 'resource_link') {
         continue;
       }
+      if (isProjectFileMentionBlock(block)) {
+        continue;
+      }
       if (!block.uri && !block.data) {
         continue;
       }
@@ -10910,6 +11220,20 @@ function App() {
     return attachments;
   };
 
+  const buildChatFileMentionsFromBlocks = (blocks: RegistryChatContentBlock[]): ChatFileMention[] => {
+    return dedupeChatFileMentionsByPath(
+      blocks
+        .filter(isProjectFileMentionBlock)
+        .map(block => {
+          const path = block.uri?.trim() ?? '';
+          return {
+            path,
+            name: block.name?.trim() || chatFileMentionName(path),
+          };
+        }),
+    );
+  };
+
   const retryPendingChatPrompt = (runtimeKey: string) => {
     const pending = chatPendingPromptsByKeyRef.current[runtimeKey];
     if (!pending) return;
@@ -10925,19 +11249,22 @@ function App() {
     const pending = chatPendingPromptsByKeyRef.current[runtimeKey];
     if (!pending) return;
     if (
-      (chatComposerTextRef.current.trim() || chatAttachmentsRef.current.length > 0) &&
+      (chatComposerTextRef.current.trim() || chatAttachmentsRef.current.length > 0 || chatFileMentionsRef.current.length > 0) &&
       !window.confirm('Replace the current draft with this undelivered message?')
     ) {
       return;
     }
     const text = extractTextFromACPContent(pending.blocks);
     const attachments = buildChatAttachmentsFromBlocks(pending.blocks);
+    const fileMentions = buildChatFileMentionsFromBlocks(pending.blocks);
     chatComposerTextRef.current = text;
     chatAttachmentsRef.current = attachments;
+    chatFileMentionsRef.current = fileMentions;
     bumpChatDraftGeneration(currentChatDraftKeyRef.current);
     setChatComposerText(text);
     setChatAttachments(attachments);
-    saveChatComposerDraft(currentChatDraftKeyRef.current, text, attachments);
+    setChatFileMentions(fileMentions);
+    saveChatComposerDraft(currentChatDraftKeyRef.current, text, attachments, fileMentions);
     forgetPendingChatPrompt(runtimeKey);
     window.setTimeout(resizeChatComposerTextarea, 0);
   };
@@ -11809,6 +12136,7 @@ function App() {
       ...deriveRegistryHubIds(registryHubs),
       ...Object.keys(wheelMakerUpdateHubs),
       ...Object.keys(agentPackageHubs),
+      ...Object.keys(projectIndexByHubId),
     ]);
     return Array.from(hubIds).sort((left, right) => {
       if (left < right) return -1;
@@ -11818,8 +12146,9 @@ function App() {
       hubId,
       wheelMaker: wheelMakerUpdateHubs[hubId] ?? null,
       agentPackage: agentPackageHubs[hubId] ?? null,
+      projectIndex: projectIndexByHubId[hubId] ?? null,
     }));
-  }, [agentPackageHubs, registryHubs, wheelMakerUpdateHubs]);
+  }, [agentPackageHubs, projectIndexByHubId, registryHubs, wheelMakerUpdateHubs]);
 
   const agentPackageHubCards = useMemo(() => {
     return Object.values(agentPackageHubs).sort((left, right) => {
@@ -11842,6 +12171,29 @@ function App() {
       window.clearTimeout(agentPackageScanPollTimerRef.current);
       agentPackageScanPollTimerRef.current = null;
     }
+  }, []);
+
+  const clearProjectIndexPollTimer = useCallback(() => {
+    if (projectIndexPollTimerRef.current) {
+      window.clearTimeout(projectIndexPollTimerRef.current);
+      projectIndexPollTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleProjectIndexPoll = useCallback((hubIds: string | string[]) => {
+    const ids = (Array.isArray(hubIds) ? hubIds : [hubIds])
+      .map(hubId => hubId.trim())
+      .filter(Boolean);
+    if (ids.length === 0 || projectIndexPollTimerRef.current) {
+      return;
+    }
+    projectIndexPollTimerRef.current = window.setTimeout(() => {
+      projectIndexPollTimerRef.current = null;
+      if (settingsDetailViewRef.current !== 'update') {
+        return;
+      }
+      refreshProjectFileIndexesRef.current?.(ids, {silent: true}).catch(() => undefined);
+    }, 1000);
   }, []);
 
   const scheduleWheelMakerUpdatePoll = useCallback((hubIds: string | string[]) => {
@@ -12137,6 +12489,59 @@ function App() {
     }
   }, [clearAgentPackageScanPollTimer, refreshProjectHubSnapshot]);
 
+  const refreshProjectFileIndexes = useCallback(async (hubIds: string | string[], options: {silent?: boolean} = {}) => {
+    const ids = (Array.isArray(hubIds) ? hubIds : [hubIds])
+      .map(hubId => hubId.trim())
+      .filter(Boolean);
+    if (ids.length === 0) {
+      setProjectIndexByHubId({});
+      return;
+    }
+    clearProjectIndexPollTimer();
+    if (!options.silent) {
+      setProjectIndexLoading(true);
+      setProjectIndexError('');
+    }
+    try {
+      const responses = await Promise.all(ids.map(async hubId => {
+        try {
+          const result = await service.getFileIndexStatus(hubId);
+          return {hubId, result};
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return {hubId, error: message};
+        }
+      }));
+      setProjectIndexByHubId(prev => {
+        const next = {...prev};
+        responses.forEach(entry => {
+          if ('error' in entry) {
+            next[entry.hubId] = prev[entry.hubId] ?? {hubId: entry.hubId, projects: []};
+            return;
+          }
+          next[entry.hubId] = {
+            hubId: entry.result.hubId ?? entry.hubId,
+            projects: entry.result.projects ?? [],
+          };
+        });
+        return next;
+      });
+      const firstError = responses.find((entry): entry is {hubId: string; error: string} => 'error' in entry)?.error || '';
+      setProjectIndexError(firstError);
+      const runningHubIds = responses
+        .filter((entry): entry is {hubId: string; result: RegistryFileIndexStatusResponse} => !('error' in entry))
+        .filter(entry => (entry.result.projects ?? []).some(project => project.running === true || project.status === 'scanning'))
+        .map(entry => entry.hubId);
+      if (runningHubIds.length > 0) {
+        scheduleProjectIndexPoll(runningHubIds);
+      }
+    } finally {
+      if (!options.silent) {
+        setProjectIndexLoading(false);
+      }
+    }
+  }, [clearProjectIndexPollTimer, scheduleProjectIndexPoll]);
+
   useEffect(() => {
     refreshWheelMakerUpdatesRef.current = refreshWheelMakerUpdates;
   }, [refreshWheelMakerUpdates]);
@@ -12146,6 +12551,10 @@ function App() {
   }, [refreshAgentPackages]);
 
   useEffect(() => {
+    refreshProjectFileIndexesRef.current = refreshProjectFileIndexes;
+  }, [refreshProjectFileIndexes]);
+
+  useEffect(() => {
     refreshAndroidApkUpdateRef.current = refreshAndroidApkUpdate;
   }, [refreshAndroidApkUpdate]);
 
@@ -12153,16 +12562,21 @@ function App() {
     if (settingsDetailView !== 'update') {
       clearWheelMakerUpdatePollTimer();
       clearAgentPackageScanPollTimer();
+      clearProjectIndexPollTimer();
       return;
     }
     refreshWheelMakerUpdatesRef.current?.().catch(() => undefined);
     refreshAgentPackagesRef.current?.().catch(() => undefined);
+    refreshProjectHubSnapshot()
+      .then(hubIds => refreshProjectFileIndexesRef.current?.(hubIds))
+      .catch(() => undefined);
     refreshAndroidApkUpdateRef.current?.().catch(() => undefined);
     return () => {
       clearWheelMakerUpdatePollTimer();
       clearAgentPackageScanPollTimer();
+      clearProjectIndexPollTimer();
     };
-  }, [clearAgentPackageScanPollTimer, clearWheelMakerUpdatePollTimer, settingsDetailView]);
+  }, [clearAgentPackageScanPollTimer, clearProjectIndexPollTimer, clearWheelMakerUpdatePollTimer, refreshProjectHubSnapshot, settingsDetailView]);
 
   useEffect(() => {
     if (!androidApkUpdateSupported) {
@@ -12547,6 +12961,72 @@ function App() {
       hubIds: uniqueHubIds,
     });
   }, []);
+
+  const handleScanProjectIndex = useCallback(async (hubId: string, projectId: string) => {
+    if (!hubId || !projectId || projectIndexScanPendingByProjectId[projectId]) {
+      return;
+    }
+    setProjectIndexError('');
+    setProjectIndexScanPendingByProjectId(prev => ({...prev, [projectId]: true}));
+    try {
+      const result = await service.rebuildFileIndex(projectId);
+      if (!result.ok) {
+        throw new Error(result.error || 'Project index scan failed.');
+      }
+      await refreshProjectFileIndexes(hubId, {silent: true});
+      if (result.running) {
+        scheduleProjectIndexPoll(hubId);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setProjectIndexError(message);
+      setError(message);
+    } finally {
+      setProjectIndexScanPendingByProjectId(prev => ({...prev, [projectId]: false}));
+    }
+  }, [projectIndexScanPendingByProjectId, refreshProjectFileIndexes, scheduleProjectIndexPoll]);
+
+  const handleScanAllProjectIndexes = useCallback(async (hubId: string, projectIndexProjects: RegistryFileIndexStatus[]) => {
+    const targets = projectIndexProjects.filter(project => project.projectId);
+    if (!hubId || targets.length === 0 || projectIndexScanAllPendingByHubId[hubId]) {
+      return;
+    }
+    setProjectIndexError('');
+    setProjectIndexScanAllPendingByHubId(prev => ({...prev, [hubId]: true}));
+    setProjectIndexScanPendingByProjectId(prev => ({
+      ...prev,
+      ...Object.fromEntries(targets.map(project => [project.projectId, true])),
+    }));
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < targets.length) {
+        const project = targets[cursor];
+        cursor += 1;
+        try {
+          await service.rebuildFileIndex(project.projectId);
+        } finally {
+          setProjectIndexScanPendingByProjectId(prev => ({...prev, [project.projectId]: false}));
+        }
+      }
+    };
+    try {
+      await Promise.all(
+        Array.from({length: Math.min(PROJECT_INDEX_SCAN_CONCURRENCY, targets.length)}, () => worker()),
+      );
+      await refreshProjectFileIndexes(hubId, {silent: true});
+      scheduleProjectIndexPoll(hubId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setProjectIndexError(message);
+      setError(message);
+    } finally {
+      setProjectIndexScanAllPendingByHubId(prev => ({...prev, [hubId]: false}));
+      setProjectIndexScanPendingByProjectId(prev => ({
+        ...prev,
+        ...Object.fromEntries(targets.map(project => [project.projectId, false])),
+      }));
+    }
+  }, [projectIndexScanAllPendingByHubId, refreshProjectFileIndexes, scheduleProjectIndexPoll]);
 
   const handleWheelMakerUpdateConfirmedAction = useCallback(async (target: Extract<ConfirmTarget, {kind: 'wheelMakerUpdate'}>) => {
     setConfirmError('');
@@ -15267,9 +15747,14 @@ function App() {
       (total, card) => total + deriveNpmPackageUpdateTargets(card.agentPackage?.hub?.packages ?? []).length,
       0,
     );
+    const projectIndexedCount = Object.values(projectIndexByHubId).reduce(
+      (total, hub) => total + (hub.projects ?? []).filter(project => project.status === 'indexed').length,
+      0,
+    );
     const updateSummaryScanning =
       wheelMakerUpdatesLoading ||
       agentPackagesLoading ||
+      projectIndexLoading ||
       updateHubCards.some(card => card.wheelMaker?.loading === true || card.agentPackage?.loading === true);
     const androidApkInstallDisabled =
       androidApkInstallPending ||
@@ -15363,6 +15848,10 @@ function App() {
               <span className="update-summary-value">{npmUpdateAvailableCount}</span>
               <span className="update-summary-label">NPM updates</span>
             </div>
+            <div className="update-summary-metric">
+              <span className="update-summary-value">{projectIndexedCount}</span>
+              <span className="update-summary-label">Indexed projects</span>
+            </div>
             <div className="update-summary-metric update-summary-state">
               <span className={`codicon ${updateSummaryScanning ? 'codicon-loading codicon-modifier-spin' : 'codicon-check'}`} aria-hidden="true" />
               <span className="update-summary-label">{updateSummaryScanning ? 'Scanning' : 'Current scan idle'}</span>
@@ -15384,13 +15873,13 @@ function App() {
             <span>{wheelMakerUpdateAllPending ? 'Updating All Hubs...' : 'Update All Hubs'}</span>
           </button>
         </div>
-        {(wheelMakerUpdatesLoading || agentPackagesLoading) && updateHubCards.length === 0 ? (
+        {(wheelMakerUpdatesLoading || agentPackagesLoading || projectIndexLoading) && updateHubCards.length === 0 ? (
           <div className="muted block">Scanning hubs...</div>
         ) : null}
-        {wheelMakerUpdatesError || agentPackagesError ? (
-          <div className="muted block settings-metadata-error">{wheelMakerUpdatesError || agentPackagesError}</div>
+        {wheelMakerUpdatesError || agentPackagesError || projectIndexError ? (
+          <div className="muted block settings-metadata-error">{wheelMakerUpdatesError || agentPackagesError || projectIndexError}</div>
         ) : null}
-        {!wheelMakerUpdatesLoading && !agentPackagesLoading && updateHubCards.length === 0 && !wheelMakerUpdatesError && !agentPackagesError ? (
+        {!wheelMakerUpdatesLoading && !agentPackagesLoading && !projectIndexLoading && updateHubCards.length === 0 && !wheelMakerUpdatesError && !agentPackagesError && !projectIndexError ? (
           <div className="muted block">No hubs available.</div>
         ) : null}
         <div className="settings-metadata-list agent-package-hub-list">
@@ -15405,6 +15894,21 @@ function App() {
             const npmExpanded = expandedNpmUpdateHubIds[card.hubId] === true;
             const npmHubUpdatePending = agentPackageHubUpdatePendingId === card.hubId;
             const npmActionDisabled = npmHubUpdatePending || operation?.running === true || agentCard?.loading === true;
+            const projectIndexFallbackProjects: RegistryFileIndexStatus[] = projects
+              .filter(project => (project.hubId || '').trim() === card.hubId)
+              .map(project => ({
+                projectId: project.projectId,
+                name: project.name,
+                path: project.path,
+                status: 'missing',
+                fileCount: 0,
+              }));
+            const projectIndexProjects = card.projectIndex?.projects?.length
+              ? card.projectIndex.projects
+              : projectIndexFallbackProjects;
+            const projectIndexIndexedCount = projectIndexProjects.filter(project => project.status === 'indexed').length;
+            const projectIndexExpanded = expandedProjectIndexHubIds[card.hubId] === true;
+            const projectIndexScanAllPending = projectIndexScanAllPendingByHubId[card.hubId] === true;
             const wheelMakerPending = wheelMakerUpdatePendingHubId === card.hubId;
             const showWheelMakerUpdateAction = shouldShowWheelMakerUpdateAction({
               data: wheelMakerData,
@@ -15432,6 +15936,8 @@ function App() {
                       {wheelMaker?.loading ? 'Checking release' : wheelMakerUpdateStatusLabel(wheelMakerStatus)}
                       {' / '}
                       {npmPackageUpdateSummary(npmUpdateTargets.length)}
+                      {' / '}
+                      {projectIndexIndexedCount}/{projectIndexProjects.length} indexed
                     </span>
                   </div>
                   {wheelMaker?.loading || agentCard?.loading ? (
@@ -15561,6 +16067,70 @@ function App() {
                           );
                         })}
                       </div>
+                    </div>
+                  ) : null}
+                </section>
+                <section className="project-index-section">
+                  <div className="project-index-disclosure">
+                    <button
+                      type="button"
+                      className="npm-update-disclosure-btn project-index-disclosure-btn"
+                      aria-expanded={projectIndexExpanded}
+                      onClick={() => setExpandedProjectIndexHubIds(prev => ({
+                        ...prev,
+                        [card.hubId]: !prev[card.hubId],
+                      }))}
+                    >
+                      <span className={`codicon ${projectIndexExpanded ? 'codicon-chevron-down' : 'codicon-chevron-right'}`} aria-hidden="true" />
+                      <span className="project-index-count">Projects - {projectIndexProjects.length} projects - {projectIndexIndexedCount} indexed</span>
+                      <span className="project-index-total">{projectIndexLoading ? 'Refreshing' : 'File index'}</span>
+                    </button>
+                    {projectIndexExpanded ? (
+                      <button
+                        type="button"
+                        className="project-index-action-btn"
+                        disabled={projectIndexProjects.length === 0 || projectIndexScanAllPending}
+                        onClick={() => handleScanAllProjectIndexes(card.hubId, projectIndexProjects)}
+                      >
+                        {projectIndexScanAllPendingByHubId[card.hubId] ? 'Scanning...' : 'Scan All'}
+                      </button>
+                    ) : null}
+                  </div>
+                  {projectIndexExpanded ? (
+                    <div className="project-index-body">
+                      {projectIndexProjects.length === 0 ? (
+                        <div className="project-index-empty">No projects</div>
+                      ) : projectIndexProjects.map(project => {
+                        const projectPending = projectIndexScanPendingByProjectId[project.projectId] === true ||
+                          project.running === true ||
+                          project.status === 'scanning';
+                        return (
+                          <div key={`${card.hubId}:project-index:${project.projectId}`} className="project-index-row">
+                            <div className="project-index-main">
+                              <span className="settings-metadata-title" title={project.name}>{project.name}</span>
+                              <span className="project-index-path" title={project.path}>{project.path || '-'}</span>
+                            </div>
+                            <div className="project-index-meta">
+                              <span className={`agent-package-status status-${project.status}`}>
+                                {projectPending ? 'Scanning' : projectFileIndexStatusLabel(project.status)}
+                              </span>
+                              <span>{project.fileCount || 0} files</span>
+                              {project.indexedAt ? <span>{formatWheelMakerDateTime(project.indexedAt)}</span> : null}
+                            </div>
+                            {project.error ? (
+                              <div className="settings-metadata-error">{project.error}</div>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="project-index-action-btn"
+                              disabled={projectPending}
+                              onClick={() => handleScanProjectIndex(card.hubId, project.projectId)}
+                            >
+                              {projectIndexScanPendingByProjectId[project.projectId] ? 'Scanning...' : 'Scan'}
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   ) : null}
                 </section>
@@ -18101,8 +18671,23 @@ function App() {
                 enqueueChatAttachmentFiles(files, attachmentDraftKey, attachmentDraftGeneration);
               }}
             >
-              {chatAttachments.length > 0 ? (
+              {chatFileMentions.length > 0 || chatAttachments.length > 0 ? (
                 <div className="chat-attachment-preview-list">
+                  {chatFileMentions.map(mention => (
+                    <div key={`file-mention:${mention.path}`} className="chat-file-mention-chip" title={mention.path}>
+                      <span className="codicon codicon-file-code" aria-hidden="true" />
+                      <span className="chat-file-mention-chip-name">{mention.name}</span>
+                      <button
+                        type="button"
+                        className="chat-attachment-remove"
+                        onClick={() => removeChatFileMention(mention.path)}
+                        title="Remove file"
+                        aria-label={`Remove ${mention.name}`}
+                      >
+                        <span className="codicon codicon-close" />
+                      </button>
+                    </div>
+                  ))}
                   {chatAttachments.map(attachment => {
                     const previewSrc = chatAttachmentPreviewSrc(attachment);
                     const pending = isChatAttachmentUploadPending(attachment);
@@ -18182,6 +18767,7 @@ function App() {
                       }
                       closeChatAttachmentTray();
                       updateChatComposerText(event.target.value);
+                      scheduleChatFileMentionSearch(event.target.value, event.target.selectionStart ?? event.target.value.length);
                     }}
                     onPaste={event => {
                       if (voiceRecordingRef.current) {
@@ -18215,6 +18801,43 @@ function App() {
                       if (voiceAwaitingFinalRef.current) {
                         event.preventDefault();
                         return;
+                      }
+                      if (chatFileMentionMenuOpen) {
+                        if (event.key === 'ArrowDown') {
+                          event.preventDefault();
+                          setChatFileMentionActiveIndex(prev => {
+                            if (chatFileMentionResults.length === 0) {
+                              return 0;
+                            }
+                            return (prev + 1) % chatFileMentionResults.length;
+                          });
+                          return;
+                        }
+                        if (event.key === 'ArrowUp') {
+                          event.preventDefault();
+                          setChatFileMentionActiveIndex(prev => {
+                            if (chatFileMentionResults.length === 0) {
+                              return 0;
+                            }
+                            return (prev - 1 + chatFileMentionResults.length) % chatFileMentionResults.length;
+                          });
+                          return;
+                        }
+                        if ((event.key === 'Enter' || event.key === 'Tab') && !event.altKey && !event.nativeEvent.isComposing) {
+                          const activeResult = chatFileMentionResults[chatFileMentionActiveIndex];
+                          if (!activeResult) {
+                            return;
+                          }
+                          event.preventDefault();
+                          applyChatFileMentionResult(activeResult);
+                          return;
+                        }
+                        if (event.key === 'Escape') {
+                          event.preventDefault();
+                          setChatFileMentionMenuOpen(false);
+                          resetChatFileMentionSearchSession();
+                          return;
+                        }
                       }
                       if (chatSlashMenuVisible) {
                         if (event.key === 'ArrowDown') {
@@ -18292,8 +18915,38 @@ function App() {
                 </div>
               </div>
               {chatFileMentionMenuOpen ? (
-                <div ref={chatFileMentionMenuRef} className="chat-file-mention-menu" role="menu" aria-label="File mentions">
-                  <div className="chat-file-mention-empty">File mentions coming soon</div>
+                <div ref={chatFileMentionMenuRef} className="chat-file-mention-menu" role="listbox" aria-label="File mentions">
+                  {chatFileMentionLoading ? (
+                    <div className="chat-file-mention-empty">Searching...</div>
+                  ) : chatFileMentionError ? (
+                    <div className="chat-file-mention-empty">File search failed</div>
+                  ) : !chatFileMentionIndexed ? (
+                    <div className="chat-file-mention-empty">Index not built</div>
+                  ) : chatFileMentionResults.length === 0 ? (
+                    <div className="chat-file-mention-empty">{chatFileMentionQuery ? 'No files found' : 'No indexed files'}</div>
+                  ) : (
+                    chatFileMentionResults.map((result, index) => {
+                      const selected = index === chatFileMentionActiveIndex;
+                      const name = result.name || chatFileMentionName(result.path);
+                      return (
+                        <button
+                          key={result.path}
+                          type="button"
+                          className={`chat-file-mention-option${selected ? ' active' : ''}`}
+                          role="option"
+                          aria-selected={index === chatFileMentionActiveIndex}
+                          title={result.path}
+                          onMouseEnter={() => setChatFileMentionActiveIndex(index)}
+                          onMouseDown={event => event.preventDefault()}
+                          onClick={() => applyChatFileMentionResult(result)}
+                        >
+                          <span className="codicon codicon-file-code" aria-hidden="true" />
+                          <span className="chat-file-mention-path">{result.path}</span>
+                          <span className="chat-file-mention-name">{name}</span>
+                        </button>
+                      );
+                    })
+                  )}
                 </div>
               ) : null}
               {chatSlashMenuVisible ? (

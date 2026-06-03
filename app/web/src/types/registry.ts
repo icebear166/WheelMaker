@@ -680,6 +680,50 @@ export interface RegistryFsReadResponse {
   returned?: number;
 }
 
+export interface RegistryFileIndexStatus {
+  projectId: string;
+  name: string;
+  path: string;
+  status: 'missing' | 'indexed' | 'scanning' | 'error' | string;
+  fileCount: number;
+  indexedAt?: string;
+  indexPath?: string;
+  running?: boolean;
+  error?: string;
+}
+
+export interface RegistryFileIndexStatusResponse {
+  hubId?: string;
+  projects: RegistryFileIndexStatus[];
+}
+
+export interface RegistryFileIndexRebuildResponse {
+  ok: boolean;
+  accepted: boolean;
+  alreadyRunning?: boolean;
+  running: boolean;
+  projectId: string;
+  status: string;
+  error?: string;
+}
+
+export interface RegistryFileIndexSearchResult {
+  path: string;
+  name: string;
+  score?: number;
+}
+
+export interface RegistryFileIndexSearchResponse {
+  query: string;
+  querySessionId?: string;
+  queryId?: number;
+  status: string;
+  indexed: boolean;
+  fileCount: number;
+  results: RegistryFileIndexSearchResult[];
+  error?: string;
+}
+
 export interface RegistryGitCommit {
   sha: string;
   author: string;

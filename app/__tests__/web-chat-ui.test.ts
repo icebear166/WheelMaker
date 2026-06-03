@@ -234,7 +234,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('for (const item of projectItem.agents ?? [])');
     expect(mainTsx).toContain('resetChatComposer();');
     expect(mainTsx).toContain('attachments: ChatAttachment[];');
-    expect(mainTsx).toContain("const EMPTY_CHAT_COMPOSER_DRAFT: ChatComposerDraft = { text: '', attachments: [] };");
+    expect(mainTsx).toContain("const EMPTY_CHAT_COMPOSER_DRAFT: ChatComposerDraft = { text: '', attachments: [], fileMentions: [] };");
     expect(mainTsx).toContain('const [chatAttachments, setChatAttachments] = useState<ChatAttachment[]>([]);');
     expect(mainTsx).toContain("status: 'queued' | 'uploading' | 'failed' | 'completed';");
     expect(mainTsx).toContain('progress: number;');
@@ -406,7 +406,7 @@ describe('web chat integration', () => {
     const sendAwait = mainTsx.indexOf('const result = await service.sendProjectSessionMessage(selectedProjectId, {', sendExistingStart);
     expect(sendExistingStart).toBeGreaterThanOrEqual(0);
     expect(sendEnd).toBeGreaterThan(sendExistingStart);
-    expect(sendBlock).toContain("if (trimmedText === '/cancel' && sourceAttachments.length === 0 && !options.blocksOverride) {");
+    expect(sendBlock).toContain("if (trimmedText === '/cancel' && sourceAttachments.length === 0 && sourceFileMentions.length === 0 && !options.blocksOverride) {");
     expect(sendBlock).toContain("setError('Use the stop button to cancel in app.');");
     expect(sendBlock).toContain('rememberPendingChatPrompt(runtimeKey, {');
     expect(sendBlock).toContain("status: 'confirming',");
@@ -529,7 +529,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className="floating-control-drag-backdrop"');
     expect(mainTsx).toContain('className="floating-control-dock-rail left"');
     expect(mainTsx).toContain('className="floating-control-dock-rail right"');
-    expect(mainTsx).toContain("CHAT - {selectedChatDisplayTitle || 'New Session'}");
+    expect(mainTsx).toContain("`CHAT - ${selectedChatDisplayTitle || 'New Session'}`");
     expect(mainTsx).toContain("{selectedFile || 'Select a file'}");
     expect(mainTsx).toContain("{selectedDiff || 'Select a changed file'}");
     expect(mainTsx).toContain('aria-expanded={drawerOpen}');
@@ -711,7 +711,7 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('onChange={e => setUseLatestPromptTitle(e.target.checked)}');
     expect(mainTsx).not.toContain('Use Latest Prompt Title');
     expect(mainTsx).not.toContain('className="chat-title-option"');
-    expect(mainTsx).toContain('renderBreadcrumbTitle(chatBreadcrumbProjectName, chatBreadcrumbLabel)');
+    expect(mainTsx).toContain('renderBreadcrumbTitle(activeChatBreadcrumbProjectName, activeChatBreadcrumbLabel)');
     expect(mainTsx).toContain('renderBreadcrumbTitle(breadcrumbProjectName, fileBreadcrumbLabel)');
     expect(mainTsx).toContain('renderBreadcrumbTitle(breadcrumbProjectName, gitBreadcrumbLabel)');
   });
@@ -802,7 +802,7 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.sidebar-title-row.search-open .chat-sidebar-title-actions {');
     expect(stylesCss).toContain('.chat-hub-summary {');
     expect(stylesCss).toContain('.chat-hub-summary-button {');
-    expect(stylesCss).toContain('.mobile-chat-drawer-header .chat-header-search-control.compact .session-search-icon-btn {');
+    expect(stylesCss).toContain('.mobile-chat-drawer-header .chat-header-search-control.compact .session-search-icon-btn,');
     expect(stylesCss).toContain('.chat-header-search-wrap.mobile {');
     const mobileSearchWrapBlock = stylesCss.match(/\.chat-header-search-wrap\.mobile \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(mobileSearchWrapBlock).toContain('position: relative;');
@@ -827,7 +827,9 @@ describe('web chat integration', () => {
     const mobileCompactSearchControlBlock = stylesCss.match(/\.mobile-chat-drawer-header \.chat-header-search-control\.compact \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(mobileCompactSearchControlBlock).not.toContain('margin-left: auto;');
     expect(stylesCss).not.toContain('.mobile-chat-drawer-header.search-open .chat-header-search-control.open {\n  height: 40px;');
-    const mobileSearchButtonBlock = stylesCss.match(/\.mobile-chat-drawer-header \.chat-header-search-control\.compact \.session-search-icon-btn \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const mobileSearchButtonBlock = stylesCss.match(
+      /\.mobile-chat-drawer-header \.session-search-control\.compact \.session-search-icon-btn,\r?\n\.mobile-chat-drawer-header \.chat-header-search-control\.compact \.session-search-icon-btn,\r?\n\.mobile-chat-drawer-header \.chat-header-archive-control\.compact \.session-search-icon-btn \{[\s\S]*?\n\}/,
+    )?.[0] ?? '';
     expect(mobileSearchButtonBlock).toContain('width: 36px;');
     expect(mobileSearchButtonBlock).toContain('height: 36px;');
     expect(mobileSearchButtonBlock).toContain('font-size: 14px;');
@@ -933,7 +935,9 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('className="chat-mention-symbol"');
     expect(mainTsx).toContain('className="chat-file-mention-menu"');
     expect(mainTsx).toContain('className="chat-file-mention-empty"');
-    expect(mainTsx).toContain('File mentions coming soon');
+    expect(mainTsx).toContain('aria-label="File mentions"');
+    expect(mainTsx).toContain('Index not built');
+    expect(mainTsx).toContain('No files found');
     expect(mainTsx).toContain('const openChatFileMentionMenu = useCallback(() => {');
     expect(mainTsx).not.toContain('className="chat-tool-button chat-skill-button"');
     expect(mainTsx).not.toContain('codicon-wand');
@@ -1391,7 +1395,7 @@ describe('web chat integration', () => {
     expect(chatSection).not.toContain("setSettingsDetailView('voiceInput')");
     expect(mainTsx).toContain('Doubao Streaming ASR 2.0');
     expect(mainTsx).toContain('speechSettings.enabled ? (');
-    expect(mainTsx).toContain('const chatComposerHasSendableContent = chatComposerText.trim().length > 0 || chatAttachments.length > 0;');
+    expect(mainTsx).toContain('const chatComposerHasSendableContent = chatComposerText.trim().length > 0 || chatAttachments.length > 0 || chatFileMentions.length > 0;');
     expect(mainTsx).toContain('const [voiceCancelIntent, setVoiceCancelIntent] = useState(false);');
     expect(mainTsx).toContain('<VoiceInputButton');
     expect(mainTsx).toContain('recordingMode={voiceInteractionMode}');
@@ -1556,11 +1560,12 @@ describe('web chat integration', () => {
     expect(mobileSheet).not.toContain("openSettingsDetail('portRelay')");
     expect(mobileSheet).not.toContain("openSettingsDetail('update')");
     expect(mobileSheet).not.toContain('className="project-wrap"');
-    expect(mobileSheet).toContain('renderProjectSessionActionMenu(targetProjectId, session)');
-    expect(mobileSheet).toContain('onPointerDown={event => startProjectSessionLongPress(targetProjectId, session.sessionId, event)}');
+    expect(mobileSheet).toContain('renderProjectSessionRowsWithOlderFolding(targetProjectId, projectSessions, true)');
+    expect(mainTsx).toContain('renderProjectSessionActionMenu(targetProjectId, session)');
+    expect(mainTsx).toContain('onPointerDown={event => startProjectSessionLongPress(targetProjectId, session.sessionId, event)}');
     expect(mobileSheet).not.toContain('chat-session-swipe-row');
     expect(mobileSheet).toContain("tagVariantClass('wide-project-hub', projectItem.hubId || 'local')");
-    expect(mobileSheet).toContain("tagVariantClass('wide-session-agent', sessionAgent)");
+    expect(mainTsx).toContain("tagVariantClass('wide-session-agent', sessionAgent)");
 
     expect(stylesCss).toContain('.mobile-chat-drawer-header {');
     expect(stylesCss).toContain('.mobile-project-session-nav {');
@@ -1927,5 +1932,44 @@ describe('web chat integration', () => {
     expect(repositoryTs).toContain('.map(item => normalizeAgentType(item))');
     expect(mainTsx).not.toContain("return normalized.toLowerCase() === 'codexapp' ? 'codex' : normalized;");
     expect(mainTsx).not.toContain('codexapp: 3');
+  });
+
+  test('chat composer supports indexed project file mentions', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const registryTypes = readSourceText(path.join(projectRoot, 'web', 'src', 'types', 'registry.ts'));
+    const repositoryTs = readSourceText(path.join(projectRoot, 'web', 'src', 'services', 'registryRepository.ts'));
+    const workspaceServiceTs = readSourceText(path.join(projectRoot, 'web', 'src', 'services', 'registryWorkspaceService.ts'));
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'main.tsx'));
+    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
+
+    expect(registryTypes).toContain('export interface RegistryFileIndexSearchResult');
+    expect(registryTypes).toContain('export interface RegistryFileIndexSearchResponse');
+    expect(repositoryTs).toContain("method: 'fs.index.search'");
+    expect(workspaceServiceTs).toContain('async searchFileIndex(');
+    expect(mainTsx).toContain('type ChatFileMention = {');
+    expect(mainTsx).toContain('fileMentions: ChatFileMention[];');
+    expect(mainTsx).toContain("const EMPTY_CHAT_COMPOSER_DRAFT: ChatComposerDraft = { text: '', attachments: [], fileMentions: [] };");
+    expect(mainTsx).toContain('const [chatFileMentions, setChatFileMentions] = useState<ChatFileMention[]>([]);');
+    expect(mainTsx).toContain('const chatFileMentionsRef = useRef<ChatFileMention[]>([]);');
+    expect(mainTsx).toContain('resolveChatFileMentionQuery(chatComposerTextRef.current, selectionStart)');
+    expect(mainTsx).toContain('service.searchFileIndex(activeProjectId, {');
+    expect(mainTsx).toContain('querySessionId: chatFileMentionQuerySessionIdRef.current');
+    expect(mainTsx).toContain('limit: CHAT_FILE_MENTION_SEARCH_LIMIT');
+    expect(mainTsx).toContain('removeChatFileMentionTriggerToken(');
+    expect(mainTsx).toContain('dedupeChatFileMentionsByPath');
+    expect(mainTsx).toContain("type: 'resource_link'");
+    expect(mainTsx).toContain('uri: mention.path');
+    expect(mainTsx).toContain('className="chat-file-mention-chip"');
+    expect(mainTsx).toContain('title={mention.path}');
+    expect(mainTsx).toContain('className={`chat-file-mention-option${selected ? \' active\' : \'\'}`}');
+    expect(mainTsx).toContain('role="option"');
+    expect(mainTsx).toContain('aria-selected={index === chatFileMentionActiveIndex}');
+    expect(mainTsx).toContain('chatFileMentionActiveIndex');
+    expect(mainTsx).toContain("event.key === 'ArrowDown'");
+    expect(mainTsx).toContain("event.key === 'Tab'");
+    expect(mainTsx).not.toContain('File mentions coming soon');
+    expect(stylesCss).toContain('.chat-file-mention-chip');
+    expect(stylesCss).toContain('.chat-file-mention-option');
+    expect(stylesCss).toContain('.chat-file-mention-path');
   });
 });

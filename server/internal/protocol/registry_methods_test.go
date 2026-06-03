@@ -32,6 +32,15 @@ func TestRegistryMethodRolesAndRoutes(t *testing.T) {
 	if !RegistryLocalReadMethodAllowed(RegistryMethodFSRead) {
 		t.Fatal("fs.read should be allowed on local read")
 	}
+	if !RegistryHubCommandMethod(RegistryMethodFSIndexStatus) {
+		t.Fatal("fs.index.status should be a hub command method")
+	}
+	if !RegistryLocalReadMethodAllowed(RegistryMethodFSIndexSearch) {
+		t.Fatal("fs.index.search should be allowed on local read")
+	}
+	if !RegistryLocalReadMethodAllowed(RegistryMethodFSIndexRebuild) {
+		t.Fatal("fs.index.rebuild should be allowed on local read")
+	}
 	if RegistryLocalReadMethodAllowed(RegistryMethodSessionList) {
 		t.Fatal("session.list should not be allowed on local read")
 	}

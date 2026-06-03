@@ -2192,6 +2192,137 @@ func TestMonitorCoreAction_UnsupportedAction(t *testing.T) {
 	}
 }
 
+func TestProjectFileIndexRebuildWritesGitIgnoredLineIndexAndSearchesFuzzy(t *testing.T) {
+	root := t.TempDir()
+	writeProjectFileForFileIndexTest(t, root, ".gitignore", "node_modules/\n*.tmp\n")
+	writeProjectFileForFileIndexTest(t, root, "src/MobileInstance.ts", "export const mobile = true;\n")
+	writeProjectFileForFileIndexTest(t, root, "src/components/ProfileCard.tsx", "export const profile = true;\n")
+	writeProjectFileForFileIndexTest(t, root, "node_modules/ignored.js", "ignored\n")
+	writeProjectFileForFileIndexTest(t, root, "scratch.tmp", "ignored\n")
+	runGitForFileIndexTest(t, root, "init")
+	runGitForFileIndexTest(t, root, "add", ".gitignore", "src/MobileInstance.ts")
+
+	baseDir := t.TempDir()
+	manager := newProjectFileIndexManager(baseDir)
+	project := projectFileIndexProject{ProjectID: "hub-a:My Project", Name: "My Project", Root: root}
+
+	snapshot, err := manager.rebuildNow(context.Background(), project)
+	if err != nil {
+		t.Fatalf("rebuildNow: %v", err)
+	}
+	if snapshot.FileCount != 3 {
+		t.Fatalf("FileCount=%d, want 3", snapshot.FileCount)
+	}
+
+	indexPath := filepath.Join(baseDir, "db", "ext", "My Project", "file-index.txt")
+	raw, err := os.ReadFile(indexPath)
+	if err != nil {
+		t.Fatalf("read index: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(strings.ReplaceAll(string(raw), "\r\n", "\n")), "\n")
+	wantLines := []string{".gitignore", "src/MobileInstance.ts", "src/components/ProfileCard.tsx"}
+	if strings.Join(lines, "\n") != strings.Join(wantLines, "\n") {
+		t.Fatalf("index lines=%q, want %q", lines, wantLines)
+	}
+
+	resp, err := manager.search(context.Background(), project, projectFileIndexSearchRequest{
+		Query:          "MI",
+		QuerySessionID: "session-1",
+		QueryID:        1,
+		Limit:          20,
+	})
+	if err != nil {
+		t.Fatalf("search MI: %v", err)
+	}
+	if len(resp.Results) == 0 || resp.Results[0].Path != "src/MobileInstance.ts" || resp.Results[0].Name != "MobileInstance.ts" {
+		t.Fatalf("MI results=%+v, want MobileInstance first", resp.Results)
+	}
+
+	resp, err = manager.search(context.Background(), project, projectFileIndexSearchRequest{
+		Query:          "components",
+		QuerySessionID: "session-1",
+		QueryID:        2,
+		Limit:          20,
+	})
+	if err != nil {
+		t.Fatalf("search components: %v", err)
+	}
+	if len(resp.Results) != 1 || resp.Results[0].Path != "src/components/ProfileCard.tsx" {
+		t.Fatalf("components results=%+v, want path-segment match", resp.Results)
+	}
+}
+
+func TestProjectFileIndexStartRebuildDedupesRunningProjectAndKeepsStatus(t *testing.T) {
+	root := t.TempDir()
+	writeProjectFileForFileIndexTest(t, root, "src/MobileInstance.ts", "export const mobile = true;\n")
+	manager := newProjectFileIndexManager(t.TempDir())
+	project := projectFileIndexProject{ProjectID: "hub-a:proj1", Name: "proj1", Root: root}
+
+	started := make(chan struct{}, 1)
+	release := make(chan struct{})
+	manager.scanFilesForTest = func(context.Context, projectFileIndexProject) ([]string, error) {
+		started <- struct{}{}
+		<-release
+		return []string{"src/MobileInstance.ts"}, nil
+	}
+
+	first := manager.startRebuild(context.Background(), project)
+	if first.Accepted != true || first.Running != true {
+		t.Fatalf("first rebuild=%+v, want accepted running", first)
+	}
+	<-started
+	second := manager.startRebuild(context.Background(), project)
+	if second.Accepted != true || second.AlreadyRunning != true || second.Running != true {
+		t.Fatalf("second rebuild=%+v, want already-running response", second)
+	}
+	status := manager.status([]projectFileIndexProject{project})
+	if len(status.Projects) != 1 || status.Projects[0].Status != "scanning" {
+		t.Fatalf("status while running=%+v, want scanning", status)
+	}
+	close(release)
+
+	waitForFileIndexStatusForTest(t, manager, project, "indexed")
+	status = manager.status([]projectFileIndexProject{project})
+	if status.Projects[0].FileCount != 1 || status.Projects[0].Running {
+		t.Fatalf("status after rebuild=%+v, want one indexed file and not running", status.Projects[0])
+	}
+}
+
+func writeProjectFileForFileIndexTest(t *testing.T, root, rel, content string) {
+	t.Helper()
+	path := filepath.Join(root, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", rel, err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write %s: %v", rel, err)
+	}
+}
+
+func runGitForFileIndexTest(t *testing.T, root string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = root
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+}
+
+func waitForFileIndexStatusForTest(t *testing.T, manager *projectFileIndexManager, project projectFileIndexProject, want string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		status := manager.status([]projectFileIndexProject{project})
+		if len(status.Projects) == 1 && status.Projects[0].Status == want {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	status := manager.status([]projectFileIndexProject{project})
+	t.Fatalf("timed out waiting for index status %q, got %+v", want, status)
+}
+
 func writeMonitorFile(path string, content string) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {

@@ -72,7 +72,7 @@ describe('web session search UI wiring', () => {
     expect(wideNav).not.toContain('renderSessionSearchControls()');
 
     const mobileHeaderStart = main.indexOf('className={`mobile-chat-drawer-header${sessionSearchHeaderExpanded ?');
-    const mobileHeaderEnd = main.indexOf('{sessionSearchActive ? renderSessionSearchResults(true)', mobileHeaderStart);
+    const mobileHeaderEnd = main.indexOf('{archivedMode ? renderArchivedSessionRows(true) : sessionSearchActive ? renderSessionSearchResults(true)', mobileHeaderStart);
     expect(mobileHeaderStart).toBeGreaterThanOrEqual(0);
     expect(mobileHeaderEnd).toBeGreaterThan(mobileHeaderStart);
     const mobileHeader = main.slice(mobileHeaderStart, mobileHeaderEnd);

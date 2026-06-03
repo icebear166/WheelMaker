@@ -60,7 +60,7 @@ describe('web chat turn rendering', () => {
     expect(virtualList).not.toContain('@tanstack/react-virtual');
     expect(virtualList).not.toContain('chatVirtualMeasurements');
     expect(virtualList).not.toContain('shouldAdjustChatVirtualItemSizeChange');
-    expect(main).toContain("import {buildChatDisplayIndex} from './chat/chatDisplayIndex';");
+    expect(main).toContain("import {buildChatDisplayIndex, type ChatDisplayIndexItem} from './chat/chatDisplayIndex';");
     expect(main).toContain("import {ChatVirtuosoTurnList, type ChatVirtuosoTurnListHandle} from './chat/ChatVirtuosoTurnList';");
     expect(main).toContain('const chatVirtuosoListRef = useRef<ChatVirtuosoTurnListHandle | null>(null);');
     expect(main).toContain("chatVirtuosoListRef.current?.scrollToBottom('auto');");
@@ -71,7 +71,7 @@ describe('web chat turn rendering', () => {
     expect(main).toContain('atBottomThreshold={CHAT_AUTO_SCROLL_BOTTOM_THRESHOLD}');
     expect(main).toContain('onAtBottomChange={handleChatAtBottomChange}');
     expect(main).toContain('shouldAutoscroll={shouldAutoscrollChat}');
-    expect(main).toContain('runtimeKey={selectedChatEncodedKey}');
+    expect(main).toContain('runtimeKey={activeChatRuntimeKey}');
     expect(main).not.toContain('container.scrollTop = nextScrollTop;');
     expect(main).not.toContain('resolveChatBottomScrollTop');
     expect(main).not.toContain("from './chat/chatTurnWindow'");

@@ -87,6 +87,22 @@ describe('agent package update settings UI source structure', () => {
     expect(mainTsx).toContain('deriveNpmPackageUpdateTargets(hub?.packages ?? [])');
     expect(mainTsx).toContain('npmPackageUpdateSummary(npmUpdateTargets.length)');
     expect(mainTsx).toContain('const [expandedNpmUpdateHubIds, setExpandedNpmUpdateHubIds] = useState<Record<string, boolean>>({});');
+    expect(mainTsx).toContain('const [expandedProjectIndexHubIds, setExpandedProjectIndexHubIds] = useState<Record<string, boolean>>({});');
+    expect(mainTsx).toContain('const [projectIndexByHubId, setProjectIndexByHubId] = useState<Record<string, RegistryFileIndexStatusResponse>>({});');
+    expect(mainTsx).toContain('const refreshProjectFileIndexes = useCallback(async (hubIds: string | string[], options: {silent?: boolean} = {}) =>');
+    expect(mainTsx).toContain('service.getFileIndexStatus(hubId)');
+    expect(mainTsx).toContain('handleScanProjectIndex(card.hubId, project.projectId)');
+    expect(mainTsx).toContain('handleScanAllProjectIndexes(card.hubId, projectIndexProjects)');
+    expect(mainTsx).toContain('PROJECT_INDEX_SCAN_CONCURRENCY');
+    expect(mainTsx).toContain('const projectIndexExpanded = expandedProjectIndexHubIds[card.hubId] === true;');
+    expect(mainTsx).toContain('aria-expanded={projectIndexExpanded}');
+    expect(mainTsx).toContain('className="project-index-disclosure"');
+    expect(mainTsx).toContain('className="project-index-section"');
+    expect(mainTsx).toContain('className="project-index-row"');
+    expect(mainTsx).toContain('className="project-index-path"');
+    expect(mainTsx).toContain('className="project-index-action-btn"');
+    expect(mainTsx).toContain("projectIndexScanPendingByProjectId[project.projectId] ? 'Scanning...' : 'Scan'");
+    expect(mainTsx).toContain("projectIndexScanAllPendingByHubId[card.hubId] ? 'Scanning...' : 'Scan All'");
     expect(mainTsx).toContain("const [agentPackageHubUpdatePendingId, setAgentPackageHubUpdatePendingId] = useState('');");
     expect(mainTsx).toContain('const npmExpanded = expandedNpmUpdateHubIds[card.hubId] === true;');
     expect(mainTsx).toContain('aria-expanded={npmExpanded}');
@@ -145,6 +161,11 @@ describe('agent package update settings UI source structure', () => {
     expect(stylesCss).toContain('.wheelmaker-update-action-btn');
     expect(stylesCss).toContain('.npm-update-disclosure');
     expect(stylesCss).toContain('.npm-update-section');
+    expect(stylesCss).toContain('.project-index-disclosure');
+    expect(stylesCss).toContain('.project-index-section');
+    expect(stylesCss).toContain('.project-index-row');
+    expect(stylesCss).toContain('.project-index-path');
+    expect(stylesCss).toContain('.project-index-action-btn');
     expect(stylesCss).toContain('.npm-update-action-btn');
     expect(stylesCss).toContain('.npm-update-body');
     expect(stylesCss).toContain('.agent-package-row');
@@ -172,11 +193,12 @@ describe('agent package update settings UI source structure', () => {
 
     const updateEntryEffectStart = mainTsx.indexOf("if (settingsDetailView !== 'update') {\n      clearWheelMakerUpdatePollTimer();\n      clearAgentPackageScanPollTimer();");
     expect(updateEntryEffectStart).toBeGreaterThanOrEqual(0);
-    const updateEntryEffectEnd = mainTsx.indexOf('}, [clearAgentPackageScanPollTimer, clearWheelMakerUpdatePollTimer, settingsDetailView]);', updateEntryEffectStart);
+    const updateEntryEffectEnd = mainTsx.indexOf('}, [clearAgentPackageScanPollTimer, clearProjectIndexPollTimer, clearWheelMakerUpdatePollTimer, refreshProjectHubSnapshot, settingsDetailView]);', updateEntryEffectStart);
     expect(updateEntryEffectEnd).toBeGreaterThan(updateEntryEffectStart);
     const updateEntryEffect = mainTsx.slice(updateEntryEffectStart, updateEntryEffectEnd);
     expect(updateEntryEffect).toContain('refreshWheelMakerUpdatesRef.current?.().catch(() => undefined);');
     expect(updateEntryEffect).toContain('refreshAgentPackagesRef.current?.().catch(() => undefined);');
+    expect(updateEntryEffect).toContain('refreshProjectFileIndexesRef.current?.(hubIds)');
     expect(updateEntryEffect).toContain('refreshAndroidApkUpdateRef.current?.().catch(() => undefined);');
     expect(updateEntryEffect).not.toContain('refreshWheelMakerUpdates().catch(() => undefined);');
     expect(updateEntryEffect).not.toContain('refreshAgentPackages().catch(() => undefined);');

@@ -7,6 +7,9 @@ import type {
   RegistryEnvelope,
   RegistryDebugUploadLogPayload,
   RegistryDebugUploadLogResponse,
+  RegistryFileIndexRebuildResponse,
+  RegistryFileIndexSearchResponse,
+  RegistryFileIndexStatusResponse,
   RegistryFsInfo,
   RegistryFsEntry,
   RegistryGitCommit,
@@ -288,6 +291,30 @@ export class RegistryWorkspaceService {
       total: result.total,
       isBinary: result.isBinary,
     };
+  }
+
+  async getFileIndexStatus(hubId: string): Promise<RegistryFileIndexStatusResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.getFileIndexStatus(hubId);
+  }
+
+  async rebuildFileIndex(projectId: string): Promise<RegistryFileIndexRebuildResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.readRepositoryForProject(projectId).rebuildFileIndex(projectId);
+  }
+
+  async searchFileIndex(
+    projectId: string,
+    payload: {query: string; querySessionId?: string; queryId?: number; limit?: number},
+  ): Promise<RegistryFileIndexSearchResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.readRepositoryForProject(projectId).searchFileIndex(projectId, payload);
   }
 
   async listGitCommits(ref = 'HEAD', refs: string[] = []): Promise<RegistryGitCommit[]> {

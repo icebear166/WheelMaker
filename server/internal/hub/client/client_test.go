@@ -6984,6 +6984,71 @@ func TestSessionSendAcceptsUploadedAttachmentBlock(t *testing.T) {
 	}
 }
 
+func TestSessionSendConvertsProjectRelativeResourceLinkToFileURI(t *testing.T) {
+	mock := &mockSession{agentName: "codex", sessionID: "sess-send-project-file"}
+	c := newAttachmentTestClientWithMock(t, mock)
+	projectFile := filepath.Join(c.cwd, "src", "MobileInstance.ts")
+	if err := os.MkdirAll(filepath.Dir(projectFile), 0o755); err != nil {
+		t.Fatalf("mkdir project file dir: %v", err)
+	}
+	if err := os.WriteFile(projectFile, []byte("export const mobile = true;\n"), 0o644); err != nil {
+		t.Fatalf("write project file: %v", err)
+	}
+	payload := mustJSON(map[string]any{
+		"sessionId": "sess-send-project-file",
+		"blocks": []acp.ContentBlock{
+			{Type: acp.ContentBlockTypeText, Text: "use this file"},
+			{Type: acp.ContentBlockTypeResourceLink, URI: "src/MobileInstance.ts", Name: "MobileInstance.ts"},
+		},
+	})
+
+	resp, err := c.HandleSessionRequest(context.Background(), "session.send", "proj1", payload)
+	if err != nil {
+		t.Fatalf("session.send: %v", err)
+	}
+	body := responseMapForTest(t, resp)
+	if body["ok"] != true {
+		t.Fatalf("send response=%#v, want ok", body)
+	}
+	sess, err := c.SessionForTest("sess-send-project-file")
+	if err != nil {
+		t.Fatalf("SessionForTest: %v", err)
+	}
+	inst := sess.instance.(*testInjectedInstance)
+	if len(inst.lastPrompt) != 2 {
+		t.Fatalf("lastPrompt=%#v, want text and resource_link", inst.lastPrompt)
+	}
+	got := inst.lastPrompt[1]
+	if got.Type != acp.ContentBlockTypeResourceLink || got.Name != "MobileInstance.ts" {
+		t.Fatalf("lastPrompt resource=%#v, want resource_link MobileInstance.ts", got)
+	}
+	uriPath := attachmentFileURIPathForTest(t, got.URI)
+	if uriPath != projectFile {
+		t.Fatalf("resource uri path=%q, want %q", uriPath, projectFile)
+	}
+}
+
+func TestSessionSendRejectsProjectRelativeResourceLinkOutsideProject(t *testing.T) {
+	mock := &mockSession{agentName: "codex", sessionID: "sess-send-project-file-outside"}
+	c := newAttachmentTestClientWithMock(t, mock)
+	payload := mustJSON(map[string]any{
+		"sessionId": "sess-send-project-file-outside",
+		"blocks": []acp.ContentBlock{{
+			Type: acp.ContentBlockTypeResourceLink,
+			URI:  "../secret.txt",
+			Name: "secret.txt",
+		}},
+	})
+
+	_, err := c.HandleSessionRequest(context.Background(), "session.send", "proj1", payload)
+	if err == nil || !strings.Contains(err.Error(), "project file") {
+		t.Fatalf("session.send err=%v, want project file containment rejection", err)
+	}
+	if len(mock.promptCalls) != 0 {
+		t.Fatalf("promptCalls=%v, want rejected before prompt", mock.promptCalls)
+	}
+}
+
 func TestSessionSendRejectsAttachmentFileURIOutsideSession(t *testing.T) {
 	mock := &mockSession{agentName: "codex", sessionID: "sess-send-outside"}
 	c := newAttachmentTestClientWithMock(t, mock)

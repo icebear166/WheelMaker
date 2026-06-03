@@ -8,6 +8,9 @@ import type {
   RegistryDebugUploadLogPayload,
   RegistryDebugUploadLogResponse,
   RegistryEnvelope,
+  RegistryFileIndexRebuildResponse,
+  RegistryFileIndexSearchResponse,
+  RegistryFileIndexStatusResponse,
   RegistryFsInfo,
   RegistryFsListResponse,
   RegistryFsReadResponse,
@@ -758,6 +761,52 @@ export class RegistryRepository {
       size: payload.size ?? 0,
       total: payload.total ?? 0,
       returned: payload.returned ?? 0,
+    };
+  }
+
+  async getFileIndexStatus(hubId: string): Promise<RegistryFileIndexStatusResponse> {
+    const resp = await this.client.request({
+      method: 'fs.index.status',
+      payload: {hubId},
+      timeoutMs: 20000,
+    });
+    const payload = (resp.payload ?? {}) as RegistryFileIndexStatusResponse;
+    return {
+      hubId: payload.hubId ?? hubId,
+      projects: Array.isArray(payload.projects) ? payload.projects : [],
+    };
+  }
+
+  async rebuildFileIndex(projectId: string): Promise<RegistryFileIndexRebuildResponse> {
+    const resp = await this.client.request({
+      method: 'fs.index.rebuild',
+      projectId,
+      payload: {},
+      timeoutMs: 20000,
+    });
+    return (resp.payload ?? {ok: false, accepted: false, running: false, projectId, status: 'error'}) as RegistryFileIndexRebuildResponse;
+  }
+
+  async searchFileIndex(
+    projectId: string,
+    payload: {query: string; querySessionId?: string; queryId?: number; limit?: number},
+  ): Promise<RegistryFileIndexSearchResponse> {
+    const resp = await this.client.request({
+      method: 'fs.index.search',
+      projectId,
+      payload,
+      timeoutMs: 20000,
+    });
+    const body = (resp.payload ?? {}) as RegistryFileIndexSearchResponse;
+    return {
+      query: body.query ?? payload.query,
+      querySessionId: body.querySessionId ?? payload.querySessionId,
+      queryId: body.queryId ?? payload.queryId,
+      status: body.status ?? 'missing',
+      indexed: body.indexed === true,
+      fileCount: typeof body.fileCount === 'number' ? body.fileCount : 0,
+      results: Array.isArray(body.results) ? body.results : [],
+      error: body.error,
     };
   }
 

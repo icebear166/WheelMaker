@@ -697,7 +697,7 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 		if len(blocks) == 0 {
 			return nil, fmt.Errorf("session prompt is empty")
 		}
-		attachmentRefs, err := c.validateSessionAttachmentBlocks(ctx, req.SessionID, blocks)
+		blocks, attachmentRefs, err := c.prepareSessionPromptBlocks(ctx, req.SessionID, blocks)
 		if err != nil {
 			return nil, err
 		}

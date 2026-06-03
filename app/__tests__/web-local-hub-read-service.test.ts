@@ -98,6 +98,12 @@ describe('local hub read service routing', () => {
         hubs: [{hubId: 'hub-a', localRead: makeCandidate()}],
       })),
       listFiles: jest.fn(async () => ({entries: [{name: 'remote.txt', path: 'remote.txt', kind: 'file'}], notModified: false})),
+      getFileIndexStatus: jest.fn(async () => ({
+        hubId: 'hub-a',
+        projects: [{projectId: 'hub-a:proj1', name: 'proj1', path: 'D:/proj1', status: 'missing', fileCount: 0, running: false}],
+      })),
+      rebuildFileIndex: jest.fn(async () => ({ok: true, accepted: true, projectId: 'hub-a:proj1', running: true})),
+      searchFileIndex: jest.fn(async () => ({query: 'MI', results: [{path: 'remote.ts', name: 'remote.ts'}]})),
       gitStatus: jest.fn(async () => ({dirty: false, worktreeRev: 'remote', staged: [], unstaged: [], untracked: []})),
       syncCheck: jest.fn(async () => ({projectRev: 'remote', gitRev: 'remote', worktreeRev: 'remote', staleDomains: []})),
       listSessions: jest.fn(async () => [{sessionId: 'remote-session', title: 'Remote', preview: '', updatedAt: '', messageCount: 0}]),
@@ -109,9 +115,16 @@ describe('local hub read service routing', () => {
       initializeLocalRead: jest.fn(async () => undefined),
       listProjectSnapshot: jest.fn(async (): Promise<RegistryProjectListResponse> => ({
         projects: [{projectId: 'hub-a:proj1', name: 'proj1', path: 'D:/proj1', online: true, hubId: 'hub-a'}],
-        hubs: [{hubId: 'hub-a', localRead: makeCandidate()}],
+      hubs: [{hubId: 'hub-a', localRead: makeCandidate()}],
       })),
       listFiles: jest.fn(async () => ({entries: [{name: 'local.txt', path: 'local.txt', kind: 'file'}], notModified: false})),
+      rebuildFileIndex: jest.fn(async () => ({ok: true, accepted: true, projectId: 'hub-a:proj1', running: true})),
+      searchFileIndex: jest.fn(async () => ({
+        query: 'MI',
+        querySessionId: 'file-query-1',
+        queryId: 2,
+        results: [{path: 'src/MobileInstance.ts', name: 'MobileInstance.ts'}],
+      })),
       gitStatus: jest.fn(async () => ({dirty: true, worktreeRev: 'local', staged: [], unstaged: [], untracked: []})),
       syncCheck: jest.fn(async () => ({projectRev: 'local', gitRev: 'local', worktreeRev: 'local', staleDomains: ['git']})),
       close: jest.fn(),
@@ -131,12 +144,33 @@ describe('local hub read service routing', () => {
     const status = await service.getGitStatus();
     const sync = await service.syncCheck({});
     const sessions = await service.listSessions();
+    const indexStatus = await service.getFileIndexStatus('hub-a');
+    const rebuild = await service.rebuildFileIndex('hub-a:proj1');
+    const search = await service.searchFileIndex('hub-a:proj1', {
+      query: 'MI',
+      querySessionId: 'file-query-1',
+      queryId: 2,
+      limit: 20,
+    });
 
     expect(session.fileEntries).toEqual([{name: 'remote.txt', path: 'remote.txt', kind: 'file'}]);
     expect(status.worktreeRev).toBe('local');
     expect(sync.gitRev).toBe('local');
     expect(sessions[0].sessionId).toBe('remote-session');
+    expect(indexStatus.projects[0].status).toBe('missing');
+    expect(rebuild.running).toBe(true);
+    expect(search.results[0].path).toBe('src/MobileInstance.ts');
     expect(remoteRepository.gitStatus).not.toHaveBeenCalled();
+    expect(remoteRepository.getFileIndexStatus).toHaveBeenCalledWith('hub-a');
+    expect(remoteRepository.rebuildFileIndex).not.toHaveBeenCalled();
+    expect(remoteRepository.searchFileIndex).not.toHaveBeenCalled();
+    expect(localRepository.rebuildFileIndex).toHaveBeenCalledWith('hub-a:proj1');
+    expect(localRepository.searchFileIndex).toHaveBeenCalledWith('hub-a:proj1', {
+      query: 'MI',
+      querySessionId: 'file-query-1',
+      queryId: 2,
+      limit: 20,
+    });
     expect(remoteRepository.listSessions).toHaveBeenCalled();
 
     localRepository.listFiles.mockRejectedValueOnce(localFileError);
