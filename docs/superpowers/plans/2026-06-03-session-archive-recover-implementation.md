@@ -654,7 +654,7 @@ git add docs/session-management-and-sync.zh-CN.md docs/codex-app-server-acp-brid
 git commit -m "docs: document archive recovery"
 ```
 
-- [ ] **Step 6: Completion gate**
+- [x] **Step 6: Completion gate**
 
 From repo root:
 
