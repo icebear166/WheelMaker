@@ -9648,6 +9648,11 @@ function App() {
     setConfirmTarget({kind: 'archiveBatch', days, candidates});
   };
 
+  const clearArchiveBatchStatus = () => {
+    setArchiveBatchProgress(null);
+    setArchiveBatchSummary('');
+  };
+
   const handleArchiveBatch = async (days: number, candidates: ArchiveCandidate[]) => {
     if (archiveBatchProgress && archiveBatchProgress.completed < archiveBatchProgress.total) {
       return;
@@ -13350,11 +13355,27 @@ function App() {
     if (!archiveBatchProgress && !archiveBatchSummary) {
       return null;
     }
+    const archiveBatchRunning = !!archiveBatchProgress && archiveBatchProgress.completed < archiveBatchProgress.total;
     const progressPercent = archiveBatchProgress && archiveBatchProgress.total > 0
       ? Math.round((archiveBatchProgress.completed / archiveBatchProgress.total) * 100)
       : 0;
     return (
       <div className="session-archive-progress" role="status" aria-live="polite">
+        <div className="session-archive-progress-top">
+          <span className="session-archive-progress-label">
+            Archive status
+          </span>
+          <button
+            type="button"
+            className="session-archive-progress-dismiss"
+            aria-label="Close archive status"
+            title="Close archive status"
+            disabled={archiveBatchRunning}
+            onClick={clearArchiveBatchStatus}
+          >
+            <span className="codicon codicon-close" aria-hidden="true" />
+          </button>
+        </div>
         {archiveBatchProgress ? (
           <>
             <div className="session-archive-progress-head">

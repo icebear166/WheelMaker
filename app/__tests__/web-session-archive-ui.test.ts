@@ -45,4 +45,19 @@ describe('session archive UI source integration', () => {
     expect(helperSource).not.toContain('codicon-chevron-up');
     expect(helperSource).not.toContain('codicon-chevron-down');
   });
+
+  test('renders archive batch status with a close action after completion', () => {
+    const helperStart = main.indexOf('const renderArchiveBatchStatus = () =>');
+    const helperEnd = main.indexOf('const renderArchivedSessionRows = (', helperStart);
+    const helperSource = main.slice(helperStart, helperEnd);
+
+    expect(main).toContain('const clearArchiveBatchStatus = () =>');
+    expect(helperSource).toContain('archiveBatchRunning');
+    expect(helperSource).toContain('session-archive-progress-dismiss');
+    expect(helperSource).toContain('aria-label="Close archive status"');
+    expect(helperSource).toContain('disabled={archiveBatchRunning}');
+    expect(helperSource).toContain('onClick={clearArchiveBatchStatus}');
+    expect(main).toContain('setArchiveBatchProgress(null);');
+    expect(main).toContain("setArchiveBatchSummary('');");
+  });
 });
