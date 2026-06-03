@@ -907,6 +907,40 @@ func TestSessionForwardingAndSessionEventBroadcast(t *testing.T) {
 		t.Fatalf("unexpected session.archive response: %#v", archiveResp)
 	}
 
+	for index, archiveRecoveryMethod := range []string{"session.archive.list", "session.archive.read", "session.archive.restore"} {
+		mustWriteJSON(t, client, testEnvelope{
+			RequestID: 60 + int64(index),
+			Type:      "request",
+			Method:    archiveRecoveryMethod,
+			ProjectID: "hub-a:server",
+			Payload: map[string]any{
+				"sessionId": "sess-1",
+			},
+		})
+
+		forwardedArchiveRecovery := mustReadEnvelope(t, hub)
+		if forwardedArchiveRecovery.Method != archiveRecoveryMethod {
+			t.Fatalf("forwarded.method=%q, want %s", forwardedArchiveRecovery.Method, archiveRecoveryMethod)
+		}
+		if forwardedArchiveRecovery.ProjectID != "hub-a:server" {
+			t.Fatalf("forwarded.projectId=%q, want hub-a:server", forwardedArchiveRecovery.ProjectID)
+		}
+
+		mustWriteJSON(t, hub, testEnvelope{
+			RequestID: forwardedArchiveRecovery.RequestID,
+			Type:      "response",
+			Method:    archiveRecoveryMethod,
+			ProjectID: forwardedArchiveRecovery.ProjectID,
+			Payload: map[string]any{
+				"ok": true,
+			},
+		})
+		archiveRecoveryResp := mustReadEnvelope(t, client)
+		if archiveRecoveryResp.Type != "response" || archiveRecoveryResp.Method != archiveRecoveryMethod {
+			t.Fatalf("unexpected %s response: %#v", archiveRecoveryMethod, archiveRecoveryResp)
+		}
+	}
+
 	mustWriteJSON(t, client, testEnvelope{
 		RequestID: 6,
 		Type:      "request",

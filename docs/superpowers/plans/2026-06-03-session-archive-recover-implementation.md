@@ -37,7 +37,7 @@
 - Modify: `server/internal/protocol/registry_methods.go`
 - Modify: `server/internal/registry/server_test.go`
 
-- [ ] **Step 1: Write failing forwarding tests**
+- [x] **Step 1: Write failing forwarding tests**
 
 Add table entries in the existing session forwarding test in `server/internal/registry/server_test.go` for:
 
@@ -51,7 +51,7 @@ Add table entries in the existing session forwarding test in `server/internal/re
 
 Each entry sends a project-scoped request with `projectId: "proj1"` and asserts the forwarded method equals the original method.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run:
 
@@ -62,7 +62,7 @@ go test ./internal/registry -run TestServerForwardsSessionRequestsToProjectHub -
 
 Expected: failure because the methods are not registered.
 
-- [ ] **Step 3: Add registry descriptors**
+- [x] **Step 3: Add registry descriptors**
 
 Add constants:
 
@@ -80,11 +80,11 @@ registryProjectMethod(RegistryMethodSessionArchiveRead, RegistryRouteSessionForw
 registryProjectMethod(RegistryMethodSessionArchiveRestore, RegistryRouteSessionForward)
 ```
 
-- [ ] **Step 4: Verify GREEN**
+- [x] **Step 4: Verify GREEN**
 
 Run the same registry test and confirm exit code 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add server/internal/protocol/registry_methods.go server/internal/registry/server_test.go
@@ -665,4 +665,3 @@ git push origin main
 ```
 
 If the final commit has no staged changes because earlier task commits already captured all work, record the no-op commit result and still run `git push origin main`.
-
