@@ -380,7 +380,7 @@ git commit -m "feat: sync native archive state"
 - Create: `app/web/src/chat/sessionArchiveState.ts`
 - Create: `app/__tests__/web-session-archive-state.test.ts`
 
-- [ ] **Step 1: Write failing pure helper tests**
+- [x] **Step 1: Write failing pure helper tests**
 
 Create tests for:
 
@@ -395,7 +395,7 @@ nextArchiveBatchProgress(previous, result)
 
 Assertions cover: two older sessions collapse behind `hiddenOlderCount`, one older session remains visible, invalid `updatedAt` excluded from candidates, running sessions excluded, hidden projects included when they are present in `projects`, and storage invalid JSON returns `{}`.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run:
 
@@ -406,7 +406,7 @@ npm test -- web-session-archive-state.test.ts --runInBand
 
 Expected: module not found.
 
-- [ ] **Step 3: Implement helper module**
+- [x] **Step 3: Implement helper module**
 
 Export constants:
 
@@ -417,11 +417,11 @@ export const OLDER_SESSIONS_EXPANDED_KEY = 'wheelmaker.chat.olderSessionsExpande
 
 Export functions and types named in Step 1. Use `parseUpdatedAtMs` from `../sessionTime` and compute age with `nowMs - updatedAtMs > days * 24 * 60 * 60 * 1000`.
 
-- [ ] **Step 4: Verify GREEN**
+- [x] **Step 4: Verify GREEN**
 
 Run the Task 5 test command and confirm exit code 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add app/web/src/chat/sessionArchiveState.ts app/__tests__/web-session-archive-state.test.ts
