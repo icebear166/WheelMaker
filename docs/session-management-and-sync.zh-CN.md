@@ -208,14 +208,16 @@ type Cursor = { turnIndex: number };
 
 ## 7. Session 归档
 
-`session.archive` 用于把非运行中的普通 session 移出常规会话系统。服务端按 turn 总数决定后续处理：`latestPersistedTurnIndex < 3` 的短会话直接永久删除；`latestPersistedTurnIndex >= 3` 的会话把已完成正文保留到冷归档文件。归档后 v1 不支持恢复、不提供归档列表/读取 API、不进入 monitor。
+`session.archive` 用于把非运行中的普通 session 移出常规会话系统。服务端按 turn 总数决定后续处理：`latestPersistedTurnIndex < 3` 的短会话直接永久删除；`latestPersistedTurnIndex >= 3` 的会话把已完成正文保留到冷归档文件。冷归档以 WheelMaker manifest 为 source of truth，支持归档列表、只读读取和恢复。
 
-对外协议暴露 `session.archive` 和 `session.delete`：
+对外协议暴露：
 
 - turn 总数 `< 3`：直接删除 `sessions` 和原 `db/session/<projectName>/<sessionId>` 目录，不写归档 pack、manifest 或 tombstone。
-- turn 总数 `>= 3`：先写归档 pack 和 manifest，成功后删除 `sessions`，再删除原 `db/session/<projectName>/<sessionId>` 目录。
-
-`session.delete` 是硬删除协议：不写归档 pack、manifest 或 tombstone，直接删除 `sessions`、原 `db/session/<projectName>/<sessionId>` 目录和相关 artifacts。
+- `session.archive`：turn 总数 `>= 3` 时先写归档 pack 和 manifest，成功后删除 `sessions`，再删除原 `db/session/<projectName>/<sessionId>` 目录。
+- `session.archive.list`：按项目列出 manifest 中未恢复的归档 session。
+- `session.archive.read`：读取并校验归档 pack，返回只读 turns/messages，不更新 read cursor，不进入普通 selected-chat 持久状态。
+- `session.archive.restore`：把归档 turns 写回普通 session turn 文件，重建 `sessions` 行，并在 manifest 中标记 `restoredAt`。
+- `session.delete`：硬删除协议，不写归档 pack、manifest 或 tombstone，直接删除 `sessions`、原 session 目录和 WheelMaker 管理的 session artifacts。
 
 `session.archive`、`session.delete`、`session.reload` 都必须拒绝运行中的 session。running 判定以服务端内存态为准：如果 session 仍有 active prompt 或 recorder 中存在未 terminal 的 prompt state，则返回错误；客户端的 `running` 字段只用于禁用按钮。
 
@@ -227,7 +229,7 @@ type Cursor = { turnIndex: number };
   manifest.json
 ```
 
-其中 `<projectName>` 使用和普通 session 历史相同的 safe path segment。归档不保留 images；原 session 目录删除时一并删除图片。
+其中 `<projectName>` 使用和普通 session 历史相同的 safe path segment。归档只保存 turn 正文和 session summary 元信息；原 session 目录删除时一并删除图片/附件，恢复只重建 session 行和 turn 文件。
 
 ### 7.1 Manifest
 
@@ -246,8 +248,12 @@ type Cursor = { turnIndex: number };
       "createdAt": "2026-05-12T00:34:13Z",
       "updatedAt": "2026-05-17T12:00:00Z",
       "archivedAt": "2026-05-17T12:34:56Z",
+      "restoredAt": "2026-05-20T09:10:11Z",
       "turnCount": 932,
       "gapCount": 0,
+      "nativeArchivedAt": "2026-05-17T12:34:57Z",
+      "nativeUnarchivedAt": "2026-05-20T09:10:12Z",
+      "nativeSyncWarning": "thread/unarchive failed: ...",
       "storage": "pack",
       "file": "archive.pack",
       "offset": 123456,
@@ -263,7 +269,7 @@ type Cursor = { turnIndex: number };
 }
 ```
 
-manifest 只保存索引和元信息，不保存 `agent_json`、`session_sync_json`、route binding 或图片信息。
+manifest 只保存索引和元信息，不保存 `agent_json`、`session_sync_json`、route binding 或图片信息。`restoredAt` 非空表示该归档记录已恢复，`session.archive.list` 不再返回。`nativeArchivedAt`、`nativeUnarchivedAt` 和 `nativeSyncWarning` 只记录 agent 原生归档同步的 best-effort 结果，不改变 WheelMaker 归档 source of truth。
 
 ### 7.2 Pack Segment
 
@@ -315,10 +321,90 @@ manifest 记录 `gapCount`。WMT2 slot 不能使用 `len=0` 表示 gap，因为�
 5. gzip 压缩 WMT2 bytes，计算压缩前后 SHA-256。
 6. 持 project 级进程内锁 append WMSA segment 到 `archive.pack` 并 fsync。
 7. 读取并 upsert `manifest.json`，写 temp 文件后 rename。
-8. 删除 `sessions`。
-9. 删除原 `db/session/<projectName>/<sessionId>` 目录。
+8. 对支持原生归档能力的 agent 做 best-effort native archive，并把 warning 写入 manifest。
+9. 删除 `sessions`。
+10. 删除原 `db/session/<projectName>/<sessionId>` 目录。
 
-长会话归档时，1-7 任一步失败都不能删除 active index。8-9 失败时 manifest 已存在；下一次 `session.archive` 对同一 session 应幂等地继续尝试删除 active index 和原目录。短会话删除不写归档痕迹。
+长会话归档时，1-7 任一步失败都不能删除 active index。8-10 失败时 manifest 已存在；下一次 `session.archive` 对同一 session 应幂等地继续尝试同步原生归档、删除 active index 和原目录。原生归档失败只记录 warning，不回滚 WheelMaker manifest。短会话删除不写归档痕迹。
+
+### 7.5 列表、只读读取与恢复
+
+`session.archive.list` 请求使用 project-scoped forwarding，响应：
+
+```json
+{
+  "sessions": [
+    {
+      "sessionId": "019e...",
+      "title": "...",
+      "agentType": "codex",
+      "updatedAt": "2026-05-17T12:00:00Z",
+      "archivedAt": "2026-05-17T12:34:56Z",
+      "turnCount": 932,
+      "gapCount": 0
+    }
+  ]
+}
+```
+
+只返回 `restoredAt` 为空的 manifest entries，排序为 `updatedAt desc`、`archivedAt desc`、`sessionId asc`。
+
+`session.archive.read` 请求：
+
+```json
+{"sessionId":"019e..."}
+```
+
+响应：
+
+```json
+{
+  "sessionId": "019e...",
+  "readOnly": true,
+  "latestTurnIndex": 932,
+  "session": {"sessionId":"019e...", "archivedAt":"..."},
+  "turns": [
+    {"turnIndex":1,"content":"...","finished":true}
+  ],
+  "messages": []
+}
+```
+
+服务端读取 manifest 指向的 `archive.pack` segment，校验 WMSA header、gzip payload length、压缩前后 SHA-256、WMT2 header 和 turn slots。read 返回只读视图，不调用 `session.markRead`，不恢复 active index，不影响普通 session list。
+
+`session.archive.restore` 请求：
+
+```json
+{"sessionId":"019e..."}
+```
+
+恢复流程：
+
+1. 读取并校验归档 payload。
+2. 如果普通 `sessions` 中已存在同 id，拒绝恢复。
+3. 如果 manifest 已有 `restoredAt`，拒绝重复恢复。
+4. 删除目标 session id 的 partial turn 文件。
+5. 把归档 turns 写回普通 WMT2 turn 文件。
+6. 重建 `sessions` 行和 `session_sync_json`。
+7. 对支持原生归档能力的 agent 做 best-effort native unarchive。
+8. 在 manifest entry 上写入 `restoredAt` 和 native sync metadata。
+9. 返回普通 session summary；如果 native sync 失败，响应带 `warning`。
+
+恢复成功后 app 会退出 Archived mode、刷新目标项目 session list，并打开恢复后的普通 session。
+
+### 7.6 App/Web 归档入口
+
+App/Web 在每个 Project 的 session 列表中按 `updatedAt` 自动折叠超过 5 天的会话；只有超过 5 天的 session 数量大于 1 时才显示 `Show N older`，展开状态存于 `sessionStorage`，刷新页面不丢失，重启 app/浏览器后按 sessionStorage 生命周期处理。
+
+聊天侧栏搜索按钮旁有 Archive 按钮；搜索展开或 active 时隐藏。菜单包含：
+
+- `Archive > 7 days`
+- `Archive > 14 days`
+- `Recover...`
+
+批量 archive 会从所有已知 Project（包含 hidden Project）收集候选，跳过 running session 和无效/缺失 `updatedAt` 的 session，按顺序逐个调用 `session.archive`，不并发、不使用 bulk API，并显示进度和失败摘要。
+
+`Recover...` 进入 Archived mode，复用原 session 列表区域按 Project 分组展示归档记录。点击某条记录时右侧加载只读对话预览；选中的记录显示 Restore 操作，Restore 需要确认弹窗。恢复成功后退出 Archived mode，刷新目标 Project，并打开恢复后的普通 session。
 
 ---
 

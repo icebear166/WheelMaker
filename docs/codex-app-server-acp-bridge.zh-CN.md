@@ -344,6 +344,36 @@ ACP `session/list` 转 `thread/list`。
 | `name` or `preview` | `title` |
 | `updatedAt` Unix seconds | RFC3339 `updatedAt` |
 
+### session.archive / session.archive.restore 原生同步
+
+WheelMaker 的归档 source of truth 始终是 `session-archive/<projectName>/manifest.json`。Codex App 原生 thread archive 只作为 best-effort 同步，不决定 WheelMaker 是否完成归档或恢复。
+
+`session.archive` 在 WheelMaker manifest 写入成功后、删除 active session index 前，若 agent instance 支持 `SessionArchiver`，会调用 Codex App：
+
+```json
+{
+  "method": "thread/archive",
+  "params": {"threadId": "thr_123"}
+}
+```
+
+`session.archive.restore` 在普通 session row 和 turn files 重建后，若 agent instance 支持 `SessionArchiver`，会调用：
+
+```json
+{
+  "method": "thread/unarchive",
+  "params": {"threadId": "thr_123"}
+}
+```
+
+`threadId` 解析顺序为：
+
+1. `codexappMappedThreadID(acpSessionId)`
+2. 当前 runtime 的 `runtimeThreadIDForSession(acpSessionId)`
+3. `acpSessionId`
+
+原生 archive/unarchive 失败不会回滚 WheelMaker 归档或恢复；失败信息写入 manifest 的 `nativeSyncWarning`，恢复响应也会带 `warning` 让 UI 显示。app-server 没有接入 session hard delete；`session.delete` 仍只执行 WheelMaker 自己的硬删除和 artifacts cleanup。
+
 ## App-Server Out -> ACP Out
 
 ### Notification 映射
@@ -438,7 +468,7 @@ Phase 1 只声明文本 prompt capability；`resource_link` 是 ACP 基线内容
 - 临时目录放在 session 资源目录内，例如 `~/.wheelmaker/db/session/<projectName>/<sessionId>/images/...`。
 - `projectName` 与 `sessionId` 作为路径段使用前必须做 path-safe 处理，不能允许路径分隔符或 `..` 逃逸出项目 artifact 目录。
 - 临时目录不绑定 `AgentInstance` / `codexappConn` 生命周期；多 session 并存时，一个 session 被 suspend 或 instance close 不代表该 session 已结束。
-- `client` 只在真正删除 session 时调用通用 agent artifact cleanup hook，例如 `agent.CleanupSessionArtifacts(projectName, agentType, sessionID)`；`codex` 在 agent 包内清理自己的图片目录。
+- `client` 只在真正删除 session 时调用通用 agent artifact cleanup hook，例如 `agent.CleanupSessionArtifacts(projectName, agentType, sessionID)`；WheelMaker 管理的 session attachments/images 目录按 provider-neutral 规则清理，不按 `agentType` 区分。
 - `turn/start` 后不能立即删除临时图片；app-server 可能异步读取 `localImage.path`。
 - `session.archive` 成功移出 active session 时清理该 session 下的临时图片目录；turn 总数 `< 3` 的短会话会直接永久删除并清理同一目录。orphan/TTL 清理作为后续兜底任务，避免长期未归档的历史图片无限累积。
 

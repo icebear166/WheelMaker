@@ -603,7 +603,7 @@ npm run tsc:web
 
 Expected: both commands exit 0.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```powershell
 git add app/web/src/main.tsx app/__tests__
@@ -617,11 +617,11 @@ git commit -m "feat: add archive recovery UI"
 - Modify: `docs/codex-app-server-acp-bridge.zh-CN.md`
 - Modify: plan checklist statuses in this file
 
-- [ ] **Step 1: Update docs**
+- [x] **Step 1: Update docs**
 
 Document `session.archive.list`, `session.archive.read`, `session.archive.restore`, `restoredAt`, native sync warning behavior, serial frontend batch archive, and Codex App `thread/archive` / `thread/unarchive`.
 
-- [ ] **Step 2: Run targeted server verification**
+- [x] **Step 2: Run targeted server verification**
 
 ```powershell
 Set-Location server
@@ -630,7 +630,7 @@ go test ./internal/hub/agent -run "CodexApp.*Archive|CleanupSessionArtifacts" -c
 go test ./internal/registry -run "Session.*Archive|Forward" -count=1
 ```
 
-- [ ] **Step 3: Run targeted frontend verification**
+- [x] **Step 3: Run targeted frontend verification**
 
 ```powershell
 Set-Location app
@@ -638,7 +638,7 @@ npm test -- web-session-archive-state.test.ts web-session-archive-service.test.t
 npm run tsc:web
 ```
 
-- [ ] **Step 4: Run full verification**
+- [x] **Step 4: Run full verification**
 
 ```powershell
 Set-Location server
@@ -647,7 +647,7 @@ Set-Location ..\app
 npm run build:web
 ```
 
-- [ ] **Step 5: Commit docs and checklist**
+- [x] **Step 5: Commit docs and checklist**
 
 ```powershell
 git add docs/session-management-and-sync.zh-CN.md docs/codex-app-server-acp-bridge.zh-CN.md docs/superpowers/plans/2026-06-03-session-archive-recover-implementation.md
