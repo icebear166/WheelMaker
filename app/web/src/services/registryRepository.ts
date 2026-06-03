@@ -26,6 +26,9 @@ import type {
   RegistryPortRelayEnablePayload,
   RegistryPortRelaySnapshot,
   RegistryResumableSession,
+  RegistryArchivedSessionSummary,
+  RegistrySessionArchiveReadResponse,
+  RegistrySessionArchiveRestoreResponse,
   RegistrySpeechCancelPayload,
   RegistrySpeechChunkPayload,
   RegistrySpeechFinishPayload,
@@ -321,6 +324,34 @@ export class RegistryRepository {
             .map(item => this.normalizeSessionCommand(item))
             .filter((item): item is RegistrySessionCommand => !!item)
         : undefined,
+    };
+  }
+
+  private normalizeArchivedSessionSummary(raw: unknown): RegistryArchivedSessionSummary | null {
+    const base = this.normalizeSessionSummary(raw);
+    if (!base || !raw || typeof raw !== 'object') {
+      return null;
+    }
+    const input = raw as Record<string, unknown>;
+    const archivedAt = typeof input.archivedAt === 'string' ? input.archivedAt : '';
+    if (!archivedAt) {
+      return null;
+    }
+    return {
+      ...base,
+      projectName: typeof input.projectName === 'string' ? input.projectName : undefined,
+      createdAt: typeof input.createdAt === 'string' ? input.createdAt : undefined,
+      archivedAt,
+      restoredAt: typeof input.restoredAt === 'string' ? input.restoredAt : undefined,
+      turnCount: typeof input.turnCount === 'number' && Number.isFinite(input.turnCount)
+        ? Math.max(0, Math.trunc(input.turnCount))
+        : 0,
+      gapCount: typeof input.gapCount === 'number' && Number.isFinite(input.gapCount)
+        ? Math.max(0, Math.trunc(input.gapCount))
+        : 0,
+      nativeArchivedAt: typeof input.nativeArchivedAt === 'string' ? input.nativeArchivedAt : undefined,
+      nativeUnarchivedAt: typeof input.nativeUnarchivedAt === 'string' ? input.nativeUnarchivedAt : undefined,
+      nativeSyncWarning: typeof input.nativeSyncWarning === 'string' ? input.nativeSyncWarning : undefined,
     };
   }
 
@@ -1045,17 +1076,96 @@ export class RegistryRepository {
     };
   }
 
-  async archiveSession(projectId: string, sessionId: string): Promise<{ok: boolean; sessionId: string}> {
+  async archiveSession(projectId: string, sessionId: string): Promise<{ok: boolean; sessionId: string; warning?: string}> {
     const resp = await this.client.request({
       method: 'session.archive',
       projectId,
       payload: {sessionId},
       timeoutMs: 30000,
     });
-    const body = (resp.payload ?? {}) as {ok?: boolean; sessionId?: string};
+    const body = (resp.payload ?? {}) as {ok?: boolean; sessionId?: string; warning?: string};
     return {
       ok: body.ok ?? false,
       sessionId: body.sessionId ?? sessionId,
+      warning: typeof body.warning === 'string' ? body.warning : undefined,
+    };
+  }
+
+  async listArchivedSessions(projectId: string): Promise<RegistryArchivedSessionSummary[]> {
+    const resp = await this.client.request({
+      method: 'session.archive.list',
+      projectId,
+      payload: {},
+      timeoutMs: 15000,
+    });
+    const payload = (resp.payload ?? {}) as {sessions?: unknown[]};
+    return (payload.sessions ?? [])
+      .map(item => this.normalizeArchivedSessionSummary(item))
+      .filter((item): item is RegistryArchivedSessionSummary => !!item);
+  }
+
+  async readArchivedSession(projectId: string, sessionId: string): Promise<RegistrySessionArchiveReadResponse> {
+    const resp = await this.client.request({
+      method: 'session.archive.read',
+      projectId,
+      payload: {sessionId},
+      timeoutMs: 15000,
+    });
+    const payload = (resp.payload ?? {}) as {
+      sessionId?: unknown;
+      session?: unknown;
+      latestTurnIndex?: unknown;
+      turns?: unknown[];
+      readOnly?: unknown;
+    };
+    const normalized = normalizeSessionReadPayload(
+      payload,
+      sessionId,
+      raw => this.normalizeArchivedSessionSummary(raw),
+    );
+    const session = this.normalizeArchivedSessionSummary(payload.session) ?? {
+      sessionId,
+      title: '',
+      preview: '',
+      updatedAt: '',
+      messageCount: 0,
+      running: false,
+      archivedAt: '',
+      turnCount: 0,
+      gapCount: 0,
+    };
+    const turns = normalized?.turns ?? [];
+    return {
+      sessionId: normalized?.sessionId ?? sessionId,
+      session,
+      turns,
+      messages: turns
+        .map(turn => decodeSessionTurnToMessage(normalized?.sessionId ?? sessionId, turn))
+        .filter((item): item is RegistrySessionMessage => !!item),
+      latestTurnIndex: normalized?.latestTurnIndex ?? 0,
+      readOnly: true,
+    };
+  }
+
+  async restoreArchivedSession(projectId: string, sessionId: string): Promise<RegistrySessionArchiveRestoreResponse> {
+    const resp = await this.client.request({
+      method: 'session.archive.restore',
+      projectId,
+      payload: {sessionId},
+      timeoutMs: 30000,
+    });
+    const body = (resp.payload ?? {}) as {ok?: boolean; sessionId?: string; session?: unknown; warning?: string};
+    return {
+      ok: body.ok ?? false,
+      sessionId: body.sessionId ?? sessionId,
+      session: this.normalizeSessionSummary(body.session) ?? {
+        sessionId,
+        title: '',
+        preview: '',
+        updatedAt: '',
+        messageCount: 0,
+      },
+      warning: typeof body.warning === 'string' ? body.warning : undefined,
     };
   }
 

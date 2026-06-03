@@ -32,6 +32,9 @@ import type {
   RegistrySessionContentBlock,
   RegistrySessionConfigOption,
   RegistrySessionMessage,
+  RegistryArchivedSessionSummary,
+  RegistrySessionArchiveReadResponse,
+  RegistrySessionArchiveRestoreResponse,
   RegistrySessionReadResponse,
   RegistrySessionSearchResponse,
   RegistrySessionSearchStatusResponse,
@@ -548,18 +551,39 @@ export class RegistryWorkspaceService {
     return this.repository.cancelSession(projectId, sessionId);
   }
 
-  async archiveSession(sessionId: string): Promise<{ok: boolean; sessionId: string}> {
+  async archiveSession(sessionId: string): Promise<{ok: boolean; sessionId: string; warning?: string}> {
     if (!this.session || !this.repository) {
       throw new Error('session is not ready');
     }
     return this.repository.archiveSession(this.session.selectedProjectId, sessionId);
   }
 
-  async archiveProjectSession(projectId: string, sessionId: string): Promise<{ok: boolean; sessionId: string}> {
+  async archiveProjectSession(projectId: string, sessionId: string): Promise<{ok: boolean; sessionId: string; warning?: string}> {
     if (!this.repository) {
       throw new Error('session is not ready');
     }
     return this.repository.archiveSession(projectId, sessionId);
+  }
+
+  async listProjectArchivedSessions(projectId: string): Promise<RegistryArchivedSessionSummary[]> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.listArchivedSessions(projectId);
+  }
+
+  async readProjectArchivedSession(projectId: string, sessionId: string): Promise<RegistrySessionArchiveReadResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.readArchivedSession(projectId, sessionId);
+  }
+
+  async restoreProjectArchivedSession(projectId: string, sessionId: string): Promise<RegistrySessionArchiveRestoreResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.restoreArchivedSession(projectId, sessionId);
   }
 
   async deleteProjectSession(projectId: string, sessionId: string): Promise<{ok: boolean; sessionId: string}> {

@@ -436,7 +436,7 @@ git commit -m "feat: add session archive state helpers"
 - Modify: `app/web/src/services/registryWorkspaceService.ts`
 - Modify: existing service tests or create `app/__tests__/web-session-archive-service.test.ts`
 
-- [ ] **Step 1: Write failing service tests**
+- [x] **Step 1: Write failing service tests**
 
 Add tests asserting repository methods send:
 
@@ -448,7 +448,7 @@ Add tests asserting repository methods send:
 
 and workspace service delegates project id correctly.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run:
 
@@ -459,7 +459,7 @@ npm test -- web-session-archive-service.test.ts --runInBand
 
 Expected: missing methods or type errors.
 
-- [ ] **Step 3: Add registry types**
+- [x] **Step 3: Add registry types**
 
 Add:
 
@@ -491,7 +491,7 @@ export interface RegistrySessionArchiveRestoreResponse {
 }
 ```
 
-- [ ] **Step 4: Add repository and service methods**
+- [x] **Step 4: Add repository and service methods**
 
 Add repository methods:
 
@@ -509,11 +509,11 @@ readProjectArchivedSession(projectId: string, sessionId: string)
 restoreProjectArchivedSession(projectId: string, sessionId: string)
 ```
 
-- [ ] **Step 5: Verify GREEN**
+- [x] **Step 5: Verify GREEN**
 
 Run the Task 6 service test command and confirm exit code 0.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add app/web/src/types/registry.ts app/web/src/services/registryRepository.ts app/web/src/services/registryWorkspaceService.ts app/__tests__

@@ -213,7 +213,33 @@ export interface RegistrySessionSummary {
   commands?: RegistrySessionCommand[];
 }
 
+export interface RegistryArchivedSessionSummary extends RegistrySessionSummary {
+  projectName?: string;
+  createdAt?: string;
+  archivedAt: string;
+  restoredAt?: string;
+  turnCount: number;
+  gapCount: number;
+  nativeArchivedAt?: string;
+  nativeUnarchivedAt?: string;
+  nativeSyncWarning?: string;
+}
 
+export interface RegistrySessionArchiveReadResponse {
+  sessionId: string;
+  session: RegistryArchivedSessionSummary;
+  turns: RegistrySessionTurn[];
+  messages: RegistrySessionMessage[];
+  latestTurnIndex: number;
+  readOnly: true;
+}
+
+export interface RegistrySessionArchiveRestoreResponse {
+  ok: boolean;
+  sessionId: string;
+  session: RegistrySessionSummary;
+  warning?: string;
+}
 
 export interface RegistrySessionReadResponse {
   sessionId: string;
