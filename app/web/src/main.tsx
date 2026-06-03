@@ -377,6 +377,9 @@ const ConnectionStatusSettingsDetail = React.lazy(() => import('./settings/Conne
 const TokenStatsSettingsDetail = React.lazy(() => import('./settings/TokenStatsSettingsDetail').then(module => ({
   default: module.TokenStatsSettingsDetail,
 })));
+const DatabaseSettingsDetail = React.lazy(() => import('./settings/DatabaseSettingsDetail').then(module => ({
+  default: module.DatabaseSettingsDetail,
+})));
 
 type Tab = 'chat' | 'file' | 'git';
 type ThemeMode = 'dark' | 'light';
@@ -16275,17 +16278,13 @@ function App() {
   const renderDatabaseSettingsDetail = (options?: SettingsDetailShellOptions) =>
     renderSettingsDetailShell(
       'Database',
-      <>
-        {databaseLoading ? (
-          <div className="muted block">Loading database...</div>
-        ) : null}
-        {databaseError ? (
-          <div className="error">Database error: {databaseError}</div>
-        ) : null}
-        {!databaseLoading && !databaseError ? (
-          <pre className="settings-database-dump">{databaseDumpText}</pre>
-        ) : null}
-      </>,
+      <React.Suspense fallback={null}>
+        <DatabaseSettingsDetail
+          loading={databaseLoading}
+          error={databaseError}
+          dumpText={databaseDumpText}
+        />
+      </React.Suspense>,
       renderSettingsDetailActions('database'),
       options,
     );
