@@ -79,7 +79,7 @@ import {
 } from './chat/chatTurnStores';
 import {createChatDurablePersistQueue} from './chat/chatDurablePersist';
 import {createChatReadRepairQueue} from './chat/chatReadRepair';
-import {buildChatDisplayIndex} from './chat/chatDisplayIndex';
+import {buildChatDisplayIndex, type ChatDisplayIndexItem} from './chat/chatDisplayIndex';
 import {
   buildSessionSearchSections,
   mergeSessionSearchResultsByProject,
@@ -88,6 +88,17 @@ import {
   type SessionSearchResultsByProjectId,
   type SessionSearchSectionRow,
 } from './chat/sessionSearchState';
+import {
+  OLDER_SESSION_DAYS,
+  buildArchivedSessionSections,
+  collectArchiveCandidates,
+  nextArchiveBatchProgress,
+  readOlderSessionsExpanded,
+  splitOlderProjectSessions,
+  writeOlderSessionsExpanded,
+  type ArchiveBatchProgress,
+  type ArchiveCandidate,
+} from './chat/sessionArchiveState';
 import {useChatLayoutMetrics} from './chat/chatLayoutMetrics';
 import {resolveWideProjectActionPopoverPlacement, type WideProjectActionPopoverPlacement} from './chat/wideProjectActionPopover';
 import {ChatVirtuosoTurnList, type ChatVirtuosoTurnListHandle} from './chat/ChatVirtuosoTurnList';
@@ -336,6 +347,8 @@ import type {
   RegistryChatMessage,
   RegistryChatMessageEventPayload,
   RegistryChatSession,
+  RegistryArchivedSessionSummary,
+  RegistrySessionArchiveReadResponse,
   RegistryResumableSession,
   RegistrySpeechCancelPayload,
   RegistrySpeechErrorEvent,
@@ -408,6 +421,17 @@ type RenameSessionTarget = {
 type ConfirmTarget =
   | {
       kind: 'archive';
+      projectId: string;
+      sessionId: string;
+      title: string;
+    }
+  | {
+      kind: 'archiveBatch';
+      days: number;
+      candidates: ArchiveCandidate[];
+    }
+  | {
+      kind: 'restoreArchived';
       projectId: string;
       sessionId: string;
       title: string;
@@ -3751,6 +3775,19 @@ function App() {
   const [sessionSearchDoneByProjectId, setSessionSearchDoneByProjectId] = useState<Record<string, boolean>>({});
   const sessionSearchDoneByProjectIdRef = useRef<Record<string, boolean>>({});
   const [sessionSearchErrorsByProjectId, setSessionSearchErrorsByProjectId] = useState<Record<string, string>>({});
+  const [olderSessionsExpandedByProjectId, setOlderSessionsExpandedByProjectId] = useState<Record<string, boolean>>(
+    () => readOlderSessionsExpanded(typeof window !== 'undefined' ? window.sessionStorage : null),
+  );
+  const [sessionArchiveMenuOpen, setSessionArchiveMenuOpen] = useState(false);
+  const [archiveBatchProgress, setArchiveBatchProgress] = useState<ArchiveBatchProgress | null>(null);
+  const [archiveBatchSummary, setArchiveBatchSummary] = useState('');
+  const [archivedMode, setArchivedMode] = useState(false);
+  const [archivedLoading, setArchivedLoading] = useState(false);
+  const [archivedError, setArchivedError] = useState('');
+  const [archivedByProjectId, setArchivedByProjectId] = useState<Record<string, RegistryArchivedSessionSummary[]>>({});
+  const [selectedArchivedKey, setSelectedArchivedKey] = useState<ChatSessionKey | null>(null);
+  const [archivedPreview, setArchivedPreview] = useState<RegistrySessionArchiveReadResponse | null>(null);
+  const [archivedRestoringSessionId, setArchivedRestoringSessionId] = useState('');
   const sessionSearchUnchangedPollsRef = useRef(0);
   const sessionSearchPollTimerRef = useRef<number | null>(null);
   const sessionSearchIdCounterRef = useRef(0);
@@ -3932,6 +3969,12 @@ function App() {
     selectedFullChatMessages,
     selectedPendingPrompt,
   ]);
+  const archivedChatDisplayIndex = useMemo(() => buildChatDisplayIndex(archivedPreview?.messages ?? [], {
+    hideToolCalls,
+    layoutMetrics: chatLayoutMetrics,
+    promptStatus: () => null,
+    shouldRender: (message, promptStatus) => shouldRenderChatTurn(message, hideToolCalls, promptStatus),
+  }), [archivedPreview?.messages, chatLayoutMetrics, hideToolCalls]);
 
   useEffect(() => {
     if (
@@ -4865,6 +4908,13 @@ function App() {
     }),
     [projectSessionsByProjectId, searchResultsByProjectId, visibleProjectItems],
   );
+  const archivedSessionSections = useMemo(
+    () => buildArchivedSessionSections({
+      projects: sortedProjectItems,
+      archivedByProjectId,
+    }),
+    [archivedByProjectId, sortedProjectItems],
+  );
   const sessionSearchResultCount = useMemo(
     () => sessionSearchSections.reduce((sum, section) => sum + section.rows.length, 0),
     [sessionSearchSections],
@@ -4925,6 +4975,12 @@ function App() {
     const cursor = input.value.length;
     input.setSelectionRange(cursor, cursor);
   }, [sessionSearchHeaderExpanded]);
+  useEffect(() => {
+    writeOlderSessionsExpanded(
+      typeof window !== 'undefined' ? window.sessionStorage : null,
+      olderSessionsExpandedByProjectId,
+    );
+  }, [olderSessionsExpandedByProjectId]);
   const mobileChatQuickSwitchSections = useMemo(
     () => buildMobileChatQuickSwitchSections({
       projects: visibleProjectItems,
@@ -9574,6 +9630,168 @@ function App() {
     }
   };
 
+  const requestArchiveOlderSessions = (days: number) => {
+    setSessionArchiveMenuOpen(false);
+    setArchiveBatchSummary('');
+    const candidates = collectArchiveCandidates({
+      projects: sortedProjectItems,
+      sessionsByProjectId: projectSessionsByProjectIdRef.current,
+      nowMs: Date.now(),
+      olderThanDays: days,
+    });
+    if (candidates.length === 0) {
+      setArchiveBatchProgress(null);
+      setArchiveBatchSummary(`No sessions older than ${days} days`);
+      return;
+    }
+    setConfirmError('');
+    setConfirmTarget({kind: 'archiveBatch', days, candidates});
+  };
+
+  const handleArchiveBatch = async (days: number, candidates: ArchiveCandidate[]) => {
+    if (archiveBatchProgress && archiveBatchProgress.completed < archiveBatchProgress.total) {
+      return;
+    }
+    setConfirmError('');
+    setConfirmTarget(null);
+    setArchiveBatchSummary('');
+    let progress: ArchiveBatchProgress = {
+      total: candidates.length,
+      completed: 0,
+      archived: 0,
+      failed: 0,
+      failures: [],
+    };
+    setArchiveBatchProgress(progress);
+    for (const candidate of candidates) {
+      const currentLabel = resolveSessionDisplayTitle(candidate.session) || candidate.session.sessionId;
+      setArchiveBatchProgress(current => current ? {...current, currentLabel} : current);
+      try {
+        const result = await service.archiveProjectSession(
+          candidate.project.projectId,
+          candidate.session.sessionId,
+        );
+        if (!result.ok) {
+          throw new Error('session.archive returned ok=false');
+        }
+        removeProjectChatSessionFromState(
+          candidate.project.projectId,
+          result.sessionId || candidate.session.sessionId,
+        );
+        progress = nextArchiveBatchProgress(progress, {candidate, ok: true});
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        progress = nextArchiveBatchProgress(progress, {
+          candidate,
+          ok: false,
+          error: message,
+        });
+      }
+      setArchiveBatchProgress(progress);
+    }
+    setArchiveBatchSummary(`Archived ${progress.archived}, failed ${progress.failed}`);
+    if (progress.failed > 0) {
+      setError(`Archive > ${days} days finished with ${progress.failed} failure${progress.failed === 1 ? '' : 's'}`);
+    }
+  };
+
+  const exitArchivedMode = () => {
+    setArchivedMode(false);
+    setArchivedByProjectId({});
+    setSelectedArchivedKey(null);
+    setArchivedPreview(null);
+    setArchivedError('');
+    setArchivedLoading(false);
+  };
+
+  const enterArchivedMode = async () => {
+    setSessionArchiveMenuOpen(false);
+    setArchivedMode(true);
+    setArchivedLoading(true);
+    setArchivedError('');
+    setArchivedByProjectId({});
+    setSelectedArchivedKey(null);
+    setArchivedPreview(null);
+    if (sessionSearchOpen || sessionSearchActive) {
+      await exitSessionSearch();
+    }
+    for (const projectItem of sortedProjectItems) {
+      try {
+        const sessions = await service.listProjectArchivedSessions(projectItem.projectId);
+        setArchivedByProjectId(current => ({
+          ...current,
+          [projectItem.projectId]: sessions,
+        }));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        setArchivedError(current => current || `${projectItem.name}: ${message}`);
+      }
+    }
+    setArchivedLoading(false);
+  };
+
+  const loadArchivedSessionPreview = async (targetProjectId: string, sessionId: string) => {
+    const normalizedSessionId = sessionId.trim();
+    if (!targetProjectId || !normalizedSessionId) {
+      return;
+    }
+    setArchivedError('');
+    setSelectedArchivedKey({projectId: targetProjectId, sessionId: normalizedSessionId});
+    try {
+      const preview = await service.readProjectArchivedSession(targetProjectId, normalizedSessionId);
+      setArchivedPreview(preview);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setArchivedError(message);
+      setError(message);
+    }
+  };
+
+  const requestRestoreArchivedSession = (targetProjectId: string, session: RegistryArchivedSessionSummary) => {
+    setConfirmError('');
+    setConfirmTarget({
+      kind: 'restoreArchived',
+      projectId: targetProjectId,
+      sessionId: session.sessionId,
+      title: resolveSessionDisplayTitle(session) || session.sessionId,
+    });
+  };
+
+  const handleRestoreArchivedSession = async (targetProjectId: string, sessionId: string) => {
+    const normalizedSessionId = sessionId.trim();
+    if (!targetProjectId || !normalizedSessionId || archivedRestoringSessionId) {
+      return;
+    }
+    const restoringKey = buildChatRuntimeKey(targetProjectId, normalizedSessionId);
+    setConfirmError('');
+    setArchivedRestoringSessionId(restoringKey);
+    try {
+      const result = await service.restoreProjectArchivedSession(targetProjectId, normalizedSessionId);
+      if (!result.ok) {
+        throw new Error('session.archive.restore returned ok=false');
+      }
+      setArchivedByProjectId(current => ({
+        ...current,
+        [targetProjectId]: (current[targetProjectId] ?? []).filter(item => item.sessionId !== normalizedSessionId),
+      }));
+      setConfirmTarget(null);
+      setConfirmError('');
+      exitArchivedMode();
+      await refreshChatProjectSessions(targetProjectId, {force: true});
+      await selectProjectChatSession(targetProjectId, result.session.sessionId || normalizedSessionId);
+      if (result.warning) {
+        setError(result.warning);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setConfirmError(message);
+      setArchivedError(message);
+      setError(message);
+    } finally {
+      setArchivedRestoringSessionId('');
+    }
+  };
+
   const handleDeleteProjectSession = async (targetProjectId: string, sessionId: string) => {
     const normalizedSessionId = sessionId.trim();
     if (!targetProjectId || !normalizedSessionId || chatDeletingSessionId) {
@@ -12861,6 +13079,159 @@ function App() {
     );
   };
 
+  const renderChatArchiveControls = (mobile: boolean) => {
+    if (sessionSearchHeaderExpanded) {
+      return null;
+    }
+    return (
+      <div className={`chat-header-archive-control compact${mobile ? ' mobile' : ''}`}>
+        <button
+          type="button"
+          className="session-search-icon-btn"
+          onClick={() => setSessionArchiveMenuOpen(value => !value)}
+          title="Archive"
+          aria-label="Archive"
+          aria-haspopup="menu"
+          aria-expanded={sessionArchiveMenuOpen}
+        >
+          <span className="codicon codicon-archive" />
+        </button>
+        {sessionArchiveMenuOpen ? (
+          <div className="session-archive-menu" role="menu" aria-label="Archive sessions">
+            <button
+              type="button"
+              className="wide-project-action-menu-item"
+              onClick={() => requestArchiveOlderSessions(7)}
+              role="menuitem"
+            >
+              <span className="codicon codicon-archive" />
+              <span>Archive &gt; 7 days</span>
+            </button>
+            <button
+              type="button"
+              className="wide-project-action-menu-item"
+              onClick={() => requestArchiveOlderSessions(14)}
+              role="menuitem"
+            >
+              <span className="codicon codicon-archive" />
+              <span>Archive &gt; 14 days</span>
+            </button>
+            <button
+              type="button"
+              className="wide-project-action-menu-item"
+              onClick={() => enterArchivedMode().catch(() => undefined)}
+              role="menuitem"
+            >
+              <span className="codicon codicon-history" />
+              <span>Recover...</span>
+            </button>
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
+  const toggleOlderSessionsExpanded = (targetProjectId: string) => {
+    setOlderSessionsExpandedByProjectId(current => ({
+      ...current,
+      [targetProjectId]: current[targetProjectId] !== true,
+    }));
+  };
+
+  const renderProjectSessionRow = (
+    targetProjectId: string,
+    session: RegistryChatSession,
+    mobile: boolean,
+  ) => {
+    const sessionAgent = (session.agentType || '').trim();
+    const displaySessionAgent = normalizeAgentTypeName(sessionAgent);
+    const sessionActionsOpen =
+      projectSessionActionMenu?.projectId === targetProjectId &&
+      projectSessionActionMenu.sessionId === session.sessionId;
+    return (
+      <div
+        key={`${targetProjectId}:${mobile ? 'mobile-session' : 'wide-session'}:${session.sessionId}`}
+        className={`project-session-row-wrap${sessionActionsOpen ? ' actions-open' : ''}`}
+      >
+        <button
+          type="button"
+          className={`wide-session-row${mobile ? ' mobile-session-row' : ''}${
+            selectedChatEncodedKey === buildChatRuntimeKey(targetProjectId, session.sessionId)
+              ? ' selected'
+              : ''
+          }`}
+          onPointerDown={event => startProjectSessionLongPress(targetProjectId, session.sessionId, event)}
+          onPointerUp={finishProjectSessionLongPress}
+          onPointerCancel={finishProjectSessionLongPress}
+          onPointerLeave={finishProjectSessionLongPress}
+          onContextMenu={event => openProjectSessionContextMenu(targetProjectId, session.sessionId, event)}
+          onClick={event => {
+            if (consumeProjectSessionLongPressClick(targetProjectId, session.sessionId, event)) {
+              return;
+            }
+            if (mobile) {
+              selectProjectChatSession(
+                targetProjectId,
+                session.sessionId,
+                {closeMobileDrawer: true},
+              ).catch(() => undefined);
+              return;
+            }
+            selectWideProjectSession(
+              targetProjectId,
+              session.sessionId,
+            ).catch(() => undefined);
+          }}
+        >
+          {renderSessionStateMarker(session, targetProjectId)}
+          <span className="wide-session-title">
+            {resolveSessionDisplayTitle(session) || session.sessionId}
+          </span>
+          {displaySessionAgent ? (
+            <span className={`wide-session-agent-tag ${tagVariantClass('wide-session-agent', sessionAgent)}`}>
+              {displaySessionAgent}
+            </span>
+          ) : null}
+          <span className="wide-session-time" title={session.updatedAt || ''}>
+            {formatCompactRelativeAge(session.updatedAt)}
+          </span>
+        </button>
+        {renderProjectSessionActionMenu(targetProjectId, session)}
+      </div>
+    );
+  };
+
+  const renderProjectSessionRowsWithOlderFolding = (
+    targetProjectId: string,
+    projectSessions: RegistryChatSession[],
+    mobile: boolean,
+  ) => {
+    const split = splitOlderProjectSessions({
+      sessions: projectSessions,
+      nowMs: Date.now(),
+      olderThanDays: OLDER_SESSION_DAYS,
+      expanded: olderSessionsExpandedByProjectId[targetProjectId] === true,
+    });
+    const hiddenOlderCount = split.hiddenOlderCount;
+    return (
+      <>
+        {split.visibleSessions.map(session => renderProjectSessionRow(targetProjectId, session, mobile))}
+        {split.showToggle ? (
+          <button
+            type="button"
+            className={`wide-session-row session-older-toggle${mobile ? ' mobile-session-row' : ''}`}
+            onClick={() => toggleOlderSessionsExpanded(targetProjectId)}
+          >
+            <span className={`codicon ${split.expanded ? 'codicon-chevron-up' : 'codicon-chevron-down'}`} />
+            <span className="wide-session-title">
+              {split.expanded ? 'Show less' : `Show ${hiddenOlderCount} older`}
+            </span>
+          </button>
+        ) : null}
+      </>
+    );
+  };
+
   const renderSessionSearchRow = (
     targetProjectId: string,
     row: SessionSearchSectionRow,
@@ -12968,6 +13339,172 @@ function App() {
     if (mobile) {
       return (
         <div className="mobile-project-session-nav session-search-nav">
+          {body}
+        </div>
+      );
+    }
+    return body;
+  };
+
+  const renderArchiveBatchStatus = () => {
+    if (!archiveBatchProgress && !archiveBatchSummary) {
+      return null;
+    }
+    const progressPercent = archiveBatchProgress && archiveBatchProgress.total > 0
+      ? Math.round((archiveBatchProgress.completed / archiveBatchProgress.total) * 100)
+      : 0;
+    return (
+      <div className="session-archive-progress" role="status" aria-live="polite">
+        {archiveBatchProgress ? (
+          <>
+            <div className="session-archive-progress-head">
+              <span>
+                Archive {archiveBatchProgress.completed}/{archiveBatchProgress.total}
+              </span>
+              <span>
+                {archiveBatchProgress.archived} ok · {archiveBatchProgress.failed} failed
+              </span>
+            </div>
+            <div className="session-archive-progress-track" aria-hidden="true">
+              <span style={{width: `${progressPercent}%`}} />
+            </div>
+            {archiveBatchProgress.currentLabel ? (
+              <div className="session-archive-progress-current">
+                {archiveBatchProgress.currentLabel}
+              </div>
+            ) : null}
+          </>
+        ) : null}
+        {archiveBatchSummary ? (
+          <div className="session-archive-summary">{archiveBatchSummary}</div>
+        ) : null}
+      </div>
+    );
+  };
+
+  const renderArchivedSessionRows = (mobile: boolean) => {
+    const body = (
+      <>
+        <div className={`archived-session-header${mobile ? ' mobile' : ''}`}>
+          <div className="archived-session-title">
+            <span className="codicon codicon-archive" aria-hidden="true" />
+            <span>Archived</span>
+          </div>
+          <button
+            type="button"
+            className="archived-session-cancel"
+            onClick={exitArchivedMode}
+          >
+            Cancel
+          </button>
+        </div>
+        {archivedLoading ? (
+          <div className="wide-project-empty archived-session-empty">
+            <span className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
+            <span>Loading archived sessions...</span>
+          </div>
+        ) : null}
+        {archivedError ? (
+          <div className="session-search-error-list archived-session-error-list">
+            <div className="session-search-error">{archivedError}</div>
+          </div>
+        ) : null}
+        {archivedSessionSections.map(section => {
+          const projectHub = projectHubId(section.project);
+          const projectHubVariant = tagVariantClass('wide-project-hub', projectHub);
+          return (
+            <div
+              key={`archived-project:${section.project.projectId}`}
+              className={`wide-project-section archived-session-project-section${section.project.projectId === projectId ? ' active' : ''}`}
+            >
+              <div className={`wide-project-row archived-session-project-row${mobile ? ' mobile-project-row' : ''}`}>
+                <div className="wide-project-toggle session-search-project-label">
+                  <span className="wide-project-folder-wrap">
+                    <span
+                      className={`codicon codicon-archive wide-project-folder-icon ${projectHubVariant}`}
+                      style={hubAccentStyle(projectHub)}
+                    />
+                  </span>
+                  <span className="wide-project-title-group">
+                    <span className="wide-project-name" title={section.project.name}>
+                      {section.project.name}
+                    </span>
+                    <span className={`wide-project-hub-tag ${projectHubVariant}`} style={hubAccentStyle(projectHub)}>
+                      <span className="wide-project-hub-dot" aria-hidden="true" />
+                      <span className="wide-project-hub-label">{projectHub}</span>
+                    </span>
+                  </span>
+                </div>
+              </div>
+              <div className={`wide-project-session-list archived-session-result-list${mobile ? ' mobile-project-session-list' : ''}`}>
+                {section.rows.map(row => {
+                  const session = row.session;
+                  const sessionAgent = (session.agentType || '').trim();
+                  const displaySessionAgent = normalizeAgentTypeName(sessionAgent);
+                  const selected =
+                    selectedArchivedKey?.projectId === section.project.projectId &&
+                    selectedArchivedKey.sessionId === session.sessionId;
+                  const restoreKey = buildChatRuntimeKey(section.project.projectId, session.sessionId);
+                  const restoring = archivedRestoringSessionId === restoreKey;
+                  return (
+                    <div
+                      key={`${section.project.projectId}:archived:${session.sessionId}`}
+                      className={`project-session-row-wrap archived-session-row-wrap${selected ? ' selected' : ''}`}
+                    >
+                      <button
+                        type="button"
+                        className={`wide-session-row archived-session-row${mobile ? ' mobile-session-row' : ''}${selected ? ' selected' : ''}`}
+                        title={resolveSessionDisplayTitle(session) || session.sessionId}
+                        onClick={() => {
+                          loadArchivedSessionPreview(
+                            section.project.projectId,
+                            session.sessionId,
+                          ).catch(() => undefined);
+                        }}
+                      >
+                        <span className="session-state-marker archived">
+                          <span className="codicon codicon-archive" aria-hidden="true" />
+                        </span>
+                        <span className="wide-session-title">
+                          {resolveSessionDisplayTitle(session) || session.sessionId}
+                        </span>
+                        {displaySessionAgent ? (
+                          <span className={`wide-session-agent-tag ${tagVariantClass('wide-session-agent', sessionAgent)}`}>
+                            {displaySessionAgent}
+                          </span>
+                        ) : null}
+                        <span className="wide-session-time" title={session.archivedAt || session.updatedAt || ''}>
+                          {formatCompactRelativeAge(session.archivedAt || session.updatedAt)}
+                        </span>
+                      </button>
+                      {selected ? (
+                        <div className="archived-session-restore-popover">
+                          <button
+                            type="button"
+                            className="project-session-menu-btn restore"
+                            disabled={restoring}
+                            onClick={() => requestRestoreArchivedSession(section.project.projectId, session)}
+                          >
+                            <span className={`codicon ${restoring ? 'codicon-loading codicon-modifier-spin' : 'codicon-debug-restart'}`} />
+                            <span className="project-session-menu-label">Restore</span>
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+        {!archivedLoading && archivedSessionSections.length === 0 ? (
+          <div className="wide-project-empty archived-session-empty">No archived sessions.</div>
+        ) : null}
+      </>
+    );
+    if (mobile) {
+      return (
+        <div className="mobile-project-session-nav archived-session-nav">
           {body}
         </div>
       );
@@ -15967,9 +16504,11 @@ function App() {
           <div className="mobile-chat-hub-slot" hidden={sessionSearchHeaderExpanded}>
             {renderChatHubSummary(true)}
           </div>
+          {renderChatArchiveControls(true)}
           {renderChatHeaderSearchControls(true)}
         </div>
-        {sessionSearchActive ? renderSessionSearchResults(true) : (
+        {renderArchiveBatchStatus()}
+        {archivedMode ? renderArchivedSessionRows(true) : sessionSearchActive ? renderSessionSearchResults(true) : (
         <div className="mobile-project-session-nav">
           {projects.length === 0 ? (
             <div className="chat-empty-hint chat-empty-state">
@@ -16074,57 +16613,7 @@ function App() {
                 ) : null}
                 {!collapsed ? (
                   <div className="wide-project-session-list mobile-project-session-list">
-                    {projectSessions.map(session => {
-                      const sessionAgent = (session.agentType || '').trim();
-                      const displaySessionAgent = normalizeAgentTypeName(sessionAgent);
-                      const sessionActionsOpen =
-                        projectSessionActionMenu?.projectId === targetProjectId &&
-                        projectSessionActionMenu.sessionId === session.sessionId;
-                      return (
-                        <div
-                          key={`${targetProjectId}:mobile-session:${session.sessionId}`}
-                          className={`project-session-row-wrap${sessionActionsOpen ? ' actions-open' : ''}`}
-                        >
-                          <button
-                            type="button"
-                            className={`wide-session-row mobile-session-row${
-                              selectedChatEncodedKey === buildChatRuntimeKey(targetProjectId, session.sessionId)
-                                ? ' selected'
-                                : ''
-                            }`}
-                            onPointerDown={event => startProjectSessionLongPress(targetProjectId, session.sessionId, event)}
-                            onPointerUp={finishProjectSessionLongPress}
-                            onPointerCancel={finishProjectSessionLongPress}
-                            onPointerLeave={finishProjectSessionLongPress}
-                            onContextMenu={event => openProjectSessionContextMenu(targetProjectId, session.sessionId, event)}
-                            onClick={event => {
-                              if (consumeProjectSessionLongPressClick(targetProjectId, session.sessionId, event)) {
-                                return;
-                              }
-                              selectProjectChatSession(
-                                targetProjectId,
-                                session.sessionId,
-                                {closeMobileDrawer: true},
-                              ).catch(() => undefined);
-                            }}
-                          >
-                            {renderSessionStateMarker(session, targetProjectId)}
-                            <span className="wide-session-title">
-                              {resolveSessionDisplayTitle(session) || session.sessionId}
-                            </span>
-                            {displaySessionAgent ? (
-                              <span className={`wide-session-agent-tag ${tagVariantClass('wide-session-agent', sessionAgent)}`}>
-                                {displaySessionAgent}
-                              </span>
-                            ) : null}
-                            <span className="wide-session-time" title={session.updatedAt || ''}>
-                              {formatCompactRelativeAge(session.updatedAt)}
-                            </span>
-                          </button>
-                          {renderProjectSessionActionMenu(targetProjectId, session)}
-                        </div>
-                      );
-                    })}
+                    {renderProjectSessionRowsWithOlderFolding(targetProjectId, projectSessions, true)}
                     {projectSessions.length === 0 ? (
                       <div className="wide-project-empty">No sessions yet.</div>
                     ) : null}
@@ -16276,10 +16765,11 @@ function App() {
   const renderWideProjectSessionNav = () => {
     return (
       <div className="wide-project-session-nav">
+        {renderArchiveBatchStatus()}
         {projects.length === 0 ? (
           <div className="chat-empty-hint">No projects available.</div>
         ) : null}
-        {sessionSearchActive ? renderSessionSearchResults(false) : visibleProjectItems.map(projectItem => {
+        {archivedMode ? renderArchivedSessionRows(false) : sessionSearchActive ? renderSessionSearchResults(false) : visibleProjectItems.map(projectItem => {
           const targetProjectId = projectItem.projectId;
           const projectSessions = projectSessionsByProjectId[targetProjectId] ?? [];
           const collapsed = collapsedProjectIds.includes(targetProjectId);
@@ -16484,56 +16974,7 @@ function App() {
               </div>
               {!collapsed ? (
                 <div className="wide-project-session-list">
-                  {projectSessions.map(session => {
-                    const sessionAgent = (session.agentType || '').trim();
-                    const displaySessionAgent = normalizeAgentTypeName(sessionAgent);
-                    const sessionActionsOpen =
-                      projectSessionActionMenu?.projectId === targetProjectId &&
-                      projectSessionActionMenu.sessionId === session.sessionId;
-                    return (
-                      <div
-                        key={`${targetProjectId}:${session.sessionId}`}
-                        className={`project-session-row-wrap${sessionActionsOpen ? ' actions-open' : ''}`}
-                      >
-                        <button
-                          type="button"
-                          className={`wide-session-row${
-                            selectedChatEncodedKey === buildChatRuntimeKey(targetProjectId, session.sessionId)
-                              ? ' selected'
-                              : ''
-                          }`}
-                          onPointerDown={event => startProjectSessionLongPress(targetProjectId, session.sessionId, event)}
-                          onPointerUp={finishProjectSessionLongPress}
-                          onPointerCancel={finishProjectSessionLongPress}
-                          onPointerLeave={finishProjectSessionLongPress}
-                          onContextMenu={event => openProjectSessionContextMenu(targetProjectId, session.sessionId, event)}
-                          onClick={event => {
-                            if (consumeProjectSessionLongPressClick(targetProjectId, session.sessionId, event)) {
-                              return;
-                            }
-                            selectWideProjectSession(
-                              targetProjectId,
-                              session.sessionId,
-                            ).catch(() => undefined);
-                          }}
-                        >
-                          {renderSessionStateMarker(session, targetProjectId)}
-                          <span className="wide-session-title">
-                            {resolveSessionDisplayTitle(session) || session.sessionId}
-                          </span>
-                          {displaySessionAgent ? (
-                            <span className={`wide-session-agent-tag ${tagVariantClass('wide-session-agent', sessionAgent)}`}>
-                              {displaySessionAgent}
-                            </span>
-                          ) : null}
-                          <span className="wide-session-time" title={session.updatedAt || ''}>
-                            {formatCompactRelativeAge(session.updatedAt)}
-                          </span>
-                        </button>
-                        {renderProjectSessionActionMenu(targetProjectId, session)}
-                      </div>
-                    );
-                  })}
+                  {renderProjectSessionRowsWithOlderFolding(targetProjectId, projectSessions, false)}
                   {projectSessions.length === 0 ? (
                     <div className="wide-project-empty">No sessions yet.</div>
                   ) : null}
@@ -16542,7 +16983,7 @@ function App() {
             </div>
           );
         })}
-        {!sessionSearchActive ? renderHiddenProjectRows(false) : null}
+        {!archivedMode && !sessionSearchActive ? renderHiddenProjectRows(false) : null}
       </div>
     );
   };
@@ -16620,6 +17061,7 @@ function App() {
                 {!chatSidebarTitleSearchOpen ? <span className="sidebar-title-text">{wideSidebarTitle}</span> : null}
                 <div className="chat-sidebar-title-actions">
                   {renderChatHubSummary()}
+                  {renderChatArchiveControls(false)}
                   {renderChatHeaderSearchControls(false)}
                 </div>
               </>
@@ -17196,11 +17638,32 @@ function App() {
       </div>
     );
   };
-  const renderChatVirtuosoItem = (displayItem: typeof chatDisplayIndex.items[number]) => {
+  const renderArchivedChatMessageTurn = (message: RegistryChatMessage) => {
+    if (!shouldRenderChatTurn(message, hideToolCalls, null)) {
+      return null;
+    }
+    const runtimeKey = selectedArchivedKey
+      ? buildChatRuntimeKey(selectedArchivedKey.projectId, selectedArchivedKey.sessionId)
+      : 'archived-session';
+    return (
+      <div key={`${runtimeKey}:${message.turnIndex}:${message.method}`}>
+        <ChatTurnView
+          message={message}
+          promptStatus={null}
+          hideToolCalls={hideToolCalls}
+          markdownComponents={chatMarkdownComponents}
+          markdownUrlTransform={chatMarkdownUrlTransform}
+        />
+      </div>
+    );
+  };
+  const renderChatVirtuosoItem = (displayItem: ChatDisplayIndexItem) => {
+    const chatReadOnlyPreview = archivedMode && archivedPreview !== null;
+    const sourceMessages = chatReadOnlyPreview ? archivedPreview.messages : chatMessages;
     const sourceMessage = displayItem.kind === 'turn'
-      ? chatMessages[displayItem.sourceIndex]
+      ? sourceMessages[displayItem.sourceIndex]
       : undefined;
-    const content = displayItem.kind === 'pending' && selectedPendingPrompt ? (
+    const content = displayItem.kind === 'pending' && selectedPendingPrompt && !chatReadOnlyPreview ? (
       <ChatTurnView
         message={buildPendingPromptMessage(selectedPendingPrompt)}
         promptStatus={selectedPendingPrompt.status}
@@ -17210,6 +17673,8 @@ function App() {
         onRetryPendingPrompt={() => retryPendingChatPrompt(selectedChatEncodedKey)}
         onEditPendingPrompt={() => editPendingChatPrompt(selectedChatEncodedKey)}
       />
+    ) : sourceMessage && chatReadOnlyPreview ? (
+      renderArchivedChatMessageTurn(sourceMessage)
     ) : sourceMessage ? (
       renderChatMessageTurn(sourceMessage)
     ) : null;
@@ -17461,6 +17926,26 @@ function App() {
         </div>
       );
     };
+    const chatReadOnlyPreview = archivedMode && archivedPreview !== null;
+    const activeChatMessages = chatReadOnlyPreview ? archivedPreview.messages : chatMessages;
+    const activeChatDisplayIndex = chatReadOnlyPreview ? archivedChatDisplayIndex : chatDisplayIndex;
+    const activeChatRuntimeKey = chatReadOnlyPreview && selectedArchivedKey
+      ? buildChatRuntimeKey(selectedArchivedKey.projectId, selectedArchivedKey.sessionId)
+      : selectedChatEncodedKey;
+    const activeChatDisplayTitle = chatReadOnlyPreview
+      ? resolveSessionDisplayTitle(archivedPreview.session) || archivedPreview.sessionId
+      : selectedChatDisplayTitle;
+    const archivedPreviewProjectName = selectedArchivedKey
+      ? projects.find(item => item.projectId === selectedArchivedKey.projectId)?.name ||
+        archivedPreview?.session.projectName ||
+        'Project'
+      : 'Project';
+    const activeChatBreadcrumbProjectName = chatReadOnlyPreview
+      ? archivedPreviewProjectName
+      : chatBreadcrumbProjectName;
+    const activeChatBreadcrumbLabel = chatReadOnlyPreview
+      ? `Archived - ${activeChatDisplayTitle || 'Session'}`
+      : chatBreadcrumbLabel;
 
     if (tab === 'chat') {
       return (
@@ -17468,10 +17953,12 @@ function App() {
           <div className="block-title">
             {isWide ? (
               <span className="title-text">
-                CHAT - {selectedChatDisplayTitle || 'New Session'}
+                {chatReadOnlyPreview
+                  ? `ARCHIVED - ${activeChatDisplayTitle || 'Session'}`
+                  : `CHAT - ${selectedChatDisplayTitle || 'New Session'}`}
               </span>
             ) : (
-              renderBreadcrumbTitle(chatBreadcrumbProjectName, chatBreadcrumbLabel)
+              renderBreadcrumbTitle(activeChatBreadcrumbProjectName, activeChatBreadcrumbLabel)
             )}
           </div>
           <div
@@ -17491,10 +17978,26 @@ function App() {
               onTouchEnd={() => { chatPointerScrollingRef.current = false; }}
               onTouchCancel={() => { chatPointerScrollingRef.current = false; }}
             >
-              {chatLoading ? (
+              {!chatReadOnlyPreview && chatLoading ? (
                 <div className="muted block">Loading chat...</div>
               ) : null}
-              {!chatLoading && chatMessages.length === 0 && !selectedPendingPrompt ? (
+              {archivedMode && !archivedPreview ? (
+                <div className="empty-card">
+                  <div className="empty-title">Select an archived session</div>
+                  <div className="empty-subtitle">
+                    The archived preview opens here in read-only mode.
+                  </div>
+                </div>
+              ) : null}
+              {chatReadOnlyPreview && activeChatMessages.length === 0 ? (
+                <div className="empty-card">
+                  <div className="empty-title">No messages</div>
+                  <div className="empty-subtitle">
+                    This archive does not include rendered chat messages.
+                  </div>
+                </div>
+              ) : null}
+              {!archivedMode && !chatLoading && chatMessages.length === 0 && !selectedPendingPrompt ? (
                 <div className="empty-card">
                   <div className="empty-title">Start chatting</div>
                   <div className="empty-subtitle">
@@ -17502,12 +18005,12 @@ function App() {
                   </div>
                 </div>
               ) : null}
-              {chatDisplayIndex.items.length > 0 ? (
+              {activeChatDisplayIndex.items.length > 0 ? (
                 <ChatVirtuosoTurnList
                   ref={chatVirtuosoListRef}
                   scrollRef={chatScrollRef}
-                  displayIndex={chatDisplayIndex}
-                  runtimeKey={selectedChatEncodedKey}
+                  displayIndex={activeChatDisplayIndex}
+                  runtimeKey={activeChatRuntimeKey}
                   atBottomThreshold={CHAT_AUTO_SCROLL_BOTTOM_THRESHOLD}
                   onAtBottomChange={handleChatAtBottomChange}
                   shouldAutoscroll={shouldAutoscrollChat}
@@ -17515,7 +18018,7 @@ function App() {
                 />
               ) : null}
             </div>
-            {chatShowScrollToBottom ? (
+            {!archivedMode && chatShowScrollToBottom ? (
             <button
               type="button"
               className="chat-scroll-bottom-button"
@@ -17528,7 +18031,7 @@ function App() {
               </span>
             </button>
           ) : null}
-          <div ref={chatComposerRef} className="chat-composer">
+          <div ref={chatComposerRef} className="chat-composer" hidden={archivedMode}>
             <input
               ref={chatFileInputRef}
               type="file"
@@ -18838,6 +19341,8 @@ function App() {
   ) : null;
 
   const archiveTarget = confirmTarget?.kind === 'archive' ? confirmTarget : null;
+  const archiveBatchTarget = confirmTarget?.kind === 'archiveBatch' ? confirmTarget : null;
+  const restoreArchivedTarget = confirmTarget?.kind === 'restoreArchived' ? confirmTarget : null;
   const deleteTarget = confirmTarget?.kind === 'delete' ? confirmTarget : null;
   const npmPackageTarget = confirmTarget?.kind === 'npmPackage' ? confirmTarget : null;
   const npmPackageHubUpdateTarget = confirmTarget?.kind === 'npmPackageHubUpdate' ? confirmTarget : null;
@@ -18861,116 +19366,136 @@ function App() {
     : '';
   const confirmBusy = archiveTarget
     ? chatArchivingSessionId === archiveTarget.sessionId
-    : deleteTarget
-      ? chatDeletingSessionId === deleteTarget.sessionId
-      : npmPackageTarget
-        ? agentPackageActionPendingKey === npmPackageConfirmPendingKey
-        : npmPackageHubUpdateTarget
-          ? agentPackageHubUpdatePendingId === npmPackageHubUpdateTarget.hubId
-          : wheelMakerUpdateTarget
-            ? wheelMakerUpdatePendingHubId === wheelMakerUpdateTarget.hubId
-            : wheelMakerUpdateAllTarget
-              ? wheelMakerUpdateAllPending
-              : skillConfirmTarget
-                ? skillsPendingKey === skillConfirmPendingKey
-                : false;
+    : archiveBatchTarget
+      ? !!archiveBatchProgress && archiveBatchProgress.completed < archiveBatchProgress.total
+      : restoreArchivedTarget
+        ? archivedRestoringSessionId === buildChatRuntimeKey(restoreArchivedTarget.projectId, restoreArchivedTarget.sessionId)
+        : deleteTarget
+          ? chatDeletingSessionId === deleteTarget.sessionId
+          : npmPackageTarget
+            ? agentPackageActionPendingKey === npmPackageConfirmPendingKey
+            : npmPackageHubUpdateTarget
+              ? agentPackageHubUpdatePendingId === npmPackageHubUpdateTarget.hubId
+              : wheelMakerUpdateTarget
+                ? wheelMakerUpdatePendingHubId === wheelMakerUpdateTarget.hubId
+                : wheelMakerUpdateAllTarget
+                  ? wheelMakerUpdateAllPending
+                  : skillConfirmTarget
+                    ? skillsPendingKey === skillConfirmPendingKey
+                    : false;
   const confirmTitle = confirmTarget?.kind === 'clearCache'
     ? 'Clear local cache?'
-    : deleteTarget
-      ? 'Delete session?'
-      : npmPackageTarget
-        ? `${agentPackageActionLabel(npmPackageTarget.action)} package?`
-        : npmPackageHubUpdateTarget
-          ? 'Update npm packages?'
-          : wheelMakerUpdateTarget
-            ? 'Update and publish WheelMaker?'
-            : wheelMakerUpdateAllTarget
-              ? 'Update all hubs?'
-              : skillInstallConfirmTarget
-                ? 'Install skills?'
-                : skillUninstallConfirmTarget
-                  ? 'Uninstall skill?'
-                  : skillUpdateConfirmTarget
-                    ? 'Update skills?'
-                    : 'Archive session?';
+    : archiveBatchTarget
+      ? `Archive sessions older than ${archiveBatchTarget.days} days?`
+      : restoreArchivedTarget
+        ? 'Restore archived session?'
+        : deleteTarget
+          ? 'Delete session?'
+          : npmPackageTarget
+            ? `${agentPackageActionLabel(npmPackageTarget.action)} package?`
+            : npmPackageHubUpdateTarget
+              ? 'Update npm packages?'
+              : wheelMakerUpdateTarget
+                ? 'Update and publish WheelMaker?'
+                : wheelMakerUpdateAllTarget
+                  ? 'Update all hubs?'
+                  : skillInstallConfirmTarget
+                    ? 'Install skills?'
+                    : skillUninstallConfirmTarget
+                      ? 'Uninstall skill?'
+                      : skillUpdateConfirmTarget
+                        ? 'Update skills?'
+                        : 'Archive session?';
   const confirmName = confirmTarget?.kind === 'clearCache'
     ? 'Token and server address will be preserved.'
-    : deleteTarget
-      ? deleteTarget.title || 'Untitled session'
-      : npmPackageTarget
-        ? npmPackageTarget.displayName || npmPackageTarget.packageName
-        : npmPackageHubUpdateTarget
-          ? `${npmPackageHubUpdateTarget.hubId} - ${npmPackageUpdateSummary(npmPackageHubUpdateTarget.packages.length)}`
-          : wheelMakerUpdateTarget
-            ? `Hub: ${wheelMakerUpdateTarget.hubId}`
-            : wheelMakerUpdateAllTarget
-              ? `${wheelMakerUpdateAllTarget.hubIds.length} hubs`
-              : skillInstallConfirmTarget
-                ? skillScopeLabel(skillInstallConfirmTarget)
-                : skillUninstallConfirmTarget
-                  ? skillUninstallConfirmTarget.skillName
-                  : skillUpdateConfirmTarget
-                    ? skillScopeLabel(skillUpdateConfirmTarget)
-                    : archiveTarget?.title || 'Untitled session';
+    : archiveBatchTarget
+      ? `${archiveBatchTarget.candidates.length} sessions`
+      : restoreArchivedTarget
+        ? restoreArchivedTarget.title || 'Untitled session'
+        : deleteTarget
+          ? deleteTarget.title || 'Untitled session'
+          : npmPackageTarget
+            ? npmPackageTarget.displayName || npmPackageTarget.packageName
+            : npmPackageHubUpdateTarget
+              ? `${npmPackageHubUpdateTarget.hubId} - ${npmPackageUpdateSummary(npmPackageHubUpdateTarget.packages.length)}`
+              : wheelMakerUpdateTarget
+                ? `Hub: ${wheelMakerUpdateTarget.hubId}`
+                : wheelMakerUpdateAllTarget
+                  ? `${wheelMakerUpdateAllTarget.hubIds.length} hubs`
+                  : skillInstallConfirmTarget
+                    ? skillScopeLabel(skillInstallConfirmTarget)
+                    : skillUninstallConfirmTarget
+                      ? skillUninstallConfirmTarget.skillName
+                      : skillUpdateConfirmTarget
+                        ? skillScopeLabel(skillUpdateConfirmTarget)
+                        : archiveTarget?.title || 'Untitled session';
   const confirmCopy = confirmTarget?.kind === 'clearCache'
     ? 'The app will reload after local cached workspace data is cleared.'
-    : deleteTarget
-      ? 'This permanently deletes the session data from the Hub.'
-      : npmPackageTarget
-        ? `Hub: ${npmPackageTarget.hubId}. Package: ${npmPackageTarget.packageName}. Installed: ${npmPackageTarget.installedVersion || '-'}. Target: ${npmPackageTarget.action === 'uninstall' ? 'remove deprecated package' : npmPackageTarget.latestVersion || 'latest'}. Restart WheelMaker or start a new agent session for changes to take effect.`
-        : npmPackageHubUpdateTarget
-          ? `Runs latest install/update for ${npmPackageHubUpdateTarget.packages.map(pkg => pkg.displayName || pkg.packageName).join(', ')}. Restart WheelMaker or start a new agent session for changes to take effect.`
-          : wheelMakerUpdateTarget
-            ? `Current: ${shortGitSha(wheelMakerUpdateTarget.currentSha)}. Latest: ${shortGitSha(wheelMakerUpdateTarget.latestSha)}. ${wheelMakerUpdateTarget.behindCount > 0 ? `${wheelMakerUpdateTarget.behindCount} commits behind. ` : ''}This writes a full-update signal; updater will pull, build, publish Web, and restart Hub/Monitor. Updater itself is not restarted.`
-            : wheelMakerUpdateAllTarget
-              ? `This sends update-publish to ${wheelMakerUpdateAllTarget.hubIds.length} hubs. Each hub may pull, build, publish Web, and restart independently.`
-              : skillInstallConfirmTarget
-                ? `Source: ${skillInstallConfirmTarget.source}. Skills: ${skillInstallConfirmTarget.skills.join(', ')}.`
-                : skillUninstallConfirmTarget
-                  ? `Remove from ${skillScopeLabel(skillUninstallConfirmTarget)}.`
-                  : skillUpdateConfirmTarget
-                    ? skillUpdateConfirmTarget.includeProjects
-                      ? 'Updates Hub Skills and online Project Skills on this Hub.'
-                      : `Updates installed skills in ${skillScopeLabel(skillUpdateConfirmTarget)}.`
-                    : 'Archived sessions leave the chat list.';
+    : archiveBatchTarget
+      ? 'Runs one archive call at a time across all known projects. Running sessions are skipped.'
+      : restoreArchivedTarget
+        ? 'The session returns to its project and opens after restore.'
+        : deleteTarget
+          ? 'This permanently deletes the session data from the Hub.'
+          : npmPackageTarget
+            ? `Hub: ${npmPackageTarget.hubId}. Package: ${npmPackageTarget.packageName}. Installed: ${npmPackageTarget.installedVersion || '-'}. Target: ${npmPackageTarget.action === 'uninstall' ? 'remove deprecated package' : npmPackageTarget.latestVersion || 'latest'}. Restart WheelMaker or start a new agent session for changes to take effect.`
+            : npmPackageHubUpdateTarget
+              ? `Runs latest install/update for ${npmPackageHubUpdateTarget.packages.map(pkg => pkg.displayName || pkg.packageName).join(', ')}. Restart WheelMaker or start a new agent session for changes to take effect.`
+              : wheelMakerUpdateTarget
+                ? `Current: ${shortGitSha(wheelMakerUpdateTarget.currentSha)}. Latest: ${shortGitSha(wheelMakerUpdateTarget.latestSha)}. ${wheelMakerUpdateTarget.behindCount > 0 ? `${wheelMakerUpdateTarget.behindCount} commits behind. ` : ''}This writes a full-update signal; updater will pull, build, publish Web, and restart Hub/Monitor. Updater itself is not restarted.`
+                : wheelMakerUpdateAllTarget
+                  ? `This sends update-publish to ${wheelMakerUpdateAllTarget.hubIds.length} hubs. Each hub may pull, build, publish Web, and restart independently.`
+                  : skillInstallConfirmTarget
+                    ? `Source: ${skillInstallConfirmTarget.source}. Skills: ${skillInstallConfirmTarget.skills.join(', ')}.`
+                    : skillUninstallConfirmTarget
+                      ? `Remove from ${skillScopeLabel(skillUninstallConfirmTarget)}.`
+                      : skillUpdateConfirmTarget
+                        ? skillUpdateConfirmTarget.includeProjects
+                          ? 'Updates Hub Skills and online Project Skills on this Hub.'
+                          : `Updates installed skills in ${skillScopeLabel(skillUpdateConfirmTarget)}.`
+                        : 'Archived sessions leave the chat list.';
   const confirmIcon = confirmTarget?.kind === 'clearCache'
     ? 'codicon-trash'
-    : deleteTarget
-      ? 'codicon-trash'
-      : npmPackageTarget
-        ? npmPackageTarget.action === 'uninstall' ? 'codicon-trash' : 'codicon-cloud-download'
-        : npmPackageHubUpdateTarget
-          ? 'codicon-cloud-download'
-          : wheelMakerUpdateTarget
+    : restoreArchivedTarget
+      ? 'codicon-debug-restart'
+      : deleteTarget
+        ? 'codicon-trash'
+        : npmPackageTarget
+          ? npmPackageTarget.action === 'uninstall' ? 'codicon-trash' : 'codicon-cloud-download'
+          : npmPackageHubUpdateTarget
             ? 'codicon-cloud-download'
-            : wheelMakerUpdateAllTarget
+            : wheelMakerUpdateTarget
               ? 'codicon-cloud-download'
-              : skillInstallConfirmTarget
+              : wheelMakerUpdateAllTarget
                 ? 'codicon-cloud-download'
-                : skillUninstallConfirmTarget
-                  ? 'codicon-trash'
-                  : skillUpdateConfirmTarget
-                    ? 'codicon-sync'
-                    : 'codicon-archive';
+                : skillInstallConfirmTarget
+                  ? 'codicon-cloud-download'
+                  : skillUninstallConfirmTarget
+                    ? 'codicon-trash'
+                    : skillUpdateConfirmTarget
+                      ? 'codicon-sync'
+                      : 'codicon-archive';
   const confirmPrimaryLabel = confirmTarget?.kind === 'clearCache'
     ? 'Clear Cache'
-    : deleteTarget
-      ? 'Delete'
-      : npmPackageTarget
-        ? agentPackageActionLabel(npmPackageTarget.action)
-        : npmPackageHubUpdateTarget
-          ? 'Update'
-          : wheelMakerUpdateTarget
+    : restoreArchivedTarget
+      ? 'Restore'
+      : deleteTarget
+        ? 'Delete'
+        : npmPackageTarget
+          ? agentPackageActionLabel(npmPackageTarget.action)
+          : npmPackageHubUpdateTarget
             ? 'Update'
-            : wheelMakerUpdateAllTarget
+            : wheelMakerUpdateTarget
               ? 'Update'
-              : skillInstallConfirmTarget
-                ? 'Install'
-                : skillUninstallConfirmTarget
-                  ? 'Uninstall'
-                  : skillUpdateConfirmTarget
-                    ? 'Update'
-                    : 'Archive';
+              : wheelMakerUpdateAllTarget
+                ? 'Update'
+                : skillInstallConfirmTarget
+                  ? 'Install'
+                  : skillUninstallConfirmTarget
+                    ? 'Uninstall'
+                    : skillUpdateConfirmTarget
+                      ? 'Update'
+                      : 'Archive';
   const confirmPrimaryClassName = confirmTarget?.kind === 'clearCache' || !!deleteTarget || npmPackageTarget?.action === 'uninstall' || !!skillUninstallConfirmTarget
     ? 'app-confirm-btn primary danger'
     : 'app-confirm-btn primary';
@@ -18987,6 +19512,17 @@ function App() {
     }
     if (confirmTarget.kind === 'delete') {
       handleDeleteProjectSession(
+        confirmTarget.projectId,
+        confirmTarget.sessionId,
+      ).catch(() => undefined);
+      return;
+    }
+    if (confirmTarget.kind === 'archiveBatch') {
+      handleArchiveBatch(confirmTarget.days, confirmTarget.candidates).catch(() => undefined);
+      return;
+    }
+    if (confirmTarget.kind === 'restoreArchived') {
+      handleRestoreArchivedSession(
         confirmTarget.projectId,
         confirmTarget.sessionId,
       ).catch(() => undefined);
@@ -19012,10 +19548,12 @@ function App() {
       handleSkillConfirmedAction(confirmTarget).catch(() => undefined);
       return;
     }
-    handleArchiveProjectSession(
-      confirmTarget.projectId,
-      confirmTarget.sessionId,
-    ).catch(() => undefined);
+    if (confirmTarget.kind === 'archive') {
+      handleArchiveProjectSession(
+        confirmTarget.projectId,
+        confirmTarget.sessionId,
+      ).catch(() => undefined);
+    }
   };
   const appConfirmDialog = confirmTarget ? (
     <div

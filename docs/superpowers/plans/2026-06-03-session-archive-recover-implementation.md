@@ -526,7 +526,7 @@ git commit -m "feat: add archive recovery service calls"
 - Modify: `app/web/src/main.tsx`
 - Modify: existing UI tests or create `app/__tests__/web-session-archive-ui.test.ts`
 
-- [ ] **Step 1: Write failing UI source tests**
+- [x] **Step 1: Write failing UI source tests**
 
 Add tests asserting the source contains:
 
@@ -545,7 +545,7 @@ Show ${hiddenOlderCount} older
 
 Also assert Archive controls appear before search controls in both desktop and mobile header snippets.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run:
 
@@ -556,7 +556,7 @@ npm test -- web-session-archive-ui.test.ts --runInBand
 
 Expected: missing source markers.
 
-- [ ] **Step 3: Add UI state**
+- [x] **Step 3: Add UI state**
 
 Add state in `main.tsx` near search state:
 
@@ -571,27 +571,27 @@ const [archivedPreview, setArchivedPreview] = useState<RegistrySessionArchiveRea
 const [archivedError, setArchivedError] = useState('');
 ```
 
-- [ ] **Step 4: Add archive menu and batch flow**
+- [x] **Step 4: Add archive menu and batch flow**
 
 Add `renderChatArchiveControls(mobile: boolean)`, `requestArchiveOlderSessions(days)`, and `runArchiveBatch(candidates)`.
 
 `runArchiveBatch` must use a `for...of` loop with `await service.archiveProjectSession(candidate.project.projectId, candidate.session.sessionId)` and must not use `Promise.all`.
 
-- [ ] **Step 5: Add Archived mode flow**
+- [x] **Step 5: Add Archived mode flow**
 
 Add `enterArchivedMode`, `exitArchivedMode`, `loadArchivedSessionPreview`, `requestRestoreArchivedSession`, and `confirmRestoreArchivedSession`.
 
 `enterArchivedMode` calls archive list sequentially across all known projects and clears search state. `loadArchivedSessionPreview` populates only archived preview state. Restore success exits archived mode, refreshes target project sessions, selects the restored normal session, and clears read-only preview.
 
-- [ ] **Step 6: Add older folding to session rows**
+- [x] **Step 6: Add older folding to session rows**
 
 In desktop and mobile session list rendering, call `splitOlderProjectSessions` per Project. Render visible recent rows first, then either the collapsed button or older rows. The collapsed button uses `Show ${hiddenOlderCount} older`; expanded state renders `Show less`.
 
-- [ ] **Step 7: Render read-only preview**
+- [x] **Step 7: Render read-only preview**
 
 When `archivedMode && archivedPreview`, route the right chat body to archived preview turns and hide or disable composer actions. Do not call mark-read, durable selected-chat persistence, prompt send, attachment upload, or cancel for archived preview.
 
-- [ ] **Step 8: Verify GREEN**
+- [x] **Step 8: Verify GREEN**
 
 Run the Task 7 UI source test and a TypeScript check:
 

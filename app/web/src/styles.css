@@ -4831,6 +4831,74 @@ textarea,
   justify-content: flex-end;
 }
 
+.chat-header-archive-control {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.chat-header-archive-control.compact {
+  justify-content: flex-end;
+}
+
+.session-archive-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 95;
+  width: min(196px, calc(100vw - 18px));
+  padding: 5px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 96%, var(--panel-2));
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.34);
+}
+
+.session-archive-progress {
+  margin: 0 4px 8px;
+  padding: 7px 8px;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--panel-2) 78%, transparent);
+  color: var(--muted);
+  display: grid;
+  gap: 5px;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.session-archive-progress-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: color-mix(in srgb, var(--text) 82%, transparent);
+  font-weight: 600;
+}
+
+.session-archive-progress-track {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+.session-archive-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: color-mix(in srgb, #65c27a 72%, var(--accent));
+}
+
+.session-archive-progress-current,
+.session-archive-summary {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .session-search-control.open,
 .chat-header-search-control.open {
   height: 30px;
@@ -4946,6 +5014,89 @@ textarea,
   color: #ff8a8a;
   font-size: 11px;
   line-height: 1.35;
+}
+
+.archived-session-header {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px 6px 7px;
+}
+
+.archived-session-title {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.archived-session-cancel {
+  flex: 0 0 auto;
+  height: 24px;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  padding: 0 8px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.archived-session-cancel:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.archived-session-row-wrap {
+  z-index: 0;
+}
+
+.archived-session-row-wrap.selected {
+  z-index: 2;
+}
+
+.session-state-marker.archived {
+  color: color-mix(in srgb, #75a7df 74%, var(--text));
+  font-size: 11px;
+}
+
+.session-older-toggle {
+  color: color-mix(in srgb, var(--muted) 88%, transparent);
+}
+
+.archived-session-restore-popover {
+  position: absolute;
+  top: 28px;
+  right: 4px;
+  z-index: 8;
+  width: 142px;
+  padding: 5px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 97%, var(--panel-2));
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.3);
+}
+
+.project-session-menu-btn.restore {
+  color: color-mix(in srgb, #65c27a 78%, var(--text));
+}
+
+.archived-session-empty {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.archived-session-error-list {
+  margin-bottom: 8px;
 }
 
 .wide-project-section {
@@ -5769,7 +5920,8 @@ textarea,
 }
 
 .mobile-chat-drawer-header .session-search-control,
-.mobile-chat-drawer-header .chat-header-search-control {
+.mobile-chat-drawer-header .chat-header-search-control,
+.mobile-chat-drawer-header .chat-header-archive-control {
   flex: 1 1 auto;
   min-width: 36px;
   max-width: min(220px, 46vw);
@@ -5777,7 +5929,8 @@ textarea,
 }
 
 .mobile-chat-drawer-header .session-search-control.compact,
-.mobile-chat-drawer-header .chat-header-search-control.compact {
+.mobile-chat-drawer-header .chat-header-search-control.compact,
+.mobile-chat-drawer-header .chat-header-archive-control.compact {
   flex: 0 0 36px;
   width: 36px;
   min-width: 36px;
@@ -5790,7 +5943,8 @@ textarea,
 }
 
 .mobile-chat-drawer-header .session-search-control.compact .session-search-icon-btn,
-.mobile-chat-drawer-header .chat-header-search-control.compact .session-search-icon-btn {
+.mobile-chat-drawer-header .chat-header-search-control.compact .session-search-icon-btn,
+.mobile-chat-drawer-header .chat-header-archive-control.compact .session-search-icon-btn {
   width: 36px;
   height: 36px;
   border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
@@ -5802,8 +5956,13 @@ textarea,
 }
 
 .mobile-chat-drawer-header .session-search-control.compact .session-search-icon-btn .codicon,
-.mobile-chat-drawer-header .chat-header-search-control.compact .session-search-icon-btn .codicon {
+.mobile-chat-drawer-header .chat-header-search-control.compact .session-search-icon-btn .codicon,
+.mobile-chat-drawer-header .chat-header-archive-control.compact .session-search-icon-btn .codicon {
   font-size: 14px;
+}
+
+.mobile-chat-drawer-header .session-archive-menu {
+  top: calc(100% + 8px);
 }
 
 .chat-header-search-wrap.mobile {
