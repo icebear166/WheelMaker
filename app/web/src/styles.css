@@ -5069,7 +5069,7 @@ textarea,
 }
 
 .session-older-toggle {
-  grid-template-columns: 18px minmax(0, 1fr) auto auto;
+  grid-template-columns: 9px minmax(0, 1fr) auto auto;
   color: color-mix(in srgb, var(--muted) 58%, transparent);
 }
 
@@ -5078,20 +5078,16 @@ textarea,
   font-weight: 500;
 }
 
-.session-older-leading {
-  width: 18px;
-  color: color-mix(in srgb, var(--muted) 42%, transparent);
-  font-size: 11px;
-  line-height: 1;
-  text-align: center;
+.session-older-spacer {
+  width: 9px;
+  height: 1px;
 }
 
 .session-older-toggle:hover {
   color: color-mix(in srgb, var(--text) 72%, transparent);
 }
 
-.session-older-toggle:hover .wide-session-title,
-.session-older-toggle:hover .session-older-leading {
+.session-older-toggle:hover .wide-session-title {
   color: color-mix(in srgb, var(--text) 68%, transparent);
 }
 

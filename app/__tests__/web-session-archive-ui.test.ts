@@ -28,20 +28,20 @@ describe('session archive UI source integration', () => {
     expect(main).toContain('readProjectArchivedSession');
     expect(main).toContain('restoreProjectArchivedSession');
     expect(main).toContain('splitOlderProjectSessions');
-    expect(main).toContain('Show ${hiddenOlderCount} older');
+    expect(main).toContain('Show ${hiddenOlderCount} old sessions...');
     expect(main).toContain('for (const candidate of candidates)');
     expect(main).not.toContain('Promise.all(candidates.map');
   });
 
-  test('renders older toggle as a muted session row without chevron icons', () => {
+  test('renders older toggle as a muted session row with old sessions copy', () => {
     const helperStart = main.indexOf('const renderProjectSessionRowsWithOlderFolding = (');
     const helperEnd = main.indexOf('const renderSessionSearchRow = (', helperStart);
     const helperSource = main.slice(helperStart, helperEnd);
 
     expect(helperSource).toContain('session-older-toggle');
-    expect(helperSource).toContain('session-older-leading');
-    expect(helperSource).toContain('...');
-    expect(helperSource).toContain('Show ${hiddenOlderCount} older');
+    expect(helperSource).toContain('session-older-spacer');
+    expect(helperSource).toContain('Show ${hiddenOlderCount} old sessions...');
+    expect(helperSource).not.toContain('session-older-leading');
     expect(helperSource).not.toContain('codicon-chevron-up');
     expect(helperSource).not.toContain('codicon-chevron-down');
   });

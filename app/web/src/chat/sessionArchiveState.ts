@@ -5,6 +5,7 @@ export const OLDER_SESSION_DAYS = 5;
 export const OLDER_SESSIONS_EXPANDED_KEY = 'wheelmaker.chat.olderSessionsExpanded.v1';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const MIN_COLLAPSED_VISIBLE_SESSIONS = 3;
 
 export type OlderProjectSessions = {
   visibleSessions: RegistryChatSession[];
@@ -71,8 +72,7 @@ export function splitOlderProjectSessions(input: {
     }
   }
 
-  const showToggle = older.length > 1;
-  if (!showToggle) {
+  if (older.length <= 1) {
     return {
       visibleSessions: [...recent, ...older],
       hiddenOlderSessions: [],
@@ -90,10 +90,22 @@ export function splitOlderProjectSessions(input: {
       expanded: true,
     };
   }
+  const visibleOlderCount = Math.max(0, MIN_COLLAPSED_VISIBLE_SESSIONS - recent.length);
+  const visibleOlder = older.slice(0, visibleOlderCount);
+  const hiddenOlderSessions = older.slice(visibleOlderCount);
+  if (hiddenOlderSessions.length === 0) {
+    return {
+      visibleSessions: [...recent, ...visibleOlder],
+      hiddenOlderSessions: [],
+      hiddenOlderCount: 0,
+      showToggle: false,
+      expanded: false,
+    };
+  }
   return {
-    visibleSessions: recent,
-    hiddenOlderSessions: older,
-    hiddenOlderCount: older.length,
+    visibleSessions: [...recent, ...visibleOlder],
+    hiddenOlderSessions,
+    hiddenOlderCount: hiddenOlderSessions.length,
     showToggle: true,
     expanded: false,
   };

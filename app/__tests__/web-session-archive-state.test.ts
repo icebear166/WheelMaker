@@ -46,16 +46,36 @@ describe('session archive state helpers', () => {
         session('recent', '2026-06-02T00:00:00.000Z'),
         session('older-a', '2026-05-20T00:00:00.000Z'),
         session('older-b', '2026-05-19T00:00:00.000Z'),
+        session('older-c', '2026-05-18T00:00:00.000Z'),
+        session('older-d', '2026-05-17T00:00:00.000Z'),
       ],
       nowMs,
       olderThanDays: 5,
       expanded: false,
     });
 
-    expect(split.visibleSessions.map(item => item.sessionId)).toEqual(['recent']);
-    expect(split.hiddenOlderSessions.map(item => item.sessionId)).toEqual(['older-a', 'older-b']);
+    expect(split.visibleSessions.map(item => item.sessionId)).toEqual(['recent', 'older-a', 'older-b']);
+    expect(split.hiddenOlderSessions.map(item => item.sessionId)).toEqual(['older-c', 'older-d']);
     expect(split.hiddenOlderCount).toBe(2);
     expect(split.showToggle).toBe(true);
+  });
+
+  test('keeps at least three sessions visible before hiding older sessions', () => {
+    const split = splitOlderProjectSessions({
+      sessions: [
+        session('older-a', '2026-05-20T00:00:00.000Z'),
+        session('older-b', '2026-05-19T00:00:00.000Z'),
+        session('older-c', '2026-05-18T00:00:00.000Z'),
+      ],
+      nowMs,
+      olderThanDays: 5,
+      expanded: false,
+    });
+
+    expect(split.visibleSessions.map(item => item.sessionId)).toEqual(['older-a', 'older-b', 'older-c']);
+    expect(split.hiddenOlderSessions).toEqual([]);
+    expect(split.hiddenOlderCount).toBe(0);
+    expect(split.showToggle).toBe(false);
   });
 
   test('keeps a single older session visible', () => {
