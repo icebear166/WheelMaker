@@ -159,6 +159,14 @@ describe('web runtime setup', () => {
     expect(webpackConfig.optimization.minimizer[0].options.parallel).toBe(false);
   });
 
+  test('production webpack splits the runtime and shared chunks for browser caching', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const webpackConfig = loadWebpackConfig(projectRoot, 'production');
+
+    expect(webpackConfig.optimization.runtimeChunk).toEqual({name: 'runtime'});
+    expect(webpackConfig.optimization.splitChunks).toEqual({chunks: 'all'});
+  });
+
   test('production webpack source maps remain opt-in', () => {
     const projectRoot = path.join(__dirname, '..');
     const previous = process.env.WHEELMAKER_WEB_SOURCEMAP;
@@ -188,20 +196,29 @@ describe('web runtime setup', () => {
     expect(typeof cssPlugin.options.filename).toBe('function');
     expect(typeof cssPlugin.options.chunkFilename).toBe('function');
     const bundleJsName = webpackConfig.output.filename({chunk: {name: 'bundle'}});
+    const runtimeJsName = webpackConfig.output.filename({chunk: {name: 'runtime'}});
+    const vendorJsName = webpackConfig.output.filename({chunk: {name: 'vendors'}});
     const asyncJsName = webpackConfig.output.chunkFilename({chunk: {name: '9452'}});
     const bundleCssName = cssPlugin.options.filename({chunk: {name: 'bundle'}});
+    const vendorCssName = cssPlugin.options.filename({chunk: {name: 'vendors'}});
     const asyncCssName = cssPlugin.options.chunkFilename({chunk: {name: '7955'}});
 
     expect(cssUses.some(item => item.includes('mini-css-extract-plugin'))).toBe(true);
     expect(cssUses).not.toContain('style-loader');
     expect(pluginNames).toContain('MiniCssExtractPlugin');
     expect(bundleJsName).toBe('bundle.[contenthash].js');
+    expect(runtimeJsName).toBe('runtime.[contenthash].js');
+    expect(vendorJsName).toBe('vendors.[contenthash].js');
     expect(asyncJsName).toBe('[name].[contenthash].js');
     expect(webpackConfig.entry).toEqual({bundle: path.resolve(projectRoot, 'web', 'src/main.tsx')});
     expect(bundleCssName).toBe('bundle.[contenthash].css');
+    expect(vendorCssName).toBe('vendors.[contenthash].css');
     expect(asyncCssName).toBe('[name].[contenthash].css');
-    expect(indexHtml).toContain('htmlWebpackPlugin.files.css');
-    expect(indexHtml).toContain('htmlWebpackPlugin.files.js');
+    const htmlPlugin = webpackConfig.plugins.find(plugin => plugin.constructor.name === 'HtmlWebpackPlugin');
+    expect(htmlPlugin.options.inject).toBe('body');
+    expect(indexHtml).not.toContain('htmlWebpackPlugin.files.css');
+    expect(indexHtml).not.toContain('htmlWebpackPlugin.files.js');
+    expect(indexHtml).not.toContain("file.includes('/bundle')");
     expect(indexHtml).not.toContain('href="/bundle.css"');
     expect(indexHtml).not.toContain('src="/bundle.js"');
   });

@@ -10,8 +10,9 @@ function envFlag(value) {
 
 function jsFilename(isProduction) {
   return pathData => {
-    if (isProduction && pathData?.chunk?.name === 'bundle') {
-      return 'bundle.[contenthash].js';
+    if (isProduction) {
+      const chunkName = pathData?.chunk?.name;
+      return chunkName ? `${chunkName}.[contenthash].js` : '[name].[contenthash].js';
     }
     return '[name].js';
   };
@@ -23,8 +24,9 @@ function jsChunkFilename(isProduction) {
 
 function cssFilename(isProduction) {
   return pathData => {
-    if (isProduction && pathData?.chunk?.name === 'bundle') {
-      return 'bundle.[contenthash].css';
+    if (isProduction) {
+      const chunkName = pathData?.chunk?.name;
+      return chunkName ? `${chunkName}.[contenthash].css` : '[name].[contenthash].css';
     }
     return '[name].css';
   };
@@ -89,7 +91,7 @@ module.exports = (_env = {}, argv = {}) => {
     plugins: [
       new HtmlWebpackPlugin({
         template: path.resolve(__dirname, 'public/index.html'),
-        inject: false,
+        inject: 'body',
       }),
       ...(isProduction ? [new MiniCssExtractPlugin({
         filename: cssFilename(isProduction),
@@ -109,6 +111,10 @@ module.exports = (_env = {}, argv = {}) => {
       hints: false,
     },
     optimization: {
+      runtimeChunk: { name: 'runtime' },
+      splitChunks: {
+        chunks: 'all',
+      },
       minimizer: [new TerserPlugin({ parallel: false })],
     },
     devtool: isProduction && !envFlag(process.env.WHEELMAKER_WEB_SOURCEMAP)

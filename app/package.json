@@ -5,6 +5,7 @@
   "scripts": {
     "build:web": "webpack --config web/webpack.config.js --mode production",
     "build:web:release": "npm run build:web && node scripts/export_web_release.js",
+    "report:web-assets": "node scripts/report_web_assets.js",
     "start": "npm run web",
     "test": "jest",
     "tsc:web": "tsc -p web/tsconfig.web.json --noEmit",

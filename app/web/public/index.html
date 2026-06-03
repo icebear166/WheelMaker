@@ -7,16 +7,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <% for (const href of (htmlWebpackPlugin.files.css || []).filter(file => file.includes('/bundle'))) { %>
-    <link rel="stylesheet" href="<%= href %>" />
-    <% } %>
     <title>WheelMaker</title>
   </head>
   <body>
     <div id="root"></div>
-    <% for (const src of (htmlWebpackPlugin.files.js || []).filter(file => file.includes('/bundle'))) { %>
-    <script src="<%= src %>"></script>
-    <% } %>
   </body>
 </html>
 
