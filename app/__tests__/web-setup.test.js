@@ -90,6 +90,24 @@ describe('web runtime setup', () => {
     expect(sw).not.toContain("'/bundle.css'");
     expect(sw).toContain("event.data?.type === 'WM_PWA_NOTIFY'");
     expect(sw).toContain("if (req.mode === 'navigate')");
+    expect(sw).toContain('isImmutableBuildAsset');
+    expect(sw).toContain("url.pathname === '/codicon.ttf'");
+    expect(sw).toContain("event.respondWith(cacheFirst(req));");
+  });
+
+  test('service worker cache-firsts immutable build assets but not navigation or service worker updates', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const sw = fs.readFileSync(
+      path.join(projectRoot, 'web', 'public', 'service-worker.js'),
+      'utf8',
+    );
+
+    expect(sw).toContain('function isImmutableBuildAsset(url)');
+    expect(sw).toContain('/\\.[0-9a-f]{8,}\\./.test(url.pathname)');
+    expect(sw).toContain("['.js', '.css', '.woff', '.woff2', '.ttf', '.svg']");
+    expect(sw).toContain("if (req.mode === 'navigate')");
+    expect(sw).toContain("if (url.pathname.endsWith('/service-worker.js')) return;");
+    expect(sw).not.toContain("cache.addAll(['/', '/index.html']");
   });
 
   test('uses the current WheelMaker brand icon for PWA without hard-linking the shell favicon', () => {
@@ -123,6 +141,37 @@ describe('web runtime setup', () => {
     expect(indexHtml).not.toContain('href="/icons/icon.png"');
     expect(indexHtml).not.toContain('rel="icon"');
     expect(indexHtml).not.toContain('rel="apple-touch-icon"');
+  });
+
+  test('preloads codicons because chat uses icon font classes on the first screen', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const indexHtml = fs.readFileSync(
+      path.join(projectRoot, 'web', 'public', 'index.html'),
+      'utf8',
+    );
+    const mainTsx = fs.readFileSync(
+      path.join(projectRoot, 'web', 'src', 'main.tsx'),
+      'utf8',
+    );
+
+    expect(mainTsx).toContain("import '@vscode/codicons/dist/codicon.css';");
+    expect(indexHtml).toContain('rel="preload"');
+    expect(indexHtml).toContain('as="font"');
+    expect(indexHtml).toContain('href="/codicon.ttf"');
+    expect(indexHtml).toContain('crossorigin');
+  });
+
+  test('webpack emits codicon font at the preload path even when css-loader preserves its query string', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const webpackConfig = loadWebpackConfig(projectRoot, 'production');
+    const assetRule = webpackConfig.module.rules.find(rule => String(rule.test) === String(/\.(woff2?|ttf|eot|svg)$/));
+
+    expect(assetRule.generator.filename({
+      filename: 'node_modules/@vscode/codicons/dist/codicon.ttf?721d4c0a96379d0c13d3d5596893c348',
+    })).toBe('codicon.ttf');
+    expect(assetRule.generator.filename({
+      filename: 'node_modules/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-400-normal.woff2',
+    })).toBe('[hash][ext][query]');
   });
 
   test('webpack output path can be redirected for desktop staging', () => {
@@ -159,12 +208,13 @@ describe('web runtime setup', () => {
     expect(webpackConfig.optimization.minimizer[0].options.parallel).toBe(false);
   });
 
-  test('production webpack splits the runtime and shared chunks for browser caching', () => {
+  test('production webpack keeps chat startup on the app entry instead of automatic initial chunks', () => {
     const projectRoot = path.join(__dirname, '..');
     const webpackConfig = loadWebpackConfig(projectRoot, 'production');
 
-    expect(webpackConfig.optimization.runtimeChunk).toEqual({name: 'runtime'});
-    expect(webpackConfig.optimization.splitChunks).toEqual({chunks: 'all'});
+    expect(webpackConfig.optimization.runtimeChunk).toBeUndefined();
+    expect(webpackConfig.optimization.splitChunks).toBeUndefined();
+    expect(webpackConfig.optimization.minimizer[0].options.parallel).toBe(false);
   });
 
   test('production webpack source maps remain opt-in', () => {
@@ -196,23 +246,17 @@ describe('web runtime setup', () => {
     expect(typeof cssPlugin.options.filename).toBe('function');
     expect(typeof cssPlugin.options.chunkFilename).toBe('function');
     const bundleJsName = webpackConfig.output.filename({chunk: {name: 'bundle'}});
-    const runtimeJsName = webpackConfig.output.filename({chunk: {name: 'runtime'}});
-    const vendorJsName = webpackConfig.output.filename({chunk: {name: 'vendors'}});
-    const asyncJsName = webpackConfig.output.chunkFilename({chunk: {name: '9452'}});
+    const asyncJsName = webpackConfig.output.chunkFilename({chunk: {name: 'settings'}});
     const bundleCssName = cssPlugin.options.filename({chunk: {name: 'bundle'}});
-    const vendorCssName = cssPlugin.options.filename({chunk: {name: 'vendors'}});
-    const asyncCssName = cssPlugin.options.chunkFilename({chunk: {name: '7955'}});
+    const asyncCssName = cssPlugin.options.chunkFilename({chunk: {name: 'settings'}});
 
     expect(cssUses.some(item => item.includes('mini-css-extract-plugin'))).toBe(true);
     expect(cssUses).not.toContain('style-loader');
     expect(pluginNames).toContain('MiniCssExtractPlugin');
     expect(bundleJsName).toBe('bundle.[contenthash].js');
-    expect(runtimeJsName).toBe('runtime.[contenthash].js');
-    expect(vendorJsName).toBe('vendors.[contenthash].js');
     expect(asyncJsName).toBe('[name].[contenthash].js');
     expect(webpackConfig.entry).toEqual({bundle: path.resolve(projectRoot, 'web', 'src/main.tsx')});
     expect(bundleCssName).toBe('bundle.[contenthash].css');
-    expect(vendorCssName).toBe('vendors.[contenthash].css');
     expect(asyncCssName).toBe('[name].[contenthash].css');
     const htmlPlugin = webpackConfig.plugins.find(plugin => plugin.constructor.name === 'HtmlWebpackPlugin');
     expect(htmlPlugin.options.inject).toBe('body');

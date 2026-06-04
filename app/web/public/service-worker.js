@@ -57,6 +57,15 @@ async function cacheFirst(request) {
   return response;
 }
 
+function isImmutableBuildAsset(url) {
+  const extension = url.pathname.slice(url.pathname.lastIndexOf('.'));
+  if (url.pathname === '/codicon.ttf') return true;
+  if (!['.js', '.css', '.woff', '.woff2', '.ttf', '.svg'].includes(extension)) {
+    return false;
+  }
+  return /\.[0-9a-f]{8,}\./.test(url.pathname);
+}
+
 self.addEventListener('message', event => {
   if (event.data === 'SKIP_WAITING') {
     self.skipWaiting();
@@ -120,6 +129,11 @@ self.addEventListener('fetch', event => {
   }
 
   if (url.pathname.startsWith('/icons/')) {
+    event.respondWith(cacheFirst(req));
+    return;
+  }
+
+  if (isImmutableBuildAsset(url)) {
     event.respondWith(cacheFirst(req));
     return;
   }
