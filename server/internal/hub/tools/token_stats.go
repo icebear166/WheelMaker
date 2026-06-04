@@ -496,11 +496,10 @@ type codexAuthProfile struct {
 }
 
 type codexAuthState struct {
-	AccessToken  string
-	RefreshToken string
-	AccountID    string
-	Email        string
-	Plan         string
+	AccessToken string
+	AccountID   string
+	Email       string
+	Plan        string
 }
 
 type copilotProfile struct {
@@ -1294,7 +1293,6 @@ func sanitizeJSONWithLineComments(raw string) string {
 func extractCodexAuthState(auth map[string]any) codexAuthState {
 	tokens, _ := auth["tokens"].(map[string]any)
 	accessToken := strings.TrimSpace(firstStringField(tokens, "access_token", "accessToken"))
-	refreshToken := strings.TrimSpace(firstStringField(tokens, "refresh_token", "refreshToken"))
 	accountID := strings.TrimSpace(firstStringField(tokens, "account_id", "accountId"))
 	email := ""
 	plan := ""
@@ -1313,11 +1311,10 @@ func extractCodexAuthState(auth map[string]any) codexAuthState {
 		plan = strings.TrimSpace(firstStringField(authInfo, "chatgpt_plan_type"))
 	}
 	return codexAuthState{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		AccountID:    accountID,
-		Email:        email,
-		Plan:         normalizePlanLabel(plan),
+		AccessToken: accessToken,
+		AccountID:   accountID,
+		Email:       email,
+		Plan:        normalizePlanLabel(plan),
 	}
 }
 
@@ -1345,23 +1342,10 @@ func (c *tokenScanner) fetchCodexUsageLimits(ctx context.Context, state codexAut
 	}
 	payload, err := c.fetchCodexUsagePayload(ctx, access, state.AccountID)
 	if err != nil {
-		if !strings.Contains(err.Error(), "http 401") || strings.TrimSpace(state.RefreshToken) == "" {
-			return "", "", state.Plan, err
+		if isCodexAuthRejectedError(err) {
+			return "", "", state.Plan, fmt.Errorf("Codex access token was rejected; please re-login with Codex CLI to refresh ~/.codex/auth.json: %w", err)
 		}
-		refreshedAccess, refreshedAccountID, refreshErr := c.refreshCodexAccessToken(ctx, state.RefreshToken)
-		if refreshErr != nil {
-			return "", "", state.Plan, refreshErr
-		}
-		if refreshedAccountID != "" {
-			state.AccountID = refreshedAccountID
-		}
-		if refreshedAccess == "" {
-			return "", "", state.Plan, fmt.Errorf("refresh succeeded but access token is empty")
-		}
-		payload, err = c.fetchCodexUsagePayload(ctx, refreshedAccess, state.AccountID)
-		if err != nil {
-			return "", "", state.Plan, err
-		}
+		return "", "", state.Plan, err
 	}
 	fiveHour, weekly := pickCodexLimits(payload)
 	plan := strings.TrimSpace(state.Plan)
@@ -1402,46 +1386,6 @@ func (c *tokenScanner) fetchCodexUsagePayload(ctx context.Context, accessToken, 
 	return payload, nil
 }
 
-func (c *tokenScanner) refreshCodexAccessToken(ctx context.Context, refreshToken string) (string, string, error) {
-	payload := map[string]string{
-		"client_id":     "app_EMoamEEZ73f0CkXaXp7hrann",
-		"grant_type":    "refresh_token",
-		"refresh_token": strings.TrimSpace(refreshToken),
-	}
-	body, _ := json.Marshal(payload)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://auth.openai.com/oauth/token", strings.NewReader(string(body)))
-	if err != nil {
-		return "", "", fmt.Errorf("build refresh request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "codex-cli")
-	res, err := c.httpClient.Do(req)
-	if err != nil {
-		return "", "", fmt.Errorf("refresh access token: %w", err)
-	}
-	defer res.Body.Close()
-	responseBody, _ := io.ReadAll(io.LimitReader(res.Body, 2<<20))
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		msg := strings.TrimSpace(string(responseBody))
-		if msg == "" {
-			msg = res.Status
-		}
-		return "", "", fmt.Errorf("refresh token request failed: http %d %s", res.StatusCode, msg)
-	}
-	var out map[string]any
-	if err := json.Unmarshal(responseBody, &out); err != nil {
-		return "", "", fmt.Errorf("decode refresh token response: %w", err)
-	}
-	accessToken := strings.TrimSpace(firstStringField(out, "access_token", "accessToken"))
-	accountID := strings.TrimSpace(firstStringField(out, "account_id", "accountId"))
-	if accountID == "" {
-		claims := decodeJWTPayload(accessToken)
-		authInfo, _ := claims["https://api.openai.com/auth"].(map[string]any)
-		accountID = strings.TrimSpace(firstStringField(authInfo, "chatgpt_account_id"))
-	}
-	return accessToken, accountID, nil
-}
-
 func pickCodexLimits(payload map[string]any) (string, string) {
 	rateLimit, _ := payload["rate_limit"].(map[string]any)
 	primary, _ := rateLimit["primary_window"].(map[string]any)
@@ -1466,6 +1410,14 @@ func pickCodexLimits(payload map[string]any) (string, string) {
 		}
 	}
 	return formatCodexWindow(primary), formatCodexWindow(weeklyWindow)
+}
+
+func isCodexAuthRejectedError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "http 401") || strings.Contains(msg, "http 403")
 }
 
 func formatCodexWindow(window map[string]any) string {

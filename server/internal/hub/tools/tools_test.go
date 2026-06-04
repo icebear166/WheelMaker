@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -14,6 +16,12 @@ import (
 
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
 
 func TestManagerRoutesToolCommands(t *testing.T) {
 	manager := NewManager(ManagerConfig{HubID: "hub-a", MonitorBaseDir: t.TempDir()})
@@ -1070,6 +1078,55 @@ func TestTokenCommandScanUsesHubLevelScanner(t *testing.T) {
 	}
 	if body["hubId"] != "hub-token" || body["ok"] != true {
 		t.Fatalf("payload=%#v", body)
+	}
+}
+
+func TestFetchCodexUsageLimitsDoesNotRefreshRejectedAccessToken(t *testing.T) {
+	calls := make([]string, 0, 2)
+	scanner := &tokenScanner{
+		httpClient: &http.Client{
+			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				calls = append(calls, req.Method+" "+req.URL.String())
+				if req.URL.String() == "https://chatgpt.com/backend-api/wham/usage" {
+					return &http.Response{
+						StatusCode: http.StatusUnauthorized,
+						Status:     "401 Unauthorized",
+						Header:     make(http.Header),
+						Body:       io.NopCloser(strings.NewReader(`{"error":"expired"}`)),
+						Request:    req,
+					}, nil
+				}
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Status:     "200 OK",
+					Header:     make(http.Header),
+					Body:       io.NopCloser(strings.NewReader(`{}`)),
+					Request:    req,
+				}, nil
+			}),
+		},
+	}
+
+	state := extractCodexAuthState(map[string]any{
+		"tokens": map[string]any{
+			"access_token":  "expired-access",
+			"refresh_token": "single-use-refresh",
+			"account_id":    "acc-1",
+		},
+	})
+	_, _, _, err := scanner.fetchCodexUsageLimits(context.Background(), state)
+
+	if err == nil {
+		t.Fatal("fetchCodexUsageLimits error=nil, want rejected access token error")
+	}
+	if !strings.Contains(err.Error(), "Codex access token was rejected") {
+		t.Fatalf("error=%q, want re-login guidance", err.Error())
+	}
+	if len(calls) != 1 {
+		t.Fatalf("http calls=%v, want only usage request", calls)
+	}
+	if calls[0] != "GET https://chatgpt.com/backend-api/wham/usage" {
+		t.Fatalf("http calls=%v, want usage request only", calls)
 	}
 }
 
