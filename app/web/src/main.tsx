@@ -2521,7 +2521,6 @@ type MarkdownPreviewProps = {
 
 type HtmlPreviewProps = {
   content: string;
-  scriptsEnabled: boolean;
   targetLine?: number | null;
 };
 
@@ -2776,7 +2775,6 @@ const MarkdownPreview = React.memo(function MarkdownPreview({
 
 const HtmlPreview = React.memo(function HtmlPreview({
   content,
-  scriptsEnabled,
   targetLine,
 }: HtmlPreviewProps) {
   return (
@@ -2784,7 +2782,7 @@ const HtmlPreview = React.memo(function HtmlPreview({
       <iframe
         className="html-preview-frame"
         title="HTML preview"
-        sandbox={scriptsEnabled ? 'allow-scripts' : ''}
+        sandbox="allow-scripts"
         srcDoc={content}
         onLoad={event => scrollHtmlPreviewFrameToLine(event.currentTarget, content, targetLine)}
       />
@@ -3528,7 +3526,6 @@ function App() {
   const [gotoToolsOpen, setGotoToolsOpen] = useState(false);
   const [markdownPreviewEnabled, setMarkdownPreviewEnabled] = useState(false);
   const [htmlPreviewEnabled, setHtmlPreviewEnabled] = useState(false);
-  const [htmlPreviewScriptsEnabled, setHtmlPreviewScriptsEnabled] = useState(false);
   const fileScrollRef = useRef<HTMLDivElement | null>(null);
   const [chatFilePeek, setChatFilePeek] = useState<ChatFilePeekState | null>(null);
   const chatFilePeekRef = useRef<ChatFilePeekState | null>(null);
@@ -5585,7 +5582,6 @@ function App() {
   useEffect(() => {
     setMarkdownPreviewEnabled(isMarkdownPath(selectedFile));
     setHtmlPreviewEnabled(isHtmlPath(selectedFile));
-    setHtmlPreviewScriptsEnabled(false);
   }, [selectedFile]);
   useEffect(() => {
     setAllowHeavyDiffLoad(false);
@@ -15658,23 +15654,6 @@ function App() {
           <span className="html-preview-toggle-text">HTML</span>
         </button>
       ) : null}
-      {selectedFileIsHtml && htmlPreviewEnabled ? (
-        <button
-          type="button"
-          className={`view-tool html-script-toggle ${
-            htmlPreviewScriptsEnabled ? 'active' : ''
-          }`}
-          onClick={() => setHtmlPreviewScriptsEnabled(value => !value)}
-          title={
-            htmlPreviewScriptsEnabled
-              ? 'Disable HTML scripts'
-              : 'Enable HTML scripts'
-          }
-          aria-label="Toggle HTML scripts"
-        >
-          <span className="codicon codicon-run-all view-tool-icon" />
-        </button>
-      ) : null}
       <button
         type="button"
         className={`view-tool ${wrapLines ? 'active' : ''}`}
@@ -16252,7 +16231,6 @@ function App() {
       return (
         <HtmlPreview
           content={chatFilePeek.content}
-          scriptsEnabled={htmlPreviewScriptsEnabled}
           targetLine={chatFilePeek.targetLine}
         />
       );
@@ -17279,11 +17257,8 @@ function App() {
                     />
                   ) : selectedFileIsHtml && htmlPreviewEnabled ? (
                     <HtmlPreview
-                      key={`${selectedFile}:${
-                        htmlPreviewScriptsEnabled ? 'scripts' : 'static'
-                      }`}
+                      key={selectedFile}
                       content={fileContent}
-                      scriptsEnabled={htmlPreviewScriptsEnabled}
                     />
                   ) : (
                     renderCodePane(
