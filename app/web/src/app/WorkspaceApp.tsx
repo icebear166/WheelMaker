@@ -16326,7 +16326,8 @@ export function App() {
     </nav>
   ) : null;
 
-  const chatQuickSwitchMenu = chatQuickSwitchMenuOpen && tab === 'chat' && !sidebarSettingsOpen && !mobilePortRelayFrameOpen && !chatPreviewOpen ? (
+  const chatQuickSwitchMenuBlockedByPreview = chatPreviewOpen && (chatQuickSwitchMenuPlacement.kind !== 'desktop' || !isWide);
+  const chatQuickSwitchMenu = chatQuickSwitchMenuOpen && tab === 'chat' && !sidebarSettingsOpen && !mobilePortRelayFrameOpen && !chatQuickSwitchMenuBlockedByPreview ? (
     <ChatQuickSwitchMenu
       ref={chatQuickSwitchMenuRef}
       sections={mobileChatQuickSwitchSections}

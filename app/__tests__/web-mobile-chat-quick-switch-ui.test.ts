@@ -42,7 +42,10 @@ describe('mobile chat quick switch UI source structure', () => {
     expect(mainTsx).toContain('onContextMenu={handleChatQuickSwitchContextMenu}');
     expect(mainTsx).toContain("if (chatQuickSwitchMenuPlacement.kind === 'desktop') {");
     expect(mainTsx).toContain('setChatQuickSwitchMenuOpen(false);');
-    expect(mainTsx).toContain('const chatQuickSwitchMenu = chatQuickSwitchMenuOpen && tab === \'chat\' && !sidebarSettingsOpen && !mobilePortRelayFrameOpen && !chatPreviewOpen ? (');
+    expect(mainTsx).toContain(
+      'const chatQuickSwitchMenuBlockedByPreview = chatPreviewOpen && (chatQuickSwitchMenuPlacement.kind !== \'desktop\' || !isWide);',
+    );
+    expect(mainTsx).toContain('const chatQuickSwitchMenu = chatQuickSwitchMenuOpen && tab === \'chat\' && !sidebarSettingsOpen && !mobilePortRelayFrameOpen && !chatQuickSwitchMenuBlockedByPreview ? (');
     expect(mainTsx).toContain('<ChatQuickSwitchMenu');
     expect(mainTsx).toContain('placement={chatQuickSwitchMenuPlacement.kind}');
     expect(quickSwitchMenuTsx).toContain('className="chat-quick-switch-menu"');
