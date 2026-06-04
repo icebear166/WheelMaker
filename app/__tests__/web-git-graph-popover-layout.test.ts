@@ -4,17 +4,17 @@ import path from 'path';
 describe('web git graph popover layout', () => {
   test('uses centered/stretched graph axis and responsive desktop/mobile popover policy', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const gitSidebarTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'git', 'GitSidebar.tsx'), 'utf8');
     const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
 
-    expect(mainTsx).toContain('if (isWide) {');
-    expect(mainTsx).toContain('Math.max(320, Math.round(window.innerWidth * 0.42))');
-    expect(mainTsx).toContain('Math.round(window.innerWidth * 0.92)');
-    expect(mainTsx).toContain(").closest('.list');");
-    expect(mainTsx).toContain('const panelMidY = panelRect');
-    expect(mainTsx).toContain('const topZoneY = panelRect');
-    expect(mainTsx).toContain('const bottomZoneY = panelRect');
-    expect(mainTsx).toContain('y = preferBelow ? bottomZoneY : topZoneY;');
+    expect(gitSidebarTsx).toContain('if (isWide) {');
+    expect(gitSidebarTsx).toContain('Math.max(320, Math.round(window.innerWidth * 0.42))');
+    expect(gitSidebarTsx).toContain('Math.round(window.innerWidth * 0.92)');
+    expect(gitSidebarTsx).toContain(").closest('.list');");
+    expect(gitSidebarTsx).toContain('const panelMidY = panelRect');
+    expect(gitSidebarTsx).toContain('const topZoneY = panelRect');
+    expect(gitSidebarTsx).toContain('const bottomZoneY = panelRect');
+    expect(gitSidebarTsx).toContain('y = preferBelow ? bottomZoneY : topZoneY;');
 
     expect(stylesCss).toMatch(/\.git-worktree-row\s*\{\s*margin-top:\s*0;/);
     expect(stylesCss).toMatch(/\.git-commit-row\s*\{\s*margin-top:\s*0;/);

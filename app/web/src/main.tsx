@@ -891,6 +891,52 @@ function loadShikiRenderer(): Promise<typeof import('./services/shikiRenderer')>
   return shikiRendererModulePromise;
 }
 
+function preloadShikiRenderer(): void {
+  loadShikiRenderer().catch(() => undefined);
+}
+
+function escapeFallbackHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+
+function renderPlainCodeFallbackHtml({
+  content,
+  wrap,
+  lineNumbers,
+  codeFont,
+  codeFontSize,
+  codeLineHeight,
+  codeTabSize,
+}: Pick<ShikiCodeBlockProps, 'content' | 'wrap' | 'lineNumbers' | 'codeFont' | 'codeFontSize' | 'codeLineHeight' | 'codeTabSize'>): string {
+  const fontFamily = resolveCodeFontFamily(codeFont);
+  const fontSize = `${codeFontSize}px`;
+  const preClassName = `wm-shiki-pre ${wrap ? 'wm-shiki-wrap' : 'wm-shiki-nowrap'}`;
+  const preStyle = `margin:0;padding:0;border-radius:0;white-space:normal;overflow-x:${wrap ? 'hidden' : 'auto'};font-family:${fontFamily};font-size:${fontSize};line-height:${codeLineHeight};`;
+  const codeStyle = wrap
+    ? `display:block;min-width:100%;white-space:normal;tab-size:${codeTabSize};`
+    : `display:block;min-width:100%;width:max-content;white-space:normal;tab-size:${codeTabSize};`;
+  const lineContentStyle = wrap
+    ? `display:block;min-width:0;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;tab-size:${codeTabSize};font-family:${fontFamily};font-size:${fontSize};line-height:${codeLineHeight};`
+    : `display:block;min-width:0;white-space:pre;tab-size:${codeTabSize};font-family:${fontFamily};font-size:${fontSize};line-height:${codeLineHeight};`;
+  const escapedContent = escapeFallbackHtml(content || ' ');
+
+  if (!lineNumbers) {
+    return `<pre class="${preClassName}" data-shiki-fallback="true" style="${preStyle}"><code class="wm-shiki-code" style="${codeStyle}"><span class="wm-shiki-line-content" style="${lineContentStyle}">${escapedContent}</span></code></pre>`;
+  }
+
+  const lines = (content || ' ').split('\n');
+  const renderedLines = lines.map((line, index) => {
+    const lineNumber = String(index + 1);
+    const escapedLine = escapeFallbackHtml(line || ' ');
+    return `<span data-line="${lineNumber}" data-line-number="${lineNumber}" style="display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start;"><span class="wm-shiki-line-number" aria-hidden="true" style="display:inline-block;min-width:3.5em;padding-right:1em;text-align:right;user-select:none;color:var(--muted);opacity:0.75;">${lineNumber}</span><span class="wm-shiki-line-content" style="${lineContentStyle}">${escapedLine}</span></span>`;
+  }).join('');
+
+  return `<pre class="${preClassName}" data-shiki-fallback="true" style="${preStyle}"><code class="wm-shiki-code" style="${codeStyle}">${renderedLines}</code></pre>`;
+}
+
 function markdownNeedsMath(content: string): boolean {
   return markdownMathPattern.test(content);
 }
@@ -2319,9 +2365,32 @@ function ShikiCodeBlock({
   codeTabSize,
 }: ShikiCodeBlockProps) {
   const [html, setHtml] = useState('');
+  const [renderFailed, setRenderFailed] = useState(false);
+  const fallbackHtml = useMemo(
+    () => renderPlainCodeFallbackHtml({
+      content,
+      wrap,
+      lineNumbers,
+      codeFont,
+      codeFontSize,
+      codeLineHeight,
+      codeTabSize,
+    }),
+    [
+      content,
+      wrap,
+      lineNumbers,
+      codeFont,
+      codeFontSize,
+      codeLineHeight,
+      codeTabSize,
+    ],
+  );
 
   useEffect(() => {
     let cancelled = false;
+    setHtml('');
+    setRenderFailed(false);
     (async () => {
       const { renderShikiHtml } = await loadShikiRenderer();
       const nextHtml = await renderShikiHtml({
@@ -2340,7 +2409,12 @@ function ShikiCodeBlock({
       if (!cancelled) {
         setHtml(nextHtml);
       }
-    })();
+    })().catch(() => {
+      if (!cancelled) {
+        setHtml('');
+        setRenderFailed(true);
+      }
+    });
     return () => {
       cancelled = true;
     };
@@ -2360,8 +2434,9 @@ function ShikiCodeBlock({
   return (
     <div
       className={`code-wrap ${wrap ? 'wrap' : 'nowrap'}`}
-      data-markdown-export-pending={html ? undefined : 'true'}
-      dangerouslySetInnerHTML={{ __html: html || '<pre><code> </code></pre>' }}
+      data-markdown-export-pending={html || renderFailed ? undefined : 'true'}
+      data-shiki-render-failed={renderFailed ? 'true' : undefined}
+      dangerouslySetInnerHTML={{ __html: html || fallbackHtml }}
     />
   );
 }
@@ -6090,6 +6165,21 @@ function App() {
     const projectTitle = currentProjectTitle;
     document.title = projectTitle ? `${baseTitle} - ${projectTitle}` : baseTitle;
   }, [currentProjectTitle]);
+  useEffect(() => {
+    const startPreload = () => {
+      preloadShikiRenderer();
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      const idleId = window.requestIdleCallback(startPreload, {timeout: 2500});
+      return () => {
+        window.cancelIdleCallback?.(idleId);
+      };
+    }
+    const timer = window.setTimeout(startPreload, 800);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, []);
   const project = currentProject;
   const breadcrumbProjectName = useMemo(
     () => (currentProjectName || '').trim() || 'Project',
