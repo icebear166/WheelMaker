@@ -670,3 +670,8 @@ git commit -m "Document frontend structure migration status"
 - Spec coverage: The plan covers shell/platform split, mobile shell helpers, Android/PWA adapters, notification split, debug Settings surface, registry/workspace split, Settings helpers, Chat/Port Relay helpers, and main bootstrap extraction from the review map.
 - Placeholder scan: No task contains `TBD`, `TODO`, or an unspecified "write tests" step.
 - Type consistency: Directory names match the review map: `shell/layouts/*`, `platform/*`, `chat/notifications/*`, and generic `notifications/*`.
+
+## Execution Status
+
+- 2026-06-04: Tasks 1-8 are complete and verified on `frontend-structure-map`.
+- Next task: Task 9, `main.tsx` bootstrap extraction. Keep this as a separate execution slice because it moves a large App body and has broader structural-test impact.
