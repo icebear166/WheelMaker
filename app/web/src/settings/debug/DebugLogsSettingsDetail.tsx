@@ -9,13 +9,13 @@ import {
   type AppDiagnosticCategory,
   type AppDiagnosticLogLevel,
   type AppDiagnosticRecord,
-} from './appDiagnostics';
-import {drainNativeWebDiagnosticsToAppLog} from './nativeWebDiagnostics';
-import {startWorkspaceDiagnosticSpan} from './workspaceDiagnostics';
+} from '../../debug/appDiagnostics';
+import {drainNativeWebDiagnosticsToAppLog} from '../../debug/nativeWebDiagnostics';
+import {startWorkspaceDiagnosticSpan} from '../../debug/workspaceDiagnostics';
 import type {
   RegistryDebugUploadLogPayload,
   RegistryDebugUploadLogResponse,
-} from '../types/registry';
+} from '../../types/registry';
 
 type DebugLogsSettingsDetailProps = {
   logLevel: AppDiagnosticLogLevel;

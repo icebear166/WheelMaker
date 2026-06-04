@@ -6,4 +6,4 @@ export { PortRelaySettingsDetail } from './PortRelaySettingsDetail';
 export { SkillsSettingsDetail } from './SkillsSettingsDetail';
 export { TokenStatsSettingsDetail } from './TokenStatsSettingsDetail';
 export { UpdateSettingsDetail } from './UpdateSettingsDetail';
-export { DebugLogsSettingsDetail } from '../debug/DebugLogsSettingsDetail';
+export { DebugLogsSettingsDetail } from './debug/DebugLogsSettingsDetail';

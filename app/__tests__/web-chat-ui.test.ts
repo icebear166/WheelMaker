@@ -1551,7 +1551,7 @@ describe('web chat integration', () => {
     expect(settingsBundleTs).toContain("export { SettingsRootContent } from './SettingsRootContent';");
     expect(settingsBundleTs).toContain("export { DatabaseSettingsDetail } from './DatabaseSettingsDetail';");
     expect(settingsBundleTs).toContain("export { UpdateSettingsDetail } from './UpdateSettingsDetail';");
-    expect(settingsBundleTs).toContain("export { DebugLogsSettingsDetail } from '../debug/DebugLogsSettingsDetail';");
+    expect(settingsBundleTs).toContain("export { DebugLogsSettingsDetail } from './debug/DebugLogsSettingsDetail';");
     expect(settingsRootTsx).toContain('function renderSettingsSection');
     expect(settingsRootTsx).toContain("renderSettingsSection('Appearance'");
     expect(settingsRootTsx).toContain('Inactive Visibility');

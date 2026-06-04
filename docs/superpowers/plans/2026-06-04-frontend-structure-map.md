@@ -371,7 +371,7 @@ npm run tsc:web
 
 Expected: targeted tests PASS and TypeScript exits 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add -A
@@ -387,16 +387,16 @@ git commit -m "Separate notification provider from chat policy"
 - Modify: `app/web/src/settings/SettingsBundle.ts`
 - Modify tests that assert debug settings paths.
 
-- [ ] **Step 1: Run baseline targeted tests**
+- [x] **Step 1: Run baseline targeted tests**
 
 ```powershell
 cd app
-npm test -- --runInBand web-registry-debug-settings.test.ts web-registry-debug-panel-ui.test.ts web-app-diagnostics.test.ts
+npm test -- --runInBand web-registry-debug-settings.test.ts web-registry-debug-panel-ui.test.ts web-app-diagnostics.test.ts web-chat-ui.test.ts
 ```
 
 Expected: PASS.
 
-- [ ] **Step 2: Move file and update imports**
+- [x] **Step 2: Move file and update imports**
 
 ```powershell
 New-Item -ItemType Directory -Force -Path app/web/src/settings/debug
@@ -423,7 +423,7 @@ with:
 export { DebugLogsSettingsDetail } from './debug/DebugLogsSettingsDetail';
 ```
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 ```powershell
 cd app
