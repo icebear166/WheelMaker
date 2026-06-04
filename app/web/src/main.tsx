@@ -42,6 +42,12 @@ import {
   type DesktopWebSourceState,
 } from './shell/desktop/webSource';
 import {isNativeShellHost} from './shell/native/webSource';
+import {
+  AppConfirmDialog,
+  AppRenameDialog,
+  type ConfirmTarget,
+  type RenameSessionTarget,
+} from './shell/AppDialogs';
 import { ResponsiveShell } from './shell/ResponsiveShell';
 import {
   getLatestSessionReadCursor,
@@ -453,83 +459,6 @@ type ProjectSessionActionMenuState = {
 type ChatQuickSwitchMenuPlacement =
   | {kind: 'mobile'}
   | {kind: 'desktop'; style: React.CSSProperties};
-type RenameSessionTarget = {
-  projectId: string;
-  sessionId: string;
-  title: string;
-};
-type ConfirmTarget =
-  | {
-      kind: 'archive';
-      projectId: string;
-      sessionId: string;
-      title: string;
-    }
-  | {
-      kind: 'archiveBatch';
-      days: number;
-      candidates: ArchiveCandidate[];
-    }
-  | {
-      kind: 'restoreArchived';
-      projectId: string;
-      sessionId: string;
-      title: string;
-    }
-  | {
-      kind: 'delete';
-      projectId: string;
-      sessionId: string;
-      title: string;
-    }
-  | {kind: 'clearCache'}
-  | {
-      kind: 'npmPackage';
-      action: 'install' | 'update' | 'uninstall';
-      hubId: string;
-      packageName: string;
-      displayName: string;
-      installedVersion: string;
-      latestVersion: string;
-    }
-  | {
-      kind: 'npmPackageHubUpdate';
-      hubId: string;
-      packages: NpmPackageUpdateTarget[];
-    }
-  | {
-      kind: 'wheelMakerUpdate';
-      hubId: string;
-      currentSha: string;
-      latestSha: string;
-      behindCount: number;
-    }
-  | {
-      kind: 'wheelMakerUpdateAll';
-      hubIds: string[];
-    }
-  | {
-      kind: 'skillInstall';
-      hubId: string;
-      scope: RegistrySkillScope;
-      projectName?: string;
-      source: string;
-      skills: string[];
-    }
-  | {
-      kind: 'skillUninstall';
-      hubId: string;
-      scope: RegistrySkillScope;
-      projectName?: string;
-      skillName: string;
-    }
-  | {
-      kind: 'skillUpdate';
-      hubId: string;
-      scope: RegistrySkillScope;
-      projectName?: string;
-      includeProjects?: boolean;
-    };
 type SettingsDetailView = SettingsDetailId | null;
 type ActiveSettingsDetailView = SettingsDetailId;
 type SettingsDetailShellOptions = {
@@ -18603,125 +18532,6 @@ function App() {
                   : skillConfirmTarget
                     ? skillsPendingKey === skillConfirmPendingKey
                     : false;
-  const confirmTitle = confirmTarget?.kind === 'clearCache'
-    ? 'Clear local cache?'
-    : archiveBatchTarget
-      ? `Archive sessions older than ${archiveBatchTarget.days} days?`
-      : restoreArchivedTarget
-        ? 'Restore archived session?'
-        : deleteTarget
-          ? 'Delete session?'
-          : npmPackageTarget
-            ? `${agentPackageActionLabel(npmPackageTarget.action)} package?`
-            : npmPackageHubUpdateTarget
-              ? 'Update npm packages?'
-              : wheelMakerUpdateTarget
-                ? 'Update and publish WheelMaker?'
-                : wheelMakerUpdateAllTarget
-                  ? 'Update all hubs?'
-                  : skillInstallConfirmTarget
-                    ? 'Install skills?'
-                    : skillUninstallConfirmTarget
-                      ? 'Uninstall skill?'
-                      : skillUpdateConfirmTarget
-                        ? 'Update skills?'
-                        : 'Archive session?';
-  const confirmName = confirmTarget?.kind === 'clearCache'
-    ? 'Token and server address will be preserved.'
-    : archiveBatchTarget
-      ? `${archiveBatchTarget.candidates.length} sessions`
-      : restoreArchivedTarget
-        ? restoreArchivedTarget.title || 'Untitled session'
-        : deleteTarget
-          ? deleteTarget.title || 'Untitled session'
-          : npmPackageTarget
-            ? npmPackageTarget.displayName || npmPackageTarget.packageName
-            : npmPackageHubUpdateTarget
-              ? `${npmPackageHubUpdateTarget.hubId} - ${npmPackageUpdateSummary(npmPackageHubUpdateTarget.packages.length)}`
-              : wheelMakerUpdateTarget
-                ? `Hub: ${wheelMakerUpdateTarget.hubId}`
-                : wheelMakerUpdateAllTarget
-                  ? `${wheelMakerUpdateAllTarget.hubIds.length} hubs`
-                  : skillInstallConfirmTarget
-                    ? skillScopeLabel(skillInstallConfirmTarget)
-                    : skillUninstallConfirmTarget
-                      ? skillUninstallConfirmTarget.skillName
-                      : skillUpdateConfirmTarget
-                        ? skillScopeLabel(skillUpdateConfirmTarget)
-                        : archiveTarget?.title || 'Untitled session';
-  const confirmCopy = confirmTarget?.kind === 'clearCache'
-    ? 'The app will reload after local cached workspace data is cleared.'
-    : archiveBatchTarget
-      ? 'Runs one archive call at a time across all known projects. Running sessions are skipped.'
-      : restoreArchivedTarget
-        ? 'The session returns to its project and opens after restore.'
-        : deleteTarget
-          ? 'This permanently deletes the session data from the Hub.'
-          : npmPackageTarget
-            ? `Hub: ${npmPackageTarget.hubId}. Package: ${npmPackageTarget.packageName}. Installed: ${npmPackageTarget.installedVersion || '-'}. Target: ${npmPackageTarget.action === 'uninstall' ? 'remove deprecated package' : npmPackageTarget.latestVersion || 'latest'}. Restart WheelMaker or start a new agent session for changes to take effect.`
-            : npmPackageHubUpdateTarget
-              ? `Runs latest install/update for ${npmPackageHubUpdateTarget.packages.map(pkg => pkg.displayName || pkg.packageName).join(', ')}. Restart WheelMaker or start a new agent session for changes to take effect.`
-              : wheelMakerUpdateTarget
-                ? `Current: ${shortGitSha(wheelMakerUpdateTarget.currentSha)}. Latest: ${shortGitSha(wheelMakerUpdateTarget.latestSha)}. ${wheelMakerUpdateTarget.behindCount > 0 ? `${wheelMakerUpdateTarget.behindCount} commits behind. ` : ''}This writes a full-update signal; updater will pull, build, publish Web, and restart Hub/Monitor. Updater itself is not restarted.`
-                : wheelMakerUpdateAllTarget
-                  ? `This sends update-publish to ${wheelMakerUpdateAllTarget.hubIds.length} hubs. Each hub may pull, build, publish Web, and restart independently.`
-                  : skillInstallConfirmTarget
-                    ? `Source: ${skillInstallConfirmTarget.source}. Skills: ${skillInstallConfirmTarget.skills.join(', ')}.`
-                    : skillUninstallConfirmTarget
-                      ? `Remove from ${skillScopeLabel(skillUninstallConfirmTarget)}.`
-                      : skillUpdateConfirmTarget
-                        ? skillUpdateConfirmTarget.includeProjects
-                          ? 'Updates Hub Skills and online Project Skills on this Hub.'
-                          : `Updates installed skills in ${skillScopeLabel(skillUpdateConfirmTarget)}.`
-                        : 'Archived sessions leave the chat list.';
-  const confirmIcon = confirmTarget?.kind === 'clearCache'
-    ? 'codicon-trash'
-    : restoreArchivedTarget
-      ? 'codicon-debug-restart'
-      : deleteTarget
-        ? 'codicon-trash'
-        : npmPackageTarget
-          ? npmPackageTarget.action === 'uninstall' ? 'codicon-trash' : 'codicon-cloud-download'
-          : npmPackageHubUpdateTarget
-            ? 'codicon-cloud-download'
-            : wheelMakerUpdateTarget
-              ? 'codicon-cloud-download'
-              : wheelMakerUpdateAllTarget
-                ? 'codicon-cloud-download'
-                : skillInstallConfirmTarget
-                  ? 'codicon-cloud-download'
-                  : skillUninstallConfirmTarget
-                    ? 'codicon-trash'
-                    : skillUpdateConfirmTarget
-                      ? 'codicon-sync'
-                      : 'codicon-archive';
-  const confirmPrimaryLabel = confirmTarget?.kind === 'clearCache'
-    ? 'Clear Cache'
-    : restoreArchivedTarget
-      ? 'Restore'
-      : deleteTarget
-        ? 'Delete'
-        : npmPackageTarget
-          ? agentPackageActionLabel(npmPackageTarget.action)
-          : npmPackageHubUpdateTarget
-            ? 'Update'
-            : wheelMakerUpdateTarget
-              ? 'Update'
-              : wheelMakerUpdateAllTarget
-                ? 'Update'
-                : skillInstallConfirmTarget
-                  ? 'Install'
-                  : skillUninstallConfirmTarget
-                    ? 'Uninstall'
-                    : skillUpdateConfirmTarget
-                      ? 'Update'
-                      : 'Archive';
-  const confirmPrimaryClassName = confirmTarget?.kind === 'clearCache' || !!deleteTarget || npmPackageTarget?.action === 'uninstall' || !!skillUninstallConfirmTarget
-    ? 'app-confirm-btn primary danger'
-    : 'app-confirm-btn primary';
-  const confirmIconClassName = confirmTarget?.kind === 'clearCache' || !!deleteTarget || npmPackageTarget?.action === 'uninstall' || !!skillUninstallConfirmTarget
-    ? 'app-confirm-icon danger'
-    : 'app-confirm-icon';
   const handleConfirmPrimary = () => {
     if (!confirmTarget) {
       return;
@@ -18775,68 +18585,6 @@ function App() {
       ).catch(() => undefined);
     }
   };
-  const appConfirmDialog = confirmTarget ? (
-    <div
-      className="app-confirm-backdrop"
-      role="presentation"
-      onPointerDown={() => {
-        if (!confirmBusy) {
-          setConfirmError('');
-          setConfirmTarget(null);
-        }
-      }}
-    >
-      <div
-        className="app-confirm-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="app-confirm-title"
-        onPointerDown={event => event.stopPropagation()}
-      >
-        <div className={confirmIconClassName}>
-          <span className={`codicon ${confirmIcon}`} />
-        </div>
-        <div className="app-confirm-content">
-          <div id="app-confirm-title" className="app-confirm-title">
-            {confirmTitle}
-          </div>
-          <div className="app-confirm-name">{confirmName}</div>
-          <div className="app-confirm-copy">{confirmCopy}</div>
-          {confirmError ? (
-            <div className="app-confirm-error">{confirmError}</div>
-          ) : null}
-        </div>
-        <div className="app-confirm-actions">
-          <button
-            type="button"
-            className="app-confirm-btn secondary"
-            disabled={confirmBusy}
-            onClick={() => {
-              setConfirmError('');
-              setConfirmTarget(null);
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            className={confirmPrimaryClassName}
-            disabled={confirmBusy}
-            onClick={handleConfirmPrimary}
-          >
-            <span
-              className={`codicon ${
-                confirmBusy
-                  ? 'codicon-loading codicon-modifier-spin'
-                  : confirmIcon
-              }`}
-            />
-            {confirmPrimaryLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  ) : null;
   const renameBusy = !!renameTarget && chatRenamingSessionId === renameTarget.sessionId;
   const submitRenameTarget = () => {
     if (!renameTarget || renameBusy) {
@@ -18848,90 +18596,33 @@ function App() {
       renameTitleDraft,
     ).catch(() => undefined);
   };
-  const appRenameDialog = renameTarget ? (
-    <div
-      className="app-confirm-backdrop"
-      role="presentation"
-      onPointerDown={() => {
-        if (!renameBusy) {
-          setRenameError('');
-          setRenameTarget(null);
-          setRenameTitleDraft('');
-        }
+  const appConfirmDialog = (
+    <AppConfirmDialog
+      target={confirmTarget}
+      busy={confirmBusy}
+      error={confirmError}
+      onCancel={() => {
+        setConfirmError('');
+        setConfirmTarget(null);
       }}
-    >
-      <div
-        className="app-confirm-dialog app-rename-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="app-rename-title"
-        onPointerDown={event => event.stopPropagation()}
-      >
-        <div className="app-confirm-icon">
-          <span className="codicon codicon-edit" />
-        </div>
-        <div className="app-confirm-content">
-          <div id="app-rename-title" className="app-confirm-title">
-            Rename session
-          </div>
-          <div className="app-confirm-name">{renameTarget.title || renameTarget.sessionId}</div>
-          <input
-            className="app-rename-input"
-            type="text"
-            value={renameTitleDraft}
-            maxLength={200}
-            autoFocus
-            disabled={renameBusy}
-            onChange={event => setRenameTitleDraft(event.target.value)}
-            onKeyDown={event => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                submitRenameTarget();
-              }
-              if (event.key === 'Escape' && !renameBusy) {
-                setRenameError('');
-                setRenameTarget(null);
-                setRenameTitleDraft('');
-              }
-            }}
-          />
-          <div className="app-confirm-copy">Saving an empty title restores the automatic first prompt title.</div>
-          {renameError ? (
-            <div className="app-confirm-error">{renameError}</div>
-          ) : null}
-        </div>
-        <div className="app-confirm-actions">
-          <button
-            type="button"
-            className="app-confirm-btn secondary"
-            disabled={renameBusy}
-            onClick={() => {
-              setRenameError('');
-              setRenameTarget(null);
-              setRenameTitleDraft('');
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="app-confirm-btn primary"
-            disabled={renameBusy}
-            onClick={submitRenameTarget}
-          >
-            <span
-              className={`codicon ${
-                renameBusy
-                  ? 'codicon-loading codicon-modifier-spin'
-                  : 'codicon-check'
-              }`}
-            />
-            Save
-          </button>
-        </div>
-      </div>
-    </div>
-  ) : null;
+      onPrimary={handleConfirmPrimary}
+    />
+  );
+  const appRenameDialog = (
+    <AppRenameDialog
+      target={renameTarget}
+      titleDraft={renameTitleDraft}
+      error={renameError}
+      busy={renameBusy}
+      onTitleDraftChange={setRenameTitleDraft}
+      onCancel={() => {
+        setRenameError('');
+        setRenameTarget(null);
+        setRenameTitleDraft('');
+      }}
+      onSubmit={submitRenameTarget}
+    />
+  );
   const registryDebugPanel = isWide && messageViewerEnabled ? (
     <React.Suspense fallback={null}>
       <RegistryDebugPanel

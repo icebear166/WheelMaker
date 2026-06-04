@@ -5,6 +5,7 @@ describe('web clear local cache settings', () => {
   test('exposes settings action that clears local cache while preserving token/address identity', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const appDialogsTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'shell', 'AppDialogs.tsx'), 'utf8');
     const settingsRootTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
     const workspaceStore = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'services', 'workspaceStore.ts'), 'utf8');
     const workspacePersistence = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'services', 'workspacePersistence.ts'), 'utf8');
@@ -17,16 +18,16 @@ describe('web clear local cache settings', () => {
     expect(switchProjectStart).toBeGreaterThan(clearCacheStart);
     const clearCacheFlow = mainTsx.slice(clearCacheStart, switchProjectStart);
     expect(clearCacheFlow).not.toContain('window.confirm(');
-    expect(mainTsx).toContain('type ConfirmTarget =');
+    expect(appDialogsTsx).toContain('export type ConfirmTarget =');
     expect(mainTsx).toContain("kind: 'clearCache'");
     expect(mainTsx).toContain("setConfirmTarget({kind: 'clearCache'});");
-    expect(mainTsx).toContain('Clear local cache?');
-    expect(mainTsx).toContain('Token and server address will be preserved.');
+    expect(appDialogsTsx).toContain('Clear local cache?');
+    expect(appDialogsTsx).toContain('Token and server address will be preserved.');
     expect(mainTsx).toContain('workspaceStore.clearLocalCachePreservingToken();');
     expect(mainTsx).toContain('window.location.reload();');
-    expect(mainTsx).toContain('const appConfirmDialog = confirmTarget ? (');
-    expect(mainTsx).toContain('className="app-confirm-backdrop"');
-    expect(mainTsx).toContain("'app-confirm-btn primary danger'");
+    expect(mainTsx).toContain('<AppConfirmDialog');
+    expect(appDialogsTsx).toContain('className="app-confirm-backdrop"');
+    expect(appDialogsTsx).toContain("'app-confirm-btn primary danger'");
 
     expect(workspaceStore).toContain('clearLocalCachePreservingToken(): void {');
     expect(workspaceStore).toContain('this.persistence.clearCachePreservingToken();');
