@@ -127,6 +127,8 @@ type PersistedWorkspaceState = {
   projects: Record<string, PersistedProjectState>;
 };
 
+type LocalIdentityState = Partial<Pick<PersistedGlobalState, 'address' | 'token'>>;
+
 export type WorkspaceDatabaseDump = {
   global: Array<{k: string; v: string; updatedAt: number}>;
   projects: Array<{projectId: string; stateJson: string; updatedAt: number}>;
@@ -780,7 +782,7 @@ export class WorkspacePersistenceRepository {
     }
 
     return {
-      global: sanitizeGlobalState({...base.global, ...globalPatch, ...this.readLocalIdentityState()}),
+      global: this.mergeLocalIdentityState(sanitizeGlobalState({...base.global, ...globalPatch})),
       projects,
     };
   }
@@ -1024,25 +1026,33 @@ export class WorkspacePersistenceRepository {
     });
   }
 
-  private readLocalIdentityState(): Pick<PersistedGlobalState, 'address' | 'token'> {
+  private readLocalIdentityState(): LocalIdentityState {
     if (typeof window === 'undefined') {
-      return {address: '', token: ''};
+      return {};
     }
-    let address = '';
-    let token = '';
+    const identity: LocalIdentityState = {};
     try {
       const rawAddress = window.localStorage.getItem(LOCAL_ADDRESS_KEY);
-      address = typeof rawAddress === 'string' ? rawAddress : '';
+      if (typeof rawAddress === 'string') {
+        identity.address = rawAddress;
+      }
     } catch {
       // ignore
     }
     try {
       const rawToken = window.localStorage.getItem(LOCAL_TOKEN_KEY);
-      token = typeof rawToken === 'string' ? rawToken : '';
+      if (typeof rawToken === 'string') {
+        identity.token = rawToken;
+      }
     } catch {
       // ignore
     }
-    return {address, token};
+    return identity;
+  }
+
+  private mergeLocalIdentityState(base: PersistedGlobalState): PersistedGlobalState {
+    const localIdentity = this.readLocalIdentityState();
+    return sanitizeGlobalState({...base, ...localIdentity});
   }
 
   private saveLocalIdentityState(value: Pick<PersistedGlobalState, 'address' | 'token'>): void {
@@ -1074,8 +1084,7 @@ export class WorkspacePersistenceRepository {
   }
 
   getGlobalState(): PersistedGlobalState {
-    const localIdentity = this.readLocalIdentityState();
-    this.state.global = sanitizeGlobalState({...this.state.global, ...localIdentity});
+    this.state.global = this.mergeLocalIdentityState(this.state.global);
     return cloneState(this.state.global);
   }
 
@@ -1263,7 +1272,9 @@ export class WorkspacePersistenceRepository {
   }
   patchGlobalState(patch: Partial<PersistedGlobalState>): void {
     this.state.global = sanitizeGlobalState({...this.state.global, ...patch});
-    this.saveLocalIdentityState(this.state.global);
+    if ('address' in patch || 'token' in patch) {
+      this.saveLocalIdentityState(this.state.global);
+    }
 
     const now = Date.now();
     const next = cloneState(this.state.global);
@@ -1461,6 +1472,7 @@ export class WorkspacePersistenceRepository {
       this.db.getAllRows<{k: string; v: string; updatedAt: number}>(TABLE_DIFF_CACHE),
       this.db.getAllRows<{k: string; v: string; updatedAt: number}>(TABLE_META),
     ]);
+    const localIdentity = this.readLocalIdentityState();
     return {
       global: sortByKey(redactGlobalDumpRows(global)),
       projects: sortByProjectId(projects),
@@ -1470,7 +1482,10 @@ export class WorkspacePersistenceRepository {
       fileCache: sortByKey(fileCache),
       diffCache: sortByKey(diffCache),
       meta: sortByKey(meta),
-      localStorage: this.readLocalIdentityState(),
+      localStorage: {
+        address: localIdentity.address ?? '',
+        token: localIdentity.token ?? '',
+      },
     };
   }
 }

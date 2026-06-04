@@ -40,4 +40,22 @@ describe('workspace persistence reset policy', () => {
     expect(resetBlock).not.toContain('this.saveAllStateToDb()');
     expect(resetBlock).not.toContain('TABLE_GLOBAL_KV');
   });
+
+  test('reads local identity as partial values so missing localStorage does not blank IndexedDB state', () => {
+    const source = workspacePersistenceSource();
+
+    expect(source).toContain("type LocalIdentityState = Partial<Pick<PersistedGlobalState, 'address' | 'token'>>");
+    expect(source).toContain("private mergeLocalIdentityState(base: PersistedGlobalState): PersistedGlobalState");
+    expect(source).toContain("return sanitizeGlobalState({...base, ...localIdentity});");
+    expect(source).not.toContain("return {address: '', token: ''};");
+  });
+
+  test('only explicit identity patches write localStorage mirrors', () => {
+    const source = workspacePersistenceSource();
+    const patchBlock = functionBlock(source, 'patchGlobalState(patch: Partial<PersistedGlobalState>): void');
+
+    expect(patchBlock).toContain("'address' in patch || 'token' in patch");
+    expect(patchBlock).toContain('this.saveLocalIdentityState(this.state.global)');
+    expect(patchBlock).not.toContain('this.saveLocalIdentityState(this.state.global);\n\n    const now');
+  });
 });
