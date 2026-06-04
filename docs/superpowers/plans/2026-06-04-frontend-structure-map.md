@@ -1109,11 +1109,11 @@ Expected: targeted tests PASS and TypeScript exits 0.
 - Modify: `app/web/src/app/WorkspaceApp.tsx`
 - Modify tests that assert code preview locality.
 
-- [ ] **Step 1: Extract code preview Modules**
+- [x] **Step 1: Extract code preview Modules**
 
 Move `ShikiCodeBlock`, `MarkdownPreview`, `HtmlPreview`, and their direct code-preview helper functions from `WorkspaceApp.tsx` into `code/` Modules. Preserve props and rendering behaviour.
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
 
 ```powershell
 cd app
