@@ -157,13 +157,19 @@ func (c *Controller) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *Controller) handleExternalHTTP(w http.ResponseWriter, r *http.Request, tunnel *registryTunnel) {
-	stream, err := tunnel.openStream(openMetaFromRequest("http", r))
+	meta := openMetaFromRequest("http", r)
+	stream, err := tunnel.openStream(meta)
 	if err != nil {
 		http.Error(w, "open relay stream failed", http.StatusBadGateway)
 		return
 	}
 	defer stream.Close()
-	if r.Body != nil {
+	if meta.HasBody {
+		if err := stream.sendRequestBody(r.Body); err != nil {
+			http.Error(w, "relay request body failed", http.StatusBadGateway)
+			return
+		}
+	} else if r.Body != nil {
 		_, _ = io.Copy(io.Discard, r.Body)
 		_ = r.Body.Close()
 	}
@@ -444,6 +450,7 @@ type requestMeta struct {
 	Method   string              `json:"method"`
 	Path     string              `json:"path"`
 	RawQuery string              `json:"rawQuery"`
+	HasBody  bool                `json:"hasBody,omitempty"`
 	Headers  map[string][]string `json:"headers"`
 }
 
@@ -459,18 +466,53 @@ func openMetaFromRequest(kind string, r *http.Request) requestMeta {
 		Method:   r.Method,
 		Path:     r.URL.Path,
 		RawQuery: r.URL.RawQuery,
+		HasBody:  requestHasBody(r),
 		Headers:  filterRequestHeaders(r.Header),
 	}
+}
+
+func requestHasBody(r *http.Request) bool {
+	return r.Body != nil && r.Body != http.NoBody && r.ContentLength != 0
 }
 
 func filterRequestHeaders(headers http.Header) map[string][]string {
 	out := map[string][]string{}
 	for name, values := range headers {
 		canonical := http.CanonicalHeaderKey(name)
-		if isHopByHopHeader(canonical) || isWebSocketDialerHeader(canonical) || isConditionalRequestHeader(canonical) || strings.EqualFold(canonical, "Cookie") {
+		if isHopByHopHeader(canonical) || isWebSocketDialerHeader(canonical) || isConditionalRequestHeader(canonical) {
+			continue
+		}
+		if strings.EqualFold(canonical, "Cookie") {
+			cookies := filterRelayCookieHeaderValues(values)
+			if len(cookies) > 0 {
+				out[canonical] = cookies
+			}
 			continue
 		}
 		out[canonical] = append([]string(nil), values...)
+	}
+	return out
+}
+
+func filterRelayCookieHeaderValues(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		parts := strings.Split(value, ";")
+		kept := make([]string, 0, len(parts))
+		for _, part := range parts {
+			cookie := strings.TrimSpace(part)
+			if cookie == "" {
+				continue
+			}
+			name, _, hasValue := strings.Cut(cookie, "=")
+			if hasValue && strings.EqualFold(strings.TrimSpace(name), relayCookieName) {
+				continue
+			}
+			kept = append(kept, cookie)
+		}
+		if len(kept) > 0 {
+			out = append(out, strings.Join(kept, "; "))
+		}
 	}
 	return out
 }

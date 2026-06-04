@@ -170,6 +170,25 @@ func TestReporterPortRelayHTTPAndWebSocketSmoke(t *testing.T) {
 				}
 			}
 		}
+		if r.URL.Path == "/echo" {
+			body, _ := io.ReadAll(r.Body)
+			if r.Header.Get("Cookie") == "" {
+				http.Error(w, "missing target cookie", http.StatusUnauthorized)
+				return
+			}
+			if _, err := r.Cookie("wm_port_relay"); err == nil {
+				http.Error(w, "relay cookie leaked", http.StatusBadGateway)
+				return
+			}
+			cookie, err := r.Cookie("breezecara_session")
+			if err != nil {
+				http.Error(w, "missing breezecara session", http.StatusUnauthorized)
+				return
+			}
+			w.Header().Set("Content-Type", "text/plain")
+			_, _ = w.Write([]byte("post:" + string(body) + "|cookie:" + cookie.Value))
+			return
+		}
 		w.Header().Set("Content-Type", "text/plain")
 		_, _ = w.Write([]byte("hello through relay"))
 	}))
@@ -266,6 +285,25 @@ func TestReporterPortRelayHTTPAndWebSocketSmoke(t *testing.T) {
 	}
 	if !strings.Contains(seenUserAgent, "Mozilla/5.0") {
 		t.Fatalf("target user-agent=%q, want browser-like agent", seenUserAgent)
+	}
+
+	postReq, err := http.NewRequest(http.MethodPost, relayBase+"/echo", strings.NewReader(`{"hello":"relay"}`))
+	if err != nil {
+		t.Fatalf("new relay post request: %v", err)
+	}
+	postReq.Header.Set("Content-Type", "application/json")
+	for _, cookie := range cookies {
+		postReq.AddCookie(cookie)
+	}
+	postReq.AddCookie(&http.Cookie{Name: "breezecara_session", Value: "target-session"})
+	postResp, err := http.DefaultClient.Do(postReq)
+	if err != nil {
+		t.Fatalf("authed relay post: %v", err)
+	}
+	postBody, _ := io.ReadAll(postResp.Body)
+	_ = postResp.Body.Close()
+	if postResp.StatusCode != http.StatusOK || string(postBody) != `post:{"hello":"relay"}|cookie:target-session` {
+		t.Fatalf("post status=%d body=%q", postResp.StatusCode, string(postBody))
 	}
 
 	wsHeader := http.Header{}

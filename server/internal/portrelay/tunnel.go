@@ -3,6 +3,7 @@ package portrelay
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -186,6 +187,26 @@ func (s *registryStream) nextData() (Frame, bool) {
 
 func (s *registryStream) sendData(flags uint8, payload []byte) error {
 	return s.tunnel.write(Frame{Type: FrameData, Flags: flags, StreamID: s.id, Payload: payload})
+}
+
+func (s *registryStream) sendRequestBody(body io.ReadCloser) error {
+	defer body.Close()
+	buf := make([]byte, 32*1024)
+	for {
+		n, readErr := body.Read(buf)
+		if n > 0 {
+			if err := s.sendData(0, append([]byte(nil), buf[:n]...)); err != nil {
+				return err
+			}
+		}
+		if readErr != nil {
+			if readErr == io.EOF {
+				return s.sendData(FlagHalfClose, nil)
+			}
+			_ = s.sendClose()
+			return readErr
+		}
+	}
 }
 
 func (s *registryStream) sendClose() error {

@@ -105,10 +105,12 @@ type hubTunnel struct {
 }
 
 type hubStream struct {
-	id       uint32
-	kind     string
-	ws       *websocket.Conn
-	closeMux sync.Once
+	id         uint32
+	kind       string
+	ws         *websocket.Conn
+	bodyMu     sync.Mutex
+	bodyWriter *io.PipeWriter
+	closeMux   sync.Once
 }
 
 func newHubTunnel(conn *websocket.Conn, payload rp.RelayOpenPayload) *hubTunnel {
@@ -144,7 +146,7 @@ func (t *hubTunnel) handleOpen(ctx context.Context, frame Frame) {
 	}
 	switch meta.Kind {
 	case "http":
-		go t.handleHTTP(ctx, frame.StreamID, meta)
+		t.startHTTP(ctx, frame.StreamID, meta)
 	case "websocket":
 		go t.handleWebSocket(ctx, frame.StreamID, meta)
 	default:
@@ -152,10 +154,28 @@ func (t *hubTunnel) handleOpen(ctx context.Context, frame Frame) {
 	}
 }
 
-func (t *hubTunnel) handleHTTP(ctx context.Context, streamID uint32, meta requestMeta) {
+func (t *hubTunnel) startHTTP(ctx context.Context, streamID uint32, meta requestMeta) {
+	var body io.Reader
+	if meta.HasBody {
+		reader, writer := io.Pipe()
+		body = reader
+		t.mu.Lock()
+		t.streams[streamID] = &hubStream{id: streamID, kind: "http", bodyWriter: writer}
+		t.mu.Unlock()
+	}
+	go t.handleHTTP(ctx, streamID, meta, body)
+}
+
+func (t *hubTunnel) handleHTTP(ctx context.Context, streamID uint32, meta requestMeta, body io.Reader) {
+	if meta.HasBody {
+		defer t.closeStream(streamID)
+	}
 	targetURL := buildTargetURL("http", t.payload.TargetHost, t.payload.TargetPort, meta.Path, meta.RawQuery)
-	req, err := http.NewRequestWithContext(ctx, meta.Method, targetURL, nil)
+	req, err := http.NewRequestWithContext(ctx, meta.Method, targetURL, body)
 	if err != nil {
+		if meta.HasBody {
+			t.closeStream(streamID)
+		}
 		_ = t.writeError(streamID, "invalid target request")
 		return
 	}
@@ -236,7 +256,14 @@ func (t *hubTunnel) handleData(frame Frame) {
 	t.mu.Lock()
 	stream := t.streams[frame.StreamID]
 	t.mu.Unlock()
-	if stream == nil || stream.ws == nil {
+	if stream == nil {
+		return
+	}
+	if stream.kind == "http" {
+		stream.writeHTTPBody(frame)
+		return
+	}
+	if stream.ws == nil {
 		return
 	}
 	messageType := websocket.BinaryMessage
@@ -246,14 +273,41 @@ func (t *hubTunnel) handleData(frame Frame) {
 	_ = stream.ws.WriteMessage(messageType, frame.Payload)
 }
 
+func (s *hubStream) writeHTTPBody(frame Frame) {
+	s.bodyMu.Lock()
+	defer s.bodyMu.Unlock()
+	if s.bodyWriter == nil {
+		return
+	}
+	if len(frame.Payload) > 0 {
+		if _, err := s.bodyWriter.Write(frame.Payload); err != nil {
+			_ = s.bodyWriter.CloseWithError(err)
+			s.bodyWriter = nil
+			return
+		}
+	}
+	if frame.Flags&FlagHalfClose != 0 {
+		_ = s.bodyWriter.Close()
+		s.bodyWriter = nil
+	}
+}
+
 func (t *hubTunnel) closeStream(streamID uint32) {
 	t.mu.Lock()
 	stream := t.streams[streamID]
 	delete(t.streams, streamID)
 	t.mu.Unlock()
-	if stream != nil && stream.ws != nil {
+	if stream != nil {
 		stream.closeMux.Do(func() {
-			_ = stream.ws.Close()
+			if stream.ws != nil {
+				_ = stream.ws.Close()
+			}
+			stream.bodyMu.Lock()
+			defer stream.bodyMu.Unlock()
+			if stream.bodyWriter != nil {
+				_ = stream.bodyWriter.CloseWithError(io.ErrClosedPipe)
+				stream.bodyWriter = nil
+			}
 		})
 	}
 }

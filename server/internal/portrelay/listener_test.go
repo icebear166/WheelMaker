@@ -61,6 +61,32 @@ func TestFilterRequestHeadersDropsConditionalCacheHeaders(t *testing.T) {
 	}
 }
 
+func TestFilterRequestHeadersPreservesTargetCookiesExceptRelayAuth(t *testing.T) {
+	headers := http.Header{}
+	headers.Add("Cookie", "wm_port_relay=relay-secret; breezecara_session=target-session; theme=light")
+	headers.Add("Cookie", "another=target-cookie")
+	headers.Set("Accept", "application/json")
+
+	filtered := filterRequestHeaders(headers)
+
+	got := filtered["Cookie"]
+	want := []string{"breezecara_session=target-session; theme=light", "another=target-cookie"}
+	if len(got) != len(want) {
+		t.Fatalf("Cookie headers=%#v, want %#v", got, want)
+	}
+	for index := range want {
+		if got[index] != want[index] {
+			t.Fatalf("Cookie headers=%#v, want %#v", got, want)
+		}
+	}
+	if strings.Contains(strings.Join(got, "; "), relayCookieName+"=") {
+		t.Fatalf("Cookie headers leaked relay auth cookie: %#v", got)
+	}
+	if got := filtered["Accept"]; len(got) != 1 || got[0] != "application/json" {
+		t.Fatalf("filterRequestHeaders dropped Accept: %#v", filtered)
+	}
+}
+
 func TestCopyResponseHeadersDropsContentLength(t *testing.T) {
 	src := map[string][]string{
 		"Content-Length": {"1234"},
