@@ -11,7 +11,7 @@ describe('connection settings UI source structure', () => {
 
     expect(mainTsx).toContain("'connectionStatus'");
     expect(mainTsx).toContain("case 'connectionStatus':");
-    expect(mainTsx).toContain("React.lazy(() => import('./settings/ConnectionStatusSettingsDetail')");
+    expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ './settings/SettingsBundle')");
     expect(mainTsx).toContain('renderConnectionStatusSettingsDetail(options)');
     expect(mainTsx).toContain('<ConnectionStatusSettingsDetail');
     expect(mainTsx).toContain('<React.Suspense fallback={null}>');

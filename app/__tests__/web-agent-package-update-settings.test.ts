@@ -46,7 +46,7 @@ describe('agent package update settings UI source structure', () => {
     const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
 
     expect(mainTsx).toContain('const renderUpdateSettingsDetail = (options?: SettingsDetailShellOptions) =>');
-    expect(mainTsx).toContain("const UpdateSettingsDetail = React.lazy(() => import('./settings/UpdateSettingsDetail')");
+    expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ './settings/SettingsBundle')");
     expect(mainTsx).toContain('<UpdateSettingsDetail');
     expect(detailTsx).toContain('export function UpdateSettingsDetail');
     expect(mainTsx).toContain("'Update'");

@@ -49,7 +49,7 @@ describe('web registry debug settings', () => {
     expect(settingsRootTsx).toContain('Log Level');
     expect(mainTsx).toContain("'debugLogs'");
     expect(mainTsx).toContain("settingsDetailView === 'debugLogs'");
-    expect(mainTsx).toContain("React.lazy(() => import('./debug/DebugLogsSettingsDetail')");
+    expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ './settings/SettingsBundle')");
     expect(mainTsx).toContain('renderDebugLogsSettingsDetail(options)');
     expect(mainTsx).toContain('<DebugLogsSettingsDetail');
     expect(mainTsx).toContain('<React.Suspense fallback={null}>');

@@ -1519,6 +1519,8 @@ describe('web chat integration', () => {
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'main.tsx'));
     const settingsRootPath = path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx');
     const settingsRootTsx = fs.existsSync(settingsRootPath) ? readSourceText(settingsRootPath) : '';
+    const settingsBundlePath = path.join(projectRoot, 'web', 'src', 'settings', 'SettingsBundle.ts');
+    const settingsBundleTs = fs.existsSync(settingsBundlePath) ? readSourceText(settingsBundlePath) : '';
     const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
 
     expect(mainTsx).toContain('type SettingsDetailView = SettingsDetailId | null;');
@@ -1539,9 +1541,14 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain("tab === 'chat' && !isWide ? renderMobileChatSessionSheet() : renderSidebarMain()");
     expect(mainTsx).toContain("openSettingsPeer('tokenStats')");
     expect(mainTsx).toContain("settingsDetailView === 'tokenStats'");
-    expect(mainTsx).toContain("const SettingsRootContent = React.lazy(() => import('./settings/SettingsRootContent')");
+    expect(mainTsx).toContain("const loadSettingsBundle = () => import(/* webpackChunkName: \"settings\" */ './settings/SettingsBundle')");
+    expect(mainTsx).toContain('const SettingsRootContent = React.lazy(() => loadSettingsBundle().then(module => ({');
     expect(mainTsx).toContain('<SettingsRootContent');
     expect(settingsRootTsx).toContain('export function SettingsRootContent');
+    expect(settingsBundleTs).toContain("export { SettingsRootContent } from './SettingsRootContent';");
+    expect(settingsBundleTs).toContain("export { DatabaseSettingsDetail } from './DatabaseSettingsDetail';");
+    expect(settingsBundleTs).toContain("export { UpdateSettingsDetail } from './UpdateSettingsDetail';");
+    expect(settingsBundleTs).toContain("export { DebugLogsSettingsDetail } from '../debug/DebugLogsSettingsDetail';");
     expect(settingsRootTsx).toContain('function renderSettingsSection');
     expect(settingsRootTsx).toContain("renderSettingsSection('Appearance'");
     expect(settingsRootTsx).toContain('Inactive Visibility');

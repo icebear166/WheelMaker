@@ -10,7 +10,7 @@ describe('token stats settings UI source structure', () => {
 
     expect(mainTsx).toContain("'tokenStats'");
     expect(mainTsx).toContain('renderTokenStatsSettingsDetail(options)');
-    expect(mainTsx).toContain("React.lazy(() => import('./settings/TokenStatsSettingsDetail')");
+    expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ './settings/SettingsBundle')");
     expect(mainTsx).toContain('<TokenStatsSettingsDetail');
     expect(mainTsx).toContain('providers={tokenStatsProviders}');
     expect(mainTsx).toContain('loading={tokenStatsLoading}');

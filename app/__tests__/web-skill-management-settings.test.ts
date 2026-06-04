@@ -37,7 +37,7 @@ describe('skill management settings UI source structure', () => {
 
   test('renders Skills detail with controlled command hooks and confirmations', () => {
     expect(mainTsx).toContain('const renderSkillsSettingsDetail = (options?: SettingsDetailShellOptions) =>');
-    expect(mainTsx).toContain("const SkillsSettingsDetail = React.lazy(() => import('./settings/SkillsSettingsDetail')");
+    expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ './settings/SettingsBundle')");
     expect(mainTsx).toContain('<SkillsSettingsDetail');
     expect(detailTsx).toContain('export function SkillsSettingsDetail');
     expect(mainTsx).toContain('refreshSkillManagement');

@@ -25,7 +25,7 @@ describe('port relay settings UI source structure', () => {
   });
 
   test('renders Port Relay controls and service hooks', () => {
-    expect(mainTsx).toContain("React.lazy(() => import('./settings/PortRelaySettingsDetail')");
+    expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ './settings/SettingsBundle')");
     expect(mainTsx).toContain('const renderPortRelaySettingsDetail = (options?: SettingsDetailShellOptions) =>');
     expect(mainTsx).toContain('<PortRelaySettingsDetail');
     expect(fs.existsSync(detailPath)).toBe(true);

@@ -10,7 +10,7 @@ describe('database settings UI source structure', () => {
 
     expect(mainTsx).toContain("'database'");
     expect(mainTsx).toContain('renderDatabaseSettingsDetail(options)');
-    expect(mainTsx).toContain("React.lazy(() => import('./settings/DatabaseSettingsDetail')");
+    expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ './settings/SettingsBundle')");
     expect(mainTsx).toContain('<DatabaseSettingsDetail');
     expect(mainTsx).toContain('loading={databaseLoading}');
     expect(mainTsx).toContain('error={databaseError}');

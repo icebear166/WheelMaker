@@ -363,31 +363,32 @@ import './styles.css';
 const RegistryDebugPanel = React.lazy(() => import('./debug/RegistryDebugPanel').then(module => ({
   default: module.RegistryDebugPanel,
 })));
-const DebugLogsSettingsDetail = React.lazy(() => import('./debug/DebugLogsSettingsDetail').then(module => ({
+const loadSettingsBundle = () => import(/* webpackChunkName: "settings" */ './settings/SettingsBundle');
+const DebugLogsSettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.DebugLogsSettingsDetail,
 })));
-const ConnectionStatusSettingsDetail = React.lazy(() => import('./settings/ConnectionStatusSettingsDetail').then(module => ({
+const ConnectionStatusSettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.ConnectionStatusSettingsDetail,
 })));
-const TokenStatsSettingsDetail = React.lazy(() => import('./settings/TokenStatsSettingsDetail').then(module => ({
+const TokenStatsSettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.TokenStatsSettingsDetail,
 })));
-const CCSwitchSettingsDetail = React.lazy(() => import('./settings/CCSwitchSettingsDetail').then(module => ({
+const CCSwitchSettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.CCSwitchSettingsDetail,
 })));
-const DatabaseSettingsDetail = React.lazy(() => import('./settings/DatabaseSettingsDetail').then(module => ({
+const DatabaseSettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.DatabaseSettingsDetail,
 })));
-const PortRelaySettingsDetail = React.lazy(() => import('./settings/PortRelaySettingsDetail').then(module => ({
+const PortRelaySettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.PortRelaySettingsDetail,
 })));
-const UpdateSettingsDetail = React.lazy(() => import('./settings/UpdateSettingsDetail').then(module => ({
+const UpdateSettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.UpdateSettingsDetail,
 })));
-const SkillsSettingsDetail = React.lazy(() => import('./settings/SkillsSettingsDetail').then(module => ({
+const SkillsSettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.SkillsSettingsDetail,
 })));
-const SettingsRootContent = React.lazy(() => import('./settings/SettingsRootContent').then(module => ({
+const SettingsRootContent = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.SettingsRootContent,
 })));
 

@@ -8,7 +8,7 @@ describe('cc switch settings detail source structure', () => {
     const detailPath = path.join(projectRoot, 'web', 'src', 'settings', 'CCSwitchSettingsDetail.tsx');
     const detailTsx = fs.existsSync(detailPath) ? fs.readFileSync(detailPath, 'utf8') : '';
 
-    expect(mainTsx).toContain("const CCSwitchSettingsDetail = React.lazy(() => import('./settings/CCSwitchSettingsDetail')");
+    expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ './settings/SettingsBundle')");
     expect(mainTsx).toContain('renderCCSwitchSettingsDetail(options)');
     expect(mainTsx).toContain('<CCSwitchSettingsDetail');
     expect(detailTsx).toContain('export function CCSwitchSettingsDetail');
