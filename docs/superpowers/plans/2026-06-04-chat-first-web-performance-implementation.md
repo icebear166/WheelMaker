@@ -19,6 +19,28 @@ This plan implements the first two slices from the design:
 
 It does not fully extract `FileFeature`, `GitFeature`, `PortRelayFeature`, or `ChatFeature` from `main.tsx`. Those are larger feature-boundary tasks and should follow after the P0/P1 performance regression is fixed and measured.
 
+## Execution Status
+
+Completed on `main`:
+
+- `7c77263 Restore chat startup loading policy`
+- `10b4bf9 Protect persisted identity during startup`
+- `c722b0c Group settings into one lazy bundle`
+
+Verified:
+
+- `npm run tsc:web`
+- `npm test`
+- `npm run build:web`
+- `npm run report:web-assets`
+
+Generated asset shape after implementation:
+
+- no `runtime.*.js` or `vendors.*.js` initial script
+- one initial `bundle.*.js` script and one initial `bundle.*.css` stylesheet
+- `codicon.ttf` emitted at the preload path
+- one coarse `settings.*.js` lazy chunk
+
 ## Files
 
 - Modify: `app/__tests__/web-setup.test.js`
