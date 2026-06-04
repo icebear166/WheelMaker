@@ -22,7 +22,7 @@ describe('web shiki code fallback', () => {
 
     expect(mainTsx).toContain('preloadShikiRenderer');
     expect(mainTsx).toContain('window.requestIdleCallback');
-    expect(mainTsx).toContain("import('../services/shikiRenderer')");
-    expect(mainTsx).not.toContain("from '../services/shikiRenderer'");
+    expect(mainTsx).toContain("import('../code/shikiRenderer')");
+    expect(mainTsx).not.toContain("from '../code/shikiRenderer'");
   });
 });

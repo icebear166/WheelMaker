@@ -134,7 +134,7 @@ import {
   resolveChatScrollToBottomVisibility,
   shouldAutoScrollChatToBottom,
 } from '../chat/chatScrollIntent';
-import { resolveChatScrollBottomButtonOffset } from '../services/chatScrollBottomButton';
+import { resolveChatScrollBottomButtonOffset } from '../chat/layout/chatScrollBottomButton';
 import { resolvePromptDoneStatus, resolvePromptTurnStatus, type ChatPromptStatus } from '../chat/chatPromptStatus';
 import {
   buildPromptCompletionNotification,
@@ -256,7 +256,7 @@ import {
   resolveCodeFontFamily,
   type CodeFontId,
   type CodeThemeId,
-} from '../services/shikiSettings';
+} from '../code/shikiSettings';
 import {createVoiceInputSession, type VoiceInputSession} from '../features/speech/useVoiceInputController';
 import {
   VOICE_LONG_TIMEOUT_MS,
@@ -686,7 +686,7 @@ const EMPTY_CHAT_COMPOSER_DRAFT: ChatComposerDraft = { text: '', attachments: []
 const DEFAULT_PORT_RELAY_SNAPSHOT: RegistryPortRelaySnapshot = {ok: true, enabled: false, status: 'Disabled'};
 let mermaidRenderSequence = 0;
 let mermaidModulePromise: Promise<typeof import('mermaid').default> | null = null;
-let shikiRendererModulePromise: Promise<typeof import('../services/shikiRenderer')> | null = null;
+let shikiRendererModulePromise: Promise<typeof import('../code/shikiRenderer')> | null = null;
 
 function isRegistryChatContentBlock(block: RegistryChatContentBlock | undefined): block is RegistryChatContentBlock {
   return !!block && typeof block.type === 'string' && block.type.length > 0;
@@ -873,9 +873,9 @@ function loadMermaid(): Promise<typeof import('mermaid').default> {
   return mermaidModulePromise;
 }
 
-function loadShikiRenderer(): Promise<typeof import('../services/shikiRenderer')> {
+function loadShikiRenderer(): Promise<typeof import('../code/shikiRenderer')> {
   if (!shikiRendererModulePromise) {
-    shikiRendererModulePromise = import('../services/shikiRenderer')
+    shikiRendererModulePromise = import('../code/shikiRenderer')
       .catch(error => {
         shikiRendererModulePromise = null;
         throw error;

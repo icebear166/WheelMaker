@@ -1,4 +1,4 @@
-jest.mock('../web/src/services/shikiRenderer', () => ({
+jest.mock('../web/src/code/shikiRenderer', () => ({
   DEFAULT_CODE_FONT: 'jetbrains',
   DEFAULT_CODE_FONT_SIZE: 13,
   DEFAULT_CODE_LINE_HEIGHT: 1.5,

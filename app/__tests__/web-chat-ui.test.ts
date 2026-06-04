@@ -72,7 +72,7 @@ describe('web chat integration', () => {
   test('defaults app chrome to non-selectable while preserving content text selection', () => {
     const projectRoot = path.join(__dirname, '..');
     const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
-    const shikiRenderer = readSourceText(path.join(projectRoot, 'web', 'src', 'services', 'shikiRenderer.ts'));
+    const shikiRenderer = readSourceText(path.join(projectRoot, 'web', 'src', 'code', 'shikiRenderer.ts'));
     const appSurfaceSelectors = ['.page', '.workspace'];
 
     for (const selector of appSurfaceSelectors) {
@@ -268,7 +268,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('const forceChatScrollToBottom = useCallback(() => {');
     expect(mainTsx).toContain('chatAutoScrollFollowRef.current = true;');
     expect(mainTsx).toContain('scrollChatToBottom(true);');
-    expect(mainTsx).toContain("import { resolveChatScrollBottomButtonOffset } from '../services/chatScrollBottomButton';");
+    expect(mainTsx).toContain("import { resolveChatScrollBottomButtonOffset } from '../chat/layout/chatScrollBottomButton';");
     expect(mainTsx).toContain('const [chatComposerHeight, setChatComposerHeight] = useState(0);');
     expect(mainTsx).toContain('setChatComposerHeight(current => (current === nextHeight ? current : nextHeight));');
     expect(mainTsx).toContain("'--chat-scroll-bottom-offset': `${resolveChatScrollBottomButtonOffset({");

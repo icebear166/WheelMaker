@@ -11,6 +11,7 @@
   --soft-shadow: 0 4px 12px rgba(0, 0, 0, 0.36);
   --danger: #f48771;
   --line-num: #858585;
+  --chat-message-text: #dedede;
   --wm-safe-area-top: env(safe-area-inset-top, 0px);
   --wm-safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --mobile-floating-control-lane: 56px;
@@ -29,6 +30,7 @@
   --soft-shadow: 0 4px 12px rgba(0, 0, 0, 0.14);
   --danger: #cf222e;
   --line-num: #717171;
+  --chat-message-text: #24292f;
 }
 
 * {
@@ -8289,11 +8291,12 @@ textarea,
   line-height: 1.4;
 }
 .chat-main-message {
-  font-family: var(--chat-message-font-family, 'IBM Plex Sans', 'Noto Sans', sans-serif);
-  line-height: 1.55;
+  font-family: var(--chat-message-font-family, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', 'Noto Sans CJK SC', 'Noto Sans', sans-serif);
+  line-height: 1.58;
   font-size: 14px;
   font-weight: 400;
-  color: var(--text);
+  color: var(--chat-message-text, var(--text));
+  letter-spacing: 0;
   white-space: normal;
   word-break: break-word;
 }

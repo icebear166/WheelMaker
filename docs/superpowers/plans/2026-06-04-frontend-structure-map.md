@@ -829,21 +829,64 @@ Expected: targeted tests PASS and TypeScript exits 0.
 ### Task 13: Remaining Services Bucket Follow-Up
 
 **Files:**
-- Move later: `app/web/src/services/chatScrollBottomButton.ts` -> `app/web/src/chat/layout/chatScrollBottomButton.ts`
-- Move later: `app/web/src/services/shikiSettings.ts` -> `app/web/src/code/shikiSettings.ts`
-- Move later: `app/web/src/services/shikiRenderer.ts` -> `app/web/src/code/shikiRenderer.ts`
+- Move: `app/web/src/services/chatScrollBottomButton.ts` -> `app/web/src/chat/layout/chatScrollBottomButton.ts`
+- Move: `app/web/src/services/shikiSettings.ts` -> `app/web/src/code/shikiSettings.ts`
+- Move: `app/web/src/services/shikiRenderer.ts` -> `app/web/src/code/shikiRenderer.ts`
+- Modify: `app/web/src/app/WorkspaceApp.tsx`
+- Modify: `app/web/src/workspace/WorkspacePersistence.ts`
+- Modify: `app/web/src/settings/SettingsRootContent.tsx`
+- Modify: `app/web/src/git/diffRows.ts`
+- Modify tests:
+  - `app/__tests__/web-code-layout.test.ts`
+  - `app/__tests__/web-shiki-code-fallback.test.ts`
+  - `app/__tests__/web-shiki-theme-settings.test.ts`
+  - `app/__tests__/web-shiki-blank-line-preservation.test.ts`
+  - `app/__tests__/web-responsive-ui-state.test.ts`
+  - `app/__tests__/web-chat-ui.test.ts`
+  - `app/__tests__/web-chat-selection-persistence.test.ts`
+  - `app/__tests__/web-workspace-project-lightweight.test.ts`
 
-- [ ] **Step 1: Defer until Task 11 and Task 12 are stable**
-
-Do not mix Code rendering and Chat layout moves into the shell-state correction commit. The next execution slice should move these remaining `services/` files with their own targeted tests:
+- [x] **Step 1: Run baseline targeted tests**
 
 ```powershell
 cd app
-npm test -- --runInBand web-code-layout.test.ts web-shiki-code-fallback.test.ts web-shiki-theme-settings.test.ts web-responsive-ui-state.test.ts
+npm test -- --runInBand web-code-layout.test.ts web-shiki-code-fallback.test.ts web-shiki-theme-settings.test.ts web-shiki-blank-line-preservation.test.ts web-responsive-ui-state.test.ts web-chat-ui.test.ts web-chat-selection-persistence.test.ts web-workspace-project-lightweight.test.ts
+```
+
+Expected: targeted tests PASS before moving files.
+
+- [x] **Step 2: Move remaining services files**
+
+```powershell
+New-Item -ItemType Directory -Force -Path app/web/src/chat/layout, app/web/src/code
+git mv app/web/src/services/chatScrollBottomButton.ts app/web/src/chat/layout/chatScrollBottomButton.ts
+git mv app/web/src/services/shikiSettings.ts app/web/src/code/shikiSettings.ts
+git mv app/web/src/services/shikiRenderer.ts app/web/src/code/shikiRenderer.ts
+```
+
+- [x] **Step 3: Update imports and structural tests**
+
+Use these replacements:
+
+```text
+../services/chatScrollBottomButton -> ../chat/layout/chatScrollBottomButton
+../services/shikiSettings -> ../code/shikiSettings
+../services/shikiRenderer -> ../code/shikiRenderer
+../web/src/services/shikiRenderer -> ../web/src/code/shikiRenderer
+path.join(projectRoot, 'web', 'src', 'services', 'shikiRenderer.ts') -> path.join(projectRoot, 'web', 'src', 'code', 'shikiRenderer.ts')
+path.join(projectRoot, 'web', 'src', 'services', 'shikiSettings.ts') -> path.join(projectRoot, 'web', 'src', 'code', 'shikiSettings.ts')
+path.join(projectRoot, 'web', 'src', 'services', 'chatScrollBottomButton.ts') -> path.join(projectRoot, 'web', 'src', 'chat', 'layout', 'chatScrollBottomButton.ts')
+```
+
+- [x] **Step 4: Verify**
+
+```powershell
+cd app
+npm test -- --runInBand web-code-layout.test.ts web-shiki-code-fallback.test.ts web-shiki-theme-settings.test.ts web-shiki-blank-line-preservation.test.ts web-responsive-ui-state.test.ts web-chat-ui.test.ts web-chat-selection-persistence.test.ts web-workspace-project-lightweight.test.ts
 npm run tsc:web
 ```
 
-Expected: targeted tests PASS and TypeScript exits 0 after that later slice.
+Expected: targeted tests PASS and TypeScript exits 0.
 
 ---
 
@@ -861,3 +904,4 @@ Expected: targeted tests PASS and TypeScript exits 0 after that later slice.
 - CSS split remains intentionally deferred; `app/web/src/styles.css` was not changed in this execution slice.
 - 2026-06-04 follow-up: Added Tasks 11-13 to correct the review-map gaps found after implementation: `shell/state` ownership, neutral floating-control preference sanitizers, and a later services-bucket cleanup.
 - 2026-06-04 follow-up: Tasks 11-12 are complete and verified with targeted Jest plus `npm run tsc:web`; `services/responsiveLayout.ts` and `services/workspaceUiState.ts` now live under `shell/state`, and `workspace/WorkspacePersistence.ts` no longer imports mobile layout helpers.
+- 2026-06-04 follow-up: Task 13 is complete and verified with targeted Jest plus `npm run tsc:web`; the remaining `services/` helpers now live under `chat/layout` and `code`, leaving no source files in `app/web/src/services`.

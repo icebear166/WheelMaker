@@ -8,14 +8,16 @@ import {
 } from '../web/src/chat/chatTypography';
 
 describe('web chat font settings', () => {
-  test('keeps the current IBM Plex chat font as the default while offering a clearer system option', () => {
-    expect(DEFAULT_CHAT_FONT).toBe('ibm-plex');
+  test('uses the system chat font by default and keeps CJK fallbacks clear in IBM Plex mode', () => {
+    expect(DEFAULT_CHAT_FONT).toBe('system');
     expect(CHAT_FONT_OPTIONS.map(option => option.id)).toEqual([
       'ibm-plex',
       'system',
       'serif',
     ]);
-    expect(resolveChatFontFamily(DEFAULT_CHAT_FONT)).toContain('IBM Plex Sans');
+    expect(resolveChatFontFamily(DEFAULT_CHAT_FONT)).toContain('Segoe UI');
+    expect(resolveChatFontFamily('ibm-plex')).toContain('IBM Plex Sans');
+    expect(resolveChatFontFamily('ibm-plex')).toContain('Microsoft YaHei UI');
     expect(resolveChatFontFamily('system')).toContain('Segoe UI');
     expect(resolveChatFontFamily('system')).toContain('Microsoft YaHei UI');
     expect(isChatFontId('system')).toBe(true);
@@ -54,8 +56,10 @@ describe('web chat font settings', () => {
     const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
 
     expect(mainTsx).toContain("'--chat-message-font-family': chatFontFamily,");
+    expect(stylesCss).toContain('--chat-message-text: #dedede;');
+    expect(stylesCss).toContain('--chat-message-text: #24292f;');
     expect(stylesCss).toMatch(
-      /\.chat-main-message \{[\s\S]*font-family: var\(--chat-message-font-family, 'IBM Plex Sans', 'Noto Sans', sans-serif\);[\s\S]*font-weight: 400;[\s\S]*\}/,
+      /\.chat-main-message \{[\s\S]*font-family: var\(--chat-message-font-family, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', 'Noto Sans CJK SC', 'Noto Sans', sans-serif\);[\s\S]*line-height: 1\.58;[\s\S]*color: var\(--chat-message-text, var\(--text\)\);[\s\S]*letter-spacing: 0;[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
       /\.chat-main-message code:not\(\.wm-shiki-code\) \{[\s\S]*font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;[\s\S]*\}/,

@@ -129,7 +129,7 @@ describe('web responsive ui state', () => {
 
   test('keeps the chat scroll-to-bottom button above the composer and keyboard inset', () => {
     const projectRoot = path.join(__dirname, '..');
-    const modulePath = path.join(projectRoot, 'web', 'src', 'services', 'chatScrollBottomButton.ts');
+    const modulePath = path.join(projectRoot, 'web', 'src', 'chat', 'layout', 'chatScrollBottomButton.ts');
 
     expect(fs.existsSync(modulePath)).toBe(true);
 

@@ -1,4 +1,4 @@
-import type { DiffRenderLine } from '../services/shikiSettings';
+import type { DiffRenderLine } from '../code/shikiSettings';
 
 declare const require: (id: string) => unknown;
 

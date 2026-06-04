@@ -11,7 +11,7 @@ import {
   isCodeThemeId,
   type CodeFontId,
   type CodeThemeId,
-} from '../services/shikiSettings';
+} from '../code/shikiSettings';
 import type {SettingsChildDetail} from './settingsNavigation';
 
 const CODE_FONT_SIZE_OPTIONS = [12, 13, 14, 15, 16] as const;
