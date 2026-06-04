@@ -24,7 +24,6 @@ import {
   normalizePortRelayTarget,
   normalizePortRelayTargets,
   orderPortRelayTargetsForMenu,
-  portRelayTargetKey,
   removePortRelayTarget,
   reconcilePortRelayTargetSelection,
   samePortRelayTarget,
@@ -32,6 +31,7 @@ import {
   upsertPortRelayTarget,
   type PortRelayTarget,
 } from './portRelayTargets';
+import { PortRelayFloatingButton, PortRelayFrameSurface } from './portRelay/PortRelayFrameSurface';
 import { initializePWAFoundation } from './pwa';
 import {cleanupNativeWebViewPWA} from './pwa/nativePwaGuard';
 import { DesktopTitleBar } from './shell/DesktopTitleBar';
@@ -11698,6 +11698,9 @@ function App() {
     portRelayListenPort,
     portRelaySnapshot.listenPort,
   ]);
+  const handlePortRelayFloatingTargetSelect = useCallback((target: PortRelayTarget) => {
+    handleMobilePortRelayTargetMenuSelect(target).catch(() => undefined);
+  }, [handleMobilePortRelayTargetMenuSelect]);
 
   const deletePortRelayTarget = useCallback(async (target: PortRelayTarget) => {
     const nextTargets = removePortRelayTarget(portRelayTargets, target);
@@ -16221,39 +16224,6 @@ function App() {
     if (!portRelayFrameUrl) return;
     window.open(portRelayFrameUrl, '_blank', 'noopener,noreferrer');
   }, [portRelayFrameUrl]);
-  const renderPortRelayFrameSurface = (mode: 'desktop' | 'mobile', options: {chrome?: boolean} = {}) => (
-    <div className={`port-relay-frame-surface ${mode}`}>
-      {options.chrome ? (
-        <div className="chat-preview-toolbar">
-          <button
-            type="button"
-            className="chat-preview-icon-button"
-            onClick={closePortRelayFrameFromChrome}
-            title={mode === 'mobile' ? 'Back' : 'Close preview'}
-            aria-label={mode === 'mobile' ? 'Back' : 'Close preview'}
-          >
-            <span className={`codicon ${mode === 'mobile' ? 'codicon-arrow-left' : 'codicon-close'}`} />
-          </button>
-          <div className="chat-preview-title" title={portRelayFrameUrl}>{portRelayFrameUrl}</div>
-          <button
-            type="button"
-            className="chat-preview-icon-button"
-            onClick={openPortRelayPreviewInBrowser}
-            title="Open relay page in browser"
-            aria-label="Open relay page in browser"
-          >
-            <span className="codicon codicon-link-external" />
-          </button>
-        </div>
-      ) : null}
-      <iframe
-        title="Port Relay"
-        src={portRelayFrameUrl}
-        className="port-relay-frame"
-        allow="clipboard-read; clipboard-write"
-      />
-    </div>
-  );
   const renderMain = () => {
     const heavyDiffDeferred =
       !!selectedDiff &&
@@ -16277,7 +16247,14 @@ function App() {
       ? chatSlashMenuOptions[Math.max(0, Math.min(chatSlashActiveIndex, chatSlashMenuOptions.length - 1))]
       : null;
     if (isWide && portRelayFrameOpen && portRelayFramePlacement === 'main' && portRelayFrameUrl) {
-      return renderPortRelayFrameSurface('desktop');
+      return (
+        <PortRelayFrameSurface
+          mode="desktop"
+          url={portRelayFrameUrl}
+          onCloseChrome={closePortRelayFrameFromChrome}
+          onOpenInBrowser={openPortRelayPreviewInBrowser}
+        />
+      );
     }
     const renderChatConfigValueMenu = (option: RegistrySessionConfigOption) => {
       const optionValues = option.options ?? [];
@@ -17447,42 +17424,6 @@ function App() {
     </nav>
   ) : null;
 
-  const portRelayTargetMenu = portRelayTargetMenuOpen && mobilePortRelayFrameOpen ? (
-    <div
-      ref={portRelayTargetMenuRef}
-      className="port-relay-target-switch-menu"
-      role="menu"
-      aria-label="Port Relay targets"
-      onPointerDown={event => event.stopPropagation()}
-    >
-      {portRelayTargetMenuTargets.map(target => {
-        const selected = samePortRelayTarget(activePortRelayTarget, target);
-        const switching = samePortRelayTarget(portRelayMenuSwitchingTarget, target);
-        return (
-          <button
-            key={portRelayTargetKey(target)}
-            type="button"
-            className="port-relay-target-switch-item"
-            data-selected={selected}
-            data-loading={switching}
-            role="menuitemradio"
-            aria-checked={selected}
-            onClick={() => handleMobilePortRelayTargetMenuSelect(target).catch(() => undefined)}
-          >
-            <span className="port-relay-target-switch-check" aria-hidden="true">
-              {switching ? (
-                <span className="codicon codicon-loading codicon-modifier-spin" />
-              ) : selected ? (
-                <span className="codicon codicon-check" />
-              ) : null}
-            </span>
-            <span className="port-relay-target-switch-label">{`${target.hubId}:${target.targetPort}`}</span>
-          </button>
-        );
-      })}
-    </div>
-  ) : null;
-
   const chatQuickSwitchMenu = chatQuickSwitchMenuOpen && tab === 'chat' && !sidebarSettingsOpen && !mobilePortRelayFrameOpen && !chatPreviewOpen ? (
     <ChatQuickSwitchMenu
       ref={chatQuickSwitchMenuRef}
@@ -17561,25 +17502,23 @@ function App() {
           cancelFloatingDrag(event.pointerId);
         }}
       >
-        {portRelayReady && portRelayFrameUrl ? (
-          <button
-            type="button"
-            className="drawer-toggle-bubble port-relay-floating-bubble"
-            data-active={portRelayFrameOpen}
-            onPointerDown={handlePortRelayFloatingPointerDown}
-            onPointerMove={handlePortRelayFloatingPointerMove}
-            onPointerUp={finishPortRelayFloatingPress}
-            onPointerCancel={finishPortRelayFloatingPress}
-            onContextMenu={event => event.preventDefault()}
-            onClick={handlePortRelayFloatingToggle}
-            title={portRelayFrameOpen ? 'Close relay page' : 'Open relay page'}
-            aria-label={portRelayFrameOpen ? 'Close relay page' : 'Open relay page'}
-            aria-pressed={portRelayFrameOpen}
-          >
-            <span className="codicon codicon-radio-tower" />
-          </button>
-        ) : null}
-        {portRelayTargetMenu}
+        <PortRelayFloatingButton
+          ready={portRelayReady}
+          frameUrl={portRelayFrameUrl}
+          frameOpen={portRelayFrameOpen}
+          mobileFrameOpen={mobilePortRelayFrameOpen}
+          targetMenuOpen={portRelayTargetMenuOpen}
+          targetMenuRef={portRelayTargetMenuRef}
+          targets={portRelayTargetMenuTargets}
+          activeTarget={activePortRelayTarget}
+          switchingTarget={portRelayMenuSwitchingTarget}
+          onTargetSelect={handlePortRelayFloatingTargetSelect}
+          onPointerDown={handlePortRelayFloatingPointerDown}
+          onPointerMove={handlePortRelayFloatingPointerMove}
+          onPointerUp={finishPortRelayFloatingPress}
+          onPointerCancel={finishPortRelayFloatingPress}
+          onToggle={handlePortRelayFloatingToggle}
+        />
         {chatQuickSwitchMenuPlacement.kind === 'mobile' ? chatQuickSwitchMenu : null}
         {mobilePortRelayFrameOpen ? null : gestureNavigation ? (
           <div
@@ -17813,10 +17752,24 @@ function App() {
     </div>
   ) : null;
   const portRelayMobileFrameOverlay = mobilePortRelayFrameOpen
-    ? renderPortRelayFrameSurface('mobile')
+    ? (
+      <PortRelayFrameSurface
+        mode="mobile"
+        url={portRelayFrameUrl}
+        onCloseChrome={closePortRelayFrameFromChrome}
+        onOpenInBrowser={openPortRelayPreviewInBrowser}
+      />
+    )
     : null;
-  const renderChatPortRelayPreviewSurface = (mode: 'desktop' | 'mobile') =>
-    renderPortRelayFrameSurface(mode, {chrome: true});
+  const renderChatPortRelayPreviewSurface = (mode: 'desktop' | 'mobile') => (
+    <PortRelayFrameSurface
+      mode={mode}
+      url={portRelayFrameUrl}
+      chrome={true}
+      onCloseChrome={closePortRelayFrameFromChrome}
+      onOpenInBrowser={openPortRelayPreviewInBrowser}
+    />
+  );
   const chatPreviewDesktopPane = isWide && chatPreviewOpen ? (
     <aside
       className="chat-preview-pane"
