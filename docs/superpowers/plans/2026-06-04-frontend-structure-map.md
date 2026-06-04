@@ -905,3 +905,4 @@ Expected: targeted tests PASS and TypeScript exits 0.
 - 2026-06-04 follow-up: Added Tasks 11-13 to correct the review-map gaps found after implementation: `shell/state` ownership, neutral floating-control preference sanitizers, and a later services-bucket cleanup.
 - 2026-06-04 follow-up: Tasks 11-12 are complete and verified with targeted Jest plus `npm run tsc:web`; `services/responsiveLayout.ts` and `services/workspaceUiState.ts` now live under `shell/state`, and `workspace/WorkspacePersistence.ts` no longer imports mobile layout helpers.
 - 2026-06-04 follow-up: Task 13 is complete and verified with targeted Jest plus `npm run tsc:web`; the remaining `services/` helpers now live under `chat/layout` and `code`, leaving no source files in `app/web/src/services`.
+- 2026-06-04 follow-up: Task 13 full verification passed with `npm test -- --runInBand` and `npm run build:web`.
