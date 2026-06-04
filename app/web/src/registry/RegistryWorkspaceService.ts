@@ -56,7 +56,7 @@ import type {
   RegistryTokenScanResult,
   RegistryWheelMakerUpdateResponse,
   RegistryWorkingTreeFileDiff,
-} from '../types/registry';
+} from './registryTypes';
 
 export type WorkspaceSession = {
   projects: RegistryProject[];

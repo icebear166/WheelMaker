@@ -7,7 +7,7 @@ import {
 } from './connectionStatus';
 import type {LocalHubReadStatus} from '../registry/localRead/LocalHubReadManager';
 import type {NativeWebSourceState} from '../platform/native/webSource';
-import type {RegistryHub} from '../types/registry';
+import type {RegistryHub} from '../registry/registryTypes';
 
 type ConnectionStatusSettingsDetailProps = {
   webSourceState: NativeWebSourceState | null;

@@ -1,4 +1,4 @@
-import type {RegistryFsEntry, RegistryHub, RegistryProject} from '../types/registry';
+import type {RegistryFsEntry, RegistryHub, RegistryProject} from '../registry/registryTypes';
 import type {RegistryWorkspaceService} from '../registry/RegistryWorkspaceService';
 import type {HydratedProjectState, WorkspaceStore} from './WorkspaceStore';
 

@@ -2,7 +2,7 @@ import type {
   RegistrySpeechCancelPayload,
   RegistrySpeechStartPayload,
   RegistrySpeechStartResponse,
-} from '../../types/registry';
+} from '../../registry/registryTypes';
 
 export type AndroidNativeSpeechStatus =
   | 'permission'

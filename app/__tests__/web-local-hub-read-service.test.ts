@@ -1,7 +1,7 @@
 import {LocalHubReadManager} from '../web/src/registry/localRead/LocalHubReadManager';
 import {RegistryRepository, type LocalReadProofVerifier} from '../web/src/registry/RegistryRepository';
 import {RegistryWorkspaceService} from '../web/src/registry/RegistryWorkspaceService';
-import type {RegistryEnvelope, RegistryLocalReadCandidate, RegistryProjectListResponse} from '../web/src/types/registry';
+import type {RegistryEnvelope, RegistryLocalReadCandidate, RegistryProjectListResponse} from '../web/src/registry/registryTypes';
 
 function makeCandidate(overrides: Partial<RegistryLocalReadCandidate> = {}): RegistryLocalReadCandidate {
   return {

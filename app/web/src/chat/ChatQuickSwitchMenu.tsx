@@ -1,5 +1,5 @@
 import React from 'react';
-import type { RegistryChatSession } from '../types/registry';
+import type { RegistryChatSession } from '../registry/registryTypes';
 import type { MobileChatQuickSwitchSection } from './mobileChatQuickSwitch';
 
 export type ChatQuickSwitchMenuPlacement = 'mobile' | 'desktop';

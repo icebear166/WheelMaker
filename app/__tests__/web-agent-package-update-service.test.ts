@@ -159,7 +159,7 @@ describe('agent package update registry service', () => {
   });
 
   test('defines WheelMaker update remote refresh metadata in the registry type', () => {
-    const registryTypes = fs.readFileSync(path.join(__dirname, '..', 'web', 'src', 'types', 'registry.ts'), 'utf8');
+    const registryTypes = fs.readFileSync(path.join(__dirname, '..', 'web', 'src', 'registry', 'registryTypes.ts'), 'utf8');
 
     expect(registryTypes).toContain('remoteRefreshRunning?: boolean;');
   });

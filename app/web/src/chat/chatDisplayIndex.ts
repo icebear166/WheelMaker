@@ -1,4 +1,4 @@
-import type {RegistryChatMessage} from '../types/registry';
+import type {RegistryChatMessage} from '../registry/registryTypes';
 import type {ChatPromptStatus} from './chatPromptStatus';
 import {
   splitChatConfirmationReplyText,

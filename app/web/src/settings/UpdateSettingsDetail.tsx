@@ -22,7 +22,7 @@ import type {
   RegistryNpmPackage,
   RegistryProject,
   RegistryWheelMakerUpdateResponse,
-} from '../types/registry';
+} from '../registry/registryTypes';
 
 type PackageAction = 'install' | 'update' | 'uninstall';
 

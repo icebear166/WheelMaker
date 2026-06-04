@@ -1,6 +1,6 @@
 import type {RegistryDebugSink} from '../RegistryClient';
 import {createRegistryRepository, type LocalReadProofVerifier, type RegistryRepository} from '../RegistryRepository';
-import type {RegistryHub, RegistryProjectListResponse} from '../../types/registry';
+import type {RegistryHub, RegistryProjectListResponse} from '../registryTypes';
 
 export type LocalHubReadStatus = 'Local' | 'Remote';
 

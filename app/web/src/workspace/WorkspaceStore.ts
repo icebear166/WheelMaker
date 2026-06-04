@@ -6,7 +6,7 @@ import type {
   RegistryGitCommitFile,
   RegistryProject,
   RegistrySessionTurn,
-} from '../types/registry';
+} from '../registry/registryTypes';
 import {decodeSessionTurnToMessage} from '../chat/chatWire';
 import {
   chatSessionKeyFromParts,

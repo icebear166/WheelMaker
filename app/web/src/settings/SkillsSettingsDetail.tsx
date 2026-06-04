@@ -12,7 +12,7 @@ import type {
   RegistrySkillScope,
   RegistrySkillSnapshot,
   RegistrySkillSourceCandidate,
-} from '../types/registry';
+} from '../registry/registryTypes';
 
 const SKILLS_MARKETPLACE_URL = 'https://www.skills.sh/';
 

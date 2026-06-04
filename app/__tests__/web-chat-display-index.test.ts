@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import {buildChatDisplayIndex, resolveChatDisplayScrollIndex} from '../web/src/chat/chatDisplayIndex';
-import type {RegistryChatMessage} from '../web/src/types/registry';
+import type {RegistryChatMessage} from '../web/src/registry/registryTypes';
 
 function message(
   turnIndex: number,

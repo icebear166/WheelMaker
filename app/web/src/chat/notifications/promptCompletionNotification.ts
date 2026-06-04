@@ -1,7 +1,7 @@
 import type {
   RegistryChatMessage,
   RegistrySessionSummary,
-} from '../../types/registry';
+} from '../../registry/registryTypes';
 import {resolveChatSessionTitle} from '../chatSessionTitle';
 import type {
   PromptCompletionNotificationStatus,

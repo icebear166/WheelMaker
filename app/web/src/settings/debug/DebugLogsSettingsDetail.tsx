@@ -15,7 +15,7 @@ import {startWorkspaceDiagnosticSpan} from '../../debug/workspaceDiagnostics';
 import type {
   RegistryDebugUploadLogPayload,
   RegistryDebugUploadLogResponse,
-} from '../../types/registry';
+} from '../../registry/registryTypes';
 
 type DebugLogsSettingsDetailProps = {
   logLevel: AppDiagnosticLogLevel;

@@ -1,4 +1,4 @@
-import type {RegistryChatSession, RegistryGitCommit, RegistryGitCommitFile, RegistrySessionTurn} from '../types/registry';
+import type {RegistryChatSession, RegistryGitCommit, RegistryGitCommitFile, RegistrySessionTurn} from '../registry/registryTypes';
 import {
   DEFAULT_CODE_FONT,
   DEFAULT_CODE_FONT_SIZE,

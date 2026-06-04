@@ -145,7 +145,7 @@ describe('web chat integration', () => {
 
   test('defines registry session protocol and uses real chat UI instead of placeholder sessions', () => {
     const projectRoot = path.join(__dirname, '..');
-    const registryTypes = readSourceText(path.join(projectRoot, 'web', 'src', 'types', 'registry.ts'));
+    const registryTypes = readSourceText(path.join(projectRoot, 'web', 'src', 'registry', 'registryTypes.ts'));
     const repositoryTs = readSourceText(path.join(projectRoot, 'web', 'src', 'registry', 'RegistryRepository.ts'));
     const workspaceServiceTs = readSourceText(path.join(projectRoot, 'web', 'src', 'registry', 'RegistryWorkspaceService.ts'));
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
@@ -1974,7 +1974,7 @@ describe('web chat integration', () => {
 
   test('chat composer supports indexed project file mentions', () => {
     const projectRoot = path.join(__dirname, '..');
-    const registryTypes = readSourceText(path.join(projectRoot, 'web', 'src', 'types', 'registry.ts'));
+    const registryTypes = readSourceText(path.join(projectRoot, 'web', 'src', 'registry', 'registryTypes.ts'));
     const repositoryTs = readSourceText(path.join(projectRoot, 'web', 'src', 'registry', 'RegistryRepository.ts'));
     const workspaceServiceTs = readSourceText(path.join(projectRoot, 'web', 'src', 'registry', 'RegistryWorkspaceService.ts'));
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));

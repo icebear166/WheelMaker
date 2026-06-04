@@ -1,5 +1,5 @@
 import type {RegistryDebugCaptureEvent, RegistryDebugConnection} from '../debug/registryDebug';
-import type {RegistryConnectInitPayload, RegistryEnvelope, RegistryErrorPayload} from '../types/registry';
+import type {RegistryConnectInitPayload, RegistryEnvelope, RegistryErrorPayload} from './registryTypes';
 
 export type RegistryDebugSink = (event: RegistryDebugCaptureEvent) => void;
 

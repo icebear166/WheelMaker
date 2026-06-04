@@ -1041,7 +1041,7 @@ Expected: targeted tests PASS and TypeScript exits 0.
 - Move: `app/web/src/types/registry.ts` -> `app/web/src/registry/registryTypes.ts`
 - Modify imports in `app/web/src/**` and `app/__tests__/**`.
 
-- [ ] **Step 1: Run baseline type import tests**
+- [x] **Step 1: Run baseline type import tests**
 
 ```powershell
 cd app
@@ -1050,7 +1050,7 @@ npm test -- --runInBand web-chat-copy-range.test.ts web-chat-display-index.test.
 
 Expected: targeted tests PASS before moving the type Module.
 
-- [ ] **Step 2: Move registry types and update imports**
+- [x] **Step 2: Move registry types and update imports**
 
 ```powershell
 git mv app/web/src/types/registry.ts app/web/src/registry/registryTypes.ts
@@ -1058,7 +1058,7 @@ git mv app/web/src/types/registry.ts app/web/src/registry/registryTypes.ts
 
 Replace imports from `../types/registry`, `../../types/registry`, and `../web/src/types/registry` with the correct relative path to `registry/registryTypes`.
 
-- [ ] **Step 3: Verify no old registry type imports remain**
+- [x] **Step 3: Verify no old registry type imports remain**
 
 ```powershell
 rg --glob '!**/dist/**' -n "types/registry|web/src/types/registry" app/web/src app/__tests__
@@ -1066,7 +1066,7 @@ rg --glob '!**/dist/**' -n "types/registry|web/src/types/registry" app/web/src a
 
 Expected: no matches.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 ```powershell
 cd app

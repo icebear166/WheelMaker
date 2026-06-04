@@ -1,5 +1,5 @@
 import React from 'react';
-import type { RegistryFsEntry, RegistryProject } from '../types/registry';
+import type { RegistryFsEntry, RegistryProject } from '../registry/registryTypes';
 
 type FileResolvedIcon = {
   glyph: string;

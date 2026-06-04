@@ -4,7 +4,7 @@ import {
   resolveSessionSearchPollDelay,
   splitSessionSearchTitleHighlight,
 } from '../web/src/chat/sessionSearchState';
-import type {RegistryChatSession, RegistryProject, RegistrySessionSearchResult} from '../web/src/types/registry';
+import type {RegistryChatSession, RegistryProject, RegistrySessionSearchResult} from '../web/src/registry/registryTypes';
 
 function session(sessionId: string, title: string): RegistryChatSession {
   return {

@@ -3,7 +3,7 @@ import type {
   RegistrySkillProjectSnapshot,
   RegistrySkillScope,
   RegistrySkillSnapshot,
-} from '../../types/registry';
+} from '../../registry/registryTypes';
 
 export interface SkillCategoryGroup {
   category: string;

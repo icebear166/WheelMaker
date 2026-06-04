@@ -1,4 +1,4 @@
-import type { RegistryChatMessage } from '../types/registry';
+import type { RegistryChatMessage } from '../registry/registryTypes';
 
 export type ChatPromptStatus = 'confirming' | 'responding' | 'undelivered' | null;
 

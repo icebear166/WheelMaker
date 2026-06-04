@@ -6,7 +6,7 @@ import {
 import type {
   RegistryChatMessage,
   RegistrySessionSummary,
-} from '../web/src/types/registry';
+} from '../web/src/registry/registryTypes';
 
 function message(
   method: string,

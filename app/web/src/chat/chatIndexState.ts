@@ -3,7 +3,7 @@ import type {
   RegistryChatSession,
   RegistryEnvelope,
   RegistryProject,
-} from '../types/registry';
+} from '../registry/registryTypes';
 import type { ChatSessionKey } from './chatSessionKey';
 
 export type ChatIndexRefreshState = {

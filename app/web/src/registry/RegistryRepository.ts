@@ -70,7 +70,7 @@ import type {
   RegistryTokenScanResult,
   RegistryWheelMakerUpdateResponse,
   RegistryWorkingTreeFileDiff,
-} from '../types/registry';
+} from './registryTypes';
 
 export type LocalReadProofResponse = {
   endpointId?: string;

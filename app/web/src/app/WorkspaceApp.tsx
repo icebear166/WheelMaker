@@ -364,7 +364,7 @@ import type {
   RegistryFileIndexSearchResult,
   RegistryFileIndexStatus,
   RegistryFileIndexStatusResponse,
-} from '../types/registry';
+} from '../registry/registryTypes';
 
 const RegistryDebugPanel = React.lazy(() => import('../debug/RegistryDebugPanel').then(module => ({
   default: module.RegistryDebugPanel,

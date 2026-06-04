@@ -7,7 +7,7 @@ import {
   wheelMakerUpdateStatusLabel,
   withAgentPackageTimeout,
 } from '../web/src/settings/update/agentPackageUpdateView';
-import type {RegistryHub} from '../web/src/types/registry';
+import type {RegistryHub} from '../web/src/registry/registryTypes';
 
 describe('agent package update view helpers', () => {
   test('derives unique hub ids from project.list hubs in stable sorted order', () => {

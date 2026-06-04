@@ -1,4 +1,4 @@
-import type {RegistryPortRelaySnapshot} from '../types/registry';
+import type {RegistryPortRelaySnapshot} from '../registry/registryTypes';
 
 export type PortRelayTarget = {
   hubId: string;
