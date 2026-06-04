@@ -1085,11 +1085,11 @@ Expected: targeted tests PASS and TypeScript exits 0.
 - Modify: `app/web/src/app/WorkspaceApp.tsx`
 - Modify tests that assert startup helper locality.
 
-- [ ] **Step 1: Extract startup-only helpers**
+- [x] **Step 1: Extract startup-only helpers**
 
 Move `isLoopbackHost`, `isLoopbackAddress`, and `resolveInitialRegistryAddress` from `WorkspaceApp.tsx` into `app/workspaceBootstrap.ts`. Keep `workspaceAppReady` in `WorkspaceApp.tsx` unless its setup grows beyond simple PWA foundation initialization.
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
 
 ```powershell
 cd app

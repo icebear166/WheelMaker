@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { resolveInitialRegistryAddress } from './workspaceBootstrap';
 
 declare global {
   interface Window {
@@ -2259,45 +2260,6 @@ function collectReactText(node: React.ReactNode): string {
   }
   return '';
 }
-function isLoopbackHost(host: string): boolean {
-  const v = host.trim().toLowerCase();
-  return v === '127.0.0.1' || v === 'localhost' || v === '::1' || v === '[::1]';
-}
-
-function isLoopbackAddress(address: string): boolean {
-  const input = address.trim();
-  if (!input) return false;
-  if (/^wss?:\/\//i.test(input)) {
-    try {
-      const url = new URL(input);
-      return isLoopbackHost(url.hostname);
-    } catch {
-      return false;
-    }
-  }
-  if (/^https?:\/\//i.test(input)) {
-    try {
-      const url = new URL(input);
-      return isLoopbackHost(url.hostname);
-    } catch {
-      return false;
-    }
-  }
-  const host = input.split('/')[0].split(':')[0];
-  return isLoopbackHost(host);
-}
-
-function resolveInitialRegistryAddress(
-  savedAddress: string,
-  defaultAddress: string,
-): string {
-  const pageHost = window.location.hostname;
-  if (!isLoopbackHost(pageHost) && isLoopbackAddress(savedAddress)) {
-    return defaultAddress;
-  }
-  return savedAddress || defaultAddress;
-}
-
 function readSafeAreaTopInset(): number {
   const value = window
     .getComputedStyle(document.documentElement)
