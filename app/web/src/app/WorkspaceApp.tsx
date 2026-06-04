@@ -58,13 +58,13 @@ import {
   decodeChatSessionKey,
   encodeChatSessionKey,
   type ChatSessionKey,
-} from '../chat/chatSessionKey';
+} from '../chat/session/chatSessionKey';
 import {buildMobileChatQuickSwitchSections} from '../chat/mobileChatQuickSwitch';
 import {ChatQuickSwitchMenu} from '../chat/ChatQuickSwitchMenu';
 import { ChatSessionNav } from '../chat/ChatSessionNav';
 import { ChatSurface } from '../chat/ChatSurface';
 import { ChatTurnView } from '../chat/ChatTurnView';
-import { resolveChatSessionTitle } from '../chat/chatSessionTitle';
+import { resolveChatSessionTitle } from '../chat/session/chatSessionTitle';
 import {decodeSessionTurnToMessage, normalizeSessionMessagePayload} from '../chat/chatWire';
 import {
   applySessionReadResult,
@@ -75,10 +75,10 @@ import {
   mergeRealtimeTurn,
   shouldReadRepairForIncomingTurn,
   type ChatTurnStoreState,
-} from '../chat/chatTurnStores';
-import {createChatDurablePersistQueue} from '../chat/chatDurablePersist';
-import {createChatReadRepairQueue} from '../chat/chatReadRepair';
-import {buildChatDisplayIndex, type ChatDisplayIndexItem} from '../chat/chatDisplayIndex';
+} from '../chat/turns/chatTurnStores';
+import {createChatDurablePersistQueue} from '../chat/turns/chatDurablePersist';
+import {createChatReadRepairQueue} from '../chat/turns/chatReadRepair';
+import {buildChatDisplayIndex, type ChatDisplayIndexItem} from '../chat/turns/chatDisplayIndex';
 import {
   buildSessionSearchSections,
   mergeSessionSearchResultsByProject,
@@ -86,7 +86,7 @@ import {
   splitSessionSearchTitleHighlight,
   type SessionSearchResultsByProjectId,
   type SessionSearchSectionRow,
-} from '../chat/sessionSearchState';
+} from '../chat/session/sessionSearchState';
 import {
   OLDER_SESSION_DAYS,
   buildArchivedSessionSections,
@@ -97,10 +97,10 @@ import {
   writeOlderSessionsExpanded,
   type ArchiveBatchProgress,
   type ArchiveCandidate,
-} from '../chat/sessionArchiveState';
-import {useChatLayoutMetrics} from '../chat/chatLayoutMetrics';
-import {resolveWideProjectActionPopoverPlacement, type WideProjectActionPopoverPlacement} from '../chat/wideProjectActionPopover';
-import {ChatVirtuosoTurnList, type ChatVirtuosoTurnListHandle} from '../chat/ChatVirtuosoTurnList';
+} from '../chat/session/sessionArchiveState';
+import {useChatLayoutMetrics} from '../chat/layout/chatLayoutMetrics';
+import {resolveWideProjectActionPopoverPlacement, type WideProjectActionPopoverPlacement} from '../chat/layout/wideProjectActionPopover';
+import {ChatVirtuosoTurnList, type ChatVirtuosoTurnListHandle} from '../chat/turns/ChatVirtuosoTurnList';
 import {
   DEFAULT_CHAT_FONT,
   isChatFontId,
@@ -110,7 +110,7 @@ import {
 import { buildPromptDoneCopyRange } from '../chat/chatCopyRange';
 import {
   isPromptAttachmentContentBlock,
-} from '../chat/chatPromptAttachments';
+} from '../chat/composer/chatPromptAttachments';
 import {
   buildPromptMarkdownImageFileName,
   renderMarkdownElementToPngBlob,
@@ -124,7 +124,7 @@ import {
   type ChatConfirmationReply,
   type ChatOptionReply,
 } from '../chat/chatOptionReplies';
-import { insertChatSlashCommandText } from '../chat/chatSlashInsertion';
+import { insertChatSlashCommandText } from '../chat/composer/chatSlashInsertion';
 import {
   isChatUserScrollLocked,
   nextChatUserScrollLockUntil,
@@ -132,9 +132,9 @@ import {
   resolveChatSessionReadWindowUpdate,
   resolveChatScrollToBottomVisibility,
   shouldAutoScrollChatToBottom,
-} from '../chat/chatScrollIntent';
+} from '../chat/layout/chatScrollIntent';
 import { resolveChatScrollBottomButtonOffset } from '../chat/layout/chatScrollBottomButton';
-import { resolvePromptTurnStatus, type ChatPromptStatus } from '../chat/chatPromptStatus';
+import { resolvePromptTurnStatus, type ChatPromptStatus } from '../chat/turns/chatPromptStatus';
 import {
   buildPromptCompletionNotification,
   promptCompletionNotificationKey,
@@ -154,7 +154,7 @@ import {
   type AndroidApkLocalRelease,
   type AndroidApkUpdateStatus,
 } from '../platform/android/androidApkUpdate';
-import { mergeChatSessionList, shouldUpdateCurrentProjectSessions } from '../chat/chatIndexState';
+import { mergeChatSessionList, shouldUpdateCurrentProjectSessions } from '../chat/session/chatIndexState';
 import {
   resolveChatListSelection,
   resolveSelectedChatVisibilityRecovery,

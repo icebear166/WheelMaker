@@ -2,7 +2,7 @@ import type {
   RegistryChatSession,
   RegistryProject,
   RegistrySessionSearchResult,
-} from '../registry/registryTypes';
+} from '../../registry/registryTypes';
 
 export const SESSION_SEARCH_FAST_POLL_MS = 300;
 export const SESSION_SEARCH_SLOW_POLL_MS = 800;

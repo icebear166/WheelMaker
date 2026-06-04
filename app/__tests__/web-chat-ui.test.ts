@@ -721,7 +721,7 @@ describe('web chat integration', () => {
     expect(chatProjectNameBlock).toContain('selectedChatKey?.projectId');
     expect(chatProjectNameBlock).toContain('projects.find(item => item.projectId === selectedProjectId)?.name');
     expect(chatProjectNameBlock).toContain('breadcrumbProjectName');
-    expect(mainTsx).toContain("import { resolveChatSessionTitle } from '../chat/chatSessionTitle';");
+    expect(mainTsx).toContain("import { resolveChatSessionTitle } from '../chat/session/chatSessionTitle';");
     expect(mainTsx).not.toContain('const [useLatestPromptTitle, setUseLatestPromptTitle] = useState(');
     expect(mainTsx).toContain('const selectedChatDisplayTitle = useMemo(');
     expect(mainTsx).toContain("resolveChatSessionTitle(selectedChatSession?.title ?? '')");
@@ -1008,7 +1008,7 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('showChatConfigLabels');
     expect(mainTsx).not.toContain('chatConfigFeedback');
     expect(mainTsx).not.toContain('Applying config');
-    expect(mainTsx).toContain("import { insertChatSlashCommandText } from '../chat/chatSlashInsertion';");
+    expect(mainTsx).toContain("import { insertChatSlashCommandText } from '../chat/composer/chatSlashInsertion';");
     expect(mainTsx).toContain('const inserted = insertChatSlashCommandText(');
 
     const stopTriggerClassStart = mainTsx.indexOf('className={chatComposerStopTriggerClassName}');

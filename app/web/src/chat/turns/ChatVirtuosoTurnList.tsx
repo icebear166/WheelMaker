@@ -2,7 +2,7 @@ import React from 'react';
 import {Virtuoso, type Components, type VirtuosoHandle} from 'react-virtuoso';
 import type {ChatDisplayIndex, ChatDisplayIndexItem} from './chatDisplayIndex';
 import {resolveChatDisplayScrollIndex} from './chatDisplayIndex';
-import {resolveChatScrollBottomTop} from './chatScrollIntent';
+import {resolveChatScrollBottomTop} from '../layout/chatScrollIntent';
 
 const DEFAULT_AT_BOTTOM_THRESHOLD = 80;
 const DEFAULT_BOTTOM_BUFFER = 0;

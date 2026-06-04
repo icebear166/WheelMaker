@@ -11,7 +11,7 @@ import {decodeSessionTurnToMessage} from '../chat/chatWire';
 import {
   chatSessionKeyFromParts,
   type ChatSessionKey,
-} from '../chat/chatSessionKey';
+} from '../chat/session/chatSessionKey';
 import { sanitizeCachedSessionMessages } from '../chat/turns/chatSync';
 import {
   WorkspacePersistenceRepository,

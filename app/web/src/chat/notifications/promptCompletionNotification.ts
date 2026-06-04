@@ -2,7 +2,7 @@ import type {
   RegistryChatMessage,
   RegistrySessionSummary,
 } from '../../registry/registryTypes';
-import {resolveChatSessionTitle} from '../chatSessionTitle';
+import {resolveChatSessionTitle} from '../session/chatSessionTitle';
 import type {
   PromptCompletionNotificationStatus,
   WheelMakerNotificationPayload,

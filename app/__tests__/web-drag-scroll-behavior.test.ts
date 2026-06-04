@@ -9,7 +9,7 @@ import {
   resolveChatScrollBottomTop,
   resolveChatScrollToBottomVisibility,
   shouldAutoScrollChatToBottom,
-} from '../web/src/chat/chatScrollIntent';
+} from '../web/src/chat/layout/chatScrollIntent';
 
 import {readWebStyles} from '../testHelpers/webStyles';
 describe('web drag scroll behavior', () => {
@@ -52,7 +52,7 @@ describe('web drag scroll behavior', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const virtualList = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'chat', 'ChatVirtuosoTurnList.tsx'),
+      path.join(projectRoot, 'web', 'src', 'chat', 'turns', 'ChatVirtuosoTurnList.tsx'),
       'utf8',
     );
 
@@ -72,9 +72,9 @@ describe('web drag scroll behavior', () => {
   test('keeps virtualizer item-count follow logic inside the Virtuoso wrapper', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
-    const scrollIntent = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'chat', 'chatScrollIntent.ts'), 'utf8');
+    const scrollIntent = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'chat', 'layout', 'chatScrollIntent.ts'), 'utf8');
     const virtualList = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'chat', 'ChatVirtuosoTurnList.tsx'),
+      path.join(projectRoot, 'web', 'src', 'chat', 'turns', 'ChatVirtuosoTurnList.tsx'),
       'utf8',
     );
 
@@ -91,7 +91,7 @@ describe('web drag scroll behavior', () => {
   test('uses the app follow intent instead of stale Virtuoso bottom state for chat output following', () => {
     const projectRoot = path.join(__dirname, '..');
     const virtualList = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'chat', 'ChatVirtuosoTurnList.tsx'),
+      path.join(projectRoot, 'web', 'src', 'chat', 'turns', 'ChatVirtuosoTurnList.tsx'),
       'utf8',
     );
 
@@ -146,7 +146,7 @@ describe('web drag scroll behavior', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const virtualList = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'chat', 'ChatVirtuosoTurnList.tsx'),
+      path.join(projectRoot, 'web', 'src', 'chat', 'turns', 'ChatVirtuosoTurnList.tsx'),
       'utf8',
     );
 

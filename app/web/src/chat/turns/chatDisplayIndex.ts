@@ -1,10 +1,10 @@
-import type {RegistryChatMessage} from '../registry/registryTypes';
+import type {RegistryChatMessage} from '../../registry/registryTypes';
 import type {ChatPromptStatus} from './chatPromptStatus';
 import {
   splitChatConfirmationReplyText,
   splitChatOptionReplyText,
-} from './chatOptionReplies';
-import {promptAttachmentBlockCount} from './chatPromptAttachments';
+} from '../chatOptionReplies';
+import {promptAttachmentBlockCount} from '../composer/chatPromptAttachments';
 
 export type ChatDisplayIndexItem = {
   kind: 'turn' | 'pending';

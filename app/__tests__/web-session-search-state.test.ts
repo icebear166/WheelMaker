@@ -3,7 +3,7 @@ import {
   mergeSessionSearchResultsByProject,
   resolveSessionSearchPollDelay,
   splitSessionSearchTitleHighlight,
-} from '../web/src/chat/sessionSearchState';
+} from '../web/src/chat/session/sessionSearchState';
 import type {RegistryChatSession, RegistryProject, RegistrySessionSearchResult} from '../web/src/registry/registryTypes';
 
 function session(sessionId: string, title: string): RegistryChatSession {

@@ -2,7 +2,7 @@ import React from 'react';
 import {
   DEFAULT_CHAT_TURN_HEIGHT_METRICS,
   type ChatTurnHeightMetrics,
-} from './chatDisplayIndex';
+} from '../turns/chatDisplayIndex';
 
 const WIDTH_BUCKET_PX = 32;
 

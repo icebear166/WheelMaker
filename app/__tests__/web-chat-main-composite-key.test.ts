@@ -34,7 +34,7 @@ describe('main chat composite key migration', () => {
     const main = readMain();
     const selectProjectChatSessionBody = extractFunctionBody(main, 'selectProjectChatSession');
 
-    expect(main).toContain("from '../chat/chatSessionKey'");
+    expect(main).toContain("from '../chat/session/chatSessionKey'");
     expect(main).toContain('const selectedChatKeyRef = useRef<ChatSessionKey | null>(null);');
     expect(main).toContain('const [selectedChatKey, setSelectedChatKey] = useState<ChatSessionKey | null>(null);');
     expect(main).toContain('encodeChatSessionKey(');

@@ -2,7 +2,7 @@ import {
   resolvePromptDoneStatus,
   resolvePromptTurnStatus,
   type ChatPromptStatus,
-} from '../web/src/chat/chatPromptStatus';
+} from '../web/src/chat/turns/chatPromptStatus';
 import type { RegistryChatMessage } from '../web/src/registry/registryTypes';
 
 function message(turnIndex: number, method: string, sessionId = 's1'): RegistryChatMessage {

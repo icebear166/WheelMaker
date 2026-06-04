@@ -19,6 +19,10 @@
 - `app/web/src/platform/**`: target for Desktop, Android, native-host, and PWA adapters.
 - `app/web/src/notifications/**`: target for generic notification provider seam and notification payload types.
 - `app/web/src/chat/notifications/**`: target for Chat prompt-completion notification policy.
+- `app/web/src/chat/session/**`: target for Chat session key, title, index, search, and archive state helpers.
+- `app/web/src/chat/turns/**`: target for Chat turn synchronization, turn stores, display index, prompt status, and virtualized turn list.
+- `app/web/src/chat/layout/**`: target for Chat layout measurements, scroll intent, and project-session popover placement helpers.
+- `app/web/src/chat/composer/**`: target for Chat composer text/attachment/slash-command helpers before extracting the full composer surface.
 - `app/web/src/debug/**`: target for diagnostics modules.
 - `app/web/src/preferences/**`: target for neutral persisted UI preference helpers shared across shell state and workspace persistence.
 - `app/web/src/code/**`: target for shared code-rendering modules, including Shiki settings and rendering.
@@ -57,6 +61,17 @@ The move-map priority column uses this rule:
 - `Keep`: Modules that already have clear locality and should not be moved just to satisfy a directory pattern.
 
 Tasks 1-18 completed the `First` scope for the HTML review candidates. Tasks 19-20 completed the `Second` surface-extraction scope. Task 21 opened the `Third` CSS scope with the style entrypoint and shared surface chrome; Task 22 completes the remaining root CSS directory split without changing selectors.
+
+---
+
+## Follow-Up Direction
+
+- Settings detail Modules should stay one level under `settings/` when the file name already carries the detail name. The extra `settings/update/UpdateSettingsDetail.tsx` style of nesting does not earn enough locality to justify the navigation cost. Existing `settings/code` and `settings/portRelay` moves can remain because they are already done and imports are stable, but further Settings detail down-foldering is not a target.
+- Chat should continue to be split because the root `chat/` directory contains several distinct seams: Session, Turn, Layout, Composer, Export, Notifications, and rendered Surfaces.
+- `WorkspaceApp.tsx` deeper extraction is a separate risk class. Evaluate it in three categories before moving logic:
+  - **State ownership:** high importance, high work. Chat state spans session selection, turn stores, composer draft, attachment uploads, read-only archive preview, file peek, and prompt cancellation. Move only after Chat files have stable locations.
+  - **Effects/runtime adapters:** medium-high importance, high work. Registry event handling, session reads, durable persistence, notifications, Android/native hooks, and viewport/history effects are coupled to state ordering and need focused tests before extraction.
+  - **Commands/callback wiring:** high importance, very high work. Send/retry/cancel prompt, select/create/resume session, file peek, archive/search, and project sync commands cross several seams. This should be split last, after state/effects have smaller Interfaces.
 
 ---
 
@@ -1239,6 +1254,49 @@ Expected: targeted tests, TypeScript, and webpack build all exit 0.
 
 ---
 
+### Task 23: Chat Helper Directory Split
+
+**Files:**
+- Move: `app/web/src/chat/chatSessionKey.ts` -> `app/web/src/chat/session/chatSessionKey.ts`
+- Move: `app/web/src/chat/chatSessionTitle.ts` -> `app/web/src/chat/session/chatSessionTitle.ts`
+- Move: `app/web/src/chat/chatIndexState.ts` -> `app/web/src/chat/session/chatIndexState.ts`
+- Move: `app/web/src/chat/sessionSearchState.ts` -> `app/web/src/chat/session/sessionSearchState.ts`
+- Move: `app/web/src/chat/sessionArchiveState.ts` -> `app/web/src/chat/session/sessionArchiveState.ts`
+- Move: `app/web/src/chat/chatTurnStores.ts` -> `app/web/src/chat/turns/chatTurnStores.ts`
+- Move: `app/web/src/chat/chatReadRepair.ts` -> `app/web/src/chat/turns/chatReadRepair.ts`
+- Move: `app/web/src/chat/chatDurablePersist.ts` -> `app/web/src/chat/turns/chatDurablePersist.ts`
+- Move: `app/web/src/chat/chatDisplayIndex.ts` -> `app/web/src/chat/turns/chatDisplayIndex.ts`
+- Move: `app/web/src/chat/chatPromptStatus.ts` -> `app/web/src/chat/turns/chatPromptStatus.ts`
+- Move: `app/web/src/chat/ChatVirtuosoTurnList.tsx` -> `app/web/src/chat/turns/ChatVirtuosoTurnList.tsx`
+- Move: `app/web/src/chat/chatLayoutMetrics.ts` -> `app/web/src/chat/layout/chatLayoutMetrics.ts`
+- Move: `app/web/src/chat/chatScrollIntent.ts` -> `app/web/src/chat/layout/chatScrollIntent.ts`
+- Move: `app/web/src/chat/wideProjectActionPopover.ts` -> `app/web/src/chat/layout/wideProjectActionPopover.ts`
+- Move: `app/web/src/chat/chatPromptAttachments.ts` -> `app/web/src/chat/composer/chatPromptAttachments.ts`
+- Move: `app/web/src/chat/chatSlashInsertion.ts` -> `app/web/src/chat/composer/chatSlashInsertion.ts`
+- Modify: `app/web/src/app/WorkspaceApp.tsx`
+- Modify Chat imports in `app/web/src/**`
+- Modify path-anchored tests under `app/__tests__/**`
+
+- [x] **Step 1: Move low-logic Chat files**
+
+Use `git mv` and preserve file bodies except import paths.
+
+- [x] **Step 2: Update imports and structural tests**
+
+Update import paths to the new Chat seams. Do not extract `ChatComposer`, `ChatFilePeekSurface`, or `ChatMarkdown` in this task.
+
+- [x] **Step 3: Verify**
+
+```powershell
+cd app
+npm test -- --runInBand web-chat-session-key.test.ts web-chat-session-title.test.ts web-chat-index-state.test.ts web-session-search-state.test.ts web-session-archive-state.test.ts web-chat-turn-stores.test.ts web-chat-read-repair.test.ts web-chat-durable-persist.test.ts web-chat-display-index.test.ts web-chat-prompt-status.test.ts web-chat-virtuoso-mount.test.tsx web-drag-scroll-behavior.test.ts web-chat-slash-insertion.test.ts web-chat-turn-rendering.test.ts web-chat-ui.test.ts wide-project-action-popover.test.ts
+npm run tsc:web
+```
+
+Expected: targeted tests and TypeScript all exit 0.
+
+---
+
 ## Self-Review
 
 - Spec coverage: The plan covers the completed HTML review implementation scope: main bootstrap extraction, `services/` retirement, root helper co-location, source-structure tests away from `main.tsx`, Settings helper co-location, Settings/Chat/File/Git surface extraction, and CSS entrypoint/surface splitting under `styles/`.
@@ -1278,3 +1336,5 @@ This plan has completed the HTML review implementation scope that was safe to ex
 - 2026-06-04 continuation: Task 22 is complete. The legacy root CSS source was split into `styles/base.css`, `styles/shell.css`, `styles/settings.css`, `styles/portRelay.css`, `styles/debug.css`, `styles/file.css`, `styles/git.css`, `styles/chat.css`, and `styles/code.css`; style-source tests now read the CSS aggregate through `testHelpers/webStyles.ts`.
 - 2026-06-04 continuation: Task 22 verification passed with `npm test -- --runInBand web-chat-ui.test.ts web-chat-file-peek-viewer.test.ts web-agent-package-update-settings.test.ts web-markdown-preview-mode.test.ts web-git-graph-popover-layout.test.ts web-port-relay-settings.test.ts web-registry-debug-panel-ui.test.ts web-responsive-shell.test.ts`, `npm run tsc:web`, and `npm run build:web`.
 - 2026-06-04 final verification: `npm test -- --runInBand` passed 133 suites / 553 tests, followed by passing `npm run tsc:web` and `npm run build:web`.
+- 2026-06-04 continuation: Task 23 is complete. Chat Session, Turn, Layout, and Composer helper files moved under `chat/session`, `chat/turns`, `chat/layout`, and `chat/composer`; `WorkspaceApp.tsx` state/effects/command ownership was not changed.
+- 2026-06-04 continuation: Task 23 verification passed with targeted Chat Jest (`16` suites / `100` tests), `npm run tsc:web`, and `npm run build:web`.

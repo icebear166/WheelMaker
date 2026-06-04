@@ -1,5 +1,5 @@
 import React from 'react';
-import type { ArchiveCandidate } from '../chat/sessionArchiveState';
+import type { ArchiveCandidate } from '../chat/session/sessionArchiveState';
 import { npmPackageUpdateSummary, type NpmPackageUpdateTarget } from '../settings/update/agentPackageUpdateView';
 import { skillScopeLabel } from '../settings/skills/skillManagementView';
 import type { RegistrySkillScope } from '../registry/registryTypes';

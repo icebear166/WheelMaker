@@ -5,7 +5,7 @@ import {
   shouldApplyPreservedChatLoad,
   shouldApplySentChatSelection,
 } from '../web/src/chat/chatSelectionGuard';
-import { chatSessionKeyFromParts, encodeChatSessionKey } from '../web/src/chat/chatSessionKey';
+import { chatSessionKeyFromParts, encodeChatSessionKey } from '../web/src/chat/session/chatSessionKey';
 
 describe('web chat selection guards', () => {
   test('preserved session reads can only write back to the same composite selected key', () => {

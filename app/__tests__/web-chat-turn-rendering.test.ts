@@ -10,7 +10,7 @@ function readMain(): string {
 function readVirtualList(): string {
   const projectRoot = path.join(__dirname, '..');
   return fs.readFileSync(
-    path.join(projectRoot, 'web', 'src', 'chat', 'ChatVirtuosoTurnList.tsx'),
+    path.join(projectRoot, 'web', 'src', 'chat', 'turns', 'ChatVirtuosoTurnList.tsx'),
     'utf8',
   );
 }
@@ -71,8 +71,8 @@ describe('web chat turn rendering', () => {
     expect(virtualList).not.toContain('@tanstack/react-virtual');
     expect(virtualList).not.toContain('chatVirtualMeasurements');
     expect(virtualList).not.toContain('shouldAdjustChatVirtualItemSizeChange');
-    expect(main).toContain("import {buildChatDisplayIndex, type ChatDisplayIndexItem} from '../chat/chatDisplayIndex';");
-    expect(main).toContain("import {ChatVirtuosoTurnList, type ChatVirtuosoTurnListHandle} from '../chat/ChatVirtuosoTurnList';");
+    expect(main).toContain("import {buildChatDisplayIndex, type ChatDisplayIndexItem} from '../chat/turns/chatDisplayIndex';");
+    expect(main).toContain("import {ChatVirtuosoTurnList, type ChatVirtuosoTurnListHandle} from '../chat/turns/ChatVirtuosoTurnList';");
     expect(main).toContain('const chatVirtuosoListRef = useRef<ChatVirtuosoTurnListHandle | null>(null);');
     expect(main).toContain("chatVirtuosoListRef.current?.scrollToBottom('auto');");
     expect(main).not.toContain('chatVirtuosoListRef.current?.autoscrollToBottom();');
@@ -104,8 +104,8 @@ describe('web chat turn rendering', () => {
     const main = readMain();
     const chatTurn = readChatTurnView();
 
-    expect(main).toContain("import { resolvePromptTurnStatus, type ChatPromptStatus } from '../chat/chatPromptStatus';");
-    expect(chatTurn).toContain("import { resolvePromptDoneStatus, type ChatPromptStatus } from './chatPromptStatus';");
+    expect(main).toContain("import { resolvePromptTurnStatus, type ChatPromptStatus } from '../chat/turns/chatPromptStatus';");
+    expect(chatTurn).toContain("import { resolvePromptDoneStatus, type ChatPromptStatus } from './turns/chatPromptStatus';");
     expect(chatTurn).toContain('promptStatus?: ChatPromptStatus;');
     expect(chatTurn).toContain("promptStatus === 'responding'");
     expect(chatTurn).toContain("promptStatus === 'confirming'");
@@ -133,7 +133,7 @@ describe('web chat turn rendering', () => {
     const chatTurn = readChatTurnView();
     const styles = readStyles();
 
-    expect(chatTurn).toContain("} from './chatPromptAttachments';");
+    expect(chatTurn).toContain("} from './composer/chatPromptAttachments';");
     expect(chatTurn).toContain('const attachmentBlocks = groupPromptAttachmentBlocks([message]);');
     expect(chatTurn).toContain('className="chat-prompt-attachment-strip"');
     expect(chatTurn).toContain('className={`chat-prompt-attachment-chip ${block.type === \'image\' ? \'image\' : \'file\'}`}');

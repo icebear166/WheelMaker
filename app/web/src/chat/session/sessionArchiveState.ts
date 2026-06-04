@@ -1,5 +1,5 @@
-import {parseUpdatedAtMs} from '../workspace/sessionTime';
-import type {RegistryChatSession, RegistryProject} from '../registry/registryTypes';
+import {parseUpdatedAtMs} from '../../workspace/sessionTime';
+import type {RegistryChatSession, RegistryProject} from '../../registry/registryTypes';
 
 export const OLDER_SESSION_DAYS = 5;
 export const OLDER_SESSIONS_EXPANDED_KEY = 'wheelmaker.chat.olderSessionsExpanded.v1';

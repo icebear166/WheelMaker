@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import {buildChatDisplayIndex, resolveChatDisplayScrollIndex} from '../web/src/chat/chatDisplayIndex';
+import {buildChatDisplayIndex, resolveChatDisplayScrollIndex} from '../web/src/chat/turns/chatDisplayIndex';
 import type {RegistryChatMessage} from '../web/src/registry/registryTypes';
 
 function message(
@@ -146,7 +146,7 @@ describe('chat display index', () => {
 
   test('does not keep a manual virtual range implementation', () => {
     const source = fs.readFileSync(
-      path.join(__dirname, '..', 'web', 'src', 'chat', 'chatDisplayIndex.ts'),
+      path.join(__dirname, '..', 'web', 'src', 'chat', 'turns', 'chatDisplayIndex.ts'),
       'utf8',
     );
 

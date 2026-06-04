@@ -1,4 +1,4 @@
-import type {RegistrySessionContentBlock} from '../registry/registryTypes';
+import type {RegistrySessionContentBlock} from '../../registry/registryTypes';
 
 function cleanString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';

@@ -8,14 +8,14 @@ import {
   chatPromptAttachmentLabel,
   chatPromptAttachmentMeta,
   isPromptAttachmentContentBlock,
-} from './chatPromptAttachments';
+} from './composer/chatPromptAttachments';
 import {
   splitChatConfirmationReplyText,
   splitChatOptionReplyText,
   type ChatConfirmationReply,
   type ChatOptionReply,
 } from './chatOptionReplies';
-import { resolvePromptDoneStatus, type ChatPromptStatus } from './chatPromptStatus';
+import { resolvePromptDoneStatus, type ChatPromptStatus } from './turns/chatPromptStatus';
 
 function msgKind(method: string): string {
   switch (method) {

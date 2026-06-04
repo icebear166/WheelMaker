@@ -1,5 +1,5 @@
-import type {RegistrySessionTurn} from '../registry/registryTypes';
-import type {SessionReadCursor} from './turns/chatSync';
+import type {RegistrySessionTurn} from '../../registry/registryTypes';
+import type {SessionReadCursor} from './chatSync';
 
 export type ChatTurnStoreState = {
   finished: RegistrySessionTurn[];

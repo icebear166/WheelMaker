@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
-import {ChatVirtuosoTurnList, type ChatVirtuosoTurnListHandle} from '../web/src/chat/ChatVirtuosoTurnList';
-import type {ChatDisplayIndexItem} from '../web/src/chat/chatDisplayIndex';
+import {ChatVirtuosoTurnList, type ChatVirtuosoTurnListHandle} from '../web/src/chat/turns/ChatVirtuosoTurnList';
+import type {ChatDisplayIndexItem} from '../web/src/chat/turns/chatDisplayIndex';
 
 const mockVirtuosoProps: any[] = [];
 const mockScrollToIndexCalls: any[] = [];
