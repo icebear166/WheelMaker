@@ -6,7 +6,7 @@ import type {
 import {
   sanitizeFloatingControlIdleOpacity,
   sanitizeFloatingControlYRatio,
-} from './mobileFloatingControls';
+} from '../shell/layouts/mobile/floatingControls';
 import { sanitizeHubColorMap } from './hubProjectPreferences';
 
 export type WorkspaceUiStateValue<T> = T | ((current: T) => T);

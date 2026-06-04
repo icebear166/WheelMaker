@@ -2,7 +2,7 @@ import {
   isSettingsDetailId,
   settingsPageKind,
   type SettingsDetailId,
-} from '../settings/settingsNavigation';
+} from '../../../settings/settingsNavigation';
 
 export type MobileSettingsHistoryDetail = SettingsDetailId;
 

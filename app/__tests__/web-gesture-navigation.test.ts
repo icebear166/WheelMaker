@@ -8,7 +8,7 @@ import {
   resolveGestureDirectionCandidate,
   resolveGesturePressIntent,
   shouldStartGestureMove,
-} from '../web/src/services/gestureNavigation';
+} from '../web/src/shell/layouts/mobile/gestureNavigation';
 
 function projectRoot(): string {
   return path.join(__dirname, '..');
@@ -98,7 +98,7 @@ describe('gesture navigation', () => {
     const settingsRoot = readSettingsRoot();
 
     expect(main).toContain("import {");
-    expect(main).toContain("} from './services/gestureNavigation';");
+    expect(main).toContain("} from './shell/layouts/mobile/gestureNavigation';");
     expect(main).toContain('const [gestureNavigation, setGestureNavigation] = useState(');
     expect(main).toContain('typeof persistedGlobal.gestureNavigation === \'boolean\'');
     expect(main).toContain('gestureNavigation,');

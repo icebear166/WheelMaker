@@ -439,8 +439,8 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('const floatingControlYRatio = workspaceUiState.mobile.floatingControlYRatio;');
     expect(mainTsx).toContain('floatingControlTopFromYRatio(');
     expect(mainTsx).toContain('floatingControlYRatioFromTop(');
-    expect(mainTsx).toContain("import { triggerMobileHaptic } from './services/mobileHaptics';");
-    expect(mainTsx).toContain("} from './services/mobileFloatingControls';");
+    expect(mainTsx).toContain("import { triggerMobileHaptic } from './shell/layouts/mobile/mobileHaptics';");
+    expect(mainTsx).toContain("} from './shell/layouts/mobile/floatingControls';");
     expect(mainTsx).not.toContain('navigator.vibrate?.(12)');
     expect(mainTsx).not.toContain('className="header-bubble"');
     expect(mainTsx).toContain('className="drawer-project-header"');

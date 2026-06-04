@@ -116,7 +116,7 @@ npm run tsc:web
 
 Expected: targeted tests PASS and TypeScript exits 0.
 
-- [ ] **Step 5: Commit task**
+- [x] **Step 5: Commit task**
 
 Run:
 
@@ -151,7 +151,7 @@ Expected: commit created with only Task 1 files.
   - `app/__tests__/web-chat-ui.test.ts`
   - `app/__tests__/web-port-relay-settings.test.ts`
 
-- [ ] **Step 1: Run baseline targeted tests**
+- [x] **Step 1: Run baseline targeted tests**
 
 ```powershell
 cd app
@@ -160,7 +160,7 @@ npm test -- --runInBand web-responsive-ui-state.test.ts web-floating-backdrop-to
 
 Expected: PASS before moving files.
 
-- [ ] **Step 2: Move files**
+- [x] **Step 2: Move files**
 
 ```powershell
 New-Item -ItemType Directory -Force -Path app/web/src/shell/layouts/mobile
@@ -172,7 +172,7 @@ git mv app/web/src/services/mobileSettingsHistory.ts app/web/src/shell/layouts/m
 git mv app/web/src/services/mobileViewportZoomGuard.ts app/web/src/shell/layouts/mobile/mobileViewportZoomGuard.ts
 ```
 
-- [ ] **Step 3: Update imports and test path anchors**
+- [x] **Step 3: Update imports and test path anchors**
 
 Use these replacements:
 
@@ -200,7 +200,7 @@ rg -n "services/mobileFloatingControls|services/floatingBackdropTone|services/ge
 
 Expected: no matches.
 
-- [ ] **Step 4: Verify targeted tests**
+- [x] **Step 4: Verify targeted tests**
 
 ```powershell
 cd app
@@ -210,7 +210,7 @@ npm run tsc:web
 
 Expected: targeted tests PASS and TypeScript exits 0.
 
-- [ ] **Step 5: Commit task**
+- [x] **Step 5: Commit task**
 
 ```powershell
 git status --short

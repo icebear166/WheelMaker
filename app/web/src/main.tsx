@@ -184,7 +184,7 @@ import {
   toggleProjectVisibility,
   type HubColorHsv,
 } from './services/hubProjectPreferences';
-import { triggerMobileHaptic } from './services/mobileHaptics';
+import { triggerMobileHaptic } from './shell/layouts/mobile/mobileHaptics';
 import {
   FLOATING_CONTROL_DEFAULT_Y_RATIO,
   floatingControlTopFromYRatio,
@@ -195,7 +195,7 @@ import {
   resolveFloatingControlYRatioForBoundsChange,
   resolveFloatingControlDragSide,
   sanitizeFloatingControlYRatio,
-} from './services/mobileFloatingControls';
+} from './shell/layouts/mobile/floatingControls';
 import {
   GESTURE_LONG_PRESS_MS,
   GESTURE_MOVE_LONG_PRESS_MS,
@@ -203,7 +203,7 @@ import {
   resolveGesturePressIntent,
   shouldStartGestureMove,
   type GestureNavigationTab,
-} from './services/gestureNavigation';
+} from './shell/layouts/mobile/gestureNavigation';
 import {
   createMobileSettingsHistoryState,
   isMobileSettingsHistoryState,
@@ -211,7 +211,7 @@ import {
   resolveMobileSettingsHistoryWriteAction,
   resolveMobileSettingsPopAction,
   type MobileSettingsHistoryDetail,
-} from './services/mobileSettingsHistory';
+} from './shell/layouts/mobile/mobileSettingsHistory';
 import {
   isSettingsPeerDetail,
   mobileSettingsShortcutIndex,
@@ -220,14 +220,14 @@ import {
   type SettingsDetailId,
   type SettingsPeerDetail,
 } from './settings/settingsNavigation';
-import { installMobileViewportZoomGuard } from './services/mobileViewportZoomGuard';
+import { installMobileViewportZoomGuard } from './shell/layouts/mobile/mobileViewportZoomGuard';
 import { resolveLayoutMode } from './services/responsiveLayout';
 import {
   FLOATING_BACKDROP_TONE_THROTTLE_MS,
   measureFloatingBackdropTone,
   shouldMeasureFloatingBackdropTone,
   type FloatingBackdropTone,
-} from './services/floatingBackdropTone';
+} from './shell/layouts/mobile/floatingBackdropTone';
 import {
   type TokenProviderSectionView,
 } from './tokenStatsView';

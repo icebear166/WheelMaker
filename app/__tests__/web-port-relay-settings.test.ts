@@ -70,7 +70,7 @@ describe('port relay settings UI source structure', () => {
     expect(mainTsx).toContain('originX: event.clientX,');
     expect(mainTsx).toContain('startSide: floatingControlSide,');
     expect(mainTsx).toContain('currentX: event.clientX,');
-    expect(mainTsx).toContain("} from './services/mobileFloatingControls';");
+    expect(mainTsx).toContain("} from './shell/layouts/mobile/floatingControls';");
     expect(mainTsx).toContain('resolveFloatingControlDragSide(');
     expect(mainTsx).toContain('floatingControlSideRef.current');
     expect(mainTsx).not.toContain("const nextSide = current.currentX < windowWidth / 2 ? 'left' : 'right';");

@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { installMobileViewportZoomGuard } from '../web/src/services/mobileViewportZoomGuard';
+import { installMobileViewportZoomGuard } from '../web/src/shell/layouts/mobile/mobileViewportZoomGuard';
 
 function projectRoot(): string {
   return path.join(__dirname, '..');
@@ -113,7 +113,7 @@ describe('mobile viewport zoom lock', () => {
   test('installs the zoom guard during web startup', () => {
     const main = readMain();
 
-    expect(main.includes("import { installMobileViewportZoomGuard } from './services/mobileViewportZoomGuard';")).toBe(true);
+    expect(main.includes("import { installMobileViewportZoomGuard } from './shell/layouts/mobile/mobileViewportZoomGuard';")).toBe(true);
     expect(main.includes('installMobileViewportZoomGuard(document);')).toBe(true);
   });
 });

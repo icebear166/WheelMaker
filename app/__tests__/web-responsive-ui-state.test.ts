@@ -4,7 +4,7 @@ import path from 'path';
 describe('web responsive ui state', () => {
   test('resolves mobile floating control side with a center hysteresis band', () => {
     const projectRoot = path.join(__dirname, '..');
-    const modulePath = path.join(projectRoot, 'web', 'src', 'services', 'mobileFloatingControls.ts');
+    const modulePath = path.join(projectRoot, 'web', 'src', 'shell', 'layouts', 'mobile', 'floatingControls.ts');
 
     expect(fs.existsSync(modulePath)).toBe(true);
 
@@ -22,7 +22,7 @@ describe('web responsive ui state', () => {
 
   test('stores mobile floating control height as a continuous clamped ratio', () => {
     const projectRoot = path.join(__dirname, '..');
-    const modulePath = path.join(projectRoot, 'web', 'src', 'services', 'mobileFloatingControls.ts');
+    const modulePath = path.join(projectRoot, 'web', 'src', 'shell', 'layouts', 'mobile', 'floatingControls.ts');
 
     expect(fs.existsSync(modulePath)).toBe(true);
 
@@ -161,7 +161,7 @@ describe('web responsive ui state', () => {
 
   test('uses a best-effort mobile haptic helper around navigator vibration', () => {
     const projectRoot = path.join(__dirname, '..');
-    const modulePath = path.join(projectRoot, 'web', 'src', 'services', 'mobileHaptics.ts');
+    const modulePath = path.join(projectRoot, 'web', 'src', 'shell', 'layouts', 'mobile', 'mobileHaptics.ts');
 
     expect(fs.existsSync(modulePath)).toBe(true);
 
