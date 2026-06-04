@@ -1,4 +1,4 @@
-import { getDesktopWindowBridge } from '../desktopRuntime';
+import { getDesktopWindowBridge } from '../../../platform/desktop/desktopRuntime';
 
 export type DesktopChatQuickSwitchContextMenuStyle = {
   position: 'fixed';

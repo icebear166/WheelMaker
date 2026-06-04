@@ -7,7 +7,7 @@ import {
   getNativeWebSourceBridge,
   type NativeWebDiagnosticRecord,
   type NativeWebSourceBridge,
-} from '../shell/native/webSource';
+} from '../platform/native/webSource';
 
 type NativeWebDiagnosticBridge = Pick<NativeWebSourceBridge, 'drainWebDiagnostics'>;
 type NativeDiagnosticLogLevelBridge = Pick<NativeWebSourceBridge, 'setDiagnosticLogLevel'>;

@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { getDesktopWindowBridge, type DesktopWebSourceState } from './desktopRuntime';
+import { getDesktopWindowBridge, type DesktopWebSourceState } from '../../../platform/desktop/desktopRuntime';
 import {
   readDesktopWebSourceState,
   setDesktopWebSourcePreference,
-} from './desktop/webSource';
+} from '../../../platform/desktop/webSource';
 
 type DesktopTitleBarProps = {
   title: string;

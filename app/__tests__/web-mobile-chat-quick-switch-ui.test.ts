@@ -17,7 +17,7 @@ describe('mobile chat quick switch UI source structure', () => {
   test('wires chat-page clicks on the mobile chat button to a compact quick switch menu', () => {
     expect(mainTsx).toContain("import {buildMobileChatQuickSwitchSections} from './chat/mobileChatQuickSwitch';");
     expect(mainTsx).toContain("import {ChatQuickSwitchMenu} from './chat/ChatQuickSwitchMenu';");
-    expect(mainTsx).toContain("import {resolveDesktopChatQuickSwitchContextMenu} from './shell/desktop/chatQuickSwitchContextMenu';");
+    expect(mainTsx).toContain("import {resolveDesktopChatQuickSwitchContextMenu} from './shell/layouts/desktop/chatQuickSwitchContextMenu';");
     expect(mainTsx).toContain('const [chatQuickSwitchMenuOpen, setChatQuickSwitchMenuOpen] = useState(false);');
     expect(mainTsx).toContain("const [chatQuickSwitchMenuPlacement, setChatQuickSwitchMenuPlacement] = useState<ChatQuickSwitchMenuPlacement>({kind: 'mobile'});");
     expect(mainTsx).not.toContain('type ChatQuickSwitchPressState =');

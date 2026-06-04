@@ -34,14 +34,14 @@ import {
 import { PortRelayFloatingButton, PortRelayFrameSurface } from './portRelay/PortRelayFrameSurface';
 import { initializePWAFoundation } from './pwa';
 import {cleanupNativeWebViewPWA} from './pwa/nativePwaGuard';
-import { DesktopTitleBar } from './shell/DesktopTitleBar';
-import {resolveDesktopChatQuickSwitchContextMenu} from './shell/desktop/chatQuickSwitchContextMenu';
+import { DesktopTitleBar } from './shell/layouts/desktop/DesktopTitleBar';
+import {resolveDesktopChatQuickSwitchContextMenu} from './shell/layouts/desktop/chatQuickSwitchContextMenu';
 import {
   readDesktopWebSourceState,
   submitDesktopRemoteWebCandidate,
   type DesktopWebSourceState,
-} from './shell/desktop/webSource';
-import {isNativeShellHost} from './shell/native/webSource';
+} from './platform/desktop/webSource';
+import {isNativeShellHost} from './platform/native/webSource';
 import {
   AppConfirmDialog,
   AppRenameDialog,
