@@ -13,12 +13,16 @@
 ## Files And Responsibilities
 
 - `docs/reviews/architecture-review-workspace-web-ui-2026-06-04.html`: source architecture map for target directories and move map.
-- `app/web/src/main.tsx`: current app orchestration. Do not extract large render blocks until late tasks.
-- `app/web/src/shell/**`: target for shell surfaces and Layout Mode helpers.
-- `app/web/src/platform/**`: target for platform adapters.
-- `app/web/src/notifications/**`: target for generic notification provider seam.
+- `app/web/src/main.tsx`: bootstrap boundary only: global CSS/fonts, `workspaceAppReady`, `createRoot`, and startup error fallback.
+- `app/web/src/app/WorkspaceApp.tsx`: current App orchestration module. Large Chat/File/Git/Settings render blocks remain here until the next surface-extraction phase.
+- `app/web/src/shell/**`: target for shell surfaces, Layout Mode helpers, mobile/desktop layout helpers, and shell state.
+- `app/web/src/platform/**`: target for Desktop, Android, native-host, and PWA adapters.
+- `app/web/src/notifications/**`: target for generic notification provider seam and notification payload types.
 - `app/web/src/chat/notifications/**`: target for Chat prompt-completion notification policy.
 - `app/web/src/debug/**`: target for diagnostics modules.
+- `app/web/src/preferences/**`: target for neutral persisted UI preference helpers shared across shell state and workspace persistence.
+- `app/web/src/code/**`: target for shared code-rendering modules, including Shiki settings and rendering.
+- `app/web/src/services/**`: retired source bucket. No source files are expected here after Task 13.
 - `app/__tests__/**`: structural tests. When a moved module is path-asserted, update the test in the same task.
 
 ## Global Rules
@@ -892,9 +896,18 @@ Expected: targeted tests PASS and TypeScript exits 0.
 
 ## Self-Review
 
-- Spec coverage: The plan covers shell/platform split, mobile shell helpers, Android/PWA adapters, notification split, debug Settings surface, registry/workspace split, Settings helpers, Chat/Port Relay helpers, and main bootstrap extraction from the review map.
+- Spec coverage: The plan covers the completed first-wave migration from the review map: shell/platform split, mobile shell helpers, Android/PWA adapters, notification split, debug Settings surface, registry/workspace split, Settings helpers, Chat/Port Relay helpers, main bootstrap extraction, shell state ownership, floating-control preferences, and the final `services/` cleanup.
 - Placeholder scan: No task contains `TBD`, `TODO`, or an unspecified "write tests" step.
 - Type consistency: Directory names match the review map: `shell/layouts/*`, `platform/*`, `chat/notifications/*`, and generic `notifications/*`.
+
+## Closeout Scope
+
+This plan has completed the logic-light first-wave structure migration:
+
+- `app/web/src/main.tsx` is bootstrap-only; `app/web/src/app/WorkspaceApp.tsx` is the temporary orchestration module.
+- `app/web/src/services/` no longer owns source files; former modules moved to `registry/`, `workspace/`, `shell/state/`, `shell/layouts/`, `chat/layout/`, and `code/`.
+- Platform-specific adapters are under `platform/`; generic notification delivery is separate from Chat notification policy; debug settings are under `settings/debug/`.
+- The original HTML review still contains later target moves that were intentionally not part of this iteration: extracting Chat/File/Git/Settings render surfaces from `WorkspaceApp.tsx`, adding `workspaceBootstrap.ts` if startup helpers grow enough to earn the module, splitting `styles.css`, and optionally relocating registry types.
 
 ## Execution Status
 
@@ -906,3 +919,4 @@ Expected: targeted tests PASS and TypeScript exits 0.
 - 2026-06-04 follow-up: Tasks 11-12 are complete and verified with targeted Jest plus `npm run tsc:web`; `services/responsiveLayout.ts` and `services/workspaceUiState.ts` now live under `shell/state`, and `workspace/WorkspacePersistence.ts` no longer imports mobile layout helpers.
 - 2026-06-04 follow-up: Task 13 is complete and verified with targeted Jest plus `npm run tsc:web`; the remaining `services/` helpers now live under `chat/layout` and `code`, leaving no source files in `app/web/src/services`.
 - 2026-06-04 follow-up: Task 13 full verification passed with `npm test -- --runInBand` and `npm run build:web`.
+- 2026-06-04 closeout: Reconciled this plan with the current tree. Tasks 1-13 are the completed first-wave scope; the original HTML review remains the broader target map for later surface and CSS extraction phases.
