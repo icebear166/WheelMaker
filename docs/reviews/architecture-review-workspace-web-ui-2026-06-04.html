@@ -64,11 +64,17 @@
           <div class="flex gap-2 text-xs font-semibold"><span class="badge-strong px-2 py-1 rounded">Phase 1 target</span><span class="bg-slate-100 text-slate-700 px-2 py-1 rounded">low logic change</span></div>
         </div>
         <p class="text-sm text-slate-600">This is the concrete target for the cleanup wave. It favors mechanical moves, clearer file names, and small re-export shims; deeper interface redesign comes after the tree is stable.</p>
+        <div class="grid gap-3 md:grid-cols-4 text-sm">
+          <div class="module-box p-3"><b>shell/</b><br />Workspace shell surfaces and Layout Mode. It may call platform adapters.</div>
+          <div class="module-box p-3"><b>platform/</b><br />Desktop, Android, PWA, and native-host adapters. It must not call shell modules.</div>
+          <div class="module-box p-3"><b>debug/</b><br />Cross-cutting diagnostics and Registry debug modules, separate from Settings UI.</div>
+          <div class="module-box p-3"><b>notifications/</b><br />Provider seam only; Chat owns prompt-completion notification policy.</div>
+        </div>
         <div class="tree-code">app/web/src/
   main.tsx                         # bootstrap only: fonts, CSS, createRoot
   app/
     WorkspaceApp.tsx                # current App orchestration, moved out of main.tsx first
-    workspaceBootstrap.ts           # startup-only helpers: registry address, native/PWA bootstrap
+    workspaceBootstrap.ts           # startup-only helpers: registry address and platform bootstrap
 
   registry/
     RegistryClient.ts               # from services/registryClient.ts
@@ -88,24 +94,39 @@
 
   shell/
     ResponsiveShell.tsx
-    DesktopTitleBar.tsx
     AppDialogs.tsx
     state/
       responsiveLayout.ts           # from services/responsiveLayout.ts
       workspaceUiState.ts           # from services/workspaceUiState.ts
-    mobile/
-      floatingControls.ts           # from services/mobileFloatingControls.ts
-      floatingBackdropTone.ts       # from services/floatingBackdropTone.ts
-      gestureNavigation.ts          # from services/gestureNavigation.ts
-      mobileHaptics.ts              # from services/mobileHaptics.ts
-      mobileSettingsHistory.ts      # from services/mobileSettingsHistory.ts
-      mobileViewportZoomGuard.ts    # from services/mobileViewportZoomGuard.ts
+    layouts/
+      desktop/
+        DesktopTitleBar.tsx         # shell surface; uses platform/desktop adapter
+        chatQuickSwitchContextMenu.ts
+      mobile/
+        floatingControls.ts         # from services/mobileFloatingControls.ts
+        floatingBackdropTone.ts     # from services/floatingBackdropTone.ts
+        gestureNavigation.ts        # from services/gestureNavigation.ts
+        mobileHaptics.ts            # from services/mobileHaptics.ts
+        mobileSettingsHistory.ts    # from services/mobileSettingsHistory.ts
+        mobileViewportZoomGuard.ts  # from services/mobileViewportZoomGuard.ts
+
+  platform/
     desktop/
-      desktopRuntime.ts
-      webSource.ts
-      chatQuickSwitchContextMenu.ts
+      desktopRuntime.ts             # from shell/desktopRuntime.ts
+      webSource.ts                  # from shell/desktop/webSource.ts
+    android/
+      androidApkUpdate.ts           # from root androidApkUpdate.ts
+      androidNativeSpeechRuntime.ts # from features/speech/androidNativeSpeechRuntime.ts
+      notificationBridge.ts         # extracted from notifications/provider.ts Android adapter
+    pwa/
+      capabilities.ts
+      connection.ts
+      index.ts
+      nativePwaGuard.ts
+      push.ts
+      storage.ts
     native/
-      webSource.ts
+      webSource.ts                  # from shell/native/webSource.ts
 
   chat/
     ChatSurface.tsx                 # extracted renderMain chat branch
@@ -140,6 +161,8 @@
       chatScrollBottomButton.ts     # from services/chatScrollBottomButton.ts
       chatScrollIntent.ts
       wideProjectActionPopover.ts
+    notifications/
+      promptCompletionNotification.ts # from notifications/promptCompletion.ts
 
   file/
     FileSurface.tsx                 # extracted renderMain file branch
@@ -161,7 +184,6 @@
     update/
       UpdateSettingsDetail.tsx
       agentPackageUpdateView.ts     # from root agentPackageUpdateView.ts
-      androidApkUpdate.ts           # from root androidApkUpdate.ts
     skills/
       SkillsSettingsDetail.tsx
       skillManagementView.ts        # from root skillManagementView.ts
@@ -194,9 +216,15 @@
 
   features/
     speech/                         # keep as-is in this wave
-  debug/                            # keep diagnostics here
-  notifications/                    # keep as-is
-  pwa/                              # keep as-is
+  debug/
+    appDiagnostics.ts
+    workspaceDiagnostics.ts
+    registryDebug.ts
+    RegistryDebugPanel.tsx
+    nativeWebDiagnostics.ts
+  notifications/
+    NotificationProvider.ts          # from notifications/provider.ts
+    notificationPayload.ts           # shared payload type, no chat policy
   styles/
     index.css                       # only CSS import from main.tsx
     base.css
@@ -239,11 +267,22 @@
               <tr><td><code>services/workspacePersistence.ts</code></td><td><code>workspace/WorkspacePersistence.ts</code></td><td>First</td><td>IndexedDB persistence module.</td></tr>
               <tr><td><code>services/workspaceUiState.ts</code></td><td><code>shell/state/workspaceUiState.ts</code></td><td>First</td><td>Matches the Responsive Shell ADR.</td></tr>
               <tr><td><code>services/responsiveLayout.ts</code></td><td><code>shell/state/responsiveLayout.ts</code></td><td>First</td><td>Layout Mode belongs with shell state.</td></tr>
-              <tr><td><code>services/mobile*.ts</code>, <code>gestureNavigation.ts</code>, <code>floatingBackdropTone.ts</code></td><td><code>shell/mobile/*</code></td><td>First</td><td>Mobile shell helpers stop leaking through services.</td></tr>
+              <tr><td><code>services/mobile*.ts</code>, <code>gestureNavigation.ts</code>, <code>floatingBackdropTone.ts</code></td><td><code>shell/layouts/mobile/*</code></td><td>First</td><td>Mobile Layout Mode helpers stop leaking through services.</td></tr>
+              <tr><td><code>shell/DesktopTitleBar.tsx</code></td><td><code>shell/layouts/desktop/DesktopTitleBar.tsx</code></td><td>First</td><td>Desktop Layout Mode surface; keep it separate from platform Desktop adapters.</td></tr>
+              <tr><td><code>shell/desktop/chatQuickSwitchContextMenu.ts</code></td><td><code>shell/layouts/desktop/chatQuickSwitchContextMenu.ts</code></td><td>First</td><td>Desktop Layout Mode interaction policy.</td></tr>
+              <tr><td><code>shell/desktopRuntime.ts</code>, <code>shell/desktop/webSource.ts</code></td><td><code>platform/desktop/*</code></td><td>First</td><td>WheelMaker Desktop host adapter seam.</td></tr>
+              <tr><td><code>shell/native/webSource.ts</code></td><td><code>platform/native/webSource.ts</code></td><td>First</td><td>Native host detection is platform adapter knowledge, not shell layout.</td></tr>
               <tr><td><code>services/shikiSettings.ts</code>, <code>services/shikiRenderer.ts</code></td><td><code>code/shikiSettings.ts</code>, <code>code/shikiRenderer.ts</code></td><td>First</td><td>Code rendering module, used by File, Git, and Chat.</td></tr>
-              <tr><td><code>agentPackageUpdateView.ts</code>, <code>androidApkUpdate.ts</code></td><td><code>settings/update/*</code></td><td>First</td><td>Owned by the Update Settings detail.</td></tr>
+              <tr><td><code>androidApkUpdate.ts</code></td><td><code>platform/android/androidApkUpdate.ts</code></td><td>First</td><td>Android-only adapter used by the Update Settings detail.</td></tr>
+              <tr><td><code>features/speech/androidNativeSpeechRuntime.ts</code></td><td><code>platform/android/androidNativeSpeechRuntime.ts</code></td><td>First</td><td>Android-only speech adapter; speech feature imports the platform seam.</td></tr>
+              <tr><td><code>pwa/*</code></td><td><code>platform/pwa/*</code></td><td>First</td><td>PWA/browser install, storage, push, and connection adapters.</td></tr>
+              <tr><td><code>agentPackageUpdateView.ts</code></td><td><code>settings/update/agentPackageUpdateView.ts</code></td><td>First</td><td>Owned by the Update Settings detail.</td></tr>
               <tr><td><code>skillManagementView.ts</code></td><td><code>settings/skills/skillManagementView.ts</code></td><td>First</td><td>Owned by the Skills Page.</td></tr>
               <tr><td><code>tokenStatsView.ts</code></td><td><code>settings/tokenStats/tokenStatsView.ts</code></td><td>First</td><td>Owned by Token Stats Settings.</td></tr>
+              <tr><td><code>notifications/provider.ts</code></td><td><code>notifications/NotificationProvider.ts</code>, <code>notifications/notificationPayload.ts</code></td><td>First</td><td>Notification provider seam stays platform-neutral; Android implementation can move behind platform/android.</td></tr>
+              <tr><td><code>notifications/promptCompletion.ts</code></td><td><code>chat/notifications/promptCompletionNotification.ts</code></td><td>First</td><td>Prompt Completion policy belongs to Chat, not the generic notification provider seam.</td></tr>
+              <tr><td><code>debug/appDiagnostics.ts</code>, <code>debug/workspaceDiagnostics.ts</code>, <code>debug/registryDebug.ts</code>, <code>debug/nativeWebDiagnostics.ts</code></td><td><code>debug/*</code></td><td>Keep</td><td>Debug is a cross-cutting capability module with its own locality.</td></tr>
+              <tr><td><code>debug/DebugLogsSettingsDetail.tsx</code></td><td><code>settings/debug/DebugLogsSettingsDetail.tsx</code></td><td>First</td><td>The Settings surface moves under settings; debug data modules remain under debug.</td></tr>
               <tr><td><code>portRelayUrl.ts</code>, <code>portRelayTargets.ts</code></td><td><code>portRelay/*</code></td><td>First</td><td>Co-locate with PortRelayFrameSurface.</td></tr>
               <tr><td><code>chatSync.ts</code>, <code>chatSessionState.ts</code></td><td><code>chat/turns/chatSync.ts</code>, <code>chat/session/chatSessionState.ts</code></td><td>First</td><td>Use Turn and Session vocabulary from CONTEXT.md.</td></tr>
               <tr><td><code>chatMarkdownImageExport.ts</code>, <code>responseImageOutput.ts</code>, <code>chatPromptCopy.ts</code></td><td><code>chat/export/*</code></td><td>First</td><td>Chat export/copy actions share one locality.</td></tr>
@@ -325,12 +364,14 @@ flowchart LR
               <div class="thick-band px-4 py-3"><b>registry/</b><br />Conversation Registry + Local Hub Read adapters</div>
               <div class="thick-band px-4 py-3"><b>workspace/</b><br />Workspace data hydration and persistence</div>
               <div class="thick-band px-4 py-3"><b>shell/</b><br />Workspace UI State and Layout Mode</div>
+              <div class="thick-band px-4 py-3"><b>platform/</b><br />Desktop, Android, PWA, and native-host adapters</div>
+              <div class="thick-band px-4 py-3"><b>debug/</b><br />Diagnostics and Registry debug capability</div>
               <div class="thick-band px-4 py-3"><b>code/</b><br />Shiki settings and renderer</div>
             </div>
           </div>
           <div class="grid gap-4 md:grid-cols-3 text-sm">
             <div><b>Problem</b><br />`services/` is a naming bucket, not a seam; callers learn unrelated interfaces from one directory.</div>
-            <div><b>Solution</b><br />Move files into concept directories without changing implementation; keep Local Workspace Reads scoped to File/Git.</div>
+            <div><b>Solution</b><br />Move files into concept directories without changing implementation; keep Local Workspace Reads scoped to File/Git and platform adapters out of shell.</div>
             <div><b>Benefits</b><br />locality: Registry changes stay together<br />leverage: directory names teach concepts<br />interface paths match CONTEXT.md<br />ADR intent remains visible</div>
           </div>
         </article>
@@ -359,9 +400,12 @@ flowchart LR
                 <div class="deep-module p-3">settings/update/*</div>
                 <div class="deep-module p-3">settings/skills/*</div>
                 <div class="deep-module p-3">settings/tokenStats/*</div>
+                <div class="deep-module p-3">platform/android/*</div>
                 <div class="deep-module p-3">portRelay/*</div>
                 <div class="deep-module p-3">chat/sync/*</div>
                 <div class="deep-module p-3">chat/session/*</div>
+                <div class="deep-module p-3">chat/notifications/*</div>
+                <div class="deep-module p-3">notifications/*</div>
               </div>
             </div>
           </div>
