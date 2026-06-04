@@ -3,6 +3,9 @@ import path from 'path';
 
 const root = path.resolve(__dirname, '..');
 const mainTsx = fs.readFileSync(path.join(root, 'web/src/main.tsx'), 'utf8');
+const detailPath = path.join(root, 'web/src/settings/SkillsSettingsDetail.tsx');
+const detailTsx = fs.existsSync(detailPath) ? fs.readFileSync(detailPath, 'utf8') : '';
+const skillsDetailSource = `${mainTsx}\n${detailTsx}`;
 const stylesCss = fs.readFileSync(path.join(root, 'web/src/styles.css'), 'utf8');
 
 describe('skill management settings UI source structure', () => {
@@ -34,6 +37,9 @@ describe('skill management settings UI source structure', () => {
 
   test('renders Skills detail with controlled command hooks and confirmations', () => {
     expect(mainTsx).toContain('const renderSkillsSettingsDetail = (options?: SettingsDetailShellOptions) =>');
+    expect(mainTsx).toContain("const SkillsSettingsDetail = React.lazy(() => import('./settings/SkillsSettingsDetail')");
+    expect(mainTsx).toContain('<SkillsSettingsDetail');
+    expect(detailTsx).toContain('export function SkillsSettingsDetail');
     expect(mainTsx).toContain('refreshSkillManagement');
     expect(mainTsx).toContain('service.scanSkills');
     expect(mainTsx).toContain('service.listSkillsSource');
@@ -43,56 +49,56 @@ describe('skill management settings UI source structure', () => {
     expect(mainTsx).toContain("kind: 'skillInstall'");
     expect(mainTsx).toContain("kind: 'skillUninstall'");
     expect(mainTsx).toContain("kind: 'skillUpdate'");
-    expect(mainTsx).toContain("const SKILLS_MARKETPLACE_URL = 'https://www.skills.sh/';");
-    expect(mainTsx).toContain('settings-skills-marketplace-link');
+    expect(detailTsx).toContain("const SKILLS_MARKETPLACE_URL = 'https://www.skills.sh/';");
+    expect(detailTsx).toContain('settings-skills-marketplace-link');
   });
 
   test('renders skill rows without linked agent labels', () => {
-    expect(mainTsx).not.toContain('skillAgentsLabel');
-    expect(mainTsx).not.toContain('No linked agents');
+    expect(skillsDetailSource).not.toContain('skillAgentsLabel');
+    expect(skillsDetailSource).not.toContain('No linked agents');
   });
 
   test('renders unmanaged skills as read-only rows', () => {
-    expect(mainTsx).toContain('skill.managed !== false');
-    expect(mainTsx).toContain('settings-skill-readonly-tag');
-    expect(mainTsx).toContain('External');
-    expect(mainTsx).toContain('managed ? renderSkillIconButton');
+    expect(detailTsx).toContain('skill.managed !== false');
+    expect(detailTsx).toContain('settings-skill-readonly-tag');
+    expect(detailTsx).toContain('External');
+    expect(detailTsx).toContain('managed ? renderSkillIconButton');
   });
 
   test('uses icon actions and operation polling for Skills tasks', () => {
     expect(mainTsx).toContain('skillOperationPollTimerRef');
-    expect(mainTsx).toContain('operation?.running');
-    expect(mainTsx).toContain('includeProjects: true');
-    expect(mainTsx).toContain('settings-skill-icon-btn');
-    expect(mainTsx).toContain('codicon-add');
-    expect(mainTsx).toContain('codicon-sync');
-    expect(mainTsx).toContain('codicon-trash');
+    expect(detailTsx).toContain('operation?.running');
+    expect(detailTsx).toContain('includeProjects: true');
+    expect(detailTsx).toContain('settings-skill-icon-btn');
+    expect(detailTsx).toContain('codicon-add');
+    expect(detailTsx).toContain('codicon-sync');
+    expect(detailTsx).toContain('codicon-trash');
   });
 
   test('keeps Skills pending and polling scoped to the affected hub', () => {
-    expect(mainTsx).toContain('isSkillActionPendingForHub(skillsPendingKey, hubId)');
+    expect(detailTsx).toContain('isSkillActionPendingForHub(skillsPendingKey, hubId)');
     expect(mainTsx).toContain('skillOperationPollHubIdsRef');
     expect(mainTsx).toContain('scheduleSkillOperationPoll(hubId)');
-    expect(mainTsx).not.toContain('options.operationRunning === true || !!skillsPendingKey');
+    expect(skillsDetailSource).not.toContain('options.operationRunning === true || !!skillsPendingKey');
     expect(mainTsx).not.toContain('refreshSkillManagementRef.current?.().catch(() => undefined)');
   });
 
   test('expands skill install controls inline with select all', () => {
     expect(mainTsx).toContain('sameSkillInstallTarget');
     expect(mainTsx).toContain('toggleAllSkillSourceCandidates');
-    expect(mainTsx).toContain('Select all');
-    expect(mainTsx).toContain('renderSkillInstallPanel({hubId, scope: options.scope, projectName: options.projectName})');
-    expect(mainTsx).not.toContain('renderSkillInstallPanel()}');
-    expect(mainTsx).not.toContain('candidate?.description');
-    expect(mainTsx).not.toContain('candidateGroups');
-    expect(mainTsx).not.toContain('candidate-group:');
+    expect(detailTsx).toContain('Select all');
+    expect(detailTsx).toContain('renderSkillInstallPanel({hubId, scope: options.scope, projectName: options.projectName})');
+    expect(skillsDetailSource).not.toContain('renderSkillInstallPanel()}');
+    expect(skillsDetailSource).not.toContain('candidate?.description');
+    expect(skillsDetailSource).not.toContain('candidateGroups');
+    expect(skillsDetailSource).not.toContain('candidate-group:');
   });
 
   test('normalizes pasted skills add commands in the install panel', () => {
     expect(mainTsx).toContain('parseSkillSourceInput(skillSourceInput)');
     expect(mainTsx).toContain('sourceInput.skillNames');
     expect(mainTsx).toContain('Skill not found in source:');
-    expect(mainTsx).toContain('owner/repo or npx skills add ... --skill name');
+    expect(detailTsx).toContain('owner/repo or npx skills add ... --skill name');
   });
 
   test('uses compact settings skill styles', () => {
