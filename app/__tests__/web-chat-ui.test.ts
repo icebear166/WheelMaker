@@ -1521,6 +1521,9 @@ describe('web chat integration', () => {
     const settingsRootTsx = fs.existsSync(settingsRootPath) ? readSourceText(settingsRootPath) : '';
     const settingsBundlePath = path.join(projectRoot, 'web', 'src', 'settings', 'SettingsBundle.ts');
     const settingsBundleTs = fs.existsSync(settingsBundlePath) ? readSourceText(settingsBundlePath) : '';
+    const fileSurfaceTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'file', 'FileExplorerTree.tsx'));
+    const gitSurfaceTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'git', 'GitSidebar.tsx'));
+    const sidebarSurfaceSource = `${mainTsx}\n${fileSurfaceTsx}\n${gitSurfaceTsx}`;
     const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
 
     expect(mainTsx).toContain('type SettingsDetailView = SettingsDetailId | null;');
@@ -1537,7 +1540,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className="mobile-project-session-nav"');
     expect(mainTsx).toContain('className="mobile-project-sheet"');
     expect(mainTsx).toContain('className="mobile-project-session-error"');
-    expect(mainTsx).toContain('if (!isWide) setDrawerOpen(false);');
+    expect(sidebarSurfaceSource).toContain('if (!isWide) setDrawerOpen(false);');
     expect(mainTsx).toContain("tab === 'chat' && !isWide ? renderMobileChatSessionSheet() : renderSidebarMain()");
     expect(mainTsx).toContain("openSettingsPeer('tokenStats')");
     expect(mainTsx).toContain("settingsDetailView === 'tokenStats'");
