@@ -12,7 +12,7 @@ import {
   chatSessionKeyFromParts,
   type ChatSessionKey,
 } from '../chat/chatSessionKey';
-import { sanitizeCachedSessionMessages } from '../chatSync';
+import { sanitizeCachedSessionMessages } from '../chat/turns/chatSync';
 import {
   WorkspacePersistenceRepository,
   type PersistedChatCursor,

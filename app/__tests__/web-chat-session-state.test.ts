@@ -1,7 +1,7 @@
 import {
   getChatSessionVisualState,
   resolveChatSessionVisualState,
-} from '../web/src/chatSessionState';
+} from '../web/src/chat/session/chatSessionState';
 
 describe('web chat session visual state', () => {
   test('prioritizes running, then unread failed, then unread completed', () => {

@@ -37,7 +37,7 @@ describe('port relay settings UI source structure', () => {
     expect(mainTsx).toContain('service.disablePortRelay');
     expect(mainTsx).toContain('service.regeneratePortRelayAccessCode');
     expect(mainTsx).toContain('generatePortRelayAccessCode');
-    expect(mainTsx).toContain("import { appendPortRelayAutoAuthCode, appendPortRelayOpenPath, parsePortRelayLocalHttpUrl, resolvePortRelayOpenUrl } from './portRelayUrl';");
+    expect(mainTsx).toContain("import { appendPortRelayAutoAuthCode, appendPortRelayOpenPath, parsePortRelayLocalHttpUrl, resolvePortRelayOpenUrl } from './portRelay/portRelayUrl';");
     expect(mainTsx).toContain('resolvePortRelayOpenUrl({');
     expect(mainTsx).toContain('relayUrl: portRelaySnapshot.relayUrl');
     expect(mainTsx).toContain('const portRelayFrameAccessCode = portRelayAccessCodeUnknown ? \'\' : portRelayAccessCode;');
@@ -141,7 +141,7 @@ describe('port relay settings UI source structure', () => {
   });
 
   test('turns chat localhost links into relay iframe actions for the current project hub', () => {
-    expect(mainTsx).toContain("import { appendPortRelayAutoAuthCode, appendPortRelayOpenPath, parsePortRelayLocalHttpUrl, resolvePortRelayOpenUrl } from './portRelayUrl';");
+    expect(mainTsx).toContain("import { appendPortRelayAutoAuthCode, appendPortRelayOpenPath, parsePortRelayLocalHttpUrl, resolvePortRelayOpenUrl } from './portRelay/portRelayUrl';");
     expect(mainTsx).toContain('const [portRelayFramePath, setPortRelayFramePath] = useState(\'\');');
     expect(mainTsx).toContain('appendPortRelayOpenPath(baseUrl, portRelayFramePath)');
     expect(mainTsx).toContain('const openChatPortRelayLink = useCallback(async (localUrl: PortRelayLocalHttpUrl) => {');

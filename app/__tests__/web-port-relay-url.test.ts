@@ -4,7 +4,7 @@ import {
   buildPortRelayOpenUrl,
   parsePortRelayLocalHttpUrl,
   resolvePortRelayOpenUrl,
-} from '../web/src/portRelayUrl';
+} from '../web/src/portRelay/portRelayUrl';
 
 describe('port relay URL helpers', () => {
   test('maps registry wss connection to https relay URL on the selected port', () => {

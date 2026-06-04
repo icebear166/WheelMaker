@@ -17,8 +17,8 @@ declare global {
 }
 
 import { getDefaultRegistryAddress, toRegistryWsUrl } from './runtime';
-import { appendPortRelayAutoAuthCode, appendPortRelayOpenPath, parsePortRelayLocalHttpUrl, resolvePortRelayOpenUrl } from './portRelayUrl';
-import type { PortRelayLocalHttpUrl } from './portRelayUrl';
+import { appendPortRelayAutoAuthCode, appendPortRelayOpenPath, parsePortRelayLocalHttpUrl, resolvePortRelayOpenUrl } from './portRelay/portRelayUrl';
+import type { PortRelayLocalHttpUrl } from './portRelay/portRelayUrl';
 import {
   normalizePortRelayListenPort,
   normalizePortRelayTarget,
@@ -30,7 +30,7 @@ import {
   samePortRelayTargets,
   upsertPortRelayTarget,
   type PortRelayTarget,
-} from './portRelayTargets';
+} from './portRelay/portRelayTargets';
 import { PortRelayFloatingButton, PortRelayFrameSurface } from './portRelay/PortRelayFrameSurface';
 import { initializePWAFoundation } from './platform/pwa';
 import {cleanupNativeWebViewPWA} from './platform/pwa/nativePwaGuard';
@@ -53,12 +53,12 @@ import {
   getLatestSessionReadCursor,
   isFinishedChatMessage,
   needsPromptTurnRefresh,
-} from './chatSync';
+} from './chat/turns/chatSync';
 import { compareUpdatedAtDesc, formatPromptDurationMs } from './workspace/sessionTime';
 import {
   resolveChatSessionVisualState as resolveChatSessionVisualStateValue,
   type ChatSessionVisualState,
-} from './chatSessionState';
+} from './chat/session/chatSessionState';
 import {
   chatSessionKeyFromParts,
   decodeChatSessionKey,
@@ -119,8 +119,8 @@ import {
 import {
   buildPromptMarkdownImageFileName,
   renderMarkdownElementToPngBlob,
-} from './chatMarkdownImageExport';
-import { outputResponseImage } from './responseImageOutput';
+} from './chat/export/chatMarkdownImageExport';
+import { outputResponseImage } from './chat/export/responseImageOutput';
 import {createRegistryDebugStore} from './debug/registryDebug';
 import type {RegistryDebugRecord} from './debug/registryDebug';
 import {

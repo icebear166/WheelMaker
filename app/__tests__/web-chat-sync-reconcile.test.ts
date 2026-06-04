@@ -7,7 +7,7 @@ import {
   replaceSessionMessages,
   sanitizeCachedSessionMessages,
   shouldRequestSessionReadForIncomingTurn,
-} from '../web/src/chatSync';
+} from '../web/src/chat/turns/chatSync';
 import {
   decodeSessionTurnToMessage,
   normalizeSessionMessagePayload,

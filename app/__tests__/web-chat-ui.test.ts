@@ -380,7 +380,7 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('gitStatusSummary');
     expect(mainTsx).not.toContain('chat-thought-label');
     expect(mainTsx).toContain("import { buildPromptDoneCopyRange } from './chat/chatCopyRange';");
-    expect(mainTsx).toContain("import { outputResponseImage } from './responseImageOutput';");
+    expect(mainTsx).toContain("import { outputResponseImage } from './chat/export/responseImageOutput';");
     expect(mainTsx).toContain('const copyRange = message.method === \'prompt_done\'');
     expect(mainTsx).toContain('className="chat-prompt-actions"');
     expect(mainTsx).toContain('className="chat-prompt-action-button"');

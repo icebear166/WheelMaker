@@ -526,7 +526,7 @@ npm run tsc:web
 
 Expected: targeted tests PASS and TypeScript exits 0.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```powershell
 git add -A
@@ -546,7 +546,7 @@ git commit -m "Co-locate settings helper modules"
 - Move: `app/web/src/portRelayUrl.ts` -> `app/web/src/portRelay/portRelayUrl.ts`
 - Move: `app/web/src/portRelayTargets.ts` -> `app/web/src/portRelay/portRelayTargets.ts`
 
-- [ ] **Step 1: Run baseline targeted tests**
+- [x] **Step 1: Run baseline targeted tests**
 
 ```powershell
 cd app
@@ -555,11 +555,11 @@ npm test -- --runInBand web-chat-sync-reconcile.test.ts web-chat-session-state.t
 
 Expected: PASS.
 
-- [ ] **Step 2: Move files and update imports**
+- [x] **Step 2: Move files and update imports**
 
 Create directories with `New-Item -ItemType Directory -Force`, then `git mv` each file listed above. Update source and test imports to the new paths.
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 ```powershell
 cd app
@@ -569,7 +569,7 @@ npm run tsc:web
 
 Expected: targeted tests PASS and TypeScript exits 0.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```powershell
 git add -A

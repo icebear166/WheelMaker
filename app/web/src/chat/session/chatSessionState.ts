@@ -1,4 +1,4 @@
-import type { RegistryChatSession } from './types/registry';
+import type { RegistryChatSession } from '../../types/registry';
 
 export type ChatSessionVisualState =
   | 'idle'

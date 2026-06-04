@@ -7,7 +7,7 @@ import {
   samePortRelayTargets,
   upsertPortRelayTarget,
   type PortRelayTarget,
-} from '../web/src/portRelayTargets';
+} from '../web/src/portRelay/portRelayTargets';
 
 const root = path.resolve(__dirname, '..');
 

@@ -20,7 +20,7 @@ import {
   normalizePortRelayTarget,
   normalizePortRelayTargets,
   type PortRelayTarget,
-} from '../portRelayTargets';
+} from '../portRelay/portRelayTargets';
 import {
   DEFAULT_SPEECH_SETTINGS,
   maskSpeechSettingsForExport,

@@ -1,4 +1,4 @@
-import type { RegistryChatMessage } from './types/registry';
+import type { RegistryChatMessage } from '../../types/registry';
 
 export type SessionReadCursor = {
   turnIndex: number;

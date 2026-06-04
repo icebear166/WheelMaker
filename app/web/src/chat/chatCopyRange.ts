@@ -1,4 +1,4 @@
-import { buildPromptAgentMarkdown } from '../chatPromptCopy';
+import { buildPromptAgentMarkdown } from './export/chatPromptCopy';
 import type { RegistryChatMessage } from '../types/registry';
 import { hasContinuousTurnRange } from './chatTurnRange';
 
