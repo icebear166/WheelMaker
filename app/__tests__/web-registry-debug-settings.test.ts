@@ -80,7 +80,7 @@ describe('web registry debug settings', () => {
 
   test('renders compact uploadable logs with a bottom category selector', () => {
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
-    const detailPath = path.join(projectRoot, 'web', 'src', 'settings', 'debug', 'DebugLogsSettingsDetail.tsx');
+    const detailPath = path.join(projectRoot, 'web', 'src', 'settings', 'DebugLogsSettingsDetail.tsx');
     const detailTsx = fs.existsSync(detailPath) ? fs.readFileSync(detailPath, 'utf8') : '';
     const stylesCss = readWebStyles(projectRoot);
 

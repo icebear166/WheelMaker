@@ -6,7 +6,7 @@ import {
   shouldShowWheelMakerUpdateAction,
   wheelMakerUpdateStatusLabel,
   withAgentPackageTimeout,
-} from '../web/src/settings/update/agentPackageUpdateView';
+} from '../web/src/settings/agentPackageUpdateView';
 import type {RegistryHub} from '../web/src/registry/registryTypes';
 
 describe('agent package update view helpers', () => {

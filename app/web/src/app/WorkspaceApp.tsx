@@ -231,7 +231,7 @@ import {
 } from '../shell/layouts/mobile/floatingBackdropTone';
 import {
   type TokenProviderSectionView,
-} from '../settings/tokenStats/tokenStatsView';
+} from '../settings/tokenStatsView';
 import {
   AGENT_PACKAGE_SCAN_TIMEOUT_MS,
   deriveNpmPackageUpdateTargets,
@@ -242,7 +242,7 @@ import {
   wheelMakerUpdateStatusLabel,
   withAgentPackageTimeout,
   type NpmPackageUpdateTarget,
-} from '../settings/update/agentPackageUpdateView';
+} from '../settings/agentPackageUpdateView';
 import {
   deriveSkillHubIds,
   groupSkillsByCategory,
@@ -251,7 +251,7 @@ import {
   skillOperationStatusLabel,
   skillScopeLabel,
   sortSkillProjects,
-} from '../settings/skills/skillManagementView';
+} from '../settings/skillManagementView';
 import {
   DEFAULT_CODE_FONT,
   DEFAULT_CODE_FONT_SIZE,

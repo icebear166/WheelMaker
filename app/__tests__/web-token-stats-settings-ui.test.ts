@@ -20,7 +20,7 @@ describe('token stats settings UI source structure', () => {
     expect(mainTsx).not.toContain('type TokenStatCardView');
     expect(mainTsx).not.toContain('const tokenStatCards = useMemo');
     expect(fs.existsSync(detailPath)).toBe(true);
-    expect(detailTsx).toContain("import {buildTokenStatCards, type TokenProviderSectionView} from './tokenStats/tokenStatsView';");
+    expect(detailTsx).toContain("import {buildTokenStatCards, type TokenProviderSectionView} from './tokenStatsView';");
     expect(detailTsx).toContain('const tokenStatCards = useMemo(');
     expect(detailTsx).toContain('buildTokenStatCards(providers)');
     expect(detailTsx).toContain('No token accounts discovered.');

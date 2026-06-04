@@ -13,7 +13,7 @@ import {
   shouldShowWheelMakerUpdateAction,
   wheelMakerUpdateStatusLabel,
   type NpmPackageUpdateTarget,
-} from './update/agentPackageUpdateView';
+} from './agentPackageUpdateView';
 import type {
   RegistryFileIndexStatus,
   RegistryFileIndexStatusResponse,

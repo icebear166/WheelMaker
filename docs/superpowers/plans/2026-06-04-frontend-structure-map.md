@@ -24,6 +24,7 @@
 - `app/web/src/chat/layout/**`: target for Chat layout measurements, scroll intent, and project-session popover placement helpers.
 - `app/web/src/chat/composer/**`: target for Chat composer text/attachment/slash-command helpers before extracting the full composer surface.
 - `app/web/src/debug/**`: target for diagnostics modules.
+- `app/web/src/settings/**`: target for Settings surface, detail views, and Settings-specific helper Modules. Settings files stay flat under `settings/` when the file name already carries the detail concept.
 - `app/web/src/preferences/**`: target for neutral persisted UI preference helpers shared across shell state and workspace persistence.
 - `app/web/src/code/**`: target for shared code-rendering modules, including Shiki settings and rendering.
 - `app/web/src/styles/**`: target for CSS entrypoint plus base, shell, surface, platform-adjacent, and code-rendering style files.
@@ -66,7 +67,7 @@ Tasks 1-18 completed the `First` scope for the HTML review candidates. Tasks 19-
 
 ## Follow-Up Direction
 
-- Settings detail Modules should stay one level under `settings/` when the file name already carries the detail name. The extra `settings/update/UpdateSettingsDetail.tsx` style of nesting does not earn enough locality to justify the navigation cost. Existing `settings/code` and `settings/portRelay` moves can remain because they are already done and imports are stable, but further Settings detail down-foldering is not a target.
+- Settings detail Modules stay one level under `settings/` when the file name already carries the detail name. Extra subdirectories such as `settings/update`, `settings/skills`, `settings/tokenStats`, `settings/debug`, `settings/code`, and `settings/portRelay` do not earn enough locality to justify the navigation cost.
 - Chat should continue to be split because the root `chat/` directory contains several distinct seams: Session, Turn, Layout, Composer, Export, Notifications, and rendered Surfaces.
 - `WorkspaceApp.tsx` deeper extraction is a separate risk class. Evaluate it in three categories before moving logic:
   - **State ownership:** high importance, high work. Chat state spans session selection, turn stores, composer draft, attachment uploads, read-only archive preview, file peek, and prompt cancellation. Move only after Chat files have stable locations.
@@ -1297,11 +1298,42 @@ Expected: targeted tests and TypeScript all exit 0.
 
 ---
 
+### Task 24: Flatten Settings Detail Helpers
+
+**Files:**
+- Move: `app/web/src/settings/code/CCSwitchSettingsDetail.tsx` -> `app/web/src/settings/CCSwitchSettingsDetail.tsx`
+- Move: `app/web/src/settings/debug/DebugLogsSettingsDetail.tsx` -> `app/web/src/settings/DebugLogsSettingsDetail.tsx`
+- Move: `app/web/src/settings/portRelay/PortRelaySettingsDetail.tsx` -> `app/web/src/settings/PortRelaySettingsDetail.tsx`
+- Move: `app/web/src/settings/skills/skillManagementView.ts` -> `app/web/src/settings/skillManagementView.ts`
+- Move: `app/web/src/settings/tokenStats/tokenStatsView.ts` -> `app/web/src/settings/tokenStatsView.ts`
+- Move: `app/web/src/settings/update/agentPackageUpdateView.ts` -> `app/web/src/settings/agentPackageUpdateView.ts`
+- Modify imports in `app/web/src/app/WorkspaceApp.tsx`, `app/web/src/shell/AppDialogs.tsx`, Settings detail files, and affected tests.
+
+- [x] **Step 1: Flatten Settings detail files**
+
+Move Settings detail and Settings-specific helper Modules back under `app/web/src/settings/`. The settings file names already carry the feature concept, so the extra directories are shallow and reduce locality instead of adding depth.
+
+- [x] **Step 2: Update imports and structural tests**
+
+Replace old paths such as `settings/update/agentPackageUpdateView`, `settings/skills/skillManagementView`, and `settings/debug/DebugLogsSettingsDetail` with flat `settings/` paths.
+
+- [x] **Step 3: Verify**
+
+```powershell
+cd app
+npm test -- --runInBand web-agent-package-update-view.test.ts web-skill-management-view.test.ts web-token-stats-view.test.ts web-token-stats-settings-ui.test.ts web-port-relay-settings.test.ts web-chat-ui.test.ts
+npm run tsc:web
+```
+
+Expected: targeted tests and TypeScript all exit 0.
+
+---
+
 ## Self-Review
 
 - Spec coverage: The plan covers the completed HTML review implementation scope: main bootstrap extraction, `services/` retirement, root helper co-location, source-structure tests away from `main.tsx`, Settings helper co-location, Settings/Chat/File/Git surface extraction, and CSS entrypoint/surface splitting under `styles/`.
 - Placeholder scan: No task contains `TBD`, `TODO`, or an unspecified "write tests" step.
-- Type consistency: Directory names match the review map: `shell/layouts/*`, `platform/*`, `chat/notifications/*`, and generic `notifications/*`.
+- Type consistency: Directory names match the review map: `shell/layouts/*`, `platform/*`, `chat/notifications/*`, and generic `notifications/*`; Settings detail Modules are flat under `settings/`.
 
 ## Closeout Scope
 
@@ -1309,8 +1341,8 @@ This plan has completed the HTML review implementation scope that was safe to ex
 
 - `app/web/src/main.tsx` is bootstrap-only; `app/web/src/app/WorkspaceApp.tsx` is the temporary orchestration module.
 - `app/web/src/services/` no longer owns source files; former modules moved to `registry/`, `workspace/`, `shell/state/`, `shell/layouts/`, `chat/layout/`, and `code/`.
-- Platform-specific adapters are under `platform/`; generic notification delivery is separate from Chat notification policy; debug data modules are under `debug/`, while debug Settings UI lives under `settings/debug/`.
-- Settings, Chat, File, and Git rendered surface chrome now lives in the owning directories; `WorkspaceApp.tsx` intentionally keeps state, effects, and command callbacks.
+- Platform-specific adapters are under `platform/`; generic notification delivery is separate from Chat notification policy; debug data modules are under `debug/`, while debug Settings UI lives directly under `settings/`.
+- Settings, Chat, File, and Git rendered surface chrome now lives in the owning directories; Settings detail files are flat under `settings/`; `WorkspaceApp.tsx` intentionally keeps state, effects, and command callbacks.
 - CSS now enters through `app/web/src/styles/index.css`; the legacy root `styles.css` was split into focused files under `app/web/src/styles/`.
 - The original HTML review's `Later`/`Keep` entries are not outstanding work for this iteration: `registryTypes.ts` was moved once churn settled, and debug data modules remain under `debug/` by design.
 
@@ -1325,7 +1357,7 @@ This plan has completed the HTML review implementation scope that was safe to ex
 - 2026-06-04 follow-up: Task 13 is complete and verified with targeted Jest plus `npm run tsc:web`; the remaining `services/` helpers now live under `chat/layout` and `code`, leaving no source files in `app/web/src/services`.
 - 2026-06-04 follow-up: Task 13 full verification passed with `npm test -- --runInBand` and `npm run build:web`.
 - 2026-06-04 closeout: Reconciled this plan with the current tree after Tasks 1-13. Later continuation tasks then completed the remaining HTML review surface and CSS targets.
-- 2026-06-04 continuation: Tasks 14-18 are complete. The remaining Settings detail files moved under `settings/code` and `settings/portRelay`; Android notification bridge logic moved under `platform/android`; registry protocol types moved to `registry/registryTypes.ts`; startup address helpers moved to `app/workspaceBootstrap.ts`; Shiki, diff, Markdown, Mermaid, and HTML preview rendering moved under `code/`.
+- 2026-06-04 continuation: Tasks 14-18 are complete. Task 24 later superseded the interim `settings/code` and `settings/portRelay` detail subdirectories by flattening Settings files under `settings/`; Android notification bridge logic moved under `platform/android`; registry protocol types moved to `registry/registryTypes.ts`; startup address helpers moved to `app/workspaceBootstrap.ts`; Shiki, diff, Markdown, Mermaid, and HTML preview rendering moved under `code/`.
 - 2026-06-04 continuation: Verification after Task 18 passed with `npm run tsc:web`, `npm test -- --runInBand`, and `npm run build:web`. Tasks 19-21 were then added for Settings surface extraction, Chat/File/Git surface extraction, and CSS surface split.
 - 2026-06-04 continuation: Task 19 is complete. `settings/SettingsSurface.tsx` now owns the Settings detail shell, root/detail surface switch, mobile Settings screen, mobile Settings shortcut bar, shortcut metadata, and Settings detail titles while `WorkspaceApp.tsx` keeps state/effect/callback ownership.
 - 2026-06-04 continuation: Task 19 verification passed with `npm test -- --runInBand web-settings-navigation.test.ts web-mobile-settings-system-back.test.ts web-port-relay-settings.test.ts web-registry-debug-settings.test.ts`, additional affected source-structure tests, and `npm run tsc:web`.
@@ -1338,3 +1370,5 @@ This plan has completed the HTML review implementation scope that was safe to ex
 - 2026-06-04 final verification: `npm test -- --runInBand` passed 133 suites / 553 tests, followed by passing `npm run tsc:web` and `npm run build:web`.
 - 2026-06-04 continuation: Task 23 is complete. Chat Session, Turn, Layout, and Composer helper files moved under `chat/session`, `chat/turns`, `chat/layout`, and `chat/composer`; `WorkspaceApp.tsx` state/effects/command ownership was not changed.
 - 2026-06-04 continuation: Task 23 verification passed with targeted Chat Jest (`16` suites / `100` tests), `npm run tsc:web`, and `npm run build:web`.
+- 2026-06-04 continuation: Task 24 is complete. Settings detail and Settings helper Modules were flattened back under `app/web/src/settings/` because their file names already carry the detail concepts and the extra directories were shallow.
+- 2026-06-04 continuation: Task 24 verification passed with targeted Settings Jest (`10` suites / `76` tests), `npm run tsc:web`, full Jest (`133` suites / `553` tests), and `npm run build:web`.

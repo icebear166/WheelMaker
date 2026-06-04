@@ -5,7 +5,7 @@ describe('cc switch settings detail source structure', () => {
   test('lazy loads the CC Switch detail body from the settings module', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
-    const detailPath = path.join(projectRoot, 'web', 'src', 'settings', 'code', 'CCSwitchSettingsDetail.tsx');
+    const detailPath = path.join(projectRoot, 'web', 'src', 'settings', 'CCSwitchSettingsDetail.tsx');
     const detailTsx = fs.existsSync(detailPath) ? fs.readFileSync(detailPath, 'utf8') : '';
 
     expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ '../settings/SettingsBundle')");

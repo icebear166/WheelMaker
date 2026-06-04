@@ -1,7 +1,7 @@
 import React from 'react';
 
-import {samePortRelayTarget, type PortRelayTarget} from '../../portRelay/portRelayTargets';
-import type {RegistryPortRelaySnapshot} from '../../registry/registryTypes';
+import {samePortRelayTarget, type PortRelayTarget} from '../portRelay/portRelayTargets';
+import type {RegistryPortRelaySnapshot} from '../registry/registryTypes';
 
 type PortRelaySettingsPatch = {
   listenPort?: number;

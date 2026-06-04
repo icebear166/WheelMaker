@@ -3,7 +3,7 @@ import type {
   RegistryNpmPackage,
   RegistryNpmPackageStatus,
   RegistryWheelMakerUpdateResponse,
-} from '../../registry/registryTypes';
+} from '../registry/registryTypes';
 
 export const AGENT_PACKAGE_SCAN_TIMEOUT_MS = 65000;
 

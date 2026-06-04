@@ -6,7 +6,7 @@ import {
   skillOperationStatusLabel,
   skillScopeLabel,
   sortSkillProjects,
-} from './skills/skillManagementView';
+} from './skillManagementView';
 import type {
   RegistrySkillCommandResponse,
   RegistrySkillScope,

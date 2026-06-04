@@ -1,4 +1,4 @@
-import { buildTokenStatCards, type TokenProviderSectionView } from '../web/src/settings/tokenStats/tokenStatsView';
+import { buildTokenStatCards, type TokenProviderSectionView } from '../web/src/settings/tokenStatsView';
 import fs from 'fs';
 import path from 'path';
 

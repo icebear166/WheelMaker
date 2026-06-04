@@ -1,9 +1,9 @@
 export { SettingsRootContent } from './SettingsRootContent';
-export { CCSwitchSettingsDetail } from './code/CCSwitchSettingsDetail';
+export { CCSwitchSettingsDetail } from './CCSwitchSettingsDetail';
 export { ConnectionStatusSettingsDetail } from './ConnectionStatusSettingsDetail';
 export { DatabaseSettingsDetail } from './DatabaseSettingsDetail';
-export { PortRelaySettingsDetail } from './portRelay/PortRelaySettingsDetail';
+export { PortRelaySettingsDetail } from './PortRelaySettingsDetail';
 export { SkillsSettingsDetail } from './SkillsSettingsDetail';
 export { TokenStatsSettingsDetail } from './TokenStatsSettingsDetail';
 export { UpdateSettingsDetail } from './UpdateSettingsDetail';
-export { DebugLogsSettingsDetail } from './debug/DebugLogsSettingsDetail';
+export { DebugLogsSettingsDetail } from './DebugLogsSettingsDetail';
