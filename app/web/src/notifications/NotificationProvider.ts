@@ -1,10 +1,10 @@
 import type { WheelMakerNotificationPayload } from './notificationPayload';
-
-type AndroidNotificationBridge = {
-  showNotification?: (rawJson: string) => string;
-  getNotificationPermissionState?: () => string;
-  requestNotificationPermission?: () => string;
-};
+import {
+  createAndroidNotificationProvider,
+  type AndroidNotificationBridge,
+  type AndroidNotificationBridgeEnv,
+  type AndroidNotificationPermissionState,
+} from '../platform/android/notificationBridge';
 
 type NotificationLike = {
   permission?: NotificationPermission;
@@ -17,12 +17,10 @@ type ServiceWorkerRegistrationLike = {
   } | null;
 };
 
-type NotificationProviderEnv = {
+type NotificationProviderEnv = AndroidNotificationBridgeEnv & {
   isSecureContext?: boolean;
   Notification?: NotificationLike;
   PushManager?: unknown;
-  addEventListener?: (eventName: string, listener: EventListener) => void;
-  removeEventListener?: (eventName: string, listener: EventListener) => void;
   navigator?: {
     serviceWorker?: {
       getRegistration?: (scope?: string) => Promise<ServiceWorkerRegistrationLike | null | undefined>;
@@ -32,16 +30,7 @@ type NotificationProviderEnv = {
   WheelMakerAndroidNative?: AndroidNotificationBridge;
 };
 
-type AndroidPermissionResponse = {
-  state: WheelMakerNotificationPermissionState;
-  pending: boolean;
-};
-
-export type WheelMakerNotificationPermissionState =
-  | 'granted'
-  | 'denied'
-  | 'default'
-  | 'unsupported';
+export type WheelMakerNotificationPermissionState = AndroidNotificationPermissionState;
 
 export type WheelMakerNotificationProvider = {
   kind: 'android' | 'pwa' | 'unsupported';
@@ -50,91 +39,6 @@ export type WheelMakerNotificationProvider = {
   requestPermission(): Promise<WheelMakerNotificationPermissionState>;
   show(payload: WheelMakerNotificationPayload): Promise<boolean>;
 };
-
-function parsePermissionState(raw: string | undefined): WheelMakerNotificationPermissionState {
-  try {
-    const parsed = JSON.parse(raw || '{}') as { state?: string; permission?: string };
-    const value = parsed.state || parsed.permission;
-    if (value === 'granted' || value === 'denied' || value === 'default') {
-      return value;
-    }
-  } catch {
-    return 'unsupported';
-  }
-  return 'unsupported';
-}
-
-function parseAndroidPermissionResponse(raw: string | undefined): AndroidPermissionResponse {
-  try {
-    const parsed = JSON.parse(raw || '{}') as { state?: string; permission?: string; pending?: boolean };
-    const value = parsed.state || parsed.permission;
-    const state = value === 'granted' || value === 'denied' || value === 'default'
-      ? value
-      : 'unsupported';
-    return { state, pending: parsed.pending === true };
-  } catch {
-    return { state: 'unsupported', pending: false };
-  }
-}
-
-function parseOk(raw: string | undefined): boolean {
-  try {
-    const parsed = JSON.parse(raw || '{}') as { ok?: boolean };
-    return parsed.ok === true;
-  } catch {
-    return false;
-  }
-}
-
-function waitForAndroidPermissionEvent(
-  env: NotificationProviderEnv,
-): Promise<WheelMakerNotificationPermissionState> {
-  const addEventListener = env.addEventListener;
-  const removeEventListener = env.removeEventListener;
-  if (!addEventListener || !removeEventListener) {
-    return Promise.resolve('default');
-  }
-  return new Promise(resolve => {
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-    const cleanup = () => {
-      removeEventListener('wheelmaker:android-notification-permission', listener);
-      if (timeoutId !== null) {
-        clearTimeout(timeoutId);
-      }
-    };
-    const listener = ((event: Event) => {
-      const detail = (event as CustomEvent<{ state?: string }>).detail;
-      const value = detail?.state;
-      cleanup();
-      resolve(value === 'granted' || value === 'denied' || value === 'default'
-        ? value
-        : 'unsupported');
-    }) as EventListener;
-    timeoutId = setTimeout(() => {
-      cleanup();
-      resolve('default');
-    }, 30_000);
-    addEventListener('wheelmaker:android-notification-permission', listener);
-  });
-}
-
-function createAndroidProvider(
-  bridge: AndroidNotificationBridge,
-  env: NotificationProviderEnv,
-): WheelMakerNotificationProvider {
-  return {
-    kind: 'android',
-    isSupported: () => typeof bridge.showNotification === 'function',
-    getPermissionState: async () => parsePermissionState(bridge.getNotificationPermissionState?.()),
-    requestPermission: async () => {
-      const response = parseAndroidPermissionResponse(bridge.requestNotificationPermission?.());
-      return response.pending
-        ? waitForAndroidPermissionEvent(env)
-        : response.state;
-    },
-    show: async payload => parseOk(bridge.showNotification?.(JSON.stringify(payload))),
-  };
-}
 
 function createPwaProvider(env: NotificationProviderEnv): WheelMakerNotificationProvider {
   const serviceWorker = env.navigator?.serviceWorker;
@@ -208,7 +112,7 @@ export function createNotificationProvider(
 ): WheelMakerNotificationProvider {
   const bridge = env.WheelMakerAndroidNative;
   if (bridge?.showNotification) {
-    return createAndroidProvider(bridge, env);
+    return createAndroidNotificationProvider(bridge, env);
   }
   const pwaProvider = createPwaProvider(env);
   return pwaProvider.isSupported() ? pwaProvider : unsupportedProvider;

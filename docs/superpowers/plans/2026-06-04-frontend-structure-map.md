@@ -974,7 +974,7 @@ Expected: targeted tests PASS and TypeScript exits 0.
   - `app/__tests__/web-notification-provider.test.ts`
   - `app/__tests__/web-chat-notification-settings.test.ts`
 
-- [ ] **Step 1: Run baseline targeted tests**
+- [x] **Step 1: Run baseline targeted tests**
 
 ```powershell
 cd app
@@ -983,7 +983,7 @@ npm test -- --runInBand web-notification-provider.test.ts web-chat-notification-
 
 Expected: targeted tests PASS before extraction.
 
-- [ ] **Step 2: Move Android-specific notification logic**
+- [x] **Step 2: Move Android-specific notification logic**
 
 Create `platform/android/notificationBridge.ts` with the Android bridge type, Android permission parsing, Android permission event wait, and Android provider factory currently embedded in `notifications/NotificationProvider.ts`.
 
@@ -1019,11 +1019,11 @@ export function createAndroidNotificationProvider(
 };
 ```
 
-- [ ] **Step 3: Keep NotificationProvider platform-neutral**
+- [x] **Step 3: Keep NotificationProvider platform-neutral**
 
 `NotificationProvider.ts` should import Android bridge types and `createAndroidNotificationProvider` from `../platform/android/notificationBridge`, while retaining PWA provider and unsupported-provider selection.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 ```powershell
 cd app

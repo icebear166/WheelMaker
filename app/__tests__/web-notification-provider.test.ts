@@ -1,3 +1,6 @@
+import fs from 'fs';
+import path from 'path';
+
 import { createNotificationProvider } from '../web/src/notifications/NotificationProvider';
 import type { WheelMakerNotificationPayload } from '../web/src/notifications/notificationPayload';
 
@@ -13,6 +16,18 @@ const payload: WheelMakerNotificationPayload = {
 };
 
 describe('notification provider selection', () => {
+  test('keeps Android bridge implementation under platform adapter', () => {
+    const root = path.resolve(__dirname, '..');
+    const provider = fs.readFileSync(path.join(root, 'web/src/notifications/NotificationProvider.ts'), 'utf8');
+    const bridge = fs.readFileSync(path.join(root, 'web/src/platform/android/notificationBridge.ts'), 'utf8');
+
+    expect(provider).toContain("from '../platform/android/notificationBridge'");
+    expect(provider).not.toContain('function waitForAndroidPermissionEvent');
+    expect(provider).not.toContain('function parseAndroidPermissionResponse');
+    expect(bridge).toContain('export function createAndroidNotificationProvider');
+    expect(bridge).toContain("wheelmaker:android-notification-permission");
+  });
+
   test('prefers Android native bridge when available', async () => {
     const calls: string[] = [];
     const provider = createNotificationProvider({
