@@ -450,13 +450,24 @@ func TestMacOSPlistContent(t *testing.T) {
 		"<key>KeepAlive</key>",
 		"<key>EnvironmentVariables</key>",
 		"<key>PATH</key>",
-		"<string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>",
+		"<string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>",
 		"<key>HOME</key>",
 		"<string>/Users/me</string>",
 	} {
 		if !strings.Contains(plist, needle) {
 			t.Fatalf("plist missing %s:\n%s", needle, plist)
 		}
+	}
+}
+
+func TestMacOSPlistContentAugmentsSparsePathForNodeTools(t *testing.T) {
+	t.Setenv("PATH", "/custom/bin")
+	t.Setenv("HOME", "/Users/me")
+
+	plist := launchAgentPlistContent("com.wheelmaker.hub", "/repo", "/Users/me/.wheelmaker/bin/wheelmaker", []string{"-d"})
+	wantPath := "<string>/custom/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>"
+	if !strings.Contains(plist, wantPath) {
+		t.Fatalf("plist PATH missing common node locations, want %s:\n%s", wantPath, plist)
 	}
 }
 

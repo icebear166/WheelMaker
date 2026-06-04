@@ -504,7 +504,7 @@ func (c *NPMCommand) runCommandOperation(operation *npmOperationSnapshot, name s
 	operation.ExitCode = &exitCode
 	if commandFailed(result) {
 		operation.Status = "failed"
-		operation.ErrorSummary = formatNPMTaskErrorSummary(exitCode, result.Stdout, result.Stderr)
+		operation.ErrorSummary = formatNPMTaskErrorSummary(exitCode, result.Stdout, result.Stderr, result.Err)
 		return
 	}
 	operation.Status = "succeeded"
@@ -523,7 +523,7 @@ func (c *NPMCommand) runInstallManyOperation(operation *npmOperationSnapshot, pa
 		if commandFailed(result) {
 			code := result.ExitCode
 			exitCode = &code
-			failed = append(failed, packageName+": "+formatNPMTaskErrorSummary(result.ExitCode, result.Stdout, result.Stderr))
+			failed = append(failed, packageName+": "+formatNPMTaskErrorSummary(result.ExitCode, result.Stdout, result.Stderr, result.Err))
 		}
 	}
 	finishedAt := c.now().Format(time.RFC3339)
@@ -612,15 +612,18 @@ func commandFailed(result npmCommandResult) bool {
 }
 
 func npmResultSummary(result npmCommandResult) string {
-	return formatNPMTaskErrorSummary(result.ExitCode, result.Stdout, result.Stderr)
+	return formatNPMTaskErrorSummary(result.ExitCode, result.Stdout, result.Stderr, result.Err)
 }
 
-func formatNPMTaskErrorSummary(exitCode int, stdout string, stderr string) string {
+func formatNPMTaskErrorSummary(exitCode int, stdout string, stderr string, err error) string {
 	segment := lastNonEmptySegment(stderr)
 	if segment == "" {
 		segment = lastNonEmptySegment(stdout)
 	}
 	if segment == "" {
+		if err != nil {
+			return fmt.Sprintf("npm command failed with exit code %d: %s", exitCode, truncateRunes(err.Error(), 500))
+		}
 		return fmt.Sprintf("npm command failed with exit code %d", exitCode)
 	}
 	return fmt.Sprintf("exit code %d: %s", exitCode, truncateRunes(segment, 500))

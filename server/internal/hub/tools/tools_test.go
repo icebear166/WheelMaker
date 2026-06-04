@@ -458,6 +458,31 @@ func TestNPMCommandFailedTaskSummarizesLastStderrSegment(t *testing.T) {
 	}
 }
 
+func TestNPMCommandFailedTaskIncludesExecErrorWhenOutputEmpty(t *testing.T) {
+	runner := newFakeNPMRunner()
+	runner.set("npm", []string{"install", "-g", "@openai/codex@latest"}, npmCommandResult{
+		ExitCode: -1,
+		Err:      errors.New(`exec: "npm": executable file not found in $PATH`),
+	})
+	cmd := newNPMCommandWithRunner(runner)
+
+	_, installErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action":      "install",
+		"hubId":       "hub-a",
+		"packageName": "@openai/codex",
+	}))
+	if installErr != nil {
+		t.Fatalf("install error: %#v", installErr)
+	}
+	operation := waitForNPMTestOperation(t, cmd)
+	if operation.Status != "failed" || operation.ExitCode == nil || *operation.ExitCode != -1 {
+		t.Fatalf("operation=%#v, want failed exit -1", operation)
+	}
+	if !strings.Contains(operation.ErrorSummary, `exec: "npm"`) {
+		t.Fatalf("summary=%q, want exec error", operation.ErrorSummary)
+	}
+}
+
 func rawNPMCommandPayload(t *testing.T, payload map[string]any) json.RawMessage {
 	t.Helper()
 	raw, err := json.Marshal(payload)
@@ -945,6 +970,35 @@ func TestSkillsCommandFailureReturnsStructuredSummary(t *testing.T) {
 	}
 	if len(body.ErrorSummary) > len("exit code 7: ")+500 {
 		t.Fatalf("summary length=%d, want truncated segment", len(body.ErrorSummary))
+	}
+}
+
+func TestSkillsCommandFailureIncludesNpxExecErrorWhenFallbackOutputEmpty(t *testing.T) {
+	runner := newFakeSkillsRunner()
+	runner.set("", "skills", []string{"add", "mattpocock/skills", "--list"}, skillsCommandResult{
+		ExitCode: -1,
+		Err:      errors.New(`exec: "skills": executable file not found in $PATH`),
+	})
+	runner.set("", "npx", []string{"--yes", "skills", "add", "mattpocock/skills", "--list"}, skillsCommandResult{
+		ExitCode: -1,
+		Err:      errors.New(`exec: "npx": executable file not found in $PATH`),
+	})
+	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{HubID: "hub-a"})
+
+	resp, cmdErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "list",
+		"hubId":  "hub-a",
+		"source": "mattpocock/skills",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("list error: %#v", cmdErr)
+	}
+	body := resp.(skillsCommandResponse)
+	if body.OK {
+		t.Fatalf("response=%#v, want failed response", body)
+	}
+	if !strings.Contains(body.ErrorSummary, `exec: "npx"`) {
+		t.Fatalf("summary=%q, want npx exec error", body.ErrorSummary)
 	}
 }
 

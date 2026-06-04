@@ -898,7 +898,7 @@ func launchAgentPlistContent(label string, workingDir string, binary string, arg
   <dict>
     <key>PATH</key>
     <string>`)
-	b.WriteString(xmlEscape(os.Getenv("PATH")))
+	b.WriteString(xmlEscape(launchAgentPathValue()))
 	b.WriteString(`</string>
     <key>HOME</key>
     <string>`)
@@ -928,6 +928,55 @@ func launchAgentPlistContent(label string, workingDir string, binary string, arg
 
 func windowsUpdaterArgs(repo string, bin string, dailyTime string) string {
 	return fmt.Sprintf(`--repo "%s" --install-dir "%s" --time "%s"`, strings.ReplaceAll(repo, `"`, `\"`), strings.ReplaceAll(bin, `"`, `\"`), strings.ReplaceAll(dailyTime, `"`, `\"`))
+}
+
+var launchAgentDefaultPathDirs = []string{
+	"/opt/homebrew/bin",
+	"/usr/local/bin",
+	"/usr/bin",
+	"/bin",
+	"/usr/sbin",
+	"/sbin",
+}
+
+var launchAgentPathToolNames = []string{"node", "npm", "npx", "skills"}
+
+func launchAgentPathValue() string {
+	dirs := splitColonPath(os.Getenv("PATH"))
+	for _, name := range launchAgentPathToolNames {
+		path, err := exec.LookPath(name)
+		if err == nil {
+			dirs = append(dirs, filepath.Dir(path))
+		}
+	}
+	dirs = append(dirs, launchAgentDefaultPathDirs...)
+	return joinUniqueColonPath(dirs)
+}
+
+func splitColonPath(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	var dirs []string
+	for _, dir := range strings.Split(raw, ":") {
+		if dir != "" {
+			dirs = append(dirs, dir)
+		}
+	}
+	return dirs
+}
+
+func joinUniqueColonPath(dirs []string) string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(dirs))
+	for _, dir := range dirs {
+		if dir == "" || seen[dir] {
+			continue
+		}
+		seen[dir] = true
+		out = append(out, dir)
+	}
+	return strings.Join(out, ":")
 }
 
 func systemdQuote(value string) string {

@@ -1127,6 +1127,9 @@ func skillsResultSummary(result skillsCommandResult) string {
 		segment = lastNonEmptySegment(result.Stdout)
 	}
 	if segment == "" {
+		if result.Err != nil {
+			return fmt.Sprintf("skills command failed with exit code %d: %s", result.ExitCode, truncateRunes(result.Err.Error(), 500))
+		}
 		return fmt.Sprintf("skills command failed with exit code %d", result.ExitCode)
 	}
 	return fmt.Sprintf("exit code %d: %s", result.ExitCode, truncateRunes(segment, 500))
