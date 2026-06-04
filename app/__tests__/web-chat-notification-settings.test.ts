@@ -37,8 +37,8 @@ describe('chat prompt completion notification settings', () => {
   test('routes session.message through prompt completion notification policy', () => {
     const mainTsx = readMainSource();
 
-    expect(mainTsx).toContain("from './notifications/promptCompletion'");
-    expect(mainTsx).toContain("from './notifications/provider'");
+    expect(mainTsx).toContain("from './chat/notifications/promptCompletionNotification'");
+    expect(mainTsx).toContain("from './notifications/NotificationProvider'");
     expect(mainTsx).toContain('const notificationProvider = useMemo(() => createNotificationProvider(), []);');
     expect(mainTsx).toContain('const notifiedPromptCompletionIdsRef = useRef<Set<string>>(new Set());');
     expect(mainTsx).toContain('const maybeNotifyPromptCompletion = (');

@@ -1,27 +1,12 @@
 import type {
   RegistryChatMessage,
   RegistrySessionSummary,
-} from '../types/registry';
-import {resolveChatSessionTitle} from '../chat/chatSessionTitle';
-
-export type WheelMakerNotificationType = 'chat.prompt.completed';
-
-export type PromptCompletionNotificationStatus =
-  | 'completed'
-  | 'cancelled'
-  | 'interrupted'
-  | 'failed';
-
-export type WheelMakerNotificationPayload = {
-  type: WheelMakerNotificationType;
-  projectId: string;
-  sessionId: string;
-  turnIndex: number;
-  title: string;
-  body: string;
-  status: PromptCompletionNotificationStatus;
-  url: string;
-};
+} from '../../types/registry';
+import {resolveChatSessionTitle} from '../chatSessionTitle';
+import type {
+  PromptCompletionNotificationStatus,
+  WheelMakerNotificationPayload,
+} from '../../notifications/notificationPayload';
 
 export function promptCompletionNotificationKey(
   projectId: string,

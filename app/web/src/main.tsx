@@ -146,11 +146,11 @@ import {
   buildPromptCompletionNotification,
   promptCompletionNotificationKey,
   shouldNotifyPromptCompletion,
-} from './notifications/promptCompletion';
+} from './chat/notifications/promptCompletionNotification';
 import {
   createNotificationProvider,
   type WheelMakerNotificationPermissionState,
-} from './notifications/provider';
+} from './notifications/NotificationProvider';
 import {
   GITHUB_ANDROID_LATEST_RELEASE_API,
   createAndroidApkUpdateBridge,

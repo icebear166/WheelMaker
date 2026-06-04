@@ -1,5 +1,5 @@
-import { createNotificationProvider } from '../web/src/notifications/provider';
-import type { WheelMakerNotificationPayload } from '../web/src/notifications/promptCompletion';
+import { createNotificationProvider } from '../web/src/notifications/NotificationProvider';
+import type { WheelMakerNotificationPayload } from '../web/src/notifications/notificationPayload';
 
 const payload: WheelMakerNotificationPayload = {
   type: 'chat.prompt.completed',

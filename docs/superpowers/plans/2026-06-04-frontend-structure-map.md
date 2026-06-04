@@ -283,7 +283,7 @@ npm run tsc:web
 
 Expected: targeted tests PASS and TypeScript exits 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add -A
@@ -300,7 +300,7 @@ git commit -m "Move platform adapters under platform"
 - Create: `app/web/src/notifications/notificationPayload.ts`
 - Modify imports in `app/web/src/main.tsx`, `app/web/src/notifications/NotificationProvider.ts`, and tests.
 
-- [ ] **Step 1: Run baseline targeted tests**
+- [x] **Step 1: Run baseline targeted tests**
 
 ```powershell
 cd app
@@ -309,7 +309,7 @@ npm test -- --runInBand web-notification-provider.test.ts web-prompt-completion-
 
 Expected: PASS.
 
-- [ ] **Step 2: Move and create files**
+- [x] **Step 2: Move and create files**
 
 ```powershell
 New-Item -ItemType Directory -Force -Path app/web/src/chat/notifications
@@ -340,7 +340,7 @@ export type WheelMakerNotificationPayload = {
 };
 ```
 
-- [ ] **Step 3: Update imports**
+- [x] **Step 3: Update imports**
 
 Use replacements:
 
@@ -361,7 +361,7 @@ import type {
 } from '../../notifications/notificationPayload';
 ```
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 ```powershell
 cd app

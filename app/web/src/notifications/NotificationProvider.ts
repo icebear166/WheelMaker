@@ -1,4 +1,4 @@
-import type { WheelMakerNotificationPayload } from './promptCompletion';
+import type { WheelMakerNotificationPayload } from './notificationPayload';
 
 type AndroidNotificationBridge = {
   showNotification?: (rawJson: string) => string;
