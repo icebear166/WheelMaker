@@ -4,13 +4,13 @@ import path from 'path';
 describe('token stats settings UI source structure', () => {
   test('lazy loads the Token Stats detail and keeps card rendering outside main', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const detailPath = path.join(projectRoot, 'web', 'src', 'settings', 'TokenStatsSettingsDetail.tsx');
     const detailTsx = fs.existsSync(detailPath) ? fs.readFileSync(detailPath, 'utf8') : '';
 
     expect(mainTsx).toContain("'tokenStats'");
     expect(mainTsx).toContain('renderTokenStatsSettingsDetail(options)');
-    expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ './settings/SettingsBundle')");
+    expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ '../settings/SettingsBundle')");
     expect(mainTsx).toContain('<TokenStatsSettingsDetail');
     expect(mainTsx).toContain('providers={tokenStatsProviders}');
     expect(mainTsx).toContain('loading={tokenStatsLoading}');

@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 const root = path.resolve(__dirname, '..');
-const mainTsx = fs.readFileSync(path.join(root, 'web/src/main.tsx'), 'utf8');
+const mainTsx = fs.readFileSync(path.join(root, 'web/src/app/WorkspaceApp.tsx'), 'utf8');
 const detailPath = path.join(root, 'web/src/settings/PortRelaySettingsDetail.tsx');
 const detailTsx = fs.existsSync(detailPath) ? fs.readFileSync(detailPath, 'utf8') : '';
 const surfacePath = path.join(root, 'web/src/portRelay/PortRelayFrameSurface.tsx');
@@ -27,7 +27,7 @@ describe('port relay settings UI source structure', () => {
   });
 
   test('renders Port Relay controls and service hooks', () => {
-    expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ './settings/SettingsBundle')");
+    expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ '../settings/SettingsBundle')");
     expect(mainTsx).toContain('const renderPortRelaySettingsDetail = (options?: SettingsDetailShellOptions) =>');
     expect(mainTsx).toContain('<PortRelaySettingsDetail');
     expect(fs.existsSync(detailPath)).toBe(true);
@@ -37,7 +37,7 @@ describe('port relay settings UI source structure', () => {
     expect(mainTsx).toContain('service.disablePortRelay');
     expect(mainTsx).toContain('service.regeneratePortRelayAccessCode');
     expect(mainTsx).toContain('generatePortRelayAccessCode');
-    expect(mainTsx).toContain("import { appendPortRelayAutoAuthCode, appendPortRelayOpenPath, parsePortRelayLocalHttpUrl, resolvePortRelayOpenUrl } from './portRelay/portRelayUrl';");
+    expect(mainTsx).toContain("import { appendPortRelayAutoAuthCode, appendPortRelayOpenPath, parsePortRelayLocalHttpUrl, resolvePortRelayOpenUrl } from '../portRelay/portRelayUrl';");
     expect(mainTsx).toContain('resolvePortRelayOpenUrl({');
     expect(mainTsx).toContain('relayUrl: portRelaySnapshot.relayUrl');
     expect(mainTsx).toContain('const portRelayFrameAccessCode = portRelayAccessCodeUnknown ? \'\' : portRelayAccessCode;');
@@ -70,7 +70,7 @@ describe('port relay settings UI source structure', () => {
     expect(mainTsx).toContain('originX: event.clientX,');
     expect(mainTsx).toContain('startSide: floatingControlSide,');
     expect(mainTsx).toContain('currentX: event.clientX,');
-    expect(mainTsx).toContain("} from './shell/layouts/mobile/floatingControls';");
+    expect(mainTsx).toContain("} from '../shell/layouts/mobile/floatingControls';");
     expect(mainTsx).toContain('resolveFloatingControlDragSide(');
     expect(mainTsx).toContain('floatingControlSideRef.current');
     expect(mainTsx).not.toContain("const nextSide = current.currentX < windowWidth / 2 ? 'left' : 'right';");
@@ -85,7 +85,7 @@ describe('port relay settings UI source structure', () => {
     expect(mainTsx).toContain('const handleDesktopPortRelaySelect = useCallback(() => {');
     expect(mainTsx).toContain('setPortRelayFrameOpen(open => !open);');
     expect(mainTsx).toContain('onClick={handleDesktopPortRelaySelect}');
-    expect(mainTsx).toContain("import { PortRelayFloatingButton, PortRelayFrameSurface } from './portRelay/PortRelayFrameSurface';");
+    expect(mainTsx).toContain("import { PortRelayFloatingButton, PortRelayFrameSurface } from '../portRelay/PortRelayFrameSurface';");
     expect(mainTsx).toContain('<PortRelayFrameSurface');
     expect(mainTsx).toContain('mode="desktop"');
     expect(mainTsx).toContain('mode="mobile"');
@@ -141,7 +141,7 @@ describe('port relay settings UI source structure', () => {
   });
 
   test('turns chat localhost links into relay iframe actions for the current project hub', () => {
-    expect(mainTsx).toContain("import { appendPortRelayAutoAuthCode, appendPortRelayOpenPath, parsePortRelayLocalHttpUrl, resolvePortRelayOpenUrl } from './portRelay/portRelayUrl';");
+    expect(mainTsx).toContain("import { appendPortRelayAutoAuthCode, appendPortRelayOpenPath, parsePortRelayLocalHttpUrl, resolvePortRelayOpenUrl } from '../portRelay/portRelayUrl';");
     expect(mainTsx).toContain('const [portRelayFramePath, setPortRelayFramePath] = useState(\'\');');
     expect(mainTsx).toContain('appendPortRelayOpenPath(baseUrl, portRelayFramePath)');
     expect(mainTsx).toContain('const openChatPortRelayLink = useCallback(async (localUrl: PortRelayLocalHttpUrl) => {');

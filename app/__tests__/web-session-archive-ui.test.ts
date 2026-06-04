@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const main = fs.readFileSync(path.join(__dirname, '../web/src/main.tsx'), 'utf8');
+const main = fs.readFileSync(path.join(__dirname, '../web/src/app/WorkspaceApp.tsx'), 'utf8');
 
 describe('session archive UI source integration', () => {
   test('renders archive controls before search controls in desktop and mobile headers', () => {

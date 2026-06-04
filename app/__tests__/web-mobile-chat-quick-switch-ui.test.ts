@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 const root = path.resolve(__dirname, '..');
-const mainTsx = fs.readFileSync(path.join(root, 'web', 'src', 'main.tsx'), 'utf8');
+const mainTsx = fs.readFileSync(path.join(root, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 const stylesCss = fs.readFileSync(path.join(root, 'web', 'src', 'styles.css'), 'utf8');
 const quickSwitchMenuPath = path.join(root, 'web', 'src', 'chat', 'ChatQuickSwitchMenu.tsx');
 const quickSwitchMenuTsx = fs.existsSync(quickSwitchMenuPath)
@@ -15,9 +15,9 @@ function cssBlock(selector: string): string {
 
 describe('mobile chat quick switch UI source structure', () => {
   test('wires chat-page clicks on the mobile chat button to a compact quick switch menu', () => {
-    expect(mainTsx).toContain("import {buildMobileChatQuickSwitchSections} from './chat/mobileChatQuickSwitch';");
-    expect(mainTsx).toContain("import {ChatQuickSwitchMenu} from './chat/ChatQuickSwitchMenu';");
-    expect(mainTsx).toContain("import {resolveDesktopChatQuickSwitchContextMenu} from './shell/layouts/desktop/chatQuickSwitchContextMenu';");
+    expect(mainTsx).toContain("import {buildMobileChatQuickSwitchSections} from '../chat/mobileChatQuickSwitch';");
+    expect(mainTsx).toContain("import {ChatQuickSwitchMenu} from '../chat/ChatQuickSwitchMenu';");
+    expect(mainTsx).toContain("import {resolveDesktopChatQuickSwitchContextMenu} from '../shell/layouts/desktop/chatQuickSwitchContextMenu';");
     expect(mainTsx).toContain('const [chatQuickSwitchMenuOpen, setChatQuickSwitchMenuOpen] = useState(false);');
     expect(mainTsx).toContain("const [chatQuickSwitchMenuPlacement, setChatQuickSwitchMenuPlacement] = useState<ChatQuickSwitchMenuPlacement>({kind: 'mobile'});");
     expect(mainTsx).not.toContain('type ChatQuickSwitchPressState =');

@@ -54,14 +54,14 @@ describe('web runtime setup', () => {
       fs.existsSync(path.join(projectRoot, 'web', 'src', 'platform', 'pwa', 'push.ts')),
     ).toBe(true);
 
-    const mainTsx = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'main.tsx'),
+    const workspaceAppTsx = fs.readFileSync(
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
-    expect(mainTsx).toMatch(
-      /import\s+\{\s*initializePWAFoundation\s*\}\s+from\s+'\.\/platform\/pwa';/,
+    expect(workspaceAppTsx).toMatch(
+      /import\s+\{\s*initializePWAFoundation\s*\}\s+from\s+'\.\.\/platform\/pwa';/,
     );
-    expect(mainTsx).toContain('initializePWAFoundation();');
+    expect(workspaceAppTsx).toContain('initializePWAFoundation();');
   });
 
   test('service worker handles push and demo notification messages', () => {

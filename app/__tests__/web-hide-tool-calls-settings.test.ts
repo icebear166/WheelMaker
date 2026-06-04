@@ -4,7 +4,7 @@ import path from 'path';
 describe('web hide tool calls setting', () => {
   test('persists a default-on setting and skips tool entries only while rendering chat', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const settingsRootTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
     const workspacePersistence = fs.readFileSync(
       path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'),

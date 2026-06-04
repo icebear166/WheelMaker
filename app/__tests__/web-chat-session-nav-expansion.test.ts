@@ -4,7 +4,7 @@ import path from 'path';
 describe('web chat session navigation expansion', () => {
   test('renders every known project session without local expansion batching', () => {
     const projectRoot = path.join(__dirname, '..');
-    const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const styles = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
 
     expect(main).not.toContain('Show more');

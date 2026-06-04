@@ -5,7 +5,7 @@ describe('web resume session ui', () => {
   test('preserves wide resume popover placement when showing resumable sessions', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'main.tsx'),
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
     const resumeAgentStart = mainTsx.indexOf(
@@ -28,7 +28,7 @@ describe('web resume session ui', () => {
   test('uses project-scoped resume controls without legacy chat pickers', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'main.tsx'),
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
     const styles = fs.readFileSync(
@@ -76,7 +76,7 @@ describe('web resume session ui', () => {
   test('clamps long mobile resume session titles inside sheet rows', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'main.tsx'),
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
     const styles = fs.readFileSync(

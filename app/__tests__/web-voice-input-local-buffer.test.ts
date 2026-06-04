@@ -5,18 +5,18 @@ describe('web voice input local buffering wiring', () => {
   test('starts local voice capture before registry stream is ready and flushes through a serial queue', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'main.tsx'),
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
 
-    expect(mainTsx).toContain("from './features/speech/voiceInputRuntime';");
-    expect(mainTsx).not.toContain("from './features/speech/audioCapture';");
-    expect(mainTsx).not.toContain("from './features/speech/voiceInputBuffer';");
+    expect(mainTsx).toContain("from '../features/speech/voiceInputRuntime';");
+    expect(mainTsx).not.toContain("from '../features/speech/audioCapture';");
+    expect(mainTsx).not.toContain("from '../features/speech/voiceInputBuffer';");
     expect(mainTsx).not.toContain(
       "from './features/speech/voiceInputSendQueue';",
     );
-    expect(mainTsx).toContain("from './features/speech/voiceInputConstants';");
-    expect(mainTsx).toContain("from './features/speech/voiceInputFlow';");
+    expect(mainTsx).toContain("from '../features/speech/voiceInputConstants';");
+    expect(mainTsx).toContain("from '../features/speech/voiceInputFlow';");
     expect(mainTsx).toContain('VOICE_LONG_TIMEOUT_MS');
     expect(mainTsx).toContain('VOICE_SHORT_TIMEOUT_MS');
     expect(mainTsx).not.toContain('VOICE_AUDIO_CHUNK_BYTES');
@@ -41,7 +41,7 @@ describe('web voice input local buffering wiring', () => {
   test('keeps voice input alive across registry reconnects and preserves recognized text', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'main.tsx'),
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
 
@@ -66,7 +66,7 @@ describe('web voice input local buffering wiring', () => {
   test('handles speech errors and finalizing without rolling back recognized text', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'main.tsx'),
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
 
@@ -84,7 +84,7 @@ describe('web voice input local buffering wiring', () => {
   test('stops microphone capture that resolves after recording was already stopped', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'main.tsx'),
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
 
@@ -99,7 +99,7 @@ describe('web voice input local buffering wiring', () => {
   test('wires composer action modes without eager microphone prewarm on send paths', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'main.tsx'),
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
 

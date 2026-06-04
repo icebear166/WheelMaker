@@ -5,14 +5,14 @@ describe('android apk update settings card', () => {
   const projectRoot = path.join(__dirname, '..');
 
   test('renders Android-only APK update card above hub update controls', () => {
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const detailTsx = fs.existsSync(path.join(projectRoot, 'web', 'src', 'settings', 'UpdateSettingsDetail.tsx'))
       ? fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'UpdateSettingsDetail.tsx'), 'utf8')
       : '';
     const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
 
-    expect(mainTsx).toContain("from './platform/android/androidApkUpdate'");
-    expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ './settings/SettingsBundle')");
+    expect(mainTsx).toContain("from '../platform/android/androidApkUpdate'");
+    expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ '../settings/SettingsBundle')");
     expect(mainTsx).toContain('<UpdateSettingsDetail');
     expect(mainTsx).toContain('const androidApkUpdateBridge = useMemo(() => createAndroidApkUpdateBridge(), []);');
     expect(mainTsx).toContain('const [androidApkUpdateSupported, setAndroidApkUpdateSupported]');

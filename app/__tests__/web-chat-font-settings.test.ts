@@ -24,7 +24,7 @@ describe('web chat font settings', () => {
 
   test('persists the chat font setting and exposes it only in Chat settings', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const settingsRootTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
     const persistence = fs.readFileSync(
       path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'),
@@ -50,7 +50,7 @@ describe('web chat font settings', () => {
 
   test('applies chat font through message CSS without changing code or composer fonts', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
 
     expect(mainTsx).toContain("'--chat-message-font-family': chatFontFamily,");

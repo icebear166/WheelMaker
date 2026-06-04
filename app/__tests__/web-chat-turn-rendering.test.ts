@@ -3,7 +3,7 @@ import path from 'path';
 
 function readMain(): string {
   const projectRoot = path.join(__dirname, '..');
-  return fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+  return fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 }
 
 function readVirtualList(): string {
@@ -60,8 +60,8 @@ describe('web chat turn rendering', () => {
     expect(virtualList).not.toContain('@tanstack/react-virtual');
     expect(virtualList).not.toContain('chatVirtualMeasurements');
     expect(virtualList).not.toContain('shouldAdjustChatVirtualItemSizeChange');
-    expect(main).toContain("import {buildChatDisplayIndex, type ChatDisplayIndexItem} from './chat/chatDisplayIndex';");
-    expect(main).toContain("import {ChatVirtuosoTurnList, type ChatVirtuosoTurnListHandle} from './chat/ChatVirtuosoTurnList';");
+    expect(main).toContain("import {buildChatDisplayIndex, type ChatDisplayIndexItem} from '../chat/chatDisplayIndex';");
+    expect(main).toContain("import {ChatVirtuosoTurnList, type ChatVirtuosoTurnListHandle} from '../chat/ChatVirtuosoTurnList';");
     expect(main).toContain('const chatVirtuosoListRef = useRef<ChatVirtuosoTurnListHandle | null>(null);');
     expect(main).toContain("chatVirtuosoListRef.current?.scrollToBottom('auto');");
     expect(main).not.toContain('chatVirtuosoListRef.current?.autoscrollToBottom();');
@@ -74,7 +74,7 @@ describe('web chat turn rendering', () => {
     expect(main).toContain('runtimeKey={activeChatRuntimeKey}');
     expect(main).not.toContain('container.scrollTop = nextScrollTop;');
     expect(main).not.toContain('resolveChatBottomScrollTop');
-    expect(main).not.toContain("from './chat/chatTurnWindow'");
+    expect(main).not.toContain("from '../chat/chatTurnWindow'");
     expect(main).toContain('buildPromptDoneCopyRange(selectedFullChatMessages, doneTurnIndex)');
     expect(main).toContain('copyDisabled={copyRange ? !copyRange.ok : true}');
   });
@@ -92,7 +92,7 @@ describe('web chat turn rendering', () => {
   test('renders prompt responding status and delivery states for pending prompts', () => {
     const main = readMain();
 
-    expect(main).toContain("import { resolvePromptDoneStatus, resolvePromptTurnStatus, type ChatPromptStatus } from './chat/chatPromptStatus';");
+    expect(main).toContain("import { resolvePromptDoneStatus, resolvePromptTurnStatus, type ChatPromptStatus } from '../chat/chatPromptStatus';");
     expect(main).toContain('promptStatus?: ChatPromptStatus;');
     expect(main).toContain("promptStatus === 'responding'");
     expect(main).toContain("promptStatus === 'confirming'");
@@ -120,7 +120,7 @@ describe('web chat turn rendering', () => {
     const styles = readStyles();
 
     expect(main).toContain("import {");
-    expect(main).toContain("} from './chat/chatPromptAttachments';");
+    expect(main).toContain("} from '../chat/chatPromptAttachments';");
     expect(main).toContain('const attachmentBlocks = groupPromptAttachmentBlocks([message]);');
     expect(main).toContain('className="chat-prompt-attachment-strip"');
     expect(main).toContain('className={`chat-prompt-attachment-chip ${block.type === \'image\' ? \'image\' : \'file\'}`}');

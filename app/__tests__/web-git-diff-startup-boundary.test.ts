@@ -9,7 +9,7 @@ function readSourceText(filePath: string): string {
 
 describe('web git diff startup boundary', () => {
   const projectRoot = path.join(__dirname, '..');
-  const mainTsxPath = path.join(projectRoot, 'web', 'src', 'main.tsx');
+  const mainTsxPath = path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx');
   const diffRowsPath = path.join(projectRoot, 'web', 'src', 'git', 'diffRows.ts');
 
   test('keeps gitdiff-parser out of the chat startup module', () => {
@@ -18,7 +18,7 @@ describe('web git diff startup boundary', () => {
     expect(mainTsx).not.toContain("require('gitdiff-parser')");
     expect(mainTsx).not.toContain('declare const require');
     expect(mainTsx).toMatch(
-      /import\(\s*\/\* webpackChunkName: "git-diff" \*\/\s*'\.\/git\/diffRows'\s*\)/,
+      /import\(\s*\/\* webpackChunkName: "git-diff" \*\/\s*'\.\.\/git\/diffRows'\s*\)/,
     );
     expect(mainTsx).toContain('const [diffRenderState, setDiffRenderState]');
     expect(mainTsx).toContain("if (diffRenderState === 'empty')");

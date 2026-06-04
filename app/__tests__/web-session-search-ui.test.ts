@@ -4,7 +4,7 @@ import path from 'path';
 describe('web session search UI wiring', () => {
   test('keeps search protocol wiring with prompt turn navigation', () => {
     const projectRoot = path.join(__dirname, '..');
-    const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const styles = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
 
     expect(main).toContain('searchResultsByProjectId');
@@ -19,7 +19,7 @@ describe('web session search UI wiring', () => {
 
   test('loads the matched prompt turn before applying search-result navigation', () => {
     const projectRoot = path.join(__dirname, '..');
-    const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const clickStart = main.indexOf('const handleSessionSearchResultClick = async (');
     const clickEnd = main.indexOf('const renderSessionSearchHighlightedTitle = (', clickStart);
     expect(clickStart).toBeGreaterThanOrEqual(0);
@@ -44,7 +44,7 @@ describe('web session search UI wiring', () => {
 
   test('moves session search controls into desktop and mobile chat headers', () => {
     const projectRoot = path.join(__dirname, '..');
-    const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const styles = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
 
     expect(main).toContain('const renderChatHeaderSearchControls = (mobile: boolean) =>');
@@ -96,7 +96,7 @@ describe('web session search UI wiring', () => {
 
   test('renders full Hub labels and aggregate header search status text', () => {
     const projectRoot = path.join(__dirname, '..');
-    const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const styles = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
 
     expect(main).toContain("const chatHubSummaryLabel = `${hubCount} ${hubCount === 1 ? 'Hub' : 'Hubs'}`;");

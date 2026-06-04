@@ -4,7 +4,7 @@ import path from 'path';
 describe('web directory expand resilience', () => {
   test('shows directory load failure, avoids fire-and-forget swallow, and refreshes expanded dirs sequentially', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const workspaceControllerTs = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspaceController.ts'), 'utf8');
 
     expect(mainTsx).toContain('Failed to load directory');

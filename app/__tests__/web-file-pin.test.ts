@@ -4,7 +4,7 @@ import path from 'path';
 describe('web file pin feature', () => {
   test('supports pinning files and switching via pinned list', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 
     expect(mainTsx).toContain('const [pinnedFiles, setPinnedFiles] = useState<string[]>([])');
     expect(mainTsx).toContain('const hasPinnedFiles = pinnedFiles.length > 0;');

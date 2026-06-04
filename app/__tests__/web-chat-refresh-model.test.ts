@@ -3,7 +3,7 @@ import path from 'path';
 
 function readMain(): string {
   const projectRoot = path.join(__dirname, '..');
-  return fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+  return fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 }
 
 function extractFunctionBody(source: string, functionName: string): string {

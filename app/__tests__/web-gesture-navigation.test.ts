@@ -15,7 +15,7 @@ function projectRoot(): string {
 }
 
 function readMain(): string {
-  return fs.readFileSync(path.join(projectRoot(), 'web', 'src', 'main.tsx'), 'utf8');
+  return fs.readFileSync(path.join(projectRoot(), 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 }
 
 function readSettingsRoot(): string {
@@ -98,7 +98,7 @@ describe('gesture navigation', () => {
     const settingsRoot = readSettingsRoot();
 
     expect(main).toContain("import {");
-    expect(main).toContain("} from './shell/layouts/mobile/gestureNavigation';");
+    expect(main).toContain("} from '../shell/layouts/mobile/gestureNavigation';");
     expect(main).toContain('const [gestureNavigation, setGestureNavigation] = useState(');
     expect(main).toContain('typeof persistedGlobal.gestureNavigation === \'boolean\'');
     expect(main).toContain('gestureNavigation,');

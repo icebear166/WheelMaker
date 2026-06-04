@@ -3,7 +3,7 @@ import path from 'path';
 
 function readMain(): string {
   const projectRoot = path.join(__dirname, '..');
-  return fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+  return fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 }
 
 function readStyles(): string {
@@ -71,8 +71,8 @@ describe('workspace project lightweight UI wiring', () => {
     const gitSurface = readWebSource('git/GitSidebar.tsx');
 
     expect(main).not.toContain('const renderWorkspaceProjectSelector = () =>');
-    expect(main).toContain("import { FileExplorerTree, WorkspaceProjectSelector } from './file/FileExplorerTree';");
-    expect(main).toContain("import { GitSidebar } from './git/GitSidebar';");
+    expect(main).toContain("import { FileExplorerTree, WorkspaceProjectSelector } from '../file/FileExplorerTree';");
+    expect(main).toContain("import { GitSidebar } from '../git/GitSidebar';");
     expect(fileSurface).toContain('<WorkspaceProjectSelector');
     expect(gitSurface).toContain('<WorkspaceProjectSelector');
     expect(fileSurface).toContain('<div className="workspace-project-label">WORKSPACE</div>');

@@ -4,18 +4,18 @@ import path from 'path';
 describe('web code layout', () => {
   test('uses shiki renderer with transformer-based line metadata and custom diff rendering', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const diffRows = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'git', 'diffRows.ts'), 'utf8');
     const shikiRenderer = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'services', 'shikiRenderer.ts'), 'utf8');
     const shikiSettings = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'services', 'shikiSettings.ts'), 'utf8');
     const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
 
-    expect(mainTsx).toContain("from './services/shikiSettings'");
-    expect(mainTsx).toContain("import('./services/shikiRenderer')");
-    expect(mainTsx).not.toContain("from './services/shikiRenderer'");
+    expect(mainTsx).toContain("from '../services/shikiSettings'");
+    expect(mainTsx).toContain("import('../services/shikiRenderer')");
+    expect(mainTsx).not.toContain("from '../services/shikiRenderer'");
     expect(mainTsx).toContain('renderShikiHtml');
     expect(mainTsx).toContain('renderShikiDiffHtml');
-    expect(mainTsx).toContain("import(/* webpackChunkName: \"git-diff\" */ './git/diffRows')");
+    expect(mainTsx).toContain("import(/* webpackChunkName: \"git-diff\" */ '../git/diffRows')");
     expect(mainTsx).not.toContain("require('gitdiff-parser')");
     expect(diffRows).toContain("require('gitdiff-parser')");
     expect(diffRows).toContain('gitdiffParser.parse(content)');

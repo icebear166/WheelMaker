@@ -13,7 +13,7 @@ function cssRuleBlock(stylesCss: string, selector: string): string {
 
 describe('web chat file peek viewer', () => {
   const projectRoot = path.join(__dirname, '..');
-  const mainPath = path.join(projectRoot, 'web', 'src', 'main.tsx');
+  const mainPath = path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx');
   const shellPath = path.join(projectRoot, 'web', 'src', 'shell', 'ResponsiveShell.tsx');
   const stylesPath = path.join(projectRoot, 'web', 'src', 'styles.css');
 

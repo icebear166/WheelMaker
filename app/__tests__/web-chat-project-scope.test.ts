@@ -5,7 +5,7 @@ describe('web chat project scoping', () => {
   test('guards stale chat loads by selected composite key instead of workspace project', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'main.tsx'),
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
 

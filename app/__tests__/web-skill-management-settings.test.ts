@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 const root = path.resolve(__dirname, '..');
-const mainTsx = fs.readFileSync(path.join(root, 'web/src/main.tsx'), 'utf8');
+const mainTsx = fs.readFileSync(path.join(root, 'web/src/app/WorkspaceApp.tsx'), 'utf8');
 const detailPath = path.join(root, 'web/src/settings/SkillsSettingsDetail.tsx');
 const detailTsx = fs.existsSync(detailPath) ? fs.readFileSync(detailPath, 'utf8') : '';
 const skillsDetailSource = `${mainTsx}\n${detailTsx}`;
@@ -37,7 +37,7 @@ describe('skill management settings UI source structure', () => {
 
   test('renders Skills detail with controlled command hooks and confirmations', () => {
     expect(mainTsx).toContain('const renderSkillsSettingsDetail = (options?: SettingsDetailShellOptions) =>');
-    expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ './settings/SettingsBundle')");
+    expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ '../settings/SettingsBundle')");
     expect(mainTsx).toContain('<SkillsSettingsDetail');
     expect(detailTsx).toContain('export function SkillsSettingsDetail');
     expect(mainTsx).toContain('refreshSkillManagement');

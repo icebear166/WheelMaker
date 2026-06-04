@@ -410,11 +410,11 @@ describe('web responsive ui state', () => {
   test('main web app uses the responsive layout and workspace ui state modules', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs
-      .readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8')
+      .readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8')
       .replace(/\r\n/g, '\n');
 
-    expect(mainTsx).toContain("from './services/responsiveLayout'");
-    expect(mainTsx).toContain("from './services/workspaceUiState'");
+    expect(mainTsx).toContain("from '../services/responsiveLayout'");
+    expect(mainTsx).toContain("from '../services/workspaceUiState'");
     expect(mainTsx).toContain('const layoutMode = resolveLayoutMode(windowWidth);');
     expect(mainTsx).toContain("const isWide = layoutMode === 'desktop';");
     expect(mainTsx).toContain('const [workspaceUiState, dispatchWorkspaceUi] = useReducer(');
@@ -450,7 +450,7 @@ describe('web responsive ui state', () => {
   test('keeps mobile drawer open while toggling hub project visibility', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs
-      .readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8')
+      .readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8')
       .replace(/\r\n/g, '\n');
 
     expect(mainTsx).toContain('options?: {preserveFileView?: boolean; keepMobileDrawerOpen?: boolean}');
@@ -467,7 +467,7 @@ describe('web responsive ui state', () => {
   test('renders hub display preferences with isolated square color controls', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs
-      .readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8')
+      .readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8')
       .replace(/\r\n/g, '\n');
     const stylesCss = fs
       .readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8')
@@ -654,7 +654,7 @@ describe('web responsive ui state', () => {
   test('captures custom hub color before dispatching a deferred updater', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs
-      .readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8')
+      .readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8')
       .replace(/\r\n/g, '\n');
 
     const customColorHandlerStart = mainTsx.indexOf('const nextColor = hubHsvToColor(', mainTsx.indexOf('const applyHubColorSvPointer = useCallback('));

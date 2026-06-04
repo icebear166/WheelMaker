@@ -49,7 +49,7 @@ describe('web drag scroll behavior', () => {
 
   test('delegates virtual row measurement and bottom scrolling to Virtuoso', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const virtualList = fs.readFileSync(
       path.join(projectRoot, 'web', 'src', 'chat', 'ChatVirtuosoTurnList.tsx'),
       'utf8',
@@ -70,7 +70,7 @@ describe('web drag scroll behavior', () => {
 
   test('keeps virtualizer item-count follow logic inside the Virtuoso wrapper', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const scrollIntent = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'chat', 'chatScrollIntent.ts'), 'utf8');
     const virtualList = fs.readFileSync(
       path.join(projectRoot, 'web', 'src', 'chat', 'ChatVirtuosoTurnList.tsx'),
@@ -101,7 +101,7 @@ describe('web drag scroll behavior', () => {
 
   test('shows the scroll-to-bottom button from the actual chat scroll container position', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 
     expect(
       resolveChatScrollToBottomVisibility({
@@ -126,7 +126,7 @@ describe('web drag scroll behavior', () => {
 
   test('defers chat bottom settling while the mobile keyboard inset is shrinking', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 
     expect(resolveChatKeyboardInsetScrollAction({previousInset: 0, nextInset: 180})).toBe('immediate');
     expect(resolveChatKeyboardInsetScrollAction({previousInset: 180, nextInset: 120})).toBe('deferred');
@@ -143,7 +143,7 @@ describe('web drag scroll behavior', () => {
 
   test('settles programmatic chat bottom scrolling against the actual scroll parent', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const virtualList = fs.readFileSync(
       path.join(projectRoot, 'web', 'src', 'chat', 'ChatVirtuosoTurnList.tsx'),
       'utf8',

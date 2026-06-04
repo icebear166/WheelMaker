@@ -4,7 +4,7 @@ import path from 'path';
 describe('web live refresh uses latest selection', () => {
   test('refreshProject reads refs instead of stale closure state', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 
     expect(mainTsx).toContain("const selectedFileRef = useRef('');");
     expect(mainTsx).toContain("const expandedDirsRef = useRef<string[]>(['.']);");
@@ -15,7 +15,7 @@ describe('web live refresh uses latest selection', () => {
 
   test('refreshProject syncCheck uses last loaded rev refs instead of latest project metadata', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 
     expect(mainTsx).toContain('knownProjectRev: knownProjectRevRef.current,');
     expect(mainTsx).toContain('knownGitRev: knownGitRevRef.current,');

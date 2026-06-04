@@ -585,7 +585,7 @@ git commit -m "Co-locate chat and port relay helpers"
 - Modify: `app/web/src/main.tsx`
 - Modify tests that assert `main.tsx` contains full App internals.
 
-- [ ] **Step 1: Run baseline broad UI structural tests**
+- [x] **Step 1: Run baseline broad UI structural tests**
 
 ```powershell
 cd app
@@ -594,9 +594,9 @@ npm test -- --runInBand web-main-surface-boundary.test.ts web-chat-turn-renderin
 
 Expected: PASS.
 
-- [ ] **Step 2: Move App implementation**
+- [x] **Step 2: Move App implementation**
 
-Move everything in `main.tsx` except global imports, CSS/font imports, `createRoot`, and the final render call into `app/WorkspaceApp.tsx`. Export `App` from `WorkspaceApp.tsx`.
+Move everything in `main.tsx` except React/bootstrap imports, CSS/font imports, `createRoot`, and the final render/error boundary into `app/WorkspaceApp.tsx`. Export `App` and `workspaceAppReady` from `WorkspaceApp.tsx`.
 
 The resulting `main.tsx` should import and render:
 
@@ -608,17 +608,15 @@ import '@fontsource/ibm-plex-sans/400.css';
 import '@fontsource/ibm-plex-sans/500.css';
 import '@fontsource/ibm-plex-sans/600.css';
 import '@fontsource/jetbrains-mono/400.css';
-import { App } from './app/WorkspaceApp';
+import { App, workspaceAppReady } from './app/WorkspaceApp';
 import './styles.css';
 
-createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-);
+workspaceAppReady.then(() => {
+  createRoot(document.getElementById('root')!).render(<App />);
+});
 ```
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 ```powershell
 cd app
@@ -628,7 +626,7 @@ npm run tsc:web
 
 Expected: targeted tests PASS and TypeScript exits 0.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```powershell
 git add -A
@@ -643,7 +641,7 @@ git commit -m "Extract workspace app bootstrap"
 - No CSS split in this execution unless Tasks 1-9 are stable.
 - Keep `app/web/src/styles.css` untouched in this plan.
 
-- [ ] **Step 1: Run full verification**
+- [x] **Step 1: Run full verification**
 
 ```powershell
 cd app
@@ -654,7 +652,7 @@ npm run build:web
 
 Expected: TypeScript, Jest, and webpack build all exit 0.
 
-- [ ] **Step 2: Commit verification-only docs update if needed**
+- [x] **Step 2: Commit verification-only docs update if needed**
 
 If no files changed after full verification, skip this step. If docs or tests were updated during verification, run:
 
@@ -674,4 +672,6 @@ git commit -m "Document frontend structure migration status"
 ## Execution Status
 
 - 2026-06-04: Tasks 1-8 are complete and verified on `frontend-structure-map`.
-- Next task: Task 9, `main.tsx` bootstrap extraction. Keep this as a separate execution slice because it moves a large App body and has broader structural-test impact.
+- 2026-06-04: Task 9 extracted `App` into `app/web/src/app/WorkspaceApp.tsx`; `app/web/src/main.tsx` now owns bootstrap imports, global styles/fonts, the IndexedDB-ready render gate, and the startup error fallback.
+- 2026-06-04: Task 10 full verification passed with `npm run tsc:web`, `npm test -- --runInBand`, and `npm run build:web`.
+- CSS split remains intentionally deferred; `app/web/src/styles.css` was not changed in this execution slice.

@@ -9,7 +9,7 @@ function readSourceText(filePath: string): string {
 
 describe('web file icon startup boundary', () => {
   const projectRoot = path.join(__dirname, '..');
-  const mainTsxPath = path.join(projectRoot, 'web', 'src', 'main.tsx');
+  const mainTsxPath = path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx');
   const fileIconsPath = path.join(projectRoot, 'web', 'src', 'file', 'fileIcons.ts');
 
   test('keeps Seti resources out of the chat startup module', () => {
@@ -19,7 +19,7 @@ describe('web file icon startup boundary', () => {
     expect(mainTsx).not.toContain('setiThemeJson');
     expect(mainTsx).not.toContain('setiFontUrl');
     expect(mainTsx).toMatch(
-      /import\(\s*\/\* webpackChunkName: "file-icons" \*\/\s*'\.\/file\/fileIcons'\s*\)/,
+      /import\(\s*\/\* webpackChunkName: "file-icons" \*\/\s*'\.\.\/file\/fileIcons'\s*\)/,
     );
     expect(mainTsx).toContain("if (tab !== 'file'");
     expect(mainTsx).toContain('const [fileIconResources, setFileIconResources]');
