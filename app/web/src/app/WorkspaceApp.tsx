@@ -48,7 +48,7 @@ import {
   isFinishedChatMessage,
   needsPromptTurnRefresh,
 } from '../chat/turns/chatSync';
-import { compareUpdatedAtDesc, formatPromptDurationMs } from '../workspace/sessionTime';
+import { compareUpdatedAtDesc } from '../workspace/sessionTime';
 import {
   resolveChatSessionVisualState as resolveChatSessionVisualStateValue,
   type ChatSessionVisualState,
@@ -61,6 +61,9 @@ import {
 } from '../chat/chatSessionKey';
 import {buildMobileChatQuickSwitchSections} from '../chat/mobileChatQuickSwitch';
 import {ChatQuickSwitchMenu} from '../chat/ChatQuickSwitchMenu';
+import { ChatSessionNav } from '../chat/ChatSessionNav';
+import { ChatSurface } from '../chat/ChatSurface';
+import { ChatTurnView } from '../chat/ChatTurnView';
 import { resolveChatSessionTitle } from '../chat/chatSessionTitle';
 import {decodeSessionTurnToMessage, normalizeSessionMessagePayload} from '../chat/chatWire';
 import {
@@ -106,8 +109,6 @@ import {
 } from '../chat/chatTypography';
 import { buildPromptDoneCopyRange } from '../chat/chatCopyRange';
 import {
-  chatPromptAttachmentLabel,
-  chatPromptAttachmentMeta,
   isPromptAttachmentContentBlock,
 } from '../chat/chatPromptAttachments';
 import {
@@ -120,8 +121,6 @@ import type {RegistryDebugRecord} from '../debug/registryDebug';
 import {
   extractChatConfirmationReply,
   extractChatOptionReplies,
-  splitChatConfirmationReplyText,
-  splitChatOptionReplyText,
   type ChatConfirmationReply,
   type ChatOptionReply,
 } from '../chat/chatOptionReplies';
@@ -135,7 +134,7 @@ import {
   shouldAutoScrollChatToBottom,
 } from '../chat/chatScrollIntent';
 import { resolveChatScrollBottomButtonOffset } from '../chat/layout/chatScrollBottomButton';
-import { resolvePromptDoneStatus, resolvePromptTurnStatus, type ChatPromptStatus } from '../chat/chatPromptStatus';
+import { resolvePromptTurnStatus, type ChatPromptStatus } from '../chat/chatPromptStatus';
 import {
   buildPromptCompletionNotification,
   promptCompletionNotificationKey,
@@ -320,6 +319,9 @@ import {
 import {VoiceInputButton, type VoiceInputInteractionMode} from '../features/speech/VoiceInputButton';
 import {VoiceRecordingBar} from '../features/speech/VoiceRecordingBar';
 import { FileExplorerTree, WorkspaceProjectSelector } from '../file/FileExplorerTree';
+import { FilePreviewPane } from '../file/FilePreviewPane';
+import { FileSurface } from '../file/FileSurface';
+import { GitSurface } from '../git/GitSurface';
 import { GitSidebar } from '../git/GitSidebar';
 import {
   buildWorkingTreeFiles,
@@ -1396,61 +1398,6 @@ function decodeSessionMessageFromEventPayload(
   return decodeSessionTurnToMessage(normalized.sessionId, normalized.turn);
 }
 
-const CollapsibleThought = React.memo(function CollapsibleThought({
-  text,
-  markdownComponents,
-  markdownUrlTransform,
-}: {
-  text: string;
-  markdownComponents: Components;
-  markdownUrlTransform: (value: string) => string;
-}) {
-  const [open, setOpen] = React.useState(false);
-  const markdownCapabilities = useMarkdownCapabilityPlugins(text);
-  const firstLine = (text || '')
-    .split('\n')
-    .map(line => line.trim())
-    .find(Boolean) || '';
-
-  return (
-    <div className={`chat-thought-block${open ? ' chat-thought-open' : ''}`}>
-      <div
-        className="chat-thought-header"
-        onClick={() => setOpen(!open)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(!open); } }}
-      >
-        <span className="codicon codicon-chevron-right chat-thought-chevron" />
-        <span className="codicon codicon-lightbulb" />
-        {!open && firstLine ? (
-          <span className="chat-thought-preview">{firstLine}</span>
-        ) : null}
-      </div>
-      {open ? (
-        <div
-          className="chat-thought-content"
-          data-markdown-export-pending={markdownCapabilities.pending ? 'true' : undefined}
-        >
-          <ReactMarkdown
-            remarkPlugins={markdownCapabilities.remarkPlugins}
-            urlTransform={markdownUrlTransform}
-            rehypePlugins={markdownCapabilities.rehypePlugins}
-            components={markdownComponents}
-          >
-            {text}
-          </ReactMarkdown>
-        </div>
-      ) : null}
-    </div>
-  );
-});
-
-function isPlanEntryCompleted(status?: string): boolean {
-  const value = (status || '').trim().toLowerCase();
-  return value === 'completed' || value === 'done' || value === 'success';
-}
-
 function groupImageBlocks(msgs: RegistryChatMessage[]): RegistrySessionContentBlock[] {
   const blocks: RegistrySessionContentBlock[] = [];
   for (const m of msgs) {
@@ -1494,343 +1441,6 @@ async function writeTextToClipboard(text: string): Promise<void> {
     document.body.removeChild(textarea);
   }
 }
-
-type ChatTurnViewProps = {
-  message: RegistryChatMessage;
-  promptRequest?: RegistryChatMessage;
-  promptStatus?: ChatPromptStatus;
-  hideToolCalls: boolean;
-  markdownComponents: Components;
-  markdownUrlTransform: (value: string) => string;
-  copyDisabled?: boolean;
-  exportBusy?: boolean;
-  onCopyPromptDone?: () => void;
-  onExportPromptDoneImage?: () => void;
-  optionReplies?: ChatOptionReply[];
-  optionRepliesDisabled?: boolean;
-  onSelectOptionReply?: (label: string) => void;
-  confirmationReply?: ChatConfirmationReply | null;
-  onSelectConfirmationReply?: (replyText: string) => void;
-  onRetryPendingPrompt?: () => void;
-  onEditPendingPrompt?: () => void;
-};
-
-const ChatTurnView = React.memo(function ChatTurnView({
-  message,
-  promptRequest,
-  promptStatus = null,
-  hideToolCalls,
-  markdownComponents,
-  markdownUrlTransform,
-  copyDisabled = true,
-  exportBusy = false,
-  onCopyPromptDone,
-  onExportPromptDoneImage,
-  optionReplies = [],
-  optionRepliesDisabled = false,
-  onSelectOptionReply,
-  confirmationReply = null,
-  onSelectConfirmationReply,
-  onRetryPendingPrompt,
-  onEditPendingPrompt,
-}: ChatTurnViewProps) {
-  const text = msgText(message.method, message.param).trim();
-  const kind = msgKind(message.method);
-  const markdownCapabilities = useMarkdownCapabilityPlugins(text);
-
-  if (message.method === 'prompt_request' || message.method === 'user_message_chunk') {
-    const imageBlocks = groupImageBlocks([message]);
-    const attachmentBlocks = groupPromptAttachmentBlocks([message]);
-    return (
-      <div className="chat-prompt-group">
-        {text || promptStatus ? (
-          <div className="chat-prompt-user-row">
-            {text ? (
-              <div className="chat-prompt-user">{text}</div>
-            ) : null}
-            {promptStatus === 'responding' ? (
-              <span className="chat-prompt-status chat-prompt-status-responding" title="Responding">
-                <span className="chat-prompt-status-dots" aria-hidden="true">
-                  <span>.</span>
-                  <span>.</span>
-                  <span>.</span>
-                </span>
-              </span>
-            ) : null}
-            {promptStatus === 'confirming' ? (
-              <span className="chat-prompt-status chat-prompt-status-confirming" title="Sending">
-                <span className="codicon codicon-sync" aria-hidden="true" />
-              </span>
-            ) : null}
-          </div>
-        ) : null}
-        {imageBlocks.length > 0 ? (
-          <div className="chat-image-strip">
-            {imageBlocks.map((block, index) => (
-              <img
-                key={`${message.sessionId}:${message.turnIndex}:img:${index}`}
-                className="chat-inline-image"
-                src={`data:${block.mimeType || 'image/png'};base64,${block.data}`}
-                alt="chat attachment"
-              />
-            ))}
-          </div>
-        ) : null}
-        {attachmentBlocks.length > 0 ? (
-          <div className="chat-prompt-attachment-strip">
-            {attachmentBlocks.map((block, index) => {
-              const label = chatPromptAttachmentLabel(block, index);
-              const meta = chatPromptAttachmentMeta(block);
-              return (
-                <div
-                  key={`${message.sessionId}:${message.turnIndex}:attachment:${index}`}
-                  className={`chat-prompt-attachment-chip ${block.type === 'image' ? 'image' : 'file'}`}
-                  title={meta ? `${label} | ${meta}` : label}
-                >
-                  <span
-                    className={`codicon ${block.type === 'image' ? 'codicon-file-media' : 'codicon-file'} chat-prompt-attachment-icon`}
-                    aria-hidden="true"
-                  />
-                  <span className="chat-prompt-attachment-body">
-                    <span className="chat-prompt-attachment-name">{label}</span>
-                    {meta ? (
-                      <span className="chat-prompt-attachment-meta">{meta}</span>
-                    ) : null}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        ) : null}
-        {promptStatus === 'undelivered' ? (
-          <div className="chat-prompt-delivery-line">
-            <span>Not delivered</span>
-            <button type="button" onClick={() => onRetryPendingPrompt?.()}>
-              Retry
-            </button>
-            <button type="button" onClick={() => onEditPendingPrompt?.()}>
-              Edit
-            </button>
-          </div>
-        ) : null}
-      </div>
-    );
-  }
-
-  if (message.method === 'prompt_done') {
-    const completedAt = typeof message.param.completedAt === 'string' ? Date.parse(message.param.completedAt) : NaN;
-    const createdAt = typeof promptRequest?.param.createdAt === 'string' ? Date.parse(promptRequest.param.createdAt) : NaN;
-    const durationMs = Number.isFinite(completedAt) && Number.isFinite(createdAt) && completedAt >= createdAt
-      ? completedAt - createdAt
-      : 0;
-    const modelName = typeof promptRequest?.param.modelName === 'string'
-      ? promptRequest.param.modelName
-      : '';
-    const doneStatus = resolvePromptDoneStatus(message.param);
-    return (
-      <div className="chat-prompt-separator">
-        <hr />
-        <span className="chat-prompt-separator-label">
-          By {modelName || 'unknown'}
-          {durationMs > 0 ? ` · ${formatPromptDurationMs(durationMs)}` : ''}
-          {doneStatus ? (
-            <span className={`chat-prompt-stop-reason ${doneStatus.kind}`}>
-              {doneStatus.label}
-            </span>
-          ) : null}
-        </span>
-        <div className="chat-prompt-actions" aria-label="Prompt actions">
-          <button
-            type="button"
-            className="chat-prompt-action-button"
-            onClick={() => onCopyPromptDone?.()}
-            disabled={copyDisabled}
-            title="Copy response"
-            aria-label="Copy response markdown"
-          >
-            <span className="codicon codicon-copy" />
-          </button>
-          <button
-            type="button"
-            className="chat-prompt-action-button"
-            onClick={() => onExportPromptDoneImage?.()}
-            disabled={copyDisabled || exportBusy}
-            aria-busy={exportBusy}
-            title="Export response image"
-            aria-label="Export response markdown image"
-          >
-            <span className="codicon codicon-device-camera" />
-          </button>
-        </div>
-        {doneStatus ? (
-          <div className={`chat-prompt-result-line ${doneStatus.kind}`}>
-            {doneStatus.message || `Response ${doneStatus.label.toLowerCase()}.`}
-          </div>
-        ) : null}
-      </div>
-    );
-  }
-
-  if (hideToolCalls && kind === 'tool') {
-    return null;
-  }
-  if (kind === 'tool') {
-    return (
-      <div className="chat-tool-line" title={text}>
-        <span className="codicon codicon-tools" />
-        <span>{text}</span>
-      </div>
-    );
-  }
-  if (kind === 'thought') {
-    return (
-      <CollapsibleThought
-        text={text}
-        markdownComponents={markdownComponents}
-        markdownUrlTransform={markdownUrlTransform}
-      />
-    );
-  }
-  if (kind === 'plan') {
-    let planEntries = msgPlanEntries(message.method, message.param);
-    if (planEntries.length === 0 && text) {
-      planEntries = text
-        .split('\n')
-        .map(line => line.trim())
-        .filter(Boolean)
-        .map(content => ({ content }));
-    }
-    if (planEntries.length === 0) {
-      return null;
-    }
-    return (
-      <div className="chat-plan-block">
-        <div className="chat-plan-title">
-          <span className="codicon codicon-checklist" />
-          <span>Plan</span>
-        </div>
-        <ul className="chat-plan-list">
-          {planEntries.map((item, index) => {
-            const done = isPlanEntryCompleted(item.status);
-            return (
-              <li
-                key={`${message.sessionId}:${message.turnIndex}:plan:${index}`}
-                className={done ? 'done' : ''}
-              >
-                <span className="chat-plan-marker">{done ? '✓' : '○'}</span>
-                <span>{item.content}</span>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-    );
-  }
-  if (!text) {
-    return null;
-  }
-  const optionReplyParts = splitChatOptionReplyText(text);
-  const confirmationReplyParts = splitChatConfirmationReplyText(text);
-  const hasOptionReplyParts = optionReplyParts.some(part => part.type === 'option');
-  const selectableOptionReplies = optionReplies.length > 0;
-  const selectableConfirmationReply = optionReplies.length === 0 ? confirmationReply : null;
-  const hasConfirmationReplyParts =
-    !!selectableConfirmationReply &&
-    !hasOptionReplyParts &&
-    confirmationReplyParts.some(part => part.type === 'confirmation');
-  return (
-    <div
-      className="chat-main-message"
-      data-markdown-export-pending={markdownCapabilities.pending ? 'true' : undefined}
-    >
-      {hasOptionReplyParts ? (
-        optionReplyParts.map((part, index) => {
-          if (part.type === 'markdown') {
-            return part.text ? (
-              <ReactMarkdown
-                key={`markdown:${index}`}
-                remarkPlugins={markdownCapabilities.remarkPlugins}
-                urlTransform={markdownUrlTransform}
-                rehypePlugins={markdownCapabilities.rehypePlugins}
-                components={markdownComponents}
-              >
-                {part.text}
-              </ReactMarkdown>
-            ) : null;
-          }
-          const optionContent = (
-            <>
-              <span className="chat-option-reply-label">{part.reply.label}.</span>
-              <span className="chat-option-reply-text">{part.reply.text}</span>
-            </>
-          );
-          return (
-            <div key={`option:${part.reply.label}:${index}`} className="chat-option-reply-line">
-              {selectableOptionReplies ? (
-                <button
-                  type="button"
-                  className="chat-option-reply-inline-button"
-                  onClick={() => onSelectOptionReply?.(part.reply.label)}
-                  disabled={optionRepliesDisabled}
-                  title={part.reply.text}
-                  aria-label={`Reply ${part.reply.label}: ${part.reply.text}`}
-                >
-                  {optionContent}
-                </button>
-              ) : (
-                <div className="chat-option-reply-static" title={part.reply.text}>
-                  {optionContent}
-                </div>
-              )}
-            </div>
-          );
-        })
-      ) : hasConfirmationReplyParts ? (
-        confirmationReplyParts.map((part, index) => {
-          if (part.type === 'markdown') {
-            return part.text ? (
-              <ReactMarkdown
-                key={`markdown:${index}`}
-                remarkPlugins={markdownCapabilities.remarkPlugins}
-                urlTransform={markdownUrlTransform}
-                rehypePlugins={markdownCapabilities.rehypePlugins}
-                components={markdownComponents}
-              >
-                {part.text}
-              </ReactMarkdown>
-            ) : null;
-          }
-          return (
-            <div key={`confirmation:${index}`} className="chat-confirmation-reply-line">
-              <button
-                type="button"
-                className="chat-confirmation-reply-action"
-                onClick={() => onSelectConfirmationReply?.(part.reply.replyText)}
-                disabled={optionRepliesDisabled}
-                title={part.reply.replyText}
-                aria-label={`Reply ${part.reply.replyText}: ${part.reply.sentence}`}
-              >
-                <span className="chat-confirmation-reply-check" aria-hidden="true">
-                  <span className="codicon codicon-check" />
-                </span>
-                <span className="chat-confirmation-reply-text">{part.reply.sentence}</span>
-              </button>
-            </div>
-          );
-        })
-      ) : (
-        <ReactMarkdown
-          remarkPlugins={markdownCapabilities.remarkPlugins}
-          urlTransform={markdownUrlTransform}
-          rehypePlugins={markdownCapabilities.rehypePlugins}
-          components={markdownComponents}
-        >
-          {text}
-        </ReactMarkdown>
-      )}
-    </div>
-  );
-});
 
 function shouldRenderChatTurn(
   message: RegistryChatMessage,
@@ -14241,7 +13851,7 @@ export function App() {
         </div>
         {renderArchiveBatchStatus()}
         {archivedMode ? renderArchivedSessionRows(true) : sessionSearchActive ? renderSessionSearchResults(true) : (
-        <div className="mobile-project-session-nav">
+        <ChatSessionNav className="mobile-project-session-nav">
           {projects.length === 0 ? (
             <div className="chat-empty-hint chat-empty-state">
               <span className="codicon codicon-inbox" aria-hidden="true" />
@@ -14355,7 +13965,7 @@ export function App() {
             );
           })}
           {renderHiddenProjectRows(true)}
-        </div>
+        </ChatSessionNav>
         )}
         {(() => {
           if (!mobileProjectActionMenu) return null;
@@ -14496,7 +14106,7 @@ export function App() {
 
   const renderWideProjectSessionNav = () => {
     return (
-      <div className="wide-project-session-nav">
+      <ChatSessionNav className="wide-project-session-nav">
         {renderArchiveBatchStatus()}
         {projects.length === 0 ? (
           <div className="chat-empty-hint">No projects available.</div>
@@ -14716,7 +14326,7 @@ export function App() {
           );
         })}
         {!archivedMode && !sessionSearchActive ? renderHiddenProjectRows(false) : null}
-      </div>
+      </ChatSessionNav>
     );
   };
 
@@ -15643,7 +15253,7 @@ export function App() {
 
     if (tab === 'chat') {
       return (
-        <div className="content">
+        <ChatSurface>
           <div className="block-title">
             {isWide ? (
               <span className="title-text">
@@ -16269,12 +15879,12 @@ export function App() {
             </div>
           </div>
           </div>
-        </div>
+        </ChatSurface>
       );
     }
     if (tab === 'file') {
       return (
-        <div className="content">
+        <FileSurface>
           <div className="block-title with-tools file-title-bar">
             {isWide ? (
               <span className="title-text">
@@ -16448,9 +16058,8 @@ export function App() {
                     </div>
                   </div>
                 </div>
-                <div
-                  ref={fileScrollRef}
-                  className="scroll-panel"
+                <FilePreviewPane
+                  scrollRef={fileScrollRef}
                   onScroll={event => {
                     const path = selectedFileRef.current;
                     if (!path) return;
@@ -16495,16 +16104,16 @@ export function App() {
                       detectCodeLanguage(selectedFile),
                     )
                   )}
-                </div>
+                </FilePreviewPane>
               </div>
             </div>
           </div>
-        </div>
+        </FileSurface>
       );
     }
 
     return (
-      <div className="content">
+      <GitSurface>
         <div className="block-title with-tools">
           {isWide ? (
             <span className="title-text">
@@ -16536,7 +16145,7 @@ export function App() {
             renderDiffPane(diffText)
           )}
         </div>
-      </div>
+      </GitSurface>
     );
   };
 

@@ -5,6 +5,7 @@ describe('web hide tool calls setting', () => {
   test('persists a default-on setting and skips tool entries only while rendering chat', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
+    const chatTurnTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'chat', 'ChatTurnView.tsx'), 'utf8');
     const settingsRootTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
     const workspacePersistence = fs.readFileSync(
       path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'),
@@ -34,15 +35,15 @@ describe('web hide tool calls setting', () => {
     expect(mainTsx).not.toContain('onChange={e => setUseLatestPromptTitle(e.target.checked)}');
     expect(settingsRootTsx).toContain('Hide Tool Calls');
     expect(mainTsx).toContain('hideToolCalls={hideToolCalls}');
-    expect(mainTsx).toMatch(
+    expect(chatTurnTsx).toMatch(
       /if \(hideToolCalls && kind === 'tool'\) \{\s*return null;\s*\}/,
     );
 
-    const turnStart = mainTsx.indexOf('const ChatTurnView = React.memo(function ChatTurnView(');
-    const turnEnd = mainTsx.indexOf('function formatChatTimestamp(', turnStart);
+    const turnStart = chatTurnTsx.indexOf('export const ChatTurnView = React.memo(function ChatTurnView(');
+    const turnEnd = chatTurnTsx.indexOf('});', turnStart);
     expect(turnStart).toBeGreaterThanOrEqual(0);
     expect(turnEnd).toBeGreaterThan(turnStart);
-    const turnView = mainTsx.slice(turnStart, turnEnd);
+    const turnView = chatTurnTsx.slice(turnStart, turnEnd);
     expect(turnView).toContain("if (kind === 'tool') {");
     expect(turnView).not.toContain('groupChatMessagesByPrompt');
   });

@@ -1160,11 +1160,11 @@ Expected: targeted tests PASS and TypeScript exits 0.
 - Modify: `app/web/src/app/WorkspaceApp.tsx`
 - Modify tests that assert surface locality.
 
-- [ ] **Step 1: Extract rendered surfaces without moving state ownership**
+- [x] **Step 1: Extract rendered surfaces without moving state ownership**
 
 Move rendered branches from `WorkspaceApp.tsx` by surface. Keep the state, effects, and command callbacks in `WorkspaceApp.tsx`; pass them into surface Modules as props.
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
 
 ```powershell
 cd app
@@ -1231,3 +1231,5 @@ This plan has completed the logic-light first-wave structure migration:
 - 2026-06-04 continuation: Verification after Task 18 passed with `npm run tsc:web`, `npm test -- --runInBand`, and `npm run build:web`. Tasks 19-21 remain: Settings surface extraction, Chat/File/Git surface extraction, and CSS surface split.
 - 2026-06-04 continuation: Task 19 is complete. `settings/SettingsSurface.tsx` now owns the Settings detail shell, root/detail surface switch, mobile Settings screen, mobile Settings shortcut bar, shortcut metadata, and Settings detail titles while `WorkspaceApp.tsx` keeps state/effect/callback ownership.
 - 2026-06-04 continuation: Task 19 verification passed with `npm test -- --runInBand web-settings-navigation.test.ts web-mobile-settings-system-back.test.ts web-port-relay-settings.test.ts web-registry-debug-settings.test.ts`, additional affected source-structure tests, and `npm run tsc:web`.
+- 2026-06-04 continuation: Task 20 is complete. Chat turn rendering moved to `chat/ChatTurnView.tsx`; Chat session nav, Chat/File/Git surface wrappers, and the File preview scroll pane now live in their surface directories while `WorkspaceApp.tsx` keeps state ownership and callback wiring.
+- 2026-06-04 continuation: Task 20 verification passed with `npm test -- --runInBand web-chat-turn-rendering.test.ts web-chat-ui.test.ts web-file-surface-boundary.test.ts web-git-surface-boundary.test.ts web-port-relay-frame-surface-boundary.test.ts`, additional affected source-structure tests, and `npm run tsc:web`.
