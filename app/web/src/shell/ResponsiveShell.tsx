@@ -6,7 +6,7 @@ type ShellThemeMode = 'dark' | 'light';
 
 type ShellContentProps = {
   themeMode: ShellThemeMode;
-  setiFontCss: string;
+  setiFontCss?: string;
   sidebar: ReactNode;
   main: ReactNode;
 };
@@ -44,7 +44,7 @@ export function DesktopShell({
 }: DesktopShellProps) {
   return (
     <div className={`workspace theme-${themeMode}`}>
-      <style>{setiFontCss}</style>
+      {setiFontCss ? <style>{setiFontCss}</style> : null}
       <DesktopTitleBar title="WheelMaker" />
       <div
         className="desktop-shell"
@@ -81,7 +81,7 @@ export function MobileShell({
       data-floating-control-side={floatingControlSide}
       data-chat-preview-open={mobileOverlay ? 'true' : undefined}
     >
-      <style>{setiFontCss}</style>
+      {setiFontCss ? <style>{setiFontCss}</style> : null}
       {floatingControlStack}
       {mobileSettingsScreen}
       {mobileOverlay}

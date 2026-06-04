@@ -1,7 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import setiThemeJson from '@codingame/monaco-vscode-theme-seti-default-extension/resources/vs-seti-icon-theme.json';
-import setiFontUrl from '@codingame/monaco-vscode-theme-seti-default-extension/resources/seti.woff';
 import '@vscode/codicons/dist/codicon.css';
 import '@fontsource/ibm-plex-sans/400.css';
 import '@fontsource/ibm-plex-sans/500.css';
@@ -394,6 +392,25 @@ const SettingsRootContent = React.lazy(() => loadSettingsBundle().then(module =>
 
 type Tab = 'chat' | 'file' | 'git';
 type ThemeMode = 'dark' | 'light';
+type FileResolvedIcon = {
+  glyph: string;
+  color: string;
+};
+type FileIconResources = {
+  resolveSetiIcon: (name: string, mode: ThemeMode) => FileResolvedIcon;
+  setiFontCss: () => string;
+};
+const FALLBACK_FILE_ICON: FileResolvedIcon = {glyph: '?', color: '#d4d7d6'};
+let fileIconResourcesPromise: Promise<FileIconResources> | null = null;
+const loadFileIconResources = () => {
+  if (!fileIconResourcesPromise) {
+    fileIconResourcesPromise = import(/* webpackChunkName: "file-icons" */ './file/fileIcons').then(module => ({
+      resolveSetiIcon: module.resolveSetiIcon,
+      setiFontCss: module.setiFontFaceCss,
+    }));
+  }
+  return fileIconResourcesPromise;
+};
 type DirEntries = Record<string, RegistryFsEntry[]>;
 type GitDiffSource = 'commit' | 'worktree';
 type VoiceTransportMode = 'registry' | 'android-native';
@@ -604,26 +621,6 @@ type ChatFilePeekState = {
   error: string;
 };
 type PortRelayFramePlacement = 'main' | 'chatPreview';
-type SetiThemeSection = {
-  file: string;
-  fileExtensions?: Record<string, string>;
-  fileNames?: Record<string, string>;
-};
-type SetiIconDefinition = {
-  fontCharacter?: string;
-  fontColor?: string;
-};
-type SetiTheme = {
-  iconDefinitions: Record<string, SetiIconDefinition>;
-  file: string;
-  fileExtensions?: Record<string, string>;
-  fileNames?: Record<string, string>;
-  light?: SetiThemeSection;
-};
-type SetiResolvedIcon = {
-  glyph: string;
-  color: string;
-};
 type GitDiffChange =
   | { type: 'insert'; content: string; lineNumber: number }
   | { type: 'delete'; content: string; lineNumber: number }
@@ -731,7 +728,6 @@ const registryDebugStore = createRegistryDebugStore();
 const service = new RegistryWorkspaceService(registryDebugStore.recordCaptureEvent);
 const workspaceStore = new WorkspaceStore();
 const workspaceController = new WorkspaceController(service, workspaceStore);
-const setiTheme = setiThemeJson as SetiTheme;
 const VS_CODE_EDITOR_FONT_FAMILY = "Consolas, 'Courier New', monospace";
 const MAX_AUTO_RENDER_DIFF_CHARS = 200000;
 const RECONNECT_RETRY_DELAY_MS = 1000;
@@ -2490,58 +2486,6 @@ function buildInlineDiffRenderLines(rows: UnifiedDiffRow[]): DiffRenderLine[] {
   });
 }
 
-function toSetiGlyph(fontCharacter?: string): string {
-  if (!fontCharacter) return '?';
-  const hex = fontCharacter.replace('\\', '');
-  const code = Number.parseInt(hex, 16);
-  if (Number.isNaN(code)) return '?';
-  return String.fromCodePoint(code);
-}
-
-function resolveSetiIcon(name: string, mode: ThemeMode): SetiResolvedIcon {
-  const section: SetiThemeSection =
-    mode === 'light' && setiTheme.light
-      ? {
-          file: setiTheme.light.file,
-          fileExtensions: setiTheme.light.fileExtensions,
-          fileNames: setiTheme.light.fileNames,
-        }
-      : {
-          file: setiTheme.file,
-          fileExtensions: setiTheme.fileExtensions,
-          fileNames: setiTheme.fileNames,
-        };
-
-  const lowerName = name.toLowerCase();
-  let iconId = section.file;
-
-  if (section.fileNames?.[lowerName]) {
-    iconId = section.fileNames[lowerName];
-  } else if (section.fileExtensions) {
-    const parts = lowerName.split('.');
-    for (let i = 0; i < parts.length; i += 1) {
-      const candidate = parts.slice(i).join('.');
-      if (section.fileExtensions[candidate]) {
-        iconId = section.fileExtensions[candidate];
-        break;
-      }
-    }
-  }
-
-  const definition =
-    setiTheme.iconDefinitions[iconId] ??
-    setiTheme.iconDefinitions[section.file] ??
-    {};
-  return {
-    glyph: toSetiGlyph(definition.fontCharacter),
-    color: definition.fontColor ?? '#d4d7d6',
-  };
-}
-
-function setiFontFaceCss(): string {
-  return `@font-face { font-family: 'wm-seti'; src: url('${setiFontUrl}') format('woff'); font-weight: normal; font-style: normal; }`;
-}
-
 function buildWorkingTreeFiles(
   status: RegistryGitStatus,
 ): WorkingTreeFileEntry[] {
@@ -3385,8 +3329,6 @@ function App() {
     () => resolveChatFontFamily(chatFont),
     [chatFont],
   );
-  const setiFontCss = useMemo(() => setiFontFaceCss(), []);
-  const resolveFileIcon = (name: string) => resolveSetiIcon(name, themeMode);
 
   const [windowWidth, setWindowWidth] = useState<number>(window.innerWidth);
   const [windowHeight, setWindowHeight] = useState<number>(window.innerHeight);
@@ -3440,6 +3382,33 @@ function App() {
       }),
   );
   const tab = workspaceUiState.shared.tab as Tab;
+  const [fileIconResources, setFileIconResources] = useState<FileIconResources | null>(null);
+
+  useEffect(() => {
+    if (tab !== 'file' || fileIconResources) {
+      return;
+    }
+    let cancelled = false;
+    loadFileIconResources()
+      .then(resources => {
+        if (!cancelled) {
+          setFileIconResources(resources);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, fileIconResources]);
+
+  const setiFontCss = useMemo(
+    () => fileIconResources?.setiFontCss() ?? '',
+    [fileIconResources],
+  );
+  const resolveFileIcon = useCallback(
+    (name: string) => fileIconResources?.resolveSetiIcon(name, themeMode) ?? FALLBACK_FILE_ICON,
+    [fileIconResources, themeMode],
+  );
   const floatingControlYRatio = workspaceUiState.mobile.floatingControlYRatio;
   const floatingControlSide = workspaceUiState.mobile.floatingControlSide;
   const floatingControlIdleOpacity = workspaceUiState.mobile.floatingControlIdleOpacity;
@@ -18159,7 +18128,7 @@ function App() {
   if (!connected && !keepWorkspaceVisible) {
     return (
       <div className={`page theme-${themeMode}`}>
-        <style>{setiFontCss}</style>
+        {setiFontCss ? <style>{setiFontCss}</style> : null}
         <DesktopTitleBar title="WheelMaker" />
         <div className="connect">
           <h3>Connect to WheelMaker Registry</h3>
