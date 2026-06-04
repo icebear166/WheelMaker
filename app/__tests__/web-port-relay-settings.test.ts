@@ -3,7 +3,7 @@ import path from 'path';
 
 const root = path.resolve(__dirname, '..');
 const mainTsx = fs.readFileSync(path.join(root, 'web/src/app/WorkspaceApp.tsx'), 'utf8');
-const detailPath = path.join(root, 'web/src/settings/PortRelaySettingsDetail.tsx');
+const detailPath = path.join(root, 'web/src/settings/portRelay/PortRelaySettingsDetail.tsx');
 const detailTsx = fs.existsSync(detailPath) ? fs.readFileSync(detailPath, 'utf8') : '';
 const surfacePath = path.join(root, 'web/src/portRelay/PortRelayFrameSurface.tsx');
 const surfaceTsx = fs.existsSync(surfacePath) ? fs.readFileSync(surfacePath, 'utf8') : '';

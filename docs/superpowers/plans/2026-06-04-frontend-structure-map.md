@@ -36,6 +36,29 @@
 
 ---
 
+## Priority Rationale From The HTML Review
+
+The HTML review has six architecture candidates:
+
+1. Make `main.tsx` a bootstrap Module.
+2. Split the old `services/` directory by real seams.
+3. Move root helper files under owning Modules.
+4. Split `styles.css` along surface seams.
+5. Move tests away from `main.tsx` text anchors.
+6. Co-locate Settings Page detail helpers.
+
+The move-map priority column uses this rule:
+
+- `First`: low-logic file ownership moves that improve locality without changing the runtime Interface. These can be verified with import updates, structural tests, TypeScript, and targeted Jest.
+- `Second`: surface extraction from `WorkspaceApp.tsx`. These moves are still intended to preserve logic, but they require new prop Interfaces and therefore have more coupling risk.
+- `Third`: CSS split. CSS should follow TypeScript surface ownership after the surface Modules exist.
+- `Later`: high import-churn moves that are safer once the first structure changes have settled.
+- `Keep`: Modules that already have clear locality and should not be moved just to satisfy a directory pattern.
+
+Tasks 1-13 completed the `First` scope for candidates 1, 2, 3, 5, and most of candidate 6. Tasks 14+ close the remaining low-logic gaps, then enter the `Second` and `Third` scopes.
+
+---
+
 ### Task 1: Platform And Shell Layout Split
 
 **Files:**
@@ -891,6 +914,290 @@ npm run tsc:web
 ```
 
 Expected: targeted tests PASS and TypeScript exits 0.
+
+---
+
+### Task 14: Remaining Settings Detail Co-location
+
+**Files:**
+- Move: `app/web/src/settings/CCSwitchSettingsDetail.tsx` -> `app/web/src/settings/code/CCSwitchSettingsDetail.tsx`
+- Move: `app/web/src/settings/PortRelaySettingsDetail.tsx` -> `app/web/src/settings/portRelay/PortRelaySettingsDetail.tsx`
+- Modify: `app/web/src/settings/SettingsBundle.ts`
+- Modify imports inside moved files.
+
+- [x] **Step 1: Run baseline targeted tests**
+
+```powershell
+cd app
+npm test -- --runInBand web-cc-switch-settings.test.ts web-port-relay-settings.test.ts web-code-layout.test.ts
+```
+
+Expected: targeted tests PASS before moving files.
+
+- [x] **Step 2: Move Settings detail files**
+
+```powershell
+New-Item -ItemType Directory -Force -Path app/web/src/settings/code, app/web/src/settings/portRelay
+git mv app/web/src/settings/CCSwitchSettingsDetail.tsx app/web/src/settings/code/CCSwitchSettingsDetail.tsx
+git mv app/web/src/settings/PortRelaySettingsDetail.tsx app/web/src/settings/portRelay/PortRelaySettingsDetail.tsx
+```
+
+- [x] **Step 3: Update imports and path anchors**
+
+Use these replacements:
+
+```text
+./CCSwitchSettingsDetail -> ./code/CCSwitchSettingsDetail
+./PortRelaySettingsDetail -> ./portRelay/PortRelaySettingsDetail
+../portRelay/portRelayTargets -> ../../portRelay/portRelayTargets
+../types/registry -> ../../types/registry
+```
+
+- [x] **Step 4: Verify**
+
+```powershell
+cd app
+npm test -- --runInBand web-cc-switch-settings.test.ts web-port-relay-settings.test.ts web-code-layout.test.ts
+npm run tsc:web
+```
+
+Expected: targeted tests PASS and TypeScript exits 0.
+
+---
+
+### Task 15: Android Notification Bridge Adapter
+
+**Files:**
+- Create: `app/web/src/platform/android/notificationBridge.ts`
+- Modify: `app/web/src/notifications/NotificationProvider.ts`
+- Modify tests:
+  - `app/__tests__/web-notification-provider.test.ts`
+  - `app/__tests__/web-chat-notification-settings.test.ts`
+
+- [ ] **Step 1: Run baseline targeted tests**
+
+```powershell
+cd app
+npm test -- --runInBand web-notification-provider.test.ts web-chat-notification-settings.test.ts web-native-pwa-gating.test.ts
+```
+
+Expected: targeted tests PASS before extraction.
+
+- [ ] **Step 2: Move Android-specific notification logic**
+
+Create `platform/android/notificationBridge.ts` with the Android bridge type, Android permission parsing, Android permission event wait, and Android provider factory currently embedded in `notifications/NotificationProvider.ts`.
+
+The extracted module should export:
+
+```ts
+export type AndroidNotificationBridge = {
+  showNotification?: (rawJson: string) => string;
+  getNotificationPermissionState?: () => string;
+  requestNotificationPermission?: () => string;
+};
+
+export type AndroidNotificationBridgeEnv = {
+  addEventListener?: (eventName: string, listener: EventListener) => void;
+  removeEventListener?: (eventName: string, listener: EventListener) => void;
+};
+
+export type AndroidNotificationPermissionState =
+  | 'granted'
+  | 'denied'
+  | 'default'
+  | 'unsupported';
+
+export function createAndroidNotificationProvider(
+  bridge: AndroidNotificationBridge,
+  env: AndroidNotificationBridgeEnv,
+): {
+  kind: 'android';
+  isSupported(): boolean;
+  getPermissionState(): Promise<AndroidNotificationPermissionState>;
+  requestPermission(): Promise<AndroidNotificationPermissionState>;
+  show(payload: unknown): Promise<boolean>;
+};
+```
+
+- [ ] **Step 3: Keep NotificationProvider platform-neutral**
+
+`NotificationProvider.ts` should import Android bridge types and `createAndroidNotificationProvider` from `../platform/android/notificationBridge`, while retaining PWA provider and unsupported-provider selection.
+
+- [ ] **Step 4: Verify**
+
+```powershell
+cd app
+npm test -- --runInBand web-notification-provider.test.ts web-chat-notification-settings.test.ts web-native-pwa-gating.test.ts
+npm run tsc:web
+```
+
+Expected: targeted tests PASS and TypeScript exits 0.
+
+---
+
+### Task 16: Registry Types Relocation
+
+**Files:**
+- Move: `app/web/src/types/registry.ts` -> `app/web/src/registry/registryTypes.ts`
+- Modify imports in `app/web/src/**` and `app/__tests__/**`.
+
+- [ ] **Step 1: Run baseline type import tests**
+
+```powershell
+cd app
+npm test -- --runInBand web-chat-copy-range.test.ts web-chat-display-index.test.ts web-local-hub-read-service.test.ts web-speech-client.test.ts
+```
+
+Expected: targeted tests PASS before moving the type Module.
+
+- [ ] **Step 2: Move registry types and update imports**
+
+```powershell
+git mv app/web/src/types/registry.ts app/web/src/registry/registryTypes.ts
+```
+
+Replace imports from `../types/registry`, `../../types/registry`, and `../web/src/types/registry` with the correct relative path to `registry/registryTypes`.
+
+- [ ] **Step 3: Verify no old registry type imports remain**
+
+```powershell
+rg --glob '!**/dist/**' -n "types/registry|web/src/types/registry" app/web/src app/__tests__
+```
+
+Expected: no matches.
+
+- [ ] **Step 4: Verify**
+
+```powershell
+cd app
+npm test -- --runInBand web-chat-copy-range.test.ts web-chat-display-index.test.ts web-local-hub-read-service.test.ts web-speech-client.test.ts
+npm run tsc:web
+```
+
+Expected: targeted tests PASS and TypeScript exits 0.
+
+---
+
+### Task 17: Workspace Bootstrap Helper
+
+**Files:**
+- Create: `app/web/src/app/workspaceBootstrap.ts`
+- Modify: `app/web/src/app/WorkspaceApp.tsx`
+- Modify tests that assert startup helper locality.
+
+- [ ] **Step 1: Extract startup-only helpers**
+
+Move `isLoopbackHost`, `isLoopbackAddress`, and `resolveInitialRegistryAddress` from `WorkspaceApp.tsx` into `app/workspaceBootstrap.ts`. Keep `workspaceAppReady` in `WorkspaceApp.tsx` unless its setup grows beyond simple PWA foundation initialization.
+
+- [ ] **Step 2: Verify**
+
+```powershell
+cd app
+npm test -- --runInBand web-main-surface-boundary.test.ts web-setup.test.js web-reconnect-fallback.test.ts
+npm run tsc:web
+```
+
+Expected: targeted tests PASS and TypeScript exits 0.
+
+---
+
+### Task 18: Code Preview Module Extraction
+
+**Files:**
+- Create: `app/web/src/code/ShikiCodeBlock.tsx`
+- Create: `app/web/src/code/markdownPreview.tsx`
+- Modify: `app/web/src/app/WorkspaceApp.tsx`
+- Modify tests that assert code preview locality.
+
+- [ ] **Step 1: Extract code preview Modules**
+
+Move `ShikiCodeBlock`, `MarkdownPreview`, `HtmlPreview`, and their direct code-preview helper functions from `WorkspaceApp.tsx` into `code/` Modules. Preserve props and rendering behaviour.
+
+- [ ] **Step 2: Verify**
+
+```powershell
+cd app
+npm test -- --runInBand web-code-layout.test.ts web-shiki-code-fallback.test.ts web-markdown-preview-mode.test.ts web-chat-turn-rendering.test.ts
+npm run tsc:web
+```
+
+Expected: targeted tests PASS and TypeScript exits 0.
+
+---
+
+### Task 19: Settings Surface Extraction
+
+**Files:**
+- Create: `app/web/src/settings/SettingsSurface.tsx`
+- Modify: `app/web/src/app/WorkspaceApp.tsx`
+- Modify tests that assert Settings surface locality.
+
+- [ ] **Step 1: Extract Settings rendering surface**
+
+Move the Settings detail shell, Settings root/detail render switch, mobile Settings screen, and mobile Settings shortcut bar into `settings/SettingsSurface.tsx`. Keep state ownership in `WorkspaceApp.tsx` for this task and pass existing callbacks/values as props.
+
+- [ ] **Step 2: Verify**
+
+```powershell
+cd app
+npm test -- --runInBand web-settings-navigation.test.ts web-mobile-settings-system-back.test.ts web-port-relay-settings.test.ts web-registry-debug-settings.test.ts
+npm run tsc:web
+```
+
+Expected: targeted tests PASS and TypeScript exits 0.
+
+---
+
+### Task 20: Chat, File, And Git Surface Extraction
+
+**Files:**
+- Create: `app/web/src/chat/ChatTurnView.tsx`
+- Create: `app/web/src/chat/ChatSessionNav.tsx`
+- Create: `app/web/src/chat/ChatSurface.tsx`
+- Create: `app/web/src/file/FileSurface.tsx`
+- Create: `app/web/src/file/FilePreviewPane.tsx`
+- Create: `app/web/src/git/GitSurface.tsx`
+- Modify: `app/web/src/app/WorkspaceApp.tsx`
+- Modify tests that assert surface locality.
+
+- [ ] **Step 1: Extract rendered surfaces without moving state ownership**
+
+Move rendered branches from `WorkspaceApp.tsx` by surface. Keep the state, effects, and command callbacks in `WorkspaceApp.tsx`; pass them into surface Modules as props.
+
+- [ ] **Step 2: Verify**
+
+```powershell
+cd app
+npm test -- --runInBand web-chat-turn-rendering.test.ts web-chat-ui.test.ts web-file-surface-boundary.test.ts web-git-surface-boundary.test.ts web-port-relay-frame-surface-boundary.test.ts
+npm run tsc:web
+```
+
+Expected: targeted tests PASS and TypeScript exits 0.
+
+---
+
+### Task 21: CSS Surface Split
+
+**Files:**
+- Create: `app/web/src/styles/index.css`
+- Create focused CSS files under surface-owned directories or `app/web/src/styles/`.
+- Modify: `app/web/src/main.tsx`
+- Modify tests that read `styles.css`.
+
+- [ ] **Step 1: Split CSS after TypeScript surfaces exist**
+
+Keep one bootstrap CSS import in `main.tsx`, but move selector groups from `styles.css` into surface-owned CSS files imported by `styles/index.css`.
+
+- [ ] **Step 2: Verify**
+
+```powershell
+cd app
+npm test -- --runInBand web-chat-ui.test.ts web-responsive-shell.test.ts web-markdown-preview-mode.test.ts web-git-graph-popover-layout.test.ts web-port-relay-settings.test.ts
+npm run tsc:web
+npm run build:web
+```
+
+Expected: targeted tests, TypeScript, and webpack build all exit 0.
 
 ---
 
