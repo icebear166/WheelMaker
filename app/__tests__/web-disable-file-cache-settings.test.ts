@@ -52,6 +52,7 @@ describe('web disable file cache settings', () => {
 
   test('adds debug setting and clears file cache when enabled', () => {
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const settingsRootTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
 
     expect(mainTsx).toContain('const [disableFileCache, setDisableFileCache] = useState(');
     expect(mainTsx).toContain("typeof persistedGlobal.disableFileCache === 'boolean'");
@@ -61,9 +62,9 @@ describe('web disable file cache settings', () => {
     expect(mainTsx).toContain('dirHashRef.current = {};');
     expect(mainTsx).toContain('fileHashRef.current = {};');
     expect(mainTsx).toContain('fileCacheRef.current = {};');
-    expect(mainTsx).toContain('Disable File Cache');
-    expect(mainTsx).toContain('checked={disableFileCache}');
-    expect(mainTsx).toContain('onChange={event => setDisableFileCache(event.target.checked)}');
+    expect(settingsRootTsx).toContain('Disable File Cache');
+    expect(settingsRootTsx).toContain('checked={disableFileCache}');
+    expect(settingsRootTsx).toContain('onChange={event => setDisableFileCache(event.target.checked)}');
   });
 
   test('bypasses directory and file cache while disabled setting is enabled', () => {

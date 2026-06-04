@@ -18,6 +18,10 @@ function readMain(): string {
   return fs.readFileSync(path.join(projectRoot(), 'web', 'src', 'main.tsx'), 'utf8');
 }
 
+function readSettingsRoot(): string {
+  return fs.readFileSync(path.join(projectRoot(), 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
+}
+
 function readStyles(): string {
   return fs.readFileSync(path.join(projectRoot(), 'web', 'src', 'styles.css'), 'utf8');
 }
@@ -91,15 +95,16 @@ describe('gesture navigation', () => {
 
   test('wires gesture navigation through appearance settings and mobile floating controls', () => {
     const main = readMain();
+    const settingsRoot = readSettingsRoot();
 
     expect(main).toContain("import {");
     expect(main).toContain("} from './services/gestureNavigation';");
     expect(main).toContain('const [gestureNavigation, setGestureNavigation] = useState(');
     expect(main).toContain('typeof persistedGlobal.gestureNavigation === \'boolean\'');
     expect(main).toContain('gestureNavigation,');
-    expect(main).toContain('Gesture Navigation');
-    expect(main).toContain('checked={gestureNavigation}');
-    expect(main).toContain('onChange={e => setGestureNavigation(e.target.checked)}');
+    expect(settingsRoot).toContain('Gesture Navigation');
+    expect(settingsRoot).toContain('checked={gestureNavigation}');
+    expect(settingsRoot).toContain('onChange={e => setGestureNavigation(e.target.checked)}');
     expect(main).toContain("gestureNavigation ? (");
     expect(main).toContain('className="gesture-nav-control"');
     expect(main).toContain('className="gesture-nav-badge"');

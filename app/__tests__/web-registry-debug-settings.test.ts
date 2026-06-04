@@ -34,6 +34,7 @@ describe('web registry debug settings', () => {
 
   test('adds separate message viewer and log level controls without making records persistent', () => {
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const settingsRootTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
 
     expect(mainTsx).toContain("import {createRegistryDebugStore} from './debug/registryDebug';");
     expect(mainTsx).toContain('const registryDebugStore = createRegistryDebugStore();');
@@ -43,24 +44,24 @@ describe('web registry debug settings', () => {
     expect(mainTsx).toContain('registryDebugStore.setEnabled(messageViewerEnabled);');
     expect(mainTsx).toContain('appDiagnosticStore.setLogLevel(logLevel);');
     expect(mainTsx).toContain('setNativeDiagnosticLogLevel(logLevel);');
-    expect(mainTsx).toContain("renderSettingsSection('Debug'");
-    expect(mainTsx).toContain('Message Viewer');
-    expect(mainTsx).toContain('Log Level');
+    expect(settingsRootTsx).toContain("renderSettingsSection('Debug'");
+    expect(settingsRootTsx).toContain('Message Viewer');
+    expect(settingsRootTsx).toContain('Log Level');
     expect(mainTsx).toContain("'debugLogs'");
     expect(mainTsx).toContain("settingsDetailView === 'debugLogs'");
     expect(mainTsx).toContain("React.lazy(() => import('./debug/DebugLogsSettingsDetail')");
     expect(mainTsx).toContain('renderDebugLogsSettingsDetail(options)');
     expect(mainTsx).toContain('<DebugLogsSettingsDetail');
     expect(mainTsx).toContain('<React.Suspense fallback={null}>');
-    expect(mainTsx).toContain('checked={messageViewerEnabled}');
-    expect(mainTsx).toContain('onChange={event => setMessageViewerEnabled(event.target.checked)}');
-    expect(mainTsx).toContain('value={logLevel}');
-    expect(mainTsx).toContain('onChange={event => setLogLevel(normalizeAppDiagnosticLogLevel(event.target.value))}');
+    expect(settingsRootTsx).toContain('checked={messageViewerEnabled}');
+    expect(settingsRootTsx).toContain('onChange={event => setMessageViewerEnabled(event.target.checked)}');
+    expect(settingsRootTsx).toContain('value={logLevel}');
+    expect(settingsRootTsx).toContain('onChange={event => setLogLevel(normalizeAppDiagnosticLogLevel(event.target.value))}');
     expect(mainTsx).not.toContain('Open Debug Panel');
     expect(mainTsx).not.toContain('disabled={!registryDebug}');
-    const debugSectionStart = mainTsx.indexOf("renderSettingsSection('Debug'");
-    const debugSectionEnd = mainTsx.indexOf("), 'bug')", debugSectionStart);
-    const debugSection = mainTsx.slice(debugSectionStart, debugSectionEnd);
+    const debugSectionStart = settingsRootTsx.indexOf("renderSettingsSection('Debug'");
+    const debugSectionEnd = settingsRootTsx.indexOf("), 'bug')", debugSectionStart);
+    const debugSection = settingsRootTsx.slice(debugSectionStart, debugSectionEnd);
     expect(debugSection).toContain("openSettingsChild('debugLogs')");
     expect(debugSection).toContain('Logs');
     expect(debugSection).toContain('Logout');
@@ -109,14 +110,14 @@ describe('web registry debug settings', () => {
   });
 
   test('places debug maintenance settings at the bottom after code display', () => {
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const settingsRootTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
 
-    const codeDisplaySectionIndex = mainTsx.indexOf("renderSettingsSection('Code Display'");
-    const debugSectionIndex = mainTsx.indexOf("renderSettingsSection('Debug'");
+    const codeDisplaySectionIndex = settingsRootTsx.indexOf("renderSettingsSection('Code Display'");
+    const debugSectionIndex = settingsRootTsx.indexOf("renderSettingsSection('Debug'");
     expect(debugSectionIndex).toBeGreaterThan(codeDisplaySectionIndex);
-    expect(mainTsx).not.toContain("renderSettingsSection('More'");
+    expect(settingsRootTsx).not.toContain("renderSettingsSection('More'");
 
-    const debugSection = mainTsx.slice(debugSectionIndex);
+    const debugSection = settingsRootTsx.slice(debugSectionIndex);
     expect(debugSection.indexOf('Message Viewer')).toBeLessThan(debugSection.indexOf('Log Level'));
     expect(debugSection.indexOf('Log Level')).toBeLessThan(debugSection.indexOf('Logs'));
     expect(debugSection.indexOf('Logs')).toBeLessThan(debugSection.indexOf('Database'));

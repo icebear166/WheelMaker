@@ -25,6 +25,7 @@ describe('web chat font settings', () => {
   test('persists the chat font setting and exposes it only in Chat settings', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const settingsRootTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
     const persistence = fs.readFileSync(
       path.join(projectRoot, 'web', 'src', 'services', 'workspacePersistence.ts'),
       'utf8',
@@ -39,11 +40,11 @@ describe('web chat font settings', () => {
     expect(mainTsx).toContain('const [chatFont, setChatFont] = useState<ChatFontId>(');
     expect(mainTsx).toContain('const chatFontFamily = useMemo(');
     expect(mainTsx).toContain('chatFont,');
-    expect(mainTsx).toContain("renderSettingsSection('Chat'");
-    expect(mainTsx).toContain('Chat Font');
-    expect(mainTsx).toContain('value={chatFont}');
-    expect(mainTsx).toContain('if (isChatFontId(next)) setChatFont(next);');
-    expect(mainTsx).toContain('CHAT_FONT_OPTIONS.map(item => (');
+    expect(settingsRootTsx).toContain("renderSettingsSection('Chat'");
+    expect(settingsRootTsx).toContain('Chat Font');
+    expect(settingsRootTsx).toContain('value={chatFont}');
+    expect(settingsRootTsx).toContain('if (isChatFontId(next)) setChatFont(next);');
+    expect(settingsRootTsx).toContain('CHAT_FONT_OPTIONS.map(item => (');
     expect(mainTsx).toContain('style={chatMainStyle}');
   });
 

@@ -5,6 +5,7 @@ describe('web hide tool calls setting', () => {
   test('persists a default-on setting and skips tool entries only while rendering chat', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const settingsRootTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
     const workspacePersistence = fs.readFileSync(
       path.join(projectRoot, 'web', 'src', 'services', 'workspacePersistence.ts'),
       'utf8',
@@ -24,14 +25,14 @@ describe('web hide tool calls setting', () => {
     expect(mainTsx).toMatch(
       /typeof persistedGlobal\.hideToolCalls === 'boolean'\r?\n\s*\? persistedGlobal\.hideToolCalls\r?\n\s*: true/,
     );
-    expect(mainTsx).toContain("renderSettingsSection('Chat'");
-    const chatSettingsStart = mainTsx.indexOf("renderSettingsSection('Chat'");
-    const hideToolCallsSettingStart = mainTsx.indexOf('Hide Tool Calls', chatSettingsStart);
-    expect(mainTsx).not.toContain('Use Latest Prompt Title');
+    expect(settingsRootTsx).toContain("renderSettingsSection('Chat'");
+    const chatSettingsStart = settingsRootTsx.indexOf("renderSettingsSection('Chat'");
+    const hideToolCallsSettingStart = settingsRootTsx.indexOf('Hide Tool Calls', chatSettingsStart);
+    expect(settingsRootTsx).not.toContain('Use Latest Prompt Title');
     expect(hideToolCallsSettingStart).toBeGreaterThan(chatSettingsStart);
     expect(mainTsx).not.toContain('checked={useLatestPromptTitle}');
     expect(mainTsx).not.toContain('onChange={e => setUseLatestPromptTitle(e.target.checked)}');
-    expect(mainTsx).toContain('Hide Tool Calls');
+    expect(settingsRootTsx).toContain('Hide Tool Calls');
     expect(mainTsx).toContain('hideToolCalls={hideToolCalls}');
     expect(mainTsx).toMatch(
       /if \(hideToolCalls && kind === 'tool'\) \{\s*return null;\s*\}/,

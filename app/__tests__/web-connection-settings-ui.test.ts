@@ -5,6 +5,7 @@ describe('connection settings UI source structure', () => {
   test('adds a Connection section with status detail and local hub read settings', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const settingsRootTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
     const detailPath = path.join(projectRoot, 'web', 'src', 'settings', 'ConnectionStatusSettingsDetail.tsx');
     const detailTsx = fs.existsSync(detailPath) ? fs.readFileSync(detailPath, 'utf8') : '';
 
@@ -17,11 +18,11 @@ describe('connection settings UI source structure', () => {
     expect(mainTsx).not.toContain('resolveRegistryConnectionStatus,');
     expect(mainTsx).not.toContain('resolveVoiceCapabilityStatus,');
     expect(mainTsx).not.toContain('resolveWebResourceConnectionStatus,');
-    expect(mainTsx).toContain("renderSettingsSection('Connection'");
-    expect(mainTsx).toContain("openSettingsChild('connectionStatus')");
-    expect(mainTsx).toContain('Connection Status');
-    expect(mainTsx).toContain('Local Hub Read');
-    expect(mainTsx).toContain('checked={localHubReadEnabled}');
+    expect(settingsRootTsx).toContain("renderSettingsSection('Connection'");
+    expect(settingsRootTsx).toContain("openSettingsChild('connectionStatus')");
+    expect(settingsRootTsx).toContain('Connection Status');
+    expect(settingsRootTsx).toContain('Local Hub Read');
+    expect(settingsRootTsx).toContain('checked={localHubReadEnabled}');
     expect(fs.existsSync(detailPath)).toBe(true);
     expect(detailTsx).toContain('resolveWebResourceConnectionStatus(webSourceState)');
     expect(detailTsx).toContain('resolveRegistryConnectionStatus({');
@@ -29,10 +30,10 @@ describe('connection settings UI source structure', () => {
     expect(detailTsx).toContain('registryHubs.map(hub =>');
     expect(detailTsx).toContain('chat-hub-read-tag');
 
-    const chatSectionStart = mainTsx.indexOf("renderSettingsSection('Chat'");
-    const connectionSectionStart = mainTsx.indexOf("renderSettingsSection('Connection'");
-    const codeSectionStart = mainTsx.indexOf("renderSettingsSection('Code Display'");
-    const connectionSection = mainTsx.slice(connectionSectionStart, codeSectionStart);
+    const chatSectionStart = settingsRootTsx.indexOf("renderSettingsSection('Chat'");
+    const connectionSectionStart = settingsRootTsx.indexOf("renderSettingsSection('Connection'");
+    const codeSectionStart = settingsRootTsx.indexOf("renderSettingsSection('Code Display'");
+    const connectionSection = settingsRootTsx.slice(connectionSectionStart, codeSectionStart);
     const localHubReadIndex = connectionSection.indexOf('Local Hub Read');
     const connectionStatusIndex = connectionSection.indexOf('Connection Status');
 

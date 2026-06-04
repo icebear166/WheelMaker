@@ -5,27 +5,28 @@ describe('agent package update settings UI source structure', () => {
   test('moves shortcut details out of More and keeps Chat focused on chat options', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const settingsRootTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
 
     expect(mainTsx).toContain("} from './settings/settingsNavigation';");
     expect(mainTsx).toContain('type SettingsDetailView = SettingsDetailId | null;');
     expect(mainTsx).toContain("settingsDetailView === 'update'");
     expect(mainTsx).toContain('renderUpdateSettingsDetail(options)');
-    expect(mainTsx).not.toContain("renderSettingsSection('More'");
-    expect(mainTsx).not.toContain("renderSettingsSection('Storage'");
+    expect(settingsRootTsx).not.toContain("renderSettingsSection('More'");
+    expect(settingsRootTsx).not.toContain("renderSettingsSection('Storage'");
 
-    const chatStart = mainTsx.indexOf("renderSettingsSection('Chat'");
-    const codeDisplayStart = mainTsx.indexOf("renderSettingsSection('Code Display'", chatStart);
+    const chatStart = settingsRootTsx.indexOf("renderSettingsSection('Chat'");
+    const codeDisplayStart = settingsRootTsx.indexOf("renderSettingsSection('Code Display'", chatStart);
     expect(chatStart).toBeGreaterThanOrEqual(0);
     expect(codeDisplayStart).toBeGreaterThan(chatStart);
-    const chatSection = mainTsx.slice(chatStart, codeDisplayStart);
+    const chatSection = settingsRootTsx.slice(chatStart, codeDisplayStart);
     expect(chatSection).not.toContain('Use Latest Prompt Title');
     expect(chatSection).toContain('Hide Tool Calls');
     expect(chatSection).not.toContain('Token Stats');
     expect(chatSection).not.toContain('CC Switch');
 
-    const debugStart = mainTsx.indexOf("renderSettingsSection('Debug'");
+    const debugStart = settingsRootTsx.indexOf("renderSettingsSection('Debug'");
     expect(debugStart).toBeGreaterThan(codeDisplayStart);
-    const debugSection = mainTsx.slice(debugStart);
+    const debugSection = settingsRootTsx.slice(debugStart);
     expect(debugSection).not.toContain("setSettingsDetailView('update')");
     expect(debugSection).not.toContain("setSettingsDetailView('skills')");
     expect(debugSection).not.toContain("setSettingsDetailView('tokenStats')");

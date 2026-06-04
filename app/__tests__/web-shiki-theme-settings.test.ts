@@ -5,6 +5,7 @@ describe('web shiki theme settings', () => {
   test('uses curated Shiki theme metadata and grouped theme settings UI', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const settingsRootTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
     const shikiRenderer = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'services', 'shikiRenderer.ts'), 'utf8');
     const shikiSettings = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'services', 'shikiSettings.ts'), 'utf8');
     const workspacePersistence = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'services', 'workspacePersistence.ts'), 'utf8');
@@ -22,14 +23,14 @@ describe('web shiki theme settings', () => {
     expect(shikiSettings).toContain('label: \'Light Themes\'');
     expect(shikiSettings).toContain('CURATED_CODE_THEME_OPTIONS');
 
-    expect(mainTsx).toContain('CODE_THEME_OPTION_GROUPS');
-    expect(mainTsx).toContain('<optgroup key={group.label} label={group.label}>');
-    expect(mainTsx).toContain('CODE_THEME_OPTIONS[0].label');
-    expect(mainTsx).toContain("renderSettingsSection('Code Display'");
-    expect(mainTsx).toContain('Code Font');
-    expect(mainTsx).toContain('Font Size');
-    expect(mainTsx).toContain('Line Height');
-    expect(mainTsx).toContain('Tab Size');
+    expect(settingsRootTsx).toContain('CODE_THEME_OPTION_GROUPS');
+    expect(settingsRootTsx).toContain('<optgroup key={group.label} label={group.label}>');
+    expect(settingsRootTsx).toContain('CODE_THEME_OPTIONS[0].label');
+    expect(settingsRootTsx).toContain("renderSettingsSection('Code Display'");
+    expect(settingsRootTsx).toContain('Code Font');
+    expect(settingsRootTsx).toContain('Font Size');
+    expect(settingsRootTsx).toContain('Line Height');
+    expect(settingsRootTsx).toContain('Tab Size');
 
     expect(workspacePersistence).toContain("isCodeThemeId(input.codeTheme)");
     expect(workspacePersistence).toContain('codeTheme: typeof input.codeTheme === \'string\' && isCodeThemeId(input.codeTheme) ? input.codeTheme : base.codeTheme');

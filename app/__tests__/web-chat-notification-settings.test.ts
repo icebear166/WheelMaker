@@ -7,17 +7,22 @@ describe('chat prompt completion notification settings', () => {
     fs
       .readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8')
       .replace(/\r\n/g, '\n');
+  const readSettingsRootSource = () =>
+    fs
+      .readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8')
+      .replace(/\r\n/g, '\n');
 
   test('adds prompt completion notifications to chat settings and persistence', () => {
     const mainTsx = readMainSource();
+    const settingsRootTsx = readSettingsRootSource();
     const persistenceTs = fs.readFileSync(
       path.join(projectRoot, 'web', 'src', 'services', 'workspacePersistence.ts'),
       'utf8',
     );
 
-    const chatSectionStart = mainTsx.indexOf("renderSettingsSection('Chat'");
-    const connectionSectionStart = mainTsx.indexOf("renderSettingsSection('Connection'");
-    const chatSection = mainTsx.slice(chatSectionStart, connectionSectionStart);
+    const chatSectionStart = settingsRootTsx.indexOf("renderSettingsSection('Chat'");
+    const connectionSectionStart = settingsRootTsx.indexOf("renderSettingsSection('Connection'");
+    const chatSection = settingsRootTsx.slice(chatSectionStart, connectionSectionStart);
 
     expect(chatSection).toContain('Notifications');
     expect(chatSection).not.toContain('Prompt Completion Notifications');
