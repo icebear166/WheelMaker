@@ -1,4 +1,4 @@
-import {ForegroundConnectionSupervisor} from '../web/src/pwa/connection';
+import {ForegroundConnectionSupervisor} from '../web/src/platform/pwa/connection';
 
 function createSupervisorEnv() {
   const documentListeners = new Map<string, () => void>();

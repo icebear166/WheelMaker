@@ -35,23 +35,23 @@ describe('web runtime setup', () => {
   test('includes pwa foundation modules and runtime integration', () => {
     const projectRoot = path.join(__dirname, '..');
     expect(
-      fs.existsSync(path.join(projectRoot, 'web', 'src', 'pwa', 'index.ts')),
+      fs.existsSync(path.join(projectRoot, 'web', 'src', 'platform', 'pwa', 'index.ts')),
     ).toBe(true);
     expect(
       fs.existsSync(
-        path.join(projectRoot, 'web', 'src', 'pwa', 'capabilities.ts'),
+        path.join(projectRoot, 'web', 'src', 'platform', 'pwa', 'capabilities.ts'),
       ),
     ).toBe(true);
     expect(
-      fs.existsSync(path.join(projectRoot, 'web', 'src', 'pwa', 'storage.ts')),
+      fs.existsSync(path.join(projectRoot, 'web', 'src', 'platform', 'pwa', 'storage.ts')),
     ).toBe(true);
     expect(
       fs.existsSync(
-        path.join(projectRoot, 'web', 'src', 'pwa', 'connection.ts'),
+        path.join(projectRoot, 'web', 'src', 'platform', 'pwa', 'connection.ts'),
       ),
     ).toBe(true);
     expect(
-      fs.existsSync(path.join(projectRoot, 'web', 'src', 'pwa', 'push.ts')),
+      fs.existsSync(path.join(projectRoot, 'web', 'src', 'platform', 'pwa', 'push.ts')),
     ).toBe(true);
 
     const mainTsx = fs.readFileSync(
@@ -59,7 +59,7 @@ describe('web runtime setup', () => {
       'utf8',
     );
     expect(mainTsx).toMatch(
-      /import\s+\{\s*initializePWAFoundation\s*\}\s+from\s+'\.\/pwa';/,
+      /import\s+\{\s*initializePWAFoundation\s*\}\s+from\s+'\.\/platform\/pwa';/,
     );
     expect(mainTsx).toContain('initializePWAFoundation();');
   });

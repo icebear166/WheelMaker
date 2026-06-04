@@ -11,7 +11,7 @@ describe('android apk update settings card', () => {
       : '';
     const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
 
-    expect(mainTsx).toContain("from './androidApkUpdate'");
+    expect(mainTsx).toContain("from './platform/android/androidApkUpdate'");
     expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ './settings/SettingsBundle')");
     expect(mainTsx).toContain('<UpdateSettingsDetail');
     expect(mainTsx).toContain('const androidApkUpdateBridge = useMemo(() => createAndroidApkUpdateBridge(), []);');

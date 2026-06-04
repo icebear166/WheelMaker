@@ -5,7 +5,7 @@ import {
   type AndroidApkLatestRelease,
   type AndroidApkLocalRelease,
   type AndroidApkUpdateStatus,
-} from '../androidApkUpdate';
+} from '../platform/android/androidApkUpdate';
 import {
   deriveNpmPackageUpdateTargets,
   npmPackageUpdateSummary,

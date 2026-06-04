@@ -4,7 +4,7 @@ import {
   normalizeSha256Digest,
   parseAndroidLatestRelease,
   resolveAndroidApkUpdateStatus,
-} from '../web/src/androidApkUpdate';
+} from '../web/src/platform/android/androidApkUpdate';
 
 describe('android apk update model', () => {
   test('parses latest GitHub release apk asset metadata', () => {

@@ -32,8 +32,8 @@ import {
   type PortRelayTarget,
 } from './portRelayTargets';
 import { PortRelayFloatingButton, PortRelayFrameSurface } from './portRelay/PortRelayFrameSurface';
-import { initializePWAFoundation } from './pwa';
-import {cleanupNativeWebViewPWA} from './pwa/nativePwaGuard';
+import { initializePWAFoundation } from './platform/pwa';
+import {cleanupNativeWebViewPWA} from './platform/pwa/nativePwaGuard';
 import { DesktopTitleBar } from './shell/layouts/desktop/DesktopTitleBar';
 import {resolveDesktopChatQuickSwitchContextMenu} from './shell/layouts/desktop/chatQuickSwitchContextMenu';
 import {
@@ -160,7 +160,7 @@ import {
   type AndroidApkLatestRelease,
   type AndroidApkLocalRelease,
   type AndroidApkUpdateStatus,
-} from './androidApkUpdate';
+} from './platform/android/androidApkUpdate';
 import { mergeChatSessionList, shouldUpdateCurrentProjectSessions } from './chat/chatIndexState';
 import {
   resolveChatListSelection,
@@ -283,7 +283,7 @@ import {
   isAndroidNativeSpeechHost,
   type AndroidNativeSpeechEvent,
   type AndroidNativeSpeechRuntime,
-} from './features/speech/androidNativeSpeechRuntime';
+} from './platform/android/androidNativeSpeechRuntime';
 import {
   isVoiceGenerationActive as isVoiceGenerationActiveSnapshot,
   isVoiceInputActive as isVoiceInputSnapshotActive,

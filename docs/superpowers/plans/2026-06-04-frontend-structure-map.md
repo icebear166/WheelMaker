@@ -226,18 +226,18 @@ git commit -m "Move mobile shell helpers into shell layouts"
 - Move: `app/web/src/androidApkUpdate.ts` -> `app/web/src/platform/android/androidApkUpdate.ts`
 - Move: `app/web/src/features/speech/androidNativeSpeechRuntime.ts` -> `app/web/src/platform/android/androidNativeSpeechRuntime.ts`
 - Move: `app/web/src/pwa/*` -> `app/web/src/platform/pwa/*`
-- Modify imports in `app/web/src/main.tsx`, `app/web/src/features/speech/voiceInputRuntime.ts`, and affected tests.
+- Modify imports in `app/web/src/main.tsx`, `app/web/src/features/speech/voiceInputRuntime.ts`, `app/web/src/settings/UpdateSettingsDetail.tsx`, and affected tests.
 
-- [ ] **Step 1: Run baseline targeted tests**
+- [x] **Step 1: Run baseline targeted tests**
 
 ```powershell
 cd app
-npm test -- --runInBand web-android-apk-update.test.ts web-android-apk-update-settings.test.ts web-android-native-speech-runtime.test.ts web-pwa-connection.test.ts web-native-pwa-gating.test.ts web-setup.test.js
+npm test -- --runInBand web-android-apk-update.test.ts web-android-apk-update-settings.test.ts web-android-native-speech-runtime.test.ts web-pwa-connection.test.ts web-native-pwa-gating.test.ts web-setup.test.js web-reconnect-fallback.test.ts
 ```
 
 Expected: PASS.
 
-- [ ] **Step 2: Move files**
+- [x] **Step 2: Move files**
 
 ```powershell
 New-Item -ItemType Directory -Force -Path app/web/src/platform/android, app/web/src/platform/pwa
@@ -251,7 +251,7 @@ git mv app/web/src/pwa/push.ts app/web/src/platform/pwa/push.ts
 git mv app/web/src/pwa/storage.ts app/web/src/platform/pwa/storage.ts
 ```
 
-- [ ] **Step 3: Update imports and tests**
+- [x] **Step 3: Update imports and tests**
 
 Use replacements:
 
@@ -273,7 +273,7 @@ rg -n "src/androidApkUpdate|features/speech/androidNativeSpeechRuntime|./pwa|../
 
 Expected: no source/test matches.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 ```powershell
 cd app
