@@ -11,7 +11,7 @@
   --soft-shadow: 0 4px 12px rgba(0, 0, 0, 0.36);
   --danger: #f48771;
   --line-num: #858585;
-  --chat-message-text: #dedede;
+  --chat-message-text: #d2d2d2;
   --wm-safe-area-top: env(safe-area-inset-top, 0px);
   --wm-safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --mobile-floating-control-lane: 56px;
