@@ -1184,11 +1184,11 @@ Expected: targeted tests PASS and TypeScript exits 0.
 - Modify: `app/web/src/main.tsx`
 - Modify tests that read `styles.css`.
 
-- [ ] **Step 1: Split CSS after TypeScript surfaces exist**
+- [x] **Step 1: Split CSS after TypeScript surfaces exist**
 
 Keep one bootstrap CSS import in `main.tsx`, but move selector groups from `styles.css` into surface-owned CSS files imported by `styles/index.css`.
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
 
 ```powershell
 cd app
@@ -1233,3 +1233,5 @@ This plan has completed the logic-light first-wave structure migration:
 - 2026-06-04 continuation: Task 19 verification passed with `npm test -- --runInBand web-settings-navigation.test.ts web-mobile-settings-system-back.test.ts web-port-relay-settings.test.ts web-registry-debug-settings.test.ts`, additional affected source-structure tests, and `npm run tsc:web`.
 - 2026-06-04 continuation: Task 20 is complete. Chat turn rendering moved to `chat/ChatTurnView.tsx`; Chat session nav, Chat/File/Git surface wrappers, and the File preview scroll pane now live in their surface directories while `WorkspaceApp.tsx` keeps state ownership and callback wiring.
 - 2026-06-04 continuation: Task 20 verification passed with `npm test -- --runInBand web-chat-turn-rendering.test.ts web-chat-ui.test.ts web-file-surface-boundary.test.ts web-git-surface-boundary.test.ts web-port-relay-frame-surface-boundary.test.ts`, additional affected source-structure tests, and `npm run tsc:web`.
+- 2026-06-04 continuation: Task 21 is complete. `main.tsx` now imports `styles/index.css`; the index imports the legacy stylesheet plus `styles/surfaces.css`, and the shared Chat/File/Git surface chrome selectors moved out of `styles.css`.
+- 2026-06-04 continuation: Task 21 verification passed with `npm test -- --runInBand web-chat-ui.test.ts web-responsive-shell.test.ts web-markdown-preview-mode.test.ts web-git-graph-popover-layout.test.ts web-port-relay-settings.test.ts`, `npm run tsc:web`, and `npm run build:web`.
