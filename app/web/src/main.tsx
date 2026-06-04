@@ -8,8 +8,6 @@ import '@fontsource/jetbrains-mono/400.css';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
-declare const require: (id: string) => any;
-
 declare global {
   interface Window {
     WheelMakerAndroidBack?: {
@@ -258,7 +256,6 @@ import {
   resolveCodeFontFamily,
   type CodeFontId,
   type CodeThemeId,
-  type DiffRenderLine,
 } from './services/shikiSettings';
 import {createVoiceInputSession, type VoiceInputSession} from './features/speech/useVoiceInputController';
 import {
@@ -410,6 +407,14 @@ const loadFileIconResources = () => {
     }));
   }
   return fileIconResourcesPromise;
+};
+type GitDiffRowsModule = typeof import('./git/diffRows');
+let gitDiffRowsModulePromise: Promise<GitDiffRowsModule> | null = null;
+const loadGitDiffRows = () => {
+  if (!gitDiffRowsModulePromise) {
+    gitDiffRowsModulePromise = import(/* webpackChunkName: "git-diff" */ './git/diffRows');
+  }
+  return gitDiffRowsModulePromise;
 };
 type DirEntries = Record<string, RegistryFsEntry[]>;
 type GitDiffSource = 'commit' | 'worktree';
@@ -621,27 +626,9 @@ type ChatFilePeekState = {
   error: string;
 };
 type PortRelayFramePlacement = 'main' | 'chatPreview';
-type GitDiffChange =
-  | { type: 'insert'; content: string; lineNumber: number }
-  | { type: 'delete'; content: string; lineNumber: number }
-  | {
-      type: 'normal';
-      content: string;
-      oldLineNumber: number;
-      newLineNumber: number;
-    };
-type GitDiffFile = {
-  hunks?: Array<{
-    changes?: GitDiffChange[];
-  }>;
-};
-type GitDiffParser = {
-  parse: (source: string) => GitDiffFile[];
-};
 
 const WORKING_TREE_COMMIT_ID = '__WORKING_TREE__';
 const LARGE_FILE_CONFIRM_BYTES = 2 * 1024 * 1024;
-const gitdiffParser = require('gitdiff-parser') as GitDiffParser;
 
 type ThinkingBlockProps = {
   content: string;
@@ -2354,138 +2341,6 @@ function readSafeAreaBottomInset(): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-type UnifiedDiffRow = {
-  kind: 'context' | 'added' | 'removed' | 'separator';
-  oldLineNumber: number | null;
-  newLineNumber: number | null;
-  text: string;
-  separator?: 'hunk' | 'file';
-};
-
-function pushUnifiedDiffSeparator(
-  rows: UnifiedDiffRow[],
-  separator: 'hunk' | 'file',
-  text: string,
-): void {
-  if (rows.length === 0) return;
-  const last = rows[rows.length - 1];
-  if (last.kind === 'separator') return;
-  rows.push({
-    kind: 'separator',
-    oldLineNumber: null,
-    newLineNumber: null,
-    text,
-    separator,
-  });
-}
-
-function parseUnifiedDiffRows(content: string): UnifiedDiffRow[] {
-  const rows: UnifiedDiffRow[] = [];
-  try {
-    const files = gitdiffParser.parse(content);
-    for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
-      const file = files[fileIndex];
-      const hunks = file.hunks || [];
-      if (hunks.length === 0) continue;
-
-      if (rows.length > 0) {
-        pushUnifiedDiffSeparator(rows, 'file', '... next file ...');
-      }
-
-      for (let hunkIndex = 0; hunkIndex < hunks.length; hunkIndex += 1) {
-        const hunk = hunks[hunkIndex];
-        if (hunkIndex > 0) {
-          pushUnifiedDiffSeparator(rows, 'hunk', '... skipped unchanged lines ...');
-        }
-        for (const change of hunk.changes || []) {
-          if (change.type === 'insert') {
-            rows.push({
-              kind: 'added',
-              oldLineNumber: null,
-              newLineNumber: change.lineNumber,
-              text: change.content,
-            });
-            continue;
-          }
-          if (change.type === 'delete') {
-            rows.push({
-              kind: 'removed',
-              oldLineNumber: change.lineNumber,
-              newLineNumber: null,
-              text: change.content,
-            });
-            continue;
-          }
-          rows.push({
-            kind: 'context',
-            oldLineNumber: change.oldLineNumber,
-            newLineNumber: change.newLineNumber,
-            text: change.content,
-          });
-        }
-      }
-    }
-  } catch {
-    // fall through to fallback parser for non-standard diff snippets
-  }
-
-  if (rows.length > 0) {
-    return rows;
-  }
-
-  // Fallback for non-standard patches: keep a readable inline rendering.
-  const lines = content.split('\n');
-  for (const raw of lines) {
-    if (raw.startsWith('+')) {
-      rows.push({
-        kind: 'added',
-        oldLineNumber: null,
-        newLineNumber: null,
-        text: raw.slice(1),
-      });
-      continue;
-    }
-    if (raw.startsWith('-')) {
-      rows.push({
-        kind: 'removed',
-        oldLineNumber: null,
-        newLineNumber: null,
-        text: raw.slice(1),
-      });
-      continue;
-    }
-    rows.push({
-      kind: 'context',
-      oldLineNumber: null,
-      newLineNumber: null,
-      text: raw.startsWith(' ') ? raw.slice(1) : raw,
-    });
-  }
-  return rows;
-}
-
-function buildInlineDiffRenderLines(rows: UnifiedDiffRow[]): DiffRenderLine[] {
-  return rows.map(row => {
-    if (row.kind === 'separator') {
-      return {
-        code: row.text,
-        lineNumber: null,
-        oldLineNumber: null,
-        newLineNumber: null,
-        kind: 'empty',
-        separator: row.separator ?? 'hunk',
-      };
-    }
-    return {
-      code: row.text,
-      lineNumber: row.newLineNumber ?? row.oldLineNumber,
-      oldLineNumber: row.oldLineNumber,
-      newLineNumber: row.newLineNumber,
-      kind: row.kind,
-    };
-  });
-}
-
 function buildWorkingTreeFiles(
   status: RegistryGitStatus,
 ): WorkingTreeFileEntry[] {
@@ -3151,20 +3006,24 @@ function ShikiDiffPane({
   codeTabSize,
 }: ShikiDiffPaneProps) {
   const [diffHtml, setDiffHtml] = useState('');
-  const rows = useMemo(() => parseUnifiedDiffRows(content), [content]);
-  const lines = useMemo(() => buildInlineDiffRenderLines(rows), [rows]);
+  const [diffRenderState, setDiffRenderState] = useState<'loading' | 'empty' | 'ready'>('loading');
 
   useEffect(() => {
     let cancelled = false;
-    if (rows.length === 0) {
-      setDiffHtml('');
-      return () => {
-        cancelled = true;
-      };
-    }
 
     setDiffHtml('');
+    setDiffRenderState('loading');
     (async () => {
+      const {parseUnifiedDiffRenderLines} = await loadGitDiffRows();
+      const lines = parseUnifiedDiffRenderLines(content);
+      if (cancelled) {
+        return;
+      }
+      if (lines.length === 0) {
+        setDiffRenderState('empty');
+        return;
+      }
+      setDiffRenderState('ready');
       const { renderShikiDiffHtml } = await loadShikiRenderer();
       const nextDiffHtml = await renderShikiDiffHtml({
         lines,
@@ -3181,14 +3040,17 @@ function ShikiDiffPane({
       if (!cancelled) {
         setDiffHtml(nextDiffHtml);
       }
-    })();
+    })().catch(() => {
+      if (!cancelled) {
+        setDiffRenderState('ready');
+      }
+    });
 
     return () => {
       cancelled = true;
     };
   }, [
-    lines,
-    rows.length,
+    content,
     language,
     themeMode,
     codeTheme,
@@ -3200,7 +3062,7 @@ function ShikiDiffPane({
     lineNumbers,
   ]);
 
-  if (rows.length === 0)
+  if (diffRenderState === 'empty')
     return <div className="muted block">No diff hunks available</div>;
 
   const diffStyle = {

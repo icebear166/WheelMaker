@@ -5,6 +5,7 @@ describe('web code layout', () => {
   test('uses shiki renderer with transformer-based line metadata and custom diff rendering', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const diffRows = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'git', 'diffRows.ts'), 'utf8');
     const shikiRenderer = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'services', 'shikiRenderer.ts'), 'utf8');
     const shikiSettings = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'services', 'shikiSettings.ts'), 'utf8');
     const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
@@ -14,14 +15,17 @@ describe('web code layout', () => {
     expect(mainTsx).not.toContain("from './services/shikiRenderer'");
     expect(mainTsx).toContain('renderShikiHtml');
     expect(mainTsx).toContain('renderShikiDiffHtml');
-    expect(mainTsx).toContain("require('gitdiff-parser')");
-    expect(mainTsx).toContain('gitdiffParser.parse(content)');
+    expect(mainTsx).toContain("import(/* webpackChunkName: \"git-diff\" */ './git/diffRows')");
+    expect(mainTsx).not.toContain("require('gitdiff-parser')");
+    expect(diffRows).toContain("require('gitdiff-parser')");
+    expect(diffRows).toContain('gitdiffParser.parse(content)');
     expect(mainTsx).toContain("mode: 'block'");
     expect(mainTsx).toContain('themeMode={themeMode}');
     expect(mainTsx).toContain('codeTheme={codeTheme}');
-    expect(mainTsx).toContain('type UnifiedDiffRow = {');
-    expect(mainTsx).toContain('parseUnifiedDiffRows(content)');
-    expect(mainTsx).toContain('buildInlineDiffRenderLines(rows)');
+    expect(diffRows).toContain('type UnifiedDiffRow = {');
+    expect(mainTsx).toContain('parseUnifiedDiffRenderLines(content)');
+    expect(diffRows).toContain('function parseUnifiedDiffRows');
+    expect(diffRows).toContain('function buildInlineDiffRenderLines');
     expect(mainTsx).toContain("className={`diff-inline ${wrap ? 'wrap' : 'nowrap'}`}");
     expect(mainTsx).toContain('codeFont={codeFont}');
     expect(mainTsx).toContain('codeFontSize={codeFontSize}');
