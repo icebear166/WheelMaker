@@ -25,6 +25,7 @@ const (
 	RegistryRouteBatch           RegistryRouteKind = "batch"
 	RegistryRouteHubControl      RegistryRouteKind = "hub_control"
 	RegistryRouteHubReport       RegistryRouteKind = "hub_report"
+	RegistryRouteHubState        RegistryRouteKind = "hub_state"
 	RegistryRouteHubSessionEvent RegistryRouteKind = "hub_session_event"
 	RegistryRouteProjectCache    RegistryRouteKind = "project_cache"
 	RegistryRouteProjectForward  RegistryRouteKind = "project_forward"
@@ -46,6 +47,10 @@ const (
 	RegistryMethodLocalReadProof    = "local_read.proof"
 	RegistryMethodBatch             = "batch"
 	RegistryMethodHubPing           = "hub.ping"
+	RegistryMethodHubStateGet       = "hub.state.get"
+	RegistryMethodHubStateRefresh   = "hub.state.refresh"
+	RegistryMethodHubStateAction    = "hub.state.action"
+	RegistryMethodHubStateUpdated   = "hub.state.updated"
 	RegistryMethodDebugUploadLog    = "debug.uploadLog"
 
 	RegistryMethodRegistryReportProjects = "registry.reportProjects"
@@ -150,6 +155,10 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodLocalReadProof:    registryMethod(RegistryMethodLocalReadProof, RegistryRouteLocalRead, []RegistryRole{RegistryRoleLocalRead}),
 	RegistryMethodBatch:             registryMethod(RegistryMethodBatch, RegistryRouteBatch, []RegistryRole{RegistryRoleClient, RegistryRoleMonitor}),
 	RegistryMethodHubPing:           registryMethod(RegistryMethodHubPing, RegistryRouteHubControl, []RegistryRole{RegistryRoleHub}),
+	RegistryMethodHubStateGet:       registryHubStateMethod(RegistryMethodHubStateGet),
+	RegistryMethodHubStateRefresh:   registryHubStateMethod(RegistryMethodHubStateRefresh),
+	RegistryMethodHubStateAction:    registryHubStateMethod(RegistryMethodHubStateAction),
+	RegistryMethodHubStateUpdated:   registryClientEventMethod(RegistryMethodHubStateUpdated),
 	RegistryMethodDebugUploadLog:    registryMethod(RegistryMethodDebugUploadLog, RegistryRouteDebug, []RegistryRole{RegistryRoleClient}),
 
 	RegistryMethodRegistryReportProjects: registryMethod(RegistryMethodRegistryReportProjects, RegistryRouteHubReport, []RegistryRole{RegistryRoleHub}),
@@ -264,6 +273,13 @@ func registryHubCommandMethod(method string) RegistryMethodDescriptor {
 	return desc
 }
 
+func registryHubStateMethod(method string) RegistryMethodDescriptor {
+	desc := registryMethod(method, RegistryRouteHubState, []RegistryRole{RegistryRoleClient})
+	desc.RequiresHubID = true
+	desc.Batchable = true
+	return desc
+}
+
 func registrySpeechMethod(method string) RegistryMethodDescriptor {
 	return registryMethod(method, RegistryRouteSpeech, []RegistryRole{RegistryRoleClient})
 }
@@ -314,6 +330,10 @@ func RegistrySessionForwardMethod(method string) bool {
 
 func RegistryHubCommandMethod(method string) bool {
 	return RegistryMethodHasRoute(method, RegistryRouteHubCommand)
+}
+
+func RegistryHubStateMethod(method string) bool {
+	return RegistryMethodHasRoute(method, RegistryRouteHubState)
 }
 
 func RegistryMonitorForwardMethod(method string) bool {

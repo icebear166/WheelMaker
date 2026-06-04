@@ -55,3 +55,37 @@ func TestRegistryHubSessionEventMapping(t *testing.T) {
 		t.Fatalf("client event method=%q, want %q", method, RegistryMethodSessionMessage)
 	}
 }
+
+func TestRegistryHubStateMethodsRequireHubID(t *testing.T) {
+	methods := []string{
+		RegistryMethodHubStateGet,
+		RegistryMethodHubStateRefresh,
+		RegistryMethodHubStateAction,
+	}
+	for _, method := range methods {
+		desc, ok := RegistryMethod(method)
+		if !ok {
+			t.Fatalf("method %q is not registered", method)
+		}
+		if desc.Route != RegistryRouteHubState {
+			t.Fatalf("%s route=%q, want %q", method, desc.Route, RegistryRouteHubState)
+		}
+		if !desc.RequiresHubID {
+			t.Fatalf("%s should require hubId", method)
+		}
+		if !RegistryMethodAllowed(string(RegistryRoleClient), method) {
+			t.Fatalf("%s should allow client role", method)
+		}
+		if !desc.Batchable {
+			t.Fatalf("%s should be batchable", method)
+		}
+	}
+
+	updated, ok := RegistryMethod(RegistryMethodHubStateUpdated)
+	if !ok {
+		t.Fatal("hub.state.updated is not registered")
+	}
+	if updated.Route != RegistryRouteClientEvent {
+		t.Fatalf("hub.state.updated route=%q, want client event", updated.Route)
+	}
+}

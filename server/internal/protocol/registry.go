@@ -55,6 +55,7 @@ type Envelope struct {
 	RequestID int64           `json:"requestId,omitempty"`
 	Type      string          `json:"type"`
 	Method    string          `json:"method,omitempty"`
+	HubID     string          `json:"hubId,omitempty"`
 	ProjectID string          `json:"projectId,omitempty"`
 	Payload   json.RawMessage `json:"payload,omitempty"`
 }
