@@ -1,3 +1,4 @@
+import React from 'react';
 import type { ArchiveCandidate } from '../chat/sessionArchiveState';
 import { npmPackageUpdateSummary, type NpmPackageUpdateTarget } from '../agentPackageUpdateView';
 import { skillScopeLabel } from '../skillManagementView';

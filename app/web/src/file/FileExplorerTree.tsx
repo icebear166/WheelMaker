@@ -1,4 +1,4 @@
-import type React from 'react';
+import React from 'react';
 import type { RegistryFsEntry, RegistryProject } from '../types/registry';
 
 type FileResolvedIcon = {
