@@ -11,6 +11,11 @@ function readStyles(): string {
   return fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
 }
 
+function readWebSource(relativePath: string): string {
+  const projectRoot = path.join(__dirname, '..');
+  return fs.readFileSync(path.join(projectRoot, 'web', 'src', relativePath), 'utf8');
+}
+
 function extractFunctionBody(source: string, functionName: string): string {
   const marker = `const ${functionName} = async`;
   const start = source.indexOf(marker);
@@ -62,11 +67,16 @@ describe('workspace project lightweight UI wiring', () => {
 
   test('pc file and git sidebars render the workspace selector above section titles', () => {
     const main = readMain();
+    const fileSurface = readWebSource('file/FileExplorerTree.tsx');
+    const gitSurface = readWebSource('git/GitSidebar.tsx');
 
-    expect(main).toContain('const renderWorkspaceProjectSelector = () =>');
-    expect(main).toContain('{isWide ? renderWorkspaceProjectSelector() : null}');
-    expect(main).toContain('<div className="workspace-project-label">WORKSPACE</div>');
-    expect(main).toContain('workspace-project-menu');
+    expect(main).not.toContain('const renderWorkspaceProjectSelector = () =>');
+    expect(main).toContain("import { FileExplorerTree, WorkspaceProjectSelector } from './file/FileExplorerTree';");
+    expect(main).toContain("import { GitSidebar } from './git/GitSidebar';");
+    expect(fileSurface).toContain('<WorkspaceProjectSelector');
+    expect(gitSurface).toContain('<WorkspaceProjectSelector');
+    expect(fileSurface).toContain('<div className="workspace-project-label">WORKSPACE</div>');
+    expect(fileSurface).toContain('workspace-project-menu');
   });
 
   test('hydrating a new workspace project clears stale directory hashes', () => {
