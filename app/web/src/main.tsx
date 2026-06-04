@@ -3369,7 +3369,7 @@ function App() {
     persistedGlobal,
     globalState =>
       createWorkspaceUiState({
-        tab: globalState.tab ?? 'file',
+        tab: globalState.tab ?? 'chat',
         collapsedProjectIds: globalState.collapsedProjectIds ?? globalState.desktopCollapsedProjectIds ?? [],
         desktopSidebarWidth: globalState.desktopSidebarWidth,
         pinnedProjectIds: globalState.pinnedProjectIds ?? [],

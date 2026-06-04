@@ -122,7 +122,7 @@ function resolveNext<T>(current: T, next: WorkspaceUiStateValue<T>): T {
 }
 
 function sanitizeTab(value: unknown): PersistedTab {
-  return value === 'chat' || value === 'git' ? value : 'file';
+  return value === 'file' || value === 'git' ? value : 'chat';
 }
 
 function sanitizeFloatingControlSide(value: unknown): PersistedFloatingControlSide {

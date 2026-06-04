@@ -236,6 +236,10 @@ describe('web responsive ui state', () => {
     expect(DESKTOP_SIDEBAR_WIDTH_DEFAULT).toBe(380);
     expect(DESKTOP_SIDEBAR_WIDTH_MIN).toBe(320);
     expect(DESKTOP_SIDEBAR_WIDTH_MAX).toBe(560);
+    expect(createWorkspaceUiState().shared.tab).toBe('chat');
+    expect(createWorkspaceUiState({ tab: 'invalid' }).shared.tab).toBe('chat');
+    expect(createWorkspaceUiState({ tab: 'file' }).shared.tab).toBe('file');
+    expect(createWorkspaceUiState({ tab: 'git' }).shared.tab).toBe('git');
 
     let state = createWorkspaceUiState({
       tab: 'git',
