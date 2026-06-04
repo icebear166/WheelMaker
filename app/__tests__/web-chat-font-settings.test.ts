@@ -9,18 +9,25 @@ import {
 
 import {readWebStyles} from '../testHelpers/webStyles';
 describe('web chat font settings', () => {
-  test('uses the system chat font by default and keeps CJK fallbacks clear in IBM Plex mode', () => {
-    expect(DEFAULT_CHAT_FONT).toBe('system');
+  test('uses Microsoft YaHei chat text by default while keeping other fonts configurable', () => {
+    expect(DEFAULT_CHAT_FONT).toBe('microsoft-yahei');
     expect(CHAT_FONT_OPTIONS.map(option => option.id)).toEqual([
-      'ibm-plex',
+      'microsoft-yahei',
       'system',
+      'ibm-plex',
       'serif',
     ]);
+    expect(CHAT_FONT_OPTIONS.map(option => option.label)).toContain('Microsoft YaHei');
     expect(resolveChatFontFamily(DEFAULT_CHAT_FONT)).toContain('Segoe UI');
+    expect(resolveChatFontFamily(DEFAULT_CHAT_FONT)).toContain('Microsoft YaHei');
+    expect(resolveChatFontFamily(DEFAULT_CHAT_FONT).indexOf('Microsoft YaHei')).toBeLessThan(
+      resolveChatFontFamily(DEFAULT_CHAT_FONT).indexOf('Microsoft YaHei UI'),
+    );
     expect(resolveChatFontFamily('ibm-plex')).toContain('IBM Plex Sans');
-    expect(resolveChatFontFamily('ibm-plex')).toContain('Microsoft YaHei UI');
+    expect(resolveChatFontFamily('ibm-plex')).toContain('Microsoft YaHei');
     expect(resolveChatFontFamily('system')).toContain('Segoe UI');
     expect(resolveChatFontFamily('system')).toContain('Microsoft YaHei UI');
+    expect(isChatFontId('microsoft-yahei')).toBe(true);
     expect(isChatFontId('system')).toBe(true);
     expect(isChatFontId('bad-font')).toBe(false);
   });

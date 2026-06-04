@@ -1,4 +1,4 @@
-export type ChatFontId = 'system' | 'ibm-plex' | 'serif';
+export type ChatFontId = 'microsoft-yahei' | 'system' | 'ibm-plex' | 'serif';
 
 export type ChatFontOption = {
   id: ChatFontId;
@@ -6,18 +6,23 @@ export type ChatFontOption = {
   fontFamily: string;
 };
 
-export const DEFAULT_CHAT_FONT: ChatFontId = 'system';
+export const DEFAULT_CHAT_FONT: ChatFontId = 'microsoft-yahei';
 
 export const CHAT_FONT_OPTIONS: ChatFontOption[] = [
   {
-    id: 'ibm-plex',
-    label: 'IBM Plex Sans',
-    fontFamily: "'IBM Plex Sans', 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', 'Noto Sans CJK SC', 'Noto Sans', sans-serif",
+    id: 'microsoft-yahei',
+    label: 'Microsoft YaHei',
+    fontFamily: "'Segoe UI', 'Microsoft YaHei', 'Microsoft YaHei UI', 'PingFang SC', 'Noto Sans CJK SC', 'Noto Sans', sans-serif",
   },
   {
     id: 'system',
     label: 'System Sans',
     fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', 'Noto Sans CJK SC', 'Noto Sans', sans-serif",
+  },
+  {
+    id: 'ibm-plex',
+    label: 'IBM Plex Sans',
+    fontFamily: "'IBM Plex Sans', 'Segoe UI', 'Microsoft YaHei', 'Microsoft YaHei UI', 'PingFang SC', 'Noto Sans CJK SC', 'Noto Sans', sans-serif",
   },
   {
     id: 'serif',
