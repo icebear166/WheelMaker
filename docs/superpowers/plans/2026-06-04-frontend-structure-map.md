@@ -481,7 +481,7 @@ npm run tsc:web
 
 Expected: targeted tests PASS and TypeScript exits 0.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```powershell
 git add -A
@@ -498,7 +498,7 @@ git commit -m "Split registry and workspace modules"
 - Move: `app/web/src/tokenStatsView.ts` -> `app/web/src/settings/tokenStats/tokenStatsView.ts`
 - Modify detail imports and tests.
 
-- [ ] **Step 1: Run baseline targeted tests**
+- [x] **Step 1: Run baseline targeted tests**
 
 ```powershell
 cd app
@@ -507,7 +507,7 @@ npm test -- --runInBand web-agent-package-update-view.test.ts web-agent-package-
 
 Expected: PASS.
 
-- [ ] **Step 2: Move files and update imports**
+- [x] **Step 2: Move files and update imports**
 
 ```powershell
 New-Item -ItemType Directory -Force -Path app/web/src/settings/update, app/web/src/settings/skills, app/web/src/settings/tokenStats
@@ -516,7 +516,7 @@ git mv app/web/src/skillManagementView.ts app/web/src/settings/skills/skillManag
 git mv app/web/src/tokenStatsView.ts app/web/src/settings/tokenStats/tokenStatsView.ts
 ```
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 ```powershell
 cd app

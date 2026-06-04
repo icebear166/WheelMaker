@@ -1,4 +1,4 @@
-import type { RegistryTokenProviderAccount } from './types/registry';
+import type { RegistryTokenProviderAccount } from '../../types/registry';
 
 export type TokenProviderAccountView = RegistryTokenProviderAccount & {
   hubId: string;

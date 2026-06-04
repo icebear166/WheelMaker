@@ -1,7 +1,7 @@
 import React from 'react';
 import type { ArchiveCandidate } from '../chat/sessionArchiveState';
-import { npmPackageUpdateSummary, type NpmPackageUpdateTarget } from '../agentPackageUpdateView';
-import { skillScopeLabel } from '../skillManagementView';
+import { npmPackageUpdateSummary, type NpmPackageUpdateTarget } from '../settings/update/agentPackageUpdateView';
+import { skillScopeLabel } from '../settings/skills/skillManagementView';
 import type { RegistrySkillScope } from '../types/registry';
 
 export type RenameSessionTarget = {
