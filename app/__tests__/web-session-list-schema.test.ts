@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 describe('web session list schema', () => {
   test('uses sessionId without legacy chatId compatibility', () => {
     const projectRoot = path.join(__dirname, '..');
@@ -8,7 +9,7 @@ describe('web session list schema', () => {
     const serviceTs = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'registry', 'RegistryWorkspaceService.ts'), 'utf8');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const registryTypes = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'registry', 'registryTypes.ts'), 'utf8');
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(repositoryTs).toContain("method: 'session.list'");
     expect(repositoryTs).toContain("method: 'session.read'");

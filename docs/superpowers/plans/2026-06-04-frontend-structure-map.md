@@ -14,7 +14,7 @@
 
 - `docs/reviews/architecture-review-workspace-web-ui-2026-06-04.html`: source architecture map for target directories and move map.
 - `app/web/src/main.tsx`: bootstrap boundary only: global CSS/fonts, `workspaceAppReady`, `createRoot`, and startup error fallback.
-- `app/web/src/app/WorkspaceApp.tsx`: current App orchestration module. Large Chat/File/Git/Settings render blocks remain here until the next surface-extraction phase.
+- `app/web/src/app/WorkspaceApp.tsx`: current App orchestration module. State, effects, and command callbacks remain here while Settings and Chat/File/Git surface chrome now live in their surface directories.
 - `app/web/src/shell/**`: target for shell surfaces, Layout Mode helpers, mobile/desktop layout helpers, and shell state.
 - `app/web/src/platform/**`: target for Desktop, Android, native-host, and PWA adapters.
 - `app/web/src/notifications/**`: target for generic notification provider seam and notification payload types.
@@ -22,6 +22,7 @@
 - `app/web/src/debug/**`: target for diagnostics modules.
 - `app/web/src/preferences/**`: target for neutral persisted UI preference helpers shared across shell state and workspace persistence.
 - `app/web/src/code/**`: target for shared code-rendering modules, including Shiki settings and rendering.
+- `app/web/src/styles/**`: target for CSS entrypoint plus base, shell, surface, platform-adjacent, and code-rendering style files.
 - `app/web/src/services/**`: retired source bucket. No source files are expected here after Task 13.
 - `app/__tests__/**`: structural tests. When a moved module is path-asserted, update the test in the same task.
 
@@ -55,7 +56,7 @@ The move-map priority column uses this rule:
 - `Later`: high import-churn moves that are safer once the first structure changes have settled.
 - `Keep`: Modules that already have clear locality and should not be moved just to satisfy a directory pattern.
 
-Tasks 1-13 completed the `First` scope for candidates 1, 2, 3, 5, and most of candidate 6. Tasks 14+ close the remaining low-logic gaps, then enter the `Second` and `Third` scopes.
+Tasks 1-18 completed the `First` scope for the HTML review candidates. Tasks 19-20 completed the `Second` surface-extraction scope. Task 21 opened the `Third` CSS scope with the style entrypoint and shared surface chrome; Task 22 completes the remaining root CSS directory split without changing selectors.
 
 ---
 
@@ -1201,37 +1202,79 @@ Expected: targeted tests, TypeScript, and webpack build all exit 0.
 
 ---
 
+### Task 22: Root CSS Directory Split
+
+**Files:**
+- Create: `app/web/src/styles/base.css`
+- Create: `app/web/src/styles/shell.css`
+- Create: `app/web/src/styles/chat.css`
+- Create: `app/web/src/styles/file.css`
+- Create: `app/web/src/styles/git.css`
+- Create: `app/web/src/styles/settings.css`
+- Create: `app/web/src/styles/portRelay.css`
+- Create: `app/web/src/styles/debug.css`
+- Create: `app/web/src/styles/code.css`
+- Delete: `app/web/src/styles.css`
+- Modify: `app/web/src/styles/index.css`
+- Modify style-source tests to read the CSS entrypoint aggregate instead of a single legacy file.
+
+- [x] **Step 1: Split legacy root CSS by owning surface**
+
+Move existing selector blocks into focused files under `app/web/src/styles/`. Preserve selector bodies and keep the app's runtime Interface as one CSS import from `main.tsx`.
+
+- [x] **Step 2: Update structural tests**
+
+Tests that assert CSS source should use a shared helper that reads the split CSS files in entrypoint order.
+
+- [x] **Step 3: Verify**
+
+```powershell
+cd app
+npm test -- --runInBand web-chat-ui.test.ts web-chat-file-peek-viewer.test.ts web-agent-package-update-settings.test.ts web-markdown-preview-mode.test.ts web-git-graph-popover-layout.test.ts web-port-relay-settings.test.ts web-registry-debug-panel-ui.test.ts web-responsive-shell.test.ts
+npm run tsc:web
+npm run build:web
+```
+
+Expected: targeted tests, TypeScript, and webpack build all exit 0.
+
+---
+
 ## Self-Review
 
-- Spec coverage: The plan covers the completed first-wave migration from the review map: shell/platform split, mobile shell helpers, Android/PWA adapters, notification split, debug Settings surface, registry/workspace split, Settings helpers, Chat/Port Relay helpers, main bootstrap extraction, shell state ownership, floating-control preferences, and the final `services/` cleanup.
+- Spec coverage: The plan covers the completed HTML review implementation scope: main bootstrap extraction, `services/` retirement, root helper co-location, source-structure tests away from `main.tsx`, Settings helper co-location, Settings/Chat/File/Git surface extraction, and CSS entrypoint/surface splitting under `styles/`.
 - Placeholder scan: No task contains `TBD`, `TODO`, or an unspecified "write tests" step.
 - Type consistency: Directory names match the review map: `shell/layouts/*`, `platform/*`, `chat/notifications/*`, and generic `notifications/*`.
 
 ## Closeout Scope
 
-This plan has completed the logic-light first-wave structure migration:
+This plan has completed the HTML review implementation scope that was safe to execute without deep logic changes:
 
 - `app/web/src/main.tsx` is bootstrap-only; `app/web/src/app/WorkspaceApp.tsx` is the temporary orchestration module.
 - `app/web/src/services/` no longer owns source files; former modules moved to `registry/`, `workspace/`, `shell/state/`, `shell/layouts/`, `chat/layout/`, and `code/`.
-- Platform-specific adapters are under `platform/`; generic notification delivery is separate from Chat notification policy; debug settings are under `settings/debug/`.
-- The original HTML review still contains later target moves that were intentionally not part of this iteration: extracting Chat/File/Git/Settings render surfaces from `WorkspaceApp.tsx`, adding `workspaceBootstrap.ts` if startup helpers grow enough to earn the module, splitting `styles.css`, and optionally relocating registry types.
+- Platform-specific adapters are under `platform/`; generic notification delivery is separate from Chat notification policy; debug data modules are under `debug/`, while debug Settings UI lives under `settings/debug/`.
+- Settings, Chat, File, and Git rendered surface chrome now lives in the owning directories; `WorkspaceApp.tsx` intentionally keeps state, effects, and command callbacks.
+- CSS now enters through `app/web/src/styles/index.css`; the legacy root `styles.css` was split into focused files under `app/web/src/styles/`.
+- The original HTML review's `Later`/`Keep` entries are not outstanding work for this iteration: `registryTypes.ts` was moved once churn settled, and debug data modules remain under `debug/` by design.
 
 ## Execution Status
 
 - 2026-06-04: Tasks 1-8 are complete and verified on `frontend-structure-map`.
 - 2026-06-04: Task 9 extracted `App` into `app/web/src/app/WorkspaceApp.tsx`; `app/web/src/main.tsx` now owns bootstrap imports, global styles/fonts, the IndexedDB-ready render gate, and the startup error fallback.
 - 2026-06-04: Task 10 full verification passed with `npm run tsc:web`, `npm test -- --runInBand`, and `npm run build:web`.
-- CSS split remains intentionally deferred; `app/web/src/styles.css` was not changed in this execution slice.
+- CSS split was initially deferred in Task 10, opened in Task 21 with `styles/index.css` and `styles/surfaces.css`, and completed in Task 22 with the root CSS split under `styles/`.
 - 2026-06-04 follow-up: Added Tasks 11-13 to correct the review-map gaps found after implementation: `shell/state` ownership, neutral floating-control preference sanitizers, and a later services-bucket cleanup.
 - 2026-06-04 follow-up: Tasks 11-12 are complete and verified with targeted Jest plus `npm run tsc:web`; `services/responsiveLayout.ts` and `services/workspaceUiState.ts` now live under `shell/state`, and `workspace/WorkspacePersistence.ts` no longer imports mobile layout helpers.
 - 2026-06-04 follow-up: Task 13 is complete and verified with targeted Jest plus `npm run tsc:web`; the remaining `services/` helpers now live under `chat/layout` and `code`, leaving no source files in `app/web/src/services`.
 - 2026-06-04 follow-up: Task 13 full verification passed with `npm test -- --runInBand` and `npm run build:web`.
-- 2026-06-04 closeout: Reconciled this plan with the current tree. Tasks 1-13 are the completed first-wave scope; the original HTML review remains the broader target map for later surface and CSS extraction phases.
+- 2026-06-04 closeout: Reconciled this plan with the current tree after Tasks 1-13. Later continuation tasks then completed the remaining HTML review surface and CSS targets.
 - 2026-06-04 continuation: Tasks 14-18 are complete. The remaining Settings detail files moved under `settings/code` and `settings/portRelay`; Android notification bridge logic moved under `platform/android`; registry protocol types moved to `registry/registryTypes.ts`; startup address helpers moved to `app/workspaceBootstrap.ts`; Shiki, diff, Markdown, Mermaid, and HTML preview rendering moved under `code/`.
-- 2026-06-04 continuation: Verification after Task 18 passed with `npm run tsc:web`, `npm test -- --runInBand`, and `npm run build:web`. Tasks 19-21 remain: Settings surface extraction, Chat/File/Git surface extraction, and CSS surface split.
+- 2026-06-04 continuation: Verification after Task 18 passed with `npm run tsc:web`, `npm test -- --runInBand`, and `npm run build:web`. Tasks 19-21 were then added for Settings surface extraction, Chat/File/Git surface extraction, and CSS surface split.
 - 2026-06-04 continuation: Task 19 is complete. `settings/SettingsSurface.tsx` now owns the Settings detail shell, root/detail surface switch, mobile Settings screen, mobile Settings shortcut bar, shortcut metadata, and Settings detail titles while `WorkspaceApp.tsx` keeps state/effect/callback ownership.
 - 2026-06-04 continuation: Task 19 verification passed with `npm test -- --runInBand web-settings-navigation.test.ts web-mobile-settings-system-back.test.ts web-port-relay-settings.test.ts web-registry-debug-settings.test.ts`, additional affected source-structure tests, and `npm run tsc:web`.
 - 2026-06-04 continuation: Task 20 is complete. Chat turn rendering moved to `chat/ChatTurnView.tsx`; Chat session nav, Chat/File/Git surface wrappers, and the File preview scroll pane now live in their surface directories while `WorkspaceApp.tsx` keeps state ownership and callback wiring.
 - 2026-06-04 continuation: Task 20 verification passed with `npm test -- --runInBand web-chat-turn-rendering.test.ts web-chat-ui.test.ts web-file-surface-boundary.test.ts web-git-surface-boundary.test.ts web-port-relay-frame-surface-boundary.test.ts`, additional affected source-structure tests, and `npm run tsc:web`.
-- 2026-06-04 continuation: Task 21 is complete. `main.tsx` now imports `styles/index.css`; the index imports the legacy stylesheet plus `styles/surfaces.css`, and the shared Chat/File/Git surface chrome selectors moved out of `styles.css`.
+- 2026-06-04 continuation: Task 21 is complete. `main.tsx` now imports `styles/index.css`; `styles/surfaces.css` owns shared Chat/File/Git surface chrome selectors. Task 22 later split the remaining legacy root CSS into focused files.
 - 2026-06-04 continuation: Task 21 verification passed with `npm test -- --runInBand web-chat-ui.test.ts web-responsive-shell.test.ts web-markdown-preview-mode.test.ts web-git-graph-popover-layout.test.ts web-port-relay-settings.test.ts`, `npm run tsc:web`, and `npm run build:web`.
+- 2026-06-04 continuation: Task 22 is complete. The legacy root CSS source was split into `styles/base.css`, `styles/shell.css`, `styles/settings.css`, `styles/portRelay.css`, `styles/debug.css`, `styles/file.css`, `styles/git.css`, `styles/chat.css`, and `styles/code.css`; style-source tests now read the CSS aggregate through `testHelpers/webStyles.ts`.
+- 2026-06-04 continuation: Task 22 verification passed with `npm test -- --runInBand web-chat-ui.test.ts web-chat-file-peek-viewer.test.ts web-agent-package-update-settings.test.ts web-markdown-preview-mode.test.ts web-git-graph-popover-layout.test.ts web-port-relay-settings.test.ts web-registry-debug-panel-ui.test.ts web-responsive-shell.test.ts`, `npm run tsc:web`, and `npm run build:web`.
+- 2026-06-04 final verification: `npm test -- --runInBand` passed 133 suites / 553 tests, followed by passing `npm run tsc:web` and `npm run build:web`.

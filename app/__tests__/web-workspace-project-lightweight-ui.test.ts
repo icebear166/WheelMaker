@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 function readMain(): string {
   const projectRoot = path.join(__dirname, '..');
   return fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
@@ -8,7 +9,7 @@ function readMain(): string {
 
 function readStyles(): string {
   const projectRoot = path.join(__dirname, '..');
-  return fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+  return readWebStyles(projectRoot);
 }
 
 function readWebSource(relativePath: string): string {

@@ -1,0 +1,417 @@
+
+
+.chat-preview-pane {
+  position: relative;
+  width: var(--chat-file-peek-width, 520px);
+  min-width: 360px;
+  max-width: min(1520px, 80vw);
+  flex: 0 0 var(--chat-file-peek-width, 520px);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.chat-file-peek-resize-handle {
+  position: absolute;
+  top: 0;
+  left: -4px;
+  bottom: 0;
+  z-index: 9;
+  width: 8px;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.chat-file-peek-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 3px;
+  width: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 64%, transparent);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.chat-file-peek-resize-handle:hover::after,
+.chat-file-peek-resize-handle.resizing::after {
+  opacity: 1;
+}
+
+.chat-file-peek-surface {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  color: var(--text);
+}
+
+.chat-file-peek-surface.mobile {
+  width: 100%;
+  height: 100%;
+}
+
+.chat-file-peek-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--panel-3);
+}
+
+.chat-file-peek-error {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 18px;
+  color: var(--danger);
+  font-size: 13px;
+  text-align: center;
+}
+
+.chat-file-peek-image-wrap {
+  min-height: 100%;
+}
+
+.chat-preview-mobile-overlay .chat-file-peek-surface.mobile {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.folder-icon,
+.file-dot {
+  width: 14px;
+  text-align: center;
+  color: #8bb8dd;
+}
+
+.seti-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.seti-icon svg path,
+.seti-icon svg rect,
+.seti-icon svg polygon,
+.seti-icon svg circle {
+  fill: currentColor;
+}
+
+.file-tools {
+  gap: 6px;
+}
+
+.file-pane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+.file-main-col {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.file-action-group {
+  position: relative;
+}
+
+.file-title-bar {
+  overflow: visible;
+}
+
+.file-title-tools {
+  margin-left: auto;
+}
+
+.file-action-panel {
+  position: absolute;
+  right: calc(100% + 8px);
+  top: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transform: translateX(6px);
+  transition: max-width 180ms ease, opacity 120ms ease, transform 180ms ease;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+  z-index: 30;
+}
+
+.file-action-panel.open {
+  max-width: 360px;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.search-input,
+.goto-input {
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 0 8px;
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.goto-input {
+  width: 72px;
+}
+
+.search-input:focus,
+.goto-input:focus {
+  border-color: var(--accent);
+}
+.pinned-pin-toggle {
+  height: 26px;
+  width: 26px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--muted);
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pinned-pin-toggle:hover {
+  color: var(--text);
+  background: var(--panel-2);
+}
+
+.pinned-pin-toggle.active {
+  color: #ffffff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.pinned-pin-toggle:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.file-code-area .scroll-panel {
+  overflow: auto;
+  width: 100%;
+  min-width: 0;
+}
+.file-image-preview-wrap {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.file-image-preview {
+  width: auto;
+  height: auto;
+  max-width: min(100%, 1600px);
+  max-height: min(78vh, 1200px);
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background:
+    linear-gradient(45deg, rgba(127, 127, 127, 0.08) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(127, 127, 127, 0.08) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(127, 127, 127, 0.08) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(127, 127, 127, 0.08) 75%);
+  background-size: 18px 18px;
+  background-position: 0 0, 0 9px, 9px -9px, -9px 0;
+}
+
+@media (max-width: 900px) {
+  .file-image-preview-wrap {
+    padding: 10px;
+  }
+
+  .file-image-preview {
+    max-height: 68vh;
+  }
+}
+
+.file-code-area {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.file-side-actions {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 10;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.file-pin-floating {
+  position: static;
+  z-index: 1;
+  width: 100%;
+}
+
+.chat-file-mention-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 10px);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: min(42vh, 296px);
+  overflow-y: auto;
+  padding: 5px 6px;
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel) 88%, #151515);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(14px);
+  z-index: 37;
+}
+
+.chat-file-mention-chip {
+  min-width: 0;
+  max-width: 190px;
+  min-height: 30px;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 5px 0 9px;
+}
+
+.chat-file-mention-chip .codicon {
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-size: 13px;
+}
+
+.chat-file-mention-chip-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.chat-file-mention-remove {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: color-mix(in srgb, var(--muted) 82%, var(--text));
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chat-file-mention-remove:hover {
+  background: color-mix(in srgb, #f85149 12%, transparent);
+  color: #ff6b62;
+}
+
+.chat-file-mention-remove .codicon {
+  color: currentColor;
+  font-size: 12px;
+}
+
+.chat-file-mention-empty {
+  min-height: 32px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.3;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+}
+
+.chat-file-mention-option {
+  min-height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  display: grid;
+  grid-template-columns: 16px minmax(0, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  padding: 0 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-file-mention-option:hover,
+.chat-file-mention-option.active {
+  background: var(--hover);
+}
+
+.chat-file-mention-option .codicon {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.chat-file-mention-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: color-mix(in srgb, var(--muted) 74%, var(--text));
+}
+
+.chat-file-mention-name {
+  max-width: min(42vw, 260px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.chat-slash-button,
+.chat-file-mention-trigger-button,
+.chat-attachment-plus-button {
+  color: color-mix(in srgb, var(--accent) 72%, var(--text));
+}

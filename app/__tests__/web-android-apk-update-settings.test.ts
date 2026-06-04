@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 describe('android apk update settings card', () => {
   const projectRoot = path.join(__dirname, '..');
 
@@ -9,7 +10,7 @@ describe('android apk update settings card', () => {
     const detailTsx = fs.existsSync(path.join(projectRoot, 'web', 'src', 'settings', 'UpdateSettingsDetail.tsx'))
       ? fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'UpdateSettingsDetail.tsx'), 'utf8')
       : '';
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain("from '../platform/android/androidApkUpdate'");
     expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ '../settings/SettingsBundle')");

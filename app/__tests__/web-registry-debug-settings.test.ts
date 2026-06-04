@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 describe('web registry debug settings', () => {
   const projectRoot = path.join(__dirname, '..');
 
@@ -81,7 +82,7 @@ describe('web registry debug settings', () => {
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const detailPath = path.join(projectRoot, 'web', 'src', 'settings', 'debug', 'DebugLogsSettingsDetail.tsx');
     const detailTsx = fs.existsSync(detailPath) ? fs.readFileSync(detailPath, 'utf8') : '';
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain('appDiagnosticStore,');
     expect(mainTsx).not.toContain('filterAppDiagnosticRecords,');

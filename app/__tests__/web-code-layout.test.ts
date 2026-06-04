@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 describe('web code layout', () => {
   test('uses shiki renderer with transformer-based line metadata and custom diff rendering', () => {
     const projectRoot = path.join(__dirname, '..');
@@ -9,7 +10,7 @@ describe('web code layout', () => {
     const diffRows = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'git', 'diffRows.ts'), 'utf8');
     const shikiRenderer = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'code', 'shikiRenderer.ts'), 'utf8');
     const shikiSettings = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'code', 'shikiSettings.ts'), 'utf8');
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain("from '../code/shikiSettings'");
     expect(mainTsx).toContain("from '../code/ShikiCodeBlock'");

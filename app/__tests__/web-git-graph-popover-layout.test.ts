@@ -1,11 +1,12 @@
 import fs from 'fs';
 import path from 'path';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 describe('web git graph popover layout', () => {
   test('uses centered/stretched graph axis and responsive desktop/mobile popover policy', () => {
     const projectRoot = path.join(__dirname, '..');
     const gitSidebarTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'git', 'GitSidebar.tsx'), 'utf8');
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(gitSidebarTsx).toContain('if (isWide) {');
     expect(gitSidebarTsx).toContain('Math.max(320, Math.round(window.innerWidth * 0.42))');

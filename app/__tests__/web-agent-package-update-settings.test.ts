@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 describe('agent package update settings UI source structure', () => {
   test('moves shortcut details out of More and keeps Chat focused on chat options', () => {
     const projectRoot = path.join(__dirname, '..');
@@ -43,7 +44,7 @@ describe('agent package update settings UI source structure', () => {
     const detailPath = path.join(projectRoot, 'web', 'src', 'settings', 'UpdateSettingsDetail.tsx');
     const detailTsx = fs.existsSync(detailPath) ? fs.readFileSync(detailPath, 'utf8') : '';
     const updateDetailSource = `${mainTsx}\n${detailTsx}`;
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain('const renderUpdateSettingsDetail = (options?: SettingsDetailShellOptions) =>');
     expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ '../settings/SettingsBundle')");
@@ -225,7 +226,7 @@ describe('agent package update settings UI source structure', () => {
   test('shows npm hub Update All only from the expanded summary row', () => {
     const projectRoot = path.join(__dirname, '..');
     const detailTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'UpdateSettingsDetail.tsx'), 'utf8');
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     const disclosureStart = detailTsx.indexOf('className="npm-update-disclosure"');
     const bodyStart = detailTsx.indexOf('className="npm-update-body"', disclosureStart);
@@ -263,7 +264,7 @@ describe('agent package update settings UI source structure', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const detailTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'UpdateSettingsDetail.tsx'), 'utf8');
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     const wheelMakerBlockStart = detailTsx.indexOf('className="wheelmaker-update-panel"');
     const agentPackagesStart = detailTsx.indexOf('className="agent-package-row-list"', wheelMakerBlockStart);
@@ -318,7 +319,7 @@ describe('agent package update settings UI source structure', () => {
 
   test('keeps WheelMaker release SHA metadata on one line inside the mobile settings screen', () => {
     const projectRoot = path.join(__dirname, '..');
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     const mobileShaLineBlock = stylesCss.match(/\.mobile-settings-screen \.wheelmaker-update-sha-line \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(mobileShaLineBlock).toContain('grid-template-columns: 52px 7ch max-content;');
@@ -338,7 +339,7 @@ describe('agent package update settings UI source structure', () => {
   test('places agent tags beside display names and lets versions span under the action button', () => {
     const projectRoot = path.join(__dirname, '..');
     const detailTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'UpdateSettingsDetail.tsx'), 'utf8');
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(detailTsx).toContain('className="agent-package-name-line"');
     expect(detailTsx).toContain('className="agent-package-agent-tags"');
@@ -369,7 +370,7 @@ describe('agent package update settings UI source structure', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const settingsSurfaceTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsSurface.tsx'), 'utf8');
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain('const AGENT_TAG_VARIANT_INDEX');
     expect(mainTsx).toContain("claude: 2");
@@ -392,7 +393,7 @@ describe('agent package update settings UI source structure', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const settingsSurfaceTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsSurface.tsx'), 'utf8');
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     const activityBarStart = mainTsx.indexOf('const desktopActivityBar = isWide ? (');
     const activityBarEnd = mainTsx.indexOf('const floatingControlStack = !isWide ? (', activityBarStart);

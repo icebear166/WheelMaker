@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { transformSync } from '@babel/core';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 function cssRuleBlock(stylesCss: string, selector: string): string {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = stylesCss.match(new RegExp(`${escapedSelector} \\{([\\s\\S]*?)\\}`));
@@ -102,7 +103,7 @@ describe('web responsive shell split', () => {
   test('keeps wide sidebar settings scrollable inside the desktop shell', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toMatch(/const wideSidebarMain = sidebarSettingsOpen\s*\?\s*renderSettingsContent\(false, \{ hideDetailHeader: isSettingsPeerDetail\(settingsDetailView\) \}\)/);
     expect(mainTsx).toContain('<div className="sidebar-scroll">');

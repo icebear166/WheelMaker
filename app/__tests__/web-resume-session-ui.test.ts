@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 describe('web resume session ui', () => {
   test('preserves wide resume popover placement when showing resumable sessions', () => {
     const projectRoot = path.join(__dirname, '..');
@@ -31,10 +32,7 @@ describe('web resume session ui', () => {
       path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
-    const styles = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'styles.css'),
-      'utf8',
-    );
+    const styles = readWebStyles(projectRoot);
 
     // Project scoped resume flow: import + reload
     expect(mainTsx).toContain('const handleWideProjectResumeAgent = async (targetProjectId: string, agentType: string) => {');
@@ -79,10 +77,7 @@ describe('web resume session ui', () => {
       path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
-    const styles = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'styles.css'),
-      'utf8',
-    );
+    const styles = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain('className="mobile-project-sheet-item-label"');
     expect(mainTsx).toContain('{resolveSessionDisplayTitle(session) || session.sessionId}');

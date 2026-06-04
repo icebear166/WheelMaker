@@ -10,6 +10,7 @@ import {
   shouldStartGestureMove,
 } from '../web/src/shell/layouts/mobile/gestureNavigation';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 function projectRoot(): string {
   return path.join(__dirname, '..');
 }
@@ -23,7 +24,7 @@ function readSettingsRoot(): string {
 }
 
 function readStyles(): string {
-  return fs.readFileSync(path.join(projectRoot(), 'web', 'src', 'styles.css'), 'utf8');
+  return readWebStyles(projectRoot());
 }
 
 function readWorkspacePersistence(): string {

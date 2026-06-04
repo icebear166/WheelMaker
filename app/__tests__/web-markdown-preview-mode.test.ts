@@ -1,12 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 describe('web markdown preview mode', () => {
   test('shows markdown preview toggle before wrap and wires markdown+mermaid+latex pipeline', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const markdownPreview = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'code', 'markdownPreview.tsx'), 'utf8');
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain("import ReactMarkdown");
     expect(mainTsx).toContain("from 'react-markdown';");
@@ -71,7 +72,7 @@ describe('web markdown preview mode', () => {
 
   test('lets HTML preview fill the file scroll panel on mobile instead of using viewport math', () => {
     const projectRoot = path.join(__dirname, '..');
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     const htmlPreviewBlock = stylesCss.match(/\.html-preview \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(htmlPreviewBlock).toContain('height: 100%;');

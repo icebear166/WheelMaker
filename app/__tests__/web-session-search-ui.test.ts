@@ -1,11 +1,12 @@
 import fs from 'fs';
 import path from 'path';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 describe('web session search UI wiring', () => {
   test('keeps search protocol wiring with prompt turn navigation', () => {
     const projectRoot = path.join(__dirname, '..');
     const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
-    const styles = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const styles = readWebStyles(projectRoot);
 
     expect(main).toContain('searchResultsByProjectId');
     expect(main).toContain('startSessionSearch');
@@ -45,7 +46,7 @@ describe('web session search UI wiring', () => {
   test('moves session search controls into desktop and mobile chat headers', () => {
     const projectRoot = path.join(__dirname, '..');
     const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
-    const styles = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const styles = readWebStyles(projectRoot);
 
     expect(main).toContain('const renderChatHeaderSearchControls = (mobile: boolean) =>');
     expect(main).toContain('const renderSessionSearchStatusLine = () =>');
@@ -97,7 +98,7 @@ describe('web session search UI wiring', () => {
   test('renders full Hub labels and aggregate header search status text', () => {
     const projectRoot = path.join(__dirname, '..');
     const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
-    const styles = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const styles = readWebStyles(projectRoot);
 
     expect(main).toContain("const chatHubSummaryLabel = `${hubCount} ${hubCount === 1 ? 'Hub' : 'Hubs'}`;");
     expect(main).toContain("const chatHubProjectLabel = `${projectCount} ${projectCount === 1 ? 'Project' : 'Projects'}`;");
@@ -137,7 +138,7 @@ describe('web session search UI wiring', () => {
 
   test('keeps the Hub popover inside the left sidebar', () => {
     const projectRoot = path.join(__dirname, '..');
-    const styles = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const styles = readWebStyles(projectRoot);
 
     const popoverBlock = styles.match(/(?:^|\n)\.chat-hub-popover \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(popoverBlock).toContain('width: min(340px, calc(100vw - 24px));');
@@ -150,7 +151,7 @@ describe('web session search UI wiring', () => {
 
   test('keeps the mobile Hub popover inside the drawer header frame', () => {
     const projectRoot = path.join(__dirname, '..');
-    const styles = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const styles = readWebStyles(projectRoot);
 
     const mobileSummaryBlock = styles.match(/\.mobile-chat-drawer-header \.chat-hub-summary \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(mobileSummaryBlock).toContain('position: static;');

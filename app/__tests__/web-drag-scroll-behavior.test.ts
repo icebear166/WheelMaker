@@ -11,10 +11,11 @@ import {
   shouldAutoScrollChatToBottom,
 } from '../web/src/chat/chatScrollIntent';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 describe('web drag scroll behavior', () => {
   test('prevents horizontal overscroll bounce while dragging code in file and git views', () => {
     const projectRoot = path.join(__dirname, '..');
-    const styles = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const styles = readWebStyles(projectRoot);
 
     expect(styles).toContain('.workspace-right {');
     expect(styles).toContain('overscroll-behavior-x: none;');
@@ -204,7 +205,7 @@ describe('web drag scroll behavior', () => {
 
   test('keeps responding prompt animation from changing chat scroll overflow', () => {
     const projectRoot = path.join(__dirname, '..');
-    const styles = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const styles = readWebStyles(projectRoot);
     const animationStart = styles.indexOf('@keyframes chat-prompt-dots-wave');
     const animationEnd = styles.indexOf('.chat-prompt-status-done', animationStart);
     const promptDotsAnimation = styles.slice(animationStart, animationEnd);

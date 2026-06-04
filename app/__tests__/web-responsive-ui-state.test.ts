@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 describe('web responsive ui state', () => {
   test('resolves mobile floating control side with a center hysteresis band', () => {
     const projectRoot = path.join(__dirname, '..');
@@ -469,9 +470,7 @@ describe('web responsive ui state', () => {
     const mainTsx = fs
       .readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8')
       .replace(/\r\n/g, '\n');
-    const stylesCss = fs
-      .readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8')
-      .replace(/\r\n/g, '\n');
+    const stylesCss = readWebStyles(projectRoot);
 
     const hubNameIndex = mainTsx.indexOf('<span className="chat-hub-row-name">{hub.hubId}</span>');
     const colorSquareIndex = mainTsx.indexOf('className="chat-hub-color-square"', hubNameIndex);

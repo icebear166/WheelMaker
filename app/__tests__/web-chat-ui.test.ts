@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 function readSourceText(filePath: string): string {
   return fs.readFileSync(filePath, 'utf8').replace(/\r\n/g, '\n');
 }
@@ -21,6 +22,17 @@ function cssRuleBlockContainingSelector(stylesCss: string, selector: string): st
   return '';
 }
 
+function cssRuleBlocksContainingSelector(stylesCss: string, selector: string): string[] {
+  const blocks: string[] = [];
+  for (const match of stylesCss.matchAll(/([^{}]+)\{([\s\S]*?)\}/g)) {
+    const selectors = match[1].split(',').map((item) => item.trim());
+    if (selectors.includes(selector)) {
+      blocks.push(match[2]);
+    }
+  }
+  return blocks;
+}
+
 function cssNumericProperty(stylesCss: string, selector: string, property: string): number {
   const block = cssRuleBlock(stylesCss, selector);
   const escapedProperty = property.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -32,7 +44,7 @@ describe('web chat integration', () => {
   test('keeps iOS long-press session menus from selecting text or activating the row', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
-    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
+    const stylesCss = readWebStyles(projectRoot);
     const nonSelectableSelectors = [
       '.desktop-titlebar',
       '.floating-control-stack',
@@ -71,12 +83,17 @@ describe('web chat integration', () => {
 
   test('defaults app chrome to non-selectable while preserving content text selection', () => {
     const projectRoot = path.join(__dirname, '..');
-    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
+    const stylesCss = readWebStyles(projectRoot);
     const shikiRenderer = readSourceText(path.join(projectRoot, 'web', 'src', 'code', 'shikiRenderer.ts'));
     const appSurfaceSelectors = ['.page', '.workspace'];
 
     for (const selector of appSurfaceSelectors) {
-      const block = cssRuleBlockContainingSelector(stylesCss, selector);
+      const block = cssRuleBlocksContainingSelector(stylesCss, selector).find(
+        candidate =>
+          candidate.includes('-webkit-touch-callout: none;') &&
+          candidate.includes('-webkit-user-select: none;') &&
+          candidate.includes('user-select: none;'),
+      ) ?? '';
       expect(block).toContain('-webkit-touch-callout: none;');
       expect(block).toContain('-webkit-user-select: none;');
       expect(block).toContain('user-select: none;');
@@ -152,7 +169,7 @@ describe('web chat integration', () => {
     const chatTurnTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'ChatTurnView.tsx'));
     const settingsRootTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'));
     const settingsSurfaceTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsSurface.tsx'));
-    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(registryTypes).toContain('export interface RegistrySessionSummary');
     expect(registryTypes).toContain('export interface RegistrySessionMessage');
@@ -724,7 +741,7 @@ describe('web chat integration', () => {
   test('chat drawer header keeps tools left and hub browser right', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
-    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain('const [chatHubMenuOpen, setChatHubMenuOpen] = useState(false);');
     expect(mainTsx).toContain('const chatHubMenuRef = useRef<HTMLDivElement | null>(null);');
@@ -860,7 +877,7 @@ describe('web chat integration', () => {
   test('mobile file and git drawer project header matches the chat drawer height', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
-    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain("{!isWide && tab !== 'chat' ? (");
     expect(mainTsx).toContain('className="drawer-project-header"');
@@ -885,7 +902,7 @@ describe('web chat integration', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const chatTurnTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'ChatTurnView.tsx'));
-    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain('const CHAT_CONFIG_INLINE_LIMIT = 3;');
     expect(mainTsx).not.toContain('CHAT_QUICK_REPLY_OPTIONS');
@@ -1236,7 +1253,7 @@ describe('web chat integration', () => {
   test('keeps composer tools in the bottom row while send aligns with larger input text', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
-    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
+    const stylesCss = readWebStyles(projectRoot);
 
     const inputRowStart = mainTsx.indexOf('className="chat-composer-input-row"');
     const inputRowEnd = mainTsx.indexOf('{chatFileMentionMenuOpen ?', inputRowStart);
@@ -1294,7 +1311,7 @@ describe('web chat integration', () => {
   test('keeps file and photo actions behind a plus tray while file mentions use the @ shortcut', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
-    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain('const chatImageInputRef = useRef<HTMLInputElement | null>(null);');
     expect(mainTsx).toContain('const chatAttachmentTrayRef = useRef<HTMLDivElement | null>(null);');
@@ -1356,7 +1373,7 @@ describe('web chat integration', () => {
 
   test('keeps the mobile drawer wide while preserving floating control clicks and backdrop dismissal', () => {
     const projectRoot = path.join(__dirname, '..');
-    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
+    const stylesCss = readWebStyles(projectRoot);
 
     const backdropLayer = cssNumericProperty(stylesCss, '.drawer-overlay', 'z-index');
     const drawerLayer = cssNumericProperty(stylesCss, '.drawer', 'z-index');
@@ -1391,7 +1408,7 @@ describe('web chat integration', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const settingsRootTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'));
-    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain("import {VoiceInputButton, type VoiceInputInteractionMode} from '../features/speech/VoiceInputButton';");
     expect(mainTsx).toContain("import {VoiceRecordingBar} from '../features/speech/VoiceRecordingBar';");
@@ -1454,7 +1471,7 @@ describe('web chat integration', () => {
   test('keeps the mobile three-tab floating nav and drawer button translucent over content', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
-    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain('const FLOATING_CONTROL_IDLE_DELAY_MS = 3000;');
     expect(mainTsx).toContain('const [floatingControlsIdle, setFloatingControlsIdle] = useState(false);');
@@ -1503,7 +1520,7 @@ describe('web chat integration', () => {
   test('allows a wider vertical drag range for the mobile floating controls', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
-    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(stylesCss).toContain('--wm-safe-area-bottom: env(safe-area-inset-bottom, 0px);');
     expect(mainTsx).toContain('const chatComposerRef = useRef<HTMLDivElement | null>(null);');
@@ -1529,7 +1546,7 @@ describe('web chat integration', () => {
     const fileSurfaceTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'file', 'FileExplorerTree.tsx'));
     const gitSurfaceTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'git', 'GitSidebar.tsx'));
     const sidebarSurfaceSource = `${mainTsx}\n${fileSurfaceTsx}\n${gitSurfaceTsx}`;
-    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain('type SettingsDetailView = SettingsDetailId | null;');
     expect(mainTsx).toContain('const [settingsDetailView, setSettingsDetailView] = useState<SettingsDetailView>(null);');
@@ -1622,7 +1639,7 @@ describe('web chat integration', () => {
 
   test('drawer session rails use slim flush scrollbars without reserved right gutter', () => {
     const projectRoot = path.join(__dirname, '..');
-    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
+    const stylesCss = readWebStyles(projectRoot);
     const railSelectors = [
       '.workspace-left .sidebar-scroll',
       '.drawer .sidebar-scroll',
@@ -1657,7 +1674,7 @@ describe('web chat integration', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const appDialogsTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'shell', 'AppDialogs.tsx'));
-    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).not.toContain('WIDE_PROJECT_SESSION_LIMIT');
     expect(mainTsx).toContain('const PROJECT_PIN_LONG_PRESS_MS = 450;');
@@ -1925,7 +1942,7 @@ describe('web chat integration', () => {
     const wideProjectNameBlock = stylesCss.match(/\.wide-project-name \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(wideProjectNameBlock).toContain('flex: 0 0 auto;');
     expect(wideProjectNameBlock).toContain('max-width: 100%;');
-    const wideProjectHubTagBlock = stylesCss.match(/\.wide-project-hub-tag \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const wideProjectHubTagBlock = stylesCss.match(/(?:^|\n)\.wide-project-hub-tag \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(wideProjectHubTagBlock).toContain('flex: 1 1 0;');
     expect(wideProjectHubTagBlock).toContain('min-width: 0;');
     expect(wideProjectHubTagBlock).toContain('max-width: max-content;');
@@ -1983,7 +2000,7 @@ describe('web chat integration', () => {
     const repositoryTs = readSourceText(path.join(projectRoot, 'web', 'src', 'registry', 'RegistryRepository.ts'));
     const workspaceServiceTs = readSourceText(path.join(projectRoot, 'web', 'src', 'registry', 'RegistryWorkspaceService.ts'));
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
-    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(registryTypes).toContain('export interface RegistryFileIndexSearchResult');
     expect(registryTypes).toContain('export interface RegistryFileIndexSearchResponse');
@@ -2019,7 +2036,7 @@ describe('web chat integration', () => {
   test('chat composer uses compact file mention pins and running plus-slot cancel', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
-    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain('const openChatFileMentionShortcut = useCallback(() => {');
     expect(mainTsx).toContain('className="chat-tool-button chat-file-mention-trigger-button"');

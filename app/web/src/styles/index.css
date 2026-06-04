@@ -1,2 +1,10 @@
-@import '../styles.css';
+@import './base.css';
+@import './shell.css';
+@import './settings.css';
+@import './portRelay.css';
+@import './debug.css';
+@import './file.css';
+@import './git.css';
+@import './chat.css';
+@import './code.css';
 @import './surfaces.css';

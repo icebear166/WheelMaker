@@ -1,11 +1,12 @@
 import fs from 'fs';
 import path from 'path';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 describe('web chat session navigation expansion', () => {
   test('renders every known project session without local expansion batching', () => {
     const projectRoot = path.join(__dirname, '..');
     const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
-    const styles = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const styles = readWebStyles(projectRoot);
 
     expect(main).not.toContain('Show more');
     expect(main).not.toContain('WIDE_PROJECT_SESSION_LIMIT');

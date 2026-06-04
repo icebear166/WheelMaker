@@ -7,6 +7,7 @@ import {
   resolveChatFontFamily,
 } from '../web/src/chat/chatTypography';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 describe('web chat font settings', () => {
   test('uses the system chat font by default and keeps CJK fallbacks clear in IBM Plex mode', () => {
     expect(DEFAULT_CHAT_FONT).toBe('system');
@@ -53,7 +54,7 @@ describe('web chat font settings', () => {
   test('applies chat font through message CSS without changing code or composer fonts', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain("'--chat-message-font-family': chatFontFamily,");
     expect(stylesCss).toContain('--chat-message-text: #dedede;');

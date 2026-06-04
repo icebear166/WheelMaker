@@ -8,12 +8,13 @@ import {
   resolveMobileSettingsHistoryWriteAction,
 } from '../web/src/shell/layouts/mobile/mobileSettingsHistory';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 function readMain(): string {
   return fs.readFileSync(path.join(__dirname, '..', 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 }
 
 function readStyles(): string {
-  return fs.readFileSync(path.join(__dirname, '..', 'web', 'src', 'styles.css'), 'utf8');
+  return readWebStyles(path.join(__dirname, '..'));
 }
 
 describe('mobile settings system back', () => {

@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 describe('local hub read UI settings', () => {
   test('persists local hub read acceleration as default enabled', () => {
     const projectRoot = path.join(__dirname, '..');
@@ -19,7 +20,7 @@ describe('local hub read UI settings', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const settingsRootTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain('const [localHubReadEnabled, setLocalHubReadEnabled] = useState(');
     expect(mainTsx).toContain('service.setLocalHubReadEnabled(localHubReadEnabled);');

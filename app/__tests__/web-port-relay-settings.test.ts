@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 const root = path.resolve(__dirname, '..');
 const mainTsx = fs.readFileSync(path.join(root, 'web/src/app/WorkspaceApp.tsx'), 'utf8');
 const settingsSurfaceTsx = fs.readFileSync(path.join(root, 'web/src/settings/SettingsSurface.tsx'), 'utf8');
@@ -9,7 +10,7 @@ const detailTsx = fs.existsSync(detailPath) ? fs.readFileSync(detailPath, 'utf8'
 const surfacePath = path.join(root, 'web/src/portRelay/PortRelayFrameSurface.tsx');
 const surfaceTsx = fs.existsSync(surfacePath) ? fs.readFileSync(surfacePath, 'utf8') : '';
 const portRelaySettingsSource = `${mainTsx}\n${detailTsx}`;
-const stylesCss = fs.readFileSync(path.join(root, 'web/src/styles.css'), 'utf8');
+const stylesCss = readWebStyles(root);
 
 describe('port relay settings UI source structure', () => {
   test('adds Port Relay as a settings detail and mobile shortcut bar entry', () => {

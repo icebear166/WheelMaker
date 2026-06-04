@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 describe('web registry debug panel ui', () => {
   const projectRoot = path.join(__dirname, '..');
   const panelPath = path.join(projectRoot, 'web', 'src', 'debug', 'RegistryDebugPanel.tsx');
@@ -56,7 +57,7 @@ describe('web registry debug panel ui', () => {
   });
 
   test('styles include floating panel, list, and detail panes', () => {
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(stylesCss).toContain('.registry-debug-panel');
     expect(stylesCss).toContain('.registry-debug-list-pane');

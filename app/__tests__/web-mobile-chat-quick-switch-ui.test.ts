@@ -1,9 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 const root = path.resolve(__dirname, '..');
 const mainTsx = fs.readFileSync(path.join(root, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
-const stylesCss = fs.readFileSync(path.join(root, 'web', 'src', 'styles.css'), 'utf8');
+const stylesCss = readWebStyles(root);
 const quickSwitchMenuPath = path.join(root, 'web', 'src', 'chat', 'ChatQuickSwitchMenu.tsx');
 const quickSwitchMenuTsx = fs.existsSync(quickSwitchMenuPath)
   ? fs.readFileSync(quickSwitchMenuPath, 'utf8')
