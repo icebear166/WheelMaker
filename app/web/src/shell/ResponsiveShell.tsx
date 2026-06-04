@@ -1,6 +1,6 @@
 import React, { type ReactNode } from 'react';
-import type { LayoutMode } from '../services/responsiveLayout';
-import { DesktopTitleBar } from './DesktopTitleBar';
+import type { LayoutMode } from './state/responsiveLayout';
+import { DesktopTitleBar } from './layouts/desktop/DesktopTitleBar';
 
 type ShellThemeMode = 'dark' | 'light';
 

@@ -1,0 +1,134 @@
+import type {
+  RegistryHub,
+  RegistryNpmPackage,
+  RegistryNpmPackageStatus,
+  RegistryWheelMakerUpdateResponse,
+} from '../../registry/registryTypes';
+
+export const AGENT_PACKAGE_SCAN_TIMEOUT_MS = 65000;
+
+export type NpmPackageUpdateTarget = {
+  packageName: string;
+  displayName: string;
+  installedVersion: string;
+  latestVersion: string;
+};
+
+export function deriveRegistryHubIds(hubs: RegistryHub[]): string[] {
+  const hubIds = new Set<string>();
+  hubs.forEach(hub => {
+    const hubId = (hub.hubId || '').trim();
+    if (hubId) hubIds.add(hubId);
+  });
+  return Array.from(hubIds).sort((a, b) => {
+    if (a < b) return -1;
+    if (a > b) return 1;
+    return 0;
+  });
+}
+
+export function packageStatusLabel(status: RegistryNpmPackageStatus | string): string {
+  switch (status) {
+    case 'checking_latest':
+      return 'Checking latest';
+    case 'not_installed':
+      return 'Not installed';
+    case 'up_to_date':
+      return 'Up to date';
+    case 'update_available':
+      return 'Update available';
+    case 'latest_unknown':
+      return 'Latest unknown';
+    case 'checking_failed':
+      return 'Checking failed';
+    case 'deprecated':
+      return 'Deprecated';
+    case 'installing':
+      return 'Installing';
+    case 'updating':
+      return 'Updating';
+    case 'uninstalling':
+      return 'Uninstalling';
+    case 'running':
+      return 'Running';
+    case 'succeeded':
+      return 'Succeeded';
+    case 'failed':
+      return 'Failed';
+    default:
+      return status || 'Unknown';
+  }
+}
+
+export function deriveNpmPackageUpdateTargets(packages: RegistryNpmPackage[]): NpmPackageUpdateTarget[] {
+  return packages
+    .filter(pkg => pkg.canInstall || pkg.canUpdate)
+    .map(pkg => ({
+      packageName: pkg.packageName,
+      displayName: pkg.displayName,
+      installedVersion: pkg.installedVersion,
+      latestVersion: pkg.latestVersion,
+    }));
+}
+
+export function npmPackageUpdateSummary(count: number): string {
+  if (count <= 0) return 'No npm updates';
+  return `${count} npm ${count === 1 ? 'update' : 'updates'}`;
+}
+
+export function wheelMakerUpdateStatusLabel(status: string): string {
+  switch (status) {
+    case 'up_to_date':
+      return 'Up to date';
+    case 'update_available':
+      return 'Update available';
+    case 'update_pending':
+      return 'Update pending';
+    case 'not_published':
+      return 'Not published';
+    case 'checking_failed':
+      return 'Checking failed';
+    case 'ahead_of_remote':
+      return 'Ahead of remote';
+    case 'diverged':
+      return 'Diverged';
+    default:
+      return status || 'Unknown';
+  }
+}
+
+export function shouldShowWheelMakerUpdateAction(input: {
+  data: RegistryWheelMakerUpdateResponse | null;
+  loading: boolean;
+  pending: boolean;
+}): boolean {
+  if (input.pending || input.data?.pendingSignal === true) {
+    return true;
+  }
+  if (input.loading || !input.data) {
+    return false;
+  }
+  return input.data.canUpdatePublish === true && input.data.status !== 'up_to_date';
+}
+
+export function withAgentPackageTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = globalThis.setTimeout(() => {
+      reject(new Error(message));
+    }, timeoutMs);
+    promise.then(
+      value => {
+        globalThis.clearTimeout(timer);
+        resolve(value);
+      },
+      error => {
+        globalThis.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}

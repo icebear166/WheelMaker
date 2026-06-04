@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 describe('web registry debug panel ui', () => {
   const projectRoot = path.join(__dirname, '..');
   const panelPath = path.join(projectRoot, 'web', 'src', 'debug', 'RegistryDebugPanel.tsx');
@@ -36,10 +37,10 @@ describe('web registry debug panel ui', () => {
   });
 
   test('main renders the message viewer only for enabled desktop viewer mode', () => {
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 
-    expect(mainTsx).not.toContain("import {RegistryDebugPanel} from './debug/RegistryDebugPanel';");
-    expect(mainTsx).toContain("React.lazy(() => import('./debug/RegistryDebugPanel')");
+    expect(mainTsx).not.toContain("import {RegistryDebugPanel} from '../debug/RegistryDebugPanel';");
+    expect(mainTsx).toContain("React.lazy(() => import('../debug/RegistryDebugPanel')");
     expect(mainTsx).toContain('<React.Suspense fallback={null}>');
     expect(mainTsx).toContain('const [registryDebugRecords, setRegistryDebugRecords] = useState(');
     expect(mainTsx).toContain('const [selectedRegistryDebugRecordId, setSelectedRegistryDebugRecordId] = useState<number | null>(null);');
@@ -56,7 +57,7 @@ describe('web registry debug panel ui', () => {
   });
 
   test('styles include floating panel, list, and detail panes', () => {
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(stylesCss).toContain('.registry-debug-panel');
     expect(stylesCss).toContain('.registry-debug-list-pane');

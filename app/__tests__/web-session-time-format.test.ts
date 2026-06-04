@@ -1,4 +1,4 @@
-import {compareUpdatedAtDesc, formatPromptDurationMs} from '../web/src/sessionTime';
+import {compareUpdatedAtDesc, formatPromptDurationMs} from '../web/src/workspace/sessionTime';
 
 describe('web session time formatting', () => {
   test('formats prompt durations from milliseconds into readable labels', () => {

@@ -1,12 +1,14 @@
 import fs from 'fs';
 import path from 'path';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 const root = path.resolve(__dirname, '..');
-const mainTsx = fs.readFileSync(path.join(root, 'web/src/main.tsx'), 'utf8');
+const mainTsx = fs.readFileSync(path.join(root, 'web/src/app/WorkspaceApp.tsx'), 'utf8');
+const settingsSurfaceTsx = fs.readFileSync(path.join(root, 'web/src/settings/SettingsSurface.tsx'), 'utf8');
 const detailPath = path.join(root, 'web/src/settings/SkillsSettingsDetail.tsx');
 const detailTsx = fs.existsSync(detailPath) ? fs.readFileSync(detailPath, 'utf8') : '';
 const skillsDetailSource = `${mainTsx}\n${detailTsx}`;
-const stylesCss = fs.readFileSync(path.join(root, 'web/src/styles.css'), 'utf8');
+const stylesCss = readWebStyles(root);
 
 describe('skill management settings UI source structure', () => {
   test('adds Skills as a settings detail and mobile shortcut bar entry', () => {
@@ -15,12 +17,16 @@ describe('skill management settings UI source structure', () => {
     expect(mainTsx).toContain('renderSkillsSettingsDetail(options)');
     expect(mainTsx).not.toContain("renderSettingsSection('More'");
 
-    const mobileBarStart = mainTsx.indexOf('const mobileSettingsShortcutBar = !isWide && sidebarSettingsOpen ? (');
-    const mobileBarEnd = mainTsx.indexOf('const mobileSettingsScreen = !isWide && sidebarSettingsOpen ? (', mobileBarStart);
-    const mobileBar = mainTsx.slice(mobileBarStart, mobileBarEnd);
-    expect(mobileBar.indexOf('title="Update"')).toBeLessThan(mobileBar.indexOf('title="Skills"'));
-    expect(mobileBar.indexOf('title="Skills"')).toBeLessThan(mobileBar.indexOf('title="Port Relay"'));
-    expect(mobileBar).toContain("openMobileSettingsShortcutDetail('skills')");
+    expect(mainTsx).toContain('<MobileSettingsShortcutBar');
+    expect(mainTsx).toContain('onDetailSelect={openMobileSettingsShortcutDetail}');
+    const mobileShortcutsStart = settingsSurfaceTsx.indexOf('export const MOBILE_SETTINGS_SHORTCUTS');
+    const mobileShortcutsEnd = settingsSurfaceTsx.indexOf('export function settingsDetailTitle', mobileShortcutsStart);
+    expect(mobileShortcutsStart).toBeGreaterThanOrEqual(0);
+    expect(mobileShortcutsEnd).toBeGreaterThan(mobileShortcutsStart);
+    const mobileShortcuts = settingsSurfaceTsx.slice(mobileShortcutsStart, mobileShortcutsEnd);
+    expect(mobileShortcuts.indexOf("detail: 'update'")).toBeLessThan(mobileShortcuts.indexOf("detail: 'skills'"));
+    expect(mobileShortcuts.indexOf("detail: 'skills'")).toBeLessThan(mobileShortcuts.indexOf("detail: 'portRelay'"));
+    expect(settingsSurfaceTsx).toContain('onClick={() => onDetailSelect(shortcut.detail)}');
   });
 
   test('adds desktop Skills shortcut between Update and Token Stats', () => {
@@ -37,7 +43,7 @@ describe('skill management settings UI source structure', () => {
 
   test('renders Skills detail with controlled command hooks and confirmations', () => {
     expect(mainTsx).toContain('const renderSkillsSettingsDetail = (options?: SettingsDetailShellOptions) =>');
-    expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ './settings/SettingsBundle')");
+    expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ '../settings/SettingsBundle')");
     expect(mainTsx).toContain('<SkillsSettingsDetail');
     expect(detailTsx).toContain('export function SkillsSettingsDetail');
     expect(mainTsx).toContain('refreshSkillManagement');

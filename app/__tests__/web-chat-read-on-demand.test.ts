@@ -5,15 +5,15 @@ describe('web chat read-on-demand behavior', () => {
   test('connect and project switch only load session list; reconnect hydrates only when currently in chat with selected session', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'main.tsx'),
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
     const workspaceStoreTs = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'services', 'workspaceStore.ts'),
+      path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspaceStore.ts'),
       'utf8',
     );
     const workspacePersistenceTs = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'services', 'workspacePersistence.ts'),
+      path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'),
       'utf8',
     );
 

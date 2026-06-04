@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 function readSourceText(filePath: string): string {
   return fs.readFileSync(filePath, 'utf8').replace(/\r\n/g, '\n');
 }
@@ -13,9 +14,8 @@ function cssRuleBlock(stylesCss: string, selector: string): string {
 
 describe('web chat file peek viewer', () => {
   const projectRoot = path.join(__dirname, '..');
-  const mainPath = path.join(projectRoot, 'web', 'src', 'main.tsx');
+  const mainPath = path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx');
   const shellPath = path.join(projectRoot, 'web', 'src', 'shell', 'ResponsiveShell.tsx');
-  const stylesPath = path.join(projectRoot, 'web', 'src', 'styles.css');
 
   test('chat file links open the peek viewer without switching to the File tab', () => {
     const mainTsx = readSourceText(mainPath);
@@ -42,7 +42,7 @@ describe('web chat file peek viewer', () => {
 
   test('peek viewer CSS defines desktop width limits and mobile full-screen overlay', () => {
     const mainTsx = readSourceText(mainPath);
-    const stylesCss = readSourceText(stylesPath);
+    const stylesCss = readWebStyles(projectRoot);
 
     const desktopPane = cssRuleBlock(stylesCss, '.chat-preview-pane');
     expect(desktopPane).toContain('width: var(--chat-file-peek-width, 520px);');
@@ -90,7 +90,7 @@ describe('web chat file peek viewer', () => {
 
   test('preview chrome uses the chat-height single-line title bar', () => {
     const mainTsx = readSourceText(mainPath);
-    const stylesCss = readSourceText(stylesPath);
+    const stylesCss = readWebStyles(projectRoot);
 
     const toolbar = cssRuleBlock(stylesCss, '.chat-preview-toolbar');
     expect(toolbar).toContain('height: 30px;');

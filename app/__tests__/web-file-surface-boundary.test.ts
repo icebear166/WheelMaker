@@ -9,13 +9,13 @@ function readSourceText(filePath: string): string {
 
 describe('web file surface boundary', () => {
   const projectRoot = path.join(__dirname, '..');
-  const mainTsxPath = path.join(projectRoot, 'web', 'src', 'main.tsx');
+  const mainTsxPath = path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx');
   const fileExplorerPath = path.join(projectRoot, 'web', 'src', 'file', 'FileExplorerTree.tsx');
 
   test('keeps file explorer rendering out of the main app module', () => {
     const mainTsx = readSourceText(mainTsxPath);
 
-    expect(mainTsx).toContain("import { FileExplorerTree, WorkspaceProjectSelector } from './file/FileExplorerTree';");
+    expect(mainTsx).toContain("import { FileExplorerTree, WorkspaceProjectSelector } from '../file/FileExplorerTree';");
     expect(mainTsx).not.toContain('const renderFileTree = (path: string, depth: number): React.ReactNode => {');
     expect(mainTsx).not.toContain('const renderWorkspaceProjectSelector = () => {');
     expect(mainTsx).toContain('<FileExplorerTree');

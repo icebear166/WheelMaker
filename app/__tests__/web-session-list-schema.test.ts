@@ -1,14 +1,15 @@
 import fs from 'fs';
 import path from 'path';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 describe('web session list schema', () => {
   test('uses sessionId without legacy chatId compatibility', () => {
     const projectRoot = path.join(__dirname, '..');
-    const repositoryTs = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'services', 'registryRepository.ts'), 'utf8');
-    const serviceTs = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'services', 'registryWorkspaceService.ts'), 'utf8');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
-    const registryTypes = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'types', 'registry.ts'), 'utf8');
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const repositoryTs = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'registry', 'RegistryRepository.ts'), 'utf8');
+    const serviceTs = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'registry', 'RegistryWorkspaceService.ts'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
+    const registryTypes = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'registry', 'registryTypes.ts'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(repositoryTs).toContain("method: 'session.list'");
     expect(repositoryTs).toContain("method: 'session.read'");

@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 const root = path.join(__dirname, '..');
-const mainPath = path.join(root, 'web/src/main.tsx');
+const mainPath = path.join(root, 'web/src/app/WorkspaceApp.tsx');
 const surfacePath = path.join(root, 'web/src/portRelay/PortRelayFrameSurface.tsx');
 
 function readFile(filePath: string): string {
@@ -13,7 +13,7 @@ describe('port relay frame surface boundary', () => {
   test('main delegates relay frame and floating button rendering to port relay components', () => {
     const main = readFile(mainPath);
 
-    expect(main).toContain("import { PortRelayFloatingButton, PortRelayFrameSurface } from './portRelay/PortRelayFrameSurface';");
+    expect(main).toContain("import { PortRelayFloatingButton, PortRelayFrameSurface } from '../portRelay/PortRelayFrameSurface';");
     expect(main).toContain('<PortRelayFrameSurface');
     expect(main).toContain('<PortRelayFloatingButton');
     expect(main).not.toContain('const renderPortRelayFrameSurface =');

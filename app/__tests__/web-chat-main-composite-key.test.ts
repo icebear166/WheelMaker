@@ -3,7 +3,7 @@ import path from 'path';
 
 function readMain(): string {
   const projectRoot = path.join(__dirname, '..');
-  return fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+  return fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 }
 
 function extractFunctionBody(source: string, functionName: string): string {
@@ -34,7 +34,7 @@ describe('main chat composite key migration', () => {
     const main = readMain();
     const selectProjectChatSessionBody = extractFunctionBody(main, 'selectProjectChatSession');
 
-    expect(main).toContain("from './chat/chatSessionKey'");
+    expect(main).toContain("from '../chat/session/chatSessionKey'");
     expect(main).toContain('const selectedChatKeyRef = useRef<ChatSessionKey | null>(null);');
     expect(main).toContain('const [selectedChatKey, setSelectedChatKey] = useState<ChatSessionKey | null>(null);');
     expect(main).toContain('encodeChatSessionKey(');

@@ -7,8 +7,8 @@ import {
   hydrateFinishedStore,
   mergeRealtimeTurn,
   shouldReadRepairForIncomingTurn,
-} from '../web/src/chat/chatTurnStores';
-import type {RegistrySessionTurn} from '../web/src/types/registry';
+} from '../web/src/chat/turns/chatTurnStores';
+import type {RegistrySessionTurn} from '../web/src/registry/registryTypes';
 
 const turn = (turnIndex: number, finished = true, text = `turn-${turnIndex}`): RegistrySessionTurn => ({
   turnIndex,

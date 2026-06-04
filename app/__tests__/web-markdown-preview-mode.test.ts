@@ -1,25 +1,27 @@
 import fs from 'fs';
 import path from 'path';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 describe('web markdown preview mode', () => {
   test('shows markdown preview toggle before wrap and wires markdown+mermaid+latex pipeline', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
+    const markdownPreview = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'code', 'markdownPreview.tsx'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain("import ReactMarkdown");
     expect(mainTsx).toContain("from 'react-markdown';");
-    expect(mainTsx).toContain("import remarkGfm from 'remark-gfm';");
+    expect(markdownPreview).toContain("import remarkGfm from 'remark-gfm';");
     expect(mainTsx).not.toContain("import remarkMath from 'remark-math';");
     expect(mainTsx).not.toContain("import rehypeKatex from 'rehype-katex';");
     expect(mainTsx).not.toContain("import mermaid from 'mermaid';");
     expect(mainTsx).not.toContain("import 'katex/dist/katex.min.css';");
-    expect(mainTsx).toContain("import('remark-math')");
-    expect(mainTsx).toContain("import('rehype-katex')");
-    expect(mainTsx).toContain("import('katex/dist/katex.min.css')");
-    expect(mainTsx).toContain("import('mermaid')");
-    expect(mainTsx).toContain('function markdownNeedsMath(content: string): boolean {');
-    expect(mainTsx).toContain('function useMarkdownCapabilityPlugins(content: string): MarkdownCapabilityPlugins {');
+    expect(markdownPreview).toContain("import('remark-math')");
+    expect(markdownPreview).toContain("import('rehype-katex')");
+    expect(markdownPreview).toContain("import('katex/dist/katex.min.css')");
+    expect(markdownPreview).toContain("import('mermaid')");
+    expect(markdownPreview).toContain('function markdownNeedsMath(content: string): boolean {');
+    expect(markdownPreview).toContain('export function useMarkdownCapabilityPlugins(content: string): MarkdownCapabilityPlugins {');
 
     expect(mainTsx).toContain('function isMarkdownPath(path: string): boolean {');
     expect(mainTsx).toContain('const selectedFileIsMarkdown = isMarkdownPath(selectedFile);');
@@ -48,15 +50,15 @@ describe('web markdown preview mode', () => {
     expect(wrapIndex).toBeGreaterThan(previewIndex);
 
     expect(mainTsx).toContain('<MarkdownPreview');
-    expect(mainTsx).toContain('remarkPlugins={markdownCapabilities.remarkPlugins}');
-    expect(mainTsx).toContain('rehypePlugins={markdownCapabilities.rehypePlugins}');
-    expect(mainTsx).toContain("data-markdown-export-pending={markdownCapabilities.pending ? 'true' : undefined}");
-    expect(mainTsx).toContain('if (language === "mermaid") {');
-    expect(mainTsx).toContain('<MermaidBlock content={codeText} themeMode={themeMode} />');
+    expect(markdownPreview).toContain('remarkPlugins={markdownCapabilities.remarkPlugins}');
+    expect(markdownPreview).toContain('rehypePlugins={markdownCapabilities.rehypePlugins}');
+    expect(markdownPreview).toContain("data-markdown-export-pending={markdownCapabilities.pending ? 'true' : undefined}");
+    expect(markdownPreview).toContain('if (language === "mermaid") {');
+    expect(markdownPreview).toContain('<MermaidBlock content={codeText} themeMode={themeMode} />');
     expect(mainTsx).toContain('<HtmlPreview');
-    expect(mainTsx).toContain('sandbox="allow-scripts"');
+    expect(markdownPreview).toContain('sandbox="allow-scripts"');
     expect(mainTsx).not.toContain('scriptsEnabled={');
-    expect(mainTsx).toContain('srcDoc={content}');
+    expect(markdownPreview).toContain('srcDoc={content}');
 
     expect(stylesCss).toContain('.markdown-preview {');
     expect(stylesCss).toContain('.markdown-preview-toggle {');
@@ -70,7 +72,7 @@ describe('web markdown preview mode', () => {
 
   test('lets HTML preview fill the file scroll panel on mobile instead of using viewport math', () => {
     const projectRoot = path.join(__dirname, '..');
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     const htmlPreviewBlock = stylesCss.match(/\.html-preview \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(htmlPreviewBlock).toContain('height: 100%;');

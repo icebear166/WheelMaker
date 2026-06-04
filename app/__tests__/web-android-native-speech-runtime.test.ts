@@ -3,7 +3,7 @@ import {
   getAndroidNativeSpeechBridge,
   isAndroidNativeSpeechHost,
   type AndroidNativeSpeechEvent,
-} from '../web/src/features/speech/androidNativeSpeechRuntime';
+} from '../web/src/platform/android/androidNativeSpeechRuntime';
 
 describe('android native speech runtime', () => {
   afterEach(() => {

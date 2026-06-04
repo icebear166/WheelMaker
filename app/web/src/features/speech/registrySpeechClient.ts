@@ -7,7 +7,7 @@ import type {
   RegistrySpeechStartPayload,
   RegistrySpeechStartResponse,
   RegistrySpeechTranscriptEvent,
-} from '../../types/registry';
+} from '../../registry/registryTypes';
 
 export type RegistrySpeechTransport = {
   request: (args: {method: string; payload: unknown; timeoutMs?: number}) => Promise<RegistryEnvelope>;

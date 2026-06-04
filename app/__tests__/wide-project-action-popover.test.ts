@@ -1,4 +1,4 @@
-import { resolveWideProjectActionPopoverPlacement } from '../web/src/chat/wideProjectActionPopover';
+import { resolveWideProjectActionPopoverPlacement } from '../web/src/chat/layout/wideProjectActionPopover';
 
 describe('wide project action popover placement', () => {
   test('flips above the project action when there is not enough space below', () => {

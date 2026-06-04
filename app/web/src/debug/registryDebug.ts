@@ -1,4 +1,4 @@
-import type {RegistryEnvelope} from '../types/registry';
+import type {RegistryEnvelope} from '../registry/registryTypes';
 
 export type RegistryDebugDirection = 'out' | 'in' | 'lifecycle';
 export type RegistryDebugScope = string;

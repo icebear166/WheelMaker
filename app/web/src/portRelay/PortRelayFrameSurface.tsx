@@ -3,7 +3,7 @@ import {
   portRelayTargetKey,
   samePortRelayTarget,
   type PortRelayTarget,
-} from '../portRelayTargets';
+} from './portRelayTargets';
 
 type PortRelayFrameMode = 'desktop' | 'mobile';
 

@@ -8,12 +8,12 @@ function readSourceText(filePath: string): string {
 describe('web chat startup defaults', () => {
   test('defaults new startup state to Chat while preserving explicit non-chat tabs', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'main.tsx'));
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const workspacePersistenceTs = readSourceText(
-      path.join(projectRoot, 'web', 'src', 'services', 'workspacePersistence.ts'),
+      path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'),
     );
     const workspaceUiStateTs = readSourceText(
-      path.join(projectRoot, 'web', 'src', 'services', 'workspaceUiState.ts'),
+      path.join(projectRoot, 'web', 'src', 'shell', 'state', 'workspaceUiState.ts'),
     );
 
     expect(mainTsx).toContain("tab: globalState.tab ?? 'chat'");

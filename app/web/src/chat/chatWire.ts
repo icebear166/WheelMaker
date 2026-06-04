@@ -4,7 +4,7 @@ import type {
   RegistrySessionReadResponse,
   RegistrySessionSummary,
   RegistrySessionTurn,
-} from '../types/registry';
+} from '../registry/registryTypes';
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)

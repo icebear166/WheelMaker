@@ -1,4 +1,4 @@
-import {insertChatSlashCommandText} from '../web/src/chat/chatSlashInsertion';
+import {insertChatSlashCommandText} from '../web/src/chat/composer/chatSlashInsertion';
 
 describe('chat slash skill insertion', () => {
   test('inserts a skill command into existing composer text without replacing it', () => {

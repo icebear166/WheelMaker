@@ -7,7 +7,7 @@ import {
   samePortRelayTargets,
   upsertPortRelayTarget,
   type PortRelayTarget,
-} from '../web/src/portRelayTargets';
+} from '../web/src/portRelay/portRelayTargets';
 
 const root = path.resolve(__dirname, '..');
 
@@ -82,10 +82,10 @@ describe('port relay target presets', () => {
 
   test('persists relay target presets under global workspace state', () => {
     const persistence = fs.readFileSync(
-      path.join(root, 'web', 'src', 'services', 'workspacePersistence.ts'),
+      path.join(root, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'),
       'utf8',
     );
-    const mainTsx = fs.readFileSync(path.join(root, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(root, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 
     expect(persistence).toContain('portRelayTargets: PortRelayTarget[];');
     expect(persistence).toContain('selectedPortRelayTarget: PortRelayTarget | null;');

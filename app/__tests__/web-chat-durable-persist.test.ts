@@ -1,4 +1,4 @@
-import {createChatDurablePersistQueue} from '../web/src/chat/chatDurablePersist';
+import {createChatDurablePersistQueue} from '../web/src/chat/turns/chatDurablePersist';
 
 describe('chat durable persist queue', () => {
   beforeEach(() => {

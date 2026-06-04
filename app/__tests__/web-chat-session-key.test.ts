@@ -3,7 +3,7 @@ import {
   decodeChatSessionKey,
   encodeChatSessionKey,
   sameChatSessionKey,
-} from '../web/src/chat/chatSessionKey';
+} from '../web/src/chat/session/chatSessionKey';
 
 describe('chat session key helpers', () => {
   test('encodes a project-scoped session key distinctly from the session id', () => {

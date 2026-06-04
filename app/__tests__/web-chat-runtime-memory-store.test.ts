@@ -6,14 +6,14 @@ function projectRoot(): string {
 }
 
 function readMain(): string {
-  return fs.readFileSync(path.join(projectRoot(), 'web', 'src', 'main.tsx'), 'utf8');
+  return fs.readFileSync(path.join(projectRoot(), 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 }
 
 describe('web chat runtime memory store', () => {
   test('does not keep an active runtime set or evict session message stores', () => {
     const main = readMain();
 
-    expect(main).not.toContain("import {createChatActiveRuntimeSet} from './chat/chatActiveRuntimeSet';");
+    expect(main).not.toContain("import {createChatActiveRuntimeSet} from '../chat/chatActiveRuntimeSet';");
     expect(main).not.toContain('chatActiveRuntimeSetRef');
     expect(main).not.toContain('capacity: 5');
     expect(main).not.toContain('delete chatTurnStoreRef.current');

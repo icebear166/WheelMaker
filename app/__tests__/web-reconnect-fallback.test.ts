@@ -5,7 +5,7 @@ describe('web reconnect fallback behavior', () => {
   test('keeps cached workspace visible during silent reconnect and falls back after grace period', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'main.tsx'),
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
 
@@ -32,7 +32,7 @@ describe('web reconnect fallback behavior', () => {
   test('schedules a forced project refresh after registry connect is ready', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'main.tsx'),
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
 
@@ -53,7 +53,7 @@ describe('web reconnect fallback behavior', () => {
   test('forced post-connect project refresh also forces per-project session refresh', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'main.tsx'),
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
 
@@ -71,7 +71,7 @@ describe('web reconnect fallback behavior', () => {
   test('uses pwa foreground supervisor for background suspend and resume reconnect', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'main.tsx'),
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
 
@@ -89,7 +89,7 @@ describe('web reconnect fallback behavior', () => {
   test('triggers local notification for completed prompts only', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'main.tsx'),
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
 
@@ -105,7 +105,7 @@ describe('web reconnect fallback behavior', () => {
   test('reloads selected file after reconnect success', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'main.tsx'),
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
 
@@ -121,7 +121,7 @@ describe('web reconnect fallback behavior', () => {
   test('restores selected file scroll position after reconnect success', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'main.tsx'),
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
 
@@ -140,7 +140,7 @@ describe('web reconnect fallback behavior', () => {
   test('shows reconnecting state through refresh button while recovering', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'main.tsx'),
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
 
@@ -154,7 +154,7 @@ describe('web reconnect fallback behavior', () => {
   test('keeps workspace visible while background-disconnected and reconnecting', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'main.tsx'),
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
 
@@ -168,7 +168,7 @@ describe('web reconnect fallback behavior', () => {
   test('supports silent file reads during reconnect to avoid loading flicker', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'main.tsx'),
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
 

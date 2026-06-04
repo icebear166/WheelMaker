@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 const root = path.join(__dirname, '..');
-const mainPath = path.join(root, 'web/src/main.tsx');
+const mainPath = path.join(root, 'web/src/app/WorkspaceApp.tsx');
 const gitSidebarPath = path.join(root, 'web/src/git/GitSidebar.tsx');
 
 function readFile(filePath: string): string {
@@ -13,7 +13,7 @@ describe('git sidebar surface boundary', () => {
   test('main delegates git sidebar rendering to the git surface component', () => {
     const main = readFile(mainPath);
 
-    expect(main).toContain("import { GitSidebar } from './git/GitSidebar';");
+    expect(main).toContain("import { GitSidebar } from '../git/GitSidebar';");
     expect(main).toContain('<GitSidebar');
     expect(main).toContain('workingTreeFiles={workingTreeFiles}');
     expect(main).toContain('commitFilesBySha={commitFilesBySha}');

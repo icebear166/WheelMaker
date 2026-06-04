@@ -3,26 +3,43 @@ import path from 'path';
 
 const root = path.join(__dirname, '..');
 const main = fs.readFileSync(path.join(root, 'web/src/main.tsx'), 'utf8');
+const workspaceApp = fs.readFileSync(path.join(root, 'web/src/app/WorkspaceApp.tsx'), 'utf8');
+const workspaceBootstrap = fs.readFileSync(path.join(root, 'web/src/app/workspaceBootstrap.ts'), 'utf8');
 
 describe('main surface boundaries', () => {
-  test('main delegates non-chat surfaces while keeping chat startup resident', () => {
-    expect(main).toContain('AppConfirmDialog');
-    expect(main).toContain("} from './shell/AppDialogs';");
-    expect(main).toContain("import { FileExplorerTree, WorkspaceProjectSelector } from './file/FileExplorerTree';");
-    expect(main).toContain("import { GitSidebar } from './git/GitSidebar';");
-    expect(main).toContain("import { PortRelayFloatingButton, PortRelayFrameSurface } from './portRelay/PortRelayFrameSurface';");
+  test('main only owns the bootstrap render boundary', () => {
+    expect(main).toContain("import { App, workspaceAppReady } from './app/WorkspaceApp';");
+    expect(main).toContain('workspaceAppReady.then(() => {');
+    expect(main).toContain("createRoot(document.getElementById('root')!).render(<App />);");
+    expect(main).not.toContain('AppConfirmDialog');
+    expect(main).not.toContain('<ChatVirtuosoTurnList');
+  });
 
-    expect(main).not.toContain('const renderFileTree = (');
-    expect(main).not.toContain('const renderWorkspaceProjectSelector = () =>');
-    expect(main).not.toContain('className="section-title git-section-title"');
-    expect(main).not.toContain('className="git-commit-popover"');
-    expect(main).not.toContain('const renderPortRelayFrameSurface =');
-    expect(main).not.toContain('className="port-relay-frame"');
+  test('workspace app delegates non-chat surfaces while keeping chat startup resident', () => {
+    expect(workspaceApp).toContain('AppConfirmDialog');
+    expect(workspaceApp).toContain("} from '../shell/AppDialogs';");
+    expect(workspaceApp).toContain("import { FileExplorerTree, WorkspaceProjectSelector } from '../file/FileExplorerTree';");
+    expect(workspaceApp).toContain("import { GitSidebar } from '../git/GitSidebar';");
+    expect(workspaceApp).toContain("import { PortRelayFloatingButton, PortRelayFrameSurface } from '../portRelay/PortRelayFrameSurface';");
 
-    expect(main).toContain("if (tab === 'chat') {");
-    expect(main).toContain('<ChatVirtuosoTurnList');
-    expect(main).toContain("import ReactMarkdown, { type Components } from 'react-markdown';");
-    expect(main).not.toContain('loadChatBundle');
-    expect(main).not.toContain("React.lazy(() => import('./chat");
+    expect(workspaceApp).not.toContain('const renderFileTree = (');
+    expect(workspaceApp).not.toContain('const renderWorkspaceProjectSelector = () =>');
+    expect(workspaceApp).not.toContain('className="section-title git-section-title"');
+    expect(workspaceApp).not.toContain('className="git-commit-popover"');
+    expect(workspaceApp).not.toContain('const renderPortRelayFrameSurface =');
+    expect(workspaceApp).not.toContain('className="port-relay-frame"');
+
+    expect(workspaceApp).toContain("if (tab === 'chat') {");
+    expect(workspaceApp).toContain('<ChatVirtuosoTurnList');
+    expect(workspaceApp).toContain("import ReactMarkdown, { type Components } from 'react-markdown';");
+    expect(workspaceApp).not.toContain('loadChatBundle');
+    expect(workspaceApp).not.toContain("React.lazy(() => import('../chat");
+  });
+
+  test('workspace startup helpers live outside the app orchestration module', () => {
+    expect(workspaceApp).toContain("import { resolveInitialRegistryAddress } from './workspaceBootstrap';");
+    expect(workspaceApp).not.toContain('function isLoopbackAddress');
+    expect(workspaceBootstrap).toContain('export function resolveInitialRegistryAddress');
+    expect(workspaceBootstrap).toContain('function isLoopbackAddress');
   });
 });

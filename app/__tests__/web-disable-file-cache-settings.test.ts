@@ -6,11 +6,11 @@ describe('web disable file cache settings', () => {
 
   test('persists disable file cache as a default-off global setting', () => {
     const workspacePersistence = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'services', 'workspacePersistence.ts'),
+      path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'),
       'utf8',
     );
     const workspaceStore = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'services', 'workspaceStore.ts'),
+      path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspaceStore.ts'),
       'utf8',
     );
 
@@ -30,11 +30,11 @@ describe('web disable file cache settings', () => {
 
   test('gates cached directory hydration and validation when file cache is disabled', () => {
     const workspaceStore = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'services', 'workspaceStore.ts'),
+      path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspaceStore.ts'),
       'utf8',
     );
     const workspaceController = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'services', 'workspaceController.ts'),
+      path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspaceController.ts'),
       'utf8',
     );
 
@@ -51,7 +51,7 @@ describe('web disable file cache settings', () => {
   });
 
   test('adds debug setting and clears file cache when enabled', () => {
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const settingsRootTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
 
     expect(mainTsx).toContain('const [disableFileCache, setDisableFileCache] = useState(');
@@ -68,7 +68,7 @@ describe('web disable file cache settings', () => {
   });
 
   test('bypasses directory and file cache while disabled setting is enabled', () => {
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 
     expect(mainTsx).toContain('const fileCacheDisabled = disableFileCache === true;');
     expect(mainTsx).toContain('const persistedCache = !fileCacheDisabled && targetProjectId');

@@ -7,7 +7,7 @@ import {
   isSpeechErrorEvent,
   isSpeechTranscriptEvent,
 } from '../web/src/features/speech/registrySpeechClient';
-import type {RegistryEnvelope} from '../web/src/types/registry';
+import type {RegistryEnvelope} from '../web/src/registry/registryTypes';
 
 describe('web speech registry debug redaction', () => {
   test('redacts speech start API key and speech chunk PCM before debug records are stored', () => {

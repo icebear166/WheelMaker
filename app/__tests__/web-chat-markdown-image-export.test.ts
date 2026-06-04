@@ -2,7 +2,7 @@ import {
   buildPromptMarkdownImageFileName,
   waitForMarkdownExportReady,
   waitForMarkdownExportImages,
-} from '../web/src/chatMarkdownImageExport';
+} from '../web/src/chat/export/chatMarkdownImageExport';
 
 describe('web chat markdown image export', () => {
   test('builds a stable png filename for prompt-done exports', () => {

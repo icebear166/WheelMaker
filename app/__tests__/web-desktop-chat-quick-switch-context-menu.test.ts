@@ -1,6 +1,6 @@
 import {
   resolveDesktopChatQuickSwitchContextMenu,
-} from '../web/src/shell/desktop/chatQuickSwitchContextMenu';
+} from '../web/src/shell/layouts/desktop/chatQuickSwitchContextMenu';
 
 function target(interactive = false): EventTarget {
   return {

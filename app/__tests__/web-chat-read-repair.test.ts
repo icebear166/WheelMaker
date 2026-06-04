@@ -1,4 +1,4 @@
-import {createChatReadRepairQueue} from '../web/src/chat/chatReadRepair';
+import {createChatReadRepairQueue} from '../web/src/chat/turns/chatReadRepair';
 
 describe('chat read repair queue', () => {
   test('serializes reads per session and reruns once when marked dirty during in-flight read', async () => {

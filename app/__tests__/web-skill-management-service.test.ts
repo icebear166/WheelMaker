@@ -1,5 +1,5 @@
-import {RegistryRepository} from '../web/src/services/registryRepository';
-import type {RegistryClient} from '../web/src/services/registryClient';
+import {RegistryRepository} from '../web/src/registry/RegistryRepository';
+import type {RegistryClient} from '../web/src/registry/RegistryClient';
 
 describe('skill management registry service', () => {
   test('sends cmd.skills scan with hubId and bounded timeout', async () => {

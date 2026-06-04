@@ -1,7 +1,7 @@
 import type {
   RegistryGitCommit,
   RegistryGitStatus,
-} from '../types/registry';
+} from '../registry/registryTypes';
 
 export type GitDiffSource = 'commit' | 'worktree';
 

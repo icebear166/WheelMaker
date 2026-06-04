@@ -1,0 +1,395 @@
+import type {
+  RegistryChatMessage,
+  RegistryChatSession,
+  RegistryFsEntry,
+  RegistryGitCommit,
+  RegistryGitCommitFile,
+  RegistryProject,
+  RegistrySessionTurn,
+} from '../registry/registryTypes';
+import {decodeSessionTurnToMessage} from '../chat/chatWire';
+import {
+  chatSessionKeyFromParts,
+  type ChatSessionKey,
+} from '../chat/session/chatSessionKey';
+import { sanitizeCachedSessionMessages } from '../chat/turns/chatSync';
+import {
+  WorkspacePersistenceRepository,
+  type PersistedChatCursor,
+  type PersistedGlobalState,
+  type WorkspaceDatabaseDump,
+} from './WorkspacePersistence';
+
+type ProjectSnapshot = {
+  expandedDirs: string[];
+  selectedFile: string;
+  pinnedFiles: string[];
+  gitCurrentBranch: string;
+  commits: RegistryGitCommit[];
+  selectedCommit: string;
+  commitFilesBySha: Record<string, RegistryGitCommitFile[]>;
+  selectedDiff: string;
+};
+
+export type HydratedProjectState = {
+  projectId: string;
+  dirEntries: Record<string, RegistryFsEntry[]>;
+  expandedDirs: string[];
+  selectedFile: string;
+  pinnedFiles: string[];
+  gitCurrentBranch: string;
+  commits: RegistryGitCommit[];
+  selectedCommit: string;
+  commitFilesBySha: Record<string, RegistryGitCommitFile[]>;
+  selectedDiff: string;
+  selectedChatSessionId: string;
+  cachedDiffText: string;
+};
+
+export type CachedDirectory = {
+  hash: string;
+  entries: RegistryFsEntry[];
+};
+
+export type CachedFile = {
+  hash: string;
+  content: string;
+};
+
+export type CachedChatSession = {
+  session: RegistryChatSession;
+  cursor: PersistedChatCursor;
+};
+
+export type CachedChatSessionContent = {
+  turns: RegistrySessionTurn[];
+  messages: RegistryChatMessage[];
+};
+
+function mergeCachedChatSessionSummary(
+  existing: RegistryChatSession | undefined,
+  next: RegistryChatSession,
+): RegistryChatSession {
+  if (!existing) {
+    return next;
+  }
+  return {
+    ...next,
+    configOptions:
+      next.configOptions ??
+      (existing.configOptions ? [...existing.configOptions] : undefined),
+    commands:
+      next.commands ??
+      (existing.commands ? [...existing.commands] : undefined),
+  };
+}
+
+function sortEntries(entries: RegistryFsEntry[]): RegistryFsEntry[] {
+  return [...entries].sort((a, b) => {
+    if (a.kind === 'dir' && b.kind !== 'dir') return -1;
+    if (a.kind !== 'dir' && b.kind === 'dir') return 1;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function uniqueStrings(items: string[]): string[] {
+  return [...new Set(items.filter(Boolean))];
+}
+
+function diffCacheKey(sha: string, path: string): string {
+  return `${sha}::${path}`;
+}
+
+function sanitizeCursor(cursor: Partial<PersistedChatCursor> | undefined): PersistedChatCursor {
+  const turnIndex = Number.isFinite(cursor?.turnIndex)
+    ? Math.max(0, Math.floor(Number(cursor?.turnIndex)))
+    : 0;
+  return {
+    turnIndex,
+  };
+}
+
+function chatMessageToRawTurn(message: RegistryChatMessage): RegistrySessionTurn {
+  return {
+    turnIndex: Math.trunc(message.turnIndex ?? 0),
+    content: JSON.stringify({method: message.method, param: message.param ?? {}}),
+    finished: message.finished === true,
+  };
+}
+
+export class WorkspaceStore {
+  constructor(private readonly persistence = new WorkspacePersistenceRepository()) {}
+
+  ready(): Promise<void> {
+    return this.persistence.ready();
+  }
+
+  getGlobalState(defaultAddress: string): PersistedGlobalState {
+    const saved = this.persistence.getGlobalState();
+    return {
+      ...saved,
+      address: saved.address || defaultAddress,
+    };
+  }
+
+  rememberGlobalState(patch: Partial<PersistedGlobalState>): void {
+    const current = this.persistence.getGlobalState();
+    const nextPatch: Partial<PersistedGlobalState> = {...patch};
+    if (patch.selectedProjectId !== undefined && !patch.selectedProjectId) {
+      nextPatch.selectedProjectId = current.selectedProjectId;
+    }
+    this.persistence.patchGlobalState(nextPatch);
+  }
+
+  selectProjectOnConnect(projects: RegistryProject[], fallbackProjectId: string): string {
+    const preferred = this.persistence.getGlobalState().selectedProjectId;
+    if (preferred && projects.some(item => item.projectId === preferred)) {
+      return preferred;
+    }
+    return fallbackProjectId;
+  }
+
+  hydrateProject(projectId: string, rootEntries: RegistryFsEntry[], options?: {disableFileCache?: boolean}): HydratedProjectState {
+    const cachedProjectState = this.persistence.getProjectState(projectId);
+    const cachedCommitState = this.persistence.getProjectCommitsState(projectId);
+    const rootSorted = sortEntries(rootEntries);
+    const dirEntries: Record<string, RegistryFsEntry[]> = {
+      '.': rootSorted,
+    };
+    const expandedDirs: string[] = ['.'];
+    if (!options?.disableFileCache) {
+      for (const dirPath of uniqueStrings(cachedProjectState.expandedDirs)) {
+        if (!dirPath || dirPath === '.') continue;
+        const cachedDir = this.getCachedDirectory(projectId, dirPath);
+        if (!cachedDir) continue;
+        dirEntries[dirPath] = sortEntries(cachedDir.entries);
+        expandedDirs.push(dirPath);
+      }
+    }
+
+    const selectedFile = cachedProjectState.selectedFile || (rootSorted.find(item => item.kind === 'file')?.path ?? '');
+    const pinnedFiles = uniqueStrings(cachedProjectState.pinnedFiles.filter(path => !!path));
+    const cacheKey = cachedProjectState.selectedCommit && cachedProjectState.selectedDiff
+      ? diffCacheKey(cachedProjectState.selectedCommit, cachedProjectState.selectedDiff)
+      : '';
+    const cachedDiff = cacheKey ? this.persistence.getProjectDiff(projectId, cacheKey) : null;
+
+    return {
+      projectId,
+      dirEntries,
+      expandedDirs: expandedDirs.length > 0 ? expandedDirs : ['.'],
+      selectedFile,
+      pinnedFiles,
+      gitCurrentBranch: cachedProjectState.gitCurrentBranch || '',
+      commits: cachedCommitState.commits ?? [],
+      selectedCommit: cachedProjectState.selectedCommit || '',
+      commitFilesBySha: cachedCommitState.commitFilesBySha ?? {},
+      selectedDiff: cachedProjectState.selectedDiff || '',
+      selectedChatSessionId: cachedProjectState.selectedChatSessionId || '',
+      cachedDiffText: cachedDiff?.diff ?? '',
+    };
+  }
+
+  hydrateCachedProject(projectId: string, options?: {disableFileCache?: boolean}): HydratedProjectState {
+    const cachedRoot = options?.disableFileCache ? null : this.getCachedDirectory(projectId, '.');
+    return this.hydrateProject(projectId, cachedRoot?.entries ?? [], options);
+  }
+
+  rememberProjectSnapshot(projectId: string, snapshot: ProjectSnapshot): void {
+    if (!projectId) return;
+    this.persistence.patchProjectState(projectId, {
+      expandedDirs: snapshot.expandedDirs,
+      selectedFile: snapshot.selectedFile,
+      pinnedFiles: snapshot.pinnedFiles,
+      gitCurrentBranch: snapshot.gitCurrentBranch,
+      selectedCommit: snapshot.selectedCommit,
+      selectedDiff: snapshot.selectedDiff,
+    });
+    this.persistence.patchProjectCommitsState(projectId, {
+      commits: snapshot.commits,
+      commitFilesBySha: snapshot.commitFilesBySha,
+    });
+  }
+
+  getCachedDiff(projectId: string, sha: string, path: string): string | null {
+    if (!projectId || !sha || !path) return null;
+    return this.persistence.getProjectDiff(projectId, diffCacheKey(sha, path))?.diff ?? null;
+  }
+
+  cacheDiff(projectId: string, sha: string, path: string, diff: string, isBinary: boolean, truncated: boolean): void {
+    if (!projectId || !sha || !path) return;
+    this.persistence.putProjectDiff(projectId, diffCacheKey(sha, path), {
+      diff,
+      isBinary,
+      truncated,
+    });
+  }
+
+  getCachedDirectory(projectId: string, path: string): CachedDirectory | null {
+    const cached = this.persistence.getCachedFile(projectId, 'dir', path);
+    if (!cached) return null;
+    try {
+      const parsed = JSON.parse(cached.value) as RegistryFsEntry[];
+      const entries = Array.isArray(parsed) ? parsed : [];
+      return {hash: cached.hash, entries};
+    } catch {
+      return null;
+    }
+  }
+
+  cacheDirectory(projectId: string, path: string, hash: string, entries: RegistryFsEntry[]): void {
+    if (!projectId || !path) return;
+    this.persistence.putCachedFile(projectId, 'dir', path, hash, JSON.stringify(entries));
+  }
+
+  getCachedFile(projectId: string, path: string): CachedFile | null {
+    const cached = this.persistence.getCachedFile(projectId, 'file', path);
+    if (!cached) return null;
+    return {
+      hash: cached.hash,
+      content: cached.value,
+    };
+  }
+
+  cacheFile(projectId: string, path: string, hash: string, content: string): void {
+    if (!projectId || !path) return;
+    this.persistence.putCachedFile(projectId, 'file', path, hash, content);
+  }
+
+  hydrateChatSessions(projectId: string): CachedChatSession[] {
+    if (!projectId) return [];
+    return this.persistence.getProjectChatSessions(projectId).map(entry => ({
+      session: entry.session,
+      cursor: sanitizeCursor(entry.cursor),
+    }));
+  }
+
+  getCachedChatSessionContent(projectId: string, sessionId: string): CachedChatSessionContent | null {
+    if (!projectId || !sessionId) return null;
+    const cached = this.persistence.getProjectChatSessionContent(projectId, sessionId);
+    if (!cached) return null;
+    const turns = Array.isArray(cached.turns) ? cached.turns : [];
+    return {
+      turns,
+      messages: turns
+        .map(turn => decodeSessionTurnToMessage(sessionId, turn))
+        .filter((item): item is RegistryChatMessage => !!item),
+    };
+  }
+
+  getSelectedChatSessionId(projectId: string): string {
+    if (!projectId) return '';
+    return this.persistence.getProjectState(projectId).selectedChatSessionId || '';
+  }
+
+  rememberSelectedChatSession(projectId: string, sessionId: string): void {
+    if (!projectId) return;
+    this.persistence.patchProjectState(projectId, { selectedChatSessionId: sessionId.trim() });
+  }
+
+  getSelectedChatSessionKey(): ChatSessionKey | null {
+    const global = this.persistence.getGlobalState();
+    return chatSessionKeyFromParts(
+      global.selectedChatProjectId || '',
+      global.selectedChatSessionId || '',
+    );
+  }
+
+  rememberSelectedChatSessionKey(key: ChatSessionKey | null): void {
+    const normalized = key
+      ? chatSessionKeyFromParts(key.projectId, key.sessionId)
+      : null;
+    this.persistence.patchGlobalState({
+      selectedChatProjectId: normalized?.projectId ?? '',
+      selectedChatSessionId: normalized?.sessionId ?? '',
+    });
+  }
+
+  migrateSelectedChatSessionKey(projectId: string): ChatSessionKey | null {
+    const existing = this.getSelectedChatSessionKey();
+    if (existing) {
+      return existing;
+    }
+    const fallback = chatSessionKeyFromParts(
+      projectId,
+      this.getSelectedChatSessionId(projectId),
+    );
+    if (fallback) {
+      this.rememberSelectedChatSessionKey(fallback);
+    }
+    return fallback;
+  }
+
+  replaceChatSessions(projectId: string, sessions: RegistryChatSession[], cursorBySessionId: Record<string, PersistedChatCursor>): void {
+    if (!projectId) return;
+    const existingById = new Map(
+      this.hydrateChatSessions(projectId).map(entry => [
+        entry.session.sessionId,
+        entry.session,
+      ]),
+    );
+    const payload = sessions.map(session => ({
+      session: mergeCachedChatSessionSummary(existingById.get(session.sessionId), session),
+      cursor: sanitizeCursor(cursorBySessionId[session.sessionId]),
+    }));
+    this.persistence.replaceProjectChatSessions(projectId, payload);
+  }
+
+  rememberChatSession(projectId: string, session: RegistryChatSession, cursor: PersistedChatCursor): void {
+    if (!projectId || !session.sessionId) return;
+    const existing = this.hydrateChatSessions(projectId)
+      .find(entry => entry.session.sessionId === session.sessionId)
+      ?.session;
+    const mergedSession = mergeCachedChatSessionSummary(existing, session);
+    this.persistence.patchProjectChatSession(projectId, mergedSession, sanitizeCursor(cursor));
+  }
+
+  rememberChatSessionContent(
+    projectId: string,
+    sessionId: string,
+    messages: RegistryChatMessage[],
+  ): void {
+    if (!projectId || !sessionId) return;
+    const sanitizedMessages = sanitizeCachedSessionMessages(messages, sessionId);
+    this.persistence.patchProjectChatSessionContent(
+      projectId,
+      sessionId,
+      sanitizedMessages.map(chatMessageToRawTurn),
+    );
+  }
+
+  rememberChatSessionTurns(
+    projectId: string,
+    sessionId: string,
+    turns: RegistrySessionTurn[],
+  ): void {
+    if (!projectId || !sessionId) return;
+    this.persistence.patchProjectChatSessionContent(projectId, sessionId, turns);
+  }
+
+  deleteChatSession(projectId: string, sessionId: string): void {
+    if (!projectId || !sessionId) return;
+    this.persistence.deleteProjectChatSession(projectId, sessionId);
+  }
+
+  setDisableFileCache(disableFileCache: boolean): void {
+    this.persistence.patchGlobalState({disableFileCache});
+  }
+
+  clearFileCache(): void {
+    this.persistence.clearFileCache();
+  }
+
+  clearLocalCachePreservingToken(): void {
+    this.persistence.clearCachePreservingToken();
+  }
+
+  clearLocalToken(): void {
+    this.persistence.patchGlobalState({token: ''});
+  }
+
+  dumpDatabase(): Promise<WorkspaceDatabaseDump> {
+    return this.persistence.dumpDatabase();
+  }
+}
+

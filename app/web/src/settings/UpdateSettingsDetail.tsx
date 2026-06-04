@@ -5,7 +5,7 @@ import {
   type AndroidApkLatestRelease,
   type AndroidApkLocalRelease,
   type AndroidApkUpdateStatus,
-} from '../androidApkUpdate';
+} from '../platform/android/androidApkUpdate';
 import {
   deriveNpmPackageUpdateTargets,
   npmPackageUpdateSummary,
@@ -13,7 +13,7 @@ import {
   shouldShowWheelMakerUpdateAction,
   wheelMakerUpdateStatusLabel,
   type NpmPackageUpdateTarget,
-} from '../agentPackageUpdateView';
+} from './update/agentPackageUpdateView';
 import type {
   RegistryFileIndexStatus,
   RegistryFileIndexStatusResponse,
@@ -22,7 +22,7 @@ import type {
   RegistryNpmPackage,
   RegistryProject,
   RegistryWheelMakerUpdateResponse,
-} from '../types/registry';
+} from '../registry/registryTypes';
 
 type PackageAction = 'install' | 'update' | 'uninstall';
 

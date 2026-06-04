@@ -1,6 +1,6 @@
 import React, {useMemo} from 'react';
 
-import {buildTokenStatCards, type TokenProviderSectionView} from '../tokenStatsView';
+import {buildTokenStatCards, type TokenProviderSectionView} from './tokenStats/tokenStatsView';
 
 type TokenStatsSettingsDetailProps = {
   providers: TokenProviderSectionView[];

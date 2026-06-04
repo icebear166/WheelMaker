@@ -1,12 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 describe('web registry debug settings', () => {
   const projectRoot = path.join(__dirname, '..');
 
   test('persists message viewer and log level as separate global settings', () => {
     const workspacePersistence = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'services', 'workspacePersistence.ts'),
+      path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'),
       'utf8',
     );
 
@@ -33,10 +34,12 @@ describe('web registry debug settings', () => {
   });
 
   test('adds separate message viewer and log level controls without making records persistent', () => {
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
+    const settingsNavigationTs = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'settingsNavigation.ts'), 'utf8');
     const settingsRootTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
+    const settingsSurfaceTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsSurface.tsx'), 'utf8');
 
-    expect(mainTsx).toContain("import {createRegistryDebugStore} from './debug/registryDebug';");
+    expect(mainTsx).toContain("import {createRegistryDebugStore} from '../debug/registryDebug';");
     expect(mainTsx).toContain('const registryDebugStore = createRegistryDebugStore();');
     expect(mainTsx).toContain('const service = new RegistryWorkspaceService(registryDebugStore.recordCaptureEvent);');
     expect(mainTsx).toContain('const [messageViewerEnabled, setMessageViewerEnabled] = useState(');
@@ -47,9 +50,11 @@ describe('web registry debug settings', () => {
     expect(settingsRootTsx).toContain("renderSettingsSection('Debug'");
     expect(settingsRootTsx).toContain('Message Viewer');
     expect(settingsRootTsx).toContain('Log Level');
-    expect(mainTsx).toContain("'debugLogs'");
-    expect(mainTsx).toContain("settingsDetailView === 'debugLogs'");
-    expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ './settings/SettingsBundle')");
+    expect(settingsNavigationTs).toContain("'debugLogs'");
+    expect(settingsSurfaceTsx).toContain("case 'debugLogs':");
+    expect(settingsSurfaceTsx).toContain("return 'Logs';");
+    expect(mainTsx).toContain("detail === 'debugLogs'");
+    expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ '../settings/SettingsBundle')");
     expect(mainTsx).toContain('renderDebugLogsSettingsDetail(options)');
     expect(mainTsx).toContain('<DebugLogsSettingsDetail');
     expect(mainTsx).toContain('<React.Suspense fallback={null}>');
@@ -74,10 +79,10 @@ describe('web registry debug settings', () => {
   });
 
   test('renders compact uploadable logs with a bottom category selector', () => {
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
-    const detailPath = path.join(projectRoot, 'web', 'src', 'debug', 'DebugLogsSettingsDetail.tsx');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
+    const detailPath = path.join(projectRoot, 'web', 'src', 'settings', 'debug', 'DebugLogsSettingsDetail.tsx');
     const detailTsx = fs.existsSync(detailPath) ? fs.readFileSync(detailPath, 'utf8') : '';
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain('appDiagnosticStore,');
     expect(mainTsx).not.toContain('filterAppDiagnosticRecords,');

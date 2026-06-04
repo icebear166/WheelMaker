@@ -7,14 +7,14 @@ import {
   replaceSessionMessages,
   sanitizeCachedSessionMessages,
   shouldRequestSessionReadForIncomingTurn,
-} from '../web/src/chatSync';
+} from '../web/src/chat/turns/chatSync';
 import {
   decodeSessionTurnToMessage,
   normalizeSessionMessagePayload,
   normalizeSessionReadPayload,
   normalizeSessionWireTurn,
 } from '../web/src/chat/chatWire';
-import type { RegistryChatMessage } from '../web/src/types/registry';
+import type { RegistryChatMessage } from '../web/src/registry/registryTypes';
 
 const message = (text: string): RegistryChatMessage => ({
   sessionId: 'sess-1',

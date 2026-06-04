@@ -1,13 +1,14 @@
 import fs from 'fs';
 import path from 'path';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 describe('agent package update settings UI source structure', () => {
   test('moves shortcut details out of More and keeps Chat focused on chat options', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const settingsRootTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
 
-    expect(mainTsx).toContain("} from './settings/settingsNavigation';");
+    expect(mainTsx).toContain("} from '../settings/settingsNavigation';");
     expect(mainTsx).toContain('type SettingsDetailView = SettingsDetailId | null;');
     expect(mainTsx).toContain("settingsDetailView === 'update'");
     expect(mainTsx).toContain('renderUpdateSettingsDetail(options)');
@@ -39,14 +40,14 @@ describe('agent package update settings UI source structure', () => {
 
   test('renders Update detail with scan, task polling, and npm confirmation flow hooks', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const detailPath = path.join(projectRoot, 'web', 'src', 'settings', 'UpdateSettingsDetail.tsx');
     const detailTsx = fs.existsSync(detailPath) ? fs.readFileSync(detailPath, 'utf8') : '';
     const updateDetailSource = `${mainTsx}\n${detailTsx}`;
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain('const renderUpdateSettingsDetail = (options?: SettingsDetailShellOptions) =>');
-    expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ './settings/SettingsBundle')");
+    expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ '../settings/SettingsBundle')");
     expect(mainTsx).toContain('<UpdateSettingsDetail');
     expect(detailTsx).toContain('export function UpdateSettingsDetail');
     expect(mainTsx).toContain("'Update'");
@@ -185,7 +186,7 @@ describe('agent package update settings UI source structure', () => {
   test('keeps Update page scan polling scoped to the active Update detail', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs
-      .readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8')
+      .readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8')
       .replace(/\r\n/g, '\n');
 
     expect(mainTsx).toContain('const refreshWheelMakerUpdatesRef = useRef<((options?: {force?: boolean}) => Promise<void>) | null>(null);');
@@ -225,7 +226,7 @@ describe('agent package update settings UI source structure', () => {
   test('shows npm hub Update All only from the expanded summary row', () => {
     const projectRoot = path.join(__dirname, '..');
     const detailTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'UpdateSettingsDetail.tsx'), 'utf8');
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     const disclosureStart = detailTsx.indexOf('className="npm-update-disclosure"');
     const bodyStart = detailTsx.indexOf('className="npm-update-body"', disclosureStart);
@@ -261,9 +262,9 @@ describe('agent package update settings UI source structure', () => {
 
   test('makes WheelMaker release identity and SHA rows visually distinct', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const detailTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'UpdateSettingsDetail.tsx'), 'utf8');
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     const wheelMakerBlockStart = detailTsx.indexOf('className="wheelmaker-update-panel"');
     const agentPackagesStart = detailTsx.indexOf('className="agent-package-row-list"', wheelMakerBlockStart);
@@ -318,7 +319,7 @@ describe('agent package update settings UI source structure', () => {
 
   test('keeps WheelMaker release SHA metadata on one line inside the mobile settings screen', () => {
     const projectRoot = path.join(__dirname, '..');
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     const mobileShaLineBlock = stylesCss.match(/\.mobile-settings-screen \.wheelmaker-update-sha-line \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(mobileShaLineBlock).toContain('grid-template-columns: 52px 7ch max-content;');
@@ -338,7 +339,7 @@ describe('agent package update settings UI source structure', () => {
   test('places agent tags beside display names and lets versions span under the action button', () => {
     const projectRoot = path.join(__dirname, '..');
     const detailTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'UpdateSettingsDetail.tsx'), 'utf8');
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(detailTsx).toContain('className="agent-package-name-line"');
     expect(detailTsx).toContain('className="agent-package-agent-tags"');
@@ -367,8 +368,9 @@ describe('agent package update settings UI source structure', () => {
 
   test('uses explicit agent tag variants and softly sized capsules', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
+    const settingsSurfaceTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsSurface.tsx'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain('const AGENT_TAG_VARIANT_INDEX');
     expect(mainTsx).toContain("claude: 2");
@@ -389,8 +391,9 @@ describe('agent package update settings UI source structure', () => {
 
   test('adds desktop shortcuts and a mobile Settings-only shortcut bar', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
+    const settingsSurfaceTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsSurface.tsx'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     const activityBarStart = mainTsx.indexOf('const desktopActivityBar = isWide ? (');
     const activityBarEnd = mainTsx.indexOf('const floatingControlStack = !isWide ? (', activityBarStart);
@@ -432,20 +435,27 @@ describe('agent package update settings UI source structure', () => {
     expect(mobileBarStart).toBeGreaterThanOrEqual(0);
     expect(mobileBarEnd).toBeGreaterThan(mobileBarStart);
     const mobileBar = mainTsx.slice(mobileBarStart, mobileBarEnd);
-    expect(mobileBar.indexOf('title="Settings"')).toBeLessThan(mobileBar.indexOf('title="Update"'));
-    expect(mobileBar.indexOf('title="Update"')).toBeLessThan(mobileBar.indexOf('title="Skills"'));
-    expect(mobileBar.indexOf('title="Skills"')).toBeLessThan(mobileBar.indexOf('title="Port Relay"'));
-    expect(mobileBar.indexOf('title="Port Relay"')).toBeLessThan(mobileBar.indexOf('title="Token Stats"'));
-    expect(mobileBar.indexOf('title="Token Stats"')).toBeLessThan(mobileBar.indexOf('title="CC Switch"'));
-    expect(mobileBar).toContain("openMobileSettingsShortcutDetail('update')");
-    expect(mobileBar).toContain("openMobileSettingsShortcutDetail('skills')");
-    expect(mobileBar).toContain("openMobileSettingsShortcutDetail('portRelay')");
-    expect(mobileBar).toContain("openMobileSettingsShortcutDetail('tokenStats')");
-    expect(mobileBar).toContain("openMobileSettingsShortcutDetail('ccSwitch')");
-    expect(mobileBar).toContain('onClick={handleMobileSettingsRootShortcut}');
-    expect(mobileBar).toContain('data-active-index={mobileSettingsShortcutActiveIndex}');
-    expect(mobileBar).toContain('className="mobile-settings-shortcut-label">Settings</span>');
-    expect(mobileBar).toContain('className="mobile-settings-shortcut-label">CC Switch</span>');
+    expect(mobileBar).toContain('<MobileSettingsShortcutBar');
+    expect(mobileBar).toContain('onRootSelect={handleMobileSettingsRootShortcut}');
+    expect(mobileBar).toContain('onDetailSelect={openMobileSettingsShortcutDetail}');
+    expect(mobileBar).toContain('activeIndex={mobileSettingsShortcutActiveIndex}');
+    const surfaceShortcutStart = settingsSurfaceTsx.indexOf('export const MOBILE_SETTINGS_SHORTCUTS');
+    const surfaceShortcutEnd = settingsSurfaceTsx.indexOf('export function settingsDetailTitle', surfaceShortcutStart);
+    const surfaceShortcuts = settingsSurfaceTsx.slice(surfaceShortcutStart, surfaceShortcutEnd);
+    expect(surfaceShortcutStart).toBeGreaterThanOrEqual(0);
+    expect(surfaceShortcutEnd).toBeGreaterThan(surfaceShortcutStart);
+    expect(surfaceShortcuts.indexOf("detail: 'update'")).toBeLessThan(surfaceShortcuts.indexOf("detail: 'skills'"));
+    expect(surfaceShortcuts.indexOf("detail: 'skills'")).toBeLessThan(surfaceShortcuts.indexOf("detail: 'portRelay'"));
+    expect(surfaceShortcuts.indexOf("detail: 'portRelay'")).toBeLessThan(surfaceShortcuts.indexOf("detail: 'tokenStats'"));
+    expect(surfaceShortcuts.indexOf("detail: 'tokenStats'")).toBeLessThan(surfaceShortcuts.indexOf("detail: 'ccSwitch'"));
+    const surfaceBarStart = settingsSurfaceTsx.indexOf('export function MobileSettingsShortcutBar');
+    const surfaceBarEnd = settingsSurfaceTsx.indexOf('export function MobileSettingsScreen', surfaceBarStart);
+    const surfaceBar = settingsSurfaceTsx.slice(surfaceBarStart, surfaceBarEnd);
+    expect(surfaceBar.indexOf('title="Settings"')).toBeLessThan(surfaceBar.indexOf('MOBILE_SETTINGS_SHORTCUTS.map'));
+    expect(surfaceBar).toContain('onClick={onRootSelect}');
+    expect(surfaceBar).toContain('onClick={() => onDetailSelect(shortcut.detail)}');
+    expect(surfaceBar).toContain('className="mobile-settings-shortcut-label">Settings</span>');
+    expect(surfaceBar).toContain('className="mobile-settings-shortcut-label">{shortcut.label}</span>');
 
     const mobileToolbarStart = mainTsx.indexOf('<div className="mobile-chat-toolbar"');
     const mobileToolbarEnd = mainTsx.indexOf('{renderChatHubSummary(true)}', mobileToolbarStart);

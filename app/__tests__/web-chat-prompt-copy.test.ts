@@ -1,4 +1,4 @@
-import { buildPromptAgentMarkdown } from '../web/src/chatPromptCopy';
+import { buildPromptAgentMarkdown } from '../web/src/chat/export/chatPromptCopy';
 
 describe('web chat prompt copy', () => {
   test('builds markdown lazily from agent messages only', () => {

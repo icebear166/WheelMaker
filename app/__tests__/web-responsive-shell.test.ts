@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { transformSync } from '@babel/core';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 function cssRuleBlock(stylesCss: string, selector: string): string {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = stylesCss.match(new RegExp(`${escapedSelector} \\{([\\s\\S]*?)\\}`));
@@ -17,11 +18,11 @@ describe('web responsive shell split', () => {
 
     const shellTsx = fs.readFileSync(shellPath, 'utf8');
 
-    expect(shellTsx).toContain("import type { LayoutMode } from '../services/responsiveLayout';");
+    expect(shellTsx).toContain("import type { LayoutMode } from './state/responsiveLayout';");
     expect(shellTsx).toContain('export function DesktopShell(');
     expect(shellTsx).toContain('export function MobileShell(');
     expect(shellTsx).toContain('export function ResponsiveShell(');
-    expect(shellTsx).toContain("import { DesktopTitleBar } from './DesktopTitleBar';");
+    expect(shellTsx).toContain("import { DesktopTitleBar } from './layouts/desktop/DesktopTitleBar';");
     expect(shellTsx).toContain("mode === 'desktop'");
     expect(shellTsx).toContain('desktopActivityBar: ReactNode;');
     expect(shellTsx).toContain('<DesktopTitleBar title="WheelMaker" />');
@@ -59,9 +60,9 @@ describe('web responsive shell split', () => {
 
   test('main delegates shell structure instead of owning desktop and mobile containers inline', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 
-    expect(mainTsx).toContain("import { ResponsiveShell } from './shell/ResponsiveShell';");
+    expect(mainTsx).toContain("import { ResponsiveShell } from '../shell/ResponsiveShell';");
     expect(mainTsx).toContain('<ResponsiveShell');
     expect(mainTsx).toContain('mode={layoutMode}');
     expect(mainTsx).toContain('desktopActivityBar={desktopActivityBar}');
@@ -83,9 +84,9 @@ describe('web responsive shell split', () => {
 
   test('connection screen keeps the desktop title bar controls available', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 
-    expect(mainTsx).toContain("import { DesktopTitleBar } from './shell/DesktopTitleBar';");
+    expect(mainTsx).toContain("import { DesktopTitleBar } from '../shell/layouts/desktop/DesktopTitleBar';");
 
     const disconnectedStart = mainTsx.indexOf('if (!connected && !keepWorkspaceVisible)');
     const disconnectedEnd = mainTsx.indexOf('const projectMenu', disconnectedStart);
@@ -101,8 +102,8 @@ describe('web responsive shell split', () => {
 
   test('keeps wide sidebar settings scrollable inside the desktop shell', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
-    const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toMatch(/const wideSidebarMain = sidebarSettingsOpen\s*\?\s*renderSettingsContent\(false, \{ hideDetailHeader: isSettingsPeerDetail\(settingsDetailView\) \}\)/);
     expect(mainTsx).toContain('<div className="sidebar-scroll">');

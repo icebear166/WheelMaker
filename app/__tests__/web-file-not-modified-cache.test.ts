@@ -4,7 +4,7 @@ import path from 'path';
 describe('web file read cache on notModified', () => {
   test('restores cached content when fs.read returns notModified', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 
     expect(mainTsx).toContain("const fileMemoryCacheKey = (activeProjectId: string, path: string) => `${activeProjectId}\\n${path}`;");
     expect(mainTsx).toContain('const fileCacheRef = useRef<Record<string, string>>({});');
@@ -24,9 +24,9 @@ describe('web file read cache on notModified', () => {
 
   test('reads files against an explicit project instead of mutable service selection', () => {
     const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const serviceTs = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'services', 'registryWorkspaceService.ts'),
+      path.join(projectRoot, 'web', 'src', 'registry', 'RegistryWorkspaceService.ts'),
       'utf8',
     );
 

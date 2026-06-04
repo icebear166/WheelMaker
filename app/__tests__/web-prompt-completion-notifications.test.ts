@@ -2,11 +2,11 @@ import {
   buildPromptCompletionNotification,
   promptCompletionNotificationKey,
   shouldNotifyPromptCompletion,
-} from '../web/src/notifications/promptCompletion';
+} from '../web/src/chat/notifications/promptCompletionNotification';
 import type {
   RegistryChatMessage,
   RegistrySessionSummary,
-} from '../web/src/types/registry';
+} from '../web/src/registry/registryTypes';
 
 function message(
   method: string,

@@ -5,7 +5,7 @@ import {
   parseSkillSourceInput,
   skillScopeLabel,
   sortSkillProjects,
-} from '../web/src/skillManagementView';
+} from '../web/src/settings/skills/skillManagementView';
 
 describe('skill management view helpers', () => {
   test('derives sorted hub ids from project.list hubs', () => {

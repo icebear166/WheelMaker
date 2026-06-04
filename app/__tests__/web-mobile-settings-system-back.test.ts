@@ -6,14 +6,15 @@ import {
   mobileSettingsHistoryKey,
   resolveMobileSettingsPopAction,
   resolveMobileSettingsHistoryWriteAction,
-} from '../web/src/services/mobileSettingsHistory';
+} from '../web/src/shell/layouts/mobile/mobileSettingsHistory';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 function readMain(): string {
-  return fs.readFileSync(path.join(__dirname, '..', 'web', 'src', 'main.tsx'), 'utf8');
+  return fs.readFileSync(path.join(__dirname, '..', 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 }
 
 function readStyles(): string {
-  return fs.readFileSync(path.join(__dirname, '..', 'web', 'src', 'styles.css'), 'utf8');
+  return readWebStyles(path.join(__dirname, '..'));
 }
 
 describe('mobile settings system back', () => {
@@ -102,7 +103,7 @@ describe('mobile settings system back', () => {
   test('wires mobile settings to history and mobile title actions', () => {
     const main = readMain();
 
-    expect(main).toContain("} from './services/mobileSettingsHistory';");
+    expect(main).toContain("} from '../shell/layouts/mobile/mobileSettingsHistory';");
     expect(main).toContain('window.history.pushState(createMobileSettingsHistoryState(settingsDetailView');
     expect(main).toContain('window.history.replaceState(createMobileSettingsHistoryState(settingsDetailView');
     expect(main).toContain('resolveMobileSettingsHistoryWriteAction({');

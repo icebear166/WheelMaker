@@ -2,7 +2,7 @@ describe('web chat session title display', () => {
   test('resolves manual title before automatic title facts', () => {
     const {
       resolveChatSessionTitle,
-    } = require('../web/src/chat/chatSessionTitle');
+    } = require('../web/src/chat/session/chatSessionTitle');
 
     const facts = JSON.stringify({ first: 'first prompt', last: 'latest prompt', manual: 'manual title' });
 
@@ -12,7 +12,7 @@ describe('web chat session title display', () => {
   test('uses first prompt by default and keeps legacy and incomplete titles readable', () => {
     const {
       resolveChatSessionTitle,
-    } = require('../web/src/chat/chatSessionTitle');
+    } = require('../web/src/chat/session/chatSessionTitle');
 
     expect(resolveChatSessionTitle(JSON.stringify({ first: 'first prompt', last: 'latest prompt' }))).toBe('first prompt');
     expect(resolveChatSessionTitle('legacy title')).toBe('legacy title');

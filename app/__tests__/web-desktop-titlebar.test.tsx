@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
-import { DesktopTitleBar } from '../web/src/shell/DesktopTitleBar';
+import { DesktopTitleBar } from '../web/src/shell/layouts/desktop/DesktopTitleBar';
 
 describe('desktop title bar', () => {
   const originalWindow = (global as typeof globalThis & { window?: unknown }).window;

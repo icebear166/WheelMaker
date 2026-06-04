@@ -1,7 +1,7 @@
 import {
   inferDesktopRemoteWebCandidate,
   submitDesktopRemoteWebCandidate,
-} from '../web/src/shell/desktop/webSource';
+} from '../web/src/platform/desktop/webSource';
 
 describe('desktop web source', () => {
   test('infers secure remote web root from registry websocket URL', () => {

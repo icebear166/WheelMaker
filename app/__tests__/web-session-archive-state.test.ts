@@ -6,8 +6,8 @@ import {
   readOlderSessionsExpanded,
   splitOlderProjectSessions,
   writeOlderSessionsExpanded,
-} from '../web/src/chat/sessionArchiveState';
-import type {RegistryChatSession, RegistryProject} from '../web/src/types/registry';
+} from '../web/src/chat/session/sessionArchiveState';
+import type {RegistryChatSession, RegistryProject} from '../web/src/registry/registryTypes';
 
 function session(sessionId: string, updatedAt: string, flags: Partial<RegistryChatSession> = {}): RegistryChatSession {
   return {

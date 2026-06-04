@@ -2,7 +2,7 @@ import {
   type ChatSessionKey,
   chatSessionKeyFromParts,
   encodeChatSessionKey,
-} from './chatSessionKey';
+} from './session/chatSessionKey';
 
 export type ChatListSelectionResolution = {
   sessionId: string;

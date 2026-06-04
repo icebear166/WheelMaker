@@ -5,17 +5,17 @@ describe('native shell PWA gating', () => {
   test('keeps browser PWA registration guarded away from native shell hosts', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'main.tsx'),
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
       'utf8',
     );
 
-    expect(mainTsx).toContain("import {cleanupNativeWebViewPWA} from './pwa/nativePwaGuard';");
-    expect(mainTsx).toContain("import {isNativeShellHost} from './shell/native/webSource';");
+    expect(mainTsx).toContain("import {cleanupNativeWebViewPWA} from '../platform/pwa/nativePwaGuard';");
+    expect(mainTsx).toContain("import {isNativeShellHost} from '../platform/native/webSource';");
     expect(mainTsx).toContain('const nativeShellHost = isNativeShellHost();');
     expect(mainTsx).toContain('if (nativeShellHost) {');
     expect(mainTsx).toContain('cleanupNativeWebViewPWA().catch(() => undefined);');
     expect(mainTsx).not.toContain('installWebFreshnessAutoRefresh');
-    expect(mainTsx).not.toContain('./pwa/webFreshness');
+    expect(mainTsx).not.toContain('../platform/pwa/webFreshness');
     expect(mainTsx).toContain("if (!nativeShellHost && 'serviceWorker' in navigator && window.isSecureContext) {");
   });
 

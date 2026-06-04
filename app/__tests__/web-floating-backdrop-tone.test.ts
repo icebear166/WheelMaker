@@ -3,7 +3,7 @@ import {
   FLOATING_BACKDROP_TONE_THROTTLE_MS,
   resolveFloatingBackdropTone,
   shouldMeasureFloatingBackdropTone,
-} from '../web/src/services/floatingBackdropTone';
+} from '../web/src/shell/layouts/mobile/floatingBackdropTone';
 
 describe('floating backdrop tone detection', () => {
   test('classifies mostly light backgrounds so mobile floating controls can become more solid', () => {

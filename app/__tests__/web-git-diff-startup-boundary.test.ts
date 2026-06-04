@@ -9,19 +9,21 @@ function readSourceText(filePath: string): string {
 
 describe('web git diff startup boundary', () => {
   const projectRoot = path.join(__dirname, '..');
-  const mainTsxPath = path.join(projectRoot, 'web', 'src', 'main.tsx');
+  const mainTsxPath = path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx');
+  const shikiBlockPath = path.join(projectRoot, 'web', 'src', 'code', 'ShikiCodeBlock.tsx');
   const diffRowsPath = path.join(projectRoot, 'web', 'src', 'git', 'diffRows.ts');
 
   test('keeps gitdiff-parser out of the chat startup module', () => {
     const mainTsx = readSourceText(mainTsxPath);
+    const shikiBlockTsx = readSourceText(shikiBlockPath);
 
     expect(mainTsx).not.toContain("require('gitdiff-parser')");
     expect(mainTsx).not.toContain('declare const require');
-    expect(mainTsx).toMatch(
-      /import\(\s*\/\* webpackChunkName: "git-diff" \*\/\s*'\.\/git\/diffRows'\s*\)/,
+    expect(shikiBlockTsx).toMatch(
+      /import\(\s*\/\* webpackChunkName: "git-diff" \*\/\s*'\.\.\/git\/diffRows'\s*\)/,
     );
-    expect(mainTsx).toContain('const [diffRenderState, setDiffRenderState]');
-    expect(mainTsx).toContain("if (diffRenderState === 'empty')");
+    expect(shikiBlockTsx).toContain('const [diffRenderState, setDiffRenderState]');
+    expect(shikiBlockTsx).toContain("if (diffRenderState === 'empty')");
   });
 
   test('loads git diff row parsing from a dedicated lazy module', () => {

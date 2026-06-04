@@ -9,8 +9,8 @@ import {
   requestChatIndexProjectRefresh,
   shouldUpdateCurrentProjectSessions,
   sortChatIndexProjects,
-} from '../web/src/chat/chatIndexState';
-import type { RegistryChatSession, RegistryProject } from '../web/src/types/registry';
+} from '../web/src/chat/session/chatIndexState';
+import type { RegistryChatSession, RegistryProject } from '../web/src/registry/registryTypes';
 
 function project(projectId: string, name: string): RegistryProject {
   return {

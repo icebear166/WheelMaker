@@ -4,7 +4,7 @@ import {
   isNativeShellHost,
   isNativeWebViewHost,
   submitNativeRemoteWebCandidate,
-} from '../web/src/shell/native/webSource';
+} from '../web/src/platform/native/webSource';
 
 describe('native Web source helpers', () => {
   afterEach(() => {

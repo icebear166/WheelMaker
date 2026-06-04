@@ -1,5 +1,5 @@
 import { buildPromptDoneCopyRange } from '../web/src/chat/chatCopyRange';
-import type { RegistryChatMessage } from '../web/src/types/registry';
+import type { RegistryChatMessage } from '../web/src/registry/registryTypes';
 
 function message(
   turnIndex: number,

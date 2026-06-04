@@ -1,13 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 
+import {readWebStyles} from '../testHelpers/webStyles';
 describe('web git filename truncation policy', () => {
   test('keeps filename untruncated while parent path remains ellipsized', () => {
     const projectRoot = path.join(__dirname, '..');
-    const stylesCss = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'styles.css'),
-      'utf8',
-    );
+    const stylesCss = readWebStyles(projectRoot);
 
     expect(stylesCss).toMatch(
       /\.git-file-name\s*\{[^}]*flex:\s*0 0 auto;[^}]*overflow:\s*visible;[^}]*text-overflow:\s*clip;/,

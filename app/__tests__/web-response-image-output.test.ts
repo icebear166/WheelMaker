@@ -1,7 +1,7 @@
 import {
   blobToDataUrl,
   outputResponseImage,
-} from '../web/src/responseImageOutput';
+} from '../web/src/chat/export/responseImageOutput';
 
 describe('response image output', () => {
   afterEach(() => {

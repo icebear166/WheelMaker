@@ -6,13 +6,13 @@ import {
   skillOperationStatusLabel,
   skillScopeLabel,
   sortSkillProjects,
-} from '../skillManagementView';
+} from './skills/skillManagementView';
 import type {
   RegistrySkillCommandResponse,
   RegistrySkillScope,
   RegistrySkillSnapshot,
   RegistrySkillSourceCandidate,
-} from '../types/registry';
+} from '../registry/registryTypes';
 
 const SKILLS_MARKETPLACE_URL = 'https://www.skills.sh/';
 

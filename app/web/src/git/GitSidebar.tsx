@@ -3,7 +3,7 @@ import type {
   RegistryGitCommit,
   RegistryGitCommitFile,
   RegistryProject,
-} from '../types/registry';
+} from '../registry/registryTypes';
 import { WorkspaceProjectSelector } from '../file/FileExplorerTree';
 import {
   WORKING_TREE_COMMIT_ID,

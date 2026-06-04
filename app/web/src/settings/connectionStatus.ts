@@ -1,4 +1,4 @@
-import type {NativeWebSourceState} from '../shell/native/webSource';
+import type {NativeWebSourceState} from '../platform/native/webSource';
 
 export type ConnectionStatusLine = {
   label: string;

@@ -5,7 +5,7 @@ describe('chat prompt completion notification settings', () => {
   const projectRoot = path.join(__dirname, '..');
   const readMainSource = () =>
     fs
-      .readFileSync(path.join(projectRoot, 'web', 'src', 'main.tsx'), 'utf8')
+      .readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8')
       .replace(/\r\n/g, '\n');
   const readSettingsRootSource = () =>
     fs
@@ -16,7 +16,7 @@ describe('chat prompt completion notification settings', () => {
     const mainTsx = readMainSource();
     const settingsRootTsx = readSettingsRootSource();
     const persistenceTs = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'services', 'workspacePersistence.ts'),
+      path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'),
       'utf8',
     );
 
@@ -37,8 +37,8 @@ describe('chat prompt completion notification settings', () => {
   test('routes session.message through prompt completion notification policy', () => {
     const mainTsx = readMainSource();
 
-    expect(mainTsx).toContain("from './notifications/promptCompletion'");
-    expect(mainTsx).toContain("from './notifications/provider'");
+    expect(mainTsx).toContain("from '../chat/notifications/promptCompletionNotification'");
+    expect(mainTsx).toContain("from '../notifications/NotificationProvider'");
     expect(mainTsx).toContain('const notificationProvider = useMemo(() => createNotificationProvider(), []);');
     expect(mainTsx).toContain('const notifiedPromptCompletionIdsRef = useRef<Set<string>>(new Set());');
     expect(mainTsx).toContain('const maybeNotifyPromptCompletion = (');

@@ -1,4 +1,4 @@
-import type {RegistryChatSession, RegistryProject} from '../types/registry';
+import type {RegistryChatSession, RegistryProject} from '../registry/registryTypes';
 
 export type MobileChatQuickSwitchSection = {
   projectId: string;

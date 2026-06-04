@@ -1,5 +1,5 @@
 import {buildMobileChatQuickSwitchSections} from '../web/src/chat/mobileChatQuickSwitch';
-import type {RegistryChatSession, RegistryProject} from '../web/src/types/registry';
+import type {RegistryChatSession, RegistryProject} from '../web/src/registry/registryTypes';
 
 function project(projectId: string, name = projectId, hubId = 'local'): RegistryProject {
   return {
