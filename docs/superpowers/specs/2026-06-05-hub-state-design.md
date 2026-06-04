@@ -1,63 +1,261 @@
-# Hub State Design
+# HubState 与 Registry 协议整理设计
 
-Date: 2026-06-05
-Status: Approved
+日期：2026-06-05
+状态：待确认
 
-## Goal
+## 目标
 
-Add a Hub-owned `HubState` model for settings and maintenance surfaces that currently trigger many independent scan/query requests.
+把 Registry 协议整理成稳定的领域命名，并引入 Hub 侧缓存的 `HubState`，用于承载设置页和维护页当前分散的 scan/query/action 模式。
 
-The Web app should be able to open settings pages from cached Hub state, refresh selected state sections, and run controlled section actions through one protocol shape. Registry remains a router and does not cache Hub state.
+最终效果：
 
-## Context
+- App 不再直接调用一批零散的 `cmd.*` scan/query 方法。
+- Hub 级状态由 Hub 缓存，Registry 只负责鉴权、路由、转发和广播。
+- Hub、Project、Session 的路由 ID 规则统一。
+- 协议方法集中注册，调用侧使用常量，不再散落字符串。
 
-Several current settings surfaces use the same pattern:
+## 背景
 
-- Load hubs through `project.list`.
-- Fan out per-hub state requests.
-- Poll the same request while a background operation is running.
-- Store view-local loading, error, operation, and data state in App code.
+当前协议已经有几个问题叠在一起：
 
-Current examples are:
+- `registry.message`、`session.message` 这类命名表达不清，容易混淆消息来源和业务领域。
+- `cmd.npm`、`cmd.update`、`cmd.skills`、`cmd.token` 是 Hub 能力，但挂在 `cmd` 顶级域。
+- 一些 Hub 级请求把 `hubId` 放在 payload 里，路由字段和业务参数混在一起。
+- Settings 页面打开时会连续发起多组 Hub scan/query，并在 App 内维护很多局部 loading/error/operation 状态。
+- `fs.index.status` 是 Hub 级状态，`fs.index.search` 是 Project 级查询，两者现在命名层级相同。
+- Registry 当前还保留 `project.online/offline` 事件，后续应该改成统一的 Project 报告事件。
 
-- `cmd.npm` `scan`, `install`, `install_many`, `uninstall`
-- `cmd.update` `query`, `update-publish`
-- `cmd.skills` `scan`, `list`, `install`, `uninstall`, `update`
-- `cmd.token` `scan`
-- `fs.index.status`
-- `fs.index.rebuild`
+这次整理不是单纯改名，而是把协议按能力边界重新收口。
 
-These are Hub-level capabilities. They should be represented as Hub state sections instead of independent command methods exposed to the App.
+## 总体协议域
 
-## Confirmed Scope
+下一阶段协议保留这些顶级域：
 
-- Add Hub-owned `HubState` cache.
-- Add protocol methods `hub.state.get`, `hub.state.refresh`, `hub.state.action`, and event `hub.state.updated`.
-- Put `hubId` on the Registry envelope for Hub-scoped requests, including batch subrequests.
-- Keep Registry as a forwarder only. Registry does not cache, aggregate, or persist HubState.
-- Let every `HubState` section carry its own status, timestamps, data, error, and optional running action.
-- Let top-level `HubState` carry an aggregate status that tells whether the Hub has finished updating.
-- Move NPM package scan and write operations into HubState.
-- Move skills scan/source-list/write operations into HubState.
-- Move WheelMaker update query and update-publish into HubState.
-- Move token scan into HubState.
-- Move file index status and rebuild into HubState.
-- Return latest state or latest section state from `refresh` and `action`, so the App does not need a follow-up `get`.
+| 顶级域 | 归属 | 用途 |
+| --- | --- | --- |
+| `connect.*` | 连接层 | 初始化、关闭、本地读连接证明 |
+| `registry.*` | Registry | Registry 自己拥有的目录、广播、控制能力 |
+| `hub.*` | Hub | Hub 报告、HubState、Hub 内部能力 |
+| `project.*` | Project | 项目文件、Git、同步检查等 Project 级能力 |
+| `session.*` | Session | 会话列表、读取、发送、归档、附件、配置 |
+| `speech.*` | Registry speech | 语音输入流式通道 |
+| `monitor.*` | Monitor | 监控面板能力 |
+| `debug.*` | Debug | 调试日志上传等调试能力 |
 
-## Non-Goals
+旧的 `cmd.*` 不再作为 App 面向协议继续扩展。迁移期可以保留兼容入口，但新 App 流程应改用 `hub.state.*`。
 
-- Do not cache HubState in Registry.
-- Do not make Registry poll Hub operations.
-- Do not expose generic command execution.
-- Do not move project/session runtime methods into HubState.
-- Do not move speech streaming into HubState.
-- Do not move Registry-owned relay status into HubState.
-- Do not require a persistent HubState database in the first version.
-- Do not remove old `cmd.*` and `fs.index.*` methods in the same first slice unless all App callers have migrated.
+## Envelope 与路由 ID
 
-## HubState Model
+共享 Envelope 增加顶层 `hubId`：
 
-Hub owns one `HubState` instance per Hub process.
+```json
+{
+  "requestId": 1,
+  "type": "request",
+  "method": "hub.state.get",
+  "hubId": "local-hub",
+  "payload": {}
+}
+```
+
+ID 放置规则：
+
+- `hubId`：Hub 级请求放在 envelope 顶层。
+- `projectId`：Project 级请求放在 envelope 顶层。
+- `sessionId`：Session 实例 ID 继续放在 payload 中。
+- payload 不再承载路由用的 `hubId` 或 `projectId`。
+- 返回数据如果需要自描述，可以继续包含 `hubId`、`projectId` 字段。
+
+Batch 子请求也要支持 `hubId`：
+
+```json
+{
+  "method": "batch",
+  "payload": {
+    "requests": [
+      {
+        "method": "hub.state.get",
+        "hubId": "local-hub",
+        "payload": {}
+      }
+    ]
+  }
+}
+```
+
+服务端协议描述符需要增加或强化：
+
+- `RequiresHubID`
+- `RequiresProjectID`
+- `RequiresSessionID`
+- `Route`
+- `Roles`
+- `Batchable`
+- `LocalRead`
+
+`RequiresHubID` 校验 envelope 顶层 `hubId`，不再解析 payload。`RequiresProjectID` 校验 envelope 顶层 `projectId`。`RequiresSessionID` 校验 payload 中的 `sessionId`。
+
+## 协议集中注册
+
+所有 Registry 协议方法继续以 `server/internal/protocol/registry_methods.go` 作为服务端单一注册表，并补齐描述符。
+
+App 侧应增加对应的协议常量模块，例如：
+
+```ts
+export const RegistryMethods = {
+  HubStateGet: 'hub.state.get',
+  HubStateRefresh: 'hub.state.refresh',
+  HubStateAction: 'hub.state.action',
+} as const;
+```
+
+调用代码不再直接写字符串。测试可以允许 fixture 字符串，但业务调用应引用常量。
+
+后续可以考虑生成 TS 常量，但第一步可以手写并用测试保证覆盖。
+
+## 协议命名调整清单
+
+### Connect
+
+| 当前 | 目标 | 说明 |
+| --- | --- | --- |
+| `connect.init` | `connect.init` | 保留 |
+| `connection.closing` | `connect.close` | 放回 connect 域 |
+| `local_read.proof` | `connect.localRead.proof` | 本地读连接证明，不再单独顶级域 |
+
+### Registry 与 Project 目录
+
+| 当前 | 目标 | 说明 |
+| --- | --- | --- |
+| `project.list` | `registry.project.list` | App 主动读取 Registry 项目目录 |
+| `project.online` | 删除 | 用 `registry.project.report` 统一表达 |
+| `project.offline` | 删除 | Hub 断开时也发 `registry.project.report` |
+| 无 | `registry.project.report` | Registry 广播单个 Project 的完整快照 |
+
+`registry.project.report` 事件应包含 envelope 顶层 `projectId`，payload 中包含完整的面向 App 的 project。Project payload 可以自带 `projectId`、`hubId`，方便 App 合并。
+
+### Hub 报告
+
+| 当前 | 目标 | 说明 |
+| --- | --- | --- |
+| `registry.reportProjects` | `hub.report.projects` | Hub 向 Registry 报告全量 projects |
+| `registry.updateProject` | `hub.report.project` | Hub 向 Registry 报告单个 project |
+
+这两个是 Hub 到 Registry 的上行报告。它们应使用 envelope 顶层 `hubId`。payload 不再需要路由用 `hubId`。
+
+### HubState
+
+新增：
+
+| 方法 | 说明 |
+| --- | --- |
+| `hub.state.get` | 读取 Hub 内缓存，不触发扫描 |
+| `hub.state.refresh` | 刷新指定 section |
+| `hub.state.action` | 对指定 section 执行动作 |
+| `hub.state.updated` | HubState 变化事件 |
+
+这些方法使用 envelope 顶层 `hubId`。
+
+### Project 能力
+
+| 当前 | 目标 | 说明 |
+| --- | --- | --- |
+| `project.syncCheck` | `project.sync.check` | Project 同步检查 |
+| `fs.list` | `project.fs.list` | Project 文件能力 |
+| `fs.info` | `project.fs.info` | Project 文件能力 |
+| `fs.read` | `project.fs.read` | Project 文件能力 |
+| `fs.search` | `project.fs.search` | Project 文件能力 |
+| `fs.grep` | `project.fs.grep` | Project 文件能力 |
+| `fs.index.search` | `project.fs.index.search` | Project 级文件索引搜索 |
+| `git.refs` | `project.git.refs` | Project Git 能力 |
+| `git.log` | `project.git.log` | Project Git 能力 |
+| `git.commit.files` | `project.git.commit.files` | Project Git 能力 |
+| `git.commit.fileDiff` | `project.git.commit.fileDiff` | Project Git 能力 |
+| `git.status` | `project.git.status` | Project Git 能力 |
+| `git.workingTree.fileDiff` | `project.git.workingTree.fileDiff` | Project Git 能力 |
+
+`fs.index.status` 和 `fs.index.rebuild` 不再作为 Project/FS 协议暴露给 App，迁移到 HubState：
+
+- `hub.state.refresh` section `fileIndex`
+- `hub.state.action` section `fileIndex` action `rebuild`
+
+### Session 能力
+
+| 当前 | 目标 | 说明 |
+| --- | --- | --- |
+| `session.new` | `session.create` | 命名更直观 |
+| `session.setConfig` | `session.config` | 配置更新 |
+| `session.markRead` | `session.markRead` | 保留 camelCase |
+| `registry.session.message` | `session.message` | 统一事件名 |
+| `registry.session.updated` | `session.updated` | 统一事件名 |
+
+Session 事件不再区分 `registry.session.*` 和 `session.*` 两套名字。Hub 向 Registry 上传和 Registry 向 App 广播都使用同一个业务事件名，Registry 通过角色和 route 判断来源。
+
+保留：
+
+- `session.list`
+- `session.read`
+- `session.search`
+- `session.send`
+- `session.cancel`
+- `session.delete`
+- `session.rename`
+- `session.reload`
+- `session.resume.list`
+- `session.resume.import`
+- `session.archive`
+- `session.archive.list`
+- `session.archive.read`
+- `session.archive.restore`
+- `session.attachment.start`
+- `session.attachment.chunk`
+- `session.attachment.finish`
+- `session.attachment.cancel`
+- `session.attachment.delete`
+
+`session.token.*` 不应继续作为 session 域扩展。当前 App 侧 token scan 迁入 HubState 的 `tokenStats` section。若后续还需要 provider 级或 DeepSeek 专项查询，应归入 `hub.state.action` 的 `tokenStats` section，或者另建 `hub.token.*`，不要放在 `session.*`。
+
+### CMD
+
+旧 `cmd.*` 的 App 面向能力迁移到 HubState：
+
+| 当前 | 目标 |
+| --- | --- |
+| `cmd.npm` `scan` | `hub.state.refresh` section `agentPackages` |
+| `cmd.npm` `install/install_many/uninstall` | `hub.state.action` section `agentPackages` |
+| `cmd.update` `query` | `hub.state.refresh` section `wheelmakerUpdate` |
+| `cmd.update` `update-publish` | `hub.state.action` section `wheelmakerUpdate` action `updatePublish` |
+| `cmd.skills` `scan` | `hub.state.refresh` section `skills` |
+| `cmd.skills` `list/install/uninstall/update` | `hub.state.action` section `skills` |
+| `cmd.token` `scan` | `hub.state.refresh` section `tokenStats` |
+
+迁移期可以保留旧方法作为兼容别名。新 UI 不应再新增 `cmd.*` 调用。
+
+### Relay
+
+Relay 是 Registry 控制器状态，不进入 HubState。
+
+| 当前 | 目标 | 说明 |
+| --- | --- | --- |
+| `relay.status` | `registry.relay.status` | Registry 自有状态 |
+| `relay.enable` | `registry.relay.enable` | Registry 控制 |
+| `relay.disable` | `registry.relay.disable` | Registry 控制 |
+| `relay.regenerateAccessCode` | `registry.relay.regenerateAccessCode` | Registry 控制 |
+| `relay.open` | `hub.relay.open` | Registry 发给 Hub 的内部请求 |
+| `relay.close` | `hub.relay.close` | Registry 发给 Hub 的内部请求 |
+
+### Speech、Monitor、Debug
+
+这些本轮不进入 HubState。
+
+- `speech.start/chunk/finish/cancel` 保留在 `speech.*`。
+- `speech.transcript/error` 保留为 speech 事件。
+- `monitor.*` 暂时保留。
+- `debug.uploadLog` 暂时保留。
+
+## HubState 模型
+
+Hub 拥有一个内存 `HubState` 缓存。Registry 不缓存、不聚合、不持久化。
 
 ```ts
 type HubStateStatus = 'empty' | 'ready' | 'refreshing' | 'partial' | 'error';
@@ -76,19 +274,19 @@ interface HubState {
 }
 ```
 
-Top-level `status` is derived from section status:
+顶层 `status` 从 section 状态汇总：
 
-- `empty`: no section has data, refresh result, or action result.
-- `refreshing`: at least one requested or active section is refreshing, or at least one section has a running action.
-- `ready`: all loaded sections are ready and no section is refreshing.
-- `partial`: at least one section is ready and at least one section is empty or error.
-- `error`: all loaded sections are error and no section is refreshing.
+- `empty`：没有任何 section 有数据、刷新结果或 action 结果。
+- `refreshing`：至少一个 section 正在刷新，或至少一个 section 有运行中的 action。
+- `ready`：所有已加载 section 都是 ready，且没有运行中任务。
+- `partial`：至少一个 section ready，同时至少一个 section empty 或 error。
+- `error`：所有已加载 section 都是 error，且没有运行中任务。
 
-Top-level `updatedAt` is the newest section `updatedAt`.
+顶层 `updatedAt` 取最新的 section `updatedAt`。
 
-## Section Model
+## Section 模型
 
-Each section is independently readable, refreshable, and actionable.
+每个 section 都独立可读、可刷新、可执行 action。
 
 ```ts
 type HubStateSectionStatus = 'empty' | 'ready' | 'refreshing' | 'error';
@@ -114,66 +312,38 @@ interface HubStateActionSnapshot {
 }
 ```
 
-Rules:
+规则：
 
-- `get` returns current cached sections without starting new work.
-- `refresh` starts or performs collection for the requested sections.
-- `action` runs a controlled operation for one section.
-- A section can keep its last successful `data` while `status` is `refreshing`.
-- A failed refresh sets section `status:"error"` and `error`, but may keep previous `data`.
-- A running action is stored in the section `action` field and makes the section `status:"refreshing"`.
-- Completed action snapshots stay visible until the next action replaces them or the Hub restarts.
+- `hub.state.get` 只读缓存，不启动扫描。
+- `hub.state.refresh` 刷新指定 sections。
+- `hub.state.action` 对一个 section 执行受控操作。
+- section 刷新中可以保留上一次成功的 `data`。
+- refresh 失败时 section 进入 `error`，但可以保留旧 `data`。
+- action 运行中时写入 `section.action`，并让 section 进入 `refreshing`。
+- action 完成后保留快照，直到下一次 action 替换或 Hub 重启。
+- `refresh` 和 `action` 都返回最新 HubState 或最新 section，不要求 App 立刻补一次 `get`。
 
-## Protocol
+## HubState 协议
 
-### Envelope
+### `hub.state.get`
 
-Hub-scoped requests use top-level `hubId`.
+读取 Hub 缓存，不触发扫描。
+
+请求：
 
 ```json
 {
-  "requestId": 1,
-  "type": "request",
   "method": "hub.state.get",
   "hubId": "local-hub",
-  "payload": {}
-}
-```
-
-`projectId` remains top-level for project-scoped requests. Session IDs remain in payload for session-instance operations.
-
-Batch subrequests also accept `hubId`:
-
-```json
-{
-  "method": "batch",
   "payload": {
-    "requests": [
-      {
-        "method": "hub.state.get",
-        "hubId": "local-hub",
-        "payload": {}
-      }
-    ]
+    "sections": ["agentPackages", "skills"]
   }
 }
 ```
 
-### `hub.state.get`
+`sections` 为空或省略时返回所有已知 sections。
 
-Reads cached HubState from the target Hub. It does not trigger scans.
-
-Request payload:
-
-```json
-{
-  "sections": ["agentPackages", "skills"]
-}
-```
-
-If `sections` is omitted or empty, Hub returns all known sections.
-
-Response payload:
+响应：
 
 ```json
 {
@@ -188,100 +358,92 @@ Response payload:
 
 ### `hub.state.refresh`
 
-Refreshes selected sections on the target Hub and returns the updated state.
+刷新指定 sections。
 
-Request payload:
-
-```json
-{
-  "sections": ["agentPackages", "wheelmakerUpdate", "fileIndex"],
-  "force": true
-}
-```
-
-Rules:
-
-- `sections` is required and must be non-empty.
-- `force` tells collectors to bypass section-specific freshness checks where supported.
-- If a section already has a running refresh or action, the Hub returns the current section with `status:"refreshing"` instead of starting duplicate work.
-- Long-running collectors may return immediately with `status:"refreshing"` and continue in background.
-- Hub emits `hub.state.updated` after a background section changes.
-
-Response payload:
+请求：
 
 ```json
 {
-  "state": {},
-  "sections": ["agentPackages", "wheelmakerUpdate", "fileIndex"]
-}
-```
-
-### `hub.state.action`
-
-Runs a controlled action against one section.
-
-Request payload:
-
-```json
-{
-  "section": "agentPackages",
-  "action": "install",
-  "params": {
-    "packageName": "@openai/codex",
-    "version": "latest"
+  "method": "hub.state.refresh",
+  "hubId": "local-hub",
+  "payload": {
+    "sections": ["agentPackages", "wheelmakerUpdate", "fileIndex"],
+    "force": true
   }
 }
 ```
 
-Rules:
+规则：
 
-- `section` and `action` are required.
-- Hub validates action names per section.
-- Hub validates params per action.
-- Hub does not accept raw command, raw args, cwd, or env from the App.
-- A section action updates that section's `action` snapshot.
-- Accepted long-running actions return the updated state immediately.
-- After action completion, the Hub refreshes the affected section data or marks it stale/error.
-- Hub emits `hub.state.updated` when action status or section data changes.
+- `sections` 必填且非空。
+- `force` 让 collector 绕过可用的 freshness check。
+- section 已有运行中 refresh/action 时，不启动重复任务，返回当前 section 状态。
+- 长任务可以先返回 `refreshing`，后台继续执行。
+- 后台状态变化后 Hub 发 `hub.state.updated`。
 
-Response payload:
+### `hub.state.action`
+
+对一个 section 执行动作。
+
+请求：
 
 ```json
 {
-  "state": {},
-  "section": "agentPackages",
-  "action": {}
+  "method": "hub.state.action",
+  "hubId": "local-hub",
+  "payload": {
+    "section": "agentPackages",
+    "action": "install",
+    "params": {
+      "packageName": "@openai/codex",
+      "version": "latest"
+    }
+  }
 }
 ```
+
+规则：
+
+- `section` 和 `action` 必填。
+- Hub 按 section 校验 action 名称。
+- Hub 按 action 校验 params。
+- App 不能传 raw command、raw args、cwd 或 env。
+- 长任务 accepted 后立即返回更新后的 state。
+- action 完成后 Hub 刷新受影响 section，或标记错误。
+- action 状态和 section data 变化时发 `hub.state.updated`。
 
 ### `hub.state.updated`
 
-Hub emits this event through Registry when HubState changes.
+HubState 变化事件。
 
-Event payload:
+事件：
 
 ```json
 {
-  "state": {},
-  "sections": ["agentPackages"],
-  "reason": "action.completed"
+  "method": "hub.state.updated",
+  "hubId": "local-hub",
+  "payload": {
+    "state": {},
+    "sections": ["agentPackages"],
+    "reason": "action.completed"
+  }
 }
 ```
 
-Registry forwards the event to App clients scoped to the Hub. Registry does not store the payload.
+Registry 只转发给对应 scope 的 App client，不保存 payload。
 
-## Sections
+## HubState 分区
 
 ### `agentPackages`
 
-Replaces App use of:
+替代：
 
-- `cmd.npm` `action:"scan"`
-- `cmd.npm` `action:"install"`
-- `cmd.npm` `action:"install_many"`
-- `cmd.npm` `action:"uninstall"`
+- `cmd.npm` `scan`
+- `cmd.npm` `install`
+- `cmd.npm` `install_many`
+- `cmd.npm` `uninstall`
 
-Refresh:
+刷新：
 
 ```json
 {
@@ -289,86 +451,74 @@ Refresh:
 }
 ```
 
-Actions:
+动作：
 
 - `install`
 - `installMany`
 - `uninstall`
 
-Action params:
-
-```json
-{
-  "packageName": "@openai/codex",
-  "packageNames": ["@openai/codex", "@anthropic-ai/claude-code"],
-  "version": "latest"
-}
-```
-
-The existing package allowlist and operation concurrency rules remain Hub-owned. Runtime packages can be installed or updated through `install`. Deprecated packages can be removed through `uninstall`.
+保留现有 package allowlist 和 Hub 单操作并发限制。运行时包通过 `install` 安装或更新；废弃包通过 `uninstall` 移除。
 
 ### `wheelmakerUpdate`
 
-Replaces App use of:
+替代：
 
-- `cmd.update` `action:"query"`
-- `cmd.update` `action:"update-publish"`
+- `cmd.update` `query`
+- `cmd.update` `update-publish`
 
-Refresh maps to update query.
+刷新等价于 update query。
 
-Action:
+动作：
 
 - `updatePublish`
 
-The section data keeps the existing update response shape: status, release, git snapshot, pending signal, remote refresh running, and update-publish capability.
+section data 保留现有 update response 信息：status、release、git snapshot、pending signal、remote refresh running、can update publish。
 
 ### `skills`
 
-Replaces App use of:
+替代：
 
-- `cmd.skills` `action:"scan"`
-- `cmd.skills` `action:"list"`
-- `cmd.skills` `action:"install"`
-- `cmd.skills` `action:"uninstall"`
-- `cmd.skills` `action:"update"`
+- `cmd.skills` `scan`
+- `cmd.skills` `list`
+- `cmd.skills` `install`
+- `cmd.skills` `uninstall`
+- `cmd.skills` `update`
 
-Refresh maps to installed skill scan.
+刷新等价于 installed skills scan。
 
-Actions:
+动作：
 
 - `listSource`
 - `install`
 - `uninstall`
 - `update`
 
-`listSource` is an action because it is scoped to the skills section and uses the same controlled CLI surface, even though it is read-like. Its response updates `section.action` and may also include action result data for source candidates.
-
-The installed skills data remains separate from provider-visible `ProjectAgentProfile.skills`.
+`listSource` 是 read-like action，但仍属于 skills section 的受控动作。候选结果放在 `section.action.result` 中。
 
 ### `tokenStats`
 
-Replaces App use of:
+替代：
 
-- `cmd.token` `action:"scan"`
+- `cmd.token` `scan`
 
-Refresh maps to token scan.
+刷新等价于 token scan。第一版不包含写动作。
 
-No write actions are included in the first version.
+如果未来需要 DeepSeek 或 provider 级专项查询，优先作为 `tokenStats` 的 action，而不是放回 `session.token.*`。
 
 ### `fileIndex`
 
-Replaces App use of:
+替代：
 
 - `fs.index.status`
 - `fs.index.rebuild`
 
-Refresh maps to file index status for all projects in the Hub.
+刷新返回 Hub 内所有项目的 file index status。
 
-Action:
+动作：
 
 - `rebuild`
 
-Action params:
+参数：
 
 ```json
 {
@@ -376,144 +526,153 @@ Action params:
 }
 ```
 
-`fs.index.search` remains a project-scoped search method and does not move into HubState.
+`project.fs.index.search` 保持 Project 级搜索方法，不进入 HubState。
 
-## Registry Routing
+## Registry 路由行为
 
-Registry adds a `hubId` field to the shared envelope and raw envelope parser.
+Registry 对 `hub.state.*`：
 
-Routing rules:
+- 校验 client role。
+- 校验 envelope 顶层 `hubId`。
+- 校验 scoped client 不能访问 scope 外 Hub。
+- 校验目标 Hub 已知且在线。
+- 转发请求到目标 Hub。
+- 把 Hub response 原样返回 App。
+- 转发 Hub 发出的 `hub.state.updated`。
+- 不缓存 HubState。
+- 不聚合多 Hub 状态。
+- 不轮询 Hub operation。
 
-- `hub.state.get`, `hub.state.refresh`, and `hub.state.action` require top-level `hubId`.
-- Client role may call these methods.
-- Registry checks client hub scope if the client is scoped.
-- Registry checks the target Hub is known and online.
-- Registry forwards the request to the Hub with the same `hubId`.
-- Registry returns the Hub response to the App.
-- Registry forwards `hub.state.updated` events from Hub to matching App clients.
-- Registry does not persist HubState.
+Hub 断开时，Registry 不提供旧 HubState。App 可以保留本地上次渲染值，但协议权威不在 Registry。
 
-This should become the model for other Hub-scoped methods. Existing payload-level `hubId` usage can remain for compatibility during migration, but new HubState calls should not put routing IDs inside payload.
+## Hub 侧架构
 
-## Hub Architecture
+新增 `HubStateManager`，挂在 Hub `Reporter` 后面。
 
-Add a Hub-side `HubStateManager` behind `Reporter`.
+职责：
 
-Responsibilities:
+- 持有内存 HubState。
+- 分发 section refresh。
+- 分发 section action。
+- 维护 section status、timestamps、error、action snapshot。
+- 复用现有 command/manager 实现。
+- 通过 Reporter publisher 发 `hub.state.updated`。
 
-- Own cached `HubState`.
-- Dispatch section refreshes.
-- Dispatch section actions.
-- Maintain section status, timestamps, errors, and action snapshots.
-- Reuse existing collectors and command handlers.
-- Emit `hub.state.updated` through the Reporter publisher when state changes.
+初始 adapter：
 
-Initial adapters:
+- `agentPackages` 复用 `tools.NPMCommand`。
+- `wheelmakerUpdate` 复用 `tools.UpdateCommand`。
+- `skills` 复用 `tools.SkillsCommand`。
+- `tokenStats` 复用 `tools.TokenCommand`。
+- `fileIndex` 复用 `projectFileIndexManager`。
 
-- `agentPackages` uses existing `tools.NPMCommand`.
-- `wheelmakerUpdate` uses existing `tools.UpdateCommand`.
-- `skills` uses existing `tools.SkillsCommand`.
-- `tokenStats` uses existing `tools.TokenCommand`.
-- `fileIndex` uses existing `projectFileIndexManager`.
+第一版可以保留旧 command handler，通过相同底层对象提供兼容。关键是新的 App 设置页流程走 `HubStateManager`。
 
-The first version can keep the old command handlers and call the same underlying command objects. The important change is that App-facing settings workflows move to `HubStateManager`.
+## App 数据流
 
-## App Data Flow
+打开 settings 页面：
 
-Opening a settings surface:
+1. App 调用项目目录方法获取 hubs/projects。当前是 `project.list`，协议整理后改为 `registry.project.list`。
+2. App 对可见 hubs batch 调用 `hub.state.get`。
+3. App 直接渲染缓存 sections。
+4. 空 section 显示 empty/stale 状态，并允许用户 refresh。
 
-1. App calls the project catalog method to get hubs and projects. This is `project.list` today and can become `registry.project.list` during the broader protocol rename.
-2. App batches `hub.state.get` for visible hubs.
-3. App renders cached sections immediately.
-4. If a visible section is empty, App may show an empty/stale state and offer refresh.
+手动刷新：
 
-Manual refresh:
+1. App 调用 `hub.state.refresh`，传入 sections。
+2. App 合并返回的 HubState。
+3. 如果 section 仍在 `refreshing`，等待 `hub.state.updated`，必要时轮询 `hub.state.get`。
 
-1. App calls `hub.state.refresh` with selected sections.
-2. App merges the returned state.
-3. If returned sections are still refreshing, App waits for `hub.state.updated` or polls `hub.state.get`.
+执行动作：
 
-Action:
+1. App 调用 `hub.state.action`，传入 section/action/params。
+2. App 合并返回的 HubState。
+3. App 渲染 `section.action`。
+4. App 通过 `hub.state.updated` 接收 action 和 section data 的后续变化。
 
-1. App calls `hub.state.action` with section, action, and params.
-2. App merges the returned state.
-3. App renders `section.action`.
-4. App receives `hub.state.updated` as action status and section data change.
+迁移后 App 不再为 NPM、update、skills、token stats、file index status 各自维护定制扫描轮询循环。
 
-The App should no longer keep separate bespoke scan polling loops for NPM, update, skills, token stats, and file index status once the migrated surfaces use HubState.
+## 错误处理
 
-## Error Handling
+- 缺少 `hubId`：`INVALID_ARGUMENT`。
+- 未知 Hub：`NOT_FOUND`。
+- Hub 离线：`UNAVAILABLE`。
+- refresh 缺少 `sections`：`INVALID_ARGUMENT`。
+- 未知 section：`INVALID_ARGUMENT`。
+- 未知 section action：`INVALID_ARGUMENT`。
+- action params 非法：`INVALID_ARGUMENT`。
+- section 已有运行中操作：能表达为 state 时返回当前 section；不能接受新 action 时返回 `CONFLICT`。
+- collector 失败：section `status:"error"`，写入短 `error`。
+- action 失败：`section.action.status:"failed"`，写入短 `error`，保留旧 data。
 
-- Missing `hubId`: `INVALID_ARGUMENT`.
-- Unknown Hub: `NOT_FOUND`.
-- Offline Hub: `UNAVAILABLE`.
-- Missing `sections` for refresh: `INVALID_ARGUMENT`.
-- Unknown section: `INVALID_ARGUMENT`.
-- Unknown section action: `INVALID_ARGUMENT`.
-- Invalid action params: `INVALID_ARGUMENT`.
-- Concurrent section operation: return current section state when possible; use `CONFLICT` only when the action cannot be accepted or represented.
-- Collector failure: section `status:"error"` with short `error`.
-- Action failure: `section.action.status:"failed"` with short `error`; keep previous section data if available.
+App 不显示完整 stdout/stderr。
 
-Full command output stays out of the App.
+## 迁移计划
 
-## Migration Plan
+1. 协议常量与 descriptor：加入新命名、`hubId`、`RequiresSessionID`，补齐 route 分类。
+2. Registry envelope：读写 `hubId`，batch 子请求支持 `hubId`。
+3. Registry routing：实现 `hub.state.*` 转发和 `hub.state.updated` 广播。
+4. HubStateManager：先实现空 state、section 状态模型和 `get/refresh/action` 框架。
+5. Section adapters：按 `agentPackages`、`wheelmakerUpdate`、`skills`、`tokenStats`、`fileIndex` 接入现有逻辑。
+6. App 协议常量：新增 TS 常量，Repository 支持 `hub.state.*` 顶层 `hubId`。
+7. App 设置页迁移：Update、Skills、Token Stats、File Index 状态依次迁移到 HubState。
+8. 协议重命名迁移：`project.*`、`session.*`、`registry.*`、`connect.*` 按上表重命名，保留兼容别名。
+9. 清理旧公开方法：确认无 App 调用后删除或降级 `cmd.*`、`fs.index.status/rebuild` 等旧入口。
 
-1. Add protocol constants, descriptors, and envelope `hubId`.
-2. Add Registry routing for `hub.state.*` and batch `hubId`.
-3. Add Hub `HubStateManager` with section status model.
-4. Wire `agentPackages`, `wheelmakerUpdate`, `skills`, `tokenStats`, and `fileIndex`.
-5. Add App repository methods for `hub.state.get`, `hub.state.refresh`, and `hub.state.action`.
-6. Migrate settings pages to HubState one surface at a time.
-7. Keep old `cmd.*` and `fs.index.status/rebuild` as compatibility paths until no App callers remain.
-8. Remove or deprecate old public scan/query methods in a later cleanup.
+## 测试策略
 
-## Testing Strategy
+服务端协议测试：
 
-Server protocol tests:
+- 所有新方法在 descriptor 中注册。
+- `hub.state.*` 要求 envelope 顶层 `hubId`。
+- batch 子请求支持 `hubId`。
+- client role 可调用 HubState 方法。
+- Registry 按 envelope `hubId` 转发。
+- Registry 拒绝缺失、未知、离线、越权 Hub。
+- Registry 不缓存 HubState。
+- `registry.session.*` 兼容事件最终映射到 `session.*`。
+- `project.online/offline` 迁移到 `registry.project.report` 后 App 可收到完整 project snapshot。
 
-- Method descriptors include `hub.state.get`, `hub.state.refresh`, `hub.state.action`, and `hub.state.updated`.
-- HubState requests require top-level `hubId`.
-- Batch subrequests carry `hubId`.
-- Client role can call HubState methods.
-- Registry forwards HubState methods by envelope `hubId`.
-- Registry rejects missing, unknown, offline, or out-of-scope Hub IDs.
-- Registry does not cache HubState.
+Hub 测试：
 
-Hub tests:
+- `get` 只读缓存，不启动 collector。
+- `refresh` 只刷新指定 sections。
+- 顶层 status 从 section statuses 正确汇总。
+- refresh 失败保留旧 data。
+- action running 会让 section 和 HubState 进入 refreshing。
+- 后台变化会发 `hub.state.updated`。
+- `agentPackages` refresh/action 复用 NPM policy。
+- `wheelmakerUpdate` refresh/action 复用 update policy。
+- `skills` refresh/action 复用 skills policy。
+- `tokenStats` refresh 复用 token scanner。
+- `fileIndex` refresh/rebuild 复用 file index manager。
+- `project.fs.index.search` 保持 Project 级搜索，不受 HubState 影响。
 
-- `get` returns cached sections without starting collectors.
-- `refresh` updates requested sections only.
-- Top-level status derives from section statuses.
-- Section refresh failure keeps previous data where available.
-- Running section refresh emits `hub.state.updated`.
-- `agentPackages` refresh and actions reuse NPM policy.
-- `wheelmakerUpdate` refresh and `updatePublish` reuse update policy.
-- `skills` refresh and actions reuse skills policy.
-- `tokenStats` refresh uses token scanner.
-- `fileIndex` refresh uses status and `rebuild` starts project index rebuild.
-- `fs.index.search` remains project-scoped and unchanged.
+App 测试：
 
-App tests:
+- Repository 使用协议常量，不直接写 method 字符串。
+- HubState 请求发送顶层 `hubId`。
+- Settings 页面打开先调用 `hub.state.get`。
+- Refresh 按 section 调用 `hub.state.refresh`。
+- NPM、Skills、Update、File Index 动作调用 `hub.state.action`。
+- 返回 state 直接合并，不强制补 `get`。
+- `hub.state.updated` 能更新可见 section。
+- 旧 method 兼容期内仍可处理已有测试 fixture。
 
-- Repository sends top-level `hubId` for HubState methods.
-- Settings surfaces read cached state with `hub.state.get`.
-- Refresh buttons call `hub.state.refresh` with expected sections.
-- NPM package actions call `hub.state.action` under `agentPackages`.
-- Skills actions call `hub.state.action` under `skills`.
-- WheelMaker update-publish calls `hub.state.action` under `wheelmakerUpdate`.
-- File index rebuild calls `hub.state.action` under `fileIndex`.
-- Returned state is merged without follow-up `get`.
-- `hub.state.updated` updates the visible section.
+## 验收标准
 
-## Acceptance Criteria
-
-- HubState cache lives in Hub, not Registry.
-- Registry only routes HubState requests and events.
-- App can read HubState through `hub.state.get`.
-- App can refresh selected sections through `hub.state.refresh`.
-- App can run controlled section operations through `hub.state.action`.
-- Every section has independent status, timestamps, data, error, and action state.
-- Top-level HubState exposes whether the Hub is empty, refreshing, ready, partial, or error.
-- NPM scan and package operations are represented through HubState.
-- Old command methods can remain temporarily for compatibility, but new settings flows use HubState.
+- 协议顶级域清晰区分 `connect`、`registry`、`hub`、`project`、`session`。
+- Hub 级请求使用 envelope 顶层 `hubId`。
+- Project 级请求使用 envelope 顶层 `projectId`。
+- Session 实例请求校验 payload `sessionId`。
+- HubState 缓存在 Hub，不在 Registry。
+- Registry 只路由 HubState 请求和事件。
+- App 可通过 `hub.state.get` 读取缓存。
+- App 可通过 `hub.state.refresh` 刷新指定 sections。
+- App 可通过 `hub.state.action` 执行受控 section 动作。
+- 每个 section 有独立 status、timestamps、data、error、action。
+- 顶层 HubState 能表达 empty、refreshing、ready、partial、error。
+- NPM scan 和 package operations 进入 HubState。
+- Project 目录事件统一为 `registry.project.report`。
+- Session 消息事件统一为 `session.message` 和 `session.updated`。
+- 新代码调用协议常量，不再散落 method 字符串。
