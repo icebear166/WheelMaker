@@ -1,5 +1,5 @@
-import {RegistryRepository} from '../web/src/services/registryRepository';
-import type {RegistryClient} from '../web/src/services/registryClient';
+import {RegistryRepository} from '../web/src/registry/RegistryRepository';
+import type {RegistryClient} from '../web/src/registry/RegistryClient';
 
 describe('registry session.read', () => {
   test('does not synthesize a fallback session when server omits session metadata', async () => {

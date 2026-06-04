@@ -16,7 +16,7 @@ describe('chat prompt completion notification settings', () => {
     const mainTsx = readMainSource();
     const settingsRootTsx = readSettingsRootSource();
     const persistenceTs = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'services', 'workspacePersistence.ts'),
+      path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'),
       'utf8',
     );
 

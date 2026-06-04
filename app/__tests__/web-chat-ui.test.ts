@@ -146,8 +146,8 @@ describe('web chat integration', () => {
   test('defines registry session protocol and uses real chat UI instead of placeholder sessions', () => {
     const projectRoot = path.join(__dirname, '..');
     const registryTypes = readSourceText(path.join(projectRoot, 'web', 'src', 'types', 'registry.ts'));
-    const repositoryTs = readSourceText(path.join(projectRoot, 'web', 'src', 'services', 'registryRepository.ts'));
-    const workspaceServiceTs = readSourceText(path.join(projectRoot, 'web', 'src', 'services', 'registryWorkspaceService.ts'));
+    const repositoryTs = readSourceText(path.join(projectRoot, 'web', 'src', 'registry', 'RegistryRepository.ts'));
+    const workspaceServiceTs = readSourceText(path.join(projectRoot, 'web', 'src', 'registry', 'RegistryWorkspaceService.ts'));
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'main.tsx'));
     const settingsRootTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'));
     const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
@@ -1961,7 +1961,7 @@ describe('web chat integration', () => {
 
   test('does not rewrite removed codexapp agent names in web payloads', () => {
     const projectRoot = path.join(__dirname, '..');
-    const repositoryTs = readSourceText(path.join(projectRoot, 'web', 'src', 'services', 'registryRepository.ts'));
+    const repositoryTs = readSourceText(path.join(projectRoot, 'web', 'src', 'registry', 'RegistryRepository.ts'));
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'main.tsx'));
 
     expect(repositoryTs).toContain('function normalizeAgentType(agentType: unknown): string | undefined');
@@ -1975,8 +1975,8 @@ describe('web chat integration', () => {
   test('chat composer supports indexed project file mentions', () => {
     const projectRoot = path.join(__dirname, '..');
     const registryTypes = readSourceText(path.join(projectRoot, 'web', 'src', 'types', 'registry.ts'));
-    const repositoryTs = readSourceText(path.join(projectRoot, 'web', 'src', 'services', 'registryRepository.ts'));
-    const workspaceServiceTs = readSourceText(path.join(projectRoot, 'web', 'src', 'services', 'registryWorkspaceService.ts'));
+    const repositoryTs = readSourceText(path.join(projectRoot, 'web', 'src', 'registry', 'RegistryRepository.ts'));
+    const workspaceServiceTs = readSourceText(path.join(projectRoot, 'web', 'src', 'registry', 'RegistryWorkspaceService.ts'));
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'main.tsx'));
     const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
 

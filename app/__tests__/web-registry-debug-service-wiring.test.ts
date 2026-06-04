@@ -6,20 +6,20 @@ describe('registry debug service wiring', () => {
 
   test('passes an optional debug sink from workspace service to registry client', () => {
     const repositoryTs = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'services', 'registryRepository.ts'),
+      path.join(projectRoot, 'web', 'src', 'registry', 'RegistryRepository.ts'),
       'utf8',
     );
     const workspaceServiceTs = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'services', 'registryWorkspaceService.ts'),
+      path.join(projectRoot, 'web', 'src', 'registry', 'RegistryWorkspaceService.ts'),
       'utf8',
     );
 
-    expect(repositoryTs).toContain("import { RegistryClient, type RegistryDebugSink } from './registryClient';");
+    expect(repositoryTs).toContain("import { RegistryClient, type RegistryDebugSink } from './RegistryClient';");
     expect(repositoryTs).toContain("import type {RegistryDebugConnection} from '../debug/registryDebug';");
     expect(repositoryTs).toContain("debugConnection: RegistryDebugConnection = 'Remote'");
     expect(repositoryTs).toContain('return new RegistryRepository(new RegistryClient(8000, debugSink, debugConnection));');
 
-    expect(workspaceServiceTs).toContain("import type {RegistryDebugSink} from './registryClient';");
+    expect(workspaceServiceTs).toContain("import type {RegistryDebugSink} from './RegistryClient';");
     expect(workspaceServiceTs).toContain("import type {RegistryDebugConnection} from '../debug/registryDebug';");
     expect(workspaceServiceTs).toContain('createRepository?: (debugSink?: RegistryDebugSink, debugConnection?: RegistryDebugConnection) => RegistryRepository;');
     expect(workspaceServiceTs).toContain(

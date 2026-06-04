@@ -1,8 +1,8 @@
-import {createRegistryRepository, type QueryWheelMakerUpdateOptions, type RegistryRepository} from './registryRepository';
-import {RegistryRequestError} from './registryClient';
-import type {RegistryDebugSink} from './registryClient';
+import {createRegistryRepository, type QueryWheelMakerUpdateOptions, type RegistryRepository} from './RegistryRepository';
+import {RegistryRequestError} from './RegistryClient';
+import type {RegistryDebugSink} from './RegistryClient';
 import type {RegistryDebugConnection} from '../debug/registryDebug';
-import {LocalHubReadManager, type LocalHubReadStatus} from './localHubReadManager';
+import {LocalHubReadManager, type LocalHubReadStatus} from './localRead/LocalHubReadManager';
 import type {
   RegistryEnvelope,
   RegistryDebugUploadLogPayload,

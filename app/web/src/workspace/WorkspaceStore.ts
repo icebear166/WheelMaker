@@ -18,7 +18,7 @@ import {
   type PersistedChatCursor,
   type PersistedGlobalState,
   type WorkspaceDatabaseDump,
-} from './workspacePersistence';
+} from './WorkspacePersistence';
 
 type ProjectSnapshot = {
   expandedDirs: string[];

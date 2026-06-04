@@ -6,11 +6,11 @@ describe('web disable file cache settings', () => {
 
   test('persists disable file cache as a default-off global setting', () => {
     const workspacePersistence = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'services', 'workspacePersistence.ts'),
+      path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'),
       'utf8',
     );
     const workspaceStore = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'services', 'workspaceStore.ts'),
+      path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspaceStore.ts'),
       'utf8',
     );
 
@@ -30,11 +30,11 @@ describe('web disable file cache settings', () => {
 
   test('gates cached directory hydration and validation when file cache is disabled', () => {
     const workspaceStore = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'services', 'workspaceStore.ts'),
+      path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspaceStore.ts'),
       'utf8',
     );
     const workspaceController = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'services', 'workspaceController.ts'),
+      path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspaceController.ts'),
       'utf8',
     );
 

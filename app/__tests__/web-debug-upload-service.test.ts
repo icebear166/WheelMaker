@@ -1,4 +1,4 @@
-import {RegistryRepository} from '../web/src/services/registryRepository';
+import {RegistryRepository} from '../web/src/registry/RegistryRepository';
 
 describe('debug log upload service', () => {
   test('sends compact diagnostic text to registry debug upload endpoint', async () => {

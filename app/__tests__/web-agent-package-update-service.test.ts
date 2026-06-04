@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import {RegistryRepository} from '../web/src/services/registryRepository';
-import type {RegistryClient} from '../web/src/services/registryClient';
+import {RegistryRepository} from '../web/src/registry/RegistryRepository';
+import type {RegistryClient} from '../web/src/registry/RegistryClient';
 
 describe('agent package update registry service', () => {
   test('reads project.list hubs without depending on online state', async () => {

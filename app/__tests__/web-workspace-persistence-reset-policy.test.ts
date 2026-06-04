@@ -3,7 +3,7 @@ import path from 'path';
 
 function workspacePersistenceSource(): string {
   return fs.readFileSync(
-    path.join(__dirname, '..', 'web', 'src', 'services', 'workspacePersistence.ts'),
+    path.join(__dirname, '..', 'web', 'src', 'workspace', 'WorkspacePersistence.ts'),
     'utf8',
   );
 }

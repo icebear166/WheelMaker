@@ -9,11 +9,11 @@ describe('web chat read-on-demand behavior', () => {
       'utf8',
     );
     const workspaceStoreTs = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'services', 'workspaceStore.ts'),
+      path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspaceStore.ts'),
       'utf8',
     );
     const workspacePersistenceTs = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'services', 'workspacePersistence.ts'),
+      path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'),
       'utf8',
     );
 

@@ -3,7 +3,7 @@ import path from 'path';
 
 describe('web registry client debug hooks', () => {
   const projectRoot = path.join(__dirname, '..');
-  const clientPath = path.join(projectRoot, 'web', 'src', 'services', 'registryClient.ts');
+  const clientPath = path.join(projectRoot, 'web', 'src', 'registry', 'RegistryClient.ts');
 
   test('keeps debug capture at the registry websocket boundary', () => {
     const clientTs = fs.readFileSync(clientPath, 'utf8');

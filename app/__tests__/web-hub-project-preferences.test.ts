@@ -4,7 +4,7 @@ import path from 'path';
 describe('web hub project preferences', () => {
   test('derives visible and hidden projects from hidden project ids', () => {
     const projectRoot = path.join(__dirname, '..');
-    const modulePath = path.join(projectRoot, 'web', 'src', 'services', 'hubProjectPreferences.ts');
+    const modulePath = path.join(projectRoot, 'web', 'src', 'workspace', 'hubProjectPreferences.ts');
 
     expect(fs.existsSync(modulePath)).toBe(true);
 
@@ -32,7 +32,7 @@ describe('web hub project preferences', () => {
 
   test('derives hub checkbox state from project visibility', () => {
     const projectRoot = path.join(__dirname, '..');
-    const modulePath = path.join(projectRoot, 'web', 'src', 'services', 'hubProjectPreferences.ts');
+    const modulePath = path.join(projectRoot, 'web', 'src', 'workspace', 'hubProjectPreferences.ts');
 
     expect(fs.existsSync(modulePath)).toBe(true);
 
@@ -61,7 +61,7 @@ describe('web hub project preferences', () => {
 
   test('finds the next visible project in current list order with wraparound', () => {
     const projectRoot = path.join(__dirname, '..');
-    const modulePath = path.join(projectRoot, 'web', 'src', 'services', 'hubProjectPreferences.ts');
+    const modulePath = path.join(projectRoot, 'web', 'src', 'workspace', 'hubProjectPreferences.ts');
 
     expect(fs.existsSync(modulePath)).toBe(true);
 
@@ -83,7 +83,7 @@ describe('web hub project preferences', () => {
 
   test('sanitizes hub color preferences and supports resetting to default', () => {
     const projectRoot = path.join(__dirname, '..');
-    const modulePath = path.join(projectRoot, 'web', 'src', 'services', 'hubProjectPreferences.ts');
+    const modulePath = path.join(projectRoot, 'web', 'src', 'workspace', 'hubProjectPreferences.ts');
 
     expect(fs.existsSync(modulePath)).toBe(true);
 
@@ -107,7 +107,7 @@ describe('web hub project preferences', () => {
 
   test('resolves stable default hub colors from hub ids while honoring custom preferences', () => {
     const projectRoot = path.join(__dirname, '..');
-    const modulePath = path.join(projectRoot, 'web', 'src', 'services', 'hubProjectPreferences.ts');
+    const modulePath = path.join(projectRoot, 'web', 'src', 'workspace', 'hubProjectPreferences.ts');
 
     expect(fs.existsSync(modulePath)).toBe(true);
 
@@ -150,7 +150,7 @@ describe('web hub project preferences', () => {
 
   test('converts between hsv picker values and sanitized hub colors', () => {
     const projectRoot = path.join(__dirname, '..');
-    const modulePath = path.join(projectRoot, 'web', 'src', 'services', 'hubProjectPreferences.ts');
+    const modulePath = path.join(projectRoot, 'web', 'src', 'workspace', 'hubProjectPreferences.ts');
 
     expect(fs.existsSync(modulePath)).toBe(true);
 

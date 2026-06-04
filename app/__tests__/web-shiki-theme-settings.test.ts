@@ -8,7 +8,7 @@ describe('web shiki theme settings', () => {
     const settingsRootTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
     const shikiRenderer = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'services', 'shikiRenderer.ts'), 'utf8');
     const shikiSettings = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'services', 'shikiSettings.ts'), 'utf8');
-    const workspacePersistence = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'services', 'workspacePersistence.ts'), 'utf8');
+    const workspacePersistence = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'), 'utf8');
 
     expect(shikiRenderer).toContain("createHighlighterCore");
     expect(shikiRenderer).toContain("from './shikiSettings'");
@@ -34,7 +34,7 @@ describe('web shiki theme settings', () => {
 
     expect(workspacePersistence).toContain("isCodeThemeId(input.codeTheme)");
     expect(workspacePersistence).toContain('codeTheme: typeof input.codeTheme === \'string\' && isCodeThemeId(input.codeTheme) ? input.codeTheme : base.codeTheme');
-    expect(workspacePersistence).toContain("from './shikiSettings'");
+    expect(workspacePersistence).toContain("from '../services/shikiSettings'");
     expect(workspacePersistence).not.toContain("from './shikiRenderer'");
   });
 });

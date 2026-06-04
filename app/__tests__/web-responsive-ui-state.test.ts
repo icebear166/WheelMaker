@@ -381,7 +381,7 @@ describe('web responsive ui state', () => {
 
   test('sorts pinned projects above unpinned projects while preserving registry order', () => {
     const projectRoot = path.join(__dirname, '..');
-    const modulePath = path.join(projectRoot, 'web', 'src', 'services', 'projectNavigation.ts');
+    const modulePath = path.join(projectRoot, 'web', 'src', 'workspace', 'projectNavigation.ts');
 
     expect(fs.existsSync(modulePath)).toBe(true);
 
@@ -669,7 +669,7 @@ describe('web responsive ui state', () => {
   test('persists desktop sidebar width as global app state', () => {
     const projectRoot = path.join(__dirname, '..');
     const persistenceTs = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'services', 'workspacePersistence.ts'),
+      path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'),
       'utf8',
     );
 

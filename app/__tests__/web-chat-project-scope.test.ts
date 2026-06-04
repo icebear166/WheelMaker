@@ -19,7 +19,7 @@ describe('web chat project scoping', () => {
   test('workspace service exposes project-scoped session methods for wide navigation', () => {
     const projectRoot = path.join(__dirname, '..');
     const serviceTs = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'services', 'registryWorkspaceService.ts'),
+      path.join(projectRoot, 'web', 'src', 'registry', 'RegistryWorkspaceService.ts'),
       'utf8',
     );
 

@@ -10,7 +10,7 @@ describe('web chat startup defaults', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'main.tsx'));
     const workspacePersistenceTs = readSourceText(
-      path.join(projectRoot, 'web', 'src', 'services', 'workspacePersistence.ts'),
+      path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'),
     );
     const workspaceUiStateTs = readSourceText(
       path.join(projectRoot, 'web', 'src', 'services', 'workspaceUiState.ts'),

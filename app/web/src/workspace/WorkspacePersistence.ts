@@ -9,7 +9,7 @@ import {
   isCodeThemeId,
   type CodeFontId,
   type CodeThemeId,
-} from './shikiSettings';
+} from '../services/shikiSettings';
 import {
   DEFAULT_CHAT_FONT,
   isChatFontId,

@@ -28,7 +28,7 @@ function readStyles(): string {
 
 function readWorkspacePersistence(): string {
   return fs.readFileSync(
-    path.join(projectRoot(), 'web', 'src', 'services', 'workspacePersistence.ts'),
+    path.join(projectRoot(), 'web', 'src', 'workspace', 'WorkspacePersistence.ts'),
     'utf8',
   );
 }

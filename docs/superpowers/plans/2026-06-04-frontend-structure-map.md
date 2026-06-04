@@ -433,7 +433,7 @@ npm run tsc:web
 
 Expected: targeted tests PASS and TypeScript exits 0.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```powershell
 git add -A
@@ -458,7 +458,7 @@ git commit -m "Move debug settings surface under settings"
   - `app/web/src/services/hubProjectPreferences.ts` -> `app/web/src/workspace/hubProjectPreferences.ts`
   - `app/web/src/sessionTime.ts` -> `app/web/src/workspace/sessionTime.ts`
 
-- [ ] **Step 1: Run broad service baseline tests**
+- [x] **Step 1: Run broad service baseline tests**
 
 ```powershell
 cd app
@@ -467,11 +467,11 @@ npm test -- --runInBand web-chat-project-service.test.ts web-local-hub-read-serv
 
 Expected: PASS.
 
-- [ ] **Step 2: Move files and update imports**
+- [x] **Step 2: Move files and update imports**
 
 Use `git mv` for all files listed above. Update imports from `./services/*`, `../services/*`, and `../web/src/services/*` to the new `registry/*` or `workspace/*` locations.
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 ```powershell
 cd app

@@ -82,7 +82,7 @@ describe('port relay target presets', () => {
 
   test('persists relay target presets under global workspace state', () => {
     const persistence = fs.readFileSync(
-      path.join(root, 'web', 'src', 'services', 'workspacePersistence.ts'),
+      path.join(root, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'),
       'utf8',
     );
     const mainTsx = fs.readFileSync(path.join(root, 'web', 'src', 'main.tsx'), 'utf8');

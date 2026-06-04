@@ -8,8 +8,8 @@ jest.mock('../web/src/services/shikiRenderer', () => ({
   isCodeThemeId: () => true,
 }));
 
-import { WorkspaceController } from '../web/src/services/workspaceController';
-import { WorkspaceStore } from '../web/src/services/workspaceStore';
+import { WorkspaceController } from '../web/src/workspace/WorkspaceController';
+import { WorkspaceStore } from '../web/src/workspace/WorkspaceStore';
 
 describe('workspace lightweight project switching', () => {
   test('hydrates cached workspace state without loading root files', async () => {

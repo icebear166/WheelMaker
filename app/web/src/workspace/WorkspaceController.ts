@@ -1,6 +1,6 @@
 import type {RegistryFsEntry, RegistryHub, RegistryProject} from '../types/registry';
-import type {RegistryWorkspaceService} from './registryWorkspaceService';
-import type {HydratedProjectState, WorkspaceStore} from './workspaceStore';
+import type {RegistryWorkspaceService} from '../registry/RegistryWorkspaceService';
+import type {HydratedProjectState, WorkspaceStore} from './WorkspaceStore';
 
 function sortEntries(entries: RegistryFsEntry[]): RegistryFsEntry[] {
   return [...entries].sort((a, b) => {

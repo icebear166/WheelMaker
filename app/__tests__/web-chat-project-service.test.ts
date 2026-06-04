@@ -1,4 +1,4 @@
-import { RegistryWorkspaceService } from '../web/src/services/registryWorkspaceService';
+import { RegistryWorkspaceService } from '../web/src/registry/RegistryWorkspaceService';
 
 describe('registry workspace project-scoped chat service methods', () => {
   test('connects to a hub with no projects without selecting or reading a project', async () => {

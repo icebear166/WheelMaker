@@ -54,7 +54,7 @@ import {
   isFinishedChatMessage,
   needsPromptTurnRefresh,
 } from './chatSync';
-import { compareUpdatedAtDesc, formatPromptDurationMs } from './sessionTime';
+import { compareUpdatedAtDesc, formatPromptDurationMs } from './workspace/sessionTime';
 import {
   resolveChatSessionVisualState as resolveChatSessionVisualStateValue,
   type ChatSessionVisualState,
@@ -169,8 +169,8 @@ import {
   shouldApplyPreservedChatLoad,
   shouldApplySentChatSelection,
 } from './chat/chatSelectionGuard';
-import { RegistryWorkspaceService } from './services/registryWorkspaceService';
-import { sortProjectsByPin, togglePinnedProjectId } from './services/projectNavigation';
+import { RegistryWorkspaceService } from './registry/RegistryWorkspaceService';
+import { sortProjectsByPin, togglePinnedProjectId } from './workspace/projectNavigation';
 import {
   HUB_COLOR_PRESETS,
   findNextVisibleProject,
@@ -183,7 +183,7 @@ import {
   splitProjectsByVisibility,
   toggleProjectVisibility,
   type HubColorHsv,
-} from './services/hubProjectPreferences';
+} from './workspace/hubProjectPreferences';
 import { triggerMobileHaptic } from './shell/layouts/mobile/mobileHaptics';
 import {
   FLOATING_CONTROL_DEFAULT_Y_RATIO,
@@ -322,8 +322,8 @@ import {
   type GitDiffSource,
   type WorkingTreeFileEntry,
 } from './git/gitView';
-import { WorkspaceController } from './services/workspaceController';
-import { WorkspaceStore } from './services/workspaceStore';
+import { WorkspaceController } from './workspace/WorkspaceController';
+import { WorkspaceStore } from './workspace/WorkspaceStore';
 import {
   DESKTOP_SIDEBAR_WIDTH_DEFAULT,
   DESKTOP_SIDEBAR_WIDTH_MAX,
@@ -335,7 +335,7 @@ import {
 } from './services/workspaceUiState';
 import type {
   PersistedFloatingControlSide,
-} from './services/workspacePersistence';
+} from './workspace/WorkspacePersistence';
 import type {
   RegistryChatContentBlock,
   RegistryChatMessage,

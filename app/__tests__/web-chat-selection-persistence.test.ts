@@ -8,8 +8,8 @@ jest.mock('../web/src/services/shikiRenderer', () => ({
   isCodeThemeId: () => true,
 }));
 
-import { WorkspaceStore } from '../web/src/services/workspaceStore';
-import { reconcilePersistedChatSessionCache } from '../web/src/services/workspacePersistence';
+import { WorkspaceStore } from '../web/src/workspace/WorkspaceStore';
+import { reconcilePersistedChatSessionCache } from '../web/src/workspace/WorkspacePersistence';
 
 function createFakePersistence(globalPatch: Record<string, unknown> = {}) {
   const globalState = {

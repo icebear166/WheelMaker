@@ -53,7 +53,7 @@ describe('web speech settings', () => {
   test('persists speech settings and redacts API key from database dumps', () => {
     const projectRoot = path.join(__dirname, '..');
     const persistence = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'services', 'workspacePersistence.ts'),
+      path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'),
       'utf8',
     );
 

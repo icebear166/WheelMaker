@@ -5,7 +5,7 @@ import {
   resolveVoiceCapabilityStatus,
   resolveWebResourceConnectionStatus,
 } from './connectionStatus';
-import type {LocalHubReadStatus} from '../services/localHubReadManager';
+import type {LocalHubReadStatus} from '../registry/localRead/LocalHubReadManager';
 import type {NativeWebSourceState} from '../platform/native/webSource';
 import type {RegistryHub} from '../types/registry';
 

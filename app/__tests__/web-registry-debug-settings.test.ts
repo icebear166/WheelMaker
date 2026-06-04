@@ -6,7 +6,7 @@ describe('web registry debug settings', () => {
 
   test('persists message viewer and log level as separate global settings', () => {
     const workspacePersistence = fs.readFileSync(
-      path.join(projectRoot, 'web', 'src', 'services', 'workspacePersistence.ts'),
+      path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'),
       'utf8',
     );
 

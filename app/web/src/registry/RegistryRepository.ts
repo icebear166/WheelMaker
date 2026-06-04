@@ -1,4 +1,4 @@
-import { RegistryClient, type RegistryDebugSink } from './registryClient';
+import { RegistryClient, type RegistryDebugSink } from './RegistryClient';
 import type {RegistryDebugConnection} from '../debug/registryDebug';
 import {
   decodeSessionTurnToMessage,

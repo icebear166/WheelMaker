@@ -2,12 +2,12 @@ import type { LayoutMode } from './responsiveLayout';
 import type {
   PersistedFloatingControlSide,
   PersistedTab,
-} from './workspacePersistence';
+} from '../workspace/WorkspacePersistence';
 import {
   sanitizeFloatingControlIdleOpacity,
   sanitizeFloatingControlYRatio,
 } from '../shell/layouts/mobile/floatingControls';
-import { sanitizeHubColorMap } from './hubProjectPreferences';
+import { sanitizeHubColorMap } from '../workspace/hubProjectPreferences';
 
 export type WorkspaceUiStateValue<T> = T | ((current: T) => T);
 

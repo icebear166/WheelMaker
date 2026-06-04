@@ -4,7 +4,7 @@ import path from 'path';
 describe('local hub read UI settings', () => {
   test('persists local hub read acceleration as default enabled', () => {
     const projectRoot = path.join(__dirname, '..');
-    const workspacePersistence = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'services', 'workspacePersistence.ts'), 'utf8');
+    const workspacePersistence = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'), 'utf8');
 
     expect(workspacePersistence).toContain('localHubReadEnabled: boolean;');
     expect(workspacePersistence).toContain("localHubReadEnabled: 'localHubReadEnabled',");

@@ -1,4 +1,4 @@
-import {parseUpdatedAtMs} from '../sessionTime';
+import {parseUpdatedAtMs} from '../workspace/sessionTime';
 import type {RegistryChatSession, RegistryProject} from '../types/registry';
 
 export const OLDER_SESSION_DAYS = 5;
