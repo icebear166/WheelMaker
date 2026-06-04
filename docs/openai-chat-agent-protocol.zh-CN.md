@@ -42,6 +42,7 @@ Registry -> Client -> Session -> AgentInstance(chat) -> Chat2API HTTP API
 4. `chat` adapter 只在 agent 层做 OpenAI HTTP 与 ACP event 的转换。
 5. 第一版不发送 OpenAI `tools`，不执行、不展示、不回灌 tool calls。
 6. 第一版只支持文本输入输出，图片、音频、resource link、MCP 全部不声明 capability。
+7. 第一版固定开启 `web_search=true`，固定发送 `reasoning_effort="high"`，不把这两个开关暴露给 App。
 
 ## 3. 接口选择
 
@@ -100,6 +101,8 @@ Authorization: Bearer <api-key>
     { "role": "system", "content": "Optional adapter-level instruction." },
     { "role": "user", "content": "Hello" }
   ],
+  "web_search": true,
+  "reasoning_effort": "high",
   "stream": true
 }
 ```
@@ -112,9 +115,9 @@ Authorization: Bearer <api-key>
 | `messages` | 必填。由 `chat` agent 自己维护的 OpenAI message log 生成。 |
 | `stream` | Phase 1 固定 `true`；非流式只作为 fallback。 |
 | `temperature`、`top_p`、`max_tokens`、`stop` | Phase 1 不暴露；后续可作为 pass-through config。 |
-| `reasoning_effort` | Phase 2 暴露，取值先限制为 `low`、`medium`、`high`。 |
-| `web_search` | Phase 2 暴露为 `off/on` 配置，必要时也可用 `X-Web-Search` header。 |
-| `web_search_options` | Phase 2 以后再设计。 |
+| `reasoning_effort` | Phase 1 固定发送 `"high"`；不暴露为配置。Chat2API 多数 provider 只把它当作 thinking on/off。 |
+| `web_search` | Phase 1 固定发送 `true`；不暴露为配置。 |
+| `web_search_options` | 不发送。Chat2API 当前只声明类型，未消费该字段。 |
 | `tools` | 不发送。 |
 | `tool_choice` | 不发送；如实现需要强约束，可发送 `"none"`。 |
 | `tool_format` | 不发送。 |
@@ -336,11 +339,14 @@ const ACPProviderChat ACPProvider = "chat"
 
 | 文件 | 职责 |
 |---|---|
-| `server/internal/hub/agent/chat_agent.go` | 实现 `Instance`，负责 ACP lifecycle 与 callbacks。 |
-| `server/internal/hub/agent/chat_openai_client.go` | HTTP client、SSE parser、error mapping。 |
-| `server/internal/hub/agent/chat_openai_types.go` | OpenAI-compatible request/response structs。 |
-| `server/internal/hub/agent/chat_message_store.go` | agent 层 message log 持久化。 |
+| `server/internal/hub/agent/agent_chat_openai.go` | `chat` direct `Instance`、OpenAI-compatible request/response structs、HTTP client、SSE parser、error mapping、message log helper。 |
 | `server/internal/hub/agent/agent_test.go` | 延续现有包测试，不新增外部 test package。 |
+
+实现原则：
+
+- 第一版只新增一个 `agent_chat_openai.go` 承载 `chat` agent 的私有实现。
+- Provider enum、factory、skills、cleanup、测试仍然在现有文件做必要小改动。
+- 只有当单文件明显变得难以维护时，后续再按 HTTP client、message store、types 拆文件。
 
 ### 6.3 Initialize
 
@@ -419,18 +425,12 @@ SessionPrompt
 |---|---|---|---|
 | `model` | select | `/v1/models` data ids；失败时保留当前 model | Chat2API |
 
-第二版 config options：
-
-| ACP config id | 类型 | 值 | 请求落点 |
-|---|---|---|---|
-| `reasoning_effort` | select | `low`、`medium`、`high` | request body `reasoning_effort` |
-| `web_search` | select | `off`、`on` | request body `web_search` |
-
 规则：
 
 - `session/set_config_option` 必须返回完整 config option 列表。
 - 模型切换只影响后续 prompt，不改已持久化 message。
 - 如果 `/v1/models` 失败，不阻断当前 prompt，只在 config option 描述中体现不可刷新。
+- `web_search` 固定为 `true`，`reasoning_effort` 固定为 `"high"`，不进入 config options。
 
 ## 7. 配置计划
 
@@ -482,39 +482,32 @@ Phase 2 再考虑正式配置：
 - 修改 `server/internal/hub/agent/skills.go` 让 `chat` 返回空 skills。
 - 测试 `ParseACPProvider("chat")` 与 factory `Names()`。
 
-### Task 2: OpenAI-compatible HTTP client
+### Task 2: Single-file chat OpenAI agent
 
-- 新增 `chat_openai_types.go` 定义 request/response/error/SSE structs。
-- 新增 `chat_openai_client.go`：
-  - `ListModels(ctx)`
-  - `ValidateModel(ctx, model)`
-  - `CreateChatCompletionStream(ctx, request, onChunk)`
-  - `CreateChatCompletion(ctx, request)`
+- 新增 `server/internal/hub/agent/agent_chat_openai.go`。
+- 在该文件内实现 direct `agent.Instance`：
+  - `Initialize` 返回保守 capabilities。
+  - `SessionNew`/`SessionLoad` 绑定 message log。
+  - `SessionPrompt` 校验 text-only，调用 HTTP stream，发 ACP chunks。
+  - `SessionCancel` 取消 in-flight HTTP request。
+  - `SessionSetConfigOption` 只更新 model。
+- 在该文件内放私有 OpenAI-compatible structs、HTTP client、SSE parser、error mapper、message log helper。
+- 固定请求参数：`web_search=true`、`reasoning_effort="high"`，不发送 `web_search_options`。
 - 使用 `httptest.Server` 覆盖 stream、error、cancel。
 
-### Task 3: Message store
+### Task 3: Message store cleanup
 
-- 新增 `chat_message_store.go`。
-- 以 project name、session id 生成安全路径。
+- 在 `agent_chat_openai.go` 中以 project name、session id 生成安全路径。
 - 支持 load、save、append user、append assistant、truncate policy。
-- 更新 `CleanupSessionArtifacts`，按 agent type 删除 `chat` message log。
+- 更新现有 `CleanupSessionArtifacts`，按 agent type 删除 `chat` message log。
 
-### Task 4: chatInstance
-
-- 新增 `chat_agent.go` 实现 `agent.Instance`。
-- `Initialize` 返回保守 capabilities。
-- `SessionNew`/`SessionLoad` 绑定 message log。
-- `SessionPrompt` 校验 text-only，调用 HTTP stream，发 ACP chunks。
-- `SessionCancel` 取消 in-flight HTTP request。
-- `SessionSetConfigOption` 更新 model。
-
-### Task 5: Config option 与模型列表
+### Task 4: Config option 与模型列表
 
 - Phase 1 实现 `model` option。
 - `/v1/models` 失败时保留当前 model，并让 prompt 使用已配置 model。
 - 无 model 且 `/v1/models` 为空时，prompt 返回 `failed`，提示用户配置 `WHEELMAKER_CHAT_MODEL`。
 
-### Task 6: 端到端回归
+### Task 5: 端到端回归
 
 - `go test ./internal/protocol ./internal/hub/agent ./internal/hub/client`
 - 手动启动 Chat2API，设置 `/use chat`，验证：
@@ -524,6 +517,7 @@ Phase 2 再考虑正式配置：
   - `session/cancel` 返回 cancelled。
   - Chat2API 未启动时错误清晰。
   - 上游返回 tool call 时不执行工具。
+  - 每次请求都默认带 `web_search=true` 与 `reasoning_effort="high"`。
 
 ## 10. 验收标准
 
@@ -542,7 +536,6 @@ Phase 1 完成后必须满足：
 
 不属于第一版，但设计上保留空间：
 
-- `reasoning_effort`、`web_search` config options。
 - `usage_update` 映射。
 - 图片输入，前提是逐 provider 验证 Chat2API 真正支持。
 - WheelMaker 侧 OpenAI tool loop，仍由 WheelMaker 执行权限与工具，不交给 Chat2API。
