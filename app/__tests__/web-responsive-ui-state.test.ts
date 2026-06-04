@@ -204,7 +204,7 @@ describe('web responsive ui state', () => {
 
   test('centralizes viewport layout mode resolution at the 900px shell breakpoint', () => {
     const projectRoot = path.join(__dirname, '..');
-    const modulePath = path.join(projectRoot, 'web', 'src', 'services', 'responsiveLayout.ts');
+    const modulePath = path.join(projectRoot, 'web', 'src', 'shell', 'state', 'responsiveLayout.ts');
 
     expect(fs.existsSync(modulePath)).toBe(true);
 
@@ -221,7 +221,7 @@ describe('web responsive ui state', () => {
 
   test('keeps shared, desktop, mobile, and transient ui state under one reducer', () => {
     const projectRoot = path.join(__dirname, '..');
-    const modulePath = path.join(projectRoot, 'web', 'src', 'services', 'workspaceUiState.ts');
+    const modulePath = path.join(projectRoot, 'web', 'src', 'shell', 'state', 'workspaceUiState.ts');
 
     expect(fs.existsSync(modulePath)).toBe(true);
 
@@ -413,8 +413,8 @@ describe('web responsive ui state', () => {
       .readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8')
       .replace(/\r\n/g, '\n');
 
-    expect(mainTsx).toContain("from '../services/responsiveLayout'");
-    expect(mainTsx).toContain("from '../services/workspaceUiState'");
+    expect(mainTsx).toContain("from '../shell/state/responsiveLayout'");
+    expect(mainTsx).toContain("from '../shell/state/workspaceUiState'");
     expect(mainTsx).toContain('const layoutMode = resolveLayoutMode(windowWidth);');
     expect(mainTsx).toContain("const isWide = layoutMode === 'desktop';");
     expect(mainTsx).toContain('const [workspaceUiState, dispatchWorkspaceUi] = useReducer(');

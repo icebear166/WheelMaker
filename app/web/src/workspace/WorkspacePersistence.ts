@@ -33,7 +33,7 @@ import {
   floatingControlYRatioFromLegacySlot,
   sanitizeFloatingControlIdleOpacity,
   sanitizeFloatingControlYRatio,
-} from '../shell/layouts/mobile/floatingControls';
+} from '../preferences/floatingControlPreferences';
 import { sanitizeHubColorMap } from './hubProjectPreferences';
 
 export type PersistedTab = 'chat' | 'file' | 'git';

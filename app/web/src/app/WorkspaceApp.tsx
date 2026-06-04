@@ -215,7 +215,7 @@ import {
   type SettingsPeerDetail,
 } from '../settings/settingsNavigation';
 import { installMobileViewportZoomGuard } from '../shell/layouts/mobile/mobileViewportZoomGuard';
-import { resolveLayoutMode } from '../services/responsiveLayout';
+import { resolveLayoutMode } from '../shell/state/responsiveLayout';
 import {
   FLOATING_BACKDROP_TONE_THROTTLE_MS,
   measureFloatingBackdropTone,
@@ -326,7 +326,7 @@ import {
   sanitizeDesktopSidebarWidth,
   workspaceUiReducer,
   type WorkspaceUiStateValue,
-} from '../services/workspaceUiState';
+} from '../shell/state/workspaceUiState';
 import type {
   PersistedFloatingControlSide,
 } from '../workspace/WorkspacePersistence';

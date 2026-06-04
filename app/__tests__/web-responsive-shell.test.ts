@@ -17,7 +17,7 @@ describe('web responsive shell split', () => {
 
     const shellTsx = fs.readFileSync(shellPath, 'utf8');
 
-    expect(shellTsx).toContain("import type { LayoutMode } from '../services/responsiveLayout';");
+    expect(shellTsx).toContain("import type { LayoutMode } from './state/responsiveLayout';");
     expect(shellTsx).toContain('export function DesktopShell(');
     expect(shellTsx).toContain('export function MobileShell(');
     expect(shellTsx).toContain('export function ResponsiveShell(');

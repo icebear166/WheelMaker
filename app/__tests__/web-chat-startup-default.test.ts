@@ -13,7 +13,7 @@ describe('web chat startup defaults', () => {
       path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'),
     );
     const workspaceUiStateTs = readSourceText(
-      path.join(projectRoot, 'web', 'src', 'services', 'workspaceUiState.ts'),
+      path.join(projectRoot, 'web', 'src', 'shell', 'state', 'workspaceUiState.ts'),
     );
 
     expect(mainTsx).toContain("tab: globalState.tab ?? 'chat'");

@@ -663,6 +663,190 @@ git commit -m "Document frontend structure migration status"
 
 ---
 
+### Task 11: Shell State Ownership Follow-Up
+
+**Files:**
+- Move: `app/web/src/services/responsiveLayout.ts` -> `app/web/src/shell/state/responsiveLayout.ts`
+- Move: `app/web/src/services/workspaceUiState.ts` -> `app/web/src/shell/state/workspaceUiState.ts`
+- Modify: `app/web/src/app/WorkspaceApp.tsx`
+- Modify: `app/web/src/shell/ResponsiveShell.tsx`
+- Modify tests:
+  - `app/__tests__/web-responsive-ui-state.test.ts`
+  - `app/__tests__/web-responsive-shell.test.ts`
+  - `app/__tests__/web-chat-startup-default.test.ts`
+
+- [x] **Step 1: Run baseline targeted tests**
+
+```powershell
+cd app
+npm test -- --runInBand web-responsive-ui-state.test.ts web-responsive-shell.test.ts web-chat-startup-default.test.ts
+```
+
+Expected: targeted tests PASS before moving files.
+
+- [x] **Step 2: Move shell state files**
+
+```powershell
+New-Item -ItemType Directory -Force -Path app/web/src/shell/state
+git mv app/web/src/services/responsiveLayout.ts app/web/src/shell/state/responsiveLayout.ts
+git mv app/web/src/services/workspaceUiState.ts app/web/src/shell/state/workspaceUiState.ts
+```
+
+- [x] **Step 3: Update imports and test anchors**
+
+Use these replacements:
+
+```text
+../services/responsiveLayout -> ../shell/state/responsiveLayout
+../services/workspaceUiState -> ../shell/state/workspaceUiState
+../services/responsiveLayout -> ./state/responsiveLayout in shell/ResponsiveShell.tsx
+path.join(projectRoot, 'web', 'src', 'services', 'responsiveLayout.ts') -> path.join(projectRoot, 'web', 'src', 'shell', 'state', 'responsiveLayout.ts')
+path.join(projectRoot, 'web', 'src', 'services', 'workspaceUiState.ts') -> path.join(projectRoot, 'web', 'src', 'shell', 'state', 'workspaceUiState.ts')
+```
+
+In `shell/state/workspaceUiState.ts`, update relative imports:
+
+```ts
+import type { LayoutMode } from './responsiveLayout';
+import type {
+  PersistedFloatingControlSide,
+  PersistedTab,
+} from '../../workspace/WorkspacePersistence';
+import {
+  sanitizeFloatingControlIdleOpacity,
+  sanitizeFloatingControlYRatio,
+} from '../../preferences/floatingControlPreferences';
+import { sanitizeHubColorMap } from '../../workspace/hubProjectPreferences';
+```
+
+- [x] **Step 4: Verify**
+
+```powershell
+cd app
+npm test -- --runInBand web-responsive-ui-state.test.ts web-responsive-shell.test.ts web-chat-startup-default.test.ts
+npm run tsc:web
+```
+
+Expected: targeted tests PASS and TypeScript exits 0.
+
+---
+
+### Task 12: Floating Control Preference Seam
+
+**Files:**
+- Create: `app/web/src/preferences/floatingControlPreferences.ts`
+- Modify: `app/web/src/shell/layouts/mobile/floatingControls.ts`
+- Modify: `app/web/src/shell/state/workspaceUiState.ts`
+- Modify: `app/web/src/workspace/WorkspacePersistence.ts`
+- Modify tests:
+  - `app/__tests__/web-responsive-ui-state.test.ts`
+  - `app/__tests__/web-drag-scroll-behavior.test.ts`
+  - `app/__tests__/web-port-relay-settings.test.ts`
+
+- [x] **Step 1: Create neutral preference module**
+
+Move the persisted floating-control defaults and sanitizer helpers from `shell/layouts/mobile/floatingControls.ts` into `preferences/floatingControlPreferences.ts`:
+
+```ts
+export const FLOATING_CONTROL_DEFAULT_Y_RATIO = 0.25;
+export const FLOATING_CONTROL_DEFAULT_IDLE_OPACITY = 0.34;
+export const FLOATING_CONTROL_IDLE_OPACITY_MIN = 0.1;
+export const FLOATING_CONTROL_IDLE_OPACITY_MAX = 0.8;
+
+export type LegacyFloatingControlSlot =
+  | 'upper'
+  | 'upper-middle'
+  | 'center'
+  | 'lower-middle'
+  | 'lower';
+
+export function sanitizeFloatingControlYRatio(
+  value: unknown,
+  fallback = FLOATING_CONTROL_DEFAULT_Y_RATIO,
+): number {
+  const numeric = typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+  return Math.min(1, Math.max(0, numeric));
+}
+
+export function sanitizeFloatingControlIdleOpacity(
+  value: unknown,
+  fallback = FLOATING_CONTROL_DEFAULT_IDLE_OPACITY,
+): number {
+  const numeric = typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+  const rounded = Math.round((numeric + Number.EPSILON) * 100) / 100;
+  return Math.min(
+    FLOATING_CONTROL_IDLE_OPACITY_MAX,
+    Math.max(FLOATING_CONTROL_IDLE_OPACITY_MIN, rounded),
+  );
+}
+
+export function floatingControlYRatioFromLegacySlot(value: unknown): number | null {
+  switch (value) {
+    case 'upper':
+      return 0;
+    case 'upper-middle':
+      return 0.25;
+    case 'center':
+      return 0.5;
+    case 'lower-middle':
+      return 0.75;
+    case 'lower':
+      return 1;
+    default:
+      return null;
+  }
+}
+```
+
+- [x] **Step 2: Re-export from the mobile layout helper**
+
+`shell/layouts/mobile/floatingControls.ts` should import and re-export the moved symbols so existing callers keep the same runtime API while new persistence callers use `preferences/` directly.
+
+- [x] **Step 3: Update persistence imports**
+
+`workspace/WorkspacePersistence.ts` must import floating-control persisted preference helpers from `../preferences/floatingControlPreferences`, not from `../shell/layouts/mobile/floatingControls`.
+
+- [x] **Step 4: Verify no workspace-to-shell layout dependency remains**
+
+```powershell
+rg --glob '!**/dist/**' -n "shell/layouts/mobile/floatingControls" app/web/src/workspace app/web/src/registry
+```
+
+Expected: no matches.
+
+- [x] **Step 5: Verify targeted tests**
+
+```powershell
+cd app
+npm test -- --runInBand web-responsive-ui-state.test.ts web-drag-scroll-behavior.test.ts web-port-relay-settings.test.ts
+npm run tsc:web
+```
+
+Expected: targeted tests PASS and TypeScript exits 0.
+
+---
+
+### Task 13: Remaining Services Bucket Follow-Up
+
+**Files:**
+- Move later: `app/web/src/services/chatScrollBottomButton.ts` -> `app/web/src/chat/layout/chatScrollBottomButton.ts`
+- Move later: `app/web/src/services/shikiSettings.ts` -> `app/web/src/code/shikiSettings.ts`
+- Move later: `app/web/src/services/shikiRenderer.ts` -> `app/web/src/code/shikiRenderer.ts`
+
+- [ ] **Step 1: Defer until Task 11 and Task 12 are stable**
+
+Do not mix Code rendering and Chat layout moves into the shell-state correction commit. The next execution slice should move these remaining `services/` files with their own targeted tests:
+
+```powershell
+cd app
+npm test -- --runInBand web-code-layout.test.ts web-shiki-code-fallback.test.ts web-shiki-theme-settings.test.ts web-responsive-ui-state.test.ts
+npm run tsc:web
+```
+
+Expected: targeted tests PASS and TypeScript exits 0 after that later slice.
+
+---
+
 ## Self-Review
 
 - Spec coverage: The plan covers shell/platform split, mobile shell helpers, Android/PWA adapters, notification split, debug Settings surface, registry/workspace split, Settings helpers, Chat/Port Relay helpers, and main bootstrap extraction from the review map.
@@ -675,3 +859,5 @@ git commit -m "Document frontend structure migration status"
 - 2026-06-04: Task 9 extracted `App` into `app/web/src/app/WorkspaceApp.tsx`; `app/web/src/main.tsx` now owns bootstrap imports, global styles/fonts, the IndexedDB-ready render gate, and the startup error fallback.
 - 2026-06-04: Task 10 full verification passed with `npm run tsc:web`, `npm test -- --runInBand`, and `npm run build:web`.
 - CSS split remains intentionally deferred; `app/web/src/styles.css` was not changed in this execution slice.
+- 2026-06-04 follow-up: Added Tasks 11-13 to correct the review-map gaps found after implementation: `shell/state` ownership, neutral floating-control preference sanitizers, and a later services-bucket cleanup.
+- 2026-06-04 follow-up: Tasks 11-12 are complete and verified with targeted Jest plus `npm run tsc:web`; `services/responsiveLayout.ts` and `services/workspaceUiState.ts` now live under `shell/state`, and `workspace/WorkspacePersistence.ts` no longer imports mobile layout helpers.
