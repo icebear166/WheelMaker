@@ -17,6 +17,7 @@ type testEnvelope struct {
 	RequestID int64          `json:"requestId,omitempty"`
 	Type      string         `json:"type"`
 	Method    string         `json:"method,omitempty"`
+	HubID     string         `json:"hubId,omitempty"`
 	ProjectID string         `json:"projectId,omitempty"`
 	Payload   map[string]any `json:"payload,omitempty"`
 }
@@ -1771,6 +1772,158 @@ func TestCmdSkillsForwardsByHubIDWithoutProjectID(t *testing.T) {
 	}
 	if resp.ProjectID != "" {
 		t.Fatalf("client response projectId=%q, want empty", resp.ProjectID)
+	}
+}
+
+func TestHubStateGetForwardsByEnvelopeHubID(t *testing.T) {
+	s := New(Config{})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	hub := dialReportedHub(t, ts.URL+"/ws", "hub-state")
+	defer hub.Close()
+
+	client := dialWS(t, ts.URL+"/ws")
+	defer client.Close()
+	connectRegistryClient(t, client)
+
+	mustWriteJSON(t, client, testEnvelope{
+		RequestID: 2,
+		Type:      "request",
+		Method:    "hub.state.get",
+		HubID:     "hub-state",
+		Payload: map[string]any{
+			"sections": []string{"tokenStats"},
+		},
+	})
+
+	_ = hub.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	forwarded := mustReadEnvelope(t, hub)
+	if forwarded.Type != "request" || forwarded.Method != "hub.state.get" {
+		t.Fatalf("forwarded=%#v, want hub.state.get request", forwarded)
+	}
+	if forwarded.HubID != "hub-state" {
+		t.Fatalf("forwarded.hubId=%q, want hub-state", forwarded.HubID)
+	}
+	if forwarded.ProjectID != "" {
+		t.Fatalf("forwarded.projectId=%q, want empty", forwarded.ProjectID)
+	}
+
+	mustWriteJSON(t, hub, testEnvelope{
+		RequestID: forwarded.RequestID,
+		Type:      "response",
+		Method:    "hub.state.get",
+		HubID:     "hub-state",
+		Payload: map[string]any{
+			"sections": map[string]any{
+				"tokenStats": map[string]any{"available": true},
+			},
+		},
+	})
+
+	resp := mustReadEnvelope(t, client)
+	if resp.Type != "response" || resp.Method != "hub.state.get" {
+		t.Fatalf("client response=%#v, want hub.state.get response", resp)
+	}
+	if resp.HubID != "hub-state" {
+		t.Fatalf("client response hubId=%q, want hub-state", resp.HubID)
+	}
+}
+
+func TestHubStateMissingEnvelopeHubIDIsRejected(t *testing.T) {
+	s := New(Config{})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	client := dialWS(t, ts.URL+"/ws")
+	defer client.Close()
+	connectRegistryClient(t, client)
+
+	mustWriteJSON(t, client, testEnvelope{
+		RequestID: 2,
+		Type:      "request",
+		Method:    "hub.state.get",
+		Payload: map[string]any{
+			"sections": []string{"tokenStats"},
+		},
+	})
+
+	resp := mustReadEnvelope(t, client)
+	if resp.Type != "error" || resp.Method != "hub.state.get" {
+		t.Fatalf("response=%#v, want hub.state.get error", resp)
+	}
+	if resp.Payload["code"] != "INVALID_ARGUMENT" {
+		t.Fatalf("error code=%v, want INVALID_ARGUMENT", resp.Payload["code"])
+	}
+}
+
+func TestHubStateBatchSubrequestCarriesEnvelopeHubID(t *testing.T) {
+	s := New(Config{})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	hub := dialReportedHub(t, ts.URL+"/ws", "hub-batch-state")
+	defer hub.Close()
+
+	client := dialWS(t, ts.URL+"/ws")
+	defer client.Close()
+	connectRegistryClient(t, client)
+
+	mustWriteJSON(t, client, testEnvelope{
+		RequestID: 2,
+		Type:      "request",
+		Method:    "batch",
+		Payload: map[string]any{
+			"requests": []map[string]any{
+				{
+					"method": "hub.state.get",
+					"hubId":  "hub-batch-state",
+					"payload": map[string]any{
+						"sections": []string{"tokenStats"},
+					},
+				},
+			},
+		},
+	})
+
+	_ = hub.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	forwarded := mustReadEnvelope(t, hub)
+	if forwarded.Type != "request" || forwarded.Method != "hub.state.get" {
+		t.Fatalf("forwarded=%#v, want hub.state.get request", forwarded)
+	}
+	if forwarded.HubID != "hub-batch-state" {
+		t.Fatalf("forwarded.hubId=%q, want hub-batch-state", forwarded.HubID)
+	}
+	if forwarded.ProjectID != "" {
+		t.Fatalf("forwarded.projectId=%q, want empty", forwarded.ProjectID)
+	}
+
+	mustWriteJSON(t, hub, testEnvelope{
+		RequestID: forwarded.RequestID,
+		Type:      "response",
+		Method:    "hub.state.get",
+		HubID:     "hub-batch-state",
+		Payload: map[string]any{
+			"sections": map[string]any{
+				"tokenStats": map[string]any{"available": true},
+			},
+		},
+	})
+
+	resp := mustReadEnvelope(t, client)
+	if resp.Type != "response" || resp.Method != "batch" {
+		t.Fatalf("batch response=%#v, want response", resp)
+	}
+	responses, ok := resp.Payload["responses"].([]any)
+	if !ok || len(responses) != 1 {
+		t.Fatalf("responses=%v, want 1 entry", resp.Payload["responses"])
+	}
+	item, _ := responses[0].(map[string]any)
+	if item["type"] != "response" || item["method"] != "hub.state.get" {
+		t.Fatalf("batch item=%#v, want hub.state.get response", item)
+	}
+	if item["hubId"] != "hub-batch-state" {
+		t.Fatalf("batch item hubId=%v, want hub-batch-state", item["hubId"])
 	}
 }
 

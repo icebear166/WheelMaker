@@ -309,6 +309,8 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 			s.handleRelayRequest(state.peer, state, in)
 		case rp.RegistryMonitorForwardMethod(in.Method):
 			s.handleMonitorForwardRequest(state.peer, state, in)
+		case rp.RegistryHubStateMethod(in.Method):
+			s.handleHubStateForwardRequest(state.peer, state, in)
 		case rp.RegistryHubCommandMethod(in.Method):
 			go s.handleHubCommandForwardRequest(state.peer, state, in)
 		case isSpeechRequestMethod(in.Method):
@@ -326,6 +328,7 @@ func readEnvelope(ws *websocket.Conn) (envelope, bool, error) {
 		RequestID json.RawMessage `json:"requestId,omitempty"`
 		Type      string          `json:"type"`
 		Method    string          `json:"method,omitempty"`
+		HubID     string          `json:"hubId,omitempty"`
 		ProjectID string          `json:"projectId,omitempty"`
 		Payload   json.RawMessage `json:"payload,omitempty"`
 	}
@@ -337,6 +340,7 @@ func readEnvelope(ws *websocket.Conn) (envelope, bool, error) {
 	out := envelope{
 		Type:      raw.Type,
 		Method:    raw.Method,
+		HubID:     raw.HubID,
 		ProjectID: raw.ProjectID,
 		Payload:   raw.Payload,
 	}
@@ -773,6 +777,12 @@ func (s *Server) handleHubCommandForwardRequest(clientPeer *peerConn, state *con
 	_ = clientPeer.write(resp)
 }
 
+func (s *Server) handleHubStateForwardRequest(clientPeer *peerConn, state *connectionState, in envelope) {
+	resp := s.executeHubStateRequest(state, in)
+	resp.RequestID = in.RequestID
+	_ = clientPeer.write(resp)
+}
+
 func (s *Server) executeHubCommandRequest(state *connectionState, in envelope) envelope {
 	type hubCommandPayload struct {
 		Action string `json:"action,omitempty"`
@@ -832,6 +842,66 @@ func (s *Server) executeHubCommandRequest(state *connectionState, in envelope) e
 	}
 }
 
+func (s *Server) executeHubStateRequest(state *connectionState, in envelope) envelope {
+	hubID := strings.TrimSpace(in.HubID)
+	if hubID == "" {
+		return s.errorEnvelope(in.Method, codeInvalidArgument, "hubId is required", nil)
+	}
+	if state.scopeHubID != "" && hubID != state.scopeHubID {
+		resp := s.errorEnvelope(in.Method, codeForbidden, "hub out of client scope", map[string]any{"hubId": hubID})
+		resp.HubID = hubID
+		return resp
+	}
+
+	s.mu.RLock()
+	hub := s.hubs[hubID]
+	hubPeer := s.hubPeers[hubID]
+	s.mu.RUnlock()
+	if hub.HubID == "" {
+		resp := s.errorEnvelope(in.Method, codeNotFound, "hub not found", map[string]any{"hubId": hubID})
+		resp.HubID = hubID
+		return resp
+	}
+	if hubPeer == nil {
+		resp := s.errorEnvelope(in.Method, codeUnavailable, "hub offline", map[string]any{"hubId": hubID})
+		resp.HubID = hubID
+		return resp
+	}
+
+	forwardID := s.nextForwardID.Add(1)
+	waitCh := hubPeer.registerPending(forwardID)
+	err := hubPeer.write(envelope{
+		RequestID: forwardID,
+		Type:      rp.RegistryEnvelopeTypeRequest,
+		Method:    in.Method,
+		HubID:     hubID,
+		Payload:   in.Payload,
+	})
+	if err != nil {
+		hubPeer.resolvePending(forwardID, envelope{})
+		resp := s.errorEnvelope(in.Method, codeInternal, "forward request write failed", nil)
+		resp.HubID = hubID
+		return resp
+	}
+
+	select {
+	case resp, ok := <-waitCh:
+		if !ok {
+			resp := s.errorEnvelope(in.Method, codeInternal, "hub disconnected", nil)
+			resp.HubID = hubID
+			return resp
+		}
+		resp.HubID = hubID
+		resp.ProjectID = ""
+		return resp
+	case <-time.After(defaultRequestTimeout):
+		hubPeer.resolvePending(forwardID, envelope{})
+		resp := s.errorEnvelope(in.Method, codeTimeout, "hub response timeout", nil)
+		resp.HubID = hubID
+		return resp
+	}
+}
+
 func (s *Server) executeMonitorRequest(_ *connectionState, in envelope) envelope {
 	var payload monitorHubRefPayload
 	if err := decodePayload(in.Payload, &payload); err != nil {
@@ -882,7 +952,9 @@ func (s *Server) handleProjectSyncCheck(peer *peerConn, state *connectionState, 
 
 func (s *Server) handleBatch(peer *peerConn, state *connectionState, in envelope) {
 	type batchItem struct {
+		RequestID int64           `json:"requestId,omitempty"`
 		Method    string          `json:"method"`
+		HubID     string          `json:"hubId,omitempty"`
 		ProjectID string          `json:"projectId,omitempty"`
 		Payload   json.RawMessage `json:"payload,omitempty"`
 	}
@@ -912,15 +984,19 @@ func (s *Server) handleBatch(peer *peerConn, state *connectionState, in envelope
 		}
 
 		subResp := s.executeBatchRequest(state, envelope{
+			RequestID: item.RequestID,
 			Type:      rp.RegistryEnvelopeTypeRequest,
 			Method:    item.Method,
+			HubID:     item.HubID,
 			ProjectID: item.ProjectID,
 			Payload:   item.Payload,
 		})
 		responses = append(responses, map[string]any{
 			"index":     index,
+			"requestId": item.RequestID,
 			"type":      subResp.Type,
 			"method":    subResp.Method,
+			"hubId":     subResp.HubID,
 			"projectId": subResp.ProjectID,
 			"payload":   json.RawMessage(subResp.Payload),
 		})
@@ -937,6 +1013,12 @@ func (s *Server) executeBatchRequest(state *connectionState, in envelope) envelo
 	}
 	if !methodAllowed(state.role, in.Method) {
 		return s.errorEnvelope(in.Method, codeForbidden, "method not allowed for role", map[string]any{"role": state.role})
+	}
+	if rp.RegistryHubStateMethod(in.Method) {
+		if state.role != string(rp.RegistryRoleClient) {
+			return s.errorEnvelope(in.Method, codeForbidden, "method not allowed for role", map[string]any{"role": state.role})
+		}
+		return s.executeHubStateRequest(state, in)
 	}
 
 	switch in.Method {
