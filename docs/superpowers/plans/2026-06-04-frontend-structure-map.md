@@ -1132,11 +1132,11 @@ Expected: targeted tests PASS and TypeScript exits 0.
 - Modify: `app/web/src/app/WorkspaceApp.tsx`
 - Modify tests that assert Settings surface locality.
 
-- [ ] **Step 1: Extract Settings rendering surface**
+- [x] **Step 1: Extract Settings rendering surface**
 
 Move the Settings detail shell, Settings root/detail render switch, mobile Settings screen, and mobile Settings shortcut bar into `settings/SettingsSurface.tsx`. Keep state ownership in `WorkspaceApp.tsx` for this task and pass existing callbacks/values as props.
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
 
 ```powershell
 cd app
@@ -1229,3 +1229,5 @@ This plan has completed the logic-light first-wave structure migration:
 - 2026-06-04 closeout: Reconciled this plan with the current tree. Tasks 1-13 are the completed first-wave scope; the original HTML review remains the broader target map for later surface and CSS extraction phases.
 - 2026-06-04 continuation: Tasks 14-18 are complete. The remaining Settings detail files moved under `settings/code` and `settings/portRelay`; Android notification bridge logic moved under `platform/android`; registry protocol types moved to `registry/registryTypes.ts`; startup address helpers moved to `app/workspaceBootstrap.ts`; Shiki, diff, Markdown, Mermaid, and HTML preview rendering moved under `code/`.
 - 2026-06-04 continuation: Verification after Task 18 passed with `npm run tsc:web`, `npm test -- --runInBand`, and `npm run build:web`. Tasks 19-21 remain: Settings surface extraction, Chat/File/Git surface extraction, and CSS surface split.
+- 2026-06-04 continuation: Task 19 is complete. `settings/SettingsSurface.tsx` now owns the Settings detail shell, root/detail surface switch, mobile Settings screen, mobile Settings shortcut bar, shortcut metadata, and Settings detail titles while `WorkspaceApp.tsx` keeps state/effect/callback ownership.
+- 2026-06-04 continuation: Task 19 verification passed with `npm test -- --runInBand web-settings-navigation.test.ts web-mobile-settings-system-back.test.ts web-port-relay-settings.test.ts web-registry-debug-settings.test.ts`, additional affected source-structure tests, and `npm run tsc:web`.

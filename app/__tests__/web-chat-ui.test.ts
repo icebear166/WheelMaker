@@ -150,6 +150,7 @@ describe('web chat integration', () => {
     const workspaceServiceTs = readSourceText(path.join(projectRoot, 'web', 'src', 'registry', 'RegistryWorkspaceService.ts'));
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const settingsRootTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'));
+    const settingsSurfaceTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsSurface.tsx'));
     const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles.css'));
 
     expect(registryTypes).toContain('export interface RegistrySessionSummary');
@@ -455,12 +456,14 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className={`sidebar-title-row${chatSidebarTitleSearchOpen ? \' search-open\' : \'\'}`}');
     expect(mainTsx).toContain('className="desktop-activity-bar"');
     expect(mainTsx).toContain('const mobileSettingsScreen = !isWide && sidebarSettingsOpen ? (');
-    expect(mainTsx).toContain('className="mobile-settings-screen"');
-    expect(mainTsx).toContain('aria-modal="true"');
-    expect(mainTsx).toContain('className="mobile-settings-nav"');
-    expect(mainTsx).toContain('className="mobile-settings-back"');
-    expect(mainTsx).toContain('<div className="mobile-settings-title">{mobileSettingsTitle}</div>');
-    expect(mainTsx).toContain('className="mobile-settings-group"');
+    expect(mainTsx).toContain('<MobileSettingsScreen');
+    expect(mainTsx).toContain('shortcutBar={mobileSettingsShortcutBar}');
+    expect(settingsSurfaceTsx).toContain('className="mobile-settings-screen"');
+    expect(settingsSurfaceTsx).toContain('aria-modal="true"');
+    expect(settingsSurfaceTsx).toContain('className="mobile-settings-nav"');
+    expect(settingsSurfaceTsx).toContain('className="mobile-settings-back"');
+    expect(settingsSurfaceTsx).toContain('<div className="mobile-settings-title">{title}</div>');
+    expect(settingsSurfaceTsx).toContain('className="mobile-settings-group"');
     const chatSettingsStart = settingsRootTsx.indexOf("renderSettingsSection('Chat'");
     const hideToolCallsSettingStart = settingsRootTsx.indexOf('Hide Tool Calls', chatSettingsStart);
     expect(chatSettingsStart).toBeGreaterThanOrEqual(0);
@@ -1576,7 +1579,7 @@ describe('web chat integration', () => {
     expect(chatSettingsIndex).toBeLessThan(codeDisplaySettingsIndex);
     expect(codeDisplaySettingsIndex).toBeLessThan(debugSettingsIndex);
     expect(settingsRootTsx).toContain("openSettingsChild('database')");
-    expect(mainTsx).toContain("settingsDetailView === 'database'");
+    expect(mainTsx).toContain("detail === 'database'");
     expect(mainTsx).toContain('renderDatabaseSettingsDetail(options)');
     expect(settingsRootTsx).toContain('className="settings-section-title"');
     expect(settingsRootTsx).toContain('className="settings-row settings-detail-row"');

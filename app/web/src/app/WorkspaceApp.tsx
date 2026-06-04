@@ -214,6 +214,14 @@ import {
   type SettingsDetailId,
   type SettingsPeerDetail,
 } from '../settings/settingsNavigation';
+import {
+  MobileSettingsScreen,
+  MobileSettingsShortcutBar,
+  SettingsDetailShell,
+  SettingsSurface,
+  settingsDetailTitle,
+  type SettingsDetailShellOptions,
+} from '../settings/SettingsSurface';
 import { installMobileViewportZoomGuard } from '../shell/layouts/mobile/mobileViewportZoomGuard';
 import { resolveLayoutMode } from '../shell/state/responsiveLayout';
 import {
@@ -464,10 +472,6 @@ type ChatQuickSwitchMenuPlacement =
   | {kind: 'mobile'}
   | {kind: 'desktop'; style: React.CSSProperties};
 type SettingsDetailView = SettingsDetailId | null;
-type ActiveSettingsDetailView = SettingsDetailId;
-type SettingsDetailShellOptions = {
-  hideDetailHeader?: boolean;
-};
 const WHEELMAKER_UPDATE_REMOTE_POLL_DELAY_MS = 1500;
 type WheelMakerUpdateHubView = {
   hubId: string;
@@ -1002,27 +1006,6 @@ function gestureTabFromElement(element: Element | null): GestureNavigationTab | 
   const target = element?.closest<HTMLElement>('[data-gesture-nav-tab]');
   const tab = target?.dataset.gestureNavTab;
   return tab === 'chat' || tab === 'file' || tab === 'git' ? tab : null;
-}
-
-function settingsDetailTitle(detail: ActiveSettingsDetailView): string {
-  switch (detail) {
-    case 'update':
-      return 'Update';
-    case 'skills':
-      return 'Skills';
-    case 'tokenStats':
-      return 'Token Stats';
-    case 'ccSwitch':
-      return 'CC Switch';
-    case 'database':
-      return 'Database';
-    case 'portRelay':
-      return 'Port Relay';
-    case 'connectionStatus':
-      return 'Connection Status';
-    case 'debugLogs':
-      return 'Logs';
-  }
 }
 
 function readPromptCompletionNotificationTarget(): ChatSessionKey | null {
@@ -13815,7 +13798,7 @@ export function App() {
       />
     );
   };
-  const renderSettingsDetailActions = (detail: ActiveSettingsDetailView): React.ReactNode => {
+  const renderSettingsDetailActions = (detail: SettingsDetailId): React.ReactNode => {
     if (detail === 'skills') {
       return (
         <button
@@ -13891,24 +13874,14 @@ export function App() {
     actions?: React.ReactNode,
     options: SettingsDetailShellOptions = {},
   ) => (
-    <div className={`settings-detail-page${options.hideDetailHeader ? ' settings-detail-page-body-only' : ''}`}>
-      {options.hideDetailHeader ? null : (
-        <div className="settings-detail-header">
-          <button
-            type="button"
-            className="mobile-settings-back settings-detail-back"
-            onClick={handleSettingsDetailBack}
-            aria-label="Back to settings"
-            title="Back"
-          >
-            <span className="codicon codicon-arrow-left" />
-          </button>
-          <div className="settings-detail-title">{title}</div>
-          {actions ?? <span className="settings-detail-header-spacer" aria-hidden="true" />}
-        </div>
-      )}
-      <div className="settings-detail-body">{content}</div>
-    </div>
+    <SettingsDetailShell
+      title={title}
+      actions={actions}
+      hideDetailHeader={options.hideDetailHeader}
+      onBack={handleSettingsDetailBack}
+    >
+      {content}
+    </SettingsDetailShell>
   );
 
   const renderSkillsSettingsDetail = (options?: SettingsDetailShellOptions) =>
@@ -14149,83 +14122,97 @@ export function App() {
       options,
     );
 
+  const renderSettingsDetailContent = (
+    detail: SettingsDetailId,
+    options: SettingsDetailShellOptions = {},
+  ) => {
+    if (detail === 'update') {
+      return renderUpdateSettingsDetail(options);
+    }
+    if (detail === 'skills') {
+      return renderSkillsSettingsDetail(options);
+    }
+    if (detail === 'ccSwitch') {
+      return renderCCSwitchSettingsDetail(options);
+    }
+    if (detail === 'tokenStats') {
+      return renderTokenStatsSettingsDetail(options);
+    }
+    if (detail === 'database') {
+      return renderDatabaseSettingsDetail(options);
+    }
+    if (detail === 'portRelay') {
+      return renderPortRelaySettingsDetail(options);
+    }
+    if (detail === 'connectionStatus') {
+      return renderConnectionStatusSettingsDetail(options);
+    }
+    if (detail === 'debugLogs') {
+      return renderDebugLogsSettingsDetail(options);
+    }
+    return null;
+  };
+
+  const renderSettingsRootContent = (showSectionTitle: boolean) => (
+    <React.Suspense fallback={null}>
+      <SettingsRootContent
+        showSectionTitle={showSectionTitle}
+        themeMode={themeMode}
+        setThemeMode={setThemeMode}
+        gestureNavigation={gestureNavigation}
+        setGestureNavigation={setGestureNavigation}
+        isWide={isWide}
+        floatingControlIdleOpacityPercent={floatingControlIdleOpacityPercent}
+        setFloatingControlIdleOpacity={setFloatingControlIdleOpacity}
+        hideToolCalls={hideToolCalls}
+        setHideToolCalls={setHideToolCalls}
+        promptCompletionNotificationsEnabled={promptCompletionNotificationsEnabled}
+        setPromptCompletionNotificationsEnabled={setPromptCompletionNotificationsEnabled}
+        handlePromptCompletionNotificationsChange={handlePromptCompletionNotificationsChange}
+        notificationPermissionState={notificationPermissionState}
+        speechSettings={speechSettings}
+        setSpeechSettings={setSpeechSettings}
+        chatFont={chatFont}
+        setChatFont={setChatFont}
+        localHubReadEnabled={localHubReadEnabled}
+        setLocalHubReadEnabled={setLocalHubReadEnabled}
+        openSettingsChild={openSettingsChild}
+        codeTheme={codeTheme}
+        setCodeTheme={setCodeTheme}
+        codeFont={codeFont}
+        setCodeFont={setCodeFont}
+        codeFontSize={codeFontSize}
+        setCodeFontSize={setCodeFontSize}
+        clampCodeFontSize={clampCodeFontSize}
+        codeLineHeight={codeLineHeight}
+        setCodeLineHeight={setCodeLineHeight}
+        clampCodeLineHeight={clampCodeLineHeight}
+        codeTabSize={codeTabSize}
+        setCodeTabSize={setCodeTabSize}
+        clampCodeTabSize={clampCodeTabSize}
+        messageViewerEnabled={messageViewerEnabled}
+        setMessageViewerEnabled={setMessageViewerEnabled}
+        logLevel={logLevel}
+        setLogLevel={setLogLevel}
+        disableFileCache={disableFileCache}
+        setDisableFileCache={setDisableFileCache}
+        requestClearLocalCache={requestClearLocalCache}
+        handleRegistryDebugLogout={handleRegistryDebugLogout}
+      />
+    </React.Suspense>
+  );
+
   const renderSettingsContent = (
     showSectionTitle: boolean,
     options: SettingsDetailShellOptions = {},
-  ) => {
-    if (settingsDetailView === 'update') {
-      return renderUpdateSettingsDetail(options);
-    }
-    if (settingsDetailView === 'skills') {
-      return renderSkillsSettingsDetail(options);
-    }
-    if (settingsDetailView === 'ccSwitch') {
-      return renderCCSwitchSettingsDetail(options);
-    }
-    if (settingsDetailView === 'tokenStats') {
-      return renderTokenStatsSettingsDetail(options);
-    }
-    if (settingsDetailView === 'database') {
-      return renderDatabaseSettingsDetail(options);
-    }
-    if (settingsDetailView === 'portRelay') {
-      return renderPortRelaySettingsDetail(options);
-    }
-    if (settingsDetailView === 'connectionStatus') {
-      return renderConnectionStatusSettingsDetail(options);
-    }
-    if (settingsDetailView === 'debugLogs') {
-      return renderDebugLogsSettingsDetail(options);
-    }
-    return (
-      <React.Suspense fallback={null}>
-        <SettingsRootContent
-          showSectionTitle={showSectionTitle}
-          themeMode={themeMode}
-          setThemeMode={setThemeMode}
-          gestureNavigation={gestureNavigation}
-          setGestureNavigation={setGestureNavigation}
-          isWide={isWide}
-          floatingControlIdleOpacityPercent={floatingControlIdleOpacityPercent}
-          setFloatingControlIdleOpacity={setFloatingControlIdleOpacity}
-          hideToolCalls={hideToolCalls}
-          setHideToolCalls={setHideToolCalls}
-          promptCompletionNotificationsEnabled={promptCompletionNotificationsEnabled}
-          setPromptCompletionNotificationsEnabled={setPromptCompletionNotificationsEnabled}
-          handlePromptCompletionNotificationsChange={handlePromptCompletionNotificationsChange}
-          notificationPermissionState={notificationPermissionState}
-          speechSettings={speechSettings}
-          setSpeechSettings={setSpeechSettings}
-          chatFont={chatFont}
-          setChatFont={setChatFont}
-          localHubReadEnabled={localHubReadEnabled}
-          setLocalHubReadEnabled={setLocalHubReadEnabled}
-          openSettingsChild={openSettingsChild}
-          codeTheme={codeTheme}
-          setCodeTheme={setCodeTheme}
-          codeFont={codeFont}
-          setCodeFont={setCodeFont}
-          codeFontSize={codeFontSize}
-          setCodeFontSize={setCodeFontSize}
-          clampCodeFontSize={clampCodeFontSize}
-          codeLineHeight={codeLineHeight}
-          setCodeLineHeight={setCodeLineHeight}
-          clampCodeLineHeight={clampCodeLineHeight}
-          codeTabSize={codeTabSize}
-          setCodeTabSize={setCodeTabSize}
-          clampCodeTabSize={clampCodeTabSize}
-          messageViewerEnabled={messageViewerEnabled}
-          setMessageViewerEnabled={setMessageViewerEnabled}
-          logLevel={logLevel}
-          setLogLevel={setLogLevel}
-          disableFileCache={disableFileCache}
-          setDisableFileCache={setDisableFileCache}
-          requestClearLocalCache={requestClearLocalCache}
-          handleRegistryDebugLogout={handleRegistryDebugLogout}
-        />
-      </React.Suspense>
-    );
-  };
+  ) => (
+    <SettingsSurface
+      detailView={settingsDetailView}
+      options={options}
+      renderRoot={() => renderSettingsRootContent(showSectionTitle)}
+      renderDetail={renderSettingsDetailContent}
+    />
+  );
 
   const renderMobileChatSessionSheet = () => {
     return (
@@ -16961,101 +16948,25 @@ export function App() {
   const mobileSettingsShortcutActiveIndex = mobileSettingsShortcutIndex(settingsDetailView);
   const mobileSettingsRootShortcutActive = mobileSettingsShortcutActiveIndex === 0;
   const mobileSettingsShortcutBar = !isWide && sidebarSettingsOpen ? (
-    <nav
-      className="mobile-settings-shortcut-bar"
-      data-active-index={mobileSettingsShortcutActiveIndex}
-      aria-label="Settings shortcuts"
-    >
-      <button
-        type="button"
-        className={`mobile-settings-shortcut-button${mobileSettingsRootShortcutActive ? ' active' : ''}`}
-        onClick={handleMobileSettingsRootShortcut}
-        title="Settings"
-        aria-label="Settings"
-      >
-        <span className="codicon codicon-settings-gear" />
-        <span className="mobile-settings-shortcut-label">Settings</span>
-      </button>
-      <button
-        type="button"
-        className={`mobile-settings-shortcut-button${settingsDetailView === 'update' ? ' active' : ''}`}
-        onClick={() => openMobileSettingsShortcutDetail('update')}
-        title="Update"
-        aria-label="Update"
-      >
-        <span className="codicon codicon-cloud-download" />
-        <span className="mobile-settings-shortcut-label">Update</span>
-      </button>
-      <button
-        type="button"
-        className={`mobile-settings-shortcut-button${settingsDetailView === 'skills' ? ' active' : ''}`}
-        onClick={() => openMobileSettingsShortcutDetail('skills')}
-        title="Skills"
-        aria-label="Skills"
-      >
-        <span className="codicon codicon-extensions" />
-        <span className="mobile-settings-shortcut-label">Skills</span>
-      </button>
-      <button
-        type="button"
-        className={`mobile-settings-shortcut-button${settingsDetailView === 'portRelay' ? ' active' : ''}`}
-        onClick={() => openMobileSettingsShortcutDetail('portRelay')}
-        title="Port Relay"
-        aria-label="Port Relay"
-      >
-        <span className="codicon codicon-radio-tower" />
-        <span className="mobile-settings-shortcut-label">Port Relay</span>
-      </button>
-      <button
-        type="button"
-        className={`mobile-settings-shortcut-button${settingsDetailView === 'tokenStats' ? ' active' : ''}`}
-        onClick={() => openMobileSettingsShortcutDetail('tokenStats')}
-        title="Token Stats"
-        aria-label="Token Stats"
-      >
-        <span className="codicon codicon-graph-line" />
-        <span className="mobile-settings-shortcut-label">Token Stats</span>
-      </button>
-      <button
-        type="button"
-        className={`mobile-settings-shortcut-button${settingsDetailView === 'ccSwitch' ? ' active' : ''}`}
-        onClick={() => openMobileSettingsShortcutDetail('ccSwitch')}
-        title="CC Switch"
-        aria-label="CC Switch"
-      >
-        <span className="codicon codicon-arrow-swap" />
-        <span className="mobile-settings-shortcut-label">CC Switch</span>
-      </button>
-    </nav>
+    <MobileSettingsShortcutBar
+      activeDetail={settingsDetailView}
+      activeIndex={mobileSettingsShortcutActiveIndex}
+      rootActive={mobileSettingsRootShortcutActive}
+      onRootSelect={handleMobileSettingsRootShortcut}
+      onDetailSelect={openMobileSettingsShortcutDetail}
+    />
   ) : null;
 
   const mobileSettingsScreen = !isWide && sidebarSettingsOpen ? (
-    <div
-      className="mobile-settings-screen"
-      role="dialog"
-      aria-modal="true"
-      aria-label={mobileSettingsTitle}
+    <MobileSettingsScreen
+      title={mobileSettingsTitle}
+      actions={mobileSettingsActions}
+      backAriaLabel={settingsDetailView ? 'Back to settings' : 'Back to drawer'}
+      shortcutBar={mobileSettingsShortcutBar}
+      onBack={handleMobileSettingsBackButton}
     >
-      <div className="mobile-settings-nav">
-        <button
-          type="button"
-          className="mobile-settings-back"
-          onClick={handleMobileSettingsBackButton}
-          aria-label={settingsDetailView ? 'Back to settings' : 'Back to drawer'}
-          title="Back"
-        >
-          <span className="codicon codicon-arrow-left" />
-        </button>
-        <div className="mobile-settings-title">{mobileSettingsTitle}</div>
-        <div className="mobile-settings-actions">{mobileSettingsActions}</div>
-      </div>
-      <div className="mobile-settings-scroll">
-        <div className="mobile-settings-group">
-          {renderSettingsContent(false, { hideDetailHeader: true })}
-        </div>
-      </div>
-      {mobileSettingsShortcutBar}
-    </div>
+      {renderSettingsContent(false, { hideDetailHeader: true })}
+    </MobileSettingsScreen>
   ) : null;
   const portRelayMobileFrameOverlay = mobilePortRelayFrameOpen
     ? (

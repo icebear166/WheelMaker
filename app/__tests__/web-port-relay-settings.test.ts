@@ -3,6 +3,7 @@ import path from 'path';
 
 const root = path.resolve(__dirname, '..');
 const mainTsx = fs.readFileSync(path.join(root, 'web/src/app/WorkspaceApp.tsx'), 'utf8');
+const settingsSurfaceTsx = fs.readFileSync(path.join(root, 'web/src/settings/SettingsSurface.tsx'), 'utf8');
 const detailPath = path.join(root, 'web/src/settings/portRelay/PortRelaySettingsDetail.tsx');
 const detailTsx = fs.existsSync(detailPath) ? fs.readFileSync(detailPath, 'utf8') : '';
 const surfacePath = path.join(root, 'web/src/portRelay/PortRelayFrameSurface.tsx');
@@ -18,12 +19,16 @@ describe('port relay settings UI source structure', () => {
     expect(mainTsx).toContain("setSettingsDetailView('portRelay')");
     expect(mainTsx).not.toContain("renderSettingsSection('More'");
 
-    const mobileBarStart = mainTsx.indexOf('const mobileSettingsShortcutBar = !isWide && sidebarSettingsOpen ? (');
-    const mobileBarEnd = mainTsx.indexOf('const mobileSettingsScreen = !isWide && sidebarSettingsOpen ? (', mobileBarStart);
-    const mobileBar = mainTsx.slice(mobileBarStart, mobileBarEnd);
-    expect(mobileBar.indexOf('title="Skills"')).toBeLessThan(mobileBar.indexOf('title="Port Relay"'));
-    expect(mobileBar.indexOf('title="Port Relay"')).toBeLessThan(mobileBar.indexOf('title="Token Stats"'));
-    expect(mobileBar).toContain("openMobileSettingsShortcutDetail('portRelay')");
+    expect(mainTsx).toContain('<MobileSettingsShortcutBar');
+    expect(mainTsx).toContain('onDetailSelect={openMobileSettingsShortcutDetail}');
+    const mobileShortcutsStart = settingsSurfaceTsx.indexOf('export const MOBILE_SETTINGS_SHORTCUTS');
+    const mobileShortcutsEnd = settingsSurfaceTsx.indexOf('export function settingsDetailTitle', mobileShortcutsStart);
+    expect(mobileShortcutsStart).toBeGreaterThanOrEqual(0);
+    expect(mobileShortcutsEnd).toBeGreaterThan(mobileShortcutsStart);
+    const mobileShortcuts = settingsSurfaceTsx.slice(mobileShortcutsStart, mobileShortcutsEnd);
+    expect(mobileShortcuts.indexOf("detail: 'skills'")).toBeLessThan(mobileShortcuts.indexOf("detail: 'portRelay'"));
+    expect(mobileShortcuts.indexOf("detail: 'portRelay'")).toBeLessThan(mobileShortcuts.indexOf("detail: 'tokenStats'"));
+    expect(settingsSurfaceTsx).toContain('onClick={() => onDetailSelect(shortcut.detail)}');
   });
 
   test('renders Port Relay controls and service hooks', () => {

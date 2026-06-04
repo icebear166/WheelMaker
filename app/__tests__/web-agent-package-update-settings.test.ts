@@ -368,6 +368,7 @@ describe('agent package update settings UI source structure', () => {
   test('uses explicit agent tag variants and softly sized capsules', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
+    const settingsSurfaceTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsSurface.tsx'), 'utf8');
     const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
 
     expect(mainTsx).toContain('const AGENT_TAG_VARIANT_INDEX');
@@ -390,6 +391,7 @@ describe('agent package update settings UI source structure', () => {
   test('adds desktop shortcuts and a mobile Settings-only shortcut bar', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
+    const settingsSurfaceTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsSurface.tsx'), 'utf8');
     const stylesCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles.css'), 'utf8');
 
     const activityBarStart = mainTsx.indexOf('const desktopActivityBar = isWide ? (');
@@ -432,20 +434,27 @@ describe('agent package update settings UI source structure', () => {
     expect(mobileBarStart).toBeGreaterThanOrEqual(0);
     expect(mobileBarEnd).toBeGreaterThan(mobileBarStart);
     const mobileBar = mainTsx.slice(mobileBarStart, mobileBarEnd);
-    expect(mobileBar.indexOf('title="Settings"')).toBeLessThan(mobileBar.indexOf('title="Update"'));
-    expect(mobileBar.indexOf('title="Update"')).toBeLessThan(mobileBar.indexOf('title="Skills"'));
-    expect(mobileBar.indexOf('title="Skills"')).toBeLessThan(mobileBar.indexOf('title="Port Relay"'));
-    expect(mobileBar.indexOf('title="Port Relay"')).toBeLessThan(mobileBar.indexOf('title="Token Stats"'));
-    expect(mobileBar.indexOf('title="Token Stats"')).toBeLessThan(mobileBar.indexOf('title="CC Switch"'));
-    expect(mobileBar).toContain("openMobileSettingsShortcutDetail('update')");
-    expect(mobileBar).toContain("openMobileSettingsShortcutDetail('skills')");
-    expect(mobileBar).toContain("openMobileSettingsShortcutDetail('portRelay')");
-    expect(mobileBar).toContain("openMobileSettingsShortcutDetail('tokenStats')");
-    expect(mobileBar).toContain("openMobileSettingsShortcutDetail('ccSwitch')");
-    expect(mobileBar).toContain('onClick={handleMobileSettingsRootShortcut}');
-    expect(mobileBar).toContain('data-active-index={mobileSettingsShortcutActiveIndex}');
-    expect(mobileBar).toContain('className="mobile-settings-shortcut-label">Settings</span>');
-    expect(mobileBar).toContain('className="mobile-settings-shortcut-label">CC Switch</span>');
+    expect(mobileBar).toContain('<MobileSettingsShortcutBar');
+    expect(mobileBar).toContain('onRootSelect={handleMobileSettingsRootShortcut}');
+    expect(mobileBar).toContain('onDetailSelect={openMobileSettingsShortcutDetail}');
+    expect(mobileBar).toContain('activeIndex={mobileSettingsShortcutActiveIndex}');
+    const surfaceShortcutStart = settingsSurfaceTsx.indexOf('export const MOBILE_SETTINGS_SHORTCUTS');
+    const surfaceShortcutEnd = settingsSurfaceTsx.indexOf('export function settingsDetailTitle', surfaceShortcutStart);
+    const surfaceShortcuts = settingsSurfaceTsx.slice(surfaceShortcutStart, surfaceShortcutEnd);
+    expect(surfaceShortcutStart).toBeGreaterThanOrEqual(0);
+    expect(surfaceShortcutEnd).toBeGreaterThan(surfaceShortcutStart);
+    expect(surfaceShortcuts.indexOf("detail: 'update'")).toBeLessThan(surfaceShortcuts.indexOf("detail: 'skills'"));
+    expect(surfaceShortcuts.indexOf("detail: 'skills'")).toBeLessThan(surfaceShortcuts.indexOf("detail: 'portRelay'"));
+    expect(surfaceShortcuts.indexOf("detail: 'portRelay'")).toBeLessThan(surfaceShortcuts.indexOf("detail: 'tokenStats'"));
+    expect(surfaceShortcuts.indexOf("detail: 'tokenStats'")).toBeLessThan(surfaceShortcuts.indexOf("detail: 'ccSwitch'"));
+    const surfaceBarStart = settingsSurfaceTsx.indexOf('export function MobileSettingsShortcutBar');
+    const surfaceBarEnd = settingsSurfaceTsx.indexOf('export function MobileSettingsScreen', surfaceBarStart);
+    const surfaceBar = settingsSurfaceTsx.slice(surfaceBarStart, surfaceBarEnd);
+    expect(surfaceBar.indexOf('title="Settings"')).toBeLessThan(surfaceBar.indexOf('MOBILE_SETTINGS_SHORTCUTS.map'));
+    expect(surfaceBar).toContain('onClick={onRootSelect}');
+    expect(surfaceBar).toContain('onClick={() => onDetailSelect(shortcut.detail)}');
+    expect(surfaceBar).toContain('className="mobile-settings-shortcut-label">Settings</span>');
+    expect(surfaceBar).toContain('className="mobile-settings-shortcut-label">{shortcut.label}</span>');
 
     const mobileToolbarStart = mainTsx.indexOf('<div className="mobile-chat-toolbar"');
     const mobileToolbarEnd = mainTsx.indexOf('{renderChatHubSummary(true)}', mobileToolbarStart);

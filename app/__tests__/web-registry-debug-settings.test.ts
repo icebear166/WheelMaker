@@ -34,7 +34,9 @@ describe('web registry debug settings', () => {
 
   test('adds separate message viewer and log level controls without making records persistent', () => {
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
+    const settingsNavigationTs = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'settingsNavigation.ts'), 'utf8');
     const settingsRootTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
+    const settingsSurfaceTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsSurface.tsx'), 'utf8');
 
     expect(mainTsx).toContain("import {createRegistryDebugStore} from '../debug/registryDebug';");
     expect(mainTsx).toContain('const registryDebugStore = createRegistryDebugStore();');
@@ -47,8 +49,10 @@ describe('web registry debug settings', () => {
     expect(settingsRootTsx).toContain("renderSettingsSection('Debug'");
     expect(settingsRootTsx).toContain('Message Viewer');
     expect(settingsRootTsx).toContain('Log Level');
-    expect(mainTsx).toContain("'debugLogs'");
-    expect(mainTsx).toContain("settingsDetailView === 'debugLogs'");
+    expect(settingsNavigationTs).toContain("'debugLogs'");
+    expect(settingsSurfaceTsx).toContain("case 'debugLogs':");
+    expect(settingsSurfaceTsx).toContain("return 'Logs';");
+    expect(mainTsx).toContain("detail === 'debugLogs'");
     expect(mainTsx).toContain("import(/* webpackChunkName: \"settings\" */ '../settings/SettingsBundle')");
     expect(mainTsx).toContain('renderDebugLogsSettingsDetail(options)');
     expect(mainTsx).toContain('<DebugLogsSettingsDetail');
