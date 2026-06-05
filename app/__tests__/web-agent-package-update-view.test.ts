@@ -104,7 +104,7 @@ describe('agent package update view helpers', () => {
     expect(wheelMakerUpdateStatusLabel('custom_status')).toBe('custom_status');
   });
 
-  test('does not allow WheelMaker update while the hub is still checking', () => {
+  test('allows WheelMaker update when published release is already current', () => {
     expect(
       shouldShowWheelMakerUpdateAction({
         data: null,
@@ -124,7 +124,7 @@ describe('agent package update view helpers', () => {
         loading: false,
         pending: false,
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       shouldShowWheelMakerUpdateAction({
         data: {

@@ -69,7 +69,8 @@ func TestReservedCommandsReturnNotImplemented(t *testing.T) {
 }
 
 type testRunner struct {
-	events *[]string
+	events    *[]string
+	gitStatus string
 }
 
 func (r testRunner) Run(_ context.Context, dir string, name string, args ...string) (string, error) {
@@ -79,6 +80,13 @@ func (r testRunner) Run(_ context.Context, dir string, name string, args ...stri
 		return "main", nil
 	case name == "git" && strings.Join(args, " ") == "rev-parse HEAD":
 		return "abc123", nil
+	case name == "git" && strings.Join(args, " ") == "status --porcelain":
+		if r.gitStatus != "" {
+			*r.events = append(*r.events, "git "+strings.Join(args, " "))
+		}
+		return r.gitStatus, nil
+	case name == "git" && len(args) >= 1 && args[0] == "stash":
+		*r.events = append(*r.events, "git "+strings.Join(args, " "))
 	case name == "git" && len(args) >= 1 && args[0] == "pull":
 		*r.events = append(*r.events, "git "+strings.Join(args, " "))
 	case name == "npm":
@@ -409,6 +417,23 @@ func TestBootstrapBuildsTempDeployAndExecsUpdate(t *testing.T) {
 	}
 	assertEventsContainInOrder(t, *h.events,
 		"git pull --ff-only origin main",
+		"go build wheelmaker-deploy-next",
+		"run wheelmaker-deploy-next update",
+	)
+}
+
+func TestBootstrapStashesLocalChangesBeforePull(t *testing.T) {
+	h := newDeployHarness(t)
+	h.cfg.Mode = modeBootstrapUpdate
+	h.deps.Runner = testRunner{events: h.events, gitStatus: " M server/cmd/wheelmaker-deploy/main.go\n?? scratch.txt\n"}
+	if err := runBootstrapUpdateWithDeps(context.Background(), h.cfg, h.deps); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	assertEventsContainInOrder(t, *h.events,
+		"git status --porcelain",
+		"git stash push --include-untracked -m WheelMaker auto-stash before update",
+		"git pull --ff-only origin main",
+		"git stash pop --index",
 		"go build wheelmaker-deploy-next",
 		"run wheelmaker-deploy-next update",
 	)

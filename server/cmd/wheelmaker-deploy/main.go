@@ -30,6 +30,8 @@ const (
 
 var errElevatedChildCompleted = errors.New("elevated child completed deployment")
 
+const deployAutoStashMessage = "WheelMaker auto-stash before update"
+
 type deployConfig struct {
 	Mode          runMode
 	ServiceAction string
@@ -450,8 +452,35 @@ func pullLatest(ctx context.Context, cfg deployConfig, deps deployDeps) error {
 	if branch == "" {
 		return errors.New("repository is in detached HEAD state; cannot pull latest automatically")
 	}
-	_, err = deps.Runner.Run(ctx, cfg.RepoRoot, "git", "pull", "--ff-only", "origin", branch)
-	return err
+	dirty, err := repoHasLocalChanges(ctx, cfg, deps)
+	if err != nil {
+		return err
+	}
+	stashed := false
+	if dirty {
+		if _, err := deps.Runner.Run(ctx, cfg.RepoRoot, "git", "stash", "push", "--include-untracked", "-m", deployAutoStashMessage); err != nil {
+			return fmt.Errorf("stash local changes before pull: %w", err)
+		}
+		stashed = true
+	}
+	_, pullErr := deps.Runner.Run(ctx, cfg.RepoRoot, "git", "pull", "--ff-only", "origin", branch)
+	if stashed {
+		if _, popErr := deps.Runner.Run(ctx, cfg.RepoRoot, "git", "stash", "pop", "--index"); popErr != nil {
+			if pullErr != nil {
+				return fmt.Errorf("pull latest failed: %w; restore stashed local changes failed: %v", pullErr, popErr)
+			}
+			return fmt.Errorf("restore stashed local changes after pull: %w", popErr)
+		}
+	}
+	return pullErr
+}
+
+func repoHasLocalChanges(ctx context.Context, cfg deployConfig, deps deployDeps) (bool, error) {
+	status, err := deps.Runner.Run(ctx, cfg.RepoRoot, "git", "status", "--porcelain")
+	if err != nil {
+		return false, fmt.Errorf("check local changes before pull: %w", err)
+	}
+	return strings.TrimSpace(status) != "", nil
 }
 
 func syncAppNPM(ctx context.Context, cfg deployConfig, deps deployDeps) error {

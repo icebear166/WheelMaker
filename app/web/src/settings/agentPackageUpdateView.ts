@@ -108,7 +108,7 @@ export function shouldShowWheelMakerUpdateAction(input: {
   if (input.loading || !input.data) {
     return false;
   }
-  return input.data.canUpdatePublish === true && input.data.status !== 'up_to_date';
+  return input.data.canUpdatePublish === true;
 }
 
 export function withAgentPackageTimeout<T>(
