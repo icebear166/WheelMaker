@@ -47,6 +47,21 @@ type errorPayload = rp.ErrorPayload
 type monitorActionPayload = rp.MonitorActionPayload
 type monitorLogPayload = rp.MonitorLogPayload
 
+type hubStateGetPayload struct {
+	Sections []string `json:"sections,omitempty"`
+}
+
+type hubStateRefreshPayload struct {
+	Sections []string `json:"sections"`
+	Force    bool     `json:"force,omitempty"`
+}
+
+type hubStateActionPayload struct {
+	Section string         `json:"section"`
+	Action  string         `json:"action"`
+	Params  map[string]any `json:"params,omitempty"`
+}
+
 type SessionHandler interface {
 	HandleSessionRequest(ctx context.Context, method string, projectID string, payload json.RawMessage) (any, error)
 }
@@ -91,6 +106,7 @@ type Reporter struct {
 	toolHandler     toolCommandHandler
 	relayClient     *portrelay.HubClient
 	fileIndex       *projectFileIndexManager
+	hubStateManager *HubStateManager
 
 	localReadMu         sync.RWMutex
 	localReadServer     *http.Server
@@ -151,6 +167,7 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 		relayClient: portrelay.NewHubClient(),
 		fileIndex:   newProjectFileIndexManager(monitorBase),
 	}
+	r.hubStateManager = newHubStateManager(r.cfg.HubID, r.hubStateSectionHandlers())
 	r.requestSeq.Store(2)
 	return r
 }
@@ -451,6 +468,12 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 		r.replyRelayOpen(conn, in)
 	case rp.RegistryMethodRelayClose:
 		r.replyRelayClose(conn, in)
+	case rp.RegistryMethodHubStateGet:
+		r.replyHubStateGet(conn, in)
+	case rp.RegistryMethodHubStateRefresh:
+		r.replyHubStateRefresh(conn, in)
+	case rp.RegistryMethodHubStateAction:
+		r.replyHubStateAction(conn, in)
 	case rp.RegistryMethodFSList:
 		r.replyFSList(conn, in)
 	case rp.RegistryMethodFSInfo:
@@ -493,6 +516,77 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 			}),
 		})
 	}
+}
+
+func (r *Reporter) replyHubStateGet(conn *websocket.Conn, req envelope) {
+	var payload hubStateGetPayload
+	if err := decodePayload(req.Payload, &payload); err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid hub.state.get payload")
+		return
+	}
+	state := r.ensureHubStateManager().get(payload.Sections)
+	_ = r.writeJSON(conn, "->", envelope{
+		RequestID: req.RequestID,
+		Type:      rp.RegistryEnvelopeTypeResponse,
+		Method:    req.Method,
+		HubID:     r.cfg.HubID,
+		Payload:   rp.MustRaw(map[string]any{"state": state}),
+	})
+}
+
+func (r *Reporter) replyHubStateRefresh(conn *websocket.Conn, req envelope) {
+	var payload hubStateRefreshPayload
+	if err := decodePayload(req.Payload, &payload); err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid hub.state.refresh payload")
+		return
+	}
+	state, err := r.ensureHubStateManager().refresh(context.Background(), payload.Sections, payload.Force)
+	if err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, err.Error())
+		return
+	}
+	_ = r.writeJSON(conn, "->", envelope{
+		RequestID: req.RequestID,
+		Type:      rp.RegistryEnvelopeTypeResponse,
+		Method:    req.Method,
+		HubID:     r.cfg.HubID,
+		Payload: rp.MustRaw(map[string]any{
+			"state":    state,
+			"sections": payload.Sections,
+		}),
+	})
+}
+
+func (r *Reporter) replyHubStateAction(conn *websocket.Conn, req envelope) {
+	var payload hubStateActionPayload
+	if err := decodePayload(req.Payload, &payload); err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid hub.state.action payload")
+		return
+	}
+	state, err := r.ensureHubStateManager().action(context.Background(), payload.Section, payload.Action, payload.Params)
+	if err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, err.Error())
+		return
+	}
+	_ = r.writeJSON(conn, "->", envelope{
+		RequestID: req.RequestID,
+		Type:      rp.RegistryEnvelopeTypeResponse,
+		Method:    req.Method,
+		HubID:     r.cfg.HubID,
+		Payload: rp.MustRaw(map[string]any{
+			"state":   state,
+			"section": payload.Section,
+		}),
+	})
+}
+
+func (r *Reporter) ensureHubStateManager() *HubStateManager {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.hubStateManager == nil {
+		r.hubStateManager = newHubStateManager(r.cfg.HubID, r.hubStateSectionHandlers())
+	}
+	return r.hubStateManager
 }
 
 func (r *Reporter) replyRelayOpen(conn *websocket.Conn, req envelope) {

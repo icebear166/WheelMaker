@@ -399,6 +399,7 @@ type testEnvelope struct {
 	RequestID int64          `json:"requestId,omitempty"`
 	Type      string         `json:"type"`
 	Method    string         `json:"method,omitempty"`
+	HubID     string         `json:"hubId,omitempty"`
 	ProjectID string         `json:"projectId,omitempty"`
 	Payload   map[string]any `json:"payload,omitempty"`
 }
@@ -444,6 +445,171 @@ func (s *stubToolCommandHandler) snapshot() (string, string, []ProjectInfo) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.method, s.payload, append([]ProjectInfo(nil), s.projects...)
+}
+
+func TestReporterRespondsToHubStateGet(t *testing.T) {
+	respSeen := make(chan testEnvelope, 1)
+	errSeen := make(chan error, 1)
+
+	ts := newFakeReporterRegistry(t, "hub-state-get", testEnvelope{
+		RequestID: 100,
+		Type:      "request",
+		Method:    rp.RegistryMethodHubStateGet,
+		HubID:     "hub-state-get",
+		Payload:   map[string]any{},
+	}, respSeen, errSeen)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	reporter := NewReporter(ReporterConfig{
+		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		HubID:             "hub-state-get",
+		ReconnectInterval: 50 * time.Millisecond,
+		MonitorBaseDir:    t.TempDir(),
+	}, nil)
+
+	done := make(chan error, 1)
+	go func() { done <- reporter.Run(ctx) }()
+	defer stopReporterForTest(t, cancel, done)
+
+	select {
+	case err := <-errSeen:
+		t.Fatalf("fake registry error: %v", err)
+	case resp := <-respSeen:
+		if resp.Type != "response" || resp.Method != rp.RegistryMethodHubStateGet {
+			t.Fatalf("unexpected hub.state.get response: %#v", resp)
+		}
+		state, ok := resp.Payload["state"].(map[string]any)
+		if !ok {
+			t.Fatalf("state missing from payload: %#v", resp.Payload)
+		}
+		if state["hubId"] != "hub-state-get" {
+			t.Fatalf("state hubId=%v, want hub-state-get", state["hubId"])
+		}
+		if state["status"] != "empty" {
+			t.Fatalf("state status=%v, want empty", state["status"])
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("did not receive hub.state.get response from reporter")
+	}
+}
+
+func TestReporterRespondsToHubStateRefresh(t *testing.T) {
+	respSeen := make(chan testEnvelope, 1)
+	errSeen := make(chan error, 1)
+
+	ts := newFakeReporterRegistry(t, "hub-state-refresh", testEnvelope{
+		RequestID: 100,
+		Type:      "request",
+		Method:    rp.RegistryMethodHubStateRefresh,
+		HubID:     "hub-state-refresh",
+		Payload: map[string]any{
+			"sections": []any{"tokenStats"},
+		},
+	}, respSeen, errSeen)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	toolHandler := &stubToolCommandHandler{response: map[string]any{"ok": true, "providers": []any{}}}
+	reporter := NewReporter(ReporterConfig{
+		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		HubID:             "hub-state-refresh",
+		ReconnectInterval: 50 * time.Millisecond,
+		MonitorBaseDir:    t.TempDir(),
+	}, nil)
+	reporter.toolHandler = toolHandler
+
+	done := make(chan error, 1)
+	go func() { done <- reporter.Run(ctx) }()
+	defer stopReporterForTest(t, cancel, done)
+
+	select {
+	case err := <-errSeen:
+		t.Fatalf("fake registry error: %v", err)
+	case resp := <-respSeen:
+		if resp.Type != "response" || resp.Method != rp.RegistryMethodHubStateRefresh {
+			t.Fatalf("unexpected hub.state.refresh response: %#v", resp)
+		}
+		method, payload, _ := toolHandler.snapshot()
+		if method != rp.RegistryMethodCmdToken {
+			t.Fatalf("tool method=%q, want %q", method, rp.RegistryMethodCmdToken)
+		}
+		var body map[string]any
+		if err := json.Unmarshal([]byte(payload), &body); err != nil {
+			t.Fatalf("tool payload json: %v", err)
+		}
+		if body["action"] != "scan" {
+			t.Fatalf("tool action=%v, want scan (payload=%s)", body["action"], payload)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("did not receive hub.state.refresh response from reporter")
+	}
+}
+
+func newFakeReporterRegistry(t *testing.T, hubID string, request testEnvelope, respSeen chan<- testEnvelope, errSeen chan<- error) *httptest.Server {
+	t.Helper()
+	upgrader := websocket.Upgrader{CheckOrigin: func(_ *http.Request) bool { return true }}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		ws, err := upgrader.Upgrade(w, req, nil)
+		if err != nil {
+			errSeen <- err
+			return
+		}
+		defer ws.Close()
+
+		initReq := mustReadEnvelope(t, ws)
+		if initReq.Method != "connect.init" {
+			errSeen <- fmt.Errorf("init method=%q", initReq.Method)
+			return
+		}
+		mustWriteJSON(t, ws, testEnvelope{
+			RequestID: initReq.RequestID,
+			Type:      "response",
+			Method:    "connect.init",
+			Payload: map[string]any{
+				"ok": true,
+				"principal": map[string]any{
+					"role":            "hub",
+					"hubId":           hubID,
+					"connectionEpoch": 1,
+				},
+				"serverInfo": map[string]any{
+					"serverVersion":   "test",
+					"protocolVersion": rp.DefaultProtocolVersion,
+				},
+				"features":       map[string]any{},
+				"hashAlgorithms": []string{"sha256"},
+			},
+		})
+
+		reportReq := mustReadEnvelope(t, ws)
+		if reportReq.Method != "registry.reportProjects" {
+			errSeen <- fmt.Errorf("report method=%q", reportReq.Method)
+			return
+		}
+		mustWriteJSON(t, ws, testEnvelope{
+			RequestID: reportReq.RequestID,
+			Type:      "response",
+			Method:    "registry.reportProjects",
+			Payload:   map[string]any{"ok": true},
+		})
+
+		mustWriteJSON(t, ws, request)
+		_ = ws.SetReadDeadline(time.Now().Add(1500 * time.Millisecond))
+		respSeen <- mustReadEnvelope(t, ws)
+	}))
+	t.Cleanup(ts.Close)
+	return ts
+}
+
+func stopReporterForTest(t *testing.T, cancel context.CancelFunc, done <-chan error) {
+	t.Helper()
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("reporter did not stop")
+	}
 }
 
 func TestHubStateToolAdaptersMapSectionsToExistingCommands(t *testing.T) {
