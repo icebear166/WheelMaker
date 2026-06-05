@@ -219,7 +219,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 			idleTimer = time.AfterFunc(clientIdleTimeout, func() {
 				_ = state.peer.write(envelope{
 					Type:   rp.RegistryEnvelopeTypeEvent,
-					Method: rp.RegistryMethodConnectionClosing,
+					Method: rp.RegistryMethodConnectClose,
 					Payload: rp.MustRaw(map[string]any{
 						"reason": "idle_timeout",
 					}),
@@ -287,13 +287,13 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		}
 
 		switch {
-		case in.Method == rp.RegistryMethodRegistryReportProjects:
+		case in.Method == rp.RegistryMethodHubReportProjects:
 			s.handleHubReportProjects(state.peer, state, in)
-		case in.Method == rp.RegistryMethodRegistryUpdateProject:
+		case in.Method == rp.RegistryMethodHubReportProject:
 			s.handleHubUpdateProject(state.peer, state, in)
 		case registrySessionEventMethod(in.Method) != "":
 			s.handleHubSessionEvent(state.peer, state, in, registrySessionEventMethod(in.Method))
-		case in.Method == rp.RegistryMethodProjectList:
+		case in.Method == rp.RegistryMethodRegistryProjectList:
 			s.handleProjectList(state.peer, state, in)
 		case in.Method == rp.RegistryMethodDebugUploadLog:
 			s.handleDebugUploadLog(state.peer, in)
@@ -311,8 +311,6 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 			s.handleMonitorForwardRequest(state.peer, state, in)
 		case rp.RegistryHubStateMethod(in.Method):
 			s.handleHubStateForwardRequest(state.peer, state, in)
-		case rp.RegistryHubCommandMethod(in.Method):
-			go s.handleHubCommandForwardRequest(state.peer, state, in)
 		case isSpeechRequestMethod(in.Method):
 			s.speech.handleRequest(state.peer, state, in)
 		case isClientForwardMethod(in.Method):
@@ -502,16 +500,23 @@ func (s *Server) handleConnectInit(peer *peerConn, state *connectionState, in en
 func (s *Server) handleHubReportProjects(peer *peerConn, state *connectionState, in envelope) {
 	var payload hubReportProjectsPayload
 	if err := decodePayload(in.Payload, &payload); err != nil {
-		_ = s.writeError(peer, in.RequestID, in.Method, codeInvalidArgument, "invalid registry.reportProjects payload", nil)
+		_ = s.writeError(peer, in.RequestID, in.Method, codeInvalidArgument, "invalid hub.report.projects payload", nil)
 		return
 	}
-	if strings.TrimSpace(payload.HubID) == "" {
-		payload.HubID = state.hubID
+	envelopeHubID := strings.TrimSpace(in.HubID)
+	if envelopeHubID == "" {
+		_ = s.writeError(peer, in.RequestID, in.Method, codeInvalidArgument, "hubId is required", nil)
+		return
 	}
-	if payload.HubID != state.hubID {
+	if envelopeHubID != state.hubID {
 		_ = s.writeError(peer, in.RequestID, in.Method, codeForbidden, "hubId mismatch", nil)
 		return
 	}
+	if strings.TrimSpace(payload.HubID) != "" && strings.TrimSpace(payload.HubID) != envelopeHubID {
+		_ = s.writeError(peer, in.RequestID, in.Method, codeInvalidArgument, "payload hubId must match envelope hubId", nil)
+		return
+	}
+	payload.HubID = envelopeHubID
 	if payload.ConnectionEpoch != state.connectionEpoch {
 		_ = s.writeError(peer, in.RequestID, in.Method, codeConflict, "connectionEpoch mismatch", nil)
 		return
@@ -568,16 +573,23 @@ func (s *Server) handleHubReportProjects(peer *peerConn, state *connectionState,
 func (s *Server) handleHubUpdateProject(peer *peerConn, state *connectionState, in envelope) {
 	var payload hubUpdateProjectPayload
 	if err := decodePayload(in.Payload, &payload); err != nil {
-		_ = s.writeError(peer, in.RequestID, in.Method, codeInvalidArgument, "invalid registry.updateProject payload", nil)
+		_ = s.writeError(peer, in.RequestID, in.Method, codeInvalidArgument, "invalid hub.report.project payload", nil)
 		return
 	}
-	if strings.TrimSpace(payload.HubID) == "" {
-		payload.HubID = state.hubID
+	envelopeHubID := strings.TrimSpace(in.HubID)
+	if envelopeHubID == "" {
+		_ = s.writeError(peer, in.RequestID, in.Method, codeInvalidArgument, "hubId is required", nil)
+		return
 	}
-	if payload.HubID != state.hubID {
+	if envelopeHubID != state.hubID {
 		_ = s.writeError(peer, in.RequestID, in.Method, codeForbidden, "hubId mismatch", nil)
 		return
 	}
+	if strings.TrimSpace(payload.HubID) != "" && strings.TrimSpace(payload.HubID) != envelopeHubID {
+		_ = s.writeError(peer, in.RequestID, in.Method, codeInvalidArgument, "payload hubId must match envelope hubId", nil)
+		return
+	}
+	payload.HubID = envelopeHubID
 	if payload.ConnectionEpoch != state.connectionEpoch {
 		_ = s.writeError(peer, in.RequestID, in.Method, codeConflict, "connectionEpoch mismatch", nil)
 		return
@@ -771,75 +783,10 @@ func (s *Server) handleMonitorForwardRequest(clientPeer *peerConn, state *connec
 	_ = clientPeer.write(resp)
 }
 
-func (s *Server) handleHubCommandForwardRequest(clientPeer *peerConn, state *connectionState, in envelope) {
-	resp := s.executeHubCommandRequest(state, in)
-	resp.RequestID = in.RequestID
-	_ = clientPeer.write(resp)
-}
-
 func (s *Server) handleHubStateForwardRequest(clientPeer *peerConn, state *connectionState, in envelope) {
 	resp := s.executeHubStateRequest(state, in)
 	resp.RequestID = in.RequestID
 	_ = clientPeer.write(resp)
-}
-
-func (s *Server) executeHubCommandRequest(state *connectionState, in envelope) envelope {
-	type hubCommandPayload struct {
-		Action string `json:"action,omitempty"`
-		HubID  string `json:"hubId"`
-	}
-	var payload hubCommandPayload
-	if err := decodePayload(in.Payload, &payload); err != nil {
-		return s.errorEnvelope(in.Method, codeInvalidArgument, "invalid "+in.Method+" payload", nil)
-	}
-	hubID := strings.TrimSpace(payload.HubID)
-	if hubID == "" {
-		return s.errorEnvelope(in.Method, codeInvalidArgument, "hubId is required", nil)
-	}
-	if state.scopeHubID != "" && hubID != state.scopeHubID {
-		return s.errorEnvelope(in.Method, codeForbidden, "hub out of client scope", map[string]any{"hubId": hubID})
-	}
-
-	s.mu.RLock()
-	hub := s.hubs[hubID]
-	hubPeer := s.hubPeers[hubID]
-	s.mu.RUnlock()
-	if hub.HubID == "" {
-		return s.errorEnvelope(in.Method, codeNotFound, "hub not found", map[string]any{"hubId": hubID})
-	}
-	if hubPeer == nil {
-		return s.errorEnvelope(in.Method, codeUnavailable, "hub offline", map[string]any{"hubId": hubID})
-	}
-
-	forwardID := s.nextForwardID.Add(1)
-	waitCh := hubPeer.registerPending(forwardID)
-	err := hubPeer.write(envelope{
-		RequestID: forwardID,
-		Type:      rp.RegistryEnvelopeTypeRequest,
-		Method:    in.Method,
-		Payload:   in.Payload,
-	})
-	if err != nil {
-		hubPeer.resolvePending(forwardID, envelope{})
-		return s.errorEnvelope(in.Method, codeInternal, "forward request write failed", nil)
-	}
-
-	timeout := defaultRequestTimeout
-	if strings.TrimSpace(payload.Action) == "scan" ||
-		(in.Method == rp.RegistryMethodCmdSkills && strings.TrimSpace(payload.Action) == "list") ||
-		(in.Method == rp.RegistryMethodCmdUpdate && strings.TrimSpace(payload.Action) == "query") {
-		timeout = 60 * time.Second
-	}
-	select {
-	case resp, ok := <-waitCh:
-		if !ok {
-			return s.errorEnvelope(in.Method, codeInternal, "hub disconnected", nil)
-		}
-		return resp
-	case <-time.After(timeout):
-		hubPeer.resolvePending(forwardID, envelope{})
-		return s.errorEnvelope(in.Method, codeTimeout, "hub response timeout", nil)
-	}
 }
 
 func hubStateRequestTimeout(method string) time.Duration {
@@ -1031,7 +978,7 @@ func (s *Server) executeBatchRequest(state *connectionState, in envelope) envelo
 	}
 
 	switch in.Method {
-	case rp.RegistryMethodProjectList:
+	case rp.RegistryMethodRegistryProjectList:
 		return envelope{
 			Type:   rp.RegistryEnvelopeTypeResponse,
 			Method: in.Method,
@@ -1050,11 +997,6 @@ func (s *Server) executeBatchRequest(state *connectionState, in envelope) envelo
 				"ok": true,
 			}),
 		}
-	case rp.RegistryMethodCmdNPM, rp.RegistryMethodCmdUpdate, rp.RegistryMethodCmdSkills, rp.RegistryMethodCmdToken:
-		if state.role != string(rp.RegistryRoleClient) {
-			return s.errorEnvelope(in.Method, codeForbidden, "method not allowed for role", map[string]any{"role": state.role})
-		}
-		return s.executeHubCommandRequest(state, in)
 	default:
 		if isClientForwardMethod(in.Method) {
 			return s.executeClientRequest(state, in)
@@ -1197,7 +1139,7 @@ func sanitizeLocalReadCandidate(candidate *rp.LocalReadCandidate) *rp.LocalReadC
 func (s *Server) projectSyncCheckEnvelope(state *connectionState, in envelope) envelope {
 	var payload syncCheckPayload
 	if err := decodePayload(in.Payload, &payload); err != nil {
-		return s.errorEnvelope(in.Method, codeInvalidArgument, "invalid project.syncCheck payload", nil)
+		return s.errorEnvelope(in.Method, codeInvalidArgument, "invalid project.sync.check payload", nil)
 	}
 
 	projectID := strings.TrimSpace(in.ProjectID)
@@ -1270,18 +1212,19 @@ func (s *Server) emitProjectUpdateEvents(hubID string, previous *rp.ProjectInfo,
 	if strings.TrimSpace(projectID) == "" {
 		return
 	}
-	if previous == nil {
-		if current.Online {
-			s.broadcastProjectEvent(hubID, projectID, rp.RegistryMethodProjectOnline, map[string]any{})
-		}
+	s.broadcastProjectReport(hubID, current)
+}
+
+func (s *Server) broadcastProjectReport(hubID string, project rp.ProjectInfo) {
+	projectID := rp.ProjectID(hubID, project.Name)
+	if strings.TrimSpace(projectID) == "" {
 		return
 	}
-	if !previous.Online && current.Online {
-		s.broadcastProjectEvent(hubID, projectID, rp.RegistryMethodProjectOnline, map[string]any{})
-	}
-	if previous.Online && !current.Online {
-		s.broadcastProjectEvent(hubID, projectID, rp.RegistryMethodProjectOffline, map[string]any{})
-	}
+	s.broadcastProjectEvent(hubID, projectID, rp.RegistryMethodRegistryProjectReport, map[string]any{
+		"hubId":     hubID,
+		"projectId": projectID,
+		"project":   project,
+	})
 }
 
 func (s *Server) broadcastProjectEvent(hubID, projectID, method string, payload any) {
@@ -1341,7 +1284,9 @@ func (s *Server) unregisterHub(peer *peerConn, state *connectionState) {
 		if strings.TrimSpace(item.Name) == "" || !item.Online {
 			continue
 		}
-		s.broadcastProjectEvent(state.hubID, rp.ProjectID(state.hubID, item.Name), rp.RegistryMethodProjectOffline, map[string]any{})
+		offline := item
+		offline.Online = false
+		s.broadcastProjectReport(state.hubID, offline)
 	}
 }
 

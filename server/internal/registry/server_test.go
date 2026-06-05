@@ -163,6 +163,247 @@ func TestConnectInitRejectsLegacyProtocolVersion23(t *testing.T) {
 	}
 }
 
+func TestConnectInitRejectsLegacyProtocolVersion24(t *testing.T) {
+	s := New(Config{})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	ws := dialWS(t, ts.URL+"/ws")
+	defer ws.Close()
+
+	mustWriteJSON(t, ws, testEnvelope{
+		RequestID: 1,
+		Type:      "request",
+		Method:    "connect.init",
+		Payload: map[string]any{
+			"clientName":      "wm-web",
+			"clientVersion":   "0.1.0",
+			"protocolVersion": "2.4",
+			"role":            "client",
+			"token":           "",
+		},
+	})
+
+	resp := mustReadEnvelope(t, ws)
+	message, _ := resp.Payload["message"].(string)
+	if resp.Type != "error" || resp.Payload["code"] != "INVALID_ARGUMENT" || !strings.Contains(message, "unsupported protocolVersion") {
+		t.Fatalf("response=%#v, want unsupported protocolVersion error", resp)
+	}
+}
+
+func TestRegistryProtocolDomainAcceptsNewAndRejectsOldProjectRoutes(t *testing.T) {
+	s := New(Config{})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	hub := dialWS(t, ts.URL+"/ws")
+	defer hub.Close()
+	epoch := connectRegistryHub(t, hub, "hub-domain")
+
+	mustWriteJSON(t, hub, testEnvelope{
+		RequestID: 2,
+		Type:      "request",
+		Method:    "registry.reportProjects",
+		HubID:     "hub-domain",
+		Payload: map[string]any{
+			"connectionEpoch": epoch,
+			"projects":        []map[string]any{},
+		},
+	})
+	oldReportResp := mustReadEnvelope(t, hub)
+	if oldReportResp.Type != "error" {
+		t.Fatalf("old report response=%#v, want error", oldReportResp)
+	}
+
+	mustWriteJSON(t, hub, testEnvelope{
+		RequestID: 3,
+		Type:      "request",
+		Method:    "hub.report.projects",
+		HubID:     "hub-domain",
+		Payload: map[string]any{
+			"connectionEpoch": epoch,
+			"projects": []map[string]any{
+				{"name": "server", "path": "D:/Code/WheelMaker/server", "online": true, "agent": "codex", "projectRev": "p1", "git": map[string]any{"gitRev": "g1", "worktreeRev": "w1"}},
+			},
+		},
+	})
+	reportResp := mustReadEnvelope(t, hub)
+	if reportResp.Type != "response" || reportResp.Method != "hub.report.projects" {
+		t.Fatalf("new report response=%#v, want hub.report.projects response", reportResp)
+	}
+
+	client := dialWS(t, ts.URL+"/ws")
+	defer client.Close()
+	connectRegistryClient(t, client)
+
+	mustWriteJSON(t, client, testEnvelope{
+		RequestID: 2,
+		Type:      "request",
+		Method:    "project.list",
+		Payload:   map[string]any{},
+	})
+	oldListResp := mustReadEnvelope(t, client)
+	if oldListResp.Type != "error" {
+		t.Fatalf("old project.list response=%#v, want error", oldListResp)
+	}
+
+	mustWriteJSON(t, client, testEnvelope{
+		RequestID: 3,
+		Type:      "request",
+		Method:    "registry.project.list",
+		Payload:   map[string]any{},
+	})
+	listResp := mustReadEnvelope(t, client)
+	if listResp.Type != "response" || listResp.Method != "registry.project.list" {
+		t.Fatalf("registry.project.list response=%#v", listResp)
+	}
+	projects, ok := listResp.Payload["projects"].([]any)
+	if !ok || len(projects) != 1 {
+		t.Fatalf("projects=%v, want one project", listResp.Payload["projects"])
+	}
+
+	mustWriteJSON(t, client, testEnvelope{
+		RequestID: 4,
+		Type:      "request",
+		Method:    "fs.list",
+		ProjectID: "hub-domain:server",
+		Payload:   map[string]any{"path": "."},
+	})
+	oldFSResp := mustReadEnvelope(t, client)
+	if oldFSResp.Type != "error" {
+		t.Fatalf("old fs.list response=%#v, want error", oldFSResp)
+	}
+
+	mustWriteJSON(t, client, testEnvelope{
+		RequestID: 5,
+		Type:      "request",
+		Method:    "project.fs.list",
+		ProjectID: "hub-domain:server",
+		Payload:   map[string]any{"path": "."},
+	})
+	_ = hub.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	forwarded := mustReadEnvelope(t, hub)
+	if forwarded.Type != "request" || forwarded.Method != "project.fs.list" {
+		t.Fatalf("forwarded=%#v, want project.fs.list request", forwarded)
+	}
+	mustWriteJSON(t, hub, testEnvelope{
+		RequestID: forwarded.RequestID,
+		Type:      "response",
+		Method:    "project.fs.list",
+		ProjectID: forwarded.ProjectID,
+		Payload: map[string]any{
+			"path":    ".",
+			"entries": []map[string]any{{"name": "go.mod", "path": "go.mod", "type": "file"}},
+		},
+	})
+	fsResp := mustReadEnvelope(t, client)
+	if fsResp.Type != "response" || fsResp.Method != "project.fs.list" {
+		t.Fatalf("project.fs.list response=%#v", fsResp)
+	}
+}
+
+func TestRegistryProtocolDomainProjectReportEvent(t *testing.T) {
+	s := New(Config{})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	hub := dialWS(t, ts.URL+"/ws")
+	defer hub.Close()
+	epoch := connectRegistryHub(t, hub, "hub-report")
+
+	mustWriteJSON(t, hub, testEnvelope{
+		RequestID: 2,
+		Type:      "request",
+		Method:    "hub.report.projects",
+		HubID:     "hub-report",
+		Payload: map[string]any{
+			"connectionEpoch": epoch,
+			"projects": []map[string]any{
+				{"name": "server", "path": "D:/Code/WheelMaker/server", "online": true, "agent": "codex", "projectRev": "p1", "git": map[string]any{"gitRev": "g1", "worktreeRev": "w1"}},
+			},
+		},
+	})
+	_ = mustReadEnvelope(t, hub)
+
+	client := dialWS(t, ts.URL+"/ws")
+	defer client.Close()
+	connectRegistryClient(t, client)
+
+	mustWriteJSON(t, hub, testEnvelope{
+		RequestID: 3,
+		Type:      "request",
+		Method:    "hub.report.project",
+		HubID:     "hub-report",
+		Payload: map[string]any{
+			"connectionEpoch": epoch,
+			"seq":             1,
+			"project": map[string]any{
+				"name":       "server",
+				"path":       "D:/Code/WheelMaker/server",
+				"online":     false,
+				"agent":      "codex",
+				"projectRev": "p2",
+				"git":        map[string]any{"gitRev": "g2", "worktreeRev": "w2"},
+			},
+			"updatedAt": "2026-03-31T10:01:23Z",
+		},
+	})
+	updateResp := mustReadEnvelope(t, hub)
+	if updateResp.Type != "response" || updateResp.Method != "hub.report.project" {
+		t.Fatalf("update response=%#v, want hub.report.project response", updateResp)
+	}
+
+	event := mustReadEnvelope(t, client)
+	if event.Type != "event" || event.Method != "registry.project.report" {
+		t.Fatalf("project event=%#v, want registry.project.report event", event)
+	}
+	project, _ := event.Payload["project"].(map[string]any)
+	if project["name"] != "server" || project["online"] != false {
+		t.Fatalf("project report payload=%#v", event.Payload)
+	}
+}
+
+func TestRegistryProtocolDomainRelayMethods(t *testing.T) {
+	if !methodAllowed("client", "registry.relay.status") {
+		t.Fatal("client should be allowed to call registry.relay.status")
+	}
+	if methodAllowed("client", "relay.status") {
+		t.Fatal("client should not be allowed to call old relay.status")
+	}
+	if methodAllowed("hub", "registry.relay.status") {
+		t.Fatal("hub should not be allowed to call public registry.relay.status")
+	}
+
+	s := New(Config{})
+	ts := httptestNewRegistryServer(t, s.Handler())
+
+	client := dialWS(t, "http://"+ts+"/ws")
+	defer client.Close()
+	connectRegistryClient(t, client)
+
+	mustWriteJSON(t, client, testEnvelope{
+		RequestID: 2,
+		Type:      "request",
+		Method:    "relay.status",
+		Payload:   map[string]any{},
+	})
+	oldResp := mustReadEnvelope(t, client)
+	if oldResp.Type != "error" {
+		t.Fatalf("old relay.status response=%#v, want error", oldResp)
+	}
+
+	mustWriteJSON(t, client, testEnvelope{
+		RequestID: 3,
+		Type:      "request",
+		Method:    "registry.relay.status",
+		Payload:   map[string]any{},
+	})
+	resp := mustReadEnvelope(t, client)
+	if resp.Type != "response" || resp.Method != "registry.relay.status" {
+		t.Fatalf("registry.relay.status response=%#v", resp)
+	}
+}
+
 func TestRegistryReportProjectsThenListProjects(t *testing.T) {
 	s := New(Config{})
 	ts := httptest.NewServer(s.Handler())
@@ -191,9 +432,9 @@ func TestRegistryReportProjectsThenListProjects(t *testing.T) {
 	mustWriteJSON(t, hub, testEnvelope{
 		RequestID: 2,
 		Type:      "request",
-		Method:    "registry.reportProjects",
+		Method:    "hub.report.projects",
+		HubID:     "hub-a",
 		Payload: map[string]any{
-			"hubId":           "hub-a",
 			"connectionEpoch": int64(connectionEpoch),
 			"projects": []map[string]any{
 				{"name": "server", "path": "D:/Code/WheelMaker/server", "online": true, "agent": "codex", "agents": []string{"codex", "claude", "copilot"}, "projectRev": "", "git": map[string]any{}},
@@ -203,7 +444,7 @@ func TestRegistryReportProjectsThenListProjects(t *testing.T) {
 	})
 
 	reportResp := mustReadEnvelope(t, hub)
-	if reportResp.Type != "response" || reportResp.Method != "registry.reportProjects" {
+	if reportResp.Type != "response" || reportResp.Method != "hub.report.projects" {
 		t.Fatalf("unexpected report response: %#v", reportResp)
 	}
 
@@ -226,12 +467,12 @@ func TestRegistryReportProjectsThenListProjects(t *testing.T) {
 	mustWriteJSON(t, client, testEnvelope{
 		RequestID: 2,
 		Type:      "request",
-		Method:    "project.list",
+		Method:    "registry.project.list",
 		Payload:   map[string]any{},
 	})
 	listResp := mustReadEnvelope(t, client)
-	if listResp.Type != "response" || listResp.Method != "project.list" {
-		t.Fatalf("unexpected project.list response: %#v", listResp)
+	if listResp.Type != "response" || listResp.Method != "registry.project.list" {
+		t.Fatalf("unexpected registry.project.list response: %#v", listResp)
 	}
 	projects, ok := listResp.Payload["projects"].([]any)
 	if !ok || len(projects) != 2 {
@@ -305,9 +546,9 @@ func TestProjectListIncludesLocalReadCandidate(t *testing.T) {
 	mustWriteJSON(t, hub, testEnvelope{
 		RequestID: 2,
 		Type:      "request",
-		Method:    "registry.reportProjects",
+		Method:    "hub.report.projects",
+		HubID:     "hub-local-read",
 		Payload: map[string]any{
-			"hubId":           "hub-local-read",
 			"connectionEpoch": int64(connectionEpoch),
 			"localRead": map[string]any{
 				"endpointId":       "local-hub-1",
@@ -321,7 +562,7 @@ func TestProjectListIncludesLocalReadCandidate(t *testing.T) {
 		},
 	})
 	reportResp := mustReadEnvelope(t, hub)
-	if reportResp.Type != "response" || reportResp.Method != "registry.reportProjects" {
+	if reportResp.Type != "response" || reportResp.Method != "hub.report.projects" {
 		t.Fatalf("unexpected report response: %#v", reportResp)
 	}
 
@@ -344,7 +585,7 @@ func TestProjectListIncludesLocalReadCandidate(t *testing.T) {
 	mustWriteJSON(t, client, testEnvelope{
 		RequestID: 2,
 		Type:      "request",
-		Method:    "project.list",
+		Method:    "registry.project.list",
 		Payload:   map[string]any{},
 	})
 	listResp := mustReadEnvelope(t, client)
@@ -415,9 +656,9 @@ func TestRegistryReportProjectsRejectsStaleConnectionEpoch(t *testing.T) {
 	mustWriteJSON(t, hubNew, testEnvelope{
 		RequestID: 2,
 		Type:      "request",
-		Method:    "registry.reportProjects",
+		Method:    "hub.report.projects",
+		HubID:     "hub-a",
 		Payload: map[string]any{
-			"hubId":           "hub-a",
 			"connectionEpoch": int64(newEpoch),
 			"projects": []map[string]any{
 				{"name": "server", "path": "D:/Code/WheelMaker/server", "online": true, "agent": "codex", "projectRev": "p2", "git": map[string]any{"gitRev": "g2", "worktreeRev": "w2"}},
@@ -429,9 +670,9 @@ func TestRegistryReportProjectsRejectsStaleConnectionEpoch(t *testing.T) {
 	mustWriteJSON(t, hubOld, testEnvelope{
 		RequestID: 2,
 		Type:      "request",
-		Method:    "registry.reportProjects",
+		Method:    "hub.report.projects",
+		HubID:     "hub-a",
 		Payload: map[string]any{
-			"hubId":           "hub-a",
 			"connectionEpoch": int64(oldEpoch),
 			"projects": []map[string]any{
 				{"name": "server", "path": "D:/Code/WheelMaker/server", "online": true, "agent": "codex", "projectRev": "p1", "git": map[string]any{"gitRev": "g1", "worktreeRev": "w1"}},
@@ -502,7 +743,7 @@ func TestInvalidRequestIDReturnsErrorAndKeepsConnection(t *testing.T) {
 	mustWriteJSON(t, ws, map[string]any{
 		"requestId": "bad-id",
 		"type":      "request",
-		"method":    "project.list",
+		"method":    "registry.project.list",
 		"payload":   map[string]any{},
 	})
 	invalid := mustReadEnvelope(t, ws)
@@ -516,12 +757,12 @@ func TestInvalidRequestIDReturnsErrorAndKeepsConnection(t *testing.T) {
 	mustWriteJSON(t, ws, testEnvelope{
 		RequestID: 2,
 		Type:      "request",
-		Method:    "project.list",
+		Method:    "registry.project.list",
 		Payload:   map[string]any{},
 	})
 	listResp := mustReadEnvelope(t, ws)
-	if listResp.Type != "response" || listResp.Method != "project.list" {
-		t.Fatalf("unexpected project.list response after invalid requestId: %#v", listResp)
+	if listResp.Type != "response" || listResp.Method != "registry.project.list" {
+		t.Fatalf("unexpected registry.project.list response after invalid requestId: %#v", listResp)
 	}
 }
 
@@ -550,9 +791,9 @@ func TestBatchForwardsProjectRequests(t *testing.T) {
 	mustWriteJSON(t, hub, testEnvelope{
 		RequestID: 2,
 		Type:      "request",
-		Method:    "registry.reportProjects",
+		Method:    "hub.report.projects",
+		HubID:     "hub-a",
 		Payload: map[string]any{
-			"hubId":           "hub-a",
 			"connectionEpoch": int64(connectionEpoch),
 			"projects": []map[string]any{
 				{"name": "server", "path": "D:/Code/WheelMaker/server", "online": true, "agent": "codex", "projectRev": "p1", "git": map[string]any{"gitRev": "g1", "worktreeRev": "w1"}},
@@ -583,7 +824,7 @@ func TestBatchForwardsProjectRequests(t *testing.T) {
 		Payload: map[string]any{
 			"requests": []map[string]any{
 				{
-					"method":    "project.syncCheck",
+					"method":    "project.sync.check",
 					"projectId": "hub-a:server",
 					"payload": map[string]any{
 						"knownProjectRev":  "old-project",
@@ -592,7 +833,7 @@ func TestBatchForwardsProjectRequests(t *testing.T) {
 					},
 				},
 				{
-					"method":    "fs.list",
+					"method":    "project.fs.list",
 					"projectId": "hub-a:server",
 					"payload": map[string]any{
 						"path": ".",
@@ -603,13 +844,13 @@ func TestBatchForwardsProjectRequests(t *testing.T) {
 	})
 
 	forwarded := mustReadEnvelope(t, hub)
-	if forwarded.Method != "fs.list" {
-		t.Fatalf("forwarded.method=%q, want fs.list", forwarded.Method)
+	if forwarded.Method != "project.fs.list" {
+		t.Fatalf("forwarded.method=%q, want project.fs.list", forwarded.Method)
 	}
 	mustWriteJSON(t, hub, testEnvelope{
 		RequestID: forwarded.RequestID,
 		Type:      "response",
-		Method:    "fs.list",
+		Method:    "project.fs.list",
 		ProjectID: forwarded.ProjectID,
 		Payload: map[string]any{
 			"path": ".",
@@ -629,7 +870,7 @@ func TestBatchForwardsProjectRequests(t *testing.T) {
 	}
 
 	first, _ := responses[0].(map[string]any)
-	if first["method"] != "project.syncCheck" || first["type"] != "response" {
+	if first["method"] != "project.sync.check" || first["type"] != "response" {
 		t.Fatalf("unexpected syncCheck item: %v", first)
 	}
 	firstPayload, _ := first["payload"].(map[string]any)
@@ -639,8 +880,8 @@ func TestBatchForwardsProjectRequests(t *testing.T) {
 	}
 
 	second, _ := responses[1].(map[string]any)
-	if second["method"] != "fs.list" || second["type"] != "response" {
-		t.Fatalf("unexpected fs.list item: %v", second)
+	if second["method"] != "project.fs.list" || second["type"] != "response" {
+		t.Fatalf("unexpected project.fs.list item: %v", second)
 	}
 	secondPayload, _ := second["payload"].(map[string]any)
 	entries, _ := secondPayload["entries"].([]any)
@@ -674,9 +915,9 @@ func TestRegistryUpdateProjectBroadcastsEvents(t *testing.T) {
 	mustWriteJSON(t, hub, testEnvelope{
 		RequestID: 2,
 		Type:      "request",
-		Method:    "registry.reportProjects",
+		Method:    "hub.report.projects",
+		HubID:     "hub-a",
 		Payload: map[string]any{
-			"hubId":           "hub-a",
 			"connectionEpoch": int64(connectionEpoch),
 			"projects": []map[string]any{
 				{"name": "server", "path": "D:/Code/WheelMaker/server", "online": true, "agent": "codex", "projectRev": "p1", "git": map[string]any{"gitRev": "g1", "worktreeRev": "w1", "headSha": "h1", "dirty": false}},
@@ -703,9 +944,9 @@ func TestRegistryUpdateProjectBroadcastsEvents(t *testing.T) {
 	mustWriteJSON(t, hub, testEnvelope{
 		RequestID: 3,
 		Type:      "request",
-		Method:    "registry.updateProject",
+		Method:    "hub.report.project",
+		HubID:     "hub-a",
 		Payload: map[string]any{
-			"hubId":           "hub-a",
 			"connectionEpoch": int64(connectionEpoch),
 			"seq":             1,
 			"project": map[string]any{
@@ -725,16 +966,24 @@ func TestRegistryUpdateProjectBroadcastsEvents(t *testing.T) {
 		},
 	})
 	updateResp := mustReadEnvelope(t, hub)
-	if updateResp.Type != "response" || updateResp.Method != "registry.updateProject" {
+	if updateResp.Type != "response" || updateResp.Method != "hub.report.project" {
 		t.Fatalf("unexpected update response: %#v", updateResp)
+	}
+	updateEvent := mustReadEnvelope(t, client)
+	if updateEvent.Type != "event" || updateEvent.Method != "registry.project.report" {
+		t.Fatalf("unexpected update event: %#v", updateEvent)
 	}
 
 	if err := hub.Close(); err != nil {
 		t.Fatalf("close hub: %v", err)
 	}
 	offline := mustReadEnvelope(t, client)
-	if offline.Type != "event" || offline.Method != "project.offline" {
+	if offline.Type != "event" || offline.Method != "registry.project.report" {
 		t.Fatalf("unexpected offline event: %#v", offline)
+	}
+	project, _ := offline.Payload["project"].(map[string]any)
+	if project["online"] != false {
+		t.Fatalf("offline report payload=%#v", offline.Payload)
 	}
 }
 
@@ -763,9 +1012,9 @@ func TestSessionForwardingAndSessionEventBroadcast(t *testing.T) {
 	mustWriteJSON(t, hub, testEnvelope{
 		RequestID: 2,
 		Type:      "request",
-		Method:    "registry.reportProjects",
+		Method:    "hub.report.projects",
+		HubID:     "hub-a",
 		Payload: map[string]any{
-			"hubId":           "hub-a",
 			"connectionEpoch": int64(connectionEpoch),
 			"projects": []map[string]any{
 				{"name": "server", "path": "D:/Code/WheelMaker/server", "online": true, "agent": "codex", "projectRev": "p1", "git": map[string]any{"gitRev": "g1", "worktreeRev": "w1"}},
@@ -829,7 +1078,7 @@ func TestSessionForwardingAndSessionEventBroadcast(t *testing.T) {
 	mustWriteJSON(t, client, testEnvelope{
 		RequestID: 3,
 		Type:      "request",
-		Method:    "session.setConfig",
+		Method:    "session.config",
 		ProjectID: "hub-a:server",
 		Payload: map[string]any{
 			"sessionId": "sess-1",
@@ -839,8 +1088,8 @@ func TestSessionForwardingAndSessionEventBroadcast(t *testing.T) {
 	})
 
 	forwardedConfig := mustReadEnvelope(t, hub)
-	if forwardedConfig.Method != "session.setConfig" {
-		t.Fatalf("forwarded.method=%q, want session.setConfig", forwardedConfig.Method)
+	if forwardedConfig.Method != "session.config" {
+		t.Fatalf("forwarded.method=%q, want session.config", forwardedConfig.Method)
 	}
 	if forwardedConfig.ProjectID != "hub-a:server" {
 		t.Fatalf("forwarded.projectId=%q, want hub-a:server", forwardedConfig.ProjectID)
@@ -853,15 +1102,15 @@ func TestSessionForwardingAndSessionEventBroadcast(t *testing.T) {
 	mustWriteJSON(t, hub, testEnvelope{
 		RequestID: forwardedConfig.RequestID,
 		Type:      "response",
-		Method:    "session.setConfig",
+		Method:    "session.config",
 		ProjectID: forwardedConfig.ProjectID,
 		Payload: map[string]any{
 			"ok": true,
 		},
 	})
 	setConfigResp := mustReadEnvelope(t, client)
-	if setConfigResp.Type != "response" || setConfigResp.Method != "session.setConfig" {
-		t.Fatalf("unexpected session.setConfig response: %#v", setConfigResp)
+	if setConfigResp.Type != "response" || setConfigResp.Method != "session.config" {
+		t.Fatalf("unexpected session.config response: %#v", setConfigResp)
 	}
 
 	mustWriteJSON(t, client, testEnvelope{
@@ -1118,9 +1367,9 @@ func TestBatchChatSendIsUnsupportedAfterIMRemoval(t *testing.T) {
 	mustWriteJSON(t, hub, testEnvelope{
 		RequestID: 2,
 		Type:      "request",
-		Method:    "registry.reportProjects",
+		Method:    "hub.report.projects",
+		HubID:     "hub-a",
 		Payload: map[string]any{
-			"hubId":           "hub-a",
 			"connectionEpoch": int64(connectionEpoch),
 			"projects": []map[string]any{
 				{"name": "server", "path": "D:/Code/WheelMaker/server", "online": true, "agent": "codex", "projectRev": "p1", "git": map[string]any{"gitRev": "g1", "worktreeRev": "w1"}},
@@ -1221,8 +1470,8 @@ func TestMonitorBatchRejectsClientForwardMethods(t *testing.T) {
 			payload: map[string]any{},
 		},
 		{
-			name:   "fs read",
-			method: "fs.read",
+			name:   "project fs read",
+			method: "project.fs.read",
 			payload: map[string]any{
 				"path": "README.md",
 			},
@@ -1259,9 +1508,9 @@ func TestMonitorBatchRejectsClientForwardMethods(t *testing.T) {
 			mustWriteJSON(t, hub, testEnvelope{
 				RequestID: 2,
 				Type:      "request",
-				Method:    "registry.reportProjects",
+				Method:    "hub.report.projects",
+				HubID:     "hub-a",
 				Payload: map[string]any{
-					"hubId":           "hub-a",
 					"connectionEpoch": int64(connectionEpoch),
 					"projects": []map[string]any{
 						{"name": "server", "path": "D:/Code/WheelMaker/server", "online": true, "agent": "codex", "projectRev": "p1", "git": map[string]any{"gitRev": "g1", "worktreeRev": "w1"}},
@@ -1404,9 +1653,9 @@ func TestMonitorListHubAndMonitorStatusForwarding(t *testing.T) {
 	mustWriteJSON(t, hub, testEnvelope{
 		RequestID: 2,
 		Type:      "request",
-		Method:    "registry.reportProjects",
+		Method:    "hub.report.projects",
+		HubID:     "hub-a",
 		Payload: map[string]any{
-			"hubId":           "hub-a",
 			"connectionEpoch": int64(connectionEpoch),
 			"projects": []map[string]any{
 				{"name": "server", "path": "D:/Code/WheelMaker/server", "online": true, "agent": "codex", "projectRev": "", "git": map[string]any{}},
@@ -1452,39 +1701,10 @@ func TestMonitorListHubAndMonitorStatusForwarding(t *testing.T) {
 	}
 }
 
-func TestCmdNPMForwardsByHubIDWithoutProjectID(t *testing.T) {
+func TestPublicCmdMethodsAreRejected(t *testing.T) {
 	s := New(Config{})
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)
-
-	hub := dialWS(t, ts.URL+"/ws")
-	defer hub.Close()
-	mustWriteJSON(t, hub, testEnvelope{
-		RequestID: 1,
-		Type:      "request",
-		Method:    "connect.init",
-		Payload: map[string]any{
-			"clientName":      "wm-hub",
-			"clientVersion":   "0.1.0",
-			"protocolVersion": rp.DefaultProtocolVersion,
-			"role":            "hub",
-			"hubId":           "hub-npm",
-		},
-	})
-	initResp := mustReadEnvelope(t, hub)
-	principal, _ := initResp.Payload["principal"].(map[string]any)
-	connectionEpoch, _ := principal["connectionEpoch"].(float64)
-	mustWriteJSON(t, hub, testEnvelope{
-		RequestID: 2,
-		Type:      "request",
-		Method:    "registry.reportProjects",
-		Payload: map[string]any{
-			"hubId":           "hub-npm",
-			"connectionEpoch": int64(connectionEpoch),
-			"projects":        []map[string]any{},
-		},
-	})
-	_ = mustReadEnvelope(t, hub)
 
 	client := dialWS(t, ts.URL+"/ws")
 	defer client.Close()
@@ -1501,306 +1721,23 @@ func TestCmdNPMForwardsByHubIDWithoutProjectID(t *testing.T) {
 	})
 	_ = mustReadEnvelope(t, client)
 
-	mustWriteJSON(t, client, testEnvelope{
-		RequestID: 2,
-		Type:      "request",
-		Method:    "cmd.npm",
-		Payload: map[string]any{
-			"action": "scan",
-			"hubId":  "hub-npm",
-		},
-	})
-	_ = hub.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
-	forwarded := mustReadEnvelope(t, hub)
-	if forwarded.Type != "request" || forwarded.Method != "cmd.npm" {
-		t.Fatalf("forwarded=%#v, want cmd.npm request", forwarded)
-	}
-	if forwarded.ProjectID != "" {
-		t.Fatalf("forwarded projectId=%q, want empty", forwarded.ProjectID)
-	}
-	if forwarded.Payload["hubId"] != "hub-npm" || forwarded.Payload["action"] != "scan" {
-		t.Fatalf("forwarded payload=%#v", forwarded.Payload)
-	}
-
-	mustWriteJSON(t, hub, testEnvelope{
-		RequestID: forwarded.RequestID,
-		Type:      "response",
-		Method:    "cmd.npm",
-		Payload: map[string]any{
-			"ok": true,
-		},
-	})
-	resp := mustReadEnvelope(t, client)
-	if resp.Type != "response" || resp.Method != "cmd.npm" {
-		t.Fatalf("client response=%#v, want cmd.npm response", resp)
-	}
-	if resp.ProjectID != "" {
-		t.Fatalf("client response projectId=%q, want empty", resp.ProjectID)
-	}
-}
-
-func TestCmdTokenForwardsByHubIDWithoutProjectID(t *testing.T) {
-	s := New(Config{})
-	ts := httptest.NewServer(s.Handler())
-	t.Cleanup(ts.Close)
-
-	hub := dialWS(t, ts.URL+"/ws")
-	defer hub.Close()
-	mustWriteJSON(t, hub, testEnvelope{
-		RequestID: 1,
-		Type:      "request",
-		Method:    "connect.init",
-		Payload: map[string]any{
-			"clientName":      "wm-hub",
-			"clientVersion":   "0.1.0",
-			"protocolVersion": rp.DefaultProtocolVersion,
-			"role":            "hub",
-			"hubId":           "hub-token",
-		},
-	})
-	initResp := mustReadEnvelope(t, hub)
-	principal, _ := initResp.Payload["principal"].(map[string]any)
-	connectionEpoch, _ := principal["connectionEpoch"].(float64)
-	mustWriteJSON(t, hub, testEnvelope{
-		RequestID: 2,
-		Type:      "request",
-		Method:    "registry.reportProjects",
-		Payload: map[string]any{
-			"hubId":           "hub-token",
-			"connectionEpoch": int64(connectionEpoch),
-			"projects":        []map[string]any{},
-		},
-	})
-	_ = mustReadEnvelope(t, hub)
-
-	client := dialWS(t, ts.URL+"/ws")
-	defer client.Close()
-	mustWriteJSON(t, client, testEnvelope{
-		RequestID: 1,
-		Type:      "request",
-		Method:    "connect.init",
-		Payload: map[string]any{
-			"clientName":      "wm-web",
-			"clientVersion":   "0.1.0",
-			"protocolVersion": rp.DefaultProtocolVersion,
-			"role":            "client",
-		},
-	})
-	_ = mustReadEnvelope(t, client)
-
-	mustWriteJSON(t, client, testEnvelope{
-		RequestID: 2,
-		Type:      "request",
-		Method:    "cmd.token",
-		Payload: map[string]any{
-			"action": "scan",
-			"hubId":  "hub-token",
-		},
-	})
-	_ = hub.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
-	forwarded := mustReadEnvelope(t, hub)
-	if forwarded.Type != "request" || forwarded.Method != "cmd.token" {
-		t.Fatalf("forwarded=%#v, want cmd.token request", forwarded)
-	}
-	if forwarded.ProjectID != "" {
-		t.Fatalf("forwarded projectId=%q, want empty", forwarded.ProjectID)
-	}
-	if forwarded.Payload["hubId"] != "hub-token" || forwarded.Payload["action"] != "scan" {
-		t.Fatalf("forwarded payload=%#v", forwarded.Payload)
-	}
-
-	mustWriteJSON(t, hub, testEnvelope{
-		RequestID: forwarded.RequestID,
-		Type:      "response",
-		Method:    "cmd.token",
-		Payload: map[string]any{
-			"ok":        true,
-			"updatedAt": "2026-05-19T10:00:00Z",
-			"providers": []map[string]any{},
-		},
-	})
-	resp := mustReadEnvelope(t, client)
-	if resp.Type != "response" || resp.Method != "cmd.token" {
-		t.Fatalf("client response=%#v, want cmd.token response", resp)
-	}
-	if resp.ProjectID != "" {
-		t.Fatalf("client response projectId=%q, want empty", resp.ProjectID)
-	}
-}
-
-func TestCmdUpdateForwardsByHubIDWithoutProjectID(t *testing.T) {
-	s := New(Config{})
-	ts := httptest.NewServer(s.Handler())
-	t.Cleanup(ts.Close)
-
-	hub := dialWS(t, ts.URL+"/ws")
-	defer hub.Close()
-	mustWriteJSON(t, hub, testEnvelope{
-		RequestID: 1,
-		Type:      "request",
-		Method:    "connect.init",
-		Payload: map[string]any{
-			"clientName":      "wheelmaker-hub",
-			"clientVersion":   "0.1.0",
-			"protocolVersion": rp.DefaultProtocolVersion,
-			"role":            "hub",
-			"hubId":           "hub-update",
-		},
-	})
-	initResp := mustReadEnvelope(t, hub)
-	principal, _ := initResp.Payload["principal"].(map[string]any)
-	connectionEpoch, _ := principal["connectionEpoch"].(float64)
-	mustWriteJSON(t, hub, testEnvelope{
-		RequestID: 2,
-		Type:      "request",
-		Method:    "registry.reportProjects",
-		Payload: map[string]any{
-			"hubId":           "hub-update",
-			"connectionEpoch": int64(connectionEpoch),
-			"projects":        []map[string]any{},
-		},
-	})
-	_ = mustReadEnvelope(t, hub)
-
-	client := dialWS(t, ts.URL+"/ws")
-	defer client.Close()
-	mustWriteJSON(t, client, testEnvelope{
-		RequestID: 1,
-		Type:      "request",
-		Method:    "connect.init",
-		Payload: map[string]any{
-			"clientName":      "wm-web",
-			"clientVersion":   "0.1.0",
-			"protocolVersion": rp.DefaultProtocolVersion,
-			"role":            "client",
-		},
-	})
-	_ = mustReadEnvelope(t, client)
-
-	mustWriteJSON(t, client, testEnvelope{
-		RequestID: 2,
-		Type:      "request",
-		Method:    "cmd.update",
-		Payload: map[string]any{
-			"action": "query",
-			"hubId":  "hub-update",
-		},
-	})
-	_ = hub.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
-	forwarded := mustReadEnvelope(t, hub)
-	if forwarded.Type != "request" || forwarded.Method != "cmd.update" {
-		t.Fatalf("forwarded=%#v, want cmd.update request", forwarded)
-	}
-	if forwarded.ProjectID != "" {
-		t.Fatalf("forwarded projectId=%q, want empty", forwarded.ProjectID)
-	}
-	if forwarded.Payload["hubId"] != "hub-update" || forwarded.Payload["action"] != "query" {
-		t.Fatalf("forwarded payload=%#v", forwarded.Payload)
-	}
-
-	mustWriteJSON(t, hub, testEnvelope{
-		RequestID: forwarded.RequestID,
-		Type:      "response",
-		Method:    "cmd.update",
-		Payload: map[string]any{
-			"ok":     true,
-			"status": "up_to_date",
-		},
-	})
-	resp := mustReadEnvelope(t, client)
-	if resp.Type != "response" || resp.Method != "cmd.update" {
-		t.Fatalf("client response=%#v, want cmd.update response", resp)
-	}
-	if resp.ProjectID != "" {
-		t.Fatalf("client response projectId=%q, want empty", resp.ProjectID)
-	}
-}
-
-func TestCmdSkillsForwardsByHubIDWithoutProjectID(t *testing.T) {
-	s := New(Config{})
-	ts := httptest.NewServer(s.Handler())
-	t.Cleanup(ts.Close)
-
-	hub := dialWS(t, ts.URL+"/ws")
-	defer hub.Close()
-	mustWriteJSON(t, hub, testEnvelope{
-		RequestID: 1,
-		Type:      "request",
-		Method:    "connect.init",
-		Payload: map[string]any{
-			"clientName":      "wheelmaker-hub",
-			"clientVersion":   "0.1.0",
-			"protocolVersion": rp.DefaultProtocolVersion,
-			"role":            "hub",
-			"hubId":           "hub-skills",
-		},
-	})
-	initResp := mustReadEnvelope(t, hub)
-	principal, _ := initResp.Payload["principal"].(map[string]any)
-	connectionEpoch, _ := principal["connectionEpoch"].(float64)
-	mustWriteJSON(t, hub, testEnvelope{
-		RequestID: 2,
-		Type:      "request",
-		Method:    "registry.reportProjects",
-		Payload: map[string]any{
-			"hubId":           "hub-skills",
-			"connectionEpoch": int64(connectionEpoch),
-			"projects":        []map[string]any{},
-		},
-	})
-	_ = mustReadEnvelope(t, hub)
-
-	client := dialWS(t, ts.URL+"/ws")
-	defer client.Close()
-	mustWriteJSON(t, client, testEnvelope{
-		RequestID: 1,
-		Type:      "request",
-		Method:    "connect.init",
-		Payload: map[string]any{
-			"clientName":      "wm-web",
-			"clientVersion":   "0.1.0",
-			"protocolVersion": rp.DefaultProtocolVersion,
-			"role":            "client",
-		},
-	})
-	_ = mustReadEnvelope(t, client)
-
-	mustWriteJSON(t, client, testEnvelope{
-		RequestID: 2,
-		Type:      "request",
-		Method:    "cmd.skills",
-		Payload: map[string]any{
-			"action": "scan",
-			"hubId":  "hub-skills",
-		},
-	})
-	_ = hub.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
-	forwarded := mustReadEnvelope(t, hub)
-	if forwarded.Type != "request" || forwarded.Method != "cmd.skills" {
-		t.Fatalf("forwarded=%#v, want cmd.skills request", forwarded)
-	}
-	if forwarded.ProjectID != "" {
-		t.Fatalf("forwarded projectId=%q, want empty", forwarded.ProjectID)
-	}
-	if forwarded.Payload["hubId"] != "hub-skills" || forwarded.Payload["action"] != "scan" {
-		t.Fatalf("forwarded payload=%#v", forwarded.Payload)
-	}
-
-	mustWriteJSON(t, hub, testEnvelope{
-		RequestID: forwarded.RequestID,
-		Type:      "response",
-		Method:    "cmd.skills",
-		Payload: map[string]any{
-			"ok":    true,
-			"hubId": "hub-skills",
-		},
-	})
-	resp := mustReadEnvelope(t, client)
-	if resp.Type != "response" || resp.Method != "cmd.skills" {
-		t.Fatalf("client response=%#v, want cmd.skills response", resp)
-	}
-	if resp.ProjectID != "" {
-		t.Fatalf("client response projectId=%q, want empty", resp.ProjectID)
+	for index, method := range []string{"cmd.npm", "cmd.token", "cmd.update", "cmd.skills"} {
+		mustWriteJSON(t, client, testEnvelope{
+			RequestID: int64(2 + index),
+			Type:      "request",
+			Method:    method,
+			Payload: map[string]any{
+				"action": "scan",
+				"hubId":  "hub-cmd",
+			},
+		})
+		resp := mustReadEnvelope(t, client)
+		if resp.Type != "error" {
+			t.Fatalf("%s response=%#v, want error", method, resp)
+		}
+		if resp.Payload["code"] != codeForbidden {
+			t.Fatalf("%s code=%v, want %s", method, resp.Payload["code"], codeForbidden)
+		}
 	}
 }
 
@@ -1988,94 +1925,6 @@ func TestHubStateBatchSubrequestCarriesEnvelopeHubID(t *testing.T) {
 	}
 }
 
-func TestHubCommandForwardRequestsToDifferentHubsDoNotBlockBehindSlowHub(t *testing.T) {
-	s := New(Config{})
-	ts := httptest.NewServer(s.Handler())
-	t.Cleanup(ts.Close)
-
-	hubA := dialReportedHub(t, ts.URL+"/ws", "hub-a")
-	defer hubA.Close()
-	hubB := dialReportedHub(t, ts.URL+"/ws", "hub-b")
-	defer hubB.Close()
-
-	client := dialWS(t, ts.URL+"/ws")
-	defer client.Close()
-	mustWriteJSON(t, client, testEnvelope{
-		RequestID: 1,
-		Type:      "request",
-		Method:    "connect.init",
-		Payload: map[string]any{
-			"clientName":      "wm-web",
-			"clientVersion":   "0.1.0",
-			"protocolVersion": rp.DefaultProtocolVersion,
-			"role":            "client",
-		},
-	})
-	_ = mustReadEnvelope(t, client)
-
-	mustWriteJSON(t, client, testEnvelope{
-		RequestID: 2,
-		Type:      "request",
-		Method:    "cmd.skills",
-		Payload: map[string]any{
-			"action": "update",
-			"hubId":  "hub-a",
-			"scope":  "hub",
-		},
-	})
-	_ = hubA.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
-	forwardedA := mustReadEnvelope(t, hubA)
-	if forwardedA.Type != "request" || forwardedA.Method != "cmd.skills" {
-		t.Fatalf("forwardedA=%#v, want cmd.skills request", forwardedA)
-	}
-
-	mustWriteJSON(t, client, testEnvelope{
-		RequestID: 3,
-		Type:      "request",
-		Method:    "cmd.update",
-		Payload: map[string]any{
-			"action": "query",
-			"hubId":  "hub-b",
-		},
-	})
-	_ = hubB.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
-	forwardedB := mustReadEnvelope(t, hubB)
-	if forwardedB.Type != "request" || forwardedB.Method != "cmd.update" {
-		t.Fatalf("forwardedB=%#v, want cmd.update request", forwardedB)
-	}
-
-	mustWriteJSON(t, hubB, testEnvelope{
-		RequestID: forwardedB.RequestID,
-		Type:      "response",
-		Method:    "cmd.update",
-		Payload: map[string]any{
-			"ok":     true,
-			"hubId":  "hub-b",
-			"status": "up_to_date",
-		},
-	})
-	mustWriteJSON(t, hubA, testEnvelope{
-		RequestID: forwardedA.RequestID,
-		Type:      "response",
-		Method:    "cmd.skills",
-		Payload: map[string]any{
-			"ok":    true,
-			"hubId": "hub-a",
-		},
-	})
-	responses := map[int64]testEnvelope{}
-	for len(responses) < 2 {
-		resp := mustReadEnvelope(t, client)
-		responses[resp.RequestID] = resp
-	}
-	if responses[2].Type != "response" || responses[2].Method != "cmd.skills" {
-		t.Fatalf("client response 2=%#v, want cmd.skills response", responses[2])
-	}
-	if responses[3].Type != "response" || responses[3].Method != "cmd.update" {
-		t.Fatalf("client response 3=%#v, want cmd.update response", responses[3])
-	}
-}
-
 func TestCmdPrefixIsNotAllowedByWildcard(t *testing.T) {
 	s := New(Config{})
 	ts := httptest.NewServer(s.Handler())
@@ -2112,11 +1961,11 @@ func TestCmdPrefixIsNotAllowedByWildcard(t *testing.T) {
 		t.Fatalf("code=%v, want %s", resp.Payload["code"], codeForbidden)
 	}
 
-	if !methodAllowed("client", "cmd.skills") {
-		t.Fatal("cmd.skills should be explicitly allowed")
+	if methodAllowed("client", "cmd.skills") {
+		t.Fatal("cmd.skills should not be allowed")
 	}
-	if !methodAllowed("client", "cmd.token") {
-		t.Fatal("cmd.token should be explicitly allowed")
+	if methodAllowed("client", "cmd.token") {
+		t.Fatal("cmd.token should not be allowed")
 	}
 }
 
@@ -2199,9 +2048,9 @@ func dialReportedHub(t *testing.T, rawURL string, hubID string) *websocket.Conn 
 	mustWriteJSON(t, hub, testEnvelope{
 		RequestID: 2,
 		Type:      "request",
-		Method:    "registry.reportProjects",
+		Method:    "hub.report.projects",
+		HubID:     hubID,
 		Payload: map[string]any{
-			"hubId":           hubID,
 			"connectionEpoch": int64(connectionEpoch),
 			"projects":        []map[string]any{},
 		},
@@ -2227,13 +2076,13 @@ func mustReadEnvelope(t *testing.T, ws *websocket.Conn) testEnvelope {
 }
 
 func TestRelayStatusIsAllowedForClientOnly(t *testing.T) {
-	if !methodAllowed("client", "relay.status") {
-		t.Fatal("client should be allowed to call relay.status")
+	if !methodAllowed("client", "registry.relay.status") {
+		t.Fatal("client should be allowed to call registry.relay.status")
 	}
-	if methodAllowed("hub", "relay.status") {
-		t.Fatal("hub should not be allowed to call public relay.status")
+	if methodAllowed("hub", "registry.relay.status") {
+		t.Fatal("hub should not be allowed to call public registry.relay.status")
 	}
-	if methodAllowed("monitor", "relay.enable") {
+	if methodAllowed("monitor", "registry.relay.enable") {
 		t.Fatal("monitor should not be allowed to mutate relay slot")
 	}
 }
@@ -2249,15 +2098,15 @@ func TestRelayStatusReturnsDisabledSnapshot(t *testing.T) {
 	mustWriteJSON(t, client, testEnvelope{
 		RequestID: 2,
 		Type:      "request",
-		Method:    "relay.status",
+		Method:    "registry.relay.status",
 		Payload:   map[string]any{},
 	})
 	resp := mustReadEnvelope(t, client)
-	if resp.Type != "response" || resp.Method != "relay.status" {
-		t.Fatalf("relay.status response=%#v", resp)
+	if resp.Type != "response" || resp.Method != "registry.relay.status" {
+		t.Fatalf("registry.relay.status response=%#v", resp)
 	}
 	if resp.Payload["status"] != "Disabled" || resp.Payload["enabled"] != false {
-		t.Fatalf("relay.status payload=%#v, want disabled snapshot", resp.Payload)
+		t.Fatalf("registry.relay.status payload=%#v, want disabled snapshot", resp.Payload)
 	}
 }
 
@@ -2276,7 +2125,7 @@ func TestRelayEnableForwardsInternalOpenToHub(t *testing.T) {
 	mustWriteJSON(t, client, testEnvelope{
 		RequestID: 2,
 		Type:      "request",
-		Method:    "relay.enable",
+		Method:    "registry.relay.enable",
 		Payload: map[string]any{
 			"listenPort": listenPort,
 			"hubId":      "hub-relay",
@@ -2288,8 +2137,8 @@ func TestRelayEnableForwardsInternalOpenToHub(t *testing.T) {
 
 	_ = hub.SetReadDeadline(time.Now().Add(2 * time.Second))
 	forwarded := mustReadEnvelope(t, hub)
-	if forwarded.Type != "request" || forwarded.Method != "relay.open" {
-		t.Fatalf("forwarded=%#v, want relay.open request", forwarded)
+	if forwarded.Type != "request" || forwarded.Method != "hub.relay.open" {
+		t.Fatalf("forwarded=%#v, want hub.relay.open request", forwarded)
 	}
 	if forwarded.Payload["targetHost"] != "127.0.0.1" || forwarded.Payload["targetPort"] != float64(43210) {
 		t.Fatalf("forwarded payload=%#v", forwarded.Payload)
@@ -2300,18 +2149,18 @@ func TestRelayEnableForwardsInternalOpenToHub(t *testing.T) {
 	mustWriteJSON(t, hub, testEnvelope{
 		RequestID: forwarded.RequestID,
 		Type:      "response",
-		Method:    "relay.open",
+		Method:    "hub.relay.open",
 		Payload: map[string]any{
 			"ok": true,
 		},
 	})
 
 	resp := mustReadEnvelope(t, client)
-	if resp.Type != "response" || resp.Method != "relay.enable" {
-		t.Fatalf("relay.enable response=%#v", resp)
+	if resp.Type != "response" || resp.Method != "registry.relay.enable" {
+		t.Fatalf("registry.relay.enable response=%#v", resp)
 	}
 	if resp.Payload["enabled"] != true || resp.Payload["status"] != "Opening" {
-		t.Fatalf("relay.enable payload=%#v, want opening snapshot", resp.Payload)
+		t.Fatalf("registry.relay.enable payload=%#v, want opening snapshot", resp.Payload)
 	}
 }
 
@@ -2329,6 +2178,26 @@ func connectRegistryClient(t *testing.T, ws *websocket.Conn) {
 		},
 	})
 	_ = mustReadEnvelope(t, ws)
+}
+
+func connectRegistryHub(t *testing.T, ws *websocket.Conn, hubID string) int64 {
+	t.Helper()
+	mustWriteJSON(t, ws, testEnvelope{
+		RequestID: 1,
+		Type:      "request",
+		Method:    "connect.init",
+		Payload: map[string]any{
+			"clientName":      "wheelmaker-hub",
+			"clientVersion":   "0.1.0",
+			"protocolVersion": rp.DefaultProtocolVersion,
+			"role":            "hub",
+			"hubId":           hubID,
+		},
+	})
+	initResp := mustReadEnvelope(t, ws)
+	principal, _ := initResp.Payload["principal"].(map[string]any)
+	connectionEpoch, _ := principal["connectionEpoch"].(float64)
+	return int64(connectionEpoch)
 }
 
 func httptestNewRegistryServer(t *testing.T, handler http.Handler) string {
