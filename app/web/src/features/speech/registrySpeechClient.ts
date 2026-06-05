@@ -8,6 +8,7 @@ import type {
   RegistrySpeechStartResponse,
   RegistrySpeechTranscriptEvent,
 } from '../../registry/registryTypes';
+import {RegistryMethods} from '../../registry/registryMethods';
 
 export type RegistrySpeechTransport = {
   request: (args: {method: string; payload: unknown; timeoutMs?: number}) => Promise<RegistryEnvelope>;
@@ -30,7 +31,7 @@ export function isSpeechTranscriptEvent(
 ): event is RegistryEnvelope<RegistrySpeechTranscriptEvent> {
   const payload = event.payload;
   return event.type === 'event' &&
-    event.method === 'speech.transcript' &&
+    event.method === RegistryMethods.SpeechTranscript &&
     !!payload &&
     typeof payload === 'object' &&
     !Array.isArray(payload) &&
@@ -44,7 +45,7 @@ export function isSpeechErrorEvent(
 ): event is RegistryEnvelope<RegistrySpeechErrorEvent> {
   const payload = event.payload;
   return event.type === 'event' &&
-    event.method === 'speech.error' &&
+    event.method === RegistryMethods.SpeechError &&
     !!payload &&
     typeof payload === 'object' &&
     !Array.isArray(payload) &&
@@ -57,7 +58,7 @@ export function createRegistrySpeechClient(transport: RegistrySpeechTransport): 
   return {
     start: async payload => {
       const response = await transport.request({
-        method: 'speech.start',
+        method: RegistryMethods.SpeechStart,
         payload,
         timeoutMs: 15000,
       });
@@ -68,21 +69,21 @@ export function createRegistrySpeechClient(transport: RegistrySpeechTransport): 
     },
     chunk: async payload => {
       await transport.request({
-        method: 'speech.chunk',
+        method: RegistryMethods.SpeechChunk,
         payload,
         timeoutMs: 8000,
       });
     },
     finish: async payload => {
       await transport.request({
-        method: 'speech.finish',
+        method: RegistryMethods.SpeechFinish,
         payload,
         timeoutMs: 15000,
       });
     },
     cancel: async payload => {
       await transport.request({
-        method: 'speech.cancel',
+        method: RegistryMethods.SpeechCancel,
         payload,
         timeoutMs: 8000,
       });

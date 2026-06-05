@@ -180,8 +180,8 @@ describe('web chat integration', () => {
     expect(registryTypes).not.toContain('export interface RegistrySessionPromptSnapshot');
     expect(registryTypes).not.toContain('updateIndex: number;');
     expect(registryTypes).not.toContain('lastIndex');
-    expect(repositoryTs).toContain("method: 'session.list'");
-    expect(repositoryTs).toContain("method: 'session.read'");
+    expect(repositoryTs).toContain('RegistryMethods.SessionList');
+    expect(repositoryTs).toContain('RegistryMethods.SessionRead');
     expect(repositoryTs).toContain('payload: afterTurnIndex > 0 ? {sessionId, afterTurnIndex} : {sessionId}');
     expect(repositoryTs).toContain('turns?: unknown[];');
     expect(repositoryTs).toContain('normalizeSessionReadPayload(');
@@ -191,16 +191,16 @@ describe('web chat integration', () => {
     expect(registryTypes).toContain('session?: RegistrySessionSummary;');
     expect(repositoryTs).not.toContain('afterIndex');
     expect(repositoryTs).not.toContain('afterSubIndex');
-    expect(repositoryTs).toContain("method: 'session.new'");
+    expect(repositoryTs).toContain('RegistryMethods.SessionCreate');
     expect(registryTypes).toContain('agentType?: string;');
     expect(registryTypes).toContain('agents?: string[];');
     expect(repositoryTs).toContain('async createSession(projectId: string, agentType: string, title?: string)');
     expect(repositoryTs).toContain('payload: title?.trim() ? {agentType, title: title.trim()} : {agentType}');
-    expect(repositoryTs).toContain("method: 'session.send'");
-    expect(repositoryTs).toContain("method: 'session.markRead'");
-    expect(repositoryTs).toContain("method: 'session.rename'");
+    expect(repositoryTs).toContain('RegistryMethods.SessionSend');
+    expect(repositoryTs).toContain('RegistryMethods.SessionMarkRead');
+    expect(repositoryTs).toContain('RegistryMethods.SessionRename');
     expect(repositoryTs).toContain('async renameSession(projectId: string, sessionId: string, title: string)');
-    expect(repositoryTs).toContain("method: 'session.delete'");
+    expect(repositoryTs).toContain('RegistryMethods.SessionDelete');
     expect(repositoryTs).toContain('async deleteSession(projectId: string, sessionId: string)');
     expect(repositoryTs).not.toContain('turnId = typeof input.turnId');
     expect(repositoryTs).not.toContain("method: 'chat.permission.respond'");
@@ -2004,7 +2004,7 @@ describe('web chat integration', () => {
 
     expect(registryTypes).toContain('export interface RegistryFileIndexSearchResult');
     expect(registryTypes).toContain('export interface RegistryFileIndexSearchResponse');
-    expect(repositoryTs).toContain("method: 'fs.index.search'");
+    expect(repositoryTs).toContain('RegistryMethods.ProjectFSIndexSearch');
     expect(workspaceServiceTs).toContain('async searchFileIndex(');
     expect(mainTsx).toContain('type ChatFileMention = {');
     expect(mainTsx).toContain('fileMentions: ChatFileMention[];');

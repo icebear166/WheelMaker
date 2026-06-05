@@ -15,11 +15,11 @@ describe('web directory expand resilience', () => {
     expect(workspaceControllerTs).not.toContain('Promise.all(expandedSnapshot.map');
   });
 
-  test('uses longer timeout for fs.list requests', () => {
+  test('uses longer timeout for project fs list requests', () => {
     const projectRoot = path.join(__dirname, '..');
     const repositoryTs = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'registry', 'RegistryRepository.ts'), 'utf8');
 
-    expect(repositoryTs).toContain('method: \'fs.list\'');
+    expect(repositoryTs).toContain('method: RegistryMethods.ProjectFSList');
     expect(repositoryTs).toContain('timeoutMs: 20000');
   });
 });

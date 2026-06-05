@@ -11,9 +11,9 @@ describe('web session list schema', () => {
     const registryTypes = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'registry', 'registryTypes.ts'), 'utf8');
     const stylesCss = readWebStyles(projectRoot);
 
-    expect(repositoryTs).toContain("method: 'session.list'");
-    expect(repositoryTs).toContain("method: 'session.read'");
-    expect(repositoryTs).toContain("method: 'session.markRead'");
+    expect(repositoryTs).toContain('RegistryMethods.SessionList');
+    expect(repositoryTs).toContain('RegistryMethods.SessionRead');
+    expect(repositoryTs).toContain('RegistryMethods.SessionMarkRead');
     expect(repositoryTs).toContain("typeof input.sessionId === 'string'");
     expect(repositoryTs).toContain('input.running === true');
     expect(repositoryTs).toContain('typeof input.lastDoneTurnIndex ===');

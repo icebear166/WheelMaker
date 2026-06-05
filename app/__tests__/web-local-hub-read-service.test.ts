@@ -1,6 +1,7 @@
 import {LocalHubReadManager} from '../web/src/registry/localRead/LocalHubReadManager';
 import {RegistryRepository, type LocalReadProofVerifier} from '../web/src/registry/RegistryRepository';
 import {RegistryWorkspaceService} from '../web/src/registry/RegistryWorkspaceService';
+import {RegistryMethods, RegistryProtocolVersion} from '../web/src/registry/registryMethods';
 import type {RegistryEnvelope, RegistryLocalReadCandidate, RegistryProjectListResponse} from '../web/src/registry/registryTypes';
 
 function makeCandidate(overrides: Partial<RegistryLocalReadCandidate> = {}): RegistryLocalReadCandidate {
@@ -14,7 +15,7 @@ function makeCandidate(overrides: Partial<RegistryLocalReadCandidate> = {}): Reg
 }
 
 describe('local hub read service routing', () => {
-  test('normalizes local read candidate metadata from project.list hubs', async () => {
+  test('normalizes local read candidate metadata from registry project list hubs', async () => {
     const fakeClient = {
       request: jest.fn(async () => ({
         payload: {
@@ -78,14 +79,14 @@ describe('local hub read service routing', () => {
       verifyProof,
     });
 
-    expect(calls.map(call => call.method)).toEqual(['connect', 'local_read.proof', 'connect.init']);
+    expect(calls.map(call => call.method)).toEqual(['connect', RegistryMethods.ConnectLocalReadProof, RegistryMethods.ConnectInit]);
     expect(calls[1].payload).toEqual({endpointId: 'endpoint-1', nonce: 'nonce-1'});
     expect(JSON.stringify(calls[1].payload)).not.toContain('secret-token');
     expect(calls[2].payload).toMatchObject({
       role: 'local_read',
       hubId: 'hub-a',
       token: 'secret-token',
-      protocolVersion: '2.4',
+      protocolVersion: RegistryProtocolVersion,
     });
   });
 

@@ -40,10 +40,10 @@ describe('registry debug records', () => {
 
   test('resolves method families into debug scopes', () => {
     expect(resolveRegistryDebugScope('session.send', 'request')).toBe('session.*');
-    expect(resolveRegistryDebugScope('fs.read', 'response')).toBe('fs.*');
-    expect(resolveRegistryDebugScope('git.status', 'event')).toBe('git.*');
-    expect(resolveRegistryDebugScope('project.list', 'request')).toBe('project.*');
-    expect(resolveRegistryDebugScope('token.scan', 'response')).toBe('token.*');
+    expect(resolveRegistryDebugScope('project.fs.read', 'response')).toBe('project.*');
+    expect(resolveRegistryDebugScope('project.git.status', 'event')).toBe('project.*');
+    expect(resolveRegistryDebugScope('registry.project.list', 'request')).toBe('registry.*');
+    expect(resolveRegistryDebugScope('hub.state.refresh', 'response')).toBe('hub.*');
     expect(resolveRegistryDebugScope('ping', 'request')).toBe('ping');
     expect(resolveRegistryDebugScope(undefined, 'connect_open')).toBe('lifecycle');
     expect(resolveRegistryDebugScope(undefined, 'parse_error')).toBe('parse_error');
@@ -126,7 +126,7 @@ describe('registry debug records', () => {
       envelope: {
         requestId: 8,
         type: 'request',
-        method: 'fs.read',
+        method: 'project.fs.read',
         projectId: 'project-a',
         payload: {path: 'README.md'},
       },
@@ -136,9 +136,9 @@ describe('registry debug records', () => {
     });
     const recordsWithFs = store.getRecords();
     expect(recordsWithFs[3]).toMatchObject({
-      scope: 'fs.*',
+      scope: 'project.*',
       connection: 'Local',
-      method: 'fs.read',
+      method: 'project.fs.read',
       sessionIds: [],
     });
 
@@ -160,7 +160,7 @@ describe('registry debug records', () => {
       recordsWithFs[2].id,
     ]);
     expect(filterRegistryDebugRecords(recordsWithFs, {
-      selectedScope: 'fs.*',
+      selectedScope: 'project.*',
       selectedSessionId: 'All',
       includeMultiSessionRecords: false,
     }).map(record => record.id)).toEqual([recordsWithFs[3].id]);

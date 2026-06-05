@@ -1,5 +1,6 @@
 import type {RegistryDebugCaptureEvent, RegistryDebugConnection} from '../debug/registryDebug';
 import type {RegistryConnectInitPayload, RegistryEnvelope, RegistryErrorPayload} from './registryTypes';
+import {RegistryMethods} from './registryMethods';
 
 export type RegistryDebugSink = (event: RegistryDebugCaptureEvent) => void;
 
@@ -114,7 +115,7 @@ export class RegistryClient {
 
   async connectInit(payload: RegistryConnectInitPayload): Promise<void> {
     await this.request({
-      method: 'connect.init',
+      method: RegistryMethods.ConnectInit,
       payload,
     });
   }

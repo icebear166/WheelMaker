@@ -2,9 +2,10 @@ import fs from 'fs';
 import path from 'path';
 import {RegistryRepository} from '../web/src/registry/RegistryRepository';
 import type {RegistryClient} from '../web/src/registry/RegistryClient';
+import {RegistryMethods} from '../web/src/registry/registryMethods';
 
 describe('agent package update registry service', () => {
-  test('reads project.list hubs without depending on online state', async () => {
+  test('reads registry project list hubs without depending on online state', async () => {
     const client = {
       request: jest.fn().mockResolvedValue({
         type: 'response',
@@ -23,20 +24,31 @@ describe('agent package update registry service', () => {
     ]);
     expect(result.hubs).toEqual([{hubId: 'hub-b'}]);
     expect(client.request).toHaveBeenCalledWith({
-      method: 'project.list',
+      method: RegistryMethods.RegistryProjectList,
       payload: {},
     });
   });
 
-  test('sends cmd.npm scan with hubId and 60 second timeout', async () => {
+  test('refreshes agentPackages HubState section with hubId and 60 second timeout', async () => {
     const client = {
       request: jest.fn().mockResolvedValue({
         type: 'response',
         payload: {
-          ok: true,
-          updatedAt: '2026-05-19T10:00:00Z',
-          hub: {hubId: 'hub-b', packages: []},
-          operation: null,
+          state: {
+            hubId: 'hub-b',
+            status: 'ready',
+            sections: {
+              agentPackages: {
+                status: 'ready',
+                data: {
+                  ok: true,
+                  updatedAt: '2026-05-19T10:00:00Z',
+                  hub: {hubId: 'hub-b', packages: []},
+                  operation: null,
+                },
+              },
+            },
+          },
         },
       }),
     } as unknown as RegistryClient;
@@ -46,8 +58,9 @@ describe('agent package update registry service', () => {
 
     expect(result.ok).toBe(true);
     expect(client.request).toHaveBeenCalledWith({
-      method: 'cmd.npm',
-      payload: {action: 'scan', hubId: 'hub-b'},
+      method: RegistryMethods.HubStateRefresh,
+      hubId: 'hub-b',
+      payload: {sections: ['agentPackages']},
       timeoutMs: 60000,
     });
   });
@@ -57,26 +70,37 @@ describe('agent package update registry service', () => {
       request: jest.fn().mockResolvedValue({
         type: 'response',
         payload: {
-          ok: true,
-          updatedAt: '2026-05-19T10:00:00Z',
-          hub: {
+          state: {
             hubId: 'hub-b',
-            packages: [{
-              packageName: '@zed-industries/codex-acp',
-              displayName: 'Deprecated Codex ACP',
-              agentTypes: null,
-              kind: 'deprecated',
-              installed: true,
-              installedVersion: '0.1.0',
-              latestVersion: '',
-              status: 'deprecated',
-              error: '',
-              canInstall: false,
-              canUpdate: false,
-              canUninstall: true,
-            }],
+            status: 'ready',
+            sections: {
+              agentPackages: {
+                status: 'ready',
+                data: {
+                  ok: true,
+                  updatedAt: '2026-05-19T10:00:00Z',
+                  hub: {
+                    hubId: 'hub-b',
+                    packages: [{
+                      packageName: '@zed-industries/codex-acp',
+                      displayName: 'Deprecated Codex ACP',
+                      agentTypes: null,
+                      kind: 'deprecated',
+                      installed: true,
+                      installedVersion: '0.1.0',
+                      latestVersion: '',
+                      status: 'deprecated',
+                      error: '',
+                      canInstall: false,
+                      canUpdate: false,
+                      canUninstall: true,
+                    }],
+                  },
+                  operation: null,
+                },
+              },
+            },
           },
-          operation: null,
         },
       }),
     } as unknown as RegistryClient;
@@ -87,11 +111,22 @@ describe('agent package update registry service', () => {
     expect(result.hub?.packages[0].agentTypes).toEqual([]);
   });
 
-  test('sends cmd.npm write actions with controlled payloads', async () => {
+  test('runs agentPackages HubState actions with controlled payloads', async () => {
     const client = {
       request: jest.fn().mockResolvedValue({
         type: 'response',
-        payload: {ok: true, accepted: true, operation: null},
+        payload: {
+          state: {
+            hubId: 'hub-a',
+            status: 'ready',
+            sections: {
+              agentPackages: {
+                status: 'ready',
+                data: {ok: true, accepted: true, operation: null},
+              },
+            },
+          },
+        },
       }),
     } as unknown as RegistryClient;
     const repository = new RegistryRepository(client);
@@ -101,39 +136,46 @@ describe('agent package update registry service', () => {
     await repository.installNpmPackages('hub-a', ['@openai/codex', '@anthropic-ai/claude-code'], 'latest');
 
     expect(client.request).toHaveBeenNthCalledWith(1, {
-      method: 'cmd.npm',
-      payload: {
-        action: 'install',
-        hubId: 'hub-a',
-        packageName: '@openai/codex',
-        version: 'latest',
-      },
+      method: RegistryMethods.HubStateAction,
+      hubId: 'hub-a',
+      payload: {section: 'agentPackages', action: 'install', params: {packageName: '@openai/codex', version: 'latest'}},
+      timeoutMs: 60000,
     });
     expect(client.request).toHaveBeenNthCalledWith(2, {
-      method: 'cmd.npm',
-      payload: {
-        action: 'uninstall',
-        hubId: 'hub-a',
-        packageName: '@zed-industries/claude-agent-acp',
-      },
+      method: RegistryMethods.HubStateAction,
+      hubId: 'hub-a',
+      payload: {section: 'agentPackages', action: 'uninstall', params: {packageName: '@zed-industries/claude-agent-acp'}},
+      timeoutMs: 60000,
     });
     expect(client.request).toHaveBeenNthCalledWith(3, {
-      method: 'cmd.npm',
+      method: RegistryMethods.HubStateAction,
+      hubId: 'hub-a',
       payload: {
-        action: 'install_many',
-        hubId: 'hub-a',
-        packageNames: ['@openai/codex', '@anthropic-ai/claude-code'],
-        version: 'latest',
+        section: 'agentPackages',
+        action: 'installMany',
+        params: {packageNames: ['@openai/codex', '@anthropic-ai/claude-code'], version: 'latest'},
       },
+      timeoutMs: 60000,
     });
     expect(client.request).toHaveBeenCalledTimes(3);
   });
 
-  test('sends cmd.update query and update-publish with controlled payloads', async () => {
+  test('uses wheelmakerUpdate HubState refresh and update-publish action', async () => {
     const client = {
       request: jest.fn().mockResolvedValue({
         type: 'response',
-        payload: {ok: true, status: 'update_pending', pendingSignal: true},
+        payload: {
+          state: {
+            hubId: 'hub-a',
+            status: 'ready',
+            sections: {
+              wheelmakerUpdate: {
+                status: 'ready',
+                data: {ok: true, hubId: 'hub-a', status: 'update_pending', pendingSignal: true, canUpdatePublish: true},
+              },
+            },
+          },
+        },
       }),
     } as unknown as RegistryClient;
     const repository = new RegistryRepository(client);
@@ -143,18 +185,22 @@ describe('agent package update registry service', () => {
     await repository.requestWheelMakerUpdatePublish('hub-a');
 
     expect(client.request).toHaveBeenNthCalledWith(1, {
-      method: 'cmd.update',
-      payload: {action: 'query', hubId: 'hub-a'},
+      method: RegistryMethods.HubStateRefresh,
+      hubId: 'hub-a',
+      payload: {sections: ['wheelmakerUpdate']},
       timeoutMs: 60000,
     });
     expect(client.request).toHaveBeenNthCalledWith(2, {
-      method: 'cmd.update',
-      payload: {action: 'query', hubId: 'hub-a', force: true},
+      method: RegistryMethods.HubStateRefresh,
+      hubId: 'hub-a',
+      payload: {sections: ['wheelmakerUpdate'], force: true},
       timeoutMs: 60000,
     });
     expect(client.request).toHaveBeenNthCalledWith(3, {
-      method: 'cmd.update',
-      payload: {action: 'update-publish', hubId: 'hub-a'},
+      method: RegistryMethods.HubStateAction,
+      hubId: 'hub-a',
+      payload: {section: 'wheelmakerUpdate', action: 'updatePublish', params: {}},
+      timeoutMs: 60000,
     });
   });
 
@@ -164,11 +210,22 @@ describe('agent package update registry service', () => {
     expect(registryTypes).toContain('remoteRefreshRunning?: boolean;');
   });
 
-  test('sends token stats scans as hub-level commands', async () => {
+  test('refreshes tokenStats HubState section for token scans', async () => {
     const client = {
       request: jest.fn().mockResolvedValue({
         type: 'response',
-        payload: {ok: true, updatedAt: '2026-05-19T10:00:00Z', providers: []},
+        payload: {
+          state: {
+            hubId: 'hub-a',
+            status: 'ready',
+            sections: {
+              tokenStats: {
+                status: 'ready',
+                data: {ok: true, updatedAt: '2026-05-19T10:00:00Z', providers: []},
+              },
+            },
+          },
+        },
       }),
     } as unknown as RegistryClient;
     const repository = new RegistryRepository(client);
@@ -176,9 +233,10 @@ describe('agent package update registry service', () => {
     await repository.scanTokenStats('hub-a');
 
     expect(client.request).toHaveBeenCalledWith({
-      method: 'cmd.token',
-      payload: {action: 'scan', hubId: 'hub-a'},
-      timeoutMs: 45000,
+      method: RegistryMethods.HubStateRefresh,
+      hubId: 'hub-a',
+      payload: {sections: ['tokenStats']},
+      timeoutMs: 60000,
     });
   });
 });

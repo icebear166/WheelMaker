@@ -1,12 +1,24 @@
 import {RegistryRepository} from '../web/src/registry/RegistryRepository';
 import type {RegistryClient} from '../web/src/registry/RegistryClient';
+import {RegistryMethods} from '../web/src/registry/registryMethods';
 
 describe('skill management registry service', () => {
-  test('sends cmd.skills scan with hubId and bounded timeout', async () => {
+  test('refreshes skills HubState section with hubId and bounded timeout', async () => {
     const client = {
       request: jest.fn().mockResolvedValue({
         type: 'response',
-        payload: {ok: true, hubId: 'hub-a', hubSkills: {scope: 'hub', skills: []}, projects: []},
+        payload: {
+          state: {
+            hubId: 'hub-a',
+            status: 'ready',
+            sections: {
+              skills: {
+                status: 'ready',
+                data: {ok: true, hubId: 'hub-a', hubSkills: {scope: 'hub', skills: []}, projects: []},
+              },
+            },
+          },
+        },
       }),
     } as unknown as RegistryClient;
     const repository = new RegistryRepository(client);
@@ -14,17 +26,29 @@ describe('skill management registry service', () => {
     await repository.scanSkills('hub-a');
 
     expect(client.request).toHaveBeenCalledWith({
-      method: 'cmd.skills',
-      payload: {action: 'scan', hubId: 'hub-a'},
+      method: RegistryMethods.HubStateRefresh,
+      hubId: 'hub-a',
+      payload: {sections: ['skills']},
       timeoutMs: 60000,
     });
   });
 
-  test('sends cmd.skills source list with controlled source payload', async () => {
+  test('runs skills source list HubState action with controlled source payload', async () => {
     const client = {
       request: jest.fn().mockResolvedValue({
         type: 'response',
-        payload: {ok: true, hubId: 'hub-a', source: 'mattpocock/skills', candidates: []},
+        payload: {
+          state: {
+            hubId: 'hub-a',
+            status: 'ready',
+            sections: {
+              skills: {
+                status: 'ready',
+                data: {ok: true, hubId: 'hub-a', source: 'mattpocock/skills', candidates: []},
+              },
+            },
+          },
+        },
       }),
     } as unknown as RegistryClient;
     const repository = new RegistryRepository(client);
@@ -32,8 +56,9 @@ describe('skill management registry service', () => {
     await repository.listSkillsSource('hub-a', 'mattpocock/skills');
 
     expect(client.request).toHaveBeenCalledWith({
-      method: 'cmd.skills',
-      payload: {action: 'list', hubId: 'hub-a', source: 'mattpocock/skills'},
+      method: RegistryMethods.HubStateAction,
+      hubId: 'hub-a',
+      payload: {section: 'skills', action: 'listSource', params: {source: 'mattpocock/skills'}},
       timeoutMs: 60000,
     });
   });
@@ -42,7 +67,18 @@ describe('skill management registry service', () => {
     const client = {
       request: jest.fn().mockResolvedValue({
         type: 'response',
-        payload: {ok: true, hubId: 'hub-a', skills: []},
+        payload: {
+          state: {
+            hubId: 'hub-a',
+            status: 'ready',
+            sections: {
+              skills: {
+                status: 'ready',
+                data: {ok: true, hubId: 'hub-a', skills: []},
+              },
+            },
+          },
+        },
       }),
     } as unknown as RegistryClient;
     const repository = new RegistryRepository(client);
@@ -59,30 +95,36 @@ describe('skill management registry service', () => {
     await repository.updateSkills({hubId: 'hub-a', scope: 'hub', includeProjects: true});
 
     expect(client.request).toHaveBeenNthCalledWith(1, {
-      method: 'cmd.skills',
+      method: RegistryMethods.HubStateAction,
+      hubId: 'hub-a',
       payload: {
         action: 'install',
-        hubId: 'hub-a',
-        scope: 'project',
-        projectName: 'WheelMaker',
-        source: 'mattpocock/skills',
-        skills: ['tdd'],
+        section: 'skills',
+        params: {
+          scope: 'project',
+          projectName: 'WheelMaker',
+          source: 'mattpocock/skills',
+          skills: ['tdd'],
+        },
       },
       timeoutMs: 60000,
     });
     expect(client.request).toHaveBeenNthCalledWith(2, {
-      method: 'cmd.skills',
-      payload: {action: 'uninstall', hubId: 'hub-a', scope: 'hub', skills: ['tdd']},
+      method: RegistryMethods.HubStateAction,
+      hubId: 'hub-a',
+      payload: {section: 'skills', action: 'uninstall', params: {scope: 'hub', skills: ['tdd']}},
       timeoutMs: 60000,
     });
     expect(client.request).toHaveBeenNthCalledWith(3, {
-      method: 'cmd.skills',
-      payload: {action: 'update', hubId: 'hub-a', scope: 'project', projectName: 'WheelMaker'},
+      method: RegistryMethods.HubStateAction,
+      hubId: 'hub-a',
+      payload: {section: 'skills', action: 'update', params: {scope: 'project', projectName: 'WheelMaker'}},
       timeoutMs: 60000,
     });
     expect(client.request).toHaveBeenNthCalledWith(4, {
-      method: 'cmd.skills',
-      payload: {action: 'update', hubId: 'hub-a', scope: 'hub', includeProjects: true},
+      method: RegistryMethods.HubStateAction,
+      hubId: 'hub-a',
+      payload: {section: 'skills', action: 'update', params: {scope: 'hub', includeProjects: true}},
       timeoutMs: 60000,
     });
   });

@@ -1,6 +1,6 @@
 import { RegistryClient, type RegistryDebugSink } from './RegistryClient';
 import type {RegistryDebugConnection} from '../debug/registryDebug';
-import {RegistryMethods} from './registryMethods';
+import {RegistryMethods, RegistryProtocolVersion} from './registryMethods';
 import {
   decodeSessionTurnToMessage,
   normalizeSessionReadPayload,
@@ -171,6 +171,15 @@ function normalizeNpmCommandResponse(raw: unknown, hubId: string): RegistryNpmCo
     hub: normalizeNpmHubSnapshot(input.hub, hubId),
     operation: (input.operation ?? null) as RegistryNpmCommandResponse['operation'],
   };
+}
+
+function hubIdFromProjectId(projectId: string): string {
+  const index = projectId.indexOf(':');
+  return (index > 0 ? projectId.slice(0, index) : projectId).trim();
+}
+
+function hubStateSectionData<T>(state: RegistryHubState, section: RegistryHubStateSectionName): T | undefined {
+  return state.sections[section]?.data as T | undefined;
 }
 
 function base64ToArrayBuffer(value: string): ArrayBuffer {
@@ -478,7 +487,7 @@ export class RegistryRepository {
     };
   }
 
-  private async listSessionsByMethod(projectId: string, method: 'session.list'): Promise<RegistrySessionSummary[]> {
+  private async listSessionsByMethod(projectId: string, method: typeof RegistryMethods.SessionList): Promise<RegistrySessionSummary[]> {
     const resp = await this.client.request({
       method,
       projectId,
@@ -495,7 +504,7 @@ export class RegistryRepository {
     projectId: string,
     sessionId: string,
     afterTurnIndex: number,
-    method: 'session.read',
+    method: typeof RegistryMethods.SessionRead,
   ): Promise<RegistrySessionReadResponse> {
     const resp = await this.client.request({
       method,
@@ -546,7 +555,7 @@ export class RegistryRepository {
     await this.client.connectInit({
       clientName: 'wheelmaker-web',
       clientVersion: '0.1.0',
-      protocolVersion: '2.4',
+      protocolVersion: RegistryProtocolVersion,
       role: 'client',
       token: token?.trim() ?? '',
     });
@@ -562,7 +571,7 @@ export class RegistryRepository {
     await this.client.connect(url);
     const nonce = options.createNonce?.() ?? createLocalReadNonce();
     const proofResp = await this.client.request({
-      method: 'local_read.proof',
+      method: RegistryMethods.ConnectLocalReadProof,
       payload: {
         endpointId: candidate.endpointId,
         nonce,
@@ -578,7 +587,7 @@ export class RegistryRepository {
     await this.client.connectInit({
       clientName: 'wheelmaker-web',
       clientVersion: '0.1.0',
-      protocolVersion: '2.4',
+      protocolVersion: RegistryProtocolVersion,
       role: 'local_read',
       hubId,
       token: token.trim(),
@@ -587,7 +596,7 @@ export class RegistryRepository {
 
   async listProjectSnapshot(): Promise<RegistryProjectListResponse> {
     const resp = await this.client.request({
-      method: 'project.list',
+      method: RegistryMethods.RegistryProjectList,
       payload: {},
     });
     const payload = (resp.payload ?? {}) as { projects?: RegistryProject[]; hubs?: RegistryHub[] };
@@ -660,7 +669,7 @@ export class RegistryRepository {
 
   async uploadDebugLog(payload: RegistryDebugUploadLogPayload): Promise<RegistryDebugUploadLogResponse> {
     const resp = await this.client.request({
-      method: 'debug.uploadLog',
+      method: RegistryMethods.DebugUploadLog,
       payload,
       timeoutMs: 15000,
     });
@@ -673,7 +682,7 @@ export class RegistryRepository {
 
   async getPortRelayStatus(): Promise<RegistryPortRelaySnapshot> {
     const resp = await this.client.request({
-      method: 'relay.status',
+      method: RegistryMethods.RegistryRelayStatus,
       payload: {},
     });
     return (resp.payload ?? {ok: true, enabled: false, status: 'Disabled'}) as RegistryPortRelaySnapshot;
@@ -681,7 +690,7 @@ export class RegistryRepository {
 
   async enablePortRelay(payload: RegistryPortRelayEnablePayload): Promise<RegistryPortRelaySnapshot> {
     const resp = await this.client.request({
-      method: 'relay.enable',
+      method: RegistryMethods.RegistryRelayEnable,
       payload,
       timeoutMs: 15000,
     });
@@ -690,7 +699,7 @@ export class RegistryRepository {
 
   async disablePortRelay(): Promise<RegistryPortRelaySnapshot> {
     const resp = await this.client.request({
-      method: 'relay.disable',
+      method: RegistryMethods.RegistryRelayDisable,
       payload: {},
     });
     return (resp.payload ?? {ok: true, enabled: false, status: 'Disabled'}) as RegistryPortRelaySnapshot;
@@ -698,7 +707,7 @@ export class RegistryRepository {
 
   async regeneratePortRelayAccessCode(accessCode: string): Promise<RegistryPortRelaySnapshot> {
     const resp = await this.client.request({
-      method: 'relay.regenerateAccessCode',
+      method: RegistryMethods.RegistryRelayRegenerateAccessCode,
       payload: {accessCode},
     });
     return (resp.payload ?? {}) as RegistryPortRelaySnapshot;
@@ -706,7 +715,7 @@ export class RegistryRepository {
 
   async syncCheck(projectId: string, payload: RegistrySyncCheckPayload): Promise<RegistrySyncCheckResponse> {
     const resp = await this.client.request({
-      method: 'project.syncCheck',
+      method: RegistryMethods.ProjectSyncCheck,
       projectId,
       payload,
     });
@@ -721,7 +730,7 @@ export class RegistryRepository {
 
   async listFiles(projectId: string, path = '.', knownHash?: string): Promise<RegistryFsListResponse> {
     const resp = await this.client.request({
-      method: 'fs.list',
+      method: RegistryMethods.ProjectFSList,
       projectId,
       payload: knownHash ? {path, knownHash} : {path},
       timeoutMs: 20000,
@@ -749,7 +758,7 @@ export class RegistryRepository {
 
   async getFileInfo(projectId: string, path: string): Promise<RegistryFsInfo> {
     const resp = await this.client.request({
-      method: 'fs.info',
+      method: RegistryMethods.ProjectFSInfo,
       projectId,
       payload: {path},
     });
@@ -776,7 +785,7 @@ export class RegistryRepository {
     options?: {knownHash?: string},
   ): Promise<RegistryFsReadResponse> {
     const resp = await this.client.request({
-      method: 'fs.read',
+      method: RegistryMethods.ProjectFSRead,
       projectId,
       payload: {
         path,
@@ -799,12 +808,11 @@ export class RegistryRepository {
   }
 
   async getFileIndexStatus(hubId: string): Promise<RegistryFileIndexStatusResponse> {
-    const resp = await this.client.request({
-      method: 'fs.index.status',
-      payload: {hubId},
-      timeoutMs: 20000,
-    });
-    const payload = (resp.payload ?? {}) as RegistryFileIndexStatusResponse;
+    const state = await this.refreshHubState(hubId, ['fileIndex']);
+    const payload = hubStateSectionData<RegistryFileIndexStatusResponse>(state, 'fileIndex') ?? {
+      hubId,
+      projects: [],
+    };
     return {
       hubId: payload.hubId ?? hubId,
       projects: Array.isArray(payload.projects) ? payload.projects : [],
@@ -812,13 +820,15 @@ export class RegistryRepository {
   }
 
   async rebuildFileIndex(projectId: string): Promise<RegistryFileIndexRebuildResponse> {
-    const resp = await this.client.request({
-      method: 'fs.index.rebuild',
+    const hubId = hubIdFromProjectId(projectId);
+    const state = await this.runHubStateAction(hubId, 'fileIndex', 'rebuild', {projectId});
+    return hubStateSectionData<RegistryFileIndexRebuildResponse>(state, 'fileIndex') ?? {
+      ok: false,
+      accepted: false,
+      running: false,
       projectId,
-      payload: {},
-      timeoutMs: 20000,
-    });
-    return (resp.payload ?? {ok: false, accepted: false, running: false, projectId, status: 'error'}) as RegistryFileIndexRebuildResponse;
+      status: 'error',
+    };
   }
 
   async searchFileIndex(
@@ -826,7 +836,7 @@ export class RegistryRepository {
     payload: {query: string; querySessionId?: string; queryId?: number; limit?: number},
   ): Promise<RegistryFileIndexSearchResponse> {
     const resp = await this.client.request({
-      method: 'fs.index.search',
+      method: RegistryMethods.ProjectFSIndexSearch,
       projectId,
       payload,
       timeoutMs: 20000,
@@ -855,7 +865,7 @@ export class RegistryRepository {
       .map(item => item.trim())
       .filter(item => item.length > 0);
     const resp = await this.client.request({
-      method: 'git.log',
+      method: RegistryMethods.ProjectGitLog,
       projectId,
       payload: normalizedRefs.length > 0
         ? {ref, refs: normalizedRefs, cursor, limit}
@@ -868,7 +878,7 @@ export class RegistryRepository {
 
   async gitBranches(projectId: string): Promise<{current: string; branches: string[]; remoteBranches: string[]}> {
     const resp = await this.client.request({
-      method: 'git.refs',
+      method: RegistryMethods.ProjectGitRefs,
       projectId,
       payload: {},
       timeoutMs: 20000,
@@ -883,7 +893,7 @@ export class RegistryRepository {
 
   async gitCommitFiles(projectId: string, sha: string): Promise<RegistryGitCommitFile[]> {
     const resp = await this.client.request({
-      method: 'git.commit.files',
+      method: RegistryMethods.ProjectGitCommitFiles,
       projectId,
       payload: { sha },
       timeoutMs: 20000,
@@ -899,7 +909,7 @@ export class RegistryRepository {
     contextLines = 3,
   ): Promise<RegistryGitFileDiff> {
     const resp = await this.client.request({
-      method: 'git.commit.fileDiff',
+      method: RegistryMethods.ProjectGitCommitFileDiff,
       projectId,
       payload: { sha, path, contextLines },
       timeoutMs: 30000,
@@ -916,7 +926,7 @@ export class RegistryRepository {
 
   async gitStatus(projectId: string): Promise<RegistryGitStatus> {
     const resp = await this.client.request({
-      method: 'git.status',
+      method: RegistryMethods.ProjectGitStatus,
       projectId,
       payload: {},
       timeoutMs: 20000,
@@ -938,7 +948,7 @@ export class RegistryRepository {
     contextLines = 3,
   ): Promise<RegistryWorkingTreeFileDiff> {
     const resp = await this.client.request({
-      method: 'git.workingTree.fileDiff',
+      method: RegistryMethods.ProjectGitWorkingTreeFileDiff,
       projectId,
       payload: {path, scope, contextLines},
       timeoutMs: 30000,
@@ -954,16 +964,16 @@ export class RegistryRepository {
   }
 
   async listSessions(projectId: string): Promise<RegistrySessionSummary[]> {
-    return this.listSessionsByMethod(projectId, 'session.list');
+    return this.listSessionsByMethod(projectId, RegistryMethods.SessionList);
   }
 
   async readSession(projectId: string, sessionId: string, afterTurnIndex = 0): Promise<RegistrySessionReadResponse> {
-    return this.readSessionByMethod(projectId, sessionId, afterTurnIndex, 'session.read');
+    return this.readSessionByMethod(projectId, sessionId, afterTurnIndex, RegistryMethods.SessionRead);
   }
 
   async startSessionSearch(projectId: string, searchId: string, query: string): Promise<RegistrySessionSearchStatusResponse> {
     const resp = await this.client.request({
-      method: 'session.search',
+      method: RegistryMethods.SessionSearch,
       projectId,
       payload: {action: 'start', searchId, query},
       timeoutMs: 15000,
@@ -973,7 +983,7 @@ export class RegistryRepository {
 
   async querySessionSearch(projectId: string, searchId: string): Promise<RegistrySessionSearchResponse> {
     const resp = await this.client.request({
-      method: 'session.search',
+      method: RegistryMethods.SessionSearch,
       projectId,
       payload: {action: 'query', searchId},
       timeoutMs: 15000,
@@ -983,7 +993,7 @@ export class RegistryRepository {
 
   async cancelSessionSearch(projectId: string, searchId: string): Promise<RegistrySessionSearchStatusResponse> {
     const resp = await this.client.request({
-      method: 'session.search',
+      method: RegistryMethods.SessionSearch,
       projectId,
       payload: {action: 'cancel', searchId},
       timeoutMs: 15000,
@@ -1000,7 +1010,7 @@ export class RegistryRepository {
       ? Math.max(0, Math.trunc(lastReadTurnIndex))
       : 0;
     const resp = await this.client.request({
-      method: 'session.markRead',
+      method: RegistryMethods.SessionMarkRead,
       projectId,
       payload: {
         sessionId,
@@ -1018,7 +1028,7 @@ export class RegistryRepository {
   async createSession(projectId: string, agentType: string, title?: string): Promise<{ok: boolean; session: RegistrySessionSummary}> {
     agentType = normalizeAgentType(agentType) ?? agentType.trim();
     const resp = await this.client.request({
-      method: 'session.new',
+      method: RegistryMethods.SessionCreate,
       projectId,
       payload: title?.trim() ? {agentType, title: title.trim()} : {agentType},
       timeoutMs: 15000,
@@ -1039,7 +1049,7 @@ export class RegistryRepository {
 
   async sendSessionMessage(projectId: string, payload: {sessionId: string; text?: string; blocks?: RegistrySessionContentBlock[]}): Promise<{ok: boolean; sessionId: string}> {
     const resp = await this.client.request({
-      method: 'session.send',
+      method: RegistryMethods.SessionSend,
       projectId,
       payload,
       timeoutMs: 30000,
@@ -1056,7 +1066,7 @@ export class RegistryRepository {
     payload: RegistrySessionAttachmentStartPayload,
   ): Promise<RegistrySessionAttachmentStartResponse> {
     const resp = await this.client.request({
-      method: 'session.attachment.start',
+      method: RegistryMethods.SessionAttachmentStart,
       projectId,
       payload,
       timeoutMs: 30000,
@@ -1076,7 +1086,7 @@ export class RegistryRepository {
     payload: RegistrySessionAttachmentChunkPayload,
   ): Promise<RegistrySessionAttachmentChunkResponse> {
     const resp = await this.client.request({
-      method: 'session.attachment.chunk',
+      method: RegistryMethods.SessionAttachmentChunk,
       projectId,
       payload,
       timeoutMs: 30000,
@@ -1095,7 +1105,7 @@ export class RegistryRepository {
     payload: RegistrySessionAttachmentFinishPayload,
   ): Promise<RegistrySessionAttachmentFinishResponse> {
     const resp = await this.client.request({
-      method: 'session.attachment.finish',
+      method: RegistryMethods.SessionAttachmentFinish,
       projectId,
       payload,
       timeoutMs: 30000,
@@ -1114,7 +1124,7 @@ export class RegistryRepository {
     payload: RegistrySessionAttachmentCancelPayload,
   ): Promise<RegistrySessionAttachmentCancelResponse> {
     const resp = await this.client.request({
-      method: 'session.attachment.cancel',
+      method: RegistryMethods.SessionAttachmentCancel,
       projectId,
       payload,
       timeoutMs: 15000,
@@ -1132,7 +1142,7 @@ export class RegistryRepository {
     payload: RegistrySessionAttachmentDeletePayload,
   ): Promise<RegistrySessionAttachmentDeleteResponse> {
     const resp = await this.client.request({
-      method: 'session.attachment.delete',
+      method: RegistryMethods.SessionAttachmentDelete,
       projectId,
       payload,
       timeoutMs: 15000,
@@ -1147,7 +1157,7 @@ export class RegistryRepository {
 
   async cancelSession(projectId: string, sessionId: string): Promise<{ok: boolean; sessionId: string}> {
     const resp = await this.client.request({
-      method: 'session.cancel',
+      method: RegistryMethods.SessionCancel,
       projectId,
       payload: {sessionId},
       timeoutMs: 15000,
@@ -1161,7 +1171,7 @@ export class RegistryRepository {
 
   async archiveSession(projectId: string, sessionId: string): Promise<{ok: boolean; sessionId: string; warning?: string}> {
     const resp = await this.client.request({
-      method: 'session.archive',
+      method: RegistryMethods.SessionArchive,
       projectId,
       payload: {sessionId},
       timeoutMs: 30000,
@@ -1176,7 +1186,7 @@ export class RegistryRepository {
 
   async listArchivedSessions(projectId: string): Promise<RegistryArchivedSessionSummary[]> {
     const resp = await this.client.request({
-      method: 'session.archive.list',
+      method: RegistryMethods.SessionArchiveList,
       projectId,
       payload: {},
       timeoutMs: 15000,
@@ -1189,7 +1199,7 @@ export class RegistryRepository {
 
   async readArchivedSession(projectId: string, sessionId: string): Promise<RegistrySessionArchiveReadResponse> {
     const resp = await this.client.request({
-      method: 'session.archive.read',
+      method: RegistryMethods.SessionArchiveRead,
       projectId,
       payload: {sessionId},
       timeoutMs: 15000,
@@ -1232,7 +1242,7 @@ export class RegistryRepository {
 
   async restoreArchivedSession(projectId: string, sessionId: string): Promise<RegistrySessionArchiveRestoreResponse> {
     const resp = await this.client.request({
-      method: 'session.archive.restore',
+      method: RegistryMethods.SessionArchiveRestore,
       projectId,
       payload: {sessionId},
       timeoutMs: 30000,
@@ -1254,7 +1264,7 @@ export class RegistryRepository {
 
   async deleteSession(projectId: string, sessionId: string): Promise<{ok: boolean; sessionId: string}> {
     const resp = await this.client.request({
-      method: 'session.delete',
+      method: RegistryMethods.SessionDelete,
       projectId,
       payload: {sessionId},
       timeoutMs: 30000,
@@ -1268,7 +1278,7 @@ export class RegistryRepository {
 
   async renameSession(projectId: string, sessionId: string, title: string): Promise<{ok: boolean; sessionId: string; session: RegistrySessionSummary}> {
     const resp = await this.client.request({
-      method: 'session.rename',
+      method: RegistryMethods.SessionRename,
       projectId,
       payload: {sessionId, title},
       timeoutMs: 15000,
@@ -1293,7 +1303,7 @@ export class RegistryRepository {
     payload: {sessionId: string; configId: string; value: string},
   ): Promise<{ok: boolean; sessionId: string; configOptions: RegistrySessionConfigOption[]}> {
     const resp = await this.client.request({
-      method: 'session.setConfig',
+      method: RegistryMethods.SessionConfig,
       projectId,
       payload,
       timeoutMs: 15000,
@@ -1316,7 +1326,7 @@ export class RegistryRepository {
   async listResumableSessions(projectId: string, agentType: string): Promise<RegistryResumableSession[]> {
     agentType = normalizeAgentType(agentType) ?? agentType.trim();
     const resp = await this.client.request({
-      method: 'session.resume.list',
+      method: RegistryMethods.SessionResumeList,
       projectId,
       payload: {agentType},
       timeoutMs: 15000,
@@ -1328,7 +1338,7 @@ export class RegistryRepository {
   async importResumedSession(projectId: string, agentType: string, sessionId: string): Promise<{ok: boolean; session: RegistrySessionSummary}> {
     agentType = normalizeAgentType(agentType) ?? agentType.trim();
     const resp = await this.client.request({
-      method: 'session.resume.import',
+      method: RegistryMethods.SessionResumeImport,
       projectId,
       payload: {agentType, sessionId},
       timeoutMs: 15000,
@@ -1349,7 +1359,7 @@ export class RegistryRepository {
 
   async reloadSession(projectId: string, sessionId: string): Promise<{ok: boolean; sessionId: string}> {
     const resp = await this.client.request({
-      method: 'session.reload',
+      method: RegistryMethods.SessionReload,
       projectId,
       payload: {sessionId},
       timeoutMs: 30000,
@@ -1362,13 +1372,9 @@ export class RegistryRepository {
   }
 
   async listTokenProviders(projectId: string): Promise<RegistryTokenProvider[]> {
-    const resp = await this.client.request({
-      method: 'session.token.providers',
-      projectId,
-      payload: {},
-      timeoutMs: 15000,
-    });
-    const payload = (resp.payload ?? {}) as {providers?: unknown[]};
+    const hubId = hubIdFromProjectId(projectId);
+    const state = await this.runHubStateAction(hubId, 'tokenStats', 'providers');
+    const payload = hubStateSectionData<{providers?: unknown[]}>(state, 'tokenStats') ?? {};
     return (Array.isArray(payload.providers) ? payload.providers : [])
       .map(item => {
         if (!item || typeof item !== 'object') return null;
@@ -1388,13 +1394,19 @@ export class RegistryRepository {
     projectId: string,
     payload: {apiKey: string; rangeType?: 'day' | 'month'; month?: string},
   ): Promise<RegistryDeepSeekTokenStats> {
-    const resp = await this.client.request({
-      method: 'session.token.deepseek.stats',
-      projectId,
-      payload,
-      timeoutMs: 30000,
-    });
-    return (resp.payload ?? {}) as RegistryDeepSeekTokenStats;
+    const hubId = hubIdFromProjectId(projectId);
+    const state = await this.runHubStateAction(hubId, 'tokenStats', 'deepseekStats', payload);
+    return hubStateSectionData<RegistryDeepSeekTokenStats>(state, 'tokenStats') ?? {
+      ok: false,
+      provider: 'deepseek',
+      rangeType: payload.rangeType ?? 'day',
+      month: payload.month ?? '',
+      updatedAt: '',
+      balance: {isAvailable: false, items: []},
+      usage: {rangeType: payload.rangeType ?? 'day', month: payload.month ?? '', rows: []},
+      usageUnavailable: true,
+      usageMessage: 'missing hub state response',
+    };
   }
 
   async getHubState(hubId: string, sections?: RegistryHubStateSectionName[]): Promise<RegistryHubState> {
@@ -1440,130 +1452,116 @@ export class RegistryRepository {
   }
 
   async scanTokenStats(hubId: string): Promise<RegistryTokenScanResult> {
-    const resp = await this.client.request({
-      method: 'cmd.token',
-      payload: {action: 'scan', hubId},
-      timeoutMs: 45000,
-    });
-    return (resp.payload ?? {}) as RegistryTokenScanResult;
+    const state = await this.refreshHubState(hubId, ['tokenStats']);
+    return hubStateSectionData<RegistryTokenScanResult>(state, 'tokenStats') ?? {
+      ok: false,
+      updatedAt: '',
+      providers: [],
+    };
   }
 
   async scanNpmPackages(hubId: string): Promise<RegistryNpmCommandResponse> {
-    const resp = await this.client.request({
-      method: 'cmd.npm',
-      payload: {action: 'scan', hubId},
-      timeoutMs: 60000,
-    });
-    return normalizeNpmCommandResponse(resp.payload, hubId);
+    const state = await this.refreshHubState(hubId, ['agentPackages']);
+    return normalizeNpmCommandResponse(hubStateSectionData(state, 'agentPackages'), hubId);
   }
 
   async installNpmPackage(hubId: string, packageName: string, version = 'latest'): Promise<RegistryNpmCommandResponse> {
-    const resp = await this.client.request({
-      method: 'cmd.npm',
-      payload: {
-        action: 'install',
-        hubId,
-        packageName,
-        version,
-      },
+    const state = await this.runHubStateAction(hubId, 'agentPackages', 'install', {
+      packageName,
+      version,
     });
-    return normalizeNpmCommandResponse(resp.payload, hubId);
+    return normalizeNpmCommandResponse(hubStateSectionData(state, 'agentPackages'), hubId);
   }
 
   async installNpmPackages(hubId: string, packageNames: string[], version = 'latest'): Promise<RegistryNpmCommandResponse> {
-    const resp = await this.client.request({
-      method: 'cmd.npm',
-      payload: {
-        action: 'install_many',
-        hubId,
-        packageNames,
-        version,
-      },
+    const state = await this.runHubStateAction(hubId, 'agentPackages', 'installMany', {
+      packageNames,
+      version,
     });
-    return normalizeNpmCommandResponse(resp.payload, hubId);
+    return normalizeNpmCommandResponse(hubStateSectionData(state, 'agentPackages'), hubId);
   }
 
   async uninstallNpmPackage(hubId: string, packageName: string): Promise<RegistryNpmCommandResponse> {
-    const resp = await this.client.request({
-      method: 'cmd.npm',
-      payload: {
-        action: 'uninstall',
-        hubId,
-        packageName,
-      },
-    });
-    return normalizeNpmCommandResponse(resp.payload, hubId);
+    const state = await this.runHubStateAction(hubId, 'agentPackages', 'uninstall', {packageName});
+    return normalizeNpmCommandResponse(hubStateSectionData(state, 'agentPackages'), hubId);
   }
 
   async queryWheelMakerUpdate(hubId: string, options: QueryWheelMakerUpdateOptions = {}): Promise<RegistryWheelMakerUpdateResponse> {
-    const payload: {action: 'query'; hubId: string; force?: boolean} = {action: 'query', hubId};
-    if (options.force === true) {
-      payload.force = true;
-    }
-    const resp = await this.client.request({
-      method: 'cmd.update',
-      payload,
-      timeoutMs: 60000,
-    });
-    return (resp.payload ?? {}) as RegistryWheelMakerUpdateResponse;
+    const state = await this.refreshHubState(hubId, ['wheelmakerUpdate'], options);
+    return hubStateSectionData<RegistryWheelMakerUpdateResponse>(state, 'wheelmakerUpdate') ?? {
+      ok: false,
+      status: 'checking_failed',
+      hubId,
+      pendingSignal: false,
+      canUpdatePublish: false,
+      error: 'missing hub state response',
+    };
   }
 
   async requestWheelMakerUpdatePublish(hubId: string): Promise<RegistryWheelMakerUpdateResponse> {
-    const resp = await this.client.request({
-      method: 'cmd.update',
-      payload: {action: 'update-publish', hubId},
-    });
-    return (resp.payload ?? {}) as RegistryWheelMakerUpdateResponse;
+    const state = await this.runHubStateAction(hubId, 'wheelmakerUpdate', 'updatePublish');
+    return hubStateSectionData<RegistryWheelMakerUpdateResponse>(state, 'wheelmakerUpdate') ?? {
+      ok: false,
+      status: 'checking_failed',
+      hubId,
+      pendingSignal: false,
+      canUpdatePublish: false,
+      error: 'missing hub state response',
+    };
   }
 
   async scanSkills(hubId: string): Promise<RegistrySkillCommandResponse> {
-    const resp = await this.client.request({
-      method: 'cmd.skills',
-      payload: {action: 'scan', hubId},
-      timeoutMs: 60000,
-    });
-    return (resp.payload ?? {}) as RegistrySkillCommandResponse;
+    const state = await this.refreshHubState(hubId, ['skills']);
+    return hubStateSectionData<RegistrySkillCommandResponse>(state, 'skills') ?? {
+      ok: false,
+      hubId,
+      errorSummary: 'missing hub state response',
+    };
   }
 
   async listSkillsSource(hubId: string, source: string): Promise<RegistrySkillCommandResponse> {
-    const resp = await this.client.request({
-      method: 'cmd.skills',
-      payload: {action: 'list', hubId, source},
-      timeoutMs: 60000,
-    });
-    return (resp.payload ?? {}) as RegistrySkillCommandResponse;
+    const state = await this.runHubStateAction(hubId, 'skills', 'listSource', {source});
+    return hubStateSectionData<RegistrySkillCommandResponse>(state, 'skills') ?? {
+      ok: false,
+      hubId,
+      source,
+      errorSummary: 'missing hub state response',
+    };
   }
 
   async installSkills(payload: RegistrySkillInstallPayload): Promise<RegistrySkillCommandResponse> {
-    const resp = await this.client.request({
-      method: 'cmd.skills',
-      payload: {action: 'install', ...payload},
-      timeoutMs: 60000,
-    });
-    return (resp.payload ?? {}) as RegistrySkillCommandResponse;
+    const {hubId, ...params} = payload;
+    const state = await this.runHubStateAction(hubId, 'skills', 'install', params);
+    return hubStateSectionData<RegistrySkillCommandResponse>(state, 'skills') ?? {
+      ok: false,
+      hubId,
+      errorSummary: 'missing hub state response',
+    };
   }
 
   async uninstallSkills(payload: RegistrySkillScopePayload): Promise<RegistrySkillCommandResponse> {
-    const resp = await this.client.request({
-      method: 'cmd.skills',
-      payload: {action: 'uninstall', ...payload},
-      timeoutMs: 60000,
-    });
-    return (resp.payload ?? {}) as RegistrySkillCommandResponse;
+    const {hubId, ...params} = payload;
+    const state = await this.runHubStateAction(hubId, 'skills', 'uninstall', params);
+    return hubStateSectionData<RegistrySkillCommandResponse>(state, 'skills') ?? {
+      ok: false,
+      hubId,
+      errorSummary: 'missing hub state response',
+    };
   }
 
   async updateSkills(payload: RegistrySkillScopePayload): Promise<RegistrySkillCommandResponse> {
-    const resp = await this.client.request({
-      method: 'cmd.skills',
-      payload: {action: 'update', ...payload},
-      timeoutMs: 60000,
-    });
-    return (resp.payload ?? {}) as RegistrySkillCommandResponse;
+    const {hubId, ...params} = payload;
+    const state = await this.runHubStateAction(hubId, 'skills', 'update', params);
+    return hubStateSectionData<RegistrySkillCommandResponse>(state, 'skills') ?? {
+      ok: false,
+      hubId,
+      errorSummary: 'missing hub state response',
+    };
   }
 
   async startSpeech(payload: RegistrySpeechStartPayload): Promise<RegistrySpeechStartResponse> {
     const resp = await this.client.request({
-      method: 'speech.start',
+      method: RegistryMethods.SpeechStart,
       payload,
       timeoutMs: 15000,
     });
@@ -1572,7 +1570,7 @@ export class RegistryRepository {
 
   async sendSpeechChunk(payload: RegistrySpeechChunkPayload): Promise<void> {
     await this.client.request({
-      method: 'speech.chunk',
+      method: RegistryMethods.SpeechChunk,
       payload,
       timeoutMs: 8000,
     });
@@ -1580,7 +1578,7 @@ export class RegistryRepository {
 
   async finishSpeech(payload: RegistrySpeechFinishPayload): Promise<void> {
     await this.client.request({
-      method: 'speech.finish',
+      method: RegistryMethods.SpeechFinish,
       payload,
       timeoutMs: 15000,
     });
@@ -1588,7 +1586,7 @@ export class RegistryRepository {
 
   async cancelSpeech(payload: RegistrySpeechCancelPayload): Promise<void> {
     await this.client.request({
-      method: 'speech.cancel',
+      method: RegistryMethods.SpeechCancel,
       payload,
       timeoutMs: 8000,
     });

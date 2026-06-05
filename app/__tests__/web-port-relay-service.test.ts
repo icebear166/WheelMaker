@@ -1,8 +1,9 @@
 import {RegistryRepository} from '../web/src/registry/RegistryRepository';
 import type {RegistryClient} from '../web/src/registry/RegistryClient';
+import {RegistryMethods} from '../web/src/registry/registryMethods';
 
 describe('port relay registry service', () => {
-  test('sends relay.status without project scope', async () => {
+  test('sends registry relay status without project scope', async () => {
     const client = {
       request: jest.fn().mockResolvedValue({
         type: 'response',
@@ -15,12 +16,12 @@ describe('port relay registry service', () => {
 
     expect(result.status).toBe('Disabled');
     expect(client.request).toHaveBeenCalledWith({
-      method: 'relay.status',
+      method: RegistryMethods.RegistryRelayStatus,
       payload: {},
     });
   });
 
-  test('sends relay.enable with explicit hub target and access code', async () => {
+  test('sends registry relay enable with explicit hub target and access code', async () => {
     const client = {
       request: jest.fn().mockResolvedValue({
         type: 'response',
@@ -49,7 +50,7 @@ describe('port relay registry service', () => {
 
     expect(result.enabled).toBe(true);
     expect(client.request).toHaveBeenCalledWith({
-      method: 'relay.enable',
+      method: RegistryMethods.RegistryRelayEnable,
       payload: {
         listenPort: 28810,
         hubId: 'hub-a',
@@ -61,7 +62,7 @@ describe('port relay registry service', () => {
     });
   });
 
-  test('sends relay.disable and regenerateAccessCode', async () => {
+  test('sends registry relay disable and regenerateAccessCode', async () => {
     const client = {
       request: jest.fn().mockResolvedValue({
         type: 'response',
@@ -74,11 +75,11 @@ describe('port relay registry service', () => {
     await repository.regeneratePortRelayAccessCode('111222');
 
     expect(client.request).toHaveBeenNthCalledWith(1, {
-      method: 'relay.disable',
+      method: RegistryMethods.RegistryRelayDisable,
       payload: {},
     });
     expect(client.request).toHaveBeenNthCalledWith(2, {
-      method: 'relay.regenerateAccessCode',
+      method: RegistryMethods.RegistryRelayRegenerateAccessCode,
       payload: {accessCode: '111222'},
     });
   });
