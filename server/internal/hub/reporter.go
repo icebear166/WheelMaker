@@ -328,7 +328,6 @@ func (r *Reporter) UpdateProject(project ProjectInfo) error {
 	}
 
 	updatePayload := map[string]any{
-		"hubId":           r.cfg.HubID,
 		"connectionEpoch": connectionEpoch,
 		"seq":             seq,
 		"project":         project,
@@ -348,7 +347,8 @@ func (r *Reporter) UpdateProject(project ProjectInfo) error {
 	if err := r.writeJSON(conn, "->", envelope{
 		RequestID: requestID,
 		Type:      rp.RegistryEnvelopeTypeRequest,
-		Method:    rp.RegistryMethodRegistryUpdateProject,
+		Method:    rp.RegistryMethodHubReportProject,
+		HubID:     r.cfg.HubID,
 		Payload:   rp.MustRaw(updatePayload),
 	}); err != nil {
 		r.mu.Lock()
@@ -436,16 +436,15 @@ func (r *Reporter) runSession(ctx context.Context) error {
 func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 	switch in.Method {
 	case rp.RegistryMethodSessionList, rp.RegistryMethodSessionRead, rp.RegistryMethodSessionSearch,
-		rp.RegistryMethodSessionNew, rp.RegistryMethodSessionResumeList, rp.RegistryMethodSessionResumeImport,
+		rp.RegistryMethodSessionCreate, rp.RegistryMethodSessionResumeList, rp.RegistryMethodSessionResumeImport,
 		rp.RegistryMethodSessionReload, rp.RegistryMethodSessionArchive,
 		rp.RegistryMethodSessionArchiveList, rp.RegistryMethodSessionArchiveRead, rp.RegistryMethodSessionArchiveRestore,
 		rp.RegistryMethodSessionDelete,
 		rp.RegistryMethodSessionRename, rp.RegistryMethodSessionSend, rp.RegistryMethodSessionCancel,
-		rp.RegistryMethodSessionMarkRead, rp.RegistryMethodSessionSetConfig,
+		rp.RegistryMethodSessionMarkRead, rp.RegistryMethodSessionConfig,
 		rp.RegistryMethodSessionAttachmentStart, rp.RegistryMethodSessionAttachmentChunk,
 		rp.RegistryMethodSessionAttachmentFinish, rp.RegistryMethodSessionAttachmentCancel,
-		rp.RegistryMethodSessionAttachmentDelete, rp.RegistryMethodSessionTokenProviders,
-		rp.RegistryMethodSessionTokenDeepSeekStats, rp.RegistryMethodSessionTokenScan:
+		rp.RegistryMethodSessionAttachmentDelete:
 		r.replySession(conn, in)
 	case rp.RegistryMethodMonitorStatus:
 		r.replyMonitorStatus(conn, in)
@@ -455,19 +454,9 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 		r.replyMonitorDB(conn, in)
 	case rp.RegistryMethodMonitorAction:
 		r.replyMonitorAction(conn, in)
-	case rp.RegistryMethodCmdNPM:
-		r.replyCmdNPM(conn, in)
-	case rp.RegistryMethodCmdUpdate:
-		r.replyCmdUpdate(conn, in)
-	case rp.RegistryMethodCmdSkills:
-		r.replyCmdSkills(conn, in)
-	case rp.RegistryMethodCmdToken:
-		r.replyCmdToken(conn, in)
-	case rp.RegistryMethodFSIndexStatus:
-		r.replyFSIndexStatus(conn, in)
-	case rp.RegistryMethodRelayOpen:
+	case rp.RegistryMethodHubRelayOpen:
 		r.replyRelayOpen(conn, in)
-	case rp.RegistryMethodRelayClose:
+	case rp.RegistryMethodHubRelayClose:
 		r.replyRelayClose(conn, in)
 	case rp.RegistryMethodHubStateGet:
 		r.replyHubStateGet(conn, in)
@@ -475,35 +464,33 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 		r.replyHubStateRefresh(conn, in)
 	case rp.RegistryMethodHubStateAction:
 		r.replyHubStateAction(conn, in)
-	case rp.RegistryMethodFSList:
+	case rp.RegistryMethodProjectFSList:
 		r.replyFSList(conn, in)
-	case rp.RegistryMethodFSInfo:
+	case rp.RegistryMethodProjectFSInfo:
 		r.replyFSInfo(conn, in)
-	case rp.RegistryMethodFSRead:
+	case rp.RegistryMethodProjectFSRead:
 		r.replyFSRead(conn, in)
-	case rp.RegistryMethodFSSearch:
+	case rp.RegistryMethodProjectFSSearch:
 		r.replyFSSearch(conn, in)
-	case rp.RegistryMethodFSGrep:
+	case rp.RegistryMethodProjectFSGrep:
 		r.replyFSGrep(conn, in)
-	case rp.RegistryMethodFSIndexRebuild:
-		r.replyFSIndexRebuild(conn, in)
-	case rp.RegistryMethodFSIndexSearch:
+	case rp.RegistryMethodProjectFSIndexSearch:
 		r.replyFSIndexSearch(conn, in)
-	case rp.RegistryMethodGitRefs, rp.RegistryMethodGitBranchesLegacy:
+	case rp.RegistryMethodProjectGitRefs:
 		r.replyGitRefs(conn, in)
-	case rp.RegistryMethodGitLog:
+	case rp.RegistryMethodProjectGitLog:
 		r.replyGitLog(conn, in)
-	case rp.RegistryMethodGitCommitFiles:
+	case rp.RegistryMethodProjectGitCommitFiles:
 		r.replyGitCommitFiles(conn, in)
-	case rp.RegistryMethodGitCommitFileDiff:
+	case rp.RegistryMethodProjectGitCommitFileDiff:
 		r.replyGitCommitFileDiff(conn, in)
-	case rp.RegistryMethodGitDiff:
+	case rp.RegistryMethodProjectGitDiff:
 		r.replyGitDiff(conn, in)
-	case rp.RegistryMethodGitDiffFileDiff:
+	case rp.RegistryMethodProjectGitDiffFileDiff:
 		r.replyGitDiffFileDiff(conn, in)
-	case rp.RegistryMethodGitStatus:
+	case rp.RegistryMethodProjectGitStatus:
 		r.replyGitStatus(conn, in)
-	case rp.RegistryMethodGitWorkingTreeFileDiff:
+	case rp.RegistryMethodProjectGitWorkingTreeFileDiff:
 		r.replyGitWorkingTreeFileDiff(conn, in)
 	default:
 		_ = r.writeJSON(conn, "->", envelope{
@@ -636,7 +623,7 @@ func (r *Reporter) ensureHubStateManager() *HubStateManager {
 func (r *Reporter) replyRelayOpen(conn *websocket.Conn, req envelope) {
 	var payload rp.RelayOpenPayload
 	if err := decodePayload(req.Payload, &payload); err != nil {
-		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid relay.open payload")
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid hub.relay.open payload")
 		return
 	}
 	if r.relayClient == nil {
@@ -765,7 +752,6 @@ func (r *Reporter) handshake(conn *websocket.Conn) error {
 	registryLogger("").Info("connect.init ok epoch=%d", initResp.Principal.ConnectionEpoch)
 
 	reportPayload := map[string]any{
-		"hubId":           r.cfg.HubID,
 		"connectionEpoch": initResp.Principal.ConnectionEpoch,
 		"projects":        projects,
 	}
@@ -776,13 +762,14 @@ func (r *Reporter) handshake(conn *websocket.Conn) error {
 	if err := r.writeJSON(conn, "->", envelope{
 		RequestID: 2,
 		Type:      rp.RegistryEnvelopeTypeRequest,
-		Method:    rp.RegistryMethodRegistryReportProjects,
+		Method:    rp.RegistryMethodHubReportProjects,
+		HubID:     r.cfg.HubID,
 		Payload:   rp.MustRaw(reportPayload),
 	}); err != nil {
 		return err
 	}
 	if _, err := r.readAck(conn); err != nil {
-		return fmt.Errorf("registry.reportProjects failed: %w", err)
+		return fmt.Errorf("hub.report.projects failed: %w", err)
 	}
 	registryLogger("").Info("reportProjects ok hubId=%s projects=%d", r.cfg.HubID, len(r.projects))
 	return nil
@@ -885,12 +872,12 @@ func (r *Reporter) handleLocalReadWS(w http.ResponseWriter, req *http.Request) {
 
 		if !state.initialized {
 			switch in.Method {
-			case rp.RegistryMethodLocalReadProof:
+			case rp.RegistryMethodConnectLocalReadProof:
 				r.handleLocalReadProof(conn, state, in)
 			case rp.RegistryMethodConnectInit:
 				r.handleLocalReadConnectInit(conn, state, in)
 			default:
-				_ = r.writeLocalReadError(conn, in.RequestID, in.Method, codeUnauthorized, "local_read.proof required", nil)
+				_ = r.writeLocalReadError(conn, in.RequestID, in.Method, codeUnauthorized, "connect.localRead.proof required", nil)
 			}
 			continue
 		}
@@ -906,7 +893,7 @@ func (r *Reporter) handleLocalReadWS(w http.ResponseWriter, req *http.Request) {
 func (r *Reporter) handleLocalReadProof(conn *websocket.Conn, state *localReadConnectionState, in envelope) {
 	var payload localReadProofPayload
 	if err := decodePayload(in.Payload, &payload); err != nil {
-		_ = r.writeLocalReadError(conn, in.RequestID, in.Method, codeInvalidArgument, "invalid local_read.proof payload", nil)
+		_ = r.writeLocalReadError(conn, in.RequestID, in.Method, codeInvalidArgument, "invalid connect.localRead.proof payload", nil)
 		return
 	}
 	endpointID := strings.TrimSpace(payload.EndpointID)
@@ -948,7 +935,7 @@ func (r *Reporter) handleLocalReadProof(conn *websocket.Conn, state *localReadCo
 
 func (r *Reporter) handleLocalReadConnectInit(conn *websocket.Conn, state *localReadConnectionState, in envelope) {
 	if !state.proved {
-		_ = r.writeLocalReadError(conn, in.RequestID, in.Method, codeUnauthorized, "local_read.proof required", nil)
+		_ = r.writeLocalReadError(conn, in.RequestID, in.Method, codeUnauthorized, "connect.localRead.proof required", nil)
 		return
 	}
 	var payload rp.ConnectInitPayload
@@ -998,7 +985,7 @@ func (r *Reporter) handleLocalReadConnectInit(conn *websocket.Conn, state *local
 
 func (r *Reporter) handleLocalReadRequest(conn *websocket.Conn, in envelope) {
 	switch in.Method {
-	case rp.RegistryMethodProjectList:
+	case rp.RegistryMethodRegistryProjectList:
 		_ = r.writeJSON(conn, "->", envelope{
 			RequestID: in.RequestID,
 			Type:      rp.RegistryEnvelopeTypeResponse,
@@ -1007,35 +994,33 @@ func (r *Reporter) handleLocalReadRequest(conn *websocket.Conn, in envelope) {
 		})
 	case rp.RegistryMethodProjectSyncCheck:
 		r.replyLocalReadProjectSyncCheck(conn, in)
-	case rp.RegistryMethodFSList:
+	case rp.RegistryMethodProjectFSList:
 		r.replyFSList(conn, in)
-	case rp.RegistryMethodFSInfo:
+	case rp.RegistryMethodProjectFSInfo:
 		r.replyFSInfo(conn, in)
-	case rp.RegistryMethodFSRead:
+	case rp.RegistryMethodProjectFSRead:
 		r.replyFSRead(conn, in)
-	case rp.RegistryMethodFSSearch:
+	case rp.RegistryMethodProjectFSSearch:
 		r.replyFSSearch(conn, in)
-	case rp.RegistryMethodFSGrep:
+	case rp.RegistryMethodProjectFSGrep:
 		r.replyFSGrep(conn, in)
-	case rp.RegistryMethodFSIndexRebuild:
-		r.replyFSIndexRebuild(conn, in)
-	case rp.RegistryMethodFSIndexSearch:
+	case rp.RegistryMethodProjectFSIndexSearch:
 		r.replyFSIndexSearch(conn, in)
-	case rp.RegistryMethodGitRefs:
+	case rp.RegistryMethodProjectGitRefs:
 		r.replyGitRefs(conn, in)
-	case rp.RegistryMethodGitLog:
+	case rp.RegistryMethodProjectGitLog:
 		r.replyGitLog(conn, in)
-	case rp.RegistryMethodGitCommitFiles:
+	case rp.RegistryMethodProjectGitCommitFiles:
 		r.replyGitCommitFiles(conn, in)
-	case rp.RegistryMethodGitCommitFileDiff:
+	case rp.RegistryMethodProjectGitCommitFileDiff:
 		r.replyGitCommitFileDiff(conn, in)
-	case rp.RegistryMethodGitDiff:
+	case rp.RegistryMethodProjectGitDiff:
 		r.replyGitDiff(conn, in)
-	case rp.RegistryMethodGitDiffFileDiff:
+	case rp.RegistryMethodProjectGitDiffFileDiff:
 		r.replyGitDiffFileDiff(conn, in)
-	case rp.RegistryMethodGitStatus:
+	case rp.RegistryMethodProjectGitStatus:
 		r.replyGitStatus(conn, in)
-	case rp.RegistryMethodGitWorkingTreeFileDiff:
+	case rp.RegistryMethodProjectGitWorkingTreeFileDiff:
 		r.replyGitWorkingTreeFileDiff(conn, in)
 	default:
 		_ = r.writeLocalReadError(conn, in.RequestID, in.Method, codeInvalidArgument, "unsupported method on local read endpoint", map[string]any{"method": in.Method})
@@ -1198,7 +1183,7 @@ func (r *Reporter) replyFSList(conn *websocket.Conn, req envelope) {
 	}
 	var payload fsListPayload
 	if err := decodePayload(req.Payload, &payload); err != nil {
-		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid fs.list payload")
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid project.fs.list payload")
 		return
 	}
 	root, err := r.projectRoot(req.ProjectID)
@@ -1457,7 +1442,7 @@ func (r *Reporter) replyFSRead(conn *websocket.Conn, req envelope) {
 	}
 	var payload fsReadPayload
 	if err := decodePayload(req.Payload, &payload); err != nil {
-		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid fs.read payload")
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid project.fs.read payload")
 		return
 	}
 	root, err := r.projectRoot(req.ProjectID)

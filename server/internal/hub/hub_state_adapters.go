@@ -4,8 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+)
 
-	rp "github.com/swm8023/wheelmaker/internal/protocol"
+const (
+	hubToolMethodNPM    = "cmd.npm"
+	hubToolMethodUpdate = "cmd.update"
+	hubToolMethodSkills = "cmd.skills"
+	hubToolMethodToken  = "cmd.token"
 )
 
 func (r *Reporter) hubStateSectionHandlers() map[string]hubStateSectionHandler {
@@ -33,7 +38,7 @@ func (r *Reporter) hubStateSectionHandlers() map[string]hubStateSectionHandler {
 }
 
 func (r *Reporter) refreshHubStateAgentPackages(ctx context.Context, input hubStateRefreshInput) (any, error) {
-	return r.runHubStateTool(ctx, rp.RegistryMethodCmdNPM, map[string]any{
+	return r.runHubStateTool(ctx, hubToolMethodNPM, map[string]any{
 		"action": "scan",
 		"hubId":  input.HubID,
 	})
@@ -42,18 +47,18 @@ func (r *Reporter) refreshHubStateAgentPackages(ctx context.Context, input hubSt
 func (r *Reporter) actionHubStateAgentPackages(ctx context.Context, action string, params map[string]any) (any, error) {
 	switch action {
 	case "install":
-		return r.runHubStateTool(ctx, rp.RegistryMethodCmdNPM, hubStateToolPayload(r.cfg.HubID, "install", params))
+		return r.runHubStateTool(ctx, hubToolMethodNPM, hubStateToolPayload(r.cfg.HubID, "install", params))
 	case "installMany":
-		return r.runHubStateTool(ctx, rp.RegistryMethodCmdNPM, hubStateToolPayload(r.cfg.HubID, "install_many", params))
+		return r.runHubStateTool(ctx, hubToolMethodNPM, hubStateToolPayload(r.cfg.HubID, "install_many", params))
 	case "uninstall":
-		return r.runHubStateTool(ctx, rp.RegistryMethodCmdNPM, hubStateToolPayload(r.cfg.HubID, "uninstall", params))
+		return r.runHubStateTool(ctx, hubToolMethodNPM, hubStateToolPayload(r.cfg.HubID, "uninstall", params))
 	default:
 		return nil, fmt.Errorf("unsupported %s action %q", hubStateSectionAgentPackages, action)
 	}
 }
 
 func (r *Reporter) refreshHubStateWheelmakerUpdate(ctx context.Context, input hubStateRefreshInput) (any, error) {
-	return r.runHubStateTool(ctx, rp.RegistryMethodCmdUpdate, map[string]any{
+	return r.runHubStateTool(ctx, hubToolMethodUpdate, map[string]any{
 		"action": "query",
 		"hubId":  input.HubID,
 		"force":  input.Force,
@@ -63,14 +68,14 @@ func (r *Reporter) refreshHubStateWheelmakerUpdate(ctx context.Context, input hu
 func (r *Reporter) actionHubStateWheelmakerUpdate(ctx context.Context, action string, params map[string]any) (any, error) {
 	switch action {
 	case "updatePublish":
-		return r.runHubStateTool(ctx, rp.RegistryMethodCmdUpdate, hubStateToolPayload(r.cfg.HubID, "update-publish", params))
+		return r.runHubStateTool(ctx, hubToolMethodUpdate, hubStateToolPayload(r.cfg.HubID, "update-publish", params))
 	default:
 		return nil, fmt.Errorf("unsupported %s action %q", hubStateSectionWheelmakerUpdate, action)
 	}
 }
 
 func (r *Reporter) refreshHubStateSkills(ctx context.Context, input hubStateRefreshInput) (any, error) {
-	return r.runHubStateTool(ctx, rp.RegistryMethodCmdSkills, map[string]any{
+	return r.runHubStateTool(ctx, hubToolMethodSkills, map[string]any{
 		"action": "scan",
 		"hubId":  input.HubID,
 	})
@@ -79,20 +84,20 @@ func (r *Reporter) refreshHubStateSkills(ctx context.Context, input hubStateRefr
 func (r *Reporter) actionHubStateSkills(ctx context.Context, action string, params map[string]any) (any, error) {
 	switch action {
 	case "listSource":
-		return r.runHubStateTool(ctx, rp.RegistryMethodCmdSkills, hubStateToolPayload(r.cfg.HubID, "list", params))
+		return r.runHubStateTool(ctx, hubToolMethodSkills, hubStateToolPayload(r.cfg.HubID, "list", params))
 	case "install":
-		return r.runHubStateTool(ctx, rp.RegistryMethodCmdSkills, hubStateToolPayload(r.cfg.HubID, "install", params))
+		return r.runHubStateTool(ctx, hubToolMethodSkills, hubStateToolPayload(r.cfg.HubID, "install", params))
 	case "uninstall":
-		return r.runHubStateTool(ctx, rp.RegistryMethodCmdSkills, hubStateToolPayload(r.cfg.HubID, "uninstall", params))
+		return r.runHubStateTool(ctx, hubToolMethodSkills, hubStateToolPayload(r.cfg.HubID, "uninstall", params))
 	case "update":
-		return r.runHubStateTool(ctx, rp.RegistryMethodCmdSkills, hubStateToolPayload(r.cfg.HubID, "update", params))
+		return r.runHubStateTool(ctx, hubToolMethodSkills, hubStateToolPayload(r.cfg.HubID, "update", params))
 	default:
 		return nil, fmt.Errorf("unsupported %s action %q", hubStateSectionSkills, action)
 	}
 }
 
 func (r *Reporter) refreshHubStateTokenStats(ctx context.Context, input hubStateRefreshInput) (any, error) {
-	return r.runHubStateTool(ctx, rp.RegistryMethodCmdToken, map[string]any{
+	return r.runHubStateTool(ctx, hubToolMethodToken, map[string]any{
 		"action": "scan",
 		"hubId":  input.HubID,
 	})

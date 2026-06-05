@@ -2152,7 +2152,7 @@ func captureSessionMessageEvents(t *testing.T, c *Client) *[]publishedSessionEve
 	t.Helper()
 	published := []publishedSessionEvent{}
 	c.sessionRecorder.SetEventPublisher(func(method string, payload any) error {
-		if method != "registry.session.message" {
+		if method != "session.message" {
 			return nil
 		}
 		body, ok := payload.(map[string]any)
@@ -3033,7 +3033,7 @@ func TestSessionViewCreatedEventSilentlyHandlesMalformedTitle(t *testing.T) {
 	}
 
 	if err := c.RecordEvent(context.Background(), event); err != nil {
-		t.Fatalf("RecordEvent malformed session.new: %v", err)
+		t.Fatalf("RecordEvent malformed session.create: %v", err)
 	}
 
 	sessions, err := c.listSessionViews(context.Background())
@@ -3465,7 +3465,7 @@ func TestSessionMessageOmitsPromptIndex(t *testing.T) {
 		t.Fatalf("RecordEvent prompt: %v", err)
 	}
 
-	last := lastPublishedEvent(t, *published, "registry.session.message")
+	last := lastPublishedEvent(t, *published, "session.message")
 	if _, ok := last["promptIndex"]; ok {
 		t.Fatalf("published payload unexpectedly contains promptIndex: %+v", last)
 	}
@@ -3483,7 +3483,7 @@ func TestSessionMessagePublishesTopLevelSessionIDAndNestedRawTurn(t *testing.T) 
 		t.Fatalf("RecordEvent prompt: %v", err)
 	}
 
-	last := lastPublishedEvent(t, *published, "registry.session.message")
+	last := lastPublishedEvent(t, *published, "session.message")
 	if got := last["sessionId"]; got != "sess-1" {
 		t.Fatalf("sessionId = %v, want sess-1", got)
 	}
@@ -3657,7 +3657,7 @@ func TestSessionViewPublishMessageOmitsTurnID(t *testing.T) {
 
 	var published map[string]any
 	c.sessionRecorder.SetEventPublisher(func(method string, payload any) error {
-		if method != "registry.session.message" {
+		if method != "session.message" {
 			return nil
 		}
 		var ok bool
@@ -3695,7 +3695,7 @@ func TestSessionMessagePublishesFinishedFieldInsteadOfDone(t *testing.T) {
 		t.Fatalf("RecordEvent prompt: %v", err)
 	}
 
-	last := lastPublishedEvent(t, *published, "registry.session.message")
+	last := lastPublishedEvent(t, *published, "session.message")
 	if _, ok := last["done"]; ok {
 		t.Fatalf("payload contains legacy done field: %#v", last)
 	}
@@ -3726,7 +3726,7 @@ func TestPromptDoneIsPublishedAsFinishedRealTurn(t *testing.T) {
 		t.Fatalf("RecordEvent done: %v", err)
 	}
 
-	last := lastPublishedEvent(t, *published, "registry.session.message")
+	last := lastPublishedEvent(t, *published, "session.message")
 	turn := publishedTurnMap(t, last)
 	content := turn["content"].(string)
 	var msg acp.SessionTurnMessage
@@ -3837,7 +3837,7 @@ func TestSessionViewPublishMessageOmitsUpdateIndexAndPublishesMergedTurn(t *test
 
 	var published []map[string]any
 	c.sessionRecorder.SetEventPublisher(func(method string, payload any) error {
-		if method != "registry.session.message" {
+		if method != "session.message" {
 			return nil
 		}
 		body, ok := payload.(map[string]any)
@@ -4758,7 +4758,7 @@ func TestSessionViewMergedTurnPublishesIncomingContentWithMergedIndices(t *testi
 
 	var published []map[string]any
 	c.sessionRecorder.SetEventPublisher(func(method string, payload any) error {
-		if method != "registry.session.message" {
+		if method != "session.message" {
 			return nil
 		}
 		body, ok := payload.(map[string]any)
@@ -4813,7 +4813,7 @@ func TestSessionViewPromptFinishedPublishesPromptDoneMessage(t *testing.T) {
 
 	var published []map[string]any
 	c.sessionRecorder.SetEventPublisher(func(method string, payload any) error {
-		if method != "registry.session.message" {
+		if method != "session.message" {
 			return nil
 		}
 		body, ok := payload.(map[string]any)
@@ -4894,7 +4894,7 @@ func TestSessionViewPromptFinishedPublishesPromptDoneBeforeSessionUpdated(t *tes
 
 	var finishTail []publishedSessionEvent
 	for _, event := range published {
-		if event.method == "registry.session.message" {
+		if event.method == "session.message" {
 			turn := publishedTurnMap(t, event.payload)
 			content, _ := turn["content"].(string)
 			if strings.Contains(content, acp.SessionTurnMethodAgentMessage) || strings.Contains(content, acp.SessionTurnMethodPromptDone) {
@@ -4902,7 +4902,7 @@ func TestSessionViewPromptFinishedPublishesPromptDoneBeforeSessionUpdated(t *tes
 			}
 			continue
 		}
-		if event.method == "registry.session.updated" {
+		if event.method == "session.updated" {
 			finishTail = append(finishTail, event)
 		}
 	}
@@ -4910,14 +4910,14 @@ func TestSessionViewPromptFinishedPublishesPromptDoneBeforeSessionUpdated(t *tes
 		t.Fatalf("finish publish tail len = %d, want at least 3; events=%+v", len(finishTail), finishTail)
 	}
 	tail := finishTail[len(finishTail)-3:]
-	if tail[0].method != "registry.session.message" || !strings.Contains(publishedTurnMap(t, tail[0].payload)["content"].(string), acp.SessionTurnMethodAgentMessage) {
+	if tail[0].method != "session.message" || !strings.Contains(publishedTurnMap(t, tail[0].payload)["content"].(string), acp.SessionTurnMethodAgentMessage) {
 		t.Fatalf("tail[0] = %+v, want sealed agent message", tail[0])
 	}
-	if tail[1].method != "registry.session.message" || !strings.Contains(publishedTurnMap(t, tail[1].payload)["content"].(string), acp.SessionTurnMethodPromptDone) {
+	if tail[1].method != "session.message" || !strings.Contains(publishedTurnMap(t, tail[1].payload)["content"].(string), acp.SessionTurnMethodPromptDone) {
 		t.Fatalf("tail[1] = %+v, want prompt_done message", tail[1])
 	}
-	if tail[2].method != "registry.session.updated" {
-		t.Fatalf("tail[2] method = %q, want registry.session.updated", tail[2].method)
+	if tail[2].method != "session.updated" {
+		t.Fatalf("tail[2] method = %q, want session.updated", tail[2].method)
 	}
 }
 
@@ -4927,7 +4927,7 @@ func TestSessionViewPromptFinishedMarksOpenTextTurnDone(t *testing.T) {
 
 	var published []map[string]any
 	c.sessionRecorder.SetEventPublisher(func(method string, payload any) error {
-		if method != "registry.session.message" {
+		if method != "session.message" {
 			return nil
 		}
 		body, ok := payload.(map[string]any)
@@ -6013,7 +6013,7 @@ func TestHandleSessionRequest_SessionNewRequiresAgentType(t *testing.T) {
 	defer store.Close()
 
 	c := New(store, "proj1", "/tmp")
-	_, err = c.HandleSessionRequest(context.Background(), "session.new", "proj1", json.RawMessage(`{"title":"hello"}`))
+	_, err = c.HandleSessionRequest(context.Background(), "session.create", "proj1", json.RawMessage(`{"title":"hello"}`))
 	if err == nil || !strings.Contains(err.Error(), "agentType is required") {
 		t.Fatalf("HandleSessionRequest() err = %v, want agentType is required", err)
 	}
@@ -6031,9 +6031,9 @@ func TestHandleSessionRequestSessionNewRejectsCodexAppAfterMigration(t *testing.
 	c.registry = agent.DefaultACPFactory().Clone()
 	c.registry.Register(acp.ACPProviderCodex, func(context.Context, string) (agent.Instance, error) { return inst, nil })
 
-	_, err = c.HandleSessionRequest(context.Background(), "session.new", "proj1", json.RawMessage(`{"agentType":"codexapp","title":"hello"}`))
+	_, err = c.HandleSessionRequest(context.Background(), "session.create", "proj1", json.RawMessage(`{"agentType":"codexapp","title":"hello"}`))
 	if err == nil || !strings.Contains(err.Error(), `no agent registered for "codexapp"`) {
-		t.Fatalf("session.new err=%v, want codexapp rejection", err)
+		t.Fatalf("session.create err=%v, want codexapp rejection", err)
 	}
 }
 
@@ -6049,9 +6049,9 @@ func TestHandleSessionRequest_SessionNewPersistsProjectDefaultAgent(t *testing.T
 	c.registry = agent.DefaultACPFactory().Clone()
 	c.registry.Register(acp.ACPProviderClaude, func(context.Context, string) (agent.Instance, error) { return inst, nil })
 
-	_, err = c.HandleSessionRequest(context.Background(), "session.new", "proj1", json.RawMessage(`{"agentType":"claude","title":"hello"}`))
+	_, err = c.HandleSessionRequest(context.Background(), "session.create", "proj1", json.RawMessage(`{"agentType":"claude","title":"hello"}`))
 	if err != nil {
-		t.Fatalf("HandleSessionRequest(session.new): %v", err)
+		t.Fatalf("HandleSessionRequest(session.create): %v", err)
 	}
 
 	got, err := store.LoadProjectDefaultAgent(context.Background(), "proj1")

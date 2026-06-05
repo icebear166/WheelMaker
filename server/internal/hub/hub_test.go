@@ -227,7 +227,7 @@ func TestReporterPortRelayHTTPAndWebSocketSmoke(t *testing.T) {
 	mustWriteJSON(t, client, testEnvelope{
 		RequestID: 2,
 		Type:      "request",
-		Method:    "relay.enable",
+		Method:    "registry.relay.enable",
 		Payload: map[string]any{
 			"listenPort": relayPort,
 			"hubId":      "hub-relay-smoke",
@@ -238,7 +238,7 @@ func TestReporterPortRelayHTTPAndWebSocketSmoke(t *testing.T) {
 	})
 	enableResp := mustReadEnvelope(t, client)
 	if enableResp.Type != "response" || enableResp.Payload["status"] != "Up" {
-		t.Fatalf("relay.enable response=%#v, want Up", enableResp)
+		t.Fatalf("registry.relay.enable response=%#v, want Up", enableResp)
 	}
 
 	relayBase := "http://127.0.0.1:" + strconv.Itoa(relayPort)
@@ -353,7 +353,7 @@ func waitForRelayHubOnline(t *testing.T, addr string, hubID string) {
 	for time.Now().Before(deadline) {
 		ws := dialWS(t, "http://"+addr+"/ws")
 		connectClient(t, ws, "")
-		mustWriteJSON(t, ws, testEnvelope{RequestID: 2, Type: "request", Method: "project.list", Payload: map[string]any{}})
+		mustWriteJSON(t, ws, testEnvelope{RequestID: 2, Type: "request", Method: "registry.project.list", Payload: map[string]any{}})
 		resp := mustReadEnvelope(t, ws)
 		_ = ws.Close()
 		hubs, _ := resp.Payload["hubs"].([]any)
@@ -561,8 +561,8 @@ func TestReporterRespondsToHubStateRefresh(t *testing.T) {
 			t.Fatalf("unexpected hub.state.refresh response: %#v", resp)
 		}
 		method, payload, _ := toolHandler.snapshot()
-		if method != rp.RegistryMethodCmdToken {
-			t.Fatalf("tool method=%q, want %q", method, rp.RegistryMethodCmdToken)
+		if method != hubToolMethodToken {
+			t.Fatalf("tool method=%q, want %q", method, hubToolMethodToken)
 		}
 		var body map[string]any
 		if err := json.Unmarshal([]byte(payload), &body); err != nil {
@@ -639,7 +639,7 @@ func TestHubStateToolHandlingSerializesSharedHandler(t *testing.T) {
 	errCh := make(chan error, 20)
 	for i := 0; i < 20; i++ {
 		go func() {
-			_, err := reporter.runHubStateTool(context.Background(), rp.RegistryMethodCmdToken, map[string]any{
+			_, err := reporter.runHubStateTool(context.Background(), hubToolMethodToken, map[string]any{
 				"action": "scan",
 				"hubId":  "hub-state-serialized",
 			})
@@ -755,14 +755,18 @@ func newFakeReporterRegistry(t *testing.T, hubID string, request testEnvelope, r
 		})
 
 		reportReq := mustReadEnvelope(t, ws)
-		if reportReq.Method != "registry.reportProjects" {
+		if reportReq.Method != "hub.report.projects" {
 			errSeen <- fmt.Errorf("report method=%q", reportReq.Method)
+			return
+		}
+		if reportReq.HubID != hubID {
+			errSeen <- fmt.Errorf("report hubId=%q", reportReq.HubID)
 			return
 		}
 		mustWriteJSON(t, ws, testEnvelope{
 			RequestID: reportReq.RequestID,
 			Type:      "response",
-			Method:    "registry.reportProjects",
+			Method:    "hub.report.projects",
 			Payload:   map[string]any{"ok": true},
 		})
 
@@ -795,10 +799,10 @@ func TestHubStateToolAdaptersMapSectionsToExistingCommands(t *testing.T) {
 		method  string
 		action  string
 	}{
-		{section: hubStateSectionAgentPackages, method: rp.RegistryMethodCmdNPM, action: "scan"},
-		{section: hubStateSectionWheelmakerUpdate, method: rp.RegistryMethodCmdUpdate, action: "query"},
-		{section: hubStateSectionSkills, method: rp.RegistryMethodCmdSkills, action: "scan"},
-		{section: hubStateSectionTokenStats, method: rp.RegistryMethodCmdToken, action: "scan"},
+		{section: hubStateSectionAgentPackages, method: hubToolMethodNPM, action: "scan"},
+		{section: hubStateSectionWheelmakerUpdate, method: hubToolMethodUpdate, action: "query"},
+		{section: hubStateSectionSkills, method: hubToolMethodSkills, action: "scan"},
+		{section: hubStateSectionTokenStats, method: hubToolMethodToken, action: "scan"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.section, func(t *testing.T) {
@@ -902,12 +906,12 @@ func TestReporterRun_RegistersAndServesFSRequests(t *testing.T) {
 	mustWriteJSON(t, app, testEnvelope{
 		RequestID: 2,
 		Type:      "request",
-		Method:    "fs.list",
+		Method:    "project.fs.list",
 		ProjectID: rp.ProjectID("hub-test", "proj1"),
 		Payload:   map[string]any{"path": ".", "limit": 50},
 	})
 	listResp := mustReadEnvelope(t, app)
-	if listResp.Type != "response" || listResp.Method != "fs.list" {
+	if listResp.Type != "response" || listResp.Method != "project.fs.list" {
 		t.Fatalf("unexpected list response: %#v", listResp)
 	}
 	assertListEntryKind(t, listResp.Payload, "linked-dir", "dir")
@@ -915,12 +919,12 @@ func TestReporterRun_RegistersAndServesFSRequests(t *testing.T) {
 	mustWriteJSON(t, app, testEnvelope{
 		RequestID: 3,
 		Type:      "request",
-		Method:    "fs.read",
+		Method:    "project.fs.read",
 		ProjectID: rp.ProjectID("hub-test", "proj1"),
 		Payload:   map[string]any{"path": "hello.txt"},
 	})
 	readResp := mustReadEnvelope(t, app)
-	if readResp.Type != "response" || readResp.Method != "fs.read" {
+	if readResp.Type != "response" || readResp.Method != "project.fs.read" {
 		t.Fatalf("unexpected read response: %#v", readResp)
 	}
 	if readResp.Payload["content"] != "hello registry" {
@@ -968,14 +972,14 @@ func TestReporterRespondsToSessionRequests(t *testing.T) {
 		})
 
 		reportReq := mustReadEnvelope(t, ws)
-		if reportReq.Method != "registry.reportProjects" {
+		if reportReq.Method != "hub.report.projects" {
 			errSeen <- fmt.Errorf("report method=%q", reportReq.Method)
 			return
 		}
 		mustWriteJSON(t, ws, testEnvelope{
 			RequestID: reportReq.RequestID,
 			Type:      "response",
-			Method:    "registry.reportProjects",
+			Method:    "hub.report.projects",
 			Payload: map[string]any{
 				"ok": true,
 			},
@@ -1084,14 +1088,14 @@ func TestReporterForwardsSessionSearchRequests(t *testing.T) {
 		})
 
 		reportReq := mustReadEnvelope(t, ws)
-		if reportReq.Method != "registry.reportProjects" {
+		if reportReq.Method != "hub.report.projects" {
 			errSeen <- fmt.Errorf("report method=%q", reportReq.Method)
 			return
 		}
 		mustWriteJSON(t, ws, testEnvelope{
 			RequestID: reportReq.RequestID,
 			Type:      "response",
-			Method:    "registry.reportProjects",
+			Method:    "hub.report.projects",
 			Payload: map[string]any{
 				"ok": true,
 			},
@@ -1205,14 +1209,14 @@ func TestReporterForwardsSessionArchiveRecoveryRequests(t *testing.T) {
 		})
 
 		reportReq := mustReadEnvelope(t, ws)
-		if reportReq.Method != "registry.reportProjects" {
+		if reportReq.Method != "hub.report.projects" {
 			errSeen <- fmt.Errorf("report method=%q", reportReq.Method)
 			return
 		}
 		mustWriteJSON(t, ws, testEnvelope{
 			RequestID: reportReq.RequestID,
 			Type:      "response",
-			Method:    "registry.reportProjects",
+			Method:    "hub.report.projects",
 			Payload: map[string]any{
 				"ok": true,
 			},
@@ -1333,81 +1337,27 @@ func TestReporterRespondsToSessionAttachmentRequests(t *testing.T) {
 	}
 }
 
-func TestReporterRespondsToCmdNPMRequests(t *testing.T) {
-	upgrader := websocket.Upgrader{}
+func TestReporterRejectsPublicCmdRequests(t *testing.T) {
 	respSeen := make(chan testEnvelope, 1)
 	errSeen := make(chan error, 1)
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ws, err := upgrader.Upgrade(w, r, nil)
-		if err != nil {
-			errSeen <- err
-			return
-		}
-		defer ws.Close()
+	ts := newFakeReporterRegistry(t, "hub-cmd-reject", testEnvelope{
+		RequestID: 100,
+		Type:      "request",
+		Method:    "cmd.npm",
+		Payload: map[string]any{
+			"action": "scan",
+			"hubId":  "hub-cmd-reject",
+		},
+	}, respSeen, errSeen)
 
-		initReq := mustReadEnvelope(t, ws)
-		if initReq.Method != "connect.init" {
-			errSeen <- fmt.Errorf("init method=%q", initReq.Method)
-			return
-		}
-		mustWriteJSON(t, ws, testEnvelope{
-			RequestID: initReq.RequestID,
-			Type:      "response",
-			Method:    "connect.init",
-			Payload: map[string]any{
-				"ok": true,
-				"principal": map[string]any{
-					"role":            "hub",
-					"hubId":           "hub-cmd-npm",
-					"connectionEpoch": 1,
-				},
-				"serverInfo": map[string]any{
-					"serverVersion":   "test",
-					"protocolVersion": rp.DefaultProtocolVersion,
-				},
-				"features":       map[string]any{},
-				"hashAlgorithms": []string{"sha256"},
-			},
-		})
-
-		reportReq := mustReadEnvelope(t, ws)
-		if reportReq.Method != "registry.reportProjects" {
-			errSeen <- fmt.Errorf("report method=%q", reportReq.Method)
-			return
-		}
-		mustWriteJSON(t, ws, testEnvelope{
-			RequestID: reportReq.RequestID,
-			Type:      "response",
-			Method:    "registry.reportProjects",
-			Payload: map[string]any{
-				"ok": true,
-			},
-		})
-
-		mustWriteJSON(t, ws, testEnvelope{
-			RequestID: 100,
-			Type:      "request",
-			Method:    "cmd.npm",
-			Payload: map[string]any{
-				"action": "scan",
-				"hubId":  "hub-cmd-npm",
-			},
-		})
-		_ = ws.SetReadDeadline(time.Now().Add(1500 * time.Millisecond))
-		respSeen <- mustReadEnvelope(t, ws)
-	}))
-
-	t.Cleanup(ts.Close)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	toolHandler := &stubToolCommandHandler{response: map[string]any{"ok": true}}
 	reporter := NewReporter(ReporterConfig{
 		Server:            strings.TrimPrefix(ts.URL, "http://"),
-		HubID:             "hub-cmd-npm",
+		HubID:             "hub-cmd-reject",
 		ReconnectInterval: 50 * time.Millisecond,
 	}, nil)
-	reporter.toolHandler = toolHandler
 
 	done := make(chan error, 1)
 	go func() { done <- reporter.Run(ctx) }()
@@ -1424,234 +1374,14 @@ func TestReporterRespondsToCmdNPMRequests(t *testing.T) {
 	case err := <-errSeen:
 		t.Fatalf("fake registry error: %v", err)
 	case resp := <-respSeen:
-		if resp.Type != "response" || resp.Method != "cmd.npm" {
+		if resp.Type != "error" || resp.Method != "cmd.npm" {
 			t.Fatalf("unexpected cmd.npm response: %#v", resp)
 		}
-		if resp.Payload["ok"] != true {
-			t.Fatalf("payload=%#v, want ok=true", resp.Payload)
-		}
-		method, payload, _ := toolHandler.snapshot()
-		if method != "cmd.npm" || !strings.Contains(payload, `"hubId":"hub-cmd-npm"`) {
-			t.Fatalf("tool call method=%q payload=%q", method, payload)
+		if resp.Payload["code"] != codeInvalidArgument {
+			t.Fatalf("payload=%#v, want INVALID_ARGUMENT", resp.Payload)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("did not receive cmd.npm response from reporter")
-	}
-}
-
-func TestReporterRespondsToCmdUpdateRequests(t *testing.T) {
-	upgrader := websocket.Upgrader{}
-	respSeen := make(chan testEnvelope, 1)
-	errSeen := make(chan error, 1)
-
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ws, err := upgrader.Upgrade(w, r, nil)
-		if err != nil {
-			errSeen <- err
-			return
-		}
-		defer ws.Close()
-
-		initReq := mustReadEnvelope(t, ws)
-		if initReq.Method != "connect.init" {
-			errSeen <- fmt.Errorf("init method=%q", initReq.Method)
-			return
-		}
-		mustWriteJSON(t, ws, testEnvelope{
-			RequestID: initReq.RequestID,
-			Type:      "response",
-			Method:    "connect.init",
-			Payload: map[string]any{
-				"ok": true,
-				"principal": map[string]any{
-					"role":            "hub",
-					"hubId":           "hub-cmd-update",
-					"connectionEpoch": 1,
-				},
-				"serverInfo": map[string]any{
-					"serverVersion":   "test",
-					"protocolVersion": rp.DefaultProtocolVersion,
-				},
-				"features":       map[string]any{},
-				"hashAlgorithms": []string{"sha256"},
-			},
-		})
-
-		reportReq := mustReadEnvelope(t, ws)
-		if reportReq.Method != "registry.reportProjects" {
-			errSeen <- fmt.Errorf("report method=%q", reportReq.Method)
-			return
-		}
-		mustWriteJSON(t, ws, testEnvelope{
-			RequestID: reportReq.RequestID,
-			Type:      "response",
-			Method:    "registry.reportProjects",
-			Payload: map[string]any{
-				"ok": true,
-			},
-		})
-
-		mustWriteJSON(t, ws, testEnvelope{
-			RequestID: 100,
-			Type:      "request",
-			Method:    "cmd.update",
-			Payload: map[string]any{
-				"action": "query",
-				"hubId":  "hub-cmd-update",
-			},
-		})
-		_ = ws.SetReadDeadline(time.Now().Add(1500 * time.Millisecond))
-		respSeen <- mustReadEnvelope(t, ws)
-	}))
-
-	t.Cleanup(ts.Close)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	toolHandler := &stubToolCommandHandler{response: map[string]any{"ok": true, "status": "not_published"}}
-	reporter := NewReporter(ReporterConfig{
-		Server:            strings.TrimPrefix(ts.URL, "http://"),
-		HubID:             "hub-cmd-update",
-		ReconnectInterval: 50 * time.Millisecond,
-		MonitorBaseDir:    t.TempDir(),
-	}, nil)
-	reporter.toolHandler = toolHandler
-
-	done := make(chan error, 1)
-	go func() { done <- reporter.Run(ctx) }()
-	defer func() {
-		cancel()
-		select {
-		case <-done:
-		case <-time.After(2 * time.Second):
-			t.Fatal("reporter did not stop")
-		}
-	}()
-
-	select {
-	case err := <-errSeen:
-		t.Fatalf("fake registry error: %v", err)
-	case resp := <-respSeen:
-		if resp.Type != "response" || resp.Method != "cmd.update" {
-			t.Fatalf("unexpected cmd.update response: %#v", resp)
-		}
-		if resp.Payload["status"] != "not_published" {
-			t.Fatalf("payload=%#v, want status=not_published", resp.Payload)
-		}
-		method, payload, _ := toolHandler.snapshot()
-		if method != "cmd.update" || !strings.Contains(payload, `"hubId":"hub-cmd-update"`) {
-			t.Fatalf("tool call method=%q payload=%q", method, payload)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("did not receive cmd.update response from reporter")
-	}
-}
-
-func TestReporterRespondsToCmdSkillsRequests(t *testing.T) {
-	upgrader := websocket.Upgrader{}
-	respSeen := make(chan testEnvelope, 1)
-	errSeen := make(chan error, 1)
-
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ws, err := upgrader.Upgrade(w, r, nil)
-		if err != nil {
-			errSeen <- err
-			return
-		}
-		defer ws.Close()
-
-		initReq := mustReadEnvelope(t, ws)
-		if initReq.Method != "connect.init" {
-			errSeen <- fmt.Errorf("init method=%q", initReq.Method)
-			return
-		}
-		mustWriteJSON(t, ws, testEnvelope{
-			RequestID: initReq.RequestID,
-			Type:      "response",
-			Method:    "connect.init",
-			Payload: map[string]any{
-				"ok": true,
-				"principal": map[string]any{
-					"role":            "hub",
-					"hubId":           "hub-cmd-skills",
-					"connectionEpoch": 1,
-				},
-				"serverInfo": map[string]any{
-					"serverVersion":   "test",
-					"protocolVersion": rp.DefaultProtocolVersion,
-				},
-				"features":       map[string]any{},
-				"hashAlgorithms": []string{"sha256"},
-			},
-		})
-
-		reportReq := mustReadEnvelope(t, ws)
-		if reportReq.Method != "registry.reportProjects" {
-			errSeen <- fmt.Errorf("report method=%q", reportReq.Method)
-			return
-		}
-		mustWriteJSON(t, ws, testEnvelope{
-			RequestID: reportReq.RequestID,
-			Type:      "response",
-			Method:    "registry.reportProjects",
-			Payload: map[string]any{
-				"ok": true,
-			},
-		})
-
-		mustWriteJSON(t, ws, testEnvelope{
-			RequestID: 100,
-			Type:      "request",
-			Method:    "cmd.skills",
-			Payload: map[string]any{
-				"action": "scan",
-				"hubId":  "hub-cmd-skills",
-			},
-		})
-		_ = ws.SetReadDeadline(time.Now().Add(1500 * time.Millisecond))
-		respSeen <- mustReadEnvelope(t, ws)
-	}))
-
-	t.Cleanup(ts.Close)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	toolHandler := &stubToolCommandHandler{response: map[string]any{"ok": true}}
-	reporter := NewReporter(ReporterConfig{
-		Server:            strings.TrimPrefix(ts.URL, "http://"),
-		HubID:             "hub-cmd-skills",
-		ReconnectInterval: 50 * time.Millisecond,
-	}, []ProjectInfo{{Name: "WheelMaker", Path: t.TempDir(), Online: true}})
-	reporter.toolHandler = toolHandler
-
-	done := make(chan error, 1)
-	go func() { done <- reporter.Run(ctx) }()
-	defer func() {
-		cancel()
-		select {
-		case <-done:
-		case <-time.After(2 * time.Second):
-			t.Fatal("reporter did not stop")
-		}
-	}()
-
-	select {
-	case err := <-errSeen:
-		t.Fatalf("fake registry error: %v", err)
-	case resp := <-respSeen:
-		if resp.Type != "response" || resp.Method != "cmd.skills" {
-			t.Fatalf("unexpected cmd.skills response: %#v", resp)
-		}
-		if resp.Payload["ok"] != true {
-			t.Fatalf("payload=%#v, want ok=true", resp.Payload)
-		}
-		method, payload, projects := toolHandler.snapshot()
-		if method != "cmd.skills" || !strings.Contains(payload, `"hubId":"hub-cmd-skills"`) {
-			t.Fatalf("tool call method=%q payload=%q", method, payload)
-		}
-		if len(projects) != 1 || projects[0].Name != "WheelMaker" {
-			t.Fatalf("tool projects=%#v", projects)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("did not receive cmd.skills response from reporter")
+		t.Fatal("did not receive cmd.npm error from reporter")
 	}
 }
 
@@ -1695,14 +1425,14 @@ func TestReporterRespondsToSessionSetConfigRequests(t *testing.T) {
 		})
 
 		reportReq := mustReadEnvelope(t, ws)
-		if reportReq.Method != "registry.reportProjects" {
+		if reportReq.Method != "hub.report.projects" {
 			errSeen <- fmt.Errorf("report method=%q", reportReq.Method)
 			return
 		}
 		mustWriteJSON(t, ws, testEnvelope{
 			RequestID: reportReq.RequestID,
 			Type:      "response",
-			Method:    "registry.reportProjects",
+			Method:    "hub.report.projects",
 			Payload: map[string]any{
 				"ok": true,
 			},
@@ -1711,7 +1441,7 @@ func TestReporterRespondsToSessionSetConfigRequests(t *testing.T) {
 		request := testEnvelope{
 			RequestID: 101,
 			Type:      "request",
-			Method:    "session.setConfig",
+			Method:    "session.config",
 			ProjectID: "hub-session:proj1",
 			Payload: map[string]any{
 				"sessionId": "sess-1",
@@ -1753,21 +1483,21 @@ func TestReporterRespondsToSessionSetConfigRequests(t *testing.T) {
 		t.Fatalf("fake registry error: %v", err)
 	case <-reqSeen:
 	case <-time.After(2 * time.Second):
-		t.Fatal("did not receive session.setConfig request")
+		t.Fatal("did not receive session.config request")
 	}
 
 	select {
 	case err := <-errSeen:
 		t.Fatalf("fake registry error: %v", err)
 	case resp := <-respSeen:
-		if resp.Type != "response" || resp.Method != "session.setConfig" {
-			t.Fatalf("unexpected session.setConfig response: %#v", resp)
+		if resp.Type != "response" || resp.Method != "session.config" {
+			t.Fatalf("unexpected session.config response: %#v", resp)
 		}
-		if handler.lastMethod != "session.setConfig" || !strings.Contains(handler.lastBody, "\"configId\":\"model\"") {
+		if handler.lastMethod != "session.config" || !strings.Contains(handler.lastBody, "\"configId\":\"model\"") {
 			t.Fatalf("handler saw method=%q body=%q", handler.lastMethod, handler.lastBody)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("did not receive session.setConfig response from reporter")
+		t.Fatal("did not receive session.config response from reporter")
 	}
 
 }
@@ -1812,14 +1542,14 @@ func TestReporterForwardsSessionDeleteRequests(t *testing.T) {
 		})
 
 		reportReq := mustReadEnvelope(t, ws)
-		if reportReq.Method != "registry.reportProjects" {
+		if reportReq.Method != "hub.report.projects" {
 			errSeen <- fmt.Errorf("report method=%q", reportReq.Method)
 			return
 		}
 		mustWriteJSON(t, ws, testEnvelope{
 			RequestID: reportReq.RequestID,
 			Type:      "response",
-			Method:    "registry.reportProjects",
+			Method:    "hub.report.projects",
 			Payload: map[string]any{
 				"ok": true,
 			},
@@ -1929,14 +1659,14 @@ func TestReporterForwardsSessionRenameRequests(t *testing.T) {
 		})
 
 		reportReq := mustReadEnvelope(t, ws)
-		if reportReq.Method != "registry.reportProjects" {
+		if reportReq.Method != "hub.report.projects" {
 			errSeen <- fmt.Errorf("report method=%q", reportReq.Method)
 			return
 		}
 		mustWriteJSON(t, ws, testEnvelope{
 			RequestID: reportReq.RequestID,
 			Type:      "response",
-			Method:    "registry.reportProjects",
+			Method:    "hub.report.projects",
 			Payload: map[string]any{
 				"ok": true,
 			},
@@ -2093,7 +1823,7 @@ func TestReporterUpdateProjectRefreshesRegistrySnapshot(t *testing.T) {
 	mustWriteJSON(t, app, testEnvelope{
 		RequestID: 2,
 		Type:      "request",
-		Method:    "project.list",
+		Method:    "registry.project.list",
 		Payload:   map[string]any{},
 	})
 	resp := mustReadEnvelope(t, app)
@@ -2153,66 +1883,66 @@ func TestReporterFSHashNegotiationAndGitStatus(t *testing.T) {
 	mustWriteJSON(t, app, testEnvelope{
 		RequestID: 2,
 		Type:      "request",
-		Method:    "fs.list",
+		Method:    "project.fs.list",
 		ProjectID: rp.ProjectID("hub-hash", "proj1"),
 		Payload:   map[string]any{"path": "."},
 	})
 	listResp := mustReadEnvelope(t, app)
 	listHash, _ := listResp.Payload["hash"].(string)
 	if listHash == "" || listResp.Payload["notModified"] != false {
-		t.Fatalf("unexpected fs.list payload: %#v", listResp.Payload)
+		t.Fatalf("unexpected project.fs.list payload: %#v", listResp.Payload)
 	}
 
 	mustWriteJSON(t, app, testEnvelope{
 		RequestID: 3,
 		Type:      "request",
-		Method:    "fs.list",
+		Method:    "project.fs.list",
 		ProjectID: rp.ProjectID("hub-hash", "proj1"),
 		Payload:   map[string]any{"path": ".", "knownHash": listHash},
 	})
 	listCached := mustReadEnvelope(t, app)
 	if listCached.Payload["notModified"] != true {
-		t.Fatalf("expected notModified fs.list response: %#v", listCached.Payload)
+		t.Fatalf("expected notModified project.fs.list response: %#v", listCached.Payload)
 	}
 
 	mustWriteJSON(t, app, testEnvelope{
 		RequestID: 4,
 		Type:      "request",
-		Method:    "fs.read",
+		Method:    "project.fs.read",
 		ProjectID: rp.ProjectID("hub-hash", "proj1"),
 		Payload:   map[string]any{"path": "hello.txt"},
 	})
 	readResp := mustReadEnvelope(t, app)
 	readHash, _ := readResp.Payload["hash"].(string)
 	if readHash == "" || readResp.Payload["notModified"] != false {
-		t.Fatalf("unexpected fs.read payload: %#v", readResp.Payload)
+		t.Fatalf("unexpected project.fs.read payload: %#v", readResp.Payload)
 	}
 
 	mustWriteJSON(t, app, testEnvelope{
 		RequestID: 5,
 		Type:      "request",
-		Method:    "fs.read",
+		Method:    "project.fs.read",
 		ProjectID: rp.ProjectID("hub-hash", "proj1"),
 		Payload:   map[string]any{"path": "hello.txt", "knownHash": readHash},
 	})
 	readCached := mustReadEnvelope(t, app)
 	if readCached.Payload["notModified"] != true {
-		t.Fatalf("expected notModified fs.read response: %#v", readCached.Payload)
+		t.Fatalf("expected notModified project.fs.read response: %#v", readCached.Payload)
 	}
 
 	mustWriteJSON(t, app, testEnvelope{
 		RequestID: 6,
 		Type:      "request",
-		Method:    "git.status",
+		Method:    "project.git.status",
 		ProjectID: rp.ProjectID("hub-hash", "proj1"),
 		Payload:   map[string]any{},
 	})
 	statusResp := mustReadEnvelope(t, app)
 	if statusResp.Payload["dirty"] != true {
-		t.Fatalf("expected dirty git.status payload: %#v", statusResp.Payload)
+		t.Fatalf("expected dirty project.git.status payload: %#v", statusResp.Payload)
 	}
 	if got, want := statusResp.Payload["worktreeRev"], collectGitState(root).WorktreeRev; got != want {
-		t.Fatalf("git.status worktreeRev=%v, want reported normalized rev %s", got, want)
+		t.Fatalf("project.git.status worktreeRev=%v, want reported normalized rev %s", got, want)
 	}
 	unstaged, _ := statusResp.Payload["unstaged"].([]any)
 	if len(unstaged) == 0 {
@@ -2222,7 +1952,7 @@ func TestReporterFSHashNegotiationAndGitStatus(t *testing.T) {
 	mustWriteJSON(t, app, testEnvelope{
 		RequestID: 7,
 		Type:      "request",
-		Method:    "git.workingTree.fileDiff",
+		Method:    "project.git.workingTree.fileDiff",
 		ProjectID: rp.ProjectID("hub-hash", "proj1"),
 		Payload:   map[string]any{"path": "hello.txt", "scope": "unstaged", "contextLines": 2},
 	})
@@ -2278,14 +2008,14 @@ func TestLocalReadEndpointProofReadAndRejectsSession(t *testing.T) {
 	mustWriteJSON(t, ws, testEnvelope{
 		RequestID: 1,
 		Type:      "request",
-		Method:    "local_read.proof",
+		Method:    "connect.localRead.proof",
 		Payload: map[string]any{
 			"endpointId": candidate.EndpointID,
 			"nonce":      "nonce-1",
 		},
 	})
 	proofResp := mustReadEnvelope(t, ws)
-	if proofResp.Type != "response" || proofResp.Method != "local_read.proof" {
+	if proofResp.Type != "response" || proofResp.Method != "connect.localRead.proof" {
 		t.Fatalf("proof response=%#v", proofResp)
 	}
 	signatureText, _ := proofResp.Payload["signature"].(string)
@@ -2322,13 +2052,13 @@ func TestLocalReadEndpointProofReadAndRejectsSession(t *testing.T) {
 	mustWriteJSON(t, ws, testEnvelope{
 		RequestID: 3,
 		Type:      "request",
-		Method:    "fs.read",
+		Method:    "project.fs.read",
 		ProjectID: rp.ProjectID("hub-local-read", "proj1"),
 		Payload:   map[string]any{"path": "hello.txt"},
 	})
 	readResp := mustReadEnvelope(t, ws)
-	if readResp.Type != "response" || readResp.Method != "fs.read" {
-		t.Fatalf("fs.read response=%#v", readResp)
+	if readResp.Type != "response" || readResp.Method != "project.fs.read" {
+		t.Fatalf("project.fs.read response=%#v", readResp)
 	}
 	if readResp.Payload["content"] != "hello local read" {
 		t.Fatalf("content=%v, want hello local read", readResp.Payload["content"])
@@ -2372,13 +2102,13 @@ func TestReporterDebugEnvelope_OneLineWithDirection(t *testing.T) {
 	r.writeDebugEnvelope("->", envelope{
 		RequestID: 1,
 		Type:      "request",
-		Method:    "registry.reportProjects",
+		Method:    "hub.report.projects",
 		Payload:   []byte(`{"hubId":"hub-1","note":"hello\nworld"}`),
 	})
 	r.writeDebugEnvelope("<-", envelope{
 		RequestID: 1,
 		Type:      "response",
-		Method:    "registry.reportProjects",
+		Method:    "hub.report.projects",
 		Payload:   []byte(`{"ok":true}`),
 	})
 
@@ -2467,7 +2197,7 @@ func waitForProjectOnline(t *testing.T, addr, projectID, token string) {
 		ws := dialWS(t, "http://"+addr+"/ws")
 		connectClient(t, ws, token)
 		mustWriteJSON(t, ws, testEnvelope{
-			RequestID: 2, Type: "request", Method: "project.list", Payload: map[string]any{},
+			RequestID: 2, Type: "request", Method: "registry.project.list", Payload: map[string]any{},
 		})
 		resp := mustReadEnvelope(t, ws)
 		_ = ws.Close()
@@ -2508,7 +2238,7 @@ func assertListEntryKind(t *testing.T, payload map[string]any, name string, want
 	t.Helper()
 	entries, ok := payload["entries"].([]any)
 	if !ok {
-		t.Fatalf("entries missing in fs.list payload: %#v", payload)
+		t.Fatalf("entries missing in project.fs.list payload: %#v", payload)
 	}
 	for _, item := range entries {
 		entry, ok := item.(map[string]any)
@@ -2525,7 +2255,7 @@ func assertListEntryKind(t *testing.T, payload map[string]any, name string, want
 		}
 		return
 	}
-	t.Fatalf("entry %q not found in fs.list payload: %#v", name, payload)
+	t.Fatalf("entry %q not found in project.fs.list payload: %#v", name, payload)
 }
 
 func initGitRepo(t *testing.T, dir string) {

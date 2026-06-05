@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/swm8023/wheelmaker/internal/hub/agent"
-	"github.com/swm8023/wheelmaker/internal/hub/tools"
 	acp "github.com/swm8023/wheelmaker/internal/protocol"
 )
 
@@ -509,13 +508,13 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 			return nil, err
 		}
 		return map[string]any{"ok": true, "sessionId": summary.SessionID, "session": summary}, nil
-	case acp.RegistryMethodSessionNew:
+	case acp.RegistryMethodSessionCreate:
 		var req struct {
 			AgentType string `json:"agentType"`
 			Title     string `json:"title,omitempty"`
 		}
 		if err := decodeSessionRequestPayload(payload, &req); err != nil {
-			return nil, fmt.Errorf("invalid session.new payload: %w", err)
+			return nil, fmt.Errorf("invalid session.create payload: %w", err)
 		}
 		if strings.TrimSpace(req.AgentType) == "" {
 			return nil, fmt.Errorf("agentType is required")
@@ -628,42 +627,14 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 		return c.handleSessionAttachmentCancel(ctx, payload)
 	case acp.RegistryMethodSessionAttachmentDelete:
 		return c.handleSessionAttachmentDelete(ctx, payload)
-	case acp.RegistryMethodSessionTokenProviders:
-		return map[string]any{
-			"providers": []map[string]any{
-				{"id": "deepseek", "name": "DeepSeek", "authMode": "api_key"},
-				{"id": "codex", "name": "Codex", "authMode": "oauth"},
-				{"id": "copilot", "name": "Copilot", "authMode": "github_api"},
-			},
-		}, nil
-	case acp.RegistryMethodSessionTokenScan:
-		stats, err := tools.ScanTokenStats(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return stats, nil
-	case acp.RegistryMethodSessionTokenDeepSeekStats:
-		var req struct {
-			APIKey    string `json:"apiKey"`
-			RangeType string `json:"rangeType,omitempty"`
-			Month     string `json:"month,omitempty"`
-		}
-		if err := decodeSessionRequestPayload(payload, &req); err != nil {
-			return nil, fmt.Errorf("invalid session.token.deepseek.stats payload: %w", err)
-		}
-		stats, err := tools.FetchDeepSeekTokenStats(ctx, req.APIKey, req.RangeType, req.Month)
-		if err != nil {
-			return nil, err
-		}
-		return stats, nil
-	case acp.RegistryMethodSessionSetConfig:
+	case acp.RegistryMethodSessionConfig:
 		var req struct {
 			SessionID string `json:"sessionId"`
 			ConfigID  string `json:"configId"`
 			Value     string `json:"value"`
 		}
 		if err := decodeSessionRequestPayload(payload, &req); err != nil {
-			return nil, fmt.Errorf("invalid session.setConfig payload: %w", err)
+			return nil, fmt.Errorf("invalid session.config payload: %w", err)
 		}
 		sess, err := c.SessionByID(ctx, req.SessionID)
 		if err != nil {
