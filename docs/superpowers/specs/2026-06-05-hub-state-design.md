@@ -1,7 +1,7 @@
 # HubState 与 Registry 协议整理设计
 
 日期：2026-06-05
-状态：待确认
+状态：已实现（Registry Protocol 2.5 硬切）
 
 ## 目标
 
@@ -42,7 +42,7 @@
 | `monitor.*` | Monitor | 监控面板能力 |
 | `debug.*` | Debug | 调试日志上传等调试能力 |
 
-旧的 `cmd.*` 不再作为 App 面向协议继续扩展。迁移期可以保留兼容入口，但新 App 流程应改用 `hub.state.*`。
+旧的 `cmd.*` 不再作为 App 面向协议。2.5 版本已经硬切，不保留旧端兼容入口；App 流程统一改用 `hub.state.*`。
 
 ## Envelope 与路由 ID
 
@@ -229,7 +229,7 @@ Session 事件不再区分 `registry.session.*` 和 `session.*` 两套名字。H
 | `cmd.skills` `list/install/uninstall/update` | `hub.state.action` section `skills` |
 | `cmd.token` `scan` | `hub.state.refresh` section `tokenStats` |
 
-迁移期可以保留旧方法作为兼容别名。新 UI 不应再新增 `cmd.*` 调用。
+2.5 已删除这些旧公开方法，不再保留兼容别名。Hub 内部仍可复用既有 command handler 作为实现细节，但它们不是 Registry public protocol。
 
 ### Relay
 
@@ -501,9 +501,14 @@ section data 保留现有 update response 信息：status、release、git snapsh
 
 - `cmd.token` `scan`
 
-刷新等价于 token scan。第一版不包含写动作。
+刷新等价于 token scan。
 
-如果未来需要 DeepSeek 或 provider 级专项查询，优先作为 `tokenStats` 的 action，而不是放回 `session.token.*`。
+动作：
+
+- `providers`
+- `deepseekStats`
+
+`providers` 返回当前支持的 token provider 列表；`deepseekStats` 使用 `apiKey`、`rangeType`、`month` 参数查询 DeepSeek 专项统计。两者都归入 `hub.state.action` 的 `tokenStats` section，不放回 `session.token.*`。
 
 ### `fileIndex`
 
@@ -572,7 +577,7 @@ Hub 断开时，Registry 不提供旧 HubState。App 可以保留本地上次渲
 
 打开 settings 页面：
 
-1. App 调用项目目录方法获取 hubs/projects。当前是 `project.list`，协议整理后改为 `registry.project.list`。
+1. App 调用 `registry.project.list` 获取 hubs/projects。
 2. App 对可见 hubs batch 调用 `hub.state.get`。
 3. App 直接渲染缓存 sections。
 4. 空 section 显示 empty/stale 状态，并允许用户 refresh。
@@ -616,8 +621,8 @@ App 不显示完整 stdout/stderr。
 5. Section adapters：按 `agentPackages`、`wheelmakerUpdate`、`skills`、`tokenStats`、`fileIndex` 接入现有逻辑。
 6. App 协议常量：新增 TS 常量，Repository 支持 `hub.state.*` 顶层 `hubId`。
 7. App 设置页迁移：Update、Skills、Token Stats、File Index 状态依次迁移到 HubState。
-8. 协议重命名迁移：`project.*`、`session.*`、`registry.*`、`connect.*` 按上表重命名，保留兼容别名。
-9. 清理旧公开方法：确认无 App 调用后删除或降级 `cmd.*`、`fs.index.status/rebuild` 等旧入口。
+8. 协议重命名迁移：`project.*`、`session.*`、`registry.*`、`connect.*` 已按上表重命名。
+9. 清理旧公开方法：旧 `cmd.*`、`fs.index.status/rebuild` 等入口已从 public Registry protocol 删除。
 
 ## 测试策略
 
@@ -630,7 +635,7 @@ App 不显示完整 stdout/stderr。
 - Registry 按 envelope `hubId` 转发。
 - Registry 拒绝缺失、未知、离线、越权 Hub。
 - Registry 不缓存 HubState。
-- `registry.session.*` 兼容事件最终映射到 `session.*`。
+- 旧 `registry.session.*` 不再注册，Session 事件统一为 `session.*`。
 - `project.online/offline` 迁移到 `registry.project.report` 后 App 可收到完整 project snapshot。
 
 Hub 测试：
@@ -657,7 +662,7 @@ App 测试：
 - NPM、Skills、Update、File Index 动作调用 `hub.state.action`。
 - 返回 state 直接合并，不强制补 `get`。
 - `hub.state.updated` 能更新可见 section。
-- 旧 method 兼容期内仍可处理已有测试 fixture。
+- 旧 method 只允许出现在历史说明或测试中的 removed-name guardrail，不允许 App service 继续发送。
 
 ## 验收标准
 

@@ -1,6 +1,11 @@
 package protocol
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestRegistryDefaultProtocolVersionIs25(t *testing.T) {
 	if DefaultProtocolVersion != "2.5" {
@@ -116,8 +121,8 @@ func TestRegistryProtocolDomainTargetMethods(t *testing.T) {
 	}
 }
 
-func TestRegistryProtocolDomainOldMethodsAreRemoved(t *testing.T) {
-	oldMethods := []string{
+func removedRegistryProtocolMethods() []string {
+	return []string{
 		"connection.closing",
 		"local_read.proof",
 		"registry.reportProjects",
@@ -161,9 +166,31 @@ func TestRegistryProtocolDomainOldMethodsAreRemoved(t *testing.T) {
 		"relay.open",
 		"relay.close",
 	}
-	for _, method := range oldMethods {
+}
+
+func TestRegistryProtocolDomainOldMethodsAreRemoved(t *testing.T) {
+	for _, method := range removedRegistryProtocolMethods() {
 		if _, ok := RegistryMethod(method); ok {
 			t.Fatalf("%s should not be registered", method)
+		}
+	}
+}
+
+func TestRegistryProtocolDomainOldMethodLiteralsDoNotReappear(t *testing.T) {
+	files := []string{
+		"registry_methods.go",
+		filepath.Join("..", "registry", "server.go"),
+	}
+	for _, file := range files {
+		raw, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("read %s: %v", file, err)
+		}
+		source := string(raw)
+		for _, method := range removedRegistryProtocolMethods() {
+			if strings.Contains(source, `"`+method+`"`) || strings.Contains(source, "`"+method+"`") {
+				t.Fatalf("%s contains removed public method literal %q", file, method)
+			}
 		}
 	}
 }
