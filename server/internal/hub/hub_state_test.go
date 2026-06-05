@@ -248,3 +248,72 @@ func TestHubStateManagerSnapshotActionResultMutationDoesNotAlterState(t *testing
 		t.Fatalf("package name = %v, want @openai/codex", packages[0].(map[string]any)["name"])
 	}
 }
+
+func TestHubStateManagerSnapshotTypedContainersDoNotAlterState(t *testing.T) {
+	manager := newHubStateManager("hub-a", map[string]hubStateSectionHandler{
+		hubStateSectionTokenStats: {
+			Refresh: func(context.Context, hubStateRefreshInput) (any, error) {
+				return map[string]string{"provider": "codex"}, nil
+			},
+		},
+	})
+
+	state, err := manager.refresh(context.Background(), []string{hubStateSectionTokenStats}, false)
+	if err != nil {
+		t.Fatalf("refresh returned error: %v", err)
+	}
+	data := state.Sections[hubStateSectionTokenStats].Data.(map[string]string)
+	data["provider"] = "mutated"
+
+	state = manager.get(nil)
+	data = state.Sections[hubStateSectionTokenStats].Data.(map[string]string)
+	if data["provider"] != "codex" {
+		t.Fatalf("provider = %q, want codex", data["provider"])
+	}
+
+	manager.handlers[hubStateSectionTokenStats] = hubStateSectionHandler{
+		Refresh: func(context.Context, hubStateRefreshInput) (any, error) {
+			return []string{"codex"}, nil
+		},
+	}
+	state, err = manager.refresh(context.Background(), []string{hubStateSectionTokenStats}, false)
+	if err != nil {
+		t.Fatalf("second refresh returned error: %v", err)
+	}
+	labels := state.Sections[hubStateSectionTokenStats].Data.([]string)
+	labels[0] = "mutated"
+
+	state = manager.get(nil)
+	labels = state.Sections[hubStateSectionTokenStats].Data.([]string)
+	if labels[0] != "codex" {
+		t.Fatalf("label = %q, want codex", labels[0])
+	}
+}
+
+func TestHubStateManagerSnapshotNestedTypedContainersDoNotAlterState(t *testing.T) {
+	manager := newHubStateManager("hub-a", map[string]hubStateSectionHandler{
+		hubStateSectionAgentPackages: {
+			Action: func(context.Context, string, map[string]any) (any, error) {
+				return []map[string]any{{"labels": []string{"a"}}}, nil
+			},
+		},
+	})
+
+	params := map[string]any{"metadata": map[string]any{"labels": []string{"a"}}}
+	state, err := manager.action(context.Background(), hubStateSectionAgentPackages, "install", params)
+	if err != nil {
+		t.Fatalf("action returned error: %v", err)
+	}
+	action := state.Sections[hubStateSectionAgentPackages].Action
+	action.Params["metadata"].(map[string]any)["labels"].([]string)[0] = "mutated"
+	action.Result.([]map[string]any)[0]["labels"].([]string)[0] = "mutated"
+
+	state = manager.get(nil)
+	action = state.Sections[hubStateSectionAgentPackages].Action
+	if got := action.Params["metadata"].(map[string]any)["labels"].([]string)[0]; got != "a" {
+		t.Fatalf("param label = %q, want a", got)
+	}
+	if got := action.Result.([]map[string]any)[0]["labels"].([]string)[0]; got != "a" {
+		t.Fatalf("result label = %q, want a", got)
+	}
+}

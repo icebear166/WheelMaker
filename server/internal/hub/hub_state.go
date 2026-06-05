@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -352,23 +353,55 @@ func cloneHubStateParams(params map[string]any) map[string]any {
 }
 
 func cloneHubStateValue(value any) any {
-	switch typed := value.(type) {
-	case nil:
+	if value == nil {
 		return nil
-	case map[string]any:
-		clone := make(map[string]any, len(typed))
-		for key, item := range typed {
-			clone[key] = cloneHubStateValue(item)
+	}
+	return cloneHubStateReflectValue(reflect.ValueOf(value)).Interface()
+}
+
+func cloneHubStateReflectValue(value reflect.Value) reflect.Value {
+	if !value.IsValid() {
+		return value
+	}
+	switch value.Kind() {
+	case reflect.Interface:
+		if value.IsNil() {
+			return reflect.Zero(value.Type())
+		}
+		cloned := cloneHubStateReflectValue(value.Elem())
+		if cloned.Type().AssignableTo(value.Type()) {
+			return cloned
+		}
+		out := reflect.New(value.Type()).Elem()
+		out.Set(cloned)
+		return out
+	case reflect.Map:
+		if value.IsNil() {
+			return reflect.Zero(value.Type())
+		}
+		clone := reflect.MakeMapWithSize(value.Type(), value.Len())
+		iter := value.MapRange()
+		for iter.Next() {
+			key := cloneHubStateReflectValue(iter.Key())
+			item := cloneHubStateReflectValue(iter.Value())
+			clone.SetMapIndex(key, item)
 		}
 		return clone
-	case []any:
-		clone := make([]any, len(typed))
-		for i, item := range typed {
-			clone[i] = cloneHubStateValue(item)
+	case reflect.Slice:
+		if value.IsNil() {
+			return reflect.Zero(value.Type())
+		}
+		clone := reflect.MakeSlice(value.Type(), value.Len(), value.Len())
+		for i := 0; i < value.Len(); i++ {
+			clone.Index(i).Set(cloneHubStateReflectValue(value.Index(i)))
 		}
 		return clone
-	case string, bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
-		return typed
+	case reflect.Array:
+		clone := reflect.New(value.Type()).Elem()
+		for i := 0; i < value.Len(); i++ {
+			clone.Index(i).Set(cloneHubStateReflectValue(value.Index(i)))
+		}
+		return clone
 	default:
 		return value
 	}
