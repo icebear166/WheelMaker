@@ -1,6 +1,7 @@
 import {
   appendPortRelayAutoAuthCode,
   appendPortRelayOpenPath,
+  buildPortRelayClearSiteDataUrl,
   buildPortRelayOpenUrl,
   parsePortRelayLocalHttpUrl,
   resolvePortRelayOpenUrl,
@@ -68,6 +69,15 @@ describe('port relay URL helpers', () => {
     );
     expect(appendPortRelayAutoAuthCode('https://relay.example.com:28801/session?id=1#logs', '')).toBe(
       'https://relay.example.com:28801/session?id=1#logs',
+    );
+  });
+
+  test('builds a same-origin relay site-data cleanup URL with the original page as next', () => {
+    expect(buildPortRelayClearSiteDataUrl('https://relay.example.com:28801/session?id=1#logs', '123456')).toBe(
+      'https://relay.example.com:28801/__wheelmaker/relay/clear-site-data?next=%2Fsession%3Fid%3D1&__wm_relay_code=123456',
+    );
+    expect(buildPortRelayClearSiteDataUrl('https://relay.example.com:28801/session?id=1#logs', '')).toBe(
+      'https://relay.example.com:28801/__wheelmaker/relay/clear-site-data?next=%2Fsession%3Fid%3D1',
     );
   });
 });

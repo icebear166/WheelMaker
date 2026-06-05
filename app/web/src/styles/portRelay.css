@@ -185,6 +185,11 @@
   font-size: 13px;
 }
 
+.port-relay-clear-cache-btn .codicon {
+  margin-right: 5px;
+  font-size: 13px;
+}
+
 .port-relay-targets-section {
   gap: 8px;
 }
@@ -328,6 +333,17 @@
   max-height: 100%;
   border: 0;
   background: #ffffff;
+}
+
+.port-relay-clear-site-data-frame {
+  position: fixed;
+  top: -9999px;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .port-relay-floating-bubble {

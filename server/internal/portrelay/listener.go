@@ -64,6 +64,9 @@ func (c *Controller) handleDataPlane(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(c.Status())
 		return
+	case internalClearSiteDataPath:
+		c.handleClearSiteData(w, r)
+		return
 	}
 
 	slot := c.currentSlot()
@@ -154,6 +157,33 @@ func (c *Controller) handleURLAccessCode(w http.ResponseWriter, r *http.Request,
 func (c *Controller) handleLogout(w http.ResponseWriter, r *http.Request) {
 	c.clearAuthCookie(w, r)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (c *Controller) handleClearSiteData(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	slot := c.currentSlot()
+	if !slot.Enabled {
+		http.Error(w, "relay disabled", http.StatusServiceUnavailable)
+		return
+	}
+	next := safeRelayNext(r.URL.Query().Get("next"))
+	if code := r.URL.Query().Get(relayURLCodeParam); code != "" {
+		if code != slot.AccessCode {
+			http.Redirect(w, r, relayLoginLocation(next, true), http.StatusSeeOther)
+			return
+		}
+		c.setAuthCookie(w, r, slot)
+		writeClearSiteDataPage(w, next)
+		return
+	}
+	if !c.authenticated(r, slot) {
+		http.Redirect(w, r, relayLoginLocation(next, false), http.StatusSeeOther)
+		return
+	}
+	writeClearSiteDataPage(w, next)
 }
 
 func (c *Controller) handleExternalHTTP(w http.ResponseWriter, r *http.Request, tunnel *registryTunnel) {
@@ -374,6 +404,52 @@ func writeLoginPage(w http.ResponseWriter, options loginPageOptions) {
   </main>
 </body>
 </html>`, internalLoginPath, html.EscapeString(next), errorClass)))
+}
+
+func writeClearSiteDataPage(w http.ResponseWriter, next string) {
+	safeNext := safeRelayNext(next)
+	nextJSON, err := json.Marshal(safeNext)
+	if err != nil {
+		nextJSON = []byte(`"/"`)
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Clear-Site-Data", `"cache", "storage"`)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(fmt.Sprintf(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WheelMaker Port Relay Cleanup</title>
+</head>
+<body>
+  <script>
+    (async function () {
+      try {
+        if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map(registration => registration.unregister()));
+        }
+      } catch (error) {}
+      try {
+        if (window.caches && caches.keys) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map(key => caches.delete(key)));
+        }
+      } catch (error) {}
+      try { localStorage.clear(); } catch (error) {}
+      try { sessionStorage.clear(); } catch (error) {}
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: "wheelmaker:portRelaySiteDataCleared" }, "*");
+        }
+      } catch (error) {}
+      window.location.replace(%s);
+    }());
+  </script>
+</body>
+</html>`, string(nextJSON))))
 }
 
 func relayLoginLocation(next string, invalidCode bool) string {

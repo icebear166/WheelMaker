@@ -19,6 +19,7 @@ type PortRelaySettingsDetailProps = {
   portRelayAccessCode: string;
   regeneratePortRelayAccessCode: () => Promise<void>;
   copyPortRelayAccessCode: () => Promise<void>;
+  clearPortRelaySiteData: () => Promise<void>;
   portRelayCodeCopied: boolean;
   portRelayTargets: PortRelayTarget[];
   selectedPortRelayTarget: PortRelayTarget | null;
@@ -45,6 +46,7 @@ export function PortRelaySettingsDetail({
   portRelayAccessCode,
   regeneratePortRelayAccessCode,
   copyPortRelayAccessCode,
+  clearPortRelaySiteData,
   portRelayCodeCopied,
   portRelayTargets,
   selectedPortRelayTarget,
@@ -220,6 +222,16 @@ export function PortRelaySettingsDetail({
           disabled={portRelayLoading || !selectedTarget}
         >
           {portRelayLoading ? 'Working...' : 'Enable'}
+        </button>
+        <button
+          type="button"
+          className="settings-detail-action-btn port-relay-clear-cache-btn"
+          onClick={() => clearPortRelaySiteData().catch(() => undefined)}
+          disabled={portRelayLoading || !portRelaySnapshot.enabled}
+          aria-label="Clear relay cache and service worker data"
+        >
+          <span className="codicon codicon-clear-all" aria-hidden="true" />
+          Clear Relay Cache
         </button>
         <button
           type="button"

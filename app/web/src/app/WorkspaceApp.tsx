@@ -12,6 +12,7 @@ declare global {
 
 import { getDefaultRegistryAddress, toRegistryWsUrl } from '../runtime';
 import { appendPortRelayAutoAuthCode, appendPortRelayOpenPath, parsePortRelayLocalHttpUrl, resolvePortRelayOpenUrl } from '../portRelay/portRelayUrl';
+import { buildPortRelayClearSiteDataUrl } from '../portRelay/portRelayUrl';
 import type { PortRelayLocalHttpUrl } from '../portRelay/portRelayUrl';
 import {
   normalizePortRelayListenPort,
@@ -35,6 +36,7 @@ import {
   submitDesktopRemoteWebCandidate,
   type DesktopWebSourceState,
 } from '../platform/desktop/webSource';
+import {getNativeWebSourceBridge} from '../platform/native/webSource';
 import {isNativeShellHost} from '../platform/native/webSource';
 import {
   AppConfirmDialog,
@@ -684,11 +686,53 @@ const FLOATING_CONTROL_IDLE_DELAY_MS = 3000;
 const PORT_RELAY_FLOATING_Y_RATIO_STORAGE_KEY = 'wheelmaker:portRelayFloatingYRatio';
 const PORT_RELAY_FLOATING_SLOT_STORAGE_KEY = 'wheelmaker:portRelayFloatingSlot';
 const PORT_RELAY_FLOATING_SIDE_STORAGE_KEY = 'wheelmaker:portRelayFloatingSide';
+const PORT_RELAY_CLEAR_SITE_DATA_MESSAGE = 'wheelmaker:portRelaySiteDataCleared';
+const PORT_RELAY_CLEAR_SITE_DATA_TIMEOUT_MS = 1200;
 const PROJECT_INDEX_SCAN_CONCURRENCY = 2;
 const CHAT_FILE_MENTION_SEARCH_LIMIT = 20;
 const CHAT_FILE_MENTION_DEBOUNCE_MS = 140;
 const EMPTY_CHAT_COMPOSER_DRAFT: ChatComposerDraft = { text: '', attachments: [], fileMentions: [] };
 const DEFAULT_PORT_RELAY_SNAPSHOT: RegistryPortRelaySnapshot = {ok: true, enabled: false, status: 'Disabled'};
+
+function relayOriginFromUrl(value: string): string {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return '';
+  }
+}
+
+function waitForPortRelaySiteDataClear(relayUrl: string): Promise<void> {
+  const expectedOrigin = relayOriginFromUrl(relayUrl);
+  return new Promise(resolve => {
+    let finished = false;
+    let timer: ReturnType<typeof window.setTimeout> | null = null;
+    function finish() {
+      if (finished) {
+        return;
+      }
+      finished = true;
+      if (timer) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+      window.removeEventListener('message', handleMessage);
+      resolve();
+    }
+    function handleMessage(event: MessageEvent) {
+      if (!expectedOrigin || event.origin !== expectedOrigin) {
+        return;
+      }
+      const data = event.data as {type?: unknown} | null;
+      if (!data || data.type !== PORT_RELAY_CLEAR_SITE_DATA_MESSAGE) {
+        return;
+      }
+      finish();
+    }
+    window.addEventListener('message', handleMessage);
+    timer = window.setTimeout(finish, PORT_RELAY_CLEAR_SITE_DATA_TIMEOUT_MS);
+  });
+}
 
 function isRegistryChatContentBlock(block: RegistryChatContentBlock | undefined): block is RegistryChatContentBlock {
   return !!block && typeof block.type === 'string' && block.type.length > 0;
@@ -2197,10 +2241,13 @@ export function App() {
   const [portRelayFrameOpen, setPortRelayFrameOpen] = useState(false);
   const [portRelayFramePlacement, setPortRelayFramePlacement] = useState<PortRelayFramePlacement>('main');
   const [portRelayFramePath, setPortRelayFramePath] = useState('');
+  const [portRelayClearSiteDataUrl, setPortRelayClearSiteDataUrl] = useState('');
+  const [portRelayFrameReloadKey, setPortRelayFrameReloadKey] = useState(0);
   const [portRelayFrameAutoOpenPending, setPortRelayFrameAutoOpenPending] = useState(false);
   const [portRelayTargetMenuOpen, setPortRelayTargetMenuOpen] = useState(false);
   const [portRelayMenuSwitchingTarget, setPortRelayMenuSwitchingTarget] = useState<PortRelayTarget | null>(null);
   const portRelayCodeCopyTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const portRelayClearSiteDataTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const portRelayTargetMenuTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const portRelayTargetMenuPressRef = useRef<PortRelayTargetMenuPressState | null>(null);
   const portRelayTargetMenuRef = useRef<HTMLDivElement | null>(null);
@@ -2319,6 +2366,9 @@ export function App() {
   useEffect(() => () => {
     if (portRelayCodeCopyTimerRef.current) {
       window.clearTimeout(portRelayCodeCopyTimerRef.current);
+    }
+    if (portRelayClearSiteDataTimerRef.current) {
+      window.clearTimeout(portRelayClearSiteDataTimerRef.current);
     }
   }, []);
 
@@ -10576,6 +10626,43 @@ export function App() {
     }
   }, [portRelayAccessCode, portRelayAccessCodeUnknown]);
 
+  const clearPortRelaySiteData = useCallback(async () => {
+    setPortRelayError('');
+    if (!portRelayFrameUrl) {
+      setPortRelayError('Relay page is not ready.');
+      return;
+    }
+    if (portRelayAccessCodeUnknown) {
+      setPortRelayError('Access code is unknown on this device. Generate a new code before clearing relay cache.');
+      return;
+    }
+    const clearUrl = buildPortRelayClearSiteDataUrl(portRelayFrameUrl, portRelayFrameAccessCode);
+    setPortRelayLoading(true);
+    try {
+      if (portRelayClearSiteDataTimerRef.current) {
+        window.clearTimeout(portRelayClearSiteDataTimerRef.current);
+        portRelayClearSiteDataTimerRef.current = null;
+      }
+      setPortRelayClearSiteDataUrl('');
+      const nativeResult = await Promise.resolve(getNativeWebSourceBridge()?.clearPortRelaySiteData?.(portRelayFrameUrl));
+      if (nativeResult?.ok === false) {
+        throw new Error(nativeResult.error || 'Failed to clear relay site data.');
+      }
+      setPortRelayClearSiteDataUrl(clearUrl);
+      await waitForPortRelaySiteDataClear(portRelayFrameUrl);
+      setPortRelayFrameReloadKey(key => key + 1);
+      setPortRelayFrameOpen(true);
+      portRelayClearSiteDataTimerRef.current = window.setTimeout(() => {
+        setPortRelayClearSiteDataUrl(current => (current === clearUrl ? '' : current));
+        portRelayClearSiteDataTimerRef.current = null;
+      }, 5000);
+    } catch (err) {
+      setPortRelayError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPortRelayLoading(false);
+    }
+  }, [portRelayAccessCodeUnknown, portRelayFrameAccessCode, portRelayFrameUrl]);
+
   const selectPortRelayTarget = useCallback(async (target: PortRelayTarget) => {
     setSelectedPortRelayTarget(target);
     persistPortRelaySettings({selectedTarget: target});
@@ -13678,6 +13765,7 @@ export function App() {
           portRelayAccessCode={portRelayAccessCode}
           regeneratePortRelayAccessCode={regeneratePortRelayAccessCode}
           copyPortRelayAccessCode={copyPortRelayAccessCode}
+          clearPortRelaySiteData={clearPortRelaySiteData}
           portRelayCodeCopied={portRelayCodeCopied}
           portRelayTargets={portRelayTargets}
           selectedPortRelayTarget={selectedPortRelayTarget}
@@ -15155,6 +15243,7 @@ export function App() {
     if (isWide && portRelayFrameOpen && portRelayFramePlacement === 'main' && portRelayFrameUrl) {
       return (
         <PortRelayFrameSurface
+          key={`desktop-main:${portRelayFrameReloadKey}:${portRelayFrameUrl}`}
           mode="desktop"
           url={portRelayFrameUrl}
           onCloseChrome={closePortRelayFrameFromChrome}
@@ -16581,6 +16670,7 @@ export function App() {
   const portRelayMobileFrameOverlay = mobilePortRelayFrameOpen
     ? (
       <PortRelayFrameSurface
+        key={`mobile-main:${portRelayFrameReloadKey}:${portRelayFrameUrl}`}
         mode="mobile"
         url={portRelayFrameUrl}
         onCloseChrome={closePortRelayFrameFromChrome}
@@ -16588,8 +16678,17 @@ export function App() {
       />
     )
     : null;
+  const portRelayClearSiteDataFrame = portRelayClearSiteDataUrl ? (
+    <iframe
+      title="Port Relay site data cleanup"
+      src={portRelayClearSiteDataUrl}
+      className="port-relay-clear-site-data-frame"
+      aria-hidden="true"
+    />
+  ) : null;
   const renderChatPortRelayPreviewSurface = (mode: 'desktop' | 'mobile') => (
     <PortRelayFrameSurface
+      key={`${mode}:chat-preview:${portRelayFrameReloadKey}:${portRelayFrameUrl}`}
       mode={mode}
       url={portRelayFrameUrl}
       chrome={true}
@@ -16801,6 +16900,7 @@ export function App() {
       />
       {chatQuickSwitchMenuPlacement.kind === 'desktop' ? chatQuickSwitchMenu : null}
       {portRelayMobileFrameOverlay}
+      {portRelayClearSiteDataFrame}
       {registryDebugPanel}
       {markdownImageExportRequest ? (
         <MarkdownImageExportSurface

@@ -31,6 +31,12 @@ export type NativeDiagnosticLogLevelState = {
   logLevel?: NativeDiagnosticLogLevel;
 };
 
+export type NativePortRelaySiteDataResult = {
+  ok?: boolean;
+  relayUrl?: string;
+  error?: string;
+};
+
 export type NativeWebSourceBridge = {
   enabled?: boolean;
   getWebSourceState?: () => Promise<NativeWebSourceState> | NativeWebSourceState;
@@ -44,6 +50,9 @@ export type NativeWebSourceBridge = {
   setDiagnosticLogLevel?: (
     logLevel: NativeDiagnosticLogLevel,
   ) => Promise<NativeDiagnosticLogLevelState> | NativeDiagnosticLogLevelState;
+  clearPortRelaySiteData?: (
+    relayUrl: string,
+  ) => Promise<NativePortRelaySiteDataResult> | NativePortRelaySiteDataResult;
 };
 
 type AndroidNativeBridge = {
@@ -52,6 +61,7 @@ type AndroidNativeBridge = {
   setRemoteWebCandidate?: (candidateJson: string) => string;
   drainWebDiagnostics?: () => string;
   setDiagnosticLogLevel?: (logLevel: NativeDiagnosticLogLevel) => string;
+  clearPortRelaySiteData?: (relayUrl: string) => string;
 };
 
 type NativeWindow = Window & {
@@ -70,6 +80,10 @@ function parseNativeWebDiagnostics(value: string | undefined): NativeWebDiagnost
 
 function parseNativeDiagnosticLogLevelState(value: string | undefined): NativeDiagnosticLogLevelState {
   return JSON.parse(value ?? '{}') as NativeDiagnosticLogLevelState;
+}
+
+function parseNativePortRelaySiteDataResult(value: string | undefined): NativePortRelaySiteDataResult {
+  return JSON.parse(value ?? '{}') as NativePortRelaySiteDataResult;
 }
 
 function isLoopbackHost(hostname: string): boolean {
@@ -94,6 +108,9 @@ function wrapAndroidNativeBridge(native: AndroidNativeBridge): NativeWebSourceBr
       : undefined,
     setDiagnosticLogLevel: native.setDiagnosticLogLevel
       ? logLevel => Promise.resolve(parseNativeDiagnosticLogLevelState(native.setDiagnosticLogLevel?.(logLevel)))
+      : undefined,
+    clearPortRelaySiteData: native.clearPortRelaySiteData
+      ? relayUrl => Promise.resolve(parseNativePortRelaySiteDataResult(native.clearPortRelaySiteData?.(relayUrl)))
       : undefined,
   };
 }

@@ -151,6 +151,23 @@ describe('native Web source helpers', () => {
     expect(native.setDiagnosticLogLevel).toHaveBeenCalledWith('warning');
   });
 
+  test('wraps Android native port relay site-data clearing', async () => {
+    const native = {
+      clearPortRelaySiteData: jest.fn((relayUrl: string) => JSON.stringify({ok: true, relayUrl})),
+    };
+    (globalThis as {window?: unknown}).window = {
+      WheelMakerAndroidNative: native,
+    };
+
+    const bridge = getNativeWebSourceBridge();
+
+    await expect(bridge?.clearPortRelaySiteData?.('https://relay.example.com:28801/')).resolves.toEqual({
+      ok: true,
+      relayUrl: 'https://relay.example.com:28801/',
+    });
+    expect(native.clearPortRelaySiteData).toHaveBeenCalledWith('https://relay.example.com:28801/');
+  });
+
   test('falls back to Desktop bridge when Android bridge is absent', () => {
     const bridge = {
       enabled: true,

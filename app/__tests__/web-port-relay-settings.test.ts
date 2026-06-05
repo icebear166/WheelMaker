@@ -48,6 +48,11 @@ describe('port relay settings UI source structure', () => {
     expect(mainTsx).toContain('relayUrl: portRelaySnapshot.relayUrl');
     expect(mainTsx).toContain('const portRelayFrameAccessCode = portRelayAccessCodeUnknown ? \'\' : portRelayAccessCode;');
     expect(mainTsx).toContain('appendPortRelayAutoAuthCode(');
+    expect(mainTsx).toContain('buildPortRelayClearSiteDataUrl(');
+    expect(mainTsx).toContain('const clearPortRelaySiteData = useCallback(async () => {');
+    expect(mainTsx).toContain('getNativeWebSourceBridge()?.clearPortRelaySiteData?.(portRelayFrameUrl)');
+    expect(mainTsx).toContain('setPortRelayClearSiteDataUrl(clearUrl);');
+    expect(mainTsx).toContain('setPortRelayFrameReloadKey(key => key + 1);');
     expect(mainTsx).not.toContain('preferDirectPortRelayUrl');
     expect(mainTsx).not.toContain('preferSnapshotRelayUrl');
     expect(mainTsx).not.toContain('getDesktopWindowBridge');
@@ -57,10 +62,14 @@ describe('port relay settings UI source structure', () => {
     expect(detailTsx).toContain('className="port-relay-form-grid"');
     expect(detailTsx).toContain('className="port-relay-code-row"');
     expect(detailTsx).toContain('className={`port-relay-status-pill ${statusClass}`}');
+    expect(detailTsx).toContain('clearPortRelaySiteData');
+    expect(detailTsx).toContain('Clear Relay Cache');
+    expect(detailTsx).toContain('aria-label="Clear relay cache and service worker data"');
     expect(stylesCss).toContain('.port-relay-panel');
     expect(stylesCss).toContain('.port-relay-form-grid');
     expect(stylesCss).toContain('.port-relay-code-row');
     expect(stylesCss).toContain('.port-relay-status-pill');
+    expect(stylesCss).toContain('.port-relay-clear-site-data-frame');
   });
 
   test('embeds relay pages through desktop main pane, chat preview, and mobile floating overlay', () => {
@@ -97,6 +106,7 @@ describe('port relay settings UI source structure', () => {
     expect(mainTsx).toContain('mode="mobile"');
     expect(mainTsx).toContain('chrome={true}');
     expect(mainTsx).toContain('url={portRelayFrameUrl}');
+    expect(mainTsx).toContain('key={`mobile-main:${portRelayFrameReloadKey}:${portRelayFrameUrl}`}');
     expect(mainTsx).toContain('<PortRelayFloatingButton');
     expect(surfaceTsx).toContain('className={`port-relay-frame-surface ${mode}`}');
     expect(surfaceTsx).toContain('className="chat-preview-title"');
@@ -120,6 +130,17 @@ describe('port relay settings UI source structure', () => {
     expect(stylesCss).toContain(".floating-control-stack[data-side='left']");
     expect(stylesCss).toContain(".floating-control-stack[data-side='right']");
     expect(stylesCss).toContain(".floating-control-stack[data-side='left'] .port-relay-target-switch-menu");
+  });
+
+  test('loads the relay cleanup page in a hidden iframe before reloading visible relay frames', () => {
+    expect(mainTsx).toContain('const [portRelayClearSiteDataUrl, setPortRelayClearSiteDataUrl] = useState(\'\');');
+    expect(mainTsx).toContain('const [portRelayFrameReloadKey, setPortRelayFrameReloadKey] = useState(0);');
+    expect(mainTsx).toContain('const portRelayClearSiteDataFrame = portRelayClearSiteDataUrl ? (');
+    expect(mainTsx).toContain('className="port-relay-clear-site-data-frame"');
+    expect(mainTsx).toContain('title="Port Relay site data cleanup"');
+    expect(mainTsx).toContain('{portRelayClearSiteDataFrame}');
+    expect(mainTsx).toContain('key={`desktop-main:${portRelayFrameReloadKey}:${portRelayFrameUrl}`}');
+    expect(mainTsx).toContain('key={`${mode}:chat-preview:${portRelayFrameReloadKey}:${portRelayFrameUrl}`}');
   });
 
   test('auto-opens the desktop relay frame after enable and polls opening status silently', () => {

@@ -18,10 +18,11 @@ import (
 )
 
 const (
-	internalHubPath    = "/__wheelmaker/relay/hub"
-	internalLoginPath  = "/__wheelmaker/relay/login"
-	internalLogoutPath = "/__wheelmaker/relay/logout"
-	internalStatusPath = "/__wheelmaker/relay/status"
+	internalHubPath           = "/__wheelmaker/relay/hub"
+	internalLoginPath         = "/__wheelmaker/relay/login"
+	internalLogoutPath        = "/__wheelmaker/relay/logout"
+	internalStatusPath        = "/__wheelmaker/relay/status"
+	internalClearSiteDataPath = "/__wheelmaker/relay/clear-site-data"
 
 	relayCookieName   = "wm_port_relay"
 	relayURLCodeParam = "__wm_relay_code"

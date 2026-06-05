@@ -9,6 +9,7 @@ class WheelMakerBridge(
     private val androidNotificationRuntime: AndroidNotificationRuntime,
     private val androidApkUpdateRuntime: AndroidApkUpdateRuntime,
     private val androidImageShareRuntime: AndroidImageShareRuntime,
+    private val androidPortRelaySiteDataRuntime: AndroidPortRelaySiteDataRuntime,
     private val androidWebDiagnostics: AndroidWebDiagnostics,
     private val androidDiagnosticLogLevelStore: AndroidDiagnosticLogLevelStore
 ) {
@@ -85,4 +86,7 @@ class WheelMakerBridge(
 
     @JavascriptInterface
     fun shareResponseImage(rawJson: String): String = androidImageShareRuntime.shareResponseImage(rawJson)
+
+    @JavascriptInterface
+    fun clearPortRelaySiteData(relayUrl: String): String = androidPortRelaySiteDataRuntime.clear(relayUrl)
 }

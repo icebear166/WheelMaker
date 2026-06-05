@@ -43,6 +43,7 @@ class MainActivity : Activity() {
     private lateinit var androidNotificationRuntime: AndroidNotificationRuntime
     private lateinit var androidApkUpdateRuntime: AndroidApkUpdateRuntime
     private lateinit var androidImageShareRuntime: AndroidImageShareRuntime
+    private lateinit var androidPortRelaySiteDataRuntime: AndroidPortRelaySiteDataRuntime
     private lateinit var androidWebDiagnostics: AndroidWebDiagnostics
     private lateinit var androidDiagnosticLogLevelStore: AndroidDiagnosticLogLevelStore
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
@@ -69,6 +70,7 @@ class MainActivity : Activity() {
         androidNotificationRuntime = AndroidNotificationRuntime(this, webView, NOTIFICATION_PERMISSION_REQUEST_CODE)
         androidApkUpdateRuntime = AndroidApkUpdateRuntime(this, webView)
         androidImageShareRuntime = AndroidImageShareRuntime(this)
+        androidPortRelaySiteDataRuntime = AndroidPortRelaySiteDataRuntime(webView)
         webView.setBackgroundColor(APP_BACKGROUND_COLOR)
         configureWindowInsets(rootView)
         configureWebView(webView)
@@ -222,6 +224,7 @@ class MainActivity : Activity() {
                 androidNotificationRuntime,
                 androidApkUpdateRuntime,
                 androidImageShareRuntime,
+                androidPortRelaySiteDataRuntime,
                 androidWebDiagnostics,
                 androidDiagnosticLogLevelStore
             ),

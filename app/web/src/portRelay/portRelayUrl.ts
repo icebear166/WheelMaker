@@ -23,6 +23,7 @@ export type PortRelayLocalHttpUrl = {
 };
 
 const PORT_RELAY_AUTO_AUTH_QUERY = '__wm_relay_code';
+const PORT_RELAY_CLEAR_SITE_DATA_PATH = '/__wheelmaker/relay/clear-site-data';
 
 function isLoopbackHost(hostname: string): boolean {
   const value = hostname.trim().toLowerCase().replace(/^\[/, '').replace(/\]$/, '');
@@ -103,6 +104,24 @@ export function appendPortRelayAutoAuthCode(openUrl: string, accessCode: string)
   try {
     const url = new URL(openUrl);
     url.searchParams.set(PORT_RELAY_AUTO_AUTH_QUERY, code);
+    return url.toString();
+  } catch {
+    return openUrl;
+  }
+}
+
+export function buildPortRelayClearSiteDataUrl(openUrl: string, accessCode: string): string {
+  try {
+    const url = new URL(openUrl);
+    const next = `${url.pathname || '/'}${url.search}`;
+    const code = accessCode.trim();
+    url.pathname = PORT_RELAY_CLEAR_SITE_DATA_PATH;
+    url.search = '';
+    url.hash = '';
+    url.searchParams.set('next', next || '/');
+    if (/^\d{6}$/.test(code)) {
+      url.searchParams.set(PORT_RELAY_AUTO_AUTH_QUERY, code);
+    }
     return url.toString();
   } catch {
     return openUrl;

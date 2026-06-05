@@ -330,6 +330,86 @@ func TestRelayURLAccessCodeUsesEmbeddableCookieForForwardedHTTPS(t *testing.T) {
 	}
 }
 
+func TestRelayClearSiteDataPageClearsOriginStorageAndReauthenticatesWithURLCode(t *testing.T) {
+	c := NewController(ControllerConfig{})
+	c.mu.Lock()
+	c.slot = relaySlot{
+		Enabled:              true,
+		Status:               rp.RelayStatusOpening,
+		RelayID:              "relay-test",
+		AccessCode:           "123456",
+		AccessCodeGeneration: 1,
+	}
+	c.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, internalClearSiteDataPath+"?next=%2Fconsole%3Ftab%3Drelay&__wm_relay_code=123456", nil)
+	req.Header.Set("X-Forwarded-Proto", "https")
+	resp := httptest.NewRecorder()
+
+	c.handleDataPlane(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("clear site data status=%d, want 200", resp.Code)
+	}
+	if got := resp.Header().Get("Clear-Site-Data"); got != `"cache", "storage"` {
+		t.Fatalf("Clear-Site-Data=%q, want cache and storage only", got)
+	}
+	setCookie := resp.Header().Get("Set-Cookie")
+	if !strings.Contains(setCookie, relayCookieName+"=") {
+		t.Fatalf("clear site data missing relay auth cookie: %q", setCookie)
+	}
+	body := resp.Body.String()
+	for _, want := range []string{
+		"navigator.serviceWorker.getRegistrations",
+		"caches.keys",
+		"localStorage.clear",
+		"sessionStorage.clear",
+		`window.location.replace("/console?tab=relay")`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("clear site data page missing %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, "123456") {
+		t.Fatalf("clear site data page leaked access code:\n%s", body)
+	}
+}
+
+func TestRelayClearSiteDataPageRequiresAuthOrValidURLCode(t *testing.T) {
+	c := NewController(ControllerConfig{})
+	c.mu.Lock()
+	c.slot = relaySlot{
+		Enabled:              true,
+		Status:               rp.RelayStatusOpening,
+		RelayID:              "relay-test",
+		AccessCode:           "123456",
+		AccessCodeGeneration: 1,
+	}
+	c.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, internalClearSiteDataPath+"?next=%2Fconsole&__wm_relay_code=000000", nil)
+	resp := httptest.NewRecorder()
+	c.handleDataPlane(resp, req)
+
+	if resp.Code != http.StatusSeeOther {
+		t.Fatalf("bad clear code status=%d, want 303", resp.Code)
+	}
+	if got := resp.Header().Get("Location"); got != internalLoginPath+"?error=1&next=%2Fconsole" {
+		t.Fatalf("bad clear code Location=%q", got)
+	}
+
+	unauthReq := httptest.NewRequest(http.MethodGet, internalClearSiteDataPath+"?next=%2Fconsole", nil)
+	unauthResp := httptest.NewRecorder()
+	c.handleDataPlane(unauthResp, unauthReq)
+
+	if unauthResp.Code != http.StatusSeeOther {
+		t.Fatalf("unauth clear status=%d, want 303", unauthResp.Code)
+	}
+	if got := unauthResp.Header().Get("Location"); got != internalLoginPath+"?next=%2Fconsole" {
+		t.Fatalf("unauth clear Location=%q", got)
+	}
+}
+
 func TestRelayLoginPostUsesEmbeddableCookieForForwardedHTTPS(t *testing.T) {
 	c := NewController(ControllerConfig{})
 	c.mu.Lock()
