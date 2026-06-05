@@ -73,4 +73,32 @@ describe('hub state registry service', () => {
       timeoutMs: 60000,
     });
   });
+
+  test('normalizes malformed hub state sections', async () => {
+    const client = {
+      request: jest.fn().mockResolvedValue({
+        type: 'response',
+        payload: {
+          state: {
+            hubId: 'hub-a',
+            status: 'ready',
+            sections: {
+              tokenStats: null,
+              skills: {data: {ok: true}},
+              fileIndex: {status: 123, error: 5},
+            },
+          },
+        },
+      }),
+    } as unknown as RegistryClient;
+    const repository = new RegistryRepository(client);
+
+    const state = await repository.getHubState('hub-a');
+
+    expect(state.sections.tokenStats.status).toBe('empty');
+    expect(state.sections.skills.status).toBe('empty');
+    expect(state.sections.skills.data).toEqual({ok: true});
+    expect(state.sections.fileIndex.status).toBe('empty');
+    expect(state.sections.fileIndex.error).toBeUndefined();
+  });
 });

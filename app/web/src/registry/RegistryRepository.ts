@@ -238,13 +238,32 @@ export class RegistryRepository {
 
   private normalizeHubState(raw: unknown, fallbackHubId: string): RegistryHubState {
     const input = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+    const sectionsInput = input.sections && typeof input.sections === 'object' && !Array.isArray(input.sections)
+      ? input.sections as Record<string, unknown>
+      : {};
+    const sections: RegistryHubState['sections'] = {};
+    for (const [name, value] of Object.entries(sectionsInput)) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        sections[name] = {status: 'empty'};
+        continue;
+      }
+      const sectionInput = value as Record<string, unknown>;
+      sections[name] = {
+        status: typeof sectionInput.status === 'string' ? sectionInput.status : 'empty',
+        updatedAt: typeof sectionInput.updatedAt === 'string' ? sectionInput.updatedAt : undefined,
+        startedAt: typeof sectionInput.startedAt === 'string' ? sectionInput.startedAt : undefined,
+        error: typeof sectionInput.error === 'string' ? sectionInput.error : undefined,
+        data: sectionInput.data,
+        action: sectionInput.action && typeof sectionInput.action === 'object' && !Array.isArray(sectionInput.action)
+          ? sectionInput.action as RegistryHubState['sections'][string]['action']
+          : undefined,
+      };
+    }
     return {
       hubId: typeof input.hubId === 'string' && input.hubId ? input.hubId : fallbackHubId,
       status: typeof input.status === 'string' ? input.status : 'empty',
       updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : undefined,
-      sections: input.sections && typeof input.sections === 'object' && !Array.isArray(input.sections)
-        ? input.sections as RegistryHubState['sections']
-        : {},
+      sections,
     };
   }
 
