@@ -42,75 +42,62 @@ const (
 )
 
 const (
-	RegistryMethodConnectInit       = "connect.init"
-	RegistryMethodConnectionClosing = "connection.closing"
-	RegistryMethodLocalReadProof    = "local_read.proof"
-	RegistryMethodBatch             = "batch"
-	RegistryMethodHubPing           = "hub.ping"
-	RegistryMethodHubStateGet       = "hub.state.get"
-	RegistryMethodHubStateRefresh   = "hub.state.refresh"
-	RegistryMethodHubStateAction    = "hub.state.action"
-	RegistryMethodHubStateUpdated   = "hub.state.updated"
-	RegistryMethodDebugUploadLog    = "debug.uploadLog"
+	RegistryMethodConnectInit           = "connect.init"
+	RegistryMethodConnectClose          = "connect.close"
+	RegistryMethodConnectLocalReadProof = "connect.localRead.proof"
+	RegistryMethodBatch                 = "batch"
+	RegistryMethodHubPing               = "hub.ping"
+	RegistryMethodHubStateGet           = "hub.state.get"
+	RegistryMethodHubStateRefresh       = "hub.state.refresh"
+	RegistryMethodHubStateAction        = "hub.state.action"
+	RegistryMethodHubStateUpdated       = "hub.state.updated"
+	RegistryMethodDebugUploadLog        = "debug.uploadLog"
 
-	RegistryMethodRegistryReportProjects = "registry.reportProjects"
-	RegistryMethodRegistryUpdateProject  = "registry.updateProject"
-	RegistryMethodRegistrySessionUpdated = "registry.session.updated"
-	RegistryMethodRegistrySessionMessage = "registry.session.message"
-
-	RegistryMethodProjectList      = "project.list"
-	RegistryMethodProjectSyncCheck = "project.syncCheck"
-	RegistryMethodProjectOnline    = "project.online"
-	RegistryMethodProjectOffline   = "project.offline"
+	RegistryMethodHubReportProjects             = "hub.report.projects"
+	RegistryMethodHubReportProject              = "hub.report.project"
+	RegistryMethodRegistryProjectList           = "registry.project.list"
+	RegistryMethodRegistryProjectReport         = "registry.project.report"
+	RegistryMethodProjectSyncCheck              = "project.sync.check"
+	RegistryMethodProjectFSList                 = "project.fs.list"
+	RegistryMethodProjectFSInfo                 = "project.fs.info"
+	RegistryMethodProjectFSRead                 = "project.fs.read"
+	RegistryMethodProjectFSSearch               = "project.fs.search"
+	RegistryMethodProjectFSGrep                 = "project.fs.grep"
+	RegistryMethodProjectFSIndexSearch          = "project.fs.index.search"
+	RegistryMethodProjectGitRefs                = "project.git.refs"
+	RegistryMethodProjectGitLog                 = "project.git.log"
+	RegistryMethodProjectGitCommitFiles         = "project.git.commit.files"
+	RegistryMethodProjectGitCommitFileDiff      = "project.git.commit.fileDiff"
+	RegistryMethodProjectGitDiff                = "project.git.diff"
+	RegistryMethodProjectGitDiffFileDiff        = "project.git.diff.fileDiff"
+	RegistryMethodProjectGitStatus              = "project.git.status"
+	RegistryMethodProjectGitWorkingTreeFileDiff = "project.git.workingTree.fileDiff"
 
 	RegistryMethodSessionUpdated = "session.updated"
 	RegistryMethodSessionMessage = "session.message"
 
-	RegistryMethodSessionList               = "session.list"
-	RegistryMethodSessionRead               = "session.read"
-	RegistryMethodSessionSearch             = "session.search"
-	RegistryMethodSessionNew                = "session.new"
-	RegistryMethodSessionResumeList         = "session.resume.list"
-	RegistryMethodSessionResumeImport       = "session.resume.import"
-	RegistryMethodSessionReload             = "session.reload"
-	RegistryMethodSessionArchive            = "session.archive"
-	RegistryMethodSessionArchiveList        = "session.archive.list"
-	RegistryMethodSessionArchiveRead        = "session.archive.read"
-	RegistryMethodSessionArchiveRestore     = "session.archive.restore"
-	RegistryMethodSessionDelete             = "session.delete"
-	RegistryMethodSessionRename             = "session.rename"
-	RegistryMethodSessionSend               = "session.send"
-	RegistryMethodSessionCancel             = "session.cancel"
-	RegistryMethodSessionMarkRead           = "session.markRead"
-	RegistryMethodSessionSetConfig          = "session.setConfig"
-	RegistryMethodSessionAttachmentStart    = "session.attachment.start"
-	RegistryMethodSessionAttachmentChunk    = "session.attachment.chunk"
-	RegistryMethodSessionAttachmentFinish   = "session.attachment.finish"
-	RegistryMethodSessionAttachmentCancel   = "session.attachment.cancel"
-	RegistryMethodSessionAttachmentDelete   = "session.attachment.delete"
-	RegistryMethodSessionTokenProviders     = "session.token.providers"
-	RegistryMethodSessionTokenDeepSeekStats = "session.token.deepseek.stats"
-	RegistryMethodSessionTokenScan          = "session.token.scan"
-
-	RegistryMethodFSList   = "fs.list"
-	RegistryMethodFSInfo   = "fs.info"
-	RegistryMethodFSRead   = "fs.read"
-	RegistryMethodFSSearch = "fs.search"
-	RegistryMethodFSGrep   = "fs.grep"
-
-	RegistryMethodFSIndexStatus  = "fs.index.status"
-	RegistryMethodFSIndexRebuild = "fs.index.rebuild"
-	RegistryMethodFSIndexSearch  = "fs.index.search"
-
-	RegistryMethodGitRefs                = "git.refs"
-	RegistryMethodGitBranchesLegacy      = "git.branches"
-	RegistryMethodGitLog                 = "git.log"
-	RegistryMethodGitCommitFiles         = "git.commit.files"
-	RegistryMethodGitCommitFileDiff      = "git.commit.fileDiff"
-	RegistryMethodGitDiff                = "git.diff"
-	RegistryMethodGitDiffFileDiff        = "git.diff.fileDiff"
-	RegistryMethodGitStatus              = "git.status"
-	RegistryMethodGitWorkingTreeFileDiff = "git.workingTree.fileDiff"
+	RegistryMethodSessionList             = "session.list"
+	RegistryMethodSessionRead             = "session.read"
+	RegistryMethodSessionSearch           = "session.search"
+	RegistryMethodSessionCreate           = "session.create"
+	RegistryMethodSessionResumeList       = "session.resume.list"
+	RegistryMethodSessionResumeImport     = "session.resume.import"
+	RegistryMethodSessionReload           = "session.reload"
+	RegistryMethodSessionArchive          = "session.archive"
+	RegistryMethodSessionArchiveList      = "session.archive.list"
+	RegistryMethodSessionArchiveRead      = "session.archive.read"
+	RegistryMethodSessionArchiveRestore   = "session.archive.restore"
+	RegistryMethodSessionDelete           = "session.delete"
+	RegistryMethodSessionRename           = "session.rename"
+	RegistryMethodSessionSend             = "session.send"
+	RegistryMethodSessionCancel           = "session.cancel"
+	RegistryMethodSessionMarkRead         = "session.markRead"
+	RegistryMethodSessionConfig           = "session.config"
+	RegistryMethodSessionAttachmentStart  = "session.attachment.start"
+	RegistryMethodSessionAttachmentChunk  = "session.attachment.chunk"
+	RegistryMethodSessionAttachmentFinish = "session.attachment.finish"
+	RegistryMethodSessionAttachmentCancel = "session.attachment.cancel"
+	RegistryMethodSessionAttachmentDelete = "session.attachment.delete"
 
 	RegistryMethodMonitorListHub = "monitor.listHub"
 	RegistryMethodMonitorStatus  = "monitor.status"
@@ -118,17 +105,12 @@ const (
 	RegistryMethodMonitorDB      = "monitor.db"
 	RegistryMethodMonitorAction  = "monitor.action"
 
-	RegistryMethodCmdNPM    = "cmd.npm"
-	RegistryMethodCmdUpdate = "cmd.update"
-	RegistryMethodCmdSkills = "cmd.skills"
-	RegistryMethodCmdToken  = "cmd.token"
-
-	RegistryMethodRelayEnable               = "relay.enable"
-	RegistryMethodRelayDisable              = "relay.disable"
-	RegistryMethodRelayStatus               = "relay.status"
-	RegistryMethodRelayRegenerateAccessCode = "relay.regenerateAccessCode"
-	RegistryMethodRelayOpen                 = "relay.open"
-	RegistryMethodRelayClose                = "relay.close"
+	RegistryMethodRegistryRelayEnable               = "registry.relay.enable"
+	RegistryMethodRegistryRelayDisable              = "registry.relay.disable"
+	RegistryMethodRegistryRelayStatus               = "registry.relay.status"
+	RegistryMethodRegistryRelayRegenerateAccessCode = "registry.relay.regenerateAccessCode"
+	RegistryMethodHubRelayOpen                      = "hub.relay.open"
+	RegistryMethodHubRelayClose                     = "hub.relay.close"
 
 	RegistryMethodSpeechStart  = "speech.start"
 	RegistryMethodSpeechChunk  = "speech.chunk"
@@ -150,73 +132,62 @@ type RegistryMethodDescriptor struct {
 }
 
 var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
-	RegistryMethodConnectInit:       registryMethod(RegistryMethodConnectInit, RegistryRouteConnect, nil),
-	RegistryMethodConnectionClosing: registryClientEventMethod(RegistryMethodConnectionClosing),
-	RegistryMethodLocalReadProof:    registryMethod(RegistryMethodLocalReadProof, RegistryRouteLocalRead, []RegistryRole{RegistryRoleLocalRead}),
-	RegistryMethodBatch:             registryMethod(RegistryMethodBatch, RegistryRouteBatch, []RegistryRole{RegistryRoleClient, RegistryRoleMonitor}),
-	RegistryMethodHubPing:           registryMethod(RegistryMethodHubPing, RegistryRouteHubControl, []RegistryRole{RegistryRoleHub}),
-	RegistryMethodHubStateGet:       registryHubStateMethod(RegistryMethodHubStateGet),
-	RegistryMethodHubStateRefresh:   registryHubStateMethod(RegistryMethodHubStateRefresh),
-	RegistryMethodHubStateAction:    registryHubStateMethod(RegistryMethodHubStateAction),
-	RegistryMethodHubStateUpdated:   registryClientEventMethod(RegistryMethodHubStateUpdated),
-	RegistryMethodDebugUploadLog:    registryMethod(RegistryMethodDebugUploadLog, RegistryRouteDebug, []RegistryRole{RegistryRoleClient}),
+	RegistryMethodConnectInit:           registryMethod(RegistryMethodConnectInit, RegistryRouteConnect, nil),
+	RegistryMethodConnectClose:          registryClientEventMethod(RegistryMethodConnectClose),
+	RegistryMethodConnectLocalReadProof: registryMethod(RegistryMethodConnectLocalReadProof, RegistryRouteLocalRead, []RegistryRole{RegistryRoleLocalRead}),
+	RegistryMethodBatch:                 registryMethod(RegistryMethodBatch, RegistryRouteBatch, []RegistryRole{RegistryRoleClient, RegistryRoleMonitor}),
+	RegistryMethodHubPing:               registryMethod(RegistryMethodHubPing, RegistryRouteHubControl, []RegistryRole{RegistryRoleHub}),
+	RegistryMethodHubStateGet:           registryHubStateMethod(RegistryMethodHubStateGet),
+	RegistryMethodHubStateRefresh:       registryHubStateMethod(RegistryMethodHubStateRefresh),
+	RegistryMethodHubStateAction:        registryHubStateMethod(RegistryMethodHubStateAction),
+	RegistryMethodHubStateUpdated:       registryClientEventMethod(RegistryMethodHubStateUpdated),
+	RegistryMethodDebugUploadLog:        registryMethod(RegistryMethodDebugUploadLog, RegistryRouteDebug, []RegistryRole{RegistryRoleClient}),
 
-	RegistryMethodRegistryReportProjects: registryMethod(RegistryMethodRegistryReportProjects, RegistryRouteHubReport, []RegistryRole{RegistryRoleHub}),
-	RegistryMethodRegistryUpdateProject:  registryMethod(RegistryMethodRegistryUpdateProject, RegistryRouteHubReport, []RegistryRole{RegistryRoleHub}),
-	RegistryMethodRegistrySessionUpdated: registryHubSessionEventMethod(RegistryMethodRegistrySessionUpdated, RegistryMethodSessionUpdated),
-	RegistryMethodRegistrySessionMessage: registryHubSessionEventMethod(RegistryMethodRegistrySessionMessage, RegistryMethodSessionMessage),
+	RegistryMethodHubReportProjects:     registryHubReportMethod(RegistryMethodHubReportProjects),
+	RegistryMethodHubReportProject:      registryHubReportMethod(RegistryMethodHubReportProject),
+	RegistryMethodRegistryProjectList:   registryLocalReadMethod(RegistryMethodRegistryProjectList, RegistryRouteProjectCache, []RegistryRole{RegistryRoleClient, RegistryRoleMonitor}),
+	RegistryMethodRegistryProjectReport: registryClientEventMethod(RegistryMethodRegistryProjectReport),
+	RegistryMethodProjectSyncCheck:      registryLocalReadProjectCacheMethod(RegistryMethodProjectSyncCheck, []RegistryRole{RegistryRoleClient}),
 
-	RegistryMethodProjectList:      registryLocalReadMethod(RegistryMethodProjectList, RegistryRouteProjectCache, []RegistryRole{RegistryRoleClient, RegistryRoleMonitor}),
-	RegistryMethodProjectSyncCheck: registryLocalReadMethod(RegistryMethodProjectSyncCheck, RegistryRouteProjectCache, []RegistryRole{RegistryRoleClient}),
-	RegistryMethodProjectOnline:    registryClientEventMethod(RegistryMethodProjectOnline),
-	RegistryMethodProjectOffline:   registryClientEventMethod(RegistryMethodProjectOffline),
-	RegistryMethodSessionUpdated:   registryClientEventMethod(RegistryMethodSessionUpdated),
-	RegistryMethodSessionMessage:   registryClientEventMethod(RegistryMethodSessionMessage),
+	RegistryMethodProjectFSList:                 registryLocalReadProjectMethod(RegistryMethodProjectFSList),
+	RegistryMethodProjectFSInfo:                 registryLocalReadProjectMethod(RegistryMethodProjectFSInfo),
+	RegistryMethodProjectFSRead:                 registryLocalReadProjectMethod(RegistryMethodProjectFSRead),
+	RegistryMethodProjectFSSearch:               registryLocalReadProjectMethod(RegistryMethodProjectFSSearch),
+	RegistryMethodProjectFSGrep:                 registryLocalReadProjectMethod(RegistryMethodProjectFSGrep),
+	RegistryMethodProjectFSIndexSearch:          registryLocalReadProjectMethod(RegistryMethodProjectFSIndexSearch),
+	RegistryMethodProjectGitRefs:                registryLocalReadProjectMethod(RegistryMethodProjectGitRefs),
+	RegistryMethodProjectGitLog:                 registryLocalReadProjectMethod(RegistryMethodProjectGitLog),
+	RegistryMethodProjectGitCommitFiles:         registryLocalReadProjectMethod(RegistryMethodProjectGitCommitFiles),
+	RegistryMethodProjectGitCommitFileDiff:      registryLocalReadProjectMethod(RegistryMethodProjectGitCommitFileDiff),
+	RegistryMethodProjectGitDiff:                registryLocalReadProjectMethod(RegistryMethodProjectGitDiff),
+	RegistryMethodProjectGitDiffFileDiff:        registryLocalReadProjectMethod(RegistryMethodProjectGitDiffFileDiff),
+	RegistryMethodProjectGitStatus:              registryLocalReadProjectMethod(RegistryMethodProjectGitStatus),
+	RegistryMethodProjectGitWorkingTreeFileDiff: registryLocalReadProjectMethod(RegistryMethodProjectGitWorkingTreeFileDiff),
+	RegistryMethodSessionUpdated:                registryHubSessionEventMethod(RegistryMethodSessionUpdated, RegistryMethodSessionUpdated),
+	RegistryMethodSessionMessage:                registryHubSessionEventMethod(RegistryMethodSessionMessage, RegistryMethodSessionMessage),
 
-	RegistryMethodSessionList:               registryProjectMethod(RegistryMethodSessionList, RegistryRouteSessionForward),
-	RegistryMethodSessionRead:               registryProjectMethod(RegistryMethodSessionRead, RegistryRouteSessionForward),
-	RegistryMethodSessionSearch:             registryProjectMethod(RegistryMethodSessionSearch, RegistryRouteSessionForward),
-	RegistryMethodSessionNew:                registryProjectMethod(RegistryMethodSessionNew, RegistryRouteSessionForward),
-	RegistryMethodSessionResumeList:         registryProjectMethod(RegistryMethodSessionResumeList, RegistryRouteSessionForward),
-	RegistryMethodSessionResumeImport:       registryProjectMethod(RegistryMethodSessionResumeImport, RegistryRouteSessionForward),
-	RegistryMethodSessionReload:             registryProjectMethod(RegistryMethodSessionReload, RegistryRouteSessionForward),
-	RegistryMethodSessionArchive:            registryProjectMethod(RegistryMethodSessionArchive, RegistryRouteSessionForward),
-	RegistryMethodSessionArchiveList:        registryProjectMethod(RegistryMethodSessionArchiveList, RegistryRouteSessionForward),
-	RegistryMethodSessionArchiveRead:        registryProjectMethod(RegistryMethodSessionArchiveRead, RegistryRouteSessionForward),
-	RegistryMethodSessionArchiveRestore:     registryProjectMethod(RegistryMethodSessionArchiveRestore, RegistryRouteSessionForward),
-	RegistryMethodSessionDelete:             registryProjectMethod(RegistryMethodSessionDelete, RegistryRouteSessionForward),
-	RegistryMethodSessionRename:             registryProjectMethod(RegistryMethodSessionRename, RegistryRouteSessionForward),
-	RegistryMethodSessionSend:               registryProjectMethod(RegistryMethodSessionSend, RegistryRouteSessionForward),
-	RegistryMethodSessionCancel:             registryProjectMethod(RegistryMethodSessionCancel, RegistryRouteSessionForward),
-	RegistryMethodSessionMarkRead:           registryProjectMethod(RegistryMethodSessionMarkRead, RegistryRouteSessionForward),
-	RegistryMethodSessionSetConfig:          registryProjectMethod(RegistryMethodSessionSetConfig, RegistryRouteSessionForward),
-	RegistryMethodSessionAttachmentStart:    registryProjectMethod(RegistryMethodSessionAttachmentStart, RegistryRouteSessionForward),
-	RegistryMethodSessionAttachmentChunk:    registryProjectMethod(RegistryMethodSessionAttachmentChunk, RegistryRouteSessionForward),
-	RegistryMethodSessionAttachmentFinish:   registryProjectMethod(RegistryMethodSessionAttachmentFinish, RegistryRouteSessionForward),
-	RegistryMethodSessionAttachmentCancel:   registryProjectMethod(RegistryMethodSessionAttachmentCancel, RegistryRouteSessionForward),
-	RegistryMethodSessionAttachmentDelete:   registryProjectMethod(RegistryMethodSessionAttachmentDelete, RegistryRouteSessionForward),
-	RegistryMethodSessionTokenProviders:     registryProjectMethod(RegistryMethodSessionTokenProviders, RegistryRouteSessionForward),
-	RegistryMethodSessionTokenDeepSeekStats: registryProjectMethod(RegistryMethodSessionTokenDeepSeekStats, RegistryRouteSessionForward),
-	RegistryMethodSessionTokenScan:          registryProjectMethod(RegistryMethodSessionTokenScan, RegistryRouteSessionForward),
-
-	RegistryMethodFSList:   registryLocalReadProjectMethod(RegistryMethodFSList),
-	RegistryMethodFSInfo:   registryLocalReadProjectMethod(RegistryMethodFSInfo),
-	RegistryMethodFSRead:   registryLocalReadProjectMethod(RegistryMethodFSRead),
-	RegistryMethodFSSearch: registryLocalReadProjectMethod(RegistryMethodFSSearch),
-	RegistryMethodFSGrep:   registryLocalReadProjectMethod(RegistryMethodFSGrep),
-
-	RegistryMethodFSIndexStatus:  registryHubCommandMethod(RegistryMethodFSIndexStatus),
-	RegistryMethodFSIndexRebuild: registryLocalReadProjectMethod(RegistryMethodFSIndexRebuild),
-	RegistryMethodFSIndexSearch:  registryLocalReadProjectMethod(RegistryMethodFSIndexSearch),
-
-	RegistryMethodGitRefs:                registryLocalReadProjectMethod(RegistryMethodGitRefs),
-	RegistryMethodGitLog:                 registryLocalReadProjectMethod(RegistryMethodGitLog),
-	RegistryMethodGitCommitFiles:         registryLocalReadProjectMethod(RegistryMethodGitCommitFiles),
-	RegistryMethodGitCommitFileDiff:      registryLocalReadProjectMethod(RegistryMethodGitCommitFileDiff),
-	RegistryMethodGitDiff:                registryLocalReadProjectMethod(RegistryMethodGitDiff),
-	RegistryMethodGitDiffFileDiff:        registryLocalReadProjectMethod(RegistryMethodGitDiffFileDiff),
-	RegistryMethodGitStatus:              registryLocalReadProjectMethod(RegistryMethodGitStatus),
-	RegistryMethodGitWorkingTreeFileDiff: registryLocalReadProjectMethod(RegistryMethodGitWorkingTreeFileDiff),
+	RegistryMethodSessionList:             registryProjectMethod(RegistryMethodSessionList, RegistryRouteSessionForward),
+	RegistryMethodSessionRead:             registryProjectMethod(RegistryMethodSessionRead, RegistryRouteSessionForward),
+	RegistryMethodSessionSearch:           registryProjectMethod(RegistryMethodSessionSearch, RegistryRouteSessionForward),
+	RegistryMethodSessionCreate:           registryProjectMethod(RegistryMethodSessionCreate, RegistryRouteSessionForward),
+	RegistryMethodSessionResumeList:       registryProjectMethod(RegistryMethodSessionResumeList, RegistryRouteSessionForward),
+	RegistryMethodSessionResumeImport:     registryProjectMethod(RegistryMethodSessionResumeImport, RegistryRouteSessionForward),
+	RegistryMethodSessionReload:           registryProjectMethod(RegistryMethodSessionReload, RegistryRouteSessionForward),
+	RegistryMethodSessionArchive:          registryProjectMethod(RegistryMethodSessionArchive, RegistryRouteSessionForward),
+	RegistryMethodSessionArchiveList:      registryProjectMethod(RegistryMethodSessionArchiveList, RegistryRouteSessionForward),
+	RegistryMethodSessionArchiveRead:      registryProjectMethod(RegistryMethodSessionArchiveRead, RegistryRouteSessionForward),
+	RegistryMethodSessionArchiveRestore:   registryProjectMethod(RegistryMethodSessionArchiveRestore, RegistryRouteSessionForward),
+	RegistryMethodSessionDelete:           registryProjectMethod(RegistryMethodSessionDelete, RegistryRouteSessionForward),
+	RegistryMethodSessionRename:           registryProjectMethod(RegistryMethodSessionRename, RegistryRouteSessionForward),
+	RegistryMethodSessionSend:             registryProjectMethod(RegistryMethodSessionSend, RegistryRouteSessionForward),
+	RegistryMethodSessionCancel:           registryProjectMethod(RegistryMethodSessionCancel, RegistryRouteSessionForward),
+	RegistryMethodSessionMarkRead:         registryProjectMethod(RegistryMethodSessionMarkRead, RegistryRouteSessionForward),
+	RegistryMethodSessionConfig:           registryProjectMethod(RegistryMethodSessionConfig, RegistryRouteSessionForward),
+	RegistryMethodSessionAttachmentStart:  registryProjectMethod(RegistryMethodSessionAttachmentStart, RegistryRouteSessionForward),
+	RegistryMethodSessionAttachmentChunk:  registryProjectMethod(RegistryMethodSessionAttachmentChunk, RegistryRouteSessionForward),
+	RegistryMethodSessionAttachmentFinish: registryProjectMethod(RegistryMethodSessionAttachmentFinish, RegistryRouteSessionForward),
+	RegistryMethodSessionAttachmentCancel: registryProjectMethod(RegistryMethodSessionAttachmentCancel, RegistryRouteSessionForward),
+	RegistryMethodSessionAttachmentDelete: registryProjectMethod(RegistryMethodSessionAttachmentDelete, RegistryRouteSessionForward),
 
 	RegistryMethodMonitorListHub: registryMethod(RegistryMethodMonitorListHub, RegistryRouteMonitorCache, []RegistryRole{RegistryRoleMonitor}),
 	RegistryMethodMonitorStatus:  registryMethod(RegistryMethodMonitorStatus, RegistryRouteMonitorForward, []RegistryRole{RegistryRoleMonitor}),
@@ -224,17 +195,12 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodMonitorDB:      registryMethod(RegistryMethodMonitorDB, RegistryRouteMonitorForward, []RegistryRole{RegistryRoleMonitor}),
 	RegistryMethodMonitorAction:  registryMethod(RegistryMethodMonitorAction, RegistryRouteMonitorForward, []RegistryRole{RegistryRoleMonitor}),
 
-	RegistryMethodCmdNPM:    registryHubCommandMethod(RegistryMethodCmdNPM),
-	RegistryMethodCmdUpdate: registryHubCommandMethod(RegistryMethodCmdUpdate),
-	RegistryMethodCmdSkills: registryHubCommandMethod(RegistryMethodCmdSkills),
-	RegistryMethodCmdToken:  registryHubCommandMethod(RegistryMethodCmdToken),
-
-	RegistryMethodRelayEnable:               registryMethod(RegistryMethodRelayEnable, RegistryRouteRelayControl, []RegistryRole{RegistryRoleClient}),
-	RegistryMethodRelayDisable:              registryMethod(RegistryMethodRelayDisable, RegistryRouteRelayControl, []RegistryRole{RegistryRoleClient}),
-	RegistryMethodRelayStatus:               registryMethod(RegistryMethodRelayStatus, RegistryRouteRelayControl, []RegistryRole{RegistryRoleClient}),
-	RegistryMethodRelayRegenerateAccessCode: registryMethod(RegistryMethodRelayRegenerateAccessCode, RegistryRouteRelayControl, []RegistryRole{RegistryRoleClient}),
-	RegistryMethodRelayOpen:                 registryMethod(RegistryMethodRelayOpen, RegistryRouteRelayHub, nil),
-	RegistryMethodRelayClose:                registryMethod(RegistryMethodRelayClose, RegistryRouteRelayHub, nil),
+	RegistryMethodRegistryRelayEnable:               registryMethod(RegistryMethodRegistryRelayEnable, RegistryRouteRelayControl, []RegistryRole{RegistryRoleClient}),
+	RegistryMethodRegistryRelayDisable:              registryMethod(RegistryMethodRegistryRelayDisable, RegistryRouteRelayControl, []RegistryRole{RegistryRoleClient}),
+	RegistryMethodRegistryRelayStatus:               registryMethod(RegistryMethodRegistryRelayStatus, RegistryRouteRelayControl, []RegistryRole{RegistryRoleClient}),
+	RegistryMethodRegistryRelayRegenerateAccessCode: registryMethod(RegistryMethodRegistryRelayRegenerateAccessCode, RegistryRouteRelayControl, []RegistryRole{RegistryRoleClient}),
+	RegistryMethodHubRelayOpen:                      registryMethod(RegistryMethodHubRelayOpen, RegistryRouteRelayHub, nil),
+	RegistryMethodHubRelayClose:                     registryMethod(RegistryMethodHubRelayClose, RegistryRouteRelayHub, nil),
 
 	RegistryMethodSpeechStart:  registrySpeechMethod(RegistryMethodSpeechStart),
 	RegistryMethodSpeechChunk:  registrySpeechMethod(RegistryMethodSpeechChunk),
@@ -257,6 +223,18 @@ func registryLocalReadMethod(method string, route RegistryRouteKind, roles []Reg
 	desc := registryMethod(method, route, roles)
 	desc.LocalRead = true
 	desc.Batchable = true
+	return desc
+}
+
+func registryHubReportMethod(method string) RegistryMethodDescriptor {
+	desc := registryMethod(method, RegistryRouteHubReport, []RegistryRole{RegistryRoleHub})
+	desc.RequiresHubID = true
+	return desc
+}
+
+func registryLocalReadProjectCacheMethod(method string, roles []RegistryRole) RegistryMethodDescriptor {
+	desc := registryLocalReadMethod(method, RegistryRouteProjectCache, roles)
+	desc.RequiresProjectID = true
 	return desc
 }
 
