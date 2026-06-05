@@ -842,6 +842,15 @@ func (s *Server) executeHubCommandRequest(state *connectionState, in envelope) e
 	}
 }
 
+func hubStateRequestTimeout(method string) time.Duration {
+	switch method {
+	case rp.RegistryMethodHubStateRefresh, rp.RegistryMethodHubStateAction:
+		return 60 * time.Second
+	default:
+		return defaultRequestTimeout
+	}
+}
+
 func (s *Server) executeHubStateRequest(state *connectionState, in envelope) envelope {
 	hubID := strings.TrimSpace(in.HubID)
 	if hubID == "" {
@@ -894,7 +903,7 @@ func (s *Server) executeHubStateRequest(state *connectionState, in envelope) env
 		resp.HubID = hubID
 		resp.ProjectID = ""
 		return resp
-	case <-time.After(defaultRequestTimeout):
+	case <-time.After(hubStateRequestTimeout(in.Method)):
 		hubPeer.resolvePending(forwardID, envelope{})
 		resp := s.errorEnvelope(in.Method, codeTimeout, "hub response timeout", nil)
 		resp.HubID = hubID

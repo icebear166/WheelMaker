@@ -2,6 +2,7 @@ package registry
 
 import (
 	"github.com/gorilla/websocket"
+	rp "github.com/swm8023/wheelmaker/internal/protocol"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -1854,6 +1855,38 @@ func TestHubStateMissingEnvelopeHubIDIsRejected(t *testing.T) {
 	}
 	if resp.Payload["code"] != "INVALID_ARGUMENT" {
 		t.Fatalf("error code=%v, want INVALID_ARGUMENT", resp.Payload["code"])
+	}
+}
+
+func TestHubStateForwardTimeoutsMatchOperationCost(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		want   time.Duration
+	}{
+		{
+			name:   "get",
+			method: rp.RegistryMethodHubStateGet,
+			want:   defaultRequestTimeout,
+		},
+		{
+			name:   "refresh",
+			method: rp.RegistryMethodHubStateRefresh,
+			want:   60 * time.Second,
+		},
+		{
+			name:   "action",
+			method: rp.RegistryMethodHubStateAction,
+			want:   60 * time.Second,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := hubStateRequestTimeout(tt.method); got != tt.want {
+				t.Fatalf("hubStateRequestTimeout(%q)=%s, want %s", tt.method, got, tt.want)
+			}
+		})
 	}
 }
 
