@@ -103,6 +103,7 @@ type Reporter struct {
 
 	connectionEpoch int64
 	monitorCore     *MonitorCore
+	toolHandlerMu   sync.Mutex
 	toolHandler     toolCommandHandler
 	relayClient     *portrelay.HubClient
 	fileIndex       *projectFileIndexManager
@@ -1318,6 +1319,9 @@ func (r *Reporter) replyCmdToken(conn *websocket.Conn, req envelope) {
 }
 
 func (r *Reporter) replyToolCommand(conn *websocket.Conn, req envelope) {
+	r.toolHandlerMu.Lock()
+	defer r.toolHandlerMu.Unlock()
+
 	handler := r.ensureToolHandler()
 	handler.SetProjects(r.projectsSnapshot())
 	payload, cmdErr := handler.Handle(context.Background(), req.Method, req.Payload)

@@ -447,6 +447,36 @@ func (s *stubToolCommandHandler) snapshot() (string, string, []ProjectInfo) {
 	return s.method, s.payload, append([]ProjectInfo(nil), s.projects...)
 }
 
+type overlapDetectingToolCommandHandler struct {
+	mu       sync.Mutex
+	inFlight int
+	overlap  bool
+}
+
+func (s *overlapDetectingToolCommandHandler) Handle(_ context.Context, _ string, _ json.RawMessage) (any, *tools.CommandError) {
+	s.mu.Lock()
+	s.inFlight++
+	if s.inFlight > 1 {
+		s.overlap = true
+	}
+	s.mu.Unlock()
+
+	time.Sleep(25 * time.Millisecond)
+
+	s.mu.Lock()
+	s.inFlight--
+	s.mu.Unlock()
+	return map[string]any{"ok": true}, nil
+}
+
+func (s *overlapDetectingToolCommandHandler) SetProjects([]ProjectInfo) {}
+
+func (s *overlapDetectingToolCommandHandler) sawOverlap() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.overlap
+}
+
 func TestReporterRespondsToHubStateGet(t *testing.T) {
 	respSeen := make(chan testEnvelope, 1)
 	errSeen := make(chan error, 1)
@@ -596,6 +626,93 @@ func TestReporterRejectsUnsupportedHubStateAction(t *testing.T) {
 				}
 			case <-time.After(2 * time.Second):
 				t.Fatal("did not receive hub.state.action error from reporter")
+			}
+		})
+	}
+}
+
+func TestHubStateToolHandlingSerializesSharedHandler(t *testing.T) {
+	toolHandler := &overlapDetectingToolCommandHandler{}
+	reporter := NewReporter(ReporterConfig{HubID: "hub-state-serialized", MonitorBaseDir: t.TempDir()}, nil)
+	reporter.toolHandler = toolHandler
+
+	errCh := make(chan error, 20)
+	for i := 0; i < 20; i++ {
+		go func() {
+			_, err := reporter.runHubStateTool(context.Background(), rp.RegistryMethodCmdToken, map[string]any{
+				"action": "scan",
+				"hubId":  "hub-state-serialized",
+			})
+			errCh <- err
+		}()
+	}
+
+	for i := 0; i < 20; i++ {
+		if err := <-errCh; err != nil {
+			t.Fatalf("runHubStateTool error: %v", err)
+		}
+	}
+	if toolHandler.sawOverlap() {
+		t.Fatal("tool handler Handle calls overlapped; want serialized use")
+	}
+}
+
+func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
+	root := t.TempDir()
+	reporter := NewReporter(
+		ReporterConfig{HubID: "hub-state-action-parity", MonitorBaseDir: t.TempDir()},
+		[]ProjectInfo{{Name: "proj1", Path: root, Online: true}},
+	)
+	toolHandler := &stubToolCommandHandler{response: map[string]any{"ok": true}}
+	reporter.toolHandler = toolHandler
+	handlers := reporter.hubStateSectionHandlers()
+
+	cases := []struct {
+		section string
+		action  string
+		params  map[string]any
+	}{
+		{section: hubStateSectionAgentPackages, action: "install"},
+		{section: hubStateSectionAgentPackages, action: "installMany"},
+		{section: hubStateSectionAgentPackages, action: "uninstall"},
+		{section: hubStateSectionWheelmakerUpdate, action: "updatePublish"},
+		{section: hubStateSectionSkills, action: "listSource"},
+		{section: hubStateSectionSkills, action: "install"},
+		{section: hubStateSectionSkills, action: "uninstall"},
+		{section: hubStateSectionSkills, action: "update"},
+		{
+			section: hubStateSectionFileIndex,
+			action:  "rebuild",
+			params:  map[string]any{"projectId": rp.ProjectID("hub-state-action-parity", "proj1")},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.section+"/"+tc.action, func(t *testing.T) {
+			if err := validateHubStateAction(tc.section, tc.action); err != nil {
+				t.Fatalf("validateHubStateAction returned error: %v", err)
+			}
+			handler := handlers[tc.section]
+			if handler.Action == nil {
+				t.Fatalf("%s action handler missing", tc.section)
+			}
+			if _, err := handler.Action(context.Background(), tc.action, tc.params); err != nil {
+				t.Fatalf("adapter action returned error: %v", err)
+			}
+		})
+	}
+
+	invalidCases := []struct {
+		section string
+		action  string
+	}{
+		{section: hubStateSectionTokenStats, action: "install"},
+		{section: hubStateSectionSkills, action: "bogus"},
+		{section: "unknown", action: "install"},
+	}
+	for _, tc := range invalidCases {
+		t.Run("invalid/"+tc.section+"/"+tc.action, func(t *testing.T) {
+			if err := validateHubStateAction(tc.section, tc.action); err == nil {
+				t.Fatal("validateHubStateAction error = nil, want error")
 			}
 		})
 	}
