@@ -546,6 +546,61 @@ func TestReporterRespondsToHubStateRefresh(t *testing.T) {
 	}
 }
 
+func TestReporterRejectsUnsupportedHubStateAction(t *testing.T) {
+	cases := []struct {
+		name    string
+		section string
+		action  string
+	}{
+		{name: "unsupported adapter action", section: "skills", action: "bogus"},
+		{name: "section without actions", section: "tokenStats", action: "install"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			respSeen := make(chan testEnvelope, 1)
+			errSeen := make(chan error, 1)
+
+			ts := newFakeReporterRegistry(t, "hub-state-action", testEnvelope{
+				RequestID: 100,
+				Type:      "request",
+				Method:    rp.RegistryMethodHubStateAction,
+				HubID:     "hub-state-action",
+				Payload: map[string]any{
+					"section": tc.section,
+					"action":  tc.action,
+				},
+			}, respSeen, errSeen)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			reporter := NewReporter(ReporterConfig{
+				Server:            strings.TrimPrefix(ts.URL, "http://"),
+				HubID:             "hub-state-action",
+				ReconnectInterval: 50 * time.Millisecond,
+				MonitorBaseDir:    t.TempDir(),
+			}, nil)
+
+			done := make(chan error, 1)
+			go func() { done <- reporter.Run(ctx) }()
+			defer stopReporterForTest(t, cancel, done)
+
+			select {
+			case err := <-errSeen:
+				t.Fatalf("fake registry error: %v", err)
+			case resp := <-respSeen:
+				if resp.Type != "error" {
+					t.Fatalf("unexpected hub.state.action response: %#v", resp)
+				}
+				if resp.Payload["code"] != rp.CodeInvalidArgument {
+					t.Fatalf("error code=%v, want %s (payload=%#v)", resp.Payload["code"], rp.CodeInvalidArgument, resp.Payload)
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("did not receive hub.state.action error from reporter")
+			}
+		})
+	}
+}
+
 func newFakeReporterRegistry(t *testing.T, hubID string, request testEnvelope, respSeen chan<- testEnvelope, errSeen chan<- error) *httptest.Server {
 	t.Helper()
 	upgrader := websocket.Upgrader{CheckOrigin: func(_ *http.Request) bool { return true }}

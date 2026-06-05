@@ -563,6 +563,12 @@ func (r *Reporter) replyHubStateAction(conn *websocket.Conn, req envelope) {
 		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid hub.state.action payload")
 		return
 	}
+	payload.Section = strings.TrimSpace(payload.Section)
+	payload.Action = strings.TrimSpace(payload.Action)
+	if err := validateHubStateAction(payload.Section, payload.Action); err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, err.Error())
+		return
+	}
 	state, err := r.ensureHubStateManager().action(context.Background(), payload.Section, payload.Action, payload.Params)
 	if err != nil {
 		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, err.Error())
@@ -578,6 +584,43 @@ func (r *Reporter) replyHubStateAction(conn *websocket.Conn, req envelope) {
 			"section": payload.Section,
 		}),
 	})
+}
+
+func validateHubStateAction(section string, action string) error {
+	if section == "" {
+		return fmt.Errorf("action requires section")
+	}
+	if action == "" {
+		return fmt.Errorf("action requires action name")
+	}
+	allowedActions := map[string]map[string]struct{}{
+		hubStateSectionAgentPackages: {
+			"install":     {},
+			"installMany": {},
+			"uninstall":   {},
+		},
+		hubStateSectionWheelmakerUpdate: {
+			"updatePublish": {},
+		},
+		hubStateSectionSkills: {
+			"listSource": {},
+			"install":    {},
+			"uninstall":  {},
+			"update":     {},
+		},
+		hubStateSectionFileIndex: {
+			"rebuild": {},
+		},
+		hubStateSectionTokenStats: {},
+	}
+	sectionActions, ok := allowedActions[section]
+	if !ok {
+		return fmt.Errorf("unsupported hub state section %q", section)
+	}
+	if _, ok := sectionActions[action]; !ok {
+		return fmt.Errorf("unsupported %s action %q", section, action)
+	}
+	return nil
 }
 
 func (r *Reporter) ensureHubStateManager() *HubStateManager {
