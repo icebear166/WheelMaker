@@ -85,11 +85,12 @@ type hubStateSectionHandler struct {
 }
 
 type HubStateManager struct {
-	mu       sync.Mutex
-	hubID    string
-	state    hubState
-	handlers map[string]hubStateSectionHandler
-	now      func() time.Time
+	mu           sync.Mutex
+	hubID        string
+	state        hubState
+	handlers     map[string]hubStateSectionHandler
+	now          func() time.Time
+	nextActionID int64
 }
 
 func newHubStateManager(hubID string, handlers map[string]hubStateSectionHandler) *HubStateManager {
@@ -159,7 +160,7 @@ func (m *HubStateManager) refresh(ctx context.Context, sections []string, force 
 		} else {
 			section.Status = hubStateSectionStatusReady
 			section.Error = ""
-			section.Data = data
+			section.Data = cloneHubStateValue(data)
 			section.UpdatedAt = formatHubStateTime(finishedAt)
 		}
 		m.state.Sections[sectionName] = section
@@ -188,7 +189,6 @@ func (m *HubStateManager) action(ctx context.Context, sectionName string, action
 	startedAt := m.now().UTC()
 	paramsCopy := cloneHubStateParams(params)
 	action := hubStateAction{
-		ID:        fmt.Sprintf("%s:%s:%d", sectionName, actionName, startedAt.UnixNano()),
 		Name:      actionName,
 		Status:    hubStateActionStatusRunning,
 		StartedAt: formatHubStateTime(startedAt),
@@ -196,6 +196,8 @@ func (m *HubStateManager) action(ctx context.Context, sectionName string, action
 	}
 
 	m.mu.Lock()
+	m.nextActionID++
+	action.ID = fmt.Sprintf("%s:%s:%d:%d", sectionName, actionName, startedAt.UnixNano(), m.nextActionID)
 	section := m.state.Sections[sectionName]
 	section.Status = hubStateSectionStatusRefreshing
 	section.StartedAt = action.StartedAt
@@ -209,8 +211,10 @@ func (m *HubStateManager) action(ctx context.Context, sectionName string, action
 	finishedAt := m.now().UTC()
 	m.mu.Lock()
 	section = m.state.Sections[sectionName]
-	if section.Action == nil {
-		section.Action = cloneHubStateAction(&action)
+	if section.Action == nil || section.Action.ID != action.ID {
+		state := m.snapshotLocked(nil)
+		m.mu.Unlock()
+		return state, nil
 	}
 	section.Action.FinishedAt = formatHubStateTime(finishedAt)
 	if err != nil {
@@ -221,12 +225,12 @@ func (m *HubStateManager) action(ctx context.Context, sectionName string, action
 	} else {
 		section.Action.Status = hubStateActionStatusSucceeded
 		section.Action.Error = ""
-		section.Action.Result = result
+		section.Action.Result = cloneHubStateValue(result)
 		section.Status = hubStateSectionStatusReady
 		section.Error = ""
 		section.UpdatedAt = formatHubStateTime(finishedAt)
 		if result != nil {
-			section.Data = result
+			section.Data = cloneHubStateValue(result)
 		}
 	}
 	m.state.Sections[sectionName] = section
@@ -321,6 +325,7 @@ func normalizeHubStateSections(sections []string) []string {
 }
 
 func cloneHubStateSection(section hubStateSection) hubStateSection {
+	section.Data = cloneHubStateValue(section.Data)
 	section.Action = cloneHubStateAction(section.Action)
 	return section
 }
@@ -331,6 +336,7 @@ func cloneHubStateAction(action *hubStateAction) *hubStateAction {
 	}
 	clone := *action
 	clone.Params = cloneHubStateParams(action.Params)
+	clone.Result = cloneHubStateValue(action.Result)
 	return &clone
 }
 
@@ -340,9 +346,32 @@ func cloneHubStateParams(params map[string]any) map[string]any {
 	}
 	clone := make(map[string]any, len(params))
 	for key, value := range params {
-		clone[key] = value
+		clone[key] = cloneHubStateValue(value)
 	}
 	return clone
+}
+
+func cloneHubStateValue(value any) any {
+	switch typed := value.(type) {
+	case nil:
+		return nil
+	case map[string]any:
+		clone := make(map[string]any, len(typed))
+		for key, item := range typed {
+			clone[key] = cloneHubStateValue(item)
+		}
+		return clone
+	case []any:
+		clone := make([]any, len(typed))
+		for i, item := range typed {
+			clone[i] = cloneHubStateValue(item)
+		}
+		return clone
+	case string, bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
+		return typed
+	default:
+		return value
+	}
 }
 
 func formatHubStateTime(t time.Time) string {

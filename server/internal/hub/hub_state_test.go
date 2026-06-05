@@ -125,3 +125,126 @@ func TestHubStateManagerActionStoresActionResult(t *testing.T) {
 		t.Fatal("Action Result is nil, want non-nil")
 	}
 }
+
+func TestHubStateManagerConcurrentActionCompletionKeepsLatestAction(t *testing.T) {
+	slowStarted := make(chan struct{})
+	releaseSlow := make(chan struct{})
+	slowDone := make(chan struct{})
+	manager := newHubStateManager("hub-a", map[string]hubStateSectionHandler{
+		hubStateSectionAgentPackages: {
+			Action: func(ctx context.Context, actionName string, params map[string]any) (any, error) {
+				if actionName == "slow" {
+					close(slowStarted)
+					<-releaseSlow
+					return map[string]any{"action": "slow"}, nil
+				}
+				return map[string]any{"action": "fast"}, nil
+			},
+		},
+	})
+
+	go func() {
+		defer close(slowDone)
+		if _, err := manager.action(context.Background(), hubStateSectionAgentPackages, "slow", nil); err != nil {
+			t.Errorf("slow action returned error: %v", err)
+		}
+	}()
+	<-slowStarted
+
+	state, err := manager.action(context.Background(), hubStateSectionAgentPackages, "fast", nil)
+	if err != nil {
+		t.Fatalf("fast action returned error: %v", err)
+	}
+	if got := state.Sections[hubStateSectionAgentPackages].Action.Name; got != "fast" {
+		t.Fatalf("action name after fast = %q, want fast", got)
+	}
+
+	close(releaseSlow)
+	<-slowDone
+
+	state = manager.get(nil)
+	action := state.Sections[hubStateSectionAgentPackages].Action
+	if action == nil {
+		t.Fatal("Action is nil, want fast action retained")
+	}
+	if action.Name != "fast" {
+		t.Fatalf("Action name = %q, want fast", action.Name)
+	}
+	result, ok := action.Result.(map[string]any)
+	if !ok {
+		t.Fatalf("Action Result = %#v, want map", action.Result)
+	}
+	if result["action"] != "fast" {
+		t.Fatalf("Action Result action = %v, want fast", result["action"])
+	}
+}
+
+func TestHubStateManagerSnapshotDataMutationDoesNotAlterState(t *testing.T) {
+	manager := newHubStateManager("hub-a", map[string]hubStateSectionHandler{
+		hubStateSectionTokenStats: {
+			Refresh: func(context.Context, hubStateRefreshInput) (any, error) {
+				return map[string]any{
+					"ok":        true,
+					"providers": []any{map[string]any{"name": "codex"}},
+				}, nil
+			},
+		},
+	})
+
+	state, err := manager.refresh(context.Background(), []string{hubStateSectionTokenStats}, false)
+	if err != nil {
+		t.Fatalf("refresh returned error: %v", err)
+	}
+	data := state.Sections[hubStateSectionTokenStats].Data.(map[string]any)
+	data["ok"] = false
+	data["new"] = "mutated"
+	providers := data["providers"].([]any)
+	providers[0].(map[string]any)["name"] = "mutated"
+	data["providers"] = append(providers, "extra")
+
+	state = manager.get(nil)
+	data = state.Sections[hubStateSectionTokenStats].Data.(map[string]any)
+	if data["ok"] != true {
+		t.Fatalf("ok = %v, want true", data["ok"])
+	}
+	if _, exists := data["new"]; exists {
+		t.Fatalf("new key exists in manager state: %#v", data)
+	}
+	providers = data["providers"].([]any)
+	if len(providers) != 1 {
+		t.Fatalf("providers length = %d, want 1", len(providers))
+	}
+	if providers[0].(map[string]any)["name"] != "codex" {
+		t.Fatalf("provider name = %v, want codex", providers[0].(map[string]any)["name"])
+	}
+}
+
+func TestHubStateManagerSnapshotActionResultMutationDoesNotAlterState(t *testing.T) {
+	manager := newHubStateManager("hub-a", map[string]hubStateSectionHandler{
+		hubStateSectionAgentPackages: {
+			Action: func(context.Context, string, map[string]any) (any, error) {
+				return map[string]any{"packages": []any{map[string]any{"name": "@openai/codex"}}}, nil
+			},
+		},
+	})
+
+	state, err := manager.action(context.Background(), hubStateSectionAgentPackages, "install", map[string]any{
+		"packageName": "@openai/codex",
+	})
+	if err != nil {
+		t.Fatalf("action returned error: %v", err)
+	}
+	result := state.Sections[hubStateSectionAgentPackages].Action.Result.(map[string]any)
+	result["packages"].([]any)[0].(map[string]any)["name"] = "mutated"
+	result["new"] = "mutated"
+
+	state = manager.get(nil)
+	result = state.Sections[hubStateSectionAgentPackages].Action.Result.(map[string]any)
+	if _, exists := result["new"]; exists {
+		t.Fatalf("new key exists in manager action result: %#v", result)
+	}
+	packages := result["packages"].([]any)
+	if packages[0].(map[string]any)["name"] != "@openai/codex" {
+		t.Fatalf("package name = %v, want @openai/codex", packages[0].(map[string]any)["name"])
+	}
+}
