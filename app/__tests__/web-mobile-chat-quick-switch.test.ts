@@ -1,4 +1,7 @@
-import {buildMobileChatQuickSwitchSections} from '../web/src/chat/mobileChatQuickSwitch';
+import {
+  buildMobileChatQuickSwitchSections,
+  hasCompletedUnreadChatSession,
+} from '../web/src/chat/mobileChatQuickSwitch';
 import type {RegistryChatSession, RegistryProject} from '../web/src/registry/registryTypes';
 
 function project(projectId: string, name = projectId, hubId = 'local'): RegistryProject {
@@ -14,7 +17,10 @@ function project(projectId: string, name = projectId, hubId = 'local'): Registry
 function session(
   sessionId: string,
   updatedAt: string,
-  flags: Partial<Pick<RegistryChatSession, 'running' | 'unreadCount'>> = {},
+  flags: Partial<Pick<
+    RegistryChatSession,
+    'running' | 'unreadCount' | 'lastDoneTurnIndex' | 'lastReadTurnIndex'
+  >> = {},
 ): RegistryChatSession {
   return {
     sessionId,
@@ -64,10 +70,11 @@ describe('mobile chat quick switch', () => {
     expect(sections.map(section => ({
       projectId: section.projectId,
       projectName: section.projectName,
+      projectHubId: section.projectHubId,
       projectHubLabel: section.projectHubLabel,
     }))).toEqual([
-      {projectId: 'p3', projectName: 'Gamma', projectHubLabel: 'local'},
-      {projectId: 'p2', projectName: 'Beta', projectHubLabel: 'hub-b'},
+      {projectId: 'p3', projectName: 'Gamma', projectHubId: 'local', projectHubLabel: 'local'},
+      {projectId: 'p2', projectName: 'Beta', projectHubId: 'hub-b', projectHubLabel: 'hub-b'},
     ]);
   });
 
@@ -76,5 +83,33 @@ describe('mobile chat quick switch', () => {
       projects: [project('p1')],
       sessionsByProjectId: {p1: []},
     })).toEqual([]);
+  });
+
+  test('detects completed unread sessions and ignores running sessions', () => {
+    expect(hasCompletedUnreadChatSession({
+      p1: [
+        session('running', '2026-01-01T00:00:00.000Z', {
+          running: true,
+          lastDoneTurnIndex: 5,
+          lastReadTurnIndex: 0,
+        }),
+      ],
+      p2: [
+        session('done', '2026-01-02T00:00:00.000Z', {
+          lastDoneTurnIndex: 6,
+          lastReadTurnIndex: 4,
+        }),
+      ],
+    })).toBe(true);
+
+    expect(hasCompletedUnreadChatSession({
+      p1: [
+        session('read', '2026-01-03T00:00:00.000Z', {
+          lastDoneTurnIndex: 6,
+          lastReadTurnIndex: 6,
+        }),
+        session('idle', '2026-01-04T00:00:00.000Z'),
+      ],
+    })).toBe(false);
   });
 });

@@ -16,17 +16,28 @@ function cssBlock(selector: string): string {
 
 describe('mobile chat quick switch UI source structure', () => {
   test('wires chat-page clicks on the mobile chat button to a compact quick switch menu', () => {
-    expect(mainTsx).toContain("import {buildMobileChatQuickSwitchSections} from '../chat/mobileChatQuickSwitch';");
+    expect(mainTsx).toContain("from '../chat/mobileChatQuickSwitch';");
+    expect(mainTsx).toContain('buildMobileChatQuickSwitchSections,');
+    expect(mainTsx).toContain('hasCompletedUnreadChatSession,');
     expect(mainTsx).toContain("import {ChatQuickSwitchMenu} from '../chat/ChatQuickSwitchMenu';");
     expect(mainTsx).toContain("import {resolveDesktopChatQuickSwitchContextMenu} from '../shell/layouts/desktop/chatQuickSwitchContextMenu';");
     expect(mainTsx).toContain('const [chatQuickSwitchMenuOpen, setChatQuickSwitchMenuOpen] = useState(false);');
     expect(mainTsx).toContain("const [chatQuickSwitchMenuPlacement, setChatQuickSwitchMenuPlacement] = useState<ChatQuickSwitchMenuPlacement>({kind: 'mobile'});");
+    expect(mainTsx).toContain('const [chatQuickSwitchCreateProjectId, setChatQuickSwitchCreateProjectId] = useState');
+    expect(mainTsx).toContain('const [chatQuickSwitchCreatePendingKey, setChatQuickSwitchCreatePendingKey] = useState');
     expect(mainTsx).not.toContain('type ChatQuickSwitchPressState =');
     expect(mainTsx).not.toContain('const chatQuickSwitchTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);');
     expect(mainTsx).not.toContain('const handleChatQuickSwitchPointerDown = useCallback(');
+    expect(mainTsx).toContain('hasCompletedUnreadChatSession');
+    expect(mainTsx).toContain('const hasCompletedUnreadChatSessionIndicator = useMemo(');
+    expect(mainTsx).toContain('className="floating-nav-unread-dot"');
+    expect(mainTsx).not.toContain('floating-nav-unread-count');
     expect(mainTsx).toContain('const mobileChatQuickSwitchSections = useMemo(');
     expect(mainTsx).toContain('buildMobileChatQuickSwitchSections({');
     expect(mainTsx).toContain('limit: 6,');
+    expect(mainTsx).toContain('const getQuickSwitchProjectAgents = useCallback(');
+    expect(mainTsx).toContain('const handleQuickSwitchCreateSession = useCallback(async (targetProjectId: string, agentType: string) => {');
+    expect(mainTsx).toContain("const pendingKey = `${targetProjectId}:${agentType}`;");
     expect(mainTsx).toContain('const handleFloatingChatSelect = useCallback(() => {');
     expect(mainTsx).toContain("if (tab !== 'chat' || sidebarSettingsOpen) {");
     expect(mainTsx).toContain("setTab('chat');");
@@ -48,10 +59,22 @@ describe('mobile chat quick switch UI source structure', () => {
     expect(mainTsx).toContain('const chatQuickSwitchMenu = chatQuickSwitchMenuOpen && tab === \'chat\' && !sidebarSettingsOpen && !mobilePortRelayFrameOpen && !chatQuickSwitchMenuBlockedByPreview ? (');
     expect(mainTsx).toContain('<ChatQuickSwitchMenu');
     expect(mainTsx).toContain('placement={chatQuickSwitchMenuPlacement.kind}');
+    expect(mainTsx).toContain('createProjectId={chatQuickSwitchCreateProjectId}');
+    expect(mainTsx).toContain('createPendingKey={chatQuickSwitchCreatePendingKey}');
+    expect(mainTsx).toContain('getProjectAgents={getQuickSwitchProjectAgents}');
+    expect(mainTsx).toContain('resolveProjectHubStyle={hubAccentStyle}');
+    expect(mainTsx).toContain('onToggleCreateProject={handleQuickSwitchToggleCreateProject}');
+    expect(mainTsx).toContain('onCreateSession={handleQuickSwitchCreateSession}');
     expect(quickSwitchMenuTsx).toContain('className="chat-quick-switch-menu"');
     expect(quickSwitchMenuTsx).toContain('className="chat-quick-switch-project"');
     expect(quickSwitchMenuTsx).toContain('className="chat-quick-switch-project-heading"');
     expect(quickSwitchMenuTsx).toContain('className="chat-quick-switch-project-hub"');
+    expect(quickSwitchMenuTsx).toContain('className="chat-quick-switch-project-hub-dot"');
+    expect(quickSwitchMenuTsx).toContain('style={resolveProjectHubStyle(section.projectHubId)}');
+    expect(quickSwitchMenuTsx).toContain('onCreateSession');
+    expect(quickSwitchMenuTsx).toContain('className="chat-quick-switch-project-create"');
+    expect(quickSwitchMenuTsx).toContain('className="chat-quick-switch-create-menu"');
+    expect(quickSwitchMenuTsx).toContain('No agents available.');
     expect(quickSwitchMenuTsx).toContain('className="chat-quick-switch-item"');
     expect(quickSwitchMenuTsx).not.toContain('className="chat-quick-switch-selected codicon codicon-check"');
     expect(quickSwitchMenuTsx).toContain('No chats');
@@ -66,6 +89,9 @@ describe('mobile chat quick switch UI source structure', () => {
     expect(stylesCss).toContain('.chat-quick-switch-item');
     expect(stylesCss).toContain('.chat-quick-switch-project-heading');
     expect(stylesCss).toContain('.chat-quick-switch-project-hub');
+    expect(stylesCss).toContain('.chat-quick-switch-project-hub-dot');
+    expect(stylesCss).toContain('.chat-quick-switch-project-create');
+    expect(stylesCss).toContain('.chat-quick-switch-create-menu');
     expect(stylesCss).not.toContain('.chat-quick-switch-item::before');
     expect(stylesCss).not.toContain('.chat-quick-switch-item[data-selected=\'true\']::before');
     expect(cssBlock('.chat-quick-switch-menu')).not.toContain('overflow-y: auto;');
@@ -75,5 +101,6 @@ describe('mobile chat quick switch UI source structure', () => {
     expect(cssBlock('.chat-quick-switch-item')).toContain('min-height: 34px;');
     expect(cssBlock('.chat-quick-switch-title')).toContain('font-size: 12.5px;');
     expect(stylesCss).toContain('.chat-quick-switch-empty');
+    expect(stylesCss).toContain('.floating-nav-unread-dot');
   });
 });

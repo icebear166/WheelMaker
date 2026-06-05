@@ -103,21 +103,110 @@
 }
 
 .chat-quick-switch-project-hub {
+  --hub-accent: var(--accent);
   max-width: 96px;
   height: 18px;
-  padding: 0 6px;
+  padding: 0 6px 0 5px;
+  border: 1px solid color-mix(in srgb, var(--hub-accent) 24%, transparent);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--muted) 12%, transparent);
-  color: color-mix(in srgb, var(--muted) 88%, var(--text));
+  background: color-mix(in srgb, var(--hub-accent) 9%, transparent);
+  color: color-mix(in srgb, var(--hub-accent) 82%, var(--text));
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 3px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 10px;
   font-weight: 600;
   line-height: 1;
+}
+
+.chat-quick-switch-project-hub-dot {
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--hub-accent);
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--hub-accent) 14%, transparent);
+}
+
+.chat-quick-switch-project-create {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: color-mix(in srgb, var(--muted) 86%, var(--text));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.chat-quick-switch-project-create:hover,
+.chat-quick-switch-project-create[aria-expanded='true'] {
+  border-color: color-mix(in srgb, var(--border) 72%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--text);
+}
+
+.chat-quick-switch-create-menu {
+  margin: 0 4px 5px;
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--border) 68%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--panel-2) 62%, transparent);
+  display: grid;
+  gap: 1px;
+}
+
+.chat-quick-switch-create-item,
+.chat-quick-switch-create-empty {
+  width: 100%;
+  min-height: 28px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: color-mix(in srgb, var(--text) 82%, var(--muted));
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  padding: 0 7px;
+  text-align: left;
+  font-size: 11.5px;
+  line-height: 1.2;
+}
+
+.chat-quick-switch-create-item {
+  cursor: pointer;
+}
+
+.chat-quick-switch-create-item:hover {
+  background: color-mix(in srgb, var(--accent) 11%, transparent);
+  color: var(--text);
+}
+
+.chat-quick-switch-create-item:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.chat-quick-switch-create-agent {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-quick-switch-create-empty {
+  color: var(--muted);
 }
 
 .chat-quick-switch-session-list {
