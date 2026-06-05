@@ -446,6 +446,77 @@ func (s *stubToolCommandHandler) snapshot() (string, string, []ProjectInfo) {
 	return s.method, s.payload, append([]ProjectInfo(nil), s.projects...)
 }
 
+func TestHubStateToolAdaptersMapSectionsToExistingCommands(t *testing.T) {
+	toolHandler := &stubToolCommandHandler{response: map[string]any{"ok": true}}
+	reporter := NewReporter(ReporterConfig{HubID: "hub-state-adapter", MonitorBaseDir: t.TempDir()}, nil)
+	reporter.toolHandler = toolHandler
+
+	handlers := reporter.hubStateSectionHandlers()
+	cases := []struct {
+		section string
+		method  string
+		action  string
+	}{
+		{section: hubStateSectionAgentPackages, method: rp.RegistryMethodCmdNPM, action: "scan"},
+		{section: hubStateSectionWheelmakerUpdate, method: rp.RegistryMethodCmdUpdate, action: "query"},
+		{section: hubStateSectionSkills, method: rp.RegistryMethodCmdSkills, action: "scan"},
+		{section: hubStateSectionTokenStats, method: rp.RegistryMethodCmdToken, action: "scan"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.section, func(t *testing.T) {
+			handler := handlers[tc.section]
+			if handler.Refresh == nil {
+				t.Fatalf("%s refresh handler missing", tc.section)
+			}
+			if _, err := handler.Refresh(context.Background(), hubStateRefreshInput{HubID: "hub-state-adapter"}); err != nil {
+				t.Fatalf("Refresh: %v", err)
+			}
+			method, payload, _ := toolHandler.snapshot()
+			if method != tc.method {
+				t.Fatalf("method=%q, want %q", method, tc.method)
+			}
+			var body map[string]any
+			if err := json.Unmarshal([]byte(payload), &body); err != nil {
+				t.Fatalf("payload json: %v", err)
+			}
+			if body["action"] != tc.action {
+				t.Fatalf("action=%v, want %q (payload=%s)", body["action"], tc.action, payload)
+			}
+			if body["hubId"] != "hub-state-adapter" {
+				t.Fatalf("hubId=%v, want hub-state-adapter (payload=%s)", body["hubId"], payload)
+			}
+		})
+	}
+}
+
+func TestHubStateFileIndexAdapterReturnsStatus(t *testing.T) {
+	root := t.TempDir()
+	reporter := NewReporter(
+		ReporterConfig{HubID: "hub-file-index", MonitorBaseDir: t.TempDir()},
+		[]ProjectInfo{{Name: "proj1", Path: root, Online: true}},
+	)
+
+	handlers := reporter.hubStateSectionHandlers()
+	handler := handlers[hubStateSectionFileIndex]
+	if handler.Refresh == nil {
+		t.Fatalf("%s refresh handler missing", hubStateSectionFileIndex)
+	}
+	data, err := handler.Refresh(context.Background(), hubStateRefreshInput{HubID: "hub-file-index"})
+	if err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	resp, ok := data.(projectFileIndexStatusResponse)
+	if !ok {
+		t.Fatalf("data type=%T, want projectFileIndexStatusResponse", data)
+	}
+	if resp.HubID != "hub-file-index" {
+		t.Fatalf("HubID=%q, want hub-file-index", resp.HubID)
+	}
+	if len(resp.Projects) != 1 {
+		t.Fatalf("projects=%+v, want one project", resp.Projects)
+	}
+}
+
 func TestReporterRun_RegistersAndServesFSRequests(t *testing.T) {
 	ts := newRegistryServer(t, registry.New(registry.Config{}).Handler())
 
