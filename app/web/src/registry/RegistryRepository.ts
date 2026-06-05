@@ -1,5 +1,6 @@
 import { RegistryClient, type RegistryDebugSink } from './RegistryClient';
 import type {RegistryDebugConnection} from '../debug/registryDebug';
+import {RegistryMethods} from './registryMethods';
 import {
   decodeSessionTurnToMessage,
   normalizeSessionReadPayload,
@@ -19,6 +20,8 @@ import type {
   RegistryGitFileDiff,
   RegistryGitStatus,
   RegistryHub,
+  RegistryHubState,
+  RegistryHubStateSectionName,
   RegistryLocalReadCandidate,
   RegistryNpmCommandResponse,
   RegistryNpmHubSnapshot,
@@ -232,6 +235,18 @@ export async function verifyLocalReadProof(input: {
 
 export class RegistryRepository {
   constructor(private readonly client: RegistryClient) {}
+
+  private normalizeHubState(raw: unknown, fallbackHubId: string): RegistryHubState {
+    const input = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+    return {
+      hubId: typeof input.hubId === 'string' && input.hubId ? input.hubId : fallbackHubId,
+      status: typeof input.status === 'string' ? input.status : 'empty',
+      updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : undefined,
+      sections: input.sections && typeof input.sections === 'object' && !Array.isArray(input.sections)
+        ? input.sections as RegistryHubState['sections']
+        : {},
+    };
+  }
 
   private normalizeSessionConfigOptionValue(raw: unknown): RegistrySessionConfigOptionValue | null {
     if (!raw || typeof raw !== 'object') {
@@ -1361,6 +1376,48 @@ export class RegistryRepository {
       timeoutMs: 30000,
     });
     return (resp.payload ?? {}) as RegistryDeepSeekTokenStats;
+  }
+
+  async getHubState(hubId: string, sections?: RegistryHubStateSectionName[]): Promise<RegistryHubState> {
+    const resp = await this.client.request({
+      method: RegistryMethods.HubStateGet,
+      hubId,
+      payload: sections && sections.length > 0 ? {sections} : {},
+      timeoutMs: 15000,
+    });
+    const payload = (resp.payload ?? {}) as {state?: unknown};
+    return this.normalizeHubState(payload.state, hubId);
+  }
+
+  async refreshHubState(
+    hubId: string,
+    sections: RegistryHubStateSectionName[],
+    options: {force?: boolean} = {},
+  ): Promise<RegistryHubState> {
+    const resp = await this.client.request({
+      method: RegistryMethods.HubStateRefresh,
+      hubId,
+      payload: options.force === true ? {sections, force: true} : {sections},
+      timeoutMs: 60000,
+    });
+    const payload = (resp.payload ?? {}) as {state?: unknown};
+    return this.normalizeHubState(payload.state, hubId);
+  }
+
+  async runHubStateAction(
+    hubId: string,
+    section: RegistryHubStateSectionName,
+    action: string,
+    params: Record<string, unknown> = {},
+  ): Promise<RegistryHubState> {
+    const resp = await this.client.request({
+      method: RegistryMethods.HubStateAction,
+      hubId,
+      payload: {section, action, params},
+      timeoutMs: 60000,
+    });
+    const payload = (resp.payload ?? {}) as {state?: unknown};
+    return this.normalizeHubState(payload.state, hubId);
   }
 
   async scanTokenStats(hubId: string): Promise<RegistryTokenScanResult> {

@@ -123,6 +123,7 @@ export class RegistryClient {
     method: string;
     payload: unknown;
     projectId?: string;
+    hubId?: string;
     timeoutMs?: number;
   }): Promise<RegistryEnvelope> {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
@@ -135,6 +136,7 @@ export class RegistryClient {
       method: args.method,
       payload: args.payload,
       ...(args.projectId ? {projectId: args.projectId} : {}),
+      ...(args.hubId ? {hubId: args.hubId} : {}),
     };
 
     const timeoutMs = args.timeoutMs ?? this.timeoutMs;

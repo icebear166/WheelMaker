@@ -68,7 +68,46 @@ export interface RegistryEnvelope<TPayload = unknown> {
   type: RegistryMessageType;
   method?: string;
   projectId?: string;
+  hubId?: string;
   payload?: TPayload;
+}
+
+export type RegistryHubStateStatus = 'empty' | 'ready' | 'refreshing' | 'partial' | 'error' | string;
+export type RegistryHubStateSectionStatus = 'empty' | 'ready' | 'refreshing' | 'error' | string;
+export type RegistryHubStateActionStatus = 'running' | 'succeeded' | 'failed' | string;
+export type RegistryHubStateSectionName =
+  | 'agentPackages'
+  | 'wheelmakerUpdate'
+  | 'skills'
+  | 'tokenStats'
+  | 'fileIndex'
+  | string;
+
+export interface RegistryHubStateAction {
+  id: string;
+  name: string;
+  status: RegistryHubStateActionStatus;
+  startedAt: string;
+  finishedAt?: string;
+  error?: string;
+  params?: Record<string, unknown>;
+  result?: unknown;
+}
+
+export interface RegistryHubStateSection<TData = unknown> {
+  status: RegistryHubStateSectionStatus;
+  updatedAt?: string;
+  startedAt?: string;
+  error?: string;
+  data?: TData;
+  action?: RegistryHubStateAction;
+}
+
+export interface RegistryHubState {
+  hubId: string;
+  status: RegistryHubStateStatus;
+  updatedAt?: string;
+  sections: Record<string, RegistryHubStateSection>;
 }
 
 export interface RegistrySessionContentBlock {
