@@ -48,7 +48,7 @@ This plan does not migrate the Settings UI yet. After this lands, the next plan 
 - Modify: `server/internal/protocol/registry_methods.go`
 - Modify: `server/internal/protocol/registry_methods_test.go`
 
-- [ ] **Step 1: Write failing protocol descriptor tests**
+- [x] **Step 1: Write failing protocol descriptor tests**
 
 Append this test to `server/internal/protocol/registry_methods_test.go`:
 
@@ -88,7 +88,7 @@ func TestRegistryHubStateMethodsRequireHubID(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the failing protocol test**
+- [x] **Step 2: Run the failing protocol test**
 
 Run:
 
@@ -99,7 +99,7 @@ go test ./internal/protocol -run TestRegistryHubStateMethodsRequireHubID -count=
 
 Expected: FAIL because `RegistryMethodHubStateGet` and `RegistryRouteHubState` are undefined.
 
-- [ ] **Step 3: Add `HubID` to shared envelope**
+- [x] **Step 3: Add `HubID` to shared envelope**
 
 In `server/internal/protocol/registry.go`, change `Envelope` to:
 
@@ -114,7 +114,7 @@ type Envelope struct {
 }
 ```
 
-- [ ] **Step 4: Add HubState method constants and descriptor helpers**
+- [x] **Step 4: Add HubState method constants and descriptor helpers**
 
 In `server/internal/protocol/registry_methods.go`, add route constant:
 
@@ -159,7 +159,7 @@ func RegistryHubStateMethod(method string) bool {
 }
 ```
 
-- [ ] **Step 5: Run protocol tests**
+- [x] **Step 5: Run protocol tests**
 
 Run:
 
@@ -170,7 +170,7 @@ go test ./internal/protocol -count=1
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit Task 1**
+- [x] **Step 6: Commit Task 1**
 
 ```powershell
 git add server/internal/protocol/registry.go server/internal/protocol/registry_methods.go server/internal/protocol/registry_methods_test.go
@@ -183,7 +183,7 @@ git commit -m "feat: add hub state protocol descriptors"
 - Modify: `server/internal/registry/server.go`
 - Modify: `server/internal/registry/server_test.go`
 
-- [ ] **Step 1: Write failing Registry tests**
+- [x] **Step 1: Write failing Registry tests**
 
 Update `testEnvelope` at the top of `server/internal/registry/server_test.go`:
 
@@ -367,7 +367,7 @@ func TestBatchHubStateSubrequestCarriesEnvelopeHubID(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the failing Registry tests**
+- [x] **Step 2: Run the failing Registry tests**
 
 Run:
 
@@ -378,7 +378,7 @@ go test ./internal/registry -run "TestHubState(GetForwards|Missing|Batch)" -coun
 
 Expected: FAIL because `hubId` is not parsed or routed.
 
-- [ ] **Step 3: Parse `hubId` in Registry envelopes**
+- [x] **Step 3: Parse `hubId` in Registry envelopes**
 
 In `server/internal/registry/server.go`, update `readEnvelope` raw struct and output:
 
@@ -405,7 +405,7 @@ out := envelope{
 }
 ```
 
-- [ ] **Step 4: Route HubState requests through Registry**
+- [x] **Step 4: Route HubState requests through Registry**
 
 In the main request switch in `server/internal/registry/server.go`, add before `RegistryHubCommandMethod`:
 
@@ -471,7 +471,7 @@ func (s *Server) executeHubStateRequest(state *connectionState, in envelope) env
 }
 ```
 
-- [ ] **Step 5: Add batch `hubId` support**
+- [x] **Step 5: Add batch `hubId` support**
 
 In `handleBatch`, add `HubID` to `batchItem`:
 
@@ -512,7 +512,7 @@ case rp.RegistryHubStateMethod(in.Method):
 	return s.executeHubStateRequest(state, in)
 ```
 
-- [ ] **Step 6: Run Registry tests**
+- [x] **Step 6: Run Registry tests**
 
 Run:
 
@@ -523,7 +523,7 @@ go test ./internal/registry -run "TestHubState(GetForwards|Missing|Batch)|TestCm
 
 Expected: PASS, including existing `cmd.*` compatibility tests.
 
-- [ ] **Step 7: Commit Task 2**
+- [x] **Step 7: Commit Task 2**
 
 ```powershell
 git add server/internal/registry/server.go server/internal/registry/server_test.go
@@ -536,7 +536,7 @@ git commit -m "feat: route hub state by envelope hub id"
 - Create: `server/internal/hub/hub_state.go`
 - Create: `server/internal/hub/hub_state_test.go`
 
-- [ ] **Step 1: Write failing HubState manager tests**
+- [x] **Step 1: Write failing HubState manager tests**
 
 Create `server/internal/hub/hub_state_test.go`:
 
@@ -636,7 +636,7 @@ func TestHubStateManagerActionStoresActionResult(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the failing manager tests**
+- [x] **Step 2: Run the failing manager tests**
 
 Run:
 
@@ -647,7 +647,7 @@ go test ./internal/hub -run TestHubStateManager -count=1
 
 Expected: FAIL because `newHubStateManager` is undefined.
 
-- [ ] **Step 3: Implement HubState types and manager**
+- [x] **Step 3: Implement HubState types and manager**
 
 Create `server/internal/hub/hub_state.go`:
 
@@ -969,7 +969,7 @@ func cloneHubStateParams(params map[string]any) map[string]any {
 }
 ```
 
-- [ ] **Step 4: Run HubState manager tests**
+- [x] **Step 4: Run HubState manager tests**
 
 Run:
 
@@ -980,7 +980,7 @@ go test ./internal/hub -run TestHubStateManager -count=1
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit Task 3**
+- [x] **Step 5: Commit Task 3**
 
 ```powershell
 git add server/internal/hub/hub_state.go server/internal/hub/hub_state_test.go
@@ -993,7 +993,7 @@ git commit -m "feat: add hub state manager"
 - Create: `server/internal/hub/hub_state_adapters.go`
 - Modify: `server/internal/hub/hub_test.go`
 
-- [ ] **Step 1: Add adapter tests**
+- [x] **Step 1: Add adapter tests**
 
 Append to `server/internal/hub/hub_test.go`:
 
@@ -1045,7 +1045,7 @@ func TestHubStateFileIndexAdapterReturnsStatus(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run failing adapter tests**
+- [x] **Step 2: Run failing adapter tests**
 
 Run:
 
@@ -1056,7 +1056,7 @@ go test ./internal/hub -run "TestHubStateToolAdapters|TestHubStateFileIndexAdapt
 
 Expected: FAIL because `hubStateSectionHandlers` is undefined.
 
-- [ ] **Step 3: Implement adapter wiring**
+- [x] **Step 3: Implement adapter wiring**
 
 Create `server/internal/hub/hub_state_adapters.go`:
 
@@ -1179,7 +1179,7 @@ func (r *Reporter) runHubStateTool(ctx context.Context, method string, payload m
 }
 ```
 
-- [ ] **Step 4: Run adapter tests**
+- [x] **Step 4: Run adapter tests**
 
 Run:
 
@@ -1190,7 +1190,7 @@ go test ./internal/hub -run "TestHubStateToolAdapters|TestHubStateFileIndexAdapt
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit Task 4**
+- [x] **Step 5: Commit Task 4**
 
 ```powershell
 git add server/internal/hub/hub_state_adapters.go server/internal/hub/hub_test.go
@@ -1203,7 +1203,7 @@ git commit -m "feat: wire hub state section adapters"
 - Modify: `server/internal/hub/reporter.go`
 - Modify: `server/internal/hub/hub_test.go`
 
-- [ ] **Step 1: Add Reporter integration tests**
+- [x] **Step 1: Add Reporter integration tests**
 
 Append to `server/internal/hub/hub_test.go`:
 
@@ -1338,7 +1338,7 @@ func TestReporterRespondsToHubStateRefresh(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run failing Reporter tests**
+- [x] **Step 2: Run failing Reporter tests**
 
 Run:
 
@@ -1349,7 +1349,7 @@ go test ./internal/hub -run "TestReporterRespondsToHubState" -count=1
 
 Expected: FAIL because Reporter does not dispatch HubState methods.
 
-- [ ] **Step 3: Add manager field and initialization to Reporter**
+- [x] **Step 3: Add manager field and initialization to Reporter**
 
 In `server/internal/hub/reporter.go`, add field to `Reporter`:
 
@@ -1365,7 +1365,7 @@ r.hubStateManager = newHubStateManager(r.cfg.HubID, r.hubStateSectionHandlers())
 
 If `NewReporter` currently returns directly, refactor it to assign to `r`, initialize `hubStateManager`, then `return r`.
 
-- [ ] **Step 4: Dispatch HubState requests**
+- [x] **Step 4: Dispatch HubState requests**
 
 In `handleRegistryRequest`, add:
 
@@ -1444,7 +1444,7 @@ func (r *Reporter) ensureHubStateManager() *HubStateManager {
 }
 ```
 
-- [ ] **Step 5: Run Reporter tests**
+- [x] **Step 5: Run Reporter tests**
 
 Run:
 
@@ -1455,7 +1455,7 @@ go test ./internal/hub -run "TestReporterRespondsToHubState|TestHubState" -count
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit Task 5**
+- [x] **Step 6: Commit Task 5**
 
 ```powershell
 git add server/internal/hub/reporter.go server/internal/hub/hub_test.go
@@ -1471,7 +1471,7 @@ git commit -m "feat: handle hub state reporter requests"
 - Modify: `app/web/src/registry/RegistryRepository.ts`
 - Create: `app/__tests__/web-hub-state-service.test.ts`
 
-- [ ] **Step 1: Write failing App repository tests**
+- [x] **Step 1: Write failing App repository tests**
 
 Create `app/__tests__/web-hub-state-service.test.ts`:
 
@@ -1580,7 +1580,7 @@ describe('HubState registry service', () => {
 });
 ```
 
-- [ ] **Step 2: Run failing App test**
+- [x] **Step 2: Run failing App test**
 
 Run:
 
@@ -1591,7 +1591,7 @@ npm test -- --runTestsByPath __tests__/web-hub-state-service.test.ts
 
 Expected: FAIL because `registryMethods.ts` and repository methods do not exist.
 
-- [ ] **Step 3: Add App protocol constants**
+- [x] **Step 3: Add App protocol constants**
 
 Create `app/web/src/registry/registryMethods.ts`:
 
@@ -1608,7 +1608,7 @@ export const RegistryMethods = {
 export type RegistryMethod = typeof RegistryMethods[keyof typeof RegistryMethods];
 ```
 
-- [ ] **Step 4: Add HubState and envelope types**
+- [x] **Step 4: Add HubState and envelope types**
 
 In `app/web/src/registry/registryTypes.ts`, add `hubId` to `RegistryEnvelope`:
 
@@ -1665,7 +1665,7 @@ export interface RegistryHubState {
 }
 ```
 
-- [ ] **Step 5: Allow RegistryClient request `hubId`**
+- [x] **Step 5: Allow RegistryClient request `hubId`**
 
 In `app/web/src/registry/RegistryClient.ts`, update request args:
 
@@ -1685,7 +1685,7 @@ Add to envelope construction:
 ...(args.hubId ? {hubId: args.hubId} : {}),
 ```
 
-- [ ] **Step 6: Add repository methods**
+- [x] **Step 6: Add repository methods**
 
 In `app/web/src/registry/RegistryRepository.ts`, import constants and HubState types:
 
@@ -1777,7 +1777,7 @@ Add methods in `RegistryRepository`:
   }
 ```
 
-- [ ] **Step 7: Run App tests**
+- [x] **Step 7: Run App tests**
 
 Run:
 
@@ -1788,7 +1788,7 @@ npm test -- --runTestsByPath __tests__/web-hub-state-service.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit Task 6**
+- [x] **Step 8: Commit Task 6**
 
 ```powershell
 git add app/web/src/registry/registryMethods.ts app/web/src/registry/registryTypes.ts app/web/src/registry/RegistryClient.ts app/web/src/registry/RegistryRepository.ts app/__tests__/web-hub-state-service.test.ts
@@ -1800,7 +1800,7 @@ git commit -m "feat: add app hub state registry methods"
 **Files:**
 - Verify all files touched in Tasks 1-6.
 
-- [ ] **Step 1: Run server targeted tests**
+- [x] **Step 1: Run server targeted tests**
 
 Run:
 
@@ -1811,7 +1811,7 @@ go test ./internal/protocol ./internal/registry ./internal/hub -count=1
 
 Expected: PASS.
 
-- [ ] **Step 2: Run App targeted tests**
+- [x] **Step 2: Run App targeted tests**
 
 Run:
 
@@ -1822,7 +1822,7 @@ npm test -- --runTestsByPath __tests__/web-hub-state-service.test.ts __tests__/w
 
 Expected: PASS.
 
-- [ ] **Step 3: Run repo status check**
+- [x] **Step 3: Run repo status check**
 
 Run:
 
@@ -1832,7 +1832,7 @@ git status --short --branch
 
 Expected: clean working tree after all task commits, on the current branch.
 
-- [ ] **Step 4: Final integration commit if needed**
+- [x] **Step 4: Final integration commit if needed**
 
 If verification required small fixes after the task commits, commit them:
 
