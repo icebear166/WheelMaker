@@ -680,6 +680,8 @@ func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 		{section: hubStateSectionSkills, action: "install"},
 		{section: hubStateSectionSkills, action: "uninstall"},
 		{section: hubStateSectionSkills, action: "update"},
+		{section: hubStateSectionTokenStats, action: "providers"},
+		{section: hubStateSectionTokenStats, action: "deepseekStats", params: map[string]any{"apiKey": "test-key"}},
 		{
 			section: hubStateSectionFileIndex,
 			action:  "rebuild",

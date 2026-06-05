@@ -599,7 +599,10 @@ func validateHubStateAction(section string, action string) error {
 		hubStateSectionFileIndex: {
 			"rebuild": {},
 		},
-		hubStateSectionTokenStats: {},
+		hubStateSectionTokenStats: {
+			"providers":     {},
+			"deepseekStats": {},
+		},
 	}
 	sectionActions, ok := allowedActions[section]
 	if !ok {

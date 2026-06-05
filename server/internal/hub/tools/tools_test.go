@@ -1135,6 +1135,47 @@ func TestTokenCommandScanUsesHubLevelScanner(t *testing.T) {
 	}
 }
 
+func TestTokenCommandProvidersReturnsSupportedProviderList(t *testing.T) {
+	cmd := NewTokenCommand()
+	payload, cmdErr := cmd.Handle(context.Background(), rp.MustRaw(map[string]any{
+		"action": "providers",
+		"hubId":  "hub-token",
+	}))
+
+	if cmdErr != nil {
+		t.Fatalf("cmdErr=%v", cmdErr)
+	}
+	body, ok := payload.(map[string]any)
+	if !ok {
+		t.Fatalf("payload=%#v, want map", payload)
+	}
+	providers, ok := body["providers"].([]map[string]any)
+	if !ok {
+		t.Fatalf("providers=%#v, want []map[string]any", body["providers"])
+	}
+	if len(providers) != 1 {
+		t.Fatalf("providers=%#v, want one provider", providers)
+	}
+	if providers[0]["id"] != "deepseek" || providers[0]["authMode"] != "api_key" {
+		t.Fatalf("provider=%#v, want deepseek api_key provider", providers[0])
+	}
+}
+
+func TestTokenCommandDeepSeekStatsValidatesAPIKey(t *testing.T) {
+	cmd := NewTokenCommand()
+	_, cmdErr := cmd.Handle(context.Background(), rp.MustRaw(map[string]any{
+		"action": "deepseekStats",
+		"hubId":  "hub-token",
+	}))
+
+	if cmdErr == nil {
+		t.Fatal("cmdErr=nil, want apiKey validation error")
+	}
+	if !strings.Contains(cmdErr.Message, "apiKey is required") {
+		t.Fatalf("cmdErr=%v, want apiKey validation error", cmdErr)
+	}
+}
+
 func TestFetchCodexUsageLimitsDoesNotRefreshRejectedAccessToken(t *testing.T) {
 	calls := make([]string, 0, 2)
 	scanner := &tokenScanner{

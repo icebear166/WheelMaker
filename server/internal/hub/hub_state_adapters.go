@@ -29,6 +29,7 @@ func (r *Reporter) hubStateSectionHandlers() map[string]hubStateSectionHandler {
 		},
 		hubStateSectionTokenStats: {
 			Refresh: r.refreshHubStateTokenStats,
+			Action:  r.actionHubStateTokenStats,
 		},
 		hubStateSectionFileIndex: {
 			Refresh: r.refreshHubStateFileIndex,
@@ -101,6 +102,17 @@ func (r *Reporter) refreshHubStateTokenStats(ctx context.Context, input hubState
 		"action": "scan",
 		"hubId":  input.HubID,
 	})
+}
+
+func (r *Reporter) actionHubStateTokenStats(ctx context.Context, action string, params map[string]any) (any, error) {
+	switch action {
+	case "providers":
+		return r.runHubStateTool(ctx, hubToolMethodToken, hubStateToolPayload(r.cfg.HubID, "providers", params))
+	case "deepseekStats":
+		return r.runHubStateTool(ctx, hubToolMethodToken, hubStateToolPayload(r.cfg.HubID, "deepseekStats", params))
+	default:
+		return nil, fmt.Errorf("unsupported %s action %q", hubStateSectionTokenStats, action)
+	}
 }
 
 func (r *Reporter) refreshHubStateFileIndex(_ context.Context, input hubStateRefreshInput) (any, error) {

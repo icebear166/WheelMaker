@@ -12,8 +12,11 @@ import (
 type TokenCommand struct{}
 
 type tokenCommandPayload struct {
-	Action string `json:"action"`
-	HubID  string `json:"hubId"`
+	Action    string `json:"action"`
+	HubID     string `json:"hubId"`
+	APIKey    string `json:"apiKey"`
+	RangeType string `json:"rangeType"`
+	Month     string `json:"month"`
 }
 
 type tokenCommandError struct {
@@ -46,6 +49,7 @@ func (e *tokenCommandError) commandMessage() string {
 }
 
 var scanHubTokenStats = ScanTokenStats
+var fetchHubDeepSeekTokenStats = FetchDeepSeekTokenStats
 
 func NewTokenCommand() *TokenCommand {
 	return &TokenCommand{}
@@ -77,8 +81,33 @@ func (c *TokenCommand) Handle(ctx context.Context, raw json.RawMessage) (any, *t
 		body := tokenCommandResponseMap(result)
 		body["hubId"] = payload.HubID
 		return body, nil
+	case "providers":
+		return map[string]any{
+			"ok":        true,
+			"hubId":     payload.HubID,
+			"providers": supportedTokenProviders(),
+		}, nil
+	case "deepseekStats":
+		if strings.TrimSpace(payload.APIKey) == "" {
+			return nil, &tokenCommandError{Code: rp.CodeInvalidArgument, Message: "apiKey is required"}
+		}
+		result, err := fetchHubDeepSeekTokenStats(ctx, payload.APIKey, payload.RangeType, payload.Month)
+		if err != nil {
+			return nil, &tokenCommandError{Code: rp.CodeInvalidArgument, Message: err.Error()}
+		}
+		return result, nil
 	default:
 		return nil, &tokenCommandError{Code: rp.CodeInvalidArgument, Message: "unsupported cmd.token action"}
+	}
+}
+
+func supportedTokenProviders() []map[string]any {
+	return []map[string]any{
+		{
+			"id":       "deepseek",
+			"name":     "DeepSeek",
+			"authMode": "api_key",
+		},
 	}
 }
 
