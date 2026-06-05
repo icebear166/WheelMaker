@@ -546,7 +546,7 @@ export class RegistryRepository {
     await this.client.connectInit({
       clientName: 'wheelmaker-web',
       clientVersion: '0.1.0',
-      protocolVersion: '2.3',
+      protocolVersion: '2.4',
       role: 'client',
       token: token?.trim() ?? '',
     });
@@ -578,7 +578,7 @@ export class RegistryRepository {
     await this.client.connectInit({
       clientName: 'wheelmaker-web',
       clientVersion: '0.1.0',
-      protocolVersion: '2.3',
+      protocolVersion: '2.4',
       role: 'local_read',
       hubId,
       token: token.trim(),

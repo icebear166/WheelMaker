@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	DefaultProtocolVersion = "2.3"
+	DefaultProtocolVersion = "2.4"
 
 	CodeUnauthorized    = "UNAUTHORIZED"
 	CodeInvalidArgument = "INVALID_ARGUMENT"

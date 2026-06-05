@@ -38,7 +38,7 @@ func TestConnectInit(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-web",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "client",
 			"token":           "",
 		},
@@ -71,7 +71,7 @@ func TestDebugUploadLogWritesClientLog(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-web",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "client",
 			"token":           "",
 		},
@@ -135,6 +135,34 @@ func TestConnectInitRejectsLegacyProtocolVersion22(t *testing.T) {
 	}
 }
 
+func TestConnectInitRejectsLegacyProtocolVersion23(t *testing.T) {
+	s := New(Config{})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	ws := dialWS(t, ts.URL+"/ws")
+	defer ws.Close()
+
+	mustWriteJSON(t, ws, testEnvelope{
+		RequestID: 1,
+		Type:      "request",
+		Method:    "connect.init",
+		Payload: map[string]any{
+			"clientName":      "wm-web",
+			"clientVersion":   "0.1.0",
+			"protocolVersion": "2.3",
+			"role":            "client",
+			"token":           "",
+		},
+	})
+
+	resp := mustReadEnvelope(t, ws)
+	message, _ := resp.Payload["message"].(string)
+	if resp.Type != "error" || resp.Payload["code"] != "INVALID_ARGUMENT" || !strings.Contains(message, "unsupported protocolVersion") {
+		t.Fatalf("response=%#v, want unsupported protocolVersion error", resp)
+	}
+}
+
 func TestRegistryReportProjectsThenListProjects(t *testing.T) {
 	s := New(Config{})
 	ts := httptest.NewServer(s.Handler())
@@ -150,7 +178,7 @@ func TestRegistryReportProjectsThenListProjects(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-hub",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "hub",
 			"hubId":           "hub-a",
 			"token":           "",
@@ -188,7 +216,7 @@ func TestRegistryReportProjectsThenListProjects(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-web",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "client",
 			"token":           "",
 		},
@@ -264,7 +292,7 @@ func TestProjectListIncludesLocalReadCandidate(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-hub",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "hub",
 			"hubId":           "hub-local-read",
 			"token":           "",
@@ -306,7 +334,7 @@ func TestProjectListIncludesLocalReadCandidate(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-web",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "client",
 			"token":           "",
 		},
@@ -357,7 +385,7 @@ func TestRegistryReportProjectsRejectsStaleConnectionEpoch(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-hub-old",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "hub",
 			"hubId":           "hub-a",
 		},
@@ -375,7 +403,7 @@ func TestRegistryReportProjectsRejectsStaleConnectionEpoch(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-hub-new",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "hub",
 			"hubId":           "hub-a",
 		},
@@ -434,7 +462,7 @@ func TestConnectInitAuthRequired(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-web",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "client",
 			"token":           "wrong",
 		},
@@ -464,7 +492,7 @@ func TestInvalidRequestIDReturnsErrorAndKeepsConnection(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-web",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "client",
 			"token":           "",
 		},
@@ -511,7 +539,7 @@ func TestBatchForwardsProjectRequests(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-hub",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "hub",
 			"hubId":           "hub-a",
 		},
@@ -542,7 +570,7 @@ func TestBatchForwardsProjectRequests(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-web",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "client",
 		},
 	})
@@ -635,7 +663,7 @@ func TestRegistryUpdateProjectBroadcastsEvents(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-hub",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "hub",
 			"hubId":           "hub-a",
 		},
@@ -666,7 +694,7 @@ func TestRegistryUpdateProjectBroadcastsEvents(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-web",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "client",
 		},
 	})
@@ -724,7 +752,7 @@ func TestSessionForwardingAndSessionEventBroadcast(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-hub",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "hub",
 			"hubId":           "hub-a",
 		},
@@ -755,7 +783,7 @@ func TestSessionForwardingAndSessionEventBroadcast(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-web",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "client",
 		},
 	})
@@ -1038,7 +1066,7 @@ func TestChatSendIsUnsupportedAfterIMRemoval(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-web",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "client",
 			"token":           "tok",
 		},
@@ -1079,7 +1107,7 @@ func TestBatchChatSendIsUnsupportedAfterIMRemoval(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-hub",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "hub",
 			"hubId":           "hub-a",
 		},
@@ -1110,7 +1138,7 @@ func TestBatchChatSendIsUnsupportedAfterIMRemoval(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-web",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "client",
 		},
 	})
@@ -1220,7 +1248,7 @@ func TestMonitorBatchRejectsClientForwardMethods(t *testing.T) {
 				Payload: map[string]any{
 					"clientName":      "wm-hub",
 					"clientVersion":   "0.1.0",
-					"protocolVersion": "2.3",
+					"protocolVersion": rp.DefaultProtocolVersion,
 					"role":            "hub",
 					"hubId":           "hub-a",
 				},
@@ -1251,7 +1279,7 @@ func TestMonitorBatchRejectsClientForwardMethods(t *testing.T) {
 				Payload: map[string]any{
 					"clientName":      "wm-monitor",
 					"clientVersion":   "0.1.0",
-					"protocolVersion": "2.3",
+					"protocolVersion": rp.DefaultProtocolVersion,
 					"role":            "monitor",
 				},
 			})
@@ -1336,7 +1364,7 @@ func TestConnectInitMonitorRole(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-monitor",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "monitor",
 			"token":           "",
 		},
@@ -1365,7 +1393,7 @@ func TestMonitorListHubAndMonitorStatusForwarding(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-hub",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "hub",
 			"hubId":           "hub-a",
 		},
@@ -1396,7 +1424,7 @@ func TestMonitorListHubAndMonitorStatusForwarding(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-monitor",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "monitor",
 		},
 	})
@@ -1438,7 +1466,7 @@ func TestCmdNPMForwardsByHubIDWithoutProjectID(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-hub",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "hub",
 			"hubId":           "hub-npm",
 		},
@@ -1467,7 +1495,7 @@ func TestCmdNPMForwardsByHubIDWithoutProjectID(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-web",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "client",
 		},
 	})
@@ -1525,7 +1553,7 @@ func TestCmdTokenForwardsByHubIDWithoutProjectID(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-hub",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "hub",
 			"hubId":           "hub-token",
 		},
@@ -1554,7 +1582,7 @@ func TestCmdTokenForwardsByHubIDWithoutProjectID(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-web",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "client",
 		},
 	})
@@ -1614,7 +1642,7 @@ func TestCmdUpdateForwardsByHubIDWithoutProjectID(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wheelmaker-hub",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "hub",
 			"hubId":           "hub-update",
 		},
@@ -1643,7 +1671,7 @@ func TestCmdUpdateForwardsByHubIDWithoutProjectID(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-web",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "client",
 		},
 	})
@@ -1702,7 +1730,7 @@ func TestCmdSkillsForwardsByHubIDWithoutProjectID(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wheelmaker-hub",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "hub",
 			"hubId":           "hub-skills",
 		},
@@ -1731,7 +1759,7 @@ func TestCmdSkillsForwardsByHubIDWithoutProjectID(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-web",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "client",
 		},
 	})
@@ -1979,7 +2007,7 @@ func TestHubCommandForwardRequestsToDifferentHubsDoNotBlockBehindSlowHub(t *test
 		Payload: map[string]any{
 			"clientName":      "wm-web",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "client",
 		},
 	})
@@ -2062,7 +2090,7 @@ func TestCmdPrefixIsNotAllowedByWildcard(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-web",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "client",
 		},
 	})
@@ -2106,7 +2134,7 @@ func TestCmdNPMBatchRequiresClientRole(t *testing.T) {
 		Payload: map[string]any{
 			"clientName":      "wm-monitor",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "monitor",
 		},
 	})
@@ -2160,7 +2188,7 @@ func dialReportedHub(t *testing.T, rawURL string, hubID string) *websocket.Conn 
 		Payload: map[string]any{
 			"clientName":      "wheelmaker-hub",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "hub",
 			"hubId":           hubID,
 		},
@@ -2296,7 +2324,7 @@ func connectRegistryClient(t *testing.T, ws *websocket.Conn) {
 		Payload: map[string]any{
 			"clientName":      "wm-web",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "client",
 		},
 	})

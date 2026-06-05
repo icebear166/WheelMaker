@@ -2415,7 +2415,7 @@ func TestReporterRespondsToMonitorStatusRequests(t *testing.T) {
 
 	monitor := dialWS(t, "http://"+ts+"/ws")
 	defer monitor.Close()
-	mustWriteJSON(t, monitor, testEnvelope{RequestID: 1, Type: "request", Method: "connect.init", Payload: map[string]any{"clientName": "wm-monitor", "clientVersion": "0.1.0", "protocolVersion": "2.3", "role": "monitor"}})
+	mustWriteJSON(t, monitor, testEnvelope{RequestID: 1, Type: "request", Method: "connect.init", Payload: map[string]any{"clientName": "wm-monitor", "clientVersion": "0.1.0", "protocolVersion": rp.DefaultProtocolVersion, "role": "monitor"}})
 	_ = mustReadEnvelope(t, monitor)
 
 	mustWriteJSON(t, monitor, testEnvelope{RequestID: 2, Type: "request", Method: "monitor.status", Payload: map[string]any{"hubId": "hub-monitor"}})
@@ -2452,7 +2452,7 @@ func connectClient(t *testing.T, ws *websocket.Conn, token string) {
 		Payload: map[string]any{
 			"clientName":      "wm-web",
 			"clientVersion":   "0.1.0",
-			"protocolVersion": "2.3",
+			"protocolVersion": rp.DefaultProtocolVersion,
 			"role":            "client",
 			"token":           token,
 		},

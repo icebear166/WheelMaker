@@ -1,10 +1,10 @@
-# WheelMaker Registry Protocol 2.3
+# WheelMaker Registry Protocol 2.4
 
-本文定义 WheelMaker Registry 2.3 协议，覆盖 Registry、Hub、Client 的连接、认证、路由、同步与数据传输行为。
+本文定义 WheelMaker Registry 2.4 协议，覆盖 Registry、Hub、Client 的连接、认证、路由、同步与数据传输行为。
 
 ## 0. 单一来源
 
-Registry 2.3 使用一个 WebSocket envelope，结构定义在 `server/internal/protocol/registry.go`。
+Registry 2.4 使用一个 WebSocket envelope，结构定义在 `server/internal/protocol/registry.go`。
 所有 Registry method 名称、envelope type 字符串、连接 role 和服务端 route 分类都集中注册在 `server/internal/protocol/registry_methods.go`。
 
 代码中应引用该文件里的常量和 helper，不再内联比较或发出原始协议字符串。ACP 仍然是 agent 业务协议，和 Registry method 注册表保持分离。
@@ -22,7 +22,7 @@ Registry 2.3 使用一个 WebSocket envelope，结构定义在 `server/internal/
 - `fs.info`：查询路径元信息（文件类型、大小、总行数等），客户端据此决定是否直接拉取文件内容。
 - `fs.read`：整文件返回；文本为 `utf-8` 全文，二进制为 `base64` 全量内容。
 - `hash` 协商（conditional GET）减少重复传输；Git 列表按版本触发，不做 hash 协商。
-- 协议仅描述 2.3 语义，不含旧版本兼容。
+- 协议仅描述 2.4 语义，不含旧版本兼容。
 
 ## 2. 核心模型
 
@@ -79,6 +79,7 @@ Hub 上报（`reportProjects`、`updateProject`）和 Client 查询（`project.l
   "requestId": 1,
   "type": "request|response|error|event",
   "method": "connect.init|...",
+  "hubId": "optional, Hub-level methods require it",
   "projectId": "optional, 业务方法必填",
   "payload": {}
 }
@@ -109,7 +110,7 @@ Hub 上报（`reportProjects`、`updateProject`）和 Client 查询（`project.l
   "payload": {
     "clientName": "wm-web",
     "clientVersion": "0.1.0",
-    "protocolVersion": "2.3",
+    "protocolVersion": "2.4",
     "role": "client",
     "hubId": "local-hub",
     "token": "******",
@@ -135,7 +136,7 @@ Hub 上报（`reportProjects`、`updateProject`）和 Client 查询（`project.l
     },
     "serverInfo": {
       "serverVersion": "x.y.z",
-      "protocolVersion": "2.3"
+      "protocolVersion": "2.4"
     },
     "features": {
       "hubReportProjects": true,
@@ -155,7 +156,7 @@ Hub 上报（`reportProjects`、`updateProject`）和 Client 查询（`project.l
 
 - `role` 必填，仅允许 `hub`、`client`、`monitor`。
 - `role=hub` 时 `hubId` 必填。
-- `protocolVersion` 必填，且必须为 `2.3`；不匹配返回 `INVALID_ARGUMENT`。
+- `protocolVersion` 必填，且必须为 `2.4`；不匹配返回 `INVALID_ARGUMENT`。
 - `role=client` 时 `hubId` 可选：
   - 携带 `hubId`：连接绑定到该 hub，`project.list` 仅返回该 hub 的项目。
   - 省略 `hubId`：全局范围，`project.list` 返回 token 有权访问的所有 hub 的项目。
@@ -170,7 +171,7 @@ Hub 上报（`reportProjects`、`updateProject`）和 Client 查询（`project.l
 | 角色 | 允许的请求方法 |
 |------|---------------|
 | `hub` | `registry.reportProjects`、`registry.updateProject`、`registry.session.updated`、`registry.session.message`、`hub.ping` |
-| `client` | `project.list`、`project.syncCheck`、`relay.enable`、`relay.disable`、`relay.status`、`relay.regenerateAccessCode`、`cmd.npm`、`cmd.update`、`cmd.skills`、`session.*`、`fs.*`、`git.*`、`batch` |
+| `client` | `project.list`、`project.syncCheck`、`relay.enable`、`relay.disable`、`relay.status`、`relay.regenerateAccessCode`、`hub.state.get`、`hub.state.refresh`、`hub.state.action`、`cmd.npm`、`cmd.update`、`cmd.skills`、`session.*`、`fs.*`、`git.*`、`batch` |
 | `monitor` | `project.list`、`monitor.listHub`、`monitor.status`、`monitor.log`、`monitor.db`、`monitor.action`、`batch` |
 
 - 方法与角色不匹配返回 `FORBIDDEN`。
@@ -609,7 +610,7 @@ Hub 可通过以下方法向 Registry 发布事件，由 Registry 转推给对�
 
 #### 5.6.2 请求字段
 
-`fs.read` 请求字段在 2.3 固定为：
+`fs.read` 请求字段在 2.4 固定为：
 
 - `path`：必填。
 - `knownHash`：可选。
@@ -1731,7 +1732,7 @@ Hub 还可通过 `registry.session.updated`、`registry.session.message` 触发�
 }
 ```
 
-`payload.sessionId` 是路由和本地 store key 的 session 维度；`payload.turn` 内不重复 `sessionId`，旧扁平消息格式不属于 2.3 协议。
+`payload.sessionId` 是路由和本地 store key 的 session 维度；`payload.turn` 内不重复 `sessionId`，旧扁平消息格式不属于 2.4 协议。
 
 #### `project.offline` / `project.online`
 
@@ -1820,6 +1821,14 @@ Registry 即将关闭客户端连接时提前通知：
 - [architecture-3.0.md](./architecture-3.0.md) — 架构设计 3.0
 
 ## 11. 版本历史
+
+### 2.4 相比 2.3 的变更
+
+1. **协议版本硬切换**：`connect.init.payload.protocolVersion` 必须为 `2.4`，不接受 `2.3` Hub/Client/Monitor 连接。
+
+2. **HubState 协议引入**：新增 `hub.state.get`、`hub.state.refresh`、`hub.state.action` 和 `hub.state.updated`，App 面向 Hub 状态读取、刷新和动作执行不再继续扩展 `cmd.*`。
+
+3. **Hub 级路由收敛到 envelope 顶层 `hubId`**：`hub.state.*` 使用 envelope 顶层 `hubId` 路由，Registry 只负责按 Hub 转发，HubState cache 归 Hub 进程所有。
 
 ### 2.3 相比 2.2 的变更
 
