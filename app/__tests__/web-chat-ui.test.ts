@@ -959,7 +959,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('<span className="chat-attachment-action-label">File</span>');
     expect(mainTsx).toContain('<span className="chat-attachment-action-label">Photo</span>');
     expect(mainTsx).toContain('className="codicon codicon-code chat-composer-tool-glyph chat-slash-symbol"');
-    expect(mainTsx).toContain('className="codicon codicon-file-media chat-composer-tool-glyph chat-at-symbol"');
+    expect(mainTsx).toContain('className="codicon codicon-file-code chat-composer-tool-glyph chat-at-symbol"');
     expect(mainTsx).not.toContain('className="chat-tool-button chat-mention-button"');
     expect(mainTsx).toContain('title="Mention files"');
     expect(mainTsx).toContain('aria-label="Mention files"');
@@ -975,7 +975,8 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('codicon-symbol-keyword');
     expect(mainTsx).not.toContain('className="chat-tool-button chat-attach-button"');
     expect(mainTsx).toContain('codicon-attach');
-    expect(mainTsx).toContain('className="codicon codicon-file-media"');
+    expect(mainTsx).toContain('className="codicon codicon-file-media chat-composer-tool-glyph"');
+    expect(mainTsx).toContain('className="codicon codicon-device-camera"');
     expect(mainTsx).not.toContain('codicon-cloud-upload');
     expect(mainTsx).not.toContain('codicon-new-file');
     expect(mainTsx).toContain('chatFileInputRef.current?.click();');
@@ -1331,7 +1332,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('chatImageInputRef.current?.click();');
     expect(mainTsx).toContain('className="chat-attachment-action-button photo"');
     expect(mainTsx).toContain('aria-label="Attach photo"');
-    expect(mainTsx).toContain('className="codicon codicon-file-media"');
+    expect(mainTsx).toContain('className="codicon codicon-device-camera"');
     expect(mainTsx).toContain('closeChatAttachmentTray();');
     expect(mainTsx).toContain('if (target && chatAttachmentTrayRef.current?.contains(target))');
     expect(mainTsx).toContain('if (target && chatAttachmentTrayButtonRef.current?.contains(target))');
@@ -1354,8 +1355,8 @@ describe('web chat integration', () => {
     expect(toolsBlock).toContain('chat-attachment-action-button photo');
     expect(toolsBlock).toContain('codicon-attach');
     expect(toolsBlock).toContain('codicon-file-media');
+    expect(toolsBlock).toContain('codicon-device-camera');
     expect(toolsBlock).not.toContain('codicon-cloud-upload');
-    expect(toolsBlock).not.toContain('codicon-device-camera');
     expect(toolsBlock).not.toContain('codicon-new-file');
 
     expect(stylesCss).toMatch(
@@ -2049,7 +2050,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className="chat-tool-button chat-file-mention-trigger-button"');
     expect(mainTsx).toContain('className="chat-tool-button chat-slash-button"');
     expect(mainTsx).toContain('aria-label="Mention files"');
-    expect(mainTsx).toContain('className="codicon codicon-file-media chat-composer-tool-glyph chat-at-symbol"');
+    expect(mainTsx).toContain('className="codicon codicon-file-code chat-composer-tool-glyph chat-at-symbol"');
     expect(mainTsx).toContain('!selectedChatPromptRunning ? (');
     expect(mainTsx).toContain('className="chat-tool-button chat-attachment-plus-button"');
     expect(mainTsx).toContain(') : (');
@@ -2073,8 +2074,9 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-at-symbol:not(.codicon)');
     expect(stylesCss).toContain('.chat-file-mention-remove');
     expect(mainTsx).toContain('className="codicon codicon-code chat-composer-tool-glyph chat-slash-symbol"');
-    expect(mainTsx).toContain('className="codicon codicon-file-media chat-composer-tool-glyph chat-at-symbol"');
-    expect(mainTsx).toContain('className="codicon codicon-tools chat-composer-tool-glyph"');
+    expect(mainTsx).toContain('className="codicon codicon-file-code chat-composer-tool-glyph chat-at-symbol"');
+    expect(mainTsx).toContain('className="codicon codicon-file-media chat-composer-tool-glyph"');
+    expect(mainTsx).not.toContain('className="codicon codicon-tools chat-composer-tool-glyph"');
     expect(mainTsx).not.toContain('className="codicon codicon-add chat-composer-tool-glyph"');
     expect(mainTsx).toContain("chat-composer-tool-glyph`}");
     expect(stylesCss).toMatch(/\.chat-slash-button,\s*\.chat-file-mention-trigger-button,\s*\.chat-attachment-plus-button \{[\s\S]*color: color-mix\(in srgb, var\(--accent\) 72%, var\(--text\)\);[\s\S]*\}/);
