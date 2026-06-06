@@ -1311,7 +1311,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('resizeChatComposerTextarea({scrollToEnd: true})');
   });
 
-  test('keeps file and photo actions behind a plus tray while file mentions use the @ shortcut', () => {
+  test('keeps file and photo actions behind a tools tray while file mentions use the @ shortcut', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const stylesCss = readWebStyles(projectRoot);
@@ -2068,7 +2068,8 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-file-mention-remove');
     expect(mainTsx).toContain('className="chat-composer-tool-glyph chat-slash-symbol"');
     expect(mainTsx).toContain('className="chat-composer-tool-glyph chat-at-symbol"');
-    expect(mainTsx).toContain('className="codicon codicon-add chat-composer-tool-glyph"');
+    expect(mainTsx).toContain('className="codicon codicon-tools chat-composer-tool-glyph"');
+    expect(mainTsx).not.toContain('className="codicon codicon-add chat-composer-tool-glyph"');
     expect(stylesCss).toMatch(/\.chat-slash-button,\s*\.chat-file-mention-trigger-button,\s*\.chat-attachment-plus-button \{[\s\S]*color: color-mix\(in srgb, var\(--accent\) 72%, var\(--text\)\);[\s\S]*\}/);
     expect(stylesCss).toMatch(/\.chat-composer-tool-glyph \{[\s\S]*width: 16px;[\s\S]*height: 16px;[\s\S]*font-size: 15px;[\s\S]*line-height: 16px;[\s\S]*\}/);
     expect(stylesCss).not.toContain('.chat-file-mention-trigger-button {\n  color: color-mix(in srgb, #8bd5ff 82%, var(--text));\n}');

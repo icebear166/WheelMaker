@@ -15868,7 +15868,7 @@ export function App() {
                       aria-haspopup="menu"
                       aria-expanded={chatAttachmentTrayOpen}
                     >
-                      <span className="codicon codicon-add chat-composer-tool-glyph" aria-hidden="true" />
+                      <span className="codicon codicon-tools chat-composer-tool-glyph" aria-hidden="true" />
                     </button>
                   ) : (
                     <button
