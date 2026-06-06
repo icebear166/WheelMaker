@@ -441,7 +441,7 @@ describe('web chat integration', () => {
     expect(sendBlock).not.toContain('markChatSessionRunning(');
     expect(sendAwait).toBeGreaterThan(sendExistingStart);
     expect(mainTsx).toContain('const [hasPendingProjectUpdates, setHasPendingProjectUpdates] = useState(false);');
-    expect(mainTsx).toContain('if (!eventProjectId || eventProjectId === projectIdRef.current) {');
+    expect(mainTsx).toContain('if (!eventProjectId || reportedProjectId === projectIdRef.current) {');
     expect(mainTsx).toContain('setHasPendingProjectUpdates(true);');
     expect(mainTsx).toContain('if (!silent) {');
     expect(mainTsx).toContain('setHasPendingProjectUpdates(false);');
@@ -606,6 +606,11 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('const runtimeKey = buildChatRuntimeKey(eventProjectId, payload.session.sessionId);');
     const sessionUpdatedBlockStart = mainTsx.indexOf("if (event.method === 'session.updated') {");
     const sessionMessageBlockStart = mainTsx.indexOf("if (event.method === 'session.message') {");
+    const projectReportBlockStart = mainTsx.indexOf('if (event.method === RegistryMethods.RegistryProjectReport) {');
+    expect(projectReportBlockStart).toBeGreaterThanOrEqual(0);
+    expect(mainTsx).toContain("import {RegistryMethods} from '../registry/registryMethods';");
+    expect(mainTsx).not.toContain("event.method === 'project.online'");
+    expect(mainTsx).not.toContain("event.method === 'project.offline'");
     const sessionUpdatedBlock = mainTsx.slice(sessionUpdatedBlockStart, sessionMessageBlockStart);
     expect(sessionUpdatedBlock).not.toContain('loadChatSession(');
     expect(sessionUpdatedBlock).toContain('if (payload.session.running === false) {');

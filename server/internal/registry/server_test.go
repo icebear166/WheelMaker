@@ -1823,6 +1823,62 @@ func TestHubStateMissingEnvelopeHubIDIsRejected(t *testing.T) {
 	}
 }
 
+func TestProjectListRespondsWhileSameClientHasPendingHubStateRequest(t *testing.T) {
+	s := New(Config{})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	hub := dialReportedHub(t, ts.URL+"/ws", "hub-async")
+	defer hub.Close()
+
+	client := dialWS(t, ts.URL+"/ws")
+	defer client.Close()
+	connectRegistryClient(t, client)
+
+	mustWriteJSON(t, client, testEnvelope{
+		RequestID: 2,
+		Type:      "request",
+		Method:    "hub.state.refresh",
+		HubID:     "hub-async",
+		Payload: map[string]any{
+			"sections": []string{"tokenStats"},
+		},
+	})
+
+	forwarded := mustReadEnvelope(t, hub)
+	if forwarded.Type != "request" || forwarded.Method != "hub.state.refresh" {
+		t.Fatalf("forwarded=%#v, want pending hub.state.refresh request", forwarded)
+	}
+
+	mustWriteJSON(t, client, testEnvelope{
+		RequestID: 3,
+		Type:      "request",
+		Method:    "registry.project.list",
+		Payload:   map[string]any{},
+	})
+
+	_ = client.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	listResp := mustReadEnvelope(t, client)
+	_ = client.SetReadDeadline(time.Time{})
+	if listResp.RequestID != 3 || listResp.Type != "response" || listResp.Method != "registry.project.list" {
+		t.Fatalf("project list response=%#v, want request 3 registry.project.list response", listResp)
+	}
+
+	mustWriteJSON(t, hub, testEnvelope{
+		RequestID: forwarded.RequestID,
+		Type:      "response",
+		Method:    "hub.state.refresh",
+		HubID:     "hub-async",
+		Payload: map[string]any{
+			"state": map[string]any{"hubId": "hub-async", "sections": map[string]any{}},
+		},
+	})
+	refreshResp := mustReadEnvelope(t, client)
+	if refreshResp.RequestID != 2 || refreshResp.Type != "response" || refreshResp.Method != "hub.state.refresh" {
+		t.Fatalf("refresh response=%#v, want request 2 hub.state.refresh response", refreshResp)
+	}
+}
+
 func TestHubStateForwardTimeoutsMatchOperationCost(t *testing.T) {
 	tests := []struct {
 		name   string

@@ -210,6 +210,29 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	defer s.speech.cancelConnection(state.id)
 	defer state.peer.dropAllPending()
 
+	asyncCtx, cancelAsyncRequests := context.WithCancel(context.Background())
+	asyncRequests := make(chan envelope, 256)
+	go func() {
+		for {
+			select {
+			case <-asyncCtx.Done():
+				return
+			case req, ok := <-asyncRequests:
+				if !ok {
+					return
+				}
+				select {
+				case <-asyncCtx.Done():
+					return
+				default:
+				}
+				s.handleRequest(state, req)
+			}
+		}
+	}()
+	defer close(asyncRequests)
+	defer cancelAsyncRequests()
+
 	var idleTimer *time.Timer
 	resetIdleTimer := func() {
 		if !state.initialized || (state.role != string(rp.RegistryRoleClient) && state.role != string(rp.RegistryRoleMonitor)) {
@@ -286,38 +309,54 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		switch {
-		case in.Method == rp.RegistryMethodHubReportProjects:
-			s.handleHubReportProjects(state.peer, state, in)
-		case in.Method == rp.RegistryMethodHubReportProject:
-			s.handleHubUpdateProject(state.peer, state, in)
-		case registrySessionEventMethod(in.Method) != "":
-			s.handleHubSessionEvent(state.peer, state, in, registrySessionEventMethod(in.Method))
-		case in.Method == rp.RegistryMethodRegistryProjectList:
-			s.handleProjectList(state.peer, state, in)
-		case in.Method == rp.RegistryMethodDebugUploadLog:
-			s.handleDebugUploadLog(state.peer, in)
-		case in.Method == rp.RegistryMethodProjectSyncCheck:
-			s.handleProjectSyncCheck(state.peer, state, in)
-		case in.Method == rp.RegistryMethodMonitorListHub:
-			s.handleMonitorListHub(state.peer, state, in)
-		case in.Method == rp.RegistryMethodBatch:
-			s.handleBatch(state.peer, state, in)
-		case in.Method == rp.RegistryMethodHubPing:
-			_ = s.writeResponse(state.peer, in.RequestID, in.Method, "", map[string]any{"ok": true})
-		case rp.RegistryRelayControlMethod(in.Method):
-			s.handleRelayRequest(state.peer, state, in)
-		case rp.RegistryMonitorForwardMethod(in.Method):
-			s.handleMonitorForwardRequest(state.peer, state, in)
-		case rp.RegistryHubStateMethod(in.Method):
-			s.handleHubStateForwardRequest(state.peer, state, in)
-		case isSpeechRequestMethod(in.Method):
-			s.speech.handleRequest(state.peer, state, in)
-		case isClientForwardMethod(in.Method):
-			s.handleForwardRequest(state.peer, state, in)
-		default:
-			_ = s.writeError(state.peer, in.RequestID, in.Method, codeInvalidArgument, "unsupported method", map[string]any{"method": in.Method})
+		if shouldHandleRegistryRequestAsync(in.Method) {
+			asyncRequests <- in
+			continue
 		}
+		s.handleRequest(state, in)
+	}
+}
+
+func shouldHandleRegistryRequestAsync(method string) bool {
+	return method == rp.RegistryMethodBatch ||
+		rp.RegistryRelayControlMethod(method) ||
+		rp.RegistryMonitorForwardMethod(method) ||
+		rp.RegistryHubStateMethod(method) ||
+		isClientForwardMethod(method)
+}
+
+func (s *Server) handleRequest(state *connectionState, in envelope) {
+	switch {
+	case in.Method == rp.RegistryMethodHubReportProjects:
+		s.handleHubReportProjects(state.peer, state, in)
+	case in.Method == rp.RegistryMethodHubReportProject:
+		s.handleHubUpdateProject(state.peer, state, in)
+	case registrySessionEventMethod(in.Method) != "":
+		s.handleHubSessionEvent(state.peer, state, in, registrySessionEventMethod(in.Method))
+	case in.Method == rp.RegistryMethodRegistryProjectList:
+		s.handleProjectList(state.peer, state, in)
+	case in.Method == rp.RegistryMethodDebugUploadLog:
+		s.handleDebugUploadLog(state.peer, in)
+	case in.Method == rp.RegistryMethodProjectSyncCheck:
+		s.handleProjectSyncCheck(state.peer, state, in)
+	case in.Method == rp.RegistryMethodMonitorListHub:
+		s.handleMonitorListHub(state.peer, state, in)
+	case in.Method == rp.RegistryMethodBatch:
+		s.handleBatch(state.peer, state, in)
+	case in.Method == rp.RegistryMethodHubPing:
+		_ = s.writeResponse(state.peer, in.RequestID, in.Method, "", map[string]any{"ok": true})
+	case rp.RegistryRelayControlMethod(in.Method):
+		s.handleRelayRequest(state.peer, state, in)
+	case rp.RegistryMonitorForwardMethod(in.Method):
+		s.handleMonitorForwardRequest(state.peer, state, in)
+	case rp.RegistryHubStateMethod(in.Method):
+		s.handleHubStateForwardRequest(state.peer, state, in)
+	case isSpeechRequestMethod(in.Method):
+		s.speech.handleRequest(state.peer, state, in)
+	case isClientForwardMethod(in.Method):
+		s.handleForwardRequest(state.peer, state, in)
+	default:
+		_ = s.writeError(state.peer, in.RequestID, in.Method, codeInvalidArgument, "unsupported method", map[string]any{"method": in.Method})
 	}
 }
 

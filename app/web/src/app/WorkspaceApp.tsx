@@ -168,6 +168,7 @@ import {
   shouldApplySentChatSelection,
 } from '../chat/chatSelectionGuard';
 import { RegistryWorkspaceService } from '../registry/RegistryWorkspaceService';
+import {RegistryMethods} from '../registry/registryMethods';
 import { sortProjectsByPin, togglePinnedProjectId } from '../workspace/projectNavigation';
 import {
   HUB_COLOR_PRESETS,
@@ -13308,20 +13309,45 @@ export function App() {
         return;
       }
       const eventProjectId = event.projectId ?? '';
-      if (
-        event.method === 'project.online' ||
-        event.method === 'project.offline'
-      ) {
-        setProjects(prev =>
-          prev.map(item =>
-            item.projectId === eventProjectId
-              ? { ...item, online: event.method === 'project.online' }
-              : item,
-            ),
-        );
-        if (!eventProjectId || eventProjectId === projectIdRef.current) {
+      if (event.method === RegistryMethods.RegistryProjectReport) {
+        const payload = (event.payload ?? {}) as {
+          hubId?: string;
+          projectId?: string;
+          project?: Partial<RegistryProject>;
+        };
+        const reportedProjectId = typeof payload.projectId === 'string' && payload.projectId
+          ? payload.projectId
+          : eventProjectId;
+        const reportedProject = payload.project;
+        if (!reportedProjectId || !reportedProject || typeof reportedProject.name !== 'string' || !reportedProject.name) {
+          return;
+        }
+        const reportedHubId = typeof payload.hubId === 'string' && payload.hubId
+          ? payload.hubId
+          : reportedProject.hubId;
+        const nextProject: RegistryProject = {
+          ...reportedProject,
+          projectId: reportedProjectId,
+          name: reportedProject.name,
+          online: reportedProject.online === true,
+          path: typeof reportedProject.path === 'string' ? reportedProject.path : '',
+          ...(reportedHubId ? {hubId: reportedHubId} : {}),
+        };
+        setProjects(prev => {
+          let updated = false;
+          const next = prev.map(item => {
+            if (item.projectId !== reportedProjectId) {
+              return item;
+            }
+            updated = true;
+            return {...item, ...nextProject};
+          });
+          return updated ? next : [...next, nextProject];
+        });
+        if (!eventProjectId || reportedProjectId === projectIdRef.current) {
           setHasPendingProjectUpdates(true);
         }
+        return;
       }
       if (event.method === 'session.updated') {
         if (!eventProjectId) {
