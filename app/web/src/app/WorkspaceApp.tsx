@@ -15867,7 +15867,7 @@ export function App() {
                     aria-haspopup="listbox"
                     aria-expanded={chatPromptMenuOpen}
                   >
-                    <span className="chat-composer-tool-glyph chat-slash-symbol">/</span>
+                    <span className="codicon codicon-code chat-composer-tool-glyph chat-slash-symbol" aria-hidden="true" />
                   </button>
                   <button
                     type="button"
@@ -15880,7 +15880,7 @@ export function App() {
                     aria-haspopup="listbox"
                     aria-expanded={chatFileMentionMenuOpen}
                   >
-                    <span className="chat-composer-tool-glyph chat-at-symbol">@</span>
+                    <span className="codicon codicon-file-media chat-composer-tool-glyph chat-at-symbol" aria-hidden="true" />
                   </button>
                   {!selectedChatPromptRunning ? (
                     <button
@@ -15952,7 +15952,7 @@ export function App() {
                         aria-label="Attach photo"
                         role="menuitem"
                       >
-                        <span className="codicon codicon-device-camera" aria-hidden="true" />
+                        <span className="codicon codicon-file-media" aria-hidden="true" />
                         <span className="chat-attachment-action-label">Photo</span>
                       </button>
                     </div>

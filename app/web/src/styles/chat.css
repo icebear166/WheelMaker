@@ -3316,8 +3316,8 @@
   line-height: 16px;
 }
 
-.chat-slash-symbol,
-.chat-at-symbol {
+.chat-slash-symbol:not(.codicon),
+.chat-at-symbol:not(.codicon) {
   font-family: var(--font-mono);
   font-weight: 700;
 }
@@ -3379,16 +3379,8 @@
   opacity: 0.55;
 }
 
-.chat-attachment-action-button.code .codicon {
-  color: color-mix(in srgb, var(--accent) 78%, var(--text));
-}
-
-.chat-attachment-action-button.file .codicon {
-  color: color-mix(in srgb, #4db6ac 78%, var(--text));
-}
-
-.chat-attachment-action-button.photo .codicon {
-  color: color-mix(in srgb, #d7a84f 78%, var(--text));
+.chat-attachment-action-button .codicon {
+  color: color-mix(in srgb, var(--accent) 72%, var(--text));
 }
 
 .chat-attachment-action-label {
