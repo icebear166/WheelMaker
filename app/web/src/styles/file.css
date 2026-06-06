@@ -409,9 +409,3 @@
   font-size: 13px;
   font-weight: 500;
 }
-
-.chat-slash-button,
-.chat-file-mention-trigger-button,
-.chat-attachment-plus-button {
-  color: color-mix(in srgb, var(--accent) 72%, var(--text));
-}

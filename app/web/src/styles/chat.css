@@ -3316,6 +3316,12 @@
   justify-content: center;
 }
 
+.chat-slash-button,
+.chat-file-mention-trigger-button,
+.chat-attachment-plus-button {
+  color: color-mix(in srgb, var(--accent) 72%, var(--text));
+}
+
 .chat-composer-tool-glyph {
   width: 16px;
   height: 16px;

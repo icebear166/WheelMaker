@@ -1209,6 +1209,9 @@ describe('web chat integration', () => {
     expect(stylesCss).toMatch(
       /\.chat-slash-button,\s*\.chat-file-mention-trigger-button,\s*\.chat-attachment-plus-button \{[\s\S]*color: color-mix\(in srgb, var\(--accent\) 72%, var\(--text\)\);[\s\S]*\}/,
     );
+    expect(stylesCss.indexOf('.chat-slash-button,\n.chat-file-mention-trigger-button,\n.chat-attachment-plus-button {')).toBeGreaterThan(
+      stylesCss.indexOf('.chat-tool-button {'),
+    );
     expect(stylesCss).toContain('.chat-composer-tool-glyph {');
     expect(stylesCss).toContain('.chat-slash-symbol,');
     expect(stylesCss).toContain('.chat-file-mention-trigger-button,');
