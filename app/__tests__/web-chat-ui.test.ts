@@ -915,11 +915,12 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('prioritized.slice(0, CHAT_CONFIG_INLINE_LIMIT)');
     expect(mainTsx).toContain("className={`chat-composer-frame${chatComposerDragActive ? ' drag-over' : ''}`}");
     expect(mainTsx).toContain('className="chat-composer-input-row"');
-    expect(mainTsx).toContain("const chatComposerStopTriggerClassName = `chat-composer-stop-trigger${selectedChatPromptRunning ? ' active' : ''}${selectedChatPromptCancelling ? ' cancelling' : ''}`;");
+    expect(mainTsx).toContain("const chatComposerStopTriggerClassName = `chat-tool-button chat-composer-stop-trigger${selectedChatPromptRunning ? ' active' : ''}${selectedChatPromptCancelling ? ' cancelling' : ''}`;");
     expect(mainTsx).toContain('className={chatComposerStopTriggerClassName}');
     expect(mainTsx).toContain('title="Skills"');
     expect(mainTsx).toContain('aria-label="Open skills"');
-    expect(mainTsx).toContain('className="chat-composer-skill-trigger chat-slash-button"');
+    expect(mainTsx).toContain('className="chat-tool-button chat-slash-button"');
+    expect(mainTsx).not.toContain('className="chat-composer-skill-trigger chat-slash-button"');
     expect(mainTsx).not.toContain('codicon-terminal');
     expect(mainTsx).not.toContain('className="chat-composer-quick-trigger"');
     expect(mainTsx).not.toContain('title="Quick replies"');
@@ -936,7 +937,7 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('className={`chat-cancel-button${selectedChatPromptRunning ? \' active\' : \'\'}`}');
     expect(mainTsx).toContain('title={selectedChatPromptCancelling ? \'Cancelling prompt\' : \'Cancel prompt\'}');
     expect(mainTsx).toContain('aria-label="Cancel prompt"');
-    expect(mainTsx).toContain("className={`codicon ${selectedChatPromptCancelling ? 'codicon-loading codicon-modifier-spin' : 'codicon-stop-circle'}`}");
+    expect(mainTsx).toContain("className={`codicon ${selectedChatPromptCancelling ? 'codicon-loading codicon-modifier-spin' : 'codicon-stop-circle'} chat-composer-tool-glyph`}");
     expect(mainTsx).not.toContain("className=\"codicon codicon-debug-stop\"");
     expect(mainTsx).not.toContain('chat-stop-glyph');
     expect(mainTsx).not.toContain('chat-stop-square');
@@ -1021,7 +1022,7 @@ describe('web chat integration', () => {
     expect(stopTriggerBlock).toContain('onClick={() => cancelSelectedChatPrompt().catch(() => undefined)}');
     expect(stopTriggerBlock).toContain('disabled={selectedChatPromptCancelling}');
     expect(stopTriggerBlock).not.toContain('disabled={!selectedChatPromptRunning || selectedChatPromptCancelling}');
-    expect(stopTriggerBlock).toContain("className={`codicon ${selectedChatPromptCancelling ? 'codicon-loading codicon-modifier-spin' : 'codicon-stop-circle'}`}");
+    expect(stopTriggerBlock).toContain("className={`codicon ${selectedChatPromptCancelling ? 'codicon-loading codicon-modifier-spin' : 'codicon-stop-circle'} chat-composer-tool-glyph`}");
     expect(stopTriggerBlock).not.toContain('codicon-debug-stop');
     expect(stopTriggerBlock).not.toContain('chat-stop-glyph');
     expect(stopTriggerBlock).not.toContain('chat-stop-square');
@@ -1119,22 +1120,21 @@ describe('web chat integration', () => {
     expect(stylesCss).toMatch(
       /\.chat-composer-input-row \{[\s\S]*align-items: flex-end;[\s\S]*gap: 6px;[\s\S]*min-height: 32px;[\s\S]*\}/,
     );
-    expect(stylesCss).toContain('.chat-composer-skill-trigger {');
+    expect(stylesCss).not.toContain('.chat-composer-skill-trigger {');
     expect(stylesCss).toContain('.chat-composer-action-column {');
     expect(stylesCss).toContain('.chat-composer-toolbar-actions {');
     expect(stylesCss).toContain('.chat-composer-stop-trigger {');
-    expect(stylesCss).toMatch(
-      /\.chat-composer-stop-trigger \{[\s\S]*width: 24px;[\s\S]*height: 24px;[\s\S]*display: inline-flex;[\s\S]*align-items: center;[\s\S]*justify-content: center;[\s\S]*\}/,
-    );
     const stopTriggerStyleBlock = stylesCss.match(/\.chat-composer-stop-trigger \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(stopTriggerStyleBlock).not.toContain('position: absolute;');
+    expect(stopTriggerStyleBlock).not.toContain('width: 24px;');
+    expect(stopTriggerStyleBlock).not.toContain('height: 24px;');
+    expect(stopTriggerStyleBlock).not.toContain('border-radius: 8px;');
     expect(stylesCss).toContain('.chat-composer-stop-trigger.active {');
     expect(stylesCss).toContain('.chat-composer-stop-trigger.cancelling {');
     expect(stylesCss).toContain('.chat-composer-stop-trigger .codicon {');
     expect(stylesCss).toContain('.chat-composer-stop-trigger.active:not(.cancelling) .codicon {');
-    expect(stylesCss).toMatch(
-      /\.chat-composer-stop-trigger \.codicon \{[\s\S]*font-size: 17px;[\s\S]*\}/,
-    );
+    const stopTriggerIconBlock = cssRuleBlock(stylesCss, '.chat-composer-stop-trigger .codicon');
+    expect(stopTriggerIconBlock).not.toContain('font-size: 17px;');
     expect(stylesCss).toContain('@keyframes chatStopBreath');
     expect(stylesCss).not.toContain('.chat-stop-glyph {');
     expect(stylesCss).not.toContain('.chat-stop-square {');
@@ -1274,7 +1274,7 @@ describe('web chat integration', () => {
     const toolsStart = mainTsx.indexOf('className="chat-composer-tools"');
     const toolsEnd = mainTsx.indexOf('className="chat-config-options-wrap"', toolsStart);
     const toolsBlock = mainTsx.slice(toolsStart, toolsEnd);
-    expect(toolsBlock).toContain('className="chat-composer-skill-trigger chat-slash-button"');
+    expect(toolsBlock).toContain('className="chat-tool-button chat-slash-button"');
     expect(toolsBlock).toContain('onClick={openChatPromptMenu}');
     expect(toolsBlock).toContain('className="chat-tool-button chat-file-mention-trigger-button"');
     expect(toolsBlock).toContain('onClick={openChatFileMentionShortcut}');
@@ -1292,7 +1292,7 @@ describe('web chat integration', () => {
     expect(toolbarConfigStart).toBeGreaterThan(toolbarActionsStart);
 
     expect(stylesCss).toMatch(/\.chat-composer-input-row \{[\s\S]*align-items: flex-end;[\s\S]*\}/);
-    expect(stylesCss).toMatch(/\.chat-composer-skill-trigger \{[\s\S]*width: 24px;[\s\S]*height: 24px;[\s\S]*\}/);
+    expect(stylesCss).not.toContain('.chat-composer-skill-trigger {');
     expect(stylesCss).toMatch(/\.chat-tool-button \{[\s\S]*width: 24px;[\s\S]*height: 24px;[\s\S]*\}/);
     expect(stylesCss).toContain('.chat-composer-toolbar-actions');
     expect(stylesCss).toMatch(/\.chat-composer-action-column \{[\s\S]*width: 36px;[\s\S]*height: 36px;[\s\S]*align-self: flex-end;[\s\S]*\}/);
@@ -2036,19 +2036,21 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-file-mention-path');
   });
 
-  test('chat composer uses compact file mention pins and running plus-slot cancel', () => {
+  test('chat composer uses compact file mention pins and running tools-slot cancel', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain('const openChatFileMentionShortcut = useCallback(() => {');
     expect(mainTsx).toContain('className="chat-tool-button chat-file-mention-trigger-button"');
+    expect(mainTsx).toContain('className="chat-tool-button chat-slash-button"');
     expect(mainTsx).toContain('aria-label="Mention files"');
     expect(mainTsx).toContain('<span className="chat-composer-tool-glyph chat-at-symbol">@</span>');
     expect(mainTsx).toContain('!selectedChatPromptRunning ? (');
     expect(mainTsx).toContain('className="chat-tool-button chat-attachment-plus-button"');
     expect(mainTsx).toContain(') : (');
     expect(mainTsx).toContain('className={chatComposerStopTriggerClassName}');
+    expect(mainTsx).toContain("const chatComposerStopTriggerClassName = `chat-tool-button chat-composer-stop-trigger");
     expect(mainTsx).not.toContain('disabled={!selectedChatPromptRunning || selectedChatPromptCancelling}');
     expect(mainTsx).toContain('disabled={selectedChatPromptCancelling}');
     expect(mainTsx).toContain('className="chat-file-mention-remove"');
@@ -2070,6 +2072,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className="chat-composer-tool-glyph chat-at-symbol"');
     expect(mainTsx).toContain('className="codicon codicon-tools chat-composer-tool-glyph"');
     expect(mainTsx).not.toContain('className="codicon codicon-add chat-composer-tool-glyph"');
+    expect(mainTsx).toContain("chat-composer-tool-glyph`}");
     expect(stylesCss).toMatch(/\.chat-slash-button,\s*\.chat-file-mention-trigger-button,\s*\.chat-attachment-plus-button \{[\s\S]*color: color-mix\(in srgb, var\(--accent\) 72%, var\(--text\)\);[\s\S]*\}/);
     expect(stylesCss).toMatch(/\.chat-composer-tool-glyph \{[\s\S]*width: 16px;[\s\S]*height: 16px;[\s\S]*font-size: 15px;[\s\S]*line-height: 16px;[\s\S]*\}/);
     expect(stylesCss).not.toContain('.chat-file-mention-trigger-button {\n  color: color-mix(in srgb, #8bd5ff 82%, var(--text));\n}');

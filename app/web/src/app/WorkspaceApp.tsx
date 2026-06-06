@@ -14994,7 +14994,7 @@ export function App() {
     );
   const selectedChatPromptCancelling =
     !!selectedChatEncodedKey && chatCancellingRuntimeKey === selectedChatEncodedKey;
-  const chatComposerStopTriggerClassName = `chat-composer-stop-trigger${selectedChatPromptRunning ? ' active' : ''}${selectedChatPromptCancelling ? ' cancelling' : ''}`;
+  const chatComposerStopTriggerClassName = `chat-tool-button chat-composer-stop-trigger${selectedChatPromptRunning ? ' active' : ''}${selectedChatPromptCancelling ? ' cancelling' : ''}`;
 
   useEffect(() => {
     if (selectedChatPromptRunning) {
@@ -15833,7 +15833,7 @@ export function App() {
                   <button
                     type="button"
                     ref={chatPromptButtonRef}
-                    className="chat-composer-skill-trigger chat-slash-button"
+                    className="chat-tool-button chat-slash-button"
                     onPointerDown={event => event.preventDefault()}
                     onClick={openChatPromptMenu}
                     title="Skills"
@@ -15881,7 +15881,7 @@ export function App() {
                       aria-label="Cancel prompt"
                       aria-busy={selectedChatPromptCancelling}
                     >
-                      <span className={`codicon ${selectedChatPromptCancelling ? 'codicon-loading codicon-modifier-spin' : 'codicon-stop-circle'}`} aria-hidden="true" />
+                      <span className={`codicon ${selectedChatPromptCancelling ? 'codicon-loading codicon-modifier-spin' : 'codicon-stop-circle'} chat-composer-tool-glyph`} aria-hidden="true" />
                     </button>
                   )}
                   {!selectedChatPromptRunning && chatAttachmentTrayOpen ? (

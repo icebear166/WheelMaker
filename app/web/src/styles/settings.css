@@ -2227,16 +2227,3 @@ textarea,
   height: 7px;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--hub-accent) 15%, transparent);
 }
-
-.chat-composer-skill-trigger {
-  width: 24px;
-  height: 24px;
-  flex: 0 0 auto;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}

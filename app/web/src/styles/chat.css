@@ -2794,19 +2794,8 @@
 }
 
 .chat-composer-stop-trigger {
-  width: 24px;
-  height: 24px;
-  flex: 0 0 auto;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
   color: #f85149;
   opacity: 1;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
 }
 
 .chat-composer-stop-trigger:not(:disabled):hover {
@@ -2837,11 +2826,6 @@
 }
 
 .chat-composer-stop-trigger .codicon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 17px;
-  line-height: 1;
   transform-origin: center;
 }
 
