@@ -3,6 +3,7 @@ import type {RegistryChatSession, RegistryProject} from '../registry/registryTyp
 export type MobileChatQuickSwitchSection = {
   projectId: string;
   projectName: string;
+  projectHubId: string;
   projectHubLabel: string;
   sessions: RegistryChatSession[];
 };
@@ -17,6 +18,7 @@ type MobileChatQuickSwitchCandidate = {
   key: string;
   projectId: string;
   projectName: string;
+  projectHubId: string;
   projectHubLabel: string;
   projectIndex: number;
   session: RegistryChatSession;
@@ -30,6 +32,27 @@ function chatQuickSwitchSessionKey(projectId: string, sessionId: string): string
 
 function isPriorityQuickSwitchSession(session: RegistryChatSession): boolean {
   return (session.unreadCount ?? 0) > 0 || session.running === true;
+}
+
+function nonNegativeTurnIndex(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.trunc(value))
+    : 0;
+}
+
+export function hasCompletedUnreadChatSession(
+  sessionsByProjectId: Record<string, RegistryChatSession[]>,
+): boolean {
+  return Object.values(sessionsByProjectId).some(sessions =>
+    sessions.some(session => {
+      if (session.running === true) {
+        return false;
+      }
+      const lastDoneTurnIndex = nonNegativeTurnIndex(session.lastDoneTurnIndex);
+      const lastReadTurnIndex = nonNegativeTurnIndex(session.lastReadTurnIndex);
+      return lastDoneTurnIndex > 0 && lastDoneTurnIndex > lastReadTurnIndex;
+    }),
+  );
 }
 
 function compareUpdatedAtDesc(left: string, right: string): number {
@@ -79,6 +102,7 @@ export function buildMobileChatQuickSwitchSections({
     if (!projectId) {
       continue;
     }
+    const projectHubId = project.hubId || 'local';
     const sessions = sessionsByProjectId[projectId] ?? [];
     for (let sessionIndex = 0; sessionIndex < sessions.length; sessionIndex += 1) {
       const session = sessions[sessionIndex];
@@ -94,7 +118,8 @@ export function buildMobileChatQuickSwitchSections({
         key,
         projectId,
         projectName: project.name || projectId,
-        projectHubLabel: project.hubId || 'local',
+        projectHubId,
+        projectHubLabel: projectHubId,
         projectIndex,
         session,
         sessionIndex,
@@ -118,6 +143,7 @@ export function buildMobileChatQuickSwitchSections({
       section = {
         projectId: candidate.projectId,
         projectName: candidate.projectName,
+        projectHubId: candidate.projectHubId,
         projectHubLabel: candidate.projectHubLabel,
         sessions: [],
       };

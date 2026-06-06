@@ -61,7 +61,10 @@ import {
   encodeChatSessionKey,
   type ChatSessionKey,
 } from '../chat/session/chatSessionKey';
-import {buildMobileChatQuickSwitchSections} from '../chat/mobileChatQuickSwitch';
+import {
+  buildMobileChatQuickSwitchSections,
+  hasCompletedUnreadChatSession,
+} from '../chat/mobileChatQuickSwitch';
 import {ChatQuickSwitchMenu} from '../chat/ChatQuickSwitchMenu';
 import { ChatSessionNav } from '../chat/ChatSessionNav';
 import { ChatSurface } from '../chat/ChatSurface';
@@ -2614,6 +2617,8 @@ export function App() {
   const chatHubMenuRef = useRef<HTMLDivElement | null>(null);
   const [chatQuickSwitchMenuOpen, setChatQuickSwitchMenuOpen] = useState(false);
   const [chatQuickSwitchMenuPlacement, setChatQuickSwitchMenuPlacement] = useState<ChatQuickSwitchMenuPlacement>({kind: 'mobile'});
+  const [chatQuickSwitchCreateProjectId, setChatQuickSwitchCreateProjectId] = useState('');
+  const [chatQuickSwitchCreatePendingKey, setChatQuickSwitchCreatePendingKey] = useState('');
   const chatQuickSwitchMenuRef = useRef<HTMLDivElement | null>(null);
   const [chatSlashActiveIndex, setChatSlashActiveIndex] = useState(0);
   const chatFileMentionQuerySessionIdRef = useRef(`file-query-${Date.now()}`);
@@ -2951,6 +2956,14 @@ export function App() {
       setChatShowScrollToBottom(false);
     });
   }, [shouldAutoscrollChat]);
+
+  useEffect(() => {
+    if (chatQuickSwitchMenuOpen) {
+      return;
+    }
+    setChatQuickSwitchCreateProjectId('');
+    setChatQuickSwitchCreatePendingKey('');
+  }, [chatQuickSwitchMenuOpen]);
 
   const forceChatScrollToBottom = useCallback(() => {
     const runtimeKey = encodeChatSessionKey(selectedChatKeyRef.current);
@@ -3936,6 +3949,10 @@ export function App() {
       limit: 6,
     }),
     [projectSessionsByProjectId, visibleProjectItems],
+  );
+  const hasCompletedUnreadChatSessionIndicator = useMemo(
+    () => hasCompletedUnreadChatSession(projectSessionsByProjectId),
+    [projectSessionsByProjectId],
   );
   const mobileChatQuickSwitchMenuStyle = useMemo<React.CSSProperties>(() => ({
     top: portRelayReady && portRelayFrameUrl ? 56 : 0,
@@ -12748,11 +12765,11 @@ export function App() {
     targetProjectId: string,
     agentType: string,
     options?: {closeMobileDrawer?: boolean},
-  ) => {
+  ): Promise<boolean> => {
     agentType = normalizeAgentTypeName(agentType);
     if (!targetProjectId || !agentType) {
       setError('No agent selected for new session');
-      return;
+      return false;
     }
     try {
       const result = await service.createProjectSession(targetProjectId, agentType, '');
@@ -12773,8 +12790,10 @@ export function App() {
         setChatSessions(prev => mergeChatSession(prev, session));
       }
       await selectProjectChatSession(targetProjectId, session.sessionId, options);
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      return false;
     }
   };
 
@@ -12785,6 +12804,32 @@ export function App() {
   const handleMobileProjectCreateSession = async (targetProjectId: string, agentType: string) => {
     await handleProjectCreateSession(targetProjectId, agentType, {closeMobileDrawer: true});
   };
+
+  const getQuickSwitchProjectAgents = useCallback((targetProjectId: string): string[] => {
+    const projectItem = visibleProjectItems.find(item => item.projectId === targetProjectId);
+    if (!projectItem) {
+      return [];
+    }
+    return getWideProjectAgents(projectItem, projectSessionsByProjectId[targetProjectId] ?? []);
+  }, [getWideProjectAgents, projectSessionsByProjectId, visibleProjectItems]);
+
+  const handleQuickSwitchToggleCreateProject = useCallback((targetProjectId: string) => {
+    setChatQuickSwitchCreateProjectId(current => current === targetProjectId ? '' : targetProjectId);
+  }, []);
+
+  const handleQuickSwitchCreateSession = useCallback(async (targetProjectId: string, agentType: string) => {
+    const pendingKey = `${targetProjectId}:${agentType}`;
+    if (chatQuickSwitchCreatePendingKey) {
+      return;
+    }
+    setChatQuickSwitchCreatePendingKey(pendingKey);
+    const created = await handleProjectCreateSession(targetProjectId, agentType, {closeMobileDrawer: true});
+    if (created) {
+      setChatQuickSwitchMenuOpen(false);
+      setChatQuickSwitchCreateProjectId('');
+    }
+    setChatQuickSwitchCreatePendingKey(current => current === pendingKey ? '' : current);
+  }, [chatQuickSwitchCreatePendingKey, handleProjectCreateSession]);
 
   const handleWideProjectResumeAgent = async (targetProjectId: string, agentType: string) => {
     agentType = normalizeAgentTypeName(agentType);
@@ -16422,12 +16467,18 @@ export function App() {
       sections={mobileChatQuickSwitchSections}
       placement={chatQuickSwitchMenuPlacement.kind}
       style={chatQuickSwitchMenuStyle}
+      createProjectId={chatQuickSwitchCreateProjectId}
+      createPendingKey={chatQuickSwitchCreatePendingKey}
       isSessionSelected={(targetProjectId, session) =>
         selectedChatEncodedKey === buildChatRuntimeKey(targetProjectId, session.sessionId)
       }
       renderSessionStateMarker={renderSessionStateMarker}
       resolveSessionTitle={resolveSessionDisplayTitle}
       formatSessionAge={formatCompactRelativeAge}
+      getProjectAgents={getQuickSwitchProjectAgents}
+      resolveProjectHubStyle={hubAccentStyle}
+      onToggleCreateProject={handleQuickSwitchToggleCreateProject}
+      onCreateSession={handleQuickSwitchCreateSession}
       onSelectSession={handleMobileChatQuickSwitchSelect}
     />
   ) : null;
@@ -16596,6 +16647,9 @@ export function App() {
                 aria-label="Chat"
               >
                 <span className="codicon codicon-comment-discussion" />
+                {hasCompletedUnreadChatSessionIndicator ? (
+                  <span className="floating-nav-unread-dot" aria-hidden="true" />
+                ) : null}
               </button>
               <button
                 type="button"

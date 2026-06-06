@@ -625,6 +625,20 @@
   color: color-mix(in srgb, var(--accent) 88%, var(--text));
 }
 
+.floating-nav-unread-dot {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #4fbf6b;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--panel) 78%, transparent),
+    0 0 10px color-mix(in srgb, #4fbf6b 34%, transparent);
+  pointer-events: none;
+}
+
 .drawer-toggle-bubble {
   width: 48px;
   height: 48px;
