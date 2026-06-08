@@ -119,6 +119,8 @@ import {
 import {
   buildPromptMarkdownImageFileName,
   renderMarkdownElementToPngBlob,
+  resolveMarkdownImageExportWidth,
+  type MarkdownImageExportMode,
 } from '../chat/export/chatMarkdownImageExport';
 import { outputResponseImage } from '../chat/export/responseImageOutput';
 import {createRegistryDebugStore} from '../debug/registryDebug';
@@ -1769,6 +1771,7 @@ type MarkdownImageExportRequest = {
 
 type MarkdownImageExportSurfaceProps = {
   request: MarkdownImageExportRequest;
+  exportMode: MarkdownImageExportMode;
   markdownComponents: Components;
   markdownUrlTransform: (value: string) => string;
   onComplete: () => void;
@@ -1778,6 +1781,7 @@ type MarkdownImageExportSurfaceProps = {
 
 const MarkdownImageExportSurface = React.memo(function MarkdownImageExportSurface({
   request,
+  exportMode,
   markdownComponents,
   markdownUrlTransform,
   onComplete,
@@ -1786,6 +1790,7 @@ const MarkdownImageExportSurface = React.memo(function MarkdownImageExportSurfac
 }: MarkdownImageExportSurfaceProps) {
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const markdownCapabilities = useMarkdownCapabilityPlugins(request.content);
+  const markdownImageExportWidth = resolveMarkdownImageExportWidth(exportMode);
 
   useEffect(() => {
     let cancelled = false;
@@ -1834,6 +1839,7 @@ const MarkdownImageExportSurface = React.memo(function MarkdownImageExportSurfac
   }, [
     request.id,
     request.fileName,
+    exportMode,
     markdownComponents,
     markdownUrlTransform,
     onComplete,
@@ -1842,7 +1848,12 @@ const MarkdownImageExportSurface = React.memo(function MarkdownImageExportSurfac
   ]);
 
   return (
-    <div className="markdown-image-export-host" aria-hidden="true">
+    <div
+      className="markdown-image-export-host"
+      data-export-mode={exportMode}
+      style={{'--markdown-image-export-width': `${markdownImageExportWidth}px`} as React.CSSProperties}
+      aria-hidden="true"
+    >
       <div
         ref={surfaceRef}
         className="markdown-image-export-surface markdown-preview"
@@ -16992,6 +17003,7 @@ export function App() {
         <MarkdownImageExportSurface
           key={markdownImageExportRequest.id}
           request={markdownImageExportRequest}
+          exportMode={isWide ? 'desktop' : 'mobile'}
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}
           onComplete={completeMarkdownImageExport}

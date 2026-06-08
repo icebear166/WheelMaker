@@ -399,7 +399,13 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('gitStatusSummary');
     expect(mainTsx).not.toContain('chat-thought-label');
     expect(mainTsx).toContain("import { buildPromptDoneCopyRange } from '../chat/chatCopyRange';");
+    expect(mainTsx).toContain('resolveMarkdownImageExportWidth,');
+    expect(mainTsx).toContain('type MarkdownImageExportMode,');
     expect(mainTsx).toContain("import { outputResponseImage } from '../chat/export/responseImageOutput';");
+    expect(mainTsx).toContain('exportMode: MarkdownImageExportMode;');
+    expect(mainTsx).toContain('const markdownImageExportWidth = resolveMarkdownImageExportWidth(exportMode);');
+    expect(mainTsx).toContain("style={{'--markdown-image-export-width': `${markdownImageExportWidth}px`} as React.CSSProperties}");
+    expect(mainTsx).toContain('data-export-mode={exportMode}');
     expect(mainTsx).toContain('const copyRange = message.method === \'prompt_done\'');
     expect(chatTurnTsx).toContain('className="chat-prompt-actions"');
     expect(chatTurnTsx).toContain('className="chat-prompt-action-button"');
@@ -420,6 +426,14 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-prompt-action-button {');
     expect(stylesCss).toContain('.markdown-image-export-host {');
     expect(stylesCss).toContain('.markdown-image-export-surface {');
+    expect(cssRuleBlock(stylesCss, '.markdown-image-export-host')).toContain('width: var(--markdown-image-export-width, 760px);');
+    expect(cssRuleBlock(stylesCss, '.markdown-image-export-host')).not.toContain('max-width: calc(100vw - 32px);');
+    expect(cssRuleBlock(stylesCss, '.markdown-image-export-surface table')).toContain('table-layout: fixed;');
+    expect(cssRuleBlock(stylesCss, '.markdown-image-export-surface table')).toContain('max-width: 100%;');
+    const exportTableCellBlock = cssRuleBlockContainingSelector(stylesCss, '.markdown-image-export-surface th');
+    expect(exportTableCellBlock).toContain('overflow-wrap: anywhere;');
+    expect(exportTableCellBlock).toContain('word-break: break-word;');
+    expect(exportTableCellBlock).toBe(cssRuleBlockContainingSelector(stylesCss, '.markdown-image-export-surface td'));
     const sendExistingStart = mainTsx.indexOf('const sendChatMessage = async');
     const sendEnd = mainTsx.indexOf('const sendDirectChatText = async (text: string) => {', sendExistingStart);
     const sendBlock = mainTsx.slice(sendExistingStart, sendEnd);

@@ -33,6 +33,17 @@ type MarkdownElementPngOptions = MarkdownExportReadyOptions & {
   pixelRatio?: number;
 };
 
+export type MarkdownImageExportMode = 'desktop' | 'mobile';
+
+const MARKDOWN_IMAGE_EXPORT_WIDTH_BY_MODE: Record<MarkdownImageExportMode, number> = {
+  desktop: 760,
+  mobile: 560,
+};
+
+export function resolveMarkdownImageExportWidth(mode: MarkdownImageExportMode): number {
+  return MARKDOWN_IMAGE_EXPORT_WIDTH_BY_MODE[mode];
+}
+
 export function buildPromptMarkdownImageFileName(
   doneTurnIndex: number,
   now = new Date(),

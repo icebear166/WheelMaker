@@ -1,5 +1,6 @@
 import {
   buildPromptMarkdownImageFileName,
+  resolveMarkdownImageExportWidth,
   waitForMarkdownExportReady,
   waitForMarkdownExportImages,
 } from '../web/src/chat/export/chatMarkdownImageExport';
@@ -9,6 +10,11 @@ describe('web chat markdown image export', () => {
     expect(
       buildPromptMarkdownImageFileName(7, new Date('2026-05-23T10:11:12.345Z')),
     ).toBe('wheelmaker-response-turn-7-2026-05-23T10-11-12-345Z.png');
+  });
+
+  test('uses stable desktop and mobile image export widths', () => {
+    expect(resolveMarkdownImageExportWidth('desktop')).toBe(760);
+    expect(resolveMarkdownImageExportWidth('mobile')).toBe(560);
   });
 
   test('waits for pending markdown images before capture', async () => {

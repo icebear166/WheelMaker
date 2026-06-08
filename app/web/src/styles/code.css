@@ -121,8 +121,8 @@
   position: fixed;
   top: 0;
   left: -10000px;
-  width: 760px;
-  max-width: calc(100vw - 32px);
+  width: var(--markdown-image-export-width, 760px);
+  max-width: none;
   pointer-events: none;
   z-index: -1;
 }
@@ -135,6 +135,17 @@
   border-radius: 8px;
   background: var(--panel);
   color: var(--text);
+}
+
+.markdown-image-export-surface table {
+  table-layout: fixed;
+  max-width: 100%;
+}
+
+.markdown-image-export-surface th,
+.markdown-image-export-surface td {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .mermaid-block {
