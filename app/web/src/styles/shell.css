@@ -639,6 +639,20 @@
   pointer-events: none;
 }
 
+.desktop-activity-unread-dot {
+  position: absolute;
+  left: 9px;
+  top: 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #4fbf6b;
+  box-shadow:
+    0 0 0 2px var(--desktop-side-surface),
+    0 0 10px color-mix(in srgb, #4fbf6b 34%, transparent);
+  pointer-events: none;
+}
+
 .drawer-toggle-bubble {
   width: 48px;
   height: 48px;

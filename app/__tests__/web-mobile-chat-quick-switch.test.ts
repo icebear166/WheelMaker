@@ -87,29 +87,55 @@ describe('mobile chat quick switch', () => {
 
   test('detects completed unread sessions and ignores running sessions', () => {
     expect(hasCompletedUnreadChatSession({
-      p1: [
-        session('running', '2026-01-01T00:00:00.000Z', {
-          running: true,
-          lastDoneTurnIndex: 5,
-          lastReadTurnIndex: 0,
-        }),
-      ],
-      p2: [
-        session('done', '2026-01-02T00:00:00.000Z', {
-          lastDoneTurnIndex: 6,
-          lastReadTurnIndex: 4,
-        }),
-      ],
+      projects: [project('p1'), project('p2')],
+      sessionsByProjectId: {
+        p1: [
+          session('running', '2026-01-01T00:00:00.000Z', {
+            running: true,
+            lastDoneTurnIndex: 5,
+            lastReadTurnIndex: 0,
+          }),
+        ],
+        p2: [
+          session('done', '2026-01-02T00:00:00.000Z', {
+            lastDoneTurnIndex: 6,
+            lastReadTurnIndex: 4,
+          }),
+        ],
+      },
     })).toBe(true);
 
     expect(hasCompletedUnreadChatSession({
-      p1: [
-        session('read', '2026-01-03T00:00:00.000Z', {
-          lastDoneTurnIndex: 6,
-          lastReadTurnIndex: 6,
-        }),
-        session('idle', '2026-01-04T00:00:00.000Z'),
-      ],
+      projects: [project('p1')],
+      sessionsByProjectId: {
+        p1: [
+          session('read', '2026-01-03T00:00:00.000Z', {
+            lastDoneTurnIndex: 6,
+            lastReadTurnIndex: 6,
+          }),
+          session('idle', '2026-01-04T00:00:00.000Z'),
+        ],
+      },
+    })).toBe(false);
+  });
+
+  test('ignores unread sessions from projects outside the visible project list', () => {
+    expect(hasCompletedUnreadChatSession({
+      projects: [project('visible')],
+      sessionsByProjectId: {
+        visible: [
+          session('visible-read', '2026-01-03T00:00:00.000Z', {
+            lastDoneTurnIndex: 3,
+            lastReadTurnIndex: 3,
+          }),
+        ],
+        hidden: [
+          session('hidden-unread', '2026-01-04T00:00:00.000Z', {
+            lastDoneTurnIndex: 6,
+            lastReadTurnIndex: 4,
+          }),
+        ],
+      },
     })).toBe(false);
   });
 });

@@ -14,6 +14,11 @@ type BuildMobileChatQuickSwitchSectionsInput = {
   limit?: number;
 };
 
+type HasCompletedUnreadChatSessionInput = {
+  projects: RegistryProject[];
+  sessionsByProjectId: Record<string, RegistryChatSession[]>;
+};
+
 type MobileChatQuickSwitchCandidate = {
   key: string;
   projectId: string;
@@ -41,18 +46,19 @@ function nonNegativeTurnIndex(value: unknown): number {
 }
 
 export function hasCompletedUnreadChatSession(
-  sessionsByProjectId: Record<string, RegistryChatSession[]>,
+  {projects, sessionsByProjectId}: HasCompletedUnreadChatSessionInput,
 ): boolean {
-  return Object.values(sessionsByProjectId).some(sessions =>
-    sessions.some(session => {
+  return projects.some(project => {
+    const sessions = sessionsByProjectId[project.projectId] ?? [];
+    return sessions.some(session => {
       if (session.running === true) {
         return false;
       }
       const lastDoneTurnIndex = nonNegativeTurnIndex(session.lastDoneTurnIndex);
       const lastReadTurnIndex = nonNegativeTurnIndex(session.lastReadTurnIndex);
       return lastDoneTurnIndex > 0 && lastDoneTurnIndex > lastReadTurnIndex;
-    }),
-  );
+    });
+  });
 }
 
 function compareUpdatedAtDesc(left: string, right: string): number {

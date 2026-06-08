@@ -3952,8 +3952,11 @@ export function App() {
     [projectSessionsByProjectId, visibleProjectItems],
   );
   const hasCompletedUnreadChatSessionIndicator = useMemo(
-    () => hasCompletedUnreadChatSession(projectSessionsByProjectId),
-    [projectSessionsByProjectId],
+    () => hasCompletedUnreadChatSession({
+      projects: visibleProjectItems,
+      sessionsByProjectId: projectSessionsByProjectId,
+    }),
+    [projectSessionsByProjectId, visibleProjectItems],
   );
   const mobileChatQuickSwitchMenuStyle = useMemo<React.CSSProperties>(() => ({
     top: portRelayReady && portRelayFrameUrl ? 56 : 0,
@@ -16393,6 +16396,9 @@ export function App() {
           aria-label="Chat"
         >
           <span className="codicon codicon-comment-discussion" />
+          {hasCompletedUnreadChatSessionIndicator ? (
+            <span className="desktop-activity-unread-dot" aria-hidden="true" />
+          ) : null}
         </button>
         <button
           type="button"
