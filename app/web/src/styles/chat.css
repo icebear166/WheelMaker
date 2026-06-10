@@ -2047,8 +2047,8 @@
   width: 100%;
 }
 
-.chat-view-width-fixed-560 .chat-view-content {
-  width: min(560px, 100%);
+.chat-view-width-fixed-800 .chat-view-content {
+  width: min(800px, 100%);
   margin-left: auto;
   margin-right: auto;
 }

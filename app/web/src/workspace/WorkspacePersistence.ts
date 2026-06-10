@@ -17,7 +17,7 @@ import {
 } from '../chat/chatTypography';
 import {
   DEFAULT_CHAT_VIEW_WIDTH,
-  isChatViewWidth,
+  normalizeChatViewWidth,
   type ChatViewWidth,
 } from '../chat/chatViewWidth';
 import {
@@ -463,7 +463,7 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
     codeLineHeight: typeof input.codeLineHeight === 'number' && Number.isFinite(input.codeLineHeight) ? input.codeLineHeight : base.codeLineHeight,
     codeTabSize: typeof input.codeTabSize === 'number' && Number.isFinite(input.codeTabSize) ? input.codeTabSize : base.codeTabSize,
     chatFont: typeof input.chatFont === 'string' && isChatFontId(input.chatFont) ? input.chatFont : base.chatFont,
-    chatViewWidth: typeof input.chatViewWidth === 'string' && isChatViewWidth(input.chatViewWidth) ? input.chatViewWidth : base.chatViewWidth,
+    chatViewWidth: normalizeChatViewWidth(input.chatViewWidth, base.chatViewWidth),
     speechSettings: normalizeSpeechSettings(input.speechSettings),
     ttsSettings: normalizeTtsSettings(input.ttsSettings),
     wrapLines: typeof input.wrapLines === 'boolean' ? input.wrapLines : base.wrapLines,

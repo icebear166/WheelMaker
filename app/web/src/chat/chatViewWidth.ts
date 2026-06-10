@@ -1,10 +1,10 @@
-export type ChatViewWidth = 'full' | 'fixed-560';
+export type ChatViewWidth = 'full' | 'fixed-800';
 
 export const DEFAULT_CHAT_VIEW_WIDTH: ChatViewWidth = 'full';
 
 export const CHAT_VIEW_WIDTH_OPTIONS: Array<{id: ChatViewWidth; label: string}> = [
   {id: 'full', label: 'Full'},
-  {id: 'fixed-560', label: '560px'},
+  {id: 'fixed-800', label: '800px'},
 ];
 
 const CHAT_VIEW_WIDTH_IDS = new Set<ChatViewWidth>(
@@ -13,4 +13,12 @@ const CHAT_VIEW_WIDTH_IDS = new Set<ChatViewWidth>(
 
 export function isChatViewWidth(value: unknown): value is ChatViewWidth {
   return typeof value === 'string' && CHAT_VIEW_WIDTH_IDS.has(value as ChatViewWidth);
+}
+
+export function normalizeChatViewWidth(
+  value: unknown,
+  fallback: ChatViewWidth = DEFAULT_CHAT_VIEW_WIDTH,
+): ChatViewWidth {
+  if (value === 'fixed-560') return 'fixed-800';
+  return isChatViewWidth(value) ? value : fallback;
 }

@@ -113,8 +113,7 @@ import {
   type ChatFontId,
 } from '../chat/chatTypography';
 import {
-  DEFAULT_CHAT_VIEW_WIDTH,
-  isChatViewWidth,
+  normalizeChatViewWidth,
   type ChatViewWidth,
 } from '../chat/chatViewWidth';
 import { buildPromptDoneCopyRange } from '../chat/chatCopyRange';
@@ -2105,10 +2104,7 @@ export function App() {
       : DEFAULT_CHAT_FONT,
   );
   const [chatViewWidth, setChatViewWidth] = useState<ChatViewWidth>(
-    typeof persistedGlobal.chatViewWidth === 'string' &&
-      isChatViewWidth(persistedGlobal.chatViewWidth)
-      ? persistedGlobal.chatViewWidth
-      : DEFAULT_CHAT_VIEW_WIDTH,
+    normalizeChatViewWidth(persistedGlobal.chatViewWidth),
   );
   const [wrapLines, setWrapLines] = useState(!!persistedGlobal.wrapLines);
   const [showLineNumbers, setShowLineNumbers] = useState(
@@ -3202,7 +3198,7 @@ export function App() {
     [chatComposerHeight, chatFontFamily, chatKeyboardInset],
   );
   const chatMainClassName = isWide
-    ? (chatViewWidth === 'fixed-560' ? 'chat-main chat-view-width-fixed-560' : 'chat-main')
+    ? (chatViewWidth === 'fixed-800' ? 'chat-main chat-view-width-fixed-800' : 'chat-main')
     : 'chat-main';
 
   useEffect(() => {

@@ -5,6 +5,7 @@ import {
   CHAT_VIEW_WIDTH_OPTIONS,
   DEFAULT_CHAT_VIEW_WIDTH,
   isChatViewWidth,
+  normalizeChatViewWidth,
 } from '../web/src/chat/chatViewWidth';
 import {readWebStyles} from '../testHelpers/webStyles';
 
@@ -15,11 +16,13 @@ function readSourceText(filePath: string): string {
 describe('web chat view width settings', () => {
   test('defines full and fixed-width chat view choices', () => {
     expect(DEFAULT_CHAT_VIEW_WIDTH).toBe('full');
-    expect(CHAT_VIEW_WIDTH_OPTIONS.map(option => option.id)).toEqual(['full', 'fixed-560']);
-    expect(CHAT_VIEW_WIDTH_OPTIONS.map(option => option.label)).toEqual(['Full', '560px']);
+    expect(CHAT_VIEW_WIDTH_OPTIONS.map(option => option.id)).toEqual(['full', 'fixed-800']);
+    expect(CHAT_VIEW_WIDTH_OPTIONS.map(option => option.label)).toEqual(['Full', '800px']);
     expect(isChatViewWidth('full')).toBe(true);
-    expect(isChatViewWidth('fixed-560')).toBe(true);
+    expect(isChatViewWidth('fixed-800')).toBe(true);
     expect(isChatViewWidth('760')).toBe(false);
+    expect(normalizeChatViewWidth('fixed-560')).toBe('fixed-800');
+    expect(normalizeChatViewWidth('bad-width')).toBe(DEFAULT_CHAT_VIEW_WIDTH);
   });
 
   test('persists chat view width and exposes it in PC Appearance settings', () => {
@@ -31,13 +34,14 @@ describe('web chat view width settings', () => {
     expect(persistence).toContain('chatViewWidth: ChatViewWidth;');
     expect(persistence).toContain("chatViewWidth: 'chatViewWidth',");
     expect(persistence).toContain('chatViewWidth: DEFAULT_CHAT_VIEW_WIDTH,');
-    expect(persistence).toContain("chatViewWidth: typeof input.chatViewWidth === 'string' && isChatViewWidth(input.chatViewWidth) ? input.chatViewWidth : base.chatViewWidth");
+    expect(persistence).toContain('chatViewWidth: normalizeChatViewWidth(input.chatViewWidth, base.chatViewWidth),');
     expect(persistence).toContain('{k: GLOBAL_KEYS.chatViewWidth, v: serialize(next.chatViewWidth), updatedAt: now}');
 
     expect(mainTsx).toContain('const [chatViewWidth, setChatViewWidth] = useState<ChatViewWidth>(');
+    expect(mainTsx).toContain('normalizeChatViewWidth(persistedGlobal.chatViewWidth)');
     expect(mainTsx).toContain('chatViewWidth,');
     expect(mainTsx).toContain('const chatMainClassName = isWide');
-    expect(mainTsx).toContain("chatViewWidth === 'fixed-560' ? 'chat-main chat-view-width-fixed-560' : 'chat-main'");
+    expect(mainTsx).toContain("chatViewWidth === 'fixed-800' ? 'chat-main chat-view-width-fixed-800' : 'chat-main'");
     expect(mainTsx).toContain('chatViewWidth={chatViewWidth}');
     expect(mainTsx).toContain('setChatViewWidth={setChatViewWidth}');
 
@@ -65,8 +69,8 @@ describe('web chat view width settings', () => {
     expect(mainTsx).toContain('className={chatMainClassName}');
     expect(mainTsx).toContain("'chat-view-content'");
     expect(stylesCss).toMatch(
-      /\.chat-view-width-fixed-560 \.chat-view-content \{[\s\S]*width: min\(560px, 100%\);[\s\S]*margin-left: auto;[\s\S]*margin-right: auto;[\s\S]*\}/,
+      /\.chat-view-width-fixed-800 \.chat-view-content \{[\s\S]*width: min\(800px, 100%\);[\s\S]*margin-left: auto;[\s\S]*margin-right: auto;[\s\S]*\}/,
     );
-    expect(stylesCss).not.toContain('.chat-view-width-fixed-560 .chat-composer');
+    expect(stylesCss).not.toContain('.chat-view-width-fixed-800 .chat-composer');
   });
 });
