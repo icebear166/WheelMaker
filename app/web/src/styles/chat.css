@@ -2053,6 +2053,17 @@
   margin-right: auto;
 }
 
+.chat-view-width-fixed-800 .chat-composer-content {
+  width: min(800px, 100%);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.chat-view-width-fixed-800 .chat-composer {
+  padding-left: 18px;
+  padding-right: 18px;
+}
+
 .chat-virtuoso-footer {
   flex: 0 0 auto;
   width: 100%;
@@ -2772,6 +2783,10 @@
   .chat-composer {
     padding-bottom: 8px;
   }
+}
+
+.chat-composer-content {
+  width: 100%;
 }
 
 .chat-composer-frame {

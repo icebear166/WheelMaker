@@ -15,7 +15,7 @@ function readSourceText(filePath: string): string {
 
 describe('web chat view width settings', () => {
   test('defines full and fixed-width chat view choices', () => {
-    expect(DEFAULT_CHAT_VIEW_WIDTH).toBe('full');
+    expect(DEFAULT_CHAT_VIEW_WIDTH).toBe('fixed-800');
     expect(CHAT_VIEW_WIDTH_OPTIONS.map(option => option.id)).toEqual(['full', 'fixed-800']);
     expect(CHAT_VIEW_WIDTH_OPTIONS.map(option => option.label)).toEqual(['Full', '800px']);
     expect(isChatViewWidth('full')).toBe(true);
@@ -23,6 +23,7 @@ describe('web chat view width settings', () => {
     expect(isChatViewWidth('760')).toBe(false);
     expect(normalizeChatViewWidth('fixed-560')).toBe('fixed-800');
     expect(normalizeChatViewWidth('bad-width')).toBe(DEFAULT_CHAT_VIEW_WIDTH);
+    expect(normalizeChatViewWidth(undefined)).toBe('fixed-800');
   });
 
   test('persists chat view width and exposes it in PC Appearance settings', () => {
@@ -61,16 +62,40 @@ describe('web chat view width settings', () => {
     expect(settingsRootTsx.slice(appearanceStart, chatStart)).toContain('isWide ? (');
   });
 
-  test('centers fixed-width chat messages on desktop without changing the composer', () => {
+  test('keeps fixed-width chat messages and composer together on desktop', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain('className={chatMainClassName}');
     expect(mainTsx).toContain("'chat-view-content'");
+    expect(mainTsx).toContain('className="chat-composer-content"');
     expect(stylesCss).toMatch(
       /\.chat-view-width-fixed-800 \.chat-view-content \{[\s\S]*width: min\(800px, 100%\);[\s\S]*margin-left: auto;[\s\S]*margin-right: auto;[\s\S]*\}/,
     );
-    expect(stylesCss).not.toContain('.chat-view-width-fixed-800 .chat-composer');
+    expect(stylesCss).toMatch(
+      /\.chat-view-width-fixed-800 \.chat-composer-content \{[\s\S]*width: min\(800px, 100%\);[\s\S]*margin-left: auto;[\s\S]*margin-right: auto;[\s\S]*\}/,
+    );
+    expect(stylesCss).toMatch(
+      /\.chat-view-width-fixed-800 \.chat-composer \{[\s\S]*padding-left: 18px;[\s\S]*padding-right: 18px;[\s\S]*\}/,
+    );
+  });
+
+  test('pins the desktop chat pane to 800px when the file preview is open', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const shellTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'shell', 'ResponsiveShell.tsx'));
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(mainTsx).toContain("const desktopChatFixedPreview = isWide && chatPreviewOpen && chatViewWidth === 'fixed-800';");
+    expect(mainTsx).toContain('desktopChatFixedPreview={desktopChatFixedPreview}');
+    expect(shellTsx).toContain('desktopChatFixedPreview: boolean;');
+    expect(shellTsx).toContain("data-chat-fixed-preview={desktopChatFixedPreview ? 'true' : undefined}");
+    expect(stylesCss).toMatch(
+      /\.desktop-shell\[data-chat-fixed-preview='true'\] \.workspace-right \{[\s\S]*flex: 0 0 800px;[\s\S]*width: 800px;[\s\S]*min-width: 0;[\s\S]*\}/,
+    );
+    expect(stylesCss).toMatch(
+      /\.desktop-shell\[data-chat-fixed-preview='true'\] \.chat-preview-pane \{[\s\S]*flex: 1 1 auto;[\s\S]*width: auto;[\s\S]*max-width: none;[\s\S]*\}/,
+    );
   });
 });

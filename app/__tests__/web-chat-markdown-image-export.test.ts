@@ -13,7 +13,7 @@ describe('web chat markdown image export', () => {
   });
 
   test('uses stable desktop and mobile image export widths', () => {
-    expect(resolveMarkdownImageExportWidth('desktop')).toBe(760);
+    expect(resolveMarkdownImageExportWidth('desktop')).toBe(800);
     expect(resolveMarkdownImageExportWidth('mobile')).toBe(560);
   });
 

@@ -1257,6 +1257,12 @@
   animation: wmFadeIn 180ms ease-out;
 }
 
+.desktop-shell[data-chat-fixed-preview='true'] .workspace-right {
+  flex: 0 0 800px;
+  width: 800px;
+  min-width: 0;
+}
+
 .archived-session-header {
   min-height: 32px;
   display: flex;

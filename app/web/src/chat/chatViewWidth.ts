@@ -1,6 +1,6 @@
 export type ChatViewWidth = 'full' | 'fixed-800';
 
-export const DEFAULT_CHAT_VIEW_WIDTH: ChatViewWidth = 'full';
+export const DEFAULT_CHAT_VIEW_WIDTH: ChatViewWidth = 'fixed-800';
 
 export const CHAT_VIEW_WIDTH_OPTIONS: Array<{id: ChatViewWidth; label: string}> = [
   {id: 'full', label: 'Full'},

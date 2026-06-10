@@ -3200,6 +3200,7 @@ export function App() {
   const chatMainClassName = isWide
     ? (chatViewWidth === 'fixed-800' ? 'chat-main chat-view-width-fixed-800' : 'chat-main')
     : 'chat-main';
+  const desktopChatFixedPreview = isWide && chatPreviewOpen && chatViewWidth === 'fixed-800';
 
   useEffect(() => {
     if (!toastMessage) return undefined;
@@ -15746,6 +15747,7 @@ export function App() {
             </button>
           ) : null}
           <div ref={chatComposerRef} className="chat-composer" hidden={archivedMode}>
+            <div className="chat-composer-content">
             <input
               ref={chatFileInputRef}
               type="file"
@@ -16287,6 +16289,7 @@ export function App() {
               </div>
               )}
             </div>
+          </div>
           </div>
           </div>
         </ChatSurface>
@@ -17262,6 +17265,7 @@ export function App() {
         setiFontCss={setiFontCss}
         desktopActivityBar={desktopActivityBar}
         desktopPeek={chatPreviewDesktopPane}
+        desktopChatFixedPreview={desktopChatFixedPreview}
         desktopSidebarWidth={effectiveDesktopSidebarWidth}
         floatingControlStack={floatingControlStack}
         floatingControlSide={floatingControlSide}

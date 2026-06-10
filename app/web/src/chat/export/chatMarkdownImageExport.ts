@@ -36,7 +36,7 @@ type MarkdownElementPngOptions = MarkdownExportReadyOptions & {
 export type MarkdownImageExportMode = 'desktop' | 'mobile';
 
 const MARKDOWN_IMAGE_EXPORT_WIDTH_BY_MODE: Record<MarkdownImageExportMode, number> = {
-  desktop: 760,
+  desktop: 800,
   mobile: 560,
 };
 

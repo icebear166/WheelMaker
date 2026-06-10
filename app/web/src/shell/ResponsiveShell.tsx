@@ -14,6 +14,7 @@ type ShellContentProps = {
 export type DesktopShellProps = ShellContentProps & {
   desktopActivityBar: ReactNode;
   desktopPeek: ReactNode;
+  desktopChatFixedPreview: boolean;
   sidebarCollapsed: boolean;
   desktopSidebarWidth: number;
 };
@@ -37,6 +38,7 @@ export function DesktopShell({
   setiFontCss,
   desktopActivityBar,
   desktopPeek,
+  desktopChatFixedPreview,
   sidebar,
   main,
   sidebarCollapsed,
@@ -48,6 +50,7 @@ export function DesktopShell({
       <DesktopTitleBar title="WheelMaker" />
       <div
         className="desktop-shell"
+        data-chat-fixed-preview={desktopChatFixedPreview ? 'true' : undefined}
         style={{ '--desktop-sidebar-width': `${desktopSidebarWidth}px` } as React.CSSProperties}
       >
         {desktopActivityBar}
