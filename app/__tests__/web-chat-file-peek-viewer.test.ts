@@ -80,9 +80,9 @@ describe('web chat file peek viewer', () => {
   test('peek viewer renders preview modes, load errors, and mobile back state', () => {
     const mainTsx = readSourceText(mainPath);
 
-    expect(mainTsx).toContain('const chatFilePeekIsMarkdown = isMarkdownPath(chatFilePeek.path);');
-    expect(mainTsx).toContain('const chatFilePeekIsHtml = isHtmlPath(chatFilePeek.path);');
-    expect(mainTsx).toContain('const chatFilePeekIsImage = isImageFile(');
+    expect(mainTsx).toContain('isMarkdownPath(peek.path)');
+    expect(mainTsx).toContain('isHtmlPath(peek.path)');
+    expect(mainTsx).toContain('isImageFile(peek.path');
     expect(mainTsx).toContain('Failed to load file');
     expect(mainTsx).toContain('createChatFilePeekHistoryState()');
     expect(mainTsx).toContain('closeChatFilePeek();');

@@ -1876,6 +1876,179 @@ const MarkdownImageExportSurface = React.memo(function MarkdownImageExportSurfac
     </div>
   );
 });
+
+type ChatFilePeekViewerProps = {
+  peek: ChatFilePeekState;
+  mode: 'desktop' | 'mobile';
+  themeMode: 'dark' | 'light';
+  codeTheme: CodeThemeId;
+  codeFont: CodeFontId;
+  codeFontSize: number;
+  codeLineHeight: number;
+  codeTabSize: number;
+  wrapLines: boolean;
+  showLineNumbers: boolean;
+  highlightedLines: Set<number>;
+  onLineClick: (line: number, event: MouseEvent) => void;
+  onClose: () => void;
+  onCopyPath: () => void;
+  onOpenInFileTab: () => void;
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+};
+
+const ChatFilePeekViewer = React.memo(function ChatFilePeekViewer({
+  peek,
+  mode,
+  themeMode,
+  codeTheme,
+  codeFont,
+  codeFontSize,
+  codeLineHeight,
+  codeTabSize,
+  wrapLines,
+  showLineNumbers,
+  highlightedLines,
+  onLineClick,
+  onClose,
+  onCopyPath,
+  onOpenInFileTab,
+  scrollRef,
+}: ChatFilePeekViewerProps) {
+  const title = peek.targetLine
+    ? `${peek.path}:${peek.targetLine}`
+    : peek.path;
+
+  let body: React.ReactNode;
+  if (peek.loading) {
+    body = <div className="muted block">Loading file...</div>;
+  } else if (peek.error) {
+    body = (
+      <div className="chat-file-peek-error" role="alert">
+        <span className="codicon codicon-error" />
+        <span>{peek.error || 'Failed to load file'}</span>
+      </div>
+    );
+  } else if (isImageFile(peek.path, peek.info?.mimeType)) {
+    const imageSrc = buildImageDataUrl({
+      content: peek.content,
+      path: peek.path,
+      mimeType: peek.info?.mimeType,
+      isBinary: peek.info?.isBinary,
+    });
+    body = imageSrc ? (
+      <div className="file-image-preview-wrap chat-file-peek-image-wrap">
+        <img
+          className="file-image-preview"
+          src={imageSrc}
+          alt={peek.path.split('/').pop() || 'image preview'}
+        />
+      </div>
+    ) : (
+      <div className="muted block">Image content is unavailable.</div>
+    );
+  } else if (isMarkdownPath(peek.path)) {
+    body = (
+      <MarkdownPreview
+        content={peek.content}
+        themeMode={themeMode}
+        codeTheme={codeTheme}
+        codeFont={codeFont}
+        codeFontSize={codeFontSize}
+        codeLineHeight={codeLineHeight}
+        codeTabSize={codeTabSize}
+        wrap={wrapLines}
+        lineNumbers={showLineNumbers}
+        targetLine={peek.targetLine}
+      />
+    );
+  } else if (isHtmlPath(peek.path)) {
+    body = (
+      <HtmlPreview
+        content={peek.content}
+        targetLine={peek.targetLine}
+      />
+    );
+  } else {
+    body = (
+      <ShikiCodeBlock
+        content={peek.content}
+        language={detectCodeLanguage(peek.path)}
+        wrap={false}
+        lineNumbers={true}
+        themeMode={themeMode}
+        codeTheme={codeTheme}
+        codeFont={codeFont}
+        codeFontSize={codeFontSize}
+        codeLineHeight={codeLineHeight}
+        codeTabSize={codeTabSize}
+        highlightedLines={highlightedLines}
+        onLineClick={onLineClick}
+      />
+    );
+  }
+
+  return (
+    <section
+      className={`chat-file-peek-surface ${mode}`}
+      aria-label="Chat file preview"
+    >
+      <div className="chat-preview-toolbar">
+        <button
+          type="button"
+          className="chat-preview-icon-button"
+          onClick={onClose}
+          title={mode === 'mobile' ? 'Back' : 'Close preview'}
+          aria-label={mode === 'mobile' ? 'Back' : 'Close preview'}
+        >
+          <span className={`codicon ${mode === 'mobile' ? 'codicon-arrow-left' : 'codicon-close'}`} />
+        </button>
+        <div className="chat-preview-title" title={title}>{title}</div>
+        <button
+          type="button"
+          className="chat-preview-icon-button"
+          onClick={onCopyPath}
+          title="Copy absolute path"
+          aria-label="Copy absolute path"
+        >
+          <span className="codicon codicon-clippy" />
+        </button>
+        <button
+          type="button"
+          className="chat-preview-icon-button"
+          onClick={onOpenInFileTab}
+          title="Open in File tab"
+          aria-label="Open in File tab"
+        >
+          <span className="codicon codicon-go-to-file" />
+        </button>
+      </div>
+      <div ref={scrollRef} className="chat-file-peek-scroll">
+        {body}
+      </div>
+    </section>
+  );
+}, (prev, next) => {
+  const p = prev.peek;
+  const n = next.peek;
+  return (
+    p.path === n.path &&
+    p.targetLine === n.targetLine &&
+    p.content === n.content &&
+    p.loading === n.loading &&
+    p.error === n.error &&
+    prev.mode === next.mode &&
+    prev.themeMode === next.themeMode &&
+    prev.codeTheme === next.codeTheme &&
+    prev.codeFont === next.codeFont &&
+    prev.codeFontSize === next.codeFontSize &&
+    prev.codeLineHeight === next.codeLineHeight &&
+    prev.codeTabSize === next.codeTabSize &&
+    prev.wrapLines === next.wrapLines &&
+    prev.showLineNumbers === next.showLineNumbers &&
+    prev.highlightedLines === next.highlightedLines
+  );
+});
+
 export function App() {
   const defaultRegistryAddress = useMemo(() => getDefaultRegistryAddress(), []);
   const persistedGlobal = useMemo(
@@ -15316,127 +15489,6 @@ export function App() {
     ) : null;
     return content;
   };
-  const renderChatFilePeekBody = () => {
-    if (!chatFilePeek) return null;
-    const chatFilePeekIsMarkdown = isMarkdownPath(chatFilePeek.path);
-    const chatFilePeekIsHtml = isHtmlPath(chatFilePeek.path);
-    const chatFilePeekIsImage = isImageFile(
-      chatFilePeek.path,
-      chatFilePeek.info?.mimeType,
-    );
-    if (chatFilePeek.loading) {
-      return <div className="muted block">Loading file...</div>;
-    }
-    if (chatFilePeek.error) {
-      return (
-        <div className="chat-file-peek-error" role="alert">
-          <span className="codicon codicon-error" />
-          <span>{chatFilePeek.error || 'Failed to load file'}</span>
-        </div>
-      );
-    }
-    if (chatFilePeekIsImage) {
-      const imageSrc = buildImageDataUrl({
-        content: chatFilePeek.content,
-        path: chatFilePeek.path,
-        mimeType: chatFilePeek.info?.mimeType,
-        isBinary: chatFilePeek.info?.isBinary,
-      });
-      return imageSrc ? (
-        <div className="file-image-preview-wrap chat-file-peek-image-wrap">
-          <img
-            className="file-image-preview"
-            src={imageSrc}
-            alt={chatFilePeek.path.split('/').pop() || 'image preview'}
-          />
-        </div>
-      ) : (
-        <div className="muted block">Image content is unavailable.</div>
-      );
-    }
-    if (chatFilePeekIsMarkdown) {
-      return (
-        <MarkdownPreview
-          content={chatFilePeek.content}
-          themeMode={themeMode}
-          codeTheme={codeTheme}
-          codeFont={codeFont}
-          codeFontSize={codeFontSize}
-          codeLineHeight={codeLineHeight}
-          codeTabSize={codeTabSize}
-          wrap={wrapLines}
-          lineNumbers={showLineNumbers}
-          targetLine={chatFilePeek.targetLine}
-        />
-      );
-    }
-    if (chatFilePeekIsHtml) {
-      return (
-        <HtmlPreview
-          content={chatFilePeek.content}
-          targetLine={chatFilePeek.targetLine}
-        />
-      );
-    }
-    return renderCodePane(
-      chatFilePeek.content,
-      true,
-      detectCodeLanguage(chatFilePeek.path),
-      {
-        highlightedLines: chatPeekSelectedLines,
-        onLineClick: handlePeekLineClick,
-        forceNoWrap: true,
-      },
-    );
-  };
-  const renderChatFilePeekSurface = (mode: 'desktop' | 'mobile') => {
-    if (!chatFilePeek) return null;
-    const title = chatFilePeek.targetLine
-      ? `${chatFilePeek.path}:${chatFilePeek.targetLine}`
-      : chatFilePeek.path;
-    return (
-      <section
-        className={`chat-file-peek-surface ${mode}`}
-        aria-label="Chat file preview"
-      >
-        <div className="chat-preview-toolbar">
-          <button
-            type="button"
-            className="chat-preview-icon-button"
-            onClick={closeChatFilePeekFromChrome}
-            title={mode === 'mobile' ? 'Back' : 'Close preview'}
-            aria-label={mode === 'mobile' ? 'Back' : 'Close preview'}
-          >
-            <span className={`codicon ${mode === 'mobile' ? 'codicon-arrow-left' : 'codicon-close'}`} />
-          </button>
-          <div className="chat-preview-title" title={title}>{title}</div>
-          <button
-            type="button"
-            className="chat-preview-icon-button"
-            onClick={() => {
-              navigator.clipboard.writeText(chatFilePeek.path).catch(() => undefined);
-            }}
-            title="Copy absolute path"
-            aria-label="Copy absolute path"
-          >
-            <span className="codicon codicon-clippy" />
-          </button>
-          <button
-            type="button"
-            className="chat-preview-icon-button"
-            onClick={openPeekFileInFullFileTab}
-            title="Open in File tab"
-            aria-label="Open in File tab"
-          >
-            <span className="codicon codicon-go-to-file" />
-          </button>
-        </div>
-        <div ref={chatFilePeekScrollRef} className="chat-file-peek-scroll">
-          {renderChatFilePeekBody()}
-        </div>
-      </section>
-    );
-  };
   const closePortRelayFrameFromChrome = useCallback(() => {
     if (!isWide && portRelayFramePlacement === 'chatPreview' && chatFilePeekHistoryActiveRef.current) {
       window.history.back();
@@ -16961,7 +17013,26 @@ export function App() {
         onPointerCancel={finishChatFilePeekResize}
         onLostPointerCapture={commitChatFilePeekResize}
       />
-      {chatFilePeek ? renderChatFilePeekSurface('desktop') : renderChatPortRelayPreviewSurface('desktop')}
+      {chatFilePeek ? (
+        <ChatFilePeekViewer
+          peek={chatFilePeek}
+          mode="desktop"
+          themeMode={themeMode}
+          codeTheme={codeTheme}
+          codeFont={codeFont}
+          codeFontSize={codeFontSize}
+          codeLineHeight={codeLineHeight}
+          codeTabSize={codeTabSize}
+          wrapLines={wrapLines}
+          showLineNumbers={showLineNumbers}
+          highlightedLines={chatPeekSelectedLines}
+          onLineClick={handlePeekLineClick}
+          onClose={closeChatFilePeekFromChrome}
+          onCopyPath={() => { navigator.clipboard.writeText(chatFilePeek.path).catch(() => undefined); }}
+          onOpenInFileTab={openPeekFileInFullFileTab}
+          scrollRef={chatFilePeekScrollRef}
+        />
+      ) : renderChatPortRelayPreviewSurface('desktop')}
     </aside>
   ) : null;
   const chatPreviewMobileOverlay = !isWide && chatPreviewOpen ? (
@@ -16971,7 +17042,26 @@ export function App() {
       aria-modal="true"
       aria-label="Chat preview"
     >
-      {chatFilePeek ? renderChatFilePeekSurface('mobile') : renderChatPortRelayPreviewSurface('mobile')}
+      {chatFilePeek ? (
+        <ChatFilePeekViewer
+          peek={chatFilePeek}
+          mode="mobile"
+          themeMode={themeMode}
+          codeTheme={codeTheme}
+          codeFont={codeFont}
+          codeFontSize={codeFontSize}
+          codeLineHeight={codeLineHeight}
+          codeTabSize={codeTabSize}
+          wrapLines={wrapLines}
+          showLineNumbers={showLineNumbers}
+          highlightedLines={chatPeekSelectedLines}
+          onLineClick={handlePeekLineClick}
+          onClose={closeChatFilePeekFromChrome}
+          onCopyPath={() => { navigator.clipboard.writeText(chatFilePeek.path).catch(() => undefined); }}
+          onOpenInFileTab={openPeekFileInFullFileTab}
+          scrollRef={chatFilePeekScrollRef}
+        />
+      ) : renderChatPortRelayPreviewSurface('mobile')}
     </div>
   ) : null;
 
