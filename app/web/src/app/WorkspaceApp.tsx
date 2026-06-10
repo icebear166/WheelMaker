@@ -5146,6 +5146,10 @@ export function App() {
   }, [speechSettings]);
 
   useEffect(() => {
+    workspaceStore.rememberGlobalState({ ttsSettings });
+  }, [ttsSettings]);
+
+  useEffect(() => {
     if (!sidebarSettingsOpen && settingsDetailView !== 'connectionStatus') {
       return undefined;
     }
