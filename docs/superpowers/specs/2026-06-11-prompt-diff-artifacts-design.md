@@ -149,19 +149,54 @@ Codex App Server turn/diff/updated
   -> codexapp bridge caches latest diff by turnId
 
 Codex App Server turn/completed
-  -> codexapp bridge attaches pending diff body to prompt result
+  -> codexapp bridge attaches pending diff artifact to the internal prompt result
 
-SessionRecorder finishPromptStateLocked
+client.Session receives prompt result
+  -> records the existing session/prompt result event
+  -> passes pending artifact bodies as side-band Go data on SessionViewEvent
+
+SessionRecorder handlePromptFinishedLocked
   -> parse diff into file metadata
   -> write one diff artifact body
   -> write prompt_done with artifact metadata
 
 App receives prompt_done
-  -> render changed-files list
+  -> render changed-files list above the done separator
   -> read full artifact only when opened
 ```
 
 The bridge does not expose Codex `turnId` to app/web. It only passes provider-neutral prompt artifact data to the common session layer.
+
+## Common-Layer Delivery
+
+The artifact is delivered through the existing prompt completion path, not through a new provider-specific event.
+
+Current completion path:
+
+```text
+agent.Instance.SessionPrompt(...)
+  -> client.Session.promptStream result
+  -> client.Session records ACP method session/prompt with result
+  -> SessionRecorder converts that result into prompt_done
+```
+
+The implementation extends this path with internal artifact data:
+
+```text
+codexappConn
+  -> returns SessionPromptResult with pending diff artifact metadata
+  -> keeps artifact body on an internal, non-JSON field
+
+client.Session
+  -> serializes only prompt result metadata into the session/prompt event
+  -> copies artifact body into SessionViewEvent side-band fields
+
+SessionRecorder
+  -> writes artifact body to SessionArtifactStore
+  -> writes prompt_done.param.artifacts metadata into the persisted turn
+```
+
+This keeps the frontend protocol clean and avoids serializing full diff content into the realtime turn stream.
 
 ## ACP Compatibility
 
@@ -177,7 +212,7 @@ Existing `item/fileChange/patchUpdated` handling remains useful for live tool pr
 
 ## UI
 
-Under `prompt_done`, render a compact changed-files section:
+Render a compact changed-files section immediately above the `prompt_done` separator:
 
 ```text
 Changed 3 files
