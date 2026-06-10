@@ -2018,6 +2018,7 @@
 }
 
 .chat-main {
+  --chat-scrollbar-gutter-width: 8px;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -2061,7 +2062,7 @@
 
 .chat-view-width-fixed-800 .chat-composer {
   padding-left: 18px;
-  padding-right: 18px;
+  padding-right: calc(18px + var(--chat-scrollbar-gutter-width, 8px));
 }
 
 .chat-virtuoso-footer {

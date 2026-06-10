@@ -691,6 +691,7 @@ const fileMemoryCacheKey = (activeProjectId: string, path: string) => `${activeP
 const PROJECT_PIN_LONG_PRESS_MS = 450;
 const PROJECT_SESSION_LONG_PRESS_MS = 450;
 const DESKTOP_SIDEBAR_VIEWPORT_MAX_RATIO = 0.45;
+const CHAT_FIXED_VIEW_WIDTH = 800;
 const CHAT_FILE_PEEK_WIDTH_DEFAULT = 520;
 const CHAT_FILE_PEEK_WIDTH_MIN = 360;
 const CHAT_FILE_PEEK_WIDTH_MAX = 1520;
@@ -2625,6 +2626,7 @@ export function App() {
   const chatFilePeekHistoryActiveRef = useRef(false);
   const chatFilePeekResizeRef = useRef<DesktopSidebarResizeState | null>(null);
   const [chatFilePeekWidth, setChatFilePeekWidth] = useState(CHAT_FILE_PEEK_WIDTH_DEFAULT);
+  const [chatFilePeekWidthResized, setChatFilePeekWidthResized] = useState(false);
   const [chatFilePeekDraftWidth, setChatFilePeekDraftWidth] = useState<number | null>(null);
   const [chatFilePeekResizing, setChatFilePeekResizing] = useState(false);
   const [chatPeekSelectedLines, setChatPeekSelectedLines] = useState<Set<number>>(new Set());
@@ -6805,7 +6807,7 @@ export function App() {
       ),
     );
   }, [clampDesktopSidebarWidthForViewport, setDesktopSidebarWidth]);
-  const clampChatFilePeekWidthForViewport = useCallback((width: number) => {
+  const clampChatFilePeekWidthForViewport = useCallback((width: number, allowFullPreviewWidth = false) => {
     const viewportMax = windowWidth > 0
       ? Math.floor(windowWidth * CHAT_FILE_PEEK_VIEWPORT_MAX_RATIO)
       : CHAT_FILE_PEEK_WIDTH_MAX;
@@ -6813,25 +6815,52 @@ export function App() {
     const middlePreservingMax = windowWidth > 0
       ? windowWidth - occupiedWidth - CHAT_FILE_PEEK_MAIN_MIN_WIDTH
       : CHAT_FILE_PEEK_WIDTH_MAX;
+    const boundedMax = allowFullPreviewWidth
+      ? middlePreservingMax
+      : Math.min(CHAT_FILE_PEEK_WIDTH_MAX, viewportMax, middlePreservingMax);
     const maxWidth = Math.max(
       CHAT_FILE_PEEK_WIDTH_MIN,
-      Math.min(CHAT_FILE_PEEK_WIDTH_MAX, viewportMax, middlePreservingMax),
+      boundedMax,
     );
     return Math.min(
       maxWidth,
       Math.max(CHAT_FILE_PEEK_WIDTH_MIN, Math.round(width)),
     );
   }, [effectiveDesktopSidebarWidth, sidebarCollapsed, windowWidth]);
+  const fixedChatPreviewDefaultWidth = useMemo(() => {
+    const occupiedWidth = sidebarCollapsed ? 48 : effectiveDesktopSidebarWidth + 48;
+    const availableWidth = windowWidth > 0
+      ? windowWidth - occupiedWidth
+      : CHAT_FIXED_VIEW_WIDTH + CHAT_FILE_PEEK_WIDTH_DEFAULT;
+    return clampChatFilePeekWidthForViewport(
+      availableWidth - CHAT_FIXED_VIEW_WIDTH,
+      true,
+    );
+  }, [clampChatFilePeekWidthForViewport, effectiveDesktopSidebarWidth, sidebarCollapsed, windowWidth]);
   const effectiveChatFilePeekWidth = useMemo(
-    () => clampChatFilePeekWidthForViewport(
-      chatFilePeekDraftWidth ?? chatFilePeekWidth,
-    ),
-    [chatFilePeekDraftWidth, chatFilePeekWidth, clampChatFilePeekWidthForViewport],
+    () => {
+      const committedWidth = desktopChatFixedPreview && !chatFilePeekWidthResized
+        ? fixedChatPreviewDefaultWidth
+        : chatFilePeekWidth;
+      return clampChatFilePeekWidthForViewport(
+        chatFilePeekDraftWidth ?? committedWidth,
+        desktopChatFixedPreview,
+      );
+    },
+    [
+      chatFilePeekDraftWidth,
+      chatFilePeekWidth,
+      chatFilePeekWidthResized,
+      clampChatFilePeekWidthForViewport,
+      desktopChatFixedPreview,
+      fixedChatPreviewDefaultWidth,
+    ],
   );
   const commitChatFilePeekResize = useCallback(() => {
     const resizeState = chatFilePeekResizeRef.current;
     if (resizeState) {
       setChatFilePeekWidth(resizeState.currentWidth);
+      setChatFilePeekWidthResized(true);
     }
     chatFilePeekResizeRef.current = null;
     setChatFilePeekDraftWidth(null);
@@ -6858,13 +6887,13 @@ export function App() {
     }
     event.preventDefault();
     const nextWidth = resizeState.startWidth + resizeState.originX - event.clientX;
-    const clampedWidth = clampChatFilePeekWidthForViewport(nextWidth);
+    const clampedWidth = clampChatFilePeekWidthForViewport(nextWidth, desktopChatFixedPreview);
     chatFilePeekResizeRef.current = {
       ...resizeState,
       currentWidth: clampedWidth,
     };
     setChatFilePeekDraftWidth(clampedWidth);
-  }, [clampChatFilePeekWidthForViewport]);
+  }, [clampChatFilePeekWidthForViewport, desktopChatFixedPreview]);
   const finishChatFilePeekResize = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
     const resizeState = chatFilePeekResizeRef.current;
     if (!resizeState || resizeState.pointerId !== event.pointerId) {

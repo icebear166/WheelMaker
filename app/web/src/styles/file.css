@@ -15,8 +15,6 @@
 }
 
 .desktop-shell[data-chat-fixed-preview='true'] .chat-preview-pane {
-  flex: 1 1 auto;
-  width: auto;
   max-width: none;
 }
 

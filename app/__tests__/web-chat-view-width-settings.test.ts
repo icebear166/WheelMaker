@@ -13,6 +13,12 @@ function readSourceText(filePath: string): string {
   return fs.readFileSync(filePath, 'utf8').replace(/\r\n/g, '\n');
 }
 
+function cssRuleBlock(stylesCss: string, selector: string): string {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = stylesCss.match(new RegExp(`${escapedSelector} \\{([\\s\\S]*?)\\}`));
+  return match?.[1] ?? '';
+}
+
 describe('web chat view width settings', () => {
   test('defines full and fixed-width chat view choices', () => {
     expect(DEFAULT_CHAT_VIEW_WIDTH).toBe('fixed-800');
@@ -77,25 +83,34 @@ describe('web chat view width settings', () => {
       /\.chat-view-width-fixed-800 \.chat-composer-content \{[\s\S]*width: min\(800px, 100%\);[\s\S]*margin-left: auto;[\s\S]*margin-right: auto;[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
-      /\.chat-view-width-fixed-800 \.chat-composer \{[\s\S]*padding-left: 18px;[\s\S]*padding-right: 18px;[\s\S]*\}/,
+      /\.chat-main \{[\s\S]*--chat-scrollbar-gutter-width: 8px;[\s\S]*\}/,
+    );
+    expect(stylesCss).toMatch(
+      /\.chat-view-width-fixed-800 \.chat-composer \{[\s\S]*padding-left: 18px;[\s\S]*padding-right: calc\(18px \+ var\(--chat-scrollbar-gutter-width, 8px\)\);[\s\S]*\}/,
     );
   });
 
-  test('pins the desktop chat pane to 800px when the file preview is open', () => {
+  test('keeps fixed-width chat centered while preserving preview resize', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const shellTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'shell', 'ResponsiveShell.tsx'));
     const stylesCss = readWebStyles(projectRoot);
 
+    expect(mainTsx).toContain('const CHAT_FIXED_VIEW_WIDTH = 800;');
     expect(mainTsx).toContain("const desktopChatFixedPreview = isWide && chatPreviewOpen && chatViewWidth === 'fixed-800';");
+    expect(mainTsx).toContain('const [chatFilePeekWidthResized, setChatFilePeekWidthResized] = useState(false);');
+    expect(mainTsx).toContain('const fixedChatPreviewDefaultWidth = useMemo(() => {');
+    expect(mainTsx).toContain('desktopChatFixedPreview && !chatFilePeekWidthResized');
+    expect(mainTsx).toContain('setChatFilePeekWidthResized(true);');
+    expect(mainTsx).toContain('clampChatFilePeekWidthForViewport(nextWidth, desktopChatFixedPreview);');
     expect(mainTsx).toContain('desktopChatFixedPreview={desktopChatFixedPreview}');
     expect(shellTsx).toContain('desktopChatFixedPreview: boolean;');
     expect(shellTsx).toContain("data-chat-fixed-preview={desktopChatFixedPreview ? 'true' : undefined}");
-    expect(stylesCss).toMatch(
-      /\.desktop-shell\[data-chat-fixed-preview='true'\] \.workspace-right \{[\s\S]*flex: 0 0 800px;[\s\S]*width: 800px;[\s\S]*min-width: 0;[\s\S]*\}/,
-    );
-    expect(stylesCss).toMatch(
-      /\.desktop-shell\[data-chat-fixed-preview='true'\] \.chat-preview-pane \{[\s\S]*flex: 1 1 auto;[\s\S]*width: auto;[\s\S]*max-width: none;[\s\S]*\}/,
-    );
+    const fixedWorkspace = cssRuleBlock(stylesCss, ".desktop-shell[data-chat-fixed-preview='true'] .workspace-right");
+    const fixedPreviewPane = cssRuleBlock(stylesCss, ".desktop-shell[data-chat-fixed-preview='true'] .chat-preview-pane");
+    expect(fixedWorkspace).not.toContain('flex: 0 0 800px;');
+    expect(fixedPreviewPane).toContain('max-width: none;');
+    expect(fixedPreviewPane).not.toContain('flex: 1 1 auto;');
+    expect(fixedPreviewPane).not.toContain('width: auto;');
   });
 });
