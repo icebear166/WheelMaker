@@ -36,7 +36,7 @@ export function segmentText(text: string, maxChars: number = MAX_SEGMENT_CHARS):
 }
 
 /**
- * Global TTS player singleton with generation-based invalidation.
+ * Global TTS player singleton with generation-based invalidation and prefetch.
  * Only one playback session is active at a time.
  *
  * State machine:
@@ -44,9 +44,8 @@ export function segmentText(text: string, maxChars: number = MAX_SEGMENT_CHARS):
  *     ↑                 │                      │
  *     └──stop()─────────┴──stop()──────────────┘
  *
- * Each play() call increments a generation counter.
- * All async operations check the generation before proceeding,
- * preventing stale sessions from interfering with new ones.
+ * Prefetch strategy: while playing segment N, start fetching segment N+1
+ * so the next segment is ready immediately when the current one ends.
  */
 class TTSPlayer {
   private audio: HTMLAudioElement | null = null;
@@ -54,6 +53,11 @@ class TTSPlayer {
   private generation = 0;
   private state: TtsPlaybackState = 'idle';
   private listeners: Set<TtsPlaybackListener> = new Set();
+
+  /** Pre-fetched audio URLs indexed by segment index */
+  private prefetched: Map<number, string> = new Map();
+  /** Pending fetch promises indexed by segment index */
+  private pendingFetches: Map<number, Promise<string | null>> = new Map();
 
   get currentState(): TtsPlaybackState {
     return this.state;
@@ -77,6 +81,8 @@ class TTSPlayer {
       URL.revokeObjectURL(url);
     }
     this.blobUrls = [];
+    this.prefetched.clear();
+    this.pendingFetches.clear();
     if (this.audio) {
       this.audio.onended = null;
       this.audio.onplaying = null;
@@ -97,8 +103,55 @@ class TTSPlayer {
   }
 
   /**
-   * Play text segments sequentially.
-   * Each segment is synthesized via TTS API, then played via HTMLAudioElement.
+   * Start pre-fetching a segment. Returns the blob URL or null if invalidated.
+   * Deduplicates: if already fetching, returns the existing promise.
+   */
+  private prefetchSegment(
+    index: number,
+    segments: string[],
+    settings: TtsSettings,
+    gen: number,
+  ): Promise<string | null> {
+    // Already have it
+    const cached = this.prefetched.get(index);
+    if (cached) return Promise.resolve(cached);
+
+    // Already fetching
+    const pending = this.pendingFetches.get(index);
+    if (pending) return pending;
+
+    // Out of range
+    if (index >= segments.length) return Promise.resolve(null);
+
+    const fetchPromise = (async (): Promise<string | null> => {
+      if (this.generation !== gen) return null;
+
+      const result = await synthesizeSpeech({
+        apiKey: settings.apiKey,
+        model: settings.model,
+        voice: settings.voice,
+        text: segments[index],
+      });
+
+      if (this.generation !== gen) return null;
+      if (!result.ok) {
+        console.warn(`TTS segment ${index} failed: ${result.error}`);
+        return null;
+      }
+
+      const blobUrl = audioBase64ToBlobUrl(result.audioBase64);
+      this.blobUrls.push(blobUrl);
+      this.prefetched.set(index, blobUrl);
+      this.pendingFetches.delete(index);
+      return blobUrl;
+    })();
+
+    this.pendingFetches.set(index, fetchPromise);
+    return fetchPromise;
+  }
+
+  /**
+   * Play text segments sequentially with prefetch.
    * Automatically stops any previous playback.
    */
   async play(segments: string[], settings: TtsSettings): Promise<void> {
@@ -112,37 +165,76 @@ class TTSPlayer {
 
     this.setState('loading');
 
-    for (let i = 0; i < segments.length; i++) {
-      if (this.generation !== gen) return;
+    // Start fetching the first segment
+    const firstUrl = await this.prefetchSegment(0, segments, settings, gen);
+    if (this.generation !== gen) return;
 
-      const result = await synthesizeSpeech({
-        apiKey: settings.apiKey,
-        model: settings.model,
-        voice: settings.voice,
-        text: segments[i],
-      });
+    if (!firstUrl) {
+      // First segment failed, try remaining
+      let foundValid = false;
+      for (let i = 1; i < segments.length; i++) {
+        const url = await this.prefetchSegment(i, segments, settings, gen);
+        if (this.generation !== gen) return;
+        if (url) {
+          foundValid = true;
+          // Start playback from this segment
+          await this.playFromSegment(i, segments, settings, gen, url);
+          return;
+        }
+      }
+      if (!foundValid && this.generation === gen) {
+        this.cleanup();
+        this.setState('idle');
+      }
+      return;
+    }
 
-      if (this.generation !== gen) return;
+    // Start playback from segment 0
+    await this.playFromSegment(0, segments, settings, gen, firstUrl);
+  }
 
-      if (!result.ok) {
-        console.warn(`TTS segment ${i} failed: ${result.error}`);
+  /**
+   * Play starting from a given segment, with prefetch for the next segment.
+   */
+  private async playFromSegment(
+    startIndex: number,
+    segments: string[],
+    settings: TtsSettings,
+    gen: number,
+    startUrl: string,
+  ): Promise<void> {
+    let currentIndex = startIndex;
+    let currentUrl: string | null = startUrl;
+
+    while (currentIndex < segments.length && this.generation === gen) {
+      if (!currentUrl) {
+        // Current segment failed, try next
+        currentIndex++;
+        if (currentIndex < segments.length) {
+          currentUrl = await this.prefetchSegment(currentIndex, segments, settings, gen);
+        }
         continue;
       }
 
-      const blobUrl = audioBase64ToBlobUrl(result.audioBase64);
-      this.blobUrls.push(blobUrl);
-
-      if (this.generation !== gen) {
-        URL.revokeObjectURL(blobUrl);
-        return;
+      // Kick off prefetch for the next segment while current plays
+      const nextIndex = currentIndex + 1;
+      if (nextIndex < segments.length) {
+        // Fire and forget - don't await
+        this.prefetchSegment(nextIndex, segments, settings, gen).catch(() => {});
       }
 
-      await this.playAudio(blobUrl, gen);
-
+      // Play current segment
+      await this.playAudio(currentUrl, gen);
       if (this.generation !== gen) return;
+
+      // Advance to next segment
+      currentIndex++;
+      currentUrl = currentIndex < segments.length
+        ? (this.prefetched.get(currentIndex) ?? await this.prefetchSegment(currentIndex, segments, settings, gen))
+        : null;
     }
 
-    // Only finalize if this generation is still current
+    // All segments played
     if (this.generation === gen) {
       this.cleanup();
       this.setState('idle');
