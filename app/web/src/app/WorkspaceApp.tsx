@@ -2421,6 +2421,8 @@ export function App() {
     path: string;
     line: number;
   } | null>(null);
+  const [fileTabSelectedLines, setFileTabSelectedLines] = useState<Set<number>>(new Set());
+  const fileTabAnchorRef = useRef<number | null>(null);
   const [searchToolsOpen, setSearchToolsOpen] = useState(false);
   const [gotoToolsOpen, setGotoToolsOpen] = useState(false);
   const [markdownPreviewEnabled, setMarkdownPreviewEnabled] = useState(false);
@@ -2435,6 +2437,8 @@ export function App() {
   const [chatFilePeekWidth, setChatFilePeekWidth] = useState(CHAT_FILE_PEEK_WIDTH_DEFAULT);
   const [chatFilePeekDraftWidth, setChatFilePeekDraftWidth] = useState<number | null>(null);
   const [chatFilePeekResizing, setChatFilePeekResizing] = useState(false);
+  const [chatPeekSelectedLines, setChatPeekSelectedLines] = useState<Set<number>>(new Set());
+  const chatPeekAnchorRef = useRef<number | null>(null);
   const chatPortRelayPreviewOpen = portRelayFrameOpen && portRelayFramePlacement === 'chatPreview' && !!portRelayFrameUrl;
   const chatPreviewOpen = !!chatFilePeek || chatPortRelayPreviewOpen;
   const liveRefreshTimerRef = useRef<number | null>(null);
@@ -6462,6 +6466,8 @@ export function App() {
   const closeChatFilePeek = useCallback(() => {
     chatFilePeekReadSeqRef.current += 1;
     setChatFilePeek(null);
+    setChatPeekSelectedLines(new Set());
+    chatPeekAnchorRef.current = null;
   }, []);
   const closeChatPortRelayPreview = useCallback(() => {
     setPortRelayFrameOpen(false);
@@ -6910,6 +6916,11 @@ export function App() {
   selectedFileRef.current = selectedFile;
   chatFilePeekRef.current = chatFilePeek;
 
+  useEffect(() => {
+    setFileTabSelectedLines(new Set());
+    fileTabAnchorRef.current = null;
+  }, [selectedFile]);
+
   const worktreeActive = selectedDiffSource === 'worktree';
 
   const isExpanded = (path: string) => expandedDirs.includes(path);
@@ -7139,6 +7150,8 @@ export function App() {
       }
 
       scrollToFileLine(targetLine);
+      fileTabAnchorRef.current = targetLine;
+      setFileTabSelectedLines(new Set([targetLine]));
       setPendingFileJump(current =>
         current && current.path === targetPath && current.line === targetLine
           ? null
@@ -7505,6 +7518,52 @@ export function App() {
     }
   }, [projectId]);
 
+  const buildLineRange = (anchor: number, target: number): Set<number> => {
+    const start = Math.min(anchor, target);
+    const end = Math.max(anchor, target);
+    const result = new Set<number>();
+    for (let i = start; i <= end; i++) result.add(i);
+    return result;
+  };
+
+  const handlePeekLineClick = useCallback(
+    (line: number, event: MouseEvent) => {
+      if (event.shiftKey && chatPeekAnchorRef.current != null) {
+        setChatPeekSelectedLines(buildLineRange(chatPeekAnchorRef.current, line));
+      } else if (event.ctrlKey || event.metaKey) {
+        setChatPeekSelectedLines(prev => {
+          const next = new Set(prev);
+          if (next.has(line)) next.delete(line);
+          else next.add(line);
+          return next;
+        });
+      } else {
+        chatPeekAnchorRef.current = line;
+        setChatPeekSelectedLines(new Set([line]));
+      }
+    },
+    [],
+  );
+
+  const handleFileTabLineClick = useCallback(
+    (line: number, event: MouseEvent) => {
+      if (event.shiftKey && fileTabAnchorRef.current != null) {
+        setFileTabSelectedLines(buildLineRange(fileTabAnchorRef.current, line));
+      } else if (event.ctrlKey || event.metaKey) {
+        setFileTabSelectedLines(prev => {
+          const next = new Set(prev);
+          if (next.has(line)) next.delete(line);
+          else next.add(line);
+          return next;
+        });
+      } else {
+        fileTabAnchorRef.current = line;
+        setFileTabSelectedLines(new Set([line]));
+      }
+    },
+    [],
+  );
+
   const openChatFilePeek = useCallback((path: string, line: number | null) => {
     const normalizedLine =
       typeof line === 'number' && Number.isFinite(line) && line > 0
@@ -7522,6 +7581,8 @@ export function App() {
       }
     }
     readChatFilePeek(path, normalizedLine).catch(() => undefined);
+    chatPeekAnchorRef.current = normalizedLine;
+    setChatPeekSelectedLines(normalizedLine != null ? new Set([normalizedLine]) : new Set());
   }, [isWide, readChatFilePeek, setDrawerOpen]);
 
   const closeChatFilePeekFromChrome = useCallback(() => {
@@ -7534,12 +7595,14 @@ export function App() {
 
   const openPeekFileInFullFileTab = useCallback(() => {
     if (!chatFilePeek) return;
+    const transferLine = chatFilePeek.targetLine;
+    const transferPath = chatFilePeek.path;
     closeChatFilePeek();
     chatFilePeekHistoryActiveRef.current = false;
     setTab('file');
-    setSelectedFile(chatFilePeek.path);
-    if (chatFilePeek.targetLine) {
-      setPendingFileJump({ path: chatFilePeek.path, line: chatFilePeek.targetLine });
+    setSelectedFile(transferPath);
+    if (transferLine) {
+      setPendingFileJump({ path: transferPath, line: transferLine });
     } else {
       setPendingFileJump(null);
     }
@@ -14610,6 +14673,11 @@ export function App() {
     content: string,
     forceLineNumbers = false,
     languageHint = '',
+    options?: {
+      highlightedLines?: Set<number>;
+      onLineClick?: (line: number, event: MouseEvent) => void;
+      forceNoWrap?: boolean;
+    },
   ) => {
     const numbersOn = forceLineNumbers || showLineNumbers;
     const language = languageHint || detectCodeLanguage(selectedFile);
@@ -14617,7 +14685,7 @@ export function App() {
       <ShikiCodeBlock
         content={content}
         language={language}
-        wrap={wrapLines}
+        wrap={options?.forceNoWrap ? false : wrapLines}
         lineNumbers={numbersOn}
         themeMode={themeMode}
         codeTheme={codeTheme}
@@ -14625,6 +14693,8 @@ export function App() {
         codeFontSize={codeFontSize}
         codeLineHeight={codeLineHeight}
         codeTabSize={codeTabSize}
+        highlightedLines={options?.highlightedLines}
+        onLineClick={options?.onLineClick}
       />
     );
   };
@@ -15248,8 +15318,13 @@ export function App() {
     }
     return renderCodePane(
       chatFilePeek.content,
-      false,
+      true,
       detectCodeLanguage(chatFilePeek.path),
+      {
+        highlightedLines: chatPeekSelectedLines,
+        onLineClick: handlePeekLineClick,
+        forceNoWrap: true,
+      },
     );
   };
   const renderChatFilePeekSurface = (mode: 'desktop' | 'mobile') => {
@@ -15273,6 +15348,17 @@ export function App() {
             <span className={`codicon ${mode === 'mobile' ? 'codicon-arrow-left' : 'codicon-close'}`} />
           </button>
           <div className="chat-preview-title" title={title}>{title}</div>
+          <button
+            type="button"
+            className="chat-preview-icon-button"
+            onClick={() => {
+              navigator.clipboard.writeText(chatFilePeek.path).catch(() => undefined);
+            }}
+            title="Copy absolute path"
+            aria-label="Copy absolute path"
+          >
+            <span className="codicon codicon-clippy" />
+          </button>
           <button
             type="button"
             className="chat-preview-icon-button"
@@ -16276,6 +16362,10 @@ export function App() {
                       fileContent,
                       false,
                       detectCodeLanguage(selectedFile),
+                      {
+                        highlightedLines: fileTabSelectedLines,
+                        onLineClick: handleFileTabLineClick,
+                      },
                     )
                   )}
                 </FilePreviewPane>

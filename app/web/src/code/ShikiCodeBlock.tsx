@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   resolveCodeFontFamily,
@@ -54,6 +54,8 @@ export type ShikiCodeBlockProps = {
   codeFontSize: number;
   codeLineHeight: number;
   codeTabSize: number;
+  highlightedLines?: Set<number>;
+  onLineClick?: (line: number, event: MouseEvent) => void;
 };
 
 function renderPlainCodeFallbackHtml({
@@ -102,7 +104,10 @@ export function ShikiCodeBlock({
   codeFontSize,
   codeLineHeight,
   codeTabSize,
+  highlightedLines,
+  onLineClick,
 }: ShikiCodeBlockProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const [html, setHtml] = useState('');
   const [renderFailed, setRenderFailed] = useState(false);
   const fallbackHtml = useMemo(
@@ -170,12 +175,42 @@ export function ShikiCodeBlock({
     lineNumbers,
   ]);
 
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const lineElements = container.querySelectorAll<HTMLElement>('[data-line-number]');
+    for (const el of lineElements) {
+      const lineNum = Number(el.dataset.lineNumber);
+      if (highlightedLines && highlightedLines.has(lineNum)) {
+        el.classList.add('wm-line-target');
+      } else {
+        el.classList.remove('wm-line-target');
+      }
+    }
+  }, [html, fallbackHtml, highlightedLines]);
+
+  const handleClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!onLineClick) return;
+      const target = e.target as HTMLElement;
+      const lineEl = target.closest<HTMLElement>('[data-line-number]');
+      if (!lineEl) return;
+      const lineNum = Number(lineEl.dataset.lineNumber);
+      if (Number.isFinite(lineNum)) {
+        onLineClick(lineNum, e.nativeEvent);
+      }
+    },
+    [onLineClick],
+  );
+
   return (
     <div
+      ref={containerRef}
       className={`code-wrap ${wrap ? 'wrap' : 'nowrap'}`}
       data-markdown-export-pending={html || renderFailed ? undefined : 'true'}
       data-shiki-render-failed={renderFailed ? 'true' : undefined}
       dangerouslySetInnerHTML={{ __html: html || fallbackHtml }}
+      onClick={onLineClick ? handleClick : undefined}
     />
   );
 }

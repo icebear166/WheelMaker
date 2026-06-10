@@ -69,7 +69,7 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('container.scrollTop =');
     expect(mainTsx).toContain('const openPeekFileInFullFileTab = useCallback(');
     expect(mainTsx).toContain("setTab('file');");
-    expect(mainTsx).toContain('setPendingFileJump({ path: chatFilePeek.path, line: chatFilePeek.targetLine });');
+    expect(mainTsx).toContain('setPendingFileJump({ path: transferPath, line: transferLine });');
 
     const jumpStart = mainTsx.indexOf('const jumpToFileLineNow = (');
     const jumpEnd = mainTsx.indexOf('const scrollToFileLine =', jumpStart);

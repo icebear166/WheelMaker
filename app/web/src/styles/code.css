@@ -7,6 +7,9 @@
   border-radius: 4px;
 }
 
+.code-wrap [data-line-number].wm-line-target {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
 
 .markdown-preview-toggle {
   font-size: 10px;
