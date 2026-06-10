@@ -87,6 +87,7 @@ export type PersistedGlobalState = {
   codeTabSize: number;
   chatFont: ChatFontId;
   speechSettings: SpeechSettings;
+  ttsSettings: TtsSettings;
   wrapLines: boolean;
   showLineNumbers: boolean;
   hideToolCalls: boolean;
@@ -171,6 +172,7 @@ const GLOBAL_KEYS = {
   codeTabSize: 'codeTabSize',
   chatFont: 'chatFont',
   speechSettings: 'speechSettings',
+  ttsSettings: 'ttsSettings',
   wrapLines: 'wrapLines',
   showLineNumbers: 'showLineNumbers',
   hideToolCalls: 'hideToolCalls',
@@ -213,6 +215,7 @@ function defaultGlobalState(): PersistedGlobalState {
     codeTabSize: DEFAULT_CODE_TAB_SIZE,
     chatFont: DEFAULT_CHAT_FONT,
     speechSettings: DEFAULT_SPEECH_SETTINGS,
+    ttsSettings: DEFAULT_TTS_SETTINGS,
     wrapLines: false,
     showLineNumbers: true,
     hideToolCalls: true,
@@ -453,6 +456,7 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
     codeTabSize: typeof input.codeTabSize === 'number' && Number.isFinite(input.codeTabSize) ? input.codeTabSize : base.codeTabSize,
     chatFont: typeof input.chatFont === 'string' && isChatFontId(input.chatFont) ? input.chatFont : base.chatFont,
     speechSettings: normalizeSpeechSettings(input.speechSettings),
+    ttsSettings: normalizeTtsSettings(input.ttsSettings),
     wrapLines: typeof input.wrapLines === 'boolean' ? input.wrapLines : base.wrapLines,
     showLineNumbers: typeof input.showLineNumbers === 'boolean' ? input.showLineNumbers : base.showLineNumbers,
     hideToolCalls: typeof input.hideToolCalls === 'boolean' ? input.hideToolCalls : base.hideToolCalls,
@@ -536,13 +540,19 @@ type RawKVRow = {
 
 function redactGlobalDumpRows(rows: RawKVRow[]): RawKVRow[] {
   return rows.map(row => {
-    if (row.k !== GLOBAL_KEYS.speechSettings) {
-      return row;
+    if (row.k === GLOBAL_KEYS.speechSettings) {
+      return {
+        ...row,
+        v: serialize(maskSpeechSettingsForExport(tryParse(row.v, DEFAULT_SPEECH_SETTINGS))),
+      };
     }
-    return {
-      ...row,
-      v: serialize(maskSpeechSettingsForExport(tryParse(row.v, DEFAULT_SPEECH_SETTINGS))),
-    };
+    if (row.k === GLOBAL_KEYS.ttsSettings) {
+      return {
+        ...row,
+        v: serialize(maskTtsSettingsForExport(tryParse(row.v, DEFAULT_TTS_SETTINGS))),
+      };
+    }
+    return row;
   });
 }
 
@@ -929,6 +939,7 @@ export class WorkspacePersistenceRepository {
       {k: GLOBAL_KEYS.codeTabSize, v: serialize(this.state.global.codeTabSize), updatedAt: now},
       {k: GLOBAL_KEYS.chatFont, v: serialize(this.state.global.chatFont), updatedAt: now},
       {k: GLOBAL_KEYS.speechSettings, v: serialize(this.state.global.speechSettings), updatedAt: now},
+      {k: GLOBAL_KEYS.ttsSettings, v: serialize(this.state.global.ttsSettings), updatedAt: now},
       {k: GLOBAL_KEYS.wrapLines, v: serialize(this.state.global.wrapLines), updatedAt: now},
       {k: GLOBAL_KEYS.showLineNumbers, v: serialize(this.state.global.showLineNumbers), updatedAt: now},
       {k: GLOBAL_KEYS.hideToolCalls, v: serialize(this.state.global.hideToolCalls), updatedAt: now},
@@ -1294,6 +1305,7 @@ export class WorkspacePersistenceRepository {
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.codeTabSize, v: serialize(next.codeTabSize), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.chatFont, v: serialize(next.chatFont), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.speechSettings, v: serialize(next.speechSettings), updatedAt: now});
+      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.ttsSettings, v: serialize(next.ttsSettings), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.wrapLines, v: serialize(next.wrapLines), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.showLineNumbers, v: serialize(next.showLineNumbers), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.hideToolCalls, v: serialize(next.hideToolCalls), updatedAt: now});

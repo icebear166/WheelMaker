@@ -14028,6 +14028,8 @@ export function App() {
         notificationPermissionState={notificationPermissionState}
         speechSettings={speechSettings}
         setSpeechSettings={setSpeechSettings}
+        ttsSettings={ttsSettings}
+        setTtsSettings={setTtsSettings}
         chatFont={chatFont}
         setChatFont={setChatFont}
         localHubReadEnabled={localHubReadEnabled}

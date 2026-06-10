@@ -3,6 +3,7 @@ import React from 'react';
 import {CHAT_FONT_OPTIONS, isChatFontId, type ChatFontId} from '../chat/chatTypography';
 import {normalizeAppDiagnosticLogLevel, type AppDiagnosticLogLevel} from '../debug/appDiagnostics';
 import {SPEECH_MODEL_OPTIONS, normalizeSpeechSettings, type SpeechSettings} from '../features/speech/speechSettings';
+import {TTS_MODEL_OPTIONS, TTS_VOICE_OPTIONS, normalizeTtsSettings, type TtsSettings, type TtsModelId, type TtsVoiceId} from '../features/tts/ttsSettings';
 import {
   CODE_FONT_OPTIONS,
   CODE_THEME_OPTIONS,
@@ -37,6 +38,8 @@ type SettingsRootContentProps = {
   notificationPermissionState: string;
   speechSettings: SpeechSettings;
   setSpeechSettings: React.Dispatch<React.SetStateAction<SpeechSettings>>;
+  ttsSettings: TtsSettings;
+  setTtsSettings: React.Dispatch<React.SetStateAction<TtsSettings>>;
   chatFont: ChatFontId;
   setChatFont: (value: ChatFontId) => void;
   localHubReadEnabled: boolean;
@@ -94,6 +97,8 @@ export function SettingsRootContent({
   notificationPermissionState,
   speechSettings,
   setSpeechSettings,
+  ttsSettings,
+  setTtsSettings,
   chatFont,
   setChatFont,
   localHubReadEnabled,
@@ -256,6 +261,79 @@ export function SettingsRootContent({
                   )}
                 >
                   {SPEECH_MODEL_OPTIONS.map(item => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          ) : null}
+        </div>
+        <div className="voice-input-settings-menu">
+          <label className="settings-row sidebar-setting-row">
+            <span>
+              <span className="codicon codicon-unmute settings-row-icon" aria-hidden="true" />
+              Text-to-Speech
+            </span>
+            <input
+              type="checkbox"
+              checked={ttsSettings.enabled}
+              onChange={event => setTtsSettings(current =>
+                normalizeTtsSettings({...current, enabled: event.target.checked}),
+              )}
+            />
+          </label>
+          {ttsSettings.enabled ? (
+            <div className="voice-input-settings-nested">
+              <label className="settings-row sidebar-setting-row voice-input-settings-child-row">
+                <span>
+                  <span className="codicon codicon-key settings-row-icon" aria-hidden="true" />
+                  API Key
+                </span>
+                <input
+                  className="sidebar-setting-input"
+                  type="text"
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={ttsSettings.apiKey}
+                  onChange={event => setTtsSettings(current =>
+                    normalizeTtsSettings({...current, apiKey: event.target.value}),
+                  )}
+                />
+              </label>
+              <label className="settings-row sidebar-setting-row voice-input-settings-child-row">
+                <span>
+                  <span className="codicon codicon-symbol-misc settings-row-icon" aria-hidden="true" />
+                  Model
+                </span>
+                <select
+                  className="sidebar-setting-select"
+                  value={ttsSettings.model}
+                  onChange={event => setTtsSettings(current =>
+                    normalizeTtsSettings({...current, model: event.target.value as TtsModelId}),
+                  )}
+                >
+                  {TTS_MODEL_OPTIONS.map(item => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="settings-row sidebar-setting-row voice-input-settings-child-row">
+                <span>
+                  <span className="codicon codicon-person settings-row-icon" aria-hidden="true" />
+                  Voice
+                </span>
+                <select
+                  className="sidebar-setting-select"
+                  value={ttsSettings.voice}
+                  onChange={event => setTtsSettings(current =>
+                    normalizeTtsSettings({...current, voice: event.target.value as TtsVoiceId}),
+                  )}
+                >
+                  {TTS_VOICE_OPTIONS.map(item => (
                     <option key={item.id} value={item.id}>
                       {item.label}
                     </option>
