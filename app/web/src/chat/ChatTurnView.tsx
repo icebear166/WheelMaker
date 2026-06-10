@@ -10,6 +10,10 @@ import {
   isPromptAttachmentContentBlock,
 } from './composer/chatPromptAttachments';
 import {
+  buildChatPromptInlineParts,
+  type ChatPromptInlinePart,
+} from './composer/chatPromptInlineParts';
+import {
   splitChatConfirmationReplyText,
   splitChatOptionReplyText,
   type ChatConfirmationReply,
@@ -205,6 +209,24 @@ function groupPromptAttachmentBlocks(msgs: RegistryChatMessage[]): RegistrySessi
   return blocks;
 }
 
+function renderPromptInlineParts(parts: ChatPromptInlinePart[]): React.ReactNode {
+  return parts.map((part, index) => {
+    if (part.type === 'text') {
+      return <React.Fragment key={`text:${index}`}>{part.text}</React.Fragment>;
+    }
+    return (
+      <span
+        key={`${part.type}:${index}:${part.type === 'file' ? part.path : part.command}`}
+        className={`chat-prompt-inline-capsule ${part.type}`}
+        title={part.type === 'file' ? part.path : part.command}
+      >
+        <span className={`codicon ${part.type === 'skill' ? 'codicon-code' : 'codicon-file-code'}`} aria-hidden="true" />
+        <span className="chat-prompt-inline-capsule-label">{part.label}</span>
+      </span>
+    );
+  });
+}
+
 export type ChatTurnViewProps = {
   message: RegistryChatMessage;
   promptRequest?: RegistryChatMessage;
@@ -255,12 +277,16 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   if (message.method === 'prompt_request' || message.method === 'user_message_chunk') {
     const imageBlocks = groupImageBlocks([message]);
     const attachmentBlocks = groupPromptAttachmentBlocks([message]);
+    const blocks = msgBlocks(message.method, message.param);
+    const inlineParts = buildChatPromptInlineParts(blocks);
     return (
       <div className="chat-prompt-group">
         {text || promptStatus ? (
           <div className="chat-prompt-user-row">
             {text ? (
-              <div className="chat-prompt-user">{text}</div>
+              <div className="chat-prompt-user">
+                {inlineParts.length > 0 ? renderPromptInlineParts(inlineParts) : text}
+              </div>
             ) : null}
             {promptStatus === 'responding' ? (
               <span className="chat-prompt-status chat-prompt-status-responding" title="Responding">

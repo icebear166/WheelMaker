@@ -254,7 +254,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('for (const item of projectItem.agents ?? [])');
     expect(mainTsx).toContain('resetChatComposer();');
     expect(mainTsx).toContain('attachments: ChatAttachment[];');
-    expect(mainTsx).toContain("const EMPTY_CHAT_COMPOSER_DRAFT: ChatComposerDraft = { text: '', attachments: [], fileMentions: [] };");
+    expect(mainTsx).toContain("const EMPTY_CHAT_COMPOSER_DRAFT: ChatComposerDraft = { text: '', tokens: [], attachments: [] };");
     expect(mainTsx).toContain('const [chatAttachments, setChatAttachments] = useState<ChatAttachment[]>([]);');
     expect(mainTsx).toContain("status: 'queued' | 'uploading' | 'failed' | 'completed';");
     expect(mainTsx).toContain('progress: number;');
@@ -448,7 +448,7 @@ describe('web chat integration', () => {
     const sendAwait = mainTsx.indexOf('const result = await service.sendProjectSessionMessage(selectedProjectId, {', sendExistingStart);
     expect(sendExistingStart).toBeGreaterThanOrEqual(0);
     expect(sendEnd).toBeGreaterThan(sendExistingStart);
-    expect(sendBlock).toContain("if (trimmedText === '/cancel' && sourceAttachments.length === 0 && sourceFileMentions.length === 0 && !options.blocksOverride) {");
+    expect(sendBlock).toContain("if (trimmedText === '/cancel' && sourceAttachments.length === 0 && !options.blocksOverride) {");
     expect(sendBlock).toContain("setError('Use the stop button to cancel in app.');");
     expect(sendBlock).toContain('rememberPendingChatPrompt(runtimeKey, {');
     expect(sendBlock).toContain("status: 'confirming',");
@@ -1037,8 +1037,9 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('showChatConfigLabels');
     expect(mainTsx).not.toContain('chatConfigFeedback');
     expect(mainTsx).not.toContain('Applying config');
-    expect(mainTsx).toContain("import { insertChatSlashCommandText } from '../chat/composer/chatSlashInsertion';");
-    expect(mainTsx).toContain('const inserted = insertChatSlashCommandText(');
+    expect(mainTsx).toContain("import { ChatRichComposer, type ChatRichComposerHandle } from '../chat/composer/ChatRichComposer';");
+    expect(mainTsx).toContain('serializeChatComposerTokens,');
+    expect(mainTsx).not.toContain("import { insertChatSlashCommandText } from '../chat/composer/chatSlashInsertion';");
 
     const stopTriggerClassStart = mainTsx.indexOf('className={chatComposerStopTriggerClassName}');
     const stopTriggerStart = mainTsx.lastIndexOf('<button', stopTriggerClassStart);
@@ -1063,8 +1064,8 @@ describe('web chat integration', () => {
     const promptMenuOpenBody = mainTsx.slice(promptMenuOpenStart, promptMenuOpenEnd);
     expect(promptMenuOpenBody).toContain('setChatFileMentionMenuOpen(false);');
     expect(promptMenuOpenBody).toContain('setChatAttachmentTrayOpen(false);');
-    expect(promptMenuOpenBody).toContain('chatComposerTextareaRef.current?.focus();');
-    expect(promptMenuOpenBody).not.toContain('chatComposerTextareaRef.current?.blur();');
+    expect(promptMenuOpenBody).toContain('chatRichComposerRef.current?.focus();');
+    expect(promptMenuOpenBody).not.toContain('chatRichComposerRef.current?.blur();');
 
     const fileMentionShortcutStart = mainTsx.indexOf('const openChatFileMentionShortcut = useCallback(() => {');
     const fileMentionShortcutEnd = mainTsx.indexOf('const applyChatFileMentionResult = useCallback', fileMentionShortcutStart);
@@ -1076,9 +1077,9 @@ describe('web chat integration', () => {
     expect(fileMentionShortcutBody).toContain('setChatConfigMenuOptionId(\'\');');
     expect(fileMentionShortcutBody).toContain('setChatConfigOverflowOpen(false);');
     expect(fileMentionShortcutBody).toContain('resolveChatFileMentionQuery(text, selectionStart)');
-    expect(fileMentionShortcutBody).toContain("const prefix = selectionStart > 0 && !/\\s/.test(text[selectionStart - 1]) ? ' @' : '@';");
-    expect(fileMentionShortcutBody).toContain('updateChatComposerText(nextText);');
-    expect(fileMentionShortcutBody).toContain('scheduleChatFileMentionSearch(nextText, nextSelectionStart);');
+    expect(fileMentionShortcutBody).toContain("const prefix = text && !/\\s$/.test(text) ? ' @' : '@';");
+    expect(fileMentionShortcutBody).toContain('chatRichComposerRef.current?.insertText(prefix);');
+    expect(fileMentionShortcutBody).toContain('scheduleChatFileMentionSearch(nextText, nextText.length);');
 
     const toolsStart = mainTsx.indexOf('className="chat-composer-tools"');
     const toolsEnd = mainTsx.indexOf('className="chat-config-options-wrap"', toolsStart);
@@ -1123,11 +1124,10 @@ describe('web chat integration', () => {
     expect(slashApplyStart).toBeGreaterThanOrEqual(0);
     expect(slashApplyEnd).toBeGreaterThan(slashApplyStart);
     const slashApplyBody = mainTsx.slice(slashApplyStart, slashApplyEnd);
-    expect(slashApplyBody).toContain('insertChatSlashCommandText(');
-    expect(slashApplyBody).toContain('chatComposerText,');
-    expect(slashApplyBody).toContain('input?.selectionStart ?? chatComposerText.length');
-    expect(slashApplyBody).toContain('updateChatComposerText(inserted.text);');
-    expect(slashApplyBody).toContain('input.setSelectionRange(inserted.selectionStart, inserted.selectionEnd);');
+    expect(slashApplyBody).toContain('chatRichComposerRef.current?.insertSkill({');
+    expect(slashApplyBody).toContain('command: command.name,');
+    expect(slashApplyBody).toContain('label: chatSlashCommandLabel(command.name),');
+    expect(slashApplyBody).toContain('chatRichComposerRef.current?.focus();');
     expect(slashApplyBody).toContain('setChatFileMentionMenuOpen(false);');
     expect(slashApplyBody).not.toContain('updateChatComposerText(next);');
 
@@ -1296,7 +1296,8 @@ describe('web chat integration', () => {
     expect(inputRow).toContain('className="chat-composer-action-column"');
     expect(inputRow).toContain('className="chat-send-button"');
     expect(inputRow).not.toContain('chat-composer-stop-trigger');
-    expect(mainTsx).toContain('const nextHeight = Math.max(32, Math.min(input.scrollHeight, 180));');
+    expect(mainTsx).toContain('const resizeChatComposerTextarea = useCallback((options: {scrollToEnd?: boolean} = {}) => {');
+    expect(mainTsx).toContain('chatRichComposerRef.current?.focus();');
 
     const toolsStart = mainTsx.indexOf('className="chat-composer-tools"');
     const toolsEnd = mainTsx.indexOf('className="chat-config-options-wrap"', toolsStart);
@@ -1329,12 +1330,13 @@ describe('web chat integration', () => {
     expect(stylesCss).toMatch(/\.chat-main \{[\s\S]*gap: 0;[\s\S]*\}/);
   });
 
-  test('scrolls the composer textarea to new voice transcript text after max height', () => {
+  test('keeps the rich composer focused for voice transcript text after max height', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
 
     expect(mainTsx).toContain('scrollToEnd?: boolean');
-    expect(mainTsx).toContain('input.scrollTop = input.scrollHeight;');
+    expect(mainTsx).toContain('chatRichComposerRef.current?.focus();');
+    expect(mainTsx).not.toContain('input.scrollTop = input.scrollHeight;');
     expect(mainTsx).toContain('resizeChatComposerTextarea({scrollToEnd: true})');
   });
 
@@ -1464,7 +1466,7 @@ describe('web chat integration', () => {
     expect(chatSection).not.toContain("setSettingsDetailView('voiceInput')");
     expect(settingsRootTsx).toContain('Doubao Streaming ASR 2.0');
     expect(settingsRootTsx).toContain('speechSettings.enabled ? (');
-    expect(mainTsx).toContain('const chatComposerHasSendableContent = chatComposerText.trim().length > 0 || chatAttachments.length > 0 || chatFileMentions.length > 0;');
+    expect(mainTsx).toContain('const chatComposerHasSendableContent = chatComposerHasSendableTokens(chatComposerTokens) || chatAttachments.length > 0;');
     expect(mainTsx).toContain('const [voiceCancelIntent, setVoiceCancelIntent] = useState(false);');
     expect(mainTsx).toContain('<VoiceInputButton');
     expect(mainTsx).toContain('recordingMode={voiceInteractionMode}');
@@ -2030,35 +2032,40 @@ describe('web chat integration', () => {
     const repositoryTs = readSourceText(path.join(projectRoot, 'web', 'src', 'registry', 'RegistryRepository.ts'));
     const workspaceServiceTs = readSourceText(path.join(projectRoot, 'web', 'src', 'registry', 'RegistryWorkspaceService.ts'));
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const composerTokensTs = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'composer', 'chatComposerTokens.ts'));
+    const promptAttachmentsTs = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'composer', 'chatPromptAttachments.ts'));
     const stylesCss = readWebStyles(projectRoot);
 
     expect(registryTypes).toContain('export interface RegistryFileIndexSearchResult');
     expect(registryTypes).toContain('export interface RegistryFileIndexSearchResponse');
     expect(repositoryTs).toContain('RegistryMethods.ProjectFSIndexSearch');
     expect(workspaceServiceTs).toContain('async searchFileIndex(');
-    expect(mainTsx).toContain('type ChatFileMention = {');
-    expect(mainTsx).toContain('fileMentions: ChatFileMention[];');
-    expect(mainTsx).toContain("const EMPTY_CHAT_COMPOSER_DRAFT: ChatComposerDraft = { text: '', attachments: [], fileMentions: [] };");
-    expect(mainTsx).toContain('const [chatFileMentions, setChatFileMentions] = useState<ChatFileMention[]>([]);');
-    expect(mainTsx).toContain('const chatFileMentionsRef = useRef<ChatFileMention[]>([]);');
-    expect(mainTsx).toContain('resolveChatFileMentionQuery(chatComposerTextRef.current, selectionStart)');
+    expect(mainTsx).not.toContain('type ChatFileMention = {');
+    expect(mainTsx).not.toContain('fileMentions: ChatFileMention[];');
+    expect(mainTsx).toContain("const EMPTY_CHAT_COMPOSER_DRAFT: ChatComposerDraft = { text: '', tokens: [], attachments: [] };");
+    expect(mainTsx).not.toContain('const [chatFileMentions, setChatFileMentions] = useState<ChatFileMention[]>([]);');
+    expect(mainTsx).not.toContain('const chatFileMentionsRef = useRef<ChatFileMention[]>([]);');
+    expect(mainTsx).toContain('resolveChatFileMentionQuery(text, selectionStart)');
     expect(mainTsx).toContain('service.searchFileIndex(activeProjectId, {');
     expect(mainTsx).toContain('querySessionId: chatFileMentionQuerySessionIdRef.current');
     expect(mainTsx).toContain('limit: CHAT_FILE_MENTION_SEARCH_LIMIT');
-    expect(mainTsx).toContain('removeChatFileMentionTriggerToken(');
-    expect(mainTsx).toContain('dedupeChatFileMentionsByPath');
-    expect(mainTsx).toContain("type: 'resource_link'");
-    expect(mainTsx).toContain('uri: mention.path');
-    expect(mainTsx).toContain('className="chat-file-mention-chip"');
-    expect(mainTsx).toContain('title={mention.path}');
+    expect(mainTsx).toContain('chatRichComposerRef.current?.insertFile({');
+    expect(mainTsx).not.toContain('removeChatFileMentionTriggerToken(');
+    expect(mainTsx).not.toContain('dedupeChatFileMentionsByPath');
+    expect(mainTsx).toContain('const serializedComposer = serializeChatComposerTokens(sourceTokens);');
+    expect(composerTokensTs).toContain("type: 'resource_link'");
+    expect(composerTokensTs).toContain('uri: token.path');
+    expect(promptAttachmentsTs).toContain('isProjectFileResourceLinkBlock');
+    expect(mainTsx).not.toContain('className="chat-file-mention-chip"');
     expect(mainTsx).toContain('className={`chat-file-mention-option${selected ? \' active\' : \'\'}`}');
+    expect(mainTsx).toContain('title={result.path}');
     expect(mainTsx).toContain('role="option"');
     expect(mainTsx).toContain('aria-selected={index === chatFileMentionActiveIndex}');
     expect(mainTsx).toContain('chatFileMentionActiveIndex');
     expect(mainTsx).toContain("event.key === 'ArrowDown'");
     expect(mainTsx).toContain("event.key === 'Tab'");
     expect(mainTsx).not.toContain('File mentions coming soon');
-    expect(stylesCss).toContain('.chat-file-mention-chip');
+    expect(stylesCss).toContain('.chat-composer-capsule.file');
     expect(stylesCss).toContain('.chat-file-mention-option');
     expect(stylesCss).toContain('.chat-file-mention-path');
   });
@@ -2080,7 +2087,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain("const chatComposerStopTriggerClassName = `chat-tool-button chat-composer-stop-trigger");
     expect(mainTsx).not.toContain('disabled={!selectedChatPromptRunning || selectedChatPromptCancelling}');
     expect(mainTsx).toContain('disabled={selectedChatPromptCancelling}');
-    expect(mainTsx).toContain('className="chat-file-mention-remove"');
+    expect(mainTsx).not.toContain('className="chat-file-mention-remove"');
     expect(mainTsx).toContain('<span className="chat-file-mention-name">{name}</span>');
     expect(mainTsx).toContain('<span className="chat-file-mention-path">{result.path}</span>');
 
@@ -2094,7 +2101,7 @@ describe('web chat integration', () => {
 
     expect(stylesCss).toContain('.chat-file-mention-trigger-button');
     expect(stylesCss).toContain('.chat-at-symbol:not(.codicon)');
-    expect(stylesCss).toContain('.chat-file-mention-remove');
+    expect(stylesCss).toContain('.chat-composer-capsule.file');
     expect(mainTsx).toContain('className="codicon codicon-code chat-composer-tool-glyph chat-slash-symbol"');
     expect(mainTsx).toContain('className="codicon codicon-file-code chat-composer-tool-glyph chat-at-symbol"');
     expect(mainTsx).toContain('className="codicon codicon-file-media chat-composer-tool-glyph"');
@@ -2107,7 +2114,7 @@ describe('web chat integration', () => {
     expect(stylesCss).not.toContain('.chat-attachment-action-button.file .codicon');
     expect(stylesCss).not.toContain('.chat-attachment-action-button.photo .codicon');
     expect(stylesCss).toMatch(/\.chat-file-mention-option \{[\s\S]*grid-template-columns: 16px minmax\(0, auto\) minmax\(0, 1fr\);/);
-    expect(stylesCss).toMatch(/\.chat-file-mention-chip \{[\s\S]*max-width: 190px;/);
+    expect(stylesCss).toMatch(/\.chat-composer-capsule,[\s\S]*\.chat-prompt-inline-capsule \{[\s\S]*max-width: min\(260px, 100%\);/);
     expect(stylesCss).toMatch(/\.chat-composer-stop-trigger \{[\s\S]*color: #f85149;[\s\S]*opacity: 1;/);
   });
 });

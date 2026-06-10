@@ -145,6 +145,16 @@ describe('web chat turn rendering', () => {
     expect(styles).toContain('.chat-prompt-attachment-name {');
   });
 
+  test('renders prompt inline capsules for new prompt file mentions', () => {
+    const chatTurn = readChatTurnView();
+    const styles = readStyles();
+
+    expect(chatTurn).toContain("from './composer/chatPromptInlineParts'");
+    expect(chatTurn).toContain('buildChatPromptInlineParts(');
+    expect(chatTurn).toContain('className={`chat-prompt-inline-capsule ${part.type}`}');
+    expect(styles).toContain('.chat-prompt-inline-capsule');
+  });
+
   test('renders prompt done stop reason labels without disabling copied partial output', () => {
     const main = readMain();
     const chatTurn = readChatTurnView();

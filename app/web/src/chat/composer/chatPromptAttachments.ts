@@ -34,13 +34,30 @@ function fileNameFromUri(uri: string): string {
   return decodeUriSegment(normalized.split('/').filter(Boolean).pop() ?? '');
 }
 
+function registryResourceLinkHasScheme(uri: string): boolean {
+  return /^[A-Za-z][A-Za-z0-9+.-]*:/.test(uri.trim());
+}
+
+export function isProjectFileResourceLinkBlock(block: unknown): block is RegistrySessionContentBlock {
+  if (!block || typeof block !== 'object') {
+    return false;
+  }
+  const item = block as RegistrySessionContentBlock;
+  const uri = cleanString(item.uri);
+  return item.type === 'resource_link' && !!uri && !registryResourceLinkHasScheme(uri);
+}
+
 export function isPromptAttachmentContentBlock(block: unknown): block is RegistrySessionContentBlock {
   if (!block || typeof block !== 'object') {
     return false;
   }
   const item = block as RegistrySessionContentBlock;
   if (item.type === 'resource_link') {
-    return !!(cleanString(item.uri) || cleanString(item.name));
+    const uri = cleanString(item.uri);
+    if (uri && !registryResourceLinkHasScheme(uri)) {
+      return false;
+    }
+    return !!(uri || cleanString(item.name));
   }
   if (item.type === 'image') {
     return !!cleanString(item.uri);

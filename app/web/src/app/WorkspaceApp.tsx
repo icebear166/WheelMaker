@@ -120,6 +120,13 @@ import { buildPromptDoneCopyRange } from '../chat/chatCopyRange';
 import {
   isPromptAttachmentContentBlock,
 } from '../chat/composer/chatPromptAttachments';
+import { ChatRichComposer, type ChatRichComposerHandle } from '../chat/composer/ChatRichComposer';
+import {
+  chatComposerHasSendableTokens,
+  normalizeChatComposerTokens,
+  serializeChatComposerTokens,
+  type ChatComposerToken,
+} from '../chat/composer/chatComposerTokens';
 import {
   buildPromptMarkdownImageFileName,
   renderMarkdownElementToPngBlob,
@@ -135,7 +142,6 @@ import {
   type ChatConfirmationReply,
   type ChatOptionReply,
 } from '../chat/chatOptionReplies';
-import { insertChatSlashCommandText } from '../chat/composer/chatSlashInsertion';
 import {
   isChatUserScrollLocked,
   nextChatUserScrollLockUntil,
@@ -470,10 +476,6 @@ type ChatAttachment = {
   attachmentId?: string;
   error?: string;
 };
-type ChatFileMention = {
-  path: string;
-  name: string;
-};
 type WideProjectActionMenuState = {
   projectId: string;
   kind: 'new' | 'resume';
@@ -519,8 +521,8 @@ type SkillInstallTarget = {
 };
 type ChatComposerDraft = {
   text: string;
+  tokens: ChatComposerToken[];
   attachments: ChatAttachment[];
-  fileMentions: ChatFileMention[];
 };
 type PendingChatPrompt = {
   sessionId: string;
@@ -707,7 +709,7 @@ const PORT_RELAY_CLEAR_SITE_DATA_TIMEOUT_MS = 1200;
 const PROJECT_INDEX_SCAN_CONCURRENCY = 2;
 const CHAT_FILE_MENTION_SEARCH_LIMIT = 20;
 const CHAT_FILE_MENTION_DEBOUNCE_MS = 140;
-const EMPTY_CHAT_COMPOSER_DRAFT: ChatComposerDraft = { text: '', attachments: [], fileMentions: [] };
+const EMPTY_CHAT_COMPOSER_DRAFT: ChatComposerDraft = { text: '', tokens: [], attachments: [] };
 const DEFAULT_PORT_RELAY_SNAPSHOT: RegistryPortRelaySnapshot = {ok: true, enabled: false, status: 'Disabled'};
 
 function relayOriginFromUrl(value: string): string {
@@ -764,25 +766,41 @@ function chatFileMentionName(path: string): string {
   return parts[parts.length - 1] || normalized || 'file';
 }
 
-function dedupeChatFileMentionsByPath(items: ChatFileMention[]): ChatFileMention[] {
-  const seen = new Set<string>();
-  const out: ChatFileMention[] = [];
-  for (const item of items) {
-    const path = item.path.trim();
-    if (!path || seen.has(path)) {
-      continue;
-    }
-    seen.add(path);
-    out.push({path, name: item.name.trim() || chatFileMentionName(path)});
-  }
-  return out;
-}
-
-function chatFileMentionsEqual(left: ChatFileMention[], right: ChatFileMention[]): boolean {
+function chatComposerTokensEqual(left: ChatComposerToken[], right: ChatComposerToken[]): boolean {
   if (left.length !== right.length) {
     return false;
   }
-  return left.every((item, index) => item.path === right[index]?.path && item.name === right[index]?.name);
+  return left.every((item, index) => {
+    const other = right[index];
+    if (!other || item.type !== other.type) {
+      return false;
+    }
+    if (item.type === 'text') {
+      return other.type === 'text' && item.text === other.text;
+    }
+    if (item.type === 'skill') {
+      return other.type === 'skill' &&
+        item.command === other.command &&
+        item.label === other.label;
+    }
+    return other.type === 'file' &&
+      item.path === other.path &&
+      item.name === other.name &&
+      item.label === other.label;
+  });
+}
+
+function chatComposerTokensFromText(text: string): ChatComposerToken[] {
+  return text ? [{type: 'text', text}] : [];
+}
+
+function chatSlashCommandLabel(name: string): string {
+  return name
+    .replace(/^\//, '')
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map(part => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(' ');
 }
 
 function resolveChatFileMentionQuery(text: string, cursor: number): {start: number; end: number; query: string} | null {
@@ -800,11 +818,6 @@ function resolveChatFileMentionQuery(text: string, cursor: number): {start: numb
     return null;
   }
   return {start: atIndex, end: safeCursor, query};
-}
-
-function removeChatFileMentionTriggerToken(text: string, start: number, end: number): {text: string; selectionStart: number} {
-  const nextText = `${text.slice(0, start)}${text.slice(end)}`;
-  return {text: nextText, selectionStart: start};
 }
 
 function registryResourceLinkHasScheme(uri: string): boolean {
@@ -2657,7 +2670,7 @@ export function App() {
   const chatAutoScrollFollowRef = useRef(true);
   const chatPointerScrollingRef = useRef(false);
   const chatUserScrollLockUntilRef = useRef(0);
-  const chatComposerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const chatRichComposerRef = useRef<ChatRichComposerHandle | null>(null);
   const chatPromptButtonRef = useRef<HTMLButtonElement | null>(null);
   const chatFileMentionButtonRef = useRef<HTMLButtonElement | null>(null);
   const chatAttachmentTrayRef = useRef<HTMLDivElement | null>(null);
@@ -2761,10 +2774,10 @@ export function App() {
   const [confirmError, setConfirmError] = useState('');
   const [chatConfigUpdatingKey, setChatConfigUpdatingKey] = useState('');
   const [chatComposerText, setChatComposerText] = useState('');
+  const [chatComposerTokens, setChatComposerTokens] = useState<ChatComposerToken[]>([]);
   const [chatAttachments, setChatAttachments] = useState<ChatAttachment[]>([]);
-  const [chatFileMentions, setChatFileMentions] = useState<ChatFileMention[]>([]);
   const chatAttachmentUploadPending = chatAttachments.some(isChatAttachmentUploadPending);
-  const chatComposerHasSendableContent = chatComposerText.trim().length > 0 || chatAttachments.length > 0 || chatFileMentions.length > 0;
+  const chatComposerHasSendableContent = chatComposerHasSendableTokens(chatComposerTokens) || chatAttachments.length > 0;
   const [voiceRecording, setVoiceRecording] = useState(false);
   const [voiceRecordingStatus, setVoiceRecordingStatus] = useState<VoiceRecordingStatus>('recording');
   const [voiceCancelIntent, setVoiceCancelIntent] = useState(false);
@@ -2780,8 +2793,8 @@ export function App() {
   const [toastMessage, setToastMessage] = useState('');
   const markdownImageExportIdRef = useRef(0);
   const chatComposerTextRef = useRef('');
+  const chatComposerTokensRef = useRef<ChatComposerToken[]>([]);
   const chatAttachmentsRef = useRef<ChatAttachment[]>([]);
-  const chatFileMentionsRef = useRef<ChatFileMention[]>([]);
   const chatComposerDraftsRef = useRef<Record<string, ChatComposerDraft>>({});
   const chatPendingPromptsByKeyRef = useRef<Record<string, PendingChatPrompt>>({});
   const chatPendingPromptTimersRef = useRef<Record<string, number>>({});
@@ -3107,16 +3120,8 @@ export function App() {
   };
 
   const resizeChatComposerTextarea = useCallback((options: {scrollToEnd?: boolean} = {}) => {
-    const input = chatComposerTextareaRef.current;
-    if (!input) {
-      return;
-    }
-    input.style.height = '0px';
-    const nextHeight = Math.max(32, Math.min(input.scrollHeight, 180));
-    input.style.height = `${nextHeight}px`;
-    input.style.overflowY = input.scrollHeight > 180 ? 'auto' : 'hidden';
     if (options.scrollToEnd) {
-      input.scrollTop = input.scrollHeight;
+      chatRichComposerRef.current?.focus();
     }
   }, []);
 
@@ -3257,15 +3262,20 @@ export function App() {
   }, [chatFileMentionMenuOpen, chatFileMentionActiveIndex, chatFileMentionResults]);
 
   const saveChatComposerDraft = useCallback(
-    (draftKey: string, text: string, attachments: ChatAttachment[], fileMentions: ChatFileMention[]) => {
+    (
+      draftKey: string,
+      text: string,
+      attachments: ChatAttachment[],
+      tokens: ChatComposerToken[] = chatComposerTokensRef.current,
+    ) => {
       const normalizedKey = draftKey.trim();
       if (!normalizedKey) {
         return;
       }
       const prev = chatComposerDraftsRef.current;
       const existing = prev[normalizedKey] ?? EMPTY_CHAT_COMPOSER_DRAFT;
-      const normalizedMentions = dedupeChatFileMentionsByPath(fileMentions);
-      const hasContent = text.length > 0 || attachments.length > 0 || normalizedMentions.length > 0;
+      const normalizedTokens = normalizeChatComposerTokens(tokens);
+      const hasContent = text.length > 0 || attachments.length > 0 || normalizedTokens.length > 0;
       if (!hasContent) {
         if (!(normalizedKey in prev)) {
           return;
@@ -3276,15 +3286,19 @@ export function App() {
         setChatComposerDrafts(next);
         return;
       }
-      if (existing.text === text && existing.attachments === attachments && chatFileMentionsEqual(existing.fileMentions, normalizedMentions)) {
+      if (
+        existing.text === text &&
+        existing.attachments === attachments &&
+        chatComposerTokensEqual(existing.tokens, normalizedTokens)
+      ) {
         return;
       }
       const next = {
         ...prev,
         [normalizedKey]: {
           text,
+          tokens: normalizedTokens,
           attachments,
-          fileMentions: normalizedMentions,
         },
       };
       chatComposerDraftsRef.current = next;
@@ -3293,14 +3307,36 @@ export function App() {
     [],
   );
 
+  const updateChatComposerTokens = useCallback(
+    (nextTokens: ChatComposerToken[]) => {
+      const normalizedTokens = normalizeChatComposerTokens(nextTokens);
+      const serialized = serializeChatComposerTokens(normalizedTokens);
+      chatComposerTokensRef.current = normalizedTokens;
+      chatComposerTextRef.current = serialized.text;
+      setChatComposerTokens(normalizedTokens);
+      setChatComposerText(serialized.text);
+      saveChatComposerDraft(
+        currentChatDraftKeyRef.current,
+        serialized.text,
+        chatAttachmentsRef.current,
+        normalizedTokens,
+      );
+    },
+    [saveChatComposerDraft],
+  );
+
   const updateChatComposerText = useCallback(
     (nextText: string) => {
+      const nextTokens = chatComposerTokensFromText(nextText);
+      chatComposerTokensRef.current = nextTokens;
+      setChatComposerTokens(nextTokens);
+      chatComposerTextRef.current = nextText;
       setChatComposerText(nextText);
       saveChatComposerDraft(
         currentChatDraftKeyRef.current,
         nextText,
         chatAttachmentsRef.current,
-        chatFileMentionsRef.current,
+        nextTokens,
       );
     },
     [saveChatComposerDraft],
@@ -3312,29 +3348,20 @@ export function App() {
 
   const applyChatSlashCommand = useCallback(
     (command: ChatSlashCommandOption) => {
-      const input = chatComposerTextareaRef.current;
-      const inserted = insertChatSlashCommandText(
-        chatComposerText,
-        command.name,
-        input?.selectionStart ?? chatComposerText.length,
-        input?.selectionEnd ?? input?.selectionStart ?? chatComposerText.length,
-      );
       setChatPromptMenuOpen(false);
       setChatFileMentionMenuOpen(false);
       setChatAttachmentTrayOpen(false);
       setChatConfigMenuOptionId('');
       setChatConfigOverflowOpen(false);
-      updateChatComposerText(inserted.text);
+      chatRichComposerRef.current?.insertSkill({
+        command: command.name,
+        label: chatSlashCommandLabel(command.name),
+      });
       window.requestAnimationFrame(() => {
-        const input = chatComposerTextareaRef.current;
-        if (!input) {
-          return;
-        }
-        input.focus();
-        input.setSelectionRange(inserted.selectionStart, inserted.selectionEnd);
+        chatRichComposerRef.current?.focus();
       });
     },
-    [chatComposerText, setChatConfigOverflowOpen, updateChatComposerText],
+    [setChatConfigOverflowOpen],
   );
 
   const openChatPromptMenu = useCallback(() => {
@@ -3344,7 +3371,7 @@ export function App() {
     setChatConfigOverflowOpen(false);
     setChatPromptMenuOpen(value => !value);
     window.requestAnimationFrame(() => {
-      chatComposerTextareaRef.current?.focus();
+      chatRichComposerRef.current?.focus();
     });
   }, [setChatConfigOverflowOpen]);
 
@@ -3355,7 +3382,7 @@ export function App() {
     setChatConfigOverflowOpen(false);
     setChatAttachmentTrayOpen(value => !value);
     window.requestAnimationFrame(() => {
-      chatComposerTextareaRef.current?.focus();
+      chatRichComposerRef.current?.focus();
     });
   }, [setChatConfigOverflowOpen]);
 
@@ -3404,7 +3431,6 @@ export function App() {
           normalizedDraftKey,
           chatComposerTextRef.current,
           next,
-          chatFileMentionsRef.current,
         );
         if (next.length === 0 && chatFileInputRef.current) {
           chatFileInputRef.current.value = '';
@@ -3418,39 +3444,9 @@ export function App() {
       if (next === currentDraft.attachments) {
         return;
       }
-      saveChatComposerDraft(normalizedDraftKey, currentDraft.text, next, currentDraft.fileMentions);
+      saveChatComposerDraft(normalizedDraftKey, currentDraft.text, next, currentDraft.tokens);
     },
     [getChatDraftGeneration, saveChatComposerDraft],
-  );
-
-  const applyChatFileMentions = useCallback(
-    (
-      updater: (current: ChatFileMention[]) => ChatFileMention[],
-      draftKey = currentChatDraftKeyRef.current,
-    ) => {
-      const normalizedDraftKey = draftKey.trim();
-      if (!normalizedDraftKey) {
-        return;
-      }
-      if (normalizedDraftKey === currentChatDraftKeyRef.current) {
-        const next = dedupeChatFileMentionsByPath(updater(chatFileMentionsRef.current));
-        chatFileMentionsRef.current = next;
-        setChatFileMentions(next);
-        saveChatComposerDraft(
-          normalizedDraftKey,
-          chatComposerTextRef.current,
-          chatAttachmentsRef.current,
-          next,
-        );
-        return;
-      }
-      const currentDraft =
-        chatComposerDraftsRef.current[normalizedDraftKey] ??
-        EMPTY_CHAT_COMPOSER_DRAFT;
-      const next = dedupeChatFileMentionsByPath(updater(currentDraft.fileMentions));
-      saveChatComposerDraft(normalizedDraftKey, currentDraft.text, currentDraft.attachments, next);
-    },
-    [saveChatComposerDraft],
   );
 
   const clearChatFileMentionSearchTimer = useCallback(() => {
@@ -3540,15 +3536,9 @@ export function App() {
   );
 
   const openChatFileMentionShortcut = useCallback(() => {
-    const input = chatComposerTextareaRef.current;
     const text = chatComposerTextRef.current;
-    const rawSelectionStart = input?.selectionStart ?? text.length;
-    const rawSelectionEnd = input?.selectionEnd ?? rawSelectionStart;
-    const selectionStart = Math.max(0, Math.min(text.length, rawSelectionStart));
-    const selectionEnd = Math.max(selectionStart, Math.min(text.length, rawSelectionEnd));
-    const existingQuery = selectionStart === selectionEnd
-      ? resolveChatFileMentionQuery(text, selectionStart)
-      : null;
+    const selectionStart = text.length;
+    const existingQuery = resolveChatFileMentionQuery(text, selectionStart);
 
     setChatPromptMenuOpen(false);
     setChatAttachmentTrayOpen(false);
@@ -3558,30 +3548,19 @@ export function App() {
     if (existingQuery) {
       scheduleChatFileMentionSearch(text, selectionStart);
       window.requestAnimationFrame(() => {
-        const nextInput = chatComposerTextareaRef.current;
-        if (!nextInput) {
-          return;
-        }
-        nextInput.focus();
-        nextInput.setSelectionRange(selectionStart, selectionStart);
+        chatRichComposerRef.current?.focus();
       });
       return;
     }
 
-    const prefix = selectionStart > 0 && !/\s/.test(text[selectionStart - 1]) ? ' @' : '@';
-    const nextText = `${text.slice(0, selectionStart)}${prefix}${text.slice(selectionEnd)}`;
-    const nextSelectionStart = selectionStart + prefix.length;
-    updateChatComposerText(nextText);
-    scheduleChatFileMentionSearch(nextText, nextSelectionStart);
+    const prefix = text && !/\s$/.test(text) ? ' @' : '@';
+    chatRichComposerRef.current?.insertText(prefix);
+    const nextText = `${text}${prefix}`;
+    scheduleChatFileMentionSearch(nextText, nextText.length);
     window.requestAnimationFrame(() => {
-      const nextInput = chatComposerTextareaRef.current;
-      if (!nextInput) {
-        return;
-      }
-      nextInput.focus();
-      nextInput.setSelectionRange(nextSelectionStart, nextSelectionStart);
+      chatRichComposerRef.current?.focus();
     });
-  }, [scheduleChatFileMentionSearch, setChatConfigOverflowOpen, updateChatComposerText]);
+  }, [scheduleChatFileMentionSearch, setChatConfigOverflowOpen]);
 
   const applyChatFileMentionResult = useCallback(
     (result: RegistryFileIndexSearchResult) => {
@@ -3589,36 +3568,17 @@ export function App() {
       if (!path) {
         return;
       }
-      const input = chatComposerTextareaRef.current;
-      const selectionStart = input?.selectionStart ?? chatComposerTextRef.current.length;
-      const mentionQuery = resolveChatFileMentionQuery(chatComposerTextRef.current, selectionStart);
-      const removed = mentionQuery
-        ? removeChatFileMentionTriggerToken(chatComposerTextRef.current, mentionQuery.start, mentionQuery.end)
-        : {text: chatComposerTextRef.current, selectionStart};
-      applyChatFileMentions(current => [
-        ...current,
-        {path, name: result.name?.trim() || chatFileMentionName(path)},
-      ]);
-      updateChatComposerText(removed.text);
+      chatRichComposerRef.current?.insertFile({
+        path,
+        name: result.name?.trim() || chatFileMentionName(path),
+      });
       setChatFileMentionMenuOpen(false);
       resetChatFileMentionSearchSession();
       window.requestAnimationFrame(() => {
-        const nextInput = chatComposerTextareaRef.current;
-        if (!nextInput) {
-          return;
-        }
-        nextInput.focus();
-        nextInput.setSelectionRange(removed.selectionStart, removed.selectionStart);
+        chatRichComposerRef.current?.focus();
       });
     },
-    [applyChatFileMentions, resetChatFileMentionSearchSession, updateChatComposerText],
-  );
-
-  const removeChatFileMention = useCallback(
-    (path: string) => {
-      applyChatFileMentions(current => current.filter(item => item.path !== path));
-    },
-    [applyChatFileMentions],
+    [resetChatFileMentionSearchSession],
   );
 
   const appendChatAttachments = useCallback(
@@ -3896,12 +3856,12 @@ export function App() {
   }, [chatComposerText]);
 
   useEffect(() => {
-    chatAttachmentsRef.current = chatAttachments;
-  }, [chatAttachments]);
+    chatComposerTokensRef.current = chatComposerTokens;
+  }, [chatComposerTokens]);
 
   useEffect(() => {
-    chatFileMentionsRef.current = chatFileMentions;
-  }, [chatFileMentions]);
+    chatAttachmentsRef.current = chatAttachments;
+  }, [chatAttachments]);
 
   useEffect(() => {
     connectedRef.current = connected;
@@ -3951,15 +3911,17 @@ export function App() {
       chatComposerDraftsRef.current[currentChatDraftKey] ??
       EMPTY_CHAT_COMPOSER_DRAFT;
     if (chatComposerTextRef.current !== draft.text) {
+      chatComposerTextRef.current = draft.text;
       setChatComposerText(draft.text);
+    }
+    const draftTokens = draft.tokens ?? chatComposerTokensFromText(draft.text);
+    if (!chatComposerTokensEqual(chatComposerTokensRef.current, draftTokens)) {
+      chatComposerTokensRef.current = draftTokens;
+      setChatComposerTokens(draftTokens);
     }
     if (chatAttachmentsRef.current !== draft.attachments) {
       chatAttachmentsRef.current = draft.attachments;
       setChatAttachments(draft.attachments);
-    }
-    if (chatFileMentionsRef.current !== draft.fileMentions) {
-      chatFileMentionsRef.current = draft.fileMentions;
-      setChatFileMentions(draft.fileMentions);
     }
     if (draft.attachments.length === 0 && chatFileInputRef.current) {
       chatFileInputRef.current.value = '';
@@ -4642,7 +4604,6 @@ export function App() {
         measureChatComposerTop,
         chatComposerText,
         chatAttachments.length,
-        chatFileMentions.length,
         voiceRecording,
         chatKeyboardInset,
         windowHeight,
@@ -8685,12 +8646,12 @@ export function App() {
   const resetChatComposer = () => {
     chatAttachmentsRef.current.forEach(revokeChatAttachmentObjectUrl);
     chatComposerTextRef.current = '';
+    chatComposerTokensRef.current = [];
     chatAttachmentsRef.current = [];
-    chatFileMentionsRef.current = [];
     bumpChatDraftGeneration(currentChatDraftKeyRef.current);
     setChatComposerText('');
+    setChatComposerTokens([]);
     setChatAttachments([]);
-    setChatFileMentions([]);
     setChatFileMentionMenuOpen(false);
     saveChatComposerDraft(currentChatDraftKeyRef.current, '', [], []);
     if (chatFileInputRef.current) {
@@ -9266,13 +9227,17 @@ export function App() {
       return;
     }
     const sourceAttachments = options.attachmentsOverride ?? chatAttachments;
-    const sourceFileMentions = chatFileMentionsRef.current;
-    const trimmedText = (options.textOverride ?? chatComposerText).trim();
-    if (trimmedText === '/cancel' && sourceAttachments.length === 0 && sourceFileMentions.length === 0 && !options.blocksOverride) {
+    const sourceTokens = options.textOverride !== undefined
+      ? chatComposerTokensFromText(options.textOverride)
+      : chatComposerTokensRef.current;
+    const serializedComposer = serializeChatComposerTokens(sourceTokens);
+    const composerText = options.blocksOverride ? (options.textOverride ?? '') : serializedComposer.text;
+    const trimmedText = composerText.trim();
+    if (trimmedText === '/cancel' && sourceAttachments.length === 0 && !options.blocksOverride) {
       setError('Use the stop button to cancel in app.');
       return;
     }
-    if (!options.blocksOverride && !trimmedText && sourceAttachments.length === 0 && sourceFileMentions.length === 0) {
+    if (!options.blocksOverride && !trimmedText && sourceAttachments.length === 0) {
       return;
     }
     if (options.blocksOverride && options.blocksOverride.length === 0) {
@@ -9306,18 +9271,11 @@ export function App() {
       if (options.blocksOverride) {
         blocks.push(...options.blocksOverride.map(block => ({...block})));
       } else {
-        if (trimmedText) {
-          blocks.push({ type: 'text', text: trimmedText });
-        }
-        blocks.push(...sourceFileMentions.map(mention => ({
-          type: 'resource_link' as const,
-          uri: mention.path,
-          name: mention.name,
-        })));
+        blocks.push(...serializedComposer.blocks.map(block => ({...block})));
         blocks.push(...uploadedAttachments.map(attachment => attachment.block).filter(isRegistryChatContentBlock));
       }
       if (blocks.length === 0) return;
-      const firstAttachmentName = sourceFileMentions[0]?.name || uploadedAttachments[0]?.name || '';
+      const firstAttachmentName = uploadedAttachments[0]?.name || '';
       const previewText = trimmedText || firstAttachmentName || msgText('prompt_request', {contentBlocks: blocks}).trim();
       const createdAt = new Date().toISOString();
       rememberPendingChatPrompt(runtimeKey, {
@@ -10058,10 +10016,9 @@ export function App() {
       setError('Fill Volcengine API Key in Chat settings first.');
       return;
     }
-    const input = chatComposerTextareaRef.current;
     const baseText = chatComposerTextRef.current;
-    const insertStart = input?.selectionStart ?? baseText.length;
-    const insertEnd = input?.selectionEnd ?? insertStart;
+    const insertStart = baseText.length;
+    const insertEnd = insertStart;
     logVoiceInputDiagnostic('debug', 'start_requested', {
       connected,
       model: settings.model,
@@ -10207,20 +10164,6 @@ export function App() {
     return attachments;
   };
 
-  const buildChatFileMentionsFromBlocks = (blocks: RegistryChatContentBlock[]): ChatFileMention[] => {
-    return dedupeChatFileMentionsByPath(
-      blocks
-        .filter(isProjectFileMentionBlock)
-        .map(block => {
-          const path = block.uri?.trim() ?? '';
-          return {
-            path,
-            name: block.name?.trim() || chatFileMentionName(path),
-          };
-        }),
-    );
-  };
-
   const retryPendingChatPrompt = (runtimeKey: string) => {
     const pending = chatPendingPromptsByKeyRef.current[runtimeKey];
     if (!pending) return;
@@ -10236,24 +10179,23 @@ export function App() {
     const pending = chatPendingPromptsByKeyRef.current[runtimeKey];
     if (!pending) return;
     if (
-      (chatComposerTextRef.current.trim() || chatAttachmentsRef.current.length > 0 || chatFileMentionsRef.current.length > 0) &&
+      (chatComposerTextRef.current.trim() || chatAttachmentsRef.current.length > 0 || chatComposerTokensRef.current.length > 0) &&
       !window.confirm('Replace the current draft with this undelivered message?')
     ) {
       return;
     }
     const text = extractTextFromACPContent(pending.blocks);
     const attachments = buildChatAttachmentsFromBlocks(pending.blocks);
-    const fileMentions = buildChatFileMentionsFromBlocks(pending.blocks);
+    const tokens = chatComposerTokensFromText(text);
     chatComposerTextRef.current = text;
+    chatComposerTokensRef.current = tokens;
     chatAttachmentsRef.current = attachments;
-    chatFileMentionsRef.current = fileMentions;
     bumpChatDraftGeneration(currentChatDraftKeyRef.current);
     setChatComposerText(text);
+    setChatComposerTokens(tokens);
     setChatAttachments(attachments);
-    setChatFileMentions(fileMentions);
-    saveChatComposerDraft(currentChatDraftKeyRef.current, text, attachments, fileMentions);
+    saveChatComposerDraft(currentChatDraftKeyRef.current, text, attachments, tokens);
     forgetPendingChatPrompt(runtimeKey);
-    window.setTimeout(resizeChatComposerTextarea, 0);
   };
 
   const cancelSelectedChatPrompt = async () => {
@@ -15825,23 +15767,8 @@ export function App() {
                 enqueueChatAttachmentFiles(files, attachmentDraftKey, attachmentDraftGeneration);
               }}
             >
-              {chatFileMentions.length > 0 || chatAttachments.length > 0 ? (
+              {chatAttachments.length > 0 ? (
                 <div className="chat-attachment-preview-list">
-                  {chatFileMentions.map(mention => (
-                    <div key={`file-mention:${mention.path}`} className="chat-file-mention-chip" title={mention.path}>
-                      <span className="codicon codicon-file-code" aria-hidden="true" />
-                      <span className="chat-file-mention-chip-name">{mention.name}</span>
-                      <button
-                        type="button"
-                        className="chat-file-mention-remove"
-                        onClick={() => removeChatFileMention(mention.path)}
-                        title="Remove file"
-                        aria-label={`Remove ${mention.name}`}
-                      >
-                        <span className="codicon codicon-close" />
-                      </button>
-                    </div>
-                  ))}
                   {chatAttachments.map(attachment => {
                     const previewSrc = chatAttachmentPreviewSrc(attachment);
                     const pending = isChatAttachmentUploadPending(attachment);
@@ -15903,25 +15830,23 @@ export function App() {
               ) : null}
               <div className="chat-composer-input-row">
                 <div className="chat-composer-input-shell">
-                  <textarea
-                    ref={chatComposerTextareaRef}
-                    rows={1}
+                  <ChatRichComposer
+                    ref={chatRichComposerRef}
                     className="chat-composer-input"
-                    value={chatComposerText}
+                    tokens={chatComposerTokens}
+                    onTokensChange={updateChatComposerTokens}
                     readOnly={chatSending}
                     enterKeyHint={isWide ? undefined : 'send'}
-                    onChange={event => {
-                      if (voiceRecordingRef.current) {
-                        event.preventDefault();
-                        return;
-                      }
-                      if (voiceAwaitingFinalRef.current) {
-                        event.preventDefault();
+                    slashCommands={chatSlashCommands.map(command => ({
+                      command: command.name,
+                      label: chatSlashCommandLabel(command.name),
+                    }))}
+                    onPlainTextChange={(text, cursor) => {
+                      if (voiceRecordingRef.current || voiceAwaitingFinalRef.current) {
                         return;
                       }
                       closeChatAttachmentTray();
-                      updateChatComposerText(event.target.value);
-                      scheduleChatFileMentionSearch(event.target.value, event.target.selectionStart ?? event.target.value.length);
+                      scheduleChatFileMentionSearch(text, cursor);
                     }}
                     onPaste={event => {
                       if (voiceRecordingRef.current) {
@@ -16035,7 +15960,14 @@ export function App() {
                         sendChatMessage().catch(() => undefined);
                       }
                     }}
-                    placeholder="Send a message..."
+                    onSend={() => {
+                      if (!isWide || isWindowsPlatform) {
+                        if (chatSending || chatAttachmentUploadPending) {
+                          return;
+                        }
+                        sendChatMessage().catch(() => undefined);
+                      }
+                    }}
                   />
                 </div>
                 <div className="chat-composer-action-column">
