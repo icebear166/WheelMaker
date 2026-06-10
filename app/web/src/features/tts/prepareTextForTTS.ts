@@ -1,15 +1,13 @@
 /**
  * Clean markdown text for TTS synthesis.
- * Strips thinking blocks, code blocks, markdown syntax, etc.
+ * Strips code blocks, markdown syntax, etc.
  * Returns plain text suitable for speech synthesis.
+ *
+ * Note: thinking blocks (agent_thought_chunk) are already excluded
+ * upstream by buildPromptDoneCopyRange, so no need to filter here.
  */
 export function prepareTextForTTS(markdown: string): string {
   let text = markdown;
-
-  // Remove <think>...</think> blocks (various formats)
-  text = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
-  text = text.replace(/<think>[\s\S]*?<\/thinking>/gi, '');
-  text = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
 
   // Remove fenced code blocks (```...```)
   text = text.replace(/```[\s\S]*?```/g, '');
