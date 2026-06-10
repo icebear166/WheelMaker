@@ -401,11 +401,15 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain("import { buildPromptDoneCopyRange } from '../chat/chatCopyRange';");
     expect(mainTsx).toContain('resolveMarkdownImageExportWidth,');
     expect(mainTsx).toContain('type MarkdownImageExportMode,');
-    expect(mainTsx).toContain("import { outputResponseImage } from '../chat/export/responseImageOutput';");
+    expect(mainTsx).toContain("import { outputResponseImage, type ResponseImageOutputResult } from '../chat/export/responseImageOutput';");
     expect(mainTsx).toContain('exportMode: MarkdownImageExportMode;');
     expect(mainTsx).toContain('const markdownImageExportWidth = resolveMarkdownImageExportWidth(exportMode);');
     expect(mainTsx).toContain("style={{'--markdown-image-export-width': `${markdownImageExportWidth}px`} as React.CSSProperties}");
     expect(mainTsx).toContain('data-export-mode={exportMode}');
+    expect(mainTsx).toContain('const [toastMessage, setToastMessage] = useState(\'\');');
+    expect(mainTsx).toContain("if (result.status === 'copied') {");
+    expect(mainTsx).toContain("setToastMessage('Response image copied to clipboard.');");
+    expect(mainTsx).toContain('className="app-toast"');
     expect(mainTsx).toContain('const copyRange = message.method === \'prompt_done\'');
     expect(chatTurnTsx).toContain('className="chat-prompt-actions"');
     expect(chatTurnTsx).toContain('className="chat-prompt-action-button"');
@@ -434,6 +438,10 @@ describe('web chat integration', () => {
     expect(exportTableCellBlock).toContain('overflow-wrap: anywhere;');
     expect(exportTableCellBlock).toContain('word-break: break-word;');
     expect(exportTableCellBlock).toBe(cssRuleBlockContainingSelector(stylesCss, '.markdown-image-export-surface td'));
+    const exportLinkBlock = cssRuleBlockContainingSelector(stylesCss, '.markdown-image-export-surface a');
+    expect(exportLinkBlock).toContain('color: color-mix(in srgb, var(--accent) 82%, var(--text));');
+    expect(exportLinkBlock).toBe(cssRuleBlockContainingSelector(stylesCss, '.markdown-image-export-surface a:visited'));
+    expect(stylesCss).toContain('.app-toast {');
     const sendExistingStart = mainTsx.indexOf('const sendChatMessage = async');
     const sendEnd = mainTsx.indexOf('const sendDirectChatText = async (text: string) => {', sendExistingStart);
     const sendBlock = mainTsx.slice(sendExistingStart, sendEnd);

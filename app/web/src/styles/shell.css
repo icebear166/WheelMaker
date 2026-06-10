@@ -17,6 +17,24 @@
   animation: wmFadeIn 160ms ease-out;
 }
 
+.app-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 240;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 94%, var(--bg));
+  color: var(--text);
+  box-shadow: 0 12px 28px color-mix(in srgb, #000 22%, transparent);
+  font-size: 12px;
+  line-height: 1.35;
+  pointer-events: none;
+}
+
 .desktop-titlebar {
   flex: 0 0 32px;
   height: 32px;

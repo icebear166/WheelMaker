@@ -474,7 +474,7 @@ export async function tokenizeShikiCode(
   }
   const lines = (code || ' ').split('\n');
   return {
-    tokens: lines.map(line => [{content: line, fontStyle: 0}]),
+    tokens: lines.map(line => [{content: line, fontStyle: 0, offset: 0}]),
     fg: 'inherit',
     bg: 'inherit',
     themeName: '',

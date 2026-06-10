@@ -1,6 +1,7 @@
 import React from 'react';
 
 import {CHAT_FONT_OPTIONS, isChatFontId, type ChatFontId} from '../chat/chatTypography';
+import {CHAT_VIEW_WIDTH_OPTIONS, isChatViewWidth, type ChatViewWidth} from '../chat/chatViewWidth';
 import {normalizeAppDiagnosticLogLevel, type AppDiagnosticLogLevel} from '../debug/appDiagnostics';
 import {SPEECH_MODEL_OPTIONS, normalizeSpeechSettings, type SpeechSettings} from '../features/speech/speechSettings';
 import {TTS_MODEL_OPTIONS, TTS_VOICE_OPTIONS, normalizeTtsSettings, type TtsSettings, type TtsModelId, type TtsVoiceId} from '../features/tts/ttsSettings';
@@ -30,6 +31,8 @@ type SettingsRootContentProps = {
   isWide: boolean;
   floatingControlIdleOpacityPercent: number;
   setFloatingControlIdleOpacity: (value: number) => void;
+  chatViewWidth: ChatViewWidth;
+  setChatViewWidth: (value: ChatViewWidth) => void;
   hideToolCalls: boolean;
   setHideToolCalls: (value: boolean) => void;
   promptCompletionNotificationsEnabled: boolean;
@@ -89,6 +92,8 @@ export function SettingsRootContent({
   isWide,
   floatingControlIdleOpacityPercent,
   setFloatingControlIdleOpacity,
+  chatViewWidth,
+  setChatViewWidth,
   hideToolCalls,
   setHideToolCalls,
   promptCompletionNotificationsEnabled,
@@ -156,6 +161,28 @@ export function SettingsRootContent({
               onChange={e => setGestureNavigation(e.target.checked)}
             />
           </label>
+          {isWide ? (
+            <label className="settings-row sidebar-setting-row">
+              <span>
+                <span className="codicon codicon-layout settings-row-icon" aria-hidden="true" />
+                Chat View Width
+              </span>
+              <select
+                className="sidebar-setting-select"
+                value={chatViewWidth}
+                onChange={event => {
+                  const next = event.target.value;
+                  if (isChatViewWidth(next)) setChatViewWidth(next);
+                }}
+              >
+                {CHAT_VIEW_WIDTH_OPTIONS.map(item => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           {!isWide ? (
             <label className="settings-row sidebar-setting-row settings-range-row">
               <span>

@@ -112,6 +112,11 @@ import {
   resolveChatFontFamily,
   type ChatFontId,
 } from '../chat/chatTypography';
+import {
+  DEFAULT_CHAT_VIEW_WIDTH,
+  isChatViewWidth,
+  type ChatViewWidth,
+} from '../chat/chatViewWidth';
 import { buildPromptDoneCopyRange } from '../chat/chatCopyRange';
 import {
   isPromptAttachmentContentBlock,
@@ -122,7 +127,7 @@ import {
   resolveMarkdownImageExportWidth,
   type MarkdownImageExportMode,
 } from '../chat/export/chatMarkdownImageExport';
-import { outputResponseImage } from '../chat/export/responseImageOutput';
+import { outputResponseImage, type ResponseImageOutputResult } from '../chat/export/responseImageOutput';
 import {createRegistryDebugStore} from '../debug/registryDebug';
 import type {RegistryDebugRecord} from '../debug/registryDebug';
 import {
@@ -1779,7 +1784,7 @@ type MarkdownImageExportSurfaceProps = {
   exportMode: MarkdownImageExportMode;
   markdownComponents: Components;
   markdownUrlTransform: (value: string) => string;
-  onComplete: () => void;
+  onComplete: (result: ResponseImageOutputResult) => void;
   onRenderError: (message: string) => void;
   onShareError: (message: string) => void;
 };
@@ -1831,7 +1836,7 @@ const MarkdownImageExportSurface = React.memo(function MarkdownImageExportSurfac
           onShareError(result.error || result.status);
           return;
         }
-        onComplete();
+        onComplete(result);
       } catch (err) {
         if (!cancelled) {
           onShareError(err instanceof Error ? err.message : String(err));
@@ -2098,6 +2103,12 @@ export function App() {
       isChatFontId(persistedGlobal.chatFont)
       ? persistedGlobal.chatFont
       : DEFAULT_CHAT_FONT,
+  );
+  const [chatViewWidth, setChatViewWidth] = useState<ChatViewWidth>(
+    typeof persistedGlobal.chatViewWidth === 'string' &&
+      isChatViewWidth(persistedGlobal.chatViewWidth)
+      ? persistedGlobal.chatViewWidth
+      : DEFAULT_CHAT_VIEW_WIDTH,
   );
   const [wrapLines, setWrapLines] = useState(!!persistedGlobal.wrapLines);
   const [showLineNumbers, setShowLineNumbers] = useState(
@@ -2768,6 +2779,7 @@ export function App() {
   const [chatCancellingRuntimeKey, setChatCancellingRuntimeKey] = useState('');
   const [markdownImageExportRequest, setMarkdownImageExportRequest] = useState<MarkdownImageExportRequest | null>(null);
   const [exportingMarkdownImageTurnIndex, setExportingMarkdownImageTurnIndex] = useState<number | null>(null);
+  const [toastMessage, setToastMessage] = useState('');
   const markdownImageExportIdRef = useRef(0);
   const chatComposerTextRef = useRef('');
   const chatAttachmentsRef = useRef<ChatAttachment[]>([]);
@@ -3189,6 +3201,15 @@ export function App() {
     }) as React.CSSProperties,
     [chatComposerHeight, chatFontFamily, chatKeyboardInset],
   );
+  const chatMainClassName = isWide
+    ? (chatViewWidth === 'fixed-560' ? 'chat-main chat-view-width-fixed-560' : 'chat-main')
+    : 'chat-main';
+
+  useEffect(() => {
+    if (!toastMessage) return undefined;
+    const timer = window.setTimeout(() => setToastMessage(''), 2200);
+    return () => window.clearTimeout(timer);
+  }, [toastMessage]);
 
   useEffect(() => {
     if (!chatSlashMenuVisible) {
@@ -5175,6 +5196,7 @@ export function App() {
       codeLineHeight,
       codeTabSize,
       chatFont,
+      chatViewWidth,
       wrapLines,
       showLineNumbers,
       hideToolCalls,
@@ -5205,6 +5227,7 @@ export function App() {
     codeLineHeight,
     codeTabSize,
     chatFont,
+    chatViewWidth,
     wrapLines,
     showLineNumbers,
     hideToolCalls,
@@ -14197,6 +14220,8 @@ export function App() {
         isWide={isWide}
         floatingControlIdleOpacityPercent={floatingControlIdleOpacityPercent}
         setFloatingControlIdleOpacity={setFloatingControlIdleOpacity}
+        chatViewWidth={chatViewWidth}
+        setChatViewWidth={setChatViewWidth}
         hideToolCalls={hideToolCalls}
         setHideToolCalls={setHideToolCalls}
         promptCompletionNotificationsEnabled={promptCompletionNotificationsEnabled}
@@ -15307,9 +15332,12 @@ export function App() {
     });
   };
 
-  const completeMarkdownImageExport = useCallback(() => {
+  const completeMarkdownImageExport = useCallback((result: ResponseImageOutputResult) => {
     setMarkdownImageExportRequest(null);
     setExportingMarkdownImageTurnIndex(null);
+    if (result.status === 'copied') {
+      setToastMessage('Response image copied to clipboard.');
+    }
   }, []);
 
   const failMarkdownImageExport = useCallback((message: string) => {
@@ -15415,7 +15443,10 @@ export function App() {
       <div
         key={`${selectedChatEncodedKey}:${message.turnIndex}:${message.method}`}
         data-chat-message-key={chatMessageDomKey(message)}
-        className={searchHighlighted ? 'chat-turn-search-highlight' : undefined}
+        className={[
+          'chat-view-content',
+          searchHighlighted ? 'chat-turn-search-highlight' : '',
+        ].filter(Boolean).join(' ')}
       >
         <ChatTurnView
           message={message}
@@ -15459,7 +15490,10 @@ export function App() {
       ? buildChatRuntimeKey(selectedArchivedKey.projectId, selectedArchivedKey.sessionId)
       : 'archived-session';
     return (
-      <div key={`${runtimeKey}:${message.turnIndex}:${message.method}`}>
+      <div
+        key={`${runtimeKey}:${message.turnIndex}:${message.method}`}
+        className="chat-view-content"
+      >
         <ChatTurnView
           message={message}
           promptStatus={null}
@@ -15477,15 +15511,17 @@ export function App() {
       ? sourceMessages[displayItem.sourceIndex]
       : undefined;
     const content = displayItem.kind === 'pending' && selectedPendingPrompt && !chatReadOnlyPreview ? (
-      <ChatTurnView
-        message={buildPendingPromptMessage(selectedPendingPrompt)}
-        promptStatus={selectedPendingPrompt.status}
-        hideToolCalls={hideToolCalls}
-        markdownComponents={chatMarkdownComponents}
-        markdownUrlTransform={chatMarkdownUrlTransform}
-        onRetryPendingPrompt={() => retryPendingChatPrompt(selectedChatEncodedKey)}
-        onEditPendingPrompt={() => editPendingChatPrompt(selectedChatEncodedKey)}
-      />
+      <div className="chat-view-content">
+        <ChatTurnView
+          message={buildPendingPromptMessage(selectedPendingPrompt)}
+          promptStatus={selectedPendingPrompt.status}
+          hideToolCalls={hideToolCalls}
+          markdownComponents={chatMarkdownComponents}
+          markdownUrlTransform={chatMarkdownUrlTransform}
+          onRetryPendingPrompt={() => retryPendingChatPrompt(selectedChatEncodedKey)}
+          onEditPendingPrompt={() => editPendingChatPrompt(selectedChatEncodedKey)}
+        />
+      </div>
     ) : sourceMessage && chatReadOnlyPreview ? (
       renderArchivedChatMessageTurn(sourceMessage)
     ) : sourceMessage ? (
@@ -15644,7 +15680,7 @@ export function App() {
             )}
           </div>
           <div
-            className="chat-main"
+            className={chatMainClassName}
             style={chatMainStyle}
           >
             <div
@@ -17256,6 +17292,11 @@ export function App() {
           onRenderError={failMarkdownImageExport}
           onShareError={failMarkdownImageShare}
         />
+      ) : null}
+      {toastMessage ? (
+        <div className="app-toast" role="status" aria-live="polite">
+          {toastMessage}
+        </div>
       ) : null}
       {appRenameDialog}
       {appConfirmDialog}

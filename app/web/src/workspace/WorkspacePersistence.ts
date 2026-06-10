@@ -16,6 +16,11 @@ import {
   type ChatFontId,
 } from '../chat/chatTypography';
 import {
+  DEFAULT_CHAT_VIEW_WIDTH,
+  isChatViewWidth,
+  type ChatViewWidth,
+} from '../chat/chatViewWidth';
+import {
   normalizePortRelayListenPort,
   normalizePortRelayTarget,
   normalizePortRelayTargets,
@@ -86,6 +91,7 @@ export type PersistedGlobalState = {
   codeLineHeight: number;
   codeTabSize: number;
   chatFont: ChatFontId;
+  chatViewWidth: ChatViewWidth;
   speechSettings: SpeechSettings;
   ttsSettings: TtsSettings;
   wrapLines: boolean;
@@ -171,6 +177,7 @@ const GLOBAL_KEYS = {
   codeLineHeight: 'codeLineHeight',
   codeTabSize: 'codeTabSize',
   chatFont: 'chatFont',
+  chatViewWidth: 'chatViewWidth',
   speechSettings: 'speechSettings',
   ttsSettings: 'ttsSettings',
   wrapLines: 'wrapLines',
@@ -214,6 +221,7 @@ function defaultGlobalState(): PersistedGlobalState {
     codeLineHeight: DEFAULT_CODE_LINE_HEIGHT,
     codeTabSize: DEFAULT_CODE_TAB_SIZE,
     chatFont: DEFAULT_CHAT_FONT,
+    chatViewWidth: DEFAULT_CHAT_VIEW_WIDTH,
     speechSettings: DEFAULT_SPEECH_SETTINGS,
     ttsSettings: DEFAULT_TTS_SETTINGS,
     wrapLines: false,
@@ -455,6 +463,7 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
     codeLineHeight: typeof input.codeLineHeight === 'number' && Number.isFinite(input.codeLineHeight) ? input.codeLineHeight : base.codeLineHeight,
     codeTabSize: typeof input.codeTabSize === 'number' && Number.isFinite(input.codeTabSize) ? input.codeTabSize : base.codeTabSize,
     chatFont: typeof input.chatFont === 'string' && isChatFontId(input.chatFont) ? input.chatFont : base.chatFont,
+    chatViewWidth: typeof input.chatViewWidth === 'string' && isChatViewWidth(input.chatViewWidth) ? input.chatViewWidth : base.chatViewWidth,
     speechSettings: normalizeSpeechSettings(input.speechSettings),
     ttsSettings: normalizeTtsSettings(input.ttsSettings),
     wrapLines: typeof input.wrapLines === 'boolean' ? input.wrapLines : base.wrapLines,
@@ -938,6 +947,7 @@ export class WorkspacePersistenceRepository {
       {k: GLOBAL_KEYS.codeLineHeight, v: serialize(this.state.global.codeLineHeight), updatedAt: now},
       {k: GLOBAL_KEYS.codeTabSize, v: serialize(this.state.global.codeTabSize), updatedAt: now},
       {k: GLOBAL_KEYS.chatFont, v: serialize(this.state.global.chatFont), updatedAt: now},
+      {k: GLOBAL_KEYS.chatViewWidth, v: serialize(this.state.global.chatViewWidth), updatedAt: now},
       {k: GLOBAL_KEYS.speechSettings, v: serialize(this.state.global.speechSettings), updatedAt: now},
       {k: GLOBAL_KEYS.ttsSettings, v: serialize(this.state.global.ttsSettings), updatedAt: now},
       {k: GLOBAL_KEYS.wrapLines, v: serialize(this.state.global.wrapLines), updatedAt: now},
@@ -1304,6 +1314,7 @@ export class WorkspacePersistenceRepository {
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.codeLineHeight, v: serialize(next.codeLineHeight), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.codeTabSize, v: serialize(next.codeTabSize), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.chatFont, v: serialize(next.chatFont), updatedAt: now});
+      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.chatViewWidth, v: serialize(next.chatViewWidth), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.speechSettings, v: serialize(next.speechSettings), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.ttsSettings, v: serialize(next.ttsSettings), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.wrapLines, v: serialize(next.wrapLines), updatedAt: now});

@@ -22,6 +22,49 @@ describe('response image output', () => {
     expect(download).toHaveBeenCalledWith(blob, 'response.png');
   });
 
+  test('copies response image to clipboard inside desktop native host', async () => {
+    const write = jest.fn(() => Promise.resolve());
+    const download = jest.fn();
+    const blob = new Blob(['png'], {type: 'image/png'});
+    const ClipboardItemMock = jest.fn(function ClipboardItem(items: Record<string, Blob>) {
+      return {items};
+    });
+
+    await expect(outputResponseImage({
+      blob,
+      fileName: 'response.png',
+      download,
+      env: {
+        WheelMakerDesktop: {enabled: true},
+        ClipboardItem: ClipboardItemMock,
+        navigator: {clipboard: {write}},
+      } as unknown as Window,
+    })).resolves.toEqual({ok: true, status: 'copied'});
+
+    expect(download).not.toHaveBeenCalled();
+    expect(ClipboardItemMock).toHaveBeenCalledWith({'image/png': blob});
+    expect(write).toHaveBeenCalledWith([expect.objectContaining({
+      items: {'image/png': blob},
+    })]);
+  });
+
+  test('reports unsupported desktop image clipboard without downloading', async () => {
+    const download = jest.fn();
+
+    await expect(outputResponseImage({
+      blob: new Blob(['png'], {type: 'image/png'}),
+      fileName: 'response.png',
+      download,
+      env: {WheelMakerDesktop: {enabled: true}} as unknown as Window,
+    })).resolves.toEqual({
+      ok: false,
+      status: 'unsupported',
+      error: 'Image clipboard is unavailable in this desktop runtime.',
+    });
+
+    expect(download).not.toHaveBeenCalled();
+  });
+
   test('shares response image through Android bridge when available', async () => {
     const native = {
       shareResponseImage: jest.fn(() => JSON.stringify({ok: true, status: 'shared'})),

@@ -10,8 +10,15 @@ type AndroidResponseImageBridge = {
   shareResponseImage?: (rawJson: string) => string;
 };
 
+type DesktopResponseImageBridge = {
+  enabled?: boolean;
+};
+
+type ClipboardItemConstructor = new (items: Record<string, Blob>) => ClipboardItem;
+
 type ResponseImageOutputEnv = Window & {
   WheelMakerAndroidNative?: AndroidResponseImageBridge;
+  WheelMakerDesktop?: DesktopResponseImageBridge;
 };
 
 type ResponseImageOutputOptions = {
@@ -22,6 +29,7 @@ type ResponseImageOutputOptions = {
 };
 
 const ANDROID_UPDATE_REQUIRED_MESSAGE = 'Update the Android app to share response images.';
+const DESKTOP_CLIPBOARD_UNAVAILABLE_MESSAGE = 'Image clipboard is unavailable in this desktop runtime.';
 
 function parseBridgeResult(raw: string | undefined): ResponseImageOutputResult {
   try {
@@ -48,6 +56,27 @@ export function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+function resolveClipboardItemConstructor(env: ResponseImageOutputEnv): ClipboardItemConstructor | null {
+  const clipboardItem = (env as unknown as {ClipboardItem?: ClipboardItemConstructor}).ClipboardItem;
+  return typeof clipboardItem === 'function' ? clipboardItem : null;
+}
+
+async function copyResponseImageToClipboard(
+  env: ResponseImageOutputEnv,
+  blob: Blob,
+): Promise<ResponseImageOutputResult> {
+  const clipboardItem = resolveClipboardItemConstructor(env);
+  const write = env.navigator?.clipboard?.write;
+  if (!clipboardItem || typeof write !== 'function') {
+    return {ok: false, status: 'unsupported', error: DESKTOP_CLIPBOARD_UNAVAILABLE_MESSAGE};
+  }
+
+  const mimeType = blob.type || 'image/png';
+  const item = new clipboardItem({[mimeType]: blob});
+  await write.call(env.navigator.clipboard, [item]);
+  return {ok: true, status: 'copied'};
+}
+
 export async function outputResponseImage({
   blob,
   fileName,
@@ -55,13 +84,18 @@ export async function outputResponseImage({
   download = downloadBlobAsFile,
 }: ResponseImageOutputOptions): Promise<ResponseImageOutputResult> {
   const native = env.WheelMakerAndroidNative;
-  if (!native) {
-    download(blob, fileName);
-    return {ok: true, status: 'downloaded'};
+  if (native) {
+    if (typeof native.shareResponseImage !== 'function') {
+      return {ok: false, status: 'unsupported', error: ANDROID_UPDATE_REQUIRED_MESSAGE};
+    }
+    const dataUrl = await blobToDataUrl(blob);
+    return parseBridgeResult(native.shareResponseImage(JSON.stringify({fileName, dataUrl})));
   }
-  if (typeof native.shareResponseImage !== 'function') {
-    return {ok: false, status: 'unsupported', error: ANDROID_UPDATE_REQUIRED_MESSAGE};
+
+  if (env.WheelMakerDesktop) {
+    return copyResponseImageToClipboard(env, blob);
   }
-  const dataUrl = await blobToDataUrl(blob);
-  return parseBridgeResult(native.shareResponseImage(JSON.stringify({fileName, dataUrl})));
+
+  download(blob, fileName);
+  return {ok: true, status: 'downloaded'};
 }

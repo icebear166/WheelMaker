@@ -166,7 +166,7 @@ describe('web chat turn rendering', () => {
     expect(main).toContain('const cancelSelectedChatPrompt = async () => {');
     expect(main).toContain('service.cancelProjectSession(selectedKey.projectId, selectedKey.sessionId)');
     expect(main).toContain('className="chat-composer-input-row"');
-    expect(main).toContain("const chatComposerStopTriggerClassName = `chat-composer-stop-trigger${selectedChatPromptRunning ? ' active' : ''}${selectedChatPromptCancelling ? ' cancelling' : ''}`;");
+    expect(main).toContain("const chatComposerStopTriggerClassName = `chat-tool-button chat-composer-stop-trigger${selectedChatPromptRunning ? ' active' : ''}${selectedChatPromptCancelling ? ' cancelling' : ''}`;");
     expect(main).toContain('!selectedChatPromptRunning ? (');
     expect(main).toContain('className="chat-tool-button chat-attachment-plus-button"');
     expect(main).toContain(') : (');

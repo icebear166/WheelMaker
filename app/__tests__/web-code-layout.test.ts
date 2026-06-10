@@ -41,7 +41,7 @@ describe('web code layout', () => {
     expect(shikiRenderer).toContain('data-line-kind');
     expect(shikiRenderer).toContain('wm-shiki-diff-line');
     expect(shikiRenderer).toContain('white-space:normal;tab-size:${codeTabSize};');
-    expect(shikiRenderer).toContain("hast.properties['data-line-number'] = String(line);");
+    expect(shikiRenderer).toContain("hast.properties['data-line-number'] = String(line + lineOffset);");
     expect(shikiRenderer).toContain('createHighlighterCore');
     expect(shikiRenderer).toContain('SHIKI_THEME_LOADERS');
     expect(shikiRenderer).toContain('SHIKI_LANG_LOADERS');

@@ -10,7 +10,7 @@ function extractFunctionBody(source: string, functionName: string): string {
   const marker = `const ${functionName} = async`;
   const start = source.indexOf(marker);
   expect(start).toBeGreaterThanOrEqual(0);
-  const arrowStart = source.indexOf(') => {', start);
+  const arrowStart = source.indexOf('=> {', start);
   expect(arrowStart).toBeGreaterThanOrEqual(0);
   const bodyStart = source.indexOf('{', arrowStart);
   let depth = 0;

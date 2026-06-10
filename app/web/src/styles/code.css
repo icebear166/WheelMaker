@@ -140,6 +140,13 @@
   color: var(--text);
 }
 
+.markdown-image-export-surface a,
+.markdown-image-export-surface a:visited {
+  color: color-mix(in srgb, var(--accent) 82%, var(--text));
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
 .markdown-image-export-surface table {
   table-layout: fixed;
   max-width: 100%;
