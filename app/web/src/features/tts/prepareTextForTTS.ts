@@ -6,8 +6,10 @@
 export function prepareTextForTTS(markdown: string): string {
   let text = markdown;
 
-  // Remove <think>...</think> blocks (with or without newlines)
-  text = text.replace(/<think>[\s\S]*?<\/think>/g, '');
+  // Remove <think>...</think> blocks (various formats)
+  text = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  text = text.replace(/<think>[\s\S]*?<\/thinking>/gi, '');
+  text = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
 
   // Remove fenced code blocks (```...```)
   text = text.replace(/```[\s\S]*?```/g, '');

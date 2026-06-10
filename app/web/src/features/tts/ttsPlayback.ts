@@ -36,13 +36,22 @@ export function segmentText(text: string, maxChars: number = MAX_SEGMENT_CHARS):
 }
 
 /**
- * Global TTS player singleton.
- * Only one playback is allowed at a time.
+ * Global TTS player singleton with generation-based invalidation.
+ * Only one playback session is active at a time.
+ *
+ * State machine:
+ *   idle ──play()──> loading ──audio ready──> playing ──ended──> idle
+ *     ↑                 │                      │
+ *     └──stop()─────────┴──stop()──────────────┘
+ *
+ * Each play() call increments a generation counter.
+ * All async operations check the generation before proceeding,
+ * preventing stale sessions from interfering with new ones.
  */
 class TTSPlayer {
   private audio: HTMLAudioElement | null = null;
   private blobUrls: string[] = [];
-  private aborted = false;
+  private generation = 0;
   private state: TtsPlaybackState = 'idle';
   private listeners: Set<TtsPlaybackListener> = new Set();
 
@@ -69,6 +78,9 @@ class TTSPlayer {
     }
     this.blobUrls = [];
     if (this.audio) {
+      this.audio.onended = null;
+      this.audio.onplaying = null;
+      this.audio.onerror = null;
       this.audio.pause();
       this.audio.src = '';
       this.audio = null;
@@ -76,10 +88,10 @@ class TTSPlayer {
   }
 
   /**
-   * Stop any current playback.
+   * Stop any current playback and invalidate pending async operations.
    */
   stop(): void {
-    this.aborted = true;
+    this.generation++;
     this.cleanup();
     this.setState('idle');
   }
@@ -90,9 +102,9 @@ class TTSPlayer {
    * Automatically stops any previous playback.
    */
   async play(segments: string[], settings: TtsSettings): Promise<void> {
-    // Stop any existing playback
+    // Stop existing and get a new generation
     this.stop();
-    this.aborted = false;
+    const gen = this.generation;
 
     if (segments.length === 0 || !settings.enabled || !settings.apiKey) {
       return;
@@ -101,7 +113,7 @@ class TTSPlayer {
     this.setState('loading');
 
     for (let i = 0; i < segments.length; i++) {
-      if (this.aborted) return;
+      if (this.generation !== gen) return;
 
       const result = await synthesizeSpeech({
         apiKey: settings.apiKey,
@@ -110,10 +122,9 @@ class TTSPlayer {
         text: segments[i],
       });
 
-      if (this.aborted) return;
+      if (this.generation !== gen) return;
 
       if (!result.ok) {
-        // Skip failed segment, continue with next
         console.warn(`TTS segment ${i} failed: ${result.error}`);
         continue;
       }
@@ -121,23 +132,26 @@ class TTSPlayer {
       const blobUrl = audioBase64ToBlobUrl(result.audioBase64);
       this.blobUrls.push(blobUrl);
 
-      if (this.aborted) {
+      if (this.generation !== gen) {
         URL.revokeObjectURL(blobUrl);
         return;
       }
 
-      await this.playAudio(blobUrl);
+      await this.playAudio(blobUrl, gen);
 
-      if (this.aborted) return;
+      if (this.generation !== gen) return;
     }
 
-    this.cleanup();
-    this.setState('idle');
+    // Only finalize if this generation is still current
+    if (this.generation === gen) {
+      this.cleanup();
+      this.setState('idle');
+    }
   }
 
-  private playAudio(url: string): Promise<void> {
+  private playAudio(url: string, gen: number): Promise<void> {
     return new Promise<void>((resolve) => {
-      if (this.aborted) {
+      if (this.generation !== gen) {
         resolve();
         return;
       }
@@ -146,7 +160,9 @@ class TTSPlayer {
       this.audio = audio;
 
       audio.onplaying = () => {
-        this.setState('playing');
+        if (this.generation === gen) {
+          this.setState('playing');
+        }
       };
 
       audio.onended = () => {
