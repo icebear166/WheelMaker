@@ -5,11 +5,14 @@ import {
   type CodeFontId,
   type CodeThemeId,
 } from './shikiSettings';
+import type {ThemedToken} from '@shikijs/types';
 
 type ThemeMode = 'dark' | 'light';
 type GitDiffRowsModule = typeof import('../git/diffRows');
 
 const VS_CODE_EDITOR_FONT_FAMILY = "Consolas, 'Courier New', monospace";
+const VIRTUALIZE_LINE_THRESHOLD = 2000;
+const CHUNK_SIZE = 200;
 
 let shikiRendererModulePromise: Promise<typeof import('./shikiRenderer')> | null = null;
 let gitDiffRowsModulePromise: Promise<GitDiffRowsModule> | null = null;
@@ -93,7 +96,31 @@ function renderPlainCodeFallbackHtml({
   return `<pre class="${preClassName}" data-shiki-fallback="true" style="${preStyle}"><code class="wm-shiki-code" style="${codeStyle}">${renderedLines}</code></pre>`;
 }
 
-export function ShikiCodeBlock({
+function useLineClick(onLineClick?: (line: number, event: MouseEvent) => void) {
+  return useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!onLineClick) return;
+      const target = e.target as HTMLElement;
+      const lineEl = target.closest<HTMLElement>('[data-line-number]');
+      if (!lineEl) return;
+      const lineNum = Number(lineEl.dataset.lineNumber);
+      if (Number.isFinite(lineNum)) {
+        onLineClick(lineNum, e.nativeEvent);
+      }
+    },
+    [onLineClick],
+  );
+}
+
+type TokenizeState = {
+  tokens: ThemedToken[][];
+  fg: string;
+  bg: string;
+  themeName: string;
+  totalLines: number;
+};
+
+function ShikiCodeBlockVirtualized({
   content,
   language,
   wrap,
@@ -108,6 +135,165 @@ export function ShikiCodeBlock({
   onLineClick,
 }: ShikiCodeBlockProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [tokenizeResult, setTokenizeResult] = useState<TokenizeState | null>(null);
+  const [chunkHtmls, setChunkHtmls] = useState<Map<number, string>>(new Map());
+  const [tokenizeFailed, setTokenizeFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setTokenizeResult(null);
+    setChunkHtmls(new Map());
+    setTokenizeFailed(false);
+    (async () => {
+      const {tokenizeShikiCode} = await loadShikiRenderer();
+      const result = await tokenizeShikiCode(content, language, themeMode, codeTheme);
+      if (cancelled) return;
+      setTokenizeResult({
+        tokens: result.tokens,
+        fg: result.fg,
+        bg: result.bg,
+        themeName: result.themeName,
+        totalLines: result.tokens.length,
+      });
+    })().catch(() => {
+      if (!cancelled) setTokenizeFailed(true);
+    });
+    return () => { cancelled = true; };
+  }, [content, language, themeMode, codeTheme]);
+
+  useEffect(() => {
+    setChunkHtmls(new Map());
+  }, [highlightedLines]);
+
+  const totalChunks = tokenizeResult ? Math.ceil(tokenizeResult.totalLines / CHUNK_SIZE) : 0;
+  const lineHeightPx = Math.max(12, codeFontSize * codeLineHeight);
+
+  useEffect(() => {
+    if (!tokenizeResult || !containerRef.current) return;
+    const container = containerRef.current;
+
+    const renderChunk = async (chunkIndex: number) => {
+      const start = chunkIndex * CHUNK_SIZE;
+      const end = Math.min(start + CHUNK_SIZE, tokenizeResult.totalLines);
+      const chunkTokens = tokenizeResult.tokens.slice(start, end);
+      const mod = await loadShikiRenderer();
+      const html = mod.renderChunkHtmlFromTokens(
+        chunkTokens, start,
+        tokenizeResult.fg, tokenizeResult.bg, tokenizeResult.themeName,
+        wrap, lineNumbers, codeFont, codeFontSize, codeLineHeight, codeTabSize,
+        highlightedLines,
+      );
+      setChunkHtmls(prev => {
+        if (prev.get(chunkIndex) === html) return prev;
+        const next = new Map(prev);
+        next.set(chunkIndex, html);
+        return next;
+      });
+    };
+
+    const sentinelMap = new Map<Element, number>();
+    const observer = new IntersectionObserver(entries => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const chunkIdx = sentinelMap.get(entry.target);
+        if (chunkIdx != null) renderChunk(chunkIdx);
+      }
+    }, {rootMargin: `${CHUNK_SIZE * lineHeightPx * 2}px`});
+
+    const sentinels = container.querySelectorAll<HTMLElement>('[data-chunk-sentinel]');
+    sentinels.forEach(el => {
+      const idx = Number(el.dataset.chunkSentinel);
+      sentinelMap.set(el, idx);
+      observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, [tokenizeResult, wrap, lineNumbers, codeFont, codeFontSize, codeLineHeight, codeTabSize, highlightedLines, totalChunks, lineHeightPx]);
+
+  const handleClick = useLineClick(onLineClick);
+
+  if (tokenizeFailed) {
+    return (
+      <div className="code-wrap" data-shiki-render-failed="true">
+        <div className="muted block">Failed to tokenize file.</div>
+      </div>
+    );
+  }
+
+  if (!tokenizeResult) {
+    return (
+      <div className="code-wrap" data-markdown-export-pending="true">
+        <div className="muted block">Tokenizing...</div>
+      </div>
+    );
+  }
+
+  const chunks: React.ReactNode[] = [];
+  for (let i = 0; i < totalChunks; i++) {
+    const html = chunkHtmls.get(i);
+    if (html) {
+      chunks.push(
+        <div
+          key={i}
+          dangerouslySetInnerHTML={{__html: html}}
+        />,
+      );
+    } else {
+      const start = i * CHUNK_SIZE;
+      const end = Math.min(start + CHUNK_SIZE, tokenizeResult.totalLines);
+      const height = (end - start) * lineHeightPx;
+      chunks.push(
+        <div
+          key={i}
+          data-chunk-sentinel={i}
+          style={{height: `${height}px`}}
+        />,
+      );
+    }
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className={`code-wrap ${wrap ? 'wrap' : 'nowrap'}`}
+      onClick={onLineClick ? handleClick : undefined}
+    >
+      {chunks}
+    </div>
+  );
+}
+
+export function ShikiCodeBlock(props: ShikiCodeBlockProps) {
+  const lineCount = useMemo(() => {
+    if (!props.content) return 0;
+    let count = 1;
+    for (let i = 0; i < props.content.length; i++) {
+      if (props.content[i] === '\n') count++;
+    }
+    return count;
+  }, [props.content]);
+
+  if (lineCount >= VIRTUALIZE_LINE_THRESHOLD) {
+    return <ShikiCodeBlockVirtualized {...props} />;
+  }
+
+  return <ShikiCodeBlockSmall {...props} />;
+}
+
+function ShikiCodeBlockSmall({
+  content,
+  language,
+  wrap,
+  lineNumbers,
+  themeMode,
+  codeTheme,
+  codeFont,
+  codeFontSize,
+  codeLineHeight,
+  codeTabSize,
+  highlightedLines,
+  onLineClick,
+}: ShikiCodeBlockProps) {
   const [html, setHtml] = useState('');
   const [renderFailed, setRenderFailed] = useState(false);
   const fallbackHtml = useMemo(
@@ -149,6 +335,7 @@ export function ShikiCodeBlock({
         wrap,
         lineNumbers,
         mode: 'block',
+        highlightedLines,
       });
       if (!cancelled) {
         setHtml(nextHtml);
@@ -173,39 +360,13 @@ export function ShikiCodeBlock({
     codeTabSize,
     wrap,
     lineNumbers,
+    highlightedLines,
   ]);
 
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    const lineElements = container.querySelectorAll<HTMLElement>('[data-line-number]');
-    for (const el of lineElements) {
-      const lineNum = Number(el.dataset.lineNumber);
-      if (highlightedLines && highlightedLines.has(lineNum)) {
-        el.classList.add('wm-line-target');
-      } else {
-        el.classList.remove('wm-line-target');
-      }
-    }
-  }, [html, fallbackHtml, highlightedLines]);
-
-  const handleClick = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!onLineClick) return;
-      const target = e.target as HTMLElement;
-      const lineEl = target.closest<HTMLElement>('[data-line-number]');
-      if (!lineEl) return;
-      const lineNum = Number(lineEl.dataset.lineNumber);
-      if (Number.isFinite(lineNum)) {
-        onLineClick(lineNum, e.nativeEvent);
-      }
-    },
-    [onLineClick],
-  );
+  const handleClick = useLineClick(onLineClick);
 
   return (
     <div
-      ref={containerRef}
       className={`code-wrap ${wrap ? 'wrap' : 'nowrap'}`}
       data-markdown-export-pending={html || renderFailed ? undefined : 'true'}
       data-shiki-render-failed={renderFailed ? 'true' : undefined}

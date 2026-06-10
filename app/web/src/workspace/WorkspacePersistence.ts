@@ -28,6 +28,12 @@ import {
   type SpeechSettings,
 } from '../features/speech/speechSettings';
 import {
+  DEFAULT_TTS_SETTINGS,
+  maskTtsSettingsForExport,
+  normalizeTtsSettings,
+  type TtsSettings,
+} from '../features/tts/ttsSettings';
+import {
   FLOATING_CONTROL_DEFAULT_IDLE_OPACITY,
   FLOATING_CONTROL_DEFAULT_Y_RATIO,
   floatingControlYRatioFromLegacySlot,

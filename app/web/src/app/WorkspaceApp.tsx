@@ -312,6 +312,11 @@ import {
 } from '../features/speech/voiceInputFlow';
 import {isSpeechErrorEvent, isSpeechTranscriptEvent} from '../features/speech/registrySpeechClient';
 import {DEFAULT_SPEECH_SETTINGS, normalizeSpeechSettings} from '../features/speech/speechSettings';
+import {DEFAULT_TTS_SETTINGS, normalizeTtsSettings} from '../features/tts/ttsSettings';
+import type {TtsSettings} from '../features/tts/ttsSettings';
+import {prepareTextForTTS} from '../features/tts/prepareTextForTTS';
+import {segmentText, ttsPlayer} from '../features/tts/ttsPlayback';
+import type {TtsPlaybackState} from '../features/tts/ttsPlayback';
 import {
   appDiagnosticStore,
   normalizeAppDiagnosticLogLevel,
@@ -1961,6 +1966,11 @@ export function App() {
   const [speechSettings, setSpeechSettings] = useState(() =>
     normalizeSpeechSettings(persistedGlobal.speechSettings ?? DEFAULT_SPEECH_SETTINGS),
   );
+  const [ttsSettings, setTtsSettings] = useState<TtsSettings>(() =>
+    normalizeTtsSettings(persistedGlobal.ttsSettings ?? DEFAULT_TTS_SETTINGS),
+  );
+  const [ttsState, setTtsState] = useState<TtsPlaybackState>('idle');
+  const ttsActiveTurnIndexRef = useRef<number | null>(null);
   const [webSourceState, setWebSourceState] = useState<DesktopWebSourceState | null>(null);
   const [registryDebugRecords, setRegistryDebugRecords] = useState(registryDebugStore.getRecords());
   const [selectedRegistryDebugRecordId, setSelectedRegistryDebugRecordId] = useState<number | null>(null);
@@ -15056,6 +15066,50 @@ export function App() {
     await writeTextToClipboard(result.markdown);
   };
 
+  // Subscribe to TTS player state changes
+  useEffect(() => {
+    const unsubscribe = ttsPlayer.subscribe((state) => {
+      setTtsState(state);
+      if (state === 'idle') {
+        ttsActiveTurnIndexRef.current = null;
+      }
+    });
+    return unsubscribe;
+  }, []);
+
+  const readAloudPromptDone = async (doneTurnIndex: number) => {
+    // If clicking on the same turn that's currently playing, stop it
+    if (ttsPlayer.currentState === 'playing' && ttsActiveTurnIndexRef.current === doneTurnIndex) {
+      ttsPlayer.stop();
+      return;
+    }
+
+    // If something else is playing, stop it first
+    if (ttsPlayer.currentState !== 'idle') {
+      ttsPlayer.stop();
+    }
+
+    const result = buildPromptDoneCopyRange(selectedFullChatMessages, doneTurnIndex);
+    if (!result.ok) {
+      return;
+    }
+
+    const cleanedText = prepareTextForTTS(result.markdown);
+    if (!cleanedText.trim()) {
+      setError('No readable text in response');
+      return;
+    }
+
+    const segments = segmentText(cleanedText);
+    if (segments.length === 0) {
+      setError('No readable text in response');
+      return;
+    }
+
+    ttsActiveTurnIndexRef.current = doneTurnIndex;
+    ttsPlayer.play(segments, ttsSettings).catch(() => undefined);
+  };
+
   const exportPromptDoneMarkdownImage = async (doneTurnIndex: number) => {
     if (exportingMarkdownImageTurnIndex !== null) {
       return;
@@ -15206,6 +15260,12 @@ export function App() {
           onExportPromptDoneImage={
             message.method === 'prompt_done'
               ? () => exportPromptDoneMarkdownImage(doneTurnIndex).catch(() => undefined)
+              : undefined
+          }
+          ttsState={message.method === 'prompt_done' && ttsActiveTurnIndexRef.current === doneTurnIndex ? ttsState : 'idle'}
+          onReadAloud={
+            message.method === 'prompt_done'
+              ? () => readAloudPromptDone(doneTurnIndex).catch(() => undefined)
               : undefined
           }
         />

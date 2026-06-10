@@ -216,6 +216,8 @@ export type ChatTurnViewProps = {
   exportBusy?: boolean;
   onCopyPromptDone?: () => void;
   onExportPromptDoneImage?: () => void;
+  ttsState?: 'idle' | 'loading' | 'playing';
+  onReadAloud?: () => void;
   optionReplies?: ChatOptionReply[];
   optionRepliesDisabled?: boolean;
   onSelectOptionReply?: (label: string) => void;
@@ -236,6 +238,8 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   exportBusy = false,
   onCopyPromptDone,
   onExportPromptDoneImage,
+  ttsState = 'idle',
+  onReadAloud,
   optionReplies = [],
   optionRepliesDisabled = false,
   onSelectOptionReply,
@@ -350,6 +354,23 @@ export const ChatTurnView = React.memo(function ChatTurnView({
           ) : null}
         </span>
         <div className="chat-prompt-actions" aria-label="Prompt actions">
+          <button
+            type="button"
+            className="chat-prompt-action-button"
+            onClick={() => onReadAloud?.()}
+            disabled={copyDisabled || ttsState === 'loading'}
+            aria-busy={ttsState === 'loading'}
+            title={ttsState === 'playing' ? 'Stop reading' : 'Read aloud'}
+            aria-label={ttsState === 'playing' ? 'Stop reading aloud' : 'Read response aloud'}
+          >
+            {ttsState === 'loading' ? (
+              <span className="codicon codicon-loading codicon-modifier-spin" />
+            ) : ttsState === 'playing' ? (
+              <span className="codicon codicon-debug-stop" />
+            ) : (
+              <span className="codicon codicon-unmute" />
+            )}
+          </button>
           <button
             type="button"
             className="chat-prompt-action-button"

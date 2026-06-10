@@ -1,6 +1,6 @@
 import {createHighlighterCore} from '@shikijs/core';
 import {createJavaScriptRegexEngine} from '@shikijs/engine-javascript';
-import type {HighlighterCore, LanguageInput, ShikiTransformer, ThemeInput} from '@shikijs/types';
+import type {HighlighterCore, LanguageInput, ShikiTransformer, ThemedToken, ThemeInput} from '@shikijs/types';
 import {
   resolveCodeFontFamily,
   type CodeFontId,
@@ -21,6 +21,7 @@ type RenderShikiBaseOptions = {
   codeLineHeight: number;
   codeTabSize: number;
   wrap: boolean;
+  highlightedLines?: Set<number>;
 };
 
 type RenderShikiOptions = RenderShikiBaseOptions & {
@@ -102,6 +103,8 @@ function buildLineTransformer(
   codeLineHeight: number,
   codeTabSize: number,
   diffLines?: DiffRenderLine[],
+  highlightedLines?: Set<number>,
+  lineOffset = 0,
 ): ShikiTransformer {
   const fontFamily = resolveCodeFontFamily(codeFont);
   const fontSize = `${codeFontSize}px`;
@@ -147,8 +150,8 @@ function buildLineTransformer(
           hast.properties['data-separator'] = diffLine.separator;
         }
       } else {
-        hast.properties['data-line'] = String(line);
-        hast.properties['data-line-number'] = String(line);
+        hast.properties['data-line'] = String(line + lineOffset);
+        hast.properties['data-line-number'] = String(line + lineOffset);
       }
 
       if (lineNumbers) {
@@ -192,7 +195,7 @@ function buildLineTransformer(
           hast.children = [diffGutterNode as any, contentNode as any];
           appendStyle(hast, 'display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start;');
         } else {
-          const lineLabel = String(line);
+          const lineLabel = String(line + lineOffset);
           const lineNumberNode = {
             type: 'element' as const,
             tagName: 'span',
@@ -228,6 +231,10 @@ function buildLineTransformer(
         } else {
           hast.children = [contentNode as any];
         }
+      }
+
+      if (highlightedLines && highlightedLines.has(line + lineOffset)) {
+        this.addClassToHast(hast, 'wm-line-target');
       }
 
       return hast;
@@ -303,6 +310,7 @@ function renderWithHighlighter(
   codeTabSize: number,
   mode: RenderMode,
   diffLines?: DiffRenderLine[],
+  highlightedLines?: Set<number>,
 ): string {
   const normalizedCode = code || ' ';
   if (mode === 'inline') {
@@ -324,6 +332,7 @@ function renderWithHighlighter(
       codeLineHeight,
       codeTabSize,
       diffLines,
+      highlightedLines,
     )],
   });
 }
@@ -361,6 +370,8 @@ export async function renderShikiHtml(options: RenderShikiOptions): Promise<stri
         options.codeLineHeight,
         options.codeTabSize,
         options.mode,
+        undefined,
+        options.highlightedLines,
       );
       if (options.mode === 'inline') {
         setInlineCache(inlineCacheKey, html);
@@ -412,4 +423,124 @@ export async function renderShikiDiffHtml(options: RenderShikiDiffOptions): Prom
   }
 
   return `<pre><code>${escapeHtml(code)}</code></pre>`;
+}
+
+function tokenFontStyleToCSS(fontStyle: number): string {
+  const parts: string[] = [];
+  if (fontStyle & 1) parts.push('font-style:italic');
+  if (fontStyle & 2) parts.push('font-weight:bold');
+  if (fontStyle & 4) parts.push('text-decoration:underline');
+  return parts.join(';');
+}
+
+export type ShikiTokenizeResult = {
+  tokens: ThemedToken[][];
+  fg: string;
+  bg: string;
+  themeName: string;
+};
+
+export async function tokenizeShikiCode(
+  code: string,
+  language: string,
+  themeMode: ThemeMode,
+  codeTheme: CodeThemeId,
+): Promise<ShikiTokenizeResult> {
+  const resolvedLang = resolveLanguage(language);
+  const resolvedTheme = resolveTheme(themeMode, codeTheme);
+  const highlighter = await getHighlighter();
+  try {
+    await ensureThemeLoaded(highlighter, resolvedTheme);
+  } catch {
+    // fall through with already loaded default themes
+  }
+  const langCandidates = resolvedLang === 'text' ? ['text'] : [resolvedLang, 'text'];
+  for (const lang of langCandidates) {
+    try {
+      await ensureLanguageLoaded(highlighter, lang);
+      const result = highlighter.codeToTokens(code || ' ', {
+        lang,
+        theme: resolvedTheme,
+      });
+      return {
+        tokens: result.tokens,
+        fg: result.fg || 'inherit',
+        bg: result.bg || 'inherit',
+        themeName: result.themeName || '',
+      };
+    } catch {
+      // Try fallback language.
+    }
+  }
+  const lines = (code || ' ').split('\n');
+  return {
+    tokens: lines.map(line => [{content: line, fontStyle: 0}]),
+    fg: 'inherit',
+    bg: 'inherit',
+    themeName: '',
+  };
+}
+
+export function renderChunkHtmlFromTokens(
+  chunkTokens: ThemedToken[][],
+  startLine: number,
+  fg: string,
+  bg: string,
+  themeName: string,
+  wrap: boolean,
+  lineNumbers: boolean,
+  codeFont: CodeFontId,
+  codeFontSize: number,
+  codeLineHeight: number,
+  codeTabSize: number,
+  highlightedLines?: Set<number>,
+): string {
+  const fontFamily = resolveCodeFontFamily(codeFont);
+  const fontSize = `${codeFontSize}px`;
+  const preClass = `wm-shiki-pre ${wrap ? 'wm-shiki-wrap' : 'wm-shiki-nowrap'}`;
+  const preStyle = `margin:0;padding:0;border-radius:0;white-space:normal;overflow-x:${wrap ? 'hidden' : 'auto'};font-family:${fontFamily};font-size:${fontSize};line-height:${codeLineHeight};background-color:${bg};color:${fg};`;
+  const codeStyle = wrap
+    ? `display:block;min-width:100%;white-space:normal;tab-size:${codeTabSize};`
+    : `display:block;min-width:100%;width:max-content;white-space:normal;tab-size:${codeTabSize};`;
+  const lineContentStyle = wrap
+    ? `display:block;min-width:0;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;tab-size:${codeTabSize};font-family:${fontFamily};font-size:${fontSize};line-height:${codeLineHeight};`
+    : `display:block;min-width:0;white-space:pre;tab-size:${codeTabSize};font-family:${fontFamily};font-size:${fontSize};line-height:${codeLineHeight};`;
+
+  const lines: string[] = [];
+  for (let i = 0; i < chunkTokens.length; i++) {
+    const absLine = startLine + i + 1;
+    const lineTokens = chunkTokens[i];
+    const isHighlighted = highlightedLines?.has(absLine);
+
+    let spans = '';
+    for (const token of lineTokens) {
+      const tokenStyle = token.color
+        ? `color:${token.color}${token.fontStyle ? ';' + tokenFontStyleToCSS(token.fontStyle) : ''}`
+        : token.fontStyle ? tokenFontStyleToCSS(token.fontStyle) : '';
+      const escaped = escapeHtml(token.content);
+      spans += tokenStyle ? `<span style="${tokenStyle}">${escaped}</span>` : escaped;
+    }
+    if (!spans) spans = ' ';
+
+    const lineClass = isHighlighted ? ' wm-line-target' : '';
+    const dataAttr = `data-line="${absLine}" data-line-number="${absLine}"`;
+
+    if (lineNumbers) {
+      const lineLabel = String(absLine);
+      lines.push(
+        `<span class="line${lineClass}" ${dataAttr} style="display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start;">` +
+        `<span class="wm-shiki-line-number" aria-hidden="true" style="display:inline-block;min-width:3.5em;padding-right:1em;text-align:right;user-select:none;color:var(--muted);opacity:0.75;">${lineLabel}</span>` +
+        `<span class="wm-shiki-line-content" style="${lineContentStyle}">${spans}</span>` +
+        `</span>`
+      );
+    } else {
+      lines.push(
+        `<span class="line${lineClass}" ${dataAttr} style="display:block;">` +
+        `<span class="wm-shiki-line-content" style="${lineContentStyle}">${spans}</span>` +
+        `</span>`
+      );
+    }
+  }
+
+  return `<pre class="${preClass} shiki ${themeName}" style="${preStyle}"><code class="wm-shiki-code" style="${codeStyle}">${lines.join('\n')}</code></pre>`;
 }
