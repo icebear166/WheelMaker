@@ -44,8 +44,10 @@ export function segmentText(text: string, maxChars: number = MAX_SEGMENT_CHARS):
  *     ↑                 │                      │
  *     └──stop()─────────┴──stop()──────────────┘
  *
- * Prefetch strategy: while playing segment N, start fetching segment N+1
- * so the next segment is ready immediately when the current one ends.
+ * Prefetch: while playing segment N, start fetching segment N+1.
+ *
+ * Stop safety: cleanup() resolves any pending playAudio() promise
+ * so the loop can exit immediately and check the generation counter.
  */
 class TTSPlayer {
   private audio: HTMLAudioElement | null = null;
@@ -58,6 +60,9 @@ class TTSPlayer {
   private prefetched: Map<number, string> = new Map();
   /** Pending fetch promises indexed by segment index */
   private pendingFetches: Map<number, Promise<string | null>> = new Map();
+
+  /** Resolve callback for the current playAudio() promise, if waiting */
+  private playAudioResolve: (() => void) | null = null;
 
   get currentState(): TtsPlaybackState {
     return this.state;
@@ -83,6 +88,7 @@ class TTSPlayer {
     this.blobUrls = [];
     this.prefetched.clear();
     this.pendingFetches.clear();
+
     if (this.audio) {
       this.audio.onended = null;
       this.audio.onplaying = null;
@@ -90,6 +96,13 @@ class TTSPlayer {
       this.audio.pause();
       this.audio.src = '';
       this.audio = null;
+    }
+
+    // Unblock any pending playAudio() so the loop can exit
+    if (this.playAudioResolve) {
+      const resolve = this.playAudioResolve;
+      this.playAudioResolve = null;
+      resolve();
     }
   }
 
@@ -171,18 +184,16 @@ class TTSPlayer {
 
     if (!firstUrl) {
       // First segment failed, try remaining
-      let foundValid = false;
       for (let i = 1; i < segments.length; i++) {
         const url = await this.prefetchSegment(i, segments, settings, gen);
         if (this.generation !== gen) return;
         if (url) {
-          foundValid = true;
-          // Start playback from this segment
           await this.playFromSegment(i, segments, settings, gen, url);
           return;
         }
       }
-      if (!foundValid && this.generation === gen) {
+      // All segments failed
+      if (this.generation === gen) {
         this.cleanup();
         this.setState('idle');
       }
@@ -248,8 +259,17 @@ class TTSPlayer {
         return;
       }
 
+      // Store resolve so cleanup() can unblock us on stop()
+      this.playAudioResolve = resolve;
+
       const audio = new Audio(url);
       this.audio = audio;
+
+      const done = () => {
+        this.playAudioResolve = null;
+        this.audio = null;
+        resolve();
+      };
 
       audio.onplaying = () => {
         if (this.generation === gen) {
@@ -257,20 +277,10 @@ class TTSPlayer {
         }
       };
 
-      audio.onended = () => {
-        this.audio = null;
-        resolve();
-      };
+      audio.onended = done;
+      audio.onerror = done;
 
-      audio.onerror = () => {
-        this.audio = null;
-        resolve();
-      };
-
-      audio.play().catch(() => {
-        this.audio = null;
-        resolve();
-      });
+      audio.play().catch(done);
     });
   }
 }
