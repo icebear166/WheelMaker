@@ -45,6 +45,32 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('togglePromptArtifactPreviewFile');
   });
 
+  test('chat preview code and diff panes force line numbers and no wrapping', () => {
+    const mainTsx = readSourceText(mainPath);
+
+    const fileViewerStart = mainTsx.indexOf('const ChatFilePeekViewer = React.memo(function ChatFilePeekViewer');
+    const fileViewerEnd = mainTsx.indexOf('}, (prev, next) => {', fileViewerStart);
+    expect(fileViewerStart).toBeGreaterThanOrEqual(0);
+    expect(fileViewerEnd).toBeGreaterThan(fileViewerStart);
+    const fileViewerBody = mainTsx.slice(fileViewerStart, fileViewerEnd);
+    const fileCodeStart = fileViewerBody.indexOf('<ShikiCodeBlock');
+    const fileCodeEnd = fileViewerBody.indexOf('/>', fileCodeStart);
+    const fileCodeBlock = fileViewerBody.slice(fileCodeStart, fileCodeEnd);
+    expect(fileCodeBlock).toContain('wrap={false}');
+    expect(fileCodeBlock).toContain('lineNumbers={true}');
+
+    const artifactViewerStart = mainTsx.indexOf('const ChatPromptArtifactPreviewViewer = React.memo(function ChatPromptArtifactPreviewViewer');
+    const artifactViewerEnd = mainTsx.indexOf('}, (prev, next) => (', artifactViewerStart);
+    expect(artifactViewerStart).toBeGreaterThanOrEqual(0);
+    expect(artifactViewerEnd).toBeGreaterThan(artifactViewerStart);
+    const artifactViewerBody = mainTsx.slice(artifactViewerStart, artifactViewerEnd);
+    const diffPaneStart = artifactViewerBody.indexOf('<ShikiDiffPane');
+    const diffPaneEnd = artifactViewerBody.indexOf('/>', diffPaneStart);
+    const diffPaneBlock = artifactViewerBody.slice(diffPaneStart, diffPaneEnd);
+    expect(diffPaneBlock).toContain('wrap={false}');
+    expect(diffPaneBlock).toContain('lineNumbers={true}');
+  });
+
   test('prompt diff preview CSS supports collapsible file rows', () => {
     const stylesCss = readWebStyles(projectRoot);
 
@@ -85,6 +111,24 @@ describe('web chat file peek viewer', () => {
     expect(mobileOverlay).toContain('z-index: 70;');
 
     expect(stylesCss).toContain(".narrow-shell[data-chat-preview-open='true'] .floating-control-stack-layer");
+  });
+
+  test('peek viewer code scroll exposes desktop horizontal overflow', () => {
+    const stylesCss = readWebStyles(projectRoot);
+
+    const scroll = cssRuleBlock(stylesCss, '.chat-file-peek-scroll');
+    expect(scroll).toContain('min-width: 0;');
+    expect(scroll).toContain('overflow-x: auto;');
+    expect(scroll).toContain('overflow-y: auto;');
+    expect(scroll).toContain('scrollbar-gutter: stable both-edges;');
+
+    const nowrapCode = cssRuleBlock(stylesCss, '.chat-file-peek-scroll .code-wrap.nowrap');
+    expect(nowrapCode).toContain('width: max-content;');
+    expect(nowrapCode).toContain('min-width: 100%;');
+
+    const nowrapDiff = cssRuleBlock(stylesCss, '.chat-file-peek-scroll .diff-wrap.nowrap');
+    expect(nowrapDiff).toContain('width: max-content;');
+    expect(nowrapDiff).toContain('min-width: 100%;');
   });
 
   test('peek viewer uses direct jumps and has an explicit File tab handoff', () => {

@@ -2120,8 +2120,6 @@ type ChatPromptArtifactPreviewViewerProps = {
   codeFontSize: number;
   codeLineHeight: number;
   codeTabSize: number;
-  wrapLines: boolean;
-  showLineNumbers: boolean;
   onClose: () => void;
   onToggleFile: (path: string) => void;
   scrollRef: React.RefObject<HTMLDivElement | null>;
@@ -2137,8 +2135,6 @@ const ChatPromptArtifactPreviewViewer = React.memo(function ChatPromptArtifactPr
   codeFontSize,
   codeLineHeight,
   codeTabSize,
-  wrapLines,
-  showLineNumbers,
   onClose,
   onToggleFile,
   scrollRef,
@@ -2192,8 +2188,8 @@ const ChatPromptArtifactPreviewViewer = React.memo(function ChatPromptArtifactPr
                     <ShikiDiffPane
                       content={file.diff}
                       language={detectCodeLanguage(file.path)}
-                      wrap={wrapLines}
-                      lineNumbers={showLineNumbers}
+                      wrap={false}
+                      lineNumbers={true}
                       themeMode={themeMode}
                       codeTheme={codeTheme}
                       codeFont={codeFont}
@@ -2245,9 +2241,7 @@ const ChatPromptArtifactPreviewViewer = React.memo(function ChatPromptArtifactPr
   prev.codeFontFamily === next.codeFontFamily &&
   prev.codeFontSize === next.codeFontSize &&
   prev.codeLineHeight === next.codeLineHeight &&
-  prev.codeTabSize === next.codeTabSize &&
-  prev.wrapLines === next.wrapLines &&
-  prev.showLineNumbers === next.showLineNumbers
+  prev.codeTabSize === next.codeTabSize
 ));
 
 export function App() {
@@ -17391,8 +17385,6 @@ export function App() {
           codeFontSize={codeFontSize}
           codeLineHeight={codeLineHeight}
           codeTabSize={codeTabSize}
-          wrapLines={wrapLines}
-          showLineNumbers={showLineNumbers}
           onClose={closeChatFilePeekFromChrome}
           onToggleFile={togglePromptArtifactPreviewFile}
           scrollRef={chatFilePeekScrollRef}
@@ -17437,8 +17429,6 @@ export function App() {
           codeFontSize={codeFontSize}
           codeLineHeight={codeLineHeight}
           codeTabSize={codeTabSize}
-          wrapLines={wrapLines}
-          showLineNumbers={showLineNumbers}
           onClose={closeChatFilePeekFromChrome}
           onToggleFile={togglePromptArtifactPreviewFile}
           scrollRef={chatFilePeekScrollRef}

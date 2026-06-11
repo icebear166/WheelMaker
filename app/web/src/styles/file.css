@@ -67,9 +67,22 @@
 
 .chat-file-peek-scroll {
   flex: 1;
+  min-width: 0;
   min-height: 0;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: auto;
+  scrollbar-gutter: stable both-edges;
   background: var(--panel-3);
+}
+
+.chat-file-peek-scroll .code-wrap.nowrap {
+  width: max-content;
+  min-width: 100%;
+}
+
+.chat-file-peek-scroll .diff-wrap.nowrap {
+  width: max-content;
+  min-width: 100%;
 }
 
 .chat-file-peek-error {
