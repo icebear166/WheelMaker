@@ -3059,7 +3059,7 @@
   display: inline-flex;
   align-items: center;
   max-width: min(260px, 100%);
-  gap: 4px;
+  gap: 1px;
   margin: 0 2px;
   padding: 0 5px;
   border: 1px solid color-mix(in srgb, var(--border) 78%, var(--accent));

@@ -148,6 +148,29 @@ describe('ChatRichComposer', () => {
     ]);
   });
 
+  test('reports serialized text cursor after replacing an active slash query', async () => {
+    const onPlainTextChange = jest.fn();
+    const ref = React.createRef<ChatRichComposerHandle>();
+
+    await ReactTestRenderer.act(() => {
+      ReactTestRenderer.create(
+        <ChatRichComposer
+          ref={ref}
+          tokens={[{type: 'text', text: '/gri'}]}
+          onTokensChange={jest.fn()}
+          onPlainTextChange={onPlainTextChange}
+          readOnly={false}
+        />,
+      );
+    });
+
+    await ReactTestRenderer.act(() => {
+      ref.current!.insertSkill({command: '/grill-me', label: 'Grill Me'});
+    });
+
+    expect(onPlainTextChange).toHaveBeenLastCalledWith('/grill-me ', '/grill-me '.length);
+  });
+
   test('deleteSelectedCapsule removes the selected token', async () => {
     const onTokensChange = jest.fn();
     const ref = React.createRef<ChatRichComposerHandle>();

@@ -22,5 +22,9 @@ describe('web chat inline composer capsule wiring', () => {
     expect(mainTsx).toContain('<ChatRichComposer');
     expect(stylesCss).toContain('.chat-rich-composer');
     expect(stylesCss).toContain('.chat-composer-capsule');
+    const capsuleRuleStart = stylesCss.indexOf('.chat-composer-capsule,\n.chat-prompt-inline-capsule {');
+    const capsuleRuleEnd = stylesCss.indexOf('}', capsuleRuleStart);
+    const capsuleRule = stylesCss.slice(capsuleRuleStart, capsuleRuleEnd);
+    expect(capsuleRule).toContain('gap: 1px;');
   });
 });

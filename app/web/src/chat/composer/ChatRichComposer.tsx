@@ -3,6 +3,7 @@ import React from 'react';
 import {
   normalizeChatComposerTokens,
   serializeChatComposerTokens,
+  serializedChatComposerTextPosition,
   tokenizeKnownChatSlashCommands,
   type ChatComposerFileToken,
   type ChatComposerSkillToken,
@@ -91,7 +92,7 @@ export const ChatRichComposer = React.forwardRef<ChatRichComposerHandle, ChatRic
         pendingSelectionRef.current = cursor;
         onTokensChange(normalized);
         const serialized = serializeChatComposerTokens(normalized);
-        onPlainTextChange?.(serialized.text, Math.min(cursor, serialized.text.length));
+        onPlainTextChange?.(serialized.text, serializedChatComposerTextPosition(normalized, cursor));
       },
       [onPlainTextChange, onTokensChange, slashCommands],
     );

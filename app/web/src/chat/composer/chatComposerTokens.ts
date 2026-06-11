@@ -88,15 +88,7 @@ export function chatComposerHasSendableTokens(tokens: ChatComposerToken[]): bool
 
 export function serializeChatComposerTokens(tokens: ChatComposerToken[]): SerializedChatComposerTokens {
   const normalized = applyFileLabels(normalizeChatComposerTokens(tokens));
-  const text = normalized.map(token => {
-    if (token.type === 'text') {
-      return token.text;
-    }
-    if (token.type === 'skill') {
-      return token.command;
-    }
-    return fileReferenceText(token.label || token.name || fileNameFromPath(token.path));
-  }).join('');
+  const text = normalized.map(serializedChatComposerTokenText).join('');
   const blocks: RegistrySessionContentBlock[] = text ? [{type: 'text', text}] : [];
   const seenPaths = new Set<string>();
   for (const token of normalized) {
@@ -114,6 +106,29 @@ export function serializeChatComposerTokens(tokens: ChatComposerToken[]): Serial
     });
   }
   return {text, blocks};
+}
+
+export function serializedChatComposerTextPosition(tokens: ChatComposerToken[], position: number): number {
+  const normalized = applyFileLabels(normalizeChatComposerTokens(tokens));
+  const safePosition = Math.max(0, Math.min(Math.trunc(position), chatComposerTokenUnitLength(normalized)));
+  let tokenCursor = 0;
+  let textCursor = 0;
+
+  for (const token of normalized) {
+    const tokenLength = chatComposerSingleTokenUnitLength(token);
+    const tokenEnd = tokenCursor + tokenLength;
+    const serializedText = serializedChatComposerTokenText(token);
+    if (safePosition <= tokenEnd) {
+      if (token.type === 'text') {
+        return textCursor + Math.max(0, safePosition - tokenCursor);
+      }
+      return safePosition <= tokenCursor ? textCursor : textCursor + serializedText.length;
+    }
+    tokenCursor = tokenEnd;
+    textCursor += serializedText.length;
+  }
+
+  return textCursor;
 }
 
 export function tokenizeKnownChatSlashCommands(
@@ -211,6 +226,24 @@ function includeUsefulParentForGenericSuffix(pathParts: string[], suffixLength: 
 
 function fileReferenceText(label: string): string {
   return /\s/.test(label) ? `@<${label}>` : `@${label}`;
+}
+
+function serializedChatComposerTokenText(token: ChatComposerToken): string {
+  if (token.type === 'text') {
+    return token.text;
+  }
+  if (token.type === 'skill') {
+    return token.command;
+  }
+  return fileReferenceText(token.label || token.name || fileNameFromPath(token.path));
+}
+
+function chatComposerTokenUnitLength(tokens: ChatComposerToken[]): number {
+  return tokens.reduce((total, token) => total + chatComposerSingleTokenUnitLength(token), 0);
+}
+
+function chatComposerSingleTokenUnitLength(token: ChatComposerToken): number {
+  return token.type === 'text' ? token.text.length : 1;
 }
 
 function normalizeSkillCommand(command: string): string {
