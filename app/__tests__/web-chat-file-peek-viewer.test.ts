@@ -30,6 +30,20 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('setChatFilePeek({');
   });
 
+  test('file mention preview reuses chat peek without inserting or closing the menu', () => {
+    const mainTsx = readSourceText(mainPath);
+    const previewStart = mainTsx.indexOf('const openChatFileMentionPreview = useCallback(');
+    expect(previewStart).toBeGreaterThanOrEqual(0);
+    const previewEnd = mainTsx.indexOf('const closeChatFilePeekFromChrome = useCallback', previewStart);
+    expect(previewEnd).toBeGreaterThan(previewStart);
+    const previewBody = mainTsx.slice(previewStart, previewEnd);
+
+    expect(previewBody).toContain('openChatFilePeek(path, null)');
+    expect(previewBody).not.toContain('applyChatFileMentionResult');
+    expect(previewBody).not.toContain('setChatFileMentionMenuOpen(false)');
+    expect(previewBody).toContain('chatRichComposerRef.current?.focus();');
+  });
+
   test('prompt diff artifacts open the chat preview without switching to the Git tab', () => {
     const mainTsx = readSourceText(mainPath);
     const openStart = mainTsx.indexOf('const openPromptArtifactDiff = useCallback(');
