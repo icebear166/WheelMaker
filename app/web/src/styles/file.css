@@ -572,8 +572,12 @@
 }
 
 .chat-file-mention-shortcut-tip {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   min-height: 26px;
   border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 94%, #151515);
   color: color-mix(in srgb, var(--muted) 78%, var(--text));
   display: flex;
   align-items: center;
