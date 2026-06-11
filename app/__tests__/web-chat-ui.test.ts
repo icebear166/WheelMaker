@@ -980,8 +980,10 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('<span className="chat-attachment-action-label">Code</span>');
     expect(mainTsx).toContain('<span className="chat-attachment-action-label">File</span>');
     expect(mainTsx).toContain('<span className="chat-attachment-action-label">Photo</span>');
-    expect(mainTsx).toContain('className="codicon codicon-code chat-composer-tool-glyph chat-slash-symbol"');
-    expect(mainTsx).toContain('className="codicon codicon-file-code chat-composer-tool-glyph chat-at-symbol"');
+    expect(mainTsx).toContain('className="chat-composer-tool-glyph chat-slash-symbol"');
+    expect(mainTsx).toContain('className="chat-composer-tool-glyph chat-at-symbol"');
+    expect(mainTsx).not.toContain('codicon-code chat-composer-tool-glyph chat-slash-symbol');
+    expect(mainTsx).not.toContain('codicon-file-code chat-composer-tool-glyph chat-at-symbol');
     expect(mainTsx).not.toContain('className="chat-tool-button chat-mention-button"');
     expect(mainTsx).toContain('title="Mention files"');
     expect(mainTsx).toContain('aria-label="Mention files"');
@@ -1080,6 +1082,15 @@ describe('web chat integration', () => {
     expect(fileMentionShortcutBody).toContain("const prefix = text && !/\\s$/.test(text) ? ' @' : '@';");
     expect(fileMentionShortcutBody).toContain('chatRichComposerRef.current?.insertText(prefix);');
     expect(fileMentionShortcutBody).toContain('scheduleChatFileMentionSearch(nextText, nextText.length);');
+
+    const slashShortcutStart = mainTsx.indexOf('const openChatPromptMenu = useCallback(() => {');
+    const slashShortcutEnd = mainTsx.indexOf('const toggleChatAttachmentTray = useCallback', slashShortcutStart);
+    expect(slashShortcutStart).toBeGreaterThanOrEqual(0);
+    expect(slashShortcutEnd).toBeGreaterThan(slashShortcutStart);
+    const slashShortcutBody = mainTsx.slice(slashShortcutStart, slashShortcutEnd);
+    expect(slashShortcutBody).toContain("const prefix = text && !/\\s$/.test(text) ? ' /' : '/';");
+    expect(slashShortcutBody).toContain('chatRichComposerRef.current?.insertText(prefix);');
+    expect(slashShortcutBody).toContain('scheduleChatSlashMenu(nextText, nextText.length);');
 
     const toolsStart = mainTsx.indexOf('className="chat-composer-tools"');
     const toolsEnd = mainTsx.indexOf('className="chat-config-options-wrap"', toolsStart);
@@ -1241,8 +1252,8 @@ describe('web chat integration', () => {
       stylesCss.indexOf('.chat-tool-button {'),
     );
     expect(stylesCss).toContain('.chat-composer-tool-glyph {');
-    expect(stylesCss).toContain('.chat-slash-symbol:not(.codicon),');
-    expect(stylesCss).toContain('.chat-at-symbol:not(.codicon) {');
+    expect(stylesCss).toContain('.chat-slash-symbol,');
+    expect(stylesCss).toContain('.chat-at-symbol {');
     expect(stylesCss).toContain('.chat-attachment-plus-button {');
     expect(stylesCss).toContain('.chat-attachment-action-tray {');
     expect(stylesCss).not.toContain('.chat-attachment-action-tray::after {');
@@ -2079,7 +2090,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className="chat-tool-button chat-file-mention-trigger-button"');
     expect(mainTsx).toContain('className="chat-tool-button chat-slash-button"');
     expect(mainTsx).toContain('aria-label="Mention files"');
-    expect(mainTsx).toContain('className="codicon codicon-file-code chat-composer-tool-glyph chat-at-symbol"');
+    expect(mainTsx).toContain('className="chat-composer-tool-glyph chat-at-symbol"');
     expect(mainTsx).toContain('!selectedChatPromptRunning ? (');
     expect(mainTsx).toContain('className="chat-tool-button chat-attachment-plus-button"');
     expect(mainTsx).toContain(') : (');
@@ -2100,10 +2111,12 @@ describe('web chat integration', () => {
     expect(toolsBlock.indexOf('chat-file-mention-trigger-button')).toBeLessThan(toolsBlock.indexOf('chat-attachment-plus-button'));
 
     expect(stylesCss).toContain('.chat-file-mention-trigger-button');
-    expect(stylesCss).toContain('.chat-at-symbol:not(.codicon)');
+    expect(stylesCss).toContain('.chat-at-symbol');
     expect(stylesCss).toContain('.chat-composer-capsule.file');
-    expect(mainTsx).toContain('className="codicon codicon-code chat-composer-tool-glyph chat-slash-symbol"');
-    expect(mainTsx).toContain('className="codicon codicon-file-code chat-composer-tool-glyph chat-at-symbol"');
+    expect(mainTsx).toContain('className="chat-composer-tool-glyph chat-slash-symbol"');
+    expect(mainTsx).toContain('className="chat-composer-tool-glyph chat-at-symbol"');
+    expect(mainTsx).not.toContain('codicon-code chat-composer-tool-glyph chat-slash-symbol');
+    expect(mainTsx).not.toContain('codicon-file-code chat-composer-tool-glyph chat-at-symbol');
     expect(mainTsx).toContain('className="codicon codicon-file-media chat-composer-tool-glyph"');
     expect(mainTsx).not.toContain('className="codicon codicon-tools chat-composer-tool-glyph"');
     expect(mainTsx).not.toContain('className="codicon codicon-add chat-composer-tool-glyph"');

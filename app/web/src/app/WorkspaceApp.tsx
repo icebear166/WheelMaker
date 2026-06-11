@@ -128,6 +128,10 @@ import {
   type ChatComposerToken,
 } from '../chat/composer/chatComposerTokens';
 import {
+  resolveChatFileMentionQuery,
+  resolveChatSlashQuery,
+} from '../chat/composer/chatComposerTriggerQueries';
+import {
   buildPromptMarkdownImageFileName,
   renderMarkdownElementToPngBlob,
   resolveMarkdownImageExportWidth,
@@ -817,23 +821,6 @@ function chatSlashCommandLabel(name: string): string {
     .join(' ');
 }
 
-function resolveChatFileMentionQuery(text: string, cursor: number): {start: number; end: number; query: string} | null {
-  const safeCursor = Math.max(0, Math.min(text.length, cursor));
-  const beforeCursor = text.slice(0, safeCursor);
-  const atIndex = beforeCursor.lastIndexOf('@');
-  if (atIndex < 0) {
-    return null;
-  }
-  if (atIndex > 0 && !/\s/.test(beforeCursor[atIndex - 1])) {
-    return null;
-  }
-  const query = beforeCursor.slice(atIndex + 1);
-  if (/\s/.test(query)) {
-    return null;
-  }
-  return {start: atIndex, end: safeCursor, query};
-}
-
 function registryResourceLinkHasScheme(uri: string): boolean {
   return /^[A-Za-z][A-Za-z0-9+.-]*:/.test(uri.trim());
 }
@@ -1184,21 +1171,6 @@ function normalizeChatSlashCommands(skills?: string[]): ChatSlashCommandOption[]
     merged.set(key, { name });
   }
   return Array.from(merged.values()).sort((left, right) => left.name.localeCompare(right.name));
-}
-
-function parseChatSlashQuery(text: string): string | null {
-  const leadingTrimmed = text.trimStart();
-  if (!leadingTrimmed.startsWith('/')) {
-    return null;
-  }
-  const firstToken = leadingTrimmed.split(/\s+/, 1)[0] || '';
-  if (!firstToken.startsWith('/')) {
-    return null;
-  }
-  if (leadingTrimmed.length > firstToken.length) {
-    return null;
-  }
-  return firstToken.slice(1).toLowerCase();
 }
 
 function filterChatSlashCommands(
@@ -3057,6 +3029,7 @@ export function App() {
   const [chatQuickSwitchCreateProjectId, setChatQuickSwitchCreateProjectId] = useState('');
   const [chatQuickSwitchCreatePendingKey, setChatQuickSwitchCreatePendingKey] = useState('');
   const chatQuickSwitchMenuRef = useRef<HTMLDivElement | null>(null);
+  const [chatSlashQuery, setChatSlashQuery] = useState<string | null>(null);
   const [chatSlashActiveIndex, setChatSlashActiveIndex] = useState(0);
   const chatFileMentionQuerySessionIdRef = useRef(`file-query-${Date.now()}`);
   const chatFileMentionQueryIdRef = useRef(0);
@@ -3229,22 +3202,17 @@ export function App() {
     [chatSlashSkills],
   );
 
-  const chatSlashQuery = useMemo(
-    () => parseChatSlashQuery(chatComposerText),
-    [chatComposerText],
-  );
-
   const chatSlashCommandOptions = useMemo(
     () => filterChatSlashCommands(chatSlashCommands, chatSlashQuery),
     [chatSlashCommands, chatSlashQuery],
   );
 
   const chatSlashMenuOptions = useMemo(
-    () => (chatPromptMenuOpen ? chatSlashCommands : chatSlashCommandOptions),
-    [chatPromptMenuOpen, chatSlashCommands, chatSlashCommandOptions],
+    () => chatSlashCommandOptions,
+    [chatSlashCommandOptions],
   );
 
-  const chatSlashMenuVisible = !chatFileMentionMenuOpen && !chatAttachmentTrayOpen && chatSlashMenuOptions.length > 0;
+  const chatSlashMenuVisible = chatPromptMenuOpen && !chatFileMentionMenuOpen && !chatAttachmentTrayOpen && chatSlashMenuOptions.length > 0;
 
 
   const currentChatDraftKey = useMemo(
@@ -3561,6 +3529,21 @@ export function App() {
     setChatAttachmentTrayOpen(false);
   }, []);
 
+  const scheduleChatSlashMenu = useCallback((text: string, cursor: number) => {
+    const slashQuery = resolveChatSlashQuery(text, cursor);
+    if (!slashQuery) {
+      setChatPromptMenuOpen(false);
+      setChatSlashQuery(null);
+      setChatSlashActiveIndex(0);
+      return;
+    }
+    setChatFileMentionMenuOpen(false);
+    setChatAttachmentTrayOpen(false);
+    setChatPromptMenuOpen(true);
+    setChatSlashQuery(slashQuery.query.toLowerCase());
+    setChatSlashActiveIndex(0);
+  }, []);
+
   const applyChatSlashCommand = useCallback(
     (command: ChatSlashCommandOption) => {
       setChatPromptMenuOpen(false);
@@ -3580,15 +3563,31 @@ export function App() {
   );
 
   const openChatPromptMenu = useCallback(() => {
+    const text = chatComposerTextRef.current;
+    const selectionStart = text.length;
+    const existingQuery = resolveChatSlashQuery(text, selectionStart);
+
     setChatFileMentionMenuOpen(false);
     setChatAttachmentTrayOpen(false);
     setChatConfigMenuOptionId('');
     setChatConfigOverflowOpen(false);
-    setChatPromptMenuOpen(value => !value);
+
+    if (existingQuery) {
+      scheduleChatSlashMenu(text, selectionStart);
+      window.requestAnimationFrame(() => {
+        chatRichComposerRef.current?.focus();
+      });
+      return;
+    }
+
+    const prefix = text && !/\s$/.test(text) ? ' /' : '/';
+    chatRichComposerRef.current?.insertText(prefix);
+    const nextText = `${text}${prefix}`;
+    scheduleChatSlashMenu(nextText, nextText.length);
     window.requestAnimationFrame(() => {
       chatRichComposerRef.current?.focus();
     });
-  }, [setChatConfigOverflowOpen]);
+  }, [scheduleChatSlashMenu, setChatConfigOverflowOpen]);
 
   const toggleChatAttachmentTray = useCallback(() => {
     setChatPromptMenuOpen(false);
@@ -8889,6 +8888,9 @@ export function App() {
     setChatComposerText('');
     setChatComposerTokens([]);
     setChatAttachments([]);
+    setChatPromptMenuOpen(false);
+    setChatSlashQuery(null);
+    setChatSlashActiveIndex(0);
     setChatFileMentionMenuOpen(false);
     saveChatComposerDraft(currentChatDraftKeyRef.current, '', [], []);
     if (chatFileInputRef.current) {
@@ -16203,6 +16205,7 @@ export function App() {
                         return;
                       }
                       closeChatAttachmentTray();
+                      scheduleChatSlashMenu(text, cursor);
                       scheduleChatFileMentionSearch(text, cursor);
                     }}
                     onPaste={event => {
@@ -16296,12 +16299,19 @@ export function App() {
                           });
                           return;
                         }
-                        if (event.key === 'Enter' && !event.altKey && !event.nativeEvent.isComposing) {
+                        if ((event.key === 'Enter' || event.key === 'Tab') && !event.altKey && !event.nativeEvent.isComposing) {
                           if (!activeChatSlashCommand) {
                             return;
                           }
                           event.preventDefault();
                           applyChatSlashCommand(activeChatSlashCommand);
+                          return;
+                        }
+                        if (event.key === 'Escape') {
+                          event.preventDefault();
+                          setChatPromptMenuOpen(false);
+                          setChatSlashQuery(null);
+                          setChatSlashActiveIndex(0);
                           return;
                         }
                       }
@@ -16437,7 +16447,7 @@ export function App() {
                     aria-haspopup="listbox"
                     aria-expanded={chatPromptMenuOpen}
                   >
-                    <span className="codicon codicon-code chat-composer-tool-glyph chat-slash-symbol" aria-hidden="true" />
+                    <span className="chat-composer-tool-glyph chat-slash-symbol" aria-hidden="true">/</span>
                   </button>
                   <button
                     type="button"
@@ -16450,7 +16460,7 @@ export function App() {
                     aria-haspopup="listbox"
                     aria-expanded={chatFileMentionMenuOpen}
                   >
-                    <span className="codicon codicon-file-code chat-composer-tool-glyph chat-at-symbol" aria-hidden="true" />
+                    <span className="chat-composer-tool-glyph chat-at-symbol" aria-hidden="true">@</span>
                   </button>
                   {!selectedChatPromptRunning ? (
                     <button

@@ -3061,11 +3061,11 @@
   max-width: min(260px, 100%);
   gap: 4px;
   margin: 0 2px;
-  padding: 1px 6px;
+  padding: 0 5px;
   border: 1px solid color-mix(in srgb, var(--border) 78%, var(--accent));
   border-radius: 999px;
   vertical-align: baseline;
-  line-height: 1.35;
+  line-height: 1.1;
   white-space: nowrap;
 }
 
@@ -3091,6 +3091,14 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.chat-composer-capsule-icon,
+.chat-prompt-inline-capsule-icon {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  line-height: 1;
 }
 
 .chat-composer-input:focus {
@@ -3529,8 +3537,8 @@
   line-height: 16px;
 }
 
-.chat-slash-symbol:not(.codicon),
-.chat-at-symbol:not(.codicon) {
+.chat-slash-symbol,
+.chat-at-symbol {
   font-family: var(--font-mono);
   font-weight: 700;
 }

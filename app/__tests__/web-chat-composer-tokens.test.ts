@@ -81,6 +81,17 @@ describe('chat composer tokens', () => {
     ]);
   });
 
+  test('only tokenizes known slash commands at text start or after whitespace', () => {
+    expect(
+      tokenizeKnownChatSlashCommands('path/to (/grill-me hello\t/grill-me', [
+        {command: '/grill-me', label: 'Grill Me'},
+      ]),
+    ).toEqual([
+      {type: 'text', text: 'path/to (/grill-me hello\t'},
+      {type: 'skill', id: expect.any(String), command: '/grill-me', label: 'Grill Me'},
+    ]);
+  });
+
   test('reports sendable content from non-empty text or capsules', () => {
     expect(chatComposerHasSendableTokens([{type: 'text', text: '  '}])).toBe(false);
     expect(chatComposerHasSendableTokens([{type: 'skill', id: 's1', command: '/x', label: 'X'}])).toBe(true);

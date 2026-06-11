@@ -1,4 +1,5 @@
 import type {RegistrySessionContentBlock} from '../../registry/registryTypes';
+import {hasChatComposerTriggerBoundary} from './chatComposerTriggerQueries';
 
 export type ChatComposerTextToken = {
   type: 'text';
@@ -129,12 +130,14 @@ export function tokenizeKnownChatSlashCommands(
   }
 
   const parts: ChatComposerToken[] = [];
-  const pattern = /(^|[\s([{,;])\/[A-Za-z0-9][A-Za-z0-9_-]*(?=$|[\s)\]},;.!?])/g;
+  const pattern = /\/[A-Za-z0-9][A-Za-z0-9_-]*(?=$|[\s)\]},;.!?])/g;
   let cursor = 0;
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(text)) !== null) {
-    const prefix = match[1] ?? '';
-    const commandStart = match.index + prefix.length;
+    const commandStart = match.index;
+    if (!hasChatComposerTriggerBoundary(text, commandStart)) {
+      continue;
+    }
     const rawCommand = text.slice(commandStart, pattern.lastIndex);
     const command = normalizeSkillCommand(rawCommand);
     const label = byCommand.get(command);

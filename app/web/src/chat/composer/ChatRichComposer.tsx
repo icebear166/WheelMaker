@@ -55,6 +55,7 @@ export const ChatRichComposer = React.forwardRef<ChatRichComposerHandle, ChatRic
     const pendingSelectionRef = React.useRef<number | null>(null);
     const selectedTokenIdRef = React.useRef('');
     const [selectedTokenId, setSelectedTokenId] = React.useState('');
+    const [localEmpty, setLocalEmpty] = React.useState(() => chatComposerTokensEmpty(tokens));
 
     React.useLayoutEffect(() => {
       if (composingRef.current) {
@@ -62,6 +63,7 @@ export const ChatRichComposer = React.forwardRef<ChatRichComposerHandle, ChatRic
       }
       const normalized = normalizeChatComposerTokens(tokens);
       tokensRef.current = normalized;
+      setLocalEmpty(chatComposerTokensEmpty(normalized));
       syncComposerDom(rootRef.current, normalized, selectedTokenIdRef.current);
       const pendingSelection = pendingSelectionRef.current;
       pendingSelectionRef.current = null;
@@ -85,6 +87,7 @@ export const ChatRichComposer = React.forwardRef<ChatRichComposerHandle, ChatRic
           composingRef.current ? nextTokens : tokenizeTextTokens(nextTokens, slashCommands),
         );
         tokensRef.current = normalized;
+        setLocalEmpty(chatComposerTokensEmpty(normalized));
         pendingSelectionRef.current = cursor;
         onTokensChange(normalized);
         const serialized = serializeChatComposerTokens(normalized);
@@ -160,6 +163,7 @@ export const ChatRichComposer = React.forwardRef<ChatRichComposerHandle, ChatRic
       if (!root) {
         return;
       }
+      setLocalEmpty(composerRootEmpty(root));
       if (composingRef.current) {
         return;
       }
@@ -219,7 +223,7 @@ export const ChatRichComposer = React.forwardRef<ChatRichComposerHandle, ChatRic
 
     return (
       <>
-        {chatComposerTokensEmpty(tokens) ? (
+        {localEmpty ? (
           <span className="chat-rich-composer-placeholder" aria-hidden="true">
             {placeholder}
           </span>
@@ -271,7 +275,21 @@ function createTokenId(kind: string): string {
 }
 
 function chatComposerTokensEmpty(tokens: ChatComposerToken[]): boolean {
-  return normalizeChatComposerTokens(tokens).every(token => token.type === 'text' && token.text.trim().length === 0);
+  return normalizeChatComposerTokens(tokens).every(token => token.type === 'text' && token.text.length === 0);
+}
+
+function composerRootEmpty(root: HTMLDivElement): boolean {
+  return Array.from(root.childNodes).every(node => !domNodeHasComposerContent(node));
+}
+
+function domNodeHasComposerContent(node: Node): boolean {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return (node.textContent ?? '').length > 0;
+  }
+  if (isCapsuleNode(node) || node.nodeName === 'BR') {
+    return true;
+  }
+  return Array.from(node.childNodes).some(child => domNodeHasComposerContent(child));
 }
 
 function syncComposerDom(
@@ -304,8 +322,9 @@ function createCapsuleNode(
   capsule.className = `chat-composer-capsule ${token.type}${selected ? ' selected' : ''}`;
 
   const icon = ownerDocument.createElement('span');
-  icon.className = `codicon ${token.type === 'skill' ? 'codicon-code' : 'codicon-file-code'}`;
+  icon.className = 'chat-composer-capsule-icon';
   icon.setAttribute('aria-hidden', 'true');
+  icon.textContent = token.type === 'skill' ? '/' : '@';
   capsule.appendChild(icon);
 
   const label = ownerDocument.createElement('span');

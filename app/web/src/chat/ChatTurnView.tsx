@@ -281,7 +281,9 @@ function renderPromptInlineParts(parts: ChatPromptInlinePart[]): React.ReactNode
         className={`chat-prompt-inline-capsule ${part.type}`}
         title={part.type === 'file' ? part.path : part.command}
       >
-        <span className={`codicon ${part.type === 'skill' ? 'codicon-code' : 'codicon-file-code'}`} aria-hidden="true" />
+        <span className="chat-prompt-inline-capsule-icon" aria-hidden="true">
+          {part.type === 'skill' ? '/' : '@'}
+        </span>
         <span className="chat-prompt-inline-capsule-label">{part.label}</span>
       </span>
     );

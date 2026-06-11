@@ -73,6 +73,34 @@ describe('ChatRichComposer', () => {
     expect(onTokensChange).toHaveBeenLastCalledWith([{type: 'text', text: 'ni'}]);
   });
 
+  test('hides placeholder from local composition input before tokens commit', async () => {
+    const onTokensChange = jest.fn();
+    const composerRoot = createComposerDomRoot();
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        <ChatRichComposer tokens={[]} onTokensChange={onTokensChange} readOnly={false} />,
+        {
+          createNodeMock: element => (element.props.role === 'textbox' ? composerRoot : null),
+        },
+      );
+    });
+
+    expect(renderer!.root.findAllByProps({className: 'chat-rich-composer-placeholder'})).toHaveLength(1);
+
+    await ReactTestRenderer.act(() => {
+      textboxAppendText(composerRoot, 'n');
+      const textbox = renderer!.root.findByProps({role: 'textbox'});
+      textbox.props.onCompositionStart();
+      textbox.props.onInput();
+    });
+
+    expect(onTokensChange).not.toHaveBeenCalled();
+    expect(renderer!.root.findAllByProps({className: 'chat-rich-composer-placeholder'})).toHaveLength(0);
+  });
+
+
   test('renders placeholder outside the editable selection surface', async () => {
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
 
@@ -181,4 +209,14 @@ function createComposerDomRoot(): HTMLDivElement {
       this.childNodes = children;
     },
   } as unknown as HTMLDivElement;
+}
+
+function textboxAppendText(root: HTMLDivElement, text: string): void {
+  root.childNodes = [
+    ...Array.from(root.childNodes),
+    {
+      nodeType: 3,
+      textContent: text,
+    } as unknown as ChildNode,
+  ] as unknown as NodeListOf<ChildNode>;
 }
