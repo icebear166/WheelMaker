@@ -463,7 +463,7 @@ export class RegistryWorkspaceService {
     if (!this.repository) {
       throw new Error('session is not ready');
     }
-    return this.readRepositoryForProject(projectId).readSessionArtifact(projectId, sessionId, artifactId);
+    return this.repository.readSessionArtifact(projectId, sessionId, artifactId);
   }
 
   async startProjectSessionSearch(projectId: string, searchId: string, query: string): Promise<RegistrySessionSearchStatusResponse> {

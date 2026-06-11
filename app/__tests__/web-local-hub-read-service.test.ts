@@ -108,6 +108,12 @@ describe('local hub read service routing', () => {
       gitStatus: jest.fn(async () => ({dirty: false, worktreeRev: 'remote', staged: [], unstaged: [], untracked: []})),
       syncCheck: jest.fn(async () => ({projectRev: 'remote', gitRev: 'remote', worktreeRev: 'remote', staleDomains: []})),
       listSessions: jest.fn(async () => [{sessionId: 'remote-session', title: 'Remote', preview: '', updatedAt: '', messageCount: 0}]),
+      readSessionArtifact: jest.fn(async () => ({
+        artifactId: 'diff-1',
+        type: 'diff',
+        format: 'unified-diff',
+        content: 'remote diff',
+      })),
       onEvent: jest.fn(() => () => undefined),
       onClose: jest.fn(() => () => undefined),
       close: jest.fn(),
@@ -128,6 +134,12 @@ describe('local hub read service routing', () => {
       })),
       gitStatus: jest.fn(async () => ({dirty: true, worktreeRev: 'local', staged: [], unstaged: [], untracked: []})),
       syncCheck: jest.fn(async () => ({projectRev: 'local', gitRev: 'local', worktreeRev: 'local', staleDomains: ['git']})),
+      readSessionArtifact: jest.fn(async () => ({
+        artifactId: 'diff-1',
+        type: 'diff',
+        format: 'unified-diff',
+        content: 'local diff',
+      })),
       close: jest.fn(),
     };
     const service = new RegistryWorkspaceService(undefined, {
@@ -145,6 +157,7 @@ describe('local hub read service routing', () => {
     const status = await service.getGitStatus();
     const sync = await service.syncCheck({});
     const sessions = await service.listSessions();
+    const artifact = await service.readSessionArtifact('hub-a:proj1', 'sess-1', 'diff-1');
     const indexStatus = await service.getFileIndexStatus('hub-a');
     const rebuild = await service.rebuildFileIndex('hub-a:proj1');
     const search = await service.searchFileIndex('hub-a:proj1', {
@@ -158,6 +171,7 @@ describe('local hub read service routing', () => {
     expect(status.worktreeRev).toBe('local');
     expect(sync.gitRev).toBe('local');
     expect(sessions[0].sessionId).toBe('remote-session');
+    expect(artifact.content).toBe('remote diff');
     expect(indexStatus.projects[0].status).toBe('missing');
     expect(rebuild.running).toBe(true);
     expect(search.results[0].path).toBe('src/MobileInstance.ts');
@@ -173,6 +187,8 @@ describe('local hub read service routing', () => {
       limit: 20,
     });
     expect(remoteRepository.listSessions).toHaveBeenCalled();
+    expect(remoteRepository.readSessionArtifact).toHaveBeenCalledWith('hub-a:proj1', 'sess-1', 'diff-1');
+    expect(localRepository.readSessionArtifact).not.toHaveBeenCalled();
 
     localRepository.listFiles.mockRejectedValueOnce(localFileError);
     await expect(service.listDirectory('.')).rejects.toThrow('local file failure');
