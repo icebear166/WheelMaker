@@ -16543,6 +16543,14 @@ export function App() {
                           });
                           return;
                         }
+                        if (event.key === 'ArrowRight') {
+                          event.preventDefault();
+                          const activeResult = chatFileMentionResults[chatFileMentionActiveIndex];
+                          if (activeResult) {
+                            openChatFileMentionPreview(activeResult);
+                          }
+                          return;
+                        }
                         if ((event.key === 'Enter' || event.key === 'Tab') && !event.altKey && !event.nativeEvent.isComposing) {
                           const activeResult = chatFileMentionResults[chatFileMentionActiveIndex];
                           if (!activeResult) {
@@ -16650,7 +16658,7 @@ export function App() {
               </div>
               {chatFileMentionMenuOpen ? (
                 <div ref={chatFileMentionMenuRef} className="chat-file-mention-menu" role="listbox" aria-label="File mentions">
-                  <div className="chat-file-mention-shortcut-tip">Up/Down to browse, right click to preview</div>
+                  <div className="chat-file-mention-shortcut-tip">Up/Down to browse, Right to preview</div>
                   {chatFileMentionLoading ? (
                     <div className="chat-file-mention-empty">Searching...</div>
                   ) : chatFileMentionError ? (
@@ -16671,11 +16679,6 @@ export function App() {
                           aria-selected={index === chatFileMentionActiveIndex}
                           title={result.path}
                           onMouseEnter={() => setChatFileMentionActiveIndex(index)}
-                          onContextMenu={event => {
-                            event.preventDefault();
-                            setChatFileMentionActiveIndex(index);
-                            openChatFileMentionPreview(result);
-                          }}
                         >
                           <button
                             type="button"

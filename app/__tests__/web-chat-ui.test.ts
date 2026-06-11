@@ -2081,7 +2081,7 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-file-mention-path');
   });
 
-  test('chat composer file mention popup exposes context preview help', () => {
+  test('chat composer file mention popup exposes directional preview help', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const stylesCss = readWebStyles(projectRoot);
@@ -2092,19 +2092,21 @@ describe('web chat integration', () => {
     expect(fileMentionKeyEnd).toBeGreaterThan(fileMentionKeyStart);
     const fileMentionKeyBody = mainTsx.slice(fileMentionKeyStart, fileMentionKeyEnd);
 
-    expect(mainTsx).toContain('Up/Down to browse, right click to preview');
+    expect(mainTsx).toContain('Up/Down to browse, Right to preview');
     expect(mainTsx).toContain('className="chat-file-mention-shortcut-tip"');
     expect(mainTsx).toContain('chat-file-mention-option-row');
     expect(mainTsx).toContain('className="chat-file-mention-option-main"');
     expect(mainTsx).toContain('className="chat-file-mention-preview-button"');
     expect(mainTsx).toContain('aria-label={`Open ${name} preview`}');
-    expect(mainTsx).toContain('onContextMenu={event => {');
     expect(mainTsx).toContain('onClick={() => openChatFileMentionPreview(result)}');
     expect(mainTsx).toContain('onClick={() => applyChatFileMentionResult(result)}');
     expect(fileMentionKeyBody).toContain("event.key === 'ArrowDown'");
     expect(fileMentionKeyBody).toContain("event.key === 'ArrowUp'");
+    expect(fileMentionKeyBody).toContain("event.key === 'ArrowRight'");
+    expect(fileMentionKeyBody).toContain('openChatFileMentionPreview(activeResult);');
     expect(fileMentionKeyBody).not.toContain("event.key.toLowerCase() === 'o'");
     expect(fileMentionKeyBody).not.toContain('(event.ctrlKey || event.metaKey)');
+    expect(mainTsx).not.toContain('onContextMenu={event => {');
 
     expect(stylesCss).toContain('.chat-file-mention-shortcut-tip');
     expect(stylesCss).toContain('.chat-file-mention-option-row');

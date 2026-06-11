@@ -13,12 +13,12 @@
 ## File Structure
 
 - Modify `app/__tests__/web-chat-ui.test.ts`
-  - Add assertions that protect the mention popup tip, preview button, context preview, and unchanged insert action.
+  - Add assertions that protect the mention popup tip, preview button, directional preview, and unchanged insert action.
 - Modify `app/__tests__/web-chat-file-peek-viewer.test.ts`
   - Add assertions that mention preview reuses `openChatFilePeek(result.path, null)` and does not close or insert.
 - Modify `app/web/src/app/WorkspaceApp.tsx`
   - Add `openChatFileMentionPreview`.
-  - Wire right-click preview into each file mention result row.
+  - Wire `ArrowRight` preview into the file mention keyboard branch.
   - Render a desktop sticky tip and a trailing preview icon for each result.
 - Modify `app/web/src/styles/file.css`
   - Add tip styling.
@@ -36,19 +36,20 @@
 Add this test near the existing file mention popup tests in `app/__tests__/web-chat-ui.test.ts`:
 
 ```ts
-  test('chat composer file mention popup exposes context preview help', () => {
+  test('chat composer file mention popup exposes directional preview help', () => {
     const mainTsx = readSourceText(mainPath);
     const stylesCss = readWebStyles(projectRoot);
 
-    expect(mainTsx).toContain('Up/Down to browse, right click to preview');
+    expect(mainTsx).toContain('Up/Down to browse, Right to preview');
     expect(mainTsx).toContain('className="chat-file-mention-shortcut-tip"');
     expect(mainTsx).toContain('className="chat-file-mention-option-row"');
     expect(mainTsx).toContain('className="chat-file-mention-option-main"');
     expect(mainTsx).toContain('className="chat-file-mention-preview-button"');
     expect(mainTsx).toContain('aria-label={`Open ${name} preview`}');
-    expect(mainTsx).toContain('onContextMenu={event => {');
     expect(mainTsx).toContain('onClick={() => openChatFileMentionPreview(result)}');
     expect(mainTsx).toContain('onClick={() => applyChatFileMentionResult(result)}');
+    expect(mainTsx).toContain("event.key === 'ArrowRight'");
+    expect(mainTsx).toContain('openChatFileMentionPreview(activeResult);');
 
     expect(stylesCss).toContain('.chat-file-mention-shortcut-tip');
     expect(stylesCss).toContain('.chat-file-mention-option-row');
@@ -87,7 +88,7 @@ cd app
 npm test -- --runTestsByPath __tests__/web-chat-ui.test.ts __tests__/web-chat-file-peek-viewer.test.ts --runInBand
 ```
 
-Expected: FAIL because the sticky right-click preview tip, `openChatFileMentionPreview`, and preview button classes are not present yet.
+Expected: FAIL because the sticky directional preview tip, `openChatFileMentionPreview`, and preview button classes are not present yet.
 
 ### Task 2: Implement File Mention Preview
 
@@ -115,16 +116,19 @@ Add a `useCallback` after `applyChatFileMentionResult`:
   );
 ```
 
-- [ ] **Step 2: Add right-click preview handling**
+- [ ] **Step 2: Add directional preview handling**
 
-Inside each file mention result row, add:
+Inside the file mention keyboard branch, add:
 
 ```tsx
-                          onContextMenu={event => {
-                            event.preventDefault();
-                            setChatFileMentionActiveIndex(index);
-                            openChatFileMentionPreview(result);
-                          }}
+                        if (event.key === 'ArrowRight') {
+                          event.preventDefault();
+                          const activeResult = chatFileMentionResults[chatFileMentionActiveIndex];
+                          if (activeResult) {
+                            openChatFileMentionPreview(activeResult);
+                          }
+                          return;
+                        }
 ```
 
 - [ ] **Step 3: Render the shortcut tip and split result row actions**
@@ -133,7 +137,7 @@ In the `chatFileMentionMenuOpen` popup JSX:
 
 ```tsx
                 <div ref={chatFileMentionMenuRef} className="chat-file-mention-menu" role="listbox" aria-label="File mentions">
-                  <div className="chat-file-mention-shortcut-tip">Up/Down to browse, right click to preview</div>
+                  <div className="chat-file-mention-shortcut-tip">Up/Down to browse, Right to preview</div>
 ```
 
 Replace each result button with sibling row buttons:
