@@ -650,7 +650,8 @@ func ensureConfig(cfg deployConfig, deps deployDeps) (bool, error) {
 			"hubId":  "local-hub",
 		},
 		"monitor": map[string]any{
-			"port": 9631,
+			"server": "127.0.0.1",
+			"port":   9631,
 		},
 		"log": map[string]string{
 			"level": "warn",

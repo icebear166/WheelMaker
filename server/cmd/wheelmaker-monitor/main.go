@@ -14,10 +14,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/swm8023/wheelmaker/internal/shared"
 	"github.com/swm8023/wheelmaker/internal/shared/winsvc"
 )
 
 const defaultMonitorPort = 9631
+const defaultMonitorServer = "127.0.0.1"
 
 func main() {
 	if err := run(); err != nil {
@@ -49,15 +51,7 @@ func run() error {
 		return err
 	}
 
-	// Determine listen address: flag > config > default
-	addr := *addrFlag
-	if addr == "" {
-		port := defaultMonitorPort
-		if cfg.Monitor.Port > 0 {
-			port = cfg.Monitor.Port
-		}
-		addr = fmt.Sprintf(":%d", port)
-	}
+	addr := resolveMonitorListenAddr(*addrFlag, cfg)
 
 	mon := NewMonitor(baseDir)
 
@@ -74,6 +68,23 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	return runHTTPServer(ctx, addr, mux)
+}
+
+func resolveMonitorListenAddr(addrFlag string, cfg *shared.AppConfig) string {
+	if addrFlag != "" {
+		return addrFlag
+	}
+	server := defaultMonitorServer
+	port := defaultMonitorPort
+	if cfg != nil {
+		if cfg.Monitor.Server != "" {
+			server = cfg.Monitor.Server
+		}
+		if cfg.Monitor.Port > 0 {
+			port = cfg.Monitor.Port
+		}
+	}
+	return net.JoinHostPort(server, fmt.Sprintf("%d", port))
 }
 
 func runHTTPServer(ctx context.Context, addr string, handler http.Handler) error {

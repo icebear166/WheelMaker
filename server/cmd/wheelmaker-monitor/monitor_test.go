@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	clientpkg "github.com/swm8023/wheelmaker/internal/hub/client"
+	"github.com/swm8023/wheelmaker/internal/shared"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,6 +15,42 @@ import (
 	"testing"
 	"time"
 )
+
+func TestResolveMonitorListenAddrUsesLocalhostByDefault(t *testing.T) {
+	got := resolveMonitorListenAddr("", &shared.AppConfig{})
+	want := "127.0.0.1:9631"
+	if got != want {
+		t.Fatalf("resolveMonitorListenAddr()=%q, want %q", got, want)
+	}
+}
+
+func TestResolveMonitorListenAddrUsesConfiguredServerAndPort(t *testing.T) {
+	cfg := &shared.AppConfig{
+		Monitor: shared.MonitorConfig{
+			Server: "localhost",
+			Port:   9731,
+		},
+	}
+	got := resolveMonitorListenAddr("", cfg)
+	want := "localhost:9731"
+	if got != want {
+		t.Fatalf("resolveMonitorListenAddr()=%q, want %q", got, want)
+	}
+}
+
+func TestResolveMonitorListenAddrPrefersExplicitAddrFlag(t *testing.T) {
+	cfg := &shared.AppConfig{
+		Monitor: shared.MonitorConfig{
+			Server: "127.0.0.1",
+			Port:   9631,
+		},
+	}
+	got := resolveMonitorListenAddr("0.0.0.0:8080", cfg)
+	want := "0.0.0.0:8080"
+	if got != want {
+		t.Fatalf("resolveMonitorListenAddr()=%q, want %q", got, want)
+	}
+}
 
 func TestResolveLogFilePath_PrefersLogDir(t *testing.T) {
 	base := t.TempDir()

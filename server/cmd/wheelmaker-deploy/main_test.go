@@ -283,6 +283,21 @@ func TestEnsureConfigWritesRunnableWheelMakerDefault(t *testing.T) {
 			t.Fatalf("project path=%#v want %q", parsed.Projects, h.cfg.RepoRoot)
 		}
 	}
+	var parsed struct {
+		Monitor struct {
+			Server string `json:"server"`
+			Port   int    `json:"port"`
+		} `json:"monitor"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		t.Fatalf("parse generated config: %v", err)
+	}
+	if parsed.Monitor.Server != "127.0.0.1" {
+		t.Fatalf("monitor.server=%q, want 127.0.0.1", parsed.Monitor.Server)
+	}
+	if parsed.Monitor.Port != 9631 {
+		t.Fatalf("monitor.port=%d, want 9631", parsed.Monitor.Port)
+	}
 }
 
 func TestWriteHelperWrappers(t *testing.T) {

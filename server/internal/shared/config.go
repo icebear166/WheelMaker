@@ -70,7 +70,8 @@ func (c *FeishuConfig) UnmarshalJSON(data []byte) error {
 
 // MonitorConfig configures the wheelmaker-monitor web dashboard.
 type MonitorConfig struct {
-	Port int `json:"port,omitempty"` // HTTP listen port (default: 9631)
+	Server string `json:"server,omitempty"` // HTTP listen host (default: 127.0.0.1)
+	Port   int    `json:"port,omitempty"`   // HTTP listen port (default: 9631)
 }
 
 // RegistryConfig configures registry sync.

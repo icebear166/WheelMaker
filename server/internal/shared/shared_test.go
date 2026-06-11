@@ -60,6 +60,16 @@ func TestLoadConfig_AllowsDebugLogLevel(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_AllowsMonitorServer(t *testing.T) {
+	path := writeTempConfig(t, `{
+		"monitor": {"server": "127.0.0.1", "port": 9631},
+		"projects": [{"name": "p", "path": "."}]
+	}`)
+	if _, err := LoadConfig(path); err != nil {
+		t.Fatalf("LoadConfig() error = %v, want monitor server accepted", err)
+	}
+}
+
 func TestLoadConfig_RejectsRemovedProjectClient(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	data := []byte(`{"projects":[{"name":"p","path":".","client":{"agent":"codex"}}]}`)
