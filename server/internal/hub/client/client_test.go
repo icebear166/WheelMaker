@@ -12,6 +12,9 @@ import (
 	"fmt"
 	"github.com/swm8023/wheelmaker/internal/hub/agent"
 	acp "github.com/swm8023/wheelmaker/internal/protocol"
+	"image"
+	"image/color"
+	"image/png"
 	"io"
 	_ "modernc.org/sqlite"
 	"net/url"
@@ -5542,6 +5545,94 @@ func TestHandleSessionRequestSessionArchiveWritesPackAndDeletesActiveSession(t *
 	}
 }
 
+func TestSessionArchiveStripsUploadedAttachmentBlocks(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	historyRoot := filepath.Join(t.TempDir(), "db", "session")
+	c.SetSessionHistoryRoot(historyRoot)
+	ctx := context.Background()
+
+	now := time.Date(2026, 5, 17, 10, 40, 0, 0, time.UTC)
+	addRuntimeSession(c, "sess-archive-attachment", "Attachment Archive", "claude", now, now)
+	block := uploadSessionAttachmentForTest(t, c, "sess-archive-attachment", "pixel.png", "image/png", tinyPNGForTest(t))
+
+	if err := c.RecordEvent(ctx, sessionViewCreatedEvent("sess-archive-attachment", "Attachment Archive")); err != nil {
+		t.Fatalf("RecordEvent session created: %v", err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptEvent("sess-archive-attachment", "", []acp.ContentBlock{block})); err != nil {
+		t.Fatalf("RecordEvent prompt: %v", err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewUpdateEvent("sess-archive-attachment", acp.SessionUpdate{
+		SessionUpdate: acp.SessionUpdateAgentMessageChunk,
+		Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: "received"}),
+	})); err != nil {
+		t.Fatalf("RecordEvent update: %v", err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptFinishedEvent("sess-archive-attachment", acp.StopReasonEndTurn)); err != nil {
+		t.Fatalf("RecordEvent prompt finished: %v", err)
+	}
+
+	if _, err := c.HandleSessionRequest(ctx, "session.archive", "proj1", json.RawMessage(`{"sessionId":"sess-archive-attachment"}`)); err != nil {
+		t.Fatalf("HandleSessionRequest(session.archive): %v", err)
+	}
+
+	manifest := readArchiveManifestForTest(t, historyRoot, "proj1")
+	entry := manifest.Sessions["sess-archive-attachment"]
+	rawWMT2, _ := readArchivedSessionPayloadForTest(t, historyRoot, "proj1", entry)
+	contents := decodeWMT2ContentsForTest(t, rawWMT2, entry.TurnCount)
+	if strings.Contains(contents[0], "resource_link") || strings.Contains(contents[0], "file://") || strings.Contains(contents[0], "pixel.png") {
+		t.Fatalf("first archived turn kept attachment block: %s", contents[0])
+	}
+	if !strings.Contains(contents[0], "Attachment removed during archive") {
+		t.Fatalf("first archived turn = %s, want archive placeholder", contents[0])
+	}
+}
+
+func TestSessionArchiveStripsLegacyImageDataBlocks(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	historyRoot := filepath.Join(t.TempDir(), "db", "session")
+	c.SetSessionHistoryRoot(historyRoot)
+	ctx := context.Background()
+
+	now := time.Date(2026, 5, 17, 10, 42, 0, 0, time.UTC)
+	addRuntimeSession(c, "sess-archive-image-data", "Image Data Archive", "claude", now, now)
+	imageBlock := acp.ContentBlock{
+		Type:     acp.ContentBlockTypeImage,
+		MimeType: "image/png",
+		Data:     "abc123",
+	}
+
+	if err := c.RecordEvent(ctx, sessionViewCreatedEvent("sess-archive-image-data", "Image Data Archive")); err != nil {
+		t.Fatalf("RecordEvent session created: %v", err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptEvent("sess-archive-image-data", "", []acp.ContentBlock{imageBlock})); err != nil {
+		t.Fatalf("RecordEvent prompt: %v", err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewUpdateEvent("sess-archive-image-data", acp.SessionUpdate{
+		SessionUpdate: acp.SessionUpdateAgentMessageChunk,
+		Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: "received"}),
+	})); err != nil {
+		t.Fatalf("RecordEvent update: %v", err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptFinishedEvent("sess-archive-image-data", acp.StopReasonEndTurn)); err != nil {
+		t.Fatalf("RecordEvent prompt finished: %v", err)
+	}
+
+	if _, err := c.HandleSessionRequest(ctx, "session.archive", "proj1", json.RawMessage(`{"sessionId":"sess-archive-image-data"}`)); err != nil {
+		t.Fatalf("HandleSessionRequest(session.archive): %v", err)
+	}
+
+	manifest := readArchiveManifestForTest(t, historyRoot, "proj1")
+	entry := manifest.Sessions["sess-archive-image-data"]
+	rawWMT2, _ := readArchivedSessionPayloadForTest(t, historyRoot, "proj1", entry)
+	contents := decodeWMT2ContentsForTest(t, rawWMT2, entry.TurnCount)
+	if strings.Contains(contents[0], "abc123") || strings.Contains(contents[0], "image/png") {
+		t.Fatalf("first archived turn kept legacy image data: %s", contents[0])
+	}
+	if !strings.Contains(contents[0], "Attachment removed during archive") {
+		t.Fatalf("first archived turn = %s, want archive placeholder", contents[0])
+	}
+}
+
 func TestSessionArchiveDiscardsPromptDiffArtifacts(t *testing.T) {
 	c := newSessionViewTestClient(t)
 	historyRoot := filepath.Join(t.TempDir(), "db", "session")
@@ -6977,6 +7068,18 @@ func base64ForTest(data []byte) string {
 	return b.String()
 }
 
+func tinyPNGForTest(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewNRGBA(image.Rect(0, 0, 2, 1))
+	img.Set(0, 0, color.NRGBA{R: 255, A: 255})
+	img.Set(1, 0, color.NRGBA{B: 255, A: 255})
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatalf("encode tiny png: %v", err)
+	}
+	return buf.Bytes()
+}
+
 func TestStart_CreatesProjectRowWhenMissing(t *testing.T) {
 	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
 	if err != nil {
@@ -7072,6 +7175,120 @@ func TestSessionAttachmentUploadCompletesImageAsResourceLinkBlock(t *testing.T) 
 	}
 	if block.URI == "" || block.MimeType != "image/png" || block.Name != "pixel.png" {
 		t.Fatalf("block=%#v, want image uri metadata", block)
+	}
+}
+
+func TestSessionAttachmentUploadCreatesImageThumbnailSidecar(t *testing.T) {
+	c := newAttachmentTestClient(t, "sess-attach-thumb")
+	block := uploadSessionAttachmentForTest(t, c, "sess-attach-thumb", "pixel.png", "image/png", tinyPNGForTest(t))
+	path := attachmentFileURIPathForTest(t, block.URI)
+	sidecar, err := readAttachmentSidecar(attachmentSidecarPathForTest(path))
+	if err != nil {
+		t.Fatalf("read sidecar: %v", err)
+	}
+	if sidecar.Kind != "image" {
+		t.Fatalf("sidecar.Kind=%q, want image", sidecar.Kind)
+	}
+	if sidecar.Thumbnail.FileName == "" {
+		t.Fatal("thumbnail file name empty")
+	}
+	if sidecar.Thumbnail.MimeType != "image/jpeg" {
+		t.Fatalf("thumbnail mime=%q, want image/jpeg", sidecar.Thumbnail.MimeType)
+	}
+	if sidecar.Thumbnail.Width <= 0 || sidecar.Thumbnail.Width > 128 {
+		t.Fatalf("thumbnail width=%d, want 1..128", sidecar.Thumbnail.Width)
+	}
+	if sidecar.Thumbnail.Height <= 0 || sidecar.Thumbnail.Height > 128 {
+		t.Fatalf("thumbnail height=%d, want 1..128", sidecar.Thumbnail.Height)
+	}
+	thumbPath := filepath.Join(filepath.Dir(path), sidecar.Thumbnail.FileName)
+	if _, err := os.Stat(thumbPath); err != nil {
+		t.Fatalf("thumbnail stat: %v", err)
+	}
+	if sidecar.Thumbnail.Size <= 0 {
+		t.Fatalf("thumbnail size=%d, want positive", sidecar.Thumbnail.Size)
+	}
+	if sidecar.Thumbnail.SHA256 == "" {
+		t.Fatal("thumbnail sha256 empty")
+	}
+}
+
+func TestSessionAttachmentUploadOmitsThumbnailForNonImage(t *testing.T) {
+	c := newAttachmentTestClient(t, "sess-attach-file-thumb")
+	block := uploadSessionAttachmentForTest(t, c, "sess-attach-file-thumb", "report.pdf", "application/pdf", []byte("hello world"))
+	path := attachmentFileURIPathForTest(t, block.URI)
+	sidecar, err := readAttachmentSidecar(attachmentSidecarPathForTest(path))
+	if err != nil {
+		t.Fatalf("read sidecar: %v", err)
+	}
+	if sidecar.Kind != "file" {
+		t.Fatalf("sidecar.Kind=%q, want file", sidecar.Kind)
+	}
+	if sidecar.Thumbnail.FileName != "" {
+		t.Fatalf("thumbnail=%#v, want empty", sidecar.Thumbnail)
+	}
+}
+
+func TestSessionAttachmentThumbnailReadsGeneratedJPEG(t *testing.T) {
+	c := newAttachmentTestClient(t, "sess-attach-thumb-read")
+	block := uploadSessionAttachmentForTest(t, c, "sess-attach-thumb-read", "pixel.png", "image/png", tinyPNGForTest(t))
+	payload := mustJSON(map[string]any{
+		"sessionId": "sess-attach-thumb-read",
+		"uri":       block.URI,
+	})
+	resp, err := c.HandleSessionRequest(context.Background(), "session.attachment.thumbnail", "proj1", payload)
+	if err != nil {
+		t.Fatalf("session.attachment.thumbnail: %v", err)
+	}
+	body := responseMapForTest(t, resp)
+	if body["ok"] != true || body["sessionId"] != "sess-attach-thumb-read" {
+		t.Fatalf("thumbnail response=%#v, want ok session", body)
+	}
+	if body["mimeType"] != "image/jpeg" || body["encoding"] != "base64" {
+		t.Fatalf("thumbnail response=%#v, want jpeg base64", body)
+	}
+	if body["content"] == "" {
+		t.Fatalf("thumbnail response=%#v, want content", body)
+	}
+	if body["attachmentId"] != blockAttachmentIDForTest(t, block) {
+		t.Fatalf("attachmentId=%#v, want block id", body["attachmentId"])
+	}
+}
+
+func TestSessionAttachmentReadReadsOriginalImage(t *testing.T) {
+	c := newAttachmentTestClient(t, "sess-attach-original-read")
+	imageBytes := tinyPNGForTest(t)
+	block := uploadSessionAttachmentForTest(t, c, "sess-attach-original-read", "pixel.png", "image/png", imageBytes)
+	payload := mustJSON(map[string]any{
+		"sessionId":    "sess-attach-original-read",
+		"attachmentId": blockAttachmentIDForTest(t, block),
+	})
+	resp, err := c.HandleSessionRequest(context.Background(), "session.attachment.read", "proj1", payload)
+	if err != nil {
+		t.Fatalf("session.attachment.read: %v", err)
+	}
+	body := responseMapForTest(t, resp)
+	if body["ok"] != true || body["sessionId"] != "sess-attach-original-read" {
+		t.Fatalf("read response=%#v, want ok session", body)
+	}
+	if body["mimeType"] != "image/png" || body["encoding"] != "base64" {
+		t.Fatalf("read response=%#v, want png base64", body)
+	}
+	if body["content"] != base64ForTest(imageBytes) {
+		t.Fatalf("read content mismatch")
+	}
+}
+
+func TestSessionAttachmentThumbnailRejectsNonImage(t *testing.T) {
+	c := newAttachmentTestClient(t, "sess-attach-file-thumb-read")
+	block := uploadSessionAttachmentForTest(t, c, "sess-attach-file-thumb-read", "report.pdf", "application/pdf", []byte("hello world"))
+	payload := mustJSON(map[string]any{
+		"sessionId": "sess-attach-file-thumb-read",
+		"uri":       block.URI,
+	})
+	_, err := c.HandleSessionRequest(context.Background(), "session.attachment.thumbnail", "proj1", payload)
+	if err == nil || !strings.Contains(err.Error(), "not_image") {
+		t.Fatalf("thumbnail err=%v, want not_image", err)
 	}
 }
 
@@ -7207,6 +7424,28 @@ func TestSessionAttachmentDeleteRemovesCompletedFileAndSidecar(t *testing.T) {
 	}
 	if _, err := os.Stat(sidecarPath); !os.IsNotExist(err) {
 		t.Fatalf("sidecar stat after delete err=%v, want removed", err)
+	}
+}
+
+func TestSessionAttachmentDeleteRemovesCompletedImageThumbnail(t *testing.T) {
+	c := newAttachmentTestClient(t, "sess-attach-delete-thumb")
+	block := uploadSessionAttachmentForTest(t, c, "sess-attach-delete-thumb", "pixel.png", "image/png", tinyPNGForTest(t))
+	path := attachmentFileURIPathForTest(t, block.URI)
+	sidecar, err := readAttachmentSidecar(attachmentSidecarPathForTest(path))
+	if err != nil {
+		t.Fatalf("read sidecar: %v", err)
+	}
+	if sidecar.Thumbnail.FileName == "" {
+		t.Fatalf("thumbnail missing in sidecar: %#v", sidecar)
+	}
+	thumbPath := filepath.Join(filepath.Dir(path), sidecar.Thumbnail.FileName)
+
+	payload := fmt.Sprintf(`{"sessionId":"sess-attach-delete-thumb","attachmentId":"%s"}`, blockAttachmentIDForTest(t, block))
+	if _, err := c.HandleSessionRequest(context.Background(), "session.attachment.delete", "proj1", json.RawMessage(payload)); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if _, err := os.Stat(thumbPath); !os.IsNotExist(err) {
+		t.Fatalf("thumbnail stat after delete err=%v, want removed", err)
 	}
 }
 

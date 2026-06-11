@@ -12,6 +12,7 @@ import { formatPromptDurationMs } from '../workspace/sessionTime';
 import {
   chatPromptAttachmentLabel,
   chatPromptAttachmentMeta,
+  isPromptImageAttachmentContentBlock,
   isPromptAttachmentContentBlock,
 } from './composer/chatPromptAttachments';
 import {
@@ -310,10 +311,71 @@ export type ChatTurnViewProps = {
   onSelectConfirmationReply?: (replyText: string) => void;
   onRetryPendingPrompt?: () => void;
   onEditPendingPrompt?: () => void;
+  onOpenPromptAttachment?: (block: RegistrySessionContentBlock, message: RegistryChatMessage) => void;
+  resolvePromptAttachmentThumbnail?: (block: RegistrySessionContentBlock, message: RegistryChatMessage) => string;
+  onLoadPromptAttachmentThumbnail?: (block: RegistrySessionContentBlock, message: RegistryChatMessage) => void;
   onOpenPromptArtifact?: (artifact: RegistrySessionPromptArtifact, message: RegistryChatMessage, filePath?: string) => void;
   openingPromptArtifactKey?: string;
   promptArtifactErrors?: Record<string, string>;
 };
+
+type PromptAttachmentChipProps = {
+  block: RegistrySessionContentBlock;
+  index: number;
+  message: RegistryChatMessage;
+  onOpenPromptAttachment?: (block: RegistrySessionContentBlock, message: RegistryChatMessage) => void;
+  resolvePromptAttachmentThumbnail?: (block: RegistrySessionContentBlock, message: RegistryChatMessage) => string;
+  onLoadPromptAttachmentThumbnail?: (block: RegistrySessionContentBlock, message: RegistryChatMessage) => void;
+};
+
+const PromptAttachmentChip = React.memo(function PromptAttachmentChip({
+  block,
+  index,
+  message,
+  onOpenPromptAttachment,
+  resolvePromptAttachmentThumbnail,
+  onLoadPromptAttachmentThumbnail,
+}: PromptAttachmentChipProps) {
+  const imageAttachment = isPromptImageAttachmentContentBlock(block);
+  const label = chatPromptAttachmentLabel(block, index);
+  const meta = chatPromptAttachmentMeta(block);
+  const thumbnailSrc = resolvePromptAttachmentThumbnail?.(block, message) ?? '';
+
+  React.useEffect(() => {
+    if (imageAttachment && !thumbnailSrc) {
+      onLoadPromptAttachmentThumbnail?.(block, message);
+    }
+  }, [block, imageAttachment, message, onLoadPromptAttachmentThumbnail, thumbnailSrc]);
+
+  return (
+    <button
+      type="button"
+      className={`chat-prompt-attachment-chip ${isPromptImageAttachmentContentBlock(block) ? 'image' : 'file'}`}
+      title={meta ? `${label} | ${meta}` : label}
+      onClick={() => onOpenPromptAttachment?.(block, message)}
+    >
+      {imageAttachment && thumbnailSrc ? (
+        <img
+          className="chat-prompt-attachment-thumb"
+          src={thumbnailSrc}
+          alt=""
+          aria-hidden="true"
+        />
+      ) : (
+        <span
+          className={`codicon ${imageAttachment ? 'codicon-file-media' : 'codicon-file'} chat-prompt-attachment-icon`}
+          aria-hidden="true"
+        />
+      )}
+      <span className="chat-prompt-attachment-body">
+        <span className="chat-prompt-attachment-name">{label}</span>
+        {meta ? (
+          <span className="chat-prompt-attachment-meta">{meta}</span>
+        ) : null}
+      </span>
+    </button>
+  );
+});
 
 export const ChatTurnView = React.memo(function ChatTurnView({
   message,
@@ -335,6 +397,9 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   onSelectConfirmationReply,
   onRetryPendingPrompt,
   onEditPendingPrompt,
+  onOpenPromptAttachment,
+  resolvePromptAttachmentThumbnail,
+  onLoadPromptAttachmentThumbnail,
   onOpenPromptArtifact,
   openingPromptArtifactKey = '',
   promptArtifactErrors = {},
@@ -387,28 +452,17 @@ export const ChatTurnView = React.memo(function ChatTurnView({
         ) : null}
         {attachmentBlocks.length > 0 ? (
           <div className="chat-prompt-attachment-strip">
-            {attachmentBlocks.map((block, index) => {
-              const label = chatPromptAttachmentLabel(block, index);
-              const meta = chatPromptAttachmentMeta(block);
-              return (
-                <div
-                  key={`${message.sessionId}:${message.turnIndex}:attachment:${index}`}
-                  className={`chat-prompt-attachment-chip ${block.type === 'image' ? 'image' : 'file'}`}
-                  title={meta ? `${label} | ${meta}` : label}
-                >
-                  <span
-                    className={`codicon ${block.type === 'image' ? 'codicon-file-media' : 'codicon-file'} chat-prompt-attachment-icon`}
-                    aria-hidden="true"
-                  />
-                  <span className="chat-prompt-attachment-body">
-                    <span className="chat-prompt-attachment-name">{label}</span>
-                    {meta ? (
-                      <span className="chat-prompt-attachment-meta">{meta}</span>
-                    ) : null}
-                  </span>
-                </div>
-              );
-            })}
+            {attachmentBlocks.map((block, index) => (
+              <PromptAttachmentChip
+                key={`${message.sessionId}:${message.turnIndex}:attachment:${index}`}
+                block={block}
+                index={index}
+                message={message}
+                onOpenPromptAttachment={onOpenPromptAttachment}
+                resolvePromptAttachmentThumbnail={resolvePromptAttachmentThumbnail}
+                onLoadPromptAttachmentThumbnail={onLoadPromptAttachmentThumbnail}
+              />
+            ))}
           </div>
         ) : null}
         {promptStatus === 'undelivered' ? (

@@ -48,6 +48,8 @@ import type {
   RegistrySessionAttachmentDeleteResponse,
   RegistrySessionAttachmentFinishPayload,
   RegistrySessionAttachmentFinishResponse,
+  RegistrySessionAttachmentReadPayload,
+  RegistrySessionAttachmentContentResponse,
   RegistrySessionAttachmentStartPayload,
   RegistrySessionAttachmentStartResponse,
   RegistrySessionArtifactReadResponse,
@@ -1173,6 +1175,56 @@ export class RegistryRepository {
       ok: body.ok ?? false,
       sessionId: body.sessionId ?? payload.sessionId,
       attachmentId: body.attachmentId ?? payload.attachmentId,
+    };
+  }
+
+  async readSessionAttachmentThumbnail(
+    projectId: string,
+    payload: RegistrySessionAttachmentReadPayload,
+  ): Promise<RegistrySessionAttachmentContentResponse> {
+    const resp = await this.client.request({
+      method: RegistryMethods.SessionAttachmentThumbnail,
+      projectId,
+      payload,
+      timeoutMs: 15000,
+    });
+    const body = (resp.payload ?? {}) as Partial<RegistrySessionAttachmentContentResponse>;
+    return {
+      ok: body.ok ?? false,
+      sessionId: body.sessionId ?? payload.sessionId,
+      attachmentId: body.attachmentId ?? payload.attachmentId ?? '',
+      mimeType: body.mimeType,
+      encoding: body.encoding ?? 'base64',
+      content: body.content ?? '',
+      width: body.width,
+      height: body.height,
+      size: body.size,
+      hash: body.hash,
+    };
+  }
+
+  async readSessionAttachment(
+    projectId: string,
+    payload: RegistrySessionAttachmentReadPayload,
+  ): Promise<RegistrySessionAttachmentContentResponse> {
+    const resp = await this.client.request({
+      method: RegistryMethods.SessionAttachmentRead,
+      projectId,
+      payload,
+      timeoutMs: 30000,
+    });
+    const body = (resp.payload ?? {}) as Partial<RegistrySessionAttachmentContentResponse>;
+    return {
+      ok: body.ok ?? false,
+      sessionId: body.sessionId ?? payload.sessionId,
+      attachmentId: body.attachmentId ?? payload.attachmentId ?? '',
+      mimeType: body.mimeType,
+      encoding: body.encoding ?? 'base64',
+      content: body.content ?? '',
+      width: body.width,
+      height: body.height,
+      size: body.size,
+      hash: body.hash,
     };
   }
 

@@ -40,9 +40,25 @@ describe('web chat file peek viewer', () => {
     expect(openBody).toContain('setChatPromptArtifactPreview({');
     expect(openBody).not.toContain("setTab('git')");
     expect(openBody).not.toContain('setPromptArtifactDiff({');
-    expect(mainTsx).toContain('chatPreviewOpen = !!chatFilePeek || !!chatPromptArtifactPreview || chatPortRelayPreviewOpen');
+    expect(mainTsx).toContain('chatPreviewOpen = !!chatFilePeek || !!chatPromptArtifactPreview || !!chatAttachmentPreview || chatPortRelayPreviewOpen');
     expect(mainTsx).toContain('<ChatPromptArtifactPreviewViewer');
     expect(mainTsx).toContain('togglePromptArtifactPreviewFile');
+  });
+
+  test('prompt attachments open the existing chat preview side panel', () => {
+    const mainTsx = readSourceText(mainPath);
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(mainTsx).toContain('type ChatAttachmentPreviewState = {');
+    expect(mainTsx).toContain('const [chatAttachmentPreview, setChatAttachmentPreview] = useState<ChatAttachmentPreviewState | null>(null);');
+    expect(mainTsx).toContain('chatPreviewOpen = !!chatFilePeek || !!chatPromptArtifactPreview || !!chatAttachmentPreview || chatPortRelayPreviewOpen');
+    expect(mainTsx).toContain('const openChatAttachmentPreview = useCallback(');
+    expect(mainTsx).toContain('service.readProjectSessionAttachment(');
+    expect(mainTsx).toContain('<ChatAttachmentPreviewViewer');
+    expect(mainTsx).toContain('preview={chatAttachmentPreview}');
+    expect(mainTsx).toContain('Preview is being implemented.');
+    expect(stylesCss).toContain('.chat-attachment-preview-surface');
+    expect(stylesCss).toContain('.chat-attachment-original-image');
   });
 
   test('chat preview code and diff panes force line numbers and no wrapping', () => {

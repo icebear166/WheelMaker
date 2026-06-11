@@ -136,12 +136,18 @@ describe('web chat turn rendering', () => {
     expect(chatTurn).toContain("} from './composer/chatPromptAttachments';");
     expect(chatTurn).toContain('const attachmentBlocks = groupPromptAttachmentBlocks([message]);');
     expect(chatTurn).toContain('className="chat-prompt-attachment-strip"');
-    expect(chatTurn).toContain('className={`chat-prompt-attachment-chip ${block.type === \'image\' ? \'image\' : \'file\'}`}');
+    expect(chatTurn).toContain('className={`chat-prompt-attachment-chip ${isPromptImageAttachmentContentBlock(block) ? \'image\' : \'file\'}`}');
     expect(chatTurn).toContain('const label = chatPromptAttachmentLabel(block, index);');
     expect(chatTurn).toContain('const meta = chatPromptAttachmentMeta(block);');
+    expect(chatTurn).toContain('onOpenPromptAttachment?: (block: RegistrySessionContentBlock, message: RegistryChatMessage) => void;');
+    expect(chatTurn).toContain('onClick={() => onOpenPromptAttachment?.(block, message)}');
+    expect(chatTurn).toContain('const thumbnailSrc = resolvePromptAttachmentThumbnail?.(block, message) ?? \'\';');
+    expect(chatTurn).toContain('className="chat-prompt-attachment-thumb"');
     expect(main).toContain('groupPromptAttachmentBlocks([message]).length > 0');
+    expect(main).toContain('onOpenPromptAttachment={openChatAttachmentPreview}');
     expect(styles).toContain('.chat-prompt-attachment-strip {');
     expect(styles).toContain('.chat-prompt-attachment-chip {');
+    expect(styles).toContain('.chat-prompt-attachment-thumb {');
     expect(styles).toContain('.chat-prompt-attachment-name {');
   });
 

@@ -638,6 +638,10 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 		return c.handleSessionAttachmentCancel(ctx, payload)
 	case acp.RegistryMethodSessionAttachmentDelete:
 		return c.handleSessionAttachmentDelete(ctx, payload)
+	case acp.RegistryMethodSessionAttachmentThumbnail:
+		return c.handleSessionAttachmentThumbnail(ctx, payload)
+	case acp.RegistryMethodSessionAttachmentRead:
+		return c.handleSessionAttachmentRead(ctx, payload)
 	case acp.RegistryMethodSessionConfig:
 		var req struct {
 			SessionID string `json:"sessionId"`
@@ -968,6 +972,7 @@ func (c *Client) archiveSession(ctx context.Context, sessionID string) (string, 
 	if err != nil {
 		return "", err
 	}
+	contents = sanitizeArchiveTurnContents(contents)
 	if _, _, err := c.archiveStore.AppendSession(ctx, *rec, contents, gapCount); err != nil {
 		return "", err
 	}

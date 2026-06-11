@@ -76,29 +76,31 @@ const (
 	RegistryMethodSessionUpdated = "session.updated"
 	RegistryMethodSessionMessage = "session.message"
 
-	RegistryMethodSessionList             = "session.list"
-	RegistryMethodSessionRead             = "session.read"
-	RegistryMethodSessionSearch           = "session.search"
-	RegistryMethodSessionCreate           = "session.create"
-	RegistryMethodSessionResumeList       = "session.resume.list"
-	RegistryMethodSessionResumeImport     = "session.resume.import"
-	RegistryMethodSessionReload           = "session.reload"
-	RegistryMethodSessionArchive          = "session.archive"
-	RegistryMethodSessionArchiveList      = "session.archive.list"
-	RegistryMethodSessionArchiveRead      = "session.archive.read"
-	RegistryMethodSessionArchiveRestore   = "session.archive.restore"
-	RegistryMethodSessionArtifactRead     = "session.artifact.read"
-	RegistryMethodSessionDelete           = "session.delete"
-	RegistryMethodSessionRename           = "session.rename"
-	RegistryMethodSessionSend             = "session.send"
-	RegistryMethodSessionCancel           = "session.cancel"
-	RegistryMethodSessionMarkRead         = "session.markRead"
-	RegistryMethodSessionConfig           = "session.config"
-	RegistryMethodSessionAttachmentStart  = "session.attachment.start"
-	RegistryMethodSessionAttachmentChunk  = "session.attachment.chunk"
-	RegistryMethodSessionAttachmentFinish = "session.attachment.finish"
-	RegistryMethodSessionAttachmentCancel = "session.attachment.cancel"
-	RegistryMethodSessionAttachmentDelete = "session.attachment.delete"
+	RegistryMethodSessionList                = "session.list"
+	RegistryMethodSessionRead                = "session.read"
+	RegistryMethodSessionSearch              = "session.search"
+	RegistryMethodSessionCreate              = "session.create"
+	RegistryMethodSessionResumeList          = "session.resume.list"
+	RegistryMethodSessionResumeImport        = "session.resume.import"
+	RegistryMethodSessionReload              = "session.reload"
+	RegistryMethodSessionArchive             = "session.archive"
+	RegistryMethodSessionArchiveList         = "session.archive.list"
+	RegistryMethodSessionArchiveRead         = "session.archive.read"
+	RegistryMethodSessionArchiveRestore      = "session.archive.restore"
+	RegistryMethodSessionArtifactRead        = "session.artifact.read"
+	RegistryMethodSessionDelete              = "session.delete"
+	RegistryMethodSessionRename              = "session.rename"
+	RegistryMethodSessionSend                = "session.send"
+	RegistryMethodSessionCancel              = "session.cancel"
+	RegistryMethodSessionMarkRead            = "session.markRead"
+	RegistryMethodSessionConfig              = "session.config"
+	RegistryMethodSessionAttachmentStart     = "session.attachment.start"
+	RegistryMethodSessionAttachmentChunk     = "session.attachment.chunk"
+	RegistryMethodSessionAttachmentFinish    = "session.attachment.finish"
+	RegistryMethodSessionAttachmentCancel    = "session.attachment.cancel"
+	RegistryMethodSessionAttachmentDelete    = "session.attachment.delete"
+	RegistryMethodSessionAttachmentThumbnail = "session.attachment.thumbnail"
+	RegistryMethodSessionAttachmentRead      = "session.attachment.read"
 
 	RegistryMethodMonitorListHub = "monitor.listHub"
 	RegistryMethodMonitorStatus  = "monitor.status"
@@ -167,29 +169,31 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodSessionUpdated:                registryHubSessionEventMethod(RegistryMethodSessionUpdated, RegistryMethodSessionUpdated),
 	RegistryMethodSessionMessage:                registryHubSessionEventMethod(RegistryMethodSessionMessage, RegistryMethodSessionMessage),
 
-	RegistryMethodSessionList:             registryProjectMethod(RegistryMethodSessionList, RegistryRouteSessionForward),
-	RegistryMethodSessionRead:             registryProjectMethod(RegistryMethodSessionRead, RegistryRouteSessionForward),
-	RegistryMethodSessionSearch:           registryProjectMethod(RegistryMethodSessionSearch, RegistryRouteSessionForward),
-	RegistryMethodSessionCreate:           registryProjectMethod(RegistryMethodSessionCreate, RegistryRouteSessionForward),
-	RegistryMethodSessionResumeList:       registryProjectMethod(RegistryMethodSessionResumeList, RegistryRouteSessionForward),
-	RegistryMethodSessionResumeImport:     registryProjectMethod(RegistryMethodSessionResumeImport, RegistryRouteSessionForward),
-	RegistryMethodSessionReload:           registryProjectMethod(RegistryMethodSessionReload, RegistryRouteSessionForward),
-	RegistryMethodSessionArchive:          registryProjectMethod(RegistryMethodSessionArchive, RegistryRouteSessionForward),
-	RegistryMethodSessionArchiveList:      registryProjectMethod(RegistryMethodSessionArchiveList, RegistryRouteSessionForward),
-	RegistryMethodSessionArchiveRead:      registryProjectMethod(RegistryMethodSessionArchiveRead, RegistryRouteSessionForward),
-	RegistryMethodSessionArchiveRestore:   registryProjectMethod(RegistryMethodSessionArchiveRestore, RegistryRouteSessionForward),
-	RegistryMethodSessionArtifactRead:     registryProjectMethod(RegistryMethodSessionArtifactRead, RegistryRouteSessionForward),
-	RegistryMethodSessionDelete:           registryProjectMethod(RegistryMethodSessionDelete, RegistryRouteSessionForward),
-	RegistryMethodSessionRename:           registryProjectMethod(RegistryMethodSessionRename, RegistryRouteSessionForward),
-	RegistryMethodSessionSend:             registryProjectMethod(RegistryMethodSessionSend, RegistryRouteSessionForward),
-	RegistryMethodSessionCancel:           registryProjectMethod(RegistryMethodSessionCancel, RegistryRouteSessionForward),
-	RegistryMethodSessionMarkRead:         registryProjectMethod(RegistryMethodSessionMarkRead, RegistryRouteSessionForward),
-	RegistryMethodSessionConfig:           registryProjectMethod(RegistryMethodSessionConfig, RegistryRouteSessionForward),
-	RegistryMethodSessionAttachmentStart:  registryProjectMethod(RegistryMethodSessionAttachmentStart, RegistryRouteSessionForward),
-	RegistryMethodSessionAttachmentChunk:  registryProjectMethod(RegistryMethodSessionAttachmentChunk, RegistryRouteSessionForward),
-	RegistryMethodSessionAttachmentFinish: registryProjectMethod(RegistryMethodSessionAttachmentFinish, RegistryRouteSessionForward),
-	RegistryMethodSessionAttachmentCancel: registryProjectMethod(RegistryMethodSessionAttachmentCancel, RegistryRouteSessionForward),
-	RegistryMethodSessionAttachmentDelete: registryProjectMethod(RegistryMethodSessionAttachmentDelete, RegistryRouteSessionForward),
+	RegistryMethodSessionList:                registryProjectMethod(RegistryMethodSessionList, RegistryRouteSessionForward),
+	RegistryMethodSessionRead:                registryProjectMethod(RegistryMethodSessionRead, RegistryRouteSessionForward),
+	RegistryMethodSessionSearch:              registryProjectMethod(RegistryMethodSessionSearch, RegistryRouteSessionForward),
+	RegistryMethodSessionCreate:              registryProjectMethod(RegistryMethodSessionCreate, RegistryRouteSessionForward),
+	RegistryMethodSessionResumeList:          registryProjectMethod(RegistryMethodSessionResumeList, RegistryRouteSessionForward),
+	RegistryMethodSessionResumeImport:        registryProjectMethod(RegistryMethodSessionResumeImport, RegistryRouteSessionForward),
+	RegistryMethodSessionReload:              registryProjectMethod(RegistryMethodSessionReload, RegistryRouteSessionForward),
+	RegistryMethodSessionArchive:             registryProjectMethod(RegistryMethodSessionArchive, RegistryRouteSessionForward),
+	RegistryMethodSessionArchiveList:         registryProjectMethod(RegistryMethodSessionArchiveList, RegistryRouteSessionForward),
+	RegistryMethodSessionArchiveRead:         registryProjectMethod(RegistryMethodSessionArchiveRead, RegistryRouteSessionForward),
+	RegistryMethodSessionArchiveRestore:      registryProjectMethod(RegistryMethodSessionArchiveRestore, RegistryRouteSessionForward),
+	RegistryMethodSessionArtifactRead:        registryProjectMethod(RegistryMethodSessionArtifactRead, RegistryRouteSessionForward),
+	RegistryMethodSessionDelete:              registryProjectMethod(RegistryMethodSessionDelete, RegistryRouteSessionForward),
+	RegistryMethodSessionRename:              registryProjectMethod(RegistryMethodSessionRename, RegistryRouteSessionForward),
+	RegistryMethodSessionSend:                registryProjectMethod(RegistryMethodSessionSend, RegistryRouteSessionForward),
+	RegistryMethodSessionCancel:              registryProjectMethod(RegistryMethodSessionCancel, RegistryRouteSessionForward),
+	RegistryMethodSessionMarkRead:            registryProjectMethod(RegistryMethodSessionMarkRead, RegistryRouteSessionForward),
+	RegistryMethodSessionConfig:              registryProjectMethod(RegistryMethodSessionConfig, RegistryRouteSessionForward),
+	RegistryMethodSessionAttachmentStart:     registryProjectMethod(RegistryMethodSessionAttachmentStart, RegistryRouteSessionForward),
+	RegistryMethodSessionAttachmentChunk:     registryProjectMethod(RegistryMethodSessionAttachmentChunk, RegistryRouteSessionForward),
+	RegistryMethodSessionAttachmentFinish:    registryProjectMethod(RegistryMethodSessionAttachmentFinish, RegistryRouteSessionForward),
+	RegistryMethodSessionAttachmentCancel:    registryProjectMethod(RegistryMethodSessionAttachmentCancel, RegistryRouteSessionForward),
+	RegistryMethodSessionAttachmentDelete:    registryProjectMethod(RegistryMethodSessionAttachmentDelete, RegistryRouteSessionForward),
+	RegistryMethodSessionAttachmentThumbnail: registryProjectMethod(RegistryMethodSessionAttachmentThumbnail, RegistryRouteSessionForward),
+	RegistryMethodSessionAttachmentRead:      registryProjectMethod(RegistryMethodSessionAttachmentRead, RegistryRouteSessionForward),
 
 	RegistryMethodMonitorListHub: registryMethod(RegistryMethodMonitorListHub, RegistryRouteMonitorCache, []RegistryRole{RegistryRoleMonitor}),
 	RegistryMethodMonitorStatus:  registryMethod(RegistryMethodMonitorStatus, RegistryRouteMonitorForward, []RegistryRole{RegistryRoleMonitor}),

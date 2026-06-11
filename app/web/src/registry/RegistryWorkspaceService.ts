@@ -30,6 +30,8 @@ import type {
   RegistrySessionAttachmentDeleteResponse,
   RegistrySessionAttachmentFinishPayload,
   RegistrySessionAttachmentFinishResponse,
+  RegistrySessionAttachmentReadPayload,
+  RegistrySessionAttachmentContentResponse,
   RegistrySessionAttachmentStartPayload,
   RegistrySessionAttachmentStartResponse,
   RegistrySessionArtifactReadResponse,
@@ -581,6 +583,26 @@ export class RegistryWorkspaceService {
       throw new Error('session is not ready');
     }
     return this.repository.deleteSessionAttachment(projectId, payload);
+  }
+
+  async readProjectSessionAttachmentThumbnail(
+    projectId: string,
+    payload: RegistrySessionAttachmentReadPayload,
+  ): Promise<RegistrySessionAttachmentContentResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.readSessionAttachmentThumbnail(projectId, payload);
+  }
+
+  async readProjectSessionAttachment(
+    projectId: string,
+    payload: RegistrySessionAttachmentReadPayload,
+  ): Promise<RegistrySessionAttachmentContentResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.readSessionAttachment(projectId, payload);
   }
 
   async cancelProjectSession(projectId: string, sessionId: string): Promise<{ok: boolean; sessionId: string}> {

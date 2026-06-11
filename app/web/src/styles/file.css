@@ -65,6 +65,20 @@
   height: 100%;
 }
 
+.chat-attachment-preview-surface {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  color: var(--text);
+}
+
+.chat-attachment-preview-surface.mobile {
+  width: 100%;
+  height: 100%;
+}
+
 .chat-file-peek-scroll {
   flex: 1;
   min-width: 0;
@@ -99,6 +113,72 @@
 
 .chat-file-peek-image-wrap {
   min-height: 100%;
+}
+
+.chat-attachment-original-wrap {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.chat-attachment-original-image {
+  width: auto;
+  height: auto;
+  max-width: min(100%, 1600px);
+  max-height: min(78vh, 1200px);
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+
+.chat-attachment-preview-placeholder {
+  min-height: 100%;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-content: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  color: var(--muted);
+}
+
+.chat-attachment-preview-placeholder .codicon {
+  width: 32px;
+  height: 32px;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: color-mix(in srgb, var(--accent) 72%, var(--text));
+}
+
+.chat-attachment-preview-placeholder-main {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.chat-attachment-preview-placeholder-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-attachment-preview-placeholder-meta,
+.chat-attachment-preview-placeholder-status {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .chat-prompt-diff-preview {
@@ -208,7 +288,8 @@
   min-width: 100%;
 }
 
-.chat-preview-mobile-overlay .chat-file-peek-surface.mobile {
+.chat-preview-mobile-overlay .chat-file-peek-surface.mobile,
+.chat-preview-mobile-overlay .chat-attachment-preview-surface.mobile {
   flex: 1 1 auto;
   min-height: 0;
 }

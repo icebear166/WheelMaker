@@ -50,6 +50,8 @@ export const RegistryMethods = {
   SessionAttachmentFinish: 'session.attachment.finish',
   SessionAttachmentCancel: 'session.attachment.cancel',
   SessionAttachmentDelete: 'session.attachment.delete',
+  SessionAttachmentThumbnail: 'session.attachment.thumbnail',
+  SessionAttachmentRead: 'session.attachment.read',
   SessionMessage: 'session.message',
   SessionUpdated: 'session.updated',
   HubStateGet: 'hub.state.get',

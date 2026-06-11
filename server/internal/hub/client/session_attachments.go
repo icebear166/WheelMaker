@@ -9,6 +9,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	"image/color"
+	_ "image/gif"
+	"image/jpeg"
+	_ "image/png"
 	"io"
 	"mime"
 	"net/url"
@@ -22,9 +27,11 @@ import (
 )
 
 const (
-	attachmentChunkSize = 1024 * 1024
-	attachmentMaxBytes  = 50 * 1024 * 1024
-	attachmentIdleTTL   = 3 * time.Minute
+	attachmentChunkSize        = 1024 * 1024
+	attachmentMaxBytes         = 50 * 1024 * 1024
+	attachmentIdleTTL          = 3 * time.Minute
+	attachmentThumbnailMaxEdge = 128
+	attachmentThumbnailQuality = 75
 )
 
 var attachmentNow = time.Now
@@ -49,17 +56,29 @@ type attachmentUpload struct {
 }
 
 type attachmentSidecar struct {
-	AttachmentID string    `json:"attachmentId"`
-	ProjectName  string    `json:"projectName"`
-	SessionID    string    `json:"sessionId"`
-	Name         string    `json:"name"`
-	MimeType     string    `json:"mimeType,omitempty"`
-	Size         int64     `json:"size"`
-	SHA256       string    `json:"sha256"`
-	FileName     string    `json:"fileName"`
-	URI          string    `json:"uri"`
-	CreatedAt    time.Time `json:"createdAt"`
-	Sent         bool      `json:"sent,omitempty"`
+	AttachmentID   string              `json:"attachmentId"`
+	ProjectName    string              `json:"projectName"`
+	SessionID      string              `json:"sessionId"`
+	Name           string              `json:"name"`
+	MimeType       string              `json:"mimeType,omitempty"`
+	Size           int64               `json:"size"`
+	SHA256         string              `json:"sha256"`
+	FileName       string              `json:"fileName"`
+	URI            string              `json:"uri"`
+	CreatedAt      time.Time           `json:"createdAt"`
+	Sent           bool                `json:"sent,omitempty"`
+	Kind           string              `json:"kind,omitempty"`
+	Thumbnail      attachmentThumbnail `json:"thumbnail,omitempty"`
+	ThumbnailError string              `json:"thumbnailError,omitempty"`
+}
+
+type attachmentThumbnail struct {
+	FileName string `json:"fileName,omitempty"`
+	MimeType string `json:"mimeType,omitempty"`
+	Width    int    `json:"width,omitempty"`
+	Height   int    `json:"height,omitempty"`
+	Size     int64  `json:"size,omitempty"`
+	SHA256   string `json:"sha256,omitempty"`
 }
 
 type attachmentRef struct {
@@ -196,6 +215,180 @@ func (c *Client) handleSessionAttachmentDelete(ctx context.Context, payload json
 		return nil, err
 	}
 	return map[string]any{"ok": true, "sessionId": sessionID, "attachmentId": strings.TrimSpace(req.AttachmentID)}, nil
+}
+
+func (c *Client) handleSessionAttachmentThumbnail(ctx context.Context, payload json.RawMessage) (any, error) {
+	var req struct {
+		SessionID    string `json:"sessionId"`
+		AttachmentID string `json:"attachmentId,omitempty"`
+		URI          string `json:"uri,omitempty"`
+	}
+	if err := decodeSessionRequestPayload(payload, &req); err != nil {
+		return nil, fmt.Errorf("invalid session.attachment.thumbnail payload: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	resolved, err := c.resolveSessionAttachment(ctx, req.SessionID, req.AttachmentID, req.URI)
+	if err != nil {
+		return nil, err
+	}
+	kind := resolved.sidecar.Kind
+	if kind == "" {
+		kind = attachmentKind(resolved.sidecar.MimeType, resolved.sidecar.Name, resolved.sidecar.URI)
+	}
+	if kind != "image" {
+		return nil, fmt.Errorf("not_image: attachment is not an image")
+	}
+	if resolved.sidecar.Thumbnail.FileName == "" {
+		return nil, fmt.Errorf("thumbnail not found")
+	}
+	thumbPath := filepath.Join(resolved.root, resolved.sidecar.Thumbnail.FileName)
+	raw, err := os.ReadFile(thumbPath)
+	if err != nil {
+		return nil, fmt.Errorf("read thumbnail: %w", err)
+	}
+	return map[string]any{
+		"ok":           true,
+		"sessionId":    resolved.sidecar.SessionID,
+		"attachmentId": resolved.sidecar.AttachmentID,
+		"mimeType":     firstNonEmpty(resolved.sidecar.Thumbnail.MimeType, "image/jpeg"),
+		"encoding":     "base64",
+		"content":      base64.StdEncoding.EncodeToString(raw),
+		"width":        resolved.sidecar.Thumbnail.Width,
+		"height":       resolved.sidecar.Thumbnail.Height,
+		"size":         len(raw),
+		"hash":         hashBytesForAttachment(raw),
+	}, nil
+}
+
+func (c *Client) handleSessionAttachmentRead(ctx context.Context, payload json.RawMessage) (any, error) {
+	var req struct {
+		SessionID    string `json:"sessionId"`
+		AttachmentID string `json:"attachmentId,omitempty"`
+		URI          string `json:"uri,omitempty"`
+	}
+	if err := decodeSessionRequestPayload(payload, &req); err != nil {
+		return nil, fmt.Errorf("invalid session.attachment.read payload: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	resolved, err := c.resolveSessionAttachment(ctx, req.SessionID, req.AttachmentID, req.URI)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := os.ReadFile(resolved.filePath)
+	if err != nil {
+		return nil, fmt.Errorf("read attachment: %w", err)
+	}
+	return map[string]any{
+		"ok":           true,
+		"sessionId":    resolved.sidecar.SessionID,
+		"attachmentId": resolved.sidecar.AttachmentID,
+		"mimeType":     resolved.sidecar.MimeType,
+		"encoding":     "base64",
+		"content":      base64.StdEncoding.EncodeToString(raw),
+		"size":         len(raw),
+		"hash":         hashBytesForAttachment(raw),
+	}, nil
+}
+
+type resolvedSessionAttachment struct {
+	root     string
+	filePath string
+	sidecar  attachmentSidecar
+}
+
+func (c *Client) resolveSessionAttachment(ctx context.Context, sessionID, attachmentID, uri string) (resolvedSessionAttachment, error) {
+	if err := ctx.Err(); err != nil {
+		return resolvedSessionAttachment{}, err
+	}
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return resolvedSessionAttachment{}, fmt.Errorf("sessionId is required")
+	}
+	root, err := c.sessionAttachmentRoot(sessionID)
+	if err != nil {
+		return resolvedSessionAttachment{}, err
+	}
+	rootAbs, err := filepath.Abs(root)
+	if err != nil {
+		return resolvedSessionAttachment{}, err
+	}
+	attachmentID = strings.TrimSpace(attachmentID)
+	uri = strings.TrimSpace(uri)
+	if attachmentID == "" && uri == "" {
+		return resolvedSessionAttachment{}, fmt.Errorf("attachmentId or uri is required")
+	}
+
+	var filePath string
+	var sidecarPath string
+	if uri != "" {
+		parsed, err := url.Parse(uri)
+		if err != nil || !strings.EqualFold(parsed.Scheme, "file") {
+			return resolvedSessionAttachment{}, fmt.Errorf("attachment uri must be file://")
+		}
+		filePath = attachmentFileURIPath(parsed)
+		if filePath == "" {
+			return resolvedSessionAttachment{}, fmt.Errorf("attachment uri has no path")
+		}
+	} else {
+		if !validAttachmentID(attachmentID) {
+			return resolvedSessionAttachment{}, fmt.Errorf("invalid attachmentId")
+		}
+		sidecarPath = filepath.Join(rootAbs, attachmentID+".json")
+	}
+
+	if filePath != "" {
+		filePath, err = filepath.Abs(filePath)
+		if err != nil {
+			return resolvedSessionAttachment{}, err
+		}
+		if !pathWithinRoot(rootAbs, filePath) {
+			return resolvedSessionAttachment{}, fmt.Errorf("attachment file is outside session attachments")
+		}
+		sidecarPath = attachmentSidecarPath(filePath)
+	}
+	sidecar, err := readAttachmentSidecar(sidecarPath)
+	if err != nil {
+		return resolvedSessionAttachment{}, fmt.Errorf("attachment sidecar: %w", err)
+	}
+	if attachmentID != "" && sidecar.AttachmentID != attachmentID {
+		return resolvedSessionAttachment{}, fmt.Errorf("attachmentId mismatch")
+	}
+	if strings.TrimSpace(sidecar.ProjectName) != strings.TrimSpace(c.projectName) || strings.TrimSpace(sidecar.SessionID) != sessionID {
+		return resolvedSessionAttachment{}, fmt.Errorf("attachment does not belong to session")
+	}
+	if strings.TrimSpace(sidecar.FileName) == "" {
+		return resolvedSessionAttachment{}, fmt.Errorf("attachment file name is missing")
+	}
+	expectedFilePath := filepath.Join(rootAbs, sidecar.FileName)
+	expectedFilePath, err = filepath.Abs(expectedFilePath)
+	if err != nil {
+		return resolvedSessionAttachment{}, err
+	}
+	if !pathWithinRoot(rootAbs, expectedFilePath) {
+		return resolvedSessionAttachment{}, fmt.Errorf("attachment file is outside session attachments")
+	}
+	if filePath != "" && filepath.Clean(filePath) != filepath.Clean(expectedFilePath) {
+		return resolvedSessionAttachment{}, fmt.Errorf("attachment sidecar path mismatch")
+	}
+	return resolvedSessionAttachment{root: rootAbs, filePath: expectedFilePath, sidecar: sidecar}, nil
+}
+
+func validAttachmentID(attachmentID string) bool {
+	return strings.HasPrefix(attachmentID, "sha256-") && len(attachmentID) == len("sha256-")+sha256.Size*2
+}
+
+func pathWithinRoot(rootAbs, pathAbs string) bool {
+	rel, err := filepath.Rel(rootAbs, pathAbs)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)) && !filepath.IsAbs(rel)
+}
+
+func hashBytesForAttachment(raw []byte) string {
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
 }
 
 func (c *Client) validateSessionAttachmentBlocks(ctx context.Context, sessionID string, blocks []acp.ContentBlock) ([]attachmentRef, error) {
@@ -425,6 +618,15 @@ func (m *attachmentManager) finish(sessionID, uploadID, expectedSHA string) (map
 		URI:          uri,
 		CreatedAt:    now,
 	}
+	sidecar.Kind = attachmentKind(sidecar.MimeType, sidecar.Name, sidecar.URI)
+	if sidecar.Kind == "image" {
+		thumb, err := buildAttachmentThumbnail(finalPath, attachmentID)
+		if err != nil {
+			sidecar.ThumbnailError = err.Error()
+		} else {
+			sidecar.Thumbnail = thumb
+		}
+	}
 	if err := writeAttachmentSidecar(attachmentSidecarPath(finalPath), sidecar); err != nil {
 		return nil, acp.ContentBlock{}, err
 	}
@@ -473,9 +675,28 @@ func (m *attachmentManager) deleteAttachment(root, sessionID, attachmentID strin
 	if sidecar.Sent {
 		return fmt.Errorf("sent attachment cannot be deleted")
 	}
+	var thumbPath string
+	if thumbFileName := strings.TrimSpace(sidecar.Thumbnail.FileName); thumbFileName != "" {
+		rootAbs, err := filepath.Abs(root)
+		if err != nil {
+			return err
+		}
+		thumbPath, err = filepath.Abs(filepath.Join(rootAbs, thumbFileName))
+		if err != nil {
+			return err
+		}
+		if !pathWithinRoot(rootAbs, thumbPath) {
+			return fmt.Errorf("attachment thumbnail is outside session attachments")
+		}
+	}
 	filePath := filepath.Join(root, sidecar.FileName)
 	if err := os.Remove(filePath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
+	}
+	if thumbPath != "" {
+		if err := os.Remove(thumbPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
 	}
 	if err := os.Remove(sidecarPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
@@ -551,6 +772,102 @@ func (m *attachmentManager) cleanupExpiredLocked(now time.Time) {
 		_ = os.Remove(upload.PartPath)
 		delete(m.uploads, uploadID)
 	}
+}
+
+func attachmentKind(mimeType, name, uri string) string {
+	if _, ok := promptImageMimeType(mimeType, name, uri); ok {
+		return "image"
+	}
+	return "file"
+}
+
+func buildAttachmentThumbnail(path string, attachmentID string) (attachmentThumbnail, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return attachmentThumbnail{}, err
+	}
+	defer f.Close()
+	src, _, err := image.Decode(f)
+	if err != nil {
+		return attachmentThumbnail{}, fmt.Errorf("decode image: %w", err)
+	}
+	bounds := src.Bounds()
+	srcW := bounds.Dx()
+	srcH := bounds.Dy()
+	if srcW <= 0 || srcH <= 0 {
+		return attachmentThumbnail{}, fmt.Errorf("image has empty dimensions")
+	}
+	dstW, dstH := thumbnailDimensions(srcW, srcH)
+	dst := image.NewRGBA(image.Rect(0, 0, dstW, dstH))
+	background := color.NRGBA{R: 244, G: 245, B: 247, A: 255}
+	for y := 0; y < dstH; y++ {
+		srcY := bounds.Min.Y + y*srcH/dstH
+		for x := 0; x < dstW; x++ {
+			srcX := bounds.Min.X + x*srcW/dstW
+			dst.Set(x, y, compositeOverBackground(color.NRGBAModel.Convert(src.At(srcX, srcY)).(color.NRGBA), background))
+		}
+	}
+	thumbPath := filepath.Join(filepath.Dir(path), attachmentID+".thumb.jpg")
+	out, err := os.OpenFile(thumbPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	if err != nil {
+		return attachmentThumbnail{}, err
+	}
+	if err := jpeg.Encode(out, dst, &jpeg.Options{Quality: attachmentThumbnailQuality}); err != nil {
+		_ = out.Close()
+		return attachmentThumbnail{}, err
+	}
+	if err := out.Close(); err != nil {
+		return attachmentThumbnail{}, err
+	}
+	raw, err := os.ReadFile(thumbPath)
+	if err != nil {
+		return attachmentThumbnail{}, err
+	}
+	sum := sha256.Sum256(raw)
+	return attachmentThumbnail{
+		FileName: filepath.Base(thumbPath),
+		MimeType: "image/jpeg",
+		Width:    dstW,
+		Height:   dstH,
+		Size:     int64(len(raw)),
+		SHA256:   hex.EncodeToString(sum[:]),
+	}, nil
+}
+
+func thumbnailDimensions(width, height int) (int, int) {
+	if width <= attachmentThumbnailMaxEdge && height <= attachmentThumbnailMaxEdge {
+		return width, height
+	}
+	if width >= height {
+		scaledHeight := maxInt(1, height*attachmentThumbnailMaxEdge/width)
+		return attachmentThumbnailMaxEdge, scaledHeight
+	}
+	scaledWidth := maxInt(1, width*attachmentThumbnailMaxEdge/height)
+	return scaledWidth, attachmentThumbnailMaxEdge
+}
+
+func compositeOverBackground(pixel color.NRGBA, background color.NRGBA) color.NRGBA {
+	if pixel.A == 255 {
+		return pixel
+	}
+	if pixel.A == 0 {
+		return background
+	}
+	alpha := uint32(pixel.A)
+	inv := uint32(255 - pixel.A)
+	return color.NRGBA{
+		R: uint8((uint32(pixel.R)*alpha + uint32(background.R)*inv) / 255),
+		G: uint8((uint32(pixel.G)*alpha + uint32(background.G)*inv) / 255),
+		B: uint8((uint32(pixel.B)*alpha + uint32(background.B)*inv) / 255),
+		A: 255,
+	}
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func (m *attachmentManager) uploadPartPathForTest(uploadID string) string {

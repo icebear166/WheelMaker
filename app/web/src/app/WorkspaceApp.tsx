@@ -118,6 +118,9 @@ import {
 } from '../chat/chatViewWidth';
 import { buildPromptDoneCopyRange } from '../chat/chatCopyRange';
 import {
+  chatPromptAttachmentLabel,
+  chatPromptAttachmentMeta,
+  isPromptImageAttachmentContentBlock,
   isPromptAttachmentContentBlock,
 } from '../chat/composer/chatPromptAttachments';
 import { ChatRichComposer, type ChatRichComposerHandle } from '../chat/composer/ChatRichComposer';
@@ -585,6 +588,22 @@ type ChatFilePeekState = {
   loading: boolean;
   error: string;
 };
+type ChatAttachmentPreviewState = {
+  projectId: string;
+  sessionId: string;
+  title: string;
+  meta: string;
+  mimeType: string;
+  kind: 'image' | 'file';
+  src: string;
+  loading: boolean;
+  error: string;
+};
+type ChatAttachmentThumbnailState = {
+  src: string;
+  loading: boolean;
+  error: string;
+};
 type ChatPromptArtifactPreviewFile = RegistrySessionPromptArtifactFile & {
   diff: string;
   expanded: boolean;
@@ -865,6 +884,17 @@ function attachmentIdFromBlock(block: RegistryChatContentBlock | undefined): str
   const withoutQuery = last.split(/[?#]/)[0] || '';
   const withoutExtension = withoutQuery.replace(/\.[^.]+$/, '');
   return withoutExtension.startsWith('sha256-') ? withoutExtension : '';
+}
+
+function chatAttachmentBlockCacheKey(projectId: string, sessionId: string, block: RegistrySessionContentBlock): string {
+  const attachmentId = attachmentIdFromBlock(block);
+  const identity = attachmentId || block.uri || block.name || block.mimeType || 'attachment';
+  return `${projectId}\u001f${sessionId}\u001f${identity}`;
+}
+
+function attachmentBase64DataUrl(content: string, mimeType?: string): string {
+  const normalizedMime = (mimeType || '').trim() || 'application/octet-stream';
+  return content ? `data:${normalizedMime};base64,${content}` : '';
 }
 
 function revokeChatAttachmentObjectUrl(attachment: ChatAttachment): void {
@@ -2110,6 +2140,81 @@ const ChatFilePeekViewer = React.memo(function ChatFilePeekViewer({
   );
 });
 
+type ChatAttachmentPreviewViewerProps = {
+  preview: ChatAttachmentPreviewState;
+  mode: 'desktop' | 'mobile';
+  onClose: () => void;
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+};
+
+const ChatAttachmentPreviewViewer = React.memo(function ChatAttachmentPreviewViewer({
+  preview,
+  mode,
+  onClose,
+  scrollRef,
+}: ChatAttachmentPreviewViewerProps) {
+  let body: React.ReactNode;
+  if (preview.loading) {
+    body = <div className="muted block">Loading attachment...</div>;
+  } else if (preview.error) {
+    body = (
+      <div className="chat-file-peek-error" role="alert">
+        <span className="codicon codicon-error" />
+        <span>{preview.error}</span>
+      </div>
+    );
+  } else if (preview.kind === 'image' && preview.src) {
+    body = (
+      <div className="chat-attachment-original-wrap">
+        <img
+          className="chat-attachment-original-image"
+          src={preview.src}
+          alt={preview.title}
+        />
+      </div>
+    );
+  } else {
+    body = (
+      <div className="chat-attachment-preview-placeholder">
+        <span className="codicon codicon-file" aria-hidden="true" />
+        <div className="chat-attachment-preview-placeholder-main">
+          <div className="chat-attachment-preview-placeholder-title">{preview.title}</div>
+          {preview.meta ? (
+            <div className="chat-attachment-preview-placeholder-meta">{preview.meta}</div>
+          ) : null}
+          <div className="chat-attachment-preview-placeholder-status">Preview is being implemented.</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <section
+      className={`chat-attachment-preview-surface ${mode}`}
+      aria-label="Chat attachment preview"
+    >
+      <div className="chat-preview-toolbar">
+        <button
+          type="button"
+          className="chat-preview-icon-button"
+          onClick={onClose}
+          title={mode === 'mobile' ? 'Back' : 'Close preview'}
+          aria-label={mode === 'mobile' ? 'Back' : 'Close preview'}
+        >
+          <span className={`codicon ${mode === 'mobile' ? 'codicon-arrow-left' : 'codicon-close'}`} />
+        </button>
+        <div className="chat-preview-title" title={preview.title}>{preview.title}</div>
+      </div>
+      <div ref={scrollRef} className="chat-file-peek-scroll">
+        {body}
+      </div>
+    </section>
+  );
+}, (prev, next) => (
+  prev.preview === next.preview &&
+  prev.mode === next.mode
+));
+
 type ChatPromptArtifactPreviewViewerProps = {
   preview: ChatPromptArtifactPreviewState;
   mode: 'desktop' | 'mobile';
@@ -2810,12 +2915,16 @@ export function App() {
   const [htmlPreviewEnabled, setHtmlPreviewEnabled] = useState(false);
   const fileScrollRef = useRef<HTMLDivElement | null>(null);
   const [chatFilePeek, setChatFilePeek] = useState<ChatFilePeekState | null>(null);
+  const [chatAttachmentPreview, setChatAttachmentPreview] = useState<ChatAttachmentPreviewState | null>(null);
   const [chatPromptArtifactPreview, setChatPromptArtifactPreview] =
     useState<ChatPromptArtifactPreviewState | null>(null);
+  const [chatAttachmentThumbnails, setChatAttachmentThumbnails] = useState<Record<string, ChatAttachmentThumbnailState>>({});
   const chatFilePeekRef = useRef<ChatFilePeekState | null>(null);
+  const chatAttachmentPreviewRef = useRef<ChatAttachmentPreviewState | null>(null);
   const chatPromptArtifactPreviewRef = useRef<ChatPromptArtifactPreviewState | null>(null);
   const chatFilePeekScrollRef = useRef<HTMLDivElement | null>(null);
   const chatFilePeekReadSeqRef = useRef(0);
+  const chatAttachmentReadSeqRef = useRef(0);
   const chatPromptArtifactReadSeqRef = useRef(0);
   const chatFilePeekHistoryActiveRef = useRef(false);
   const chatFilePeekResizeRef = useRef<DesktopSidebarResizeState | null>(null);
@@ -2826,7 +2935,7 @@ export function App() {
   const [chatPeekSelectedLines, setChatPeekSelectedLines] = useState<Set<number>>(new Set());
   const chatPeekAnchorRef = useRef<number | null>(null);
   const chatPortRelayPreviewOpen = portRelayFrameOpen && portRelayFramePlacement === 'chatPreview' && !!portRelayFrameUrl;
-  const chatPreviewOpen = !!chatFilePeek || !!chatPromptArtifactPreview || chatPortRelayPreviewOpen;
+  const chatPreviewOpen = !!chatFilePeek || !!chatPromptArtifactPreview || !!chatAttachmentPreview || chatPortRelayPreviewOpen;
   const liveRefreshTimerRef = useRef<number | null>(null);
   const refreshInFlightRef = useRef(false);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -6861,6 +6970,10 @@ export function App() {
     setChatPeekSelectedLines(new Set());
     chatPeekAnchorRef.current = null;
   }, []);
+  const closeChatAttachmentPreview = useCallback(() => {
+    chatAttachmentReadSeqRef.current += 1;
+    setChatAttachmentPreview(null);
+  }, []);
   const closeChatPromptArtifactPreview = useCallback(() => {
     chatPromptArtifactReadSeqRef.current += 1;
     setChatPromptArtifactPreview(null);
@@ -6871,11 +6984,12 @@ export function App() {
   }, []);
   const closeChatPreview = useCallback(() => {
     closeChatFilePeek();
+    closeChatAttachmentPreview();
     closeChatPromptArtifactPreview();
     closeChatPortRelayPreview();
-  }, [closeChatFilePeek, closeChatPortRelayPreview, closeChatPromptArtifactPreview]);
+  }, [closeChatAttachmentPreview, closeChatFilePeek, closeChatPortRelayPreview, closeChatPromptArtifactPreview]);
   const handleAndroidNativeBack = useCallback(() => {
-    if (!isWide && (chatFilePeekRef.current || chatPromptArtifactPreviewRef.current || chatPortRelayPreviewOpen)) {
+    if (!isWide && (chatFilePeekRef.current || chatAttachmentPreviewRef.current || chatPromptArtifactPreviewRef.current || chatPortRelayPreviewOpen)) {
       chatFilePeekHistoryActiveRef.current = false;
       closeChatPreview();
       return true;
@@ -7339,6 +7453,7 @@ export function App() {
   expandedDirsRef.current = expandedDirs;
   selectedFileRef.current = selectedFile;
   chatFilePeekRef.current = chatFilePeek;
+  chatAttachmentPreviewRef.current = chatAttachmentPreview;
   chatPromptArtifactPreviewRef.current = chatPromptArtifactPreview;
 
   useEffect(() => {
@@ -7943,6 +8058,149 @@ export function App() {
     }
   }, [projectId]);
 
+  const resolvePromptAttachmentThumbnail = useCallback((
+    block: RegistrySessionContentBlock,
+    message: RegistryChatMessage,
+  ): string => {
+    if (!isPromptImageAttachmentContentBlock(block)) {
+      return '';
+    }
+    if (block.type === 'image' && block.data) {
+      return attachmentBase64DataUrl(block.data, block.mimeType || 'image/png');
+    }
+    const selectedKey = selectedChatKeyRef.current;
+    const targetProjectId = selectedKey?.projectId || projectIdRef.current;
+    const sessionId = message.sessionId || selectedKey?.sessionId || '';
+    if (!targetProjectId || !sessionId) {
+      return '';
+    }
+    const cacheKey = chatAttachmentBlockCacheKey(targetProjectId, sessionId, block);
+    return chatAttachmentThumbnails[cacheKey]?.src || '';
+  }, [chatAttachmentThumbnails]);
+
+  const loadPromptAttachmentThumbnail = useCallback((
+    block: RegistrySessionContentBlock,
+    message: RegistryChatMessage,
+  ) => {
+    if (!isPromptImageAttachmentContentBlock(block) || (block.type === 'image' && block.data)) {
+      return;
+    }
+    const selectedKey = selectedChatKeyRef.current;
+    const targetProjectId = selectedKey?.projectId || projectIdRef.current;
+    const sessionId = message.sessionId || selectedKey?.sessionId || '';
+    if (!targetProjectId || !sessionId) {
+      return;
+    }
+    const cacheKey = chatAttachmentBlockCacheKey(targetProjectId, sessionId, block);
+    const existing = chatAttachmentThumbnails[cacheKey];
+    if (existing?.src || existing?.loading || existing?.error) {
+      return;
+    }
+    setChatAttachmentThumbnails(current => ({
+      ...current,
+      [cacheKey]: {src: '', loading: true, error: ''},
+    }));
+    service.readProjectSessionAttachmentThumbnail(targetProjectId, {
+      sessionId,
+      uri: block.uri,
+      attachmentId: attachmentIdFromBlock(block) || undefined,
+    }).then(result => {
+      const src = attachmentBase64DataUrl(result.content, result.mimeType || 'image/jpeg');
+      setChatAttachmentThumbnails(current => ({
+        ...current,
+        [cacheKey]: {src, loading: false, error: ''},
+      }));
+    }).catch(err => {
+      const reason = err instanceof Error ? err.message : String(err);
+      setChatAttachmentThumbnails(current => ({
+        ...current,
+        [cacheKey]: {src: '', loading: false, error: reason},
+      }));
+    });
+  }, [chatAttachmentThumbnails]);
+
+  const openChatAttachmentPreview = useCallback((block: RegistrySessionContentBlock, message: RegistryChatMessage) => {
+    const selectedKey = selectedChatKeyRef.current;
+    const targetProjectId = selectedKey?.projectId || projectIdRef.current;
+    const sessionId = message.sessionId || selectedKey?.sessionId || '';
+    if (!targetProjectId || !sessionId) {
+      setError('Attachment preview requires an active chat session.');
+      return;
+    }
+    const imageAttachment = isPromptImageAttachmentContentBlock(block);
+    const title = chatPromptAttachmentLabel(block, 0);
+    const meta = chatPromptAttachmentMeta(block);
+    const initialSrc = block.type === 'image' && block.data
+      ? attachmentBase64DataUrl(block.data, block.mimeType || 'image/png')
+      : '';
+    const requestSeq = chatAttachmentReadSeqRef.current + 1;
+    chatAttachmentReadSeqRef.current = requestSeq;
+    chatFilePeekReadSeqRef.current += 1;
+    chatPromptArtifactReadSeqRef.current += 1;
+    setError('');
+    setPortRelayFrameOpen(false);
+    setPortRelayFramePlacement('main');
+    setChatFilePeek(null);
+    setChatPromptArtifactPreview(null);
+    setChatAttachmentPreview({
+      projectId: targetProjectId,
+      sessionId,
+      title,
+      meta,
+      mimeType: block.mimeType || '',
+      kind: imageAttachment ? 'image' : 'file',
+      src: initialSrc,
+      loading: imageAttachment && !initialSrc,
+      error: '',
+    });
+    if (!isWide) {
+      setDrawerOpen(false);
+      setChatQuickSwitchMenuOpen(false);
+      if (!chatFilePeekHistoryActiveRef.current) {
+        window.history.pushState(createChatFilePeekHistoryState(), '', window.location.href);
+        chatFilePeekHistoryActiveRef.current = true;
+      }
+    }
+    if (!imageAttachment || initialSrc) {
+      return;
+    }
+    service.readProjectSessionAttachment(targetProjectId, {
+      sessionId,
+      uri: block.uri,
+      attachmentId: attachmentIdFromBlock(block) || undefined,
+    }).then(result => {
+      if (requestSeq !== chatAttachmentReadSeqRef.current) {
+        return;
+      }
+      setChatAttachmentPreview(current =>
+        current && current.projectId === targetProjectId && current.sessionId === sessionId
+          ? {
+              ...current,
+              mimeType: result.mimeType || current.mimeType,
+              src: attachmentBase64DataUrl(result.content, result.mimeType || current.mimeType || 'image/png'),
+              loading: false,
+              error: '',
+            }
+          : current,
+      );
+    }).catch(err => {
+      if (requestSeq !== chatAttachmentReadSeqRef.current) {
+        return;
+      }
+      const reason = err instanceof Error ? err.message : String(err);
+      setChatAttachmentPreview(current =>
+        current && current.projectId === targetProjectId && current.sessionId === sessionId
+          ? {
+              ...current,
+              src: '',
+              loading: false,
+              error: `Failed to load attachment: ${reason}`,
+            }
+          : current,
+      );
+    });
+  }, [isWide, setDrawerOpen]);
+
   const buildLineRange = (anchor: number, target: number): Set<number> => {
     const start = Math.min(anchor, target);
     const end = Math.max(anchor, target);
@@ -7998,7 +8256,9 @@ export function App() {
     setPortRelayFrameOpen(false);
     setPortRelayFramePlacement('main');
     chatPromptArtifactReadSeqRef.current += 1;
+    chatAttachmentReadSeqRef.current += 1;
     setChatPromptArtifactPreview(null);
+    setChatAttachmentPreview(null);
     if (!isWide) {
       setDrawerOpen(false);
       setChatQuickSwitchMenuOpen(false);
@@ -11270,8 +11530,10 @@ export function App() {
     }
     setPortRelayFramePlacement('chatPreview');
     chatFilePeekReadSeqRef.current += 1;
+    chatAttachmentReadSeqRef.current += 1;
     chatPromptArtifactReadSeqRef.current += 1;
     setChatFilePeek(null);
+    setChatAttachmentPreview(null);
     setChatPromptArtifactPreview(null);
     if (!isWide) {
       setDrawerOpen(false);
@@ -15583,7 +15845,9 @@ export function App() {
     const requestSeq = chatPromptArtifactReadSeqRef.current + 1;
     chatPromptArtifactReadSeqRef.current = requestSeq;
     chatFilePeekReadSeqRef.current += 1;
+    chatAttachmentReadSeqRef.current += 1;
     setChatFilePeek(null);
+    setChatAttachmentPreview(null);
     setChatPeekSelectedLines(new Set());
     chatPeekAnchorRef.current = null;
     setPortRelayFrameOpen(false);
@@ -15789,6 +16053,9 @@ export function App() {
               ? () => readAloudPromptDone(doneTurnIndex).catch(() => undefined)
               : undefined
           }
+          onOpenPromptAttachment={openChatAttachmentPreview}
+          resolvePromptAttachmentThumbnail={resolvePromptAttachmentThumbnail}
+          onLoadPromptAttachmentThumbnail={loadPromptAttachmentThumbnail}
           onOpenPromptArtifact={
             message.method === 'prompt_done'
               ? openPromptArtifactDiff
@@ -15818,6 +16085,9 @@ export function App() {
           hideToolCalls={hideToolCalls}
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}
+          onOpenPromptAttachment={openChatAttachmentPreview}
+          resolvePromptAttachmentThumbnail={resolvePromptAttachmentThumbnail}
+          onLoadPromptAttachmentThumbnail={loadPromptAttachmentThumbnail}
           onOpenPromptArtifact={message.method === 'prompt_done' ? openPromptArtifactDiff : undefined}
           openingPromptArtifactKey={openingPromptArtifactKey}
           promptArtifactErrors={promptArtifactErrors}
@@ -15839,6 +16109,9 @@ export function App() {
           hideToolCalls={hideToolCalls}
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}
+          onOpenPromptAttachment={openChatAttachmentPreview}
+          resolvePromptAttachmentThumbnail={resolvePromptAttachmentThumbnail}
+          onLoadPromptAttachmentThumbnail={loadPromptAttachmentThumbnail}
           onRetryPendingPrompt={() => retryPendingChatPrompt(selectedChatEncodedKey)}
           onEditPendingPrompt={() => editPendingChatPrompt(selectedChatEncodedKey)}
         />
@@ -17389,6 +17662,13 @@ export function App() {
           onToggleFile={togglePromptArtifactPreviewFile}
           scrollRef={chatFilePeekScrollRef}
         />
+      ) : chatAttachmentPreview ? (
+        <ChatAttachmentPreviewViewer
+          preview={chatAttachmentPreview}
+          mode="desktop"
+          onClose={closeChatFilePeekFromChrome}
+          scrollRef={chatFilePeekScrollRef}
+        />
       ) : chatFilePeek ? (
         <ChatFilePeekViewer
           peek={chatFilePeek}
@@ -17431,6 +17711,13 @@ export function App() {
           codeTabSize={codeTabSize}
           onClose={closeChatFilePeekFromChrome}
           onToggleFile={togglePromptArtifactPreviewFile}
+          scrollRef={chatFilePeekScrollRef}
+        />
+      ) : chatAttachmentPreview ? (
+        <ChatAttachmentPreviewViewer
+          preview={chatAttachmentPreview}
+          mode="mobile"
+          onClose={closeChatFilePeekFromChrome}
           scrollRef={chatFilePeekScrollRef}
         />
       ) : chatFilePeek ? (

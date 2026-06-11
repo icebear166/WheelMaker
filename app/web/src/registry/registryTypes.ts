@@ -193,6 +193,25 @@ export interface RegistrySessionAttachmentDeleteResponse {
   attachmentId: string;
 }
 
+export interface RegistrySessionAttachmentReadPayload {
+  sessionId: string;
+  attachmentId?: string;
+  uri?: string;
+}
+
+export interface RegistrySessionAttachmentContentResponse {
+  ok: boolean;
+  sessionId: string;
+  attachmentId: string;
+  mimeType?: string;
+  encoding: 'base64' | string;
+  content: string;
+  width?: number;
+  height?: number;
+  size?: number;
+  hash?: string;
+}
+
 export interface RegistrySessionMessage {
   sessionId: string;
   turnIndex: number;

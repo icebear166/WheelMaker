@@ -65,6 +65,10 @@ export function isPromptAttachmentContentBlock(block: unknown): block is Registr
   return false;
 }
 
+export function isPromptImageAttachmentContentBlock(block: RegistrySessionContentBlock): boolean {
+  return block.type === 'image' || cleanString(block.mimeType).toLowerCase().startsWith('image/');
+}
+
 export function promptAttachmentBlockCount(blocks: unknown): number {
   if (!Array.isArray(blocks)) {
     return 0;
