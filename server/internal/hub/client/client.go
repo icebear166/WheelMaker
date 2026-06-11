@@ -725,21 +725,9 @@ func (c *Client) ReadSessionArtifact(ctx context.Context, sessionID string, arti
 		return sessionArtifactReadResult{}, fmt.Errorf("artifactId is required")
 	}
 	if c == nil || c.sessionRecorder == nil || c.sessionRecorder.artifactStore == nil {
-		if c != nil && c.archiveStore != nil {
-			return c.archiveStore.ReadArtifact(ctx, c.projectName, sessionID, artifactID)
-		}
 		return sessionArtifactReadResult{}, fmt.Errorf("session artifact store is required")
 	}
-	result, err := c.sessionRecorder.artifactStore.ReadArtifact(ctx, c.projectName, sessionID, artifactID)
-	if err == nil {
-		return result, nil
-	}
-	if c.archiveStore != nil {
-		if archived, archiveErr := c.archiveStore.ReadArtifact(ctx, c.projectName, sessionID, artifactID); archiveErr == nil {
-			return archived, nil
-		}
-	}
-	return sessionArtifactReadResult{}, err
+	return c.sessionRecorder.artifactStore.ReadArtifact(ctx, c.projectName, sessionID, artifactID)
 }
 
 func (c *Client) listSessionViews(ctx context.Context) ([]sessionViewSummary, error) {
@@ -971,18 +959,19 @@ func (c *Client) archiveSession(ctx context.Context, sessionID string) (string, 
 		return "", err
 	}
 	if alreadyArchived {
+		if err := c.archiveStore.DeleteProjectArtifacts(ctx, c.projectName); err != nil {
+			return "", err
+		}
 		return "", c.deleteActiveSession(ctx, sessionID, false)
 	}
 	contents, gapCount, err := c.sessionRecorder.ReadPersistedTurnContentsForArchive(ctx, sessionID, latestTurnIndex)
 	if err != nil {
 		return "", err
 	}
-	if c.sessionRecorder != nil && c.sessionRecorder.artifactStore != nil {
-		if err := c.archiveStore.CopyArtifactsFromSession(ctx, c.sessionRecorder.artifactStore.root, c.projectName, sessionID); err != nil {
-			return "", err
-		}
-	}
 	if _, _, err := c.archiveStore.AppendSession(ctx, *rec, contents, gapCount); err != nil {
+		return "", err
+	}
+	if err := c.archiveStore.DeleteProjectArtifacts(ctx, c.projectName); err != nil {
 		return "", err
 	}
 	nativeUpdate := c.syncNativeArchiveState(ctx, rec.AgentType, sessionID, true)
@@ -997,6 +986,9 @@ func (c *Client) archiveSession(ctx context.Context, sessionID string) (string, 
 func (c *Client) ListArchivedSessions(ctx context.Context) (map[string]any, error) {
 	if c.archiveStore == nil {
 		return nil, fmt.Errorf("session archive store is required")
+	}
+	if err := c.archiveStore.DeleteProjectArtifacts(ctx, c.projectName); err != nil {
+		return nil, err
 	}
 	entries, err := c.archiveStore.ListSessions(ctx, c.projectName)
 	if err != nil {
@@ -1016,6 +1008,9 @@ func (c *Client) ReadArchivedSession(ctx context.Context, sessionID string) (map
 	}
 	if c.archiveStore == nil {
 		return nil, fmt.Errorf("session archive store is required")
+	}
+	if err := c.archiveStore.DeleteProjectArtifacts(ctx, c.projectName); err != nil {
+		return nil, err
 	}
 	entry, contents, err := c.archiveStore.ReadSession(ctx, c.projectName, sessionID)
 	if err != nil {
@@ -1046,6 +1041,9 @@ func (c *Client) RestoreArchivedSession(ctx context.Context, sessionID string) (
 	if c.sessionRecorder == nil || c.sessionRecorder.turnStore == nil {
 		return nil, fmt.Errorf("session turn store is required")
 	}
+	if err := c.archiveStore.DeleteProjectArtifacts(ctx, c.projectName); err != nil {
+		return nil, err
+	}
 
 	entry, contents, err := c.archiveStore.ReadSession(ctx, c.projectName, sessionID)
 	if err != nil {
@@ -1061,14 +1059,9 @@ func (c *Client) RestoreArchivedSession(ctx context.Context, sessionID string) (
 	if err := c.sessionRecorder.DeleteSessionData(ctx, sessionID); err != nil {
 		return nil, fmt.Errorf("reset restored session data: %w", err)
 	}
+	contents = discardSessionTurnArtifactsForArchiveContents(contents)
 	if _, err := WriteSessionTurnFiles(ctx, c.sessionRecorder.turnStore.root, c.projectName, sessionID, 1, contents); err != nil {
 		return nil, fmt.Errorf("restore session turns: %w", err)
-	}
-	if c.sessionRecorder.artifactStore != nil {
-		if err := c.archiveStore.RestoreArtifactsToSession(ctx, c.sessionRecorder.artifactStore.root, c.projectName, sessionID); err != nil {
-			_ = c.sessionRecorder.DeleteSessionData(context.Background(), sessionID)
-			return nil, fmt.Errorf("restore session artifacts: %w", err)
-		}
 	}
 
 	createdAt := parseArchiveEntryTime(entry.CreatedAt, entry.ArchivedAt)
@@ -1129,11 +1122,19 @@ func archiveTurnsFromContents(contents []string) []sessionViewTurn {
 	for index, content := range contents {
 		turns = append(turns, sessionViewTurn{
 			TurnIndex: int64(index + 1),
-			Content:   content,
+			Content:   discardSessionTurnArtifactsForArchive(content),
 			Finished:  true,
 		})
 	}
 	return turns
+}
+
+func discardSessionTurnArtifactsForArchiveContents(contents []string) []string {
+	out := make([]string, 0, len(contents))
+	for _, content := range contents {
+		out = append(out, discardSessionTurnArtifactsForArchive(content))
+	}
+	return out
 }
 
 func parseArchiveEntryTime(values ...string) time.Time {

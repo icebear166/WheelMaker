@@ -296,55 +296,17 @@ func (s *sessionArchiveStore) MarkRestored(ctx context.Context, projectName, ses
 	return entry, nil
 }
 
-func (s *sessionArchiveStore) CopyArtifactsFromSession(ctx context.Context, sourceRoot, projectName, sessionID string) error {
+func (s *sessionArchiveStore) DeleteProjectArtifacts(ctx context.Context, projectName string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if s == nil || strings.TrimSpace(s.root) == "" {
 		return fmt.Errorf("session archive store is required")
 	}
-	sourceStore := newFileSessionArtifactStore(sourceRoot)
-	return copySessionArtifactDir(ctx, sourceStore.artifactDir(projectName, sessionID), s.artifactDir(projectName, sessionID))
-}
-
-func (s *sessionArchiveStore) RestoreArtifactsToSession(ctx context.Context, targetRoot, projectName, sessionID string) error {
-	if err := ctx.Err(); err != nil {
-		return err
+	if err := os.RemoveAll(filepath.Join(s.projectDir(projectName), "artifacts")); err != nil {
+		return fmt.Errorf("delete archived artifact dir: %w", err)
 	}
-	if s == nil || strings.TrimSpace(s.root) == "" {
-		return fmt.Errorf("session archive store is required")
-	}
-	targetStore := newFileSessionArtifactStore(targetRoot)
-	return copySessionArtifactDir(ctx, s.artifactDir(projectName, sessionID), targetStore.artifactDir(projectName, sessionID))
-}
-
-func (s *sessionArchiveStore) ReadArtifact(ctx context.Context, projectName, sessionID, artifactID string) (sessionArtifactReadResult, error) {
-	if err := ctx.Err(); err != nil {
-		return sessionArtifactReadResult{}, err
-	}
-	if s == nil || strings.TrimSpace(s.root) == "" {
-		return sessionArtifactReadResult{}, fmt.Errorf("session archive store is required")
-	}
-	sessionID = strings.TrimSpace(sessionID)
-	if sessionID == "" {
-		return sessionArtifactReadResult{}, fmt.Errorf("session id is required")
-	}
-	if !validSessionArtifactID(artifactID) {
-		return sessionArtifactReadResult{}, fmt.Errorf("invalid artifact id: %s", artifactID)
-	}
-	raw, err := os.ReadFile(filepath.Join(s.artifactDir(projectName, sessionID), artifactID+".diff"))
-	if os.IsNotExist(err) {
-		return sessionArtifactReadResult{}, fmt.Errorf("artifact not found: %s", artifactID)
-	}
-	if err != nil {
-		return sessionArtifactReadResult{}, fmt.Errorf("read archived artifact: %w", err)
-	}
-	return sessionArtifactReadResult{
-		ArtifactID: artifactID,
-		Type:       sessionArtifactTypeDiff,
-		Format:     sessionArtifactFormatDiff,
-		Content:    string(raw),
-	}, nil
+	return nil
 }
 
 func (s *sessionArchiveStore) UpdateNativeSync(ctx context.Context, projectName, sessionID string, update sessionArchiveNativeSyncUpdate) error {
@@ -581,49 +543,6 @@ func (s *sessionArchiveStore) manifestPath(projectName string) string {
 
 func (s *sessionArchiveStore) projectDir(projectName string) string {
 	return filepath.Join(s.root, safeHistoryPathPart(projectName))
-}
-
-func (s *sessionArchiveStore) artifactDir(projectName, sessionID string) string {
-	return filepath.Join(s.projectDir(projectName), "artifacts", safeHistoryPathPart(sessionID))
-}
-
-func copySessionArtifactDir(ctx context.Context, sourceDir string, targetDir string) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	entries, err := os.ReadDir(sourceDir)
-	if os.IsNotExist(err) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("read artifact dir: %w", err)
-	}
-	if err := os.RemoveAll(targetDir); err != nil {
-		return fmt.Errorf("reset artifact target dir: %w", err)
-	}
-	wrote := false
-	for _, entry := range entries {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".diff") {
-			continue
-		}
-		raw, err := os.ReadFile(filepath.Join(sourceDir, entry.Name()))
-		if err != nil {
-			return fmt.Errorf("read artifact file: %w", err)
-		}
-		if !wrote {
-			if err := os.MkdirAll(targetDir, 0o755); err != nil {
-				return fmt.Errorf("mkdir artifact target dir: %w", err)
-			}
-			wrote = true
-		}
-		if err := os.WriteFile(filepath.Join(targetDir, entry.Name()), raw, 0o644); err != nil {
-			return fmt.Errorf("write artifact file: %w", err)
-		}
-	}
-	return nil
 }
 
 func buildArchiveWMT2(contents []string) ([]byte, byte, error) {

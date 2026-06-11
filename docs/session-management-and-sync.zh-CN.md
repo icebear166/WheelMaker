@@ -229,7 +229,7 @@ type Cursor = { turnIndex: number };
   manifest.json
 ```
 
-其中 `<projectName>` 使用和普通 session 历史相同的 safe path segment。归档只保存 turn 正文和 session summary 元信息；原 session 目录删除时一并删除图片/附件，恢复只重建 session 行和 turn 文件。
+其中 `<projectName>` 使用和普通 session 历史相同的 safe path segment。归档只保存 turn 正文和 session summary 元信息；prompt diff artifacts 不进入归档，`prompt_done.artifacts` 元数据会在归档写入、归档读取和恢复时丢弃。服务端在归档写入、列表、读取和恢复入口会清理旧版留下的 `session-archive/<projectName>/artifacts` 目录。原 session 目录删除时一并删除图片/附件，恢复只重建 session 行和 turn 文件。
 
 ### 7.1 Manifest
 
@@ -317,7 +317,7 @@ manifest 记录 `gapCount`。WMT2 slot 不能使用 `len=0` 表示 gap，因为�
 1. 校验 session 非 running。
 2. 从 `sessions` 读取元信息和 `latestPersistedTurnIndex`。
 3. 如果 `latestPersistedTurnIndex < 3`，直接删除 `sessions` 和原 session 目录并结束。
-4. 读取普通 turn 文件并生成单 session WMT2 bytes，缺 turn 写 gap turn。
+4. 读取普通 turn 文件，丢弃 `prompt_done.artifacts` 元数据，并生成单 session WMT2 bytes，缺 turn 写 gap turn。
 5. gzip 压缩 WMT2 bytes，计算压缩前后 SHA-256。
 6. 持 project 级进程内锁 append WMSA segment 到 `archive.pack` 并 fsync。
 7. 读取并 upsert `manifest.json`，写 temp 文件后 rename。

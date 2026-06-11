@@ -247,7 +247,7 @@ func (r *SessionRecorder) ReadPersistedTurnContentsForArchive(ctx context.Contex
 				gapCount++
 				continue
 			}
-			contents = append(contents, string(content))
+			contents = append(contents, discardSessionTurnArtifactsForArchive(string(content)))
 		}
 		return contents, gapCount, nil
 	}
@@ -267,9 +267,28 @@ func (r *SessionRecorder) ReadPersistedTurnContentsForArchive(ctx context.Contex
 			gapCount++
 			continue
 		}
-		contents = append(contents, content)
+		contents = append(contents, discardSessionTurnArtifactsForArchive(content))
 	}
 	return contents, gapCount, nil
+}
+
+func discardSessionTurnArtifactsForArchive(content string) string {
+	var msg acp.SessionTurnMessage
+	if err := json.Unmarshal([]byte(content), &msg); err != nil {
+		return content
+	}
+	if strings.TrimSpace(msg.Method) != acp.SessionTurnMethodPromptDone || len(msg.Param) == 0 {
+		return content
+	}
+	payload := map[string]json.RawMessage{}
+	if err := json.Unmarshal(msg.Param, &payload); err != nil {
+		return content
+	}
+	if _, ok := payload["artifacts"]; !ok {
+		return content
+	}
+	delete(payload, "artifacts")
+	return buildSessionTurnContentJSON(msg.Method, payload)
 }
 
 func (r *SessionRecorder) SetEventPublisher(publish func(method string, payload any) error) {

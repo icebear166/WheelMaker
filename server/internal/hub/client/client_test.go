@@ -5542,7 +5542,7 @@ func TestHandleSessionRequestSessionArchiveWritesPackAndDeletesActiveSession(t *
 	}
 }
 
-func TestSessionArchivePreservesPromptDiffArtifacts(t *testing.T) {
+func TestSessionArchiveDiscardsPromptDiffArtifacts(t *testing.T) {
 	c := newSessionViewTestClient(t)
 	historyRoot := filepath.Join(t.TempDir(), "db", "session")
 	c.SetSessionHistoryRoot(historyRoot)
@@ -5592,9 +5592,45 @@ func TestSessionArchivePreservesPromptDiffArtifacts(t *testing.T) {
 		t.Fatalf("artifacts len = %d, want 1", len(result.Artifacts))
 	}
 	artifactID := result.Artifacts[0].ArtifactID
+	if _, err := c.sessionRecorder.artifactStore.ReadArtifact(ctx, "proj1", "sess-artifact-archive", artifactID); err != nil {
+		t.Fatalf("ReadArtifact before archive: %v", err)
+	}
 
 	if _, err := c.HandleSessionRequest(ctx, "session.archive", "proj1", json.RawMessage(`{"sessionId":"sess-artifact-archive"}`)); err != nil {
 		t.Fatalf("HandleSessionRequest(session.archive): %v", err)
+	}
+	archiveArtifactDir := filepath.Join(filepath.Dir(historyRoot), "session-archive", safeHistoryPathPart("proj1"), "artifacts", safeHistoryPathPart("sess-artifact-archive"))
+	if err := os.MkdirAll(archiveArtifactDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll stale archive artifact dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(archiveArtifactDir, artifactID+".diff"), []byte(promptDiffArtifactSampleDiff), 0o644); err != nil {
+		t.Fatalf("WriteFile stale archive artifact: %v", err)
+	}
+	archived, err := c.HandleSessionRequest(ctx, "session.archive.read", "proj1", json.RawMessage(`{"sessionId":"sess-artifact-archive"}`))
+	if err != nil {
+		t.Fatalf("HandleSessionRequest(session.archive.read): %v", err)
+	}
+	archivedMap, ok := archived.(map[string]any)
+	if !ok {
+		t.Fatalf("archive read response type = %T", archived)
+	}
+	archivedTurns, ok := archivedMap["turns"].([]sessionViewTurn)
+	if !ok || len(archivedTurns) != 3 {
+		t.Fatalf("archived turns = %#v, want 3 sessionViewTurn entries", archivedMap["turns"])
+	}
+	msg = acp.SessionTurnMessage{}
+	if err := json.Unmarshal([]byte(archivedTurns[2].Content), &msg); err != nil {
+		t.Fatalf("unmarshal archived prompt_done: %v", err)
+	}
+	result = acp.SessionTurnPromptResult{}
+	if err := json.Unmarshal(msg.Param, &result); err != nil {
+		t.Fatalf("unmarshal archived prompt_done param: %v", err)
+	}
+	if len(result.Artifacts) != 0 {
+		t.Fatalf("archived artifacts len = %d, want 0", len(result.Artifacts))
+	}
+	if _, err := os.Stat(archiveArtifactDir); !os.IsNotExist(err) {
+		t.Fatalf("archive artifact dir stat err = %v, want not exist", err)
 	}
 	readPayload, err := json.Marshal(map[string]any{
 		"sessionId":  "sess-artifact-archive",
@@ -5603,31 +5639,30 @@ func TestSessionArchivePreservesPromptDiffArtifacts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("json.Marshal read payload: %v", err)
 	}
-	readResp, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionArtifactRead, "proj1", readPayload)
-	if err != nil {
-		t.Fatalf("HandleSessionRequest(session.artifact.read archived): %v", err)
-	}
-	readRaw, err := json.Marshal(readResp)
-	if err != nil {
-		t.Fatalf("marshal read response: %v", err)
-	}
-	archivedBody := sessionArtifactReadResult{}
-	if err := json.Unmarshal(readRaw, &archivedBody); err != nil {
-		t.Fatalf("unmarshal read response: %v", err)
-	}
-	if archivedBody.Content != promptDiffArtifactSampleDiff {
-		t.Fatalf("archived artifact content = %q, want original diff", archivedBody.Content)
+	if _, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionArtifactRead, "proj1", readPayload); err == nil {
+		t.Fatal("HandleSessionRequest(session.artifact.read archived) error = nil, want artifact not found")
 	}
 
 	if _, err := c.HandleSessionRequest(ctx, "session.archive.restore", "proj1", json.RawMessage(`{"sessionId":"sess-artifact-archive"}`)); err != nil {
 		t.Fatalf("HandleSessionRequest(session.archive.restore): %v", err)
 	}
-	restoredBody, err := c.sessionRecorder.artifactStore.ReadArtifact(ctx, "proj1", "sess-artifact-archive", artifactID)
-	if err != nil {
-		t.Fatalf("ReadArtifact after restore: %v", err)
+	if _, err := c.sessionRecorder.artifactStore.ReadArtifact(ctx, "proj1", "sess-artifact-archive", artifactID); err == nil {
+		t.Fatal("ReadArtifact after restore error = nil, want artifact not found")
 	}
-	if restoredBody.Content != promptDiffArtifactSampleDiff {
-		t.Fatalf("restored artifact content = %q, want original diff", restoredBody.Content)
+	_, restoredTurns, err := c.sessionRecorder.ReadSessionTurns(ctx, "sess-artifact-archive", 0)
+	if err != nil {
+		t.Fatalf("ReadSessionTurns after restore: %v", err)
+	}
+	msg = acp.SessionTurnMessage{}
+	if err := json.Unmarshal([]byte(restoredTurns[2].Content), &msg); err != nil {
+		t.Fatalf("unmarshal restored prompt_done: %v", err)
+	}
+	result = acp.SessionTurnPromptResult{}
+	if err := json.Unmarshal(msg.Param, &result); err != nil {
+		t.Fatalf("unmarshal restored prompt_done param: %v", err)
+	}
+	if len(result.Artifacts) != 0 {
+		t.Fatalf("restored artifacts len = %d, want 0", len(result.Artifacts))
 	}
 }
 

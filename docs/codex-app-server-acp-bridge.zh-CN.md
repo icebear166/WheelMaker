@@ -346,7 +346,7 @@ ACP `session/list` 转 `thread/list`。
 
 ### session.archive / session.archive.restore 原生同步
 
-WheelMaker 的归档 source of truth 始终是 `session-archive/<projectName>/manifest.json`。Codex App 原生 thread archive 只作为 best-effort 同步，不决定 WheelMaker 是否完成归档或恢复。
+WheelMaker 的归档 source of truth 始终是 `session-archive/<projectName>/manifest.json`。Codex App 原生 thread archive 只作为 best-effort 同步，不决定 WheelMaker 是否完成归档或恢复。WheelMaker 归档不保留 prompt diff artifacts；归档读取和恢复都只返回去掉 artifact metadata 的 turns。
 
 `session.archive` 在 WheelMaker manifest 写入成功后、删除 active session index 前，若 agent instance 支持 `SessionArchiver`，会调用 Codex App：
 
