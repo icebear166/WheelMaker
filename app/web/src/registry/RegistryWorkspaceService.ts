@@ -32,6 +32,7 @@ import type {
   RegistrySessionAttachmentFinishResponse,
   RegistrySessionAttachmentStartPayload,
   RegistrySessionAttachmentStartResponse,
+  RegistrySessionArtifactReadResponse,
   RegistrySessionContentBlock,
   RegistrySessionConfigOption,
   RegistrySessionMessage,
@@ -452,6 +453,17 @@ export class RegistryWorkspaceService {
       };
     }
     return this.repository.readSession(projectId, sessionId, afterTurnIndex);
+  }
+
+  async readSessionArtifact(
+    projectId: string,
+    sessionId: string,
+    artifactId: string,
+  ): Promise<RegistrySessionArtifactReadResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.readRepositoryForProject(projectId).readSessionArtifact(projectId, sessionId, artifactId);
   }
 
   async startProjectSessionSearch(projectId: string, searchId: string, query: string): Promise<RegistrySessionSearchStatusResponse> {

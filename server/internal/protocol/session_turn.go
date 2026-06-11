@@ -47,9 +47,25 @@ type SessionTurnPromptRequest struct {
 }
 
 type SessionTurnPromptResult struct {
-	StopReason  string `json:"stopReason"`
-	CompletedAt string `json:"completedAt,omitempty"`
-	Message     string `json:"message,omitempty"`
+	StopReason  string                      `json:"stopReason"`
+	CompletedAt string                      `json:"completedAt,omitempty"`
+	Message     string                      `json:"message,omitempty"`
+	Artifacts   []SessionTurnPromptArtifact `json:"artifacts,omitempty"`
+}
+
+type SessionTurnPromptArtifact struct {
+	ArtifactID string                          `json:"artifactId"`
+	Type       string                          `json:"type"`
+	Format     string                          `json:"format"`
+	FileCount  int                             `json:"fileCount"`
+	Files      []SessionTurnPromptArtifactFile `json:"files,omitempty"`
+}
+
+type SessionTurnPromptArtifactFile struct {
+	Path      string `json:"path"`
+	Status    string `json:"status"`
+	Additions int    `json:"additions"`
+	Deletions int    `json:"deletions"`
 }
 
 type SessionTurnTextResult struct {

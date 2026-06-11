@@ -42,6 +42,7 @@ export const RegistryMethods = {
   SessionArchiveList: 'session.archive.list',
   SessionArchiveRead: 'session.archive.read',
   SessionArchiveRestore: 'session.archive.restore',
+  SessionArtifactRead: 'session.artifact.read',
   SessionDelete: 'session.delete',
   SessionRename: 'session.rename',
   SessionAttachmentStart: 'session.attachment.start',

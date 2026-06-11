@@ -102,10 +102,12 @@ func (c *Client) SetSessionHistoryRoot(root string) {
 	root = strings.TrimSpace(root)
 	if root == "" {
 		c.sessionRecorder.turnStore = nil
+		c.sessionRecorder.artifactStore = nil
 		c.archiveStore = nil
 		return
 	}
 	c.sessionRecorder.turnStore = newFileSessionTurnStore(root)
+	c.sessionRecorder.artifactStore = newFileSessionArtifactStore(root)
 	c.archiveStore = newSessionArchiveStore(filepath.Join(filepath.Dir(root), "session-archive"))
 }
 
@@ -606,6 +608,15 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 			return nil, fmt.Errorf("invalid session.archive.restore payload: %w", err)
 		}
 		return c.RestoreArchivedSession(ctx, req.SessionID)
+	case acp.RegistryMethodSessionArtifactRead:
+		var req struct {
+			SessionID  string `json:"sessionId"`
+			ArtifactID string `json:"artifactId"`
+		}
+		if err := decodeSessionRequestPayload(payload, &req); err != nil {
+			return nil, fmt.Errorf("invalid session.artifact.read payload: %w", err)
+		}
+		return c.ReadSessionArtifact(ctx, req.SessionID, req.ArtifactID)
 	case acp.RegistryMethodSessionDelete:
 		var req struct {
 			SessionID string `json:"sessionId"`
@@ -702,6 +713,33 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 	default:
 		return nil, fmt.Errorf("unsupported session method: %s", method)
 	}
+}
+
+func (c *Client) ReadSessionArtifact(ctx context.Context, sessionID string, artifactID string) (sessionArtifactReadResult, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	artifactID = strings.TrimSpace(artifactID)
+	if sessionID == "" {
+		return sessionArtifactReadResult{}, fmt.Errorf("sessionId is required")
+	}
+	if artifactID == "" {
+		return sessionArtifactReadResult{}, fmt.Errorf("artifactId is required")
+	}
+	if c == nil || c.sessionRecorder == nil || c.sessionRecorder.artifactStore == nil {
+		if c != nil && c.archiveStore != nil {
+			return c.archiveStore.ReadArtifact(ctx, c.projectName, sessionID, artifactID)
+		}
+		return sessionArtifactReadResult{}, fmt.Errorf("session artifact store is required")
+	}
+	result, err := c.sessionRecorder.artifactStore.ReadArtifact(ctx, c.projectName, sessionID, artifactID)
+	if err == nil {
+		return result, nil
+	}
+	if c.archiveStore != nil {
+		if archived, archiveErr := c.archiveStore.ReadArtifact(ctx, c.projectName, sessionID, artifactID); archiveErr == nil {
+			return archived, nil
+		}
+	}
+	return sessionArtifactReadResult{}, err
 }
 
 func (c *Client) listSessionViews(ctx context.Context) ([]sessionViewSummary, error) {
@@ -939,6 +977,11 @@ func (c *Client) archiveSession(ctx context.Context, sessionID string) (string, 
 	if err != nil {
 		return "", err
 	}
+	if c.sessionRecorder != nil && c.sessionRecorder.artifactStore != nil {
+		if err := c.archiveStore.CopyArtifactsFromSession(ctx, c.sessionRecorder.artifactStore.root, c.projectName, sessionID); err != nil {
+			return "", err
+		}
+	}
 	if _, _, err := c.archiveStore.AppendSession(ctx, *rec, contents, gapCount); err != nil {
 		return "", err
 	}
@@ -1020,6 +1063,12 @@ func (c *Client) RestoreArchivedSession(ctx context.Context, sessionID string) (
 	}
 	if _, err := WriteSessionTurnFiles(ctx, c.sessionRecorder.turnStore.root, c.projectName, sessionID, 1, contents); err != nil {
 		return nil, fmt.Errorf("restore session turns: %w", err)
+	}
+	if c.sessionRecorder.artifactStore != nil {
+		if err := c.archiveStore.RestoreArtifactsToSession(ctx, c.sessionRecorder.artifactStore.root, c.projectName, sessionID); err != nil {
+			_ = c.sessionRecorder.DeleteSessionData(context.Background(), sessionID)
+			return nil, fmt.Errorf("restore session artifacts: %w", err)
+		}
 	}
 
 	createdAt := parseArchiveEntryTime(entry.CreatedAt, entry.ArchivedAt)

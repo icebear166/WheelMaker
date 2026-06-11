@@ -47,6 +47,12 @@ func TestRegistryMethodRolesAndRoutes(t *testing.T) {
 	if !RegistryClientForwardMethod(RegistryMethodSessionSend) {
 		t.Fatal("session.send should be a client forward method")
 	}
+	if !RegistryClientForwardMethod(RegistryMethodSessionArtifactRead) {
+		t.Fatalf("%s should be forwarded to the hub session route", RegistryMethodSessionArtifactRead)
+	}
+	if !RegistryMethodAllowed(string(RegistryRoleClient), RegistryMethodSessionArtifactRead) {
+		t.Fatalf("%s should allow client callers", RegistryMethodSessionArtifactRead)
+	}
 	if RegistryHubCommandMethod("cmd.skills") {
 		t.Fatal("cmd.skills should not be a public hub command method")
 	}

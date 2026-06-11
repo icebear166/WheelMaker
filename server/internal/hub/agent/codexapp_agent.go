@@ -438,10 +438,12 @@ type codexappConn struct {
 
 	pendingPromptStops   map[string]string
 	pendingPromptUpdates map[string][]protocol.SessionUpdateParams
+	pendingTurnDiffs     map[string]string
 }
 
 type codexappPromptResult struct {
 	stopReason string
+	artifacts  []protocol.SessionPromptArtifactPayload
 	err        error
 }
 
@@ -763,6 +765,7 @@ func (c *codexappConn) sendSessionPrompt(ctx context.Context, p protocol.Session
 	c.activeTurnID = ""
 	c.pendingPromptStops = nil
 	c.pendingPromptUpdates = nil
+	c.pendingTurnDiffs = nil
 	c.mu.Unlock()
 
 	var resp appServerTurnStartResponse
@@ -779,7 +782,7 @@ func (c *codexappConn) sendSessionPrompt(ctx context.Context, p protocol.Session
 		if promptResult.err != nil {
 			return promptResult.err
 		}
-		return assignResult(result, protocol.SessionPromptResult{StopReason: promptResult.stopReason})
+		return assignResult(result, protocol.SessionPromptResult{StopReason: promptResult.stopReason, Artifacts: promptResult.artifacts})
 	case <-ctx.Done():
 		c.clearPromptDone(done)
 		return ctx.Err()
@@ -892,6 +895,11 @@ func (c *codexappConn) handleAppServerNotification(method string, params json.Ra
 				SessionUpdate: protocol.SessionUpdatePlan,
 				Entries:       codexappPlanEntries(p.Plan),
 			})
+		}
+	case "turn/diff/updated":
+		var p appServerTurnDiffUpdatedParams
+		if json.Unmarshal(params, &p) == nil && p.ThreadID != "" && p.TurnID != "" && p.Diff != "" {
+			c.cacheTurnDiff(p.TurnID, p.Diff)
 		}
 	case "turn/started":
 		var p appServerTurnEventParams
@@ -1463,15 +1471,48 @@ func (c *codexappConn) completePrompt(turnID string, stopReason string) {
 		c.mu.Unlock()
 		return
 	}
+	diff := ""
+	if c.pendingTurnDiffs != nil {
+		diff = c.pendingTurnDiffs[turnID]
+	}
 	c.promptDone = nil
 	c.activeTurnID = ""
 	c.pendingPromptStops = nil
 	c.pendingPromptUpdates = nil
+	c.pendingTurnDiffs = nil
 	c.mu.Unlock()
+	artifacts := codexappPromptDiffArtifacts(diff)
 	select {
-	case done <- codexappPromptResult{stopReason: stopReason}:
+	case done <- codexappPromptResult{stopReason: stopReason, artifacts: artifacts}:
 	default:
 	}
+}
+
+func (c *codexappConn) cacheTurnDiff(turnID string, diff string) {
+	turnID = strings.TrimSpace(turnID)
+	if turnID == "" || diff == "" {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.promptDone == nil {
+		return
+	}
+	if c.pendingTurnDiffs == nil {
+		c.pendingTurnDiffs = map[string]string{}
+	}
+	c.pendingTurnDiffs[turnID] = diff
+}
+
+func codexappPromptDiffArtifacts(diff string) []protocol.SessionPromptArtifactPayload {
+	if diff == "" {
+		return nil
+	}
+	return []protocol.SessionPromptArtifactPayload{{
+		Type:    "diff",
+		Format:  "unified-diff",
+		Content: diff,
+	}}
 }
 
 func (c *codexappConn) waitForPromptCompletionOrCancel(done chan codexappPromptResult) {
@@ -1511,6 +1552,7 @@ func (c *codexappConn) synthesizePromptCancelled(done chan codexappPromptResult)
 	c.activeTurnID = ""
 	c.pendingPromptStops = nil
 	c.pendingPromptUpdates = nil
+	c.pendingTurnDiffs = nil
 	c.mu.Unlock()
 	select {
 	case done <- codexappPromptResult{stopReason: protocol.StopReasonCancelled}:
@@ -1528,6 +1570,7 @@ func (c *codexappConn) failActivePrompt(err error) {
 	c.activeTurnID = ""
 	c.pendingPromptStops = nil
 	c.pendingPromptUpdates = nil
+	c.pendingTurnDiffs = nil
 	c.mu.Unlock()
 	if done != nil {
 		select {
@@ -1543,6 +1586,7 @@ func (c *codexappConn) clearPromptDone(done chan codexappPromptResult) {
 		c.promptDone = nil
 		c.pendingPromptStops = nil
 		c.pendingPromptUpdates = nil
+		c.pendingTurnDiffs = nil
 	}
 	c.mu.Unlock()
 }
@@ -1550,6 +1594,12 @@ func (c *codexappConn) clearPromptDone(done chan codexappPromptResult) {
 func assignResult(result any, value any) error {
 	if result == nil {
 		return nil
+	}
+	if out, ok := result.(*protocol.SessionPromptResult); ok {
+		if typed, ok := value.(protocol.SessionPromptResult); ok {
+			*out = typed
+			return nil
+		}
 	}
 	raw, err := json.Marshal(value)
 	if err != nil {

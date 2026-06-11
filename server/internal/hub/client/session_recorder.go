@@ -24,6 +24,7 @@ type SessionViewEvent struct {
 	Type      SessionViewEventType
 	SessionID string
 	Content   string
+	Artifacts []acp.SessionPromptArtifactPayload
 
 	SourceChannel string
 	SourceChatID  string
@@ -86,15 +87,17 @@ type parsedSessionViewEvent struct {
 	bMessage  bool
 	method    string
 	payload   any
+	artifacts []acp.SessionPromptArtifactPayload
 	acpMethod string
 	turnKey   string
 }
 
 type SessionRecorder struct {
-	projectName  string
-	store        Store
-	turnStore    *fileSessionTurnStore
-	listSessions func(context.Context) ([]SessionRecord, error)
+	projectName   string
+	store         Store
+	turnStore     *fileSessionTurnStore
+	artifactStore *fileSessionArtifactStore
+	listSessions  func(context.Context) ([]SessionRecord, error)
 
 	mu      sync.Mutex
 	publish func(method string, payload any) error
@@ -167,10 +170,17 @@ func (r *SessionRecorder) ResetSessionTurns(ctx context.Context, sessionID strin
 		return nil
 	}
 	r.RemovePromptState(sessionID)
-	if r.turnStore == nil {
-		return nil
+	if r.turnStore != nil {
+		if err := r.turnStore.DeleteTurns(ctx, r.projectName, sessionID); err != nil {
+			return err
+		}
 	}
-	return r.turnStore.DeleteTurns(ctx, r.projectName, sessionID)
+	if r.artifactStore != nil {
+		if err := r.artifactStore.DeleteArtifacts(ctx, r.projectName, sessionID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *SessionRecorder) DeleteSessionData(ctx context.Context, sessionID string) error {
@@ -182,10 +192,17 @@ func (r *SessionRecorder) DeleteSessionData(ctx context.Context, sessionID strin
 		return nil
 	}
 	r.RemovePromptState(sessionID)
-	if r.turnStore == nil {
-		return nil
+	if r.turnStore != nil {
+		if err := r.turnStore.DeleteSession(ctx, r.projectName, sessionID); err != nil {
+			return err
+		}
 	}
-	return r.turnStore.DeleteSession(ctx, r.projectName, sessionID)
+	if r.artifactStore != nil {
+		if err := r.artifactStore.DeleteArtifacts(ctx, r.projectName, sessionID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *SessionRecorder) HasUnfinishedPrompt(sessionID string) bool {
@@ -585,10 +602,10 @@ func (r *SessionRecorder) handlePromptFinishedLocked(ctx context.Context, parsed
 	if err != nil {
 		return err
 	}
-	return r.finishPromptStateLocked(ctx, event.SessionID, state, stopReason, strings.TrimSpace(result.Message), event.UpdatedAt, true)
+	return r.finishPromptStateLocked(ctx, event.SessionID, state, stopReason, strings.TrimSpace(result.Message), parsedEvent.artifacts, event.UpdatedAt, true)
 }
 
-func (r *SessionRecorder) finishPromptStateLocked(ctx context.Context, sessionID string, state *sessionPromptState, stopReason string, message string, updatedAt time.Time, publishDone bool) error {
+func (r *SessionRecorder) finishPromptStateLocked(ctx context.Context, sessionID string, state *sessionPromptState, stopReason string, message string, artifacts []acp.SessionPromptArtifactPayload, updatedAt time.Time, publishDone bool) error {
 	if state == nil {
 		return nil
 	}
@@ -600,12 +617,22 @@ func (r *SessionRecorder) finishPromptStateLocked(ctx context.Context, sessionID
 	needsPromptDone := !sessionPromptStateTerminal(state)
 	r.publishOpenTextTurnDone(state)
 
+	artifactMetadata, err := r.writePromptArtifactsLocked(ctx, sessionID, artifacts)
+	if err != nil {
+		return err
+	}
+
 	var doneTurn sessionTurnMessage
 	if needsPromptDone {
 		doneTurn = sessionTurnMessage{
 			sessionID: sessionID,
 			method:    acp.SessionTurnMethodPromptDone,
-			payload:   acp.SessionTurnPromptResult{StopReason: stopReason, CompletedAt: updatedAt.UTC().Format(time.RFC3339Nano), Message: message},
+			payload: acp.SessionTurnPromptResult{
+				StopReason:  stopReason,
+				CompletedAt: updatedAt.UTC().Format(time.RFC3339Nano),
+				Message:     message,
+				Artifacts:   artifactMetadata,
+			},
 			turnIndex: state.nextTurnIndex,
 			finished:  true,
 		}
@@ -626,6 +653,27 @@ func (r *SessionRecorder) finishPromptStateLocked(ctx context.Context, sessionID
 	r.nextTurnIndex[sessionID] = state.nextTurnIndex
 	delete(r.promptState, sessionID)
 	return nil
+}
+
+func (r *SessionRecorder) writePromptArtifactsLocked(ctx context.Context, sessionID string, artifacts []acp.SessionPromptArtifactPayload) ([]acp.SessionTurnPromptArtifact, error) {
+	if len(artifacts) == 0 {
+		return nil, nil
+	}
+	if r.artifactStore == nil {
+		return nil, fmt.Errorf("session artifact store is required")
+	}
+	out := make([]acp.SessionTurnPromptArtifact, 0, len(artifacts))
+	for _, artifact := range artifacts {
+		if strings.TrimSpace(artifact.Type) != sessionArtifactTypeDiff || strings.TrimSpace(artifact.Format) != sessionArtifactFormatDiff || artifact.Content == "" {
+			continue
+		}
+		meta, err := r.artifactStore.WriteDiffArtifact(ctx, r.projectName, sessionID, artifact.Content)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, meta)
+	}
+	return out, nil
 }
 
 func (r *SessionRecorder) latestPromptFinishedWithoutLiveStateLocked(ctx context.Context, sessionID string) (bool, error) {
@@ -1034,7 +1082,7 @@ func (r *SessionRecorder) nextPromptStateLocked(ctx context.Context, sessionID s
 		return &created, nil
 	}
 	if len(state.turns) > 0 && !sessionPromptStateTerminal(state) {
-		if err := r.finishPromptStateLocked(ctx, sessionID, state, "interrupted", "", updatedAt, true); err != nil {
+		if err := r.finishPromptStateLocked(ctx, sessionID, state, "interrupted", "", nil, updatedAt, true); err != nil {
 			return nil, err
 		}
 	}
@@ -1172,7 +1220,8 @@ func extractUpdateText(raw json.RawMessage) string {
 
 func parseSessionViewEvent(event SessionViewEvent) (parsedSessionViewEvent, error) {
 	parsed := parsedSessionViewEvent{
-		raw: event,
+		raw:       event,
+		artifacts: cloneSessionPromptArtifactPayloads(event.Artifacts),
 	}
 	parsed.raw.SessionID = strings.TrimSpace(parsed.raw.SessionID)
 	parsed.raw.Content = strings.TrimSpace(parsed.raw.Content)
@@ -1243,6 +1292,15 @@ func parseSessionViewEvent(event SessionViewEvent) (parsedSessionViewEvent, erro
 	}
 
 	return parsed, nil
+}
+
+func cloneSessionPromptArtifactPayloads(in []acp.SessionPromptArtifactPayload) []acp.SessionPromptArtifactPayload {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]acp.SessionPromptArtifactPayload, len(in))
+	copy(out, in)
+	return out
 }
 
 func mergeTurnMessage(existing, incoming sessionTurnMessage, turnIndex int64) sessionTurnMessage {

@@ -379,6 +379,12 @@ type appServerTurnPlanUpdatedParams struct {
 	Plan     []appServerPlanStep `json:"plan"`
 }
 
+type appServerTurnDiffUpdatedParams struct {
+	ThreadID string `json:"threadId"`
+	TurnID   string `json:"turnId"`
+	Diff     string `json:"diff"`
+}
+
 type appServerPlanStep struct {
 	Step   string `json:"step"`
 	Status string `json:"status"`

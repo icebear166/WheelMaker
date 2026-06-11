@@ -212,6 +212,28 @@ export interface RegistrySessionPlanEntry {
   status?: string;
 }
 
+export interface RegistrySessionPromptArtifactFile {
+  path: string;
+  status: string;
+  additions: number;
+  deletions: number;
+}
+
+export interface RegistrySessionPromptArtifact {
+  artifactId: string;
+  type: 'diff' | string;
+  format: 'unified-diff' | string;
+  fileCount: number;
+  files?: RegistrySessionPromptArtifactFile[];
+}
+
+export interface RegistrySessionArtifactReadResponse {
+  artifactId: string;
+  type: 'diff' | string;
+  format: 'unified-diff' | string;
+  content: string;
+}
+
 
 
 export interface RegistrySessionConfigOptionValue {

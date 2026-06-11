@@ -1105,6 +1105,70 @@ func TestCodexAppFileChangePatchUpdatedEmitsDiffToolUpdate(t *testing.T) {
 	}
 }
 
+func TestCodexAppRuntimeAttachesTurnDiffArtifact(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	tr.onSend = func(msg map[string]any) {
+		if msg["method"] == "turn/start" {
+			_ = tr.emit(map[string]any{
+				"id": msg["id"],
+				"result": map[string]any{
+					"turn": map[string]any{"id": "turn-1"},
+				},
+			})
+		}
+	}
+
+	conn := newCodexappConnWithRuntime(rt, t.TempDir())
+	conn.BindSessionID("thread-1")
+
+	var promptRes protocol.SessionPromptResult
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- conn.Send(context.Background(), protocol.MethodSessionPrompt, protocol.SessionPromptParams{
+			SessionID: "thread-1",
+			Prompt:    []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "edit file"}},
+		}, &promptRes)
+	}()
+	waitForActiveTurn(t, conn, "turn-1")
+
+	staleDiff := "diff --git a/stale.txt b/stale.txt\n--- a/stale.txt\n+++ b/stale.txt\n@@ -1 +1 @@\n-old\n+stale\n"
+	currentDiff := "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-old\n+new\n"
+	if err := tr.emit(map[string]any{
+		"method": "turn/diff/updated",
+		"params": map[string]any{"threadId": "thread-1", "turnId": "turn-stale", "diff": staleDiff},
+	}); err != nil {
+		t.Fatalf("emit stale diff: %v", err)
+	}
+	if err := tr.emit(map[string]any{
+		"method": "turn/diff/updated",
+		"params": map[string]any{"threadId": "thread-1", "turnId": "turn-1", "diff": currentDiff},
+	}); err != nil {
+		t.Fatalf("emit current diff: %v", err)
+	}
+	waitForTurnDiff(t, conn, "turn-1", currentDiff)
+	if err := tr.emit(map[string]any{
+		"method": "turn/completed",
+		"params": map[string]any{"threadId": "thread-1", "turn": map[string]any{"id": "turn-1", "status": "completed"}},
+	}); err != nil {
+		t.Fatalf("emit completion: %v", err)
+	}
+	if err := <-errCh; err != nil {
+		t.Fatalf("SessionPrompt: %v", err)
+	}
+	if promptRes.StopReason != protocol.StopReasonEndTurn {
+		t.Fatalf("stopReason=%q, want end_turn", promptRes.StopReason)
+	}
+	if len(promptRes.Artifacts) != 1 {
+		t.Fatalf("artifacts len = %d, want 1: %#v", len(promptRes.Artifacts), promptRes.Artifacts)
+	}
+	artifact := promptRes.Artifacts[0]
+	if artifact.Type != "diff" || artifact.Format != "unified-diff" || artifact.Content != currentDiff {
+		t.Fatalf("artifact = %#v, want current unified diff", artifact)
+	}
+}
+
 func TestCodexAppThreadResumeDecodesOfficialFileChangeKind(t *testing.T) {
 	raw := []byte(`{
 		"thread": {
@@ -2658,6 +2722,30 @@ func waitForActiveTurn(t *testing.T, conn *codexappConn, want string) {
 	got := conn.activeTurnID
 	conn.mu.Unlock()
 	t.Fatalf("activeTurnID=%q, want %q", got, want)
+}
+
+func waitForTurnDiff(t *testing.T, conn *codexappConn, turnID string, want string) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		conn.mu.Lock()
+		got := ""
+		if conn.pendingTurnDiffs != nil {
+			got = conn.pendingTurnDiffs[turnID]
+		}
+		conn.mu.Unlock()
+		if got == want {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	conn.mu.Lock()
+	got := ""
+	if conn.pendingTurnDiffs != nil {
+		got = conn.pendingTurnDiffs[turnID]
+	}
+	conn.mu.Unlock()
+	t.Fatalf("pendingTurnDiff[%q]=%q, want %q", turnID, got, want)
 }
 
 type fakeRawConn struct {

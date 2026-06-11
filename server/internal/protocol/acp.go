@@ -158,8 +158,17 @@ type SessionPromptParams struct {
 
 // SessionPromptResult is the final result after a prompt completes.
 type SessionPromptResult struct {
-	StopReason string `json:"stopReason"`
-	Message    string `json:"message,omitempty"`
+	StopReason string                         `json:"stopReason"`
+	Message    string                         `json:"message,omitempty"`
+	Artifacts  []SessionPromptArtifactPayload `json:"-"`
+}
+
+// SessionPromptArtifactPayload is internal side-band data attached to a prompt
+// result before the session recorder writes the artifact body to disk.
+type SessionPromptArtifactPayload struct {
+	Type    string `json:"type"`
+	Format  string `json:"format"`
+	Content string `json:"-"`
 }
 
 // SessionCancelParams cancels an in-progress prompt.

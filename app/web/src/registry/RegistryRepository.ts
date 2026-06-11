@@ -50,6 +50,7 @@ import type {
   RegistrySessionAttachmentFinishResponse,
   RegistrySessionAttachmentStartPayload,
   RegistrySessionAttachmentStartResponse,
+  RegistrySessionArtifactReadResponse,
   RegistrySessionContentBlock,
   RegistrySessionConfigOption,
   RegistrySessionConfigOptionValue,
@@ -969,6 +970,26 @@ export class RegistryRepository {
 
   async readSession(projectId: string, sessionId: string, afterTurnIndex = 0): Promise<RegistrySessionReadResponse> {
     return this.readSessionByMethod(projectId, sessionId, afterTurnIndex, RegistryMethods.SessionRead);
+  }
+
+  async readSessionArtifact(
+    projectId: string,
+    sessionId: string,
+    artifactId: string,
+  ): Promise<RegistrySessionArtifactReadResponse> {
+    const resp = await this.client.request({
+      method: RegistryMethods.SessionArtifactRead,
+      projectId,
+      payload: {sessionId, artifactId},
+      timeoutMs: 30000,
+    });
+    const body = (resp.payload ?? {}) as Partial<RegistrySessionArtifactReadResponse>;
+    return {
+      artifactId: body.artifactId ?? artifactId,
+      type: body.type ?? 'diff',
+      format: body.format ?? 'unified-diff',
+      content: body.content ?? '',
+    };
   }
 
   async startSessionSearch(projectId: string, searchId: string, query: string): Promise<RegistrySessionSearchStatusResponse> {

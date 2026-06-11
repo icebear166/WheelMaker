@@ -2,7 +2,12 @@ import React from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 
 import { useMarkdownCapabilityPlugins } from '../code/markdownPreview';
-import type { RegistryChatMessage, RegistrySessionContentBlock } from '../registry/registryTypes';
+import type {
+  RegistryChatMessage,
+  RegistrySessionContentBlock,
+  RegistrySessionPromptArtifact,
+  RegistrySessionPromptArtifactFile,
+} from '../registry/registryTypes';
 import { formatPromptDurationMs } from '../workspace/sessionTime';
 import {
   chatPromptAttachmentLabel,
@@ -109,6 +114,62 @@ function msgBlocks(
     return [];
   }
   return [];
+}
+
+function promptDiffArtifacts(param: Record<string, unknown>): RegistrySessionPromptArtifact[] {
+  const artifacts = Array.isArray(param.artifacts) ? param.artifacts : [];
+  const out: RegistrySessionPromptArtifact[] = [];
+  for (const item of artifacts) {
+    if (!item || typeof item !== 'object') continue;
+    const entry = item as Record<string, unknown>;
+    const artifactId = typeof entry.artifactId === 'string' ? entry.artifactId : '';
+    const type = typeof entry.type === 'string' ? entry.type : '';
+    const format = typeof entry.format === 'string' ? entry.format : '';
+    if (!artifactId || type !== 'diff' || format !== 'unified-diff') continue;
+    const files = parsePromptArtifactFiles(entry.files);
+    const fileCount = typeof entry.fileCount === 'number' && Number.isFinite(entry.fileCount)
+      ? Math.max(0, Math.trunc(entry.fileCount))
+      : files.length;
+    out.push({
+      artifactId,
+      type,
+      format,
+      fileCount,
+      files,
+    });
+  }
+  return out;
+}
+
+function parsePromptArtifactFiles(value: unknown): RegistrySessionPromptArtifactFile[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const files: RegistrySessionPromptArtifactFile[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const entry = item as Record<string, unknown>;
+    const path = typeof entry.path === 'string' ? entry.path : '';
+    const status = typeof entry.status === 'string' ? entry.status : '?';
+    const additions = typeof entry.additions === 'number' && Number.isFinite(entry.additions)
+      ? Math.max(0, Math.trunc(entry.additions))
+      : 0;
+    const deletions = typeof entry.deletions === 'number' && Number.isFinite(entry.deletions)
+      ? Math.max(0, Math.trunc(entry.deletions))
+      : 0;
+    if (!path) continue;
+    files.push({path, status, additions, deletions});
+  }
+  return files;
+}
+
+function promptArtifactCountLabel(fileCount: number): string {
+  const count = Math.max(0, Math.trunc(fileCount));
+  return `Changed ${count} ${count === 1 ? 'file' : 'files'}`;
+}
+
+function promptArtifactViewKey(message: RegistryChatMessage, artifact: RegistrySessionPromptArtifact): string {
+  return `${message.sessionId}:${artifact.artifactId}`;
 }
 
 function msgPlanEntries(
@@ -247,6 +308,9 @@ export type ChatTurnViewProps = {
   onSelectConfirmationReply?: (replyText: string) => void;
   onRetryPendingPrompt?: () => void;
   onEditPendingPrompt?: () => void;
+  onOpenPromptArtifact?: (artifact: RegistrySessionPromptArtifact, message: RegistryChatMessage) => void;
+  openingPromptArtifactKey?: string;
+  promptArtifactErrors?: Record<string, string>;
 };
 
 export const ChatTurnView = React.memo(function ChatTurnView({
@@ -269,6 +333,9 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   onSelectConfirmationReply,
   onRetryPendingPrompt,
   onEditPendingPrompt,
+  onOpenPromptArtifact,
+  openingPromptArtifactKey = '',
+  promptArtifactErrors = {},
 }: ChatTurnViewProps) {
   const text = msgText(message.method, message.param).trim();
   const kind = msgKind(message.method);
@@ -367,64 +434,117 @@ export const ChatTurnView = React.memo(function ChatTurnView({
       ? promptRequest.param.modelName
       : '';
     const doneStatus = resolvePromptDoneStatus(message.param);
+    const diffArtifacts = promptDiffArtifacts(message.param);
     return (
-      <div className="chat-prompt-separator">
-        <hr />
-        <span className="chat-prompt-separator-label">
-          By {modelName || 'unknown'}
-          {durationMs > 0 ? ` · ${formatPromptDurationMs(durationMs)}` : ''}
-          {doneStatus ? (
-            <span className={`chat-prompt-stop-reason ${doneStatus.kind}`}>
-              {doneStatus.label}
-            </span>
-          ) : null}
-        </span>
-        <div className="chat-prompt-actions" aria-label="Prompt actions">
-          <button
-            type="button"
-            className="chat-prompt-action-button"
-            onClick={() => onReadAloud?.()}
-            disabled={copyDisabled || ttsState === 'loading'}
-            aria-busy={ttsState === 'loading'}
-            title={ttsState === 'playing' ? 'Stop reading' : 'Read aloud'}
-            aria-label={ttsState === 'playing' ? 'Stop reading aloud' : 'Read response aloud'}
-          >
-            {ttsState === 'loading' ? (
-              <span className="codicon codicon-loading codicon-modifier-spin" />
-            ) : ttsState === 'playing' ? (
-              <span className="codicon codicon-debug-stop" />
-            ) : (
-              <span className="codicon codicon-unmute" />
-            )}
-          </button>
-          <button
-            type="button"
-            className="chat-prompt-action-button"
-            onClick={() => onCopyPromptDone?.()}
-            disabled={copyDisabled}
-            title="Copy response"
-            aria-label="Copy response markdown"
-          >
-            <span className="codicon codicon-copy" />
-          </button>
-          <button
-            type="button"
-            className="chat-prompt-action-button"
-            onClick={() => onExportPromptDoneImage?.()}
-            disabled={copyDisabled || exportBusy}
-            aria-busy={exportBusy}
-            title="Export response image"
-            aria-label="Export response markdown image"
-          >
-            <span className="codicon codicon-device-camera" />
-          </button>
-        </div>
-        {doneStatus ? (
-          <div className={`chat-prompt-result-line ${doneStatus.kind}`}>
-            {doneStatus.message || `Response ${doneStatus.label.toLowerCase()}.`}
+      <>
+        {diffArtifacts.length > 0 ? (
+          <div className="chat-prompt-artifacts">
+            {diffArtifacts.map(artifact => {
+              const artifactKey = promptArtifactViewKey(message, artifact);
+              const loading = openingPromptArtifactKey === artifactKey;
+              const error = promptArtifactErrors[artifactKey] || '';
+              return (
+                <div key={artifact.artifactId} className="chat-prompt-artifact">
+                  <button
+                    type="button"
+                    className="chat-prompt-artifact-summary"
+                    onClick={() => onOpenPromptArtifact?.(artifact, message)}
+                    disabled={loading}
+                    aria-busy={loading}
+                    title="Open full diff"
+                  >
+                    <span
+                      className={`codicon ${loading ? 'codicon-loading codicon-modifier-spin' : 'codicon-diff'}`}
+                      aria-hidden="true"
+                    />
+                    <span>{promptArtifactCountLabel(artifact.fileCount || artifact.files?.length || 0)}</span>
+                  </button>
+                  {artifact.files && artifact.files.length > 0 ? (
+                    <div className="chat-prompt-artifact-files">
+                      {artifact.files.map(file => (
+                        <button
+                          key={`${artifact.artifactId}:${file.path}`}
+                          type="button"
+                          className="chat-prompt-artifact-file"
+                          onClick={() => onOpenPromptArtifact?.(artifact, message)}
+                          title={file.path}
+                        >
+                          <span className={`chat-prompt-artifact-file-status status-${file.status.toLowerCase()}`}>
+                            {file.status}
+                          </span>
+                          <span className="chat-prompt-artifact-file-path">{file.path}</span>
+                          <span className="chat-prompt-artifact-file-counts">
+                            {file.additions > 0 ? <span className="additions">+{file.additions}</span> : null}
+                            {file.deletions > 0 ? <span className="deletions">-{file.deletions}</span> : null}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  {error ? <div className="chat-prompt-artifact-error">{error}</div> : null}
+                </div>
+              );
+            })}
           </div>
         ) : null}
-      </div>
+        <div className="chat-prompt-separator">
+          <hr />
+          <span className="chat-prompt-separator-label">
+            By {modelName || 'unknown'}
+            {durationMs > 0 ? ` · ${formatPromptDurationMs(durationMs)}` : ''}
+            {doneStatus ? (
+              <span className={`chat-prompt-stop-reason ${doneStatus.kind}`}>
+                {doneStatus.label}
+              </span>
+            ) : null}
+          </span>
+          <div className="chat-prompt-actions" aria-label="Prompt actions">
+            <button
+              type="button"
+              className="chat-prompt-action-button"
+              onClick={() => onReadAloud?.()}
+              disabled={copyDisabled || ttsState === 'loading'}
+              aria-busy={ttsState === 'loading'}
+              title={ttsState === 'playing' ? 'Stop reading' : 'Read aloud'}
+              aria-label={ttsState === 'playing' ? 'Stop reading aloud' : 'Read response aloud'}
+            >
+              {ttsState === 'loading' ? (
+                <span className="codicon codicon-loading codicon-modifier-spin" />
+              ) : ttsState === 'playing' ? (
+                <span className="codicon codicon-debug-stop" />
+              ) : (
+                <span className="codicon codicon-unmute" />
+              )}
+            </button>
+            <button
+              type="button"
+              className="chat-prompt-action-button"
+              onClick={() => onCopyPromptDone?.()}
+              disabled={copyDisabled}
+              title="Copy response"
+              aria-label="Copy response markdown"
+            >
+              <span className="codicon codicon-copy" />
+            </button>
+            <button
+              type="button"
+              className="chat-prompt-action-button"
+              onClick={() => onExportPromptDoneImage?.()}
+              disabled={copyDisabled || exportBusy}
+              aria-busy={exportBusy}
+              title="Export response image"
+              aria-label="Export response markdown image"
+            >
+              <span className="codicon codicon-device-camera" />
+            </button>
+          </div>
+          {doneStatus ? (
+            <div className={`chat-prompt-result-line ${doneStatus.kind}`}>
+              {doneStatus.message || `Response ${doneStatus.label.toLowerCase()}.`}
+            </div>
+          ) : null}
+        </div>
+      </>
     );
   }
 

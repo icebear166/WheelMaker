@@ -384,6 +384,7 @@ import type {
   RegistrySessionContentBlock,
   RegistrySessionConfigOption,
   RegistrySessionReadResponse,
+  RegistrySessionPromptArtifact,
   RegistrySessionSummary,
   RegistrySessionTurn,
   RegistryFsEntry,
@@ -441,6 +442,11 @@ const SettingsRootContent = React.lazy(() => loadSettingsBundle().then(module =>
 
 type Tab = 'chat' | 'file' | 'git';
 type ThemeMode = 'dark' | 'light';
+type PromptArtifactDiffState = {
+  artifactId: string;
+  title: string;
+  content: string;
+} | null;
 type FileResolvedIcon = {
   glyph: string;
   color: string;
@@ -3957,6 +3963,25 @@ export function App() {
   const [allowLargeDiffRender, setAllowLargeDiffRender] = useState(false);
   const [diffText, setDiffText] = useState('');
   const [diffLoading, setDiffLoading] = useState(false);
+  const [promptArtifactDiff, setPromptArtifactDiff] = useState<PromptArtifactDiffState>(null);
+  const [openingPromptArtifactKey, setOpeningPromptArtifactKey] = useState('');
+  const [promptArtifactErrors, setPromptArtifactErrors] = useState<Record<string, string>>({});
+  const setGitSelectedDiff = useCallback<React.Dispatch<React.SetStateAction<string>>>((next) => {
+    setPromptArtifactDiff(null);
+    setSelectedDiff(next);
+  }, []);
+  const setGitSelectedDiffSource = useCallback<React.Dispatch<React.SetStateAction<GitDiffSource>>>((next) => {
+    setPromptArtifactDiff(null);
+    setSelectedDiffSource(next);
+  }, []);
+  const setGitSelectedDiffScope = useCallback<React.Dispatch<React.SetStateAction<'staged' | 'unstaged' | 'untracked'>>>((next) => {
+    setPromptArtifactDiff(null);
+    setSelectedDiffScope(next);
+  }, []);
+  const setGitSelectedCommit = useCallback<React.Dispatch<React.SetStateAction<string>>>((next) => {
+    setPromptArtifactDiff(null);
+    setSelectedCommit(next);
+  }, []);
   const projectIdListKey = useMemo(
     () => projects.map(item => item.projectId).join('|'),
     [projects],
@@ -7961,6 +7986,7 @@ export function App() {
 
   useEffect(() => {
     const run = async () => {
+      if (promptArtifactDiff) return;
       if (!projectId || !selectedDiff) return;
       if (isHeavyGeneratedDiffPath(selectedDiff) && !allowHeavyDiffLoad) {
         setDiffText('');
@@ -8012,6 +8038,7 @@ export function App() {
     selectedDiffSource,
     selectedDiffScope,
     allowHeavyDiffLoad,
+    promptArtifactDiff,
   ]);
 
   const clearReconnectTimer = () => {
@@ -13805,13 +13832,13 @@ export function App() {
         selectedDiff={selectedDiff}
         selectedDiffScope={selectedDiffScope}
         selectedDiffSource={selectedDiffSource}
-        setSelectedDiff={setSelectedDiff}
-        setSelectedDiffScope={setSelectedDiffScope}
-        setSelectedDiffSource={setSelectedDiffSource}
+        setSelectedDiff={setGitSelectedDiff}
+        setSelectedDiffScope={setGitSelectedDiffScope}
+        setSelectedDiffSource={setGitSelectedDiffSource}
         setDrawerOpen={setDrawerOpen}
         commits={commits}
         selectedCommit={selectedCommit}
-        setSelectedCommit={setSelectedCommit}
+        setSelectedCommit={setGitSelectedCommit}
         expandedCommitShas={expandedCommitShas}
         setExpandedCommitShas={setExpandedCommitShas}
         commitFilesBySha={commitFilesBySha}
@@ -14938,11 +14965,11 @@ export function App() {
     </>
   );
 
-  const renderDiffPane = (content: string) => {
+  const renderDiffPane = (content: string, diffPath = selectedDiff || selectedFile) => {
     if (!content) return <div className="muted block">No diff available</div>;
     const shouldDelayLargeRender =
       !allowLargeDiffRender &&
-      isHeavyGeneratedDiffPath(selectedDiff || '') &&
+      isHeavyGeneratedDiffPath(diffPath || '') &&
       content.length > MAX_AUTO_RENDER_DIFF_CHARS;
     if (shouldDelayLargeRender) {
       return (
@@ -14962,7 +14989,7 @@ export function App() {
       );
     }
 
-    const language = detectCodeLanguage(selectedDiff || selectedFile);
+    const language = detectCodeLanguage(diffPath);
     return (
       <ShikiDiffPane
         content={content}
@@ -15320,6 +15347,64 @@ export function App() {
     setError(`Failed to share response image: ${message}`);
   }, []);
 
+  const openPromptArtifactDiff = useCallback(async (
+    artifact: RegistrySessionPromptArtifact,
+    message: RegistryChatMessage,
+  ) => {
+    const artifactId = artifact.artifactId;
+    if (!artifactId) {
+      return;
+    }
+    const artifactKey = `${message.sessionId}:${artifactId}`;
+    const artifactProjectId =
+      selectedArchivedKey?.projectId ||
+      selectedChatKey?.projectId ||
+      projectId;
+    const sessionId = message.sessionId;
+    if (!artifactProjectId || !sessionId) {
+      setPromptArtifactErrors(prev => ({
+        ...prev,
+        [artifactKey]: 'Unable to resolve artifact session.',
+      }));
+      return;
+    }
+    setOpeningPromptArtifactKey(artifactKey);
+    setPromptArtifactErrors(prev => {
+      if (!prev[artifactKey]) return prev;
+      const next = {...prev};
+      delete next[artifactKey];
+      return next;
+    });
+    try {
+      const result = await service.readSessionArtifact(artifactProjectId, sessionId, artifactId);
+      const fileCount = artifact.fileCount || artifact.files?.length || 0;
+      setPromptArtifactDiff({
+        artifactId,
+        title: `Prompt diff - ${fileCount} ${fileCount === 1 ? 'file' : 'files'}`,
+        content: result.content,
+      });
+      setSelectedFile('');
+      setDiffLoading(false);
+      setAllowLargeDiffRender(false);
+      setTab('git');
+      setDrawerOpen(false);
+    } catch (err) {
+      setPromptArtifactErrors(prev => ({
+        ...prev,
+        [artifactKey]: err instanceof Error ? err.message : String(err),
+      }));
+    } finally {
+      setOpeningPromptArtifactKey(current => (current === artifactKey ? '' : current));
+    }
+  }, [
+    projectId,
+    selectedArchivedKey?.projectId,
+    selectedChatKey?.projectId,
+    service,
+    setDrawerOpen,
+    setTab,
+  ]);
+
   const selectedChatHasOpenPromptTurn = selectedFullChatMessages.some(message =>
     isPromptStartMessage(message) &&
     resolvePromptTurnStatus(selectedFullChatMessages, message) === 'responding',
@@ -15446,6 +15531,13 @@ export function App() {
               ? () => readAloudPromptDone(doneTurnIndex).catch(() => undefined)
               : undefined
           }
+          onOpenPromptArtifact={
+            message.method === 'prompt_done'
+              ? openPromptArtifactDiff
+              : undefined
+          }
+          openingPromptArtifactKey={openingPromptArtifactKey}
+          promptArtifactErrors={promptArtifactErrors}
         />
       </div>
     );
@@ -15468,6 +15560,9 @@ export function App() {
           hideToolCalls={hideToolCalls}
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}
+          onOpenPromptArtifact={message.method === 'prompt_done' ? openPromptArtifactDiff : undefined}
+          openingPromptArtifactKey={openingPromptArtifactKey}
+          promptArtifactErrors={promptArtifactErrors}
         />
       </div>
     );
@@ -15512,7 +15607,9 @@ export function App() {
     window.open(portRelayFrameUrl, '_blank', 'noopener,noreferrer');
   }, [portRelayFrameUrl]);
   const renderMain = () => {
+    const activePromptArtifactDiff = promptArtifactDiff;
     const heavyDiffDeferred =
+      !activePromptArtifactDiff &&
       !!selectedDiff &&
       isHeavyGeneratedDiffPath(selectedDiff) &&
       !allowHeavyDiffLoad;
@@ -16495,10 +16592,10 @@ export function App() {
         <div className="block-title with-tools">
           {isWide ? (
             <span className="title-text">
-              {selectedDiff || 'Select a changed file'}
+              {activePromptArtifactDiff?.title || selectedDiff || 'Select a changed file'}
             </span>
           ) : (
-            renderBreadcrumbTitle(breadcrumbProjectName, gitBreadcrumbLabel)
+            renderBreadcrumbTitle(breadcrumbProjectName, activePromptArtifactDiff?.title || gitBreadcrumbLabel)
           )}
           <div className="view-tools">{renderViewTools()}</div>
         </div>
@@ -16517,10 +16614,10 @@ export function App() {
                 </button>
               </div>
             </div>
-          ) : diffLoading ? (
+          ) : !activePromptArtifactDiff && diffLoading ? (
             <div className="muted block">Loading diff...</div>
           ) : (
-            renderDiffPane(diffText)
+            renderDiffPane(activePromptArtifactDiff?.content ?? diffText, activePromptArtifactDiff?.title || selectedDiff)
           )}
         </div>
       </GitSurface>

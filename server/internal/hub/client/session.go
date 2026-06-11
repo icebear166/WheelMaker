@@ -1041,6 +1041,7 @@ func (s *Session) handlePromptBlocks(blocks []acp.ContentBlock) {
 					Content: acp.BuildACPContentJSON(acp.MethodSessionPrompt, map[string]any{
 						"result": *ev.result,
 					}),
+					Artifacts: cloneSessionPromptArtifactPayloads(ev.result.Artifacts),
 				})
 				streamDone = true
 			}

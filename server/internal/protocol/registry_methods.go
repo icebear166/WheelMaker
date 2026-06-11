@@ -87,6 +87,7 @@ const (
 	RegistryMethodSessionArchiveList      = "session.archive.list"
 	RegistryMethodSessionArchiveRead      = "session.archive.read"
 	RegistryMethodSessionArchiveRestore   = "session.archive.restore"
+	RegistryMethodSessionArtifactRead     = "session.artifact.read"
 	RegistryMethodSessionDelete           = "session.delete"
 	RegistryMethodSessionRename           = "session.rename"
 	RegistryMethodSessionSend             = "session.send"
@@ -177,6 +178,7 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodSessionArchiveList:      registryProjectMethod(RegistryMethodSessionArchiveList, RegistryRouteSessionForward),
 	RegistryMethodSessionArchiveRead:      registryProjectMethod(RegistryMethodSessionArchiveRead, RegistryRouteSessionForward),
 	RegistryMethodSessionArchiveRestore:   registryProjectMethod(RegistryMethodSessionArchiveRestore, RegistryRouteSessionForward),
+	RegistryMethodSessionArtifactRead:     registryProjectMethod(RegistryMethodSessionArtifactRead, RegistryRouteSessionForward),
 	RegistryMethodSessionDelete:           registryProjectMethod(RegistryMethodSessionDelete, RegistryRouteSessionForward),
 	RegistryMethodSessionRename:           registryProjectMethod(RegistryMethodSessionRename, RegistryRouteSessionForward),
 	RegistryMethodSessionSend:             registryProjectMethod(RegistryMethodSessionSend, RegistryRouteSessionForward),
