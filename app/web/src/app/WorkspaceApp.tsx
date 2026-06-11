@@ -8272,6 +8272,20 @@ export function App() {
     setChatPeekSelectedLines(normalizedLine != null ? new Set([normalizedLine]) : new Set());
   }, [isWide, readChatFilePeek, setDrawerOpen]);
 
+  const openChatFileMentionPreview = useCallback(
+    (result: RegistryFileIndexSearchResult) => {
+      const path = result.path.trim();
+      if (!path) {
+        return;
+      }
+      openChatFilePeek(path, null);
+      window.requestAnimationFrame(() => {
+        chatRichComposerRef.current?.focus();
+      });
+    },
+    [openChatFilePeek],
+  );
+
   const closeChatFilePeekFromChrome = useCallback(() => {
     if (!isWide && chatFilePeekHistoryActiveRef.current) {
       window.history.back();
@@ -16529,6 +16543,14 @@ export function App() {
                           });
                           return;
                         }
+                        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'o') {
+                          event.preventDefault();
+                          const activeResult = chatFileMentionResults[chatFileMentionActiveIndex];
+                          if (activeResult) {
+                            openChatFileMentionPreview(activeResult);
+                          }
+                          return;
+                        }
                         if ((event.key === 'Enter' || event.key === 'Tab') && !event.altKey && !event.nativeEvent.isComposing) {
                           const activeResult = chatFileMentionResults[chatFileMentionActiveIndex];
                           if (!activeResult) {
@@ -16636,6 +16658,7 @@ export function App() {
               </div>
               {chatFileMentionMenuOpen ? (
                 <div ref={chatFileMentionMenuRef} className="chat-file-mention-menu" role="listbox" aria-label="File mentions">
+                  <div className="chat-file-mention-shortcut-tip">Ctrl+O To open selected file</div>
                   {chatFileMentionLoading ? (
                     <div className="chat-file-mention-empty">Searching...</div>
                   ) : chatFileMentionError ? (
@@ -16649,21 +16672,35 @@ export function App() {
                       const selected = index === chatFileMentionActiveIndex;
                       const name = result.name || chatFileMentionName(result.path);
                       return (
-                        <button
+                        <div
                           key={result.path}
-                          type="button"
-                          className={`chat-file-mention-option${selected ? ' active' : ''}`}
+                          className={`chat-file-mention-option chat-file-mention-option-row${selected ? ' active' : ''}`}
                           role="option"
                           aria-selected={index === chatFileMentionActiveIndex}
                           title={result.path}
                           onMouseEnter={() => setChatFileMentionActiveIndex(index)}
-                          onMouseDown={event => event.preventDefault()}
-                          onClick={() => applyChatFileMentionResult(result)}
                         >
-                          <span className="codicon codicon-file-code" aria-hidden="true" />
-                          <span className="chat-file-mention-name">{name}</span>
-                          <span className="chat-file-mention-path">{result.path}</span>
-                        </button>
+                          <button
+                            type="button"
+                            className="chat-file-mention-option-main"
+                            onMouseDown={event => event.preventDefault()}
+                            onClick={() => applyChatFileMentionResult(result)}
+                          >
+                            <span className="codicon codicon-file-code" aria-hidden="true" />
+                            <span className="chat-file-mention-name">{name}</span>
+                            <span className="chat-file-mention-path">{result.path}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="chat-file-mention-preview-button"
+                            onMouseDown={event => event.preventDefault()}
+                            onClick={() => openChatFileMentionPreview(result)}
+                            title={`Open ${name} preview`}
+                            aria-label={`Open ${name} preview`}
+                          >
+                            <span className="codicon codicon-open-preview" aria-hidden="true" />
+                          </button>
+                        </div>
                       );
                     })
                   )}

@@ -2068,7 +2068,7 @@ describe('web chat integration', () => {
     expect(composerTokensTs).toContain('uri: token.path');
     expect(promptAttachmentsTs).toContain('isProjectFileResourceLinkBlock');
     expect(mainTsx).not.toContain('className="chat-file-mention-chip"');
-    expect(mainTsx).toContain('className={`chat-file-mention-option${selected ? \' active\' : \'\'}`}');
+    expect(mainTsx).toContain('className={`chat-file-mention-option chat-file-mention-option-row${selected ? \' active\' : \'\'}`}');
     expect(mainTsx).toContain('title={result.path}');
     expect(mainTsx).toContain('role="option"');
     expect(mainTsx).toContain('aria-selected={index === chatFileMentionActiveIndex}');
@@ -2079,6 +2079,28 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-composer-capsule.file');
     expect(stylesCss).toContain('.chat-file-mention-option');
     expect(stylesCss).toContain('.chat-file-mention-path');
+  });
+
+  test('chat composer file mention popup exposes preview actions and shortcut help', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(mainTsx).toContain('Ctrl+O To open selected file');
+    expect(mainTsx).toContain('className="chat-file-mention-shortcut-tip"');
+    expect(mainTsx).toContain('chat-file-mention-option-row');
+    expect(mainTsx).toContain('className="chat-file-mention-option-main"');
+    expect(mainTsx).toContain('className="chat-file-mention-preview-button"');
+    expect(mainTsx).toContain('aria-label={`Open ${name} preview`}');
+    expect(mainTsx).toContain('onClick={() => openChatFileMentionPreview(result)}');
+    expect(mainTsx).toContain('onClick={() => applyChatFileMentionResult(result)}');
+    expect(mainTsx).toContain("event.key.toLowerCase() === 'o'");
+    expect(mainTsx).toContain('(event.ctrlKey || event.metaKey)');
+
+    expect(stylesCss).toContain('.chat-file-mention-shortcut-tip');
+    expect(stylesCss).toContain('.chat-file-mention-option-row');
+    expect(stylesCss).toContain('.chat-file-mention-preview-button');
+    expect(stylesCss).toMatch(/@media \(max-width: 900px\) \{[\s\S]*?\.chat-file-mention-shortcut-tip \{[\s\S]*?display: none;/);
   });
 
   test('chat composer uses compact file mention pins and running tools-slot cancel', () => {
@@ -2126,7 +2148,7 @@ describe('web chat integration', () => {
     expect(stylesCss).not.toContain('.chat-file-mention-trigger-button {\n  color: color-mix(in srgb, #8bd5ff 82%, var(--text));\n}');
     expect(stylesCss).not.toContain('.chat-attachment-action-button.file .codicon');
     expect(stylesCss).not.toContain('.chat-attachment-action-button.photo .codicon');
-    expect(stylesCss).toMatch(/\.chat-file-mention-option \{[\s\S]*grid-template-columns: 16px minmax\(0, auto\) minmax\(0, 1fr\);/);
+    expect(stylesCss).toMatch(/\.chat-file-mention-option-main \{[\s\S]*grid-template-columns: 16px minmax\(0, auto\) minmax\(0, 1fr\);/);
     expect(stylesCss).toMatch(/\.chat-composer-capsule,[\s\S]*\.chat-prompt-inline-capsule \{[\s\S]*max-width: min\(260px, 100%\);/);
     expect(stylesCss).toMatch(/\.chat-composer-stop-trigger \{[\s\S]*color: #f85149;[\s\S]*opacity: 1;/);
   });

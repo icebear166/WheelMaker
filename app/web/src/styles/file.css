@@ -571,7 +571,41 @@
   padding: 0 8px;
 }
 
+.chat-file-mention-shortcut-tip {
+  min-height: 26px;
+  border-radius: 8px;
+  color: color-mix(in srgb, var(--muted) 78%, var(--text));
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
 .chat-file-mention-option {
+  min-height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.chat-file-mention-option-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 30px;
+  align-items: center;
+  gap: 3px;
+  padding: 0 4px 0 0;
+}
+
+.chat-file-mention-option:hover,
+.chat-file-mention-option.active {
+  background: var(--hover);
+}
+
+.chat-file-mention-option-main {
+  min-width: 0;
   min-height: 34px;
   border: 0;
   border-radius: 8px;
@@ -581,19 +615,37 @@
   grid-template-columns: 16px minmax(0, auto) minmax(0, 1fr);
   align-items: center;
   gap: 9px;
-  padding: 0 10px;
+  padding: 0 6px 0 10px;
   text-align: left;
   cursor: pointer;
 }
 
-.chat-file-mention-option:hover,
-.chat-file-mention-option.active {
-  background: var(--hover);
-}
-
-.chat-file-mention-option .codicon {
+.chat-file-mention-option-main .codicon {
   color: var(--muted);
   font-size: 13px;
+}
+
+.chat-file-mention-preview-button {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: color-mix(in srgb, var(--muted) 78%, var(--text));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.chat-file-mention-preview-button:hover,
+.chat-file-mention-preview-button:focus-visible {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: color-mix(in srgb, var(--accent) 86%, var(--text));
+}
+
+.chat-file-mention-preview-button .codicon {
+  font-size: 14px;
 }
 
 .chat-file-mention-path {
@@ -613,4 +665,10 @@
   color: var(--text);
   font-size: 13px;
   font-weight: 500;
+}
+
+@media (max-width: 900px) {
+  .chat-file-mention-shortcut-tip {
+    display: none;
+  }
 }
