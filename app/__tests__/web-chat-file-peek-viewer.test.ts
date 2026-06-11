@@ -30,6 +30,31 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('setChatFilePeek({');
   });
 
+  test('prompt diff artifacts open the chat preview without switching to the Git tab', () => {
+    const mainTsx = readSourceText(mainPath);
+    const openStart = mainTsx.indexOf('const openPromptArtifactDiff = useCallback(');
+    expect(openStart).toBeGreaterThanOrEqual(0);
+    const openEnd = mainTsx.indexOf('const selectedChatHasOpenPromptTurn', openStart);
+    const openBody = mainTsx.slice(openStart, openEnd);
+
+    expect(openBody).toContain('setChatPromptArtifactPreview({');
+    expect(openBody).not.toContain("setTab('git')");
+    expect(openBody).not.toContain('setPromptArtifactDiff({');
+    expect(mainTsx).toContain('chatPreviewOpen = !!chatFilePeek || !!chatPromptArtifactPreview || chatPortRelayPreviewOpen');
+    expect(mainTsx).toContain('<ChatPromptArtifactPreviewViewer');
+    expect(mainTsx).toContain('togglePromptArtifactPreviewFile');
+  });
+
+  test('prompt diff preview CSS supports collapsible file rows', () => {
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(stylesCss).toContain('.chat-prompt-diff-preview {');
+    expect(stylesCss).toContain('.chat-prompt-diff-file-header {');
+    expect(stylesCss).toContain('.chat-prompt-diff-file-body {');
+    expect(stylesCss).toContain('.chat-prompt-diff-file-counts .additions');
+    expect(stylesCss).toContain('.chat-prompt-diff-file-counts .deletions');
+  });
+
   test('desktop shell renders an optional third chat preview column', () => {
     const shellTsx = readSourceText(shellPath);
     const mainTsx = readSourceText(mainPath);

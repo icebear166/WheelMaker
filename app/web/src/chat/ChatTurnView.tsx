@@ -308,7 +308,7 @@ export type ChatTurnViewProps = {
   onSelectConfirmationReply?: (replyText: string) => void;
   onRetryPendingPrompt?: () => void;
   onEditPendingPrompt?: () => void;
-  onOpenPromptArtifact?: (artifact: RegistrySessionPromptArtifact, message: RegistryChatMessage) => void;
+  onOpenPromptArtifact?: (artifact: RegistrySessionPromptArtifact, message: RegistryChatMessage, filePath?: string) => void;
   openingPromptArtifactKey?: string;
   promptArtifactErrors?: Record<string, string>;
 };
@@ -466,7 +466,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
                           key={`${artifact.artifactId}:${file.path}`}
                           type="button"
                           className="chat-prompt-artifact-file"
-                          onClick={() => onOpenPromptArtifact?.(artifact, message)}
+                          onClick={() => onOpenPromptArtifact?.(artifact, message, file.path)}
                           title={file.path}
                         >
                           <span className={`chat-prompt-artifact-file-status status-${file.status.toLowerCase()}`}>

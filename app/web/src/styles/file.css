@@ -88,6 +88,113 @@
   min-height: 100%;
 }
 
+.chat-prompt-diff-preview {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  background: var(--panel-3);
+}
+
+.chat-prompt-diff-overview {
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.chat-prompt-diff-overview .codicon {
+  color: color-mix(in srgb, var(--accent) 82%, var(--text));
+}
+
+.chat-prompt-diff-file {
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--panel) 82%, var(--panel-3));
+  overflow: hidden;
+}
+
+.chat-prompt-diff-file-header {
+  width: 100%;
+  min-height: 34px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  display: grid;
+  grid-template-columns: 16px 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-prompt-diff-file-header:hover {
+  background: var(--hover);
+}
+
+.chat-prompt-diff-file-title {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.chat-prompt-diff-file-name,
+.chat-prompt-diff-file-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-prompt-diff-file-name {
+  font-family: var(--mono-font);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.chat-prompt-diff-file-path {
+  font-family: var(--mono-font);
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.chat-prompt-diff-file-counts {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  min-width: 58px;
+  font-family: var(--mono-font);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.chat-prompt-diff-file-counts .additions {
+  color: #3fb950;
+}
+
+.chat-prompt-diff-file-counts .deletions {
+  color: #f85149;
+}
+
+.chat-prompt-diff-file-body {
+  border-top: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  background: var(--panel-3);
+  overflow-x: auto;
+}
+
+.chat-prompt-diff-file-body .code-wrap {
+  min-width: 100%;
+}
+
 .chat-preview-mobile-overlay .chat-file-peek-surface.mobile {
   flex: 1 1 auto;
   min-height: 0;

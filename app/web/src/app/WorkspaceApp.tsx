@@ -357,6 +357,7 @@ import {
   type GitDiffSource,
   type WorkingTreeFileEntry,
 } from '../git/gitView';
+import {splitUnifiedDiffFileBlocks} from '../git/unifiedDiffFiles';
 import { WorkspaceController } from '../workspace/WorkspaceController';
 import { WorkspaceStore } from '../workspace/WorkspaceStore';
 import {
@@ -385,6 +386,7 @@ import type {
   RegistrySessionConfigOption,
   RegistrySessionReadResponse,
   RegistrySessionPromptArtifact,
+  RegistrySessionPromptArtifactFile,
   RegistrySessionSummary,
   RegistrySessionTurn,
   RegistryFsEntry,
@@ -442,11 +444,6 @@ const SettingsRootContent = React.lazy(() => loadSettingsBundle().then(module =>
 
 type Tab = 'chat' | 'file' | 'git';
 type ThemeMode = 'dark' | 'light';
-type PromptArtifactDiffState = {
-  artifactId: string;
-  title: string;
-  content: string;
-} | null;
 type FileResolvedIcon = {
   glyph: string;
   color: string;
@@ -581,6 +578,17 @@ type ChatFilePeekState = {
   targetLine: number | null;
   content: string;
   info: RegistryFsInfo | null;
+  loading: boolean;
+  error: string;
+};
+type ChatPromptArtifactPreviewFile = RegistrySessionPromptArtifactFile & {
+  diff: string;
+  expanded: boolean;
+};
+type ChatPromptArtifactPreviewState = {
+  artifactId: string;
+  title: string;
+  files: ChatPromptArtifactPreviewFile[];
   loading: boolean;
   error: string;
 };
@@ -1901,6 +1909,63 @@ const MarkdownImageExportSurface = React.memo(function MarkdownImageExportSurfac
   );
 });
 
+function promptArtifactPreviewTitle(fileCount: number): string {
+  return `Prompt diff - ${fileCount} ${fileCount === 1 ? 'file' : 'files'}`;
+}
+
+function normalizePromptArtifactPath(value: string): string {
+  return value.replaceAll('\\', '/');
+}
+
+function buildPromptArtifactPreviewFiles(
+  artifact: RegistrySessionPromptArtifact,
+  content: string,
+  initialExpandedPath: string | null,
+): ChatPromptArtifactPreviewFile[] {
+  const blocks = splitUnifiedDiffFileBlocks(content);
+  const blocksByPath = new Map(
+    blocks.map(block => [normalizePromptArtifactPath(block.path), block]),
+  );
+  const metadataFiles = artifact.files && artifact.files.length > 0
+    ? artifact.files
+    : blocks.map(block => ({
+        path: block.path,
+        status: 'M',
+        additions: 0,
+        deletions: 0,
+      }));
+  const initialPath = initialExpandedPath
+    ? normalizePromptArtifactPath(initialExpandedPath)
+    : '';
+  const files = metadataFiles.map((file, index) => {
+    const normalizedPath = normalizePromptArtifactPath(file.path);
+    const block = blocksByPath.get(normalizedPath) ?? blocks[index] ?? null;
+    return {
+      ...file,
+      diff: block?.diff ?? '',
+      expanded: initialPath ? normalizedPath === initialPath : index === 0,
+    };
+  });
+  if (files.length === 0 && content.trim()) {
+    return [{
+      path: 'Prompt diff',
+      status: 'M',
+      additions: 0,
+      deletions: 0,
+      diff: content,
+      expanded: true,
+    }];
+  }
+  if (files.length > 0 && !files.some(file => file.expanded)) {
+    files[0] = {...files[0], expanded: true};
+  }
+  return files;
+}
+
+function promptArtifactPreviewCountLabel(fileCount: number): string {
+  return `${fileCount} changed ${fileCount === 1 ? 'file' : 'files'}`;
+}
+
 type ChatFilePeekViewerProps = {
   peek: ChatFilePeekState;
   mode: 'desktop' | 'mobile';
@@ -2072,6 +2137,146 @@ const ChatFilePeekViewer = React.memo(function ChatFilePeekViewer({
     prev.highlightedLines === next.highlightedLines
   );
 });
+
+type ChatPromptArtifactPreviewViewerProps = {
+  preview: ChatPromptArtifactPreviewState;
+  mode: 'desktop' | 'mobile';
+  themeMode: 'dark' | 'light';
+  codeTheme: CodeThemeId;
+  codeFont: CodeFontId;
+  codeFontFamily: string;
+  codeFontSize: number;
+  codeLineHeight: number;
+  codeTabSize: number;
+  wrapLines: boolean;
+  showLineNumbers: boolean;
+  onClose: () => void;
+  onToggleFile: (path: string) => void;
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+};
+
+const ChatPromptArtifactPreviewViewer = React.memo(function ChatPromptArtifactPreviewViewer({
+  preview,
+  mode,
+  themeMode,
+  codeTheme,
+  codeFont,
+  codeFontFamily,
+  codeFontSize,
+  codeLineHeight,
+  codeTabSize,
+  wrapLines,
+  showLineNumbers,
+  onClose,
+  onToggleFile,
+  scrollRef,
+}: ChatPromptArtifactPreviewViewerProps) {
+  let body: React.ReactNode;
+  if (preview.loading) {
+    body = <div className="muted block">Loading diff...</div>;
+  } else if (preview.error) {
+    body = (
+      <div className="chat-file-peek-error" role="alert">
+        <span className="codicon codicon-error" />
+        <span>{preview.error}</span>
+      </div>
+    );
+  } else if (preview.files.length === 0) {
+    body = <div className="muted block">No diff available</div>;
+  } else {
+    body = (
+      <div className="chat-prompt-diff-preview">
+        <div className="chat-prompt-diff-overview">
+          <span className="codicon codicon-diff" aria-hidden="true" />
+          <span>{promptArtifactPreviewCountLabel(preview.files.length)}</span>
+        </div>
+        {preview.files.map(file => {
+          const {fileName, parentPath} = splitPathForDisplay(file.path);
+          return (
+            <section key={file.path} className={`chat-prompt-diff-file${file.expanded ? ' expanded' : ''}`}>
+              <button
+                type="button"
+                className="chat-prompt-diff-file-header"
+                onClick={() => onToggleFile(file.path)}
+                aria-expanded={file.expanded}
+                title={file.path}
+              >
+                <span className={`codicon ${file.expanded ? 'codicon-chevron-down' : 'codicon-chevron-right'}`} aria-hidden="true" />
+                <span className={`chat-prompt-artifact-file-status status-${file.status.toLowerCase()}`}>
+                  {file.status}
+                </span>
+                <span className="chat-prompt-diff-file-title">
+                  <span className="chat-prompt-diff-file-name">{fileName || file.path}</span>
+                  {parentPath ? <span className="chat-prompt-diff-file-path">{parentPath}</span> : null}
+                </span>
+                <span className="chat-prompt-diff-file-counts">
+                  {file.additions > 0 ? <span className="additions">+{file.additions}</span> : null}
+                  {file.deletions > 0 ? <span className="deletions">-{file.deletions}</span> : null}
+                </span>
+              </button>
+              {file.expanded ? (
+                <div className="chat-prompt-diff-file-body">
+                  {file.diff ? (
+                    <ShikiDiffPane
+                      content={file.diff}
+                      language={detectCodeLanguage(file.path)}
+                      wrap={wrapLines}
+                      lineNumbers={showLineNumbers}
+                      themeMode={themeMode}
+                      codeTheme={codeTheme}
+                      codeFont={codeFont}
+                      codeFontFamily={codeFontFamily}
+                      codeFontSize={codeFontSize}
+                      codeLineHeight={codeLineHeight}
+                      codeTabSize={codeTabSize}
+                    />
+                  ) : (
+                    <div className="muted block">File diff unavailable</div>
+                  )}
+                </div>
+              ) : null}
+            </section>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return (
+    <section
+      className={`chat-file-peek-surface chat-prompt-diff-surface ${mode}`}
+      aria-label="Chat prompt diff preview"
+    >
+      <div className="chat-preview-toolbar">
+        <button
+          type="button"
+          className="chat-preview-icon-button"
+          onClick={onClose}
+          title={mode === 'mobile' ? 'Back' : 'Close preview'}
+          aria-label={mode === 'mobile' ? 'Back' : 'Close preview'}
+        >
+          <span className={`codicon ${mode === 'mobile' ? 'codicon-arrow-left' : 'codicon-close'}`} />
+        </button>
+        <div className="chat-preview-title" title={preview.title}>{preview.title}</div>
+      </div>
+      <div ref={scrollRef} className="chat-file-peek-scroll">
+        {body}
+      </div>
+    </section>
+  );
+}, (prev, next) => (
+  prev.preview === next.preview &&
+  prev.mode === next.mode &&
+  prev.themeMode === next.themeMode &&
+  prev.codeTheme === next.codeTheme &&
+  prev.codeFont === next.codeFont &&
+  prev.codeFontFamily === next.codeFontFamily &&
+  prev.codeFontSize === next.codeFontSize &&
+  prev.codeLineHeight === next.codeLineHeight &&
+  prev.codeTabSize === next.codeTabSize &&
+  prev.wrapLines === next.wrapLines &&
+  prev.showLineNumbers === next.showLineNumbers
+));
 
 export function App() {
   const defaultRegistryAddress = useMemo(() => getDefaultRegistryAddress(), []);
@@ -2639,9 +2844,13 @@ export function App() {
   const [htmlPreviewEnabled, setHtmlPreviewEnabled] = useState(false);
   const fileScrollRef = useRef<HTMLDivElement | null>(null);
   const [chatFilePeek, setChatFilePeek] = useState<ChatFilePeekState | null>(null);
+  const [chatPromptArtifactPreview, setChatPromptArtifactPreview] =
+    useState<ChatPromptArtifactPreviewState | null>(null);
   const chatFilePeekRef = useRef<ChatFilePeekState | null>(null);
+  const chatPromptArtifactPreviewRef = useRef<ChatPromptArtifactPreviewState | null>(null);
   const chatFilePeekScrollRef = useRef<HTMLDivElement | null>(null);
   const chatFilePeekReadSeqRef = useRef(0);
+  const chatPromptArtifactReadSeqRef = useRef(0);
   const chatFilePeekHistoryActiveRef = useRef(false);
   const chatFilePeekResizeRef = useRef<DesktopSidebarResizeState | null>(null);
   const [chatFilePeekWidth, setChatFilePeekWidth] = useState(CHAT_FILE_PEEK_WIDTH_DEFAULT);
@@ -2651,7 +2860,7 @@ export function App() {
   const [chatPeekSelectedLines, setChatPeekSelectedLines] = useState<Set<number>>(new Set());
   const chatPeekAnchorRef = useRef<number | null>(null);
   const chatPortRelayPreviewOpen = portRelayFrameOpen && portRelayFramePlacement === 'chatPreview' && !!portRelayFrameUrl;
-  const chatPreviewOpen = !!chatFilePeek || chatPortRelayPreviewOpen;
+  const chatPreviewOpen = !!chatFilePeek || !!chatPromptArtifactPreview || chatPortRelayPreviewOpen;
   const liveRefreshTimerRef = useRef<number | null>(null);
   const refreshInFlightRef = useRef(false);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -3963,23 +4172,18 @@ export function App() {
   const [allowLargeDiffRender, setAllowLargeDiffRender] = useState(false);
   const [diffText, setDiffText] = useState('');
   const [diffLoading, setDiffLoading] = useState(false);
-  const [promptArtifactDiff, setPromptArtifactDiff] = useState<PromptArtifactDiffState>(null);
   const [openingPromptArtifactKey, setOpeningPromptArtifactKey] = useState('');
   const [promptArtifactErrors, setPromptArtifactErrors] = useState<Record<string, string>>({});
   const setGitSelectedDiff = useCallback<React.Dispatch<React.SetStateAction<string>>>((next) => {
-    setPromptArtifactDiff(null);
     setSelectedDiff(next);
   }, []);
   const setGitSelectedDiffSource = useCallback<React.Dispatch<React.SetStateAction<GitDiffSource>>>((next) => {
-    setPromptArtifactDiff(null);
     setSelectedDiffSource(next);
   }, []);
   const setGitSelectedDiffScope = useCallback<React.Dispatch<React.SetStateAction<'staged' | 'unstaged' | 'untracked'>>>((next) => {
-    setPromptArtifactDiff(null);
     setSelectedDiffScope(next);
   }, []);
   const setGitSelectedCommit = useCallback<React.Dispatch<React.SetStateAction<string>>>((next) => {
-    setPromptArtifactDiff(null);
     setSelectedCommit(next);
   }, []);
   const projectIdListKey = useMemo(
@@ -6664,16 +6868,21 @@ export function App() {
     setChatPeekSelectedLines(new Set());
     chatPeekAnchorRef.current = null;
   }, []);
+  const closeChatPromptArtifactPreview = useCallback(() => {
+    chatPromptArtifactReadSeqRef.current += 1;
+    setChatPromptArtifactPreview(null);
+  }, []);
   const closeChatPortRelayPreview = useCallback(() => {
     setPortRelayFrameOpen(false);
     setPortRelayFramePlacement('main');
   }, []);
   const closeChatPreview = useCallback(() => {
     closeChatFilePeek();
+    closeChatPromptArtifactPreview();
     closeChatPortRelayPreview();
-  }, [closeChatFilePeek, closeChatPortRelayPreview]);
+  }, [closeChatFilePeek, closeChatPortRelayPreview, closeChatPromptArtifactPreview]);
   const handleAndroidNativeBack = useCallback(() => {
-    if (!isWide && (chatFilePeekRef.current || chatPortRelayPreviewOpen)) {
+    if (!isWide && (chatFilePeekRef.current || chatPromptArtifactPreviewRef.current || chatPortRelayPreviewOpen)) {
       chatFilePeekHistoryActiveRef.current = false;
       closeChatPreview();
       return true;
@@ -7137,6 +7346,7 @@ export function App() {
   expandedDirsRef.current = expandedDirs;
   selectedFileRef.current = selectedFile;
   chatFilePeekRef.current = chatFilePeek;
+  chatPromptArtifactPreviewRef.current = chatPromptArtifactPreview;
 
   useEffect(() => {
     setFileTabSelectedLines(new Set());
@@ -7794,6 +8004,8 @@ export function App() {
     setError('');
     setPortRelayFrameOpen(false);
     setPortRelayFramePlacement('main');
+    chatPromptArtifactReadSeqRef.current += 1;
+    setChatPromptArtifactPreview(null);
     if (!isWide) {
       setDrawerOpen(false);
       setChatQuickSwitchMenuOpen(false);
@@ -7812,8 +8024,8 @@ export function App() {
       window.history.back();
       return;
     }
-    closeChatFilePeek();
-  }, [closeChatFilePeek, isWide]);
+    closeChatPreview();
+  }, [closeChatPreview, isWide]);
 
   const openPeekFileInFullFileTab = useCallback(() => {
     if (!chatFilePeek) return;
@@ -7986,7 +8198,6 @@ export function App() {
 
   useEffect(() => {
     const run = async () => {
-      if (promptArtifactDiff) return;
       if (!projectId || !selectedDiff) return;
       if (isHeavyGeneratedDiffPath(selectedDiff) && !allowHeavyDiffLoad) {
         setDiffText('');
@@ -8038,7 +8249,6 @@ export function App() {
     selectedDiffSource,
     selectedDiffScope,
     allowHeavyDiffLoad,
-    promptArtifactDiff,
   ]);
 
   const clearReconnectTimer = () => {
@@ -11064,7 +11274,9 @@ export function App() {
     }
     setPortRelayFramePlacement('chatPreview');
     chatFilePeekReadSeqRef.current += 1;
+    chatPromptArtifactReadSeqRef.current += 1;
     setChatFilePeek(null);
+    setChatPromptArtifactPreview(null);
     if (!isWide) {
       setDrawerOpen(false);
       setChatQuickSwitchMenuOpen(false);
@@ -15350,6 +15562,7 @@ export function App() {
   const openPromptArtifactDiff = useCallback(async (
     artifact: RegistrySessionPromptArtifact,
     message: RegistryChatMessage,
+    initialFilePath?: string,
   ) => {
     const artifactId = artifact.artifactId;
     if (!artifactId) {
@@ -15368,6 +15581,32 @@ export function App() {
       }));
       return;
     }
+    const initialPath = initialFilePath || null;
+    const initialFiles = buildPromptArtifactPreviewFiles(artifact, '', initialPath);
+    const initialFileCount = artifact.fileCount || artifact.files?.length || initialFiles.length;
+    const requestSeq = chatPromptArtifactReadSeqRef.current + 1;
+    chatPromptArtifactReadSeqRef.current = requestSeq;
+    chatFilePeekReadSeqRef.current += 1;
+    setChatFilePeek(null);
+    setChatPeekSelectedLines(new Set());
+    chatPeekAnchorRef.current = null;
+    setPortRelayFrameOpen(false);
+    setPortRelayFramePlacement('main');
+    setChatPromptArtifactPreview({
+      artifactId,
+      title: promptArtifactPreviewTitle(initialFileCount),
+      files: initialFiles,
+      loading: true,
+      error: '',
+    });
+    if (!isWide) {
+      setDrawerOpen(false);
+      setChatQuickSwitchMenuOpen(false);
+      if (!chatFilePeekHistoryActiveRef.current) {
+        window.history.pushState(createChatFilePeekHistoryState(), '', window.location.href);
+        chatFilePeekHistoryActiveRef.current = true;
+      }
+    }
     setOpeningPromptArtifactKey(artifactKey);
     setPromptArtifactErrors(prev => {
       if (!prev[artifactKey]) return prev;
@@ -15377,33 +15616,56 @@ export function App() {
     });
     try {
       const result = await service.readSessionArtifact(artifactProjectId, sessionId, artifactId);
-      const fileCount = artifact.fileCount || artifact.files?.length || 0;
-      setPromptArtifactDiff({
+      if (requestSeq !== chatPromptArtifactReadSeqRef.current) {
+        return;
+      }
+      const files = buildPromptArtifactPreviewFiles(artifact, result.content, initialPath);
+      const fileCount = files.length || artifact.fileCount || artifact.files?.length || 0;
+      setChatPromptArtifactPreview({
         artifactId,
-        title: `Prompt diff - ${fileCount} ${fileCount === 1 ? 'file' : 'files'}`,
-        content: result.content,
+        title: promptArtifactPreviewTitle(fileCount),
+        files,
+        loading: false,
+        error: '',
       });
-      setSelectedFile('');
-      setDiffLoading(false);
-      setAllowLargeDiffRender(false);
-      setTab('git');
-      setDrawerOpen(false);
     } catch (err) {
+      if (requestSeq !== chatPromptArtifactReadSeqRef.current) {
+        return;
+      }
+      const messageText = err instanceof Error ? err.message : String(err);
+      setChatPromptArtifactPreview(current =>
+        current && current.artifactId === artifactId
+          ? {...current, loading: false, error: messageText}
+          : current,
+      );
       setPromptArtifactErrors(prev => ({
         ...prev,
-        [artifactKey]: err instanceof Error ? err.message : String(err),
+        [artifactKey]: messageText,
       }));
     } finally {
       setOpeningPromptArtifactKey(current => (current === artifactKey ? '' : current));
     }
   }, [
+    isWide,
     projectId,
     selectedArchivedKey?.projectId,
     selectedChatKey?.projectId,
     service,
     setDrawerOpen,
-    setTab,
   ]);
+
+  const togglePromptArtifactPreviewFile = useCallback((path: string) => {
+    setChatPromptArtifactPreview(current =>
+      current
+        ? {
+            ...current,
+            files: current.files.map(file =>
+              file.path === path ? {...file, expanded: !file.expanded} : file,
+            ),
+          }
+        : current,
+    );
+  }, []);
 
   const selectedChatHasOpenPromptTurn = selectedFullChatMessages.some(message =>
     isPromptStartMessage(message) &&
@@ -15607,9 +15869,7 @@ export function App() {
     window.open(portRelayFrameUrl, '_blank', 'noopener,noreferrer');
   }, [portRelayFrameUrl]);
   const renderMain = () => {
-    const activePromptArtifactDiff = promptArtifactDiff;
     const heavyDiffDeferred =
-      !activePromptArtifactDiff &&
       !!selectedDiff &&
       isHeavyGeneratedDiffPath(selectedDiff) &&
       !allowHeavyDiffLoad;
@@ -16592,10 +16852,10 @@ export function App() {
         <div className="block-title with-tools">
           {isWide ? (
             <span className="title-text">
-              {activePromptArtifactDiff?.title || selectedDiff || 'Select a changed file'}
+              {selectedDiff || 'Select a changed file'}
             </span>
           ) : (
-            renderBreadcrumbTitle(breadcrumbProjectName, activePromptArtifactDiff?.title || gitBreadcrumbLabel)
+            renderBreadcrumbTitle(breadcrumbProjectName, gitBreadcrumbLabel)
           )}
           <div className="view-tools">{renderViewTools()}</div>
         </div>
@@ -16614,10 +16874,10 @@ export function App() {
                 </button>
               </div>
             </div>
-          ) : !activePromptArtifactDiff && diffLoading ? (
+          ) : diffLoading ? (
             <div className="muted block">Loading diff...</div>
           ) : (
-            renderDiffPane(activePromptArtifactDiff?.content ?? diffText, activePromptArtifactDiff?.title || selectedDiff)
+            renderDiffPane(diffText, selectedDiff)
           )}
         </div>
       </GitSurface>
@@ -17110,7 +17370,24 @@ export function App() {
         onPointerCancel={finishChatFilePeekResize}
         onLostPointerCapture={commitChatFilePeekResize}
       />
-      {chatFilePeek ? (
+      {chatPromptArtifactPreview ? (
+        <ChatPromptArtifactPreviewViewer
+          preview={chatPromptArtifactPreview}
+          mode="desktop"
+          themeMode={themeMode}
+          codeTheme={codeTheme}
+          codeFont={codeFont}
+          codeFontFamily={codeFontFamily}
+          codeFontSize={codeFontSize}
+          codeLineHeight={codeLineHeight}
+          codeTabSize={codeTabSize}
+          wrapLines={wrapLines}
+          showLineNumbers={showLineNumbers}
+          onClose={closeChatFilePeekFromChrome}
+          onToggleFile={togglePromptArtifactPreviewFile}
+          scrollRef={chatFilePeekScrollRef}
+        />
+      ) : chatFilePeek ? (
         <ChatFilePeekViewer
           peek={chatFilePeek}
           mode="desktop"
@@ -17139,7 +17416,24 @@ export function App() {
       aria-modal="true"
       aria-label="Chat preview"
     >
-      {chatFilePeek ? (
+      {chatPromptArtifactPreview ? (
+        <ChatPromptArtifactPreviewViewer
+          preview={chatPromptArtifactPreview}
+          mode="mobile"
+          themeMode={themeMode}
+          codeTheme={codeTheme}
+          codeFont={codeFont}
+          codeFontFamily={codeFontFamily}
+          codeFontSize={codeFontSize}
+          codeLineHeight={codeLineHeight}
+          codeTabSize={codeTabSize}
+          wrapLines={wrapLines}
+          showLineNumbers={showLineNumbers}
+          onClose={closeChatFilePeekFromChrome}
+          onToggleFile={togglePromptArtifactPreviewFile}
+          scrollRef={chatFilePeekScrollRef}
+        />
+      ) : chatFilePeek ? (
         <ChatFilePeekViewer
           peek={chatFilePeek}
           mode="mobile"
