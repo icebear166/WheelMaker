@@ -444,7 +444,8 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 		rp.RegistryMethodSessionMarkRead, rp.RegistryMethodSessionConfig,
 		rp.RegistryMethodSessionAttachmentStart, rp.RegistryMethodSessionAttachmentChunk,
 		rp.RegistryMethodSessionAttachmentFinish, rp.RegistryMethodSessionAttachmentCancel,
-		rp.RegistryMethodSessionAttachmentDelete:
+		rp.RegistryMethodSessionAttachmentDelete, rp.RegistryMethodSessionAttachmentThumbnail,
+		rp.RegistryMethodSessionAttachmentRead:
 		r.replySession(conn, in)
 	case rp.RegistryMethodMonitorStatus:
 		r.replyMonitorStatus(conn, in)

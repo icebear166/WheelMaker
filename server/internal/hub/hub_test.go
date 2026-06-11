@@ -1318,24 +1318,57 @@ func TestReporterRespondsToSessionAttachmentRequests(t *testing.T) {
 	defer app.Close()
 	connectClient(t, app, "")
 
-	mustWriteJSON(t, app, testEnvelope{
-		RequestID: 2,
-		Type:      "request",
-		Method:    "session.attachment.start",
-		ProjectID: "hub-attachment:proj1",
-		Payload: map[string]any{
-			"sessionId": "sess-1",
-			"name":      "a.txt",
-			"mimeType":  "text/plain",
-			"size":      1,
+	cases := []struct {
+		requestID int64
+		method    string
+		payload   map[string]any
+		wantBody  string
+	}{
+		{
+			requestID: 2,
+			method:    rp.RegistryMethodSessionAttachmentStart,
+			payload: map[string]any{
+				"sessionId": "sess-1",
+				"name":      "a.txt",
+				"mimeType":  "text/plain",
+				"size":      1,
+			},
+			wantBody: `"name":"a.txt"`,
 		},
-	})
-	resp := mustReadEnvelope(t, app)
-	if resp.Type != "response" || resp.Method != "session.attachment.start" {
-		t.Fatalf("unexpected session.attachment.start response: %#v", resp)
+		{
+			requestID: 3,
+			method:    rp.RegistryMethodSessionAttachmentThumbnail,
+			payload: map[string]any{
+				"sessionId":    "sess-1",
+				"attachmentId": "sha256-image",
+			},
+			wantBody: `"attachmentId":"sha256-image"`,
+		},
+		{
+			requestID: 4,
+			method:    rp.RegistryMethodSessionAttachmentRead,
+			payload: map[string]any{
+				"sessionId":    "sess-1",
+				"attachmentId": "sha256-image",
+			},
+			wantBody: `"attachmentId":"sha256-image"`,
+		},
 	}
-	if handler.lastMethod != "session.attachment.start" || !strings.Contains(handler.lastBody, `"name":"a.txt"`) {
-		t.Fatalf("handler saw method=%q body=%q, want session.attachment.start payload", handler.lastMethod, handler.lastBody)
+	for _, tc := range cases {
+		mustWriteJSON(t, app, testEnvelope{
+			RequestID: tc.requestID,
+			Type:      "request",
+			Method:    tc.method,
+			ProjectID: "hub-attachment:proj1",
+			Payload:   tc.payload,
+		})
+		resp := mustReadEnvelope(t, app)
+		if resp.Type != "response" || resp.Method != tc.method {
+			t.Fatalf("unexpected %s response: %#v", tc.method, resp)
+		}
+		if handler.lastMethod != tc.method || !strings.Contains(handler.lastBody, tc.wantBody) {
+			t.Fatalf("handler saw method=%q body=%q, want %s payload", handler.lastMethod, handler.lastBody, tc.method)
+		}
 	}
 }
 
