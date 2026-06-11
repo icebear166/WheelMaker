@@ -238,11 +238,11 @@ function serializedChatComposerTokenText(token: ChatComposerToken): string {
   return fileReferenceText(token.label || token.name || fileNameFromPath(token.path));
 }
 
-function chatComposerTokenUnitLength(tokens: ChatComposerToken[]): number {
+export function chatComposerTokenUnitLength(tokens: ChatComposerToken[]): number {
   return tokens.reduce((total, token) => total + chatComposerSingleTokenUnitLength(token), 0);
 }
 
-function chatComposerSingleTokenUnitLength(token: ChatComposerToken): number {
+export function chatComposerSingleTokenUnitLength(token: ChatComposerToken): number {
   return token.type === 'text' ? token.text.length : 1;
 }
 

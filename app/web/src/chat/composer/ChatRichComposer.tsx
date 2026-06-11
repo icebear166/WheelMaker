@@ -1,15 +1,22 @@
 import React from 'react';
 
 import {
+  chatComposerSingleTokenUnitLength,
+  chatComposerTokenUnitLength,
   normalizeChatComposerTokens,
   serializeChatComposerTokens,
   serializedChatComposerTextPosition,
   tokenizeKnownChatSlashCommands,
   type ChatComposerFileToken,
   type ChatComposerSkillToken,
-  type ChatComposerTextToken,
   type ChatComposerToken,
 } from './chatComposerTokens';
+import {
+  chatComposerCapsuleAfterPosition,
+  chatComposerCapsuleBeforePosition,
+  deleteChatComposerTokenById,
+  insertChatComposerTokens,
+} from './chatComposerTokenEditing';
 
 export type ChatRichComposerHandle = {
   focus: () => void;
@@ -83,7 +90,7 @@ export const ChatRichComposer = React.forwardRef<ChatRichComposerHandle, ChatRic
     }, []);
 
     const emitTokens = React.useCallback(
-      (nextTokens: ChatComposerToken[], cursor = tokenUnitLength(nextTokens)) => {
+      (nextTokens: ChatComposerToken[], cursor = chatComposerTokenUnitLength(nextTokens)) => {
         const normalized = normalizeChatComposerTokens(
           composingRef.current ? nextTokens : tokenizeTextTokens(nextTokens, slashCommands),
         );
@@ -101,12 +108,9 @@ export const ChatRichComposer = React.forwardRef<ChatRichComposerHandle, ChatRic
       (insertedTokens: ChatComposerToken[]) => {
         const current = tokensRef.current;
         const position = currentTokenPosition(rootRef.current, current);
-        const queryRange = activeQueryRange(current, position);
-        const next = queryRange
-          ? replaceTokenRange(current, queryRange.start, queryRange.end, insertedTokens)
-          : insertTokensAtPosition(current, position, insertedTokens);
+        const insertion = insertChatComposerTokens(current, position, insertedTokens);
         setSelectedToken('');
-        emitTokens(next, queryRange ? queryRange.start + tokenUnitLength(insertedTokens) : position + tokenUnitLength(insertedTokens));
+        emitTokens(insertion.tokens, insertion.cursor);
       },
       [emitTokens, setSelectedToken],
     );
@@ -117,7 +121,7 @@ export const ChatRichComposer = React.forwardRef<ChatRichComposerHandle, ChatRic
         return;
       }
       setSelectedToken('');
-      emitTokens(tokensRef.current.filter(token => !tokenHasId(token, selectedId)));
+      emitTokens(deleteChatComposerTokenById(tokensRef.current, selectedId));
     }, [emitTokens, setSelectedToken]);
 
     React.useImperativeHandle(
@@ -211,11 +215,11 @@ export const ChatRichComposer = React.forwardRef<ChatRichComposerHandle, ChatRic
           const current = tokensRef.current;
           const position = currentTokenPosition(rootRef.current, current);
           const removable = event.key === 'Backspace'
-            ? capsuleBeforePosition(current, position)
-            : capsuleAfterPosition(current, position);
+            ? chatComposerCapsuleBeforePosition(current, position)
+            : chatComposerCapsuleAfterPosition(current, position);
           if (removable) {
             event.preventDefault();
-            emitTokens(current.filter(token => !tokenHasId(token, removable.id)));
+            emitTokens(deleteChatComposerTokenById(current, removable.id));
           }
         }
       },
@@ -375,11 +379,11 @@ function composerCaretPoint(
   tokens: ChatComposerToken[],
   position: number,
 ): {node: Node; offset: number} {
-  const safePosition = Math.max(0, Math.min(position, tokenUnitLength(tokens)));
+  const safePosition = Math.max(0, Math.min(position, chatComposerTokenUnitLength(tokens)));
   let cursor = 0;
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index];
-    const tokenLength = singleTokenUnitLength(token);
+    const tokenLength = chatComposerSingleTokenUnitLength(token);
     const tokenStart = cursor;
     const tokenEnd = cursor + tokenLength;
     const child = root.childNodes[index];
@@ -394,20 +398,8 @@ function composerCaretPoint(
   return {node: root, offset: root.childNodes.length};
 }
 
-function tokenHasId(token: ChatComposerToken, id: string): boolean {
-  return token.type !== 'text' && token.id === id;
-}
-
-function tokenUnitLength(tokens: ChatComposerToken[]): number {
-  return tokens.reduce((total, token) => total + singleTokenUnitLength(token), 0);
-}
-
-function singleTokenUnitLength(token: ChatComposerToken): number {
-  return token.type === 'text' ? token.text.length : 1;
-}
-
 function currentTokenPosition(root: HTMLDivElement | null, tokens: ChatComposerToken[]): number {
-  const fallback = tokenUnitLength(tokens);
+  const fallback = chatComposerTokenUnitLength(tokens);
   if (!root || typeof window === 'undefined' || !window.getSelection) {
     return fallback;
   }
@@ -427,7 +419,6 @@ function domOffsetToTokenPosition(
 ): number {
   let position = 0;
   let found = false;
-  const tokenById = tokenMap(tokens);
 
   const visit = (node: Node): void => {
     if (found) {
@@ -439,14 +430,14 @@ function domOffsetToTokenPosition(
       } else {
         const children = Array.from(node.childNodes);
         for (const child of children.slice(0, Math.max(0, anchorOffset))) {
-          position += domNodeUnitLength(child, tokenById);
+          position += domNodeUnitLength(child);
         }
       }
       found = true;
       return;
     }
     if (node.nodeType === Node.TEXT_NODE || isCapsuleNode(node)) {
-      position += domNodeUnitLength(node, tokenById);
+      position += domNodeUnitLength(node);
       return;
     }
     for (const child of Array.from(node.childNodes)) {
@@ -463,10 +454,10 @@ function domOffsetToTokenPosition(
       break;
     }
   }
-  return found ? position : tokenUnitLength(tokens);
+  return found ? position : chatComposerTokenUnitLength(tokens);
 }
 
-function domNodeUnitLength(node: Node, tokenById: Map<string, ChatComposerToken>): number {
+function domNodeUnitLength(node: Node): number {
   if (node.nodeType === Node.TEXT_NODE) {
     return node.textContent?.length ?? 0;
   }
@@ -478,7 +469,7 @@ function domNodeUnitLength(node: Node, tokenById: Map<string, ChatComposerToken>
   }
   let total = 0;
   for (const child of Array.from(node.childNodes)) {
-    total += domNodeUnitLength(child, tokenById);
+    total += domNodeUnitLength(child);
   }
   return total;
 }
@@ -528,127 +519,4 @@ function tokenMap(tokens: ChatComposerToken[]): Map<string, ChatComposerToken> {
 function isCapsuleNode(node: Node): boolean {
   return node.nodeType === Node.ELEMENT_NODE &&
     (node as HTMLElement).dataset.chatComposerCapsule === 'true';
-}
-
-function activeQueryRange(
-  tokens: ChatComposerToken[],
-  position: number,
-): {start: number; end: number} | null {
-  const located = locateTextPosition(tokens, position);
-  if (!located) {
-    return null;
-  }
-  const before = located.token.text.slice(0, located.offset);
-  const fileAt = before.lastIndexOf('@');
-  const slashAt = before.lastIndexOf('/');
-  const queryStart = Math.max(fileAt, slashAt);
-  if (queryStart < 0 || /\s/.test(before.slice(queryStart + 1))) {
-    return null;
-  }
-  if (queryStart > 0 && !/\s/.test(before[queryStart - 1])) {
-    return null;
-  }
-  return {
-    start: located.tokenStart + queryStart,
-    end: position,
-  };
-}
-
-function locateTextPosition(
-  tokens: ChatComposerToken[],
-  position: number,
-): {token: ChatComposerTextToken; tokenStart: number; offset: number} | null {
-  let cursor = 0;
-  for (const token of tokens) {
-    const length = singleTokenUnitLength(token);
-    if (token.type === 'text' && position >= cursor && position <= cursor + length) {
-      return {token, tokenStart: cursor, offset: Math.max(0, Math.min(position - cursor, length))};
-    }
-    cursor += length;
-  }
-  return null;
-}
-
-function insertTokensAtPosition(
-  tokens: ChatComposerToken[],
-  position: number,
-  inserted: ChatComposerToken[],
-): ChatComposerToken[] {
-  return replaceTokenRange(tokens, position, position, inserted);
-}
-
-function replaceTokenRange(
-  tokens: ChatComposerToken[],
-  start: number,
-  end: number,
-  inserted: ChatComposerToken[],
-): ChatComposerToken[] {
-  const out: ChatComposerToken[] = [];
-  let cursor = 0;
-  let insertedAdded = false;
-  for (const token of tokens) {
-    const length = singleTokenUnitLength(token);
-    const tokenStart = cursor;
-    const tokenEnd = cursor + length;
-    if (tokenEnd < start || tokenStart > end) {
-      if (!insertedAdded && tokenStart >= start) {
-        out.push(...inserted);
-        insertedAdded = true;
-      }
-      out.push(token);
-      cursor = tokenEnd;
-      continue;
-    }
-    if (token.type === 'text') {
-      const keepBefore = Math.max(0, Math.min(start - tokenStart, token.text.length));
-      const keepAfter = Math.max(0, Math.min(tokenEnd - end, token.text.length));
-      if (keepBefore > 0) {
-        out.push({type: 'text', text: token.text.slice(0, keepBefore)});
-      }
-      if (!insertedAdded) {
-        out.push(...inserted);
-        insertedAdded = true;
-      }
-      if (keepAfter > 0) {
-        out.push({type: 'text', text: token.text.slice(token.text.length - keepAfter)});
-      }
-    } else if ((tokenStart < start || tokenEnd > end) && !insertedAdded) {
-      out.push(...inserted);
-      insertedAdded = true;
-      out.push(token);
-    } else if (tokenStart < start || tokenEnd > end) {
-      out.push(token);
-    } else if (!insertedAdded) {
-      out.push(...inserted);
-      insertedAdded = true;
-    }
-    cursor = tokenEnd;
-  }
-  if (!insertedAdded) {
-    out.push(...inserted);
-  }
-  return normalizeChatComposerTokens(out);
-}
-
-function capsuleBeforePosition(tokens: ChatComposerToken[], position: number): ChatComposerFileToken | ChatComposerSkillToken | null {
-  let cursor = 0;
-  for (const token of tokens) {
-    const next = cursor + singleTokenUnitLength(token);
-    if (next === position && token.type !== 'text') {
-      return token;
-    }
-    cursor = next;
-  }
-  return null;
-}
-
-function capsuleAfterPosition(tokens: ChatComposerToken[], position: number): ChatComposerFileToken | ChatComposerSkillToken | null {
-  let cursor = 0;
-  for (const token of tokens) {
-    if (cursor === position && token.type !== 'text') {
-      return token;
-    }
-    cursor += singleTokenUnitLength(token);
-  }
-  return null;
 }
