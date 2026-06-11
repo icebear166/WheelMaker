@@ -3033,13 +3033,24 @@
 }
 
 .chat-rich-composer {
+  position: relative;
+  z-index: 1;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
-.chat-rich-composer[data-empty='true']::before {
-  content: attr(data-placeholder);
+.chat-rich-composer-placeholder {
+  position: absolute;
+  left: 8px;
+  top: 5px;
+  z-index: 0;
+  max-width: calc(100% - 16px);
+  overflow: hidden;
   color: var(--muted);
+  font-size: 15px;
+  line-height: 1.4;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   pointer-events: none;
 }
 

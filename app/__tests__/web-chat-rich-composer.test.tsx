@@ -7,6 +7,19 @@ import {
 import type {ChatComposerToken} from '../web/src/chat/composer/chatComposerTokens';
 
 describe('ChatRichComposer', () => {
+  const originalNode = global.Node;
+
+  beforeAll(() => {
+    (global as typeof global & {Node: typeof Node}).Node = {
+      TEXT_NODE: 3,
+      ELEMENT_NODE: 1,
+    } as typeof Node;
+  });
+
+  afterAll(() => {
+    (global as typeof global & {Node: typeof Node}).Node = originalNode;
+  });
+
   test('keeps the contenteditable root DOM-owned to avoid duplicate browser input', async () => {
     const tokens: ChatComposerToken[] = [
       {type: 'skill', id: 's1', command: '/grill-me', label: 'Grill Me'},
@@ -23,6 +36,59 @@ describe('ChatRichComposer', () => {
 
     const textbox = renderer!.root.findByProps({role: 'textbox'});
     expect(textbox.children).toHaveLength(0);
+  });
+
+  test('keeps IME composition DOM local until composition ends', async () => {
+    const onTokensChange = jest.fn();
+    const composerRoot = createComposerDomRoot();
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        <ChatRichComposer
+          tokens={[{type: 'text', text: 'ni'}]}
+          onTokensChange={onTokensChange}
+          readOnly={false}
+        />,
+        {
+          createNodeMock: element => (element.props.role === 'textbox' ? composerRoot : null),
+        },
+      );
+    });
+
+    const textbox = renderer!.root.findByProps({role: 'textbox'});
+
+    await ReactTestRenderer.act(() => {
+      textbox.props.onCompositionStart();
+      textbox.props.onInput();
+    });
+
+    expect(onTokensChange).not.toHaveBeenCalled();
+
+    await ReactTestRenderer.act(() => {
+      textbox.props.onCompositionEnd();
+    });
+
+    expect(onTokensChange).toHaveBeenCalledTimes(1);
+    expect(onTokensChange).toHaveBeenLastCalledWith([{type: 'text', text: 'ni'}]);
+  });
+
+  test('renders placeholder outside the editable selection surface', async () => {
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        <ChatRichComposer tokens={[]} onTokensChange={jest.fn()} readOnly={false} />,
+      );
+    });
+
+    const textbox = renderer!.root.findByProps({role: 'textbox'});
+    expect(textbox.props['data-placeholder']).toBeUndefined();
+    expect(textbox.props['data-empty']).toBeUndefined();
+
+    const placeholder = renderer!.root.findByProps({className: 'chat-rich-composer-placeholder'});
+    expect(placeholder.props['aria-hidden']).toBe('true');
+    expect(placeholder.children).toEqual(['Send a message...']);
   });
 
   test('imperative insertion appends file and skill tokens', async () => {
@@ -83,3 +149,36 @@ describe('ChatRichComposer', () => {
     ]);
   });
 });
+
+function createComposerDomRoot(): HTMLDivElement {
+  const ownerDocument = {
+    createTextNode: (text: string) => ({
+      nodeType: 3,
+      textContent: text,
+    }),
+    createElement: (tagName: string) => ({
+      nodeType: 1,
+      nodeName: tagName.toUpperCase(),
+      dataset: {},
+      className: '',
+      contentEditable: '',
+      childNodes: [],
+      appendChild(child: Node) {
+        this.childNodes.push(child);
+      },
+      setAttribute() {
+        return undefined;
+      },
+    }),
+  };
+  return {
+    ownerDocument,
+    childNodes: [],
+    querySelectorAll() {
+      return [];
+    },
+    replaceChildren(...children: Node[]) {
+      this.childNodes = children;
+    },
+  } as unknown as HTMLDivElement;
+}

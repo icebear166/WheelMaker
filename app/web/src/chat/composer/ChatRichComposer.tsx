@@ -57,6 +57,9 @@ export const ChatRichComposer = React.forwardRef<ChatRichComposerHandle, ChatRic
     const [selectedTokenId, setSelectedTokenId] = React.useState('');
 
     React.useLayoutEffect(() => {
+      if (composingRef.current) {
+        return;
+      }
       const normalized = normalizeChatComposerTokens(tokens);
       tokensRef.current = normalized;
       syncComposerDom(rootRef.current, normalized, selectedTokenIdRef.current);
@@ -157,6 +160,9 @@ export const ChatRichComposer = React.forwardRef<ChatRichComposerHandle, ChatRic
       if (!root) {
         return;
       }
+      if (composingRef.current) {
+        return;
+      }
       setSelectedToken('');
       emitTokens(readTokensFromDom(root, tokensRef.current), currentTokenPosition(root, tokensRef.current));
     }, [emitTokens, setSelectedToken]);
@@ -212,28 +218,34 @@ export const ChatRichComposer = React.forwardRef<ChatRichComposerHandle, ChatRic
     );
 
     return (
-      <div
-        ref={rootRef}
-        className={`chat-rich-composer ${className}`.trim()}
-        contentEditable={!readOnly}
-        suppressContentEditableWarning
-        role="textbox"
-        aria-multiline="true"
-        data-placeholder={placeholder}
-        data-empty={chatComposerTokensEmpty(tokens) ? 'true' : undefined}
-        enterKeyHint={enterKeyHint}
-        onInput={handleInput}
-        onKeyDown={handleKeyDown}
-        onMouseDown={handleMouseDown}
-        onPaste={onPaste}
-        onCompositionStart={() => {
-          composingRef.current = true;
-        }}
-        onCompositionEnd={() => {
-          composingRef.current = false;
-          handleInput();
-        }}
-      />
+      <>
+        {chatComposerTokensEmpty(tokens) ? (
+          <span className="chat-rich-composer-placeholder" aria-hidden="true">
+            {placeholder}
+          </span>
+        ) : null}
+        <div
+          ref={rootRef}
+          className={`chat-rich-composer ${className}`.trim()}
+          contentEditable={!readOnly}
+          suppressContentEditableWarning
+          role="textbox"
+          aria-label={placeholder}
+          aria-multiline="true"
+          enterKeyHint={enterKeyHint}
+          onInput={handleInput}
+          onKeyDown={handleKeyDown}
+          onMouseDown={handleMouseDown}
+          onPaste={onPaste}
+          onCompositionStart={() => {
+            composingRef.current = true;
+          }}
+          onCompositionEnd={() => {
+            composingRef.current = false;
+            handleInput();
+          }}
+        />
+      </>
     );
   },
 );
