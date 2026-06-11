@@ -1339,6 +1339,50 @@ func TestReporterRespondsToSessionAttachmentRequests(t *testing.T) {
 	}
 }
 
+func TestReporterForwardsSessionArtifactReadRequests(t *testing.T) {
+	respSeen := make(chan testEnvelope, 1)
+	errSeen := make(chan error, 1)
+
+	ts := newFakeReporterRegistry(t, "hub-artifact-read", testEnvelope{
+		RequestID: 100,
+		Type:      "request",
+		Method:    rp.RegistryMethodSessionArtifactRead,
+		ProjectID: "hub-artifact-read:proj1",
+		Payload: map[string]any{
+			"sessionId":  "sess-1",
+			"artifactId": "diff-1234",
+		},
+	}, respSeen, errSeen)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	reporter := NewReporter(ReporterConfig{
+		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		HubID:             "hub-artifact-read",
+		ReconnectInterval: 50 * time.Millisecond,
+	}, []ProjectInfo{{Name: "proj1", Path: t.TempDir(), Online: true}})
+	handler := &stubSessionHandler{}
+	reporter.RegisterSessionHandler(rp.ProjectID("hub-artifact-read", "proj1"), handler)
+
+	done := make(chan error, 1)
+	go func() { done <- reporter.Run(ctx) }()
+	defer stopReporterForTest(t, cancel, done)
+
+	select {
+	case err := <-errSeen:
+		t.Fatalf("fake registry error: %v", err)
+	case resp := <-respSeen:
+		if resp.Type != "response" || resp.Method != rp.RegistryMethodSessionArtifactRead {
+			t.Fatalf("unexpected session.artifact.read response: %#v", resp)
+		}
+		if handler.lastMethod != rp.RegistryMethodSessionArtifactRead || !strings.Contains(handler.lastBody, `"artifactId":"diff-1234"`) {
+			t.Fatalf("handler saw method=%q body=%q, want session.artifact.read payload", handler.lastMethod, handler.lastBody)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("did not receive session.artifact.read response from reporter")
+	}
+}
+
 func TestReporterRejectsPublicCmdRequests(t *testing.T) {
 	respSeen := make(chan testEnvelope, 1)
 	errSeen := make(chan error, 1)

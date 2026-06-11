@@ -439,7 +439,7 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 		rp.RegistryMethodSessionCreate, rp.RegistryMethodSessionResumeList, rp.RegistryMethodSessionResumeImport,
 		rp.RegistryMethodSessionReload, rp.RegistryMethodSessionArchive,
 		rp.RegistryMethodSessionArchiveList, rp.RegistryMethodSessionArchiveRead, rp.RegistryMethodSessionArchiveRestore,
-		rp.RegistryMethodSessionDelete,
+		rp.RegistryMethodSessionArtifactRead, rp.RegistryMethodSessionDelete,
 		rp.RegistryMethodSessionRename, rp.RegistryMethodSessionSend, rp.RegistryMethodSessionCancel,
 		rp.RegistryMethodSessionMarkRead, rp.RegistryMethodSessionConfig,
 		rp.RegistryMethodSessionAttachmentStart, rp.RegistryMethodSessionAttachmentChunk,
