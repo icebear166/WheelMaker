@@ -52,15 +52,24 @@ export const ChatRichComposer = React.forwardRef<ChatRichComposerHandle, ChatRic
     const rootRef = React.useRef<HTMLDivElement | null>(null);
     const tokensRef = React.useRef<ChatComposerToken[]>(tokens);
     const composingRef = React.useRef(false);
-    const [renderTokens, setRenderTokens] = React.useState<ChatComposerToken[]>(tokens);
+    const pendingSelectionRef = React.useRef<number | null>(null);
     const selectedTokenIdRef = React.useRef('');
     const [selectedTokenId, setSelectedTokenId] = React.useState('');
 
-    React.useEffect(() => {
+    React.useLayoutEffect(() => {
       const normalized = normalizeChatComposerTokens(tokens);
       tokensRef.current = normalized;
-      setRenderTokens(normalized);
+      syncComposerDom(rootRef.current, normalized, selectedTokenIdRef.current);
+      const pendingSelection = pendingSelectionRef.current;
+      pendingSelectionRef.current = null;
+      if (pendingSelection !== null) {
+        restoreComposerSelection(rootRef.current, normalized, pendingSelection);
+      }
     }, [tokens]);
+
+    React.useLayoutEffect(() => {
+      updateSelectedCapsule(rootRef.current, selectedTokenId);
+    }, [selectedTokenId]);
 
     const setSelectedToken = React.useCallback((id: string) => {
       selectedTokenIdRef.current = id;
@@ -73,12 +82,12 @@ export const ChatRichComposer = React.forwardRef<ChatRichComposerHandle, ChatRic
           composingRef.current ? nextTokens : tokenizeTextTokens(nextTokens, slashCommands),
         );
         tokensRef.current = normalized;
-        setRenderTokens(normalized);
+        pendingSelectionRef.current = cursor;
         onTokensChange(normalized);
         const serialized = serializeChatComposerTokens(normalized);
         onPlainTextChange?.(serialized.text, Math.min(cursor, serialized.text.length));
       },
-      [onPlainTextChange, onTokensChange],
+      [onPlainTextChange, onTokensChange, slashCommands],
     );
 
     const insertTokens = React.useCallback(
@@ -152,6 +161,25 @@ export const ChatRichComposer = React.forwardRef<ChatRichComposerHandle, ChatRic
       emitTokens(readTokensFromDom(root, tokensRef.current), currentTokenPosition(root, tokensRef.current));
     }, [emitTokens, setSelectedToken]);
 
+    const handleMouseDown = React.useCallback(
+      (event: React.MouseEvent<HTMLDivElement>) => {
+        const target = event.target instanceof HTMLElement
+          ? event.target.closest<HTMLElement>('[data-chat-composer-capsule="true"]')
+          : null;
+        if (!target) {
+          setSelectedToken('');
+          return;
+        }
+        const tokenId = target.dataset.tokenId ?? '';
+        if (!tokenId) {
+          return;
+        }
+        event.preventDefault();
+        setSelectedToken(tokenId);
+      },
+      [setSelectedToken],
+    );
+
     const handleKeyDown = React.useCallback(
       (event: React.KeyboardEvent<HTMLDivElement>) => {
         onKeyDown?.(event);
@@ -192,10 +220,11 @@ export const ChatRichComposer = React.forwardRef<ChatRichComposerHandle, ChatRic
         role="textbox"
         aria-multiline="true"
         data-placeholder={placeholder}
-        data-empty={chatComposerTokensEmpty(renderTokens) ? 'true' : undefined}
+        data-empty={chatComposerTokensEmpty(tokens) ? 'true' : undefined}
         enterKeyHint={enterKeyHint}
         onInput={handleInput}
         onKeyDown={handleKeyDown}
+        onMouseDown={handleMouseDown}
         onPaste={onPaste}
         onCompositionStart={() => {
           composingRef.current = true;
@@ -204,33 +233,7 @@ export const ChatRichComposer = React.forwardRef<ChatRichComposerHandle, ChatRic
           composingRef.current = false;
           handleInput();
         }}
-      >
-        {renderTokens.map((token, index) => {
-          if (token.type === 'text') {
-            return <span key={`text:${index}`}>{token.text}</span>;
-          }
-          const selected = token.id === selectedTokenId;
-          return (
-            <span
-              key={token.id}
-              data-chat-composer-capsule={true}
-              data-kind={token.type}
-              data-token-id={token.id}
-              contentEditable={false}
-              className={`chat-composer-capsule ${token.type}${selected ? ' selected' : ''}`}
-              onMouseDown={event => {
-                event.preventDefault();
-                setSelectedToken(token.id);
-              }}
-            >
-              <span className={`codicon ${token.type === 'skill' ? 'codicon-code' : 'codicon-file-code'}`} aria-hidden="true" />
-              <span className="chat-composer-capsule-label">
-                {token.type === 'skill' ? token.label : (token.label || token.name)}
-              </span>
-            </span>
-          );
-        })}
-      </div>
+      />
     );
   },
 );
@@ -257,6 +260,106 @@ function createTokenId(kind: string): string {
 
 function chatComposerTokensEmpty(tokens: ChatComposerToken[]): boolean {
   return normalizeChatComposerTokens(tokens).every(token => token.type === 'text' && token.text.trim().length === 0);
+}
+
+function syncComposerDom(
+  root: HTMLDivElement | null,
+  tokens: ChatComposerToken[],
+  selectedTokenId: string,
+): void {
+  if (!root) {
+    return;
+  }
+  const ownerDocument = root.ownerDocument;
+  root.replaceChildren(...tokens.map(token => {
+    if (token.type === 'text') {
+      return ownerDocument.createTextNode(token.text);
+    }
+    return createCapsuleNode(ownerDocument, token, token.id === selectedTokenId);
+  }));
+}
+
+function createCapsuleNode(
+  ownerDocument: Document,
+  token: ChatComposerSkillToken | ChatComposerFileToken,
+  selected: boolean,
+): HTMLElement {
+  const capsule = ownerDocument.createElement('span');
+  capsule.dataset.chatComposerCapsule = 'true';
+  capsule.dataset.kind = token.type;
+  capsule.dataset.tokenId = token.id;
+  capsule.contentEditable = 'false';
+  capsule.className = `chat-composer-capsule ${token.type}${selected ? ' selected' : ''}`;
+
+  const icon = ownerDocument.createElement('span');
+  icon.className = `codicon ${token.type === 'skill' ? 'codicon-code' : 'codicon-file-code'}`;
+  icon.setAttribute('aria-hidden', 'true');
+  capsule.appendChild(icon);
+
+  const label = ownerDocument.createElement('span');
+  label.className = 'chat-composer-capsule-label';
+  label.textContent = token.type === 'skill' ? token.label : (token.label || token.name);
+  capsule.appendChild(label);
+
+  return capsule;
+}
+
+function updateSelectedCapsule(root: HTMLDivElement | null, selectedTokenId: string): void {
+  if (!root) {
+    return;
+  }
+  for (const capsule of Array.from(root.querySelectorAll<HTMLElement>('[data-chat-composer-capsule="true"]'))) {
+    capsule.classList.toggle('selected', !!selectedTokenId && capsule.dataset.tokenId === selectedTokenId);
+  }
+}
+
+function restoreComposerSelection(
+  root: HTMLDivElement | null,
+  tokens: ChatComposerToken[],
+  position: number,
+): void {
+  if (
+    !root ||
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    document.activeElement !== root
+  ) {
+    return;
+  }
+  const selection = window.getSelection();
+  if (!selection) {
+    return;
+  }
+  const point = composerCaretPoint(root, tokens, position);
+  const range = document.createRange();
+  range.setStart(point.node, point.offset);
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function composerCaretPoint(
+  root: HTMLDivElement,
+  tokens: ChatComposerToken[],
+  position: number,
+): {node: Node; offset: number} {
+  const safePosition = Math.max(0, Math.min(position, tokenUnitLength(tokens)));
+  let cursor = 0;
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    const tokenLength = singleTokenUnitLength(token);
+    const tokenStart = cursor;
+    const tokenEnd = cursor + tokenLength;
+    const child = root.childNodes[index];
+    if (safePosition <= tokenEnd) {
+      if (token.type === 'text' && child?.nodeType === Node.TEXT_NODE) {
+        return {node: child, offset: Math.max(0, Math.min(safePosition - tokenStart, token.text.length))};
+      }
+      return {node: root, offset: safePosition <= tokenStart ? index : index + 1};
+    }
+    cursor = tokenEnd;
+  }
+  return {node: root, offset: root.childNodes.length};
 }
 
 function tokenHasId(token: ChatComposerToken, id: string): boolean {

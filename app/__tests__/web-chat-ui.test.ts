@@ -575,7 +575,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className="floating-control-dock-rail right"');
     expect(mainTsx).toContain("`CHAT - ${selectedChatDisplayTitle || 'New Session'}`");
     expect(mainTsx).toContain("{selectedFile || 'Select a file'}");
-    expect(mainTsx).toContain("{selectedDiff || 'Select a changed file'}");
+    expect(mainTsx).toContain("{activePromptArtifactDiff?.title || selectedDiff || 'Select a changed file'}");
     expect(mainTsx).toContain('aria-expanded={drawerOpen}');
     expect(mainTsx).toContain('const chatConfigDisplay = useMemo(() => {');
     expect(mainTsx).toContain('className="chat-config-options-shell"');
@@ -762,7 +762,7 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('className="chat-title-option"');
     expect(mainTsx).toContain('renderBreadcrumbTitle(activeChatBreadcrumbProjectName, activeChatBreadcrumbLabel)');
     expect(mainTsx).toContain('renderBreadcrumbTitle(breadcrumbProjectName, fileBreadcrumbLabel)');
-    expect(mainTsx).toContain('renderBreadcrumbTitle(breadcrumbProjectName, gitBreadcrumbLabel)');
+    expect(mainTsx).toContain('renderBreadcrumbTitle(breadcrumbProjectName, activePromptArtifactDiff?.title || gitBreadcrumbLabel)');
   });
 
   test('chat drawer header keeps tools left and hub browser right', () => {

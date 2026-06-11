@@ -7,7 +7,7 @@ import {
 import type {ChatComposerToken} from '../web/src/chat/composer/chatComposerTokens';
 
 describe('ChatRichComposer', () => {
-  test('renders skill and file capsules inline', async () => {
+  test('keeps the contenteditable root DOM-owned to avoid duplicate browser input', async () => {
     const tokens: ChatComposerToken[] = [
       {type: 'skill', id: 's1', command: '/grill-me', label: 'Grill Me'},
       {type: 'text', text: ' in '},
@@ -21,9 +21,8 @@ describe('ChatRichComposer', () => {
       );
     });
 
-    const capsules = renderer!.root.findAllByProps({'data-chat-composer-capsule': true});
-    expect(capsules.map(item => item.props['data-kind'])).toEqual(['skill', 'file']);
-    expect(capsules.map(item => item.props.contentEditable)).toEqual([false, false]);
+    const textbox = renderer!.root.findByProps({role: 'textbox'});
+    expect(textbox.children).toHaveLength(0);
   });
 
   test('imperative insertion appends file and skill tokens', async () => {
