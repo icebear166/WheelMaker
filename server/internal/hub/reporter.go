@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	hubclient "github.com/swm8023/wheelmaker/internal/hub/client"
 	"github.com/swm8023/wheelmaker/internal/hub/tools"
 	"github.com/swm8023/wheelmaker/internal/portrelay"
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
@@ -1341,76 +1340,35 @@ func (r *Reporter) ensureToolHandler() toolCommandHandler {
 
 func (r *Reporter) replySession(conn *websocket.Conn, req envelope) {
 	projectID := strings.TrimSpace(req.ProjectID)
-	log := registryLogger(projectID)
-	traceSession := log.VerboseEnabled()
-	var sessionID string
-	var startedAt time.Time
-	if traceSession {
-		sessionID = sessionIDFromPayload(req.Payload)
-		startedAt = time.Now()
-	}
 	if projectID == "" {
-		if traceSession {
-			registryLogger("").Verbose("session request reject requestId=%d method=%s projectId=%s sessionId=%s durationMs=%d code=%s message=%s", req.RequestID, req.Method, projectID, sessionID, time.Since(startedAt).Milliseconds(), codeInvalidArgument, "projectId is required")
-		}
 		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "projectId is required")
 		return
-	}
-	if traceSession {
-		log.Verbose("session request received requestId=%d method=%s projectId=%s sessionId=%s", req.RequestID, req.Method, projectID, sessionID)
 	}
 
 	r.mu.RLock()
 	handler := r.sessionByID[projectID]
 	r.mu.RUnlock()
 	if handler == nil {
-		if traceSession {
-			log.Verbose("session request finish requestId=%d method=%s projectId=%s sessionId=%s durationMs=%d result=handler_missing code=%s", req.RequestID, req.Method, projectID, sessionID, time.Since(startedAt).Milliseconds(), codeNotFound)
-		}
 		_ = r.writeError(conn, req.RequestID, codeNotFound, "session unavailable for project")
 		return
 	}
 
-	handlerStartedAt := time.Now()
-	payload, err := handler.HandleSessionRequest(hubclient.WithSessionRequestTrace(context.Background(), req.RequestID), req.Method, projectID, req.Payload)
-	handlerDurationMs := time.Since(handlerStartedAt).Milliseconds()
+	payload, err := handler.HandleSessionRequest(context.Background(), req.Method, projectID, req.Payload)
 	if err != nil {
-		if traceSession {
-			log.Verbose("session request finish requestId=%d method=%s projectId=%s sessionId=%s durationMs=%d handlerDurationMs=%d result=handler_error code=%s err=%v", req.RequestID, req.Method, projectID, sessionID, time.Since(startedAt).Milliseconds(), handlerDurationMs, codeInternal, err)
-		}
 		_ = r.writeError(conn, req.RequestID, codeInternal, err.Error())
 		return
 	}
 
-	writeStartedAt := time.Now()
-	err = r.writeJSON(conn, "->", envelope{
+	if err := r.writeJSON(conn, "->", envelope{
 		RequestID: req.RequestID,
 		Type:      rp.RegistryEnvelopeTypeResponse,
 		Method:    req.Method,
 		ProjectID: projectID,
 		Payload:   rp.MustRaw(payload),
-	})
-	writeDurationMs := time.Since(writeStartedAt).Milliseconds()
-	if err != nil {
-		log.Warn("session response write failed requestId=%d method=%s projectId=%s sessionId=%s handlerDurationMs=%d writeDurationMs=%d err=%v", req.RequestID, req.Method, projectID, sessionID, handlerDurationMs, writeDurationMs, err)
+	}); err != nil {
+		registryLogger(projectID).Warn("session response write failed requestId=%d method=%s projectId=%s err=%v", req.RequestID, req.Method, projectID, err)
 		return
 	}
-	if traceSession {
-		log.Verbose("session request finish requestId=%d method=%s projectId=%s sessionId=%s durationMs=%d handlerDurationMs=%d writeDurationMs=%d result=response", req.RequestID, req.Method, projectID, sessionID, time.Since(startedAt).Milliseconds(), handlerDurationMs, writeDurationMs)
-	}
-}
-
-func sessionIDFromPayload(payload json.RawMessage) string {
-	if len(payload) == 0 {
-		return ""
-	}
-	var req struct {
-		SessionID string `json:"sessionId"`
-	}
-	if err := json.Unmarshal(payload, &req); err != nil {
-		return ""
-	}
-	return strings.TrimSpace(req.SessionID)
 }
 
 func (r *Reporter) replyFSInfo(conn *websocket.Conn, req envelope) {
@@ -2617,15 +2575,55 @@ func (r *Reporter) readJSON(conn *websocket.Conn, direction string, out any) err
 	if err := conn.ReadJSON(out); err != nil {
 		return err
 	}
+	r.writeVerboseEnvelope(direction, out)
 	r.writeDebugEnvelope(direction, out)
 	return nil
 }
 
 func (r *Reporter) writeJSON(conn *websocket.Conn, direction string, v any) error {
+	r.writeVerboseEnvelope(direction, v)
 	r.writeDebugEnvelope(direction, v)
 	r.writeMu.Lock()
 	defer r.writeMu.Unlock()
 	return conn.WriteJSON(v)
+}
+
+func (r *Reporter) writeVerboseEnvelope(direction string, v any) {
+	log := registryLogger("")
+	if !log.VerboseEnabled() {
+		return
+	}
+	env, ok := envelopeFromValue(v)
+	if !ok {
+		return
+	}
+	dir := verboseEnvelopeDirection(direction)
+	registryLogger(env.ProjectID).Verbose("envelope dir=%s type=%s requestId=%d method=%s projectId=%s hubId=%s", dir, env.Type, env.RequestID, env.Method, env.ProjectID, env.HubID)
+}
+
+func envelopeFromValue(v any) (envelope, bool) {
+	switch msg := v.(type) {
+	case envelope:
+		return msg, true
+	case *envelope:
+		if msg == nil {
+			return envelope{}, false
+		}
+		return *msg, true
+	default:
+		return envelope{}, false
+	}
+}
+
+func verboseEnvelopeDirection(direction string) string {
+	switch strings.TrimSpace(direction) {
+	case "<-":
+		return "in"
+	case "->":
+		return "out"
+	default:
+		return strings.TrimSpace(direction)
+	}
 }
 
 func (r *Reporter) writeDebugEnvelope(direction string, v any) {

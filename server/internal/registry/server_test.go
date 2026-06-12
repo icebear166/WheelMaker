@@ -1,8 +1,10 @@
 package registry
 
 import (
+	"bytes"
 	"github.com/gorilla/websocket"
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
+	logger "github.com/swm8023/wheelmaker/internal/shared"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -53,6 +55,61 @@ func TestConnectInit(t *testing.T) {
 	}
 	if resp.Payload["serverInfo"] == nil {
 		t.Fatalf("missing serverInfo: %#v", resp.Payload)
+	}
+}
+
+func TestVerboseEnvelopeLogsDoNotIncludePayloadOrTiming(t *testing.T) {
+	var logs bytes.Buffer
+	if err := logger.Setup(logger.LoggerConfig{Level: logger.LevelVerbose}); err != nil {
+		t.Fatalf("setup logger: %v", err)
+	}
+	t.Cleanup(logger.Close)
+	logger.SetOutput(&logs)
+
+	s := New(Config{Token: "secret-token"})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	ws := dialWS(t, ts.URL+"/ws")
+	defer ws.Close()
+
+	mustWriteJSON(t, ws, testEnvelope{
+		RequestID: 1,
+		Type:      "request",
+		Method:    "connect.init",
+		Payload: map[string]any{
+			"clientName":      "wm-web",
+			"clientVersion":   "0.1.0",
+			"protocolVersion": rp.DefaultProtocolVersion,
+			"role":            "client",
+			"token":           "secret-token",
+		},
+	})
+	_ = mustReadEnvelope(t, ws)
+
+	mustWriteJSON(t, ws, testEnvelope{
+		RequestID: 2,
+		Type:      "request",
+		Method:    "registry.project.list",
+		Payload:   map[string]any{},
+	})
+	_ = mustReadEnvelope(t, ws)
+
+	got := logs.String()
+	for _, want := range []string{
+		"envelope dir=in peer=conn-1 role= type=request requestId=1 method=connect.init",
+		"envelope dir=out peer=conn-1 role=client type=response requestId=1 method=connect.init",
+		"envelope dir=in peer=conn-1 role=client type=request requestId=2 method=registry.project.list",
+		"envelope dir=out peer=conn-1 role=client type=response requestId=2 method=registry.project.list",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("log missing %q in:\n%s", want, got)
+		}
+	}
+	for _, forbidden := range []string{"secret-token", "payload=", "durationMs", "sessionId"} {
+		if strings.Contains(got, forbidden) {
+			t.Fatalf("log contains forbidden %q in:\n%s", forbidden, got)
+		}
 	}
 }
 

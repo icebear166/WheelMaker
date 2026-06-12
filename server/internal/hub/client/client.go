@@ -21,24 +21,6 @@ var acpClientInfo = &acp.AgentInfo{Name: "wheelmaker", Version: "0.1"}
 
 var cleanupSessionArtifacts = agent.CleanupSessionArtifacts
 
-type sessionRequestTraceKey struct{}
-
-// WithSessionRequestTrace attaches registry request metadata to hub session handling.
-func WithSessionRequestTrace(ctx context.Context, requestID int64) context.Context {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	return context.WithValue(ctx, sessionRequestTraceKey{}, requestID)
-}
-
-func sessionRequestIDFromContext(ctx context.Context) int64 {
-	if ctx == nil {
-		return 0
-	}
-	requestID, _ := ctx.Value(sessionRequestTraceKey{}).(int64)
-	return requestID
-}
-
 type promptState struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -469,21 +451,7 @@ func (c *Client) RecordEvent(ctx context.Context, event SessionViewEvent) error 
 	return c.sessionRecorder.RecordEvent(ctx, event)
 }
 
-func (c *Client) HandleSessionRequest(ctx context.Context, method string, projectID string, payload json.RawMessage) (response any, err error) {
-	log := hubLogger(c.projectName)
-	if log.VerboseEnabled() {
-		startedAt := time.Now()
-		requestID := sessionRequestIDFromContext(ctx)
-		sessionID := sessionIDFromPayload(payload)
-		log.Verbose("session handler start requestId=%d method=%s projectId=%s sessionId=%s", requestID, method, projectID, sessionID)
-		defer func() {
-			if err != nil {
-				log.Verbose("session handler finish requestId=%d method=%s projectId=%s sessionId=%s durationMs=%d result=error err=%v", requestID, method, projectID, sessionID, time.Since(startedAt).Milliseconds(), err)
-				return
-			}
-			log.Verbose("session handler finish requestId=%d method=%s projectId=%s sessionId=%s durationMs=%d result=ok", requestID, method, projectID, sessionID, time.Since(startedAt).Milliseconds())
-		}()
-	}
+func (c *Client) HandleSessionRequest(ctx context.Context, method string, projectID string, payload json.RawMessage) (any, error) {
 	switch strings.TrimSpace(method) {
 	case acp.RegistryMethodSessionList:
 		sessions, err := c.sessionRecorder.ListSessionViews(ctx)
@@ -749,19 +717,6 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 	default:
 		return nil, fmt.Errorf("unsupported session method: %s", method)
 	}
-}
-
-func sessionIDFromPayload(payload json.RawMessage) string {
-	if len(payload) == 0 {
-		return ""
-	}
-	var req struct {
-		SessionID string `json:"sessionId"`
-	}
-	if err := json.Unmarshal(payload, &req); err != nil {
-		return ""
-	}
-	return strings.TrimSpace(req.SessionID)
 }
 
 func (c *Client) ReadSessionArtifact(ctx context.Context, sessionID string, artifactID string) (sessionArtifactReadResult, error) {

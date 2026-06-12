@@ -41,18 +41,50 @@ type peerConn struct {
 
 	writeMu sync.Mutex
 
+	metaMu sync.RWMutex
+	id     string
+	role   string
+	hubID  string
+
 	pendingMu sync.Mutex
 	pending   map[int64]chan envelope
 }
 
-func newPeerConn(ws websocketWriter) *peerConn {
+func newPeerConn(ws websocketWriter, id string) *peerConn {
 	return &peerConn{
+		id:      id,
 		ws:      ws,
 		pending: make(map[int64]chan envelope),
 	}
 }
 
+func (p *peerConn) setMeta(role, hubID string) {
+	p.metaMu.Lock()
+	p.role = role
+	p.hubID = hubID
+	p.metaMu.Unlock()
+}
+
+func (p *peerConn) logEnvelope(direction string, env envelope) {
+	log := registryLogger("")
+	if !log.VerboseEnabled() {
+		return
+	}
+	p.metaMu.RLock()
+	id := p.id
+	role := p.role
+	hubID := p.hubID
+	p.metaMu.RUnlock()
+	if env.HubID != "" {
+		hubID = env.HubID
+	}
+	log.Verbose("envelope dir=%s peer=%s role=%s type=%s requestId=%d method=%s hubId=%s projectId=%s", direction, id, role, env.Type, env.RequestID, env.Method, hubID, env.ProjectID)
+}
+
 func (p *peerConn) write(v any) error {
+	if env, ok := v.(envelope); ok {
+		p.logEnvelope("out", env)
+	}
 	p.writeMu.Lock()
 	defer p.writeMu.Unlock()
 	return p.ws.WriteJSON(v)
@@ -195,9 +227,10 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 	defer ws.Close()
 
+	connID := fmt.Sprintf("conn-%d", s.nextConnID.Add(1))
 	state := &connectionState{
-		id:             fmt.Sprintf("conn-%d", s.nextConnID.Add(1)),
-		peer:           newPeerConn(ws),
+		id:             connID,
+		peer:           newPeerConn(ws, connID),
 		relayHost:      relayControlHost(r),
 		relaySecure:    relayControlSecure(r),
 		seenRequestIDs: map[int64]struct{}{},
@@ -264,6 +297,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return
 		}
+		state.peer.logEnvelope("in", in)
 		if invalidRequestID {
 			_ = s.writeError(state.peer, 0, in.Method, codeInvalidArgument, "requestId must be integer", nil)
 			continue
@@ -506,6 +540,7 @@ func (s *Server) handleConnectInit(peer *peerConn, state *connectionState, in en
 	state.hubID = strings.TrimSpace(payload.HubID)
 	state.scopeHubID = strings.TrimSpace(payload.HubID)
 	state.connectionEpoch = s.nextConnEpoch.Add(1)
+	peer.setMeta(state.role, state.hubID)
 	if state.role == string(rp.RegistryRoleClient) || state.role == string(rp.RegistryRoleMonitor) {
 		s.mu.Lock()
 		s.clientPeers[state.id] = state
@@ -1072,16 +1107,6 @@ func (s *Server) executeClientRequest(state *connectionState, in envelope) envel
 
 	forwardID := s.nextForwardID.Add(1)
 	waitCh := hubPeer.registerPending(forwardID)
-	log := registryLogger("")
-	traceSession := rp.RegistrySessionForwardMethod(in.Method) && log.VerboseEnabled()
-	var sessionID string
-	var startedAt time.Time
-	if traceSession {
-		sessionID = sessionIDFromPayload(in.Payload)
-		startedAt = time.Now()
-		log.Verbose("session forward start clientRequestId=%d forwardId=%d method=%s projectId=%s hubId=%s sessionId=%s", in.RequestID, forwardID, in.Method, projectID, hubID, sessionID)
-	}
-
 	err := hubPeer.write(envelope{
 		RequestID: forwardID,
 		Type:      rp.RegistryEnvelopeTypeRequest,
@@ -1091,57 +1116,20 @@ func (s *Server) executeClientRequest(state *connectionState, in envelope) envel
 	})
 	if err != nil {
 		hubPeer.resolvePending(forwardID, envelope{})
-		if traceSession {
-			log.Verbose("session forward finish clientRequestId=%d forwardId=%d method=%s projectId=%s hubId=%s sessionId=%s durationMs=%d result=write_error err=%v", in.RequestID, forwardID, in.Method, projectID, hubID, sessionID, time.Since(startedAt).Milliseconds(), err)
-		}
 		return s.errorEnvelope(in.Method, codeInternal, "forward request write failed", nil)
 	}
 
 	select {
 	case resp, ok := <-waitCh:
 		if !ok {
-			if traceSession {
-				log.Verbose("session forward finish clientRequestId=%d forwardId=%d method=%s projectId=%s hubId=%s sessionId=%s durationMs=%d result=hub_disconnected", in.RequestID, forwardID, in.Method, projectID, hubID, sessionID, time.Since(startedAt).Milliseconds())
-			}
 			return s.errorEnvelope(in.Method, codeInternal, "hub disconnected", nil)
 		}
 		resp.ProjectID = projectID
-		if traceSession {
-			code, message := envelopeErrorSummary(resp)
-			log.Verbose("session forward finish clientRequestId=%d forwardId=%d method=%s projectId=%s hubId=%s sessionId=%s durationMs=%d result=%s code=%s message=%s", in.RequestID, forwardID, in.Method, projectID, hubID, sessionID, time.Since(startedAt).Milliseconds(), resp.Type, code, message)
-		}
 		return resp
 	case <-time.After(defaultRequestTimeout):
 		hubPeer.resolvePending(forwardID, envelope{})
-		if traceSession {
-			log.Verbose("session forward finish clientRequestId=%d forwardId=%d method=%s projectId=%s hubId=%s sessionId=%s durationMs=%d result=timeout code=%s message=%s", in.RequestID, forwardID, in.Method, projectID, hubID, sessionID, time.Since(startedAt).Milliseconds(), codeTimeout, "hub response timeout")
-		}
 		return s.errorEnvelope(in.Method, codeTimeout, "hub response timeout", nil)
 	}
-}
-
-func sessionIDFromPayload(payload json.RawMessage) string {
-	if len(payload) == 0 {
-		return ""
-	}
-	var req struct {
-		SessionID string `json:"sessionId"`
-	}
-	if err := json.Unmarshal(payload, &req); err != nil {
-		return ""
-	}
-	return strings.TrimSpace(req.SessionID)
-}
-
-func envelopeErrorSummary(resp envelope) (string, string) {
-	if resp.Type != rp.RegistryEnvelopeTypeError || len(resp.Payload) == 0 {
-		return "", ""
-	}
-	var payload errorPayload
-	if err := json.Unmarshal(resp.Payload, &payload); err != nil {
-		return "", ""
-	}
-	return strings.TrimSpace(payload.Code), strings.TrimSpace(payload.Message)
 }
 
 func (s *Server) lookupProject(projectID string) (rp.ProjectListItem, bool) {

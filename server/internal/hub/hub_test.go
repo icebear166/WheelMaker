@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"database/sql"
@@ -1048,6 +1049,114 @@ func TestReporterRespondsToSessionRequests(t *testing.T) {
 		t.Fatal("did not receive session.send response from reporter")
 	}
 
+}
+
+func TestReporterVerboseEnvelopeLogsDoNotIncludePayloadOrTiming(t *testing.T) {
+	var logs bytes.Buffer
+	if err := logger.Setup(logger.LoggerConfig{Level: logger.LevelVerbose}); err != nil {
+		t.Fatalf("setup logger: %v", err)
+	}
+	t.Cleanup(logger.Close)
+	logger.SetOutput(&logs)
+
+	upgrader := websocket.Upgrader{}
+	respSeen := make(chan testEnvelope, 1)
+	errSeen := make(chan error, 1)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ws, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			errSeen <- err
+			return
+		}
+		defer ws.Close()
+
+		initReq := mustReadEnvelope(t, ws)
+		mustWriteJSON(t, ws, testEnvelope{
+			RequestID: initReq.RequestID,
+			Type:      "response",
+			Method:    "connect.init",
+			Payload: map[string]any{
+				"ok": true,
+				"principal": map[string]any{
+					"role":            "hub",
+					"hubId":           "hub-session",
+					"connectionEpoch": 1,
+				},
+				"serverInfo":     map[string]any{"serverVersion": "test", "protocolVersion": rp.DefaultProtocolVersion},
+				"features":       map[string]any{},
+				"hashAlgorithms": []string{"sha256"},
+			},
+		})
+
+		reportReq := mustReadEnvelope(t, ws)
+		mustWriteJSON(t, ws, testEnvelope{
+			RequestID: reportReq.RequestID,
+			Type:      "response",
+			Method:    "hub.report.projects",
+			Payload:   map[string]any{"ok": true},
+		})
+
+		mustWriteJSON(t, ws, testEnvelope{
+			RequestID: 100,
+			Type:      "request",
+			Method:    "session.send",
+			ProjectID: "hub-session:proj1",
+			Payload: map[string]any{
+				"sessionId": "sess-secret",
+				"text":      "hello session",
+			},
+		})
+		_ = ws.SetReadDeadline(time.Now().Add(1500 * time.Millisecond))
+		respSeen <- mustReadEnvelope(t, ws)
+	}))
+	t.Cleanup(ts.Close)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	reporter := NewReporter(ReporterConfig{
+		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		HubID:             "hub-session",
+		ReconnectInterval: 50 * time.Millisecond,
+	}, []ProjectInfo{{Name: "proj1", Path: t.TempDir(), Online: true}})
+	reporter.RegisterSessionHandler(rp.ProjectID("hub-session", "proj1"), &stubSessionHandler{})
+
+	done := make(chan error, 1)
+	go func() { done <- reporter.Run(ctx) }()
+	defer func() {
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Fatal("reporter did not stop")
+		}
+	}()
+
+	select {
+	case err := <-errSeen:
+		t.Fatalf("fake registry error: %v", err)
+	case resp := <-respSeen:
+		if resp.Type != "response" || resp.Method != "session.send" {
+			t.Fatalf("unexpected response: %#v", resp)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("did not receive session.send response")
+	}
+
+	got := logs.String()
+	for _, want := range []string{
+		"envelope dir=in type=request requestId=100 method=session.send projectId=hub-session:proj1",
+		"envelope dir=out type=response requestId=100 method=session.send projectId=hub-session:proj1",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("log missing %q in:\n%s", want, got)
+		}
+	}
+	for _, forbidden := range []string{"durationMs", "handlerDurationMs", "writeDurationMs", "sessionId", "sess-secret", "hello session"} {
+		if strings.Contains(got, forbidden) {
+			t.Fatalf("log contains forbidden %q in:\n%s", forbidden, got)
+		}
+	}
 }
 
 func TestReporterForwardsSessionSearchRequests(t *testing.T) {
