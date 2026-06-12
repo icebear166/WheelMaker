@@ -220,6 +220,34 @@ func TestGetLogs_DebugOmitsTimeLevelAndDedupsSessionID(t *testing.T) {
 	}
 }
 
+func TestGetLogs_ParsesAndFiltersVerboseLevel(t *testing.T) {
+	base := t.TempDir()
+	m := NewMonitor(base)
+
+	logDir := filepath.Join(base, "log")
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
+		t.Fatalf("mkdir log dir: %v", err)
+	}
+	lines := strings.Join([]string{
+		"2026/06/12 13:10:00 VERBOSE [Registry] session forward start method=session.read",
+		"2026/06/12 13:10:01 INFO  [Registry] listening on 127.0.0.1:9630",
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(logDir, "registry.log"), []byte(lines+"\n"), 0o644); err != nil {
+		t.Fatalf("write registry log: %v", err)
+	}
+
+	res, err := m.GetLogs("registry", "verbose", 100)
+	if err != nil {
+		t.Fatalf("GetLogs(registry, verbose): %v", err)
+	}
+	if len(res.Entries) != 2 {
+		t.Fatalf("entries=%d, want 2: %#v", len(res.Entries), res.Entries)
+	}
+	if res.Entries[0].Level != "VERBOSE" || !strings.Contains(res.Entries[0].Message, "session forward start") {
+		t.Fatalf("verbose entry=%#v", res.Entries[0])
+	}
+}
+
 func TestGetDBTablesDoesNotIncludeLegacyPromptTable(t *testing.T) {
 	base := t.TempDir()
 	store, err := clientpkg.NewStore(filepath.Join(base, "db", "client.sqlite3"))

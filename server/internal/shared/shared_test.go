@@ -201,6 +201,40 @@ func TestLogger_FilteredLogsDoNotFormatArguments(t *testing.T) {
 	Info("%v", panicStringer{})
 }
 
+func TestLoggerVerboseLevelWritesVerboseButNotDebug(t *testing.T) {
+	if got := ParseLevel("verbose"); got != LevelVerbose {
+		t.Fatalf("ParseLevel(verbose)=%v, want %v", got, LevelVerbose)
+	}
+
+	var out bytes.Buffer
+	if err := Setup(LoggerConfig{Level: LevelVerbose, DebugLogFile: filepath.Join(t.TempDir(), "debug.log")}); err != nil {
+		t.Fatalf("setup logger: %v", err)
+	}
+	defer Close()
+	SetOutput(&out)
+
+	Debug("debug hidden")
+	Verbose("session forward request method=%s", "session.read")
+	Info("info visible")
+
+	got := out.String()
+	if strings.Contains(got, "debug hidden") {
+		t.Fatalf("verbose level wrote debug log: %q", got)
+	}
+	if !strings.Contains(got, "VERBOSE") || !strings.Contains(got, "session forward request method=session.read") {
+		t.Fatalf("verbose log missing from output: %q", got)
+	}
+	if !strings.Contains(got, "INFO") || !strings.Contains(got, "info visible") {
+		t.Fatalf("info log missing from output: %q", got)
+	}
+	if DebugWriter() != nil {
+		t.Fatal("verbose level should not create debug writer")
+	}
+	if !VerboseEnabled() {
+		t.Fatal("verbose level should report verbose enabled")
+	}
+}
+
 func TestDeriveDebugLogPath(t *testing.T) {
 	base := filepath.Join("tmp", "hub.log")
 	got := deriveDebugLogPath(base)

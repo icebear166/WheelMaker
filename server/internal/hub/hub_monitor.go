@@ -225,10 +225,12 @@ func (c *MonitorCore) resolveLogFilePath(file string) string {
 func levelRank(level string) int {
 	switch strings.ToUpper(level) {
 	case "ERROR":
-		return 4
+		return 5
 	case "WARN":
-		return 3
+		return 4
 	case "INFO":
+		return 3
+	case "VERBOSE":
 		return 2
 	case "DEBUG":
 		return 1
@@ -245,12 +247,12 @@ func parseLine(line string) LogEntry {
 	if line[4] == '/' && line[7] == '/' && line[10] == ' ' {
 		e.Time = line[:19]
 		rest := line[20:]
-		if len(rest) >= 5 {
-			lv := strings.TrimSpace(rest[:5])
+		if levelEnd := strings.IndexByte(rest, ' '); levelEnd > 0 {
+			lv := rest[:levelEnd]
 			switch lv {
-			case "DEBUG", "INFO", "WARN", "ERROR":
+			case "DEBUG", "VERBOSE", "INFO", "WARN", "ERROR":
 				e.Level = lv
-				e.Message = strings.TrimSpace(rest[5:])
+				e.Message = strings.TrimSpace(rest[levelEnd+1:])
 				return e
 			}
 		}

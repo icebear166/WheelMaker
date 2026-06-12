@@ -20,6 +20,7 @@ type Level int
 
 const (
 	LevelDebug Level = iota
+	LevelVerbose
 	LevelInfo
 	LevelWarn
 	LevelError
@@ -30,6 +31,8 @@ func ParseLevel(s string) Level {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "debug":
 		return LevelDebug
+	case "verbose":
+		return LevelVerbose
 	case "info":
 		return LevelInfo
 	case "error":
@@ -60,6 +63,14 @@ func DebugWriter() io.Writer {
 	return global.debugOut
 }
 
+func Enabled(level Level) bool {
+	global.mu.Lock()
+	defer global.mu.Unlock()
+	return global.targetWriterLocked(level) != nil
+}
+
+func VerboseEnabled() bool { return Enabled(LevelVerbose) }
+
 func SetOutput(w io.Writer) {
 	global.mu.Lock()
 	defer global.mu.Unlock()
@@ -67,6 +78,9 @@ func SetOutput(w io.Writer) {
 }
 
 func Debug(format string, args ...any) { global.emit(LevelDebug, format, args...) }
+func Verbose(format string, args ...any) {
+	global.emit(LevelVerbose, format, args...)
+}
 func Info(format string, args ...any)  { global.emit(LevelInfo, format, args...) }
 func Warn(format string, args ...any)  { global.emit(LevelWarn, format, args...) }
 func Error(format string, args ...any) { global.emit(LevelError, format, args...) }
@@ -79,7 +93,7 @@ type loggerInst struct {
 	opFile   *os.File
 }
 
-var levelTag = [4]string{"DEBUG", "INFO ", "WARN ", "ERROR"}
+var levelTag = [...]string{"DEBUG", "VERBOSE", "INFO ", "WARN ", "ERROR"}
 
 func (l *loggerInst) emit(lvl Level, format string, args ...any) {
 	l.mu.Lock()

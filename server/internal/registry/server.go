@@ -1072,6 +1072,15 @@ func (s *Server) executeClientRequest(state *connectionState, in envelope) envel
 
 	forwardID := s.nextForwardID.Add(1)
 	waitCh := hubPeer.registerPending(forwardID)
+	log := registryLogger("")
+	traceSession := rp.RegistrySessionForwardMethod(in.Method) && log.VerboseEnabled()
+	var sessionID string
+	var startedAt time.Time
+	if traceSession {
+		sessionID = sessionIDFromPayload(in.Payload)
+		startedAt = time.Now()
+		log.Verbose("session forward start clientRequestId=%d forwardId=%d method=%s projectId=%s hubId=%s sessionId=%s", in.RequestID, forwardID, in.Method, projectID, hubID, sessionID)
+	}
 
 	err := hubPeer.write(envelope{
 		RequestID: forwardID,
@@ -1082,20 +1091,57 @@ func (s *Server) executeClientRequest(state *connectionState, in envelope) envel
 	})
 	if err != nil {
 		hubPeer.resolvePending(forwardID, envelope{})
+		if traceSession {
+			log.Verbose("session forward finish clientRequestId=%d forwardId=%d method=%s projectId=%s hubId=%s sessionId=%s durationMs=%d result=write_error err=%v", in.RequestID, forwardID, in.Method, projectID, hubID, sessionID, time.Since(startedAt).Milliseconds(), err)
+		}
 		return s.errorEnvelope(in.Method, codeInternal, "forward request write failed", nil)
 	}
 
 	select {
 	case resp, ok := <-waitCh:
 		if !ok {
+			if traceSession {
+				log.Verbose("session forward finish clientRequestId=%d forwardId=%d method=%s projectId=%s hubId=%s sessionId=%s durationMs=%d result=hub_disconnected", in.RequestID, forwardID, in.Method, projectID, hubID, sessionID, time.Since(startedAt).Milliseconds())
+			}
 			return s.errorEnvelope(in.Method, codeInternal, "hub disconnected", nil)
 		}
 		resp.ProjectID = projectID
+		if traceSession {
+			code, message := envelopeErrorSummary(resp)
+			log.Verbose("session forward finish clientRequestId=%d forwardId=%d method=%s projectId=%s hubId=%s sessionId=%s durationMs=%d result=%s code=%s message=%s", in.RequestID, forwardID, in.Method, projectID, hubID, sessionID, time.Since(startedAt).Milliseconds(), resp.Type, code, message)
+		}
 		return resp
 	case <-time.After(defaultRequestTimeout):
 		hubPeer.resolvePending(forwardID, envelope{})
+		if traceSession {
+			log.Verbose("session forward finish clientRequestId=%d forwardId=%d method=%s projectId=%s hubId=%s sessionId=%s durationMs=%d result=timeout code=%s message=%s", in.RequestID, forwardID, in.Method, projectID, hubID, sessionID, time.Since(startedAt).Milliseconds(), codeTimeout, "hub response timeout")
+		}
 		return s.errorEnvelope(in.Method, codeTimeout, "hub response timeout", nil)
 	}
+}
+
+func sessionIDFromPayload(payload json.RawMessage) string {
+	if len(payload) == 0 {
+		return ""
+	}
+	var req struct {
+		SessionID string `json:"sessionId"`
+	}
+	if err := json.Unmarshal(payload, &req); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(req.SessionID)
+}
+
+func envelopeErrorSummary(resp envelope) (string, string) {
+	if resp.Type != rp.RegistryEnvelopeTypeError || len(resp.Payload) == 0 {
+		return "", ""
+	}
+	var payload errorPayload
+	if err := json.Unmarshal(resp.Payload, &payload); err != nil {
+		return "", ""
+	}
+	return strings.TrimSpace(payload.Code), strings.TrimSpace(payload.Message)
 }
 
 func (s *Server) lookupProject(projectID string) (rp.ProjectListItem, bool) {

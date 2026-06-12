@@ -1100,7 +1100,7 @@ type LogResult struct {
 
 // GetLogs reads the specified log file with optional level filter.
 // file: "hub" | "debug" | "registry" | "registry-debug" | "updater".
-// level: "" (all), "warn", "error".
+// level: "" (all), "debug", "verbose", "info", "warn", "error".
 // tail: number of lines from the end (0 = all, max 5000).
 func (m *Monitor) GetLogs(file string, level string, tail int) (*LogResult, error) {
 	logPath := m.resolveLogFilePath(file)
@@ -1245,10 +1245,12 @@ func shortSessionID(sessionID string) string {
 func levelRank(level string) int {
 	switch strings.ToUpper(level) {
 	case "ERROR":
-		return 4
+		return 5
 	case "WARN":
-		return 3
+		return 4
 	case "INFO":
+		return 3
+	case "VERBOSE":
 		return 2
 	case "DEBUG":
 		return 1
@@ -1264,17 +1266,15 @@ func parseLine(line string) LogEntry {
 		entry.Message = line
 		return entry
 	}
-	// Try to parse date (19 chars) + space + level (5 chars)
 	if line[4] == '/' && line[7] == '/' && line[10] == ' ' {
 		entry.Time = line[:19]
 		rest := line[20:]
-		// Level tag is 5 chars like "INFO ", "WARN ", "ERROR", "DEBUG"
-		if len(rest) >= 5 {
-			levelStr := strings.TrimSpace(rest[:5])
+		if levelEnd := strings.IndexByte(rest, ' '); levelEnd > 0 {
+			levelStr := rest[:levelEnd]
 			switch levelStr {
-			case "DEBUG", "INFO", "WARN", "ERROR":
+			case "DEBUG", "VERBOSE", "INFO", "WARN", "ERROR":
 				entry.Level = levelStr
-				entry.Message = strings.TrimSpace(rest[5:])
+				entry.Message = strings.TrimSpace(rest[levelEnd+1:])
 				return entry
 			}
 		}

@@ -33,7 +33,7 @@ type rawLegacyIMConfig struct {
 
 // LogConfig controls the operational log system.
 type LogConfig struct {
-	// Level is the minimum log level to emit: "debug", "info", "warn" (default), "error".
+	// Level is the minimum log level to emit: "debug", "verbose", "info", "warn" (default), "error".
 	Level string `json:"level,omitempty"`
 }
 

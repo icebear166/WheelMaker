@@ -2413,6 +2413,29 @@ func TestMonitorCoreGetLogs_NormalizesFileAndTail(t *testing.T) {
 	}
 }
 
+func TestMonitorCoreGetLogs_ParsesAndFiltersVerboseLevel(t *testing.T) {
+	base := t.TempDir()
+	core := NewMonitorCore(base)
+	logPath := filepath.Join(base, "log", "hub.log")
+	lines := strings.Join([]string{
+		"2026/06/12 13:10:00 VERBOSE [Hub:WheelMaker] session handler start method=session.read",
+		"2026/06/12 13:10:01 INFO  [Hub] started",
+	}, "\n")
+	if err := writeMonitorFile(logPath, lines+"\n"); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+	res, err := core.GetLogs("hub", "verbose", 100)
+	if err != nil {
+		t.Fatalf("GetLogs: %v", err)
+	}
+	if len(res.Entries) != 2 {
+		t.Fatalf("entries=%d want 2: %#v", len(res.Entries), res.Entries)
+	}
+	if res.Entries[0].Level != "VERBOSE" || !strings.Contains(res.Entries[0].Message, "session handler start") {
+		t.Fatalf("verbose entry=%#v", res.Entries[0])
+	}
+}
+
 func TestMonitorCoreGetDBTables_NoDBReturnsErrorResult(t *testing.T) {
 	core := NewMonitorCore(t.TempDir())
 	res := core.GetDBTables()

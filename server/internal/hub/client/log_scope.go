@@ -31,6 +31,14 @@ func (l scopedLogger) Debug(format string, args ...any) {
 	logger.Debug(l.format(format), args...)
 }
 
+func (l scopedLogger) Verbose(format string, args ...any) {
+	logger.Verbose(l.format(format), args...)
+}
+
+func (l scopedLogger) VerboseEnabled() bool {
+	return logger.VerboseEnabled()
+}
+
 func (l scopedLogger) Info(format string, args ...any) {
 	logger.Info(l.format(format), args...)
 }

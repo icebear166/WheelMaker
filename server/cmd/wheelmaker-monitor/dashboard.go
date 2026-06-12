@@ -569,6 +569,7 @@ html, body {
 .log-line { white-space: pre-wrap; word-break: break-all; }
 .log-line .ts      { color: var(--text-dim); }
 .log-line .lvl-info  { color: var(--accent); }
+.log-line .lvl-verbose { color: #8ea4c8; }
 .log-line .lvl-warn  { color: var(--yellow); }
 .log-line .lvl-error { color: var(--red); font-weight: 700; }
 .log-line .lvl-debug { color: var(--text-dim); }
@@ -944,6 +945,7 @@ html, body {
             <option value="error">Error+</option>
             <option value="warn">Warn+</option>
             <option value="info">Info+</option>
+            <option value="verbose">Verbose+</option>
             <option value="debug">Debug+</option>
           </select>
           <select id="log-tail" class="log-sel" onchange="loadLogs()">
