@@ -603,19 +603,19 @@
   position: absolute;
   right: 0;
   bottom: 0;
-  width: 48px;
+  width: 50px;
   height: 88px;
   box-sizing: border-box;
   display: grid;
   grid-template-rows: repeat(2, 40px);
-  gap: 2px;
-  padding: 3px;
+  padding: 4px;
   border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
   border-radius: 999px;
   background: color-mix(in srgb, var(--panel) 34%, transparent);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
   backdrop-filter: blur(1px);
   -webkit-backdrop-filter: blur(1px);
+  overflow: hidden;
   transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, backdrop-filter 180ms ease;
 }
 
@@ -767,13 +767,9 @@
 
 .gesture-nav-control {
   position: relative;
-  width: 48px;
+  width: 50px;
   height: 88px;
   pointer-events: auto;
-}
-
-.gesture-nav-control[data-expanded='true'] {
-  height: 48px;
 }
 
 .gesture-nav-control[data-expanded='true'] .gesture-nav-pill {
@@ -784,9 +780,9 @@
 .gesture-nav-button {
   position: absolute;
   top: 0;
-  right: 0;
-  width: 48px;
-  height: 48px;
+  right: 5px;
+  width: 40px;
+  height: 40px;
   border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
   border-radius: 999px;
   background: color-mix(in srgb, var(--panel) 34%, transparent);
@@ -809,17 +805,16 @@
 
 .gesture-nav-drawer-button {
   z-index: 3;
+  top: 44px;
 }
 
 .gesture-nav-current-button {
   z-index: 2;
+  top: 4px;
 }
 
 .gesture-nav-control[data-expanded='false'] .gesture-nav-current-button,
 .gesture-nav-control[data-expanded='false'] .gesture-nav-drawer-button {
-  right: 4px;
-  width: 40px;
-  height: 40px;
   border-color: transparent;
   background: transparent;
   box-shadow: none;
@@ -827,11 +822,7 @@
   -webkit-backdrop-filter: none;
 }
 
-.gesture-nav-control[data-expanded='false'] .gesture-nav-current-button {
-  top: 4px;
-}
-
-.gesture-nav-control[data-expanded='false'] .gesture-nav-drawer-button {
+.gesture-nav-control[data-expanded='true'] .gesture-nav-drawer-button {
   top: 44px;
 }
 
@@ -863,24 +854,25 @@
 
 .gesture-nav-option {
   z-index: 2;
+  top: 44px;
   color: var(--muted);
   transition: background 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
 }
 
 .gesture-nav-option-chat {
-  transform: translate3d(0, -56px, 0);
+  transform: translate3d(0, -48px, 0);
 }
 
 .floating-control-stack[data-side='right'] .gesture-nav-option-file {
-  transform: translate3d(-56px, 0, 0);
+  transform: translate3d(-48px, 0, 0);
 }
 
 .floating-control-stack[data-side='left'] .gesture-nav-option-file {
-  transform: translate3d(56px, 0, 0);
+  transform: translate3d(48px, 0, 0);
 }
 
 .gesture-nav-option-git {
-  transform: translate3d(0, 56px, 0);
+  transform: translate3d(0, 48px, 0);
 }
 
 .gesture-nav-option[data-active='true'],

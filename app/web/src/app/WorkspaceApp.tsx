@@ -6299,21 +6299,7 @@ export function App() {
     [floatingNavIndex],
   );
   const gestureNavigationExpanded = gestureNavState?.phase === 'expanded';
-  const effectiveFloatingControlTop = useMemo(() => {
-    if (!gestureNavigation || !gestureNavigationExpanded) {
-      return floatingControlTop;
-    }
-    const expandedInset = 56;
-    const minTop = floatingBounds.minTop + expandedInset;
-    const maxTop = Math.max(minTop, floatingBounds.maxTop - expandedInset);
-    return clampFloatingTop(floatingControlTop, minTop, maxTop);
-  }, [
-    floatingBounds.maxTop,
-    floatingBounds.minTop,
-    floatingControlTop,
-    gestureNavigation,
-    gestureNavigationExpanded,
-  ]);
+  const effectiveFloatingControlTop = floatingControlTop;
   const effectiveFloatingControlStackStyle = useMemo(
     () =>
       !isWide

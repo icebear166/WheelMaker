@@ -128,6 +128,7 @@ describe('gesture navigation', () => {
     expect(main).toContain('handleFloatingNavSelect');
     expect(main).toContain('handleGestureNavigationCurrentSelect');
     expect(main).toContain('GESTURE_MOVE_LONG_PRESS_MS');
+    expect(main).not.toContain('const expandedInset = 56;');
   });
 
   test('styles gesture navigation as a collapsed pill and expanded drawer-centered controls', () => {
@@ -135,6 +136,13 @@ describe('gesture navigation', () => {
 
     expect(styles).toContain('.gesture-nav-control');
     expect(styles).toContain('.gesture-nav-pill');
+    expect(styles).toMatch(
+      /\.gesture-nav-control \{[\s\S]*width: 50px;[\s\S]*height: 88px;[\s\S]*\}/,
+    );
+    expect(styles).toMatch(
+      /\.gesture-nav-pill \{[\s\S]*width: 50px;[\s\S]*grid-template-rows: repeat\(2, 40px\);[\s\S]*padding: 4px;[\s\S]*\}/,
+    );
+    expect(styles).not.toContain(".gesture-nav-control[data-expanded='true'] {\n  height: 48px;");
     expect(styles).toContain('.gesture-nav-button');
     expect(styles).toContain('.gesture-nav-current-button');
     expect(styles).not.toContain('.gesture-nav-badge');
@@ -145,5 +153,11 @@ describe('gesture navigation', () => {
     expect(styles).toContain(".gesture-nav-option[data-candidate='true']");
     expect(styles).toContain(".floating-control-stack[data-side='right'] .gesture-nav-option-file");
     expect(styles).toContain(".floating-control-stack[data-side='left'] .gesture-nav-option-file");
+    expect(styles).toMatch(
+      /\.gesture-nav-control\[data-expanded='true'\] \.gesture-nav-drawer-button \{[\s\S]*top: 44px;[\s\S]*\}/,
+    );
+    expect(styles).toMatch(
+      /\.gesture-nav-option \{[\s\S]*top: 44px;[\s\S]*\}/,
+    );
   });
 });
