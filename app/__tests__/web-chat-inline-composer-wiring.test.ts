@@ -27,4 +27,19 @@ describe('web chat inline composer capsule wiring', () => {
     const capsuleRule = stylesCss.slice(capsuleRuleStart, capsuleRuleEnd);
     expect(capsuleRule).toContain('gap: 1px;');
   });
+
+  test('keeps file mention capsule labels readable without ellipsis', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(stylesCss).toMatch(/\.chat-composer-capsule\.file,\s*\.chat-prompt-inline-capsule\.file \{[\s\S]*max-width: 100%;[\s\S]*white-space: normal;[\s\S]*\}/);
+    expect(stylesCss).toMatch(/\.chat-composer-capsule\.file \.chat-composer-capsule-label,\s*\.chat-prompt-inline-capsule\.file \.chat-prompt-inline-capsule-label \{[\s\S]*overflow: visible;[\s\S]*text-overflow: clip;[\s\S]*overflow-wrap: anywhere;[\s\S]*\}/);
+  });
+
+  test('keeps long composer content inside the input scroll area', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(stylesCss).toMatch(/\.chat-composer-input \{[\s\S]*max-height: 180px;[\s\S]*overflow-x: hidden;[\s\S]*overflow-y: auto;[\s\S]*\}/);
+  });
 });

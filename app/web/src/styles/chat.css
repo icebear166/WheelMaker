@@ -3091,6 +3091,8 @@
   min-width: 0;
   min-height: 32px;
   max-height: 180px;
+  overflow-x: hidden;
+  overflow-y: auto;
   border: none;
   border-radius: 0;
   background: transparent;
@@ -3150,6 +3152,8 @@
 
 .chat-composer-capsule.file,
 .chat-prompt-inline-capsule.file {
+  max-width: 100%;
+  white-space: normal;
   color: color-mix(in srgb, var(--text) 84%, var(--muted));
   background: color-mix(in srgb, var(--surface-1) 82%, var(--accent));
 }
@@ -3164,6 +3168,14 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.chat-composer-capsule.file .chat-composer-capsule-label,
+.chat-prompt-inline-capsule.file .chat-prompt-inline-capsule-label {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .chat-composer-capsule-icon,
