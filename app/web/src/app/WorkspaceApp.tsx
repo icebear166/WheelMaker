@@ -1108,6 +1108,17 @@ function tabIconClass(tab: GestureNavigationTab): string {
   }
 }
 
+function tabLabel(tab: GestureNavigationTab): string {
+  switch (tab) {
+    case 'chat':
+      return 'Chat';
+    case 'git':
+      return 'Git';
+    default:
+      return 'File';
+  }
+}
+
 function gestureTabFromElement(element: Element | null): GestureNavigationTab | null {
   const target = element?.closest<HTMLElement>('[data-gesture-nav-tab]');
   const tab = target?.dataset.gestureNavTab;
@@ -6469,8 +6480,15 @@ export function App() {
     }
     setDrawerOpen(value => !value);
   }, []);
+  const handleGestureNavigationCurrentSelect = useCallback(() => {
+    if (tab === 'chat') {
+      handleFloatingChatSelect();
+      return;
+    }
+    handleFloatingNavSelect(tab);
+  }, [handleFloatingChatSelect, handleFloatingNavSelect, tab]);
   const beginGestureNavigationPress = useCallback(
-    (event: React.PointerEvent<HTMLButtonElement>) => {
+    (event: React.PointerEvent<HTMLElement>) => {
       if (isWide || event.button !== 0) {
         return;
       }
@@ -6550,6 +6568,13 @@ export function App() {
   );
   const handleGestureNavigationButtonPointerDown = useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
+      beginGestureNavigationPress(event);
+      event.stopPropagation();
+    },
+    [beginGestureNavigationPress],
+  );
+  const handleGestureNavigationPillPointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
       beginGestureNavigationPress(event);
       event.stopPropagation();
     },
@@ -17484,10 +17509,15 @@ export function App() {
         {mobilePortRelayFrameOpen ? null : gestureNavigation ? (
           <div
             className="gesture-nav-control"
-            data-expanded={gestureNavigationExpanded}
+            data-expanded={gestureNavigationExpanded ? 'true' : 'false'}
             data-candidate={gestureNavState?.candidate ?? ''}
             aria-label="Gesture navigation"
           >
+            <div
+              className="gesture-nav-pill"
+              onPointerDown={handleGestureNavigationPillPointerDown}
+              aria-hidden="true"
+            />
             {gestureNavigationExpanded ? (
               <>
                 <button
@@ -17530,6 +17560,23 @@ export function App() {
             ) : null}
             <button
               type="button"
+              className="gesture-nav-button gesture-nav-current-button"
+              data-active="true"
+              data-visible={gestureNavigationExpanded ? 'false' : 'true'}
+              onPointerDown={handleGestureNavigationButtonPointerDown}
+              onClick={handleGestureNavigationCurrentSelect}
+              title={tabLabel(tab)}
+              aria-label={tabLabel(tab)}
+              aria-hidden={gestureNavigationExpanded}
+              tabIndex={gestureNavigationExpanded ? -1 : undefined}
+            >
+              <span className={`codicon ${tabIconClass(tab)}`} />
+              {tab === 'chat' && hasCompletedUnreadChatSessionIndicator ? (
+                <span className="floating-nav-unread-dot" aria-hidden="true" />
+              ) : null}
+            </button>
+            <button
+              type="button"
               className="gesture-nav-button gesture-nav-drawer-button"
               data-active={drawerOpen}
               onPointerDown={handleGestureNavigationButtonPointerDown}
@@ -17539,11 +17586,6 @@ export function App() {
               aria-expanded={drawerOpen}
             >
               <span className="codicon codicon-menu" />
-              {!gestureNavigationExpanded ? (
-                <span className="gesture-nav-badge" aria-hidden="true">
-                  <span className={`codicon ${tabIconClass(tab)}`} />
-                </span>
-              ) : null}
             </button>
           </div>
         ) : (

@@ -599,6 +599,38 @@
   -webkit-backdrop-filter: blur(8px);
 }
 
+.gesture-nav-pill {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 48px;
+  height: 88px;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: repeat(2, 40px);
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 34%, transparent);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(1px);
+  -webkit-backdrop-filter: blur(1px);
+  transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, backdrop-filter 180ms ease;
+}
+
+.floating-control-stack[data-backdrop-tone='mixed'] .gesture-nav-pill {
+  background: color-mix(in srgb, var(--panel) 64%, transparent);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+.floating-control-stack[data-backdrop-tone='light'] .gesture-nav-pill {
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
 .floating-nav-group {
   position: relative;
   width: 50px;
@@ -725,6 +757,7 @@
 
 .floating-control-stack[data-idle='true'] .floating-nav-group,
 .floating-control-stack[data-idle='true'] .drawer-toggle-bubble,
+.floating-control-stack[data-idle='true'] .gesture-nav-pill,
 .floating-control-stack[data-idle='true'] .gesture-nav-button {
   background: transparent;
   box-shadow: none;
@@ -735,8 +768,17 @@
 .gesture-nav-control {
   position: relative;
   width: 48px;
-  height: 48px;
+  height: 88px;
   pointer-events: auto;
+}
+
+.gesture-nav-control[data-expanded='true'] {
+  height: 48px;
+}
+
+.gesture-nav-control[data-expanded='true'] .gesture-nav-pill {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .gesture-nav-button {
@@ -769,29 +811,54 @@
   z-index: 3;
 }
 
-.gesture-nav-drawer-button:active {
-  transform: scale(0.97);
+.gesture-nav-current-button {
+  z-index: 2;
 }
 
-.gesture-nav-badge {
-  position: absolute;
-  right: -2px;
-  bottom: -2px;
-  width: 16px;
-  height: 16px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--panel) 92%, transparent);
-  background: var(--accent);
-  color: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);
+.gesture-nav-control[data-expanded='false'] .gesture-nav-current-button,
+.gesture-nav-control[data-expanded='false'] .gesture-nav-drawer-button {
+  right: 4px;
+  width: 40px;
+  height: 40px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.gesture-nav-control[data-expanded='false'] .gesture-nav-current-button {
+  top: 4px;
+}
+
+.gesture-nav-control[data-expanded='false'] .gesture-nav-drawer-button {
+  top: 44px;
+}
+
+.gesture-nav-control[data-expanded='true'] .gesture-nav-current-button {
+  opacity: 0;
   pointer-events: none;
 }
 
-.gesture-nav-badge .codicon {
-  font-size: 10px;
+.gesture-nav-control[data-expanded='false'] .gesture-nav-button:hover {
+  background: color-mix(in srgb, var(--panel) 64%, transparent);
+}
+
+.gesture-nav-current-button[data-active='true'],
+.gesture-nav-drawer-button[data-active='true'] {
+  color: color-mix(in srgb, var(--accent) 88%, var(--text));
+  background: transparent;
+  border-color: color-mix(in srgb, var(--accent) 72%, transparent);
+}
+
+.gesture-nav-current-button[data-active='true']:hover,
+.gesture-nav-drawer-button[data-active='true']:hover {
+  color: color-mix(in srgb, var(--accent) 88%, var(--text));
+  background: transparent;
+}
+
+.gesture-nav-drawer-button:active {
+  transform: scale(0.97);
 }
 
 .gesture-nav-option {
@@ -804,8 +871,12 @@
   transform: translate3d(0, -56px, 0);
 }
 
-.gesture-nav-option-file {
+.floating-control-stack[data-side='right'] .gesture-nav-option-file {
   transform: translate3d(-56px, 0, 0);
+}
+
+.floating-control-stack[data-side='left'] .gesture-nav-option-file {
+  transform: translate3d(56px, 0, 0);
 }
 
 .gesture-nav-option-git {

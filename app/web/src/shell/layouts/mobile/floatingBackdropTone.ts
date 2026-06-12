@@ -21,7 +21,7 @@ type SampleRect = {
 
 export const FLOATING_BACKDROP_TONE_THROTTLE_MS = 5000;
 export const FLOATING_BACKDROP_CONTROL_SELECTOR =
-  '.floating-nav-group, .drawer-toggle-bubble, .port-relay-floating-bubble';
+  '.floating-nav-group, .drawer-toggle-bubble, .gesture-nav-pill, .port-relay-floating-bubble';
 
 const LIGHT_LUMINANCE_THRESHOLD = 0.72;
 const DARK_LUMINANCE_THRESHOLD = 0.42;

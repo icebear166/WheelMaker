@@ -34,6 +34,7 @@ describe('floating backdrop tone detection', () => {
   test('samples the primary nav, drawer, and relay floating button surfaces', () => {
     expect(FLOATING_BACKDROP_CONTROL_SELECTOR).toContain('.floating-nav-group');
     expect(FLOATING_BACKDROP_CONTROL_SELECTOR).toContain('.drawer-toggle-bubble');
+    expect(FLOATING_BACKDROP_CONTROL_SELECTOR).toContain('.gesture-nav-pill');
     expect(FLOATING_BACKDROP_CONTROL_SELECTOR).toContain('.port-relay-floating-bubble');
   });
 });

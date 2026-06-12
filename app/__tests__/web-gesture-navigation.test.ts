@@ -108,7 +108,12 @@ describe('gesture navigation', () => {
     expect(settingsRoot).toContain('onChange={e => setGestureNavigation(e.target.checked)}');
     expect(main).toContain("gestureNavigation ? (");
     expect(main).toContain('className="gesture-nav-control"');
-    expect(main).toContain('className="gesture-nav-badge"');
+    expect(main).toContain('className="gesture-nav-pill"');
+    expect(main).toContain('className="gesture-nav-button gesture-nav-current-button"');
+    expect(main).toContain('onClick={handleGestureNavigationCurrentSelect}');
+    expect(main).toContain('className="gesture-nav-button gesture-nav-drawer-button"');
+    expect(main).toContain('onClick={handleFloatingDrawerToggle}');
+    expect(main).not.toContain('className="gesture-nav-badge"');
     expect(main).toContain('className="floating-nav-group"');
     expect(main).toContain('data-gesture-nav-tab="chat"');
     expect(main).toContain('data-gesture-nav-tab="file"');
@@ -121,19 +126,24 @@ describe('gesture navigation', () => {
     expect(main).toContain("codicon-source-control");
     expect(main).toContain('handleFloatingDrawerToggle');
     expect(main).toContain('handleFloatingNavSelect');
+    expect(main).toContain('handleGestureNavigationCurrentSelect');
     expect(main).toContain('GESTURE_MOVE_LONG_PRESS_MS');
   });
 
-  test('styles gesture navigation as circular drawer-centered controls', () => {
+  test('styles gesture navigation as a collapsed pill and expanded drawer-centered controls', () => {
     const styles = readStyles();
 
     expect(styles).toContain('.gesture-nav-control');
+    expect(styles).toContain('.gesture-nav-pill');
     expect(styles).toContain('.gesture-nav-button');
-    expect(styles).toContain('.gesture-nav-badge');
+    expect(styles).toContain('.gesture-nav-current-button');
+    expect(styles).not.toContain('.gesture-nav-badge');
     expect(styles).toContain('.gesture-nav-option');
     expect(styles).toContain('.gesture-nav-option-chat');
     expect(styles).toContain('.gesture-nav-option-file');
     expect(styles).toContain('.gesture-nav-option-git');
     expect(styles).toContain(".gesture-nav-option[data-candidate='true']");
+    expect(styles).toContain(".floating-control-stack[data-side='right'] .gesture-nav-option-file");
+    expect(styles).toContain(".floating-control-stack[data-side='left'] .gesture-nav-option-file");
   });
 });
