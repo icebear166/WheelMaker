@@ -1071,6 +1071,57 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, #f46d6d 18%, transparent);
 }
 
+.draft-session-row-wrap.has-dismiss .draft-session-row {
+  padding-right: 27px;
+}
+
+.draft-session-row.creating,
+.draft-session-row.sendingFirstPrompt {
+  color: color-mix(in srgb, var(--text) 82%, transparent);
+}
+
+.draft-session-row.failed {
+  color: color-mix(in srgb, #f46d6d 74%, var(--text));
+}
+
+.session-state-marker.draft {
+  font-size: 11px;
+}
+
+.session-state-marker.draft.creating,
+.session-state-marker.draft.sendingFirstPrompt {
+  color: #68a8e8;
+}
+
+.session-state-marker.draft.failed {
+  color: #f46d6d;
+}
+
+.draft-session-dismiss {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: color-mix(in srgb, var(--text) 54%, transparent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
+  cursor: pointer;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.draft-session-dismiss:hover {
+  background: color-mix(in srgb, #f46d6d 13%, var(--hover));
+  color: #f46d6d;
+}
+
 .project-session-action-menu {
   position: fixed;
   top: 0;

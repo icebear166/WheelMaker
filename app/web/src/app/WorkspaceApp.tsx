@@ -56,6 +56,15 @@ import {
   type ChatSessionVisualState,
 } from '../chat/session/chatSessionState';
 import {
+  createDraftChatSession,
+  isDraftChatSessionId,
+  markDraftChatSessionFailed,
+  markDraftChatSessionSending,
+  removeDraftChatSession,
+  resolveDraftReplacementSelection,
+  type DraftChatSession,
+} from '../chat/session/chatDraftSessions';
+import {
   chatSessionKeyFromParts,
   decodeChatSessionKey,
   encodeChatSessionKey,
@@ -3009,6 +3018,9 @@ export function App() {
   const chatSessionsRef = useRef<RegistryChatSession[]>([]);
   const [projectSessionsByProjectId, setProjectSessionsByProjectId] = useState<Record<string, RegistryChatSession[]>>({});
   const projectSessionsByProjectIdRef = useRef<Record<string, RegistryChatSession[]>>({});
+  const [draftSessionsByProjectId, setDraftSessionsByProjectId] = useState<Record<string, DraftChatSession[]>>({});
+  const draftSessionsByProjectIdRef = useRef<Record<string, DraftChatSession[]>>({});
+  const draftSessionCreatePromisesRef = useRef<Record<string, Promise<RegistryChatSession>>>({});
   const [sessionSearchOpen, setSessionSearchOpen] = useState(false);
   const [sessionSearchInput, setSessionSearchInput] = useState('');
   const sessionSearchInputRef = useRef<HTMLInputElement | null>(null);
@@ -3192,6 +3204,17 @@ export function App() {
     [chatSessions, projectId, projectSessionsByProjectId, selectedChatKey],
   );
 
+  const selectedDraftChatSession = useMemo(
+    () => {
+      if (!selectedChatKey || !isDraftChatSessionId(selectedChatKey.sessionId)) {
+        return undefined;
+      }
+      return draftSessionsByProjectId[selectedChatKey.projectId]
+        ?.find(item => item.draftId === selectedChatKey.sessionId);
+    },
+    [draftSessionsByProjectId, selectedChatKey],
+  );
+
   const selectedChatConfigOptions = useMemo(() => {
     return selectedChatSession?.configOptions ?? [];
   }, [selectedChatSession]);
@@ -3339,12 +3362,211 @@ export function App() {
     sessionId: string,
   ): string => encodeChatSessionKey(chatSessionKeyFromParts(activeProjectId, sessionId));
 
+  const commitDraftSessionsByProjectId = (next: Record<string, DraftChatSession[]>) => {
+    draftSessionsByProjectIdRef.current = next;
+    setDraftSessionsByProjectId(next);
+  };
+
+  const updateProjectDraftSessions = (
+    targetProjectId: string,
+    updater: (drafts: DraftChatSession[]) => DraftChatSession[],
+  ) => {
+    if (!targetProjectId) {
+      return;
+    }
+    const currentMap = draftSessionsByProjectIdRef.current;
+    const currentDrafts = currentMap[targetProjectId] ?? [];
+    const nextDrafts = updater(currentDrafts);
+    if (nextDrafts === currentDrafts) {
+      return;
+    }
+    const nextMap = {...currentMap};
+    if (nextDrafts.length > 0) {
+      nextMap[targetProjectId] = nextDrafts;
+    } else {
+      delete nextMap[targetProjectId];
+    }
+    commitDraftSessionsByProjectId(nextMap);
+  };
+
+  const updateDraftChatSession = (
+    targetProjectId: string,
+    draftId: string,
+    updater: (draft: DraftChatSession) => DraftChatSession,
+  ) => {
+    updateProjectDraftSessions(targetProjectId, drafts => {
+      let changed = false;
+      const next = drafts.map(draft => {
+        if (draft.draftId !== draftId) {
+          return draft;
+        }
+        changed = true;
+        return updater(draft);
+      });
+      return changed ? next : drafts;
+    });
+  };
+
+  const findDraftChatSession = (
+    targetProjectId: string,
+    draftId: string,
+  ): DraftChatSession | undefined => (
+    draftSessionsByProjectIdRef.current[targetProjectId]
+      ?.find(item => item.draftId === draftId)
+  );
+
+  const registerCreatedProjectSession = (
+    targetProjectId: string,
+    session: RegistryChatSession,
+  ) => {
+    workspaceStore.rememberChatSession(targetProjectId, session, {turnIndex: 0});
+    setProjectSessionsByProjectId(prev => ({
+      ...prev,
+      [targetProjectId]: mergeChatSession(prev[targetProjectId] ?? [], session),
+    }));
+    const runtimeKey = buildChatRuntimeKey(targetProjectId, session.sessionId);
+    chatMessageStoreRef.current[runtimeKey] = chatMessageStoreRef.current[runtimeKey] ?? [];
+    chatTurnStoreRef.current[runtimeKey] = chatTurnStoreRef.current[runtimeKey] ?? createEmptyChatTurnStore();
+    chatFinishedCursorRef.current[runtimeKey] = chatFinishedCursorRef.current[runtimeKey] ?? 0;
+    if (targetProjectId === projectIdRef.current) {
+      setChatSessions(prev => mergeChatSession(prev, session));
+    }
+  };
+
+  const moveChatRuntimeState = (
+    fromRuntimeKey: string,
+    toRuntimeKey: string,
+    sessionId: string,
+  ) => {
+    if (!fromRuntimeKey || !toRuntimeKey || fromRuntimeKey === toRuntimeKey) {
+      return;
+    }
+    if (chatMessageStoreRef.current[fromRuntimeKey] && !chatMessageStoreRef.current[toRuntimeKey]) {
+      chatMessageStoreRef.current[toRuntimeKey] = chatMessageStoreRef.current[fromRuntimeKey];
+    }
+    if (chatTurnStoreRef.current[fromRuntimeKey] && !chatTurnStoreRef.current[toRuntimeKey]) {
+      chatTurnStoreRef.current[toRuntimeKey] = chatTurnStoreRef.current[fromRuntimeKey];
+    }
+    if (
+      chatFinishedCursorRef.current[fromRuntimeKey] !== undefined &&
+      chatFinishedCursorRef.current[toRuntimeKey] === undefined
+    ) {
+      chatFinishedCursorRef.current[toRuntimeKey] = chatFinishedCursorRef.current[fromRuntimeKey];
+    }
+    movePendingChatPrompt(fromRuntimeKey, toRuntimeKey, sessionId);
+  };
+
+  const moveChatComposerDraft = (fromDraftKey: string, toDraftKey: string) => {
+    if (!fromDraftKey || !toDraftKey || fromDraftKey === toDraftKey) {
+      return;
+    }
+    const sourceDraft = chatComposerDraftsRef.current[fromDraftKey];
+    if (sourceDraft) {
+      const nextDrafts = {...chatComposerDraftsRef.current};
+      if (!nextDrafts[toDraftKey]) {
+        nextDrafts[toDraftKey] = sourceDraft;
+      }
+      delete nextDrafts[fromDraftKey];
+      chatComposerDraftsRef.current = nextDrafts;
+      setChatComposerDrafts(nextDrafts);
+    }
+    const sourceGeneration = chatDraftGenerationRef.current[fromDraftKey];
+    if (sourceGeneration !== undefined && chatDraftGenerationRef.current[toDraftKey] === undefined) {
+      chatDraftGenerationRef.current[toDraftKey] = sourceGeneration;
+    }
+    delete chatDraftGenerationRef.current[fromDraftKey];
+    if (currentChatDraftKeyRef.current === fromDraftKey) {
+      currentChatDraftKeyRef.current = toDraftKey;
+    }
+  };
+
+  const applyDraftSessionCreateSuccess = (
+    targetProjectId: string,
+    draft: DraftChatSession,
+    session: RegistryChatSession,
+  ) => {
+    registerCreatedProjectSession(targetProjectId, session);
+    const draftRuntimeKey = buildChatRuntimeKey(targetProjectId, draft.draftId);
+    const realRuntimeKey = buildChatRuntimeKey(targetProjectId, session.sessionId);
+    moveChatRuntimeState(draftRuntimeKey, realRuntimeKey, session.sessionId);
+    moveChatComposerDraft(
+      buildChatDraftKey(targetProjectId, draft.draftId),
+      buildChatDraftKey(targetProjectId, session.sessionId),
+    );
+    updateProjectDraftSessions(
+      targetProjectId,
+      drafts => removeDraftChatSession(drafts, draft.draftId),
+    );
+    const currentSelection = selectedChatKeyRef.current;
+    const nextSelection = resolveDraftReplacementSelection({
+      currentSelectedKey: currentSelection,
+      draft,
+      realSessionId: session.sessionId,
+    });
+    if (encodeChatSessionKey(nextSelection) !== encodeChatSessionKey(currentSelection)) {
+      applySelectedChatKey(nextSelection);
+      workspaceStore.rememberSelectedChatSessionKey(nextSelection);
+      setVisibleChatMessagesForRuntimeKey(
+        realRuntimeKey,
+        chatMessageStoreRef.current[realRuntimeKey] ?? [],
+        {resetToLatest: true},
+      );
+    }
+  };
+
+  const startDraftSessionCreate = (
+    targetProjectId: string,
+    agentType: string,
+    draftId: string,
+  ): Promise<RegistryChatSession> => {
+    const createKey = buildChatRuntimeKey(targetProjectId, draftId);
+    const existing = draftSessionCreatePromisesRef.current[createKey];
+    if (existing) {
+      return existing;
+    }
+    const draft = findDraftChatSession(targetProjectId, draftId);
+    if (!draft) {
+      return Promise.reject(new Error('Draft session is no longer available.'));
+    }
+    const promise = service.createProjectSession(targetProjectId, agentType, '')
+      .then(result => {
+        if (!result.ok || !result.session.sessionId) {
+          throw new Error('project session.create returned ok=false');
+        }
+        const latestDraft = findDraftChatSession(targetProjectId, draftId) ?? draft;
+        applyDraftSessionCreateSuccess(targetProjectId, latestDraft, result.session);
+        return result.session;
+      })
+      .catch(err => {
+        const message = err instanceof Error ? err.message : String(err);
+        updateDraftChatSession(
+          targetProjectId,
+          draftId,
+          current => markDraftChatSessionFailed(current, message),
+        );
+        throw err;
+      })
+      .finally(() => {
+        const next = {...draftSessionCreatePromisesRef.current};
+        delete next[createKey];
+        draftSessionCreatePromisesRef.current = next;
+      });
+    draftSessionCreatePromisesRef.current = {
+      ...draftSessionCreatePromisesRef.current,
+      [createKey]: promise,
+    };
+    return promise;
+  };
+
   const runtimeKeysFromChatStores = (): string[] =>
     Array.from(new Set([
       ...Object.keys(chatTurnStoreRef.current),
       ...Object.keys(chatMessageStoreRef.current),
       ...Object.keys(chatFinishedCursorRef.current),
-    ]));
+    ])).filter(runtimeKey => {
+      const key = decodeChatSessionKey(runtimeKey);
+      return !key || !isDraftChatSessionId(key.sessionId);
+    });
 
   const ensureChatTurnStore = (runtimeKey: string): ChatTurnStoreState => {
     const existing = chatTurnStoreRef.current[runtimeKey];
@@ -4512,6 +4734,9 @@ export function App() {
     projectSessionsByProjectIdRef.current = projectSessionsByProjectId;
   }, [projectSessionsByProjectId]);
   useEffect(() => {
+    draftSessionsByProjectIdRef.current = draftSessionsByProjectId;
+  }, [draftSessionsByProjectId]);
+  useEffect(() => {
     activeSessionSearchIdRef.current = activeSessionSearchId;
   }, [activeSessionSearchId]);
   useEffect(() => {
@@ -5637,10 +5862,11 @@ export function App() {
   );
   const selectedChatDisplayTitle = useMemo(
     () =>
+      selectedDraftChatSession?.title ||
       resolveChatSessionTitle(selectedChatSession?.title ?? '') ||
       selectedChatSession?.sessionId ||
       '',
-    [selectedChatSession],
+    [selectedChatSession, selectedDraftChatSession?.title],
   );
   const chatBreadcrumbLabel = useMemo(
     () => selectedChatDisplayTitle || 'No Selected Session',
@@ -9028,6 +9254,9 @@ export function App() {
       if (!key) {
         return Promise.resolve();
       }
+      if (isDraftChatSessionId(key.sessionId)) {
+        return Promise.resolve();
+      }
       const cursor = ensureChatTurnStore(runtimeKey).cursor.turnIndex;
       const selectionSnapshot = runtimeKey === selectedRuntimeKey ? runtimeKey : '';
       return chatReadRepairQueueRef.current.request(runtimeKey, cursor, async () => {
@@ -9746,6 +9975,55 @@ export function App() {
     }
   };
 
+  const resolveSelectedDraftSessionForSend = async (
+    selectedProjectId: string,
+    sessionId: string,
+    draftKey: string,
+  ): Promise<{
+    sessionId: string;
+    runtimeKey: string;
+    draftKey: string;
+    draftGeneration: number;
+    sentFromKey: ChatSessionKey;
+  }> => {
+    const existingKey = chatSessionKeyFromParts(selectedProjectId, sessionId);
+    if (!existingKey) {
+      throw new Error('Select or create a chat session first.');
+    }
+    const draft = findDraftChatSession(selectedProjectId, sessionId);
+    if (!draft) {
+      return {
+        sessionId,
+        runtimeKey: buildChatRuntimeKey(selectedProjectId, sessionId),
+        draftKey,
+        draftGeneration: getChatDraftGeneration(draftKey),
+        sentFromKey: existingKey,
+      };
+    }
+
+    updateDraftChatSession(
+      selectedProjectId,
+      draft.draftId,
+      current => markDraftChatSessionSending(current),
+    );
+    try {
+      const session = await startDraftSessionCreate(selectedProjectId, draft.agentType, draft.draftId);
+      const realSessionId = session.sessionId;
+      const realDraftKey = buildChatDraftKey(selectedProjectId, realSessionId);
+      return {
+        sessionId: realSessionId,
+        runtimeKey: buildChatRuntimeKey(selectedProjectId, realSessionId),
+        draftKey: realDraftKey,
+        draftGeneration: getChatDraftGeneration(realDraftKey),
+        sentFromKey: chatSessionKeyFromParts(selectedProjectId, realSessionId) ?? existingKey,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
+      throw err;
+    }
+  };
+
   const sendChatMessage = async (options: {
     textOverride?: string;
     attachmentsOverride?: ChatAttachment[];
@@ -9781,17 +10059,28 @@ export function App() {
       return;
     }
     const selectedProjectId = selectedKey.projectId;
-    const sessionId = selectedKey.sessionId;
+    let sessionId = selectedKey.sessionId;
     if (!sessionId) {
       setError('Select or create a chat session first.');
       return;
     }
-    const runtimeKey = buildChatRuntimeKey(selectedProjectId, sessionId);
-    const draftKey = currentChatDraftKeyRef.current;
-    const draftGeneration = getChatDraftGeneration(draftKey);
+    let runtimeKey = buildChatRuntimeKey(selectedProjectId, sessionId);
+    let draftKey = currentChatDraftKeyRef.current;
+    let draftGeneration = getChatDraftGeneration(draftKey);
+    let sentFromKey = selectedKey;
     let pendingRemembered = false;
     setChatSending(true);
     try {
+      const resolvedDraftSession = await resolveSelectedDraftSessionForSend(
+        selectedProjectId,
+        sessionId,
+        draftKey,
+      );
+      sessionId = resolvedDraftSession.sessionId;
+      runtimeKey = resolvedDraftSession.runtimeKey;
+      draftKey = resolvedDraftSession.draftKey;
+      draftGeneration = resolvedDraftSession.draftGeneration;
+      sentFromKey = resolvedDraftSession.sentFromKey;
       const uploadedAttachments = options.blocksOverride ? sourceAttachments : await uploadChatAttachmentsForSend(
         sourceAttachments,
         selectedProjectId,
@@ -9836,7 +10125,7 @@ export function App() {
         movePendingChatPrompt(runtimeKey, buildChatRuntimeKey(selectedProjectId, nextSessionId), nextSessionId);
       }
       const nextSelectedKey = chatSessionKeyFromParts(selectedProjectId, nextSessionId);
-      if (shouldApplySentChatSelection(selectedChatKeyRef.current, selectedKey)) {
+      if (shouldApplySentChatSelection(selectedChatKeyRef.current, sentFromKey)) {
         applySelectedChatKey(nextSelectedKey);
         workspaceStore.rememberSelectedChatSessionKey(nextSelectedKey);
       }
@@ -12867,6 +13156,39 @@ export function App() {
     }
   };
 
+  const selectDraftChatSession = useCallback((
+    targetProjectId: string,
+    draftId: string,
+    options?: {closeMobileDrawer?: boolean},
+  ): boolean => {
+    if (!targetProjectId || !draftId || !findDraftChatSession(targetProjectId, draftId)) {
+      return false;
+    }
+    const nextSelectedKey = chatSessionKeyFromParts(targetProjectId, draftId);
+    if (!nextSelectedKey) {
+      return false;
+    }
+    syncWorkspaceProject(targetProjectId, {reason: 'chat'}).catch(() => undefined);
+    setWideProjectActionMenu(null);
+    setMobileProjectActionMenu(null);
+    setProjectSessionActionMenu(null);
+    if (options?.closeMobileDrawer) {
+      setDrawerOpen(false);
+    }
+    setTab('chat');
+    applySelectedChatKey(nextSelectedKey);
+    const runtimeKey = encodeChatSessionKey(nextSelectedKey);
+    chatMessageStoreRef.current[runtimeKey] = chatMessageStoreRef.current[runtimeKey] ?? [];
+    chatTurnStoreRef.current[runtimeKey] = chatTurnStoreRef.current[runtimeKey] ?? createEmptyChatTurnStore();
+    chatFinishedCursorRef.current[runtimeKey] = chatFinishedCursorRef.current[runtimeKey] ?? 0;
+    setVisibleChatMessagesForRuntimeKey(
+      runtimeKey,
+      chatMessageStoreRef.current[runtimeKey] ?? [],
+      {resetToLatest: true},
+    );
+    return true;
+  }, [setDrawerOpen, setTab, setVisibleChatMessagesForRuntimeKey, syncWorkspaceProject]);
+
   const selectProjectChatSession = async (
     targetProjectId: string,
     sessionId: string,
@@ -13130,6 +13452,102 @@ export function App() {
     }));
   };
 
+  const dismissDraftChatSession = (targetProjectId: string, draftId: string) => {
+    if (!targetProjectId || !draftId) {
+      return;
+    }
+    const runtimeKey = buildChatRuntimeKey(targetProjectId, draftId);
+    const draftKey = buildChatDraftKey(targetProjectId, draftId);
+    resetChatComposerDraft(draftKey);
+    updateProjectDraftSessions(
+      targetProjectId,
+      drafts => removeDraftChatSession(drafts, draftId),
+    );
+    const nextPromises = {...draftSessionCreatePromisesRef.current};
+    delete nextPromises[runtimeKey];
+    draftSessionCreatePromisesRef.current = nextPromises;
+    if (encodeChatSessionKey(selectedChatKeyRef.current) === runtimeKey) {
+      applySelectedChatKey(null);
+      setVisibleChatMessagesForRuntimeKey('', [], {resetToLatest: true});
+    }
+  };
+
+  const renderDraftSessionStateMarker = (draft: DraftChatSession) => {
+    const failed = draft.status === 'failed';
+    const title =
+      draft.status === 'sendingFirstPrompt'
+        ? 'Creating session and sending first prompt'
+        : failed
+          ? draft.errorMessage || 'Create failed'
+          : 'Creating session';
+    return (
+      <span className={`session-state-marker draft ${draft.status}`} title={title}>
+        <span className={`codicon ${
+          failed
+            ? 'codicon-error'
+            : 'codicon-loading codicon-modifier-spin'
+        }`} />
+      </span>
+    );
+  };
+
+  const renderDraftSessionRow = (
+    targetProjectId: string,
+    draft: DraftChatSession,
+    mobile: boolean,
+  ) => {
+    const selected = selectedChatEncodedKey === buildChatRuntimeKey(targetProjectId, draft.draftId);
+    const failed = draft.status === 'failed';
+    const displaySessionAgent = normalizeAgentTypeName(draft.agentType);
+    const statusLabel =
+      draft.status === 'sendingFirstPrompt'
+        ? 'Sending...'
+        : failed
+          ? 'Failed'
+          : 'Creating...';
+    return (
+      <div
+        key={`${targetProjectId}:${mobile ? 'mobile-draft' : 'wide-draft'}:${draft.draftId}`}
+        className={`project-session-row-wrap draft-session-row-wrap${failed ? ' failed has-dismiss' : ''}`}
+      >
+        <button
+          type="button"
+          className={`wide-session-row draft-session-row ${draft.status}${mobile ? ' mobile-session-row' : ''}${selected ? ' selected' : ''}`}
+          title={failed ? draft.errorMessage : draft.title}
+          onClick={() => {
+            selectDraftChatSession(targetProjectId, draft.draftId, {
+              closeMobileDrawer: mobile,
+            });
+          }}
+        >
+          {renderDraftSessionStateMarker(draft)}
+          <span className="wide-session-title">
+            {draft.title}
+          </span>
+          {displaySessionAgent ? (
+            <span className={`wide-session-agent-tag ${tagVariantClass('wide-session-agent', draft.agentType)}`}>
+              {displaySessionAgent}
+            </span>
+          ) : null}
+          <span className="wide-session-time" title={failed ? draft.errorMessage : draft.createdAt}>
+            {statusLabel}
+          </span>
+        </button>
+        {failed ? (
+          <button
+            type="button"
+            className="draft-session-dismiss"
+            title="Dismiss"
+            aria-label="Dismiss draft session"
+            onClick={() => dismissDraftChatSession(targetProjectId, draft.draftId)}
+          >
+            <span className="codicon codicon-close" />
+          </button>
+        ) : null}
+      </div>
+    );
+  };
+
   const renderProjectSessionRow = (
     targetProjectId: string,
     session: RegistryChatSession,
@@ -13198,6 +13616,7 @@ export function App() {
     projectSessions: RegistryChatSession[],
     mobile: boolean,
   ) => {
+    const projectDraftSessions = draftSessionsByProjectId[targetProjectId] ?? [];
     const split = splitOlderProjectSessions({
       sessions: projectSessions,
       nowMs: Date.now(),
@@ -13207,6 +13626,7 @@ export function App() {
     const hiddenOlderCount = split.hiddenOlderCount;
     return (
       <>
+        {projectDraftSessions.map(draft => renderDraftSessionRow(targetProjectId, draft, mobile))}
         {split.visibleSessions.map(session => renderProjectSessionRow(targetProjectId, session, mobile))}
         {split.showToggle ? (
           <button
@@ -13563,24 +13983,28 @@ export function App() {
       setError('No agent selected for new session');
       return false;
     }
+    if (agentType.toLowerCase() === 'codex') {
+      const draft = createDraftChatSession({
+        projectId: targetProjectId,
+        agentType,
+      });
+      updateProjectDraftSessions(targetProjectId, drafts => [draft, ...drafts]);
+      const runtimeKey = buildChatRuntimeKey(targetProjectId, draft.draftId);
+      chatMessageStoreRef.current[runtimeKey] = [];
+      chatTurnStoreRef.current[runtimeKey] = createEmptyChatTurnStore();
+      chatFinishedCursorRef.current[runtimeKey] = 0;
+      selectDraftChatSession(targetProjectId, draft.draftId, options);
+      startDraftSessionCreate(targetProjectId, agentType, draft.draftId)
+        .catch(err => setError(err instanceof Error ? err.message : String(err)));
+      return true;
+    }
     try {
       const result = await service.createProjectSession(targetProjectId, agentType, '');
       if (!result.ok || !result.session.sessionId) {
         throw new Error('project session.create returned ok=false');
       }
       const session = result.session;
-      workspaceStore.rememberChatSession(targetProjectId, session, {turnIndex: 0});
-      setProjectSessionsByProjectId(prev => ({
-        ...prev,
-        [targetProjectId]: mergeChatSession(prev[targetProjectId] ?? [], session),
-      }));
-      const runtimeKey = buildChatRuntimeKey(targetProjectId, session.sessionId);
-      chatMessageStoreRef.current[runtimeKey] = [];
-      chatTurnStoreRef.current[runtimeKey] = createEmptyChatTurnStore();
-      chatFinishedCursorRef.current[runtimeKey] = 0;
-      if (targetProjectId === projectIdRef.current) {
-        setChatSessions(prev => mergeChatSession(prev, session));
-      }
+      registerCreatedProjectSession(targetProjectId, session);
       await selectProjectChatSession(targetProjectId, session.sessionId, options);
       return true;
     } catch (err) {
@@ -14552,7 +14976,7 @@ export function App() {
 
   const renderCCSwitchSettingsDetail = (options?: SettingsDetailShellOptions) => {
     const activeHub = (currentProject?.hubId || 'unknown').trim() || 'unknown';
-    const activeAgent = (selectedChatSession?.agentType || '').trim() || '-';
+    const activeAgent = (selectedDraftChatSession?.agentType || selectedChatSession?.agentType || '').trim() || '-';
     const profileCards = projects
       .map(projectItem => {
         const projectHub = (projectItem.hubId || 'local').trim() || 'local';
