@@ -3150,7 +3150,6 @@ export function App() {
   const [chatConfigMenuOptionId, setChatConfigMenuOptionId] = useState('');
   const [chatHubMenuOpen, setChatHubMenuOpen] = useState(false);
   const [chatHubColorMenuHubId, setChatHubColorMenuHubId] = useState('');
-  const [chatHubColorMenuPos, setChatHubColorMenuPos] = useState<{top: number; left: number; above: boolean}>({top: 0, left: 0, above: false});
   const chatHubMenuRef = useRef<HTMLDivElement | null>(null);
   const [chatQuickSwitchMenuOpen, setChatQuickSwitchMenuOpen] = useState(false);
   const [chatQuickSwitchMenuPlacement, setChatQuickSwitchMenuPlacement] = useState<ChatQuickSwitchMenuPlacement>({kind: 'mobile'});
@@ -5545,7 +5544,7 @@ export function App() {
       if (!chatHubMenuRef.current.contains(event.target as Node)) {
         setChatHubMenuOpen(false);
         setChatHubColorMenuHubId('');
-        setChatHubColorMenuPos({top: 0, left: 0, above: false});
+
         return;
       }
       const targetElement = event.target instanceof Element ? event.target : null;
@@ -5556,30 +5555,21 @@ export function App() {
         !targetElement.closest('.chat-hub-color-square')
       ) {
         setChatHubColorMenuHubId('');
-        setChatHubColorMenuPos({top: 0, left: 0, above: false});
+
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setChatHubMenuOpen(false);
         setChatHubColorMenuHubId('');
-        setChatHubColorMenuPos({top: 0, left: 0, above: false});
+
       }
     };
     window.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('keydown', onKeyDown);
-    const popoverEl = chatHubMenuRef.current?.querySelector('.chat-hub-popover');
-    const onScroll = () => {
-      if (chatHubColorMenuHubId) {
-        setChatHubColorMenuHubId('');
-        setChatHubColorMenuPos({top: 0, left: 0, above: false});
-      }
-    };
-    popoverEl?.addEventListener('scroll', onScroll);
     return () => {
       window.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('keydown', onKeyDown);
-      popoverEl?.removeEventListener('scroll', onScroll);
     };
   }, [chatHubColorMenuHubId, chatHubMenuOpen]);
 
@@ -5587,7 +5577,6 @@ export function App() {
     if (tab !== 'chat' || sidebarSettingsOpen) {
       setChatHubMenuOpen(false);
       setChatHubColorMenuHubId('');
-      setChatHubColorMenuPos({top: 0, left: 0, above: false});
     }
   }, [sidebarSettingsOpen, tab]);
 
@@ -5901,7 +5890,6 @@ export function App() {
     setChatConfigOverflowOpen(false);
     setChatHubMenuOpen(false);
     setChatHubColorMenuHubId('');
-    setChatHubColorMenuPos({top: 0, left: 0, above: false});
   }, [setChatConfigOverflowOpen]);
   const handleMobileBreadcrumbProjectClick = useCallback(() => {
     closeMobileDrawerCompanionOverlays();
@@ -5948,7 +5936,7 @@ export function App() {
             setChatConfigMenuOptionId('');
             setChatConfigOverflowOpen(false);
             setChatHubColorMenuHubId('');
-            setChatHubColorMenuPos({top: 0, left: 0, above: false});
+    
             setChatHubMenuOpen(open => !open);
           }}
         >
@@ -5959,7 +5947,7 @@ export function App() {
           <span className="codicon codicon-chevron-down" aria-hidden="true" />
         </button>
         {chatHubMenuOpen ? (
-          <div className="chat-hub-popover" role="dialog" aria-label="Hub and project display preferences">
+          <div className={`chat-hub-popover${chatHubColorMenuHubId ? ' no-overflow' : ''}`} role="dialog" aria-label="Hub and project display preferences">
             {registryHubs.length > 0 ? (
               registryHubs.map(hub => {
                 const treeItem = chatHubTreeItems.find(item => item.hubId === hub.hubId) ?? {hubId: hub.hubId, projects: []};
@@ -5996,24 +5984,7 @@ export function App() {
                         style={hubAccentStyle(hub.hubId)}
                         onClick={event => {
                           event.stopPropagation();
-                          setChatHubColorMenuHubId(current => {
-                            if (current === hub.hubId) return '';
-                            const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-                            const paletteW = 248;
-                            const paletteH = 290;
-                            const margin = 8;
-                            let left = rect.right - paletteW;
-                            let top = rect.bottom + margin;
-                            let above = false;
-                            if (left < margin) left = margin;
-                            if (left + paletteW > window.innerWidth - margin) left = window.innerWidth - margin - paletteW;
-                            if (top + paletteH > window.innerHeight - margin) {
-                              top = rect.top - paletteH - margin;
-                              above = true;
-                            }
-                            setChatHubColorMenuPos({top, left, above});
-                            return hub.hubId;
-                          });
+                          setChatHubColorMenuHubId(current => (current === hub.hubId ? '' : hub.hubId));
                         }}
                       >
                         <span className="chat-hub-color-square-fill" aria-hidden="true" />
@@ -6023,8 +5994,7 @@ export function App() {
                       </span>
                     </div>
                     {colorMenuOpen ? (
-                      <div className={`chat-hub-color-palette${chatHubColorMenuPos.above ? ' palette-above' : ''}`} aria-label={`Color options for ${hub.hubId}`}
-                        style={{top: `${chatHubColorMenuPos.top}px`, left: `${chatHubColorMenuPos.left}px`}}>
+                      <div className="chat-hub-color-palette" aria-label={`Color options for ${hub.hubId}`}>
                         <div className="chat-hub-color-grid">
                           {HUB_COLOR_PRESETS.map(color => {
                             const defaultSwatch = color === defaultHubColor;
