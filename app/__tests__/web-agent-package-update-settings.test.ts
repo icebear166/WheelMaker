@@ -213,6 +213,51 @@ describe('agent package update settings UI source structure', () => {
     expect(updateEntryEffect).not.toContain('refreshAndroidApkUpdate().catch(() => undefined);');
   });
 
+  test('updates each Update page hub scan section as its request settles', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = fs
+      .readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8')
+      .replace(/\r\n/g, '\n');
+
+    const wheelMakerStart = mainTsx.indexOf('const refreshWheelMakerUpdates = useCallback');
+    const wheelMakerEnd = mainTsx.indexOf('const refreshAndroidApkUpdate = useCallback', wheelMakerStart);
+    expect(wheelMakerStart).toBeGreaterThanOrEqual(0);
+    expect(wheelMakerEnd).toBeGreaterThan(wheelMakerStart);
+    const wheelMakerBlock = mainTsx.slice(wheelMakerStart, wheelMakerEnd);
+    expect(wheelMakerBlock).toContain('await Promise.all(hubIds.map(async hubId => {');
+    expect(wheelMakerBlock).not.toContain('const responses = await Promise.all(hubIds.map');
+    expect(wheelMakerBlock).not.toContain('responses.forEach(entry =>');
+    const wheelMakerRequestIndex = wheelMakerBlock.indexOf('const result = await service.queryWheelMakerUpdate(hubId, options);');
+    const wheelMakerUpdateIndex = wheelMakerBlock.indexOf('setWheelMakerUpdateHubs(prev => ({', wheelMakerRequestIndex);
+    expect(wheelMakerUpdateIndex).toBeGreaterThan(wheelMakerRequestIndex);
+
+    const agentStart = mainTsx.indexOf('const refreshAgentPackages = useCallback');
+    const agentEnd = mainTsx.indexOf('const refreshProjectFileIndexes = useCallback', agentStart);
+    expect(agentStart).toBeGreaterThanOrEqual(0);
+    expect(agentEnd).toBeGreaterThan(agentStart);
+    const agentBlock = mainTsx.slice(agentStart, agentEnd);
+    expect(agentBlock).toContain('const runningHubIds = new Set<string>();');
+    expect(agentBlock).toContain('await Promise.all(hubIds.map(async hubId => {');
+    expect(agentBlock).not.toContain('const responses = await Promise.all(hubIds.map');
+    expect(agentBlock).not.toContain('responses.forEach(entry =>');
+    const agentRequestIndex = agentBlock.indexOf('const result = await withAgentPackageTimeout(');
+    const agentUpdateIndex = agentBlock.indexOf('setAgentPackageHubs(prev => ({', agentRequestIndex);
+    expect(agentUpdateIndex).toBeGreaterThan(agentRequestIndex);
+
+    const projectIndexStart = mainTsx.indexOf('const refreshProjectFileIndexes = useCallback');
+    const projectIndexEnd = mainTsx.indexOf('useEffect(() => {\n    refreshWheelMakerUpdatesRef.current = refreshWheelMakerUpdates;', projectIndexStart);
+    expect(projectIndexStart).toBeGreaterThanOrEqual(0);
+    expect(projectIndexEnd).toBeGreaterThan(projectIndexStart);
+    const projectIndexBlock = mainTsx.slice(projectIndexStart, projectIndexEnd);
+    expect(projectIndexBlock).toContain('const runningHubIds = new Set<string>();');
+    expect(projectIndexBlock).toContain('await Promise.all(ids.map(async hubId => {');
+    expect(projectIndexBlock).not.toContain('const responses = await Promise.all(ids.map');
+    expect(projectIndexBlock).not.toContain('responses.forEach(entry =>');
+    const projectRequestIndex = projectIndexBlock.indexOf('const result = await service.getFileIndexStatus(hubId);');
+    const projectUpdateIndex = projectIndexBlock.indexOf('setProjectIndexByHubId(prev => ({', projectRequestIndex);
+    expect(projectUpdateIndex).toBeGreaterThan(projectRequestIndex);
+  });
+
   test('does not use one hub package operation to disable every hub action', () => {
     const projectRoot = path.join(__dirname, '..');
     const detailTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'UpdateSettingsDetail.tsx'), 'utf8');

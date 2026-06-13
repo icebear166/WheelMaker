@@ -12054,44 +12054,33 @@ export function App() {
         });
         return next;
       });
-      const responses = await Promise.all(hubIds.map(async hubId => {
+      await Promise.all(hubIds.map(async hubId => {
         try {
           const result = await service.queryWheelMakerUpdate(hubId, options);
-          return {hubId, result};
+          setWheelMakerUpdateHubs(prev => ({
+            ...prev,
+            [hubId]: {
+              hubId,
+              loading: false,
+              error: result.ok ? '' : result.error || 'Update check failed.',
+              data: result,
+            },
+          }));
+          if (!options.force && result.remoteRefreshRunning) {
+            scheduleWheelMakerUpdatePoll(hubId);
+          }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          return {hubId, error: message};
+          setWheelMakerUpdateHubs(prev => ({
+            ...prev,
+            [hubId]: {
+              ...(prev[hubId] ?? {hubId, loading: false, error: '', data: null}),
+              loading: false,
+              error: message,
+            },
+          }));
         }
       }));
-      setWheelMakerUpdateHubs(prev => {
-        const next: Record<string, WheelMakerUpdateHubView> = {};
-        responses.forEach(entry => {
-          if ('error' in entry) {
-            next[entry.hubId] = {
-              hubId: entry.hubId,
-              loading: false,
-              error: entry.error || '',
-              data: prev[entry.hubId]?.data ?? null,
-            };
-            return;
-          }
-          next[entry.hubId] = {
-            hubId: entry.hubId,
-            loading: false,
-            error: entry.result.ok ? '' : entry.result.error || 'Update check failed.',
-            data: entry.result,
-          };
-        });
-        return next;
-      });
-      if (!options.force) {
-        const remoteRefreshingHubIds = responses
-          .filter((entry): entry is {hubId: string; result: RegistryWheelMakerUpdateResponse} => !('error' in entry) && entry.result.remoteRefreshRunning === true)
-          .map(entry => entry.hubId);
-        if (remoteRefreshingHubIds.length > 0) {
-          scheduleWheelMakerUpdatePoll(remoteRefreshingHubIds);
-        }
-      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setWheelMakerUpdatesError(message);
@@ -12198,35 +12187,16 @@ export function App() {
         });
         return next;
       });
-      const responses = await Promise.all(hubIds.map(async hubId => {
+      const runningHubIds = new Set<string>();
+      await Promise.all(hubIds.map(async hubId => {
         try {
           const result = await withAgentPackageTimeout(
             service.scanNpmPackages(hubId),
             AGENT_PACKAGE_SCAN_TIMEOUT_MS,
             `${hubId} npm package scan timed out`,
           );
-          return {hubId, result};
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          return {hubId, error: message};
-        }
-      }));
-      setAgentPackageHubs(prev => {
-        const next: Record<string, AgentPackageHubView> = {};
-        responses.forEach(entry => {
-          if ('error' in entry) {
-            next[entry.hubId] = {
-              hubId: entry.hubId,
-              loading: false,
-              error: entry.error || '',
-              updatedAt: prev[entry.hubId]?.updatedAt || '',
-              hub: prev[entry.hubId]?.hub ?? null,
-              operation: prev[entry.hubId]?.operation ?? null,
-            };
-            return;
-          }
-          const hub = entry.result.hub ?? {
-            hubId: entry.hubId,
+          const hub = result.hub ?? {
+            hubId,
             nodeVersion: '',
             npmVersion: '',
             npmPrefix: '',
@@ -12234,18 +12204,36 @@ export function App() {
             error: '',
             packages: [],
           };
-          next[entry.hubId] = {
-            hubId: entry.hubId,
-            loading: false,
-            error: entry.result.ok ? '' : hub.error || 'Scan failed.',
-            updatedAt: entry.result.updatedAt || '',
-            hub,
-            operation: entry.result.operation ?? prev[entry.hubId]?.operation ?? null,
-          };
-        });
-        return next;
-      });
-      if (responses.some(entry => !('error' in entry) && entry.result.operation?.running)) {
+          setAgentPackageHubs(prev => ({
+            ...prev,
+            [hubId]: {
+              hubId,
+              loading: false,
+              error: result.ok ? '' : hub.error || 'Scan failed.',
+              updatedAt: result.updatedAt || '',
+              hub,
+              operation: result.operation ?? prev[hubId]?.operation ?? null,
+            },
+          }));
+          if (result.operation?.running) {
+            runningHubIds.add(hubId);
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          setAgentPackageHubs(prev => ({
+            ...prev,
+            [hubId]: {
+              hubId,
+              loading: false,
+              error: message,
+              updatedAt: prev[hubId]?.updatedAt || '',
+              hub: prev[hubId]?.hub ?? null,
+              operation: prev[hubId]?.operation ?? null,
+            },
+          }));
+        }
+      }));
+      if (runningHubIds.size > 0) {
         agentPackageScanPollTimerRef.current = window.setTimeout(() => {
           agentPackageScanPollTimerRef.current = null;
           if (settingsDetailViewRef.current !== 'update') {
@@ -12278,37 +12266,33 @@ export function App() {
       setProjectIndexError('');
     }
     try {
-      const responses = await Promise.all(ids.map(async hubId => {
+      const errorsByHubId: Record<string, string> = {};
+      const runningHubIds = new Set<string>();
+      await Promise.all(ids.map(async hubId => {
         try {
           const result = await service.getFileIndexStatus(hubId);
-          return {hubId, result};
+          setProjectIndexByHubId(prev => ({
+            ...prev,
+            [hubId]: {
+              hubId: result.hubId ?? hubId,
+              projects: result.projects ?? [],
+            },
+          }));
+          if ((result.projects ?? []).some(project => project.running === true || project.status === 'scanning')) {
+            runningHubIds.add(hubId);
+          }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          return {hubId, error: message};
+          errorsByHubId[hubId] = message;
+          setProjectIndexByHubId(prev => ({
+            ...prev,
+            [hubId]: prev[hubId] ?? {hubId, projects: []},
+          }));
         }
       }));
-      setProjectIndexByHubId(prev => {
-        const next = {...prev};
-        responses.forEach(entry => {
-          if ('error' in entry) {
-            next[entry.hubId] = prev[entry.hubId] ?? {hubId: entry.hubId, projects: []};
-            return;
-          }
-          next[entry.hubId] = {
-            hubId: entry.result.hubId ?? entry.hubId,
-            projects: entry.result.projects ?? [],
-          };
-        });
-        return next;
-      });
-      const firstError = responses.find((entry): entry is {hubId: string; error: string} => 'error' in entry)?.error || '';
-      setProjectIndexError(firstError);
-      const runningHubIds = responses
-        .filter((entry): entry is {hubId: string; result: RegistryFileIndexStatusResponse} => !('error' in entry))
-        .filter(entry => (entry.result.projects ?? []).some(project => project.running === true || project.status === 'scanning'))
-        .map(entry => entry.hubId);
-      if (runningHubIds.length > 0) {
-        scheduleProjectIndexPoll(runningHubIds);
+      setProjectIndexError(ids.map(hubId => errorsByHubId[hubId]).find(Boolean) || '');
+      if (runningHubIds.size > 0) {
+        scheduleProjectIndexPoll(Array.from(runningHubIds));
       }
     } finally {
       if (!options.silent) {
