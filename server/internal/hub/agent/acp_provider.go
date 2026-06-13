@@ -63,6 +63,14 @@ var (
 		SkillProjectDirs:       []string{".agents/skills"},
 		SkillUserDirs:          []string{"~/.agents/skills"},
 	}
+	MimoACPProviderPreset = ACPProviderPreset{
+		Name:                   "mimo",
+		BinaryName:             "mimo",
+		Args:                   []string{"acp"},
+		MissingPathErrTemplate: "mimo: binary not found in PATH: %v",
+		SkillProjectDirs:       []string{".agents/skills"},
+		SkillUserDirs:          []string{"~/.agents/skills"},
+	}
 	CodeBuddyACPProviderPreset = ACPProviderPreset{
 		Name:                   "codebuddy",
 		BinaryName:             "codebuddy",
@@ -104,6 +112,10 @@ func NewCopilotProvider() *acpProvider {
 
 func NewOpenCodeProvider() *acpProvider {
 	return NewACPProvider(OpenCodeACPProviderPreset)
+}
+
+func NewMimoProvider() *acpProvider {
+	return NewACPProvider(MimoACPProviderPreset)
 }
 
 func NewCodeBuddyProvider() *acpProvider {
