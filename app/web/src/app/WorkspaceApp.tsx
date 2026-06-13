@@ -44,6 +44,7 @@ import {
   type ConfirmTarget,
   type RenameSessionTarget,
 } from '../shell/AppDialogs';
+import { installDesktopZoomGuard } from '../shell/desktopZoomGuard';
 import { ResponsiveShell } from '../shell/ResponsiveShell';
 import {
   getLatestSessionReadCursor,
@@ -18453,6 +18454,7 @@ if (!nativeShellHost && 'serviceWorker' in navigator && window.isSecureContext) 
   });
 }
 
+installDesktopZoomGuard(window);
 installMobileViewportZoomGuard(document);
 
 export const workspaceAppReady = workspaceStore.ready();
