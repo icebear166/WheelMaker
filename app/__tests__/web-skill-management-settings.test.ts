@@ -107,6 +107,18 @@ describe('skill management settings UI source structure', () => {
     expect(updateIndex).toBeGreaterThan(requestIndex);
   });
 
+  test('separates Skills scanning state from empty skill state', () => {
+    expect(detailTsx).toContain('const skillHubCards = Object.values(skillHubs)');
+    expect(detailTsx).toContain('const skillsScanning = skillsLoading || skillHubCards.some(hub => hub.loading === true);');
+    expect(detailTsx).toContain('className="settings-skills-scan-status"');
+    expect(detailTsx).toContain('role="status"');
+    expect(detailTsx).toContain('codicon-loading codicon-modifier-spin');
+    expect(detailTsx).toContain('Scanning skills');
+    expect(detailTsx).toContain('groups.length === 0 && options.loading ? (');
+    expect(detailTsx).toContain('groups.length === 0 && !options.error && !options.loading ? (');
+    expect(stylesCss).toContain('.settings-skills-scan-status');
+  });
+
   test('expands skill install controls inline with select all', () => {
     expect(mainTsx).toContain('sameSkillInstallTarget');
     expect(mainTsx).toContain('toggleAllSkillSourceCandidates');

@@ -114,6 +114,13 @@ export function SkillsSettingsDetail({
   requestSkillUninstall,
   skillActionPendingKey,
 }: SkillsSettingsDetailProps) {
+  const skillHubCards = Object.values(skillHubs).sort((left, right) => left.hubId.localeCompare(right.hubId));
+  const skillsScanning = skillsLoading || skillHubCards.some(hub => hub.loading === true);
+  const scanningHubCount = skillHubCards.filter(hub => hub.loading === true).length;
+  const skillsScanStatusLabel = scanningHubCount > 0
+    ? `Scanning skills on ${scanningHubCount} ${scanningHubCount === 1 ? 'hub' : 'hubs'}...`
+    : 'Scanning skills...';
+
   const renderSkillInstallPanel = (target: SkillInstallTarget) => {
     const activeInstallTarget = skillInstallTarget;
     if (!activeInstallTarget || !sameSkillInstallTarget(activeInstallTarget, target)) {
@@ -261,7 +268,13 @@ export function SkillsSettingsDetail({
         ) : null}
         {renderSkillInstallPanel({hubId, scope: options.scope, projectName: options.projectName})}
         <div className="settings-skills-scope-body">
-          {groups.length === 0 && !options.error ? (
+          {groups.length === 0 && options.loading ? (
+            <div className="settings-skills-empty settings-skills-empty-loading">
+              <span className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
+              <span>Scanning skills...</span>
+            </div>
+          ) : null}
+          {groups.length === 0 && !options.error && !options.loading ? (
             <div className="settings-skills-empty">No skills installed.</div>
           ) : null}
           {groups.map(group => (
@@ -323,17 +336,20 @@ export function SkillsSettingsDetail({
         </span>
         <span className="codicon codicon-link-external" aria-hidden="true" />
       </a>
-      {skillsLoading && Object.keys(skillHubs).length === 0 ? (
-        <div className="muted block">Loading skills...</div>
+      {skillsScanning ? (
+        <div className="settings-skills-scan-status" role="status" aria-live="polite">
+          <span className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
+          <span>{skillsScanStatusLabel}</span>
+        </div>
       ) : null}
       {skillsError ? (
         <div className="muted block settings-metadata-error">{skillsError}</div>
       ) : null}
-      {!skillsLoading && Object.keys(skillHubs).length === 0 && !skillsError ? (
+      {!skillsScanning && skillHubCards.length === 0 && !skillsError ? (
         <div className="muted block">No hubs available.</div>
       ) : null}
       <div className="settings-skills-list">
-        {Object.values(skillHubs).sort((left, right) => left.hubId.localeCompare(right.hubId)).map(hub => {
+        {skillHubCards.map(hub => {
           const data = hub.data;
           const operation = data?.operation ?? null;
           const operationRunning = operation?.running === true;
