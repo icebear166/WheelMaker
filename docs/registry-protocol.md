@@ -106,8 +106,8 @@
 | 角色 | 允许请求 |
 | --- | --- |
 | `hub` | `hub.report.projects`、`hub.report.project`、`hub.ping`、`session.message`、`session.updated` |
-| `client` | `registry.project.list`、`registry.relay.*`、`hub.state.*`、`project.*`、`session.*`、`speech.*`、`debug.uploadLog`、`batch` |
-| `monitor` | `registry.project.list`、`monitor.*`、`batch` |
+| `client` | `registry.project.list`、`registry.relay.*`、`hub.state.*`、`project.*`、`session.*`、`speech.*`、`debug.uploadLog` |
+| `monitor` | `registry.project.list`、`monitor.*` |
 | `local_read` | `connect.localRead.proof`、`connect.init`、允许本地读的 `registry.project.list` 与 `project.*` 只读方法 |
 
 事件方法由服务端推送，不作为 client request 白名单处理，包括 `registry.project.report`、`hub.state.updated`、`session.message`、`session.updated`、`connect.close`。
@@ -233,7 +233,7 @@ Registry 对 App 广播单项目完整快照：
 
 ## 6. Project 方法
 
-所有 Project 方法要求 envelope 顶层 `projectId`，由 Registry 通过 `projectId -> hubId` 路由到 Hub。可 batch 的方法由注册表声明。
+所有 Project 方法要求 envelope 顶层 `projectId`，由 Registry 通过 `projectId -> hubId` 路由到 Hub。Registry 不提供跨请求 batch 聚合；客户端应按目标 Hub/Project 分别发请求，并用 `requestId` 匹配乱序返回。
 
 ### 同步检查
 
@@ -486,7 +486,7 @@ Local read 是 Hub 暴露的 loopback 只读 WebSocket 端点。连接流程：
 
 Session 方法不允许走 local-read endpoint。
 
-## 11. Speech、Monitor、Debug、Batch
+## 11. Speech、Monitor、Debug
 
 Speech：
 
@@ -507,25 +507,6 @@ Monitor：
 Debug：
 
 - `debug.uploadLog`
-
-Batch：
-
-```json
-{
-  "method": "batch",
-  "payload": {
-    "requests": [
-      {
-        "method": "hub.state.get",
-        "hubId": "hub-a",
-        "payload": {}
-      }
-    ]
-  }
-}
-```
-
-Batch 子请求同样使用 envelope 顶层 `hubId` / `projectId`。
 
 ## 12. 错误
 
@@ -601,4 +582,3 @@ Batch 子请求同样使用 envelope 顶层 `hubId` / `projectId`。
 1. 协议版本硬切到 `2.2`。
 2. 同步策略切换为 pull-only。
 3. Hub 事件与 Session 方法开始收敛。
-

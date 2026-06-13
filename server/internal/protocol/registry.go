@@ -93,7 +93,6 @@ type ConnectFeatures struct {
 	PushHint                bool `json:"pushHint"`
 	PingPong                bool `json:"pingPong"`
 	SupportsHashNegotiation bool `json:"supportsHashNegotiation"`
-	SupportsBatch           bool `json:"supportsBatch"`
 }
 
 type ConnectInitResponsePayload struct {

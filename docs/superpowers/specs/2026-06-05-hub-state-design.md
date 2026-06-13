@@ -66,22 +66,7 @@ ID 放置规则：
 - payload 不再承载路由用的 `hubId` 或 `projectId`。
 - 返回数据如果需要自描述，可以继续包含 `hubId`、`projectId` 字段。
 
-Batch 子请求也要支持 `hubId`：
-
-```json
-{
-  "method": "batch",
-  "payload": {
-    "requests": [
-      {
-        "method": "hub.state.get",
-        "hubId": "local-hub",
-        "payload": {}
-      }
-    ]
-  }
-}
-```
+Registry 不提供跨 Hub batch 聚合。App 对多个 Hub 读取 HubState 时，按 Hub 分别发送 `hub.state.get`，通过各自 `requestId` 独立接收响应。
 
 服务端协议描述符需要增加或强化：
 
@@ -90,7 +75,6 @@ Batch 子请求也要支持 `hubId`：
 - `RequiresSessionID`
 - `Route`
 - `Roles`
-- `Batchable`
 - `LocalRead`
 
 `RequiresHubID` 校验 envelope 顶层 `hubId`，不再解析 payload。`RequiresProjectID` 校验 envelope 顶层 `projectId`。`RequiresSessionID` 校验 payload 中的 `sessionId`。
@@ -578,7 +562,7 @@ Hub 断开时，Registry 不提供旧 HubState。App 可以保留本地上次渲
 打开 settings 页面：
 
 1. App 调用 `registry.project.list` 获取 hubs/projects。
-2. App 对可见 hubs batch 调用 `hub.state.get`。
+2. App 对可见 hubs 分别调用 `hub.state.get`。
 3. App 直接渲染缓存 sections。
 4. 空 section 显示 empty/stale 状态，并允许用户 refresh。
 
@@ -615,7 +599,7 @@ App 不显示完整 stdout/stderr。
 ## 迁移计划
 
 1. 协议常量与 descriptor：加入新命名、`hubId`、`RequiresSessionID`，补齐 route 分类。
-2. Registry envelope：读写 `hubId`，batch 子请求支持 `hubId`。
+2. Registry envelope：读写 `hubId`。
 3. Registry routing：实现 `hub.state.*` 转发和 `hub.state.updated` 广播。
 4. HubStateManager：先实现空 state、section 状态模型和 `get/refresh/action` 框架。
 5. Section adapters：按 `agentPackages`、`wheelmakerUpdate`、`skills`、`tokenStats`、`fileIndex` 接入现有逻辑。
@@ -630,7 +614,6 @@ App 不显示完整 stdout/stderr。
 
 - 所有新方法在 descriptor 中注册。
 - `hub.state.*` 要求 envelope 顶层 `hubId`。
-- batch 子请求支持 `hubId`。
 - client role 可调用 HubState 方法。
 - Registry 按 envelope `hubId` 转发。
 - Registry 拒绝缺失、未知、离线、越权 Hub。

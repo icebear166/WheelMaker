@@ -165,6 +165,7 @@ func removedRegistryProtocolMethods() []string {
 		"cmd.update",
 		"cmd.skills",
 		"cmd.token",
+		"batch",
 		"relay.status",
 		"relay.enable",
 		"relay.disable",
@@ -230,9 +231,6 @@ func TestRegistryHubStateMethodsRequireHubID(t *testing.T) {
 		}
 		if !RegistryMethodAllowed(string(RegistryRoleClient), method) {
 			t.Fatalf("%s should allow client role", method)
-		}
-		if !desc.Batchable {
-			t.Fatalf("%s should be batchable", method)
 		}
 	}
 

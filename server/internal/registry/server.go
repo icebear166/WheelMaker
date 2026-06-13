@@ -25,6 +25,7 @@ const (
 	clientIdleTimeout      = 5 * time.Minute
 	removedChatSendMethod  = rp.LegacyRegistryMethodChatSend
 	maxDebugUploadLogBytes = 512 * 1024
+	asyncQueueBuffer       = 64
 )
 
 // Config configures the project registry server.
@@ -158,6 +159,77 @@ type connectionState struct {
 	lastProjectSeq  map[string]int64
 }
 
+type requestDispatcher struct {
+	server *Server
+	state  *connectionState
+
+	ctx    context.Context
+	cancel context.CancelFunc
+	mu     sync.Mutex
+	queues map[string]chan envelope
+}
+
+func newRequestDispatcher(parent context.Context, server *Server, state *connectionState) *requestDispatcher {
+	ctx, cancel := context.WithCancel(parent)
+	return &requestDispatcher{
+		server: server,
+		state:  state,
+		ctx:    ctx,
+		cancel: cancel,
+		queues: make(map[string]chan envelope),
+	}
+}
+
+func (d *requestDispatcher) stop() {
+	d.cancel()
+}
+
+func (d *requestDispatcher) dispatch(in envelope) {
+	queueKey := registryRequestQueueKey(in.Method)
+	if queueKey == "" {
+		go d.handle(in)
+		return
+	}
+
+	queue := d.queue(queueKey)
+	select {
+	case queue <- in:
+	case <-d.ctx.Done():
+	}
+}
+
+func (d *requestDispatcher) queue(key string) chan envelope {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if queue := d.queues[key]; queue != nil {
+		return queue
+	}
+	queue := make(chan envelope, asyncQueueBuffer)
+	d.queues[key] = queue
+	go d.runQueue(queue)
+	return queue
+}
+
+func (d *requestDispatcher) runQueue(queue <-chan envelope) {
+	for {
+		select {
+		case <-d.ctx.Done():
+			return
+		case in := <-queue:
+			d.handle(in)
+		}
+	}
+}
+
+func (d *requestDispatcher) handle(in envelope) {
+	select {
+	case <-d.ctx.Done():
+		return
+	default:
+		d.server.handleRequest(d.state, in)
+	}
+}
+
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(_ *http.Request) bool { return true },
 }
@@ -243,28 +315,8 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	defer s.speech.cancelConnection(state.id)
 	defer state.peer.dropAllPending()
 
-	asyncCtx, cancelAsyncRequests := context.WithCancel(context.Background())
-	asyncRequests := make(chan envelope, 256)
-	go func() {
-		for {
-			select {
-			case <-asyncCtx.Done():
-				return
-			case req, ok := <-asyncRequests:
-				if !ok {
-					return
-				}
-				select {
-				case <-asyncCtx.Done():
-					return
-				default:
-				}
-				s.handleRequest(state, req)
-			}
-		}
-	}()
-	defer close(asyncRequests)
-	defer cancelAsyncRequests()
+	dispatcher := newRequestDispatcher(context.Background(), s, state)
+	defer dispatcher.stop()
 
 	var idleTimer *time.Timer
 	resetIdleTimer := func() {
@@ -344,7 +396,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if shouldHandleRegistryRequestAsync(in.Method) {
-			asyncRequests <- in
+			dispatcher.dispatch(in)
 			continue
 		}
 		s.handleRequest(state, in)
@@ -352,11 +404,17 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 }
 
 func shouldHandleRegistryRequestAsync(method string) bool {
-	return method == rp.RegistryMethodBatch ||
-		rp.RegistryRelayControlMethod(method) ||
+	return rp.RegistryRelayControlMethod(method) ||
 		rp.RegistryMonitorForwardMethod(method) ||
 		rp.RegistryHubStateMethod(method) ||
 		isClientForwardMethod(method)
+}
+
+func registryRequestQueueKey(method string) string {
+	if rp.RegistryRelayControlMethod(method) {
+		return "registry.relay"
+	}
+	return ""
 }
 
 func (s *Server) handleRequest(state *connectionState, in envelope) {
@@ -375,8 +433,6 @@ func (s *Server) handleRequest(state *connectionState, in envelope) {
 		s.handleProjectSyncCheck(state.peer, state, in)
 	case in.Method == rp.RegistryMethodMonitorListHub:
 		s.handleMonitorListHub(state.peer, state, in)
-	case in.Method == rp.RegistryMethodBatch:
-		s.handleBatch(state.peer, state, in)
 	case in.Method == rp.RegistryMethodHubPing:
 		_ = s.writeResponse(state.peer, in.RequestID, in.Method, "", map[string]any{"ok": true})
 	case rp.RegistryRelayControlMethod(in.Method):
@@ -563,7 +619,6 @@ func (s *Server) handleConnectInit(peer *peerConn, state *connectionState, in en
 			PushHint:                false,
 			PingPong:                true,
 			SupportsHashNegotiation: true,
-			SupportsBatch:           true,
 		},
 		HashAlgorithms: []string{"sha256"},
 	}
@@ -978,105 +1033,6 @@ func (s *Server) handleProjectSyncCheck(peer *peerConn, state *connectionState, 
 	resp := s.projectSyncCheckEnvelope(state, in)
 	resp.RequestID = in.RequestID
 	_ = peer.write(resp)
-}
-
-func (s *Server) handleBatch(peer *peerConn, state *connectionState, in envelope) {
-	type batchItem struct {
-		RequestID int64           `json:"requestId,omitempty"`
-		Method    string          `json:"method"`
-		HubID     string          `json:"hubId,omitempty"`
-		ProjectID string          `json:"projectId,omitempty"`
-		Payload   json.RawMessage `json:"payload,omitempty"`
-	}
-	type batchPayload struct {
-		Requests []batchItem `json:"requests"`
-	}
-
-	var payload batchPayload
-	if err := decodePayload(in.Payload, &payload); err != nil {
-		_ = s.writeError(peer, in.RequestID, in.Method, codeInvalidArgument, "invalid batch payload", nil)
-		return
-	}
-
-	responses := make([]map[string]any, 0, len(payload.Requests))
-	for index, item := range payload.Requests {
-		if strings.TrimSpace(item.Method) == "" || item.Method == rp.RegistryMethodBatch || item.Method == rp.RegistryMethodConnectInit {
-			responses = append(responses, map[string]any{
-				"index":  index,
-				"type":   rp.RegistryEnvelopeTypeError,
-				"method": item.Method,
-				"payload": errorPayload{
-					Code:    codeInvalidArgument,
-					Message: "unsupported batch subrequest",
-				},
-			})
-			continue
-		}
-
-		subResp := s.executeBatchRequest(state, envelope{
-			RequestID: item.RequestID,
-			Type:      rp.RegistryEnvelopeTypeRequest,
-			Method:    item.Method,
-			HubID:     item.HubID,
-			ProjectID: item.ProjectID,
-			Payload:   item.Payload,
-		})
-		responses = append(responses, map[string]any{
-			"index":     index,
-			"requestId": item.RequestID,
-			"type":      subResp.Type,
-			"method":    subResp.Method,
-			"hubId":     subResp.HubID,
-			"projectId": subResp.ProjectID,
-			"payload":   json.RawMessage(subResp.Payload),
-		})
-	}
-
-	_ = s.writeResponse(peer, in.RequestID, in.Method, "", map[string]any{
-		"responses": responses,
-	})
-}
-
-func (s *Server) executeBatchRequest(state *connectionState, in envelope) envelope {
-	if state.role == string(rp.RegistryRoleClient) && isRemovedClientRequestMethod(in.Method) {
-		return s.errorEnvelope(in.Method, codeInvalidArgument, "unsupported method", map[string]any{"method": in.Method})
-	}
-	if !methodAllowed(state.role, in.Method) {
-		return s.errorEnvelope(in.Method, codeForbidden, "method not allowed for role", map[string]any{"role": state.role})
-	}
-	if rp.RegistryHubStateMethod(in.Method) {
-		if state.role != string(rp.RegistryRoleClient) {
-			return s.errorEnvelope(in.Method, codeForbidden, "method not allowed for role", map[string]any{"role": state.role})
-		}
-		return s.executeHubStateRequest(state, in)
-	}
-
-	switch in.Method {
-	case rp.RegistryMethodRegistryProjectList:
-		return envelope{
-			Type:   rp.RegistryEnvelopeTypeResponse,
-			Method: in.Method,
-			Payload: rp.MustRaw(map[string]any{
-				"projects": s.snapshotProjects(state.scopeHubID),
-				"hubs":     s.snapshotProjectListHubs(state.scopeHubID),
-			}),
-		}
-	case rp.RegistryMethodProjectSyncCheck:
-		return s.projectSyncCheckEnvelope(state, in)
-	case rp.RegistryMethodHubPing:
-		return envelope{
-			Type:   rp.RegistryEnvelopeTypeResponse,
-			Method: in.Method,
-			Payload: rp.MustRaw(map[string]any{
-				"ok": true,
-			}),
-		}
-	default:
-		if isClientForwardMethod(in.Method) {
-			return s.executeClientRequest(state, in)
-		}
-		return s.errorEnvelope(in.Method, codeInvalidArgument, "unsupported method", map[string]any{"method": in.Method})
-	}
 }
 
 func (s *Server) handleForwardRequest(clientPeer *peerConn, state *connectionState, in envelope) {

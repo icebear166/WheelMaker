@@ -22,7 +22,6 @@ type RegistryRouteKind string
 
 const (
 	RegistryRouteConnect         RegistryRouteKind = "connect"
-	RegistryRouteBatch           RegistryRouteKind = "batch"
 	RegistryRouteHubControl      RegistryRouteKind = "hub_control"
 	RegistryRouteHubReport       RegistryRouteKind = "hub_report"
 	RegistryRouteHubState        RegistryRouteKind = "hub_state"
@@ -45,7 +44,6 @@ const (
 	RegistryMethodConnectInit           = "connect.init"
 	RegistryMethodConnectClose          = "connect.close"
 	RegistryMethodConnectLocalReadProof = "connect.localRead.proof"
-	RegistryMethodBatch                 = "batch"
 	RegistryMethodHubPing               = "hub.ping"
 	RegistryMethodHubStateGet           = "hub.state.get"
 	RegistryMethodHubStateRefresh       = "hub.state.refresh"
@@ -129,7 +127,6 @@ type RegistryMethodDescriptor struct {
 	Roles             []RegistryRole
 	RequiresProjectID bool
 	RequiresHubID     bool
-	Batchable         bool
 	LocalRead         bool
 	ClientEventMethod string
 }
@@ -138,7 +135,6 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodConnectInit:           registryMethod(RegistryMethodConnectInit, RegistryRouteConnect, nil),
 	RegistryMethodConnectClose:          registryClientEventMethod(RegistryMethodConnectClose),
 	RegistryMethodConnectLocalReadProof: registryMethod(RegistryMethodConnectLocalReadProof, RegistryRouteLocalRead, []RegistryRole{RegistryRoleLocalRead}),
-	RegistryMethodBatch:                 registryMethod(RegistryMethodBatch, RegistryRouteBatch, []RegistryRole{RegistryRoleClient, RegistryRoleMonitor}),
 	RegistryMethodHubPing:               registryMethod(RegistryMethodHubPing, RegistryRouteHubControl, []RegistryRole{RegistryRoleHub}),
 	RegistryMethodHubStateGet:           registryHubStateMethod(RegistryMethodHubStateGet),
 	RegistryMethodHubStateRefresh:       registryHubStateMethod(RegistryMethodHubStateRefresh),
@@ -221,14 +217,12 @@ func registryMethod(method string, route RegistryRouteKind, roles []RegistryRole
 func registryProjectMethod(method string, route RegistryRouteKind) RegistryMethodDescriptor {
 	desc := registryMethod(method, route, []RegistryRole{RegistryRoleClient})
 	desc.RequiresProjectID = true
-	desc.Batchable = true
 	return desc
 }
 
 func registryLocalReadMethod(method string, route RegistryRouteKind, roles []RegistryRole) RegistryMethodDescriptor {
 	desc := registryMethod(method, route, roles)
 	desc.LocalRead = true
-	desc.Batchable = true
 	return desc
 }
 
@@ -253,14 +247,12 @@ func registryLocalReadProjectMethod(method string) RegistryMethodDescriptor {
 func registryHubCommandMethod(method string) RegistryMethodDescriptor {
 	desc := registryMethod(method, RegistryRouteHubCommand, []RegistryRole{RegistryRoleClient})
 	desc.RequiresHubID = true
-	desc.Batchable = true
 	return desc
 }
 
 func registryHubStateMethod(method string) RegistryMethodDescriptor {
 	desc := registryMethod(method, RegistryRouteHubState, []RegistryRole{RegistryRoleClient})
 	desc.RequiresHubID = true
-	desc.Batchable = true
 	return desc
 }
 
