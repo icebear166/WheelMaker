@@ -89,6 +89,24 @@ describe('skill management settings UI source structure', () => {
     expect(mainTsx).not.toContain('refreshSkillManagementRef.current?.().catch(() => undefined)');
   });
 
+  test('updates each Skills hub as its scan request settles', () => {
+    const normalizedMainTsx = mainTsx.replace(/\r\n/g, '\n');
+    const refreshStart = normalizedMainTsx.indexOf('const refreshSkillManagement = useCallback');
+    const refreshEnd = normalizedMainTsx.indexOf('refreshSkillManagementHubRef.current = refreshSkillManagementHub;', refreshStart);
+    expect(refreshStart).toBeGreaterThanOrEqual(0);
+    expect(refreshEnd).toBeGreaterThan(refreshStart);
+
+    const refreshBlock = normalizedMainTsx.slice(refreshStart, refreshEnd);
+    expect(refreshBlock).toContain('const runningHubIds = new Set<string>();');
+    expect(refreshBlock).toContain('await Promise.all(hubIds.map(async hubId => {');
+    expect(refreshBlock).not.toContain('const responses = await Promise.all(hubIds.map');
+    expect(refreshBlock).not.toContain('responses.forEach(entry =>');
+
+    const requestIndex = refreshBlock.indexOf('const result = await service.scanSkills(hubId);');
+    const updateIndex = refreshBlock.indexOf('setSkillHubs(prev => ({', requestIndex);
+    expect(updateIndex).toBeGreaterThan(requestIndex);
+  });
+
   test('expands skill install controls inline with select all', () => {
     expect(mainTsx).toContain('sameSkillInstallTarget');
     expect(mainTsx).toContain('toggleAllSkillSourceCandidates');

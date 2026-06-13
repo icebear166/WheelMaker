@@ -12451,41 +12451,37 @@ export function App() {
         });
         return next;
       });
-      const responses = await Promise.all(hubIds.map(async hubId => {
+      const runningHubIds = new Set<string>();
+      await Promise.all(hubIds.map(async hubId => {
         try {
           const result = await service.scanSkills(hubId);
-          return {hubId, result};
+          setSkillHubs(prev => ({
+            ...prev,
+            [hubId]: {
+              hubId,
+              loading: false,
+              error: result.ok ? '' : skillCommandErrorMessage(result),
+              data: result,
+            },
+          }));
+          if (result.operation?.running) {
+            runningHubIds.add(hubId);
+          }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          return {hubId, error: message};
+          setSkillHubs(prev => ({
+            ...prev,
+            [hubId]: {
+              hubId,
+              loading: false,
+              error: message || 'Skills scan failed.',
+              data: prev[hubId]?.data ?? null,
+            },
+          }));
         }
       }));
-      setSkillHubs(prev => {
-        const next: Record<string, SkillHubView> = {};
-        responses.forEach(entry => {
-          if ('error' in entry) {
-            next[entry.hubId] = {
-              hubId: entry.hubId,
-              loading: false,
-              error: entry.error || 'Skills scan failed.',
-              data: prev[entry.hubId]?.data ?? null,
-            };
-            return;
-          }
-          next[entry.hubId] = {
-            hubId: entry.hubId,
-            loading: false,
-            error: entry.result.ok ? '' : skillCommandErrorMessage(entry.result),
-            data: entry.result,
-          };
-        });
-        return next;
-      });
-      const runningHubIds = responses
-        .filter((entry): entry is {hubId: string; result: RegistrySkillCommandResponse} => !('error' in entry) && entry.result.operation?.running === true)
-        .map(entry => entry.hubId);
-      if (runningHubIds.length > 0) {
-        scheduleSkillOperationPoll(runningHubIds);
+      if (runningHubIds.size > 0) {
+        scheduleSkillOperationPoll(Array.from(runningHubIds));
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
