@@ -87,6 +87,22 @@ export function hydrateFinishedStore(turns: RegistrySessionTurn[]): ChatTurnStor
   };
 }
 
+export function mergeCachedTurnPrefix(
+  state: ChatTurnStoreState,
+  turns: RegistrySessionTurn[],
+): ChatTurnStoreState {
+  const cachedState = hydrateFinishedStore(turns);
+  if (cachedState.cursor.turnIndex <= 0) {
+    return state;
+  }
+  return applySessionReadResult(
+    state,
+    0,
+    cachedState.finished,
+    cachedState.cursor.turnIndex,
+  );
+}
+
 export function getDurableTurnPrefix(
   turns: RegistrySessionTurn[],
   cursor: SessionReadCursor,

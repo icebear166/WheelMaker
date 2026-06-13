@@ -85,8 +85,8 @@ import {
   applySessionReadResult,
   buildMergedRawTurns,
   createEmptyChatTurnStore,
-  hydrateFinishedStore,
   isStaleSessionReadResult,
+  mergeCachedTurnPrefix,
   mergeRealtimeTurn,
   shouldReadRepairForIncomingTurn,
   type ChatTurnStoreState,
@@ -8795,9 +8795,18 @@ export function App() {
     const runtimeKey = buildChatRuntimeKey(activeProjectId, sessionId);
     const cached = workspaceStore.getCachedChatSessionContent(activeProjectId, sessionId);
     if (!cached) {
-      const inMemoryMessages = chatMessageStoreRef.current[runtimeKey] ?? [];
+      const turnState = chatTurnStoreRef.current[runtimeKey];
+      const storeMessages = messagesFromTurnStore(runtimeKey, sessionId);
+      const inMemoryMessages = storeMessages.length > 0
+        ? storeMessages
+        : (chatMessageStoreRef.current[runtimeKey] ?? []);
+      if (storeMessages.length > 0) {
+        chatMessageStoreRef.current[runtimeKey] = storeMessages;
+      }
       if (inMemoryMessages.length === 0) {
         chatFinishedCursorRef.current[runtimeKey] = 0;
+      } else if (turnState && storeMessages.length > 0) {
+        chatFinishedCursorRef.current[runtimeKey] = turnState.cursor.turnIndex;
       } else {
         const cursor = getLatestSessionReadCursor(inMemoryMessages);
         chatFinishedCursorRef.current[runtimeKey] = cursor.turnIndex;
@@ -8805,13 +8814,16 @@ export function App() {
       return inMemoryMessages;
     }
 
-    const cachedMessages = [...cached.messages];
-    chatTurnStoreRef.current[runtimeKey] = hydrateFinishedStore(cached.turns);
-    chatMessageStoreRef.current[runtimeKey] = cachedMessages;
+    const turnState = ensureChatTurnStore(runtimeKey);
+    mergeCachedTurnPrefix(turnState, cached.turns);
+    const storeMessages = messagesFromTurnStore(runtimeKey, sessionId);
+    const nextMessages = storeMessages.length > 0
+      ? storeMessages
+      : [...cached.messages];
+    chatMessageStoreRef.current[runtimeKey] = nextMessages;
 
-    const cursor = chatTurnStoreRef.current[runtimeKey].cursor;
-    chatFinishedCursorRef.current[runtimeKey] = cursor.turnIndex;
-    return cachedMessages;
+    chatFinishedCursorRef.current[runtimeKey] = turnState.cursor.turnIndex;
+    return nextMessages;
   };
 
   const hydrateChatSessionsFromCache = (
@@ -8846,7 +8858,7 @@ export function App() {
       const content = workspaceStore.getCachedChatSessionContent(activeProjectId, sessionId);
       const runtimeKey = buildChatRuntimeKey(activeProjectId, sessionId);
       if (content) {
-        chatTurnStoreRef.current[runtimeKey] = hydrateFinishedStore(content.turns);
+        mergeCachedTurnPrefix(ensureChatTurnStore(runtimeKey), content.turns);
       }
       const cursor = chatTurnStoreRef.current[runtimeKey]?.cursor ?? cached.cursor;
       chatFinishedCursorRef.current[runtimeKey] = cursor.turnIndex;
@@ -13186,7 +13198,6 @@ export function App() {
       setTab('chat');
       applySelectedChatKey(nextSelectedKey);
       const runtimeKey = encodeChatSessionKey(nextSelectedKey);
-      setChatMessages([]);
       setVisibleChatMessagesForRuntimeKey(
         runtimeKey,
         hydrateChatSessionContentFromCache(sessionId, targetProjectId),

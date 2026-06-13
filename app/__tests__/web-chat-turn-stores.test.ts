@@ -5,6 +5,7 @@ import {
   getDurableTurnPrefix,
   getFinishedCursor,
   hydrateFinishedStore,
+  mergeCachedTurnPrefix,
   mergeRealtimeTurn,
   shouldReadRepairForIncomingTurn,
 } from '../web/src/chat/turns/chatTurnStores';
@@ -31,6 +32,23 @@ describe('raw chat turn stores', () => {
 
     expect(state.cursor).toEqual({turnIndex: 1});
     expect(buildMergedRawTurns(state)).toEqual([turn(1, true), turn(2, false)]);
+  });
+
+  test('cached prefix merge preserves in-memory live tail', () => {
+    const state = createEmptyChatTurnStore();
+    mergeRealtimeTurn(state, turn(6, false, 'live tail'));
+
+    mergeCachedTurnPrefix(state, [turn(1), turn(2), turn(3), turn(4), turn(5)]);
+
+    expect(state.cursor).toEqual({turnIndex: 5});
+    expect(buildMergedRawTurns(state)).toEqual([
+      turn(1),
+      turn(2),
+      turn(3),
+      turn(4),
+      turn(5),
+      turn(6, false, 'live tail'),
+    ]);
   });
 
   test('same-index live turn updates and finished turn absorbs live', () => {
