@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"github.com/swm8023/wheelmaker/internal/hub/agent"
 	acp "github.com/swm8023/wheelmaker/internal/protocol"
+	logger "github.com/swm8023/wheelmaker/internal/shared"
 	"image"
 	"image/color"
 	"image/png"
@@ -3453,6 +3454,60 @@ func TestSessionReadReturnsTurnsEnvelopeWithLatestTurnIndex(t *testing.T) {
 	}
 	if turns[0].TurnIndex != 2 || turns[1].TurnIndex != 3 {
 		t.Fatalf("turns = %#v, want indexes 2 and 3", turns)
+	}
+}
+
+func TestSessionReadVerboseLogIncludesTurnCursor(t *testing.T) {
+	var logs bytes.Buffer
+	if err := logger.Setup(logger.LoggerConfig{Level: logger.LevelVerbose}); err != nil {
+		t.Fatalf("setup logger: %v", err)
+	}
+	t.Cleanup(logger.Close)
+	logger.SetOutput(&logs)
+
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+
+	if err := c.RecordEvent(ctx, sessionViewCreatedEvent("sess-1", "Task")); err != nil {
+		t.Fatalf("RecordEvent session created: %v", err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptEvent("sess-1", "run", nil)); err != nil {
+		t.Fatalf("RecordEvent prompt: %v", err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewUpdateEvent("sess-1", acp.SessionUpdate{
+		SessionUpdate: acp.SessionUpdateAgentMessageChunk,
+		Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: "answer"}),
+	})); err != nil {
+		t.Fatalf("RecordEvent answer: %v", err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptFinishedEvent("sess-1", "end_turn")); err != nil {
+		t.Fatalf("RecordEvent finished: %v", err)
+	}
+
+	resp, err := c.HandleSessionRequest(ctx, "session.read", "proj1", json.RawMessage(`{"sessionId":"sess-1","afterTurnIndex":1}`))
+	if err != nil {
+		t.Fatalf("HandleSessionRequest: %v", err)
+	}
+	if body := resp.(map[string]any); body["latestTurnIndex"] != int64(3) {
+		t.Fatalf("latestTurnIndex = %v, want 3", body["latestTurnIndex"])
+	}
+
+	got := logs.String()
+	for _, want := range []string{
+		"[Hub:proj1] session.read",
+		"sessionId=sess-1",
+		"afterTurnIndex=1",
+		"latestTurnIndex=3",
+		"turnCount=2",
+		"lastDoneTurnIndex=3",
+		"lastReadTurnIndex=0",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("verbose log missing %q in:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "answer") {
+		t.Fatalf("verbose log leaked message content:\n%s", got)
 	}
 }
 

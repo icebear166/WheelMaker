@@ -470,15 +470,33 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 		if err := decodeSessionRequestPayload(payload, &req); err != nil {
 			return nil, fmt.Errorf("invalid session.read payload: %w", err)
 		}
-		latestTurnIndex, turns, err := c.sessionRecorder.ReadSessionTurns(ctx, req.SessionID, req.AfterTurnIndex)
+		sessionID := strings.TrimSpace(req.SessionID)
+		afterTurnIndex := req.AfterTurnIndex
+		if afterTurnIndex < 0 {
+			afterTurnIndex = 0
+		}
+		log := hubLogger(c.projectName)
+		if log.VerboseEnabled() {
+			log.Verbose("session.read request sessionId=%s afterTurnIndex=%d", sessionID, afterTurnIndex)
+		}
+		latestTurnIndex, turns, err := c.sessionRecorder.ReadSessionTurns(ctx, sessionID, afterTurnIndex)
 		if err != nil {
+			if log.VerboseEnabled() {
+				log.Verbose("session.read error sessionId=%s afterTurnIndex=%d error=%s", sessionID, afterTurnIndex, err)
+			}
 			return nil, err
 		}
-		summary, err := c.sessionRecorder.ReadSessionSummary(ctx, req.SessionID)
+		summary, err := c.sessionRecorder.ReadSessionSummary(ctx, sessionID)
 		if err != nil {
+			if log.VerboseEnabled() {
+				log.Verbose("session.read error sessionId=%s afterTurnIndex=%d latestTurnIndex=%d turnCount=%d error=%s", sessionID, afterTurnIndex, latestTurnIndex, len(turns), err)
+			}
 			return nil, err
 		}
-		return map[string]any{"sessionId": strings.TrimSpace(req.SessionID), "latestTurnIndex": latestTurnIndex, "session": summary, "turns": turns}, nil
+		if log.VerboseEnabled() {
+			log.Verbose("session.read result sessionId=%s afterTurnIndex=%d latestTurnIndex=%d turnCount=%d lastDoneTurnIndex=%d lastReadTurnIndex=%d lastDoneSuccess=%t running=%t", sessionID, afterTurnIndex, latestTurnIndex, len(turns), summary.LastDoneTurnIndex, summary.LastReadTurnIndex, summary.LastDoneSuccess, summary.Running)
+		}
+		return map[string]any{"sessionId": sessionID, "latestTurnIndex": latestTurnIndex, "session": summary, "turns": turns}, nil
 	case acp.RegistryMethodSessionSearch:
 		if c.sessionSearch == nil {
 			c.sessionSearch = newSessionSearchManager(c)
