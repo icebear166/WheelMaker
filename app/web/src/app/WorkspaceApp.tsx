@@ -5935,6 +5935,15 @@ export function App() {
             setChatHubMenuOpen(open => !open);
           }}
         >
+          <span className="chat-hub-summary-dots" aria-hidden="true">
+            {registryHubs.slice(0, 5).map(hub => (
+              <span
+                key={`hub-dot:${hub.hubId}`}
+                className="chat-hub-summary-dot"
+                style={{'--dot-color': resolveHubColor(hubColors, hub.hubId)} as React.CSSProperties}
+              />
+            ))}
+          </span>
           <span className="chat-hub-summary-copy">
             <span className="chat-hub-summary-label">{chatHubSummaryLabel}</span>
             <span className="chat-hub-summary-project-label">{chatHubProjectLabel}</span>
@@ -5962,22 +5971,14 @@ export function App() {
                 } as React.CSSProperties;
                     return (
                       <div key={hub.hubId} className={`chat-hub-tree${expanded ? ' expanded' : ''}${colorMenuOpen ? ' color-open' : ''}`}>
-                    <div className="chat-hub-row">
-                      <button
-                        type="button"
-                        className="chat-hub-project-toggle"
-                        aria-label={expanded ? `Collapse ${hub.hubId}` : `Expand ${hub.hubId}`}
-                        aria-expanded={expanded}
-                        style={hubAccentStyle(hub.hubId)}
-                        onClick={() => {
-                          const next = expanded
-                            ? effectiveExpandedHubIds.filter(hubId => hubId !== hub.hubId)
-                            : [...effectiveExpandedHubIds, hub.hubId];
-                          setExpandedHubIds(next.length > 0 ? next : [HUB_TREE_EMPTY_EXPANDED_SENTINEL]);
-                        }}
-                      >
-                        <span className={`codicon ${expanded ? 'codicon-folder-opened' : 'codicon-folder'} chat-hub-project-toggle-icon`} aria-hidden="true" />
-                      </button>
+                    <div className="chat-hub-row" style={hubAccentStyle(hub.hubId)}
+                      onClick={() => {
+                        const next = expanded
+                          ? effectiveExpandedHubIds.filter(hubId => hubId !== hub.hubId)
+                          : [...effectiveExpandedHubIds, hub.hubId];
+                        setExpandedHubIds(next.length > 0 ? next : [HUB_TREE_EMPTY_EXPANDED_SENTINEL]);
+                      }}
+                    >
                       <span className="chat-hub-row-name">{hub.hubId}</span>
                       <button
                         type="button"
@@ -5985,7 +5986,10 @@ export function App() {
                         aria-label={`Set color for ${hub.hubId}`}
                         aria-expanded={colorMenuOpen}
                         style={hubAccentStyle(hub.hubId)}
-                        onClick={() => setChatHubColorMenuHubId(current => (current === hub.hubId ? '' : hub.hubId))}
+                        onClick={event => {
+                          event.stopPropagation();
+                          setChatHubColorMenuHubId(current => (current === hub.hubId ? '' : hub.hubId));
+                        }}
                       >
                         <span className="chat-hub-color-square-fill" aria-hidden="true" />
                       </button>
