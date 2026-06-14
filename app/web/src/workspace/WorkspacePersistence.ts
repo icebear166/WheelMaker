@@ -152,6 +152,28 @@ export type WorkspaceDatabaseDump = {
   diffCache: Array<{k: string; v: string; updatedAt: number}>;
   meta: Array<{k: string; v: string; updatedAt: number}>;
   localStorage: {address: string; token: string};
+  storage: WorkspaceDatabaseStorageStats;
+};
+
+export type WorkspaceDatabaseStoreStorageStats = {
+  store: string;
+  rows: number;
+  approximateBytes: number;
+};
+
+export type WorkspaceBrowserStorageEstimate = {
+  usage?: number;
+  quota?: number;
+  usageDetails?: Record<string, number | undefined>;
+};
+
+export type WorkspaceDatabaseStorageStats = {
+  usageBytes: number | null;
+  quotaBytes: number | null;
+  persisted: boolean | null;
+  usageDetails: Record<string, number>;
+  totalApproximateStoreBytes: number;
+  stores: WorkspaceDatabaseStoreStorageStats[];
 };
 
 const LOCAL_ADDRESS_KEY = 'wheelmaker.workspace.address';
@@ -167,6 +189,58 @@ const TABLE_FILE_CACHE = 'wm_file_cache';
 const TABLE_DIFF_CACHE = 'wm_diff_cache';
 const TABLE_META = 'wm_meta';
 const DIFF_CACHE_LIMIT = 120;
+
+function approximateJsonBytes(value: unknown): number {
+  const json = JSON.stringify(value);
+  if (typeof Blob !== 'undefined') {
+    return new Blob([json]).size;
+  }
+  if (typeof TextEncoder !== 'undefined') {
+    return new TextEncoder().encode(json).length;
+  }
+  return json.length;
+}
+
+function finiteStorageBytes(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? Math.trunc(value)
+    : null;
+}
+
+export function buildWorkspaceDatabaseStorageStats(
+  stores: Record<string, unknown[]>,
+  estimate?: WorkspaceBrowserStorageEstimate | null,
+  persisted?: boolean | null,
+): WorkspaceDatabaseStorageStats {
+  const storeStats = Object.entries(stores)
+    .map(([store, rows]) => ({
+      store,
+      rows: rows.length,
+      approximateBytes: approximateJsonBytes(rows),
+    }))
+    .sort((left, right) => {
+      const sizeDelta = right.approximateBytes - left.approximateBytes;
+      return sizeDelta !== 0 ? sizeDelta : left.store.localeCompare(right.store);
+    });
+  const usageDetails: Record<string, number> = {};
+  for (const [key, value] of Object.entries(estimate?.usageDetails ?? {})) {
+    const bytes = finiteStorageBytes(value);
+    if (bytes != null) {
+      usageDetails[key] = bytes;
+    }
+  }
+  return {
+    usageBytes: finiteStorageBytes(estimate?.usage),
+    quotaBytes: finiteStorageBytes(estimate?.quota),
+    persisted: typeof persisted === 'boolean' ? persisted : null,
+    usageDetails,
+    totalApproximateStoreBytes: storeStats.reduce(
+      (total, item) => total + item.approximateBytes,
+      0,
+    ),
+    stores: storeStats,
+  };
+}
 
 const GLOBAL_KEYS = {
   deepseekApiKey: 'deepseekApiKey',
@@ -1501,6 +1575,29 @@ export class WorkspacePersistenceRepository {
       this.db.getAllRows<{k: string; v: string; updatedAt: number}>(TABLE_DIFF_CACHE),
       this.db.getAllRows<{k: string; v: string; updatedAt: number}>(TABLE_META),
     ]);
+    const storageManager = globalThis.navigator?.storage;
+    const [estimate, persisted] = await Promise.all([
+      storageManager?.estimate
+        ? storageManager.estimate().catch(() => null)
+        : Promise.resolve(null),
+      storageManager?.persisted
+        ? storageManager.persisted().catch(() => null)
+        : Promise.resolve(null),
+    ]);
+    const storage = buildWorkspaceDatabaseStorageStats(
+      {
+        [TABLE_GLOBAL_KV]: global,
+        [TABLE_PROJECT_STATE]: projects,
+        [TABLE_PROJECT_COMMITS]: projectCommits,
+        [TABLE_CHAT_SESSION_INDEX]: chatSessionIndex,
+        [TABLE_CHAT_SESSION_CONTENT]: chatSessionContent,
+        [TABLE_FILE_CACHE]: fileCache,
+        [TABLE_DIFF_CACHE]: diffCache,
+        [TABLE_META]: meta,
+      },
+      estimate as WorkspaceBrowserStorageEstimate | null,
+      persisted,
+    );
     const localIdentity = this.readLocalIdentityState();
     return {
       global: sortByKey(redactGlobalDumpRows(global)),
@@ -1515,6 +1612,7 @@ export class WorkspacePersistenceRepository {
         address: localIdentity.address ?? '',
         token: localIdentity.token ?? '',
       },
+      storage,
     };
   }
 }

@@ -1685,6 +1685,92 @@ textarea,
   line-height: 1.5;
 }
 
+.settings-database-storage-summary {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+.settings-database-storage-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.settings-database-storage-metric,
+.settings-database-store-list {
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel-2) 84%, transparent);
+}
+
+.settings-database-storage-metric {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.settings-database-storage-label,
+.settings-database-storage-note {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.settings-database-storage-metric strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.settings-database-store-list {
+  overflow: hidden;
+}
+
+.settings-database-store-list-header,
+.settings-database-store-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px 96px;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
+.settings-database-store-list-header {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.settings-database-store-row + .settings-database-store-row {
+  border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+}
+
+.settings-database-store-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
+  font-size: 11px;
+}
+
+@media (max-width: 720px) {
+  .settings-database-storage-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-database-store-list-header,
+  .settings-database-store-row {
+    grid-template-columns: minmax(0, 1fr) 52px 78px;
+  }
+}
+
 .project-menu,
 .settings-menu {
   position: absolute;

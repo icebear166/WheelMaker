@@ -388,6 +388,7 @@ import {
 } from '../shell/state/workspaceUiState';
 import type {
   PersistedFloatingControlSide,
+  WorkspaceDatabaseStorageStats,
 } from '../workspace/WorkspacePersistence';
 import type {
   RegistryChatContentBlock,
@@ -2688,6 +2689,7 @@ export function App() {
   const [databaseLoading, setDatabaseLoading] = useState(false);
   const [databaseError, setDatabaseError] = useState('');
   const [databaseDumpText, setDatabaseDumpText] = useState('');
+  const [databaseStorageStats, setDatabaseStorageStats] = useState<WorkspaceDatabaseStorageStats | null>(null);
   const [settingsDetailView, setSettingsDetailView] = useState<SettingsDetailView>(null);
   const mobileSettingsHistoryKeyRef = useRef<string | null>(null);
   const mobileSettingsReplaceRootHistoryRef = useRef(false);
@@ -12978,6 +12980,7 @@ export function App() {
         wm_file_cache: dump.fileCache,
         wm_diff_cache: dump.diffCache,
         wm_meta: dump.meta,
+        storage: dump.storage,
         local_storage: dump.localStorage,
       },
       null,
@@ -12989,9 +12992,11 @@ export function App() {
     setDatabasePanelOpen(true);
     setDatabaseLoading(true);
     setDatabaseError('');
+    setDatabaseStorageStats(null);
     workspaceStore
       .dumpDatabase()
       .then(dump => {
+        setDatabaseStorageStats(dump.storage);
         setDatabaseDumpText(formatDatabaseDump(dump));
       })
       .catch(err => {
@@ -15006,6 +15011,7 @@ export function App() {
           loading={databaseLoading}
           error={databaseError}
           dumpText={databaseDumpText}
+          storageStats={databaseStorageStats}
         />
       </React.Suspense>,
       renderSettingsDetailActions('database'),
