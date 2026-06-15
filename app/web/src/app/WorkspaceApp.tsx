@@ -18171,7 +18171,12 @@ export function App() {
           highlightedLines={chatPeekSelectedLines}
           onLineClick={handlePeekLineClick}
           onClose={closeChatFilePeekFromChrome}
-          onCopyPath={() => { navigator.clipboard.writeText(chatFilePeek.path).catch(() => undefined); }}
+          onCopyPath={() => {
+            const projectRoot = (currentProject?.path ?? '').replace(/[\\/]+$/, '');
+            const relativePath = chatFilePeek.path.replace(/^\.?[\\/]+/, '');
+            const absolutePath = projectRoot && relativePath ? `${projectRoot}/${relativePath}`.replace(/\\/g, '/') : chatFilePeek.path;
+            navigator.clipboard.writeText(absolutePath).catch(() => undefined);
+          }}
           onOpenInFileTab={openPeekFileInFullFileTab}
           scrollRef={chatFilePeekScrollRef}
         />
@@ -18222,7 +18227,12 @@ export function App() {
           highlightedLines={chatPeekSelectedLines}
           onLineClick={handlePeekLineClick}
           onClose={closeChatFilePeekFromChrome}
-          onCopyPath={() => { navigator.clipboard.writeText(chatFilePeek.path).catch(() => undefined); }}
+          onCopyPath={() => {
+            const projectRoot = (currentProject?.path ?? '').replace(/[\\/]+$/, '');
+            const relativePath = chatFilePeek.path.replace(/^\.?[\\/]+/, '');
+            const absolutePath = projectRoot && relativePath ? `${projectRoot}/${relativePath}`.replace(/\\/g, '/') : chatFilePeek.path;
+            navigator.clipboard.writeText(absolutePath).catch(() => undefined);
+          }}
           onOpenInFileTab={openPeekFileInFullFileTab}
           scrollRef={chatFilePeekScrollRef}
         />
