@@ -265,6 +265,8 @@ import {
   type FloatingBackdropTone,
 } from '../shell/layouts/mobile/floatingBackdropTone';
 import {
+  scanTokenStatsAcrossHubs,
+  tokenStatsFailureSummary,
   type TokenProviderSectionView,
 } from '../settings/tokenStatsView';
 import {
@@ -11441,16 +11443,25 @@ export function App() {
         setTokenStatsError('No hubs available.');
         return;
       }
-      const requests = hubIds.map(async hubId => {
-        const result = await service.scanTokenStats(hubId);
-        return {hubId, result};
-      });
-      const responses = await Promise.all(requests);
-      setTokenStatsProviders(mergeTokenProviders(responses));
-      const latestUpdatedAt = responses
-        .map(item => item.result.updatedAt || '')
-        .sort((left, right) => right.localeCompare(left))[0] || '';
-      setTokenStatsUpdatedAt(latestUpdatedAt);
+      const applyTokenStatsResponses = (responses: Array<{hubId: string; projectId?: string; result: RegistryTokenScanResult}>) => {
+        setTokenStatsProviders(mergeTokenProviders(responses));
+        const latestUpdatedAt = responses
+          .map(item => item.result.updatedAt || '')
+          .sort((left, right) => right.localeCompare(left))[0] || '';
+        setTokenStatsUpdatedAt(latestUpdatedAt);
+      };
+      const scanResult = await scanTokenStatsAcrossHubs(
+        hubIds,
+        hubId => service.scanTokenStats(hubId),
+        {
+          onSuccess: applyTokenStatsResponses,
+          onFailure: failures => {
+            setTokenStatsError(tokenStatsFailureSummary(failures));
+          },
+        },
+      );
+      applyTokenStatsResponses(scanResult.responses);
+      setTokenStatsError(tokenStatsFailureSummary(scanResult.failures));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setTokenStatsError(message);

@@ -1,4 +1,91 @@
-import type { RegistryTokenProviderAccount } from '../registry/registryTypes';
+import type {
+  RegistryTokenProviderAccount,
+  RegistryTokenScanResult,
+} from '../registry/registryTypes';
+
+export const TOKEN_STATS_SCAN_TIMEOUT_MS = 65000;
+
+export type TokenStatsHubScanEntry = {
+  hubId: string;
+  projectId?: string;
+  result: RegistryTokenScanResult;
+};
+
+export type TokenStatsHubScanFailure = {
+  hubId: string;
+  message: string;
+};
+
+type ScanTokenStatsAcrossHubsOptions = {
+  timeoutMs?: number;
+  onSuccess?: (entries: TokenStatsHubScanEntry[]) => void;
+  onFailure?: (failures: TokenStatsHubScanFailure[]) => void;
+};
+
+const errorMessage = (err: unknown): string => {
+  return err instanceof Error ? err.message : String(err);
+};
+
+export function tokenStatsFailureSummary(failures: TokenStatsHubScanFailure[]): string {
+  if (failures.length === 0) return '';
+  const details = [...failures]
+    .sort((left, right) => left.hubId.localeCompare(right.hubId))
+    .map(failure => `${failure.hubId}: ${failure.message}`)
+    .join('; ');
+  return `Some hubs failed: ${details}`;
+}
+
+export function withTokenStatsTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string,
+): Promise<T> {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return promise;
+  }
+  return new Promise<T>((resolve, reject) => {
+    const timer = globalThis.setTimeout(() => {
+      reject(new Error(message));
+    }, timeoutMs);
+    promise.then(
+      value => {
+        globalThis.clearTimeout(timer);
+        resolve(value);
+      },
+      error => {
+        globalThis.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+export async function scanTokenStatsAcrossHubs(
+  hubIds: string[],
+  scanHub: (hubId: string) => Promise<RegistryTokenScanResult>,
+  options: ScanTokenStatsAcrossHubsOptions = {},
+): Promise<{responses: TokenStatsHubScanEntry[]; failures: TokenStatsHubScanFailure[]}> {
+  const responses: TokenStatsHubScanEntry[] = [];
+  const failures: TokenStatsHubScanFailure[] = [];
+  const timeoutMs = options.timeoutMs ?? TOKEN_STATS_SCAN_TIMEOUT_MS;
+
+  await Promise.all(hubIds.map(async hubId => {
+    try {
+      const result = await withTokenStatsTimeout(
+        scanHub(hubId),
+        timeoutMs,
+        `${hubId} token stats scan timed out`,
+      );
+      responses.push({hubId, result});
+      options.onSuccess?.([...responses]);
+    } catch (err) {
+      failures.push({hubId, message: errorMessage(err)});
+      options.onFailure?.([...failures]);
+    }
+  }));
+
+  return {responses, failures};
+}
 
 export type TokenProviderAccountView = RegistryTokenProviderAccount & {
   hubId: string;
