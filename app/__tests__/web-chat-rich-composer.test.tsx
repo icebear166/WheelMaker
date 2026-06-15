@@ -145,6 +145,78 @@ describe('ChatRichComposer', () => {
     expect(onTokensChange).toHaveBeenLastCalledWith([{type: 'text', text: 'wo'}]);
   });
 
+  test('does not replace browser-owned text after committed IME text is cleared and restarted', async () => {
+    const onTokensChange = jest.fn();
+    const composerRoot = createComposerDomRoot();
+    const replaceChildren = jest.spyOn(composerRoot, 'replaceChildren');
+    const StatefulComposer = () => {
+      const [tokens, setTokens] = React.useState<ChatComposerToken[]>([]);
+      return (
+        <ChatRichComposer
+          tokens={tokens}
+          onTokensChange={nextTokens => {
+            onTokensChange(nextTokens);
+            setTokens(nextTokens);
+          }}
+          readOnly={false}
+        />
+      );
+    };
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(<StatefulComposer />, {
+        createNodeMock: element => (element.props.role === 'textbox' ? composerRoot : null),
+      });
+    });
+
+    const textbox = renderer!.root.findByProps({role: 'textbox'});
+    replaceChildren.mockClear();
+
+    await ReactTestRenderer.act(() => {
+      textbox.props.onCompositionStart();
+      textboxReplaceText(composerRoot, '哟');
+      textbox.props.onCompositionEnd();
+    });
+
+    expect(onTokensChange).toHaveBeenLastCalledWith([{type: 'text', text: '哟'}]);
+    expect(replaceChildren).not.toHaveBeenCalled();
+
+    await ReactTestRenderer.act(() => {
+      textboxReplaceText(composerRoot, '');
+      textbox.props.onInput({
+        nativeEvent: {
+          inputType: 'deleteContentBackward',
+          isComposing: false,
+        },
+      });
+    });
+
+    expect(onTokensChange).toHaveBeenLastCalledWith([]);
+    expect(replaceChildren).not.toHaveBeenCalled();
+
+    await ReactTestRenderer.act(() => {
+      textbox.props.onBeforeInput({
+        nativeEvent: {
+          inputType: 'insertText',
+          isComposing: false,
+          data: 'y',
+        },
+      });
+      textboxReplaceText(composerRoot, 'y');
+      textbox.props.onInput({
+        nativeEvent: {
+          inputType: 'insertText',
+          isComposing: false,
+          data: 'y',
+        },
+      });
+    });
+
+    expect(onTokensChange).toHaveBeenLastCalledWith([{type: 'text', text: 'y'}]);
+    expect(replaceChildren).not.toHaveBeenCalled();
+  });
+
 
   test('renders placeholder outside the editable selection surface', async () => {
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;

@@ -315,6 +315,9 @@ function syncComposerDom(
   if (!root) {
     return;
   }
+  if (composerDomMatchesTokens(root, tokens, selectedTokenId)) {
+    return;
+  }
   const ownerDocument = root.ownerDocument;
   root.replaceChildren(...tokens.map(token => {
     if (token.type === 'text') {
@@ -322,6 +325,49 @@ function syncComposerDom(
     }
     return createCapsuleNode(ownerDocument, token, token.id === selectedTokenId);
   }));
+}
+
+function composerDomMatchesTokens(
+  root: HTMLDivElement,
+  tokens: ChatComposerToken[],
+  selectedTokenId: string,
+): boolean {
+  const children = Array.from(root.childNodes).filter(node => !isEmptyTextNode(node));
+  if (children.length !== tokens.length) {
+    return false;
+  }
+  return tokens.every((token, index) => composerNodeMatchesToken(children[index], token, selectedTokenId));
+}
+
+function isEmptyTextNode(node: Node): boolean {
+  return node.nodeType === Node.TEXT_NODE && (node.textContent ?? '') === '';
+}
+
+function composerNodeMatchesToken(
+  node: Node | undefined,
+  token: ChatComposerToken,
+  selectedTokenId: string,
+): boolean {
+  if (!node) {
+    return false;
+  }
+  if (token.type === 'text') {
+    return node.nodeType === Node.TEXT_NODE && node.textContent === token.text;
+  }
+  if (!isCapsuleNode(node)) {
+    return false;
+  }
+  const element = node as HTMLElement;
+  return element.dataset.kind === token.type &&
+    element.dataset.tokenId === token.id &&
+    elementHasClass(element, 'selected') === (token.id === selectedTokenId);
+}
+
+function elementHasClass(element: HTMLElement, className: string): boolean {
+  if (element.classList) {
+    return element.classList.contains(className);
+  }
+  return String(element.className || '').split(/\s+/).includes(className);
 }
 
 function createCapsuleNode(
