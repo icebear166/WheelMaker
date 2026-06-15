@@ -181,6 +181,25 @@ export const ChatRichComposer = React.forwardRef<ChatRichComposerHandle, ChatRic
       emitTokens(readTokensFromDom(root, tokensRef.current), currentTokenPosition(root, tokensRef.current));
     }, [emitTokens, setSelectedToken]);
 
+    const handlePaste = React.useCallback(
+      (event: React.ClipboardEvent<HTMLDivElement>) => {
+        onPaste?.(event);
+        if (event.defaultPrevented) {
+          return;
+        }
+        if (readOnly) {
+          return;
+        }
+        const text = event.clipboardData?.getData('text/plain') ?? '';
+        if (!text) {
+          return;
+        }
+        event.preventDefault();
+        insertTokens([{type: 'text', text}]);
+      },
+      [insertTokens, onPaste, readOnly],
+    );
+
     const handleMouseDown = React.useCallback(
       (event: React.MouseEvent<HTMLDivElement>) => {
         const target = event.target instanceof HTMLElement
@@ -246,7 +265,7 @@ export const ChatRichComposer = React.forwardRef<ChatRichComposerHandle, ChatRic
           onInput={handleInput}
           onKeyDown={handleKeyDown}
           onMouseDown={handleMouseDown}
-          onPaste={onPaste}
+          onPaste={handlePaste}
           onCompositionStart={() => {
             composingRef.current = true;
           }}

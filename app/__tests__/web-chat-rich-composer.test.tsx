@@ -164,6 +164,107 @@ describe('ChatRichComposer', () => {
     expect(placeholder.children).toEqual(['Send a message...']);
   });
 
+  test('pastes rich clipboard links as their plain-text URL', async () => {
+    const onTokensChange = jest.fn();
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        <ChatRichComposer tokens={[]} onTokensChange={onTokensChange} readOnly={false} />,
+      );
+    });
+
+    const textbox = renderer!.root.findByProps({role: 'textbox'});
+    const preventDefault = jest.fn();
+
+    await ReactTestRenderer.act(() => {
+      textbox.props.onPaste({
+        clipboardData: {
+          getData: (type: string) => {
+            if (type === 'text/plain') {
+              return 'https://example.com/docs?x=1#intro';
+            }
+            if (type === 'text/html') {
+              return '<a href="https://example.com/docs?x=1#intro">Example Docs</a>';
+            }
+            return '';
+          },
+        },
+        defaultPrevented: false,
+        preventDefault,
+      });
+    });
+
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(onTokensChange).toHaveBeenLastCalledWith([
+      {type: 'text', text: 'https://example.com/docs?x=1#intro'},
+    ]);
+  });
+
+  test('leaves paste untouched after parent paste handler prevents default', async () => {
+    const onTokensChange = jest.fn();
+    const onPaste = jest.fn(event => {
+      event.preventDefault();
+      event.defaultPrevented = true;
+    });
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        <ChatRichComposer
+          tokens={[]}
+          onTokensChange={onTokensChange}
+          onPaste={onPaste}
+          readOnly={false}
+        />,
+      );
+    });
+
+    const textbox = renderer!.root.findByProps({role: 'textbox'});
+    const preventDefault = jest.fn();
+
+    await ReactTestRenderer.act(() => {
+      textbox.props.onPaste({
+        clipboardData: {
+          getData: () => 'https://example.com/',
+        },
+        defaultPrevented: false,
+        preventDefault,
+      });
+    });
+
+    expect(onPaste).toHaveBeenCalledTimes(1);
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(onTokensChange).not.toHaveBeenCalled();
+  });
+
+  test('does not paste plain text while read only', async () => {
+    const onTokensChange = jest.fn();
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        <ChatRichComposer tokens={[]} onTokensChange={onTokensChange} readOnly={true} />,
+      );
+    });
+
+    const textbox = renderer!.root.findByProps({role: 'textbox'});
+    const preventDefault = jest.fn();
+
+    await ReactTestRenderer.act(() => {
+      textbox.props.onPaste({
+        clipboardData: {
+          getData: () => 'https://example.com/',
+        },
+        defaultPrevented: false,
+        preventDefault,
+      });
+    });
+
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(onTokensChange).not.toHaveBeenCalled();
+  });
+
   test('imperative insertion appends file and skill tokens', async () => {
     const onTokensChange = jest.fn();
     const ref = React.createRef<ChatRichComposerHandle>();
