@@ -163,12 +163,21 @@ export const ChatRichComposer = React.forwardRef<ChatRichComposerHandle, ChatRic
       [deleteSelectedCapsule, insertTokens, setSelectedToken],
     );
 
-    const handleInput = React.useCallback(() => {
+    const handleBeforeInput = React.useCallback((event: React.FormEvent<HTMLDivElement>) => {
+      if (isCompositionTextEvent(event.nativeEvent)) {
+        composingRef.current = true;
+      }
+    }, []);
+
+    const handleInput = React.useCallback((event?: React.FormEvent<HTMLDivElement>) => {
       const root = rootRef.current;
       if (!root) {
         return;
       }
       setLocalEmpty(composerRootEmpty(root));
+      if (isCompositionTextEvent(event?.nativeEvent)) {
+        composingRef.current = true;
+      }
       if (composingRef.current) {
         return;
       }
@@ -242,6 +251,7 @@ export const ChatRichComposer = React.forwardRef<ChatRichComposerHandle, ChatRic
           aria-label={placeholder}
           aria-multiline="true"
           enterKeyHint={enterKeyHint}
+          onBeforeInput={handleBeforeInput}
           onInput={handleInput}
           onKeyDown={handleKeyDown}
           onMouseDown={handleMouseDown}
@@ -295,6 +305,11 @@ function domNodeHasComposerContent(node: Node): boolean {
     return true;
   }
   return Array.from(node.childNodes).some(child => domNodeHasComposerContent(child));
+}
+
+function isCompositionTextEvent(nativeEvent: Event | undefined): boolean {
+  const inputEvent = nativeEvent as (Event & {inputType?: string; isComposing?: boolean}) | undefined;
+  return inputEvent?.isComposing === true || inputEvent?.inputType === 'insertCompositionText';
 }
 
 function syncComposerDom(

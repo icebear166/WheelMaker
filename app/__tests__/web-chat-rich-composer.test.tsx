@@ -100,6 +100,51 @@ describe('ChatRichComposer', () => {
     expect(renderer!.root.findAllByProps({className: 'chat-rich-composer-placeholder'})).toHaveLength(0);
   });
 
+  test('keeps early IME beforeinput local until composition ends', async () => {
+    const onTokensChange = jest.fn();
+    const composerRoot = createComposerDomRoot();
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        <ChatRichComposer tokens={[]} onTokensChange={onTokensChange} readOnly={false} />,
+        {
+          createNodeMock: element => (element.props.role === 'textbox' ? composerRoot : null),
+        },
+      );
+    });
+
+    const textbox = renderer!.root.findByProps({role: 'textbox'});
+
+    expect(textbox.props.onBeforeInput).toEqual(expect.any(Function));
+
+    await ReactTestRenderer.act(() => {
+      textbox.props.onBeforeInput({
+        nativeEvent: {
+          inputType: 'insertCompositionText',
+          isComposing: false,
+        },
+      });
+      textboxReplaceText(composerRoot, 'w');
+      textbox.props.onInput({
+        nativeEvent: {
+          inputType: 'insertText',
+          isComposing: false,
+        },
+      });
+    });
+
+    expect(onTokensChange).not.toHaveBeenCalled();
+
+    await ReactTestRenderer.act(() => {
+      textboxReplaceText(composerRoot, 'wo');
+      textbox.props.onCompositionEnd();
+    });
+
+    expect(onTokensChange).toHaveBeenCalledTimes(1);
+    expect(onTokensChange).toHaveBeenLastCalledWith([{type: 'text', text: 'wo'}]);
+  });
+
 
   test('renders placeholder outside the editable selection surface', async () => {
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
@@ -237,6 +282,15 @@ function createComposerDomRoot(): HTMLDivElement {
 function textboxAppendText(root: HTMLDivElement, text: string): void {
   root.childNodes = [
     ...Array.from(root.childNodes),
+    {
+      nodeType: 3,
+      textContent: text,
+    } as unknown as ChildNode,
+  ] as unknown as NodeListOf<ChildNode>;
+}
+
+function textboxReplaceText(root: HTMLDivElement, text: string): void {
+  root.childNodes = [
     {
       nodeType: 3,
       textContent: text,
