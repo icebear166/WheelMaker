@@ -73,7 +73,7 @@ describe('ChatRichComposer', () => {
     expect(onTokensChange).toHaveBeenLastCalledWith([{type: 'text', text: 'ni'}]);
   });
 
-  test('hides placeholder from local composition input before tokens commit', async () => {
+  test('keeps placeholder mounted during local composition input before tokens commit', async () => {
     const onTokensChange = jest.fn();
     const composerRoot = createComposerDomRoot();
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
@@ -97,7 +97,7 @@ describe('ChatRichComposer', () => {
     });
 
     expect(onTokensChange).not.toHaveBeenCalled();
-    expect(renderer!.root.findAllByProps({className: 'chat-rich-composer-placeholder'})).toHaveLength(0);
+    expect(renderer!.root.findAllByProps({className: 'chat-rich-composer-placeholder'})).toHaveLength(1);
   });
 
   test('keeps early IME beforeinput local until composition ends', async () => {

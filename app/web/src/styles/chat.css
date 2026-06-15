@@ -3184,6 +3184,10 @@
   pointer-events: none;
 }
 
+.chat-rich-composer:not(:empty) + .chat-rich-composer-placeholder {
+  visibility: hidden;
+}
+
 .chat-composer-capsule,
 .chat-prompt-inline-capsule {
   display: inline-flex;
