@@ -9,6 +9,8 @@ const workspaceBootstrap = fs.readFileSync(path.join(root, 'web/src/app/workspac
 describe('main surface boundaries', () => {
   test('main only owns the bootstrap render boundary', () => {
     expect(main).toContain("import { App, workspaceAppReady } from './app/WorkspaceApp';");
+    expect(main).toContain("import { requestPersistentBrowserStorageOnStartup } from './platform/storagePersistence';");
+    expect(main).toContain('requestPersistentBrowserStorageOnStartup();');
     expect(main).toContain('workspaceAppReady.then(() => {');
     expect(main).toContain("createRoot(document.getElementById('root')!).render(<App />);");
     expect(main).not.toContain('AppConfirmDialog');

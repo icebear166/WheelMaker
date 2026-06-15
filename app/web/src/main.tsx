@@ -6,7 +6,10 @@ import '@fontsource/ibm-plex-sans/500.css';
 import '@fontsource/ibm-plex-sans/600.css';
 import '@fontsource/jetbrains-mono/400.css';
 import { App, workspaceAppReady } from './app/WorkspaceApp';
+import { requestPersistentBrowserStorageOnStartup } from './platform/storagePersistence';
 import './styles/index.css';
+
+requestPersistentBrowserStorageOnStartup();
 
 workspaceAppReady.then(() => {
   createRoot(document.getElementById('root')!).render(<App />);
