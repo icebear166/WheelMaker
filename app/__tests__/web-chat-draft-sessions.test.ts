@@ -146,4 +146,18 @@ describe('web chat draft sessions', () => {
     expect(draftRowBody).not.toContain('openProjectSessionContextMenu');
     expect(draftRowBody).not.toContain('startProjectSessionLongPress');
   });
+
+  test('keeps session.create RPC alive long enough for slow Codex startup drafts', () => {
+    const root = projectRoot();
+    const repositoryTs = readSourceText(path.join(root, 'web', 'src', 'registry', 'RegistryRepository.ts'));
+    const createSessionStart = repositoryTs.indexOf('async createSession(projectId: string, agentType: string, title?: string)');
+    expect(createSessionStart).toBeGreaterThanOrEqual(0);
+    const sendSessionStart = repositoryTs.indexOf('async sendSessionMessage(', createSessionStart);
+    expect(sendSessionStart).toBeGreaterThan(createSessionStart);
+    const createSessionBody = repositoryTs.slice(createSessionStart, sendSessionStart);
+
+    expect(repositoryTs).toContain('const SESSION_CREATE_TIMEOUT_MS = 120000;');
+    expect(createSessionBody).toContain('timeoutMs: SESSION_CREATE_TIMEOUT_MS,');
+    expect(createSessionBody).not.toContain('timeoutMs: 15000,');
+  });
 });

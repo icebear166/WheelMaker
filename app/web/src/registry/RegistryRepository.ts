@@ -101,6 +101,8 @@ export type QueryWheelMakerUpdateOptions = {
   force?: boolean;
 };
 
+const SESSION_CREATE_TIMEOUT_MS = 120000;
+
 function normalizeAgentType(agentType: unknown): string | undefined {
   if (typeof agentType !== 'string') {
     return undefined;
@@ -1054,7 +1056,7 @@ export class RegistryRepository {
       method: RegistryMethods.SessionCreate,
       projectId,
       payload: title?.trim() ? {agentType, title: title.trim()} : {agentType},
-      timeoutMs: 15000,
+      timeoutMs: SESSION_CREATE_TIMEOUT_MS,
     });
     const body = (resp.payload ?? {}) as {ok?: boolean; session?: RegistrySessionSummary};
     return {
