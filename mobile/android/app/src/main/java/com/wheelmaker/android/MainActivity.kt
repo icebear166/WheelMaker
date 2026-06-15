@@ -7,6 +7,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
 import android.os.Build
@@ -24,7 +25,10 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.window.OnBackInvokedCallback
 import android.window.OnBackInvokedDispatcher
+import android.view.animation.AlphaAnimation
 import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.ProgressBar
 import android.widget.Toast
 import androidx.core.graphics.Insets
 import androidx.core.app.ActivityCompat
@@ -49,6 +53,7 @@ class MainActivity : Activity() {
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
     private var pendingAudioPermissionRequest: PermissionRequest? = null
     private var systemBackCallback: OnBackInvokedCallback? = null
+    private var splashOverlay: FrameLayout? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,9 +83,52 @@ class MainActivity : Activity() {
             webView,
             FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         )
+        splashOverlay = createSplashOverlay()
+        rootView.addView(splashOverlay)
         setContentView(rootView)
         registerSystemBackCallback()
         webView.loadUrl(notificationTargetUrl(intent) ?: ANDROID_APP_ORIGIN)
+    }
+
+    private fun createSplashOverlay(): FrameLayout {
+        val overlay = FrameLayout(this)
+        overlay.setBackgroundColor(APP_BACKGROUND_COLOR)
+        val contentLayout = android.widget.LinearLayout(this)
+        contentLayout.orientation = android.widget.LinearLayout.VERTICAL
+        contentLayout.gravity = android.view.Gravity.CENTER
+        val iconSize = (64 * resources.displayMetrics.density).toInt()
+        val iconParams = android.widget.LinearLayout.LayoutParams(iconSize, iconSize)
+        iconParams.gravity = android.view.Gravity.CENTER_HORIZONTAL
+        val icon = ImageView(this)
+        icon.setImageResource(R.drawable.ic_launcher_foreground)
+        icon.layoutParams = iconParams
+        contentLayout.addView(icon)
+        val loadingSize = (32 * resources.displayMetrics.density).toInt()
+        val loadingParams = android.widget.LinearLayout.LayoutParams(loadingSize, loadingSize)
+        loadingParams.gravity = android.view.Gravity.CENTER_HORIZONTAL
+        loadingParams.topMargin = (24 * resources.displayMetrics.density).toInt()
+        val loading = ProgressBar(this)
+        loading.indeterminateDrawable.setColorFilter(Color.WHITE, android.graphics.PorterDuff.Mode.SRC_IN)
+        loading.layoutParams = loadingParams
+        contentLayout.addView(loading)
+        val overlayParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        overlay.addView(contentLayout, overlayParams)
+        return overlay
+    }
+
+    private fun dismissSplashOverlay() {
+        val overlay = splashOverlay ?: return
+        splashOverlay = null
+        val fadeOut = AlphaAnimation(1f, 0f)
+        fadeOut.duration = 300
+        fadeOut.setAnimationListener(object : android.view.animation.Animation.AnimationListener {
+            override fun onAnimationStart(animation: android.view.animation.Animation?) {}
+            override fun onAnimationRepeat(animation: android.view.animation.Animation?) {}
+            override fun onAnimationEnd(animation: android.view.animation.Animation?) {
+                rootView.removeView(overlay)
+            }
+        })
+        overlay.startAnimation(fadeOut)
     }
 
     override fun onPause() {
@@ -187,7 +235,12 @@ class MainActivity : Activity() {
         target.settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(target, true)
-        target.webViewClient = StableOriginWebViewClient(this, webSourceRuntime, androidWebDiagnostics)
+        target.webViewClient = object : StableOriginWebViewClient(this, webSourceRuntime, androidWebDiagnostics) {
+            override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                super.onPageStarted(view, url, favicon)
+                dismissSplashOverlay()
+            }
+        }
         target.webChromeClient = object : WebChromeClient() {
             override fun onPermissionRequest(request: PermissionRequest) {
                 if (request.resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) {
