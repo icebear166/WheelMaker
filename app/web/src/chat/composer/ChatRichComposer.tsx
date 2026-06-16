@@ -332,35 +332,41 @@ function composerDomMatchesTokens(
   tokens: ChatComposerToken[],
   selectedTokenId: string,
 ): boolean {
-  const children = Array.from(root.childNodes).filter(node => !isEmptyTextNode(node));
-  if (children.length !== tokens.length) {
-    return false;
-  }
-  return tokens.every((token, index) => composerNodeMatchesToken(children[index], token, selectedTokenId));
+  const domTokens = readTokensFromDom(root, tokens);
+  return chatComposerTokensMatch(domTokens, normalizeChatComposerTokens(tokens)) &&
+    composerCapsuleSelectionMatches(root, selectedTokenId);
 }
 
-function isEmptyTextNode(node: Node): boolean {
-  return node.nodeType === Node.TEXT_NODE && (node.textContent ?? '') === '';
+function chatComposerTokensMatch(left: ChatComposerToken[], right: ChatComposerToken[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  return left.every((token, index) => chatComposerTokenMatches(token, right[index]));
 }
 
-function composerNodeMatchesToken(
-  node: Node | undefined,
-  token: ChatComposerToken,
-  selectedTokenId: string,
-): boolean {
-  if (!node) {
+function chatComposerTokenMatches(left: ChatComposerToken, right: ChatComposerToken | undefined): boolean {
+  if (!right || left.type !== right.type) {
     return false;
   }
-  if (token.type === 'text') {
-    return node.nodeType === Node.TEXT_NODE && node.textContent === token.text;
+  if (left.type === 'text' && right.type === 'text') {
+    return left.text === right.text;
   }
-  if (!isCapsuleNode(node)) {
-    return false;
+  if (left.type === 'skill' && right.type === 'skill') {
+    return left.id === right.id &&
+      left.command === right.command &&
+      left.label === right.label;
   }
-  const element = node as HTMLElement;
-  return element.dataset.kind === token.type &&
-    element.dataset.tokenId === token.id &&
-    elementHasClass(element, 'selected') === (token.id === selectedTokenId);
+  return left.type === 'file' &&
+    right.type === 'file' &&
+    left.id === right.id &&
+    left.path === right.path &&
+    left.name === right.name &&
+    left.label === right.label;
+}
+
+function composerCapsuleSelectionMatches(root: HTMLDivElement, selectedTokenId: string): boolean {
+  return Array.from(root.querySelectorAll<HTMLElement>('[data-chat-composer-capsule="true"]'))
+    .every(element => elementHasClass(element, 'selected') === (!!selectedTokenId && element.dataset.tokenId === selectedTokenId));
 }
 
 function elementHasClass(element: HTMLElement, className: string): boolean {

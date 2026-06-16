@@ -217,6 +217,143 @@ describe('ChatRichComposer', () => {
     expect(replaceChildren).not.toHaveBeenCalled();
   });
 
+  test('does not replace wrapped browser text at the start of an empty composer', async () => {
+    const onTokensChange = jest.fn();
+    const composerRoot = createComposerDomRoot();
+    const replaceChildren = jest.spyOn(composerRoot, 'replaceChildren');
+    const StatefulComposer = () => {
+      const [tokens, setTokens] = React.useState<ChatComposerToken[]>([]);
+      return (
+        <ChatRichComposer
+          tokens={tokens}
+          onTokensChange={nextTokens => {
+            onTokensChange(nextTokens);
+            setTokens(nextTokens);
+          }}
+          readOnly={false}
+        />
+      );
+    };
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(<StatefulComposer />, {
+        createNodeMock: element => (element.props.role === 'textbox' ? composerRoot : null),
+      });
+    });
+
+    const textbox = renderer!.root.findByProps({role: 'textbox'});
+    replaceChildren.mockClear();
+
+    await ReactTestRenderer.act(() => {
+      textboxAppendNode(composerRoot, createComposerElementNode('span', [createComposerTextNode('y')]));
+      textbox.props.onInput({
+        nativeEvent: {
+          inputType: 'insertText',
+          isComposing: false,
+          data: 'y',
+        },
+      });
+    });
+
+    expect(onTokensChange).toHaveBeenLastCalledWith([{type: 'text', text: 'y'}]);
+    expect(replaceChildren).not.toHaveBeenCalled();
+  });
+
+  test('does not replace plain text typed immediately after a skill capsule without a space', async () => {
+    const onTokensChange = jest.fn();
+    const composerRoot = createComposerDomRoot();
+    const replaceChildren = jest.spyOn(composerRoot, 'replaceChildren');
+    const skillToken: ChatComposerToken = {type: 'skill', id: 'skill:1', command: '/review', label: 'Review'};
+    const StatefulComposer = () => {
+      const [tokens, setTokens] = React.useState<ChatComposerToken[]>([skillToken]);
+      return (
+        <ChatRichComposer
+          tokens={tokens}
+          onTokensChange={nextTokens => {
+            onTokensChange(nextTokens);
+            setTokens(nextTokens);
+          }}
+          readOnly={false}
+        />
+      );
+    };
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(<StatefulComposer />, {
+        createNodeMock: element => (element.props.role === 'textbox' ? composerRoot : null),
+      });
+    });
+
+    const textbox = renderer!.root.findByProps({role: 'textbox'});
+    replaceChildren.mockClear();
+
+    await ReactTestRenderer.act(() => {
+      textboxAppendText(composerRoot, 'y');
+      textbox.props.onInput({
+        nativeEvent: {
+          inputType: 'insertText',
+          isComposing: false,
+          data: 'y',
+        },
+      });
+    });
+
+    expect(onTokensChange).toHaveBeenLastCalledWith([
+      skillToken,
+      {type: 'text', text: 'y'},
+    ]);
+    expect(replaceChildren).not.toHaveBeenCalled();
+  });
+
+  test('does not replace wrapped browser text typed immediately after a skill capsule without a space', async () => {
+    const onTokensChange = jest.fn();
+    const composerRoot = createComposerDomRoot();
+    const replaceChildren = jest.spyOn(composerRoot, 'replaceChildren');
+    const skillToken: ChatComposerToken = {type: 'skill', id: 'skill:1', command: '/review', label: 'Review'};
+    const StatefulComposer = () => {
+      const [tokens, setTokens] = React.useState<ChatComposerToken[]>([skillToken]);
+      return (
+        <ChatRichComposer
+          tokens={tokens}
+          onTokensChange={nextTokens => {
+            onTokensChange(nextTokens);
+            setTokens(nextTokens);
+          }}
+          readOnly={false}
+        />
+      );
+    };
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(<StatefulComposer />, {
+        createNodeMock: element => (element.props.role === 'textbox' ? composerRoot : null),
+      });
+    });
+
+    const textbox = renderer!.root.findByProps({role: 'textbox'});
+    replaceChildren.mockClear();
+
+    await ReactTestRenderer.act(() => {
+      textboxAppendNode(composerRoot, createComposerElementNode('span', [createComposerTextNode('y')]));
+      textbox.props.onInput({
+        nativeEvent: {
+          inputType: 'insertText',
+          isComposing: false,
+          data: 'y',
+        },
+      });
+    });
+
+    expect(onTokensChange).toHaveBeenLastCalledWith([
+      skillToken,
+      {type: 'text', text: 'y'},
+    ]);
+    expect(replaceChildren).not.toHaveBeenCalled();
+  });
+
 
   test('renders placeholder outside the editable selection surface', async () => {
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
@@ -421,10 +558,7 @@ describe('ChatRichComposer', () => {
 
 function createComposerDomRoot(): HTMLDivElement {
   const ownerDocument = {
-    createTextNode: (text: string) => ({
-      nodeType: 3,
-      textContent: text,
-    }),
+    createTextNode: createComposerTextNode,
     createElement: (tagName: string) => ({
       nodeType: 1,
       nodeName: tagName.toUpperCase(),
@@ -452,21 +586,42 @@ function createComposerDomRoot(): HTMLDivElement {
   } as unknown as HTMLDivElement;
 }
 
+function createComposerTextNode(text: string): Node {
+  return {
+    nodeType: 3,
+    textContent: text,
+  } as unknown as Node;
+}
+
+function createComposerElementNode(tagName: string, children: Node[] = []): Node {
+  return {
+    nodeType: 1,
+    nodeName: tagName.toUpperCase(),
+    dataset: {},
+    className: '',
+    childNodes: children,
+    appendChild(child: Node) {
+      this.childNodes.push(child);
+    },
+    setAttribute() {
+      return undefined;
+    },
+  } as unknown as Node;
+}
+
 function textboxAppendText(root: HTMLDivElement, text: string): void {
+  textboxAppendNode(root, createComposerTextNode(text));
+}
+
+function textboxAppendNode(root: HTMLDivElement, node: Node): void {
   root.childNodes = [
     ...Array.from(root.childNodes),
-    {
-      nodeType: 3,
-      textContent: text,
-    } as unknown as ChildNode,
+    node as ChildNode,
   ] as unknown as NodeListOf<ChildNode>;
 }
 
 function textboxReplaceText(root: HTMLDivElement, text: string): void {
   root.childNodes = [
-    {
-      nodeType: 3,
-      textContent: text,
-    } as unknown as ChildNode,
+    createComposerTextNode(text) as ChildNode,
   ] as unknown as NodeListOf<ChildNode>;
 }
