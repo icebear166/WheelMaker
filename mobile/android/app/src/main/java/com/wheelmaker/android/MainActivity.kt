@@ -7,7 +7,6 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
 import android.os.Build
@@ -96,17 +95,17 @@ class MainActivity : Activity() {
         val contentLayout = android.widget.LinearLayout(this)
         contentLayout.orientation = android.widget.LinearLayout.VERTICAL
         contentLayout.gravity = android.view.Gravity.CENTER
-        val iconSize = (64 * resources.displayMetrics.density).toInt()
+        val iconSize = (120 * resources.displayMetrics.density).toInt()
         val iconParams = android.widget.LinearLayout.LayoutParams(iconSize, iconSize)
         iconParams.gravity = android.view.Gravity.CENTER_HORIZONTAL
         val icon = ImageView(this)
         icon.setImageResource(R.drawable.ic_launcher_foreground)
         icon.layoutParams = iconParams
         contentLayout.addView(icon)
-        val loadingSize = (32 * resources.displayMetrics.density).toInt()
+        val loadingSize = (40 * resources.displayMetrics.density).toInt()
         val loadingParams = android.widget.LinearLayout.LayoutParams(loadingSize, loadingSize)
         loadingParams.gravity = android.view.Gravity.CENTER_HORIZONTAL
-        loadingParams.topMargin = (24 * resources.displayMetrics.density).toInt()
+        loadingParams.topMargin = (32 * resources.displayMetrics.density).toInt()
         val loading = ProgressBar(this)
         loading.indeterminateDrawable.setColorFilter(Color.WHITE, android.graphics.PorterDuff.Mode.SRC_IN)
         loading.layoutParams = loadingParams
@@ -236,8 +235,8 @@ class MainActivity : Activity() {
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(target, true)
         target.webViewClient = object : StableOriginWebViewClient(this, webSourceRuntime, androidWebDiagnostics) {
-            override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
-                super.onPageStarted(view, url, favicon)
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
                 dismissSplashOverlay()
             }
         }
