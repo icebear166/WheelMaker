@@ -11,7 +11,7 @@ import java.net.HttpURLConnection
 import java.net.URI
 import java.util.Locale
 
-class StableOriginWebViewClient(
+open class StableOriginWebViewClient(
     private val context: Context,
     private val webSourceRuntime: WebSourceRuntime,
     private val diagnostics: AndroidWebDiagnostics
