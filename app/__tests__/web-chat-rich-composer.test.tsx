@@ -199,6 +199,58 @@ describe('ChatRichComposer', () => {
     ]);
   });
 
+  test('keeps imperative text, skill, file, and capsule deletion working together', async () => {
+    const onTokensChange = jest.fn();
+    const ref = React.createRef<ChatRichComposerHandle>();
+    const StatefulComposer = () => {
+      const [tokens, setTokens] = React.useState<ChatComposerToken[]>([]);
+      return (
+        <ChatRichComposer
+          ref={ref}
+          tokens={tokens}
+          onTokensChange={nextTokens => {
+            onTokensChange(nextTokens);
+            setTokens(nextTokens);
+          }}
+          readOnly={false}
+        />
+      );
+    };
+
+    await ReactTestRenderer.act(() => {
+      ReactTestRenderer.create(<StatefulComposer />);
+    });
+
+    await ReactTestRenderer.act(() => {
+      ref.current!.insertText('hello');
+    });
+    expect(onTokensChange).toHaveBeenLastCalledWith([{type: 'text', text: 'hello'}]);
+
+    await ReactTestRenderer.act(() => {
+      ref.current!.insertSkill({command: '/review', label: 'Review'});
+    });
+    expect(onTokensChange).toHaveBeenLastCalledWith([
+      {type: 'text', text: 'hello'},
+      {type: 'skill', id: expect.any(String), command: '/review', label: 'Review'},
+      {type: 'text', text: ' '},
+    ]);
+
+    const skillToken = onTokensChange.mock.calls.at(-1)![0][1] as ChatComposerToken;
+    await ReactTestRenderer.act(() => {
+      ref.current!.insertFile({path: 'app/file.ts', name: 'file.ts'});
+      if (skillToken.type !== 'text') {
+        ref.current!.selectToken(skillToken.id);
+      }
+      ref.current!.deleteSelectedCapsule();
+    });
+
+    expect(onTokensChange).toHaveBeenLastCalledWith([
+      {type: 'text', text: 'hello '},
+      {type: 'file', id: expect.any(String), path: 'app/file.ts', name: 'file.ts', label: ''},
+      {type: 'text', text: ' '},
+    ]);
+  });
+
   test('reports serialized text cursor after replacing an active slash query', async () => {
     const onPlainTextChange = jest.fn();
     const ref = React.createRef<ChatRichComposerHandle>();

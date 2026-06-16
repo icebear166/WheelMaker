@@ -174,7 +174,7 @@ function ChatRichComposerContent({
     handleRef.current = {
       focus: () => editor.focus(),
       insertSkill: input => {
-        insertComposerTokens(editor, tokensRef.current, slashCommands, [
+        insertComposerTokens(editor, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange, slashCommands, [
           {
             type: 'skill',
             id: createTokenId('skill'),
@@ -186,7 +186,7 @@ function ChatRichComposerContent({
         setSelectedTokenId('');
       },
       insertFile: input => {
-        insertComposerTokens(editor, tokensRef.current, slashCommands, [
+        insertComposerTokens(editor, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange, slashCommands, [
           {
             type: 'file',
             id: createTokenId('file'),
@@ -353,6 +353,10 @@ function ChatRichComposerContent({
     }
     editor.getEditorState().read(() => {
       const currentTokens = tokenizeTextTokens($readComposerTokens(), slashCommands);
+      if (chatComposerTokensEqual(currentTokens, emittedTokensRef.current)) {
+        tokensRef.current = currentTokens;
+        return;
+      }
       const cursor = $currentComposerPosition(currentTokens);
       tokensRef.current = currentTokens;
       emittedTokensRef.current = currentTokens;
@@ -409,18 +413,32 @@ function tokenizeTextTokens(
 
 function insertComposerTokens(
   editor: LexicalEditor,
-  fallbackTokens: ChatComposerToken[],
+  tokensRef: React.MutableRefObject<ChatComposerToken[]>,
+  emittedTokensRef: React.MutableRefObject<ChatComposerToken[]>,
+  onTokensChange: (tokens: ChatComposerToken[]) => void,
+  onPlainTextChange: ((text: string, cursor: number) => void) | undefined,
   slashCommands: {command: string; label: string}[],
   insertedTokens: ChatComposerToken[],
 ): void {
+  let emitted: ChatComposerToken[] | null = null;
+  let emittedCursor = 0;
   editor.update(() => {
     const current = $readComposerTokens();
-    const sourceTokens = current.length > 0 ? current : fallbackTokens;
+    const sourceTokens = current.length > 0 ? current : tokensRef.current;
     const position = $currentComposerPosition(sourceTokens);
     const insertion = insertChatComposerTokens(sourceTokens, position, insertedTokens);
     const nextTokens = tokenizeTextTokens(insertion.tokens, slashCommands);
+    tokensRef.current = nextTokens;
+    emittedTokensRef.current = nextTokens;
+    emitted = nextTokens;
+    emittedCursor = insertion.cursor;
     $setComposerTokens(nextTokens, '', insertion.cursor);
   });
+  if (emitted) {
+    onTokensChange(emitted);
+    const serialized = serializeChatComposerTokens(emitted);
+    onPlainTextChange?.(serialized.text, serializedChatComposerTextPosition(emitted, emittedCursor));
+  }
 }
 
 function insertPlainText(editor: LexicalEditor, text: string): void {
