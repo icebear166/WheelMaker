@@ -4,6 +4,10 @@ import {
   ChatRichComposer,
   type ChatRichComposerHandle,
 } from '../web/src/chat/composer/ChatRichComposer';
+import {
+  chatComposerTokensFromLexicalNodesForTest,
+  lexicalNodesFromChatComposerTokensForTest,
+} from '../web/src/chat/composer/chatComposerLexicalModel';
 import type {ChatComposerToken} from '../web/src/chat/composer/chatComposerTokens';
 
 describe('ChatRichComposer', () => {
@@ -20,340 +24,16 @@ describe('ChatRichComposer', () => {
     (global as typeof global & {Node: typeof Node}).Node = originalNode;
   });
 
-  test('keeps the contenteditable root DOM-owned to avoid duplicate browser input', async () => {
+  test('round-trips composer text and capsule tokens through the Lexical model', () => {
     const tokens: ChatComposerToken[] = [
-      {type: 'skill', id: 's1', command: '/grill-me', label: 'Grill Me'},
-      {type: 'text', text: ' in '},
-      {type: 'file', id: 'f1', path: 'app/fix_drop.py', name: 'fix_drop.py', label: 'fix_drop.py'},
+      {type: 'text', text: 'ask '},
+      {type: 'skill', id: 's1', command: '/review', label: 'Review'},
+      {type: 'text', text: ' about '},
+      {type: 'file', id: 'f1', path: 'app/a.ts', name: 'a.ts', label: 'a.ts'},
     ];
-    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
 
-    await ReactTestRenderer.act(() => {
-      renderer = ReactTestRenderer.create(
-        <ChatRichComposer tokens={tokens} onTokensChange={jest.fn()} readOnly={false} />,
-      );
-    });
-
-    const textbox = renderer!.root.findByProps({role: 'textbox'});
-    expect(textbox.children).toHaveLength(0);
+    expect(chatComposerTokensFromLexicalNodesForTest(lexicalNodesFromChatComposerTokensForTest(tokens))).toEqual(tokens);
   });
-
-  test('keeps IME composition DOM local until composition ends', async () => {
-    const onTokensChange = jest.fn();
-    const composerRoot = createComposerDomRoot();
-    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
-
-    await ReactTestRenderer.act(() => {
-      renderer = ReactTestRenderer.create(
-        <ChatRichComposer
-          tokens={[{type: 'text', text: 'ni'}]}
-          onTokensChange={onTokensChange}
-          readOnly={false}
-        />,
-        {
-          createNodeMock: element => (element.props.role === 'textbox' ? composerRoot : null),
-        },
-      );
-    });
-
-    const textbox = renderer!.root.findByProps({role: 'textbox'});
-
-    await ReactTestRenderer.act(() => {
-      textbox.props.onCompositionStart();
-      textbox.props.onInput();
-    });
-
-    expect(onTokensChange).not.toHaveBeenCalled();
-
-    await ReactTestRenderer.act(() => {
-      textbox.props.onCompositionEnd();
-    });
-
-    expect(onTokensChange).toHaveBeenCalledTimes(1);
-    expect(onTokensChange).toHaveBeenLastCalledWith([{type: 'text', text: 'ni'}]);
-  });
-
-  test('keeps placeholder mounted during local composition input before tokens commit', async () => {
-    const onTokensChange = jest.fn();
-    const composerRoot = createComposerDomRoot();
-    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
-
-    await ReactTestRenderer.act(() => {
-      renderer = ReactTestRenderer.create(
-        <ChatRichComposer tokens={[]} onTokensChange={onTokensChange} readOnly={false} />,
-        {
-          createNodeMock: element => (element.props.role === 'textbox' ? composerRoot : null),
-        },
-      );
-    });
-
-    expect(renderer!.root.findAllByProps({className: 'chat-rich-composer-placeholder'})).toHaveLength(1);
-
-    await ReactTestRenderer.act(() => {
-      textboxAppendText(composerRoot, 'n');
-      const textbox = renderer!.root.findByProps({role: 'textbox'});
-      textbox.props.onCompositionStart();
-      textbox.props.onInput();
-    });
-
-    expect(onTokensChange).not.toHaveBeenCalled();
-    expect(renderer!.root.findAllByProps({className: 'chat-rich-composer-placeholder'})).toHaveLength(1);
-  });
-
-  test('keeps early IME beforeinput local until composition ends', async () => {
-    const onTokensChange = jest.fn();
-    const composerRoot = createComposerDomRoot();
-    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
-
-    await ReactTestRenderer.act(() => {
-      renderer = ReactTestRenderer.create(
-        <ChatRichComposer tokens={[]} onTokensChange={onTokensChange} readOnly={false} />,
-        {
-          createNodeMock: element => (element.props.role === 'textbox' ? composerRoot : null),
-        },
-      );
-    });
-
-    const textbox = renderer!.root.findByProps({role: 'textbox'});
-
-    expect(textbox.props.onBeforeInput).toEqual(expect.any(Function));
-
-    await ReactTestRenderer.act(() => {
-      textbox.props.onBeforeInput({
-        nativeEvent: {
-          inputType: 'insertCompositionText',
-          isComposing: false,
-        },
-      });
-      textboxReplaceText(composerRoot, 'w');
-      textbox.props.onInput({
-        nativeEvent: {
-          inputType: 'insertText',
-          isComposing: false,
-        },
-      });
-    });
-
-    expect(onTokensChange).not.toHaveBeenCalled();
-
-    await ReactTestRenderer.act(() => {
-      textboxReplaceText(composerRoot, 'wo');
-      textbox.props.onCompositionEnd();
-    });
-
-    expect(onTokensChange).toHaveBeenCalledTimes(1);
-    expect(onTokensChange).toHaveBeenLastCalledWith([{type: 'text', text: 'wo'}]);
-  });
-
-  test('does not replace browser-owned text after committed IME text is cleared and restarted', async () => {
-    const onTokensChange = jest.fn();
-    const composerRoot = createComposerDomRoot();
-    const replaceChildren = jest.spyOn(composerRoot, 'replaceChildren');
-    const StatefulComposer = () => {
-      const [tokens, setTokens] = React.useState<ChatComposerToken[]>([]);
-      return (
-        <ChatRichComposer
-          tokens={tokens}
-          onTokensChange={nextTokens => {
-            onTokensChange(nextTokens);
-            setTokens(nextTokens);
-          }}
-          readOnly={false}
-        />
-      );
-    };
-    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
-
-    await ReactTestRenderer.act(() => {
-      renderer = ReactTestRenderer.create(<StatefulComposer />, {
-        createNodeMock: element => (element.props.role === 'textbox' ? composerRoot : null),
-      });
-    });
-
-    const textbox = renderer!.root.findByProps({role: 'textbox'});
-    replaceChildren.mockClear();
-
-    await ReactTestRenderer.act(() => {
-      textbox.props.onCompositionStart();
-      textboxReplaceText(composerRoot, '哟');
-      textbox.props.onCompositionEnd();
-    });
-
-    expect(onTokensChange).toHaveBeenLastCalledWith([{type: 'text', text: '哟'}]);
-    expect(replaceChildren).not.toHaveBeenCalled();
-
-    await ReactTestRenderer.act(() => {
-      textboxReplaceText(composerRoot, '');
-      textbox.props.onInput({
-        nativeEvent: {
-          inputType: 'deleteContentBackward',
-          isComposing: false,
-        },
-      });
-    });
-
-    expect(onTokensChange).toHaveBeenLastCalledWith([]);
-    expect(replaceChildren).not.toHaveBeenCalled();
-
-    await ReactTestRenderer.act(() => {
-      textbox.props.onBeforeInput({
-        nativeEvent: {
-          inputType: 'insertText',
-          isComposing: false,
-          data: 'y',
-        },
-      });
-      textboxReplaceText(composerRoot, 'y');
-      textbox.props.onInput({
-        nativeEvent: {
-          inputType: 'insertText',
-          isComposing: false,
-          data: 'y',
-        },
-      });
-    });
-
-    expect(onTokensChange).toHaveBeenLastCalledWith([{type: 'text', text: 'y'}]);
-    expect(replaceChildren).not.toHaveBeenCalled();
-  });
-
-  test('does not replace wrapped browser text at the start of an empty composer', async () => {
-    const onTokensChange = jest.fn();
-    const composerRoot = createComposerDomRoot();
-    const replaceChildren = jest.spyOn(composerRoot, 'replaceChildren');
-    const StatefulComposer = () => {
-      const [tokens, setTokens] = React.useState<ChatComposerToken[]>([]);
-      return (
-        <ChatRichComposer
-          tokens={tokens}
-          onTokensChange={nextTokens => {
-            onTokensChange(nextTokens);
-            setTokens(nextTokens);
-          }}
-          readOnly={false}
-        />
-      );
-    };
-    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
-
-    await ReactTestRenderer.act(() => {
-      renderer = ReactTestRenderer.create(<StatefulComposer />, {
-        createNodeMock: element => (element.props.role === 'textbox' ? composerRoot : null),
-      });
-    });
-
-    const textbox = renderer!.root.findByProps({role: 'textbox'});
-    replaceChildren.mockClear();
-
-    await ReactTestRenderer.act(() => {
-      textboxAppendNode(composerRoot, createComposerElementNode('span', [createComposerTextNode('y')]));
-      textbox.props.onInput({
-        nativeEvent: {
-          inputType: 'insertText',
-          isComposing: false,
-          data: 'y',
-        },
-      });
-    });
-
-    expect(onTokensChange).toHaveBeenLastCalledWith([{type: 'text', text: 'y'}]);
-    expect(replaceChildren).not.toHaveBeenCalled();
-  });
-
-  test('does not replace plain text typed immediately after a skill capsule without a space', async () => {
-    const onTokensChange = jest.fn();
-    const composerRoot = createComposerDomRoot();
-    const replaceChildren = jest.spyOn(composerRoot, 'replaceChildren');
-    const skillToken: ChatComposerToken = {type: 'skill', id: 'skill:1', command: '/review', label: 'Review'};
-    const StatefulComposer = () => {
-      const [tokens, setTokens] = React.useState<ChatComposerToken[]>([skillToken]);
-      return (
-        <ChatRichComposer
-          tokens={tokens}
-          onTokensChange={nextTokens => {
-            onTokensChange(nextTokens);
-            setTokens(nextTokens);
-          }}
-          readOnly={false}
-        />
-      );
-    };
-    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
-
-    await ReactTestRenderer.act(() => {
-      renderer = ReactTestRenderer.create(<StatefulComposer />, {
-        createNodeMock: element => (element.props.role === 'textbox' ? composerRoot : null),
-      });
-    });
-
-    const textbox = renderer!.root.findByProps({role: 'textbox'});
-    replaceChildren.mockClear();
-
-    await ReactTestRenderer.act(() => {
-      textboxAppendText(composerRoot, 'y');
-      textbox.props.onInput({
-        nativeEvent: {
-          inputType: 'insertText',
-          isComposing: false,
-          data: 'y',
-        },
-      });
-    });
-
-    expect(onTokensChange).toHaveBeenLastCalledWith([
-      skillToken,
-      {type: 'text', text: 'y'},
-    ]);
-    expect(replaceChildren).not.toHaveBeenCalled();
-  });
-
-  test('does not replace wrapped browser text typed immediately after a skill capsule without a space', async () => {
-    const onTokensChange = jest.fn();
-    const composerRoot = createComposerDomRoot();
-    const replaceChildren = jest.spyOn(composerRoot, 'replaceChildren');
-    const skillToken: ChatComposerToken = {type: 'skill', id: 'skill:1', command: '/review', label: 'Review'};
-    const StatefulComposer = () => {
-      const [tokens, setTokens] = React.useState<ChatComposerToken[]>([skillToken]);
-      return (
-        <ChatRichComposer
-          tokens={tokens}
-          onTokensChange={nextTokens => {
-            onTokensChange(nextTokens);
-            setTokens(nextTokens);
-          }}
-          readOnly={false}
-        />
-      );
-    };
-    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
-
-    await ReactTestRenderer.act(() => {
-      renderer = ReactTestRenderer.create(<StatefulComposer />, {
-        createNodeMock: element => (element.props.role === 'textbox' ? composerRoot : null),
-      });
-    });
-
-    const textbox = renderer!.root.findByProps({role: 'textbox'});
-    replaceChildren.mockClear();
-
-    await ReactTestRenderer.act(() => {
-      textboxAppendNode(composerRoot, createComposerElementNode('span', [createComposerTextNode('y')]));
-      textbox.props.onInput({
-        nativeEvent: {
-          inputType: 'insertText',
-          isComposing: false,
-          data: 'y',
-        },
-      });
-    });
-
-    expect(onTokensChange).toHaveBeenLastCalledWith([
-      skillToken,
-      {type: 'text', text: 'y'},
-    ]);
-    expect(replaceChildren).not.toHaveBeenCalled();
-  });
-
 
   test('renders placeholder outside the editable selection surface', async () => {
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
@@ -371,6 +51,22 @@ describe('ChatRichComposer', () => {
     const placeholder = renderer!.root.findByProps({className: 'chat-rich-composer-placeholder'});
     expect(placeholder.props['aria-hidden']).toBe('true');
     expect(placeholder.children).toEqual(['Send a message...']);
+  });
+
+  test('delegates text input and composition ownership to Lexical', async () => {
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        <ChatRichComposer tokens={[]} onTokensChange={jest.fn()} readOnly={false} />,
+      );
+    });
+
+    const textbox = renderer!.root.findByProps({role: 'textbox'});
+    expect(textbox.props.onBeforeInput).toBeUndefined();
+    expect(textbox.props.onInput).toBeUndefined();
+    expect(textbox.props.onCompositionStart).toBeUndefined();
+    expect(textbox.props.onCompositionEnd).toBeUndefined();
   });
 
   test('pastes rich clipboard links as their plain-text URL', async () => {
@@ -555,73 +251,3 @@ describe('ChatRichComposer', () => {
     ]);
   });
 });
-
-function createComposerDomRoot(): HTMLDivElement {
-  const ownerDocument = {
-    createTextNode: createComposerTextNode,
-    createElement: (tagName: string) => ({
-      nodeType: 1,
-      nodeName: tagName.toUpperCase(),
-      dataset: {},
-      className: '',
-      contentEditable: '',
-      childNodes: [],
-      appendChild(child: Node) {
-        this.childNodes.push(child);
-      },
-      setAttribute() {
-        return undefined;
-      },
-    }),
-  };
-  return {
-    ownerDocument,
-    childNodes: [],
-    querySelectorAll() {
-      return [];
-    },
-    replaceChildren(...children: Node[]) {
-      this.childNodes = children;
-    },
-  } as unknown as HTMLDivElement;
-}
-
-function createComposerTextNode(text: string): Node {
-  return {
-    nodeType: 3,
-    textContent: text,
-  } as unknown as Node;
-}
-
-function createComposerElementNode(tagName: string, children: Node[] = []): Node {
-  return {
-    nodeType: 1,
-    nodeName: tagName.toUpperCase(),
-    dataset: {},
-    className: '',
-    childNodes: children,
-    appendChild(child: Node) {
-      this.childNodes.push(child);
-    },
-    setAttribute() {
-      return undefined;
-    },
-  } as unknown as Node;
-}
-
-function textboxAppendText(root: HTMLDivElement, text: string): void {
-  textboxAppendNode(root, createComposerTextNode(text));
-}
-
-function textboxAppendNode(root: HTMLDivElement, node: Node): void {
-  root.childNodes = [
-    ...Array.from(root.childNodes),
-    node as ChildNode,
-  ] as unknown as NodeListOf<ChildNode>;
-}
-
-function textboxReplaceText(root: HTMLDivElement, text: string): void {
-  root.childNodes = [
-    createComposerTextNode(text) as ChildNode,
-  ] as unknown as NodeListOf<ChildNode>;
-}

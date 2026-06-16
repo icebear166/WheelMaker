@@ -1,7 +1,25 @@
+import {LexicalComposer} from '@lexical/react/LexicalComposer';
+import {useLexicalComposerContext} from '@lexical/react/LexicalComposerContext';
+import {ContentEditable} from '@lexical/react/LexicalContentEditable';
+import {EditorRefPlugin} from '@lexical/react/LexicalEditorRefPlugin';
+import {LexicalErrorBoundary} from '@lexical/react/LexicalErrorBoundary';
+import {HistoryPlugin} from '@lexical/react/LexicalHistoryPlugin';
+import {OnChangePlugin} from '@lexical/react/LexicalOnChangePlugin';
+import {RichTextPlugin} from '@lexical/react/LexicalRichTextPlugin';
 import React from 'react';
+import {
+  $createTextNode,
+  $getSelection,
+  $isRangeSelection,
+  COMMAND_PRIORITY_HIGH,
+  COMMAND_PRIORITY_LOW,
+  KEY_BACKSPACE_COMMAND,
+  KEY_DELETE_COMMAND,
+  KEY_ENTER_COMMAND,
+  type LexicalEditor,
+} from 'lexical';
 
 import {
-  chatComposerSingleTokenUnitLength,
   chatComposerTokenUnitLength,
   normalizeChatComposerTokens,
   serializeChatComposerTokens,
@@ -17,6 +35,13 @@ import {
   deleteChatComposerTokenById,
   insertChatComposerTokens,
 } from './chatComposerTokenEditing';
+import {
+  $currentComposerPosition,
+  $readComposerTokens,
+  $setComposerTokens,
+  $setSelectedComposerCapsule,
+  ChatComposerCapsuleNode,
+} from './chatComposerLexicalModel';
 
 export type ChatRichComposerHandle = {
   focus: () => void;
@@ -44,256 +69,391 @@ export type ChatRichComposerProps = {
 let nextTokenId = 1;
 
 export const ChatRichComposer = React.forwardRef<ChatRichComposerHandle, ChatRichComposerProps>(
-  function ChatRichComposer({
-    tokens,
-    onTokensChange,
-    readOnly,
-    placeholder = 'Send a message...',
-    enterKeyHint,
-    className = '',
-    slashCommands = [],
-    onPlainTextChange,
-    onKeyDown,
-    onPaste,
-    onSend,
-  }, ref) {
-    const rootRef = React.useRef<HTMLDivElement | null>(null);
-    const tokensRef = React.useRef<ChatComposerToken[]>(tokens);
-    const composingRef = React.useRef(false);
-    const pendingSelectionRef = React.useRef<number | null>(null);
-    const selectedTokenIdRef = React.useRef('');
-    const [selectedTokenId, setSelectedTokenId] = React.useState('');
+  function ChatRichComposer(props, ref) {
+    const initialTokensRef = React.useRef(normalizeChatComposerTokens(props.tokens));
+    const editorRef = React.useRef<LexicalEditor | null>(null);
+    const handleRef = React.useRef<ChatRichComposerHandle>({
+      focus: () => undefined,
+      insertSkill: () => undefined,
+      insertFile: () => undefined,
+      insertText: () => undefined,
+      selectToken: () => undefined,
+      deleteSelectedCapsule: () => undefined,
+    });
 
-    React.useLayoutEffect(() => {
-      if (composingRef.current) {
-        return;
-      }
-      const normalized = normalizeChatComposerTokens(tokens);
-      tokensRef.current = normalized;
-      syncComposerDom(rootRef.current, normalized, selectedTokenIdRef.current);
-      const pendingSelection = pendingSelectionRef.current;
-      pendingSelectionRef.current = null;
-      if (pendingSelection !== null) {
-        restoreComposerSelection(rootRef.current, normalized, pendingSelection);
-      }
-    }, [tokens]);
-
-    React.useLayoutEffect(() => {
-      updateSelectedCapsule(rootRef.current, selectedTokenId);
-    }, [selectedTokenId]);
-
-    const setSelectedToken = React.useCallback((id: string) => {
-      selectedTokenIdRef.current = id;
-      setSelectedTokenId(id);
-    }, []);
-
-    const emitTokens = React.useCallback(
-      (nextTokens: ChatComposerToken[], cursor = chatComposerTokenUnitLength(nextTokens)) => {
-        const normalized = normalizeChatComposerTokens(
-          composingRef.current ? nextTokens : tokenizeTextTokens(nextTokens, slashCommands),
-        );
-        tokensRef.current = normalized;
-        pendingSelectionRef.current = cursor;
-        onTokensChange(normalized);
-        const serialized = serializeChatComposerTokens(normalized);
-        onPlainTextChange?.(serialized.text, serializedChatComposerTextPosition(normalized, cursor));
+    const initialConfig = React.useMemo(() => ({
+      namespace: 'WheelMakerChatComposer',
+      editable: !props.readOnly,
+      nodes: [ChatComposerCapsuleNode],
+      editorState: () => {
+        $setComposerTokens(initialTokensRef.current);
       },
-      [onPlainTextChange, onTokensChange, slashCommands],
-    );
-
-    const insertTokens = React.useCallback(
-      (insertedTokens: ChatComposerToken[]) => {
-        const current = tokensRef.current;
-        const position = currentTokenPosition(rootRef.current, current);
-        const insertion = insertChatComposerTokens(current, position, insertedTokens);
-        setSelectedToken('');
-        emitTokens(insertion.tokens, insertion.cursor);
+      onError(error: Error) {
+        throw error;
       },
-      [emitTokens, setSelectedToken],
-    );
+      theme: {},
+    }), []);
 
-    const deleteSelectedCapsule = React.useCallback(() => {
-      const selectedId = selectedTokenIdRef.current;
-      if (!selectedId) {
-        return;
-      }
-      setSelectedToken('');
-      emitTokens(deleteChatComposerTokenById(tokensRef.current, selectedId));
-    }, [emitTokens, setSelectedToken]);
-
-    React.useImperativeHandle(
-      ref,
-      () => ({
-        focus: () => rootRef.current?.focus(),
-        insertSkill: input => {
-          insertTokens([
-            {
-              type: 'skill',
-              id: createTokenId('skill'),
-              command: input.command,
-              label: input.label,
-            },
-            {type: 'text', text: ' '},
-          ]);
-        },
-        insertFile: input => {
-          insertTokens([
-            {
-              type: 'file',
-              id: createTokenId('file'),
-              path: input.path,
-              name: input.name,
-              label: '',
-            },
-            {type: 'text', text: ' '},
-          ]);
-        },
-        insertText: text => {
-          if (!text) {
-            return;
-          }
-          insertTokens([{type: 'text', text}]);
-        },
-        selectToken: setSelectedToken,
-        deleteSelectedCapsule,
-      }),
-      [deleteSelectedCapsule, insertTokens, setSelectedToken],
-    );
-
-    const handleBeforeInput = React.useCallback((event: React.FormEvent<HTMLDivElement>) => {
-      if (isCompositionTextEvent(event.nativeEvent)) {
-        composingRef.current = true;
-      }
-    }, []);
-
-    const handleInput = React.useCallback((event?: React.FormEvent<HTMLDivElement>) => {
-      const root = rootRef.current;
-      if (!root) {
-        return;
-      }
-      if (isCompositionTextEvent(event?.nativeEvent)) {
-        composingRef.current = true;
-      }
-      if (composingRef.current) {
-        return;
-      }
-      setSelectedToken('');
-      emitTokens(readTokensFromDom(root, tokensRef.current), currentTokenPosition(root, tokensRef.current));
-    }, [emitTokens, setSelectedToken]);
-
-    const handlePaste = React.useCallback(
-      (event: React.ClipboardEvent<HTMLDivElement>) => {
-        onPaste?.(event);
-        if (event.defaultPrevented) {
-          return;
-        }
-        if (readOnly) {
-          return;
-        }
-        const text = event.clipboardData?.getData('text/plain') ?? '';
-        if (!text) {
-          return;
-        }
-        event.preventDefault();
-        insertTokens([{type: 'text', text}]);
-      },
-      [insertTokens, onPaste, readOnly],
-    );
-
-    const handleMouseDown = React.useCallback(
-      (event: React.MouseEvent<HTMLDivElement>) => {
-        const target = event.target instanceof HTMLElement
-          ? event.target.closest<HTMLElement>('[data-chat-composer-capsule="true"]')
-          : null;
-        if (!target) {
-          setSelectedToken('');
-          return;
-        }
-        const tokenId = target.dataset.tokenId ?? '';
-        if (!tokenId) {
-          return;
-        }
-        event.preventDefault();
-        setSelectedToken(tokenId);
-      },
-      [setSelectedToken],
-    );
-
-    const handleKeyDown = React.useCallback(
-      (event: React.KeyboardEvent<HTMLDivElement>) => {
-        onKeyDown?.(event);
-        if (event.defaultPrevented) {
-          return;
-        }
-        if (event.key === 'Enter' && !event.shiftKey && !event.altKey && !event.nativeEvent.isComposing) {
-          event.preventDefault();
-          onSend?.();
-          return;
-        }
-        if ((event.key === 'Backspace' || event.key === 'Delete') && selectedTokenIdRef.current) {
-          event.preventDefault();
-          deleteSelectedCapsule();
-          return;
-        }
-        if (event.key === 'Backspace' || event.key === 'Delete') {
-          const current = tokensRef.current;
-          const position = currentTokenPosition(rootRef.current, current);
-          const removable = event.key === 'Backspace'
-            ? chatComposerCapsuleBeforePosition(current, position)
-            : chatComposerCapsuleAfterPosition(current, position);
-          if (removable) {
-            event.preventDefault();
-            emitTokens(deleteChatComposerTokenById(current, removable.id));
-          }
-        }
-      },
-      [deleteSelectedCapsule, emitTokens, onKeyDown, onSend],
-    );
+    React.useImperativeHandle(ref, () => ({
+      focus: () => handleRef.current.focus(),
+      insertSkill: input => handleRef.current.insertSkill(input),
+      insertFile: input => handleRef.current.insertFile(input),
+      insertText: text => handleRef.current.insertText(text),
+      selectToken: id => handleRef.current.selectToken(id),
+      deleteSelectedCapsule: () => handleRef.current.deleteSelectedCapsule(),
+    }), []);
 
     return (
-      <>
-        <div
-          ref={rootRef}
-          className={`chat-rich-composer ${className}`.trim()}
-          contentEditable={!readOnly}
-          suppressContentEditableWarning
-          role="textbox"
-          aria-label={placeholder}
-          aria-multiline="true"
-          enterKeyHint={enterKeyHint}
-          onBeforeInput={handleBeforeInput}
-          onInput={handleInput}
-          onKeyDown={handleKeyDown}
-          onMouseDown={handleMouseDown}
-          onPaste={handlePaste}
-          onCompositionStart={() => {
-            composingRef.current = true;
-          }}
-          onCompositionEnd={() => {
-            composingRef.current = false;
-            handleInput();
-          }}
+      <LexicalComposer initialConfig={initialConfig}>
+        <ChatRichComposerContent
+          {...props}
+          editorRef={editorRef}
+          handleRef={handleRef}
         />
-        <span className="chat-rich-composer-placeholder" aria-hidden="true">
-          {placeholder}
-        </span>
-      </>
+      </LexicalComposer>
     );
   },
 );
+
+type ChatRichComposerContentProps = ChatRichComposerProps & {
+  editorRef: React.MutableRefObject<LexicalEditor | null>;
+  handleRef: React.MutableRefObject<ChatRichComposerHandle>;
+};
+
+function ChatRichComposerContent({
+  tokens,
+  onTokensChange,
+  readOnly,
+  placeholder = 'Send a message...',
+  enterKeyHint,
+  className = '',
+  slashCommands = [],
+  onPlainTextChange,
+  onKeyDown,
+  onPaste,
+  onSend,
+  editorRef,
+  handleRef,
+}: ChatRichComposerContentProps): React.ReactElement {
+  const [editor] = useLexicalComposerContext();
+  const selectedTokenIdRef = React.useRef('');
+  const emittedTokensRef = React.useRef<ChatComposerToken[]>(normalizeChatComposerTokens(tokens));
+  const tokensRef = React.useRef<ChatComposerToken[]>(normalizeChatComposerTokens(tokens));
+  const syncingFromPropsRef = React.useRef(false);
+  const [selectedTokenId, setSelectedTokenId] = React.useState('');
+
+  React.useEffect(() => {
+    editor.setEditable(!readOnly);
+  }, [editor, readOnly]);
+
+  React.useEffect(() => {
+    const normalized = normalizeChatComposerTokens(tokens);
+    tokensRef.current = normalized;
+    if (chatComposerTokensEqual(normalized, emittedTokensRef.current)) {
+      return;
+    }
+    syncingFromPropsRef.current = true;
+    editor.update(() => {
+      $setComposerTokens(normalized, selectedTokenIdRef.current);
+    }, {
+      onUpdate: () => {
+        emittedTokensRef.current = normalized;
+        syncingFromPropsRef.current = false;
+      },
+    });
+  }, [editor, tokens]);
+
+  React.useEffect(() => {
+    selectedTokenIdRef.current = selectedTokenId;
+    editor.update(() => {
+      $setSelectedComposerCapsule(selectedTokenId);
+    });
+  }, [editor, selectedTokenId]);
+
+  React.useEffect(() => {
+    handleRef.current = {
+      focus: () => editor.focus(),
+      insertSkill: input => {
+        insertComposerTokens(editor, tokensRef.current, slashCommands, [
+          {
+            type: 'skill',
+            id: createTokenId('skill'),
+            command: input.command,
+            label: input.label,
+          },
+          {type: 'text', text: ' '},
+        ]);
+        setSelectedTokenId('');
+      },
+      insertFile: input => {
+        insertComposerTokens(editor, tokensRef.current, slashCommands, [
+          {
+            type: 'file',
+            id: createTokenId('file'),
+            path: input.path,
+            name: input.name,
+            label: '',
+          },
+          {type: 'text', text: ' '},
+        ]);
+        setSelectedTokenId('');
+      },
+      insertText: text => {
+        if (!text) {
+          return;
+        }
+        insertPlainText(editor, text);
+        setSelectedTokenId('');
+      },
+      selectToken: id => {
+        selectedTokenIdRef.current = id;
+        setSelectedTokenId(id);
+      },
+      deleteSelectedCapsule: () => {
+        const selected = selectedTokenIdRef.current;
+        if (!selected) {
+          return;
+        }
+        const nextTokens = deleteChatComposerTokenById(tokensRef.current, selected);
+        tokensRef.current = nextTokens;
+        emittedTokensRef.current = nextTokens;
+        const serialized = serializeChatComposerTokens(nextTokens);
+        onTokensChange(nextTokens);
+        onPlainTextChange?.(serialized.text, serializedChatComposerTextPosition(nextTokens, chatComposerTokenUnitLength(nextTokens)));
+        setSelectedTokenId('');
+        editor.update(() => {
+          $setComposerTokens(nextTokens, '', chatComposerTokenUnitLength(nextTokens));
+        });
+      },
+    };
+  }, [editor, handleRef, onPlainTextChange, onTokensChange, slashCommands]);
+
+  React.useEffect(() => {
+    return editor.registerCommand<KeyboardEvent>(
+      KEY_ENTER_COMMAND,
+      event => {
+        onKeyDown?.(reactKeyboardEventFromNative(event));
+        if (event.defaultPrevented) {
+          return true;
+        }
+        if (!event.shiftKey && !event.altKey && !event.isComposing) {
+          event.preventDefault();
+          onSend?.();
+          return true;
+        }
+        return false;
+      },
+      COMMAND_PRIORITY_HIGH,
+    );
+  }, [editor, onKeyDown, onSend]);
+
+  React.useEffect(() => {
+    return editor.registerCommand<KeyboardEvent>(
+      KEY_BACKSPACE_COMMAND,
+      event => {
+        if (!selectedTokenIdRef.current) {
+          const currentTokens = tokensRef.current;
+          const removable = chatComposerCapsuleBeforePosition(
+            currentTokens,
+            editor.getEditorState().read(() => $currentComposerPosition(currentTokens)),
+          );
+          if (!removable) {
+            return false;
+          }
+          event.preventDefault();
+          deleteComposerToken(editor, removable.id, tokensRef, emittedTokensRef, onTokensChange);
+          setSelectedTokenId('');
+          return true;
+        }
+        event.preventDefault();
+        deleteComposerToken(editor, selectedTokenIdRef.current, tokensRef, emittedTokensRef, onTokensChange);
+        setSelectedTokenId('');
+        return true;
+      },
+      COMMAND_PRIORITY_HIGH,
+    );
+  }, [editor, onTokensChange]);
+
+  React.useEffect(() => {
+    return editor.registerCommand<KeyboardEvent>(
+      KEY_DELETE_COMMAND,
+      event => {
+        if (!selectedTokenIdRef.current) {
+          const currentTokens = tokensRef.current;
+          const removable = chatComposerCapsuleAfterPosition(
+            currentTokens,
+            editor.getEditorState().read(() => $currentComposerPosition(currentTokens)),
+          );
+          if (!removable) {
+            return false;
+          }
+          event.preventDefault();
+          deleteComposerToken(editor, removable.id, tokensRef, emittedTokensRef, onTokensChange);
+          setSelectedTokenId('');
+          return true;
+        }
+        event.preventDefault();
+        deleteComposerToken(editor, selectedTokenIdRef.current, tokensRef, emittedTokensRef, onTokensChange);
+        setSelectedTokenId('');
+        return true;
+      },
+      COMMAND_PRIORITY_HIGH,
+    );
+  }, [editor, onTokensChange]);
+
+  React.useEffect(() => {
+    return editor.registerCommand<KeyboardEvent>(
+      KEY_BACKSPACE_COMMAND,
+      () => {
+        setSelectedTokenId('');
+        return false;
+      },
+      COMMAND_PRIORITY_LOW,
+    );
+  }, [editor]);
+
+  const handleMouseDown = React.useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      const target = event.target instanceof HTMLElement
+        ? event.target.closest<HTMLElement>('[data-chat-composer-capsule="true"]')
+        : null;
+      if (!target) {
+        setSelectedTokenId('');
+        return;
+      }
+      const tokenId = target.dataset.tokenId ?? '';
+      if (!tokenId) {
+        return;
+      }
+      event.preventDefault();
+      setSelectedTokenId(tokenId);
+    },
+    [],
+  );
+
+  const handlePaste = React.useCallback(
+    (event: React.ClipboardEvent<HTMLDivElement>) => {
+      onPaste?.(event);
+      if (event.defaultPrevented || readOnly) {
+        return;
+      }
+      const text = event.clipboardData?.getData('text/plain') ?? '';
+      if (!text) {
+        return;
+      }
+      event.preventDefault();
+      insertPlainText(editor, text);
+    },
+    [editor, onPaste, readOnly],
+  );
+
+  const handleChange = React.useCallback(() => {
+    if (syncingFromPropsRef.current) {
+      return;
+    }
+    editor.getEditorState().read(() => {
+      const currentTokens = tokenizeTextTokens($readComposerTokens(), slashCommands);
+      const cursor = $currentComposerPosition(currentTokens);
+      tokensRef.current = currentTokens;
+      emittedTokensRef.current = currentTokens;
+      onTokensChange(currentTokens);
+      const serialized = serializeChatComposerTokens(currentTokens);
+      onPlainTextChange?.(serialized.text, serializedChatComposerTextPosition(currentTokens, cursor));
+    });
+  }, [editor, onPlainTextChange, onTokensChange, slashCommands]);
+
+  return (
+    <>
+      <EditorRefPlugin editorRef={editorRef} />
+      <RichTextPlugin
+        contentEditable={
+          <ContentEditable
+            className={`chat-rich-composer ${className}`.trim()}
+            role="textbox"
+            aria-label={placeholder}
+            aria-multiline="true"
+            enterKeyHint={enterKeyHint}
+            onMouseDown={handleMouseDown}
+            onPaste={handlePaste}
+          />
+        }
+        placeholder={null}
+        ErrorBoundary={LexicalErrorBoundary}
+      />
+      <HistoryPlugin />
+      <OnChangePlugin
+        ignoreSelectionChange
+        onChange={handleChange}
+      />
+      <span className="chat-rich-composer-placeholder" aria-hidden="true">
+        {placeholder}
+      </span>
+    </>
+  );
+}
 
 function tokenizeTextTokens(
   tokens: ChatComposerToken[],
   slashCommands: {command: string; label: string}[],
 ): ChatComposerToken[] {
   if (slashCommands.length === 0) {
-    return tokens;
+    return normalizeChatComposerTokens(tokens);
   }
-  return tokens.flatMap(token => {
+  return normalizeChatComposerTokens(tokens.flatMap(token => {
     if (token.type !== 'text') {
       return [token];
     }
     return tokenizeKnownChatSlashCommands(token.text, slashCommands);
+  }));
+}
+
+function insertComposerTokens(
+  editor: LexicalEditor,
+  fallbackTokens: ChatComposerToken[],
+  slashCommands: {command: string; label: string}[],
+  insertedTokens: ChatComposerToken[],
+): void {
+  editor.update(() => {
+    const current = $readComposerTokens();
+    const sourceTokens = current.length > 0 ? current : fallbackTokens;
+    const position = $currentComposerPosition(sourceTokens);
+    const insertion = insertChatComposerTokens(sourceTokens, position, insertedTokens);
+    const nextTokens = tokenizeTextTokens(insertion.tokens, slashCommands);
+    $setComposerTokens(nextTokens, '', insertion.cursor);
+  });
+}
+
+function insertPlainText(editor: LexicalEditor, text: string): void {
+  editor.update(() => {
+    $getSelectionInsertText(text);
+  });
+}
+
+function $getSelectionInsertText(text: string): void {
+  const node = $createTextNode(text);
+  const lexicalSelection = $getSelection();
+  if ($isRangeSelection(lexicalSelection)) {
+    lexicalSelection.insertNodes([node]);
+    return;
+  }
+  const currentTokens = $readComposerTokens();
+  const nextTokens = normalizeChatComposerTokens([...currentTokens, {type: 'text', text}]);
+  $setComposerTokens(nextTokens, '', chatComposerTokenUnitLength(nextTokens));
+}
+
+function deleteComposerToken(
+  editor: LexicalEditor,
+  tokenId: string,
+  tokensRef: React.MutableRefObject<ChatComposerToken[]>,
+  emittedTokensRef: React.MutableRefObject<ChatComposerToken[]>,
+  onTokensChange: (tokens: ChatComposerToken[]) => void,
+): void {
+  const nextTokens = deleteChatComposerTokenById(tokensRef.current, tokenId);
+  tokensRef.current = nextTokens;
+  emittedTokensRef.current = nextTokens;
+  onTokensChange(nextTokens);
+  editor.update(() => {
+    $setComposerTokens(nextTokens, '', chatComposerTokenUnitLength(nextTokens));
   });
 }
 
@@ -302,49 +462,16 @@ function createTokenId(kind: string): string {
   return `${kind}:${Date.now()}:${nextTokenId}`;
 }
 
-function isCompositionTextEvent(nativeEvent: Event | undefined): boolean {
-  const inputEvent = nativeEvent as (Event & {inputType?: string; isComposing?: boolean}) | undefined;
-  return inputEvent?.isComposing === true || inputEvent?.inputType === 'insertCompositionText';
-}
-
-function syncComposerDom(
-  root: HTMLDivElement | null,
-  tokens: ChatComposerToken[],
-  selectedTokenId: string,
-): void {
-  if (!root) {
-    return;
-  }
-  if (composerDomMatchesTokens(root, tokens, selectedTokenId)) {
-    return;
-  }
-  const ownerDocument = root.ownerDocument;
-  root.replaceChildren(...tokens.map(token => {
-    if (token.type === 'text') {
-      return ownerDocument.createTextNode(token.text);
-    }
-    return createCapsuleNode(ownerDocument, token, token.id === selectedTokenId);
-  }));
-}
-
-function composerDomMatchesTokens(
-  root: HTMLDivElement,
-  tokens: ChatComposerToken[],
-  selectedTokenId: string,
-): boolean {
-  const domTokens = readTokensFromDom(root, tokens);
-  return chatComposerTokensMatch(domTokens, normalizeChatComposerTokens(tokens)) &&
-    composerCapsuleSelectionMatches(root, selectedTokenId);
-}
-
-function chatComposerTokensMatch(left: ChatComposerToken[], right: ChatComposerToken[]): boolean {
-  if (left.length !== right.length) {
+function chatComposerTokensEqual(left: ChatComposerToken[], right: ChatComposerToken[]): boolean {
+  const normalizedLeft = normalizeChatComposerTokens(left);
+  const normalizedRight = normalizeChatComposerTokens(right);
+  if (normalizedLeft.length !== normalizedRight.length) {
     return false;
   }
-  return left.every((token, index) => chatComposerTokenMatches(token, right[index]));
+  return normalizedLeft.every((token, index) => chatComposerTokenEqual(token, normalizedRight[index]));
 }
 
-function chatComposerTokenMatches(left: ChatComposerToken, right: ChatComposerToken | undefined): boolean {
+function chatComposerTokenEqual(left: ChatComposerToken, right: ChatComposerToken | undefined): boolean {
   if (!right || left.type !== right.type) {
     return false;
   }
@@ -352,9 +479,7 @@ function chatComposerTokenMatches(left: ChatComposerToken, right: ChatComposerTo
     return left.text === right.text;
   }
   if (left.type === 'skill' && right.type === 'skill') {
-    return left.id === right.id &&
-      left.command === right.command &&
-      left.label === right.label;
+    return left.id === right.id && left.command === right.command && left.label === right.label;
   }
   return left.type === 'file' &&
     right.type === 'file' &&
@@ -364,221 +489,6 @@ function chatComposerTokenMatches(left: ChatComposerToken, right: ChatComposerTo
     left.label === right.label;
 }
 
-function composerCapsuleSelectionMatches(root: HTMLDivElement, selectedTokenId: string): boolean {
-  return Array.from(root.querySelectorAll<HTMLElement>('[data-chat-composer-capsule="true"]'))
-    .every(element => elementHasClass(element, 'selected') === (!!selectedTokenId && element.dataset.tokenId === selectedTokenId));
-}
-
-function elementHasClass(element: HTMLElement, className: string): boolean {
-  if (element.classList) {
-    return element.classList.contains(className);
-  }
-  return String(element.className || '').split(/\s+/).includes(className);
-}
-
-function createCapsuleNode(
-  ownerDocument: Document,
-  token: ChatComposerSkillToken | ChatComposerFileToken,
-  selected: boolean,
-): HTMLElement {
-  const capsule = ownerDocument.createElement('span');
-  capsule.dataset.chatComposerCapsule = 'true';
-  capsule.dataset.kind = token.type;
-  capsule.dataset.tokenId = token.id;
-  capsule.contentEditable = 'false';
-  capsule.className = `chat-composer-capsule ${token.type}${selected ? ' selected' : ''}`;
-
-  const icon = ownerDocument.createElement('span');
-  icon.className = 'chat-composer-capsule-icon';
-  icon.setAttribute('aria-hidden', 'true');
-  icon.textContent = token.type === 'skill' ? '/' : '@';
-  capsule.appendChild(icon);
-
-  const label = ownerDocument.createElement('span');
-  label.className = 'chat-composer-capsule-label';
-  label.textContent = token.type === 'skill' ? token.label : (token.label || token.name);
-  capsule.appendChild(label);
-
-  return capsule;
-}
-
-function updateSelectedCapsule(root: HTMLDivElement | null, selectedTokenId: string): void {
-  if (!root) {
-    return;
-  }
-  for (const capsule of Array.from(root.querySelectorAll<HTMLElement>('[data-chat-composer-capsule="true"]'))) {
-    capsule.classList.toggle('selected', !!selectedTokenId && capsule.dataset.tokenId === selectedTokenId);
-  }
-}
-
-function restoreComposerSelection(
-  root: HTMLDivElement | null,
-  tokens: ChatComposerToken[],
-  position: number,
-): void {
-  if (
-    !root ||
-    typeof window === 'undefined' ||
-    typeof document === 'undefined' ||
-    document.activeElement !== root
-  ) {
-    return;
-  }
-  const selection = window.getSelection();
-  if (!selection) {
-    return;
-  }
-  const point = composerCaretPoint(root, tokens, position);
-  const range = document.createRange();
-  range.setStart(point.node, point.offset);
-  range.collapse(true);
-  selection.removeAllRanges();
-  selection.addRange(range);
-}
-
-function composerCaretPoint(
-  root: HTMLDivElement,
-  tokens: ChatComposerToken[],
-  position: number,
-): {node: Node; offset: number} {
-  const safePosition = Math.max(0, Math.min(position, chatComposerTokenUnitLength(tokens)));
-  let cursor = 0;
-  for (let index = 0; index < tokens.length; index += 1) {
-    const token = tokens[index];
-    const tokenLength = chatComposerSingleTokenUnitLength(token);
-    const tokenStart = cursor;
-    const tokenEnd = cursor + tokenLength;
-    const child = root.childNodes[index];
-    if (safePosition <= tokenEnd) {
-      if (token.type === 'text' && child?.nodeType === Node.TEXT_NODE) {
-        return {node: child, offset: Math.max(0, Math.min(safePosition - tokenStart, token.text.length))};
-      }
-      return {node: root, offset: safePosition <= tokenStart ? index : index + 1};
-    }
-    cursor = tokenEnd;
-  }
-  return {node: root, offset: root.childNodes.length};
-}
-
-function currentTokenPosition(root: HTMLDivElement | null, tokens: ChatComposerToken[]): number {
-  const fallback = chatComposerTokenUnitLength(tokens);
-  if (!root || typeof window === 'undefined' || !window.getSelection) {
-    return fallback;
-  }
-  const selection = window.getSelection();
-  const anchorNode = selection?.anchorNode;
-  if (!selection || selection.rangeCount === 0 || !anchorNode || !root.contains(anchorNode)) {
-    return fallback;
-  }
-  return domOffsetToTokenPosition(root, anchorNode, selection.anchorOffset, tokens);
-}
-
-function domOffsetToTokenPosition(
-  root: HTMLDivElement,
-  anchorNode: Node,
-  anchorOffset: number,
-  tokens: ChatComposerToken[],
-): number {
-  let position = 0;
-  let found = false;
-
-  const visit = (node: Node): void => {
-    if (found) {
-      return;
-    }
-    if (node === anchorNode) {
-      if (node.nodeType === Node.TEXT_NODE) {
-        position += Math.max(0, Math.min(anchorOffset, node.textContent?.length ?? 0));
-      } else {
-        const children = Array.from(node.childNodes);
-        for (const child of children.slice(0, Math.max(0, anchorOffset))) {
-          position += domNodeUnitLength(child);
-        }
-      }
-      found = true;
-      return;
-    }
-    if (node.nodeType === Node.TEXT_NODE || isCapsuleNode(node)) {
-      position += domNodeUnitLength(node);
-      return;
-    }
-    for (const child of Array.from(node.childNodes)) {
-      visit(child);
-      if (found) {
-        return;
-      }
-    }
-  };
-
-  for (const child of Array.from(root.childNodes)) {
-    visit(child);
-    if (found) {
-      break;
-    }
-  }
-  return found ? position : chatComposerTokenUnitLength(tokens);
-}
-
-function domNodeUnitLength(node: Node): number {
-  if (node.nodeType === Node.TEXT_NODE) {
-    return node.textContent?.length ?? 0;
-  }
-  if (isCapsuleNode(node)) {
-    return 1;
-  }
-  if (node.nodeName === 'BR') {
-    return 1;
-  }
-  let total = 0;
-  for (const child of Array.from(node.childNodes)) {
-    total += domNodeUnitLength(child);
-  }
-  return total;
-}
-
-function readTokensFromDom(root: HTMLDivElement, previousTokens: ChatComposerToken[]): ChatComposerToken[] {
-  const tokenById = tokenMap(previousTokens);
-  const out: ChatComposerToken[] = [];
-  const visit = (node: Node): void => {
-    if (node.nodeType === Node.TEXT_NODE) {
-      if (node.textContent) {
-        out.push({type: 'text', text: node.textContent});
-      }
-      return;
-    }
-    if (isCapsuleNode(node)) {
-      const id = (node as HTMLElement).dataset.tokenId ?? '';
-      const token = tokenById.get(id);
-      if (token) {
-        out.push(token);
-      }
-      return;
-    }
-    if (node.nodeName === 'BR') {
-      out.push({type: 'text', text: '\n'});
-      return;
-    }
-    for (const child of Array.from(node.childNodes)) {
-      visit(child);
-    }
-  };
-  for (const child of Array.from(root.childNodes)) {
-    visit(child);
-  }
-  return normalizeChatComposerTokens(out);
-}
-
-function tokenMap(tokens: ChatComposerToken[]): Map<string, ChatComposerToken> {
-  const map = new Map<string, ChatComposerToken>();
-  for (const token of tokens) {
-    if (token.type !== 'text') {
-      map.set(token.id, token);
-    }
-  }
-  return map;
-}
-
-function isCapsuleNode(node: Node): boolean {
-  return node.nodeType === Node.ELEMENT_NODE &&
-    (node as HTMLElement).dataset.chatComposerCapsule === 'true';
+function reactKeyboardEventFromNative(event: KeyboardEvent): React.KeyboardEvent<HTMLDivElement> {
+  return event as unknown as React.KeyboardEvent<HTMLDivElement>;
 }
