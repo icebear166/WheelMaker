@@ -8,9 +8,6 @@ import {OnChangePlugin} from '@lexical/react/LexicalOnChangePlugin';
 import {RichTextPlugin} from '@lexical/react/LexicalRichTextPlugin';
 import React from 'react';
 import {
-  $createTextNode,
-  $getSelection,
-  $isRangeSelection,
   COMMAND_PRIORITY_HIGH,
   COMMAND_PRIORITY_LOW,
   KEY_BACKSPACE_COMMAND,
@@ -24,7 +21,6 @@ import {
   normalizeChatComposerTokens,
   serializeChatComposerTokens,
   serializedChatComposerTextPosition,
-  tokenizeKnownChatSlashCommands,
   type ChatComposerFileToken,
   type ChatComposerSkillToken,
   type ChatComposerToken,
@@ -33,14 +29,17 @@ import {
   chatComposerCapsuleAfterPosition,
   chatComposerCapsuleBeforePosition,
   deleteChatComposerTokenById,
-  insertChatComposerTokens,
 } from './chatComposerTokenEditing';
 import {
   $currentComposerPosition,
+  $deleteComposerTokenById,
+  $insertComposerPlainText,
+  $insertComposerTokens,
   $readComposerTokens,
   $setComposerTokens,
   $setSelectedComposerCapsule,
   ChatComposerCapsuleNode,
+  normalizeComposerTextTokens,
 } from './chatComposerLexicalModel';
 
 export type ChatRichComposerHandle = {
@@ -174,7 +173,7 @@ function ChatRichComposerContent({
     handleRef.current = {
       focus: () => editor.focus(),
       insertSkill: input => {
-        insertComposerTokens(editor, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange, slashCommands, [
+        emitLexicalInsertion(editor, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange, slashCommands, [
           {
             type: 'skill',
             id: createTokenId('skill'),
@@ -186,7 +185,7 @@ function ChatRichComposerContent({
         setSelectedTokenId('');
       },
       insertFile: input => {
-        insertComposerTokens(editor, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange, slashCommands, [
+        emitLexicalInsertion(editor, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange, slashCommands, [
           {
             type: 'file',
             id: createTokenId('file'),
@@ -202,7 +201,9 @@ function ChatRichComposerContent({
         if (!text) {
           return;
         }
-        insertPlainText(editor, text);
+        editor.update(() => {
+          $insertComposerPlainText(text);
+        });
         setSelectedTokenId('');
       },
       selectToken: id => {
@@ -342,7 +343,9 @@ function ChatRichComposerContent({
         return;
       }
       event.preventDefault();
-      insertPlainText(editor, text);
+      editor.update(() => {
+        $insertComposerPlainText(text);
+      });
     },
     [editor, onPaste, readOnly],
   );
@@ -352,7 +355,7 @@ function ChatRichComposerContent({
       return;
     }
     editor.getEditorState().read(() => {
-      const currentTokens = tokenizeTextTokens($readComposerTokens(), slashCommands);
+      const currentTokens = normalizeComposerTextTokens($readComposerTokens(), slashCommands);
       if (chatComposerTokensEqual(currentTokens, emittedTokensRef.current)) {
         tokensRef.current = currentTokens;
         return;
@@ -396,22 +399,7 @@ function ChatRichComposerContent({
   );
 }
 
-function tokenizeTextTokens(
-  tokens: ChatComposerToken[],
-  slashCommands: {command: string; label: string}[],
-): ChatComposerToken[] {
-  if (slashCommands.length === 0) {
-    return normalizeChatComposerTokens(tokens);
-  }
-  return normalizeChatComposerTokens(tokens.flatMap(token => {
-    if (token.type !== 'text') {
-      return [token];
-    }
-    return tokenizeKnownChatSlashCommands(token.text, slashCommands);
-  }));
-}
-
-function insertComposerTokens(
+function emitLexicalInsertion(
   editor: LexicalEditor,
   tokensRef: React.MutableRefObject<ChatComposerToken[]>,
   emittedTokensRef: React.MutableRefObject<ChatComposerToken[]>,
@@ -423,40 +411,18 @@ function insertComposerTokens(
   let emitted: ChatComposerToken[] | null = null;
   let emittedCursor = 0;
   editor.update(() => {
-    const current = $readComposerTokens();
-    const sourceTokens = current.length > 0 ? current : tokensRef.current;
-    const position = $currentComposerPosition(sourceTokens);
-    const insertion = insertChatComposerTokens(sourceTokens, position, insertedTokens);
-    const nextTokens = tokenizeTextTokens(insertion.tokens, slashCommands);
+    const insertion = $insertComposerTokens(insertedTokens, slashCommands);
+    const nextTokens = insertion.tokens;
     tokensRef.current = nextTokens;
     emittedTokensRef.current = nextTokens;
     emitted = nextTokens;
     emittedCursor = insertion.cursor;
-    $setComposerTokens(nextTokens, '', insertion.cursor);
   });
   if (emitted) {
     onTokensChange(emitted);
     const serialized = serializeChatComposerTokens(emitted);
     onPlainTextChange?.(serialized.text, serializedChatComposerTextPosition(emitted, emittedCursor));
   }
-}
-
-function insertPlainText(editor: LexicalEditor, text: string): void {
-  editor.update(() => {
-    $getSelectionInsertText(text);
-  });
-}
-
-function $getSelectionInsertText(text: string): void {
-  const node = $createTextNode(text);
-  const lexicalSelection = $getSelection();
-  if ($isRangeSelection(lexicalSelection)) {
-    lexicalSelection.insertNodes([node]);
-    return;
-  }
-  const currentTokens = $readComposerTokens();
-  const nextTokens = normalizeChatComposerTokens([...currentTokens, {type: 'text', text}]);
-  $setComposerTokens(nextTokens, '', chatComposerTokenUnitLength(nextTokens));
 }
 
 function deleteComposerToken(
@@ -466,13 +432,13 @@ function deleteComposerToken(
   emittedTokensRef: React.MutableRefObject<ChatComposerToken[]>,
   onTokensChange: (tokens: ChatComposerToken[]) => void,
 ): void {
-  const nextTokens = deleteChatComposerTokenById(tokensRef.current, tokenId);
+  let nextTokens = deleteChatComposerTokenById(tokensRef.current, tokenId);
+  editor.update(() => {
+    nextTokens = $deleteComposerTokenById(tokenId);
+  });
   tokensRef.current = nextTokens;
   emittedTokensRef.current = nextTokens;
   onTokensChange(nextTokens);
-  editor.update(() => {
-    $setComposerTokens(nextTokens, '', chatComposerTokenUnitLength(nextTokens));
-  });
 }
 
 function createTokenId(kind: string): string {

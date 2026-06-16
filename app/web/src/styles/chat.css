@@ -3169,6 +3169,10 @@
   overflow-wrap: anywhere;
 }
 
+.chat-rich-composer p {
+  margin: 0;
+}
+
 .chat-rich-composer-placeholder {
   position: absolute;
   left: 8px;

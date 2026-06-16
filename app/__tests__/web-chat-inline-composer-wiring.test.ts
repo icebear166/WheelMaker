@@ -42,4 +42,11 @@ describe('web chat inline composer capsule wiring', () => {
 
     expect(stylesCss).toMatch(/\.chat-composer-input \{[\s\S]*max-height: 180px;[\s\S]*overflow-x: hidden;[\s\S]*overflow-y: auto;[\s\S]*\}/);
   });
+
+  test('resets Lexical paragraph spacing inside the composer', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(stylesCss).toMatch(/\.chat-rich-composer p \{[\s\S]*margin: 0;[\s\S]*\}/);
+  });
 });

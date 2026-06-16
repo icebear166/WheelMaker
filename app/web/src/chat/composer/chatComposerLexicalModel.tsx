@@ -24,10 +24,15 @@ import {
   chatComposerSingleTokenUnitLength,
   chatComposerTokenUnitLength,
   normalizeChatComposerTokens,
+  tokenizeKnownChatSlashCommands,
   type ChatComposerFileToken,
   type ChatComposerSkillToken,
   type ChatComposerToken,
 } from './chatComposerTokens';
+import {
+  deleteChatComposerTokenById,
+  insertChatComposerTokens,
+} from './chatComposerTokenEditing';
 
 export type SerializedChatComposerCapsuleNode = Spread<{
   kind: 'skill' | 'file';
@@ -43,6 +48,11 @@ export type ChatComposerLexicalNodeForTest =
   | {type: 'text'; text: string}
   | {type: 'linebreak'}
   | {type: 'capsule'; token: ChatComposerSkillToken | ChatComposerFileToken};
+
+export type ChatComposerLexicalInsertionResult = {
+  tokens: ChatComposerToken[];
+  cursor: number;
+};
 
 export class ChatComposerCapsuleNode extends DecoratorNode<React.ReactNode> {
   __kind: 'skill' | 'file';
@@ -260,6 +270,42 @@ export function $setSelectedComposerCapsule(selectedTokenId: string): void {
   }
 }
 
+export function $insertComposerTokens(
+  insertedTokens: ChatComposerToken[],
+  slashCommands: {command: string; label: string}[],
+): ChatComposerLexicalInsertionResult {
+  const sourceTokens = $readComposerTokens();
+  const insertion = insertChatComposerTokens(
+    sourceTokens,
+    $currentComposerPosition(sourceTokens),
+    insertedTokens,
+  );
+  const nextTokens = normalizeComposerTextTokens(insertion.tokens, slashCommands);
+  $setComposerTokens(nextTokens, '', insertion.cursor);
+  return {
+    tokens: nextTokens,
+    cursor: insertion.cursor,
+  };
+}
+
+export function $insertComposerPlainText(text: string): void {
+  const node = $createTextNode(text);
+  const selection = $getSelection();
+  if ($isRangeSelection(selection)) {
+    selection.insertNodes([node]);
+    return;
+  }
+  const currentTokens = $readComposerTokens();
+  const nextTokens = normalizeChatComposerTokens([...currentTokens, {type: 'text', text}]);
+  $setComposerTokens(nextTokens, '', chatComposerTokenUnitLength(nextTokens));
+}
+
+export function $deleteComposerTokenById(tokenId: string): ChatComposerToken[] {
+  const nextTokens = deleteChatComposerTokenById($readComposerTokens(), tokenId);
+  $setComposerTokens(nextTokens, '', chatComposerTokenUnitLength(nextTokens));
+  return nextTokens;
+}
+
 export function $deleteSelectedComposerCapsule(selectedTokenId: string): boolean {
   if (!selectedTokenId) {
     return false;
@@ -352,6 +398,21 @@ function $createComposerNodes(tokens: ChatComposerToken[], selectedTokenId: stri
       selected: node.token.id === selectedTokenId,
     });
   });
+}
+
+export function normalizeComposerTextTokens(
+  tokens: ChatComposerToken[],
+  slashCommands: {command: string; label: string}[],
+): ChatComposerToken[] {
+  if (slashCommands.length === 0) {
+    return normalizeChatComposerTokens(tokens);
+  }
+  return normalizeChatComposerTokens(tokens.flatMap(token => {
+    if (token.type !== 'text') {
+      return [token];
+    }
+    return tokenizeKnownChatSlashCommands(token.text, slashCommands);
+  }));
 }
 
 function $getComposerParagraph(): ElementNode | null {

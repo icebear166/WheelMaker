@@ -8,7 +8,10 @@ import {
   chatComposerTokensFromLexicalNodesForTest,
   lexicalNodesFromChatComposerTokensForTest,
 } from '../web/src/chat/composer/chatComposerLexicalModel';
-import type {ChatComposerToken} from '../web/src/chat/composer/chatComposerTokens';
+import {
+  serializeChatComposerTokens,
+  type ChatComposerToken,
+} from '../web/src/chat/composer/chatComposerTokens';
 
 describe('ChatRichComposer', () => {
   const originalNode = global.Node;
@@ -272,6 +275,32 @@ describe('ChatRichComposer', () => {
     });
 
     expect(onPlainTextChange).toHaveBeenLastCalledWith('/grill-me ', '/grill-me '.length);
+  });
+
+  test('inserts a skill into an empty composer without a leading newline', async () => {
+    const onTokensChange = jest.fn();
+    const onPlainTextChange = jest.fn();
+    const ref = React.createRef<ChatRichComposerHandle>();
+
+    await ReactTestRenderer.act(() => {
+      ReactTestRenderer.create(
+        <ChatRichComposer
+          ref={ref}
+          tokens={[]}
+          onTokensChange={onTokensChange}
+          onPlainTextChange={onPlainTextChange}
+          readOnly={false}
+        />,
+      );
+    });
+
+    await ReactTestRenderer.act(() => {
+      ref.current!.insertSkill({command: '/review', label: 'Review'});
+    });
+
+    const emittedTokens = onTokensChange.mock.calls.at(-1)![0] as ChatComposerToken[];
+    expect(serializeChatComposerTokens(emittedTokens).text).toBe('/review ');
+    expect(onPlainTextChange).toHaveBeenLastCalledWith('/review ', '/review '.length);
   });
 
   test('deleteSelectedCapsule removes the selected token', async () => {
