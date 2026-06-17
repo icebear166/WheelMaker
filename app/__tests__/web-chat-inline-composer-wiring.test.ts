@@ -82,11 +82,30 @@ describe('web chat inline composer capsule wiring', () => {
     expect(fileEnterStart).toBeGreaterThan(fileMenuStart);
     expect(fileEnterEnd).toBeGreaterThan(fileEnterStart);
     expect(fileEnterBlock.indexOf('event.preventDefault();')).toBeLessThan(fileEnterBlock.indexOf('const activeResult'));
+    expect(fileEnterBlock.indexOf('event.stopPropagation();')).toBeGreaterThan(fileEnterBlock.indexOf('event.preventDefault();'));
+    expect(fileEnterBlock.indexOf('event.stopPropagation();')).toBeLessThan(fileEnterBlock.indexOf('const activeResult'));
     expect(fileEnterBlock.indexOf('event.preventDefault();')).toBeLessThan(fileEnterBlock.indexOf('if (!activeResult)'));
+    expect(fileEnterBlock.indexOf('event.stopPropagation();')).toBeLessThan(fileEnterBlock.indexOf('if (!activeResult)'));
 
     expect(slashMenuStart).toBeGreaterThanOrEqual(0);
     expect(slashEnterStart).toBeGreaterThan(slashMenuStart);
     expect(slashEnterEnd).toBeGreaterThan(slashEnterStart);
     expect(slashEnterBlock.indexOf('event.preventDefault();')).toBeLessThan(slashEnterBlock.indexOf('if (!activeChatSlashCommand)'));
+    expect(slashEnterBlock.indexOf('event.stopPropagation();')).toBeGreaterThan(slashEnterBlock.indexOf('event.preventDefault();'));
+    expect(slashEnterBlock.indexOf('event.stopPropagation();')).toBeLessThan(slashEnterBlock.indexOf('if (!activeChatSlashCommand)'));
+  });
+
+  test('stops plain Enter send from reaching Lexical paragraph insertion', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const sendEnterStart = mainTsx.indexOf("const shouldSendChatOnEnter = event.key === 'Enter'");
+    const sendEnterEnd = mainTsx.indexOf('sendChatMessage().catch(() => undefined);', sendEnterStart);
+    const sendEnterBlock = mainTsx.slice(sendEnterStart, sendEnterEnd);
+
+    expect(sendEnterStart).toBeGreaterThanOrEqual(0);
+    expect(sendEnterEnd).toBeGreaterThan(sendEnterStart);
+    expect(sendEnterBlock.indexOf('event.preventDefault();')).toBeLessThan(sendEnterBlock.indexOf('if (chatSendDisabled)'));
+    expect(sendEnterBlock.indexOf('event.stopPropagation();')).toBeGreaterThan(sendEnterBlock.indexOf('event.preventDefault();'));
+    expect(sendEnterBlock.indexOf('event.stopPropagation();')).toBeLessThan(sendEnterBlock.indexOf('if (chatSendDisabled)'));
   });
 });
