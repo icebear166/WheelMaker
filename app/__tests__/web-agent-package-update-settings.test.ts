@@ -419,6 +419,7 @@ describe('agent package update settings UI source structure', () => {
 
     expect(mainTsx).toContain('const AGENT_TAG_VARIANT_INDEX');
     expect(mainTsx).toContain("claude: 2");
+    expect(mainTsx).toContain("flicker: 8");
     expect(mainTsx).not.toContain("codexapp: 3");
     expect(mainTsx).not.toContain(`${['my', 'flicker'].join('')}:`);
     expect(mainTsx).toContain('if (prefix === \'wide-session-agent\' || prefix === \'token-stats-pill-agent\')');
@@ -432,6 +433,8 @@ describe('agent package update settings UI source structure', () => {
     expect(agentTagBlock).toContain('font-weight: 600;');
     expect(agentTagBlock).toContain('background: color-mix(in srgb, var(--agent-accent) 6%, transparent);');
     expect(agentTagBlock).toContain('text-transform: none;');
+    expect(stylesCss).toContain('.wide-session-agent-8 { --agent-accent: #69db7c; }');
+    expect(stylesCss).toContain('.token-stats-pill-agent-8 { --pill-accent: #4fb86a; }');
   });
 
   test('adds desktop shortcuts and a mobile Settings-only shortcut bar', () => {

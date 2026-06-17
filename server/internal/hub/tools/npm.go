@@ -179,6 +179,7 @@ var runtimeNPMPackages = []npmPackagePolicy{
 	{PackageName: "@openai/codex", DisplayName: "Codex CLI", AgentTypes: []string{"codex"}, Kind: "runtime"},
 	{PackageName: "@github/copilot", DisplayName: "Copilot CLI", AgentTypes: []string{"copilot"}, Kind: "runtime"},
 	{PackageName: "opencode-ai", DisplayName: "OpenCode CLI", AgentTypes: []string{"opencode"}, Kind: "runtime"},
+	{PackageName: "@myflicker/cli", DisplayName: "MyFlicker CLI", AgentTypes: []string{"flicker"}, Kind: "runtime"},
 }
 
 var deprecatedNPMPackages = []npmPackagePolicy{

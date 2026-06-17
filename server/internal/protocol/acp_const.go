@@ -100,9 +100,10 @@ const (
 	ACPProviderOpenCode  ACPProvider = "opencode"
 	ACPProviderMimo      ACPProvider = "mimo"
 	ACPProviderCodeBuddy ACPProvider = "codebuddy"
+	ACPProviderFlicker   ACPProvider = "flicker"
 )
 
-var acpProviders = []ACPProvider{ACPProviderCodex, ACPProviderClaude, ACPProviderCopilot, ACPProviderOpenCode, ACPProviderMimo, ACPProviderCodeBuddy}
+var acpProviders = []ACPProvider{ACPProviderCodex, ACPProviderClaude, ACPProviderCopilot, ACPProviderOpenCode, ACPProviderMimo, ACPProviderCodeBuddy, ACPProviderFlicker}
 
 // ParseACPProvider parses a provider name (case-insensitive).
 func ParseACPProvider(name string) (ACPProvider, bool) {
@@ -119,6 +120,8 @@ func ParseACPProvider(name string) (ACPProvider, bool) {
 		return ACPProviderMimo, true
 	case string(ACPProviderCodeBuddy):
 		return ACPProviderCodeBuddy, true
+	case string(ACPProviderFlicker):
+		return ACPProviderFlicker, true
 	default:
 		return "", false
 	}

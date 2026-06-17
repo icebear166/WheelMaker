@@ -36,6 +36,8 @@ func providerPresetByName(name string) (ACPProviderPreset, bool) {
 		return OpenCodeACPProviderPreset, true
 	case CodeBuddyACPProviderPreset.Name:
 		return CodeBuddyACPProviderPreset, true
+	case FlickerACPProviderPreset.Name:
+		return FlickerACPProviderPreset, true
 	default:
 		return ACPProviderPreset{}, false
 	}

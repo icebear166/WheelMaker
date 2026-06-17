@@ -72,10 +72,15 @@ func newACPFactoryWithDefaults() *ACPFactory {
 		{provider: protocol.ACPProviderOpenCode, build: func() ACPProvider { return NewOpenCodeProvider() }},
 		{provider: protocol.ACPProviderMimo, build: func() ACPProvider { return NewMimoProvider() }},
 		{provider: protocol.ACPProviderCodeBuddy, build: func() ACPProvider { return NewCodeBuddyProvider() }},
+		{provider: protocol.ACPProviderFlicker, build: func() ACPProvider { return NewFlickerProvider() }},
 	}
 	for _, candidate := range candidates {
 		prov := candidate.build()
 		if !isProviderAvailable(prov) {
+			continue
+		}
+		if candidate.provider == protocol.ACPProviderFlicker {
+			f.Register(candidate.provider, flickerInstanceCreator(prov))
 			continue
 		}
 		f.Register(candidate.provider, providerInstanceCreator(prov))
@@ -161,6 +166,7 @@ func (f *ACPFactory) PreferredName() string {
 		protocol.ACPProviderOpenCode,
 		protocol.ACPProviderMimo,
 		protocol.ACPProviderCodeBuddy,
+		protocol.ACPProviderFlicker,
 	}
 	f.mu.RLock()
 	defer f.mu.RUnlock()

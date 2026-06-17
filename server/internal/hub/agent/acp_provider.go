@@ -79,6 +79,14 @@ var (
 		SkillProjectDirs:       []string{".agents/skills"},
 		SkillUserDirs:          []string{"~/.agents/skills"},
 	}
+	FlickerACPProviderPreset = ACPProviderPreset{
+		Name:                   "flicker",
+		BinaryName:             "myflicker",
+		Args:                   []string{"acp"},
+		MissingPathErrTemplate: "flicker: myflicker binary not found in PATH (install @myflicker/cli): %v",
+		SkillProjectDirs:       []string{".agents/skills"},
+		SkillUserDirs:          []string{"~/.agents/skills"},
+	}
 )
 
 // acpProvider is the unified implementation for all ACP providers.
@@ -120,6 +128,10 @@ func NewMimoProvider() *acpProvider {
 
 func NewCodeBuddyProvider() *acpProvider {
 	return NewACPProvider(CodeBuddyACPProviderPreset)
+}
+
+func NewFlickerProvider() *acpProvider {
+	return NewACPProvider(FlickerACPProviderPreset)
 }
 
 func (p *acpProvider) Name() string { return p.preset.Name }

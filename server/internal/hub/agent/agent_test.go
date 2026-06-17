@@ -265,6 +265,33 @@ func TestCodeBuddyACPProvider_LaunchArgs(t *testing.T) {
 	}
 }
 
+func TestFlickerACPProvider_LaunchArgs(t *testing.T) {
+	p := NewFlickerProvider()
+	p.resolveBinary = func(name string, configuredPath string) (string, error) {
+		if name != "myflicker" {
+			t.Fatalf("resolveBinary name=%q, want myflicker", name)
+		}
+		if configuredPath != "" {
+			t.Fatalf("resolveBinary configuredPath=%q, want empty", configuredPath)
+		}
+		return "/usr/bin/myflicker", nil
+	}
+
+	exe, args, env, err := p.Launch()
+	if err != nil {
+		t.Fatalf("launch: %v", err)
+	}
+	if exe != "/usr/bin/myflicker" {
+		t.Fatalf("exe=%q", exe)
+	}
+	if !reflect.DeepEqual(args, []string{"acp"}) {
+		t.Fatalf("args=%v", args)
+	}
+	if len(env) != 0 {
+		t.Fatalf("env=%v, want empty", env)
+	}
+}
+
 func TestParseACPProviderCodexAliases(t *testing.T) {
 	removedProviderName := strings.Join([]string{"my", "flicker"}, "")
 
@@ -283,6 +310,9 @@ func TestParseACPProviderCodexAliases(t *testing.T) {
 	}
 	if _, ok := protocol.ParseACPProvider(removedProviderName); ok {
 		t.Fatal("ParseACPProvider accepted removed provider")
+	}
+	if provider, ok := protocol.ParseACPProvider("flicker"); !ok || provider != protocol.ACPProviderFlicker {
+		t.Fatalf("ParseACPProvider(flicker)=(%q,%v), want %q,true", provider, ok, protocol.ACPProviderFlicker)
 	}
 
 	for _, name := range protocol.ACPProviderNames() {
@@ -303,7 +333,158 @@ func TestProviderPresetByNameRejectsRemovedProvider(t *testing.T) {
 	if _, ok := providerPresetByName(removedProviderName); ok {
 		t.Fatal("providerPresetByName accepted removed provider")
 	}
+	if preset, ok := providerPresetByName("flicker"); !ok || preset.Name != "flicker" {
+		t.Fatalf("providerPresetByName(flicker)=(%#v,%v), want flicker,true", preset, ok)
+	}
 }
+
+func TestFlickerConnPassesThroughStandardConfigOptions(t *testing.T) {
+	base := &testFlickerBaseConn{
+		sendFn: func(_ context.Context, method string, _ any, result any) error {
+			if method != protocol.MethodSessionNew {
+				t.Fatalf("method=%q, want session/new", method)
+			}
+			return assignResult(result, map[string]any{
+				"sessionId": "session-1",
+				"configOptions": []map[string]any{
+					{
+						"id":           protocol.ConfigOptionIDModel,
+						"name":         "Model",
+						"category":     protocol.ConfigOptionCategoryModel,
+						"type":         "select",
+						"currentValue": "wanqing/glm-5.1",
+						"options": []map[string]any{
+							{"value": "wanqing/glm-5.1", "name": "GLM-5.1"},
+							{"value": "wanqing/deepseek-v4-pro", "name": "DeepSeek V4 Pro"},
+						},
+					},
+				},
+			})
+		},
+	}
+	conn := newFlickerConn(base)
+
+	var got protocol.SessionNewResult
+	if err := conn.Send(context.Background(), protocol.MethodSessionNew, protocol.SessionNewParams{}, &got); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	if got.SessionID != "session-1" {
+		t.Fatalf("sessionId=%q", got.SessionID)
+	}
+	if len(got.ConfigOptions) != 1 {
+		t.Fatalf("configOptions=%#v, want one", got.ConfigOptions)
+	}
+	option := got.ConfigOptions[0]
+	if option.ID != protocol.ConfigOptionIDModel || option.CurrentValue != "wanqing/glm-5.1" {
+		t.Fatalf("model option=%#v", option)
+	}
+	if len(option.Options) != 2 || option.Options[0].Value != "wanqing/glm-5.1" {
+		t.Fatalf("model values=%#v", option.Options)
+	}
+}
+
+func TestFlickerConnMapsModelConfigToSetModel(t *testing.T) {
+	var capturedMethod string
+	var capturedParams flickerSetModelParams
+	base := &testFlickerBaseConn{
+		sendFn: func(_ context.Context, method string, params any, result any) error {
+			switch method {
+			case protocol.MethodSessionNew:
+				return assignResult(result, map[string]any{
+					"sessionId": "session-1",
+					"configOptions": []map[string]any{
+						{
+							"id":           protocol.ConfigOptionIDModel,
+							"name":         "Model",
+							"category":     protocol.ConfigOptionCategoryModel,
+							"type":         "select",
+							"currentValue": "wanqing/auto",
+							"options": []map[string]any{
+								{"value": "wanqing/auto", "name": "Auto"},
+								{"value": "wanqing/glm-5.1", "name": "GLM-5.1"},
+							},
+						},
+					},
+				})
+			case "session/set_model":
+				capturedMethod = method
+				if err := remarshal(params, &capturedParams); err != nil {
+					t.Fatalf("params: %v", err)
+				}
+				return assignResult(result, map[string]any{})
+			default:
+				t.Fatalf("unexpected method=%q", method)
+				return nil
+			}
+		},
+	}
+	conn := newFlickerConn(base)
+	var session protocol.SessionNewResult
+	if err := conn.Send(context.Background(), protocol.MethodSessionNew, protocol.SessionNewParams{}, &session); err != nil {
+		t.Fatalf("session/new: %v", err)
+	}
+	var raw json.RawMessage
+	if err := conn.Send(context.Background(), protocol.MethodSetConfigOption, protocol.SessionSetConfigOptionParams{
+		SessionID: "session-1",
+		ConfigID:  protocol.ConfigOptionIDModel,
+		Value:     "wanqing/glm-5.1",
+	}, &raw); err != nil {
+		t.Fatalf("set config: %v", err)
+	}
+	var wrapped struct {
+		ConfigOptions []protocol.ConfigOption `json:"configOptions"`
+	}
+	if err := json.Unmarshal(raw, &wrapped); err != nil {
+		t.Fatalf("decode update: %v", err)
+	}
+	if capturedMethod != "session/set_model" {
+		t.Fatalf("capturedMethod=%q", capturedMethod)
+	}
+	if capturedParams.SessionID != "session-1" || capturedParams.ModelID != "wanqing/glm-5.1" {
+		t.Fatalf("capturedParams=%#v", capturedParams)
+	}
+	if len(wrapped.ConfigOptions) != 1 || wrapped.ConfigOptions[0].CurrentValue != "wanqing/glm-5.1" {
+		t.Fatalf("updated=%#v", wrapped.ConfigOptions)
+	}
+}
+
+func TestFlickerConnPassesThroughNonModelConfigOption(t *testing.T) {
+	var capturedMethod string
+	base := &testFlickerBaseConn{
+		sendFn: func(_ context.Context, method string, _ any, result any) error {
+			capturedMethod = method
+			return assignResult(result, map[string]any{})
+		},
+	}
+	conn := newFlickerConn(base)
+	var raw json.RawMessage
+	if err := conn.Send(context.Background(), protocol.MethodSetConfigOption, protocol.SessionSetConfigOptionParams{
+		SessionID: "session-1",
+		ConfigID:  protocol.ConfigOptionIDMode,
+		Value:     "default",
+	}, &raw); err != nil {
+		t.Fatalf("set config: %v", err)
+	}
+	if capturedMethod != protocol.MethodSetConfigOption {
+		t.Fatalf("capturedMethod=%q, want %q", capturedMethod, protocol.MethodSetConfigOption)
+	}
+}
+
+type testFlickerBaseConn struct {
+	sendFn func(context.Context, string, any, any) error
+}
+
+func (c *testFlickerBaseConn) Send(ctx context.Context, method string, params any, result any) error {
+	return c.sendFn(ctx, method, params, result)
+}
+
+func (c *testFlickerBaseConn) Notify(string, any) error { return nil }
+
+func (c *testFlickerBaseConn) OnACPRequest(ACPRequestHandler) {}
+
+func (c *testFlickerBaseConn) OnACPResponse(ACPResponseHandler) {}
+
+func (c *testFlickerBaseConn) Close() error { return nil }
 
 func TestCodexAppProviderLaunchUsesAppServerStdio(t *testing.T) {
 	p := NewCodexAppProvider()
