@@ -2023,6 +2023,13 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-title-bar {');
     expect(stylesCss).toContain('.chat-title-actions {');
     expect(stylesCss).toContain('.chat-preview-toggle {');
+    const previewToggleBlock = cssRuleBlock(stylesCss, '.chat-preview-toggle');
+    expect(previewToggleBlock).toContain('border: 1px solid color-mix(in srgb, var(--accent) 54%, transparent);');
+    expect(previewToggleBlock).toContain('background: transparent;');
+    expect(previewToggleBlock).toContain('color: color-mix(in srgb, var(--accent) 88%, var(--text));');
+    expect(previewToggleBlock).not.toContain('var(--panel-2)');
+    const previewToggleActiveBlock = cssRuleBlock(stylesCss, '.chat-preview-toggle:hover');
+    expect(previewToggleActiveBlock).toContain('background: color-mix(in srgb, var(--accent) 13%, transparent);');
   });
 
   test('wide project session rail actions use project-scoped chat flows', () => {

@@ -363,18 +363,23 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 54%, transparent);
   border-radius: 6px;
   padding: 0;
-  background: color-mix(in srgb, var(--panel-2) 82%, transparent);
-  color: var(--muted);
+  background: transparent;
+  color: color-mix(in srgb, var(--accent) 88%, var(--text));
   cursor: pointer;
 }
 
-.chat-preview-toggle:hover,
+.chat-preview-toggle:hover {
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  color: color-mix(in srgb, var(--accent) 96%, var(--text));
+}
+
 .chat-preview-toggle.active {
-  background: var(--hover);
-  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 72%, transparent);
+  color: color-mix(in srgb, var(--accent) 96%, var(--text));
 }
 
 .chat-preview-toolbar {
