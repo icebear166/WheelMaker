@@ -78,7 +78,7 @@ describe('ChatRichComposer', () => {
     expect(textbox.props.onCompositionEnd).toBeUndefined();
   });
 
-  test('wires parent keyboard handling directly to the editable surface', async () => {
+  test('wires parent keyboard handling to the editable capture phase', async () => {
     const onKeyDown = jest.fn();
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
 
@@ -89,7 +89,8 @@ describe('ChatRichComposer', () => {
     });
 
     const textbox = renderer!.root.findByProps({role: 'textbox'});
-    expect(textbox.props.onKeyDown).toBe(onKeyDown);
+    expect(textbox.props.onKeyDownCapture).toBe(onKeyDown);
+    expect(textbox.props.onKeyDown).toBeUndefined();
   });
 
   test('transforms typed slash commands inside Lexical state and keeps following text editable', () => {

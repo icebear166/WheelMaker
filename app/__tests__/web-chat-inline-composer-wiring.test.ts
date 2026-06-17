@@ -49,4 +49,44 @@ describe('web chat inline composer capsule wiring', () => {
 
     expect(stylesCss).toMatch(/\.chat-rich-composer p \{[\s\S]*margin: 0;[\s\S]*\}/);
   });
+
+  test('keeps Enter send ownership outside the Lexical composer', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const composerTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'composer', 'ChatRichComposer.tsx'));
+    const composerCallStart = mainTsx.indexOf('                  <ChatRichComposer');
+    const composerCallEnd = mainTsx.indexOf('/>', composerCallStart);
+    const composerCall = mainTsx.slice(composerCallStart, composerCallEnd);
+
+    expect(composerCallStart).toBeGreaterThanOrEqual(0);
+    expect(composerCallEnd).toBeGreaterThan(composerCallStart);
+    expect(composerCall).toContain('onKeyDown={event => {');
+    expect(composerCall).not.toContain('onSend=');
+    expect(composerTsx).not.toContain('KEY_ENTER_COMMAND');
+    expect(composerTsx).not.toContain('onSend');
+  });
+
+  test('consumes Enter and Tab before resolving chat skill or file menu selection', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const fileMenuStart = mainTsx.indexOf('if (chatFileMentionMenuOpen) {');
+    const fileEnterStart = mainTsx.indexOf("if ((event.key === 'Enter' || event.key === 'Tab')", fileMenuStart);
+    const fileEnterEnd = mainTsx.indexOf("if (event.key === 'Escape')", fileEnterStart);
+    const fileEnterBlock = mainTsx.slice(fileEnterStart, fileEnterEnd);
+    const slashMenuStart = mainTsx.indexOf('if (chatSlashMenuVisible) {');
+    const slashEnterStart = mainTsx.indexOf("if ((event.key === 'Enter' || event.key === 'Tab')", slashMenuStart);
+    const slashEnterEnd = mainTsx.indexOf("if (event.key === 'Escape')", slashEnterStart);
+    const slashEnterBlock = mainTsx.slice(slashEnterStart, slashEnterEnd);
+
+    expect(fileMenuStart).toBeGreaterThanOrEqual(0);
+    expect(fileEnterStart).toBeGreaterThan(fileMenuStart);
+    expect(fileEnterEnd).toBeGreaterThan(fileEnterStart);
+    expect(fileEnterBlock.indexOf('event.preventDefault();')).toBeLessThan(fileEnterBlock.indexOf('const activeResult'));
+    expect(fileEnterBlock.indexOf('event.preventDefault();')).toBeLessThan(fileEnterBlock.indexOf('if (!activeResult)'));
+
+    expect(slashMenuStart).toBeGreaterThanOrEqual(0);
+    expect(slashEnterStart).toBeGreaterThan(slashMenuStart);
+    expect(slashEnterEnd).toBeGreaterThan(slashEnterStart);
+    expect(slashEnterBlock.indexOf('event.preventDefault();')).toBeLessThan(slashEnterBlock.indexOf('if (!activeChatSlashCommand)'));
+  });
 });

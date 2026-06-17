@@ -12,7 +12,6 @@ import {
   COMMAND_PRIORITY_LOW,
   KEY_BACKSPACE_COMMAND,
   KEY_DELETE_COMMAND,
-  KEY_ENTER_COMMAND,
   type LexicalEditor,
 } from 'lexical';
 
@@ -62,7 +61,6 @@ export type ChatRichComposerProps = {
   onPlainTextChange?: (text: string, cursor: number) => void;
   onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
   onPaste?: React.ClipboardEventHandler<HTMLDivElement>;
-  onSend?: () => void;
 };
 
 let nextTokenId = 1;
@@ -130,7 +128,6 @@ function ChatRichComposerContent({
   onPlainTextChange,
   onKeyDown,
   onPaste,
-  onSend,
   editorRef,
   handleRef,
 }: ChatRichComposerContentProps): React.ReactElement {
@@ -234,27 +231,6 @@ function ChatRichComposerContent({
       },
     };
   }, [editor, handleRef, onPlainTextChange, onTokensChange, slashCommands]);
-
-  React.useEffect(() => {
-    return editor.registerCommand<KeyboardEvent>(
-      KEY_ENTER_COMMAND,
-      event => {
-        if (!event) {
-          return false;
-        }
-        if (event.defaultPrevented) {
-          return true;
-        }
-        if (!event.shiftKey && !event.altKey && !event.isComposing) {
-          event.preventDefault();
-          onSend?.();
-          return true;
-        }
-        return false;
-      },
-      COMMAND_PRIORITY_HIGH,
-    );
-  }, [editor, onSend]);
 
   React.useEffect(() => {
     return editor.registerCommand<KeyboardEvent>(
@@ -389,7 +365,7 @@ function ChatRichComposerContent({
             aria-multiline="true"
             enterKeyHint={enterKeyHint}
             onMouseDown={handleMouseDown}
-            onKeyDown={onKeyDown}
+            onKeyDownCapture={onKeyDown}
             onPaste={handlePaste}
           />
         }

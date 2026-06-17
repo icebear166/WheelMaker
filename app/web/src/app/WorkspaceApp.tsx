@@ -17053,11 +17053,11 @@ export function App() {
                           return;
                         }
                         if ((event.key === 'Enter' || event.key === 'Tab') && !event.altKey && !event.nativeEvent.isComposing) {
+                          event.preventDefault();
                           const activeResult = chatFileMentionResults[chatFileMentionActiveIndex];
                           if (!activeResult) {
                             return;
                           }
-                          event.preventDefault();
                           applyChatFileMentionResult(activeResult);
                           return;
                         }
@@ -17090,10 +17090,10 @@ export function App() {
                           return;
                         }
                         if ((event.key === 'Enter' || event.key === 'Tab') && !event.altKey && !event.nativeEvent.isComposing) {
+                          event.preventDefault();
                           if (!activeChatSlashCommand) {
                             return;
                           }
-                          event.preventDefault();
                           applyChatSlashCommand(activeChatSlashCommand);
                           return;
                         }
@@ -17111,14 +17111,6 @@ export function App() {
                       }
                       if (!isWide || isWindowsPlatform) {
                         event.preventDefault();
-                        if (chatSending || chatAttachmentUploadPending) {
-                          return;
-                        }
-                        sendChatMessage().catch(() => undefined);
-                      }
-                    }}
-                    onSend={() => {
-                      if (!isWide || isWindowsPlatform) {
                         if (chatSending || chatAttachmentUploadPending) {
                           return;
                         }
