@@ -573,7 +573,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className="floating-control-drag-backdrop"');
     expect(mainTsx).toContain('className="floating-control-dock-rail left"');
     expect(mainTsx).toContain('className="floating-control-dock-rail right"');
-    expect(mainTsx).toContain("`CHAT - ${selectedChatDisplayTitle || 'New Session'}`");
+    expect(mainTsx).toContain('className="block-title chat-title-bar"');
     expect(mainTsx).toContain("{selectedFile || 'Select a file'}");
     expect(mainTsx).toContain("{selectedDiff || 'Select a changed file'}");
     expect(mainTsx).toContain('aria-expanded={drawerOpen}');
@@ -1995,6 +1995,34 @@ describe('web chat integration', () => {
     expect(stylesCss).toMatch(
       /\.wide-project-pin-badge \{[\s\S]*position: absolute;[\s\S]*right: -4px;[\s\S]*top: -5px;[\s\S]*\}/,
     );
+  });
+
+  test('chat title bar uses breadcrumb context and exposes preview toggle', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const stylesCss = readWebStyles(projectRoot);
+
+    const chatSurfaceStart = mainTsx.indexOf('if (tab === \'chat\') {\n      return (');
+    const chatSurfaceEnd = mainTsx.indexOf('if (tab === \'file\') {', chatSurfaceStart);
+    expect(chatSurfaceStart).toBeGreaterThanOrEqual(0);
+    expect(chatSurfaceEnd).toBeGreaterThan(chatSurfaceStart);
+    const chatSurface = mainTsx.slice(chatSurfaceStart, chatSurfaceEnd);
+
+    expect(chatSurface).toContain('className="block-title chat-title-bar"');
+    expect(chatSurface).toContain('renderBreadcrumbTitle(activeChatBreadcrumbProjectName, activeChatBreadcrumbLabel)');
+    expect(chatSurface).not.toContain('CHAT - ${selectedChatDisplayTitle || \'New Session\'}');
+    expect(chatSurface).toContain('className="chat-title-actions"');
+    expect(chatSurface).toContain('className={`chat-preview-toggle${chatPreviewOpen ? \' active\' : \'\'}`}');
+    expect(chatSurface).toContain('title={chatPreviewOpen ? \'Hide preview\' : \'Show preview\'}');
+    expect(chatSurface).toContain('aria-label={chatPreviewOpen ? \'Hide preview\' : \'Show preview\'}');
+    expect(chatSurface).toContain('aria-pressed={chatPreviewOpen}');
+    expect(chatSurface).toContain('onClick={toggleChatPreviewFromTitle}');
+    expect(mainTsx).toContain('setChatPreviewManualOpen(open => !open)');
+    expect(mainTsx).toContain('setChatPreviewManualCollapsed(true)');
+
+    expect(stylesCss).toContain('.chat-title-bar {');
+    expect(stylesCss).toContain('.chat-title-actions {');
+    expect(stylesCss).toContain('.chat-preview-toggle {');
   });
 
   test('wide project session rail actions use project-scoped chat flows', () => {

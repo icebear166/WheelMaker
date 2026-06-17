@@ -2165,6 +2165,35 @@ const ChatFilePeekViewer = React.memo(function ChatFilePeekViewer({
   );
 });
 
+const ChatEmptyPreviewViewer = React.memo(function ChatEmptyPreviewViewer({
+  mode,
+  onClose,
+}: {
+  mode: 'desktop' | 'mobile';
+  onClose: () => void;
+}) {
+  return (
+    <div className={`chat-file-peek-surface chat-empty-preview-surface ${mode}`} aria-label="Chat preview">
+      <div className="chat-preview-toolbar">
+        <button
+          type="button"
+          className="chat-preview-icon-button"
+          onClick={onClose}
+          title={mode === 'mobile' ? 'Back' : 'Close preview'}
+          aria-label={mode === 'mobile' ? 'Back' : 'Close preview'}
+        >
+          <span className={`codicon ${mode === 'mobile' ? 'codicon-arrow-left' : 'codicon-close'}`} />
+        </button>
+        <div className="chat-preview-title" title="Preview">Preview</div>
+      </div>
+      <div className="chat-empty-preview-body">
+        <span className="codicon codicon-layout-sidebar-right" aria-hidden="true" />
+        <span className="chat-empty-preview-copy">No preview selected</span>
+      </div>
+    </div>
+  );
+});
+
 type ChatAttachmentPreviewViewerProps = {
   preview: ChatAttachmentPreviewState;
   mode: 'desktop' | 'mobile';
@@ -2944,6 +2973,8 @@ export function App() {
   const [chatAttachmentPreview, setChatAttachmentPreview] = useState<ChatAttachmentPreviewState | null>(null);
   const [chatPromptArtifactPreview, setChatPromptArtifactPreview] =
     useState<ChatPromptArtifactPreviewState | null>(null);
+  const [chatPreviewManualOpen, setChatPreviewManualOpen] = useState(false);
+  const [chatPreviewManualCollapsed, setChatPreviewManualCollapsed] = useState(false);
   const [chatAttachmentThumbnails, setChatAttachmentThumbnails] = useState<Record<string, ChatAttachmentThumbnailState>>({});
   const chatFilePeekRef = useRef<ChatFilePeekState | null>(null);
   const chatAttachmentPreviewRef = useRef<ChatAttachmentPreviewState | null>(null);
@@ -2961,7 +2992,8 @@ export function App() {
   const [chatPeekSelectedLines, setChatPeekSelectedLines] = useState<Set<number>>(new Set());
   const chatPeekAnchorRef = useRef<number | null>(null);
   const chatPortRelayPreviewOpen = portRelayFrameOpen && portRelayFramePlacement === 'chatPreview' && !!portRelayFrameUrl;
-  const chatPreviewOpen = !!chatFilePeek || !!chatPromptArtifactPreview || !!chatAttachmentPreview || chatPortRelayPreviewOpen;
+  const chatPreviewHasContent = !!chatFilePeek || !!chatPromptArtifactPreview || !!chatAttachmentPreview || chatPortRelayPreviewOpen;
+  const chatPreviewOpen = chatPreviewManualOpen || (chatPreviewHasContent && !chatPreviewManualCollapsed);
   const liveRefreshTimerRef = useRef<number | null>(null);
   const refreshInFlightRef = useRef(false);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -7225,6 +7257,8 @@ export function App() {
     setPortRelayFramePlacement('main');
   }, []);
   const closeChatPreview = useCallback(() => {
+    setChatPreviewManualOpen(false);
+    setChatPreviewManualCollapsed(false);
     closeChatFilePeek();
     closeChatAttachmentPreview();
     closeChatPromptArtifactPreview();
@@ -8230,6 +8264,8 @@ export function App() {
   const readChatFilePeek = useCallback(async (path: string, targetLine: number | null) => {
     const targetProjectId = projectIdRef.current || projectId;
     if (!path || !targetProjectId) return;
+    setChatPreviewManualOpen(false);
+    setChatPreviewManualCollapsed(false);
     const requestSeq = chatFilePeekReadSeqRef.current + 1;
     chatFilePeekReadSeqRef.current = requestSeq;
     setChatFilePeek({
@@ -8382,6 +8418,8 @@ export function App() {
     setError('');
     setPortRelayFrameOpen(false);
     setPortRelayFramePlacement('main');
+    setChatPreviewManualOpen(false);
+    setChatPreviewManualCollapsed(false);
     setChatFilePeek(null);
     setChatPromptArtifactPreview(null);
     setChatAttachmentPreview({
@@ -11869,6 +11907,8 @@ export function App() {
       return;
     }
     setPortRelayFramePlacement('chatPreview');
+    setChatPreviewManualOpen(false);
+    setChatPreviewManualCollapsed(false);
     chatFilePeekReadSeqRef.current += 1;
     chatAttachmentReadSeqRef.current += 1;
     chatPromptArtifactReadSeqRef.current += 1;
@@ -16310,6 +16350,8 @@ export function App() {
     chatPeekAnchorRef.current = null;
     setPortRelayFrameOpen(false);
     setPortRelayFramePlacement('main');
+    setChatPreviewManualOpen(false);
+    setChatPreviewManualCollapsed(false);
     setChatPromptArtifactPreview({
       artifactId,
       title: promptArtifactPreviewTitle(initialFileCount),
@@ -16595,6 +16637,15 @@ export function App() {
     if (!portRelayFrameUrl) return;
     window.open(portRelayFrameUrl, '_blank', 'noopener,noreferrer');
   }, [portRelayFrameUrl]);
+  const toggleChatPreviewFromTitle = useCallback(() => {
+    if (chatPreviewOpen) {
+      setChatPreviewManualOpen(false);
+      setChatPreviewManualCollapsed(true);
+      return;
+    }
+    setChatPreviewManualCollapsed(false);
+    setChatPreviewManualOpen(open => !open);
+  }, [chatPreviewOpen]);
   const renderMain = () => {
     const heavyDiffDeferred =
       !!selectedDiff &&
@@ -16720,16 +16771,22 @@ export function App() {
     if (tab === 'chat') {
       return (
         <ChatSurface>
-          <div className="block-title">
-            {isWide ? (
-              <span className="title-text">
-                {chatReadOnlyPreview
-                  ? `ARCHIVED - ${activeChatDisplayTitle || 'Session'}`
-                  : `CHAT - ${selectedChatDisplayTitle || 'New Session'}`}
-              </span>
-            ) : (
-              renderBreadcrumbTitle(activeChatBreadcrumbProjectName, activeChatBreadcrumbLabel)
-            )}
+          <div className="block-title chat-title-bar">
+            <div className="chat-title-context">
+              {renderBreadcrumbTitle(activeChatBreadcrumbProjectName, activeChatBreadcrumbLabel)}
+            </div>
+            <div className="chat-title-actions">
+              <button
+                type="button"
+                className={`chat-preview-toggle${chatPreviewOpen ? ' active' : ''}`}
+                onClick={toggleChatPreviewFromTitle}
+                title={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
+                aria-label={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
+                aria-pressed={chatPreviewOpen}
+              >
+                <span className="codicon codicon-layout-sidebar-right" aria-hidden="true" />
+              </button>
+            </div>
           </div>
           <div
             className={chatMainClassName}
@@ -18191,7 +18248,7 @@ export function App() {
           onOpenInFileTab={openPeekFileInFullFileTab}
           scrollRef={chatFilePeekScrollRef}
         />
-      ) : renderChatPortRelayPreviewSurface('desktop')}
+      ) : chatPortRelayPreviewOpen ? renderChatPortRelayPreviewSurface('desktop') : <ChatEmptyPreviewViewer mode="desktop" onClose={closeChatFilePeekFromChrome} />}
     </aside>
   ) : null;
   const chatPreviewMobileOverlay = !isWide && chatPreviewOpen ? (
@@ -18247,7 +18304,7 @@ export function App() {
           onOpenInFileTab={openPeekFileInFullFileTab}
           scrollRef={chatFilePeekScrollRef}
         />
-      ) : renderChatPortRelayPreviewSurface('mobile')}
+      ) : chatPortRelayPreviewOpen ? renderChatPortRelayPreviewSurface('mobile') : <ChatEmptyPreviewViewer mode="mobile" onClose={closeChatFilePeekFromChrome} />}
     </div>
   ) : null;
 

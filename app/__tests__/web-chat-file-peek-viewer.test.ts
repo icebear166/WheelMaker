@@ -54,7 +54,7 @@ describe('web chat file peek viewer', () => {
     expect(openBody).toContain('setChatPromptArtifactPreview({');
     expect(openBody).not.toContain("setTab('git')");
     expect(openBody).not.toContain('setPromptArtifactDiff({');
-    expect(mainTsx).toContain('chatPreviewOpen = !!chatFilePeek || !!chatPromptArtifactPreview || !!chatAttachmentPreview || chatPortRelayPreviewOpen');
+    expect(mainTsx).toContain('const chatPreviewHasContent = !!chatFilePeek || !!chatPromptArtifactPreview || !!chatAttachmentPreview || chatPortRelayPreviewOpen;');
     expect(mainTsx).toContain('<ChatPromptArtifactPreviewViewer');
     expect(mainTsx).toContain('togglePromptArtifactPreviewFile');
   });
@@ -65,7 +65,7 @@ describe('web chat file peek viewer', () => {
 
     expect(mainTsx).toContain('type ChatAttachmentPreviewState = {');
     expect(mainTsx).toContain('const [chatAttachmentPreview, setChatAttachmentPreview] = useState<ChatAttachmentPreviewState | null>(null);');
-    expect(mainTsx).toContain('chatPreviewOpen = !!chatFilePeek || !!chatPromptArtifactPreview || !!chatAttachmentPreview || chatPortRelayPreviewOpen');
+    expect(mainTsx).toContain('const chatPreviewHasContent = !!chatFilePeek || !!chatPromptArtifactPreview || !!chatAttachmentPreview || chatPortRelayPreviewOpen;');
     expect(mainTsx).toContain('const openChatAttachmentPreview = useCallback(');
     expect(mainTsx).toContain('service.readProjectSessionAttachment(');
     expect(mainTsx).toContain('<ChatAttachmentPreviewViewer');
@@ -73,6 +73,25 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('Preview is being implemented.');
     expect(stylesCss).toContain('.chat-attachment-preview-surface');
     expect(stylesCss).toContain('.chat-attachment-original-image');
+  });
+
+  test('chat preview can open without active content and keeps chrome close controls', () => {
+    const mainTsx = readSourceText(mainPath);
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(mainTsx).toContain('const [chatPreviewManualOpen, setChatPreviewManualOpen] = useState(false);');
+    expect(mainTsx).toContain('const [chatPreviewManualCollapsed, setChatPreviewManualCollapsed] = useState(false);');
+    expect(mainTsx).toContain('const chatPreviewHasContent = !!chatFilePeek || !!chatPromptArtifactPreview || !!chatAttachmentPreview || chatPortRelayPreviewOpen;');
+    expect(mainTsx).toContain('const chatPreviewOpen = chatPreviewManualOpen || (chatPreviewHasContent && !chatPreviewManualCollapsed);');
+    expect(mainTsx).toContain('const ChatEmptyPreviewViewer = React.memo(function ChatEmptyPreviewViewer');
+    expect(mainTsx).toContain('<div className="chat-preview-title" title="Preview">Preview</div>');
+    expect(mainTsx).toContain('No preview selected');
+    expect(mainTsx).toContain(') : <ChatEmptyPreviewViewer mode="desktop" onClose={closeChatFilePeekFromChrome} />');
+    expect(mainTsx).toContain(') : <ChatEmptyPreviewViewer mode="mobile" onClose={closeChatFilePeekFromChrome} />');
+    expect(mainTsx).toContain('title={mode === \'mobile\' ? \'Back\' : \'Close preview\'}');
+
+    expect(stylesCss).toContain('.chat-empty-preview-body {');
+    expect(stylesCss).toContain('.chat-empty-preview-copy {');
   });
 
   test('chat preview code and diff panes force line numbers and no wrapping', () => {
