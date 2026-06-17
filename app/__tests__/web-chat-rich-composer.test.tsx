@@ -1,12 +1,19 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
-import {createEditor} from 'lexical';
+import {
+  $createParagraphNode,
+  $createTextNode,
+  $getRoot,
+  createEditor,
+} from 'lexical';
 import {
   ChatRichComposer,
   type ChatRichComposerHandle,
 } from '../web/src/chat/composer/ChatRichComposer';
 import {
+  $currentComposerPosition,
   $insertComposerPlainText,
+  $insertComposerTokens,
   $readComposerTokens,
   $setComposerTokens,
   ChatComposerCapsuleNode,
@@ -124,6 +131,59 @@ describe('ChatRichComposer', () => {
     ]);
 
     unregister();
+  });
+
+  test('reads every Lexical paragraph as newline-separated composer text', () => {
+    const editor = createEditor({
+      namespace: 'WheelMakerChatComposerTest',
+      nodes: [ChatComposerCapsuleNode],
+      onError(error) {
+        throw error;
+      },
+    });
+
+    editor.update(() => {
+      const root = $getRoot();
+      root.clear();
+      root.append(
+        $createParagraphNode().append($createTextNode('line one')),
+        $createParagraphNode().append($createTextNode('line two')),
+        $createParagraphNode().append($createTextNode('line three')),
+      );
+    }, {discrete: true});
+
+    expect(editor.getEditorState().read(() => $readComposerTokens())).toEqual([
+      {type: 'text', text: 'line one\nline two\nline three'},
+    ]);
+  });
+
+  test('inserts composer tokens at the cursor inside later Lexical paragraphs', () => {
+    const editor = createEditor({
+      namespace: 'WheelMakerChatComposerTest',
+      nodes: [ChatComposerCapsuleNode],
+      onError(error) {
+        throw error;
+      },
+    });
+
+    editor.update(() => {
+      const root = $getRoot();
+      const secondLine = $createTextNode('second');
+      root.clear();
+      root.append(
+        $createParagraphNode().append($createTextNode('first')),
+        $createParagraphNode().append(secondLine),
+      );
+      secondLine.select(2);
+      expect($currentComposerPosition($readComposerTokens())).toBe('first\nse'.length);
+      expect($insertComposerTokens([
+        {type: 'skill', id: 'skill:review', command: '/review', label: 'Review'},
+      ], []).tokens).toEqual([
+        {type: 'text', text: 'first\nse'},
+        {type: 'skill', id: 'skill:review', command: '/review', label: 'Review'},
+        {type: 'text', text: 'cond'},
+      ]);
+    }, {discrete: true});
   });
 
   test('pastes rich clipboard links as their plain-text URL', async () => {

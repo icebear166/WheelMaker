@@ -5,7 +5,7 @@ import {EditorRefPlugin} from '@lexical/react/LexicalEditorRefPlugin';
 import {LexicalErrorBoundary} from '@lexical/react/LexicalErrorBoundary';
 import {HistoryPlugin} from '@lexical/react/LexicalHistoryPlugin';
 import {OnChangePlugin} from '@lexical/react/LexicalOnChangePlugin';
-import {RichTextPlugin} from '@lexical/react/LexicalRichTextPlugin';
+import {PlainTextPlugin} from '@lexical/react/LexicalPlainTextPlugin';
 import React from 'react';
 import {
   COMMAND_PRIORITY_HIGH,
@@ -356,7 +356,7 @@ function ChatRichComposerContent({
   return (
     <>
       <EditorRefPlugin editorRef={editorRef} />
-      <RichTextPlugin
+      <PlainTextPlugin
         contentEditable={
           <ContentEditable
             className={`chat-rich-composer ${className}`.trim()}

@@ -249,11 +249,15 @@ export function $setComposerTokens(tokens: ChatComposerToken[], selectedTokenId 
 }
 
 export function $readComposerTokens(): ChatComposerToken[] {
-  const paragraph = $getComposerParagraph();
-  if (!paragraph) {
-    return [];
+  const out: ChatComposerToken[] = [];
+  const paragraphs = $getComposerParagraphs();
+  for (let index = 0; index < paragraphs.length; index += 1) {
+    if (index > 0) {
+      out.push({type: 'text', text: '\n'});
+    }
+    out.push(...$readComposerChildren(paragraphs[index]));
   }
-  return normalizeChatComposerTokens($readComposerChildren(paragraph));
+  return normalizeChatComposerTokens(out);
 }
 
 export function $currentComposerPosition(tokens: ChatComposerToken[]): number {
@@ -265,13 +269,11 @@ export function $currentComposerPosition(tokens: ChatComposerToken[]): number {
 }
 
 export function $setSelectedComposerCapsule(selectedTokenId: string): void {
-  const paragraph = $getComposerParagraph();
-  if (!paragraph) {
-    return;
-  }
-  for (const child of paragraph.getChildren()) {
-    if ($isChatComposerCapsuleNode(child)) {
-      child.setSelected(!!selectedTokenId && child.getToken().id === selectedTokenId);
+  for (const paragraph of $getComposerParagraphs()) {
+    for (const child of paragraph.getChildren()) {
+      if ($isChatComposerCapsuleNode(child)) {
+        child.setSelected(!!selectedTokenId && child.getToken().id === selectedTokenId);
+      }
     }
   }
 }
@@ -331,14 +333,12 @@ export function $deleteSelectedComposerCapsule(selectedTokenId: string): boolean
   if (!selectedTokenId) {
     return false;
   }
-  const paragraph = $getComposerParagraph();
-  if (!paragraph) {
-    return false;
-  }
-  for (const child of paragraph.getChildren()) {
-    if ($isChatComposerCapsuleNode(child) && child.getToken().id === selectedTokenId) {
-      child.remove();
-      return true;
+  for (const paragraph of $getComposerParagraphs()) {
+    for (const child of paragraph.getChildren()) {
+      if ($isChatComposerCapsuleNode(child) && child.getToken().id === selectedTokenId) {
+        child.remove();
+        return true;
+      }
     }
   }
   return false;
@@ -515,9 +515,12 @@ function composerPositionFromSerializedTextOffset(tokens: ChatComposerToken[], o
   return composerCursor;
 }
 
-function $getComposerParagraph(): ElementNode | null {
-  const first = $getRoot().getFirstChild();
-  return first && 'getChildren' in first ? first as ElementNode : null;
+function $getComposerParagraphs(): ElementNode[] {
+  return $getRoot().getChildren().filter($isComposerElementNode);
+}
+
+function $isComposerElementNode(node: LexicalNode | null | undefined): node is ElementNode {
+  return !!node && 'getChildren' in node;
 }
 
 function $readComposerChildren(paragraph: ElementNode): ChatComposerToken[] {
@@ -544,28 +547,34 @@ function $readComposerChildren(paragraph: ElementNode): ChatComposerToken[] {
 function $selectionPointToComposerPosition(selection: RangeSelection): number {
   const anchor = selection.anchor;
   const anchorNode = anchor.getNode();
-  const paragraph = $getComposerParagraph();
-  if (!paragraph) {
-    return 0;
-  }
   let position = 0;
-  for (const child of paragraph.getChildren()) {
-    if (child === anchorNode) {
-      if ($isTextNode(child)) {
-        return position + Math.max(0, Math.min(anchor.offset, child.getTextContentSize()));
+  const paragraphs = $getComposerParagraphs();
+  for (let paragraphIndex = 0; paragraphIndex < paragraphs.length; paragraphIndex += 1) {
+    const paragraph = paragraphs[paragraphIndex];
+    if (paragraphIndex > 0) {
+      position += 1;
+    }
+
+    if (anchorNode === paragraph) {
+      const children = paragraph.getChildren();
+      const safeOffset = Math.max(0, Math.min(anchor.offset, children.length));
+      return position + children.slice(0, safeOffset).reduce((total, child) => {
+        return total + $composerNodeUnitLength(child);
+      }, 0);
+    }
+
+    for (const child of paragraph.getChildren()) {
+      if (child === anchorNode) {
+        if ($isTextNode(child)) {
+          return position + Math.max(0, Math.min(anchor.offset, child.getTextContentSize()));
+        }
+        return position;
       }
-      return position;
+      if (child.getKey() === anchorNode.getKey()) {
+        return position;
+      }
+      position += $composerNodeUnitLength(child);
     }
-    if (child.getKey() === anchorNode.getKey()) {
-      return position;
-    }
-    position += $isTextNode(child) ? child.getTextContentSize() : 1;
-  }
-  if (anchorNode === paragraph) {
-    const children = paragraph.getChildren();
-    return children.slice(0, Math.max(0, anchor.offset)).reduce((total, child) => {
-      return total + ($isTextNode(child) ? child.getTextContentSize() : 1);
-    }, 0);
   }
   return position;
 }
