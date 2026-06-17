@@ -3112,7 +3112,7 @@ export function App() {
   const [selectedChatKey, setSelectedChatKey] = useState<ChatSessionKey | null>(null);
   const [chatMessages, setChatMessages] = useState<RegistryChatMessage[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
-  const [chatSending, setChatSending] = useState(false);
+  const [chatSubmittingByKey, setChatSubmittingByKey] = useState<Record<string, boolean>>({});
   const [chatShowScrollToBottom, setChatShowScrollToBottom] = useState(false);
   const [chatReloadingSessionId, setChatReloadingSessionId] = useState('');
   const [chatArchivingSessionId, setChatArchivingSessionId] = useState('');
@@ -3148,6 +3148,7 @@ export function App() {
   const chatAttachmentsRef = useRef<ChatAttachment[]>([]);
   const chatComposerDraftsRef = useRef<Record<string, ChatComposerDraft>>({});
   const chatPendingPromptsByKeyRef = useRef<Record<string, PendingChatPrompt>>({});
+  const chatSubmittingByKeyRef = useRef<Record<string, boolean>>({});
   const chatPendingPromptTimersRef = useRef<Record<string, number>>({});
   const chatDraftGenerationRef = useRef<Record<string, number>>({});
   const currentChatDraftKeyRef = useRef('');
@@ -3265,6 +3266,9 @@ export function App() {
   const selectedPendingPrompt = selectedChatEncodedKey
     ? chatPendingPromptsByKey[selectedChatEncodedKey]
     : undefined;
+  const selectedChatSubmitPending = selectedChatEncodedKey
+    ? chatSubmittingByKey[selectedChatEncodedKey] === true
+    : false;
 
   const chatDisplayIndex = useMemo(() => buildChatDisplayIndex(chatMessages, {
     hideToolCalls,
@@ -4479,6 +4483,10 @@ export function App() {
   useEffect(() => {
     chatPendingPromptsByKeyRef.current = chatPendingPromptsByKey;
   }, [chatPendingPromptsByKey]);
+
+  useEffect(() => {
+    chatSubmittingByKeyRef.current = chatSubmittingByKey;
+  }, [chatSubmittingByKey]);
 
   useEffect(() => {
     return () => {
@@ -9476,6 +9484,31 @@ export function App() {
     saveChatComposerDraft(normalizedDraftKey, '', [], []);
   };
 
+  const setChatSubmittingForRuntimeKey = (runtimeKey: string, submitting: boolean) => {
+    if (!runtimeKey) return;
+    const current = chatSubmittingByKeyRef.current;
+    const isSubmitting = current[runtimeKey] === true;
+    if (submitting === isSubmitting) return;
+    const next = {...current};
+    if (submitting) {
+      next[runtimeKey] = true;
+    } else {
+      delete next[runtimeKey];
+    }
+    chatSubmittingByKeyRef.current = next;
+    setChatSubmittingByKey(next);
+  };
+
+  const moveChatSubmittingRuntimeKey = (fromRuntimeKey: string, toRuntimeKey: string) => {
+    if (!fromRuntimeKey || !toRuntimeKey || fromRuntimeKey === toRuntimeKey) return;
+    if (chatSubmittingByKeyRef.current[fromRuntimeKey] !== true) return;
+    const next = {...chatSubmittingByKeyRef.current};
+    delete next[fromRuntimeKey];
+    next[toRuntimeKey] = true;
+    chatSubmittingByKeyRef.current = next;
+    setChatSubmittingByKey(next);
+  };
+
   const clearPendingChatPromptTimer = (runtimeKey: string) => {
     const timerId = chatPendingPromptTimersRef.current[runtimeKey];
     if (timerId !== undefined) {
@@ -9488,7 +9521,10 @@ export function App() {
 
   const markPendingChatPromptUndelivered = (runtimeKey: string, errorMessage = 'Server did not confirm receipt.') => {
     const pending = chatPendingPromptsByKeyRef.current[runtimeKey];
-    if (!pending || pending.status === 'undelivered') return;
+    if (!pending || pending.status === 'undelivered') {
+      setChatSubmittingForRuntimeKey(runtimeKey, false);
+      return;
+    }
     clearPendingChatPromptTimer(runtimeKey);
     const next = {
       ...chatPendingPromptsByKeyRef.current,
@@ -9500,7 +9536,7 @@ export function App() {
     };
     chatPendingPromptsByKeyRef.current = next;
     setChatPendingPromptsByKey(next);
-    setChatSending(false);
+    setChatSubmittingForRuntimeKey(runtimeKey, false);
   };
 
   const rememberPendingChatPrompt = (runtimeKey: string, prompt: PendingChatPrompt) => {
@@ -9532,6 +9568,7 @@ export function App() {
     delete next[runtimeKey];
     chatPendingPromptsByKeyRef.current = next;
     setChatPendingPromptsByKey(next);
+    setChatSubmittingForRuntimeKey(runtimeKey, false);
   };
 
   const movePendingChatPrompt = (
@@ -9553,6 +9590,7 @@ export function App() {
     delete next[fromRuntimeKey];
     chatPendingPromptsByKeyRef.current = next;
     setChatPendingPromptsByKey(next);
+    moveChatSubmittingRuntimeKey(fromRuntimeKey, toRuntimeKey);
     if (prompt.status === 'confirming') {
       const timerId = window.setTimeout(() => {
         markPendingChatPromptUndelivered(toRuntimeKey);
@@ -10071,9 +10109,6 @@ export function App() {
     blocksOverride?: RegistryChatContentBlock[];
     preserveComposer?: boolean;
   } = {}) => {
-    if (chatSending) {
-      return;
-    }
     if (voiceAwaitingFinalRef.current) {
       return;
     }
@@ -10106,17 +10141,28 @@ export function App() {
       return;
     }
     let runtimeKey = buildChatRuntimeKey(selectedProjectId, sessionId);
+    if (chatSubmittingByKeyRef.current[runtimeKey] === true) {
+      return;
+    }
+    if (selectedChatPromptRunning) {
+      return;
+    }
     let draftKey = currentChatDraftKeyRef.current;
     let draftGeneration = getChatDraftGeneration(draftKey);
     let sentFromKey = selectedKey;
+    let submittingRuntimeKey = runtimeKey;
     let pendingRemembered = false;
-    setChatSending(true);
+    setChatSubmittingForRuntimeKey(submittingRuntimeKey, true);
     try {
       const resolvedDraftSession = await resolveSelectedDraftSessionForSend(
         selectedProjectId,
         sessionId,
         draftKey,
       );
+      if (resolvedDraftSession.runtimeKey !== runtimeKey) {
+        moveChatSubmittingRuntimeKey(submittingRuntimeKey, resolvedDraftSession.runtimeKey);
+        submittingRuntimeKey = resolvedDraftSession.runtimeKey;
+      }
       sessionId = resolvedDraftSession.sessionId;
       runtimeKey = resolvedDraftSession.runtimeKey;
       draftKey = resolvedDraftSession.draftKey;
@@ -10136,7 +10182,10 @@ export function App() {
         blocks.push(...serializedComposer.blocks.map(block => ({...block})));
         blocks.push(...uploadedAttachments.map(attachment => attachment.block).filter(isRegistryChatContentBlock));
       }
-      if (blocks.length === 0) return;
+      if (blocks.length === 0) {
+        setChatSubmittingForRuntimeKey(submittingRuntimeKey, false);
+        return;
+      }
       const firstAttachmentName = uploadedAttachments[0]?.name || '';
       const previewText = trimmedText || firstAttachmentName || msgText('prompt_request', {contentBlocks: blocks}).trim();
       const createdAt = new Date().toISOString();
@@ -10172,12 +10221,17 @@ export function App() {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      if (pendingRemembered) {
+      if (pendingRemembered && chatPendingPromptsByKeyRef.current[runtimeKey]) {
         markPendingChatPromptUndelivered(runtimeKey, message);
+        setError(message);
+      } else if (!pendingRemembered) {
+        setChatSubmittingForRuntimeKey(submittingRuntimeKey, false);
+        setError(message);
       }
-      setError(message);
     } finally {
-      setChatSending(false);
+      if (!pendingRemembered) {
+        setChatSubmittingForRuntimeKey(submittingRuntimeKey, false);
+      }
     }
   };
 
@@ -11144,7 +11198,7 @@ export function App() {
   const handleChatFileChange = (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
-    if (chatSending) {
+    if (selectedChatSubmitPending) {
       event.target.value = '';
       return;
     }
@@ -11161,7 +11215,7 @@ export function App() {
   const handleChatImageChange = (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
-    if (chatSending) {
+    if (selectedChatSubmitPending) {
       event.target.value = '';
       return;
     }
@@ -16438,6 +16492,7 @@ export function App() {
       selectedChatSession?.running === true ||
       selectedChatHasOpenPromptTurn
     );
+  const chatSendDisabled = selectedChatSubmitPending || chatAttachmentUploadPending || selectedChatPromptRunning;
   const selectedChatPromptCancelling =
     !!selectedChatEncodedKey && chatCancellingRuntimeKey === selectedChatEncodedKey;
   const chatComposerStopTriggerClassName = `chat-tool-button chat-composer-stop-trigger${selectedChatPromptRunning ? ' active' : ''}${selectedChatPromptCancelling ? ' cancelling' : ''}`;
@@ -16533,7 +16588,7 @@ export function App() {
           copyDisabled={copyRange ? !copyRange.ok : true}
           exportBusy={message.method === 'prompt_done' && exportingMarkdownImageTurnIndex !== null}
           optionReplies={optionReplies}
-          optionRepliesDisabled={chatSending}
+          optionRepliesDisabled={chatSendDisabled}
           confirmationReply={confirmationReply}
           onSelectOptionReply={label => sendDirectChatText(label).catch(() => undefined)}
           onSelectConfirmationReply={replyText => sendDirectChatText(replyText).catch(() => undefined)}
@@ -16878,7 +16933,7 @@ export function App() {
             <div
               className={`chat-composer-frame${chatComposerDragActive ? ' drag-over' : ''}`}
               onDragOver={event => {
-                if (chatSending) {
+                if (selectedChatSubmitPending) {
                   return;
                 }
                 if (event.dataTransfer.types.includes('Files')) {
@@ -16892,7 +16947,7 @@ export function App() {
                 }
               }}
               onDrop={event => {
-                if (chatSending) {
+                if (selectedChatSubmitPending) {
                   setChatComposerDragActive(false);
                   return;
                 }
@@ -16976,7 +17031,7 @@ export function App() {
                     className="chat-composer-input"
                     tokens={chatComposerTokens}
                     onTokensChange={updateChatComposerTokens}
-                    readOnly={chatSending}
+                    readOnly={selectedChatSubmitPending}
                     enterKeyHint={isWide ? undefined : 'send'}
                     slashCommands={chatSlashCommands.map(command => ({
                       command: command.name,
@@ -16999,7 +17054,7 @@ export function App() {
                         event.preventDefault();
                         return;
                       }
-                      if (chatSending) {
+                      if (selectedChatSubmitPending) {
                         return;
                       }
                       if (!supportsChatClipboardFiles) {
@@ -17111,7 +17166,7 @@ export function App() {
                       }
                       if (!isWide || isWindowsPlatform) {
                         event.preventDefault();
-                        if (chatSending || chatAttachmentUploadPending) {
+                        if (chatSendDisabled) {
                           return;
                         }
                         sendChatMessage().catch(() => undefined);
@@ -17126,7 +17181,7 @@ export function App() {
                       recordingMode={voiceInteractionMode}
                       hasSendableContent={chatComposerHasSendableContent}
                       disabled={chatAttachmentUploadPending || voiceRecordingStatus === 'recognizing'}
-                      readOnly={chatSending}
+                      readOnly={selectedChatSubmitPending}
                       onSend={() => sendChatMessage().catch(() => undefined)}
                       onStart={startVoiceInput}
                       onFinish={finishVoiceInput}
@@ -17140,7 +17195,7 @@ export function App() {
                       type="button"
                       className="chat-send-button"
                       onClick={() => sendChatMessage().catch(() => undefined)}
-                      disabled={chatSending || chatAttachmentUploadPending}
+                      disabled={chatSendDisabled}
                       title="Send"
                       aria-label="Send message"
                     >
@@ -17305,7 +17360,7 @@ export function App() {
                           setChatConfigOverflowOpen(false);
                           chatFileInputRef.current?.click();
                         }}
-                        disabled={chatSending}
+                        disabled={selectedChatSubmitPending}
                         title="Attach file"
                         aria-label="Attach file"
                         role="menuitem"
@@ -17324,7 +17379,7 @@ export function App() {
                           setChatConfigOverflowOpen(false);
                           chatImageInputRef.current?.click();
                         }}
-                        disabled={chatSending}
+                        disabled={selectedChatSubmitPending}
                         title="Attach photo"
                         aria-label="Attach photo"
                         role="menuitem"

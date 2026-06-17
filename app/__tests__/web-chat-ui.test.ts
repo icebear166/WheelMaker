@@ -356,16 +356,16 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('type="file"');
     expect(mainTsx).toContain('multiple');
     expect(mainTsx).toContain('onPaste={event => {');
-    expect(mainTsx).toContain('readOnly={chatSending}');
-    expect(mainTsx).toContain('if (chatSending) {\n      event.target.value = \'\';\n      return;\n    }');
+    expect(mainTsx).toContain('readOnly={selectedChatSubmitPending}');
+    expect(mainTsx).toContain('if (selectedChatSubmitPending) {\n      event.target.value = \'\';\n      return;\n    }');
     expect(mainTsx).toContain('if (!supportsChatClipboardFiles) {');
     expect(mainTsx).toContain('onDragOver={event => {');
     expect(mainTsx).toContain('onDrop={event => {');
     expect(mainTsx).toContain('enqueueChatAttachmentFiles(');
     expect(mainTsx).toContain('attachmentDraftKey,');
     expect(mainTsx).toContain('attachmentDraftGeneration);');
-    expect(mainTsx).toContain('if (chatSending || chatAttachmentUploadPending) {');
-    expect(mainTsx).toContain('disabled={chatSending}');
+    expect(mainTsx).toContain('if (chatSendDisabled) {');
+    expect(mainTsx).toContain('disabled={selectedChatSubmitPending}');
     expect(mainTsx).toContain('title="Attach file"');
     expect(mainTsx).not.toContain('respondToChatPermission');
     expect(mainTsx).not.toContain("const [chatSessions] = useState(['General', 'WheelMaker App', 'Go Service']);");
@@ -729,7 +729,7 @@ describe('web chat integration', () => {
     );
     expect(mainTsx).toContain('chatAttachments.map(attachment => {');
     expect(mainTsx).toContain('onClick={() => removeChatAttachment(attachment.id)}');
-    expect(mainTsx).toContain('disabled={chatSending || chatAttachmentUploadPending}');
+    expect(mainTsx).toContain('disabled={chatSendDisabled}');
     expect(stylesCss).not.toContain('.project-presence {');
     expect(stylesCss).not.toContain('.project-dirty {');
     expect(stylesCss).not.toContain('.chat-permission-button');
@@ -1492,7 +1492,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain("logVoiceInputDiagnostic('debug', 'start_requested'");
     expect(mainTsx).toContain("logVoiceInputDiagnostic('error', 'start_failed'");
     expect(mainTsx).toContain("logVoiceInputDiagnostic('error', 'chunk_send_failed'");
-    expect(mainTsx).toContain('readOnly={chatSending}');
+    expect(mainTsx).toContain('readOnly={selectedChatSubmitPending}');
     expect(mainTsx).toContain('if (voiceRecordingRef.current) {');
     expect(mainTsx).toContain('voiceRecording ? (');
     expect(mainTsx).toContain('<VoiceRecordingBar');
@@ -2191,5 +2191,28 @@ describe('web chat integration', () => {
     expect(stylesCss).toMatch(/\.chat-file-mention-option-main \{[\s\S]*grid-template-columns: 16px minmax\(0, auto\) minmax\(0, 1fr\);/);
     expect(stylesCss).toMatch(/\.chat-composer-capsule,[\s\S]*\.chat-prompt-inline-capsule \{[\s\S]*max-width: min\(260px, 100%\);/);
     expect(stylesCss).toMatch(/\.chat-composer-stop-trigger \{[\s\S]*color: #f85149;[\s\S]*opacity: 1;/);
+  });
+
+  test('keeps running chat editable while blocking another send for that chat', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const sendStart = mainTsx.indexOf('const sendChatMessage = async');
+    const sendEnd = mainTsx.indexOf('const sendDirectChatText = async', sendStart);
+    const sendBlock = mainTsx.slice(sendStart, sendEnd);
+
+    expect(mainTsx).toContain('const [chatSubmittingByKey, setChatSubmittingByKey] = useState<Record<string, boolean>>({});');
+    expect(mainTsx).toContain('const chatSubmittingByKeyRef = useRef<Record<string, boolean>>({});');
+    expect(mainTsx).toContain('const selectedChatSubmitPending = selectedChatEncodedKey');
+    expect(mainTsx).toContain('const chatSendDisabled = selectedChatSubmitPending || chatAttachmentUploadPending || selectedChatPromptRunning;');
+    expect(mainTsx).toContain('readOnly={selectedChatSubmitPending}');
+    expect(mainTsx).toContain('disabled={chatSendDisabled}');
+    expect(mainTsx).toContain('if (chatSendDisabled) {');
+    expect(sendStart).toBeGreaterThanOrEqual(0);
+    expect(sendEnd).toBeGreaterThan(sendStart);
+    expect(sendBlock).toContain('if (selectedChatPromptRunning) {');
+    expect(sendBlock).toContain('setChatSubmittingForRuntimeKey(submittingRuntimeKey, true);');
+    expect(sendBlock).toContain('setChatSubmittingForRuntimeKey(submittingRuntimeKey, false);');
+    expect(mainTsx).not.toContain('readOnly={chatSending}');
+    expect(mainTsx).not.toContain('disabled={chatSending || chatAttachmentUploadPending}');
   });
 });
