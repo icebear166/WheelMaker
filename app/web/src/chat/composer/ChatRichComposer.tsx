@@ -39,7 +39,7 @@ import {
   $setComposerTokens,
   $setSelectedComposerCapsule,
   ChatComposerCapsuleNode,
-  normalizeComposerTextTokens,
+  registerComposerSlashCommandTransform,
 } from './chatComposerLexicalModel';
 
 export type ChatRichComposerHandle = {
@@ -146,9 +146,15 @@ function ChatRichComposerContent({
   }, [editor, readOnly]);
 
   React.useEffect(() => {
+    return registerComposerSlashCommandTransform(editor, slashCommands);
+  }, [editor, slashCommands]);
+
+  React.useEffect(() => {
     const normalized = normalizeChatComposerTokens(tokens);
     tokensRef.current = normalized;
-    if (chatComposerTokensEqual(normalized, emittedTokensRef.current)) {
+    const editorTokens = editor.getEditorState().read(() => $readComposerTokens());
+    if (chatComposerTokensEqual(normalized, editorTokens)) {
+      emittedTokensRef.current = normalized;
       return;
     }
     syncingFromPropsRef.current = true;
@@ -233,7 +239,9 @@ function ChatRichComposerContent({
     return editor.registerCommand<KeyboardEvent>(
       KEY_ENTER_COMMAND,
       event => {
-        onKeyDown?.(reactKeyboardEventFromNative(event));
+        if (!event) {
+          return false;
+        }
         if (event.defaultPrevented) {
           return true;
         }
@@ -246,7 +254,7 @@ function ChatRichComposerContent({
       },
       COMMAND_PRIORITY_HIGH,
     );
-  }, [editor, onKeyDown, onSend]);
+  }, [editor, onSend]);
 
   React.useEffect(() => {
     return editor.registerCommand<KeyboardEvent>(
@@ -355,7 +363,7 @@ function ChatRichComposerContent({
       return;
     }
     editor.getEditorState().read(() => {
-      const currentTokens = normalizeComposerTextTokens($readComposerTokens(), slashCommands);
+      const currentTokens = $readComposerTokens();
       if (chatComposerTokensEqual(currentTokens, emittedTokensRef.current)) {
         tokensRef.current = currentTokens;
         return;
@@ -367,7 +375,7 @@ function ChatRichComposerContent({
       const serialized = serializeChatComposerTokens(currentTokens);
       onPlainTextChange?.(serialized.text, serializedChatComposerTextPosition(currentTokens, cursor));
     });
-  }, [editor, onPlainTextChange, onTokensChange, slashCommands]);
+  }, [editor, onPlainTextChange, onTokensChange]);
 
   return (
     <>
@@ -381,6 +389,7 @@ function ChatRichComposerContent({
             aria-multiline="true"
             enterKeyHint={enterKeyHint}
             onMouseDown={handleMouseDown}
+            onKeyDown={onKeyDown}
             onPaste={handlePaste}
           />
         }
@@ -432,7 +441,7 @@ function deleteComposerToken(
   emittedTokensRef: React.MutableRefObject<ChatComposerToken[]>,
   onTokensChange: (tokens: ChatComposerToken[]) => void,
 ): void {
-  let nextTokens = deleteChatComposerTokenById(tokensRef.current, tokenId);
+  let nextTokens: ChatComposerToken[] = [];
   editor.update(() => {
     nextTokens = $deleteComposerTokenById(tokenId);
   });
@@ -471,8 +480,4 @@ function chatComposerTokenEqual(left: ChatComposerToken, right: ChatComposerToke
     left.path === right.path &&
     left.name === right.name &&
     left.label === right.label;
-}
-
-function reactKeyboardEventFromNative(event: KeyboardEvent): React.KeyboardEvent<HTMLDivElement> {
-  return event as unknown as React.KeyboardEvent<HTMLDivElement>;
 }

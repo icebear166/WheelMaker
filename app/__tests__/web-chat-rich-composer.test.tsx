@@ -1,12 +1,18 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
+import {createEditor} from 'lexical';
 import {
   ChatRichComposer,
   type ChatRichComposerHandle,
 } from '../web/src/chat/composer/ChatRichComposer';
 import {
+  $insertComposerPlainText,
+  $readComposerTokens,
+  $setComposerTokens,
+  ChatComposerCapsuleNode,
   chatComposerTokensFromLexicalNodesForTest,
   lexicalNodesFromChatComposerTokensForTest,
+  registerComposerSlashCommandTransform,
 } from '../web/src/chat/composer/chatComposerLexicalModel';
 import {
   serializeChatComposerTokens,
@@ -70,6 +76,53 @@ describe('ChatRichComposer', () => {
     expect(textbox.props.onInput).toBeUndefined();
     expect(textbox.props.onCompositionStart).toBeUndefined();
     expect(textbox.props.onCompositionEnd).toBeUndefined();
+  });
+
+  test('wires parent keyboard handling directly to the editable surface', async () => {
+    const onKeyDown = jest.fn();
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        <ChatRichComposer tokens={[]} onTokensChange={jest.fn()} onKeyDown={onKeyDown} readOnly={false} />,
+      );
+    });
+
+    const textbox = renderer!.root.findByProps({role: 'textbox'});
+    expect(textbox.props.onKeyDown).toBe(onKeyDown);
+  });
+
+  test('transforms typed slash commands inside Lexical state and keeps following text editable', () => {
+    const editor = createEditor({
+      namespace: 'WheelMakerChatComposerTest',
+      nodes: [ChatComposerCapsuleNode],
+      onError(error) {
+        throw error;
+      },
+    });
+    const unregister = registerComposerSlashCommandTransform(editor, [
+      {command: '/grill-me', label: 'Grill Me'},
+    ]);
+
+    editor.update(() => {
+      $setComposerTokens([]);
+      $insertComposerPlainText('/grill-me');
+    }, {discrete: true});
+
+    expect(editor.getEditorState().read(() => $readComposerTokens())).toEqual([
+      {type: 'skill', id: expect.any(String), command: '/grill-me', label: 'Grill Me'},
+    ]);
+
+    editor.update(() => {
+      $insertComposerPlainText(' next');
+    }, {discrete: true});
+
+    expect(editor.getEditorState().read(() => $readComposerTokens())).toEqual([
+      {type: 'skill', id: expect.any(String), command: '/grill-me', label: 'Grill Me'},
+      {type: 'text', text: ' next'},
+    ]);
+
+    unregister();
   });
 
   test('pastes rich clipboard links as their plain-text URL', async () => {
@@ -329,6 +382,31 @@ describe('ChatRichComposer', () => {
 
     expect(onTokensChange).toHaveBeenLastCalledWith([
       {type: 'text', text: 'a  b'},
+    ]);
+  });
+
+  test('insertText tokenizes known slash commands into skill capsules', async () => {
+    const onTokensChange = jest.fn();
+    const ref = React.createRef<ChatRichComposerHandle>();
+
+    await ReactTestRenderer.act(() => {
+      ReactTestRenderer.create(
+        <ChatRichComposer
+          ref={ref}
+          tokens={[]}
+          onTokensChange={onTokensChange}
+          slashCommands={[{command: '/grill-me', label: 'Grill Me'}]}
+          readOnly={false}
+        />,
+      );
+    });
+
+    await ReactTestRenderer.act(() => {
+      ref.current!.insertText('/grill-me');
+    });
+
+    expect(onTokensChange).toHaveBeenLastCalledWith([
+      {type: 'skill', id: expect.any(String), command: '/grill-me', label: 'Grill Me'},
     ]);
   });
 });

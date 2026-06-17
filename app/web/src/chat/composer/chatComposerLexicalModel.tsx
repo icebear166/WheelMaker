@@ -12,12 +12,14 @@ import {
   DecoratorNode,
   type EditorConfig,
   type ElementNode,
+  type LexicalEditor,
   type LexicalNode,
   type LexicalUpdateJSON,
   type NodeKey,
   type RangeSelection,
   type SerializedLexicalNode,
   type Spread,
+  TextNode,
 } from 'lexical';
 
 import {
@@ -144,7 +146,11 @@ export class ChatComposerCapsuleNode extends DecoratorNode<React.ReactNode> {
     if (
       previous.__kind !== this.__kind ||
       previous.__tokenId !== this.__tokenId ||
-      previous.__selected !== this.__selected
+      previous.__selected !== this.__selected ||
+      previous.__label !== this.__label ||
+      previous.__command !== this.__command ||
+      previous.__path !== this.__path ||
+      previous.__name !== this.__name
     ) {
       dom.dataset.kind = this.__kind;
       dom.dataset.tokenId = this.__tokenId;
@@ -268,6 +274,21 @@ export function $setSelectedComposerCapsule(selectedTokenId: string): void {
       child.setSelected(!!selectedTokenId && child.getToken().id === selectedTokenId);
     }
   }
+}
+
+export function registerComposerSlashCommandTransform(
+  editor: LexicalEditor,
+  slashCommands: {command: string; label: string}[],
+): () => void {
+  if (slashCommands.length === 0) {
+    return () => undefined;
+  }
+  return editor.registerNodeTransform(TextNode, textNode => {
+    if (editor.isComposing() || textNode.isComposing()) {
+      return;
+    }
+    $replaceKnownSlashCommandsInTextNode(textNode, slashCommands);
+  });
 }
 
 export function $insertComposerTokens(
@@ -415,6 +436,85 @@ export function normalizeComposerTextTokens(
   }));
 }
 
+function $replaceKnownSlashCommandsInTextNode(
+  textNode: TextNode,
+  slashCommands: {command: string; label: string}[],
+): boolean {
+  const text = textNode.getTextContent();
+  const nextTokens = normalizeComposerTextTokens([{type: 'text', text}], slashCommands);
+  if (chatComposerTokensEqualForLexical(nextTokens, [{type: 'text', text}])) {
+    return false;
+  }
+  const parent = textNode.getParent();
+  if (!parent) {
+    return false;
+  }
+  const positionBeforeNode = $composerPositionBeforeChild(parent, textNode);
+  const selection = $getSelection();
+  const rawSelectionOffset = $isRangeSelection(selection) && selection.isCollapsed() && selection.anchor.getNode().getKey() === textNode.getKey()
+    ? selection.anchor.offset
+    : null;
+  const replacementNodes = $createComposerNodes(nextTokens, '');
+  const [firstNode, ...remainingNodes] = replacementNodes;
+  if (!firstNode) {
+    textNode.remove();
+    return true;
+  }
+  let previousNode = textNode.replace(firstNode);
+  for (const node of remainingNodes) {
+    previousNode = previousNode.insertAfter(node);
+  }
+  if (rawSelectionOffset !== null) {
+    $selectComposerPosition(
+      parent,
+      $readComposerChildren(parent),
+      positionBeforeNode + composerPositionFromSerializedTextOffset(nextTokens, rawSelectionOffset),
+    );
+  }
+  return true;
+}
+
+function $composerPositionBeforeChild(parent: ElementNode, target: LexicalNode): number {
+  let position = 0;
+  for (const child of parent.getChildren()) {
+    if (child.getKey() === target.getKey()) {
+      return position;
+    }
+    position += $composerNodeUnitLength(child);
+  }
+  return position;
+}
+
+function $composerNodeUnitLength(node: LexicalNode): number {
+  if ($isTextNode(node)) {
+    return node.getTextContentSize();
+  }
+  return 1;
+}
+
+function composerPositionFromSerializedTextOffset(tokens: ChatComposerToken[], offset: number): number {
+  const safeOffset = Math.max(0, offset);
+  let serializedCursor = 0;
+  let composerCursor = 0;
+  for (const token of tokens) {
+    const serializedText = token.type === 'text'
+      ? token.text
+      : token.type === 'skill'
+        ? token.command
+        : fileReferenceText(token.label || token.name || token.path);
+    const serializedEnd = serializedCursor + serializedText.length;
+    if (safeOffset <= serializedEnd) {
+      if (token.type === 'text') {
+        return composerCursor + Math.max(0, safeOffset - serializedCursor);
+      }
+      return safeOffset <= serializedCursor ? composerCursor : composerCursor + 1;
+    }
+    serializedCursor = serializedEnd;
+    composerCursor += chatComposerSingleTokenUnitLength(token);
+  }
+  return composerCursor;
+}
+
 function $getComposerParagraph(): ElementNode | null {
   const first = $getRoot().getFirstChild();
   return first && 'getChildren' in first ? first as ElementNode : null;
@@ -472,4 +572,26 @@ function $selectionPointToComposerPosition(selection: RangeSelection): number {
 
 function fileReferenceText(label: string): string {
   return /\s/.test(label) ? `@<${label}>` : `@${label}`;
+}
+
+function chatComposerTokensEqualForLexical(left: ChatComposerToken[], right: ChatComposerToken[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  return left.every((token, index) => {
+    const other = right[index];
+    if (!other || token.type !== other.type) {
+      return false;
+    }
+    if (token.type === 'text' && other.type === 'text') {
+      return token.text === other.text;
+    }
+    if (token.type === 'skill' && other.type === 'skill') {
+      return token.id === other.id && token.command === other.command && token.label === other.label;
+    }
+    if (token.type === 'file' && other.type === 'file') {
+      return token.id === other.id && token.path === other.path && token.name === other.name && token.label === other.label;
+    }
+    return false;
+  });
 }

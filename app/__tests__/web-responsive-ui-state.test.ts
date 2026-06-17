@@ -484,8 +484,8 @@ describe('web responsive ui state', () => {
     expect(mainTsx).not.toContain('const visibilityState = resolveHubVisibilityState(treeItem.projects, hiddenProjectIds);');
     expect(mainTsx).not.toContain('const hubToggleLabel = hubEnabled');
     expect(mainTsx).toContain('className={`chat-hub-tree${expanded ? \' expanded\' : \'\'}${colorMenuOpen ? \' color-open\' : \'\'}`}');
-    expect(mainTsx).toContain('className="chat-hub-project-toggle"');
-    expect(mainTsx).toContain("className={`codicon ${expanded ? 'codicon-folder-opened' : 'codicon-folder'} chat-hub-project-toggle-icon`}");
+    expect(mainTsx).toContain("className={`chat-hub-project-row${visible ? '' : ' hidden'}`}");
+    expect(mainTsx).toContain('className="chat-hub-project-check"');
     expect(mainTsx).toContain('style={hubAccentStyle(hub.hubId)}');
     expect(mainTsx).not.toContain('className="chat-hub-disclosure"');
     expect(mainTsx).not.toContain('className={`chat-hub-visibility-cube');
@@ -542,14 +542,13 @@ describe('web responsive ui state', () => {
     expect(treeBlock).toContain('--chat-hub-color-chip-radius: 6px;');
     expect(stylesCss).not.toContain('.chat-hub-tree.expanded .chat-hub-disclosure {');
     const colorOpenBlock = stylesCss.match(/\.chat-hub-tree\.color-open \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(colorOpenBlock).toContain('min-height: calc(36px + var(--chat-hub-color-palette-clearance));');
-    expect(colorOpenBlock).toContain('--chat-hub-color-palette-clearance: 286px;');
+    expect(colorOpenBlock).toContain('z-index: 3;');
     const colorOpenProjectListBlock = stylesCss.match(/\.chat-hub-tree\.color-open \.chat-hub-project-list \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(colorOpenProjectListBlock).toContain('margin-top: var(--chat-hub-color-palette-clearance);');
+    expect(colorOpenProjectListBlock).toContain('margin-top: 0;');
     expect(stylesCss).toContain('.chat-hub-color-palette::before {');
 
     const rowBlock = stylesCss.match(/\.chat-hub-row,\n\.chat-hub-empty \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(rowBlock).toContain('grid-template-columns: 24px minmax(0, 1fr) 40px auto;');
+    expect(rowBlock).toContain('grid-template-columns: minmax(0, 1fr) 32px auto;');
 
     const hubProjectToggleBlock = stylesCss.match(/\.chat-hub-project-toggle \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(hubProjectToggleBlock).toContain('width: 24px;');
@@ -569,7 +568,7 @@ describe('web responsive ui state', () => {
     const colorSquareBlock = Array.from(stylesCss.matchAll(/\.chat-hub-color-square \{[\s\S]*?\n\}/g))
       .map(match => match[0])
       .find(block => block.includes('--hub-accent')) ?? '';
-    expect(colorSquareBlock).toContain('width: 40px;');
+    expect(colorSquareBlock).toContain('width: 32px;');
     expect(colorSquareBlock).toContain('height: 24px;');
     expect(colorSquareBlock).toContain('border: 1px solid transparent;');
     expect(colorSquareBlock).toContain('background: transparent;');
@@ -591,10 +590,10 @@ describe('web responsive ui state', () => {
 
     const paletteBlock = stylesCss.match(/\.chat-hub-color-palette \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(paletteBlock).toContain('position: absolute;');
-    expect(paletteBlock).toContain('right: 8px;');
-    expect(paletteBlock).toContain('width: min(248px, calc(100% - 16px));');
+    expect(paletteBlock).toContain('right: 4px;');
+    expect(paletteBlock).toContain('width: min(248px, calc(100% - 8px));');
     const paletteArrowBlock = stylesCss.match(/\.chat-hub-color-palette::before \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(paletteArrowBlock).toContain('right: 66px;');
+    expect(paletteArrowBlock).toContain('right: 56px;');
 
     const colorGridBlock = stylesCss.match(/\.chat-hub-color-grid \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(colorGridBlock).toContain('grid-template-columns: repeat(5, minmax(0, 1fr));');
@@ -641,11 +640,12 @@ describe('web responsive ui state', () => {
 
     const projectListBlock = Array.from(stylesCss.matchAll(/\.chat-hub-project-list \{[\s\S]*?\n\}/g))
       .map(match => match[0])
-      .find(block => block.includes('margin: 2px 6px 6px 30px;')) ?? '';
-    expect(projectListBlock).toContain('margin: 2px 6px 6px 30px;');
+      .find(block => block.includes('margin: 2px 2px 4px 9px;')) ?? '';
+    expect(projectListBlock).toContain('margin: 2px 2px 4px 9px;');
     expect(projectListBlock).not.toContain('border-radius:');
     expect(projectListBlock).not.toContain('background:');
     expect(projectListBlock).not.toContain('box-shadow:');
+    expect(projectListBlock).not.toContain('margin: 2px 6px 6px 30px;');
     expect(projectListBlock).not.toContain('margin: 3px 6px 6px 54px;');
     expect(projectListBlock).not.toContain('border-left:');
   });
