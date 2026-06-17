@@ -16702,6 +16702,24 @@ export function App() {
     setChatPreviewManualCollapsed(false);
     setChatPreviewManualOpen(open => !open);
   }, [chatPreviewOpen]);
+  useEffect(() => {
+    if (!isWide) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || event.altKey) return;
+      if (!event.ctrlKey || event.metaKey) return;
+      if (event.key === 't' || event.key === 'T') {
+        event.preventDefault();
+        setSidebarCollapsed(value => !value);
+        return;
+      }
+      if (event.code === 'Backquote') {
+        event.preventDefault();
+        toggleChatPreviewFromTitle();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isWide, setSidebarCollapsed, toggleChatPreviewFromTitle]);
   const renderMain = () => {
     const heavyDiffDeferred =
       !!selectedDiff &&
@@ -17082,6 +17100,7 @@ export function App() {
                       if (chatFileMentionMenuOpen) {
                         if (event.key === 'ArrowDown') {
                           event.preventDefault();
+                          event.stopPropagation();
                           setChatFileMentionActiveIndex(prev => {
                             if (chatFileMentionResults.length === 0) {
                               return 0;
@@ -17092,6 +17111,7 @@ export function App() {
                         }
                         if (event.key === 'ArrowUp') {
                           event.preventDefault();
+                          event.stopPropagation();
                           setChatFileMentionActiveIndex(prev => {
                             if (chatFileMentionResults.length === 0) {
                               return 0;
@@ -17102,6 +17122,7 @@ export function App() {
                         }
                         if (event.key === 'ArrowRight') {
                           event.preventDefault();
+                          event.stopPropagation();
                           const activeResult = chatFileMentionResults[chatFileMentionActiveIndex];
                           if (activeResult) {
                             openChatFileMentionPreview(activeResult);
@@ -17110,6 +17131,7 @@ export function App() {
                         }
                         if ((event.key === 'Enter' || event.key === 'Tab') && !event.altKey && !event.nativeEvent.isComposing) {
                           event.preventDefault();
+                          event.stopPropagation();
                           const activeResult = chatFileMentionResults[chatFileMentionActiveIndex];
                           if (!activeResult) {
                             return;
@@ -17119,6 +17141,7 @@ export function App() {
                         }
                         if (event.key === 'Escape') {
                           event.preventDefault();
+                          event.stopPropagation();
                           setChatFileMentionMenuOpen(false);
                           resetChatFileMentionSearchSession();
                           return;
@@ -17127,6 +17150,7 @@ export function App() {
                       if (chatSlashMenuVisible) {
                         if (event.key === 'ArrowDown') {
                           event.preventDefault();
+                          event.stopPropagation();
                           setChatSlashActiveIndex(prev => {
                             if (chatSlashMenuOptions.length === 0) {
                               return 0;
@@ -17137,6 +17161,7 @@ export function App() {
                         }
                         if (event.key === 'ArrowUp') {
                           event.preventDefault();
+                          event.stopPropagation();
                           setChatSlashActiveIndex(prev => {
                             if (chatSlashMenuOptions.length === 0) {
                               return 0;
@@ -17147,6 +17172,7 @@ export function App() {
                         }
                         if ((event.key === 'Enter' || event.key === 'Tab') && !event.altKey && !event.nativeEvent.isComposing) {
                           event.preventDefault();
+                          event.stopPropagation();
                           if (!activeChatSlashCommand) {
                             return;
                           }
@@ -17155,6 +17181,7 @@ export function App() {
                         }
                         if (event.key === 'Escape') {
                           event.preventDefault();
+                          event.stopPropagation();
                           setChatPromptMenuOpen(false);
                           setChatSlashQuery(null);
                           setChatSlashActiveIndex(0);
@@ -17167,6 +17194,7 @@ export function App() {
                       }
                       if (!isWide || isWindowsPlatform) {
                         event.preventDefault();
+                        event.stopPropagation();
                         if (chatSendDisabled) {
                           return;
                         }
