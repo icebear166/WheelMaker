@@ -11,11 +11,12 @@ import (
 type ProjectInfo = rp.ProjectInfo
 
 type ManagerConfig struct {
-	HubID          string
-	Projects       []ProjectInfo
-	MonitorBaseDir string
-	GlobalLockPath string
-	HomeDir        string
+	HubID                string
+	Projects             []ProjectInfo
+	MonitorBaseDir       string
+	GlobalLockPath       string
+	HomeDir              string
+	OnSkillsOperationDone func(scope, projectName string)
 }
 
 type CommandError struct {
@@ -60,6 +61,7 @@ func NewManager(config ManagerConfig) *Manager {
 			Projects:       config.Projects,
 			GlobalLockPath: config.GlobalLockPath,
 			HomeDir:        config.HomeDir,
+			OnOperationDone: config.OnSkillsOperationDone,
 		}),
 		tokenCommand: NewTokenCommand(),
 	}
@@ -99,6 +101,7 @@ func (m *Manager) Handle(ctx context.Context, method string, payload json.RawMes
 				Projects:       m.cfg.Projects,
 				GlobalLockPath: m.cfg.GlobalLockPath,
 				HomeDir:        m.cfg.HomeDir,
+				OnOperationDone: m.cfg.OnSkillsOperationDone,
 			})
 		}
 		m.skillsCommand.SetProjects(m.cfg.Projects)

@@ -160,14 +160,15 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 		sessionByID:  make(map[string]SessionHandler),
 		pending:      make(map[int64]chan envelope),
 		monitorCore:  NewMonitorCore(monitorBase),
-		toolHandler: tools.NewManager(tools.ManagerConfig{
-			HubID:          cfg.HubID,
-			Projects:       cp,
-			MonitorBaseDir: monitorBase,
-		}),
-		relayClient: portrelay.NewHubClient(),
-		fileIndex:   newProjectFileIndexManager(monitorBase),
+		relayClient:  portrelay.NewHubClient(),
+		fileIndex:    newProjectFileIndexManager(monitorBase),
 	}
+	r.toolHandler = tools.NewManager(tools.ManagerConfig{
+		HubID:          cfg.HubID,
+		Projects:       cp,
+		MonitorBaseDir: monitorBase,
+		OnSkillsOperationDone: r.refreshSkillsAgentProfiles,
+	})
 	r.hubStateManager = newHubStateManager(r.cfg.HubID, r.hubStateSectionHandlers())
 	r.requestSeq.Store(2)
 	return r
@@ -1334,8 +1335,28 @@ func (r *Reporter) ensureToolHandler() toolCommandHandler {
 		HubID:          r.cfg.HubID,
 		Projects:       r.projectsSnapshot(),
 		MonitorBaseDir: r.cfg.MonitorBaseDir,
+		OnSkillsOperationDone: r.refreshSkillsAgentProfiles,
 	})
 	return r.toolHandler
+}
+
+func (r *Reporter) refreshSkillsAgentProfiles(scope, projectName string) {
+	projects := r.projectsSnapshot()
+	for _, project := range projects {
+		if scope == "project" && projectName != "" && strings.TrimSpace(project.Name) != strings.TrimSpace(projectName) {
+			continue
+		}
+		path := strings.TrimSpace(project.Path)
+		if path == "" {
+			continue
+		}
+		newProfiles := collectProjectAgentProfiles(project.Name, path, project.Agents)
+		updated := project
+		updated.AgentProfiles = newProfiles
+		if err := r.UpdateProject(updated); err != nil {
+			registryLogger(project.Name).Warn("refresh skills agent profiles failed: %v", err)
+		}
+	}
 }
 
 func (r *Reporter) replySession(conn *websocket.Conn, req envelope) {

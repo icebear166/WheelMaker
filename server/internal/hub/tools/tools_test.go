@@ -860,6 +860,95 @@ func TestSkillsCommandWriteActionsReturnAcceptedOperation(t *testing.T) {
 	waitForSkillsOperationDone(t, cmd)
 }
 
+func TestSkillsCommandOnOperationDoneCalledAfterSuccess(t *testing.T) {
+	baseDir := t.TempDir()
+	projectRoot := filepath.Join(baseDir, "project")
+	if err := os.MkdirAll(projectRoot, 0o755); err != nil {
+		t.Fatalf("mkdir project: %v", err)
+	}
+	runner := newFakeSkillsRunner()
+	runner.set("", "skills", []string{"list", "-g", "--json"}, skillsCommandResult{Stdout: "[]", ExitCode: 0})
+	runner.set(projectRoot, "skills", []string{"list", "--json"}, skillsCommandResult{Stdout: "[]", ExitCode: 0})
+
+	callbackDone := make(chan struct{})
+	var callbackScope, callbackProject string
+	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{
+		HubID: "hub-a",
+		Projects: []ProjectInfo{{
+			Name: "proj",
+			Path: projectRoot,
+		}},
+		OnOperationDone: func(scope, projectName string) {
+			callbackScope = scope
+			callbackProject = projectName
+			close(callbackDone)
+		},
+	})
+
+	_, cmdErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "install",
+		"hubId":  "hub-a",
+		"scope":  "project",
+		"projectName": "proj",
+		"source":  "mattpocock/skills",
+		"skills":  []string{"tdd"},
+	}))
+	if cmdErr != nil {
+		t.Fatalf("install error: %#v", cmdErr)
+	}
+
+	select {
+	case <-callbackDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("OnOperationDone callback not called within timeout")
+	}
+	if callbackScope != "project" {
+		t.Fatalf("callback scope = %q, want %q", callbackScope, "project")
+	}
+	if callbackProject != "proj" {
+		t.Fatalf("callback projectName = %q, want %q", callbackProject, "proj")
+	}
+}
+
+func TestSkillsCommandOnOperationDoneNotCalledOnFailure(t *testing.T) {
+	runner := newFakeSkillsRunner()
+	runner.set("", "skills", []string{"add", "mattpocock/skills", "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "tdd", "-y"}, skillsCommandResult{
+		ExitCode: 1,
+		Stderr:   "install failed",
+	})
+	runner.set("", "npx", []string{"--yes", "skills", "add", "mattpocock/skills", "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "tdd", "-y"}, skillsCommandResult{
+		ExitCode: 1,
+		Stderr:   "install failed",
+	})
+
+	callbackCalled := make(chan struct{}, 1)
+	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{
+		HubID: "hub-a",
+		OnOperationDone: func(scope, projectName string) {
+			callbackCalled <- struct{}{}
+		},
+	})
+
+	_, cmdErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "install",
+		"hubId":  "hub-a",
+		"scope":  "hub",
+		"source": "mattpocock/skills",
+		"skills": []string{"tdd"},
+	}))
+	if cmdErr != nil {
+		t.Fatalf("install error: %#v", cmdErr)
+	}
+
+	waitForSkillsOperationDone(t, cmd)
+
+	select {
+	case <-callbackCalled:
+		t.Fatal("OnOperationDone should not be called on failure")
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
 func TestSkillsCommandRejectsConcurrentWriteOperations(t *testing.T) {
 	runner := newFakeSkillsRunner()
 	block := runner.block("", "skills", "remove", "-g", "--skill", "tdd", "--agent", "codex", "claude-code", "opencode", "github-copilot", "-y")

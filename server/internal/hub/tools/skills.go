@@ -79,6 +79,7 @@ type skillsCommandConfig struct {
 	Projects       []ProjectInfo
 	GlobalLockPath string
 	HomeDir        string
+	OnOperationDone func(scope, projectName string)
 }
 
 type SkillsCommand struct {
@@ -87,6 +88,7 @@ type SkillsCommand struct {
 	hubID          string
 	globalLockPath string
 	homeDir        string
+	onOperationDone func(scope, projectName string)
 
 	mu        sync.RWMutex
 	projects  []ProjectInfo
@@ -106,6 +108,7 @@ func newSkillsCommandWithRunner(runner skillsCommandRunner, config skillsCommand
 		hubID:          strings.TrimSpace(config.HubID),
 		globalLockPath: strings.TrimSpace(config.GlobalLockPath),
 		homeDir:        strings.TrimSpace(config.HomeDir),
+		onOperationDone: config.OnOperationDone,
 		now: func() time.Time {
 			return time.Now().UTC()
 		},
@@ -469,8 +472,8 @@ func (c *SkillsCommand) runSkillsOperation(operation *skillsOperationSnapshot, r
 
 func (c *SkillsCommand) finishOperation(operation *skillsOperationSnapshot, status string, exitCode *int, errorSummary string, message string) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	if c.operation != operation {
+		c.mu.Unlock()
 		return
 	}
 	operation.Running = false
@@ -482,6 +485,14 @@ func (c *SkillsCommand) finishOperation(operation *skillsOperationSnapshot, stat
 	}
 	operation.ErrorSummary = errorSummary
 	operation.Message = message
+	scope := operation.Scope
+	projectName := operation.ProjectName
+	done := c.onOperationDone
+	c.mu.Unlock()
+
+	if status == "succeeded" && done != nil {
+		done(scope, projectName)
+	}
 }
 
 func (c *SkillsCommand) currentOperationSnapshot() *skillsOperationSnapshot {
