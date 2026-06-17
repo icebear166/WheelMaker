@@ -266,6 +266,20 @@ func TestCodeBuddyACPProvider_LaunchArgs(t *testing.T) {
 }
 
 func TestFlickerACPProvider_LaunchArgs(t *testing.T) {
+	tempDir := t.TempDir()
+	binDir := filepath.Join(tempDir, "bin")
+	cliPath := filepath.Join(binDir, "node_modules", "@myflicker", "cli", "cli.mjs")
+	if err := os.MkdirAll(filepath.Dir(cliPath), 0o755); err != nil {
+		t.Fatalf("mkdir cli dir: %v", err)
+	}
+	if err := os.WriteFile(cliPath, []byte(""), 0o644); err != nil {
+		t.Fatalf("write cli: %v", err)
+	}
+	myflickerPath := filepath.Join(binDir, "myflicker.cmd")
+	if err := os.WriteFile(myflickerPath, []byte("@echo off\r\n"), 0o755); err != nil {
+		t.Fatalf("write shim: %v", err)
+	}
+
 	p := NewFlickerProvider()
 	p.resolveBinary = func(name string, configuredPath string) (string, error) {
 		if name != "myflicker" {
@@ -274,17 +288,37 @@ func TestFlickerACPProvider_LaunchArgs(t *testing.T) {
 		if configuredPath != "" {
 			t.Fatalf("resolveBinary configuredPath=%q, want empty", configuredPath)
 		}
-		return "/usr/bin/myflicker", nil
+		return myflickerPath, nil
+	}
+	p.lookPath = func(file string) (string, error) {
+		if file != "node" {
+			t.Fatalf("lookPath file=%q, want node", file)
+		}
+		return filepath.Join(tempDir, "node"), nil
+	}
+	p.ensureFlickerLoader = func() (string, error) {
+		return filepath.Join(tempDir, "flicker_acp_loader.mjs"), nil
 	}
 
 	exe, args, env, err := p.Launch()
 	if err != nil {
 		t.Fatalf("launch: %v", err)
 	}
-	if exe != "/usr/bin/myflicker" {
+	if exe != filepath.Join(tempDir, "node") {
 		t.Fatalf("exe=%q", exe)
 	}
-	if !reflect.DeepEqual(args, []string{"acp"}) {
+	loaderURL, err := nodeFileURL(filepath.Join(tempDir, "flicker_acp_loader.mjs"))
+	if err != nil {
+		t.Fatalf("loader url: %v", err)
+	}
+	wantArgs := []string{
+		"--import", nodeRegisterImportArg(loaderURL),
+		cliPath,
+		"--approval-mode", "yolo",
+		"--thinking-level", "xhigh",
+		"acp",
+	}
+	if !reflect.DeepEqual(args, wantArgs) {
 		t.Fatalf("args=%v", args)
 	}
 	if len(env) != 0 {
@@ -383,46 +417,20 @@ func TestFlickerConnPassesThroughStandardConfigOptions(t *testing.T) {
 	}
 }
 
-func TestFlickerConnMapsModelConfigToSetModel(t *testing.T) {
+func TestFlickerConnPassesThroughSetConfigOption(t *testing.T) {
 	var capturedMethod string
-	var capturedParams flickerSetModelParams
+	var capturedParams protocol.SessionSetConfigOptionParams
 	base := &testFlickerBaseConn{
 		sendFn: func(_ context.Context, method string, params any, result any) error {
-			switch method {
-			case protocol.MethodSessionNew:
-				return assignResult(result, map[string]any{
-					"sessionId": "session-1",
-					"configOptions": []map[string]any{
-						{
-							"id":           protocol.ConfigOptionIDModel,
-							"name":         "Model",
-							"category":     protocol.ConfigOptionCategoryModel,
-							"type":         "select",
-							"currentValue": "wanqing/auto",
-							"options": []map[string]any{
-								{"value": "wanqing/auto", "name": "Auto"},
-								{"value": "wanqing/glm-5.1", "name": "GLM-5.1"},
-							},
-						},
-					},
-				})
-			case "session/set_model":
-				capturedMethod = method
-				if err := remarshal(params, &capturedParams); err != nil {
-					t.Fatalf("params: %v", err)
-				}
-				return assignResult(result, map[string]any{})
-			default:
-				t.Fatalf("unexpected method=%q", method)
-				return nil
+			capturedMethod = method
+			if err := remarshal(params, &capturedParams); err != nil {
+				t.Fatalf("params: %v", err)
 			}
+			return assignResult(result, map[string]any{"configOptions": []map[string]any{}})
 		},
 	}
 	conn := newFlickerConn(base)
-	var session protocol.SessionNewResult
-	if err := conn.Send(context.Background(), protocol.MethodSessionNew, protocol.SessionNewParams{}, &session); err != nil {
-		t.Fatalf("session/new: %v", err)
-	}
+
 	var raw json.RawMessage
 	if err := conn.Send(context.Background(), protocol.MethodSetConfigOption, protocol.SessionSetConfigOptionParams{
 		SessionID: "session-1",
@@ -431,20 +439,14 @@ func TestFlickerConnMapsModelConfigToSetModel(t *testing.T) {
 	}, &raw); err != nil {
 		t.Fatalf("set config: %v", err)
 	}
-	var wrapped struct {
-		ConfigOptions []protocol.ConfigOption `json:"configOptions"`
+	if len(raw) == 0 {
+		t.Fatal("raw result is empty")
 	}
-	if err := json.Unmarshal(raw, &wrapped); err != nil {
-		t.Fatalf("decode update: %v", err)
-	}
-	if capturedMethod != "session/set_model" {
+	if capturedMethod != protocol.MethodSetConfigOption {
 		t.Fatalf("capturedMethod=%q", capturedMethod)
 	}
-	if capturedParams.SessionID != "session-1" || capturedParams.ModelID != "wanqing/glm-5.1" {
+	if capturedParams.SessionID != "session-1" || capturedParams.ConfigID != protocol.ConfigOptionIDModel || capturedParams.Value != "wanqing/glm-5.1" {
 		t.Fatalf("capturedParams=%#v", capturedParams)
-	}
-	if len(wrapped.ConfigOptions) != 1 || wrapped.ConfigOptions[0].CurrentValue != "wanqing/glm-5.1" {
-		t.Fatalf("updated=%#v", wrapped.ConfigOptions)
 	}
 }
 

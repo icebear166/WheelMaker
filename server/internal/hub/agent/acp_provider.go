@@ -1,11 +1,14 @@
 package agent
 
 import (
+	"encoding/base64"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 // ACPProvider resolves launch details for one ACP agent type.
@@ -93,16 +96,18 @@ var (
 type acpProvider struct {
 	preset ACPProviderPreset
 
-	resolveBinary func(name, configuredPath string) (string, error)
-	lookPath      func(file string) (string, error)
+	resolveBinary       func(name, configuredPath string) (string, error)
+	lookPath            func(file string) (string, error)
+	ensureFlickerLoader func() (string, error)
 }
 
 // NewACPProvider creates a provider from preset.
 func NewACPProvider(preset ACPProviderPreset) *acpProvider {
 	return &acpProvider{
-		preset:        preset,
-		resolveBinary: ResolveACPBinary,
-		lookPath:      exec.LookPath,
+		preset:              preset,
+		resolveBinary:       ResolveACPBinary,
+		lookPath:            exec.LookPath,
+		ensureFlickerLoader: ensureFlickerACPLoader,
 	}
 }
 
@@ -146,7 +151,36 @@ func (p *acpProvider) Launch() (string, []string, []string, error) {
 		}
 		return "", nil, nil, fmt.Errorf("%s: resolve binary: %w", p.preset.Name, err)
 	}
+	if p.preset.Name == FlickerACPProviderPreset.Name {
+		return p.launchFlicker(exePath)
+	}
 	return exePath, defaultArgs, nil, nil
+}
+
+func (p *acpProvider) launchFlicker(myflickerPath string) (string, []string, []string, error) {
+	nodePath, err := p.lookPath("node")
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("flicker: node binary not found: %w", err)
+	}
+	cliPath, err := resolveFlickerCLIEntry(myflickerPath)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	loaderPath, err := p.ensureFlickerLoader()
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("flicker: prepare ACP loader: %w", err)
+	}
+	loaderURL, err := nodeFileURL(loaderPath)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("flicker: resolve ACP loader URL: %w", err)
+	}
+	return nodePath, []string{
+		"--import", nodeRegisterImportArg(loaderURL),
+		cliPath,
+		"--approval-mode", "yolo",
+		"--thinking-level", "xhigh",
+		"acp",
+	}, nil, nil
 }
 
 func cloneArgs(args []string) []string {
@@ -154,6 +188,72 @@ func cloneArgs(args []string) []string {
 		return nil
 	}
 	return append([]string(nil), args...)
+}
+
+func resolveFlickerCLIEntry(binaryPath string) (string, error) {
+	ext := strings.ToLower(filepath.Ext(binaryPath))
+	if ext == ".mjs" || ext == ".js" {
+		if exists(binaryPath) {
+			return binaryPath, nil
+		}
+		return "", fmt.Errorf("flicker: CLI entry not found at %s", binaryPath)
+	}
+	binDir := filepath.Dir(binaryPath)
+	candidates := []string{
+		filepath.Join(binDir, "node_modules", "@myflicker", "cli", "cli.mjs"),
+		filepath.Join(binDir, "..", "lib", "node_modules", "@myflicker", "cli", "cli.mjs"),
+		filepath.Join(binDir, "..", "node_modules", "@myflicker", "cli", "cli.mjs"),
+	}
+	for _, candidate := range candidates {
+		if exists(candidate) {
+			abs, err := filepath.Abs(candidate)
+			if err != nil {
+				return "", fmt.Errorf("flicker: abs CLI path %q: %w", candidate, err)
+			}
+			return abs, nil
+		}
+	}
+	return "", fmt.Errorf("flicker: could not locate @myflicker/cli/cli.mjs next to %s", binaryPath)
+}
+
+func ensureFlickerACPLoader() (string, error) {
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		home, homeErr := os.UserHomeDir()
+		if homeErr != nil {
+			return "", err
+		}
+		cacheDir = filepath.Join(home, ".wheelmaker", "cache")
+	}
+	dir := filepath.Join(cacheDir, "wheelmaker")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, "flicker_acp_loader.mjs")
+	if err := os.WriteFile(path, []byte(flickerACPLoaderSource), 0o644); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func nodeFileURL(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	slashPath := filepath.ToSlash(abs)
+	if runtime.GOOS == "windows" && !strings.HasPrefix(slashPath, "/") {
+		slashPath = "/" + slashPath
+	}
+	return (&url.URL{Scheme: "file", Path: slashPath}).String(), nil
+}
+
+func nodeRegisterImportArg(loaderURL string) string {
+	script := fmt.Sprintf(
+		`import { register } from "node:module"; import { pathToFileURL } from "node:url"; register(%q, pathToFileURL("./"));`,
+		loaderURL,
+	)
+	return "data:text/javascript;base64," + base64.StdEncoding.EncodeToString([]byte(script))
 }
 
 // ResolveACPBinary locates an ACP executable in this order:
