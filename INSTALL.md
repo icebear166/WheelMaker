@@ -25,6 +25,7 @@ Registry 入口机额外需要：
 - Windows：如果已有 Scoop，用 Scoop；没有 Scoop 就用 winget。不要自动安装 Scoop。
 - Linux：发行版包版本满足时再用发行版包；不满足时先提出 Go 官方包、NodeSource、nvm 等升级方案，让用户确认。
 - 只有 Registry 入口机才处理 Nginx。
+- Go module 或 npm 下载长时间无进展、超时、连接失败时，可以建议临时换源，但先说明原因并让用户确认。不要一开始就换源。
 
 常用检测：
 
@@ -51,6 +52,12 @@ systemctl --user status
 loginctl show-user "$USER" -p Linger
 sudo loginctl enable-linger "$USER"
 ```
+
+下载源处理 tips：
+
+- Go 可临时使用 `GOPROXY=https://goproxy.cn,direct`，或恢复为 `https://proxy.golang.org,direct`。
+- npm 可临时使用 `https://registry.npmmirror.com`，部署后提醒用户是否恢复默认 registry。
+- 换源是环境改动；执行前必须说明当前失败现象和将要修改的配置。
 
 ## 2. 克隆仓库
 
@@ -109,7 +116,7 @@ bash deploy.sh
 
 - 首次部署必须用 `deploy.bat` 或 `deploy.sh`。
 - 不要用 `update-publish.bat` 或 `update-publish.sh` 做首次部署；它们只适合服务已存在后的更新发布。
-- Windows 可能触发 UAC；首次创建服务时可能要求当前账号密码。
+- Windows 可能触发 UAC；首次创建服务时可能要求当前账号密码。AI 运行前要提醒用户关注终端或弹窗，命令长时间停住时先判断是否正在等待人工输入。
 - 部署流程会构建二进制、发布 Web 到 `~/.wheelmaker/web`、安装服务，并在缺失时创建 `~/.wheelmaker/config.json`。
 
 ## 5. Registry 入口机配置
