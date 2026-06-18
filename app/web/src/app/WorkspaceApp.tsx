@@ -3199,6 +3199,7 @@ export function App() {
   const [chatHubColorMenuHubId, setChatHubColorMenuHubId] = useState('');
   const chatHubMenuRef = useRef<HTMLDivElement | null>(null);
   const [chatTitlePromptMenuOpen, setChatTitlePromptMenuOpen] = useState(false);
+  const chatTitlePromptButtonRef = useRef<HTMLButtonElement | null>(null);
   const chatTitlePromptMenuRef = useRef<HTMLDivElement | null>(null);
   const [chatQuickSwitchMenuOpen, setChatQuickSwitchMenuOpen] = useState(false);
   const [chatQuickSwitchMenuPlacement, setChatQuickSwitchMenuPlacement] = useState<ChatQuickSwitchMenuPlacement>({kind: 'mobile'});
@@ -3291,6 +3292,25 @@ export function App() {
         .filter(item => item.turnIndex > 0),
     [selectedFullChatMessages],
   );
+  const activeChatPromptHistory = tab === 'chat' && !archivedMode ? selectedChatPromptHistory : [];
+  const chatTitlePromptMenuAvailable = activeChatPromptHistory.length > 0;
+  const chatTitlePromptMenuStyle = useMemo<React.CSSProperties | undefined>(() => {
+    if (!chatTitlePromptMenuOpen || !chatTitlePromptMenuAvailable || typeof window === 'undefined') {
+      return undefined;
+    }
+    const anchor = chatTitlePromptButtonRef.current?.getBoundingClientRect();
+    if (!anchor) {
+      return undefined;
+    }
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+    const menuWidth = Math.min(430, Math.max(280, viewportWidth - 24));
+    const left = Math.max(12, Math.min(anchor.left, viewportWidth - menuWidth - 12));
+    return {
+      left,
+      top: Math.max(12, anchor.bottom + 7),
+      width: menuWidth,
+    };
+  }, [chatTitlePromptMenuAvailable, chatTitlePromptMenuOpen, isWide]);
 
   const selectedPendingPrompt = selectedChatEncodedKey
     ? chatPendingPromptsByKey[selectedChatEncodedKey]
@@ -5560,7 +5580,11 @@ export function App() {
     if (!chatTitlePromptMenuOpen) return;
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null;
-      if (target && chatTitlePromptMenuRef.current?.contains(target)) {
+      if (
+        target &&
+        (chatTitlePromptMenuRef.current?.contains(target) ||
+          chatTitlePromptButtonRef.current?.contains(target))
+      ) {
         return;
       }
       setChatTitlePromptMenuOpen(false);
@@ -16914,10 +16938,8 @@ export function App() {
     const activeChatBreadcrumbLabel = chatReadOnlyPreview
       ? `Archived - ${activeChatDisplayTitle || 'Session'}`
       : chatBreadcrumbLabel;
-    const activeChatPromptHistory = chatReadOnlyPreview ? [] : selectedChatPromptHistory;
-    const chatTitlePromptMenuAvailable = activeChatPromptHistory.length > 0;
     const renderChatBreadcrumbTitle = () => (
-      <div ref={chatTitlePromptMenuRef} className="breadcrumb-title chat-breadcrumb-title">
+      <div className="breadcrumb-title chat-breadcrumb-title">
         <button
           type="button"
           className="breadcrumb-project-button breadcrumb-project-name"
@@ -16928,6 +16950,7 @@ export function App() {
           {activeChatBreadcrumbProjectName}
         </button>
         <button
+          ref={chatTitlePromptButtonRef}
           type="button"
           className={`title-text breadcrumb-current chat-title-prompt-button${chatTitlePromptMenuOpen ? ' open' : ''}`}
           title={chatTitlePromptMenuAvailable ? 'Show prompt history' : activeChatBreadcrumbLabel}
@@ -16949,23 +16972,6 @@ export function App() {
         >
           {activeChatBreadcrumbLabel}
         </button>
-        {chatTitlePromptMenuOpen && chatTitlePromptMenuAvailable ? (
-          <div className="chat-title-prompt-menu" role="menu" aria-label="Prompt history">
-            {activeChatPromptHistory.map(item => (
-              <button
-                key={item.key}
-                type="button"
-                className="chat-title-prompt-menu-item"
-                role="menuitem"
-                title={item.preview}
-                onClick={() => jumpToChatPromptTurn(item.turnIndex)}
-              >
-                <span className="chat-title-prompt-menu-label">{item.label}</span>
-                <span className="chat-title-prompt-menu-preview">{item.preview}</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
       </div>
     );
 
@@ -18104,6 +18110,29 @@ export function App() {
       onSelectSession={handleMobileChatQuickSwitchSelect}
     />
   ) : null;
+  const chatTitlePromptMenu = chatTitlePromptMenuOpen && chatTitlePromptMenuAvailable ? (
+    <div
+      ref={chatTitlePromptMenuRef}
+      className="chat-title-prompt-menu"
+      role="menu"
+      aria-label="Prompt history"
+      style={chatTitlePromptMenuStyle}
+    >
+      {activeChatPromptHistory.map(item => (
+        <button
+          key={item.key}
+          type="button"
+          className="chat-title-prompt-menu-item"
+          role="menuitem"
+          title={item.preview}
+          onClick={() => jumpToChatPromptTurn(item.turnIndex)}
+        >
+          <span className="chat-title-prompt-menu-label">{item.label}</span>
+          <span className="chat-title-prompt-menu-preview">{item.preview}</span>
+        </button>
+      ))}
+    </div>
+  ) : null;
 
   const floatingControlStack = !isWide ? (
     <div
@@ -18685,6 +18714,7 @@ export function App() {
         onCloseDrawer={() => setDrawerOpen(false)}
       />
       {chatQuickSwitchMenuPlacement.kind === 'desktop' ? chatQuickSwitchMenu : null}
+      {chatTitlePromptMenu}
       {portRelayMobileFrameOverlay}
       {portRelayClearSiteDataFrame}
       {registryDebugPanel}

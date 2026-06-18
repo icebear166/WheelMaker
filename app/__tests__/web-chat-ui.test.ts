@@ -2018,11 +2018,17 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('const jumpToChatPromptTurn = useCallback((turnIndex: number) => {');
     expect(mainTsx).toContain("chatVirtuosoListRef.current?.scrollToTurnIndex(turnIndex, 'smooth');");
     expect(mainTsx).toContain('setChatTitlePromptMenuOpen(false);');
+    expect(mainTsx).toContain('const chatTitlePromptButtonRef = useRef<HTMLButtonElement | null>(null);');
+    expect(mainTsx).toContain('const chatTitlePromptMenuStyle = useMemo<React.CSSProperties | undefined>(() => {');
+    expect(mainTsx).toContain('const chatTitlePromptMenu = chatTitlePromptMenuOpen && chatTitlePromptMenuAvailable ? (');
+    expect(mainTsx).toContain('{chatTitlePromptMenu}');
     expect(mainTsx).toContain('className={`title-text breadcrumb-current chat-title-prompt-button${chatTitlePromptMenuOpen ? \' open\' : \'\'}`}');
+    expect(mainTsx).toContain('ref={chatTitlePromptButtonRef}');
     expect(mainTsx).toContain('aria-haspopup="menu"');
     expect(mainTsx).toContain('aria-expanded={chatTitlePromptMenuOpen}');
     expect(mainTsx).toContain('className="chat-title-prompt-menu"');
     expect(mainTsx).toContain('className="chat-title-prompt-menu-item"');
+    expect(chatSurface).not.toContain('className="chat-title-prompt-menu"');
     expect(chatSurface).not.toContain('CHAT - ${selectedChatDisplayTitle || \'New Session\'}');
     expect(chatSurface).toContain('className="chat-title-actions"');
     expect(chatSurface).toContain('className={`chat-preview-toggle${chatPreviewOpen ? \' active\' : \'\'}`}');
@@ -2045,7 +2051,7 @@ describe('web chat integration', () => {
     expect(promptButtonBlock).toContain('background: transparent;');
     expect(promptButtonBlock).toContain('text-align: left;');
     const promptMenuBlock = cssRuleBlock(stylesCss, '.chat-title-prompt-menu');
-    expect(promptMenuBlock).toContain('position: absolute;');
+    expect(promptMenuBlock).toContain('position: fixed;');
     expect(promptMenuBlock).toContain('overflow-y: auto;');
     const previewToggleBlock = cssRuleBlock(stylesCss, '.chat-preview-toggle');
     expect(previewToggleBlock).toContain('border: 0;');

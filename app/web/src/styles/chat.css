@@ -381,10 +381,10 @@
 }
 
 .chat-title-prompt-menu {
-  position: absolute;
-  left: 0;
-  top: calc(100% + 7px);
-  z-index: 40;
+  position: fixed;
+  left: 12px;
+  top: 48px;
+  z-index: 86;
   width: min(430px, calc(100vw - 28px));
   max-height: min(360px, calc(100vh - 96px));
   overflow-y: auto;
