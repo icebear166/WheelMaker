@@ -7,7 +7,7 @@ import {
 import {promptAttachmentBlockCount} from '../composer/chatPromptAttachments';
 
 export type ChatDisplayIndexItem = {
-  kind: 'turn' | 'pending';
+  kind: 'turn' | 'pending' | 'queued';
   key: string;
   turnIndex: number;
   sourceIndex: number;
@@ -56,6 +56,8 @@ export type ChatDisplayIndexOptions = {
   promptStatus?: (message: RegistryChatMessage) => ChatPromptStatus;
   pendingKey?: string;
   pendingEstimatedHeight?: number;
+  queuedKeys?: string[];
+  queuedEstimatedHeight?: number;
 };
 
 export const DEFAULT_CHAT_TURN_HEIGHT_METRICS: ChatTurnHeightMetrics = {
@@ -416,6 +418,17 @@ export function buildChatDisplayIndex(
       turnIndex: 0,
       sourceIndex: -1,
       estimatedHeight: Math.max(56, Math.trunc(options.pendingEstimatedHeight ?? 120)),
+    });
+  }
+  for (const queuedKey of options.queuedKeys ?? []) {
+    const key = queuedKey.trim();
+    if (!key) continue;
+    items.push({
+      kind: 'queued',
+      key,
+      turnIndex: 0,
+      sourceIndex: -1,
+      estimatedHeight: Math.max(72, Math.trunc(options.queuedEstimatedHeight ?? 128)),
     });
   }
   return {items};

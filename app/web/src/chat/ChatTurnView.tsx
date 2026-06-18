@@ -311,6 +311,8 @@ export type ChatTurnViewProps = {
   onSelectConfirmationReply?: (replyText: string) => void;
   onRetryPendingPrompt?: () => void;
   onEditPendingPrompt?: () => void;
+  onCancelQueuedPrompt?: () => void;
+  onPrioritizeQueuedPrompt?: () => void;
   onOpenPromptAttachment?: (block: RegistrySessionContentBlock, message: RegistryChatMessage) => void;
   resolvePromptAttachmentThumbnail?: (block: RegistrySessionContentBlock, message: RegistryChatMessage) => string;
   onLoadPromptAttachmentThumbnail?: (block: RegistrySessionContentBlock, message: RegistryChatMessage) => void;
@@ -397,6 +399,8 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   onSelectConfirmationReply,
   onRetryPendingPrompt,
   onEditPendingPrompt,
+  onCancelQueuedPrompt,
+  onPrioritizeQueuedPrompt,
   onOpenPromptAttachment,
   resolvePromptAttachmentThumbnail,
   onLoadPromptAttachmentThumbnail,
@@ -436,6 +440,11 @@ export const ChatTurnView = React.memo(function ChatTurnView({
                 <span className="codicon codicon-sync" aria-hidden="true" />
               </span>
             ) : null}
+            {promptStatus === 'queued' ? (
+              <span className="chat-prompt-status chat-prompt-status-queued" title="Queued">
+                Queued
+              </span>
+            ) : null}
           </div>
         ) : null}
         {imageBlocks.length > 0 ? (
@@ -473,6 +482,16 @@ export const ChatTurnView = React.memo(function ChatTurnView({
             </button>
             <button type="button" onClick={() => onEditPendingPrompt?.()}>
               Edit
+            </button>
+          </div>
+        ) : null}
+        {promptStatus === 'queued' ? (
+          <div className="chat-prompt-queue-actions">
+            <button type="button" className="chat-prompt-queue-action" onClick={onPrioritizeQueuedPrompt}>
+              Send next
+            </button>
+            <button type="button" className="chat-prompt-queue-action danger" onClick={onCancelQueuedPrompt}>
+              Cancel
             </button>
           </div>
         ) : null}

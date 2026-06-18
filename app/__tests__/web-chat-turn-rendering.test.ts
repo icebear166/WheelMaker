@@ -23,6 +23,14 @@ function readChatTurnView(): string {
   );
 }
 
+function readDisplayIndex(): string {
+  const projectRoot = path.join(__dirname, '..');
+  return fs.readFileSync(
+    path.join(projectRoot, 'web', 'src', 'chat', 'turns', 'chatDisplayIndex.ts'),
+    'utf8',
+  );
+}
+
 function readStyles(): string {
   const projectRoot = path.join(__dirname, '..');
   return readWebStyles(projectRoot);
@@ -126,6 +134,24 @@ describe('web chat turn rendering', () => {
     const sendIndex = main.indexOf('const result = await service.sendProjectSessionMessage(selectedProjectId, {');
     expect(pendingIndex).toBeGreaterThanOrEqual(0);
     expect(sendIndex).toBeGreaterThan(pendingIndex);
+  });
+
+  test('renders queued prompts in the chat stream with queue actions', () => {
+    const chatTurn = readChatTurnView();
+    const displayIndex = readDisplayIndex();
+    const styles = readStyles();
+
+    expect(displayIndex).toContain("kind: 'turn' | 'pending' | 'queued';");
+    expect(displayIndex).toContain('queuedKeys?: string[];');
+    expect(displayIndex).toContain("kind: 'queued'");
+    expect(chatTurn).toContain("'queued'");
+    expect(chatTurn).toContain('onCancelQueuedPrompt?: () => void;');
+    expect(chatTurn).toContain('onPrioritizeQueuedPrompt?: () => void;');
+    expect(chatTurn).toContain('chat-prompt-status-queued');
+    expect(chatTurn).toContain('Queued');
+    expect(chatTurn).toContain('Send next');
+    expect(styles).toContain('.chat-prompt-status-queued');
+    expect(styles).toContain('.chat-prompt-queue-actions');
   });
 
   test('renders persisted prompt attachments as user-visible chips', () => {

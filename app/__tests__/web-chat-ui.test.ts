@@ -2232,7 +2232,7 @@ describe('web chat integration', () => {
     expect(stylesCss).toMatch(/\.chat-composer-stop-trigger \{[\s\S]*color: #f85149;[\s\S]*opacity: 1;/);
   });
 
-  test('keeps running chat editable while blocking another send for that chat', () => {
+  test('keeps running chat editable and queues another send for that chat', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const sendStart = mainTsx.indexOf('const sendChatMessage = async');
@@ -2241,14 +2241,20 @@ describe('web chat integration', () => {
 
     expect(mainTsx).toContain('const [chatSubmittingByKey, setChatSubmittingByKey] = useState<Record<string, boolean>>({});');
     expect(mainTsx).toContain('const chatSubmittingByKeyRef = useRef<Record<string, boolean>>({});');
+    expect(mainTsx).toContain('const [chatQueuedPromptsByKey, setChatQueuedPromptsByKey] = useState<QueuedChatPromptsByKey>({});');
+    expect(mainTsx).toContain('const chatQueuedPromptsByKeyRef = useRef<QueuedChatPromptsByKey>({});');
     expect(mainTsx).toContain('const selectedChatSubmitPending = selectedChatEncodedKey');
-    expect(mainTsx).toContain('const chatSendDisabled = selectedChatSubmitPending || chatAttachmentUploadPending || selectedChatPromptRunning;');
+    expect(mainTsx).toContain('const chatSendDisabled = selectedChatSubmitPending || chatAttachmentUploadPending;');
+    expect(mainTsx).toContain('enqueueSelectedChatPrompt(');
+    expect(mainTsx).toContain('drainNextQueuedChatPrompt(selectedChatEncodedKey)');
+    expect(mainTsx).toContain('cancelQueuedPrompt(selectedChatEncodedKey, queuedPrompt.id)');
+    expect(mainTsx).toContain('prioritizeQueuedPrompt(selectedChatEncodedKey, queuedPrompt.id)');
     expect(mainTsx).toContain('readOnly={selectedChatSubmitPending}');
     expect(mainTsx).toContain('disabled={chatSendDisabled}');
     expect(mainTsx).toContain('if (chatSendDisabled) {');
     expect(sendStart).toBeGreaterThanOrEqual(0);
     expect(sendEnd).toBeGreaterThan(sendStart);
-    expect(sendBlock).toContain('if (selectedChatPromptRunning) {');
+    expect(sendBlock).not.toContain('if (selectedChatPromptRunning) {\n      return;\n    }');
     expect(sendBlock).toContain('setChatSubmittingForRuntimeKey(submittingRuntimeKey, true);');
     expect(sendBlock).toContain('setChatSubmittingForRuntimeKey(submittingRuntimeKey, false);');
     expect(mainTsx).not.toContain('readOnly={chatSending}');

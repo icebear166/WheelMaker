@@ -72,6 +72,16 @@ import {
   type ChatSessionKey,
 } from '../chat/session/chatSessionKey';
 import {
+  buildQueuedPromptMessage,
+  cancelQueuedChatPrompt,
+  enqueueChatPrompt,
+  moveQueuedChatPromptToFront,
+  moveQueuedChatPrompts,
+  shiftNextQueuedChatPrompt,
+  type QueuedChatPrompt,
+  type QueuedChatPromptsByKey,
+} from '../chat/session/chatPromptQueue';
+import {
   buildMobileChatQuickSwitchSections,
   hasCompletedUnreadChatSession,
 } from '../chat/mobileChatQuickSwitch';
@@ -3147,6 +3157,7 @@ export function App() {
   const [chatComposerDragActive, setChatComposerDragActive] = useState(false);
   const [chatComposerDrafts, setChatComposerDrafts] = useState<Record<string, ChatComposerDraft>>({});
   const [chatPendingPromptsByKey, setChatPendingPromptsByKey] = useState<Record<string, PendingChatPrompt>>({});
+  const [chatQueuedPromptsByKey, setChatQueuedPromptsByKey] = useState<QueuedChatPromptsByKey>({});
   const [chatCancellingRuntimeKey, setChatCancellingRuntimeKey] = useState('');
   const [markdownImageExportRequest, setMarkdownImageExportRequest] = useState<MarkdownImageExportRequest | null>(null);
   const [exportingMarkdownImageTurnIndex, setExportingMarkdownImageTurnIndex] = useState<number | null>(null);
@@ -3157,6 +3168,7 @@ export function App() {
   const chatAttachmentsRef = useRef<ChatAttachment[]>([]);
   const chatComposerDraftsRef = useRef<Record<string, ChatComposerDraft>>({});
   const chatPendingPromptsByKeyRef = useRef<Record<string, PendingChatPrompt>>({});
+  const chatQueuedPromptsByKeyRef = useRef<QueuedChatPromptsByKey>({});
   const chatSubmittingByKeyRef = useRef<Record<string, boolean>>({});
   const chatPendingPromptTimersRef = useRef<Record<string, number>>({});
   const chatDraftGenerationRef = useRef<Record<string, number>>({});
@@ -3315,6 +3327,13 @@ export function App() {
   const selectedPendingPrompt = selectedChatEncodedKey
     ? chatPendingPromptsByKey[selectedChatEncodedKey]
     : undefined;
+  const selectedQueuedPrompts = useMemo(
+    () => selectedChatEncodedKey
+      ? chatQueuedPromptsByKey[selectedChatEncodedKey] ?? []
+      : [],
+    [chatQueuedPromptsByKey, selectedChatEncodedKey],
+  );
+  const queuedPromptTurnIndex = (index: number) => nextPromptTurnIndex(selectedFullChatMessages) + index + 1;
   const selectedChatSubmitPending = selectedChatEncodedKey
     ? chatSubmittingByKey[selectedChatEncodedKey] === true
     : false;
@@ -3335,6 +3354,8 @@ export function App() {
       ? `${selectedChatEncodedKey}:pending:${selectedPendingPrompt.createdAt}`
       : undefined,
     pendingEstimatedHeight: 120,
+    queuedKeys: selectedQueuedPrompts.map(prompt => `${selectedChatEncodedKey}:queued:${prompt.id}`),
+    queuedEstimatedHeight: 128,
   }), [
     chatMessages,
     chatLayoutMetrics,
@@ -3342,6 +3363,7 @@ export function App() {
     selectedChatEncodedKey,
     selectedFullChatMessages,
     selectedPendingPrompt,
+    selectedQueuedPrompts,
   ]);
   const archivedChatDisplayIndex = useMemo(() => buildChatDisplayIndex(archivedPreview?.messages ?? [], {
     hideToolCalls,
@@ -3545,6 +3567,7 @@ export function App() {
       chatFinishedCursorRef.current[toRuntimeKey] = chatFinishedCursorRef.current[fromRuntimeKey];
     }
     movePendingChatPrompt(fromRuntimeKey, toRuntimeKey, sessionId);
+    setQueuedPrompts(current => moveQueuedChatPrompts(current, fromRuntimeKey, toRuntimeKey, sessionId));
   };
 
   const moveChatComposerDraft = (fromDraftKey: string, toDraftKey: string) => {
@@ -9585,6 +9608,28 @@ export function App() {
     setChatSubmittingByKey(next);
   };
 
+  const makeQueuedPromptId = () => `queued-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const setQueuedPrompts = (updater: (current: QueuedChatPromptsByKey) => QueuedChatPromptsByKey) => {
+    setChatQueuedPromptsByKey(current => {
+      const next = updater(current);
+      chatQueuedPromptsByKeyRef.current = next;
+      return next;
+    });
+  };
+
+  const enqueueSelectedChatPrompt = (runtimeKey: string, prompt: QueuedChatPrompt) => {
+    setQueuedPrompts(current => enqueueChatPrompt(current, runtimeKey, prompt));
+  };
+
+  const cancelQueuedPrompt = (runtimeKey: string, promptId: string) => {
+    setQueuedPrompts(current => cancelQueuedChatPrompt(current, runtimeKey, promptId));
+  };
+
+  const prioritizeQueuedPrompt = (runtimeKey: string, promptId: string) => {
+    setQueuedPrompts(current => moveQueuedChatPromptToFront(current, runtimeKey, promptId));
+  };
+
   const clearPendingChatPromptTimer = (runtimeKey: string) => {
     const timerId = chatPendingPromptTimersRef.current[runtimeKey];
     if (timerId !== undefined) {
@@ -10220,9 +10265,6 @@ export function App() {
     if (chatSubmittingByKeyRef.current[runtimeKey] === true) {
       return;
     }
-    if (selectedChatPromptRunning) {
-      return;
-    }
     let draftKey = currentChatDraftKeyRef.current;
     let draftGeneration = getChatDraftGeneration(draftKey);
     let sentFromKey = selectedKey;
@@ -10260,6 +10302,22 @@ export function App() {
       }
       if (blocks.length === 0) {
         setChatSubmittingForRuntimeKey(submittingRuntimeKey, false);
+        return;
+      }
+      if (selectedChatPromptRunning) {
+        const queuedPrompt: QueuedChatPrompt = {
+          id: makeQueuedPromptId(),
+          sessionId,
+          blocks: blocks.map(block => ({...block})),
+          createdAt: new Date().toISOString(),
+          text: trimmedText || msgText('prompt_request', {contentBlocks: blocks}).trim(),
+        };
+        enqueueSelectedChatPrompt(runtimeKey, queuedPrompt);
+        if (!options.preserveComposer) {
+          resetChatComposerDraft(draftKey);
+        }
+        setChatSubmittingForRuntimeKey(submittingRuntimeKey, false);
+        forceChatScrollToBottom();
         return;
       }
       const firstAttachmentName = uploadedAttachments[0]?.name || '';
@@ -10325,6 +10383,22 @@ export function App() {
       attachmentsOverride: [],
       preserveComposer: true,
     });
+  };
+
+  const drainNextQueuedChatPrompt = (runtimeKey: string) => {
+    const selectedKey = selectedChatKeyRef.current;
+    if (!selectedKey) return;
+    if (buildChatRuntimeKey(selectedKey.projectId, selectedKey.sessionId) !== runtimeKey) return;
+    if (chatSubmittingByKeyRef.current[runtimeKey] === true) return;
+    const result = shiftNextQueuedChatPrompt(chatQueuedPromptsByKeyRef.current, runtimeKey);
+    if (!result.prompt) return;
+    setQueuedPrompts(() => result.state);
+    sendChatMessage({
+      textOverride: result.prompt.text,
+      blocksOverride: result.prompt.blocks,
+      attachmentsOverride: [],
+      preserveComposer: true,
+    }).catch(err => setError(err instanceof Error ? err.message : String(err)));
   };
 
   const stopVoiceCapture = (options: {flush?: boolean} = {}) => {
@@ -16590,7 +16664,7 @@ export function App() {
       selectedChatSession?.running === true ||
       selectedChatHasOpenPromptTurn
     );
-  const chatSendDisabled = selectedChatSubmitPending || chatAttachmentUploadPending || selectedChatPromptRunning;
+  const chatSendDisabled = selectedChatSubmitPending || chatAttachmentUploadPending;
   const selectedChatPromptCancelling =
     !!selectedChatEncodedKey && chatCancellingRuntimeKey === selectedChatEncodedKey;
   const chatComposerStopTriggerClassName = `chat-tool-button chat-composer-stop-trigger${selectedChatPromptRunning ? ' active' : ''}${selectedChatPromptCancelling ? ' cancelling' : ''}`;
@@ -16600,6 +16674,16 @@ export function App() {
       setChatAttachmentTrayOpen(false);
     }
   }, [selectedChatPromptRunning]);
+
+  useEffect(() => {
+    if (!selectedChatEncodedKey || selectedChatPromptRunning || selectedChatSubmitPending) {
+      return;
+    }
+    if ((chatQueuedPromptsByKeyRef.current[selectedChatEncodedKey] ?? []).length === 0) {
+      return;
+    }
+    drainNextQueuedChatPrompt(selectedChatEncodedKey);
+  }, [selectedChatEncodedKey, selectedChatPromptRunning, selectedChatSubmitPending, chatMessages.length, chatQueuedPromptsByKey]);
 
   const latestSelectableAssistantReply = (() => {
     if (selectedPendingPrompt) {
@@ -16754,7 +16838,26 @@ export function App() {
     const sourceMessage = displayItem.kind === 'turn'
       ? sourceMessages[displayItem.sourceIndex]
       : undefined;
-    const content = displayItem.kind === 'pending' && selectedPendingPrompt && !chatReadOnlyPreview ? (
+    const queuedPromptIndex = displayItem.kind === 'queued'
+      ? selectedQueuedPrompts.findIndex(queuedPrompt => `${selectedChatEncodedKey}:queued:${queuedPrompt.id}` === displayItem.key)
+      : -1;
+    const queuedPrompt = queuedPromptIndex >= 0 ? selectedQueuedPrompts[queuedPromptIndex] : null;
+    const content = displayItem.kind === 'queued' && queuedPrompt && !chatReadOnlyPreview ? (
+      <div className="chat-view-content">
+        <ChatTurnView
+          message={buildQueuedPromptMessage(queuedPrompt, queuedPromptTurnIndex(queuedPromptIndex))}
+          promptStatus="queued"
+          hideToolCalls={hideToolCalls}
+          markdownComponents={chatMarkdownComponents}
+          markdownUrlTransform={chatMarkdownUrlTransform}
+          onCancelQueuedPrompt={() => cancelQueuedPrompt(selectedChatEncodedKey, queuedPrompt.id)}
+          onPrioritizeQueuedPrompt={() => prioritizeQueuedPrompt(selectedChatEncodedKey, queuedPrompt.id)}
+          onOpenPromptAttachment={openChatAttachmentPreview}
+          resolvePromptAttachmentThumbnail={resolvePromptAttachmentThumbnail}
+          onLoadPromptAttachmentThumbnail={loadPromptAttachmentThumbnail}
+        />
+      </div>
+    ) : displayItem.kind === 'pending' && selectedPendingPrompt && !chatReadOnlyPreview ? (
       <div className="chat-view-content">
         <ChatTurnView
           message={buildPendingPromptMessage(selectedPendingPrompt)}

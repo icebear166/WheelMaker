@@ -1,6 +1,6 @@
 import type { RegistryChatMessage } from '../../registry/registryTypes';
 
-export type ChatPromptStatus = 'confirming' | 'responding' | 'undelivered' | null;
+export type ChatPromptStatus = 'confirming' | 'responding' | 'undelivered' | 'queued' | null;
 
 export type ChatPromptDoneStatus = {
   kind: 'cancelled' | 'interrupted' | 'failed';

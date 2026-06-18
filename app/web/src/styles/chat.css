@@ -2404,6 +2404,18 @@
   font-size: 12px;
 }
 
+.chat-prompt-status-queued {
+  width: auto;
+  height: 18px;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: color-mix(in srgb, var(--accent) 82%, var(--text));
+  font-size: 11px;
+  line-height: 16px;
+  padding: 0 7px;
+}
+
 .chat-prompt-status-dots {
   display: inline-flex;
   gap: 1px;
@@ -2474,6 +2486,34 @@
 .chat-prompt-delivery-line button:hover {
   border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
   background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.chat-prompt-queue-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.chat-prompt-queue-action {
+  min-height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0 10px;
+}
+
+.chat-prompt-queue-action:hover {
+  border-color: color-mix(in srgb, var(--accent) 44%, var(--border));
+  color: var(--text);
+}
+
+.chat-prompt-queue-action.danger:hover {
+  border-color: color-mix(in srgb, #f85149 50%, var(--border));
+  color: #f85149;
 }
 
 .chat-tool-stack {
