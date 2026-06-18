@@ -363,7 +363,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid color-mix(in srgb, var(--accent) 54%, transparent);
+  border: 0;
   border-radius: 6px;
   padding: 0;
   background: transparent;
@@ -378,7 +378,6 @@
 
 .chat-preview-toggle.active {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 72%, transparent);
   color: color-mix(in srgb, var(--accent) 96%, var(--text));
 }
 
