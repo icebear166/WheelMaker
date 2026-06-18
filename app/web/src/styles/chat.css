@@ -348,6 +348,90 @@
   min-width: 0;
 }
 
+.chat-breadcrumb-title {
+  position: relative;
+}
+
+.chat-title-prompt-button {
+  appearance: none;
+  flex: 1 1 auto;
+  border: 0;
+  border-radius: 6px;
+  padding: 2px 5px;
+  background: transparent;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-title-prompt-button:hover,
+.chat-title-prompt-button.open {
+  background: color-mix(in srgb, var(--accent) 11%, transparent);
+  color: color-mix(in srgb, var(--accent) 86%, var(--text));
+}
+
+.chat-title-prompt-button:disabled {
+  cursor: default;
+}
+
+.chat-title-prompt-button:disabled:hover {
+  background: transparent;
+  color: var(--muted);
+}
+
+.chat-title-prompt-menu {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 7px);
+  z-index: 40;
+  width: min(430px, calc(100vw - 28px));
+  max-height: min(360px, calc(100vh - 96px));
+  overflow-y: auto;
+  padding: 5px;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 94%, var(--panel-2));
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+}
+
+.chat-title-prompt-menu-item {
+  width: 100%;
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  border: 0;
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-title-prompt-menu-item:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.chat-title-prompt-menu-label {
+  color: color-mix(in srgb, var(--accent) 82%, var(--text));
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.chat-title-prompt-menu-preview {
+  min-width: 0;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--text) 82%, var(--muted));
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .chat-title-actions {
   flex: 0 0 auto;
   display: inline-flex;

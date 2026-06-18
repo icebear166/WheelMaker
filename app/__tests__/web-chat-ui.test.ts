@@ -760,7 +760,8 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('onChange={e => setUseLatestPromptTitle(e.target.checked)}');
     expect(mainTsx).not.toContain('Use Latest Prompt Title');
     expect(mainTsx).not.toContain('className="chat-title-option"');
-    expect(mainTsx).toContain('renderBreadcrumbTitle(activeChatBreadcrumbProjectName, activeChatBreadcrumbLabel)');
+    expect(mainTsx).toContain('const renderChatBreadcrumbTitle = () => (');
+    expect(mainTsx).toContain('className="breadcrumb-title chat-breadcrumb-title"');
     expect(mainTsx).toContain('renderBreadcrumbTitle(breadcrumbProjectName, fileBreadcrumbLabel)');
     expect(mainTsx).toContain('renderBreadcrumbTitle(breadcrumbProjectName, gitBreadcrumbLabel)');
   });
@@ -2009,7 +2010,19 @@ describe('web chat integration', () => {
     const chatSurface = mainTsx.slice(chatSurfaceStart, chatSurfaceEnd);
 
     expect(chatSurface).toContain('className="block-title chat-title-bar"');
-    expect(chatSurface).toContain('renderBreadcrumbTitle(activeChatBreadcrumbProjectName, activeChatBreadcrumbLabel)');
+    expect(chatSurface).toContain('{renderChatBreadcrumbTitle()}');
+    expect(chatSurface).not.toContain('className="breadcrumb-separator"');
+    expect(mainTsx).toContain('const selectedChatPromptHistory = useMemo(');
+    expect(mainTsx).toContain('.filter(message => isPromptStartMessage(message))');
+    expect(mainTsx).toContain('summarizeChatTitlePrompt(msgText(message.method, message.param), fallback)');
+    expect(mainTsx).toContain('const jumpToChatPromptTurn = useCallback((turnIndex: number) => {');
+    expect(mainTsx).toContain("chatVirtuosoListRef.current?.scrollToTurnIndex(turnIndex, 'smooth');");
+    expect(mainTsx).toContain('setChatTitlePromptMenuOpen(false);');
+    expect(mainTsx).toContain('className={`title-text breadcrumb-current chat-title-prompt-button${chatTitlePromptMenuOpen ? \' open\' : \'\'}`}');
+    expect(mainTsx).toContain('aria-haspopup="menu"');
+    expect(mainTsx).toContain('aria-expanded={chatTitlePromptMenuOpen}');
+    expect(mainTsx).toContain('className="chat-title-prompt-menu"');
+    expect(mainTsx).toContain('className="chat-title-prompt-menu-item"');
     expect(chatSurface).not.toContain('CHAT - ${selectedChatDisplayTitle || \'New Session\'}');
     expect(chatSurface).toContain('className="chat-title-actions"');
     expect(chatSurface).toContain('className={`chat-preview-toggle${chatPreviewOpen ? \' active\' : \'\'}`}');
@@ -2022,7 +2035,18 @@ describe('web chat integration', () => {
 
     expect(stylesCss).toContain('.chat-title-bar {');
     expect(stylesCss).toContain('.chat-title-actions {');
+    expect(stylesCss).toContain('.chat-breadcrumb-title {');
+    expect(stylesCss).toContain('.chat-title-prompt-button {');
+    expect(stylesCss).toContain('.chat-title-prompt-menu {');
+    expect(stylesCss).toContain('.chat-title-prompt-menu-item {');
     expect(stylesCss).toContain('.chat-preview-toggle {');
+    const promptButtonBlock = cssRuleBlock(stylesCss, '.chat-title-prompt-button');
+    expect(promptButtonBlock).toContain('border: 0;');
+    expect(promptButtonBlock).toContain('background: transparent;');
+    expect(promptButtonBlock).toContain('text-align: left;');
+    const promptMenuBlock = cssRuleBlock(stylesCss, '.chat-title-prompt-menu');
+    expect(promptMenuBlock).toContain('position: absolute;');
+    expect(promptMenuBlock).toContain('overflow-y: auto;');
     const previewToggleBlock = cssRuleBlock(stylesCss, '.chat-preview-toggle');
     expect(previewToggleBlock).toContain('border: 0;');
     expect(previewToggleBlock).toContain('background: transparent;');

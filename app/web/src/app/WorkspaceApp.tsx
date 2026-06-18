@@ -1431,6 +1431,14 @@ function msgText(method: string, param: Record<string, unknown>): string {
   return extractTextFromSessionTurnParam(param);
 }
 
+function summarizeChatTitlePrompt(text: string, fallback: string): string {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (!normalized) {
+    return fallback;
+  }
+  return normalized.length > 96 ? `${normalized.slice(0, 95)}...` : normalized;
+}
+
 function msgBlocks(
   method: string,
   param: Record<string, unknown>,
@@ -3190,6 +3198,8 @@ export function App() {
   const [chatHubMenuOpen, setChatHubMenuOpen] = useState(false);
   const [chatHubColorMenuHubId, setChatHubColorMenuHubId] = useState('');
   const chatHubMenuRef = useRef<HTMLDivElement | null>(null);
+  const [chatTitlePromptMenuOpen, setChatTitlePromptMenuOpen] = useState(false);
+  const chatTitlePromptMenuRef = useRef<HTMLDivElement | null>(null);
   const [chatQuickSwitchMenuOpen, setChatQuickSwitchMenuOpen] = useState(false);
   const [chatQuickSwitchMenuPlacement, setChatQuickSwitchMenuPlacement] = useState<ChatQuickSwitchMenuPlacement>({kind: 'mobile'});
   const [chatQuickSwitchCreateProjectId, setChatQuickSwitchCreateProjectId] = useState('');
@@ -3263,6 +3273,24 @@ export function App() {
     selectedChatEncodedKey
       ? chatMessageStoreRef.current[selectedChatEncodedKey] ?? []
       : [];
+  const selectedChatPromptHistory = useMemo(
+    () =>
+      [...selectedFullChatMessages]
+        .filter(message => isPromptStartMessage(message))
+        .sort((left, right) => (left.turnIndex ?? 0) - (right.turnIndex ?? 0))
+        .map((message, index) => {
+          const turnIndex = Math.max(0, Math.trunc(message.turnIndex ?? 0));
+          const fallback = `Prompt ${index + 1}`;
+          return {
+            key: `${message.sessionId}:${turnIndex}:${message.method}`,
+            label: fallback,
+            preview: summarizeChatTitlePrompt(msgText(message.method, message.param), fallback),
+            turnIndex,
+          };
+        })
+        .filter(item => item.turnIndex > 0),
+    [selectedFullChatMessages],
+  );
 
   const selectedPendingPrompt = selectedChatEncodedKey
     ? chatPendingPromptsByKey[selectedChatEncodedKey]
@@ -5529,6 +5557,28 @@ export function App() {
   }, [chatPromptMenuOpen]);
 
   useEffect(() => {
+    if (!chatTitlePromptMenuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (target && chatTitlePromptMenuRef.current?.contains(target)) {
+        return;
+      }
+      setChatTitlePromptMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setChatTitlePromptMenuOpen(false);
+      }
+    };
+    window.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [chatTitlePromptMenuOpen]);
+
+  useEffect(() => {
     if (!chatFileMentionMenuOpen) return;
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null;
@@ -5936,6 +5986,7 @@ export function App() {
     setChatConfigOverflowOpen(false);
     setChatHubMenuOpen(false);
     setChatHubColorMenuHubId('');
+    setChatTitlePromptMenuOpen(false);
   }, [setChatConfigOverflowOpen]);
   const handleMobileBreadcrumbProjectClick = useCallback(() => {
     closeMobileDrawerCompanionOverlays();
@@ -13388,6 +13439,28 @@ export function App() {
     }, 2000);
   };
 
+  const jumpToChatPromptTurn = useCallback((turnIndex: number) => {
+    if (!selectedChatEncodedKey || turnIndex <= 0) {
+      return;
+    }
+    setChatTitlePromptMenuOpen(false);
+    const generation = Date.now();
+    setSessionSearchTargetTurn({
+      runtimeKey: selectedChatEncodedKey,
+      turnIndex,
+      generation,
+    });
+    chatVirtuosoListRef.current?.scrollToTurnIndex(turnIndex, 'smooth');
+    if (sessionSearchHighlightTimerRef.current !== null) {
+      window.clearTimeout(sessionSearchHighlightTimerRef.current);
+    }
+    sessionSearchHighlightTimerRef.current = window.setTimeout(() => {
+      setSessionSearchTargetTurn(current =>
+        current?.generation === generation ? null : current,
+      );
+    }, 2000);
+  }, [selectedChatEncodedKey]);
+
   const renderSessionSearchHighlightedTitle = (
     title: string,
     row: SessionSearchSectionRow,
@@ -16841,13 +16914,67 @@ export function App() {
     const activeChatBreadcrumbLabel = chatReadOnlyPreview
       ? `Archived - ${activeChatDisplayTitle || 'Session'}`
       : chatBreadcrumbLabel;
+    const activeChatPromptHistory = chatReadOnlyPreview ? [] : selectedChatPromptHistory;
+    const chatTitlePromptMenuAvailable = activeChatPromptHistory.length > 0;
+    const renderChatBreadcrumbTitle = () => (
+      <div ref={chatTitlePromptMenuRef} className="breadcrumb-title chat-breadcrumb-title">
+        <button
+          type="button"
+          className="breadcrumb-project-button breadcrumb-project-name"
+          onClick={handleMobileBreadcrumbProjectClick}
+          title="Toggle workspace drawer"
+          aria-label="Toggle workspace drawer"
+        >
+          {activeChatBreadcrumbProjectName}
+        </button>
+        <button
+          type="button"
+          className={`title-text breadcrumb-current chat-title-prompt-button${chatTitlePromptMenuOpen ? ' open' : ''}`}
+          title={chatTitlePromptMenuAvailable ? 'Show prompt history' : activeChatBreadcrumbLabel}
+          aria-label="Show prompt history"
+          aria-haspopup="menu"
+          aria-expanded={chatTitlePromptMenuOpen}
+          disabled={!chatTitlePromptMenuAvailable}
+          onClick={() => {
+            if (!chatTitlePromptMenuAvailable) return;
+            setChatPromptMenuOpen(false);
+            setChatFileMentionMenuOpen(false);
+            setChatAttachmentTrayOpen(false);
+            setChatConfigMenuOptionId('');
+            setChatConfigOverflowOpen(false);
+            setChatHubMenuOpen(false);
+            setChatQuickSwitchMenuOpen(false);
+            setChatTitlePromptMenuOpen(open => !open);
+          }}
+        >
+          {activeChatBreadcrumbLabel}
+        </button>
+        {chatTitlePromptMenuOpen && chatTitlePromptMenuAvailable ? (
+          <div className="chat-title-prompt-menu" role="menu" aria-label="Prompt history">
+            {activeChatPromptHistory.map(item => (
+              <button
+                key={item.key}
+                type="button"
+                className="chat-title-prompt-menu-item"
+                role="menuitem"
+                title={item.preview}
+                onClick={() => jumpToChatPromptTurn(item.turnIndex)}
+              >
+                <span className="chat-title-prompt-menu-label">{item.label}</span>
+                <span className="chat-title-prompt-menu-preview">{item.preview}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
 
     if (tab === 'chat') {
       return (
         <ChatSurface>
           <div className="block-title chat-title-bar">
             <div className="chat-title-context">
-              {renderBreadcrumbTitle(activeChatBreadcrumbProjectName, activeChatBreadcrumbLabel)}
+              {renderChatBreadcrumbTitle()}
             </div>
             <div className="chat-title-actions">
               <button
