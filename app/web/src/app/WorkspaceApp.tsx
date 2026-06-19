@@ -7373,7 +7373,7 @@ export function App() {
     closeChatPortRelayPreview();
   }, [closeChatAttachmentPreview, closeChatFilePeek, closeChatPortRelayPreview, closeChatPromptArtifactPreview]);
   const handleAndroidNativeBack = useCallback(() => {
-    if (!isWide && (chatFilePeekRef.current || chatAttachmentPreviewRef.current || chatPromptArtifactPreviewRef.current || chatPortRelayPreviewOpen)) {
+    if (!isWide && chatPreviewOpen) {
       chatFilePeekHistoryActiveRef.current = false;
       closeChatPreview();
       return true;
@@ -7389,7 +7389,7 @@ export function App() {
       setSidebarSettingsOpen(false);
     }
     return true;
-  }, [chatPortRelayPreviewOpen, closeChatPreview, isWide, setSidebarSettingsOpen]);
+  }, [chatPreviewOpen, closeChatPreview, isWide, setSidebarSettingsOpen]);
   useEffect(() => {
     window.WheelMakerAndroidBack = {
       handleBack: handleAndroidNativeBack,

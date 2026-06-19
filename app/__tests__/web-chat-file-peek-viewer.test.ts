@@ -94,6 +94,20 @@ describe('web chat file peek viewer', () => {
     expect(stylesCss).toContain('.chat-empty-preview-copy {');
   });
 
+  test('mobile native back closes manually opened empty chat preview', () => {
+    const mainTsx = readSourceText(mainPath);
+    const backStart = mainTsx.indexOf('const handleAndroidNativeBack = useCallback(() => {');
+    expect(backStart).toBeGreaterThanOrEqual(0);
+    const backEnd = mainTsx.indexOf('useEffect(() => {\n    window.WheelMakerAndroidBack = {', backStart);
+    expect(backEnd).toBeGreaterThan(backStart);
+    const backBody = mainTsx.slice(backStart, backEnd);
+
+    expect(backBody).toContain('if (!isWide && chatPreviewOpen) {');
+    expect(backBody).toContain('closeChatPreview();');
+    expect(backBody).toContain('return true;');
+    expect(backBody).not.toContain('chatFilePeekRef.current || chatAttachmentPreviewRef.current || chatPromptArtifactPreviewRef.current || chatPortRelayPreviewOpen');
+  });
+
   test('chat preview code and diff panes force line numbers and no wrapping', () => {
     const mainTsx = readSourceText(mainPath);
 
