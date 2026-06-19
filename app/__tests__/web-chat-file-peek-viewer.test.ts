@@ -136,8 +136,14 @@ describe('web chat file peek viewer', () => {
 
   test('prompt diff preview CSS supports collapsible file rows', () => {
     const stylesCss = readWebStyles(projectRoot);
+    const preview = cssRuleBlock(stylesCss, '.chat-prompt-diff-preview');
+    const scroll = cssRuleBlock(stylesCss, '.chat-prompt-diff-surface .chat-file-peek-scroll');
+    const overview = cssRuleBlock(stylesCss, '.chat-prompt-diff-overview');
 
     expect(stylesCss).toContain('.chat-prompt-diff-preview {');
+    expect(preview).toContain('padding: 8px 0;');
+    expect(scroll).toContain('scrollbar-gutter: auto;');
+    expect(overview).toContain('padding: 0 8px;');
     expect(stylesCss).toContain('.chat-prompt-diff-file-header {');
     expect(stylesCss).toContain('.chat-prompt-diff-file-body {');
     expect(stylesCss).toContain('.chat-prompt-diff-file-counts .additions');

@@ -186,8 +186,12 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 8px;
+  padding: 8px 0;
   background: var(--panel-3);
+}
+
+.chat-prompt-diff-surface .chat-file-peek-scroll {
+  scrollbar-gutter: auto;
 }
 
 .chat-prompt-diff-overview {
@@ -195,6 +199,7 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  padding: 0 8px;
   color: var(--muted);
   font-size: 12px;
 }
