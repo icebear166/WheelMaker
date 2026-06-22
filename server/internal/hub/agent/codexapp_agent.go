@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -15,6 +16,8 @@ import (
 
 	"github.com/swm8023/wheelmaker/internal/protocol"
 )
+
+var codexappANSIEscapePattern = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]`)
 
 // codexAppProvider launches the native Codex app-server ACP bridge.
 type codexAppProvider struct {
@@ -865,11 +868,12 @@ func (c *codexappConn) handleAppServerNotification(method string, params json.Ra
 				kind = protocol.ToolKindWrite
 			}
 			toolCallID := firstNonEmptyString(p.ItemID, p.TurnID)
-			c.emitToolCallStart(p.ThreadID, p.TurnID, toolCallID, toolCallID, kind)
+			title := codexappToolFallbackTitle(kind)
+			c.emitToolCallStart(p.ThreadID, p.TurnID, toolCallID, title, kind)
 			c.emitTurnUpdate(p.ThreadID, p.TurnID, protocol.SessionUpdate{
 				SessionUpdate:   protocol.SessionUpdateToolCallUpdate,
 				ToolCallID:      toolCallID,
-				Title:           firstNonEmptyString(p.ItemID, "tool"),
+				Title:           title,
 				Kind:            kind,
 				Status:          protocol.ToolCallStatusInProgress,
 				ToolCallContent: []protocol.ToolCallContent{textToolCallContent(p.Delta)},
@@ -878,11 +882,12 @@ func (c *codexappConn) handleAppServerNotification(method string, params json.Ra
 	case "item/fileChange/patchUpdated":
 		var p appServerFileChangePatchUpdatedParams
 		if json.Unmarshal(params, &p) == nil && p.ThreadID != "" && p.ItemID != "" {
-			c.emitToolCallStart(p.ThreadID, p.TurnID, p.ItemID, "File change", protocol.ToolKindWrite)
+			title := codexappFileChangesTitle("", p.Changes)
+			c.emitToolCallStart(p.ThreadID, p.TurnID, p.ItemID, title, protocol.ToolKindWrite)
 			c.emitTurnUpdate(p.ThreadID, p.TurnID, protocol.SessionUpdate{
 				SessionUpdate:   protocol.SessionUpdateToolCallUpdate,
 				ToolCallID:      p.ItemID,
-				Title:           "File change",
+				Title:           title,
 				Kind:            protocol.ToolKindWrite,
 				Status:          protocol.ToolCallStatusInProgress,
 				ToolCallContent: codexappFileChangeContents(p.Changes),
@@ -966,7 +971,7 @@ func (c *codexappConn) emitToolCallStart(threadID string, turnID string, toolCal
 	c.emitTurnUpdate(threadID, turnID, protocol.SessionUpdate{
 		SessionUpdate: protocol.SessionUpdateToolCall,
 		ToolCallID:    toolCallID,
-		Title:         firstNonEmptyString(title, toolCallID),
+		Title:         codexappSafeToolTitle(title, kind),
 		Kind:          kind,
 		Status:        protocol.ToolCallStatusPending,
 	})
@@ -1056,23 +1061,192 @@ func codexappToolStatus(status string, completed bool) string {
 func codexappItemTitle(item appServerThreadItem) string {
 	switch item.Type {
 	case "commandExecution":
-		return firstNonEmptyString(item.Command, item.ID)
-	case "fileChange":
-		return firstNonEmptyString(item.Path, item.ID)
-	case "mcpToolCall":
-		if item.Server != "" && item.Tool != "" {
-			return item.Server + "/" + item.Tool
+		if title := codexappCommandTitle(item.Command); title != "" {
+			return title
 		}
-		return firstNonEmptyString(item.Tool, item.Server, item.ID)
+		return codexappToolFallbackTitle(protocol.ToolKindExecute)
+	case "fileChange":
+		return codexappFileChangesTitle(item.Path, item.Changes)
+	case "mcpToolCall":
+		server := codexappDisplayText(item.Server)
+		tool := codexappDisplayText(item.Tool)
+		if server != "" && tool != "" {
+			return server + "/" + tool
+		}
+		return firstNonEmptyString(tool, server, codexappNonOpaqueID(item.ID), codexappToolFallbackTitle(protocol.ToolKindOther))
 	case "dynamicToolCall":
-		return firstNonEmptyString(item.Tool, item.ID)
+		if tool := codexappDisplayText(item.Tool); tool != "" {
+			return tool
+		}
+		if command := codexappCommandFromArguments(item.Arguments); command != "" {
+			return command
+		}
+		return codexappToolFallbackTitle(protocol.ToolKindOther)
 	case "webSearch":
-		return firstNonEmptyString(item.Query, item.ID)
+		return firstNonEmptyString(codexappDisplayText(item.Query), codexappToolFallbackTitle(protocol.ToolKindRead))
 	case "imageView":
-		return firstNonEmptyString(item.Path, item.ID)
+		return firstNonEmptyString(codexappDisplayText(item.Path), codexappToolFallbackTitle(protocol.ToolKindRead))
 	default:
-		return firstNonEmptyString(item.ID, item.Type)
+		return firstNonEmptyString(codexappNonOpaqueID(item.ID), codexappDisplayText(item.Type), codexappToolFallbackTitle(protocol.ToolKindOther))
 	}
+}
+
+func codexappSafeToolTitle(title string, kind string) string {
+	title = codexappDisplayText(title)
+	if title == "" || codexappOpaqueCallID(title) {
+		return codexappToolFallbackTitle(kind)
+	}
+	if kind == protocol.ToolKindExecute {
+		if command := codexappPowerShellCommand(title); command != "" {
+			return command
+		}
+	}
+	return title
+}
+
+func codexappToolFallbackTitle(kind string) string {
+	switch kind {
+	case protocol.ToolKindExecute:
+		return "Command"
+	case protocol.ToolKindWrite:
+		return "Edit files"
+	case protocol.ToolKindRead:
+		return "Read"
+	default:
+		return "Tool call"
+	}
+}
+
+func codexappFileChangesTitle(path string, changes []appServerFileChange) string {
+	path = codexappDisplayText(path)
+	if path != "" {
+		return "Edit " + path
+	}
+	paths := make(map[string]bool, len(changes))
+	for _, change := range changes {
+		changePath := codexappDisplayText(change.Path)
+		if changePath != "" {
+			paths[changePath] = true
+		}
+	}
+	switch len(paths) {
+	case 0:
+		return "Edit files"
+	case 1:
+		for changePath := range paths {
+			return "Edit " + changePath
+		}
+	}
+	return fmt.Sprintf("Edit %d files", len(paths))
+}
+
+func codexappCommandTitle(command string) string {
+	command = codexappDisplayText(command)
+	if command == "" {
+		return ""
+	}
+	if inner := codexappPowerShellCommand(command); inner != "" {
+		return inner
+	}
+	return command
+}
+
+func codexappCommandFromArguments(raw json.RawMessage) string {
+	if len(raw) == 0 || string(raw) == "null" {
+		return ""
+	}
+	var value any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return ""
+	}
+	return codexappCommandFromAny(value)
+}
+
+func codexappCommandFromAny(value any) string {
+	switch v := value.(type) {
+	case string:
+		return codexappCommandTitle(v)
+	case map[string]any:
+		for _, key := range []string{"command", "cmd"} {
+			if command := codexappCommandFromAny(v[key]); command != "" {
+				return command
+			}
+		}
+	}
+	return ""
+}
+
+func codexappDisplayText(value string) string {
+	return strings.TrimSpace(codexappANSIEscapePattern.ReplaceAllString(value, ""))
+}
+
+func codexappNonOpaqueID(value string) string {
+	value = codexappDisplayText(value)
+	if codexappOpaqueCallID(value) {
+		return ""
+	}
+	return value
+}
+
+func codexappOpaqueCallID(value string) bool {
+	value = codexappDisplayText(value)
+	return strings.HasPrefix(value, "call_")
+}
+
+func codexappPowerShellCommand(command string) string {
+	fields := codexappCommandFields(command)
+	if len(fields) < 3 || !codexappIsPowerShellExecutable(fields[0]) {
+		return ""
+	}
+	for i := 1; i < len(fields)-1; i++ {
+		if strings.EqualFold(fields[i], "-Command") || strings.EqualFold(fields[i], "-c") {
+			return codexappDisplayText(strings.Join(fields[i+1:], " "))
+		}
+	}
+	return ""
+}
+
+func codexappIsPowerShellExecutable(value string) bool {
+	base := strings.ToLower(filepath.Base(value))
+	switch base {
+	case "pwsh", "pwsh.exe", "powershell", "powershell.exe":
+		return true
+	default:
+		return false
+	}
+}
+
+func codexappCommandFields(value string) []string {
+	var fields []string
+	var builder strings.Builder
+	var quote rune
+	flush := func() {
+		if builder.Len() == 0 {
+			return
+		}
+		fields = append(fields, builder.String())
+		builder.Reset()
+	}
+	for _, r := range value {
+		if quote != 0 {
+			if r == quote {
+				quote = 0
+				continue
+			}
+			builder.WriteRune(r)
+			continue
+		}
+		switch r {
+		case '"', '\'':
+			quote = r
+		case ' ', '\t', '\r', '\n':
+			flush()
+		default:
+			builder.WriteRune(r)
+		}
+	}
+	flush()
+	return fields
 }
 
 func codexappItemText(values ...any) string {

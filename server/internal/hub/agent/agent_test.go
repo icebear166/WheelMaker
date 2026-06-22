@@ -1206,6 +1206,115 @@ func TestCodexAppItemLifecycleEmitsToolCallThenUpdates(t *testing.T) {
 	}
 }
 
+func TestCodexAppItemTitlesAreDisplaySafe(t *testing.T) {
+	tests := []struct {
+		name string
+		item appServerThreadItem
+		want string
+	}{
+		{
+			name: "command execution strips powershell wrapper",
+			item: appServerThreadItem{
+				ID:      "cmd-1",
+				Type:    "commandExecution",
+				Command: "\"C:\\Program Files\\PowerShell\\7\\pwsh.exe\" -Command \"Get-Content -Raw D:\\Code\\WheelMaker\\CLAUDE.md\"",
+			},
+			want: `Get-Content -Raw D:\Code\WheelMaker\CLAUDE.md`,
+		},
+		{
+			name: "command execution strips ansi",
+			item: appServerThreadItem{
+				ID:      "cmd-2",
+				Type:    "commandExecution",
+				Command: "\x1b[32;1mrg needle\x1b[0m",
+			},
+			want: "rg needle",
+		},
+		{
+			name: "file change uses changed path",
+			item: appServerThreadItem{
+				ID:   "call_file",
+				Type: "fileChange",
+				Changes: []appServerFileChange{{
+					Path: "app/web/src/main.tsx",
+				}},
+			},
+			want: "Edit app/web/src/main.tsx",
+		},
+		{
+			name: "file change summarizes multiple files",
+			item: appServerThreadItem{
+				ID:   "call_file",
+				Type: "fileChange",
+				Changes: []appServerFileChange{
+					{Path: "app/web/src/main.tsx"},
+					{Path: "server/internal/hub/agent/codexapp_agent.go"},
+				},
+			},
+			want: "Edit 2 files",
+		},
+		{
+			name: "dynamic tool extracts command argument",
+			item: appServerThreadItem{
+				ID:        "call_dynamic",
+				Type:      "dynamicToolCall",
+				Arguments: json.RawMessage(`{"command":"Get-ChildItem -Force"}`),
+			},
+			want: "Get-ChildItem -Force",
+		},
+		{
+			name: "dynamic tool hides opaque call id",
+			item: appServerThreadItem{
+				ID:   "call_p4Y4Q5C2Eiz9LkpcRF4tn286",
+				Type: "dynamicToolCall",
+			},
+			want: "Tool call",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := codexappItemTitle(tt.item); got != tt.want {
+				t.Fatalf("codexappItemTitle() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCodexAppOutputDeltaDoesNotDisplayOpaqueCallID(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	conn := newCodexappConnWithRuntime(rt, t.TempDir())
+	conn.BindSessionID("thread-1")
+	updates := make(chan protocol.SessionUpdateParams, 2)
+	conn.OnACPResponse(captureSessionUpdate(t, updates))
+
+	if err := tr.emit(map[string]any{
+		"method": "item/fileChange/outputDelta",
+		"params": map[string]any{
+			"threadId": "thread-1",
+			"turnId":   "turn-1",
+			"itemId":   "call_p4Y4Q5C2Eiz9LkpcRF4tn286",
+			"delta":    "updated",
+		},
+	}); err != nil {
+		t.Fatalf("emit output delta: %v", err)
+	}
+
+	start := waitForCodexappUpdate(t, updates)
+	if start.Update.SessionUpdate != protocol.SessionUpdateToolCall ||
+		start.Update.Title != "Edit files" {
+		t.Fatalf("output delta start=%#v, want title Edit files", start.Update)
+	}
+
+	update := waitForCodexappUpdate(t, updates)
+	if update.Update.SessionUpdate != protocol.SessionUpdateToolCallUpdate ||
+		update.Update.Title != "Edit files" {
+		t.Fatalf("output delta update=%#v, want title Edit files", update.Update)
+	}
+}
+
 func TestCodexAppTurnPlanUpdatedEmitsFullACPPlan(t *testing.T) {
 	tr := newFakeCodexappTransport()
 	rt := newCodexappRuntimeWithTransport(tr)
