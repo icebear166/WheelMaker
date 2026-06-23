@@ -75,6 +75,7 @@ describe('web chat view width settings', () => {
 
     expect(mainTsx).toContain('className={chatMainClassName}');
     expect(mainTsx).toContain("'chat-view-content'");
+    expect((mainTsx.match(/className="chat-view-content chat-empty-state-content"/g) ?? []).length).toBe(3);
     expect(mainTsx).toContain('className="chat-composer-content"');
     expect(stylesCss).toMatch(
       /\.chat-view-width-fixed-800 \.chat-view-content \{[\s\S]*width: min\(800px, 100%\);[\s\S]*margin-left: auto;[\s\S]*margin-right: auto;[\s\S]*\}/,
@@ -87,6 +88,9 @@ describe('web chat view width settings', () => {
     );
     expect(stylesCss).toMatch(
       /\.chat-view-width-fixed-800 \.chat-composer \{[\s\S]*padding-left: 18px;[\s\S]*padding-right: calc\(18px \+ var\(--chat-scrollbar-gutter-width, 8px\)\);[\s\S]*\}/,
+    );
+    expect(stylesCss).toMatch(
+      /\.chat-view-width-fixed-800 \.chat-scroll-bottom-button \{[\s\S]*right: max\(20px, calc\(\(100% - 800px\) \/ 2 \+ 20px\)\);[\s\S]*\}/,
     );
   });
 
