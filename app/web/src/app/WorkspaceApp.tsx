@@ -8601,10 +8601,9 @@ export function App() {
         path,
         requestSeq,
       ),
-    );
+      );
     try {
       const info = await service.getProjectFileInfo(targetProjectId, path);
-      if (requestSeq !== chatFilePeekReadSeqRef.current) return;
       if ((info.size ?? 0) > LARGE_FILE_CONFIRM_BYTES) {
         const sizeMB = ((info.size ?? 0) / (1024 * 1024)).toFixed(1);
         const confirmed = window.confirm(
@@ -8624,7 +8623,6 @@ export function App() {
         }
       }
       const result = await service.readProjectFile(path, targetProjectId);
-      if (requestSeq !== chatFilePeekReadSeqRef.current) return;
       setChatFilePreviewWorkbench(current =>
         completeFilePreviewTabLoad(
           current,
@@ -8636,7 +8634,6 @@ export function App() {
         ),
       );
     } catch (err) {
-      if (requestSeq !== chatFilePeekReadSeqRef.current) return;
       const reason = err instanceof Error ? err.message : String(err);
       setChatFilePreviewWorkbench(current =>
         failFilePreviewTabLoad(
@@ -8896,8 +8893,35 @@ export function App() {
       window.history.back();
       return;
     }
+    if (chatPromptArtifactPreview) {
+      closeChatPromptArtifactPreview();
+      setChatPreviewManualOpen(false);
+      setChatPreviewManualCollapsed(false);
+      return;
+    }
+    if (chatAttachmentPreview) {
+      closeChatAttachmentPreview();
+      setChatPreviewManualOpen(false);
+      setChatPreviewManualCollapsed(false);
+      return;
+    }
+    if (chatPortRelayPreviewOpen) {
+      closeChatPortRelayPreview();
+      setChatPreviewManualOpen(false);
+      setChatPreviewManualCollapsed(false);
+      return;
+    }
     closeChatPreview();
-  }, [closeChatPreview, isWide]);
+  }, [
+    chatAttachmentPreview,
+    chatPortRelayPreviewOpen,
+    chatPromptArtifactPreview,
+    closeChatAttachmentPreview,
+    closeChatPortRelayPreview,
+    closeChatPreview,
+    closeChatPromptArtifactPreview,
+    isWide,
+  ]);
 
   const openPeekFileInFullFileTab = useCallback(() => {
     if (!chatFilePeek) return;
@@ -18788,9 +18812,15 @@ export function App() {
     });
   };
   const closeChatFilePreviewTab = (path: string) => {
+    const closingLastTab = chatFilePreviewTabs.length === 1 &&
+      chatFilePreviewTabs[0]?.path === path;
     setChatFilePreviewWorkbench(current =>
       closeFilePreviewTab(current, current.activeProjectId, path),
     );
+    if (closingLastTab) {
+      setChatPreviewManualOpen(true);
+      setChatPreviewManualCollapsed(false);
+    }
   };
   const toggleChatFilePreviewTree = () => {
     setChatFilePreviewWorkbench(current => ({...current, treeOpen: !current.treeOpen}));

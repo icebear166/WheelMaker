@@ -218,6 +218,46 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('ensureFilePreviewProjectVisible(');
   });
 
+  test('closing the last workbench tab leaves the preview open on the empty state', () => {
+    const mainTsx = readSourceText(mainPath);
+    const closeStart = mainTsx.indexOf('const closeChatFilePreviewTab = (path: string) => {');
+    expect(closeStart).toBeGreaterThanOrEqual(0);
+    const closeEnd = mainTsx.indexOf('const toggleChatFilePreviewTree = () => {', closeStart);
+    const closeBody = mainTsx.slice(closeStart, closeEnd);
+
+    expect(closeBody).toContain('const closingLastTab = chatFilePreviewTabs.length === 1');
+    expect(closeBody).toContain('setChatPreviewManualOpen(true);');
+    expect(closeBody).toContain('setChatPreviewManualCollapsed(false);');
+  });
+
+  test('closing transient non-file previews reveals retained file tabs instead of clearing the workbench', () => {
+    const mainTsx = readSourceText(mainPath);
+    const closeStart = mainTsx.indexOf('const closeChatFilePeekFromChrome = useCallback(() => {');
+    expect(closeStart).toBeGreaterThanOrEqual(0);
+    const closeEnd = mainTsx.indexOf('const openPeekFileInFullFileTab = useCallback', closeStart);
+    const closeBody = mainTsx.slice(closeStart, closeEnd);
+
+    expect(closeBody).toContain('if (chatPromptArtifactPreview) {');
+    expect(closeBody).toContain('closeChatPromptArtifactPreview();');
+    expect(closeBody).toContain('if (chatAttachmentPreview) {');
+    expect(closeBody).toContain('closeChatAttachmentPreview();');
+    expect(closeBody).toContain('if (chatPortRelayPreviewOpen) {');
+    expect(closeBody).toContain('closeChatPortRelayPreview();');
+    expect(closeBody).toContain('setChatPreviewManualCollapsed(false);');
+  });
+
+  test('workbench file reads are independent per tab instead of globally cancelling older tabs', () => {
+    const mainTsx = readSourceText(mainPath);
+    const readStart = mainTsx.indexOf('const readChatFilePeek = useCallback(async');
+    expect(readStart).toBeGreaterThanOrEqual(0);
+    const readEnd = mainTsx.indexOf('const resolvePromptAttachmentThumbnail = useCallback', readStart);
+    const readBody = mainTsx.slice(readStart, readEnd);
+
+    expect(readBody).toContain('completeFilePreviewTabLoad(');
+    expect(readBody).toContain('failFilePreviewTabLoad(');
+    expect(readBody).not.toContain('requestSeq !== chatFilePeekReadSeqRef.current');
+  });
+
   test('peek viewer CSS defines desktop width limits and mobile full-screen overlay', () => {
     const mainTsx = readSourceText(mainPath);
     const stylesCss = readWebStyles(projectRoot);
