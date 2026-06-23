@@ -3202,6 +3202,10 @@
   box-shadow: 0 10px 28px color-mix(in srgb, #000 28%, transparent);
 }
 
+.chat-view-width-fixed-800 .chat-scroll-bottom-button {
+  right: max(20px, calc((100% - 800px) / 2 + 20px));
+}
+
 .chat-scroll-bottom-button:hover {
   background: var(--hover);
 }

@@ -89,6 +89,114 @@
   background: var(--panel-3);
 }
 
+.chat-file-workbench-project-select {
+  min-width: 104px;
+  max-width: 168px;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+}
+
+.chat-file-workbench-tree-toggle.active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.chat-file-workbench-tabs {
+  min-height: 31px;
+  display: flex;
+  align-items: stretch;
+  gap: 1px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.chat-file-workbench-tab {
+  flex: 0 0 auto;
+  min-width: 96px;
+  max-width: 190px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px;
+  align-items: center;
+  border-right: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.chat-file-workbench-tab.active {
+  color: var(--text);
+  background: var(--panel-3);
+}
+
+.chat-file-workbench-tab-open,
+.chat-file-workbench-tab-close {
+  min-width: 0;
+  height: 30px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.chat-file-workbench-tab-open {
+  padding: 0 8px;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.chat-file-workbench-tab-close {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  opacity: 0.72;
+}
+
+.chat-file-workbench-tab-close:hover {
+  opacity: 1;
+  color: var(--danger);
+}
+
+.chat-file-workbench-tree-popover {
+  position: absolute;
+  top: 62px;
+  left: 8px;
+  z-index: 8;
+  width: min(340px, calc(100% - 16px));
+  max-height: min(560px, calc(100% - 76px));
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 18px 48px color-mix(in srgb, #000 36%, transparent);
+}
+
+.chat-file-workbench-tree-popover .list {
+  padding: 6px 0;
+}
+
+.chat-file-workbench-empty {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.chat-file-workbench-empty .codicon {
+  font-size: 24px;
+  opacity: 0.75;
+}
+
 .chat-file-peek-scroll .code-wrap.nowrap {
   width: max-content;
   min-width: 100%;

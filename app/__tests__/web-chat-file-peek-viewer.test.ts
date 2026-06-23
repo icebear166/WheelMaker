@@ -19,7 +19,7 @@ describe('web chat file peek viewer', () => {
 
   test('chat file links open the peek viewer without switching to the File tab', () => {
     const mainTsx = readSourceText(mainPath);
-    const clickStart = mainTsx.indexOf('openChatFilePeek(targetFile.path, jumpLine ?? null)');
+    const clickStart = mainTsx.indexOf('openChatFilePeek(targetFile.path, jumpLine ?? null, resolveChatFilePreviewProjectId())');
     expect(clickStart).toBeGreaterThanOrEqual(0);
     const clickEnd = mainTsx.indexOf('</a>', clickStart);
     const clickBody = mainTsx.slice(clickStart, clickEnd);
@@ -27,7 +27,7 @@ describe('web chat file peek viewer', () => {
     expect(clickBody).not.toContain("setTab('file')");
     expect(clickBody).not.toContain('setSelectedFile(targetFile.path)');
     expect(mainTsx).toContain('const openChatFilePeek = useCallback(');
-    expect(mainTsx).toContain('setChatFilePeek({');
+    expect(mainTsx).toContain('beginFilePreviewTabLoad(');
   });
 
   test('file mention preview reuses chat peek without inserting or closing the menu', () => {
@@ -38,7 +38,7 @@ describe('web chat file peek viewer', () => {
     expect(previewEnd).toBeGreaterThan(previewStart);
     const previewBody = mainTsx.slice(previewStart, previewEnd);
 
-    expect(previewBody).toContain('openChatFilePeek(path, null)');
+    expect(previewBody).toContain('openChatFilePeek(path, null, resolveChatFilePreviewProjectId())');
     expect(previewBody).not.toContain('applyChatFileMentionResult');
     expect(previewBody).not.toContain('setChatFileMentionMenuOpen(false)');
     expect(previewBody).toContain('chatRichComposerRef.current?.focus();');
@@ -54,7 +54,7 @@ describe('web chat file peek viewer', () => {
     expect(openBody).toContain('setChatPromptArtifactPreview({');
     expect(openBody).not.toContain("setTab('git')");
     expect(openBody).not.toContain('setPromptArtifactDiff({');
-    expect(mainTsx).toContain('const chatPreviewHasContent = !!chatFilePeek || !!chatPromptArtifactPreview || !!chatAttachmentPreview || chatPortRelayPreviewOpen;');
+    expect(mainTsx).toContain('const chatPreviewHasContent = chatFilePreviewHasTabs || !!chatPromptArtifactPreview || !!chatAttachmentPreview || chatPortRelayPreviewOpen;');
     expect(mainTsx).toContain('<ChatPromptArtifactPreviewViewer');
     expect(mainTsx).toContain('togglePromptArtifactPreviewFile');
   });
@@ -65,7 +65,7 @@ describe('web chat file peek viewer', () => {
 
     expect(mainTsx).toContain('type ChatAttachmentPreviewState = {');
     expect(mainTsx).toContain('const [chatAttachmentPreview, setChatAttachmentPreview] = useState<ChatAttachmentPreviewState | null>(null);');
-    expect(mainTsx).toContain('const chatPreviewHasContent = !!chatFilePeek || !!chatPromptArtifactPreview || !!chatAttachmentPreview || chatPortRelayPreviewOpen;');
+    expect(mainTsx).toContain('const chatPreviewHasContent = chatFilePreviewHasTabs || !!chatPromptArtifactPreview || !!chatAttachmentPreview || chatPortRelayPreviewOpen;');
     expect(mainTsx).toContain('const openChatAttachmentPreview = useCallback(');
     expect(mainTsx).toContain('service.readProjectSessionAttachment(');
     expect(mainTsx).toContain('<ChatAttachmentPreviewViewer');
@@ -81,7 +81,7 @@ describe('web chat file peek viewer', () => {
 
     expect(mainTsx).toContain('const [chatPreviewManualOpen, setChatPreviewManualOpen] = useState(false);');
     expect(mainTsx).toContain('const [chatPreviewManualCollapsed, setChatPreviewManualCollapsed] = useState(false);');
-    expect(mainTsx).toContain('const chatPreviewHasContent = !!chatFilePeek || !!chatPromptArtifactPreview || !!chatAttachmentPreview || chatPortRelayPreviewOpen;');
+    expect(mainTsx).toContain('const chatPreviewHasContent = chatFilePreviewHasTabs || !!chatPromptArtifactPreview || !!chatAttachmentPreview || chatPortRelayPreviewOpen;');
     expect(mainTsx).toContain('const chatPreviewOpen = chatPreviewManualOpen || (chatPreviewHasContent && !chatPreviewManualCollapsed);');
     expect(mainTsx).toContain('const ChatEmptyPreviewViewer = React.memo(function ChatEmptyPreviewViewer');
     expect(mainTsx).toContain('<div className="chat-preview-title" title="Preview">Preview</div>');
@@ -158,6 +158,104 @@ describe('web chat file peek viewer', () => {
     expect(shellTsx).toContain('{desktopPeek}');
     expect(mainTsx).toContain('desktopPeek={chatPreviewDesktopPane}');
     expect(mainTsx).toContain('mobileOverlay={chatPreviewMobileOverlay}');
+  });
+
+  test('right preview workbench uses project-scoped directory listing without switching workspace project', () => {
+    const serviceTs = readSourceText(path.join(projectRoot, 'web', 'src', 'registry', 'RegistryWorkspaceService.ts'));
+    const mainTsx = readSourceText(mainPath);
+
+    expect(serviceTs).toContain('async listProjectDirectory(');
+    expect(serviceTs).toContain("this.readRepositoryForProject(projectId).listFiles(projectId, path || '.', knownHash)");
+    expect(mainTsx).toContain('const result = await service.listProjectDirectory(');
+    expect(mainTsx).toContain('targetProjectId,');
+    expect(mainTsx).not.toContain('syncWorkspaceProject(chatFilePreviewWorkbench.activeProjectId');
+  });
+
+  test('chat file preview keeps project-partitioned tabs and does not clear them for non-file previews', () => {
+    const mainTsx = readSourceText(mainPath);
+
+    expect(mainTsx).toContain('const [chatFilePreviewWorkbench, setChatFilePreviewWorkbench] = useState');
+    expect(mainTsx).toContain('openFilePreviewTab(');
+    expect(mainTsx).toContain('completeFilePreviewTabLoad(');
+    expect(mainTsx).toContain('const chatFilePreviewActiveTab = activeFilePreviewTab(chatFilePreviewWorkbench);');
+    expect(mainTsx).toContain('const chatFilePreviewHasTabs = Object.values(chatFilePreviewWorkbench.tabsByProjectId).some(tabs => tabs.length > 0);');
+
+    const attachmentStart = mainTsx.indexOf('const openChatAttachmentPreview = useCallback');
+    const attachmentEnd = mainTsx.indexOf('const buildLineRange', attachmentStart);
+    const attachmentBody = mainTsx.slice(attachmentStart, attachmentEnd);
+    expect(attachmentBody).not.toContain('setChatFilePeek(null)');
+  });
+
+  test('chat file links and mention previews open files in the selected chat project', () => {
+    const mainTsx = readSourceText(mainPath);
+
+    expect(mainTsx).toContain('const resolveChatFilePreviewProjectId = useCallback(');
+    expect(mainTsx).toContain('openChatFilePeek(targetFile.path, jumpLine ?? null, resolveChatFilePreviewProjectId())');
+    expect(mainTsx).toContain('openChatFilePeek(path, null, resolveChatFilePreviewProjectId())');
+  });
+
+  test('chat file workbench renders project selector, tab strip, tab close controls, and a desktop tree popover', () => {
+    const mainTsx = readSourceText(mainPath);
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(mainTsx).toContain('className="chat-file-workbench-project-select"');
+    expect(mainTsx).toContain('className="chat-file-workbench-tabs"');
+    expect(mainTsx).toContain('className="chat-file-workbench-tab-close"');
+    expect(mainTsx).toContain('className="chat-file-workbench-tree-popover"');
+    expect(mainTsx).toContain('aria-label="Toggle file tree"');
+    expect(mainTsx).toContain('closeFilePreviewTab(');
+
+    expect(stylesCss).toContain('.chat-file-workbench-tabs');
+    expect(stylesCss).toContain('.chat-file-workbench-tree-popover');
+    expect(stylesCss).toContain('.chat-file-workbench-empty');
+  });
+
+  test('chat file workbench project selector is limited to visible projects', () => {
+    const mainTsx = readSourceText(mainPath);
+
+    expect(mainTsx).toContain('const chatFilePreviewProjects = visibleProjectItems;');
+    expect(mainTsx).toContain('chatFilePreviewProjects.map(projectItem =>');
+    expect(mainTsx).toContain('ensureFilePreviewProjectVisible(');
+  });
+
+  test('closing the last workbench tab leaves the preview open on the empty state', () => {
+    const mainTsx = readSourceText(mainPath);
+    const closeStart = mainTsx.indexOf('const closeChatFilePreviewTab = (path: string) => {');
+    expect(closeStart).toBeGreaterThanOrEqual(0);
+    const closeEnd = mainTsx.indexOf('const toggleChatFilePreviewTree = () => {', closeStart);
+    const closeBody = mainTsx.slice(closeStart, closeEnd);
+
+    expect(closeBody).toContain('const closingLastTab = chatFilePreviewTabs.length === 1');
+    expect(closeBody).toContain('setChatPreviewManualOpen(true);');
+    expect(closeBody).toContain('setChatPreviewManualCollapsed(false);');
+  });
+
+  test('closing transient non-file previews reveals retained file tabs instead of clearing the workbench', () => {
+    const mainTsx = readSourceText(mainPath);
+    const closeStart = mainTsx.indexOf('const closeChatFilePeekFromChrome = useCallback(() => {');
+    expect(closeStart).toBeGreaterThanOrEqual(0);
+    const closeEnd = mainTsx.indexOf('const openPeekFileInFullFileTab = useCallback', closeStart);
+    const closeBody = mainTsx.slice(closeStart, closeEnd);
+
+    expect(closeBody).toContain('if (chatPromptArtifactPreview) {');
+    expect(closeBody).toContain('closeChatPromptArtifactPreview();');
+    expect(closeBody).toContain('if (chatAttachmentPreview) {');
+    expect(closeBody).toContain('closeChatAttachmentPreview();');
+    expect(closeBody).toContain('if (chatPortRelayPreviewOpen) {');
+    expect(closeBody).toContain('closeChatPortRelayPreview();');
+    expect(closeBody).toContain('setChatPreviewManualCollapsed(false);');
+  });
+
+  test('workbench file reads are independent per tab instead of globally cancelling older tabs', () => {
+    const mainTsx = readSourceText(mainPath);
+    const readStart = mainTsx.indexOf('const readChatFilePeek = useCallback(async');
+    expect(readStart).toBeGreaterThanOrEqual(0);
+    const readEnd = mainTsx.indexOf('const resolvePromptAttachmentThumbnail = useCallback', readStart);
+    const readBody = mainTsx.slice(readStart, readEnd);
+
+    expect(readBody).toContain('completeFilePreviewTabLoad(');
+    expect(readBody).toContain('failFilePreviewTabLoad(');
+    expect(readBody).not.toContain('requestSeq !== chatFilePeekReadSeqRef.current');
   });
 
   test('peek viewer CSS defines desktop width limits and mobile full-screen overlay', () => {

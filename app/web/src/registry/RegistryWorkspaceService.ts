@@ -248,6 +248,18 @@ export class RegistryWorkspaceService {
     };
   }
 
+  async listProjectDirectory(projectId: string, path: string, knownHash?: string): Promise<{entries: RegistryFsEntry[]; hash?: string; notModified: boolean}> {
+    if (!this.repository || !projectId) {
+      return {entries: [], hash: '', notModified: false};
+    }
+    const result = await this.readRepositoryForProject(projectId).listFiles(projectId, path || '.', knownHash);
+    return {
+      entries: result.entries ?? [],
+      hash: result.hash,
+      notModified: result.notModified,
+    };
+  }
+
   async getFileInfo(path: string): Promise<RegistryFsInfo> {
     if (!this.session || !this.repository) {
       throw new Error('session is not ready');
