@@ -94,7 +94,7 @@ func TestCopyResponseHeadersDropsContentLength(t *testing.T) {
 	}
 	dst := http.Header{}
 
-	copyResponseHeaders(dst, src)
+	copyResponseHeaders(dst, src, false)
 
 	if got := dst.Get("Content-Length"); got != "" {
 		t.Fatalf("copyResponseHeaders forwarded Content-Length=%q", got)
@@ -113,7 +113,7 @@ func TestCopyResponseHeadersAllowsRelayEmbedding(t *testing.T) {
 	}
 	dst := http.Header{}
 
-	copyResponseHeaders(dst, src)
+	copyResponseHeaders(dst, src, false)
 
 	if got := dst.Get("X-Frame-Options"); got != "" {
 		t.Fatalf("X-Frame-Options=%q, want empty", got)
@@ -126,6 +126,35 @@ func TestCopyResponseHeadersAllowsRelayEmbedding(t *testing.T) {
 	}
 	if got := dst.Get("Content-Type"); got != "text/html" {
 		t.Fatalf("Content-Type=%q, want text/html", got)
+	}
+}
+
+func TestCopyResponseHeadersMakesTargetCookiesEmbeddableForHTTPSRelay(t *testing.T) {
+	src := map[string][]string{
+		"Set-Cookie": {
+			"breezecara_session=target-session; Path=/; Expires=Wed, 24 Jun 2026 11:43:36 GMT; HttpOnly; SameSite=Lax",
+			relayCookieName + "=relay-secret; Path=/; HttpOnly; Secure; SameSite=None",
+		},
+	}
+	dst := http.Header{}
+
+	copyResponseHeaders(dst, src, true)
+
+	got := dst.Values("Set-Cookie")
+	if len(got) != 1 {
+		t.Fatalf("Set-Cookie values=%#v, want only target cookie", got)
+	}
+	if !strings.Contains(got[0], "breezecara_session=target-session") {
+		t.Fatalf("Set-Cookie=%q, want target session cookie", got[0])
+	}
+	if !strings.Contains(got[0], "Secure") {
+		t.Fatalf("Set-Cookie=%q, want Secure for HTTPS iframe embedding", got[0])
+	}
+	if !strings.Contains(got[0], "SameSite=None") {
+		t.Fatalf("Set-Cookie=%q, want SameSite=None for HTTPS iframe embedding", got[0])
+	}
+	if strings.Contains(got[0], "SameSite=Lax") {
+		t.Fatalf("Set-Cookie=%q, must not keep SameSite=Lax for embedded relay", got[0])
 	}
 }
 

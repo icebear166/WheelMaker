@@ -214,7 +214,7 @@ func (c *Controller) handleExternalHTTP(w http.ResponseWriter, r *http.Request, 
 		http.Error(w, "invalid target response", http.StatusBadGateway)
 		return
 	}
-	copyResponseHeaders(w.Header(), headers.Headers)
+	copyResponseHeaders(w.Header(), headers.Headers, relayRequestIsHTTPS(r))
 	status := headers.Status
 	if status == 0 {
 		status = http.StatusOK
@@ -593,7 +593,7 @@ func filterRelayCookieHeaderValues(values []string) []string {
 	return out
 }
 
-func copyResponseHeaders(dst http.Header, headers map[string][]string) {
+func copyResponseHeaders(dst http.Header, headers map[string][]string, embeddableCookies bool) {
 	for name, values := range headers {
 		canonical := http.CanonicalHeaderKey(name)
 		if isHopByHopHeader(canonical) || isBlockedFrameHeader(canonical) || strings.EqualFold(canonical, "Content-Length") {
@@ -607,9 +607,22 @@ func copyResponseHeaders(dst http.Header, headers map[string][]string) {
 			if strings.EqualFold(canonical, "Set-Cookie") && strings.HasPrefix(strings.ToLower(value), strings.ToLower(relayCookieName)+"=") {
 				continue
 			}
+			if embeddableCookies && strings.EqualFold(canonical, "Set-Cookie") {
+				value = makeTargetCookieEmbeddable(value)
+			}
 			dst.Add(canonical, value)
 		}
 	}
+}
+
+func makeTargetCookieEmbeddable(value string) string {
+	cookie, err := http.ParseSetCookie(value)
+	if err != nil {
+		return value
+	}
+	cookie.Secure = true
+	cookie.SameSite = http.SameSiteNoneMode
+	return cookie.String()
 }
 
 func copyWebSocketResponseHeaders(headers map[string][]string) http.Header {
