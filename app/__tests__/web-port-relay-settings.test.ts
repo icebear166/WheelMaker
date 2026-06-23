@@ -173,7 +173,9 @@ describe('port relay settings UI source structure', () => {
     expect(mainTsx).toContain('appendPortRelayOpenPath(baseUrl, portRelayFramePath)');
     expect(mainTsx).toContain('const openChatPortRelayLink = useCallback(async (localUrl: PortRelayLocalHttpUrl) => {');
     expect(mainTsx).toContain("setPortRelayFramePlacement('chatPreview');");
-    expect(mainTsx).toContain('setChatFilePeek(null);');
+    expect(mainTsx).toContain('setChatAttachmentPreview(null);');
+    expect(mainTsx).toContain('setChatPromptArtifactPreview(null);');
+    expect(mainTsx).not.toContain('setChatFilePeek(null);');
     expect(mainTsx).toContain('const hubId = currentProject?.hubId || \'\';');
     expect(mainTsx).toContain('targetPort: localUrl.targetPort');
     expect(mainTsx).toContain('framePath: localUrl.path');
