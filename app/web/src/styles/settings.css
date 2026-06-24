@@ -1288,8 +1288,27 @@ textarea,
 }
 
 .settings-skills-list {
+  --settings-skills-controls-space: 128px;
   display: grid;
   gap: 8px;
+  padding-bottom: var(--settings-skills-controls-space);
+}
+
+.settings-skills-fixed-controls {
+  position: fixed;
+  left: 48px;
+  bottom: 0;
+  z-index: 52;
+  width: min(var(--desktop-sidebar-width, 380px), calc(100vw - 48px));
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  box-shadow: 0 -14px 28px color-mix(in srgb, black 20%, transparent);
+  padding: 8px 8px calc(env(safe-area-inset-bottom, 0px) + 8px);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .settings-skills-marketplace-link {
@@ -1345,17 +1364,10 @@ textarea,
 }
 
 .settings-skills-hub-picker {
-  position: sticky;
-  top: 0;
-  z-index: 12;
+  position: relative;
+  z-index: 1;
   display: grid;
   min-width: 0;
-  padding: 0 0 6px;
-  background: linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--panel) 96%, transparent),
-    color-mix(in srgb, var(--panel) 88%, transparent)
-  );
 }
 
 .settings-skills-hub-picker-button {
@@ -1449,7 +1461,7 @@ textarea,
   position: absolute;
   left: 0;
   right: 0;
-  top: calc(100% - 4px);
+  bottom: calc(100% + 4px);
   z-index: 12;
   display: grid;
   gap: 2px;
@@ -1488,6 +1500,18 @@ textarea,
 
 .settings-skills-hub-option.active {
   background: color-mix(in srgb, var(--accent) 13%, var(--panel-2));
+}
+
+.mobile-settings-screen .settings-skills-list {
+  --settings-skills-controls-space: 146px;
+}
+
+.mobile-settings-screen .settings-skills-fixed-controls {
+  left: 0;
+  right: 0;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 58px);
+  width: auto;
+  padding: 8px 10px;
 }
 
 .settings-skills-scan-status {

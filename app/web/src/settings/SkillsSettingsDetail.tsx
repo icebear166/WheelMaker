@@ -355,110 +355,102 @@ export function SkillsSettingsDetail({
     );
   };
 
+  const renderSkillHubPicker = () => {
+    if (!activeSkillHub) {
+      return null;
+    }
+    const activeSummary = skillHubSummary(activeSkillHub);
+    return (
+      <div
+        className="settings-skills-hub-picker"
+        onBlur={event => {
+          const nextFocus = event.relatedTarget as Node | null;
+          if (!nextFocus || !event.currentTarget.contains(nextFocus)) {
+            setSkillHubMenuOpen(false);
+          }
+        }}
+        onKeyDown={event => {
+          if (event.key === 'Escape') {
+            setSkillHubMenuOpen(false);
+          }
+        }}
+      >
+        <button
+          type="button"
+          className="settings-skills-hub-picker-button"
+          onClick={() => setSkillHubMenuOpen(!skillHubMenuOpen)}
+          aria-haspopup="listbox"
+          aria-expanded={skillHubMenuOpen}
+          title={selectedSkillHubId}
+        >
+          <span className="settings-skills-hub-picker-main">
+            <span className="settings-skills-hub-picker-label">Hub</span>
+            <span className="settings-skills-hub-picker-title">{selectedSkillHubId}</span>
+            <span className="settings-skills-hub-picker-meta">
+              {activeSummary.hubSkillCount} skills / {activeSummary.projectCount} projects / {activeSummary.projectSkillCount} project skills
+            </span>
+          </span>
+          <span className="settings-skills-hub-picker-state">
+            {activeSkillHub.loading ? (
+              <span className="codicon codicon-loading codicon-modifier-spin" aria-label="Scanning" />
+            ) : activeSkillHub.error ? (
+              <span className="codicon codicon-error" aria-label="Error" />
+            ) : activeSummary.operation?.running ? (
+              <span className="codicon codicon-sync codicon-modifier-spin" aria-label="Running" />
+            ) : (
+              <span className="codicon codicon-circle-filled" aria-hidden="true" />
+            )}
+          </span>
+          <span className={`codicon ${skillHubMenuOpen ? 'codicon-chevron-up' : 'codicon-chevron-down'}`} aria-hidden="true" />
+        </button>
+        {skillHubMenuOpen ? (
+          <div className="settings-skills-hub-menu" role="listbox" aria-label="Skill hubs">
+            {skillHubCards.map(hub => {
+              const summary = skillHubSummary(hub);
+              const selected = hub.hubId === selectedSkillHubId;
+              return (
+                <button
+                  key={`skills-hub-option:${hub.hubId}`}
+                  type="button"
+                  className={`settings-skills-hub-option${hub.hubId === selectedSkillHubId ? ' active' : ''}`}
+                  role="option"
+                  aria-selected={selected}
+                  title={hub.hubId}
+                  onClick={() => {
+                    setActiveSkillHubId(hub.hubId);
+                    setSkillHubMenuOpen(false);
+                  }}
+                >
+                  <span className="settings-skills-hub-option-main">
+                    <span className="settings-skills-hub-option-title">{hub.hubId}</span>
+                    <span className="settings-skills-hub-option-meta">
+                      {summary.hubSkillCount} skills / {summary.projectCount} projects / {summary.projectSkillCount} project skills
+                    </span>
+                  </span>
+                  <span className="settings-skills-hub-option-state">
+                    {hub.loading ? (
+                      <span className="codicon codicon-loading codicon-modifier-spin" aria-label="Scanning" />
+                    ) : hub.error ? (
+                      <span className="codicon codicon-error" aria-label="Error" />
+                    ) : summary.operation?.running ? (
+                      <span className="codicon codicon-sync codicon-modifier-spin" aria-label="Running" />
+                    ) : selected ? (
+                      <span className="codicon codicon-check" aria-hidden="true" />
+                    ) : (
+                      <span className="codicon codicon-circle-filled" aria-hidden="true" />
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   return (
     <>
-      {activeSkillHub ? (() => {
-        const activeSummary = skillHubSummary(activeSkillHub);
-        return (
-          <div
-            className="settings-skills-hub-picker"
-            onBlur={event => {
-              const nextFocus = event.relatedTarget as Node | null;
-              if (!nextFocus || !event.currentTarget.contains(nextFocus)) {
-                setSkillHubMenuOpen(false);
-              }
-            }}
-            onKeyDown={event => {
-              if (event.key === 'Escape') {
-                setSkillHubMenuOpen(false);
-              }
-            }}
-          >
-            <button
-              type="button"
-              className="settings-skills-hub-picker-button"
-              onClick={() => setSkillHubMenuOpen(!skillHubMenuOpen)}
-              aria-haspopup="listbox"
-              aria-expanded={skillHubMenuOpen}
-              title={selectedSkillHubId}
-            >
-              <span className="settings-skills-hub-picker-main">
-                <span className="settings-skills-hub-picker-label">Hub</span>
-                <span className="settings-skills-hub-picker-title">{selectedSkillHubId}</span>
-                <span className="settings-skills-hub-picker-meta">
-                  {activeSummary.hubSkillCount} skills / {activeSummary.projectCount} projects / {activeSummary.projectSkillCount} project skills
-                </span>
-              </span>
-              <span className="settings-skills-hub-picker-state">
-                {activeSkillHub.loading ? (
-                  <span className="codicon codicon-loading codicon-modifier-spin" aria-label="Scanning" />
-                ) : activeSkillHub.error ? (
-                  <span className="codicon codicon-error" aria-label="Error" />
-                ) : activeSummary.operation?.running ? (
-                  <span className="codicon codicon-sync codicon-modifier-spin" aria-label="Running" />
-                ) : (
-                  <span className="codicon codicon-circle-filled" aria-hidden="true" />
-                )}
-              </span>
-              <span className={`codicon ${skillHubMenuOpen ? 'codicon-chevron-up' : 'codicon-chevron-down'}`} aria-hidden="true" />
-            </button>
-            {skillHubMenuOpen ? (
-              <div className="settings-skills-hub-menu" role="listbox" aria-label="Skill hubs">
-                {skillHubCards.map(hub => {
-                  const summary = skillHubSummary(hub);
-                  const selected = hub.hubId === selectedSkillHubId;
-                  return (
-                    <button
-                      key={`skills-hub-option:${hub.hubId}`}
-                      type="button"
-                      className={`settings-skills-hub-option${hub.hubId === selectedSkillHubId ? ' active' : ''}`}
-                      role="option"
-                      aria-selected={selected}
-                      title={hub.hubId}
-                      onClick={() => {
-                        setActiveSkillHubId(hub.hubId);
-                        setSkillHubMenuOpen(false);
-                      }}
-                    >
-                      <span className="settings-skills-hub-option-main">
-                        <span className="settings-skills-hub-option-title">{hub.hubId}</span>
-                        <span className="settings-skills-hub-option-meta">
-                          {summary.hubSkillCount} skills / {summary.projectCount} projects / {summary.projectSkillCount} project skills
-                        </span>
-                      </span>
-                      <span className="settings-skills-hub-option-state">
-                        {hub.loading ? (
-                          <span className="codicon codicon-loading codicon-modifier-spin" aria-label="Scanning" />
-                        ) : hub.error ? (
-                          <span className="codicon codicon-error" aria-label="Error" />
-                        ) : summary.operation?.running ? (
-                          <span className="codicon codicon-sync codicon-modifier-spin" aria-label="Running" />
-                        ) : selected ? (
-                          <span className="codicon codicon-check" aria-hidden="true" />
-                        ) : (
-                          <span className="codicon codicon-circle-filled" aria-hidden="true" />
-                        )}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
-          </div>
-        );
-      })() : null}
-      <a
-        className="settings-skills-marketplace-link"
-        href={SKILLS_MARKETPLACE_URL}
-        target="_blank"
-        rel="noreferrer"
-      >
-        <span className="settings-skills-marketplace-main">
-          <span className="settings-skills-marketplace-label">Marketplace</span>
-          <span className="settings-skills-marketplace-url">{SKILLS_MARKETPLACE_URL}</span>
-        </span>
-        <span className="codicon codicon-link-external" aria-hidden="true" />
-      </a>
       {skillsScanning ? (
         <div className="settings-skills-scan-status" role="status" aria-live="polite">
           <span className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
@@ -520,6 +512,21 @@ export function SkillsSettingsDetail({
             </section>
           );
         })() : null}
+      </div>
+      <div className="settings-skills-fixed-controls">
+        <a
+          className="settings-skills-marketplace-link"
+          href={SKILLS_MARKETPLACE_URL}
+          target="_blank"
+          rel="noreferrer"
+        >
+          <span className="settings-skills-marketplace-main">
+            <span className="settings-skills-marketplace-label">Marketplace</span>
+            <span className="settings-skills-marketplace-url">{SKILLS_MARKETPLACE_URL}</span>
+          </span>
+          <span className="codicon codicon-link-external" aria-hidden="true" />
+        </a>
+        {renderSkillHubPicker()}
       </div>
     </>
   );
