@@ -20,6 +20,7 @@ type PreviewWorkbenchChromeProps = {
   onTabSelect: (tabId: string) => void;
   onTabClose: (tabId: string) => void;
   onFileTreeToggle: () => void;
+  onMobilePortRelayRefresh?: () => void;
   children: React.ReactNode;
 };
 
@@ -46,6 +47,7 @@ export function PreviewWorkbenchChrome({
   onTabSelect,
   onTabClose,
   onFileTreeToggle,
+  onMobilePortRelayRefresh,
   children,
 }: PreviewWorkbenchChromeProps) {
   const [mobileHeaderHidden, setMobileHeaderHidden] = React.useState(false);
@@ -152,16 +154,29 @@ export function PreviewWorkbenchChrome({
           </div>
         ) : null}
         {mode === 'mobile' ? (
-          <button
-            type="button"
-            className={`preview-workbench-mobile-header-toggle${mobileHeaderHidden ? ' active' : ''}`}
-            onClick={() => setMobileHeaderHidden(hidden => !hidden)}
-            title={mobileHeaderHidden ? 'Show preview header' : 'Hide preview header'}
-            aria-label={mobileHeaderHidden ? 'Show preview header' : 'Hide preview header'}
-            aria-pressed={mobileHeaderHidden}
-          >
-            <span className={`codicon ${mobileHeaderHidden ? 'codicon-screen-normal' : 'codicon-screen-full'}`} />
-          </button>
+          <>
+            {activeTab?.type === 'port-relay' && onMobilePortRelayRefresh ? (
+              <button
+                type="button"
+                className="preview-workbench-mobile-port-relay-refresh"
+                onClick={onMobilePortRelayRefresh}
+                title="Refresh relay page"
+                aria-label="Refresh relay page"
+              >
+                <span className="codicon codicon-refresh" />
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className={`preview-workbench-mobile-header-toggle${mobileHeaderHidden ? ' active' : ''}`}
+              onClick={() => setMobileHeaderHidden(hidden => !hidden)}
+              title={mobileHeaderHidden ? 'Show preview header' : 'Hide preview header'}
+              aria-label={mobileHeaderHidden ? 'Show preview header' : 'Hide preview header'}
+              aria-pressed={mobileHeaderHidden}
+            >
+              <span className={`codicon ${mobileHeaderHidden ? 'codicon-screen-normal' : 'codicon-screen-full'}`} />
+            </button>
+          </>
         ) : null}
         {children}
       </div>

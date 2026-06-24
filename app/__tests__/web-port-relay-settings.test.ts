@@ -9,6 +9,8 @@ const detailPath = path.join(root, 'web/src/settings/PortRelaySettingsDetail.tsx
 const detailTsx = fs.existsSync(detailPath) ? fs.readFileSync(detailPath, 'utf8') : '';
 const surfacePath = path.join(root, 'web/src/portRelay/PortRelayFrameSurface.tsx');
 const surfaceTsx = fs.existsSync(surfacePath) ? fs.readFileSync(surfacePath, 'utf8') : '';
+const previewChromePath = path.join(root, 'web/src/preview/PreviewWorkbenchChrome.tsx');
+const previewChromeTsx = fs.existsSync(previewChromePath) ? fs.readFileSync(previewChromePath, 'utf8') : '';
 const portRelaySettingsSource = `${mainTsx}\n${detailTsx}`;
 const stylesCss = readWebStyles(root);
 
@@ -135,6 +137,28 @@ describe('port relay settings UI source structure', () => {
     expect(mainTsx).toContain('title="Port Relay site data cleanup"');
     expect(mainTsx).toContain('{portRelayClearSiteDataFrame}');
     expect(mainTsx).toContain('key={`workbench:${activePortRelayPreview.id}:${activePortRelayPreview.reloadKey}:${portRelayFrameUrl}`}');
+  });
+
+  test('adds a mobile Port Relay iframe refresh button above the full-screen toggle', () => {
+    expect(mainTsx).toContain('const refreshActivePortRelayPreview = () => {');
+    expect(mainTsx).toContain('updatePreviewTab(current, tab.projectId, tab.id, item =>');
+    expect(mainTsx).toContain("item.type === 'port-relay'");
+    expect(mainTsx).toContain('reloadKey: item.reloadKey + 1');
+    expect(mainTsx).toContain('onMobilePortRelayRefresh={refreshActivePortRelayPreview}');
+
+    expect(previewChromeTsx).toContain('onMobilePortRelayRefresh?: () => void;');
+    expect(previewChromeTsx).toContain("activeTab?.type === 'port-relay' && onMobilePortRelayRefresh ? (");
+    expect(previewChromeTsx).toContain('className="preview-workbench-mobile-port-relay-refresh"');
+    expect(previewChromeTsx).toContain('aria-label="Refresh relay page"');
+    expect(previewChromeTsx).toContain('codicon-refresh');
+
+    expect(stylesCss).toContain('.preview-workbench-mobile-port-relay-refresh');
+    const refreshStart = stylesCss.indexOf('.preview-workbench-mobile-port-relay-refresh');
+    const fullscreenStart = stylesCss.indexOf('.preview-workbench-mobile-header-toggle', refreshStart);
+    expect(refreshStart).toBeGreaterThanOrEqual(0);
+    expect(fullscreenStart).toBeGreaterThan(refreshStart);
+    const refreshCss = stylesCss.slice(refreshStart, fullscreenStart);
+    expect(refreshCss).toContain('bottom: calc(max(14px, var(--wm-safe-area-bottom)) + 44px);');
   });
 
   test('tracks relay enable status and polls opening status silently', () => {

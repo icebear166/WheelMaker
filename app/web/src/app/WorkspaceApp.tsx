@@ -18730,6 +18730,17 @@ export function App() {
     const absolutePath = projectRoot && relativePath ? `${projectRoot}/${relativePath}`.replace(/\\/g, '/') : chatFilePeek.path;
     navigator.clipboard.writeText(absolutePath).catch(() => undefined);
   };
+  const refreshActivePortRelayPreview = () => {
+    const tab = activePortRelayPreview;
+    if (!tab) return;
+    setPreviewWorkbench(current =>
+      updatePreviewTab(current, tab.projectId, tab.id, item =>
+        item.type === 'port-relay'
+          ? {...item, reloadKey: item.reloadKey + 1}
+          : item,
+      ),
+    );
+  };
   const renderPreviewWorkbenchActions = () => {
     const tab = activeWorkbenchTab;
     if (!tab) {
@@ -18862,6 +18873,7 @@ export function App() {
       onTabSelect={selectWorkbenchTab}
       onTabClose={closeWorkbenchTab}
       onFileTreeToggle={toggleChatFilePreviewTree}
+      onMobilePortRelayRefresh={refreshActivePortRelayPreview}
     >
       <div ref={chatFilePeekScrollRef} className="chat-file-peek-scroll">
         {renderPreviewWorkbenchBody(mode)}
