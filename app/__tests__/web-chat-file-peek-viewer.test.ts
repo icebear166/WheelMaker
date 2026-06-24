@@ -89,7 +89,7 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('const [chatPreviewManualOpen, setChatPreviewManualOpen] = useState(false);');
     expect(mainTsx).toContain('const [chatPreviewManualCollapsed, setChatPreviewManualCollapsed] = useState(false);');
     expect(mainTsx).toContain('const chatPreviewHasContent =');
-    expect(mainTsx).toContain('chatFilePreviewHasTabs || !!activePromptDiffPreview || !!activeAttachmentPreview || !!activePortRelayPreview;');
+    expect(mainTsx).toContain('const chatPreviewHasContent = previewWorkbenchHasTabs;');
     expect(mainTsx).toContain('const chatPreviewOpen = chatPreviewManualOpen || (chatPreviewHasContent && !chatPreviewManualCollapsed);');
     expect(mainTsx).toContain('const renderPreviewWorkbenchBody = (mode:');
     expect(mainTsx).toContain('No preview selected');
@@ -186,7 +186,7 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('updatePreviewTabAfterLoad(');
     expect(mainTsx).toContain('const activeWorkbenchTab = activePreviewTab(previewWorkbench);');
     expect(mainTsx).toContain('const chatFilePeek = isFilePreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;');
-    expect(mainTsx).toContain('const chatFilePreviewHasTabs = Object.values(previewWorkbench.tabsByProjectId)');
+    expect(mainTsx).toContain('const previewWorkbenchHasTabs = Object.values(previewWorkbench.tabsByProjectId)');
     expect(mainTsx).not.toContain('filePreviewWorkbenchState');
 
     const attachmentStart = mainTsx.indexOf('const openChatAttachmentPreview = useCallback');
@@ -253,6 +253,17 @@ describe('web chat file peek viewer', () => {
     expect(chromeTsx).not.toContain('chat-file-workbench-tree-toggle');
     expect(stylesCss).toContain('.preview-workbench-body-tools');
     expect(stylesCss).toContain('.preview-workbench-tree-panel');
+  });
+
+  test('preview pane renders one active typed workbench body instead of preview priority branches', () => {
+    const mainTsx = readSourceText(mainPath);
+
+    expect(mainTsx).toContain('const previewWorkbenchHasTabs = Object.values(previewWorkbench.tabsByProjectId)');
+    expect(mainTsx).toContain('const renderPreviewWorkbenchBody = (mode:');
+    expect(mainTsx).not.toContain('chatPreviewHasContent = chatFilePreviewHasTabs || !!chatPromptArtifactPreview || !!chatAttachmentPreview || chatPortRelayPreviewOpen');
+    expect(mainTsx).not.toContain('chatPromptArtifactPreview ? (');
+    expect(mainTsx).not.toContain('chatAttachmentPreview ? (');
+    expect(mainTsx).not.toContain('chatPortRelayPreviewOpen ?');
   });
 
   test('closing the last workbench tab leaves the preview open on the empty state', () => {

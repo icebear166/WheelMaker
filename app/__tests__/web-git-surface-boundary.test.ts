@@ -35,4 +35,17 @@ describe('git sidebar surface boundary', () => {
     expect(source).toContain('className="git-commit-popover"');
     expect(source).toContain('formatGitCommitDateTime(commitPopover.commit.time)');
   });
+
+  test('git surface keeps its existing diff rendering path outside preview workbench', () => {
+    const main = readFile(mainPath);
+    const gitBranchStart = main.indexOf('<GitSurface>');
+    const gitBranchEnd = main.indexOf('</GitSurface>', gitBranchStart);
+    const gitBranch = main.slice(gitBranchStart, gitBranchEnd);
+
+    expect(gitBranch).toContain('<GitSurface>');
+    expect(gitBranch).toContain('renderDiffPane(diffText, selectedDiff)');
+    expect(gitBranch).toContain("selectedDiff || 'Select a changed file'");
+    expect(gitBranch).not.toContain('openPreviewTab(');
+    expect(gitBranch).not.toContain("type: 'prompt-diff'");
+  });
 });

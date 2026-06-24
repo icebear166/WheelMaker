@@ -2766,15 +2766,14 @@ export function App() {
   const portRelayTargetMenuPressRef = useRef<PortRelayTargetMenuPressState | null>(null);
   const portRelayTargetMenuRef = useRef<HTMLDivElement | null>(null);
   const activeWorkbenchTab = activePreviewTab(previewWorkbench);
-  const chatFilePreviewHasTabs = Object.values(previewWorkbench.tabsByProjectId)
-    .some(tabs => tabs.some(isFilePreviewTab));
+  const previewWorkbenchHasTabs = Object.values(previewWorkbench.tabsByProjectId)
+    .some(tabs => tabs.length > 0);
   const chatFilePeek = isFilePreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;
   const activePromptDiffPreview = isPromptDiffPreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;
   const activeAttachmentPreview = isAttachmentPreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;
   const activePortRelayPreview = isPortRelayPreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;
   const previewWorkbenchRef = useRef(previewWorkbench);
-  const chatPreviewHasContent =
-    chatFilePreviewHasTabs || !!activePromptDiffPreview || !!activeAttachmentPreview || !!activePortRelayPreview;
+  const chatPreviewHasContent = previewWorkbenchHasTabs;
   const chatPreviewOpen = chatPreviewManualOpen || (chatPreviewHasContent && !chatPreviewManualCollapsed);
   const portRelayWorkbenchOpen = !!activePortRelayPreview && chatPreviewOpen;
   const mobilePortRelayFrameOpen = !isWide && portRelayWorkbenchOpen;
