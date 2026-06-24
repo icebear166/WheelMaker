@@ -373,17 +373,19 @@ import {VoiceInputButton, type VoiceInputInteractionMode} from '../features/spee
 import {VoiceRecordingBar} from '../features/speech/VoiceRecordingBar';
 import { FileExplorerTree, WorkspaceProjectSelector } from '../file/FileExplorerTree';
 import {
-  activeFilePreviewTab,
-  beginFilePreviewTabLoad,
-  closeFilePreviewTab,
-  completeFilePreviewTabLoad,
-  createFilePreviewWorkbenchState,
-  ensureFilePreviewProjectVisible,
-  failFilePreviewTabLoad,
-  openFilePreviewTab,
-  selectFilePreviewProject,
-  type FilePreviewWorkbenchTab,
-} from '../file/filePreviewWorkbenchState';
+  activePreviewTab,
+  beginPreviewTabLoad,
+  closePreviewTab,
+  createPreviewWorkbenchState,
+  ensurePreviewProjectVisible,
+  failPreviewTabLoad,
+  isFilePreviewTab,
+  openPreviewTab,
+  previewTabId,
+  selectPreviewProject,
+  updatePreviewTabAfterLoad,
+  type FilePreviewTab,
+} from '../preview/previewWorkbenchState';
 import { FilePreviewPane } from '../file/FilePreviewPane';
 import { FileSurface } from '../file/FileSurface';
 import { GitSurface } from '../git/GitSurface';
@@ -2026,11 +2028,11 @@ function promptArtifactPreviewCountLabel(fileCount: number): string {
 }
 
 type ChatFilePeekViewerProps = {
-  peek: FilePreviewWorkbenchTab | null;
+  peek: FilePreviewTab | null;
   mode: 'desktop' | 'mobile';
   projects: RegistryProject[];
   activeProjectId: string;
-  tabs: FilePreviewWorkbenchTab[];
+  tabs: FilePreviewTab[];
   treeOpen: boolean;
   themeMode: 'dark' | 'light';
   codeTheme: CodeThemeId;
@@ -3091,8 +3093,8 @@ export function App() {
   const [markdownPreviewEnabled, setMarkdownPreviewEnabled] = useState(false);
   const [htmlPreviewEnabled, setHtmlPreviewEnabled] = useState(false);
   const fileScrollRef = useRef<HTMLDivElement | null>(null);
-  const [chatFilePreviewWorkbench, setChatFilePreviewWorkbench] = useState(() =>
-    createFilePreviewWorkbenchState(),
+  const [previewWorkbench, setPreviewWorkbench] = useState(() =>
+    createPreviewWorkbenchState(),
   );
   const [chatFilePreviewDirEntriesByProject, setChatFilePreviewDirEntriesByProject] =
     useState<Record<string, DirEntries>>({});
@@ -3104,10 +3106,11 @@ export function App() {
   const [chatPreviewManualOpen, setChatPreviewManualOpen] = useState(false);
   const [chatPreviewManualCollapsed, setChatPreviewManualCollapsed] = useState(false);
   const [chatAttachmentThumbnails, setChatAttachmentThumbnails] = useState<Record<string, ChatAttachmentThumbnailState>>({});
-  const chatFilePreviewActiveTab = activeFilePreviewTab(chatFilePreviewWorkbench);
-  const chatFilePreviewHasTabs = Object.values(chatFilePreviewWorkbench.tabsByProjectId).some(tabs => tabs.length > 0);
-  const chatFilePeek = chatFilePreviewActiveTab;
-  const chatFilePeekRef = useRef<FilePreviewWorkbenchTab | null>(null);
+  const activeWorkbenchTab = activePreviewTab(previewWorkbench);
+  const chatFilePreviewHasTabs = Object.values(previewWorkbench.tabsByProjectId)
+    .some(tabs => tabs.some(isFilePreviewTab));
+  const chatFilePeek = isFilePreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;
+  const chatFilePeekRef = useRef<FilePreviewTab | null>(null);
   const chatAttachmentPreviewRef = useRef<ChatAttachmentPreviewState | null>(null);
   const chatPromptArtifactPreviewRef = useRef<ChatPromptArtifactPreviewState | null>(null);
   const chatFilePeekScrollRef = useRef<HTMLDivElement | null>(null);
@@ -4766,8 +4769,8 @@ export function App() {
   const hiddenProjectIdSet = useMemo(() => new Set(hiddenProjectIds), [hiddenProjectIds]);
   useEffect(() => {
     const visibleProjectIds = chatFilePreviewProjects.map(projectItem => projectItem.projectId);
-    setChatFilePreviewWorkbench(current =>
-      ensureFilePreviewProjectVisible(
+    setPreviewWorkbench(current =>
+      ensurePreviewProjectVisible(
         current,
         visibleProjectIds,
         selectedChatKey?.projectId ?? '',
@@ -8440,7 +8443,7 @@ export function App() {
   };
 
   const togglePreviewDirectory = async (path: string) => {
-    const targetProjectId = chatFilePreviewWorkbench.activeProjectId;
+    const targetProjectId = previewWorkbench.activeProjectId;
     if (!targetProjectId) return;
     if (isExpanded(path)) {
       setExpandedDirs(prev => prev.filter(item => item !== path));
@@ -8460,14 +8463,14 @@ export function App() {
   };
 
   useEffect(() => {
-    const targetProjectId = chatFilePreviewWorkbench.activeProjectId;
+    const targetProjectId = previewWorkbench.activeProjectId;
     if (!targetProjectId) return;
     if (chatFilePreviewDirEntriesByProject[targetProjectId]?.['.']) return;
     loadPreviewDirectory(targetProjectId, '.').catch(err => {
       const reason = err instanceof Error ? err.message : String(err);
       setError(`Failed to load project files: ${reason}`);
     });
-  }, [chatFilePreviewWorkbench.activeProjectId, chatFilePreviewDirEntriesByProject]);
+  }, [previewWorkbench.activeProjectId, chatFilePreviewDirEntriesByProject]);
 
   const readSelectedFile = async (path: string, options?: {restoreScroll?: boolean; silent?: boolean}) => {
     if (!path) return;
@@ -8594,11 +8597,18 @@ export function App() {
     setChatPreviewManualCollapsed(false);
     const requestSeq = chatFilePeekReadSeqRef.current + 1;
     chatFilePeekReadSeqRef.current = requestSeq;
-    setChatFilePreviewWorkbench(current =>
-      beginFilePreviewTabLoad(
-        openFilePreviewTab(current, targetProjectId, path, targetLine),
+    const tabId = previewTabId({type: 'file', path});
+    setPreviewWorkbench(current =>
+      beginPreviewTabLoad(
+        openPreviewTab(current, {
+          type: 'file',
+          projectId: targetProjectId,
+          path,
+          targetLine,
+          title: path.split('/').pop() || path,
+        }),
         targetProjectId,
-        path,
+        tabId,
         requestSeq,
       ),
       );
@@ -8610,11 +8620,11 @@ export function App() {
           `This file is ${sizeMB} MB. Load full content now?`,
         );
         if (!confirmed) {
-          setChatFilePreviewWorkbench(current =>
-            failFilePreviewTabLoad(
+          setPreviewWorkbench(current =>
+            failPreviewTabLoad(
               current,
               targetProjectId,
-              path,
+              tabId,
               requestSeq,
               'File load cancelled.',
             ),
@@ -8623,23 +8633,34 @@ export function App() {
         }
       }
       const result = await service.readProjectFile(path, targetProjectId);
-      setChatFilePreviewWorkbench(current =>
-        completeFilePreviewTabLoad(
+      setPreviewWorkbench(current =>
+        updatePreviewTabAfterLoad(
           current,
           targetProjectId,
-          path,
+          tabId,
           requestSeq,
-          info,
-          result.content,
+          tab =>
+            tab.type === 'file'
+              ? {...tab, info, content: result.content, loading: false, error: ''}
+              : tab,
         ),
       );
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
-      setChatFilePreviewWorkbench(current =>
-        failFilePreviewTabLoad(
-          current,
+      setPreviewWorkbench(current =>
+        failPreviewTabLoad(
+          updatePreviewTabAfterLoad(
+            current,
+            targetProjectId,
+            tabId,
+            requestSeq,
+            tab =>
+              tab.type === 'file'
+                ? {...tab, content: '', info: null}
+                : tab,
+          ),
           targetProjectId,
-          path,
+          tabId,
           requestSeq,
           `Failed to load file: ${reason}`,
         ),
@@ -8840,9 +8861,9 @@ export function App() {
     (explicitProjectId = '') =>
       explicitProjectId ||
       selectedChatKeyRef.current?.projectId ||
-      chatFilePreviewWorkbench.activeProjectId ||
+      previewWorkbench.activeProjectId ||
       projectIdRef.current,
-    [chatFilePreviewWorkbench.activeProjectId],
+    [previewWorkbench.activeProjectId],
   );
 
   const openChatFilePeek = useCallback((path: string, line: number | null, targetProjectId: string) => {
@@ -18767,19 +18788,19 @@ export function App() {
     />
   );
   const chatFilePreviewTabs =
-    chatFilePreviewWorkbench.tabsByProjectId[chatFilePreviewWorkbench.activeProjectId] ?? [];
+    (previewWorkbench.tabsByProjectId[previewWorkbench.activeProjectId] ?? []).filter(isFilePreviewTab);
   const chatFilePreviewDirEntries =
-    chatFilePreviewDirEntriesByProject[chatFilePreviewWorkbench.activeProjectId] ?? {'.': []};
+    chatFilePreviewDirEntriesByProject[previewWorkbench.activeProjectId] ?? {'.': []};
   const chatFilePreviewLoadingDirs =
-    chatFilePreviewLoadingDirsByProject[chatFilePreviewWorkbench.activeProjectId] ?? {};
+    chatFilePreviewLoadingDirsByProject[previewWorkbench.activeProjectId] ?? {};
   const chatFilePreviewTreeContent = (
     <FileExplorerTree
       isWide={false}
       showSectionTitle={false}
       projects={projects}
-      projectId={chatFilePreviewWorkbench.activeProjectId}
+      projectId={previewWorkbench.activeProjectId}
       currentProjectName={
-        chatFilePreviewProjects.find(item => item.projectId === chatFilePreviewWorkbench.activeProjectId)?.name ??
+        chatFilePreviewProjects.find(item => item.projectId === previewWorkbench.activeProjectId)?.name ??
         currentProjectName
       }
       sortedProjectItems={chatFilePreviewProjects}
@@ -18797,25 +18818,33 @@ export function App() {
       }}
       resolveFileIcon={resolveFileIcon}
       onFileSelect={path => {
-        openChatFilePeek(path, null, chatFilePreviewWorkbench.activeProjectId);
+        openChatFilePeek(path, null, previewWorkbench.activeProjectId);
       }}
     />
   );
   const changeChatFilePreviewProject = (nextProjectId: string) => {
-    setChatFilePreviewWorkbench(current => selectFilePreviewProject(current, nextProjectId));
+    setPreviewWorkbench(current => selectPreviewProject(current, nextProjectId));
   };
   const selectChatFilePreviewTab = (path: string) => {
-    setChatFilePreviewWorkbench(current => {
+    setPreviewWorkbench(current => {
       const projectId = current.activeProjectId;
-      const tab = (current.tabsByProjectId[projectId] ?? []).find(item => item.path === path);
-      return openFilePreviewTab(current, projectId, path, tab?.targetLine ?? null);
+      const tab = (current.tabsByProjectId[projectId] ?? []).find(item =>
+        item.type === 'file' && item.path === path,
+      );
+      return openPreviewTab(current, {
+        type: 'file',
+        projectId,
+        path,
+        targetLine: tab?.type === 'file' ? tab.targetLine : null,
+        title: path.split('/').pop() || path,
+      });
     });
   };
   const closeChatFilePreviewTab = (path: string) => {
     const closingLastTab = chatFilePreviewTabs.length === 1 &&
       chatFilePreviewTabs[0]?.path === path;
-    setChatFilePreviewWorkbench(current =>
-      closeFilePreviewTab(current, current.activeProjectId, path),
+    setPreviewWorkbench(current =>
+      closePreviewTab(current, current.activeProjectId, previewTabId({type: 'file', path})),
     );
     if (closingLastTab) {
       setChatPreviewManualOpen(true);
@@ -18823,11 +18852,11 @@ export function App() {
     }
   };
   const toggleChatFilePreviewTree = () => {
-    setChatFilePreviewWorkbench(current => ({...current, treeOpen: !current.treeOpen}));
+    setPreviewWorkbench(current => ({...current, treeOpen: !current.treeOpen}));
   };
   const copyChatFilePreviewPath = () => {
     if (!chatFilePeek) return;
-    const previewProject = projects.find(item => item.projectId === chatFilePreviewWorkbench.activeProjectId);
+    const previewProject = projects.find(item => item.projectId === previewWorkbench.activeProjectId);
     const projectRoot = (previewProject?.path ?? currentProject?.path ?? '').replace(/[\\/]+$/, '');
     const relativePath = chatFilePeek.path.replace(/^\.?[\\/]+/, '');
     const absolutePath = projectRoot && relativePath ? `${projectRoot}/${relativePath}`.replace(/\\/g, '/') : chatFilePeek.path;
@@ -18876,9 +18905,9 @@ export function App() {
           peek={chatFilePeek}
           mode="desktop"
           projects={chatFilePreviewProjects}
-          activeProjectId={chatFilePreviewWorkbench.activeProjectId}
+          activeProjectId={previewWorkbench.activeProjectId}
           tabs={chatFilePreviewTabs}
-          treeOpen={chatFilePreviewWorkbench.treeOpen}
+          treeOpen={previewWorkbench.treeOpen}
           themeMode={themeMode}
           codeTheme={codeTheme}
           codeFont={codeFont}
@@ -18936,9 +18965,9 @@ export function App() {
           peek={chatFilePeek}
           mode="mobile"
           projects={chatFilePreviewProjects}
-          activeProjectId={chatFilePreviewWorkbench.activeProjectId}
+          activeProjectId={previewWorkbench.activeProjectId}
           tabs={chatFilePreviewTabs}
-          treeOpen={chatFilePreviewWorkbench.treeOpen}
+          treeOpen={previewWorkbench.treeOpen}
           themeMode={themeMode}
           codeTheme={codeTheme}
           codeFont={codeFont}
