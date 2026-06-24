@@ -18854,7 +18854,7 @@ export function App() {
       activeTab={previewWorkbenchActiveTab}
       tabs={previewWorkbenchTabs}
       fileTreeOpen={previewWorkbench.treeOpen}
-      fileTree={mode === 'desktop' && activeWorkbenchTab?.type === 'file' ? chatFilePreviewTreeContent : null}
+      fileTree={activeWorkbenchTab?.type === 'file' ? chatFilePreviewTreeContent : null}
       actions={renderPreviewWorkbenchActions()}
       onClose={closeChatFilePeekFromChrome}
       onProjectMenuToggle={togglePreviewProjectMenu}

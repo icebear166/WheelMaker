@@ -48,10 +48,11 @@ export function PreviewWorkbenchChrome({
   onFileTreeToggle,
   children,
 }: PreviewWorkbenchChromeProps) {
+  const [mobileHeaderHidden, setMobileHeaderHidden] = React.useState(false);
   const activeProject = projects.find(project => project.projectId === activeProjectId) ?? null;
   const activeTitle = activeTab?.title || 'Preview';
   return (
-    <section className={`preview-workbench-surface chat-file-peek-surface ${mode}`} aria-label="Preview workbench">
+    <section className={`preview-workbench-surface chat-file-peek-surface ${mode}${mobileHeaderHidden ? ' mobile-header-hidden' : ''}`} aria-label="Preview workbench">
       <div className="chat-preview-toolbar preview-workbench-toolbar">
         <button
           type="button"
@@ -131,7 +132,7 @@ export function PreviewWorkbenchChrome({
         })}
       </div>
       <div className="preview-workbench-body">
-        {mode === 'desktop' && fileTree ? (
+        {fileTree ? (
           <div className="preview-workbench-body-tools">
             <button
               type="button"
@@ -145,10 +146,22 @@ export function PreviewWorkbenchChrome({
             </button>
           </div>
         ) : null}
-        {mode === 'desktop' && fileTreeOpen && fileTree ? (
+        {fileTreeOpen && fileTree ? (
           <div className="preview-workbench-tree-panel">
             {fileTree}
           </div>
+        ) : null}
+        {mode === 'mobile' ? (
+          <button
+            type="button"
+            className={`preview-workbench-mobile-header-toggle${mobileHeaderHidden ? ' active' : ''}`}
+            onClick={() => setMobileHeaderHidden(hidden => !hidden)}
+            title={mobileHeaderHidden ? 'Show preview header' : 'Hide preview header'}
+            aria-label={mobileHeaderHidden ? 'Show preview header' : 'Hide preview header'}
+            aria-pressed={mobileHeaderHidden}
+          >
+            <span className={`codicon ${mobileHeaderHidden ? 'codicon-screen-normal' : 'codicon-screen-full'}`} />
+          </button>
         ) : null}
         {children}
       </div>

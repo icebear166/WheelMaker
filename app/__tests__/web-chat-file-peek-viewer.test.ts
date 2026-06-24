@@ -244,15 +244,39 @@ describe('web chat file peek viewer', () => {
     expect(stylesCss).toContain('.preview-workbench-tab-icon');
   });
 
-  test('desktop file tree toggle is a floating body button and mobile hides it', () => {
+  test('file tree toggle is a floating body button on desktop and mobile', () => {
+    const mainTsx = readSourceText(mainPath);
     const chromeTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'preview', 'PreviewWorkbenchChrome.tsx'));
     const stylesCss = readWebStyles(projectRoot);
 
     expect(chromeTsx).toContain('preview-workbench-tree-fab');
-    expect(chromeTsx).toContain("mode === 'desktop' && fileTree");
+    expect(chromeTsx).toContain('fileTree ? (');
+    expect(chromeTsx).toContain('fileTreeOpen && fileTree ? (');
+    expect(mainTsx).toContain("fileTree={activeWorkbenchTab?.type === 'file' ? chatFilePreviewTreeContent : null}");
     expect(chromeTsx).not.toContain('chat-file-workbench-tree-toggle');
     expect(stylesCss).toContain('.preview-workbench-body-tools');
     expect(stylesCss).toContain('.preview-workbench-tree-panel');
+    expect(stylesCss).toContain('.preview-workbench-surface.mobile .preview-workbench-tree-panel');
+  });
+
+  test('mobile preview workbench can hide and restore its top chrome', () => {
+    const chromeTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'preview', 'PreviewWorkbenchChrome.tsx'));
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(chromeTsx).toContain('const [mobileHeaderHidden, setMobileHeaderHidden] = React.useState(false);');
+    expect(chromeTsx).toContain("preview-workbench-surface chat-file-peek-surface ${mode}${mobileHeaderHidden ? ' mobile-header-hidden' : ''}");
+    expect(chromeTsx).toContain("mode === 'mobile' ? (");
+    expect(chromeTsx).toContain('preview-workbench-mobile-header-toggle');
+    expect(chromeTsx).toContain("setMobileHeaderHidden(hidden => !hidden)");
+    expect(chromeTsx).toContain("mobileHeaderHidden ? 'Show preview header' : 'Hide preview header'");
+    expect(chromeTsx).toContain("mobileHeaderHidden ? 'codicon-screen-normal' : 'codicon-screen-full'");
+
+    expect(stylesCss).toContain('.preview-workbench-surface.mobile.mobile-header-hidden .preview-workbench-toolbar');
+    expect(stylesCss).toContain('.preview-workbench-mobile-header-toggle');
+    const mobileToggle = cssRuleBlock(stylesCss, '.preview-workbench-mobile-header-toggle');
+    expect(mobileToggle).toContain('right: max(14px, var(--wm-safe-area-right));');
+    expect(mobileToggle).toContain('bottom: max(14px, var(--wm-safe-area-bottom));');
+    expect(mobileToggle).toContain('z-index: 11;');
   });
 
   test('preview pane renders one active typed workbench body instead of preview priority branches', () => {
