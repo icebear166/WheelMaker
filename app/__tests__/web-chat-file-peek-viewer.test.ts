@@ -89,7 +89,7 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('const [chatPreviewManualOpen, setChatPreviewManualOpen] = useState(false);');
     expect(mainTsx).toContain('const [chatPreviewManualCollapsed, setChatPreviewManualCollapsed] = useState(false);');
     expect(mainTsx).toContain('const chatPreviewHasContent =');
-    expect(mainTsx).toContain('chatFilePreviewHasTabs || !!activePromptDiffPreview || !!activeAttachmentPreview || chatPortRelayPreviewOpen;');
+    expect(mainTsx).toContain('chatFilePreviewHasTabs || !!activePromptDiffPreview || !!activeAttachmentPreview || !!activePortRelayPreview;');
     expect(mainTsx).toContain('const chatPreviewOpen = chatPreviewManualOpen || (chatPreviewHasContent && !chatPreviewManualCollapsed);');
     expect(mainTsx).toContain('const ChatEmptyPreviewViewer = React.memo(function ChatEmptyPreviewViewer');
     expect(mainTsx).toContain('<div className="chat-preview-title" title="Preview">Preview</div>');
@@ -253,7 +253,7 @@ describe('web chat file peek viewer', () => {
     expect(closeBody).toContain('closeChatPromptArtifactPreview();');
     expect(closeBody).toContain("if (activeTab?.type === 'attachment') {");
     expect(closeBody).toContain('closeChatAttachmentPreview();');
-    expect(closeBody).toContain('if (chatPortRelayPreviewOpen) {');
+    expect(closeBody).toContain("if (activeTab?.type === 'port-relay') {");
     expect(closeBody).toContain('closeChatPortRelayPreview();');
     expect(closeBody).toContain('setChatPreviewManualCollapsed(false);');
   });

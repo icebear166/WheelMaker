@@ -29,6 +29,9 @@ describe('main surface boundaries', () => {
     expect(workspaceApp).not.toContain('className="section-title git-section-title"');
     expect(workspaceApp).not.toContain('className="git-commit-popover"');
     expect(workspaceApp).not.toContain('const renderPortRelayFrameSurface =');
+    expect(workspaceApp).not.toContain('const portRelayMobileFrameOverlay = mobilePortRelayFrameOpen');
+    expect(workspaceApp).not.toContain("portRelayFramePlacement === 'main'");
+    expect(workspaceApp).not.toContain("portRelayFramePlacement === 'chatPreview'");
     expect(workspaceApp).not.toContain('className="port-relay-frame"');
 
     expect(workspaceApp).toContain("if (tab === 'chat') {");

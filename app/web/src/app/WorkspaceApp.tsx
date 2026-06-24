@@ -381,6 +381,7 @@ import {
   failPreviewTabLoad,
   isAttachmentPreviewTab,
   isFilePreviewTab,
+  isPortRelayPreviewTab,
   isPromptDiffPreviewTab,
   openPreviewTab,
   previewTabId,
@@ -629,8 +630,6 @@ type ChatAttachmentThumbnailState = {
   loading: boolean;
   error: string;
 };
-type PortRelayFramePlacement = 'main' | 'chatPreview';
-
 const LARGE_FILE_CONFIRM_BYTES = 2 * 1024 * 1024;
 
 type ThinkingBlockProps = {
@@ -2894,19 +2893,35 @@ export function App() {
   const [portRelayAccessCode, setPortRelayAccessCode] = useState('');
   const [portRelayKnownAccessCodeGeneration, setPortRelayKnownAccessCodeGeneration] = useState<number | null>(null);
   const [portRelayCodeCopied, setPortRelayCodeCopied] = useState(false);
-  const [portRelayFrameOpen, setPortRelayFrameOpen] = useState(false);
-  const [portRelayFramePlacement, setPortRelayFramePlacement] = useState<PortRelayFramePlacement>('main');
   const [portRelayFramePath, setPortRelayFramePath] = useState('');
   const [portRelayClearSiteDataUrl, setPortRelayClearSiteDataUrl] = useState('');
   const [portRelayFrameReloadKey, setPortRelayFrameReloadKey] = useState(0);
   const [portRelayFrameAutoOpenPending, setPortRelayFrameAutoOpenPending] = useState(false);
   const [portRelayTargetMenuOpen, setPortRelayTargetMenuOpen] = useState(false);
   const [portRelayMenuSwitchingTarget, setPortRelayMenuSwitchingTarget] = useState<PortRelayTarget | null>(null);
+  const [previewWorkbench, setPreviewWorkbench] = useState(() =>
+    createPreviewWorkbenchState(),
+  );
+  const [chatPreviewManualOpen, setChatPreviewManualOpen] = useState(false);
+  const [chatPreviewManualCollapsed, setChatPreviewManualCollapsed] = useState(false);
   const portRelayCodeCopyTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const portRelayClearSiteDataTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const portRelayTargetMenuTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const portRelayTargetMenuPressRef = useRef<PortRelayTargetMenuPressState | null>(null);
   const portRelayTargetMenuRef = useRef<HTMLDivElement | null>(null);
+  const activeWorkbenchTab = activePreviewTab(previewWorkbench);
+  const chatFilePreviewHasTabs = Object.values(previewWorkbench.tabsByProjectId)
+    .some(tabs => tabs.some(isFilePreviewTab));
+  const chatFilePeek = isFilePreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;
+  const activePromptDiffPreview = isPromptDiffPreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;
+  const activeAttachmentPreview = isAttachmentPreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;
+  const activePortRelayPreview = isPortRelayPreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;
+  const previewWorkbenchRef = useRef(previewWorkbench);
+  const chatPreviewHasContent =
+    chatFilePreviewHasTabs || !!activePromptDiffPreview || !!activeAttachmentPreview || !!activePortRelayPreview;
+  const chatPreviewOpen = chatPreviewManualOpen || (chatPreviewHasContent && !chatPreviewManualCollapsed);
+  const portRelayWorkbenchOpen = !!activePortRelayPreview && chatPreviewOpen;
+  const mobilePortRelayFrameOpen = !isWide && portRelayWorkbenchOpen;
   const portRelayReady = portRelaySnapshot.enabled && portRelaySnapshot.status === 'Up';
   const portRelayAccessCodeUnknown = portRelaySnapshot.enabled && (
     !portRelayAccessCode ||
@@ -2941,20 +2956,12 @@ export function App() {
     () => orderPortRelayTargetsForMenu(portRelayTargets, activePortRelayTarget),
     [activePortRelayTarget, portRelayTargets],
   );
-  const mobilePortRelayFrameOpen = !isWide && portRelayFrameOpen && portRelayFramePlacement === 'main' && !!portRelayFrameUrl;
-
-  useEffect(() => {
-    if (!portRelayReady || !portRelayFrameUrl) {
-      setPortRelayFrameOpen(false);
-    }
-  }, [portRelayFrameUrl, portRelayReady]);
 
   useEffect(() => {
     if (!portRelayFrameAutoOpenPending) {
       return;
     }
     if (portRelayReady && portRelayFrameUrl) {
-      setPortRelayFrameOpen(true);
       setPortRelayFrameAutoOpenPending(false);
       return;
     }
@@ -3069,23 +3076,11 @@ export function App() {
   const [markdownPreviewEnabled, setMarkdownPreviewEnabled] = useState(false);
   const [htmlPreviewEnabled, setHtmlPreviewEnabled] = useState(false);
   const fileScrollRef = useRef<HTMLDivElement | null>(null);
-  const [previewWorkbench, setPreviewWorkbench] = useState(() =>
-    createPreviewWorkbenchState(),
-  );
   const [chatFilePreviewDirEntriesByProject, setChatFilePreviewDirEntriesByProject] =
     useState<Record<string, DirEntries>>({});
   const [chatFilePreviewLoadingDirsByProject, setChatFilePreviewLoadingDirsByProject] =
     useState<Record<string, Record<string, boolean>>>({});
-  const [chatPreviewManualOpen, setChatPreviewManualOpen] = useState(false);
-  const [chatPreviewManualCollapsed, setChatPreviewManualCollapsed] = useState(false);
   const [chatAttachmentThumbnails, setChatAttachmentThumbnails] = useState<Record<string, ChatAttachmentThumbnailState>>({});
-  const activeWorkbenchTab = activePreviewTab(previewWorkbench);
-  const chatFilePreviewHasTabs = Object.values(previewWorkbench.tabsByProjectId)
-    .some(tabs => tabs.some(isFilePreviewTab));
-  const chatFilePeek = isFilePreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;
-  const activePromptDiffPreview = isPromptDiffPreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;
-  const activeAttachmentPreview = isAttachmentPreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;
-  const previewWorkbenchRef = useRef(previewWorkbench);
   const chatFilePeekRef = useRef<FilePreviewTab | null>(null);
   const chatFilePeekScrollRef = useRef<HTMLDivElement | null>(null);
   const chatFilePeekReadSeqRef = useRef(0);
@@ -3099,10 +3094,6 @@ export function App() {
   const [chatFilePeekResizing, setChatFilePeekResizing] = useState(false);
   const [chatPeekSelectedLines, setChatPeekSelectedLines] = useState<Set<number>>(new Set());
   const chatPeekAnchorRef = useRef<number | null>(null);
-  const chatPortRelayPreviewOpen = portRelayFrameOpen && portRelayFramePlacement === 'chatPreview' && !!portRelayFrameUrl;
-  const chatPreviewHasContent =
-    chatFilePreviewHasTabs || !!activePromptDiffPreview || !!activeAttachmentPreview || chatPortRelayPreviewOpen;
-  const chatPreviewOpen = chatPreviewManualOpen || (chatPreviewHasContent && !chatPreviewManualCollapsed);
   const liveRefreshTimerRef = useRef<number | null>(null);
   const refreshInFlightRef = useRef(false);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -6574,7 +6565,6 @@ export function App() {
     gestureNavigation,
     gestureNavigationExpanded,
     mobilePortRelayFrameOpen,
-    portRelayFrameOpen,
     portRelayFrameUrl,
     portRelayReady,
     requestFloatingBackdropToneMeasure,
@@ -7180,27 +7170,18 @@ export function App() {
     };
   }, [cancelGestureNavigation, gestureNavigationExpanded]);
   const closeSettingsPanel = useCallback(() => {
-    if (isWide) {
-      setPortRelayFrameOpen(false);
-    }
     setSettingsDetailView(null);
     setSidebarSettingsOpen(false);
-  }, [isWide, setSidebarSettingsOpen]);
+  }, [setSidebarSettingsOpen]);
   const openSettingsRoot = useCallback(() => {
-    if (isWide) {
-      setPortRelayFrameOpen(false);
-    }
     setSettingsDetailView(null);
     setSidebarSettingsOpen(true);
     setSidebarCollapsed(false);
-  }, [isWide, setSidebarCollapsed, setSidebarSettingsOpen]);
+  }, [setSidebarCollapsed, setSidebarSettingsOpen]);
   const openSettingsPeer = useCallback((detail: SettingsPeerDetail) => {
     if (isWide && sidebarSettingsOpen && settingsDetailView === detail) {
       closeSettingsPanel();
       return;
-    }
-    if (isWide && detail !== 'portRelay') {
-      setPortRelayFrameOpen(false);
     }
     setSidebarSettingsOpen(true);
     setSidebarCollapsed(false);
@@ -7216,9 +7197,6 @@ export function App() {
     setSettingsDetailView(detail);
   }, [closeSettingsPanel, isWide, setSidebarCollapsed, setSidebarSettingsOpen, settingsDetailView, sidebarSettingsOpen]);
   const openSettingsChild = useCallback((detail: SettingsChildDetail) => {
-    if (isWide) {
-      setPortRelayFrameOpen(false);
-    }
     setSidebarSettingsOpen(true);
     setSidebarCollapsed(false);
     if (detail === 'database') {
@@ -7234,7 +7212,6 @@ export function App() {
     openSettingsChild(detail);
   }, [openSettingsChild, openSettingsPeer]);
   const handleDesktopActivitySelect = useCallback((nextTab: Tab) => {
-    setPortRelayFrameOpen(false);
     if (sidebarSettingsOpen) {
       setSidebarSettingsOpen(false);
       setSettingsDetailView(null);
@@ -7258,35 +7235,6 @@ export function App() {
     }
     openSettingsRoot();
   }, [closeSettingsPanel, openSettingsRoot, sidebarSettingsOpen, settingsDetailView]);
-  const handleDesktopPortRelaySelect = useCallback(() => {
-    if (sidebarSettingsOpen && settingsDetailView === 'portRelay') {
-      closeSettingsPanel();
-      return;
-    }
-    openSettingsPeer('portRelay');
-    if (!portRelayReady || !portRelayFrameUrl) {
-      setPortRelayFrameOpen(false);
-      setPortRelayFramePlacement('main');
-      return;
-    }
-    setPortRelayFramePlacement('main');
-    setPortRelayFrameOpen(open => (portRelayFramePlacement === 'main' ? !open : true));
-  }, [closeSettingsPanel, openSettingsPeer, portRelayFramePlacement, portRelayFrameUrl, portRelayReady, settingsDetailView, sidebarSettingsOpen]);
-  const handlePortRelayFloatingToggle = useCallback(() => {
-    if (floatingClickCooldownUntilRef.current > Date.now()) {
-      return;
-    }
-    setPortRelayTargetMenuOpen(false);
-    if (!portRelayReady || !portRelayFrameUrl) {
-      setPortRelayFrameOpen(false);
-      setPortRelayFramePlacement('main');
-      return;
-    }
-    setDrawerOpen(false);
-    setSidebarSettingsOpen(false);
-    setPortRelayFramePlacement('main');
-    setPortRelayFrameOpen(open => !open);
-  }, [portRelayFrameUrl, portRelayReady, setDrawerOpen, setSidebarSettingsOpen]);
   const handlePortRelayFloatingPointerDown = useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
       event.stopPropagation();
@@ -7467,8 +7415,11 @@ export function App() {
     setPreviewWorkbench(current => closePreviewTab(current, tab.projectId, tab.id));
   }, []);
   const closeChatPortRelayPreview = useCallback(() => {
-    setPortRelayFrameOpen(false);
-    setPortRelayFramePlacement('main');
+    const tab = activePreviewTab(previewWorkbenchRef.current);
+    if (!tab || tab.type !== 'port-relay') {
+      return;
+    }
+    setPreviewWorkbench(current => closePreviewTab(current, tab.projectId, tab.id));
   }, []);
   const closeChatPreview = useCallback(() => {
     setChatPreviewManualOpen(false);
@@ -8730,8 +8681,6 @@ export function App() {
     const requestSeq = chatAttachmentReadSeqRef.current + 1;
     chatAttachmentReadSeqRef.current = requestSeq;
     setError('');
-    setPortRelayFrameOpen(false);
-    setPortRelayFramePlacement('main');
     setChatPreviewManualOpen(false);
     setChatPreviewManualCollapsed(false);
     setPreviewWorkbench(current => {
@@ -8858,8 +8807,6 @@ export function App() {
       return;
     }
     setError('');
-    setPortRelayFrameOpen(false);
-    setPortRelayFramePlacement('main');
     if (!isWide) {
       setDrawerOpen(false);
       setChatQuickSwitchMenuOpen(false);
@@ -8905,7 +8852,7 @@ export function App() {
       setChatPreviewManualCollapsed(false);
       return;
     }
-    if (chatPortRelayPreviewOpen) {
+    if (activeTab?.type === 'port-relay') {
       closeChatPortRelayPreview();
       setChatPreviewManualOpen(false);
       setChatPreviewManualCollapsed(false);
@@ -8913,7 +8860,6 @@ export function App() {
     }
     closeChatPreview();
   }, [
-    chatPortRelayPreviewOpen,
     closeChatAttachmentPreview,
     closeChatPortRelayPreview,
     closeChatPreview,
@@ -12094,29 +12040,26 @@ export function App() {
   const enablePortRelayForTarget = useCallback(async (
     target: PortRelayTarget | null,
     listenPortValue = portRelayListenPort,
-    options: {framePath?: string; openFrame?: boolean; framePlacement?: PortRelayFramePlacement} = {},
-  ) => {
+    options: {framePath?: string; openFrame?: boolean} = {},
+  ): Promise<RegistryPortRelaySnapshot | null> => {
     const normalizedTarget = normalizePortRelayTarget(target);
     const listenPort = Number(listenPortValue);
     if (portRelayAccessCodeUnknown) {
       setPortRelayError('Access code is unknown on this device. Generate a new code before switching target.');
-      return;
+      return null;
     }
     if (options.framePath !== undefined) {
       setPortRelayFramePath(options.framePath);
-    }
-    if (options.framePlacement) {
-      setPortRelayFramePlacement(options.framePlacement);
     }
     const accessCode = portRelayAccessCode || generatePortRelayAccessCode();
     setPortRelayAccessCode(accessCode);
     if (!Number.isInteger(listenPort) || listenPort < 1 || listenPort > 65535) {
       setPortRelayError('Listen port must be in 1..65535.');
-      return;
+      return null;
     }
     if (!normalizedTarget) {
       setPortRelayError('Target is required.');
-      return;
+      return null;
     }
     const nextTargets = upsertPortRelayTarget(portRelayTargets, normalizedTarget);
     setPortRelayTargets(nextTargets);
@@ -12139,17 +12082,130 @@ export function App() {
       setPortRelayKnownAccessCodeGeneration(typeof snapshot.accessCodeGeneration === 'number' ? snapshot.accessCodeGeneration : null);
       setPortRelayFrameAutoOpenPending((options.openFrame ?? isWide) && snapshot.enabled);
       applyPortRelaySnapshot(snapshot);
+      return snapshot;
     } catch (err) {
       setPortRelayError(err instanceof Error ? err.message : String(err));
+      return null;
     } finally {
       setPortRelayLoading(false);
     }
   }, [applyPortRelaySnapshot, isWide, persistPortRelaySettings, portRelayAccessCode, portRelayAccessCodeUnknown, portRelayListenPort, portRelayTargets]);
 
+  const openPortRelayWorkbenchTab = useCallback(async (
+    target: PortRelayTarget | null,
+    framePath = '',
+    _options: {source?: 'chat' | 'settings' | 'floating'} = {},
+  ) => {
+    const normalizedTarget = normalizePortRelayTarget(target);
+    if (!normalizedTarget) {
+      setPortRelayError('Target is required.');
+      return;
+    }
+    if (portRelayAccessCodeUnknown) {
+      setPortRelayError('Access code is unknown on this device. Generate a new code before opening relay pages.');
+      setSidebarSettingsOpen(true);
+      setSidebarCollapsed(false);
+      setSettingsDetailView('portRelay');
+      return;
+    }
+    const targetProjectId =
+      selectedChatKeyRef.current?.projectId ||
+      previewWorkbenchRef.current.activeProjectId ||
+      projectIdRef.current;
+    if (!targetProjectId) {
+      setPortRelayError('Project is required to open Port Relay.');
+      return;
+    }
+    const listenPort = Number(portRelayListenPort);
+    if (!Number.isInteger(listenPort) || listenPort < 1 || listenPort > 65535) {
+      setPortRelayError('Listen port must be in 1..65535.');
+      setSidebarSettingsOpen(true);
+      setSidebarCollapsed(false);
+      setSettingsDetailView('portRelay');
+      return;
+    }
+    const tabId = previewTabId({type: 'port-relay', hubId: normalizedTarget.hubId, targetPort: normalizedTarget.targetPort, framePath});
+    setPreviewWorkbench(current =>
+      openPreviewTab(current, {
+        type: 'port-relay',
+        projectId: targetProjectId,
+        hubId: normalizedTarget.hubId,
+        targetPort: normalizedTarget.targetPort,
+        framePath,
+        title: `${normalizedTarget.hubId}:${normalizedTarget.targetPort}`,
+        url: portRelayFrameUrl,
+        reloadKey: portRelayFrameReloadKey,
+      }),
+    );
+    setChatPreviewManualOpen(false);
+    setChatPreviewManualCollapsed(false);
+    setPortRelayFramePath(framePath);
+    if (!isWide) {
+      setDrawerOpen(false);
+      setSidebarSettingsOpen(false);
+      setChatQuickSwitchMenuOpen(false);
+      if (!chatFilePeekHistoryActiveRef.current) {
+        window.history.pushState(createChatFilePeekHistoryState(), '', window.location.href);
+        chatFilePeekHistoryActiveRef.current = true;
+      }
+    }
+    const activeTarget = normalizePortRelayTarget({
+      hubId: portRelaySnapshot.hubId,
+      targetPort: portRelaySnapshot.targetPort,
+    });
+    const activeRelayMatches =
+      portRelaySnapshot.enabled &&
+      portRelaySnapshot.status !== 'Error' &&
+      portRelaySnapshot.listenPort === listenPort &&
+      samePortRelayTarget(activeTarget, normalizedTarget);
+    if (!activeRelayMatches) {
+      await enablePortRelayForTarget(normalizedTarget, portRelayListenPort, {
+        framePath,
+        openFrame: true,
+      });
+    }
+    setPreviewWorkbench(current =>
+      updatePreviewTab(current, targetProjectId, tabId, tab =>
+        tab.type === 'port-relay'
+          ? {...tab, url: portRelayFrameUrl || tab.url, reloadKey: portRelayFrameReloadKey}
+          : tab,
+      ),
+    );
+  }, [
+    enablePortRelayForTarget,
+    isWide,
+    portRelayAccessCodeUnknown,
+    portRelayFrameReloadKey,
+    portRelayFrameUrl,
+    portRelayListenPort,
+    portRelaySnapshot.enabled,
+    portRelaySnapshot.hubId,
+    portRelaySnapshot.listenPort,
+    portRelaySnapshot.status,
+    portRelaySnapshot.targetPort,
+    setDrawerOpen,
+    setSidebarCollapsed,
+    setSidebarSettingsOpen,
+  ]);
+
+  useEffect(() => {
+    const tab = activePreviewTab(previewWorkbenchRef.current);
+    if (!tab || tab.type !== 'port-relay' || !portRelayFrameUrl) {
+      return;
+    }
+    setPreviewWorkbench(current =>
+      updatePreviewTab(current, tab.projectId, tab.id, item =>
+        item.type === 'port-relay'
+          ? {...item, url: portRelayFrameUrl, reloadKey: portRelayFrameReloadKey}
+          : item,
+      ),
+    );
+  }, [portRelayFrameReloadKey, portRelayFrameUrl]);
+
   const enablePortRelay = useCallback(async () => {
     const target = selectedPortRelayTarget ?? commitPortRelayDraftTarget();
-    await enablePortRelayForTarget(target, portRelayListenPort, {framePath: ''});
-  }, [commitPortRelayDraftTarget, enablePortRelayForTarget, portRelayListenPort, selectedPortRelayTarget]);
+    await openPortRelayWorkbenchTab(target, '', {source: 'settings'});
+  }, [commitPortRelayDraftTarget, openPortRelayWorkbenchTab, selectedPortRelayTarget]);
 
   const disablePortRelay = useCallback(async () => {
     setPortRelayLoading(true);
@@ -12239,7 +12295,10 @@ export function App() {
       setPortRelayClearSiteDataUrl(clearUrl);
       await waitForPortRelaySiteDataClear(portRelayFrameUrl);
       setPortRelayFrameReloadKey(key => key + 1);
-      setPortRelayFrameOpen(true);
+      const target = activePortRelayTarget ?? selectedPortRelayTarget;
+      if (target) {
+        openPortRelayWorkbenchTab(target, portRelayFramePath, {source: 'settings'}).catch(() => undefined);
+      }
       portRelayClearSiteDataTimerRef.current = window.setTimeout(() => {
         setPortRelayClearSiteDataUrl(current => (current === clearUrl ? '' : current));
         portRelayClearSiteDataTimerRef.current = null;
@@ -12249,7 +12308,15 @@ export function App() {
     } finally {
       setPortRelayLoading(false);
     }
-  }, [portRelayAccessCodeUnknown, portRelayFrameAccessCode, portRelayFrameUrl]);
+  }, [
+    activePortRelayTarget,
+    openPortRelayWorkbenchTab,
+    portRelayAccessCodeUnknown,
+    portRelayFrameAccessCode,
+    portRelayFramePath,
+    portRelayFrameUrl,
+    selectedPortRelayTarget,
+  ]);
 
   const selectPortRelayTarget = useCallback(async (target: PortRelayTarget) => {
     setSelectedPortRelayTarget(target);
@@ -12272,26 +12339,15 @@ export function App() {
     if (samePortRelayTarget(activePortRelayTarget, target)) {
       return;
     }
-    if (portRelayAccessCodeUnknown) {
-      setPortRelayFrameOpen(false);
-      openSettingsDetail('portRelay');
-      setPortRelayError('Access code is unknown on this device. Generate a new code before switching target.');
-      return;
-    }
     setPortRelayMenuSwitchingTarget(target);
     try {
-      await enablePortRelayForTarget(target, String(portRelaySnapshot.listenPort || portRelayListenPort), {framePath: '', openFrame: true, framePlacement: 'main'});
-      setPortRelayFrameOpen(true);
+      await openPortRelayWorkbenchTab(target, '', {source: 'floating'});
     } finally {
       setPortRelayMenuSwitchingTarget(null);
     }
   }, [
     activePortRelayTarget,
-    enablePortRelayForTarget,
-    openSettingsDetail,
-    portRelayAccessCodeUnknown,
-    portRelayListenPort,
-    portRelaySnapshot.listenPort,
+    openPortRelayWorkbenchTab,
   ]);
   const handlePortRelayFloatingTargetSelect = useCallback((target: PortRelayTarget) => {
     handleMobilePortRelayTargetMenuSelect(target).catch(() => undefined);
@@ -12330,84 +12386,65 @@ export function App() {
       setError('Current project has no hub for Port Relay.');
       return;
     }
-    if (portRelayAccessCodeUnknown) {
-      setPortRelayError('Access code is unknown on this device. Generate a new code before opening local relay links.');
-      setSidebarSettingsOpen(true);
-      setSidebarCollapsed(false);
-      setSettingsDetailView('portRelay');
-      setPortRelayFrameOpen(false);
-      return;
-    }
     const target: PortRelayTarget = {
       hubId,
       targetPort: localUrl.targetPort,
     };
-    const listenPort = Number(portRelayListenPort);
-    if (!Number.isInteger(listenPort) || listenPort < 1 || listenPort > 65535) {
-      setPortRelayError('Listen port must be in 1..65535.');
-      setSidebarSettingsOpen(true);
-      setSidebarCollapsed(false);
-      setSettingsDetailView('portRelay');
-      return;
-    }
-    setPortRelayFramePlacement('chatPreview');
-    setChatPreviewManualOpen(false);
-    setChatPreviewManualCollapsed(false);
-    if (!isWide) {
-      setDrawerOpen(false);
-      setChatQuickSwitchMenuOpen(false);
-      if (!chatFilePeekHistoryActiveRef.current) {
-        window.history.pushState(createChatFilePeekHistoryState(), '', window.location.href);
-        chatFilePeekHistoryActiveRef.current = true;
-      }
-    }
     const nextTargets = upsertPortRelayTarget(portRelayTargets, target);
     setPortRelayTargets(nextTargets);
     setSelectedPortRelayTarget(target);
     persistPortRelaySettings({
       targets: nextTargets,
       selectedTarget: target,
-      listenPort,
+      listenPort: Number(portRelayListenPort),
     });
-    setPortRelayFramePath(localUrl.path);
-    const activeTarget = normalizePortRelayTarget({
-      hubId: portRelaySnapshot.hubId,
-      targetPort: portRelaySnapshot.targetPort,
-    });
-    const activeRelayMatches =
-      portRelaySnapshot.enabled &&
-      portRelaySnapshot.status !== 'Error' &&
-      portRelaySnapshot.listenPort === listenPort &&
-      samePortRelayTarget(activeTarget, target);
-    if (activeRelayMatches) {
-      setPortRelayFrameAutoOpenPending(true);
-      if (portRelayReady) {
-        setPortRelayFrameOpen(true);
-      }
-      return;
-    }
-    await enablePortRelayForTarget(target, portRelayListenPort, {
-      framePath: localUrl.path,
-      openFrame: true,
-      framePlacement: 'chatPreview',
-    });
+    await openPortRelayWorkbenchTab(target, localUrl.path, {source: 'chat'});
   }, [
     currentProject?.hubId,
-    enablePortRelayForTarget,
-    isWide,
+    openPortRelayWorkbenchTab,
     persistPortRelaySettings,
-    portRelayAccessCodeUnknown,
     portRelayListenPort,
-    portRelayReady,
-    portRelaySnapshot.enabled,
-    portRelaySnapshot.hubId,
-    portRelaySnapshot.listenPort,
-    portRelaySnapshot.status,
-    portRelaySnapshot.targetPort,
     portRelayTargets,
-    setDrawerOpen,
-    setSidebarCollapsed,
-    setSidebarSettingsOpen,
+  ]);
+
+  const handleDesktopPortRelaySelect = useCallback(() => {
+    if (sidebarSettingsOpen && settingsDetailView === 'portRelay') {
+      closeSettingsPanel();
+      return;
+    }
+    openSettingsPeer('portRelay');
+    const target = activePortRelayTarget ?? selectedPortRelayTarget;
+    if (target) {
+      openPortRelayWorkbenchTab(target, portRelayFramePath, {source: 'settings'}).catch(() => undefined);
+    }
+  }, [
+    activePortRelayTarget,
+    closeSettingsPanel,
+    openPortRelayWorkbenchTab,
+    openSettingsPeer,
+    portRelayFramePath,
+    selectedPortRelayTarget,
+    settingsDetailView,
+    sidebarSettingsOpen,
+  ]);
+
+  const handlePortRelayFloatingToggle = useCallback(() => {
+    if (floatingClickCooldownUntilRef.current > Date.now()) {
+      return;
+    }
+    setPortRelayTargetMenuOpen(false);
+    const target = activePortRelayTarget ?? selectedPortRelayTarget;
+    if (!target) {
+      openSettingsDetail('portRelay');
+      return;
+    }
+    openPortRelayWorkbenchTab(target, portRelayFramePath, {source: 'floating'}).catch(() => undefined);
+  }, [
+    activePortRelayTarget,
+    openPortRelayWorkbenchTab,
+    openSettingsDetail,
+    portRelayFramePath,
+    selectedPortRelayTarget,
   ]);
 
   const updateHubCards = useMemo(() => {
@@ -14437,7 +14474,6 @@ export function App() {
   const handleMobileChatQuickSwitchSelect = useCallback(async (targetProjectId: string, session: RegistryChatSession) => {
     setChatQuickSwitchMenuOpen(false);
     setPortRelayTargetMenuOpen(false);
-    setPortRelayFrameOpen(false);
     setSidebarSettingsOpen(false);
     setDrawerOpen(false);
     setTab('chat');
@@ -16806,8 +16842,6 @@ export function App() {
     const tabId = previewTabId({type: 'prompt-diff', sessionId, artifactId});
     setChatPeekSelectedLines(new Set());
     chatPeekAnchorRef.current = null;
-    setPortRelayFrameOpen(false);
-    setPortRelayFramePlacement('main');
     setChatPreviewManualOpen(false);
     setChatPreviewManualCollapsed(false);
     setPreviewWorkbench(current =>
@@ -17130,18 +17164,21 @@ export function App() {
     return content;
   };
   const closePortRelayFrameFromChrome = useCallback(() => {
-    if (!isWide && portRelayFramePlacement === 'chatPreview' && chatFilePeekHistoryActiveRef.current) {
+    const tab = activePreviewTab(previewWorkbenchRef.current);
+    if (!tab || tab.type !== 'port-relay') {
+      return;
+    }
+    if (!isWide && chatFilePeekHistoryActiveRef.current) {
       window.history.back();
       return;
     }
-    setPortRelayFrameOpen(false);
-    if (portRelayFramePlacement === 'chatPreview') {
-      setPortRelayFramePlacement('main');
-    }
-  }, [isWide, portRelayFramePlacement]);
+    setPreviewWorkbench(current => closePreviewTab(current, tab.projectId, tab.id));
+  }, [isWide]);
   const openPortRelayPreviewInBrowser = useCallback(() => {
-    if (!portRelayFrameUrl) return;
-    window.open(portRelayFrameUrl, '_blank', 'noopener,noreferrer');
+    const tab = activePreviewTab(previewWorkbenchRef.current);
+    const url = tab?.type === 'port-relay' ? portRelayFrameUrl || tab.url : portRelayFrameUrl;
+    if (!url) return;
+    window.open(url, '_blank', 'noopener,noreferrer');
   }, [portRelayFrameUrl]);
   const toggleChatPreviewFromTitle = useCallback(() => {
     if (chatPreviewOpen) {
@@ -17192,17 +17229,6 @@ export function App() {
     const activeChatSlashCommand = chatSlashMenuVisible
       ? chatSlashMenuOptions[Math.max(0, Math.min(chatSlashActiveIndex, chatSlashMenuOptions.length - 1))]
       : null;
-    if (isWide && portRelayFrameOpen && portRelayFramePlacement === 'main' && portRelayFrameUrl) {
-      return (
-        <PortRelayFrameSurface
-          key={`desktop-main:${portRelayFrameReloadKey}:${portRelayFrameUrl}`}
-          mode="desktop"
-          url={portRelayFrameUrl}
-          onCloseChrome={closePortRelayFrameFromChrome}
-          onOpenInBrowser={openPortRelayPreviewInBrowser}
-        />
-      );
-    }
     const renderChatConfigValueMenu = (option: RegistrySessionConfigOption) => {
       const optionValues = option.options ?? [];
       const currentValue = chatConfigCurrentValue(option);
@@ -18558,7 +18584,7 @@ export function App() {
         <PortRelayFloatingButton
           ready={portRelayReady}
           frameUrl={portRelayFrameUrl}
-          frameOpen={portRelayFrameOpen}
+          frameOpen={portRelayWorkbenchOpen}
           mobileFrameOpen={mobilePortRelayFrameOpen}
           targetMenuOpen={portRelayTargetMenuOpen}
           targetMenuRef={portRelayTargetMenuRef}
@@ -18748,17 +18774,6 @@ export function App() {
       {renderSettingsContent(false, { hideDetailHeader: true })}
     </MobileSettingsScreen>
   ) : null;
-  const portRelayMobileFrameOverlay = mobilePortRelayFrameOpen
-    ? (
-      <PortRelayFrameSurface
-        key={`mobile-main:${portRelayFrameReloadKey}:${portRelayFrameUrl}`}
-        mode="mobile"
-        url={portRelayFrameUrl}
-        onCloseChrome={closePortRelayFrameFromChrome}
-        onOpenInBrowser={openPortRelayPreviewInBrowser}
-      />
-    )
-    : null;
   const portRelayClearSiteDataFrame = portRelayClearSiteDataUrl ? (
     <iframe
       title="Port Relay site data cleanup"
@@ -18767,16 +18782,17 @@ export function App() {
       aria-hidden="true"
     />
   ) : null;
-  const renderChatPortRelayPreviewSurface = (mode: 'desktop' | 'mobile') => (
-    <PortRelayFrameSurface
-      key={`${mode}:chat-preview:${portRelayFrameReloadKey}:${portRelayFrameUrl}`}
-      mode={mode}
-      url={portRelayFrameUrl}
-      chrome={true}
-      onCloseChrome={closePortRelayFrameFromChrome}
-      onOpenInBrowser={openPortRelayPreviewInBrowser}
-    />
-  );
+  const renderPortRelayWorkbenchSurface = (mode: 'desktop' | 'mobile') =>
+    activePortRelayPreview ? (
+      <PortRelayFrameSurface
+        key={`workbench:${activePortRelayPreview.id}:${activePortRelayPreview.reloadKey}:${portRelayFrameUrl}`}
+        mode={mode}
+        url={portRelayFrameUrl || activePortRelayPreview.url}
+        chrome={false}
+        onCloseChrome={closePortRelayFrameFromChrome}
+        onOpenInBrowser={openPortRelayPreviewInBrowser}
+      />
+    ) : null;
   const chatFilePreviewTabs =
     (previewWorkbench.tabsByProjectId[previewWorkbench.activeProjectId] ?? []).filter(isFilePreviewTab);
   const chatFilePreviewDirEntries =
@@ -18890,7 +18906,7 @@ export function App() {
           onClose={closeChatFilePeekFromChrome}
           scrollRef={chatFilePeekScrollRef}
         />
-      ) : chatPortRelayPreviewOpen ? renderChatPortRelayPreviewSurface('desktop') : (chatFilePreviewHasTabs || chatPreviewManualOpen) ? (
+      ) : activePortRelayPreview ? renderPortRelayWorkbenchSurface('desktop') : (chatFilePreviewHasTabs || chatPreviewManualOpen) ? (
         <ChatFilePeekViewer
           peek={chatFilePeek}
           mode="desktop"
@@ -18950,7 +18966,7 @@ export function App() {
           onClose={closeChatFilePeekFromChrome}
           scrollRef={chatFilePeekScrollRef}
         />
-      ) : chatPortRelayPreviewOpen ? renderChatPortRelayPreviewSurface('mobile') : (chatFilePreviewHasTabs || chatPreviewManualOpen) ? (
+      ) : activePortRelayPreview ? renderPortRelayWorkbenchSurface('mobile') : (chatFilePreviewHasTabs || chatPreviewManualOpen) ? (
         <ChatFilePeekViewer
           peek={chatFilePeek}
           mode="mobile"
@@ -19154,11 +19170,10 @@ export function App() {
         sidebarCollapsed={sidebarCollapsed}
         drawerOpen={mobilePortRelayFrameOpen ? false : drawerOpen}
         onCloseDrawer={() => setDrawerOpen(false)}
-      />
-      {chatQuickSwitchMenuPlacement.kind === 'desktop' ? chatQuickSwitchMenu : null}
-      {chatTitlePromptMenu}
-      {portRelayMobileFrameOverlay}
-      {portRelayClearSiteDataFrame}
+          />
+          {chatQuickSwitchMenuPlacement.kind === 'desktop' ? chatQuickSwitchMenu : null}
+          {chatTitlePromptMenu}
+          {portRelayClearSiteDataFrame}
       {registryDebugPanel}
       {markdownImageExportRequest ? (
         <MarkdownImageExportSurface
