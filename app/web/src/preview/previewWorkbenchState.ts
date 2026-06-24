@@ -1,0 +1,392 @@
+import type {RegistryFsInfo, RegistrySessionPromptArtifactFile} from '../registry/registryTypes';
+
+export type PreviewWorkbenchTabType = 'file' | 'prompt-diff' | 'attachment' | 'port-relay';
+
+export type PreviewWorkbenchTabBase = {
+  id: string;
+  type: PreviewWorkbenchTabType;
+  projectId: string;
+  title: string;
+  loading: boolean;
+  error: string;
+  requestId: number;
+};
+
+export type FilePreviewTab = PreviewWorkbenchTabBase & {
+  type: 'file';
+  path: string;
+  targetLine: number | null;
+  content: string;
+  info: RegistryFsInfo | null;
+};
+
+export type PromptDiffPreviewFile = RegistrySessionPromptArtifactFile & {
+  diff: string;
+  expanded: boolean;
+};
+
+export type PromptDiffPreviewTab = PreviewWorkbenchTabBase & {
+  type: 'prompt-diff';
+  sessionId: string;
+  artifactId: string;
+  files: PromptDiffPreviewFile[];
+};
+
+export type AttachmentPreviewTab = PreviewWorkbenchTabBase & {
+  type: 'attachment';
+  sessionId: string;
+  attachmentKey: string;
+  meta: string;
+  mimeType: string;
+  kind: 'image' | 'file';
+  src: string;
+};
+
+export type PortRelayPreviewTab = PreviewWorkbenchTabBase & {
+  type: 'port-relay';
+  hubId: string;
+  targetPort: number;
+  framePath: string;
+  url: string;
+  reloadKey: number;
+};
+
+export type PreviewWorkbenchTab =
+  | FilePreviewTab
+  | PromptDiffPreviewTab
+  | AttachmentPreviewTab
+  | PortRelayPreviewTab;
+
+export type PreviewWorkbenchOpenInput =
+  | {
+      type: 'file';
+      projectId: string;
+      path: string;
+      targetLine: number | null;
+      title: string;
+    }
+  | {
+      type: 'prompt-diff';
+      projectId: string;
+      sessionId: string;
+      artifactId: string;
+      title: string;
+      files: PromptDiffPreviewFile[];
+    }
+  | {
+      type: 'attachment';
+      projectId: string;
+      sessionId: string;
+      attachmentKey: string;
+      title: string;
+      meta: string;
+      mimeType: string;
+      kind: 'image' | 'file';
+      src: string;
+    }
+  | {
+      type: 'port-relay';
+      projectId: string;
+      hubId: string;
+      targetPort: number;
+      framePath: string;
+      title: string;
+      url?: string;
+      reloadKey?: number;
+    };
+
+export type PreviewWorkbenchTabIdInput =
+  | {type: 'file'; path?: string}
+  | {type: 'prompt-diff'; sessionId?: string; artifactId?: string}
+  | {type: 'attachment'; sessionId?: string; attachmentKey?: string}
+  | {type: 'port-relay'; hubId?: string; targetPort?: number; framePath?: string};
+
+export type PreviewWorkbenchState = {
+  activeProjectId: string;
+  tabsByProjectId: Record<string, PreviewWorkbenchTab[]>;
+  activeTabIdByProjectId: Record<string, string>;
+  treeOpen: boolean;
+};
+
+const normalizeLine = (line: number | null): number | null =>
+  typeof line === 'number' && Number.isFinite(line) && line > 0
+    ? Math.trunc(line)
+    : null;
+
+const normalizeFramePath = (path: string): string => path || '';
+
+const hasText = (value: string | undefined): value is string => !!value;
+
+export function previewTabId(input: PreviewWorkbenchTabIdInput): string {
+  if (input.type === 'file') {
+    return `file:${input.path || ''}`;
+  }
+  if (input.type === 'prompt-diff') {
+    return `prompt-diff:${input.sessionId || ''}:${input.artifactId || ''}`;
+  }
+  if (input.type === 'attachment') {
+    return `attachment:${input.sessionId || ''}:${input.attachmentKey || ''}`;
+  }
+  return `port-relay:${input.hubId || ''}:${input.targetPort || 0}:${normalizeFramePath(input.framePath || '')}`;
+}
+
+function validPreviewInput(input: PreviewWorkbenchOpenInput): boolean {
+  if (!input.projectId) {
+    return false;
+  }
+  if (input.type === 'file') {
+    return hasText(input.path);
+  }
+  if (input.type === 'prompt-diff') {
+    return hasText(input.sessionId) && hasText(input.artifactId);
+  }
+  if (input.type === 'attachment') {
+    return hasText(input.sessionId) && hasText(input.attachmentKey);
+  }
+  return hasText(input.hubId) && Number.isInteger(input.targetPort) && input.targetPort > 0;
+}
+
+export function createPreviewWorkbenchState(activeProjectId = ''): PreviewWorkbenchState {
+  return {
+    activeProjectId,
+    tabsByProjectId: activeProjectId ? {[activeProjectId]: []} : {},
+    activeTabIdByProjectId: {},
+    treeOpen: false,
+  };
+}
+
+export function selectPreviewProject(
+  state: PreviewWorkbenchState,
+  projectId: string,
+): PreviewWorkbenchState {
+  if (!projectId || projectId === state.activeProjectId) {
+    return state;
+  }
+  return {
+    ...state,
+    activeProjectId: projectId,
+    tabsByProjectId: {
+      ...state.tabsByProjectId,
+      [projectId]: state.tabsByProjectId[projectId] ?? [],
+    },
+  };
+}
+
+export function ensurePreviewProjectVisible(
+  state: PreviewWorkbenchState,
+  visibleProjectIds: string[],
+  preferredProjectId = '',
+): PreviewWorkbenchState {
+  if (state.activeProjectId && visibleProjectIds.includes(state.activeProjectId)) {
+    return state;
+  }
+  const nextProjectId =
+    preferredProjectId && visibleProjectIds.includes(preferredProjectId)
+      ? preferredProjectId
+      : visibleProjectIds[0] ?? '';
+  return nextProjectId ? selectPreviewProject(state, nextProjectId) : state;
+}
+
+function createTab(input: PreviewWorkbenchOpenInput): PreviewWorkbenchTab {
+  const id = previewTabId(input);
+  const base = {
+    id,
+    type: input.type,
+    projectId: input.projectId,
+    title: input.title,
+    loading: false,
+    error: '',
+    requestId: 0,
+  };
+  if (input.type === 'file') {
+    return {
+      ...base,
+      type: 'file',
+      path: input.path,
+      targetLine: normalizeLine(input.targetLine),
+      content: '',
+      info: null,
+    };
+  }
+  if (input.type === 'prompt-diff') {
+    return {
+      ...base,
+      type: 'prompt-diff',
+      sessionId: input.sessionId,
+      artifactId: input.artifactId,
+      files: input.files,
+    };
+  }
+  if (input.type === 'attachment') {
+    return {
+      ...base,
+      type: 'attachment',
+      sessionId: input.sessionId,
+      attachmentKey: input.attachmentKey,
+      meta: input.meta,
+      mimeType: input.mimeType,
+      kind: input.kind,
+      src: input.src,
+    };
+  }
+  return {
+    ...base,
+    type: 'port-relay',
+    hubId: input.hubId,
+    targetPort: input.targetPort,
+    framePath: normalizeFramePath(input.framePath),
+    url: input.url ?? '',
+    reloadKey: input.reloadKey ?? 0,
+  };
+}
+
+function mergeTab(existing: PreviewWorkbenchTab, input: PreviewWorkbenchOpenInput): PreviewWorkbenchTab {
+  if (existing.type === 'file' && input.type === 'file') {
+    return {...existing, title: input.title, targetLine: normalizeLine(input.targetLine)};
+  }
+  if (existing.type === 'prompt-diff' && input.type === 'prompt-diff') {
+    return {...existing, title: input.title, files: input.files};
+  }
+  if (existing.type === 'attachment' && input.type === 'attachment') {
+    return {
+      ...existing,
+      title: input.title,
+      meta: input.meta,
+      mimeType: input.mimeType,
+      kind: input.kind,
+      src: input.src,
+    };
+  }
+  if (existing.type === 'port-relay' && input.type === 'port-relay') {
+    return {
+      ...existing,
+      title: input.title,
+      framePath: normalizeFramePath(input.framePath),
+      url: input.url ?? existing.url,
+      reloadKey: input.reloadKey ?? existing.reloadKey,
+    };
+  }
+  return existing;
+}
+
+export function openPreviewTab(
+  state: PreviewWorkbenchState,
+  input: PreviewWorkbenchOpenInput,
+): PreviewWorkbenchState {
+  if (!validPreviewInput(input)) {
+    return state;
+  }
+  const id = previewTabId(input);
+  const projectState = selectPreviewProject(state, input.projectId);
+  const tabs = projectState.tabsByProjectId[input.projectId] ?? [];
+  const existing = tabs.find(tab => tab.id === id);
+  const nextTabs = existing
+    ? tabs.map(tab => (tab.id === id ? mergeTab(tab, input) : tab))
+    : [...tabs, createTab(input)];
+  return {
+    ...projectState,
+    tabsByProjectId: {...projectState.tabsByProjectId, [input.projectId]: nextTabs},
+    activeTabIdByProjectId: {...projectState.activeTabIdByProjectId, [input.projectId]: id},
+  };
+}
+
+export function beginPreviewTabLoad(
+  state: PreviewWorkbenchState,
+  projectId: string,
+  tabId: string,
+  requestId: number,
+): PreviewWorkbenchState {
+  const tabs = state.tabsByProjectId[projectId] ?? [];
+  return {
+    ...state,
+    tabsByProjectId: {
+      ...state.tabsByProjectId,
+      [projectId]: tabs.map(tab =>
+        tab.id === tabId ? {...tab, loading: true, error: '', requestId} : tab,
+      ),
+    },
+  };
+}
+
+export function updatePreviewTab(
+  state: PreviewWorkbenchState,
+  projectId: string,
+  tabId: string,
+  updater: (tab: PreviewWorkbenchTab) => PreviewWorkbenchTab,
+): PreviewWorkbenchState {
+  const tabs = state.tabsByProjectId[projectId] ?? [];
+  return {
+    ...state,
+    tabsByProjectId: {
+      ...state.tabsByProjectId,
+      [projectId]: tabs.map(tab => (tab.id === tabId ? updater(tab) : tab)),
+    },
+  };
+}
+
+export function updatePreviewTabAfterLoad(
+  state: PreviewWorkbenchState,
+  projectId: string,
+  tabId: string,
+  requestId: number,
+  updater: (tab: PreviewWorkbenchTab) => PreviewWorkbenchTab,
+): PreviewWorkbenchState {
+  return updatePreviewTab(state, projectId, tabId, tab =>
+    tab.requestId === requestId ? updater(tab) : tab,
+  );
+}
+
+export function failPreviewTabLoad(
+  state: PreviewWorkbenchState,
+  projectId: string,
+  tabId: string,
+  requestId: number,
+  error: string,
+): PreviewWorkbenchState {
+  return updatePreviewTabAfterLoad(state, projectId, tabId, requestId, tab => ({
+    ...tab,
+    loading: false,
+    error,
+  }));
+}
+
+export function closePreviewTab(
+  state: PreviewWorkbenchState,
+  projectId: string,
+  tabId: string,
+): PreviewWorkbenchState {
+  const tabs = state.tabsByProjectId[projectId] ?? [];
+  const closingIndex = tabs.findIndex(tab => tab.id === tabId);
+  if (closingIndex < 0) {
+    return state;
+  }
+  const nextTabs = tabs.filter(tab => tab.id !== tabId);
+  const currentActiveId = state.activeTabIdByProjectId[projectId] ?? '';
+  const nextActiveId =
+    currentActiveId === tabId
+      ? nextTabs[Math.min(closingIndex, Math.max(0, nextTabs.length - 1))]?.id ?? ''
+      : currentActiveId;
+  return {
+    ...state,
+    tabsByProjectId: {...state.tabsByProjectId, [projectId]: nextTabs},
+    activeTabIdByProjectId: {...state.activeTabIdByProjectId, [projectId]: nextActiveId},
+  };
+}
+
+export function activePreviewTab(state: PreviewWorkbenchState): PreviewWorkbenchTab | null {
+  const projectId = state.activeProjectId;
+  const activeTabId = state.activeTabIdByProjectId[projectId] ?? '';
+  return (state.tabsByProjectId[projectId] ?? []).find(tab => tab.id === activeTabId) ?? null;
+}
+
+export const isFilePreviewTab = (tab: PreviewWorkbenchTab | null): tab is FilePreviewTab =>
+  tab?.type === 'file';
+
+export const isPromptDiffPreviewTab = (tab: PreviewWorkbenchTab | null): tab is PromptDiffPreviewTab =>
+  tab?.type === 'prompt-diff';
+
+export const isAttachmentPreviewTab = (tab: PreviewWorkbenchTab | null): tab is AttachmentPreviewTab =>
+  tab?.type === 'attachment';
+
+export const isPortRelayPreviewTab = (tab: PreviewWorkbenchTab | null): tab is PortRelayPreviewTab =>
+  tab?.type === 'port-relay';
