@@ -91,11 +91,9 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('const chatPreviewHasContent =');
     expect(mainTsx).toContain('chatFilePreviewHasTabs || !!activePromptDiffPreview || !!activeAttachmentPreview || !!activePortRelayPreview;');
     expect(mainTsx).toContain('const chatPreviewOpen = chatPreviewManualOpen || (chatPreviewHasContent && !chatPreviewManualCollapsed);');
-    expect(mainTsx).toContain('const ChatEmptyPreviewViewer = React.memo(function ChatEmptyPreviewViewer');
-    expect(mainTsx).toContain('<div className="chat-preview-title" title="Preview">Preview</div>');
+    expect(mainTsx).toContain('const renderPreviewWorkbenchBody = (mode:');
     expect(mainTsx).toContain('No preview selected');
-    expect(mainTsx).toContain(') : <ChatEmptyPreviewViewer mode="desktop" onClose={closeChatFilePeekFromChrome} />');
-    expect(mainTsx).toContain(') : <ChatEmptyPreviewViewer mode="mobile" onClose={closeChatFilePeekFromChrome} />');
+    expect(mainTsx).toContain('<PreviewWorkbenchChrome');
     expect(mainTsx).toContain('title={mode === \'mobile\' ? \'Back\' : \'Close preview\'}');
 
     expect(stylesCss).toContain('.chat-empty-preview-body {');
@@ -205,19 +203,19 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('openChatFilePeek(path, null, resolveChatFilePreviewProjectId())');
   });
 
-  test('chat file workbench renders project selector, tab strip, tab close controls, and a desktop tree popover', () => {
+  test('chat file workbench renders unified project pill, tab strip, tab close controls, and a desktop tree panel', () => {
     const mainTsx = readSourceText(mainPath);
     const stylesCss = readWebStyles(projectRoot);
 
-    expect(mainTsx).toContain('className="chat-file-workbench-project-select"');
-    expect(mainTsx).toContain('className="chat-file-workbench-tabs"');
-    expect(mainTsx).toContain('className="chat-file-workbench-tab-close"');
-    expect(mainTsx).toContain('className="chat-file-workbench-tree-popover"');
-    expect(mainTsx).toContain('aria-label="Toggle file tree"');
+    expect(mainTsx).toContain('<PreviewWorkbenchChrome');
+    expect(mainTsx).toContain('projectMenuOpen={previewProjectMenuOpen}');
+    expect(mainTsx).toContain('onTabClose={closeWorkbenchTab}');
+    expect(mainTsx).toContain('onFileTreeToggle={toggleChatFilePreviewTree}');
     expect(mainTsx).toContain('closePreviewTab(');
 
     expect(stylesCss).toContain('.chat-file-workbench-tabs');
-    expect(stylesCss).toContain('.chat-file-workbench-tree-popover');
+    expect(stylesCss).toContain('.preview-workbench-project-pill');
+    expect(stylesCss).toContain('.preview-workbench-tree-panel');
     expect(stylesCss).toContain('.chat-file-workbench-empty');
   });
 
@@ -229,14 +227,42 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('ensurePreviewProjectVisible(');
   });
 
+  test('preview workbench chrome renders a project pill, active title, and typed tabs', () => {
+    const mainTsx = readSourceText(mainPath);
+    const chromeTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'preview', 'PreviewWorkbenchChrome.tsx'));
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(mainTsx).toContain('<PreviewWorkbenchChrome');
+    expect(chromeTsx).toContain('className="preview-workbench-project-pill"');
+    expect(chromeTsx).toContain('className="preview-workbench-title"');
+    expect(chromeTsx).toContain('className="preview-workbench-actions"');
+    expect(chromeTsx).toContain('previewWorkbenchTabIcon(');
+    expect(chromeTsx).toContain('preview-workbench-tab-icon');
+    expect(chromeTsx).not.toContain('<select');
+    expect(stylesCss).toContain('.preview-workbench-project-pill');
+    expect(stylesCss).toContain('.preview-workbench-project-menu');
+    expect(stylesCss).toContain('.preview-workbench-tab-icon');
+  });
+
+  test('desktop file tree toggle is a floating body button and mobile hides it', () => {
+    const chromeTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'preview', 'PreviewWorkbenchChrome.tsx'));
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(chromeTsx).toContain('preview-workbench-tree-fab');
+    expect(chromeTsx).toContain("mode === 'desktop' && fileTree");
+    expect(chromeTsx).not.toContain('chat-file-workbench-tree-toggle');
+    expect(stylesCss).toContain('.preview-workbench-body-tools');
+    expect(stylesCss).toContain('.preview-workbench-tree-panel');
+  });
+
   test('closing the last workbench tab leaves the preview open on the empty state', () => {
     const mainTsx = readSourceText(mainPath);
-    const closeStart = mainTsx.indexOf('const closeChatFilePreviewTab = (path: string) => {');
+    const closeStart = mainTsx.indexOf('const closeWorkbenchTab = (tabId: string) => {');
     expect(closeStart).toBeGreaterThanOrEqual(0);
     const closeEnd = mainTsx.indexOf('const toggleChatFilePreviewTree = () => {', closeStart);
     const closeBody = mainTsx.slice(closeStart, closeEnd);
 
-    expect(closeBody).toContain('const closingLastTab = chatFilePreviewTabs.length === 1');
+    expect(closeBody).toContain('const closingLastTab = previewWorkbenchTabs.length === 1');
     expect(closeBody).toContain('setChatPreviewManualOpen(true);');
     expect(closeBody).toContain('setChatPreviewManualCollapsed(false);');
   });

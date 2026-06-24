@@ -393,6 +393,7 @@ import {
   type PromptDiffPreviewFile,
   type PromptDiffPreviewTab,
 } from '../preview/previewWorkbenchState';
+import {PreviewWorkbenchChrome} from '../preview/PreviewWorkbenchChrome';
 import { FilePreviewPane } from '../file/FilePreviewPane';
 import { FileSurface } from '../file/FileSurface';
 import { GitSurface } from '../git/GitSurface';
@@ -2057,10 +2058,6 @@ const ChatFilePeekViewer = React.memo(function ChatFilePeekViewer({
   treeContent,
   scrollRef,
 }: ChatFilePeekViewerProps) {
-  const title = peek?.targetLine
-    ? `${peek.path}:${peek.targetLine}`
-    : peek?.path || 'Files';
-
   let body: React.ReactNode;
   if (!peek) {
     body = (
@@ -2137,107 +2134,7 @@ const ChatFilePeekViewer = React.memo(function ChatFilePeekViewer({
     );
   }
 
-  return (
-    <section
-      className={`chat-file-peek-surface ${mode}`}
-      aria-label="Chat file preview"
-    >
-      <div className="chat-preview-toolbar">
-        <button
-          type="button"
-          className="chat-preview-icon-button"
-          onClick={onClose}
-          title={mode === 'mobile' ? 'Back' : 'Close preview'}
-          aria-label={mode === 'mobile' ? 'Back' : 'Close preview'}
-        >
-          <span className={`codicon ${mode === 'mobile' ? 'codicon-arrow-left' : 'codicon-close'}`} />
-        </button>
-        <select
-          className="chat-file-workbench-project-select"
-          value={activeProjectId}
-          onChange={event => onProjectChange(event.currentTarget.value)}
-          aria-label="Preview project"
-          title="Preview project"
-        >
-          {projects.map(projectItem => (
-            <option key={`chat-preview-project:${projectItem.projectId}`} value={projectItem.projectId}>
-              {projectItem.name || projectItem.projectId}
-            </option>
-          ))}
-        </select>
-        {mode === 'desktop' ? (
-          <button
-            type="button"
-            className={`chat-preview-icon-button chat-file-workbench-tree-toggle${treeOpen ? ' active' : ''}`}
-            onClick={onToggleTree}
-            title="Toggle file tree"
-            aria-label="Toggle file tree"
-            aria-pressed={treeOpen}
-          >
-            <span className="codicon codicon-files" />
-          </button>
-        ) : null}
-        <div className="chat-preview-title" title={title}>{title}</div>
-        <button
-          type="button"
-          className="chat-preview-icon-button"
-          onClick={onCopyPath}
-          title="Copy absolute path"
-          aria-label="Copy absolute path"
-        >
-          <span className="codicon codicon-clippy" />
-        </button>
-        <button
-          type="button"
-          className="chat-preview-icon-button"
-          onClick={onOpenInFileTab}
-          title="Open in File tab"
-          aria-label="Open in File tab"
-        >
-          <span className="codicon codicon-go-to-file" />
-        </button>
-      </div>
-      <div className="chat-file-workbench-tabs" role="tablist" aria-label="Open preview files">
-        {tabs.map(tab => {
-          const active = peek?.path === tab.path;
-          return (
-            <div
-              key={`chat-preview-tab:${tab.path}`}
-              className={`chat-file-workbench-tab${active ? ' active' : ''}`}
-              role="tab"
-              aria-selected={active}
-              title={tab.path}
-            >
-              <button
-                type="button"
-                className="chat-file-workbench-tab-open"
-                onClick={() => onTabSelect(tab.path)}
-              >
-                {tab.path.split('/').pop() || tab.path}
-              </button>
-              <button
-                type="button"
-                className="chat-file-workbench-tab-close"
-                onClick={() => onTabClose(tab.path)}
-                aria-label={`Close ${tab.path}`}
-                title="Close"
-              >
-                <span className="codicon codicon-close" />
-              </button>
-            </div>
-          );
-        })}
-      </div>
-      {mode === 'desktop' && treeOpen ? (
-        <div className="chat-file-workbench-tree-popover">
-          {treeContent}
-        </div>
-      ) : null}
-      <div ref={scrollRef} className="chat-file-peek-scroll">
-        {body}
-      </div>
-    </section>
-  );
+  return <>{body}</>;
 }, (prev, next) => {
   const p = prev.peek;
   const n = next.peek;
@@ -2341,28 +2238,7 @@ const ChatAttachmentPreviewViewer = React.memo(function ChatAttachmentPreviewVie
     );
   }
 
-  return (
-    <section
-      className={`chat-attachment-preview-surface ${mode}`}
-      aria-label="Chat attachment preview"
-    >
-      <div className="chat-preview-toolbar">
-        <button
-          type="button"
-          className="chat-preview-icon-button"
-          onClick={onClose}
-          title={mode === 'mobile' ? 'Back' : 'Close preview'}
-          aria-label={mode === 'mobile' ? 'Back' : 'Close preview'}
-        >
-          <span className={`codicon ${mode === 'mobile' ? 'codicon-arrow-left' : 'codicon-close'}`} />
-        </button>
-        <div className="chat-preview-title" title={preview.title}>{preview.title}</div>
-      </div>
-      <div ref={scrollRef} className="chat-file-peek-scroll">
-        {body}
-      </div>
-    </section>
-  );
+  return <>{body}</>;
 }, (prev, next) => (
   prev.preview === next.preview &&
   prev.mode === next.mode
@@ -2468,28 +2344,7 @@ const ChatPromptArtifactPreviewViewer = React.memo(function ChatPromptArtifactPr
     );
   }
 
-  return (
-    <section
-      className={`chat-file-peek-surface chat-prompt-diff-surface ${mode}`}
-      aria-label="Chat prompt diff preview"
-    >
-      <div className="chat-preview-toolbar">
-        <button
-          type="button"
-          className="chat-preview-icon-button"
-          onClick={onClose}
-          title={mode === 'mobile' ? 'Back' : 'Close preview'}
-          aria-label={mode === 'mobile' ? 'Back' : 'Close preview'}
-        >
-          <span className={`codicon ${mode === 'mobile' ? 'codicon-arrow-left' : 'codicon-close'}`} />
-        </button>
-        <div className="chat-preview-title" title={preview.title}>{preview.title}</div>
-      </div>
-      <div ref={scrollRef} className="chat-file-peek-scroll">
-        {body}
-      </div>
-    </section>
-  );
+  return <>{body}</>;
 }, (prev, next) => (
   prev.preview === next.preview &&
   prev.mode === next.mode &&
@@ -2904,6 +2759,7 @@ export function App() {
   );
   const [chatPreviewManualOpen, setChatPreviewManualOpen] = useState(false);
   const [chatPreviewManualCollapsed, setChatPreviewManualCollapsed] = useState(false);
+  const [previewProjectMenuOpen, setPreviewProjectMenuOpen] = useState(false);
   const portRelayCodeCopyTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const portRelayClearSiteDataTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const portRelayTargetMenuTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
@@ -18793,8 +18649,10 @@ export function App() {
         onOpenInBrowser={openPortRelayPreviewInBrowser}
       />
     ) : null;
-  const chatFilePreviewTabs =
-    (previewWorkbench.tabsByProjectId[previewWorkbench.activeProjectId] ?? []).filter(isFilePreviewTab);
+  const previewWorkbenchProjects = visibleProjectItems;
+  const previewWorkbenchTabs =
+    previewWorkbench.tabsByProjectId[previewWorkbench.activeProjectId] ?? [];
+  const previewWorkbenchActiveTab = activeWorkbenchTab;
   const chatFilePreviewDirEntries =
     chatFilePreviewDirEntriesByProject[previewWorkbench.activeProjectId] ?? {'.': []};
   const chatFilePreviewLoadingDirs =
@@ -18828,37 +18686,42 @@ export function App() {
       }}
     />
   );
-  const changeChatFilePreviewProject = (nextProjectId: string) => {
+  const toggleChatFilePreviewTree = () => {
+    setPreviewWorkbench(current => ({...current, treeOpen: !current.treeOpen}));
+  };
+  const togglePreviewProjectMenu = () => {
+    setPreviewProjectMenuOpen(open => !open);
+  };
+  const selectPreviewProjectFromMenu = (nextProjectId: string) => {
+    setPreviewProjectMenuOpen(false);
     setPreviewWorkbench(current => selectPreviewProject(current, nextProjectId));
   };
-  const selectChatFilePreviewTab = (path: string) => {
+  const selectWorkbenchTab = (tabId: string) => {
     setPreviewWorkbench(current => {
       const projectId = current.activeProjectId;
-      const tab = (current.tabsByProjectId[projectId] ?? []).find(item =>
-        item.type === 'file' && item.path === path,
-      );
-      return openPreviewTab(current, {
-        type: 'file',
-        projectId,
-        path,
-        targetLine: tab?.type === 'file' ? tab.targetLine : null,
-        title: path.split('/').pop() || path,
-      });
+      const tab = (current.tabsByProjectId[projectId] ?? []).find(item => item.id === tabId);
+      if (!tab) {
+        return current;
+      }
+      return {
+        ...current,
+        activeTabIdByProjectId: {
+          ...current.activeTabIdByProjectId,
+          [projectId]: tabId,
+        },
+      };
     });
   };
-  const closeChatFilePreviewTab = (path: string) => {
-    const closingLastTab = chatFilePreviewTabs.length === 1 &&
-      chatFilePreviewTabs[0]?.path === path;
+  const closeWorkbenchTab = (tabId: string) => {
+    const closingLastTab = previewWorkbenchTabs.length === 1 &&
+      previewWorkbenchTabs[0]?.id === tabId;
     setPreviewWorkbench(current =>
-      closePreviewTab(current, current.activeProjectId, previewTabId({type: 'file', path})),
+      closePreviewTab(current, current.activeProjectId, tabId),
     );
     if (closingLastTab) {
       setChatPreviewManualOpen(true);
       setChatPreviewManualCollapsed(false);
     }
-  };
-  const toggleChatFilePreviewTree = () => {
-    setPreviewWorkbench(current => ({...current, treeOpen: !current.treeOpen}));
   };
   const copyChatFilePreviewPath = () => {
     if (!chatFilePeek) return;
@@ -18868,6 +18731,144 @@ export function App() {
     const absolutePath = projectRoot && relativePath ? `${projectRoot}/${relativePath}`.replace(/\\/g, '/') : chatFilePeek.path;
     navigator.clipboard.writeText(absolutePath).catch(() => undefined);
   };
+  const renderPreviewWorkbenchActions = () => {
+    const tab = activeWorkbenchTab;
+    if (!tab) {
+      return null;
+    }
+    if (tab.type === 'file') {
+      return (
+        <>
+          <button
+            type="button"
+            className="chat-preview-icon-button"
+            onClick={copyChatFilePreviewPath}
+            title="Copy absolute path"
+            aria-label="Copy absolute path"
+          >
+            <span className="codicon codicon-clippy" />
+          </button>
+          <button
+            type="button"
+            className="chat-preview-icon-button"
+            onClick={openPeekFileInFullFileTab}
+            title="Open in File tab"
+            aria-label="Open in File tab"
+          >
+            <span className="codicon codicon-go-to-file" />
+          </button>
+        </>
+      );
+    }
+    if (tab.type === 'port-relay') {
+      return (
+        <button
+          type="button"
+          className="chat-preview-icon-button"
+          onClick={openPortRelayPreviewInBrowser}
+          title="Open relay page in browser"
+          aria-label="Open relay page in browser"
+        >
+          <span className="codicon codicon-link-external" />
+        </button>
+      );
+    }
+    return null;
+  };
+  const renderPreviewWorkbenchBody = (mode: 'desktop' | 'mobile') => {
+    const tab = activeWorkbenchTab;
+    if (!tab) {
+      return (
+        <div className="chat-file-workbench-empty">
+          <span className="codicon codicon-layout-sidebar-right" aria-hidden="true" />
+          <span>No preview selected</span>
+        </div>
+      );
+    }
+    if (tab.type === 'file') {
+      return (
+        <ChatFilePeekViewer
+          peek={tab}
+          mode={mode}
+          projects={previewWorkbenchProjects}
+          activeProjectId={previewWorkbench.activeProjectId}
+          tabs={[]}
+          treeOpen={previewWorkbench.treeOpen}
+          themeMode={themeMode}
+          codeTheme={codeTheme}
+          codeFont={codeFont}
+          codeFontSize={codeFontSize}
+          codeLineHeight={codeLineHeight}
+          codeTabSize={codeTabSize}
+          wrapLines={wrapLines}
+          showLineNumbers={showLineNumbers}
+          highlightedLines={chatPeekSelectedLines}
+          onLineClick={handlePeekLineClick}
+          onClose={closeChatFilePeekFromChrome}
+          onCopyPath={copyChatFilePreviewPath}
+          onOpenInFileTab={openPeekFileInFullFileTab}
+          onProjectChange={selectPreviewProjectFromMenu}
+          onTabSelect={() => undefined}
+          onTabClose={() => undefined}
+          onToggleTree={toggleChatFilePreviewTree}
+          treeContent={null}
+          scrollRef={chatFilePeekScrollRef}
+        />
+      );
+    }
+    if (tab.type === 'prompt-diff') {
+      return (
+        <ChatPromptArtifactPreviewViewer
+          preview={tab}
+          mode={mode}
+          themeMode={themeMode}
+          codeTheme={codeTheme}
+          codeFont={codeFont}
+          codeFontFamily={codeFontFamily}
+          codeFontSize={codeFontSize}
+          codeLineHeight={codeLineHeight}
+          codeTabSize={codeTabSize}
+          onClose={closeChatFilePeekFromChrome}
+          onToggleFile={togglePromptArtifactPreviewFile}
+          scrollRef={chatFilePeekScrollRef}
+        />
+      );
+    }
+    if (tab.type === 'attachment') {
+      return (
+        <ChatAttachmentPreviewViewer
+          preview={tab}
+          mode={mode}
+          onClose={closeChatFilePeekFromChrome}
+          scrollRef={chatFilePeekScrollRef}
+        />
+      );
+    }
+    return renderPortRelayWorkbenchSurface(mode);
+  };
+  const renderPreviewWorkbenchSurface = (mode: 'desktop' | 'mobile') => (
+    <PreviewWorkbenchChrome
+      mode={mode}
+      projects={previewWorkbenchProjects}
+      activeProjectId={previewWorkbench.activeProjectId}
+      projectMenuOpen={previewProjectMenuOpen}
+      activeTab={previewWorkbenchActiveTab}
+      tabs={previewWorkbenchTabs}
+      fileTreeOpen={previewWorkbench.treeOpen}
+      fileTree={mode === 'desktop' && activeWorkbenchTab?.type === 'file' ? chatFilePreviewTreeContent : null}
+      actions={renderPreviewWorkbenchActions()}
+      onClose={closeChatFilePeekFromChrome}
+      onProjectMenuToggle={togglePreviewProjectMenu}
+      onProjectSelect={selectPreviewProjectFromMenu}
+      onTabSelect={selectWorkbenchTab}
+      onTabClose={closeWorkbenchTab}
+      onFileTreeToggle={toggleChatFilePreviewTree}
+    >
+      <div ref={chatFilePeekScrollRef} className="chat-file-peek-scroll">
+        {renderPreviewWorkbenchBody(mode)}
+      </div>
+    </PreviewWorkbenchChrome>
+  );
   const chatPreviewDesktopPane = isWide && chatPreviewOpen ? (
     <aside
       className="chat-preview-pane"
@@ -18884,57 +18885,7 @@ export function App() {
         onPointerCancel={finishChatFilePeekResize}
         onLostPointerCapture={commitChatFilePeekResize}
       />
-      {activePromptDiffPreview ? (
-        <ChatPromptArtifactPreviewViewer
-          preview={activePromptDiffPreview}
-          mode="desktop"
-          themeMode={themeMode}
-          codeTheme={codeTheme}
-          codeFont={codeFont}
-          codeFontFamily={codeFontFamily}
-          codeFontSize={codeFontSize}
-          codeLineHeight={codeLineHeight}
-          codeTabSize={codeTabSize}
-          onClose={closeChatFilePeekFromChrome}
-          onToggleFile={togglePromptArtifactPreviewFile}
-          scrollRef={chatFilePeekScrollRef}
-        />
-      ) : activeAttachmentPreview ? (
-        <ChatAttachmentPreviewViewer
-          preview={activeAttachmentPreview}
-          mode="desktop"
-          onClose={closeChatFilePeekFromChrome}
-          scrollRef={chatFilePeekScrollRef}
-        />
-      ) : activePortRelayPreview ? renderPortRelayWorkbenchSurface('desktop') : (chatFilePreviewHasTabs || chatPreviewManualOpen) ? (
-        <ChatFilePeekViewer
-          peek={chatFilePeek}
-          mode="desktop"
-          projects={chatFilePreviewProjects}
-          activeProjectId={previewWorkbench.activeProjectId}
-          tabs={chatFilePreviewTabs}
-          treeOpen={previewWorkbench.treeOpen}
-          themeMode={themeMode}
-          codeTheme={codeTheme}
-          codeFont={codeFont}
-          codeFontSize={codeFontSize}
-          codeLineHeight={codeLineHeight}
-          codeTabSize={codeTabSize}
-          wrapLines={wrapLines}
-          showLineNumbers={showLineNumbers}
-          highlightedLines={chatPeekSelectedLines}
-          onLineClick={handlePeekLineClick}
-          onClose={closeChatFilePeekFromChrome}
-          onCopyPath={copyChatFilePreviewPath}
-          onOpenInFileTab={openPeekFileInFullFileTab}
-          onProjectChange={changeChatFilePreviewProject}
-          onTabSelect={selectChatFilePreviewTab}
-          onTabClose={closeChatFilePreviewTab}
-          onToggleTree={toggleChatFilePreviewTree}
-          treeContent={chatFilePreviewTreeContent}
-          scrollRef={chatFilePeekScrollRef}
-        />
-      ) : <ChatEmptyPreviewViewer mode="desktop" onClose={closeChatFilePeekFromChrome} />}
+      {renderPreviewWorkbenchSurface('desktop')}
     </aside>
   ) : null;
   const chatPreviewMobileOverlay = !isWide && chatPreviewOpen ? (
@@ -18944,57 +18895,7 @@ export function App() {
       aria-modal="true"
       aria-label="Chat preview"
     >
-      {activePromptDiffPreview ? (
-        <ChatPromptArtifactPreviewViewer
-          preview={activePromptDiffPreview}
-          mode="mobile"
-          themeMode={themeMode}
-          codeTheme={codeTheme}
-          codeFont={codeFont}
-          codeFontFamily={codeFontFamily}
-          codeFontSize={codeFontSize}
-          codeLineHeight={codeLineHeight}
-          codeTabSize={codeTabSize}
-          onClose={closeChatFilePeekFromChrome}
-          onToggleFile={togglePromptArtifactPreviewFile}
-          scrollRef={chatFilePeekScrollRef}
-        />
-      ) : activeAttachmentPreview ? (
-        <ChatAttachmentPreviewViewer
-          preview={activeAttachmentPreview}
-          mode="mobile"
-          onClose={closeChatFilePeekFromChrome}
-          scrollRef={chatFilePeekScrollRef}
-        />
-      ) : activePortRelayPreview ? renderPortRelayWorkbenchSurface('mobile') : (chatFilePreviewHasTabs || chatPreviewManualOpen) ? (
-        <ChatFilePeekViewer
-          peek={chatFilePeek}
-          mode="mobile"
-          projects={chatFilePreviewProjects}
-          activeProjectId={previewWorkbench.activeProjectId}
-          tabs={chatFilePreviewTabs}
-          treeOpen={previewWorkbench.treeOpen}
-          themeMode={themeMode}
-          codeTheme={codeTheme}
-          codeFont={codeFont}
-          codeFontSize={codeFontSize}
-          codeLineHeight={codeLineHeight}
-          codeTabSize={codeTabSize}
-          wrapLines={wrapLines}
-          showLineNumbers={showLineNumbers}
-          highlightedLines={chatPeekSelectedLines}
-          onLineClick={handlePeekLineClick}
-          onClose={closeChatFilePeekFromChrome}
-          onCopyPath={copyChatFilePreviewPath}
-          onOpenInFileTab={openPeekFileInFullFileTab}
-          onProjectChange={changeChatFilePreviewProject}
-          onTabSelect={selectChatFilePreviewTab}
-          onTabClose={closeChatFilePreviewTab}
-          onToggleTree={toggleChatFilePreviewTree}
-          treeContent={null}
-          scrollRef={chatFilePeekScrollRef}
-        />
-      ) : <ChatEmptyPreviewViewer mode="mobile" onClose={closeChatFilePeekFromChrome} />}
+      {renderPreviewWorkbenchSurface('mobile')}
     </div>
   ) : null;
 
