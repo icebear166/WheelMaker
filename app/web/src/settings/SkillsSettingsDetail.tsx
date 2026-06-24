@@ -115,11 +115,28 @@ export function SkillsSettingsDetail({
   skillActionPendingKey,
 }: SkillsSettingsDetailProps) {
   const skillHubCards = Object.values(skillHubs).sort((left, right) => left.hubId.localeCompare(right.hubId));
+  const skillHubIds = skillHubCards.map(hub => hub.hubId);
+  const skillHubIdsKey = skillHubIds.join('\n');
+  const [activeSkillHubId, setActiveSkillHubId] = React.useState(skillHubIds[0] ?? '');
+  const activeSkillHub = skillHubCards.find(hub => hub.hubId === activeSkillHubId) ?? skillHubCards[0] ?? null;
+  const selectedSkillHubId = activeSkillHub?.hubId ?? '';
   const skillsScanning = skillsLoading || skillHubCards.some(hub => hub.loading === true);
   const scanningHubCount = skillHubCards.filter(hub => hub.loading === true).length;
   const skillsScanStatusLabel = scanningHubCount > 0
     ? `Scanning skills on ${scanningHubCount} ${scanningHubCount === 1 ? 'hub' : 'hubs'}...`
     : 'Scanning skills...';
+
+  React.useEffect(() => {
+    if (skillHubIds.length === 0) {
+      if (activeSkillHubId) {
+        setActiveSkillHubId('');
+      }
+      return;
+    }
+    if (!skillHubIds.includes(activeSkillHubId)) {
+      setActiveSkillHubId(skillHubIds[0]);
+    }
+  }, [activeSkillHubId, skillHubIdsKey]);
 
   const renderSkillInstallPanel = (target: SkillInstallTarget) => {
     const activeInstallTarget = skillInstallTarget;
@@ -348,18 +365,61 @@ export function SkillsSettingsDetail({
       {!skillsScanning && skillHubCards.length === 0 && !skillsError ? (
         <div className="muted block">No hubs available.</div>
       ) : null}
+      {skillHubCards.length > 0 ? (
+        <div className="settings-skills-hub-selector" role="tablist" aria-label="Skill hubs">
+          {skillHubCards.map(hub => {
+            const data = hub.data;
+            const projects = sortSkillProjects(data?.projects ?? []);
+            const hubSkillCount = data?.hubSkills?.skills.length ?? 0;
+            const projectSkillCount = projects.reduce((total, project) => total + project.skills.length, 0);
+            const operation = data?.operation ?? null;
+            return (
+              <button
+                key={`skills-hub-selector:${hub.hubId}`}
+                type="button"
+                className={`settings-skills-hub-tab${hub.hubId === selectedSkillHubId ? ' active' : ''}`}
+                onClick={() => setActiveSkillHubId(hub.hubId)}
+                title={hub.hubId}
+                role="tab"
+                aria-selected={hub.hubId === selectedSkillHubId}
+                aria-pressed={hub.hubId === selectedSkillHubId}
+              >
+                <span className="settings-skills-hub-tab-main">
+                  <span className="settings-skills-hub-tab-title">{hub.hubId}</span>
+                  <span className="settings-skills-hub-tab-meta">
+                    <span>{hubSkillCount} skills</span>
+                    <span>{projects.length} projects</span>
+                    <span>{projectSkillCount} project skills</span>
+                  </span>
+                </span>
+                <span className="settings-skills-hub-tab-state">
+                  {hub.loading ? (
+                    <span className="codicon codicon-loading codicon-modifier-spin" aria-label="Scanning" />
+                  ) : hub.error ? (
+                    <span className="codicon codicon-error" aria-label="Error" />
+                  ) : operation?.running ? (
+                    <span className="codicon codicon-sync codicon-modifier-spin" aria-label="Running" />
+                  ) : (
+                    <span className="codicon codicon-circle-filled" aria-hidden="true" />
+                  )}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
       <div className="settings-skills-list">
-        {skillHubCards.map(hub => {
-          const data = hub.data;
+        {activeSkillHub ? (() => {
+          const data = activeSkillHub.data;
           const operation = data?.operation ?? null;
           const operationRunning = operation?.running === true;
           const projects = sortSkillProjects(data?.projects ?? []);
           const hubSkillCount = data?.hubSkills?.skills.length ?? 0;
           const projectSkillCount = projects.reduce((total, project) => total + project.skills.length, 0);
           return (
-            <section className="settings-skills-hub" key={`skills-hub:${hub.hubId}`}>
-              {hub.error ? (
-                <div className="settings-metadata-error">{hub.error}</div>
+            <section className="settings-skills-hub" key={`skills-hub:${activeSkillHub.hubId}`}>
+              {activeSkillHub.error ? (
+                <div className="settings-metadata-error">{activeSkillHub.error}</div>
               ) : null}
               {operation ? (
                 <div className={`agent-package-task ${operation.status === 'failed' ? 'failed' : ''}`}>
@@ -371,19 +431,19 @@ export function SkillsSettingsDetail({
                 </div>
               ) : null}
               <div className="settings-skills-scope-grid">
-                {renderSkillScopeRows(hub.hubId, hub.hubId, data?.hubSkills?.skills ?? [], {
+                {renderSkillScopeRows(activeSkillHub.hubId, activeSkillHub.hubId, data?.hubSkills?.skills ?? [], {
                   scope: 'hub',
                   operationRunning,
-                  actionsDisabled: hub.loading,
-                  loading: hub.loading,
+                  actionsDisabled: activeSkillHub.loading,
+                  loading: activeSkillHub.loading,
                   allowUpdate: true,
                   updateIncludeProjects: true,
                   updateLabel: 'Update hub and project skills',
                   summary: `${hubSkillCount} hub skills / ${projects.length} projects / ${projectSkillCount} project skills`,
                 })}
                 {projects.map(project => (
-                  <div className="settings-skills-project" key={`${hub.hubId}:${project.projectName}`}>
-                    {renderSkillScopeRows(hub.hubId, project.projectName, project.skills, {
+                  <div className="settings-skills-project" key={`${activeSkillHub.hubId}:${project.projectName}`}>
+                    {renderSkillScopeRows(activeSkillHub.hubId, project.projectName, project.skills, {
                       scope: 'project',
                       projectName: project.projectName,
                       disabled: !project.online,
@@ -396,7 +456,7 @@ export function SkillsSettingsDetail({
               </div>
             </section>
           );
-        })}
+        })() : null}
       </div>
     </>
   );

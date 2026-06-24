@@ -193,6 +193,10 @@ export function DesktopTitleBar({ title }: DesktopTitleBarProps) {
     }
     window.location.reload();
   };
+  const handleWebSourceRefresh = () => {
+    setSourceMenuOpen(false);
+    window.location.reload();
+  };
   const displayTitle = webSourceState?.displayTitle || title;
   const titlePrefix = `${title} - `;
   const actualSourceLabel = webSourceState?.displaySource || '';
@@ -224,6 +228,16 @@ export function DesktopTitleBar({ title }: DesktopTitleBarProps) {
                   onClick={() => setSourceMenuOpen(open => !open)}
                 >
                   {actualSourceLabel}
+                </button>
+                <button
+                  type="button"
+                  className="desktop-titlebar-source-refresh"
+                  aria-label="Refresh web source"
+                  data-desktop-titlebar-interactive={true}
+                  title="Refresh web source"
+                  onClick={handleWebSourceRefresh}
+                >
+                  <span className="codicon codicon-refresh" aria-hidden="true" />
                 </button>
                 {sourceMenuOpen ? (
                   <div

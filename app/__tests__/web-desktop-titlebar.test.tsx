@@ -74,6 +74,15 @@ describe('desktop title bar', () => {
     expect(sourceButton.props.title).toBe('https://example.com/');
     expect(sourceButton.props.children).toBe('example.com');
     expect(sourceButton.props['aria-expanded']).toBe(false);
+    const sourceRefreshButton = root.findByProps({className: 'desktop-titlebar-source-refresh'});
+    expect(sourceRefreshButton.props['aria-label']).toBe('Refresh web source');
+    expect(sourceRefreshButton.props.title).toBe('Refresh web source');
+    expect(sourceRefreshButton.props['data-desktop-titlebar-interactive']).toBe(true);
+    expect(sourceRefreshButton.findByProps({className: 'codicon codicon-refresh'})).toBeDefined();
+    await ReactTestRenderer.act(async () => {
+      sourceRefreshButton.props.onClick();
+    });
+    expect(reload).toHaveBeenCalledTimes(1);
     await ReactTestRenderer.act(async () => {
       sourceButton.props.onClick();
     });
@@ -87,7 +96,7 @@ describe('desktop title bar', () => {
       await menuItems[1].props.onClick();
     });
     expect(setWebSourcePreference).toHaveBeenCalledWith('embedded');
-    expect(reload).toHaveBeenCalled();
+    expect(reload).toHaveBeenCalledTimes(2);
 
     const dragRegion = root.findByProps({'data-desktop-titlebar-drag-region': true});
     expect(root.findByProps({className: 'desktop-titlebar-controls'}).findAllByType('select')).toHaveLength(0);
@@ -172,5 +181,6 @@ describe('desktop title bar', () => {
     expect(root.findByProps({className: 'desktop-titlebar-source-label'}).props.children).toBe('Embedded');
     expect(root.findAllByProps({className: 'desktop-titlebar-source-select'})).toHaveLength(0);
     expect(root.findAllByProps({className: 'desktop-titlebar-source-button'})).toHaveLength(0);
+    expect(root.findAllByProps({className: 'desktop-titlebar-source-refresh'})).toHaveLength(0);
   });
 });

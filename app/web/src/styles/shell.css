@@ -99,6 +99,7 @@
   min-width: 0;
   display: inline-flex;
   align-items: center;
+  gap: 2px;
   flex: 0 1 auto;
   position: relative;
 }
@@ -144,6 +145,35 @@
   background-size: 4px 4px, 4px 4px;
   color: var(--text);
   outline: none;
+}
+
+.desktop-titlebar-source-refresh {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: color-mix(in srgb, var(--text) 72%, var(--muted));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: background-color 80ms ease, border-color 80ms ease, color 80ms ease;
+}
+
+.desktop-titlebar-source-refresh:hover,
+.desktop-titlebar-source-refresh:focus-visible {
+  border-color: color-mix(in srgb, var(--border) 70%, transparent);
+  background-color: color-mix(in srgb, var(--hover) 72%, transparent);
+  color: var(--text);
+  outline: none;
+}
+
+.desktop-titlebar-source-refresh .codicon {
+  font-size: 13px;
+  line-height: 1;
 }
 
 .desktop-titlebar-source-menu {

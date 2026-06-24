@@ -1292,6 +1292,99 @@ textarea,
   gap: 8px;
 }
 
+.settings-skills-hub-selector {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 1px 0 5px;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+
+.settings-skills-hub-tab {
+  flex: 0 0 clamp(148px, 34%, 220px);
+  min-width: 0;
+  height: 48px;
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--panel-2) 84%, var(--panel));
+  color: var(--text);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 7px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-skills-hub-tab:hover {
+  background: var(--hover);
+}
+
+.settings-skills-hub-tab.active {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel-2));
+}
+
+.settings-skills-hub-tab-main {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.settings-skills-hub-tab-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.1;
+}
+
+.settings-skills-hub-tab-meta {
+  display: flex;
+  min-width: 0;
+  gap: 6px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.settings-skills-hub-tab-meta span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settings-skills-hub-tab-state {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--accent) 82%, var(--text));
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.settings-skills-hub-tab-state .codicon {
+  font-size: 11px;
+}
+
+.settings-skills-hub-tab-state .codicon-error {
+  color: var(--danger);
+}
+
 .settings-skills-marketplace-link {
   display: flex;
   align-items: center;
@@ -1389,7 +1482,7 @@ textarea,
   display: grid;
   min-width: 0;
   gap: 7px;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .settings-skills-scope-grid > .settings-skills-scope:first-child {
@@ -1445,8 +1538,6 @@ textarea,
   display: grid;
   min-width: 0;
   gap: 0;
-  max-height: min(32vh, 320px);
-  overflow: auto;
   padding-right: 2px;
 }
 
