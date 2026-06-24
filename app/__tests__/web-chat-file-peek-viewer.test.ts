@@ -244,6 +244,25 @@ describe('web chat file peek viewer', () => {
     expect(stylesCss).toContain('.preview-workbench-tab-icon');
   });
 
+  test('preview workbench toolbar keeps long project names from covering the title', () => {
+    const stylesCss = readWebStyles(projectRoot);
+
+    const toolbar = cssRuleBlock(stylesCss, '.preview-workbench-toolbar');
+    expect(toolbar).toContain('display: grid;');
+    expect(toolbar).toContain('grid-template-columns: 24px fit-content(132px) minmax(80px, 1fr) auto;');
+
+    const title = cssRuleBlock(stylesCss, '.preview-workbench-title');
+    expect(title).toContain('min-width: 0;');
+    expect(title).toContain('overflow: hidden;');
+    expect(title).toContain('text-overflow: ellipsis;');
+
+    const mobileToolbar = cssRuleBlock(stylesCss, '.preview-workbench-surface.mobile .preview-workbench-toolbar');
+    expect(mobileToolbar).toContain('grid-template-columns: 24px fit-content(88px) minmax(72px, 1fr) auto;');
+
+    const mobileProjectPill = cssRuleBlock(stylesCss, '.preview-workbench-surface.mobile .preview-workbench-project-pill');
+    expect(mobileProjectPill).toContain('max-width: 88px;');
+  });
+
   test('file tree toggle is a floating body button on desktop and mobile', () => {
     const mainTsx = readSourceText(mainPath);
     const chromeTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'preview', 'PreviewWorkbenchChrome.tsx'));

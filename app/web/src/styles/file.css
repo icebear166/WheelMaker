@@ -198,6 +198,8 @@
 }
 
 .preview-workbench-toolbar {
+  display: grid;
+  grid-template-columns: 24px fit-content(132px) minmax(80px, 1fr) auto;
   gap: 6px;
 }
 
@@ -205,11 +207,12 @@
   position: relative;
   flex: 0 1 auto;
   min-width: 0;
+  max-width: 132px;
 }
 
 .preview-workbench-project-pill {
   height: 24px;
-  max-width: 160px;
+  max-width: 132px;
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -233,9 +236,13 @@
 
 .preview-workbench-title {
   flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
   color: var(--text);
   font-size: 12px;
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .preview-workbench-actions {
@@ -342,6 +349,15 @@
 .preview-workbench-surface.mobile.mobile-header-hidden .preview-workbench-toolbar,
 .preview-workbench-surface.mobile.mobile-header-hidden .preview-workbench-tabs {
   display: none;
+}
+
+.preview-workbench-surface.mobile .preview-workbench-toolbar {
+  grid-template-columns: 24px fit-content(88px) minmax(72px, 1fr) auto;
+}
+
+.preview-workbench-surface.mobile .preview-workbench-project-wrap,
+.preview-workbench-surface.mobile .preview-workbench-project-pill {
+  max-width: 88px;
 }
 
 .preview-workbench-surface.mobile .preview-workbench-tree-panel {
