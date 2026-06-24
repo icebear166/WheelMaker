@@ -1292,99 +1292,6 @@ textarea,
   gap: 8px;
 }
 
-.settings-skills-hub-selector {
-  display: flex;
-  align-items: stretch;
-  min-width: 0;
-  gap: 6px;
-  overflow-x: auto;
-  padding: 1px 0 5px;
-  scrollbar-gutter: stable;
-  -webkit-overflow-scrolling: touch;
-}
-
-.settings-skills-hub-tab {
-  flex: 0 0 clamp(148px, 34%, 220px);
-  min-width: 0;
-  height: 48px;
-  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--panel-2) 84%, var(--panel));
-  color: var(--text);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 7px;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.settings-skills-hub-tab:hover {
-  background: var(--hover);
-}
-
-.settings-skills-hub-tab.active {
-  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
-  background: color-mix(in srgb, var(--accent) 12%, var(--panel-2));
-}
-
-.settings-skills-hub-tab-main {
-  display: grid;
-  min-width: 0;
-  gap: 4px;
-}
-
-.settings-skills-hub-tab-title {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 850;
-  line-height: 1.1;
-}
-
-.settings-skills-hub-tab-meta {
-  display: flex;
-  min-width: 0;
-  gap: 6px;
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 650;
-  line-height: 1.1;
-  white-space: nowrap;
-}
-
-.settings-skills-hub-tab-meta span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.settings-skills-hub-tab-state {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 999px;
-  color: color-mix(in srgb, var(--accent) 82%, var(--text));
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-}
-
-.settings-skills-hub-tab-state .codicon {
-  font-size: 11px;
-}
-
-.settings-skills-hub-tab-state .codicon-error {
-  color: var(--danger);
-}
-
 .settings-skills-marketplace-link {
   display: flex;
   align-items: center;
@@ -1435,6 +1342,152 @@ textarea,
   flex: 0 0 auto;
   color: var(--muted);
   font-size: 13px;
+}
+
+.settings-skills-hub-picker {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  display: grid;
+  min-width: 0;
+  padding: 0 0 6px;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--panel) 96%, transparent),
+    color-mix(in srgb, var(--panel) 88%, transparent)
+  );
+}
+
+.settings-skills-hub-picker-button {
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  border: 1px solid color-mix(in srgb, var(--accent) 36%, var(--border));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--panel-2) 88%, var(--accent));
+  color: var(--text);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-skills-hub-picker-button:hover,
+.settings-skills-hub-picker-button:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+  background: color-mix(in srgb, var(--panel-2) 78%, var(--accent));
+  outline: none;
+}
+
+.settings-skills-hub-picker-main,
+.settings-skills-hub-option-main {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.settings-skills-hub-picker-label {
+  color: var(--accent);
+  font-size: 9.5px;
+  font-weight: 850;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.settings-skills-hub-picker-title,
+.settings-skills-hub-option-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 850;
+  line-height: 1.1;
+}
+
+.settings-skills-hub-picker-meta,
+.settings-skills-hub-option-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 1.1;
+}
+
+.settings-skills-hub-picker-state,
+.settings-skills-hub-option-state {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--accent) 82%, var(--text));
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.settings-skills-hub-picker-state .codicon,
+.settings-skills-hub-option-state .codicon {
+  font-size: 11px;
+}
+
+.settings-skills-hub-picker-state .codicon-error,
+.settings-skills-hub-option-state .codicon-error {
+  color: var(--danger);
+}
+
+.settings-skills-hub-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% - 4px);
+  z-index: 12;
+  display: grid;
+  gap: 2px;
+  max-height: min(56vh, 420px);
+  overflow-y: auto;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--panel) 96%, var(--panel-3));
+  box-shadow: 0 14px 32px color-mix(in srgb, black 30%, transparent);
+  padding: 4px;
+}
+
+.settings-skills-hub-option {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 7px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-skills-hub-option:hover,
+.settings-skills-hub-option:focus-visible {
+  background: var(--hover);
+  outline: none;
+}
+
+.settings-skills-hub-option.active {
+  background: color-mix(in srgb, var(--accent) 13%, var(--panel-2));
 }
 
 .settings-skills-scan-status {

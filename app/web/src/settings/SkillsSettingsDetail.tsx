@@ -118,6 +118,7 @@ export function SkillsSettingsDetail({
   const skillHubIds = skillHubCards.map(hub => hub.hubId);
   const skillHubIdsKey = skillHubIds.join('\n');
   const [activeSkillHubId, setActiveSkillHubId] = React.useState(skillHubIds[0] ?? '');
+  const [skillHubMenuOpen, setSkillHubMenuOpen] = React.useState(false);
   const activeSkillHub = skillHubCards.find(hub => hub.hubId === activeSkillHubId) ?? skillHubCards[0] ?? null;
   const selectedSkillHubId = activeSkillHub?.hubId ?? '';
   const skillsScanning = skillsLoading || skillHubCards.some(hub => hub.loading === true);
@@ -131,12 +132,27 @@ export function SkillsSettingsDetail({
       if (activeSkillHubId) {
         setActiveSkillHubId('');
       }
+      setSkillHubMenuOpen(false);
       return;
     }
     if (!skillHubIds.includes(activeSkillHubId)) {
       setActiveSkillHubId(skillHubIds[0]);
+      setSkillHubMenuOpen(false);
     }
   }, [activeSkillHubId, skillHubIdsKey]);
+
+  const skillHubSummary = (hub: SkillHubView) => {
+    const data = hub.data;
+    const projects = sortSkillProjects(data?.projects ?? []);
+    const hubSkillCount = data?.hubSkills?.skills.length ?? 0;
+    const projectSkillCount = projects.reduce((total, project) => total + project.skills.length, 0);
+    return {
+      hubSkillCount,
+      projectCount: projects.length,
+      projectSkillCount,
+      operation: data?.operation ?? null,
+    };
+  };
 
   const renderSkillInstallPanel = (target: SkillInstallTarget) => {
     const activeInstallTarget = skillInstallTarget;
@@ -341,6 +357,96 @@ export function SkillsSettingsDetail({
 
   return (
     <>
+      {activeSkillHub ? (() => {
+        const activeSummary = skillHubSummary(activeSkillHub);
+        return (
+          <div
+            className="settings-skills-hub-picker"
+            onBlur={event => {
+              const nextFocus = event.relatedTarget as Node | null;
+              if (!nextFocus || !event.currentTarget.contains(nextFocus)) {
+                setSkillHubMenuOpen(false);
+              }
+            }}
+            onKeyDown={event => {
+              if (event.key === 'Escape') {
+                setSkillHubMenuOpen(false);
+              }
+            }}
+          >
+            <button
+              type="button"
+              className="settings-skills-hub-picker-button"
+              onClick={() => setSkillHubMenuOpen(!skillHubMenuOpen)}
+              aria-haspopup="listbox"
+              aria-expanded={skillHubMenuOpen}
+              title={selectedSkillHubId}
+            >
+              <span className="settings-skills-hub-picker-main">
+                <span className="settings-skills-hub-picker-label">Hub</span>
+                <span className="settings-skills-hub-picker-title">{selectedSkillHubId}</span>
+                <span className="settings-skills-hub-picker-meta">
+                  {activeSummary.hubSkillCount} skills / {activeSummary.projectCount} projects / {activeSummary.projectSkillCount} project skills
+                </span>
+              </span>
+              <span className="settings-skills-hub-picker-state">
+                {activeSkillHub.loading ? (
+                  <span className="codicon codicon-loading codicon-modifier-spin" aria-label="Scanning" />
+                ) : activeSkillHub.error ? (
+                  <span className="codicon codicon-error" aria-label="Error" />
+                ) : activeSummary.operation?.running ? (
+                  <span className="codicon codicon-sync codicon-modifier-spin" aria-label="Running" />
+                ) : (
+                  <span className="codicon codicon-circle-filled" aria-hidden="true" />
+                )}
+              </span>
+              <span className={`codicon ${skillHubMenuOpen ? 'codicon-chevron-up' : 'codicon-chevron-down'}`} aria-hidden="true" />
+            </button>
+            {skillHubMenuOpen ? (
+              <div className="settings-skills-hub-menu" role="listbox" aria-label="Skill hubs">
+                {skillHubCards.map(hub => {
+                  const summary = skillHubSummary(hub);
+                  const selected = hub.hubId === selectedSkillHubId;
+                  return (
+                    <button
+                      key={`skills-hub-option:${hub.hubId}`}
+                      type="button"
+                      className={`settings-skills-hub-option${hub.hubId === selectedSkillHubId ? ' active' : ''}`}
+                      role="option"
+                      aria-selected={selected}
+                      title={hub.hubId}
+                      onClick={() => {
+                        setActiveSkillHubId(hub.hubId);
+                        setSkillHubMenuOpen(false);
+                      }}
+                    >
+                      <span className="settings-skills-hub-option-main">
+                        <span className="settings-skills-hub-option-title">{hub.hubId}</span>
+                        <span className="settings-skills-hub-option-meta">
+                          {summary.hubSkillCount} skills / {summary.projectCount} projects / {summary.projectSkillCount} project skills
+                        </span>
+                      </span>
+                      <span className="settings-skills-hub-option-state">
+                        {hub.loading ? (
+                          <span className="codicon codicon-loading codicon-modifier-spin" aria-label="Scanning" />
+                        ) : hub.error ? (
+                          <span className="codicon codicon-error" aria-label="Error" />
+                        ) : summary.operation?.running ? (
+                          <span className="codicon codicon-sync codicon-modifier-spin" aria-label="Running" />
+                        ) : selected ? (
+                          <span className="codicon codicon-check" aria-hidden="true" />
+                        ) : (
+                          <span className="codicon codicon-circle-filled" aria-hidden="true" />
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+        );
+      })() : null}
       <a
         className="settings-skills-marketplace-link"
         href={SKILLS_MARKETPLACE_URL}
@@ -364,49 +470,6 @@ export function SkillsSettingsDetail({
       ) : null}
       {!skillsScanning && skillHubCards.length === 0 && !skillsError ? (
         <div className="muted block">No hubs available.</div>
-      ) : null}
-      {skillHubCards.length > 0 ? (
-        <div className="settings-skills-hub-selector" role="tablist" aria-label="Skill hubs">
-          {skillHubCards.map(hub => {
-            const data = hub.data;
-            const projects = sortSkillProjects(data?.projects ?? []);
-            const hubSkillCount = data?.hubSkills?.skills.length ?? 0;
-            const projectSkillCount = projects.reduce((total, project) => total + project.skills.length, 0);
-            const operation = data?.operation ?? null;
-            return (
-              <button
-                key={`skills-hub-selector:${hub.hubId}`}
-                type="button"
-                className={`settings-skills-hub-tab${hub.hubId === selectedSkillHubId ? ' active' : ''}`}
-                onClick={() => setActiveSkillHubId(hub.hubId)}
-                title={hub.hubId}
-                role="tab"
-                aria-selected={hub.hubId === selectedSkillHubId}
-                aria-pressed={hub.hubId === selectedSkillHubId}
-              >
-                <span className="settings-skills-hub-tab-main">
-                  <span className="settings-skills-hub-tab-title">{hub.hubId}</span>
-                  <span className="settings-skills-hub-tab-meta">
-                    <span>{hubSkillCount} skills</span>
-                    <span>{projects.length} projects</span>
-                    <span>{projectSkillCount} project skills</span>
-                  </span>
-                </span>
-                <span className="settings-skills-hub-tab-state">
-                  {hub.loading ? (
-                    <span className="codicon codicon-loading codicon-modifier-spin" aria-label="Scanning" />
-                  ) : hub.error ? (
-                    <span className="codicon codicon-error" aria-label="Error" />
-                  ) : operation?.running ? (
-                    <span className="codicon codicon-sync codicon-modifier-spin" aria-label="Running" />
-                  ) : (
-                    <span className="codicon codicon-circle-filled" aria-hidden="true" />
-                  )}
-                </span>
-              </button>
-            );
-          })}
-        </div>
       ) : null}
       <div className="settings-skills-list">
         {activeSkillHub ? (() => {

@@ -119,17 +119,25 @@ describe('skill management settings UI source structure', () => {
     expect(stylesCss).toContain('.settings-skills-scan-status');
   });
 
-  test('uses an active hub selector instead of expanding every Skills hub', () => {
+  test('uses a sticky hub dropdown instead of a horizontal Skills hub selector', () => {
     expect(detailTsx).toContain('const skillHubIds = skillHubCards.map(hub => hub.hubId);');
     expect(detailTsx).toContain('const [activeSkillHubId, setActiveSkillHubId] = React.useState');
+    expect(detailTsx).toContain('const [skillHubMenuOpen, setSkillHubMenuOpen] = React.useState(false);');
     expect(detailTsx).toContain('const activeSkillHub = skillHubCards.find(hub => hub.hubId === activeSkillHubId)');
     expect(detailTsx).toContain("const selectedSkillHubId = activeSkillHub?.hubId ?? '';");
-    expect(detailTsx).toContain('className="settings-skills-hub-selector"');
-    expect(detailTsx).toContain('aria-pressed={hub.hubId === selectedSkillHubId}');
+    expect(detailTsx).toContain('className="settings-skills-hub-picker"');
+    expect(detailTsx).toContain('className="settings-skills-hub-picker-button"');
+    expect(detailTsx).toContain('className="settings-skills-hub-menu"');
+    expect(detailTsx).toContain('className={`settings-skills-hub-option${hub.hubId === selectedSkillHubId ? \' active\' : \'\'}`}');
+    expect(detailTsx).toContain('setSkillHubMenuOpen(false);');
     expect(detailTsx).toContain('{activeSkillHub ? (');
-    expect(stylesCss).toContain('.settings-skills-hub-selector');
+    expect(stylesCss).toContain('.settings-skills-hub-picker');
+    expect(stylesCss).toContain('position: sticky;');
+    expect(stylesCss).toContain('.settings-skills-hub-menu');
+    expect(stylesCss).toContain('z-index: 12;');
     expect(stylesCss).toContain('grid-template-columns: minmax(0, 1fr);');
     expect(stylesCss).not.toContain('grid-template-columns: repeat(auto-fit');
+    expect(stylesCss).not.toContain('.settings-skills-hub-selector');
     expect(stylesCss).not.toContain('max-height: min(32vh, 320px);');
   });
 
