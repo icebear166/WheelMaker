@@ -167,10 +167,11 @@ func (e *npmCommandError) commandMessage() string {
 }
 
 type npmPackagePolicy struct {
-	PackageName string
-	DisplayName string
-	AgentTypes  []string
-	Kind        string
+	PackageName          string
+	DisplayName          string
+	AgentTypes           []string
+	Kind                 string
+	HiddenFromUpdateList bool
 }
 
 var runtimeNPMPackages = []npmPackagePolicy{
@@ -179,7 +180,7 @@ var runtimeNPMPackages = []npmPackagePolicy{
 	{PackageName: "@openai/codex", DisplayName: "Codex CLI", AgentTypes: []string{"codex"}, Kind: "runtime"},
 	{PackageName: "@github/copilot", DisplayName: "Copilot CLI", AgentTypes: []string{"copilot"}, Kind: "runtime"},
 	{PackageName: "opencode-ai", DisplayName: "OpenCode CLI", AgentTypes: []string{"opencode"}, Kind: "runtime"},
-	{PackageName: "@myflicker/cli", DisplayName: "MyFlicker CLI", AgentTypes: []string{"flicker"}, Kind: "runtime"},
+	{PackageName: "@myflicker/cli", DisplayName: "MyFlicker CLI", AgentTypes: []string{"flicker"}, Kind: "runtime", HiddenFromUpdateList: true},
 }
 
 var deprecatedNPMPackages = []npmPackagePolicy{
@@ -243,7 +244,7 @@ func (c *NPMCommand) scan(ctx context.Context, hubID string) npmCommandResponse 
 			go c.runLatestOperation(started, missingLatest)
 		}
 	}
-	for _, policy := range runtimeNPMPackages {
+	for _, policy := range updateListRuntimeNPMPackages() {
 		installedVersion := installed[policy.PackageName]
 		row := npmPackageStatus{
 			PackageName:      policy.PackageName,
@@ -288,6 +289,17 @@ func cloneNPMStringSlice(values []string) []string {
 		return []string{}
 	}
 	return append([]string(nil), values...)
+}
+
+func updateListRuntimeNPMPackages() []npmPackagePolicy {
+	out := make([]npmPackagePolicy, 0, len(runtimeNPMPackages))
+	for _, policy := range runtimeNPMPackages {
+		if policy.HiddenFromUpdateList {
+			continue
+		}
+		out = append(out, policy)
+	}
+	return out
 }
 
 func normalizeNPMPackageNames(values []string) []string {
@@ -350,9 +362,10 @@ func (c *NPMCommand) latestResultsForScan(now time.Time) (map[string]npmLatestRe
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	out := make(map[string]npmLatestResult, len(runtimeNPMPackages))
+	packages := updateListRuntimeNPMPackages()
+	out := make(map[string]npmLatestResult, len(packages))
 	var missing []string
-	for _, policy := range runtimeNPMPackages {
+	for _, policy := range packages {
 		entry, ok := c.latestCache[policy.PackageName]
 		if !ok || !npmLatestCacheValid(entry, now) {
 			missing = append(missing, policy.PackageName)
