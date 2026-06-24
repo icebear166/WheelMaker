@@ -379,12 +379,18 @@ import {
   createPreviewWorkbenchState,
   ensurePreviewProjectVisible,
   failPreviewTabLoad,
+  isAttachmentPreviewTab,
   isFilePreviewTab,
+  isPromptDiffPreviewTab,
   openPreviewTab,
   previewTabId,
   selectPreviewProject,
+  updatePreviewTab,
   updatePreviewTabAfterLoad,
+  type AttachmentPreviewTab,
   type FilePreviewTab,
+  type PromptDiffPreviewFile,
+  type PromptDiffPreviewTab,
 } from '../preview/previewWorkbenchState';
 import { FilePreviewPane } from '../file/FilePreviewPane';
 import { FileSurface } from '../file/FileSurface';
@@ -618,38 +624,8 @@ type DesktopSidebarResizeState = {
   startWidth: number;
   currentWidth: number;
 };
-type ChatFilePeekState = {
-  path: string;
-  targetLine: number | null;
-  content: string;
-  info: RegistryFsInfo | null;
-  loading: boolean;
-  error: string;
-};
-type ChatAttachmentPreviewState = {
-  projectId: string;
-  sessionId: string;
-  title: string;
-  meta: string;
-  mimeType: string;
-  kind: 'image' | 'file';
-  src: string;
-  loading: boolean;
-  error: string;
-};
 type ChatAttachmentThumbnailState = {
   src: string;
-  loading: boolean;
-  error: string;
-};
-type ChatPromptArtifactPreviewFile = RegistrySessionPromptArtifactFile & {
-  diff: string;
-  expanded: boolean;
-};
-type ChatPromptArtifactPreviewState = {
-  artifactId: string;
-  title: string;
-  files: ChatPromptArtifactPreviewFile[];
   loading: boolean;
   error: string;
 };
@@ -1982,7 +1958,7 @@ function buildPromptArtifactPreviewFiles(
   artifact: RegistrySessionPromptArtifact,
   content: string,
   initialExpandedPath: string | null,
-): ChatPromptArtifactPreviewFile[] {
+): PromptDiffPreviewFile[] {
   const blocks = splitUnifiedDiffFileBlocks(content);
   const blocksByPath = new Map(
     blocks.map(block => [normalizePromptArtifactPath(block.path), block]),
@@ -2319,7 +2295,7 @@ const ChatEmptyPreviewViewer = React.memo(function ChatEmptyPreviewViewer({
 });
 
 type ChatAttachmentPreviewViewerProps = {
-  preview: ChatAttachmentPreviewState;
+  preview: AttachmentPreviewTab;
   mode: 'desktop' | 'mobile';
   onClose: () => void;
   scrollRef: React.RefObject<HTMLDivElement | null>;
@@ -2394,7 +2370,7 @@ const ChatAttachmentPreviewViewer = React.memo(function ChatAttachmentPreviewVie
 ));
 
 type ChatPromptArtifactPreviewViewerProps = {
-  preview: ChatPromptArtifactPreviewState;
+  preview: PromptDiffPreviewTab;
   mode: 'desktop' | 'mobile';
   themeMode: 'dark' | 'light';
   codeTheme: CodeThemeId;
@@ -3100,9 +3076,6 @@ export function App() {
     useState<Record<string, DirEntries>>({});
   const [chatFilePreviewLoadingDirsByProject, setChatFilePreviewLoadingDirsByProject] =
     useState<Record<string, Record<string, boolean>>>({});
-  const [chatAttachmentPreview, setChatAttachmentPreview] = useState<ChatAttachmentPreviewState | null>(null);
-  const [chatPromptArtifactPreview, setChatPromptArtifactPreview] =
-    useState<ChatPromptArtifactPreviewState | null>(null);
   const [chatPreviewManualOpen, setChatPreviewManualOpen] = useState(false);
   const [chatPreviewManualCollapsed, setChatPreviewManualCollapsed] = useState(false);
   const [chatAttachmentThumbnails, setChatAttachmentThumbnails] = useState<Record<string, ChatAttachmentThumbnailState>>({});
@@ -3110,9 +3083,10 @@ export function App() {
   const chatFilePreviewHasTabs = Object.values(previewWorkbench.tabsByProjectId)
     .some(tabs => tabs.some(isFilePreviewTab));
   const chatFilePeek = isFilePreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;
+  const activePromptDiffPreview = isPromptDiffPreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;
+  const activeAttachmentPreview = isAttachmentPreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;
+  const previewWorkbenchRef = useRef(previewWorkbench);
   const chatFilePeekRef = useRef<FilePreviewTab | null>(null);
-  const chatAttachmentPreviewRef = useRef<ChatAttachmentPreviewState | null>(null);
-  const chatPromptArtifactPreviewRef = useRef<ChatPromptArtifactPreviewState | null>(null);
   const chatFilePeekScrollRef = useRef<HTMLDivElement | null>(null);
   const chatFilePeekReadSeqRef = useRef(0);
   const chatAttachmentReadSeqRef = useRef(0);
@@ -3126,7 +3100,8 @@ export function App() {
   const [chatPeekSelectedLines, setChatPeekSelectedLines] = useState<Set<number>>(new Set());
   const chatPeekAnchorRef = useRef<number | null>(null);
   const chatPortRelayPreviewOpen = portRelayFrameOpen && portRelayFramePlacement === 'chatPreview' && !!portRelayFrameUrl;
-  const chatPreviewHasContent = chatFilePreviewHasTabs || !!chatPromptArtifactPreview || !!chatAttachmentPreview || chatPortRelayPreviewOpen;
+  const chatPreviewHasContent =
+    chatFilePreviewHasTabs || !!activePromptDiffPreview || !!activeAttachmentPreview || chatPortRelayPreviewOpen;
   const chatPreviewOpen = chatPreviewManualOpen || (chatPreviewHasContent && !chatPreviewManualCollapsed);
   const liveRefreshTimerRef = useRef<number | null>(null);
   const refreshInFlightRef = useRef(false);
@@ -7476,12 +7451,20 @@ export function App() {
     chatPeekAnchorRef.current = null;
   }, []);
   const closeChatAttachmentPreview = useCallback(() => {
+    const tab = activePreviewTab(previewWorkbenchRef.current);
+    if (!tab || tab.type !== 'attachment') {
+      return;
+    }
     chatAttachmentReadSeqRef.current += 1;
-    setChatAttachmentPreview(null);
+    setPreviewWorkbench(current => closePreviewTab(current, tab.projectId, tab.id));
   }, []);
   const closeChatPromptArtifactPreview = useCallback(() => {
+    const tab = activePreviewTab(previewWorkbenchRef.current);
+    if (!tab || tab.type !== 'prompt-diff') {
+      return;
+    }
     chatPromptArtifactReadSeqRef.current += 1;
-    setChatPromptArtifactPreview(null);
+    setPreviewWorkbench(current => closePreviewTab(current, tab.projectId, tab.id));
   }, []);
   const closeChatPortRelayPreview = useCallback(() => {
     setPortRelayFrameOpen(false);
@@ -7959,9 +7942,8 @@ export function App() {
   projectsRef.current = projects;
   expandedDirsRef.current = expandedDirs;
   selectedFileRef.current = selectedFile;
+  previewWorkbenchRef.current = previewWorkbench;
   chatFilePeekRef.current = chatFilePeek;
-  chatAttachmentPreviewRef.current = chatAttachmentPreview;
-  chatPromptArtifactPreviewRef.current = chatPromptArtifactPreview;
 
   useEffect(() => {
     setFileTabSelectedLines(new Set());
@@ -8731,13 +8713,15 @@ export function App() {
 
   const openChatAttachmentPreview = useCallback((block: RegistrySessionContentBlock, message: RegistryChatMessage) => {
     const selectedKey = selectedChatKeyRef.current;
-    const targetProjectId = selectedKey?.projectId || projectIdRef.current;
+    const targetProjectId = selectedArchivedKey?.projectId || selectedKey?.projectId || projectIdRef.current;
     const sessionId = message.sessionId || selectedKey?.sessionId || '';
     if (!targetProjectId || !sessionId) {
       setError('Attachment preview requires an active chat session.');
       return;
     }
     const imageAttachment = isPromptImageAttachmentContentBlock(block);
+    const attachmentKey = chatAttachmentBlockCacheKey(targetProjectId, sessionId, block);
+    const tabId = previewTabId({type: 'attachment', sessionId, attachmentKey});
     const title = chatPromptAttachmentLabel(block, 0);
     const meta = chatPromptAttachmentMeta(block);
     const initialSrc = block.type === 'image' && block.data
@@ -8745,23 +8729,26 @@ export function App() {
       : '';
     const requestSeq = chatAttachmentReadSeqRef.current + 1;
     chatAttachmentReadSeqRef.current = requestSeq;
-    chatPromptArtifactReadSeqRef.current += 1;
     setError('');
     setPortRelayFrameOpen(false);
     setPortRelayFramePlacement('main');
     setChatPreviewManualOpen(false);
     setChatPreviewManualCollapsed(false);
-    setChatPromptArtifactPreview(null);
-    setChatAttachmentPreview({
-      projectId: targetProjectId,
-      sessionId,
-      title,
-      meta,
-      mimeType: block.mimeType || '',
-      kind: imageAttachment ? 'image' : 'file',
-      src: initialSrc,
-      loading: imageAttachment && !initialSrc,
-      error: '',
+    setPreviewWorkbench(current => {
+      const opened = openPreviewTab(current, {
+        type: 'attachment',
+        projectId: targetProjectId,
+        sessionId,
+        attachmentKey,
+        title,
+        meta,
+        mimeType: block.mimeType || '',
+        kind: imageAttachment ? 'image' : 'file',
+        src: initialSrc,
+      });
+      return imageAttachment && !initialSrc
+        ? beginPreviewTabLoad(opened, targetProjectId, tabId, requestSeq)
+        : opened;
     });
     if (!isWide) {
       setDrawerOpen(false);
@@ -8779,37 +8766,32 @@ export function App() {
       uri: block.uri,
       attachmentId: attachmentIdFromBlock(block) || undefined,
     }).then(result => {
-      if (requestSeq !== chatAttachmentReadSeqRef.current) {
-        return;
-      }
-      setChatAttachmentPreview(current =>
-        current && current.projectId === targetProjectId && current.sessionId === sessionId
-          ? {
-              ...current,
-              mimeType: result.mimeType || current.mimeType,
-              src: attachmentBase64DataUrl(result.content, result.mimeType || current.mimeType || 'image/png'),
-              loading: false,
-              error: '',
-            }
-          : current,
+      setPreviewWorkbench(current =>
+        updatePreviewTabAfterLoad(current, targetProjectId, tabId, requestSeq, tab =>
+          tab.type === 'attachment'
+            ? {
+                ...tab,
+                mimeType: result.mimeType || tab.mimeType,
+                src: attachmentBase64DataUrl(result.content, result.mimeType || tab.mimeType || 'image/png'),
+                loading: false,
+                error: '',
+              }
+            : tab,
+        ),
       );
     }).catch(err => {
-      if (requestSeq !== chatAttachmentReadSeqRef.current) {
-        return;
-      }
       const reason = err instanceof Error ? err.message : String(err);
-      setChatAttachmentPreview(current =>
-        current && current.projectId === targetProjectId && current.sessionId === sessionId
-          ? {
-              ...current,
-              src: '',
-              loading: false,
-              error: `Failed to load attachment: ${reason}`,
-            }
-          : current,
+      setPreviewWorkbench(current =>
+        failPreviewTabLoad(
+          current,
+          targetProjectId,
+          tabId,
+          requestSeq,
+          `Failed to load attachment: ${reason}`,
+        ),
       );
     });
-  }, [isWide, setDrawerOpen]);
+  }, [isWide, selectedArchivedKey?.projectId, setDrawerOpen]);
 
   const buildLineRange = (anchor: number, target: number): Set<number> => {
     const start = Math.min(anchor, target);
@@ -8878,10 +8860,6 @@ export function App() {
     setError('');
     setPortRelayFrameOpen(false);
     setPortRelayFramePlacement('main');
-    chatPromptArtifactReadSeqRef.current += 1;
-    chatAttachmentReadSeqRef.current += 1;
-    setChatPromptArtifactPreview(null);
-    setChatAttachmentPreview(null);
     if (!isWide) {
       setDrawerOpen(false);
       setChatQuickSwitchMenuOpen(false);
@@ -8914,13 +8892,14 @@ export function App() {
       window.history.back();
       return;
     }
-    if (chatPromptArtifactPreview) {
+    const activeTab = activePreviewTab(previewWorkbenchRef.current);
+    if (activeTab?.type === 'prompt-diff') {
       closeChatPromptArtifactPreview();
       setChatPreviewManualOpen(false);
       setChatPreviewManualCollapsed(false);
       return;
     }
-    if (chatAttachmentPreview) {
+    if (activeTab?.type === 'attachment') {
       closeChatAttachmentPreview();
       setChatPreviewManualOpen(false);
       setChatPreviewManualCollapsed(false);
@@ -8934,9 +8913,7 @@ export function App() {
     }
     closeChatPreview();
   }, [
-    chatAttachmentPreview,
     chatPortRelayPreviewOpen,
-    chatPromptArtifactPreview,
     closeChatAttachmentPreview,
     closeChatPortRelayPreview,
     closeChatPreview,
@@ -12376,10 +12353,6 @@ export function App() {
     setPortRelayFramePlacement('chatPreview');
     setChatPreviewManualOpen(false);
     setChatPreviewManualCollapsed(false);
-    chatAttachmentReadSeqRef.current += 1;
-    chatPromptArtifactReadSeqRef.current += 1;
-    setChatAttachmentPreview(null);
-    setChatPromptArtifactPreview(null);
     if (!isWide) {
       setDrawerOpen(false);
       setChatQuickSwitchMenuOpen(false);
@@ -16830,21 +16803,28 @@ export function App() {
     const initialFileCount = artifact.fileCount || artifact.files?.length || initialFiles.length;
     const requestSeq = chatPromptArtifactReadSeqRef.current + 1;
     chatPromptArtifactReadSeqRef.current = requestSeq;
-    chatAttachmentReadSeqRef.current += 1;
-    setChatAttachmentPreview(null);
+    const tabId = previewTabId({type: 'prompt-diff', sessionId, artifactId});
     setChatPeekSelectedLines(new Set());
     chatPeekAnchorRef.current = null;
     setPortRelayFrameOpen(false);
     setPortRelayFramePlacement('main');
     setChatPreviewManualOpen(false);
     setChatPreviewManualCollapsed(false);
-    setChatPromptArtifactPreview({
-      artifactId,
-      title: promptArtifactPreviewTitle(initialFileCount),
-      files: initialFiles,
-      loading: true,
-      error: '',
-    });
+    setPreviewWorkbench(current =>
+      beginPreviewTabLoad(
+        openPreviewTab(current, {
+          type: 'prompt-diff',
+          projectId: artifactProjectId,
+          sessionId,
+          artifactId,
+          title: promptArtifactPreviewTitle(initialFileCount),
+          files: initialFiles,
+        }),
+        artifactProjectId,
+        tabId,
+        requestSeq,
+      ),
+    );
     if (!isWide) {
       setDrawerOpen(false);
       setChatQuickSwitchMenuOpen(false);
@@ -16862,27 +16842,31 @@ export function App() {
     });
     try {
       const result = await service.readSessionArtifact(artifactProjectId, sessionId, artifactId);
-      if (requestSeq !== chatPromptArtifactReadSeqRef.current) {
-        return;
-      }
       const files = buildPromptArtifactPreviewFiles(artifact, result.content, initialPath);
       const fileCount = files.length || artifact.fileCount || artifact.files?.length || 0;
-      setChatPromptArtifactPreview({
-        artifactId,
-        title: promptArtifactPreviewTitle(fileCount),
-        files,
-        loading: false,
-        error: '',
-      });
+      setPreviewWorkbench(current =>
+        updatePreviewTabAfterLoad(current, artifactProjectId, tabId, requestSeq, tab =>
+          tab.type === 'prompt-diff'
+            ? {
+                ...tab,
+                title: promptArtifactPreviewTitle(fileCount),
+                files,
+                loading: false,
+                error: '',
+              }
+            : tab,
+        ),
+      );
     } catch (err) {
-      if (requestSeq !== chatPromptArtifactReadSeqRef.current) {
-        return;
-      }
       const messageText = err instanceof Error ? err.message : String(err);
-      setChatPromptArtifactPreview(current =>
-        current && current.artifactId === artifactId
-          ? {...current, loading: false, error: messageText}
-          : current,
+      setPreviewWorkbench(current =>
+        failPreviewTabLoad(
+          current,
+          artifactProjectId,
+          tabId,
+          requestSeq,
+          messageText,
+        ),
       );
       setPromptArtifactErrors(prev => ({
         ...prev,
@@ -16901,15 +16885,21 @@ export function App() {
   ]);
 
   const togglePromptArtifactPreviewFile = useCallback((path: string) => {
-    setChatPromptArtifactPreview(current =>
-      current
-        ? {
-            ...current,
-            files: current.files.map(file =>
-              file.path === path ? {...file, expanded: !file.expanded} : file,
-            ),
-          }
-        : current,
+    const tab = activePreviewTab(previewWorkbenchRef.current);
+    if (!tab || tab.type !== 'prompt-diff') {
+      return;
+    }
+    setPreviewWorkbench(current =>
+      updatePreviewTab(current, tab.projectId, tab.id, item =>
+        item.type === 'prompt-diff'
+          ? {
+              ...item,
+              files: item.files.map(file =>
+                file.path === path ? {...file, expanded: !file.expanded} : file,
+              ),
+            }
+          : item,
+      ),
     );
   }, []);
 
@@ -18878,9 +18868,9 @@ export function App() {
         onPointerCancel={finishChatFilePeekResize}
         onLostPointerCapture={commitChatFilePeekResize}
       />
-      {chatPromptArtifactPreview ? (
+      {activePromptDiffPreview ? (
         <ChatPromptArtifactPreviewViewer
-          preview={chatPromptArtifactPreview}
+          preview={activePromptDiffPreview}
           mode="desktop"
           themeMode={themeMode}
           codeTheme={codeTheme}
@@ -18893,9 +18883,9 @@ export function App() {
           onToggleFile={togglePromptArtifactPreviewFile}
           scrollRef={chatFilePeekScrollRef}
         />
-      ) : chatAttachmentPreview ? (
+      ) : activeAttachmentPreview ? (
         <ChatAttachmentPreviewViewer
-          preview={chatAttachmentPreview}
+          preview={activeAttachmentPreview}
           mode="desktop"
           onClose={closeChatFilePeekFromChrome}
           scrollRef={chatFilePeekScrollRef}
@@ -18938,9 +18928,9 @@ export function App() {
       aria-modal="true"
       aria-label="Chat preview"
     >
-      {chatPromptArtifactPreview ? (
+      {activePromptDiffPreview ? (
         <ChatPromptArtifactPreviewViewer
-          preview={chatPromptArtifactPreview}
+          preview={activePromptDiffPreview}
           mode="mobile"
           themeMode={themeMode}
           codeTheme={codeTheme}
@@ -18953,9 +18943,9 @@ export function App() {
           onToggleFile={togglePromptArtifactPreviewFile}
           scrollRef={chatFilePeekScrollRef}
         />
-      ) : chatAttachmentPreview ? (
+      ) : activeAttachmentPreview ? (
         <ChatAttachmentPreviewViewer
-          preview={chatAttachmentPreview}
+          preview={activeAttachmentPreview}
           mode="mobile"
           onClose={closeChatFilePeekFromChrome}
           scrollRef={chatFilePeekScrollRef}

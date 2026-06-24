@@ -44,32 +44,39 @@ describe('web chat file peek viewer', () => {
     expect(previewBody).toContain('chatRichComposerRef.current?.focus();');
   });
 
-  test('prompt diff artifacts open the chat preview without switching to the Git tab', () => {
+  test('prompt diff artifacts open unified prompt-diff tabs without switching to Git', () => {
     const mainTsx = readSourceText(mainPath);
     const openStart = mainTsx.indexOf('const openPromptArtifactDiff = useCallback(');
     expect(openStart).toBeGreaterThanOrEqual(0);
     const openEnd = mainTsx.indexOf('const selectedChatHasOpenPromptTurn', openStart);
     const openBody = mainTsx.slice(openStart, openEnd);
 
-    expect(openBody).toContain('setChatPromptArtifactPreview({');
+    expect(openBody).toContain("type: 'prompt-diff'");
+    expect(openBody).toContain('artifactId');
+    expect(openBody).toContain('updatePreviewTabAfterLoad(');
     expect(openBody).not.toContain("setTab('git')");
     expect(openBody).not.toContain('setPromptArtifactDiff({');
-    expect(mainTsx).toContain('const chatPreviewHasContent = chatFilePreviewHasTabs || !!chatPromptArtifactPreview || !!chatAttachmentPreview || chatPortRelayPreviewOpen;');
+    expect(openBody).not.toContain('setChatPromptArtifactPreview({');
+    expect(mainTsx).toContain('isPromptDiffPreviewTab(activeWorkbenchTab)');
     expect(mainTsx).toContain('<ChatPromptArtifactPreviewViewer');
     expect(mainTsx).toContain('togglePromptArtifactPreviewFile');
   });
 
-  test('prompt attachments open the existing chat preview side panel', () => {
+  test('prompt attachments open unified attachment tabs', () => {
     const mainTsx = readSourceText(mainPath);
     const stylesCss = readWebStyles(projectRoot);
+    const openStart = mainTsx.indexOf('const openChatAttachmentPreview = useCallback');
+    const openEnd = mainTsx.indexOf('const buildLineRange', openStart);
+    const openBody = mainTsx.slice(openStart, openEnd);
 
-    expect(mainTsx).toContain('type ChatAttachmentPreviewState = {');
-    expect(mainTsx).toContain('const [chatAttachmentPreview, setChatAttachmentPreview] = useState<ChatAttachmentPreviewState | null>(null);');
-    expect(mainTsx).toContain('const chatPreviewHasContent = chatFilePreviewHasTabs || !!chatPromptArtifactPreview || !!chatAttachmentPreview || chatPortRelayPreviewOpen;');
-    expect(mainTsx).toContain('const openChatAttachmentPreview = useCallback(');
-    expect(mainTsx).toContain('service.readProjectSessionAttachment(');
+    expect(openBody).toContain("type: 'attachment'");
+    expect(openBody).toContain('attachmentKey');
+    expect(openBody).toContain('chatAttachmentBlockCacheKey(');
+    expect(openBody).toContain('updatePreviewTabAfterLoad(');
+    expect(openBody).toContain('service.readProjectSessionAttachment(');
+    expect(mainTsx).not.toContain('const [chatAttachmentPreview, setChatAttachmentPreview]');
+    expect(mainTsx).not.toContain('const [chatPromptArtifactPreview, setChatPromptArtifactPreview]');
     expect(mainTsx).toContain('<ChatAttachmentPreviewViewer');
-    expect(mainTsx).toContain('preview={chatAttachmentPreview}');
     expect(mainTsx).toContain('Preview is being implemented.');
     expect(stylesCss).toContain('.chat-attachment-preview-surface');
     expect(stylesCss).toContain('.chat-attachment-original-image');
@@ -81,7 +88,8 @@ describe('web chat file peek viewer', () => {
 
     expect(mainTsx).toContain('const [chatPreviewManualOpen, setChatPreviewManualOpen] = useState(false);');
     expect(mainTsx).toContain('const [chatPreviewManualCollapsed, setChatPreviewManualCollapsed] = useState(false);');
-    expect(mainTsx).toContain('const chatPreviewHasContent = chatFilePreviewHasTabs || !!chatPromptArtifactPreview || !!chatAttachmentPreview || chatPortRelayPreviewOpen;');
+    expect(mainTsx).toContain('const chatPreviewHasContent =');
+    expect(mainTsx).toContain('chatFilePreviewHasTabs || !!activePromptDiffPreview || !!activeAttachmentPreview || chatPortRelayPreviewOpen;');
     expect(mainTsx).toContain('const chatPreviewOpen = chatPreviewManualOpen || (chatPreviewHasContent && !chatPreviewManualCollapsed);');
     expect(mainTsx).toContain('const ChatEmptyPreviewViewer = React.memo(function ChatEmptyPreviewViewer');
     expect(mainTsx).toContain('<div className="chat-preview-title" title="Preview">Preview</div>');
@@ -240,9 +248,10 @@ describe('web chat file peek viewer', () => {
     const closeEnd = mainTsx.indexOf('const openPeekFileInFullFileTab = useCallback', closeStart);
     const closeBody = mainTsx.slice(closeStart, closeEnd);
 
-    expect(closeBody).toContain('if (chatPromptArtifactPreview) {');
+    expect(closeBody).toContain('const activeTab = activePreviewTab(previewWorkbenchRef.current);');
+    expect(closeBody).toContain("if (activeTab?.type === 'prompt-diff') {");
     expect(closeBody).toContain('closeChatPromptArtifactPreview();');
-    expect(closeBody).toContain('if (chatAttachmentPreview) {');
+    expect(closeBody).toContain("if (activeTab?.type === 'attachment') {");
     expect(closeBody).toContain('closeChatAttachmentPreview();');
     expect(closeBody).toContain('if (chatPortRelayPreviewOpen) {');
     expect(closeBody).toContain('closeChatPortRelayPreview();');
