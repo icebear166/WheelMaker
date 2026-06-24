@@ -180,6 +180,43 @@ func TestNPMCommandScanReturnsRuntimeAndDeprecatedPackageRows(t *testing.T) {
 	}
 }
 
+func TestNPMCommandScanExcludesMyFlickerFromUpdateList(t *testing.T) {
+	runner := newFakeNPMRunner()
+	runner.set("npm", []string{"list", "-g", "--depth=0", "--json"}, npmCommandResult{
+		Stdout:   `{"dependencies":{"@myflicker/cli":{"version":"1.0.0"},"@openai/codex":{"version":"0.129.0"}}}`,
+		ExitCode: 0,
+	})
+	runner.set("npm", []string{"view", "@openai/codex", "version"}, npmCommandResult{Stdout: "0.130.0\n", ExitCode: 0})
+
+	cmd := newNPMCommandWithRunner(runner)
+	resp, cmdErr := cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("Handle scan error: %#v", cmdErr)
+	}
+	body := resp.(npmCommandResponse)
+	if hasNPMTestPackage(body.Hub.Packages, "@myflicker/cli") {
+		t.Fatalf("scan packages include @myflicker/cli: %#v", body.Hub.Packages)
+	}
+
+	waitForNPMTestOperation(t, cmd)
+	resp, cmdErr = cmd.Handle(context.Background(), rawNPMCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("Handle second scan error: %#v", cmdErr)
+	}
+	if hasNPMTestPackage(resp.(npmCommandResponse).Hub.Packages, "@myflicker/cli") {
+		t.Fatalf("second scan packages include @myflicker/cli: %#v", resp.(npmCommandResponse).Hub.Packages)
+	}
+	if runner.hasCall("npm", "view", "@myflicker/cli", "version") {
+		t.Fatalf("scan should not query latest for @myflicker/cli: %#v", runner.calls)
+	}
+}
+
 func TestNPMCommandScanDeprecatedCodexACPUsesEmptyAgentTypes(t *testing.T) {
 	runner := newFakeNPMRunner()
 	runner.set("npm", []string{"list", "-g", "--depth=0", "--json"}, npmCommandResult{
@@ -501,6 +538,15 @@ func findNPMTestPackage(t *testing.T, packages []npmPackageStatus, name string) 
 	}
 	t.Fatalf("package %s not found in %#v", name, packages)
 	return npmPackageStatus{}
+}
+
+func hasNPMTestPackage(packages []npmPackageStatus, name string) bool {
+	for _, pkg := range packages {
+		if pkg.PackageName == name {
+			return true
+		}
+	}
+	return false
 }
 
 func waitForNPMTestOperation(t *testing.T, cmd *NPMCommand) *npmOperationSnapshot {
