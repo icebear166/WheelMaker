@@ -639,6 +639,9 @@ type PreviewSelectionMenuState = {
   y: number;
   text: string;
 };
+type PreviewSelectionSnapshot = PreviewSelectionMenuState & {
+  range: Range | null;
+};
 const LARGE_FILE_CONFIRM_BYTES = 2 * 1024 * 1024;
 
 type ThinkingBlockProps = {
@@ -2791,6 +2794,7 @@ export function App() {
   const quickFileQuerySessionIdRef = useRef(`quick-file-${Date.now()}`);
   const [previewSelectionMenu, setPreviewSelectionMenu] = useState<PreviewSelectionMenuState | null>(null);
   const previewSelectionMenuRef = useRef<HTMLDivElement | null>(null);
+  const previewContextSelectionRef = useRef<PreviewSelectionSnapshot | null>(null);
   const portRelayCodeCopyTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const portRelayClearSiteDataTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const portRelayTargetMenuTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
@@ -18395,18 +18399,62 @@ export function App() {
       if (event.defaultPrevented) {
         return;
       }
+      if (!chatPreviewOpen) {
+        return;
+      }
+      if (quickFileOpen) {
+        if (event.key.toLowerCase() === 'p' && (event.ctrlKey || event.metaKey)) {
+          event.preventDefault();
+          quickFileInputRef.current?.focus();
+        }
+        return;
+      }
+      if (event.key === 'Tab' && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        const nextTabId = cyclePreviewTabId(previewWorkbenchTabs, activeWorkbenchTab?.id ?? '', event.shiftKey ? -1 : 1);
+        if (nextTabId) {
+          setPreviewWorkbench(current => {
+            const projectId = current.activeProjectId;
+            const tab = (current.tabsByProjectId[projectId] ?? []).find(item => item.id === nextTabId);
+            if (!tab) {
+              return current;
+            }
+            return {
+              ...current,
+              activeTabIdByProjectId: {
+                ...current.activeTabIdByProjectId,
+                [projectId]: nextTabId,
+              },
+            };
+          });
+        }
+        return;
+      }
+      if (event.key.toLowerCase() === 'f' && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        setPreviewSearchOpen(true);
+        setPreviewSearchActiveIndex(0);
+        setPreviewSelectionMenu(null);
+        window.requestAnimationFrame(() => {
+          previewSearchInputRef.current?.focus();
+          previewSearchInputRef.current?.select();
+        });
+        return;
+      }
       if (event.key.toLowerCase() === 'p' && (event.ctrlKey || event.metaKey)) {
         event.preventDefault();
-        if (quickFileOpen) {
-          quickFileInputRef.current?.focus();
-          return;
-        }
         openQuickFileSearch();
       }
     };
-    window.addEventListener('keydown', handleGlobalPreviewKeyDown);
-    return () => window.removeEventListener('keydown', handleGlobalPreviewKeyDown);
-  }, [openQuickFileSearch, quickFileOpen]);
+    window.addEventListener('keydown', handleGlobalPreviewKeyDown, true);
+    return () => window.removeEventListener('keydown', handleGlobalPreviewKeyDown, true);
+  }, [
+    activeWorkbenchTab?.id,
+    chatPreviewOpen,
+    openQuickFileSearch,
+    previewWorkbenchTabs,
+    quickFileOpen,
+  ]);
 
   useEffect(() => {
     if (!previewSelectionMenu) {
@@ -19090,7 +19138,11 @@ export function App() {
       }
     }
   };
-  const handlePreviewSelectionContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
+  const capturePreviewSelectionContext = (event: React.PointerEvent<HTMLDivElement>) => {
+    previewContextSelectionRef.current = null;
+    if (event.button !== 2) {
+      return;
+    }
     if (!activeWorkbenchTab || (activeWorkbenchTab.type !== 'file' && activeWorkbenchTab.type !== 'prompt-diff')) {
       return;
     }
@@ -19100,6 +19152,37 @@ export function App() {
     }
     const selection = window.getSelection();
     const text = selection?.toString() ?? '';
+    if (!selection || !text.trim() || selection.rangeCount === 0) {
+      return;
+    }
+    const anchorNode = selection.anchorNode ?? null;
+    const focusNode = selection.focusNode ?? null;
+    const container = chatFilePeekScrollRef.current;
+    if (
+      !container ||
+      (anchorNode && !container.contains(anchorNode)) ||
+      (focusNode && !container.contains(focusNode))
+    ) {
+      return;
+    }
+    previewContextSelectionRef.current = {
+      x: Math.min(event.clientX, Math.max(8, window.innerWidth - 132)),
+      y: Math.min(event.clientY, Math.max(8, window.innerHeight - 48)),
+      text,
+      range: selection.getRangeAt(0).cloneRange(),
+    };
+  };
+  const handlePreviewSelectionContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!activeWorkbenchTab || (activeWorkbenchTab.type !== 'file' && activeWorkbenchTab.type !== 'prompt-diff')) {
+      return;
+    }
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (!target?.closest('.code-wrap')) {
+      return;
+    }
+    const preservedSelection = previewContextSelectionRef.current;
+    const selection = window.getSelection();
+    const text = selection?.toString() || preservedSelection?.text || '';
     if (!text.trim()) {
       return;
     }
@@ -19114,11 +19197,16 @@ export function App() {
       return;
     }
     event.preventDefault();
+    if (preservedSelection?.range) {
+      selection?.removeAllRanges();
+      selection?.addRange(preservedSelection.range);
+    }
     setPreviewSelectionMenu({
-      x: Math.min(event.clientX, Math.max(8, window.innerWidth - 132)),
-      y: Math.min(event.clientY, Math.max(8, window.innerHeight - 48)),
+      x: preservedSelection?.x ?? Math.min(event.clientX, Math.max(8, window.innerWidth - 132)),
+      y: preservedSelection?.y ?? Math.min(event.clientY, Math.max(8, window.innerHeight - 48)),
       text,
     });
+    previewContextSelectionRef.current = null;
   };
   const copyPreviewSelection = () => {
     if (!previewSelectionMenu) {
@@ -19335,7 +19423,12 @@ export function App() {
       onMobilePortRelayRefresh={refreshActivePortRelayPreview}
     >
       {previewSearchBar}
-      <div ref={chatFilePeekScrollRef} className="chat-file-peek-scroll" onContextMenu={handlePreviewSelectionContextMenu}>
+      <div
+        ref={chatFilePeekScrollRef}
+        className="chat-file-peek-scroll"
+        onPointerDownCapture={capturePreviewSelectionContext}
+        onContextMenu={handlePreviewSelectionContextMenu}
+      >
         {renderPreviewWorkbenchBody(mode)}
       </div>
     </PreviewWorkbenchChrome>

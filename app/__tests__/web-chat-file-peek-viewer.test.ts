@@ -368,6 +368,41 @@ describe('web chat file peek viewer', () => {
     });
   });
 
+  test('preview workbench shortcuts are captured globally while preview is open', () => {
+    const mainTsx = readSourceText(mainPath);
+    const handlerStart = mainTsx.indexOf('const handleGlobalPreviewKeyDown = (event: KeyboardEvent) => {');
+    expect(handlerStart).toBeGreaterThanOrEqual(0);
+    const handlerEnd = mainTsx.indexOf("window.addEventListener('keydown', handleGlobalPreviewKeyDown, true);", handlerStart);
+    expect(handlerEnd).toBeGreaterThan(handlerStart);
+    const handlerBody = mainTsx.slice(handlerStart, handlerEnd);
+
+    expect(handlerBody).toContain('if (!chatPreviewOpen) {');
+    expect(handlerBody).toContain("if (event.key === 'Tab' && (event.ctrlKey || event.metaKey)) {");
+    expect(handlerBody).toContain("cyclePreviewTabId(previewWorkbenchTabs, activeWorkbenchTab?.id ?? '', event.shiftKey ? -1 : 1)");
+    expect(handlerBody).toContain('activeTabIdByProjectId: {');
+    expect(handlerBody).toContain("if (event.key.toLowerCase() === 'f' && (event.ctrlKey || event.metaKey)) {");
+    expect(handlerBody).toContain('setPreviewSearchOpen(true);');
+    expect(handlerBody).toContain("if (event.key.toLowerCase() === 'p' && (event.ctrlKey || event.metaKey)) {");
+    expect(mainTsx).toContain("window.addEventListener('keydown', handleGlobalPreviewKeyDown, true);");
+    expect(mainTsx).toContain("window.removeEventListener('keydown', handleGlobalPreviewKeyDown, true);");
+  });
+
+  test('preview selection context menu preserves text selection through right click', () => {
+    const mainTsx = readSourceText(mainPath);
+
+    expect(mainTsx).toContain('const previewContextSelectionRef = useRef<PreviewSelectionSnapshot | null>(null);');
+    expect(mainTsx).toContain('type PreviewSelectionSnapshot = PreviewSelectionMenuState & {');
+    expect(mainTsx).toContain('range: Range | null;');
+    expect(mainTsx).toContain('const capturePreviewSelectionContext = (event: React.PointerEvent<HTMLDivElement>) => {');
+    expect(mainTsx).toContain('if (event.button !== 2) {');
+    expect(mainTsx).toContain('selection.getRangeAt(0).cloneRange()');
+    expect(mainTsx).toContain('previewContextSelectionRef.current = {');
+    expect(mainTsx).toContain('const preservedSelection = previewContextSelectionRef.current;');
+    expect(mainTsx).toContain('selection?.removeAllRanges();');
+    expect(mainTsx).toContain('selection?.addRange(preservedSelection.range);');
+    expect(mainTsx).toContain('onPointerDownCapture={capturePreviewSelectionContext}');
+  });
+
   test('preview pane renders one active typed workbench body instead of preview priority branches', () => {
     const mainTsx = readSourceText(mainPath);
 
