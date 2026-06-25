@@ -350,6 +350,24 @@ describe('web chat file peek viewer', () => {
     expect(stylesCss).toContain('.preview-selection-context-menu');
   });
 
+  test('preview workbench hooks stay before disconnected connect screen return', () => {
+    const mainTsx = readSourceText(mainPath);
+    const disconnectedReturnIndex = mainTsx.indexOf('if (!connected && !keepWorkspaceVisible) {');
+    expect(disconnectedReturnIndex).toBeGreaterThanOrEqual(0);
+
+    [
+      'setPreviewSearchActiveIndex(current =>',
+      'if (!previewSearchOpen || previewSearchMatches.length === 0) {',
+      'if (!quickFileOpen) {',
+      'const handleGlobalPreviewKeyDown = (event: KeyboardEvent) => {',
+      'if (!previewSelectionMenu) {',
+    ].forEach(pattern => {
+      const hookIndex = mainTsx.indexOf(pattern);
+      expect(hookIndex).toBeGreaterThanOrEqual(0);
+      expect(hookIndex).toBeLessThan(disconnectedReturnIndex);
+    });
+  });
+
   test('preview pane renders one active typed workbench body instead of preview priority branches', () => {
     const mainTsx = readSourceText(mainPath);
 

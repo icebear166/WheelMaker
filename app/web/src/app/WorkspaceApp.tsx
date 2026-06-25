@@ -18315,6 +18315,123 @@ export function App() {
     );
   };
 
+  const scrollToPreviewSearchMatch = (match: PreviewSearchMatch) => {
+    const tab = activePreviewTab(previewWorkbenchRef.current);
+    const container = chatFilePeekScrollRef.current;
+    if (!tab || !container) {
+      return;
+    }
+    if (match.kind === 'file') {
+      if (tab.type !== 'file') {
+        return;
+      }
+      jumpToFileLineNow(container, match.line, {content: tab.content});
+      chatPeekAnchorRef.current = match.line;
+      setChatPeekSelectedLines(new Set([match.line]));
+      return;
+    }
+    if (tab.type !== 'prompt-diff') {
+      return;
+    }
+    setPreviewWorkbench(current =>
+      updatePreviewTab(current, tab.projectId, tab.id, item =>
+        item.type === 'prompt-diff'
+          ? {
+              ...item,
+              files: item.files.map(file =>
+                file.path === match.path ? {...file, expanded: true} : file,
+              ),
+            }
+          : item,
+      ),
+    );
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const currentContainer = chatFilePeekScrollRef.current;
+        if (!currentContainer) {
+          return;
+        }
+        const fileNode = Array.from(
+          currentContainer.querySelectorAll<HTMLElement>('.chat-prompt-diff-file'),
+        ).find(node => node.dataset.previewDiffPath === match.path);
+        if (!fileNode) {
+          return;
+        }
+        const lineNode = fileNode.querySelector<HTMLElement>(
+          `.code-wrap [data-line-number="${match.line}"]`,
+        );
+        (lineNode ?? fileNode).scrollIntoView({block: 'center', inline: 'nearest'});
+      });
+    });
+  };
+
+  useEffect(() => {
+    setPreviewSearchActiveIndex(current =>
+      Math.min(current, Math.max(0, previewSearchMatches.length - 1)),
+    );
+  }, [previewSearchMatches.length]);
+
+  useEffect(() => {
+    if (!previewSearchOpen || previewSearchMatches.length === 0) {
+      return;
+    }
+    setPreviewSearchActiveIndex(0);
+    window.requestAnimationFrame(() => {
+      scrollToPreviewSearchMatch(previewSearchMatches[0]);
+    });
+  }, [previewSearchMatches, previewSearchOpen]);
+
+  useEffect(() => {
+    if (!quickFileOpen) {
+      return;
+    }
+    setQuickFileActiveIndex(current =>
+      Math.min(current, Math.max(0, quickFileResults.length - 1)),
+    );
+  }, [quickFileOpen, quickFileResults.length]);
+
+  useEffect(() => {
+    const handleGlobalPreviewKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) {
+        return;
+      }
+      if (event.key.toLowerCase() === 'p' && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        if (quickFileOpen) {
+          quickFileInputRef.current?.focus();
+          return;
+        }
+        openQuickFileSearch();
+      }
+    };
+    window.addEventListener('keydown', handleGlobalPreviewKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalPreviewKeyDown);
+  }, [openQuickFileSearch, quickFileOpen]);
+
+  useEffect(() => {
+    if (!previewSelectionMenu) {
+      return undefined;
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target instanceof Node ? event.target : null;
+      if (previewSelectionMenuRef.current?.contains(target)) {
+        return;
+      }
+      setPreviewSelectionMenu(null);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setPreviewSelectionMenu(null);
+      }
+    };
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [previewSelectionMenu]);
+
   const hasCachedWorkspace = projects.length > 0 || !!projectId;
   const keepWorkspaceVisible =
     reconnecting && hasCachedWorkspace;
@@ -18887,55 +19004,6 @@ export function App() {
       setChatPreviewManualCollapsed(false);
     }
   };
-  const scrollToPreviewSearchMatch = (match: PreviewSearchMatch) => {
-    const tab = activePreviewTab(previewWorkbenchRef.current);
-    const container = chatFilePeekScrollRef.current;
-    if (!tab || !container) {
-      return;
-    }
-    if (match.kind === 'file') {
-      if (tab.type !== 'file') {
-        return;
-      }
-      jumpToFileLineNow(container, match.line, {content: tab.content});
-      chatPeekAnchorRef.current = match.line;
-      setChatPeekSelectedLines(new Set([match.line]));
-      return;
-    }
-    if (tab.type !== 'prompt-diff') {
-      return;
-    }
-    setPreviewWorkbench(current =>
-      updatePreviewTab(current, tab.projectId, tab.id, item =>
-        item.type === 'prompt-diff'
-          ? {
-              ...item,
-              files: item.files.map(file =>
-                file.path === match.path ? {...file, expanded: true} : file,
-              ),
-            }
-          : item,
-      ),
-    );
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        const currentContainer = chatFilePeekScrollRef.current;
-        if (!currentContainer) {
-          return;
-        }
-        const fileNode = Array.from(
-          currentContainer.querySelectorAll<HTMLElement>('.chat-prompt-diff-file'),
-        ).find(node => node.dataset.previewDiffPath === match.path);
-        if (!fileNode) {
-          return;
-        }
-        const lineNode = fileNode.querySelector<HTMLElement>(
-          `.code-wrap [data-line-number="${match.line}"]`,
-        );
-        (lineNode ?? fileNode).scrollIntoView({block: 'center', inline: 'nearest'});
-      });
-    });
-  };
   const activatePreviewSearchMatch = (index: number) => {
     if (previewSearchMatches.length === 0) {
       return;
@@ -19059,68 +19127,6 @@ export function App() {
     navigator.clipboard.writeText(previewSelectionMenu.text).catch(() => undefined);
     setPreviewSelectionMenu(null);
   };
-  useEffect(() => {
-    setPreviewSearchActiveIndex(current =>
-      Math.min(current, Math.max(0, previewSearchMatches.length - 1)),
-    );
-  }, [previewSearchMatches.length]);
-  useEffect(() => {
-    if (!previewSearchOpen || previewSearchMatches.length === 0) {
-      return;
-    }
-    setPreviewSearchActiveIndex(0);
-    window.requestAnimationFrame(() => {
-      scrollToPreviewSearchMatch(previewSearchMatches[0]);
-    });
-  }, [previewSearchMatches, previewSearchOpen]);
-  useEffect(() => {
-    if (!quickFileOpen) {
-      return;
-    }
-    setQuickFileActiveIndex(current =>
-      Math.min(current, Math.max(0, quickFileResults.length - 1)),
-    );
-  }, [quickFileOpen, quickFileResults.length]);
-  useEffect(() => {
-    const handleGlobalPreviewKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) {
-        return;
-      }
-      if (event.key.toLowerCase() === 'p' && (event.ctrlKey || event.metaKey)) {
-        event.preventDefault();
-        if (quickFileOpen) {
-          quickFileInputRef.current?.focus();
-          return;
-        }
-        openQuickFileSearch();
-      }
-    };
-    window.addEventListener('keydown', handleGlobalPreviewKeyDown);
-    return () => window.removeEventListener('keydown', handleGlobalPreviewKeyDown);
-  }, [openQuickFileSearch, quickFileOpen]);
-  useEffect(() => {
-    if (!previewSelectionMenu) {
-      return undefined;
-    }
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target instanceof Node ? event.target : null;
-      if (previewSelectionMenuRef.current?.contains(target)) {
-        return;
-      }
-      setPreviewSelectionMenu(null);
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setPreviewSelectionMenu(null);
-      }
-    };
-    window.addEventListener('pointerdown', handlePointerDown);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('pointerdown', handlePointerDown);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [previewSelectionMenu]);
   const copyChatFilePreviewPath = () => {
     if (!chatFilePeek) return;
     const previewProject = projects.find(item => item.projectId === previewWorkbench.activeProjectId);
