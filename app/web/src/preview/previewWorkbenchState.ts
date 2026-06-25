@@ -108,6 +108,19 @@ export type PreviewWorkbenchState = {
   treeOpen: boolean;
 };
 
+export type PreviewSearchMatch =
+  | {
+      kind: 'file';
+      line: number;
+      text: string;
+    }
+  | {
+      kind: 'diff';
+      path: string;
+      line: number;
+      text: string;
+    };
+
 const normalizeLine = (line: number | null): number | null =>
   typeof line === 'number' && Number.isFinite(line) && line > 0
     ? Math.trunc(line)
@@ -128,6 +141,58 @@ export function previewTabId(input: PreviewWorkbenchTabIdInput): string {
     return `attachment:${input.sessionId || ''}:${input.attachmentKey || ''}`;
   }
   return `port-relay:${input.hubId || ''}:${input.targetPort || 0}:${normalizeFramePath(input.framePath || '')}`;
+}
+
+export function cyclePreviewTabId(
+  tabs: PreviewWorkbenchTab[],
+  activeTabId: string,
+  direction: 1 | -1,
+): string {
+  if (tabs.length === 0) {
+    return '';
+  }
+  const activeIndex = Math.max(0, tabs.findIndex(tab => tab.id === activeTabId));
+  const nextIndex = (activeIndex + direction + tabs.length) % tabs.length;
+  return tabs[nextIndex]?.id ?? '';
+}
+
+export function previewWorkbenchTabTooltip(tab: PreviewWorkbenchTab): string {
+  if (tab.type === 'file') {
+    return tab.path || tab.title;
+  }
+  if (tab.type === 'prompt-diff') {
+    const paths = tab.files.map(file => file.path).filter(Boolean);
+    return paths.length > 0 ? `${tab.title}: ${paths.join(', ')}` : tab.title;
+  }
+  if (tab.type === 'attachment') {
+    return [tab.title, tab.meta].filter(Boolean).join(' - ');
+  }
+  return tab.url || `${tab.hubId}:${tab.targetPort}${tab.framePath || ''}`;
+}
+
+export function buildPreviewSearchMatches(
+  tab: PreviewWorkbenchTab | null,
+  query: string,
+): PreviewSearchMatch[] {
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  if (!tab || !normalizedQuery) {
+    return [];
+  }
+  if (tab.type === 'file') {
+    return tab.content
+      .split('\n')
+      .map((text, index) => ({kind: 'file' as const, line: index + 1, text}))
+      .filter(match => match.text.toLocaleLowerCase().includes(normalizedQuery));
+  }
+  if (tab.type === 'prompt-diff') {
+    return tab.files.flatMap(file =>
+      file.diff
+        .split('\n')
+        .map((text, index) => ({kind: 'diff' as const, path: file.path, line: index + 1, text}))
+        .filter(match => match.text.toLocaleLowerCase().includes(normalizedQuery)),
+    );
+  }
+  return [];
 }
 
 function validPreviewInput(input: PreviewWorkbenchOpenInput): boolean {

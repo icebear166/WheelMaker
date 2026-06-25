@@ -298,6 +298,58 @@ describe('web chat file peek viewer', () => {
     expect(mobileToggle).toContain('z-index: 11;');
   });
 
+  test('preview workbench closes open project and file-tree popovers on outside interactions', () => {
+    const chromeTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'preview', 'PreviewWorkbenchChrome.tsx'));
+    const mainTsx = readSourceText(mainPath);
+
+    expect(chromeTsx).toContain('onProjectMenuClose: () => void;');
+    expect(chromeTsx).toContain('onFileTreeClose: () => void;');
+    expect(chromeTsx).toContain('const surfaceRef = React.useRef<HTMLElement | null>(null);');
+    expect(chromeTsx).toContain('const projectMenuRef = React.useRef<HTMLDivElement | null>(null);');
+    expect(chromeTsx).toContain('const fileTreePanelRef = React.useRef<HTMLDivElement | null>(null);');
+    expect(chromeTsx).toContain("window.addEventListener('pointerdown', handlePointerDown, true);");
+    expect(chromeTsx).toContain("if (event.key === 'Escape') {");
+    expect(mainTsx).toContain('onProjectMenuClose={() => setPreviewProjectMenuOpen(false)}');
+    expect(mainTsx).toContain('onFileTreeClose={() => setPreviewWorkbench(current => ({...current, treeOpen: false}))}');
+  });
+
+  test('preview workbench wires tab tooltips, keyboard navigation, search, quick open, and selection copy', () => {
+    const mainTsx = readSourceText(mainPath);
+    const chromeTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'preview', 'PreviewWorkbenchChrome.tsx'));
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(chromeTsx).toContain('previewWorkbenchTabTooltip(tab)');
+    expect(chromeTsx).toContain('onKeyDown={onWorkbenchKeyDown}');
+
+    expect(mainTsx).toContain('const [previewSearchOpen, setPreviewSearchOpen] = useState(false);');
+    expect(mainTsx).toContain('const previewSearchMatches = useMemo(');
+    expect(mainTsx).toContain('buildPreviewSearchMatches(activeWorkbenchTab, previewSearchQuery)');
+    expect(mainTsx).toContain('const handlePreviewWorkbenchKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {');
+    expect(mainTsx).toContain("event.key === 'Tab' && (event.ctrlKey || event.metaKey)");
+    expect(mainTsx).toContain('cyclePreviewTabId(previewWorkbenchTabs, activeWorkbenchTab?.id ?? \'\', event.shiftKey ? -1 : 1)');
+    expect(mainTsx).toContain("event.key.toLowerCase() === 'f' && (event.ctrlKey || event.metaKey)");
+    expect(mainTsx).toContain('className="preview-workbench-search-bar"');
+    expect(mainTsx).toContain('previewSearchUnavailableMessage');
+
+    expect(mainTsx).toContain('const [quickFileOpen, setQuickFileOpen] = useState(false);');
+    expect(mainTsx).toContain('const openQuickFileSearch = useCallback(() => {');
+    expect(mainTsx).toContain('const resolveQuickFileProjectId = useCallback(');
+    expect(mainTsx).toContain('service.searchFileIndex(targetProjectId, {');
+    expect(mainTsx).toContain('openChatFilePeek(result.path, null, quickFileProjectId);');
+    expect(mainTsx).toContain("event.key.toLowerCase() === 'p' && (event.ctrlKey || event.metaKey)");
+    expect(mainTsx).toContain('className="quick-file-search-overlay"');
+
+    expect(mainTsx).toContain('const [previewSelectionMenu, setPreviewSelectionMenu] = useState<PreviewSelectionMenuState | null>(null);');
+    expect(mainTsx).toContain('const handlePreviewSelectionContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {');
+    expect(mainTsx).toContain("activeWorkbenchTab.type !== 'file' && activeWorkbenchTab.type !== 'prompt-diff'");
+    expect(mainTsx).toContain('navigator.clipboard.writeText(previewSelectionMenu.text)');
+    expect(mainTsx).toContain('className="preview-selection-context-menu"');
+
+    expect(stylesCss).toContain('.preview-workbench-search-bar');
+    expect(stylesCss).toContain('.quick-file-search-overlay');
+    expect(stylesCss).toContain('.preview-selection-context-menu');
+  });
+
   test('preview pane renders one active typed workbench body instead of preview priority branches', () => {
     const mainTsx = readSourceText(mainPath);
 

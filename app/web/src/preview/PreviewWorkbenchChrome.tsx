@@ -1,6 +1,10 @@
 import React from 'react';
 import type {RegistryProject} from '../registry/registryTypes';
-import type {PreviewWorkbenchTab, PreviewWorkbenchTabType} from './previewWorkbenchState';
+import {
+  previewWorkbenchTabTooltip,
+  type PreviewWorkbenchTab,
+  type PreviewWorkbenchTabType,
+} from './previewWorkbenchState';
 
 export type PreviewWorkbenchChromeMode = 'desktop' | 'mobile';
 
@@ -20,6 +24,9 @@ type PreviewWorkbenchChromeProps = {
   onTabSelect: (tabId: string) => void;
   onTabClose: (tabId: string) => void;
   onFileTreeToggle: () => void;
+  onProjectMenuClose: () => void;
+  onFileTreeClose: () => void;
+  onWorkbenchKeyDown?: React.KeyboardEventHandler<HTMLElement>;
   onMobilePortRelayRefresh?: () => void;
   children: React.ReactNode;
 };
@@ -47,14 +54,67 @@ export function PreviewWorkbenchChrome({
   onTabSelect,
   onTabClose,
   onFileTreeToggle,
+  onProjectMenuClose,
+  onFileTreeClose,
+  onWorkbenchKeyDown,
   onMobilePortRelayRefresh,
   children,
 }: PreviewWorkbenchChromeProps) {
   const [mobileHeaderHidden, setMobileHeaderHidden] = React.useState(false);
+  const surfaceRef = React.useRef<HTMLElement | null>(null);
+  const projectButtonRef = React.useRef<HTMLButtonElement | null>(null);
+  const projectMenuRef = React.useRef<HTMLDivElement | null>(null);
+  const fileTreeButtonRef = React.useRef<HTMLButtonElement | null>(null);
+  const fileTreePanelRef = React.useRef<HTMLDivElement | null>(null);
   const activeProject = projects.find(project => project.projectId === activeProjectId) ?? null;
   const activeTitle = activeTab?.title || 'Preview';
+
+  React.useEffect(() => {
+    if (!projectMenuOpen && !fileTreeOpen) {
+      return undefined;
+    }
+    const containsTarget = (node: HTMLElement | null, target: Node | null) =>
+      !!node && !!target && node.contains(target);
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target instanceof Node ? event.target : null;
+      if (projectMenuOpen &&
+        !containsTarget(projectButtonRef.current, target) &&
+        !containsTarget(projectMenuRef.current, target)
+      ) {
+        onProjectMenuClose();
+      }
+      if (fileTreeOpen &&
+        !containsTarget(fileTreeButtonRef.current, target) &&
+        !containsTarget(fileTreePanelRef.current, target)
+      ) {
+        onFileTreeClose();
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (projectMenuOpen) {
+          onProjectMenuClose();
+        }
+        if (fileTreeOpen) {
+          onFileTreeClose();
+        }
+      }
+    };
+    window.addEventListener('pointerdown', handlePointerDown, true);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown, true);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [fileTreeOpen, onFileTreeClose, onProjectMenuClose, projectMenuOpen]);
+
   return (
-    <section className={`preview-workbench-surface chat-file-peek-surface ${mode}${mobileHeaderHidden ? ' mobile-header-hidden' : ''}`} aria-label="Preview workbench">
+    <section
+      ref={surfaceRef}
+      className={`preview-workbench-surface chat-file-peek-surface ${mode}${mobileHeaderHidden ? ' mobile-header-hidden' : ''}`}
+      aria-label="Preview workbench"
+      onKeyDown={onWorkbenchKeyDown}
+    >
       <div className="chat-preview-toolbar preview-workbench-toolbar">
         <button
           type="button"
@@ -67,6 +127,7 @@ export function PreviewWorkbenchChrome({
         </button>
         <div className="preview-workbench-project-wrap">
           <button
+            ref={projectButtonRef}
             type="button"
             className="preview-workbench-project-pill"
             onClick={onProjectMenuToggle}
@@ -79,7 +140,7 @@ export function PreviewWorkbenchChrome({
             </span>
           </button>
           {projectMenuOpen ? (
-            <div className="preview-workbench-project-menu" role="menu" aria-label="Preview projects">
+            <div ref={projectMenuRef} className="preview-workbench-project-menu" role="menu" aria-label="Preview projects">
               {projects.map(project => {
                 const selected = project.projectId === activeProjectId;
                 return (
@@ -108,13 +169,14 @@ export function PreviewWorkbenchChrome({
       <div className="chat-file-workbench-tabs preview-workbench-tabs" role="tablist" aria-label="Open preview tabs">
         {tabs.map(tab => {
           const active = activeTab?.id === tab.id;
+          const tooltip = previewWorkbenchTabTooltip(tab);
           return (
             <div
               key={`preview-tab:${tab.projectId}:${tab.id}`}
               className={`chat-file-workbench-tab preview-workbench-tab${active ? ' active' : ''}`}
               role="tab"
               aria-selected={active}
-              title={tab.title}
+              title={tooltip}
             >
               <button type="button" className="chat-file-workbench-tab-open" onClick={() => onTabSelect(tab.id)}>
                 <span className={`codicon ${previewWorkbenchTabIcon(tab.type)} preview-workbench-tab-icon`} aria-hidden="true" />
@@ -137,6 +199,7 @@ export function PreviewWorkbenchChrome({
         {fileTree ? (
           <div className="preview-workbench-body-tools">
             <button
+              ref={fileTreeButtonRef}
               type="button"
               className={`preview-workbench-tree-fab${fileTreeOpen ? ' active' : ''}`}
               onClick={onFileTreeToggle}
@@ -149,7 +212,7 @@ export function PreviewWorkbenchChrome({
           </div>
         ) : null}
         {fileTreeOpen && fileTree ? (
-          <div className="preview-workbench-tree-panel">
+          <div ref={fileTreePanelRef} className="preview-workbench-tree-panel">
             {fileTree}
           </div>
         ) : null}

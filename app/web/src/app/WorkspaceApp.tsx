@@ -375,8 +375,10 @@ import { FileExplorerTree, WorkspaceProjectSelector } from '../file/FileExplorer
 import {
   activePreviewTab,
   beginPreviewTabLoad,
+  buildPreviewSearchMatches,
   closePreviewTab,
   createPreviewWorkbenchState,
+  cyclePreviewTabId,
   ensurePreviewProjectVisible,
   failPreviewTabLoad,
   isAttachmentPreviewTab,
@@ -390,6 +392,7 @@ import {
   updatePreviewTabAfterLoad,
   type AttachmentPreviewTab,
   type FilePreviewTab,
+  type PreviewSearchMatch,
   type PromptDiffPreviewFile,
   type PromptDiffPreviewTab,
 } from '../preview/previewWorkbenchState';
@@ -630,6 +633,11 @@ type ChatAttachmentThumbnailState = {
   src: string;
   loading: boolean;
   error: string;
+};
+type PreviewSelectionMenuState = {
+  x: number;
+  y: number;
+  text: string;
 };
 const LARGE_FILE_CONFIRM_BYTES = 2 * 1024 * 1024;
 
@@ -2295,7 +2303,11 @@ const ChatPromptArtifactPreviewViewer = React.memo(function ChatPromptArtifactPr
         {preview.files.map(file => {
           const {fileName, parentPath} = splitPathForDisplay(file.path);
           return (
-            <section key={file.path} className={`chat-prompt-diff-file${file.expanded ? ' expanded' : ''}`}>
+            <section
+              key={file.path}
+              className={`chat-prompt-diff-file${file.expanded ? ' expanded' : ''}`}
+              data-preview-diff-path={file.path}
+            >
               <button
                 type="button"
                 className="chat-prompt-diff-file-header"
@@ -2760,18 +2772,47 @@ export function App() {
   const [chatPreviewManualOpen, setChatPreviewManualOpen] = useState(false);
   const [chatPreviewManualCollapsed, setChatPreviewManualCollapsed] = useState(false);
   const [previewProjectMenuOpen, setPreviewProjectMenuOpen] = useState(false);
+  const [previewSearchOpen, setPreviewSearchOpen] = useState(false);
+  const [previewSearchQuery, setPreviewSearchQuery] = useState('');
+  const [previewSearchActiveIndex, setPreviewSearchActiveIndex] = useState(0);
+  const previewSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const [quickFileOpen, setQuickFileOpen] = useState(false);
+  const [quickFileProjectId, setQuickFileProjectId] = useState('');
+  const [quickFileQuery, setQuickFileQuery] = useState('');
+  const [quickFileResults, setQuickFileResults] = useState<RegistryFileIndexSearchResult[]>([]);
+  const [quickFileLoading, setQuickFileLoading] = useState(false);
+  const [quickFileError, setQuickFileError] = useState('');
+  const [quickFileIndexed, setQuickFileIndexed] = useState(true);
+  const [quickFileActiveIndex, setQuickFileActiveIndex] = useState(0);
+  const quickFileInputRef = useRef<HTMLInputElement | null>(null);
+  const quickFileSearchTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const quickFileSearchGenerationRef = useRef(0);
+  const quickFileQueryIdRef = useRef(0);
+  const quickFileQuerySessionIdRef = useRef(`quick-file-${Date.now()}`);
+  const [previewSelectionMenu, setPreviewSelectionMenu] = useState<PreviewSelectionMenuState | null>(null);
+  const previewSelectionMenuRef = useRef<HTMLDivElement | null>(null);
   const portRelayCodeCopyTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const portRelayClearSiteDataTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const portRelayTargetMenuTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const portRelayTargetMenuPressRef = useRef<PortRelayTargetMenuPressState | null>(null);
   const portRelayTargetMenuRef = useRef<HTMLDivElement | null>(null);
   const activeWorkbenchTab = activePreviewTab(previewWorkbench);
+  const previewWorkbenchTabs =
+    previewWorkbench.tabsByProjectId[previewWorkbench.activeProjectId] ?? [];
   const previewWorkbenchHasTabs = Object.values(previewWorkbench.tabsByProjectId)
     .some(tabs => tabs.length > 0);
   const chatFilePeek = isFilePreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;
   const activePromptDiffPreview = isPromptDiffPreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;
   const activeAttachmentPreview = isAttachmentPreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;
   const activePortRelayPreview = isPortRelayPreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;
+  const previewSearchMatches = useMemo(
+    () => buildPreviewSearchMatches(activeWorkbenchTab, previewSearchQuery),
+    [activeWorkbenchTab, previewSearchQuery],
+  );
+  const previewSearchUnavailableMessage =
+    activeWorkbenchTab && activeWorkbenchTab.type !== 'file' && activeWorkbenchTab.type !== 'prompt-diff'
+      ? 'Search is not available for this preview.'
+      : '';
   const previewWorkbenchRef = useRef(previewWorkbench);
   const chatPreviewHasContent = previewWorkbenchHasTabs;
   const chatPreviewOpen = chatPreviewManualOpen || (chatPreviewHasContent && !chatPreviewManualCollapsed);
@@ -8674,6 +8715,132 @@ export function App() {
     chatPeekAnchorRef.current = normalizedLine;
     setChatPeekSelectedLines(normalizedLine != null ? new Set([normalizedLine]) : new Set());
   }, [isWide, readChatFilePeek, setDrawerOpen]);
+
+  const clearQuickFileSearchTimer = useCallback(() => {
+    if (quickFileSearchTimerRef.current !== null) {
+      window.clearTimeout(quickFileSearchTimerRef.current);
+      quickFileSearchTimerRef.current = null;
+    }
+  }, []);
+
+  const resetQuickFileSearchSession = useCallback(() => {
+    clearQuickFileSearchTimer();
+    quickFileQuerySessionIdRef.current = `quick-file-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    quickFileQueryIdRef.current = 0;
+    quickFileSearchGenerationRef.current += 1;
+    setQuickFileQuery('');
+    setQuickFileResults([]);
+    setQuickFileLoading(false);
+    setQuickFileError('');
+    setQuickFileIndexed(true);
+    setQuickFileActiveIndex(0);
+  }, [clearQuickFileSearchTimer]);
+
+  const resolveQuickFileProjectId = useCallback(
+    () =>
+      previewWorkbenchRef.current.activeProjectId ||
+      selectedChatKeyRef.current?.projectId ||
+      projectIdRef.current,
+    [],
+  );
+
+  const runQuickFileSearch = useCallback(
+    async (targetProjectId: string, query: string, generation: number) => {
+      if (!targetProjectId) {
+        setQuickFileError('Select a project first.');
+        setQuickFileLoading(false);
+        return;
+      }
+      const queryId = quickFileQueryIdRef.current + 1;
+      quickFileQueryIdRef.current = queryId;
+      setQuickFileLoading(true);
+      setQuickFileError('');
+      try {
+        const response = await service.searchFileIndex(targetProjectId, {
+          query,
+          querySessionId: quickFileQuerySessionIdRef.current,
+          queryId,
+          limit: CHAT_FILE_MENTION_SEARCH_LIMIT,
+        });
+        if (generation !== quickFileSearchGenerationRef.current) {
+          return;
+        }
+        setQuickFileIndexed(response.indexed);
+        setQuickFileResults(response.results ?? []);
+        setQuickFileActiveIndex(0);
+        setQuickFileError(response.error || '');
+      } catch (err) {
+        if (generation !== quickFileSearchGenerationRef.current) {
+          return;
+        }
+        setQuickFileResults([]);
+        setQuickFileIndexed(true);
+        setQuickFileError(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (generation === quickFileSearchGenerationRef.current) {
+          setQuickFileLoading(false);
+        }
+      }
+    },
+    [],
+  );
+
+  const scheduleQuickFileSearch = useCallback(
+    (targetProjectId: string, query: string) => {
+      clearQuickFileSearchTimer();
+      setQuickFileQuery(query);
+      setQuickFileLoading(true);
+      const generation = quickFileSearchGenerationRef.current + 1;
+      quickFileSearchGenerationRef.current = generation;
+      quickFileSearchTimerRef.current = window.setTimeout(() => {
+        quickFileSearchTimerRef.current = null;
+        runQuickFileSearch(targetProjectId, query, generation).catch(() => undefined);
+      }, CHAT_FILE_MENTION_DEBOUNCE_MS);
+    },
+    [clearQuickFileSearchTimer, runQuickFileSearch],
+  );
+
+  const openQuickFileSearch = useCallback(() => {
+    const targetProjectId = resolveQuickFileProjectId();
+    resetQuickFileSearchSession();
+    setQuickFileProjectId(targetProjectId);
+    setQuickFileOpen(true);
+    setChatPromptMenuOpen(false);
+    setChatFileMentionMenuOpen(false);
+    setChatAttachmentTrayOpen(false);
+    if (targetProjectId) {
+      scheduleQuickFileSearch(targetProjectId, '');
+    } else {
+      setQuickFileError('Select a project first.');
+    }
+    window.requestAnimationFrame(() => {
+      quickFileInputRef.current?.focus();
+      quickFileInputRef.current?.select();
+    });
+  }, [resetQuickFileSearchSession, resolveQuickFileProjectId, scheduleQuickFileSearch]);
+
+  const closeQuickFileSearch = useCallback(() => {
+    setQuickFileOpen(false);
+    resetQuickFileSearchSession();
+  }, [resetQuickFileSearchSession]);
+
+  const openQuickFileResult = useCallback(
+    (result: RegistryFileIndexSearchResult) => {
+      const path = result.path.trim();
+      if (!path || !quickFileProjectId) {
+        return;
+      }
+      openChatFilePeek(result.path, null, quickFileProjectId);
+      closeQuickFileSearch();
+    },
+    [closeQuickFileSearch, openChatFilePeek, quickFileProjectId],
+  );
+
+  useEffect(() => {
+    return () => {
+      clearQuickFileSearchTimer();
+    };
+  }, [clearQuickFileSearchTimer]);
 
   const openChatFileMentionPreview = useCallback(
     (result: RegistryFileIndexSearchResult) => {
@@ -18647,10 +18814,8 @@ export function App() {
         onCloseChrome={closePortRelayFrameFromChrome}
         onOpenInBrowser={openPortRelayPreviewInBrowser}
       />
-    ) : null;
+  ) : null;
   const previewWorkbenchProjects = visibleProjectItems;
-  const previewWorkbenchTabs =
-    previewWorkbench.tabsByProjectId[previewWorkbench.activeProjectId] ?? [];
   const previewWorkbenchActiveTab = activeWorkbenchTab;
   const chatFilePreviewDirEntries =
     chatFilePreviewDirEntriesByProject[previewWorkbench.activeProjectId] ?? {'.': []};
@@ -18722,6 +18887,240 @@ export function App() {
       setChatPreviewManualCollapsed(false);
     }
   };
+  const scrollToPreviewSearchMatch = (match: PreviewSearchMatch) => {
+    const tab = activePreviewTab(previewWorkbenchRef.current);
+    const container = chatFilePeekScrollRef.current;
+    if (!tab || !container) {
+      return;
+    }
+    if (match.kind === 'file') {
+      if (tab.type !== 'file') {
+        return;
+      }
+      jumpToFileLineNow(container, match.line, {content: tab.content});
+      chatPeekAnchorRef.current = match.line;
+      setChatPeekSelectedLines(new Set([match.line]));
+      return;
+    }
+    if (tab.type !== 'prompt-diff') {
+      return;
+    }
+    setPreviewWorkbench(current =>
+      updatePreviewTab(current, tab.projectId, tab.id, item =>
+        item.type === 'prompt-diff'
+          ? {
+              ...item,
+              files: item.files.map(file =>
+                file.path === match.path ? {...file, expanded: true} : file,
+              ),
+            }
+          : item,
+      ),
+    );
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const currentContainer = chatFilePeekScrollRef.current;
+        if (!currentContainer) {
+          return;
+        }
+        const fileNode = Array.from(
+          currentContainer.querySelectorAll<HTMLElement>('.chat-prompt-diff-file'),
+        ).find(node => node.dataset.previewDiffPath === match.path);
+        if (!fileNode) {
+          return;
+        }
+        const lineNode = fileNode.querySelector<HTMLElement>(
+          `.code-wrap [data-line-number="${match.line}"]`,
+        );
+        (lineNode ?? fileNode).scrollIntoView({block: 'center', inline: 'nearest'});
+      });
+    });
+  };
+  const activatePreviewSearchMatch = (index: number) => {
+    if (previewSearchMatches.length === 0) {
+      return;
+    }
+    const nextIndex =
+      (index + previewSearchMatches.length) % previewSearchMatches.length;
+    setPreviewSearchActiveIndex(nextIndex);
+    scrollToPreviewSearchMatch(previewSearchMatches[nextIndex]);
+  };
+  const navigatePreviewSearchMatch = (delta: 1 | -1) => {
+    activatePreviewSearchMatch(previewSearchActiveIndex + delta);
+  };
+  const openPreviewSearch = () => {
+    setPreviewSearchOpen(true);
+    setPreviewSearchActiveIndex(0);
+    setPreviewSelectionMenu(null);
+    window.requestAnimationFrame(() => {
+      previewSearchInputRef.current?.focus();
+      previewSearchInputRef.current?.select();
+    });
+  };
+  const closePreviewSearch = () => {
+    setPreviewSearchOpen(false);
+    setPreviewSearchQuery('');
+    setPreviewSearchActiveIndex(0);
+  };
+  const handlePreviewSearchInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closePreviewSearch();
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      navigatePreviewSearchMatch(event.shiftKey ? -1 : 1);
+    }
+  };
+  const handlePreviewWorkbenchKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key === 'Tab' && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      const nextTabId = cyclePreviewTabId(previewWorkbenchTabs, activeWorkbenchTab?.id ?? '', event.shiftKey ? -1 : 1);
+      if (nextTabId) {
+        selectWorkbenchTab(nextTabId);
+      }
+      return;
+    }
+    if (event.key.toLowerCase() === 'f' && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      openPreviewSearch();
+      return;
+    }
+    if (event.key.toLowerCase() === 'p' && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      openQuickFileSearch();
+    }
+  };
+  const handleQuickFileKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeQuickFileSearch();
+      return;
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setQuickFileActiveIndex(current =>
+        quickFileResults.length === 0 ? 0 : (current + 1) % quickFileResults.length,
+      );
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setQuickFileActiveIndex(current =>
+        quickFileResults.length === 0
+          ? 0
+          : (current - 1 + quickFileResults.length) % quickFileResults.length,
+      );
+      return;
+    }
+    if (event.key === 'Enter') {
+      const result = quickFileResults[quickFileActiveIndex];
+      if (result) {
+        event.preventDefault();
+        openQuickFileResult(result);
+      }
+    }
+  };
+  const handlePreviewSelectionContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!activeWorkbenchTab || (activeWorkbenchTab.type !== 'file' && activeWorkbenchTab.type !== 'prompt-diff')) {
+      return;
+    }
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (!target?.closest('.code-wrap')) {
+      return;
+    }
+    const selection = window.getSelection();
+    const text = selection?.toString() ?? '';
+    if (!text.trim()) {
+      return;
+    }
+    const anchorNode = selection?.anchorNode ?? null;
+    const focusNode = selection?.focusNode ?? null;
+    const container = chatFilePeekScrollRef.current;
+    if (
+      !container ||
+      (anchorNode && !container.contains(anchorNode)) ||
+      (focusNode && !container.contains(focusNode))
+    ) {
+      return;
+    }
+    event.preventDefault();
+    setPreviewSelectionMenu({
+      x: Math.min(event.clientX, Math.max(8, window.innerWidth - 132)),
+      y: Math.min(event.clientY, Math.max(8, window.innerHeight - 48)),
+      text,
+    });
+  };
+  const copyPreviewSelection = () => {
+    if (!previewSelectionMenu) {
+      return;
+    }
+    navigator.clipboard.writeText(previewSelectionMenu.text).catch(() => undefined);
+    setPreviewSelectionMenu(null);
+  };
+  useEffect(() => {
+    setPreviewSearchActiveIndex(current =>
+      Math.min(current, Math.max(0, previewSearchMatches.length - 1)),
+    );
+  }, [previewSearchMatches.length]);
+  useEffect(() => {
+    if (!previewSearchOpen || previewSearchMatches.length === 0) {
+      return;
+    }
+    setPreviewSearchActiveIndex(0);
+    window.requestAnimationFrame(() => {
+      scrollToPreviewSearchMatch(previewSearchMatches[0]);
+    });
+  }, [previewSearchMatches, previewSearchOpen]);
+  useEffect(() => {
+    if (!quickFileOpen) {
+      return;
+    }
+    setQuickFileActiveIndex(current =>
+      Math.min(current, Math.max(0, quickFileResults.length - 1)),
+    );
+  }, [quickFileOpen, quickFileResults.length]);
+  useEffect(() => {
+    const handleGlobalPreviewKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) {
+        return;
+      }
+      if (event.key.toLowerCase() === 'p' && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        if (quickFileOpen) {
+          quickFileInputRef.current?.focus();
+          return;
+        }
+        openQuickFileSearch();
+      }
+    };
+    window.addEventListener('keydown', handleGlobalPreviewKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalPreviewKeyDown);
+  }, [openQuickFileSearch, quickFileOpen]);
+  useEffect(() => {
+    if (!previewSelectionMenu) {
+      return undefined;
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target instanceof Node ? event.target : null;
+      if (previewSelectionMenuRef.current?.contains(target)) {
+        return;
+      }
+      setPreviewSelectionMenu(null);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setPreviewSelectionMenu(null);
+      }
+    };
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [previewSelectionMenu]);
   const copyChatFilePreviewPath = () => {
     if (!chatFilePeek) return;
     const previewProject = projects.find(item => item.projectId === previewWorkbench.activeProjectId);
@@ -18856,6 +19255,57 @@ export function App() {
     }
     return renderPortRelayWorkbenchSurface(mode);
   };
+  const previewSearchStatus = previewSearchUnavailableMessage
+    ? previewSearchUnavailableMessage
+    : previewSearchQuery
+      ? previewSearchMatches.length > 0
+        ? `${previewSearchActiveIndex + 1}/${previewSearchMatches.length}`
+        : 'No results'
+      : 'Search current preview';
+  const previewSearchBar = previewSearchOpen ? (
+    <div className="preview-workbench-search-bar">
+      <span className="codicon codicon-search" aria-hidden="true" />
+      <input
+        ref={previewSearchInputRef}
+        className="preview-workbench-search-input"
+        value={previewSearchQuery}
+        onChange={event => setPreviewSearchQuery(event.target.value)}
+        onKeyDown={handlePreviewSearchInputKeyDown}
+        placeholder="Search"
+        aria-label="Search current preview"
+      />
+      <span className="preview-workbench-search-status">{previewSearchStatus}</span>
+      <button
+        type="button"
+        className="chat-preview-icon-button"
+        onClick={() => navigatePreviewSearchMatch(-1)}
+        disabled={previewSearchMatches.length === 0}
+        title="Previous match"
+        aria-label="Previous match"
+      >
+        <span className="codicon codicon-chevron-up" />
+      </button>
+      <button
+        type="button"
+        className="chat-preview-icon-button"
+        onClick={() => navigatePreviewSearchMatch(1)}
+        disabled={previewSearchMatches.length === 0}
+        title="Next match"
+        aria-label="Next match"
+      >
+        <span className="codicon codicon-chevron-down" />
+      </button>
+      <button
+        type="button"
+        className="chat-preview-icon-button"
+        onClick={closePreviewSearch}
+        title="Close search"
+        aria-label="Close search"
+      >
+        <span className="codicon codicon-close" />
+      </button>
+    </div>
+  ) : null;
   const renderPreviewWorkbenchSurface = (mode: 'desktop' | 'mobile') => (
     <PreviewWorkbenchChrome
       mode={mode}
@@ -18873,9 +19323,13 @@ export function App() {
       onTabSelect={selectWorkbenchTab}
       onTabClose={closeWorkbenchTab}
       onFileTreeToggle={toggleChatFilePreviewTree}
+      onProjectMenuClose={() => setPreviewProjectMenuOpen(false)}
+      onFileTreeClose={() => setPreviewWorkbench(current => ({...current, treeOpen: false}))}
+      onWorkbenchKeyDown={handlePreviewWorkbenchKeyDown}
       onMobilePortRelayRefresh={refreshActivePortRelayPreview}
     >
-      <div ref={chatFilePeekScrollRef} className="chat-file-peek-scroll">
+      {previewSearchBar}
+      <div ref={chatFilePeekScrollRef} className="chat-file-peek-scroll" onContextMenu={handlePreviewSelectionContextMenu}>
         {renderPreviewWorkbenchBody(mode)}
       </div>
     </PreviewWorkbenchChrome>
@@ -18907,6 +19361,90 @@ export function App() {
       aria-label="Chat preview"
     >
       {renderPreviewWorkbenchSurface('mobile')}
+    </div>
+  ) : null;
+  const quickFileProjectName =
+    projects.find(project => project.projectId === quickFileProjectId)?.name ||
+    quickFileProjectId ||
+    'Project';
+  const quickFileSearchOverlay = quickFileOpen ? (
+    <div
+      className="quick-file-search-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Quick file search"
+      onPointerDown={closeQuickFileSearch}
+    >
+      <div className="quick-file-search-panel" onPointerDown={event => event.stopPropagation()}>
+        <div className="quick-file-search-header">
+          <span className="codicon codicon-go-to-file" aria-hidden="true" />
+          <span className="quick-file-search-project" title={quickFileProjectName}>
+            {quickFileProjectName}
+          </span>
+        </div>
+        <input
+          ref={quickFileInputRef}
+          className="quick-file-search-input"
+          value={quickFileQuery}
+          onChange={event => {
+            const query = event.target.value;
+            if (!quickFileProjectId) {
+              setQuickFileQuery(query);
+              setQuickFileError('Select a project first.');
+              return;
+            }
+            scheduleQuickFileSearch(quickFileProjectId, query);
+          }}
+          onKeyDown={handleQuickFileKeyDown}
+          placeholder="Open file"
+          aria-label="Open file"
+        />
+        <div className="quick-file-search-results" role="listbox" aria-label="Files">
+          {quickFileLoading ? (
+            <div className="quick-file-search-empty">Loading...</div>
+          ) : quickFileError ? (
+            <div className="quick-file-search-empty">{quickFileError}</div>
+          ) : !quickFileIndexed ? (
+            <div className="quick-file-search-empty">File index is not ready.</div>
+          ) : quickFileResults.length === 0 ? (
+            <div className="quick-file-search-empty">{quickFileQuery ? 'No files found' : 'No indexed files'}</div>
+          ) : (
+            quickFileResults.map((result, index) => {
+              const selected = index === quickFileActiveIndex;
+              const name = result.name || chatFileMentionName(result.path);
+              return (
+                <button
+                  key={`quick-file:${result.path}`}
+                  type="button"
+                  className={`quick-file-search-option${selected ? ' selected' : ''}`}
+                  role="option"
+                  aria-selected={selected}
+                  onMouseEnter={() => setQuickFileActiveIndex(index)}
+                  onClick={() => openQuickFileResult(result)}
+                  title={result.path}
+                >
+                  <span className="codicon codicon-file-code" aria-hidden="true" />
+                  <span className="quick-file-search-name">{name}</span>
+                  <span className="quick-file-search-path">{result.path}</span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  ) : null;
+  const previewSelectionContextMenu = previewSelectionMenu ? (
+    <div
+      ref={previewSelectionMenuRef}
+      className="preview-selection-context-menu"
+      style={{left: previewSelectionMenu.x, top: previewSelectionMenu.y}}
+      role="menu"
+    >
+      <button type="button" role="menuitem" onClick={copyPreviewSelection}>
+        <span className="codicon codicon-copy" aria-hidden="true" />
+        <span>Copy</span>
+      </button>
     </div>
   ) : null;
 
@@ -19083,6 +19621,8 @@ export function App() {
         drawerOpen={mobilePortRelayFrameOpen ? false : drawerOpen}
         onCloseDrawer={() => setDrawerOpen(false)}
           />
+          {quickFileSearchOverlay}
+          {previewSelectionContextMenu}
           {chatQuickSwitchMenuPlacement.kind === 'desktop' ? chatQuickSwitchMenu : null}
           {chatTitlePromptMenu}
           {portRelayClearSiteDataFrame}

@@ -252,6 +252,45 @@
   gap: 2px;
 }
 
+.preview-workbench-search-bar {
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: 16px minmax(80px, 1fr) auto 24px 24px 24px;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  padding: 4px 8px;
+  color: var(--muted);
+}
+
+.preview-workbench-search-input {
+  min-width: 0;
+  height: 24px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: 5px;
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 0 7px;
+  font-size: 12px;
+  outline: none;
+}
+
+.preview-workbench-search-input:focus {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+}
+
+.preview-workbench-search-status {
+  min-width: 56px;
+  max-width: 168px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .preview-workbench-project-menu {
   position: absolute;
   top: calc(100% + 6px);
@@ -408,6 +447,143 @@
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 46%, transparent);
   background: color-mix(in srgb, var(--accent) 16%, var(--panel));
+}
+
+.quick-file-search-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: grid;
+  align-items: start;
+  justify-items: center;
+  background: rgba(0, 0, 0, 0.24);
+  padding: max(72px, calc(var(--wm-safe-area-top) + 48px)) 16px 16px;
+}
+
+.quick-file-search-panel {
+  width: min(620px, 100%);
+  max-height: min(560px, calc(100vh - 112px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.34);
+}
+
+.quick-file-search-header {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  padding: 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.quick-file-search-project {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quick-file-search-input {
+  height: 38px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 0 12px;
+  font-size: 14px;
+  outline: none;
+}
+
+.quick-file-search-results {
+  min-height: 42px;
+  overflow: auto;
+  padding: 6px;
+}
+
+.quick-file-search-option {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: 18px minmax(96px, 0.5fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  padding: 5px 7px;
+  text-align: left;
+}
+
+.quick-file-search-option:hover,
+.quick-file-search-option.selected {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.quick-file-search-name,
+.quick-file-search-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quick-file-search-name {
+  font-family: var(--mono-font);
+  font-size: 12px;
+}
+
+.quick-file-search-path {
+  color: var(--muted);
+  font-family: var(--mono-font);
+  font-size: 11px;
+}
+
+.quick-file-search-empty {
+  padding: 18px 10px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.preview-selection-context-menu {
+  position: fixed;
+  z-index: 120;
+  min-width: 108px;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border-radius: 7px;
+  background: var(--panel);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.3);
+  padding: 4px;
+}
+
+.preview-selection-context-menu button {
+  width: 100%;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  padding: 0 8px;
+  text-align: left;
+}
+
+.preview-selection-context-menu button:hover {
+  background: var(--hover);
 }
 
 .chat-file-peek-scroll .code-wrap.nowrap {

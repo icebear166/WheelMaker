@@ -1,11 +1,14 @@
 import {
   activePreviewTab,
   beginPreviewTabLoad,
+  buildPreviewSearchMatches,
   closePreviewTab,
   createPreviewWorkbenchState,
+  cyclePreviewTabId,
   ensurePreviewProjectVisible,
   openPreviewTab,
   previewTabId,
+  previewWorkbenchTabTooltip,
   selectPreviewProject,
   updatePreviewTabAfterLoad,
 } from '../web/src/preview/previewWorkbenchState';
@@ -135,5 +138,105 @@ describe('preview workbench state', () => {
     expect(previewTabId({type: 'prompt-diff', sessionId: 's1', artifactId: 'd1'})).toBe('prompt-diff:s1:d1');
     expect(previewTabId({type: 'attachment', sessionId: 's1', attachmentKey: 'sha256-a'})).toBe('attachment:s1:sha256-a');
     expect(previewTabId({type: 'port-relay', hubId: 'hub-a', targetPort: 3000, framePath: '/x'})).toBe('port-relay:hub-a:3000:/x');
+  });
+
+  test('cycles tab ids in both directions with wraparound', () => {
+    const state = openPreviewTab(
+      openPreviewTab(createPreviewWorkbenchState('p1'), {
+        type: 'file',
+        projectId: 'p1',
+        path: 'src/a.ts',
+        targetLine: null,
+        title: 'a.ts',
+      }),
+      {
+        type: 'file',
+        projectId: 'p1',
+        path: 'src/b.ts',
+        targetLine: null,
+        title: 'b.ts',
+      },
+    );
+    const tabs = state.tabsByProjectId.p1;
+
+    expect(cyclePreviewTabId(tabs, 'file:src/a.ts', 1)).toBe('file:src/b.ts');
+    expect(cyclePreviewTabId(tabs, 'file:src/a.ts', -1)).toBe('file:src/b.ts');
+    expect(cyclePreviewTabId(tabs, 'file:src/b.ts', 1)).toBe('file:src/a.ts');
+  });
+
+  test('uses full resource identity for preview tab hover text', () => {
+    const state = openPreviewTab(
+      openPreviewTab(createPreviewWorkbenchState('p1'), {
+        type: 'file',
+        projectId: 'p1',
+        path: 'src/deep/a.ts',
+        targetLine: null,
+        title: 'a.ts',
+      }),
+      {
+        type: 'port-relay',
+        projectId: 'p1',
+        hubId: 'hub-a',
+        targetPort: 5173,
+        framePath: '/app',
+        title: 'hub-a:5173',
+        url: 'http://127.0.0.1:5173/app',
+      },
+    );
+
+    expect(previewWorkbenchTabTooltip(state.tabsByProjectId.p1[0])).toBe('src/deep/a.ts');
+    expect(previewWorkbenchTabTooltip(state.tabsByProjectId.p1[1])).toBe('http://127.0.0.1:5173/app');
+  });
+
+  test('builds search matches for file and prompt diff preview tabs only', () => {
+    const fileState = openPreviewTab(createPreviewWorkbenchState('p1'), {
+      type: 'file',
+      projectId: 'p1',
+      path: 'src/a.ts',
+      targetLine: null,
+      title: 'a.ts',
+    });
+    const fileTab = {
+      ...activePreviewTab(fileState)!,
+      content: 'alpha\nBeta needle\nneedle again',
+    };
+
+    expect(buildPreviewSearchMatches(fileTab, 'needle').map(match => match.line)).toEqual([2, 3]);
+
+    const diffState = openPreviewTab(createPreviewWorkbenchState('p1'), {
+      type: 'prompt-diff',
+      projectId: 'p1',
+      sessionId: 's1',
+      artifactId: 'd1',
+      title: 'Prompt diff',
+      files: [
+        {
+          path: 'src/a.ts',
+          status: 'MODIFIED',
+          additions: 1,
+          deletions: 0,
+          diff: '@@ -1 +1 @@\n+needle',
+          expanded: false,
+        },
+      ],
+    });
+
+    expect(buildPreviewSearchMatches(activePreviewTab(diffState), 'needle')).toMatchObject([
+      {kind: 'diff', path: 'src/a.ts', line: 2},
+    ]);
+
+    const attachmentState = openPreviewTab(createPreviewWorkbenchState('p1'), {
+      type: 'attachment',
+      projectId: 'p1',
+      sessionId: 's1',
+      attachmentKey: 'img',
+      title: 'img.png',
+      meta: '',
+      mimeType: 'image/png',
+      kind: 'image',
+      src: '',
+    });
+
+    expect(buildPreviewSearchMatches(activePreviewTab(attachmentState), 'needle')).toEqual([]);
   });
 });
