@@ -197,6 +197,29 @@
   opacity: 0.75;
 }
 
+.chat-file-workbench-empty-action {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.chat-file-workbench-empty-action:hover {
+  border-color: color-mix(in srgb, var(--accent) 46%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+}
+
+.chat-file-workbench-empty-action .codicon {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
 .preview-workbench-toolbar {
   display: grid;
   grid-template-columns: 24px fit-content(132px) minmax(80px, 1fr) auto;

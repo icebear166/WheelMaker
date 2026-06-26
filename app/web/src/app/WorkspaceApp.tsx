@@ -18399,14 +18399,19 @@ export function App() {
       if (event.defaultPrevented) {
         return;
       }
+      if (event.key.toLowerCase() === 'p' && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        if (quickFileOpen) {
+          quickFileInputRef.current?.focus();
+          return;
+        }
+        openQuickFileSearch();
+        return;
+      }
       if (!chatPreviewOpen) {
         return;
       }
       if (quickFileOpen) {
-        if (event.key.toLowerCase() === 'p' && (event.ctrlKey || event.metaKey)) {
-          event.preventDefault();
-          quickFileInputRef.current?.focus();
-        }
         return;
       }
       if (event.key === 'Tab' && (event.ctrlKey || event.metaKey)) {
@@ -18440,10 +18445,6 @@ export function App() {
           previewSearchInputRef.current?.select();
         });
         return;
-      }
-      if (event.key.toLowerCase() === 'p' && (event.ctrlKey || event.metaKey)) {
-        event.preventDefault();
-        openQuickFileSearch();
       }
     };
     window.addEventListener('keydown', handleGlobalPreviewKeyDown, true);
@@ -19285,6 +19286,14 @@ export function App() {
         <div className="chat-file-workbench-empty">
           <span className="codicon codicon-layout-sidebar-right" aria-hidden="true" />
           <span>No preview selected</span>
+          <button
+            type="button"
+            className="chat-file-workbench-empty-action"
+            onClick={toggleChatFilePreviewTree}
+          >
+            <span className="codicon codicon-files" aria-hidden="true" />
+            <span>Open files</span>
+          </button>
         </div>
       );
     }
@@ -19400,6 +19409,7 @@ export function App() {
       </button>
     </div>
   ) : null;
+  const previewWorkbenchFileTreeContent = !activeWorkbenchTab || activeWorkbenchTab.type === 'file' ? chatFilePreviewTreeContent : null;
   const renderPreviewWorkbenchSurface = (mode: 'desktop' | 'mobile') => (
     <PreviewWorkbenchChrome
       mode={mode}
@@ -19409,7 +19419,7 @@ export function App() {
       activeTab={previewWorkbenchActiveTab}
       tabs={previewWorkbenchTabs}
       fileTreeOpen={previewWorkbench.treeOpen}
-      fileTree={activeWorkbenchTab?.type === 'file' ? chatFilePreviewTreeContent : null}
+      fileTree={previewWorkbenchFileTreeContent}
       actions={renderPreviewWorkbenchActions()}
       onClose={closeChatFilePeekFromChrome}
       onProjectMenuToggle={togglePreviewProjectMenu}

@@ -271,11 +271,22 @@ describe('web chat file peek viewer', () => {
     expect(chromeTsx).toContain('preview-workbench-tree-fab');
     expect(chromeTsx).toContain('fileTree ? (');
     expect(chromeTsx).toContain('fileTreeOpen && fileTree ? (');
-    expect(mainTsx).toContain("fileTree={activeWorkbenchTab?.type === 'file' ? chatFilePreviewTreeContent : null}");
+    expect(mainTsx).toContain("fileTree={previewWorkbenchFileTreeContent}");
     expect(chromeTsx).not.toContain('chat-file-workbench-tree-toggle');
     expect(stylesCss).toContain('.preview-workbench-body-tools');
     expect(stylesCss).toContain('.preview-workbench-tree-panel');
     expect(stylesCss).toContain('.preview-workbench-surface.mobile .preview-workbench-tree-panel');
+  });
+
+  test('empty preview workbench can open the file tree to select a file', () => {
+    const mainTsx = readSourceText(mainPath);
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(mainTsx).toContain('const previewWorkbenchFileTreeContent = !activeWorkbenchTab || activeWorkbenchTab.type === \'file\' ? chatFilePreviewTreeContent : null;');
+    expect(mainTsx).toContain('className="chat-file-workbench-empty-action"');
+    expect(mainTsx).toContain('onClick={toggleChatFilePreviewTree}');
+    expect(mainTsx).toContain('fileTree={previewWorkbenchFileTreeContent}');
+    expect(stylesCss).toContain('.chat-file-workbench-empty-action');
   });
 
   test('mobile preview workbench can hide and restore its top chrome', () => {
@@ -375,8 +386,12 @@ describe('web chat file peek viewer', () => {
     const handlerEnd = mainTsx.indexOf("window.addEventListener('keydown', handleGlobalPreviewKeyDown, true);", handlerStart);
     expect(handlerEnd).toBeGreaterThan(handlerStart);
     const handlerBody = mainTsx.slice(handlerStart, handlerEnd);
+    const pShortcutIndex = handlerBody.indexOf("if (event.key.toLowerCase() === 'p' && (event.ctrlKey || event.metaKey)) {");
+    const previewOpenGateIndex = handlerBody.indexOf('if (!chatPreviewOpen) {');
 
     expect(handlerBody).toContain('if (!chatPreviewOpen) {');
+    expect(pShortcutIndex).toBeGreaterThanOrEqual(0);
+    expect(previewOpenGateIndex).toBeGreaterThan(pShortcutIndex);
     expect(handlerBody).toContain("if (event.key === 'Tab' && (event.ctrlKey || event.metaKey)) {");
     expect(handlerBody).toContain("cyclePreviewTabId(previewWorkbenchTabs, activeWorkbenchTab?.id ?? '', event.shiftKey ? -1 : 1)");
     expect(handlerBody).toContain('activeTabIdByProjectId: {');
