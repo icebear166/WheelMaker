@@ -40,13 +40,14 @@ func TestWindowsAsUserConfiguresLogonTasksAndRemovesServices(t *testing.T) {
 	}
 
 	stateDir := filepath.Dir(h.cfg.InstallDir)
-	assertWindowsTaskConfigureContains(t, events, windowsHubService, "Register-ScheduledTask", "New-ScheduledTaskPrincipal", "AtLogOn", "Interactive", "-d", "--dir", stateDir)
-	assertWindowsTaskConfigureContains(t, events, windowsMonitorService, "Register-ScheduledTask", "New-ScheduledTaskPrincipal", "AtLogOn", "Interactive", "--dir", stateDir)
-	assertWindowsTaskConfigureContains(t, events, windowsUpdaterService, "Register-ScheduledTask", "New-ScheduledTaskPrincipal", "AtLogOn", "Interactive", "--repo", h.cfg.RepoRoot, "--install-dir", h.cfg.InstallDir, "--runtime", "asuser")
+	assertWindowsTaskConfigureContains(t, events, windowsHubService, "Register-ScheduledTask", "New-ScheduledTaskPrincipal", "AtLogOn", "Interactive", "-RunLevel Limited", "-d", "--dir", stateDir)
+	assertWindowsTaskConfigureContains(t, events, windowsMonitorService, "Register-ScheduledTask", "New-ScheduledTaskPrincipal", "AtLogOn", "Interactive", "-RunLevel Limited", "--dir", stateDir)
+	assertWindowsTaskConfigureContains(t, events, windowsUpdaterService, "Register-ScheduledTask", "New-ScheduledTaskPrincipal", "AtLogOn", "Interactive", "-RunLevel Limited", "--repo", h.cfg.RepoRoot, "--install-dir", h.cfg.InstallDir, "--runtime", "asuser")
 	assertEventsContainInOrder(t, events, "Stop-Service")
 	assertEventsContainInOrder(t, events, "sc.exe delete")
 	assertEventsDoNotContain(t, events, "Get-Credential")
 	assertEventsDoNotContain(t, events, "New-Service")
+	assertEventsDoNotContain(t, events, "LeastPrivilege")
 }
 
 func TestWindowsAsUserCleanupIncludesUpdaterWhenUpdaterInstallSkipped(t *testing.T) {

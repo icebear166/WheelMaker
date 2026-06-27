@@ -373,7 +373,7 @@ foreach ($definition in $definitions) {
   }
   $action = New-ScheduledTaskAction @actionArgs
   $trigger = New-ScheduledTaskTrigger -AtLogOn -User $currentUser
-  $principal = New-ScheduledTaskPrincipal -UserId $currentUser -LogonType Interactive -RunLevel LeastPrivilege
+  $principal = New-ScheduledTaskPrincipal -UserId $currentUser -LogonType Interactive -RunLevel Limited
   Register-ScheduledTask -TaskName $definition.Name -Action $action -Trigger $trigger -Principal $principal -Description $definition.DisplayName -Force | Out-Null
 }`, defs.String(), allNames)
 
