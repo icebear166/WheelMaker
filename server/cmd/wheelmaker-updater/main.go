@@ -29,6 +29,7 @@ func run() error {
 	repo := fs.String("repo", "", "WheelMaker repository root")
 	installDir := fs.String("install-dir", "", "WheelMaker install directory (default: ~/.wheelmaker/bin)")
 	at := fs.String("time", "03:00", "daily update time in HH:mm")
+	runtimeMode := fs.String("runtime", "", "Windows runtime mode to pass to wheelmaker-deploy")
 	signalFile := fs.String("signal-file", "", "manual trigger signal file path (default: ~/.wheelmaker/update-now.signal)")
 	once := fs.Bool("once", false, "run one update round then exit")
 	if err := fs.Parse(os.Args[1:]); err != nil {
@@ -64,11 +65,12 @@ func run() error {
 	defer logger.Close()
 
 	cfg := UpdaterConfig{
-		RepoDir:    *repo,
-		InstallDir: *installDir,
-		DailyTime:  *at,
-		SignalFile: *signalFile,
-		Once:       *once,
+		RepoDir:     *repo,
+		InstallDir:  *installDir,
+		DailyTime:   *at,
+		RuntimeMode: *runtimeMode,
+		SignalFile:  *signalFile,
+		Once:        *once,
 	}
 
 	ranAsService, err := runAsWindowsServiceIfNeeded(cfg)

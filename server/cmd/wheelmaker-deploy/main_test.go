@@ -35,6 +35,24 @@ func TestParseDeployDefaults(t *testing.T) {
 	}
 }
 
+func TestParseRuntimeFlag(t *testing.T) {
+	cfg := parseDeployArgsForTest(t, []string{"deploy", "--runtime", "service"})
+	if cfg.RuntimeMode != "service" {
+		t.Fatalf("runtime=%q, want service", cfg.RuntimeMode)
+	}
+	cfg = parseDeployArgsForTest(t, []string{"service", "--runtime", "asuser", "restart"})
+	if cfg.RuntimeMode != "asuser" || cfg.ServiceAction != "restart" {
+		t.Fatalf("cfg=%+v, want asuser runtime restart action", cfg)
+	}
+}
+
+func TestParseRejectsInvalidRuntimeFlag(t *testing.T) {
+	_, err := parseArgs([]string{"deploy", "--runtime", "daemon"})
+	if err == nil || !strings.Contains(err.Error(), "runtime") {
+		t.Fatalf("parse invalid runtime err=%v, want runtime error", err)
+	}
+}
+
 func TestParseUpdateDefaults(t *testing.T) {
 	cfg := parseDeployArgsForTest(t, []string{"update"})
 	if cfg.Mode != modeUpdate {
@@ -316,10 +334,10 @@ func TestWriteHelperWrappers(t *testing.T) {
 	}
 	if runtime.GOOS == "windows" {
 		assertFileContains(t, filepath.Join(wheelMakerHome, "start.bat"), "wheelmaker-deploy.exe")
-		assertFileContains(t, filepath.Join(wheelMakerHome, "start.bat"), "service start")
-		assertFileContains(t, filepath.Join(wheelMakerHome, "stop.bat"), "service stop")
-		assertFileContains(t, filepath.Join(wheelMakerHome, "restart.bat"), "service restart")
-		assertFileContains(t, filepath.Join(wheelMakerHome, "status.bat"), "service status")
+		assertFileContains(t, filepath.Join(wheelMakerHome, "start.bat"), "service --runtime asuser start")
+		assertFileContains(t, filepath.Join(wheelMakerHome, "stop.bat"), "service --runtime asuser stop")
+		assertFileContains(t, filepath.Join(wheelMakerHome, "restart.bat"), "service --runtime asuser restart")
+		assertFileContains(t, filepath.Join(wheelMakerHome, "status.bat"), "service --runtime asuser status")
 		assertFileMissing(t, filepath.Join(wheelMakerHome, "start.sh"))
 		assertFileMissing(t, filepath.Join(wheelMakerHome, "stop.sh"))
 		assertFileMissing(t, filepath.Join(wheelMakerHome, "restart.sh"))
@@ -512,8 +530,8 @@ func TestMacOSPlistContentAugmentsSparsePathForNodeTools(t *testing.T) {
 }
 
 func TestWindowsUpdaterServiceArgumentsUseDeployCLIPathFlags(t *testing.T) {
-	got := windowsUpdaterArgs(`C:\repo`, `C:\Users\me\.wheelmaker\bin`, "03:00")
-	for _, needle := range []string{`--repo "C:\repo"`, `--install-dir "C:\Users\me\.wheelmaker\bin"`, `--time "03:00"`} {
+	got := windowsUpdaterArgs(`C:\repo`, `C:\Users\me\.wheelmaker\bin`, "03:00", "asuser")
+	for _, needle := range []string{`--repo "C:\repo"`, `--install-dir "C:\Users\me\.wheelmaker\bin"`, `--time "03:00"`, `--runtime "asuser"`} {
 		if !strings.Contains(got, needle) {
 			t.Fatalf("args=%s missing %s", got, needle)
 		}

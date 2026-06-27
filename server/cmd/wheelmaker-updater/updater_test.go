@@ -102,6 +102,31 @@ func TestRunUpdateRound_RunsDeployCLI(t *testing.T) {
 	}
 }
 
+func TestRunUpdateRound_WindowsPassesRuntimeToDeployCLI(t *testing.T) {
+	old := runtimeGOOS
+	runtimeGOOS = "windows"
+	defer func() { runtimeGOOS = old }()
+
+	repoDir := t.TempDir()
+	installDir := filepath.Join(t.TempDir(), "bin")
+	createDeployCLI(t, installDir, "windows")
+
+	cfg := UpdaterConfig{RepoDir: repoDir, InstallDir: installDir, DailyTime: "03:00", RuntimeMode: "asuser"}
+	f := &fakeRunner{results: map[string]fakeResult{}}
+
+	if err := runUpdateRound(context.Background(), cfg, f, false); err != nil {
+		t.Fatalf("runUpdateRound: %v", err)
+	}
+
+	if len(f.calls) != 1 {
+		t.Fatalf("expected one windows deploy call, got %d", len(f.calls))
+	}
+	args := strings.Join(f.calls[0].args, " ")
+	if !strings.Contains(args, "--runtime asuser") {
+		t.Fatalf("windows updater should pass runtime mode to deploy CLI, got: %s", args)
+	}
+}
+
 func TestRunUpdateRound_DarwinRunsDeployCLI(t *testing.T) {
 	old := runtimeGOOS
 	runtimeGOOS = "darwin"

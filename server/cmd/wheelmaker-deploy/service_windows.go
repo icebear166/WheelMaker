@@ -14,9 +14,11 @@ import (
 )
 
 const (
-	windowsHubService     = "WheelMaker"
-	windowsMonitorService = "WheelMakerMonitor"
-	windowsUpdaterService = "WheelMakerUpdater"
+	windowsHubService         = "WheelMaker"
+	windowsMonitorService     = "WheelMakerMonitor"
+	windowsUpdaterService     = "WheelMakerUpdater"
+	windowsRuntimeAsUser      = "asuser"
+	windowsRuntimeServiceMode = "service"
 )
 
 type serviceManager struct {
@@ -30,6 +32,14 @@ type windowsRuntimeService struct {
 	BinaryPath  string
 }
 
+type windowsRuntimeProgram struct {
+	Name        string
+	DisplayName string
+	Binary      string
+	Args        string
+	WorkingDir  string
+}
+
 var windowsIsElevated = windowsCurrentProcessElevated
 var windowsRelaunchElevated = windowsRelaunchCurrentProcessElevated
 
@@ -38,7 +48,11 @@ func newServiceManager(cfg deployConfig, runner commandRunner) serviceManager {
 }
 
 func (m serviceManager) CheckDeployPrerequisites(ctx context.Context) error {
-	if !m.requiresAdministrator() {
+	needAdmin, err := m.requiresAdministrator(ctx)
+	if err != nil {
+		return err
+	}
+	if !needAdmin {
 		return nil
 	}
 	elevated, err := windowsIsElevated()
@@ -53,18 +67,28 @@ func (m serviceManager) CheckDeployPrerequisites(ctx context.Context) error {
 }
 
 func (m serviceManager) Configure(ctx context.Context) error {
+	if m.runtimeMode() == windowsRuntimeAsUser {
+		return m.configureScheduledTasks(ctx)
+	}
+	return m.configureServices(ctx)
+}
+
+func (m serviceManager) configureServices(ctx context.Context) error {
 	stateDir := filepath.Dir(m.cfg.InstallDir)
 	services := []windowsRuntimeService{
 		windowsServiceSpec(windowsHubService, filepath.Join(m.cfg.InstallDir, "wheelmaker.exe"), "-d "+windowsStateDirArgs(stateDir)),
 		windowsServiceSpec(windowsMonitorService, filepath.Join(m.cfg.InstallDir, "wheelmaker-monitor.exe"), windowsStateDirArgs(stateDir)),
 	}
 	if !m.cfg.NoUpdater {
-		services = append(services, windowsServiceSpec(windowsUpdaterService, filepath.Join(m.cfg.InstallDir, "wheelmaker-updater.exe"), windowsUpdaterArgs(m.cfg.RepoRoot, m.cfg.InstallDir, m.cfg.UpdaterTime)))
+		services = append(services, windowsServiceSpec(windowsUpdaterService, filepath.Join(m.cfg.InstallDir, "wheelmaker-updater.exe"), windowsUpdaterArgs(m.cfg.RepoRoot, m.cfg.InstallDir, m.cfg.UpdaterTime, m.runtimeMode())))
 	}
 	return m.ensureRuntimeServices(ctx, services)
 }
 
 func (m serviceManager) Start(ctx context.Context, includeUpdater bool) error {
+	if m.runtimeMode() == windowsRuntimeAsUser {
+		return m.startScheduledTasks(ctx, includeUpdater)
+	}
 	for _, name := range m.serviceNames(includeUpdater) {
 		if _, err := m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", fmt.Sprintf("Start-Service -Name %s -ErrorAction Stop", psQuote(name))); err != nil {
 			return err
@@ -74,6 +98,9 @@ func (m serviceManager) Start(ctx context.Context, includeUpdater bool) error {
 }
 
 func (m serviceManager) Stop(ctx context.Context, includeUpdater bool) error {
+	if m.runtimeMode() == windowsRuntimeAsUser {
+		return m.stopScheduledTasks(ctx, includeUpdater)
+	}
 	for _, name := range m.serviceNames(includeUpdater) {
 		_, _ = m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", fmt.Sprintf("$svc=Get-Service -Name %s -ErrorAction SilentlyContinue; if ($null -ne $svc -and $svc.Status -ne 'Stopped') { Stop-Service -Name %s -Force -ErrorAction SilentlyContinue }", psQuote(name), psQuote(name)))
 	}
@@ -88,6 +115,9 @@ func (m serviceManager) Restart(ctx context.Context, includeUpdater bool) error 
 }
 
 func (m serviceManager) Status(ctx context.Context) error {
+	if m.runtimeMode() == windowsRuntimeAsUser {
+		return m.statusScheduledTasks(ctx)
+	}
 	for _, name := range []string{windowsHubService, windowsMonitorService, windowsUpdaterService} {
 		filter := fmt.Sprintf("Name='%s'", name)
 		if _, err := m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", fmt.Sprintf("Get-CimInstance Win32_Service -Filter %s -ErrorAction SilentlyContinue | Select-Object Name,State,StartMode,StartName,PathName | Format-Table -AutoSize", psQuote(filter))); err != nil {
@@ -97,11 +127,45 @@ func (m serviceManager) Status(ctx context.Context) error {
 	return nil
 }
 
-func (m serviceManager) requiresAdministrator() bool {
-	if m.cfg.Mode == modeService {
-		return true
+func (m serviceManager) requiresAdministrator(ctx context.Context) (bool, error) {
+	if m.runtimeMode() == windowsRuntimeAsUser {
+		if m.cfg.NoConfig {
+			return false, nil
+		}
+		installed, err := m.anyWindowsServicesInstalled(ctx)
+		if err != nil {
+			return false, err
+		}
+		return installed, nil
 	}
-	return !m.cfg.NoConfig || !m.cfg.NoRestart
+	if m.cfg.Mode == modeService {
+		return true, nil
+	}
+	return !m.cfg.NoConfig || !m.cfg.NoRestart, nil
+}
+
+func (m serviceManager) runtimeMode() string {
+	mode := strings.ToLower(strings.TrimSpace(m.cfg.RuntimeMode))
+	switch mode {
+	case windowsRuntimeServiceMode:
+		return windowsRuntimeServiceMode
+	default:
+		return windowsRuntimeAsUser
+	}
+}
+
+func (m serviceManager) anyWindowsServicesInstalled(ctx context.Context) (bool, error) {
+	names := windowsRuntimeNames()
+	quoted := make([]string, 0, len(names))
+	for _, name := range names {
+		quoted = append(quoted, psQuote(name))
+	}
+	script := fmt.Sprintf(`$names = @(%s); foreach ($name in $names) { if ($null -ne (Get-Service -Name $name -ErrorAction SilentlyContinue)) { Write-Output 'true'; exit 0 } }; Write-Output 'false'`, strings.Join(quoted, ", "))
+	out, err := m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script)
+	if err != nil {
+		return false, err
+	}
+	return strings.Contains(strings.ToLower(out), "true"), nil
 }
 
 func windowsCurrentProcessElevated() (bool, error) {
@@ -165,11 +229,13 @@ func (m serviceManager) ensureRuntimeServices(ctx context.Context, services []wi
 		defs.WriteString(fmt.Sprintf("  @{ Name = %s; DisplayName = %s; BinaryPath = %s }\n", psQuote(service.Name), psQuote(service.DisplayName), psQuote(service.BinaryPath)))
 	}
 	defs.WriteString(")")
+	allNames := windowsPSStringArray(windowsRuntimeNames())
 
 	script := fmt.Sprintf(`$ErrorActionPreference = 'Stop'
 $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 $localUser = ".\$env:USERNAME"
 $services = %s
+$allNames = %s
 
 function Get-WheelMakerServiceInfo([string]$name) {
   Get-CimInstance Win32_Service -Filter "Name='$name'" -ErrorAction SilentlyContinue
@@ -202,8 +268,12 @@ function Remove-WheelMakerService([string]$name) {
 }
 
 $needCredential = $false
+foreach ($name in $allNames) {
+  Stop-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+  Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction SilentlyContinue
+}
+
 foreach ($definition in $services) {
-  Unregister-ScheduledTask -TaskName $definition.Name -Confirm:$false -ErrorAction SilentlyContinue
   $serviceInfo = Get-WheelMakerServiceInfo $definition.Name
   if (-not (Test-CurrentUserService $serviceInfo)) {
     $needCredential = $true
@@ -229,12 +299,128 @@ foreach ($definition in $services) {
     New-Service -Name $definition.Name -DisplayName $definition.DisplayName -BinaryPathName $definition.BinaryPath -StartupType Automatic -Credential $credential | Out-Null
   }
   sc.exe failure $definition.Name reset= 300 actions= restart/5000/restart/5000/restart/5000 | Out-Null
-}`, defs.String())
+}`, defs.String(), allNames)
 
 	if _, err := m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script); err != nil {
 		return fmt.Errorf("configure Windows services: %w", err)
 	}
 	return nil
+}
+
+func (m serviceManager) configureScheduledTasks(ctx context.Context) error {
+	programs := m.runtimePrograms(m.runtimeMode())
+	var defs strings.Builder
+	defs.WriteString("@(\n")
+	for _, program := range programs {
+		defs.WriteString(fmt.Sprintf("  @{ Name = %s; DisplayName = %s; Binary = %s; Args = %s; WorkingDir = %s }\n", psQuote(program.Name), psQuote(program.DisplayName), psQuote(program.Binary), psQuote(program.Args), psQuote(program.WorkingDir)))
+	}
+	defs.WriteString(")")
+	allNames := windowsPSStringArray(windowsRuntimeNames())
+
+	script := fmt.Sprintf(`$ErrorActionPreference = 'Stop'
+$currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+$definitions = %s
+$allNames = %s
+
+function Remove-WheelMakerService([string]$name) {
+  $service = Get-Service -Name $name -ErrorAction SilentlyContinue
+  if ($null -eq $service) {
+    return
+  }
+  if ($service.Status -ne 'Stopped') {
+    Stop-Service -Name $name -Force -ErrorAction SilentlyContinue
+  }
+  sc.exe delete $name | Out-Null
+  for ($i = 0; $i -lt 30; $i++) {
+    Start-Sleep -Milliseconds 200
+    if ($null -eq (Get-Service -Name $name -ErrorAction SilentlyContinue)) {
+      return
+    }
+  }
+  throw "Timed out deleting service $name"
+}
+
+foreach ($name in $allNames) {
+  Stop-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+  Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction SilentlyContinue
+  Remove-WheelMakerService $name
+}
+
+foreach ($definition in $definitions) {
+  $actionArgs = @{
+    Execute = $definition.Binary
+  }
+  if (-not [string]::IsNullOrWhiteSpace($definition.Args)) {
+    $actionArgs.Argument = $definition.Args
+  }
+  if (-not [string]::IsNullOrWhiteSpace($definition.WorkingDir)) {
+    $actionArgs.WorkingDirectory = $definition.WorkingDir
+  }
+  $action = New-ScheduledTaskAction @actionArgs
+  $trigger = New-ScheduledTaskTrigger -AtLogOn -User $currentUser
+  $principal = New-ScheduledTaskPrincipal -UserId $currentUser -LogonType Interactive -RunLevel LeastPrivilege
+  Register-ScheduledTask -TaskName $definition.Name -Action $action -Trigger $trigger -Principal $principal -Description $definition.DisplayName -Force | Out-Null
+}`, defs.String(), allNames)
+
+	if _, err := m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script); err != nil {
+		return fmt.Errorf("configure Windows scheduled tasks: %w", err)
+	}
+	return nil
+}
+
+func (m serviceManager) startScheduledTasks(ctx context.Context, includeUpdater bool) error {
+	for _, name := range m.serviceNames(includeUpdater) {
+		if _, err := m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", fmt.Sprintf("Start-ScheduledTask -TaskName %s -ErrorAction Stop", psQuote(name))); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m serviceManager) stopScheduledTasks(ctx context.Context, includeUpdater bool) error {
+	for _, name := range m.serviceNames(includeUpdater) {
+		_, _ = m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", fmt.Sprintf("$task=Get-ScheduledTask -TaskName %s -ErrorAction SilentlyContinue; if ($null -ne $task) { Stop-ScheduledTask -TaskName %s -ErrorAction SilentlyContinue }", psQuote(name), psQuote(name)))
+	}
+	return nil
+}
+
+func (m serviceManager) statusScheduledTasks(ctx context.Context) error {
+	for _, name := range []string{windowsHubService, windowsMonitorService, windowsUpdaterService} {
+		if _, err := m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", fmt.Sprintf("Get-ScheduledTask -TaskName %s -ErrorAction SilentlyContinue | Select-Object TaskName,State,TaskPath | Format-Table -AutoSize", psQuote(name))); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m serviceManager) runtimePrograms(runtimeMode string) []windowsRuntimeProgram {
+	stateDir := filepath.Dir(m.cfg.InstallDir)
+	programs := []windowsRuntimeProgram{
+		{
+			Name:        windowsHubService,
+			DisplayName: windowsHubService,
+			Binary:      filepath.Join(m.cfg.InstallDir, "wheelmaker.exe"),
+			Args:        "-d " + windowsStateDirArgs(stateDir),
+			WorkingDir:  m.cfg.RepoRoot,
+		},
+		{
+			Name:        windowsMonitorService,
+			DisplayName: windowsMonitorService,
+			Binary:      filepath.Join(m.cfg.InstallDir, "wheelmaker-monitor.exe"),
+			Args:        windowsStateDirArgs(stateDir),
+			WorkingDir:  m.cfg.RepoRoot,
+		},
+	}
+	if !m.cfg.NoUpdater {
+		programs = append(programs, windowsRuntimeProgram{
+			Name:        windowsUpdaterService,
+			DisplayName: windowsUpdaterService,
+			Binary:      filepath.Join(m.cfg.InstallDir, "wheelmaker-updater.exe"),
+			Args:        windowsUpdaterArgs(m.cfg.RepoRoot, m.cfg.InstallDir, m.cfg.UpdaterTime, runtimeMode),
+			WorkingDir:  m.cfg.RepoRoot,
+		})
+	}
+	return programs
 }
 
 func (m serviceManager) serviceNames(includeUpdater bool) []string {
@@ -243,6 +429,18 @@ func (m serviceManager) serviceNames(includeUpdater bool) []string {
 		names = append(names, windowsUpdaterService)
 	}
 	return names
+}
+
+func windowsRuntimeNames() []string {
+	return []string{windowsHubService, windowsMonitorService, windowsUpdaterService}
+}
+
+func windowsPSStringArray(values []string) string {
+	quoted := make([]string, 0, len(values))
+	for _, value := range values {
+		quoted = append(quoted, psQuote(value))
+	}
+	return "@(" + strings.Join(quoted, ", ") + ")"
 }
 
 func psQuote(value string) string {

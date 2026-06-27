@@ -35,6 +35,7 @@ const deployAutoStashMessage = "WheelMaker auto-stash before update"
 type deployConfig struct {
 	Mode          runMode
 	ServiceAction string
+	RuntimeMode   string
 	RepoRoot      string
 	HomeDir       string
 	InstallDir    string
@@ -143,6 +144,7 @@ func parseArgs(args []string) (deployConfig, error) {
 	fs.StringVar(&cfg.RepoRoot, "repo", "", "WheelMaker repository root")
 	fs.StringVar(&cfg.InstallDir, "bin", "", "WheelMaker install directory")
 	fs.StringVar(&cfg.UpdaterTime, "time", cfg.UpdaterTime, "updater daily time in HH:mm")
+	fs.StringVar(&cfg.RuntimeMode, "runtime", "", "Windows runtime mode: asuser or service")
 	fs.BoolVar(&cfg.NoPull, "no-pull", false, "skip git pull")
 	fs.BoolVar(&cfg.NoNPM, "no-npm", false, "skip app npm dependency sync")
 	fs.BoolVar(&cfg.NoBuild, "no-build", false, "skip Go builds")
@@ -170,6 +172,9 @@ func parseArgs(args []string) (deployConfig, error) {
 	if cfg.NoWeb {
 		cfg.NoNPM = true
 	}
+	if err := validateRuntimeMode(cfg.RuntimeMode); err != nil {
+		return deployConfig{}, err
+	}
 	if mode == modeUpdate {
 		cfg.NoPull = true
 		cfg.NoConfig = true
@@ -183,6 +188,15 @@ func parseArgs(args []string) (deployConfig, error) {
 		cfg.NoUpdater = true
 	}
 	return cfg, nil
+}
+
+func validateRuntimeMode(mode string) error {
+	switch strings.TrimSpace(strings.ToLower(mode)) {
+	case "", "asuser", "service":
+		return nil
+	default:
+		return fmt.Errorf("unsupported runtime mode %q (expected asuser or service)", mode)
+	}
 }
 
 func runDeploy(ctx context.Context, cfg deployConfig) error {
@@ -392,6 +406,9 @@ func runBootstrapUpdateWithDeps(ctx context.Context, cfg deployConfig, deps depl
 		return err
 	}
 	args := []string{"update", "--repo", cfg.RepoRoot, "--bin", cfg.InstallDir, "--time", cfg.UpdaterTime, "--no-pull", "--no-config", "--no-updater"}
+	if strings.TrimSpace(cfg.RuntimeMode) != "" {
+		args = append(args, "--runtime", cfg.RuntimeMode)
+	}
 	if cfg.NoWeb {
 		args = append(args, "--no-web")
 	}
@@ -437,6 +454,7 @@ func resolveDefaults(cfg deployConfig) deployConfig {
 	if strings.TrimSpace(cfg.UpdaterTime) == "" {
 		cfg.UpdaterTime = "03:00"
 	}
+	cfg.RuntimeMode = strings.ToLower(strings.TrimSpace(cfg.RuntimeMode))
 	return cfg
 }
 
@@ -676,11 +694,15 @@ func writeHelperWrappers(cfg deployConfig, deps deployDeps) error {
 	binDir := filepath.Join(home, "bin")
 	windowsDeploy := filepath.Join(binDir, "wheelmaker-deploy.exe")
 	unixDeploy := filepath.Join(binDir, "wheelmaker-deploy")
+	windowsRuntime := cfg.RuntimeMode
+	if runtime.GOOS == "windows" && strings.TrimSpace(windowsRuntime) == "" {
+		windowsRuntime = "asuser"
+	}
 	windows := map[string]string{
-		"start.bat":   wrapperBAT(windowsDeploy, "start"),
-		"stop.bat":    wrapperBAT(windowsDeploy, "stop"),
-		"restart.bat": wrapperBAT(windowsDeploy, "restart"),
-		"status.bat":  wrapperBAT(windowsDeploy, "status"),
+		"start.bat":   wrapperBATWithRuntime(windowsDeploy, "start", windowsRuntime),
+		"stop.bat":    wrapperBATWithRuntime(windowsDeploy, "stop", windowsRuntime),
+		"restart.bat": wrapperBATWithRuntime(windowsDeploy, "restart", windowsRuntime),
+		"status.bat":  wrapperBATWithRuntime(windowsDeploy, "status", windowsRuntime),
 	}
 	unix := map[string]string{
 		"start.sh":   wrapperSH(unixDeploy, "start"),
@@ -880,11 +902,20 @@ func wheelMakerHome(cfg deployConfig) string {
 }
 
 func wrapperBAT(deployPath string, action string) string {
-	return fmt.Sprintf("@echo off\r\nsetlocal\r\n\"%s\" service %s %%*\r\nexit /b %%errorlevel%%\r\n", deployPath, action)
+	return wrapperBATWithRuntime(deployPath, action, "")
 }
 
 func wrapperSH(deployPath string, action string) string {
 	return fmt.Sprintf("#!/usr/bin/env bash\nset -euo pipefail\n%q service %s \"$@\"\n", deployPath, action)
+}
+
+func wrapperBATWithRuntime(deployPath string, action string, runtimeMode string) string {
+	args := "service"
+	if strings.TrimSpace(runtimeMode) != "" {
+		args += " --runtime " + strings.TrimSpace(runtimeMode)
+	}
+	args += " " + action
+	return fmt.Sprintf("@echo off\r\nsetlocal\r\n\"%s\" %s %%*\r\nexit /b %%errorlevel%%\r\n", deployPath, args)
 }
 
 func linuxUnitContent(description string, workingDir string, envFile string, binary string, args string) string {
@@ -956,8 +987,12 @@ func launchAgentPlistContent(label string, workingDir string, binary string, arg
 	return b.String()
 }
 
-func windowsUpdaterArgs(repo string, bin string, dailyTime string) string {
-	return fmt.Sprintf(`--repo "%s" --install-dir "%s" --time "%s"`, strings.ReplaceAll(repo, `"`, `\"`), strings.ReplaceAll(bin, `"`, `\"`), strings.ReplaceAll(dailyTime, `"`, `\"`))
+func windowsUpdaterArgs(repo string, bin string, dailyTime string, runtimeMode string) string {
+	args := fmt.Sprintf(`--repo "%s" --install-dir "%s" --time "%s"`, strings.ReplaceAll(repo, `"`, `\"`), strings.ReplaceAll(bin, `"`, `\"`), strings.ReplaceAll(dailyTime, `"`, `\"`))
+	if strings.TrimSpace(runtimeMode) != "" {
+		args += fmt.Sprintf(` --runtime "%s"`, strings.ReplaceAll(runtimeMode, `"`, `\"`))
+	}
+	return args
 }
 
 var launchAgentDefaultPathDirs = []string{

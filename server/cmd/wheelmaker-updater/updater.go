@@ -31,11 +31,12 @@ const (
 var runtimeGOOS = runtime.GOOS
 
 type UpdaterConfig struct {
-	RepoDir    string
-	InstallDir string
-	DailyTime  string
-	SignalFile string
-	Once       bool
+	RepoDir     string
+	InstallDir  string
+	DailyTime   string
+	RuntimeMode string
+	SignalFile  string
+	Once        bool
 }
 
 type commandRunner interface {
@@ -283,6 +284,9 @@ func deployInvocationForOS(cfg UpdaterConfig, opts updateRoundOptions, goos stri
 		"--repo", cfg.RepoDir,
 		"--bin", cfg.InstallDir,
 		"--time", cfg.DailyTime,
+	}
+	if strings.TrimSpace(cfg.RuntimeMode) != "" {
+		args = append(args, "--runtime", cfg.RuntimeMode)
 	}
 	if opts.skipWebPublish {
 		args = append(args, "--no-web")

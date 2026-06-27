@@ -11,6 +11,7 @@ import (
 
 func TestWindowsConfiguresCurrentUserServices(t *testing.T) {
 	h := newDeployHarness(t)
+	h.cfg.RuntimeMode = "service"
 	events := []string{}
 	runner := testRunner{events: &events}
 	manager := newServiceManager(h.cfg, runner)
@@ -22,13 +23,69 @@ func TestWindowsConfiguresCurrentUserServices(t *testing.T) {
 	stateDir := filepath.Dir(h.cfg.InstallDir)
 	assertWindowsServiceConfigureContains(t, events, windowsHubService, "Unregister-ScheduledTask", "Get-Credential", "New-Service", "StartName", "-d", "--dir", stateDir)
 	assertWindowsServiceConfigureContains(t, events, windowsMonitorService, "Get-Credential", "New-Service", "StartName", "--dir", stateDir)
-	assertWindowsServiceConfigureContains(t, events, windowsUpdaterService, "Get-Credential", "New-Service", "StartName", "--repo", h.cfg.RepoRoot, "--install-dir", h.cfg.InstallDir)
+	assertWindowsServiceConfigureContains(t, events, windowsUpdaterService, "Get-Credential", "New-Service", "StartName", "--repo", h.cfg.RepoRoot, "--install-dir", h.cfg.InstallDir, "--runtime", "service")
 	assertEventsDoNotContain(t, events, "Register-ScheduledTask")
 	assertEventsDoNotContain(t, events, "New-ScheduledTaskPrincipal")
 }
 
+func TestWindowsAsUserConfiguresLogonTasksAndRemovesServices(t *testing.T) {
+	h := newDeployHarness(t)
+	h.cfg.RuntimeMode = "asuser"
+	events := []string{}
+	runner := testRunner{events: &events}
+	manager := newServiceManager(h.cfg, runner)
+
+	if err := manager.Configure(context.Background()); err != nil {
+		t.Fatalf("Configure: %v", err)
+	}
+
+	stateDir := filepath.Dir(h.cfg.InstallDir)
+	assertWindowsTaskConfigureContains(t, events, windowsHubService, "Register-ScheduledTask", "New-ScheduledTaskPrincipal", "AtLogOn", "Interactive", "-d", "--dir", stateDir)
+	assertWindowsTaskConfigureContains(t, events, windowsMonitorService, "Register-ScheduledTask", "New-ScheduledTaskPrincipal", "AtLogOn", "Interactive", "--dir", stateDir)
+	assertWindowsTaskConfigureContains(t, events, windowsUpdaterService, "Register-ScheduledTask", "New-ScheduledTaskPrincipal", "AtLogOn", "Interactive", "--repo", h.cfg.RepoRoot, "--install-dir", h.cfg.InstallDir, "--runtime", "asuser")
+	assertEventsContainInOrder(t, events, "Stop-Service")
+	assertEventsContainInOrder(t, events, "sc.exe delete")
+	assertEventsDoNotContain(t, events, "Get-Credential")
+	assertEventsDoNotContain(t, events, "New-Service")
+}
+
+func TestWindowsAsUserCleanupIncludesUpdaterWhenUpdaterInstallSkipped(t *testing.T) {
+	h := newDeployHarness(t)
+	h.cfg.RuntimeMode = "asuser"
+	h.cfg.NoUpdater = true
+	events := []string{}
+	runner := testRunner{events: &events}
+	manager := newServiceManager(h.cfg, runner)
+
+	if err := manager.Configure(context.Background()); err != nil {
+		t.Fatalf("Configure: %v", err)
+	}
+
+	assertEventsContainInOrder(t, events, windowsUpdaterService)
+	assertEventsContainInOrder(t, events, "sc.exe delete")
+	assertEventsDoNotContain(t, events, "wheelmaker-updater.exe")
+}
+
+func TestWindowsServiceCleanupIncludesUpdaterTaskWhenUpdaterInstallSkipped(t *testing.T) {
+	h := newDeployHarness(t)
+	h.cfg.RuntimeMode = "service"
+	h.cfg.NoUpdater = true
+	events := []string{}
+	runner := testRunner{events: &events}
+	manager := newServiceManager(h.cfg, runner)
+
+	if err := manager.Configure(context.Background()); err != nil {
+		t.Fatalf("Configure: %v", err)
+	}
+
+	assertEventsContainInOrder(t, events, windowsUpdaterService)
+	assertEventsContainInOrder(t, events, "Unregister-ScheduledTask")
+	assertEventsDoNotContain(t, events, "wheelmaker-updater.exe")
+}
+
 func TestWindowsRuntimeActionsUseServices(t *testing.T) {
 	h := newDeployHarness(t)
+	h.cfg.RuntimeMode = "service"
 	events := []string{}
 	runner := testRunner{events: &events}
 	manager := newServiceManager(h.cfg, runner)
@@ -53,8 +110,36 @@ func TestWindowsRuntimeActionsUseServices(t *testing.T) {
 	assertEventsDoNotContain(t, events, "Get-ScheduledTask")
 }
 
+func TestWindowsAsUserRuntimeActionsUseScheduledTasks(t *testing.T) {
+	h := newDeployHarness(t)
+	h.cfg.RuntimeMode = "asuser"
+	events := []string{}
+	runner := testRunner{events: &events}
+	manager := newServiceManager(h.cfg, runner)
+
+	if err := manager.Start(context.Background(), true); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if err := manager.Stop(context.Background(), true); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+	if err := manager.Status(context.Background()); err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+
+	assertEventsContainInOrder(t, events,
+		"Start-ScheduledTask",
+		"Stop-ScheduledTask",
+		"Get-ScheduledTask",
+	)
+	assertEventsDoNotContain(t, events, "Start-Service")
+	assertEventsDoNotContain(t, events, "Stop-Service")
+	assertEventsDoNotContain(t, events, "Get-CimInstance Win32_Service")
+}
+
 func TestWindowsDeployPrerequisitesRelaunchesUnelevatedServiceWork(t *testing.T) {
 	h := newDeployHarness(t)
+	h.cfg.RuntimeMode = "service"
 	events := []string{}
 	runner := testRunner{events: &events}
 	manager := newServiceManager(h.cfg, runner)
@@ -80,6 +165,7 @@ func TestWindowsDeployPrerequisitesRelaunchesUnelevatedServiceWork(t *testing.T)
 
 func TestWindowsDeployPrerequisitesSkipsElevationWhenServiceWorkDisabled(t *testing.T) {
 	h := newDeployHarness(t)
+	h.cfg.RuntimeMode = "service"
 	h.cfg.NoConfig = true
 	h.cfg.NoRestart = true
 	events := []string{}
@@ -98,6 +184,33 @@ func TestWindowsDeployPrerequisitesSkipsElevationWhenServiceWorkDisabled(t *test
 	}
 	windowsRelaunchElevated = func() error {
 		t.Fatal("windowsRelaunchElevated should not be called when service work is disabled")
+		return nil
+	}
+
+	if err := manager.CheckDeployPrerequisites(context.Background()); err != nil {
+		t.Fatalf("CheckDeployPrerequisites: %v", err)
+	}
+}
+
+func TestWindowsDeployPrerequisitesSkipsElevationForAsUserRuntime(t *testing.T) {
+	h := newDeployHarness(t)
+	h.cfg.RuntimeMode = "asuser"
+	events := []string{}
+	runner := testRunner{events: &events}
+	manager := newServiceManager(h.cfg, runner)
+
+	oldIsElevated := windowsIsElevated
+	oldRelaunchElevated := windowsRelaunchElevated
+	t.Cleanup(func() {
+		windowsIsElevated = oldIsElevated
+		windowsRelaunchElevated = oldRelaunchElevated
+	})
+	windowsIsElevated = func() (bool, error) {
+		t.Fatal("windowsIsElevated should not be called for asuser runtime")
+		return false, nil
+	}
+	windowsRelaunchElevated = func() error {
+		t.Fatal("windowsRelaunchElevated should not be called for asuser runtime")
 		return nil
 	}
 
@@ -138,4 +251,21 @@ func assertWindowsServiceConfigureContains(t *testing.T, events []string, servic
 		return
 	}
 	t.Fatalf("missing service configure event for %s in %#v", serviceName, events)
+}
+
+func assertWindowsTaskConfigureContains(t *testing.T, events []string, taskName string, needles ...string) {
+	t.Helper()
+	prefix := "powershell -NoProfile -ExecutionPolicy Bypass -Command "
+	for _, event := range events {
+		if !strings.Contains(event, prefix) || !strings.Contains(event, taskName) || !strings.Contains(event, "Register-ScheduledTask") {
+			continue
+		}
+		for _, needle := range needles {
+			if !strings.Contains(event, needle) {
+				t.Fatalf("task configure for %s missing %q:\n%s", taskName, needle, event)
+			}
+		}
+		return
+	}
+	t.Fatalf("missing task configure event for %s in %#v", taskName, events)
 }
