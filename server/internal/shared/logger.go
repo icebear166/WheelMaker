@@ -123,7 +123,7 @@ func (l *loggerInst) setup(cfg LoggerConfig) error {
 			return fmt.Errorf("logger: open log file %q: %w", cfg.LogFile, err)
 		}
 		l.opFile = f
-		l.out = io.MultiWriter(os.Stderr, f)
+		l.out = writeAll{f, os.Stderr}
 	}
 
 	if cfg.Level <= LevelDebug {
@@ -198,6 +198,32 @@ func deriveDebugLogPath(logPath string) string {
 	}
 	base := strings.TrimSuffix(path, ext)
 	return base + ".debug" + ext
+}
+
+type writeAll []io.Writer
+
+func (w writeAll) Write(p []byte) (int, error) {
+	var firstErr error
+	wrote := false
+	for _, out := range w {
+		if out == nil {
+			continue
+		}
+		n, err := out.Write(p)
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+		if n == len(p) {
+			wrote = true
+		}
+	}
+	if wrote {
+		return len(p), firstErr
+	}
+	if firstErr != nil {
+		return 0, firstErr
+	}
+	return len(p), nil
 }
 
 type debugDailyRotator struct {

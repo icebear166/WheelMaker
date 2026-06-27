@@ -183,6 +183,12 @@ func (panicStringer) String() string {
 	panic("String() should not be called for filtered logs")
 }
 
+type failWriter struct{}
+
+func (failWriter) Write(p []byte) (int, error) {
+	return 0, os.ErrInvalid
+}
+
 func TestLogger_FilteredLogsDoNotFormatArguments(t *testing.T) {
 	var out bytes.Buffer
 	if err := Setup(LoggerConfig{Level: LevelWarn}); err != nil {
@@ -199,6 +205,15 @@ func TestLogger_FilteredLogsDoNotFormatArguments(t *testing.T) {
 
 	Debug("%v", panicStringer{})
 	Info("%v", panicStringer{})
+}
+
+func TestLoggerFanoutContinuesAfterWriterError(t *testing.T) {
+	var out bytes.Buffer
+	_, _ = writeAll{failWriter{}, &out}.Write([]byte("persisted\n"))
+
+	if got := out.String(); got != "persisted\n" {
+		t.Fatalf("fanout should keep writing after one writer fails, got %q", got)
+	}
 }
 
 func TestLoggerVerboseLevelWritesVerboseButNotDebug(t *testing.T) {
