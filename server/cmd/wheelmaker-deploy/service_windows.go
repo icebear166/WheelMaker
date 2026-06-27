@@ -496,7 +496,7 @@ function Test-WheelMakerInstallProcess($process) {
   }
   $cmd = [string]$process.CommandLine
   if ([string]::IsNullOrWhiteSpace($exe) -and [string]::IsNullOrWhiteSpace($cmd)) {
-    return $true
+    return $processNames -contains $process.Name
   }
   return -not [string]::IsNullOrWhiteSpace($cmd) -and $cmd.ToLowerInvariant().Contains($install)
 }
@@ -530,14 +530,14 @@ foreach ($name in $names) {
   Remove-WheelMakerService $name
 }
 
-$procs = @(Get-CimInstance Win32_Process | Where-Object { $processNames -contains $_.Name -and (Test-WheelMakerInstallProcess $_) })
+$procs = @(Get-CimInstance Win32_Process | Where-Object { ($processNames -contains $_.Name) -or (Test-WheelMakerInstallProcess $_) })
 foreach ($proc in $procs) {
   Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
 }
 
 $deadline = (Get-Date).AddSeconds(10)
 while ((Get-Date) -lt $deadline) {
-  $remaining = @(Get-CimInstance Win32_Process | Where-Object { $processNames -contains $_.Name -and (Test-WheelMakerInstallProcess $_) })
+  $remaining = @(Get-CimInstance Win32_Process | Where-Object { ($processNames -contains $_.Name) -or (Test-WheelMakerInstallProcess $_) })
   if ($remaining.Count -eq 0) {
     exit 0
   }

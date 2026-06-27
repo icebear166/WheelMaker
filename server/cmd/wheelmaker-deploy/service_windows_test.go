@@ -168,11 +168,19 @@ func TestWindowsPrepareInstallTreatsUninspectableRuntimeProcessAsManaged(t *test
 	script := windowsPrepareInstallScript(windowsRuntimeNames(), windowsRuntimeProcessNames(), `C:\Users\me\.wheelmaker\bin`, true)
 	for _, needle := range []string{
 		"[string]::IsNullOrWhiteSpace($exe) -and [string]::IsNullOrWhiteSpace($cmd)",
-		"return $true",
+		"return $processNames -contains $process.Name",
 	} {
 		if !strings.Contains(script, needle) {
 			t.Fatalf("prepare install script missing %q:\n%s", needle, script)
 		}
+	}
+}
+
+func TestWindowsPrepareInstallFindsRuntimeProcessesByInstallPath(t *testing.T) {
+	script := windowsPrepareInstallScript(windowsRuntimeNames(), windowsRuntimeProcessNames(), `C:\Users\me\.wheelmaker\bin`, true)
+	needle := "($processNames -contains $_.Name) -or (Test-WheelMakerInstallProcess $_)"
+	if !strings.Contains(script, needle) {
+		t.Fatalf("prepare install script should match processes by install path for short 8.3 names, missing %q:\n%s", needle, script)
 	}
 }
 
