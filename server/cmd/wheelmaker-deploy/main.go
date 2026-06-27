@@ -76,6 +76,7 @@ type deployService interface {
 	Configure(context.Context) error
 	Start(context.Context, bool) error
 	Stop(context.Context, bool) error
+	PrepareInstall(context.Context, bool) error
 	Restart(context.Context, bool) error
 	Status(context.Context) error
 }
@@ -86,6 +87,7 @@ func (noopServices) CheckDeployPrerequisites(context.Context) error { return nil
 func (noopServices) Configure(context.Context) error                { return nil }
 func (noopServices) Start(context.Context, bool) error              { return nil }
 func (noopServices) Stop(context.Context, bool) error               { return nil }
+func (noopServices) PrepareInstall(context.Context, bool) error     { return nil }
 func (noopServices) Restart(context.Context, bool) error            { return nil }
 func (noopServices) Status(context.Context) error                   { return nil }
 
@@ -291,8 +293,8 @@ func runDeployWithDeps(ctx context.Context, cfg deployConfig, deps deployDeps) e
 		return err
 	}
 	if !cfg.NoRestart {
-		deps.report("stopping services")
-		if err := deps.Services.Stop(ctx, !cfg.NoUpdater); err != nil {
+		deps.report("preparing install")
+		if err := deps.Services.PrepareInstall(ctx, !cfg.NoUpdater); err != nil {
 			return err
 		}
 	}
@@ -360,8 +362,8 @@ func runUpdateWithDeps(ctx context.Context, cfg deployConfig, deps deployDeps) e
 		return err
 	}
 	if !cfg.NoRestart {
-		deps.report("stopping services")
-		if err := deps.Services.Stop(ctx, false); err != nil {
+		deps.report("preparing install")
+		if err := deps.Services.PrepareInstall(ctx, false); err != nil {
 			return err
 		}
 	}

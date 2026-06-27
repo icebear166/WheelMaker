@@ -108,6 +108,10 @@ func (m serviceManager) Stop(ctx context.Context, includeUpdater bool) error {
 	return nil
 }
 
+func (m serviceManager) PrepareInstall(ctx context.Context, includeUpdater bool) error {
+	return m.Stop(ctx, includeUpdater)
+}
+
 func (m serviceManager) Restart(ctx context.Context, includeUpdater bool) error {
 	for _, service := range m.services(includeUpdater) {
 		if _, err := m.runner.Run(ctx, "", "systemctl", "--user", "restart", service); err != nil {

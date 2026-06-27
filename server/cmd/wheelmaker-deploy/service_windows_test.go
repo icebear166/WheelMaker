@@ -137,6 +137,32 @@ func TestWindowsAsUserRuntimeActionsUseScheduledTasks(t *testing.T) {
 	assertEventsDoNotContain(t, events, "Get-CimInstance Win32_Service")
 }
 
+func TestWindowsPrepareInstallCleansServicesTasksAndProcesses(t *testing.T) {
+	for _, runtimeMode := range []string{"asuser", "service"} {
+		t.Run(runtimeMode, func(t *testing.T) {
+			h := newDeployHarness(t)
+			h.cfg.RuntimeMode = runtimeMode
+			events := []string{}
+			runner := testRunner{events: &events}
+			manager := newServiceManager(h.cfg, runner)
+
+			if err := manager.PrepareInstall(context.Background(), true); err != nil {
+				t.Fatalf("PrepareInstall: %v", err)
+			}
+
+			assertEventsContainInOrder(t, events, "Stop-ScheduledTask")
+			assertEventsContainInOrder(t, events, "Unregister-ScheduledTask")
+			assertEventsContainInOrder(t, events, "Stop-Service")
+			assertEventsContainInOrder(t, events, "sc.exe delete")
+			assertEventsContainInOrder(t, events, "Get-CimInstance Win32_Process")
+			assertEventsContainInOrder(t, events, "Stop-Process")
+			for _, needle := range []string{"wheelmaker.exe", "wheelmaker-monitor.exe", "wheelmaker-updater.exe"} {
+				assertEventsContainInOrder(t, events, needle)
+			}
+		})
+	}
+}
+
 func TestWindowsDeployPrerequisitesRelaunchesUnelevatedServiceWork(t *testing.T) {
 	h := newDeployHarness(t)
 	h.cfg.RuntimeMode = "service"

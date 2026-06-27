@@ -27,6 +27,10 @@ func (serviceManager) Stop(context.Context, bool) error {
 	return errors.New("services are unsupported on this platform")
 }
 
+func (serviceManager) PrepareInstall(context.Context, bool) error {
+	return errors.New("services are unsupported on this platform")
+}
+
 func (serviceManager) Restart(context.Context, bool) error {
 	return errors.New("services are unsupported on this platform")
 }

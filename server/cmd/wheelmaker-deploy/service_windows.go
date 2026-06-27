@@ -107,6 +107,21 @@ func (m serviceManager) Stop(ctx context.Context, includeUpdater bool) error {
 	return nil
 }
 
+func (m serviceManager) PrepareInstall(ctx context.Context, includeUpdater bool) error {
+	deleteRegistrations := !m.cfg.NoConfig
+	names := windowsRuntimeNames()
+	processNames := windowsRuntimeProcessNames()
+	if !deleteRegistrations {
+		names = m.serviceNames(includeUpdater)
+		processNames = windowsRuntimeProcessNamesForServices(names)
+	}
+	script := windowsPrepareInstallScript(names, processNames, m.cfg.InstallDir, deleteRegistrations)
+	if _, err := m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script); err != nil {
+		return fmt.Errorf("prepare Windows install: %w", err)
+	}
+	return nil
+}
+
 func (m serviceManager) Restart(ctx context.Context, includeUpdater bool) error {
 	if err := m.Stop(ctx, includeUpdater); err != nil {
 		return err
@@ -435,12 +450,104 @@ func windowsRuntimeNames() []string {
 	return []string{windowsHubService, windowsMonitorService, windowsUpdaterService}
 }
 
+func windowsRuntimeProcessNames() []string {
+	return []string{"wheelmaker.exe", "wheelmaker-monitor.exe", "wheelmaker-updater.exe"}
+}
+
+func windowsRuntimeProcessNamesForServices(serviceNames []string) []string {
+	out := make([]string, 0, len(serviceNames))
+	for _, name := range serviceNames {
+		switch name {
+		case windowsHubService:
+			out = append(out, "wheelmaker.exe")
+		case windowsMonitorService:
+			out = append(out, "wheelmaker-monitor.exe")
+		case windowsUpdaterService:
+			out = append(out, "wheelmaker-updater.exe")
+		}
+	}
+	return out
+}
+
 func windowsPSStringArray(values []string) string {
 	quoted := make([]string, 0, len(values))
 	for _, value := range values {
 		quoted = append(quoted, psQuote(value))
 	}
 	return "@(" + strings.Join(quoted, ", ") + ")"
+}
+
+func windowsPrepareInstallScript(serviceNames []string, processNames []string, installDir string, deleteRegistrations bool) string {
+	return fmt.Sprintf(`$ErrorActionPreference = 'Stop'
+$names = %s
+$processNames = %s
+$installDir = %s
+$deleteRegistrations = %s
+
+function Test-WheelMakerInstallProcess($process) {
+  $install = [string]$installDir
+  if ([string]::IsNullOrWhiteSpace($install)) {
+    return $false
+  }
+  $install = ($install.TrimEnd('\') + '\').ToLowerInvariant()
+  $exe = [string]$process.ExecutablePath
+  if (-not [string]::IsNullOrWhiteSpace($exe) -and $exe.ToLowerInvariant().StartsWith($install)) {
+    return $true
+  }
+  $cmd = [string]$process.CommandLine
+  return -not [string]::IsNullOrWhiteSpace($cmd) -and $cmd.ToLowerInvariant().Contains($install)
+}
+
+function Remove-WheelMakerService([string]$name) {
+  $service = Get-Service -Name $name -ErrorAction SilentlyContinue
+  if ($null -eq $service) {
+    return
+  }
+  if ($service.Status -ne 'Stopped') {
+    Stop-Service -Name $name -Force -ErrorAction Stop
+  }
+  if (-not $deleteRegistrations) {
+    return
+  }
+  sc.exe delete $name | Out-Null
+  for ($i = 0; $i -lt 30; $i++) {
+    Start-Sleep -Milliseconds 200
+    if ($null -eq (Get-Service -Name $name -ErrorAction SilentlyContinue)) {
+      return
+    }
+  }
+  throw "Timed out deleting service $name"
+}
+
+foreach ($name in $names) {
+  Stop-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+  if ($deleteRegistrations) {
+    Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction SilentlyContinue
+  }
+  Remove-WheelMakerService $name
+}
+
+$procs = @(Get-CimInstance Win32_Process | Where-Object { $processNames -contains $_.Name -and (Test-WheelMakerInstallProcess $_) })
+foreach ($proc in $procs) {
+  Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+}
+
+$deadline = (Get-Date).AddSeconds(10)
+while ((Get-Date) -lt $deadline) {
+  $remaining = @(Get-CimInstance Win32_Process | Where-Object { $processNames -contains $_.Name -and (Test-WheelMakerInstallProcess $_) })
+  if ($remaining.Count -eq 0) {
+    exit 0
+  }
+  Start-Sleep -Milliseconds 200
+}
+throw "Timed out stopping WheelMaker runtime processes"`, windowsPSStringArray(serviceNames), windowsPSStringArray(processNames), psQuote(filepath.Clean(installDir)), windowsPSBool(deleteRegistrations))
+}
+
+func windowsPSBool(value bool) string {
+	if value {
+		return "$true"
+	}
+	return "$false"
 }
 
 func psQuote(value string) string {

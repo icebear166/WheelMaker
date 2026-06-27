@@ -152,6 +152,14 @@ func (s testServices) Stop(_ context.Context, includeUpdater bool) error {
 	}
 	return nil
 }
+func (s testServices) PrepareInstall(_ context.Context, includeUpdater bool) error {
+	if includeUpdater {
+		*s.events = append(*s.events, "service prepare install all")
+	} else {
+		*s.events = append(*s.events, "service prepare install hub-monitor")
+	}
+	return nil
+}
 func (s testServices) Restart(context.Context, bool) error { return nil }
 func (s testServices) Status(context.Context) error        { return nil }
 
@@ -208,7 +216,7 @@ func TestDeployPipelineOrder(t *testing.T) {
 		"go build wheelmaker-updater",
 		"go build wheelmaker-deploy",
 		"npm run build:web:release",
-		"service stop all",
+		"service prepare install all",
 		"install wheelmaker",
 		"install wheelmaker-monitor",
 		"install wheelmaker-updater",

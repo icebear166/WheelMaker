@@ -79,6 +79,10 @@ func (m serviceManager) Stop(ctx context.Context, includeUpdater bool) error {
 	return nil
 }
 
+func (m serviceManager) PrepareInstall(ctx context.Context, includeUpdater bool) error {
+	return m.Stop(ctx, includeUpdater)
+}
+
 func (m serviceManager) Restart(ctx context.Context, includeUpdater bool) error {
 	if err := m.Stop(ctx, includeUpdater); err != nil {
 		return err
