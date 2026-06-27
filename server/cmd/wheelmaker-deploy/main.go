@@ -516,33 +516,44 @@ func buildBinaries(ctx context.Context, cfg deployConfig, deps deployDeps, inclu
 		return nil
 	}
 	builds := []struct {
-		label string
-		pkg   string
+		label      string
+		pkg        string
+		windowsGUI bool
 	}{
-		{"wheelmaker", "./cmd/wheelmaker"},
-		{"wheelmaker-monitor", "./cmd/wheelmaker-monitor"},
+		{"wheelmaker", "./cmd/wheelmaker", true},
+		{"wheelmaker-monitor", "./cmd/wheelmaker-monitor", true},
 	}
 	if includeUpdater {
 		builds = append(builds, struct {
-			label string
-			pkg   string
-		}{"wheelmaker-updater", "./cmd/wheelmaker-updater"})
+			label      string
+			pkg        string
+			windowsGUI bool
+		}{"wheelmaker-updater", "./cmd/wheelmaker-updater", true})
 	}
 	builds = append(builds, struct {
-		label string
-		pkg   string
-	}{"wheelmaker-deploy", "./cmd/wheelmaker-deploy"})
+		label      string
+		pkg        string
+		windowsGUI bool
+	}{"wheelmaker-deploy", "./cmd/wheelmaker-deploy", false})
 	for _, build := range builds {
 		out := filepath.Join(cfg.BuildRoot, binaryName(build.label))
 		if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 			return fmt.Errorf("create build dir: %w", err)
 		}
 		deps.report("building %s -> %s", build.label, out)
-		if _, err := deps.Runner.Run(ctx, filepath.Join(cfg.RepoRoot, "server"), "go", "build", "-o", out, build.pkg); err != nil {
+		if _, err := deps.Runner.Run(ctx, filepath.Join(cfg.RepoRoot, "server"), "go", goBuildArgs(out, build.pkg, build.windowsGUI)...); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func goBuildArgs(out string, pkg string, windowsGUI bool) []string {
+	args := []string{"build"}
+	if runtime.GOOS == "windows" && windowsGUI {
+		args = append(args, "-ldflags", "-H windowsgui")
+	}
+	return append(args, "-o", out, pkg)
 }
 
 func publishWeb(ctx context.Context, cfg deployConfig, deps deployDeps) error {

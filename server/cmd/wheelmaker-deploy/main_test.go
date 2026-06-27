@@ -110,11 +110,12 @@ func (r testRunner) Run(_ context.Context, dir string, name string, args ...stri
 	case name == "npm":
 		*r.events = append(*r.events, "npm "+strings.Join(args, " "))
 	case name == "go" && len(args) >= 4 && args[0] == "build":
-		*r.events = append(*r.events, "go build "+buildLabelFromOutput(args[2]))
-		if err := os.MkdirAll(filepath.Dir(args[2]), 0o755); err != nil {
+		out := goBuildOutputArgForTest(args)
+		*r.events = append(*r.events, "go build "+buildLabelFromOutput(out))
+		if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 			return "", err
 		}
-		if err := os.WriteFile(args[2], []byte(buildLabelFromOutput(args[2])), 0o755); err != nil {
+		if err := os.WriteFile(out, []byte(buildLabelFromOutput(out)), 0o755); err != nil {
 			return "", err
 		}
 	case strings.Contains(filepath.Base(name), "wheelmaker-deploy-next"):
@@ -162,6 +163,20 @@ func (s testServices) PrepareInstall(_ context.Context, includeUpdater bool) err
 }
 func (s testServices) Restart(context.Context, bool) error { return nil }
 func (s testServices) Status(context.Context) error        { return nil }
+
+type capturedCommand struct {
+	name string
+	args []string
+}
+
+type captureBuildRunner struct {
+	calls *[]capturedCommand
+}
+
+func (r captureBuildRunner) Run(_ context.Context, _ string, name string, args ...string) (string, error) {
+	*r.calls = append(*r.calls, capturedCommand{name: name, args: append([]string(nil), args...)})
+	return "", nil
+}
 
 type deployHarness struct {
 	home   string
@@ -259,6 +274,28 @@ func TestDeployReportsBuildProgress(t *testing.T) {
 		"starting services",
 		"cleaning deploy artifacts",
 	)
+}
+
+func TestWindowsRuntimeBinariesBuildWithoutConsoleWindows(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows subsystem flags only apply on Windows")
+	}
+	h := newDeployHarness(t)
+	var calls []capturedCommand
+	deps := h.deps
+	deps.Runner = captureBuildRunner{calls: &calls}
+
+	if err := buildBinaries(context.Background(), h.cfg, deps, true); err != nil {
+		t.Fatalf("buildBinaries: %v", err)
+	}
+
+	for _, label := range []string{"wheelmaker", "wheelmaker-monitor", "wheelmaker-updater"} {
+		args := findBuildArgsForLabel(t, calls, label)
+		assertStringSliceContains(t, args, "-ldflags")
+		assertStringSliceContains(t, args, "-H windowsgui")
+	}
+	deployArgs := findBuildArgsForLabel(t, calls, "wheelmaker-deploy")
+	assertStringSliceDoesNotContain(t, deployArgs, "-H windowsgui")
 }
 
 func TestUpdatePipelineSkipsUpdaterAndConfig(t *testing.T) {
@@ -553,6 +590,49 @@ func buildLabelFromOutput(out string) string {
 		return "wheelmaker-deploy-next"
 	}
 	return base
+}
+
+func goBuildOutputArgForTest(args []string) string {
+	for i := 0; i < len(args)-1; i++ {
+		if args[i] == "-o" {
+			return args[i+1]
+		}
+	}
+	return ""
+}
+
+func findBuildArgsForLabel(t *testing.T, calls []capturedCommand, label string) []string {
+	t.Helper()
+	for _, call := range calls {
+		if call.name != "go" || len(call.args) == 0 || call.args[0] != "build" {
+			continue
+		}
+		out := goBuildOutputArgForTest(call.args)
+		if out != "" && buildLabelFromOutput(out) == label {
+			return call.args
+		}
+	}
+	t.Fatalf("missing go build for %s in %#v", label, calls)
+	return nil
+}
+
+func assertStringSliceContains(t *testing.T, values []string, needle string) {
+	t.Helper()
+	for _, value := range values {
+		if value == needle {
+			return
+		}
+	}
+	t.Fatalf("%#v missing %q", values, needle)
+}
+
+func assertStringSliceDoesNotContain(t *testing.T, values []string, needle string) {
+	t.Helper()
+	for _, value := range values {
+		if value == needle {
+			t.Fatalf("%#v should not contain %q", values, needle)
+		}
+	}
 }
 
 func cmpStringSlices(got []string, want []string) string {
