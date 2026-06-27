@@ -11,6 +11,7 @@ const (
 	desktopGetWebSourceBinding   = "__wheelMakerDesktopGetWebSourceState"
 	desktopSetWebSourceBinding   = "__wheelMakerDesktopSetWebSourcePreference"
 	desktopSetRemoteWebBinding   = "__wheelMakerDesktopSetRemoteWebCandidate"
+	desktopSetRemoteDebugBinding = "__wheelMakerDesktopSetRemoteDebugEnabled"
 )
 
 func desktopRuntimeInitScript() string {
@@ -31,6 +32,7 @@ func desktopRuntimeInitScript() string {
     getWebSourceState: invoke('` + desktopGetWebSourceBinding + `'),
     setWebSourcePreference: invoke('` + desktopSetWebSourceBinding + `'),
     setRemoteWebCandidate: invoke('` + desktopSetRemoteWebBinding + `'),
+    setRemoteDebugEnabled: invoke('` + desktopSetRemoteDebugBinding + `'),
   });
 })();`
 }

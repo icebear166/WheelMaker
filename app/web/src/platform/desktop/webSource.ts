@@ -30,6 +30,15 @@ export async function setDesktopWebSourcePreference(preference: 'auto' | 'embedd
   return Promise.resolve(setPreference(preference)).catch(() => null);
 }
 
+export async function setDesktopRemoteDebugEnabled(enabled: boolean): Promise<DesktopWebSourceState | null> {
+  const bridge = getNativeWebSourceBridge();
+  const setRemoteDebugEnabled = bridge?.setRemoteDebugEnabled;
+  if (!setRemoteDebugEnabled) {
+    return null;
+  }
+  return Promise.resolve(setRemoteDebugEnabled(enabled)).catch(() => null);
+}
+
 export function submitDesktopRemoteWebCandidate(registryAddress: string): void {
   const bridge = getNativeWebSourceBridge();
   const submit = bridge?.setRemoteWebCandidate;

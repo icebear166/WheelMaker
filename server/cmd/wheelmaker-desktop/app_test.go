@@ -58,6 +58,25 @@ func TestRunDesktopAppLaunchesWithCustomTitleBarAndIcon(t *testing.T) {
 	if launcher.opts.ThemeColor != desktopTitleBarThemeColor {
 		t.Fatalf("ThemeColor=%q, want %q", launcher.opts.ThemeColor, desktopTitleBarThemeColor)
 	}
+	if launcher.opts.RemoteDebugEnabled {
+		t.Fatal("remote debug should be disabled by default")
+	}
+}
+
+func TestDesktopWindowOptionsUseRemoteDebugConfig(t *testing.T) {
+	runtime := newDesktopWebSourceRuntime(&memoryDesktopWebSourceConfigStore{config: desktopWebSourceConfig{
+		WebSourcePreference: desktopWebSourcePreferenceAuto,
+		RemoteDebugEnabled:  true,
+	}}, nil)
+
+	opts := desktopWindowOptionsForWebSource(runtime)
+
+	if !opts.RemoteDebugEnabled {
+		t.Fatal("expected remote debug launch option to be enabled")
+	}
+	if opts.RemoteDebugPort != desktopRemoteDebugPort {
+		t.Fatalf("RemoteDebugPort=%d, want %d", opts.RemoteDebugPort, desktopRemoteDebugPort)
+	}
 }
 
 func TestRunDesktopAppReturnsActionableWebViewError(t *testing.T) {
@@ -99,6 +118,7 @@ func TestDesktopRuntimeInitScriptExposesWindowBridge(t *testing.T) {
 		desktopGetWebSourceBinding,
 		desktopSetWebSourceBinding,
 		desktopSetRemoteWebBinding,
+		desktopSetRemoteDebugBinding,
 	} {
 		if !strings.Contains(script, want) {
 			t.Fatalf("desktop runtime init script missing %q: %s", want, script)
@@ -447,6 +467,31 @@ func TestDesktopWebSourcePreferencePersistsWithoutClearingRemoteURL(t *testing.T
 	}
 	if state.ActualSource != desktopWebSourceActualEmbedded {
 		t.Fatalf("ActualSource=%q", state.ActualSource)
+	}
+}
+
+func TestDesktopRemoteDebugSettingPersistsAndReturnsStatus(t *testing.T) {
+	store := &memoryDesktopWebSourceConfigStore{config: desktopWebSourceConfig{
+		WebSourcePreference: desktopWebSourcePreferenceAuto,
+	}}
+	runtime := newDesktopWebSourceRuntime(store, nil)
+
+	state, err := runtime.SetRemoteDebugEnabled(true)
+	if err != nil {
+		t.Fatalf("SetRemoteDebugEnabled: %v", err)
+	}
+
+	if !store.saved.RemoteDebugEnabled {
+		t.Fatal("RemoteDebugEnabled should be persisted")
+	}
+	if !state.RemoteDebugEnabled {
+		t.Fatal("RemoteDebugEnabled should be reflected in state")
+	}
+	if state.RemoteDebugPort != desktopRemoteDebugPort {
+		t.Fatalf("RemoteDebugPort=%d, want %d", state.RemoteDebugPort, desktopRemoteDebugPort)
+	}
+	if state.RemoteDebugURL != "http://127.0.0.1:9222/" {
+		t.Fatalf("RemoteDebugURL=%q", state.RemoteDebugURL)
 	}
 }
 

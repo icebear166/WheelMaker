@@ -33,6 +33,7 @@ import { DesktopTitleBar } from '../shell/layouts/desktop/DesktopTitleBar';
 import {resolveDesktopChatQuickSwitchContextMenu} from '../shell/layouts/desktop/chatQuickSwitchContextMenu';
 import {
   readDesktopWebSourceState,
+  setDesktopRemoteDebugEnabled as persistDesktopRemoteDebugEnabled,
   submitDesktopRemoteWebCandidate,
   type DesktopWebSourceState,
 } from '../platform/desktop/webSource';
@@ -5850,6 +5851,18 @@ export function App() {
       cancelled = true;
     };
   }, [sidebarSettingsOpen, settingsDetailView]);
+
+  const handleDesktopRemoteDebugEnabledChange = useCallback((enabled: boolean) => {
+    setWebSourceState(current => current ? {
+      ...current,
+      remoteDebugEnabled: enabled,
+    } : current);
+    persistDesktopRemoteDebugEnabled(enabled).then(state => {
+      if (state) {
+        setWebSourceState(state);
+      }
+    }).catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     workspaceStore.rememberGlobalState({
@@ -15741,6 +15754,10 @@ export function App() {
         setLogLevel={setLogLevel}
         disableFileCache={disableFileCache}
         setDisableFileCache={setDisableFileCache}
+        desktopRemoteDebugAvailable={Boolean(getNativeWebSourceBridge()?.setRemoteDebugEnabled)}
+        desktopRemoteDebugEnabled={webSourceState?.remoteDebugEnabled === true}
+        desktopRemoteDebugPort={webSourceState?.remoteDebugPort ?? 9222}
+        setDesktopRemoteDebugEnabled={handleDesktopRemoteDebugEnabledChange}
         requestClearLocalCache={requestClearLocalCache}
         handleRegistryDebugLogout={handleRegistryDebugLogout}
       />

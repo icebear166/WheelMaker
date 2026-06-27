@@ -1,5 +1,6 @@
 import {
   inferDesktopRemoteWebCandidate,
+  setDesktopRemoteDebugEnabled,
   submitDesktopRemoteWebCandidate,
 } from '../web/src/platform/desktop/webSource';
 
@@ -41,6 +42,34 @@ describe('desktop web source', () => {
         registryAddress: 'ws://127.0.0.1:9630/ws',
         remoteWebUrl: '',
       });
+    } finally {
+      (global as typeof globalThis & { window?: unknown }).window = originalWindow;
+    }
+  });
+
+  test('persists desktop remote debug setting through the desktop bridge', async () => {
+    const originalWindow = (global as typeof globalThis & { window?: unknown }).window;
+    const state = {
+      preference: 'auto',
+      actualSource: 'embedded',
+      displayTitle: 'WheelMaker - Embedded',
+      displaySource: 'Embedded',
+      remoteUrl: '',
+      remoteHost: '',
+      remoteDebugEnabled: true,
+      remoteDebugPort: 9222,
+      remoteDebugUrl: 'http://127.0.0.1:9222/',
+    };
+    const setRemoteDebugEnabled = jest.fn(async () => state);
+    (global as typeof globalThis & { window?: unknown }).window = {
+      WheelMakerDesktop: {
+        enabled: true,
+        setRemoteDebugEnabled,
+      },
+    };
+    try {
+      await expect(setDesktopRemoteDebugEnabled(true)).resolves.toEqual(state);
+      expect(setRemoteDebugEnabled).toHaveBeenCalledWith(true);
     } finally {
       (global as typeof globalThis & { window?: unknown }).window = originalWindow;
     }

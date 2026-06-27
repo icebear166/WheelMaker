@@ -9,14 +9,16 @@ import (
 var errWebView2Unavailable = errors.New("Microsoft Edge WebView2 Runtime is required to run WheelMaker Desktop")
 
 type desktopWindowOptions struct {
-	Title          string
-	Width          uint
-	Height         uint
-	Debug          bool
-	IconID         uint
-	CustomTitleBar bool
-	ThemeColor     string
-	WebSource      *desktopWebSourceRuntime
+	Title              string
+	Width              uint
+	Height             uint
+	Debug              bool
+	RemoteDebugEnabled bool
+	RemoteDebugPort    int
+	IconID             uint
+	CustomTitleBar     bool
+	ThemeColor         string
+	WebSource          *desktopWebSourceRuntime
 }
 
 type desktopLauncher interface {
@@ -38,15 +40,7 @@ func runDesktopAppWithWebSource(assets fs.FS, launcher desktopLauncher, webSourc
 	}
 	defer srv.Close()
 
-	opts := desktopWindowOptions{
-		Title:          webSource.WindowTitle(),
-		Width:          1280,
-		Height:         840,
-		IconID:         desktopResourceIconID,
-		CustomTitleBar: true,
-		ThemeColor:     desktopTitleBarThemeColor,
-		WebSource:      webSource,
-	}
+	opts := desktopWindowOptionsForWebSource(webSource)
 	if err := launcher.Launch(srv.URL(), opts); err != nil {
 		if errors.Is(err, errWebView2Unavailable) {
 			return fmt.Errorf("%w. Install it from https://developer.microsoft.com/microsoft-edge/webview2/", err)
@@ -54,4 +48,22 @@ func runDesktopAppWithWebSource(assets fs.FS, launcher desktopLauncher, webSourc
 		return err
 	}
 	return nil
+}
+
+func desktopWindowOptionsForWebSource(webSource *desktopWebSourceRuntime) desktopWindowOptions {
+	if webSource == nil {
+		webSource = newEmbeddedOnlyDesktopWebSourceRuntime()
+	}
+	state := webSource.State()
+	return desktopWindowOptions{
+		Title:              state.DisplayTitle,
+		RemoteDebugEnabled: state.RemoteDebugEnabled,
+		RemoteDebugPort:    state.RemoteDebugPort,
+		Width:              1280,
+		Height:             840,
+		IconID:             desktopResourceIconID,
+		CustomTitleBar:     true,
+		ThemeColor:         desktopTitleBarThemeColor,
+		WebSource:          webSource,
+	}
 }

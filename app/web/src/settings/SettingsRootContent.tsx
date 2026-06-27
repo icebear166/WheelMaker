@@ -67,6 +67,10 @@ type SettingsRootContentProps = {
   setLogLevel: (value: AppDiagnosticLogLevel) => void;
   disableFileCache: boolean;
   setDisableFileCache: (value: boolean) => void;
+  desktopRemoteDebugAvailable: boolean;
+  desktopRemoteDebugEnabled: boolean;
+  desktopRemoteDebugPort: number;
+  setDesktopRemoteDebugEnabled: (value: boolean) => void;
   requestClearLocalCache: () => void;
   handleRegistryDebugLogout: () => void;
 };
@@ -128,6 +132,10 @@ export function SettingsRootContent({
   setLogLevel,
   disableFileCache,
   setDisableFileCache,
+  desktopRemoteDebugAvailable,
+  desktopRemoteDebugEnabled,
+  desktopRemoteDebugPort,
+  setDesktopRemoteDebugEnabled,
   requestClearLocalCache,
   handleRegistryDebugLogout,
 }: SettingsRootContentProps) {
@@ -575,6 +583,26 @@ export function SettingsRootContent({
             onChange={event => setDisableFileCache(event.target.checked)}
           />
         </label>
+        {desktopRemoteDebugAvailable ? (
+          <div className="voice-input-settings-menu">
+            <label className="settings-row sidebar-setting-row">
+              <span>
+                <span className="codicon codicon-debug-alt settings-row-icon" aria-hidden="true" />
+                WebView2 Remote Debug
+              </span>
+              <input
+                type="checkbox"
+                checked={desktopRemoteDebugEnabled}
+                onChange={event => setDesktopRemoteDebugEnabled(event.target.checked)}
+              />
+            </label>
+            {desktopRemoteDebugEnabled ? (
+              <div className="voice-input-settings-nested">
+                <div className="settings-metadata-line">Port {desktopRemoteDebugPort || 9222} after restart</div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <button
           type="button"
           className="settings-row settings-detail-row"

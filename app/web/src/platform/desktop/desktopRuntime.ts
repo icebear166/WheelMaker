@@ -8,6 +8,9 @@ export type DesktopWebSourceState = {
   displaySource: string;
   remoteUrl: string;
   remoteHost: string;
+  remoteDebugEnabled?: boolean;
+  remoteDebugPort?: number;
+  remoteDebugUrl?: string;
 };
 
 export type DesktopRemoteWebCandidate = {
@@ -28,6 +31,9 @@ export type DesktopWindowBridge = {
   ) => Promise<DesktopWebSourceState> | DesktopWebSourceState;
   setRemoteWebCandidate?: (
     candidate: DesktopRemoteWebCandidate,
+  ) => Promise<DesktopWebSourceState> | DesktopWebSourceState;
+  setRemoteDebugEnabled?: (
+    enabled: boolean,
   ) => Promise<DesktopWebSourceState> | DesktopWebSourceState;
 };
 

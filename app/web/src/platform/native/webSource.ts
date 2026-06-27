@@ -9,6 +9,9 @@ export type NativeWebSourceState = {
   displaySource: string;
   remoteUrl: string;
   remoteHost: string;
+  remoteDebugEnabled?: boolean;
+  remoteDebugPort?: number;
+  remoteDebugUrl?: string;
 };
 
 export type NativeRemoteWebCandidate = {
@@ -45,6 +48,9 @@ export type NativeWebSourceBridge = {
   ) => Promise<NativeWebSourceState> | NativeWebSourceState;
   setRemoteWebCandidate?: (
     candidate: NativeRemoteWebCandidate,
+  ) => Promise<NativeWebSourceState> | NativeWebSourceState;
+  setRemoteDebugEnabled?: (
+    enabled: boolean,
   ) => Promise<NativeWebSourceState> | NativeWebSourceState;
   drainWebDiagnostics?: () => Promise<NativeWebDiagnosticsPayload> | NativeWebDiagnosticsPayload;
   setDiagnosticLogLevel?: (

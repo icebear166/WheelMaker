@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -18,12 +19,15 @@ const (
 
 	desktopWebSourceActualEmbedded = "embedded"
 	desktopWebSourceActualRemote   = "remote"
+
+	desktopRemoteDebugPort = 9222
 )
 
 type desktopWebSourceConfig struct {
 	WebSourcePreference     string `json:"webSourcePreference"`
 	RemoteWebURL            string `json:"remoteWebUrl,omitempty"`
 	RemoteWebRegistryOrigin string `json:"remoteWebRegistryOrigin,omitempty"`
+	RemoteDebugEnabled      bool   `json:"remoteDebugEnabled,omitempty"`
 }
 
 type desktopRemoteWebCandidate struct {
@@ -33,12 +37,15 @@ type desktopRemoteWebCandidate struct {
 }
 
 type desktopWebSourceState struct {
-	Preference    string `json:"preference"`
-	ActualSource  string `json:"actualSource"`
-	DisplayTitle  string `json:"displayTitle"`
-	DisplaySource string `json:"displaySource"`
-	RemoteURL     string `json:"remoteUrl"`
-	RemoteHost    string `json:"remoteHost"`
+	Preference         string `json:"preference"`
+	ActualSource       string `json:"actualSource"`
+	DisplayTitle       string `json:"displayTitle"`
+	DisplaySource      string `json:"displaySource"`
+	RemoteURL          string `json:"remoteUrl"`
+	RemoteHost         string `json:"remoteHost"`
+	RemoteDebugEnabled bool   `json:"remoteDebugEnabled"`
+	RemoteDebugPort    int    `json:"remoteDebugPort"`
+	RemoteDebugURL     string `json:"remoteDebugUrl"`
 }
 
 type desktopWebSourceConfigStore interface {
@@ -167,6 +174,16 @@ func (r *desktopWebSourceRuntime) SetRemoteCandidate(candidate desktopRemoteWebC
 	return desktopWebSourceStateForConfig(r.config, r.actual, r.actualRemoteURL), nil
 }
 
+func (r *desktopWebSourceRuntime) SetRemoteDebugEnabled(enabled bool) (desktopWebSourceState, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.config.RemoteDebugEnabled = enabled
+	if err := r.store.Save(r.config); err != nil {
+		return desktopWebSourceState{}, err
+	}
+	return desktopWebSourceStateForConfig(r.config, r.actual, r.actualRemoteURL), nil
+}
+
 func (r *desktopWebSourceRuntime) SetActualSource(actual string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -283,13 +300,23 @@ func desktopWebSourceStateForConfig(config desktopWebSourceConfig, actual string
 		actual = desktopWebSourceActualEmbedded
 	}
 	return desktopWebSourceState{
-		Preference:    config.WebSourcePreference,
-		ActualSource:  actual,
-		DisplayTitle:  "WheelMaker - " + displaySource,
-		DisplaySource: displaySource,
-		RemoteURL:     config.RemoteWebURL,
-		RemoteHost:    remoteHost,
+		Preference:         config.WebSourcePreference,
+		ActualSource:       actual,
+		DisplayTitle:       "WheelMaker - " + displaySource,
+		DisplaySource:      displaySource,
+		RemoteURL:          config.RemoteWebURL,
+		RemoteHost:         remoteHost,
+		RemoteDebugEnabled: config.RemoteDebugEnabled,
+		RemoteDebugPort:    desktopRemoteDebugPort,
+		RemoteDebugURL:     desktopRemoteDebugURL(desktopRemoteDebugPort),
 	}
+}
+
+func desktopRemoteDebugURL(port int) string {
+	if port <= 0 {
+		port = desktopRemoteDebugPort
+	}
+	return "http://127.0.0.1:" + strconv.Itoa(port) + "/"
 }
 
 func normalizeDesktopRemoteWebCandidate(candidate desktopRemoteWebCandidate) (string, string, bool) {

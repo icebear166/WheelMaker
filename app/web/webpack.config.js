@@ -121,7 +121,7 @@ module.exports = (_env = {}, argv = {}) => {
     optimization: {
       minimizer: [new TerserPlugin({ parallel: false })],
     },
-    devtool: isProduction && !envFlag(process.env.WHEELMAKER_WEB_SOURCEMAP)
+    devtool: isProduction && envFlag(process.env.WHEELMAKER_WEB_DISABLE_SOURCEMAP)
       ? false
       : 'source-map',
   };
