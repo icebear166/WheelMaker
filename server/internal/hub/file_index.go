@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sahilm/fuzzy"
+	"github.com/swm8023/wheelmaker/internal/shared"
 )
 
 const (
@@ -699,6 +700,7 @@ func (s projectFileIndexSnapshot) releaseLoadedData() projectFileIndexSnapshot {
 
 func scanGitProjectFileIndex(ctx context.Context, root string) ([]string, error) {
 	cmd := exec.CommandContext(ctx, "git", "ls-files", "--cached", "--others", "--exclude-standard")
+	shared.ConfigureBackgroundCommand(cmd)
 	cmd.Dir = root
 	out, err := cmd.Output()
 	if err != nil {

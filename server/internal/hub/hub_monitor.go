@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/swm8023/wheelmaker/internal/shared"
 	_ "modernc.org/sqlite"
 )
 
@@ -54,7 +55,9 @@ func (c *MonitorCore) GetServiceStatus() (*ServiceStatus, error) {
 func listWheelmakerProcesses() ([]ProcessInfo, error) {
 	if runtime.GOOS == "windows" {
 		script := `Get-CimInstance Win32_Process -Filter "Name='wheelmaker.exe'" | Select-Object ProcessId,CommandLine,@{Name='StartedAt';Expression={[System.Management.ManagementDateTimeConverter]::ToDateTime($_.CreationDate).ToString('MM-dd HH:mm')}} | ConvertTo-Json -Compress`
-		out, err := exec.Command("powershell", "-NoProfile", "-Command", script).Output()
+		cmd := exec.Command("powershell", "-NoProfile", "-Command", script)
+		shared.ConfigureBackgroundCommand(cmd)
+		out, err := cmd.Output()
 		if err != nil {
 			return nil, err
 		}
@@ -87,7 +90,9 @@ func listWheelmakerProcesses() ([]ProcessInfo, error) {
 		}
 		return outProcs, nil
 	}
-	out, err := exec.Command("ps", "-eo", "pid=,lstart=,args=").Output()
+	cmd := exec.Command("ps", "-eo", "pid=,lstart=,args=")
+	shared.ConfigureBackgroundCommand(cmd)
+	out, err := cmd.Output()
 	if err != nil {
 		return nil, err
 	}

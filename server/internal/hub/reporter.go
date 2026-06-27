@@ -30,6 +30,7 @@ import (
 	"github.com/swm8023/wheelmaker/internal/hub/tools"
 	"github.com/swm8023/wheelmaker/internal/portrelay"
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
+	"github.com/swm8023/wheelmaker/internal/shared"
 )
 
 const (
@@ -164,9 +165,9 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 		fileIndex:    newProjectFileIndexManager(monitorBase),
 	}
 	r.toolHandler = tools.NewManager(tools.ManagerConfig{
-		HubID:          cfg.HubID,
-		Projects:       cp,
-		MonitorBaseDir: monitorBase,
+		HubID:                 cfg.HubID,
+		Projects:              cp,
+		MonitorBaseDir:        monitorBase,
 		OnSkillsOperationDone: r.refreshSkillsAgentProfiles,
 	})
 	r.hubStateManager = newHubStateManager(r.cfg.HubID, r.hubStateSectionHandlers())
@@ -1332,9 +1333,9 @@ func (r *Reporter) ensureToolHandler() toolCommandHandler {
 		return r.toolHandler
 	}
 	r.toolHandler = tools.NewManager(tools.ManagerConfig{
-		HubID:          r.cfg.HubID,
-		Projects:       r.projectsSnapshot(),
-		MonitorBaseDir: r.cfg.MonitorBaseDir,
+		HubID:                 r.cfg.HubID,
+		Projects:              r.projectsSnapshot(),
+		MonitorBaseDir:        r.cfg.MonitorBaseDir,
 		OnSkillsOperationDone: r.refreshSkillsAgentProfiles,
 	})
 	return r.toolHandler
@@ -2705,6 +2706,7 @@ func newLocalReadEndpointID(hubID string) (string, error) {
 
 func runGit(root string, args ...string) (string, error) {
 	cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
+	shared.ConfigureBackgroundCommand(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("git %s: %s", strings.Join(args, " "), strings.TrimSpace(string(out)))

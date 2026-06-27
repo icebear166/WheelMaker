@@ -18,6 +18,7 @@ import (
 	"unicode"
 
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
+	"github.com/swm8023/wheelmaker/internal/shared"
 )
 
 var (
@@ -50,6 +51,7 @@ type execSkillsCommandRunner struct{}
 
 func (execSkillsCommandRunner) Run(ctx context.Context, dir string, name string, args ...string) skillsCommandResult {
 	cmd := exec.CommandContext(ctx, name, args...)
+	shared.ConfigureBackgroundCommand(cmd)
 	if strings.TrimSpace(dir) != "" {
 		cmd.Dir = dir
 	}
@@ -75,19 +77,19 @@ func (execSkillsCommandRunner) Run(ctx context.Context, dir string, name string,
 }
 
 type skillsCommandConfig struct {
-	HubID          string
-	Projects       []ProjectInfo
-	GlobalLockPath string
-	HomeDir        string
+	HubID           string
+	Projects        []ProjectInfo
+	GlobalLockPath  string
+	HomeDir         string
 	OnOperationDone func(scope, projectName string)
 }
 
 type SkillsCommand struct {
-	runner         skillsCommandRunner
-	now            func() time.Time
-	hubID          string
-	globalLockPath string
-	homeDir        string
+	runner          skillsCommandRunner
+	now             func() time.Time
+	hubID           string
+	globalLockPath  string
+	homeDir         string
 	onOperationDone func(scope, projectName string)
 
 	mu        sync.RWMutex
@@ -104,10 +106,10 @@ func newSkillsCommandWithRunner(runner skillsCommandRunner, config skillsCommand
 		runner = execSkillsCommandRunner{}
 	}
 	cmd := &SkillsCommand{
-		runner:         runner,
-		hubID:          strings.TrimSpace(config.HubID),
-		globalLockPath: strings.TrimSpace(config.GlobalLockPath),
-		homeDir:        strings.TrimSpace(config.HomeDir),
+		runner:          runner,
+		hubID:           strings.TrimSpace(config.HubID),
+		globalLockPath:  strings.TrimSpace(config.GlobalLockPath),
+		homeDir:         strings.TrimSpace(config.HomeDir),
 		onOperationDone: config.OnOperationDone,
 		now: func() time.Time {
 			return time.Now().UTC()

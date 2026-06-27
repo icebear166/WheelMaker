@@ -15,6 +15,7 @@ import (
 	"time"
 
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
+	"github.com/swm8023/wheelmaker/internal/shared"
 )
 
 const (
@@ -49,6 +50,7 @@ type execUpdateCommandRunner struct{}
 
 func (execUpdateCommandRunner) Run(ctx context.Context, dir string, name string, args ...string) updateCommandResult {
 	cmd := exec.CommandContext(ctx, name, args...)
+	shared.ConfigureBackgroundCommand(cmd)
 	cmd.Dir = dir
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/swm8023/wheelmaker/internal/protocol"
+	"github.com/swm8023/wheelmaker/internal/shared"
 )
 
 // ACPProcess is a transport-only subprocess channel for newline-delimited ACP JSON messages.
@@ -62,6 +63,7 @@ func (p *ACPProcess) SetDir(dir string) {
 // Start starts the subprocess transport.
 func (p *ACPProcess) Start() error {
 	cmd := exec.Command(p.exePath, p.exeArgs...)
+	shared.ConfigureBackgroundCommand(cmd)
 	cmd.Env = append(cmd.Environ(), p.env...)
 	if p.dir != "" {
 		cmd.Dir = p.dir

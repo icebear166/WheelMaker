@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/swm8023/wheelmaker/internal/shared"
 )
 
 func listWorkerProcesses(exeName, markerFlag string) ([]daemonProcess, error) {
@@ -19,7 +21,9 @@ func listWorkerProcesses(exeName, markerFlag string) ([]daemonProcess, error) {
 		markerFlag = daemonWorkerArg
 	}
 	script := fmt.Sprintf(`$p = Get-CimInstance Win32_Process -Filter "Name='%s'" | Where-Object { $_.CommandLine -match '%s' } | Select-Object ProcessId; if ($null -eq $p) { '[]' } else { $p | ConvertTo-Json -Compress }`, exeName, markerFlag)
-	out, err := exec.Command("powershell", "-NoProfile", "-Command", script).Output()
+	cmd := exec.Command("powershell", "-NoProfile", "-Command", script)
+	shared.ConfigureBackgroundCommand(cmd)
+	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("list workers: %w", err)
 	}

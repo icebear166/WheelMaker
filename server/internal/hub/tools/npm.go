@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
+	"github.com/swm8023/wheelmaker/internal/shared"
 )
 
 type npmCommandCall struct {
@@ -35,6 +36,7 @@ type execNPMCommandRunner struct{}
 
 func (execNPMCommandRunner) Run(ctx context.Context, name string, args ...string) npmCommandResult {
 	cmd := exec.CommandContext(ctx, name, args...)
+	shared.ConfigureBackgroundCommand(cmd)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout

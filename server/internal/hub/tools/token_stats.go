@@ -16,6 +16,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/swm8023/wheelmaker/internal/shared"
 )
 
 type deepSeekBalanceInfo struct {
@@ -1018,6 +1020,7 @@ func discoverGitHubTokenByCLI() string {
 			continue
 		}
 		cmd := exec.Command(bin, "auth", "token", "--hostname", "github.com")
+		shared.ConfigureBackgroundCommand(cmd)
 		output, err := cmd.Output()
 		if err != nil {
 			continue

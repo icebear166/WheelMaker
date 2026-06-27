@@ -15,6 +15,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/swm8023/wheelmaker/internal/shared"
 )
 
 type runMode string
@@ -59,6 +61,7 @@ type execRunner struct{}
 
 func (execRunner) Run(ctx context.Context, dir string, name string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
+	shared.ConfigureBackgroundCommand(cmd)
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	if err != nil {

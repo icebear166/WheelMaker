@@ -54,6 +54,12 @@ var errServiceNotInstalled = errors.New("service not installed")
 var debugSessionPrefixRe = regexp.MustCompile(`\{([0-9a-fA-F-]{36})\s+([^}]*)\}`)
 var monitorGOOS = runtime.GOOS
 
+func backgroundCommand(name string, args ...string) *exec.Cmd {
+	cmd := exec.Command(name, args...)
+	shared.ConfigureBackgroundCommand(cmd)
+	return cmd
+}
+
 type ActionError struct {
 	Code    string
 	Message string
@@ -341,7 +347,7 @@ $obj = @{
   startType = [string]$svc.StartMode
 }
 $obj | ConvertTo-Json -Compress`, name, name)
-	cmd := exec.Command("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script)
+	cmd := backgroundCommand("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script)
 	out, err := cmd.Output()
 	if err != nil {
 		return ServiceInfo{}, fmt.Errorf("query service %s: %w", name, err)
@@ -404,7 +410,7 @@ func getLaunchAgentServiceInfo(label string) (ServiceInfo, error) {
 	}
 	plist := launchAgentPlistPath(home, label)
 	installed := fileExists(plist)
-	out, err := exec.Command("launchctl", "print", launchAgentTarget(label)).CombinedOutput()
+	out, err := backgroundCommand("launchctl", "print", launchAgentTarget(label)).CombinedOutput()
 	if err != nil {
 		return parseLaunchAgentServiceInfo(label, installed, nil), nil
 	}
@@ -461,7 +467,7 @@ func getSystemdUserServiceInfo(service string) (ServiceInfo, error) {
 	}
 	unit := systemdUserUnitPath(home, service)
 	installed := fileExists(unit)
-	out, err := exec.Command("systemctl", "--user", "show", service, "--property=LoadState,ActiveState,UnitFileState").CombinedOutput()
+	out, err := backgroundCommand("systemctl", "--user", "show", service, "--property=LoadState,ActiveState,UnitFileState").CombinedOutput()
 	if err != nil {
 		return parseSystemdUserServiceInfo(service, installed, nil), nil
 	}
@@ -477,7 +483,7 @@ func listWheelmakerProcesses() ([]ProcessInfo, error) {
 
 func listProcessesWindows() ([]ProcessInfo, error) {
 	script := `Get-CimInstance Win32_Process -Filter "Name='wheelmaker.exe'" | Select-Object ProcessId,CommandLine,@{Name='StartedAt';Expression={[System.Management.ManagementDateTimeConverter]::ToDateTime($_.CreationDate).ToString('MM-dd HH:mm')}} | ConvertTo-Json -Compress`
-	out, err := exec.Command("powershell", "-NoProfile", "-Command", script).Output()
+	out, err := backgroundCommand("powershell", "-NoProfile", "-Command", script).Output()
 	if err != nil {
 		return nil, fmt.Errorf("list processes: %w", err)
 	}
@@ -518,7 +524,7 @@ func listProcessesWindows() ([]ProcessInfo, error) {
 }
 
 func listProcessesUnix() ([]ProcessInfo, error) {
-	out, err := exec.Command("ps", "-eo", "pid=,lstart=,args=").Output()
+	out, err := backgroundCommand("ps", "-eo", "pid=,lstart=,args=").Output()
 	if err != nil {
 		return nil, fmt.Errorf("list processes: %w", err)
 	}
@@ -1349,12 +1355,12 @@ func (m *Monitor) StopService() error {
 			return err
 		}
 		for _, proc := range procs {
-			_ = exec.Command("kill", "-TERM", fmt.Sprintf("%d", proc.PID)).Run()
+			_ = backgroundCommand("kill", "-TERM", fmt.Sprintf("%d", proc.PID)).Run()
 		}
 		time.Sleep(800 * time.Millisecond)
 		remain, _ := listProcessesUnix()
 		for _, proc := range remain {
-			_ = exec.Command("kill", "-KILL", fmt.Sprintf("%d", proc.PID)).Run()
+			_ = backgroundCommand("kill", "-KILL", fmt.Sprintf("%d", proc.PID)).Run()
 		}
 		return nil
 	}
@@ -1382,7 +1388,7 @@ while ((Get-Date) -lt $deadline) {
 }
 Write-Error "wheelmaker.exe still running after stop timeout"
 exit 1`
-	cmd := exec.Command("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script)
+	cmd := backgroundCommand("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("stop wheelmaker failed: %v (%s)", err, strings.TrimSpace(string(out)))
 	}
@@ -1422,7 +1428,7 @@ func (m *Monitor) StartService() error {
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command(wheelmakerExe, "-d")
+	cmd := backgroundCommand(wheelmakerExe, "-d")
 	cmd.Dir = filepath.Dir(wheelmakerExe)
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start wheelmaker failed: %w", err)
@@ -1452,7 +1458,7 @@ func (m *Monitor) RestartMonitor() error {
 	if monitorGOOS == "darwin" {
 		home, homeErr := os.UserHomeDir()
 		if homeErr == nil && fileExists(launchAgentPlistPath(home, launchAgentMonitorLabel)) {
-			cmd := exec.Command("launchctl", "kickstart", "-k", launchAgentTarget(launchAgentMonitorLabel))
+			cmd := backgroundCommand("launchctl", "kickstart", "-k", launchAgentTarget(launchAgentMonitorLabel))
 			if err := cmd.Start(); err != nil {
 				return fmt.Errorf("schedule monitor LaunchAgent restart: %w", err)
 			}
@@ -1466,7 +1472,7 @@ func (m *Monitor) RestartMonitor() error {
 	if monitorGOOS == "linux" {
 		home, homeErr := os.UserHomeDir()
 		if homeErr == nil && fileExists(systemdUserUnitPath(home, systemdUserMonitorService)) {
-			cmd := exec.Command("systemctl", "--user", "restart", systemdUserMonitorService)
+			cmd := backgroundCommand("systemctl", "--user", "restart", systemdUserMonitorService)
 			if err := cmd.Start(); err != nil {
 				return fmt.Errorf("schedule monitor systemd user restart: %w", err)
 			}
@@ -1485,7 +1491,7 @@ func (m *Monitor) RestartMonitor() error {
 		if exists {
 			// Run restart in a detached process so this HTTP handler can return before service stop.
 			script := fmt.Sprintf("Start-Sleep -Milliseconds 300; Restart-Service -Name '%s' -Force -ErrorAction Stop", monitorServiceName)
-			cmd := exec.Command("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script)
+			cmd := backgroundCommand("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script)
 			if err := cmd.Start(); err != nil {
 				return fmt.Errorf("schedule monitor service restart: %w", err)
 			}
@@ -1508,12 +1514,12 @@ func (m *Monitor) RestartMonitor() error {
 			monitorExe,
 			m.baseDir,
 		)
-		cmd := exec.Command("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script)
+		cmd := backgroundCommand("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script)
 		if err := cmd.Start(); err != nil {
 			return fmt.Errorf("schedule monitor relaunch: %w", err)
 		}
 	} else {
-		cmd := exec.Command(monitorExe, "-dir", m.baseDir)
+		cmd := backgroundCommand(monitorExe, "-dir", m.baseDir)
 		cmd.Dir = filepath.Dir(monitorExe)
 		if err := cmd.Start(); err != nil {
 			return fmt.Errorf("start new monitor process: %w", err)
@@ -1623,23 +1629,23 @@ func runLaunchAgentAction(label string, action string) error {
 	target := launchAgentTarget(label)
 	switch action {
 	case "start":
-		_ = exec.Command("launchctl", "bootout", target).Run()
-		if out, err := exec.Command("launchctl", "bootstrap", launchAgentDomain(), plist).CombinedOutput(); err != nil {
+		_ = backgroundCommand("launchctl", "bootout", target).Run()
+		if out, err := backgroundCommand("launchctl", "bootstrap", launchAgentDomain(), plist).CombinedOutput(); err != nil {
 			return fmt.Errorf("launchctl bootstrap %s: %w (%s)", label, err, strings.TrimSpace(string(out)))
 		}
-		if out, err := exec.Command("launchctl", "kickstart", "-k", target).CombinedOutput(); err != nil {
+		if out, err := backgroundCommand("launchctl", "kickstart", "-k", target).CombinedOutput(); err != nil {
 			return fmt.Errorf("launchctl kickstart %s: %w (%s)", label, err, strings.TrimSpace(string(out)))
 		}
 		return nil
 	case "stop":
-		_ = exec.Command("launchctl", "bootout", target).Run()
+		_ = backgroundCommand("launchctl", "bootout", target).Run()
 		return nil
 	case "restart":
-		_ = exec.Command("launchctl", "bootout", target).Run()
-		if out, err := exec.Command("launchctl", "bootstrap", launchAgentDomain(), plist).CombinedOutput(); err != nil {
+		_ = backgroundCommand("launchctl", "bootout", target).Run()
+		if out, err := backgroundCommand("launchctl", "bootstrap", launchAgentDomain(), plist).CombinedOutput(); err != nil {
 			return fmt.Errorf("launchctl bootstrap %s: %w (%s)", label, err, strings.TrimSpace(string(out)))
 		}
-		if out, err := exec.Command("launchctl", "kickstart", "-k", target).CombinedOutput(); err != nil {
+		if out, err := backgroundCommand("launchctl", "kickstart", "-k", target).CombinedOutput(); err != nil {
 			return fmt.Errorf("launchctl kickstart %s: %w (%s)", label, err, strings.TrimSpace(string(out)))
 		}
 		return nil
@@ -1692,22 +1698,22 @@ func runSystemdUserAction(service string, action string) error {
 	if !fileExists(unit) {
 		return errServiceNotInstalled
 	}
-	if out, err := exec.Command("systemctl", "--user", "daemon-reload").CombinedOutput(); err != nil {
+	if out, err := backgroundCommand("systemctl", "--user", "daemon-reload").CombinedOutput(); err != nil {
 		return fmt.Errorf("systemctl --user daemon-reload: %w (%s)", err, strings.TrimSpace(string(out)))
 	}
 	switch action {
 	case "start":
-		if out, err := exec.Command("systemctl", "--user", "start", service).CombinedOutput(); err != nil {
+		if out, err := backgroundCommand("systemctl", "--user", "start", service).CombinedOutput(); err != nil {
 			return fmt.Errorf("systemctl --user start %s: %w (%s)", service, err, strings.TrimSpace(string(out)))
 		}
 		return nil
 	case "stop":
-		if out, err := exec.Command("systemctl", "--user", "stop", service).CombinedOutput(); err != nil {
+		if out, err := backgroundCommand("systemctl", "--user", "stop", service).CombinedOutput(); err != nil {
 			return fmt.Errorf("systemctl --user stop %s: %w (%s)", service, err, strings.TrimSpace(string(out)))
 		}
 		return nil
 	case "restart":
-		if out, err := exec.Command("systemctl", "--user", "restart", service).CombinedOutput(); err != nil {
+		if out, err := backgroundCommand("systemctl", "--user", "restart", service).CombinedOutput(); err != nil {
 			return fmt.Errorf("systemctl --user restart %s: %w (%s)", service, err, strings.TrimSpace(string(out)))
 		}
 		return nil
@@ -1718,7 +1724,7 @@ func runSystemdUserAction(service string, action string) error {
 
 func windowsServiceExists(serviceName string) (bool, error) {
 	script := fmt.Sprintf("$svc = Get-Service -Name '%s' -ErrorAction SilentlyContinue; if ($null -eq $svc) { exit 3 }; exit 0", serviceName)
-	cmd := exec.Command("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script)
+	cmd := backgroundCommand("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script)
 	if err := cmd.Run(); err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {
 			if ee.ExitCode() == 3 {
@@ -1772,7 +1778,7 @@ func windowsServiceRestart(serviceName string, timeout time.Duration) error {
 }
 
 func runWindowsServiceScript(serviceName string, script string, action string) error {
-	cmd := exec.Command("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script)
+	cmd := backgroundCommand("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		if ee, ok := err.(*exec.ExitError); ok && ee.ExitCode() == 3 {
 			return errServiceNotInstalled

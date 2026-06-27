@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 
 	"github.com/swm8023/wheelmaker/internal/protocol"
+	"github.com/swm8023/wheelmaker/internal/shared"
 )
 
 type instanceTools struct {
@@ -143,6 +144,7 @@ func (tm *terminalManager) Create(params protocol.TerminalCreateParams) (protoco
 	}
 
 	cmd := exec.Command(command, args...)
+	shared.ConfigureBackgroundCommand(cmd)
 	if params.CWD != "" {
 		cmd.Dir = params.CWD
 	}

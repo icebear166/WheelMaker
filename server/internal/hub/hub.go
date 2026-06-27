@@ -285,6 +285,7 @@ func collectGitState(projectPath string) rp.ProjectGitState {
 
 func runGitLocal(projectPath string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
+	logger.ConfigureBackgroundCommand(cmd)
 	cmd.Dir = projectPath
 	out, err := cmd.CombinedOutput()
 	if err != nil {

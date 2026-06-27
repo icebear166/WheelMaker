@@ -52,6 +52,7 @@ type osCommandRunner struct{}
 
 func (osCommandRunner) CombinedOutput(ctx context.Context, dir string, name string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
+	logger.ConfigureBackgroundCommand(cmd)
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	if err != nil {

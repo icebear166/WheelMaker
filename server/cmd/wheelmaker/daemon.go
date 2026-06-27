@@ -200,6 +200,7 @@ func chooseKeepPID(workers []daemonProcess, preferredPID int) int {
 
 func startWorker(exePath string, workerArgs []string) (int, error) {
 	cmd := exec.Command(exePath, workerArgs...)
+	shared.ConfigureBackgroundCommand(cmd)
 	restoreIO, err := configureWorkerCommandIO(cmd)
 	if err != nil {
 		return 0, err
