@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf16"
 )
 
 func parseDeployArgsForTest(t *testing.T, args []string) deployConfig {
@@ -296,6 +297,35 @@ func TestWindowsRuntimeBinariesBuildWithoutConsoleWindows(t *testing.T) {
 	}
 	deployArgs := findBuildArgsForLabel(t, calls, "wheelmaker-deploy")
 	assertStringSliceDoesNotContain(t, deployArgs, "-H windowsgui")
+}
+
+func TestWindowsCommandManifestsRequestAsInvoker(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows manifest resources only apply on Windows")
+	}
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolve test source path")
+	}
+	serverRoot := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+	for _, rel := range []string{
+		filepath.Join("cmd", "wheelmaker", "wheelmaker_windows_amd64.syso"),
+		filepath.Join("cmd", "wheelmaker-monitor", "wheelmaker_monitor_windows_amd64.syso"),
+		filepath.Join("cmd", "wheelmaker-updater", "wheelmaker_updater_windows_amd64.syso"),
+		filepath.Join("cmd", "wheelmaker-deploy", "wheelmaker_deploy_windows_amd64.syso"),
+	} {
+		path := filepath.Join(serverRoot, rel)
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read manifest resource %s: %v", path, err)
+		}
+		text := string(raw) + utf16LEString(raw)
+		for _, needle := range []string{"requestedExecutionLevel", "asInvoker", `uiAccess="false"`} {
+			if !strings.Contains(text, needle) {
+				t.Fatalf("%s missing manifest needle %q", path, needle)
+			}
+		}
+	}
 }
 
 func TestUpdatePipelineSkipsUpdaterAndConfig(t *testing.T) {
@@ -704,6 +734,17 @@ func writeTestFile(t *testing.T, path string, body string) {
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
+}
+
+func utf16LEString(raw []byte) string {
+	if len(raw) < 2 {
+		return ""
+	}
+	units := make([]uint16, 0, len(raw)/2)
+	for i := 0; i+1 < len(raw); i += 2 {
+		units = append(units, uint16(raw[i])|uint16(raw[i+1])<<8)
+	}
+	return string(utf16.Decode(units))
 }
 
 func platformStaleWrapperNames() []string {
