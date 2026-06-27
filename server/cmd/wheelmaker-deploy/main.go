@@ -295,7 +295,7 @@ func runDeployWithDeps(ctx context.Context, cfg deployConfig, deps deployDeps) e
 	if err := publishWeb(ctx, cfg, deps); err != nil {
 		return err
 	}
-	if !cfg.NoRestart {
+	if !cfg.NoInstall {
 		deps.report("preparing install")
 		if err := deps.Services.PrepareInstall(ctx, !cfg.NoUpdater); err != nil {
 			return err
@@ -364,7 +364,7 @@ func runUpdateWithDeps(ctx context.Context, cfg deployConfig, deps deployDeps) e
 	if err := publishWeb(ctx, cfg, deps); err != nil {
 		return err
 	}
-	if !cfg.NoRestart {
+	if !cfg.NoInstall {
 		deps.report("preparing install")
 		if err := deps.Services.PrepareInstall(ctx, false); err != nil {
 			return err

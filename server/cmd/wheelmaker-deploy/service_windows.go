@@ -495,6 +495,9 @@ function Test-WheelMakerInstallProcess($process) {
     return $true
   }
   $cmd = [string]$process.CommandLine
+  if ([string]::IsNullOrWhiteSpace($exe) -and [string]::IsNullOrWhiteSpace($cmd)) {
+    return $true
+  }
   return -not [string]::IsNullOrWhiteSpace($cmd) -and $cmd.ToLowerInvariant().Contains($install)
 }
 

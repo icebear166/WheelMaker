@@ -164,6 +164,18 @@ func TestWindowsPrepareInstallCleansServicesTasksAndProcesses(t *testing.T) {
 	}
 }
 
+func TestWindowsPrepareInstallTreatsUninspectableRuntimeProcessAsManaged(t *testing.T) {
+	script := windowsPrepareInstallScript(windowsRuntimeNames(), windowsRuntimeProcessNames(), `C:\Users\me\.wheelmaker\bin`, true)
+	for _, needle := range []string{
+		"[string]::IsNullOrWhiteSpace($exe) -and [string]::IsNullOrWhiteSpace($cmd)",
+		"return $true",
+	} {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("prepare install script missing %q:\n%s", needle, script)
+		}
+	}
+}
+
 func TestWindowsDeployPrerequisitesRelaunchesUnelevatedServiceWork(t *testing.T) {
 	h := newDeployHarness(t)
 	h.cfg.RuntimeMode = "service"

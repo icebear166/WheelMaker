@@ -252,6 +252,22 @@ func TestDeployPipelineOrder(t *testing.T) {
 	}
 }
 
+func TestDeployPreparesInstallWhenRestartIsSkipped(t *testing.T) {
+	h := newDeployHarness(t)
+	h.cfg.Mode = modeDeploy
+	h.cfg.NoRestart = true
+
+	if err := runDeployWithDeps(context.Background(), h.cfg, h.deps); err != nil {
+		t.Fatalf("runDeployWithDeps: %v", err)
+	}
+
+	assertEventsContainInOrder(t, *h.events,
+		"service prepare install all",
+		"install wheelmaker",
+	)
+	assertEventsDoNotContain(t, *h.events, "service start all")
+}
+
 func TestDeployReportsBuildProgress(t *testing.T) {
 	h := newDeployHarness(t)
 	var progress []string
