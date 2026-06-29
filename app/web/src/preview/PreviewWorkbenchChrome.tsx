@@ -17,6 +17,7 @@ type PreviewWorkbenchChromeProps = {
   tabs: PreviewWorkbenchTab[];
   fileTreeOpen: boolean;
   fileTree: React.ReactNode;
+  fileTreeSearch?: React.ReactNode;
   actions?: React.ReactNode;
   onClose: () => void;
   onProjectMenuToggle: () => void;
@@ -47,6 +48,7 @@ export function PreviewWorkbenchChrome({
   tabs,
   fileTreeOpen,
   fileTree,
+  fileTreeSearch,
   actions,
   onClose,
   onProjectMenuToggle,
@@ -65,6 +67,7 @@ export function PreviewWorkbenchChrome({
   const projectButtonRef = React.useRef<HTMLButtonElement | null>(null);
   const projectMenuRef = React.useRef<HTMLDivElement | null>(null);
   const fileTreeButtonRef = React.useRef<HTMLButtonElement | null>(null);
+  const fileTreeSearchRef = React.useRef<HTMLDivElement | null>(null);
   const fileTreePanelRef = React.useRef<HTMLDivElement | null>(null);
   const activeProject = projects.find(project => project.projectId === activeProjectId) ?? null;
   const activeTitle = activeTab?.title || 'Preview';
@@ -85,6 +88,7 @@ export function PreviewWorkbenchChrome({
       }
       if (fileTreeOpen &&
         !containsTarget(fileTreeButtonRef.current, target) &&
+        !containsTarget(fileTreeSearchRef.current, target) &&
         !containsTarget(fileTreePanelRef.current, target)
       ) {
         onFileTreeClose();
@@ -198,6 +202,15 @@ export function PreviewWorkbenchChrome({
       <div className="preview-workbench-body">
         {fileTree ? (
           <div className="preview-workbench-body-tools">
+            {fileTreeSearch ? (
+              <div
+                ref={fileTreeSearchRef}
+                className="preview-workbench-tree-search-shell"
+                data-open={fileTreeOpen}
+              >
+                {fileTreeSearch}
+              </div>
+            ) : null}
             <button
               ref={fileTreeButtonRef}
               type="button"

@@ -379,6 +379,10 @@ import {VoiceInputButton, type VoiceInputInteractionMode} from '../features/spee
 import {VoiceRecordingBar} from '../features/speech/VoiceRecordingBar';
 import { FileExplorerTree, WorkspaceProjectSelector } from '../file/FileExplorerTree';
 import {
+  buildFileSearchResultTree,
+  type FileSearchResultTreeNode,
+} from '../file/fileSearchResultTree';
+import {
   activePreviewTab,
   beginPreviewTabLoad,
   buildPreviewSearchMatches,
@@ -845,6 +849,10 @@ function chatFileMentionName(path: string): string {
   const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '');
   const parts = normalized.split('/').filter(Boolean);
   return parts[parts.length - 1] || normalized || 'file';
+}
+
+function isArrowNavigationKey(key: string): boolean {
+  return key === 'ArrowUp' || key === 'ArrowDown' || key === 'ArrowLeft' || key === 'ArrowRight';
 }
 
 function chatComposerTokensEqual(left: ChatComposerToken[], right: ChatComposerToken[]): boolean {
@@ -2801,6 +2809,17 @@ export function App() {
   const [previewSearchQuery, setPreviewSearchQuery] = useState('');
   const [previewSearchActiveIndex, setPreviewSearchActiveIndex] = useState(0);
   const previewSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const [previewFileTreeSearchQuery, setPreviewFileTreeSearchQuery] = useState('');
+  const [previewFileTreeSearchResults, setPreviewFileTreeSearchResults] = useState<RegistryFileIndexSearchResult[]>([]);
+  const [previewFileTreeSearchLoading, setPreviewFileTreeSearchLoading] = useState(false);
+  const [previewFileTreeSearchError, setPreviewFileTreeSearchError] = useState('');
+  const [previewFileTreeSearchIndexed, setPreviewFileTreeSearchIndexed] = useState(true);
+  const [previewFileTreeSearchActiveIndex, setPreviewFileTreeSearchActiveIndex] = useState(0);
+  const previewFileTreeSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const previewFileTreeSearchTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const previewFileTreeSearchGenerationRef = useRef(0);
+  const previewFileTreeSearchQueryIdRef = useRef(0);
+  const previewFileTreeSearchSessionIdRef = useRef(`preview-file-tree-${Date.now()}`);
   const [quickFileOpen, setQuickFileOpen] = useState(false);
   const [quickFileProjectId, setQuickFileProjectId] = useState('');
   const [quickFileQuery, setQuickFileQuery] = useState('');
@@ -7854,6 +7873,12 @@ export function App() {
     : false;
   const hasPinnedFiles = pinnedFiles.length > 0;
   const fileLines = useMemo(() => fileContent.split('\n'), [fileContent]);
+  const previewFileTreeSearchTree = useMemo(
+    () => buildFileSearchResultTree(previewFileTreeSearchResults),
+    [previewFileTreeSearchResults],
+  );
+  const previewFileTreeSearchActivePath =
+    previewFileTreeSearchResults[previewFileTreeSearchActiveIndex]?.path ?? '';
   const fileSearchMatches = useMemo(() => {
     const query = fileSearchQuery.trim().toLocaleLowerCase();
     if (!query) return [] as number[];
@@ -8763,6 +8788,190 @@ export function App() {
     chatPeekAnchorRef.current = normalizedLine;
     setChatPeekSelectedLines(normalizedLine != null ? new Set([normalizedLine]) : new Set());
   }, [isWide, readChatFilePeek, setDrawerOpen]);
+
+  const clearPreviewFileTreeSearchTimer = useCallback(() => {
+    if (previewFileTreeSearchTimerRef.current !== null) {
+      window.clearTimeout(previewFileTreeSearchTimerRef.current);
+      previewFileTreeSearchTimerRef.current = null;
+    }
+  }, []);
+
+  const resetPreviewFileTreeSearchSession = useCallback(() => {
+    clearPreviewFileTreeSearchTimer();
+    previewFileTreeSearchSessionIdRef.current = `preview-file-tree-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    previewFileTreeSearchQueryIdRef.current = 0;
+    previewFileTreeSearchGenerationRef.current += 1;
+    setPreviewFileTreeSearchQuery('');
+    setPreviewFileTreeSearchResults([]);
+    setPreviewFileTreeSearchLoading(false);
+    setPreviewFileTreeSearchError('');
+    setPreviewFileTreeSearchIndexed(true);
+    setPreviewFileTreeSearchActiveIndex(0);
+  }, [clearPreviewFileTreeSearchTimer]);
+
+  const focusPreviewFileTreeSearch = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      previewFileTreeSearchInputRef.current?.focus();
+      previewFileTreeSearchInputRef.current?.select();
+    });
+  }, []);
+
+  const runPreviewFileTreeSearch = useCallback(
+    async (targetProjectId: string, query: string, generation: number) => {
+      if (!targetProjectId) {
+        setPreviewFileTreeSearchError('Select a project first.');
+        setPreviewFileTreeSearchLoading(false);
+        return;
+      }
+      const queryId = previewFileTreeSearchQueryIdRef.current + 1;
+      previewFileTreeSearchQueryIdRef.current = queryId;
+      setPreviewFileTreeSearchLoading(true);
+      setPreviewFileTreeSearchError('');
+      try {
+        const response = await service.searchFileIndex(targetProjectId, {
+          query,
+          querySessionId: previewFileTreeSearchSessionIdRef.current,
+          queryId,
+          limit: CHAT_FILE_MENTION_SEARCH_LIMIT,
+        });
+        if (generation !== previewFileTreeSearchGenerationRef.current) {
+          return;
+        }
+        setPreviewFileTreeSearchIndexed(response.indexed);
+        setPreviewFileTreeSearchResults(response.results ?? []);
+        setPreviewFileTreeSearchActiveIndex(0);
+        setPreviewFileTreeSearchError(response.error || '');
+      } catch (err) {
+        if (generation !== previewFileTreeSearchGenerationRef.current) {
+          return;
+        }
+        setPreviewFileTreeSearchResults([]);
+        setPreviewFileTreeSearchIndexed(true);
+        setPreviewFileTreeSearchError(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (generation === previewFileTreeSearchGenerationRef.current) {
+          setPreviewFileTreeSearchLoading(false);
+        }
+      }
+    },
+    [],
+  );
+
+  const schedulePreviewFileTreeSearch = useCallback(
+    (targetProjectId: string, query: string) => {
+      clearPreviewFileTreeSearchTimer();
+      setPreviewFileTreeSearchQuery(query);
+      if (!query) {
+        previewFileTreeSearchGenerationRef.current += 1;
+        setPreviewFileTreeSearchResults([]);
+        setPreviewFileTreeSearchLoading(false);
+        setPreviewFileTreeSearchError('');
+        setPreviewFileTreeSearchIndexed(true);
+        setPreviewFileTreeSearchActiveIndex(0);
+        return;
+      }
+      if (!targetProjectId) {
+        setPreviewFileTreeSearchResults([]);
+        setPreviewFileTreeSearchLoading(false);
+        setPreviewFileTreeSearchError('Select a project first.');
+        setPreviewFileTreeSearchIndexed(true);
+        setPreviewFileTreeSearchActiveIndex(0);
+        return;
+      }
+      setPreviewFileTreeSearchLoading(true);
+      const generation = previewFileTreeSearchGenerationRef.current + 1;
+      previewFileTreeSearchGenerationRef.current = generation;
+      previewFileTreeSearchTimerRef.current = window.setTimeout(() => {
+        previewFileTreeSearchTimerRef.current = null;
+        runPreviewFileTreeSearch(targetProjectId, query, generation).catch(() => undefined);
+      }, CHAT_FILE_MENTION_DEBOUNCE_MS);
+    },
+    [clearPreviewFileTreeSearchTimer, runPreviewFileTreeSearch],
+  );
+
+  const updatePreviewFileTreeSearchQuery = useCallback(
+    (query: string) => {
+      schedulePreviewFileTreeSearch(previewWorkbenchRef.current.activeProjectId, query);
+    },
+    [schedulePreviewFileTreeSearch],
+  );
+
+  const openPreviewFileTreeSearchResult = useCallback(
+    (result: RegistryFileIndexSearchResult) => {
+      const path = result.path;
+      const targetProjectId = previewWorkbenchRef.current.activeProjectId;
+      if (!path || !targetProjectId) {
+        return;
+      }
+      openChatFilePeek(path, null, targetProjectId);
+    },
+    [openChatFilePeek],
+  );
+
+  const startPreviewFileTreeSearchFromKey = useCallback(
+    (key: string) => {
+      if (key.length !== 1 && key !== 'Backspace') {
+        focusPreviewFileTreeSearch();
+        return;
+      }
+      const nextQuery =
+        key === 'Backspace'
+          ? previewFileTreeSearchQuery.slice(0, -1)
+          : `${previewFileTreeSearchQuery}${key}`;
+      updatePreviewFileTreeSearchQuery(nextQuery);
+      focusPreviewFileTreeSearch();
+    },
+    [focusPreviewFileTreeSearch, previewFileTreeSearchQuery, updatePreviewFileTreeSearchQuery],
+  );
+
+  const handlePreviewFileTreeSearchInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      if (previewFileTreeSearchQuery) {
+        updatePreviewFileTreeSearchQuery('');
+      } else {
+        setPreviewWorkbench(current => ({...current, treeOpen: false}));
+      }
+      return;
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setPreviewFileTreeSearchActiveIndex(current =>
+        previewFileTreeSearchResults.length === 0 ? 0 : (current + 1) % previewFileTreeSearchResults.length,
+      );
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setPreviewFileTreeSearchActiveIndex(current =>
+        previewFileTreeSearchResults.length === 0
+          ? 0
+          : (current - 1 + previewFileTreeSearchResults.length) % previewFileTreeSearchResults.length,
+      );
+      return;
+    }
+    if (event.key === 'Enter') {
+      const result = previewFileTreeSearchResults[previewFileTreeSearchActiveIndex];
+      if (result) {
+        event.preventDefault();
+        openPreviewFileTreeSearchResult(result);
+      }
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      clearPreviewFileTreeSearchTimer();
+    };
+  }, [clearPreviewFileTreeSearchTimer]);
+
+  useEffect(() => {
+    if (previewWorkbench.treeOpen) {
+      focusPreviewFileTreeSearch();
+    } else {
+      resetPreviewFileTreeSearchSession();
+    }
+  }, [focusPreviewFileTreeSearch, previewWorkbench.treeOpen, resetPreviewFileTreeSearchSession]);
 
   const clearQuickFileSearchTimer = useCallback(() => {
     if (quickFileSearchTimerRef.current !== null) {
@@ -19105,34 +19314,103 @@ export function App() {
     chatFilePreviewDirEntriesByProject[previewWorkbench.activeProjectId] ?? {'.': []};
   const chatFilePreviewLoadingDirs =
     chatFilePreviewLoadingDirsByProject[previewWorkbench.activeProjectId] ?? {};
-  const chatFilePreviewTreeContent = (
-    <FileExplorerTree
-      isWide={false}
-      showSectionTitle={false}
-      projects={projects}
-      projectId={previewWorkbench.activeProjectId}
-      currentProjectName={
-        chatFilePreviewProjects.find(item => item.projectId === previewWorkbench.activeProjectId)?.name ??
-        currentProjectName
+  const renderPreviewFileTreeSearchResults = (
+    nodes: FileSearchResultTreeNode[],
+    depth = 0,
+  ): React.ReactNode =>
+    nodes.map(node => {
+      const paddingLeft = 10 + depth * 14;
+      if (node.kind === 'dir') {
+        return (
+          <div key={`preview-file-search-dir:${node.path}`}>
+            <div
+              className="preview-workbench-file-search-node dir"
+              style={{paddingLeft}}
+            >
+              <span className="caret codicon codicon-chevron-down" />
+              <span className="node-icon codicon codicon-folder-opened" />
+              <span className="label">{node.name}</span>
+            </div>
+            {renderPreviewFileTreeSearchResults(node.children, depth + 1)}
+          </div>
+        );
       }
-      sortedProjectItems={chatFilePreviewProjects}
-      workspaceProjectMenuOpen={false}
-      setWorkspaceProjectMenuOpen={setWorkspaceProjectMenuOpen}
-      syncWorkspaceProject={syncWorkspaceProject}
-      dirEntries={chatFilePreviewDirEntries}
-      loadingDirs={chatFilePreviewLoadingDirs}
-      selectedFile={chatFilePeek?.path ?? ''}
-      setSelectedFile={setSelectedFile}
-      setDrawerOpen={() => undefined}
-      isExpanded={isExpanded}
-      toggleDirectory={path => {
-        togglePreviewDirectory(path).catch(() => undefined);
-      }}
-      resolveFileIcon={resolveFileIcon}
-      onFileSelect={path => {
-        openChatFilePeek(path, null, previewWorkbench.activeProjectId);
-      }}
-    />
+
+      const fileIcon = resolveFileIcon(node.name);
+      const resultIndex = previewFileTreeSearchResults.findIndex(item => item.path === node.path);
+      const selected = node.path === previewFileTreeSearchActivePath;
+      return (
+        <button
+          key={`preview-file-search-file:${node.path}`}
+          type="button"
+          className={`preview-workbench-file-search-node file${selected ? ' selected' : ''}`}
+          style={{paddingLeft}}
+          onMouseEnter={() => {
+            if (resultIndex >= 0) {
+              setPreviewFileTreeSearchActiveIndex(resultIndex);
+            }
+          }}
+          onClick={() => openPreviewFileTreeSearchResult(node.result)}
+          title={node.path}
+        >
+          <span className="caret placeholder" aria-hidden="true" />
+          <span
+            className="node-icon seti-icon"
+            style={{color: fileIcon.color}}
+          >
+            <span className="seti-glyph">{fileIcon.glyph}</span>
+          </span>
+          <span className="label">{node.name}</span>
+          <span className="path">{node.path}</span>
+        </button>
+      );
+    });
+  const chatFilePreviewTreeContent = (
+    <div className="preview-workbench-file-tree-content">
+      {previewFileTreeSearchQuery ? (
+        previewFileTreeSearchLoading ? (
+          <div className="preview-workbench-file-search-empty">Loading...</div>
+        ) : previewFileTreeSearchError ? (
+          <div className="preview-workbench-file-search-empty">{previewFileTreeSearchError}</div>
+        ) : !previewFileTreeSearchIndexed ? (
+          <div className="preview-workbench-file-search-empty">File index is not ready.</div>
+        ) : previewFileTreeSearchTree.length === 0 ? (
+          <div className="preview-workbench-file-search-empty">No files found</div>
+        ) : (
+          <div className="preview-workbench-file-search-tree" role="tree" aria-label="Search results">
+            {renderPreviewFileTreeSearchResults(previewFileTreeSearchTree)}
+          </div>
+        )
+      ) : (
+        <FileExplorerTree
+          isWide={false}
+          showSectionTitle={false}
+          projects={projects}
+          projectId={previewWorkbench.activeProjectId}
+          currentProjectName={
+            chatFilePreviewProjects.find(item => item.projectId === previewWorkbench.activeProjectId)?.name ??
+            currentProjectName
+          }
+          sortedProjectItems={chatFilePreviewProjects}
+          workspaceProjectMenuOpen={false}
+          setWorkspaceProjectMenuOpen={setWorkspaceProjectMenuOpen}
+          syncWorkspaceProject={syncWorkspaceProject}
+          dirEntries={chatFilePreviewDirEntries}
+          loadingDirs={chatFilePreviewLoadingDirs}
+          selectedFile={chatFilePeek?.path ?? ''}
+          setSelectedFile={setSelectedFile}
+          setDrawerOpen={() => undefined}
+          isExpanded={isExpanded}
+          toggleDirectory={path => {
+            togglePreviewDirectory(path).catch(() => undefined);
+          }}
+          resolveFileIcon={resolveFileIcon}
+          onFileSelect={path => {
+            openChatFilePeek(path, null, previewWorkbench.activeProjectId);
+          }}
+        />
+      )}
+    </div>
   );
   const toggleChatFilePreviewTree = () => {
     setPreviewWorkbench(current => ({...current, treeOpen: !current.treeOpen}));
@@ -19142,6 +19420,7 @@ export function App() {
   };
   const selectPreviewProjectFromMenu = (nextProjectId: string) => {
     setPreviewProjectMenuOpen(false);
+    resetPreviewFileTreeSearchSession();
     setPreviewWorkbench(current => selectPreviewProject(current, nextProjectId));
   };
   const selectWorkbenchTab = (tabId: string) => {
@@ -19198,6 +19477,31 @@ export function App() {
       navigatePreviewSearchMatch(event.shiftKey ? -1 : 1);
     }
   };
+  const handlePreviewFileTreeKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (!previewWorkbench.treeOpen || event.defaultPrevented) {
+      return;
+    }
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (
+      target?.tagName === 'INPUT' ||
+      target?.tagName === 'TEXTAREA' ||
+      target?.isContentEditable ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.altKey ||
+      event.key === 'Tab' ||
+      event.key === 'Escape' ||
+      event.key === 'Enter' ||
+      isArrowNavigationKey(event.key)
+    ) {
+      return;
+    }
+    if (event.key.length !== 1 && event.key !== 'Backspace') {
+      return;
+    }
+    event.preventDefault();
+    startPreviewFileTreeSearchFromKey(event.key);
+  };
   const handlePreviewWorkbenchKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
     if (event.key === 'Tab' && (event.ctrlKey || event.metaKey)) {
       event.preventDefault();
@@ -19215,7 +19519,9 @@ export function App() {
     if (event.key.toLowerCase() === 'p' && (event.ctrlKey || event.metaKey)) {
       event.preventDefault();
       openQuickFileSearch();
+      return;
     }
+    handlePreviewFileTreeKeyDown(event);
   };
   const handleQuickFileKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Escape') {
@@ -19539,6 +19845,20 @@ export function App() {
       </button>
     </div>
   ) : null;
+  const previewFileTreeSearch = (
+    <>
+      <span className="codicon codicon-search preview-workbench-tree-search-icon" aria-hidden="true" />
+      <input
+        ref={previewFileTreeSearchInputRef}
+        className="preview-workbench-tree-search-input"
+        value={previewFileTreeSearchQuery}
+        onChange={event => updatePreviewFileTreeSearchQuery(event.target.value)}
+        onKeyDown={handlePreviewFileTreeSearchInputKeyDown}
+        placeholder="Search files"
+        aria-label="Search files"
+      />
+    </>
+  );
   const previewWorkbenchFileTreeContent = !activeWorkbenchTab || activeWorkbenchTab.type === 'file' ? chatFilePreviewTreeContent : null;
   const renderPreviewWorkbenchSurface = (mode: 'desktop' | 'mobile') => (
     <PreviewWorkbenchChrome
@@ -19550,6 +19870,7 @@ export function App() {
       tabs={previewWorkbenchTabs}
       fileTreeOpen={previewWorkbench.treeOpen}
       fileTree={previewWorkbenchFileTreeContent}
+      fileTreeSearch={previewFileTreeSearch}
       actions={renderPreviewWorkbenchActions()}
       onClose={closeChatFilePeekFromChrome}
       onProjectMenuToggle={togglePreviewProjectMenu}

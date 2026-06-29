@@ -286,6 +286,34 @@ describe('web chat file peek viewer', () => {
     expect(stylesCss).toContain('.preview-workbench-surface.mobile .preview-workbench-tree-panel');
   });
 
+  test('preview file tree opens with inline search and renders search results as a tree', () => {
+    const mainTsx = readSourceText(mainPath);
+    const chromeTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'preview', 'PreviewWorkbenchChrome.tsx'));
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(chromeTsx).toContain('fileTreeSearch');
+    expect(chromeTsx).toContain('const fileTreeSearchRef = React.useRef<HTMLDivElement | null>(null);');
+    expect(chromeTsx).toContain('!containsTarget(fileTreeSearchRef.current, target)');
+    expect(chromeTsx).toContain('className="preview-workbench-tree-search-shell"');
+    expect(chromeTsx).toContain("mode === 'mobile'");
+
+    expect(mainTsx).toContain('const previewFileTreeSearchInputRef = useRef<HTMLInputElement | null>(null);');
+    expect(mainTsx).toContain('const [previewFileTreeSearchQuery, setPreviewFileTreeSearchQuery] = useState(\'\');');
+    expect(mainTsx).toContain('className="preview-workbench-tree-search-input"');
+    expect(mainTsx).toContain('const previewFileTreeSearchTree = useMemo(');
+    expect(mainTsx).toContain('buildFileSearchResultTree(previewFileTreeSearchResults)');
+    expect(mainTsx).toContain('const handlePreviewFileTreeKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {');
+    expect(mainTsx).toContain('isArrowNavigationKey(event.key)');
+    expect(mainTsx).toContain('startPreviewFileTreeSearchFromKey(event.key)');
+    expect(mainTsx).toContain('service.searchFileIndex(targetProjectId, {');
+    expect(mainTsx).toContain('renderPreviewFileTreeSearchResults(');
+
+    expect(stylesCss).toContain('.preview-workbench-tree-search-shell');
+    expect(stylesCss).toContain('.preview-workbench-tree-search-shell[data-open=\'true\']');
+    expect(stylesCss).toContain('.preview-workbench-file-search-tree');
+    expect(stylesCss).toContain('.preview-workbench-file-search-node');
+  });
+
   test('empty preview workbench can open the file tree to select a file', () => {
     const mainTsx = readSourceText(mainPath);
     const stylesCss = readWebStyles(projectRoot);
