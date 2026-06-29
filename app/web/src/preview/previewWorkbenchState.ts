@@ -105,6 +105,7 @@ export type PreviewWorkbenchState = {
   activeProjectId: string;
   tabsByProjectId: Record<string, PreviewWorkbenchTab[]>;
   activeTabIdByProjectId: Record<string, string>;
+  renderedTabIdsByProjectId: Record<string, string[]>;
   treeOpen: boolean;
 };
 
@@ -216,7 +217,39 @@ export function createPreviewWorkbenchState(activeProjectId = ''): PreviewWorkbe
     activeProjectId,
     tabsByProjectId: activeProjectId ? {[activeProjectId]: []} : {},
     activeTabIdByProjectId: {},
+    renderedTabIdsByProjectId: activeProjectId ? {[activeProjectId]: []} : {},
     treeOpen: false,
+  };
+}
+
+function addRenderedTabId(state: PreviewWorkbenchState, projectId: string, tabId: string): PreviewWorkbenchState {
+  if (!projectId || !tabId) {
+    return state;
+  }
+  const renderedIds = state.renderedTabIdsByProjectId[projectId] ?? [];
+  if (renderedIds.includes(tabId)) {
+    return state;
+  }
+  return {
+    ...state,
+    renderedTabIdsByProjectId: {
+      ...state.renderedTabIdsByProjectId,
+      [projectId]: [...renderedIds, tabId],
+    },
+  };
+}
+
+function removeRenderedTabId(state: PreviewWorkbenchState, projectId: string, tabId: string): PreviewWorkbenchState {
+  const renderedIds = state.renderedTabIdsByProjectId[projectId] ?? [];
+  if (!renderedIds.includes(tabId)) {
+    return state;
+  }
+  return {
+    ...state,
+    renderedTabIdsByProjectId: {
+      ...state.renderedTabIdsByProjectId,
+      [projectId]: renderedIds.filter(id => id !== tabId),
+    },
   };
 }
 
@@ -233,6 +266,10 @@ export function selectPreviewProject(
     tabsByProjectId: {
       ...state.tabsByProjectId,
       [projectId]: state.tabsByProjectId[projectId] ?? [],
+    },
+    renderedTabIdsByProjectId: {
+      ...state.renderedTabIdsByProjectId,
+      [projectId]: state.renderedTabIdsByProjectId[projectId] ?? [],
     },
   };
 }
@@ -348,11 +385,29 @@ export function openPreviewTab(
   const nextTabs = existing
     ? tabs.map(tab => (tab.id === id ? mergeTab(tab, input) : tab))
     : [...tabs, createTab(input)];
-  return {
+  return addRenderedTabId({
     ...projectState,
     tabsByProjectId: {...projectState.tabsByProjectId, [input.projectId]: nextTabs},
     activeTabIdByProjectId: {...projectState.activeTabIdByProjectId, [input.projectId]: id},
-  };
+  }, input.projectId, id);
+}
+
+export function selectPreviewTab(
+  state: PreviewWorkbenchState,
+  projectId: string,
+  tabId: string,
+): PreviewWorkbenchState {
+  const tabs = state.tabsByProjectId[projectId] ?? [];
+  if (!tabs.some(tab => tab.id === tabId)) {
+    return state;
+  }
+  return addRenderedTabId({
+    ...state,
+    activeTabIdByProjectId: {
+      ...state.activeTabIdByProjectId,
+      [projectId]: tabId,
+    },
+  }, projectId, tabId);
 }
 
 export function beginPreviewTabLoad(
@@ -431,17 +486,29 @@ export function closePreviewTab(
     currentActiveId === tabId
       ? nextTabs[Math.min(closingIndex, Math.max(0, nextTabs.length - 1))]?.id ?? ''
       : currentActiveId;
-  return {
+  const closedState = removeRenderedTabId({
     ...state,
     tabsByProjectId: {...state.tabsByProjectId, [projectId]: nextTabs},
     activeTabIdByProjectId: {...state.activeTabIdByProjectId, [projectId]: nextActiveId},
-  };
+  }, projectId, tabId);
+  return nextActiveId ? addRenderedTabId(closedState, projectId, nextActiveId) : closedState;
 }
 
 export function activePreviewTab(state: PreviewWorkbenchState): PreviewWorkbenchTab | null {
   const projectId = state.activeProjectId;
   const activeTabId = state.activeTabIdByProjectId[projectId] ?? '';
   return (state.tabsByProjectId[projectId] ?? []).find(tab => tab.id === activeTabId) ?? null;
+}
+
+export function previewRenderedTabs(state: PreviewWorkbenchState): PreviewWorkbenchTab[] {
+  const projectId = state.activeProjectId;
+  const tabs = state.tabsByProjectId[projectId] ?? [];
+  const activeTabId = state.activeTabIdByProjectId[projectId] ?? '';
+  const renderedIds = new Set([
+    ...(state.renderedTabIdsByProjectId[projectId] ?? []),
+    ...(activeTabId ? [activeTabId] : []),
+  ]);
+  return tabs.filter(tab => renderedIds.has(tab.id));
 }
 
 export const isFilePreviewTab = (tab: PreviewWorkbenchTab | null): tab is FilePreviewTab =>

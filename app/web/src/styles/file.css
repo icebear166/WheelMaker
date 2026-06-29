@@ -89,6 +89,16 @@
   background: var(--panel-3);
 }
 
+.preview-workbench-render-cache,
+.preview-workbench-rendered-tab {
+  min-width: 100%;
+  min-height: 100%;
+}
+
+.preview-workbench-rendered-tab.active {
+  display: block;
+}
+
 .chat-file-workbench-project-select {
   min-width: 104px;
   max-width: 168px;

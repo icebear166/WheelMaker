@@ -6,6 +6,7 @@ import {
   reconcileSessionReadMessages,
   replaceSessionMessages,
   sanitizeCachedSessionMessages,
+  shouldMaterializeRealtimeSessionMessages,
   shouldRequestSessionReadForIncomingTurn,
 } from '../web/src/chat/turns/chatSync';
 import {
@@ -215,6 +216,11 @@ describe('chat session read reconciliation', () => {
         promptDone,
       ),
     ).toBe(false);
+  });
+
+  test('materializes realtime decoded messages only for the selected session', () => {
+    expect(shouldMaterializeRealtimeSessionMessages(true)).toBe(true);
+    expect(shouldMaterializeRealtimeSessionMessages(false)).toBe(false);
   });
 
   test('keeps checkpointed turns and merges returned turn delta', () => {

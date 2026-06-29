@@ -120,6 +120,10 @@ export function needsPromptTurnRefresh(
   return false;
 }
 
+export function shouldMaterializeRealtimeSessionMessages(isSelectedSession: boolean): boolean {
+  return isSelectedSession;
+}
+
 export function getLatestSessionReadCursor(messages: RegistryChatMessage[]): SessionReadCursor {
   const finishedTurns = new Set<number>();
   for (const message of messages) {

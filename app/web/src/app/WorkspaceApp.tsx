@@ -52,6 +52,7 @@ import {
   getLatestSessionReadCursor,
   isFinishedChatMessage,
   needsPromptTurnRefresh,
+  shouldMaterializeRealtimeSessionMessages,
 } from '../chat/turns/chatSync';
 import { compareUpdatedAtDesc } from '../workspace/sessionTime';
 import {
@@ -391,12 +392,15 @@ import {
   isPortRelayPreviewTab,
   isPromptDiffPreviewTab,
   openPreviewTab,
+  previewRenderedTabs,
   previewTabId,
   selectPreviewProject,
+  selectPreviewTab,
   updatePreviewTab,
   updatePreviewTabAfterLoad,
   type AttachmentPreviewTab,
   type FilePreviewTab,
+  type PreviewWorkbenchTab,
   type PreviewSearchMatch,
   type PromptDiffPreviewFile,
   type PromptDiffPreviewTab,
@@ -406,6 +410,7 @@ import { FilePreviewPane } from '../file/FilePreviewPane';
 import { FileSurface } from '../file/FileSurface';
 import { GitSurface } from '../git/GitSurface';
 import { GitSidebar } from '../git/GitSidebar';
+import {resolveGitRefreshForSync} from '../git/gitRefreshPolicy';
 import {
   buildWorkingTreeFiles,
   isHeavyGeneratedDiffPath,
@@ -2821,6 +2826,7 @@ export function App() {
   const activeWorkbenchTab = activePreviewTab(previewWorkbench);
   const previewWorkbenchTabs =
     previewWorkbench.tabsByProjectId[previewWorkbench.activeProjectId] ?? [];
+  const previewWorkbenchRenderedTabs = previewRenderedTabs(previewWorkbench);
   const previewWorkbenchHasTabs = Object.values(previewWorkbench.tabsByProjectId)
     .some(tabs => tabs.length > 0);
   const chatFilePeek = isFilePreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;
@@ -14938,15 +14944,32 @@ export function App() {
       if (latestSelectedFile && needsProjectOrFsRefresh) {
         await readSelectedFile(latestSelectedFile);
       }
-      const needsGitRefresh = sync.staleDomains.some(
-        domain =>
-          domain === 'git' || domain === 'worktree' || domain === 'project',
-      );
-      if (needsGitRefresh) {
+      const gitRefreshPlan = resolveGitRefreshForSync({
+        activeTab: tabRef.current,
+        staleDomains: sync.staleDomains,
+        gitRev: sync.gitRev ?? '',
+        worktreeRev: sync.worktreeRev ?? '',
+      });
+      const rememberGitSyncRevs = () => {
+        if (gitRefreshPlan.nextKnownGitRev) {
+          knownGitRevRef.current = gitRefreshPlan.nextKnownGitRev;
+        }
+        if (gitRefreshPlan.nextKnownWorktreeRev) {
+          knownWorktreeRevRef.current = gitRefreshPlan.nextKnownWorktreeRev;
+        }
+      };
+      if (gitRefreshPlan.shouldLoadGit) {
+        setGitLoadedProjectId('');
         const gitLoaded = await loadGit();
         if (gitLoaded) {
-          knownGitRevRef.current = sync.gitRev ?? '';
+          rememberGitSyncRevs();
         }
+      } else if (gitRefreshPlan.shouldRefreshGitStatusOnly) {
+        await refreshGitStatusOnly();
+        rememberGitSyncRevs();
+      } else if (gitRefreshPlan.shouldInvalidateGitView) {
+        setGitLoadedProjectId('');
+        rememberGitSyncRevs();
       }
       knownProjectRevRef.current = sync.projectRev ?? '';
       if (!silent) {
@@ -15220,15 +15243,16 @@ export function App() {
         };
         const gapReadCursor = shouldReadRepairForIncomingTurn(turnState, incomingTurn);
         mergeRealtimeTurn(turnState, incomingTurn);
-        const merged = messagesFromTurnStore(runtimeKey, sessionId);
         const latestSyncCursor = turnState.cursor;
         chatFinishedCursorRef.current[runtimeKey] = latestSyncCursor.turnIndex;
-        chatMessageStoreRef.current[runtimeKey] = merged;
         if (incomingTurn.finished) {
           markChatSessionTurnsDirty(runtimeKey);
         }
 
-        if (isSelectedSession) {
+        let merged: RegistryChatMessage[] | null = null;
+        if (shouldMaterializeRealtimeSessionMessages(isSelectedSession)) {
+          merged = messagesFromTurnStore(runtimeKey, sessionId);
+          chatMessageStoreRef.current[runtimeKey] = merged;
           setVisibleChatMessagesForRuntimeKey(runtimeKey, merged, {
             followLatest: chatAutoScrollFollowRef.current,
           });
@@ -15253,6 +15277,7 @@ export function App() {
         if (
           message.method === 'prompt_done' &&
           isSelectedSession &&
+          merged &&
           needsPromptTurnRefresh(merged, message)
         ) {
           refreshSessionTurns(
@@ -19134,17 +19159,7 @@ export function App() {
   const selectWorkbenchTab = (tabId: string) => {
     setPreviewWorkbench(current => {
       const projectId = current.activeProjectId;
-      const tab = (current.tabsByProjectId[projectId] ?? []).find(item => item.id === tabId);
-      if (!tab) {
-        return current;
-      }
-      return {
-        ...current,
-        activeTabIdByProjectId: {
-          ...current.activeTabIdByProjectId,
-          [projectId]: tabId,
-        },
-      };
+      return selectPreviewTab(current, projectId, tabId);
     });
   };
   const closeWorkbenchTab = (tabId: string) => {
@@ -19384,24 +19399,7 @@ export function App() {
     }
     return null;
   };
-  const renderPreviewWorkbenchBody = (mode: 'desktop' | 'mobile') => {
-    const tab = activeWorkbenchTab;
-    if (!tab) {
-      return (
-        <div className="chat-file-workbench-empty">
-          <span className="codicon codicon-layout-sidebar-right" aria-hidden="true" />
-          <span>No preview selected</span>
-          <button
-            type="button"
-            className="chat-file-workbench-empty-action"
-            onClick={toggleChatFilePreviewTree}
-          >
-            <span className="codicon codicon-files" aria-hidden="true" />
-            <span>Open files</span>
-          </button>
-        </div>
-      );
-    }
+  const renderPreviewWorkbenchTabBody = (tab: PreviewWorkbenchTab, mode: 'desktop' | 'mobile') => {
     if (tab.type === 'file') {
       return (
         <ChatFilePeekViewer
@@ -19462,6 +19460,45 @@ export function App() {
       );
     }
     return renderPortRelayWorkbenchSurface(mode);
+  };
+  const renderPreviewWorkbenchBody = (mode: 'desktop' | 'mobile') => {
+    const activeTab = activeWorkbenchTab;
+    if (!activeTab) {
+      return (
+        <div className="chat-file-workbench-empty">
+          <span className="codicon codicon-layout-sidebar-right" aria-hidden="true" />
+          <span>No preview selected</span>
+          <button
+            type="button"
+            className="chat-file-workbench-empty-action"
+            onClick={toggleChatFilePreviewTree}
+          >
+            <span className="codicon codicon-files" aria-hidden="true" />
+            <span>Open files</span>
+          </button>
+        </div>
+      );
+    }
+    const renderedTabs = previewWorkbenchRenderedTabs.filter(tab =>
+      tab.type !== 'port-relay' || tab.id === activeTab.id,
+    );
+    return (
+      <div className="preview-workbench-render-cache">
+        {renderedTabs.map(tab => {
+          const active = tab.id === activeTab.id;
+          return (
+            <div
+              key={`${tab.projectId}:${tab.id}`}
+              className={`preview-workbench-rendered-tab${active ? ' active' : ''}`}
+              hidden={!active}
+              aria-hidden={active ? undefined : true}
+            >
+              {renderPreviewWorkbenchTabBody(tab, mode)}
+            </div>
+          );
+        })}
+      </div>
+    );
   };
   const previewSearchStatus = previewSearchUnavailableMessage
     ? previewSearchUnavailableMessage

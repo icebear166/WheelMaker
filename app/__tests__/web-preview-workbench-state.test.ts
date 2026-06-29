@@ -7,9 +7,11 @@ import {
   cyclePreviewTabId,
   ensurePreviewProjectVisible,
   openPreviewTab,
+  previewRenderedTabs,
   previewTabId,
   previewWorkbenchTabTooltip,
   selectPreviewProject,
+  selectPreviewTab,
   updatePreviewTabAfterLoad,
 } from '../web/src/preview/previewWorkbenchState';
 
@@ -70,6 +72,42 @@ describe('preview workbench state', () => {
     expect(activePreviewTab(p1)?.id).toBe('prompt-diff:s1:diff-1');
     const p2 = selectPreviewProject(p1, 'p2');
     expect(activePreviewTab(p2)?.id).toBe('port-relay:hub-a:5173:/app');
+  });
+
+  test('tracks visited tabs for render caching within the active project', () => {
+    const state = openPreviewTab(
+      openPreviewTab(createPreviewWorkbenchState('p1'), {
+        type: 'file',
+        projectId: 'p1',
+        path: 'src/a.ts',
+        targetLine: null,
+        title: 'a.ts',
+      }),
+      {
+        type: 'file',
+        projectId: 'p1',
+        path: 'src/b.ts',
+        targetLine: null,
+        title: 'b.ts',
+      },
+    );
+
+    expect(previewRenderedTabs(state).map(tab => tab.id)).toEqual([
+      'file:src/a.ts',
+      'file:src/b.ts',
+    ]);
+
+    const selected = selectPreviewTab(state, 'p1', 'file:src/a.ts');
+    expect(activePreviewTab(selected)?.id).toBe('file:src/a.ts');
+    expect(previewRenderedTabs(selected).map(tab => tab.id)).toEqual([
+      'file:src/a.ts',
+      'file:src/b.ts',
+    ]);
+
+    const closed = closePreviewTab(selected, 'p1', 'file:src/a.ts');
+    expect(previewRenderedTabs(closed).map(tab => tab.id)).toEqual([
+      'file:src/b.ts',
+    ]);
   });
 
   test('closes the active tab to a neighboring tab and keeps an empty project', () => {
