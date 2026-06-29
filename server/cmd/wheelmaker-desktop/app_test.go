@@ -521,7 +521,7 @@ func TestDesktopWebSourceRefreshActualSourceUsesEmbeddedWhenRemoteFails(t *testi
 	}
 }
 
-func TestDesktopAssetHandlerPrefersRemoteAndFallsBackToEmbedded(t *testing.T) {
+func TestDesktopAssetHandlerKeepsRemoteSourceWhenRemoteAssetFails(t *testing.T) {
 	remoteFails := false
 	remote := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if remoteFails {
@@ -565,10 +565,13 @@ func TestDesktopAssetHandlerPrefersRemoteAndFallsBackToEmbedded(t *testing.T) {
 	remoteFails = true
 	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
-	if got := rec.Body.String(); !strings.Contains(got, "embedded") {
-		t.Fatalf("fallback body=%q", got)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status=%d want %d body=%q", rec.Code, http.StatusNotFound, rec.Body.String())
 	}
-	if runtime.State().ActualSource != desktopWebSourceActualEmbedded {
+	if strings.Contains(rec.Body.String(), "embedded") {
+		t.Fatalf("body=%q should not include embedded fallback", rec.Body.String())
+	}
+	if runtime.State().ActualSource != desktopWebSourceActualRemote {
 		t.Fatalf("ActualSource=%q", runtime.State().ActualSource)
 	}
 }
@@ -672,5 +675,39 @@ func TestDesktopAssetHandlerFallsBackToRemoteIndexForWorkspaceRoute(t *testing.T
 
 	if got := rec.Body.String(); !strings.Contains(got, "remote shell") {
 		t.Fatalf("body=%q should use remote shell fallback", got)
+	}
+}
+
+func TestDesktopAssetHandlerDoesNotFallbackToEmbeddedIndexForRemoteWorkspaceRoute(t *testing.T) {
+	remote := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	}))
+	defer remote.Close()
+
+	runtime := newDesktopWebSourceRuntime(&memoryDesktopWebSourceConfigStore{config: desktopWebSourceConfig{
+		WebSourcePreference: desktopWebSourcePreferenceAuto,
+	}}, remote.Client())
+	runtime.mu.Lock()
+	runtime.config.WebSourcePreference = desktopWebSourcePreferenceAuto
+	runtime.config.RemoteWebURL = remote.URL + "/"
+	runtime.actual = desktopWebSourceActualRemote
+	runtime.actualRemoteURL = remote.URL + "/"
+	runtime.mu.Unlock()
+	handler := newDesktopAssetHandlerWithWebSource(fstest.MapFS{
+		"index.html": {Data: []byte("<html>embedded shell</html>")},
+	}, runtime)
+
+	req := httptest.NewRequest(http.MethodGet, "/settings/update", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status=%d want %d body=%q", rec.Code, http.StatusNotFound, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "embedded shell") {
+		t.Fatalf("body=%q should not include embedded fallback", rec.Body.String())
+	}
+	if runtime.State().ActualSource != desktopWebSourceActualRemote {
+		t.Fatalf("ActualSource=%q", runtime.State().ActualSource)
 	}
 }

@@ -89,10 +89,14 @@ func newDesktopAssetHandlerWithWebSource(assets fs.FS, webSource *desktopWebSour
 		if serveDesktopNativeShellStubAsset(w, r, name) {
 			return
 		}
-		if webSource != nil && serveRemoteDesktopAsset(w, r, name, webSource) {
-			return
-		}
 		if webSource != nil {
+			if _, ok := webSource.remoteBaseURL(); ok {
+				if serveRemoteDesktopAsset(w, r, name, webSource) {
+					return
+				}
+				serveDesktopAssetNotFound(w, r)
+				return
+			}
 			webSource.SetActualSource(desktopWebSourceActualEmbedded)
 		}
 		serveEmbeddedDesktopAsset(w, r, assets, name)
@@ -117,6 +121,14 @@ func serveDesktopNativeShellStubAsset(w http.ResponseWriter, r *http.Request, na
 		_, _ = io.WriteString(w, stub.body)
 	}
 	return true
+}
+
+func serveDesktopAssetNotFound(w http.ResponseWriter, r *http.Request) {
+	header := w.Header()
+	header.Set("Cache-Control", "no-store")
+	header.Set("Pragma", "no-cache")
+	header.Set("Expires", "0")
+	http.NotFound(w, r)
 }
 
 func desktopNativeShellStubAssetForName(name string) (desktopNativeShellStubAsset, bool) {
