@@ -299,11 +299,14 @@ describe('web chat file peek viewer', () => {
 
     expect(mainTsx).toContain('const previewFileTreeSearchInputRef = useRef<HTMLInputElement | null>(null);');
     expect(mainTsx).toContain('const [previewFileTreeSearchQuery, setPreviewFileTreeSearchQuery] = useState(\'\');');
+    expect(mainTsx).toContain('const [previewFileTreeSearchCollapsedDirs, setPreviewFileTreeSearchCollapsedDirs] = useState<string[]>([]);');
     expect(mainTsx).toContain('className="preview-workbench-tree-search-input"');
     expect(mainTsx).toContain('const previewFileTreeSearchTree = useMemo(');
-    expect(mainTsx).toContain('buildFileSearchResultTree(previewFileTreeSearchResults)');
+    expect(mainTsx).toContain('buildFileSearchResultTree(previewFileTreeSearchResults, {');
+    expect(mainTsx).toContain('dirEntries: chatFilePreviewDirEntries');
     expect(mainTsx).toContain('const previewFileTreeSearchVisibleResults = useMemo(');
-    expect(mainTsx).toContain('flattenFileSearchResultTree(previewFileTreeSearchTree)');
+    expect(mainTsx).toContain('flattenFileSearchResultTree(previewFileTreeSearchTree, {');
+    expect(mainTsx).toContain('collapsedDirPaths: previewFileTreeSearchCollapsedDirs');
     expect(mainTsx).toContain('const handlePreviewFileTreeKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {');
     expect(mainTsx).toContain('isArrowNavigationKey(event.key)');
     expect(mainTsx).toContain('startPreviewFileTreeSearchFromKey(event.key)');
@@ -312,6 +315,11 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('const result = previewFileTreeSearchVisibleResults[previewFileTreeSearchActiveIndex];');
     expect(mainTsx).toContain('service.searchFileIndex(targetProjectId, {');
     expect(mainTsx).toContain('renderPreviewFileTreeSearchResults(');
+    expect(mainTsx).toContain('const togglePreviewFileTreeSearchDirectory = (path: string) => {');
+    expect(mainTsx).toContain('const collapsed = previewFileTreeSearchCollapsedDirs.includes(node.path);');
+    expect(mainTsx).toContain('onClick={() => togglePreviewFileTreeSearchDirectory(node.path)}');
+    expect(mainTsx).toContain("collapsed ? 'codicon-chevron-right' : 'codicon-chevron-down'");
+    expect(mainTsx).toContain('{collapsed ? null : renderPreviewFileTreeSearchResults(node.children, depth + 1)}');
     expect(mainTsx).not.toContain('className="path"');
 
     expect(stylesCss).toContain('.preview-workbench-tree-search-shell');

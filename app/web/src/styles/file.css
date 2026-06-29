@@ -512,6 +512,14 @@
   cursor: pointer;
 }
 
+.preview-workbench-file-search-node.dir {
+  cursor: pointer;
+}
+
+.preview-workbench-file-search-node.dir:hover {
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+
 .preview-workbench-file-search-node.file:hover,
 .preview-workbench-file-search-node.file.selected {
   background: color-mix(in srgb, var(--accent) 15%, transparent);

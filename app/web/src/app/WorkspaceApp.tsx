@@ -532,6 +532,7 @@ const loadFileIconResources = () => {
   return fileIconResourcesPromise;
 };
 type DirEntries = Record<string, RegistryFsEntry[]>;
+const EMPTY_DIR_ENTRIES: DirEntries = {'.': []};
 type VoiceTransportMode = 'registry' | 'android-native';
 type ChatAttachment = {
   id: string;
@@ -2813,6 +2814,7 @@ export function App() {
   const [previewFileTreeSearchError, setPreviewFileTreeSearchError] = useState('');
   const [previewFileTreeSearchIndexed, setPreviewFileTreeSearchIndexed] = useState(true);
   const [previewFileTreeSearchActiveIndex, setPreviewFileTreeSearchActiveIndex] = useState(0);
+  const [previewFileTreeSearchCollapsedDirs, setPreviewFileTreeSearchCollapsedDirs] = useState<string[]>([]);
   const previewFileTreeSearchInputRef = useRef<HTMLInputElement | null>(null);
   const previewFileTreeSearchTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const previewFileTreeSearchGenerationRef = useRef(0);
@@ -7871,13 +7873,19 @@ export function App() {
     : false;
   const hasPinnedFiles = pinnedFiles.length > 0;
   const fileLines = useMemo(() => fileContent.split('\n'), [fileContent]);
+  const chatFilePreviewDirEntries =
+    chatFilePreviewDirEntriesByProject[previewWorkbench.activeProjectId] ?? EMPTY_DIR_ENTRIES;
   const previewFileTreeSearchTree = useMemo(
-    () => buildFileSearchResultTree(previewFileTreeSearchResults),
-    [previewFileTreeSearchResults],
+    () => buildFileSearchResultTree(previewFileTreeSearchResults, {
+      dirEntries: chatFilePreviewDirEntries,
+    }),
+    [chatFilePreviewDirEntries, previewFileTreeSearchResults],
   );
   const previewFileTreeSearchVisibleResults = useMemo(
-    () => flattenFileSearchResultTree(previewFileTreeSearchTree),
-    [previewFileTreeSearchTree],
+    () => flattenFileSearchResultTree(previewFileTreeSearchTree, {
+      collapsedDirPaths: previewFileTreeSearchCollapsedDirs,
+    }),
+    [previewFileTreeSearchCollapsedDirs, previewFileTreeSearchTree],
   );
   const previewFileTreeSearchActivePath =
     previewFileTreeSearchVisibleResults[previewFileTreeSearchActiveIndex]?.path ?? '';
@@ -7892,6 +7900,14 @@ export function App() {
     }
     return matches;
   }, [fileContent, fileLines, fileSearchQuery]);
+
+  useEffect(() => {
+    setPreviewFileTreeSearchActiveIndex(current =>
+      previewFileTreeSearchVisibleResults.length === 0
+        ? 0
+        : Math.min(current, previewFileTreeSearchVisibleResults.length - 1),
+    );
+  }, [previewFileTreeSearchVisibleResults.length]);
 
   const applyHydratedProjectState = (
     hydrated: {
@@ -8809,6 +8825,7 @@ export function App() {
     setPreviewFileTreeSearchError('');
     setPreviewFileTreeSearchIndexed(true);
     setPreviewFileTreeSearchActiveIndex(0);
+    setPreviewFileTreeSearchCollapsedDirs([]);
   }, [clearPreviewFileTreeSearchTimer]);
 
   const focusPreviewFileTreeSearch = useCallback(() => {
@@ -8870,6 +8887,7 @@ export function App() {
         setPreviewFileTreeSearchError('');
         setPreviewFileTreeSearchIndexed(true);
         setPreviewFileTreeSearchActiveIndex(0);
+        setPreviewFileTreeSearchCollapsedDirs([]);
         return;
       }
       if (!targetProjectId) {
@@ -8878,8 +8896,10 @@ export function App() {
         setPreviewFileTreeSearchError('Select a project first.');
         setPreviewFileTreeSearchIndexed(true);
         setPreviewFileTreeSearchActiveIndex(0);
+        setPreviewFileTreeSearchCollapsedDirs([]);
         return;
       }
+      setPreviewFileTreeSearchCollapsedDirs([]);
       setPreviewFileTreeSearchLoading(true);
       const generation = previewFileTreeSearchGenerationRef.current + 1;
       previewFileTreeSearchGenerationRef.current = generation;
@@ -19254,10 +19274,15 @@ export function App() {
   ) : null;
   const previewWorkbenchProjects = visibleProjectItems;
   const previewWorkbenchActiveTab = activeWorkbenchTab;
-  const chatFilePreviewDirEntries =
-    chatFilePreviewDirEntriesByProject[previewWorkbench.activeProjectId] ?? {'.': []};
   const chatFilePreviewLoadingDirs =
     chatFilePreviewLoadingDirsByProject[previewWorkbench.activeProjectId] ?? {};
+  const togglePreviewFileTreeSearchDirectory = (path: string) => {
+    setPreviewFileTreeSearchCollapsedDirs(current =>
+      current.includes(path)
+        ? current.filter(item => item !== path)
+        : [...current, path],
+    );
+  };
   const renderPreviewFileTreeSearchResults = (
     nodes: FileSearchResultTreeNode[],
     depth = 0,
@@ -19265,17 +19290,22 @@ export function App() {
     nodes.map(node => {
       const paddingLeft = 10 + depth * 14;
       if (node.kind === 'dir') {
+        const collapsed = previewFileTreeSearchCollapsedDirs.includes(node.path);
         return (
           <div key={`preview-file-search-dir:${node.path}`}>
-            <div
+            <button
+              type="button"
               className="preview-workbench-file-search-node dir"
               style={{paddingLeft}}
+              onClick={() => togglePreviewFileTreeSearchDirectory(node.path)}
+              title={node.path}
+              aria-expanded={!collapsed}
             >
-              <span className="caret codicon codicon-chevron-down" />
-              <span className="node-icon codicon codicon-folder-opened" />
+              <span className={`caret codicon ${collapsed ? 'codicon-chevron-right' : 'codicon-chevron-down'}`} />
+              <span className={`node-icon codicon ${collapsed ? 'codicon-folder' : 'codicon-folder-opened'}`} />
               <span className="label">{node.name}</span>
-            </div>
-            {renderPreviewFileTreeSearchResults(node.children, depth + 1)}
+            </button>
+            {collapsed ? null : renderPreviewFileTreeSearchResults(node.children, depth + 1)}
           </div>
         );
       }
