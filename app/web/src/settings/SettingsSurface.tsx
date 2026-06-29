@@ -141,29 +141,31 @@ export function MobileSettingsShortcutBar({
       data-active-index={activeIndex}
       aria-label="Settings shortcuts"
     >
-      <button
-        type="button"
-        className={`mobile-settings-shortcut-button${rootActive ? ' active' : ''}`}
-        onClick={onRootSelect}
-        title="Settings"
-        aria-label="Settings"
-      >
-        <span className="codicon codicon-settings-gear" />
-        <span className="mobile-settings-shortcut-label">Settings</span>
-      </button>
-      {MOBILE_SETTINGS_SHORTCUTS.map(shortcut => (
+      <div className="mobile-settings-shortcut-track">
         <button
-          key={shortcut.detail}
           type="button"
-          className={`mobile-settings-shortcut-button${activeDetail === shortcut.detail ? ' active' : ''}`}
-          onClick={() => onDetailSelect(shortcut.detail)}
-          title={shortcut.title}
-          aria-label={shortcut.title}
+          className={`mobile-settings-shortcut-button${rootActive ? ' active' : ''}`}
+          onClick={onRootSelect}
+          title="Settings"
+          aria-label="Settings"
         >
-          <span className={`codicon ${shortcut.iconClass}`} />
-          <span className="mobile-settings-shortcut-label">{shortcut.label}</span>
+          <span className="codicon codicon-settings-gear" />
+          <span className="mobile-settings-shortcut-label">Settings</span>
         </button>
-      ))}
+        {MOBILE_SETTINGS_SHORTCUTS.map(shortcut => (
+          <button
+            key={shortcut.detail}
+            type="button"
+            className={`mobile-settings-shortcut-button${activeDetail === shortcut.detail ? ' active' : ''}`}
+            onClick={() => onDetailSelect(shortcut.detail)}
+            title={shortcut.title}
+            aria-label={shortcut.title}
+          >
+            <span className={`codicon ${shortcut.iconClass}`} />
+            <span className="mobile-settings-shortcut-label">{shortcut.label}</span>
+          </button>
+        ))}
+      </div>
     </nav>
   );
 }

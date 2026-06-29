@@ -222,21 +222,29 @@ textarea,
 .mobile-settings-shortcut-bar {
   flex: 0 0 auto;
   position: relative;
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  align-items: center;
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
   border-top: 1px solid var(--border);
   background: color-mix(in srgb, var(--panel) 62%, var(--panel-3));
-  padding: 0 0 env(safe-area-inset-bottom, 0px);
+  padding: 0 12px env(safe-area-inset-bottom, 0px);
 }
 
-.mobile-settings-shortcut-bar::before {
+.mobile-settings-shortcut-track {
+  position: relative;
+  width: min(100%, 340px);
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: center;
+}
+
+.mobile-settings-shortcut-track::before {
   content: '';
   position: absolute;
   left: 0;
   top: 0;
   z-index: 0;
-  width: calc(100% / 6);
+  width: calc(100% / 5);
   height: 2px;
   border-radius: 0 0 2px 2px;
   background: var(--accent);
@@ -245,24 +253,20 @@ textarea,
   pointer-events: none;
 }
 
-.mobile-settings-shortcut-bar[data-active-index='1']::before {
+.mobile-settings-shortcut-bar[data-active-index='1'] .mobile-settings-shortcut-track::before {
   transform: translateX(100%);
 }
 
-.mobile-settings-shortcut-bar[data-active-index='2']::before {
+.mobile-settings-shortcut-bar[data-active-index='2'] .mobile-settings-shortcut-track::before {
   transform: translateX(200%);
 }
 
-.mobile-settings-shortcut-bar[data-active-index='3']::before {
+.mobile-settings-shortcut-bar[data-active-index='3'] .mobile-settings-shortcut-track::before {
   transform: translateX(300%);
 }
 
-.mobile-settings-shortcut-bar[data-active-index='4']::before {
+.mobile-settings-shortcut-bar[data-active-index='4'] .mobile-settings-shortcut-track::before {
   transform: translateX(400%);
-}
-
-.mobile-settings-shortcut-bar[data-active-index='5']::before {
-  transform: translateX(500%);
 }
 
 .mobile-settings-shortcut-button {
