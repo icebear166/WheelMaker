@@ -2573,23 +2573,6 @@ export function App() {
   const tab = workspaceUiState.shared.tab as Tab;
   const [fileIconResources, setFileIconResources] = useState<FileIconResources | null>(null);
 
-  useEffect(() => {
-    if (tab !== 'file' || fileIconResources) {
-      return;
-    }
-    let cancelled = false;
-    loadFileIconResources()
-      .then(resources => {
-        if (!cancelled) {
-          setFileIconResources(resources);
-        }
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [tab, fileIconResources]);
-
   const setiFontCss = useMemo(
     () => fileIconResources?.setiFontCss() ?? '',
     [fileIconResources],
@@ -2864,6 +2847,29 @@ export function App() {
   const chatPreviewOpen = chatPreviewManualOpen || (chatPreviewHasContent && !chatPreviewManualCollapsed);
   const portRelayWorkbenchOpen = !!activePortRelayPreview && chatPreviewOpen;
   const mobilePortRelayFrameOpen = !isWide && portRelayWorkbenchOpen;
+  const fileIconResourcesNeeded = tab === 'file' ||
+    (
+      chatPreviewOpen &&
+      previewWorkbench.treeOpen &&
+      (!activeWorkbenchTab || activeWorkbenchTab.type === 'file')
+    );
+
+  useEffect(() => {
+    if (!fileIconResourcesNeeded || fileIconResources) {
+      return;
+    }
+    let cancelled = false;
+    loadFileIconResources()
+      .then(resources => {
+        if (!cancelled) {
+          setFileIconResources(resources);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [fileIconResources, fileIconResourcesNeeded]);
   const portRelayReady = portRelaySnapshot.enabled && portRelaySnapshot.status === 'Up';
   const portRelayAccessCodeUnknown = portRelaySnapshot.enabled && (
     !portRelayAccessCode ||
