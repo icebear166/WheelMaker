@@ -13,12 +13,11 @@ import {
 
 describe('settings navigation model', () => {
   test('classifies settings pages into root, peers, and children', () => {
-    expect(SETTINGS_PEER_DETAILS).toEqual(['update', 'skills', 'portRelay', 'tokenStats', 'ccSwitch']);
+    expect(SETTINGS_PEER_DETAILS).toEqual(['update', 'skills', 'portRelay', 'tokenStats']);
     expect(SETTINGS_CHILD_DETAILS).toEqual(['connectionStatus', 'database', 'debugLogs']);
 
     expect(settingsPageKind(null)).toBe('root');
     expect(settingsPageKind('update')).toBe('peer');
-    expect(settingsPageKind('ccSwitch')).toBe('peer');
     expect(settingsPageKind('connectionStatus')).toBe('child');
     expect(settingsPageKind('database')).toBe('child');
 
@@ -34,7 +33,6 @@ describe('settings navigation model', () => {
     expect(mobileSettingsShortcutIndex('skills')).toBe(2);
     expect(mobileSettingsShortcutIndex('portRelay')).toBe(3);
     expect(mobileSettingsShortcutIndex('tokenStats')).toBe(4);
-    expect(mobileSettingsShortcutIndex('ccSwitch')).toBe(5);
     expect(mobileSettingsShortcutIndex('database')).toBe(0);
   });
 
@@ -44,7 +42,6 @@ describe('settings navigation model', () => {
     expect(settingsDetailTitle('skills')).toBe('Skills');
     expect(settingsDetailTitle('portRelay')).toBe('Port Relay');
     expect(settingsDetailTitle('tokenStats')).toBe('Token Stats');
-    expect(settingsDetailTitle('ccSwitch')).toBe('CC Switch');
     expect(settingsDetailTitle('connectionStatus')).toBe('Connection Status');
     expect(settingsDetailTitle('database')).toBe('Database');
     expect(settingsDetailTitle('debugLogs')).toBe('Logs');

@@ -69,12 +69,6 @@ export const MOBILE_SETTINGS_SHORTCUTS: readonly MobileSettingsShortcut[] = [
     label: 'Token Stats',
     iconClass: 'codicon-graph-line',
   },
-  {
-    detail: 'ccSwitch',
-    title: 'CC Switch',
-    label: 'CC Switch',
-    iconClass: 'codicon-arrow-swap',
-  },
 ];
 
 export function settingsDetailTitle(detail: SettingsDetailId): string {
@@ -85,8 +79,6 @@ export function settingsDetailTitle(detail: SettingsDetailId): string {
       return 'Skills';
     case 'tokenStats':
       return 'Token Stats';
-    case 'ccSwitch':
-      return 'CC Switch';
     case 'database':
       return 'Database';
     case 'portRelay':

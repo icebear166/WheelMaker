@@ -454,7 +454,7 @@ describe('agent package update settings UI source structure', () => {
     expect(activityBar).toContain('codicon-radio-tower');
     expect(activityBar).toContain("openSettingsPeer('update')");
     expect(activityBar).toContain("openSettingsPeer('tokenStats')");
-    expect(activityBar).toContain("openSettingsPeer('ccSwitch')");
+    expect(activityBar).not.toContain("openSettingsPeer('ccSwitch')");
     expect(activityBar).toContain('handleDesktopPortRelaySelect');
     expect(activityBar.indexOf("title={reconnecting ? 'Reconnecting...' : 'Refresh project'}")).toBeLessThan(
       activityBar.indexOf('title="Settings"'),
@@ -465,12 +465,13 @@ describe('agent package update settings UI source structure', () => {
     expect(activityBar.indexOf('title="Update"')).toBeLessThan(activityBar.indexOf('title="Skills"'));
     expect(activityBar.indexOf('title="Skills"')).toBeLessThan(activityBar.indexOf('title="Port Relay"'));
     expect(activityBar.indexOf('title="Port Relay"')).toBeLessThan(activityBar.indexOf('title="Token Stats"'));
-    expect(activityBar.indexOf('title="Token Stats"')).toBeLessThan(activityBar.indexOf('title="CC Switch"'));
     expect(activityBar.indexOf('title="Update"')).toBeLessThan(activityBar.indexOf('title="Token Stats"'));
+    expect(activityBar).not.toContain('title="CC Switch"');
+    expect(activityBar).not.toContain('aria-label="CC Switch"');
     expect(activityBar).toContain("settingsDetailView === 'update'");
     expect(activityBar).toContain("settingsDetailView === 'tokenStats'");
     expect(activityBar).toContain("settingsDetailView === 'portRelay'");
-    expect(activityBar).toContain("settingsDetailView === 'ccSwitch'");
+    expect(activityBar).not.toContain("settingsDetailView === 'ccSwitch'");
     expect(activityBar).toContain("!isShortcutSettingsDetailActive");
     expect(mainTsx).toContain('const isShortcutSettingsDetailActive = sidebarSettingsOpen && isSettingsPeerDetail(settingsDetailView);');
 
@@ -495,7 +496,7 @@ describe('agent package update settings UI source structure', () => {
     expect(surfaceShortcuts.indexOf("detail: 'update'")).toBeLessThan(surfaceShortcuts.indexOf("detail: 'skills'"));
     expect(surfaceShortcuts.indexOf("detail: 'skills'")).toBeLessThan(surfaceShortcuts.indexOf("detail: 'portRelay'"));
     expect(surfaceShortcuts.indexOf("detail: 'portRelay'")).toBeLessThan(surfaceShortcuts.indexOf("detail: 'tokenStats'"));
-    expect(surfaceShortcuts.indexOf("detail: 'tokenStats'")).toBeLessThan(surfaceShortcuts.indexOf("detail: 'ccSwitch'"));
+    expect(surfaceShortcuts).not.toContain("detail: 'ccSwitch'");
     const surfaceBarStart = settingsSurfaceTsx.indexOf('export function MobileSettingsShortcutBar');
     const surfaceBarEnd = settingsSurfaceTsx.indexOf('export function MobileSettingsScreen', surfaceBarStart);
     const surfaceBar = settingsSurfaceTsx.slice(surfaceBarStart, surfaceBarEnd);

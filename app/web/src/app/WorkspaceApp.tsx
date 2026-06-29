@@ -494,9 +494,6 @@ const ConnectionStatusSettingsDetail = React.lazy(() => loadSettingsBundle().the
 const TokenStatsSettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.TokenStatsSettingsDetail,
 })));
-const CCSwitchSettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
-  default: module.CCSwitchSettingsDetail,
-})));
 const DatabaseSettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.DatabaseSettingsDetail,
 })));
@@ -15798,52 +15795,6 @@ export function App() {
       options,
     );
 
-  const renderCCSwitchSettingsDetail = (options?: SettingsDetailShellOptions) => {
-    const activeHub = (currentProject?.hubId || 'unknown').trim() || 'unknown';
-    const activeAgent = (selectedDraftChatSession?.agentType || selectedChatSession?.agentType || '').trim() || '-';
-    const profileCards = projects
-      .map(projectItem => {
-        const projectHub = (projectItem.hubId || 'local').trim() || 'local';
-        const projectSessions = projectSessionsByProjectId[projectItem.projectId] ?? [];
-        const projectAgents = getWideProjectAgents(projectItem, projectSessions);
-        const profiles = (projectItem.agentProfiles ?? [])
-          .map(profile => {
-            const profileName = (profile.name || '').trim();
-            if (!profileName) {
-              return null;
-            }
-            const skills = (profile.skills ?? [])
-              .map(skill => (skill || '').trim())
-              .filter(Boolean);
-            return { profileName, skills };
-          })
-          .filter((item): item is { profileName: string; skills: string[] } => item !== null);
-        return {
-          projectId: projectItem.projectId,
-          projectName: projectItem.name,
-          projectHub,
-          projectAgents,
-          profiles,
-        };
-      })
-      .filter(item => item.profiles.length > 0);
-
-    return renderSettingsDetailShell(
-      'CC Switch',
-      <React.Suspense fallback={null}>
-        <CCSwitchSettingsDetail
-          activeHub={activeHub}
-          activeAgent={activeAgent}
-          profileCards={profileCards}
-          tagVariantClass={tagVariantClass}
-          hubAccentStyle={hubAccentStyle}
-        />
-      </React.Suspense>,
-      undefined,
-      options,
-    );
-  };
-
   const renderDatabaseSettingsDetail = (options?: SettingsDetailShellOptions) =>
     renderSettingsDetailShell(
       'Database',
@@ -15940,9 +15891,6 @@ export function App() {
     }
     if (detail === 'skills') {
       return renderSkillsSettingsDetail(options);
-    }
-    if (detail === 'ccSwitch') {
-      return renderCCSwitchSettingsDetail(options);
     }
     if (detail === 'tokenStats') {
       return renderTokenStatsSettingsDetail(options);
@@ -18979,15 +18927,6 @@ export function App() {
           aria-label="Token Stats"
         >
           <span className="codicon codicon-graph-line" />
-        </button>
-        <button
-          type="button"
-          className={`desktop-activity-button${sidebarSettingsOpen && settingsDetailView === 'ccSwitch' ? ' active' : ''}`}
-          onClick={() => openSettingsPeer('ccSwitch')}
-          title="CC Switch"
-          aria-label="CC Switch"
-        >
-          <span className="codicon codicon-arrow-swap" />
         </button>
       </div>
     </nav>
