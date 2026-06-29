@@ -18,6 +18,7 @@ import type {
   RegistryGitCommit,
   RegistryGitCommitFile,
   RegistryGitFileDiff,
+  RegistryGitRev,
   RegistryGitStatus,
   RegistryHub,
   RegistryHubState,
@@ -69,8 +70,6 @@ import type {
   RegistrySkillCommandResponse,
   RegistrySkillInstallPayload,
   RegistrySkillScopePayload,
-  RegistrySyncCheckPayload,
-  RegistrySyncCheckResponse,
   RegistryTokenProvider,
   RegistryDeepSeekTokenStats,
   RegistryTokenScanResult,
@@ -718,18 +717,17 @@ export class RegistryRepository {
     return (resp.payload ?? {}) as RegistryPortRelaySnapshot;
   }
 
-  async syncCheck(projectId: string, payload: RegistrySyncCheckPayload): Promise<RegistrySyncCheckResponse> {
+  async gitRev(projectId: string): Promise<RegistryGitRev> {
     const resp = await this.client.request({
-      method: RegistryMethods.ProjectSyncCheck,
+      method: RegistryMethods.ProjectGitRev,
       projectId,
-      payload,
+      payload: {},
+      timeoutMs: 8000,
     });
-    const body = (resp.payload ?? {}) as Partial<RegistrySyncCheckResponse>;
+    const body = (resp.payload ?? {}) as Partial<RegistryGitRev>;
     return {
-      projectRev: body.projectRev ?? '',
       gitRev: body.gitRev ?? '',
       worktreeRev: body.worktreeRev ?? '',
-      staleDomains: Array.isArray(body.staleDomains) ? body.staleDomains.filter(item => typeof item === 'string') : [],
     };
   }
 

@@ -10,7 +10,8 @@ describe('web directory expand resilience', () => {
     expect(mainTsx).toContain('Failed to load directory');
     expect(mainTsx).toContain('setExpandedDirs(prev => prev.filter(item => item !== path));');
     expect(mainTsx).not.toContain('toggleDirectory(entry.path).catch(() => undefined);');
-    expect(mainTsx).toContain('workspaceController.refreshProject(projectId, [');
+    expect(mainTsx).toContain('const activeProjectId = projectIdRef.current || projectId;');
+    expect(mainTsx).toContain('workspaceController.refreshProject(activeProjectId, [');
     expect(workspaceControllerTs).toContain('for (const dirPath of expandedSnapshot) {');
     expect(workspaceControllerTs).not.toContain('Promise.all(expandedSnapshot.map');
   });

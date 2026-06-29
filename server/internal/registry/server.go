@@ -429,8 +429,6 @@ func (s *Server) handleRequest(state *connectionState, in envelope) {
 		s.handleProjectList(state.peer, state, in)
 	case in.Method == rp.RegistryMethodDebugUploadLog:
 		s.handleDebugUploadLog(state.peer, in)
-	case in.Method == rp.RegistryMethodProjectSyncCheck:
-		s.handleProjectSyncCheck(state.peer, state, in)
 	case in.Method == rp.RegistryMethodMonitorListHub:
 		s.handleMonitorListHub(state.peer, state, in)
 	case in.Method == rp.RegistryMethodHubPing:
@@ -1029,12 +1027,6 @@ func (s *Server) executeMonitorRequest(_ *connectionState, in envelope) envelope
 	}
 }
 
-func (s *Server) handleProjectSyncCheck(peer *peerConn, state *connectionState, in envelope) {
-	resp := s.projectSyncCheckEnvelope(state, in)
-	resp.RequestID = in.RequestID
-	_ = peer.write(resp)
-}
-
 func (s *Server) handleForwardRequest(clientPeer *peerConn, state *connectionState, in envelope) {
 	resp := s.executeClientRequest(state, in)
 	resp.RequestID = in.RequestID
@@ -1162,49 +1154,6 @@ func sanitizeLocalReadCandidate(candidate *rp.LocalReadCandidate) *rp.LocalReadC
 		URL:              url,
 		ProofPublicKey:   proofPublicKey,
 		ProofFingerprint: proofFingerprint,
-	}
-}
-
-func (s *Server) projectSyncCheckEnvelope(state *connectionState, in envelope) envelope {
-	var payload syncCheckPayload
-	if err := decodePayload(in.Payload, &payload); err != nil {
-		return s.errorEnvelope(in.Method, codeInvalidArgument, "invalid project.sync.check payload", nil)
-	}
-
-	projectID := strings.TrimSpace(in.ProjectID)
-	if projectID == "" {
-		return s.errorEnvelope(in.Method, codeInvalidArgument, "projectId is required", nil)
-	}
-	if state.scopeHubID != "" && !strings.HasPrefix(projectID, state.scopeHubID+":") {
-		return s.errorEnvelope(in.Method, codeForbidden, "project out of client scope", map[string]any{"projectId": projectID})
-	}
-
-	project, ok := s.lookupProject(projectID)
-	if !ok {
-		return s.errorEnvelope(in.Method, codeNotFound, "project not found", map[string]any{"projectId": projectID})
-	}
-
-	stale := make([]string, 0, 3)
-	if payload.KnownProjectRev != project.ProjectRev {
-		stale = append(stale, "project")
-	}
-	if payload.KnownGitRev != project.Git.GitRev {
-		stale = append(stale, "git")
-	}
-	if payload.KnownWorktreeRev != project.Git.WorktreeRev {
-		stale = append(stale, "worktree")
-	}
-
-	return envelope{
-		Type:      rp.RegistryEnvelopeTypeResponse,
-		Method:    in.Method,
-		ProjectID: projectID,
-		Payload: rp.MustRaw(syncCheckResponsePayload{
-			ProjectRev:   project.ProjectRev,
-			GitRev:       project.Git.GitRev,
-			WorktreeRev:  project.Git.WorktreeRev,
-			StaleDomains: stale,
-		}),
 	}
 }
 

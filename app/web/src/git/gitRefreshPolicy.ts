@@ -1,33 +1,33 @@
-export type GitRefreshPlan = {
-  shouldLoadGit: boolean;
-  shouldRefreshGitStatusOnly: boolean;
-  shouldInvalidateGitView: boolean;
-  nextKnownGitRev: string;
-  nextKnownWorktreeRev: string;
-};
-
-export function resolveGitRefreshForSync({
-  activeTab,
-  staleDomains,
-  gitRev,
-  worktreeRev,
-}: {
-  activeTab: string;
-  staleDomains: string[];
+export type GitRevSnapshot = {
   gitRev: string;
   worktreeRev: string;
-}): GitRefreshPlan {
-  const stale = new Set(staleDomains);
-  const gitMetadataStale = stale.has('git') || stale.has('project');
-  const worktreeStale = stale.has('worktree') || stale.has('project');
-  const gitSurfaceStale = gitMetadataStale || worktreeStale;
-  const gitVisible = activeTab === 'git';
+};
 
-  return {
-    shouldLoadGit: gitVisible && gitMetadataStale,
-    shouldRefreshGitStatusOnly: gitVisible && !gitMetadataStale && worktreeStale,
-    shouldInvalidateGitView: gitSurfaceStale,
-    nextKnownGitRev: gitRev || '',
-    nextKnownWorktreeRev: worktreeRev || '',
-  };
+export function sameGitRev(left: GitRevSnapshot, right: GitRevSnapshot): boolean {
+  return left.gitRev === right.gitRev && left.worktreeRev === right.worktreeRev;
+}
+
+export function shouldLoadGitForRev({
+  projectId,
+  loadedProjectId,
+  currentRev,
+  nextRev,
+  hasGitError,
+}: {
+  projectId: string;
+  loadedProjectId: string;
+  currentRev: GitRevSnapshot;
+  nextRev: GitRevSnapshot;
+  hasGitError: boolean;
+}): boolean {
+  if (!projectId) {
+    return false;
+  }
+  if (loadedProjectId !== projectId) {
+    return true;
+  }
+  if (hasGitError) {
+    return true;
+  }
+  return !sameGitRev(currentRev, nextRev);
 }

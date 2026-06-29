@@ -479,6 +479,8 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 		r.replyFSGrep(conn, in)
 	case rp.RegistryMethodProjectFSIndexSearch:
 		r.replyFSIndexSearch(conn, in)
+	case rp.RegistryMethodProjectGitRev:
+		r.replyGitRev(conn, in)
 	case rp.RegistryMethodProjectGitRefs:
 		r.replyGitRefs(conn, in)
 	case rp.RegistryMethodProjectGitLog:
@@ -998,8 +1000,6 @@ func (r *Reporter) handleLocalReadRequest(conn *websocket.Conn, in envelope) {
 			Method:    in.Method,
 			Payload:   rp.MustRaw(r.localReadProjectListPayload()),
 		})
-	case rp.RegistryMethodProjectSyncCheck:
-		r.replyLocalReadProjectSyncCheck(conn, in)
 	case rp.RegistryMethodProjectFSList:
 		r.replyFSList(conn, in)
 	case rp.RegistryMethodProjectFSInfo:
@@ -1012,6 +1012,8 @@ func (r *Reporter) handleLocalReadRequest(conn *websocket.Conn, in envelope) {
 		r.replyFSGrep(conn, in)
 	case rp.RegistryMethodProjectFSIndexSearch:
 		r.replyFSIndexSearch(conn, in)
+	case rp.RegistryMethodProjectGitRev:
+		r.replyGitRev(conn, in)
 	case rp.RegistryMethodProjectGitRefs:
 		r.replyGitRefs(conn, in)
 	case rp.RegistryMethodProjectGitLog:
@@ -1063,54 +1065,6 @@ func (r *Reporter) localReadProjectListPayload() map[string]any {
 			LocalRead: r.LocalReadCandidate(),
 		}},
 	}
-}
-
-func (r *Reporter) replyLocalReadProjectSyncCheck(conn *websocket.Conn, in envelope) {
-	var payload rp.SyncCheckPayload
-	if err := decodePayload(in.Payload, &payload); err != nil {
-		_ = r.writeLocalReadError(conn, in.RequestID, in.Method, codeInvalidArgument, "invalid project.syncCheck payload", nil)
-		return
-	}
-	projectID := strings.TrimSpace(in.ProjectID)
-	if projectID == "" {
-		_ = r.writeLocalReadError(conn, in.RequestID, in.Method, codeInvalidArgument, "projectId is required", nil)
-		return
-	}
-	if !strings.HasPrefix(projectID, r.cfg.HubID+":") {
-		_ = r.writeLocalReadError(conn, in.RequestID, in.Method, codeForbidden, "project out of hub scope", map[string]any{"projectId": projectID})
-		return
-	}
-
-	r.mu.RLock()
-	project, ok := r.projectsByID[projectID]
-	r.mu.RUnlock()
-	if !ok {
-		_ = r.writeLocalReadError(conn, in.RequestID, in.Method, codeNotFound, "project not found", map[string]any{"projectId": projectID})
-		return
-	}
-
-	stale := make([]string, 0, 3)
-	if payload.KnownProjectRev != project.ProjectRev {
-		stale = append(stale, "project")
-	}
-	if payload.KnownGitRev != project.Git.GitRev {
-		stale = append(stale, "git")
-	}
-	if payload.KnownWorktreeRev != project.Git.WorktreeRev {
-		stale = append(stale, "worktree")
-	}
-	_ = r.writeJSON(conn, "->", envelope{
-		RequestID: in.RequestID,
-		Type:      rp.RegistryEnvelopeTypeResponse,
-		Method:    in.Method,
-		ProjectID: projectID,
-		Payload: rp.MustRaw(rp.SyncCheckResponsePayload{
-			ProjectRev:   project.ProjectRev,
-			GitRev:       project.Git.GitRev,
-			WorktreeRev:  project.Git.WorktreeRev,
-			StaleDomains: stale,
-		}),
-	})
 }
 
 func (r *Reporter) replyFSIndexStatus(conn *websocket.Conn, req envelope) {
@@ -1730,6 +1684,25 @@ func (r *Reporter) replyFSGrep(conn *websocket.Conn, req envelope) {
 			"results":      results,
 			"totalMatches": totalMatches,
 			"nextCursor":   "",
+		}),
+	})
+}
+
+func (r *Reporter) replyGitRev(conn *websocket.Conn, req envelope) {
+	root, err := r.projectRoot(req.ProjectID)
+	if err != nil {
+		_ = r.writeError(conn, req.RequestID, codeNotFound, err.Error())
+		return
+	}
+	state := collectGitState(root)
+	_ = r.writeJSON(conn, "->", envelope{
+		RequestID: req.RequestID,
+		Type:      rp.RegistryEnvelopeTypeResponse,
+		Method:    req.Method,
+		ProjectID: req.ProjectID,
+		Payload: rp.MustRaw(rp.ProjectGitRevResponsePayload{
+			GitRev:      state.GitRev,
+			WorktreeRev: state.WorktreeRev,
 		}),
 	})
 }

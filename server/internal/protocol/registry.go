@@ -120,22 +120,14 @@ type HubUpdateProjectPayload struct {
 	LocalRead       *LocalReadCandidate `json:"localRead,omitempty"`
 }
 
-type SyncCheckPayload struct {
-	KnownProjectRev  string `json:"knownProjectRev,omitempty"`
-	KnownGitRev      string `json:"knownGitRev,omitempty"`
-	KnownWorktreeRev string `json:"knownWorktreeRev,omitempty"`
-}
-
-type SyncCheckResponsePayload struct {
-	ProjectRev   string   `json:"projectRev"`
-	GitRev       string   `json:"gitRev"`
-	WorktreeRev  string   `json:"worktreeRev"`
-	StaleDomains []string `json:"staleDomains"`
-}
-
 type DebugUploadLogPayload struct {
 	Source string `json:"source"`
 	Text   string `json:"text"`
+}
+
+type ProjectGitRevResponsePayload struct {
+	GitRev      string `json:"gitRev"`
+	WorktreeRev string `json:"worktreeRev"`
 }
 
 type DebugUploadLogResponsePayload struct {

@@ -83,7 +83,7 @@ describe('web disable file cache settings', () => {
     expect(mainTsx).toContain('workspaceController.connect(ws, trimmedToken, {disableFileCache})');
     expect(mainTsx).toContain('workspaceController.switchProject(nextProjectId, {disableFileCache})');
     expect(mainTsx).toContain('workspaceController.switchProjectLightweight(nextProjectId, {disableFileCache})');
-    expect(mainTsx).toContain('workspaceController.refreshProject(projectId, [');
+    expect(mainTsx).toContain('workspaceController.refreshProject(activeProjectId, [');
     expect(mainTsx).toContain('{disableFileCache}');
   });
 });

@@ -640,23 +640,15 @@ export interface RegistryResumableSession {
   cwd: string;
 }
 
-export interface RegistrySyncCheckPayload {
-  knownProjectRev?: string;
-  knownGitRev?: string;
-  knownWorktreeRev?: string;
-}
-
-export interface RegistrySyncCheckResponse {
-  projectRev: string;
-  gitRev: string;
-  worktreeRev: string;
-  staleDomains: string[];
-}
-
 export interface RegistryProjectGitState {
   branch: string;
   headSha: string;
   dirty: boolean;
+  gitRev: string;
+  worktreeRev: string;
+}
+
+export interface RegistryGitRev {
   gitRev: string;
   worktreeRev: string;
 }

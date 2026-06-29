@@ -15,6 +15,7 @@ import type {
   RegistryGitCommit,
   RegistryGitCommitFile,
   RegistryGitFileDiff,
+  RegistryGitRev,
   RegistryGitStatus,
   RegistryHub,
   RegistryNpmCommandResponse,
@@ -54,8 +55,6 @@ import type {
   RegistrySpeechFinishPayload,
   RegistrySpeechStartPayload,
   RegistrySpeechStartResponse,
-  RegistrySyncCheckPayload,
-  RegistrySyncCheckResponse,
   RegistryTokenScanResult,
   RegistryWheelMakerUpdateResponse,
   RegistryWorkingTreeFileDiff,
@@ -337,6 +336,13 @@ export class RegistryWorkspaceService {
     return this.readRepositoryForProject(this.session.selectedProjectId).gitLog(this.session.selectedProjectId, ref, '', 50, refs);
   }
 
+  async getGitRev(): Promise<RegistryGitRev> {
+    if (!this.session || !this.repository) {
+      return {gitRev: '', worktreeRev: ''};
+    }
+    return this.readRepositoryForProject(this.session.selectedProjectId).gitRev(this.session.selectedProjectId);
+  }
+
   async listGitBranches(): Promise<{current: string; branches: string[]; remoteBranches: string[]}> {
     if (!this.session || !this.repository) {
       return {current: '', branches: [], remoteBranches: []};
@@ -371,13 +377,6 @@ export class RegistryWorkspaceService {
       return {path, scope, isBinary: false, diff: '', truncated: false};
     }
     return this.readRepositoryForProject(this.session.selectedProjectId).gitWorkingTreeFileDiff(this.session.selectedProjectId, path, scope, 3);
-  }
-
-  async syncCheck(payload: RegistrySyncCheckPayload): Promise<RegistrySyncCheckResponse> {
-    if (!this.session || !this.repository) {
-      return {projectRev: '', gitRev: '', worktreeRev: '', staleDomains: []};
-    }
-    return this.readRepositoryForProject(this.session.selectedProjectId).syncCheck(this.session.selectedProjectId, payload);
   }
 
   async listProjects(): Promise<RegistryProject[]> {

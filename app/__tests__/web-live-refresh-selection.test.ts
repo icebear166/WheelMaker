@@ -13,13 +13,15 @@ describe('web live refresh uses latest selection', () => {
     expect(mainTsx).toContain('await readSelectedFile(latestSelectedFile);');
   });
 
-  test('refreshProject syncCheck uses last loaded rev refs instead of latest project metadata', () => {
+  test('Git tab rev check uses last loaded rev refs instead of project metadata', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 
-    expect(mainTsx).toContain('knownProjectRev: knownProjectRevRef.current,');
-    expect(mainTsx).toContain('knownGitRev: knownGitRevRef.current,');
-    expect(mainTsx).toContain('knownWorktreeRev: knownWorktreeRevRef.current,');
+    expect(mainTsx).toContain('const currentRev = {');
+    expect(mainTsx).toContain('gitRev: knownGitRevRef.current,');
+    expect(mainTsx).toContain('worktreeRev: knownWorktreeRevRef.current,');
+    expect(mainTsx).toContain('const nextRev = await service.getGitRev();');
+    expect(mainTsx).toContain('currentRev,');
     expect(mainTsx).not.toContain('knownGitRev: latestProject?.git?.gitRev ??');
     expect(mainTsx).not.toContain('knownWorktreeRev: latestProject?.git?.worktreeRev ??');
     expect(mainTsx).not.toContain('knownGitRevRef.current = currentProject?.git?.gitRev ??');

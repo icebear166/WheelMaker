@@ -1,44 +1,47 @@
-import {resolveGitRefreshForSync} from '../web/src/git/gitRefreshPolicy';
+import {shouldLoadGitForRev} from '../web/src/git/gitRefreshPolicy';
 
 describe('git refresh policy', () => {
-  test('invalidates cached git view without loading refs and log while outside Git tab', () => {
-    const plan = resolveGitRefreshForSync({
-      activeTab: 'chat',
-      staleDomains: ['worktree'],
-      gitRev: 'git-2',
-      worktreeRev: 'worktree-2',
+  test('loads full git data on first Git tab open for a project', () => {
+    const shouldLoad = shouldLoadGitForRev({
+      projectId: 'hub-a:proj1',
+      loadedProjectId: '',
+      currentRev: {gitRev: '', worktreeRev: ''},
+      nextRev: {gitRev: 'git-1', worktreeRev: 'worktree-1'},
+      hasGitError: false,
     });
 
-    expect(plan).toEqual({
-      shouldLoadGit: false,
-      shouldRefreshGitStatusOnly: false,
-      shouldInvalidateGitView: true,
-      nextKnownGitRev: 'git-2',
-      nextKnownWorktreeRev: 'worktree-2',
-    });
+    expect(shouldLoad).toBe(true);
   });
 
-  test('refreshes only status for worktree changes when the Git tab is visible', () => {
-    const plan = resolveGitRefreshForSync({
-      activeTab: 'git',
-      staleDomains: ['worktree'],
-      gitRev: 'git-2',
-      worktreeRev: 'worktree-2',
+  test('skips full git load when the same project rev was already loaded', () => {
+    const shouldLoad = shouldLoadGitForRev({
+      projectId: 'hub-a:proj1',
+      loadedProjectId: 'hub-a:proj1',
+      currentRev: {gitRev: 'git-1', worktreeRev: 'worktree-1'},
+      nextRev: {gitRev: 'git-1', worktreeRev: 'worktree-1'},
+      hasGitError: false,
     });
 
-    expect(plan.shouldRefreshGitStatusOnly).toBe(true);
-    expect(plan.shouldLoadGit).toBe(false);
+    expect(shouldLoad).toBe(false);
   });
 
-  test('loads full git data when refs changed and Git tab is visible', () => {
-    const plan = resolveGitRefreshForSync({
-      activeTab: 'git',
-      staleDomains: ['git'],
-      gitRev: 'git-2',
-      worktreeRev: 'worktree-2',
+  test('loads full git data when refs or worktree rev changed', () => {
+    const shouldLoadForGitRev = shouldLoadGitForRev({
+      projectId: 'hub-a:proj1',
+      loadedProjectId: 'hub-a:proj1',
+      currentRev: {gitRev: 'git-1', worktreeRev: 'worktree-1'},
+      nextRev: {gitRev: 'git-2', worktreeRev: 'worktree-1'},
+      hasGitError: false,
+    });
+    const shouldLoadForWorktreeRev = shouldLoadGitForRev({
+      projectId: 'hub-a:proj1',
+      loadedProjectId: 'hub-a:proj1',
+      currentRev: {gitRev: 'git-1', worktreeRev: 'worktree-1'},
+      nextRev: {gitRev: 'git-1', worktreeRev: 'worktree-2'},
+      hasGitError: false,
     });
 
-    expect(plan.shouldLoadGit).toBe(true);
-    expect(plan.shouldRefreshGitStatusOnly).toBe(false);
+    expect(shouldLoadForGitRev).toBe(true);
+    expect(shouldLoadForWorktreeRev).toBe(true);
   });
 });

@@ -68,18 +68,18 @@ func TestRegistryMethodRolesAndRoutes(t *testing.T) {
 	if RegistryLocalReadMethodAllowed("fs.index.rebuild") {
 		t.Fatal("fs.index.rebuild should not be allowed on local read")
 	}
-	syncCheck, ok := RegistryMethod(RegistryMethodProjectSyncCheck)
+	gitRev, ok := RegistryMethod(RegistryMethodProjectGitRev)
 	if !ok {
-		t.Fatal("project.sync.check should be registered")
+		t.Fatal("project.git.rev should be registered")
 	}
-	if syncCheck.Route != RegistryRouteProjectCache {
-		t.Fatalf("project.sync.check route=%q, want %q", syncCheck.Route, RegistryRouteProjectCache)
+	if gitRev.Route != RegistryRouteProjectForward {
+		t.Fatalf("project.git.rev route=%q, want %q", gitRev.Route, RegistryRouteProjectForward)
 	}
-	if !syncCheck.RequiresProjectID {
-		t.Fatal("project.sync.check should require projectId")
+	if !gitRev.RequiresProjectID {
+		t.Fatal("project.git.rev should require projectId")
 	}
-	if !syncCheck.LocalRead {
-		t.Fatal("project.sync.check should be allowed on local read")
+	if !gitRev.LocalRead {
+		t.Fatal("project.git.rev should be allowed on local read")
 	}
 	if RegistryLocalReadMethodAllowed(RegistryMethodSessionList) {
 		t.Fatal("session.list should not be allowed on local read")
@@ -94,13 +94,13 @@ func TestRegistryProtocolDomainTargetMethods(t *testing.T) {
 		"hub.report.project",
 		"registry.project.list",
 		"registry.project.report",
-		"project.sync.check",
 		"project.fs.list",
 		"project.fs.info",
 		"project.fs.read",
 		"project.fs.search",
 		"project.fs.grep",
 		"project.fs.index.search",
+		"project.git.rev",
 		"project.git.refs",
 		"project.git.log",
 		"project.git.commit.files",
@@ -136,6 +136,7 @@ func removedRegistryProtocolMethods() []string {
 		"registry.session.updated",
 		"registry.session.message",
 		"project.list",
+		"project.sync.check",
 		"project.syncCheck",
 		"project.online",
 		"project.offline",

@@ -11,6 +11,7 @@ describe('registry protocol domain service', () => {
     const removedRequestMarkers = [
       "method: 'local_read.proof'",
       "method: 'project.list'",
+      "method: 'project.sync.check'",
       "method: 'project.syncCheck'",
       "method: 'fs.",
       "method: 'git.",
@@ -33,6 +34,7 @@ describe('registry protocol domain service', () => {
     expect(repositoryTs).toContain('RegistryMethods.ConnectLocalReadProof');
     expect(repositoryTs).toContain('RegistryMethods.RegistryProjectList');
     expect(repositoryTs).toContain('RegistryMethods.ProjectFSRead');
+    expect(repositoryTs).toContain('RegistryMethods.ProjectGitRev');
     expect(repositoryTs).toContain('RegistryMethods.ProjectGitStatus');
     expect(repositoryTs).toContain('RegistryMethods.SessionCreate');
     expect(repositoryTs).toContain('RegistryMethods.SessionConfig');

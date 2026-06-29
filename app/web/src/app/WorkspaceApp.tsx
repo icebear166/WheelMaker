@@ -410,7 +410,7 @@ import { FilePreviewPane } from '../file/FilePreviewPane';
 import { FileSurface } from '../file/FileSurface';
 import { GitSurface } from '../git/GitSurface';
 import { GitSidebar } from '../git/GitSidebar';
-import {resolveGitRefreshForSync} from '../git/gitRefreshPolicy';
+import {shouldLoadGitForRev} from '../git/gitRefreshPolicy';
 import {
   buildWorkingTreeFiles,
   isHeavyGeneratedDiffPath,
@@ -742,7 +742,6 @@ const workspaceController = new WorkspaceController(service, workspaceStore);
 const MAX_AUTO_RENDER_DIFF_CHARS = 200000;
 const RECONNECT_RETRY_DELAY_MS = 1000;
 const RECONNECT_GRACE_PERIOD_MS = 30_000;
-const PROJECT_REFRESH_POLL_INTERVAL_MS = 30_000;
 const CHAT_NEW_DRAFT_SESSION_KEY = '__new__';
 const CHAT_DRAFT_KEY_PROJECT_FALLBACK = '__no_project__';
 const CHAT_AUTO_SCROLL_BOTTOM_THRESHOLD = 80;
@@ -2969,9 +2968,10 @@ export function App() {
   const projectIdRef = useRef('');
   const projectsRef = useRef<RegistryProject[]>([]);
   const currentProjectRef = useRef<RegistryProject | null>(null);
-  const knownProjectRevRef = useRef('');
   const knownGitRevRef = useRef('');
   const knownWorktreeRevRef = useRef('');
+  const gitRevCheckInFlightRef = useRef(false);
+  const failedGitRevLoadKeyRef = useRef('');
   const [loadingProject, setLoadingProject] = useState(false);
   const [refreshingProject, setRefreshingProject] = useState(false);
   const [hasPendingProjectUpdates, setHasPendingProjectUpdates] = useState(false);
@@ -7896,9 +7896,10 @@ export function App() {
     }
     const previousProjectId = projectIdRef.current;
     if (hydrated.projectId !== previousProjectId) {
-      knownProjectRevRef.current = '';
       knownGitRevRef.current = '';
       knownWorktreeRevRef.current = '';
+      failedGitRevLoadKeyRef.current = '';
+      setGitError('');
     }
     expandedDirsRef.current = hydrated.expandedDirs;
     selectedFileRef.current = hydrated.selectedFile;
@@ -8988,6 +8989,7 @@ export function App() {
     if (!targetProjectId) return false;
     setGitLoading(true);
     setGitError('');
+    failedGitRevLoadKeyRef.current = '';
     try {
       const [branchData, statusData] = await Promise.all([
         service.listGitBranches(),
@@ -9071,13 +9073,48 @@ export function App() {
     );
   };
 
-  const refreshGitStatusOnly = async () => {
+  const loadGitIfRevChanged = async (): Promise<boolean> => {
+    const targetProjectId = projectIdRef.current || projectId;
+    if (!connected || !targetProjectId || gitLoading) return false;
+    if (gitRevCheckInFlightRef.current) return false;
+    gitRevCheckInFlightRef.current = true;
     try {
-      const statusData = await service.getGitStatus();
-      setWorkingTreeFiles(buildWorkingTreeFiles(statusData));
-      knownWorktreeRevRef.current = statusData.worktreeRev ?? '';
-    } catch {
-      // Keep existing UI state on transient status fetch failure.
+      const nextRev = await service.getGitRev();
+      const revKey = `${targetProjectId}\n${nextRev.gitRev ?? ''}\n${nextRev.worktreeRev ?? ''}`;
+      if (gitError && failedGitRevLoadKeyRef.current === revKey) {
+        return false;
+      }
+      const currentRev = {
+        gitRev: knownGitRevRef.current,
+        worktreeRev: knownWorktreeRevRef.current,
+      };
+      const shouldLoad = shouldLoadGitForRev({
+        projectId: targetProjectId,
+        loadedProjectId: gitLoadedProjectId,
+        currentRev,
+        nextRev,
+        hasGitError: !!gitError,
+      });
+      if (!shouldLoad) {
+        knownGitRevRef.current = nextRev.gitRev ?? '';
+        knownWorktreeRevRef.current = nextRev.worktreeRev ?? '';
+        return false;
+      }
+      setGitLoadedProjectId('');
+      const loaded = await loadGit();
+      if (loaded) {
+        failedGitRevLoadKeyRef.current = '';
+        knownGitRevRef.current = nextRev.gitRev ?? '';
+        knownWorktreeRevRef.current = nextRev.worktreeRev ?? '';
+      } else {
+        failedGitRevLoadKeyRef.current = revKey;
+      }
+      return loaded;
+    } catch (err) {
+      setGitError(err instanceof Error ? err.message : String(err));
+      return false;
+    } finally {
+      gitRevCheckInFlightRef.current = false;
     }
   };
 
@@ -9085,8 +9122,7 @@ export function App() {
     if (!connected || tab !== 'git') return;
     if (!projectId) return;
     if (gitLoading) return;
-    if (gitLoadedProjectId === projectId && !gitError) return;
-    loadGit().catch(() => undefined);
+    loadGitIfRevChanged().catch(() => undefined);
   }, [connected, tab, projectId, gitError, gitLoading, gitLoadedProjectId]);
 
   useEffect(() => {
@@ -13698,7 +13734,7 @@ export function App() {
             setError(err instanceof Error ? err.message : String(err)),
           );
         } else if (tabRef.current === 'git') {
-          loadGit().catch(err =>
+          loadGitIfRevChanged().catch(err =>
             setGitError(err instanceof Error ? err.message : String(err)),
           );
         }
@@ -14904,74 +14940,37 @@ export function App() {
   };
 
   const refreshProject = async (options?: {silent?: boolean}) => {
-    if (!connected || !projectId) return;
+    const activeProjectId = projectIdRef.current || projectId;
+    if (!connected || !activeProjectId) return;
     if (refreshInFlightRef.current) return;
     const finishRefreshProjectDiagnostic = startWorkspaceDiagnosticSpan('refresh_project', {
-      projectId,
+      projectId: activeProjectId,
       silent: options?.silent === true,
     });
     let refreshProjectError = '';
-    let staleDomains: string[] = [];
+    let loadedSurface = 'file';
     refreshInFlightRef.current = true;
     const silent = !!options?.silent;
-    const latestProject = currentProjectRef.current;
     const latestExpandedDirs = expandedDirsRef.current;
     const latestSelectedFile = selectedFileRef.current;
     if (!silent) {
       setRefreshingProject(true);
     }
     try {
-      const sync = await service.syncCheck({
-        knownProjectRev: knownProjectRevRef.current,
-        knownGitRev: knownGitRevRef.current,
-        knownWorktreeRev: knownWorktreeRevRef.current,
-      });
-      staleDomains = sync.staleDomains;
-      const needsProjectOrFsRefresh = sync.staleDomains.some(
-        domain => domain === 'fs' || domain === 'project',
-      );
-      if (sync.staleDomains.includes('project') || !latestProject) {
-        setProjects(await service.listProjects());
-      }
-      if (needsProjectOrFsRefresh) {
-        const validated = await workspaceController.refreshProject(projectId, [
-          ...latestExpandedDirs,
-        ], {disableFileCache});
-        setDirEntries(validated.dirEntries);
-        setExpandedDirs(validated.expandedDirs);
-        dirHashRef.current = {};
-      }
-      if (latestSelectedFile && needsProjectOrFsRefresh) {
+      setProjects(await service.listProjects());
+      const validated = await workspaceController.refreshProject(activeProjectId, [
+        ...latestExpandedDirs,
+      ], {disableFileCache});
+      setDirEntries(validated.dirEntries);
+      setExpandedDirs(validated.expandedDirs);
+      dirHashRef.current = {};
+      if (latestSelectedFile) {
         await readSelectedFile(latestSelectedFile);
       }
-      const gitRefreshPlan = resolveGitRefreshForSync({
-        activeTab: tabRef.current,
-        staleDomains: sync.staleDomains,
-        gitRev: sync.gitRev ?? '',
-        worktreeRev: sync.worktreeRev ?? '',
-      });
-      const rememberGitSyncRevs = () => {
-        if (gitRefreshPlan.nextKnownGitRev) {
-          knownGitRevRef.current = gitRefreshPlan.nextKnownGitRev;
-        }
-        if (gitRefreshPlan.nextKnownWorktreeRev) {
-          knownWorktreeRevRef.current = gitRefreshPlan.nextKnownWorktreeRev;
-        }
-      };
-      if (gitRefreshPlan.shouldLoadGit) {
-        setGitLoadedProjectId('');
-        const gitLoaded = await loadGit();
-        if (gitLoaded) {
-          rememberGitSyncRevs();
-        }
-      } else if (gitRefreshPlan.shouldRefreshGitStatusOnly) {
-        await refreshGitStatusOnly();
-        rememberGitSyncRevs();
-      } else if (gitRefreshPlan.shouldInvalidateGitView) {
-        setGitLoadedProjectId('');
-        rememberGitSyncRevs();
+      if (tabRef.current === 'git') {
+        const gitLoaded = await loadGitIfRevChanged();
+        loadedSurface = gitLoaded ? 'git' : 'file';
       }
-      knownProjectRevRef.current = sync.projectRev ?? '';
       if (!silent) {
         setHasPendingProjectUpdates(false);
       }
@@ -14985,7 +14984,7 @@ export function App() {
       }
       finishRefreshProjectDiagnostic({
         ok: !refreshProjectError,
-        staleDomains,
+        loadedSurface,
         ...(refreshProjectError ? {error: refreshProjectError} : {}),
       }, refreshProjectError ? 'error' : 'info');
     }
@@ -15322,17 +15321,6 @@ export function App() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!connected || !projectId || reconnecting) {
-      return;
-    }
-    const timer = window.setInterval(() => {
-      refreshProject({silent: true}).catch(() => undefined);
-    }, PROJECT_REFRESH_POLL_INTERVAL_MS);
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [connected, projectId, reconnecting]);
   const renderSidebarMain = (showSectionTitle = true) => {
     if (tab === 'file') {
       return (

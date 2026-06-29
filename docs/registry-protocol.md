@@ -97,7 +97,7 @@
 | `connect.*` | 连接层 | 初始化、关闭事件、本地读证明 |
 | `registry.*` | Registry | Registry 自有目录、Project 报告事件、Relay 控制 |
 | `hub.*` | Hub | Hub 报告、HubState、Hub 内部 Relay |
-| `project.*` | Project | 文件、Git、同步检查 |
+| `project.*` | Project | 文件、Git |
 | `session.*` | Session | 会话、归档、附件、配置、会话事件 |
 | `speech.*` | Registry speech | 语音输入流式通道 |
 | `monitor.*` | Monitor | 监控面板 |
@@ -235,30 +235,26 @@ Registry 对 App 广播单项目完整快照：
 
 所有 Project 方法要求 envelope 顶层 `projectId`，由 Registry 通过 `projectId -> hubId` 路由到 Hub。Registry 不提供跨请求 batch 聚合；客户端应按目标 Hub/Project 分别发请求，并用 `requestId` 匹配乱序返回。
 
-### 同步检查
+### Git rev 检查
 
-- `project.sync.check`
+- `project.git.rev`
 
 请求 payload：
 
 ```json
-{
-  "knownProjectRev": "sha256:...",
-  "knownGitRev": "sha256:...",
-  "knownWorktreeRev": "sha256:..."
-}
+{}
 ```
 
 响应 payload：
 
 ```json
 {
-  "projectRev": "sha256:...",
   "gitRev": "sha256:...",
-  "worktreeRev": "sha256:...",
-  "staleDomains": ["project", "git", "worktree"]
+  "worktreeRev": "sha256:..."
 }
 ```
+
+App 打开 Git tab 时先调用该方法；只有 `gitRev` 或 `worktreeRev` 相比已加载值变化时，才继续拉取 `project.git.refs`、`project.git.log`、`project.git.status` 等较重数据。
 
 ### 文件方法
 
@@ -278,6 +274,7 @@ Registry 对 App 广播单项目完整快照：
 
 ### Git 方法
 
+- `project.git.rev`
 - `project.git.refs`
 - `project.git.log`
 - `project.git.commit.files`
@@ -287,7 +284,7 @@ Registry 对 App 广播单项目完整快照：
 - `project.git.status`
 - `project.git.workingTree.fileDiff`
 
-Git 列表按 `gitRev` / `worktreeRev` 触发刷新，不使用 `knownHash`。
+Git 列表按 `project.git.rev` 返回的 `gitRev` / `worktreeRev` 触发刷新，不使用 `knownHash`。
 
 ## 7. HubState
 
@@ -468,13 +465,13 @@ Local read 是 Hub 暴露的 loopback 只读 WebSocket 端点。连接流程：
 允许的本地读方法包括：
 
 - `registry.project.list`
-- `project.sync.check`
 - `project.fs.list`
 - `project.fs.info`
 - `project.fs.read`
 - `project.fs.search`
 - `project.fs.grep`
 - `project.fs.index.search`
+- `project.git.rev`
 - `project.git.refs`
 - `project.git.log`
 - `project.git.commit.files`
@@ -563,7 +560,7 @@ Debug：
 8. File index status/rebuild 迁入 HubState `fileIndex` section；`project.fs.index.search` 保持 Project 级搜索。
 9. Relay 公开方法改为 `registry.relay.*`；Registry 下发 Hub 的内部方法改为 `hub.relay.*`。
 10. Local read proof 改为 `connect.localRead.proof`。
-11. 已删除旧公开方法：`connection.closing`、`local_read.proof`、`registry.reportProjects`、`registry.updateProject`、`registry.session.*`、`project.list`、`project.syncCheck`、`project.online`、`project.offline`、`session.new`、`session.setConfig`、`session.token.*`、裸 `fs.*`、裸 `git.*`、`cmd.*`、裸 `relay.*`。
+11. 已删除旧公开方法：`connection.closing`、`local_read.proof`、`registry.reportProjects`、`registry.updateProject`、`registry.session.*`、`project.list`、`project.sync.check`、`project.syncCheck`、`project.online`、`project.offline`、`session.new`、`session.setConfig`、`session.token.*`、裸 `fs.*`、裸 `git.*`、`cmd.*`、裸 `relay.*`。
 
 ### 2.4 相比 2.3
 

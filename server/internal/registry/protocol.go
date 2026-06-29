@@ -27,9 +27,6 @@ type hubUpdateProjectPayload = rp.HubUpdateProjectPayload
 
 type projectListItem = rp.ProjectListItem
 
-type syncCheckPayload = rp.SyncCheckPayload
-
-type syncCheckResponsePayload = rp.SyncCheckResponsePayload
 type debugUploadLogPayload = rp.DebugUploadLogPayload
 
 type debugUploadLogResponsePayload = rp.DebugUploadLogResponsePayload

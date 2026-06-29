@@ -2121,6 +2121,22 @@ func TestReporterFSHashNegotiationAndGitStatus(t *testing.T) {
 	mustWriteJSON(t, app, testEnvelope{
 		RequestID: 6,
 		Type:      "request",
+		Method:    "project.git.rev",
+		ProjectID: rp.ProjectID("hub-hash", "proj1"),
+		Payload:   map[string]any{},
+	})
+	revResp := mustReadEnvelope(t, app)
+	expectedGitState := collectGitState(root)
+	if got := revResp.Payload["gitRev"]; got != expectedGitState.GitRev {
+		t.Fatalf("project.git.rev gitRev=%v, want %s", got, expectedGitState.GitRev)
+	}
+	if got := revResp.Payload["worktreeRev"]; got != expectedGitState.WorktreeRev {
+		t.Fatalf("project.git.rev worktreeRev=%v, want %s", got, expectedGitState.WorktreeRev)
+	}
+
+	mustWriteJSON(t, app, testEnvelope{
+		RequestID: 7,
+		Type:      "request",
 		Method:    "project.git.status",
 		ProjectID: rp.ProjectID("hub-hash", "proj1"),
 		Payload:   map[string]any{},
@@ -2138,7 +2154,7 @@ func TestReporterFSHashNegotiationAndGitStatus(t *testing.T) {
 	}
 
 	mustWriteJSON(t, app, testEnvelope{
-		RequestID: 7,
+		RequestID: 8,
 		Type:      "request",
 		Method:    "project.git.workingTree.fileDiff",
 		ProjectID: rp.ProjectID("hub-hash", "proj1"),

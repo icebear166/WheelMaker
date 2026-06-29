@@ -55,13 +55,13 @@ const (
 	RegistryMethodHubReportProject              = "hub.report.project"
 	RegistryMethodRegistryProjectList           = "registry.project.list"
 	RegistryMethodRegistryProjectReport         = "registry.project.report"
-	RegistryMethodProjectSyncCheck              = "project.sync.check"
 	RegistryMethodProjectFSList                 = "project.fs.list"
 	RegistryMethodProjectFSInfo                 = "project.fs.info"
 	RegistryMethodProjectFSRead                 = "project.fs.read"
 	RegistryMethodProjectFSSearch               = "project.fs.search"
 	RegistryMethodProjectFSGrep                 = "project.fs.grep"
 	RegistryMethodProjectFSIndexSearch          = "project.fs.index.search"
+	RegistryMethodProjectGitRev                 = "project.git.rev"
 	RegistryMethodProjectGitRefs                = "project.git.refs"
 	RegistryMethodProjectGitLog                 = "project.git.log"
 	RegistryMethodProjectGitCommitFiles         = "project.git.commit.files"
@@ -146,7 +146,6 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodHubReportProject:      registryHubReportMethod(RegistryMethodHubReportProject),
 	RegistryMethodRegistryProjectList:   registryLocalReadMethod(RegistryMethodRegistryProjectList, RegistryRouteProjectCache, []RegistryRole{RegistryRoleClient, RegistryRoleMonitor}),
 	RegistryMethodRegistryProjectReport: registryClientEventMethod(RegistryMethodRegistryProjectReport),
-	RegistryMethodProjectSyncCheck:      registryLocalReadProjectCacheMethod(RegistryMethodProjectSyncCheck, []RegistryRole{RegistryRoleClient}),
 
 	RegistryMethodProjectFSList:                 registryLocalReadProjectMethod(RegistryMethodProjectFSList),
 	RegistryMethodProjectFSInfo:                 registryLocalReadProjectMethod(RegistryMethodProjectFSInfo),
@@ -154,6 +153,7 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodProjectFSSearch:               registryLocalReadProjectMethod(RegistryMethodProjectFSSearch),
 	RegistryMethodProjectFSGrep:                 registryLocalReadProjectMethod(RegistryMethodProjectFSGrep),
 	RegistryMethodProjectFSIndexSearch:          registryLocalReadProjectMethod(RegistryMethodProjectFSIndexSearch),
+	RegistryMethodProjectGitRev:                 registryLocalReadProjectMethod(RegistryMethodProjectGitRev),
 	RegistryMethodProjectGitRefs:                registryLocalReadProjectMethod(RegistryMethodProjectGitRefs),
 	RegistryMethodProjectGitLog:                 registryLocalReadProjectMethod(RegistryMethodProjectGitLog),
 	RegistryMethodProjectGitCommitFiles:         registryLocalReadProjectMethod(RegistryMethodProjectGitCommitFiles),
