@@ -19361,7 +19361,6 @@ export function App() {
             <span className="seti-glyph">{fileIcon.glyph}</span>
           </span>
           <span className="label">{node.name}</span>
-          <span className="path">{node.path}</span>
         </button>
       );
     });

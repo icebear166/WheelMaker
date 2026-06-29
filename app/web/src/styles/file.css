@@ -517,19 +517,11 @@
   background: color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
-.preview-workbench-file-search-node .label,
-.preview-workbench-file-search-node .path {
+.preview-workbench-file-search-node .label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.preview-workbench-file-search-node .path {
-  margin-left: auto;
-  color: var(--muted);
-  font-family: var(--mono-font);
-  font-size: 10px;
 }
 
 .preview-workbench-file-search-empty {

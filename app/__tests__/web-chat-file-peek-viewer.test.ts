@@ -307,11 +307,13 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('startPreviewFileTreeSearchFromKey(event.key)');
     expect(mainTsx).toContain('service.searchFileIndex(targetProjectId, {');
     expect(mainTsx).toContain('renderPreviewFileTreeSearchResults(');
+    expect(mainTsx).not.toContain('className="path"');
 
     expect(stylesCss).toContain('.preview-workbench-tree-search-shell');
     expect(stylesCss).toContain('.preview-workbench-tree-search-shell[data-open=\'true\']');
     expect(stylesCss).toContain('.preview-workbench-file-search-tree');
     expect(stylesCss).toContain('.preview-workbench-file-search-node');
+    expect(stylesCss).not.toContain('.preview-workbench-file-search-node .path');
   });
 
   test('empty preview workbench can open the file tree to select a file', () => {
