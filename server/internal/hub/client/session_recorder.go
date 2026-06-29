@@ -83,13 +83,15 @@ type sessionViewSessionNewParams struct {
 }
 
 type parsedSessionViewEvent struct {
-	raw       SessionViewEvent
-	bMessage  bool
-	method    string
-	payload   any
-	artifacts []acp.SessionPromptArtifactPayload
-	acpMethod string
-	turnKey   string
+	raw               SessionViewEvent
+	bMessage          bool
+	method            string
+	payload           any
+	artifacts         []acp.SessionPromptArtifactPayload
+	acpMethod         string
+	turnKey           string
+	sessionInfoUpdate bool
+	sessionInfoTitle  string
 }
 
 type SessionRecorder struct {
@@ -328,9 +330,34 @@ func (r *SessionRecorder) RecordEvent(ctx context.Context, event SessionViewEven
 		jsonDecodeAt(json.RawMessage(parsed.raw.Content), "params.agentType", &agentType)
 		title = strings.TrimSpace(title)
 		return r.upsertSessionProjection(ctx, parsed.raw.SessionID, normalizeAgentType(agentType), title, parsed.raw.UpdatedAt, false)
+	case acp.MethodSessionUpdate:
+		if parsed.sessionInfoUpdate {
+			return r.handleSessionInfoUpdateLocked(ctx, parsed)
+		}
+		return nil
 	default:
 		return nil
 	}
+}
+
+func (r *SessionRecorder) handleSessionInfoUpdateLocked(ctx context.Context, event parsedSessionViewEvent) error {
+	title := strings.TrimSpace(event.sessionInfoTitle)
+	if title == "" {
+		return nil
+	}
+	rec, err := r.store.LoadSession(ctx, r.projectName, event.raw.SessionID)
+	if err != nil {
+		return err
+	}
+	if rec == nil {
+		return nil
+	}
+	rec.Title = updateSessionFirstTitleFacts(rec.Title, title)
+	if err := r.store.SaveSession(ctx, rec); err != nil {
+		return err
+	}
+	r.publishSessionUpdated(r.sessionViewSummaryFromRecordLocked(*rec))
+	return nil
 }
 
 func (r *SessionRecorder) handleSessionTurnMessage(ctx context.Context, event parsedSessionViewEvent) error {
@@ -935,6 +962,23 @@ func updateSessionTitleFacts(rawTitle, promptTitle string) string {
 	return sessionTitleFactsJSON(facts)
 }
 
+func updateSessionFirstTitleFacts(rawTitle, firstTitle string) string {
+	firstTitle = strings.TrimSpace(firstTitle)
+	if firstTitle == "" {
+		return strings.TrimSpace(rawTitle)
+	}
+	facts, ok := sessionTitleFactsFromJSON(rawTitle)
+	if !ok {
+		legacyTitle := strings.TrimSpace(rawTitle)
+		facts = sessionTitleFacts{
+			First: legacyTitle,
+			Last:  legacyTitle,
+		}
+	}
+	facts.First = firstTitle
+	return sessionTitleFactsJSON(facts)
+}
+
 func updateSessionManualTitleFacts(rawTitle, manualTitle string) string {
 	facts, ok := sessionTitleFactsFromJSON(rawTitle)
 	if !ok {
@@ -1297,6 +1341,9 @@ func parseSessionViewEvent(event SessionViewEvent) (parsedSessionViewEvent, erro
 					entries = append(entries, acp.SessionTurnPlanResult{Content: strings.TrimSpace(entry.Content), Status: strings.TrimSpace(entry.Status)})
 				}
 				parsed.setJSONMessage(acp.SessionTurnMethodAgentPlan, entries, "")
+			case acp.SessionUpdateSessionInfoUpdate:
+				parsed.sessionInfoUpdate = true
+				parsed.sessionInfoTitle = strings.TrimSpace(params.Update.Title)
 			default:
 				return parsedSessionViewEvent{}, fmt.Errorf("unsupported session update type: %s", method)
 			}

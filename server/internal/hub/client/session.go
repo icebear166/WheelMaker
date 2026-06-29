@@ -872,6 +872,16 @@ func (s *Session) SessionUpdate(params acp.SessionUpdateParams) {
 		s.persistSessionBestEffort()
 	}
 
+	if update.SessionUpdate == acp.SessionUpdateSessionInfoUpdate && ch == nil {
+		s.recordSessionViewEvent(SessionViewEvent{
+			Type:      SessionViewEventTypeACP,
+			SessionID: sessID,
+			Content: acp.BuildACPContentJSON(acp.MethodSessionUpdate, map[string]any{
+				"params": params,
+			}),
+		})
+	}
+
 	if ch == nil {
 		return
 	}

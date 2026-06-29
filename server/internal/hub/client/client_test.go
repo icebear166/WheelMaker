@@ -3273,6 +3273,71 @@ func TestSessionRenameManualTitleSurvivesLaterPromptTitle(t *testing.T) {
 	}
 }
 
+func TestSessionInfoUpdateTitleUpdatesFirstTitleFact(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+
+	if err := c.RecordEvent(ctx, sessionViewCreatedEvent("sess-1", "Initial prompt title")); err != nil {
+		t.Fatalf("RecordEvent session created: %v", err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptEvent("sess-1", "latest prompt", nil)); err != nil {
+		t.Fatalf("RecordEvent prompt: %v", err)
+	}
+	if _, err := c.HandleSessionRequest(ctx, "session.rename", "proj1", json.RawMessage(`{"sessionId":"sess-1","title":"Manual title"}`)); err != nil {
+		t.Fatalf("session.rename: %v", err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewUpdateEvent("sess-1", acp.SessionUpdate{
+		SessionUpdate: acp.SessionUpdateSessionInfoUpdate,
+		Title:         "Codex summary",
+	})); err != nil {
+		t.Fatalf("RecordEvent session info update: %v", err)
+	}
+
+	summary, err := c.sessionRecorder.ReadSessionSummary(ctx, "sess-1")
+	if err != nil {
+		t.Fatalf("ReadSessionSummary: %v", err)
+	}
+	titleFacts := decodeSessionTitleFacts(t, summary.Title)
+	if titleFacts.Manual != "Manual title" || titleFacts.First != "Codex summary" || titleFacts.Last != "latest prompt" {
+		t.Fatalf("title facts = %#v, want native title as first with manual and latest prompt preserved", titleFacts)
+	}
+}
+
+func TestSessionInfoUpdateCallbackUpdatesFirstTitleFactWithoutActivePrompt(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	addRuntimeSession(c, "sess-1", "Runtime title", "codex", now.Add(-time.Minute), now)
+
+	if err := c.RecordEvent(ctx, sessionViewCreatedEvent("sess-1", "Initial prompt title")); err != nil {
+		t.Fatalf("RecordEvent session created: %v", err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptEvent("sess-1", "latest prompt", nil)); err != nil {
+		t.Fatalf("RecordEvent prompt: %v", err)
+	}
+	sess, err := c.SessionByID(ctx, "sess-1")
+	if err != nil {
+		t.Fatalf("SessionByID: %v", err)
+	}
+
+	sess.SessionUpdate(acp.SessionUpdateParams{
+		SessionID: "sess-1",
+		Update: acp.SessionUpdate{
+			SessionUpdate: acp.SessionUpdateSessionInfoUpdate,
+			Title:         "Codex summary",
+		},
+	})
+
+	summary, err := c.sessionRecorder.ReadSessionSummary(ctx, "sess-1")
+	if err != nil {
+		t.Fatalf("ReadSessionSummary: %v", err)
+	}
+	titleFacts := decodeSessionTitleFacts(t, summary.Title)
+	if titleFacts.First != "Codex summary" || titleFacts.Last != "latest prompt" {
+		t.Fatalf("title facts = %#v, want native title as first and latest prompt preserved", titleFacts)
+	}
+}
+
 func TestHandleSessionRequestRenameClearsManualTitleAndNormalizesInput(t *testing.T) {
 	c := newSessionViewTestClient(t)
 	ctx := context.Background()
