@@ -1407,9 +1407,10 @@ describe('web chat integration', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
 
-    expect(mainTsx).toContain("enterKeyHint={isWide ? undefined : 'send'}");
+    expect(mainTsx).toContain("enterKeyHint={isWide ? undefined : mobileEnterKeyBehavior === 'send' ? 'send' : 'enter'}");
     expect(mainTsx).toContain("const shouldSendChatOnEnter = event.key === 'Enter' && !event.shiftKey && !event.altKey && !event.nativeEvent.isComposing;");
-    expect(mainTsx).toContain('if (!isWide || isWindowsPlatform) {');
+    expect(mainTsx).toContain("const mobileEnterShouldSend = !isWide && mobileEnterKeyBehavior === 'send';");
+    expect(mainTsx).toContain('if (mobileEnterShouldSend || isWindowsPlatform) {');
     expect(mainTsx).toContain('if (!shouldSendChatOnEnter) {');
     expect(mainTsx).toContain('event.preventDefault();');
     expect(mainTsx).toContain('sendChatMessage().catch(() => undefined);');

@@ -21,6 +21,11 @@ import {
   type ChatViewWidth,
 } from '../chat/chatViewWidth';
 import {
+  DEFAULT_MOBILE_ENTER_KEY_BEHAVIOR,
+  normalizeMobileEnterKeyBehavior,
+  type MobileEnterKeyBehavior,
+} from '../chat/mobileEnterKeyBehavior';
+import {
   normalizePortRelayListenPort,
   normalizePortRelayTarget,
   normalizePortRelayTargets,
@@ -92,6 +97,7 @@ export type PersistedGlobalState = {
   codeTabSize: number;
   chatFont: ChatFontId;
   chatViewWidth: ChatViewWidth;
+  mobileEnterKeyBehavior: MobileEnterKeyBehavior;
   speechSettings: SpeechSettings;
   ttsSettings: TtsSettings;
   wrapLines: boolean;
@@ -252,6 +258,7 @@ const GLOBAL_KEYS = {
   codeTabSize: 'codeTabSize',
   chatFont: 'chatFont',
   chatViewWidth: 'chatViewWidth',
+  mobileEnterKeyBehavior: 'mobileEnterKeyBehavior',
   speechSettings: 'speechSettings',
   ttsSettings: 'ttsSettings',
   wrapLines: 'wrapLines',
@@ -296,6 +303,7 @@ function defaultGlobalState(): PersistedGlobalState {
     codeTabSize: DEFAULT_CODE_TAB_SIZE,
     chatFont: DEFAULT_CHAT_FONT,
     chatViewWidth: DEFAULT_CHAT_VIEW_WIDTH,
+    mobileEnterKeyBehavior: DEFAULT_MOBILE_ENTER_KEY_BEHAVIOR,
     speechSettings: DEFAULT_SPEECH_SETTINGS,
     ttsSettings: DEFAULT_TTS_SETTINGS,
     wrapLines: false,
@@ -538,6 +546,7 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
     codeTabSize: typeof input.codeTabSize === 'number' && Number.isFinite(input.codeTabSize) ? input.codeTabSize : base.codeTabSize,
     chatFont: typeof input.chatFont === 'string' && isChatFontId(input.chatFont) ? input.chatFont : base.chatFont,
     chatViewWidth: normalizeChatViewWidth(input.chatViewWidth, base.chatViewWidth),
+    mobileEnterKeyBehavior: normalizeMobileEnterKeyBehavior(input.mobileEnterKeyBehavior, base.mobileEnterKeyBehavior),
     speechSettings: normalizeSpeechSettings(input.speechSettings),
     ttsSettings: normalizeTtsSettings(input.ttsSettings),
     wrapLines: typeof input.wrapLines === 'boolean' ? input.wrapLines : base.wrapLines,
@@ -1022,6 +1031,7 @@ export class WorkspacePersistenceRepository {
       {k: GLOBAL_KEYS.codeTabSize, v: serialize(this.state.global.codeTabSize), updatedAt: now},
       {k: GLOBAL_KEYS.chatFont, v: serialize(this.state.global.chatFont), updatedAt: now},
       {k: GLOBAL_KEYS.chatViewWidth, v: serialize(this.state.global.chatViewWidth), updatedAt: now},
+      {k: GLOBAL_KEYS.mobileEnterKeyBehavior, v: serialize(this.state.global.mobileEnterKeyBehavior), updatedAt: now},
       {k: GLOBAL_KEYS.speechSettings, v: serialize(this.state.global.speechSettings), updatedAt: now},
       {k: GLOBAL_KEYS.ttsSettings, v: serialize(this.state.global.ttsSettings), updatedAt: now},
       {k: GLOBAL_KEYS.wrapLines, v: serialize(this.state.global.wrapLines), updatedAt: now},
@@ -1389,6 +1399,7 @@ export class WorkspacePersistenceRepository {
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.codeTabSize, v: serialize(next.codeTabSize), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.chatFont, v: serialize(next.chatFont), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.chatViewWidth, v: serialize(next.chatViewWidth), updatedAt: now});
+      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.mobileEnterKeyBehavior, v: serialize(next.mobileEnterKeyBehavior), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.speechSettings, v: serialize(next.speechSettings), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.ttsSettings, v: serialize(next.ttsSettings), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.wrapLines, v: serialize(next.wrapLines), updatedAt: now});

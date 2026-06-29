@@ -2,6 +2,11 @@ import React from 'react';
 
 import {CHAT_FONT_OPTIONS, isChatFontId, type ChatFontId} from '../chat/chatTypography';
 import {CHAT_VIEW_WIDTH_OPTIONS, isChatViewWidth, type ChatViewWidth} from '../chat/chatViewWidth';
+import {
+  MOBILE_ENTER_KEY_BEHAVIOR_OPTIONS,
+  isMobileEnterKeyBehavior,
+  type MobileEnterKeyBehavior,
+} from '../chat/mobileEnterKeyBehavior';
 import {normalizeAppDiagnosticLogLevel, type AppDiagnosticLogLevel} from '../debug/appDiagnostics';
 import {SPEECH_MODEL_OPTIONS, normalizeSpeechSettings, type SpeechSettings} from '../features/speech/speechSettings';
 import {TTS_MODEL_OPTIONS, TTS_VOICE_OPTIONS, normalizeTtsSettings, type TtsSettings, type TtsModelId, type TtsVoiceId} from '../features/tts/ttsSettings';
@@ -33,6 +38,8 @@ type SettingsRootContentProps = {
   setFloatingControlIdleOpacity: (value: number) => void;
   chatViewWidth: ChatViewWidth;
   setChatViewWidth: (value: ChatViewWidth) => void;
+  mobileEnterKeyBehavior: MobileEnterKeyBehavior;
+  setMobileEnterKeyBehavior: (value: MobileEnterKeyBehavior) => void;
   hideToolCalls: boolean;
   setHideToolCalls: (value: boolean) => void;
   promptCompletionNotificationsEnabled: boolean;
@@ -98,6 +105,8 @@ export function SettingsRootContent({
   setFloatingControlIdleOpacity,
   chatViewWidth,
   setChatViewWidth,
+  mobileEnterKeyBehavior,
+  setMobileEnterKeyBehavior,
   hideToolCalls,
   setHideToolCalls,
   promptCompletionNotificationsEnabled,
@@ -225,6 +234,26 @@ export function SettingsRootContent({
             checked={hideToolCalls}
             onChange={e => setHideToolCalls(e.target.checked)}
           />
+        </label>
+        <label className="settings-row sidebar-setting-row">
+          <span>
+            <span className="codicon codicon-keyboard settings-row-icon" aria-hidden="true" />
+            Mobile Enter Key
+          </span>
+          <select
+            className="sidebar-setting-select"
+            value={mobileEnterKeyBehavior}
+            onChange={event => {
+              const next = event.target.value;
+              if (isMobileEnterKeyBehavior(next)) setMobileEnterKeyBehavior(next);
+            }}
+          >
+            {MOBILE_ENTER_KEY_BEHAVIOR_OPTIONS.map(item => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </select>
         </label>
         <div className="voice-input-settings-menu">
           <label className="settings-row sidebar-setting-row">

@@ -138,6 +138,10 @@ import {
   normalizeChatViewWidth,
   type ChatViewWidth,
 } from '../chat/chatViewWidth';
+import {
+  normalizeMobileEnterKeyBehavior,
+  type MobileEnterKeyBehavior,
+} from '../chat/mobileEnterKeyBehavior';
 import { buildPromptDoneCopyRange } from '../chat/chatCopyRange';
 import {
   chatPromptAttachmentLabel,
@@ -2425,6 +2429,9 @@ export function App() {
   );
   const [chatViewWidth, setChatViewWidth] = useState<ChatViewWidth>(
     normalizeChatViewWidth(persistedGlobal.chatViewWidth),
+  );
+  const [mobileEnterKeyBehavior, setMobileEnterKeyBehavior] = useState<MobileEnterKeyBehavior>(
+    normalizeMobileEnterKeyBehavior(persistedGlobal.mobileEnterKeyBehavior),
   );
   const [wrapLines, setWrapLines] = useState(!!persistedGlobal.wrapLines);
   const [showLineNumbers, setShowLineNumbers] = useState(
@@ -5876,6 +5883,7 @@ export function App() {
       codeTabSize,
       chatFont,
       chatViewWidth,
+      mobileEnterKeyBehavior,
       wrapLines,
       showLineNumbers,
       hideToolCalls,
@@ -5907,6 +5915,7 @@ export function App() {
     codeTabSize,
     chatFont,
     chatViewWidth,
+    mobileEnterKeyBehavior,
     wrapLines,
     showLineNumbers,
     hideToolCalls,
@@ -15720,6 +15729,8 @@ export function App() {
         setFloatingControlIdleOpacity={setFloatingControlIdleOpacity}
         chatViewWidth={chatViewWidth}
         setChatViewWidth={setChatViewWidth}
+        mobileEnterKeyBehavior={mobileEnterKeyBehavior}
+        setMobileEnterKeyBehavior={setMobileEnterKeyBehavior}
         hideToolCalls={hideToolCalls}
         setHideToolCalls={setHideToolCalls}
         promptCompletionNotificationsEnabled={promptCompletionNotificationsEnabled}
@@ -17612,7 +17623,7 @@ export function App() {
                     tokens={chatComposerTokens}
                     onTokensChange={updateChatComposerTokens}
                     readOnly={selectedChatSubmitPending}
-                    enterKeyHint={isWide ? undefined : 'send'}
+                    enterKeyHint={isWide ? undefined : mobileEnterKeyBehavior === 'send' ? 'send' : 'enter'}
                     slashCommands={chatSlashCommands.map(command => ({
                       command: command.name,
                       label: chatSlashCommandLabel(command.name),
@@ -17753,7 +17764,8 @@ export function App() {
                       if (!shouldSendChatOnEnter) {
                         return;
                       }
-                      if (!isWide || isWindowsPlatform) {
+                      const mobileEnterShouldSend = !isWide && mobileEnterKeyBehavior === 'send';
+                      if (mobileEnterShouldSend || isWindowsPlatform) {
                         event.preventDefault();
                         event.stopPropagation();
                         if (chatSendDisabled) {
