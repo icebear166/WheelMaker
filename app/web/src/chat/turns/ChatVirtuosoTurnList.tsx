@@ -114,7 +114,7 @@ function scrollElementToBottom(element: HTMLElement, behavior: ChatVirtuosoScrol
   });
 }
 
-export const ChatVirtuosoTurnList = React.forwardRef<
+const ChatVirtuosoTurnListInner = React.forwardRef<
   ChatVirtuosoTurnListHandle,
   ChatVirtuosoTurnListProps
 >(function ChatVirtuosoTurnList({
@@ -369,3 +369,5 @@ export const ChatVirtuosoTurnList = React.forwardRef<
     />
   );
 });
+
+export const ChatVirtuosoTurnList = React.memo(ChatVirtuosoTurnListInner);

@@ -777,7 +777,17 @@ const PROJECT_INDEX_SCAN_CONCURRENCY = 2;
 const CHAT_FILE_MENTION_SEARCH_LIMIT = 20;
 const CHAT_FILE_MENTION_DEBOUNCE_MS = 140;
 const EMPTY_CHAT_COMPOSER_DRAFT: ChatComposerDraft = { text: '', tokens: [], attachments: [] };
+const EMPTY_CHAT_OPTION_REPLIES: ChatOptionReply[] = [];
+const EMPTY_PREVIEW_WORKBENCH_TABS: FilePreviewTab[] = [];
 const DEFAULT_PORT_RELAY_SNAPSHOT: RegistryPortRelaySnapshot = {ok: true, enabled: false, status: 'Disabled'};
+
+function useStableEvent<T extends (...args: any[]) => any>(handler: T): T {
+  const handlerRef = useRef(handler);
+  useLayoutEffect(() => {
+    handlerRef.current = handler;
+  });
+  return useCallback(((...args: Parameters<T>): ReturnType<T> => handlerRef.current(...args)) as T, []);
+}
 
 function relayOriginFromUrl(value: string): string {
   try {
@@ -3322,7 +3332,10 @@ export function App() {
       : [],
     [chatQueuedPromptsByKey, selectedChatEncodedKey],
   );
-  const queuedPromptTurnIndex = (index: number) => nextPromptTurnIndex(selectedFullChatMessages) + index + 1;
+  const queuedPromptTurnIndex = useCallback(
+    (index: number) => nextPromptTurnIndex(selectedFullChatMessages) + index + 1,
+    [selectedFullChatMessages],
+  );
   const selectedChatSubmitPending = selectedChatEncodedKey
     ? chatSubmittingByKey[selectedChatEncodedKey] === true
     : false;
@@ -5261,14 +5274,17 @@ export function App() {
     setChatComposerTop(rect ? Math.round(rect.top) : null);
     setChatComposerHeight(current => (current === nextHeight ? current : nextHeight));
   }, []);
+  const shouldMeasureChatComposerLayout = tab === 'chat' && !isWide;
 
   useLayoutEffect(() => {
     resizeChatComposerTextarea();
-    measureChatComposerTop();
-  }, [resizeChatComposerTextarea, measureChatComposerTop, chatComposerText, tab, selectedChatId, currentChatDraftKey]);
+    if (shouldMeasureChatComposerLayout) {
+      measureChatComposerTop();
+    }
+  }, [resizeChatComposerTextarea, measureChatComposerTop, chatComposerText, selectedChatId, currentChatDraftKey, shouldMeasureChatComposerLayout]);
 
   useEffect(() => {
-    if (isWide || tab !== 'chat') {
+    if (!shouldMeasureChatComposerLayout) {
       setChatComposerTop(null);
       setChatComposerHeight(0);
       return;
@@ -5284,8 +5300,7 @@ export function App() {
       window.visualViewport?.removeEventListener('scroll', measure);
     };
   }, [
-    isWide,
-    tab,
+    shouldMeasureChatComposerLayout,
         measureChatComposerTop,
         chatComposerText,
         chatAttachments.length,
@@ -9844,25 +9859,25 @@ export function App() {
 
   const makeQueuedPromptId = () => `queued-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-  const setQueuedPrompts = (updater: (current: QueuedChatPromptsByKey) => QueuedChatPromptsByKey) => {
+  const setQueuedPrompts = useCallback((updater: (current: QueuedChatPromptsByKey) => QueuedChatPromptsByKey) => {
     setChatQueuedPromptsByKey(current => {
       const next = updater(current);
       chatQueuedPromptsByKeyRef.current = next;
       return next;
     });
-  };
+  }, []);
 
-  const enqueueSelectedChatPrompt = (runtimeKey: string, prompt: QueuedChatPrompt) => {
+  const enqueueSelectedChatPrompt = useCallback((runtimeKey: string, prompt: QueuedChatPrompt) => {
     setQueuedPrompts(current => enqueueChatPrompt(current, runtimeKey, prompt));
-  };
+  }, [setQueuedPrompts]);
 
-  const cancelQueuedPrompt = (runtimeKey: string, promptId: string) => {
+  const cancelQueuedPrompt = useCallback((runtimeKey: string, promptId: string) => {
     setQueuedPrompts(current => cancelQueuedChatPrompt(current, runtimeKey, promptId));
-  };
+  }, [setQueuedPrompts]);
 
-  const prioritizeQueuedPrompt = (runtimeKey: string, promptId: string) => {
+  const prioritizeQueuedPrompt = useCallback((runtimeKey: string, promptId: string) => {
     setQueuedPrompts(current => moveQueuedChatPromptToFront(current, runtimeKey, promptId));
-  };
+  }, [setQueuedPrompts]);
 
   const clearPendingChatPromptTimer = (runtimeKey: string) => {
     const timerId = chatPendingPromptTimersRef.current[runtimeKey];
@@ -10603,7 +10618,8 @@ export function App() {
     }
   };
 
-  const sendDirectChatText = async (text: string) => {
+  const sendChatMessageEvent = useStableEvent(sendChatMessage);
+  const sendDirectChatText = useCallback(async (text: string) => {
     const normalizedText = text.trim();
     if (!normalizedText) {
       return;
@@ -10617,7 +10633,10 @@ export function App() {
       attachmentsOverride: [],
       preserveComposer: true,
     });
-  };
+  }, [sendChatMessageEvent]);
+  const handleSelectChatReply = useCallback((replyText: string) => {
+    sendDirectChatText(replyText).catch(() => undefined);
+  }, [sendDirectChatText]);
 
   const drainNextQueuedChatPrompt = (runtimeKey: string) => {
     const selectedKey = selectedChatKeyRef.current;
@@ -11464,18 +11483,18 @@ export function App() {
     return attachments;
   };
 
-  const retryPendingChatPrompt = (runtimeKey: string) => {
+  const retryPendingChatPrompt = useCallback((runtimeKey: string) => {
     const pending = chatPendingPromptsByKeyRef.current[runtimeKey];
     if (!pending) return;
-    sendChatMessage({
+    sendChatMessageEvent({
       textOverride: '',
       attachmentsOverride: [],
       blocksOverride: pending.blocks,
       preserveComposer: true,
     }).catch(() => undefined);
-  };
+  }, [sendChatMessageEvent]);
 
-  const editPendingChatPrompt = (runtimeKey: string) => {
+  const editPendingChatPrompt = useCallback((runtimeKey: string) => {
     const pending = chatPendingPromptsByKeyRef.current[runtimeKey];
     if (!pending) return;
     if (
@@ -11496,7 +11515,7 @@ export function App() {
     setChatAttachments(attachments);
     saveChatComposerDraft(currentChatDraftKeyRef.current, text, attachments, tokens);
     forgetPendingChatPrompt(runtimeKey);
-  };
+  }, [saveChatComposerDraft]);
 
   const cancelSelectedChatPrompt = async () => {
     const selectedKey = selectedChatKeyRef.current;
@@ -16762,7 +16781,7 @@ export function App() {
     ],
   );
 
-  const findPromptRequestForDone = (doneTurnIndex: number): RegistryChatMessage | undefined => {
+  const findPromptRequestForDone = useCallback((doneTurnIndex: number): RegistryChatMessage | undefined => {
     const ordered = [...selectedFullChatMessages].sort((left, right) => (left.turnIndex ?? 0) - (right.turnIndex ?? 0));
     const doneIndex = ordered.findIndex(message => message.method === 'prompt_done' && (message.turnIndex ?? 0) === doneTurnIndex);
     if (doneIndex < 0) {
@@ -16774,7 +16793,7 @@ export function App() {
       }
     }
     return undefined;
-  };
+  }, [selectedFullChatMessages]);
 
   const copyPromptDoneMarkdown = async (doneTurnIndex: number) => {
     const result = buildPromptDoneCopyRange(selectedFullChatMessages, doneTurnIndex);
@@ -16845,6 +16864,9 @@ export function App() {
       fileName: buildPromptMarkdownImageFileName(doneTurnIndex),
     });
   };
+  const copyPromptDoneMarkdownEvent = useStableEvent(copyPromptDoneMarkdown);
+  const readAloudPromptDoneEvent = useStableEvent(readAloudPromptDone);
+  const exportPromptDoneMarkdownImageEvent = useStableEvent(exportPromptDoneMarkdownImage);
 
   const completeMarkdownImageExport = useCallback((result: ResponseImageOutputResult) => {
     setMarkdownImageExportRequest(null);
@@ -17023,7 +17045,7 @@ export function App() {
     drainNextQueuedChatPrompt(selectedChatEncodedKey);
   }, [selectedChatEncodedKey, selectedChatPromptRunning, selectedChatSubmitPending, chatMessages.length, chatQueuedPromptsByKey]);
 
-  const latestSelectableAssistantReply = (() => {
+  const latestSelectableAssistantReply = useMemo(() => {
     if (selectedPendingPrompt) {
       return {
         messageKey: '',
@@ -17058,12 +17080,12 @@ export function App() {
       hasOptionReplies: latestOptionReplies.length > 0,
       confirmationReply: latestOptionReplies.length === 0 ? extractChatConfirmationReply(text) : null,
     };
-  })();
+  }, [selectedFullChatMessages, selectedPendingPrompt]);
   const latestSelectableOptionReplyMessageKey = latestSelectableAssistantReply.hasOptionReplies
     ? latestSelectableAssistantReply.messageKey
     : '';
 
-  const renderChatMessageTurn = (message: RegistryChatMessage) => {
+  const renderChatMessageTurn = useCallback((message: RegistryChatMessage) => {
     const doneTurnIndex = message.turnIndex ?? 0;
     const copyRange = message.method === 'prompt_done'
       ? buildPromptDoneCopyRange(selectedFullChatMessages, doneTurnIndex)
@@ -17107,25 +17129,25 @@ export function App() {
           markdownUrlTransform={chatMarkdownUrlTransform}
           copyDisabled={copyRange ? !copyRange.ok : true}
           exportBusy={message.method === 'prompt_done' && exportingMarkdownImageTurnIndex !== null}
-          optionReplies={optionReplies}
+          optionReplies={optionReplies.length > 0 ? optionReplies : EMPTY_CHAT_OPTION_REPLIES}
           optionRepliesDisabled={chatSendDisabled}
           confirmationReply={confirmationReply}
-          onSelectOptionReply={label => sendDirectChatText(label).catch(() => undefined)}
-          onSelectConfirmationReply={replyText => sendDirectChatText(replyText).catch(() => undefined)}
+          onSelectOptionReply={optionReplies.length > 0 ? handleSelectChatReply : undefined}
+          onSelectConfirmationReply={confirmationReply ? handleSelectChatReply : undefined}
           onCopyPromptDone={
             message.method === 'prompt_done'
-              ? () => copyPromptDoneMarkdown(doneTurnIndex).catch(() => undefined)
+              ? () => copyPromptDoneMarkdownEvent(doneTurnIndex).catch(() => undefined)
               : undefined
           }
           onExportPromptDoneImage={
             message.method === 'prompt_done'
-              ? () => exportPromptDoneMarkdownImage(doneTurnIndex).catch(() => undefined)
+              ? () => exportPromptDoneMarkdownImageEvent(doneTurnIndex).catch(() => undefined)
               : undefined
           }
           ttsState={message.method === 'prompt_done' && ttsActiveTurnIndexRef.current === doneTurnIndex ? ttsState : 'idle'}
           onReadAloud={
             message.method === 'prompt_done'
-              ? () => readAloudPromptDone(doneTurnIndex).catch(() => undefined)
+              ? () => readAloudPromptDoneEvent(doneTurnIndex).catch(() => undefined)
               : undefined
           }
           onOpenPromptAttachment={openChatAttachmentPreview}
@@ -17141,8 +17163,31 @@ export function App() {
         />
       </div>
     );
-  };
-  const renderArchivedChatMessageTurn = (message: RegistryChatMessage) => {
+  }, [
+    chatMarkdownComponents,
+    chatMarkdownUrlTransform,
+    chatSendDisabled,
+    copyPromptDoneMarkdownEvent,
+    exportPromptDoneMarkdownImageEvent,
+    exportingMarkdownImageTurnIndex,
+    findPromptRequestForDone,
+    handleSelectChatReply,
+    hideToolCalls,
+    latestSelectableAssistantReply,
+    latestSelectableOptionReplyMessageKey,
+    loadPromptAttachmentThumbnail,
+    openChatAttachmentPreview,
+    openPromptArtifactDiff,
+    openingPromptArtifactKey,
+    promptArtifactErrors,
+    readAloudPromptDoneEvent,
+    resolvePromptAttachmentThumbnail,
+    selectedChatEncodedKey,
+    selectedFullChatMessages,
+    sessionSearchTargetTurn,
+    ttsState,
+  ]);
+  const renderArchivedChatMessageTurn = useCallback((message: RegistryChatMessage) => {
     if (!shouldRenderChatTurn(message, hideToolCalls, null)) {
       return null;
     }
@@ -17169,8 +17214,19 @@ export function App() {
         />
       </div>
     );
-  };
-  const renderChatVirtuosoItem = (displayItem: ChatDisplayIndexItem) => {
+  }, [
+    chatMarkdownComponents,
+    chatMarkdownUrlTransform,
+    hideToolCalls,
+    loadPromptAttachmentThumbnail,
+    openChatAttachmentPreview,
+    openPromptArtifactDiff,
+    openingPromptArtifactKey,
+    promptArtifactErrors,
+    resolvePromptAttachmentThumbnail,
+    selectedArchivedKey,
+  ]);
+  const renderChatVirtuosoItem = useCallback((displayItem: ChatDisplayIndexItem) => {
     const chatReadOnlyPreview = archivedMode && archivedPreview !== null;
     const sourceMessages = chatReadOnlyPreview ? archivedPreview.messages : chatMessages;
     const sourceMessage = displayItem.kind === 'turn'
@@ -17216,7 +17272,27 @@ export function App() {
       renderChatMessageTurn(sourceMessage)
     ) : null;
     return content;
-  };
+  }, [
+    archivedMode,
+    archivedPreview,
+    cancelQueuedPrompt,
+    chatMarkdownComponents,
+    chatMarkdownUrlTransform,
+    chatMessages,
+    editPendingChatPrompt,
+    hideToolCalls,
+    loadPromptAttachmentThumbnail,
+    openChatAttachmentPreview,
+    prioritizeQueuedPrompt,
+    queuedPromptTurnIndex,
+    renderArchivedChatMessageTurn,
+    renderChatMessageTurn,
+    resolvePromptAttachmentThumbnail,
+    retryPendingChatPrompt,
+    selectedChatEncodedKey,
+    selectedPendingPrompt,
+    selectedQueuedPrompts,
+  ]);
   const closePortRelayFrameFromChrome = useCallback(() => {
     const tab = activePreviewTab(previewWorkbenchRef.current);
     if (!tab || tab.type !== 'port-relay') {
@@ -19333,7 +19409,7 @@ export function App() {
           mode={mode}
           projects={previewWorkbenchProjects}
           activeProjectId={previewWorkbench.activeProjectId}
-          tabs={[]}
+          tabs={EMPTY_PREVIEW_WORKBENCH_TABS}
           treeOpen={previewWorkbench.treeOpen}
           themeMode={themeMode}
           codeTheme={codeTheme}

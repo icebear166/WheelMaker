@@ -41,6 +41,28 @@ function cssNumericProperty(stylesCss: string, selector: string, property: strin
 }
 
 describe('web chat integration', () => {
+  test('composer text changes do not force desktop layout measurement', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+
+    expect(mainTsx).toContain('const shouldMeasureChatComposerLayout = tab === \'chat\' && !isWide;');
+    expect(mainTsx).toContain('if (shouldMeasureChatComposerLayout) {');
+    expect(mainTsx).toContain('}, [resizeChatComposerTextarea, measureChatComposerTop, chatComposerText, selectedChatId, currentChatDraftKey, shouldMeasureChatComposerLayout]);');
+  });
+
+  test('composer text changes keep rendered chat turns memoized', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const virtuosoTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'turns', 'ChatVirtuosoTurnList.tsx'));
+
+    expect(mainTsx).toContain('const EMPTY_CHAT_OPTION_REPLIES: ChatOptionReply[] = [];');
+    expect(mainTsx).toContain('const renderChatVirtuosoItem = useCallback(');
+    expect(mainTsx).toContain('optionReplies={optionReplies.length > 0 ? optionReplies : EMPTY_CHAT_OPTION_REPLIES}');
+    expect(mainTsx).toContain('onSelectOptionReply={optionReplies.length > 0 ? handleSelectChatReply : undefined}');
+    expect(virtuosoTsx).toContain('const ChatVirtuosoTurnListInner = React.forwardRef');
+    expect(virtuosoTsx).toContain('export const ChatVirtuosoTurnList = React.memo(ChatVirtuosoTurnListInner);');
+  });
+
   test('keeps iOS long-press session menus from selecting text or activating the row', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
@@ -295,7 +317,8 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('keyboardInset: chatKeyboardInset,');
     expect(mainTsx).toContain('useLayoutEffect(() => {');
     expect(mainTsx).toContain('resizeChatComposerTextarea();');
-    expect(mainTsx).toContain('}, [resizeChatComposerTextarea, measureChatComposerTop, chatComposerText, tab, selectedChatId, currentChatDraftKey]);');
+    expect(mainTsx).toContain('if (shouldMeasureChatComposerLayout) {');
+    expect(mainTsx).toContain('}, [resizeChatComposerTextarea, measureChatComposerTop, chatComposerText, selectedChatId, currentChatDraftKey, shouldMeasureChatComposerLayout]);');
     expect(mainTsx).not.toContain('const chatBottomFollowAction = resolveChatBottomFollowAction({');
     expect(mainTsx).not.toContain("if (chatBottomFollowAction === 'scrollToBottom') {");
     expect(mainTsx).toContain('}, [tab, selectedChatId, chatMessages, chatPendingPromptsByKey, chatLoading, resizeChatComposerTextarea]);');
@@ -418,7 +441,7 @@ describe('web chat integration', () => {
     expect(chatTurnTsx).toContain('aria-label="Export response markdown image"');
     expect(chatTurnTsx).toContain('codicon codicon-device-camera');
     expect(chatTurnTsx).toContain('onExportPromptDoneImage');
-    expect(mainTsx).toContain('exportPromptDoneMarkdownImage(doneTurnIndex)');
+    expect(mainTsx).toContain('exportPromptDoneMarkdownImageEvent(doneTurnIndex)');
     expect(mainTsx).toContain('exportingMarkdownImageTurnIndex');
     expect(chatTurnTsx).toContain('disabled={copyDisabled || exportBusy}');
     expect(chatTurnTsx).toContain('aria-busy={exportBusy}');
@@ -443,7 +466,7 @@ describe('web chat integration', () => {
     expect(exportLinkBlock).toBe(cssRuleBlockContainingSelector(stylesCss, '.markdown-image-export-surface a:visited'));
     expect(stylesCss).toContain('.app-toast {');
     const sendExistingStart = mainTsx.indexOf('const sendChatMessage = async');
-    const sendEnd = mainTsx.indexOf('const sendDirectChatText = async (text: string) => {', sendExistingStart);
+    const sendEnd = mainTsx.indexOf('const sendChatMessageEvent = useStableEvent(sendChatMessage);', sendExistingStart);
     const sendBlock = mainTsx.slice(sendExistingStart, sendEnd);
     const sendAwait = mainTsx.indexOf('const result = await service.sendProjectSessionMessage(selectedProjectId, {', sendExistingStart);
     expect(sendExistingStart).toBeGreaterThanOrEqual(0);
@@ -2237,7 +2260,7 @@ describe('web chat integration', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const sendStart = mainTsx.indexOf('const sendChatMessage = async');
-    const sendEnd = mainTsx.indexOf('const sendDirectChatText = async', sendStart);
+    const sendEnd = mainTsx.indexOf('const sendChatMessageEvent = useStableEvent(sendChatMessage);', sendStart);
     const sendBlock = mainTsx.slice(sendStart, sendEnd);
 
     expect(mainTsx).toContain('const [chatSubmittingByKey, setChatSubmittingByKey] = useState<Record<string, boolean>>({});');

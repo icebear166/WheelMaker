@@ -219,6 +219,14 @@ describe('web chat file peek viewer', () => {
     expect(stylesCss).toContain('.chat-file-workbench-empty');
   });
 
+  test('chat file preview keeps memoized empty props stable across chat typing rerenders', () => {
+    const mainTsx = readSourceText(mainPath);
+
+    expect(mainTsx).toContain('const EMPTY_PREVIEW_WORKBENCH_TABS: FilePreviewTab[] = [];');
+    expect(mainTsx).toContain('tabs={EMPTY_PREVIEW_WORKBENCH_TABS}');
+    expect(mainTsx).not.toContain('tabs={[]}');
+  });
+
   test('chat file workbench project selector is limited to visible projects', () => {
     const mainTsx = readSourceText(mainPath);
 
