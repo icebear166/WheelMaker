@@ -380,6 +380,7 @@ import {VoiceRecordingBar} from '../features/speech/VoiceRecordingBar';
 import { FileExplorerTree, WorkspaceProjectSelector } from '../file/FileExplorerTree';
 import {
   buildFileSearchResultTree,
+  flattenFileSearchResultTree,
   type FileSearchResultTreeNode,
 } from '../file/fileSearchResultTree';
 import {
@@ -7877,8 +7878,12 @@ export function App() {
     () => buildFileSearchResultTree(previewFileTreeSearchResults),
     [previewFileTreeSearchResults],
   );
+  const previewFileTreeSearchVisibleResults = useMemo(
+    () => flattenFileSearchResultTree(previewFileTreeSearchTree),
+    [previewFileTreeSearchTree],
+  );
   const previewFileTreeSearchActivePath =
-    previewFileTreeSearchResults[previewFileTreeSearchActiveIndex]?.path ?? '';
+    previewFileTreeSearchVisibleResults[previewFileTreeSearchActiveIndex]?.path ?? '';
   const fileSearchMatches = useMemo(() => {
     const query = fileSearchQuery.trim().toLocaleLowerCase();
     if (!query) return [] as number[];
@@ -8937,21 +8942,21 @@ export function App() {
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       setPreviewFileTreeSearchActiveIndex(current =>
-        previewFileTreeSearchResults.length === 0 ? 0 : (current + 1) % previewFileTreeSearchResults.length,
+        previewFileTreeSearchVisibleResults.length === 0 ? 0 : (current + 1) % previewFileTreeSearchVisibleResults.length,
       );
       return;
     }
     if (event.key === 'ArrowUp') {
       event.preventDefault();
       setPreviewFileTreeSearchActiveIndex(current =>
-        previewFileTreeSearchResults.length === 0
+        previewFileTreeSearchVisibleResults.length === 0
           ? 0
-          : (current - 1 + previewFileTreeSearchResults.length) % previewFileTreeSearchResults.length,
+          : (current - 1 + previewFileTreeSearchVisibleResults.length) % previewFileTreeSearchVisibleResults.length,
       );
       return;
     }
     if (event.key === 'Enter') {
-      const result = previewFileTreeSearchResults[previewFileTreeSearchActiveIndex];
+      const result = previewFileTreeSearchVisibleResults[previewFileTreeSearchActiveIndex];
       if (result) {
         event.preventDefault();
         openPreviewFileTreeSearchResult(result);
@@ -19337,7 +19342,7 @@ export function App() {
       }
 
       const fileIcon = resolveFileIcon(node.name);
-      const resultIndex = previewFileTreeSearchResults.findIndex(item => item.path === node.path);
+      const resultIndex = previewFileTreeSearchVisibleResults.findIndex(item => item.path === node.path);
       const selected = node.path === previewFileTreeSearchActivePath;
       return (
         <button

@@ -302,9 +302,14 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('className="preview-workbench-tree-search-input"');
     expect(mainTsx).toContain('const previewFileTreeSearchTree = useMemo(');
     expect(mainTsx).toContain('buildFileSearchResultTree(previewFileTreeSearchResults)');
+    expect(mainTsx).toContain('const previewFileTreeSearchVisibleResults = useMemo(');
+    expect(mainTsx).toContain('flattenFileSearchResultTree(previewFileTreeSearchTree)');
     expect(mainTsx).toContain('const handlePreviewFileTreeKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {');
     expect(mainTsx).toContain('isArrowNavigationKey(event.key)');
     expect(mainTsx).toContain('startPreviewFileTreeSearchFromKey(event.key)');
+    expect(mainTsx).toContain('(current + 1) % previewFileTreeSearchVisibleResults.length');
+    expect(mainTsx).toContain('(current - 1 + previewFileTreeSearchVisibleResults.length) % previewFileTreeSearchVisibleResults.length');
+    expect(mainTsx).toContain('const result = previewFileTreeSearchVisibleResults[previewFileTreeSearchActiveIndex];');
     expect(mainTsx).toContain('service.searchFileIndex(targetProjectId, {');
     expect(mainTsx).toContain('renderPreviewFileTreeSearchResults(');
     expect(mainTsx).not.toContain('className="path"');

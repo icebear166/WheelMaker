@@ -85,3 +85,17 @@ export function buildFileSearchResultTree(
 
   return root.children.map(toPublicNode);
 }
+
+export function flattenFileSearchResultTree(
+  nodes: FileSearchResultTreeNode[],
+): RegistryFileIndexSearchResult[] {
+  const results: RegistryFileIndexSearchResult[] = [];
+  nodes.forEach(node => {
+    if (node.kind === 'file') {
+      results.push(node.result);
+      return;
+    }
+    results.push(...flattenFileSearchResultTree(node.children));
+  });
+  return results;
+}
