@@ -83,6 +83,12 @@ export function markDraftChatSessionFailed(
   };
 }
 
+export function canStartDraftChatSessionCreate(
+  draft: DraftChatSession | null | undefined,
+): boolean {
+  return !!draft && draft.status !== 'failed';
+}
+
 export function removeDraftChatSession(
   drafts: DraftChatSession[],
   draftId: string,

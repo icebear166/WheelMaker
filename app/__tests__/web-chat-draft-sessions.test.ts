@@ -42,6 +42,7 @@ describe('web chat draft sessions', () => {
   test('creates frontend-only draft sessions with explicit lifecycle states', () => {
     const {
       DRAFT_CHAT_SESSION_ID_PREFIX,
+      canStartDraftChatSessionCreate,
       createDraftChatSession,
       isDraftChatSessionId,
       markDraftChatSessionFailed,
@@ -78,6 +79,9 @@ describe('web chat draft sessions', () => {
       status: 'failed',
       errorMessage: 'create failed',
     });
+    expect(canStartDraftChatSessionCreate(draft)).toBe(true);
+    expect(canStartDraftChatSessionCreate(markDraftChatSessionSending(draft))).toBe(true);
+    expect(canStartDraftChatSessionCreate(markDraftChatSessionFailed(draft, 'create failed'))).toBe(false);
   });
 
   test('replaces selected draft keys only when the user is still on that draft', () => {
@@ -134,12 +138,19 @@ describe('web chat draft sessions', () => {
     expect(mainTsx).toContain('const selectDraftChatSession = useCallback');
     expect(mainTsx).toContain('const resolveSelectedDraftSessionForSend = async');
     expect(mainTsx).toContain('const renderDraftSessionRow = (');
+    expect(mainTsx).toContain('canStartDraftChatSessionCreate(draft)');
 
     const sendBody = extractConstFunctionBody(mainTsx, 'sendChatMessage');
     const resolveIndex = sendBody.indexOf('await resolveSelectedDraftSessionForSend(');
     const uploadIndex = sendBody.indexOf('await uploadChatAttachmentsForSend(');
     expect(resolveIndex).toBeGreaterThanOrEqual(0);
     expect(uploadIndex).toBeGreaterThan(resolveIndex);
+
+    const resolveDraftSendBody = extractConstFunctionBody(mainTsx, 'resolveSelectedDraftSessionForSend');
+    const canStartIndex = resolveDraftSendBody.indexOf('if (!canStartDraftChatSessionCreate(draft))');
+    const markSendingIndex = resolveDraftSendBody.indexOf('markDraftChatSessionSending(current)');
+    expect(canStartIndex).toBeGreaterThanOrEqual(0);
+    expect(markSendingIndex).toBeGreaterThan(canStartIndex);
 
     const draftRowBody = extractConstFunctionBody(mainTsx, 'renderDraftSessionRow');
     expect(draftRowBody).not.toContain('renderProjectSessionActionMenu');

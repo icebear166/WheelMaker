@@ -123,4 +123,21 @@ describe('web chat selection guards', () => {
       }),
     ).toBe('none');
   });
+
+  test('does not recover frontend draft sessions from the backend', () => {
+    const draftKey = chatSessionKeyFromParts('project-a', 'draft-chat-session-pending');
+    expect(
+      resolveSelectedChatVisibilityRecovery({
+        tab: 'chat',
+        connected: true,
+        chatLoading: false,
+        selectedRuntimeKey: encodeChatSessionKey(draftKey),
+        visibleRuntimeKey: '',
+        visibleMessageCount: 0,
+        cachedMessageCount: 0,
+        attemptedRuntimeKey: '',
+        selectedIsDraft: true,
+      }),
+    ).toBe('none');
+  });
 });

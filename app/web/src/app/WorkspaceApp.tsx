@@ -60,6 +60,7 @@ import {
   type ChatSessionVisualState,
 } from '../chat/session/chatSessionState';
 import {
+  canStartDraftChatSessionCreate,
   createDraftChatSession,
   isDraftChatSessionId,
   markDraftChatSessionFailed,
@@ -3681,6 +3682,9 @@ export function App() {
     const draft = findDraftChatSession(targetProjectId, draftId);
     if (!draft) {
       return Promise.reject(new Error('Draft session is no longer available.'));
+    }
+    if (!canStartDraftChatSessionCreate(draft)) {
+      return Promise.reject(new Error(draft.errorMessage || 'Session create failed.'));
     }
     const promise = service.createProjectSession(targetProjectId, agentType, '')
       .then(result => {
@@ -10059,6 +10063,7 @@ export function App() {
       connected,
       chatLoading,
       selectedRuntimeKey: runtimeKey,
+      selectedIsDraft: isDraftChatSessionId(selectedKey.sessionId),
       visibleRuntimeKey: chatVisibleRuntimeKeyRef.current,
       visibleMessageCount: chatMessagesRef.current.length,
       cachedMessageCount: cachedMessages.length,
@@ -10740,6 +10745,11 @@ export function App() {
         draftGeneration: getChatDraftGeneration(draftKey),
         sentFromKey: existingKey,
       };
+    }
+    if (!canStartDraftChatSessionCreate(draft)) {
+      const message = draft.errorMessage || 'Session create failed.';
+      setError(message);
+      throw new Error(message);
     }
 
     updateDraftChatSession(

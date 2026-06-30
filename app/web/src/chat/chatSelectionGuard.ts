@@ -96,6 +96,7 @@ export function resolveSelectedChatVisibilityRecovery(input: {
   tab: string;
   connected: boolean;
   chatLoading: boolean;
+  selectedIsDraft?: boolean;
   selectedRuntimeKey: string;
   visibleRuntimeKey: string;
   visibleMessageCount: number;
@@ -108,6 +109,9 @@ export function resolveSelectedChatVisibilityRecovery(input: {
     input.chatLoading ||
     !input.selectedRuntimeKey
   ) {
+    return 'none';
+  }
+  if (input.selectedIsDraft) {
     return 'none';
   }
 
