@@ -390,7 +390,6 @@ import {
   closePreviewTab,
   createPreviewWorkbenchState,
   cyclePreviewTabId,
-  ensurePreviewProjectVisible,
   failPreviewTabLoad,
   isAttachmentPreviewTab,
   isFilePreviewTab,
@@ -2052,8 +2051,6 @@ function promptArtifactPreviewCountLabel(fileCount: number): string {
 type ChatFilePeekViewerProps = {
   peek: FilePreviewTab | null;
   mode: 'desktop' | 'mobile';
-  projects: RegistryProject[];
-  activeProjectId: string;
   tabs: FilePreviewTab[];
   treeOpen: boolean;
   themeMode: 'dark' | 'light';
@@ -2069,7 +2066,6 @@ type ChatFilePeekViewerProps = {
   onClose: () => void;
   onCopyPath: () => void;
   onOpenInFileTab: () => void;
-  onProjectChange: (projectId: string) => void;
   onTabSelect: (path: string) => void;
   onTabClose: (path: string) => void;
   onToggleTree: () => void;
@@ -2080,8 +2076,6 @@ type ChatFilePeekViewerProps = {
 const ChatFilePeekViewer = React.memo(function ChatFilePeekViewer({
   peek,
   mode,
-  projects,
-  activeProjectId,
   tabs,
   treeOpen,
   themeMode,
@@ -2097,7 +2091,6 @@ const ChatFilePeekViewer = React.memo(function ChatFilePeekViewer({
   onClose,
   onCopyPath,
   onOpenInFileTab,
-  onProjectChange,
   onTabSelect,
   onTabClose,
   onToggleTree,
@@ -2191,8 +2184,6 @@ const ChatFilePeekViewer = React.memo(function ChatFilePeekViewer({
     p?.loading === n?.loading &&
     p?.error === n?.error &&
     prev.mode === next.mode &&
-    prev.projects === next.projects &&
-    prev.activeProjectId === next.activeProjectId &&
     prev.tabs === next.tabs &&
     prev.treeOpen === next.treeOpen &&
     prev.themeMode === next.themeMode &&
@@ -2795,7 +2786,6 @@ export function App() {
   );
   const [chatPreviewManualOpen, setChatPreviewManualOpen] = useState(false);
   const [chatPreviewManualCollapsed, setChatPreviewManualCollapsed] = useState(false);
-  const [previewProjectMenuOpen, setPreviewProjectMenuOpen] = useState(false);
   const [previewSearchOpen, setPreviewSearchOpen] = useState(false);
   const [previewSearchQuery, setPreviewSearchQuery] = useState('');
   const [previewSearchActiveIndex, setPreviewSearchActiveIndex] = useState(0);
@@ -4692,18 +4682,24 @@ export function App() {
   );
   const visibleProjectItems = visibility.visibleProjects;
   const chatFilePreviewProjects = visibleProjectItems;
+  const chatPreviewProjectId = selectedChatKey?.projectId || projectId || projectIdRef.current;
   const hiddenProjectItems = visibility.hiddenProjects;
   const hiddenProjectIdSet = useMemo(() => new Set(hiddenProjectIds), [hiddenProjectIds]);
   useEffect(() => {
-    const visibleProjectIds = chatFilePreviewProjects.map(projectItem => projectItem.projectId);
-    setPreviewWorkbench(current =>
-      ensurePreviewProjectVisible(
-        current,
-        visibleProjectIds,
-        selectedChatKey?.projectId ?? '',
-      ),
-    );
-  }, [chatFilePreviewProjects, selectedChatKey?.projectId]);
+    if (!chatPreviewProjectId || previewWorkbench.activeProjectId === chatPreviewProjectId) {
+      return;
+    }
+    previewFileTreeSearchGenerationRef.current += 1;
+    previewFileTreeSearchQueryIdRef.current = 0;
+    setPreviewFileTreeSearchQuery('');
+    setPreviewFileTreeSearchResults([]);
+    setPreviewFileTreeSearchLoading(false);
+    setPreviewFileTreeSearchError('');
+    setPreviewFileTreeSearchIndexed(true);
+    setPreviewFileTreeSearchActiveIndex(0);
+    setPreviewFileTreeSearchCollapsedDirs([]);
+    setPreviewWorkbench(current => selectPreviewProject(current, chatPreviewProjectId));
+  }, [chatPreviewProjectId, previewWorkbench.activeProjectId]);
   const chatHubTreeItems = useMemo(() => {
     const hubIds: string[] = [];
     const addHubId = (hubId: string) => {
@@ -9032,8 +9028,8 @@ export function App() {
 
   const resolveQuickFileProjectId = useCallback(
     () =>
-      previewWorkbenchRef.current.activeProjectId ||
       selectedChatKeyRef.current?.projectId ||
+      previewWorkbenchRef.current.activeProjectId ||
       projectIdRef.current,
     [],
   );
@@ -19287,7 +19283,6 @@ export function App() {
         onOpenInBrowser={openPortRelayPreviewInBrowser}
       />
   ) : null;
-  const previewWorkbenchProjects = visibleProjectItems;
   const previewWorkbenchActiveTab = activeWorkbenchTab;
   const chatFilePreviewLoadingDirs =
     chatFilePreviewLoadingDirsByProject[previewWorkbench.activeProjectId] ?? {};
@@ -19414,7 +19409,7 @@ export function App() {
           projects={projects}
           projectId={previewWorkbench.activeProjectId}
           currentProjectName={
-            chatFilePreviewProjects.find(item => item.projectId === previewWorkbench.activeProjectId)?.name ??
+            projects.find(item => item.projectId === previewWorkbench.activeProjectId)?.name ??
             currentProjectName
           }
           sortedProjectItems={chatFilePreviewProjects}
@@ -19441,14 +19436,6 @@ export function App() {
   );
   const toggleChatFilePreviewTree = () => {
     setPreviewWorkbench(current => ({...current, treeOpen: !current.treeOpen}));
-  };
-  const togglePreviewProjectMenu = () => {
-    setPreviewProjectMenuOpen(open => !open);
-  };
-  const selectPreviewProjectFromMenu = (nextProjectId: string) => {
-    setPreviewProjectMenuOpen(false);
-    resetPreviewFileTreeSearchSession();
-    setPreviewWorkbench(current => selectPreviewProject(current, nextProjectId));
   };
   const selectWorkbenchTab = (tabId: string) => {
     setPreviewWorkbench(current => {
@@ -19726,8 +19713,6 @@ export function App() {
         <ChatFilePeekViewer
           peek={tab}
           mode={mode}
-          projects={previewWorkbenchProjects}
-          activeProjectId={previewWorkbench.activeProjectId}
           tabs={EMPTY_PREVIEW_WORKBENCH_TABS}
           treeOpen={previewWorkbench.treeOpen}
           themeMode={themeMode}
@@ -19743,7 +19728,6 @@ export function App() {
           onClose={closeChatFilePeekFromChrome}
           onCopyPath={copyChatFilePreviewPath}
           onOpenInFileTab={openPeekFileInFullFileTab}
-          onProjectChange={selectPreviewProjectFromMenu}
           onTabSelect={() => undefined}
           onTabClose={() => undefined}
           onToggleTree={toggleChatFilePreviewTree}
@@ -19900,9 +19884,6 @@ export function App() {
   const renderPreviewWorkbenchSurface = (mode: 'desktop' | 'mobile') => (
     <PreviewWorkbenchChrome
       mode={mode}
-      projects={previewWorkbenchProjects}
-      activeProjectId={previewWorkbench.activeProjectId}
-      projectMenuOpen={previewProjectMenuOpen}
       activeTab={previewWorkbenchActiveTab}
       tabs={previewWorkbenchTabs}
       fileTreeOpen={previewWorkbench.treeOpen}
@@ -19910,12 +19891,9 @@ export function App() {
       fileTreeSearch={previewFileTreeSearch}
       actions={renderPreviewWorkbenchActions()}
       onClose={closeChatFilePeekFromChrome}
-      onProjectMenuToggle={togglePreviewProjectMenu}
-      onProjectSelect={selectPreviewProjectFromMenu}
       onTabSelect={selectWorkbenchTab}
       onTabClose={closeWorkbenchTab}
       onFileTreeToggle={toggleChatFilePreviewTree}
-      onProjectMenuClose={() => setPreviewProjectMenuOpen(false)}
       onFileTreeClose={() => setPreviewWorkbench(current => ({...current, treeOpen: false}))}
       onWorkbenchKeyDown={handlePreviewWorkbenchKeyDown}
       onMobilePortRelayRefresh={refreshActivePortRelayPreview}
