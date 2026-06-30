@@ -925,6 +925,15 @@ func hubStateRequestTimeout(method string) time.Duration {
 	}
 }
 
+func projectForwardRequestTimeout(method string) time.Duration {
+	switch method {
+	case rp.RegistryMethodSessionCreate:
+		return 120 * time.Second
+	default:
+		return defaultRequestTimeout
+	}
+}
+
 func (s *Server) executeHubStateRequest(state *connectionState, in envelope) envelope {
 	hubID := strings.TrimSpace(in.HubID)
 	if hubID == "" {
@@ -1074,7 +1083,7 @@ func (s *Server) executeClientRequest(state *connectionState, in envelope) envel
 		}
 		resp.ProjectID = projectID
 		return resp
-	case <-time.After(defaultRequestTimeout):
+	case <-time.After(projectForwardRequestTimeout(in.Method)):
 		hubPeer.resolvePending(forwardID, envelope{})
 		return s.errorEnvelope(in.Method, codeTimeout, "hub response timeout", nil)
 	}

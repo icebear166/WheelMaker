@@ -1702,6 +1702,33 @@ func TestHubStateForwardTimeoutsMatchOperationCost(t *testing.T) {
 	}
 }
 
+func TestProjectForwardTimeoutsMatchOperationCost(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		want   time.Duration
+	}{
+		{
+			name:   "session list",
+			method: rp.RegistryMethodSessionList,
+			want:   defaultRequestTimeout,
+		},
+		{
+			name:   "session create",
+			method: rp.RegistryMethodSessionCreate,
+			want:   120 * time.Second,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := projectForwardRequestTimeout(tt.method); got != tt.want {
+				t.Fatalf("projectForwardRequestTimeout(%q)=%s, want %s", tt.method, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCmdPrefixIsNotAllowedByWildcard(t *testing.T) {
 	s := New(Config{})
 	ts := httptest.NewServer(s.Handler())
