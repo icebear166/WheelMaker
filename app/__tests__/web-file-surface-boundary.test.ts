@@ -31,6 +31,9 @@ describe('web file surface boundary', () => {
     expect(fileExplorerTsx).toContain('className="section-title">EXPLORER</div>');
     expect(fileExplorerTsx).toContain('className="node-icon seti-icon"');
     expect(fileExplorerTsx).toContain('className="seti-glyph"');
+    expect(fileExplorerTsx).toContain('depthIndent?: number;');
+    expect(fileExplorerTsx).toContain('depthIndent = 14');
+    expect(fileExplorerTsx).toContain('10 + depth * depthIndent');
     expect(fileExplorerTsx).toContain('syncWorkspaceProject(projectItem.projectId');
   });
 });

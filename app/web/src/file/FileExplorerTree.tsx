@@ -28,6 +28,7 @@ type FileExplorerTreeProps = WorkspaceProjectSelectorProps & {
   toggleDirectory: (path: string) => void;
   resolveFileIcon: (name: string) => FileResolvedIcon;
   onFileSelect?: (path: string) => void;
+  depthIndent?: number;
 };
 
 export function WorkspaceProjectSelector({
@@ -102,6 +103,7 @@ export function FileExplorerTree({
   toggleDirectory,
   resolveFileIcon,
   onFileSelect,
+  depthIndent = 14,
 }: FileExplorerTreeProps) {
   const renderFileTree = (path: string, depth: number): React.ReactNode => {
     const entries = dirEntries[path] ?? [];
@@ -112,7 +114,7 @@ export function FileExplorerTree({
           <div key={entry.path}>
             <div
               className="item"
-              style={{ paddingLeft: 10 + depth * 14 }}
+              style={{ paddingLeft: 10 + depth * depthIndent }}
               onClick={() => {
                 toggleDirectory(entry.path);
               }}
@@ -142,7 +144,7 @@ export function FileExplorerTree({
         <div
           key={entry.path}
           className={`item ${selectedFile === entry.path ? 'selected' : ''}`}
-          style={{ paddingLeft: 10 + depth * 14 }}
+          style={{ paddingLeft: 10 + depth * depthIndent }}
           onClick={() => {
             if (onFileSelect) onFileSelect(entry.path);
             else setSelectedFile(entry.path);

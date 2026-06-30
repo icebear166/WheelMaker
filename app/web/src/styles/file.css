@@ -396,9 +396,9 @@
   height: 30px;
   min-width: 0;
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
+  grid-template-columns: 18px minmax(0, 1fr) 24px;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   overflow: hidden;
   border: 1px solid transparent;
   border-radius: 999px;
@@ -419,7 +419,7 @@
 }
 
 .preview-workbench-tree-search-shell[data-open='true'] {
-  width: min(260px, calc(100vw - 108px));
+  width: min(292px, calc(100vw - 108px));
   border-color: color-mix(in srgb, var(--border) 78%, transparent);
   opacity: 1;
   padding: 0 10px;
@@ -444,6 +444,27 @@
 
 .preview-workbench-tree-search-input::placeholder {
   color: color-mix(in srgb, var(--muted) 82%, transparent);
+}
+
+.preview-workbench-tree-tool-button {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.preview-workbench-tree-tool-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+
+.preview-workbench-tree-tool-button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .preview-workbench-tree-fab {
@@ -558,7 +579,7 @@
 }
 
 .preview-workbench-surface.mobile .preview-workbench-tree-search-shell[data-open='true'] {
-  width: min(250px, calc(100vw - 92px));
+  width: min(286px, calc(100vw - 92px));
 }
 
 .preview-workbench-surface.mobile .preview-workbench-tree-panel {

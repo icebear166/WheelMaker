@@ -1667,6 +1667,15 @@ function sortEntries(entries: RegistryFsEntry[]): RegistryFsEntry[] {
   });
 }
 
+function previewFileAncestorDirs(path: string): string[] {
+  const parts = path.replace(/\\/g, '/').replace(/^\.?\//, '').split('/').filter(Boolean);
+  const dirs: string[] = [];
+  for (let index = 1; index < parts.length; index += 1) {
+    dirs.push(parts.slice(0, index).join('/'));
+  }
+  return dirs;
+}
+
 function getFileExtension(path: string): string {
   const match = /\.([a-z0-9]+)$/i.exec(path);
   return match ? match[1].toLowerCase() : '';
@@ -19282,6 +19291,44 @@ export function App() {
   const previewWorkbenchActiveTab = activeWorkbenchTab;
   const chatFilePreviewLoadingDirs =
     chatFilePreviewLoadingDirsByProject[previewWorkbench.activeProjectId] ?? {};
+  const previewFileTreeDepthIndent = 8;
+  const scrollLocatedPreviewFileIntoView = () => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const selected = document.querySelector('.preview-workbench-tree-panel .preview-workbench-file-tree-content .item.selected');
+        if (selected instanceof HTMLElement) {
+          selected.scrollIntoView({block: 'center'});
+        }
+      });
+    });
+  };
+  const locateActivePreviewFileInTree = () => {
+    const targetPath = chatFilePeek?.path ?? '';
+    const targetProjectId = previewWorkbench.activeProjectId;
+    if (!targetPath || !targetProjectId) {
+      return;
+    }
+    const ancestors = previewFileAncestorDirs(targetPath);
+    setPreviewWorkbench(current => ({...current, treeOpen: true}));
+    updatePreviewFileTreeSearchQuery('');
+    setExpandedDirs(current => {
+      const next = [...current];
+      ancestors.forEach(path => {
+        if (!next.includes(path)) {
+          next.push(path);
+        }
+      });
+      return next;
+    });
+    const projectEntries = chatFilePreviewDirEntriesByProject[targetProjectId] ?? {};
+    const missingAncestors = ancestors.filter(path => !projectEntries[path]);
+    Promise.all(missingAncestors.map(path => loadPreviewDirectory(targetProjectId, path)))
+      .catch(err => {
+        const reason = err instanceof Error ? err.message : String(err);
+        setError(`Failed to locate file "${targetPath}": ${reason}`);
+      })
+      .finally(scrollLocatedPreviewFileIntoView);
+  };
   const togglePreviewFileTreeSearchDirectory = (path: string) => {
     setPreviewFileTreeSearchCollapsedDirs(current =>
       current.includes(path)
@@ -19294,7 +19341,7 @@ export function App() {
     depth = 0,
   ): React.ReactNode =>
     nodes.map(node => {
-      const paddingLeft = 10 + depth * 14;
+      const paddingLeft = 10 + depth * previewFileTreeDepthIndent;
       if (node.kind === 'dir') {
         const collapsed = previewFileTreeSearchCollapsedDirs.includes(node.path);
         return (
@@ -19384,6 +19431,7 @@ export function App() {
             togglePreviewDirectory(path).catch(() => undefined);
           }}
           resolveFileIcon={resolveFileIcon}
+          depthIndent={previewFileTreeDepthIndent}
           onFileSelect={path => {
             openChatFilePeek(path, null, previewWorkbench.activeProjectId);
           }}
@@ -19836,6 +19884,16 @@ export function App() {
         placeholder="Search files"
         aria-label="Search files"
       />
+      <button
+        type="button"
+        className="preview-workbench-tree-tool-button"
+        onClick={locateActivePreviewFileInTree}
+        disabled={!chatFilePeek?.path}
+        title={chatFilePeek?.path ? 'Locate current file' : 'No current file to locate'}
+        aria-label="Locate current file"
+      >
+        <span className="codicon codicon-location" aria-hidden="true" />
+      </button>
     </>
   );
   const previewWorkbenchFileTreeContent = !activeWorkbenchTab || activeWorkbenchTab.type === 'file' ? chatFilePreviewTreeContent : null;

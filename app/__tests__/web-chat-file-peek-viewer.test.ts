@@ -301,6 +301,15 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('const [previewFileTreeSearchQuery, setPreviewFileTreeSearchQuery] = useState(\'\');');
     expect(mainTsx).toContain('const [previewFileTreeSearchCollapsedDirs, setPreviewFileTreeSearchCollapsedDirs] = useState<string[]>([]);');
     expect(mainTsx).toContain('className="preview-workbench-tree-search-input"');
+    expect(mainTsx).toContain('className="preview-workbench-tree-tool-button"');
+    expect(mainTsx).toContain('onClick={locateActivePreviewFileInTree}');
+    expect(mainTsx).toContain('codicon codicon-location');
+    expect(mainTsx).toContain('const previewFileTreeDepthIndent = 8;');
+    expect(mainTsx).toContain('const paddingLeft = 10 + depth * previewFileTreeDepthIndent;');
+    expect(mainTsx).toContain('depthIndent={previewFileTreeDepthIndent}');
+    expect(mainTsx).toContain('const locateActivePreviewFileInTree = () => {');
+    expect(mainTsx).toContain('const ancestors = previewFileAncestorDirs(targetPath);');
+    expect(mainTsx).toContain("document.querySelector('.preview-workbench-tree-panel .preview-workbench-file-tree-content .item.selected')");
     expect(mainTsx).toContain('const previewFileTreeSearchTree = useMemo(');
     expect(mainTsx).toContain('buildFileSearchResultTree(previewFileTreeSearchResults, {');
     expect(mainTsx).toContain('dirEntries: chatFilePreviewDirEntries');
@@ -324,6 +333,7 @@ describe('web chat file peek viewer', () => {
 
     expect(stylesCss).toContain('.preview-workbench-tree-search-shell');
     expect(stylesCss).toContain('.preview-workbench-tree-search-shell[data-open=\'true\']');
+    expect(stylesCss).toContain('.preview-workbench-tree-tool-button');
     expect(stylesCss).toContain('.preview-workbench-file-search-tree');
     expect(stylesCss).toContain('.preview-workbench-file-search-node');
     expect(stylesCss).not.toContain('.preview-workbench-file-search-node .path');
