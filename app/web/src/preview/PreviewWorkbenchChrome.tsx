@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  previewWorkbenchHeaderTitle,
   previewWorkbenchTabTooltip,
   type PreviewWorkbenchTab,
   type PreviewWorkbenchTabType,
@@ -54,7 +55,7 @@ export function PreviewWorkbenchChrome({
   const fileTreeButtonRef = React.useRef<HTMLButtonElement | null>(null);
   const fileTreeSearchRef = React.useRef<HTMLDivElement | null>(null);
   const fileTreePanelRef = React.useRef<HTMLDivElement | null>(null);
-  const activeTitle = activeTab?.title || 'Preview';
+  const activeTitle = previewWorkbenchHeaderTitle(activeTab);
 
   React.useEffect(() => {
     if (!fileTreeOpen) {

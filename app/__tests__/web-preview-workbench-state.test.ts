@@ -9,6 +9,7 @@ import {
   openPreviewTab,
   previewRenderedTabs,
   previewTabId,
+  previewWorkbenchHeaderTitle,
   previewWorkbenchTabTooltip,
   selectPreviewProject,
   selectPreviewTab,
@@ -224,6 +225,84 @@ describe('preview workbench state', () => {
 
     expect(previewWorkbenchTabTooltip(state.tabsByProjectId.p1[0])).toBe('src/deep/a.ts');
     expect(previewWorkbenchTabTooltip(state.tabsByProjectId.p1[1])).toBe('http://127.0.0.1:5173/app');
+  });
+
+  test('formats preview workbench header titles and short tab titles by tab type', () => {
+    const state = [
+      {
+        type: 'file' as const,
+        projectId: 'p1',
+        path: 'app/web/src/app/WorkspaceApp.tsx',
+        targetLine: null,
+        title: 'WorkspaceApp.tsx',
+      },
+      {
+        type: 'prompt-diff' as const,
+        projectId: 'p1',
+        sessionId: 's1',
+        artifactId: 'd1',
+        title: 'Diff · 2 files',
+        promptText: 'Refine the preview workbench title rules so file tabs show paths and diffs show prompt context.',
+        promptSummary: 'Refine the preview workbench title rules',
+        files: [
+          {
+            path: 'app/web/src/app/WorkspaceApp.tsx',
+            status: 'MODIFIED',
+            additions: 4,
+            deletions: 1,
+            diff: '',
+            expanded: false,
+          },
+          {
+            path: 'app/web/src/preview/previewWorkbenchState.ts',
+            status: 'MODIFIED',
+            additions: 8,
+            deletions: 2,
+            diff: '',
+            expanded: false,
+          },
+        ],
+      },
+      {
+        type: 'attachment' as const,
+        projectId: 'p1',
+        sessionId: 's1',
+        attachmentKey: 'att1',
+        title: 'screenshot.png',
+        meta: '42 KB',
+        mimeType: 'image/png',
+        kind: 'image' as const,
+        src: '',
+      },
+      {
+        type: 'port-relay' as const,
+        projectId: 'p1',
+        hubId: 'local',
+        targetPort: 5173,
+        framePath: '/app',
+        title: 'local:5173/app',
+        url: 'http://127.0.0.1:5173/app',
+      },
+    ].reduce((current, input) => openPreviewTab(current, input), createPreviewWorkbenchState('p1'));
+
+    const tabs = state.tabsByProjectId.p1;
+    expect(tabs.map(tab => tab.title)).toEqual([
+      'WorkspaceApp.tsx',
+      'Diff · 2 files',
+      'screenshot.png',
+      'local:5173/app',
+    ]);
+    expect(tabs.map(previewWorkbenchHeaderTitle)).toEqual([
+      'app/web/src/app/WorkspaceApp.tsx',
+      'Prompt diff · "Refine the preview workbench title rules" · 2 files',
+      'Attachment · screenshot.png · image/png',
+      'Port Relay · local:5173/app',
+    ]);
+    expect(previewWorkbenchTabTooltip(tabs[1])).toContain('Refine the preview workbench title rules so file tabs show paths');
+    expect(previewWorkbenchTabTooltip(tabs[1])).toContain('2 files');
+    expect(previewWorkbenchTabTooltip(tabs[1])).toContain('app/web/src/preview/previewWorkbenchState.ts');
+    expect(previewWorkbenchTabTooltip(tabs[2])).toBe('screenshot.png - image/png - 42 KB - att1');
+    expect(previewWorkbenchTabTooltip(tabs[3])).toBe('http://127.0.0.1:5173/app');
   });
 
   test('builds search matches for file and prompt diff preview tabs only', () => {

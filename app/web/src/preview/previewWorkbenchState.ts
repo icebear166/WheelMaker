@@ -29,6 +29,8 @@ export type PromptDiffPreviewTab = PreviewWorkbenchTabBase & {
   type: 'prompt-diff';
   sessionId: string;
   artifactId: string;
+  promptText: string;
+  promptSummary: string;
   files: PromptDiffPreviewFile[];
 };
 
@@ -71,6 +73,8 @@ export type PreviewWorkbenchOpenInput =
       sessionId: string;
       artifactId: string;
       title: string;
+      promptText?: string;
+      promptSummary?: string;
       files: PromptDiffPreviewFile[];
     }
   | {
@@ -131,6 +135,22 @@ const normalizeFramePath = (path: string): string => path || '';
 
 const hasText = (value: string | undefined): value is string => !!value;
 
+function compactLabel(value: string, maxLength: number): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (!normalized) {
+    return '';
+  }
+  return normalized.length > maxLength ? `${normalized.slice(0, Math.max(0, maxLength - 3))}...` : normalized;
+}
+
+function fileCountLabel(fileCount: number): string {
+  return `${fileCount} ${fileCount === 1 ? 'file' : 'files'}`;
+}
+
+function portRelayLabel(tab: Pick<PortRelayPreviewTab, 'hubId' | 'targetPort' | 'framePath'>): string {
+  return `${tab.hubId}:${tab.targetPort}${tab.framePath || ''}`;
+}
+
 export function previewTabId(input: PreviewWorkbenchTabIdInput): string {
   if (input.type === 'file') {
     return `file:${input.path || ''}`;
@@ -163,12 +183,35 @@ export function previewWorkbenchTabTooltip(tab: PreviewWorkbenchTab): string {
   }
   if (tab.type === 'prompt-diff') {
     const paths = tab.files.map(file => file.path).filter(Boolean);
-    return paths.length > 0 ? `${tab.title}: ${paths.join(', ')}` : tab.title;
+    return [
+      tab.promptText || tab.promptSummary || 'Prompt diff',
+      fileCountLabel(tab.files.length),
+      paths.join(', '),
+    ].filter(Boolean).join(' - ');
   }
   if (tab.type === 'attachment') {
-    return [tab.title, tab.meta].filter(Boolean).join(' - ');
+    return [tab.title, tab.mimeType, tab.meta, tab.attachmentKey].filter(Boolean).join(' - ');
   }
-  return tab.url || `${tab.hubId}:${tab.targetPort}${tab.framePath || ''}`;
+  return tab.url || portRelayLabel(tab);
+}
+
+export function previewWorkbenchHeaderTitle(tab: PreviewWorkbenchTab | null): string {
+  if (!tab) {
+    return 'Preview';
+  }
+  if (tab.type === 'file') {
+    return tab.path || tab.title;
+  }
+  if (tab.type === 'prompt-diff') {
+    const summary = tab.promptSummary || compactLabel(tab.promptText, 48);
+    return summary
+      ? `Prompt diff · "${summary}" · ${fileCountLabel(tab.files.length)}`
+      : `Prompt diff · ${fileCountLabel(tab.files.length)}`;
+  }
+  if (tab.type === 'attachment') {
+    return ['Attachment', tab.title, tab.mimeType].filter(Boolean).join(' · ');
+  }
+  return `Port Relay · ${portRelayLabel(tab)}`;
 }
 
 export function buildPreviewSearchMatches(
@@ -316,6 +359,8 @@ function createTab(input: PreviewWorkbenchOpenInput): PreviewWorkbenchTab {
       type: 'prompt-diff',
       sessionId: input.sessionId,
       artifactId: input.artifactId,
+      promptText: input.promptText ?? '',
+      promptSummary: input.promptSummary ?? compactLabel(input.promptText ?? '', 48),
       files: input.files,
     };
   }
@@ -347,7 +392,13 @@ function mergeTab(existing: PreviewWorkbenchTab, input: PreviewWorkbenchOpenInpu
     return {...existing, title: input.title, targetLine: normalizeLine(input.targetLine)};
   }
   if (existing.type === 'prompt-diff' && input.type === 'prompt-diff') {
-    return {...existing, title: input.title, files: input.files};
+    return {
+      ...existing,
+      title: input.title,
+      promptText: input.promptText ?? existing.promptText,
+      promptSummary: input.promptSummary ?? existing.promptSummary,
+      files: input.files,
+    };
   }
   if (existing.type === 'attachment' && input.type === 'attachment') {
     return {

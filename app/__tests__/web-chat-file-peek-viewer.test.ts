@@ -248,6 +248,7 @@ describe('web chat file peek viewer', () => {
     expect(chromeTsx).not.toContain('preview-workbench-project-menu');
     expect(chromeTsx).not.toContain('projectMenuOpen');
     expect(chromeTsx).not.toContain('onProjectSelect');
+    expect(chromeTsx).toContain('previewWorkbenchHeaderTitle(activeTab)');
     expect(chromeTsx).toContain('className="preview-workbench-title"');
     expect(chromeTsx).toContain('className="preview-workbench-actions"');
     expect(chromeTsx).toContain('previewWorkbenchTabIcon(');

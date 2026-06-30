@@ -1992,7 +1992,15 @@ const MarkdownImageExportSurface = React.memo(function MarkdownImageExportSurfac
 });
 
 function promptArtifactPreviewTitle(fileCount: number): string {
-  return `Prompt diff - ${fileCount} ${fileCount === 1 ? 'file' : 'files'}`;
+  return `Diff · ${fileCount} ${fileCount === 1 ? 'file' : 'files'}`;
+}
+
+function promptArtifactPromptSummary(text: string): string {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (!normalized) {
+    return '';
+  }
+  return normalized.length > 48 ? `${normalized.slice(0, 45)}...` : normalized;
 }
 
 function normalizePromptArtifactPath(value: string): string {
@@ -12476,6 +12484,7 @@ export function App() {
       return;
     }
     const tabId = previewTabId({type: 'port-relay', hubId: normalizedTarget.hubId, targetPort: normalizedTarget.targetPort, framePath});
+    const tabTitle = `${normalizedTarget.hubId}:${normalizedTarget.targetPort}${framePath || ''}`;
     setPreviewWorkbench(current =>
       openPreviewTab(current, {
         type: 'port-relay',
@@ -12483,7 +12492,7 @@ export function App() {
         hubId: normalizedTarget.hubId,
         targetPort: normalizedTarget.targetPort,
         framePath,
-        title: `${normalizedTarget.hubId}:${normalizedTarget.targetPort}`,
+        title: tabTitle,
         url: portRelayFrameUrl,
         reloadKey: portRelayFrameReloadKey,
       }),
@@ -16987,18 +16996,25 @@ export function App() {
     ],
   );
 
-  const findPromptRequestForDone = useCallback((doneTurnIndex: number): RegistryChatMessage | undefined => {
-    const ordered = [...selectedFullChatMessages].sort((left, right) => (left.turnIndex ?? 0) - (right.turnIndex ?? 0));
+  const findPromptRequestForDoneInMessages = (
+    messages: RegistryChatMessage[],
+    doneTurnIndex: number,
+  ): RegistryChatMessage | undefined => {
+    const ordered = [...messages].sort((left, right) => (left.turnIndex ?? 0) - (right.turnIndex ?? 0));
     const doneIndex = ordered.findIndex(message => message.method === 'prompt_done' && (message.turnIndex ?? 0) === doneTurnIndex);
     if (doneIndex < 0) {
       return undefined;
     }
     for (let index = doneIndex - 1; index >= 0; index -= 1) {
-      if (ordered[index].method === 'prompt_request') {
+      if (isPromptStartMessage(ordered[index])) {
         return ordered[index];
       }
     }
     return undefined;
+  };
+
+  const findPromptRequestForDone = useCallback((doneTurnIndex: number): RegistryChatMessage | undefined => {
+    return findPromptRequestForDoneInMessages(selectedFullChatMessages, doneTurnIndex);
   }, [selectedFullChatMessages]);
 
   const copyPromptDoneMarkdown = async (doneTurnIndex: number) => {
@@ -17116,6 +17132,14 @@ export function App() {
       }));
       return;
     }
+    const promptMessages = selectedArchivedKey
+      ? archivedPreview?.messages ?? []
+      : selectedFullChatMessages;
+    const promptRequest =
+      findPromptRequestForDoneInMessages(promptMessages, message.turnIndex ?? 0) ||
+      findPromptRequestForDone(message.turnIndex ?? 0);
+    const promptText = promptRequest ? msgText(promptRequest.method, promptRequest.param).trim() : '';
+    const promptSummary = promptArtifactPromptSummary(promptText);
     const initialPath = initialFilePath || null;
     const initialFiles = buildPromptArtifactPreviewFiles(artifact, '', initialPath);
     const initialFileCount = artifact.fileCount || artifact.files?.length || initialFiles.length;
@@ -17134,6 +17158,8 @@ export function App() {
           sessionId,
           artifactId,
           title: promptArtifactPreviewTitle(initialFileCount),
+          promptText,
+          promptSummary,
           files: initialFiles,
         }),
         artifactProjectId,
@@ -17166,6 +17192,8 @@ export function App() {
             ? {
                 ...tab,
                 title: promptArtifactPreviewTitle(fileCount),
+                promptText,
+                promptSummary,
                 files,
                 loading: false,
                 error: '',
@@ -17192,10 +17220,13 @@ export function App() {
       setOpeningPromptArtifactKey(current => (current === artifactKey ? '' : current));
     }
   }, [
+    archivedPreview?.messages,
+    findPromptRequestForDone,
     isWide,
     projectId,
     selectedArchivedKey?.projectId,
     selectedChatKey?.projectId,
+    selectedFullChatMessages,
     service,
     setDrawerOpen,
   ]);
