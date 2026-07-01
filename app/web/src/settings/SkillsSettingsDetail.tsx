@@ -50,6 +50,12 @@ type SkillDetailCacheEntry = {
   detail: RegistrySkillDetail | null;
 };
 
+type SkillDetailAnchor = {
+  left: number;
+  top: number;
+  placement: 'left' | 'right';
+};
+
 type SkillUpdateTarget = SkillInstallTarget & {
   includeProjects?: boolean;
 };
@@ -100,6 +106,31 @@ function formatSkillFileSize(size?: number): string {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function skillDetailAnchorFromRect(rect: DOMRect): SkillDetailAnchor | null {
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+  if (viewportWidth <= 720) {
+    return null;
+  }
+  const margin = 12;
+  const gap = 10;
+  const popoverWidth = Math.min(480, viewportWidth - margin * 2);
+  const popoverHeight = Math.min(620, Math.max(240, viewportHeight - margin * 2));
+  const canPlaceRight = rect.right + gap + popoverWidth <= viewportWidth - margin;
+  const placement: SkillDetailAnchor['placement'] = canPlaceRight || rect.left < popoverWidth + gap + margin ? 'right' : 'left';
+  const left = placement === 'right'
+    ? Math.min(rect.right + gap, viewportWidth - margin - popoverWidth)
+    : Math.max(margin, rect.left - gap - popoverWidth);
+  const rowCenter = rect.top + rect.height / 2;
+  const minTop = margin + popoverHeight / 2;
+  const maxTop = Math.max(minTop, viewportHeight - margin - popoverHeight / 2);
+  return {
+    left,
+    top: Math.min(Math.max(rowCenter, minTop), maxTop),
+    placement,
+  };
 }
 
 function renderSkillIconButton(options: {
@@ -158,6 +189,7 @@ export function SkillsSettingsDetail({
   const [activeSkillHubId, setActiveSkillHubId] = React.useState(skillHubIds[0] ?? '');
   const [skillHubMenuOpen, setSkillHubMenuOpen] = React.useState(false);
   const [selectedSkillKeysByScope, setSelectedSkillKeysByScope] = React.useState<Record<string, string[]>>({});
+  const [skillDetailAnchor, setSkillDetailAnchor] = React.useState<SkillDetailAnchor | null>(null);
   const activeSkillHub = skillHubCards.find(hub => hub.hubId === activeSkillHubId) ?? skillHubCards[0] ?? null;
   const selectedSkillHubId = activeSkillHub?.hubId ?? '';
   const skillsScanning = skillsLoading || skillHubCards.some(hub => hub.loading === true);
@@ -180,6 +212,22 @@ export function SkillsSettingsDetail({
     }
   }, [activeSkillHubId, skillHubIdsKey]);
 
+  React.useEffect(() => {
+    if (!skillDetailTarget) {
+      setSkillDetailAnchor(null);
+    }
+  }, [skillDetailTarget]);
+
+  React.useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth <= 720) {
+        setSkillDetailAnchor(null);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const toggleScopeSkillSelection = React.useCallback((scopeKey: string, skillName: string) => {
     setSelectedSkillKeysByScope(prev => {
       const current = prev[scopeKey] ?? [];
@@ -193,6 +241,12 @@ export function SkillsSettingsDetail({
   const setScopeSkillSelection = React.useCallback((scopeKey: string, skillNames: string[]) => {
     setSelectedSkillKeysByScope(prev => ({...prev, [scopeKey]: skillNames}));
   }, []);
+
+  const openSkillDetailFromRow = React.useCallback((event: React.MouseEvent<HTMLButtonElement>, target: SkillDetailTarget) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setSkillDetailAnchor(skillDetailAnchorFromRect(rect));
+    requestSkillDetail(target).catch(() => undefined);
+  }, [requestSkillDetail]);
 
   const skillHubSummary = (hub: SkillHubView) => {
     const data = hub.data;
@@ -446,12 +500,12 @@ export function SkillsSettingsDetail({
                     <button
                       type="button"
                       className="settings-skill-row-main settings-skill-row-open"
-                      onClick={() => requestSkillDetail({
+                      onClick={event => openSkillDetailFromRow(event, {
                         hubId,
                         scope: options.scope,
                         projectName: options.projectName,
                         skillName: skill.name,
-                      }).catch(() => undefined)}
+                      })}
                     >
                       <span className="settings-skill-name" title={skill.path || skill.name}>{skill.name}</span>
                       {managed ? null : <span className="settings-skill-readonly-tag">External</span>}
@@ -522,7 +576,14 @@ export function SkillsSettingsDetail({
       .sort((left, right) => left.relativePath.localeCompare(right.relativePath));
 
     return (
-      <aside className="settings-skills-detail-drawer" aria-label="Skill detail">
+      <aside
+        className={`settings-skills-detail-popover settings-skills-detail-placement-${skillDetailAnchor?.placement ?? 'right'}`}
+        style={skillDetailAnchor ? {
+          left: `${skillDetailAnchor.left}px`,
+          top: `${skillDetailAnchor.top}px`,
+        } : undefined}
+        aria-label="Skill detail"
+      >
         <div className="settings-skills-detail-mobile-header">
           <button
             type="button"

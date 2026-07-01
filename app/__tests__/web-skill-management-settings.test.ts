@@ -170,18 +170,41 @@ describe('skill management settings UI source structure', () => {
     expect(detailTsx).toContain('owner/repo or npx skills add ... --skill name');
   });
 
-  test('loads skill details on demand into a responsive detail panel', () => {
+  test('loads skill details on demand into a responsive popover detail panel', () => {
     expect(mainTsx).toContain('skillDetailCache');
     expect(mainTsx).toContain('requestSkillDetail');
     expect(mainTsx).toContain('service.getSkillDetail');
     expect(mainTsx).toContain('skillDetailCacheKey');
-    expect(detailTsx).toContain('settings-skills-detail-drawer');
+    expect(detailTsx).toContain('settings-skills-detail-popover');
     expect(detailTsx).toContain('settings-skills-detail-mobile-header');
     expect(detailTsx).toContain('Skill.md');
     expect(detailTsx).toContain('Supporting files');
-    expect(stylesCss).toContain('.settings-skills-detail-drawer');
+    expect(stylesCss).toContain('.settings-skills-detail-popover');
     expect(stylesCss).toContain('@media (max-width: 720px)');
     expect(stylesCss).toContain('.settings-skills-detail-mobile-header');
+  });
+
+  test('anchors desktop skill details next to the selected skill row', () => {
+    expect(detailTsx).toContain('skillDetailAnchor');
+    expect(detailTsx).toContain('openSkillDetailFromRow');
+    expect(detailTsx).toContain('getBoundingClientRect()');
+    expect(detailTsx).toContain('style={skillDetailAnchor ?');
+    expect(detailTsx).toContain('settings-skills-detail-placement-');
+
+    const popoverStart = stylesCss.indexOf('.settings-skills-detail-popover {');
+    const mobileStart = stylesCss.indexOf('@media (max-width: 720px)', popoverStart);
+    expect(popoverStart).toBeGreaterThanOrEqual(0);
+    expect(mobileStart).toBeGreaterThan(popoverStart);
+    const desktopPopoverStyles = stylesCss.slice(popoverStart, mobileStart);
+    expect(desktopPopoverStyles).not.toMatch(/^\s*right: 0;/m);
+    expect(desktopPopoverStyles).not.toMatch(/^\s*bottom: 0;/m);
+    expect(desktopPopoverStyles).toContain('max-height: calc(100vh - 24px);');
+    expect(stylesCss).toContain('.settings-skills-detail-placement-left');
+    expect(stylesCss).toContain('.settings-skills-detail-placement-right');
+
+    const mobileStyles = stylesCss.slice(mobileStart);
+    expect(mobileStyles).toContain('.settings-skills-detail-popover');
+    expect(mobileStyles).toContain('inset: 0;');
   });
 
   test('supports current-scope batch uninstall without selecting external skills', () => {
