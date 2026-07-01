@@ -653,6 +653,19 @@ func waitForSkillsOperationDone(t *testing.T, cmd *SkillsCommand) *skillsOperati
 	return operation
 }
 
+func countSkillsCalls(runner *fakeSkillsRunner, dir string, name string, args ...string) int {
+	runner.mu.Lock()
+	defer runner.mu.Unlock()
+	want := skillsCommandCall{Dir: dir, Name: name, Args: append([]string(nil), args...)}
+	count := 0
+	for _, call := range runner.calls {
+		if reflect.DeepEqual(call, want) {
+			count++
+		}
+	}
+	return count
+}
+
 func assertDirExists(t *testing.T, path string) {
 	t.Helper()
 	info, err := os.Stat(path)
@@ -661,6 +674,91 @@ func assertDirExists(t *testing.T, path string) {
 	}
 	if !info.IsDir() {
 		t.Fatalf("%s is not a directory", path)
+	}
+}
+
+func TestSkillsCommandInstallsMissingSkillsCLIBeforeRunningCommand(t *testing.T) {
+	runner := newFakeSkillsRunner()
+	lookPath := func(name string) (string, error) {
+		if name == "skills" && runner.hasCall("", "npm", "install", "-g", "skills") {
+			return "C:/npm/skills.cmd", nil
+		}
+		return "", errors.New("not found")
+	}
+	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{
+		HubID:    "hub-a",
+		LookPath: lookPath,
+	})
+
+	resp, cmdErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("Handle scan error: %#v", cmdErr)
+	}
+	body := resp.(skillsCommandResponse)
+	if !body.OK {
+		t.Fatalf("response=%#v, want successful scan", body)
+	}
+	runner.mu.Lock()
+	calls := append([]skillsCommandCall(nil), runner.calls...)
+	runner.mu.Unlock()
+	if len(calls) < 2 {
+		t.Fatalf("calls=%#v, want install then skills list", calls)
+	}
+	if !reflect.DeepEqual(calls[0], skillsCommandCall{Dir: "", Name: "npm", Args: []string{"install", "-g", "skills"}}) {
+		t.Fatalf("first call=%#v, want npm install -g skills", calls[0])
+	}
+	if !reflect.DeepEqual(calls[1], skillsCommandCall{Dir: "", Name: "skills", Args: []string{"list", "-g", "--json"}}) {
+		t.Fatalf("second call=%#v, want skills list -g --json", calls[1])
+	}
+	if runner.hasCall("", "npx", "--yes", "skills", "list", "-g", "--json") {
+		t.Fatalf("npx fallback should not run after install succeeds: %#v", calls)
+	}
+}
+
+func TestSkillsCommandFallsBackToNpxWhenAutoInstallFailsOnce(t *testing.T) {
+	baseDir := t.TempDir()
+	projectRoot := filepath.Join(baseDir, "project")
+	if err := os.MkdirAll(projectRoot, 0o755); err != nil {
+		t.Fatalf("mkdir project: %v", err)
+	}
+	runner := newFakeSkillsRunner()
+	runner.set("", "npm", []string{"install", "-g", "skills"}, skillsCommandResult{
+		ExitCode: 1,
+		Stderr:   "npm install failed",
+		Err:      errors.New("exit status 1"),
+	})
+	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{
+		HubID:    "hub-a",
+		LookPath: func(string) (string, error) { return "", errors.New("not found") },
+		Projects: []ProjectInfo{{
+			Name:   "WheelMaker",
+			Path:   projectRoot,
+			Online: true,
+		}},
+	})
+
+	resp, cmdErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("Handle scan error: %#v", cmdErr)
+	}
+	body := resp.(skillsCommandResponse)
+	if !body.OK {
+		t.Fatalf("response=%#v, want npx fallback scan to succeed", body)
+	}
+	if got := countSkillsCalls(runner, "", "npm", "install", "-g", "skills"); got != 1 {
+		t.Fatalf("npm install calls=%d, want 1", got)
+	}
+	if !runner.hasCall("", "npx", "--yes", "skills", "list", "-g", "--json") {
+		t.Fatalf("global npx fallback not called: %#v", runner.calls)
+	}
+	if !runner.hasCall(projectRoot, "npx", "--yes", "skills", "list", "--json") {
+		t.Fatalf("project npx fallback not called: %#v", runner.calls)
 	}
 }
 
@@ -932,12 +1030,12 @@ func TestSkillsCommandOnOperationDoneCalledAfterSuccess(t *testing.T) {
 	})
 
 	_, cmdErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
-		"action": "install",
-		"hubId":  "hub-a",
-		"scope":  "project",
+		"action":      "install",
+		"hubId":       "hub-a",
+		"scope":       "project",
 		"projectName": "proj",
-		"source":  "mattpocock/skills",
-		"skills":  []string{"tdd"},
+		"source":      "mattpocock/skills",
+		"skills":      []string{"tdd"},
 	}))
 	if cmdErr != nil {
 		t.Fatalf("install error: %#v", cmdErr)

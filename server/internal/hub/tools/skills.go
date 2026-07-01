@@ -47,6 +47,10 @@ type skillsCommandRunner interface {
 	Run(ctx context.Context, dir string, name string, args ...string) skillsCommandResult
 }
 
+type skillsCommandPathResolver interface {
+	LookPath(name string) (string, error)
+}
+
 type execSkillsCommandRunner struct{}
 
 func (execSkillsCommandRunner) Run(ctx context.Context, dir string, name string, args ...string) skillsCommandResult {
@@ -76,25 +80,33 @@ func (execSkillsCommandRunner) Run(ctx context.Context, dir string, name string,
 	}
 }
 
+func (execSkillsCommandRunner) LookPath(name string) (string, error) {
+	return exec.LookPath(name)
+}
+
 type skillsCommandConfig struct {
 	HubID           string
 	Projects        []ProjectInfo
 	GlobalLockPath  string
 	HomeDir         string
 	OnOperationDone func(scope, projectName string)
+	LookPath        func(name string) (string, error)
 }
 
 type SkillsCommand struct {
 	runner          skillsCommandRunner
+	lookPath        func(name string) (string, error)
 	now             func() time.Time
 	hubID           string
 	globalLockPath  string
 	homeDir         string
 	onOperationDone func(scope, projectName string)
 
-	mu        sync.RWMutex
-	projects  []ProjectInfo
-	operation *skillsOperationSnapshot
+	mu                     sync.RWMutex
+	projects               []ProjectInfo
+	operation              *skillsOperationSnapshot
+	skillsInstallMu        sync.Mutex
+	skillsInstallAttempted bool
 }
 
 func NewSkillsCommand(config skillsCommandConfig) *SkillsCommand {
@@ -105,8 +117,19 @@ func newSkillsCommandWithRunner(runner skillsCommandRunner, config skillsCommand
 	if runner == nil {
 		runner = execSkillsCommandRunner{}
 	}
+	lookPath := config.LookPath
+	if lookPath == nil {
+		if resolver, ok := runner.(skillsCommandPathResolver); ok {
+			lookPath = resolver.LookPath
+		} else {
+			lookPath = func(name string) (string, error) {
+				return name, nil
+			}
+		}
+	}
 	cmd := &SkillsCommand{
 		runner:          runner,
+		lookPath:        lookPath,
 		hubID:           strings.TrimSpace(config.HubID),
 		globalLockPath:  strings.TrimSpace(config.GlobalLockPath),
 		homeDir:         strings.TrimSpace(config.HomeDir),
@@ -739,12 +762,43 @@ func (c *SkillsCommand) scanProjectSkills(ctx context.Context, project ProjectIn
 }
 
 func (c *SkillsCommand) runSkills(ctx context.Context, dir string, args ...string) skillsCommandResult {
-	result := c.runner.Run(ctx, dir, "skills", args...)
-	if !skillsCommandUnavailable(result) {
-		return result
+	if c.ensureSkillsCLI(ctx) {
+		result := c.runner.Run(ctx, dir, "skills", args...)
+		if !skillsCommandUnavailable(result) {
+			return result
+		}
 	}
 	npxArgs := append([]string{"--yes", "skills"}, args...)
 	return c.runner.Run(ctx, dir, "npx", npxArgs...)
+}
+
+func (c *SkillsCommand) ensureSkillsCLI(ctx context.Context) bool {
+	if c.skillsCLIAvailable() {
+		return true
+	}
+
+	c.skillsInstallMu.Lock()
+	defer c.skillsInstallMu.Unlock()
+	if c.skillsCLIAvailable() {
+		return true
+	}
+	if c.skillsInstallAttempted {
+		return false
+	}
+	c.skillsInstallAttempted = true
+	result := c.runner.Run(ctx, "", "npm", "install", "-g", "skills")
+	if skillsCommandFailed(result) {
+		return false
+	}
+	return c.skillsCLIAvailable()
+}
+
+func (c *SkillsCommand) skillsCLIAvailable() bool {
+	if c.lookPath == nil {
+		return false
+	}
+	_, err := c.lookPath("skills")
+	return err == nil
 }
 
 func (c *SkillsCommand) projectSnapshot() []ProjectInfo {
