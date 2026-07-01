@@ -16,6 +16,16 @@ fun mergedSafeAreaInsets(systemBars: EdgeInsets, displayCutout: EdgeInsets): Edg
     bottom = maxOf(systemBars.bottom, displayCutout.bottom)
 )
 
+fun mergedContentInsets(systemBars: EdgeInsets, displayCutout: EdgeInsets, ime: EdgeInsets): EdgeInsets {
+    val safeArea = mergedSafeAreaInsets(systemBars, displayCutout)
+    return EdgeInsets(
+        left = safeArea.left,
+        top = safeArea.top,
+        right = safeArea.right,
+        bottom = maxOf(safeArea.bottom, ime.bottom)
+    )
+}
+
 fun Insets.toEdgeInsets(): EdgeInsets = EdgeInsets(
     left = left,
     top = top,

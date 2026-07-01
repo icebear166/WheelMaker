@@ -377,14 +377,16 @@ class MainActivity : Activity() {
         WindowInsetsControllerCompat(window, target).isAppearanceLightStatusBars = false
         WindowInsetsControllerCompat(window, target).isAppearanceLightNavigationBars = false
         ViewCompat.setOnApplyWindowInsetsListener(target) { view, insets ->
-            val safeArea = mergedSafeAreaInsets(
+            val contentInsets = mergedContentInsets(
                 systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars()).toEdgeInsets(),
-                displayCutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout()).toEdgeInsets()
+                displayCutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout()).toEdgeInsets(),
+                ime = insets.getInsets(WindowInsetsCompat.Type.ime()).toEdgeInsets()
             )
-            view.setPadding(safeArea.left, safeArea.top, safeArea.right, safeArea.bottom)
+            view.setPadding(contentInsets.left, contentInsets.top, contentInsets.right, contentInsets.bottom)
             WindowInsetsCompat.Builder(insets)
                 .setInsets(WindowInsetsCompat.Type.systemBars(), Insets.NONE)
                 .setInsets(WindowInsetsCompat.Type.displayCutout(), Insets.NONE)
+                .setInsets(WindowInsetsCompat.Type.ime(), Insets.NONE)
                 .build()
         }
         ViewCompat.requestApplyInsets(target)
