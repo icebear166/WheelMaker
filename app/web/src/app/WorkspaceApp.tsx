@@ -303,6 +303,7 @@ import {
   groupSkillsByCategory,
   isSkillActionPendingForHub,
   parseSkillSourceInput,
+  skillDetailCacheKey,
   skillOperationStatusLabel,
   skillScopeLabel,
   sortSkillProjects,
@@ -471,6 +472,7 @@ import type {
   RegistryProject,
   RegistryPortRelaySnapshot,
   RegistrySkillCommandResponse,
+  RegistrySkillDetail,
   RegistrySkillScope,
   RegistrySkillSourceCandidate,
   RegistryTokenScanResult,
@@ -590,6 +592,14 @@ type SkillInstallTarget = {
   hubId: string;
   scope: RegistrySkillScope;
   projectName?: string;
+};
+type SkillDetailTarget = SkillInstallTarget & {
+  skillName: string;
+};
+type SkillDetailCacheEntry = {
+  loading: boolean;
+  error: string;
+  detail: RegistrySkillDetail | null;
 };
 type ChatComposerDraft = {
   text: string;
@@ -2769,6 +2779,8 @@ export function App() {
   const [skillSourceSelectedNames, setSkillSourceSelectedNames] = useState<string[]>([]);
   const [skillSourceLoading, setSkillSourceLoading] = useState(false);
   const [skillSourceError, setSkillSourceError] = useState('');
+  const [skillDetailTarget, setSkillDetailTarget] = useState<SkillDetailTarget | null>(null);
+  const [skillDetailCache, setSkillDetailCache] = useState<Record<string, SkillDetailCacheEntry>>({});
   const [portRelaySnapshot, setPortRelaySnapshot] = useState<RegistryPortRelaySnapshot>(DEFAULT_PORT_RELAY_SNAPSHOT);
   const [portRelayLoading, setPortRelayLoading] = useState(false);
   const [portRelayError, setPortRelayError] = useState('');
@@ -13519,13 +13531,66 @@ export function App() {
     setConfirmTarget({kind: 'skillUninstall', ...target});
   }, []);
 
+  const requestSkillBatchUninstall = useCallback((target: {hubId: string; scope: RegistrySkillScope; projectName?: string; skillNames: string[]}) => {
+    if (target.skillNames.length === 0) {
+      return;
+    }
+    setConfirmError('');
+    setConfirmTarget({kind: 'skillBatchUninstall', ...target});
+  }, []);
+
+  const closeSkillDetail = useCallback(() => {
+    setSkillDetailTarget(null);
+  }, []);
+
+  const requestSkillDetail = useCallback(async (target: SkillDetailTarget) => {
+    const cacheKey = skillDetailCacheKey(target);
+    setSkillDetailTarget(target);
+    const cached = skillDetailCache[cacheKey];
+    if (cached?.detail || cached?.loading) {
+      return;
+    }
+    setSkillDetailCache(prev => ({
+      ...prev,
+      [cacheKey]: {
+        loading: true,
+        error: '',
+        detail: prev[cacheKey]?.detail ?? null,
+      },
+    }));
+    try {
+      const result = await service.getSkillDetail(target);
+      if (!result.ok || !result.detail) {
+        throw new Error(skillCommandErrorMessage(result));
+      }
+      setSkillDetailCache(prev => ({
+        ...prev,
+        [cacheKey]: {
+          loading: false,
+          error: '',
+          detail: result.detail ?? null,
+        },
+      }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setSkillDetailCache(prev => ({
+        ...prev,
+        [cacheKey]: {
+          loading: false,
+          error: message,
+          detail: prev[cacheKey]?.detail ?? null,
+        },
+      }));
+    }
+  }, [skillDetailCache]);
+
   const requestSkillUpdate = useCallback((target: {hubId: string; scope: RegistrySkillScope; projectName?: string; includeProjects?: boolean}) => {
     setConfirmError('');
     setConfirmTarget({kind: 'skillUpdate', ...target});
   }, []);
 
   const handleSkillConfirmedAction = useCallback(async (
-    target: Extract<ConfirmTarget, {kind: 'skillInstall' | 'skillUninstall' | 'skillUpdate'}>,
+    target: Extract<ConfirmTarget, {kind: 'skillInstall' | 'skillUninstall' | 'skillBatchUninstall' | 'skillUpdate'}>,
   ) => {
     const pendingKey = skillActionPendingKey({
       hubId: target.hubId,
@@ -13552,6 +13617,13 @@ export function App() {
           scope: target.scope,
           projectName: target.projectName,
           skills: [target.skillName],
+        })];
+      } else if (target.kind === 'skillBatchUninstall') {
+        results = [await service.uninstallSkills({
+          hubId: target.hubId,
+          scope: target.scope,
+          projectName: target.projectName,
+          skills: target.skillNames,
         })];
       } else {
         results = [await service.updateSkills({
@@ -15763,6 +15835,11 @@ export function App() {
           requestSkillInstall={requestSkillInstall}
           requestSkillUpdate={requestSkillUpdate}
           requestSkillUninstall={requestSkillUninstall}
+          requestSkillBatchUninstall={requestSkillBatchUninstall}
+          requestSkillDetail={requestSkillDetail}
+          closeSkillDetail={closeSkillDetail}
+          skillDetailTarget={skillDetailTarget}
+          skillDetailCache={skillDetailCache}
           skillActionPendingKey={skillActionPendingKey}
         />
       </React.Suspense>,
@@ -20074,8 +20151,9 @@ export function App() {
   const wheelMakerUpdateAllTarget = confirmTarget?.kind === 'wheelMakerUpdateAll' ? confirmTarget : null;
   const skillInstallConfirmTarget = confirmTarget?.kind === 'skillInstall' ? confirmTarget : null;
   const skillUninstallConfirmTarget = confirmTarget?.kind === 'skillUninstall' ? confirmTarget : null;
+  const skillBatchUninstallConfirmTarget = confirmTarget?.kind === 'skillBatchUninstall' ? confirmTarget : null;
   const skillUpdateConfirmTarget = confirmTarget?.kind === 'skillUpdate' ? confirmTarget : null;
-  const skillConfirmTarget = skillInstallConfirmTarget ?? skillUninstallConfirmTarget ?? skillUpdateConfirmTarget;
+  const skillConfirmTarget = skillInstallConfirmTarget ?? skillUninstallConfirmTarget ?? skillBatchUninstallConfirmTarget ?? skillUpdateConfirmTarget;
   const npmPackageConfirmPendingKey = npmPackageTarget
     ? agentPackageActionKey(npmPackageTarget.hubId, npmPackageTarget.packageName)
     : '';
@@ -20149,7 +20227,12 @@ export function App() {
       handleWheelMakerUpdateAllConfirmedAction(confirmTarget).catch(() => undefined);
       return;
     }
-    if (confirmTarget.kind === 'skillInstall' || confirmTarget.kind === 'skillUninstall' || confirmTarget.kind === 'skillUpdate') {
+    if (
+      confirmTarget.kind === 'skillInstall' ||
+      confirmTarget.kind === 'skillUninstall' ||
+      confirmTarget.kind === 'skillBatchUninstall' ||
+      confirmTarget.kind === 'skillUpdate'
+    ) {
       handleSkillConfirmedAction(confirmTarget).catch(() => undefined);
       return;
     }

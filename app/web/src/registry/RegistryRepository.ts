@@ -68,6 +68,7 @@ import type {
   RegistrySessionSummary,
   RegistrySessionTurn,
   RegistrySkillCommandResponse,
+  RegistrySkillDetailPayload,
   RegistrySkillInstallPayload,
   RegistrySkillScopePayload,
   RegistryTokenProvider,
@@ -1615,6 +1616,16 @@ export class RegistryRepository {
   async uninstallSkills(payload: RegistrySkillScopePayload): Promise<RegistrySkillCommandResponse> {
     const {hubId, ...params} = payload;
     const state = await this.runHubStateAction(hubId, 'skills', 'uninstall', params);
+    return hubStateSectionData<RegistrySkillCommandResponse>(state, 'skills') ?? {
+      ok: false,
+      hubId,
+      errorSummary: 'missing hub state response',
+    };
+  }
+
+  async getSkillDetail(payload: RegistrySkillDetailPayload): Promise<RegistrySkillCommandResponse> {
+    const {hubId, ...params} = payload;
+    const state = await this.runHubStateAction(hubId, 'skills', 'detail', params);
     return hubStateSectionData<RegistrySkillCommandResponse>(state, 'skills') ?? {
       ok: false,
       hubId,

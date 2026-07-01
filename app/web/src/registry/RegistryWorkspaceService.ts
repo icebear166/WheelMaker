@@ -48,6 +48,7 @@ import type {
   RegistryResumableSession,
   RegistrySessionSummary,
   RegistrySkillCommandResponse,
+  RegistrySkillDetailPayload,
   RegistrySkillInstallPayload,
   RegistrySkillScopePayload,
   RegistrySpeechCancelPayload,
@@ -838,6 +839,13 @@ export class RegistryWorkspaceService {
       throw new Error('session is not ready');
     }
     return this.repository.uninstallSkills(payload);
+  }
+
+  async getSkillDetail(payload: RegistrySkillDetailPayload): Promise<RegistrySkillCommandResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.getSkillDetail(payload);
   }
 
   async updateSkills(payload: RegistrySkillScopePayload): Promise<RegistrySkillCommandResponse> {

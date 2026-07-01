@@ -92,6 +92,8 @@ func (r *Reporter) actionHubStateSkills(ctx context.Context, action string, para
 		return r.runHubStateTool(ctx, hubToolMethodSkills, hubStateToolPayload(r.cfg.HubID, "uninstall", params))
 	case "update":
 		return r.runHubStateTool(ctx, hubToolMethodSkills, hubStateToolPayload(r.cfg.HubID, "update", params))
+	case "detail":
+		return r.runHubStateTool(ctx, hubToolMethodSkills, hubStateToolPayload(r.cfg.HubID, "detail", params))
 	default:
 		return nil, fmt.Errorf("unsupported %s action %q", hubStateSectionSkills, action)
 	}

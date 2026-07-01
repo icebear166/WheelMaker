@@ -160,6 +160,15 @@ export function skillScopeLabel(input: {scope: RegistrySkillScope; hubId: string
   return `Hub: ${input.hubId}`;
 }
 
+export function skillDetailCacheKey(input: {hubId: string; scope: RegistrySkillScope; projectName?: string; skillName: string}): string {
+  return [
+    input.hubId,
+    input.scope,
+    input.projectName || '',
+    input.skillName,
+  ].join(':');
+}
+
 export function isSkillActionPendingForHub(pendingKey: string, hubId: string): boolean {
   const normalizedHubId = (hubId || '').trim();
   if (!pendingKey || !normalizedHubId) return false;

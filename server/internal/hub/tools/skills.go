@@ -154,25 +154,27 @@ type skillsCommandPayload struct {
 	Scope           string   `json:"scope,omitempty"`
 	ProjectName     string   `json:"projectName,omitempty"`
 	Source          string   `json:"source,omitempty"`
+	SkillName       string   `json:"skillName,omitempty"`
 	Skills          []string `json:"skills,omitempty"`
 	IncludeProjects bool     `json:"includeProjects,omitempty"`
 }
 
 type skillsCommandResponse struct {
-	OK           bool                     `json:"ok"`
-	Accepted     bool                     `json:"accepted,omitempty"`
-	HubID        string                   `json:"hubId"`
-	UpdatedAt    string                   `json:"updatedAt,omitempty"`
-	Source       string                   `json:"source,omitempty"`
-	Scope        string                   `json:"scope,omitempty"`
-	ProjectName  string                   `json:"projectName,omitempty"`
-	HubSkills    skillsScopeSnapshot      `json:"hubSkills,omitempty"`
-	Projects     []skillsProjectSnapshot  `json:"projects,omitempty"`
-	Skills       []skillsSkillSnapshot    `json:"skills,omitempty"`
-	Candidates   []skillsSourceCandidate  `json:"candidates,omitempty"`
-	Operation    *skillsOperationSnapshot `json:"operation,omitempty"`
-	Message      string                   `json:"message,omitempty"`
-	ErrorSummary string                   `json:"errorSummary,omitempty"`
+	OK           bool                       `json:"ok"`
+	Accepted     bool                       `json:"accepted,omitempty"`
+	HubID        string                     `json:"hubId"`
+	UpdatedAt    string                     `json:"updatedAt,omitempty"`
+	Source       string                     `json:"source,omitempty"`
+	Scope        string                     `json:"scope,omitempty"`
+	ProjectName  string                     `json:"projectName,omitempty"`
+	HubSkills    skillsScopeSnapshot        `json:"hubSkills,omitempty"`
+	Projects     []skillsProjectSnapshot    `json:"projects,omitempty"`
+	Skills       []skillsSkillSnapshot      `json:"skills,omitempty"`
+	Detail       *skillsSkillDetailSnapshot `json:"detail,omitempty"`
+	Candidates   []skillsSourceCandidate    `json:"candidates,omitempty"`
+	Operation    *skillsOperationSnapshot   `json:"operation,omitempty"`
+	Message      string                     `json:"message,omitempty"`
+	ErrorSummary string                     `json:"errorSummary,omitempty"`
 }
 
 type skillsOperationSnapshot struct {
@@ -212,6 +214,33 @@ type skillsSkillSnapshot struct {
 	CategoryKey string   `json:"categoryKey"`
 	Managed     bool     `json:"managed"`
 	Agents      []string `json:"agents,omitempty"`
+}
+
+type skillsSkillDetailSnapshot struct {
+	Name            string                 `json:"name"`
+	Scope           string                 `json:"scope"`
+	ProjectName     string                 `json:"projectName,omitempty"`
+	Path            string                 `json:"path,omitempty"`
+	Category        string                 `json:"category"`
+	CategoryKey     string                 `json:"categoryKey"`
+	Managed         bool                   `json:"managed"`
+	Agents          []string               `json:"agents,omitempty"`
+	Source          string                 `json:"source,omitempty"`
+	SourceURL       string                 `json:"sourceUrl,omitempty"`
+	SourceType      string                 `json:"sourceType,omitempty"`
+	Ref             string                 `json:"ref,omitempty"`
+	SkillPath       string                 `json:"skillPath,omitempty"`
+	PluginName      string                 `json:"pluginName,omitempty"`
+	InstalledAt     string                 `json:"installedAt,omitempty"`
+	UpdatedAt       string                 `json:"updatedAt,omitempty"`
+	SkillMarkdown   string                 `json:"skillMarkdown"`
+	SupportingFiles []skillsSupportingFile `json:"supportingFiles"`
+}
+
+type skillsSupportingFile struct {
+	RelativePath string `json:"relativePath"`
+	Size         int64  `json:"size,omitempty"`
+	Directory    bool   `json:"directory,omitempty"`
 }
 
 type skillsSourceCandidate struct {
@@ -260,7 +289,11 @@ func (c *SkillsCommand) Handle(ctx context.Context, raw json.RawMessage) (any, *
 	payload.Scope = strings.TrimSpace(payload.Scope)
 	payload.ProjectName = strings.TrimSpace(payload.ProjectName)
 	payload.Source = strings.TrimSpace(payload.Source)
+	payload.SkillName = strings.TrimSpace(payload.SkillName)
 	payload.Skills = normalizeSkillNames(payload.Skills)
+	if payload.SkillName != "" && len(payload.Skills) == 0 {
+		payload.Skills = []string{payload.SkillName}
+	}
 	if payload.HubID == "" {
 		return nil, &skillsCommandError{Code: rp.CodeInvalidArgument, Message: "hubId is required"}
 	}
@@ -273,6 +306,8 @@ func (c *SkillsCommand) Handle(ctx context.Context, raw json.RawMessage) (any, *
 		return c.scan(ctx, payload.HubID), nil
 	case "list":
 		return c.listSource(ctx, payload)
+	case "detail":
+		return c.detail(ctx, payload)
 	case "install":
 		return c.startInstall(payload)
 	case "uninstall":
@@ -282,6 +317,60 @@ func (c *SkillsCommand) Handle(ctx context.Context, raw json.RawMessage) (any, *
 	default:
 		return nil, &skillsCommandError{Code: rp.CodeInvalidArgument, Message: "unsupported cmd.skills action"}
 	}
+}
+
+func (c *SkillsCommand) detail(ctx context.Context, payload skillsCommandPayload) (skillsCommandResponse, *skillsCommandError) {
+	skillName := payload.SkillName
+	if skillName == "" {
+		if len(payload.Skills) != 1 {
+			return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeInvalidArgument, Message: "exactly one skillName is required"}
+		}
+		skillName = payload.Skills[0]
+	}
+	if err := validateSkillNames([]string{skillName}); err != nil {
+		return skillsCommandResponse{}, err
+	}
+	target, cmdErr := c.resolveTarget(payload)
+	if cmdErr != nil {
+		return skillsCommandResponse{}, cmdErr
+	}
+
+	var skills []skillsSkillSnapshot
+	var scanErr string
+	if target.scope == "hub" {
+		skills, scanErr = c.scanHubSkills(ctx)
+	} else {
+		skills, scanErr = c.scanProjectSkills(ctx, target.project)
+	}
+	if scanErr != "" {
+		return skillsCommandResponse{
+			OK:           false,
+			HubID:        payload.HubID,
+			UpdatedAt:    c.now().Format(time.RFC3339),
+			Scope:        target.scope,
+			ProjectName:  target.projectName,
+			ErrorSummary: scanErr,
+		}, nil
+	}
+
+	for _, skill := range skills {
+		if skill.Name != skillName {
+			continue
+		}
+		detail, detailErr := c.skillDetailFromSnapshot(target, skill)
+		if detailErr != nil {
+			return skillsCommandResponse{}, detailErr
+		}
+		return skillsCommandResponse{
+			OK:          true,
+			HubID:       payload.HubID,
+			UpdatedAt:   c.now().Format(time.RFC3339),
+			Scope:       target.scope,
+			ProjectName: target.projectName,
+			Detail:      detail,
+		}, nil
+	}
+	return skillsCommandResponse{}, &skillsCommandError{Code: rp.CodeNotFound, Message: "skill not found"}
 }
 
 func (c *SkillsCommand) scan(ctx context.Context, hubID string) skillsCommandResponse {
@@ -761,6 +850,169 @@ func (c *SkillsCommand) scanProjectSkills(ctx context.Context, project ProjectIn
 	return skills, ""
 }
 
+func (c *SkillsCommand) skillDetailFromSnapshot(target skillsCommandTarget, skill skillsSkillSnapshot) (*skillsSkillDetailSnapshot, *skillsCommandError) {
+	root, cmdErr := skillRootFromPath(skill.Path)
+	if cmdErr != nil {
+		return nil, cmdErr
+	}
+	markdown, cmdErr := readSkillMarkdown(root)
+	if cmdErr != nil {
+		return nil, cmdErr
+	}
+	supportingFiles, cmdErr := listSkillSupportingFiles(root)
+	if cmdErr != nil {
+		return nil, cmdErr
+	}
+	lockMetadata := readSkillsLockScanMetadata(c.skillsLockFile(target))
+	lockDetail := lockMetadata.Details[skill.Name]
+	category := skill.Category
+	categoryKey := skill.CategoryKey
+	if lockDetail.PluginName != "" {
+		categoryKey, category = skillCategory(lockDetail.PluginName)
+	}
+	if category == "" || categoryKey == "" {
+		categoryKey, category = skillCategory("")
+	}
+	return &skillsSkillDetailSnapshot{
+		Name:            skill.Name,
+		Scope:           target.scope,
+		ProjectName:     target.projectName,
+		Path:            skill.Path,
+		Category:        category,
+		CategoryKey:     categoryKey,
+		Managed:         skill.Managed,
+		Agents:          append([]string(nil), skill.Agents...),
+		Source:          lockDetail.Source,
+		SourceURL:       lockDetail.SourceURL,
+		SourceType:      lockDetail.SourceType,
+		Ref:             lockDetail.Ref,
+		SkillPath:       lockDetail.SkillPath,
+		PluginName:      lockDetail.PluginName,
+		InstalledAt:     lockDetail.InstalledAt,
+		UpdatedAt:       lockDetail.UpdatedAt,
+		SkillMarkdown:   markdown,
+		SupportingFiles: supportingFiles,
+	}, nil
+}
+
+func skillRootFromPath(path string) (string, *skillsCommandError) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", &skillsCommandError{Code: rp.CodeInvalidArgument, Message: "skill path is empty"}
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", &skillsCommandError{Code: rp.CodeInternal, Message: err.Error()}
+	}
+	if strings.EqualFold(filepath.Base(abs), "SKILL.md") {
+		abs = filepath.Dir(abs)
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		return "", &skillsCommandError{Code: rp.CodeNotFound, Message: "skill path not found"}
+	}
+	if !info.IsDir() {
+		return "", &skillsCommandError{Code: rp.CodeInvalidArgument, Message: "skill path is not a directory"}
+	}
+	return abs, nil
+}
+
+func readSkillMarkdown(root string) (string, *skillsCommandError) {
+	skillFile := filepath.Join(root, "SKILL.md")
+	realRoot, realFile, cmdErr := containedRealPaths(root, skillFile)
+	if cmdErr != nil {
+		return "", cmdErr
+	}
+	if _, ok := safeSkillRelativePath(realRoot, realFile); !ok {
+		return "", &skillsCommandError{Code: rp.CodeForbidden, Message: "skill file resolves outside skill directory"}
+	}
+	info, err := os.Stat(realFile)
+	if err != nil {
+		return "", &skillsCommandError{Code: rp.CodeNotFound, Message: "SKILL.md not found"}
+	}
+	if info.IsDir() {
+		return "", &skillsCommandError{Code: rp.CodeInvalidArgument, Message: "SKILL.md is a directory"}
+	}
+	raw, err := os.ReadFile(realFile)
+	if err != nil {
+		return "", &skillsCommandError{Code: rp.CodeInternal, Message: err.Error()}
+	}
+	return string(raw), nil
+}
+
+func listSkillSupportingFiles(root string) ([]skillsSupportingFile, *skillsCommandError) {
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return nil, &skillsCommandError{Code: rp.CodeInternal, Message: err.Error()}
+	}
+	files := []skillsSupportingFile{}
+	err = filepath.WalkDir(absRoot, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if path == absRoot {
+			return nil
+		}
+		rel, ok := safeSkillRelativePath(absRoot, path)
+		if !ok {
+			return fmt.Errorf("supporting file resolves outside skill directory")
+		}
+		if entry.IsDir() {
+			if entry.Name() == ".git" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if rel == "SKILL.md" {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		files = append(files, skillsSupportingFile{
+			RelativePath: rel,
+			Size:         info.Size(),
+		})
+		return nil
+	})
+	if err != nil {
+		return nil, &skillsCommandError{Code: rp.CodeInternal, Message: err.Error()}
+	}
+	return files, nil
+}
+
+func containedRealPaths(root string, path string) (string, string, *skillsCommandError) {
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return "", "", &skillsCommandError{Code: rp.CodeNotFound, Message: "skill path not found"}
+	}
+	realFile, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return "", "", &skillsCommandError{Code: rp.CodeNotFound, Message: "SKILL.md not found"}
+	}
+	realRoot, err = filepath.Abs(realRoot)
+	if err != nil {
+		return "", "", &skillsCommandError{Code: rp.CodeInternal, Message: err.Error()}
+	}
+	realFile, err = filepath.Abs(realFile)
+	if err != nil {
+		return "", "", &skillsCommandError{Code: rp.CodeInternal, Message: err.Error()}
+	}
+	return realRoot, realFile, nil
+}
+
+func safeSkillRelativePath(root string, path string) (string, bool) {
+	rel, err := filepath.Rel(root, path)
+	if err != nil || rel == "." || filepath.IsAbs(rel) {
+		return "", false
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return "", false
+	}
+	return filepath.ToSlash(rel), true
+}
+
 func (c *SkillsCommand) runSkills(ctx context.Context, dir string, args ...string) skillsCommandResult {
 	if c.ensureSkillsCLI(ctx) {
 		result := c.runner.Run(ctx, dir, "skills", args...)
@@ -888,12 +1140,25 @@ func parseSkillsListJSON(raw string, pluginNames map[string]string, managed map[
 type skillsLockScanMetadata struct {
 	PluginNames map[string]string
 	Managed     map[string]bool
+	Details     map[string]skillsLockDetailMetadata
+}
+
+type skillsLockDetailMetadata struct {
+	Source      string
+	SourceURL   string
+	SourceType  string
+	Ref         string
+	SkillPath   string
+	PluginName  string
+	InstalledAt string
+	UpdatedAt   string
 }
 
 func readSkillsLockScanMetadata(path string) skillsLockScanMetadata {
 	out := skillsLockScanMetadata{
 		PluginNames: map[string]string{},
 		Managed:     map[string]bool{},
+		Details:     map[string]skillsLockDetailMetadata{},
 	}
 	if strings.TrimSpace(path) == "" {
 		return out
@@ -904,7 +1169,14 @@ func readSkillsLockScanMetadata(path string) skillsLockScanMetadata {
 	}
 	var body struct {
 		Skills map[string]struct {
-			PluginName string `json:"pluginName"`
+			Source      string `json:"source"`
+			SourceURL   string `json:"sourceUrl"`
+			SourceType  string `json:"sourceType"`
+			Ref         string `json:"ref"`
+			SkillPath   string `json:"skillPath"`
+			PluginName  string `json:"pluginName"`
+			InstalledAt string `json:"installedAt"`
+			UpdatedAt   string `json:"updatedAt"`
 		} `json:"skills"`
 	}
 	if err := json.Unmarshal(raw, &body); err != nil {
@@ -919,6 +1191,16 @@ func readSkillsLockScanMetadata(path string) skillsLockScanMetadata {
 		pluginName := strings.TrimSpace(skill.PluginName)
 		if pluginName != "" {
 			out.PluginNames[skillName] = pluginName
+		}
+		out.Details[skillName] = skillsLockDetailMetadata{
+			Source:      strings.TrimSpace(skill.Source),
+			SourceURL:   strings.TrimSpace(skill.SourceURL),
+			SourceType:  strings.TrimSpace(skill.SourceType),
+			Ref:         strings.TrimSpace(skill.Ref),
+			SkillPath:   strings.TrimSpace(skill.SkillPath),
+			PluginName:  pluginName,
+			InstalledAt: strings.TrimSpace(skill.InstalledAt),
+			UpdatedAt:   strings.TrimSpace(skill.UpdatedAt),
 		}
 	}
 	return out

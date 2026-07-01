@@ -550,6 +550,33 @@ export interface RegistrySkillSnapshot {
   agents?: string[];
 }
 
+export interface RegistrySkillSupportingFile {
+  relativePath: string;
+  size?: number;
+  directory?: boolean;
+}
+
+export interface RegistrySkillDetail {
+  name: string;
+  scope: RegistrySkillScope;
+  projectName?: string;
+  path?: string;
+  category: string;
+  categoryKey: string;
+  managed?: boolean;
+  agents?: string[];
+  source?: string;
+  sourceUrl?: string;
+  sourceType?: string;
+  ref?: string;
+  skillPath?: string;
+  pluginName?: string;
+  installedAt?: string;
+  updatedAt?: string;
+  skillMarkdown: string;
+  supportingFiles: RegistrySkillSupportingFile[];
+}
+
 export interface RegistrySkillScopeSnapshot {
   scope: RegistrySkillScope;
   skills: RegistrySkillSnapshot[];
@@ -598,6 +625,7 @@ export interface RegistrySkillCommandResponse {
   hubSkills?: RegistrySkillScopeSnapshot;
   projects?: RegistrySkillProjectSnapshot[];
   skills?: RegistrySkillSnapshot[];
+  detail?: RegistrySkillDetail;
   candidates?: RegistrySkillSourceCandidate[];
   operation?: RegistrySkillOperation | null;
   message?: string;
@@ -618,6 +646,13 @@ export interface RegistrySkillScopePayload {
   projectName?: string;
   skills?: string[];
   includeProjects?: boolean;
+}
+
+export interface RegistrySkillDetailPayload {
+  hubId: string;
+  scope: RegistrySkillScope;
+  projectName?: string;
+  skillName: string;
 }
 
 export interface RegistrySessionMessageEventPayload {

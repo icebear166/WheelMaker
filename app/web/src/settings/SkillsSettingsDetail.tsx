@@ -3,15 +3,18 @@ import React from 'react';
 import {
   groupSkillsByCategory,
   isSkillActionPendingForHub,
+  skillDetailCacheKey,
   skillOperationStatusLabel,
   skillScopeLabel,
   sortSkillProjects,
 } from './skillManagementView';
 import type {
   RegistrySkillCommandResponse,
+  RegistrySkillDetail,
   RegistrySkillScope,
   RegistrySkillSnapshot,
   RegistrySkillSourceCandidate,
+  RegistrySkillSupportingFile,
 } from '../registry/registryTypes';
 
 const SKILLS_MARKETPLACE_URL = 'https://www.skills.sh/';
@@ -31,6 +34,20 @@ type SkillHubView = {
 
 type SkillUninstallTarget = SkillInstallTarget & {
   skillName: string;
+};
+
+type SkillBatchUninstallTarget = SkillInstallTarget & {
+  skillNames: string[];
+};
+
+type SkillDetailTarget = SkillInstallTarget & {
+  skillName: string;
+};
+
+type SkillDetailCacheEntry = {
+  loading: boolean;
+  error: string;
+  detail: RegistrySkillDetail | null;
 };
 
 type SkillUpdateTarget = SkillInstallTarget & {
@@ -66,8 +83,24 @@ type SkillsSettingsDetailProps = {
   requestSkillInstall: (target: SkillInstallTarget) => void;
   requestSkillUpdate: (target: SkillUpdateTarget) => void;
   requestSkillUninstall: (target: SkillUninstallTarget) => void;
+  requestSkillBatchUninstall: (target: SkillBatchUninstallTarget) => void;
+  requestSkillDetail: (target: SkillDetailTarget) => Promise<void>;
+  closeSkillDetail: () => void;
+  skillDetailTarget: SkillDetailTarget | null;
+  skillDetailCache: Record<string, SkillDetailCacheEntry>;
   skillActionPendingKey: (input: SkillPendingKeyInput) => string;
 };
+
+function skillScopeSelectionKey(input: {hubId: string; scope: RegistrySkillScope; projectName?: string}): string {
+  return [input.hubId, input.scope, input.projectName || ''].join(':');
+}
+
+function formatSkillFileSize(size?: number): string {
+  if (typeof size !== 'number' || !Number.isFinite(size) || size < 0) return '-';
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 function renderSkillIconButton(options: {
   label: string;
@@ -112,6 +145,11 @@ export function SkillsSettingsDetail({
   requestSkillInstall,
   requestSkillUpdate,
   requestSkillUninstall,
+  requestSkillBatchUninstall,
+  requestSkillDetail,
+  closeSkillDetail,
+  skillDetailTarget,
+  skillDetailCache,
   skillActionPendingKey,
 }: SkillsSettingsDetailProps) {
   const skillHubCards = Object.values(skillHubs).sort((left, right) => left.hubId.localeCompare(right.hubId));
@@ -119,6 +157,7 @@ export function SkillsSettingsDetail({
   const skillHubIdsKey = skillHubIds.join('\n');
   const [activeSkillHubId, setActiveSkillHubId] = React.useState(skillHubIds[0] ?? '');
   const [skillHubMenuOpen, setSkillHubMenuOpen] = React.useState(false);
+  const [selectedSkillKeysByScope, setSelectedSkillKeysByScope] = React.useState<Record<string, string[]>>({});
   const activeSkillHub = skillHubCards.find(hub => hub.hubId === activeSkillHubId) ?? skillHubCards[0] ?? null;
   const selectedSkillHubId = activeSkillHub?.hubId ?? '';
   const skillsScanning = skillsLoading || skillHubCards.some(hub => hub.loading === true);
@@ -140,6 +179,20 @@ export function SkillsSettingsDetail({
       setSkillHubMenuOpen(false);
     }
   }, [activeSkillHubId, skillHubIdsKey]);
+
+  const toggleScopeSkillSelection = React.useCallback((scopeKey: string, skillName: string) => {
+    setSelectedSkillKeysByScope(prev => {
+      const current = prev[scopeKey] ?? [];
+      const nextNames = current.includes(skillName)
+        ? current.filter(name => name !== skillName)
+        : [...current, skillName];
+      return {...prev, [scopeKey]: nextNames};
+    });
+  }, []);
+
+  const setScopeSkillSelection = React.useCallback((scopeKey: string, skillNames: string[]) => {
+    setSelectedSkillKeysByScope(prev => ({...prev, [scopeKey]: skillNames}));
+  }, []);
 
   const skillHubSummary = (hub: SkillHubView) => {
     const data = hub.data;
@@ -265,6 +318,14 @@ export function SkillsSettingsDetail({
     const actionDisabled = disabled || options.actionsDisabled === true || options.operationRunning === true || hubActionPending;
     const skillCount = skills.length;
     const scopeKind = options.scope === 'hub' ? 'Hub' : 'Project';
+    const scopeKey = skillScopeSelectionKey({hubId, scope: options.scope, projectName: options.projectName});
+    const selectedSkillKeys = selectedSkillKeysByScope[scopeKey] ?? [];
+    const selectedSkillNames = new Set(selectedSkillKeys);
+    const managedSkillNames = skills
+      .filter(skill => skill.managed !== false)
+      .map(skill => skill.name);
+    const selectedManagedNames = selectedSkillKeys.filter(name => managedSkillNames.includes(name));
+    const allManagedSelected = managedSkillNames.length > 0 && managedSkillNames.every(name => selectedSkillNames.has(name));
     return (
       <section className={`settings-skills-scope settings-skills-scope-${options.scope}`}>
         <div className="settings-skills-scope-header">
@@ -301,6 +362,42 @@ export function SkillsSettingsDetail({
         ) : null}
         {renderSkillInstallPanel({hubId, scope: options.scope, projectName: options.projectName})}
         <div className="settings-skills-scope-body">
+          {managedSkillNames.length > 0 ? (
+            <div className="settings-skills-bulk-bar">
+              <label className="settings-skills-bulk-select">
+                <input
+                  type="checkbox"
+                  checked={allManagedSelected}
+                  disabled={actionDisabled}
+                  onChange={() => setScopeSkillSelection(scopeKey, allManagedSelected ? [] : managedSkillNames)}
+                />
+                <span>{selectedManagedNames.length} selected</span>
+              </label>
+              <div className="settings-skills-bulk-actions">
+                <button
+                  type="button"
+                  className="settings-detail-action-btn"
+                  disabled={selectedManagedNames.length === 0}
+                  onClick={() => setScopeSkillSelection(scopeKey, [])}
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  className="settings-detail-action-btn danger"
+                  disabled={selectedManagedNames.length === 0 || actionDisabled}
+                  onClick={() => requestSkillBatchUninstall({
+                    hubId,
+                    scope: options.scope,
+                    projectName: options.projectName,
+                    skillNames: selectedManagedNames,
+                  })}
+                >
+                  Uninstall
+                </button>
+              </div>
+            </div>
+          ) : null}
           {groups.length === 0 && options.loading ? (
             <div className="settings-skills-empty settings-skills-empty-loading">
               <span className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
@@ -318,6 +415,12 @@ export function SkillsSettingsDetail({
               </div>
               {group.skills.map(skill => {
                 const managed = skill.managed !== false;
+                const selectable = managed && !actionDisabled;
+                const selected = selectedSkillNames.has(skill.name);
+                const detailActive = skillDetailTarget?.hubId === hubId &&
+                  skillDetailTarget.scope === options.scope &&
+                  (skillDetailTarget.projectName || '') === (options.projectName || '') &&
+                  skillDetailTarget.skillName === skill.name;
                 const pendingKey = skillActionPendingKey({
                   hubId,
                   scope: options.scope,
@@ -327,11 +430,32 @@ export function SkillsSettingsDetail({
                 });
                 const pending = skillsPendingKey === pendingKey;
                 return (
-                  <div key={`${hubId}:${title}:${skill.name}`} className="settings-skill-row">
-                    <div className="settings-skill-row-main">
+                  <div key={`${hubId}:${title}:${skill.name}`} className={`settings-skill-row${detailActive ? ' active' : ''}`}>
+                    {managed ? (
+                      <input
+                        className="settings-skill-row-checkbox"
+                        type="checkbox"
+                        checked={selected}
+                        disabled={!selectable}
+                        onChange={() => toggleScopeSkillSelection(scopeKey, skill.name)}
+                        aria-label={`Select ${skill.name}`}
+                      />
+                    ) : (
+                      <span className="settings-skill-row-checkbox-spacer" aria-hidden="true" />
+                    )}
+                    <button
+                      type="button"
+                      className="settings-skill-row-main settings-skill-row-open"
+                      onClick={() => requestSkillDetail({
+                        hubId,
+                        scope: options.scope,
+                        projectName: options.projectName,
+                        skillName: skill.name,
+                      }).catch(() => undefined)}
+                    >
                       <span className="settings-skill-name" title={skill.path || skill.name}>{skill.name}</span>
                       {managed ? null : <span className="settings-skill-readonly-tag">External</span>}
-                    </div>
+                    </button>
                     {managed ? renderSkillIconButton({
                       label: pending ? 'Removing skill' : 'Uninstall skill',
                       icon: 'codicon-trash',
@@ -352,6 +476,143 @@ export function SkillsSettingsDetail({
           ))}
         </div>
       </section>
+    );
+  };
+
+  const renderSkillDetailMetaRow = (label: string, value?: string) => {
+    if (!value) {
+      return null;
+    }
+    return (
+      <div className="settings-skills-detail-meta-row">
+        <span>{label}</span>
+        <span title={value}>{value}</span>
+      </div>
+    );
+  };
+
+  const renderSupportingFile = (file: RegistrySkillSupportingFile) => (
+    <div key={file.relativePath} className="settings-skills-detail-file">
+      <span className={`codicon ${file.directory ? 'codicon-folder' : 'codicon-file'}`} aria-hidden="true" />
+      <span title={file.relativePath}>{file.relativePath}</span>
+      <span>{file.directory ? 'Folder' : formatSkillFileSize(file.size)}</span>
+    </div>
+  );
+
+  const renderSkillDetailPanel = () => {
+    if (!skillDetailTarget) {
+      return null;
+    }
+    const activeSkillDetailKey = skillDetailCacheKey(skillDetailTarget);
+    const activeSkillDetailEntry = skillDetailCache[activeSkillDetailKey];
+    const detail = activeSkillDetailEntry?.detail ?? null;
+    const loading = activeSkillDetailEntry?.loading === true;
+    const error = activeSkillDetailEntry?.error ?? '';
+    const pendingKey = skillActionPendingKey({
+      hubId: skillDetailTarget.hubId,
+      scope: skillDetailTarget.scope,
+      projectName: skillDetailTarget.projectName,
+      skillName: skillDetailTarget.skillName,
+      action: 'skillUninstall',
+    });
+    const pending = skillsPendingKey === pendingKey;
+    const hubActionPending = isSkillActionPendingForHub(skillsPendingKey, skillDetailTarget.hubId);
+    const managed = detail?.managed !== false;
+    const supportingFiles = [...(detail?.supportingFiles ?? [])]
+      .sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+
+    return (
+      <aside className="settings-skills-detail-drawer" aria-label="Skill detail">
+        <div className="settings-skills-detail-mobile-header">
+          <button
+            type="button"
+            className="settings-skill-icon-btn"
+            onClick={closeSkillDetail}
+            title="Back"
+            aria-label="Back"
+          >
+            <span className="codicon codicon-arrow-left" />
+          </button>
+          <span>{skillDetailTarget.skillName}</span>
+        </div>
+        <div className="settings-skills-detail-header">
+          <div className="settings-skills-detail-title-wrap">
+            <span className="settings-skills-scope-kind">Skill</span>
+            <h2 className="settings-skills-detail-title">{skillDetailTarget.skillName}</h2>
+            <span className="settings-skills-detail-scope">{skillScopeLabel(skillDetailTarget)}</span>
+          </div>
+          <button
+            type="button"
+            className="settings-skill-icon-btn"
+            onClick={closeSkillDetail}
+            title="Close"
+            aria-label="Close"
+          >
+            <span className="codicon codicon-close" />
+          </button>
+        </div>
+        {loading ? (
+          <div className="settings-skills-detail-status" role="status">
+            <span className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
+            <span>Loading skill detail...</span>
+          </div>
+        ) : null}
+        {error ? <div className="settings-metadata-error">{error}</div> : null}
+        {detail ? (
+          <div className="settings-skills-detail-body">
+            <section className="settings-skills-detail-section">
+              <div className="settings-skills-detail-section-title">Install</div>
+              <div className="settings-skills-detail-meta">
+                {renderSkillDetailMetaRow('Source', detail.source)}
+                {renderSkillDetailMetaRow('Source URL', detail.sourceUrl)}
+                {renderSkillDetailMetaRow('Source type', detail.sourceType)}
+                {renderSkillDetailMetaRow('Ref', detail.ref)}
+                {renderSkillDetailMetaRow('Skill path', detail.skillPath)}
+                {renderSkillDetailMetaRow('Plugin', detail.pluginName)}
+                {renderSkillDetailMetaRow('Installed', detail.installedAt)}
+                {renderSkillDetailMetaRow('Updated', detail.updatedAt)}
+                {renderSkillDetailMetaRow('Local path', detail.path)}
+                {detail.agents?.length ? renderSkillDetailMetaRow('Agents', detail.agents.join(', ')) : null}
+                <div className="settings-skills-detail-meta-row">
+                  <span>Status</span>
+                  <span>{managed ? 'Managed' : 'External'}</span>
+                </div>
+              </div>
+              {managed ? (
+                <button
+                  type="button"
+                  className="settings-detail-action-btn danger"
+                  disabled={hubActionPending}
+                  onClick={() => requestSkillUninstall({
+                    hubId: skillDetailTarget.hubId,
+                    scope: skillDetailTarget.scope,
+                    projectName: skillDetailTarget.projectName,
+                    skillName: skillDetailTarget.skillName,
+                  })}
+                >
+                  {pending ? 'Removing...' : 'Uninstall'}
+                </button>
+              ) : null}
+            </section>
+            <section className="settings-skills-detail-section">
+              <div className="settings-skills-detail-section-title">Skill.md</div>
+              <pre className="settings-skills-detail-markdown">{detail.skillMarkdown}</pre>
+            </section>
+            <section className="settings-skills-detail-section">
+              <div className="settings-skills-detail-section-title">Supporting files</div>
+              {supportingFiles.length > 0 ? (
+                <div className="settings-skills-detail-files">
+                  {supportingFiles.map(renderSupportingFile)}
+                </div>
+              ) : (
+                <div className="settings-skills-empty">No supporting files.</div>
+              )}
+            </section>
+          </div>
+        ) : !loading && !error ? (
+          <div className="settings-skills-empty">No detail loaded.</div>
+        ) : null}
+      </aside>
     );
   };
 
@@ -513,6 +774,7 @@ export function SkillsSettingsDetail({
           );
         })() : null}
       </div>
+      {renderSkillDetailPanel()}
       <div className="settings-skills-fixed-controls">
         <a
           className="settings-skills-marketplace-link"

@@ -170,6 +170,31 @@ describe('skill management settings UI source structure', () => {
     expect(detailTsx).toContain('owner/repo or npx skills add ... --skill name');
   });
 
+  test('loads skill details on demand into a responsive detail panel', () => {
+    expect(mainTsx).toContain('skillDetailCache');
+    expect(mainTsx).toContain('requestSkillDetail');
+    expect(mainTsx).toContain('service.getSkillDetail');
+    expect(mainTsx).toContain('skillDetailCacheKey');
+    expect(detailTsx).toContain('settings-skills-detail-drawer');
+    expect(detailTsx).toContain('settings-skills-detail-mobile-header');
+    expect(detailTsx).toContain('Skill.md');
+    expect(detailTsx).toContain('Supporting files');
+    expect(stylesCss).toContain('.settings-skills-detail-drawer');
+    expect(stylesCss).toContain('@media (max-width: 720px)');
+    expect(stylesCss).toContain('.settings-skills-detail-mobile-header');
+  });
+
+  test('supports current-scope batch uninstall without selecting external skills', () => {
+    expect(detailTsx).toContain('selectedSkillKeysByScope');
+    expect(detailTsx).toContain('toggleScopeSkillSelection');
+    expect(detailTsx).toContain('requestSkillBatchUninstall');
+    expect(detailTsx).toContain('settings-skills-bulk-bar');
+    expect(detailTsx).toContain('managed && !actionDisabled');
+    expect(mainTsx).toContain("kind: 'skillBatchUninstall'");
+    expect(mainTsx).toContain('service.uninstallSkills({');
+    expect(mainTsx).toContain('skills: target.skillNames');
+  });
+
   test('uses compact settings skill styles', () => {
     expect(stylesCss).toContain('.settings-skills-hub');
     expect(stylesCss).toContain('.settings-skills-marketplace-link');

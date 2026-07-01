@@ -76,6 +76,13 @@ export type ConfirmTarget =
       skillName: string;
     }
   | {
+      kind: 'skillBatchUninstall';
+      hubId: string;
+      scope: RegistrySkillScope;
+      projectName?: string;
+      skillNames: string[];
+    }
+  | {
       kind: 'skillUpdate';
       hubId: string;
       scope: RegistrySkillScope;
@@ -127,6 +134,7 @@ function resolveConfirmTitle(target: ConfirmTarget): string {
   if (target.kind === 'wheelMakerUpdateAll') return 'Update all hubs?';
   if (target.kind === 'skillInstall') return 'Install skills?';
   if (target.kind === 'skillUninstall') return 'Uninstall skill?';
+  if (target.kind === 'skillBatchUninstall') return 'Uninstall skills?';
   if (target.kind === 'skillUpdate') return 'Update skills?';
   return 'Archive session?';
 }
@@ -144,6 +152,7 @@ function resolveConfirmName(target: ConfirmTarget): string {
   if (target.kind === 'wheelMakerUpdateAll') return `${target.hubIds.length} hubs`;
   if (target.kind === 'skillInstall') return skillScopeLabel(target);
   if (target.kind === 'skillUninstall') return target.skillName;
+  if (target.kind === 'skillBatchUninstall') return `${target.skillNames.length} skills`;
   if (target.kind === 'skillUpdate') return skillScopeLabel(target);
   return target.title || 'Untitled session';
 }
@@ -179,6 +188,9 @@ function resolveConfirmCopy(target: ConfirmTarget): string {
   if (target.kind === 'skillUninstall') {
     return `Remove from ${skillScopeLabel(target)}.`;
   }
+  if (target.kind === 'skillBatchUninstall') {
+    return `Remove from ${skillScopeLabel(target)}: ${target.skillNames.join(', ')}.`;
+  }
   if (target.kind === 'skillUpdate') {
     return target.includeProjects
       ? 'Updates Hub Skills and online Project Skills on this Hub.'
@@ -199,6 +211,7 @@ function resolveConfirmIcon(target: ConfirmTarget): string {
   if (target.kind === 'wheelMakerUpdateAll') return 'codicon-cloud-download';
   if (target.kind === 'skillInstall') return 'codicon-cloud-download';
   if (target.kind === 'skillUninstall') return 'codicon-trash';
+  if (target.kind === 'skillBatchUninstall') return 'codicon-trash';
   if (target.kind === 'skillUpdate') return 'codicon-sync';
   return 'codicon-archive';
 }
@@ -213,6 +226,7 @@ function resolveConfirmPrimaryLabel(target: ConfirmTarget): string {
   if (target.kind === 'wheelMakerUpdateAll') return 'Update';
   if (target.kind === 'skillInstall') return 'Install';
   if (target.kind === 'skillUninstall') return 'Uninstall';
+  if (target.kind === 'skillBatchUninstall') return 'Uninstall';
   if (target.kind === 'skillUpdate') return 'Update';
   return 'Archive';
 }
@@ -222,7 +236,8 @@ function isDangerConfirmTarget(target: ConfirmTarget): boolean {
     target.kind === 'clearCache' ||
     target.kind === 'delete' ||
     (target.kind === 'npmPackage' && target.action === 'uninstall') ||
-    target.kind === 'skillUninstall'
+    target.kind === 'skillUninstall' ||
+    target.kind === 'skillBatchUninstall'
   );
 }
 

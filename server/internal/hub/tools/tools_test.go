@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -1161,6 +1162,84 @@ func TestSkillsCommandUpdateCanIncludeOnlineProjectsInOneOperation(t *testing.T)
 	}
 }
 
+func TestSkillsCommandDetailReturnsSkillContentAndInstallMetadata(t *testing.T) {
+	baseDir := t.TempDir()
+	skillRoot := filepath.Join(baseDir, "skills", "tdd")
+	if err := os.MkdirAll(filepath.Join(skillRoot, "references"), 0o755); err != nil {
+		t.Fatalf("mkdir skill: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillRoot, "SKILL.md"), []byte("---\nname: tdd\n---\n# TDD\nPractice test-driven development.\n"), 0o644); err != nil {
+		t.Fatalf("write skill md: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillRoot, "references", "checklist.md"), []byte("red green refactor"), 0o644); err != nil {
+		t.Fatalf("write support file: %v", err)
+	}
+	globalLock := filepath.Join(baseDir, "global-lock.json")
+	writeDetailedSkillsLockForTest(t, globalLock, map[string]detailedLockSkillForTest{
+		"tdd": {
+			Source:      "mattpocock/skills",
+			SourceURL:   "https://github.com/mattpocock/skills.git",
+			SourceType:  "github",
+			Ref:         "main",
+			SkillPath:   "skills/tdd/SKILL.md",
+			PluginName:  "mattpocock-skills",
+			InstalledAt: "2026-06-01T00:00:00Z",
+			UpdatedAt:   "2026-06-02T00:00:00Z",
+		},
+	})
+	runner := newFakeSkillsRunner()
+	runner.set("", "skills", []string{"list", "-g", "--json"}, skillsCommandResult{
+		Stdout:   fmt.Sprintf(`[{"name":"tdd","path":%q,"scope":"global","agents":["Codex"]}]`, skillRoot),
+		ExitCode: 0,
+	})
+	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{
+		HubID:          "hub-a",
+		GlobalLockPath: globalLock,
+	})
+
+	resp, cmdErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "detail",
+		"hubId":  "hub-a",
+		"scope":  "hub",
+		"skills": []string{"tdd"},
+	}))
+	if cmdErr != nil {
+		t.Fatalf("detail error: %#v", cmdErr)
+	}
+	body := resp.(skillsCommandResponse)
+	if !body.OK || body.Detail == nil {
+		t.Fatalf("response=%#v, want detail", body)
+	}
+	if body.Detail.Name != "tdd" || !strings.Contains(body.Detail.SkillMarkdown, "Practice test-driven development.") {
+		t.Fatalf("detail=%#v, want skill content", body.Detail)
+	}
+	if body.Detail.Source != "mattpocock/skills" || body.Detail.SkillPath != "skills/tdd/SKILL.md" || body.Detail.InstalledAt == "" {
+		t.Fatalf("detail metadata=%#v", body.Detail)
+	}
+	if len(body.Detail.SupportingFiles) != 1 || body.Detail.SupportingFiles[0].RelativePath != "references/checklist.md" {
+		t.Fatalf("supporting files=%#v", body.Detail.SupportingFiles)
+	}
+}
+
+func TestSkillsCommandDetailReturnsNotFoundForUnknownSkill(t *testing.T) {
+	runner := newFakeSkillsRunner()
+	runner.set("", "skills", []string{"list", "-g", "--json"}, skillsCommandResult{
+		Stdout:   `[{"name":"tdd","path":"C:/skills/tdd","scope":"global","agents":["Codex"]}]`,
+		ExitCode: 0,
+	})
+	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{HubID: "hub-a"})
+
+	_, cmdErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "detail",
+		"hubId":  "hub-a",
+		"scope":  "hub",
+		"skills": []string{"missing"},
+	}))
+	if cmdErr == nil || cmdErr.Code != rp.CodeNotFound {
+		t.Fatalf("cmdErr=%#v, want NOT_FOUND", cmdErr)
+	}
+}
+
 func TestSkillsCommandRejectsUnsupportedSources(t *testing.T) {
 	cmd := newSkillsCommandWithRunner(newFakeSkillsRunner(), skillsCommandConfig{HubID: "hub-a"})
 	for _, source := range []string{"../local", "git@github.com:a/b.git", "https://example.com/repo.git"} {
@@ -1327,6 +1406,35 @@ func writeSkillsLockSourcesForTest(t *testing.T, path string, sources map[string
 	}
 	if err := os.WriteFile(path, raw, 0o644); err != nil {
 		t.Fatalf("write lock: %v", err)
+	}
+}
+
+type detailedLockSkillForTest struct {
+	Source      string `json:"source"`
+	SourceURL   string `json:"sourceUrl"`
+	SourceType  string `json:"sourceType"`
+	Ref         string `json:"ref"`
+	SkillPath   string `json:"skillPath"`
+	PluginName  string `json:"pluginName"`
+	InstalledAt string `json:"installedAt"`
+	UpdatedAt   string `json:"updatedAt"`
+}
+
+func writeDetailedSkillsLockForTest(t *testing.T, path string, skills map[string]detailedLockSkillForTest) {
+	t.Helper()
+	body := struct {
+		Version int                                 `json:"version"`
+		Skills  map[string]detailedLockSkillForTest `json:"skills"`
+	}{
+		Version: 3,
+		Skills:  skills,
+	}
+	raw, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal detailed lock: %v", err)
+	}
+	if err := os.WriteFile(path, raw, 0o644); err != nil {
+		t.Fatalf("write detailed lock: %v", err)
 	}
 }
 
