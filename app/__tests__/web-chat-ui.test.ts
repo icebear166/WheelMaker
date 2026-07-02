@@ -68,7 +68,7 @@ describe('web chat integration', () => {
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const stylesCss = readWebStyles(projectRoot);
     const nonSelectableSelectors = [
-      '.desktop-titlebar',
+      '.desktop-window-controls',
       '.floating-control-stack',
       '.registry-debug-panel-header',
       '.item',
@@ -1888,13 +1888,15 @@ describe('web chat integration', () => {
 
     expect(stylesCss).toContain('.wide-project-session-nav {');
     expect(stylesCss).toContain('--desktop-side-surface: color-mix(in srgb, var(--panel) 62%, var(--panel-3));');
-    expect(stylesCss).toContain('.desktop-activity-bar {');
-    expect(stylesCss).toContain('.desktop-activity-button {');
-    expect(stylesCss).toContain('.desktop-activity-button.active::before {');
+    expect(stylesCss).toContain('--desktop-window-controls-width: 176px;');
+    expect(stylesCss).toContain('.desktop-window-controls {');
+    expect(stylesCss).toContain('.desktop-window-menu-button {');
+    expect(stylesCss).toContain('.desktop-window-menu {');
+    expect(stylesCss).toContain('.desktop-window-source-panel {');
+    expect(stylesCss).not.toContain('.desktop-activity-bar {');
+    expect(stylesCss).not.toContain('.desktop-activity-button {');
+    expect(stylesCss).not.toContain('.desktop-activity-button.active::before {');
     expect(stylesCss).toContain('.sidebar-title-row {');
-    expect(stylesCss).toMatch(
-      /\.desktop-activity-bar \{[\s\S]*background: var\(--desktop-side-surface\);[\s\S]*\}/,
-    );
     expect(stylesCss).toMatch(
       /\.workspace-left \{[\s\S]*background: var\(--desktop-side-surface\);[\s\S]*\}/,
     );
@@ -1904,9 +1906,6 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.desktop-sidebar-resize-handle {');
     expect(stylesCss).toMatch(
       /\.desktop-sidebar-resize-handle \{[\s\S]*cursor: ew-resize;[\s\S]*\}/,
-    );
-    expect(stylesCss).toMatch(
-      /\.desktop-activity-button\.active::before \{[\s\S]*top: 0;[\s\S]*bottom: 0;[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
       /\.sidebar-title-row \{[\s\S]*border-bottom: 0;[\s\S]*\}/,

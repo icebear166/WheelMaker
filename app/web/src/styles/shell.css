@@ -2,6 +2,7 @@
 
 .page,
 .workspace {
+  --desktop-window-controls-width: 176px;
   width: 100%;
   height: 100%;
   background: var(--bg);
@@ -35,186 +36,154 @@
   pointer-events: none;
 }
 
-.desktop-titlebar {
-  flex: 0 0 32px;
+.desktop-window-controls {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 80;
+  width: var(--desktop-window-controls-width);
   height: 32px;
-  min-height: 32px;
-  display: flex;
-  align-items: center;
-  background: color-mix(in srgb, var(--bg) 76%, var(--panel));
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  display: inline-flex;
+  align-items: stretch;
+  justify-content: flex-end;
   color: var(--text);
+  background: color-mix(in srgb, var(--bg) 82%, var(--panel));
+  border-left: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 64%, transparent);
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
 }
 
-.theme-light .desktop-titlebar {
-  background: color-mix(in srgb, var(--panel) 86%, var(--panel-3));
+.theme-light .desktop-window-controls {
+  background: color-mix(in srgb, var(--panel) 90%, var(--panel-3));
 }
 
-.desktop-titlebar-drag-region {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 10px;
-}
-
-.desktop-titlebar-icon {
-  width: 16px;
-  height: 16px;
-  flex: 0 0 16px;
-}
-
-.desktop-titlebar-title,
-.desktop-titlebar-app-title,
-.desktop-titlebar-source-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  color: color-mix(in srgb, var(--text) 80%, var(--muted));
-}
-
-.desktop-titlebar-title-group {
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  flex: 0 1 auto;
-}
-
-.desktop-titlebar-app-title {
-  flex: 0 0 auto;
-}
-
-.desktop-titlebar-source-label {
-  flex: 0 1 auto;
-}
-
-.desktop-titlebar-source-control {
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  flex: 0 1 auto;
+.desktop-window-menu-root {
   position: relative;
-}
-
-.desktop-titlebar-controls {
-  flex: 0 0 auto;
-  height: 100%;
+  flex: 0 0 38px;
   display: flex;
   align-items: stretch;
 }
 
-.desktop-titlebar-source-button {
-  align-self: center;
-  height: 24px;
-  min-width: 0;
-  max-width: min(320px, 100%);
-  border: 1px solid transparent;
-  border-radius: 4px;
-  background-color: transparent;
-  color: color-mix(in srgb, var(--text) 80%, var(--muted));
-  font: inherit;
-  font-size: 12px;
-  padding: 0 18px 0 0;
-  flex: 0 1 auto;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  background-repeat: no-repeat;
-  transition: background-color 80ms ease, border-color 80ms ease, color 80ms ease;
-}
-
-.desktop-titlebar-source-button:hover,
-.desktop-titlebar-source-button:focus-visible,
-.desktop-titlebar-source-button[aria-expanded="true"] {
-  border-color: color-mix(in srgb, var(--border) 70%, transparent);
-  background-color: color-mix(in srgb, var(--hover) 72%, transparent);
-  background-image:
-    linear-gradient(45deg, transparent 50%, currentColor 50%),
-    linear-gradient(135deg, currentColor 50%, transparent 50%);
-  background-position:
-    calc(100% - 10px) 10px,
-    calc(100% - 6px) 10px;
-  background-size: 4px 4px, 4px 4px;
-  color: var(--text);
-  outline: none;
-}
-
-.desktop-titlebar-source-refresh {
-  flex: 0 0 24px;
-  width: 24px;
-  height: 24px;
-  border: 1px solid transparent;
-  border-radius: 4px;
+.desktop-window-menu-button {
+  width: 38px;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
   background: transparent;
-  color: color-mix(in srgb, var(--text) 72%, var(--muted));
+  color: var(--text);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   padding: 0;
-  transition: background-color 80ms ease, border-color 80ms ease, color 80ms ease;
+  transition: background-color 80ms ease;
 }
 
-.desktop-titlebar-source-refresh:hover,
-.desktop-titlebar-source-refresh:focus-visible {
-  border-color: color-mix(in srgb, var(--border) 70%, transparent);
-  background-color: color-mix(in srgb, var(--hover) 72%, transparent);
-  color: var(--text);
+.desktop-window-menu-button:hover,
+.desktop-window-menu-button:focus-visible,
+.desktop-window-menu-button[aria-expanded="true"] {
+  background: var(--hover);
   outline: none;
 }
 
-.desktop-titlebar-source-refresh .codicon {
-  font-size: 13px;
-  line-height: 1;
+.desktop-titlebar-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
 }
 
-.desktop-titlebar-source-menu {
+.desktop-window-menu {
   position: absolute;
-  top: calc(100% + 3px);
-  left: 0;
-  z-index: 40;
-  min-width: 132px;
-  max-width: min(240px, calc(100vw - 20px));
-  padding: 4px;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 90;
+  width: 236px;
+  max-width: min(236px, calc(100vw - 12px));
+  padding: 6px;
   border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
-  border-radius: 6px;
+  border-radius: 8px;
   background: color-mix(in srgb, var(--panel) 92%, var(--bg));
-  box-shadow: 0 14px 34px color-mix(in srgb, #000 30%, transparent);
+  box-shadow: 0 18px 38px color-mix(in srgb, #000 34%, transparent);
 }
 
-.theme-light .desktop-titlebar-source-menu {
+.theme-light .desktop-window-menu {
   background: color-mix(in srgb, var(--panel) 96%, #ffffff);
-  box-shadow: 0 12px 26px color-mix(in srgb, #000 16%, transparent);
+  box-shadow: 0 14px 28px color-mix(in srgb, #000 16%, transparent);
 }
 
-.desktop-titlebar-source-menu-item {
+.desktop-window-menu-item {
   width: 100%;
-  min-height: 26px;
+  min-height: 30px;
   border: 0;
-  border-radius: 4px;
+  border-radius: 6px;
   background: transparent;
-  color: color-mix(in srgb, var(--text) 84%, var(--muted));
+  color: color-mix(in srgb, var(--text) 86%, var(--muted));
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  padding: 0 8px;
+  gap: 8px;
+  padding: 0 9px;
   font: inherit;
   font-size: 12px;
   text-align: left;
   cursor: pointer;
 }
 
-.desktop-titlebar-source-menu-item:hover,
-.desktop-titlebar-source-menu-item:focus-visible,
-.desktop-titlebar-source-menu-item[aria-checked="true"] {
+.desktop-window-menu-item .codicon:last-child {
+  margin-left: auto;
+}
+
+.desktop-window-menu-item:hover,
+.desktop-window-menu-item:focus-visible {
+  background: var(--hover);
+  color: var(--text);
+  outline: none;
+}
+
+.desktop-window-source-panel {
+  margin: 4px 0 6px;
+  padding: 7px;
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--panel-3) 84%, transparent);
+  display: grid;
+  gap: 5px;
+}
+
+.desktop-window-source-current {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--text) 76%, var(--muted));
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.desktop-window-source-refresh,
+.desktop-window-source-choice {
+  width: 100%;
+  min-height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: color-mix(in srgb, var(--text) 84%, var(--muted));
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.desktop-window-source-refresh:hover,
+.desktop-window-source-refresh:focus-visible,
+.desktop-window-source-choice:hover,
+.desktop-window-source-choice:focus-visible,
+.desktop-window-source-choice[aria-checked="true"] {
   background: var(--hover);
   color: var(--text);
   outline: none;
@@ -264,85 +233,6 @@
 .desktop-shell > .body {
   flex: 1 1 auto;
   min-width: 0;
-}
-
-.desktop-activity-bar {
-  flex: 0 0 48px;
-  width: 48px;
-  min-height: 0;
-  border-right: 1px solid var(--border);
-  background: var(--desktop-side-surface);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 8px 0;
-}
-
-.desktop-activity-primary,
-.desktop-activity-secondary {
-  width: 100%;
-  display: grid;
-  gap: 4px;
-  justify-items: center;
-}
-
-.desktop-activity-secondary {
-  margin-top: auto;
-}
-
-.desktop-activity-button {
-  position: relative;
-  width: 48px;
-  height: 44px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: color-mix(in srgb, var(--muted) 86%, var(--text));
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background-color 100ms ease, color 100ms ease;
-}
-
-.desktop-activity-button .codicon {
-  font-size: 22px;
-}
-
-.desktop-activity-button:hover {
-  color: var(--text);
-  background: var(--hover);
-}
-
-.desktop-activity-button.active {
-  color: var(--text);
-}
-
-.desktop-activity-button.active::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  border-radius: 0 2px 2px 0;
-  background: var(--accent);
-}
-
-.desktop-activity-button:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
-.desktop-activity-button:disabled:hover {
-  background: transparent;
-  color: color-mix(in srgb, var(--muted) 86%, var(--text));
-}
-
-.desktop-activity-button.refresh-btn.has-update-badge::after {
-  top: 7px;
-  right: 10px;
-  box-shadow: 0 0 0 2px var(--desktop-side-surface);
 }
 
 .header {
@@ -715,20 +605,6 @@
   background: #4fbf6b;
   box-shadow:
     0 0 0 2px color-mix(in srgb, var(--panel) 78%, transparent),
-    0 0 10px color-mix(in srgb, #4fbf6b 34%, transparent);
-  pointer-events: none;
-}
-
-.desktop-activity-unread-dot {
-  position: absolute;
-  left: 9px;
-  top: 7px;
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: #4fbf6b;
-  box-shadow:
-    0 0 0 2px var(--desktop-side-surface),
     0 0 10px color-mix(in srgb, #4fbf6b 34%, transparent);
   pointer-events: none;
 }

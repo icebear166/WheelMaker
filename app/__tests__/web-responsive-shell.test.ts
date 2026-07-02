@@ -103,6 +103,37 @@ describe('web responsive shell split', () => {
     );
   });
 
+  test('styles frameless desktop controls and reserves right toolbar space', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(stylesCss).toContain('--desktop-window-controls-width: 176px;');
+    expect(stylesCss).not.toContain('.desktop-titlebar {');
+    expect(stylesCss).not.toContain('.desktop-activity-bar {');
+
+    const controlsBlock = cssRuleBlock(stylesCss, '.desktop-window-controls');
+    expect(controlsBlock).toContain('position: fixed;');
+    expect(controlsBlock).toContain('top: 0;');
+    expect(controlsBlock).toContain('right: 0;');
+    expect(controlsBlock).toContain('z-index: 80;');
+    expect(controlsBlock).toContain('width: var(--desktop-window-controls-width);');
+    expect(controlsBlock).toContain('height: 32px;');
+
+    expect(stylesCss).toContain('.desktop-window-menu-button {');
+    expect(stylesCss).toContain('.desktop-window-menu {');
+    expect(stylesCss).toContain('.desktop-window-source-panel {');
+    expect(stylesCss).toContain('.desktop-window-source-choice {');
+
+    const rightTitleBlock = cssRuleBlock(stylesCss, '.desktop-shell .workspace-right .block-title');
+    expect(rightTitleBlock).toContain('padding-right: calc(var(--desktop-window-controls-width) + 10px);');
+
+    const rightChatTitleBlock = cssRuleBlock(stylesCss, '.desktop-shell .workspace-right .chat-title-bar');
+    expect(rightChatTitleBlock).toContain('padding-right: calc(var(--desktop-window-controls-width) + 10px);');
+
+    const previewToolbarBlock = cssRuleBlock(stylesCss, '.desktop-shell .preview-workbench-surface.desktop .preview-workbench-toolbar');
+    expect(previewToolbarBlock).toContain('padding-right: calc(var(--desktop-window-controls-width) + 10px);');
+  });
+
   test('keeps wide sidebar settings scrollable inside the desktop shell', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');

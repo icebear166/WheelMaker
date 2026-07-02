@@ -236,6 +236,10 @@
   gap: 6px;
 }
 
+.desktop-shell .preview-workbench-surface.desktop .preview-workbench-toolbar {
+  padding-right: calc(var(--desktop-window-controls-width) + 10px);
+}
+
 .preview-workbench-title,
 .preview-workbench-tab-label {
   min-width: 0;
