@@ -1,6 +1,5 @@
 import React, { type ReactNode } from 'react';
 import type { LayoutMode } from './state/responsiveLayout';
-import { DesktopTitleBar } from './layouts/desktop/DesktopTitleBar';
 
 type ShellThemeMode = 'dark' | 'light';
 
@@ -12,7 +11,7 @@ type ShellContentProps = {
 };
 
 export type DesktopShellProps = ShellContentProps & {
-  desktopActivityBar: ReactNode;
+  desktopWindowControls: ReactNode;
   desktopPeek: ReactNode;
   desktopChatFixedPreview: boolean;
   sidebarCollapsed: boolean;
@@ -36,7 +35,7 @@ export type ResponsiveShellProps = DesktopShellProps &
 export function DesktopShell({
   themeMode,
   setiFontCss,
-  desktopActivityBar,
+  desktopWindowControls,
   desktopPeek,
   desktopChatFixedPreview,
   sidebar,
@@ -47,13 +46,12 @@ export function DesktopShell({
   return (
     <div className={`workspace theme-${themeMode}`}>
       {setiFontCss ? <style>{setiFontCss}</style> : null}
-      <DesktopTitleBar title="WheelMaker" />
+      {desktopWindowControls}
       <div
         className="desktop-shell"
         data-chat-fixed-preview={desktopChatFixedPreview ? 'true' : undefined}
         style={{ '--desktop-sidebar-width': `${desktopSidebarWidth}px` } as React.CSSProperties}
       >
-        {desktopActivityBar}
         <div className="body">
           {!sidebarCollapsed ? (
             <aside className="workspace-left">{sidebar}</aside>

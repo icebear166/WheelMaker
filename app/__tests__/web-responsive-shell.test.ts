@@ -22,13 +22,14 @@ describe('web responsive shell split', () => {
     expect(shellTsx).toContain('export function DesktopShell(');
     expect(shellTsx).toContain('export function MobileShell(');
     expect(shellTsx).toContain('export function ResponsiveShell(');
-    expect(shellTsx).toContain("import { DesktopTitleBar } from './layouts/desktop/DesktopTitleBar';");
+    expect(shellTsx).not.toContain("import { DesktopTitleBar } from './layouts/desktop/DesktopTitleBar';");
     expect(shellTsx).toContain("mode === 'desktop'");
-    expect(shellTsx).toContain('desktopActivityBar: ReactNode;');
-    expect(shellTsx).toContain('<DesktopTitleBar title="WheelMaker" />');
+    expect(shellTsx).toContain('desktopWindowControls: ReactNode;');
+    expect(shellTsx).not.toContain('desktopActivityBar: ReactNode;');
+    expect(shellTsx).not.toContain('<DesktopTitleBar title="WheelMaker" />');
 
     expect(shellTsx).toMatch(
-      /export function DesktopShell[\s\S]*?desktopActivityBar[\s\S]*?className=\{`workspace theme-\$\{themeMode\}`\}[\s\S]*?<DesktopTitleBar title="WheelMaker" \/>[\s\S]*?\{desktopActivityBar\}[\s\S]*?<aside className="workspace-left">\{sidebar\}<\/aside>/,
+      /export function DesktopShell[\s\S]*?desktopWindowControls[\s\S]*?className=\{`workspace theme-\$\{themeMode\}`\}[\s\S]*?\{desktopWindowControls\}[\s\S]*?<div[\s\S]*?className="desktop-shell"[\s\S]*?<aside className="workspace-left">\{sidebar\}<\/aside>/,
     );
     expect(shellTsx).toMatch(
       /export function MobileShell[\s\S]*?className=\{`workspace theme-\$\{themeMode\} narrow-shell`\}[\s\S]*?className=\{`drawer-overlay \$\{drawerOpen \? 'show' : ''\}`\}/,
@@ -65,7 +66,8 @@ describe('web responsive shell split', () => {
     expect(mainTsx).toContain("import { ResponsiveShell } from '../shell/ResponsiveShell';");
     expect(mainTsx).toContain('<ResponsiveShell');
     expect(mainTsx).toContain('mode={layoutMode}');
-    expect(mainTsx).toContain('desktopActivityBar={desktopActivityBar}');
+    expect(mainTsx).toContain('desktopWindowControls={desktopWindowControls}');
+    expect(mainTsx).not.toContain('desktopActivityBar={desktopActivityBar}');
     expect(mainTsx).toContain('floatingControlStack={floatingControlStack}');
     expect(mainTsx).toContain('mobileSettingsScreen={mobileSettingsScreen}');
     expect(mainTsx).toContain('sidebar={renderSidebar()}');
@@ -82,11 +84,11 @@ describe('web responsive shell split', () => {
     expect(appReturn).not.toContain('className="workspace-left"');
   });
 
-  test('connection screen keeps the desktop title bar controls available', () => {
+  test('connection screen keeps frameless desktop controls available', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 
-    expect(mainTsx).toContain("import { DesktopTitleBar } from '../shell/layouts/desktop/DesktopTitleBar';");
+    expect(mainTsx).toContain("import { DesktopWindowControls } from '../shell/layouts/desktop/DesktopTitleBar';");
 
     const disconnectedStart = mainTsx.indexOf('if (!connected && !keepWorkspaceVisible)');
     const disconnectedEnd = mainTsx.indexOf('const projectMenu', disconnectedStart);
@@ -94,9 +96,10 @@ describe('web responsive shell split', () => {
     expect(disconnectedEnd).toBeGreaterThan(disconnectedStart);
     const disconnectedReturn = mainTsx.slice(disconnectedStart, disconnectedEnd);
 
-    expect(disconnectedReturn).toContain('<DesktopTitleBar title="WheelMaker" />');
+    expect(disconnectedReturn).toContain('<DesktopWindowControls />');
+    expect(disconnectedReturn).not.toContain('<DesktopTitleBar title="WheelMaker" />');
     expect(disconnectedReturn).toMatch(
-      /className=\{`page theme-\$\{themeMode\}`\}[\s\S]*?<DesktopTitleBar title="WheelMaker" \/>[\s\S]*?<div className="connect">/,
+      /className=\{`page theme-\$\{themeMode\}`\}[\s\S]*?<DesktopWindowControls \/>[\s\S]*?<div className="connect">/,
     );
   });
 

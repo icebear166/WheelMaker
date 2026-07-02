@@ -29,7 +29,7 @@ import {
 import { PortRelayFloatingButton, PortRelayFrameSurface } from '../portRelay/PortRelayFrameSurface';
 import { initializePWAFoundation } from '../platform/pwa';
 import {cleanupNativeWebViewPWA} from '../platform/pwa/nativePwaGuard';
-import { DesktopTitleBar } from '../shell/layouts/desktop/DesktopTitleBar';
+import { DesktopWindowControls } from '../shell/layouts/desktop/DesktopTitleBar';
 import {resolveDesktopChatQuickSwitchContextMenu} from '../shell/layouts/desktop/chatQuickSwitchContextMenu';
 import {
   readDesktopWebSourceState,
@@ -18922,7 +18922,7 @@ export function App() {
     return (
       <div className={`page theme-${themeMode}`}>
         {setiFontCss ? <style>{setiFontCss}</style> : null}
-        <DesktopTitleBar title="WheelMaker" />
+        <DesktopWindowControls />
         <div className="connect">
           <h3>Connect to WheelMaker Registry</h3>
           <input
@@ -20303,6 +20303,9 @@ export function App() {
       />
     </React.Suspense>
   ) : null;
+  const desktopWindowControls = isWide ? (
+    <DesktopWindowControls onSettingsSelect={handleDesktopSettingsSelect} />
+  ) : null;
 
   return (
     <>
@@ -20310,7 +20313,7 @@ export function App() {
         mode={layoutMode}
         themeMode={themeMode}
         setiFontCss={setiFontCss}
-        desktopActivityBar={desktopActivityBar}
+        desktopWindowControls={desktopWindowControls}
         desktopPeek={chatPreviewDesktopPane}
         desktopChatFixedPreview={desktopChatFixedPreview}
         desktopSidebarWidth={effectiveDesktopSidebarWidth}
