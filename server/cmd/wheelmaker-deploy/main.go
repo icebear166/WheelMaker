@@ -270,6 +270,7 @@ func runDeployWithDeps(ctx context.Context, cfg deployConfig, deps deployDeps) e
 	cfg.Mode = modeDeploy
 	cfg = resolveDefaults(cfg)
 	deps = resolveDeps(cfg, deps)
+	cfg = applyExistingConfigWebPolicy(cfg, deps)
 	deps.report("checking deploy prerequisites")
 	if err := deps.Services.CheckDeployPrerequisites(ctx); err != nil {
 		return err
@@ -343,6 +344,7 @@ func runUpdateWithDeps(ctx context.Context, cfg deployConfig, deps deployDeps) e
 	cfg.NoConfig = true
 	cfg = resolveDefaults(cfg)
 	deps = resolveDeps(cfg, deps)
+	cfg = applyExistingConfigWebPolicy(cfg, deps)
 	if !cfg.NoPull {
 		deps.report("pulling latest source")
 	}
@@ -396,6 +398,7 @@ func runBootstrapUpdateWithDeps(ctx context.Context, cfg deployConfig, deps depl
 	cfg.Mode = modeBootstrapUpdate
 	cfg = resolveDefaults(cfg)
 	deps = resolveDeps(cfg, deps)
+	cfg = applyExistingConfigWebPolicy(cfg, deps)
 	if !cfg.NoPull {
 		deps.report("pulling latest source")
 	}
@@ -564,6 +567,40 @@ func publishWeb(ctx context.Context, cfg deployConfig, deps deployDeps) error {
 	}
 	_, err := deps.Runner.Run(ctx, filepath.Join(cfg.RepoRoot, "app"), "npm", "run", "build:web:release")
 	return err
+}
+
+func applyExistingConfigWebPolicy(cfg deployConfig, deps deployDeps) deployConfig {
+	if cfg.NoWeb {
+		return cfg
+	}
+	skip, ok := existingConfigDisablesLocalRegistry(wheelMakerHome(cfg))
+	if !ok || !skip {
+		return cfg
+	}
+	cfg.NoWeb = true
+	cfg.NoNPM = true
+	deps.report("skipping Web publish because registry.listen=false in existing config")
+	return cfg
+}
+
+func existingConfigDisablesLocalRegistry(home string) (bool, bool) {
+	path := filepath.Join(home, "config.json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return false, false
+	}
+	var parsed struct {
+		Registry *struct {
+			Listen *bool `json:"listen"`
+		} `json:"registry"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return false, false
+	}
+	if parsed.Registry == nil || parsed.Registry.Listen == nil {
+		return false, false
+	}
+	return !*parsed.Registry.Listen, true
 }
 
 func installBuiltBinaries(cfg deployConfig, deps deployDeps, includeUpdater bool) error {

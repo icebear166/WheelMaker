@@ -267,6 +267,69 @@ func TestDeployPreparesInstallWhenRestartIsSkipped(t *testing.T) {
 	assertEventsDoNotContain(t, *h.events, "service start all")
 }
 
+func TestDeploySkipsWebWhenExistingConfigDoesNotListen(t *testing.T) {
+	h := newDeployHarness(t)
+	writeRegistryListenConfig(t, h.cfg, false)
+
+	if err := runDeployWithDeps(context.Background(), h.cfg, h.deps); err != nil {
+		t.Fatalf("runDeployWithDeps: %v", err)
+	}
+
+	assertEventsDoNotContain(t, *h.events, "npm ci")
+	assertEventsDoNotContain(t, *h.events, "npm run build:web:release")
+}
+
+func TestDeployPublishesWebWhenExistingConfigListens(t *testing.T) {
+	h := newDeployHarness(t)
+	writeRegistryListenConfig(t, h.cfg, true)
+
+	if err := runDeployWithDeps(context.Background(), h.cfg, h.deps); err != nil {
+		t.Fatalf("runDeployWithDeps: %v", err)
+	}
+
+	assertEventsContainInOrder(t, *h.events, "npm ci --include=dev", "npm run build:web:release")
+}
+
+func TestDeployPublishesWebWhenConfigIsMissing(t *testing.T) {
+	h := newDeployHarness(t)
+
+	if err := runDeployWithDeps(context.Background(), h.cfg, h.deps); err != nil {
+		t.Fatalf("runDeployWithDeps: %v", err)
+	}
+
+	assertEventsContainInOrder(t, *h.events, "npm ci --include=dev", "npm run build:web:release")
+}
+
+func TestDeployPublishesWebWhenExistingConfigCannotBeParsed(t *testing.T) {
+	h := newDeployHarness(t)
+	path := filepath.Join(wheelMakerHome(h.cfg), "config.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("{"), 0o644); err != nil {
+		t.Fatalf("write invalid config: %v", err)
+	}
+
+	if err := runDeployWithDeps(context.Background(), h.cfg, h.deps); err != nil {
+		t.Fatalf("runDeployWithDeps: %v", err)
+	}
+
+	assertEventsContainInOrder(t, *h.events, "npm ci --include=dev", "npm run build:web:release")
+}
+
+func TestUpdateSkipsWebWhenExistingConfigDoesNotListen(t *testing.T) {
+	h := newDeployHarness(t)
+	h.cfg.Mode = modeUpdate
+	writeRegistryListenConfig(t, h.cfg, false)
+
+	if err := runUpdateWithDeps(context.Background(), h.cfg, h.deps); err != nil {
+		t.Fatalf("runUpdateWithDeps: %v", err)
+	}
+
+	assertEventsDoNotContain(t, *h.events, "npm ci")
+	assertEventsDoNotContain(t, *h.events, "npm run build:web:release")
+}
+
 func TestDeployReportsBuildProgress(t *testing.T) {
 	h := newDeployHarness(t)
 	var progress []string
@@ -577,6 +640,21 @@ func TestBootstrapPassesNoWebToUpdate(t *testing.T) {
 	t.Fatalf("bootstrap update command did not include --no-web: %#v", *h.events)
 }
 
+func TestBootstrapPassesNoWebToUpdateWhenExistingConfigDoesNotListen(t *testing.T) {
+	h := newDeployHarness(t)
+	h.cfg.Mode = modeBootstrapUpdate
+	writeRegistryListenConfig(t, h.cfg, false)
+	if err := runBootstrapUpdateWithDeps(context.Background(), h.cfg, h.deps); err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+	for _, event := range *h.events {
+		if strings.Contains(event, "run wheelmaker-deploy-next update") && strings.Contains(event, "--no-web") {
+			return
+		}
+	}
+	t.Fatalf("bootstrap update command did not include --no-web: %#v", *h.events)
+}
+
 func TestLinuxUnitContentRequiresRestartAlways(t *testing.T) {
 	unit := linuxUnitContent("WheelMaker Hub", "/repo", "/home/user/.wheelmaker/systemd.env", "/home/user/.wheelmaker/bin/wheelmaker", "-d")
 	for _, needle := range []string{"Restart=always", "EnvironmentFile=", "ExecStart=", "WantedBy=default.target"} {
@@ -671,6 +749,26 @@ func assertBuildLabelMissing(t *testing.T, calls []capturedCommand, label string
 		if out != "" && buildLabelFromOutput(out) == label {
 			t.Fatalf("unexpected go build for %s in %#v", label, calls)
 		}
+	}
+}
+
+func writeRegistryListenConfig(t *testing.T, cfg deployConfig, listen bool) {
+	t.Helper()
+	raw, err := json.Marshal(map[string]any{
+		"registry": map[string]any{
+			"listen": listen,
+			"server": "wss://wheelmaker.top/ws",
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+	path := filepath.Join(wheelMakerHome(cfg), "config.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+	if err := os.WriteFile(path, raw, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
 	}
 }
 
