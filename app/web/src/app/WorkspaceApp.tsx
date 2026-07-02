@@ -7432,6 +7432,10 @@ export function App() {
       closeChatPreview();
       return true;
     }
+    if (!isWide && sidebarSettingsOpenRef.current && mobileSettingsHistoryKeyRef.current !== null) {
+      window.history.back();
+      return true;
+    }
     if (isWide || !sidebarSettingsOpenRef.current) {
       return false;
     }

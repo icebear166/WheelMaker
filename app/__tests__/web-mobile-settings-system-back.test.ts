@@ -120,6 +120,8 @@ describe('mobile settings system back', () => {
     expect(main).toContain('window.WheelMakerAndroidBack = {');
     expect(main).toContain('handleBack: handleAndroidNativeBack');
     expect(main).toContain('settingsPageKind(settingsDetailViewRef.current)');
+    expect(main).toContain('if (!isWide && sidebarSettingsOpenRef.current && mobileSettingsHistoryKeyRef.current !== null) {');
+    expect(main).toContain('window.history.back();');
     expect(main).toContain('renderSettingsDetailActions(settingsDetailView)');
     expect(main).not.toContain('mobileSettingsSwipe');
   });
