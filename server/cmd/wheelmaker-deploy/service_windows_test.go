@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -228,7 +229,7 @@ func TestWindowsUpdatePrepareInstallDoesNotMatchEveryInstallDirProcess(t *testin
 	}
 }
 
-func TestWindowsDeployPrerequisitesRelaunchesUnelevatedLegacyServiceCleanup(t *testing.T) {
+func TestWindowsDeployPrerequisitesDoesNotRelaunchForLegacyCleanup(t *testing.T) {
 	h := newDeployHarness(t)
 	events := []string{}
 	runner := windowsServiceInstalledRunner{events: &events}
@@ -246,11 +247,32 @@ func TestWindowsDeployPrerequisitesRelaunchesUnelevatedLegacyServiceCleanup(t *t
 		return errElevatedChildCompleted
 	}
 
-	err := manager.CheckDeployPrerequisites(context.Background())
-	if err != errElevatedChildCompleted {
-		t.Fatalf("CheckDeployPrerequisites err=%v, want errElevatedChildCompleted", err)
+	if err := manager.CheckDeployPrerequisites(context.Background()); err != nil {
+		t.Fatalf("CheckDeployPrerequisites: %v", err)
 	}
-	assertEventsContainInOrder(t, events, "relaunch elevated")
+	assertEventsDoNotContain(t, events, "relaunch elevated")
+}
+
+func TestWindowsPrepareInstallRunsLegacyCleanupElevatedAndContinuesUnelevated(t *testing.T) {
+	h := newDeployHarness(t)
+	runner := &windowsLegacyCleanupNeedsElevationRunner{}
+	manager := newServiceManager(h.cfg, runner)
+
+	oldIsElevated := windowsIsElevated
+	t.Cleanup(func() {
+		windowsIsElevated = oldIsElevated
+	})
+	windowsIsElevated = func() (bool, error) { return false, nil }
+
+	if err := manager.PrepareInstall(context.Background(), true); err != nil {
+		t.Fatalf("PrepareInstall: %v", err)
+	}
+
+	assertEventsContainInOrder(t, runner.events, "-Verb RunAs")
+	assertEventsContainInOrder(t, runner.events, "Stop-Process")
+	if runner.normalPrepareAttempts != 2 {
+		t.Fatalf("normal prepare attempts=%d, want first failure and retry after elevated cleanup; events=%#v", runner.normalPrepareAttempts, runner.events)
+	}
 }
 
 func TestWindowsDeployPrerequisitesSkipsElevationWhenServiceWorkDisabled(t *testing.T) {
@@ -385,6 +407,27 @@ func (r windowsServiceInstalledRunner) Run(_ context.Context, dir string, name s
 	*r.events = append(*r.events, dir+"|"+line)
 	if name == "powershell" && strings.Contains(strings.Join(args, " "), "Get-Service -Name") {
 		return "true", nil
+	}
+	return "", nil
+}
+
+type windowsLegacyCleanupNeedsElevationRunner struct {
+	events                []string
+	normalPrepareAttempts int
+}
+
+func (r *windowsLegacyCleanupNeedsElevationRunner) Run(_ context.Context, dir string, name string, args ...string) (string, error) {
+	line := name + " " + strings.Join(args, " ")
+	r.events = append(r.events, dir+"|"+line)
+	joined := strings.Join(args, " ")
+	if name == "powershell" && strings.Contains(joined, "Get-Service -Name") && strings.Contains(joined, "Get-ScheduledTask -TaskName") && strings.Contains(joined, "Write-Output 'true'") {
+		return "true", nil
+	}
+	if name == "powershell" && strings.Contains(joined, "$deleteRegistrations = $true") && !strings.Contains(joined, "-Verb RunAs") {
+		r.normalPrepareAttempts++
+		if r.normalPrepareAttempts == 1 {
+			return "", errors.New("access denied deleting legacy task")
+		}
 	}
 	return "", nil
 }

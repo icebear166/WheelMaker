@@ -48,22 +48,8 @@ func newServiceManager(cfg deployConfig, runner commandRunner) serviceManager {
 }
 
 func (m serviceManager) CheckDeployPrerequisites(ctx context.Context) error {
-	needAdmin, err := m.requiresAdministrator(ctx)
-	if err != nil {
-		return err
-	}
-	if !needAdmin {
-		return nil
-	}
-	elevated, err := windowsIsElevated()
-	if err != nil {
-		return err
-	}
-	if elevated {
-		return nil
-	}
 	_ = ctx
-	return windowsRelaunchElevated()
+	return nil
 }
 
 func (m serviceManager) Configure(ctx context.Context) error {
@@ -117,7 +103,30 @@ func (m serviceManager) PrepareInstall(ctx context.Context, includeUpdater bool)
 	}
 	script := windowsPrepareInstallScript(names, processNames, m.cfg.InstallDir, deleteRegistrations)
 	if _, err := m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script); err != nil {
+		if deleteRegistrations {
+			elevated, elevatedErr := windowsIsElevated()
+			if elevatedErr != nil {
+				return fmt.Errorf("prepare Windows install: %w; detect elevation: %v", err, elevatedErr)
+			}
+			if !elevated {
+				if elevatedCleanupErr := m.runPrepareInstallElevated(ctx, script); elevatedCleanupErr != nil {
+					return fmt.Errorf("prepare Windows install elevated cleanup: %w (original error: %v)", elevatedCleanupErr, err)
+				}
+				if _, retryErr := m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script); retryErr != nil {
+					return fmt.Errorf("prepare Windows install after elevated cleanup: %w", retryErr)
+				}
+				return nil
+			}
+		}
 		return fmt.Errorf("prepare Windows install: %w", err)
+	}
+	return nil
+}
+
+func (m serviceManager) runPrepareInstallElevated(ctx context.Context, script string) error {
+	elevatedScript := windowsElevatedPowerShellScript(script)
+	if _, err := m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", elevatedScript); err != nil {
+		return err
 	}
 	return nil
 }
@@ -205,6 +214,11 @@ func windowsRelaunchCurrentProcessElevated() error {
 func windowsElevatedRelaunchScript(exe string, args []string) string {
 	childCommand := psInvokeCommand(exe, args) + `; $code = $global:LASTEXITCODE; if ($null -eq $code) { $code = 0 }; if (-not $env:WHEELMAKER_DEPLOY_NO_PAUSE) { Write-Host ''; Read-Host 'Press Enter to close elevated deploy' | Out-Null }; exit $code`
 	return fmt.Sprintf(`$p = Start-Process -FilePath 'powershell' -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', %s) -Verb RunAs -Wait -PassThru; exit $p.ExitCode`, psQuote(childCommand))
+}
+
+func windowsElevatedPowerShellScript(script string) string {
+	childCommand := script + `; $code = $global:LASTEXITCODE; if ($null -eq $code) { $code = 0 }; exit $code`
+	return fmt.Sprintf(`$p = Start-Process -FilePath 'powershell' -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', %s) -Verb RunAs -Wait -PassThru -WindowStyle Hidden; exit $p.ExitCode`, psQuote(childCommand))
 }
 
 func psInvokeCommand(exe string, args []string) string {
