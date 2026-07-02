@@ -219,6 +219,55 @@ textarea,
   font-size: 14px;
 }
 
+.workspace-left .settings-list {
+  overflow: visible;
+  gap: 18px;
+  padding: 0 10px 16px;
+}
+
+.workspace-left .settings-section-rows {
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+}
+
+.workspace-left .settings-row {
+  min-height: 54px;
+  padding: 0 16px;
+  font-size: 13px;
+}
+
+.workspace-left .settings-row > span:first-child > .codicon:first-child,
+.workspace-left .settings-row-icon {
+  width: 20px;
+  font-size: 15px;
+}
+
+.workspace-left .settings-detail-page {
+  padding: 0 8px 12px;
+}
+
+.workspace-left .settings-detail-page-body-only {
+  padding-top: 0;
+}
+
+.workspace-left .settings-detail-header {
+  padding: 6px 4px 8px;
+}
+
+.workspace-left .settings-detail-title {
+  font-size: 15px;
+}
+
+.workspace-left .settings-detail-body {
+  padding: 4px 2px 16px;
+  gap: 12px;
+}
+
+.workspace-left .settings-detail-row {
+  min-height: 54px;
+  font-size: 13px;
+}
+
 .mobile-settings-shortcut-bar {
   flex: 0 0 auto;
   position: relative;

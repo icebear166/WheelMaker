@@ -152,4 +152,29 @@ describe('web responsive shell split', () => {
     expect(wideSidebarScrollBlock).toContain('scrollbar-width: thin;');
     expect(wideSidebarScrollBlock).not.toContain('scrollbar-gutter: stable;');
   });
+
+  test('applies mobile-style settings surfaces inside the desktop sidebar', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+
+    const settingsListBlock = cssRuleBlock(stylesCss, '.workspace-left .settings-list');
+    expect(settingsListBlock).toContain('overflow: visible;');
+    expect(settingsListBlock).toContain('gap: 18px;');
+    expect(settingsListBlock).toContain('padding: 0 10px 16px;');
+
+    const settingsRowsBlock = cssRuleBlock(stylesCss, '.workspace-left .settings-section-rows');
+    expect(settingsRowsBlock).toContain('border-radius: 12px;');
+    expect(settingsRowsBlock).toContain('background: color-mix(in srgb, var(--panel) 92%, transparent);');
+
+    const settingsRowBlock = cssRuleBlock(stylesCss, '.workspace-left .settings-row');
+    expect(settingsRowBlock).toContain('min-height: 54px;');
+    expect(settingsRowBlock).toContain('padding: 0 16px;');
+    expect(settingsRowBlock).toContain('font-size: 13px;');
+
+    const detailPageBlock = cssRuleBlock(stylesCss, '.workspace-left .settings-detail-page');
+    expect(detailPageBlock).toContain('padding: 0 8px 12px;');
+
+    const detailHeaderBlock = cssRuleBlock(stylesCss, '.workspace-left .settings-detail-header');
+    expect(detailHeaderBlock).toContain('padding: 6px 4px 8px;');
+  });
 });
