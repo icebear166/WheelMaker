@@ -254,7 +254,7 @@ func TestWindowsDeployPrerequisitesDoesNotRelaunchForLegacyCleanup(t *testing.T)
 	assertEventsDoNotContain(t, events, "relaunch elevated")
 }
 
-func TestWindowsPrepareInstallRunsLegacyCleanupElevatedBeforeUnelevatedWork(t *testing.T) {
+func TestWindowsPrepareInstallRunsLegacyCleanupElevatedThenStopsCurrentUserProcesses(t *testing.T) {
 	h := newDeployHarness(t)
 	runner := &windowsLegacyCleanupOrderRunner{}
 	manager := newServiceManager(h.cfg, runner)
@@ -272,11 +272,39 @@ func TestWindowsPrepareInstallRunsLegacyCleanupElevatedBeforeUnelevatedWork(t *t
 	if runner.elevatedPrepareAttempts != 1 {
 		t.Fatalf("elevated prepare attempts=%d, want 1; events=%#v", runner.elevatedPrepareAttempts, runner.events)
 	}
-	if runner.normalPrepareAttempts != 0 {
-		t.Fatalf("normal prepare attempts=%d, want legacy cleanup to run only in elevated child; events=%#v", runner.normalPrepareAttempts, runner.events)
+	if runner.normalPrepareAttempts != 1 {
+		t.Fatalf("normal prepare attempts=%d, want current-user process cleanup after elevated legacy cleanup; events=%#v", runner.normalPrepareAttempts, runner.events)
 	}
-	assertEventsContainInOrder(t, runner.events, "-Verb RunAs")
+	if len(runner.events) < 2 {
+		t.Fatalf("events=%#v, want elevated cleanup followed by current-user process cleanup", runner.events)
+	}
+	if !strings.Contains(runner.events[0], "-Verb RunAs") {
+		t.Fatalf("first prepare event should run elevated cleanup, events=%#v", runner.events)
+	}
+	if strings.Contains(runner.events[1], "-Verb RunAs") || !strings.Contains(runner.events[1], "Stop-Process") || strings.Contains(runner.events[1], "$deleteRegistrations") {
+		t.Fatalf("second prepare event should be non-elevated process cleanup only, events=%#v", runner.events)
+	}
 	assertEventsContainInOrder(t, runner.events, "wheelmaker-updater.exe")
+}
+
+func TestWindowsPrepareInstallTimeoutReportsRemainingProcesses(t *testing.T) {
+	scripts := map[string]string{
+		"prepare": windowsPrepareInstallScript(windowsRuntimeNames(), windowsRuntimeProcessNames(), `C:\Users\me\.wheelmaker\bin`, false),
+		"stop":    windowsStopRuntimeProcessesScript(windowsRuntimeProcessNames(), `C:\Users\me\.wheelmaker\bin`),
+	}
+	for name, script := range scripts {
+		for _, needle := range []string{
+			"Timed out stopping WheelMaker runtime processes",
+			"Select-Object ProcessId,Name,CommandLine",
+			"$stopErrors",
+			"Stop errors:",
+			"Out-String",
+		} {
+			if !strings.Contains(script, needle) {
+				t.Fatalf("%s script timeout should report remaining process details, missing %q:\n%s", name, needle, script)
+			}
+		}
+	}
 }
 
 func TestWindowsUpdatePrepareInstallDoesNotElevateOrStopUpdater(t *testing.T) {
@@ -306,6 +334,8 @@ func TestWindowsUpdatePrepareInstallDoesNotElevateOrStopUpdater(t *testing.T) {
 	}
 	assertEventsDoNotContain(t, runner.events, "-Verb RunAs")
 	assertEventsDoNotContain(t, runner.events, "wheelmaker-updater.exe")
+	assertEventsDoNotContain(t, runner.events, "Get-Service")
+	assertEventsDoNotContain(t, runner.events, "Get-ScheduledTask")
 }
 
 func TestWindowsDeployPrerequisitesSkipsElevationWhenServiceWorkDisabled(t *testing.T) {
@@ -479,6 +509,9 @@ func (r *windowsLegacyCleanupOrderRunner) Run(_ context.Context, dir string, nam
 		}
 	}
 	if name == "powershell" && strings.Contains(joined, "$deleteRegistrations = $false") {
+		r.normalPrepareAttempts++
+	}
+	if name == "powershell" && !strings.Contains(joined, "$deleteRegistrations") && strings.Contains(joined, "$processNames =") && strings.Contains(joined, "Stop-Process") {
 		r.normalPrepareAttempts++
 	}
 	return "", nil

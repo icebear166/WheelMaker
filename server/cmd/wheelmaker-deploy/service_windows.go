@@ -94,12 +94,14 @@ func (m serviceManager) Stop(ctx context.Context, includeUpdater bool) error {
 
 func (m serviceManager) PrepareInstall(ctx context.Context, includeUpdater bool) error {
 	deleteRegistrations := !m.cfg.NoConfig
+	if !deleteRegistrations {
+		if err := m.stopRuntimeProcesses(ctx, includeUpdater); err != nil {
+			return fmt.Errorf("prepare Windows install process cleanup: %w", err)
+		}
+		return nil
+	}
 	names := windowsRuntimeNames()
 	processNames := windowsRuntimeProcessNames()
-	if !deleteRegistrations {
-		names = m.stopServiceNames(includeUpdater)
-		processNames = windowsRuntimeProcessNamesForServices(names)
-	}
 	script := windowsPrepareInstallScript(names, processNames, m.cfg.InstallDir, deleteRegistrations)
 	if deleteRegistrations {
 		elevated, elevatedErr := windowsIsElevated()
@@ -109,6 +111,9 @@ func (m serviceManager) PrepareInstall(ctx context.Context, includeUpdater bool)
 		if !elevated {
 			if err := m.runPrepareInstallElevated(ctx, script); err != nil {
 				return fmt.Errorf("prepare Windows install elevated cleanup: %w", err)
+			}
+			if err := m.stopRuntimeProcesses(ctx, includeUpdater); err != nil {
+				return fmt.Errorf("prepare Windows install process cleanup: %w", err)
 			}
 			return nil
 		}
@@ -562,13 +567,14 @@ foreach ($name in $names) {
   Remove-WheelMakerService $name
 }
 
+$stopErrors = @()
 $procs = @(Get-CimInstance Win32_Process | Where-Object { ($processNames -contains $_.Name) -or (Test-WheelMakerInstallProcess $_) })
 foreach ($proc in $procs) {
   try {
     Stop-Process -Id $proc.ProcessId -Force -ErrorAction Stop
   } catch {
     if ($null -ne (Get-Process -Id $proc.ProcessId -ErrorAction SilentlyContinue)) {
-      throw
+      $stopErrors += ("PID {0} {1}: {2}" -f $proc.ProcessId, $proc.Name, $_.Exception.Message)
     }
   }
 }
@@ -581,7 +587,14 @@ while ((Get-Date) -lt $deadline) {
   }
   Start-Sleep -Milliseconds 200
 }
-throw "Timed out stopping WheelMaker runtime processes"`, windowsPSStringArray(serviceNames), windowsPSStringArray(processNames), psQuote(filepath.Clean(installDir)), windowsPSBool(deleteRegistrations))
+$remainingText = ($remaining | Select-Object ProcessId,Name,CommandLine | Format-List | Out-String).Trim()
+if ([string]::IsNullOrWhiteSpace($remainingText)) {
+  $remainingText = '<no process details available>'
+}
+if ($stopErrors.Count -gt 0) {
+  $remainingText = $remainingText + [Environment]::NewLine + 'Stop errors:' + [Environment]::NewLine + ($stopErrors -join [Environment]::NewLine)
+}
+throw ("Timed out stopping WheelMaker runtime processes:" + [Environment]::NewLine + $remainingText)`, windowsPSStringArray(serviceNames), windowsPSStringArray(processNames), psQuote(filepath.Clean(installDir)), windowsPSBool(deleteRegistrations))
 }
 
 func windowsStopRuntimeProcessesScript(processNames []string, installDir string) string {
@@ -624,16 +637,34 @@ function Test-WheelMakerInstallProcess($process) {
   return $false
 }
 
+$stopErrors = @()
 $procs = @(Get-CimInstance Win32_Process | Where-Object { ($processNames -contains $_.Name) -or (Test-WheelMakerInstallProcess $_) })
 foreach ($proc in $procs) {
   try {
     Stop-Process -Id $proc.ProcessId -Force -ErrorAction Stop
   } catch {
     if ($null -ne (Get-Process -Id $proc.ProcessId -ErrorAction SilentlyContinue)) {
-      throw
+      $stopErrors += ("PID {0} {1}: {2}" -f $proc.ProcessId, $proc.Name, $_.Exception.Message)
     }
   }
-}`, windowsPSStringArray(processNames), psQuote(filepath.Clean(installDir)))
+}
+
+$deadline = (Get-Date).AddSeconds(10)
+while ((Get-Date) -lt $deadline) {
+  $remaining = @(Get-CimInstance Win32_Process | Where-Object { ($processNames -contains $_.Name) -or (Test-WheelMakerInstallProcess $_) })
+  if ($remaining.Count -eq 0) {
+    exit 0
+  }
+  Start-Sleep -Milliseconds 200
+}
+$remainingText = ($remaining | Select-Object ProcessId,Name,CommandLine | Format-List | Out-String).Trim()
+if ([string]::IsNullOrWhiteSpace($remainingText)) {
+  $remainingText = '<no process details available>'
+}
+if ($stopErrors.Count -gt 0) {
+  $remainingText = $remainingText + [Environment]::NewLine + 'Stop errors:' + [Environment]::NewLine + ($stopErrors -join [Environment]::NewLine)
+}
+throw ("Timed out stopping WheelMaker runtime processes:" + [Environment]::NewLine + $remainingText)`, windowsPSStringArray(processNames), psQuote(filepath.Clean(installDir)))
 }
 
 func windowsRuntimeProcessStatusScript(processNames []string, installDir string) string {
