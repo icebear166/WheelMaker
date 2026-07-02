@@ -524,7 +524,6 @@ func buildBinaries(ctx context.Context, cfg deployConfig, deps deployDeps, inclu
 		windowsGUI bool
 	}{
 		{"wheelmaker", "./cmd/wheelmaker", true},
-		{"wheelmaker-monitor", "./cmd/wheelmaker-monitor", true},
 	}
 	if includeUpdater {
 		builds = append(builds, struct {
@@ -571,7 +570,7 @@ func installBuiltBinaries(cfg deployConfig, deps deployDeps, includeUpdater bool
 	if cfg.NoInstall {
 		return nil
 	}
-	names := []string{"wheelmaker", "wheelmaker-monitor"}
+	names := []string{"wheelmaker"}
 	if includeUpdater {
 		names = append(names, "wheelmaker-updater")
 	}

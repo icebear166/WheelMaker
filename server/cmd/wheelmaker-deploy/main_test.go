@@ -228,13 +228,11 @@ func TestDeployPipelineOrder(t *testing.T) {
 		"git pull --ff-only origin main",
 		"npm ci --include=dev",
 		"go build wheelmaker",
-		"go build wheelmaker-monitor",
 		"go build wheelmaker-updater",
 		"go build wheelmaker-deploy",
 		"npm run build:web:release",
 		"service prepare install all",
 		"install wheelmaker",
-		"install wheelmaker-monitor",
 		"install wheelmaker-updater",
 		"install wheelmaker-deploy",
 		"write config",
@@ -247,9 +245,10 @@ func TestDeployPipelineOrder(t *testing.T) {
 	if diff := cmpStringSlices(*h.events, want); diff != "" {
 		t.Fatal(diff)
 	}
-	for _, name := range []string{"wheelmaker", "wheelmaker-monitor", "wheelmaker-updater", "wheelmaker-deploy"} {
+	for _, name := range []string{"wheelmaker", "wheelmaker-updater", "wheelmaker-deploy"} {
 		assertFileContains(t, filepath.Join(h.cfg.InstallDir, binaryName(name)), name)
 	}
+	assertFileMissing(t, filepath.Join(h.cfg.InstallDir, binaryName("wheelmaker-monitor")))
 }
 
 func TestDeployPreparesInstallWhenRestartIsSkipped(t *testing.T) {
@@ -282,7 +281,6 @@ func TestDeployReportsBuildProgress(t *testing.T) {
 		"pulling latest source",
 		"syncing Web dependencies",
 		"building wheelmaker",
-		"building wheelmaker-monitor",
 		"building wheelmaker-updater",
 		"building wheelmaker-deploy",
 		"publishing Web",
@@ -306,11 +304,12 @@ func TestWindowsRuntimeBinariesBuildWithoutConsoleWindows(t *testing.T) {
 		t.Fatalf("buildBinaries: %v", err)
 	}
 
-	for _, label := range []string{"wheelmaker", "wheelmaker-monitor", "wheelmaker-updater"} {
+	for _, label := range []string{"wheelmaker", "wheelmaker-updater"} {
 		args := findBuildArgsForLabel(t, calls, label)
 		assertStringSliceContains(t, args, "-ldflags")
 		assertStringSliceContains(t, args, "-H windowsgui")
 	}
+	assertBuildLabelMissing(t, calls, "wheelmaker-monitor")
 	deployArgs := findBuildArgsForLabel(t, calls, "wheelmaker-deploy")
 	assertStringSliceDoesNotContain(t, deployArgs, "-H windowsgui")
 }
@@ -660,6 +659,19 @@ func findBuildArgsForLabel(t *testing.T, calls []capturedCommand, label string) 
 	}
 	t.Fatalf("missing go build for %s in %#v", label, calls)
 	return nil
+}
+
+func assertBuildLabelMissing(t *testing.T, calls []capturedCommand, label string) {
+	t.Helper()
+	for _, call := range calls {
+		if call.name != "go" || len(call.args) == 0 || call.args[0] != "build" {
+			continue
+		}
+		out := goBuildOutputArgForTest(call.args)
+		if out != "" && buildLabelFromOutput(out) == label {
+			t.Fatalf("unexpected go build for %s in %#v", label, calls)
+		}
+	}
 }
 
 func assertStringSliceContains(t *testing.T, values []string, needle string) {

@@ -22,8 +22,8 @@ func TestWindowsLegacyServiceRuntimeConfiguresHKCURun(t *testing.T) {
 
 	stateDir := filepath.Dir(h.cfg.InstallDir)
 	assertWindowsHKCURunConfigureContains(t, events, windowsHubService, "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "Set-ItemProperty", "wheelmaker.exe", "-d", "--dir", stateDir)
-	assertWindowsHKCURunConfigureContains(t, events, windowsMonitorService, "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "Set-ItemProperty", "wheelmaker-monitor.exe", "--dir", stateDir)
 	assertWindowsHKCURunConfigureContains(t, events, windowsUpdaterService, "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "Set-ItemProperty", "wheelmaker-updater.exe", "--repo", h.cfg.RepoRoot, "--install-dir", h.cfg.InstallDir, "--runtime", "asuser")
+	assertEventsDoNotContain(t, events, "wheelmaker-monitor.exe")
 	assertEventsDoNotContain(t, events, "Register-ScheduledTask")
 	assertEventsDoNotContain(t, events, "New-ScheduledTaskPrincipal")
 	assertEventsDoNotContain(t, events, "New-Service")
@@ -42,8 +42,8 @@ func TestWindowsAsUserConfiguresHKCURunAndRemovesLegacyRuntime(t *testing.T) {
 
 	stateDir := filepath.Dir(h.cfg.InstallDir)
 	assertWindowsHKCURunConfigureContains(t, events, windowsHubService, "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "Set-ItemProperty", "wheelmaker.exe", "-d", "--dir", stateDir)
-	assertWindowsHKCURunConfigureContains(t, events, windowsMonitorService, "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "Set-ItemProperty", "wheelmaker-monitor.exe", "--dir", stateDir)
 	assertWindowsHKCURunConfigureContains(t, events, windowsUpdaterService, "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "Set-ItemProperty", "wheelmaker-updater.exe", "--repo", h.cfg.RepoRoot, "--install-dir", h.cfg.InstallDir, "--runtime", "asuser")
+	assertEventsDoNotContain(t, events, "wheelmaker-monitor.exe")
 	assertEventsDoNotContain(t, events, "Register-ScheduledTask")
 	assertEventsDoNotContain(t, events, "New-ScheduledTaskPrincipal")
 	assertEventsDoNotContain(t, events, "Get-Credential")
@@ -83,9 +83,10 @@ func TestWindowsLegacyServiceRuntimeActionsUseProcesses(t *testing.T) {
 		t.Fatalf("Status: %v", err)
 	}
 
-	for _, needle := range []string{"Start-Process", "wheelmaker.exe", "wheelmaker-monitor.exe", "wheelmaker-updater.exe", "Stop-Process", "Get-CimInstance Win32_Process"} {
+	for _, needle := range []string{"Start-Process", "wheelmaker.exe", "wheelmaker-updater.exe", "Stop-Process", "Get-CimInstance Win32_Process"} {
 		assertEventsContainInOrder(t, events, needle)
 	}
+	assertWindowsStartDoesNotContain(t, events, "wheelmaker-monitor.exe")
 	assertEventsDoNotContain(t, events, "Start-ScheduledTask")
 	assertEventsDoNotContain(t, events, "Stop-ScheduledTask")
 	assertEventsDoNotContain(t, events, "Get-ScheduledTask")
@@ -111,9 +112,10 @@ func TestWindowsAsUserRuntimeActionsUseProcesses(t *testing.T) {
 		t.Fatalf("Status: %v", err)
 	}
 
-	for _, needle := range []string{"Start-Process", "wheelmaker.exe", "wheelmaker-monitor.exe", "wheelmaker-updater.exe", "Stop-Process", "Get-CimInstance Win32_Process"} {
+	for _, needle := range []string{"Start-Process", "wheelmaker.exe", "wheelmaker-updater.exe", "Stop-Process", "Get-CimInstance Win32_Process"} {
 		assertEventsContainInOrder(t, events, needle)
 	}
+	assertWindowsStartDoesNotContain(t, events, "wheelmaker-monitor.exe")
 	assertEventsDoNotContain(t, events, "Start-ScheduledTask")
 	assertEventsDoNotContain(t, events, "Stop-ScheduledTask")
 	assertEventsDoNotContain(t, events, "Get-ScheduledTask")
@@ -135,7 +137,7 @@ func TestWindowsAsUserUpdateStartExcludesUpdaterProcess(t *testing.T) {
 
 	assertEventsContainInOrder(t, events, "Start-Process")
 	assertEventsContainInOrder(t, events, "wheelmaker.exe")
-	assertEventsContainInOrder(t, events, "wheelmaker-monitor.exe")
+	assertEventsDoNotContain(t, events, "wheelmaker-monitor.exe")
 	assertEventsDoNotContain(t, events, "wheelmaker-updater.exe")
 }
 
@@ -427,6 +429,20 @@ func assertWindowsHKCURunConfigureContains(t *testing.T, events []string, valueN
 		return
 	}
 	t.Fatalf("missing HKCU Run configure event for %s in %#v", valueName, events)
+}
+
+func assertWindowsStartDoesNotContain(t *testing.T, events []string, needle string) {
+	t.Helper()
+	for _, event := range events {
+		if !strings.Contains(event, "Start-Process") {
+			continue
+		}
+		if strings.Contains(event, needle) {
+			t.Fatalf("Windows start script should not contain %q:\n%s", needle, event)
+		}
+		return
+	}
+	t.Fatalf("missing Windows start script in %#v", events)
 }
 
 type windowsServiceInstalledRunner struct {

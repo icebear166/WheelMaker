@@ -63,7 +63,6 @@ func (m serviceManager) configureServices(ctx context.Context) error {
 	stateDir := filepath.Dir(m.cfg.InstallDir)
 	services := []windowsRuntimeService{
 		windowsServiceSpec(windowsHubService, filepath.Join(m.cfg.InstallDir, "wheelmaker.exe"), "-d "+windowsStateDirArgs(stateDir)),
-		windowsServiceSpec(windowsMonitorService, filepath.Join(m.cfg.InstallDir, "wheelmaker-monitor.exe"), windowsStateDirArgs(stateDir)),
 	}
 	if !m.cfg.NoUpdater {
 		services = append(services, windowsServiceSpec(windowsUpdaterService, filepath.Join(m.cfg.InstallDir, "wheelmaker-updater.exe"), windowsUpdaterArgs(m.cfg.RepoRoot, m.cfg.InstallDir, m.cfg.UpdaterTime, m.runtimeMode())))
@@ -87,7 +86,7 @@ func (m serviceManager) Stop(ctx context.Context, includeUpdater bool) error {
 	if m.runtimeMode() == windowsRuntimeAsUser {
 		return m.stopRuntimeProcesses(ctx, includeUpdater)
 	}
-	for _, name := range m.serviceNames(includeUpdater) {
+	for _, name := range m.stopServiceNames(includeUpdater) {
 		_, _ = m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", fmt.Sprintf("$svc=Get-Service -Name %s -ErrorAction SilentlyContinue; if ($null -ne $svc -and $svc.Status -ne 'Stopped') { Stop-Service -Name %s -Force -ErrorAction SilentlyContinue }", psQuote(name), psQuote(name)))
 	}
 	return nil
@@ -98,7 +97,7 @@ func (m serviceManager) PrepareInstall(ctx context.Context, includeUpdater bool)
 	names := windowsRuntimeNames()
 	processNames := windowsRuntimeProcessNames()
 	if !deleteRegistrations {
-		names = m.serviceNames(includeUpdater)
+		names = m.stopServiceNames(includeUpdater)
 		processNames = windowsRuntimeProcessNamesForServices(names)
 	}
 	script := windowsPrepareInstallScript(names, processNames, m.cfg.InstallDir, deleteRegistrations)
@@ -139,7 +138,7 @@ func (m serviceManager) Status(ctx context.Context) error {
 	if m.runtimeMode() == windowsRuntimeAsUser {
 		return m.statusRuntimeProcesses(ctx)
 	}
-	for _, name := range []string{windowsHubService, windowsMonitorService, windowsUpdaterService} {
+	for _, name := range m.serviceNames(true) {
 		filter := fmt.Sprintf("Name='%s'", name)
 		if _, err := m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", fmt.Sprintf("Get-CimInstance Win32_Service -Filter %s -ErrorAction SilentlyContinue | Select-Object Name,State,StartMode,StartName,PathName | Format-Table -AutoSize", psQuote(filter))); err != nil {
 			return err
@@ -398,7 +397,7 @@ foreach ($definition in $definitions) {
 }
 
 func (m serviceManager) stopRuntimeProcesses(ctx context.Context, includeUpdater bool) error {
-	processNames := windowsRuntimeProcessNamesForServices(m.serviceNames(includeUpdater))
+	processNames := windowsRuntimeProcessNamesForServices(m.stopServiceNames(includeUpdater))
 	script := windowsStopRuntimeProcessesScript(processNames, m.cfg.InstallDir)
 	if _, err := m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script); err != nil {
 		return err
@@ -407,7 +406,7 @@ func (m serviceManager) stopRuntimeProcesses(ctx context.Context, includeUpdater
 }
 
 func (m serviceManager) statusRuntimeProcesses(ctx context.Context) error {
-	script := windowsRuntimeProcessStatusScript(windowsRuntimeProcessNames(), m.cfg.InstallDir)
+	script := windowsRuntimeProcessStatusScript(windowsRuntimeProcessNamesForServices(m.serviceNames(true)), m.cfg.InstallDir)
 	if _, err := m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script); err != nil {
 		return err
 	}
@@ -424,13 +423,6 @@ func (m serviceManager) runtimePrograms(runtimeMode string) []windowsRuntimeProg
 			Args:        "-d " + windowsStateDirArgs(stateDir),
 			WorkingDir:  m.cfg.RepoRoot,
 		},
-		{
-			Name:        windowsMonitorService,
-			DisplayName: windowsMonitorService,
-			Binary:      filepath.Join(m.cfg.InstallDir, "wheelmaker-monitor.exe"),
-			Args:        windowsStateDirArgs(stateDir),
-			WorkingDir:  m.cfg.RepoRoot,
-		},
 	}
 	if !m.cfg.NoUpdater {
 		programs = append(programs, windowsRuntimeProgram{
@@ -445,6 +437,14 @@ func (m serviceManager) runtimePrograms(runtimeMode string) []windowsRuntimeProg
 }
 
 func (m serviceManager) serviceNames(includeUpdater bool) []string {
+	names := []string{windowsHubService}
+	if includeUpdater && !m.cfg.NoUpdater {
+		names = append(names, windowsUpdaterService)
+	}
+	return names
+}
+
+func (m serviceManager) stopServiceNames(includeUpdater bool) []string {
 	names := []string{windowsHubService, windowsMonitorService}
 	if includeUpdater && !m.cfg.NoUpdater {
 		names = append(names, windowsUpdaterService)

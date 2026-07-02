@@ -40,7 +40,6 @@ func (m serviceManager) Configure(ctx context.Context) error {
 		args   []string
 	}{
 		{launchHubLabel, filepath.Join(m.cfg.InstallDir, "wheelmaker"), []string{"-d"}},
-		{launchMonitorLabel, filepath.Join(m.cfg.InstallDir, "wheelmaker-monitor"), nil},
 	}
 	if !m.cfg.NoUpdater {
 		agents = append(agents, struct {
@@ -56,6 +55,8 @@ func (m serviceManager) Configure(ctx context.Context) error {
 			return fmt.Errorf("write %s: %w", path, err)
 		}
 	}
+	_, _ = m.runner.Run(ctx, "", "launchctl", "bootout", launchTarget(launchMonitorLabel))
+	_ = os.Remove(launchPlistPath(m.cfg.HomeDir, launchMonitorLabel))
 	return nil
 }
 
@@ -73,7 +74,7 @@ func (m serviceManager) Start(ctx context.Context, includeUpdater bool) error {
 }
 
 func (m serviceManager) Stop(ctx context.Context, includeUpdater bool) error {
-	for _, label := range m.labels(includeUpdater) {
+	for _, label := range m.stopLabels(includeUpdater) {
 		_, _ = m.runner.Run(ctx, "", "launchctl", "bootout", launchTarget(label))
 	}
 	return nil
@@ -91,7 +92,7 @@ func (m serviceManager) Restart(ctx context.Context, includeUpdater bool) error 
 }
 
 func (m serviceManager) Status(ctx context.Context) error {
-	for _, label := range []string{launchHubLabel, launchMonitorLabel, launchUpdaterLabel} {
+	for _, label := range m.labels(true) {
 		if _, err := m.runner.Run(ctx, "", "launchctl", "print", launchTarget(label)); err != nil {
 			return err
 		}
@@ -100,6 +101,14 @@ func (m serviceManager) Status(ctx context.Context) error {
 }
 
 func (m serviceManager) labels(includeUpdater bool) []string {
+	labels := []string{launchHubLabel}
+	if includeUpdater && !m.cfg.NoUpdater {
+		labels = append(labels, launchUpdaterLabel)
+	}
+	return labels
+}
+
+func (m serviceManager) stopLabels(includeUpdater bool) []string {
 	labels := []string{launchHubLabel, launchMonitorLabel}
 	if includeUpdater && !m.cfg.NoUpdater {
 		labels = append(labels, launchUpdaterLabel)

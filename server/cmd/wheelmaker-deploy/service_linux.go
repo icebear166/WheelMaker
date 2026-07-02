@@ -64,7 +64,6 @@ func (m serviceManager) Configure(ctx context.Context) error {
 		args        string
 	}{
 		{systemdHubService, "WheelMaker Hub", filepath.Join(m.cfg.InstallDir, "wheelmaker"), "-d"},
-		{systemdMonitorService, "WheelMaker Monitor", filepath.Join(m.cfg.InstallDir, "wheelmaker-monitor"), ""},
 	}
 	if !m.cfg.NoUpdater {
 		args := fmt.Sprintf("--repo %s --install-dir %s --time %s", systemdQuote(m.cfg.RepoRoot), systemdQuote(m.cfg.InstallDir), systemdQuote(m.cfg.UpdaterTime))
@@ -81,6 +80,8 @@ func (m serviceManager) Configure(ctx context.Context) error {
 			return fmt.Errorf("write unit %s: %w", unit.name, err)
 		}
 	}
+	_, _ = m.runner.Run(ctx, "", "systemctl", "--user", "disable", "--now", systemdMonitorService)
+	_ = os.Remove(filepath.Join(unitDir, systemdMonitorService))
 	if _, err := m.runner.Run(ctx, "", "systemctl", "--user", "daemon-reload"); err != nil {
 		return err
 	}
@@ -102,7 +103,7 @@ func (m serviceManager) Start(ctx context.Context, includeUpdater bool) error {
 }
 
 func (m serviceManager) Stop(ctx context.Context, includeUpdater bool) error {
-	for _, service := range m.services(includeUpdater) {
+	for _, service := range m.stopServices(includeUpdater) {
 		_, _ = m.runner.Run(ctx, "", "systemctl", "--user", "stop", service)
 	}
 	return nil
@@ -113,16 +114,14 @@ func (m serviceManager) PrepareInstall(ctx context.Context, includeUpdater bool)
 }
 
 func (m serviceManager) Restart(ctx context.Context, includeUpdater bool) error {
-	for _, service := range m.services(includeUpdater) {
-		if _, err := m.runner.Run(ctx, "", "systemctl", "--user", "restart", service); err != nil {
-			return err
-		}
+	if err := m.Stop(ctx, includeUpdater); err != nil {
+		return err
 	}
-	return nil
+	return m.Start(ctx, includeUpdater)
 }
 
 func (m serviceManager) Status(ctx context.Context) error {
-	for _, service := range []string{systemdHubService, systemdMonitorService, systemdUpdaterService} {
+	for _, service := range m.services(true) {
 		if _, err := m.runner.Run(ctx, "", "systemctl", "--user", "show", service, "--property=LoadState,ActiveState,UnitFileState"); err != nil {
 			return err
 		}
@@ -131,6 +130,14 @@ func (m serviceManager) Status(ctx context.Context) error {
 }
 
 func (m serviceManager) services(includeUpdater bool) []string {
+	services := []string{systemdHubService}
+	if includeUpdater && !m.cfg.NoUpdater {
+		services = append(services, systemdUpdaterService)
+	}
+	return services
+}
+
+func (m serviceManager) stopServices(includeUpdater bool) []string {
 	services := []string{systemdHubService, systemdMonitorService}
 	if includeUpdater && !m.cfg.NoUpdater {
 		services = append(services, systemdUpdaterService)
