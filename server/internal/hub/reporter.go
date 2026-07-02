@@ -600,6 +600,7 @@ func validateHubStateAction(section string, action string) error {
 			"install":    {},
 			"uninstall":  {},
 			"update":     {},
+			"detail":     {},
 		},
 		hubStateSectionFileIndex: {
 			"rebuild": {},
