@@ -155,7 +155,7 @@ func parseArgs(args []string) (deployConfig, error) {
 	fs.BoolVar(&cfg.NoBuild, "no-build", false, "skip Go builds")
 	fs.BoolVar(&cfg.NoInstall, "no-install", false, "skip binary install")
 	fs.BoolVar(&cfg.NoRestart, "no-restart", false, "skip service restart")
-	fs.BoolVar(&cfg.NoConfig, "no-config", false, "skip service configuration")
+	fs.BoolVar(&cfg.NoConfig, "no-config", false, "skip runtime configuration")
 	fs.BoolVar(&cfg.NoWeb, "no-web", false, "skip Web publish")
 	fs.BoolVar(&cfg.NoUpdater, "no-updater", false, "skip updater build/install/config")
 	if err := fs.Parse(args[1:]); err != nil {

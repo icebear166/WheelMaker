@@ -68,7 +68,7 @@ func (m serviceManager) CheckDeployPrerequisites(ctx context.Context) error {
 
 func (m serviceManager) Configure(ctx context.Context) error {
 	if m.runtimeMode() == windowsRuntimeAsUser {
-		return m.configureScheduledTasks(ctx)
+		return m.configureHKCURun(ctx)
 	}
 	return m.configureServices(ctx)
 }
@@ -87,7 +87,7 @@ func (m serviceManager) configureServices(ctx context.Context) error {
 
 func (m serviceManager) Start(ctx context.Context, includeUpdater bool) error {
 	if m.runtimeMode() == windowsRuntimeAsUser {
-		return m.startScheduledTasks(ctx, includeUpdater)
+		return m.startRuntimeProcesses(ctx, includeUpdater)
 	}
 	for _, name := range m.serviceNames(includeUpdater) {
 		if _, err := m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", fmt.Sprintf("Start-Service -Name %s -ErrorAction Stop", psQuote(name))); err != nil {
@@ -99,7 +99,7 @@ func (m serviceManager) Start(ctx context.Context, includeUpdater bool) error {
 
 func (m serviceManager) Stop(ctx context.Context, includeUpdater bool) error {
 	if m.runtimeMode() == windowsRuntimeAsUser {
-		return m.stopScheduledTasks(ctx, includeUpdater)
+		return m.stopRuntimeProcesses(ctx, includeUpdater)
 	}
 	for _, name := range m.serviceNames(includeUpdater) {
 		_, _ = m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", fmt.Sprintf("$svc=Get-Service -Name %s -ErrorAction SilentlyContinue; if ($null -ne $svc -and $svc.Status -ne 'Stopped') { Stop-Service -Name %s -Force -ErrorAction SilentlyContinue }", psQuote(name), psQuote(name)))
@@ -131,7 +131,7 @@ func (m serviceManager) Restart(ctx context.Context, includeUpdater bool) error 
 
 func (m serviceManager) Status(ctx context.Context) error {
 	if m.runtimeMode() == windowsRuntimeAsUser {
-		return m.statusScheduledTasks(ctx)
+		return m.statusRuntimeProcesses(ctx)
 	}
 	for _, name := range []string{windowsHubService, windowsMonitorService, windowsUpdaterService} {
 		filter := fmt.Sprintf("Name='%s'", name)
@@ -147,7 +147,7 @@ func (m serviceManager) requiresAdministrator(ctx context.Context) (bool, error)
 		if m.cfg.NoConfig {
 			return false, nil
 		}
-		installed, err := m.anyWindowsServicesInstalled(ctx)
+		installed, err := m.anyWindowsLegacyRegistrationsInstalled(ctx)
 		if err != nil {
 			return false, err
 		}
@@ -160,22 +160,16 @@ func (m serviceManager) requiresAdministrator(ctx context.Context) (bool, error)
 }
 
 func (m serviceManager) runtimeMode() string {
-	mode := strings.ToLower(strings.TrimSpace(m.cfg.RuntimeMode))
-	switch mode {
-	case windowsRuntimeServiceMode:
-		return windowsRuntimeServiceMode
-	default:
-		return windowsRuntimeAsUser
-	}
+	return windowsRuntimeAsUser
 }
 
-func (m serviceManager) anyWindowsServicesInstalled(ctx context.Context) (bool, error) {
+func (m serviceManager) anyWindowsLegacyRegistrationsInstalled(ctx context.Context) (bool, error) {
 	names := windowsRuntimeNames()
 	quoted := make([]string, 0, len(names))
 	for _, name := range names {
 		quoted = append(quoted, psQuote(name))
 	}
-	script := fmt.Sprintf(`$names = @(%s); foreach ($name in $names) { if ($null -ne (Get-Service -Name $name -ErrorAction SilentlyContinue)) { Write-Output 'true'; exit 0 } }; Write-Output 'false'`, strings.Join(quoted, ", "))
+	script := fmt.Sprintf(`$names = @(%s); foreach ($name in $names) { if ($null -ne (Get-Service -Name $name -ErrorAction SilentlyContinue)) { Write-Output 'true'; exit 0 }; if ($null -ne (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue)) { Write-Output 'true'; exit 0 } }; Write-Output 'false'`, strings.Join(quoted, ", "))
 	out, err := m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script)
 	if err != nil {
 		return false, err
@@ -235,6 +229,10 @@ func windowsServiceBinaryPath(binary string, args string) string {
 		path += " " + strings.TrimSpace(args)
 	}
 	return path
+}
+
+func windowsRunCommandLine(binary string, args string) string {
+	return windowsServiceBinaryPath(binary, args)
 }
 
 func (m serviceManager) ensureRuntimeServices(ctx context.Context, services []windowsRuntimeService) error {
@@ -322,89 +320,85 @@ foreach ($definition in $services) {
 	return nil
 }
 
-func (m serviceManager) configureScheduledTasks(ctx context.Context) error {
+func (m serviceManager) configureHKCURun(ctx context.Context) error {
 	programs := m.runtimePrograms(m.runtimeMode())
 	var defs strings.Builder
 	defs.WriteString("@(\n")
 	for _, program := range programs {
-		defs.WriteString(fmt.Sprintf("  @{ Name = %s; DisplayName = %s; Binary = %s; Args = %s; WorkingDir = %s }\n", psQuote(program.Name), psQuote(program.DisplayName), psQuote(program.Binary), psQuote(program.Args), psQuote(program.WorkingDir)))
+		defs.WriteString(fmt.Sprintf("  @{ Name = %s; Command = %s }\n", psQuote(program.Name), psQuote(windowsRunCommandLine(program.Binary, program.Args))))
 	}
 	defs.WriteString(")")
 	allNames := windowsPSStringArray(windowsRuntimeNames())
 
 	script := fmt.Sprintf(`$ErrorActionPreference = 'Stop'
-$currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 $definitions = %s
 $allNames = %s
+$runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 
-function Remove-WheelMakerService([string]$name) {
-  $service = Get-Service -Name $name -ErrorAction SilentlyContinue
-  if ($null -eq $service) {
-    return
-  }
-  if ($service.Status -ne 'Stopped') {
-    Stop-Service -Name $name -Force -ErrorAction SilentlyContinue
-  }
-  sc.exe delete $name | Out-Null
-  for ($i = 0; $i -lt 30; $i++) {
-    Start-Sleep -Milliseconds 200
-    if ($null -eq (Get-Service -Name $name -ErrorAction SilentlyContinue)) {
-      return
-    }
-  }
-  throw "Timed out deleting service $name"
-}
-
+New-Item -Path $runKey -Force | Out-Null
 foreach ($name in $allNames) {
-  Stop-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
-  Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction SilentlyContinue
-  Remove-WheelMakerService $name
+  Remove-ItemProperty -Path $runKey -Name $name -ErrorAction SilentlyContinue
 }
 
 foreach ($definition in $definitions) {
-  $actionArgs = @{
-    Execute = $definition.Binary
-  }
-  if (-not [string]::IsNullOrWhiteSpace($definition.Args)) {
-    $actionArgs.Argument = $definition.Args
-  }
-  if (-not [string]::IsNullOrWhiteSpace($definition.WorkingDir)) {
-    $actionArgs.WorkingDirectory = $definition.WorkingDir
-  }
-  $action = New-ScheduledTaskAction @actionArgs
-  $trigger = New-ScheduledTaskTrigger -AtLogOn -User $currentUser
-  $principal = New-ScheduledTaskPrincipal -UserId $currentUser -LogonType Interactive -RunLevel Limited
-  $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Seconds 0)
-  Register-ScheduledTask -TaskName $definition.Name -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description $definition.DisplayName -Force | Out-Null
+  Set-ItemProperty -Path $runKey -Name $definition.Name -Value $definition.Command -Type String
 }`, defs.String(), allNames)
 
 	if _, err := m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script); err != nil {
-		return fmt.Errorf("configure Windows scheduled tasks: %w", err)
+		return fmt.Errorf("configure Windows HKCU Run: %w", err)
 	}
 	return nil
 }
 
-func (m serviceManager) startScheduledTasks(ctx context.Context, includeUpdater bool) error {
+func (m serviceManager) startRuntimeProcesses(ctx context.Context, includeUpdater bool) error {
+	programs := m.runtimePrograms(m.runtimeMode())
+	include := map[string]bool{}
 	for _, name := range m.serviceNames(includeUpdater) {
-		if _, err := m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", fmt.Sprintf("Start-ScheduledTask -TaskName %s -ErrorAction Stop", psQuote(name))); err != nil {
-			return err
+		include[name] = true
+	}
+	var defs strings.Builder
+	defs.WriteString("@(\n")
+	for _, program := range programs {
+		if !include[program.Name] {
+			continue
 		}
+		defs.WriteString(fmt.Sprintf("  @{ Name = %s; Binary = %s; Args = %s; WorkingDir = %s }\n", psQuote(program.Name), psQuote(program.Binary), psQuote(program.Args), psQuote(program.WorkingDir)))
+	}
+	defs.WriteString(")")
+	script := fmt.Sprintf(`$ErrorActionPreference = 'Stop'
+$definitions = %s
+foreach ($definition in $definitions) {
+  $startArgs = @{
+    FilePath = $definition.Binary
+    WindowStyle = 'Hidden'
+  }
+  if (-not [string]::IsNullOrWhiteSpace($definition.Args)) {
+    $startArgs.ArgumentList = $definition.Args
+  }
+  if (-not [string]::IsNullOrWhiteSpace($definition.WorkingDir)) {
+    $startArgs.WorkingDirectory = $definition.WorkingDir
+  }
+  Start-Process @startArgs
+}`, defs.String())
+	if _, err := m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script); err != nil {
+		return err
 	}
 	return nil
 }
 
-func (m serviceManager) stopScheduledTasks(ctx context.Context, includeUpdater bool) error {
-	for _, name := range m.serviceNames(includeUpdater) {
-		_, _ = m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", fmt.Sprintf("$task=Get-ScheduledTask -TaskName %s -ErrorAction SilentlyContinue; if ($null -ne $task) { Stop-ScheduledTask -TaskName %s -ErrorAction SilentlyContinue }", psQuote(name), psQuote(name)))
+func (m serviceManager) stopRuntimeProcesses(ctx context.Context, includeUpdater bool) error {
+	processNames := windowsRuntimeProcessNamesForServices(m.serviceNames(includeUpdater))
+	script := windowsStopRuntimeProcessesScript(processNames, m.cfg.InstallDir)
+	if _, err := m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script); err != nil {
+		return err
 	}
 	return nil
 }
 
-func (m serviceManager) statusScheduledTasks(ctx context.Context) error {
-	for _, name := range []string{windowsHubService, windowsMonitorService, windowsUpdaterService} {
-		if _, err := m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", fmt.Sprintf("Get-ScheduledTask -TaskName %s -ErrorAction SilentlyContinue | Select-Object TaskName,State,TaskPath | Format-Table -AutoSize", psQuote(name))); err != nil {
-			return err
-		}
+func (m serviceManager) statusRuntimeProcesses(ctx context.Context) error {
+	script := windowsRuntimeProcessStatusScript(windowsRuntimeProcessNames(), m.cfg.InstallDir)
+	if _, err := m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script); err != nil {
+		return err
 	}
 	return nil
 }
@@ -532,6 +526,9 @@ function Remove-WheelMakerService([string]$name) {
     return
   }
   sc.exe delete $name | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    throw "Failed to delete service $name"
+  }
   for ($i = 0; $i -lt 30; $i++) {
     Start-Sleep -Milliseconds 200
     if ($null -eq (Get-Service -Name $name -ErrorAction SilentlyContinue)) {
@@ -542,16 +539,27 @@ function Remove-WheelMakerService([string]$name) {
 }
 
 foreach ($name in $names) {
-  Stop-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
-  if ($deleteRegistrations) {
-    Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction SilentlyContinue
+  $task = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+  if ($null -ne $task) {
+    if ($task.State -eq 'Running') {
+      Stop-ScheduledTask -TaskName $name -ErrorAction Stop
+    }
+    if ($deleteRegistrations) {
+      Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction Stop
+    }
   }
   Remove-WheelMakerService $name
 }
 
 $procs = @(Get-CimInstance Win32_Process | Where-Object { ($processNames -contains $_.Name) -or (Test-WheelMakerInstallProcess $_) })
 foreach ($proc in $procs) {
-  Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+  try {
+    Stop-Process -Id $proc.ProcessId -Force -ErrorAction Stop
+  } catch {
+    if ($null -ne (Get-Process -Id $proc.ProcessId -ErrorAction SilentlyContinue)) {
+      throw
+    }
+  }
 }
 
 $deadline = (Get-Date).AddSeconds(10)
@@ -563,6 +571,101 @@ while ((Get-Date) -lt $deadline) {
   Start-Sleep -Milliseconds 200
 }
 throw "Timed out stopping WheelMaker runtime processes"`, windowsPSStringArray(serviceNames), windowsPSStringArray(processNames), psQuote(filepath.Clean(installDir)), windowsPSBool(deleteRegistrations))
+}
+
+func windowsStopRuntimeProcessesScript(processNames []string, installDir string) string {
+	return fmt.Sprintf(`$ErrorActionPreference = 'Stop'
+$processNames = %s
+$targetProcessNames = @($processNames | ForEach-Object { ([string]$_).ToLowerInvariant() })
+$installDir = %s
+
+function Test-WheelMakerTargetProcessPath([string]$path) {
+  if ([string]::IsNullOrWhiteSpace($path)) {
+    return $false
+  }
+  $image = [System.IO.Path]::GetFileName($path).ToLowerInvariant()
+  return $targetProcessNames -contains $image
+}
+
+function Test-WheelMakerInstallProcess($process) {
+  $install = [string]$installDir
+  if ([string]::IsNullOrWhiteSpace($install)) {
+    return $processNames -contains $process.Name
+  }
+  $install = ($install.TrimEnd('\') + '\').ToLowerInvariant()
+  $exe = [string]$process.ExecutablePath
+  if (-not [string]::IsNullOrWhiteSpace($exe) -and $exe.ToLowerInvariant().StartsWith($install)) {
+    return Test-WheelMakerTargetProcessPath $exe
+  }
+  $cmd = [string]$process.CommandLine
+  if ([string]::IsNullOrWhiteSpace($exe) -and [string]::IsNullOrWhiteSpace($cmd)) {
+    return $processNames -contains $process.Name
+  }
+  if ([string]::IsNullOrWhiteSpace($cmd)) {
+    return $false
+  }
+  $cmdLower = $cmd.ToLowerInvariant()
+  foreach ($targetProcessName in $targetProcessNames) {
+    if ($cmdLower.Contains($install + $targetProcessName)) {
+      return $true
+    }
+  }
+  return $false
+}
+
+$procs = @(Get-CimInstance Win32_Process | Where-Object { ($processNames -contains $_.Name) -or (Test-WheelMakerInstallProcess $_) })
+foreach ($proc in $procs) {
+  try {
+    Stop-Process -Id $proc.ProcessId -Force -ErrorAction Stop
+  } catch {
+    if ($null -ne (Get-Process -Id $proc.ProcessId -ErrorAction SilentlyContinue)) {
+      throw
+    }
+  }
+}`, windowsPSStringArray(processNames), psQuote(filepath.Clean(installDir)))
+}
+
+func windowsRuntimeProcessStatusScript(processNames []string, installDir string) string {
+	return fmt.Sprintf(`$ErrorActionPreference = 'Stop'
+$processNames = %s
+$targetProcessNames = @($processNames | ForEach-Object { ([string]$_).ToLowerInvariant() })
+$installDir = %s
+
+function Test-WheelMakerTargetProcessPath([string]$path) {
+  if ([string]::IsNullOrWhiteSpace($path)) {
+    return $false
+  }
+  $image = [System.IO.Path]::GetFileName($path).ToLowerInvariant()
+  return $targetProcessNames -contains $image
+}
+
+function Test-WheelMakerInstallProcess($process) {
+  $install = [string]$installDir
+  if ([string]::IsNullOrWhiteSpace($install)) {
+    return $processNames -contains $process.Name
+  }
+  $install = ($install.TrimEnd('\') + '\').ToLowerInvariant()
+  $exe = [string]$process.ExecutablePath
+  if (-not [string]::IsNullOrWhiteSpace($exe) -and $exe.ToLowerInvariant().StartsWith($install)) {
+    return Test-WheelMakerTargetProcessPath $exe
+  }
+  $cmd = [string]$process.CommandLine
+  if ([string]::IsNullOrWhiteSpace($exe) -and [string]::IsNullOrWhiteSpace($cmd)) {
+    return $processNames -contains $process.Name
+  }
+  if ([string]::IsNullOrWhiteSpace($cmd)) {
+    return $false
+  }
+  $cmdLower = $cmd.ToLowerInvariant()
+  foreach ($targetProcessName in $targetProcessNames) {
+    if ($cmdLower.Contains($install + $targetProcessName)) {
+      return $true
+    }
+  }
+  return $false
+}
+
+Get-CimInstance Win32_Process | Where-Object { ($processNames -contains $_.Name) -or (Test-WheelMakerInstallProcess $_) } | Select-Object ProcessId,Name,CommandLine | Format-Table -AutoSize`, windowsPSStringArray(processNames), psQuote(filepath.Clean(installDir)))
 }
 
 func windowsPSBool(value bool) string {

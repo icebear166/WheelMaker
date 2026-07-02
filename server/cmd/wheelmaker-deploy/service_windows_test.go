@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestWindowsConfiguresCurrentUserServices(t *testing.T) {
+func TestWindowsLegacyServiceRuntimeConfiguresHKCURun(t *testing.T) {
 	h := newDeployHarness(t)
 	h.cfg.RuntimeMode = "service"
 	events := []string{}
@@ -21,14 +21,15 @@ func TestWindowsConfiguresCurrentUserServices(t *testing.T) {
 	}
 
 	stateDir := filepath.Dir(h.cfg.InstallDir)
-	assertWindowsServiceConfigureContains(t, events, windowsHubService, "Unregister-ScheduledTask", "Get-Credential", "New-Service", "StartName", "-d", "--dir", stateDir)
-	assertWindowsServiceConfigureContains(t, events, windowsMonitorService, "Get-Credential", "New-Service", "StartName", "--dir", stateDir)
-	assertWindowsServiceConfigureContains(t, events, windowsUpdaterService, "Get-Credential", "New-Service", "StartName", "--repo", h.cfg.RepoRoot, "--install-dir", h.cfg.InstallDir, "--runtime", "service")
+	assertWindowsHKCURunConfigureContains(t, events, windowsHubService, "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "Set-ItemProperty", "wheelmaker.exe", "-d", "--dir", stateDir)
+	assertWindowsHKCURunConfigureContains(t, events, windowsMonitorService, "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "Set-ItemProperty", "wheelmaker-monitor.exe", "--dir", stateDir)
+	assertWindowsHKCURunConfigureContains(t, events, windowsUpdaterService, "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "Set-ItemProperty", "wheelmaker-updater.exe", "--repo", h.cfg.RepoRoot, "--install-dir", h.cfg.InstallDir, "--runtime", "asuser")
 	assertEventsDoNotContain(t, events, "Register-ScheduledTask")
 	assertEventsDoNotContain(t, events, "New-ScheduledTaskPrincipal")
+	assertEventsDoNotContain(t, events, "New-Service")
 }
 
-func TestWindowsAsUserConfiguresLogonTasksAndRemovesServices(t *testing.T) {
+func TestWindowsAsUserConfiguresHKCURunAndRemovesLegacyRuntime(t *testing.T) {
 	h := newDeployHarness(t)
 	h.cfg.RuntimeMode = "asuser"
 	events := []string{}
@@ -40,18 +41,17 @@ func TestWindowsAsUserConfiguresLogonTasksAndRemovesServices(t *testing.T) {
 	}
 
 	stateDir := filepath.Dir(h.cfg.InstallDir)
-	assertWindowsTaskConfigureContains(t, events, windowsHubService, "Register-ScheduledTask", "New-ScheduledTaskPrincipal", "AtLogOn", "Interactive", "-RunLevel Limited", "-d", "--dir", stateDir)
-	assertWindowsTaskConfigureContains(t, events, windowsMonitorService, "Register-ScheduledTask", "New-ScheduledTaskPrincipal", "AtLogOn", "Interactive", "-RunLevel Limited", "--dir", stateDir)
-	assertWindowsTaskConfigureContains(t, events, windowsUpdaterService, "Register-ScheduledTask", "New-ScheduledTaskPrincipal", "AtLogOn", "Interactive", "-RunLevel Limited", "--repo", h.cfg.RepoRoot, "--install-dir", h.cfg.InstallDir, "--runtime", "asuser")
-	assertWindowsTaskConfigureContains(t, events, windowsUpdaterService, "New-ScheduledTaskSettingsSet", "ExecutionTimeLimit", "New-TimeSpan -Seconds 0")
-	assertEventsContainInOrder(t, events, "Stop-Service")
-	assertEventsContainInOrder(t, events, "sc.exe delete")
+	assertWindowsHKCURunConfigureContains(t, events, windowsHubService, "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "Set-ItemProperty", "wheelmaker.exe", "-d", "--dir", stateDir)
+	assertWindowsHKCURunConfigureContains(t, events, windowsMonitorService, "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "Set-ItemProperty", "wheelmaker-monitor.exe", "--dir", stateDir)
+	assertWindowsHKCURunConfigureContains(t, events, windowsUpdaterService, "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "Set-ItemProperty", "wheelmaker-updater.exe", "--repo", h.cfg.RepoRoot, "--install-dir", h.cfg.InstallDir, "--runtime", "asuser")
+	assertEventsDoNotContain(t, events, "Register-ScheduledTask")
+	assertEventsDoNotContain(t, events, "New-ScheduledTaskPrincipal")
 	assertEventsDoNotContain(t, events, "Get-Credential")
 	assertEventsDoNotContain(t, events, "New-Service")
 	assertEventsDoNotContain(t, events, "LeastPrivilege")
 }
 
-func TestWindowsAsUserCleanupIncludesUpdaterWhenUpdaterInstallSkipped(t *testing.T) {
+func TestWindowsAsUserConfigSkipsUpdaterWhenUpdaterInstallSkipped(t *testing.T) {
 	h := newDeployHarness(t)
 	h.cfg.RuntimeMode = "asuser"
 	h.cfg.NoUpdater = true
@@ -63,29 +63,10 @@ func TestWindowsAsUserCleanupIncludesUpdaterWhenUpdaterInstallSkipped(t *testing
 		t.Fatalf("Configure: %v", err)
 	}
 
-	assertEventsContainInOrder(t, events, windowsUpdaterService)
-	assertEventsContainInOrder(t, events, "sc.exe delete")
 	assertEventsDoNotContain(t, events, "wheelmaker-updater.exe")
 }
 
-func TestWindowsServiceCleanupIncludesUpdaterTaskWhenUpdaterInstallSkipped(t *testing.T) {
-	h := newDeployHarness(t)
-	h.cfg.RuntimeMode = "service"
-	h.cfg.NoUpdater = true
-	events := []string{}
-	runner := testRunner{events: &events}
-	manager := newServiceManager(h.cfg, runner)
-
-	if err := manager.Configure(context.Background()); err != nil {
-		t.Fatalf("Configure: %v", err)
-	}
-
-	assertEventsContainInOrder(t, events, windowsUpdaterService)
-	assertEventsContainInOrder(t, events, "Unregister-ScheduledTask")
-	assertEventsDoNotContain(t, events, "wheelmaker-updater.exe")
-}
-
-func TestWindowsRuntimeActionsUseServices(t *testing.T) {
+func TestWindowsLegacyServiceRuntimeActionsUseProcesses(t *testing.T) {
 	h := newDeployHarness(t)
 	h.cfg.RuntimeMode = "service"
 	events := []string{}
@@ -102,17 +83,18 @@ func TestWindowsRuntimeActionsUseServices(t *testing.T) {
 		t.Fatalf("Status: %v", err)
 	}
 
-	assertEventsContainInOrder(t, events,
-		"Start-Service",
-		"Stop-Service",
-		"Get-CimInstance Win32_Service",
-	)
+	for _, needle := range []string{"Start-Process", "wheelmaker.exe", "wheelmaker-monitor.exe", "wheelmaker-updater.exe", "Stop-Process", "Get-CimInstance Win32_Process"} {
+		assertEventsContainInOrder(t, events, needle)
+	}
 	assertEventsDoNotContain(t, events, "Start-ScheduledTask")
 	assertEventsDoNotContain(t, events, "Stop-ScheduledTask")
 	assertEventsDoNotContain(t, events, "Get-ScheduledTask")
+	assertEventsDoNotContain(t, events, "Start-Service")
+	assertEventsDoNotContain(t, events, "Stop-Service")
+	assertEventsDoNotContain(t, events, "Get-CimInstance Win32_Service")
 }
 
-func TestWindowsAsUserRuntimeActionsUseScheduledTasks(t *testing.T) {
+func TestWindowsAsUserRuntimeActionsUseProcesses(t *testing.T) {
 	h := newDeployHarness(t)
 	h.cfg.RuntimeMode = "asuser"
 	events := []string{}
@@ -129,14 +111,32 @@ func TestWindowsAsUserRuntimeActionsUseScheduledTasks(t *testing.T) {
 		t.Fatalf("Status: %v", err)
 	}
 
-	assertEventsContainInOrder(t, events,
-		"Start-ScheduledTask",
-		"Stop-ScheduledTask",
-		"Get-ScheduledTask",
-	)
+	for _, needle := range []string{"Start-Process", "wheelmaker.exe", "wheelmaker-monitor.exe", "wheelmaker-updater.exe", "Stop-Process", "Get-CimInstance Win32_Process"} {
+		assertEventsContainInOrder(t, events, needle)
+	}
+	assertEventsDoNotContain(t, events, "Start-ScheduledTask")
+	assertEventsDoNotContain(t, events, "Stop-ScheduledTask")
+	assertEventsDoNotContain(t, events, "Get-ScheduledTask")
 	assertEventsDoNotContain(t, events, "Start-Service")
 	assertEventsDoNotContain(t, events, "Stop-Service")
 	assertEventsDoNotContain(t, events, "Get-CimInstance Win32_Service")
+}
+
+func TestWindowsAsUserUpdateStartExcludesUpdaterProcess(t *testing.T) {
+	h := newDeployHarness(t)
+	h.cfg.RuntimeMode = "asuser"
+	events := []string{}
+	runner := testRunner{events: &events}
+	manager := newServiceManager(h.cfg, runner)
+
+	if err := manager.Start(context.Background(), false); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	assertEventsContainInOrder(t, events, "Start-Process")
+	assertEventsContainInOrder(t, events, "wheelmaker.exe")
+	assertEventsContainInOrder(t, events, "wheelmaker-monitor.exe")
+	assertEventsDoNotContain(t, events, "wheelmaker-updater.exe")
 }
 
 func TestWindowsPrepareInstallCleansServicesTasksAndProcesses(t *testing.T) {
@@ -162,6 +162,28 @@ func TestWindowsPrepareInstallCleansServicesTasksAndProcesses(t *testing.T) {
 				assertEventsContainInOrder(t, events, needle)
 			}
 		})
+	}
+}
+
+func TestWindowsPrepareInstallRequiresLegacyRegistrationCleanup(t *testing.T) {
+	script := windowsPrepareInstallScript(windowsRuntimeNames(), windowsRuntimeProcessNames(), `C:\Users\me\.wheelmaker\bin`, true)
+	for _, bad := range []string{
+		"Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction SilentlyContinue",
+		"Stop-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue",
+		"Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue",
+	} {
+		if strings.Contains(script, bad) {
+			t.Fatalf("prepare install script must not hide cleanup failure %q:\n%s", bad, script)
+		}
+	}
+	for _, needle := range []string{
+		"Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction Stop",
+		"Stop-ScheduledTask -TaskName $name -ErrorAction Stop",
+		"Stop-Process -Id $proc.ProcessId -Force -ErrorAction Stop",
+	} {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("prepare install script missing strict cleanup %q:\n%s", needle, script)
+		}
 	}
 }
 
@@ -206,11 +228,10 @@ func TestWindowsUpdatePrepareInstallDoesNotMatchEveryInstallDirProcess(t *testin
 	}
 }
 
-func TestWindowsDeployPrerequisitesRelaunchesUnelevatedServiceWork(t *testing.T) {
+func TestWindowsDeployPrerequisitesRelaunchesUnelevatedLegacyServiceCleanup(t *testing.T) {
 	h := newDeployHarness(t)
-	h.cfg.RuntimeMode = "service"
 	events := []string{}
-	runner := testRunner{events: &events}
+	runner := windowsServiceInstalledRunner{events: &events}
 	manager := newServiceManager(h.cfg, runner)
 
 	oldIsElevated := windowsIsElevated
@@ -234,7 +255,6 @@ func TestWindowsDeployPrerequisitesRelaunchesUnelevatedServiceWork(t *testing.T)
 
 func TestWindowsDeployPrerequisitesSkipsElevationWhenServiceWorkDisabled(t *testing.T) {
 	h := newDeployHarness(t)
-	h.cfg.RuntimeMode = "service"
 	h.cfg.NoConfig = true
 	h.cfg.NoRestart = true
 	events := []string{}
@@ -337,4 +357,34 @@ func assertWindowsTaskConfigureContains(t *testing.T, events []string, taskName 
 		return
 	}
 	t.Fatalf("missing task configure event for %s in %#v", taskName, events)
+}
+
+func assertWindowsHKCURunConfigureContains(t *testing.T, events []string, valueName string, needles ...string) {
+	t.Helper()
+	prefix := "powershell -NoProfile -ExecutionPolicy Bypass -Command "
+	for _, event := range events {
+		if !strings.Contains(event, prefix) || !strings.Contains(event, valueName) || !strings.Contains(event, "Set-ItemProperty") {
+			continue
+		}
+		for _, needle := range needles {
+			if !strings.Contains(event, needle) {
+				t.Fatalf("HKCU Run configure for %s missing %q:\n%s", valueName, needle, event)
+			}
+		}
+		return
+	}
+	t.Fatalf("missing HKCU Run configure event for %s in %#v", valueName, events)
+}
+
+type windowsServiceInstalledRunner struct {
+	events *[]string
+}
+
+func (r windowsServiceInstalledRunner) Run(_ context.Context, dir string, name string, args ...string) (string, error) {
+	line := name + " " + strings.Join(args, " ")
+	*r.events = append(*r.events, dir+"|"+line)
+	if name == "powershell" && strings.Contains(strings.Join(args, " "), "Get-Service -Name") {
+		return "true", nil
+	}
+	return "", nil
 }

@@ -169,7 +169,7 @@ The updater process remains the parent scheduler and is not stopped or replaced.
 8. Write `~/.wheelmaker/release.json`.
 9. Start hub and monitor unless `--no-restart`.
 
-`update` never touches updater binaries or updater service configuration.
+`update` never touches updater binaries or updater startup configuration.
 
 ## Install Rules
 
@@ -244,23 +244,25 @@ status.sh   -> bin/wheelmaker-deploy service status
 
 The new flow does not install copied refresh scripts.
 
-## Platform Services
+## Platform Runtime Registration
 
 ### Windows
 
-`deploy` configures Windows services:
+`deploy` configures current-user startup with HKCU Run values:
 
 - `WheelMaker`
 - `WheelMakerMonitor`
 - `WheelMakerUpdater`
 
-Updater service arguments include:
+Before writing HKCU startup values, Windows deploy cleanup must remove legacy `WheelMaker*` Windows Services and Scheduled Tasks. Cleanup is a hard gate: if a legacy service or task cannot be removed, deploy fails before continuing. The deploy CLI may relaunch elevated when legacy service cleanup requires administrator rights.
+
+Updater HKCU arguments include:
 
 ```text
---repo <repo> --install-dir <bin> --time <HH:mm>
+--repo <repo> --install-dir <bin> --time <HH:mm> --runtime asuser
 ```
 
-`wheelmaker-deploy deploy` detects missing elevation for service configuration and returns an actionable error.
+`update` and `bootstrap-update` do not replace or stop `WheelMakerUpdater`; they only restart Hub and Monitor after installing updated binaries.
 
 ### macOS
 

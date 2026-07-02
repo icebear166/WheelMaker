@@ -48,7 +48,7 @@ Requirements:
 - **Node.js 22.11+**
 - `git`
 - `npm`
-- Windows will request UAC elevation from `wheelmaker-deploy` when service work is needed
+- Windows will request UAC elevation from `wheelmaker-deploy` when legacy Service or Scheduled Task cleanup needs it
 - `launchctl` on macOS, or `systemctl --user` on Linux
 - on Linux, lingering enabled for the deploy user:
 
@@ -66,11 +66,11 @@ deploy.bat
 bash deploy.sh
 ```
 
-`deploy.bat` and `deploy.sh` only prepare the bootstrap environment: when Go and the deploy source are available they refresh the temporary `wheelmaker-deploy` CLI under `~/.wheelmaker/build/bootstrap`; otherwise they reuse an existing bootstrap CLI and fail clearly if none exists. All deploy flow, service setup, elevation, and platform differences live in `wheelmaker-deploy`.
+`deploy.bat` and `deploy.sh` only prepare the bootstrap environment: when Go and the deploy source are available they refresh the temporary `wheelmaker-deploy` CLI under `~/.wheelmaker/build/bootstrap`; otherwise they reuse an existing bootstrap CLI and fail clearly if none exists. All deploy flow, runtime setup, elevation, and platform differences live in `wheelmaker-deploy`.
 
-On Windows, the deploy CLI configures server-mode Windows Services. First-time service creation may prompt for the current account password so the services can run under that account and start after reboot without an interactive login.
+On Windows, the deploy CLI configures current-user startup through `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. Before writing HKCU startup entries, deploy must fully remove old `WheelMaker*` Windows Services and Scheduled Tasks; if that cleanup requires admin rights, the deploy CLI prompts for UAC and stops on cleanup failure.
 
-After the initial service setup, request an updater-driven update and Web publish without recreating service files:
+After the initial runtime setup, request an updater-driven update and Web publish without recreating startup entries:
 
 ```bat
 update-publish.bat
@@ -86,16 +86,16 @@ The deploy CLI flow will:
 - run `npm ci --include=dev` for the Web app before Web publish
 - build `wheelmaker`, `wheelmaker-monitor`, `wheelmaker-updater`, and `wheelmaker-deploy`
 - publish the Web UI to `~/.wheelmaker/web`
-- stop services before replacing binaries
+- stop managed runtime processes before replacing binaries and remove legacy Windows Services/Scheduled Tasks during Windows deploy cleanup
 - install binaries to `~/.wheelmaker/bin`
 - preserve an existing `~/.wheelmaker/config.json`, or create a runnable default for this WheelMaker checkout with the registry listening locally
 - generate platform-specific `start`, `stop`, `restart`, and `status` wrapper scripts under `~/.wheelmaker`
-- register or update services:
-  - Windows: `WheelMaker`, `WheelMakerMonitor`, `WheelMakerUpdater`
+- register or update startup entries/services:
+  - Windows: HKCU Run values `WheelMaker`, `WheelMakerMonitor`, `WheelMakerUpdater`
   - macOS: `com.wheelmaker.hub`, `com.wheelmaker.monitor`, `com.wheelmaker.updater`
   - Linux: `wheelmaker-hub.service`, `wheelmaker-monitor.service`, `wheelmaker-updater.service`
 - write `~/.wheelmaker/release.json` with the published Git SHA
-- start services
+- start managed runtime processes/services
 - clean regenerable deploy artifacts and stale entry scripts: Android JVM probe builds, `~/.wheelmaker/cache/go-build`, `~/.wheelmaker/tmp`, root `web-dev*.log`, old `~/.wheelmaker/logs/<timestamp>` backups beyond the latest 3, legacy `refresh_server.*` copies, and helper wrappers for the other platform family
 
 Lifecycle commands after deployment on Windows:
@@ -430,7 +430,7 @@ macOS/Linux:
 Default deploy flow:
 
 ```text
-pull -> npm ci -> build -> publish web -> stop -> install -> config -> write release manifest -> start
+pull -> npm ci -> build -> publish web -> prepare install -> install -> config -> write release manifest -> start
 ```
 
 Common deploy flags:
