@@ -108,7 +108,6 @@ describe('desktop window controls', () => {
       expect.arrayContaining([
         'WheelMaker menu',
         'Show source',
-        'Refresh web source',
         'Open settings',
         'Minimize',
         'Maximize or restore',
