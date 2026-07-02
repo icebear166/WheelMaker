@@ -43,6 +43,7 @@ func TestWindowsAsUserConfiguresLogonTasksAndRemovesServices(t *testing.T) {
 	assertWindowsTaskConfigureContains(t, events, windowsHubService, "Register-ScheduledTask", "New-ScheduledTaskPrincipal", "AtLogOn", "Interactive", "-RunLevel Limited", "-d", "--dir", stateDir)
 	assertWindowsTaskConfigureContains(t, events, windowsMonitorService, "Register-ScheduledTask", "New-ScheduledTaskPrincipal", "AtLogOn", "Interactive", "-RunLevel Limited", "--dir", stateDir)
 	assertWindowsTaskConfigureContains(t, events, windowsUpdaterService, "Register-ScheduledTask", "New-ScheduledTaskPrincipal", "AtLogOn", "Interactive", "-RunLevel Limited", "--repo", h.cfg.RepoRoot, "--install-dir", h.cfg.InstallDir, "--runtime", "asuser")
+	assertWindowsTaskConfigureContains(t, events, windowsUpdaterService, "New-ScheduledTaskSettingsSet", "ExecutionTimeLimit", "New-TimeSpan -Seconds 0")
 	assertEventsContainInOrder(t, events, "Stop-Service")
 	assertEventsContainInOrder(t, events, "sc.exe delete")
 	assertEventsDoNotContain(t, events, "Get-Credential")
@@ -181,6 +182,27 @@ func TestWindowsPrepareInstallFindsRuntimeProcessesByInstallPath(t *testing.T) {
 	needle := "($processNames -contains $_.Name) -or (Test-WheelMakerInstallProcess $_)"
 	if !strings.Contains(script, needle) {
 		t.Fatalf("prepare install script should match processes by install path for short 8.3 names, missing %q:\n%s", needle, script)
+	}
+}
+
+func TestWindowsUpdatePrepareInstallDoesNotMatchEveryInstallDirProcess(t *testing.T) {
+	script := windowsPrepareInstallScript(
+		[]string{windowsHubService, windowsMonitorService},
+		[]string{"wheelmaker.exe", "wheelmaker-monitor.exe"},
+		`C:\Users\me\.wheelmaker\bin`,
+		false,
+	)
+	forbidden := "return -not [string]::IsNullOrWhiteSpace($cmd) -and $cmd.ToLowerInvariant().Contains($install)"
+	if strings.Contains(script, forbidden) {
+		t.Fatalf("update prepare install must not stop updater/deploy processes only because they run from install dir:\n%s", script)
+	}
+	for _, needle := range []string{
+		"Test-WheelMakerTargetProcessPath $exe",
+		"$cmdLower.Contains($install + $targetProcessName)",
+	} {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("prepare install script missing selected process guard %q:\n%s", needle, script)
+		}
 	}
 }
 

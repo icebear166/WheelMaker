@@ -374,7 +374,8 @@ foreach ($definition in $definitions) {
   $action = New-ScheduledTaskAction @actionArgs
   $trigger = New-ScheduledTaskTrigger -AtLogOn -User $currentUser
   $principal = New-ScheduledTaskPrincipal -UserId $currentUser -LogonType Interactive -RunLevel Limited
-  Register-ScheduledTask -TaskName $definition.Name -Action $action -Trigger $trigger -Principal $principal -Description $definition.DisplayName -Force | Out-Null
+  $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Seconds 0)
+  Register-ScheduledTask -TaskName $definition.Name -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description $definition.DisplayName -Force | Out-Null
 }`, defs.String(), allNames)
 
 	if _, err := m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script); err != nil {
@@ -481,8 +482,17 @@ func windowsPrepareInstallScript(serviceNames []string, processNames []string, i
 	return fmt.Sprintf(`$ErrorActionPreference = 'Stop'
 $names = %s
 $processNames = %s
+$targetProcessNames = @($processNames | ForEach-Object { ([string]$_).ToLowerInvariant() })
 $installDir = %s
 $deleteRegistrations = %s
+
+function Test-WheelMakerTargetProcessPath([string]$path) {
+  if ([string]::IsNullOrWhiteSpace($path)) {
+    return $false
+  }
+  $image = [System.IO.Path]::GetFileName($path).ToLowerInvariant()
+  return $targetProcessNames -contains $image
+}
 
 function Test-WheelMakerInstallProcess($process) {
   $install = [string]$installDir
@@ -492,13 +502,22 @@ function Test-WheelMakerInstallProcess($process) {
   $install = ($install.TrimEnd('\') + '\').ToLowerInvariant()
   $exe = [string]$process.ExecutablePath
   if (-not [string]::IsNullOrWhiteSpace($exe) -and $exe.ToLowerInvariant().StartsWith($install)) {
-    return $true
+    return Test-WheelMakerTargetProcessPath $exe
   }
   $cmd = [string]$process.CommandLine
   if ([string]::IsNullOrWhiteSpace($exe) -and [string]::IsNullOrWhiteSpace($cmd)) {
     return $processNames -contains $process.Name
   }
-  return -not [string]::IsNullOrWhiteSpace($cmd) -and $cmd.ToLowerInvariant().Contains($install)
+  if ([string]::IsNullOrWhiteSpace($cmd)) {
+    return $false
+  }
+  $cmdLower = $cmd.ToLowerInvariant()
+  foreach ($targetProcessName in $targetProcessNames) {
+    if ($cmdLower.Contains($install + $targetProcessName)) {
+      return $true
+    }
+  }
+  return $false
 }
 
 function Remove-WheelMakerService([string]$name) {
