@@ -4,7 +4,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -253,9 +252,9 @@ func TestWindowsDeployPrerequisitesDoesNotRelaunchForLegacyCleanup(t *testing.T)
 	assertEventsDoNotContain(t, events, "relaunch elevated")
 }
 
-func TestWindowsPrepareInstallRunsLegacyCleanupElevatedAndContinuesUnelevated(t *testing.T) {
+func TestWindowsPrepareInstallRunsLegacyCleanupElevatedBeforeUnelevatedWork(t *testing.T) {
 	h := newDeployHarness(t)
-	runner := &windowsLegacyCleanupNeedsElevationRunner{}
+	runner := &windowsLegacyCleanupOrderRunner{}
 	manager := newServiceManager(h.cfg, runner)
 
 	oldIsElevated := windowsIsElevated
@@ -268,11 +267,43 @@ func TestWindowsPrepareInstallRunsLegacyCleanupElevatedAndContinuesUnelevated(t 
 		t.Fatalf("PrepareInstall: %v", err)
 	}
 
-	assertEventsContainInOrder(t, runner.events, "-Verb RunAs")
-	assertEventsContainInOrder(t, runner.events, "Stop-Process")
-	if runner.normalPrepareAttempts != 2 {
-		t.Fatalf("normal prepare attempts=%d, want first failure and retry after elevated cleanup; events=%#v", runner.normalPrepareAttempts, runner.events)
+	if runner.elevatedPrepareAttempts != 1 {
+		t.Fatalf("elevated prepare attempts=%d, want 1; events=%#v", runner.elevatedPrepareAttempts, runner.events)
 	}
+	if runner.normalPrepareAttempts != 0 {
+		t.Fatalf("normal prepare attempts=%d, want legacy cleanup to run only in elevated child; events=%#v", runner.normalPrepareAttempts, runner.events)
+	}
+	assertEventsContainInOrder(t, runner.events, "-Verb RunAs")
+	assertEventsContainInOrder(t, runner.events, "wheelmaker-updater.exe")
+}
+
+func TestWindowsUpdatePrepareInstallDoesNotElevateOrStopUpdater(t *testing.T) {
+	h := newDeployHarness(t)
+	h.cfg.NoConfig = true
+	runner := &windowsLegacyCleanupOrderRunner{}
+	manager := newServiceManager(h.cfg, runner)
+
+	oldIsElevated := windowsIsElevated
+	t.Cleanup(func() {
+		windowsIsElevated = oldIsElevated
+	})
+	windowsIsElevated = func() (bool, error) {
+		t.Fatal("windowsIsElevated should not be called for update/no-config cleanup")
+		return false, nil
+	}
+
+	if err := manager.PrepareInstall(context.Background(), false); err != nil {
+		t.Fatalf("PrepareInstall: %v", err)
+	}
+
+	if runner.elevatedPrepareAttempts != 0 {
+		t.Fatalf("elevated prepare attempts=%d, want 0; events=%#v", runner.elevatedPrepareAttempts, runner.events)
+	}
+	if runner.normalPrepareAttempts != 1 {
+		t.Fatalf("normal prepare attempts=%d, want 1; events=%#v", runner.normalPrepareAttempts, runner.events)
+	}
+	assertEventsDoNotContain(t, runner.events, "-Verb RunAs")
+	assertEventsDoNotContain(t, runner.events, "wheelmaker-updater.exe")
 }
 
 func TestWindowsDeployPrerequisitesSkipsElevationWhenServiceWorkDisabled(t *testing.T) {
@@ -411,23 +442,28 @@ func (r windowsServiceInstalledRunner) Run(_ context.Context, dir string, name s
 	return "", nil
 }
 
-type windowsLegacyCleanupNeedsElevationRunner struct {
-	events                []string
-	normalPrepareAttempts int
+type windowsLegacyCleanupOrderRunner struct {
+	events                  []string
+	normalPrepareAttempts   int
+	elevatedPrepareAttempts int
 }
 
-func (r *windowsLegacyCleanupNeedsElevationRunner) Run(_ context.Context, dir string, name string, args ...string) (string, error) {
+func (r *windowsLegacyCleanupOrderRunner) Run(_ context.Context, dir string, name string, args ...string) (string, error) {
 	line := name + " " + strings.Join(args, " ")
 	r.events = append(r.events, dir+"|"+line)
 	joined := strings.Join(args, " ")
 	if name == "powershell" && strings.Contains(joined, "Get-Service -Name") && strings.Contains(joined, "Get-ScheduledTask -TaskName") && strings.Contains(joined, "Write-Output 'true'") {
 		return "true", nil
 	}
-	if name == "powershell" && strings.Contains(joined, "$deleteRegistrations = $true") && !strings.Contains(joined, "-Verb RunAs") {
-		r.normalPrepareAttempts++
-		if r.normalPrepareAttempts == 1 {
-			return "", errors.New("access denied deleting legacy task")
+	if name == "powershell" && strings.Contains(joined, "$deleteRegistrations = $true") {
+		if strings.Contains(joined, "-Verb RunAs") {
+			r.elevatedPrepareAttempts++
+		} else {
+			r.normalPrepareAttempts++
 		}
+	}
+	if name == "powershell" && strings.Contains(joined, "$deleteRegistrations = $false") {
+		r.normalPrepareAttempts++
 	}
 	return "", nil
 }

@@ -254,7 +254,7 @@ The new flow does not install copied refresh scripts.
 - `WheelMakerMonitor`
 - `WheelMakerUpdater`
 
-Before writing HKCU startup values, Windows deploy cleanup must remove legacy `WheelMaker*` Windows Services and Scheduled Tasks. Cleanup is a hard gate: if a legacy service or task cannot be removed, deploy fails before continuing. When cleanup requires administrator rights, only the cleanup script is relaunched elevated; the main deploy process continues unelevated so HKCU startup values are written for the original user.
+Before writing HKCU startup values, Windows deploy cleanup must remove legacy `WheelMaker*` Windows Services and Scheduled Tasks. Cleanup is a hard gate: if a legacy service or task cannot be removed, deploy fails before continuing. When the main deploy process is not elevated, only the cleanup script is relaunched elevated; the main deploy process continues unelevated so HKCU startup values are written for the original user.
 
 Updater HKCU arguments include:
 

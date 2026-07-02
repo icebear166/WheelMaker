@@ -48,7 +48,7 @@ Requirements:
 - **Node.js 22.11+**
 - `git`
 - `npm`
-- Windows will request UAC elevation from `wheelmaker-deploy` when legacy Service or Scheduled Task cleanup needs it
+- Windows full deploy runs legacy Service and Scheduled Task cleanup in a UAC-elevated child when the main deploy process is not elevated
 - `launchctl` on macOS, or `systemctl --user` on Linux
 - on Linux, lingering enabled for the deploy user:
 
@@ -68,7 +68,7 @@ bash deploy.sh
 
 `deploy.bat` and `deploy.sh` only prepare the bootstrap environment: when Go and the deploy source are available they refresh the temporary `wheelmaker-deploy` CLI under `~/.wheelmaker/build/bootstrap`; otherwise they reuse an existing bootstrap CLI and fail clearly if none exists. All deploy flow, runtime setup, elevation, and platform differences live in `wheelmaker-deploy`.
 
-On Windows, the deploy CLI configures current-user startup through `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. Before writing HKCU startup entries, deploy must fully remove old `WheelMaker*` Windows Services and Scheduled Tasks; if that cleanup requires admin rights, only the cleanup script is relaunched through UAC, then the normal deploy process continues and writes HKCU entries for the original user.
+On Windows, the deploy CLI configures current-user startup through `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. Before writing HKCU startup entries, deploy must fully remove old `WheelMaker*` Windows Services and Scheduled Tasks. When the main deploy process is not elevated, only the cleanup script is relaunched through UAC, then the normal deploy process continues and writes HKCU entries for the original user.
 
 After the initial runtime setup, request an updater-driven update and Web publish without recreating startup entries:
 

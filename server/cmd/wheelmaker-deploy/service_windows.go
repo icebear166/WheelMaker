@@ -102,22 +102,19 @@ func (m serviceManager) PrepareInstall(ctx context.Context, includeUpdater bool)
 		processNames = windowsRuntimeProcessNamesForServices(names)
 	}
 	script := windowsPrepareInstallScript(names, processNames, m.cfg.InstallDir, deleteRegistrations)
-	if _, err := m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script); err != nil {
-		if deleteRegistrations {
-			elevated, elevatedErr := windowsIsElevated()
-			if elevatedErr != nil {
-				return fmt.Errorf("prepare Windows install: %w; detect elevation: %v", err, elevatedErr)
-			}
-			if !elevated {
-				if elevatedCleanupErr := m.runPrepareInstallElevated(ctx, script); elevatedCleanupErr != nil {
-					return fmt.Errorf("prepare Windows install elevated cleanup: %w (original error: %v)", elevatedCleanupErr, err)
-				}
-				if _, retryErr := m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script); retryErr != nil {
-					return fmt.Errorf("prepare Windows install after elevated cleanup: %w", retryErr)
-				}
-				return nil
-			}
+	if deleteRegistrations {
+		elevated, elevatedErr := windowsIsElevated()
+		if elevatedErr != nil {
+			return fmt.Errorf("prepare Windows install detect elevation: %w", elevatedErr)
 		}
+		if !elevated {
+			if err := m.runPrepareInstallElevated(ctx, script); err != nil {
+				return fmt.Errorf("prepare Windows install elevated cleanup: %w", err)
+			}
+			return nil
+		}
+	}
+	if _, err := m.runner.Run(ctx, "", "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script); err != nil {
 		return fmt.Errorf("prepare Windows install: %w", err)
 	}
 	return nil
