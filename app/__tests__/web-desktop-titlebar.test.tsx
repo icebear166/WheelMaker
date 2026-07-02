@@ -1,8 +1,8 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
-import { DesktopTitleBar } from '../web/src/shell/layouts/desktop/DesktopTitleBar';
+import { DesktopWindowControls } from '../web/src/shell/layouts/desktop/DesktopTitleBar';
 
-describe('desktop title bar', () => {
+describe('desktop window controls', () => {
   const originalWindow = (global as typeof globalThis & { window?: unknown }).window;
 
   afterEach(() => {
@@ -14,17 +14,17 @@ describe('desktop title bar', () => {
 
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
     await ReactTestRenderer.act(() => {
-      renderer = ReactTestRenderer.create(<DesktopTitleBar title="WheelMaker" />);
+      renderer = ReactTestRenderer.create(<DesktopWindowControls />);
     });
 
     expect(renderer!.toJSON()).toBeNull();
   });
 
-  test('renders source selector in the title text position when a remote URL is available', async () => {
-    const startDrag = jest.fn();
+  test('renders frameless controls with menu, source panel, and window actions', async () => {
     const minimize = jest.fn();
     const toggleMaximize = jest.fn();
     const close = jest.fn();
+    const onSettingsSelect = jest.fn();
     const getWebSourceState = jest.fn(async () => ({
       preference: 'auto',
       actualSource: 'remote',
@@ -46,7 +46,6 @@ describe('desktop title bar', () => {
       location: {reload},
       WheelMakerDesktop: {
         enabled: true,
-        startDrag,
         minimize,
         toggleMaximize,
         close,
@@ -57,105 +56,76 @@ describe('desktop title bar', () => {
 
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
     await ReactTestRenderer.act(async () => {
-      renderer = ReactTestRenderer.create(<DesktopTitleBar title="WheelMaker" />);
+      renderer = ReactTestRenderer.create(<DesktopWindowControls onSettingsSelect={onSettingsSelect} />);
     });
 
     const root = renderer!.root;
-    expect(root.findByProps({'data-desktop-titlebar': true})).toBeDefined();
-    expect(root.findAllByType('img')).toHaveLength(0);
-    expect(root.findByProps({className: 'desktop-titlebar-icon'}).type).toBe('svg');
-    expect(root.findAllByProps({className: 'desktop-titlebar-title'})).toHaveLength(0);
-    expect(root.findByProps({className: 'desktop-titlebar-app-title'}).props.children).toBe('WheelMaker - ');
-    expect(root.findAllByProps({className: 'desktop-titlebar-source-select'})).toHaveLength(0);
-    const sourceControl = root.findByProps({className: 'desktop-titlebar-source-control'});
-    expect(sourceControl.props['data-desktop-titlebar-source-root']).toBe(true);
-    const sourceButton = root.findByProps({className: 'desktop-titlebar-source-button'});
-    expect(sourceButton.props['data-desktop-titlebar-interactive']).toBe(true);
-    expect(sourceButton.props.title).toBe('https://example.com/');
-    expect(sourceButton.props.children).toBe('example.com');
-    expect(sourceButton.props['aria-expanded']).toBe(false);
-    const sourceRefreshButton = root.findByProps({className: 'desktop-titlebar-source-refresh'});
-    expect(sourceRefreshButton.props['aria-label']).toBe('Refresh web source');
-    expect(sourceRefreshButton.props.title).toBe('Refresh web source');
-    expect(sourceRefreshButton.props['data-desktop-titlebar-interactive']).toBe(true);
-    expect(sourceRefreshButton.findByProps({className: 'codicon codicon-refresh'})).toBeDefined();
+    expect(root.findByProps({'data-desktop-window-controls': true})).toBeDefined();
+    expect(root.findAllByProps({'data-desktop-titlebar': true})).toHaveLength(0);
+    expect(root.findByProps({className: 'desktop-window-menu-button'}).findByProps({className: 'desktop-titlebar-icon'})).toBeDefined();
+    expect(root.findAllByProps({className: 'desktop-titlebar-title-group'})).toHaveLength(0);
+
+    const menuButton = root.findByProps({className: 'desktop-window-menu-button'});
+    expect(menuButton.props['aria-expanded']).toBe(false);
     await ReactTestRenderer.act(async () => {
-      sourceRefreshButton.props.onClick();
+      menuButton.props.onClick();
     });
+    expect(root.findByProps({className: 'desktop-window-menu'}).props.role).toBe('menu');
+
+    const menuItems = root.findAllByProps({className: 'desktop-window-menu-item'});
+    expect(menuItems.map(item => item.props.children).flat().filter(Boolean).join(' ')).toContain('显示来源');
+    expect(menuItems.map(item => item.props.children).flat().filter(Boolean).join(' ')).toContain('设置');
+
+    await ReactTestRenderer.act(async () => {
+      menuItems[0].props.onClick();
+    });
+    expect(root.findByProps({className: 'desktop-window-source-panel'})).toBeDefined();
+    expect(root.findByProps({className: 'desktop-window-source-current'}).props.title).toBe('https://example.com/');
+    const sourceRefreshButton = root.findByProps({className: 'desktop-window-source-refresh'});
+    sourceRefreshButton.props.onClick();
     expect(reload).toHaveBeenCalledTimes(1);
+
+    const sourceItems = root.findAllByProps({className: 'desktop-window-source-choice'});
+    expect(sourceItems.map(item => item.props.children)).toEqual(['example.com', 'Embedded']);
     await ReactTestRenderer.act(async () => {
-      sourceButton.props.onClick();
-    });
-    expect(sourceControl.findByProps({className: 'desktop-titlebar-source-menu'}).props.role).toBe('menu');
-    const menuItems = root.findAllByProps({className: 'desktop-titlebar-source-menu-item'});
-    expect(menuItems.map(item => item.props.children)).toEqual([
-      'example.com',
-      'Embedded',
-    ]);
-    await ReactTestRenderer.act(async () => {
-      await menuItems[1].props.onClick();
+      await sourceItems[1].props.onClick();
     });
     expect(setWebSourcePreference).toHaveBeenCalledWith('embedded');
     expect(reload).toHaveBeenCalledTimes(2);
 
-    const dragRegion = root.findByProps({'data-desktop-titlebar-drag-region': true});
-    expect(root.findByProps({className: 'desktop-titlebar-controls'}).findAllByType('select')).toHaveLength(0);
-    expect(root.findByProps({className: 'desktop-titlebar-controls'}).findAllByProps({className: 'desktop-titlebar-source-button'})).toHaveLength(0);
-    expect(dragRegion.props.onPointerDown).toBeUndefined();
-    const preventDefault = jest.fn();
-    dragRegion.props.onMouseDown({
-      button: 0,
-      detail: 1,
-      target: { closest: () => null },
-      preventDefault,
+    await ReactTestRenderer.act(async () => {
+      menuButton.props.onClick();
     });
-    expect(preventDefault).toHaveBeenCalled();
-    expect(startDrag).toHaveBeenCalled();
-    const sourceMouseDownPreventDefault = jest.fn();
-    dragRegion.props.onMouseDown({
-      button: 0,
-      detail: 1,
-      target: { closest: (selector: string) => selector.includes('[data-desktop-titlebar-interactive]') ? {} : null },
-      preventDefault: sourceMouseDownPreventDefault,
-    });
-    expect(sourceMouseDownPreventDefault).not.toHaveBeenCalled();
-    expect(startDrag).toHaveBeenCalledTimes(1);
-    dragRegion.props.onDoubleClick({
-      target: { closest: (selector: string) => selector.includes('[data-desktop-titlebar-interactive]') ? {} : null },
-    });
-    expect(toggleMaximize).not.toHaveBeenCalled();
-    dragRegion.props.onDoubleClick({ target: { closest: () => null } });
-    expect(toggleMaximize).toHaveBeenCalledTimes(1);
-    const doubleClickPreventDefault = jest.fn();
-    dragRegion.props.onMouseDown({
-      button: 0,
-      detail: 2,
-      target: { closest: () => null },
-      preventDefault: doubleClickPreventDefault,
-    });
-    expect(doubleClickPreventDefault).toHaveBeenCalled();
-    expect(startDrag).toHaveBeenCalledTimes(1);
-    expect(toggleMaximize).toHaveBeenCalledTimes(2);
-    dragRegion.props.onDoubleClick({ target: { closest: () => null } });
-    expect(toggleMaximize).toHaveBeenCalledTimes(2);
+    const settingsItem = root.findAllByProps({className: 'desktop-window-menu-item'}).find(item =>
+      item.props['aria-label'] === 'Open settings',
+    );
+    expect(settingsItem).toBeDefined();
+    settingsItem!.props.onClick();
+    expect(onSettingsSelect).toHaveBeenCalledTimes(1);
 
     const buttons = root.findAllByType('button');
-    expect(buttons.map(button => button.props['aria-label'])).toEqual([
-      'Minimize',
-      'Maximize or restore',
-      'Close',
-    ]);
+    expect(buttons.map(button => button.props['aria-label']).filter(Boolean)).toEqual(
+      expect.arrayContaining([
+        'WheelMaker menu',
+        'Show source',
+        'Refresh web source',
+        'Open settings',
+        'Minimize',
+        'Maximize or restore',
+        'Close',
+      ]),
+    );
 
-    buttons[0].props.onClick();
-    buttons[1].props.onClick();
-    buttons[2].props.onClick();
+    root.findByProps({'aria-label': 'Minimize'}).props.onClick();
+    root.findByProps({'aria-label': 'Maximize or restore'}).props.onClick();
+    root.findByProps({'aria-label': 'Close'}).props.onClick();
 
     expect(minimize).toHaveBeenCalled();
-    expect(toggleMaximize).toHaveBeenCalledTimes(3);
+    expect(toggleMaximize).toHaveBeenCalled();
     expect(close).toHaveBeenCalled();
   });
 
-  test('renders plain embedded title text when no remote URL is available', async () => {
+  test('renders plain embedded source text when no remote URL is available', async () => {
     const getWebSourceState = jest.fn(async () => ({
       preference: 'auto',
       actualSource: 'embedded',
@@ -173,14 +143,19 @@ describe('desktop title bar', () => {
 
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
     await ReactTestRenderer.act(async () => {
-      renderer = ReactTestRenderer.create(<DesktopTitleBar title="WheelMaker" />);
+      renderer = ReactTestRenderer.create(<DesktopWindowControls />);
     });
 
     const root = renderer!.root;
-    expect(root.findByProps({className: 'desktop-titlebar-app-title'}).props.children).toBe('WheelMaker - ');
-    expect(root.findByProps({className: 'desktop-titlebar-source-label'}).props.children).toBe('Embedded');
-    expect(root.findAllByProps({className: 'desktop-titlebar-source-select'})).toHaveLength(0);
-    expect(root.findAllByProps({className: 'desktop-titlebar-source-button'})).toHaveLength(0);
-    expect(root.findAllByProps({className: 'desktop-titlebar-source-refresh'})).toHaveLength(0);
+    await ReactTestRenderer.act(async () => {
+      root.findByProps({className: 'desktop-window-menu-button'}).props.onClick();
+    });
+    await ReactTestRenderer.act(async () => {
+      root.findByProps({className: 'desktop-window-menu-item'}).props.onClick();
+    });
+
+    expect(root.findByProps({className: 'desktop-window-source-current'}).props.children).toBe('Embedded');
+    expect(root.findAllByProps({className: 'desktop-window-source-choice'})).toHaveLength(0);
+    expect(root.findAllByProps({className: 'desktop-window-source-refresh'})).toHaveLength(0);
   });
 });
