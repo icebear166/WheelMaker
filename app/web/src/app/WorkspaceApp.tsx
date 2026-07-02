@@ -7208,23 +7208,6 @@ export function App() {
     }
     openSettingsChild(detail);
   }, [openSettingsChild, openSettingsPeer]);
-  const handleDesktopActivitySelect = useCallback((nextTab: Tab) => {
-    if (sidebarSettingsOpen) {
-      setSidebarSettingsOpen(false);
-      setSettingsDetailView(null);
-      if (nextTab !== tab) {
-        setTab(nextTab);
-      }
-      setSidebarCollapsed(false);
-      return;
-    }
-    if (nextTab === tab) {
-      setSidebarCollapsed(value => !value);
-      return;
-    }
-    setTab(nextTab);
-    setSidebarCollapsed(false);
-  }, [sidebarSettingsOpen, tab, setSidebarSettingsOpen, setSidebarCollapsed, setTab]);
   const handleDesktopSettingsSelect = useCallback(() => {
     if (sidebarSettingsOpen && settingsDetailView === null) {
       closeSettingsPanel();
@@ -7232,6 +7215,13 @@ export function App() {
     }
     openSettingsRoot();
   }, [closeSettingsPanel, openSettingsRoot, sidebarSettingsOpen, settingsDetailView]);
+  useEffect(() => {
+    if (!isWide || tab === 'chat') {
+      return;
+    }
+    setTab('chat');
+    setSidebarCollapsed(false);
+  }, [isWide, setSidebarCollapsed, setTab, tab]);
   const handlePortRelayFloatingPointerDown = useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
       event.stopPropagation();
@@ -18985,105 +18975,6 @@ export function App() {
   ) : (
     <span className="codicon codicon-refresh" />
   );
-  const isShortcutSettingsDetailActive = sidebarSettingsOpen && isSettingsPeerDetail(settingsDetailView);
-
-  const desktopActivityBar = isWide ? (
-    <nav className="desktop-activity-bar" aria-label="Workspace navigation">
-      <div className="desktop-activity-primary">
-        <button
-          type="button"
-          className={`desktop-activity-button${tab === 'chat' && !sidebarSettingsOpen ? ' active' : ''}`}
-          onClick={() => handleDesktopActivitySelect('chat')}
-          title="Chat"
-          aria-label="Chat"
-        >
-          <span className="codicon codicon-comment-discussion" />
-          {hasCompletedUnreadChatSessionIndicator ? (
-            <span className="desktop-activity-unread-dot" aria-hidden="true" />
-          ) : null}
-        </button>
-        <button
-          type="button"
-          className={`desktop-activity-button${tab === 'file' && !sidebarSettingsOpen ? ' active' : ''}`}
-          onClick={() => handleDesktopActivitySelect('file')}
-          title="File"
-          aria-label="File"
-        >
-          <span className="codicon codicon-files" />
-        </button>
-        <button
-          type="button"
-          className={`desktop-activity-button${tab === 'git' && !sidebarSettingsOpen ? ' active' : ''}`}
-          onClick={() => handleDesktopActivitySelect('git')}
-          title="Git"
-          aria-label="Git"
-        >
-          <span className="codicon codicon-source-control" />
-        </button>
-      </div>
-      <div className="desktop-activity-secondary">
-        <button
-          type="button"
-          className={`desktop-activity-button refresh-btn${hasPendingProjectUpdates && !refreshingProject && !reconnecting ? ' has-update-badge' : ''}`}
-          onClick={() => refreshProject().catch(() => undefined)}
-          title={reconnecting ? 'Reconnecting...' : 'Refresh project'}
-          aria-label={reconnecting ? 'Reconnecting' : 'Refresh project'}
-          disabled={refreshingProject || reconnecting}
-        >
-          {refreshingProject || reconnecting ? (
-            <span className="codicon codicon-loading codicon-modifier-spin" />
-          ) : (
-            <span className="codicon codicon-refresh" />
-          )}
-        </button>
-        <button
-          type="button"
-          className={`desktop-activity-button${sidebarSettingsOpen && !isShortcutSettingsDetailActive ? ' active' : ''}`}
-          onClick={handleDesktopSettingsSelect}
-          title="Settings"
-          aria-label="Settings"
-        >
-          <span className="codicon codicon-settings-gear" />
-        </button>
-        <button
-          type="button"
-          className={`desktop-activity-button${sidebarSettingsOpen && settingsDetailView === 'update' ? ' active' : ''}`}
-          onClick={() => openSettingsPeer('update')}
-          title="Update"
-          aria-label="Update"
-        >
-          <span className="codicon codicon-cloud-download" />
-        </button>
-        <button
-          type="button"
-          className={`desktop-activity-button${sidebarSettingsOpen && settingsDetailView === 'skills' ? ' active' : ''}`}
-          onClick={() => openSettingsPeer('skills')}
-          title="Skills"
-          aria-label="Skills"
-        >
-          <span className="codicon codicon-extensions" />
-        </button>
-        <button
-          type="button"
-          className={`desktop-activity-button${sidebarSettingsOpen && settingsDetailView === 'portRelay' ? ' active' : ''}`}
-          onClick={handleDesktopPortRelaySelect}
-          title="Port Relay"
-          aria-label="Port Relay"
-        >
-          <span className="codicon codicon-radio-tower" />
-        </button>
-        <button
-          type="button"
-          className={`desktop-activity-button${sidebarSettingsOpen && settingsDetailView === 'tokenStats' ? ' active' : ''}`}
-          onClick={() => openSettingsPeer('tokenStats')}
-          title="Token Stats"
-          aria-label="Token Stats"
-        >
-          <span className="codicon codicon-graph-line" />
-        </button>
-      </div>
-    </nav>
-  ) : null;
 
   const chatQuickSwitchMenuBlockedByPreview = chatPreviewOpen && (chatQuickSwitchMenuPlacement.kind !== 'desktop' || !isWide);
   const chatQuickSwitchMenu = chatQuickSwitchMenuOpen && tab === 'chat' && !sidebarSettingsOpen && !mobilePortRelayFrameOpen && !chatQuickSwitchMenuBlockedByPreview ? (

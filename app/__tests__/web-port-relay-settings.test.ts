@@ -17,7 +17,7 @@ const stylesCss = readWebStyles(root);
 describe('port relay settings UI source structure', () => {
   test('adds Port Relay as a settings detail and mobile shortcut bar entry', () => {
     expect(mainTsx).toContain('type SettingsDetailView = SettingsDetailId | null;');
-    expect(mainTsx).toContain("settingsDetailView === 'portRelay'");
+    expect(mainTsx).toContain("if (detail === 'portRelay') {");
     expect(mainTsx).toContain('renderPortRelaySettingsDetail(options)');
     expect(mainTsx).toContain("setSettingsDetailView('portRelay')");
     expect(mainTsx).not.toContain("renderSettingsSection('More'");
@@ -99,7 +99,7 @@ describe('port relay settings UI source structure', () => {
     expect(mainTsx).toContain("type: 'port-relay'");
     expect(mainTsx).toContain("previewTabId({type: 'port-relay'");
     expect(mainTsx).toContain('const handleDesktopPortRelaySelect = useCallback(() => {');
-    expect(mainTsx).toContain('onClick={handleDesktopPortRelaySelect}');
+    expect(mainTsx).not.toContain('onClick={handleDesktopPortRelaySelect}');
     expect(mainTsx).toContain("import { PortRelayFloatingButton, PortRelayFrameSurface } from '../portRelay/PortRelayFrameSurface';");
     expect(mainTsx).toContain('<PortRelayFrameSurface');
     expect(mainTsx).toContain('mode={mode}');
@@ -169,19 +169,13 @@ describe('port relay settings UI source structure', () => {
     expect(mainTsx).toContain("const refreshPortRelayStatus = useCallback(async (options?: {silent?: boolean}) => {");
   });
 
-  test('places desktop Port Relay shortcut with settings peers after Skills', () => {
-    const activityBarStart = mainTsx.indexOf('const desktopActivityBar = isWide ? (');
-    const activityBarEnd = mainTsx.indexOf('const floatingControlStack = !isWide ? (', activityBarStart);
-    const activityBar = mainTsx.slice(activityBarStart, activityBarEnd);
-    const primaryStart = activityBar.indexOf('className="desktop-activity-primary"');
-    const secondaryStart = activityBar.indexOf('className="desktop-activity-secondary"');
-    const primary = activityBar.slice(primaryStart, secondaryStart);
-    const secondary = activityBar.slice(secondaryStart);
-
-    expect(primary).not.toContain('title="Port Relay"');
-    expect(secondary.indexOf('title="Skills"')).toBeLessThan(secondary.indexOf('title="Port Relay"'));
-    expect(secondary.indexOf('title="Port Relay"')).toBeLessThan(secondary.indexOf('title="Token Stats"'));
-    expect(secondary).toContain('onClick={handleDesktopPortRelaySelect}');
+  test('hides desktop Port Relay shortcut while keeping the settings peer handler', () => {
+    expect(mainTsx).toContain('const handleDesktopPortRelaySelect = useCallback(() => {');
+    expect(mainTsx).toContain("openSettingsPeer('portRelay');");
+    expect(mainTsx).not.toContain('const desktopActivityBar = isWide ? (');
+    expect(mainTsx).not.toContain('className="desktop-activity-bar"');
+    expect(mainTsx).not.toContain('title="Port Relay"');
+    expect(mainTsx).not.toContain('onClick={handleDesktopPortRelaySelect}');
   });
 
   test('turns chat localhost links into relay iframe actions for the current project hub', () => {

@@ -13,7 +13,7 @@ const stylesCss = readWebStyles(root);
 describe('skill management settings UI source structure', () => {
   test('adds Skills as a settings detail and mobile shortcut bar entry', () => {
     expect(mainTsx).toContain('type SettingsDetailView = SettingsDetailId | null;');
-    expect(mainTsx).toContain("settingsDetailView === 'skills'");
+    expect(mainTsx).toContain("if (detail === 'skills') {");
     expect(mainTsx).toContain('renderSkillsSettingsDetail(options)');
     expect(mainTsx).not.toContain("renderSettingsSection('More'");
 
@@ -29,16 +29,14 @@ describe('skill management settings UI source structure', () => {
     expect(settingsSurfaceTsx).toContain('onClick={() => onDetailSelect(shortcut.detail)}');
   });
 
-  test('adds desktop Skills shortcut between Update and Token Stats', () => {
-    const activityBarStart = mainTsx.indexOf('const desktopActivityBar = isWide ? (');
-    const activityBarEnd = mainTsx.indexOf('const floatingControlStack = !isWide ? (', activityBarStart);
-    const activityBar = mainTsx.slice(activityBarStart, activityBarEnd);
-
-    expect(activityBar).toContain('codicon-extensions');
-    expect(activityBar).toContain("openSettingsPeer('skills')");
-    expect(activityBar.indexOf('title="Update"')).toBeLessThan(activityBar.indexOf('title="Skills"'));
-    expect(activityBar.indexOf('title="Skills"')).toBeLessThan(activityBar.indexOf('title="Token Stats"'));
-    expect(activityBar).toContain("settingsDetailView === 'skills'");
+  test('hides desktop Skills shortcut while keeping the settings detail route', () => {
+    expect(mainTsx).toContain('renderSkillsSettingsDetail(options)');
+    expect(mainTsx).toContain("if (detail === 'skills') {");
+    expect(mainTsx).toContain('const desktopWindowControls = isWide ? (');
+    expect(mainTsx).not.toContain('const desktopActivityBar = isWide ? (');
+    expect(mainTsx).not.toContain('className="desktop-activity-bar"');
+    expect(mainTsx).not.toContain('className={`desktop-activity-button${sidebarSettingsOpen && settingsDetailView === \'skills\' ? \' active\' : \'\'}`}');
+    expect(mainTsx).not.toContain('aria-label="Skills"\n        >\n          <span className="codicon codicon-extensions" />');
   });
 
   test('renders Skills detail with controlled command hooks and confirmations', () => {

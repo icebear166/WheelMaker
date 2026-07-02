@@ -10,7 +10,7 @@ describe('agent package update settings UI source structure', () => {
 
     expect(mainTsx).toContain("} from '../settings/settingsNavigation';");
     expect(mainTsx).toContain('type SettingsDetailView = SettingsDetailId | null;');
-    expect(mainTsx).toContain("settingsDetailView === 'update'");
+    expect(mainTsx).toContain("if (detail === 'update') {");
     expect(mainTsx).toContain('renderUpdateSettingsDetail(options)');
     expect(settingsRootTsx).not.toContain("renderSettingsSection('More'");
     expect(settingsRootTsx).not.toContain("renderSettingsSection('Storage'");
@@ -437,43 +437,23 @@ describe('agent package update settings UI source structure', () => {
     expect(stylesCss).toContain('.token-stats-pill-agent-8 { --pill-accent: #4fb86a; }');
   });
 
-  test('adds desktop shortcuts and a mobile Settings-only shortcut bar', () => {
+  test('hides desktop shortcuts and keeps a mobile Settings-only shortcut bar', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const settingsSurfaceTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsSurface.tsx'), 'utf8');
     const stylesCss = readWebStyles(projectRoot);
 
-    const activityBarStart = mainTsx.indexOf('const desktopActivityBar = isWide ? (');
-    const activityBarEnd = mainTsx.indexOf('const floatingControlStack = !isWide ? (', activityBarStart);
-    expect(activityBarStart).toBeGreaterThanOrEqual(0);
-    expect(activityBarEnd).toBeGreaterThan(activityBarStart);
-    const activityBar = mainTsx.slice(activityBarStart, activityBarEnd);
-
-    expect(activityBar).toContain('codicon-cloud-download');
-    expect(activityBar).toContain('codicon-graph-line');
-    expect(activityBar).toContain('codicon-radio-tower');
-    expect(activityBar).toContain("openSettingsPeer('update')");
-    expect(activityBar).toContain("openSettingsPeer('tokenStats')");
-    expect(activityBar).not.toContain("openSettingsPeer('ccSwitch')");
-    expect(activityBar).toContain('handleDesktopPortRelaySelect');
-    expect(activityBar.indexOf("title={reconnecting ? 'Reconnecting...' : 'Refresh project'}")).toBeLessThan(
-      activityBar.indexOf('title="Settings"'),
-    );
-    expect(activityBar.indexOf('title="Settings"')).toBeLessThan(
-      activityBar.indexOf('title="Update"'),
-    );
-    expect(activityBar.indexOf('title="Update"')).toBeLessThan(activityBar.indexOf('title="Skills"'));
-    expect(activityBar.indexOf('title="Skills"')).toBeLessThan(activityBar.indexOf('title="Port Relay"'));
-    expect(activityBar.indexOf('title="Port Relay"')).toBeLessThan(activityBar.indexOf('title="Token Stats"'));
-    expect(activityBar.indexOf('title="Update"')).toBeLessThan(activityBar.indexOf('title="Token Stats"'));
-    expect(activityBar).not.toContain('title="CC Switch"');
-    expect(activityBar).not.toContain('aria-label="CC Switch"');
-    expect(activityBar).toContain("settingsDetailView === 'update'");
-    expect(activityBar).toContain("settingsDetailView === 'tokenStats'");
-    expect(activityBar).toContain("settingsDetailView === 'portRelay'");
-    expect(activityBar).not.toContain("settingsDetailView === 'ccSwitch'");
-    expect(activityBar).toContain("!isShortcutSettingsDetailActive");
-    expect(mainTsx).toContain('const isShortcutSettingsDetailActive = sidebarSettingsOpen && isSettingsPeerDetail(settingsDetailView);');
+    expect(mainTsx).toContain('renderUpdateSettingsDetail(options)');
+    expect(mainTsx).toContain('renderTokenStatsSettingsDetail(options)');
+    expect(mainTsx).toContain('renderSkillsSettingsDetail(options)');
+    expect(mainTsx).toContain("openSettingsPeer('portRelay')");
+    expect(mainTsx).not.toContain("openSettingsPeer('ccSwitch')");
+    expect(mainTsx).toContain('const desktopWindowControls = isWide ? (');
+    expect(mainTsx).not.toContain('const desktopActivityBar = isWide ? (');
+    expect(mainTsx).not.toContain('className="desktop-activity-bar"');
+    expect(mainTsx).not.toContain('const isShortcutSettingsDetailActive = sidebarSettingsOpen && isSettingsPeerDetail(settingsDetailView);');
+    expect(mainTsx).not.toContain('title="CC Switch"');
+    expect(mainTsx).not.toContain('aria-label="CC Switch"');
 
     const floatingStart = mainTsx.indexOf('const floatingControlStack = !isWide ? (');
     const mobileBarStart = mainTsx.indexOf('const mobileSettingsShortcutBar = !isWide && sidebarSettingsOpen ? (', floatingStart);
