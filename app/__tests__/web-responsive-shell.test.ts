@@ -133,7 +133,7 @@ describe('web responsive shell split', () => {
     expect(controlsBlock).toContain('height: 32px;');
     expect(controlsBlock).toContain('background: var(--desktop-top-surface);');
     expect(controlsBlock).not.toContain('border-left:');
-    expect(controlsBlock).not.toContain('border-bottom:');
+    expect(controlsBlock).toContain('border-bottom: 1px solid var(--border);');
     expect(stylesCss).not.toContain('.theme-light .desktop-window-controls {');
 
     expect(stylesCss).toContain('.desktop-window-menu-button {');

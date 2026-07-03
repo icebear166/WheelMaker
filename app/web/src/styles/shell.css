@@ -49,6 +49,7 @@
   justify-content: flex-end;
   color: var(--text);
   background: var(--desktop-top-surface);
+  border-bottom: 1px solid var(--border);
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
