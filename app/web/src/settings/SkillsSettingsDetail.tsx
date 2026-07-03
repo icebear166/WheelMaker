@@ -710,20 +710,35 @@ export function SkillsSettingsDetail({
   };
 
   return (
-    <>
-      {skillsScanning ? (
-        <div className="settings-skills-scan-status" role="status" aria-live="polite">
-          <span className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
-          <span>{skillsScanStatusLabel}</span>
-        </div>
-      ) : null}
-      {skillsError ? (
-        <div className="muted block settings-metadata-error">{skillsError}</div>
-      ) : null}
-      {!skillsScanning && skillHubCards.length === 0 && !skillsError ? (
-        <div className="muted block">No hubs available.</div>
-      ) : null}
+    <div className="settings-skills-page">
+      <div className="settings-skills-fixed-controls">
+        {renderSkillHubPicker()}
+        <a
+          className="settings-skills-marketplace-link"
+          href={SKILLS_MARKETPLACE_URL}
+          target="_blank"
+          rel="noreferrer"
+        >
+          <span className="settings-skills-marketplace-main">
+            <span className="settings-skills-marketplace-label">Marketplace</span>
+            <span className="settings-skills-marketplace-url">{SKILLS_MARKETPLACE_URL}</span>
+          </span>
+          <span className="codicon codicon-link-external" aria-hidden="true" />
+        </a>
+      </div>
       <div className="settings-skills-list">
+        {skillsScanning ? (
+          <div className="settings-skills-scan-status" role="status" aria-live="polite">
+            <span className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
+            <span>{skillsScanStatusLabel}</span>
+          </div>
+        ) : null}
+        {skillsError ? (
+          <div className="muted block settings-metadata-error">{skillsError}</div>
+        ) : null}
+        {!skillsScanning && skillHubCards.length === 0 && !skillsError ? (
+          <div className="muted block">No hubs available.</div>
+        ) : null}
         {activeSkillHub ? (() => {
           const data = activeSkillHub.data;
           const operation = data?.operation ?? null;
@@ -772,23 +787,8 @@ export function SkillsSettingsDetail({
             </section>
           );
         })() : null}
+        {renderSkillDetailPanel()}
       </div>
-      {renderSkillDetailPanel()}
-      <div className="settings-skills-fixed-controls">
-        <a
-          className="settings-skills-marketplace-link"
-          href={SKILLS_MARKETPLACE_URL}
-          target="_blank"
-          rel="noreferrer"
-        >
-          <span className="settings-skills-marketplace-main">
-            <span className="settings-skills-marketplace-label">Marketplace</span>
-            <span className="settings-skills-marketplace-url">{SKILLS_MARKETPLACE_URL}</span>
-          </span>
-          <span className="codicon codicon-link-external" aria-hidden="true" />
-        </a>
-        {renderSkillHubPicker()}
-      </div>
-    </>
+    </div>
   );
 }
