@@ -130,13 +130,13 @@ describe('web responsive shell split', () => {
     expect(stylesCss).toContain('.desktop-window-source-choice {');
 
     const sidebarMenuRootBlock = cssRuleBlock(stylesCss, '.sidebar-title-row .desktop-window-menu-root');
-    expect(sidebarMenuRootBlock).toContain('margin-left: -12px;');
+    expect(sidebarMenuRootBlock).toContain('margin-left: -10px;');
     expect(sidebarMenuRootBlock).toContain('flex-basis: 38px;');
 
     const titlebarIconBlock = cssRuleBlock(stylesCss, '.desktop-titlebar-icon');
-    expect(titlebarIconBlock).toContain('width: 24px;');
-    expect(titlebarIconBlock).toContain('height: 24px;');
-    expect(titlebarIconBlock).toContain('flex: 0 0 24px;');
+    expect(titlebarIconBlock).toContain('width: 22px;');
+    expect(titlebarIconBlock).toContain('height: 22px;');
+    expect(titlebarIconBlock).toContain('flex: 0 0 22px;');
 
     const rightTitleBlock = cssRuleBlock(stylesCss, '.desktop-shell .workspace-right .block-title');
     expect(rightTitleBlock).toContain('padding-right: calc(var(--desktop-window-controls-width) + 10px);');
