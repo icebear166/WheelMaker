@@ -29,7 +29,7 @@ import {
 import { PortRelayFloatingButton, PortRelayFrameSurface } from '../portRelay/PortRelayFrameSurface';
 import { initializePWAFoundation } from '../platform/pwa';
 import {cleanupNativeWebViewPWA} from '../platform/pwa/nativePwaGuard';
-import { DesktopWindowControls } from '../shell/layouts/desktop/DesktopTitleBar';
+import { DesktopDragRegion, DesktopWindowControls, DesktopWindowMenu } from '../shell/layouts/desktop/DesktopTitleBar';
 import {resolveDesktopChatQuickSwitchContextMenu} from '../shell/layouts/desktop/chatQuickSwitchContextMenu';
 import {
   readDesktopWebSourceState,
@@ -16675,10 +16675,10 @@ export function App() {
           </div>
         ) : null}
         {isWide ? (
-          <div className={`sidebar-title-row${chatSidebarTitleSearchOpen ? ' search-open' : ''}`}>
+          <DesktopDragRegion className={`sidebar-title-row${chatSidebarTitleSearchOpen ? ' search-open' : ''}`}>
             {tab === 'chat' && !sidebarSettingsOpen ? (
               <>
-                {!chatSidebarTitleSearchOpen ? <span className="sidebar-title-text">{wideSidebarTitle}</span> : null}
+                {!chatSidebarTitleSearchOpen ? <DesktopWindowMenu /> : null}
                 <div className="chat-sidebar-title-actions">
                   {renderChatHubSummary()}
                   {renderChatArchiveControls(false)}
@@ -16688,7 +16688,7 @@ export function App() {
             ) : (
               <span className="sidebar-title-text">{wideSidebarTitle}</span>
             )}
-          </div>
+          </DesktopDragRegion>
         ) : null}
         <div className="sidebar-scroll">
           {isWide ? wideSidebarMain : mobileSidebarMain}
@@ -17805,7 +17805,7 @@ export function App() {
     if (tab === 'chat') {
       return (
         <ChatSurface>
-          <div className="block-title chat-title-bar">
+          <DesktopDragRegion className="block-title chat-title-bar">
             <div className="chat-title-context">
               {renderChatBreadcrumbTitle()}
             </div>
@@ -17821,7 +17821,7 @@ export function App() {
                 <span className="codicon codicon-layout-sidebar-right" aria-hidden="true" />
               </button>
             </div>
-          </div>
+          </DesktopDragRegion>
           <div
             className={chatMainClassName}
             style={chatMainStyle}
@@ -20207,6 +20207,7 @@ export function App() {
         desktopWindowControls={desktopWindowControls}
         desktopPeek={chatPreviewDesktopPane}
         desktopChatFixedPreview={desktopChatFixedPreview}
+        desktopChatPreviewOpen={isWide && chatPreviewOpen}
         desktopSidebarWidth={effectiveDesktopSidebarWidth}
         floatingControlStack={floatingControlStack}
         floatingControlSide={floatingControlSide}

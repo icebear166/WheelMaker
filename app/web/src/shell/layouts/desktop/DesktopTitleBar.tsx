@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { type ReactNode, useEffect, useRef, useState } from 'react';
 import { getDesktopWindowBridge, type DesktopWebSourceState } from '../../../platform/desktop/desktopRuntime';
 import {
   readDesktopWebSourceState,
@@ -7,6 +7,11 @@ import {
 
 type DesktopWindowControlsProps = {
   onSettingsSelect?: () => void;
+};
+
+type DesktopDragRegionProps = {
+  className: string;
+  children: ReactNode;
 };
 
 type DesktopSourcePreference = 'auto' | 'embedded';
@@ -19,6 +24,12 @@ function isDesktopWindowControlsTarget(target: EventTarget | null) {
   const targetElement = target as { closest?: (selector: string) => Element | null } | null;
   return typeof targetElement?.closest === 'function'
     && Boolean(targetElement.closest('[data-desktop-window-menu-root]'));
+}
+
+function isDesktopDragInteractiveTarget(target: EventTarget | null) {
+  const targetElement = target as { closest?: (selector: string) => Element | null } | null;
+  return typeof targetElement?.closest === 'function'
+    && Boolean(targetElement.closest('button, select, input, textarea, [contenteditable="true"], [role="dialog"], [data-desktop-window-interactive]'));
 }
 
 function DesktopTitleBarIcon() {
@@ -126,7 +137,51 @@ function DesktopTitleBarIcon() {
   );
 }
 
-export function DesktopWindowControls({ onSettingsSelect }: DesktopWindowControlsProps) {
+export function DesktopDragRegion({ className, children }: DesktopDragRegionProps) {
+  const bridge = getDesktopWindowBridge();
+  const suppressNextDoubleClickRef = useRef(false);
+
+  const handleMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!bridge || event.button !== 0) {
+      return;
+    }
+    if (isDesktopDragInteractiveTarget(event.target)) {
+      return;
+    }
+    event.preventDefault();
+    if (event.detail >= 2) {
+      suppressNextDoubleClickRef.current = true;
+      invokeDesktopAction(bridge.toggleMaximize);
+      return;
+    }
+    invokeDesktopAction(bridge.startDrag);
+  };
+
+  const handleDoubleClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!bridge || isDesktopDragInteractiveTarget(event.target)) {
+      suppressNextDoubleClickRef.current = false;
+      return;
+    }
+    if (suppressNextDoubleClickRef.current) {
+      suppressNextDoubleClickRef.current = false;
+      return;
+    }
+    invokeDesktopAction(bridge.toggleMaximize);
+  };
+
+  return (
+    <div
+      className={`${className} desktop-drag-region`}
+      data-desktop-drag-region={true}
+      onMouseDown={handleMouseDown}
+      onDoubleClick={handleDoubleClick}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function DesktopWindowMenu() {
   const bridge = getDesktopWindowBridge();
   const [webSourceState, setWebSourceState] = useState<DesktopWebSourceState | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -184,102 +239,106 @@ export function DesktopWindowControls({ onSettingsSelect }: DesktopWindowControl
     window.location.reload();
   };
 
-  const handleSettingsSelect = () => {
-    setMenuOpen(false);
-    setSourcePanelOpen(false);
-    onSettingsSelect?.();
-  };
+  return (
+    <div className="desktop-window-menu-root" data-desktop-window-menu-root={true}>
+      <button
+        type="button"
+        className="desktop-window-menu-button"
+        aria-label="WheelMaker menu"
+        title="WheelMaker"
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        onClick={() => {
+          setMenuOpen(open => {
+            if (open) {
+              setSourcePanelOpen(false);
+            }
+            return !open;
+          });
+        }}
+      >
+        <DesktopTitleBarIcon />
+      </button>
+      {menuOpen ? (
+        <div className="desktop-window-menu" role="menu">
+          <button
+            type="button"
+            className="desktop-window-menu-item"
+            role="menuitem"
+            aria-label="Show source"
+            aria-expanded={sourcePanelOpen}
+            onClick={() => setSourcePanelOpen(open => !open)}
+          >
+            <span className="codicon codicon-server-process" aria-hidden="true" />
+            显示来源
+            <span className={`codicon ${sourcePanelOpen ? 'codicon-chevron-up' : 'codicon-chevron-down'}`} aria-hidden="true" />
+          </button>
+          {sourcePanelOpen && webSourceState ? (
+            <div className="desktop-window-source-panel">
+              <div className="desktop-window-source-current" title={sourceTitle}>
+                {actualSourceLabel}
+              </div>
+              {hasRemoteWebSource ? (
+                <>
+                  <button
+                    type="button"
+                    className="desktop-window-source-refresh"
+                    aria-label="Refresh web source"
+                    title="Refresh web source"
+                    onClick={handleWebSourceRefresh}
+                  >
+                    <span className="codicon codicon-refresh" aria-hidden="true" />
+                    <span>Refresh</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="desktop-window-source-choice"
+                    role="menuitemradio"
+                    aria-checked={webSourceState.preference === 'auto'}
+                    title={webSourceState.remoteUrl}
+                    onClick={() => void handleWebSourcePreferenceSelect('auto')}
+                  >
+                    {remoteSourceLabel}
+                  </button>
+                  <button
+                    type="button"
+                    className="desktop-window-source-choice"
+                    role="menuitemradio"
+                    aria-checked={webSourceState.preference === 'embedded'}
+                    onClick={() => void handleWebSourcePreferenceSelect('embedded')}
+                  >
+                    Embedded
+                  </button>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function DesktopWindowControls({ onSettingsSelect }: DesktopWindowControlsProps) {
+  const bridge = getDesktopWindowBridge();
+
+  if (!bridge) {
+    return null;
+  }
 
   return (
     <div className="desktop-window-controls" data-desktop-window-controls={true}>
-      <div className="desktop-window-menu-root" data-desktop-window-menu-root={true}>
+      {onSettingsSelect ? (
         <button
           type="button"
-          className="desktop-window-menu-button"
-          aria-label="WheelMaker menu"
-          title="WheelMaker"
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          onClick={() => {
-            setMenuOpen(open => {
-              if (open) {
-                setSourcePanelOpen(false);
-              }
-              return !open;
-            });
-          }}
+          className="desktop-titlebar-button desktop-window-settings-button"
+          aria-label="Open settings"
+          title="Settings"
+          onClick={onSettingsSelect}
         >
-          <DesktopTitleBarIcon />
+          <span className="codicon codicon-settings-gear" aria-hidden="true" />
         </button>
-        {menuOpen ? (
-          <div className="desktop-window-menu" role="menu">
-            <button
-              type="button"
-              className="desktop-window-menu-item"
-              role="menuitem"
-              aria-label="Show source"
-              aria-expanded={sourcePanelOpen}
-              onClick={() => setSourcePanelOpen(open => !open)}
-            >
-              <span className="codicon codicon-server-process" aria-hidden="true" />
-              显示来源
-              <span className={`codicon ${sourcePanelOpen ? 'codicon-chevron-up' : 'codicon-chevron-down'}`} aria-hidden="true" />
-            </button>
-            {sourcePanelOpen && webSourceState ? (
-              <div className="desktop-window-source-panel">
-                <div className="desktop-window-source-current" title={sourceTitle}>
-                  {actualSourceLabel}
-                </div>
-                {hasRemoteWebSource ? (
-                  <>
-                    <button
-                      type="button"
-                      className="desktop-window-source-refresh"
-                      aria-label="Refresh web source"
-                      title="Refresh web source"
-                      onClick={handleWebSourceRefresh}
-                    >
-                      <span className="codicon codicon-refresh" aria-hidden="true" />
-                      <span>Refresh</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="desktop-window-source-choice"
-                      role="menuitemradio"
-                      aria-checked={webSourceState.preference === 'auto'}
-                      title={webSourceState.remoteUrl}
-                      onClick={() => void handleWebSourcePreferenceSelect('auto')}
-                    >
-                      {remoteSourceLabel}
-                    </button>
-                    <button
-                      type="button"
-                      className="desktop-window-source-choice"
-                      role="menuitemradio"
-                      aria-checked={webSourceState.preference === 'embedded'}
-                      onClick={() => void handleWebSourcePreferenceSelect('embedded')}
-                    >
-                      Embedded
-                    </button>
-                  </>
-                ) : null}
-              </div>
-            ) : null}
-            {onSettingsSelect ? (
-              <button
-                type="button"
-                className="desktop-window-menu-item"
-                role="menuitem"
-                aria-label="Open settings"
-                onClick={handleSettingsSelect}
-              >
-                <span className="codicon codicon-settings-gear" aria-hidden="true" />
-                设置
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
+      ) : null}
       <button
         type="button"
         className="desktop-titlebar-button"

@@ -62,7 +62,7 @@ describe('web session search UI wiring', () => {
     expect(wideHeader).toContain('renderChatHeaderSearchControls(false)');
     expect(wideHeader).toContain('renderChatHubSummary()');
     expect(wideHeader).toContain('className="chat-sidebar-title-actions"');
-    expect(wideHeader).toContain('{!chatSidebarTitleSearchOpen ? <span className="sidebar-title-text">{wideSidebarTitle}</span> : null}');
+    expect(wideHeader).toContain('{!chatSidebarTitleSearchOpen ? <DesktopWindowMenu /> : null}');
     expect(wideHeader.indexOf('renderChatHubSummary()')).toBeLessThan(wideHeader.lastIndexOf('renderChatHeaderSearchControls(false)'));
 
     const wideNavStart = main.indexOf('const renderWideProjectSessionNav = () =>');

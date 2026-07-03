@@ -5,6 +5,7 @@ import {
   type PreviewWorkbenchTab,
   type PreviewWorkbenchTabType,
 } from './previewWorkbenchState';
+import { DesktopDragRegion } from '../shell/layouts/desktop/DesktopTitleBar';
 
 export type PreviewWorkbenchChromeMode = 'desktop' | 'mobile';
 
@@ -56,6 +57,21 @@ export function PreviewWorkbenchChrome({
   const fileTreeSearchRef = React.useRef<HTMLDivElement | null>(null);
   const fileTreePanelRef = React.useRef<HTMLDivElement | null>(null);
   const activeTitle = previewWorkbenchHeaderTitle(activeTab);
+  const toolbar = (
+    <>
+      <button
+        type="button"
+        className="chat-preview-icon-button"
+        onClick={onClose}
+        title={mode === 'mobile' ? 'Back' : 'Close preview'}
+        aria-label={mode === 'mobile' ? 'Back' : 'Close preview'}
+      >
+        <span className={`codicon ${mode === 'mobile' ? 'codicon-arrow-left' : 'codicon-close'}`} />
+      </button>
+      <div className="preview-workbench-title" title={activeTitle}>{activeTitle}</div>
+      {actions ? <div className="preview-workbench-actions">{actions}</div> : null}
+    </>
+  );
 
   React.useEffect(() => {
     if (!fileTreeOpen) {
@@ -95,19 +111,15 @@ export function PreviewWorkbenchChrome({
       aria-label="Preview workbench"
       onKeyDown={onWorkbenchKeyDown}
     >
-      <div className="chat-preview-toolbar preview-workbench-toolbar">
-        <button
-          type="button"
-          className="chat-preview-icon-button"
-          onClick={onClose}
-          title={mode === 'mobile' ? 'Back' : 'Close preview'}
-          aria-label={mode === 'mobile' ? 'Back' : 'Close preview'}
-        >
-          <span className={`codicon ${mode === 'mobile' ? 'codicon-arrow-left' : 'codicon-close'}`} />
-        </button>
-        <div className="preview-workbench-title" title={activeTitle}>{activeTitle}</div>
-        {actions ? <div className="preview-workbench-actions">{actions}</div> : null}
-      </div>
+      {mode === 'desktop' ? (
+        <DesktopDragRegion className="chat-preview-toolbar preview-workbench-toolbar">
+          {toolbar}
+        </DesktopDragRegion>
+      ) : (
+        <div className="chat-preview-toolbar preview-workbench-toolbar">
+          {toolbar}
+        </div>
+      )}
       <div className="chat-file-workbench-tabs preview-workbench-tabs" role="tablist" aria-label="Open preview tabs">
         {tabs.map(tab => {
           const active = activeTab?.id === tab.id;

@@ -25,12 +25,14 @@ describe('web responsive shell split', () => {
     expect(shellTsx).not.toContain("import { DesktopTitleBar } from './layouts/desktop/DesktopTitleBar';");
     expect(shellTsx).toContain("mode === 'desktop'");
     expect(shellTsx).toContain('desktopWindowControls: ReactNode;');
+    expect(shellTsx).toContain('desktopChatPreviewOpen: boolean;');
     expect(shellTsx).not.toContain('desktopActivityBar: ReactNode;');
     expect(shellTsx).not.toContain('<DesktopTitleBar title="WheelMaker" />');
 
     expect(shellTsx).toMatch(
       /export function DesktopShell[\s\S]*?desktopWindowControls[\s\S]*?className=\{`workspace theme-\$\{themeMode\}`\}[\s\S]*?\{desktopWindowControls\}[\s\S]*?<div[\s\S]*?className="desktop-shell"[\s\S]*?<aside className="workspace-left">\{sidebar\}<\/aside>/,
     );
+    expect(shellTsx).toContain("data-chat-preview-open={desktopChatPreviewOpen ? 'true' : undefined}");
     expect(shellTsx).toMatch(
       /export function MobileShell[\s\S]*?className=\{`workspace theme-\$\{themeMode\} narrow-shell`\}[\s\S]*?className=\{`drawer-overlay \$\{drawerOpen \? 'show' : ''\}`\}/,
     );
@@ -67,6 +69,7 @@ describe('web responsive shell split', () => {
     expect(mainTsx).toContain('<ResponsiveShell');
     expect(mainTsx).toContain('mode={layoutMode}');
     expect(mainTsx).toContain('desktopWindowControls={desktopWindowControls}');
+    expect(mainTsx).toContain('desktopChatPreviewOpen={isWide && chatPreviewOpen}');
     expect(mainTsx).not.toContain('desktopActivityBar={desktopActivityBar}');
     expect(mainTsx).toContain('floatingControlStack={floatingControlStack}');
     expect(mainTsx).toContain('mobileSettingsScreen={mobileSettingsScreen}');
@@ -88,7 +91,7 @@ describe('web responsive shell split', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 
-    expect(mainTsx).toContain("import { DesktopWindowControls } from '../shell/layouts/desktop/DesktopTitleBar';");
+    expect(mainTsx).toContain("import { DesktopDragRegion, DesktopWindowControls, DesktopWindowMenu } from '../shell/layouts/desktop/DesktopTitleBar';");
 
     const disconnectedStart = mainTsx.indexOf('if (!connected && !keepWorkspaceVisible)');
     const disconnectedEnd = mainTsx.indexOf('const projectMenu', disconnectedStart);
@@ -127,8 +130,9 @@ describe('web responsive shell split', () => {
     const rightTitleBlock = cssRuleBlock(stylesCss, '.desktop-shell .workspace-right .block-title');
     expect(rightTitleBlock).toContain('padding-right: calc(var(--desktop-window-controls-width) + 10px);');
 
-    const rightChatTitleBlock = cssRuleBlock(stylesCss, '.desktop-shell .workspace-right .chat-title-bar');
+    const rightChatTitleBlock = cssRuleBlock(stylesCss, ".desktop-shell:not([data-chat-preview-open='true']) .workspace-right .chat-title-bar");
     expect(rightChatTitleBlock).toContain('padding-right: calc(var(--desktop-window-controls-width) + 10px);');
+    expect(stylesCss).not.toContain('.desktop-shell .workspace-right .chat-title-bar {');
 
     const previewToolbarBlock = cssRuleBlock(stylesCss, '.desktop-shell .preview-workbench-surface.desktop .preview-workbench-toolbar');
     expect(previewToolbarBlock).toContain('padding-right: calc(var(--desktop-window-controls-width) + 10px);');

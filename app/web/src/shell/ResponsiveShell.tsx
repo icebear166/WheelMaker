@@ -14,6 +14,7 @@ export type DesktopShellProps = ShellContentProps & {
   desktopWindowControls: ReactNode;
   desktopPeek: ReactNode;
   desktopChatFixedPreview: boolean;
+  desktopChatPreviewOpen: boolean;
   sidebarCollapsed: boolean;
   desktopSidebarWidth: number;
 };
@@ -38,6 +39,7 @@ export function DesktopShell({
   desktopWindowControls,
   desktopPeek,
   desktopChatFixedPreview,
+  desktopChatPreviewOpen,
   sidebar,
   main,
   sidebarCollapsed,
@@ -50,6 +52,7 @@ export function DesktopShell({
       <div
         className="desktop-shell"
         data-chat-fixed-preview={desktopChatFixedPreview ? 'true' : undefined}
+        data-chat-preview-open={desktopChatPreviewOpen ? 'true' : undefined}
         style={{ '--desktop-sidebar-width': `${desktopSidebarWidth}px` } as React.CSSProperties}
       >
         <div className="body">

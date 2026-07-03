@@ -28,7 +28,7 @@
   padding-right: calc(var(--desktop-window-controls-width) + 10px);
 }
 
-.desktop-shell .workspace-right .chat-title-bar {
+.desktop-shell:not([data-chat-preview-open='true']) .workspace-right .chat-title-bar {
   padding-right: calc(var(--desktop-window-controls-width) + 10px);
 }
 
