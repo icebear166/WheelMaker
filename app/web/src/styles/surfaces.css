@@ -25,6 +25,7 @@
 }
 
 .desktop-shell .workspace-right .block-title {
+  background: var(--desktop-top-surface);
   padding-right: calc(var(--desktop-window-controls-width) + 10px);
 }
 

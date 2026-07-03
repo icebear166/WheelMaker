@@ -3262,6 +3262,9 @@ export function App() {
   const [chatHubMenuOpen, setChatHubMenuOpen] = useState(false);
   const [chatHubColorMenuHubId, setChatHubColorMenuHubId] = useState('');
   const chatHubMenuRef = useRef<HTMLDivElement | null>(null);
+  const [chatTitleProjectMenuOpen, setChatTitleProjectMenuOpen] = useState(false);
+  const chatTitleProjectButtonRef = useRef<HTMLButtonElement | null>(null);
+  const chatTitleProjectMenuRef = useRef<HTMLDivElement | null>(null);
   const [chatTitlePromptMenuOpen, setChatTitlePromptMenuOpen] = useState(false);
   const chatTitlePromptButtonRef = useRef<HTMLButtonElement | null>(null);
   const chatTitlePromptMenuRef = useRef<HTMLDivElement | null>(null);
@@ -3358,6 +3361,23 @@ export function App() {
   );
   const activeChatPromptHistory = tab === 'chat' && !archivedMode ? selectedChatPromptHistory : [];
   const chatTitlePromptMenuAvailable = activeChatPromptHistory.length > 0;
+  const chatTitleProjectMenuStyle = useMemo<React.CSSProperties | undefined>(() => {
+    if (!chatTitleProjectMenuOpen || typeof window === 'undefined') {
+      return undefined;
+    }
+    const anchor = chatTitleProjectButtonRef.current?.getBoundingClientRect();
+    if (!anchor) {
+      return undefined;
+    }
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+    const menuWidth = Math.min(360, Math.max(260, viewportWidth - 24));
+    const left = Math.max(12, Math.min(anchor.left, viewportWidth - menuWidth - 12));
+    return {
+      left,
+      top: Math.max(12, anchor.bottom + 7),
+      width: menuWidth,
+    };
+  }, [chatTitleProjectMenuOpen, isWide]);
   const chatTitlePromptMenuStyle = useMemo<React.CSSProperties | undefined>(() => {
     if (!chatTitlePromptMenuOpen || !chatTitlePromptMenuAvailable || typeof window === 'undefined') {
       return undefined;
@@ -5619,6 +5639,7 @@ export function App() {
   useEffect(() => {
     const onPointer = () => {
       setProjectMenuOpen(false);
+      setChatTitleProjectMenuOpen(false);
     };
     window.addEventListener('pointerdown', onPointer);
     return () => window.removeEventListener('pointerdown', onPointer);
@@ -5675,6 +5696,32 @@ export function App() {
     window.addEventListener('pointerdown', onPointerDown);
     return () => window.removeEventListener('pointerdown', onPointerDown);
   }, [chatPromptMenuOpen]);
+
+  useEffect(() => {
+    if (!chatTitleProjectMenuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (
+        target &&
+        (chatTitleProjectMenuRef.current?.contains(target) ||
+          chatTitleProjectButtonRef.current?.contains(target))
+      ) {
+        return;
+      }
+      setChatTitleProjectMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setChatTitleProjectMenuOpen(false);
+      }
+    };
+    window.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [chatTitleProjectMenuOpen]);
 
   useEffect(() => {
     if (!chatTitlePromptMenuOpen) return;
@@ -14188,6 +14235,64 @@ export function App() {
     }
   };
 
+  const resolveChatTitleProjectSession = useCallback((targetProjectId: string): RegistryChatSession | null => {
+    if (!targetProjectId) {
+      return null;
+    }
+    const knownSessions = mergeChatSessionList(
+      projectSessionsByProjectIdRef.current[targetProjectId] ?? [],
+      targetProjectId === projectIdRef.current ? chatSessionsRef.current : [],
+    );
+    const currentKey = selectedChatKeyRef.current;
+    if (currentKey?.projectId === targetProjectId) {
+      const currentSession = knownSessions.find(session => session.sessionId === currentKey.sessionId);
+      if (currentSession) {
+        return currentSession;
+      }
+    }
+    const persistedKey = workspaceStore.migrateSelectedChatSessionKey(targetProjectId);
+    if (persistedKey?.projectId === targetProjectId) {
+      const persistedSession = knownSessions.find(session => session.sessionId === persistedKey.sessionId);
+      if (persistedSession) {
+        return persistedSession;
+      }
+    }
+    return knownSessions[0] ?? null;
+  }, []);
+
+  const handleChatTitleProjectSelect = useCallback(async (targetProjectId: string) => {
+    if (!targetProjectId) {
+      return;
+    }
+    setChatTitleProjectMenuOpen(false);
+    setChatTitlePromptMenuOpen(false);
+    setChatQuickSwitchMenuOpen(false);
+    setSidebarSettingsOpen(false);
+    setTab('chat');
+    const targetSession = resolveChatTitleProjectSession(targetProjectId);
+    if (targetSession) {
+      await selectProjectChatSession(targetProjectId, targetSession.sessionId);
+      return;
+    }
+    workspaceStore.rememberSelectedChatSessionKey(null);
+    applySelectedChatKey(null);
+    setChatMessages([]);
+    setVisibleChatMessagesForRuntimeKey('', [], {resetToLatest: true});
+    await syncWorkspaceProject(targetProjectId, {reason: 'chat'});
+    if (connected) {
+      loadChatSessions(targetProjectId, '').catch(() => undefined);
+    }
+  }, [
+    connected,
+    loadChatSessions,
+    resolveChatTitleProjectSession,
+    selectProjectChatSession,
+    setSidebarSettingsOpen,
+    setTab,
+    setVisibleChatMessagesForRuntimeKey,
+    syncWorkspaceProject,
+  ]);
+
   const selectWideProjectSession = async (targetProjectId: string, sessionId: string) => {
     await selectProjectChatSession(targetProjectId, sessionId);
   };
@@ -17760,18 +17865,29 @@ export function App() {
     const renderChatBreadcrumbTitle = () => (
       <div className="breadcrumb-title chat-breadcrumb-title">
         <button
+          ref={chatTitleProjectButtonRef}
           type="button"
-          className="breadcrumb-project-button breadcrumb-project-name"
-          onClick={handleMobileBreadcrumbProjectClick}
-          title="Toggle workspace drawer"
-          aria-label="Toggle workspace drawer"
+          className={`chat-title-project-button${chatTitleProjectMenuOpen ? ' open' : ''}`}
+          onPointerDown={event => event.stopPropagation()}
+          onClick={() => {
+            setChatTitlePromptMenuOpen(false);
+            setChatQuickSwitchMenuOpen(false);
+            setChatTitleProjectMenuOpen(open => !open);
+          }}
+          title="Switch project"
+          aria-label="Switch project"
+          aria-haspopup="menu"
+          aria-expanded={chatTitleProjectMenuOpen}
         >
-          {activeChatBreadcrumbProjectName}
+          <span className="breadcrumb-project-name" title={activeChatBreadcrumbProjectName}>
+            {activeChatBreadcrumbProjectName}
+          </span>
+          <span className="codicon codicon-chevron-down" aria-hidden="true" />
         </button>
         <button
           ref={chatTitlePromptButtonRef}
           type="button"
-          className={`title-text breadcrumb-current chat-title-prompt-button${chatTitlePromptMenuOpen ? ' open' : ''}`}
+          className={`chat-title-prompt-icon-button${chatTitlePromptMenuOpen ? ' open' : ''}`}
           title={chatTitlePromptMenuAvailable ? 'Show prompt history' : activeChatBreadcrumbLabel}
           aria-label="Show prompt history"
           aria-haspopup="menu"
@@ -17786,11 +17902,15 @@ export function App() {
             setChatConfigOverflowOpen(false);
             setChatHubMenuOpen(false);
             setChatQuickSwitchMenuOpen(false);
+            setChatTitleProjectMenuOpen(false);
             setChatTitlePromptMenuOpen(open => !open);
           }}
         >
-          {activeChatBreadcrumbLabel}
+          <span className="codicon codicon-history" aria-hidden="true" />
         </button>
+        <span className="chat-title-session-text title-text breadcrumb-current" title={activeChatBreadcrumbLabel}>
+          {activeChatBreadcrumbLabel}
+        </span>
       </div>
     );
 
@@ -17798,6 +17918,16 @@ export function App() {
       return (
         <ChatSurface>
           <DesktopDragRegion className="block-title chat-title-bar">
+            <button
+              type="button"
+              className={`chat-sidebar-toggle${sidebarCollapsed ? ' collapsed' : ''}`}
+              onClick={() => setSidebarCollapsed(value => !value)}
+              title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+              aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+              aria-pressed={sidebarCollapsed}
+            >
+              <span className="codicon codicon-layout-sidebar-left" aria-hidden="true" />
+            </button>
             <div className="chat-title-context">
               {renderChatBreadcrumbTitle()}
             </div>
@@ -18989,6 +19119,37 @@ export function App() {
       onCreateSession={handleQuickSwitchCreateSession}
       onSelectSession={handleMobileChatQuickSwitchSelect}
     />
+  ) : null;
+  const chatTitleProjectMenu = chatTitleProjectMenuOpen ? (
+    <div
+      ref={chatTitleProjectMenuRef}
+      className="chat-title-project-menu"
+      role="menu"
+      aria-label="Switch project"
+      style={chatTitleProjectMenuStyle}
+      onPointerDown={event => event.stopPropagation()}
+    >
+      {sortedProjectItems.map(projectItem => {
+        const selectedProjectId = selectedChatKey?.projectId || projectId;
+        const selected = projectItem.projectId === selectedProjectId;
+        return (
+          <button
+            key={`chat-title-project:${projectItem.projectId}`}
+            type="button"
+            className={`chat-title-project-menu-item${selected ? ' selected' : ''}`}
+            role="menuitemradio"
+            aria-checked={selected}
+            title={projectItem.path || projectItem.projectId}
+            onClick={() => handleChatTitleProjectSelect(projectItem.projectId).catch(() => undefined)}
+          >
+            <span className="chat-title-project-menu-name">{projectItem.name}</span>
+            <span className="chat-title-project-menu-path">
+              {projectItem.path || projectItem.hubId || projectItem.projectId}
+            </span>
+          </button>
+        );
+      })}
+    </div>
   ) : null;
   const chatTitlePromptMenu = chatTitlePromptMenuOpen && chatTitlePromptMenuAvailable ? (
     <div
@@ -20225,12 +20386,13 @@ export function App() {
         sidebarCollapsed={sidebarCollapsed}
         drawerOpen={mobilePortRelayFrameOpen ? false : drawerOpen}
         onCloseDrawer={() => setDrawerOpen(false)}
-          />
-          {quickFileSearchOverlay}
-          {previewSelectionContextMenu}
-          {chatQuickSwitchMenuPlacement.kind === 'desktop' ? chatQuickSwitchMenu : null}
-          {chatTitlePromptMenu}
-          {portRelayClearSiteDataFrame}
+      />
+      {quickFileSearchOverlay}
+      {previewSelectionContextMenu}
+      {chatQuickSwitchMenuPlacement.kind === 'desktop' ? chatQuickSwitchMenu : null}
+      {chatTitleProjectMenu}
+      {chatTitlePromptMenu}
+      {portRelayClearSiteDataFrame}
       {registryDebugPanel}
       {markdownImageExportRequest ? (
         <MarkdownImageExportSurface

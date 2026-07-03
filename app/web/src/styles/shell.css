@@ -3,6 +3,7 @@
 .page,
 .workspace {
   --desktop-window-controls-width: 176px;
+  --desktop-top-surface: color-mix(in srgb, var(--panel) 62%, var(--panel-3));
   width: 100%;
   height: 100%;
   background: var(--bg);
@@ -47,7 +48,7 @@
   align-items: stretch;
   justify-content: flex-end;
   color: var(--text);
-  background: transparent;
+  background: var(--desktop-top-surface);
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
@@ -236,7 +237,7 @@
 }
 
 .desktop-shell {
-  --desktop-side-surface: color-mix(in srgb, var(--panel) 62%, var(--panel-3));
+  --desktop-side-surface: var(--desktop-top-surface);
   flex: 1;
   min-height: 0;
   display: flex;
@@ -1043,8 +1044,8 @@
   position: relative;
   flex: 0 0 32px;
   min-height: 32px;
-  border-bottom: 0;
-  background: var(--desktop-side-surface);
+  border-bottom: 1px solid var(--border);
+  background: var(--desktop-top-surface);
   display: flex;
   align-items: center;
   gap: 8px;

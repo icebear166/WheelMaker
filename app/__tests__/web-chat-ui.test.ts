@@ -1150,7 +1150,7 @@ describe('web chat integration', () => {
     expect(toolsBlock).toContain('className={chatComposerStopTriggerClassName}');
 
     const configPillStart = mainTsx.indexOf('const renderChatConfigPill = (option: RegistrySessionConfigOption) => {');
-    const configPillEnd = mainTsx.indexOf('if (tab === \'chat\')', configPillStart);
+    const configPillEnd = mainTsx.indexOf('const chatReadOnlyPreview = archivedMode && archivedPreview !== null;', configPillStart);
     expect(configPillStart).toBeGreaterThanOrEqual(0);
     expect(configPillEnd).toBeGreaterThan(configPillStart);
     const configPillBlock = mainTsx.slice(configPillStart, configPillEnd);
@@ -1884,6 +1884,23 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('<DesktopWindowMenu />');
     expect(mainTsx).toContain('<DesktopDragRegion className={`sidebar-title-row${chatSidebarTitleSearchOpen ? \' search-open\' : \'\'}`}>');
     expect(mainTsx).toContain('<DesktopDragRegion className="block-title chat-title-bar">');
+    expect(mainTsx).toContain('className={`chat-sidebar-toggle${sidebarCollapsed ? \' collapsed\' : \'\'}`}');
+    expect(mainTsx).toContain('onClick={() => setSidebarCollapsed(value => !value)}');
+    expect(mainTsx).toContain('title={sidebarCollapsed ? \'Show sidebar\' : \'Hide sidebar\'}');
+    expect(mainTsx).toContain('className={`chat-title-project-button${chatTitleProjectMenuOpen ? \' open\' : \'\'}`}');
+    expect(mainTsx).toContain('onPointerDown={event => event.stopPropagation()}');
+    expect(mainTsx).toContain('setChatTitleProjectMenuOpen(open => !open);');
+    expect(mainTsx).toContain('const handleChatTitleProjectSelect = useCallback(async (targetProjectId: string) => {');
+    expect(mainTsx).toContain('const targetSession = resolveChatTitleProjectSession(targetProjectId);');
+    expect(mainTsx).toContain('if (targetSession) {');
+    expect(mainTsx).toContain('await selectProjectChatSession(targetProjectId, targetSession.sessionId);');
+    expect(mainTsx).toContain('workspaceStore.rememberSelectedChatSessionKey(null);');
+    expect(mainTsx).toContain('applySelectedChatKey(null);');
+    expect(mainTsx).toContain('setVisibleChatMessagesForRuntimeKey(\'\', [], {resetToLatest: true});');
+    expect(mainTsx).toContain('className={`chat-title-prompt-icon-button${chatTitlePromptMenuOpen ? \' open\' : \'\'}`}');
+    expect(mainTsx).toContain('aria-label="Show prompt history"');
+    expect(mainTsx).toContain('<span className="chat-title-session-text title-text breadcrumb-current"');
+    expect(mainTsx).not.toContain('className={`title-text breadcrumb-current chat-title-prompt-button');
     expect(mainTsx).toContain('const beginDesktopSidebarResize = useCallback(');
     expect(mainTsx).toContain('className={`desktop-sidebar-resize-handle${desktopSidebarResizing ?');
     expect(mainTsx).toContain('desktopSidebarWidth={effectiveDesktopSidebarWidth}');
@@ -1905,7 +1922,8 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain("onClick={() => handleDesktopActivitySelect('git')}");
 
     expect(stylesCss).toContain('.wide-project-session-nav {');
-    expect(stylesCss).toContain('--desktop-side-surface: color-mix(in srgb, var(--panel) 62%, var(--panel-3));');
+    expect(stylesCss).toContain('--desktop-side-surface: var(--desktop-top-surface);');
+    expect(stylesCss).toContain('--desktop-top-surface: color-mix(in srgb, var(--panel) 62%, var(--panel-3));');
     expect(stylesCss).toContain('--desktop-window-controls-width: 176px;');
     expect(stylesCss).toContain('.desktop-window-controls {');
     expect(stylesCss).toContain('.desktop-window-menu-button {');
@@ -1913,6 +1931,10 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.desktop-window-source-panel {');
     expect(stylesCss).toContain('.sidebar-title-row .desktop-window-menu-root {');
     expect(stylesCss).toContain('.desktop-drag-region {');
+    expect(stylesCss).toContain('.chat-sidebar-toggle,');
+    expect(stylesCss).toContain('.chat-title-prompt-icon-button,');
+    expect(stylesCss).toContain('.chat-preview-toggle {');
+    expect(stylesCss).toContain('.chat-title-project-menu {');
     expect(stylesCss).not.toContain('.desktop-activity-bar {');
     expect(stylesCss).not.toContain('.desktop-activity-button {');
     expect(stylesCss).not.toContain('.desktop-activity-button.active::before {');
@@ -1928,7 +1950,13 @@ describe('web chat integration', () => {
       /\.desktop-sidebar-resize-handle \{[\s\S]*cursor: ew-resize;[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
-      /\.sidebar-title-row \{[\s\S]*border-bottom: 0;[\s\S]*\}/,
+      /\.sidebar-title-row \{[\s\S]*background: var\(--desktop-top-surface\);[\s\S]*border-bottom: 1px solid var\(--border\);[\s\S]*\}/,
+    );
+    expect(stylesCss).toMatch(
+      /\.chat-title-bar \{[\s\S]*background: var\(--desktop-top-surface\);[\s\S]*\}/,
+    );
+    expect(stylesCss).toMatch(
+      /\.desktop-window-controls \{[\s\S]*background: var\(--desktop-top-surface\);[\s\S]*\}/,
     );
     expect(stylesCss).toContain('.wide-project-row {');
     expect(stylesCss).toContain('.wide-project-folder-wrap {');
@@ -2058,12 +2086,23 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('setChatTitlePromptMenuOpen(false);');
     expect(mainTsx).toContain('const chatTitlePromptButtonRef = useRef<HTMLButtonElement | null>(null);');
     expect(mainTsx).toContain('const chatTitlePromptMenuStyle = useMemo<React.CSSProperties | undefined>(() => {');
+    expect(mainTsx).toContain('const chatTitleProjectButtonRef = useRef<HTMLButtonElement | null>(null);');
+    expect(mainTsx).toContain('const chatTitleProjectMenuStyle = useMemo<React.CSSProperties | undefined>(() => {');
+    expect(mainTsx).toContain('const chatTitleProjectMenu = chatTitleProjectMenuOpen ? (');
     expect(mainTsx).toContain('const chatTitlePromptMenu = chatTitlePromptMenuOpen && chatTitlePromptMenuAvailable ? (');
+    expect(mainTsx).toContain('{chatTitleProjectMenu}');
     expect(mainTsx).toContain('{chatTitlePromptMenu}');
-    expect(mainTsx).toContain('className={`title-text breadcrumb-current chat-title-prompt-button${chatTitlePromptMenuOpen ? \' open\' : \'\'}`}');
+    expect(mainTsx).toContain('className={`chat-title-project-button${chatTitleProjectMenuOpen ? \' open\' : \'\'}`}');
+    expect(mainTsx).toContain('onPointerDown={event => event.stopPropagation()}');
+    expect(mainTsx).toContain('setChatTitleProjectMenuOpen(open => !open);');
+    expect(mainTsx).toContain('className={`chat-title-prompt-icon-button${chatTitlePromptMenuOpen ? \' open\' : \'\'}`}');
+    expect(mainTsx).toContain('<span className="chat-title-session-text title-text breadcrumb-current"');
+    expect(mainTsx).not.toContain('className={`title-text breadcrumb-current chat-title-prompt-button');
     expect(mainTsx).toContain('ref={chatTitlePromptButtonRef}');
     expect(mainTsx).toContain('aria-haspopup="menu"');
     expect(mainTsx).toContain('aria-expanded={chatTitlePromptMenuOpen}');
+    expect(mainTsx).toContain('className="chat-title-project-menu"');
+    expect(mainTsx).toContain('className={`chat-title-project-menu-item${selected ? \' selected\' : \'\'}`}');
     expect(mainTsx).toContain('className="chat-title-prompt-menu"');
     expect(mainTsx).toContain('className="chat-title-prompt-menu-item"');
     expect(chatSurface).not.toContain('className="chat-title-prompt-menu"');
@@ -2080,14 +2119,21 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-title-bar {');
     expect(stylesCss).toContain('.chat-title-actions {');
     expect(stylesCss).toContain('.chat-breadcrumb-title {');
-    expect(stylesCss).toContain('.chat-title-prompt-button {');
+    expect(stylesCss).toContain('.chat-sidebar-toggle,');
+    expect(stylesCss).toContain('.chat-title-project-button {');
+    expect(stylesCss).toContain('.chat-title-project-menu {');
+    expect(stylesCss).toContain('.chat-title-prompt-icon-button,');
     expect(stylesCss).toContain('.chat-title-prompt-menu {');
     expect(stylesCss).toContain('.chat-title-prompt-menu-item {');
     expect(stylesCss).toContain('.chat-preview-toggle {');
-    const promptButtonBlock = cssRuleBlock(stylesCss, '.chat-title-prompt-button');
-    expect(promptButtonBlock).toContain('border: 0;');
-    expect(promptButtonBlock).toContain('background: transparent;');
-    expect(promptButtonBlock).toContain('text-align: left;');
+    const projectButtonBlock = cssRuleBlock(stylesCss, '.chat-title-project-button');
+    expect(projectButtonBlock).toContain('border: 0;');
+    expect(projectButtonBlock).toContain('background: transparent;');
+    expect(projectButtonBlock).toContain('text-align: left;');
+    const promptIconBlock = cssRuleBlockContainingSelector(stylesCss, '.chat-title-prompt-icon-button');
+    expect(promptIconBlock).toContain('width: 28px;');
+    expect(promptIconBlock).toContain('border: 0;');
+    expect(promptIconBlock).toContain('background: transparent;');
     const promptMenuBlock = cssRuleBlock(stylesCss, '.chat-title-prompt-menu');
     expect(promptMenuBlock).toContain('position: fixed;');
     expect(promptMenuBlock).toContain('overflow-y: auto;');
