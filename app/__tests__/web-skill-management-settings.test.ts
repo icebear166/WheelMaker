@@ -206,6 +206,11 @@ describe('skill management settings UI source structure', () => {
     expect(mainTsx).toContain('requestSkillDetail');
     expect(mainTsx).toContain('service.getSkillDetail');
     expect(mainTsx).toContain('skillDetailCacheKey');
+    expect(mainTsx).toContain("const SkillDetailPanel = React.lazy(() => loadSettingsBundle().then(module => ({");
+    expect(mainTsx).toContain('const renderSkillDetailSettingsDetail = (options?: SettingsDetailShellOptions) =>');
+    expect(mainTsx).toContain("if (detail === 'skillDetail') {");
+    expect(mainTsx).toContain('return renderSkillDetailSettingsDetail(options);');
+    expect(detailTsx).toContain('export function SkillDetailPanel');
     expect(detailTsx).toContain('settings-skills-detail-panel');
     expect(detailTsx).not.toContain('settings-skills-detail-popover');
     expect(detailTsx).not.toContain('settings-skills-detail-mobile-header');
@@ -223,13 +228,20 @@ describe('skill management settings UI source structure', () => {
     expect(stylesCss).not.toContain('.settings-skills-detail-mobile-header');
   });
 
-  test('keeps skill details inline without desktop-only anchoring', () => {
+  test('opens skill details as mobile child pages and desktop side panels', () => {
     expect(detailTsx).not.toContain('skillDetailAnchor');
     expect(detailTsx).toContain('openSkillDetailFromRow');
     expect(detailTsx).not.toContain('getBoundingClientRect()');
     expect(detailTsx).not.toContain('style={skillDetailAnchor ?');
     expect(detailTsx).not.toContain('settings-skills-detail-placement-');
     expect(detailTsx).toContain('requestSkillDetail(target).catch(() => undefined);');
+    expect(detailTsx).not.toContain('{renderSkillDetailPanel()}');
+    expect(mainTsx).toContain("if (!isWide) {\n      setSidebarSettingsOpen(true);\n      setSettingsDetailView('skillDetail');\n    }");
+    expect(mainTsx).toContain('const desktopSkillDetailPanel = isWide && sidebarSettingsOpen && settingsDetailView === \'skills\' && skillDetailTarget ? (');
+    expect(mainTsx).toContain('sidePanel={desktopSkillDetailPanel}');
+    expect(settingsSurfaceTsx).toContain('sidePanel?: ReactNode;');
+    expect(settingsSurfaceTsx).toContain("sidePanel ? `${screenClassName} has-settings-side-panel` : screenClassName");
+    expect(settingsSurfaceTsx).toContain('className="settings-screen-panel-row"');
 
     const panelStart = stylesCss.indexOf('.settings-skills-detail-panel {');
     expect(panelStart).toBeGreaterThanOrEqual(0);
@@ -239,7 +251,12 @@ describe('skill management settings UI source structure', () => {
     expect(panelStyles).not.toContain('position: fixed;');
     expect(panelStyles).not.toContain('transform: translateY(-50%);');
     expect(panelStyles).toContain('display: flex;');
-    expect(panelStyles).toContain('max-height: min(70vh, 720px);');
+    expect(panelStyles).toContain('height: 100%;');
+    expect(panelStyles).toContain('max-height: 100%;');
+    expect(stylesCss).toContain('.settings-screen-panel-row');
+    expect(stylesCss).toContain('.desktop-settings-screen.has-settings-side-panel .settings-screen-panel-row');
+    expect(stylesCss).toContain('grid-template-columns: minmax(0, 720px) minmax(360px, 500px);');
+    expect(stylesCss).toContain('width: min(1220px, calc(100vw - 56px));');
 
     const markdownStart = stylesCss.indexOf('.settings-skills-detail-markdown {', panelStart);
     const markdownEnd = stylesCss.indexOf('.settings-skills-detail-files {', markdownStart);

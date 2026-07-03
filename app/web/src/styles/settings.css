@@ -69,6 +69,13 @@ textarea,
   color: var(--text);
 }
 
+.settings-screen-panel-row {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+
 .mobile-settings-nav {
   flex: 0 0 auto;
   position: relative;
@@ -252,6 +259,29 @@ textarea,
   box-shadow:
     0 30px 90px color-mix(in srgb, #000 42%, transparent),
     0 1px 0 color-mix(in srgb, #fff 8%, transparent) inset;
+}
+
+.desktop-settings-screen .settings-screen-panel-row {
+  flex: 0 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+.desktop-settings-screen.has-settings-side-panel .settings-screen-panel-row {
+  width: min(1220px, calc(100vw - 56px));
+  height: calc(100vh - 56px);
+  min-height: 420px;
+  display: grid;
+  grid-template-columns: minmax(0, 720px) minmax(360px, 500px);
+  gap: 12px;
+}
+
+.desktop-settings-screen.has-settings-side-panel .mobile-settings-panel {
+  width: auto;
+  height: 100%;
+  min-height: 0;
 }
 
 .desktop-settings-screen .mobile-settings-nav {
@@ -448,6 +478,11 @@ textarea,
   overflow-y: auto;
   scrollbar-gutter: stable;
   -webkit-overflow-scrolling: touch;
+}
+
+.settings-detail-body:has(> .settings-skills-detail-panel) {
+  align-content: stretch;
+  overflow: hidden;
 }
 
 .settings-detail-row {
@@ -1997,7 +2032,8 @@ textarea,
   display: flex;
   flex-direction: column;
   min-width: 0;
-  max-height: min(70vh, 720px);
+  height: 100%;
+  max-height: 100%;
   border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
   border-radius: 8px;
   background: color-mix(in srgb, var(--panel) 96%, var(--panel-2));

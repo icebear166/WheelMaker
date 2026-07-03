@@ -22,7 +22,7 @@ import type {
 const SKILLS_MARKETPLACE_URL = 'https://www.skills.sh/';
 const SKILL_MARKDOWN_REMARK_PLUGINS = [remarkGfm];
 
-type SkillInstallTarget = {
+export type SkillInstallTarget = {
   hubId: string;
   scope: RegistrySkillScope;
   projectName?: string;
@@ -35,25 +35,25 @@ type SkillHubView = {
   data: RegistrySkillCommandResponse | null;
 };
 
-type SkillUninstallTarget = SkillInstallTarget & {
+export type SkillUninstallTarget = SkillInstallTarget & {
   skillName: string;
 };
 
-type SkillBatchUninstallTarget = SkillInstallTarget & {
+export type SkillBatchUninstallTarget = SkillInstallTarget & {
   skillNames: string[];
 };
 
-type SkillDetailTarget = SkillInstallTarget & {
+export type SkillDetailTarget = SkillInstallTarget & {
   skillName: string;
 };
 
-type SkillDetailCacheEntry = {
+export type SkillDetailCacheEntry = {
   loading: boolean;
   error: string;
   detail: RegistrySkillDetail | null;
 };
 
-type SkillUpdateTarget = SkillInstallTarget & {
+export type SkillUpdateTarget = SkillInstallTarget & {
   includeProjects?: boolean;
 };
 
@@ -88,9 +88,16 @@ type SkillsSettingsDetailProps = {
   requestSkillUninstall: (target: SkillUninstallTarget) => void;
   requestSkillBatchUninstall: (target: SkillBatchUninstallTarget) => void;
   requestSkillDetail: (target: SkillDetailTarget) => Promise<void>;
-  closeSkillDetail: () => void;
+  skillDetailTarget: SkillDetailTarget | null;
+  skillActionPendingKey: (input: SkillPendingKeyInput) => string;
+};
+
+type SkillDetailPanelProps = {
   skillDetailTarget: SkillDetailTarget | null;
   skillDetailCache: Record<string, SkillDetailCacheEntry>;
+  skillsPendingKey: string;
+  closeSkillDetail: () => void;
+  requestSkillUninstall: (target: SkillUninstallTarget) => void;
   skillActionPendingKey: (input: SkillPendingKeyInput) => string;
 };
 
@@ -127,6 +134,144 @@ function renderSkillIconButton(options: {
   );
 }
 
+function renderSkillDetailMetaRow(label: string, value?: string) {
+  if (!value) {
+    return null;
+  }
+  return (
+    <div className="settings-skills-detail-meta-row">
+      <span>{label}</span>
+      <span title={value}>{value}</span>
+    </div>
+  );
+}
+
+function renderSupportingFile(file: RegistrySkillSupportingFile) {
+  return (
+    <div key={file.relativePath} className="settings-skills-detail-file">
+      <span className={`codicon ${file.directory ? 'codicon-folder' : 'codicon-file'}`} aria-hidden="true" />
+      <span title={file.relativePath}>{file.relativePath}</span>
+      <span>{file.directory ? 'Folder' : formatSkillFileSize(file.size)}</span>
+    </div>
+  );
+}
+
+export function SkillDetailPanel({
+  skillDetailTarget,
+  skillDetailCache,
+  skillsPendingKey,
+  closeSkillDetail,
+  requestSkillUninstall,
+  skillActionPendingKey,
+}: SkillDetailPanelProps) {
+  if (!skillDetailTarget) {
+    return null;
+  }
+  const activeSkillDetailKey = skillDetailCacheKey(skillDetailTarget);
+  const activeSkillDetailEntry = skillDetailCache[activeSkillDetailKey];
+  const detail = activeSkillDetailEntry?.detail ?? null;
+  const loading = activeSkillDetailEntry?.loading === true;
+  const error = activeSkillDetailEntry?.error ?? '';
+  const pendingKey = skillActionPendingKey({
+    hubId: skillDetailTarget.hubId,
+    scope: skillDetailTarget.scope,
+    projectName: skillDetailTarget.projectName,
+    skillName: skillDetailTarget.skillName,
+    action: 'skillUninstall',
+  });
+  const pending = skillsPendingKey === pendingKey;
+  const hubActionPending = isSkillActionPendingForHub(skillsPendingKey, skillDetailTarget.hubId);
+  const managed = detail?.managed !== false;
+  const supportingFiles = [...(detail?.supportingFiles ?? [])]
+    .sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+
+  return (
+    <aside className="settings-skills-detail-panel" aria-label="Skill detail">
+      <div className="settings-skills-detail-header">
+        <div className="settings-skills-detail-title-wrap">
+          <span className="settings-skills-scope-kind">Skill</span>
+          <h2 className="settings-skills-detail-title">{skillDetailTarget.skillName}</h2>
+          <span className="settings-skills-detail-scope">{skillScopeLabel(skillDetailTarget)}</span>
+        </div>
+        <button
+          type="button"
+          className="settings-skill-icon-btn"
+          onClick={closeSkillDetail}
+          title="Close"
+          aria-label="Close"
+        >
+          <span className="codicon codicon-close" />
+        </button>
+      </div>
+      {loading ? (
+        <div className="settings-skills-detail-status" role="status">
+          <span className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
+          <span>Loading skill detail...</span>
+        </div>
+      ) : null}
+      {error ? <div className="settings-metadata-error">{error}</div> : null}
+      {detail ? (
+        <div className="settings-skills-detail-body">
+          <section className="settings-skills-detail-section">
+            <div className="settings-skills-detail-section-title">Install</div>
+            <div className="settings-skills-detail-meta">
+              {renderSkillDetailMetaRow('Source', detail.source)}
+              {renderSkillDetailMetaRow('Source URL', detail.sourceUrl)}
+              {renderSkillDetailMetaRow('Source type', detail.sourceType)}
+              {renderSkillDetailMetaRow('Ref', detail.ref)}
+              {renderSkillDetailMetaRow('Skill path', detail.skillPath)}
+              {renderSkillDetailMetaRow('Plugin', detail.pluginName)}
+              {renderSkillDetailMetaRow('Installed', detail.installedAt)}
+              {renderSkillDetailMetaRow('Updated', detail.updatedAt)}
+              {renderSkillDetailMetaRow('Local path', detail.path)}
+              {detail.agents?.length ? renderSkillDetailMetaRow('Agents', detail.agents.join(', ')) : null}
+              <div className="settings-skills-detail-meta-row">
+                <span>Status</span>
+                <span>{managed ? 'Managed' : 'External'}</span>
+              </div>
+            </div>
+            {managed ? (
+              <button
+                type="button"
+                className="settings-detail-action-btn danger"
+                disabled={hubActionPending}
+                onClick={() => requestSkillUninstall({
+                  hubId: skillDetailTarget.hubId,
+                  scope: skillDetailTarget.scope,
+                  projectName: skillDetailTarget.projectName,
+                  skillName: skillDetailTarget.skillName,
+                })}
+              >
+                {pending ? 'Removing...' : 'Uninstall'}
+              </button>
+            ) : null}
+          </section>
+          <section className="settings-skills-detail-section">
+            <div className="settings-skills-detail-section-title">Skill.md</div>
+            <div className="settings-skills-detail-markdown markdown-preview">
+              <ReactMarkdown remarkPlugins={SKILL_MARKDOWN_REMARK_PLUGINS}>
+                {detail.skillMarkdown}
+              </ReactMarkdown>
+            </div>
+          </section>
+          <section className="settings-skills-detail-section">
+            <div className="settings-skills-detail-section-title">Supporting files</div>
+            {supportingFiles.length > 0 ? (
+              <div className="settings-skills-detail-files">
+                {supportingFiles.map(renderSupportingFile)}
+              </div>
+            ) : (
+              <div className="settings-skills-empty">No supporting files.</div>
+            )}
+          </section>
+        </div>
+      ) : !loading && !error ? (
+        <div className="settings-skills-empty">No detail loaded.</div>
+      ) : null}
+    </aside>
+  );
+}
+
 export function SkillsSettingsDetail({
   skillHubs,
   skillsLoading,
@@ -150,9 +295,7 @@ export function SkillsSettingsDetail({
   requestSkillUninstall,
   requestSkillBatchUninstall,
   requestSkillDetail,
-  closeSkillDetail,
   skillDetailTarget,
-  skillDetailCache,
   skillActionPendingKey,
 }: SkillsSettingsDetailProps) {
   const skillHubCards = Object.values(skillHubs).sort((left, right) => left.hubId.localeCompare(right.hubId));
@@ -486,135 +629,6 @@ export function SkillsSettingsDetail({
     );
   };
 
-  const renderSkillDetailMetaRow = (label: string, value?: string) => {
-    if (!value) {
-      return null;
-    }
-    return (
-      <div className="settings-skills-detail-meta-row">
-        <span>{label}</span>
-        <span title={value}>{value}</span>
-      </div>
-    );
-  };
-
-  const renderSupportingFile = (file: RegistrySkillSupportingFile) => (
-    <div key={file.relativePath} className="settings-skills-detail-file">
-      <span className={`codicon ${file.directory ? 'codicon-folder' : 'codicon-file'}`} aria-hidden="true" />
-      <span title={file.relativePath}>{file.relativePath}</span>
-      <span>{file.directory ? 'Folder' : formatSkillFileSize(file.size)}</span>
-    </div>
-  );
-
-  const renderSkillDetailPanel = () => {
-    if (!skillDetailTarget) {
-      return null;
-    }
-    const activeSkillDetailKey = skillDetailCacheKey(skillDetailTarget);
-    const activeSkillDetailEntry = skillDetailCache[activeSkillDetailKey];
-    const detail = activeSkillDetailEntry?.detail ?? null;
-    const loading = activeSkillDetailEntry?.loading === true;
-    const error = activeSkillDetailEntry?.error ?? '';
-    const pendingKey = skillActionPendingKey({
-      hubId: skillDetailTarget.hubId,
-      scope: skillDetailTarget.scope,
-      projectName: skillDetailTarget.projectName,
-      skillName: skillDetailTarget.skillName,
-      action: 'skillUninstall',
-    });
-    const pending = skillsPendingKey === pendingKey;
-    const hubActionPending = isSkillActionPendingForHub(skillsPendingKey, skillDetailTarget.hubId);
-    const managed = detail?.managed !== false;
-    const supportingFiles = [...(detail?.supportingFiles ?? [])]
-      .sort((left, right) => left.relativePath.localeCompare(right.relativePath));
-
-    return (
-      <aside className="settings-skills-detail-panel" aria-label="Skill detail">
-        <div className="settings-skills-detail-header">
-          <div className="settings-skills-detail-title-wrap">
-            <span className="settings-skills-scope-kind">Skill</span>
-            <h2 className="settings-skills-detail-title">{skillDetailTarget.skillName}</h2>
-            <span className="settings-skills-detail-scope">{skillScopeLabel(skillDetailTarget)}</span>
-          </div>
-          <button
-            type="button"
-            className="settings-skill-icon-btn"
-            onClick={closeSkillDetail}
-            title="Close"
-            aria-label="Close"
-          >
-            <span className="codicon codicon-close" />
-          </button>
-        </div>
-        {loading ? (
-          <div className="settings-skills-detail-status" role="status">
-            <span className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
-            <span>Loading skill detail...</span>
-          </div>
-        ) : null}
-        {error ? <div className="settings-metadata-error">{error}</div> : null}
-        {detail ? (
-          <div className="settings-skills-detail-body">
-            <section className="settings-skills-detail-section">
-              <div className="settings-skills-detail-section-title">Install</div>
-              <div className="settings-skills-detail-meta">
-                {renderSkillDetailMetaRow('Source', detail.source)}
-                {renderSkillDetailMetaRow('Source URL', detail.sourceUrl)}
-                {renderSkillDetailMetaRow('Source type', detail.sourceType)}
-                {renderSkillDetailMetaRow('Ref', detail.ref)}
-                {renderSkillDetailMetaRow('Skill path', detail.skillPath)}
-                {renderSkillDetailMetaRow('Plugin', detail.pluginName)}
-                {renderSkillDetailMetaRow('Installed', detail.installedAt)}
-                {renderSkillDetailMetaRow('Updated', detail.updatedAt)}
-                {renderSkillDetailMetaRow('Local path', detail.path)}
-                {detail.agents?.length ? renderSkillDetailMetaRow('Agents', detail.agents.join(', ')) : null}
-                <div className="settings-skills-detail-meta-row">
-                  <span>Status</span>
-                  <span>{managed ? 'Managed' : 'External'}</span>
-                </div>
-              </div>
-              {managed ? (
-                <button
-                  type="button"
-                  className="settings-detail-action-btn danger"
-                  disabled={hubActionPending}
-                  onClick={() => requestSkillUninstall({
-                    hubId: skillDetailTarget.hubId,
-                    scope: skillDetailTarget.scope,
-                    projectName: skillDetailTarget.projectName,
-                    skillName: skillDetailTarget.skillName,
-                  })}
-                >
-                  {pending ? 'Removing...' : 'Uninstall'}
-                </button>
-              ) : null}
-            </section>
-            <section className="settings-skills-detail-section">
-              <div className="settings-skills-detail-section-title">Skill.md</div>
-              <div className="settings-skills-detail-markdown markdown-preview">
-                <ReactMarkdown remarkPlugins={SKILL_MARKDOWN_REMARK_PLUGINS}>
-                  {detail.skillMarkdown}
-                </ReactMarkdown>
-              </div>
-            </section>
-            <section className="settings-skills-detail-section">
-              <div className="settings-skills-detail-section-title">Supporting files</div>
-              {supportingFiles.length > 0 ? (
-                <div className="settings-skills-detail-files">
-                  {supportingFiles.map(renderSupportingFile)}
-                </div>
-              ) : (
-                <div className="settings-skills-empty">No supporting files.</div>
-              )}
-            </section>
-          </div>
-        ) : !loading && !error ? (
-          <div className="settings-skills-empty">No detail loaded.</div>
-        ) : null}
-      </aside>
-    );
-  };
-
   const renderSkillHubPicker = () => {
     if (!activeSkillHub) {
       return null;
@@ -787,7 +801,6 @@ export function SkillsSettingsDetail({
             </section>
           );
         })() : null}
-        {renderSkillDetailPanel()}
       </div>
     </div>
   );

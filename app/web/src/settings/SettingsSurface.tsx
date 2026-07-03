@@ -35,6 +35,7 @@ export type MobileSettingsScreenProps = {
   children: ReactNode;
   shortcutBar: ReactNode;
   onBack: () => void;
+  sidePanel?: ReactNode;
 };
 
 export type SettingsScreenProps = MobileSettingsScreenProps & {
@@ -92,6 +93,8 @@ export function settingsDetailTitle(detail: SettingsDetailId): string {
       return 'Connection Status';
     case 'debugLogs':
       return 'Logs';
+    case 'skillDetail':
+      return 'Skill Detail';
   }
 }
 
@@ -182,12 +185,14 @@ export function SettingsScreen({
   children,
   shortcutBar,
   onBack,
+  sidePanel,
   className,
   onBackdropClick,
 }: SettingsScreenProps) {
   const screenClassName = className
     ? `mobile-settings-screen ${className}`
     : 'mobile-settings-screen';
+  const effectiveScreenClassName = sidePanel ? `${screenClassName} has-settings-side-panel` : screenClassName;
   const handleBackdropClick = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (event.target !== event.currentTarget || !onBackdropClick) {
       return;
@@ -197,30 +202,33 @@ export function SettingsScreen({
 
   return (
     <div
-      className={screenClassName}
+      className={effectiveScreenClassName}
       role="dialog"
       aria-modal="true"
       aria-label={title}
       onClick={handleBackdropClick}
     >
-      <div className="mobile-settings-panel">
-        <div className="mobile-settings-nav">
-          <button
-            type="button"
-            className="mobile-settings-back"
-            onClick={onBack}
-            aria-label={backAriaLabel}
-            title="Back"
-          >
-            <span className="codicon codicon-arrow-left" />
-          </button>
-          <div className="mobile-settings-title">{title}</div>
-          <div className="mobile-settings-actions">{actions}</div>
+      <div className="settings-screen-panel-row">
+        <div className="mobile-settings-panel">
+          <div className="mobile-settings-nav">
+            <button
+              type="button"
+              className="mobile-settings-back"
+              onClick={onBack}
+              aria-label={backAriaLabel}
+              title="Back"
+            >
+              <span className="codicon codicon-arrow-left" />
+            </button>
+            <div className="mobile-settings-title">{title}</div>
+            <div className="mobile-settings-actions">{actions}</div>
+          </div>
+          <div className="mobile-settings-scroll">
+            <div className="mobile-settings-group">{children}</div>
+          </div>
+          {shortcutBar}
         </div>
-        <div className="mobile-settings-scroll">
-          <div className="mobile-settings-group">{children}</div>
-        </div>
-        {shortcutBar}
+        {sidePanel}
       </div>
     </div>
   );

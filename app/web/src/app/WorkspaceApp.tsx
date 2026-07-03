@@ -509,6 +509,9 @@ const UpdateSettingsDetail = React.lazy(() => loadSettingsBundle().then(module =
 const SkillsSettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.SkillsSettingsDetail,
 })));
+const SkillDetailPanel = React.lazy(() => loadSettingsBundle().then(module => ({
+  default: module.SkillDetailPanel,
+})));
 const SettingsRootContent = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.SettingsRootContent,
 })));
@@ -7383,7 +7386,7 @@ export function App() {
         settingsDetailView: settingsDetailViewRef.current as MobileSettingsHistoryDetail | null,
       });
       if (action === 'back-to-root') {
-        setSettingsDetailView(null);
+        setSettingsDetailView(nextIsMobileSettingsHistory ? nextState.detail : null);
         return;
       }
       if (action === 'close-settings') {
@@ -13582,11 +13585,18 @@ export function App() {
 
   const closeSkillDetail = useCallback(() => {
     setSkillDetailTarget(null);
-  }, []);
+    if (!isWide && settingsDetailViewRef.current === 'skillDetail') {
+      setSettingsDetailView('skills');
+    }
+  }, [isWide]);
 
   const requestSkillDetail = useCallback(async (target: SkillDetailTarget) => {
     const cacheKey = skillDetailCacheKey(target);
     setSkillDetailTarget(target);
+    if (!isWide) {
+      setSidebarSettingsOpen(true);
+      setSettingsDetailView('skillDetail');
+    }
     const cached = skillDetailCache[cacheKey];
     if (cached?.detail || cached?.loading) {
       return;
@@ -13623,7 +13633,7 @@ export function App() {
         },
       }));
     }
-  }, [skillDetailCache]);
+  }, [isWide, setSidebarSettingsOpen, skillDetailCache]);
 
   const requestSkillUpdate = useCallback((target: {hubId: string; scope: RegistrySkillScope; projectName?: string; includeProjects?: boolean}) => {
     setConfirmError('');
@@ -15936,13 +15946,32 @@ export function App() {
           requestSkillUninstall={requestSkillUninstall}
           requestSkillBatchUninstall={requestSkillBatchUninstall}
           requestSkillDetail={requestSkillDetail}
-          closeSkillDetail={closeSkillDetail}
           skillDetailTarget={skillDetailTarget}
-          skillDetailCache={skillDetailCache}
           skillActionPendingKey={skillActionPendingKey}
         />
       </React.Suspense>,
       renderSettingsDetailActions('skills'),
+      options,
+    );
+
+  const renderSkillDetailPanel = () => (
+    <React.Suspense fallback={null}>
+      <SkillDetailPanel
+        skillDetailTarget={skillDetailTarget}
+        skillDetailCache={skillDetailCache}
+        skillsPendingKey={skillsPendingKey}
+        closeSkillDetail={closeSkillDetail}
+        requestSkillUninstall={requestSkillUninstall}
+        skillActionPendingKey={skillActionPendingKey}
+      />
+    </React.Suspense>
+  );
+
+  const renderSkillDetailSettingsDetail = (options?: SettingsDetailShellOptions) =>
+    renderSettingsDetailShell(
+      skillDetailTarget?.skillName || 'Skill Detail',
+      renderSkillDetailPanel(),
+      undefined,
       options,
     );
 
@@ -16117,6 +16146,9 @@ export function App() {
     }
     if (detail === 'skills') {
       return renderSkillsSettingsDetail(options);
+    }
+    if (detail === 'skillDetail') {
+      return renderSkillDetailSettingsDetail(options);
     }
     if (detail === 'tokenStats') {
       return renderTokenStatsSettingsDetail(options);
@@ -19444,7 +19476,9 @@ export function App() {
   ) : null;
 
   const mobileSettingsTitle = settingsDetailView
-    ? settingsDetailTitle(settingsDetailView)
+    ? settingsDetailView === 'skillDetail' && skillDetailTarget
+      ? skillDetailTarget.skillName
+      : settingsDetailTitle(settingsDetailView)
     : 'Settings';
   const mobileSettingsActions = settingsDetailView
     ? renderSettingsDetailActions(settingsDetailView)
@@ -19461,6 +19495,10 @@ export function App() {
     />
   ) : null;
 
+  const desktopSkillDetailPanel = isWide && sidebarSettingsOpen && settingsDetailView === 'skills' && skillDetailTarget ? (
+    renderSkillDetailPanel()
+  ) : null;
+
   const desktopSettingsScreen = isWide && sidebarSettingsOpen ? (
     <SettingsScreen
       className="desktop-settings-screen"
@@ -19470,6 +19508,7 @@ export function App() {
       shortcutBar={settingsShortcutBar}
       onBack={handleMobileSettingsBackButton}
       onBackdropClick={handleMobileSettingsBackButton}
+      sidePanel={desktopSkillDetailPanel}
     >
       {renderSettingsContent(false, { hideDetailHeader: true })}
     </SettingsScreen>

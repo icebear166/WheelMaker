@@ -7,7 +7,8 @@ export type SettingsPeerDetail =
 export type SettingsChildDetail =
   | 'connectionStatus'
   | 'database'
-  | 'debugLogs';
+  | 'debugLogs'
+  | 'skillDetail';
 
 export type SettingsDetailId = SettingsPeerDetail | SettingsChildDetail;
 export type SettingsPageKind = 'root' | 'peer' | 'child';
@@ -23,6 +24,7 @@ export const SETTINGS_CHILD_DETAILS: readonly SettingsChildDetail[] = [
   'connectionStatus',
   'database',
   'debugLogs',
+  'skillDetail',
 ];
 
 export function isSettingsPeerDetail(

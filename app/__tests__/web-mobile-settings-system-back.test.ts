@@ -27,6 +27,7 @@ describe('mobile settings system back', () => {
     expect(isMobileSettingsHistoryState({})).toBe(false);
     expect(mobileSettingsHistoryKey(null)).toBe('mobile-settings:root');
     expect(mobileSettingsHistoryKey('update')).toBe('mobile-settings:update');
+    expect(mobileSettingsHistoryKey('skillDetail')).toBe('mobile-settings:skillDetail');
   });
 
   test('resolves native back actions for settings layers', () => {
@@ -98,6 +99,11 @@ describe('mobile settings system back', () => {
       currentKey: mobileSettingsHistoryKey('skills'),
       nextDetail: 'skills',
     })).toBe('none');
+
+    expect(resolveMobileSettingsHistoryWriteAction({
+      currentKey: mobileSettingsHistoryKey('skills'),
+      nextDetail: 'skillDetail',
+    })).toBe('push');
   });
 
   test('wires mobile settings to history and mobile title actions', () => {
@@ -120,6 +126,7 @@ describe('mobile settings system back', () => {
     expect(main).toContain('window.WheelMakerAndroidBack = {');
     expect(main).toContain('handleBack: handleAndroidNativeBack');
     expect(main).toContain('settingsPageKind(settingsDetailViewRef.current)');
+    expect(main).toContain('setSettingsDetailView(nextIsMobileSettingsHistory ? nextState.detail : null);');
     expect(main).toContain('if (!isWide && sidebarSettingsOpenRef.current && mobileSettingsHistoryKeyRef.current !== null) {');
     expect(main).toContain('window.history.back();');
     expect(main).toContain('renderSettingsDetailActions(settingsDetailView)');
