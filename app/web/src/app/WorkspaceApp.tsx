@@ -270,6 +270,7 @@ import {
   MobileSettingsScreen,
   MobileSettingsShortcutBar,
   SettingsDetailShell,
+  SettingsScreen,
   SettingsSurface,
   settingsDetailTitle,
   type SettingsDetailShellOptions,
@@ -7173,15 +7174,13 @@ export function App() {
   const openSettingsRoot = useCallback(() => {
     setSettingsDetailView(null);
     setSidebarSettingsOpen(true);
-    setSidebarCollapsed(false);
-  }, [setSidebarCollapsed, setSidebarSettingsOpen]);
+  }, [setSidebarSettingsOpen]);
   const openSettingsPeer = useCallback((detail: SettingsPeerDetail) => {
     if (isWide && sidebarSettingsOpen && settingsDetailView === detail) {
       closeSettingsPanel();
       return;
     }
     setSidebarSettingsOpen(true);
-    setSidebarCollapsed(false);
     if (detail === 'skills') {
       setSkillsError('');
     }
@@ -7192,15 +7191,14 @@ export function App() {
       setPortRelayError('');
     }
     setSettingsDetailView(detail);
-  }, [closeSettingsPanel, isWide, setSidebarCollapsed, setSidebarSettingsOpen, settingsDetailView, sidebarSettingsOpen]);
+  }, [closeSettingsPanel, isWide, setSidebarSettingsOpen, settingsDetailView, sidebarSettingsOpen]);
   const openSettingsChild = useCallback((detail: SettingsChildDetail) => {
     setSidebarSettingsOpen(true);
-    setSidebarCollapsed(false);
     if (detail === 'database') {
       openDatabasePanel();
     }
     setSettingsDetailView(detail);
-  }, [isWide, setSidebarCollapsed, setSidebarSettingsOpen]);
+  }, [setSidebarSettingsOpen]);
   const openSettingsDetail = useCallback((detail: SettingsDetailId) => {
     if (isSettingsPeerDetail(detail)) {
       openSettingsPeer(detail);
@@ -16612,20 +16610,13 @@ export function App() {
     const mobileSidebarMain = !isWide
       ? tab === 'chat' && !isWide ? renderMobileChatSessionSheet() : renderSidebarMain()
       : null;
-    const wideSettingsTitle = settingsDetailView
-      ? settingsDetailTitle(settingsDetailView).toUpperCase()
-      : 'SETTINGS';
-    const wideSidebarTitle = sidebarSettingsOpen
-      ? wideSettingsTitle
-      : tab === 'chat'
+    const wideSidebarTitle = tab === 'chat'
       ? 'CHAT'
       : tab === 'file'
       ? 'EXPLORER'
       : 'SOURCE CONTROL';
     const chatSidebarTitleSearchOpen = tab === 'chat' && !sidebarSettingsOpen && sessionSearchHeaderExpanded;
-    const wideSidebarMain = sidebarSettingsOpen
-      ? renderSettingsContent(false, { hideDetailHeader: isSettingsPeerDetail(settingsDetailView) })
-      : tab === 'chat' ? renderWideProjectSessionNav() : renderSidebarMain(false);
+    const wideSidebarMain = tab === 'chat' ? renderWideProjectSessionNav() : renderSidebarMain(false);
 
     return (
       <>
@@ -19256,7 +19247,7 @@ export function App() {
     : <span className="mobile-settings-action-spacer" aria-hidden="true" />;
   const mobileSettingsShortcutActiveIndex = mobileSettingsShortcutIndex(settingsDetailView);
   const mobileSettingsRootShortcutActive = mobileSettingsShortcutActiveIndex === 0;
-  const mobileSettingsShortcutBar = !isWide && sidebarSettingsOpen ? (
+  const settingsShortcutBar = sidebarSettingsOpen ? (
     <MobileSettingsShortcutBar
       activeDetail={settingsDetailView}
       activeIndex={mobileSettingsShortcutActiveIndex}
@@ -19266,12 +19257,25 @@ export function App() {
     />
   ) : null;
 
+  const desktopSettingsScreen = isWide && sidebarSettingsOpen ? (
+    <SettingsScreen
+      className="desktop-settings-screen"
+      title={mobileSettingsTitle}
+      actions={mobileSettingsActions}
+      backAriaLabel={settingsDetailView ? 'Back to settings' : 'Close settings'}
+      shortcutBar={settingsShortcutBar}
+      onBack={handleMobileSettingsBackButton}
+    >
+      {renderSettingsContent(false, { hideDetailHeader: true })}
+    </SettingsScreen>
+  ) : null;
+
   const mobileSettingsScreen = !isWide && sidebarSettingsOpen ? (
     <MobileSettingsScreen
       title={mobileSettingsTitle}
       actions={mobileSettingsActions}
       backAriaLabel={settingsDetailView ? 'Back to settings' : 'Back to drawer'}
-      shortcutBar={mobileSettingsShortcutBar}
+      shortcutBar={settingsShortcutBar}
       onBack={handleMobileSettingsBackButton}
     >
       {renderSettingsContent(false, { hideDetailHeader: true })}
@@ -20205,6 +20209,7 @@ export function App() {
         themeMode={themeMode}
         setiFontCss={setiFontCss}
         desktopWindowControls={desktopWindowControls}
+        desktopSettingsScreen={desktopSettingsScreen}
         desktopPeek={chatPreviewDesktopPane}
         desktopChatFixedPreview={desktopChatFixedPreview}
         desktopChatPreviewOpen={isWide && chatPreviewOpen}

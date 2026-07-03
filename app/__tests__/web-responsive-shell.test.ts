@@ -25,6 +25,7 @@ describe('web responsive shell split', () => {
     expect(shellTsx).not.toContain("import { DesktopTitleBar } from './layouts/desktop/DesktopTitleBar';");
     expect(shellTsx).toContain("mode === 'desktop'");
     expect(shellTsx).toContain('desktopWindowControls: ReactNode;');
+    expect(shellTsx).toContain('desktopSettingsScreen: ReactNode;');
     expect(shellTsx).toContain('desktopChatPreviewOpen: boolean;');
     expect(shellTsx).not.toContain('desktopActivityBar: ReactNode;');
     expect(shellTsx).not.toContain('<DesktopTitleBar title="WheelMaker" />');
@@ -69,6 +70,7 @@ describe('web responsive shell split', () => {
     expect(mainTsx).toContain('<ResponsiveShell');
     expect(mainTsx).toContain('mode={layoutMode}');
     expect(mainTsx).toContain('desktopWindowControls={desktopWindowControls}');
+    expect(mainTsx).toContain('desktopSettingsScreen={desktopSettingsScreen}');
     expect(mainTsx).toContain('desktopChatPreviewOpen={isWide && chatPreviewOpen}');
     expect(mainTsx).not.toContain('desktopActivityBar={desktopActivityBar}');
     expect(mainTsx).toContain('floatingControlStack={floatingControlStack}');
@@ -138,12 +140,19 @@ describe('web responsive shell split', () => {
     expect(previewToolbarBlock).toContain('padding-right: calc(var(--desktop-window-controls-width) + 10px);');
   });
 
-  test('keeps wide sidebar settings scrollable inside the desktop shell', () => {
+  test('renders desktop settings as a global centered overlay instead of sidebar content', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const stylesCss = readWebStyles(projectRoot);
 
-    expect(mainTsx).toMatch(/const wideSidebarMain = sidebarSettingsOpen\s*\?\s*renderSettingsContent\(false, \{ hideDetailHeader: isSettingsPeerDetail\(settingsDetailView\) \}\)/);
+    expect(mainTsx).toContain('const desktopSettingsScreen = isWide && sidebarSettingsOpen ? (');
+    expect(mainTsx).toContain('<SettingsScreen');
+    expect(mainTsx).toContain('className="desktop-settings-screen"');
+    expect(mainTsx).toContain('shortcutBar={settingsShortcutBar}');
+    expect(mainTsx).toContain("const wideSidebarMain = tab === 'chat' ? renderWideProjectSessionNav() : renderSidebarMain(false);");
+    expect(mainTsx).not.toContain('const wideSidebarMain = sidebarSettingsOpen');
+    expect(mainTsx).not.toContain('wideSettingsTitle');
+    expect(mainTsx).not.toContain('const wideSidebarTitle = sidebarSettingsOpen');
     expect(mainTsx).toContain('<div className="sidebar-scroll">');
 
     const workspaceLeftBlock = cssRuleBlock(stylesCss, '.workspace-left');
@@ -155,30 +164,21 @@ describe('web responsive shell split', () => {
     expect(wideSidebarScrollBlock).toContain('scrollbar-gutter: auto;');
     expect(wideSidebarScrollBlock).toContain('scrollbar-width: thin;');
     expect(wideSidebarScrollBlock).not.toContain('scrollbar-gutter: stable;');
-  });
 
-  test('applies mobile-style settings surfaces inside the desktop sidebar', () => {
-    const projectRoot = path.join(__dirname, '..');
-    const stylesCss = readWebStyles(projectRoot);
+    const desktopScreenBlock = cssRuleBlock(stylesCss, '.mobile-settings-screen.desktop-settings-screen');
+    expect(desktopScreenBlock).toContain('position: fixed;');
+    expect(desktopScreenBlock).toContain('inset: 0;');
+    expect(desktopScreenBlock).toContain('z-index: 60;');
+    expect(desktopScreenBlock).toContain('display: grid;');
+    expect(desktopScreenBlock).toContain('place-items: center;');
 
-    const settingsListBlock = cssRuleBlock(stylesCss, '.workspace-left .settings-list');
-    expect(settingsListBlock).toContain('overflow: visible;');
-    expect(settingsListBlock).toContain('gap: 18px;');
-    expect(settingsListBlock).toContain('padding: 0 10px 16px;');
+    const desktopPanelBlock = cssRuleBlock(stylesCss, '.desktop-settings-screen .mobile-settings-panel');
+    expect(desktopPanelBlock).toContain('width: min(720px, calc(100vw - 56px));');
+    expect(desktopPanelBlock).toContain('height: min(760px, calc(100vh - 84px));');
+    expect(desktopPanelBlock).toContain('border-radius: 14px;');
+    expect(desktopPanelBlock).toContain('overflow: hidden;');
 
-    const settingsRowsBlock = cssRuleBlock(stylesCss, '.workspace-left .settings-section-rows');
-    expect(settingsRowsBlock).toContain('border-radius: 12px;');
-    expect(settingsRowsBlock).toContain('background: color-mix(in srgb, var(--panel) 92%, transparent);');
-
-    const settingsRowBlock = cssRuleBlock(stylesCss, '.workspace-left .settings-row');
-    expect(settingsRowBlock).toContain('min-height: 54px;');
-    expect(settingsRowBlock).toContain('padding: 0 16px;');
-    expect(settingsRowBlock).toContain('font-size: 13px;');
-
-    const detailPageBlock = cssRuleBlock(stylesCss, '.workspace-left .settings-detail-page');
-    expect(detailPageBlock).toContain('padding: 0 8px 12px;');
-
-    const detailHeaderBlock = cssRuleBlock(stylesCss, '.workspace-left .settings-detail-header');
-    expect(detailHeaderBlock).toContain('padding: 6px 4px 8px;');
+    expect(stylesCss).not.toContain('.workspace-left .settings-list {');
+    expect(stylesCss).not.toContain('.workspace-left .settings-detail-page {');
   });
 });

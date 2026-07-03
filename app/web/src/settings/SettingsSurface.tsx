@@ -37,6 +37,10 @@ export type MobileSettingsScreenProps = {
   onBack: () => void;
 };
 
+export type SettingsScreenProps = MobileSettingsScreenProps & {
+  className?: string;
+};
+
 type MobileSettingsShortcut = {
   detail: SettingsPeerDetail;
   title: string;
@@ -170,38 +174,49 @@ export function MobileSettingsShortcutBar({
   );
 }
 
-export function MobileSettingsScreen({
+export function SettingsScreen({
   title,
   actions,
   backAriaLabel,
   children,
   shortcutBar,
   onBack,
-}: MobileSettingsScreenProps) {
+  className,
+}: SettingsScreenProps) {
+  const screenClassName = className
+    ? `mobile-settings-screen ${className}`
+    : 'mobile-settings-screen';
+
   return (
     <div
-      className="mobile-settings-screen"
+      className={screenClassName}
       role="dialog"
       aria-modal="true"
       aria-label={title}
     >
-      <div className="mobile-settings-nav">
-        <button
-          type="button"
-          className="mobile-settings-back"
-          onClick={onBack}
-          aria-label={backAriaLabel}
-          title="Back"
-        >
-          <span className="codicon codicon-arrow-left" />
-        </button>
-        <div className="mobile-settings-title">{title}</div>
-        <div className="mobile-settings-actions">{actions}</div>
+      <div className="mobile-settings-panel">
+        <div className="mobile-settings-nav">
+          <button
+            type="button"
+            className="mobile-settings-back"
+            onClick={onBack}
+            aria-label={backAriaLabel}
+            title="Back"
+          >
+            <span className="codicon codicon-arrow-left" />
+          </button>
+          <div className="mobile-settings-title">{title}</div>
+          <div className="mobile-settings-actions">{actions}</div>
+        </div>
+        <div className="mobile-settings-scroll">
+          <div className="mobile-settings-group">{children}</div>
+        </div>
+        {shortcutBar}
       </div>
-      <div className="mobile-settings-scroll">
-        <div className="mobile-settings-group">{children}</div>
-      </div>
-      {shortcutBar}
     </div>
   );
+}
+
+export function MobileSettingsScreen(props: MobileSettingsScreenProps) {
+  return <SettingsScreen {...props} />;
 }

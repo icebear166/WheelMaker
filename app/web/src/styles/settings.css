@@ -53,9 +53,18 @@ textarea,
   inset: 0;
   z-index: 60;
   display: flex;
-  flex-direction: column;
   min-width: 0;
   min-height: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.mobile-settings-panel {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   background: var(--bg);
   color: var(--text);
 }
@@ -219,53 +228,46 @@ textarea,
   font-size: 14px;
 }
 
-.workspace-left .settings-list {
-  overflow: visible;
-  gap: 18px;
-  padding: 0 10px 16px;
+.mobile-settings-screen.desktop-settings-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 48px 28px 28px;
+  background: color-mix(in srgb, var(--bg) 76%, transparent);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 
-.workspace-left .settings-section-rows {
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--panel) 92%, transparent);
+.desktop-settings-screen .mobile-settings-panel {
+  flex: 0 1 auto;
+  width: min(720px, calc(100vw - 56px));
+  height: min(760px, calc(100vh - 84px));
+  min-height: 420px;
+  border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+  border-radius: 14px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--panel) 94%, var(--bg));
+  box-shadow:
+    0 30px 90px color-mix(in srgb, #000 42%, transparent),
+    0 1px 0 color-mix(in srgb, #fff 8%, transparent) inset;
 }
 
-.workspace-left .settings-row {
-  min-height: 54px;
-  padding: 0 16px;
-  font-size: 13px;
+.desktop-settings-screen .mobile-settings-nav {
+  height: 52px;
+  min-height: 52px;
+  padding: 0 12px;
 }
 
-.workspace-left .settings-row > span:first-child > .codicon:first-child,
-.workspace-left .settings-row-icon {
-  width: 20px;
-  font-size: 15px;
+.desktop-settings-screen .mobile-settings-title {
+  top: 26px;
+  max-width: min(460px, calc(100% - 176px));
 }
 
-.workspace-left .settings-detail-page {
-  padding: 0 8px 12px;
-}
-
-.workspace-left .settings-detail-page-body-only {
-  padding-top: 0;
-}
-
-.workspace-left .settings-detail-header {
-  padding: 6px 4px 8px;
-}
-
-.workspace-left .settings-detail-title {
-  font-size: 15px;
-}
-
-.workspace-left .settings-detail-body {
-  padding: 4px 2px 16px;
-  gap: 12px;
-}
-
-.workspace-left .settings-detail-row {
-  min-height: 54px;
-  font-size: 13px;
+.desktop-settings-screen .mobile-settings-scroll {
+  padding: 14px 0 0;
+  background: color-mix(in srgb, var(--panel) 94%, var(--bg));
 }
 
 .mobile-settings-shortcut-bar {
@@ -277,6 +279,10 @@ textarea,
   border-top: 1px solid var(--border);
   background: color-mix(in srgb, var(--panel) 62%, var(--panel-3));
   padding: 0 12px env(safe-area-inset-bottom, 0px);
+}
+
+.desktop-settings-screen .mobile-settings-shortcut-bar {
+  padding-bottom: 0;
 }
 
 .mobile-settings-shortcut-track {

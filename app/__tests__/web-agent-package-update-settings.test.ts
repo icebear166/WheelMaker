@@ -437,7 +437,7 @@ describe('agent package update settings UI source structure', () => {
     expect(stylesCss).toContain('.token-stats-pill-agent-8 { --pill-accent: #4fb86a; }');
   });
 
-  test('hides desktop shortcuts and keeps a mobile Settings-only shortcut bar', () => {
+  test('hides desktop shortcuts and shares the Settings shortcut bar across settings screens', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const settingsSurfaceTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsSurface.tsx'), 'utf8');
@@ -456,18 +456,21 @@ describe('agent package update settings UI source structure', () => {
     expect(mainTsx).not.toContain('aria-label="CC Switch"');
 
     const floatingStart = mainTsx.indexOf('const floatingControlStack = !isWide ? (');
-    const mobileBarStart = mainTsx.indexOf('const mobileSettingsShortcutBar = !isWide && sidebarSettingsOpen ? (', floatingStart);
-    const mobileOnly = mainTsx.slice(floatingStart, mobileBarStart);
+    const settingsBarStart = mainTsx.indexOf('const settingsShortcutBar = sidebarSettingsOpen ? (', floatingStart);
+    const mobileOnly = mainTsx.slice(floatingStart, settingsBarStart);
     expect(mobileOnly).not.toContain("openSettingsDetail('update')");
 
-    const mobileBarEnd = mainTsx.indexOf('const mobileSettingsScreen = !isWide && sidebarSettingsOpen ? (', mobileBarStart);
-    expect(mobileBarStart).toBeGreaterThanOrEqual(0);
-    expect(mobileBarEnd).toBeGreaterThan(mobileBarStart);
-    const mobileBar = mainTsx.slice(mobileBarStart, mobileBarEnd);
-    expect(mobileBar).toContain('<MobileSettingsShortcutBar');
-    expect(mobileBar).toContain('onRootSelect={handleMobileSettingsRootShortcut}');
-    expect(mobileBar).toContain('onDetailSelect={openMobileSettingsShortcutDetail}');
-    expect(mobileBar).toContain('activeIndex={mobileSettingsShortcutActiveIndex}');
+    const settingsBarEnd = mainTsx.indexOf('const desktopSettingsScreen = isWide && sidebarSettingsOpen ? (', settingsBarStart);
+    expect(settingsBarStart).toBeGreaterThanOrEqual(0);
+    expect(settingsBarEnd).toBeGreaterThan(settingsBarStart);
+    const settingsBar = mainTsx.slice(settingsBarStart, settingsBarEnd);
+    expect(settingsBar).toContain('<MobileSettingsShortcutBar');
+    expect(settingsBar).toContain('onRootSelect={handleMobileSettingsRootShortcut}');
+    expect(settingsBar).toContain('onDetailSelect={openMobileSettingsShortcutDetail}');
+    expect(settingsBar).toContain('activeIndex={mobileSettingsShortcutActiveIndex}');
+    expect(mainTsx).toContain('const desktopSettingsScreen = isWide && sidebarSettingsOpen ? (');
+    expect(mainTsx).toContain('shortcutBar={settingsShortcutBar}');
+    expect(mainTsx).toContain('const mobileSettingsScreen = !isWide && sidebarSettingsOpen ? (');
     const surfaceShortcutStart = settingsSurfaceTsx.indexOf('export const MOBILE_SETTINGS_SHORTCUTS');
     const surfaceShortcutEnd = settingsSurfaceTsx.indexOf('export function settingsDetailTitle', surfaceShortcutStart);
     const surfaceShortcuts = settingsSurfaceTsx.slice(surfaceShortcutStart, surfaceShortcutEnd);

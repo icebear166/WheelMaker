@@ -12,6 +12,7 @@ type ShellContentProps = {
 
 export type DesktopShellProps = ShellContentProps & {
   desktopWindowControls: ReactNode;
+  desktopSettingsScreen: ReactNode;
   desktopPeek: ReactNode;
   desktopChatFixedPreview: boolean;
   desktopChatPreviewOpen: boolean;
@@ -37,6 +38,7 @@ export function DesktopShell({
   themeMode,
   setiFontCss,
   desktopWindowControls,
+  desktopSettingsScreen,
   desktopPeek,
   desktopChatFixedPreview,
   desktopChatPreviewOpen,
@@ -63,6 +65,7 @@ export function DesktopShell({
           {desktopPeek}
         </div>
       </div>
+      {desktopSettingsScreen}
     </div>
   );
 }
