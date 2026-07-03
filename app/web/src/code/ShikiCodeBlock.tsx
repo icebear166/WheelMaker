@@ -101,7 +101,9 @@ function useLineClick(onLineClick?: (line: number, event: MouseEvent) => void) {
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (!onLineClick) return;
       const target = e.target as HTMLElement;
-      const lineEl = target.closest<HTMLElement>('[data-line-number]');
+      const lineNumberEl = target.closest<HTMLElement>('.wm-shiki-line-number');
+      if (!lineNumberEl) return;
+      const lineEl = lineNumberEl.closest<HTMLElement>('[data-line-number]');
       if (!lineEl) return;
       const lineNum = Number(lineEl.dataset.lineNumber);
       if (Number.isFinite(lineNum)) {
