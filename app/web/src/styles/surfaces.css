@@ -32,6 +32,10 @@
   padding-right: calc(var(--desktop-window-controls-width) + 10px);
 }
 
+.desktop-shell[data-chat-preview-open='true'] .workspace-right .chat-title-bar {
+  padding-right: 10px;
+}
+
 .title-text {
   min-width: 0;
   overflow: hidden;

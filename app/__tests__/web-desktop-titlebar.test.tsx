@@ -102,6 +102,8 @@ describe('desktop window controls', () => {
 
     const root = renderer!.root;
     expect(root.findByProps({className: 'desktop-window-menu-button'}).findByProps({className: 'desktop-titlebar-icon'})).toBeDefined();
+    expect(root.findAllByProps({'data-desktop-titlebar-icon-bg': true})).toHaveLength(0);
+    expect(root.findAllByProps({'data-desktop-titlebar-icon-mark': true})).toHaveLength(1);
 
     const menuButton = root.findByProps({className: 'desktop-window-menu-button'});
     expect(menuButton.props['aria-expanded']).toBe(false);

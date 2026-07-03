@@ -36,39 +36,11 @@ function DesktopTitleBarIcon() {
   return (
     <svg
       className="desktop-titlebar-icon"
-      viewBox="0 0 1536 1536"
+      viewBox="300 420 930 690"
       aria-hidden="true"
       focusable="false"
     >
       <defs>
-        <clipPath id="desktopTitlebarIconClip">
-          <rect x="38" y="38" width="1460" height="1460" rx="292" />
-        </clipPath>
-        <radialGradient
-          id="desktopTitlebarIconBgRadial"
-          cx="0"
-          cy="0"
-          r="1"
-          gradientUnits="userSpaceOnUse"
-          gradientTransform="translate(768 636) rotate(90) scale(910 910)"
-        >
-          <stop offset="0" stopColor="#061A3F" />
-          <stop offset="0.58" stopColor="#021331" />
-          <stop offset="1" stopColor="#000918" />
-        </radialGradient>
-        <linearGradient
-          id="desktopTitlebarIconBgEdge"
-          x1="768"
-          y1="38"
-          x2="768"
-          y2="1498"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop offset="0" stopColor="#173E78" stopOpacity="0.55" />
-          <stop offset="0.22" stopColor="#0A2C5E" stopOpacity="0.18" />
-          <stop offset="0.72" stopColor="#020B1F" stopOpacity="0" />
-          <stop offset="1" stopColor="#0A2D61" stopOpacity="0.32" />
-        </linearGradient>
         <linearGradient
           id="desktopTitlebarIconBlueMark"
           x1="339"
@@ -108,27 +80,17 @@ function DesktopTitleBarIcon() {
         <filter
           id="desktopTitlebarIconLogoShadow"
           x="260"
-          y="405"
+          y="390"
           width="1010"
-          height="735"
+          height="760"
           filterUnits="userSpaceOnUse"
           colorInterpolationFilters="sRGB"
         >
-          <feDropShadow dx="0" dy="10" stdDeviation="10" floodColor="#000814" floodOpacity="0.45" />
+          <feDropShadow dx="0" dy="8" stdDeviation="8" floodColor="#000814" floodOpacity="0.48" />
+          <feDropShadow dx="0" dy="0" stdDeviation="5" floodColor="#1D5AA5" floodOpacity="0.25" />
         </filter>
       </defs>
-      <rect width="1536" height="1536" fill="transparent" />
-      <g filter="url(#desktopTitlebarIconSoftOuter)">
-        <rect x="38" y="38" width="1460" height="1460" rx="292" fill="url(#desktopTitlebarIconBgRadial)" />
-      </g>
-      <g clipPath="url(#desktopTitlebarIconClip)">
-        <rect x="38" y="38" width="1460" height="1460" rx="292" fill="url(#desktopTitlebarIconBgEdge)" />
-        <ellipse cx="770" cy="190" rx="520" ry="155" fill="#0C3471" opacity="0.10" />
-        <ellipse cx="768" cy="1260" rx="600" ry="210" fill="#00184A" opacity="0.15" />
-      </g>
-      <rect x="44" y="44" width="1448" height="1448" rx="286" stroke="#1A4D91" strokeWidth="5" opacity="0.45" />
-      <rect x="51" y="51" width="1434" height="1434" rx="280" stroke="#102A59" strokeWidth="3" opacity="0.42" />
-      <g filter="url(#desktopTitlebarIconLogoShadow)">
+      <g filter="url(#desktopTitlebarIconLogoShadow)" data-desktop-titlebar-icon-mark={true}>
         <path d="M325 462 L456 607 L457 847 L644 650 L1026 1073 L853 1073 L637 843 L424 1073 L326 1073 Z" fill="url(#desktopTitlebarIconBlueMark)" />
         <path d="M674 628 H871 L768 746 Z" fill="url(#desktopTitlebarIconBlueMark)" />
         <path d="M1209 462 L974 729 L895 648 L787 768 L948 943 L1079 798 L1079 1071 L1209 1071 Z" fill="url(#desktopTitlebarIconWhiteMark)" />

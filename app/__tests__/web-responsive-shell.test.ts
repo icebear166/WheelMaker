@@ -129,12 +129,22 @@ describe('web responsive shell split', () => {
     expect(stylesCss).toContain('.desktop-window-source-panel {');
     expect(stylesCss).toContain('.desktop-window-source-choice {');
 
+    const sidebarMenuRootBlock = cssRuleBlock(stylesCss, '.sidebar-title-row .desktop-window-menu-root');
+    expect(sidebarMenuRootBlock).toContain('margin-left: -12px;');
+    expect(sidebarMenuRootBlock).toContain('flex-basis: 38px;');
+
+    const titlebarIconBlock = cssRuleBlock(stylesCss, '.desktop-titlebar-icon');
+    expect(titlebarIconBlock).toContain('width: 28px;');
+    expect(titlebarIconBlock).toContain('height: 28px;');
+    expect(titlebarIconBlock).toContain('flex: 0 0 28px;');
+
     const rightTitleBlock = cssRuleBlock(stylesCss, '.desktop-shell .workspace-right .block-title');
     expect(rightTitleBlock).toContain('padding-right: calc(var(--desktop-window-controls-width) + 10px);');
 
     const rightChatTitleBlock = cssRuleBlock(stylesCss, ".desktop-shell:not([data-chat-preview-open='true']) .workspace-right .chat-title-bar");
     expect(rightChatTitleBlock).toContain('padding-right: calc(var(--desktop-window-controls-width) + 10px);');
-    expect(stylesCss).not.toContain('.desktop-shell .workspace-right .chat-title-bar {');
+    const rightChatTitlePreviewOpenBlock = cssRuleBlock(stylesCss, ".desktop-shell[data-chat-preview-open='true'] .workspace-right .chat-title-bar");
+    expect(rightChatTitlePreviewOpenBlock).toContain('padding-right: 10px;');
 
     const previewToolbarBlock = cssRuleBlock(stylesCss, '.desktop-shell .preview-workbench-surface.desktop .preview-workbench-toolbar');
     expect(previewToolbarBlock).toContain('padding-right: calc(var(--desktop-window-controls-width) + 10px);');
@@ -174,7 +184,7 @@ describe('web responsive shell split', () => {
 
     const desktopPanelBlock = cssRuleBlock(stylesCss, '.desktop-settings-screen .mobile-settings-panel');
     expect(desktopPanelBlock).toContain('width: min(720px, calc(100vw - 56px));');
-    expect(desktopPanelBlock).toContain('height: min(760px, calc(100vh - 84px));');
+    expect(desktopPanelBlock).toContain('height: calc(100vh - 64px);');
     expect(desktopPanelBlock).toContain('border-radius: 14px;');
     expect(desktopPanelBlock).toContain('overflow: hidden;');
 

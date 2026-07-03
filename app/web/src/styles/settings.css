@@ -234,7 +234,7 @@ textarea,
   z-index: 60;
   display: grid;
   place-items: center;
-  padding: 48px 28px 28px;
+  padding: 32px 28px;
   background: color-mix(in srgb, var(--bg) 76%, transparent);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
@@ -243,7 +243,7 @@ textarea,
 .desktop-settings-screen .mobile-settings-panel {
   flex: 0 1 auto;
   width: min(720px, calc(100vw - 56px));
-  height: min(760px, calc(100vh - 84px));
+  height: calc(100vh - 64px);
   min-height: 420px;
   border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
   border-radius: 14px;
@@ -1562,15 +1562,15 @@ textarea,
 }
 
 .mobile-settings-screen .settings-skills-list {
-  --settings-skills-controls-space: 146px;
+  --settings-skills-controls-space: 12px;
 }
 
 .mobile-settings-screen .settings-skills-fixed-controls {
-  left: 0;
-  right: 0;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 58px);
-  width: auto;
-  padding: 8px 10px;
+  position: sticky;
+  bottom: 0;
+  z-index: 12;
+  width: 100%;
+  padding: 8px 2px;
 }
 
 .settings-skills-scan-status {

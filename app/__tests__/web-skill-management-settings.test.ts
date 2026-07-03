@@ -137,8 +137,12 @@ describe('skill management settings UI source structure', () => {
     expect(detailTsx).toContain('setSkillHubMenuOpen(false);');
     expect(detailTsx).toContain('{activeSkillHub ? (');
     expect(stylesCss).toContain('.settings-skills-fixed-controls');
-    expect(stylesCss).toContain('position: fixed;');
-    expect(stylesCss).toContain('bottom: 0;');
+    const mobileControlsBlock = stylesCss.match(/\.mobile-settings-screen \.settings-skills-fixed-controls \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(mobileControlsBlock).toContain('position: sticky;');
+    expect(mobileControlsBlock).toContain('bottom: 0;');
+    expect(mobileControlsBlock).not.toContain('left: 0;');
+    expect(mobileControlsBlock).not.toContain('right: 0;');
+    expect(mobileControlsBlock).not.toContain('width: auto;');
     expect(stylesCss).toContain('.settings-skills-hub-picker');
     expect(stylesCss).toContain('.settings-skills-hub-menu');
     expect(stylesCss).toContain('z-index: 12;');
