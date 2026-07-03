@@ -17863,6 +17863,18 @@ export function App() {
     const activeChatBreadcrumbLabel = chatReadOnlyPreview
       ? `Archived - ${activeChatDisplayTitle || 'Session'}`
       : chatBreadcrumbLabel;
+    const toggleChatTitlePromptMenu = () => {
+      if (!chatTitlePromptMenuAvailable) return;
+      setChatPromptMenuOpen(false);
+      setChatFileMentionMenuOpen(false);
+      setChatAttachmentTrayOpen(false);
+      setChatConfigMenuOptionId('');
+      setChatConfigOverflowOpen(false);
+      setChatHubMenuOpen(false);
+      setChatQuickSwitchMenuOpen(false);
+      setChatTitleProjectMenuOpen(false);
+      setChatTitlePromptMenuOpen(open => !open);
+    };
     const renderDesktopChatBreadcrumbTitle = () => (
       <div className="breadcrumb-title chat-breadcrumb-title">
         <button
@@ -17894,18 +17906,7 @@ export function App() {
           aria-haspopup="menu"
           aria-expanded={chatTitlePromptMenuOpen}
           disabled={!chatTitlePromptMenuAvailable}
-          onClick={() => {
-            if (!chatTitlePromptMenuAvailable) return;
-            setChatPromptMenuOpen(false);
-            setChatFileMentionMenuOpen(false);
-            setChatAttachmentTrayOpen(false);
-            setChatConfigMenuOptionId('');
-            setChatConfigOverflowOpen(false);
-            setChatHubMenuOpen(false);
-            setChatQuickSwitchMenuOpen(false);
-            setChatTitleProjectMenuOpen(false);
-            setChatTitlePromptMenuOpen(open => !open);
-          }}
+          onClick={toggleChatTitlePromptMenu}
         >
           <span className="codicon codicon-history" aria-hidden="true" />
         </button>
@@ -17915,21 +17916,41 @@ export function App() {
       </div>
     );
     const renderMobileChatBreadcrumbTitle = () => (
-      <button
-        type="button"
-        className="breadcrumb-title chat-breadcrumb-title chat-mobile-title-button"
-        onClick={handleMobileBreadcrumbProjectClick}
-        title="Toggle workspace drawer"
-        aria-label="Toggle workspace drawer"
-      >
-        <span className="breadcrumb-project-name" title={activeChatBreadcrumbProjectName}>
-          {activeChatBreadcrumbProjectName}
-        </span>
-        <span className="breadcrumb-separator" aria-hidden="true">&gt;</span>
-        <span className="title-text breadcrumb-current" title={activeChatBreadcrumbLabel}>
+      <div className="breadcrumb-title chat-breadcrumb-title">
+        <button
+          ref={chatTitleProjectButtonRef}
+          type="button"
+          className={`chat-title-project-button${chatTitleProjectMenuOpen ? ' open' : ''}`}
+          onPointerDown={event => event.stopPropagation()}
+          onClick={() => {
+            setChatTitlePromptMenuOpen(false);
+            setChatQuickSwitchMenuOpen(false);
+            setChatTitleProjectMenuOpen(open => !open);
+          }}
+          title="Switch project"
+          aria-label="Switch project"
+          aria-haspopup="menu"
+          aria-expanded={chatTitleProjectMenuOpen}
+        >
+          <span className="breadcrumb-project-name" title={activeChatBreadcrumbProjectName}>
+            {activeChatBreadcrumbProjectName}
+          </span>
+          <span className="codicon codicon-chevron-down" aria-hidden="true" />
+        </button>
+        <button
+          ref={chatTitlePromptButtonRef}
+          type="button"
+          className={`chat-title-session-button chat-title-session-text title-text breadcrumb-current${chatTitlePromptMenuOpen ? ' open' : ''}`}
+          title={chatTitlePromptMenuAvailable ? 'Show prompt history' : activeChatBreadcrumbLabel}
+          aria-label="Show prompt history"
+          aria-haspopup="menu"
+          aria-expanded={chatTitlePromptMenuOpen}
+          aria-disabled={!chatTitlePromptMenuAvailable}
+          onClick={toggleChatTitlePromptMenu}
+        >
           {activeChatBreadcrumbLabel}
-        </span>
-      </button>
+        </button>
+      </div>
     );
     const renderChatBreadcrumbTitle = () => (isWide ? renderDesktopChatBreadcrumbTitle() : renderMobileChatBreadcrumbTitle());
 
@@ -19141,7 +19162,7 @@ export function App() {
       onSelectSession={handleMobileChatQuickSwitchSelect}
     />
   ) : null;
-  const chatTitleProjectMenu = isWide && chatTitleProjectMenuOpen ? (
+  const chatTitleProjectMenu = chatTitleProjectMenuOpen ? (
     <div
       ref={chatTitleProjectMenuRef}
       className="chat-title-project-menu"
@@ -19172,7 +19193,7 @@ export function App() {
       })}
     </div>
   ) : null;
-  const chatTitlePromptMenu = isWide && chatTitlePromptMenuOpen && chatTitlePromptMenuAvailable ? (
+  const chatTitlePromptMenu = chatTitlePromptMenuOpen && chatTitlePromptMenuAvailable ? (
     <div
       ref={chatTitlePromptMenuRef}
       className="chat-title-prompt-menu"
