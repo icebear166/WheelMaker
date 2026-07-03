@@ -176,6 +176,13 @@ describe('skill management settings UI source structure', () => {
     expect(detailTsx).toContain('settings-skills-detail-popover');
     expect(detailTsx).toContain('settings-skills-detail-mobile-header');
     expect(detailTsx).toContain('Skill.md');
+    expect(detailTsx).toContain("import ReactMarkdown from 'react-markdown';");
+    expect(detailTsx).toContain("import remarkGfm from 'remark-gfm';");
+    expect(detailTsx).toContain('const SKILL_MARKDOWN_REMARK_PLUGINS = [remarkGfm];');
+    expect(detailTsx).toContain('className="settings-skills-detail-markdown markdown-preview"');
+    expect(detailTsx).toContain('remarkPlugins={SKILL_MARKDOWN_REMARK_PLUGINS}');
+    expect(detailTsx).toContain('<ReactMarkdown');
+    expect(detailTsx).not.toContain('<pre className="settings-skills-detail-markdown">{detail.skillMarkdown}</pre>');
     expect(detailTsx).toContain('Supporting files');
     expect(stylesCss).toContain('.settings-skills-detail-popover');
     expect(stylesCss).toContain('@media (max-width: 720px)');
@@ -196,7 +203,15 @@ describe('skill management settings UI source structure', () => {
     const desktopPopoverStyles = stylesCss.slice(popoverStart, mobileStart);
     expect(desktopPopoverStyles).not.toMatch(/^\s*right: 0;/m);
     expect(desktopPopoverStyles).not.toMatch(/^\s*bottom: 0;/m);
+    expect(desktopPopoverStyles).toContain('height: min(620px, calc(100vh - 24px));');
     expect(desktopPopoverStyles).toContain('max-height: calc(100vh - 24px);');
+    const markdownStart = stylesCss.indexOf('.settings-skills-detail-markdown {', popoverStart);
+    const markdownEnd = stylesCss.indexOf('.settings-skills-detail-files {', markdownStart);
+    expect(markdownStart).toBeGreaterThanOrEqual(0);
+    expect(markdownEnd).toBeGreaterThan(markdownStart);
+    const markdownStyles = stylesCss.slice(markdownStart, markdownEnd);
+    expect(markdownStyles).not.toContain('max-height:');
+    expect(markdownStyles).not.toContain('overflow: auto;');
     expect(stylesCss).toContain('.settings-skills-detail-placement-left');
     expect(stylesCss).toContain('.settings-skills-detail-placement-right');
 

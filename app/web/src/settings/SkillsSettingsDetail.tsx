@@ -1,4 +1,6 @@
 import React from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 import {
   groupSkillsByCategory,
@@ -18,6 +20,7 @@ import type {
 } from '../registry/registryTypes';
 
 const SKILLS_MARKETPLACE_URL = 'https://www.skills.sh/';
+const SKILL_MARKDOWN_REMARK_PLUGINS = [remarkGfm];
 
 type SkillInstallTarget = {
   hubId: string;
@@ -117,7 +120,7 @@ function skillDetailAnchorFromRect(rect: DOMRect): SkillDetailAnchor | null {
   const margin = 12;
   const gap = 10;
   const popoverWidth = Math.min(480, viewportWidth - margin * 2);
-  const popoverHeight = Math.min(620, Math.max(240, viewportHeight - margin * 2));
+  const popoverHeight = Math.min(620, Math.max(0, viewportHeight - margin * 2));
   const canPlaceRight = rect.right + gap + popoverWidth <= viewportWidth - margin;
   const placement: SkillDetailAnchor['placement'] = canPlaceRight || rect.left < popoverWidth + gap + margin ? 'right' : 'left';
   const left = placement === 'right'
@@ -657,7 +660,11 @@ export function SkillsSettingsDetail({
             </section>
             <section className="settings-skills-detail-section">
               <div className="settings-skills-detail-section-title">Skill.md</div>
-              <pre className="settings-skills-detail-markdown">{detail.skillMarkdown}</pre>
+              <div className="settings-skills-detail-markdown markdown-preview">
+                <ReactMarkdown remarkPlugins={SKILL_MARKDOWN_REMARK_PLUGINS}>
+                  {detail.skillMarkdown}
+                </ReactMarkdown>
+              </div>
             </section>
             <section className="settings-skills-detail-section">
               <div className="settings-skills-detail-section-title">Supporting files</div>
