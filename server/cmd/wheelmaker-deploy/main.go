@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/swm8023/wheelmaker/internal/shared"
@@ -33,6 +34,11 @@ const (
 var errElevatedChildCompleted = errors.New("elevated child completed deployment")
 
 const deployAutoStashMessage = "WheelMaker auto-stash before update"
+
+const (
+	windowsErrorSharingViolation syscall.Errno = 32
+	windowsErrorLockViolation    syscall.Errno = 33
+)
 
 type deployConfig struct {
 	Mode          runMode
@@ -319,17 +325,17 @@ func runDeployWithDeps(ctx context.Context, cfg deployConfig, deps deployDeps) e
 			return err
 		}
 	}
-	if !cfg.NoBuild && !cfg.NoInstall && !cfg.NoWeb {
-		deps.report("writing release manifest")
-	}
-	if err := writeReleaseManifest(ctx, cfg, deps); err != nil {
-		return err
-	}
 	if !cfg.NoRestart {
 		deps.report("starting services")
 		if err := deps.Services.Start(ctx, true); err != nil {
 			return err
 		}
+	}
+	if !cfg.NoBuild && !cfg.NoInstall {
+		deps.report("writing release manifest")
+	}
+	if err := writeReleaseManifest(ctx, cfg, deps); err != nil {
+		return err
 	}
 	deps.report("cleaning deploy artifacts")
 	if err := cleanupDeployArtifacts(cfg, deps); err != nil {
@@ -375,17 +381,17 @@ func runUpdateWithDeps(ctx context.Context, cfg deployConfig, deps deployDeps) e
 	if err := installBuiltBinaries(cfg, deps, false); err != nil {
 		return err
 	}
-	if !cfg.NoBuild && !cfg.NoInstall && !cfg.NoWeb {
-		deps.report("writing release manifest")
-	}
-	if err := writeReleaseManifest(ctx, cfg, deps); err != nil {
-		return err
-	}
 	if !cfg.NoRestart {
 		deps.report("starting services")
 		if err := deps.Services.Start(ctx, false); err != nil {
 			return err
 		}
+	}
+	if !cfg.NoBuild && !cfg.NoInstall {
+		deps.report("writing release manifest")
+	}
+	if err := writeReleaseManifest(ctx, cfg, deps); err != nil {
+		return err
 	}
 	deps.report("cleaning deploy artifacts")
 	if err := cleanupDeployArtifacts(cfg, deps); err != nil {
@@ -788,7 +794,7 @@ func writeHelperWrappers(cfg deployConfig, deps deployDeps) error {
 }
 
 func writeReleaseManifest(ctx context.Context, cfg deployConfig, deps deployDeps) error {
-	if cfg.NoBuild || cfg.NoInstall || cfg.NoWeb {
+	if cfg.NoBuild || cfg.NoInstall {
 		return nil
 	}
 	sha, err := deps.Runner.Run(ctx, cfg.RepoRoot, "git", "rev-parse", "HEAD")
@@ -889,10 +895,20 @@ func removeRootWebDevLogs(home string) error {
 			continue
 		}
 		if err := removeWithinRoot(home, filepath.Join(home, entry.Name())); err != nil {
+			if shouldIgnoreRootWebDevLogCleanupError(err) {
+				continue
+			}
 			errs = append(errs, err)
 		}
 	}
 	return errors.Join(errs...)
+}
+
+func shouldIgnoreRootWebDevLogCleanupError(err error) bool {
+	if runtime.GOOS != "windows" {
+		return false
+	}
+	return errors.Is(err, windowsErrorSharingViolation) || errors.Is(err, windowsErrorLockViolation)
 }
 
 func pruneTimestampLogDirs(logDir string, keep int) error {

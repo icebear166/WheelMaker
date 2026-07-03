@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 	"unicode/utf16"
@@ -238,8 +240,8 @@ func TestDeployPipelineOrder(t *testing.T) {
 		"write config",
 		"write wrappers",
 		"service configure",
-		"write release",
 		"service start all",
+		"write release",
 		"cleanup artifacts",
 	}
 	if diff := cmpStringSlices(*h.events, want); diff != "" {
@@ -328,6 +330,35 @@ func TestUpdateSkipsWebWhenExistingConfigDoesNotListen(t *testing.T) {
 
 	assertEventsDoNotContain(t, *h.events, "npm ci")
 	assertEventsDoNotContain(t, *h.events, "npm run build:web:release")
+}
+
+func TestUpdateWritesReleaseManifestWhenWebPublishIsSkipped(t *testing.T) {
+	h := newDeployHarness(t)
+	h.cfg.Mode = modeUpdate
+	writeRegistryListenConfig(t, h.cfg, false)
+
+	if err := runUpdateWithDeps(context.Background(), h.cfg, h.deps); err != nil {
+		t.Fatalf("runUpdateWithDeps: %v", err)
+	}
+
+	assertEventsDoNotContain(t, *h.events, "npm run build:web:release")
+	assertEventsContainInOrder(t, *h.events, "write release", "cleanup artifacts")
+	raw, err := os.ReadFile(filepath.Join(wheelMakerHome(h.cfg), "release.json"))
+	if err != nil {
+		t.Fatalf("read release manifest: %v", err)
+	}
+	var manifest struct {
+		Repo        string `json:"repo"`
+		Branch      string `json:"branch"`
+		SHA         string `json:"sha"`
+		PublishedAt string `json:"publishedAt"`
+	}
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		t.Fatalf("decode release manifest: %v", err)
+	}
+	if manifest.Repo != h.cfg.RepoRoot || manifest.Branch != "main" || manifest.SHA != "abc123" || manifest.PublishedAt != "2026-05-30T01:02:03Z" {
+		t.Fatalf("manifest=%+v", manifest)
+	}
 }
 
 func TestDeployReportsBuildProgress(t *testing.T) {
@@ -593,6 +624,20 @@ func TestCleanupDeployArtifactsPrunesRegenerableFiles(t *testing.T) {
 		assertFileContains(t, filepath.Join(home, name), "keep")
 	}
 	assertEventsContainInOrder(t, *h.events, "cleanup artifacts")
+}
+
+func TestRootWebDevLogCleanupIgnoresWindowsFileInUse(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows sharing violation only applies on Windows")
+	}
+	err := fmt.Errorf("remove log: %w", &os.PathError{
+		Op:   "remove",
+		Path: filepath.Join("home", "web-dev-8081.log"),
+		Err:  syscall.Errno(32),
+	})
+	if !shouldIgnoreRootWebDevLogCleanupError(err) {
+		t.Fatalf("expected Windows sharing violation to be ignored: %v", err)
+	}
 }
 
 func TestBootstrapBuildsTempDeployAndExecsUpdate(t *testing.T) {
