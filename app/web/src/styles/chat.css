@@ -421,6 +421,7 @@
   color: color-mix(in srgb, var(--accent) 86%, var(--text));
   font: inherit;
   line-height: inherit;
+  overflow: hidden;
   text-align: left;
   cursor: pointer;
 }
@@ -433,6 +434,13 @@
 
 .chat-title-project-button .breadcrumb-project-name {
   min-width: 0;
+  max-width: 100%;
+  flex: 1 1 auto;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

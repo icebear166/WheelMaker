@@ -1890,6 +1890,13 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className={`chat-title-project-button${chatTitleProjectMenuOpen ? \' open\' : \'\'}`}');
     expect(mainTsx).toContain('onPointerDown={event => event.stopPropagation()}');
     expect(mainTsx).toContain('setChatTitleProjectMenuOpen(open => !open);');
+    const chatTitleProjectMenuStart = mainTsx.indexOf('const chatTitleProjectMenu = chatTitleProjectMenuOpen ? (');
+    const chatTitleProjectMenuEnd = mainTsx.indexOf('const chatTitlePromptMenu =', chatTitleProjectMenuStart);
+    expect(chatTitleProjectMenuStart).toBeGreaterThanOrEqual(0);
+    expect(chatTitleProjectMenuEnd).toBeGreaterThan(chatTitleProjectMenuStart);
+    const chatTitleProjectMenuBlock = mainTsx.slice(chatTitleProjectMenuStart, chatTitleProjectMenuEnd);
+    expect(chatTitleProjectMenuBlock).toContain('{visibleProjectItems.map(projectItem => {');
+    expect(chatTitleProjectMenuBlock).not.toContain('sortedProjectItems.map(projectItem => {');
     expect(mainTsx).toContain('const handleChatTitleProjectSelect = useCallback(async (targetProjectId: string) => {');
     expect(mainTsx).toContain('const targetSession = resolveChatTitleProjectSession(targetProjectId);');
     expect(mainTsx).toContain('if (targetSession) {');
@@ -2129,7 +2136,14 @@ describe('web chat integration', () => {
     const projectButtonBlock = cssRuleBlock(stylesCss, '.chat-title-project-button');
     expect(projectButtonBlock).toContain('border: 0;');
     expect(projectButtonBlock).toContain('background: transparent;');
+    expect(projectButtonBlock).toContain('overflow: hidden;');
     expect(projectButtonBlock).toContain('text-align: left;');
+    const projectButtonNameBlock = cssRuleBlock(stylesCss, '.chat-title-project-button .breadcrumb-project-name');
+    expect(projectButtonNameBlock).toContain('flex: 1 1 auto;');
+    expect(projectButtonNameBlock).toContain('max-width: 100%;');
+    expect(projectButtonNameBlock).toContain('border: 0;');
+    expect(projectButtonNameBlock).toContain('padding: 0;');
+    expect(projectButtonNameBlock).toContain('background: transparent;');
     const promptIconBlock = cssRuleBlockContainingSelector(stylesCss, '.chat-title-prompt-icon-button');
     expect(promptIconBlock).toContain('width: 28px;');
     expect(promptIconBlock).toContain('border: 0;');

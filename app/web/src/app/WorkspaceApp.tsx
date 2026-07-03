@@ -19129,7 +19129,7 @@ export function App() {
       style={chatTitleProjectMenuStyle}
       onPointerDown={event => event.stopPropagation()}
     >
-      {sortedProjectItems.map(projectItem => {
+      {visibleProjectItems.map(projectItem => {
         const selectedProjectId = selectedChatKey?.projectId || projectId;
         const selected = projectItem.projectId === selectedProjectId;
         return (
