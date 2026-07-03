@@ -228,6 +228,15 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).not.toContain('tabs={[]}');
   });
 
+  test('hidden preview file tabs do not receive active line highlights', () => {
+    const mainTsx = readSourceText(mainPath);
+
+    expect(mainTsx).toContain('const EMPTY_HIGHLIGHTED_LINES = new Set<number>();');
+    expect(mainTsx).toContain('const active = tab.id === activeTab.id;');
+    expect(mainTsx).toContain('highlightedLines={active ? chatPeekSelectedLines : EMPTY_HIGHLIGHTED_LINES}');
+    expect(mainTsx).toContain('onLineClick={active ? handlePeekLineClick : undefined}');
+  });
+
   test('chat file workbench project is bound to the selected chat session', () => {
     const mainTsx = readSourceText(mainPath);
 

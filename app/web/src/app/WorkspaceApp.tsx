@@ -797,6 +797,7 @@ const CHAT_FILE_MENTION_DEBOUNCE_MS = 140;
 const EMPTY_CHAT_COMPOSER_DRAFT: ChatComposerDraft = { text: '', tokens: [], attachments: [] };
 const EMPTY_CHAT_OPTION_REPLIES: ChatOptionReply[] = [];
 const EMPTY_PREVIEW_WORKBENCH_TABS: FilePreviewTab[] = [];
+const EMPTY_HIGHLIGHTED_LINES = new Set<number>();
 const DEFAULT_PORT_RELAY_SNAPSHOT: RegistryPortRelaySnapshot = {ok: true, enabled: false, status: 'Disabled'};
 
 function useStableEvent<T extends (...args: any[]) => any>(handler: T): T {
@@ -2082,7 +2083,7 @@ type ChatFilePeekViewerProps = {
   wrapLines: boolean;
   showLineNumbers: boolean;
   highlightedLines: Set<number>;
-  onLineClick: (line: number, event: MouseEvent) => void;
+  onLineClick?: (line: number, event: MouseEvent) => void;
   onClose: () => void;
   onCopyPath: () => void;
   onOpenInFileTab: () => void;
@@ -19724,7 +19725,7 @@ export function App() {
     }
     return null;
   };
-  const renderPreviewWorkbenchTabBody = (tab: PreviewWorkbenchTab, mode: 'desktop' | 'mobile') => {
+  const renderPreviewWorkbenchTabBody = (tab: PreviewWorkbenchTab, mode: 'desktop' | 'mobile', active: boolean) => {
     if (tab.type === 'file') {
       return (
         <ChatFilePeekViewer
@@ -19740,8 +19741,8 @@ export function App() {
           codeTabSize={codeTabSize}
           wrapLines={wrapLines}
           showLineNumbers={showLineNumbers}
-          highlightedLines={chatPeekSelectedLines}
-          onLineClick={handlePeekLineClick}
+          highlightedLines={active ? chatPeekSelectedLines : EMPTY_HIGHLIGHTED_LINES}
+          onLineClick={active ? handlePeekLineClick : undefined}
           onClose={closeChatFilePeekFromChrome}
           onCopyPath={copyChatFilePreviewPath}
           onOpenInFileTab={openPeekFileInFullFileTab}
@@ -19815,7 +19816,7 @@ export function App() {
               hidden={!active}
               aria-hidden={active ? undefined : true}
             >
-              {renderPreviewWorkbenchTabBody(tab, mode)}
+              {renderPreviewWorkbenchTabBody(tab, mode, active)}
             </div>
           );
         })}
