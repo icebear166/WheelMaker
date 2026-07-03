@@ -6171,6 +6171,7 @@ export function App() {
     setChatConfigOverflowOpen(false);
     setChatHubMenuOpen(false);
     setChatHubColorMenuHubId('');
+    setChatTitleProjectMenuOpen(false);
     setChatTitlePromptMenuOpen(false);
   }, [setChatConfigOverflowOpen]);
   const handleMobileBreadcrumbProjectClick = useCallback(() => {
@@ -17862,7 +17863,7 @@ export function App() {
     const activeChatBreadcrumbLabel = chatReadOnlyPreview
       ? `Archived - ${activeChatDisplayTitle || 'Session'}`
       : chatBreadcrumbLabel;
-    const renderChatBreadcrumbTitle = () => (
+    const renderDesktopChatBreadcrumbTitle = () => (
       <div className="breadcrumb-title chat-breadcrumb-title">
         <button
           ref={chatTitleProjectButtonRef}
@@ -17913,21 +17914,41 @@ export function App() {
         </span>
       </div>
     );
+    const renderMobileChatBreadcrumbTitle = () => (
+      <button
+        type="button"
+        className="breadcrumb-title chat-breadcrumb-title chat-mobile-title-button"
+        onClick={handleMobileBreadcrumbProjectClick}
+        title="Toggle workspace drawer"
+        aria-label="Toggle workspace drawer"
+      >
+        <span className="breadcrumb-project-name" title={activeChatBreadcrumbProjectName}>
+          {activeChatBreadcrumbProjectName}
+        </span>
+        <span className="breadcrumb-separator" aria-hidden="true">&gt;</span>
+        <span className="title-text breadcrumb-current" title={activeChatBreadcrumbLabel}>
+          {activeChatBreadcrumbLabel}
+        </span>
+      </button>
+    );
+    const renderChatBreadcrumbTitle = () => (isWide ? renderDesktopChatBreadcrumbTitle() : renderMobileChatBreadcrumbTitle());
 
     if (tab === 'chat') {
       return (
         <ChatSurface>
           <DesktopDragRegion className="block-title chat-title-bar">
-            <button
-              type="button"
-              className={`chat-sidebar-toggle${sidebarCollapsed ? ' collapsed' : ''}`}
-              onClick={() => setSidebarCollapsed(value => !value)}
-              title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
-              aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
-              aria-pressed={sidebarCollapsed}
-            >
-              <span className="codicon codicon-layout-sidebar-left" aria-hidden="true" />
-            </button>
+            {isWide ? (
+              <button
+                type="button"
+                className={`chat-sidebar-toggle${sidebarCollapsed ? ' collapsed' : ''}`}
+                onClick={() => setSidebarCollapsed(value => !value)}
+                title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+                aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+                aria-pressed={sidebarCollapsed}
+              >
+                <span className="codicon codicon-layout-sidebar-left" aria-hidden="true" />
+              </button>
+            ) : null}
             <div className="chat-title-context">
               {renderChatBreadcrumbTitle()}
             </div>
@@ -19120,7 +19141,7 @@ export function App() {
       onSelectSession={handleMobileChatQuickSwitchSelect}
     />
   ) : null;
-  const chatTitleProjectMenu = chatTitleProjectMenuOpen ? (
+  const chatTitleProjectMenu = isWide && chatTitleProjectMenuOpen ? (
     <div
       ref={chatTitleProjectMenuRef}
       className="chat-title-project-menu"
@@ -19151,7 +19172,7 @@ export function App() {
       })}
     </div>
   ) : null;
-  const chatTitlePromptMenu = chatTitlePromptMenuOpen && chatTitlePromptMenuAvailable ? (
+  const chatTitlePromptMenu = isWide && chatTitlePromptMenuOpen && chatTitlePromptMenuAvailable ? (
     <div
       ref={chatTitlePromptMenuRef}
       className="chat-title-prompt-menu"
