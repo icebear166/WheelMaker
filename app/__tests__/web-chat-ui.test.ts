@@ -2137,6 +2137,8 @@ describe('web chat integration', () => {
     expect(projectButtonBlock).toContain('border: 0;');
     expect(projectButtonBlock).toContain('background: transparent;');
     expect(projectButtonBlock).toContain('overflow: hidden;');
+    expect(projectButtonBlock).toContain('max-width: max-content;');
+    expect(projectButtonBlock).not.toContain('max-width: min(46%, 280px);');
     expect(projectButtonBlock).toContain('text-align: left;');
     const projectButtonNameBlock = cssRuleBlock(stylesCss, '.chat-title-project-button .breadcrumb-project-name');
     expect(projectButtonNameBlock).toContain('flex: 1 1 auto;');
@@ -2144,6 +2146,8 @@ describe('web chat integration', () => {
     expect(projectButtonNameBlock).toContain('border: 0;');
     expect(projectButtonNameBlock).toContain('padding: 0;');
     expect(projectButtonNameBlock).toContain('background: transparent;');
+    const sessionTitleBlock = cssRuleBlock(stylesCss, '.chat-title-session-text');
+    expect(sessionTitleBlock).toContain('flex: 1 1 0;');
     const promptIconBlock = cssRuleBlockContainingSelector(stylesCss, '.chat-title-prompt-icon-button');
     expect(promptIconBlock).toContain('width: 28px;');
     expect(promptIconBlock).toContain('border: 0;');

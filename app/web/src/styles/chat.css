@@ -408,7 +408,7 @@
 .chat-title-project-button {
   appearance: none;
   min-width: 0;
-  max-width: min(46%, 280px);
+  max-width: max-content;
   height: 26px;
   flex: 0 1 auto;
   display: inline-flex;
@@ -453,7 +453,7 @@
 
 .chat-title-session-text {
   min-width: 0;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   color: var(--muted);
   cursor: default;
 }
