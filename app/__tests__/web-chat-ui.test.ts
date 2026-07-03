@@ -525,8 +525,14 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('<MobileSettingsScreen');
     expect(mainTsx).toContain('className="desktop-settings-screen"');
     expect(mainTsx).toContain('shortcutBar={settingsShortcutBar}');
+    expect(mainTsx).toContain('onBackdropClick={handleMobileSettingsBackButton}');
     expect(settingsSurfaceTsx).toContain('export function SettingsScreen');
+    expect(settingsSurfaceTsx).toContain('onBackdropClick?: () => void;');
+    expect(settingsSurfaceTsx).toContain('const handleBackdropClick = React.useCallback');
+    expect(settingsSurfaceTsx).toContain('if (event.target !== event.currentTarget || !onBackdropClick) {');
+    expect(settingsSurfaceTsx).toContain('onBackdropClick();');
     expect(settingsSurfaceTsx).toContain('className={screenClassName}');
+    expect(settingsSurfaceTsx).toContain('onClick={handleBackdropClick}');
     expect(settingsSurfaceTsx).toContain('className="mobile-settings-panel"');
     expect(settingsSurfaceTsx).toContain('aria-modal="true"');
     expect(settingsSurfaceTsx).toContain('className="mobile-settings-nav"');

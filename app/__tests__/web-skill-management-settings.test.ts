@@ -172,13 +172,14 @@ describe('skill management settings UI source structure', () => {
     expect(detailTsx).toContain('owner/repo or npx skills add ... --skill name');
   });
 
-  test('loads skill details on demand into a responsive popover detail panel', () => {
+  test('loads skill details on demand into the shared settings detail panel', () => {
     expect(mainTsx).toContain('skillDetailCache');
     expect(mainTsx).toContain('requestSkillDetail');
     expect(mainTsx).toContain('service.getSkillDetail');
     expect(mainTsx).toContain('skillDetailCacheKey');
-    expect(detailTsx).toContain('settings-skills-detail-popover');
-    expect(detailTsx).toContain('settings-skills-detail-mobile-header');
+    expect(detailTsx).toContain('settings-skills-detail-panel');
+    expect(detailTsx).not.toContain('settings-skills-detail-popover');
+    expect(detailTsx).not.toContain('settings-skills-detail-mobile-header');
     expect(detailTsx).toContain('Skill.md');
     expect(detailTsx).toContain("import ReactMarkdown from 'react-markdown';");
     expect(detailTsx).toContain("import remarkGfm from 'remark-gfm';");
@@ -188,40 +189,38 @@ describe('skill management settings UI source structure', () => {
     expect(detailTsx).toContain('<ReactMarkdown');
     expect(detailTsx).not.toContain('<pre className="settings-skills-detail-markdown">{detail.skillMarkdown}</pre>');
     expect(detailTsx).toContain('Supporting files');
-    expect(stylesCss).toContain('.settings-skills-detail-popover');
-    expect(stylesCss).toContain('@media (max-width: 720px)');
-    expect(stylesCss).toContain('.settings-skills-detail-mobile-header');
+    expect(stylesCss).toContain('.settings-skills-detail-panel');
+    expect(stylesCss).not.toContain('.settings-skills-detail-popover');
+    expect(stylesCss).not.toContain('.settings-skills-detail-mobile-header');
   });
 
-  test('anchors desktop skill details next to the selected skill row', () => {
-    expect(detailTsx).toContain('skillDetailAnchor');
+  test('keeps skill details inline without desktop-only anchoring', () => {
+    expect(detailTsx).not.toContain('skillDetailAnchor');
     expect(detailTsx).toContain('openSkillDetailFromRow');
-    expect(detailTsx).toContain('getBoundingClientRect()');
-    expect(detailTsx).toContain('style={skillDetailAnchor ?');
-    expect(detailTsx).toContain('settings-skills-detail-placement-');
+    expect(detailTsx).not.toContain('getBoundingClientRect()');
+    expect(detailTsx).not.toContain('style={skillDetailAnchor ?');
+    expect(detailTsx).not.toContain('settings-skills-detail-placement-');
+    expect(detailTsx).toContain('requestSkillDetail(target).catch(() => undefined);');
 
-    const popoverStart = stylesCss.indexOf('.settings-skills-detail-popover {');
-    const mobileStart = stylesCss.indexOf('@media (max-width: 720px)', popoverStart);
-    expect(popoverStart).toBeGreaterThanOrEqual(0);
-    expect(mobileStart).toBeGreaterThan(popoverStart);
-    const desktopPopoverStyles = stylesCss.slice(popoverStart, mobileStart);
-    expect(desktopPopoverStyles).not.toMatch(/^\s*right: 0;/m);
-    expect(desktopPopoverStyles).not.toMatch(/^\s*bottom: 0;/m);
-    expect(desktopPopoverStyles).toContain('height: min(620px, calc(100vh - 24px));');
-    expect(desktopPopoverStyles).toContain('max-height: calc(100vh - 24px);');
-    const markdownStart = stylesCss.indexOf('.settings-skills-detail-markdown {', popoverStart);
+    const panelStart = stylesCss.indexOf('.settings-skills-detail-panel {');
+    expect(panelStart).toBeGreaterThanOrEqual(0);
+    const panelEnd = stylesCss.indexOf('.settings-skills-detail-header {', panelStart);
+    expect(panelEnd).toBeGreaterThan(panelStart);
+    const panelStyles = stylesCss.slice(panelStart, panelEnd);
+    expect(panelStyles).not.toContain('position: fixed;');
+    expect(panelStyles).not.toContain('transform: translateY(-50%);');
+    expect(panelStyles).toContain('display: flex;');
+    expect(panelStyles).toContain('max-height: min(70vh, 720px);');
+
+    const markdownStart = stylesCss.indexOf('.settings-skills-detail-markdown {', panelStart);
     const markdownEnd = stylesCss.indexOf('.settings-skills-detail-files {', markdownStart);
     expect(markdownStart).toBeGreaterThanOrEqual(0);
     expect(markdownEnd).toBeGreaterThan(markdownStart);
     const markdownStyles = stylesCss.slice(markdownStart, markdownEnd);
     expect(markdownStyles).not.toContain('max-height:');
     expect(markdownStyles).not.toContain('overflow: auto;');
-    expect(stylesCss).toContain('.settings-skills-detail-placement-left');
-    expect(stylesCss).toContain('.settings-skills-detail-placement-right');
-
-    const mobileStyles = stylesCss.slice(mobileStart);
-    expect(mobileStyles).toContain('.settings-skills-detail-popover');
-    expect(mobileStyles).toContain('inset: 0;');
+    expect(stylesCss).not.toContain('.settings-skills-detail-placement-left');
+    expect(stylesCss).not.toContain('.settings-skills-detail-placement-right');
   });
 
   test('supports current-scope batch uninstall without selecting external skills', () => {

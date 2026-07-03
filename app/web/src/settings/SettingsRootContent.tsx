@@ -235,26 +235,28 @@ export function SettingsRootContent({
             onChange={e => setHideToolCalls(e.target.checked)}
           />
         </label>
-        <label className="settings-row sidebar-setting-row">
-          <span>
-            <span className="codicon codicon-keyboard settings-row-icon" aria-hidden="true" />
-            Mobile Enter Key
-          </span>
-          <select
-            className="sidebar-setting-select"
-            value={mobileEnterKeyBehavior}
-            onChange={event => {
-              const next = event.target.value;
-              if (isMobileEnterKeyBehavior(next)) setMobileEnterKeyBehavior(next);
-            }}
-          >
-            {MOBILE_ENTER_KEY_BEHAVIOR_OPTIONS.map(item => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        {!isWide ? (
+          <label className="settings-row sidebar-setting-row">
+            <span>
+              <span className="codicon codicon-keyboard settings-row-icon" aria-hidden="true" />
+              Mobile Enter Key
+            </span>
+            <select
+              className="sidebar-setting-select"
+              value={mobileEnterKeyBehavior}
+              onChange={event => {
+                const next = event.target.value;
+                if (isMobileEnterKeyBehavior(next)) setMobileEnterKeyBehavior(next);
+              }}
+            >
+              {MOBILE_ENTER_KEY_BEHAVIOR_OPTIONS.map(item => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <div className="voice-input-settings-menu">
           <label className="settings-row sidebar-setting-row">
             <span>

@@ -34,7 +34,7 @@ describe('mobile chat quick switch UI source structure', () => {
     expect(mainTsx).toContain('projects: visibleProjectItems,');
     expect(mainTsx).toContain('sessionsByProjectId: projectSessionsByProjectId,');
     expect(mainTsx).toContain('className="floating-nav-unread-dot"');
-    expect(mainTsx).toContain('className="desktop-activity-unread-dot"');
+    expect(mainTsx).not.toContain('className="desktop-activity-unread-dot"');
     expect(mainTsx).not.toContain('floating-nav-unread-count');
     expect(mainTsx).toContain('const mobileChatQuickSwitchSections = useMemo(');
     expect(mainTsx).toContain('buildMobileChatQuickSwitchSections({');
@@ -106,8 +106,8 @@ describe('mobile chat quick switch UI source structure', () => {
     expect(cssBlock('.chat-quick-switch-title')).toContain('font-size: 12.5px;');
     expect(stylesCss).toContain('.chat-quick-switch-empty');
     expect(stylesCss).toContain('.floating-nav-unread-dot');
-    expect(stylesCss).toContain('.desktop-activity-unread-dot');
-    expect(cssBlock('.desktop-activity-unread-dot')).toContain('left: 9px;');
-    expect(cssBlock('.desktop-activity-unread-dot')).toContain('top: 7px;');
+    expect(stylesCss).not.toContain('.desktop-activity-unread-dot');
+    expect(cssBlock('.floating-nav-unread-dot')).toContain('right: 7px;');
+    expect(cssBlock('.floating-nav-unread-dot')).toContain('top: 7px;');
   });
 });

@@ -19266,6 +19266,7 @@ export function App() {
       backAriaLabel={settingsDetailView ? 'Back to settings' : 'Close settings'}
       shortcutBar={settingsShortcutBar}
       onBack={handleMobileSettingsBackButton}
+      onBackdropClick={handleMobileSettingsBackButton}
     >
       {renderSettingsContent(false, { hideDetailHeader: true })}
     </SettingsScreen>

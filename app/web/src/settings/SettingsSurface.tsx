@@ -39,6 +39,7 @@ export type MobileSettingsScreenProps = {
 
 export type SettingsScreenProps = MobileSettingsScreenProps & {
   className?: string;
+  onBackdropClick?: () => void;
 };
 
 type MobileSettingsShortcut = {
@@ -182,10 +183,17 @@ export function SettingsScreen({
   shortcutBar,
   onBack,
   className,
+  onBackdropClick,
 }: SettingsScreenProps) {
   const screenClassName = className
     ? `mobile-settings-screen ${className}`
     : 'mobile-settings-screen';
+  const handleBackdropClick = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget || !onBackdropClick) {
+      return;
+    }
+    onBackdropClick();
+  }, [onBackdropClick]);
 
   return (
     <div
@@ -193,6 +201,7 @@ export function SettingsScreen({
       role="dialog"
       aria-modal="true"
       aria-label={title}
+      onClick={handleBackdropClick}
     >
       <div className="mobile-settings-panel">
         <div className="mobile-settings-nav">

@@ -134,9 +134,9 @@ describe('web responsive shell split', () => {
     expect(sidebarMenuRootBlock).toContain('flex-basis: 38px;');
 
     const titlebarIconBlock = cssRuleBlock(stylesCss, '.desktop-titlebar-icon');
-    expect(titlebarIconBlock).toContain('width: 28px;');
-    expect(titlebarIconBlock).toContain('height: 28px;');
-    expect(titlebarIconBlock).toContain('flex: 0 0 28px;');
+    expect(titlebarIconBlock).toContain('width: 24px;');
+    expect(titlebarIconBlock).toContain('height: 24px;');
+    expect(titlebarIconBlock).toContain('flex: 0 0 24px;');
 
     const rightTitleBlock = cssRuleBlock(stylesCss, '.desktop-shell .workspace-right .block-title');
     expect(rightTitleBlock).toContain('padding-right: calc(var(--desktop-window-controls-width) + 10px);');
@@ -159,6 +159,7 @@ describe('web responsive shell split', () => {
     expect(mainTsx).toContain('<SettingsScreen');
     expect(mainTsx).toContain('className="desktop-settings-screen"');
     expect(mainTsx).toContain('shortcutBar={settingsShortcutBar}');
+    expect(mainTsx).toContain('onBackdropClick={handleMobileSettingsBackButton}');
     expect(mainTsx).toContain("const wideSidebarMain = tab === 'chat' ? renderWideProjectSessionNav() : renderSidebarMain(false);");
     expect(mainTsx).not.toContain('const wideSidebarMain = sidebarSettingsOpen');
     expect(mainTsx).not.toContain('wideSettingsTitle');
@@ -184,7 +185,7 @@ describe('web responsive shell split', () => {
 
     const desktopPanelBlock = cssRuleBlock(stylesCss, '.desktop-settings-screen .mobile-settings-panel');
     expect(desktopPanelBlock).toContain('width: min(720px, calc(100vw - 56px));');
-    expect(desktopPanelBlock).toContain('height: calc(100vh - 64px);');
+    expect(desktopPanelBlock).toContain('height: calc(100vh - 56px);');
     expect(desktopPanelBlock).toContain('border-radius: 14px;');
     expect(desktopPanelBlock).toContain('overflow: hidden;');
 
