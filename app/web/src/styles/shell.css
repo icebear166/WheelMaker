@@ -47,16 +47,10 @@
   align-items: stretch;
   justify-content: flex-end;
   color: var(--text);
-  background: color-mix(in srgb, var(--bg) 82%, var(--panel));
-  border-left: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 64%, transparent);
+  background: transparent;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
-}
-
-.theme-light .desktop-window-controls {
-  background: color-mix(in srgb, var(--panel) 90%, var(--panel-3));
 }
 
 .desktop-window-menu-root {
@@ -1047,8 +1041,8 @@
 
 .sidebar-title-row {
   position: relative;
-  flex: 0 0 34px;
-  min-height: 34px;
+  flex: 0 0 32px;
+  min-height: 32px;
   border-bottom: 0;
   background: var(--desktop-side-surface);
   display: flex;

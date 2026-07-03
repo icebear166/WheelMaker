@@ -116,6 +116,13 @@ describe('web responsive shell split', () => {
     expect(stylesCss).not.toContain('.desktop-titlebar {');
     expect(stylesCss).not.toContain('.desktop-activity-bar {');
 
+    const blockTitleBlock = cssRuleBlock(stylesCss, '.block-title');
+    expect(blockTitleBlock).toContain('height: 32px;');
+
+    const sidebarTitleRowBlock = cssRuleBlock(stylesCss, '.sidebar-title-row');
+    expect(sidebarTitleRowBlock).toContain('flex: 0 0 32px;');
+    expect(sidebarTitleRowBlock).toContain('min-height: 32px;');
+
     const controlsBlock = cssRuleBlock(stylesCss, '.desktop-window-controls');
     expect(controlsBlock).toContain('position: fixed;');
     expect(controlsBlock).toContain('top: 0;');
@@ -123,6 +130,10 @@ describe('web responsive shell split', () => {
     expect(controlsBlock).toContain('z-index: 80;');
     expect(controlsBlock).toContain('width: var(--desktop-window-controls-width);');
     expect(controlsBlock).toContain('height: 32px;');
+    expect(controlsBlock).toContain('background: transparent;');
+    expect(controlsBlock).not.toContain('border-left:');
+    expect(controlsBlock).not.toContain('border-bottom:');
+    expect(stylesCss).not.toContain('.theme-light .desktop-window-controls {');
 
     expect(stylesCss).toContain('.desktop-window-menu-button {');
     expect(stylesCss).toContain('.desktop-window-menu {');
