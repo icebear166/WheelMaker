@@ -151,8 +151,17 @@ describe('skill management settings UI source structure', () => {
     expect(pageBlock).toContain('flex-direction: column;');
     expect(pageBlock).toContain('overflow: hidden;');
     const detailBodyBlock = stylesCss.match(/\.settings-detail-body:has\(> \.settings-skills-page\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(detailBodyBlock).toContain('flex: 1 1 auto;');
+    expect(detailBodyBlock).toContain('min-height: 0;');
+    expect(detailBodyBlock).toContain('display: flex;');
+    expect(detailBodyBlock).toContain('flex-direction: column;');
     expect(detailBodyBlock).toContain('overflow: hidden;');
     expect(detailBodyBlock).toContain('align-content: stretch;');
+    const scrollBlock = stylesCss.match(/\.mobile-settings-scroll:has\(\.settings-skills-page\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(scrollBlock).toContain('min-height: 0;');
+    expect(scrollBlock).toContain('display: flex;');
+    expect(scrollBlock).toContain('flex-direction: column;');
+    expect(scrollBlock).toContain('overflow: hidden;');
     const listBlock = stylesCss.match(/\.settings-skills-list \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(listBlock).toContain('flex: 1 1 auto;');
     expect(listBlock).toContain('min-height: 0;');
