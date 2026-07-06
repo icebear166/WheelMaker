@@ -26,14 +26,17 @@
 
 .desktop-shell .workspace-right .block-title {
   background: var(--desktop-top-surface);
+}
+
+.desktop-shell[data-desktop-window-controls='true'] .workspace-right .block-title {
   padding-right: calc(var(--desktop-window-controls-width) + 10px);
 }
 
-.desktop-shell:not([data-chat-preview-open='true']) .workspace-right .chat-title-bar {
+.desktop-shell[data-desktop-window-controls='true']:not([data-chat-preview-open='true']) .workspace-right .chat-title-bar {
   padding-right: calc(var(--desktop-window-controls-width) + 10px);
 }
 
-.desktop-shell[data-chat-preview-open='true'] .workspace-right .chat-title-bar {
+.desktop-shell[data-desktop-window-controls='true'][data-chat-preview-open='true'] .workspace-right .chat-title-bar {
   padding-right: 10px;
 }
 

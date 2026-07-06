@@ -856,7 +856,7 @@ describe('web chat integration', () => {
       /<div className="mobile-chat-toolbar" aria-label="Chat tools">[\s\S]*?title="Open settings"[\s\S]*?<\/div>[\s\S]*?\{renderChatHubSummary\(true\)\}[\s\S]*?\{renderChatHeaderSearchControls\(true\)\}/,
     );
     expect(mainTsx).toMatch(
-      /<DesktopDragRegion className=\{`sidebar-title-row\$\{chatSidebarTitleSearchOpen \? ' search-open' : ''\}`\}>[\s\S]*?\{tab === 'chat' && !sidebarSettingsOpen \? \([\s\S]*?\{!chatSidebarTitleSearchOpen \? <DesktopWindowMenu \/> : null\}[\s\S]*?<div className="chat-sidebar-title-actions">[\s\S]*?\{renderChatHubSummary\(\)\}[\s\S]*?\{renderChatHeaderSearchControls\(false\)\}/,
+      /<DesktopDragRegion className=\{`sidebar-title-row\$\{chatSidebarTitleSearchOpen \? ' search-open' : ''\}`\}>[\s\S]*?\{wideSidebarSettingsButton\}[\s\S]*?\{tab === 'chat' && !sidebarSettingsOpen \? \([\s\S]*?<div className="chat-sidebar-title-actions">[\s\S]*?\{renderChatHubSummary\(\)\}[\s\S]*?\{renderChatHeaderSearchControls\(false\)\}/,
     );
     const renderMainStart = mainTsx.indexOf('const renderMain = () => {');
     const chatMainStart = mainTsx.indexOf("if (tab === 'chat') {", renderMainStart);
@@ -1881,11 +1881,14 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className={`sidebar-title-row${chatSidebarTitleSearchOpen ? \' search-open\' : \'\'}`}');
     expect(mainTsx).not.toContain('const handleDesktopActivitySelect = useCallback((nextTab: Tab) => {');
     expect(mainTsx).toContain('const handleDesktopSettingsSelect = useCallback(() => {');
-    expect(mainTsx).toContain("import { DesktopDragRegion, DesktopWindowControls, DesktopWindowMenu } from '../shell/layouts/desktop/DesktopTitleBar';");
-    expect(mainTsx).toContain('const desktopWindowControls = isWide ? (');
-    expect(mainTsx).toContain('<DesktopWindowControls onSettingsSelect={handleDesktopSettingsSelect} />');
+    expect(mainTsx).toContain("import { DesktopDragRegion, DesktopWindowControls } from '../shell/layouts/desktop/DesktopTitleBar';");
+    expect(mainTsx).toContain('const desktopWindowControls = desktopWindowControlsVisible ? (');
+    expect(mainTsx).toContain('const desktopWindowControlsVisible = isWide && Boolean(getDesktopWindowBridge());');
+    expect(mainTsx).toContain('<DesktopWindowControls />');
     expect(mainTsx).toContain('desktopSettingsScreen={desktopSettingsScreen}');
-    expect(mainTsx).toContain('<DesktopWindowMenu />');
+    expect(mainTsx).toContain('const wideSidebarSettingsButton = !chatSidebarTitleSearchOpen ? (');
+    expect(mainTsx).toContain('className="wide-sidebar-settings-button"');
+    expect(mainTsx).toContain('onClick={handleDesktopSettingsSelect}');
     expect(mainTsx).toContain('<DesktopDragRegion className={`sidebar-title-row${chatSidebarTitleSearchOpen ? \' search-open\' : \'\'}`}>');
     expect(mainTsx).toContain('<DesktopDragRegion className="block-title chat-title-bar">');
     expect(mainTsx).toContain('className={`chat-sidebar-toggle${sidebarCollapsed ? \' collapsed\' : \'\'}`}');
@@ -1955,10 +1958,10 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('--desktop-top-surface: color-mix(in srgb, var(--panel) 62%, var(--panel-3));');
     expect(stylesCss).toContain('--desktop-window-controls-width: 176px;');
     expect(stylesCss).toContain('.desktop-window-controls {');
-    expect(stylesCss).toContain('.desktop-window-menu-button {');
-    expect(stylesCss).toContain('.desktop-window-menu {');
+    expect(stylesCss).toContain('.desktop-window-source-button {');
+    expect(stylesCss).toContain('.desktop-window-source-popover {');
     expect(stylesCss).toContain('.desktop-window-source-panel {');
-    expect(stylesCss).toContain('.sidebar-title-row .desktop-window-menu-root {');
+    expect(stylesCss).toContain('.wide-sidebar-settings-button {');
     expect(stylesCss).toContain('.desktop-drag-region {');
     expect(stylesCss).toContain('.chat-sidebar-toggle,');
     expect(stylesCss).toContain('.chat-title-prompt-icon-button,');

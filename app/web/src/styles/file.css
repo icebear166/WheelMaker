@@ -236,8 +236,12 @@
   gap: 6px;
 }
 
-.desktop-shell .preview-workbench-surface.desktop .preview-workbench-toolbar {
+.desktop-shell[data-desktop-window-controls='true'] .preview-workbench-surface.desktop .preview-workbench-toolbar {
   padding-right: calc(var(--desktop-window-controls-width) + 10px);
+  background: var(--desktop-top-surface);
+}
+
+.desktop-shell .preview-workbench-surface.desktop .preview-workbench-toolbar {
   background: var(--desktop-top-surface);
 }
 

@@ -2736,11 +2736,18 @@
 }
 
 .chat-plan-surface.desktop {
+  --chat-plan-desktop-width: 320px;
+  --chat-plan-column-gap: 12px;
+  --chat-plan-edge-gap: calc(18px + var(--chat-scrollbar-gutter-width, 8px));
+  --chat-plan-resolved-width: min(
+    var(--chat-plan-desktop-width),
+    calc(100% - var(--chat-plan-edge-gap) - var(--chat-plan-edge-gap))
+  );
   position: absolute;
   top: 12px;
-  right: calc(18px + var(--chat-scrollbar-gutter-width, 8px));
+  right: var(--chat-plan-edge-gap);
   z-index: 6;
-  width: min(320px, calc(100% - 36px));
+  width: var(--chat-plan-resolved-width);
   max-height: min(42vh, 360px);
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--border) 82%, var(--accent));
@@ -2751,10 +2758,11 @@
 }
 
 .chat-view-width-fixed-800 .chat-plan-surface.desktop {
-  right: max(
-    calc(18px + var(--chat-scrollbar-gutter-width, 8px)),
-    calc((100% - 800px) / 2 + var(--chat-scrollbar-gutter-width, 8px))
+  left: min(
+    calc((100% + 800px) / 2 + var(--chat-plan-column-gap)),
+    calc(100% - var(--chat-plan-resolved-width) - var(--chat-plan-edge-gap))
   );
+  right: auto;
 }
 
 .chat-plan-surface-header {

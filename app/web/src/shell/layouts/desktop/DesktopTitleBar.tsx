@@ -5,10 +5,6 @@ import {
   setDesktopWebSourcePreference,
 } from '../../../platform/desktop/webSource';
 
-type DesktopWindowControlsProps = {
-  onSettingsSelect?: () => void;
-};
-
 type DesktopDragRegionProps = {
   className: string;
   children: ReactNode;
@@ -20,83 +16,16 @@ function invokeDesktopAction(action: (() => Promise<void> | void) | undefined) {
   void action?.();
 }
 
-function isDesktopWindowControlsTarget(target: EventTarget | null) {
+function isDesktopWindowSourceTarget(target: EventTarget | null) {
   const targetElement = target as { closest?: (selector: string) => Element | null } | null;
   return typeof targetElement?.closest === 'function'
-    && Boolean(targetElement.closest('[data-desktop-window-menu-root]'));
+    && Boolean(targetElement.closest('[data-desktop-window-source-root]'));
 }
 
 function isDesktopDragInteractiveTarget(target: EventTarget | null) {
   const targetElement = target as { closest?: (selector: string) => Element | null } | null;
   return typeof targetElement?.closest === 'function'
     && Boolean(targetElement.closest('button, select, input, textarea, [contenteditable="true"], [role="dialog"], [data-desktop-window-interactive]'));
-}
-
-function DesktopTitleBarIcon() {
-  return (
-    <svg
-      className="desktop-titlebar-icon"
-      viewBox="300 420 930 690"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <defs>
-        <linearGradient
-          id="desktopTitlebarIconBlueMark"
-          x1="339"
-          y1="448"
-          x2="940"
-          y2="1098"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop offset="0" stopColor="#48C1FF" />
-          <stop offset="0.48" stopColor="#29A8FF" />
-          <stop offset="1" stopColor="#168FF0" />
-        </linearGradient>
-        <linearGradient
-          id="desktopTitlebarIconWhiteMark"
-          x1="848"
-          y1="508"
-          x2="1208"
-          y2="1072"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop offset="0" stopColor="#FFFFFF" />
-          <stop offset="0.64" stopColor="#FAFAFA" />
-          <stop offset="1" stopColor="#F1F2F6" />
-        </linearGradient>
-        <filter
-          id="desktopTitlebarIconSoftOuter"
-          x="-80"
-          y="-80"
-          width="1696"
-          height="1696"
-          filterUnits="userSpaceOnUse"
-          colorInterpolationFilters="sRGB"
-        >
-          <feDropShadow dx="0" dy="18" stdDeviation="26" floodColor="#000000" floodOpacity="0.55" />
-          <feDropShadow dx="0" dy="0" stdDeviation="10" floodColor="#1D5AA5" floodOpacity="0.35" />
-        </filter>
-        <filter
-          id="desktopTitlebarIconLogoShadow"
-          x="260"
-          y="390"
-          width="1010"
-          height="760"
-          filterUnits="userSpaceOnUse"
-          colorInterpolationFilters="sRGB"
-        >
-          <feDropShadow dx="0" dy="8" stdDeviation="8" floodColor="#000814" floodOpacity="0.48" />
-          <feDropShadow dx="0" dy="0" stdDeviation="5" floodColor="#1D5AA5" floodOpacity="0.25" />
-        </filter>
-      </defs>
-      <g filter="url(#desktopTitlebarIconLogoShadow)" data-desktop-titlebar-icon-mark={true}>
-        <path d="M325 462 L456 607 L457 847 L644 650 L1026 1073 L853 1073 L637 843 L424 1073 L326 1073 Z" fill="url(#desktopTitlebarIconBlueMark)" />
-        <path d="M674 628 H871 L768 746 Z" fill="url(#desktopTitlebarIconBlueMark)" />
-        <path d="M1209 462 L974 729 L895 648 L787 768 L948 943 L1079 798 L1079 1071 L1209 1071 Z" fill="url(#desktopTitlebarIconWhiteMark)" />
-      </g>
-    </svg>
-  );
 }
 
 export function DesktopDragRegion({ className, children }: DesktopDragRegionProps) {
@@ -143,11 +72,10 @@ export function DesktopDragRegion({ className, children }: DesktopDragRegionProp
   );
 }
 
-export function DesktopWindowMenu() {
+export function DesktopWindowSourceButton() {
   const bridge = getDesktopWindowBridge();
   const [webSourceState, setWebSourceState] = useState<DesktopWebSourceState | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [sourcePanelOpen, setSourcePanelOpen] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -162,19 +90,18 @@ export function DesktopWindowMenu() {
   }, []);
 
   useEffect(() => {
-    if (!menuOpen || typeof window === 'undefined' || typeof window.addEventListener !== 'function') {
+    if (!panelOpen || typeof window === 'undefined' || typeof window.addEventListener !== 'function') {
       return undefined;
     }
-    const closeMenu = (event: PointerEvent) => {
-      if (isDesktopWindowControlsTarget(event.target)) {
+    const closePanel = (event: PointerEvent) => {
+      if (isDesktopWindowSourceTarget(event.target)) {
         return;
       }
-      setMenuOpen(false);
-      setSourcePanelOpen(false);
+      setPanelOpen(false);
     };
-    window.addEventListener('pointerdown', closeMenu);
-    return () => window.removeEventListener('pointerdown', closeMenu);
-  }, [menuOpen]);
+    window.addEventListener('pointerdown', closePanel);
+    return () => window.removeEventListener('pointerdown', closePanel);
+  }, [panelOpen]);
 
   if (!bridge) {
     return null;
@@ -186,8 +113,7 @@ export function DesktopWindowMenu() {
   const sourceTitle = webSourceState?.remoteUrl || actualSourceLabel;
 
   const handleWebSourcePreferenceSelect = async (preference: DesktopSourcePreference) => {
-    setMenuOpen(false);
-    setSourcePanelOpen(false);
+    setPanelOpen(false);
     const nextState = await setDesktopWebSourcePreference(preference);
     if (nextState) {
       setWebSourceState(nextState);
@@ -196,46 +122,26 @@ export function DesktopWindowMenu() {
   };
 
   const handleWebSourceRefresh = () => {
-    setMenuOpen(false);
-    setSourcePanelOpen(false);
+    setPanelOpen(false);
     window.location.reload();
   };
 
   return (
-    <div className="desktop-window-menu-root" data-desktop-window-menu-root={true}>
+    <div className="desktop-window-source-root" data-desktop-window-source-root={true}>
       <button
         type="button"
-        className="desktop-window-menu-button"
-        aria-label="WheelMaker menu"
-        title="WheelMaker"
+        className="desktop-window-source-button"
+        aria-label="Show source"
+        title="Source"
         aria-haspopup="menu"
-        aria-expanded={menuOpen}
-        onClick={() => {
-          setMenuOpen(open => {
-            if (open) {
-              setSourcePanelOpen(false);
-            }
-            return !open;
-          });
-        }}
+        aria-expanded={panelOpen}
+        onClick={() => setPanelOpen(open => !open)}
       >
-        <DesktopTitleBarIcon />
+        <span className="codicon codicon-info" aria-hidden="true" />
       </button>
-      {menuOpen ? (
-        <div className="desktop-window-menu" role="menu">
-          <button
-            type="button"
-            className="desktop-window-menu-item"
-            role="menuitem"
-            aria-label="Show source"
-            aria-expanded={sourcePanelOpen}
-            onClick={() => setSourcePanelOpen(open => !open)}
-          >
-            <span className="codicon codicon-server-process" aria-hidden="true" />
-            显示来源
-            <span className={`codicon ${sourcePanelOpen ? 'codicon-chevron-up' : 'codicon-chevron-down'}`} aria-hidden="true" />
-          </button>
-          {sourcePanelOpen && webSourceState ? (
+      {panelOpen ? (
+        <div className="desktop-window-source-popover" role="menu">
+          {webSourceState ? (
             <div className="desktop-window-source-panel">
               <div className="desktop-window-source-current" title={sourceTitle}>
                 {actualSourceLabel}
@@ -274,14 +180,18 @@ export function DesktopWindowMenu() {
                 </>
               ) : null}
             </div>
-          ) : null}
+          ) : (
+            <div className="desktop-window-source-panel">
+              <div className="desktop-window-source-current">Source unavailable</div>
+            </div>
+          )}
         </div>
       ) : null}
     </div>
   );
 }
 
-export function DesktopWindowControls({ onSettingsSelect }: DesktopWindowControlsProps) {
+export function DesktopWindowControls() {
   const bridge = getDesktopWindowBridge();
 
   if (!bridge) {
@@ -290,17 +200,7 @@ export function DesktopWindowControls({ onSettingsSelect }: DesktopWindowControl
 
   return (
     <div className="desktop-window-controls" data-desktop-window-controls={true}>
-      {onSettingsSelect ? (
-        <button
-          type="button"
-          className="desktop-titlebar-button desktop-window-settings-button"
-          aria-label="Open settings"
-          title="Settings"
-          onClick={onSettingsSelect}
-        >
-          <span className="codicon codicon-settings-gear" aria-hidden="true" />
-        </button>
-      ) : null}
+      <DesktopWindowSourceButton />
       <button
         type="button"
         className="desktop-titlebar-button"

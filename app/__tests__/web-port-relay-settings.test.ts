@@ -57,7 +57,7 @@ describe('port relay settings UI source structure', () => {
     expect(mainTsx).toContain('setPortRelayFrameReloadKey(key => key + 1);');
     expect(mainTsx).not.toContain('preferDirectPortRelayUrl');
     expect(mainTsx).not.toContain('preferSnapshotRelayUrl');
-    expect(mainTsx).not.toContain('getDesktopWindowBridge');
+    expect(mainTsx).toContain('const desktopWindowControlsVisible = isWide && Boolean(getDesktopWindowBridge());');
     expect(mainTsx).not.toContain('window.open(openUrl, \'_blank\', \'noopener,noreferrer\')');
 
     expect(detailTsx).toContain('className="port-relay-panel port-relay-panel-shell"');

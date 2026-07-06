@@ -448,7 +448,7 @@ describe('agent package update settings UI source structure', () => {
     expect(mainTsx).toContain('renderSkillsSettingsDetail(options)');
     expect(mainTsx).toContain("openSettingsPeer('portRelay')");
     expect(mainTsx).not.toContain("openSettingsPeer('ccSwitch')");
-    expect(mainTsx).toContain('const desktopWindowControls = isWide ? (');
+    expect(mainTsx).toContain('const desktopWindowControls = desktopWindowControlsVisible ? (');
     expect(mainTsx).not.toContain('const desktopActivityBar = isWide ? (');
     expect(mainTsx).not.toContain('className="desktop-activity-bar"');
     expect(mainTsx).not.toContain('const isShortcutSettingsDetailActive = sidebarSettingsOpen && isSettingsPeerDetail(settingsDetailView);');

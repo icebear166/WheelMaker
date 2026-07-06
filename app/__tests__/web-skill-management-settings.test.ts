@@ -32,7 +32,7 @@ describe('skill management settings UI source structure', () => {
   test('hides desktop Skills shortcut while keeping the settings detail route', () => {
     expect(mainTsx).toContain('renderSkillsSettingsDetail(options)');
     expect(mainTsx).toContain("if (detail === 'skills') {");
-    expect(mainTsx).toContain('const desktopWindowControls = isWide ? (');
+    expect(mainTsx).toContain('const desktopWindowControls = desktopWindowControlsVisible ? (');
     expect(mainTsx).not.toContain('const desktopActivityBar = isWide ? (');
     expect(mainTsx).not.toContain('className="desktop-activity-bar"');
     expect(mainTsx).not.toContain('className={`desktop-activity-button${sidebarSettingsOpen && settingsDetailView === \'skills\' ? \' active\' : \'\'}`}');

@@ -29,8 +29,9 @@ import {
 import { PortRelayFloatingButton, PortRelayFrameSurface } from '../portRelay/PortRelayFrameSurface';
 import { initializePWAFoundation } from '../platform/pwa';
 import {cleanupNativeWebViewPWA} from '../platform/pwa/nativePwaGuard';
-import { DesktopDragRegion, DesktopWindowControls, DesktopWindowMenu } from '../shell/layouts/desktop/DesktopTitleBar';
+import { DesktopDragRegion, DesktopWindowControls } from '../shell/layouts/desktop/DesktopTitleBar';
 import {resolveDesktopChatQuickSwitchContextMenu} from '../shell/layouts/desktop/chatQuickSwitchContextMenu';
+import {getDesktopWindowBridge} from '../platform/desktop/desktopRuntime';
 import {
   readDesktopWebSourceState,
   setDesktopRemoteDebugEnabled as persistDesktopRemoteDebugEnabled,
@@ -16894,6 +16895,17 @@ export function App() {
       : 'SOURCE CONTROL';
     const chatSidebarTitleSearchOpen = tab === 'chat' && !sidebarSettingsOpen && sessionSearchHeaderExpanded;
     const wideSidebarMain = tab === 'chat' ? renderWideProjectSessionNav() : renderSidebarMain(false);
+    const wideSidebarSettingsButton = !chatSidebarTitleSearchOpen ? (
+      <button
+        type="button"
+        className="wide-sidebar-settings-button"
+        onClick={handleDesktopSettingsSelect}
+        title="Open settings"
+        aria-label="Open settings"
+      >
+        <span className="codicon codicon-settings-gear" aria-hidden="true" />
+      </button>
+    ) : null;
 
     return (
       <>
@@ -16944,9 +16956,9 @@ export function App() {
         ) : null}
         {isWide ? (
           <DesktopDragRegion className={`sidebar-title-row${chatSidebarTitleSearchOpen ? ' search-open' : ''}`}>
+            {wideSidebarSettingsButton}
             {tab === 'chat' && !sidebarSettingsOpen ? (
               <>
-                {!chatSidebarTitleSearchOpen ? <DesktopWindowMenu /> : null}
                 <div className="chat-sidebar-title-actions">
                   {renderChatHubSummary()}
                   {renderChatArchiveControls(false)}
@@ -20584,8 +20596,9 @@ export function App() {
       />
     </React.Suspense>
   ) : null;
-  const desktopWindowControls = isWide ? (
-    <DesktopWindowControls onSettingsSelect={handleDesktopSettingsSelect} />
+  const desktopWindowControlsVisible = isWide && Boolean(getDesktopWindowBridge());
+  const desktopWindowControls = desktopWindowControlsVisible ? (
+    <DesktopWindowControls />
   ) : null;
 
   return (
@@ -20595,6 +20608,7 @@ export function App() {
         themeMode={themeMode}
         setiFontCss={setiFontCss}
         desktopWindowControls={desktopWindowControls}
+        desktopWindowControlsVisible={desktopWindowControlsVisible}
         desktopSettingsScreen={desktopSettingsScreen}
         desktopPeek={chatPreviewDesktopPane}
         desktopChatFixedPreview={desktopChatFixedPreview}

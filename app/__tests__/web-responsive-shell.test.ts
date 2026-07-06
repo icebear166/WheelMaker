@@ -25,6 +25,7 @@ describe('web responsive shell split', () => {
     expect(shellTsx).not.toContain("import { DesktopTitleBar } from './layouts/desktop/DesktopTitleBar';");
     expect(shellTsx).toContain("mode === 'desktop'");
     expect(shellTsx).toContain('desktopWindowControls: ReactNode;');
+    expect(shellTsx).toContain('desktopWindowControlsVisible: boolean;');
     expect(shellTsx).toContain('desktopSettingsScreen: ReactNode;');
     expect(shellTsx).toContain('desktopChatPreviewOpen: boolean;');
     expect(shellTsx).not.toContain('desktopActivityBar: ReactNode;');
@@ -34,6 +35,7 @@ describe('web responsive shell split', () => {
       /export function DesktopShell[\s\S]*?desktopWindowControls[\s\S]*?className=\{`workspace theme-\$\{themeMode\}`\}[\s\S]*?\{desktopWindowControls\}[\s\S]*?<div[\s\S]*?className="desktop-shell"[\s\S]*?<aside className="workspace-left">\{sidebar\}<\/aside>/,
     );
     expect(shellTsx).toContain("data-chat-preview-open={desktopChatPreviewOpen ? 'true' : undefined}");
+    expect(shellTsx).toContain("data-desktop-window-controls={desktopWindowControlsVisible ? 'true' : undefined}");
     expect(shellTsx).toMatch(
       /export function MobileShell[\s\S]*?className=\{`workspace theme-\$\{themeMode\} narrow-shell`\}[\s\S]*?className=\{`drawer-overlay \$\{drawerOpen \? 'show' : ''\}`\}/,
     );
@@ -70,6 +72,7 @@ describe('web responsive shell split', () => {
     expect(mainTsx).toContain('<ResponsiveShell');
     expect(mainTsx).toContain('mode={layoutMode}');
     expect(mainTsx).toContain('desktopWindowControls={desktopWindowControls}');
+    expect(mainTsx).toContain('desktopWindowControlsVisible={desktopWindowControlsVisible}');
     expect(mainTsx).toContain('desktopSettingsScreen={desktopSettingsScreen}');
     expect(mainTsx).toContain('desktopChatPreviewOpen={isWide && chatPreviewOpen}');
     expect(mainTsx).not.toContain('desktopActivityBar={desktopActivityBar}');
@@ -93,7 +96,7 @@ describe('web responsive shell split', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 
-    expect(mainTsx).toContain("import { DesktopDragRegion, DesktopWindowControls, DesktopWindowMenu } from '../shell/layouts/desktop/DesktopTitleBar';");
+    expect(mainTsx).toContain("import { DesktopDragRegion, DesktopWindowControls } from '../shell/layouts/desktop/DesktopTitleBar';");
 
     const disconnectedStart = mainTsx.indexOf('if (!connected && !keepWorkspaceVisible)');
     const disconnectedEnd = mainTsx.indexOf('const projectMenu', disconnectedStart);
@@ -136,29 +139,25 @@ describe('web responsive shell split', () => {
     expect(controlsBlock).toContain('border-bottom: 1px solid var(--border);');
     expect(stylesCss).not.toContain('.theme-light .desktop-window-controls {');
 
-    expect(stylesCss).toContain('.desktop-window-menu-button {');
-    expect(stylesCss).toContain('.desktop-window-menu {');
+    expect(stylesCss).toContain('.desktop-window-source-button {');
+    expect(stylesCss).toContain('.desktop-window-source-popover {');
     expect(stylesCss).toContain('.desktop-window-source-panel {');
     expect(stylesCss).toContain('.desktop-window-source-choice {');
 
-    const sidebarMenuRootBlock = cssRuleBlock(stylesCss, '.sidebar-title-row .desktop-window-menu-root');
-    expect(sidebarMenuRootBlock).toContain('margin-left: -10px;');
-    expect(sidebarMenuRootBlock).toContain('flex-basis: 38px;');
+    const sidebarSettingsButtonBlock = cssRuleBlock(stylesCss, '.wide-sidebar-settings-button');
+    expect(sidebarSettingsButtonBlock).toContain('width: 28px;');
+    expect(sidebarSettingsButtonBlock).toContain('height: 28px;');
+    expect(sidebarSettingsButtonBlock).toContain('flex: 0 0 28px;');
 
-    const titlebarIconBlock = cssRuleBlock(stylesCss, '.desktop-titlebar-icon');
-    expect(titlebarIconBlock).toContain('width: 22px;');
-    expect(titlebarIconBlock).toContain('height: 22px;');
-    expect(titlebarIconBlock).toContain('flex: 0 0 22px;');
-
-    const rightTitleBlock = cssRuleBlock(stylesCss, '.desktop-shell .workspace-right .block-title');
+    const rightTitleBlock = cssRuleBlock(stylesCss, ".desktop-shell[data-desktop-window-controls='true'] .workspace-right .block-title");
     expect(rightTitleBlock).toContain('padding-right: calc(var(--desktop-window-controls-width) + 10px);');
 
-    const rightChatTitleBlock = cssRuleBlock(stylesCss, ".desktop-shell:not([data-chat-preview-open='true']) .workspace-right .chat-title-bar");
+    const rightChatTitleBlock = cssRuleBlock(stylesCss, ".desktop-shell[data-desktop-window-controls='true']:not([data-chat-preview-open='true']) .workspace-right .chat-title-bar");
     expect(rightChatTitleBlock).toContain('padding-right: calc(var(--desktop-window-controls-width) + 10px);');
-    const rightChatTitlePreviewOpenBlock = cssRuleBlock(stylesCss, ".desktop-shell[data-chat-preview-open='true'] .workspace-right .chat-title-bar");
+    const rightChatTitlePreviewOpenBlock = cssRuleBlock(stylesCss, ".desktop-shell[data-desktop-window-controls='true'][data-chat-preview-open='true'] .workspace-right .chat-title-bar");
     expect(rightChatTitlePreviewOpenBlock).toContain('padding-right: 10px;');
 
-    const previewToolbarBlock = cssRuleBlock(stylesCss, '.desktop-shell .preview-workbench-surface.desktop .preview-workbench-toolbar');
+    const previewToolbarBlock = cssRuleBlock(stylesCss, ".desktop-shell[data-desktop-window-controls='true'] .preview-workbench-surface.desktop .preview-workbench-toolbar");
     expect(previewToolbarBlock).toContain('padding-right: calc(var(--desktop-window-controls-width) + 10px);');
   });
 

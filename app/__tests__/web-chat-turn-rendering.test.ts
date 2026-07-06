@@ -36,6 +36,11 @@ function readStyles(): string {
   return readWebStyles(projectRoot);
 }
 
+function cssRuleBlock(stylesCss: string, selector: string): string {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return stylesCss.match(new RegExp(`${escaped} \\{[\\s\\S]*?\\n\\}`))?.[0] ?? '';
+}
+
 describe('web chat turn rendering', () => {
   test('renders chat turns through the virtual display index instead of prompt groups', () => {
     const main = readMain();
@@ -250,6 +255,19 @@ describe('web chat turn rendering', () => {
     expect(styles).toContain('.chat-plan-surface.mobile');
     expect(styles).toContain('.chat-plan-compact-trigger');
     expect(styles).toContain('.chat-plan-surface.mobile.expanded');
+  });
+
+  test('anchors fixed-width desktop plan beside the 800px chat text column before squeezing inward', () => {
+    const styles = readStyles();
+    const desktopBlock = cssRuleBlock(styles, '.chat-plan-surface.desktop');
+    const fixedBlock = cssRuleBlock(styles, '.chat-view-width-fixed-800 .chat-plan-surface.desktop');
+
+    expect(desktopBlock).toContain('--chat-plan-desktop-width: 320px;');
+    expect(desktopBlock).toContain('width: var(--chat-plan-resolved-width);');
+    expect(fixedBlock).toContain('right: auto;');
+    expect(fixedBlock).toContain('left: min(');
+    expect(fixedBlock).toContain('calc((100% + 800px) / 2 + var(--chat-plan-column-gap))');
+    expect(fixedBlock).toContain('calc(100% - var(--chat-plan-resolved-width) - var(--chat-plan-edge-gap))');
   });
 
   test('settles chat bottom after the mobile keyboard inset changes without fighting keyboard close animation', () => {
