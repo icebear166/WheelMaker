@@ -374,6 +374,7 @@
 .chat-title-prompt-icon-button,
 .chat-preview-toggle {
   appearance: none;
+  position: relative;
   width: 28px;
   height: 28px;
   flex: 0 0 28px;

@@ -18167,6 +18167,9 @@ export function App() {
                 aria-pressed={chatPreviewOpen}
               >
                 <span className="codicon codicon-layout-sidebar-right" aria-hidden="true" />
+                {!chatPreviewOpen && previewTabCount > 0 ? (
+                  <span className="chat-preview-badge" aria-label={`${previewTabCount} preview tabs`}>{previewTabCount}</span>
+                ) : null}
               </button>
             </div>
           </DesktopDragRegion>
@@ -19565,9 +19568,6 @@ export function App() {
               aria-expanded={drawerOpen}
             >
               <span className="codicon codicon-menu" />
-              {!drawerOpen && previewTabCount > 0 ? (
-                <span className="floating-nav-preview-badge" aria-label={`${previewTabCount} preview tabs`}>{previewTabCount}</span>
-              ) : null}
             </button>
           </div>
         ) : (
@@ -19627,9 +19627,6 @@ export function App() {
               aria-expanded={drawerOpen}
             >
               <span className="codicon codicon-menu" />
-              {!drawerOpen && previewTabCount > 0 ? (
-                <span className="floating-nav-preview-badge" aria-label={`${previewTabCount} preview tabs`}>{previewTabCount}</span>
-              ) : null}
             </button>
           </>
         )}
