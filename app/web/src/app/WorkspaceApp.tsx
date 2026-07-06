@@ -2852,6 +2852,8 @@ export function App() {
   const previewWorkbenchRenderedTabs = previewRenderedTabs(previewWorkbench);
   const previewWorkbenchHasTabs = Object.values(previewWorkbench.tabsByProjectId)
     .some(tabs => tabs.length > 0);
+  const previewTabCount = Object.values(previewWorkbench.tabsByProjectId)
+    .reduce((sum, tabs) => sum + tabs.length, 0);
   const chatFilePeek = isFilePreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;
   const activePromptDiffPreview = isPromptDiffPreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;
   const activeAttachmentPreview = isAttachmentPreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;
@@ -19563,6 +19565,9 @@ export function App() {
               aria-expanded={drawerOpen}
             >
               <span className="codicon codicon-menu" />
+              {!drawerOpen && previewTabCount > 0 ? (
+                <span className="floating-nav-preview-badge" aria-label={`${previewTabCount} preview tabs`}>{previewTabCount}</span>
+              ) : null}
             </button>
           </div>
         ) : (
@@ -19622,6 +19627,9 @@ export function App() {
               aria-expanded={drawerOpen}
             >
               <span className="codicon codicon-menu" />
+              {!drawerOpen && previewTabCount > 0 ? (
+                <span className="floating-nav-preview-badge" aria-label={`${previewTabCount} preview tabs`}>{previewTabCount}</span>
+              ) : null}
             </button>
           </>
         )}
