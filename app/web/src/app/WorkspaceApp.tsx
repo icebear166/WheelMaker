@@ -19445,6 +19445,7 @@ export function App() {
                   <button
                     type="button"
                     className="gesture-nav-button gesture-nav-capsule"
+                    onPointerDown={e => e.stopPropagation()}
                     onClick={() => { cancelGestureNavigation(); toggleChatPreviewFromTitle(); }}
                     title={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
                     aria-label={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
@@ -19454,6 +19455,7 @@ export function App() {
                   <button
                     type="button"
                     className="gesture-nav-button gesture-nav-capsule"
+                    onPointerDown={e => e.stopPropagation()}
                     onClick={() => { cancelGestureNavigation(); setDrawerOpen(false); }}
                     title="Close drawer"
                     aria-label="Close drawer"
@@ -19463,6 +19465,7 @@ export function App() {
                   <button
                     type="button"
                     className="gesture-nav-button gesture-nav-capsule"
+                    onPointerDown={e => e.stopPropagation()}
                     onClick={() => { cancelGestureNavigation(); openSettingsRoot(); }}
                     title="Settings"
                     aria-label="Settings"
