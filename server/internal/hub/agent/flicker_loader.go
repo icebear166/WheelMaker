@@ -42,12 +42,35 @@ function replaceOnceRegex(source, pattern, replacement, label) {
   return source.replace(pattern, replacement);
 }
 
-function patchMyFlickerBundle(source) {
-  const sessionMatch = source.match(/let B=await this\.getCanUseModels\(\),D=new (\w+)\(Q,this\.messageBus,this\.connection,this\.clientFsCapabilities\);return this\.sessions\.set\(Q,D\),await D\.init\(\),/);
-  if (!sessionMatch) {
+function replaceOptionalOnce(source, needle, replacement, label) {
+  const index = source.indexOf(needle);
+  if (index < 0) {
+    return { source, replaced: false };
+  }
+  if (source.indexOf(needle, index + needle.length) >= 0) {
+    throw new Error("WheelMaker flicker ACP patch failed: " + label + " matched more than once");
+  }
+  return {
+    source: source.slice(0, index) + replacement + source.slice(index + needle.length),
+    replaced: true,
+  };
+}
+
+function findSessionClass(source) {
+  const matches = [...source.matchAll(/new (\w+)\([^)]*this\.messageBus,this\.connection,this\.clientFsCapabilities\)/g)];
+  const classNames = [...new Set(matches.map((match) => match[1]))];
+  if (classNames.length !== 1) {
     throw new Error("WheelMaker flicker ACP patch failed: session constructor not found");
   }
-  const sessionClass = sessionMatch[1];
+  return classNames[0];
+}
+
+function loadSessionPatchSource(sessionClass) {
+  return "async loadSession(A){if(!this.messageBus)throw Error(\"Agent not initialized\");let Q=A.sessionId;if(!Q)throw Error(\"sessionId is required\");let B=await this.getCanUseModels(),D=typeof SU1===\"function\"?SU1(A.mcpServers):{};if(this.registerRuntimeMcpServers)await this.registerRuntimeMcpServers(D);let J=this.sessions.get(Q);if(!J)J=new " + sessionClass + "(Q,this.messageBus,this.connection,this.clientFsCapabilities),this.sessions.set(Q,J),J.defaultCwd=this.defaultCwd,await this.messageBus.request(\"session.initialize\",{cwd:this.defaultCwd,sessionId:Q,source:\"resume\"}),J.listenChunkEvent(),J.initPermission(),setTimeout(()=>{J.initSlashCommand()},0);try{let H=(await this.messageBus.request(\"session.messages.list\",{cwd:this.defaultCwd,sessionId:Q}))?.data?.messages,V=(I)=>{if(typeof I===\"string\")return I;if(Array.isArray(I))return I.map((W)=>{if(typeof W===\"string\")return W;if(!W||typeof W!==\"object\")return\"\";if(typeof W.text===\"string\")return W.text;if(typeof W.content===\"string\")return W.content;if(W.type===\"text\"&&typeof W.value===\"string\")return W.value;return\"\"}).filter(Boolean).join(\"\");if(I&&typeof I===\"object\"){if(typeof I.text===\"string\")return I.text;if(typeof I.content===\"string\")return I.content;if(typeof I.value===\"string\")return I.value}return\"\"};if(Array.isArray(H))for(let I of H){let W=I?.message??I,_=W?.role,z=V(W?.content??W?.uiContent);if(!z)continue;let w=_===\"user\"?\"user_message_chunk\":_===\"assistant\"?\"agent_message_chunk\":\"\";if(w)this.connection.sessionUpdate({sessionId:Q,update:{sessionUpdate:w,content:{type:\"text\",text:z}}})}}catch(H){console.error(\"Failed to replay session history:\",H)}return{configOptions:WMF(B,this.__wmfConfig)}}";
+}
+
+function patchMyFlickerBundle(source) {
+  const sessionClass = findSessionClass(source);
   source = replaceOnceRegex(
     source,
     /}(class \w+\{connection;sessions=new Map;messageBus;nodeBridge;context;defaultCwd;contextCreateOpts;clientFsCapabilities;)/,
@@ -60,18 +83,29 @@ function patchMyFlickerBundle(source) {
     "agentCapabilities:{loadSession:!0}}}async getCanUseModels()",
     "initialize capabilities"
   );
-  source = replaceOnce(
+  source = replaceOnceRegex(
     source,
-    "{sessionId:Q,models:B||void 0}",
-    "{sessionId:Q,configOptions:WMF(B,this.__wmfConfig)}",
+    /\{sessionId:(\w+),models:(\w+)\|\|void 0\}/,
+    "{sessionId:$1,configOptions:WMF($2,this.__wmfConfig)}",
     "newSession config options"
   );
-  source = replaceOnce(
+  const patchedLoadSession = loadSessionPatchSource(sessionClass);
+  const oldLoadSession = replaceOptionalOnce(
     source,
     "loadSession(A){throw Error(\"Method not implemented.\")}",
-    "async loadSession(A){if(!this.messageBus)throw Error(\"Agent not initialized\");let Q=A.sessionId;if(!Q)throw Error(\"sessionId is required\");let B=await this.getCanUseModels(),D=new " + sessionClass + "(Q,this.messageBus,this.connection,this.clientFsCapabilities);this.sessions.set(Q,D),await this.messageBus.request(\"session.initialize\",{cwd:this.defaultCwd,sessionId:Q,source:\"resume\"}),D.listenChunkEvent(),D.initPermission(),setTimeout(()=>{D.initSlashCommand()},0);try{let J=(await this.messageBus.request(\"session.messages.list\",{cwd:this.defaultCwd,sessionId:Q}))?.data?.messages,$=(Y)=>{if(typeof Y===\"string\")return Y;if(Array.isArray(Y))return Y.map((E)=>{if(typeof E===\"string\")return E;if(!E||typeof E!==\"object\")return\"\";if(typeof E.text===\"string\")return E.text;if(typeof E.content===\"string\")return E.content;if(E.type===\"text\"&&typeof E.value===\"string\")return E.value;return\"\"}).filter(Boolean).join(\"\");if(Y&&typeof Y===\"object\"){if(typeof Y.text===\"string\")return Y.text;if(typeof Y.content===\"string\")return Y.content;if(typeof Y.value===\"string\")return Y.value}return\"\"};if(Array.isArray(J))for(let Y of J){let E=Y?.message??Y,G=E?.role,X=$(E?.content??E?.uiContent);if(!X)continue;let K=G===\"user\"?\"user_message_chunk\":G===\"assistant\"?\"agent_message_chunk\":\"\";if(K)this.connection.sessionUpdate({sessionId:Q,update:{sessionUpdate:K,content:{type:\"text\",text:X}}})}}catch(J){console.error(\"Failed to replay session history:\",J)}return{configOptions:WMF(B,this.__wmfConfig)}}",
+    patchedLoadSession,
     "loadSession"
   );
+  if (oldLoadSession.replaced) {
+    source = oldLoadSession.source;
+  } else {
+    source = replaceOnceRegex(
+      source,
+      /async loadSession\(A\)\{if\(!this\.messageBus\)throw Error\("Agent not initialized"\);[\s\S]*?\{models:\w+\|\|void 0\}\}(?=async setSessionModelValue\(A\))/,
+      patchedLoadSession,
+      "loadSession"
+    );
+  }
   source = replaceOnce(
     source,
     "unstable_resumeSession(A){throw Error(\"Method not implemented.\")}",
