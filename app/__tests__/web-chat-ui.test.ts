@@ -839,13 +839,15 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('<span className="chat-hub-row-name">{hub.hubId}</span>');
     expect(mainTsx).toContain('<div className="chat-hub-empty">No hubs</div>');
     expect(mainTsx).toContain('<div className="mobile-chat-toolbar" aria-label="Chat tools">');
+    expect(mainTsx).toContain('const renderChatMenuSettingsButton = () => (');
+    expect(mainTsx).toContain('className="chat-menu-icon-button chat-menu-settings-button"');
     expect(mainTsx).not.toContain('<span className="mobile-chat-drawer-title">Chats</span>');
     expect(mainTsx).toContain('renderChatHubSummary(true)');
     expect(mainTsx).toContain('renderChatHubSummary()');
     const mobileToolbarStart = mainTsx.indexOf('<div className="mobile-chat-toolbar"');
     const mobileToolbarEnd = mainTsx.indexOf('{renderChatHeaderSearchControls(true)}', mobileToolbarStart);
     const mobileToolbar = mainTsx.slice(mobileToolbarStart, mobileToolbarEnd);
-    expect(mobileToolbar).toContain('title="Open settings"');
+    expect(mobileToolbar).toContain('{renderChatMenuSettingsButton()}');
     expect(mobileToolbar).not.toContain('title="Update"');
     expect(mobileToolbar).not.toContain('title="Port Relay"');
     expect(mobileToolbar).not.toContain("openSettingsDetail('update')");
@@ -853,10 +855,10 @@ describe('web chat integration', () => {
     expect(mobileToolbar).not.toContain('refreshMobileChatProjectSessions()');
     expect(mobileToolbar).not.toContain('title={reconnecting ? \'Reconnecting...\' : \'Refresh chats\'}');
     expect(mainTsx).toMatch(
-      /<div className="mobile-chat-toolbar" aria-label="Chat tools">[\s\S]*?title="Open settings"[\s\S]*?<\/div>[\s\S]*?\{renderChatHubSummary\(true\)\}[\s\S]*?\{renderChatHeaderSearchControls\(true\)\}/,
+      /<div className="mobile-chat-toolbar" aria-label="Chat tools">[\s\S]*?\{renderChatMenuSettingsButton\(\)\}[\s\S]*?<\/div>[\s\S]*?\{renderChatHubSummary\(true\)\}[\s\S]*?\{renderChatHeaderSearchControls\(true\)\}/,
     );
     expect(mainTsx).toMatch(
-      /<DesktopDragRegion className=\{`sidebar-title-row\$\{chatSidebarTitleSearchOpen \? ' search-open' : ''\}`\}>[\s\S]*?\{wideSidebarSettingsButton\}[\s\S]*?\{tab === 'chat' && !sidebarSettingsOpen \? \([\s\S]*?<div className="chat-sidebar-title-actions">[\s\S]*?\{renderChatHubSummary\(\)\}[\s\S]*?\{renderChatHeaderSearchControls\(false\)\}/,
+      /<DesktopDragRegion className=\{`sidebar-title-row\$\{chatSidebarTitleSearchOpen \? ' search-open' : ''\}`\}>[\s\S]*?\{!chatSidebarTitleSearchOpen \? renderChatMenuSettingsButton\(\) : null\}[\s\S]*?\{tab === 'chat' && !sidebarSettingsOpen \? \([\s\S]*?<div className="chat-sidebar-title-actions">[\s\S]*?\{renderChatHubSummary\(\)\}[\s\S]*?\{renderChatHeaderSearchControls\(false\)\}/,
     );
     const renderMainStart = mainTsx.indexOf('const renderMain = () => {');
     const chatMainStart = mainTsx.indexOf("if (tab === 'chat') {", renderMainStart);
@@ -869,14 +871,14 @@ describe('web chat integration', () => {
     const mobileChatHeaderBlock = stylesCss.match(/\.mobile-chat-drawer-header \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(mobileChatHeaderBlock).toContain('display: flex;');
     expect(mobileChatHeaderBlock).toContain('justify-content: space-between;');
-    expect(mobileChatHeaderBlock).toContain('height: calc(var(--wm-safe-area-top) + 50px);');
-    expect(mobileChatHeaderBlock).toContain('min-height: calc(var(--wm-safe-area-top) + 50px);');
-    expect(mobileChatHeaderBlock).toContain('max-height: calc(var(--wm-safe-area-top) + 50px);');
+    expect(mobileChatHeaderBlock).toContain('height: calc(var(--wm-safe-area-top) + var(--chat-menu-header-height));');
+    expect(mobileChatHeaderBlock).toContain('min-height: calc(var(--wm-safe-area-top) + var(--chat-menu-header-height));');
+    expect(mobileChatHeaderBlock).toContain('max-height: calc(var(--wm-safe-area-top) + var(--chat-menu-header-height));');
     const mobileChatHeaderSearchOpenBlock = stylesCss.match(/\.mobile-chat-drawer-header\.search-open \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(mobileChatHeaderSearchOpenBlock).toContain('height: calc(var(--wm-safe-area-top) + 50px);');
-    expect(mobileChatHeaderSearchOpenBlock).toContain('min-height: calc(var(--wm-safe-area-top) + 50px);');
-    expect(mobileChatHeaderSearchOpenBlock).toContain('max-height: calc(var(--wm-safe-area-top) + 50px);');
-    expect(mobileChatHeaderSearchOpenBlock).toContain('padding: calc(var(--wm-safe-area-top) + 6px) 7px 6px;');
+    expect(mobileChatHeaderSearchOpenBlock).toContain('height: calc(var(--wm-safe-area-top) + var(--chat-menu-header-height));');
+    expect(mobileChatHeaderSearchOpenBlock).toContain('min-height: calc(var(--wm-safe-area-top) + var(--chat-menu-header-height));');
+    expect(mobileChatHeaderSearchOpenBlock).toContain('max-height: calc(var(--wm-safe-area-top) + var(--chat-menu-header-height));');
+    expect(mobileChatHeaderSearchOpenBlock).toContain('padding: var(--wm-safe-area-top) 8px 0;');
     expect(mobileChatHeaderBlock).not.toContain('+ 58px');
     expect(mobileChatHeaderBlock).not.toContain('+ 62px');
     expect(mobileChatHeaderSearchOpenBlock).not.toContain('+ 58px');
@@ -887,7 +889,14 @@ describe('web chat integration', () => {
     expect(mobileChatToolbarBlock).toContain('display: inline-flex;');
     expect(mobileChatToolbarBlock).toContain('justify-content: flex-start;');
     expect(stylesCss).not.toContain('.mobile-chat-toolbar-icon {');
-    expect(stylesCss).toContain('.drawer-settings-icon-btn {');
+    expect(stylesCss).toContain('--chat-menu-header-height: 32px;');
+    expect(stylesCss).toContain('--chat-menu-icon-button-size: 28px;');
+    expect(stylesCss).toContain('.chat-menu-icon-button {');
+    const chatMenuIconButtonBlock = stylesCss.match(/\.chat-menu-icon-button \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(chatMenuIconButtonBlock).toContain('width: var(--chat-menu-icon-button-size);');
+    expect(chatMenuIconButtonBlock).toContain('height: var(--chat-menu-icon-button-size);');
+    expect(chatMenuIconButtonBlock).toContain('border-radius: var(--chat-menu-icon-button-radius);');
+    expect(stylesCss).not.toContain('.wide-sidebar-settings-button {');
     expect(stylesCss).toContain('.mobile-chat-drawer-header .chat-hub-summary {');
     expect(stylesCss).toContain('.mobile-chat-hub-slot {');
     const mobileChatHubSlotBlock = stylesCss.match(/\.mobile-chat-hub-slot \{[\s\S]*?\n\}/)?.[0] ?? '';
@@ -925,11 +934,11 @@ describe('web chat integration', () => {
     const mobileSearchButtonBlock = stylesCss.match(
       /\.mobile-chat-drawer-header \.session-search-control\.compact \.session-search-icon-btn,\r?\n\.mobile-chat-drawer-header \.chat-header-search-control\.compact \.session-search-icon-btn,\r?\n\.mobile-chat-drawer-header \.chat-header-archive-control\.compact \.session-search-icon-btn \{[\s\S]*?\n\}/,
     )?.[0] ?? '';
-    expect(mobileSearchButtonBlock).toContain('width: 36px;');
-    expect(mobileSearchButtonBlock).toContain('height: 36px;');
+    expect(mobileSearchButtonBlock).toContain('width: var(--chat-menu-icon-button-size);');
+    expect(mobileSearchButtonBlock).toContain('height: var(--chat-menu-icon-button-size);');
     expect(mobileSearchButtonBlock).toContain('font-size: 14px;');
     const mobileHubButtonBlock = stylesCss.match(/\.mobile-chat-drawer-header \.chat-hub-summary-button \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(mobileHubButtonBlock).toContain('height: 36px;');
+    expect(mobileHubButtonBlock).toContain('height: var(--chat-menu-icon-button-size);');
     expect(mobileHubButtonBlock).toContain('align-items: center;');
     expect(stylesCss).not.toContain('.content > .block-title.with-tools {\n    height: calc(var(--wm-safe-area-top) + 50px);');
     expect(stylesCss).not.toContain('.content > .block-title.with-tools .view-tool {');
@@ -1886,8 +1895,8 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('const desktopWindowControlsVisible = isWide && Boolean(getDesktopWindowBridge());');
     expect(mainTsx).toContain('<DesktopWindowControls />');
     expect(mainTsx).toContain('desktopSettingsScreen={desktopSettingsScreen}');
-    expect(mainTsx).toContain('const wideSidebarSettingsButton = !chatSidebarTitleSearchOpen ? (');
-    expect(mainTsx).toContain('className="wide-sidebar-settings-button"');
+    expect(mainTsx).toContain('const renderChatMenuSettingsButton = () => (');
+    expect(mainTsx).toContain('className="chat-menu-icon-button chat-menu-settings-button"');
     expect(mainTsx).toContain('onClick={handleDesktopSettingsSelect}');
     expect(mainTsx).toContain('<DesktopDragRegion className={`sidebar-title-row${chatSidebarTitleSearchOpen ? \' search-open\' : \'\'}`}>');
     expect(mainTsx).toContain('<DesktopDragRegion className="block-title chat-title-bar">');
@@ -1961,7 +1970,7 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.desktop-window-source-button {');
     expect(stylesCss).toContain('.desktop-window-source-popover {');
     expect(stylesCss).toContain('.desktop-window-source-panel {');
-    expect(stylesCss).toContain('.wide-sidebar-settings-button {');
+    expect(stylesCss).toContain('.chat-menu-icon-button {');
     expect(stylesCss).toContain('.desktop-drag-region {');
     expect(stylesCss).toContain('.chat-sidebar-toggle,');
     expect(stylesCss).toContain('.chat-title-prompt-icon-button,');

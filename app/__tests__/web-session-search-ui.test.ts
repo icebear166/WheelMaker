@@ -62,7 +62,7 @@ describe('web session search UI wiring', () => {
     expect(wideHeader).toContain('renderChatHeaderSearchControls(false)');
     expect(wideHeader).toContain('renderChatHubSummary()');
     expect(wideHeader).toContain('className="chat-sidebar-title-actions"');
-    expect(wideHeader).toContain('{wideSidebarSettingsButton}');
+    expect(wideHeader).toContain('{!chatSidebarTitleSearchOpen ? renderChatMenuSettingsButton() : null}');
     expect(wideHeader.indexOf('renderChatHubSummary()')).toBeLessThan(wideHeader.lastIndexOf('renderChatHeaderSearchControls(false)'));
 
     const wideNavStart = main.indexOf('const renderWideProjectSessionNav = () =>');
@@ -90,8 +90,8 @@ describe('web session search UI wiring', () => {
     expect(styles).toContain('.mobile-chat-drawer-header.search-open');
     expect(styles).not.toContain('min-height: calc(var(--wm-safe-area-top) + 66px);');
     const desktopSearchOpenBlock = styles.match(/\.sidebar-title-row\.search-open \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(desktopSearchOpenBlock).toContain('flex: 0 0 34px;');
-    expect(desktopSearchOpenBlock).toContain('min-height: 34px;');
+    expect(desktopSearchOpenBlock).toContain('flex: 0 0 var(--chat-menu-header-height);');
+    expect(desktopSearchOpenBlock).toContain('min-height: var(--chat-menu-header-height);');
     expect(desktopSearchOpenBlock).not.toContain('min-height: 58px;');
   });
 

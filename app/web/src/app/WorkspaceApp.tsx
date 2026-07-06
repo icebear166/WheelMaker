@@ -14556,7 +14556,7 @@ export function App() {
         <div className={`chat-header-search-control compact${mobile ? ' mobile' : ''}`}>
           <button
             type="button"
-            className="session-search-icon-btn"
+            className="session-search-icon-btn chat-menu-icon-button"
             onClick={() => setSessionSearchOpen(true)}
             title="Search sessions"
             aria-label="Search sessions"
@@ -14622,7 +14622,7 @@ export function App() {
       <div className={`chat-header-archive-control compact${mobile ? ' mobile' : ''}`}>
         <button
           type="button"
-          className="session-search-icon-btn"
+          className="session-search-icon-btn chat-menu-icon-button"
           onClick={() => setSessionArchiveMenuOpen(value => !value)}
           title="Archive"
           aria-label="Archive"
@@ -16378,24 +16378,24 @@ export function App() {
     />
   );
 
+  const renderChatMenuSettingsButton = () => (
+    <button
+      type="button"
+      className="chat-menu-icon-button chat-menu-settings-button"
+      onClick={handleDesktopSettingsSelect}
+      title="Open settings"
+      aria-label="Open settings"
+    >
+      <span className="codicon codicon-settings-gear" aria-hidden="true" />
+    </button>
+  );
+
   const renderMobileChatSessionSheet = () => {
     return (
       <>
         <div className={`mobile-chat-drawer-header${sessionSearchHeaderExpanded ? ' search-open' : ''}`}>
           <div className="mobile-chat-toolbar" aria-label="Chat tools">
-            <button
-              type="button"
-              className="drawer-settings-icon-btn"
-              onClick={() => {
-                setProjectMenuOpen(false);
-                setSettingsDetailView(null);
-                setSidebarSettingsOpen(true);
-              }}
-              title="Open settings"
-              aria-label="Open settings"
-            >
-              <span className="codicon codicon-settings-gear" />
-            </button>
+            {renderChatMenuSettingsButton()}
           </div>
           <div className="mobile-chat-hub-slot" hidden={sessionSearchHeaderExpanded}>
             {renderChatHubSummary(true)}
@@ -16895,17 +16895,6 @@ export function App() {
       : 'SOURCE CONTROL';
     const chatSidebarTitleSearchOpen = tab === 'chat' && !sidebarSettingsOpen && sessionSearchHeaderExpanded;
     const wideSidebarMain = tab === 'chat' ? renderWideProjectSessionNav() : renderSidebarMain(false);
-    const wideSidebarSettingsButton = !chatSidebarTitleSearchOpen ? (
-      <button
-        type="button"
-        className="wide-sidebar-settings-button"
-        onClick={handleDesktopSettingsSelect}
-        title="Open settings"
-        aria-label="Open settings"
-      >
-        <span className="codicon codicon-settings-gear" aria-hidden="true" />
-      </button>
-    ) : null;
 
     return (
       <>
@@ -16956,7 +16945,7 @@ export function App() {
         ) : null}
         {isWide ? (
           <DesktopDragRegion className={`sidebar-title-row${chatSidebarTitleSearchOpen ? ' search-open' : ''}`}>
-            {wideSidebarSettingsButton}
+            {!chatSidebarTitleSearchOpen ? renderChatMenuSettingsButton() : null}
             {tab === 'chat' && !sidebarSettingsOpen ? (
               <>
                 <div className="chat-sidebar-title-actions">

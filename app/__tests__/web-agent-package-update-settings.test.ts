@@ -495,7 +495,7 @@ describe('agent package update settings UI source structure', () => {
     expect(mobileToolbarStart).toBeGreaterThanOrEqual(0);
     expect(mobileToolbarEnd).toBeGreaterThan(mobileToolbarStart);
     const mobileToolbar = mainTsx.slice(mobileToolbarStart, mobileToolbarEnd);
-    expect(mobileToolbar).toContain('title="Open settings"');
+    expect(mobileToolbar).toContain('{renderChatMenuSettingsButton()}');
     expect(mobileToolbar).not.toContain('title="Update"');
     expect(mobileToolbar).not.toContain('title="Port Relay"');
     expect(mobileToolbar).not.toContain("openSettingsDetail('update')");
@@ -504,7 +504,7 @@ describe('agent package update settings UI source structure', () => {
     expect(mobileToolbar).not.toContain('title={reconnecting ? \'Reconnecting...\' : \'Refresh chats\'}');
 
     const mobileToolbarBlock = stylesCss.match(/\.mobile-chat-toolbar \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(mobileToolbarBlock).toContain('gap: 4px;');
+    expect(mobileToolbarBlock).toContain('gap: var(--chat-menu-header-gap);');
     expect(mobileToolbarBlock).toContain('background: transparent;');
     expect(mobileToolbarBlock).not.toContain('border: 1px solid');
     expect(mobileToolbarBlock).not.toContain('border-radius: 10px;');

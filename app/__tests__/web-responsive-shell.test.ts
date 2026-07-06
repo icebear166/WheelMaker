@@ -124,8 +124,8 @@ describe('web responsive shell split', () => {
     expect(blockTitleBlock).toContain('height: 32px;');
 
     const sidebarTitleRowBlock = cssRuleBlock(stylesCss, '.sidebar-title-row');
-    expect(sidebarTitleRowBlock).toContain('flex: 0 0 32px;');
-    expect(sidebarTitleRowBlock).toContain('min-height: 32px;');
+    expect(sidebarTitleRowBlock).toContain('flex: 0 0 var(--chat-menu-header-height);');
+    expect(sidebarTitleRowBlock).toContain('min-height: var(--chat-menu-header-height);');
 
     const controlsBlock = cssRuleBlock(stylesCss, '.desktop-window-controls');
     expect(controlsBlock).toContain('position: fixed;');
@@ -144,10 +144,10 @@ describe('web responsive shell split', () => {
     expect(stylesCss).toContain('.desktop-window-source-panel {');
     expect(stylesCss).toContain('.desktop-window-source-choice {');
 
-    const sidebarSettingsButtonBlock = cssRuleBlock(stylesCss, '.wide-sidebar-settings-button');
-    expect(sidebarSettingsButtonBlock).toContain('width: 28px;');
-    expect(sidebarSettingsButtonBlock).toContain('height: 28px;');
-    expect(sidebarSettingsButtonBlock).toContain('flex: 0 0 28px;');
+    const sidebarSettingsButtonBlock = cssRuleBlock(stylesCss, '.chat-menu-icon-button');
+    expect(sidebarSettingsButtonBlock).toContain('width: var(--chat-menu-icon-button-size);');
+    expect(sidebarSettingsButtonBlock).toContain('height: var(--chat-menu-icon-button-size);');
+    expect(sidebarSettingsButtonBlock).toContain('flex: 0 0 var(--chat-menu-icon-button-size);');
 
     const rightTitleBlock = cssRuleBlock(stylesCss, ".desktop-shell[data-desktop-window-controls='true'] .workspace-right .block-title");
     expect(rightTitleBlock).toContain('padding-right: calc(var(--desktop-window-controls-width) + 10px);');
