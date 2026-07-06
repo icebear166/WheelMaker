@@ -390,7 +390,32 @@ func TestFlickerLoaderPatchesInstalledMyFlickerBundleWhenAvailable(t *testing.T)
 	}
 }
 
+func TestFlickerLoaderRejectsLegacyStubBundleShape(t *testing.T) {
+	tempDir := t.TempDir()
+	fixturePath := filepath.Join(tempDir, "myflicker-legacy-fragment.mjs")
+	if err := os.WriteFile(fixturePath, []byte(myFlickerLegacyBundleFragment), 0o644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	out, err := runFlickerLoaderPatchCommand(t, fixturePath)
+	if err == nil {
+		t.Fatalf("legacy stub bundle patched unexpectedly:\n%s", out)
+	}
+	if !strings.Contains(string(out), "WheelMaker flicker ACP patch failed: loadSession not found") {
+		t.Fatalf("legacy stub bundle failed for unexpected reason: %v\n%s", err, out)
+	}
+}
+
 func runFlickerLoaderPatch(t *testing.T, sourcePath string) string {
+	t.Helper()
+	out, err := runFlickerLoaderPatchCommand(t, sourcePath)
+	if err != nil {
+		t.Fatalf("patch runner failed: %v\n%s", err, out)
+	}
+	return string(out)
+}
+
+func runFlickerLoaderPatchCommand(t *testing.T, sourcePath string) ([]byte, error) {
 	t.Helper()
 	nodePath, err := exec.LookPath("node")
 	if err != nil {
@@ -420,14 +445,12 @@ process.stdout.write(result.source);
 		t.Fatalf("write runner: %v", err)
 	}
 
-	out, err := exec.Command(nodePath, runnerPath, loaderPath, sourcePath).CombinedOutput()
-	if err != nil {
-		t.Fatalf("patch runner failed: %v\n%s", err, out)
-	}
-	return string(out)
+	return exec.Command(nodePath, runnerPath, loaderPath, sourcePath).CombinedOutput()
 }
 
 const myFlicker036BundleFragment = `}class mE0{connection;sessions=new Map;messageBus;nodeBridge;context;defaultCwd;contextCreateOpts;clientFsCapabilities;runtimeMcpServers={};constructor(A,Q){this.connection=A,this.contextCreateOpts=Q,this.defaultCwd=Q.cwd||process.cwd()}async initialize(A){let $={},[Y,E]=Q7.createPair(),G=new S9;return G.setTransport(Y),$.messageBus.setTransport(E),this.messageBus=G,this.nodeBridge=$,iG("Agent initialized successfully"),{protocolVersion:tZ1,agentCapabilities:{}}}async getCanUseModels(){if(!this.messageBus)return;try{let B=(await this.messageBus.request("providers.list",{cwd:this.defaultCwd})).data.providers.filter((Y)=>Y.hasApiKey);if(B.length===0)return;let D=await this.messageBus.request("models.list",{cwd:this.defaultCwd});return{availableModels:D.data.groupedModels.filter((Y)=>B.some((E)=>E.id===Y.providerId)).flatMap((Y)=>Y.models).map((Y)=>({modelId:Y.value,name:Y.name})),currentModelId:` + "`" + `${D.data.currentModel.provider.id}/${D.data.currentModelInfo?.modelId??""}` + "`" + `}}catch(A){console.error("Failed to get available models:",A);return}}async registerRuntimeMcpServers(A){if(!this.messageBus)throw Error("Agent not initialized");if(Object.entries(A).length===0)return;this.runtimeMcpServers={...this.runtimeMcpServers,...A},await this.messageBus.request("mcp.addRuntimeServers",{cwd:this.defaultCwd,mcpServers:A})}async restoreRuntimeMcpServers(){if(!this.messageBus)throw Error("Agent not initialized");if(Object.keys(this.runtimeMcpServers).length===0)return;await this.messageBus.request("mcp.addRuntimeServers",{cwd:this.defaultCwd,mcpServers:this.runtimeMcpServers})}async newSession(A){if(!this.messageBus)throw Error("Agent not initialized");let Q=Array.from(crypto.getRandomValues(new Uint8Array(16))).map(($)=>$.toString(16).padStart(2,"0")).join("");iG("Creating new session:",Q),mqA("Session params: %O",A);let B=SU1(A.mcpServers),D=await this.getCanUseModels();await this.registerRuntimeMcpServers(B);let J=new hqA(Q,this.messageBus,this.connection,this.clientFsCapabilities);return this.sessions.set(Q,J),await J.init(),iG("Session created successfully:",Q),{sessionId:Q,models:D||void 0}}async loadSession(A){if(!this.messageBus)throw Error("Agent not initialized");iG("Loading session:",A.sessionId),mqA("Load session params: %O",A);let Q=SU1(A.mcpServers),B=await this.getCanUseModels();await this.registerRuntimeMcpServers(Q);let D=this.sessions.get(A.sessionId);if(!D)D=new hqA(A.sessionId,this.messageBus,this.connection,this.clientFsCapabilities),this.sessions.set(A.sessionId,D),await D.init();return iG("Session loaded successfully:",A.sessionId),{models:B||void 0}}async setSessionModelValue(A){if(!this.messageBus)throw Error("Agent not initialized");await this.messageBus.request("config.set",{cwd:this.defaultCwd,key:"model",value:A,isGlobal:!0}),await this.restoreRuntimeMcpServers()}unstable_forkSession(A){throw Error("Method not implemented.")}unstable_listSessions(A){throw Error("Method not implemented.")}unstable_resumeSession(A){throw Error("Method not implemented.")}async setSessionMode(A){throw Error("Method not implemented.")}async unstable_setSessionModel(A){await this.setSessionModelValue(A.modelId)}unstable_setSessionConfigOption(A){throw Error("Method not implemented.")}authenticate(A){throw Error("Method not implemented.")}async prompt(A){return{stopReason:"end_turn"}}}`
+
+const myFlickerLegacyBundleFragment = `}class mE0{connection;sessions=new Map;messageBus;nodeBridge;context;defaultCwd;contextCreateOpts;clientFsCapabilities;constructor(A,Q){this.connection=A,this.contextCreateOpts=Q,this.defaultCwd=Q.cwd||process.cwd()}async initialize(A){return{protocolVersion:tZ1,agentCapabilities:{}}}async getCanUseModels(){return}async newSession(A){let Q="legacy-session",B=await this.getCanUseModels(),D=new hqA(Q,this.messageBus,this.connection,this.clientFsCapabilities);return this.sessions.set(Q,D),await D.init(),{sessionId:Q,models:B||void 0}}loadSession(A){throw Error("Method not implemented.")}async setSessionModelValue(A){}unstable_resumeSession(A){throw Error("Method not implemented.")}async unstable_setSessionModel(A){await this.setSessionModelValue(A.modelId)}unstable_setSessionConfigOption(A){throw Error("Method not implemented.")}}`
 
 func TestParseACPProviderCodexAliases(t *testing.T) {
 	removedProviderName := strings.Join([]string{"my", "flicker"}, "")

@@ -42,20 +42,6 @@ function replaceOnceRegex(source, pattern, replacement, label) {
   return source.replace(pattern, replacement);
 }
 
-function replaceOptionalOnce(source, needle, replacement, label) {
-  const index = source.indexOf(needle);
-  if (index < 0) {
-    return { source, replaced: false };
-  }
-  if (source.indexOf(needle, index + needle.length) >= 0) {
-    throw new Error("WheelMaker flicker ACP patch failed: " + label + " matched more than once");
-  }
-  return {
-    source: source.slice(0, index) + replacement + source.slice(index + needle.length),
-    replaced: true,
-  };
-}
-
 function findSessionClass(source) {
   const matches = [...source.matchAll(/new (\w+)\([^)]*this\.messageBus,this\.connection,this\.clientFsCapabilities\)/g)];
   const classNames = [...new Set(matches.map((match) => match[1]))];
@@ -90,22 +76,12 @@ function patchMyFlickerBundle(source) {
     "newSession config options"
   );
   const patchedLoadSession = loadSessionPatchSource(sessionClass);
-  const oldLoadSession = replaceOptionalOnce(
+  source = replaceOnceRegex(
     source,
-    "loadSession(A){throw Error(\"Method not implemented.\")}",
+    /async loadSession\(A\)\{if\(!this\.messageBus\)throw Error\("Agent not initialized"\);[\s\S]*?\{models:\w+\|\|void 0\}\}(?=async setSessionModelValue\(A\))/,
     patchedLoadSession,
     "loadSession"
   );
-  if (oldLoadSession.replaced) {
-    source = oldLoadSession.source;
-  } else {
-    source = replaceOnceRegex(
-      source,
-      /async loadSession\(A\)\{if\(!this\.messageBus\)throw Error\("Agent not initialized"\);[\s\S]*?\{models:\w+\|\|void 0\}\}(?=async setSessionModelValue\(A\))/,
-      patchedLoadSession,
-      "loadSession"
-    );
-  }
   source = replaceOnce(
     source,
     "unstable_resumeSession(A){throw Error(\"Method not implemented.\")}",
