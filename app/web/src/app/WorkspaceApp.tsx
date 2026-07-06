@@ -7112,12 +7112,11 @@ export function App() {
       if (!current || current.pointerId !== pointerId) {
         return;
       }
+      clearGestureLongPressTimer();
       clearGestureMoveLongPressTimer();
-      if (current.phase === 'expanded' || gestureLongPressTimerRef.current !== null) {
-        clearGestureLongPressTimer();
+      if (current.phase === 'expanded') {
         return;
       }
-      clearGestureLongPressTimer();
       gestureNavStateRef.current = null;
       setGestureNavState(null);
     },
