@@ -5,19 +5,17 @@ const main = fs.readFileSync(path.join(__dirname, '../web/src/app/WorkspaceApp.t
 
 describe('session archive UI source integration', () => {
   test('renders archive controls before search controls in desktop and mobile headers', () => {
-    expect(main).toContain('const renderChatArchiveControls = (mobile: boolean) =>');
-    expect(main).toContain('renderChatArchiveControls(false)');
-    expect(main).toContain('renderChatArchiveControls(true)');
+    expect(main).toContain('const renderChatArchiveControls = () =>');
+    expect(main).toContain('const renderChatSessionHeader = (mobile: boolean) =>');
+    expect(main).toContain('{renderChatSessionHeader(true)}');
+    expect(main).toContain('renderChatSessionHeader(false)');
+    expect(main).not.toContain('renderChatArchiveControls(false)');
+    expect(main).not.toContain('renderChatArchiveControls(true)');
 
-    const wideHeaderStart = main.indexOf('className="chat-sidebar-title-actions"');
-    const wideHeaderEnd = main.indexOf('</div>', wideHeaderStart);
-    const wideHeader = main.slice(wideHeaderStart, wideHeaderEnd);
-    expect(wideHeader.indexOf('renderChatArchiveControls(false)')).toBeLessThan(wideHeader.indexOf('renderChatHeaderSearchControls(false)'));
-
-    const mobileHeaderStart = main.indexOf('className={`mobile-chat-drawer-header');
-    const mobileHeaderEnd = main.indexOf('{archivedMode ? renderArchivedSessionRows(true)', mobileHeaderStart);
-    const mobileHeader = main.slice(mobileHeaderStart, mobileHeaderEnd);
-    expect(mobileHeader.indexOf('renderChatArchiveControls(true)')).toBeLessThan(mobileHeader.indexOf('renderChatHeaderSearchControls(true)'));
+    const headerStart = main.indexOf('const renderChatSessionHeader = (mobile: boolean) =>');
+    const headerEnd = main.indexOf('const renderMobileChatSessionSheet = () => {', headerStart);
+    const header = main.slice(headerStart, headerEnd);
+    expect(header.indexOf('renderChatArchiveControls()')).toBeLessThan(header.indexOf('renderChatHeaderSearchControls()'));
   });
 
   test('contains archive batch, older folding, and restore flow markers', () => {

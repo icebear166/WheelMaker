@@ -490,24 +490,23 @@ describe('agent package update settings UI source structure', () => {
     expect(surfaceBar).toContain('className="mobile-settings-shortcut-label">Settings</span>');
     expect(surfaceBar).toContain('className="mobile-settings-shortcut-label">{shortcut.label}</span>');
 
-    const mobileToolbarStart = mainTsx.indexOf('<div className="mobile-chat-toolbar"');
-    const mobileToolbarEnd = mainTsx.indexOf('{renderChatHubSummary(true)}', mobileToolbarStart);
-    expect(mobileToolbarStart).toBeGreaterThanOrEqual(0);
-    expect(mobileToolbarEnd).toBeGreaterThan(mobileToolbarStart);
-    const mobileToolbar = mainTsx.slice(mobileToolbarStart, mobileToolbarEnd);
-    expect(mobileToolbar).toContain('{renderChatMenuSettingsButton()}');
-    expect(mobileToolbar).not.toContain('title="Update"');
-    expect(mobileToolbar).not.toContain('title="Port Relay"');
-    expect(mobileToolbar).not.toContain("openSettingsDetail('update')");
-    expect(mobileToolbar).not.toContain("openSettingsDetail('portRelay')");
-    expect(mobileToolbar).not.toContain('refreshMobileChatProjectSessions()');
-    expect(mobileToolbar).not.toContain('title={reconnecting ? \'Reconnecting...\' : \'Refresh chats\'}');
+    const chatSessionHeaderStart = mainTsx.indexOf('const renderChatSessionHeader = (mobile: boolean) => {');
+    const chatSessionHeaderEnd = mainTsx.indexOf('const renderMobileChatSessionSheet = () => {', chatSessionHeaderStart);
+    expect(chatSessionHeaderStart).toBeGreaterThanOrEqual(0);
+    expect(chatSessionHeaderEnd).toBeGreaterThan(chatSessionHeaderStart);
+    const chatSessionHeader = mainTsx.slice(chatSessionHeaderStart, chatSessionHeaderEnd);
+    expect(chatSessionHeader).toContain('{!sessionSearchHeaderExpanded ? renderChatMenuSettingsButton() : null}');
+    expect(chatSessionHeader).not.toContain('title="Update"');
+    expect(chatSessionHeader).not.toContain('title="Port Relay"');
+    expect(chatSessionHeader).not.toContain("openSettingsDetail('update')");
+    expect(chatSessionHeader).not.toContain("openSettingsDetail('portRelay')");
+    expect(chatSessionHeader).not.toContain('refreshMobileChatProjectSessions()');
+    expect(chatSessionHeader).not.toContain('title={reconnecting ? \'Reconnecting...\' : \'Refresh chats\'}');
 
-    const mobileToolbarBlock = stylesCss.match(/\.mobile-chat-toolbar \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(mobileToolbarBlock).toContain('gap: var(--chat-menu-header-gap);');
-    expect(mobileToolbarBlock).toContain('background: transparent;');
-    expect(mobileToolbarBlock).not.toContain('border: 1px solid');
-    expect(mobileToolbarBlock).not.toContain('border-radius: 10px;');
+    const mobileChatSessionHeaderBlock = stylesCss.match(/\.chat-session-header\.mobile \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(mobileChatSessionHeaderBlock).toContain('padding: var(--wm-safe-area-top) 8px 0;');
+    expect(mobileChatSessionHeaderBlock).not.toContain('border-radius: 10px;');
+    expect(stylesCss).not.toContain('.mobile-chat-toolbar {');
 
     expect(stylesCss).toContain('.mobile-settings-shortcut-bar {');
     expect(stylesCss).toContain('.mobile-settings-shortcut-track {');

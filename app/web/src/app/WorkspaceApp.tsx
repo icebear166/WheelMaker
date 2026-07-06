@@ -6206,13 +6206,13 @@ export function App() {
     ),
     [handleMobileBreadcrumbProjectClick],
   );
-  const renderChatHubSummary = useCallback((mobile = false) => {
+  const renderChatHubSummary = useCallback(() => {
     const hubCount = registryHubs.length;
     const projectCount = projects.length;
     const chatHubSummaryLabel = `${hubCount} ${hubCount === 1 ? 'Hub' : 'Hubs'}`;
     const chatHubProjectLabel = `${projectCount} ${projectCount === 1 ? 'Project' : 'Projects'}`;
     return (
-      <div ref={chatHubMenuRef} className={`chat-hub-summary${mobile ? ' mobile' : ''}`}>
+      <div ref={chatHubMenuRef} className="chat-hub-summary">
         <button
           type="button"
           className="chat-hub-summary-button"
@@ -14549,11 +14549,11 @@ export function App() {
     );
   };
 
-  const renderChatHeaderSearchControls = (mobile: boolean) => {
+  const renderChatHeaderSearchControls = () => {
     const hasActiveSearch = !!activeSessionSearchId;
     if (!sessionSearchOpen && !hasActiveSearch) {
       return (
-        <div className={`chat-header-search-control compact${mobile ? ' mobile' : ''}`}>
+        <div className="chat-header-search-control compact">
           <button
             type="button"
             className="session-search-icon-btn chat-menu-icon-button"
@@ -14567,9 +14567,9 @@ export function App() {
       );
     }
     return (
-      <div className={`chat-header-search-wrap${mobile ? ' mobile' : ''}`}>
+      <div className="chat-header-search-wrap">
         <form
-          className={`chat-header-search-control open${hasActiveSearch ? ' active' : ''}${mobile ? ' mobile' : ''}`}
+          className={`chat-header-search-control open${hasActiveSearch ? ' active' : ''}`}
           onSubmit={event => {
             event.preventDefault();
             startSessionSearch().catch(() => undefined);
@@ -14614,12 +14614,12 @@ export function App() {
     );
   };
 
-  const renderChatArchiveControls = (mobile: boolean) => {
+  const renderChatArchiveControls = () => {
     if (sessionSearchHeaderExpanded) {
       return null;
     }
     return (
-      <div className={`chat-header-archive-control compact${mobile ? ' mobile' : ''}`}>
+      <div className="chat-header-archive-control compact">
         <button
           type="button"
           className="session-search-icon-btn chat-menu-icon-button"
@@ -16390,19 +16390,32 @@ export function App() {
     </button>
   );
 
+  const renderChatSessionHeader = (mobile: boolean) => {
+    const chatSessionHeaderClassName = `sidebar-title-row chat-session-header${sessionSearchHeaderExpanded ? ' search-open' : ''}${mobile ? ' mobile' : ''}`;
+    const chatSessionHeaderContent = (
+      <>
+        {!sessionSearchHeaderExpanded ? renderChatMenuSettingsButton() : null}
+        <div className="chat-sidebar-title-actions">
+          {renderChatHubSummary()}
+          {renderChatArchiveControls()}
+          {renderChatHeaderSearchControls()}
+        </div>
+      </>
+    );
+    if (mobile) {
+      return <div className={chatSessionHeaderClassName}>{chatSessionHeaderContent}</div>;
+    }
+    return (
+      <DesktopDragRegion className={chatSessionHeaderClassName}>
+        {chatSessionHeaderContent}
+      </DesktopDragRegion>
+    );
+  };
+
   const renderMobileChatSessionSheet = () => {
     return (
       <>
-        <div className={`mobile-chat-drawer-header${sessionSearchHeaderExpanded ? ' search-open' : ''}`}>
-          <div className="mobile-chat-toolbar" aria-label="Chat tools">
-            {renderChatMenuSettingsButton()}
-          </div>
-          <div className="mobile-chat-hub-slot" hidden={sessionSearchHeaderExpanded}>
-            {renderChatHubSummary(true)}
-          </div>
-          {renderChatArchiveControls(true)}
-          {renderChatHeaderSearchControls(true)}
-        </div>
+        {renderChatSessionHeader(true)}
         {renderArchiveBatchStatus()}
         {archivedMode ? renderArchivedSessionRows(true) : sessionSearchActive ? renderSessionSearchResults(true) : (
         <ChatSessionNav className="mobile-project-session-nav">
@@ -16893,7 +16906,6 @@ export function App() {
       : tab === 'file'
       ? 'EXPLORER'
       : 'SOURCE CONTROL';
-    const chatSidebarTitleSearchOpen = tab === 'chat' && !sidebarSettingsOpen && sessionSearchHeaderExpanded;
     const wideSidebarMain = tab === 'chat' ? renderWideProjectSessionNav() : renderSidebarMain(false);
 
     return (
@@ -16944,20 +16956,13 @@ export function App() {
           </div>
         ) : null}
         {isWide ? (
-          <DesktopDragRegion className={`sidebar-title-row${chatSidebarTitleSearchOpen ? ' search-open' : ''}`}>
-            {!chatSidebarTitleSearchOpen ? renderChatMenuSettingsButton() : null}
-            {tab === 'chat' && !sidebarSettingsOpen ? (
-              <>
-                <div className="chat-sidebar-title-actions">
-                  {renderChatHubSummary()}
-                  {renderChatArchiveControls(false)}
-                  {renderChatHeaderSearchControls(false)}
-                </div>
-              </>
-            ) : (
+          tab === 'chat' && !sidebarSettingsOpen ? (
+            renderChatSessionHeader(false)
+          ) : (
+            <DesktopDragRegion className="sidebar-title-row">
               <span className="sidebar-title-text">{wideSidebarTitle}</span>
-            )}
-          </DesktopDragRegion>
+            </DesktopDragRegion>
+          )
         ) : null}
         <div className="sidebar-scroll">
           {isWide ? wideSidebarMain : mobileSidebarMain}
