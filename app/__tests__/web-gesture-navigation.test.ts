@@ -4,8 +4,6 @@ import {
   GESTURE_LONG_PRESS_CANCEL_PX,
   GESTURE_LONG_PRESS_MS,
   GESTURE_MOVE_LONG_PRESS_MS,
-  GESTURE_SELECTION_PX,
-  resolveGestureDirectionCandidate,
   resolveGesturePressIntent,
   shouldStartGestureMove,
 } from '../web/src/shell/layouts/mobile/gestureNavigation';
@@ -52,6 +50,11 @@ describe('gesture navigation', () => {
     );
   });
 
+  test('uses 200ms expand threshold and 1000ms drag threshold', () => {
+    expect(GESTURE_LONG_PRESS_MS).toBe(200);
+    expect(GESTURE_MOVE_LONG_PRESS_MS).toBe(1000);
+  });
+
   test('resolves pre-expansion press movement without distance-triggered drag', () => {
     expect(resolveGesturePressIntent({
       elapsedMs: GESTURE_LONG_PRESS_MS - 1,
@@ -65,33 +68,15 @@ describe('gesture navigation', () => {
       elapsedMs: GESTURE_LONG_PRESS_MS - 1,
       distancePx: GESTURE_LONG_PRESS_CANCEL_PX + 2,
     })).toBe('neutral');
-    expect(resolveGesturePressIntent({
-      elapsedMs: GESTURE_LONG_PRESS_MS - 1,
-      distancePx: GESTURE_SELECTION_PX + 1,
-    })).toBe('neutral');
   });
 
-  test('only enters gesture movement after a two second hold without a navigation candidate', () => {
+  test('enters gesture movement after a one second hold', () => {
     expect(shouldStartGestureMove({
       elapsedMs: GESTURE_MOVE_LONG_PRESS_MS - 1,
-      candidate: null,
     })).toBe(false);
     expect(shouldStartGestureMove({
       elapsedMs: GESTURE_MOVE_LONG_PRESS_MS,
-      candidate: null,
     })).toBe(true);
-    expect(shouldStartGestureMove({
-      elapsedMs: GESTURE_MOVE_LONG_PRESS_MS,
-      candidate: 'chat',
-    })).toBe(false);
-  });
-
-  test('resolves gesture direction candidates from fixed mobile directions', () => {
-    expect(resolveGestureDirectionCandidate({deltaX: 0, deltaY: -GESTURE_SELECTION_PX - 1})).toBe('chat');
-    expect(resolveGestureDirectionCandidate({deltaX: -GESTURE_SELECTION_PX - 1, deltaY: 0})).toBe('file');
-    expect(resolveGestureDirectionCandidate({deltaX: 0, deltaY: GESTURE_SELECTION_PX + 1})).toBe('git');
-    expect(resolveGestureDirectionCandidate({deltaX: GESTURE_SELECTION_PX + 1, deltaY: 0})).toBeNull();
-    expect(resolveGestureDirectionCandidate({deltaX: 0, deltaY: GESTURE_SELECTION_PX - 1})).toBeNull();
   });
 
   test('wires gesture navigation through appearance settings and mobile floating controls', () => {
@@ -111,27 +96,22 @@ describe('gesture navigation', () => {
     expect(main).toContain('className="gesture-nav-pill"');
     expect(main).toContain('className="gesture-nav-button gesture-nav-current-button"');
     expect(main).toContain('onClick={handleGestureNavigationCurrentSelect}');
-    expect(main).toContain('className="gesture-nav-button gesture-nav-drawer-button"');
-    expect(main).toContain('onClick={handleFloatingDrawerToggle}');
     expect(main).not.toContain('className="gesture-nav-badge"');
     expect(main).toContain('className="floating-nav-group"');
-    expect(main).toContain('data-gesture-nav-tab="chat"');
-    expect(main).toContain('data-gesture-nav-tab="file"');
-    expect(main).toContain('data-gesture-nav-tab="git"');
     expect(main).toContain('aria-label="Chat"');
-    expect(main).toContain('aria-label="File"');
-    expect(main).toContain('aria-label="Git"');
     expect(main).toContain("codicon-comment-discussion");
-    expect(main).toContain("codicon-files");
-    expect(main).toContain("codicon-source-control");
-    expect(main).toContain('handleFloatingDrawerToggle');
-    expect(main).toContain('handleFloatingNavSelect');
     expect(main).toContain('handleGestureNavigationCurrentSelect');
     expect(main).toContain('GESTURE_MOVE_LONG_PRESS_MS');
-    expect(main).not.toContain('const expandedInset = 56;');
+    expect(main).toContain('className="gesture-nav-button gesture-nav-capsule gesture-nav-capsule-preview"');
+    expect(main).toContain('className="gesture-nav-button gesture-nav-capsule gesture-nav-capsule-drawer"');
+    expect(main).toContain('className="gesture-nav-button gesture-nav-capsule gesture-nav-capsule-settings"');
+    expect(main).toContain('codicon-layout-sidebar-right');
+    expect(main).toContain('codicon-settings-gear');
+    expect(main).not.toContain('gesture-nav-drawer-button');
+    expect(main).not.toContain('data-gesture-nav-tab');
   });
 
-  test('styles gesture navigation as a collapsed pill and expanded drawer-centered controls', () => {
+  test('styles gesture navigation as a collapsed pill and expanded vertical capsules', () => {
     const styles = readStyles();
 
     expect(styles).toContain('.gesture-nav-control');
@@ -142,22 +122,19 @@ describe('gesture navigation', () => {
     expect(styles).toMatch(
       /\.gesture-nav-pill \{[\s\S]*width: 50px;[\s\S]*grid-template-rows: repeat\(2, 40px\);[\s\S]*padding: 4px;[\s\S]*\}/,
     );
-    expect(styles).not.toContain(".gesture-nav-control[data-expanded='true'] {\n  height: 48px;");
     expect(styles).toContain('.gesture-nav-button');
     expect(styles).toContain('.gesture-nav-current-button');
     expect(styles).not.toContain('.gesture-nav-badge');
-    expect(styles).toContain('.gesture-nav-option');
-    expect(styles).toContain('.gesture-nav-option-chat');
-    expect(styles).toContain('.gesture-nav-option-file');
-    expect(styles).toContain('.gesture-nav-option-git');
-    expect(styles).toContain(".gesture-nav-option[data-candidate='true']");
-    expect(styles).toContain(".floating-control-stack[data-side='right'] .gesture-nav-option-file");
-    expect(styles).toContain(".floating-control-stack[data-side='left'] .gesture-nav-option-file");
-    expect(styles).toMatch(
-      /\.gesture-nav-control\[data-expanded='true'\] \.gesture-nav-drawer-button \{[\s\S]*top: 44px;[\s\S]*\}/,
-    );
-    expect(styles).toMatch(
-      /\.gesture-nav-option \{[\s\S]*top: 44px;[\s\S]*\}/,
-    );
+    expect(styles).toContain('.gesture-nav-capsule');
+    expect(styles).toContain('.gesture-nav-capsule-preview');
+    expect(styles).toContain('.gesture-nav-capsule-drawer');
+    expect(styles).toContain('.gesture-nav-capsule-settings');
+    expect(styles).toContain('gesture-pill-grow-up');
+    expect(styles).toContain('gesture-pill-grow-down');
+    expect(styles).not.toContain('.gesture-nav-option');
+    expect(styles).not.toContain('.gesture-nav-option-chat');
+    expect(styles).not.toContain('.gesture-nav-option-file');
+    expect(styles).not.toContain('.gesture-nav-option-git');
+    expect(styles).not.toContain('.gesture-nav-drawer-button');
   });
 });

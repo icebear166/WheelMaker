@@ -542,7 +542,7 @@
   backdrop-filter: blur(1px);
   -webkit-backdrop-filter: blur(1px);
   overflow: hidden;
-  transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, backdrop-filter 180ms ease;
+  transition: height 200ms ease, background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, backdrop-filter 180ms ease;
 }
 
 .floating-control-stack[data-backdrop-tone='mixed'] .gesture-nav-pill {
@@ -703,6 +703,12 @@
 }
 
 .gesture-nav-control[data-expanded='true'] .gesture-nav-pill {
+  height: 176px;
+  grid-template-rows: repeat(3, 40px) 4px;
+  opacity: 1;
+}
+
+.gesture-nav-control[data-expanded='true'] .gesture-nav-current-button {
   opacity: 0;
   pointer-events: none;
 }
@@ -733,18 +739,12 @@
   background: color-mix(in srgb, var(--panel) 64%, transparent);
 }
 
-.gesture-nav-drawer-button {
-  z-index: 3;
-  top: 44px;
-}
-
 .gesture-nav-current-button {
   z-index: 2;
   top: 4px;
 }
 
-.gesture-nav-control[data-expanded='false'] .gesture-nav-current-button,
-.gesture-nav-control[data-expanded='false'] .gesture-nav-drawer-button {
+.gesture-nav-control[data-expanded='false'] .gesture-nav-current-button {
   border-color: transparent;
   background: transparent;
   box-shadow: none;
@@ -752,68 +752,75 @@
   -webkit-backdrop-filter: none;
 }
 
-.gesture-nav-control[data-expanded='true'] .gesture-nav-drawer-button {
-  top: 44px;
-}
-
-.gesture-nav-control[data-expanded='true'] .gesture-nav-current-button {
-  opacity: 0;
-  pointer-events: none;
-}
-
 .gesture-nav-control[data-expanded='false'] .gesture-nav-button:hover {
   background: color-mix(in srgb, var(--panel) 64%, transparent);
 }
 
-.gesture-nav-current-button[data-active='true'],
-.gesture-nav-drawer-button[data-active='true'] {
+.gesture-nav-current-button[data-active='true'] {
   color: color-mix(in srgb, var(--accent) 88%, var(--text));
   background: transparent;
   border-color: color-mix(in srgb, var(--accent) 72%, transparent);
 }
 
-.gesture-nav-current-button[data-active='true']:hover,
-.gesture-nav-drawer-button[data-active='true']:hover {
+.gesture-nav-current-button[data-active='true']:hover {
   color: color-mix(in srgb, var(--accent) 88%, var(--text));
   background: transparent;
 }
 
-.gesture-nav-drawer-button:active {
-  transform: scale(0.97);
-}
-
-.gesture-nav-option {
+.gesture-nav-capsule {
   z-index: 2;
-  top: 44px;
   color: var(--muted);
-  transition: background 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease, opacity 200ms ease, transform 200ms ease;
 }
 
-.gesture-nav-option-chat {
-  transform: translate3d(0, -48px, 0);
+.gesture-nav-capsule-preview {
+  top: 4px;
+  transform-origin: bottom center;
+  animation: gesture-pill-grow-up 200ms ease-out;
 }
 
-.floating-control-stack[data-side='right'] .gesture-nav-option-file {
-  transform: translate3d(-48px, 0, 0);
+.gesture-nav-capsule-drawer {
+  top: 48px;
+  animation: gesture-pill-grow-center 200ms ease-out;
 }
 
-.floating-control-stack[data-side='left'] .gesture-nav-option-file {
-  transform: translate3d(48px, 0, 0);
+.gesture-nav-capsule-settings {
+  top: 92px;
+  transform-origin: top center;
+  animation: gesture-pill-grow-down 200ms ease-out;
 }
 
-.gesture-nav-option-git {
-  transform: translate3d(0, 48px, 0);
+@keyframes gesture-pill-grow-up {
+  from {
+    opacity: 0;
+    transform: translateY(40px) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
-.gesture-nav-option[data-active='true'],
-.gesture-nav-option[data-candidate='true'] {
-  color: color-mix(in srgb, var(--accent) 88%, var(--text));
-  background: transparent;
-  border-color: color-mix(in srgb, var(--accent) 72%, transparent);
+@keyframes gesture-pill-grow-center {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
-.gesture-nav-option[data-candidate='true'] {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent), 0 10px 24px rgba(0, 0, 0, 0.2);
+@keyframes gesture-pill-grow-down {
+  from {
+    opacity: 0;
+    transform: translateY(-40px) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .breadcrumb-title {

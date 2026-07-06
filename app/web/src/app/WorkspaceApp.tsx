@@ -248,10 +248,8 @@ import {
 import {
   GESTURE_LONG_PRESS_MS,
   GESTURE_MOVE_LONG_PRESS_MS,
-  resolveGestureDirectionCandidate,
   resolveGesturePressIntent,
   shouldStartGestureMove,
-  type GestureNavigationTab,
 } from '../shell/layouts/mobile/gestureNavigation';
 import {
   createMobileSettingsHistoryState,
@@ -652,7 +650,6 @@ type GestureNavigationState = {
   currentX: number;
   currentY: number;
   startedAt: number;
-  candidate: GestureNavigationTab | null;
 };
 type DesktopSidebarResizeState = {
   pointerId: number;
@@ -1179,34 +1176,6 @@ function readPortRelayFloatingSide(): PersistedFloatingControlSide | null {
   } catch {
     return null;
   }
-}
-
-function tabIconClass(tab: GestureNavigationTab): string {
-  switch (tab) {
-    case 'chat':
-      return 'codicon-comment-discussion';
-    case 'git':
-      return 'codicon-source-control';
-    default:
-      return 'codicon-files';
-  }
-}
-
-function tabLabel(tab: GestureNavigationTab): string {
-  switch (tab) {
-    case 'chat':
-      return 'Chat';
-    case 'git':
-      return 'Git';
-    default:
-      return 'File';
-  }
-}
-
-function gestureTabFromElement(element: Element | null): GestureNavigationTab | null {
-  const target = element?.closest<HTMLElement>('[data-gesture-nav-tab]');
-  const tab = target?.dataset.gestureNavTab;
-  return tab === 'chat' || tab === 'file' || tab === 'git' ? tab : null;
 }
 
 function readPromptCompletionNotificationTarget(): ChatSessionKey | null {
@@ -7016,7 +6985,6 @@ export function App() {
         currentX: event.clientX,
         currentY: event.clientY,
         startedAt,
-        candidate: null,
       };
       gestureNavStateRef.current = nextState;
       setGestureNavState(nextState);
@@ -7027,6 +6995,9 @@ export function App() {
               ? {...current, phase: 'expanded' as const}
               : current;
           gestureNavStateRef.current = next;
+          if (next?.phase === 'expanded') {
+            setDrawerOpen(true);
+          }
           return next;
         });
         gestureLongPressTimerRef.current = null;
@@ -7039,7 +7010,6 @@ export function App() {
         }
         if (!shouldStartGestureMove({
           elapsedMs: Date.now() - current.startedAt,
-          candidate: current.candidate,
         })) {
           return;
         }
@@ -7123,28 +7093,13 @@ export function App() {
           const nextState = {...nextCurrent, phase: 'expanded' as const};
           gestureNavStateRef.current = nextState;
           setGestureNavState(nextState);
+          setDrawerOpen(true);
           return;
         }
         if (current.currentX !== event.clientX || current.currentY !== event.clientY) {
           gestureNavStateRef.current = nextCurrent;
           setGestureNavState(nextCurrent);
         }
-        return;
-      }
-      event.preventDefault();
-      const directCandidate = gestureTabFromElement(
-        document.elementFromPoint(event.clientX, event.clientY),
-      );
-      const candidate =
-        directCandidate ?? resolveGestureDirectionCandidate({deltaX, deltaY});
-      if (
-        candidate !== current.candidate ||
-        current.currentX !== event.clientX ||
-        current.currentY !== event.clientY
-      ) {
-        const nextState = {...nextCurrent, candidate};
-        gestureNavStateRef.current = nextState;
-        setGestureNavState(nextState);
       }
     },
     [
@@ -7162,12 +7117,6 @@ export function App() {
       clearGestureMoveLongPressTimer();
       gestureNavStateRef.current = null;
       setGestureNavState(null);
-      if (current.phase === 'pressing') {
-        return;
-      }
-      if (current.phase === 'expanded' && current.candidate) {
-        handleFloatingNavSelect(current.candidate);
-      }
       const cooldownUntil = Date.now() + 120;
       floatingClickCooldownUntilRef.current = cooldownUntil;
       clearFloatingCooldownState(cooldownUntil);
@@ -7176,7 +7125,6 @@ export function App() {
       clearFloatingCooldownState,
       clearGestureLongPressTimer,
       clearGestureMoveLongPressTimer,
-      handleFloatingNavSelect,
     ],
   );
   const cancelGestureNavigation = useCallback(
@@ -7194,18 +7142,6 @@ export function App() {
       clearFloatingCooldownState(cooldownUntil);
     },
     [clearFloatingCooldownState, clearGestureLongPressTimer, clearGestureMoveLongPressTimer],
-  );
-  const handleGestureNavigationOptionClick = useCallback(
-    (nextTab: GestureNavigationTab, event: React.MouseEvent<HTMLButtonElement>) => {
-      event.preventDefault();
-      event.stopPropagation();
-      clearGestureLongPressTimer();
-      clearGestureMoveLongPressTimer();
-      gestureNavStateRef.current = null;
-      setGestureNavState(null);
-      handleFloatingNavSelect(nextTab);
-    },
-    [clearGestureLongPressTimer, clearGestureMoveLongPressTimer, handleFloatingNavSelect],
   );
   useEffect(() => {
     if (!gestureNavigationExpanded) {
@@ -7230,6 +7166,11 @@ export function App() {
       window.removeEventListener('pointerdown', onPointerDown);
     };
   }, [cancelGestureNavigation, gestureNavigationExpanded]);
+  useEffect(() => {
+    if (gestureNavigationExpanded && !drawerOpen) {
+      cancelGestureNavigation();
+    }
+  }, [cancelGestureNavigation, drawerOpen, gestureNavigationExpanded]);
   const closeSettingsPanel = useCallback(() => {
     setSettingsDetailView(null);
     setSidebarSettingsOpen(false);
@@ -19492,7 +19433,6 @@ export function App() {
           <div
             className="gesture-nav-control"
             data-expanded={gestureNavigationExpanded ? 'true' : 'false'}
-            data-candidate={gestureNavState?.candidate ?? ''}
             aria-label="Gesture navigation"
           >
             <div
@@ -19504,39 +19444,30 @@ export function App() {
               <>
                 <button
                   type="button"
-                  className="gesture-nav-button gesture-nav-option gesture-nav-option-chat"
-                  data-gesture-nav-tab="chat"
-                  data-active={tab === 'chat'}
-                  data-candidate={gestureNavState?.candidate === 'chat'}
-                  onClick={event => handleGestureNavigationOptionClick('chat', event)}
-                  title="Chat"
-                  aria-label="Chat"
+                  className="gesture-nav-button gesture-nav-capsule gesture-nav-capsule-preview"
+                  onClick={() => { cancelGestureNavigation(); toggleChatPreviewFromTitle(); }}
+                  title={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
+                  aria-label={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
+                >
+                  <span className="codicon codicon-layout-sidebar-right" />
+                </button>
+                <button
+                  type="button"
+                  className="gesture-nav-button gesture-nav-capsule gesture-nav-capsule-drawer"
+                  onClick={() => { cancelGestureNavigation(); setDrawerOpen(false); }}
+                  title="Close drawer"
+                  aria-label="Close drawer"
                 >
                   <span className="codicon codicon-comment-discussion" />
                 </button>
                 <button
                   type="button"
-                  className="gesture-nav-button gesture-nav-option gesture-nav-option-file"
-                  data-gesture-nav-tab="file"
-                  data-active={tab === 'file'}
-                  data-candidate={gestureNavState?.candidate === 'file'}
-                  onClick={event => handleGestureNavigationOptionClick('file', event)}
-                  title="File"
-                  aria-label="File"
+                  className="gesture-nav-button gesture-nav-capsule gesture-nav-capsule-settings"
+                  onClick={() => { cancelGestureNavigation(); openSettingsRoot(); }}
+                  title="Settings"
+                  aria-label="Settings"
                 >
-                  <span className="codicon codicon-files" />
-                </button>
-                <button
-                  type="button"
-                  className="gesture-nav-button gesture-nav-option gesture-nav-option-git"
-                  data-gesture-nav-tab="git"
-                  data-active={tab === 'git'}
-                  data-candidate={gestureNavState?.candidate === 'git'}
-                  onClick={event => handleGestureNavigationOptionClick('git', event)}
-                  title="Git"
-                  aria-label="Git"
-                >
-                  <span className="codicon codicon-source-control" />
+                  <span className="codicon codicon-settings-gear" />
                 </button>
               </>
             ) : null}
@@ -19547,27 +19478,15 @@ export function App() {
               data-visible={gestureNavigationExpanded ? 'false' : 'true'}
               onPointerDown={handleGestureNavigationButtonPointerDown}
               onClick={handleGestureNavigationCurrentSelect}
-              title={tabLabel(tab)}
-              aria-label={tabLabel(tab)}
+              title="Chat"
+              aria-label="Chat"
               aria-hidden={gestureNavigationExpanded}
               tabIndex={gestureNavigationExpanded ? -1 : undefined}
             >
-              <span className={`codicon ${tabIconClass(tab)}`} />
-              {tab === 'chat' && hasCompletedUnreadChatSessionIndicator ? (
+              <span className="codicon codicon-comment-discussion" />
+              {hasCompletedUnreadChatSessionIndicator ? (
                 <span className="floating-nav-unread-dot" aria-hidden="true" />
               ) : null}
-            </button>
-            <button
-              type="button"
-              className="gesture-nav-button gesture-nav-drawer-button"
-              data-active={drawerOpen}
-              onPointerDown={handleGestureNavigationButtonPointerDown}
-              onClick={handleFloatingDrawerToggle}
-              title="Toggle drawer"
-              aria-label="Toggle drawer"
-              aria-expanded={drawerOpen}
-            >
-              <span className="codicon codicon-menu" />
             </button>
           </div>
         ) : (
