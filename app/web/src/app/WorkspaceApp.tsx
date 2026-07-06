@@ -19454,7 +19454,7 @@ export function App() {
                   </button>
                   <button
                     type="button"
-                    className="gesture-nav-button gesture-nav-capsule"
+                    className="gesture-nav-button gesture-nav-capsule gesture-nav-capsule-drawer"
                     onPointerDown={e => e.stopPropagation()}
                     onClick={() => { cancelGestureNavigation(); setDrawerOpen(false); }}
                     title="Close drawer"

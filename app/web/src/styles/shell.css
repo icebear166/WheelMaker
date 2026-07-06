@@ -763,6 +763,10 @@
   animation: gesture-capsule-fade-in 200ms ease-out;
 }
 
+.gesture-nav-capsule-drawer {
+  color: color-mix(in srgb, var(--accent) 88%, var(--text));
+}
+
 @keyframes gesture-capsule-fade-in {
   from {
     opacity: 0;
