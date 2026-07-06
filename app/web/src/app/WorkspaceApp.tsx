@@ -2868,6 +2868,12 @@ export function App() {
   const chatPreviewHasContent = previewWorkbenchHasTabs;
   const chatPreviewOpen = chatPreviewManualOpen || (chatPreviewHasContent && !chatPreviewManualCollapsed);
   const portRelayWorkbenchOpen = !!activePortRelayPreview && chatPreviewOpen;
+
+  useEffect(() => {
+    if (!isWide && chatPreviewHasContent && !chatPreviewManualCollapsed) {
+      setChatPreviewManualCollapsed(true);
+    }
+  }, []);
   const mobilePortRelayFrameOpen = !isWide && portRelayWorkbenchOpen;
   const fileIconResourcesNeeded = tab === 'file' ||
     (
