@@ -113,6 +113,64 @@ export type PreviewWorkbenchState = {
   treeOpen: boolean;
 };
 
+export const PREVIEW_WORKBENCH_SNAPSHOT_VERSION = 1;
+
+export type PreviewWorkbenchSnapshotFileTab = {
+  type: 'file';
+  projectId: string;
+  path: string;
+  targetLine: number | null;
+  title: string;
+};
+
+export type PreviewWorkbenchSnapshotPromptDiffTab = {
+  type: 'prompt-diff';
+  projectId: string;
+  sessionId: string;
+  artifactId: string;
+  title: string;
+  promptText: string;
+  promptSummary: string;
+  files: Array<RegistrySessionPromptArtifactFile & {expanded: boolean}>;
+};
+
+export type PreviewWorkbenchSnapshotAttachmentTab = {
+  type: 'attachment';
+  projectId: string;
+  sessionId: string;
+  attachmentKey: string;
+  title: string;
+  meta: string;
+  mimeType: string;
+  kind: 'image' | 'file';
+};
+
+export type PreviewWorkbenchSnapshotPortRelayTab = {
+  type: 'port-relay';
+  projectId: string;
+  hubId: string;
+  targetPort: number;
+  framePath: string;
+  title: string;
+  url: string;
+  reloadKey: number;
+};
+
+export type PreviewWorkbenchSnapshotTab =
+  | PreviewWorkbenchSnapshotFileTab
+  | PreviewWorkbenchSnapshotPromptDiffTab
+  | PreviewWorkbenchSnapshotAttachmentTab
+  | PreviewWorkbenchSnapshotPortRelayTab;
+
+export type PreviewWorkbenchSnapshot = {
+  version: typeof PREVIEW_WORKBENCH_SNAPSHOT_VERSION;
+  activeProjectId: string;
+  tabsByProjectId: Record<string, PreviewWorkbenchSnapshotTab[]>;
+  activeTabIdByProjectId: Record<string, string>;
+  renderedTabIdsByProjectId: Record<string, string[]>;
+  treeOpen: boolean;
+};
+
 export type PreviewSearchMatch =
   | {
       kind: 'file';
@@ -262,6 +320,187 @@ export function createPreviewWorkbenchState(activeProjectId = ''): PreviewWorkbe
     activeTabIdByProjectId: {},
     renderedTabIdsByProjectId: activeProjectId ? {[activeProjectId]: []} : {},
     treeOpen: false,
+  };
+}
+
+function previewSnapshotTab(tab: PreviewWorkbenchTab): PreviewWorkbenchSnapshotTab {
+  if (tab.type === 'file') {
+    return {
+      type: 'file',
+      projectId: tab.projectId,
+      path: tab.path,
+      targetLine: tab.targetLine,
+      title: tab.title,
+    };
+  }
+  if (tab.type === 'prompt-diff') {
+    return {
+      type: 'prompt-diff',
+      projectId: tab.projectId,
+      sessionId: tab.sessionId,
+      artifactId: tab.artifactId,
+      title: tab.title,
+      promptText: tab.promptText,
+      promptSummary: tab.promptSummary,
+      files: tab.files.map(file => ({
+        path: file.path,
+        status: file.status,
+        additions: file.additions,
+        deletions: file.deletions,
+        expanded: file.expanded,
+      })),
+    };
+  }
+  if (tab.type === 'attachment') {
+    return {
+      type: 'attachment',
+      projectId: tab.projectId,
+      sessionId: tab.sessionId,
+      attachmentKey: tab.attachmentKey,
+      title: tab.title,
+      meta: tab.meta,
+      mimeType: tab.mimeType,
+      kind: tab.kind,
+    };
+  }
+  return {
+    type: 'port-relay',
+    projectId: tab.projectId,
+    hubId: tab.hubId,
+    targetPort: tab.targetPort,
+    framePath: tab.framePath,
+    title: tab.title,
+    url: tab.url,
+    reloadKey: tab.reloadKey,
+  };
+}
+
+export function previewWorkbenchSnapshotFromState(
+  state: PreviewWorkbenchState,
+): PreviewWorkbenchSnapshot {
+  const tabsByProjectId = Object.fromEntries(
+    Object.entries(state.tabsByProjectId)
+      .map(([projectId, tabs]) => [
+        projectId,
+        tabs.map(previewSnapshotTab),
+      ])
+      .filter(([, tabs]) => Array.isArray(tabs) && tabs.length > 0),
+  );
+  return {
+    version: PREVIEW_WORKBENCH_SNAPSHOT_VERSION,
+    activeProjectId: state.activeProjectId,
+    tabsByProjectId,
+    activeTabIdByProjectId: {...state.activeTabIdByProjectId},
+    renderedTabIdsByProjectId: Object.fromEntries(
+      Object.entries(state.renderedTabIdsByProjectId)
+        .map(([projectId, ids]) => [projectId, ids.filter(Boolean)])
+        .filter(([, ids]) => Array.isArray(ids) && ids.length > 0),
+    ),
+    treeOpen: state.treeOpen,
+  };
+}
+
+function previewSnapshotInput(tab: PreviewWorkbenchSnapshotTab): PreviewWorkbenchOpenInput {
+  if (tab.type === 'file') {
+    return {
+      type: 'file',
+      projectId: tab.projectId,
+      path: tab.path,
+      targetLine: tab.targetLine,
+      title: tab.title,
+    };
+  }
+  if (tab.type === 'prompt-diff') {
+    return {
+      type: 'prompt-diff',
+      projectId: tab.projectId,
+      sessionId: tab.sessionId,
+      artifactId: tab.artifactId,
+      title: tab.title,
+      promptText: tab.promptText,
+      promptSummary: tab.promptSummary,
+      files: tab.files.map(file => ({
+        path: file.path,
+        status: file.status,
+        additions: file.additions,
+        deletions: file.deletions,
+        expanded: file.expanded,
+        diff: '',
+      })),
+    };
+  }
+  if (tab.type === 'attachment') {
+    return {
+      type: 'attachment',
+      projectId: tab.projectId,
+      sessionId: tab.sessionId,
+      attachmentKey: tab.attachmentKey,
+      title: tab.title,
+      meta: tab.meta,
+      mimeType: tab.mimeType,
+      kind: tab.kind,
+      src: '',
+    };
+  }
+  return {
+    type: 'port-relay',
+    projectId: tab.projectId,
+    hubId: tab.hubId,
+    targetPort: tab.targetPort,
+    framePath: tab.framePath,
+    title: tab.title,
+    url: tab.url,
+    reloadKey: tab.reloadKey,
+  };
+}
+
+function restorePreviewSnapshotTab(tab: PreviewWorkbenchSnapshotTab): PreviewWorkbenchTab | null {
+  const input = previewSnapshotInput(tab);
+  return validPreviewInput(input) ? createTab(input) : null;
+}
+
+export function previewWorkbenchStateFromSnapshot(
+  snapshot: PreviewWorkbenchSnapshot | null | undefined,
+): PreviewWorkbenchState {
+  if (!snapshot || snapshot.version !== PREVIEW_WORKBENCH_SNAPSHOT_VERSION) {
+    return createPreviewWorkbenchState();
+  }
+  const tabsByProjectId: Record<string, PreviewWorkbenchTab[]> = {};
+  for (const [projectId, tabs] of Object.entries(snapshot.tabsByProjectId ?? {})) {
+    const restoredTabs = tabs
+      .map(restorePreviewSnapshotTab)
+      .filter((tab): tab is PreviewWorkbenchTab => !!tab);
+    if (projectId && restoredTabs.length > 0) {
+      tabsByProjectId[projectId] = restoredTabs;
+    }
+  }
+  const availableIdsByProject: Record<string, Set<string>> = {};
+  for (const [projectId, tabs] of Object.entries(tabsByProjectId)) {
+    availableIdsByProject[projectId] = new Set(tabs.map(tab => tab.id));
+  }
+  const activeTabIdByProjectId = Object.fromEntries(
+    Object.entries(snapshot.activeTabIdByProjectId ?? {})
+      .filter(([projectId, tabId]) => availableIdsByProject[projectId]?.has(tabId)),
+  );
+  const renderedTabIdsByProjectId = Object.fromEntries(
+    Object.entries(snapshot.renderedTabIdsByProjectId ?? {})
+      .map(([projectId, ids]) => [
+        projectId,
+        ids.filter(id => availableIdsByProject[projectId]?.has(id)),
+      ])
+      .filter(([projectId, ids]) => !!projectId && ids.length > 0),
+  );
+  const projectIds = Object.keys(tabsByProjectId);
+  const activeProjectId =
+    snapshot.activeProjectId && projectIds.includes(snapshot.activeProjectId)
+      ? snapshot.activeProjectId
+      : projectIds[0] ?? '';
+  return {
+    activeProjectId,
+    tabsByProjectId,
+    activeTabIdByProjectId,
+    renderedTabIdsByProjectId,
+    treeOpen: snapshot.treeOpen === true,
   };
 }
 

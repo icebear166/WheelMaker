@@ -71,4 +71,15 @@ class WindowInsetPaddingTest {
 
         assertTrue(manifest.contains("android:windowSoftInputMode=\"adjustResize\""))
     }
+
+    @Test
+    fun manifestHandlesFoldableSizeConfigurationChangesWithoutRecreatingWebView() {
+        val manifest = String(Files.readAllBytes(
+            Paths.get("src/main/AndroidManifest.xml")
+        ))
+
+        assertTrue(manifest.contains("screenSize"))
+        assertTrue(manifest.contains("smallestScreenSize"))
+        assertTrue(manifest.contains("screenLayout"))
+    }
 }

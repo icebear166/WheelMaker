@@ -44,6 +44,10 @@ import {
   type TtsSettings,
 } from '../features/tts/ttsSettings';
 import {
+  PREVIEW_WORKBENCH_SNAPSHOT_VERSION,
+  type PreviewWorkbenchSnapshot,
+} from '../preview/previewWorkbenchState';
+import {
   FLOATING_CONTROL_DEFAULT_IDLE_OPACITY,
   FLOATING_CONTROL_DEFAULT_Y_RATIO,
   floatingControlYRatioFromLegacySlot,
@@ -126,6 +130,7 @@ export type PersistedGlobalState = {
   portRelayTargets: PortRelayTarget[];
   selectedPortRelayTarget: PortRelayTarget | null;
   portRelayListenPort: number;
+  previewWorkbenchSnapshot: PreviewWorkbenchSnapshot | null;
 };
 
 export type PersistedChatCursor = {
@@ -288,6 +293,7 @@ const GLOBAL_KEYS = {
   portRelayTargets: 'portRelayTargets',
   selectedPortRelayTarget: 'selectedPortRelayTarget',
   portRelayListenPort: 'portRelayListenPort',
+  previewWorkbenchSnapshot: 'previewWorkbenchSnapshot',
 } as const;
 
 function defaultGlobalState(): PersistedGlobalState {
@@ -332,6 +338,7 @@ function defaultGlobalState(): PersistedGlobalState {
     portRelayTargets: [],
     selectedPortRelayTarget: null,
     portRelayListenPort: 28810,
+    previewWorkbenchSnapshot: null,
   };
 }
 
@@ -506,6 +513,14 @@ function sanitizeStringList(value: unknown, fallback: string[] = []): string[] {
     : fallback;
 }
 
+function sanitizePreviewWorkbenchSnapshot(input: unknown): PreviewWorkbenchSnapshot | null {
+  if (!input || typeof input !== 'object') {
+    return null;
+  }
+  const value = input as Partial<PreviewWorkbenchSnapshot>;
+  return value.version === PREVIEW_WORKBENCH_SNAPSHOT_VERSION ? value as PreviewWorkbenchSnapshot : null;
+}
+
 type PersistedGlobalStateInput = Partial<PersistedGlobalState> & {
   floatingControlSlot?: unknown;
 };
@@ -575,6 +590,7 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
     portRelayTargets: normalizePortRelayTargets(input.portRelayTargets),
     selectedPortRelayTarget: normalizePortRelayTarget(input.selectedPortRelayTarget),
     portRelayListenPort: normalizePortRelayListenPort(input.portRelayListenPort, base.portRelayListenPort),
+    previewWorkbenchSnapshot: sanitizePreviewWorkbenchSnapshot(input.previewWorkbenchSnapshot),
   };
 }
 
@@ -1060,6 +1076,7 @@ export class WorkspacePersistenceRepository {
       {k: GLOBAL_KEYS.portRelayTargets, v: serialize(this.state.global.portRelayTargets), updatedAt: now},
       {k: GLOBAL_KEYS.selectedPortRelayTarget, v: serialize(this.state.global.selectedPortRelayTarget), updatedAt: now},
       {k: GLOBAL_KEYS.portRelayListenPort, v: serialize(this.state.global.portRelayListenPort), updatedAt: now},
+      {k: GLOBAL_KEYS.previewWorkbenchSnapshot, v: serialize(this.state.global.previewWorkbenchSnapshot), updatedAt: now},
     ];
 
     for (const row of globalRows) {
@@ -1428,6 +1445,7 @@ export class WorkspacePersistenceRepository {
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.portRelayTargets, v: serialize(next.portRelayTargets), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.selectedPortRelayTarget, v: serialize(next.selectedPortRelayTarget), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.portRelayListenPort, v: serialize(next.portRelayListenPort), updatedAt: now});
+      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.previewWorkbenchSnapshot, v: serialize(next.previewWorkbenchSnapshot), updatedAt: now});
     }).catch(() => undefined);
   }
 

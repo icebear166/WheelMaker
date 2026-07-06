@@ -179,4 +179,35 @@ describe('web reconnect fallback behavior', () => {
     expect(mainTsx).toContain('if (!silentRead) {');
     expect(mainTsx).toContain('setFileLoading(true);');
   });
+
+  test('restores preview workbench through shared persisted state across viewport modes', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = fs.readFileSync(
+      path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'),
+      'utf8',
+    );
+    const persistenceTs = fs.readFileSync(
+      path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'),
+      'utf8',
+    );
+
+    expect(mainTsx).toContain(
+      'previewWorkbenchStateFromSnapshot(persistedGlobal.previewWorkbenchSnapshot)',
+    );
+    expect(mainTsx).toContain(
+      'workspaceStore.rememberGlobalState({previewWorkbenchSnapshot: previewWorkbenchSnapshotFromState(previewWorkbench)});',
+    );
+    expect(mainTsx).toContain('const loadRestoredPreviewTab = useCallback(async (tab: PreviewWorkbenchTab) => {');
+    expect(mainTsx).toContain('loadRestoredPreviewTab(restoredActiveTab).catch(() => undefined);');
+    expect(mainTsx).toContain('Attachment preview cannot be restored from this source.');
+    expect(mainTsx).not.toContain(
+      'isWide && workspaceStore.rememberGlobalState({previewWorkbenchSnapshot',
+    );
+    expect(persistenceTs).toContain('previewWorkbenchSnapshot: PreviewWorkbenchSnapshot | null;');
+    expect(persistenceTs).toContain("previewWorkbenchSnapshot: 'previewWorkbenchSnapshot',");
+    expect(persistenceTs).toContain('previewWorkbenchSnapshot: null,');
+    expect(persistenceTs).toContain(
+      '{k: GLOBAL_KEYS.previewWorkbenchSnapshot, v: serialize(next.previewWorkbenchSnapshot), updatedAt: now}',
+    );
+  });
 });

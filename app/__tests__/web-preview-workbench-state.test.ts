@@ -7,8 +7,10 @@ import {
   cyclePreviewTabId,
   ensurePreviewProjectVisible,
   openPreviewTab,
+  previewWorkbenchSnapshotFromState,
   previewRenderedTabs,
   previewTabId,
+  previewWorkbenchStateFromSnapshot,
   previewWorkbenchHeaderTitle,
   previewWorkbenchTabTooltip,
   selectPreviewProject,
@@ -355,5 +357,94 @@ describe('preview workbench state', () => {
     });
 
     expect(buildPreviewSearchMatches(activePreviewTab(attachmentState), 'needle')).toEqual([]);
+  });
+
+  test('serializes a lightweight restorable snapshot without preview body content', () => {
+    const state = [
+      {
+        type: 'file' as const,
+        projectId: 'p1',
+        path: 'src/a.ts',
+        targetLine: 3,
+        title: 'a.ts',
+      },
+      {
+        type: 'prompt-diff' as const,
+        projectId: 'p1',
+        sessionId: 's1',
+        artifactId: 'diff-1',
+        title: 'Diff · 1 file',
+        promptText: 'Update the preview workbench persistence.',
+        promptSummary: 'Update preview persistence',
+        files: [
+          {
+            path: 'src/a.ts',
+            status: 'MODIFIED',
+            additions: 12,
+            deletions: 2,
+            diff: '@@ -1 +1 @@\n+large diff body should reload',
+            expanded: true,
+          },
+        ],
+      },
+      {
+        type: 'attachment' as const,
+        projectId: 'p1',
+        sessionId: 's1',
+        attachmentKey: 'p1\u001fs1\u001fsha256-image',
+        title: 'screenshot.png',
+        meta: '42 KB',
+        mimeType: 'image/png',
+        kind: 'image' as const,
+        src: 'data:image/png;base64,heavy-body',
+      },
+      {
+        type: 'port-relay' as const,
+        projectId: 'p1',
+        hubId: 'hub-a',
+        targetPort: 5173,
+        framePath: '/app',
+        title: 'hub-a:5173/app',
+        url: 'http://127.0.0.1:5173/app',
+      },
+    ].reduce((current, input) => openPreviewTab(current, input), createPreviewWorkbenchState('p1'));
+    const loaded = updatePreviewTabAfterLoad(
+      state,
+      'p1',
+      'file:src/a.ts',
+      0,
+      tab => tab.type === 'file' ? {...tab, content: 'file body should reload'} : tab,
+    );
+
+    const snapshot = previewWorkbenchSnapshotFromState(loaded);
+
+    expect(JSON.stringify(snapshot)).not.toContain('file body should reload');
+    expect(JSON.stringify(snapshot)).not.toContain('large diff body should reload');
+    expect(JSON.stringify(snapshot)).not.toContain('data:image/png;base64,heavy-body');
+
+    const restored = previewWorkbenchStateFromSnapshot(snapshot);
+    expect(restored.activeProjectId).toBe('p1');
+    expect(activePreviewTab(restored)?.id).toBe('port-relay:hub-a:5173:/app');
+    expect(restored.tabsByProjectId.p1.map(tab => tab.id)).toEqual([
+      'file:src/a.ts',
+      'prompt-diff:s1:diff-1',
+      'attachment:s1:p1\u001fs1\u001fsha256-image',
+      'port-relay:hub-a:5173:/app',
+    ]);
+    expect(restored.tabsByProjectId.p1[0]).toMatchObject({
+      type: 'file',
+      content: '',
+      path: 'src/a.ts',
+      targetLine: 3,
+    });
+    expect(restored.tabsByProjectId.p1[1]).toMatchObject({
+      type: 'prompt-diff',
+      files: [{path: 'src/a.ts', diff: '', expanded: true}],
+    });
+    expect(restored.tabsByProjectId.p1[2]).toMatchObject({
+      type: 'attachment',
+      src: '',
+      attachmentKey: 'p1\u001fs1\u001fsha256-image',
+    });
   });
 });

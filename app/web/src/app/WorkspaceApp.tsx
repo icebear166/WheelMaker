@@ -391,7 +391,6 @@ import {
   beginPreviewTabLoad,
   buildPreviewSearchMatches,
   closePreviewTab,
-  createPreviewWorkbenchState,
   cyclePreviewTabId,
   failPreviewTabLoad,
   isAttachmentPreviewTab,
@@ -400,6 +399,8 @@ import {
   isPromptDiffPreviewTab,
   openPreviewTab,
   previewRenderedTabs,
+  previewWorkbenchSnapshotFromState,
+  previewWorkbenchStateFromSnapshot,
   previewTabId,
   selectPreviewProject,
   selectPreviewTab,
@@ -956,6 +957,20 @@ function chatAttachmentBlockCacheKey(projectId: string, sessionId: string, block
   const attachmentId = attachmentIdFromBlock(block);
   const identity = attachmentId || block.uri || block.name || block.mimeType || 'attachment';
   return `${projectId}\u001f${sessionId}\u001f${identity}`;
+}
+
+function attachmentPreviewReadPayloadFromKey(tab: AttachmentPreviewTab): {sessionId: string; uri?: string; attachmentId?: string} | null {
+  const identity = tab.attachmentKey.split('\u001f').pop() || '';
+  if (!identity || identity === 'attachment') {
+    return null;
+  }
+  if (identity.startsWith('sha256-')) {
+    return {sessionId: tab.sessionId, attachmentId: identity};
+  }
+  if (identity.includes('/') || identity.includes('\\') || identity.includes(':')) {
+    return {sessionId: tab.sessionId, uri: identity};
+  }
+  return null;
 }
 
 function attachmentBase64DataUrl(content: string, mimeType?: string): string {
@@ -2808,7 +2823,7 @@ export function App() {
   const [portRelayTargetMenuOpen, setPortRelayTargetMenuOpen] = useState(false);
   const [portRelayMenuSwitchingTarget, setPortRelayMenuSwitchingTarget] = useState<PortRelayTarget | null>(null);
   const [previewWorkbench, setPreviewWorkbench] = useState(() =>
-    createPreviewWorkbenchState(),
+    previewWorkbenchStateFromSnapshot(persistedGlobal.previewWorkbenchSnapshot),
   );
   const [chatPreviewManualOpen, setChatPreviewManualOpen] = useState(false);
   const [chatPreviewManualCollapsed, setChatPreviewManualCollapsed] = useState(false);
@@ -7938,6 +7953,10 @@ export function App() {
   chatFilePeekRef.current = chatFilePeek;
 
   useEffect(() => {
+    workspaceStore.rememberGlobalState({previewWorkbenchSnapshot: previewWorkbenchSnapshotFromState(previewWorkbench)});
+  }, [previewWorkbench]);
+
+  useEffect(() => {
     setFileTabSelectedLines(new Set());
     fileTabAnchorRef.current = null;
   }, [selectedFile]);
@@ -8666,6 +8685,138 @@ export function App() {
       );
     }
   }, []);
+
+  const loadRestoredPreviewTab = useCallback(async (tab: PreviewWorkbenchTab) => {
+    if (!connectedRef.current) {
+      return;
+    }
+    if (tab.type === 'file') {
+      if (tab.loading || tab.content || tab.requestId > 0) {
+        return;
+      }
+      const requestSeq = chatFilePeekReadSeqRef.current + 1;
+      chatFilePeekReadSeqRef.current = requestSeq;
+      setPreviewWorkbench(current => beginPreviewTabLoad(current, tab.projectId, tab.id, requestSeq));
+      try {
+        const info = await service.getProjectFileInfo(tab.projectId, tab.path);
+        const result = await service.readProjectFile(tab.path, tab.projectId);
+        setPreviewWorkbench(current =>
+          updatePreviewTabAfterLoad(current, tab.projectId, tab.id, requestSeq, currentTab =>
+            currentTab.type === 'file'
+              ? {...currentTab, info, content: result.content, loading: false, error: ''}
+              : currentTab,
+          ),
+        );
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err);
+        setPreviewWorkbench(current =>
+          failPreviewTabLoad(current, tab.projectId, tab.id, requestSeq, `Failed to load file: ${reason}`),
+        );
+      }
+      return;
+    }
+    if (tab.type === 'prompt-diff') {
+      if (tab.loading || tab.requestId > 0 || tab.files.some(file => file.diff)) {
+        return;
+      }
+      const requestSeq = chatPromptArtifactReadSeqRef.current + 1;
+      chatPromptArtifactReadSeqRef.current = requestSeq;
+      setPreviewWorkbench(current => beginPreviewTabLoad(current, tab.projectId, tab.id, requestSeq));
+      try {
+        const result = await service.readSessionArtifact(tab.projectId, tab.sessionId, tab.artifactId);
+        const expandedByPath = new Map(
+          tab.files.map(file => [normalizePromptArtifactPath(file.path), file.expanded]),
+        );
+        const files = buildPromptArtifactPreviewFiles({
+          artifactId: tab.artifactId,
+          type: 'diff',
+          format: 'unified-diff',
+          fileCount: tab.files.length,
+          files: tab.files.map(file => ({
+            path: file.path,
+            status: file.status,
+            additions: file.additions,
+            deletions: file.deletions,
+          })),
+        }, result.content, null).map(file => ({
+          ...file,
+          expanded: expandedByPath.get(normalizePromptArtifactPath(file.path)) ?? file.expanded,
+        }));
+        setPreviewWorkbench(current =>
+          updatePreviewTabAfterLoad(current, tab.projectId, tab.id, requestSeq, currentTab =>
+            currentTab.type === 'prompt-diff'
+              ? {
+                  ...currentTab,
+                  title: promptArtifactPreviewTitle(files.length),
+                  files,
+                  loading: false,
+                  error: '',
+                }
+              : currentTab,
+          ),
+        );
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err);
+        setPreviewWorkbench(current =>
+          failPreviewTabLoad(current, tab.projectId, tab.id, requestSeq, reason),
+        );
+      }
+      return;
+    }
+    if (tab.type === 'attachment' && tab.kind === 'image') {
+      if (tab.loading || tab.src || tab.requestId > 0) {
+        return;
+      }
+      const requestSeq = chatAttachmentReadSeqRef.current + 1;
+      chatAttachmentReadSeqRef.current = requestSeq;
+      const payload = attachmentPreviewReadPayloadFromKey(tab);
+      if (!payload) {
+        setPreviewWorkbench(current =>
+          failPreviewTabLoad(
+            beginPreviewTabLoad(current, tab.projectId, tab.id, requestSeq),
+            tab.projectId,
+            tab.id,
+            requestSeq,
+            'Attachment preview cannot be restored from this source.',
+          ),
+        );
+        return;
+      }
+      setPreviewWorkbench(current => beginPreviewTabLoad(current, tab.projectId, tab.id, requestSeq));
+      try {
+        const result = await service.readProjectSessionAttachment(tab.projectId, payload);
+        setPreviewWorkbench(current =>
+          updatePreviewTabAfterLoad(current, tab.projectId, tab.id, requestSeq, currentTab =>
+            currentTab.type === 'attachment'
+              ? {
+                  ...currentTab,
+                  mimeType: result.mimeType || currentTab.mimeType,
+                  src: attachmentBase64DataUrl(result.content, result.mimeType || currentTab.mimeType || 'image/png'),
+                  loading: false,
+                  error: '',
+                }
+              : currentTab,
+          ),
+        );
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err);
+        setPreviewWorkbench(current =>
+          failPreviewTabLoad(current, tab.projectId, tab.id, requestSeq, `Failed to load attachment: ${reason}`),
+        );
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!connected) {
+      return;
+    }
+    const restoredActiveTab = activePreviewTab(previewWorkbench);
+    if (!restoredActiveTab) {
+      return;
+    }
+    loadRestoredPreviewTab(restoredActiveTab).catch(() => undefined);
+  }, [connected, loadRestoredPreviewTab, previewWorkbench]);
 
   const resolvePromptAttachmentThumbnail = useCallback((
     block: RegistrySessionContentBlock,
