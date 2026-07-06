@@ -592,9 +592,9 @@
 
 .chat-preview-toolbar {
   flex: 0 0 auto;
-  height: 30px;
-  min-height: 30px;
-  max-height: 30px;
+  height: 32px;
+  min-height: 32px;
+  max-height: 32px;
   display: flex;
   align-items: center;
   gap: 6px;

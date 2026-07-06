@@ -238,6 +238,7 @@
 
 .desktop-shell .preview-workbench-surface.desktop .preview-workbench-toolbar {
   padding-right: calc(var(--desktop-window-controls-width) + 10px);
+  background: var(--desktop-top-surface);
 }
 
 .preview-workbench-title,

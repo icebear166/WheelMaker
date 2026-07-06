@@ -610,14 +610,16 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('closeChatFilePeek();');
   });
 
-  test('preview chrome uses the chat-height single-line title bar', () => {
+  test('preview chrome uses the desktop chat titlebar surface and height', () => {
     const mainTsx = readSourceText(mainPath);
     const stylesCss = readWebStyles(projectRoot);
 
     const toolbar = cssRuleBlock(stylesCss, '.chat-preview-toolbar');
-    expect(toolbar).toContain('height: 30px;');
-    expect(toolbar).toContain('min-height: 30px;');
-    expect(toolbar).toContain('max-height: 30px;');
+    const desktopToolbar = cssRuleBlock(stylesCss, '.desktop-shell .preview-workbench-surface.desktop .preview-workbench-toolbar');
+    expect(toolbar).toContain('height: 32px;');
+    expect(toolbar).toContain('min-height: 32px;');
+    expect(toolbar).toContain('max-height: 32px;');
+    expect(desktopToolbar).toContain('background: var(--desktop-top-surface);');
 
     const title = cssRuleBlock(stylesCss, '.chat-preview-title');
     expect(title).toContain('white-space: nowrap;');
