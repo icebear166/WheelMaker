@@ -528,7 +528,7 @@
 .gesture-nav-pill {
   position: absolute;
   right: 0;
-  bottom: 0;
+  top: 0;
   width: 50px;
   height: 48px;
   box-sizing: border-box;
@@ -703,8 +703,8 @@
 }
 
 .gesture-nav-control[data-expanded='true'] .gesture-nav-pill {
-  height: 168px;
-  grid-template-rows: repeat(3, 40px) 40px;
+  height: 128px;
+  grid-template-rows: repeat(3, 40px);
   opacity: 1;
 }
 
@@ -741,8 +741,7 @@
 
 .gesture-nav-current-button {
   z-index: 2;
-  top: auto;
-  bottom: 4px;
+  top: 4px;
   right: 5px;
 }
 
@@ -776,22 +775,19 @@
 }
 
 .gesture-nav-capsule-preview {
-  top: auto;
-  bottom: 88px;
-  transform-origin: bottom center;
-  animation: gesture-pill-grow-up 200ms ease-out;
+  top: 4px;
+  transform-origin: top center;
+  animation: gesture-pill-grow-down 200ms ease-out;
 }
 
 .gesture-nav-capsule-drawer {
-  top: auto;
-  bottom: 44px;
+  top: 44px;
   animation: gesture-pill-grow-center 200ms ease-out;
 }
 
 .gesture-nav-capsule-settings {
-  top: auto;
-  bottom: 0;
-  transform-origin: top center;
+  top: 84px;
+  transform-origin: bottom center;
   animation: gesture-pill-grow-down 200ms ease-out;
 }
 
