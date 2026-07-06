@@ -6,7 +6,7 @@
   --desktop-top-surface: color-mix(in srgb, var(--panel) 62%, var(--panel-3));
   --chat-menu-header-height: 32px;
   --chat-menu-header-gap: 6px;
-  --chat-menu-icon-button-size: 28px;
+  --chat-menu-icon-button-size: 30px;
   --chat-menu-icon-button-radius: 6px;
   width: 100%;
   height: 100%;

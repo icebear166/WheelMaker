@@ -117,6 +117,7 @@ type SessionNewParams struct {
 // SessionNewResult is returned after a successful session/new.
 type SessionNewResult struct {
 	SessionID     string         `json:"sessionId"`
+	Title         string         `json:"title,omitempty"`
 	ConfigOptions []ConfigOption `json:"configOptions,omitempty"`
 }
 

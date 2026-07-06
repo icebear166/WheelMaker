@@ -659,6 +659,7 @@ func (c *codexappConn) sendSessionNew(ctx context.Context, p protocol.SessionNew
 	c.bindSessionIDs(threadID, threadID)
 	return assignResult(result, protocol.SessionNewResult{
 		SessionID:     threadID,
+		Title:         strings.TrimSpace(resp.Thread.displayTitle()),
 		ConfigOptions: c.config.options(),
 	})
 }
@@ -706,6 +707,15 @@ func (c *codexappConn) sendSessionLoad(ctx context.Context, p protocol.SessionLo
 	}
 	c.bindSessionIDs(acpSessionID, runtimeThreadID)
 	codexappStoreThreadMapping(acpSessionID, runtimeThreadID)
+	if title := strings.TrimSpace(resp.Thread.displayTitle()); title != "" {
+		c.emitSessionUpdate(protocol.SessionUpdateParams{
+			SessionID: acpSessionID,
+			Update: protocol.SessionUpdate{
+				SessionUpdate: protocol.SessionUpdateSessionInfoUpdate,
+				Title:         title,
+			},
+		})
+	}
 	c.replayThreadTurns(acpSessionID, resp.Thread.Turns)
 	return assignResult(result, protocol.SessionLoadResult{ConfigOptions: c.config.options()})
 }

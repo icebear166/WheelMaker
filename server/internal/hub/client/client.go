@@ -282,10 +282,15 @@ func (c *Client) createSessionState(ctx context.Context, agentType, title string
 		resolved = applyStoredConfigOptions(ctx, c.projectName, inst, sessionID, resolved, preference.ConfigOptions)
 	}
 
+	sessionTitle := strings.TrimSpace(newResult.Title)
+	if sessionTitle == "" {
+		sessionTitle = strings.TrimSpace(title)
+	}
+
 	state := SessionAgentState{
 		ConfigOptions:     append([]acp.ConfigOption(nil), resolved...),
 		Commands:          []acp.AvailableCommand{},
-		Title:             strings.TrimSpace(title),
+		Title:             sessionTitle,
 		AgentCapabilities: initResult.AgentCapabilities,
 		AgentInfo:         cloneAgentInfo(initResult.AgentInfo),
 		AuthMethods:       append([]acp.AuthMethod(nil), initResult.AuthMethods...),
@@ -548,6 +553,10 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 				hubLogger(c.projectName).Warn("save project default agent failed agent=%s err=%v", sess.agentType, err)
 			}
 		}
+		sessionTitle := strings.TrimSpace(sess.agentState.Title)
+		if sessionTitle == "" {
+			sessionTitle = strings.TrimSpace(req.Title)
+		}
 		if err := c.RecordEvent(ctx, SessionViewEvent{
 			Type:      SessionViewEventTypeACP,
 			SessionID: sess.acpSessionID,
@@ -555,7 +564,7 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 				"params": sessionViewSessionNewParams{
 					SessionID: sess.acpSessionID,
 					AgentType: sess.agentType,
-					Title:     strings.TrimSpace(req.Title),
+					Title:     sessionTitle,
 				},
 			}),
 		}); err != nil {

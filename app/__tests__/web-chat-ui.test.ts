@@ -890,7 +890,7 @@ describe('web chat integration', () => {
     expect(mobileChatToolbarBlock).toContain('justify-content: flex-start;');
     expect(stylesCss).not.toContain('.mobile-chat-toolbar-icon {');
     expect(stylesCss).toContain('--chat-menu-header-height: 32px;');
-    expect(stylesCss).toContain('--chat-menu-icon-button-size: 28px;');
+    expect(stylesCss).toContain('--chat-menu-icon-button-size: 30px;');
     expect(stylesCss).toContain('.chat-menu-icon-button {');
     const chatMenuIconButtonBlock = stylesCss.match(/\.chat-menu-icon-button \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(chatMenuIconButtonBlock).toContain('width: var(--chat-menu-icon-button-size);');
