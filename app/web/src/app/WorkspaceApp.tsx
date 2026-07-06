@@ -7155,6 +7155,9 @@ export function App() {
       if (target && floatingControlStackRef.current?.contains(target)) {
         return;
       }
+      if (target && (target as Element).closest?.('.drawer, .drawer-overlay')) {
+        return;
+      }
       cancelGestureNavigation();
     };
     window.addEventListener('keydown', onKeyDown);
@@ -19436,56 +19439,56 @@ export function App() {
             <div
               className="gesture-nav-pill"
               onPointerDown={handleGestureNavigationPillPointerDown}
-              aria-hidden="true"
-            />
-            {gestureNavigationExpanded ? (
-              <>
-                <button
-                  type="button"
-                  className="gesture-nav-button gesture-nav-capsule gesture-nav-capsule-preview"
-                  onClick={() => { cancelGestureNavigation(); toggleChatPreviewFromTitle(); }}
-                  title={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
-                  aria-label={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
-                >
-                  <span className="codicon codicon-layout-sidebar-right" />
-                </button>
-                <button
-                  type="button"
-                  className="gesture-nav-button gesture-nav-capsule gesture-nav-capsule-drawer"
-                  onClick={() => { cancelGestureNavigation(); setDrawerOpen(false); }}
-                  title="Close drawer"
-                  aria-label="Close drawer"
-                >
-                  <span className="codicon codicon-comment-discussion" />
-                </button>
-                <button
-                  type="button"
-                  className="gesture-nav-button gesture-nav-capsule gesture-nav-capsule-settings"
-                  onClick={() => { cancelGestureNavigation(); openSettingsRoot(); }}
-                  title="Settings"
-                  aria-label="Settings"
-                >
-                  <span className="codicon codicon-settings-gear" />
-                </button>
-              </>
-            ) : null}
-            <button
-              type="button"
-              className="gesture-nav-button gesture-nav-current-button"
-              data-active="true"
-              data-visible={gestureNavigationExpanded ? 'false' : 'true'}
-              onPointerDown={handleGestureNavigationButtonPointerDown}
-              onClick={handleGestureNavigationCurrentSelect}
-              title="Chat"
-              aria-label="Chat"
-              aria-hidden={gestureNavigationExpanded}
-              tabIndex={gestureNavigationExpanded ? -1 : undefined}
             >
-              <span className="codicon codicon-comment-discussion" />
-              {hasCompletedUnreadChatSessionIndicator ? (
-                <span className="floating-nav-unread-dot" aria-hidden="true" />
+              {gestureNavigationExpanded ? (
+                <>
+                  <button
+                    type="button"
+                    className="gesture-nav-button gesture-nav-capsule"
+                    onClick={() => { cancelGestureNavigation(); toggleChatPreviewFromTitle(); }}
+                    title={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
+                    aria-label={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
+                  >
+                    <span className="codicon codicon-layout-sidebar-right" />
+                  </button>
+                  <button
+                    type="button"
+                    className="gesture-nav-button gesture-nav-capsule"
+                    onClick={() => { cancelGestureNavigation(); setDrawerOpen(false); }}
+                    title="Close drawer"
+                    aria-label="Close drawer"
+                  >
+                    <span className="codicon codicon-comment-discussion" />
+                  </button>
+                  <button
+                    type="button"
+                    className="gesture-nav-button gesture-nav-capsule"
+                    onClick={() => { cancelGestureNavigation(); openSettingsRoot(); }}
+                    title="Settings"
+                    aria-label="Settings"
+                  >
+                    <span className="codicon codicon-settings-gear" />
+                  </button>
+                </>
               ) : null}
-            </button>
+              <button
+                type="button"
+                className="gesture-nav-button gesture-nav-current-button"
+                data-active="true"
+                data-visible={gestureNavigationExpanded ? 'false' : 'true'}
+                onPointerDown={handleGestureNavigationButtonPointerDown}
+                onClick={handleGestureNavigationCurrentSelect}
+                title="Chat"
+                aria-label="Chat"
+                aria-hidden={gestureNavigationExpanded}
+                tabIndex={gestureNavigationExpanded ? -1 : undefined}
+              >
+                <span className="codicon codicon-comment-discussion" />
+                {hasCompletedUnreadChatSessionIndicator ? (
+                  <span className="floating-nav-unread-dot" aria-hidden="true" />
+                ) : null}
+              </button>
+            </div>
           </div>
         ) : (
           <>

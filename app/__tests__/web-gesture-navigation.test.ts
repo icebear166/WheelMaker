@@ -94,6 +94,7 @@ describe('gesture navigation', () => {
     expect(main).toContain("gestureNavigation ? (");
     expect(main).toContain('className="gesture-nav-control"');
     expect(main).toContain('className="gesture-nav-pill"');
+    expect(main).toContain('className="gesture-nav-button gesture-nav-capsule"');
     expect(main).toContain('className="gesture-nav-button gesture-nav-current-button"');
     expect(main).toContain('onClick={handleGestureNavigationCurrentSelect}');
     expect(main).not.toContain('className="gesture-nav-badge"');
@@ -102,9 +103,6 @@ describe('gesture navigation', () => {
     expect(main).toContain("codicon-comment-discussion");
     expect(main).toContain('handleGestureNavigationCurrentSelect');
     expect(main).toContain('GESTURE_MOVE_LONG_PRESS_MS');
-    expect(main).toContain('className="gesture-nav-button gesture-nav-capsule gesture-nav-capsule-preview"');
-    expect(main).toContain('className="gesture-nav-button gesture-nav-capsule gesture-nav-capsule-drawer"');
-    expect(main).toContain('className="gesture-nav-button gesture-nav-capsule gesture-nav-capsule-settings"');
     expect(main).toContain('codicon-layout-sidebar-right');
     expect(main).toContain('codicon-settings-gear');
     expect(main).not.toContain('gesture-nav-drawer-button');
@@ -126,11 +124,7 @@ describe('gesture navigation', () => {
     expect(styles).toContain('.gesture-nav-current-button');
     expect(styles).not.toContain('.gesture-nav-badge');
     expect(styles).toContain('.gesture-nav-capsule');
-    expect(styles).toContain('.gesture-nav-capsule-preview');
-    expect(styles).toContain('.gesture-nav-capsule-drawer');
-    expect(styles).toContain('.gesture-nav-capsule-settings');
-    expect(styles).toContain('gesture-pill-grow-up');
-    expect(styles).toContain('gesture-pill-grow-down');
+    expect(styles).toContain('gesture-capsule-fade-in');
     expect(styles).not.toContain('.gesture-nav-option');
     expect(styles).not.toContain('.gesture-nav-option-chat');
     expect(styles).not.toContain('.gesture-nav-option-file');

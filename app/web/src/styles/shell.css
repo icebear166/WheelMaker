@@ -702,10 +702,22 @@
   pointer-events: auto;
 }
 
+.gesture-nav-pill {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 50px;
+  display: grid;
+  grid-template-rows: 40px;
+  padding: 4px;
+  border-radius: 999px;
+  overflow: visible;
+  transition: height 200ms ease, background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, backdrop-filter 180ms ease;
+}
+
 .gesture-nav-control[data-expanded='true'] .gesture-nav-pill {
   height: 128px;
   grid-template-rows: repeat(3, 40px);
-  opacity: 1;
 }
 
 .gesture-nav-control[data-expanded='true'] .gesture-nav-current-button {
@@ -714,23 +726,19 @@
 }
 
 .gesture-nav-button {
-  position: absolute;
-  top: 0;
-  right: 5px;
+  position: relative;
+  z-index: 1;
   width: 40px;
   height: 40px;
-  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border: none;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--panel) 34%, transparent);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
-  backdrop-filter: blur(1px);
-  -webkit-backdrop-filter: blur(1px);
-  color: var(--text);
+  background: transparent;
+  color: var(--muted);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size: 17px;
+  font-size: 18px;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -739,88 +747,28 @@
   background: color-mix(in srgb, var(--panel) 64%, transparent);
 }
 
-.gesture-nav-current-button {
-  z-index: 2;
-  top: 4px;
-  right: 5px;
-}
-
-.gesture-nav-control[data-expanded='false'] .gesture-nav-current-button {
-  border-color: transparent;
-  background: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-.gesture-nav-control[data-expanded='false'] .gesture-nav-button:hover {
-  background: color-mix(in srgb, var(--panel) 64%, transparent);
-}
-
 .gesture-nav-current-button[data-active='true'] {
   color: color-mix(in srgb, var(--accent) 88%, var(--text));
-  background: transparent;
-  border-color: color-mix(in srgb, var(--accent) 72%, transparent);
 }
 
 .gesture-nav-current-button[data-active='true']:hover {
-  color: color-mix(in srgb, var(--accent) 88%, var(--text));
   background: transparent;
+  color: color-mix(in srgb, var(--accent) 88%, var(--text));
 }
 
 .gesture-nav-capsule {
-  z-index: 2;
   color: var(--muted);
-  transition: background 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease, opacity 200ms ease, transform 200ms ease;
+  animation: gesture-capsule-fade-in 200ms ease-out;
 }
 
-.gesture-nav-capsule-preview {
-  top: 4px;
-  transform-origin: top center;
-  animation: gesture-pill-grow-down 200ms ease-out;
-}
-
-.gesture-nav-capsule-drawer {
-  top: 44px;
-  animation: gesture-pill-grow-center 200ms ease-out;
-}
-
-.gesture-nav-capsule-settings {
-  top: 84px;
-  transform-origin: bottom center;
-  animation: gesture-pill-grow-down 200ms ease-out;
-}
-
-@keyframes gesture-pill-grow-up {
+@keyframes gesture-capsule-fade-in {
   from {
     opacity: 0;
-    transform: translateY(40px) scale(0.8);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes gesture-pill-grow-center {
-  from {
-    opacity: 0;
-    transform: scale(0.8);
+    transform: scale(0.85);
   }
   to {
     opacity: 1;
     transform: scale(1);
-  }
-}
-
-@keyframes gesture-pill-grow-down {
-  from {
-    opacity: 0;
-    transform: translateY(-40px) scale(0.8);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
   }
 }
 
