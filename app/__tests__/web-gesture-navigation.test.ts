@@ -120,7 +120,7 @@ describe('gesture navigation', () => {
       /\.gesture-nav-control \{[\s\S]*width: 50px;[\s\S]*height: 88px;[\s\S]*\}/,
     );
     expect(styles).toMatch(
-      /\.gesture-nav-pill \{[\s\S]*width: 50px;[\s\S]*grid-template-rows: repeat\(2, 40px\);[\s\S]*padding: 4px;[\s\S]*\}/,
+      /\.gesture-nav-pill \{[\s\S]*width: 50px;[\s\S]*grid-template-rows: 40px;[\s\S]*padding: 4px;[\s\S]*\}/,
     );
     expect(styles).toContain('.gesture-nav-button');
     expect(styles).toContain('.gesture-nav-current-button');

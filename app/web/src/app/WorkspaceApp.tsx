@@ -7116,9 +7116,11 @@ export function App() {
       clearGestureMoveLongPressTimer();
       gestureNavStateRef.current = null;
       setGestureNavState(null);
-      const cooldownUntil = Date.now() + 120;
-      floatingClickCooldownUntilRef.current = cooldownUntil;
-      clearFloatingCooldownState(cooldownUntil);
+      if (current.phase === 'expanded') {
+        const cooldownUntil = Date.now() + 120;
+        floatingClickCooldownUntilRef.current = cooldownUntil;
+        clearFloatingCooldownState(cooldownUntil);
+      }
     },
     [
       clearFloatingCooldownState,
