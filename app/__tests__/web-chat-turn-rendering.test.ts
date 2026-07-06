@@ -229,6 +229,29 @@ describe('web chat turn rendering', () => {
     expect(main).not.toContain('updateSelectedChatWindowFromScroll(event.currentTarget, direction);');
   });
 
+  test('renders plan updates through a dedicated desktop and mobile surface outside the chat stream', () => {
+    const main = readMain();
+    const chatTurn = readChatTurnView();
+    const displayIndex = readDisplayIndex();
+    const styles = readStyles();
+
+    expect(main).toContain("import {ChatPlanSurface} from '../chat/ChatPlanSurface';");
+    expect(main).toContain("import {extractLatestChatPlan} from '../chat/chatPlan';");
+    expect(main).toContain('const selectedChatPlan = useMemo(');
+    expect(main).toContain('extractLatestChatPlan(selectedFullChatMessages)');
+    expect(main).toContain('<ChatPlanSurface');
+    expect(main).toContain("mode={isWide ? 'desktop' : 'mobile'}");
+    expect(main).toContain('plan={selectedChatPlan}');
+    expect(chatTurn).not.toContain("case 'agent_plan':");
+    expect(chatTurn).not.toContain("kind === 'plan'");
+    expect(displayIndex).toContain("if (message.method === 'agent_plan') {");
+    expect(displayIndex).toContain('return clampHeight(0);');
+    expect(styles).toContain('.chat-plan-surface.desktop');
+    expect(styles).toContain('.chat-plan-surface.mobile');
+    expect(styles).toContain('.chat-plan-compact-trigger');
+    expect(styles).toContain('.chat-plan-surface.mobile.expanded');
+  });
+
   test('settles chat bottom after the mobile keyboard inset changes without fighting keyboard close animation', () => {
     const main = readMain();
 

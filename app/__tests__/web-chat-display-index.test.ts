@@ -88,6 +88,23 @@ describe('chat display index', () => {
     expect(visible.items[1].estimatedHeight).toBeLessThan(48);
   });
 
+  test('keeps structured plan updates out of the ordinary chat turn list', () => {
+    const plan = message(2, 'agent_plan', '');
+    plan.param = {
+      entries: [
+        {content: 'Inspect files', status: 'completed'},
+        {content: 'Patch UI', status: 'in_progress'},
+      ],
+    };
+    const index = buildChatDisplayIndex([
+      message(1, 'prompt_request', 'hello'),
+      plan,
+      message(3, 'agent_message_chunk', 'answer'),
+    ]);
+
+    expect(index.items.map(item => item.turnIndex)).toEqual([1, 3]);
+  });
+
   test('resolves turn jump to exact or nearest visible display item', () => {
     const source = [
       message(1, 'prompt_request', 'hello'),

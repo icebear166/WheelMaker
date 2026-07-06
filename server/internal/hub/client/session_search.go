@@ -433,12 +433,12 @@ func sessionSearchTurnVisibleText(content string) string {
 	case acp.SessionTurnMethodToolCall:
 		return ""
 	case acp.SessionTurnMethodAgentPlan:
-		var payload []acp.SessionTurnPlanResult
+		var payload acp.SessionTurnPlanPayload
 		if err := json.Unmarshal(turn.Param, &payload); err != nil {
 			return ""
 		}
-		parts := make([]string, 0, len(payload)*2)
-		for _, entry := range payload {
+		parts := make([]string, 0, len(payload.Entries)*2)
+		for _, entry := range payload.Entries {
 			parts = append(parts, strings.TrimSpace(entry.Content), strings.TrimSpace(entry.Status))
 		}
 		return strings.Join(nonEmptySessionSearchParts(parts...), "\n")

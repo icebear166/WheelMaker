@@ -15,7 +15,7 @@ const (
 	// Outbound session update methods.
 	SessionTurnMethodAgentMessage = SessionUpdateAgentMessageChunk
 	SessionTurnMethodAgentThought = SessionUpdateAgentThoughtChunk
-	SessionTurnMethodAgentPlan    = SessionUpdatePlan
+	SessionTurnMethodAgentPlan    = "agent_plan"
 	SessionTurnMethodToolCall     = SessionUpdateToolCall
 )
 
@@ -31,7 +31,7 @@ const (
 //   - method=tool_call:
 //     param is SessionTurnToolResult
 //   - method=agent_plan:
-//     param is []SessionTurnPlanResult
+//     param is SessionTurnPlanPayload
 //
 // Payload is inlined in Param (no extra type wrapper map).
 // Ordering metadata lives in the outer transport or persistence envelope.
@@ -76,6 +76,10 @@ type SessionTurnToolResult struct {
 	Cmd    string `json:"cmd,omitempty"`
 	Kind   string `json:"kind,omitempty"`
 	Status string `json:"status,omitempty"`
+}
+
+type SessionTurnPlanPayload struct {
+	Entries []SessionTurnPlanResult `json:"entries"`
 }
 
 type SessionTurnPlanResult struct {

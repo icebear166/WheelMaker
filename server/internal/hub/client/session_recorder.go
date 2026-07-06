@@ -586,6 +586,13 @@ func (r *SessionRecorder) addMessageTurn(state *sessionPromptState, event parsed
 		if event.turnKey != "" {
 			mergedTurnIndex = state.turnIndexByKey[event.turnKey]
 		}
+	case acp.SessionTurnMethodAgentPlan:
+		for _, existing := range state.turns {
+			if existing.method == event.method {
+				mergedTurnIndex = existing.turnIndex
+				break
+			}
+		}
 	case acp.SessionTurnMethodAgentMessage, acp.SessionTurnMethodAgentThought:
 		if len(state.turns) > 0 {
 			if existing := state.turns[len(state.turns)-1]; existing.method == event.method {
@@ -1340,7 +1347,7 @@ func parseSessionViewEvent(event SessionViewEvent) (parsedSessionViewEvent, erro
 				for _, entry := range params.Update.Entries {
 					entries = append(entries, acp.SessionTurnPlanResult{Content: strings.TrimSpace(entry.Content), Status: strings.TrimSpace(entry.Status)})
 				}
-				parsed.setJSONMessage(acp.SessionTurnMethodAgentPlan, entries, "")
+				parsed.setJSONMessage(acp.SessionTurnMethodAgentPlan, acp.SessionTurnPlanPayload{Entries: entries}, "")
 			case acp.SessionUpdateSessionInfoUpdate:
 				parsed.sessionInfoUpdate = true
 				parsed.sessionInfoTitle = strings.TrimSpace(params.Update.Title)

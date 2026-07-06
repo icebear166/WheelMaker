@@ -35,8 +35,6 @@ function msgKind(method: string): string {
       return 'thought';
     case 'tool_call':
       return 'tool';
-    case 'agent_plan':
-      return 'plan';
     default:
       return 'message';
   }
@@ -173,25 +171,6 @@ function promptArtifactViewKey(message: RegistryChatMessage, artifact: RegistryS
   return `${message.sessionId}:${artifact.artifactId}`;
 }
 
-function msgPlanEntries(
-  method: string,
-  param: Record<string, unknown>,
-): { content: string; status?: string }[] {
-  if (method !== 'agent_plan' || !Array.isArray(param)) {
-    return [];
-  }
-  const entries: { content: string; status?: string }[] = [];
-  for (const item of param as unknown[]) {
-    if (!item || typeof item !== 'object') continue;
-    const entry = item as Record<string, unknown>;
-    const content = typeof entry.content === 'string' ? entry.content.trim() : '';
-    if (!content) continue;
-    const status = typeof entry.status === 'string' ? entry.status.trim() : '';
-    entries.push(status ? { content, status } : { content });
-  }
-  return entries;
-}
-
 const CollapsibleThought = React.memo(function CollapsibleThought({
   text,
   markdownComponents,
@@ -241,11 +220,6 @@ const CollapsibleThought = React.memo(function CollapsibleThought({
     </div>
   );
 });
-
-function isPlanEntryCompleted(status?: string): boolean {
-  const value = (status || '').trim().toLowerCase();
-  return value === 'completed' || value === 'done' || value === 'success';
-}
 
 function groupImageBlocks(msgs: RegistryChatMessage[]): RegistrySessionContentBlock[] {
   const blocks: RegistrySessionContentBlock[] = [];
@@ -623,6 +597,9 @@ export const ChatTurnView = React.memo(function ChatTurnView({
     );
   }
 
+  if (message.method === 'agent_plan') {
+    return null;
+  }
   if (hideToolCalls && kind === 'tool') {
     return null;
   }
@@ -641,41 +618,6 @@ export const ChatTurnView = React.memo(function ChatTurnView({
         markdownComponents={markdownComponents}
         markdownUrlTransform={markdownUrlTransform}
       />
-    );
-  }
-  if (kind === 'plan') {
-    let planEntries = msgPlanEntries(message.method, message.param);
-    if (planEntries.length === 0 && text) {
-      planEntries = text
-        .split('\n')
-        .map(line => line.trim())
-        .filter(Boolean)
-        .map(content => ({ content }));
-    }
-    if (planEntries.length === 0) {
-      return null;
-    }
-    return (
-      <div className="chat-plan-block">
-        <div className="chat-plan-title">
-          <span className="codicon codicon-checklist" />
-          <span>Plan</span>
-        </div>
-        <ul className="chat-plan-list">
-          {planEntries.map((item, index) => {
-            const done = isPlanEntryCompleted(item.status);
-            return (
-              <li
-                key={`${message.sessionId}:${message.turnIndex}:plan:${index}`}
-                className={done ? 'done' : ''}
-              >
-                <span className="chat-plan-marker">{done ? '✓' : '○'}</span>
-                <span>{item.content}</span>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
     );
   }
   if (!text) {

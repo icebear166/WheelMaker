@@ -93,6 +93,8 @@ import {ChatQuickSwitchMenu} from '../chat/ChatQuickSwitchMenu';
 import { ChatSessionNav } from '../chat/ChatSessionNav';
 import { ChatSurface } from '../chat/ChatSurface';
 import { ChatTurnView } from '../chat/ChatTurnView';
+import {ChatPlanSurface} from '../chat/ChatPlanSurface';
+import {extractLatestChatPlan} from '../chat/chatPlan';
 import { resolveChatSessionTitle } from '../chat/session/chatSessionTitle';
 import {decodeSessionTurnToMessage, normalizeSessionMessagePayload} from '../chat/chatWire';
 import {
@@ -1430,8 +1432,6 @@ function msgKind(method: string): string {
       return 'thought';
     case 'tool_call':
       return 'tool';
-    case 'agent_plan':
-      return 'plan';
     default:
       return 'message';
   }
@@ -1518,25 +1518,6 @@ function msgBlocks(
     return [];
   }
   return [];
-}
-
-function msgPlanEntries(
-  method: string,
-  param: Record<string, unknown>,
-): { content: string; status?: string }[] {
-  if (method !== 'agent_plan' || !Array.isArray(param)) {
-    return [];
-  }
-  const entries: { content: string; status?: string }[] = [];
-  for (const item of param as unknown[]) {
-    if (!item || typeof item !== 'object') continue;
-    const entry = item as Record<string, unknown>;
-    const content = typeof entry.content === 'string' ? entry.content.trim() : '';
-    if (!content) continue;
-    const status = typeof entry.status === 'string' ? entry.status.trim() : '';
-    entries.push(status ? { content, status } : { content });
-  }
-  return entries;
 }
 
 function chatConfigPriority(option: RegistrySessionConfigOption): number {
@@ -1648,15 +1629,15 @@ function shouldRenderChatTurn(
   if (message.method === 'prompt_done') {
     return true;
   }
+  if (message.method === 'agent_plan') {
+    return false;
+  }
   const kind = msgKind(message.method);
   if (kind === 'tool') {
     return !hideToolCalls && !!text;
   }
   if (kind === 'thought') {
     return !!text;
-  }
-  if (kind === 'plan') {
-    return msgPlanEntries(message.method, message.param).length > 0 || !!text;
   }
   return !!text;
 }
@@ -3359,6 +3340,12 @@ export function App() {
     selectedChatEncodedKey
       ? chatMessageStoreRef.current[selectedChatEncodedKey] ?? []
       : [];
+  const selectedChatPlan = useMemo(
+    () => tab === 'chat' && !archivedMode
+      ? extractLatestChatPlan(selectedFullChatMessages)
+      : null,
+    [archivedMode, selectedFullChatMessages, tab],
+  );
   const selectedChatPromptHistory = useMemo(
     () =>
       [...selectedFullChatMessages]
@@ -18245,6 +18232,10 @@ export function App() {
               </span>
             </button>
           ) : null}
+          <ChatPlanSurface
+            mode={isWide ? 'desktop' : 'mobile'}
+            plan={selectedChatPlan}
+          />
           <div ref={chatComposerRef} className="chat-composer" hidden={archivedMode}>
             <div className="chat-composer-content">
             <input

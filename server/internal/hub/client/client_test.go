@@ -1932,6 +1932,13 @@ func sessionViewToolUpdatedTextEvent(sessionID, title string) SessionViewEvent {
 	}
 	return sessionViewUpdateEvent(sessionID, update)
 }
+
+func sessionViewPlanUpdatedEvent(sessionID string, entries []acp.PlanEntry) SessionViewEvent {
+	return sessionViewUpdateEvent(sessionID, acp.SessionUpdate{
+		SessionUpdate: acp.SessionUpdatePlan,
+		Entries:       entries,
+	})
+}
 func sessionViewPromptFinishedEvent(sessionID, stopReason string) SessionViewEvent {
 	return SessionViewEvent{
 		Type:      SessionViewEventTypeACP,
@@ -2192,6 +2199,41 @@ func publishedTurnMap(t *testing.T, event map[string]any) map[string]any {
 	var out map[string]any
 	if err := json.Unmarshal(raw, &out); err != nil {
 		t.Fatalf("unmarshal event turn: %v", err)
+	}
+	return out
+}
+
+func decodePublishedTurnMessage(t *testing.T, event map[string]any) sessionViewTurn {
+	t.Helper()
+	raw, err := json.Marshal(publishedTurnMap(t, event))
+	if err != nil {
+		t.Fatalf("marshal published turn: %v", err)
+	}
+	var out sessionViewTurn
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("unmarshal published turn: %v", err)
+	}
+	return out
+}
+
+func decodeSessionTurnMessage(t *testing.T, content string) acp.SessionTurnMessage {
+	t.Helper()
+	var out acp.SessionTurnMessage
+	if err := json.Unmarshal([]byte(content), &out); err != nil {
+		t.Fatalf("unmarshal session turn content: %v", err)
+	}
+	return out
+}
+
+type testSessionTurnPlanPayload struct {
+	Entries []acp.SessionTurnPlanResult `json:"entries"`
+}
+
+func decodePlanPayload(t *testing.T, raw json.RawMessage) testSessionTurnPlanPayload {
+	t.Helper()
+	var out testSessionTurnPlanPayload
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("unmarshal plan payload: %v", err)
 	}
 	return out
 }
@@ -3825,6 +3867,65 @@ func TestSessionMessagePublishesFinishedFieldInsteadOfDone(t *testing.T) {
 	turn := publishedTurnMap(t, last)
 	if got := turn["finished"]; got != true {
 		t.Fatalf("finished = %v, want true", got)
+	}
+}
+
+func TestSessionPlanUpdatesPublishAgentPlanAndReplaceTurn(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	published := captureSessionMessageEvents(t, c)
+
+	if acp.SessionTurnMethodAgentPlan != "agent_plan" {
+		t.Fatalf("SessionTurnMethodAgentPlan = %q, want agent_plan", acp.SessionTurnMethodAgentPlan)
+	}
+	if err := c.RecordEvent(ctx, sessionViewCreatedEvent("sess-plan", "Plan Task")); err != nil {
+		t.Fatalf("RecordEvent created: %v", err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptEvent("sess-plan", "run plan", nil)); err != nil {
+		t.Fatalf("RecordEvent prompt: %v", err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPlanUpdatedEvent("sess-plan", []acp.PlanEntry{
+		{Content: "Inspect files", Status: acp.ToolCallStatusCompleted},
+		{Content: "Patch UI", Status: acp.ToolCallStatusInProgress},
+	})); err != nil {
+		t.Fatalf("RecordEvent first plan: %v", err)
+	}
+
+	firstPlan := decodePublishedTurnMessage(t, lastPublishedEvent(t, *published, "session.message"))
+	if firstPlan.TurnIndex != 2 {
+		t.Fatalf("first plan turnIndex = %d, want 2", firstPlan.TurnIndex)
+	}
+	firstMessage := decodeSessionTurnMessage(t, firstPlan.Content)
+	if firstMessage.Method != acp.SessionTurnMethodAgentPlan {
+		t.Fatalf("first plan method = %q, want %q", firstMessage.Method, acp.SessionTurnMethodAgentPlan)
+	}
+	firstPayload := decodePlanPayload(t, firstMessage.Param)
+	if len(firstPayload.Entries) != 2 || firstPayload.Entries[1].Content != "Patch UI" || firstPayload.Entries[1].Status != acp.ToolCallStatusInProgress {
+		t.Fatalf("first plan entries = %#v", firstPayload.Entries)
+	}
+
+	if err := c.RecordEvent(ctx, sessionViewPlanUpdatedEvent("sess-plan", []acp.PlanEntry{
+		{Content: "Inspect files", Status: acp.ToolCallStatusCompleted},
+		{Content: "Patch UI", Status: acp.ToolCallStatusCompleted},
+		{Content: "Run tests", Status: acp.ToolCallStatusInProgress},
+	})); err != nil {
+		t.Fatalf("RecordEvent second plan: %v", err)
+	}
+
+	secondPlan := decodePublishedTurnMessage(t, lastPublishedEvent(t, *published, "session.message"))
+	if secondPlan.TurnIndex != firstPlan.TurnIndex {
+		t.Fatalf("second plan turnIndex = %d, want same turnIndex %d", secondPlan.TurnIndex, firstPlan.TurnIndex)
+	}
+	secondMessage := decodeSessionTurnMessage(t, secondPlan.Content)
+	if secondMessage.Method != acp.SessionTurnMethodAgentPlan {
+		t.Fatalf("second plan method = %q, want %q", secondMessage.Method, acp.SessionTurnMethodAgentPlan)
+	}
+	secondPayload := decodePlanPayload(t, secondMessage.Param)
+	if len(secondPayload.Entries) != 3 {
+		t.Fatalf("second plan entries len = %d, want 3: %#v", len(secondPayload.Entries), secondPayload.Entries)
+	}
+	if got := secondPayload.Entries[2]; got.Content != "Run tests" || got.Status != acp.ToolCallStatusInProgress {
+		t.Fatalf("second plan final entry = %#v, want Run tests in_progress", got)
 	}
 }
 
@@ -6662,12 +6763,12 @@ func decodeTurnSessionUpdate(t *testing.T, raw string) acp.SessionUpdate {
 			Status:        strings.TrimSpace(result.Status),
 		}
 	case acp.SessionTurnMethodAgentPlan:
-		plan := []acp.SessionTurnPlanResult{}
+		plan := acp.SessionTurnPlanPayload{}
 		if err := json.Unmarshal(msg.Param, &plan); err != nil {
 			t.Fatalf("unmarshal plan result: %v", err)
 		}
-		entries := make([]acp.PlanEntry, 0, len(plan))
-		for _, entry := range plan {
+		entries := make([]acp.PlanEntry, 0, len(plan.Entries))
+		for _, entry := range plan.Entries {
 			entries = append(entries, acp.PlanEntry{Content: entry.Content, Status: entry.Status})
 		}
 		return acp.SessionUpdate{SessionUpdate: acp.SessionUpdatePlan, Entries: entries}

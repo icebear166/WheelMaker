@@ -32,10 +32,6 @@ export type ChatTurnHeightMetrics = {
   promptMaxWidth: number;
   toolLineHeight: number;
   thoughtCollapsedHeight: number;
-  planLineHeight: number;
-  planBlockVerticalPadding: number;
-  planTitleHeight: number;
-  planItemGap: number;
   optionButtonMinHeight: number;
   optionButtonMaxWidth: number;
   confirmationButtonMinHeight: number;
@@ -74,10 +70,6 @@ export const DEFAULT_CHAT_TURN_HEIGHT_METRICS: ChatTurnHeightMetrics = {
   promptMaxWidth: 920,
   toolLineHeight: 18,
   thoughtCollapsedHeight: 28,
-  planLineHeight: 19,
-  planBlockVerticalPadding: 16,
-  planTitleHeight: 23,
-  planItemGap: 4,
   optionButtonMinHeight: 30,
   optionButtonMaxWidth: 560,
   confirmationButtonMinHeight: 32,
@@ -337,26 +329,6 @@ function promptDoneHasResultLine(message: RegistryChatMessage): boolean {
     stopReason === 'error';
 }
 
-function estimatePlanHeight(message: RegistryChatMessage, metrics: ChatTurnHeightMetrics): number {
-  const text = messageText(message);
-  const lines = text
-    .split(/\r?\n/)
-    .map(line => line.trim())
-    .filter(Boolean);
-  const entries = lines.length > 0 ? lines : ['Plan'];
-  const entryWidth = Math.max(120, metrics.contentWidth - 44);
-  const rows = entries.reduce(
-    (sum, entry) => sum + estimateWrappedRows(entry, entryWidth, 13),
-    0,
-  );
-  return clampHeight(
-    metrics.planBlockVerticalPadding +
-      metrics.planTitleHeight +
-      rows * metrics.planLineHeight +
-      Math.max(0, entries.length - 1) * metrics.planItemGap,
-  );
-}
-
 export function estimateChatTurnHeight(
   message: RegistryChatMessage,
   context: ChatTurnHeightContext = {},
@@ -375,7 +347,7 @@ export function estimateChatTurnHeight(
     return clampHeight(metrics.thoughtCollapsedHeight);
   }
   if (message.method === 'agent_plan') {
-    return estimatePlanHeight(message, metrics);
+    return clampHeight(0);
   }
   const text = messageText(message);
   return clampHeight(estimateAssistantTextHeight(text, metrics));
@@ -391,6 +363,9 @@ export function buildChatDisplayIndex(
     .sort((left, right) => positiveTurnIndex(left.message) - positiveTurnIndex(right.message));
   const items: ChatDisplayIndexItem[] = [];
   for (const item of sorted) {
+    if (item.message.method === 'agent_plan') {
+      continue;
+    }
     if (options.hideToolCalls && isToolCallMethod(item.message.method)) {
       continue;
     }

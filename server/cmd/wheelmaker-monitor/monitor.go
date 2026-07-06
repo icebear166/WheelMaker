@@ -851,10 +851,10 @@ func parseMonitorSessionTurn(updateJSON, promptUpdatedAt string, fallbackIndex i
 				role = "system"
 				status = firstNonEmpty(strings.TrimSpace(result.Status), "done")
 			case rp.SessionTurnMethodAgentPlan:
-				entries := []rp.SessionTurnPlanResult{}
-				_ = json.Unmarshal(message.Param, &entries)
-				parts := make([]string, 0, len(entries))
-				for _, entry := range entries {
+				payload := rp.SessionTurnPlanPayload{}
+				_ = json.Unmarshal(message.Param, &payload)
+				parts := make([]string, 0, len(payload.Entries))
+				for _, entry := range payload.Entries {
 					if strings.TrimSpace(entry.Content) != "" {
 						parts = append(parts, strings.TrimSpace(entry.Content))
 					}
