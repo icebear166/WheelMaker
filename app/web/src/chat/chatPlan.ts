@@ -70,7 +70,13 @@ function summarizeChatPlanEntries(entries: ChatPlanEntry[]): Omit<ChatPlanSnapsh
     (sum, entry) => sum + (entry.status === 'completed' ? 1 : 0),
     0,
   );
-  let activeIndex = entries.findIndex(entry => entry.status === 'in_progress');
+  let activeIndex = -1;
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    if (entries[index].status === 'in_progress') {
+      activeIndex = index;
+      break;
+    }
+  }
   if (activeIndex < 0) {
     activeIndex = entries.findIndex(entry => entry.status !== 'completed');
   }

@@ -66,4 +66,20 @@ describe('chat plan extraction', () => {
     expect(plan?.entries.map(entry => entry.content)).toEqual(['Old step', 'New step']);
     expect(plan?.activeEntry?.content).toBe('New step');
   });
+
+  test('uses the furthest in-progress step when a plan snapshot overlaps active steps', () => {
+    const plan = extractLatestChatPlan([
+      message(1, 'prompt_request'),
+      message(2, 'agent_plan', {
+        entries: [
+          {content: 'Patch the UI', status: 'in_progress'},
+          {content: 'Run tests', status: 'in_progress'},
+          {content: 'Commit changes', status: 'pending'},
+        ],
+      }),
+    ]);
+
+    expect(plan?.activeIndex).toBe(1);
+    expect(plan?.activeEntry?.content).toBe('Run tests');
+  });
 });
