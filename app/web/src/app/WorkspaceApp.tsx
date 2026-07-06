@@ -2821,8 +2821,7 @@ export function App() {
   const previewWorkbenchRenderedTabs = previewRenderedTabs(previewWorkbench);
   const previewWorkbenchHasTabs = Object.values(previewWorkbench.tabsByProjectId)
     .some(tabs => tabs.length > 0);
-  const previewTabCount = Object.values(previewWorkbench.tabsByProjectId)
-    .reduce((sum, tabs) => sum + tabs.length, 0);
+  const previewTabCount = (previewWorkbench.tabsByProjectId[previewWorkbench.activeProjectId] ?? []).length;
   const chatFilePeek = isFilePreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;
   const activePromptDiffPreview = isPromptDiffPreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;
   const activeAttachmentPreview = isAttachmentPreviewTab(activeWorkbenchTab) ? activeWorkbenchTab : null;
