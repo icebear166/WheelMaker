@@ -1178,6 +1178,41 @@
   border-bottom: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
 }
 
+/* When pinned, the Recent Sessions block stays at the top of the scroll area
+   while the rest of the session list scrolls underneath it. */
+.recent-sessions-section.pinned {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg, #1e1e1e);
+}
+
+.recent-sessions-pin-btn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: color-mix(in srgb, var(--text) 55%, transparent);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.recent-sessions-pin-btn:hover {
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+  color: var(--text);
+}
+
+.recent-sessions-pin-btn.active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
 .recent-sessions-icon {
   font-size: 14px;
   line-height: 1;

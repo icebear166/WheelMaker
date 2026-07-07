@@ -45,4 +45,16 @@ describe('web chat recent sessions', () => {
     );
     expect(mainTsx).toContain('recentSessionsTick');
   });
+
+  test('recent sessions has a pin toggle that sticks the block to the top', () => {
+    // Pin button toggles recentSessionsPinned state.
+    expect(mainTsx).toContain('recentSessionsPinned');
+    expect(mainTsx).toContain('setRecentSessionsPinned(p => !p)');
+    expect(mainTsx).toContain('recent-sessions-pin-btn');
+    // Pinned state adds the `pinned` class for sticky positioning.
+    expect(mainTsx).toContain("recentSessionsPinned ? ' pinned' : ''");
+    // Sticky styling lives in chat.css so the block stays at top while scrolling.
+    expect(chatCss).toContain('.recent-sessions-section.pinned');
+    expect(chatCss).toContain('position: sticky;');
+  });
 });

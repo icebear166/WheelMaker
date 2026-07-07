@@ -3081,6 +3081,7 @@ export function App() {
   const [projectSessionsByProjectId, setProjectSessionsByProjectId] = useState<Record<string, RegistryChatSession[]>>({});
   const [recentSessions, setRecentSessions] = useState<RecentChatSessionRow[]>([]);
   const [recentSessionsTick, setRecentSessionsTick] = useState(0);
+  const [recentSessionsPinned, setRecentSessionsPinned] = useState(false);
   const projectSessionsByProjectIdRef = useRef<Record<string, RegistryChatSession[]>>({});
   const [draftSessionsByProjectId, setDraftSessionsByProjectId] = useState<Record<string, DraftChatSession[]>>({});
   const draftSessionsByProjectIdRef = useRef<Record<string, DraftChatSession[]>>({});
@@ -14864,7 +14865,7 @@ export function App() {
       <div
         className={`wide-project-section recent-sessions-section${mobile ? ' mobile-project-section' : ''}${
           recentCollapsed ? ' collapsed' : ''
-        }`}
+        }${recentSessionsPinned ? ' pinned' : ''}`}
       >
         <div className="wide-project-row">
           <button
@@ -14880,6 +14881,15 @@ export function App() {
             <span className="wide-project-title-group">
               <span className="wide-project-name">Recent Sessions</span>
             </span>
+          </button>
+          <button
+            type="button"
+            className={`recent-sessions-pin-btn${recentSessionsPinned ? ' active' : ''}`}
+            onClick={() => setRecentSessionsPinned(p => !p)}
+            title={recentSessionsPinned ? 'Unpin Recent Sessions' : 'Pin Recent Sessions to top'}
+            aria-pressed={recentSessionsPinned}
+          >
+            <span className="codicon codicon-pin" aria-hidden="true" />
           </button>
         </div>
         {!recentCollapsed ? (
