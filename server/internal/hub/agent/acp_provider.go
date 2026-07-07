@@ -23,6 +23,7 @@ type ACPProviderPreset struct {
 	BinaryName             string
 	Args                   []string
 	MissingPathErrTemplate string
+	InstallHint            string
 	SkillProjectDirs       []string
 	SkillProjectParentDirs []string
 	SkillUserDirs          []string
@@ -34,6 +35,7 @@ var (
 	CodexProviderPreset = ACPProviderPreset{
 		Name:             "codex",
 		BinaryName:       "codex",
+		InstallHint:      "@openai/codex",
 		SkillProjectDirs: []string{".agents/skills"},
 		SkillUserDirs:    []string{"~/.codex/skills", "~/.agents/skills", "~/.copilot/skills"},
 		SkillPluginDirGlobs: []string{
@@ -43,6 +45,7 @@ var (
 	ClaudeACPProviderPreset = ACPProviderPreset{
 		Name:                   "claude",
 		BinaryName:             "claude-agent-acp",
+		InstallHint:            "@agentclientprotocol/claude-agent-acp",
 		SkillProjectDirs:       []string{".claude/skills"},
 		SkillProjectParentDirs: []string{".claude/skills"},
 		SkillUserDirs:          []string{"~/.claude/skills"},
@@ -51,7 +54,8 @@ var (
 		Name:                   "copilot",
 		BinaryName:             "copilot",
 		Args:                   []string{"--acp", "--stdio"},
-		MissingPathErrTemplate: "copilot: binary not found in PATH (install GitHub Copilot CLI): %v",
+		InstallHint:            "@github/copilot",
+		MissingPathErrTemplate: "copilot: binary not found in PATH: %v",
 		SkillProjectDirs:       []string{".github/skills", ".agents/skills", ".claude/skills"},
 		SkillProjectParentDirs: []string{".github/skills"},
 		SkillUserDirs:          []string{"~/.copilot/skills", "~/.agents/skills", "~/.claude/skills"},
@@ -62,6 +66,7 @@ var (
 		Name:                   "opencode",
 		BinaryName:             "opencode",
 		Args:                   []string{"acp"},
+		InstallHint:            "opencode-ai",
 		MissingPathErrTemplate: "opencode: binary not found in PATH: %v",
 		SkillProjectDirs:       []string{".agents/skills"},
 		SkillUserDirs:          []string{"~/.agents/skills"},
@@ -78,6 +83,7 @@ var (
 		Name:                   "codebuddy",
 		BinaryName:             "codebuddy",
 		Args:                   []string{"--acp"},
+		InstallHint:            "@tencent-ai/codebuddy-code",
 		MissingPathErrTemplate: "codebuddy: binary not found in PATH: %v",
 		SkillProjectDirs:       []string{".agents/skills"},
 		SkillUserDirs:          []string{"~/.agents/skills"},
@@ -86,7 +92,8 @@ var (
 		Name:                   "flicker",
 		BinaryName:             "myflicker",
 		Args:                   []string{"acp"},
-		MissingPathErrTemplate: "flicker: myflicker binary not found in PATH (install @myflicker/cli): %v",
+		InstallHint:            "@myflicker/cli",
+		MissingPathErrTemplate: "flicker: myflicker binary not found in PATH: %v",
 		SkillProjectDirs:       []string{".agents/skills"},
 		SkillUserDirs:          []string{"~/.agents/skills"},
 	}
@@ -96,7 +103,7 @@ var (
 type acpProvider struct {
 	preset ACPProviderPreset
 
-	resolveBinary       func(name, configuredPath string) (string, error)
+	resolveBinary       func(name, configuredPath, installHint string) (string, error)
 	lookPath            func(file string) (string, error)
 	ensureFlickerLoader func() (string, error)
 }
@@ -144,7 +151,7 @@ func (p *acpProvider) Name() string { return p.preset.Name }
 func (p *acpProvider) Launch() (string, []string, []string, error) {
 	defaultArgs := cloneArgs(p.preset.Args)
 
-	exePath, err := p.resolveBinary(p.preset.BinaryName, "")
+	exePath, err := p.resolveBinary(p.preset.BinaryName, "", p.preset.InstallHint)
 	if err != nil {
 		if p.preset.MissingPathErrTemplate != "" {
 			return "", nil, nil, fmt.Errorf(p.preset.MissingPathErrTemplate, err)
@@ -261,7 +268,7 @@ func nodeRegisterImportArg(loaderURL string) string {
 //  2. PATH
 //  3. bin/{GOOS}_{GOARCH}/ next to the running executable
 //  4. bin/{GOOS}_{GOARCH}/ relative to current working directory
-func ResolveACPBinary(name, configuredPath string) (string, error) {
+func ResolveACPBinary(name, configuredPath, installHint string) (string, error) {
 	if configuredPath != "" {
 		if exists(configuredPath) {
 			abs, err := filepath.Abs(configuredPath)
@@ -296,8 +303,14 @@ func ResolveACPBinary(name, configuredPath string) (string, error) {
 		}
 	}
 
+	if installHint != "" {
+		return "", fmt.Errorf(
+			"agent: %q not found (tried configured path, PATH, and bin/%s/); install with: npm install -g %s",
+			name, platformDir(), installHint,
+		)
+	}
 	return "", fmt.Errorf(
-		"agent: %q not found (tried configured path, PATH, and bin/%s/); install with npm: npm install -g @zed-industries/%s",
+		"agent: %q not found (tried configured path, PATH, and bin/%s/); install the %s CLI",
 		name, platformDir(), name,
 	)
 }

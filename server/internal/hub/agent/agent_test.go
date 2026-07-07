@@ -159,7 +159,7 @@ func TestCodexProviderUsesAppServerStdio(t *testing.T) {
 
 func TestClaudeACPProvider_UsesGlobalBinaryByDefault(t *testing.T) {
 	p := NewClaudeProvider()
-	p.resolveBinary = func(name string, configuredPath string) (string, error) {
+	p.resolveBinary = func(name string, configuredPath string, installHint string) (string, error) {
 		if name != "claude-agent-acp" {
 			t.Fatalf("resolveBinary name=%q, want claude-agent-acp", name)
 		}
@@ -187,7 +187,7 @@ func TestClaudeACPProvider_UsesGlobalBinaryByDefault(t *testing.T) {
 
 func TestCopilotACPProvider_LaunchArgs(t *testing.T) {
 	p := NewCopilotProvider()
-	p.resolveBinary = func(name string, configuredPath string) (string, error) {
+	p.resolveBinary = func(name string, configuredPath string, installHint string) (string, error) {
 		if name != "copilot" {
 			t.Fatalf("resolveBinary name=%q, want copilot", name)
 		}
@@ -214,7 +214,7 @@ func TestCopilotACPProvider_LaunchArgs(t *testing.T) {
 
 func TestOpenCodeACPProvider_LaunchArgs(t *testing.T) {
 	p := NewOpenCodeProvider()
-	p.resolveBinary = func(name string, configuredPath string) (string, error) {
+	p.resolveBinary = func(name string, configuredPath string, installHint string) (string, error) {
 		if name != "opencode" {
 			t.Fatalf("resolveBinary name=%q, want opencode", name)
 		}
@@ -241,7 +241,7 @@ func TestOpenCodeACPProvider_LaunchArgs(t *testing.T) {
 
 func TestCodeBuddyACPProvider_LaunchArgs(t *testing.T) {
 	p := NewCodeBuddyProvider()
-	p.resolveBinary = func(name string, configuredPath string) (string, error) {
+	p.resolveBinary = func(name string, configuredPath string, installHint string) (string, error) {
 		if name != "codebuddy" {
 			t.Fatalf("resolveBinary name=%q, want codebuddy", name)
 		}
@@ -282,7 +282,7 @@ func TestFlickerACPProvider_LaunchArgs(t *testing.T) {
 	}
 
 	p := NewFlickerProvider()
-	p.resolveBinary = func(name string, configuredPath string) (string, error) {
+	p.resolveBinary = func(name string, configuredPath string, installHint string) (string, error) {
 		if name != "myflicker" {
 			t.Fatalf("resolveBinary name=%q, want myflicker", name)
 		}
