@@ -1126,13 +1126,9 @@ describe('web chat integration', () => {
     expect(configPillEnd).toBeGreaterThan(configPillStart);
     const configPillBlock = mainTsx.slice(configPillStart, configPillEnd);
     expect(configPillBlock).not.toContain('codicon-chevron-down');
-    const configIconStart = mainTsx.indexOf('function chatConfigIconClass(option: RegistrySessionConfigOption): string {');
-    const configIconEnd = mainTsx.indexOf('function decodeSessionMessageFromEventPayload', configIconStart);
-    expect(configIconStart).toBeGreaterThanOrEqual(0);
-    expect(configIconEnd).toBeGreaterThan(configIconStart);
-    const configIconBlock = mainTsx.slice(configIconStart, configIconEnd);
-    expect(configIconBlock).toContain("return 'codicon-lock';");
-    expect(configIconBlock).not.toContain("return 'codicon-shield';");
+    expect(configPillBlock).not.toContain('className={`codicon');
+    expect(configPillBlock).toContain('className="chat-config-pill-value"');
+    expect(mainTsx).not.toContain('function chatConfigIconClass(option: RegistrySessionConfigOption): string {');
 
     const configChangeStart = mainTsx.indexOf('const handleChatConfigOptionChange = async');
     const configChangeEnd = mainTsx.indexOf('const handleChatFileChange = (', configChangeStart);
@@ -1284,6 +1280,7 @@ describe('web chat integration', () => {
     expect(stylesCss).not.toContain('.chat-stop-button {');
     expect(stylesCss).not.toContain('.chat-stop-button.active {');
     expect(stylesCss).toContain('.chat-config-pill {');
+    expect(stylesCss).not.toContain('.chat-config-pill .codicon');
     expect(stylesCss).toContain('.chat-config-value-menu {');
     expect(stylesCss).toMatch(
       /\.chat-config-value-menu \{[\s\S]*width: max-content;[\s\S]*min-width: 100%;[\s\S]*max-width: min\(320px, calc\(100vw - 24px\)\);[\s\S]*\}/,

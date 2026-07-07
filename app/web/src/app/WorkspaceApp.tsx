@@ -1504,20 +1504,6 @@ function chatConfigCurrentLabel(option: RegistrySessionConfigOption): string {
   return currentOption?.name || currentValue || option.name || option.id;
 }
 
-function chatConfigIconClass(option: RegistrySessionConfigOption): string {
-  const key = `${option.id || ''} ${option.name || ''}`.toLowerCase();
-  if (key.includes('model')) {
-    return 'codicon-symbol-class';
-  }
-  if (key.includes('effort') || key.includes('thought')) {
-    return 'codicon-pulse';
-  }
-  if (key.includes('mode') || key.includes('permission') || key.includes('access')) {
-    return 'codicon-lock';
-  }
-  return 'codicon-settings-gear';
-}
-
 function decodeSessionMessageFromEventPayload(
   payload: RegistryChatMessageEventPayload,
 ): RegistryChatMessage | null {
@@ -18001,10 +17987,6 @@ export function App() {
               setChatConfigMenuOptionId(current => (current === option.id ? '' : option.id));
             }}
           >
-            <span
-              className={`codicon ${updating ? 'codicon-loading codicon-modifier-spin' : chatConfigIconClass(option)}`}
-              aria-hidden="true"
-            />
             <span className="chat-config-pill-value">{currentLabel}</span>
           </button>
           {open ? renderChatConfigValueMenu(option) : null}
@@ -18855,12 +18837,9 @@ export function App() {
                         {renderChatStatusModel(chatConfigStatus.modelOption)}
                         {renderChatStatusEffort(chatConfigStatus.reasoningOption)}
                         {chatConfigOptions.length > 0 ? (
-                          <>
-                            <span className="chat-status-secondary-divider" aria-hidden="true" />
-                            <div className="chat-config-options">
-                              {chatConfigOptions.map(option => renderChatConfigPill(option))}
-                            </div>
-                          </>
+                          <div className="chat-config-options">
+                            {chatConfigOptions.map(option => renderChatConfigPill(option))}
+                          </div>
                         ) : null}
                         {chatConfigStatus.showOverflowToggle ? (
                           <div ref={chatConfigOverflowRef} className="chat-config-overflow-anchor">

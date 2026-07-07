@@ -136,10 +136,12 @@ describe('chat composer status helpers', () => {
     const stylesCss = readWebStyles(projectRoot);
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
 
-    expect(mainTsx).toContain('chat-status-secondary-divider');
     expect(mainTsx).toContain('renderChatStatusEffort(chatConfigStatus.reasoningOption)');
+    expect(mainTsx).not.toContain('chat-status-secondary-divider');
+    expect(mainTsx).not.toContain('chatConfigIconClass(option)');
     expect(mainTsx).not.toContain('chat-status-signal-bar');
-    expect(stylesCss).toContain('.chat-status-secondary-divider');
+    expect(stylesCss).not.toContain('.chat-status-secondary-divider');
+    expect(stylesCss).not.toContain('.chat-config-pill .codicon');
     expect(stylesCss).not.toContain('chat-status-signal-bar');
     expect(stylesCss).toMatch(/\.chat-status-model-button,\s*\.chat-status-effort-button \{[\s\S]*height: 24px;/);
     expect(cssRuleBlock(stylesCss, '.chat-status-model-control')).toContain('flex: 0 1 auto;');
@@ -171,6 +173,7 @@ describe('chat composer status helpers', () => {
     expect(mainTsx).not.toContain('aria-label={chatContextUsage.title}');
     expect(mainTsx).not.toContain('title={chatContextUsage.title}');
     expect(stylesCss).toContain('.chat-context-usage-popover {');
+    expect(stylesCss).not.toContain('.chat-context-usage-popover::after');
     expect(stylesCss).toContain('.chat-context-usage-anchor:hover .chat-context-usage-popover,');
     expect(stylesCss).toContain(".chat-context-usage-anchor.open .chat-context-usage-popover {");
     expect(cssRuleBlock(stylesCss, '.chat-context-usage-popover')).toContain('position: fixed;');
