@@ -1,10 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 import {
-  GESTURE_LONG_PRESS_CANCEL_PX,
-  GESTURE_LONG_PRESS_MS,
+  GESTURE_CLICK_CANCEL_PX,
   GESTURE_MOVE_LONG_PRESS_MS,
-  resolveGesturePressIntent,
+  shouldCancelGestureClick,
   shouldStartGestureMove,
 } from '../web/src/shell/layouts/mobile/gestureNavigation';
 
@@ -50,24 +49,18 @@ describe('gesture navigation', () => {
     );
   });
 
-  test('uses 200ms expand threshold and 1000ms drag threshold', () => {
-    expect(GESTURE_LONG_PRESS_MS).toBe(200);
+  test('uses click movement cancellation and 1000ms drag threshold', () => {
+    expect(GESTURE_CLICK_CANCEL_PX).toBe(12);
     expect(GESTURE_MOVE_LONG_PRESS_MS).toBe(1000);
   });
 
-  test('resolves pre-expansion press movement without distance-triggered drag', () => {
-    expect(resolveGesturePressIntent({
-      elapsedMs: GESTURE_LONG_PRESS_MS - 1,
-      distancePx: GESTURE_LONG_PRESS_CANCEL_PX - 1,
-    })).toBe('pressing');
-    expect(resolveGesturePressIntent({
-      elapsedMs: GESTURE_LONG_PRESS_MS,
-      distancePx: GESTURE_LONG_PRESS_CANCEL_PX - 1,
-    })).toBe('expand');
-    expect(resolveGesturePressIntent({
-      elapsedMs: GESTURE_LONG_PRESS_MS - 1,
-      distancePx: GESTURE_LONG_PRESS_CANCEL_PX + 2,
-    })).toBe('neutral');
+  test('cancels click expansion after pointer movement crosses the threshold', () => {
+    expect(shouldCancelGestureClick({
+      distancePx: GESTURE_CLICK_CANCEL_PX - 1,
+    })).toBe(false);
+    expect(shouldCancelGestureClick({
+      distancePx: GESTURE_CLICK_CANCEL_PX,
+    })).toBe(true);
   });
 
   test('enters gesture movement after a one second hold', () => {
@@ -108,10 +101,16 @@ describe('gesture navigation', () => {
     expect(main).toContain('aria-label="Chat"');
     expect(main).toContain("codicon-comment-discussion");
     expect(main).toContain('handleGestureNavigationCurrentSelect');
-    expect(currentSelectBody).toContain('handleFloatingChatSelect();');
+    expect(main).toContain('const openGestureNavigationActions = useCallback(');
+    expect(main).toContain('setDrawerOpen(true);');
+    expect(currentSelectBody).toContain('openGestureNavigationActions();');
+    expect(currentSelectBody).not.toContain('handleFloatingChatSelect();');
     expect(currentSelectBody).not.toContain('handleFloatingNavSelect(tab)');
     expect(heightMeasureDeps).toContain('gestureNavigationExpanded,');
     expect(main).toContain('GESTURE_MOVE_LONG_PRESS_MS');
+    expect(main).not.toContain('GESTURE_LONG_PRESS_MS');
+    expect(main).not.toContain('resolveGesturePressIntent');
+    expect(main).not.toContain('gestureLongPressTimerRef.current = window.setTimeout');
     expect(main).toContain('codicon-layout-sidebar-right');
     expect(main).toContain('codicon-settings-gear');
     expect(main).not.toContain('gesture-nav-drawer-button');
@@ -163,24 +162,38 @@ describe('gesture navigation', () => {
     );
   });
 
-  test('suppresses synthesized chat clicks after gesture expansion', () => {
+  test('suppresses chat click expansion after movement cancellation', () => {
     const main = readMain();
     const currentSelectStart = main.indexOf('const handleGestureNavigationCurrentSelect = useCallback(');
     const currentSelectEnd = main.indexOf('const beginGestureNavigationPress = useCallback', currentSelectStart);
     const currentSelectBody = main.slice(currentSelectStart, currentSelectEnd);
+    const pointerMoveStart = main.indexOf('const handleGestureNavigationPointerMove = useCallback(');
+    const pointerMoveEnd = main.indexOf('const finishGestureNavigation = useCallback', pointerMoveStart);
+    const pointerMoveBody = main.slice(pointerMoveStart, pointerMoveEnd);
 
     expect(main).toContain('const gestureNavigationSuppressClickRef = useRef(false);');
     expect(main).toContain('const gestureNavigationSuppressClickUntilRef = useRef(0);');
     expect(currentSelectBody).toContain('gestureNavigationSuppressClickRef.current');
     expect(currentSelectBody).toContain('Date.now() <= gestureNavigationSuppressClickUntilRef.current');
+    expect(currentSelectBody).toContain('floatingClickCooldownUntilRef.current > Date.now()');
     expect(currentSelectBody).toContain("gestureNavStateRef.current?.phase === 'expanded'");
     expect(currentSelectBody).toContain('setDrawerOpen(false);');
-    expect(main).toContain('gestureNavigationSuppressClickRef.current = true;');
+    expect(pointerMoveBody).toContain('shouldCancelGestureClick({');
+    expect(pointerMoveBody).toContain('gestureNavigationSuppressClickRef.current = true;');
     expect(main).toContain('gestureNavigationSuppressClickRef.current = false;');
     expect(main).toContain('gestureNavigationSuppressClickUntilRef.current = 0;');
-    expect(main).toMatch(
-      /gestureNavigationSuppressClickUntilRef\.current =\s*Date\.now\(\) \+ GESTURE_NAV_SYNTHETIC_CLICK_SUPPRESS_MS/,
-    );
+    expect(pointerMoveBody).not.toContain("intent === 'expand'");
+    expect(main).not.toContain('GESTURE_NAV_SYNTHETIC_CLICK_SUPPRESS_MS');
+  });
+
+  test('does not restart the gesture press when the expanded chat button is clicked', () => {
+    const main = readMain();
+    const pointerDownStart = main.indexOf('const handleGestureNavigationButtonPointerDown = useCallback(');
+    const pointerDownEnd = main.indexOf('const handleGestureNavigationPillPointerDown = useCallback', pointerDownStart);
+    const pointerDownBody = main.slice(pointerDownStart, pointerDownEnd);
+
+    expect(pointerDownBody).toContain("gestureNavStateRef.current?.phase !== 'expanded'");
+    expect(pointerDownBody).toContain('beginGestureNavigationPress(event);');
   });
 
   test('keeps chat centered between preview and settings when the gesture pill expands', () => {

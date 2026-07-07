@@ -249,9 +249,8 @@ import {
   sanitizeFloatingControlYRatio,
 } from '../shell/layouts/mobile/floatingControls';
 import {
-  GESTURE_LONG_PRESS_MS,
   GESTURE_MOVE_LONG_PRESS_MS,
-  resolveGesturePressIntent,
+  shouldCancelGestureClick,
   shouldStartGestureMove,
 } from '../shell/layouts/mobile/gestureNavigation';
 import {
@@ -791,7 +790,8 @@ const CHAT_FILE_PEEK_VIEWPORT_MAX_RATIO = 0.8;
 const CHAT_FILE_PEEK_MAIN_MIN_WIDTH = 420;
 const CHAT_FILE_PEEK_HISTORY_KIND = 'wheelmaker:chat-file-peek';
 const FLOATING_CONTROL_IDLE_DELAY_MS = 3000;
-const GESTURE_NAV_SYNTHETIC_CLICK_SUPPRESS_MS = 160;
+const GESTURE_NAV_CANCELLED_CLICK_SUPPRESS_MS = 160;
+const PORT_RELAY_TARGET_MENU_LONG_PRESS_MS = 200;
 const PORT_RELAY_FLOATING_Y_RATIO_STORAGE_KEY = 'wheelmaker:portRelayFloatingYRatio';
 const PORT_RELAY_FLOATING_SLOT_STORAGE_KEY = 'wheelmaker:portRelayFloatingSlot';
 const PORT_RELAY_FLOATING_SIDE_STORAGE_KEY = 'wheelmaker:portRelayFloatingSide';
@@ -2569,7 +2569,6 @@ export function App() {
   const floatingDragStateRef = useRef<FloatingDragState | null>(null);
   const [gestureNavState, setGestureNavState] = useState<GestureNavigationState | null>(null);
   const gestureNavStateRef = useRef<GestureNavigationState | null>(null);
-  const gestureLongPressTimerRef = useRef<number | null>(null);
   const gestureMoveLongPressTimerRef = useRef<number | null>(null);
   const gestureNavigationSuppressClickRef = useRef(false);
   const gestureNavigationSuppressClickUntilRef = useRef(0);
@@ -5575,10 +5574,6 @@ export function App() {
       window.clearTimeout(floatingLongPressTimerRef.current);
       floatingLongPressTimerRef.current = null;
     }
-    if (gestureLongPressTimerRef.current !== null) {
-      window.clearTimeout(gestureLongPressTimerRef.current);
-      gestureLongPressTimerRef.current = null;
-    }
     if (gestureMoveLongPressTimerRef.current !== null) {
       window.clearTimeout(gestureMoveLongPressTimerRef.current);
       gestureMoveLongPressTimerRef.current = null;
@@ -5601,10 +5596,6 @@ export function App() {
       if (floatingLongPressTimerRef.current !== null) {
         window.clearTimeout(floatingLongPressTimerRef.current);
         floatingLongPressTimerRef.current = null;
-      }
-      if (gestureLongPressTimerRef.current !== null) {
-        window.clearTimeout(gestureLongPressTimerRef.current);
-        gestureLongPressTimerRef.current = null;
       }
       if (gestureMoveLongPressTimerRef.current !== null) {
         window.clearTimeout(gestureMoveLongPressTimerRef.current);
@@ -6624,12 +6615,6 @@ export function App() {
       floatingLongPressTimerRef.current = null;
     }
   }, []);
-  const clearGestureLongPressTimer = useCallback(() => {
-    if (gestureLongPressTimerRef.current !== null) {
-      window.clearTimeout(gestureLongPressTimerRef.current);
-      gestureLongPressTimerRef.current = null;
-    }
-  }, []);
   const clearGestureMoveLongPressTimer = useCallback(() => {
     if (gestureMoveLongPressTimerRef.current !== null) {
       window.clearTimeout(gestureMoveLongPressTimerRef.current);
@@ -6975,6 +6960,25 @@ export function App() {
     }
     setDrawerOpen(value => !value);
   }, []);
+  const openGestureNavigationActions = useCallback(() => {
+    clearGestureMoveLongPressTimer();
+    const startedAt = Date.now();
+    const nextState: GestureNavigationState = {
+      phase: 'expanded',
+      pointerId: -1,
+      originX: 0,
+      originY: 0,
+      currentX: 0,
+      currentY: 0,
+      startedAt,
+    };
+    gestureNavStateRef.current = nextState;
+    setGestureNavState(nextState);
+    setDrawerOpen(true);
+  }, [
+    clearGestureMoveLongPressTimer,
+    setDrawerOpen,
+  ]);
   const handleGestureNavigationCurrentSelect = useCallback(() => {
     const shouldSuppressSyntheticClick =
       gestureNavigationSuppressClickRef.current &&
@@ -6984,19 +6988,21 @@ export function App() {
     if (shouldSuppressSyntheticClick) {
       return;
     }
-    if (gestureNavStateRef.current?.phase === 'expanded') {
-      clearGestureLongPressTimer();
+    if (gestureNavigationExpanded || gestureNavStateRef.current?.phase === 'expanded') {
       clearGestureMoveLongPressTimer();
       gestureNavStateRef.current = null;
       setGestureNavState(null);
       setDrawerOpen(false);
       return;
     }
-    handleFloatingChatSelect();
+    if (floatingClickCooldownUntilRef.current > Date.now()) {
+      return;
+    }
+    openGestureNavigationActions();
   }, [
-    clearGestureLongPressTimer,
     clearGestureMoveLongPressTimer,
-    handleFloatingChatSelect,
+    gestureNavigationExpanded,
+    openGestureNavigationActions,
     setDrawerOpen,
   ]);
   const beginGestureNavigationPress = useCallback(
@@ -7007,7 +7013,6 @@ export function App() {
       if (floatingClickCooldownUntilRef.current > Date.now()) {
         return;
       }
-      clearGestureLongPressTimer();
       clearGestureMoveLongPressTimer();
       gestureNavigationSuppressClickRef.current = false;
       gestureNavigationSuppressClickUntilRef.current = 0;
@@ -7025,23 +7030,6 @@ export function App() {
       };
       gestureNavStateRef.current = nextState;
       setGestureNavState(nextState);
-      gestureLongPressTimerRef.current = window.setTimeout(() => {
-        setGestureNavState(current => {
-          const next =
-            current && current.pointerId === event.pointerId && current.phase === 'pressing'
-              ? {...current, phase: 'expanded' as const}
-              : current;
-          gestureNavStateRef.current = next;
-          if (next?.phase === 'expanded') {
-            gestureNavigationSuppressClickRef.current = true;
-            gestureNavigationSuppressClickUntilRef.current =
-              Date.now() + GESTURE_NAV_SYNTHETIC_CLICK_SUPPRESS_MS;
-            setDrawerOpen(true);
-          }
-          return next;
-        });
-        gestureLongPressTimerRef.current = null;
-      }, GESTURE_LONG_PRESS_MS);
       gestureMoveLongPressTimerRef.current = window.setTimeout(() => {
         const current = gestureNavStateRef.current;
         gestureMoveLongPressTimerRef.current = null;
@@ -7053,7 +7041,6 @@ export function App() {
         })) {
           return;
         }
-        clearGestureLongPressTimer();
         gestureNavigationSuppressClickRef.current = false;
         gestureNavigationSuppressClickUntilRef.current = 0;
         gestureNavStateRef.current = null;
@@ -7076,7 +7063,6 @@ export function App() {
       }, GESTURE_MOVE_LONG_PRESS_MS);
     },
     [
-      clearGestureLongPressTimer,
       clearGestureMoveLongPressTimer,
       closeMobileDrawerCompanionOverlays,
       floatingControlSide,
@@ -7088,7 +7074,9 @@ export function App() {
   );
   const handleGestureNavigationButtonPointerDown = useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
-      beginGestureNavigationPress(event);
+      if (gestureNavStateRef.current?.phase !== 'expanded') {
+        beginGestureNavigationPress(event);
+      }
       event.stopPropagation();
     },
     [beginGestureNavigationPress],
@@ -7120,25 +7108,13 @@ export function App() {
         currentY: event.clientY,
       };
       if (current.phase !== 'expanded') {
-        const intent = resolveGesturePressIntent({
-          distancePx,
-          elapsedMs: Date.now() - current.startedAt,
-        });
-        if (intent === 'neutral' && current.phase !== 'neutral') {
-          clearGestureLongPressTimer();
+        if (shouldCancelGestureClick({distancePx}) && current.phase !== 'neutral') {
+          gestureNavigationSuppressClickRef.current = true;
+          gestureNavigationSuppressClickUntilRef.current =
+            Date.now() + GESTURE_NAV_CANCELLED_CLICK_SUPPRESS_MS;
           const nextState = {...nextCurrent, phase: 'neutral' as const};
           gestureNavStateRef.current = nextState;
           setGestureNavState(nextState);
-          return;
-        }
-        if (intent === 'expand') {
-          const nextState = {...nextCurrent, phase: 'expanded' as const};
-          gestureNavigationSuppressClickRef.current = true;
-          gestureNavigationSuppressClickUntilRef.current =
-            Date.now() + GESTURE_NAV_SYNTHETIC_CLICK_SUPPRESS_MS;
-          gestureNavStateRef.current = nextState;
-          setGestureNavState(nextState);
-          setDrawerOpen(true);
           return;
         }
         if (current.currentX !== event.clientX || current.currentY !== event.clientY) {
@@ -7148,7 +7124,6 @@ export function App() {
       }
     },
     [
-      clearGestureLongPressTimer,
       handleFloatingPointerMove,
     ],
   );
@@ -7158,7 +7133,6 @@ export function App() {
       if (!current || current.pointerId !== pointerId) {
         return;
       }
-      clearGestureLongPressTimer();
       clearGestureMoveLongPressTimer();
       if (current.phase === 'expanded') {
         return;
@@ -7167,7 +7141,6 @@ export function App() {
       setGestureNavState(null);
     },
     [
-      clearGestureLongPressTimer,
       clearGestureMoveLongPressTimer,
     ],
   );
@@ -7177,10 +7150,9 @@ export function App() {
       if (typeof pointerId === 'number' && current && current.pointerId !== pointerId) {
         return;
       }
-      if (!current && gestureLongPressTimerRef.current === null && gestureMoveLongPressTimerRef.current === null) {
+      if (!current && gestureMoveLongPressTimerRef.current === null) {
         return;
       }
-      clearGestureLongPressTimer();
       clearGestureMoveLongPressTimer();
       gestureNavStateRef.current = null;
       gestureNavigationSuppressClickRef.current = false;
@@ -7190,7 +7162,7 @@ export function App() {
       floatingClickCooldownUntilRef.current = cooldownUntil;
       clearFloatingCooldownState(cooldownUntil);
     },
-    [clearFloatingCooldownState, clearGestureLongPressTimer, clearGestureMoveLongPressTimer],
+    [clearFloatingCooldownState, clearGestureMoveLongPressTimer],
   );
   useEffect(() => {
     if (!gestureNavigationExpanded) {
@@ -7308,7 +7280,7 @@ export function App() {
         portRelayTargetMenuTimerRef.current = null;
         floatingClickCooldownUntilRef.current = Date.now() + 180;
         setPortRelayTargetMenuOpen(true);
-      }, GESTURE_LONG_PRESS_MS);
+      }, PORT_RELAY_TARGET_MENU_LONG_PRESS_MS);
     },
     [clearPortRelayTargetMenuTimer, isWide, mobilePortRelayFrameOpen],
   );
