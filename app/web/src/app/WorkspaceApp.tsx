@@ -18272,7 +18272,11 @@ export function App() {
             mode={isWide ? 'desktop' : 'mobile'}
             plan={selectedChatPlan}
           />
-          <div ref={chatComposerRef} className="chat-composer" hidden={archivedMode}>
+          <div
+            ref={chatComposerRef}
+            className={`chat-composer${chatConfigMenuOptionId || chatConfigOverflowOpen ? ' config-menu-open' : ''}`}
+            hidden={archivedMode}
+          >
             <div className="chat-composer-content">
             <input
               ref={chatFileInputRef}

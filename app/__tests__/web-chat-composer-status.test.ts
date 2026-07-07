@@ -4,6 +4,25 @@ import {
   splitChatComposerStatusOptions,
 } from '../web/src/chat/session/chatComposerStatus';
 import type { RegistrySessionConfigOption } from '../web/src/registry/registryTypes';
+import fs from 'fs';
+import path from 'path';
+
+import { readWebStyles } from '../testHelpers/webStyles';
+
+function readSourceText(filePath: string): string {
+  return fs.readFileSync(filePath, 'utf8').replace(/\r\n/g, '\n');
+}
+
+function cssRuleBlock(stylesCss: string, selector: string): string {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = stylesCss.match(new RegExp(`${escapedSelector} \\{([\\s\\S]*?)\\}`));
+  return match?.[1] ?? '';
+}
+
+function zIndexValue(rule: string): number {
+  const match = rule.match(/z-index:\s*(\d+);/);
+  return match ? Number(match[1]) : -1;
+}
 
 function option(
   partial: RegistrySessionConfigOption,
@@ -91,5 +110,23 @@ describe('chat composer status helpers', () => {
     ]);
     expect(wide.overflowOptions).toEqual([]);
     expect(wide.showOverflowToggle).toBe(false);
+  });
+
+  test('raises config popovers above the current task surface only while open', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+
+    expect(mainTsx).toContain("chatConfigMenuOptionId || chatConfigOverflowOpen ? ' config-menu-open' : ''");
+
+    const planLayer = zIndexValue(cssRuleBlock(stylesCss, '.chat-plan-surface.desktop'));
+    const openComposerLayer = zIndexValue(cssRuleBlock(stylesCss, '.chat-composer.config-menu-open'));
+    expect(planLayer).toBeGreaterThan(0);
+    expect(openComposerLayer).toBeGreaterThan(planLayer);
+
+    const overflowMenu = cssRuleBlock(stylesCss, '.chat-config-overflow-menu');
+    const valueMenu = cssRuleBlock(stylesCss, '.chat-config-value-menu');
+    expect(overflowMenu).toContain('z-index: var(--chat-config-popover-layer);');
+    expect(valueMenu).toContain('z-index: var(--chat-config-popover-layer);');
   });
 });
