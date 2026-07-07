@@ -1680,20 +1680,20 @@ func TestCodexAppTokenUsageNotificationEmitsUsageUpdate(t *testing.T) {
 		"turnId":   "turn-1",
 		"tokenUsage": map[string]any{
 			"total": map[string]any{
-				"totalTokens":           19000,
-				"inputTokens":           17000,
+				"totalTokens":           40894907,
+				"inputTokens":           40892907,
 				"cachedInputTokens":     12000,
 				"outputTokens":          2000,
 				"reasoningOutputTokens": 300,
 			},
 			"last": map[string]any{
-				"totalTokens":           1000,
-				"inputTokens":           700,
+				"totalTokens":           93000,
+				"inputTokens":           90700,
 				"cachedInputTokens":     200,
-				"outputTokens":          300,
+				"outputTokens":          2300,
 				"reasoningOutputTokens": 50,
 			},
-			"modelContextWindow": 258000,
+			"modelContextWindow": 192000,
 		},
 	}))
 
@@ -1704,11 +1704,11 @@ func TestCodexAppTokenUsageNotificationEmitsUsageUpdate(t *testing.T) {
 	if update.Update.SessionUpdate != protocol.SessionUpdateUsageUpdate {
 		t.Fatalf("sessionUpdate=%q, want usage_update", update.Update.SessionUpdate)
 	}
-	if update.Update.Used == nil || *update.Update.Used != 19000 {
-		t.Fatalf("used=%v, want 19000", update.Update.Used)
+	if update.Update.Used == nil || *update.Update.Used != 93000 {
+		t.Fatalf("used=%v, want 93000", update.Update.Used)
 	}
-	if update.Update.Size == nil || *update.Update.Size != 258000 {
-		t.Fatalf("size=%v, want 258000", update.Update.Size)
+	if update.Update.Size == nil || *update.Update.Size != 192000 {
+		t.Fatalf("size=%v, want 192000", update.Update.Size)
 	}
 	if strings.TrimSpace(update.Update.UpdatedAt) == "" {
 		t.Fatal("updatedAt is empty")
