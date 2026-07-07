@@ -7131,6 +7131,9 @@ export function App() {
       if (typeof pointerId === 'number' && current && current.pointerId !== pointerId) {
         return;
       }
+      if (!current && gestureLongPressTimerRef.current === null && gestureMoveLongPressTimerRef.current === null) {
+        return;
+      }
       clearGestureLongPressTimer();
       clearGestureMoveLongPressTimer();
       gestureNavStateRef.current = null;
