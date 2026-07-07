@@ -18861,34 +18861,38 @@ export function App() {
                   >
                     <span className="chat-composer-tool-glyph chat-at-symbol" aria-hidden="true">@</span>
                   </button>
-                  {!selectedChatPromptRunning ? (
-                    <button
-                      type="button"
-                      ref={chatAttachmentTrayButtonRef}
-                      className="chat-tool-button chat-attachment-plus-button"
-                      onPointerDown={event => event.preventDefault()}
-                      onClick={toggleChatAttachmentTray}
-                      title="Tools"
-                      aria-label="Open composer tools"
-                      aria-haspopup="menu"
-                      aria-expanded={chatAttachmentTrayOpen}
-                    >
-                      <span className="codicon codicon-file-media chat-composer-tool-glyph" aria-hidden="true" />
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className={chatComposerStopTriggerClassName}
-                      onPointerDown={event => event.preventDefault()}
-                      onClick={() => cancelSelectedChatPrompt().catch(() => undefined)}
-                      disabled={selectedChatPromptCancelling}
-                      title={selectedChatPromptCancelling ? 'Cancelling prompt' : 'Cancel prompt'}
-                      aria-label="Cancel prompt"
-                      aria-busy={selectedChatPromptCancelling}
-                    >
-                      <span className={`codicon ${selectedChatPromptCancelling ? 'codicon-loading codicon-modifier-spin' : 'codicon-stop-circle'} chat-composer-tool-glyph`} aria-hidden="true" />
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    ref={chatAttachmentTrayButtonRef}
+                    className="chat-tool-button chat-attachment-plus-button"
+                    onPointerDown={event => event.preventDefault()}
+                    onClick={() => {
+                      if (selectedChatPromptRunning) return;
+                      toggleChatAttachmentTray();
+                    }}
+                    title="Tools"
+                    aria-label="Open composer tools"
+                    aria-haspopup="menu"
+                    aria-expanded={!selectedChatPromptRunning && chatAttachmentTrayOpen}
+                  >
+                    <span className="codicon codicon-file-media chat-composer-tool-glyph" aria-hidden="true" />
+                  </button>
+                  <div className="chat-composer-stop-slot">
+                    {selectedChatPromptRunning ? (
+                      <button
+                        type="button"
+                        className={chatComposerStopTriggerClassName}
+                        onPointerDown={event => event.preventDefault()}
+                        onClick={() => cancelSelectedChatPrompt().catch(() => undefined)}
+                        disabled={selectedChatPromptCancelling}
+                        title={selectedChatPromptCancelling ? 'Cancelling prompt' : 'Cancel prompt'}
+                        aria-label="Cancel prompt"
+                        aria-busy={selectedChatPromptCancelling}
+                      >
+                        <span className={`codicon ${selectedChatPromptCancelling ? 'codicon-loading codicon-modifier-spin' : 'codicon-stop-circle'} chat-composer-tool-glyph`} aria-hidden="true" />
+                      </button>
+                    ) : null}
+                  </div>
                   {!selectedChatPromptRunning && chatAttachmentTrayOpen ? (
                     <div
                       ref={chatAttachmentTrayRef}

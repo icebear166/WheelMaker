@@ -4082,33 +4082,35 @@
   border: none;
   border-radius: 7px;
   background: transparent;
-  color: var(--muted);
+  color: color-mix(in srgb, var(--muted) 86%, var(--text));
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: inline-grid;
+  place-items: center;
+  line-height: 1;
 }
 
-.chat-slash-button,
-.chat-file-mention-trigger-button,
-.chat-attachment-plus-button {
-  color: color-mix(in srgb, var(--accent) 72%, var(--text));
+.chat-composer-stop-slot {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  display: inline-grid;
+  place-items: center;
 }
 
 .chat-composer-tool-glyph {
   width: 16px;
   height: 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 15px;
-  line-height: 16px;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  line-height: 1;
 }
 
 .chat-slash-symbol,
 .chat-at-symbol {
   font-family: var(--font-mono);
   font-weight: 700;
+  transform: translateY(-0.5px);
 }
 
 .chat-attach-button {
