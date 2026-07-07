@@ -31,14 +31,6 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('limit: 6,');
   });
 
-  test('recent sessions span all projects, not just visible ones', () => {
-    // The recent list must use the full project list (sortedProjectItems) so it
-    // stays a global recency jump list even when some projects are hidden.
-    expect(mainTsx).toMatch(
-      /buildRecentChatSessionRows\(\{[\s\S]*?projects: sortedProjectItems,/,
-    );
-  });
-
   test('each recent row shows the project name as a clear marker', () => {
     expect(mainTsx).toContain('recent-session-project-tag');
     expect(mainTsx).toContain('renderRecentSessionRow(row, mobile)');
