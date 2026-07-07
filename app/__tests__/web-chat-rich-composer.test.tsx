@@ -68,6 +68,26 @@ describe('ChatRichComposer', () => {
     });
   }
 
+  function composerSelectionState(editor: {getEditorState: () => {read: <T>(fn: () => T) => T}}): {
+    collapsed: boolean;
+    anchorOffset: number;
+    focusOffset: number;
+    position: number;
+  } {
+    return editor.getEditorState().read(() => {
+      const selection = $getSelection();
+      if (!$isRangeSelection(selection)) {
+        throw new Error('expected range selection');
+      }
+      return {
+        collapsed: selection.isCollapsed(),
+        anchorOffset: selection.anchor.offset,
+        focusOffset: selection.focus.offset,
+        position: $currentComposerPosition($readComposerTokens()),
+      };
+    });
+  }
+
   test('round-trips composer text and capsule tokens through the Lexical model', () => {
     const tokens: ChatComposerToken[] = [
       {type: 'text', text: 'ask '},
@@ -202,7 +222,7 @@ describe('ChatRichComposer', () => {
         $createParagraphNode().append($createTextNode('first')),
         $createParagraphNode().append(secondLine),
       );
-      secondLine.select(2);
+      secondLine.select(2, 2);
       expect($currentComposerPosition($readComposerTokens())).toBe('first\nse'.length);
       expect($insertComposerTokens([
         {type: 'skill', id: 'skill:review', command: '/review', label: 'Review'},
@@ -233,6 +253,27 @@ describe('ChatRichComposer', () => {
       expect($deleteComposerTokenById('s1')).toEqual([{type: 'text', text: ' hello'}]);
       expect($currentComposerPosition($readComposerTokens())).toBe(0);
     }, {discrete: true});
+  });
+
+  test('restores composer cursor as a collapsed selection before following text', () => {
+    const editor = createEditor({
+      namespace: 'WheelMakerChatComposerTest',
+      nodes: [ChatComposerCapsuleNode],
+      onError(error) {
+        throw error;
+      },
+    });
+
+    editor.update(() => {
+      $setComposerTokens([{type: 'text', text: ' hello'}], '', 0);
+    }, {discrete: true});
+
+    expect(composerSelectionState(editor)).toEqual({
+      collapsed: true,
+      anchorOffset: 0,
+      focusOffset: 0,
+      position: 0,
+    });
   });
 
   test('input-method delete across a capsule range removes only the capsule', async () => {
@@ -623,6 +664,10 @@ describe('ChatRichComposer', () => {
 
     expect(onTokensChange).toHaveBeenLastCalledWith([{type: 'text', text: ' hello'}]);
     expect(editor.getEditorState().read(() => $currentComposerPosition($readComposerTokens()))).toBe(0);
+    expect(composerSelectionState(editor)).toMatchObject({
+      collapsed: true,
+      position: 0,
+    });
   });
 
   test('keeps the cursor at the selected capsule boundary after Backspace', async () => {
@@ -666,6 +711,10 @@ describe('ChatRichComposer', () => {
 
     expect(onTokensChange).toHaveBeenLastCalledWith([{type: 'text', text: ' hello'}]);
     expect(editor.getEditorState().read(() => $currentComposerPosition($readComposerTokens()))).toBe(0);
+    expect(composerSelectionState(editor)).toMatchObject({
+      collapsed: true,
+      position: 0,
+    });
   });
 
   test('does not carry transient capsule selection across external token props', async () => {

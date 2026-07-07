@@ -408,15 +408,17 @@ export function $selectComposerPosition(
     const child = children[index];
     if (safePosition <= end) {
       if (token.type === 'text' && $isTextNode(child)) {
-        child.select(Math.max(0, Math.min(safePosition - start, token.text.length)));
+        const textOffset = Math.max(0, Math.min(safePosition - start, token.text.length));
+        child.select(textOffset, textOffset);
         return;
       }
-      paragraph.select(safePosition <= start ? index : index + 1);
+      const childOffset = safePosition <= start ? index : index + 1;
+      paragraph.select(childOffset, childOffset);
       return;
     }
     cursor = end;
   }
-  paragraph.select(children.length);
+  paragraph.select(children.length, children.length);
 }
 
 export function lexicalNodesFromChatComposerTokensForTest(tokens: ChatComposerToken[]): ChatComposerLexicalNodeForTest[] {
