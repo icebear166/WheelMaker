@@ -4877,12 +4877,15 @@ export function App() {
   const recomputeRecentSessions = useCallback(() => {
     setRecentSessions(
       buildRecentChatSessionRows({
-        projects: visibleProjectItems,
+        // Use the full project list (not the visibility-filtered one) so Recent
+        // Sessions stays a global recency jump list across all projects, even
+        // ones the user has hidden from the main session list.
+        projects: sortedProjectItems,
         sessionsByProjectId: projectSessionsByProjectId,
         limit: 8,
       }),
     );
-  }, [projectSessionsByProjectId, visibleProjectItems]);
+  }, [projectSessionsByProjectId, sortedProjectItems]);
   useEffect(() => {
     recomputeRecentSessions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
