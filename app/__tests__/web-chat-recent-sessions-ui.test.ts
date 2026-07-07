@@ -18,10 +18,10 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('recent-sessions-list');
   });
 
-  test('recent sessions section behaves like a collapsible project folder', () => {
+  test('recent sessions section behaves like a collapsible block', () => {
     expect(mainTsx).toContain('RECENT_SESSIONS_VIRTUAL_PROJECT_ID');
     expect(mainTsx).toContain('toggleWideProjectCollapsed(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)');
-    expect(mainTsx).toContain('codicon-folder');
+    expect(mainTsx).toContain('codicon-history recent-sessions-icon');
   });
 
   test('recent sessions reuse the shared builder with an 8-item cap', () => {

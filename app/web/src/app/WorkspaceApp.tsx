@@ -14896,11 +14896,7 @@ export function App() {
             aria-expanded={!recentCollapsed}
           >
             <span className="wide-project-folder-wrap">
-              <span
-                className={`codicon ${recentCollapsed ? 'codicon-folder' : 'codicon-folder-opened'} wide-project-folder-icon`}
-              >
-                <span className="codicon codicon-history recent-sessions-icon" aria-hidden="true" />
-              </span>
+              <span className="codicon codicon-history recent-sessions-icon" aria-hidden="true" />
             </span>
             <span className="wide-project-title-group">
               <span className="wide-project-name">Recent Sessions</span>

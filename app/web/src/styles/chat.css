@@ -1172,19 +1172,16 @@
   margin-bottom: 4px;
 }
 
-.recent-sessions-section .wide-project-folder-icon {
-  width: 16px;
-  height: 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: color-mix(in srgb, var(--accent) 82%, var(--text));
-  font-size: 14px;
+.recent-sessions-section:not(.collapsed) {
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
 }
 
 .recent-sessions-icon {
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1;
+  color: color-mix(in srgb, var(--accent) 82%, var(--text));
 }
 
 .recent-sessions-section .wide-project-name {
