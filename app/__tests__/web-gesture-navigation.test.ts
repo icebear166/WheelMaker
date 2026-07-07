@@ -131,11 +131,12 @@ describe('gesture navigation', () => {
       /\.gesture-nav-pill \{[\s\S]*width: 50px;[\s\S]*grid-template-rows: 40px;[\s\S]*padding: 4px;[\s\S]*\}/,
     );
     expect(styles).toMatch(
-      /\.gesture-nav-control\[data-expanded='true'\] \{[\s\S]*height: 128px;[\s\S]*\}/,
+      /\.gesture-nav-control\[data-expanded='true'\] \{[\s\S]*height: 168px;[\s\S]*\}/,
     );
     expect(styles).toMatch(
-      /\.gesture-nav-control\[data-expanded='true'\] \.gesture-nav-pill \{[\s\S]*height: 128px;[\s\S]*grid-template-rows: repeat\(3, 40px\);[\s\S]*\}/,
+      /\.gesture-nav-control\[data-expanded='true'\] \.gesture-nav-pill \{[\s\S]*height: 168px;[\s\S]*grid-template-rows: repeat\(4, 40px\);[\s\S]*\}/,
     );
+    expect(styles).not.toContain(".gesture-nav-control[data-expanded='true'] .gesture-nav-current-button");
     expect(styles).toContain('.gesture-nav-button');
     expect(styles).toContain('.gesture-nav-current-button');
     expect(styles).not.toContain('.gesture-nav-badge');
@@ -169,9 +170,30 @@ describe('gesture navigation', () => {
     const currentSelectBody = main.slice(currentSelectStart, currentSelectEnd);
 
     expect(main).toContain('const gestureNavigationSuppressClickRef = useRef(false);');
+    expect(main).toContain('const gestureNavigationSuppressClickUntilRef = useRef(0);');
     expect(currentSelectBody).toContain('gestureNavigationSuppressClickRef.current');
-    expect(currentSelectBody).toContain("gestureNavStateRef.current?.phase === 'expanded'");
+    expect(currentSelectBody).toContain('Date.now() <= gestureNavigationSuppressClickUntilRef.current');
+    expect(currentSelectBody).not.toContain("gestureNavStateRef.current?.phase === 'expanded'");
     expect(main).toContain('gestureNavigationSuppressClickRef.current = true;');
     expect(main).toContain('gestureNavigationSuppressClickRef.current = false;');
+    expect(main).toContain('gestureNavigationSuppressClickUntilRef.current = 0;');
+    expect(main).toMatch(
+      /gestureNavigationSuppressClickUntilRef\.current =\s*Date\.now\(\) \+ GESTURE_NAV_SYNTHETIC_CLICK_SUPPRESS_MS/,
+    );
+  });
+
+  test('keeps the chat button in place when the gesture pill expands', () => {
+    const main = readMain();
+    const pillStart = main.indexOf('className="gesture-nav-pill"');
+    const pillEnd = main.indexOf('</div>', main.indexOf('</button>', pillStart));
+    const pillBody = main.slice(pillStart, pillEnd);
+    const currentButtonIndex = pillBody.indexOf('className="gesture-nav-button gesture-nav-current-button"');
+    const expandedBlockIndex = pillBody.indexOf('{gestureNavigationExpanded ? (');
+
+    expect(currentButtonIndex).toBeGreaterThan(-1);
+    expect(expandedBlockIndex).toBeGreaterThan(-1);
+    expect(currentButtonIndex).toBeLessThan(expandedBlockIndex);
+    expect(pillBody).not.toContain('aria-hidden={gestureNavigationExpanded}');
+    expect(pillBody).not.toContain('tabIndex={gestureNavigationExpanded ? -1 : undefined}');
   });
 });

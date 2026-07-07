@@ -705,17 +705,12 @@
 }
 
 .gesture-nav-control[data-expanded='true'] {
-  height: 128px;
+  height: 168px;
 }
 
 .gesture-nav-control[data-expanded='true'] .gesture-nav-pill {
-  height: 128px;
-  grid-template-rows: repeat(3, 40px);
-}
-
-.gesture-nav-control[data-expanded='true'] .gesture-nav-current-button {
-  opacity: 0;
-  pointer-events: none;
+  height: 168px;
+  grid-template-rows: repeat(4, 40px);
 }
 
 .gesture-nav-button {

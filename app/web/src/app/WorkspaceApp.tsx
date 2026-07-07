@@ -788,6 +788,7 @@ const CHAT_FILE_PEEK_VIEWPORT_MAX_RATIO = 0.8;
 const CHAT_FILE_PEEK_MAIN_MIN_WIDTH = 420;
 const CHAT_FILE_PEEK_HISTORY_KIND = 'wheelmaker:chat-file-peek';
 const FLOATING_CONTROL_IDLE_DELAY_MS = 3000;
+const GESTURE_NAV_SYNTHETIC_CLICK_SUPPRESS_MS = 160;
 const PORT_RELAY_FLOATING_Y_RATIO_STORAGE_KEY = 'wheelmaker:portRelayFloatingYRatio';
 const PORT_RELAY_FLOATING_SLOT_STORAGE_KEY = 'wheelmaker:portRelayFloatingSlot';
 const PORT_RELAY_FLOATING_SIDE_STORAGE_KEY = 'wheelmaker:portRelayFloatingSide';
@@ -2582,6 +2583,7 @@ export function App() {
   const gestureLongPressTimerRef = useRef<number | null>(null);
   const gestureMoveLongPressTimerRef = useRef<number | null>(null);
   const gestureNavigationSuppressClickRef = useRef(false);
+  const gestureNavigationSuppressClickUntilRef = useRef(0);
   const [floatingControlStackHeight, setFloatingControlStackHeight] = useState(184);
   const chatComposerRef = useRef<HTMLDivElement | null>(null);
   const [chatComposerTop, setChatComposerTop] = useState<number | null>(null);
@@ -5562,6 +5564,7 @@ export function App() {
     }
     floatingIgnoreLostCaptureRef.current = false;
     gestureNavigationSuppressClickRef.current = false;
+    gestureNavigationSuppressClickUntilRef.current = 0;
     setFloatingDragState(null);
     gestureNavStateRef.current = null;
     setGestureNavState(null);
@@ -6929,11 +6932,12 @@ export function App() {
     setDrawerOpen(value => !value);
   }, []);
   const handleGestureNavigationCurrentSelect = useCallback(() => {
-    if (
-      gestureNavigationSuppressClickRef.current ||
-      gestureNavStateRef.current?.phase === 'expanded'
-    ) {
-      gestureNavigationSuppressClickRef.current = false;
+    const shouldSuppressSyntheticClick =
+      gestureNavigationSuppressClickRef.current &&
+      Date.now() <= gestureNavigationSuppressClickUntilRef.current;
+    gestureNavigationSuppressClickRef.current = false;
+    gestureNavigationSuppressClickUntilRef.current = 0;
+    if (shouldSuppressSyntheticClick) {
       return;
     }
     handleFloatingChatSelect();
@@ -6949,6 +6953,7 @@ export function App() {
       clearGestureLongPressTimer();
       clearGestureMoveLongPressTimer();
       gestureNavigationSuppressClickRef.current = false;
+      gestureNavigationSuppressClickUntilRef.current = 0;
       floatingIgnoreLostCaptureRef.current = false;
       event.currentTarget.setPointerCapture(event.pointerId);
       const startedAt = Date.now();
@@ -6972,6 +6977,8 @@ export function App() {
           gestureNavStateRef.current = next;
           if (next?.phase === 'expanded') {
             gestureNavigationSuppressClickRef.current = true;
+            gestureNavigationSuppressClickUntilRef.current =
+              Date.now() + GESTURE_NAV_SYNTHETIC_CLICK_SUPPRESS_MS;
             setDrawerOpen(true);
           }
           return next;
@@ -6991,6 +6998,7 @@ export function App() {
         }
         clearGestureLongPressTimer();
         gestureNavigationSuppressClickRef.current = false;
+        gestureNavigationSuppressClickUntilRef.current = 0;
         gestureNavStateRef.current = null;
         setGestureNavState(null);
         closeMobileDrawerCompanionOverlays();
@@ -7069,6 +7077,8 @@ export function App() {
         if (intent === 'expand') {
           const nextState = {...nextCurrent, phase: 'expanded' as const};
           gestureNavigationSuppressClickRef.current = true;
+          gestureNavigationSuppressClickUntilRef.current =
+            Date.now() + GESTURE_NAV_SYNTHETIC_CLICK_SUPPRESS_MS;
           gestureNavStateRef.current = nextState;
           setGestureNavState(nextState);
           setDrawerOpen(true);
@@ -7117,6 +7127,7 @@ export function App() {
       clearGestureMoveLongPressTimer();
       gestureNavStateRef.current = null;
       gestureNavigationSuppressClickRef.current = false;
+      gestureNavigationSuppressClickUntilRef.current = 0;
       setGestureNavState(null);
       const cooldownUntil = Date.now() + 120;
       floatingClickCooldownUntilRef.current = cooldownUntil;
@@ -19531,6 +19542,20 @@ export function App() {
               className="gesture-nav-pill"
               onPointerDown={handleGestureNavigationPillPointerDown}
             >
+              <button
+                type="button"
+                className="gesture-nav-button gesture-nav-current-button"
+                data-active="true"
+                onPointerDown={handleGestureNavigationButtonPointerDown}
+                onClick={handleGestureNavigationCurrentSelect}
+                title="Chat"
+                aria-label="Chat"
+              >
+                <span className="codicon codicon-comment-discussion" aria-hidden="true" />
+                {hasCompletedUnreadChatSessionIndicator ? (
+                  <span className="floating-nav-unread-dot" aria-hidden="true" />
+                ) : null}
+              </button>
               {gestureNavigationExpanded ? (
                 <>
                   <button
@@ -19567,23 +19592,6 @@ export function App() {
                   </button>
                 </>
               ) : null}
-              <button
-                type="button"
-                className="gesture-nav-button gesture-nav-current-button"
-                data-active="true"
-                data-visible={gestureNavigationExpanded ? 'false' : 'true'}
-                onPointerDown={handleGestureNavigationButtonPointerDown}
-                onClick={handleGestureNavigationCurrentSelect}
-                title="Chat"
-                aria-label="Chat"
-                aria-hidden={gestureNavigationExpanded}
-                tabIndex={gestureNavigationExpanded ? -1 : undefined}
-              >
-                <span className="codicon codicon-comment-discussion" aria-hidden="true" />
-                {hasCompletedUnreadChatSessionIndicator ? (
-                  <span className="floating-nav-unread-dot" aria-hidden="true" />
-                ) : null}
-              </button>
             </div>
           </div>
         ) : (
