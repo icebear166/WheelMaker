@@ -13,6 +13,11 @@ export type ChatComposerTokenInsertionResult = {
   cursor: number;
 };
 
+export type ChatComposerTokenDeletionResult = {
+  tokens: ChatComposerToken[];
+  cursor: number;
+};
+
 export function insertChatComposerTokens(
   tokens: ChatComposerToken[],
   position: number,
@@ -36,6 +41,41 @@ export function deleteChatComposerTokenById(
   id: string,
 ): ChatComposerToken[] {
   return normalizeChatComposerTokens(tokens.filter(token => !chatComposerTokenHasId(token, id)));
+}
+
+export function deleteChatComposerTokenByIdAtPosition(
+  tokens: ChatComposerToken[],
+  id: string,
+  position: number,
+): ChatComposerTokenDeletionResult {
+  const normalized = normalizeChatComposerTokens(tokens);
+  const safePosition = Math.max(0, Math.min(Math.trunc(position), chatComposerTokenUnitLength(normalized)));
+  let cursor = 0;
+  let removedStart = -1;
+  let removedEnd = -1;
+  for (const token of normalized) {
+    const next = cursor + chatComposerSingleTokenUnitLength(token);
+    if (chatComposerTokenHasId(token, id)) {
+      removedStart = cursor;
+      removedEnd = next;
+      break;
+    }
+    cursor = next;
+  }
+  if (removedStart < 0 || removedEnd < 0) {
+    return {tokens: normalized, cursor: safePosition};
+  }
+  const nextTokens = deleteChatComposerTokenById(normalized, id);
+  const removedLength = removedEnd - removedStart;
+  const nextCursor = safePosition <= removedStart
+    ? safePosition
+    : safePosition <= removedEnd
+      ? removedStart
+      : safePosition - removedLength;
+  return {
+    tokens: nextTokens,
+    cursor: Math.max(0, Math.min(nextCursor, chatComposerTokenUnitLength(nextTokens))),
+  };
 }
 
 export function chatComposerTokenHasId(token: ChatComposerToken, id: string): boolean {

@@ -1,9 +1,14 @@
 import React from 'react';
 import ReactTestRenderer from 'react-test-renderer';
+import {EditorRefPlugin} from '@lexical/react/LexicalEditorRefPlugin';
 import {
   $createParagraphNode,
   $createTextNode,
   $getRoot,
+  $getSelection,
+  $isRangeSelection,
+  DELETE_CHARACTER_COMMAND,
+  KEY_BACKSPACE_COMMAND,
   createEditor,
 } from 'lexical';
 import {
@@ -12,6 +17,7 @@ import {
 } from '../web/src/chat/composer/ChatRichComposer';
 import {
   $currentComposerPosition,
+  $deleteComposerTokenById,
   $insertComposerPlainText,
   $insertComposerTokens,
   $readComposerTokens,
@@ -184,6 +190,113 @@ describe('ChatRichComposer', () => {
         {type: 'text', text: 'cond'},
       ]);
     }, {discrete: true});
+  });
+
+  test('keeps the cursor at the removed capsule boundary', () => {
+    const editor = createEditor({
+      namespace: 'WheelMakerChatComposerTest',
+      nodes: [ChatComposerCapsuleNode],
+      onError(error) {
+        throw error;
+      },
+    });
+    const tokens: ChatComposerToken[] = [
+      {type: 'skill', id: 's1', command: '/review', label: 'Review'},
+      {type: 'text', text: ' hello'},
+    ];
+
+    editor.update(() => {
+      $setComposerTokens(tokens, '', 1);
+      expect($currentComposerPosition($readComposerTokens())).toBe(1);
+      expect($deleteComposerTokenById('s1')).toEqual([{type: 'text', text: ' hello'}]);
+      expect($currentComposerPosition($readComposerTokens())).toBe(0);
+    }, {discrete: true});
+  });
+
+  test('input-method delete across a capsule range removes only the capsule', async () => {
+    const onTokensChange = jest.fn();
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+    const tokens: ChatComposerToken[] = [
+      {type: 'skill', id: 's1', command: '/review', label: 'Review'},
+      {type: 'text', text: ' hello'},
+    ];
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        <ChatRichComposer tokens={tokens} onTokensChange={onTokensChange} readOnly={false} />,
+      );
+    });
+
+    const editorRefPlugin = renderer!.root.findByType(EditorRefPlugin);
+    const editor = editorRefPlugin.props.editorRef.current;
+    expect(editor).toBeTruthy();
+
+    await ReactTestRenderer.act(() => {
+      editor.update(() => {
+        $setComposerTokens(tokens, '', 0);
+        const selection = $getSelection();
+        if (!$isRangeSelection(selection)) {
+          throw new Error('expected range selection');
+        }
+        const paragraph = selection.anchor.getNode().getTopLevelElementOrThrow();
+        const children = paragraph.getChildren();
+        const text = children[1];
+        selection.anchor.set(paragraph.getKey(), 0, 'element');
+        selection.focus.set(text.getKey(), ' hello'.length, 'text');
+      }, {discrete: true});
+    });
+
+    await ReactTestRenderer.act(() => {
+      editor.dispatchCommand(DELETE_CHARACTER_COMMAND, true);
+    });
+
+    expect(editor.getEditorState().read(() => $readComposerTokens())).toEqual([
+      {type: 'text', text: ' hello'},
+    ]);
+    expect(onTokensChange).toHaveBeenLastCalledWith([
+      {type: 'text', text: ' hello'},
+    ]);
+  });
+
+  test('hardware backspace still removes an explicit selected range', async () => {
+    const onTokensChange = jest.fn();
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+    const tokens: ChatComposerToken[] = [
+      {type: 'skill', id: 's1', command: '/review', label: 'Review'},
+      {type: 'text', text: ' hello'},
+    ];
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        <ChatRichComposer tokens={tokens} onTokensChange={onTokensChange} readOnly={false} />,
+      );
+    });
+
+    const editorRefPlugin = renderer!.root.findByType(EditorRefPlugin);
+    const editor = editorRefPlugin.props.editorRef.current;
+    expect(editor).toBeTruthy();
+
+    await ReactTestRenderer.act(() => {
+      editor.update(() => {
+        $setComposerTokens(tokens, '', 0);
+        const selection = $getSelection();
+        if (!$isRangeSelection(selection)) {
+          throw new Error('expected range selection');
+        }
+        const paragraph = selection.anchor.getNode().getTopLevelElementOrThrow();
+        const children = paragraph.getChildren();
+        const text = children[1];
+        selection.anchor.set(paragraph.getKey(), 0, 'element');
+        selection.focus.set(text.getKey(), ' hello'.length, 'text');
+      }, {discrete: true});
+    });
+
+    await ReactTestRenderer.act(() => {
+      editor.dispatchCommand(KEY_BACKSPACE_COMMAND, {preventDefault: jest.fn()} as unknown as KeyboardEvent);
+    });
+
+    expect(editor.getEditorState().read(() => $readComposerTokens())).toEqual([]);
+    expect(onTokensChange).toHaveBeenLastCalledWith([]);
   });
 
   test('pastes rich clipboard links as their plain-text URL', async () => {

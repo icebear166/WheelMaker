@@ -8,10 +8,14 @@ import {OnChangePlugin} from '@lexical/react/LexicalOnChangePlugin';
 import {PlainTextPlugin} from '@lexical/react/LexicalPlainTextPlugin';
 import React from 'react';
 import {
+  BEFORE_INPUT_COMMAND,
   COMMAND_PRIORITY_HIGH,
   COMMAND_PRIORITY_LOW,
+  DELETE_CHARACTER_COMMAND,
   KEY_BACKSPACE_COMMAND,
   KEY_DELETE_COMMAND,
+  $getSelection,
+  $isRangeSelection,
   type LexicalEditor,
 } from 'lexical';
 
@@ -25,12 +29,12 @@ import {
   type ChatComposerToken,
 } from './chatComposerTokens';
 import {
-  chatComposerCapsuleAfterPosition,
-  chatComposerCapsuleBeforePosition,
   deleteChatComposerTokenById,
+  type ChatComposerTokenDeletionResult,
 } from './chatComposerTokenEditing';
 import {
   $currentComposerPosition,
+  $deleteComposerCapsuleForCharacterDeletion,
   $deleteComposerTokenById,
   $insertComposerPlainText,
   $insertComposerTokens,
@@ -136,6 +140,7 @@ function ChatRichComposerContent({
   const emittedTokensRef = React.useRef<ChatComposerToken[]>(normalizeChatComposerTokens(tokens));
   const tokensRef = React.useRef<ChatComposerToken[]>(normalizeChatComposerTokens(tokens));
   const syncingFromPropsRef = React.useRef(false);
+  const skipNextRangeCharacterDeleteRef = React.useRef(false);
   const [selectedTokenId, setSelectedTokenId] = React.useState('');
 
   React.useEffect(() => {
@@ -237,54 +242,91 @@ function ChatRichComposerContent({
       KEY_BACKSPACE_COMMAND,
       event => {
         if (!selectedTokenIdRef.current) {
-          const currentTokens = tokensRef.current;
-          const removable = chatComposerCapsuleBeforePosition(
-            currentTokens,
-            editor.getEditorState().read(() => $currentComposerPosition(currentTokens)),
-          );
-          if (!removable) {
+          const deletion = $deleteComposerCapsuleForCharacterDeletion(true, {includeRange: false});
+          if (!deletion) {
+            skipNextRangeCharacterDeleteRef.current = true;
             return false;
           }
           event.preventDefault();
-          deleteComposerToken(editor, removable.id, tokensRef, emittedTokensRef, onTokensChange);
+          emitComposerDeletion(deletion, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange);
           setSelectedTokenId('');
           return true;
         }
         event.preventDefault();
-        deleteComposerToken(editor, selectedTokenIdRef.current, tokensRef, emittedTokensRef, onTokensChange);
+        deleteComposerToken(editor, selectedTokenIdRef.current, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange);
         setSelectedTokenId('');
         return true;
       },
       COMMAND_PRIORITY_HIGH,
     );
-  }, [editor, onTokensChange]);
+  }, [editor, onPlainTextChange, onTokensChange]);
 
   React.useEffect(() => {
     return editor.registerCommand<KeyboardEvent>(
       KEY_DELETE_COMMAND,
       event => {
         if (!selectedTokenIdRef.current) {
-          const currentTokens = tokensRef.current;
-          const removable = chatComposerCapsuleAfterPosition(
-            currentTokens,
-            editor.getEditorState().read(() => $currentComposerPosition(currentTokens)),
-          );
-          if (!removable) {
+          const deletion = $deleteComposerCapsuleForCharacterDeletion(false, {includeRange: false});
+          if (!deletion) {
+            skipNextRangeCharacterDeleteRef.current = true;
             return false;
           }
           event.preventDefault();
-          deleteComposerToken(editor, removable.id, tokensRef, emittedTokensRef, onTokensChange);
+          emitComposerDeletion(deletion, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange);
           setSelectedTokenId('');
           return true;
         }
         event.preventDefault();
-        deleteComposerToken(editor, selectedTokenIdRef.current, tokensRef, emittedTokensRef, onTokensChange);
+        deleteComposerToken(editor, selectedTokenIdRef.current, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange);
         setSelectedTokenId('');
         return true;
       },
       COMMAND_PRIORITY_HIGH,
     );
-  }, [editor, onTokensChange]);
+  }, [editor, onPlainTextChange, onTokensChange]);
+
+  React.useEffect(() => {
+    return editor.registerCommand<InputEvent>(
+      BEFORE_INPUT_COMMAND,
+      event => {
+        if (event.inputType !== 'deleteContentBackward' && event.inputType !== 'deleteContentForward') {
+          return false;
+        }
+        const deletion = $deleteComposerCapsuleForCharacterDeletion(event.inputType === 'deleteContentBackward');
+        if (!deletion) {
+          return false;
+        }
+        event.preventDefault();
+        emitComposerDeletion(deletion, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange);
+        setSelectedTokenId('');
+        return true;
+      },
+      COMMAND_PRIORITY_HIGH,
+    );
+  }, [editor, onPlainTextChange, onTokensChange]);
+
+  React.useEffect(() => {
+    return editor.registerCommand<boolean>(
+      DELETE_CHARACTER_COMMAND,
+      isBackward => {
+        if (skipNextRangeCharacterDeleteRef.current) {
+          skipNextRangeCharacterDeleteRef.current = false;
+          const selection = $getSelection();
+          if ($isRangeSelection(selection) && !selection.isCollapsed()) {
+            return false;
+          }
+        }
+        const deletion = $deleteComposerCapsuleForCharacterDeletion(isBackward);
+        if (!deletion) {
+          return false;
+        }
+        emitComposerDeletion(deletion, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange);
+        setSelectedTokenId('');
+        return true;
+      },
+      COMMAND_PRIORITY_HIGH,
+    );
+  }, [editor, onPlainTextChange, onTokensChange]);
 
   React.useEffect(() => {
     return editor.registerCommand<KeyboardEvent>(
@@ -416,14 +458,29 @@ function deleteComposerToken(
   tokensRef: React.MutableRefObject<ChatComposerToken[]>,
   emittedTokensRef: React.MutableRefObject<ChatComposerToken[]>,
   onTokensChange: (tokens: ChatComposerToken[]) => void,
+  onPlainTextChange: ((text: string, cursor: number) => void) | undefined,
 ): void {
   let nextTokens: ChatComposerToken[] = [];
+  let cursor = 0;
   editor.update(() => {
     nextTokens = $deleteComposerTokenById(tokenId);
+    cursor = $currentComposerPosition(nextTokens);
   });
-  tokensRef.current = nextTokens;
-  emittedTokensRef.current = nextTokens;
-  onTokensChange(nextTokens);
+  emitComposerDeletion({tokens: nextTokens, cursor}, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange);
+}
+
+function emitComposerDeletion(
+  deletion: ChatComposerTokenDeletionResult,
+  tokensRef: React.MutableRefObject<ChatComposerToken[]>,
+  emittedTokensRef: React.MutableRefObject<ChatComposerToken[]>,
+  onTokensChange: (tokens: ChatComposerToken[]) => void,
+  onPlainTextChange: ((text: string, cursor: number) => void) | undefined,
+): void {
+  tokensRef.current = deletion.tokens;
+  emittedTokensRef.current = deletion.tokens;
+  onTokensChange(deletion.tokens);
+  const serialized = serializeChatComposerTokens(deletion.tokens);
+  onPlainTextChange?.(serialized.text, serializedChatComposerTextPosition(deletion.tokens, deletion.cursor));
 }
 
 function createTokenId(kind: string): string {

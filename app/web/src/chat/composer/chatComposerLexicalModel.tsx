@@ -32,8 +32,12 @@ import {
   type ChatComposerToken,
 } from './chatComposerTokens';
 import {
+  chatComposerCapsuleAfterPosition,
+  chatComposerCapsuleBeforePosition,
   deleteChatComposerTokenById,
+  deleteChatComposerTokenByIdAtPosition,
   insertChatComposerTokens,
+  type ChatComposerTokenDeletionResult,
 } from './chatComposerTokenEditing';
 
 export type SerializedChatComposerCapsuleNode = Spread<{
@@ -324,9 +328,51 @@ export function $insertComposerPlainText(text: string): void {
 }
 
 export function $deleteComposerTokenById(tokenId: string): ChatComposerToken[] {
-  const nextTokens = deleteChatComposerTokenById($readComposerTokens(), tokenId);
-  $setComposerTokens(nextTokens, '', chatComposerTokenUnitLength(nextTokens));
-  return nextTokens;
+  const sourceTokens = $readComposerTokens();
+  const deletion = deleteChatComposerTokenByIdAtPosition(
+    sourceTokens,
+    tokenId,
+    $currentComposerPosition(sourceTokens),
+  );
+  $setComposerTokens(deletion.tokens, '', deletion.cursor);
+  return deletion.tokens;
+}
+
+export function $deleteComposerCapsuleForCharacterDeletion(
+  isBackward: boolean,
+  options: {includeRange?: boolean} = {},
+): ChatComposerTokenDeletionResult | null {
+  const sourceTokens = $readComposerTokens();
+  const selection = $getSelection();
+  if (!$isRangeSelection(selection)) {
+    return null;
+  }
+
+  if (selection.isCollapsed()) {
+    const position = $currentComposerPosition(sourceTokens);
+    const target = isBackward
+      ? chatComposerCapsuleBeforePosition(sourceTokens, position)
+      : chatComposerCapsuleAfterPosition(sourceTokens, position);
+    if (!target) {
+      return null;
+    }
+    const deletion = deleteChatComposerTokenByIdAtPosition(sourceTokens, target.id, position);
+    $setComposerTokens(deletion.tokens, '', deletion.cursor);
+    return deletion;
+  }
+
+  if (options.includeRange === false) {
+    return null;
+  }
+
+  const range = $composerSelectionRange(selection);
+  const target = composerCapsuleInRange(sourceTokens, range.start, range.end);
+  if (!target) {
+    return null;
+  }
+  const deletion = deleteChatComposerTokenByIdAtPosition(sourceTokens, target.token.id, target.start);
+  $setComposerTokens(deletion.tokens, '', deletion.cursor);
+  return deletion;
 }
 
 export function $deleteSelectedComposerCapsule(selectedTokenId: string): boolean {
@@ -545,8 +591,20 @@ function $readComposerChildren(paragraph: ElementNode): ChatComposerToken[] {
 }
 
 function $selectionPointToComposerPosition(selection: RangeSelection): number {
-  const anchor = selection.anchor;
-  const anchorNode = anchor.getNode();
+  return $composerSelectionPointToPosition(selection.anchor);
+}
+
+function $composerSelectionRange(selection: RangeSelection): {start: number; end: number} {
+  const anchor = $composerSelectionPointToPosition(selection.anchor);
+  const focus = $composerSelectionPointToPosition(selection.focus);
+  return {
+    start: Math.min(anchor, focus),
+    end: Math.max(anchor, focus),
+  };
+}
+
+function $composerSelectionPointToPosition(point: RangeSelection['anchor']): number {
+  const anchorNode = point.getNode();
   let position = 0;
   const paragraphs = $getComposerParagraphs();
   for (let paragraphIndex = 0; paragraphIndex < paragraphs.length; paragraphIndex += 1) {
@@ -557,7 +615,7 @@ function $selectionPointToComposerPosition(selection: RangeSelection): number {
 
     if (anchorNode === paragraph) {
       const children = paragraph.getChildren();
-      const safeOffset = Math.max(0, Math.min(anchor.offset, children.length));
+      const safeOffset = Math.max(0, Math.min(point.offset, children.length));
       return position + children.slice(0, safeOffset).reduce((total, child) => {
         return total + $composerNodeUnitLength(child);
       }, 0);
@@ -566,7 +624,7 @@ function $selectionPointToComposerPosition(selection: RangeSelection): number {
     for (const child of paragraph.getChildren()) {
       if (child === anchorNode) {
         if ($isTextNode(child)) {
-          return position + Math.max(0, Math.min(anchor.offset, child.getTextContentSize()));
+          return position + Math.max(0, Math.min(point.offset, child.getTextContentSize()));
         }
         return position;
       }
@@ -577,6 +635,25 @@ function $selectionPointToComposerPosition(selection: RangeSelection): number {
     }
   }
   return position;
+}
+
+function composerCapsuleInRange(
+  tokens: ChatComposerToken[],
+  start: number,
+  end: number,
+): {token: ChatComposerSkillToken | ChatComposerFileToken; start: number; end: number} | null {
+  if (start >= end) {
+    return null;
+  }
+  let cursor = 0;
+  for (const token of tokens) {
+    const next = cursor + chatComposerSingleTokenUnitLength(token);
+    if (token.type !== 'text' && cursor >= start && next <= end) {
+      return {token, start: cursor, end: next};
+    }
+    cursor = next;
+  }
+  return null;
 }
 
 function fileReferenceText(label: string): string {
