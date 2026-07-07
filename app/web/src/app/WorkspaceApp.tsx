@@ -6940,8 +6940,21 @@ export function App() {
     if (shouldSuppressSyntheticClick) {
       return;
     }
+    if (gestureNavStateRef.current?.phase === 'expanded') {
+      clearGestureLongPressTimer();
+      clearGestureMoveLongPressTimer();
+      gestureNavStateRef.current = null;
+      setGestureNavState(null);
+      setDrawerOpen(false);
+      return;
+    }
     handleFloatingChatSelect();
-  }, [handleFloatingChatSelect]);
+  }, [
+    clearGestureLongPressTimer,
+    clearGestureMoveLongPressTimer,
+    handleFloatingChatSelect,
+    setDrawerOpen,
+  ]);
   const beginGestureNavigationPress = useCallback(
     (event: React.PointerEvent<HTMLElement>) => {
       if (isWide || event.button !== 0) {
@@ -19545,14 +19558,30 @@ export function App() {
               className="gesture-nav-pill"
               onPointerDown={handleGestureNavigationPillPointerDown}
             >
+              {gestureNavigationExpanded ? (
+                <button
+                  key="preview"
+                  type="button"
+                  className="gesture-nav-button gesture-nav-capsule"
+                  data-active={chatPreviewOpen}
+                  onPointerDown={e => e.stopPropagation()}
+                  onClick={() => { cancelGestureNavigation(); toggleChatPreviewFromTitle(); }}
+                  title={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
+                  aria-label={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
+                  aria-pressed={chatPreviewOpen}
+                >
+                  <span className="codicon codicon-layout-sidebar-right" aria-hidden="true" />
+                </button>
+              ) : null}
               <button
+                key="chat"
                 type="button"
                 className="gesture-nav-button gesture-nav-current-button"
                 data-active="true"
                 onPointerDown={handleGestureNavigationButtonPointerDown}
                 onClick={handleGestureNavigationCurrentSelect}
-                title="Chat"
-                aria-label="Chat"
+                title={gestureNavigationExpanded ? 'Close drawer' : 'Chat'}
+                aria-label={gestureNavigationExpanded ? 'Close drawer' : 'Chat'}
               >
                 <span className="codicon codicon-comment-discussion" aria-hidden="true" />
                 {hasCompletedUnreadChatSessionIndicator ? (
@@ -19560,40 +19589,17 @@ export function App() {
                 ) : null}
               </button>
               {gestureNavigationExpanded ? (
-                <>
-                  <button
-                    type="button"
-                    className="gesture-nav-button gesture-nav-capsule"
-                    data-active={chatPreviewOpen}
-                    onPointerDown={e => e.stopPropagation()}
-                    onClick={() => { cancelGestureNavigation(); toggleChatPreviewFromTitle(); }}
-                    title={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
-                    aria-label={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
-                    aria-pressed={chatPreviewOpen}
-                  >
-                    <span className="codicon codicon-layout-sidebar-right" aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    className="gesture-nav-button gesture-nav-capsule gesture-nav-capsule-drawer"
-                    onPointerDown={e => e.stopPropagation()}
-                    onClick={() => { cancelGestureNavigation(); setDrawerOpen(false); }}
-                    title="Close drawer"
-                    aria-label="Close drawer"
-                  >
-                    <span className="codicon codicon-comment-discussion" aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    className="gesture-nav-button gesture-nav-capsule"
-                    onPointerDown={e => e.stopPropagation()}
-                    onClick={() => { cancelGestureNavigation(); openSettingsRoot(); }}
-                    title="Settings"
-                    aria-label="Settings"
-                  >
-                    <span className="codicon codicon-settings-gear" aria-hidden="true" />
-                  </button>
-                </>
+                <button
+                  key="settings"
+                  type="button"
+                  className="gesture-nav-button gesture-nav-capsule"
+                  onPointerDown={e => e.stopPropagation()}
+                  onClick={() => { cancelGestureNavigation(); openSettingsRoot(); }}
+                  title="Settings"
+                  aria-label="Settings"
+                >
+                  <span className="codicon codicon-settings-gear" aria-hidden="true" />
+                </button>
               ) : null}
             </div>
           </div>

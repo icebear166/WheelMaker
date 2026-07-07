@@ -131,11 +131,10 @@ describe('gesture navigation', () => {
       /\.gesture-nav-pill \{[\s\S]*width: 50px;[\s\S]*grid-template-rows: 40px;[\s\S]*padding: 4px;[\s\S]*\}/,
     );
     expect(styles).toMatch(
-      /\.gesture-nav-control\[data-expanded='true'\] \{[\s\S]*height: 168px;[\s\S]*\}/,
+      /\.gesture-nav-control\[data-expanded='true'\] \.gesture-nav-pill \{[\s\S]*top: -40px;[\s\S]*height: 128px;[\s\S]*grid-template-rows: repeat\(3, 40px\);[\s\S]*\}/,
     );
-    expect(styles).toMatch(
-      /\.gesture-nav-control\[data-expanded='true'\] \.gesture-nav-pill \{[\s\S]*height: 168px;[\s\S]*grid-template-rows: repeat\(4, 40px\);[\s\S]*\}/,
-    );
+    expect(styles).not.toContain('height: 168px;');
+    expect(styles).not.toContain('grid-template-rows: repeat(4, 40px);');
     expect(styles).not.toContain(".gesture-nav-control[data-expanded='true'] .gesture-nav-current-button");
     expect(styles).toContain('.gesture-nav-button');
     expect(styles).toContain('.gesture-nav-current-button');
@@ -147,6 +146,7 @@ describe('gesture navigation', () => {
     expect(styles).not.toContain('.gesture-nav-option-file');
     expect(styles).not.toContain('.gesture-nav-option-git');
     expect(styles).not.toContain('.gesture-nav-drawer-button');
+    expect(styles).not.toContain('gesture-nav-capsule-drawer');
   });
 
   test('shows preview capsule state and respects reduced motion', () => {
@@ -173,7 +173,8 @@ describe('gesture navigation', () => {
     expect(main).toContain('const gestureNavigationSuppressClickUntilRef = useRef(0);');
     expect(currentSelectBody).toContain('gestureNavigationSuppressClickRef.current');
     expect(currentSelectBody).toContain('Date.now() <= gestureNavigationSuppressClickUntilRef.current');
-    expect(currentSelectBody).not.toContain("gestureNavStateRef.current?.phase === 'expanded'");
+    expect(currentSelectBody).toContain("gestureNavStateRef.current?.phase === 'expanded'");
+    expect(currentSelectBody).toContain('setDrawerOpen(false);');
     expect(main).toContain('gestureNavigationSuppressClickRef.current = true;');
     expect(main).toContain('gestureNavigationSuppressClickRef.current = false;');
     expect(main).toContain('gestureNavigationSuppressClickUntilRef.current = 0;');
@@ -182,17 +183,21 @@ describe('gesture navigation', () => {
     );
   });
 
-  test('keeps the chat button in place when the gesture pill expands', () => {
+  test('keeps chat centered between preview and settings when the gesture pill expands', () => {
     const main = readMain();
     const pillStart = main.indexOf('className="gesture-nav-pill"');
-    const pillEnd = main.indexOf('</div>', main.indexOf('</button>', pillStart));
+    const pillEnd = main.indexOf('className="floating-nav-group"', pillStart);
     const pillBody = main.slice(pillStart, pillEnd);
+    const previewIndex = pillBody.indexOf('codicon-layout-sidebar-right');
     const currentButtonIndex = pillBody.indexOf('className="gesture-nav-button gesture-nav-current-button"');
-    const expandedBlockIndex = pillBody.indexOf('{gestureNavigationExpanded ? (');
+    const settingsIndex = pillBody.indexOf('codicon-settings-gear');
 
+    expect(previewIndex).toBeGreaterThan(-1);
     expect(currentButtonIndex).toBeGreaterThan(-1);
-    expect(expandedBlockIndex).toBeGreaterThan(-1);
-    expect(currentButtonIndex).toBeLessThan(expandedBlockIndex);
+    expect(settingsIndex).toBeGreaterThan(-1);
+    expect(previewIndex).toBeLessThan(currentButtonIndex);
+    expect(currentButtonIndex).toBeLessThan(settingsIndex);
+    expect(pillBody).not.toContain('gesture-nav-capsule-drawer');
     expect(pillBody).not.toContain('aria-hidden={gestureNavigationExpanded}');
     expect(pillBody).not.toContain('tabIndex={gestureNavigationExpanded ? -1 : undefined}');
   });

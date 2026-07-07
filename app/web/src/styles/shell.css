@@ -543,7 +543,7 @@
   -webkit-backdrop-filter: blur(1px);
   overflow: hidden;
   pointer-events: auto;
-  transition: height 200ms ease, background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, backdrop-filter 180ms ease;
+  transition: top 200ms ease, height 200ms ease, background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, backdrop-filter 180ms ease;
 }
 
 .floating-control-stack[data-backdrop-tone='mixed'] .gesture-nav-pill {
@@ -704,13 +704,10 @@
   overflow: visible;
 }
 
-.gesture-nav-control[data-expanded='true'] {
-  height: 168px;
-}
-
 .gesture-nav-control[data-expanded='true'] .gesture-nav-pill {
-  height: 168px;
-  grid-template-rows: repeat(4, 40px);
+  top: -40px;
+  height: 128px;
+  grid-template-rows: repeat(3, 40px);
 }
 
 .gesture-nav-button {
@@ -757,10 +754,6 @@
 .gesture-nav-capsule[data-active='true'] {
   color: color-mix(in srgb, var(--accent) 88%, var(--text));
   background: color-mix(in srgb, var(--accent) 18%, transparent);
-}
-
-.gesture-nav-capsule-drawer {
-  color: color-mix(in srgb, var(--accent) 88%, var(--text));
 }
 
 @keyframes gesture-capsule-fade-in {
