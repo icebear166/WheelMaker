@@ -39,11 +39,23 @@ describe('chat composer status helpers', () => {
         updatedAt: '2026-07-07T08:00:00Z',
       }),
     ).toEqual({
+      available: true,
       percent: 8,
       percentText: '8%',
       usedText: '19k',
       sizeText: '258k',
       title: 'Context window: 8% used (19k / 258k tokens)',
+    });
+  });
+
+  test('keeps a neutral context usage affordance before Codex reports tokens', () => {
+    expect(formatChatContextUsage(null)).toEqual({
+      available: false,
+      percent: 0,
+      percentText: '--',
+      usedText: '--',
+      sizeText: '--',
+      title: 'Context window usage will appear after Codex reports token usage',
     });
   });
 
@@ -96,8 +108,8 @@ describe('chat composer status helpers', () => {
     expect(compact.reasoningOption?.id).toBe('reasoning_effort');
     expect(compact.secondaryOptions).toEqual([]);
     expect(compact.overflowOptions.map(item => item.id)).toEqual([
-      'approval_preset',
       'personality',
+      'approval_preset',
     ]);
     expect(compact.showOverflowToggle).toBe(true);
 
@@ -105,11 +117,24 @@ describe('chat composer status helpers', () => {
     expect(wide.modelOption?.id).toBe('model');
     expect(wide.reasoningOption?.id).toBe('reasoning_effort');
     expect(wide.secondaryOptions.map(item => item.id)).toEqual([
-      'approval_preset',
       'personality',
+      'approval_preset',
     ]);
     expect(wide.overflowOptions).toEqual([]);
     expect(wide.showOverflowToggle).toBe(false);
+  });
+
+  test('keeps composer status controls on a single visual rhythm', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+
+    expect(mainTsx).toContain('chat-status-secondary-divider');
+    expect(stylesCss).toContain('.chat-status-secondary-divider');
+    expect(stylesCss).toMatch(/\.chat-status-model-button,\s*\.chat-status-signal-button \{[\s\S]*height: 24px;/);
+    expect(cssRuleBlock(stylesCss, '.chat-config-pill')).toContain('height: 24px;');
+    expect(cssRuleBlock(stylesCss, '.chat-config-overflow-button')).toContain('height: 24px;');
+    expect(cssRuleBlock(stylesCss, '.chat-status-signal-bar:nth-child(5)')).toContain('height: 12px;');
   });
 
   test('raises config popovers above the current task surface only while open', () => {

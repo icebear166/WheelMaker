@@ -3302,8 +3302,8 @@ export function App() {
   }, [selectedChatSession]);
 
   const chatContextUsage = useMemo(
-    () => formatChatContextUsage(selectedChatSession?.usage),
-    [selectedChatSession?.usage],
+    () => selectedChatSession ? formatChatContextUsage(selectedChatSession.usage) : null,
+    [selectedChatSession],
   );
 
   const selectedFullChatMessages =
@@ -17970,7 +17970,7 @@ export function App() {
       }
       return (
         <span
-          className="chat-context-usage"
+          className={`chat-context-usage${chatContextUsage.available ? '' : ' pending'}`}
           style={{ '--chat-context-used': `${chatContextUsage.percent}%` } as React.CSSProperties}
           title={chatContextUsage.title}
           aria-label={chatContextUsage.title}
@@ -18786,9 +18786,12 @@ export function App() {
                         {renderChatStatusModel(chatConfigStatus.modelOption)}
                         {renderChatStatusReasoning(chatConfigStatus.reasoningOption)}
                         {chatConfigOptions.length > 0 ? (
-                          <div className="chat-config-options">
-                            {chatConfigOptions.map(option => renderChatConfigPill(option))}
-                          </div>
+                          <>
+                            <span className="chat-status-secondary-divider" aria-hidden="true" />
+                            <div className="chat-config-options">
+                              {chatConfigOptions.map(option => renderChatConfigPill(option))}
+                            </div>
+                          </>
                         ) : null}
                         {chatConfigStatus.showOverflowToggle ? (
                           <div ref={chatConfigOverflowRef} className="chat-config-overflow-anchor">

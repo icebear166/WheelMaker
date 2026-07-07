@@ -4,6 +4,7 @@ import type {
 } from '../../registry/registryTypes';
 
 export type ChatContextUsageView = {
+  available: boolean;
   percent: number;
   percentText: string;
   usedText: string;
@@ -82,7 +83,14 @@ export function formatChatContextUsage(
     !usage.size ||
     usage.size <= 0
   ) {
-    return null;
+    return {
+      available: false,
+      percent: 0,
+      percentText: '--',
+      usedText: '--',
+      sizeText: '--',
+      title: 'Context window usage will appear after Codex reports token usage',
+    };
   }
   const used = Math.max(0, Math.trunc(usage.used));
   const size = Math.max(1, Math.trunc(usage.size));
@@ -90,6 +98,7 @@ export function formatChatContextUsage(
   const usedText = formatCompactTokenCount(used);
   const sizeText = formatCompactTokenCount(size);
   return {
+    available: true,
     percent,
     percentText: `${percent}%`,
     usedText,
@@ -147,6 +156,17 @@ export function resolveChatReasoningSignal(
   };
 }
 
+function secondaryOptionRank(option: RegistrySessionConfigOption): number {
+  const text = optionSearchText(option);
+  if (text.includes('personality')) {
+    return 0;
+  }
+  if (text.includes('approval') || text.includes('access') || text.includes('permission')) {
+    return 1;
+  }
+  return 9;
+}
+
 export function splitChatComposerStatusOptions(
   options: RegistrySessionConfigOption[],
   compact: boolean,
@@ -158,7 +178,16 @@ export function splitChatComposerStatusOptions(
   const coreIds = new Set(
     [modelOption?.id, reasoningOption?.id].filter((id): id is string => !!id),
   );
-  const secondaryOptions = options.filter(option => !coreIds.has(option.id));
+  const secondaryOptions = options
+    .filter(option => !coreIds.has(option.id))
+    .map((option, index) => ({ option, index, rank: secondaryOptionRank(option) }))
+    .sort((left, right) => {
+      if (left.rank !== right.rank) {
+        return left.rank - right.rank;
+      }
+      return left.index - right.index;
+    })
+    .map(item => item.option);
   return {
     modelOption,
     reasoningOption,
