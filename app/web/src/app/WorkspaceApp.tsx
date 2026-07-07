@@ -2596,6 +2596,7 @@ export function App() {
   const gestureNavStateRef = useRef<GestureNavigationState | null>(null);
   const gestureLongPressTimerRef = useRef<number | null>(null);
   const gestureMoveLongPressTimerRef = useRef<number | null>(null);
+  const gestureNavigationSuppressClickRef = useRef(false);
   const [floatingControlStackHeight, setFloatingControlStackHeight] = useState(184);
   const chatComposerRef = useRef<HTMLDivElement | null>(null);
   const [chatComposerTop, setChatComposerTop] = useState<number | null>(null);
@@ -5592,6 +5593,7 @@ export function App() {
       floatingCooldownTimerRef.current = null;
     }
     floatingIgnoreLostCaptureRef.current = false;
+    gestureNavigationSuppressClickRef.current = false;
     setFloatingDragState(null);
     gestureNavStateRef.current = null;
     setGestureNavState(null);
@@ -6959,6 +6961,13 @@ export function App() {
     setDrawerOpen(value => !value);
   }, []);
   const handleGestureNavigationCurrentSelect = useCallback(() => {
+    if (
+      gestureNavigationSuppressClickRef.current ||
+      gestureNavStateRef.current?.phase === 'expanded'
+    ) {
+      gestureNavigationSuppressClickRef.current = false;
+      return;
+    }
     handleFloatingChatSelect();
   }, [handleFloatingChatSelect]);
   const beginGestureNavigationPress = useCallback(
@@ -6971,6 +6980,7 @@ export function App() {
       }
       clearGestureLongPressTimer();
       clearGestureMoveLongPressTimer();
+      gestureNavigationSuppressClickRef.current = false;
       floatingIgnoreLostCaptureRef.current = false;
       event.currentTarget.setPointerCapture(event.pointerId);
       const startedAt = Date.now();
@@ -6993,6 +7003,7 @@ export function App() {
               : current;
           gestureNavStateRef.current = next;
           if (next?.phase === 'expanded') {
+            gestureNavigationSuppressClickRef.current = true;
             setDrawerOpen(true);
           }
           return next;
@@ -7011,6 +7022,7 @@ export function App() {
           return;
         }
         clearGestureLongPressTimer();
+        gestureNavigationSuppressClickRef.current = false;
         gestureNavStateRef.current = null;
         setGestureNavState(null);
         closeMobileDrawerCompanionOverlays();
@@ -7088,6 +7100,7 @@ export function App() {
         }
         if (intent === 'expand') {
           const nextState = {...nextCurrent, phase: 'expanded' as const};
+          gestureNavigationSuppressClickRef.current = true;
           gestureNavStateRef.current = nextState;
           setGestureNavState(nextState);
           setDrawerOpen(true);
@@ -7135,6 +7148,7 @@ export function App() {
       clearGestureLongPressTimer();
       clearGestureMoveLongPressTimer();
       gestureNavStateRef.current = null;
+      gestureNavigationSuppressClickRef.current = false;
       setGestureNavState(null);
       const cooldownUntil = Date.now() + 120;
       floatingClickCooldownUntilRef.current = cooldownUntil;

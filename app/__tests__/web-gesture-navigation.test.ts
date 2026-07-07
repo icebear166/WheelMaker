@@ -161,4 +161,17 @@ describe('gesture navigation', () => {
       /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*\.gesture-nav-pill,[\s\S]*\.gesture-nav-capsule[\s\S]*animation: none;[\s\S]*transition: none;[\s\S]*\}/,
     );
   });
+
+  test('suppresses synthesized chat clicks after gesture expansion', () => {
+    const main = readMain();
+    const currentSelectStart = main.indexOf('const handleGestureNavigationCurrentSelect = useCallback(');
+    const currentSelectEnd = main.indexOf('const beginGestureNavigationPress = useCallback', currentSelectStart);
+    const currentSelectBody = main.slice(currentSelectStart, currentSelectEnd);
+
+    expect(main).toContain('const gestureNavigationSuppressClickRef = useRef(false);');
+    expect(currentSelectBody).toContain('gestureNavigationSuppressClickRef.current');
+    expect(currentSelectBody).toContain("gestureNavStateRef.current?.phase === 'expanded'");
+    expect(main).toContain('gestureNavigationSuppressClickRef.current = true;');
+    expect(main).toContain('gestureNavigationSuppressClickRef.current = false;');
+  });
 });
