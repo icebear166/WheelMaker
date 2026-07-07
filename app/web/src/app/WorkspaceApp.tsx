@@ -18085,12 +18085,8 @@ export function App() {
       if (!chatContextUsage) {
         return null;
       }
-      const popoverValue = chatContextUsage.available
-        ? `${chatContextUsage.percentText} used`
-        : 'Usage pending';
-      const popoverDetail = chatContextUsage.available
-        ? `${chatContextUsage.usedText} of ${chatContextUsage.sizeText} tokens`
-        : 'Codex will report token usage after the next update.';
+      const popoverValue = `${chatContextUsage.percentText} used`;
+      const popoverDetail = `${chatContextUsage.usedText} of ${chatContextUsage.sizeText} tokens`;
       return (
         <div
           ref={chatContextUsageRef}
@@ -18102,7 +18098,7 @@ export function App() {
           </span>
           <button
             type="button"
-            className={`chat-context-usage${chatContextUsage.available ? '' : ' pending'}`}
+            className="chat-context-usage"
             style={{ '--chat-context-used': `${chatContextUsage.percent}%` } as React.CSSProperties}
             aria-labelledby="chat-context-usage-label"
             aria-describedby="chat-context-usage-popover"

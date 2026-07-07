@@ -76,14 +76,7 @@ export function formatChatContextUsage(
     !usage.size ||
     usage.size <= 0
   ) {
-    return {
-      available: false,
-      percent: 0,
-      percentText: '--',
-      usedText: '--',
-      sizeText: '--',
-      title: 'Context window usage will appear after Codex reports token usage',
-    };
+    return null;
   }
   const used = Math.max(0, Math.trunc(usage.used));
   const size = Math.max(1, Math.trunc(usage.size));

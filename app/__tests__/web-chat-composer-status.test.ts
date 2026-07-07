@@ -48,15 +48,8 @@ describe('chat composer status helpers', () => {
     });
   });
 
-  test('keeps a neutral context usage affordance before Codex reports tokens', () => {
-    expect(formatChatContextUsage(null)).toEqual({
-      available: false,
-      percent: 0,
-      percentText: '--',
-      usedText: '--',
-      sizeText: '--',
-      title: 'Context window usage will appear after Codex reports token usage',
-    });
+  test('omits context usage before the agent reports tokens', () => {
+    expect(formatChatContextUsage(null)).toBeNull();
   });
 
   test('uses the reasoning effort option label as compact status text', () => {
@@ -152,7 +145,7 @@ describe('chat composer status helpers', () => {
     expect(cssRuleBlock(stylesCss, '.chat-config-pill')).toContain('height: 24px;');
     expect(cssRuleBlock(stylesCss, '.chat-config-overflow-button')).toContain('height: 24px;');
     expect(cssRuleBlock(stylesCss, '.chat-context-usage::after')).toContain('inset: 2px;');
-    expect(cssRuleBlock(stylesCss, '.chat-context-usage.pending::after')).toContain('inset: 2px;');
+    expect(stylesCss).not.toContain('.chat-context-usage.pending');
   });
 
   test('uses a custom context usage popover that can be opened on click', () => {
