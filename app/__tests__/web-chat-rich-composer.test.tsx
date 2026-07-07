@@ -23,6 +23,7 @@ import {
   $readComposerTokens,
   $setComposerTokens,
   ChatComposerCapsuleNode,
+  $isChatComposerCapsuleNode,
   chatComposerTokensFromLexicalNodesForTest,
   lexicalNodesFromChatComposerTokensForTest,
   registerComposerSlashCommandTransform,
@@ -45,6 +46,27 @@ describe('ChatRichComposer', () => {
   afterAll(() => {
     (global as typeof global & {Node: typeof Node}).Node = originalNode;
   });
+
+  function selectedCapsuleIds(editor: {getEditorState: () => {read: <T>(fn: () => T) => T}}): string[] {
+    return editor.getEditorState().read(() => {
+      const out: string[] = [];
+      const visit = (node: any): void => {
+        if ($isChatComposerCapsuleNode(node)) {
+          const serialized = node.exportJSON();
+          if (serialized.selected) {
+            out.push(serialized.tokenId);
+          }
+        }
+        if (typeof node.getChildren === 'function') {
+          for (const child of node.getChildren()) {
+            visit(child);
+          }
+        }
+      };
+      visit($getRoot());
+      return out;
+    });
+  }
 
   test('round-trips composer text and capsule tokens through the Lexical model', () => {
     const tokens: ChatComposerToken[] = [
@@ -644,6 +666,49 @@ describe('ChatRichComposer', () => {
 
     expect(onTokensChange).toHaveBeenLastCalledWith([{type: 'text', text: ' hello'}]);
     expect(editor.getEditorState().read(() => $currentComposerPosition($readComposerTokens()))).toBe(0);
+  });
+
+  test('does not carry transient capsule selection across external token props', async () => {
+    const ref = React.createRef<ChatRichComposerHandle>();
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+    let replaceTokens: (nextTokens: ChatComposerToken[]) => void = () => undefined;
+    const StatefulComposer = () => {
+      const [tokens, setTokens] = React.useState<ChatComposerToken[]>([
+        {type: 'skill', id: 's1', command: '/review', label: 'Review'},
+        {type: 'text', text: ' hello'},
+      ]);
+      replaceTokens = setTokens;
+      return (
+        <ChatRichComposer
+          ref={ref}
+          tokens={tokens}
+          onTokensChange={setTokens}
+          readOnly={false}
+        />
+      );
+    };
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(<StatefulComposer />);
+    });
+
+    const editorRefPlugin = renderer!.root.findByType(EditorRefPlugin);
+    const editor = editorRefPlugin.props.editorRef.current;
+    expect(editor).toBeTruthy();
+
+    await ReactTestRenderer.act(() => {
+      ref.current!.selectToken('s1');
+    });
+    expect(selectedCapsuleIds(editor)).toEqual(['s1']);
+
+    await ReactTestRenderer.act(() => {
+      replaceTokens([
+        {type: 'skill', id: 's1', command: '/review', label: 'Review'},
+        {type: 'text', text: ' updated externally'},
+      ]);
+    });
+
+    expect(selectedCapsuleIds(editor)).toEqual([]);
   });
 
   test('insertText tokenizes known slash commands into skill capsules', async () => {

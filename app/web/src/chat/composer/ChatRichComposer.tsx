@@ -10,7 +10,6 @@ import React from 'react';
 import {
   BEFORE_INPUT_COMMAND,
   COMMAND_PRIORITY_HIGH,
-  COMMAND_PRIORITY_LOW,
   DELETE_CHARACTER_COMMAND,
   KEY_BACKSPACE_COMMAND,
   KEY_DELETE_COMMAND,
@@ -20,7 +19,6 @@ import {
 } from 'lexical';
 
 import {
-  chatComposerTokenUnitLength,
   normalizeChatComposerTokens,
   serializeChatComposerTokens,
   serializedChatComposerTextPosition,
@@ -33,6 +31,7 @@ import {
   $currentComposerPosition,
   $deleteComposerCapsuleForCharacterDeletion,
   $deleteComposerTokenByIdAtBoundary,
+  $getSelectedComposerCapsuleId,
   $insertComposerPlainText,
   $insertComposerTokens,
   $readComposerTokens,
@@ -133,12 +132,11 @@ function ChatRichComposerContent({
   handleRef,
 }: ChatRichComposerContentProps): React.ReactElement {
   const [editor] = useLexicalComposerContext();
-  const selectedTokenIdRef = React.useRef('');
   const emittedTokensRef = React.useRef<ChatComposerToken[]>(normalizeChatComposerTokens(tokens));
   const tokensRef = React.useRef<ChatComposerToken[]>(normalizeChatComposerTokens(tokens));
+  const pendingEmissionRef = React.useRef<ChatComposerTokenDeletionResult | null>(null);
   const syncingFromPropsRef = React.useRef(false);
   const skipNextRangeCharacterDeleteRef = React.useRef(false);
-  const [selectedTokenId, setSelectedTokenId] = React.useState('');
 
   React.useEffect(() => {
     editor.setEditable(!readOnly);
@@ -147,6 +145,17 @@ function ChatRichComposerContent({
   React.useEffect(() => {
     return registerComposerSlashCommandTransform(editor, slashCommands);
   }, [editor, slashCommands]);
+
+  React.useEffect(() => {
+    return editor.registerUpdateListener(() => {
+      const pending = pendingEmissionRef.current;
+      if (!pending) {
+        return;
+      }
+      pendingEmissionRef.current = null;
+      emitComposerCallbacks(pending, onTokensChange, onPlainTextChange);
+    });
+  }, [editor, onPlainTextChange, onTokensChange]);
 
   React.useEffect(() => {
     const normalized = normalizeChatComposerTokens(tokens);
@@ -158,7 +167,7 @@ function ChatRichComposerContent({
     }
     syncingFromPropsRef.current = true;
     editor.update(() => {
-      $setComposerTokens(normalized, selectedTokenIdRef.current);
+      $setComposerTokens(normalized);
     }, {
       onUpdate: () => {
         emittedTokensRef.current = normalized;
@@ -166,13 +175,6 @@ function ChatRichComposerContent({
       },
     });
   }, [editor, tokens]);
-
-  React.useEffect(() => {
-    selectedTokenIdRef.current = selectedTokenId;
-    editor.update(() => {
-      $setSelectedComposerCapsule(selectedTokenId);
-    });
-  }, [editor, selectedTokenId]);
 
   React.useEffect(() => {
     handleRef.current = {
@@ -187,7 +189,6 @@ function ChatRichComposerContent({
           },
           {type: 'text', text: ' '},
         ]);
-        setSelectedTokenId('');
       },
       insertFile: input => {
         emitLexicalInsertion(editor, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange, slashCommands, [
@@ -200,35 +201,30 @@ function ChatRichComposerContent({
           },
           {type: 'text', text: ' '},
         ]);
-        setSelectedTokenId('');
       },
       insertText: text => {
         if (!text) {
           return;
         }
         editor.update(() => {
+          $setSelectedComposerCapsule('');
           $insertComposerPlainText(text);
         });
-        setSelectedTokenId('');
       },
       selectToken: id => {
-        selectedTokenIdRef.current = id;
-        setSelectedTokenId(id);
+        editor.update(() => {
+          $setSelectedComposerCapsule(id);
+        }, {discrete: true});
       },
       deleteSelectedCapsule: () => {
-        const selected = selectedTokenIdRef.current;
-        if (!selected) {
-          return;
-        }
-        let deletion: ChatComposerTokenDeletionResult = {
-          tokens: tokensRef.current,
-          cursor: chatComposerTokenUnitLength(tokensRef.current),
-        };
         editor.update(() => {
-          deletion = $deleteComposerTokenByIdAtBoundary(selected);
+          const selected = $getSelectedComposerCapsuleId();
+          if (!selected) {
+            return;
+          }
+          const deletion = $deleteComposerTokenByIdAtBoundary(selected);
+          queueComposerEmission(deletion, tokensRef, emittedTokensRef, pendingEmissionRef);
         }, {discrete: true});
-        emitComposerDeletion(deletion, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange);
-        setSelectedTokenId('');
       },
     };
   }, [editor, handleRef, onPlainTextChange, onTokensChange, slashCommands]);
@@ -237,69 +233,64 @@ function ChatRichComposerContent({
     return editor.registerCommand<KeyboardEvent>(
       KEY_BACKSPACE_COMMAND,
       event => {
-        if (!selectedTokenIdRef.current) {
+        const selected = $getSelectedComposerCapsuleId();
+        if (!selected) {
           const deletion = $deleteComposerCapsuleForCharacterDeletion(true, {includeRange: false});
           if (!deletion) {
             skipNextRangeCharacterDeleteRef.current = true;
             return false;
           }
           event.preventDefault();
-          emitComposerDeletion(deletion, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange, {deferCallbacks: true});
-          setSelectedTokenId('');
+          queueComposerEmission(deletion, tokensRef, emittedTokensRef, pendingEmissionRef);
           return true;
         }
         event.preventDefault();
-        emitComposerDeletion(
-          $deleteComposerTokenByIdAtBoundary(selectedTokenIdRef.current),
+        queueComposerEmission(
+          $deleteComposerTokenByIdAtBoundary(selected),
           tokensRef,
           emittedTokensRef,
-          onTokensChange,
-          onPlainTextChange,
-          {deferCallbacks: true},
+          pendingEmissionRef,
         );
-        setSelectedTokenId('');
         return true;
       },
       COMMAND_PRIORITY_HIGH,
     );
-  }, [editor, onPlainTextChange, onTokensChange]);
+  }, [editor]);
 
   React.useEffect(() => {
     return editor.registerCommand<KeyboardEvent>(
       KEY_DELETE_COMMAND,
       event => {
-        if (!selectedTokenIdRef.current) {
+        const selected = $getSelectedComposerCapsuleId();
+        if (!selected) {
           const deletion = $deleteComposerCapsuleForCharacterDeletion(false, {includeRange: false});
           if (!deletion) {
             skipNextRangeCharacterDeleteRef.current = true;
             return false;
           }
           event.preventDefault();
-          emitComposerDeletion(deletion, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange, {deferCallbacks: true});
-          setSelectedTokenId('');
+          queueComposerEmission(deletion, tokensRef, emittedTokensRef, pendingEmissionRef);
           return true;
         }
         event.preventDefault();
-        emitComposerDeletion(
-          $deleteComposerTokenByIdAtBoundary(selectedTokenIdRef.current),
+        queueComposerEmission(
+          $deleteComposerTokenByIdAtBoundary(selected),
           tokensRef,
           emittedTokensRef,
-          onTokensChange,
-          onPlainTextChange,
-          {deferCallbacks: true},
+          pendingEmissionRef,
         );
-        setSelectedTokenId('');
         return true;
       },
       COMMAND_PRIORITY_HIGH,
     );
-  }, [editor, onPlainTextChange, onTokensChange]);
+  }, [editor]);
 
   React.useEffect(() => {
     return editor.registerCommand<InputEvent>(
       BEFORE_INPUT_COMMAND,
       event => {
         if (event.inputType !== 'deleteContentBackward' && event.inputType !== 'deleteContentForward') {
+          $setSelectedComposerCapsule('');
           return false;
         }
         const deletion = $deleteComposerCapsuleForCharacterDeletion(event.inputType === 'deleteContentBackward');
@@ -307,13 +298,12 @@ function ChatRichComposerContent({
           return false;
         }
         event.preventDefault();
-        emitComposerDeletion(deletion, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange, {deferCallbacks: true});
-        setSelectedTokenId('');
+        queueComposerEmission(deletion, tokensRef, emittedTokensRef, pendingEmissionRef);
         return true;
       },
       COMMAND_PRIORITY_HIGH,
     );
-  }, [editor, onPlainTextChange, onTokensChange]);
+  }, [editor]);
 
   React.useEffect(() => {
     return editor.registerCommand<boolean>(
@@ -330,22 +320,10 @@ function ChatRichComposerContent({
         if (!deletion) {
           return false;
         }
-        emitComposerDeletion(deletion, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange, {deferCallbacks: true});
-        setSelectedTokenId('');
+        queueComposerEmission(deletion, tokensRef, emittedTokensRef, pendingEmissionRef);
         return true;
       },
       COMMAND_PRIORITY_HIGH,
-    );
-  }, [editor, onPlainTextChange, onTokensChange]);
-
-  React.useEffect(() => {
-    return editor.registerCommand<KeyboardEvent>(
-      KEY_BACKSPACE_COMMAND,
-      () => {
-        setSelectedTokenId('');
-        return false;
-      },
-      COMMAND_PRIORITY_LOW,
     );
   }, [editor]);
 
@@ -355,7 +333,9 @@ function ChatRichComposerContent({
         ? event.target.closest<HTMLElement>('[data-chat-composer-capsule="true"]')
         : null;
       if (!target) {
-        setSelectedTokenId('');
+        editor.update(() => {
+          $setSelectedComposerCapsule('');
+        }, {discrete: true});
         return;
       }
       const tokenId = target.dataset.tokenId ?? '';
@@ -363,9 +343,11 @@ function ChatRichComposerContent({
         return;
       }
       event.preventDefault();
-      setSelectedTokenId(tokenId);
+      editor.update(() => {
+        $setSelectedComposerCapsule(tokenId);
+      }, {discrete: true});
     },
-    [],
+    [editor],
   );
 
   const handlePaste = React.useCallback(
@@ -380,6 +362,7 @@ function ChatRichComposerContent({
       }
       event.preventDefault();
       editor.update(() => {
+        $setSelectedComposerCapsule('');
         $insertComposerPlainText(text);
       });
     },
@@ -462,26 +445,25 @@ function emitLexicalInsertion(
   }
 }
 
-function emitComposerDeletion(
+function queueComposerEmission(
   deletion: ChatComposerTokenDeletionResult,
   tokensRef: React.MutableRefObject<ChatComposerToken[]>,
   emittedTokensRef: React.MutableRefObject<ChatComposerToken[]>,
-  onTokensChange: (tokens: ChatComposerToken[]) => void,
-  onPlainTextChange: ((text: string, cursor: number) => void) | undefined,
-  options: {deferCallbacks?: boolean} = {},
+  pendingEmissionRef: React.MutableRefObject<ChatComposerTokenDeletionResult | null>,
 ): void {
   tokensRef.current = deletion.tokens;
   emittedTokensRef.current = deletion.tokens;
+  pendingEmissionRef.current = deletion;
+}
+
+function emitComposerCallbacks(
+  deletion: ChatComposerTokenDeletionResult,
+  onTokensChange: (tokens: ChatComposerToken[]) => void,
+  onPlainTextChange: ((text: string, cursor: number) => void) | undefined,
+): void {
   const serialized = serializeChatComposerTokens(deletion.tokens);
-  const emit = () => {
-    onTokensChange(deletion.tokens);
-    onPlainTextChange?.(serialized.text, serializedChatComposerTextPosition(deletion.tokens, deletion.cursor));
-  };
-  if (options.deferCallbacks) {
-    queueMicrotask(emit);
-    return;
-  }
-  emit();
+  onTokensChange(deletion.tokens);
+  onPlainTextChange?.(serialized.text, serializedChatComposerTextPosition(deletion.tokens, deletion.cursor));
 }
 
 function createTokenId(kind: string): string {

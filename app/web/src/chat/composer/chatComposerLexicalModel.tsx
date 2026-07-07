@@ -34,7 +34,6 @@ import {
 import {
   chatComposerCapsuleAfterPosition,
   chatComposerCapsuleBeforePosition,
-  deleteChatComposerTokenById,
   deleteChatComposerTokenByIdAtBoundary,
   deleteChatComposerTokenByIdAtPosition,
   insertChatComposerTokens,
@@ -283,6 +282,17 @@ export function $setSelectedComposerCapsule(selectedTokenId: string): void {
   }
 }
 
+export function $getSelectedComposerCapsuleId(): string {
+  for (const paragraph of $getComposerParagraphs()) {
+    for (const child of paragraph.getChildren()) {
+      if ($isChatComposerCapsuleNode(child) && child.__selected) {
+        return child.getToken().id;
+      }
+    }
+  }
+  return '';
+}
+
 export function registerComposerSlashCommandTransform(
   editor: LexicalEditor,
   slashCommands: {command: string; label: string}[],
@@ -380,21 +390,6 @@ export function $deleteComposerCapsuleForCharacterDeletion(
   const deletion = deleteChatComposerTokenByIdAtPosition(sourceTokens, target.token.id, target.start);
   $setComposerTokens(deletion.tokens, '', deletion.cursor);
   return deletion;
-}
-
-export function $deleteSelectedComposerCapsule(selectedTokenId: string): boolean {
-  if (!selectedTokenId) {
-    return false;
-  }
-  for (const paragraph of $getComposerParagraphs()) {
-    for (const child of paragraph.getChildren()) {
-      if ($isChatComposerCapsuleNode(child) && child.getToken().id === selectedTokenId) {
-        child.remove();
-        return true;
-      }
-    }
-  }
-  return false;
 }
 
 export function $selectComposerPosition(
