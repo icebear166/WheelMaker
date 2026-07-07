@@ -4874,7 +4874,18 @@ export function App() {
     }),
     [projectSessionsByProjectId, visibleProjectItems],
   );
+  // Recent Sessions should only be computed once the session data for every
+  // visible project has loaded. Otherwise, on first paint projectSessionsByProjectId
+  // is still empty/partial and the list collapses to whatever single project
+  // happened to load first. A visible project counts as loaded once it has an
+  // entry in projectSessionsByProjectId (even an empty list).
+  const allVisibleProjectsLoaded = visibleProjectItems.length > 0 &&
+    visibleProjectItems.every(project => project.projectId in projectSessionsByProjectId);
+
   const recomputeRecentSessions = useCallback(() => {
+    if (!allVisibleProjectsLoaded) {
+      return;
+    }
     setRecentSessions(
       buildRecentChatSessionRows({
         projects: visibleProjectItems,
@@ -4882,16 +4893,18 @@ export function App() {
         limit: 8,
       }),
     );
-  }, [projectSessionsByProjectId, visibleProjectItems]);
+  }, [allVisibleProjectsLoaded, projectSessionsByProjectId, visibleProjectItems]);
   useEffect(() => {
     recomputeRecentSessions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recentSessionsTick]);
+  }, [recentSessionsTick, allVisibleProjectsLoaded]);
   useEffect(() => {
-    if (recentSessions.length === 0 && Object.keys(projectSessionsByProjectId).length > 0) {
+    // Recompute once the visible projects finish loading (or whenever the
+    // session map grows), even if recentSessions was already seeded.
+    if (allVisibleProjectsLoaded) {
       setRecentSessionsTick(t => t + 1);
     }
-  }, [projectSessionsByProjectId]);
+  }, [allVisibleProjectsLoaded, projectSessionsByProjectId]);
 
   const mobileChatQuickSwitchMenuStyle = useMemo<React.CSSProperties>(() => ({
     top: portRelayReady && portRelayFrameUrl ? 56 : 0,
