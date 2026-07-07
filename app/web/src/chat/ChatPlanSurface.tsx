@@ -45,14 +45,59 @@ function renderPlanList(plan: ChatPlanSnapshot) {
   );
 }
 
+function compactChevronClassName(expanded: boolean, mode: 'desktop' | 'mobile'): string {
+  if (mode === 'desktop') {
+    return expanded ? 'codicon-chevron-up' : 'codicon-chevron-down';
+  }
+  return expanded ? 'codicon-chevron-down' : 'codicon-chevron-up';
+}
+
+function renderCompactTrigger({
+  activeEntry,
+  expanded,
+  mode,
+  onClick,
+  progressLabel,
+}: {
+  activeEntry: ChatPlanEntry | null;
+  expanded: boolean;
+  mode: 'desktop' | 'mobile';
+  onClick: () => void;
+  progressLabel: string;
+}) {
+  return (
+    <button
+      type="button"
+      className="chat-plan-compact-trigger"
+      onClick={onClick}
+      aria-expanded={expanded}
+      aria-label={expanded ? 'Collapse current plan' : 'Expand current plan'}
+      title={expanded ? 'Collapse current plan' : 'Expand current plan'}
+    >
+      <span
+        className={`codicon ${activeEntry ? planStepIconClassName(activeEntry) : 'codicon-checklist'} chat-plan-compact-marker`}
+        aria-hidden="true"
+      />
+      <span className="chat-plan-progress">{progressLabel}</span>
+      <span className="chat-plan-current">{activeEntry?.content ?? ''}</span>
+      <span
+        className={`codicon ${compactChevronClassName(expanded, mode)} chat-plan-compact-chevron`}
+        aria-hidden="true"
+      />
+    </button>
+  );
+}
+
 export const ChatPlanSurface = React.memo(function ChatPlanSurface({
   plan,
   mode,
 }: ChatPlanSurfaceProps) {
   const [expanded, setExpanded] = React.useState(false);
+  const [desktopCollapsed, setDesktopCollapsed] = React.useState(false);
 
   React.useEffect(() => {
     setExpanded(false);
+    setDesktopCollapsed(false);
   }, [mode, plan?.turnIndex]);
 
   if (!plan) {
@@ -66,10 +111,33 @@ export const ChatPlanSurface = React.memo(function ChatPlanSurface({
   const progressLabel = `${currentStep}/${plan.totalCount}`;
 
   if (mode === 'desktop') {
+    if (desktopCollapsed) {
+      return (
+        <aside className="chat-plan-surface desktop collapsed" aria-label="Current plan">
+          {renderCompactTrigger({
+            activeEntry,
+            expanded: false,
+            mode,
+            onClick: () => setDesktopCollapsed(false),
+            progressLabel,
+          })}
+        </aside>
+      );
+    }
+
     return (
-      <aside className="chat-plan-surface desktop" aria-label="Current plan">
+      <aside className="chat-plan-surface desktop expanded" aria-label="Current plan">
         <div className="chat-plan-surface-header">
-          <span className="codicon codicon-checklist" aria-hidden="true" />
+          <button
+            type="button"
+            className="chat-plan-surface-toggle"
+            onClick={() => setDesktopCollapsed(true)}
+            aria-expanded={true}
+            aria-label="Collapse current plan"
+            title="Collapse current plan"
+          >
+            <span className="codicon codicon-chevron-up" aria-hidden="true" />
+          </button>
           <span className="chat-plan-surface-title">Plan</span>
           <span className="chat-plan-progress">{progressLabel}</span>
         </div>
@@ -80,25 +148,13 @@ export const ChatPlanSurface = React.memo(function ChatPlanSurface({
 
   return (
     <div className={`chat-plan-surface mobile${expanded ? ' expanded' : ''}`}>
-      <button
-        type="button"
-        className="chat-plan-compact-trigger"
-        onClick={() => setExpanded(value => !value)}
-        aria-expanded={expanded}
-        aria-label={expanded ? 'Collapse current plan' : 'Expand current plan'}
-        title={expanded ? 'Collapse current plan' : 'Expand current plan'}
-      >
-        <span
-          className={`codicon ${activeEntry ? planStepIconClassName(activeEntry) : 'codicon-checklist'} chat-plan-compact-marker`}
-          aria-hidden="true"
-        />
-        <span className="chat-plan-progress">{progressLabel}</span>
-        <span className="chat-plan-current">{activeEntry?.content ?? ''}</span>
-        <span
-          className={`codicon ${expanded ? 'codicon-chevron-down' : 'codicon-chevron-up'} chat-plan-compact-chevron`}
-          aria-hidden="true"
-        />
-      </button>
+      {renderCompactTrigger({
+        activeEntry,
+        expanded,
+        mode,
+        onClick: () => setExpanded(value => !value),
+        progressLabel,
+      })}
       {expanded ? renderPlanList(plan) : null}
     </div>
   );
