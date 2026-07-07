@@ -31,6 +31,7 @@ type SessionAgentState struct {
 	Commands          []acp.AvailableCommand `json:"commands,omitempty"`
 	Title             string                 `json:"title,omitempty"`
 	UpdatedAt         string                 `json:"updatedAt,omitempty"`
+	Usage             *acp.SessionUsage      `json:"usage,omitempty"`
 	AgentCapabilities acp.AgentCapabilities  `json:"agentCapabilities,omitempty"`
 	AgentInfo         *acp.AgentInfo         `json:"agentInfo,omitempty"`
 	AuthMethods       []acp.AuthMethod       `json:"authMethods,omitempty"`
@@ -121,6 +122,10 @@ func cloneSessionAgentState(src *SessionAgentState) *SessionAgentState {
 	cp.Commands = append([]acp.AvailableCommand(nil), src.Commands...)
 	cp.AuthMethods = append([]acp.AuthMethod(nil), src.AuthMethods...)
 	cp.AgentInfo = cloneAgentInfo(src.AgentInfo)
+	if src.Usage != nil {
+		usage := *src.Usage
+		cp.Usage = &usage
+	}
 	return &cp
 }
 
@@ -835,7 +840,8 @@ func (s *Session) SessionUpdate(params acp.SessionUpdateParams) {
 	changed := false
 	if update.SessionUpdate == acp.SessionUpdateAvailableCommandsUpdate ||
 		update.SessionUpdate == acp.SessionUpdateConfigOptionUpdate ||
-		update.SessionUpdate == acp.SessionUpdateSessionInfoUpdate {
+		update.SessionUpdate == acp.SessionUpdateSessionInfoUpdate ||
+		update.SessionUpdate == acp.SessionUpdateUsageUpdate {
 		s.mu.Lock()
 		state := &s.agentState
 		switch update.SessionUpdate {
@@ -856,6 +862,26 @@ func (s *Session) SessionUpdate(params acp.SessionUpdateParams) {
 			}
 			if update.UpdatedAt != "" {
 				state.UpdatedAt = update.UpdatedAt
+				changed = true
+			}
+		case acp.SessionUpdateUsageUpdate:
+			if update.Used != nil || update.Size != nil || strings.TrimSpace(update.UpdatedAt) != "" {
+				next := acp.SessionUsage{}
+				if state.Usage != nil {
+					next = *state.Usage
+				}
+				if update.Used != nil {
+					next.Used = *update.Used
+				}
+				if update.Size != nil {
+					next.Size = *update.Size
+				}
+				if updatedAt := strings.TrimSpace(update.UpdatedAt); updatedAt != "" {
+					next.UpdatedAt = updatedAt
+				} else {
+					next.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+				}
+				state.Usage = &next
 				changed = true
 			}
 		}
@@ -880,6 +906,17 @@ func (s *Session) SessionUpdate(params acp.SessionUpdateParams) {
 				"params": params,
 			}),
 		})
+	}
+
+	if update.SessionUpdate == acp.SessionUpdateUsageUpdate {
+		s.recordSessionViewEvent(SessionViewEvent{
+			Type:      SessionViewEventTypeACP,
+			SessionID: sessID,
+			Content: acp.BuildACPContentJSON(acp.MethodSessionUpdate, map[string]any{
+				"params": params,
+			}),
+		})
+		return
 	}
 
 	if ch == nil {

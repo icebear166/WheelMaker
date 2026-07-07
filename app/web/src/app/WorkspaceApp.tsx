@@ -97,6 +97,7 @@ import { ChatTurnView } from '../chat/ChatTurnView';
 import {ChatPlanSurface} from '../chat/ChatPlanSurface';
 import {extractLatestChatPlan} from '../chat/chatPlan';
 import { resolveChatSessionTitle } from '../chat/session/chatSessionTitle';
+import { formatChatContextUsage, resolveChatReasoningSignal, splitChatComposerStatusOptions } from '../chat/session/chatComposerStatus';
 import {decodeSessionTurnToMessage, normalizeSessionMessagePayload} from '../chat/chatWire';
 import {
   applySessionReadResult,
@@ -766,9 +767,6 @@ const CHAT_AUTO_SCROLL_BOTTOM_THRESHOLD = 80;
 const CHAT_KEYBOARD_INSET_SETTLE_DELAY_MS = 120;
 const CHAT_PENDING_CONFIRM_TIMEOUT_MS = 5000;
 const CHAT_ATTACHMENT_CHUNK_SIZE = 1024 * 1024;
-const CHAT_CONFIG_PRIORITY_IDS = ['mode', 'model', 'effort'] as const;
-const CHAT_CONFIG_PRIORITY_MATCHERS = ['mode', 'model', 'effort', 'thought'] as const;
-const CHAT_CONFIG_INLINE_LIMIT = 3;
 const HUB_TREE_EMPTY_EXPANDED_SENTINEL = '__hub_tree_empty__';
 function estimateSessionReadPayloadBytes(result: RegistrySessionReadResponse): number {
   try {
@@ -1317,6 +1315,9 @@ function mergeChatSession(
       (existing?.commands
         ? [...existing.commands]
         : undefined),
+    usage:
+      next.usage ??
+      (existing?.usage ? { ...existing.usage } : undefined),
   };
   const filtered = list.filter(item => item.sessionId !== next.sessionId);
   return sortChatSessions([merged, ...filtered]);
@@ -1488,22 +1489,6 @@ function msgBlocks(
     return [];
   }
   return [];
-}
-
-function chatConfigPriority(option: RegistrySessionConfigOption): number {
-  const id = (option.id || '').trim().toLowerCase();
-  const label = (option.name || '').trim().toLowerCase();
-  const exactRank = CHAT_CONFIG_PRIORITY_IDS.findIndex(item => item === id);
-  if (exactRank >= 0) {
-    return exactRank;
-  }
-  const fuzzyRank = CHAT_CONFIG_PRIORITY_MATCHERS.findIndex(
-    item => id.includes(item) || label.includes(item),
-  );
-  if (fuzzyRank >= 0) {
-    return CHAT_CONFIG_PRIORITY_IDS.length + fuzzyRank;
-  }
-  return 99;
 }
 
 function chatConfigCurrentValue(option: RegistrySessionConfigOption): string {
@@ -3314,6 +3299,11 @@ export function App() {
     return selectedChatSession?.configOptions ?? [];
   }, [selectedChatSession]);
 
+  const chatContextUsage = useMemo(
+    () => formatChatContextUsage(selectedChatSession?.usage),
+    [selectedChatSession?.usage],
+  );
+
   const selectedFullChatMessages =
     selectedChatEncodedKey
       ? chatMessageStoreRef.current[selectedChatEncodedKey] ?? []
@@ -3450,42 +3440,20 @@ export function App() {
     return () => window.cancelAnimationFrame(frameId);
   }, [chatDisplayIndex, selectedChatEncodedKey, sessionSearchTargetTurn]);
 
+  const chatComposerStatusCompact = !isWide || windowWidth < 980 || (chatPreviewOpen && windowWidth < 1280);
+
   const chatConfigDisplay = useMemo(() => {
-    if (selectedChatConfigOptions.length === 0) {
-      return {
-        visible: selectedChatConfigOptions,
-        overflow: [] as RegistrySessionConfigOption[],
-      };
-    }
-    if (selectedChatConfigOptions.length <= CHAT_CONFIG_INLINE_LIMIT) {
-      return {
-        visible: selectedChatConfigOptions,
-        overflow: [] as RegistrySessionConfigOption[],
-      };
-    }
-    const prioritized = selectedChatConfigOptions
-      .map((option, index) => ({ option, index, rank: chatConfigPriority(option) }))
-      .sort((left, right) => {
-        if (left.rank !== right.rank) {
-          return left.rank - right.rank;
-        }
-        return left.index - right.index;
-      });
-    const visibleIds = new Set(
-      prioritized.slice(0, CHAT_CONFIG_INLINE_LIMIT).map(item => item.option.id),
-    );
-    const visible: RegistrySessionConfigOption[] = [];
-    const overflow: RegistrySessionConfigOption[] = [];
-    for (const option of selectedChatConfigOptions) {
-      if (visibleIds.has(option.id) && visible.length < CHAT_CONFIG_INLINE_LIMIT) {
-        visible.push(option);
-        visibleIds.delete(option.id);
-      } else {
-        overflow.push(option);
-      }
-    }
-    return { visible, overflow };
-  }, [selectedChatConfigOptions]);
+    const status = splitChatComposerStatusOptions(selectedChatConfigOptions, chatComposerStatusCompact);
+    return {
+      status,
+      visible: [
+        ...(status.modelOption ? [status.modelOption] : []),
+        ...(status.reasoningOption ? [status.reasoningOption] : []),
+        ...status.secondaryOptions,
+      ],
+      overflow: status.overflowOptions,
+    };
+  }, [chatComposerStatusCompact, selectedChatConfigOptions]);
 
   const chatSlashSkills = useMemo(() => {
     const currentProject = projects.find(item => item.projectId === projectId);
@@ -17899,8 +17867,9 @@ export function App() {
       !!selectedDiff &&
       isHeavyGeneratedDiffPath(selectedDiff) &&
       !allowHeavyDiffLoad;
-    const chatConfigOptions = chatConfigDisplay.visible;
-    const chatConfigOverflowOptions = chatConfigDisplay.overflow;
+    const chatConfigStatus = chatConfigDisplay.status;
+    const chatConfigOptions = chatConfigStatus.secondaryOptions;
+    const chatConfigOverflowOptions = chatConfigStatus.overflowOptions;
     const selectedFileIsImage = isImageFile(
       selectedFile,
       fileInfo?.mimeType,
@@ -17979,6 +17948,99 @@ export function App() {
               aria-hidden="true"
             />
             <span className="chat-config-pill-value">{currentLabel}</span>
+          </button>
+          {open ? renderChatConfigValueMenu(option) : null}
+        </div>
+      );
+    };
+    const renderChatContextUsage = () => {
+      if (!chatContextUsage) {
+        return null;
+      }
+      return (
+        <span
+          className="chat-context-usage"
+          style={{ '--chat-context-used': `${chatContextUsage.percent}%` } as React.CSSProperties}
+          title={chatContextUsage.title}
+          aria-label={chatContextUsage.title}
+          role="img"
+        />
+      );
+    };
+    const renderChatStatusModel = (option?: RegistrySessionConfigOption) => {
+      if (!option) {
+        return null;
+      }
+      const optionValues = option.options ?? [];
+      const label = chatConfigCurrentLabel(option);
+      const updating =
+        chatConfigUpdatingKey ===
+        `${selectedChatSession?.sessionId ?? ''}:${option.id}`;
+      const open = chatConfigMenuOptionId === option.id;
+      return (
+        <div key={`status:${option.id}`} className="chat-status-control">
+          <button
+            type="button"
+            className="chat-status-model-button"
+            disabled={updating || optionValues.length === 0}
+            title={`Model: ${label}`}
+            aria-label={`Model: ${label}`}
+            aria-haspopup="menu"
+            aria-expanded={open}
+            onClick={() => {
+              setChatPromptMenuOpen(false);
+              setChatFileMentionMenuOpen(false);
+              setChatConfigOverflowOpen(false);
+              setChatConfigMenuOptionId(current => (current === option.id ? '' : option.id));
+            }}
+          >
+            <span
+              className={`codicon ${updating ? 'codicon-loading codicon-modifier-spin' : 'codicon-symbol-class'}`}
+              aria-hidden="true"
+            />
+            <span className="chat-status-model-label">{label}</span>
+          </button>
+          {open ? renderChatConfigValueMenu(option) : null}
+        </div>
+      );
+    };
+    const renderChatStatusReasoning = (option?: RegistrySessionConfigOption) => {
+      if (!option) {
+        return null;
+      }
+      const signal = resolveChatReasoningSignal(option);
+      if (!signal) {
+        return null;
+      }
+      const optionValues = option.options ?? [];
+      const updating =
+        chatConfigUpdatingKey ===
+        `${selectedChatSession?.sessionId ?? ''}:${option.id}`;
+      const open = chatConfigMenuOptionId === option.id;
+      return (
+        <div key={`status:${option.id}`} className="chat-status-control">
+          <button
+            type="button"
+            className="chat-status-signal-button"
+            disabled={updating || optionValues.length === 0}
+            title={`Reasoning: ${signal.label}`}
+            aria-label={`Reasoning: ${signal.label}`}
+            aria-haspopup="menu"
+            aria-expanded={open}
+            onClick={() => {
+              setChatPromptMenuOpen(false);
+              setChatFileMentionMenuOpen(false);
+              setChatConfigOverflowOpen(false);
+              setChatConfigMenuOptionId(current => (current === option.id ? '' : option.id));
+            }}
+          >
+            {Array.from({ length: signal.totalBars }).map((_, index) => (
+              <span
+                key={index}
+                className={`chat-status-signal-bar${index < signal.activeBars ? ' active' : ''}`}
+                aria-hidden="true"
+              />
+            ))}
           </button>
           {open ? renderChatConfigValueMenu(option) : null}
         </div>
@@ -18699,20 +18761,28 @@ export function App() {
                   ) : null}
                 </div>
                 <div className="chat-composer-toolbar-actions">
-                  {selectedChatConfigOptions.length > 0 ? (
+                  {chatContextUsage || selectedChatConfigOptions.length > 0 ? (
                     <div className="chat-config-options-wrap">
-                      <div className="chat-config-options-shell">
-                        <div ref={chatConfigOptionsRef} className="chat-config-options">
-                          {chatConfigOptions.map(option => renderChatConfigPill(option))}
-                        </div>
-                        {chatConfigOverflowOptions.length > 0 ? (
+                      <div
+                        ref={chatConfigOptionsRef}
+                        className={`chat-config-options-shell${chatComposerStatusCompact ? ' compact' : ''}`}
+                      >
+                        {renderChatContextUsage()}
+                        {renderChatStatusModel(chatConfigStatus.modelOption)}
+                        {renderChatStatusReasoning(chatConfigStatus.reasoningOption)}
+                        {chatConfigOptions.length > 0 ? (
+                          <div className="chat-config-options">
+                            {chatConfigOptions.map(option => renderChatConfigPill(option))}
+                          </div>
+                        ) : null}
+                        {chatConfigStatus.showOverflowToggle ? (
                           <div ref={chatConfigOverflowRef} className="chat-config-overflow-anchor">
                             <button
                               type="button"
-                              className="chat-config-overflow-button"
-                              aria-label={`Show ${chatConfigOverflowOptions.length} more config options`}
+                              className="chat-config-overflow-button chat-config-expand-button"
+                              aria-label={chatConfigOverflowOpen ? 'Hide config options' : `Show ${chatConfigOverflowOptions.length} config options`}
                               aria-expanded={chatConfigOverflowOpen}
-                              title="More config options"
+                              title={chatConfigOverflowOpen ? 'Hide config options' : 'Show config options'}
                               onClick={() => {
                                 setChatPromptMenuOpen(false);
                                 setChatFileMentionMenuOpen(false);
@@ -18720,11 +18790,13 @@ export function App() {
                                 setChatConfigOverflowOpen(prev => !prev);
                               }}
                             >
-                              <span className="codicon codicon-ellipsis" aria-hidden="true" />
-                              <span className="codicon codicon-chevron-down" aria-hidden="true" />
+                              <span
+                                className={`codicon ${chatConfigOverflowOpen ? 'codicon-chevron-up' : 'codicon-chevron-down'}`}
+                                aria-hidden="true"
+                              />
                             </button>
                             {chatConfigOverflowOpen ? (
-                              <div className="chat-config-overflow-menu" aria-label="More config options">
+                              <div className="chat-config-overflow-menu" aria-label="Config options">
                                 {chatConfigOverflowOptions.map(option => {
                                   const optionValues = option.options ?? [];
                                   const currentValue = chatConfigCurrentValue(option);

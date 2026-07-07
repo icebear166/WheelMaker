@@ -775,6 +775,52 @@ func TestSessionUpdate_NoPromptContext_DoesNotBlockWhenChannelFull(t *testing.T)
 	}
 }
 
+func TestSessionUpdate_UsageUpdatesAgentStateWithoutPromptDelivery(t *testing.T) {
+	s := mustNewSession(t, "sess", "/tmp", "claude")
+	ch := make(chan acp.SessionUpdateParams, 1)
+	used := int64(19000)
+	size := int64(258000)
+
+	s.mu.Lock()
+	s.acpSessionID = "acp-1"
+	s.prompt.updatesCh = ch
+	s.prompt.ctx = nil
+	s.mu.Unlock()
+
+	s.SessionUpdate(acp.SessionUpdateParams{
+		SessionID: "acp-1",
+		Update: acp.SessionUpdate{
+			SessionUpdate: acp.SessionUpdateUsageUpdate,
+			Used:          &used,
+			Size:          &size,
+			UpdatedAt:     "2026-07-07T08:00:00Z",
+		},
+	})
+
+	select {
+	case got := <-ch:
+		t.Fatalf("usage update delivered to prompt channel: %+v", got.Update)
+	default:
+	}
+
+	s.mu.Lock()
+	raw := mustJSON(s.agentState)
+	s.mu.Unlock()
+	var state struct {
+		Usage struct {
+			Used      int64  `json:"used"`
+			Size      int64  `json:"size"`
+			UpdatedAt string `json:"updatedAt"`
+		} `json:"usage"`
+	}
+	if err := json.Unmarshal(raw, &state); err != nil {
+		t.Fatalf("unmarshal agent state: %v", err)
+	}
+	if state.Usage.Used != used || state.Usage.Size != size || state.Usage.UpdatedAt != "2026-07-07T08:00:00Z" {
+		t.Fatalf("usage state = %+v, want used=%d size=%d", state.Usage, used, size)
+	}
+}
+
 func TestPromptObserve_FirstWaitTransitions(t *testing.T) {
 	st := newPromptObserveState(time.Unix(0, 0))
 	e := st.Eval(time.Unix(60, 0), false)
@@ -6676,6 +6722,47 @@ func TestHandleSessionRequest_SessionListIncludesConfigOptions(t *testing.T) {
 	}
 	if sessions[0].ConfigOptions[0].ID != "mode" || sessions[0].ConfigOptions[0].CurrentValue != "code" {
 		t.Fatalf("config option = %+v", sessions[0].ConfigOptions[0])
+	}
+}
+
+func TestHandleSessionRequest_SessionListIncludesUsage(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	now := time.Date(2026, 5, 10, 5, 0, 0, 0, time.UTC)
+
+	if err := c.store.SaveSession(ctx, &SessionRecord{
+		ID:           "sess-1",
+		ProjectName:  "proj1",
+		Status:       SessionPersisted,
+		AgentType:    "codexapp",
+		AgentJSON:    `{"usage":{"used":19000,"size":258000,"updatedAt":"2026-07-07T08:00:00Z"}}`,
+		Title:        "Session 1",
+		CreatedAt:    now,
+		LastActiveAt: now,
+	}); err != nil {
+		t.Fatalf("SaveSession: %v", err)
+	}
+
+	resp, err := c.HandleSessionRequest(ctx, "session.list", "proj1", json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("HandleSessionRequest(session.list): %v", err)
+	}
+	body, ok := resp.(map[string]any)
+	if !ok {
+		t.Fatalf("response type = %T, want map[string]any", resp)
+	}
+	sessions, ok := body["sessions"].([]sessionViewSummary)
+	if !ok {
+		t.Fatalf("sessions type = %T, want []sessionViewSummary", body["sessions"])
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("sessions len = %d, want 1", len(sessions))
+	}
+	if sessions[0].Usage == nil {
+		t.Fatal("usage missing from session summary")
+	}
+	if sessions[0].Usage.Used != 19000 || sessions[0].Usage.Size != 258000 || sessions[0].Usage.UpdatedAt != "2026-07-07T08:00:00Z" {
+		t.Fatalf("usage = %+v", sessions[0].Usage)
 	}
 }
 

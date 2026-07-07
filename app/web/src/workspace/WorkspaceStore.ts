@@ -81,6 +81,9 @@ function mergeCachedChatSessionSummary(
     commands:
       next.commands ??
       (existing.commands ? [...existing.commands] : undefined),
+    usage:
+      next.usage ??
+      (existing.usage ? { ...existing.usage } : undefined),
   };
 }
 

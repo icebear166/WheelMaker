@@ -136,7 +136,7 @@ describe('chat session index persistence', () => {
     });
   });
 
-  test('preserves config options and commands when patching with a summary that omits them', () => {
+  test('preserves config options, commands, and usage when patching with a summary that omits them', () => {
     const persistence = createFakeChatPersistence();
     const store = new WorkspaceStore(persistence as any);
 
@@ -149,6 +149,7 @@ describe('chat session index persistence', () => {
         messageCount: 1,
         configOptions: [{ id: 'model', currentValue: 'gpt-5.3-codex' }],
         commands: [{ name: '/plan' }],
+        usage: { used: 19000, size: 258000, updatedAt: '2026-07-07T08:00:00.000Z' },
       },
     ], { s1: { turnIndex: 3 } });
 
@@ -167,12 +168,13 @@ describe('chat session index persistence', () => {
         preview: 'updated',
         configOptions: [{ id: 'model', currentValue: 'gpt-5.3-codex' }],
         commands: [{ name: '/plan' }],
+        usage: { used: 19000, size: 258000, updatedAt: '2026-07-07T08:00:00.000Z' },
       }),
       { turnIndex: 4 },
     );
   });
 
-  test('preserves config options and commands when replacing with summaries that omit them', () => {
+  test('preserves config options, commands, and usage when replacing with summaries that omit them', () => {
     const persistence = createFakeChatPersistence();
     const store = new WorkspaceStore(persistence as any);
 
@@ -185,6 +187,7 @@ describe('chat session index persistence', () => {
         messageCount: 1,
         configOptions: [{ id: 'mode', currentValue: 'code' }],
         commands: [{ name: '/status' }],
+        usage: { used: 19000, size: 258000, updatedAt: '2026-07-07T08:00:00.000Z' },
       },
     ], { s1: { turnIndex: 3 } });
 
@@ -207,6 +210,7 @@ describe('chat session index persistence', () => {
             preview: 'listed',
             configOptions: [{ id: 'mode', currentValue: 'code' }],
             commands: [{ name: '/status' }],
+            usage: { used: 19000, size: 258000, updatedAt: '2026-07-07T08:00:00.000Z' },
           }),
           cursor: { turnIndex: 5 },
         },

@@ -276,6 +276,12 @@ export interface RegistrySessionCommand {
   description?: string;
 }
 
+export interface RegistrySessionUsage {
+  used: number;
+  size?: number;
+  updatedAt?: string;
+}
+
 export interface RegistrySessionSummary {
   sessionId: string;
   title: string;
@@ -291,6 +297,7 @@ export interface RegistrySessionSummary {
   lastReadTurnIndex?: number;
   configOptions?: RegistrySessionConfigOption[];
   commands?: RegistrySessionCommand[];
+  usage?: RegistrySessionUsage;
 }
 
 export interface RegistryArchivedSessionSummary extends RegistrySessionSummary {

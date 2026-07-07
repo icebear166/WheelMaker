@@ -78,7 +78,7 @@ describe('chat index state helpers', () => {
     });
   });
 
-  test('preserves config options and commands when refreshed session list omits them', () => {
+  test('preserves config options, commands, and usage when refreshed session list omits them', () => {
     const existing: RegistryChatSession[] = [
       {
         ...session('s1', '2026-01-02T00:00:00.000Z'),
@@ -91,6 +91,7 @@ describe('chat index state helpers', () => {
           },
         ],
         commands: [{ name: '/plan', description: 'Plan' }],
+        usage: { used: 19000, size: 258000, updatedAt: '2026-07-07T08:00:00.000Z' },
       },
     ];
 
@@ -108,6 +109,7 @@ describe('chat index state helpers', () => {
       updatedAt: '2026-01-03T00:00:00.000Z',
       configOptions: existing[0].configOptions,
       commands: existing[0].commands,
+      usage: existing[0].usage,
     });
   });
 

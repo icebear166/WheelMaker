@@ -134,6 +134,9 @@ export function mergeChatIndexSession(
     commands:
       session.commands ??
       (existing?.commands ? [...existing.commands] : undefined),
+    usage:
+      session.usage ??
+      (existing?.usage ? { ...existing.usage } : undefined),
   };
   return {
     ...state,
@@ -157,11 +160,12 @@ export function mergeChatSessionList(
     const previous = nextById.get(item.sessionId) ?? byId.get(item.sessionId);
     const merged =
       previous &&
-      (item.configOptions === undefined || item.commands === undefined)
+      (item.configOptions === undefined || item.commands === undefined || item.usage === undefined)
         ? {
             ...item,
             configOptions: item.configOptions ?? previous.configOptions,
             commands: item.commands ?? previous.commands,
+            usage: item.usage ?? previous.usage,
           }
         : item;
     nextById.set(item.sessionId, merged);

@@ -46,6 +46,7 @@ type sessionViewSummary struct {
 	LastDoneSuccess   bool               `json:"lastDoneSuccess"`
 	LastReadTurnIndex int64              `json:"lastReadTurnIndex"`
 	ConfigOptions     []acp.ConfigOption `json:"configOptions,omitempty"`
+	Usage             *acp.SessionUsage  `json:"usage,omitempty"`
 }
 
 type sessionTitleFacts struct {
@@ -92,6 +93,7 @@ type parsedSessionViewEvent struct {
 	turnKey           string
 	sessionInfoUpdate bool
 	sessionInfoTitle  string
+	usageUpdate       bool
 }
 
 type SessionRecorder struct {
@@ -334,6 +336,9 @@ func (r *SessionRecorder) RecordEvent(ctx context.Context, event SessionViewEven
 		if parsed.sessionInfoUpdate {
 			return r.handleSessionInfoUpdateLocked(ctx, parsed)
 		}
+		if parsed.usageUpdate {
+			return r.handleSessionUsageUpdateLocked(ctx, parsed)
+		}
 		return nil
 	default:
 		return nil
@@ -355,6 +360,18 @@ func (r *SessionRecorder) handleSessionInfoUpdateLocked(ctx context.Context, eve
 	rec.Title = updateSessionFirstTitleFacts(rec.Title, title)
 	if err := r.store.SaveSession(ctx, rec); err != nil {
 		return err
+	}
+	r.publishSessionUpdated(r.sessionViewSummaryFromRecordLocked(*rec))
+	return nil
+}
+
+func (r *SessionRecorder) handleSessionUsageUpdateLocked(ctx context.Context, event parsedSessionViewEvent) error {
+	rec, err := r.store.LoadSession(ctx, r.projectName, event.raw.SessionID)
+	if err != nil {
+		return err
+	}
+	if rec == nil {
+		return nil
 	}
 	r.publishSessionUpdated(r.sessionViewSummaryFromRecordLocked(*rec))
 	return nil
@@ -823,7 +840,7 @@ func (r *SessionRecorder) sessionViewSummaryFromRecordLocked(rec SessionRecord) 
 			latestTurnIndex = turn.TurnIndex
 		}
 	}
-	return buildSessionViewSummary(
+	summary := buildSessionViewSummary(
 		rec.ID,
 		rec.Title,
 		rec.LastActiveAt,
@@ -834,6 +851,12 @@ func (r *SessionRecorder) sessionViewSummaryFromRecordLocked(rec SessionRecord) 
 		projection.LastDoneSuccess != nil && *projection.LastDoneSuccess,
 		projection.LastReadTurnIndex,
 	)
+	var agentState SessionAgentState
+	if strings.TrimSpace(rec.AgentJSON) != "" && json.Unmarshal([]byte(rec.AgentJSON), &agentState) == nil && agentState.Usage != nil {
+		usage := *agentState.Usage
+		summary.Usage = &usage
+	}
+	return summary
 }
 
 func (r *SessionRecorder) publishSessionUpdated(summary sessionViewSummary) {
@@ -1351,6 +1374,8 @@ func parseSessionViewEvent(event SessionViewEvent) (parsedSessionViewEvent, erro
 			case acp.SessionUpdateSessionInfoUpdate:
 				parsed.sessionInfoUpdate = true
 				parsed.sessionInfoTitle = strings.TrimSpace(params.Update.Title)
+			case acp.SessionUpdateUsageUpdate:
+				parsed.usageUpdate = true
 			default:
 				return parsedSessionViewEvent{}, fmt.Errorf("unsupported session update type: %s", method)
 			}

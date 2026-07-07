@@ -1617,6 +1617,104 @@ func TestCodexAppThreadResumeDecodesOfficialFileChangeKind(t *testing.T) {
 	}
 }
 
+func TestCodexAppConfigStateIncludesPersonalityInRequests(t *testing.T) {
+	state := newCodexappConfigState()
+	options := state.options()
+	var found bool
+	for _, option := range options {
+		if option.ID != "personality" {
+			continue
+		}
+		found = true
+		if option.CurrentValue != "none" {
+			t.Fatalf("personality currentValue=%q, want none", option.CurrentValue)
+		}
+		if len(option.Options) != 3 {
+			t.Fatalf("personality options len=%d, want 3", len(option.Options))
+		}
+	}
+	if !found {
+		t.Fatal("personality config option not exposed")
+	}
+
+	if err := state.set("personality", "pragmatic"); err != nil {
+		t.Fatalf("set personality: %v", err)
+	}
+	if err := state.set("personality", "chaotic"); err == nil {
+		t.Fatal("set invalid personality succeeded")
+	}
+
+	threadStartRaw, err := json.Marshal(state.threadStartParams("/tmp/project"))
+	if err != nil {
+		t.Fatalf("marshal thread start: %v", err)
+	}
+	if !strings.Contains(string(threadStartRaw), `"personality":"pragmatic"`) {
+		t.Fatalf("thread/start params=%s, want personality", threadStartRaw)
+	}
+
+	threadResumeRaw, err := json.Marshal(state.threadResumeParams("thread-1", "/tmp/project"))
+	if err != nil {
+		t.Fatalf("marshal thread resume: %v", err)
+	}
+	if !strings.Contains(string(threadResumeRaw), `"personality":"pragmatic"`) {
+		t.Fatalf("thread/resume params=%s, want personality", threadResumeRaw)
+	}
+
+	turnStartRaw, err := json.Marshal(state.turnStartParams("thread-1", "/tmp/project", []appServerUserInput{{Type: "text", Text: "hello"}}))
+	if err != nil {
+		t.Fatalf("marshal turn start: %v", err)
+	}
+	if !strings.Contains(string(turnStartRaw), `"personality":"pragmatic"`) {
+		t.Fatalf("turn/start params=%s, want personality", turnStartRaw)
+	}
+}
+
+func TestCodexAppTokenUsageNotificationEmitsUsageUpdate(t *testing.T) {
+	conn := newCodexappConnWithRuntimeAndProject(nil, t.TempDir(), "proj")
+	conn.BindSessionID("thread-1")
+	updates := make(chan protocol.SessionUpdateParams, 1)
+	conn.OnACPResponse(captureSessionUpdate(t, updates))
+
+	conn.handleAppServerNotification("thread/tokenUsage/updated", mustRaw(map[string]any{
+		"threadId": "thread-1",
+		"turnId":   "turn-1",
+		"tokenUsage": map[string]any{
+			"total": map[string]any{
+				"totalTokens":           19000,
+				"inputTokens":           17000,
+				"cachedInputTokens":     12000,
+				"outputTokens":          2000,
+				"reasoningOutputTokens": 300,
+			},
+			"last": map[string]any{
+				"totalTokens":           1000,
+				"inputTokens":           700,
+				"cachedInputTokens":     200,
+				"outputTokens":          300,
+				"reasoningOutputTokens": 50,
+			},
+			"modelContextWindow": 258000,
+		},
+	}))
+
+	update := waitForCodexappUpdate(t, updates)
+	if update.SessionID != "thread-1" {
+		t.Fatalf("sessionID=%q, want thread-1", update.SessionID)
+	}
+	if update.Update.SessionUpdate != protocol.SessionUpdateUsageUpdate {
+		t.Fatalf("sessionUpdate=%q, want usage_update", update.Update.SessionUpdate)
+	}
+	if update.Update.Used == nil || *update.Update.Used != 19000 {
+		t.Fatalf("used=%v, want 19000", update.Update.Used)
+	}
+	if update.Update.Size == nil || *update.Update.Size != 258000 {
+		t.Fatalf("size=%v, want 258000", update.Update.Size)
+	}
+	if strings.TrimSpace(update.Update.UpdatedAt) == "" {
+		t.Fatal("updatedAt is empty")
+	}
+}
+
 func TestCodexAppCompletedReasoningItemEmitsThoughtChunk(t *testing.T) {
 	tr := newFakeCodexappTransport()
 	rt := newCodexappRuntimeWithTransport(tr)

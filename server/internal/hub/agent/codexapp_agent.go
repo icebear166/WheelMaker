@@ -657,9 +657,10 @@ func (c *codexappConn) sendSessionNew(ctx context.Context, p protocol.SessionNew
 		return errors.New("codexapp thread/start returned empty thread id")
 	}
 	c.bindSessionIDs(threadID, threadID)
+	threadTitle := strings.TrimSpace(resp.Thread.displayTitle())
 	return assignResult(result, protocol.SessionNewResult{
 		SessionID:     threadID,
-		Title:         strings.TrimSpace(resp.Thread.displayTitle()),
+		Title:         threadTitle,
 		ConfigOptions: c.config.options(),
 	})
 }
@@ -707,12 +708,13 @@ func (c *codexappConn) sendSessionLoad(ctx context.Context, p protocol.SessionLo
 	}
 	c.bindSessionIDs(acpSessionID, runtimeThreadID)
 	codexappStoreThreadMapping(acpSessionID, runtimeThreadID)
-	if title := strings.TrimSpace(resp.Thread.displayTitle()); title != "" {
+	threadTitle := strings.TrimSpace(resp.Thread.displayTitle())
+	if threadTitle != "" {
 		c.emitSessionUpdate(protocol.SessionUpdateParams{
 			SessionID: acpSessionID,
 			Update: protocol.SessionUpdate{
 				SessionUpdate: protocol.SessionUpdateSessionInfoUpdate,
-				Title:         title,
+				Title:         threadTitle,
 			},
 		})
 	}
@@ -934,6 +936,20 @@ func (c *codexappConn) handleAppServerNotification(method string, params json.Ra
 				Update: protocol.SessionUpdate{
 					SessionUpdate: protocol.SessionUpdateSessionInfoUpdate,
 					Title:         p.displayName(),
+				},
+			})
+		}
+	case "thread/tokenUsage/updated":
+		var p appServerThreadTokenUsageUpdatedParams
+		if json.Unmarshal(params, &p) == nil && p.ThreadID != "" {
+			used := p.TokenUsage.Total.TotalTokens
+			c.emitSessionUpdate(protocol.SessionUpdateParams{
+				SessionID: c.outboundSessionID(p.ThreadID),
+				Update: protocol.SessionUpdate{
+					SessionUpdate: protocol.SessionUpdateUsageUpdate,
+					Used:          &used,
+					Size:          p.TokenUsage.ModelContextWindow,
+					UpdatedAt:     time.Now().UTC().Format(time.RFC3339),
 				},
 			})
 		}

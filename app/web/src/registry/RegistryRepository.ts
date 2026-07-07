@@ -58,6 +58,7 @@ import type {
   RegistrySessionConfigOption,
   RegistrySessionConfigOptionValue,
   RegistrySessionCommand,
+  RegistrySessionUsage,
   RegistrySessionMessage,
   RegistrySessionMessageEventPayload,
   RegistrySessionReadResponse,
@@ -337,6 +338,26 @@ export class RegistryRepository {
       description: typeof input.description === 'string' ? input.description : undefined,
     };
   }
+  private normalizeSessionUsage(raw: unknown): RegistrySessionUsage | undefined {
+    if (!raw || typeof raw !== 'object') {
+      return undefined;
+    }
+    const input = raw as Record<string, unknown>;
+    const used = typeof input.used === 'number' && Number.isFinite(input.used)
+      ? Math.max(0, Math.trunc(input.used))
+      : undefined;
+    if (used === undefined) {
+      return undefined;
+    }
+    const size = typeof input.size === 'number' && Number.isFinite(input.size)
+      ? Math.max(0, Math.trunc(input.size))
+      : undefined;
+    return {
+      used,
+      size,
+      updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : undefined,
+    };
+  }
   private normalizeSessionSummary(raw: unknown): RegistrySessionSummary | null {
     if (!raw || typeof raw !== 'object') {
       return null;
@@ -375,6 +396,7 @@ export class RegistryRepository {
             .map(item => this.normalizeSessionCommand(item))
             .filter((item): item is RegistrySessionCommand => !!item)
         : undefined,
+      usage: this.normalizeSessionUsage(input.usage),
     };
   }
 

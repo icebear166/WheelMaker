@@ -207,6 +207,13 @@ type SessionUpdate struct {
 	UpdatedAt     string         `json:"updatedAt,omitempty"`
 }
 
+// SessionUsage is the current context-window usage snapshot for a session.
+type SessionUsage struct {
+	Used      int64  `json:"used"`
+	Size      int64  `json:"size,omitempty"`
+	UpdatedAt string `json:"updatedAt,omitempty"`
+}
+
 // PlanEntry is a single step in an agent execution plan.
 type PlanEntry struct {
 	Content  string `json:"content"`

@@ -116,6 +116,7 @@ func (m *appServerModel) UnmarshalJSON(data []byte) error {
 type appServerThreadStartParams struct {
 	CWD            string `json:"cwd,omitempty"`
 	Model          string `json:"model,omitempty"`
+	Personality    string `json:"personality,omitempty"`
 	ApprovalPolicy string `json:"approvalPolicy,omitempty"`
 	Sandbox        string `json:"sandbox,omitempty"`
 	ServiceName    string `json:"serviceName,omitempty"`
@@ -125,6 +126,7 @@ type appServerThreadResumeParams struct {
 	ThreadID       string `json:"threadId"`
 	CWD            string `json:"cwd,omitempty"`
 	Model          string `json:"model,omitempty"`
+	Personality    string `json:"personality,omitempty"`
 	ApprovalPolicy string `json:"approvalPolicy,omitempty"`
 	Sandbox        string `json:"sandbox,omitempty"`
 }
@@ -196,6 +198,7 @@ type appServerTurnStartParams struct {
 	Input          []appServerUserInput `json:"input"`
 	CWD            string               `json:"cwd,omitempty"`
 	Model          string               `json:"model,omitempty"`
+	Personality    string               `json:"personality,omitempty"`
 	Effort         string               `json:"effort,omitempty"`
 	ApprovalPolicy string               `json:"approvalPolicy,omitempty"`
 	SandboxPolicy  appServerSandbox     `json:"sandboxPolicy,omitempty"`
@@ -346,6 +349,26 @@ func (p appServerThreadNameUpdatedParams) displayName() string {
 	return p.ThreadName
 }
 
+type appServerThreadTokenUsageUpdatedParams struct {
+	ThreadID   string                    `json:"threadId"`
+	TurnID     string                    `json:"turnId,omitempty"`
+	TokenUsage appServerThreadTokenUsage `json:"tokenUsage"`
+}
+
+type appServerThreadTokenUsage struct {
+	Total              appServerTokenUsageBreakdown `json:"total"`
+	Last               appServerTokenUsageBreakdown `json:"last"`
+	ModelContextWindow *int64                       `json:"modelContextWindow,omitempty"`
+}
+
+type appServerTokenUsageBreakdown struct {
+	TotalTokens           int64 `json:"totalTokens"`
+	InputTokens           int64 `json:"inputTokens"`
+	CachedInputTokens     int64 `json:"cachedInputTokens"`
+	OutputTokens          int64 `json:"outputTokens"`
+	ReasoningOutputTokens int64 `json:"reasoningOutputTokens"`
+}
+
 type appServerApprovalRequestParams struct {
 	ThreadID    string          `json:"threadId"`
 	TurnID      string          `json:"turnId,omitempty"`
@@ -401,6 +424,7 @@ type codexappConfigState struct {
 	approvalPreset  string
 	model           string
 	reasoningEffort string
+	personality     string
 	models          []appServerModel
 }
 
@@ -408,6 +432,7 @@ func newCodexappConfigState() codexappConfigState {
 	return codexappConfigState{
 		approvalPreset:  "auto",
 		reasoningEffort: "medium",
+		personality:     "none",
 	}
 }
 
@@ -451,6 +476,18 @@ func (s codexappConfigState) options() []protocol.ConfigOption {
 			CurrentValue: s.reasoningEffort,
 			Options:      s.reasoningOptions(),
 		},
+		{
+			ID:           protocol.ConfigOptionIDPersonality,
+			Name:         "Personality",
+			Category:     protocol.ConfigOptionCategoryPersonality,
+			Type:         "select",
+			CurrentValue: s.personality,
+			Options: []protocol.ConfigOptionValue{
+				{Value: "none", Name: "None"},
+				{Value: "friendly", Name: "Friendly"},
+				{Value: "pragmatic", Name: "Pragmatic"},
+			},
+		},
 	}
 }
 
@@ -475,6 +512,11 @@ func (s *codexappConfigState) set(id, value string) error {
 			return fmt.Errorf("invalid reasoning effort %q", value)
 		}
 		s.reasoningEffort = value
+	case protocol.ConfigOptionIDPersonality:
+		if !codexappPersonalityAllowed(value) {
+			return fmt.Errorf("invalid personality %q", value)
+		}
+		s.personality = value
 	default:
 		return fmt.Errorf("unsupported config option %q", id)
 	}
@@ -486,6 +528,7 @@ func (s codexappConfigState) threadStartParams(cwd string) appServerThreadStartP
 	return appServerThreadStartParams{
 		CWD:            cwd,
 		Model:          s.model,
+		Personality:    s.personality,
 		ApprovalPolicy: profile.approvalPolicy,
 		Sandbox:        profile.threadSandbox,
 		ServiceName:    "wheelmaker",
@@ -498,6 +541,7 @@ func (s codexappConfigState) threadResumeParams(threadID, cwd string) appServerT
 		ThreadID:       threadID,
 		CWD:            cwd,
 		Model:          s.model,
+		Personality:    s.personality,
 		ApprovalPolicy: profile.approvalPolicy,
 		Sandbox:        profile.threadSandbox,
 	}
@@ -510,6 +554,7 @@ func (s codexappConfigState) turnStartParams(threadID, cwd string, input []appSe
 		Input:          input,
 		CWD:            cwd,
 		Model:          s.model,
+		Personality:    s.personality,
 		Effort:         s.reasoningEffort,
 		ApprovalPolicy: profile.approvalPolicy,
 		SandboxPolicy:  profile.sandboxPolicy(cwd),
@@ -575,6 +620,15 @@ func (s codexappConfigState) currentModel() appServerModel {
 		}
 	}
 	return appServerModel{}
+}
+
+func codexappPersonalityAllowed(value string) bool {
+	switch value {
+	case "none", "friendly", "pragmatic":
+		return true
+	default:
+		return false
+	}
 }
 
 type codexappApprovalPreset struct {

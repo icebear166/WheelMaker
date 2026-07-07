@@ -72,11 +72,13 @@ const (
 	ConfigOptionIDThoughtLevel    = "thought_level"
 	ConfigOptionIDApprovalPreset  = "approval_preset"
 	ConfigOptionIDReasoningEffort = "reasoning_effort"
+	ConfigOptionIDPersonality     = "personality"
 
 	ConfigOptionCategoryMode           = "mode"
 	ConfigOptionCategoryModel          = "model"
 	ConfigOptionCategoryThoughtLv      = "thought_level"
 	ConfigOptionCategoryApprovalPreset = "_approval_preset"
+	ConfigOptionCategoryPersonality    = "personality"
 )
 
 // --- ACP stop reasons ---
