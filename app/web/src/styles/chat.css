@@ -4380,6 +4380,8 @@
 
 .chat-context-usage {
   --chat-context-used: 0%;
+  --chat-context-used-color: color-mix(in srgb, var(--text) 72%, #ffffff);
+  --chat-context-rest-color: color-mix(in srgb, var(--muted) 48%, transparent);
   position: relative;
   display: inline-flex;
   width: 16px;
@@ -4390,10 +4392,10 @@
   border-radius: 999px;
   background:
     conic-gradient(
-      color-mix(in srgb, var(--accent) 78%, #32c7a1) var(--chat-context-used),
-      color-mix(in srgb, var(--border) 76%, transparent) 0
+      var(--chat-context-used-color) var(--chat-context-used),
+      var(--chat-context-rest-color) 0
     );
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 70%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--muted) 38%, transparent);
   cursor: pointer;
   appearance: none;
 }
@@ -4412,8 +4414,8 @@
 .chat-context-usage-anchor.open .chat-context-usage {
   outline: none;
   box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--accent) 72%, transparent),
-    0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+    inset 0 0 0 1px color-mix(in srgb, var(--text) 42%, transparent),
+    0 0 0 3px color-mix(in srgb, var(--text) 9%, transparent);
 }
 
 .chat-context-usage-popover {

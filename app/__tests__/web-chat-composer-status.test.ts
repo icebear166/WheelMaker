@@ -146,6 +146,14 @@ describe('chat composer status helpers', () => {
     expect(cssRuleBlock(stylesCss, '.chat-config-pill')).toContain('height: 24px;');
     expect(cssRuleBlock(stylesCss, '.chat-config-overflow-button')).toContain('height: 24px;');
     expect(cssRuleBlock(stylesCss, '.chat-context-usage::after')).toContain('inset: 2px;');
+    const contextUsageRule = cssRuleBlock(stylesCss, '.chat-context-usage');
+    expect(contextUsageRule).toContain('--chat-context-used-color: color-mix(in srgb, var(--text) 72%, #ffffff);');
+    expect(contextUsageRule).toContain('--chat-context-rest-color: color-mix(in srgb, var(--muted) 48%, transparent);');
+    expect(contextUsageRule).toContain('var(--chat-context-used-color) var(--chat-context-used)');
+    expect(contextUsageRule).toContain('var(--chat-context-rest-color) 0');
+    expect(contextUsageRule).not.toContain('var(--accent)');
+    const contextUsageHoverRule = cssRuleBlock(stylesCss, '.chat-context-usage:hover,\n.chat-context-usage:focus-visible,\n.chat-context-usage-anchor.open .chat-context-usage');
+    expect(contextUsageHoverRule).not.toContain('var(--accent)');
     expect(stylesCss).not.toContain('.chat-context-usage.pending');
   });
 
