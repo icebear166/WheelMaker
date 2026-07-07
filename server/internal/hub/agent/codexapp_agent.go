@@ -942,7 +942,7 @@ func (c *codexappConn) handleAppServerNotification(method string, params json.Ra
 	case "thread/tokenUsage/updated":
 		var p appServerThreadTokenUsageUpdatedParams
 		if json.Unmarshal(params, &p) == nil && p.ThreadID != "" {
-			used := p.TokenUsage.Last.TotalTokens
+			used := p.TokenUsage.Total.TotalTokens
 			c.emitSessionUpdate(protocol.SessionUpdateParams{
 				SessionID: c.outboundSessionID(p.ThreadID),
 				Update: protocol.SessionUpdate{

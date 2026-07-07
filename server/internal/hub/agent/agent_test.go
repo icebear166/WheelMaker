@@ -1704,8 +1704,11 @@ func TestCodexAppTokenUsageNotificationEmitsUsageUpdate(t *testing.T) {
 	if update.Update.SessionUpdate != protocol.SessionUpdateUsageUpdate {
 		t.Fatalf("sessionUpdate=%q, want usage_update", update.Update.SessionUpdate)
 	}
-	if update.Update.Used == nil || *update.Update.Used != 93000 {
-		t.Fatalf("used=%v, want 93000", update.Update.Used)
+	// Usage must reflect the cumulative thread total (tokenUsage.total), not the
+	// per-chunk delta (tokenUsage.last). The delta is volatile and overwritten on
+	// every token event, so it cannot represent the session's token usage.
+	if update.Update.Used == nil || *update.Update.Used != 40894907 {
+		t.Fatalf("used=%v, want 40894907 (tokenUsage.total cumulative)", update.Update.Used)
 	}
 	if update.Update.Size == nil || *update.Update.Size != 192000 {
 		t.Fatalf("size=%v, want 192000", update.Update.Size)
