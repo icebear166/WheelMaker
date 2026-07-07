@@ -4459,7 +4459,7 @@
 }
 
 .chat-status-model-control {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
 }
 
 .chat-status-effort-control {
@@ -4484,7 +4484,7 @@
 }
 
 .chat-status-model-button {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   max-width: min(240px, 45vw);
   min-width: 0;
   padding: 0 6px;

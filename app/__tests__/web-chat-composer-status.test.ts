@@ -142,7 +142,8 @@ describe('chat composer status helpers', () => {
     expect(stylesCss).toContain('.chat-status-secondary-divider');
     expect(stylesCss).not.toContain('chat-status-signal-bar');
     expect(stylesCss).toMatch(/\.chat-status-model-button,\s*\.chat-status-effort-button \{[\s\S]*height: 24px;/);
-    expect(cssRuleBlock(stylesCss, '.chat-status-model-button')).toContain('flex: 1 1 auto;');
+    expect(cssRuleBlock(stylesCss, '.chat-status-model-control')).toContain('flex: 0 1 auto;');
+    expect(cssRuleBlock(stylesCss, '.chat-status-model-button')).toContain('flex: 0 1 auto;');
     expect(cssRuleBlock(stylesCss, '.chat-status-effort-button')).toContain('flex: 0 0 auto;');
     expect(cssRuleBlock(stylesCss, '.chat-config-options-shell')).toContain('max-width: 100%;');
     expect(cssRuleBlock(stylesCss, '.chat-config-options-wrap')).toContain('flex: 1 1 auto;');
