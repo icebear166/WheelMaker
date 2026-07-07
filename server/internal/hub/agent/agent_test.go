@@ -1704,13 +1704,11 @@ func TestCodexAppTokenUsageNotificationEmitsUsageUpdate(t *testing.T) {
 	if update.Update.SessionUpdate != protocol.SessionUpdateUsageUpdate {
 		t.Fatalf("sessionUpdate=%q, want usage_update", update.Update.SessionUpdate)
 	}
-	// Usage must reflect the current context-window occupancy, which is the
-	// cumulative input token count (tokenUsage.total.inputTokens), not the raw
-	// cumulative spend (totalTokens, which also counts output) nor the per-turn
-	// delta (tokenUsage.last). inputTokens is bounded by modelContextWindow and
-	// drops after context compaction, matching the codex app's context display.
-	if update.Update.Used == nil || *update.Update.Used != 40892907 {
-		t.Fatalf("used=%v, want 40892907 (tokenUsage.total.inputTokens)", update.Update.Used)
+	// Usage must reflect the current context-window occupancy. Codex reports it
+	// as tokenUsage.last.totalTokens; tokenUsage.total is cumulative session
+	// accounting and can greatly exceed modelContextWindow.
+	if update.Update.Used == nil || *update.Update.Used != 93000 {
+		t.Fatalf("used=%v, want 93000 (tokenUsage.last.totalTokens)", update.Update.Used)
 	}
 	if update.Update.Size == nil || *update.Update.Size != 192000 {
 		t.Fatalf("size=%v, want 192000", update.Update.Size)
