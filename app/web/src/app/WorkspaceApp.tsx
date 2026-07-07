@@ -3224,6 +3224,7 @@ export function App() {
   const [chatFileMentionActiveIndex, setChatFileMentionActiveIndex] = useState(0);
   const [chatAttachmentTrayOpen, setChatAttachmentTrayOpen] = useState(false);
   const [chatContextUsageOpen, setChatContextUsageOpen] = useState(false);
+  const [chatContextUsagePopoverStyle, setChatContextUsagePopoverStyle] = useState<React.CSSProperties>({});
   const [chatConfigMenuOptionId, setChatConfigMenuOptionId] = useState('');
   const [chatHubMenuOpen, setChatHubMenuOpen] = useState(false);
   const [chatHubColorMenuHubId, setChatHubColorMenuHubId] = useState('');
@@ -3307,6 +3308,18 @@ export function App() {
     () => selectedChatSession ? formatChatContextUsage(selectedChatSession.usage) : null,
     [selectedChatSession],
   );
+
+  const updateChatContextUsagePopoverPosition = useCallback(() => {
+    const anchor = chatContextUsageRef.current;
+    if (!anchor) return;
+    const rect = anchor.getBoundingClientRect();
+    const right = Math.max(12, window.innerWidth - rect.right - 8);
+    const bottom = Math.max(12, window.innerHeight - rect.top + 10);
+    setChatContextUsagePopoverStyle({
+      '--chat-context-usage-popover-right': `${right}px`,
+      '--chat-context-usage-popover-bottom': `${bottom}px`,
+    } as React.CSSProperties);
+  }, []);
 
   const selectedFullChatMessages =
     selectedChatEncodedKey
@@ -5755,14 +5768,22 @@ export function App() {
 
   useEffect(() => {
     if (!chatContextUsageOpen) return;
+    updateChatContextUsagePopoverPosition();
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null;
       if (target && chatContextUsageRef.current?.contains(target)) return;
       setChatContextUsageOpen(false);
     };
+    const onReposition = () => updateChatContextUsagePopoverPosition();
     window.addEventListener('pointerdown', onPointerDown);
-    return () => window.removeEventListener('pointerdown', onPointerDown);
-  }, [chatContextUsageOpen]);
+    window.addEventListener('resize', onReposition);
+    window.addEventListener('scroll', onReposition, true);
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('resize', onReposition);
+      window.removeEventListener('scroll', onReposition, true);
+    };
+  }, [chatContextUsageOpen, updateChatContextUsagePopoverPosition]);
 
   useEffect(() => {
     if (!chatConfigOverflowOpen) return;
@@ -18004,15 +18025,21 @@ export function App() {
         <div
           ref={chatContextUsageRef}
           className={`chat-context-usage-anchor${chatContextUsageOpen ? ' open' : ''}`}
+          onPointerEnter={updateChatContextUsagePopoverPosition}
         >
+          <span id="chat-context-usage-label" className="chat-context-usage-a11y-label">
+            {chatContextUsage.title}
+          </span>
           <button
             type="button"
             className={`chat-context-usage${chatContextUsage.available ? '' : ' pending'}`}
             style={{ '--chat-context-used': `${chatContextUsage.percent}%` } as React.CSSProperties}
-            aria-label={chatContextUsage.title}
+            aria-labelledby="chat-context-usage-label"
             aria-describedby="chat-context-usage-popover"
             aria-expanded={chatContextUsageOpen}
+            onFocus={updateChatContextUsagePopoverPosition}
             onClick={() => {
+              updateChatContextUsagePopoverPosition();
               setChatPromptMenuOpen(false);
               setChatFileMentionMenuOpen(false);
               setChatConfigMenuOptionId('');
@@ -18024,6 +18051,7 @@ export function App() {
             id="chat-context-usage-popover"
             className="chat-context-usage-popover"
             role="tooltip"
+            style={chatContextUsagePopoverStyle}
           >
             <span className="chat-context-usage-popover-kicker">Context window</span>
             <span className="chat-context-usage-popover-value">{popoverValue}</span>

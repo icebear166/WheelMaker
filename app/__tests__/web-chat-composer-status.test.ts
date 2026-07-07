@@ -166,10 +166,14 @@ describe('chat composer status helpers', () => {
     expect(mainTsx).toContain('className="chat-context-usage-popover"');
     expect(mainTsx).toContain('role="tooltip"');
     expect(mainTsx).toContain('aria-expanded={chatContextUsageOpen}');
+    expect(mainTsx).toContain('aria-labelledby="chat-context-usage-label"');
+    expect(mainTsx).toContain('className="chat-context-usage-a11y-label"');
+    expect(mainTsx).not.toContain('aria-label={chatContextUsage.title}');
     expect(mainTsx).not.toContain('title={chatContextUsage.title}');
     expect(stylesCss).toContain('.chat-context-usage-popover {');
     expect(stylesCss).toContain('.chat-context-usage-anchor:hover .chat-context-usage-popover,');
     expect(stylesCss).toContain(".chat-context-usage-anchor.open .chat-context-usage-popover {");
+    expect(cssRuleBlock(stylesCss, '.chat-context-usage-popover')).toContain('position: fixed;');
     expect(cssRuleBlock(stylesCss, '.chat-context-usage-popover')).toContain('opacity: 0;');
     expect(cssRuleBlock(stylesCss, '.chat-context-usage-popover')).toContain('box-shadow:');
   });

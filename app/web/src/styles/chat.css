@@ -4332,6 +4332,18 @@
   flex: 0 0 auto;
 }
 
+.chat-context-usage-a11y-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .chat-context-usage {
   --chat-context-used: 0%;
   position: relative;
@@ -4380,9 +4392,9 @@
 }
 
 .chat-context-usage-popover {
-  position: absolute;
-  right: -8px;
-  bottom: calc(100% + 10px);
+  position: fixed;
+  right: var(--chat-context-usage-popover-right, 24px);
+  bottom: var(--chat-context-usage-popover-bottom, 96px);
   z-index: var(--chat-config-popover-layer);
   width: max-content;
   min-width: 188px;
