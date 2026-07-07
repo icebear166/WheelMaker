@@ -89,14 +89,22 @@
   background: var(--panel-3);
 }
 
-.preview-workbench-render-cache,
-.preview-workbench-rendered-tab {
+.preview-workbench-render-cache {
   min-width: 100%;
   min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.preview-workbench-rendered-tab {
+  min-width: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
 .preview-workbench-rendered-tab.active {
-  display: block;
+  display: flex;
+  flex-direction: column;
 }
 
 .chat-file-workbench-project-select {
