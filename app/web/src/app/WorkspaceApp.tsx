@@ -97,7 +97,7 @@ import { ChatTurnView } from '../chat/ChatTurnView';
 import {ChatPlanSurface} from '../chat/ChatPlanSurface';
 import {extractLatestChatPlan} from '../chat/chatPlan';
 import { resolveChatSessionTitle } from '../chat/session/chatSessionTitle';
-import { formatChatContextUsage, resolveChatReasoningSignal, splitChatComposerStatusOptions } from '../chat/session/chatComposerStatus';
+import { formatChatContextUsage, splitChatComposerStatusOptions } from '../chat/session/chatComposerStatus';
 import {decodeSessionTurnToMessage, normalizeSessionMessagePayload} from '../chat/chatWire';
 import {
   applySessionReadResult,
@@ -18002,7 +18002,7 @@ export function App() {
         `${selectedChatSession?.sessionId ?? ''}:${option.id}`;
       const open = chatConfigMenuOptionId === option.id;
       return (
-        <div key={`status:${option.id}`} className="chat-status-control">
+        <div key={`status:${option.id}`} className="chat-status-control chat-status-model-control">
           <button
             type="button"
             className="chat-status-model-button"
@@ -18018,37 +18018,30 @@ export function App() {
               setChatConfigMenuOptionId(current => (current === option.id ? '' : option.id));
             }}
           >
-            <span
-              className={`codicon ${updating ? 'codicon-loading codicon-modifier-spin' : 'codicon-symbol-class'}`}
-              aria-hidden="true"
-            />
             <span className="chat-status-model-label">{label}</span>
           </button>
           {open ? renderChatConfigValueMenu(option) : null}
         </div>
       );
     };
-    const renderChatStatusReasoning = (option?: RegistrySessionConfigOption) => {
+    const renderChatStatusEffort = (option?: RegistrySessionConfigOption) => {
       if (!option) {
         return null;
       }
-      const signal = resolveChatReasoningSignal(option);
-      if (!signal) {
-        return null;
-      }
+      const label = chatConfigCurrentLabel(option);
       const optionValues = option.options ?? [];
       const updating =
         chatConfigUpdatingKey ===
         `${selectedChatSession?.sessionId ?? ''}:${option.id}`;
       const open = chatConfigMenuOptionId === option.id;
       return (
-        <div key={`status:${option.id}`} className="chat-status-control">
+        <div key={`status:${option.id}`} className="chat-status-control chat-status-effort-control">
           <button
             type="button"
-            className="chat-status-signal-button"
+            className="chat-status-effort-button"
             disabled={updating || optionValues.length === 0}
-            title={`Reasoning: ${signal.label}`}
-            aria-label={`Reasoning: ${signal.label}`}
+            title={`Reasoning: ${label}`}
+            aria-label={`Reasoning: ${label}`}
             aria-haspopup="menu"
             aria-expanded={open}
             onClick={() => {
@@ -18058,13 +18051,7 @@ export function App() {
               setChatConfigMenuOptionId(current => (current === option.id ? '' : option.id));
             }}
           >
-            {Array.from({ length: signal.totalBars }).map((_, index) => (
-              <span
-                key={index}
-                className={`chat-status-signal-bar${index < signal.activeBars ? ' active' : ''}`}
-                aria-hidden="true"
-              />
-            ))}
+            <span className="chat-status-effort-label">{label}</span>
           </button>
           {open ? renderChatConfigValueMenu(option) : null}
         </div>
@@ -18797,7 +18784,7 @@ export function App() {
                       >
                         {renderChatContextUsage()}
                         {renderChatStatusModel(chatConfigStatus.modelOption)}
-                        {renderChatStatusReasoning(chatConfigStatus.reasoningOption)}
+                        {renderChatStatusEffort(chatConfigStatus.reasoningOption)}
                         {chatConfigOptions.length > 0 ? (
                           <>
                             <span className="chat-status-secondary-divider" aria-hidden="true" />

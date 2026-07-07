@@ -1,6 +1,6 @@
 import {
+  chatConfigCurrentLabel,
   formatChatContextUsage,
-  resolveChatReasoningSignal,
   splitChatComposerStatusOptions,
 } from '../web/src/chat/session/chatComposerStatus';
 import type { RegistrySessionConfigOption } from '../web/src/registry/registryTypes';
@@ -59,26 +59,33 @@ describe('chat composer status helpers', () => {
     });
   });
 
-  test('resolves reasoning effort into active signal bars from configured levels', () => {
-    const signal = resolveChatReasoningSignal(
-      option({
-        id: 'reasoning_effort',
-        name: 'Reasoning',
-        currentValue: 'high',
-        options: [
-          { value: 'low', name: 'Low' },
-          { value: 'medium', name: 'Medium' },
-          { value: 'high', name: 'High' },
-        ],
-      }),
-    );
+  test('uses the reasoning effort option label as compact status text', () => {
+    expect(
+      chatConfigCurrentLabel(
+        option({
+          id: 'reasoning_effort',
+          name: 'Reasoning',
+          currentValue: 'high',
+          options: [
+            { value: 'low', name: 'Low' },
+            { value: 'medium', name: 'Medium' },
+            { value: 'high', name: 'High' },
+          ],
+        }),
+      ),
+    ).toBe('High');
+  });
 
-    expect(signal).toEqual({
-      activeBars: 3,
-      totalBars: 3,
-      label: 'High',
-      value: 'high',
-    });
+  test('falls back to the raw reasoning effort value when no label is configured', () => {
+    expect(
+      chatConfigCurrentLabel(
+        option({
+          id: 'reasoning_effort',
+          name: 'Reasoning',
+          currentValue: 'max',
+        }),
+      ),
+    ).toBe('max');
   });
 
   test('keeps usage model and reasoning visible while compacting secondary options', () => {
@@ -130,11 +137,17 @@ describe('chat composer status helpers', () => {
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
 
     expect(mainTsx).toContain('chat-status-secondary-divider');
+    expect(mainTsx).toContain('renderChatStatusEffort(chatConfigStatus.reasoningOption)');
+    expect(mainTsx).not.toContain('chat-status-signal-bar');
     expect(stylesCss).toContain('.chat-status-secondary-divider');
-    expect(stylesCss).toMatch(/\.chat-status-model-button,\s*\.chat-status-signal-button \{[\s\S]*height: 24px;/);
+    expect(stylesCss).not.toContain('chat-status-signal-bar');
+    expect(stylesCss).toMatch(/\.chat-status-model-button,\s*\.chat-status-effort-button \{[\s\S]*height: 24px;/);
+    expect(cssRuleBlock(stylesCss, '.chat-status-model-button')).toContain('flex: 1 1 auto;');
+    expect(cssRuleBlock(stylesCss, '.chat-status-effort-button')).toContain('flex: 0 0 auto;');
+    expect(cssRuleBlock(stylesCss, '.chat-config-options-shell')).toContain('max-width: 100%;');
+    expect(cssRuleBlock(stylesCss, '.chat-config-options-wrap')).toContain('flex: 1 1 auto;');
     expect(cssRuleBlock(stylesCss, '.chat-config-pill')).toContain('height: 24px;');
     expect(cssRuleBlock(stylesCss, '.chat-config-overflow-button')).toContain('height: 24px;');
-    expect(cssRuleBlock(stylesCss, '.chat-status-signal-bar:nth-child(5)')).toContain('height: 12px;');
   });
 
   test('raises config popovers above the current task surface only while open', () => {
