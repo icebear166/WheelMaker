@@ -94,11 +94,10 @@ function compareQuickSwitchCandidates(
   return left.sessionIndex - right.sessionIndex;
 }
 
-export function buildMobileChatQuickSwitchSections({
-  projects,
-  sessionsByProjectId,
-  limit = 6,
-}: BuildMobileChatQuickSwitchSectionsInput): MobileChatQuickSwitchSection[] {
+function buildQuickSwitchCandidates(
+  projects: RegistryProject[],
+  sessionsByProjectId: Record<string, RegistryChatSession[]>,
+): MobileChatQuickSwitchCandidate[] {
   const candidates: MobileChatQuickSwitchCandidate[] = [];
   const seen = new Set<string>();
 
@@ -133,8 +132,41 @@ export function buildMobileChatQuickSwitchSections({
       });
     }
   }
+  return candidates;
+}
 
-  const selected = candidates
+export type RecentChatSessionRow = {
+  projectId: string;
+  projectName: string;
+  projectHubId: string;
+  session: RegistryChatSession;
+};
+
+// Flat, cross-project "recent sessions" list (global recency order), used by
+// the persistent Recent Sessions section. Shares the same candidate building and
+// sort as the right-click quick-switch menu (which keeps the grouped layout).
+export function buildRecentChatSessionRows({
+  projects,
+  sessionsByProjectId,
+  limit = 8,
+}: BuildMobileChatQuickSwitchSectionsInput): RecentChatSessionRow[] {
+  return buildQuickSwitchCandidates(projects, sessionsByProjectId)
+    .sort(compareQuickSwitchCandidates)
+    .slice(0, Math.max(0, limit))
+    .map(candidate => ({
+      projectId: candidate.projectId,
+      projectName: candidate.projectName,
+      projectHubId: candidate.projectHubId,
+      session: candidate.session,
+    }));
+}
+
+export function buildMobileChatQuickSwitchSections({
+  projects,
+  sessionsByProjectId,
+  limit = 6,
+}: BuildMobileChatQuickSwitchSectionsInput): MobileChatQuickSwitchSection[] {
+  const selected = buildQuickSwitchCandidates(projects, sessionsByProjectId)
     .sort(compareQuickSwitchCandidates)
     .slice(0, Math.max(0, limit));
   if (selected.length === 0) {

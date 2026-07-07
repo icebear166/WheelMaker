@@ -1168,6 +1168,37 @@
 .wide-project-hub-6 { --hub-accent: #038c7f; }
 .wide-project-hub-7 { --hub-accent: #7b6cb8; }
 
+.recent-sessions-section {
+  margin-bottom: 2px;
+}
+
+.recent-sessions-header {
+  padding-left: 4px;
+  cursor: default;
+}
+
+.recent-sessions-header .wide-project-name {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--text) 64%, transparent);
+}
+
+.recent-sessions-icon {
+  color: color-mix(in srgb, var(--accent) 88%, var(--text));
+  font-size: 13px;
+}
+
+.recent-session-hub-tag.wide-project-hub-tag {
+  flex: 0 0 auto;
+  max-width: 104px;
+  padding: 1px 6px;
+  border: 1px solid color-mix(in srgb, var(--hub-accent) 38%, transparent);
+  background: color-mix(in srgb, var(--hub-accent) 14%, transparent);
+  color: color-mix(in srgb, var(--hub-accent) 88%, var(--text));
+  border-radius: 999px;
+}
+
 .wide-project-actions {
   display: inline-flex;
   align-items: center;

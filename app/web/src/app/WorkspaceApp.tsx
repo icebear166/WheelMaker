@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
+﻿import React, { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import { resolveInitialRegistryAddress } from './workspaceBootstrap';
 
@@ -88,7 +88,9 @@ import {
 } from '../chat/session/chatPromptQueue';
 import {
   buildMobileChatQuickSwitchSections,
+  buildRecentChatSessionRows,
   hasCompletedUnreadChatSession,
+  type RecentChatSessionRow,
 } from '../chat/mobileChatQuickSwitch';
 import {ChatQuickSwitchMenu} from '../chat/ChatQuickSwitchMenu';
 import { ChatSessionNav } from '../chat/ChatSessionNav';
@@ -3077,6 +3079,8 @@ export function App() {
   const [chatSessions, setChatSessions] = useState<RegistryChatSession[]>([]);
   const chatSessionsRef = useRef<RegistryChatSession[]>([]);
   const [projectSessionsByProjectId, setProjectSessionsByProjectId] = useState<Record<string, RegistryChatSession[]>>({});
+  const [recentSessions, setRecentSessions] = useState<RecentChatSessionRow[]>([]);
+  const [recentSessionsTick, setRecentSessionsTick] = useState(0);
   const projectSessionsByProjectIdRef = useRef<Record<string, RegistryChatSession[]>>({});
   const [draftSessionsByProjectId, setDraftSessionsByProjectId] = useState<Record<string, DraftChatSession[]>>({});
   const draftSessionsByProjectIdRef = useRef<Record<string, DraftChatSession[]>>({});
@@ -4869,6 +4873,25 @@ export function App() {
     }),
     [projectSessionsByProjectId, visibleProjectItems],
   );
+  const recomputeRecentSessions = useCallback(() => {
+    setRecentSessions(
+      buildRecentChatSessionRows({
+        projects: visibleProjectItems,
+        sessionsByProjectId: projectSessionsByProjectId,
+        limit: 8,
+      }),
+    );
+  }, [projectSessionsByProjectId, visibleProjectItems]);
+  useEffect(() => {
+    recomputeRecentSessions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recentSessionsTick]);
+  useEffect(() => {
+    if (recentSessions.length === 0 && Object.keys(projectSessionsByProjectId).length > 0) {
+      setRecentSessionsTick(t => t + 1);
+    }
+  }, [projectSessionsByProjectId]);
+
   const mobileChatQuickSwitchMenuStyle = useMemo<React.CSSProperties>(() => ({
     top: portRelayReady && portRelayFrameUrl ? 56 : 0,
   }), [portRelayFrameUrl, portRelayReady]);
@@ -14809,6 +14832,66 @@ export function App() {
     );
   };
 
+  const renderRecentSessionRow = (row: RecentChatSessionRow, mobile: boolean) => {
+    const selected = selectedChatEncodedKey === buildChatRuntimeKey(row.projectId, row.session.sessionId);
+    const projectHubVariant = tagVariantClass('wide-project-hub', row.projectHubId);
+    return (
+      <div
+        key={`recent:${row.projectId}:${row.session.sessionId}`}
+        className="project-session-row-wrap recent-session-row-wrap"
+      >
+        <button
+          type="button"
+          className={`wide-session-row recent-session-row${mobile ? ' mobile-session-row' : ''}${selected ? ' selected' : ''}`}
+          title={resolveSessionDisplayTitle(row.session) || row.session.sessionId}
+          onClick={() => {
+            if (mobile) {
+              selectProjectChatSession(row.projectId, row.session.sessionId, {closeMobileDrawer: true}).catch(() => undefined);
+            } else {
+              selectWideProjectSession(row.projectId, row.session.sessionId).catch(() => undefined);
+            }
+          }}
+        >
+          {renderSessionStateMarker(row.session, row.projectId)}
+          <span className="wide-session-title">
+            {resolveSessionDisplayTitle(row.session) || row.session.sessionId}
+          </span>
+          <span className={`wide-project-hub-tag recent-session-hub-tag ${projectHubVariant}`} style={hubAccentStyle(row.projectHubId)}>
+            <span className="wide-project-hub-dot" aria-hidden="true" />
+            <span className="wide-project-hub-label">{row.projectHubId}</span>
+          </span>
+          <span className="wide-session-time" title={row.session.updatedAt || ''}>
+            {formatCompactRelativeAge(row.session.updatedAt)}
+          </span>
+        </button>
+      </div>
+    );
+  };
+
+  const renderRecentSessionsSection = (mobile: boolean) => {
+    if (archivedMode || sessionSearchActive) {
+      return null;
+    }
+    if (recentSessions.length === 0) {
+      return null;
+    }
+    return (
+      <div className={`wide-project-section recent-sessions-section${mobile ? ' mobile-project-section' : ''}`}>
+        <div className={`wide-project-row recent-sessions-header${mobile ? ' mobile-project-row' : ''}`}>
+          <span className="wide-project-folder-wrap">
+            <span className="codicon codicon-history recent-sessions-icon" aria-hidden="true" />
+          </span>
+          <span className="wide-project-title-group">
+            <span className="wide-project-name">Recent Sessions</span>
+          </span>
+        </div>
+        <div className={`wide-project-session-list recent-sessions-list${mobile ? ' mobile-project-session-list' : ''}`}>
+          {recentSessions.map(row => renderRecentSessionRow(row, mobile))}
+        </div>
+      </div>
+    );
+  };
+
   const renderProjectSessionRowsWithOlderFolding = (
     targetProjectId: string,
     projectSessions: RegistryChatSession[],
@@ -15843,6 +15926,9 @@ export function App() {
             runtimeKey,
           ).catch(() => undefined);
         }
+        if (message.method === 'prompt_request' || message.method === 'prompt_done') {
+          setRecentSessionsTick(t => t + 1);
+        }
       }
     });
     const unsubscribeClose = service.onClose(() => {
@@ -16402,6 +16488,7 @@ export function App() {
               <span>No projects available.</span>
             </div>
           ) : null}
+          {renderRecentSessionsSection(true)}
           {visibleProjectItems.map(projectItem => {
             const targetProjectId = projectItem.projectId;
             const projectSessions = projectSessionsByProjectId[targetProjectId] ?? [];
@@ -16655,6 +16742,7 @@ export function App() {
         {projects.length === 0 ? (
           <div className="chat-empty-hint">No projects available.</div>
         ) : null}
+        {renderRecentSessionsSection(false)}
         {archivedMode ? renderArchivedSessionRows(false) : sessionSearchActive ? renderSessionSearchResults(false) : visibleProjectItems.map(projectItem => {
           const targetProjectId = projectItem.projectId;
           const projectSessions = projectSessionsByProjectId[targetProjectId] ?? [];

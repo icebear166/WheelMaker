@@ -1,0 +1,40 @@
+import fs from 'fs';
+import path from 'path';
+
+function readSourceText(filePath: string): string {
+  return fs.readFileSync(filePath, 'utf8').replace(/\r\n/g, '\n');
+}
+
+describe('web chat recent sessions', () => {
+  const projectRoot = path.join(__dirname, '..');
+  const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+  const chatCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles', 'chat.css'));
+
+  test('recent sessions section renders at top of the session list', () => {
+    expect(mainTsx).toContain('Recent Sessions');
+    expect(mainTsx).toContain('renderRecentSessionsSection(false)');
+    expect(mainTsx).toContain('renderRecentSessionsSection(true)');
+    expect(mainTsx).toContain('recent-sessions-section');
+    expect(mainTsx).toContain('recent-sessions-list');
+  });
+
+  test('recent sessions reuse the shared builder with an 8-item cap', () => {
+    expect(mainTsx).toContain('buildRecentChatSessionRows({');
+    expect(mainTsx).toContain('limit: 8,');
+    // Right-click quick switch keeps its own 6-item cap.
+    expect(mainTsx).toContain('limit: 6,');
+  });
+
+  test('each recent row shows a clear project hub marker', () => {
+    expect(mainTsx).toContain('recent-session-hub-tag');
+    expect(mainTsx).toContain('renderRecentSessionRow(row, mobile)');
+    expect(chatCss).toContain('.recent-session-hub-tag.wide-project-hub-tag');
+  });
+
+  test('recent sessions refresh only on prompt start / done', () => {
+    expect(mainTsx).toContain(
+      "if (message.method === 'prompt_request' || message.method === 'prompt_done') {",
+    );
+    expect(mainTsx).toContain('recentSessionsTick');
+  });
+});
