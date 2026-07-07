@@ -35,6 +35,7 @@ import {
   chatComposerCapsuleAfterPosition,
   chatComposerCapsuleBeforePosition,
   deleteChatComposerTokenById,
+  deleteChatComposerTokenByIdAtBoundary,
   deleteChatComposerTokenByIdAtPosition,
   insertChatComposerTokens,
   type ChatComposerTokenDeletionResult,
@@ -336,6 +337,12 @@ export function $deleteComposerTokenById(tokenId: string): ChatComposerToken[] {
   );
   $setComposerTokens(deletion.tokens, '', deletion.cursor);
   return deletion.tokens;
+}
+
+export function $deleteComposerTokenByIdAtBoundary(tokenId: string): ChatComposerTokenDeletionResult {
+  const deletion = deleteChatComposerTokenByIdAtBoundary($readComposerTokens(), tokenId);
+  $setComposerTokens(deletion.tokens, '', deletion.cursor);
+  return deletion;
 }
 
 export function $deleteComposerCapsuleForCharacterDeletion(

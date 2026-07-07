@@ -1,5 +1,6 @@
 import {
   deleteChatComposerTokenById,
+  deleteChatComposerTokenByIdAtBoundary,
   insertChatComposerTokens,
   chatComposerCapsuleAfterPosition,
   chatComposerCapsuleBeforePosition,
@@ -45,6 +46,19 @@ describe('chat composer token editing', () => {
     expect(chatComposerCapsuleBeforePosition(tokens, 3)).toEqual(tokens[1]);
     expect(chatComposerCapsuleAfterPosition(tokens, 2)).toEqual(tokens[1]);
     expect(deleteChatComposerTokenById(tokens, 'file:1')).toEqual([{type: 'text', text: 'a  b'}]);
+  });
+
+  test('removes capsule tokens with the cursor at the removed token boundary', () => {
+    const tokens: ChatComposerToken[] = [
+      {type: 'text', text: 'a '},
+      {type: 'file', id: 'file:1', path: 'app/a.ts', name: 'a.ts', label: 'a.ts'},
+      {type: 'text', text: ' b'},
+    ];
+
+    expect(deleteChatComposerTokenByIdAtBoundary(tokens, 'file:1')).toEqual({
+      tokens: [{type: 'text', text: 'a  b'}],
+      cursor: 2,
+    });
   });
 
   test('clamps insertion cursor to the token tape', () => {

@@ -1169,34 +1169,38 @@
 .wide-project-hub-7 { --hub-accent: #7b6cb8; }
 
 .recent-sessions-section {
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 
-.recent-sessions-header {
-  padding-left: 4px;
-  cursor: default;
-}
-
-.recent-sessions-header .wide-project-name {
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: color-mix(in srgb, var(--text) 64%, transparent);
+.recent-sessions-section .wide-project-folder-icon {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: color-mix(in srgb, var(--accent) 82%, var(--text));
+  font-size: 14px;
 }
 
 .recent-sessions-icon {
-  color: color-mix(in srgb, var(--accent) 88%, var(--text));
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1;
 }
 
-.recent-session-hub-tag.wide-project-hub-tag {
+.recent-sessions-section .wide-project-name {
+  text-align: left;
+}
+
+.recent-session-project-tag.wide-project-hub-tag {
   flex: 0 0 auto;
-  max-width: 104px;
-  padding: 1px 6px;
+  max-width: 120px;
+  padding: 1px 7px;
   border: 1px solid color-mix(in srgb, var(--hub-accent) 38%, transparent);
   background: color-mix(in srgb, var(--hub-accent) 14%, transparent);
   color: color-mix(in srgb, var(--hub-accent) 88%, var(--text));
   border-radius: 999px;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .wide-project-actions {

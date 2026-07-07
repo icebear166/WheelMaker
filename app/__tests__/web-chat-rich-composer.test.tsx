@@ -246,8 +246,9 @@ describe('ChatRichComposer', () => {
       }, {discrete: true});
     });
 
-    await ReactTestRenderer.act(() => {
+    await ReactTestRenderer.act(async () => {
       editor.dispatchCommand(DELETE_CHARACTER_COMMAND, true);
+      await Promise.resolve();
     });
 
     expect(editor.getEditorState().read(() => $readComposerTokens())).toEqual([
@@ -291,8 +292,9 @@ describe('ChatRichComposer', () => {
       }, {discrete: true});
     });
 
-    await ReactTestRenderer.act(() => {
+    await ReactTestRenderer.act(async () => {
       editor.dispatchCommand(KEY_BACKSPACE_COMMAND, {preventDefault: jest.fn()} as unknown as KeyboardEvent);
+      await Promise.resolve();
     });
 
     expect(editor.getEditorState().read(() => $readComposerTokens())).toEqual([]);
@@ -557,6 +559,91 @@ describe('ChatRichComposer', () => {
     expect(onTokensChange).toHaveBeenLastCalledWith([
       {type: 'text', text: 'a  b'},
     ]);
+  });
+
+  test('keeps the cursor at the selected capsule boundary after deletion', async () => {
+    const onTokensChange = jest.fn();
+    const ref = React.createRef<ChatRichComposerHandle>();
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+    const StatefulComposer = () => {
+      const [tokens, setTokens] = React.useState<ChatComposerToken[]>([
+        {type: 'skill', id: 's1', command: '/review', label: 'Review'},
+        {type: 'text', text: ' hello'},
+      ]);
+      return (
+        <ChatRichComposer
+          ref={ref}
+          tokens={tokens}
+          onTokensChange={nextTokens => {
+            onTokensChange(nextTokens);
+            setTokens(nextTokens);
+          }}
+          readOnly={false}
+        />
+      );
+    };
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(<StatefulComposer />);
+    });
+
+    const editorRefPlugin = renderer!.root.findByType(EditorRefPlugin);
+    const editor = editorRefPlugin.props.editorRef.current;
+    expect(editor).toBeTruthy();
+
+    await ReactTestRenderer.act(() => {
+      ref.current!.selectToken('s1');
+    });
+
+    await ReactTestRenderer.act(() => {
+      ref.current!.deleteSelectedCapsule();
+    });
+
+    expect(onTokensChange).toHaveBeenLastCalledWith([{type: 'text', text: ' hello'}]);
+    expect(editor.getEditorState().read(() => $currentComposerPosition($readComposerTokens()))).toBe(0);
+  });
+
+  test('keeps the cursor at the selected capsule boundary after Backspace', async () => {
+    const onTokensChange = jest.fn();
+    const ref = React.createRef<ChatRichComposerHandle>();
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+    const StatefulComposer = () => {
+      const [tokens, setTokens] = React.useState<ChatComposerToken[]>([
+        {type: 'skill', id: 's1', command: '/review', label: 'Review'},
+        {type: 'text', text: ' hello'},
+      ]);
+      return (
+        <ChatRichComposer
+          ref={ref}
+          tokens={tokens}
+          onTokensChange={nextTokens => {
+            onTokensChange(nextTokens);
+            setTokens(nextTokens);
+          }}
+          readOnly={false}
+        />
+      );
+    };
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(<StatefulComposer />);
+    });
+
+    const editorRefPlugin = renderer!.root.findByType(EditorRefPlugin);
+    const editor = editorRefPlugin.props.editorRef.current;
+    expect(editor).toBeTruthy();
+
+    await ReactTestRenderer.act(() => {
+      ref.current!.selectToken('s1');
+    });
+
+    await ReactTestRenderer.act(async () => {
+      editor.dispatchCommand(KEY_BACKSPACE_COMMAND, {preventDefault: jest.fn()} as unknown as KeyboardEvent);
+      await Promise.resolve();
+    });
+
+    expect(onTokensChange).toHaveBeenLastCalledWith([{type: 'text', text: ' hello'}]);
+    expect(editor.getEditorState().read(() => $currentComposerPosition($readComposerTokens()))).toBe(0);
   });
 
   test('insertText tokenizes known slash commands into skill capsules', async () => {

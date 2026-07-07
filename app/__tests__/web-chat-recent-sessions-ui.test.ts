@@ -18,6 +18,12 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('recent-sessions-list');
   });
 
+  test('recent sessions section behaves like a collapsible project folder', () => {
+    expect(mainTsx).toContain('RECENT_SESSIONS_VIRTUAL_PROJECT_ID');
+    expect(mainTsx).toContain('toggleWideProjectCollapsed(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)');
+    expect(mainTsx).toContain('codicon-folder');
+  });
+
   test('recent sessions reuse the shared builder with an 8-item cap', () => {
     expect(mainTsx).toContain('buildRecentChatSessionRows({');
     expect(mainTsx).toContain('limit: 8,');
@@ -25,10 +31,12 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('limit: 6,');
   });
 
-  test('each recent row shows a clear project hub marker', () => {
-    expect(mainTsx).toContain('recent-session-hub-tag');
+  test('each recent row shows the project name as a clear marker', () => {
+    expect(mainTsx).toContain('recent-session-project-tag');
     expect(mainTsx).toContain('renderRecentSessionRow(row, mobile)');
-    expect(chatCss).toContain('.recent-session-hub-tag.wide-project-hub-tag');
+    expect(chatCss).toContain('.recent-session-project-tag.wide-project-hub-tag');
+    // Project name (not hub id) is displayed on the row.
+    expect(mainTsx).toContain('{projectName}</span>');
   });
 
   test('recent sessions refresh only on prompt start / done', () => {

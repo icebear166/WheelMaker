@@ -28,14 +28,11 @@ import {
   type ChatComposerSkillToken,
   type ChatComposerToken,
 } from './chatComposerTokens';
-import {
-  deleteChatComposerTokenById,
-  type ChatComposerTokenDeletionResult,
-} from './chatComposerTokenEditing';
+import type {ChatComposerTokenDeletionResult} from './chatComposerTokenEditing';
 import {
   $currentComposerPosition,
   $deleteComposerCapsuleForCharacterDeletion,
-  $deleteComposerTokenById,
+  $deleteComposerTokenByIdAtBoundary,
   $insertComposerPlainText,
   $insertComposerTokens,
   $readComposerTokens,
@@ -223,16 +220,15 @@ function ChatRichComposerContent({
         if (!selected) {
           return;
         }
-        const nextTokens = deleteChatComposerTokenById(tokensRef.current, selected);
-        tokensRef.current = nextTokens;
-        emittedTokensRef.current = nextTokens;
-        const serialized = serializeChatComposerTokens(nextTokens);
-        onTokensChange(nextTokens);
-        onPlainTextChange?.(serialized.text, serializedChatComposerTextPosition(nextTokens, chatComposerTokenUnitLength(nextTokens)));
-        setSelectedTokenId('');
+        let deletion: ChatComposerTokenDeletionResult = {
+          tokens: tokensRef.current,
+          cursor: chatComposerTokenUnitLength(tokensRef.current),
+        };
         editor.update(() => {
-          $setComposerTokens(nextTokens, '', chatComposerTokenUnitLength(nextTokens));
-        });
+          deletion = $deleteComposerTokenByIdAtBoundary(selected);
+        }, {discrete: true});
+        emitComposerDeletion(deletion, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange);
+        setSelectedTokenId('');
       },
     };
   }, [editor, handleRef, onPlainTextChange, onTokensChange, slashCommands]);
@@ -248,12 +244,19 @@ function ChatRichComposerContent({
             return false;
           }
           event.preventDefault();
-          emitComposerDeletion(deletion, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange);
+          emitComposerDeletion(deletion, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange, {deferCallbacks: true});
           setSelectedTokenId('');
           return true;
         }
         event.preventDefault();
-        deleteComposerToken(editor, selectedTokenIdRef.current, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange);
+        emitComposerDeletion(
+          $deleteComposerTokenByIdAtBoundary(selectedTokenIdRef.current),
+          tokensRef,
+          emittedTokensRef,
+          onTokensChange,
+          onPlainTextChange,
+          {deferCallbacks: true},
+        );
         setSelectedTokenId('');
         return true;
       },
@@ -272,12 +275,19 @@ function ChatRichComposerContent({
             return false;
           }
           event.preventDefault();
-          emitComposerDeletion(deletion, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange);
+          emitComposerDeletion(deletion, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange, {deferCallbacks: true});
           setSelectedTokenId('');
           return true;
         }
         event.preventDefault();
-        deleteComposerToken(editor, selectedTokenIdRef.current, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange);
+        emitComposerDeletion(
+          $deleteComposerTokenByIdAtBoundary(selectedTokenIdRef.current),
+          tokensRef,
+          emittedTokensRef,
+          onTokensChange,
+          onPlainTextChange,
+          {deferCallbacks: true},
+        );
         setSelectedTokenId('');
         return true;
       },
@@ -297,7 +307,7 @@ function ChatRichComposerContent({
           return false;
         }
         event.preventDefault();
-        emitComposerDeletion(deletion, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange);
+        emitComposerDeletion(deletion, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange, {deferCallbacks: true});
         setSelectedTokenId('');
         return true;
       },
@@ -320,7 +330,7 @@ function ChatRichComposerContent({
         if (!deletion) {
           return false;
         }
-        emitComposerDeletion(deletion, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange);
+        emitComposerDeletion(deletion, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange, {deferCallbacks: true});
         setSelectedTokenId('');
         return true;
       },
@@ -452,35 +462,26 @@ function emitLexicalInsertion(
   }
 }
 
-function deleteComposerToken(
-  editor: LexicalEditor,
-  tokenId: string,
-  tokensRef: React.MutableRefObject<ChatComposerToken[]>,
-  emittedTokensRef: React.MutableRefObject<ChatComposerToken[]>,
-  onTokensChange: (tokens: ChatComposerToken[]) => void,
-  onPlainTextChange: ((text: string, cursor: number) => void) | undefined,
-): void {
-  let nextTokens: ChatComposerToken[] = [];
-  let cursor = 0;
-  editor.update(() => {
-    nextTokens = $deleteComposerTokenById(tokenId);
-    cursor = $currentComposerPosition(nextTokens);
-  });
-  emitComposerDeletion({tokens: nextTokens, cursor}, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange);
-}
-
 function emitComposerDeletion(
   deletion: ChatComposerTokenDeletionResult,
   tokensRef: React.MutableRefObject<ChatComposerToken[]>,
   emittedTokensRef: React.MutableRefObject<ChatComposerToken[]>,
   onTokensChange: (tokens: ChatComposerToken[]) => void,
   onPlainTextChange: ((text: string, cursor: number) => void) | undefined,
+  options: {deferCallbacks?: boolean} = {},
 ): void {
   tokensRef.current = deletion.tokens;
   emittedTokensRef.current = deletion.tokens;
-  onTokensChange(deletion.tokens);
   const serialized = serializeChatComposerTokens(deletion.tokens);
-  onPlainTextChange?.(serialized.text, serializedChatComposerTextPosition(deletion.tokens, deletion.cursor));
+  const emit = () => {
+    onTokensChange(deletion.tokens);
+    onPlainTextChange?.(serialized.text, serializedChatComposerTextPosition(deletion.tokens, deletion.cursor));
+  };
+  if (options.deferCallbacks) {
+    queueMicrotask(emit);
+    return;
+  }
+  emit();
 }
 
 function createTokenId(kind: string): string {

@@ -765,6 +765,7 @@ const RECONNECT_RETRY_DELAY_MS = 1000;
 const RECONNECT_GRACE_PERIOD_MS = 30_000;
 const CHAT_NEW_DRAFT_SESSION_KEY = '__new__';
 const CHAT_DRAFT_KEY_PROJECT_FALLBACK = '__no_project__';
+const RECENT_SESSIONS_VIRTUAL_PROJECT_ID = '__recent_sessions__';
 const CHAT_AUTO_SCROLL_BOTTOM_THRESHOLD = 80;
 const CHAT_KEYBOARD_INSET_SETTLE_DELAY_MS = 120;
 const CHAT_PENDING_CONFIRM_TIMEOUT_MS = 5000;
@@ -14835,6 +14836,7 @@ export function App() {
   const renderRecentSessionRow = (row: RecentChatSessionRow, mobile: boolean) => {
     const selected = selectedChatEncodedKey === buildChatRuntimeKey(row.projectId, row.session.sessionId);
     const projectHubVariant = tagVariantClass('wide-project-hub', row.projectHubId);
+    const projectName = row.projectName || row.projectId;
     return (
       <div
         key={`recent:${row.projectId}:${row.session.sessionId}`}
@@ -14856,9 +14858,12 @@ export function App() {
           <span className="wide-session-title">
             {resolveSessionDisplayTitle(row.session) || row.session.sessionId}
           </span>
-          <span className={`wide-project-hub-tag recent-session-hub-tag ${projectHubVariant}`} style={hubAccentStyle(row.projectHubId)}>
+          <span
+            className={`wide-project-hub-tag recent-session-project-tag ${projectHubVariant}`}
+            style={hubAccentStyle(row.projectHubId)}
+          >
             <span className="wide-project-hub-dot" aria-hidden="true" />
-            <span className="wide-project-hub-label">{row.projectHubId}</span>
+            <span className="wide-project-hub-label">{projectName}</span>
           </span>
           <span className="wide-session-time" title={row.session.updatedAt || ''}>
             {formatCompactRelativeAge(row.session.updatedAt)}
@@ -14875,19 +14880,38 @@ export function App() {
     if (recentSessions.length === 0) {
       return null;
     }
+    const recentCollapsed = collapsedProjectIds.includes(RECENT_SESSIONS_VIRTUAL_PROJECT_ID);
     return (
-      <div className={`wide-project-section recent-sessions-section${mobile ? ' mobile-project-section' : ''}`}>
-        <div className={`wide-project-row recent-sessions-header${mobile ? ' mobile-project-row' : ''}`}>
-          <span className="wide-project-folder-wrap">
-            <span className="codicon codicon-history recent-sessions-icon" aria-hidden="true" />
-          </span>
-          <span className="wide-project-title-group">
-            <span className="wide-project-name">Recent Sessions</span>
-          </span>
+      <div
+        className={`wide-project-section recent-sessions-section${mobile ? ' mobile-project-section' : ''}${
+          recentCollapsed ? ' collapsed' : ''
+        }`}
+      >
+        <div className="wide-project-row">
+          <button
+            type="button"
+            className="wide-project-toggle"
+            onClick={() => toggleWideProjectCollapsed(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)}
+            title={recentCollapsed ? 'Expand Recent Sessions' : 'Collapse Recent Sessions'}
+            aria-expanded={!recentCollapsed}
+          >
+            <span className="wide-project-folder-wrap">
+              <span
+                className={`codicon ${recentCollapsed ? 'codicon-folder' : 'codicon-folder-opened'} wide-project-folder-icon`}
+              >
+                <span className="codicon codicon-history recent-sessions-icon" aria-hidden="true" />
+              </span>
+            </span>
+            <span className="wide-project-title-group">
+              <span className="wide-project-name">Recent Sessions</span>
+            </span>
+          </button>
         </div>
-        <div className={`wide-project-session-list recent-sessions-list${mobile ? ' mobile-project-session-list' : ''}`}>
-          {recentSessions.map(row => renderRecentSessionRow(row, mobile))}
-        </div>
+        {!recentCollapsed ? (
+          <div className={`wide-project-session-list recent-sessions-list${mobile ? ' mobile-project-session-list' : ''}`}>
+            {recentSessions.map(row => renderRecentSessionRow(row, mobile))}
+          </div>
+        ) : null}
       </div>
     );
   };

@@ -78,6 +78,21 @@ export function deleteChatComposerTokenByIdAtPosition(
   };
 }
 
+export function deleteChatComposerTokenByIdAtBoundary(
+  tokens: ChatComposerToken[],
+  id: string,
+): ChatComposerTokenDeletionResult {
+  const normalized = normalizeChatComposerTokens(tokens);
+  let cursor = 0;
+  for (const token of normalized) {
+    if (chatComposerTokenHasId(token, id)) {
+      return deleteChatComposerTokenByIdAtPosition(normalized, id, cursor);
+    }
+    cursor += chatComposerSingleTokenUnitLength(token);
+  }
+  return {tokens: normalized, cursor};
+}
+
 export function chatComposerTokenHasId(token: ChatComposerToken, id: string): boolean {
   return token.type !== 'text' && token.id === id;
 }
