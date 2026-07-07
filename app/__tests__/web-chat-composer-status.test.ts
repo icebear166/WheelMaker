@@ -148,6 +148,8 @@ describe('chat composer status helpers', () => {
     expect(cssRuleBlock(stylesCss, '.chat-config-options-wrap')).toContain('flex: 1 1 auto;');
     expect(cssRuleBlock(stylesCss, '.chat-config-pill')).toContain('height: 24px;');
     expect(cssRuleBlock(stylesCss, '.chat-config-overflow-button')).toContain('height: 24px;');
+    expect(cssRuleBlock(stylesCss, '.chat-context-usage::after')).toContain('inset: 3px;');
+    expect(cssRuleBlock(stylesCss, '.chat-context-usage.pending::after')).toContain('inset: 3px;');
   });
 
   test('raises config popovers above the current task surface only while open', () => {
