@@ -942,7 +942,12 @@ func (c *codexappConn) handleAppServerNotification(method string, params json.Ra
 	case "thread/tokenUsage/updated":
 		var p appServerThreadTokenUsageUpdatedParams
 		if json.Unmarshal(params, &p) == nil && p.ThreadID != "" {
-			used := p.TokenUsage.Total.TotalTokens
+			// The codex tokenUsage event reports raw token accounting. The
+			// context-window occupancy the app displays is the current prompt
+			// context, which is the cumulative input token count (total.inputTokens),
+			// bounded by modelContextWindow. Using totalTokens (cumulative
+			// spend incl. output) or last (per-turn delta) produces wrong values.
+			used := p.TokenUsage.Total.InputTokens
 			c.emitSessionUpdate(protocol.SessionUpdateParams{
 				SessionID: c.outboundSessionID(p.ThreadID),
 				Update: protocol.SessionUpdate{
