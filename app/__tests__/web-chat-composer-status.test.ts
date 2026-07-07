@@ -148,8 +148,29 @@ describe('chat composer status helpers', () => {
     expect(cssRuleBlock(stylesCss, '.chat-config-options-wrap')).toContain('flex: 1 1 auto;');
     expect(cssRuleBlock(stylesCss, '.chat-config-pill')).toContain('height: 24px;');
     expect(cssRuleBlock(stylesCss, '.chat-config-overflow-button')).toContain('height: 24px;');
-    expect(cssRuleBlock(stylesCss, '.chat-context-usage::after')).toContain('inset: 3px;');
-    expect(cssRuleBlock(stylesCss, '.chat-context-usage.pending::after')).toContain('inset: 3px;');
+    expect(cssRuleBlock(stylesCss, '.chat-context-usage::after')).toContain('inset: 2px;');
+    expect(cssRuleBlock(stylesCss, '.chat-context-usage.pending::after')).toContain('inset: 2px;');
+  });
+
+  test('uses a custom context usage popover that can be opened on click', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+
+    expect(mainTsx).toContain('const [chatContextUsageOpen, setChatContextUsageOpen] = useState(false);');
+    expect(mainTsx).toContain('const chatContextUsageRef = useRef<HTMLDivElement | null>(null);');
+    expect(mainTsx).toContain('if (target && chatContextUsageRef.current?.contains(target)) return;');
+    expect(mainTsx).toContain('setChatContextUsageOpen(false);');
+    expect(mainTsx).toContain("className={`chat-context-usage-anchor${chatContextUsageOpen ? ' open' : ''}`}");
+    expect(mainTsx).toContain('className="chat-context-usage-popover"');
+    expect(mainTsx).toContain('role="tooltip"');
+    expect(mainTsx).toContain('aria-expanded={chatContextUsageOpen}');
+    expect(mainTsx).not.toContain('title={chatContextUsage.title}');
+    expect(stylesCss).toContain('.chat-context-usage-popover {');
+    expect(stylesCss).toContain('.chat-context-usage-anchor:hover .chat-context-usage-popover,');
+    expect(stylesCss).toContain(".chat-context-usage-anchor.open .chat-context-usage-popover {");
+    expect(cssRuleBlock(stylesCss, '.chat-context-usage-popover')).toContain('opacity: 0;');
+    expect(cssRuleBlock(stylesCss, '.chat-context-usage-popover')).toContain('box-shadow:');
   });
 
   test('raises config popovers above the current task surface only while open', () => {
@@ -157,7 +178,7 @@ describe('chat composer status helpers', () => {
     const stylesCss = readWebStyles(projectRoot);
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
 
-    expect(mainTsx).toContain("chatConfigMenuOptionId || chatConfigOverflowOpen ? ' config-menu-open' : ''");
+    expect(mainTsx).toContain("chatConfigMenuOptionId || chatConfigOverflowOpen || chatContextUsageOpen ? ' config-menu-open' : ''");
 
     const planLayer = zIndexValue(cssRuleBlock(stylesCss, '.chat-plan-surface.desktop'));
     const openComposerLayer = zIndexValue(cssRuleBlock(stylesCss, '.chat-composer.config-menu-open'));

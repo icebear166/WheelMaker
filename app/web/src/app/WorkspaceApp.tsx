@@ -3060,6 +3060,7 @@ export function App() {
   const chatAttachmentTrayButtonRef = useRef<HTMLButtonElement | null>(null);
   const chatFileMentionMenuRef = useRef<HTMLDivElement | null>(null);
   const chatSlashMenuRef = useRef<HTMLDivElement | null>(null);
+  const chatContextUsageRef = useRef<HTMLDivElement | null>(null);
   const chatConfigOptionsRef = useRef<HTMLDivElement | null>(null);
   const chatConfigOverflowRef = useRef<HTMLDivElement | null>(null);
   const wideProjectActionMenuRef = useRef<HTMLDivElement | null>(null);
@@ -3222,6 +3223,7 @@ export function App() {
   const [chatFileMentionIndexed, setChatFileMentionIndexed] = useState(true);
   const [chatFileMentionActiveIndex, setChatFileMentionActiveIndex] = useState(0);
   const [chatAttachmentTrayOpen, setChatAttachmentTrayOpen] = useState(false);
+  const [chatContextUsageOpen, setChatContextUsageOpen] = useState(false);
   const [chatConfigMenuOptionId, setChatConfigMenuOptionId] = useState('');
   const [chatHubMenuOpen, setChatHubMenuOpen] = useState(false);
   const [chatHubColorMenuHubId, setChatHubColorMenuHubId] = useState('');
@@ -5750,6 +5752,17 @@ export function App() {
     window.addEventListener('pointerdown', onPointerDown);
     return () => window.removeEventListener('pointerdown', onPointerDown);
   }, [chatConfigMenuOptionId]);
+
+  useEffect(() => {
+    if (!chatContextUsageOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (target && chatContextUsageRef.current?.contains(target)) return;
+      setChatContextUsageOpen(false);
+    };
+    window.addEventListener('pointerdown', onPointerDown);
+    return () => window.removeEventListener('pointerdown', onPointerDown);
+  }, [chatContextUsageOpen]);
 
   useEffect(() => {
     if (!chatConfigOverflowOpen) return;
@@ -17981,14 +17994,42 @@ export function App() {
       if (!chatContextUsage) {
         return null;
       }
+      const popoverValue = chatContextUsage.available
+        ? `${chatContextUsage.percentText} used`
+        : 'Usage pending';
+      const popoverDetail = chatContextUsage.available
+        ? `${chatContextUsage.usedText} of ${chatContextUsage.sizeText} tokens`
+        : 'Codex will report token usage after the next update.';
       return (
-        <span
-          className={`chat-context-usage${chatContextUsage.available ? '' : ' pending'}`}
-          style={{ '--chat-context-used': `${chatContextUsage.percent}%` } as React.CSSProperties}
-          title={chatContextUsage.title}
-          aria-label={chatContextUsage.title}
-          role="img"
-        />
+        <div
+          ref={chatContextUsageRef}
+          className={`chat-context-usage-anchor${chatContextUsageOpen ? ' open' : ''}`}
+        >
+          <button
+            type="button"
+            className={`chat-context-usage${chatContextUsage.available ? '' : ' pending'}`}
+            style={{ '--chat-context-used': `${chatContextUsage.percent}%` } as React.CSSProperties}
+            aria-label={chatContextUsage.title}
+            aria-describedby="chat-context-usage-popover"
+            aria-expanded={chatContextUsageOpen}
+            onClick={() => {
+              setChatPromptMenuOpen(false);
+              setChatFileMentionMenuOpen(false);
+              setChatConfigMenuOptionId('');
+              setChatConfigOverflowOpen(false);
+              setChatContextUsageOpen(open => !open);
+            }}
+          />
+          <div
+            id="chat-context-usage-popover"
+            className="chat-context-usage-popover"
+            role="tooltip"
+          >
+            <span className="chat-context-usage-popover-kicker">Context window</span>
+            <span className="chat-context-usage-popover-value">{popoverValue}</span>
+            <span className="chat-context-usage-popover-detail">{popoverDetail}</span>
+          </div>
+        </div>
       );
     };
     const renderChatStatusModel = (option?: RegistrySessionConfigOption) => {
@@ -18285,7 +18326,7 @@ export function App() {
           />
           <div
             ref={chatComposerRef}
-            className={`chat-composer${chatConfigMenuOptionId || chatConfigOverflowOpen ? ' config-menu-open' : ''}`}
+            className={`chat-composer${chatConfigMenuOptionId || chatConfigOverflowOpen || chatContextUsageOpen ? ' config-menu-open' : ''}`}
             hidden={archivedMode}
           >
             <div className="chat-composer-content">
