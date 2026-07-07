@@ -542,6 +542,7 @@
   backdrop-filter: blur(1px);
   -webkit-backdrop-filter: blur(1px);
   overflow: hidden;
+  pointer-events: auto;
   transition: height 200ms ease, background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, backdrop-filter 180ms ease;
 }
 
@@ -698,23 +699,13 @@
 .gesture-nav-control {
   position: relative;
   width: 50px;
-  height: 88px;
-  pointer-events: auto;
+  height: 48px;
+  pointer-events: none;
   overflow: visible;
 }
 
-.gesture-nav-pill {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 50px;
-  display: grid;
-  grid-template-rows: 40px;
-  padding: 4px;
-  border-radius: 999px;
-  overflow: visible;
-  transition: height 200ms ease, background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, backdrop-filter 180ms ease;
+.gesture-nav-control[data-expanded='true'] {
+  height: 128px;
 }
 
 .gesture-nav-control[data-expanded='true'] .gesture-nav-pill {
@@ -749,6 +740,11 @@
   background: color-mix(in srgb, var(--panel) 64%, transparent);
 }
 
+.gesture-nav-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 58%, transparent);
+  outline-offset: 2px;
+}
+
 .gesture-nav-current-button[data-active='true'] {
   color: color-mix(in srgb, var(--accent) 88%, var(--text));
 }
@@ -763,6 +759,11 @@
   animation: gesture-capsule-fade-in 200ms ease-out;
 }
 
+.gesture-nav-capsule[data-active='true'] {
+  color: color-mix(in srgb, var(--accent) 88%, var(--text));
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
 .gesture-nav-capsule-drawer {
   color: color-mix(in srgb, var(--accent) 88%, var(--text));
 }
@@ -775,6 +776,15 @@
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gesture-nav-pill,
+  .gesture-nav-capsule,
+  .floating-control-stack[data-drag-state='gesture-open'] {
+    animation: none;
+    transition: none;
   }
 }
 

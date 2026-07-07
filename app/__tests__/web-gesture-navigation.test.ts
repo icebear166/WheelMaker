@@ -82,6 +82,12 @@ describe('gesture navigation', () => {
   test('wires gesture navigation through appearance settings and mobile floating controls', () => {
     const main = readMain();
     const settingsRoot = readSettingsRoot();
+    const currentSelectStart = main.indexOf('const handleGestureNavigationCurrentSelect = useCallback(');
+    const currentSelectEnd = main.indexOf('const beginGestureNavigationPress = useCallback', currentSelectStart);
+    const currentSelectBody = main.slice(currentSelectStart, currentSelectEnd);
+    const heightMeasureDeps = main.match(
+      /useLayoutEffect\(\(\) => \{[\s\S]*?const nextFloatingHeight = floatingControlStackRef\.current\?\.offsetHeight \?\? 184;[\s\S]*?\}, \[([\s\S]*?)\]\);/,
+    )?.[1] ?? '';
 
     expect(main).toContain("import {");
     expect(main).toContain("} from '../shell/layouts/mobile/gestureNavigation';");
@@ -102,6 +108,9 @@ describe('gesture navigation', () => {
     expect(main).toContain('aria-label="Chat"');
     expect(main).toContain("codicon-comment-discussion");
     expect(main).toContain('handleGestureNavigationCurrentSelect');
+    expect(currentSelectBody).toContain('handleFloatingChatSelect();');
+    expect(currentSelectBody).not.toContain('handleFloatingNavSelect(tab)');
+    expect(heightMeasureDeps).toContain('gestureNavigationExpanded,');
     expect(main).toContain('GESTURE_MOVE_LONG_PRESS_MS');
     expect(main).toContain('codicon-layout-sidebar-right');
     expect(main).toContain('codicon-settings-gear');
@@ -114,11 +123,18 @@ describe('gesture navigation', () => {
 
     expect(styles).toContain('.gesture-nav-control');
     expect(styles).toContain('.gesture-nav-pill');
+    expect(styles.match(/^\.gesture-nav-pill \{/gm) ?? []).toHaveLength(1);
     expect(styles).toMatch(
-      /\.gesture-nav-control \{[\s\S]*width: 50px;[\s\S]*height: 88px;[\s\S]*\}/,
+      /\.gesture-nav-control \{[\s\S]*width: 50px;[\s\S]*height: 48px;[\s\S]*\}/,
     );
     expect(styles).toMatch(
       /\.gesture-nav-pill \{[\s\S]*width: 50px;[\s\S]*grid-template-rows: 40px;[\s\S]*padding: 4px;[\s\S]*\}/,
+    );
+    expect(styles).toMatch(
+      /\.gesture-nav-control\[data-expanded='true'\] \{[\s\S]*height: 128px;[\s\S]*\}/,
+    );
+    expect(styles).toMatch(
+      /\.gesture-nav-control\[data-expanded='true'\] \.gesture-nav-pill \{[\s\S]*height: 128px;[\s\S]*grid-template-rows: repeat\(3, 40px\);[\s\S]*\}/,
     );
     expect(styles).toContain('.gesture-nav-button');
     expect(styles).toContain('.gesture-nav-current-button');
@@ -130,5 +146,19 @@ describe('gesture navigation', () => {
     expect(styles).not.toContain('.gesture-nav-option-file');
     expect(styles).not.toContain('.gesture-nav-option-git');
     expect(styles).not.toContain('.gesture-nav-drawer-button');
+  });
+
+  test('shows preview capsule state and respects reduced motion', () => {
+    const main = readMain();
+    const styles = readStyles();
+
+    expect(main).toContain('data-active={chatPreviewOpen}');
+    expect(main).toContain('aria-pressed={chatPreviewOpen}');
+    expect(styles).toMatch(
+      /\.gesture-nav-capsule\[data-active='true'\] \{[\s\S]*color: color-mix\(in srgb, var\(--accent\) 88%, var\(--text\)\);[\s\S]*\}/,
+    );
+    expect(styles).toMatch(
+      /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*\.gesture-nav-pill,[\s\S]*\.gesture-nav-capsule[\s\S]*animation: none;[\s\S]*transition: none;[\s\S]*\}/,
+    );
   });
 });

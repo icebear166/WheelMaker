@@ -5460,6 +5460,8 @@ export function App() {
     layoutModeRef.current = layoutMode;
   }, [layoutMode]);
 
+  const gestureNavigationExpanded = gestureNavState?.phase === 'expanded';
+
   useLayoutEffect(() => {
     if (isWide) {
       return;
@@ -5470,6 +5472,7 @@ export function App() {
     isWide,
     windowWidth,
     gestureNavigation,
+    gestureNavigationExpanded,
     projectId,
     projects.length,
     tab,
@@ -6563,7 +6566,6 @@ export function App() {
       }) as React.CSSProperties,
     [floatingNavIndex],
   );
-  const gestureNavigationExpanded = gestureNavState?.phase === 'expanded';
   const effectiveFloatingControlTop = floatingControlTop;
   const effectiveFloatingControlStackStyle = useMemo(
     () =>
@@ -6957,12 +6959,8 @@ export function App() {
     setDrawerOpen(value => !value);
   }, []);
   const handleGestureNavigationCurrentSelect = useCallback(() => {
-    if (tab === 'chat') {
-      handleFloatingChatSelect();
-      return;
-    }
-    handleFloatingNavSelect(tab);
-  }, [handleFloatingChatSelect, handleFloatingNavSelect, tab]);
+    handleFloatingChatSelect();
+  }, [handleFloatingChatSelect]);
   const beginGestureNavigationPress = useCallback(
     (event: React.PointerEvent<HTMLElement>) => {
       if (isWide || event.button !== 0) {
@@ -19448,12 +19446,14 @@ export function App() {
                   <button
                     type="button"
                     className="gesture-nav-button gesture-nav-capsule"
+                    data-active={chatPreviewOpen}
                     onPointerDown={e => e.stopPropagation()}
                     onClick={() => { cancelGestureNavigation(); toggleChatPreviewFromTitle(); }}
                     title={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
                     aria-label={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
+                    aria-pressed={chatPreviewOpen}
                   >
-                    <span className="codicon codicon-layout-sidebar-right" />
+                    <span className="codicon codicon-layout-sidebar-right" aria-hidden="true" />
                   </button>
                   <button
                     type="button"
@@ -19463,7 +19463,7 @@ export function App() {
                     title="Close drawer"
                     aria-label="Close drawer"
                   >
-                    <span className="codicon codicon-comment-discussion" />
+                    <span className="codicon codicon-comment-discussion" aria-hidden="true" />
                   </button>
                   <button
                     type="button"
@@ -19473,7 +19473,7 @@ export function App() {
                     title="Settings"
                     aria-label="Settings"
                   >
-                    <span className="codicon codicon-settings-gear" />
+                    <span className="codicon codicon-settings-gear" aria-hidden="true" />
                   </button>
                 </>
               ) : null}
@@ -19489,7 +19489,7 @@ export function App() {
                 aria-hidden={gestureNavigationExpanded}
                 tabIndex={gestureNavigationExpanded ? -1 : undefined}
               >
-                <span className="codicon codicon-comment-discussion" />
+                <span className="codicon codicon-comment-discussion" aria-hidden="true" />
                 {hasCompletedUnreadChatSessionIndicator ? (
                   <span className="floating-nav-unread-dot" aria-hidden="true" />
                 ) : null}
