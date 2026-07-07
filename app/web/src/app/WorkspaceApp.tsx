@@ -14834,7 +14834,14 @@ export function App() {
   };
 
   const renderRecentSessionRow = (row: RecentChatSessionRow, mobile: boolean) => {
-    const selected = selectedChatEncodedKey === buildChatRuntimeKey(row.projectId, row.session.sessionId);
+    // Resolve the live session from the store so the state marker stays in
+    // sync with the project list (the recentSessions snapshot can lag until the
+    // next prompt event). Fall back to the captured snapshot if not found.
+    const liveSession =
+      projectSessionsByProjectId[row.projectId]?.find(
+        item => item.sessionId === row.session.sessionId,
+      ) ?? row.session;
+    const selected = selectedChatEncodedKey === buildChatRuntimeKey(row.projectId, liveSession.sessionId);
     const projectHubVariant = tagVariantClass('wide-project-hub', row.projectHubId);
     const projectName = row.projectName || row.projectId;
     return (
@@ -14854,9 +14861,9 @@ export function App() {
             }
           }}
         >
-          {renderSessionStateMarker(row.session, row.projectId)}
+          {renderSessionStateMarker(liveSession, row.projectId)}
           <span className="wide-session-title">
-            {resolveSessionDisplayTitle(row.session) || row.session.sessionId}
+            {resolveSessionDisplayTitle(liveSession) || liveSession.sessionId}
           </span>
           <span
             className={`wide-project-hub-tag recent-session-project-tag ${projectHubVariant}`}
@@ -14865,8 +14872,8 @@ export function App() {
             <span className="wide-project-hub-dot" aria-hidden="true" />
             <span className="wide-project-hub-label">{projectName}</span>
           </span>
-          <span className="wide-session-time" title={row.session.updatedAt || ''}>
-            {formatCompactRelativeAge(row.session.updatedAt)}
+          <span className="wide-session-time" title={liveSession.updatedAt || ''}>
+            {formatCompactRelativeAge(liveSession.updatedAt)}
           </span>
         </button>
       </div>
