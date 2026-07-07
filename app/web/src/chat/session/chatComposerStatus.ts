@@ -9,6 +9,7 @@ export type ChatContextUsageView = {
   percentText: string;
   usedText: string;
   sizeText: string;
+  summaryText: string;
   title: string;
 };
 
@@ -83,12 +84,14 @@ export function formatChatContextUsage(
   const percent = Math.min(100, Math.max(0, Math.ceil((used / size) * 100)));
   const usedText = formatCompactTokenCount(used);
   const sizeText = formatCompactTokenCount(size);
+  const summaryText = `${usedText.toUpperCase()}/${sizeText.toUpperCase()} ${percent}%`;
   return {
     available: true,
     percent,
     percentText: `${percent}%`,
     usedText,
     sizeText,
+    summaryText,
     title: `Context window: ${percent}% used (${usedText} / ${sizeText} tokens)`,
   };
 }

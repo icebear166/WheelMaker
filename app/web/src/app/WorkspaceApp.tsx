@@ -18084,8 +18084,6 @@ export function App() {
       if (!chatContextUsage) {
         return null;
       }
-      const popoverValue = `${chatContextUsage.percentText} used`;
-      const popoverDetail = `${chatContextUsage.usedText} of ${chatContextUsage.sizeText} tokens`;
       return (
         <div
           ref={chatContextUsageRef}
@@ -18119,8 +18117,7 @@ export function App() {
             style={chatContextUsagePopoverStyle}
           >
             <span className="chat-context-usage-popover-kicker">Context window</span>
-            <span className="chat-context-usage-popover-value">{popoverValue}</span>
-            <span className="chat-context-usage-popover-detail">{popoverDetail}</span>
+            <span className="chat-context-usage-popover-value">{chatContextUsage.summaryText}</span>
           </div>
         </div>
       );

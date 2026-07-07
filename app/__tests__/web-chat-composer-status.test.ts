@@ -44,6 +44,7 @@ describe('chat composer status helpers', () => {
       percentText: '8%',
       usedText: '19k',
       sizeText: '258k',
+      summaryText: '19K/258K 8%',
       title: 'Context window: 8% used (19k / 258k tokens)',
     });
   });
@@ -163,6 +164,9 @@ describe('chat composer status helpers', () => {
     expect(mainTsx).toContain('aria-expanded={chatContextUsageOpen}');
     expect(mainTsx).toContain('aria-labelledby="chat-context-usage-label"');
     expect(mainTsx).toContain('className="chat-context-usage-a11y-label"');
+    expect(mainTsx).toContain('{chatContextUsage.summaryText}');
+    expect(mainTsx).not.toContain('const popoverValue = `${chatContextUsage.percentText} used`;');
+    expect(mainTsx).not.toContain('const popoverDetail = `${chatContextUsage.usedText} of ${chatContextUsage.sizeText} tokens`;');
     expect(mainTsx).not.toContain('aria-label={chatContextUsage.title}');
     expect(mainTsx).not.toContain('title={chatContextUsage.title}');
     expect(stylesCss).toContain('.chat-context-usage-popover {');
