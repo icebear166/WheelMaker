@@ -1241,15 +1241,16 @@ describe('web chat integration', () => {
       /\.chat-tool-button \{[\s\S]*width: 24px;[\s\S]*height: 24px;[\s\S]*\}/,
     );
     const toolButtonBlock = cssRuleBlock(stylesCss, '.chat-tool-button');
-    expect(toolButtonBlock).toContain('border: 1px solid color-mix(in srgb, var(--border) 64%, transparent);');
+    expect(toolButtonBlock).toContain('border: none;');
     expect(toolButtonBlock).toContain('background: color-mix(in srgb, var(--surface-1) 64%, transparent);');
     expect(toolButtonBlock).toContain('color: color-mix(in srgb, var(--text) 72%, var(--muted));');
-    expect(toolButtonBlock).not.toContain('border: none;');
+    expect(toolButtonBlock).not.toContain('border: 1px');
     expect(toolButtonBlock).not.toContain('background: transparent;');
     expect(cssRuleBlock(stylesCss, '.chat-tool-button')).toContain('display: inline-grid;');
     expect(cssRuleBlock(stylesCss, '.chat-tool-button')).toContain('place-items: center;');
     expect(cssRuleBlock(stylesCss, '.chat-tool-button:hover,\n.chat-tool-button:focus-visible')).toContain('background: color-mix(in srgb, var(--accent) 10%, var(--surface-1));');
     expect(cssRuleBlock(stylesCss, '.chat-tool-button:hover,\n.chat-tool-button:focus-visible')).toContain('color: color-mix(in srgb, var(--text) 92%, var(--accent));');
+    expect(cssRuleBlock(stylesCss, '.chat-tool-button:hover,\n.chat-tool-button:focus-visible')).not.toContain('border-color:');
     expect(stylesCss).not.toContain('.chat-slash-button,\n.chat-file-mention-trigger-button,\n.chat-attachment-plus-button {');
     expect(stylesCss).toMatch(/\.chat-composer-stop-slot \{[\s\S]*width: 24px;[\s\S]*height: 24px;[\s\S]*flex: 0 0 24px;[\s\S]*\}/);
     expect(stylesCss).toContain('.chat-composer-tool-glyph {');
@@ -2319,10 +2320,10 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('className="codicon codicon-add chat-composer-tool-glyph"');
     expect(mainTsx).toContain("chat-composer-tool-glyph`}");
     const toolButtonBlock = cssRuleBlock(stylesCss, '.chat-tool-button');
-    expect(toolButtonBlock).toContain('border: 1px solid color-mix(in srgb, var(--border) 64%, transparent);');
+    expect(toolButtonBlock).toContain('border: none;');
     expect(toolButtonBlock).toContain('background: color-mix(in srgb, var(--surface-1) 64%, transparent);');
     expect(toolButtonBlock).toContain('color: color-mix(in srgb, var(--text) 72%, var(--muted));');
-    expect(toolButtonBlock).not.toContain('border: none;');
+    expect(toolButtonBlock).not.toContain('border: 1px');
     expect(toolButtonBlock).not.toContain('background: transparent;');
     expect(stylesCss).not.toContain('.chat-slash-button,\n.chat-file-mention-trigger-button,\n.chat-attachment-plus-button {');
     expect(stylesCss).toMatch(/\.chat-composer-tool-glyph \{[\s\S]*width: 16px;[\s\S]*height: 16px;[\s\S]*display: grid;[\s\S]*font-size: 14px;[\s\S]*line-height: 1;[\s\S]*\}/);
