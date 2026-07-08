@@ -548,8 +548,12 @@ describe('web chat integration', () => {
     expect(hideToolCallsSettingStart).toBeGreaterThan(chatSettingsStart);
     expect(mainTsx).not.toContain('className="sidebar-footer"');
     expect(mainTsx).toContain('className="floating-control-stack"');
-    expect(mainTsx).toContain('className="floating-nav-group"');
-    expect(mainTsx).toContain('className="drawer-toggle-bubble"');
+    expect(mainTsx).toContain('className="gesture-nav-control"');
+    expect(mainTsx).toContain('className="gesture-nav-pill"');
+    expect(mainTsx).toContain('className="gesture-nav-button gesture-nav-current-button"');
+    expect(mainTsx).not.toContain('className="floating-nav-group"');
+    expect(mainTsx).not.toContain('className="floating-nav-button"');
+    expect(mainTsx).not.toContain('className="drawer-toggle-bubble"');
     expect(mainTsx).toContain('const floatingControlSideRef = useRef(floatingControlSide);');
     expect(mainTsx).toContain('floatingControlSideRef.current = floatingControlSide;');
     expect(mainTsx).toContain("const [floatingSidePulse, setFloatingSidePulse] = useState<PersistedFloatingControlSide | ''>('');");
@@ -561,33 +565,24 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('setDrawerOpen(open => !open);');
     expect(mainTsx).toContain('className="breadcrumb-project-button breadcrumb-project-name"');
     expect(mainTsx).toContain('onClick={handleMobileBreadcrumbProjectClick}');
-    expect(mainTsx).toContain('const handleFloatingControlButtonPointerDown = useCallback(');
-    expect(mainTsx).toMatch(
-      /const handleFloatingControlButtonPointerDown = useCallback\([\s\S]*?beginFloatingPress\(event\);[\s\S]*?event\.stopPropagation\(\);/,
-    );
+    expect(mainTsx).not.toContain('const handleFloatingControlButtonPointerDown = useCallback(');
+    expect(mainTsx).not.toContain('const beginFloatingPress = useCallback(');
     expect(mainTsx).toContain('event.stopPropagation();');
-    expect(mainTsx).toMatch(
-      /className="floating-nav-button"[\s\S]*?onPointerDown=\{event => event\.stopPropagation\(\)\}[\s\S]*?onClick=\{handleFloatingChatSelect\}/,
-    );
-    expect(mainTsx).toMatch(
-      /className="floating-nav-button"[\s\S]*?onPointerDown=\{handleFloatingControlButtonPointerDown\}[\s\S]*?onClick=\{\(\) => handleFloatingNavSelect\('file'\)\}/,
-    );
-    expect(mainTsx).toMatch(
-      /className="floating-nav-button"[\s\S]*?onPointerDown=\{handleFloatingControlButtonPointerDown\}[\s\S]*?onClick=\{\(\) => handleFloatingNavSelect\('git'\)\}/,
-    );
-    expect(mainTsx).toMatch(
-      /className="drawer-toggle-bubble"[\s\S]*?onPointerDown=\{handleFloatingControlButtonPointerDown\}[\s\S]*?onClick=\{handleFloatingDrawerToggle\}/,
-    );
+    expect(mainTsx).not.toContain('handleFloatingNavSelect');
+    expect(mainTsx).not.toContain('handleFloatingChatSelect');
+    expect(mainTsx).not.toContain('handleFloatingDrawerToggle');
+    expect(mainTsx).toContain('onPointerDown={handleGestureNavigationButtonPointerDown}');
+    expect(mainTsx).toContain('onClick={handleGestureNavigationCurrentSelect}');
     expect(mainTsx).toContain('const floatingControlYRatio = workspaceUiState.mobile.floatingControlYRatio;');
     expect(mainTsx).toContain('const floatingDragState = workspaceUiState.transient.floatingDragState as FloatingDragState | null;');
     expect(mainTsx).toContain('const floatingKeyboardOffset = workspaceUiState.transient.floatingKeyboardOffset;');
-    const floatingLongPressStart = mainTsx.indexOf('floatingLongPressTimerRef.current = window.setTimeout(() => {');
-    const floatingLongPressEnd = mainTsx.indexOf('}, 350);', floatingLongPressStart);
-    expect(floatingLongPressStart).toBeGreaterThanOrEqual(0);
-    expect(floatingLongPressEnd).toBeGreaterThan(floatingLongPressStart);
-    const floatingLongPressBlock = mainTsx.slice(floatingLongPressStart, floatingLongPressEnd);
-    expect(floatingLongPressBlock).toContain('closeMobileDrawerCompanionOverlays();');
-    expect(floatingLongPressBlock).toContain('triggerMobileHaptic();');
+    const gestureMoveLongPressStart = mainTsx.indexOf('gestureMoveLongPressTimerRef.current = window.setTimeout(() => {');
+    const gestureMoveLongPressEnd = mainTsx.indexOf('}, GESTURE_MOVE_LONG_PRESS_MS);', gestureMoveLongPressStart);
+    expect(gestureMoveLongPressStart).toBeGreaterThanOrEqual(0);
+    expect(gestureMoveLongPressEnd).toBeGreaterThan(gestureMoveLongPressStart);
+    const gestureMoveLongPressBlock = mainTsx.slice(gestureMoveLongPressStart, gestureMoveLongPressEnd);
+    expect(gestureMoveLongPressBlock).toContain('closeMobileDrawerCompanionOverlays();');
+    expect(gestureMoveLongPressBlock).toContain('triggerMobileHaptic();');
     const floatingMoveStart = mainTsx.indexOf('const handleFloatingPointerMove = useCallback(');
     const floatingMoveEnd = mainTsx.indexOf('const finishFloatingDrag = useCallback(', floatingMoveStart);
     expect(floatingMoveStart).toBeGreaterThanOrEqual(0);
@@ -605,7 +600,6 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className="breadcrumb-project-button breadcrumb-project-name"');
     expect(mainTsx).toContain('No Selected Session');
     expect(mainTsx).toContain('No Selected Diff');
-    expect(mainTsx).toContain('data-active={drawerOpen}');
     expect(mainTsx).toContain('data-side-pulse={floatingSidePulse}');
     expect(mainTsx).toContain('className="floating-control-drag-backdrop"');
     expect(mainTsx).toContain('className="floating-control-dock-rail left"');
@@ -613,7 +607,6 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className="block-title chat-title-bar"');
     expect(mainTsx).toContain("{selectedFile || 'Select a file'}");
     expect(mainTsx).toContain("{selectedDiff || 'Select a changed file'}");
-    expect(mainTsx).toContain('aria-expanded={drawerOpen}');
     expect(mainTsx).toContain('const chatConfigDisplay = useMemo(() => {');
     expect(mainTsx).toContain("className={`chat-config-options-shell${chatComposerStatusCompact ? ' compact' : ''}`}");
     expect(mainTsx).toContain('className="chat-config-options-wrap"');
@@ -742,18 +735,12 @@ describe('web chat integration', () => {
       /\.floating-control-stack-layer\[data-side-pulse='left'\] \.floating-control-dock-rail\.left,[\s\S]*\.floating-control-stack-layer\[data-side-pulse='right'\] \.floating-control-dock-rail\.right \{[\s\S]*animation: floatingDockRailPulse 160ms ease-out;[\s\S]*\}/,
     );
     expect(stylesCss).toContain('@keyframes floatingDockRailPulse');
-    expect(stylesCss).toContain('.floating-nav-group {');
-    expect(stylesCss).toMatch(
-      /\.floating-nav-group \{[\s\S]*width: 50px;[\s\S]*grid-template-rows: repeat\(3, 40px\);[\s\S]*padding: 4px;[\s\S]*\}/,
-    );
-    expect(stylesCss).toContain('.floating-nav-indicator {');
-    expect(stylesCss).toMatch(
-      /\.floating-nav-indicator \{[\s\S]*background: transparent;[\s\S]*border: 1px solid color-mix\(in srgb, var\(--accent\) 72%, transparent\);/,
-    );
-    expect(stylesCss).toMatch(
-      /\.floating-nav-button\[data-active='true'\] \{[\s\S]*color: color-mix\(in srgb, var\(--accent\) 88%, var\(--text\)\);[\s\S]*\}/,
-    );
-    expect(stylesCss).toContain(".floating-nav-button[data-active='true']:hover {");
+    expect(stylesCss).not.toContain('.floating-nav-group {');
+    expect(stylesCss).not.toContain('.floating-nav-indicator {');
+    expect(stylesCss).not.toContain('.floating-nav-button {');
+    expect(stylesCss).toContain('.gesture-nav-control {');
+    expect(stylesCss).toContain('.gesture-nav-pill {');
+    expect(stylesCss).toContain('.gesture-nav-button {');
     expect(stylesCss).toContain('.drawer-toggle-bubble {');
     expect(stylesCss).toMatch(
       /\.drawer-toggle-bubble\[data-active='true'\] \{[\s\S]*background: transparent;[\s\S]*border-color: color-mix\(in srgb, var\(--accent\) 72%, transparent\);[\s\S]*color: color-mix\(in srgb, var\(--accent\) 88%, var\(--text\)\);/,
@@ -1557,21 +1544,20 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('floatingBaseBounds.minTop');
     expect(mainTsx).toContain('floatingBaseBounds.maxTop');
     expect(mainTsx).not.toContain('const keyboardShift = Math.min(');
+    expect(stylesCss).not.toContain('.floating-nav-group');
     expect(stylesCss).toMatch(
-      /\.floating-nav-group,\s*\.drawer-toggle-bubble \{[\s\S]*background: color-mix\(in srgb, var\(--panel\) 34%, transparent\);[\s\S]*backdrop-filter: blur\(1px\);[\s\S]*\}/,
+      /\.drawer-toggle-bubble \{[\s\S]*background: color-mix\(in srgb, var\(--panel\) 34%, transparent\);[\s\S]*backdrop-filter: blur\(1px\);[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
-      /\.floating-control-stack\[data-backdrop-tone='light'\] \.floating-nav-group,[\s\S]*\.floating-control-stack\[data-backdrop-tone='light'\] \.drawer-toggle-bubble \{[\s\S]*background: color-mix\(in srgb, var\(--panel\) 88%, transparent\);[\s\S]*backdrop-filter: blur\(8px\);[\s\S]*\}/,
+      /\.floating-control-stack\[data-backdrop-tone='light'\] \.drawer-toggle-bubble \{[\s\S]*background: color-mix\(in srgb, var\(--panel\) 88%, transparent\);[\s\S]*backdrop-filter: blur\(8px\);[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
       /\.floating-control-stack\[data-idle='true'\] \{[\s\S]*opacity: var\(--floating-control-idle-opacity, 0\.34\);[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
-      /\.floating-control-stack\[data-idle='true'\] \.floating-nav-group,[\s\S]*\.floating-control-stack\[data-idle='true'\] \.drawer-toggle-bubble,[\s\S]*\.floating-control-stack\[data-idle='true'\] \.gesture-nav-button \{[\s\S]*background: transparent;[\s\S]*box-shadow: none;[\s\S]*backdrop-filter: none;[\s\S]*\}/,
+      /\.floating-control-stack\[data-idle='true'\] \.drawer-toggle-bubble,[\s\S]*\.floating-control-stack\[data-idle='true'\] \.gesture-nav-pill,[\s\S]*\.floating-control-stack\[data-idle='true'\] \.gesture-nav-button \{[\s\S]*background: transparent;[\s\S]*box-shadow: none;[\s\S]*backdrop-filter: none;[\s\S]*\}/,
     );
-    expect(stylesCss).toMatch(
-      /\.floating-nav-button\[data-active='true'\]:hover \{[\s\S]*color: color-mix\(in srgb, var\(--accent\) 88%, var\(--text\)\);[\s\S]*\}/,
-    );
+    expect(stylesCss).not.toContain('.floating-nav-button');
     expect(stylesCss).toMatch(
       /\.port-relay-floating-bubble\[data-active='true'\] \{[\s\S]*background: transparent;[\s\S]*border-color: color-mix\(in srgb, var\(--accent\) 72%, transparent\);[\s\S]*color: color-mix\(in srgb, var\(--accent\) 88%, var\(--text\)\);[\s\S]*\}/,
     );

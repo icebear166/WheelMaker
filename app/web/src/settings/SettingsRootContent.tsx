@@ -31,8 +31,6 @@ type SettingsRootContentProps = {
   showSectionTitle: boolean;
   themeMode: ThemeMode;
   setThemeMode: (value: ThemeMode) => void;
-  gestureNavigation: boolean;
-  setGestureNavigation: (value: boolean) => void;
   isWide: boolean;
   floatingControlIdleOpacityPercent: number;
   setFloatingControlIdleOpacity: (value: number) => void;
@@ -98,8 +96,6 @@ export function SettingsRootContent({
   showSectionTitle,
   themeMode,
   setThemeMode,
-  gestureNavigation,
-  setGestureNavigation,
   isWide,
   floatingControlIdleOpacityPercent,
   setFloatingControlIdleOpacity,
@@ -165,17 +161,6 @@ export function SettingsRootContent({
               onChange={e =>
                 setThemeMode(e.target.checked ? 'dark' : 'light')
               }
-            />
-          </label>
-          <label className="settings-row sidebar-setting-row">
-            <span>
-              <span className="codicon codicon-move settings-row-icon" aria-hidden="true" />
-              Gesture Navigation
-            </span>
-            <input
-              type="checkbox"
-              checked={gestureNavigation}
-              onChange={e => setGestureNavigation(e.target.checked)}
             />
           </label>
           {isWide ? (

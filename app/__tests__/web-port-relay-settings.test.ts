@@ -221,7 +221,8 @@ describe('port relay settings UI source structure', () => {
     expect(mainTsx).toContain('setDrawerOpen(false);');
     expect(mainTsx).toContain('setSidebarSettingsOpen(false);');
     expect(mainTsx).toContain('}, [mobilePortRelayFrameOpen, setDrawerOpen, setSidebarSettingsOpen]);');
-    expect(mainTsx).toContain('{mobilePortRelayFrameOpen ? null : gestureNavigation ? (');
+    expect(mainTsx).toContain('{mobilePortRelayFrameOpen ? null : (');
+    expect(mainTsx).not.toContain('{mobilePortRelayFrameOpen ? null : gestureNavigation ? (');
     expect(mainTsx).toContain('drawerOpen={mobilePortRelayFrameOpen ? false : drawerOpen}');
     expect(mainTsx).not.toContain('const portRelayMobileFrameOverlay = mobilePortRelayFrameOpen');
   });

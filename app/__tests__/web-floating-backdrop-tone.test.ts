@@ -31,8 +31,8 @@ describe('floating backdrop tone detection', () => {
     expect(shouldMeasureFloatingBackdropTone(15_000, 10_000)).toBe(true);
   });
 
-  test('samples the primary nav, drawer, and relay floating button surfaces', () => {
-    expect(FLOATING_BACKDROP_CONTROL_SELECTOR).toContain('.floating-nav-group');
+  test('samples the gesture nav, drawer, and relay floating button surfaces', () => {
+    expect(FLOATING_BACKDROP_CONTROL_SELECTOR).not.toContain('.floating-nav-group');
     expect(FLOATING_BACKDROP_CONTROL_SELECTOR).toContain('.drawer-toggle-bubble');
     expect(FLOATING_BACKDROP_CONTROL_SELECTOR).toContain('.gesture-nav-pill');
     expect(FLOATING_BACKDROP_CONTROL_SELECTOR).toContain('.port-relay-floating-bubble');

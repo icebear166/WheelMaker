@@ -15,7 +15,7 @@ function cssBlock(selector: string): string {
 }
 
 describe('mobile chat quick switch UI source structure', () => {
-  test('wires chat-page clicks on the mobile chat button to a compact quick switch menu', () => {
+  test('keeps quick switch menu wiring without the removed mobile chat button opener', () => {
     expect(mainTsx).toContain("from '../chat/mobileChatQuickSwitch';");
     expect(mainTsx).toContain('buildMobileChatQuickSwitchSections,');
     expect(mainTsx).toContain('hasCompletedUnreadChatSession,');
@@ -42,11 +42,9 @@ describe('mobile chat quick switch UI source structure', () => {
     expect(mainTsx).toContain('const getQuickSwitchProjectAgents = useCallback(');
     expect(mainTsx).toContain('const handleQuickSwitchCreateSession = useCallback(async (targetProjectId: string, agentType: string) => {');
     expect(mainTsx).toContain("const pendingKey = `${targetProjectId}:${agentType}`;");
-    expect(mainTsx).toContain('const handleFloatingChatSelect = useCallback(() => {');
-    expect(mainTsx).toContain("if (tab !== 'chat' || sidebarSettingsOpen) {");
-    expect(mainTsx).toContain("setTab('chat');");
-    expect(mainTsx).toContain("setChatQuickSwitchMenuPlacement({kind: 'mobile'});");
-    expect(mainTsx).toContain('setChatQuickSwitchMenuOpen(open => !open);');
+    expect(mainTsx).not.toContain('const handleFloatingChatSelect = useCallback(() => {');
+    expect(mainTsx).not.toContain('onClick={handleFloatingChatSelect}');
+    expect(mainTsx).not.toContain("setChatQuickSwitchMenuPlacement({kind: 'mobile'});");
     expect(mainTsx).toContain('const handleMobileChatQuickSwitchSelect = useCallback(async (targetProjectId: string, session: RegistryChatSession) => {');
     expect(mainTsx).toContain('await selectProjectChatSession(targetProjectId, session.sessionId, {closeMobileDrawer: true});');
     expect(mainTsx).toContain("if (tab !== 'chat' || sidebarSettingsOpen) {");
@@ -83,8 +81,7 @@ describe('mobile chat quick switch UI source structure', () => {
     expect(quickSwitchMenuTsx).not.toContain('className="chat-quick-switch-selected codicon codicon-check"');
     expect(quickSwitchMenuTsx).toContain('No chats');
     expect(quickSwitchMenuTsx).toContain('onPointerDown={event => event.stopPropagation()}');
-    expect(mainTsx).toContain('onClick={handleFloatingChatSelect}');
-    expect(mainTsx).toContain("chatQuickSwitchMenuPlacement.kind === 'mobile' ? chatQuickSwitchMenu : null");
+    expect(mainTsx).not.toContain("chatQuickSwitchMenuPlacement.kind === 'mobile' ? chatQuickSwitchMenu : null");
     expect(mainTsx).toContain("chatQuickSwitchMenuPlacement.kind === 'desktop' ? chatQuickSwitchMenu : null");
 
     expect(stylesCss).toContain('.chat-quick-switch-menu');

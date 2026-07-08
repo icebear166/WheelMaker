@@ -32,21 +32,15 @@ function readWorkspacePersistence(): string {
 }
 
 describe('gesture navigation', () => {
-  test('persists gesture navigation as a default-off appearance preference', () => {
+  test('does not persist gesture navigation as an appearance preference', () => {
     const persistence = readWorkspacePersistence();
 
-    expect(persistence).toContain('gestureNavigation: boolean;');
-    expect(persistence).toContain("gestureNavigation: 'gestureNavigation',");
-    expect(persistence).toContain('gestureNavigation: false,');
-    expect(persistence).toContain(
-      "gestureNavigation: typeof input.gestureNavigation === 'boolean' ? input.gestureNavigation : base.gestureNavigation",
-    );
-    expect(persistence).toContain(
-      '{k: GLOBAL_KEYS.gestureNavigation, v: serialize(this.state.global.gestureNavigation), updatedAt: now}',
-    );
-    expect(persistence).toContain(
-      '{k: GLOBAL_KEYS.gestureNavigation, v: serialize(next.gestureNavigation), updatedAt: now}',
-    );
+    expect(persistence).not.toContain('gestureNavigation: boolean;');
+    expect(persistence).not.toContain("gestureNavigation: 'gestureNavigation',");
+    expect(persistence).not.toContain('gestureNavigation: false,');
+    expect(persistence).not.toContain('input.gestureNavigation');
+    expect(persistence).not.toContain('GLOBAL_KEYS.gestureNavigation');
+    expect(persistence).not.toContain('next.gestureNavigation');
   });
 
   test('uses click movement cancellation and 1000ms drag threshold', () => {
@@ -72,7 +66,7 @@ describe('gesture navigation', () => {
     })).toBe(true);
   });
 
-  test('wires gesture navigation through appearance settings and mobile floating controls', () => {
+  test('wires gesture navigation as the only mobile floating controls scheme', () => {
     const main = readMain();
     const settingsRoot = readSettingsRoot();
     const currentSelectStart = main.indexOf('const handleGestureNavigationCurrentSelect = useCallback(');
@@ -84,21 +78,27 @@ describe('gesture navigation', () => {
 
     expect(main).toContain("import {");
     expect(main).toContain("} from '../shell/layouts/mobile/gestureNavigation';");
-    expect(main).toContain('const [gestureNavigation, setGestureNavigation] = useState(');
-    expect(main).toContain('typeof persistedGlobal.gestureNavigation === \'boolean\'');
-    expect(main).toContain('gestureNavigation,');
-    expect(settingsRoot).toContain('Gesture Navigation');
-    expect(settingsRoot).toContain('checked={gestureNavigation}');
-    expect(settingsRoot).toContain('onChange={e => setGestureNavigation(e.target.checked)}');
-    expect(main).toContain("gestureNavigation ? (");
+    expect(main).not.toContain('const [gestureNavigation, setGestureNavigation] = useState(');
+    expect(main).not.toContain('persistedGlobal.gestureNavigation');
+    expect(main).not.toContain('gestureNavigation={gestureNavigation}');
+    expect(main).not.toContain('setGestureNavigation={setGestureNavigation}');
+    expect(settingsRoot).not.toContain('Gesture Navigation');
+    expect(settingsRoot).not.toContain('checked={gestureNavigation}');
+    expect(settingsRoot).not.toContain('setGestureNavigation');
+    expect(main).not.toContain('gestureNavigation ? (');
     expect(main).toContain('className="gesture-nav-control"');
     expect(main).toContain('className="gesture-nav-pill"');
     expect(main).toContain('className="gesture-nav-button gesture-nav-capsule"');
     expect(main).toContain('className="gesture-nav-button gesture-nav-current-button"');
     expect(main).toContain('onClick={handleGestureNavigationCurrentSelect}');
     expect(main).not.toContain('className="gesture-nav-badge"');
-    expect(main).toContain('className="floating-nav-group"');
-    expect(main).toContain('aria-label="Chat"');
+    expect(main).not.toContain('className="floating-nav-group"');
+    expect(main).not.toContain('className="floating-nav-button"');
+    expect(main).not.toContain('floating-nav-indicator');
+    expect(main).not.toContain('handleFloatingNavSelect');
+    expect(main).not.toContain('handleFloatingDrawerToggle');
+    expect(main).toContain("title={gestureNavigationExpanded ? 'Close drawer' : 'Chat'}");
+    expect(main).toContain("aria-label={gestureNavigationExpanded ? 'Close drawer' : 'Chat'}");
     expect(main).toContain("codicon-comment-discussion");
     expect(main).toContain('handleGestureNavigationCurrentSelect');
     expect(main).toContain('const openGestureNavigationActions = useCallback(');
@@ -199,7 +199,7 @@ describe('gesture navigation', () => {
   test('keeps chat centered between preview and settings when the gesture pill expands', () => {
     const main = readMain();
     const pillStart = main.indexOf('className="gesture-nav-pill"');
-    const pillEnd = main.indexOf('className="floating-nav-group"', pillStart);
+    const pillEnd = main.indexOf('const mobileSettingsTitle', pillStart);
     const pillBody = main.slice(pillStart, pillEnd);
     const previewIndex = pillBody.indexOf('codicon-layout-sidebar-right');
     const currentButtonIndex = pillBody.indexOf('className="gesture-nav-button gesture-nav-current-button"');

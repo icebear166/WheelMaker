@@ -2470,11 +2470,6 @@ export function App() {
   const [selectedRegistryDebugScope, setSelectedRegistryDebugScope] = useState('All');
   const [selectedRegistryDebugSessionId, setSelectedRegistryDebugSessionId] = useState('All');
   const [registryDebugIncludeMultiSessionRecords, setRegistryDebugIncludeMultiSessionRecords] = useState(false);
-  const [gestureNavigation, setGestureNavigation] = useState(
-    typeof persistedGlobal.gestureNavigation === 'boolean'
-      ? persistedGlobal.gestureNavigation
-      : false,
-  );
   const codeFontFamily = useMemo(
     () => resolveCodeFontFamily(codeFont),
     [codeFont],
@@ -2577,7 +2572,6 @@ export function App() {
   const [chatComposerTop, setChatComposerTop] = useState<number | null>(null);
   const [chatComposerHeight, setChatComposerHeight] = useState(0);
   const [floatingDefaultComposerTop, setFloatingDefaultComposerTop] = useState<number | null>(null);
-  const floatingLongPressTimerRef = useRef<number | null>(null);
   const floatingCooldownTimerRef = useRef<number | null>(null);
   const floatingClickCooldownUntilRef = useRef(0);
   const floatingIgnoreLostCaptureRef = useRef(false);
@@ -5480,7 +5474,6 @@ export function App() {
   }, [
     isWide,
     windowWidth,
-    gestureNavigation,
     gestureNavigationExpanded,
     projectId,
     projects.length,
@@ -5584,10 +5577,6 @@ export function App() {
     if (!isWide) {
       return;
     }
-    if (floatingLongPressTimerRef.current !== null) {
-      window.clearTimeout(floatingLongPressTimerRef.current);
-      floatingLongPressTimerRef.current = null;
-    }
     if (gestureMoveLongPressTimerRef.current !== null) {
       window.clearTimeout(gestureMoveLongPressTimerRef.current);
       gestureMoveLongPressTimerRef.current = null;
@@ -5607,10 +5596,6 @@ export function App() {
 
   useEffect(
     () => () => {
-      if (floatingLongPressTimerRef.current !== null) {
-        window.clearTimeout(floatingLongPressTimerRef.current);
-        floatingLongPressTimerRef.current = null;
-      }
       if (gestureMoveLongPressTimerRef.current !== null) {
         window.clearTimeout(gestureMoveLongPressTimerRef.current);
         gestureMoveLongPressTimerRef.current = null;
@@ -6022,7 +6007,6 @@ export function App() {
       logLevel,
       localHubReadEnabled,
       promptCompletionNotificationsEnabled,
-      gestureNavigation,
       tab,
       selectedProjectId: projectId,
       floatingControlYRatio,
@@ -6054,7 +6038,6 @@ export function App() {
     logLevel,
     localHubReadEnabled,
     promptCompletionNotificationsEnabled,
-    gestureNavigation,
     tab,
     projectId,
     floatingControlYRatio,
@@ -6580,14 +6563,6 @@ export function App() {
     isWide,
     setFloatingControlYRatio,
   ]);
-  const floatingNavIndex = tab === 'chat' ? 0 : tab === 'file' ? 1 : 2;
-  const floatingNavIndicatorStyle = useMemo(
-    () =>
-      ({
-        '--floating-nav-index': String(floatingNavIndex),
-      }) as React.CSSProperties,
-    [floatingNavIndex],
-  );
   const effectiveFloatingControlTop = floatingControlTop;
   const effectiveFloatingControlStackStyle = useMemo(
     () =>
@@ -6604,7 +6579,7 @@ export function App() {
       ? 'dragging'
       : gestureNavigationExpanded
         ? 'gesture-open'
-        : floatingDragState?.pressing || gestureNavState?.phase === 'pressing'
+        : gestureNavState?.phase === 'pressing'
           ? 'drag-ready'
           : 'idle';
   useEffect(() => {
@@ -6615,7 +6590,6 @@ export function App() {
     effectiveFloatingControlTop,
     floatingControlStackHeight,
     floatingDragVisualState,
-    gestureNavigation,
     gestureNavigationExpanded,
     mobilePortRelayFrameOpen,
     portRelayFrameUrl,
@@ -6623,12 +6597,6 @@ export function App() {
     requestFloatingBackdropToneMeasure,
     tab,
   ]);
-  const clearFloatingLongPressTimer = useCallback(() => {
-    if (floatingLongPressTimerRef.current !== null) {
-      window.clearTimeout(floatingLongPressTimerRef.current);
-      floatingLongPressTimerRef.current = null;
-    }
-  }, []);
   const clearGestureMoveLongPressTimer = useCallback(() => {
     if (gestureMoveLongPressTimerRef.current !== null) {
       window.clearTimeout(gestureMoveLongPressTimerRef.current);
@@ -6662,7 +6630,6 @@ export function App() {
     isWide ||
     drawerOpen ||
     !!floatingDragState?.active ||
-    !!floatingDragState?.pressing ||
     gestureNavigationExpanded ||
     portRelayTargetMenuOpen ||
     chatQuickSwitchMenuOpen ||
@@ -6711,58 +6678,6 @@ export function App() {
       floatingCooldownTimerRef.current = null;
     }, remaining);
   }, [clearFloatingCooldownTimer]);
-  const beginFloatingPress = useCallback(
-    (event: React.PointerEvent<HTMLElement>) => {
-      if (isWide || event.button !== 0) {
-        return;
-      }
-      if (floatingClickCooldownUntilRef.current > Date.now()) {
-        return;
-      }
-      clearFloatingLongPressTimer();
-      floatingIgnoreLostCaptureRef.current = false;
-      event.currentTarget.setPointerCapture(event.pointerId);
-      const originY = event.clientY;
-      setFloatingDragState({
-        active: false,
-        pressing: true,
-        pointerId: event.pointerId,
-        originX: event.clientX,
-        originY,
-        startSide: floatingControlSide,
-        currentX: event.clientX,
-        startTop: floatingControlTop,
-        currentTop: floatingControlTop,
-        cooldownUntil: 0,
-      });
-      floatingLongPressTimerRef.current = window.setTimeout(() => {
-        closeMobileDrawerCompanionOverlays();
-        setDrawerOpen(false);
-        triggerMobileHaptic();
-        setFloatingDragState(prev =>
-          prev && prev.pointerId === event.pointerId
-            ? { ...prev, active: true, pressing: false }
-            : prev,
-        );
-        floatingLongPressTimerRef.current = null;
-      }, 350);
-    },
-    [
-      clearFloatingLongPressTimer,
-      closeMobileDrawerCompanionOverlays,
-      floatingControlSide,
-      floatingControlTop,
-      isWide,
-      setDrawerOpen,
-    ],
-  );
-  const handleFloatingControlButtonPointerDown = useCallback(
-    (event: React.PointerEvent<HTMLButtonElement>) => {
-      beginFloatingPress(event);
-      event.stopPropagation();
-    },
-    [beginFloatingPress],
-  );
   useEffect(() => {
     if (mobilePortRelayFrameOpen) {
       setChatQuickSwitchMenuOpen(false);
@@ -6805,7 +6720,6 @@ export function App() {
       const deltaY = event.clientY - current.originY;
       if (!current.active) {
         if (Math.abs(deltaY) >= 10) {
-          clearFloatingLongPressTimer();
           const cooldownUntil = Date.now() + 120;
           floatingClickCooldownUntilRef.current = cooldownUntil;
           setFloatingDragState({
@@ -6852,7 +6766,6 @@ export function App() {
     [
       closeMobileDrawerCompanionOverlays,
       clearFloatingCooldownState,
-      clearFloatingLongPressTimer,
       floatingBounds.maxTop,
       floatingBounds.minTop,
       pulseFloatingControlSide,
@@ -6866,7 +6779,6 @@ export function App() {
       if (!current || current.pointerId !== pointerId) {
         return;
       }
-      clearFloatingLongPressTimer();
       if (!current.active) {
         setFloatingDragState(null);
         return;
@@ -6904,7 +6816,6 @@ export function App() {
     },
     [
       clearFloatingCooldownState,
-      clearFloatingLongPressTimer,
       floatingBounds.maxTop,
       floatingBounds.minTop,
       floatingBaseBounds.maxTop,
@@ -6919,7 +6830,6 @@ export function App() {
       if (!current || current.pointerId !== pointerId) {
         return;
       }
-      clearFloatingLongPressTimer();
       if (!current.active) {
         setFloatingDragState(null);
         return;
@@ -6934,46 +6844,8 @@ export function App() {
       });
       clearFloatingCooldownState(cooldownUntil);
     },
-    [clearFloatingCooldownState, clearFloatingLongPressTimer],
+    [clearFloatingCooldownState],
   );
-  const handleFloatingNavSelect = useCallback((nextTab: Tab) => {
-    if (floatingClickCooldownUntilRef.current > Date.now()) {
-      return;
-    }
-    setChatQuickSwitchMenuOpen(false);
-    if (nextTab === tab) {
-      if (nextTab === 'chat' && drawerOpen) {
-        setDrawerOpen(false);
-      }
-      return;
-    }
-    setTab(nextTab);
-    setDrawerOpen(false);
-  }, [drawerOpen, tab, setDrawerOpen, setTab]);
-  const handleFloatingChatSelect = useCallback(() => {
-    if (floatingClickCooldownUntilRef.current > Date.now()) {
-      return;
-    }
-    setPortRelayTargetMenuOpen(false);
-    setChatQuickSwitchMenuPlacement({kind: 'mobile'});
-    if (tab !== 'chat' || sidebarSettingsOpen) {
-      setChatQuickSwitchMenuOpen(false);
-      setTab('chat');
-      setDrawerOpen(false);
-      if (sidebarSettingsOpen) {
-        setSidebarSettingsOpen(false);
-      }
-      return;
-    }
-    setDrawerOpen(false);
-    setChatQuickSwitchMenuOpen(open => !open);
-  }, [sidebarSettingsOpen, tab, setDrawerOpen, setSidebarSettingsOpen, setTab]);
-  const handleFloatingDrawerToggle = useCallback(() => {
-    if (floatingClickCooldownUntilRef.current > Date.now()) {
-      return;
-    }
-    setDrawerOpen(value => !value);
-  }, []);
   const openGestureNavigationActions = useCallback(() => {
     clearGestureMoveLongPressTimer();
     const startedAt = Date.now();
@@ -16398,8 +16270,6 @@ export function App() {
         showSectionTitle={showSectionTitle}
         themeMode={themeMode}
         setThemeMode={setThemeMode}
-        gestureNavigation={gestureNavigation}
-        setGestureNavigation={setGestureNavigation}
         isWide={isWide}
         floatingControlIdleOpacityPercent={floatingControlIdleOpacityPercent}
         setFloatingControlIdleOpacity={setFloatingControlIdleOpacity}
@@ -19630,46 +19500,33 @@ export function App() {
         style={effectiveFloatingControlStackStyle}
         onPointerDownCapture={wakeFloatingControls}
         onClickCapture={wakeFloatingControls}
-        onPointerDown={gestureNavigation ? undefined : beginFloatingPress}
-        onPointerMove={gestureNavigation ? handleGestureNavigationPointerMove : handleFloatingPointerMove}
+        onPointerMove={handleGestureNavigationPointerMove}
         onPointerUp={event => {
           floatingIgnoreLostCaptureRef.current = true;
-          if (gestureNavigation) {
-            if (floatingDragStateRef.current?.pointerId === event.pointerId) {
-              finishFloatingDrag(event.pointerId);
-              return;
-            }
-            finishGestureNavigation(event.pointerId);
+          if (floatingDragStateRef.current?.pointerId === event.pointerId) {
+            finishFloatingDrag(event.pointerId);
             return;
           }
-          finishFloatingDrag(event.pointerId);
+          finishGestureNavigation(event.pointerId);
         }}
         onPointerCancel={event => {
           floatingIgnoreLostCaptureRef.current = true;
-          if (gestureNavigation) {
-            if (floatingDragStateRef.current?.pointerId === event.pointerId) {
-              cancelFloatingDrag(event.pointerId);
-              return;
-            }
-            cancelGestureNavigation(event.pointerId);
+          if (floatingDragStateRef.current?.pointerId === event.pointerId) {
+            cancelFloatingDrag(event.pointerId);
             return;
           }
-          cancelFloatingDrag(event.pointerId);
+          cancelGestureNavigation(event.pointerId);
         }}
         onLostPointerCapture={event => {
           if (floatingIgnoreLostCaptureRef.current) {
             floatingIgnoreLostCaptureRef.current = false;
             return;
           }
-          if (gestureNavigation) {
-            if (floatingDragStateRef.current?.pointerId === event.pointerId) {
-              cancelFloatingDrag(event.pointerId);
-              return;
-            }
-            cancelGestureNavigation(event.pointerId);
+          if (floatingDragStateRef.current?.pointerId === event.pointerId) {
+            cancelFloatingDrag(event.pointerId);
             return;
           }
-          cancelFloatingDrag(event.pointerId);
+          cancelGestureNavigation(event.pointerId);
         }}
       >
         <PortRelayFloatingButton
@@ -19689,8 +19546,7 @@ export function App() {
           onPointerCancel={finishPortRelayFloatingPress}
           onToggle={handlePortRelayFloatingToggle}
         />
-        {chatQuickSwitchMenuPlacement.kind === 'mobile' ? chatQuickSwitchMenu : null}
-        {mobilePortRelayFrameOpen ? null : gestureNavigation ? (
+        {mobilePortRelayFrameOpen ? null : (
           <div
             className="gesture-nav-control"
             data-expanded={gestureNavigationExpanded ? 'true' : 'false'}
@@ -19745,65 +19601,6 @@ export function App() {
               ) : null}
             </div>
           </div>
-        ) : (
-          <>
-            <div
-              className="floating-nav-group"
-              aria-label="Primary navigation"
-              style={floatingNavIndicatorStyle}
-            >
-              <div className="floating-nav-indicator" />
-              <button
-                type="button"
-                className="floating-nav-button"
-                data-active={tab === 'chat'}
-                onPointerDown={event => event.stopPropagation()}
-                onContextMenu={event => event.preventDefault()}
-                onClick={handleFloatingChatSelect}
-                title="Chat"
-                aria-label="Chat"
-              >
-                <span className="codicon codicon-comment-discussion" />
-                {hasCompletedUnreadChatSessionIndicator ? (
-                  <span className="floating-nav-unread-dot" aria-hidden="true" />
-                ) : null}
-              </button>
-              <button
-                type="button"
-                className="floating-nav-button"
-                data-active={tab === 'file'}
-                onPointerDown={handleFloatingControlButtonPointerDown}
-                onClick={() => handleFloatingNavSelect('file')}
-                title="File"
-                aria-label="File"
-              >
-                <span className="codicon codicon-files" />
-              </button>
-              <button
-                type="button"
-                className="floating-nav-button"
-                data-active={tab === 'git'}
-                onPointerDown={handleFloatingControlButtonPointerDown}
-                onClick={() => handleFloatingNavSelect('git')}
-                title="Git"
-                aria-label="Git"
-              >
-                <span className="codicon codicon-source-control" />
-              </button>
-            </div>
-            <button
-              type="button"
-              className="drawer-toggle-bubble"
-              data-active={drawerOpen}
-              onPointerDown={handleFloatingControlButtonPointerDown}
-              onClick={handleFloatingDrawerToggle}
-              title="Toggle drawer"
-              aria-label="Toggle drawer"
-              aria-expanded={drawerOpen}
-            >
-              <span className="codicon codicon-menu" />
-            </button>
-          </>
         )}
       </div>
     </div>

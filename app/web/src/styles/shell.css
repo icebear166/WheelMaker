@@ -501,7 +501,6 @@
   transition: top 140ms ease, transform 120ms ease, opacity 180ms ease, filter 180ms ease;
 }
 
-.floating-nav-group,
 .drawer-toggle-bubble {
   border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
   background: color-mix(in srgb, var(--panel) 34%, transparent);
@@ -511,14 +510,12 @@
   transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, backdrop-filter 180ms ease;
 }
 
-.floating-control-stack[data-backdrop-tone='mixed'] .floating-nav-group,
 .floating-control-stack[data-backdrop-tone='mixed'] .drawer-toggle-bubble {
   background: color-mix(in srgb, var(--panel) 64%, transparent);
   backdrop-filter: blur(5px);
   -webkit-backdrop-filter: blur(5px);
 }
 
-.floating-control-stack[data-backdrop-tone='light'] .floating-nav-group,
 .floating-control-stack[data-backdrop-tone='light'] .drawer-toggle-bubble {
   background: color-mix(in srgb, var(--panel) 88%, transparent);
   backdrop-filter: blur(8px);
@@ -556,50 +553,6 @@
   background: color-mix(in srgb, var(--panel) 88%, transparent);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-}
-
-.floating-nav-group {
-  position: relative;
-  width: 50px;
-  display: grid;
-  grid-template-rows: repeat(3, 40px);
-  padding: 4px;
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.floating-nav-indicator {
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  width: 40px;
-  height: 40px;
-  border-radius: 999px;
-  background: transparent;
-  border: 1px solid color-mix(in srgb, var(--accent) 72%, transparent);
-  transform: translateY(calc(var(--floating-nav-index, 0) * 40px));
-  transition: transform 180ms ease;
-}
-
-.floating-nav-button {
-  position: relative;
-  z-index: 1;
-  width: 40px;
-  height: 40px;
-  border: none;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--muted);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 18px;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.floating-nav-button[data-active='true'] {
-  color: color-mix(in srgb, var(--accent) 88%, var(--text));
 }
 
 .floating-nav-unread-dot {
@@ -647,18 +600,11 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-.floating-nav-button:hover,
 .drawer-toggle-bubble:hover {
   color: var(--text);
   background: color-mix(in srgb, var(--panel) 64%, transparent);
 }
 
-.floating-nav-button[data-active='true']:hover {
-  background: transparent;
-  color: color-mix(in srgb, var(--accent) 88%, var(--text));
-}
-
-.floating-nav-button:active,
 .drawer-toggle-bubble:active {
   transform: scale(0.97);
 }
@@ -686,7 +632,6 @@
   filter: none;
 }
 
-.floating-control-stack[data-idle='true'] .floating-nav-group,
 .floating-control-stack[data-idle='true'] .drawer-toggle-bubble,
 .floating-control-stack[data-idle='true'] .gesture-nav-pill,
 .floating-control-stack[data-idle='true'] .gesture-nav-button {
