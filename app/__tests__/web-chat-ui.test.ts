@@ -1519,22 +1519,23 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('@keyframes voiceBarPulse');
   });
 
-  test('keeps the mobile three-tab floating nav and drawer button translucent over content', () => {
+  test('keeps the mobile floating controls in a fixed translucent idle state until expanded', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const stylesCss = readWebStyles(projectRoot);
 
-    expect(mainTsx).toContain('const FLOATING_CONTROL_IDLE_DELAY_MS = 3000;');
-    expect(mainTsx).toContain('const [floatingControlsIdle, setFloatingControlsIdle] = useState(false);');
-    expect(mainTsx).toContain('const floatingControlIdleOpacityPercent = Math.round(floatingControlIdleOpacity * 100);');
-    expect(mainTsx).toContain('const floatingControlsIdleBlocked =');
-    expect(mainTsx).toContain('const wakeFloatingControls = useCallback(() => {');
+    expect(mainTsx).not.toContain('FLOATING_CONTROL_IDLE_DELAY_MS');
+    expect(mainTsx).not.toContain('setFloatingControlsIdle');
+    expect(mainTsx).not.toContain('floatingControlIdleOpacity');
+    expect(mainTsx).not.toContain('floatingControlsIdleBlocked');
+    expect(mainTsx).not.toContain('wakeFloatingControls');
+    expect(mainTsx).toContain("const floatingControlsIdle = floatingDragVisualState === 'idle'");
     expect(mainTsx).toContain('data-idle={floatingControlsIdle}');
-    expect(mainTsx).toContain("'--floating-control-idle-opacity': String(floatingControlIdleOpacity),");
-    expect(mainTsx).toContain('onPointerDownCapture={wakeFloatingControls}');
-    expect(mainTsx).toContain('data-backdrop-tone={floatingBackdropTone}');
-    expect(mainTsx).toContain('requestFloatingBackdropToneMeasure');
-    expect(mainTsx).toContain('FLOATING_BACKDROP_TONE_THROTTLE_MS');
+    expect(mainTsx).not.toContain("'--floating-control-idle-opacity'");
+    expect(mainTsx).not.toContain('onPointerDownCapture={wakeFloatingControls}');
+    expect(mainTsx).not.toContain('data-backdrop-tone=');
+    expect(mainTsx).not.toContain('requestFloatingBackdropToneMeasure');
+    expect(mainTsx).not.toContain('FLOATING_BACKDROP_TONE_THROTTLE_MS');
     expect(mainTsx).toContain('const floatingPositionSnapshotRef = useRef');
     expect(mainTsx).toContain('resolveFloatingControlYRatioForBoundsChange({');
     expect(mainTsx).toContain('previousTop: previousFloatingPosition.top');
@@ -1552,15 +1553,12 @@ describe('web chat integration', () => {
     expect(stylesCss).toMatch(
       /\.drawer-toggle-bubble \{[\s\S]*background: color-mix\(in srgb, var\(--panel\) 34%, transparent\);[\s\S]*backdrop-filter: blur\(1px\);[\s\S]*\}/,
     );
+    expect(stylesCss).not.toContain('[data-backdrop-tone');
     expect(stylesCss).toMatch(
-      /\.floating-control-stack\[data-backdrop-tone='light'\] \.drawer-toggle-bubble \{[\s\S]*background: color-mix\(in srgb, var\(--panel\) 88%, transparent\);[\s\S]*backdrop-filter: blur\(8px\);[\s\S]*\}/,
+      /\.floating-control-stack\[data-idle='true'\] \{[\s\S]*opacity: 0\.6;[\s\S]*\}/,
     );
-    expect(stylesCss).toMatch(
-      /\.floating-control-stack\[data-idle='true'\] \{[\s\S]*opacity: var\(--floating-control-idle-opacity, 0\.34\);[\s\S]*\}/,
-    );
-    expect(stylesCss).toMatch(
-      /\.floating-control-stack\[data-idle='true'\] \.drawer-toggle-bubble,[\s\S]*\.floating-control-stack\[data-idle='true'\] \.gesture-nav-pill,[\s\S]*\.floating-control-stack\[data-idle='true'\] \.gesture-nav-button \{[\s\S]*background: transparent;[\s\S]*box-shadow: none;[\s\S]*backdrop-filter: none;[\s\S]*\}/,
-    );
+    expect(stylesCss).not.toContain(".floating-control-stack[data-idle='true'] .drawer-toggle-bubble");
+    expect(stylesCss).not.toContain('backdrop-filter: none;');
     expect(stylesCss).not.toContain('.floating-nav-button');
     expect(stylesCss).toMatch(
       /\.port-relay-floating-bubble\[data-active='true'\] \{[\s\S]*background: transparent;[\s\S]*border-color: color-mix\(in srgb, var\(--accent\) 72%, transparent\);[\s\S]*color: color-mix\(in srgb, var\(--accent\) 88%, var\(--text\)\);[\s\S]*\}/,
@@ -1628,13 +1626,9 @@ describe('web chat integration', () => {
     expect(settingsBundleTs).toContain("export { DebugLogsSettingsDetail } from './DebugLogsSettingsDetail';");
     expect(settingsRootTsx).toContain('function renderSettingsSection');
     expect(settingsRootTsx).toContain("renderSettingsSection('Appearance'");
-    expect(settingsRootTsx).toContain('Inactive Visibility');
-    expect(settingsRootTsx).toContain('{floatingControlIdleOpacityPercent}%');
-    expect(settingsRootTsx).toContain('value={floatingControlIdleOpacityPercent}');
-    expect(settingsRootTsx).toContain('min={10}');
-    expect(settingsRootTsx).toContain('max={80}');
-    expect(settingsRootTsx).toContain('step={5}');
-    expect(settingsRootTsx).toContain('onChange={event => setFloatingControlIdleOpacity(Number(event.target.value) / 100)}');
+    expect(settingsRootTsx).not.toContain('Inactive Visibility');
+    expect(settingsRootTsx).not.toContain('floatingControlIdleOpacityPercent');
+    expect(settingsRootTsx).not.toContain('setFloatingControlIdleOpacity');
     expect(settingsRootTsx).toContain("renderSettingsSection('Chat'");
     expect(settingsRootTsx).toContain("renderSettingsSection('Code Display'");
     expect(settingsRootTsx).toContain("renderSettingsSection('Debug'");
@@ -1645,8 +1639,8 @@ describe('web chat integration', () => {
     const debugSettingsIndex = settingsRootTsx.indexOf("renderSettingsSection('Debug'");
     expect(appearanceSettingsIndex).toBeLessThan(chatSettingsIndex);
     const appearanceSection = settingsRootTsx.slice(appearanceSettingsIndex, chatSettingsIndex);
-    expect(appearanceSection).toContain('!isWide ? (');
-    expect(appearanceSection).toContain('Inactive Visibility');
+    expect(appearanceSection).not.toContain('!isWide ? (');
+    expect(appearanceSection).not.toContain('Inactive Visibility');
     expect(chatSettingsIndex).toBeLessThan(codeDisplaySettingsIndex);
     expect(codeDisplaySettingsIndex).toBeLessThan(debugSettingsIndex);
     expect(settingsRootTsx).toContain("openSettingsChild('database')");

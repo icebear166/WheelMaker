@@ -32,8 +32,6 @@ type SettingsRootContentProps = {
   themeMode: ThemeMode;
   setThemeMode: (value: ThemeMode) => void;
   isWide: boolean;
-  floatingControlIdleOpacityPercent: number;
-  setFloatingControlIdleOpacity: (value: number) => void;
   chatViewWidth: ChatViewWidth;
   setChatViewWidth: (value: ChatViewWidth) => void;
   mobileEnterKeyBehavior: MobileEnterKeyBehavior;
@@ -97,8 +95,6 @@ export function SettingsRootContent({
   themeMode,
   setThemeMode,
   isWide,
-  floatingControlIdleOpacityPercent,
-  setFloatingControlIdleOpacity,
   chatViewWidth,
   setChatViewWidth,
   mobileEnterKeyBehavior,
@@ -183,26 +179,6 @@ export function SettingsRootContent({
                   </option>
                 ))}
               </select>
-            </label>
-          ) : null}
-          {!isWide ? (
-            <label className="settings-row sidebar-setting-row settings-range-row">
-              <span>
-                <span className="codicon codicon-eye settings-row-icon" aria-hidden="true" />
-                Inactive Visibility
-              </span>
-              <span className="settings-range-control">
-                <input
-                  type="range"
-                  min={10}
-                  max={80}
-                  step={5}
-                  value={floatingControlIdleOpacityPercent}
-                  onChange={event => setFloatingControlIdleOpacity(Number(event.target.value) / 100)}
-                  aria-label="Inactive visibility"
-                />
-                <span className="settings-range-value">{floatingControlIdleOpacityPercent}%</span>
-              </span>
             </label>
           ) : null}
         </>

@@ -510,18 +510,6 @@
   transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, backdrop-filter 180ms ease;
 }
 
-.floating-control-stack[data-backdrop-tone='mixed'] .drawer-toggle-bubble {
-  background: color-mix(in srgb, var(--panel) 64%, transparent);
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
-}
-
-.floating-control-stack[data-backdrop-tone='light'] .drawer-toggle-bubble {
-  background: color-mix(in srgb, var(--panel) 88%, transparent);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
 .gesture-nav-pill {
   position: absolute;
   right: 0;
@@ -541,18 +529,6 @@
   overflow: hidden;
   pointer-events: auto;
   transition: top 200ms ease, height 200ms ease, background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, backdrop-filter 180ms ease;
-}
-
-.floating-control-stack[data-backdrop-tone='mixed'] .gesture-nav-pill {
-  background: color-mix(in srgb, var(--panel) 64%, transparent);
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
-}
-
-.floating-control-stack[data-backdrop-tone='light'] .gesture-nav-pill {
-  background: color-mix(in srgb, var(--panel) 88%, transparent);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
 }
 
 .floating-nav-unread-dot {
@@ -615,30 +591,9 @@
   color: color-mix(in srgb, var(--accent) 88%, var(--text));
 }
 
-.floating-control-stack[data-backdrop-tone='mixed'] .drawer-toggle-bubble[data-active='true'] {
-  background: transparent;
-  border-color: color-mix(in srgb, var(--accent) 72%, transparent);
-  color: color-mix(in srgb, var(--accent) 88%, var(--text));
-}
-
-.floating-control-stack[data-backdrop-tone='light'] .drawer-toggle-bubble[data-active='true'] {
-  background: transparent;
-  border-color: color-mix(in srgb, var(--accent) 72%, transparent);
-  color: color-mix(in srgb, var(--accent) 88%, var(--text));
-}
-
 .floating-control-stack[data-idle='true'] {
-  opacity: var(--floating-control-idle-opacity, 0.34);
+  opacity: 0.6;
   filter: none;
-}
-
-.floating-control-stack[data-idle='true'] .drawer-toggle-bubble,
-.floating-control-stack[data-idle='true'] .gesture-nav-pill,
-.floating-control-stack[data-idle='true'] .gesture-nav-button {
-  background: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 
 .gesture-nav-control {

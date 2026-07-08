@@ -4,12 +4,8 @@ import {
 } from '../../../preferences/floatingControlPreferences';
 
 export {
-  FLOATING_CONTROL_DEFAULT_IDLE_OPACITY,
   FLOATING_CONTROL_DEFAULT_Y_RATIO,
-  FLOATING_CONTROL_IDLE_OPACITY_MAX,
-  FLOATING_CONTROL_IDLE_OPACITY_MIN,
   floatingControlYRatioFromLegacySlot,
-  sanitizeFloatingControlIdleOpacity,
   sanitizeFloatingControlYRatio,
   type LegacyFloatingControlSlot,
 } from '../../../preferences/floatingControlPreferences';

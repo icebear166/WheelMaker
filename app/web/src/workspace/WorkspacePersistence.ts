@@ -48,10 +48,8 @@ import {
   type PreviewWorkbenchSnapshot,
 } from '../preview/previewWorkbenchState';
 import {
-  FLOATING_CONTROL_DEFAULT_IDLE_OPACITY,
   FLOATING_CONTROL_DEFAULT_Y_RATIO,
   floatingControlYRatioFromLegacySlot,
-  sanitizeFloatingControlIdleOpacity,
   sanitizeFloatingControlYRatio,
 } from '../preferences/floatingControlPreferences';
 import { sanitizeHubColorMap } from './hubProjectPreferences';
@@ -118,7 +116,6 @@ export type PersistedGlobalState = {
   selectedChatSessionId: string;
   floatingControlYRatio: number;
   floatingControlSide: PersistedFloatingControlSide;
-  floatingControlIdleOpacity: number;
   desktopSidebarWidth: number;
   collapsedProjectIds: string[];
   desktopCollapsedProjectIds: string[];
@@ -280,7 +277,6 @@ const GLOBAL_KEYS = {
   floatingControlYRatio: 'floatingControlYRatio',
   floatingControlSlot: 'floatingControlSlot',
   floatingControlSide: 'floatingControlSide',
-  floatingControlIdleOpacity: 'floatingControlIdleOpacity',
   desktopSidebarWidth: 'desktopSidebarWidth',
   collapsedProjectIds: 'collapsedProjectIds',
   desktopCollapsedProjectIds: 'desktopCollapsedProjectIds',
@@ -324,7 +320,6 @@ function defaultGlobalState(): PersistedGlobalState {
     selectedChatSessionId: '',
     floatingControlYRatio: FLOATING_CONTROL_DEFAULT_Y_RATIO,
     floatingControlSide: 'right',
-    floatingControlIdleOpacity: FLOATING_CONTROL_DEFAULT_IDLE_OPACITY,
     desktopSidebarWidth: 380,
     collapsedProjectIds: [],
     desktopCollapsedProjectIds: [],
@@ -575,7 +570,6 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
     selectedChatSessionId: typeof input.selectedChatSessionId === 'string' ? input.selectedChatSessionId : base.selectedChatSessionId,
     floatingControlYRatio,
     floatingControlSide: sanitizeFloatingControlSide(input.floatingControlSide, base.floatingControlSide),
-    floatingControlIdleOpacity: sanitizeFloatingControlIdleOpacity(input.floatingControlIdleOpacity, base.floatingControlIdleOpacity),
     desktopSidebarWidth: sanitizeDesktopSidebarWidth(input.desktopSidebarWidth, base.desktopSidebarWidth),
     collapsedProjectIds,
     desktopCollapsedProjectIds: collapsedProjectIds,
@@ -1060,7 +1054,6 @@ export class WorkspacePersistenceRepository {
       {k: GLOBAL_KEYS.selectedChatSessionId, v: serialize(this.state.global.selectedChatSessionId), updatedAt: now},
       {k: GLOBAL_KEYS.floatingControlYRatio, v: serialize(this.state.global.floatingControlYRatio), updatedAt: now},
       {k: GLOBAL_KEYS.floatingControlSide, v: serialize(this.state.global.floatingControlSide), updatedAt: now},
-      {k: GLOBAL_KEYS.floatingControlIdleOpacity, v: serialize(this.state.global.floatingControlIdleOpacity), updatedAt: now},
       {k: GLOBAL_KEYS.desktopSidebarWidth, v: serialize(this.state.global.desktopSidebarWidth), updatedAt: now},
       {k: GLOBAL_KEYS.collapsedProjectIds, v: serialize(this.state.global.collapsedProjectIds), updatedAt: now},
       {k: GLOBAL_KEYS.desktopCollapsedProjectIds, v: serialize(this.state.global.desktopCollapsedProjectIds), updatedAt: now},
@@ -1428,7 +1421,6 @@ export class WorkspacePersistenceRepository {
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.selectedChatSessionId, v: serialize(next.selectedChatSessionId), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.floatingControlYRatio, v: serialize(next.floatingControlYRatio), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.floatingControlSide, v: serialize(next.floatingControlSide), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.floatingControlIdleOpacity, v: serialize(next.floatingControlIdleOpacity), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.desktopSidebarWidth, v: serialize(next.desktopSidebarWidth), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.collapsedProjectIds, v: serialize(next.collapsedProjectIds), updatedAt: now});
       await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.desktopCollapsedProjectIds, v: serialize(next.desktopCollapsedProjectIds), updatedAt: now});

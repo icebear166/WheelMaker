@@ -282,12 +282,6 @@ import {
 import { installMobileViewportZoomGuard } from '../shell/layouts/mobile/mobileViewportZoomGuard';
 import { resolveLayoutMode } from '../shell/state/responsiveLayout';
 import {
-  FLOATING_BACKDROP_TONE_THROTTLE_MS,
-  measureFloatingBackdropTone,
-  shouldMeasureFloatingBackdropTone,
-  type FloatingBackdropTone,
-} from '../shell/layouts/mobile/floatingBackdropTone';
-import {
   scanTokenStatsAcrossHubs,
   tokenStatsFailureSummary,
   type TokenProviderSectionView,
@@ -790,7 +784,6 @@ const CHAT_FILE_PEEK_WIDTH_MAX = 1520;
 const CHAT_FILE_PEEK_VIEWPORT_MAX_RATIO = 0.8;
 const CHAT_FILE_PEEK_MAIN_MIN_WIDTH = 420;
 const CHAT_FILE_PEEK_HISTORY_KIND = 'wheelmaker:chat-file-peek';
-const FLOATING_CONTROL_IDLE_DELAY_MS = 3000;
 const GESTURE_NAV_CANCELLED_CLICK_SUPPRESS_MS = 160;
 const PORT_RELAY_TARGET_MENU_LONG_PRESS_MS = 200;
 const PORT_RELAY_FLOATING_Y_RATIO_STORAGE_KEY = 'wheelmaker:portRelayFloatingYRatio';
@@ -2528,7 +2521,6 @@ export function App() {
         hubColors: globalState.hubColors ?? {},
         floatingControlYRatio: globalState.floatingControlYRatio ?? readPortRelayFloatingYRatio() ?? FLOATING_CONTROL_DEFAULT_Y_RATIO,
         floatingControlSide: globalState.floatingControlSide ?? readPortRelayFloatingSide() ?? 'right',
-        floatingControlIdleOpacity: globalState.floatingControlIdleOpacity,
       }),
   );
   const tab = workspaceUiState.shared.tab as Tab;
@@ -2544,8 +2536,6 @@ export function App() {
   );
   const floatingControlYRatio = workspaceUiState.mobile.floatingControlYRatio;
   const floatingControlSide = workspaceUiState.mobile.floatingControlSide;
-  const floatingControlIdleOpacity = workspaceUiState.mobile.floatingControlIdleOpacity;
-  const floatingControlIdleOpacityPercent = Math.round(floatingControlIdleOpacity * 100);
   const floatingDragState = workspaceUiState.transient.floatingDragState as FloatingDragState | null;
   const floatingKeyboardOffset = workspaceUiState.transient.floatingKeyboardOffset;
   const sidebarCollapsed = workspaceUiState.desktop.sidebarCollapsed;
@@ -2578,17 +2568,9 @@ export function App() {
   const floatingIgnoreLostCaptureRef = useRef(false);
   const floatingControlStackRef = useRef<HTMLDivElement | null>(null);
   const floatingPositionSnapshotRef = useRef<{minTop: number; maxTop: number; top: number; hasDefaultComposerTop: boolean} | null>(null);
-  const [floatingBackdropTone, setFloatingBackdropTone] = useState<FloatingBackdropTone>('dark');
   const [floatingSidePulse, setFloatingSidePulse] = useState<PersistedFloatingControlSide | ''>('');
-  const [floatingControlsIdle, setFloatingControlsIdle] = useState(false);
-  const [floatingControlActivityTick, setFloatingControlActivityTick] = useState(0);
-  const floatingBackdropToneRef = useRef<FloatingBackdropTone>('dark');
   const floatingControlSideRef = useRef(floatingControlSide);
   const floatingSidePulseTimerRef = useRef<number | null>(null);
-  const floatingControlIdleTimerRef = useRef<number | null>(null);
-  const floatingBackdropToneMeasuredAtRef = useRef(0);
-  const floatingBackdropToneRafRef = useRef<number | null>(null);
-  const floatingBackdropToneTimerRef = useRef<number | null>(null);
   const desktopSidebarResizeRef = useRef<DesktopSidebarResizeState | null>(null);
   const projectPinLongPressTimerRef = useRef<number | null>(null);
   const projectPinLongPressTargetRef = useRef('');
@@ -2607,12 +2589,6 @@ export function App() {
   const setFloatingControlSide = useCallback(
     (next: WorkspaceUiStateValue<PersistedFloatingControlSide>) => {
       dispatchWorkspaceUi({ type: 'mobile/setFloatingControlSide', next });
-    },
-    [],
-  );
-  const setFloatingControlIdleOpacity = useCallback(
-    (next: WorkspaceUiStateValue<number>) => {
-      dispatchWorkspaceUi({ type: 'mobile/setFloatingControlIdleOpacity', next });
     },
     [],
   );
@@ -5168,94 +5144,6 @@ export function App() {
     gestureNavStateRef.current = gestureNavState;
   }, [gestureNavState]);
   useEffect(() => {
-    floatingBackdropToneRef.current = floatingBackdropTone;
-  }, [floatingBackdropTone]);
-  const clearFloatingBackdropToneTimer = useCallback(() => {
-    if (floatingBackdropToneTimerRef.current !== null) {
-      window.clearTimeout(floatingBackdropToneTimerRef.current);
-      floatingBackdropToneTimerRef.current = null;
-    }
-  }, []);
-  const cancelFloatingBackdropToneRaf = useCallback(() => {
-    if (floatingBackdropToneRafRef.current !== null) {
-      window.cancelAnimationFrame(floatingBackdropToneRafRef.current);
-      floatingBackdropToneRafRef.current = null;
-    }
-  }, []);
-  const runFloatingBackdropToneMeasure = useCallback(() => {
-    if (floatingBackdropToneRafRef.current !== null) {
-      return;
-    }
-    floatingBackdropToneRafRef.current = window.requestAnimationFrame(() => {
-      floatingBackdropToneRafRef.current = null;
-      const stack = floatingControlStackRef.current;
-      if (!stack) {
-        return;
-      }
-      const nextTone = measureFloatingBackdropTone(stack);
-      if (!nextTone || nextTone === floatingBackdropToneRef.current) {
-        return;
-      }
-      floatingBackdropToneRef.current = nextTone;
-      setFloatingBackdropTone(nextTone);
-    });
-  }, []);
-  const requestFloatingBackdropToneMeasure = useCallback(() => {
-    if (isWide) {
-      return;
-    }
-    const now = Date.now();
-    const lastMeasuredAt = floatingBackdropToneMeasuredAtRef.current;
-    if (shouldMeasureFloatingBackdropTone(now, lastMeasuredAt)) {
-      clearFloatingBackdropToneTimer();
-      floatingBackdropToneMeasuredAtRef.current = now;
-      runFloatingBackdropToneMeasure();
-      return;
-    }
-    if (floatingBackdropToneTimerRef.current !== null) {
-      return;
-    }
-    const remaining = Math.max(0, FLOATING_BACKDROP_TONE_THROTTLE_MS - (now - lastMeasuredAt));
-    floatingBackdropToneTimerRef.current = window.setTimeout(() => {
-      floatingBackdropToneTimerRef.current = null;
-      floatingBackdropToneMeasuredAtRef.current = Date.now();
-      runFloatingBackdropToneMeasure();
-    }, remaining);
-  }, [clearFloatingBackdropToneTimer, isWide, runFloatingBackdropToneMeasure]);
-  useEffect(() => {
-    return () => {
-      clearFloatingBackdropToneTimer();
-      cancelFloatingBackdropToneRaf();
-    };
-  }, [cancelFloatingBackdropToneRaf, clearFloatingBackdropToneTimer]);
-  useEffect(() => {
-    if (isWide) {
-      clearFloatingBackdropToneTimer();
-      cancelFloatingBackdropToneRaf();
-      floatingBackdropToneMeasuredAtRef.current = 0;
-      return;
-    }
-    const scheduleMeasure = () => requestFloatingBackdropToneMeasure();
-    scheduleMeasure();
-    window.addEventListener('scroll', scheduleMeasure, true);
-    window.addEventListener('resize', scheduleMeasure);
-    window.addEventListener('orientationchange', scheduleMeasure);
-    window.visualViewport?.addEventListener('scroll', scheduleMeasure);
-    window.visualViewport?.addEventListener('resize', scheduleMeasure);
-    return () => {
-      window.removeEventListener('scroll', scheduleMeasure, true);
-      window.removeEventListener('resize', scheduleMeasure);
-      window.removeEventListener('orientationchange', scheduleMeasure);
-      window.visualViewport?.removeEventListener('scroll', scheduleMeasure);
-      window.visualViewport?.removeEventListener('resize', scheduleMeasure);
-    };
-  }, [
-    cancelFloatingBackdropToneRaf,
-    clearFloatingBackdropToneTimer,
-    isWide,
-    requestFloatingBackdropToneMeasure,
-  ]);
-  useEffect(() => {
     sidebarSettingsOpenRef.current = sidebarSettingsOpen;
   }, [sidebarSettingsOpen]);
   useEffect(() => {
@@ -6034,7 +5922,6 @@ export function App() {
       selectedProjectId: projectId,
       floatingControlYRatio,
       floatingControlSide,
-      floatingControlIdleOpacity,
       desktopSidebarWidth,
       collapsedProjectIds,
       pinnedProjectIds,
@@ -6065,7 +5952,6 @@ export function App() {
     projectId,
     floatingControlYRatio,
     floatingControlSide,
-    floatingControlIdleOpacity,
     desktopSidebarWidth,
     collapsedProjectIds,
     pinnedProjectIds,
@@ -6592,10 +6478,9 @@ export function App() {
       !isWide
         ? ({
             top: `${effectiveFloatingControlTop}px`,
-            '--floating-control-idle-opacity': String(floatingControlIdleOpacity),
           } as React.CSSProperties)
         : undefined,
-    [effectiveFloatingControlTop, floatingControlIdleOpacity, isWide],
+    [effectiveFloatingControlTop, isWide],
   );
   const floatingDragVisualState =
     floatingDragState?.active
@@ -6605,21 +6490,11 @@ export function App() {
         : gestureNavState?.phase === 'pressing'
           ? 'drag-ready'
           : 'idle';
-  useEffect(() => {
-    requestFloatingBackdropToneMeasure();
-  }, [
-    drawerOpen,
-    floatingControlSide,
-    effectiveFloatingControlTop,
-    floatingControlStackHeight,
-    floatingDragVisualState,
-    gestureNavigationExpanded,
-    mobilePortRelayFrameOpen,
-    portRelayFrameUrl,
-    portRelayReady,
-    requestFloatingBackdropToneMeasure,
-    tab,
-  ]);
+  const floatingControlsIdle = floatingDragVisualState === 'idle'
+    && !drawerOpen
+    && !portRelayTargetMenuOpen
+    && !chatQuickSwitchMenuOpen
+    && !mobilePortRelayFrameOpen;
   const clearGestureMoveLongPressTimer = useCallback(() => {
     if (gestureMoveLongPressTimerRef.current !== null) {
       window.clearTimeout(gestureMoveLongPressTimerRef.current);
@@ -6638,37 +6513,6 @@ export function App() {
       floatingSidePulseTimerRef.current = null;
     }
   }, []);
-  const clearFloatingControlIdleTimer = useCallback(() => {
-    if (floatingControlIdleTimerRef.current !== null) {
-      window.clearTimeout(floatingControlIdleTimerRef.current);
-      floatingControlIdleTimerRef.current = null;
-    }
-  }, []);
-  const wakeFloatingControls = useCallback(() => {
-    clearFloatingControlIdleTimer();
-    setFloatingControlsIdle(false);
-    setFloatingControlActivityTick(tick => tick + 1);
-  }, [clearFloatingControlIdleTimer]);
-  const floatingControlsIdleBlocked =
-    isWide ||
-    drawerOpen ||
-    !!floatingDragState?.active ||
-    gestureNavigationExpanded ||
-    portRelayTargetMenuOpen ||
-    chatQuickSwitchMenuOpen ||
-    mobilePortRelayFrameOpen;
-  useEffect(() => {
-    clearFloatingControlIdleTimer();
-    if (floatingControlsIdleBlocked) {
-      setFloatingControlsIdle(false);
-      return;
-    }
-    floatingControlIdleTimerRef.current = window.setTimeout(() => {
-      setFloatingControlsIdle(true);
-      floatingControlIdleTimerRef.current = null;
-    }, FLOATING_CONTROL_IDLE_DELAY_MS);
-    return clearFloatingControlIdleTimer;
-  }, [clearFloatingControlIdleTimer, floatingControlActivityTick, floatingControlsIdleBlocked]);
   const pulseFloatingControlSide = useCallback(
     (side: PersistedFloatingControlSide) => {
       clearFloatingSidePulseTimer();
@@ -16299,8 +16143,6 @@ export function App() {
         themeMode={themeMode}
         setThemeMode={setThemeMode}
         isWide={isWide}
-        floatingControlIdleOpacityPercent={floatingControlIdleOpacityPercent}
-        setFloatingControlIdleOpacity={setFloatingControlIdleOpacity}
         chatViewWidth={chatViewWidth}
         setChatViewWidth={setChatViewWidth}
         mobileEnterKeyBehavior={mobileEnterKeyBehavior}
@@ -19523,13 +19365,10 @@ export function App() {
       <div
         ref={floatingControlStackRef}
         className="floating-control-stack"
-        data-backdrop-tone={floatingBackdropTone}
         data-drag-state={floatingDragVisualState}
         data-idle={floatingControlsIdle}
         data-side={floatingControlSide}
         style={effectiveFloatingControlStackStyle}
-        onPointerDownCapture={wakeFloatingControls}
-        onClickCapture={wakeFloatingControls}
         onPointerMove={handleGestureNavigationPointerMove}
         onPointerUp={event => {
           floatingIgnoreLostCaptureRef.current = true;
