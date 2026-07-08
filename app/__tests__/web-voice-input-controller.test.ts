@@ -26,9 +26,11 @@ describe('voice input controller helpers', () => {
     const session = createVoiceInputSession('prefix suffix', 7, 7);
 
     expect(session.applyTranscript('你好')).toBe('prefix 你好suffix');
+    expect(session.currentCursor()).toBe('prefix 你好'.length);
     session.commitLiveTranscript();
     expect(session.applyTranscript('世界')).toBe('prefix 你好世界suffix');
     expect(session.currentTranscriptText()).toBe('你好世界');
+    expect(session.currentCursor()).toBe('prefix 你好世界'.length);
   });
 
   test('replaces live speech with shorter full transcript from the provider', () => {
@@ -37,6 +39,16 @@ describe('voice input controller helpers', () => {
     expect(session.applyTranscript('我想打开')).toBe('prefix 我想打开suffix');
     expect(session.applyTranscript('语音输入')).toBe('prefix 语音输入suffix');
     expect(session.currentTranscriptText()).toBe('语音输入');
+    expect(session.currentCursor()).toBe('prefix 语音输入'.length);
+  });
+
+  test('restores the original insertion cursor after voice cancellation', () => {
+    const session = createVoiceInputSession('prefix suffix', 7, 7);
+
+    expect(session.applyTranscript('voice')).toBe('prefix voicesuffix');
+    expect(session.currentCursor()).toBe('prefix voice'.length);
+    expect(session.cancel()).toBe('prefix suffix');
+    expect(session.currentCursor()).toBe('prefix '.length);
   });
 
   test('detects swipe-up cancellation threshold', () => {

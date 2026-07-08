@@ -209,4 +209,22 @@ describe('chat composer status helpers', () => {
     expect(overflowMenu).toContain('z-index: var(--chat-config-popover-layer);');
     expect(valueMenu).toContain('z-index: var(--chat-config-popover-layer);');
   });
+
+  test('raises composer trigger menus above the current task surface only while open', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+
+    expect(mainTsx).toContain("chatSlashMenuVisible || chatFileMentionMenuOpen ? ' trigger-menu-open' : ''");
+
+    const planLayer = zIndexValue(cssRuleBlock(stylesCss, '.chat-plan-surface.desktop'));
+    const openComposerLayer = zIndexValue(cssRuleBlock(stylesCss, '.chat-composer.trigger-menu-open'));
+    expect(planLayer).toBeGreaterThan(0);
+    expect(openComposerLayer).toBeGreaterThan(planLayer);
+
+    const slashMenu = cssRuleBlock(stylesCss, '.chat-slash-menu');
+    const fileMentionMenu = cssRuleBlock(stylesCss, '.chat-file-mention-menu');
+    expect(slashMenu).toContain('z-index: 36;');
+    expect(fileMentionMenu).toContain('z-index: 37;');
+  });
 });

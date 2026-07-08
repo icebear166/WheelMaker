@@ -272,6 +272,15 @@ export function $currentComposerPosition(tokens: ChatComposerToken[]): number {
   return $selectionPointToComposerPosition(selection);
 }
 
+export function $currentComposerSelectionRange(tokens: ChatComposerToken[]): {start: number; end: number} {
+  const selection = $getSelection();
+  if (!$isRangeSelection(selection)) {
+    const end = chatComposerTokenUnitLength(tokens);
+    return {start: end, end};
+  }
+  return $composerSelectionRange(selection);
+}
+
 export function $setSelectedComposerCapsule(selectedTokenId: string): void {
   for (const paragraph of $getComposerParagraphs()) {
     for (const child of paragraph.getChildren()) {

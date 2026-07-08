@@ -29,6 +29,7 @@ import {
 import type {ChatComposerTokenDeletionResult} from './chatComposerTokenEditing';
 import {
   $currentComposerPosition,
+  $currentComposerSelectionRange,
   $deleteComposerCapsuleForCharacterDeletion,
   $deleteComposerTokenByIdAtBoundary,
   $getSelectedComposerCapsuleId,
@@ -43,11 +44,23 @@ import {
 
 export type ChatRichComposerHandle = {
   focus: () => void;
+  getPlainTextSelection: () => ChatRichComposerPlainTextSelection;
   insertSkill: (input: Pick<ChatComposerSkillToken, 'command' | 'label'>) => void;
   insertFile: (input: Pick<ChatComposerFileToken, 'path' | 'name'>) => void;
   insertText: (text: string) => void;
   selectToken: (id: string) => void;
   deleteSelectedCapsule: () => void;
+};
+
+export type ChatRichComposerPlainTextSelection = {
+  text: string;
+  start: number;
+  end: number;
+};
+
+export type ChatRichComposerSelectionRestore = {
+  revision: number;
+  cursor: number;
 };
 
 export type ChatRichComposerProps = {
@@ -61,6 +74,7 @@ export type ChatRichComposerProps = {
   onPlainTextChange?: (text: string, cursor: number) => void;
   onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
   onPaste?: React.ClipboardEventHandler<HTMLDivElement>;
+  selectionRestore?: ChatRichComposerSelectionRestore | null;
 };
 
 let nextTokenId = 1;
@@ -71,6 +85,7 @@ export const ChatRichComposer = React.forwardRef<ChatRichComposerHandle, ChatRic
     const editorRef = React.useRef<LexicalEditor | null>(null);
     const handleRef = React.useRef<ChatRichComposerHandle>({
       focus: () => undefined,
+      getPlainTextSelection: () => ({text: '', start: 0, end: 0}),
       insertSkill: () => undefined,
       insertFile: () => undefined,
       insertText: () => undefined,
@@ -93,6 +108,7 @@ export const ChatRichComposer = React.forwardRef<ChatRichComposerHandle, ChatRic
 
     React.useImperativeHandle(ref, () => ({
       focus: () => handleRef.current.focus(),
+      getPlainTextSelection: () => handleRef.current.getPlainTextSelection(),
       insertSkill: input => handleRef.current.insertSkill(input),
       insertFile: input => handleRef.current.insertFile(input),
       insertText: text => handleRef.current.insertText(text),
@@ -128,6 +144,7 @@ function ChatRichComposerContent({
   onPlainTextChange,
   onKeyDown,
   onPaste,
+  selectionRestore,
   editorRef,
   handleRef,
 }: ChatRichComposerContentProps): React.ReactElement {
@@ -137,6 +154,7 @@ function ChatRichComposerContent({
   const pendingEmissionRef = React.useRef<ChatComposerTokenDeletionResult | null>(null);
   const syncingFromPropsRef = React.useRef(false);
   const skipNextRangeCharacterDeleteRef = React.useRef(false);
+  const appliedSelectionRestoreRevisionRef = React.useRef<number | null>(null);
 
   React.useEffect(() => {
     editor.setEditable(!readOnly);
@@ -160,25 +178,53 @@ function ChatRichComposerContent({
   React.useEffect(() => {
     const normalized = normalizeChatComposerTokens(tokens);
     tokensRef.current = normalized;
+    const restoreCursor = selectionRestore && appliedSelectionRestoreRevisionRef.current !== selectionRestore.revision
+      ? selectionRestore.cursor
+      : null;
     const editorTokens = editor.getEditorState().read(() => $readComposerTokens());
     if (chatComposerTokensEqual(normalized, editorTokens)) {
       emittedTokensRef.current = normalized;
+      if (restoreCursor !== null) {
+        syncingFromPropsRef.current = true;
+        editor.update(() => {
+          $setSelectedComposerCapsule('');
+          $setComposerTokens(normalized, '', restoreCursor);
+        }, {
+          onUpdate: () => {
+            appliedSelectionRestoreRevisionRef.current = selectionRestore?.revision ?? null;
+            syncingFromPropsRef.current = false;
+          },
+        });
+      }
       return;
     }
     syncingFromPropsRef.current = true;
     editor.update(() => {
-      $setComposerTokens(normalized);
+      $setComposerTokens(normalized, '', restoreCursor ?? undefined);
     }, {
       onUpdate: () => {
         emittedTokensRef.current = normalized;
+        if (restoreCursor !== null) {
+          appliedSelectionRestoreRevisionRef.current = selectionRestore?.revision ?? null;
+        }
         syncingFromPropsRef.current = false;
       },
     });
-  }, [editor, tokens]);
+  }, [editor, selectionRestore, tokens]);
 
   React.useEffect(() => {
     handleRef.current = {
       focus: () => editor.focus(),
+      getPlainTextSelection: () => editor.getEditorState().read(() => {
+        const currentTokens = $readComposerTokens();
+        const serialized = serializeChatComposerTokens(currentTokens);
+        const range = $currentComposerSelectionRange(currentTokens);
+        return {
+          text: serialized.text,
+          start: serializedChatComposerTextPosition(currentTokens, range.start),
+          end: serializedChatComposerTextPosition(currentTokens, range.end),
+        };
+      }),
       insertSkill: input => {
         emitLexicalInsertion(editor, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange, slashCommands, [
           {

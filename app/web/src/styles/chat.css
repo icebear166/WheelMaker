@@ -3486,6 +3486,10 @@
   z-index: 32;
 }
 
+.chat-composer.trigger-menu-open {
+  z-index: 32;
+}
+
 .chat-composer.config-menu-open .chat-composer-frame {
   border-color: color-mix(in srgb, var(--border) 68%, var(--accent));
   box-shadow:

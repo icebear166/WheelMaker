@@ -546,6 +546,53 @@ describe('ChatRichComposer', () => {
     ]);
   });
 
+  test('restores an externally requested cursor after controlled text replacement', async () => {
+    const onTokensChange = jest.fn();
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+    let replaceComposerText: (text: string, cursor: number) => void = () => undefined;
+    const StatefulComposer = () => {
+      const [tokens, setTokens] = React.useState<ChatComposerToken[]>([
+        {type: 'text', text: 'prefix suffix'},
+      ]);
+      const [selectionRestore, setSelectionRestore] = React.useState<{revision: number; cursor: number} | null>(null);
+      replaceComposerText = (text, cursor) => {
+        setTokens([{type: 'text', text}]);
+        setSelectionRestore(current => ({
+          revision: (current?.revision ?? 0) + 1,
+          cursor,
+        }));
+      };
+      return (
+        <ChatRichComposer
+          tokens={tokens}
+          onTokensChange={onTokensChange}
+          readOnly={false}
+          selectionRestore={selectionRestore}
+        />
+      );
+    };
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(<StatefulComposer />);
+    });
+
+    const editorRefPlugin = renderer!.root.findByType(EditorRefPlugin);
+    const editor = editorRefPlugin.props.editorRef.current;
+    expect(editor).toBeTruthy();
+
+    await ReactTestRenderer.act(() => {
+      replaceComposerText('prefix voice suffix', 'prefix voice'.length);
+    });
+
+    expect(editor.getEditorState().read(() => $readComposerTokens())).toEqual([
+      {type: 'text', text: 'prefix voice suffix'},
+    ]);
+    expect(composerSelectionState(editor)).toMatchObject({
+      collapsed: true,
+      position: 'prefix voice'.length,
+    });
+  });
+
   test('reports serialized text cursor after replacing an active slash query', async () => {
     const onPlainTextChange = jest.fn();
     const ref = React.createRef<ChatRichComposerHandle>();

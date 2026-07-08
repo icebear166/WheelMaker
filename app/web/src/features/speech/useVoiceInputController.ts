@@ -6,6 +6,7 @@ export type VoiceInputSession = {
   cancel: () => string;
   currentText: () => string;
   currentTranscriptText: () => string;
+  currentCursor: () => number;
 };
 
 export function mergeVoiceTranscriptUpdate(
@@ -43,12 +44,13 @@ export function createVoiceInputSession(
   let current = baseText;
   let committedTranscript = '';
   let liveTranscript = '';
+  const currentTranscript = () => `${committedTranscript}${liveTranscript}`;
   const render = () => {
     current = replaceVoiceSegment(
       baseText,
       insertStart,
       insertEnd,
-      `${committedTranscript}${liveTranscript}`,
+      currentTranscript(),
     );
     return current;
   };
@@ -63,11 +65,14 @@ export function createVoiceInputSession(
       return render();
     },
     cancel: () => {
+      committedTranscript = '';
+      liveTranscript = '';
       current = baseText;
       return current;
     },
     currentText: () => current,
-    currentTranscriptText: () => `${committedTranscript}${liveTranscript}`,
+    currentTranscriptText: currentTranscript,
+    currentCursor: () => insertStart + currentTranscript().length,
   };
 }
 

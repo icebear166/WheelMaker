@@ -158,6 +158,7 @@ import {
   isPromptAttachmentContentBlock,
 } from '../chat/composer/chatPromptAttachments';
 import { ChatRichComposer, type ChatRichComposerHandle } from '../chat/composer/ChatRichComposer';
+import type {ChatRichComposerSelectionRestore} from '../chat/composer/ChatRichComposer';
 import {
   chatComposerHasSendableTokens,
   normalizeChatComposerTokens,
@@ -3147,6 +3148,7 @@ export function App() {
   const [chatConfigUpdatingKey, setChatConfigUpdatingKey] = useState('');
   const [chatComposerText, setChatComposerText] = useState('');
   const [chatComposerTokens, setChatComposerTokens] = useState<ChatComposerToken[]>([]);
+  const [chatComposerSelectionRestore, setChatComposerSelectionRestore] = useState<ChatRichComposerSelectionRestore | null>(null);
   const [chatAttachments, setChatAttachments] = useState<ChatAttachment[]>([]);
   const chatAttachmentUploadPending = chatAttachments.some(isChatAttachmentUploadPending);
   const chatComposerHasSendableContent = chatComposerHasSendableTokens(chatComposerTokens) || chatAttachments.length > 0;
@@ -3166,6 +3168,7 @@ export function App() {
   const [toastMessage, setToastMessage] = useState('');
   const markdownImageExportIdRef = useRef(0);
   const chatComposerTextRef = useRef('');
+  const chatComposerTextCursorRef = useRef(0);
   const chatComposerTokensRef = useRef<ChatComposerToken[]>([]);
   const chatAttachmentsRef = useRef<ChatAttachment[]>([]);
   const chatComposerDraftsRef = useRef<Record<string, ChatComposerDraft>>({});
@@ -3176,6 +3179,7 @@ export function App() {
   const chatDraftGenerationRef = useRef<Record<string, number>>({});
   const currentChatDraftKeyRef = useRef('');
   const chatAttachmentIdRef = useRef(0);
+  const chatComposerSelectionRestoreRevisionRef = useRef(0);
   const chatAttachmentCancelIdsRef = useRef<Set<string>>(new Set());
   const connectedRef = useRef(false);
   const voiceRecordingRef = useRef(false);
@@ -3971,12 +3975,23 @@ export function App() {
     [],
   );
 
+  const requestChatComposerSelectionRestore = useCallback((cursor: number) => {
+    const safeCursor = Math.max(0, Math.floor(cursor));
+    chatComposerTextCursorRef.current = safeCursor;
+    chatComposerSelectionRestoreRevisionRef.current += 1;
+    setChatComposerSelectionRestore({
+      revision: chatComposerSelectionRestoreRevisionRef.current,
+      cursor: safeCursor,
+    });
+  }, []);
+
   const updateChatComposerTokens = useCallback(
     (nextTokens: ChatComposerToken[]) => {
       const normalizedTokens = normalizeChatComposerTokens(nextTokens);
       const serialized = serializeChatComposerTokens(normalizedTokens);
       chatComposerTokensRef.current = normalizedTokens;
       chatComposerTextRef.current = serialized.text;
+      chatComposerTextCursorRef.current = serialized.text.length;
       setChatComposerTokens(normalizedTokens);
       setChatComposerText(serialized.text);
       saveChatComposerDraft(
@@ -3990,12 +4005,19 @@ export function App() {
   );
 
   const updateChatComposerText = useCallback(
-    (nextText: string) => {
+    (nextText: string, cursor?: number) => {
       const nextTokens = chatComposerTokensFromText(nextText);
+      const nextCursor = typeof cursor === 'number'
+        ? Math.max(0, Math.min(nextText.length, Math.floor(cursor)))
+        : nextText.length;
       chatComposerTokensRef.current = nextTokens;
       setChatComposerTokens(nextTokens);
       chatComposerTextRef.current = nextText;
+      chatComposerTextCursorRef.current = nextCursor;
       setChatComposerText(nextText);
+      if (typeof cursor === 'number') {
+        requestChatComposerSelectionRestore(nextCursor);
+      }
       saveChatComposerDraft(
         currentChatDraftKeyRef.current,
         nextText,
@@ -4003,7 +4025,7 @@ export function App() {
         nextTokens,
       );
     },
-    [saveChatComposerDraft],
+    [requestChatComposerSelectionRestore, saveChatComposerDraft],
   );
 
   const closeChatAttachmentTray = useCallback(() => {
@@ -4611,6 +4633,7 @@ export function App() {
       EMPTY_CHAT_COMPOSER_DRAFT;
     if (chatComposerTextRef.current !== draft.text) {
       chatComposerTextRef.current = draft.text;
+      chatComposerTextCursorRef.current = draft.text.length;
       setChatComposerText(draft.text);
     }
     const draftTokens = draft.tokens ?? chatComposerTokensFromText(draft.text);
@@ -10152,6 +10175,7 @@ export function App() {
   const resetChatComposer = () => {
     chatAttachmentsRef.current.forEach(revokeChatAttachmentObjectUrl);
     chatComposerTextRef.current = '';
+    chatComposerTextCursorRef.current = 0;
     chatComposerTokensRef.current = [];
     chatAttachmentsRef.current = [];
     bumpChatDraftGeneration(currentChatDraftKeyRef.current);
@@ -11118,7 +11142,8 @@ export function App() {
     });
     stopVoiceCapture();
     if (session && options.restoreComposer !== false) {
-      updateChatComposerText(session.cancel());
+      const restoredText = session.cancel();
+      updateChatComposerText(restoredText, session.currentCursor());
       window.setTimeout(resizeChatComposerTextarea, 0);
     }
     clearVoiceInputState();
@@ -11157,7 +11182,7 @@ export function App() {
       return '';
     }
     const nextText = session.commitLiveTranscript();
-    updateChatComposerText(nextText);
+    updateChatComposerText(nextText, session.currentCursor());
     window.setTimeout(() => resizeChatComposerTextarea({scrollToEnd: true}), 0);
     return nextText;
   };
@@ -11581,8 +11606,9 @@ export function App() {
       return;
     }
     if (payload.text !== '') {
-      const nextText = voiceSessionRef.current.applyTranscript(payload.text);
-      updateChatComposerText(nextText);
+      const session = voiceSessionRef.current;
+      const nextText = session.applyTranscript(payload.text);
+      updateChatComposerText(nextText, session.currentCursor());
       window.setTimeout(() => resizeChatComposerTextarea({scrollToEnd: true}), 0);
     }
     if (payload.final) {
@@ -11691,9 +11717,10 @@ export function App() {
       setError('Fill Volcengine API Key in Chat settings first.');
       return;
     }
-    const baseText = chatComposerTextRef.current;
-    const insertStart = baseText.length;
-    const insertEnd = insertStart;
+    const composerSelection = chatRichComposerRef.current?.getPlainTextSelection();
+    const baseText = composerSelection?.text ?? chatComposerTextRef.current;
+    const insertStart = composerSelection?.start ?? baseText.length;
+    const insertEnd = composerSelection?.end ?? insertStart;
     logVoiceInputDiagnostic('debug', 'start_requested', {
       connected,
       model: settings.model,
@@ -11863,6 +11890,7 @@ export function App() {
     const attachments = buildChatAttachmentsFromBlocks(pending.blocks);
     const tokens = chatComposerTokensFromText(text);
     chatComposerTextRef.current = text;
+    chatComposerTextCursorRef.current = text.length;
     chatComposerTokensRef.current = tokens;
     chatAttachmentsRef.current = attachments;
     bumpChatDraftGeneration(currentChatDraftKeyRef.current);
@@ -18309,7 +18337,7 @@ export function App() {
           />
           <div
             ref={chatComposerRef}
-            className={`chat-composer${chatConfigMenuOptionId || chatConfigOverflowOpen || chatContextUsageOpen ? ' config-menu-open' : ''}`}
+            className={`chat-composer${chatConfigMenuOptionId || chatConfigOverflowOpen || chatContextUsageOpen ? ' config-menu-open' : ''}${chatSlashMenuVisible || chatFileMentionMenuOpen ? ' trigger-menu-open' : ''}`}
             hidden={archivedMode}
           >
             <div className="chat-composer-content">
@@ -18435,7 +18463,9 @@ export function App() {
                       command: command.name,
                       label: chatSlashCommandLabel(command.name),
                     }))}
+                    selectionRestore={chatComposerSelectionRestore}
                     onPlainTextChange={(text, cursor) => {
+                      chatComposerTextCursorRef.current = cursor;
                       if (voiceRecordingRef.current || voiceAwaitingFinalRef.current) {
                         return;
                       }
