@@ -2191,6 +2191,16 @@ type ChatAttachmentPreviewViewerProps = {
   mode: 'desktop' | 'mobile';
   onClose: () => void;
   scrollRef: React.RefObject<HTMLDivElement | null>;
+  themeMode: 'dark' | 'light';
+  codeTheme: CodeThemeId;
+  codeFont: CodeFontId;
+  codeFontSize: number;
+  codeLineHeight: number;
+  codeTabSize: number;
+  wrapLines: boolean;
+  showLineNumbers: boolean;
+  highlightedLines: Set<number>;
+  onLineClick?: (line: number, event: MouseEvent) => void;
 };
 
 const ChatAttachmentPreviewViewer = React.memo(function ChatAttachmentPreviewViewer({
@@ -2198,6 +2208,16 @@ const ChatAttachmentPreviewViewer = React.memo(function ChatAttachmentPreviewVie
   mode,
   onClose,
   scrollRef,
+  themeMode,
+  codeTheme,
+  codeFont,
+  codeFontSize,
+  codeLineHeight,
+  codeTabSize,
+  wrapLines,
+  showLineNumbers,
+  highlightedLines,
+  onLineClick,
 }: ChatAttachmentPreviewViewerProps) {
   let body: React.ReactNode;
   if (preview.loading) {
@@ -2219,6 +2239,46 @@ const ChatAttachmentPreviewViewer = React.memo(function ChatAttachmentPreviewVie
         />
       </div>
     );
+  } else if (preview.content !== undefined) {
+    const fileName = preview.title || 'attachment';
+    if (isMarkdownPath(fileName)) {
+      body = (
+        <MarkdownPreview
+          content={preview.content}
+          themeMode={themeMode}
+          codeTheme={codeTheme}
+          codeFont={codeFont}
+          codeFontSize={codeFontSize}
+          codeLineHeight={codeLineHeight}
+          codeTabSize={codeTabSize}
+          wrap={wrapLines}
+          lineNumbers={showLineNumbers}
+        />
+      );
+    } else if (isHtmlPath(fileName)) {
+      body = (
+        <HtmlPreview
+          content={preview.content}
+        />
+      );
+    } else {
+      body = (
+        <ShikiCodeBlock
+          content={preview.content}
+          language={detectCodeLanguage(fileName)}
+          wrap={false}
+          lineNumbers={true}
+          themeMode={themeMode}
+          codeTheme={codeTheme}
+          codeFont={codeFont}
+          codeFontSize={codeFontSize}
+          codeLineHeight={codeLineHeight}
+          codeTabSize={codeTabSize}
+          highlightedLines={highlightedLines}
+          onLineClick={onLineClick}
+        />
+      );
+    }
   } else {
     body = (
       <div className="chat-attachment-preview-placeholder">
@@ -2237,7 +2297,16 @@ const ChatAttachmentPreviewViewer = React.memo(function ChatAttachmentPreviewVie
   return <>{body}</>;
 }, (prev, next) => (
   prev.preview === next.preview &&
-  prev.mode === next.mode
+  prev.mode === next.mode &&
+  prev.themeMode === next.themeMode &&
+  prev.codeTheme === next.codeTheme &&
+  prev.codeFont === next.codeFont &&
+  prev.codeFontSize === next.codeFontSize &&
+  prev.codeLineHeight === next.codeLineHeight &&
+  prev.codeTabSize === next.codeTabSize &&
+  prev.wrapLines === next.wrapLines &&
+  prev.showLineNumbers === next.showLineNumbers &&
+  prev.highlightedLines === next.highlightedLines
 ));
 
 type ChatPromptArtifactPreviewViewerProps = {
@@ -20026,6 +20095,16 @@ export function App() {
           mode={mode}
           onClose={closeChatFilePeekFromChrome}
           scrollRef={chatFilePeekScrollRef}
+          themeMode={themeMode}
+          codeTheme={codeTheme}
+          codeFont={codeFont}
+          codeFontSize={codeFontSize}
+          codeLineHeight={codeLineHeight}
+          codeTabSize={codeTabSize}
+          wrapLines={wrapLines}
+          showLineNumbers={showLineNumbers}
+          highlightedLines={active ? chatPeekSelectedLines : EMPTY_HIGHLIGHTED_LINES}
+          onLineClick={active ? handlePeekLineClick : undefined}
         />
       );
     }
