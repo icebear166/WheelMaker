@@ -668,6 +668,7 @@ type PreviewSelectionSnapshot = PreviewSelectionMenuState & {
   range: Range | null;
 };
 const LARGE_FILE_CONFIRM_BYTES = 2 * 1024 * 1024;
+const ATTACHMENT_PREVIEW_MAX_SIZE = 20 * 1024 * 1024; // 20MB
 
 type ThinkingBlockProps = {
   content: string;
@@ -2237,6 +2238,13 @@ const ChatAttachmentPreviewViewer = React.memo(function ChatAttachmentPreviewVie
           src={preview.src}
           alt={preview.title}
         />
+      </div>
+    );
+  } else if (preview.content === undefined && preview.isBinary === false) {
+    body = (
+      <div className="chat-file-peek-error" role="alert">
+        <span className="codicon codicon-error" />
+        <span>Failed to decode file content (UTF-8 expected).</span>
       </div>
     );
   } else if (preview.content !== undefined) {
@@ -8568,6 +8576,13 @@ export function App() {
       setPreviewWorkbench(current => beginPreviewTabLoad(current, tab.projectId, tab.id, requestSeq));
       try {
         const result = await service.readProjectSessionAttachment(tab.projectId, payload);
+        // Check file size limit for text preview
+        if (result.size && result.size > ATTACHMENT_PREVIEW_MAX_SIZE) {
+          setPreviewWorkbench(current =>
+            failPreviewTabLoad(current, tab.projectId, tab.id, requestSeq, 'File too large to preview (max 20MB).'),
+          );
+          return;
+        }
         setPreviewWorkbench(current =>
           updatePreviewTabAfterLoad(current, tab.projectId, tab.id, requestSeq, currentTab =>
             currentTab.type === 'attachment'
@@ -8717,6 +8732,19 @@ export function App() {
       uri: block.uri,
       attachmentId: attachmentIdFromBlock(block) || undefined,
     }).then(result => {
+      // Check file size limit for text preview
+      if (result.size && result.size > ATTACHMENT_PREVIEW_MAX_SIZE) {
+        setPreviewWorkbench(current =>
+          failPreviewTabLoad(
+            current,
+            targetProjectId,
+            tabId,
+            requestSeq,
+            'File too large to preview (max 20MB).',
+          ),
+        );
+        return;
+      }
       setPreviewWorkbench(current =>
         updatePreviewTabAfterLoad(current, targetProjectId, tabId, requestSeq, tab =>
           tab.type === 'attachment'
