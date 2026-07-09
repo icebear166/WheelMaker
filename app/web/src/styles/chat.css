@@ -4120,8 +4120,8 @@
   height: 24px;
   border: none;
   border-radius: 7px;
-  background: color-mix(in srgb, var(--surface-1) 64%, transparent);
-  color: color-mix(in srgb, var(--text) 72%, var(--muted));
+  background: transparent;
+  color: color-mix(in srgb, var(--muted) 86%, var(--text));
   cursor: pointer;
   display: inline-grid;
   place-items: center;
@@ -4226,9 +4226,9 @@
 
 .chat-tool-button:hover,
 .chat-tool-button:focus-visible {
-  background: color-mix(in srgb, var(--accent) 10%, var(--surface-1));
-  color: color-mix(in srgb, var(--text) 92%, var(--accent));
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 10%, transparent);
+  background: var(--hover);
+  color: var(--text);
+  box-shadow: none;
   outline: none;
 }
 
@@ -4239,8 +4239,8 @@
 }
 
 .chat-tool-button:disabled:hover {
-  background: color-mix(in srgb, var(--surface-1) 64%, transparent);
-  color: color-mix(in srgb, var(--text) 72%, var(--muted));
+  background: transparent;
+  color: color-mix(in srgb, var(--muted) 86%, var(--text));
 }
 
 
