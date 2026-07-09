@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import { resolveInitialRegistryAddress } from './workspaceBootstrap';
 
@@ -8477,8 +8477,8 @@ export function App() {
       }
       return;
     }
-    if (tab.type === 'attachment' && tab.kind === 'image') {
-      if (tab.loading || tab.src || tab.requestId > 0) {
+    if (tab.type === 'attachment') {
+      if (tab.loading || tab.src || tab.content !== undefined || tab.requestId > 0) {
         return;
       }
       const requestSeq = chatAttachmentReadSeqRef.current + 1;
@@ -8505,7 +8505,9 @@ export function App() {
               ? {
                   ...currentTab,
                   mimeType: result.mimeType || currentTab.mimeType,
-                  src: attachmentBase64DataUrl(result.content, result.mimeType || currentTab.mimeType || 'image/png'),
+                  src: result.isBinary ? attachmentBase64DataUrl(result.content, result.mimeType || currentTab.mimeType || 'image/png') : '',
+                  content: result.isBinary ? undefined : result.content,
+                  isBinary: result.isBinary,
                   loading: false,
                   error: '',
                 }
@@ -8638,7 +8640,7 @@ export function App() {
         chatFilePeekHistoryActiveRef.current = true;
       }
     }
-    if (!imageAttachment || initialSrc) {
+    if (initialSrc) {
       return;
     }
     service.readProjectSessionAttachment(targetProjectId, {
@@ -8652,7 +8654,9 @@ export function App() {
             ? {
                 ...tab,
                 mimeType: result.mimeType || tab.mimeType,
-                src: attachmentBase64DataUrl(result.content, result.mimeType || tab.mimeType || 'image/png'),
+                src: result.isBinary ? attachmentBase64DataUrl(result.content, result.mimeType || tab.mimeType || 'image/png') : '',
+                content: result.isBinary ? undefined : result.content,
+                isBinary: result.isBinary,
                 loading: false,
                 error: '',
               }
