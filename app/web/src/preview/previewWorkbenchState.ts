@@ -42,6 +42,8 @@ export type AttachmentPreviewTab = PreviewWorkbenchTabBase & {
   mimeType: string;
   kind: 'image' | 'file';
   src: string;
+  content?: string;
+  isBinary?: boolean;
 };
 
 export type PortRelayPreviewTab = PreviewWorkbenchTabBase & {

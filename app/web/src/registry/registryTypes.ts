@@ -204,8 +204,9 @@ export interface RegistrySessionAttachmentContentResponse {
   sessionId: string;
   attachmentId: string;
   mimeType?: string;
-  encoding: 'base64' | string;
+  encoding: 'base64' | 'utf-8' | string;
   content: string;
+  isBinary?: boolean;
   width?: number;
   height?: number;
   size?: number;
