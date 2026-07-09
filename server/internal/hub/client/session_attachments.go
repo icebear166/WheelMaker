@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -16,6 +17,7 @@ import (
 	_ "image/png"
 	"io"
 	"mime"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -282,13 +284,37 @@ func (c *Client) handleSessionAttachmentRead(ctx context.Context, payload json.R
 	if err != nil {
 		return nil, fmt.Errorf("read attachment: %w", err)
 	}
+
+	// Detect if binary and get MIME type
+	isBinary, mimeType := detectAttachmentBinaryAndMime(raw)
+	if mimeType == "" {
+		mimeType = resolved.sidecar.MimeType
+	}
+
+	// Return different format based on file type
+	if isBinary {
+		return map[string]any{
+			"ok":           true,
+			"sessionId":    resolved.sidecar.SessionID,
+			"attachmentId": resolved.sidecar.AttachmentID,
+			"mimeType":     mimeType,
+			"encoding":     "base64",
+			"content":      base64.StdEncoding.EncodeToString(raw),
+			"isBinary":     true,
+			"size":         len(raw),
+			"hash":         hashBytesForAttachment(raw),
+		}, nil
+	}
+
+	// Text files return UTF-8 string
 	return map[string]any{
 		"ok":           true,
 		"sessionId":    resolved.sidecar.SessionID,
 		"attachmentId": resolved.sidecar.AttachmentID,
-		"mimeType":     resolved.sidecar.MimeType,
-		"encoding":     "base64",
-		"content":      base64.StdEncoding.EncodeToString(raw),
+		"mimeType":     mimeType,
+		"encoding":     "utf-8",
+		"content":      string(raw),
+		"isBinary":     false,
 		"size":         len(raw),
 		"hash":         hashBytesForAttachment(raw),
 	}, nil
@@ -992,4 +1018,17 @@ func randomHex(n int) string {
 		return hex.EncodeToString(sum[:n])
 	}
 	return hex.EncodeToString(raw)
+}
+
+func detectAttachmentBinaryAndMime(data []byte) (bool, string) {
+	sample := data
+	if len(sample) > 512 {
+		sample = sample[:512]
+	}
+	mimeType := http.DetectContentType(sample)
+	isBinary := bytes.IndexByte(sample, 0) >= 0
+	if strings.HasPrefix(mimeType, "text/") || strings.Contains(mimeType, "json") || strings.Contains(mimeType, "xml") {
+		isBinary = false
+	}
+	return isBinary, mimeType
 }
