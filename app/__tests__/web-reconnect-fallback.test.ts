@@ -206,8 +206,9 @@ describe('web reconnect fallback behavior', () => {
     expect(persistenceTs).toContain('previewWorkbenchSnapshot: PreviewWorkbenchSnapshot | null;');
     expect(persistenceTs).toContain("previewWorkbenchSnapshot: 'previewWorkbenchSnapshot',");
     expect(persistenceTs).toContain('previewWorkbenchSnapshot: null,');
+    expect(persistenceTs).toContain('const rows = globalRowsForPatch(patch, next, now);');
     expect(persistenceTs).toContain(
-      '{k: GLOBAL_KEYS.previewWorkbenchSnapshot, v: serialize(next.previewWorkbenchSnapshot), updatedAt: now}',
+      '{k: GLOBAL_KEYS.previewWorkbenchSnapshot, v: serialize(this.state.global.previewWorkbenchSnapshot), updatedAt}',
     );
   });
 });

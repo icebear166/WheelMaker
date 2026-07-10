@@ -42,7 +42,10 @@ describe('web chat view width settings', () => {
     expect(persistence).toContain("chatViewWidth: 'chatViewWidth',");
     expect(persistence).toContain('chatViewWidth: DEFAULT_CHAT_VIEW_WIDTH,');
     expect(persistence).toContain('chatViewWidth: normalizeChatViewWidth(input.chatViewWidth, base.chatViewWidth),');
-    expect(persistence).toContain('{k: GLOBAL_KEYS.chatViewWidth, v: serialize(next.chatViewWidth), updatedAt: now}');
+    expect(persistence).toContain('const rows = globalRowsForPatch(patch, next, now);');
+    expect(persistence).toContain(
+      '{k: GLOBAL_KEYS.chatViewWidth, v: serialize(this.state.global.chatViewWidth), updatedAt}',
+    );
 
     expect(mainTsx).toContain('const [chatViewWidth, setChatViewWidth] = useState<ChatViewWidth>(');
     expect(mainTsx).toContain('normalizeChatViewWidth(persistedGlobal.chatViewWidth)');

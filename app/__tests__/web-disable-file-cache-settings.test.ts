@@ -21,7 +21,10 @@ describe('web disable file cache settings', () => {
       "disableFileCache: typeof input.disableFileCache === 'boolean' ? input.disableFileCache : base.disableFileCache",
     );
     expect(workspacePersistence).toContain(
-      '{k: GLOBAL_KEYS.disableFileCache, v: serialize(next.disableFileCache), updatedAt: now}',
+      'const rows = globalRowsForPatch(patch, next, now);',
+    );
+    expect(workspacePersistence).toContain(
+      '{k: GLOBAL_KEYS.disableFileCache, v: serialize(this.state.global.disableFileCache), updatedAt}',
     );
     expect(workspaceStore).toContain('setDisableFileCache(disableFileCache: boolean): void {');
     expect(workspaceStore).toContain('clearFileCache(): void {');

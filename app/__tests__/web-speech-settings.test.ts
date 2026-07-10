@@ -65,7 +65,10 @@ describe('web speech settings', () => {
     expect(persistence).toContain("speechSettings: 'speechSettings',");
     expect(persistence).toContain('speechSettings: DEFAULT_SPEECH_SETTINGS,');
     expect(persistence).toContain('speechSettings: normalizeSpeechSettings(input.speechSettings),');
-    expect(persistence).toContain('{k: GLOBAL_KEYS.speechSettings, v: serialize(next.speechSettings), updatedAt: now}');
+    expect(persistence).toContain('const rows = globalRowsForPatch(patch, next, now);');
+    expect(persistence).toContain(
+      '{k: GLOBAL_KEYS.speechSettings, v: serialize(this.state.global.speechSettings), updatedAt}',
+    );
     expect(persistence).toContain('maskSpeechSettingsForExport');
     expect(persistence).toContain('redactGlobalDumpRows');
   });

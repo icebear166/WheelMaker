@@ -687,37 +687,26 @@ describe('web responsive ui state', () => {
     expect(persistenceTs).toContain('floatingControlSide: sanitizeFloatingControlSide(input.floatingControlSide, base.floatingControlSide),');
     expect(persistenceTs).not.toContain('sanitizeFloatingControlIdleOpacity');
     expect(persistenceTs).toContain(
-      '{k: GLOBAL_KEYS.desktopSidebarWidth, v: serialize(this.state.global.desktopSidebarWidth), updatedAt: now}',
+      '{k: GLOBAL_KEYS.desktopSidebarWidth, v: serialize(this.state.global.desktopSidebarWidth), updatedAt}',
     );
     expect(persistenceTs).toContain(
-      '{k: GLOBAL_KEYS.hubColors, v: serialize(this.state.global.hubColors), updatedAt: now}',
+      '{k: GLOBAL_KEYS.hubColors, v: serialize(this.state.global.hubColors), updatedAt}',
     );
     expect(persistenceTs).toContain(
-      '{k: GLOBAL_KEYS.hiddenProjectIds, v: serialize(this.state.global.hiddenProjectIds), updatedAt: now}',
+      '{k: GLOBAL_KEYS.hiddenProjectIds, v: serialize(this.state.global.hiddenProjectIds), updatedAt}',
     );
     expect(persistenceTs).toContain(
-      '{k: GLOBAL_KEYS.expandedHubIds, v: serialize(this.state.global.expandedHubIds), updatedAt: now}',
+      '{k: GLOBAL_KEYS.expandedHubIds, v: serialize(this.state.global.expandedHubIds), updatedAt}',
     );
     expect(persistenceTs).not.toContain('GLOBAL_KEYS.useLatestPromptTitle');
+    expect(persistenceTs).toContain('const rows = globalRowsForPatch(patch, next, now);');
     expect(persistenceTs).toContain(
-      '{k: GLOBAL_KEYS.desktopSidebarWidth, v: serialize(next.desktopSidebarWidth), updatedAt: now}',
+      '{k: GLOBAL_KEYS.floatingControlYRatio, v: serialize(this.state.global.floatingControlYRatio), updatedAt}',
     );
     expect(persistenceTs).toContain(
-      '{k: GLOBAL_KEYS.floatingControlYRatio, v: serialize(next.floatingControlYRatio), updatedAt: now}',
-    );
-    expect(persistenceTs).toContain(
-      '{k: GLOBAL_KEYS.floatingControlSide, v: serialize(next.floatingControlSide), updatedAt: now}',
+      '{k: GLOBAL_KEYS.floatingControlSide, v: serialize(this.state.global.floatingControlSide), updatedAt}',
     );
     expect(persistenceTs).not.toContain('next.floatingControlIdleOpacity');
-    expect(persistenceTs).toContain(
-      '{k: GLOBAL_KEYS.hubColors, v: serialize(next.hubColors), updatedAt: now}',
-    );
-    expect(persistenceTs).toContain(
-      '{k: GLOBAL_KEYS.hiddenProjectIds, v: serialize(next.hiddenProjectIds), updatedAt: now}',
-    );
-    expect(persistenceTs).toContain(
-      '{k: GLOBAL_KEYS.expandedHubIds, v: serialize(next.expandedHubIds), updatedAt: now}',
-    );
     expect(persistenceTs).not.toContain('next.useLatestPromptTitle');
   });
 });

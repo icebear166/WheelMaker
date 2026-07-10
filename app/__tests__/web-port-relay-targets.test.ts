@@ -95,9 +95,16 @@ describe('port relay target presets', () => {
     expect(persistence).toContain("portRelayListenPort: 'portRelayListenPort',");
     expect(persistence).toContain('normalizePortRelayTargets(input.portRelayTargets)');
     expect(persistence).toContain('normalizePortRelayTarget(input.selectedPortRelayTarget)');
-    expect(persistence).toContain('{k: GLOBAL_KEYS.portRelayTargets, v: serialize(next.portRelayTargets), updatedAt: now}');
-    expect(persistence).toContain('{k: GLOBAL_KEYS.selectedPortRelayTarget, v: serialize(next.selectedPortRelayTarget), updatedAt: now}');
-    expect(persistence).toContain('{k: GLOBAL_KEYS.portRelayListenPort, v: serialize(next.portRelayListenPort), updatedAt: now}');
+    expect(persistence).toContain('const rows = globalRowsForPatch(patch, next, now);');
+    expect(persistence).toContain(
+      '{k: GLOBAL_KEYS.portRelayTargets, v: serialize(this.state.global.portRelayTargets), updatedAt}',
+    );
+    expect(persistence).toContain(
+      '{k: GLOBAL_KEYS.selectedPortRelayTarget, v: serialize(this.state.global.selectedPortRelayTarget), updatedAt}',
+    );
+    expect(persistence).toContain(
+      '{k: GLOBAL_KEYS.portRelayListenPort, v: serialize(this.state.global.portRelayListenPort), updatedAt}',
+    );
 
     expect(mainTsx).toContain('persistPortRelaySettings(');
     expect(mainTsx).toContain('reconcilePortRelayTargetSelection({');

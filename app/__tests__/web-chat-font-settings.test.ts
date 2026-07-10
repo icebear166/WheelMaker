@@ -45,7 +45,10 @@ describe('web chat font settings', () => {
     expect(persistence).toContain("chatFont: 'chatFont',");
     expect(persistence).toContain('chatFont: DEFAULT_CHAT_FONT,');
     expect(persistence).toContain("chatFont: typeof input.chatFont === 'string' && isChatFontId(input.chatFont) ? input.chatFont : base.chatFont");
-    expect(persistence).toContain('{k: GLOBAL_KEYS.chatFont, v: serialize(next.chatFont), updatedAt: now}');
+    expect(persistence).toContain('const rows = globalRowsForPatch(patch, next, now);');
+    expect(persistence).toContain(
+      '{k: GLOBAL_KEYS.chatFont, v: serialize(this.state.global.chatFont), updatedAt}',
+    );
 
     expect(mainTsx).toContain('const [chatFont, setChatFont] = useState<ChatFontId>(');
     expect(mainTsx).toContain('const chatFontFamily = useMemo(');
@@ -64,8 +67,8 @@ describe('web chat font settings', () => {
     const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain("'--chat-message-font-family': chatFontFamily,");
-    expect(stylesCss).toContain('--chat-message-text: #d2d2d2;');
-    expect(stylesCss).toContain('--chat-message-text: #24292f;');
+    expect(stylesCss).toContain('--chat-message-text: #e0e4e9;');
+    expect(stylesCss).toContain('--chat-message-text: #252c34;');
     expect(stylesCss).toMatch(
       /\.chat-main-message \{[\s\S]*font-family: var\(--chat-message-font-family, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', 'Noto Sans CJK SC', 'Noto Sans', sans-serif\);[\s\S]*line-height: 1\.58;[\s\S]*color: var\(--chat-message-text, var\(--text\)\);[\s\S]*letter-spacing: 0;[\s\S]*\}/,
     );

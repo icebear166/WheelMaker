@@ -19,7 +19,10 @@ describe('web hide tool calls setting', () => {
       "hideToolCalls: typeof input.hideToolCalls === 'boolean' ? input.hideToolCalls : base.hideToolCalls",
     );
     expect(workspacePersistence).toContain(
-      '{k: GLOBAL_KEYS.hideToolCalls, v: serialize(next.hideToolCalls), updatedAt: now}',
+      'const rows = globalRowsForPatch(patch, next, now);',
+    );
+    expect(workspacePersistence).toContain(
+      '{k: GLOBAL_KEYS.hideToolCalls, v: serialize(this.state.global.hideToolCalls), updatedAt}',
     );
 
     expect(mainTsx).toContain('const [hideToolCalls, setHideToolCalls] = useState(');

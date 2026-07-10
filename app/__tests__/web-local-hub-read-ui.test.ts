@@ -13,7 +13,10 @@ describe('local hub read UI settings', () => {
     expect(workspacePersistence).toContain(
       "localHubReadEnabled: typeof input.localHubReadEnabled === 'boolean' ? input.localHubReadEnabled : base.localHubReadEnabled",
     );
-    expect(workspacePersistence).toContain('{k: GLOBAL_KEYS.localHubReadEnabled, v: serialize(next.localHubReadEnabled), updatedAt: now}');
+    expect(workspacePersistence).toContain('const rows = globalRowsForPatch(patch, next, now);');
+    expect(workspacePersistence).toContain(
+      '{k: GLOBAL_KEYS.localHubReadEnabled, v: serialize(this.state.global.localHubReadEnabled), updatedAt}',
+    );
   });
 
   test('adds settings switch and simple Remote Local hub tags', () => {
