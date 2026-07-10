@@ -667,6 +667,16 @@ type PreviewSelectionMenuState = {
 type PreviewSelectionSnapshot = PreviewSelectionMenuState & {
   range: Range | null;
 };
+
+function isAbortError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'name' in error &&
+    (error as {name?: unknown}).name === 'AbortError'
+  );
+}
+
 const LARGE_FILE_CONFIRM_BYTES = 2 * 1024 * 1024;
 const ATTACHMENT_PREVIEW_MAX_SIZE = 20 * 1024 * 1024; // 20MB
 
@@ -3075,6 +3085,8 @@ export function App() {
   const fileHashRef = useRef<Record<string, string>>({});
   const fileCacheRef = useRef<Record<string, string>>({});
   const fileReadSeqRef = useRef(0);
+  const fileReadAbortControllerRef = useRef<AbortController | null>(null);
+  const previewFileLoadControllersRef = useRef<Map<string, AbortController>>(new Map());
   const fileScrollTopByPathRef = useRef<Record<string, number>>({});
   const skipNextSelectedFileAutoReadRef = useRef(false);
   const fileSideActionsRef = useRef<HTMLDivElement | null>(null);
@@ -7902,6 +7914,11 @@ export function App() {
 
   useEffect(
     () => () => {
+      fileReadAbortControllerRef.current?.abort();
+      for (const controller of previewFileLoadControllersRef.current.values()) {
+        controller.abort();
+      }
+      previewFileLoadControllersRef.current.clear();
       if (liveRefreshTimerRef.current !== null) {
         window.clearTimeout(liveRefreshTimerRef.current);
       }
@@ -8291,6 +8308,9 @@ export function App() {
     if (!path) return;
     const targetProjectId = projectIdRef.current || projectId;
     if (!targetProjectId) return;
+    fileReadAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    fileReadAbortControllerRef.current = controller;
     const requestSeq = fileReadSeqRef.current + 1;
     fileReadSeqRef.current = requestSeq;
     const silentRead = options?.silent === true;
@@ -8299,7 +8319,7 @@ export function App() {
     }
     const shouldRestoreScroll = options?.restoreScroll === true;
     try {
-      const info = await service.getProjectFileInfo(targetProjectId, path);
+      const info = await service.getProjectFileInfo(targetProjectId, path, {signal: controller.signal});
       if (requestSeq !== fileReadSeqRef.current || projectIdRef.current !== targetProjectId) return;
       setFileInfo(info);
       const cacheKey = fileMemoryCacheKey(targetProjectId, path);
@@ -8332,10 +8352,11 @@ export function App() {
       }
       const result = await service.readProjectFile(path, targetProjectId, {
         knownHash: fileCacheDisabled ? undefined : knownHash || undefined,
+        signal: controller.signal,
       });
       if (requestSeq !== fileReadSeqRef.current || projectIdRef.current !== targetProjectId) return;
       if (result.notModified && fileCacheDisabled) {
-        const freshResult = await service.readProjectFile(path, targetProjectId);
+        const freshResult = await service.readProjectFile(path, targetProjectId, {signal: controller.signal});
         if (requestSeq !== fileReadSeqRef.current || projectIdRef.current !== targetProjectId) return;
         setFileContent(freshResult.content);
         if (shouldRestoreScroll) {
@@ -8345,7 +8366,7 @@ export function App() {
       }
       if (result.notModified) {
         if (typeof cachedContent !== 'string') {
-          const freshResult = await service.readProjectFile(path, targetProjectId);
+          const freshResult = await service.readProjectFile(path, targetProjectId, {signal: controller.signal});
           if (requestSeq !== fileReadSeqRef.current || projectIdRef.current !== targetProjectId) return;
           setFileContent(freshResult.content);
           if (!fileCacheDisabled) {
@@ -8389,6 +8410,7 @@ export function App() {
         scheduleRestoreSelectedFileScroll(path);
       }
     } catch (err) {
+      if (isAbortError(err)) return;
       if (requestSeq !== fileReadSeqRef.current || projectIdRef.current !== targetProjectId) return;
       if (!silentRead) {
         setFileInfo(null);
@@ -8396,6 +8418,9 @@ export function App() {
       }
       setError(err instanceof Error ? err.message : String(err));
     } finally {
+      if (fileReadAbortControllerRef.current === controller) {
+        fileReadAbortControllerRef.current = null;
+      }
       if (
         requestSeq === fileReadSeqRef.current &&
         projectIdRef.current === targetProjectId &&
@@ -8413,6 +8438,10 @@ export function App() {
     const requestSeq = chatFilePeekReadSeqRef.current + 1;
     chatFilePeekReadSeqRef.current = requestSeq;
     const tabId = previewTabId({type: 'file', path});
+    const loadKey = fileMemoryCacheKey(targetProjectId, tabId);
+    previewFileLoadControllersRef.current.get(loadKey)?.abort();
+    const controller = new AbortController();
+    previewFileLoadControllersRef.current.set(loadKey, controller);
     setPreviewWorkbench(current =>
       beginPreviewTabLoad(
         openPreviewTab(current, {
@@ -8428,7 +8457,7 @@ export function App() {
       ),
       );
     try {
-      const info = await service.getProjectFileInfo(targetProjectId, path);
+      const info = await service.getProjectFileInfo(targetProjectId, path, {signal: controller.signal});
       if ((info.size ?? 0) > LARGE_FILE_CONFIRM_BYTES) {
         const sizeMB = ((info.size ?? 0) / (1024 * 1024)).toFixed(1);
         const confirmed = window.confirm(
@@ -8447,7 +8476,7 @@ export function App() {
           return;
         }
       }
-      const result = await service.readProjectFile(path, targetProjectId);
+      const result = await service.readProjectFile(path, targetProjectId, {signal: controller.signal});
       setPreviewWorkbench(current =>
         updatePreviewTabAfterLoad(
           current,
@@ -8461,6 +8490,7 @@ export function App() {
         ),
       );
     } catch (err) {
+      if (isAbortError(err)) return;
       const reason = err instanceof Error ? err.message : String(err);
       setPreviewWorkbench(current =>
         failPreviewTabLoad(
@@ -8480,6 +8510,10 @@ export function App() {
           `Failed to load file: ${reason}`,
         ),
       );
+    } finally {
+      if (previewFileLoadControllersRef.current.get(loadKey) === controller) {
+        previewFileLoadControllersRef.current.delete(loadKey);
+      }
     }
   }, []);
 
@@ -8493,10 +8527,14 @@ export function App() {
       }
       const requestSeq = chatFilePeekReadSeqRef.current + 1;
       chatFilePeekReadSeqRef.current = requestSeq;
+      const loadKey = fileMemoryCacheKey(tab.projectId, tab.id);
+      previewFileLoadControllersRef.current.get(loadKey)?.abort();
+      const controller = new AbortController();
+      previewFileLoadControllersRef.current.set(loadKey, controller);
       setPreviewWorkbench(current => beginPreviewTabLoad(current, tab.projectId, tab.id, requestSeq));
       try {
-        const info = await service.getProjectFileInfo(tab.projectId, tab.path);
-        const result = await service.readProjectFile(tab.path, tab.projectId);
+        const info = await service.getProjectFileInfo(tab.projectId, tab.path, {signal: controller.signal});
+        const result = await service.readProjectFile(tab.path, tab.projectId, {signal: controller.signal});
         setPreviewWorkbench(current =>
           updatePreviewTabAfterLoad(current, tab.projectId, tab.id, requestSeq, currentTab =>
             currentTab.type === 'file'
@@ -8505,10 +8543,15 @@ export function App() {
           ),
         );
       } catch (err) {
+        if (isAbortError(err)) return;
         const reason = err instanceof Error ? err.message : String(err);
         setPreviewWorkbench(current =>
           failPreviewTabLoad(current, tab.projectId, tab.id, requestSeq, `Failed to load file: ${reason}`),
         );
+      } finally {
+        if (previewFileLoadControllersRef.current.get(loadKey) === controller) {
+          previewFileLoadControllersRef.current.delete(loadKey);
+        }
       }
       return;
     }
@@ -9253,6 +9296,8 @@ export function App() {
 
   useEffect(() => {
     if (!selectedFile) {
+      fileReadAbortControllerRef.current?.abort();
+      fileReadAbortControllerRef.current = null;
       fileReadSeqRef.current += 1;
       setFileLoading(false);
       setFileInfo(null);
@@ -19812,10 +19857,14 @@ export function App() {
     });
   };
   const closeWorkbenchTab = (tabId: string) => {
+    const projectId = previewWorkbench.activeProjectId;
+    const loadKey = fileMemoryCacheKey(projectId, tabId);
+    previewFileLoadControllersRef.current.get(loadKey)?.abort();
+    previewFileLoadControllersRef.current.delete(loadKey);
     const closingLastTab = previewWorkbenchTabs.length === 1 &&
       previewWorkbenchTabs[0]?.id === tabId;
     setPreviewWorkbench(current =>
-      closePreviewTab(current, current.activeProjectId, tabId),
+      closePreviewTab(current, projectId, tabId),
     );
     if (closingLastTab) {
       setChatPreviewManualOpen(true);

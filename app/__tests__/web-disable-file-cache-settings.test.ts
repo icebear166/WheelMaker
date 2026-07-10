@@ -78,7 +78,7 @@ describe('web disable file cache settings', () => {
     expect(mainTsx).toContain('const persistedFile = fileCacheDisabled ? null : workspaceStore.getCachedFile(targetProjectId, path);');
     expect(mainTsx).toContain("const knownHash = !fileCacheDisabled && typeof cachedContent === 'string'");
     expect(mainTsx).toContain('if (result.notModified && fileCacheDisabled) {');
-    expect(mainTsx).toContain('const freshResult = await service.readProjectFile(path, targetProjectId);');
+    expect(mainTsx).toContain('const freshResult = await service.readProjectFile(path, targetProjectId, {signal: controller.signal});');
     expect(mainTsx).toContain('if (!fileCacheDisabled) {');
     expect(mainTsx).toContain('workspaceController.connect(ws, trimmedToken, {disableFileCache})');
     expect(mainTsx).toContain('workspaceController.switchProject(nextProjectId, {disableFileCache})');

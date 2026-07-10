@@ -541,7 +541,11 @@ describe('web chat file peek viewer', () => {
 
     expect(readBody).toContain('updatePreviewTabAfterLoad(');
     expect(readBody).toContain('failPreviewTabLoad(');
+    expect(mainTsx).toContain('const previewFileLoadControllersRef = useRef<Map<string, AbortController>>(new Map());');
+    expect(readBody).toContain('previewFileLoadControllersRef.current.get(loadKey)?.abort();');
+    expect(readBody).toContain('signal: controller.signal');
     expect(readBody).not.toContain('requestSeq !== chatFilePeekReadSeqRef.current');
+    expect(mainTsx).not.toContain('const chatFilePeekAbortControllerRef = useRef<AbortController | null>(null);');
   });
 
   test('peek viewer CSS defines desktop width limits and mobile full-screen overlay', () => {

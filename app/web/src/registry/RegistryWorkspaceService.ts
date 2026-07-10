@@ -1,4 +1,9 @@
-import {createRegistryRepository, type QueryWheelMakerUpdateOptions, type RegistryRepository} from './RegistryRepository';
+import {
+  createRegistryRepository,
+  type QueryWheelMakerUpdateOptions,
+  type RegistryFileRequestOptions,
+  type RegistryRepository,
+} from './RegistryRepository';
 import {RegistryRequestError} from './RegistryClient';
 import type {RegistryDebugSink} from './RegistryClient';
 import type {RegistryDebugConnection} from '../debug/registryDebug';
@@ -260,21 +265,21 @@ export class RegistryWorkspaceService {
     };
   }
 
-  async getFileInfo(path: string): Promise<RegistryFsInfo> {
+  async getFileInfo(path: string, options?: Pick<RegistryFileRequestOptions, 'signal'>): Promise<RegistryFsInfo> {
     if (!this.session || !this.repository) {
       throw new Error('session is not ready');
     }
-    return this.getProjectFileInfo(this.session.selectedProjectId, path);
+    return this.getProjectFileInfo(this.session.selectedProjectId, path, options);
   }
 
-  async getProjectFileInfo(projectId: string, path: string): Promise<RegistryFsInfo> {
+  async getProjectFileInfo(projectId: string, path: string, options?: Pick<RegistryFileRequestOptions, 'signal'>): Promise<RegistryFsInfo> {
     if (!this.repository) {
       throw new Error('session is not ready');
     }
-    return this.readRepositoryForProject(projectId).getFileInfo(projectId, path);
+    return this.readRepositoryForProject(projectId).getFileInfo(projectId, path, options);
   }
 
-  async readFile(path: string, options?: {knownHash?: string}): Promise<{
+  async readFile(path: string, options?: RegistryFileRequestOptions): Promise<{
     content: string;
     hash?: string;
     notModified: boolean;
@@ -287,7 +292,7 @@ export class RegistryWorkspaceService {
     return this.readProjectFile(path, this.session.selectedProjectId, options);
   }
 
-  async readProjectFile(path: string, projectId: string, options?: {knownHash?: string}): Promise<{
+  async readProjectFile(path: string, projectId: string, options?: RegistryFileRequestOptions): Promise<{
     content: string;
     hash?: string;
     notModified: boolean;

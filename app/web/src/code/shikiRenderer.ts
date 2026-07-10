@@ -1,6 +1,6 @@
 import {createHighlighterCore} from '@shikijs/core';
 import {createJavaScriptRegexEngine} from '@shikijs/engine-javascript';
-import type {HighlighterCore, LanguageInput, ShikiTransformer, ThemedToken, ThemeInput} from '@shikijs/types';
+import type {GrammarState, HighlighterCore, LanguageInput, ShikiTransformer, ThemedToken, ThemeInput} from '@shikijs/types';
 import {
   resolveCodeFontFamily,
   type CodeFontId,
@@ -63,6 +63,9 @@ const SHIKI_LANG_LOADERS: Record<string, () => Promise<LanguageInput>> = {
   powershell: async () => (await import('@shikijs/langs/powershell')).default,
 };
 const INLINE_CACHE_LIMIT = 4000;
+const TOKENIZE_CHUNK_LINES = 50;
+const TOKENIZE_MAX_LINE_LENGTH = 20_000;
+const TOKENIZE_TIME_LIMIT_MS = 20;
 const inlineCache = new Map<string, string>();
 const loadedThemes = new Set<string>();
 const loadedLanguages = new Set<string>(['text']);
@@ -318,12 +321,16 @@ function renderWithHighlighter(
       lang,
       theme,
       structure: 'inline',
+      tokenizeMaxLineLength: TOKENIZE_MAX_LINE_LENGTH,
+      tokenizeTimeLimit: TOKENIZE_TIME_LIMIT_MS,
     });
   }
   return highlighter.codeToHtml(normalizedCode, {
     lang,
     theme,
     structure: 'classic',
+    tokenizeMaxLineLength: TOKENIZE_MAX_LINE_LENGTH,
+    tokenizeTimeLimit: TOKENIZE_TIME_LIMIT_MS,
     transformers: [buildLineTransformer(
       wrap,
       lineNumbers,
@@ -461,6 +468,8 @@ export async function tokenizeShikiCode(
       const result = highlighter.codeToTokens(code || ' ', {
         lang,
         theme: resolvedTheme,
+        tokenizeMaxLineLength: TOKENIZE_MAX_LINE_LENGTH,
+        tokenizeTimeLimit: TOKENIZE_TIME_LIMIT_MS,
       });
       return {
         tokens: result.tokens,
@@ -479,6 +488,125 @@ export async function tokenizeShikiCode(
     bg: 'inherit',
     themeName: '',
   };
+}
+
+export type ShikiTokenChunk = ShikiTokenizeResult & {
+  startLine: number;
+  totalLines: number;
+};
+
+export type IncrementalShikiTokenizeOptions = {
+  chunkLines?: number;
+  signal?: AbortSignal;
+  onChunk: (chunk: ShikiTokenChunk) => void | Promise<void>;
+  yieldToMainThread?: () => Promise<void>;
+};
+
+function shikiAbortError(): Error {
+  if (typeof DOMException !== 'undefined') {
+    return new DOMException('Shiki tokenization aborted', 'AbortError');
+  }
+  const error = new Error('Shiki tokenization aborted');
+  error.name = 'AbortError';
+  return error;
+}
+
+function throwIfShikiAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw shikiAbortError();
+}
+
+async function defaultYieldToMainThread(): Promise<void> {
+  const scheduler = (globalThis as typeof globalThis & {
+    scheduler?: {yield?: () => Promise<void>};
+  }).scheduler;
+  if (typeof scheduler?.yield === 'function') {
+    await scheduler.yield();
+    return;
+  }
+  await new Promise<void>(resolve => setTimeout(resolve, 0));
+}
+
+export async function tokenizeShikiCodeInChunks(
+  code: string,
+  language: string,
+  themeMode: ThemeMode,
+  codeTheme: CodeThemeId,
+  options: IncrementalShikiTokenizeOptions,
+): Promise<void> {
+  throwIfShikiAborted(options.signal);
+  const resolvedLang = resolveLanguage(language);
+  const resolvedTheme = resolveTheme(themeMode, codeTheme);
+  const highlighter = await getHighlighter();
+  throwIfShikiAborted(options.signal);
+  try {
+    await ensureThemeLoaded(highlighter, resolvedTheme);
+  } catch {
+    // fall through with already loaded default themes
+  }
+  throwIfShikiAborted(options.signal);
+
+  const lines = (code || ' ').split('\n');
+  const totalLines = lines.length;
+  const chunkLines = Math.max(1, Math.trunc(options.chunkLines ?? TOKENIZE_CHUNK_LINES));
+  const yieldToMainThread = options.yieldToMainThread ?? defaultYieldToMainThread;
+  const langCandidates = resolvedLang === 'text' ? ['text'] : [resolvedLang, 'text'];
+
+  for (const lang of langCandidates) {
+    let emittedChunk = false;
+    try {
+      await ensureLanguageLoaded(highlighter, lang);
+      throwIfShikiAborted(options.signal);
+      let grammarState: GrammarState | undefined;
+      for (let startLine = 0; startLine < totalLines; startLine += chunkLines) {
+        throwIfShikiAborted(options.signal);
+        const endLine = Math.min(startLine + chunkLines, totalLines);
+        const result = highlighter.codeToTokens(lines.slice(startLine, endLine).join('\n'), {
+          lang,
+          theme: resolvedTheme,
+          grammarState,
+          tokenizeMaxLineLength: TOKENIZE_MAX_LINE_LENGTH,
+          tokenizeTimeLimit: TOKENIZE_TIME_LIMIT_MS,
+        });
+        grammarState = result.grammarState;
+        await options.onChunk({
+          tokens: result.tokens,
+          fg: result.fg || 'inherit',
+          bg: result.bg || 'inherit',
+          themeName: result.themeName || '',
+          startLine,
+          totalLines,
+        });
+        emittedChunk = true;
+        throwIfShikiAborted(options.signal);
+        if (endLine < totalLines) {
+          await yieldToMainThread();
+          throwIfShikiAborted(options.signal);
+        }
+      }
+      return;
+    } catch (error) {
+      if (options.signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
+        throw shikiAbortError();
+      }
+      if (emittedChunk) throw error;
+      // Try fallback language before any chunks have been published.
+    }
+  }
+
+  for (let startLine = 0; startLine < totalLines; startLine += chunkLines) {
+    throwIfShikiAborted(options.signal);
+    const endLine = Math.min(startLine + chunkLines, totalLines);
+    await options.onChunk({
+      tokens: lines.slice(startLine, endLine).map(line => [{content: line, fontStyle: 0, offset: 0}]),
+      fg: 'inherit',
+      bg: 'inherit',
+      themeName: '',
+      startLine,
+      totalLines,
+    });
+    throwIfShikiAborted(options.signal);
+    if (endLine < totalLines) await yieldToMainThread();
+  }
 }
 
 export function renderChunkHtmlFromTokens(

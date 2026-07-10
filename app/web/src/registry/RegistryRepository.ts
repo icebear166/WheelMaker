@@ -102,6 +102,11 @@ export type QueryWheelMakerUpdateOptions = {
   force?: boolean;
 };
 
+export type RegistryFileRequestOptions = {
+  knownHash?: string;
+  signal?: AbortSignal;
+};
+
 const SESSION_CREATE_TIMEOUT_MS = 120000;
 
 function normalizeAgentType(agentType: unknown): string | undefined {
@@ -782,11 +787,16 @@ export class RegistryRepository {
     };
   }
 
-  async getFileInfo(projectId: string, path: string): Promise<RegistryFsInfo> {
+  async getFileInfo(
+    projectId: string,
+    path: string,
+    options?: Pick<RegistryFileRequestOptions, 'signal'>,
+  ): Promise<RegistryFsInfo> {
     const resp = await this.client.request({
       method: RegistryMethods.ProjectFSInfo,
       projectId,
       payload: {path},
+      signal: options?.signal,
     });
     const payload = (resp.payload ?? {}) as RegistryFsInfo;
     const tabSize = typeof payload.tabSize === 'number' && Number.isFinite(payload.tabSize)
@@ -808,7 +818,7 @@ export class RegistryRepository {
   async readFile(
     projectId: string,
     path: string,
-    options?: {knownHash?: string},
+    options?: RegistryFileRequestOptions,
   ): Promise<RegistryFsReadResponse> {
     const resp = await this.client.request({
       method: RegistryMethods.ProjectFSRead,
@@ -817,6 +827,7 @@ export class RegistryRepository {
         path,
         ...(options?.knownHash ? {knownHash: options.knownHash} : {}),
       },
+      signal: options?.signal,
     });
     const payload = (resp.payload ?? {}) as RegistryFsReadResponse;
     return {

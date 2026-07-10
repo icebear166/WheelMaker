@@ -12,7 +12,8 @@ type GitDiffRowsModule = typeof import('../git/diffRows');
 
 const VS_CODE_EDITOR_FONT_FAMILY = "Consolas, 'Courier New', monospace";
 const VIRTUALIZE_LINE_THRESHOLD = 2000;
-const CHUNK_SIZE = 200;
+const INCREMENTAL_CHARACTER_THRESHOLD = 80_000;
+const CHUNK_SIZE = 50;
 
 let shikiRendererModulePromise: Promise<typeof import('./shikiRenderer')> | null = null;
 let gitDiffRowsModulePromise: Promise<GitDiffRowsModule> | null = null;
@@ -114,13 +115,32 @@ function useLineClick(onLineClick?: (line: number, event: MouseEvent) => void) {
   );
 }
 
-type TokenizeState = {
+type TokenChunkState = {
   tokens: ThemedToken[][];
   fg: string;
   bg: string;
   themeName: string;
-  totalLines: number;
+  startLine: number;
 };
+
+function countCodeLines(content: string): number {
+  if (!content) return 0;
+  let count = 1;
+  for (let i = 0; i < content.length; i++) {
+    if (content[i] === '\n') count++;
+  }
+  return count;
+}
+
+function firstCodeLines(content: string, lineLimit: number): string {
+  let end = 0;
+  for (let line = 0; line < lineLimit; line++) {
+    end = content.indexOf('\n', end);
+    if (end < 0) return content;
+    end += 1;
+  }
+  return content.slice(0, Math.max(0, end - 1));
+}
 
 function ShikiCodeBlockVirtualized({
   content,
@@ -137,80 +157,142 @@ function ShikiCodeBlockVirtualized({
   onLineClick,
 }: ShikiCodeBlockProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [tokenizeResult, setTokenizeResult] = useState<TokenizeState | null>(null);
+  const totalLines = useMemo(() => countCodeLines(content), [content]);
+  const totalChunks = Math.ceil(totalLines / CHUNK_SIZE);
+  const [tokenChunks, setTokenChunks] = useState<Map<number, TokenChunkState>>(new Map());
   const [chunkHtmls, setChunkHtmls] = useState<Map<number, string>>(new Map());
+  const [visibleChunks, setVisibleChunks] = useState<Set<number>>(() => new Set([0]));
   const [tokenizeFailed, setTokenizeFailed] = useState(false);
+  const initialFallbackHtml = useMemo(
+    () => renderPlainCodeFallbackHtml({
+      content: firstCodeLines(content, CHUNK_SIZE),
+      wrap,
+      lineNumbers,
+      codeFont,
+      codeFontSize,
+      codeLineHeight,
+      codeTabSize,
+    }),
+    [content, wrap, lineNumbers, codeFont, codeFontSize, codeLineHeight, codeTabSize],
+  );
 
   useEffect(() => {
-    let cancelled = false;
-    setTokenizeResult(null);
+    const controller = new AbortController();
+    setTokenChunks(new Map());
     setChunkHtmls(new Map());
+    setVisibleChunks(new Set([0]));
     setTokenizeFailed(false);
     (async () => {
-      const {tokenizeShikiCode} = await loadShikiRenderer();
-      const result = await tokenizeShikiCode(content, language, themeMode, codeTheme);
-      if (cancelled) return;
-      setTokenizeResult({
-        tokens: result.tokens,
-        fg: result.fg,
-        bg: result.bg,
-        themeName: result.themeName,
-        totalLines: result.tokens.length,
+      const {tokenizeShikiCodeInChunks} = await loadShikiRenderer();
+      if (controller.signal.aborted) return;
+      await tokenizeShikiCodeInChunks(content, language, themeMode, codeTheme, {
+        chunkLines: CHUNK_SIZE,
+        signal: controller.signal,
+        onChunk: chunk => {
+          if (controller.signal.aborted) return;
+          const chunkIndex = Math.floor(chunk.startLine / CHUNK_SIZE);
+          setTokenChunks(previous => {
+            const next = new Map(previous);
+            next.set(chunkIndex, {
+              tokens: chunk.tokens,
+              fg: chunk.fg,
+              bg: chunk.bg,
+              themeName: chunk.themeName,
+              startLine: chunk.startLine,
+            });
+            return next;
+          });
+        },
       });
-    })().catch(() => {
-      if (!cancelled) setTokenizeFailed(true);
+    })().catch(error => {
+      if (!controller.signal.aborted && !(error instanceof Error && error.name === 'AbortError')) {
+        setTokenizeFailed(true);
+      }
     });
-    return () => { cancelled = true; };
+    return () => {
+      controller.abort();
+    };
   }, [content, language, themeMode, codeTheme]);
 
-  useEffect(() => {
-    setChunkHtmls(new Map());
-  }, [highlightedLines]);
-
-  const totalChunks = tokenizeResult ? Math.ceil(tokenizeResult.totalLines / CHUNK_SIZE) : 0;
   const lineHeightPx = Math.max(12, codeFontSize * codeLineHeight);
 
   useEffect(() => {
-    if (!tokenizeResult || !containerRef.current) return;
+    if (!containerRef.current) return;
     const container = containerRef.current;
-
-    const renderChunk = async (chunkIndex: number) => {
-      const start = chunkIndex * CHUNK_SIZE;
-      const end = Math.min(start + CHUNK_SIZE, tokenizeResult.totalLines);
-      const chunkTokens = tokenizeResult.tokens.slice(start, end);
-      const mod = await loadShikiRenderer();
-      const html = mod.renderChunkHtmlFromTokens(
-        chunkTokens, start,
-        tokenizeResult.fg, tokenizeResult.bg, tokenizeResult.themeName,
-        wrap, lineNumbers, codeFont, codeFontSize, codeLineHeight, codeTabSize,
-        highlightedLines,
-      );
-      setChunkHtmls(prev => {
-        if (prev.get(chunkIndex) === html) return prev;
-        const next = new Map(prev);
-        next.set(chunkIndex, html);
-        return next;
-      });
-    };
-
-    const sentinelMap = new Map<Element, number>();
+    if (typeof IntersectionObserver === 'undefined') {
+      setVisibleChunks(new Set(Array.from({length: totalChunks}, (_, index) => index)));
+      return;
+    }
     const observer = new IntersectionObserver(entries => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting) continue;
-        const chunkIdx = sentinelMap.get(entry.target);
-        if (chunkIdx != null) renderChunk(chunkIdx);
-      }
+      setVisibleChunks(previous => {
+        const next = new Set(previous);
+        let changed = false;
+        for (const entry of entries) {
+          const chunkIndex = Number((entry.target as HTMLElement).dataset.chunkSentinel);
+          if (!Number.isFinite(chunkIndex)) continue;
+          if (entry.isIntersecting && !next.has(chunkIndex)) {
+            next.add(chunkIndex);
+            changed = true;
+          } else if (!entry.isIntersecting && next.delete(chunkIndex)) {
+            changed = true;
+          }
+        }
+        return changed ? next : previous;
+      });
     }, {rootMargin: `${CHUNK_SIZE * lineHeightPx * 2}px`});
 
     const sentinels = container.querySelectorAll<HTMLElement>('[data-chunk-sentinel]');
     sentinels.forEach(el => {
-      const idx = Number(el.dataset.chunkSentinel);
-      sentinelMap.set(el, idx);
       observer.observe(el);
     });
 
     return () => observer.disconnect();
-  }, [tokenizeResult, wrap, lineNumbers, codeFont, codeFontSize, codeLineHeight, codeTabSize, highlightedLines, totalChunks, lineHeightPx]);
+  }, [totalChunks, lineHeightPx]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const {renderChunkHtmlFromTokens} = await loadShikiRenderer();
+      if (cancelled) return;
+      const rendered = new Map<number, string>();
+      for (const chunkIndex of visibleChunks) {
+        const chunk = tokenChunks.get(chunkIndex);
+        if (!chunk) continue;
+        rendered.set(chunkIndex, renderChunkHtmlFromTokens(
+          chunk.tokens,
+          chunk.startLine,
+          chunk.fg,
+          chunk.bg,
+          chunk.themeName,
+          wrap,
+          lineNumbers,
+          codeFont,
+          codeFontSize,
+          codeLineHeight,
+          codeTabSize,
+          highlightedLines,
+        ));
+      }
+      if (cancelled) return;
+      setChunkHtmls(previous => {
+        let changed = previous.size !== rendered.size;
+        if (!changed) {
+          for (const [chunkIndex, html] of rendered) {
+            if (previous.get(chunkIndex) !== html) {
+              changed = true;
+              break;
+            }
+          }
+        }
+        return changed ? rendered : previous;
+      });
+    })().catch(() => {
+      if (!cancelled) setTokenizeFailed(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [tokenChunks, visibleChunks, wrap, lineNumbers, codeFont, codeFontSize, codeLineHeight, codeTabSize, highlightedLines]);
 
   const handleClick = useLineClick(onLineClick);
 
@@ -222,42 +304,31 @@ function ShikiCodeBlockVirtualized({
     );
   }
 
-  if (!tokenizeResult) {
-    return (
-      <div className="code-wrap" data-markdown-export-pending="true">
-        <div className="muted block">Tokenizing...</div>
-      </div>
-    );
-  }
-
   const chunks: React.ReactNode[] = [];
   for (let i = 0; i < totalChunks; i++) {
-    const html = chunkHtmls.get(i);
-    if (html) {
-      chunks.push(
-        <div
-          key={i}
-          dangerouslySetInnerHTML={{__html: html}}
-        />,
-      );
-    } else {
-      const start = i * CHUNK_SIZE;
-      const end = Math.min(start + CHUNK_SIZE, tokenizeResult.totalLines);
-      const height = (end - start) * lineHeightPx;
-      chunks.push(
-        <div
-          key={i}
-          data-chunk-sentinel={i}
-          style={{height: `${height}px`}}
-        />,
-      );
-    }
+    const html = visibleChunks.has(i) ? chunkHtmls.get(i) : undefined;
+    const fallbackHtml = i === 0 && visibleChunks.has(i) && !tokenChunks.has(i)
+      ? initialFallbackHtml
+      : undefined;
+    const renderedHtml = html ?? fallbackHtml;
+    const start = i * CHUNK_SIZE;
+    const end = Math.min(start + CHUNK_SIZE, totalLines);
+    const height = (end - start) * lineHeightPx;
+    chunks.push(
+      <div
+        key={i}
+        data-chunk-sentinel={i}
+        style={renderedHtml ? undefined : {height: `${height}px`}}
+        dangerouslySetInnerHTML={renderedHtml ? {__html: renderedHtml} : undefined}
+      />,
+    );
   }
 
   return (
     <div
       ref={containerRef}
       className={`code-wrap ${wrap ? 'wrap' : 'nowrap'}`}
+      data-markdown-export-pending={tokenChunks.size < totalChunks ? 'true' : undefined}
       onClick={onLineClick ? handleClick : undefined}
     >
       {chunks}
@@ -266,16 +337,12 @@ function ShikiCodeBlockVirtualized({
 }
 
 export function ShikiCodeBlock(props: ShikiCodeBlockProps) {
-  const lineCount = useMemo(() => {
-    if (!props.content) return 0;
-    let count = 1;
-    for (let i = 0; i < props.content.length; i++) {
-      if (props.content[i] === '\n') count++;
-    }
-    return count;
-  }, [props.content]);
+  const lineCount = useMemo(() => countCodeLines(props.content), [props.content]);
 
-  if (lineCount >= VIRTUALIZE_LINE_THRESHOLD) {
+  if (
+    lineCount >= VIRTUALIZE_LINE_THRESHOLD ||
+    props.content.length >= INCREMENTAL_CHARACTER_THRESHOLD
+  ) {
     return <ShikiCodeBlockVirtualized {...props} />;
   }
 

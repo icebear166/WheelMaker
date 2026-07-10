@@ -8,7 +8,17 @@ type PendingRequest = {
   resolve: (value: RegistryEnvelope) => void;
   reject: (reason?: unknown) => void;
   timer: ReturnType<typeof setTimeout>;
+  removeAbortListener?: () => void;
 };
+
+function registryAbortError(): Error {
+  if (typeof DOMException !== 'undefined') {
+    return new DOMException('Registry request aborted', 'AbortError');
+  }
+  const error = new Error('Registry request aborted');
+  error.name = 'AbortError';
+  return error;
+}
 
 export class RegistryRequestError extends Error {
   code?: string;
@@ -126,7 +136,11 @@ export class RegistryClient {
     projectId?: string;
     hubId?: string;
     timeoutMs?: number;
+    signal?: AbortSignal;
   }): Promise<RegistryEnvelope> {
+    if (args.signal?.aborted) {
+      throw registryAbortError();
+    }
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       throw new Error('registry websocket is not connected');
     }
@@ -144,10 +158,25 @@ export class RegistryClient {
     const raw = JSON.stringify(envelope);
     return new Promise<RegistryEnvelope>((resolve, reject) => {
       const timer = setTimeout(() => {
+        const pending = this.pending.get(requestId);
+        if (!pending) return;
         this.pending.delete(requestId);
+        pending.removeAbortListener?.();
         reject(new Error(`registry request timed out (${timeoutMs}ms): ${args.method}`));
       }, timeoutMs);
-      this.pending.set(requestId, {resolve, reject, timer});
+      const handleAbort = () => {
+        const pending = this.pending.get(requestId);
+        if (!pending) return;
+        this.pending.delete(requestId);
+        clearTimeout(pending.timer);
+        pending.removeAbortListener?.();
+        pending.reject(registryAbortError());
+      };
+      const removeAbortListener = args.signal
+        ? () => args.signal?.removeEventListener('abort', handleAbort)
+        : undefined;
+      args.signal?.addEventListener('abort', handleAbort, {once: true});
+      this.pending.set(requestId, {resolve, reject, timer, removeAbortListener});
       this.emitDebug({kind: 'outbound', envelope, raw});
       this.ws?.send(raw);
     });
@@ -157,6 +186,7 @@ export class RegistryClient {
     this.closing = true;
     for (const [id, pending] of this.pending.entries()) {
       clearTimeout(pending.timer);
+      pending.removeAbortListener?.();
       pending.reject(new Error(`connection closed before response: ${id}`));
     }
     this.pending.clear();
@@ -204,6 +234,7 @@ export class RegistryClient {
       if (!pending) return;
       this.pending.delete(envelope.requestId);
       clearTimeout(pending.timer);
+      pending.removeAbortListener?.();
       if (envelope.type === 'error') {
         const payload = parseErrorPayload(envelope.payload);
         pending.reject(new RegistryRequestError(payload.message ?? 'registry error', payload.code, payload.details));
@@ -245,6 +276,7 @@ export class RegistryClient {
     this.ws = null;
     for (const [id, pending] of this.pending.entries()) {
       clearTimeout(pending.timer);
+      pending.removeAbortListener?.();
       pending.reject(new Error(`connection closed before response: ${id}`));
     }
     this.pending.clear();
