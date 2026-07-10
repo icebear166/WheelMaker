@@ -528,4 +528,96 @@ describe('chat virtuoso mount fallback', () => {
       animationFrames.restore();
     }
   });
+
+  test('marks only a newly appended tail item for entry motion', async () => {
+    jest.useFakeTimers();
+    const scrollRef = {current: {} as HTMLElement};
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    try {
+      await ReactTestRenderer.act(() => {
+        renderer = ReactTestRenderer.create(
+          <ChatVirtuosoTurnList
+            scrollRef={scrollRef}
+            displayIndex={{items: [turnItem(1)]}}
+            runtimeKey="project-a/session-a"
+            renderItem={item => <span>{item.key}</span>}
+          />,
+        );
+      });
+      expect(renderer!.root.findAllByProps({className: 'chat-turn-entry'})).toHaveLength(0);
+
+      await ReactTestRenderer.act(() => {
+        renderer!.update(
+          <ChatVirtuosoTurnList
+            scrollRef={scrollRef}
+            displayIndex={{items: [turnItem(1), turnItem(2)]}}
+            runtimeKey="project-a/session-a"
+            renderItem={item => <span>{item.key}</span>}
+          />,
+        );
+      });
+      expect(renderer!.root.findAllByProps({className: 'chat-turn-entry'})).toHaveLength(1);
+
+      await ReactTestRenderer.act(() => {
+        jest.advanceTimersByTime(240);
+      });
+      expect(renderer!.root.findAllByProps({className: 'chat-turn-entry'})).toHaveLength(0);
+    } finally {
+      if (renderer) {
+        await ReactTestRenderer.act(() => {
+          renderer!.unmount();
+        });
+      }
+      jest.useRealTimers();
+    }
+  });
+
+  test('does not mark tail replacement or runtime switches for entry motion', async () => {
+    const scrollRef = {current: {} as HTMLElement};
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    try {
+      await ReactTestRenderer.act(() => {
+        renderer = ReactTestRenderer.create(
+          <ChatVirtuosoTurnList
+            scrollRef={scrollRef}
+            displayIndex={{items: [turnItem(1)]}}
+            runtimeKey="project-a/session-a"
+            renderItem={item => <span>{item.key}</span>}
+          />,
+        );
+      });
+
+      await ReactTestRenderer.act(() => {
+        renderer!.update(
+          <ChatVirtuosoTurnList
+            scrollRef={scrollRef}
+            displayIndex={{items: [turnItem(2)]}}
+            runtimeKey="project-a/session-a"
+            renderItem={item => <span>{item.key}</span>}
+          />,
+        );
+      });
+      expect(renderer!.root.findAllByProps({className: 'chat-turn-entry'})).toHaveLength(0);
+
+      await ReactTestRenderer.act(() => {
+        renderer!.update(
+          <ChatVirtuosoTurnList
+            scrollRef={scrollRef}
+            displayIndex={{items: [turnItem(1), turnItem(2)]}}
+            runtimeKey="project-a/session-b"
+            renderItem={item => <span>{item.key}</span>}
+          />,
+        );
+      });
+      expect(renderer!.root.findAllByProps({className: 'chat-turn-entry'})).toHaveLength(0);
+    } finally {
+      if (renderer) {
+        await ReactTestRenderer.act(() => {
+          renderer!.unmount();
+        });
+      }
+    }
+  });
 });

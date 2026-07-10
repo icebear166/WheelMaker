@@ -5095,3 +5095,68 @@
     line-height: 1.62;
   }
 }
+
+.chat-turn-entry {
+  animation: chatTurnEnter var(--motion-emphasized) var(--ease-out) both;
+}
+
+@keyframes chatTurnEnter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.chat-hub-popover,
+.project-session-action-menu,
+.session-archive-menu,
+.chat-title-project-menu,
+.chat-title-prompt-menu,
+.chat-quick-switch-menu {
+  transform-origin: top center;
+  animation: workspaceMenuEnter var(--motion-standard) var(--ease-out) both;
+}
+
+.mobile-project-sheet {
+  transform-origin: bottom center;
+  animation: workspaceSheetEnter var(--motion-standard) var(--ease-out) both;
+}
+
+@keyframes workspaceMenuEnter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes workspaceSheetEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-turn-entry,
+  .chat-hub-popover,
+  .project-session-action-menu,
+  .session-archive-menu,
+  .chat-title-project-menu,
+  .chat-title-prompt-menu,
+  .chat-quick-switch-menu,
+  .mobile-project-sheet {
+    animation: none;
+  }
+}

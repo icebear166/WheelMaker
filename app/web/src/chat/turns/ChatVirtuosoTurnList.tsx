@@ -134,6 +134,34 @@ const ChatVirtuosoTurnListInner = React.forwardRef<
   const tailLockSettleFollowupFrameRef = React.useRef<number | null>(null);
   const turnScrollSettleFrameRef = React.useRef<number | null>(null);
   const [scrollParent, setScrollParent] = React.useState<HTMLElement | null>(null);
+  const previousTailRef = React.useRef<{
+    runtimeKey: string;
+    key: string;
+    itemCount: number;
+  } | null>(null);
+  const [entryKey, setEntryKey] = React.useState('');
+  const itemCount = displayIndex.items.length;
+  const tailKey = displayIndex.items[itemCount - 1]?.key ?? '';
+
+  React.useEffect(() => {
+    const previous = previousTailRef.current;
+    previousTailRef.current = {runtimeKey, key: tailKey, itemCount};
+    const appended =
+      !!tailKey &&
+      !!previous &&
+      previous.runtimeKey === runtimeKey &&
+      itemCount > previous.itemCount &&
+      previous.key !== tailKey;
+    if (!appended) {
+      setEntryKey('');
+      return undefined;
+    }
+    setEntryKey(tailKey);
+    const timer = window.setTimeout(() => {
+      setEntryKey(current => current === tailKey ? '' : current);
+    }, 240);
+    return () => window.clearTimeout(timer);
+  }, [itemCount, runtimeKey, tailKey]);
 
   React.useLayoutEffect(() => {
     let cancelled = false;
@@ -357,7 +385,7 @@ const ChatVirtuosoTurnListInner = React.forwardRef<
       totalListHeightChanged={handleTotalListHeightChanged}
       itemContent={(index, displayItem) => {
         const size = heightEstimates[index] ?? defaultItemHeight;
-        return renderItem(displayItem, {
+        const content = renderItem(displayItem, {
           end: size,
           index,
           key: displayItem.key,
@@ -365,6 +393,9 @@ const ChatVirtuosoTurnListInner = React.forwardRef<
           size,
           start: 0,
         });
+        return displayItem.key === entryKey
+          ? <div className="chat-turn-entry">{content}</div>
+          : content;
       }}
     />
   );

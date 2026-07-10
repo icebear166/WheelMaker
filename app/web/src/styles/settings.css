@@ -2931,3 +2931,24 @@ textarea,
   height: 7px;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--hub-accent) 15%, transparent);
 }
+
+.mobile-settings-screen,
+.settings-detail-page {
+  animation: settingsPageEnter var(--motion-standard) var(--ease-out) both;
+}
+
+@keyframes settingsPageEnter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-settings-screen,
+  .settings-detail-page {
+    animation: none;
+  }
+}

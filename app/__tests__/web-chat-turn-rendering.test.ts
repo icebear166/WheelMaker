@@ -302,4 +302,9 @@ describe('web chat turn rendering', () => {
     expect(styles).toMatch(/\.chat-tool-line\s*\{[^}]*min-width:\s*0;/s);
     expect(styles).toMatch(/\.chat-tool-line span:last-child\s*\{[^}]*white-space:\s*nowrap;[^}]*text-overflow:\s*ellipsis;/s);
   });
+
+  test('disables new message entry motion when reduced motion is requested', () => {
+    const styles = readStyles();
+    expect(styles).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.chat-turn-entry[\s\S]*?animation:\s*none;/);
+  });
 });

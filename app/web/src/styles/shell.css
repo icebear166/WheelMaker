@@ -1538,3 +1538,22 @@
     transition-duration: 0ms;
   }
 }
+
+.workspace-right > .content:has(> .chat-title-bar) {
+  animation: workspacePageEnter var(--motion-standard) var(--ease-out) both;
+}
+
+@keyframes workspacePageEnter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-right > .content:has(> .chat-title-bar) {
+    animation: none;
+  }
+}
