@@ -364,6 +364,6 @@ Run from `mobile/android/`:
 
 Expected: every command exits 0, the Jest summary reports no failed tests, TypeScript emits no errors, and the release APK assembles.
 
-- [ ] **Step 5: Review and publish**
+- [x] **Step 5: Review and publish**
 
 Run `git diff --check`, inspect `git diff --stat` and `git status --short`, then follow the repository completion gate exactly: `git add -A`, commit with a message naming the non-destructive atomic persistence fix, and `git push origin main`.
