@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 const STYLE_ENTRY_ORDER = [
+  'tokens.css',
   'base.css',
   'shell.css',
   'settings.css',
