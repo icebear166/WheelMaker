@@ -2363,4 +2363,16 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('readOnly={chatSending}');
     expect(mainTsx).not.toContain('disabled={chatSending || chatAttachmentUploadPending}');
   });
+
+  test('keeps sidebar search fixed in the title region and new sessions project-scoped', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const stylesCss = readWebStyles(projectRoot);
+    expect(mainTsx).toContain("const chatSessionHeaderClassName = `sidebar-title-row chat-session-header");
+    expect(mainTsx).toContain('{renderChatHeaderSearchControls()}');
+    expect(mainTsx).toContain('className="chat-header-search-wrap"');
+    expect(mainTsx).toContain('className="wide-project-action-btn"');
+    expect(mainTsx).not.toContain('className="global-new-session"');
+    expect(stylesCss).toContain('/* workspace-ui-targeted-evolution: session sidebar */');
+  });
 });

@@ -4960,3 +4960,73 @@
 .mobile-project-session-nav::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* workspace-ui-targeted-evolution: session sidebar */
+.wide-project-section {
+  border-radius: var(--radius-panel);
+}
+
+.wide-project-row {
+  min-height: 34px;
+  color: var(--text-secondary);
+}
+
+.wide-project-name {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.wide-project-hub-tag,
+.wide-session-agent-tag {
+  border-color: color-mix(in srgb, currentColor 20%, var(--border-subtle));
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.wide-session-row {
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  transition: background var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard);
+}
+
+.wide-session-row:hover {
+  background: var(--hover);
+}
+
+.wide-session-row.selected {
+  border-color: color-mix(in srgb, var(--accent-primary) 32%, var(--border-subtle));
+  background: color-mix(in srgb, var(--accent-primary) 11%, var(--surface-sidebar));
+  color: var(--text-primary);
+}
+
+.wide-session-row.selected::before {
+  background: var(--accent-primary);
+}
+
+.chat-hub-summary-button,
+.chat-header-search-control,
+.session-search-input {
+  border-color: var(--border-subtle);
+  background: var(--surface-panel);
+}
+
+.chat-hub-popover,
+.project-session-action-menu,
+.session-archive-menu,
+.mobile-project-sheet {
+  border-color: var(--border-subtle);
+  border-radius: var(--radius-floating);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-overlay);
+}
+
+@media (max-width: 900px) {
+  .mobile-project-row,
+  .mobile-session-row {
+    min-height: 44px;
+  }
+
+  .mobile-project-sheet {
+    max-width: 100%;
+    padding-bottom: max(12px, var(--wm-safe-area-bottom));
+  }
+}

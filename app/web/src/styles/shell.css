@@ -1484,3 +1484,57 @@
 .narrow-shell .project-menu {
   max-width: min(86vw, 420px);
 }
+
+/* workspace-ui-targeted-evolution: shell */
+.workspace-left {
+  border-right-color: var(--border-subtle);
+  background: var(--surface-sidebar);
+}
+
+.sidebar-title-row {
+  min-height: 44px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-sidebar);
+}
+
+.sidebar-title-text {
+  color: var(--text-primary);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.sidebar-scroll {
+  background: var(--surface-sidebar);
+}
+
+.drawer-overlay {
+  background: rgb(4 9 16 / 0%);
+  backdrop-filter: blur(0);
+  transition: background var(--motion-standard) var(--ease-standard), backdrop-filter var(--motion-standard) var(--ease-standard);
+}
+
+.drawer-overlay.show {
+  background: rgb(4 9 16 / 48%);
+  backdrop-filter: blur(2px);
+}
+
+.drawer {
+  border-color: var(--border-subtle);
+  background: var(--surface-sidebar);
+  box-shadow: var(--shadow-overlay);
+  transition: transform var(--motion-emphasized) var(--ease-out);
+}
+
+.drawer-toggle-bubble,
+.floating-control-stack-layer button {
+  border-color: var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-overlay) 94%, transparent);
+  box-shadow: var(--shadow-floating);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer,
+  .drawer-overlay {
+    transition-duration: 0ms;
+  }
+}

@@ -206,4 +206,14 @@ describe('web responsive shell split', () => {
     expect(stylesCss).not.toContain('.workspace-left .settings-list {');
     expect(stylesCss).not.toContain('.workspace-left .settings-detail-page {');
   });
+
+  test('keeps the existing two responsive modes while styling the mobile drawer', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+    expect(stylesCss).toContain('@media (max-width: 900px)');
+    expect(stylesCss).not.toMatch(/@media[^\{]+\(min-width:\s*901px\)[^\{]+\(max-width:/);
+    expect(stylesCss).toContain('.drawer.show');
+    expect(stylesCss).toContain('.drawer-overlay.show');
+    expect(stylesCss).toContain('background: rgb(4 9 16 / 48%);');
+  });
 });
