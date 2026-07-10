@@ -26,4 +26,16 @@ describe('web file pin feature', () => {
     expect(mainTsx).toContain('goto-input');
     expect(mainTsx).toContain('goto-trigger');
   });
+
+  test('keeps file search focus feedback on the field border instead of an inner outline block', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const styles = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles', 'file.css'), 'utf8').replace(/\r\n/g, '\n');
+
+    const focusBlock = styles.match(/\.search-input:focus,\s*\.goto-input:focus \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(focusBlock).toContain('border-color: var(--accent);');
+    expect(focusBlock).toContain('box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 16%, transparent);');
+
+    const focusVisibleBlock = styles.match(/\.search-input:focus-visible,\s*\.goto-input:focus-visible \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(focusVisibleBlock).toContain('outline: none;');
+  });
 });

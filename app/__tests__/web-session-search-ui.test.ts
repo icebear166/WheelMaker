@@ -162,4 +162,17 @@ describe('web session search UI wiring', () => {
     expect(sidebarPopoverBlock).toContain('right: auto;');
     expect(sidebarPopoverBlock).toContain('max-width: calc(100vw - 24px);');
   });
+
+  test('keeps the session search focus highlight on the outer border instead of the inner input', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const styles = readWebStyles(projectRoot);
+
+    const focusWithinBlock = styles.match(/\.session-search-control\.open:focus-within,\s*\.chat-header-search-control\.open:focus-within \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(focusWithinBlock).toContain('border-color: color-mix(in srgb, var(--accent) 45%, var(--border));');
+    expect(focusWithinBlock).toContain('box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 14%, transparent);');
+
+    const inputFocusVisibleBlock = styles.match(/\.session-search-input:focus-visible \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(inputFocusVisibleBlock).toContain('outline: none;');
+    expect(inputFocusVisibleBlock).toContain('box-shadow: none;');
+  });
 });

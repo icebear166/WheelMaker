@@ -838,6 +838,12 @@
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
 
+.session-search-control.open:focus-within,
+.chat-header-search-control.open:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
 .chat-header-search-control.open {
   width: 100%;
 }
@@ -857,6 +863,11 @@
   color: var(--text);
   font-size: 12px;
   outline: none;
+}
+
+.session-search-input:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .session-search-input::placeholder {

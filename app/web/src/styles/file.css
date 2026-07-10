@@ -1087,6 +1087,12 @@
 .search-input:focus,
 .goto-input:focus {
   border-color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.search-input:focus-visible,
+.goto-input:focus-visible {
+  outline: none;
 }
 .pinned-pin-toggle {
   height: 26px;
