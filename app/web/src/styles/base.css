@@ -11,6 +11,21 @@ button,
   -webkit-tap-highlight-color: transparent;
 }
 
+:where(
+  button,
+  select,
+  [role='button'],
+  [role='menuitem'],
+  [role='menuitemradio'],
+  [role='option'],
+  [tabindex]
+):focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: 2px;
+}
+
 html,
 body,
 #root {
@@ -32,52 +47,68 @@ body,
 
 .connect {
   margin: auto;
-  width: min(520px, 92vw);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--panel);
-  padding: 20px;
+  width: min(480px, calc(100vw - 32px));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-floating);
+  background: var(--surface-panel);
+  box-shadow: var(--shadow-floating);
+  padding: 24px;
 }
 
 .connect h3 {
-  margin: 0 0 12px 0;
-  font-size: 14px;
+  margin: 0 0 14px;
+  color: var(--text-primary);
+  font-size: 16px;
   font-weight: 600;
-  color: var(--text);
+  letter-spacing: -0.01em;
 }
 
 .input {
   width: 100%;
+  min-height: 36px;
   margin-top: 8px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--panel-3);
-  color: var(--text);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-canvas);
+  color: var(--text-primary);
   padding: 8px 10px;
-  font-family: inherit;
-  font-size: 13px;
+  font: inherit;
   outline: none;
+  transition: border-color var(--motion-fast) var(--ease-standard), background var(--motion-fast) var(--ease-standard);
+}
+
+.input:hover {
+  border-color: var(--border-strong);
 }
 
 .input:focus {
-  border-color: var(--accent);
+  border-color: var(--accent-primary);
 }
 
 .button {
   margin-top: 10px;
-  border: none;
-  border-radius: 4px;
-  background: var(--accent);
-  color: #ffffff;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: var(--accent-primary);
+  color: #fff;
   padding: 8px 16px;
   cursor: pointer;
-  font-family: inherit;
-  font-size: 13px;
-  transition: opacity 100ms ease, background 100ms ease, border-color 100ms ease;
+  font: inherit;
+  font-weight: 500;
+  transition: background var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), opacity var(--motion-fast) var(--ease-standard);
 }
 
-.button:hover {
-  opacity: 0.9;
+.button:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.button:active:not(:disabled) {
+  filter: brightness(0.94);
+}
+
+.button:disabled {
+  cursor: default;
+  opacity: 0.55;
 }
 
 .button.secondary {
@@ -119,9 +150,52 @@ body,
   gap: 6px;
 }
 
+.error,
+.feedback-state.error {
+  color: var(--state-danger);
+}
+
 .error {
-  color: var(--danger);
   margin-top: 10px;
+}
+
+.feedback-state {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-panel);
+  background: color-mix(in srgb, var(--surface-raised) 72%, transparent);
+  color: var(--text-secondary);
+}
+
+.feedback-state.loading {
+  animation: feedbackStatePulse 1.4s ease-in-out infinite;
+}
+
+@keyframes feedbackStatePulse {
+  0%,
+  100% {
+    opacity: 0.72;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 520px) {
+  .connect {
+    width: calc(100vw - 24px);
+    padding: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feedback-state.loading {
+    animation: none;
+  }
 }
 
 @keyframes floatingDockRailPulse {

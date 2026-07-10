@@ -107,8 +107,11 @@ describe('web responsive shell split', () => {
     expect(disconnectedReturn).toContain('<DesktopWindowControls />');
     expect(disconnectedReturn).not.toContain('<DesktopTitleBar title="WheelMaker" />');
     expect(disconnectedReturn).toMatch(
-      /className=\{`page theme-\$\{themeMode\}`\}[\s\S]*?<DesktopWindowControls \/>[\s\S]*?<div className="connect">/,
+      /className=\{`page theme-\$\{themeMode\}`\}[\s\S]*?<DesktopWindowControls \/>[\s\S]*?<div className="connect" aria-busy=\{autoConnecting\}>/,
     );
+    expect(disconnectedReturn).toContain('aria-busy={autoConnecting}');
+    expect(disconnectedReturn).toContain('disabled={autoConnecting}');
+    expect(disconnectedReturn).toContain('role="alert"');
   });
 
   test('styles frameless desktop controls and reserves right toolbar space', () => {

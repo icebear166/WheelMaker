@@ -41,4 +41,14 @@ describe('workspace visual foundation', () => {
     expect(read('web/src/styles/file.css')).not.toContain('workspace-ui-targeted-evolution');
     expect(read('web/src/styles/git.css')).not.toContain('workspace-ui-targeted-evolution');
   });
+
+  test('defines keyboard focus, disabled, loading, empty and error feedback', () => {
+    const base = read('web/src/styles/base.css');
+    expect(base).toContain(':focus-visible');
+    expect(base).toContain('outline: 2px solid var(--focus-ring-color);');
+    expect(base).toContain('.button:disabled');
+    expect(base).toContain('.feedback-state');
+    expect(base).toContain('.feedback-state.error');
+    expect(base).toContain('.feedback-state.loading');
+  });
 });

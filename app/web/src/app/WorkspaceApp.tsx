@@ -19395,7 +19395,7 @@ export function App() {
       <div className={`page theme-${themeMode}`}>
         {setiFontCss ? <style>{setiFontCss}</style> : null}
         <DesktopWindowControls />
-        <div className="connect">
+        <div className="connect" aria-busy={autoConnecting}>
           <h3>Connect to WheelMaker Registry</h3>
           <input
             className="input"
@@ -19411,11 +19411,12 @@ export function App() {
           />
           <button
             className="button"
+            disabled={autoConnecting}
             onClick={() => connect().catch(() => undefined)}
           >
             {autoConnecting ? 'Connecting...' : 'Connect'}
           </button>
-          {error ? <div className="error">{error}</div> : null}
+          {error ? <div className="error" role="alert">{error}</div> : null}
         </div>
       </div>
     );
