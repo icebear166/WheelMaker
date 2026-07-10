@@ -2375,4 +2375,12 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('className="global-new-session"');
     expect(stylesCss).toContain('/* workspace-ui-targeted-evolution: session sidebar */');
   });
+
+  test('keeps assistant content inside the narrow chat viewport', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+    expect(stylesCss).toContain('.chat-main-message');
+    expect(stylesCss).toContain('max-width: 100%');
+    expect(stylesCss).toContain('overflow-wrap: anywhere');
+  });
 });

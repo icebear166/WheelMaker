@@ -291,4 +291,15 @@ describe('web chat turn rendering', () => {
     expect(main).toContain('chatAutoScrollFollowRef.current = true;');
     expect(main).toContain('chatUserScrollLockUntilRef.current = 0;');
   });
+
+  test('keeps tool calls single-line and plan updates outside message content', () => {
+    const chatTurn = readChatTurnView();
+    const styles = readStyles();
+    expect(chatTurn).toContain('<div className="chat-tool-line" title={text}>');
+    expect(chatTurn).toContain("if (message.method === 'agent_plan') {");
+    expect(chatTurn).toMatch(/if \(message\.method === 'agent_plan'\) \{\s*return null;/);
+    expect(styles).toContain('/* workspace-ui-targeted-evolution: chat reading */');
+    expect(styles).toMatch(/\.chat-tool-line\s*\{[^}]*min-width:\s*0;/s);
+    expect(styles).toMatch(/\.chat-tool-line span:last-child\s*\{[^}]*white-space:\s*nowrap;[^}]*text-overflow:\s*ellipsis;/s);
+  });
 });
