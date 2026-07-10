@@ -5160,3 +5160,88 @@
     animation: none;
   }
 }
+
+/* workspace-ui-targeted-evolution: composer */
+.chat-composer-frame {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-floating);
+  background: color-mix(in srgb, var(--surface-panel) 96%, transparent);
+  box-shadow: 0 4px 14px rgb(3 8 15 / 12%);
+  padding: 8px 8px 4px;
+  transition: border-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard), background var(--motion-fast) var(--ease-standard);
+}
+
+.chat-composer:focus-within .chat-composer-frame {
+  border-color: color-mix(in srgb, var(--accent-primary) 56%, var(--border-subtle));
+  box-shadow: 0 4px 16px rgb(3 8 15 / 14%), 0 0 0 1px color-mix(in srgb, var(--accent-primary) 10%, transparent);
+}
+
+.chat-composer.config-menu-open .chat-composer-frame,
+.chat-composer.trigger-menu-open .chat-composer-frame {
+  border-color: color-mix(in srgb, var(--accent-primary) 48%, var(--border-subtle));
+  box-shadow: 0 8px 22px rgb(3 8 15 / 18%);
+}
+
+.chat-composer-frame.drag-over {
+  border-color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 7%, var(--surface-panel));
+}
+
+.chat-send-button {
+  width: 36px;
+  height: 36px;
+  border-color: color-mix(in srgb, var(--accent-primary) 58%, var(--border-subtle));
+  background: color-mix(in srgb, var(--accent-primary) 17%, var(--surface-panel));
+  color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
+  box-shadow: none;
+}
+
+.chat-send-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-primary) 24%, var(--surface-panel));
+}
+
+.chat-send-button:disabled:hover {
+  border-color: color-mix(in srgb, var(--accent-primary) 58%, var(--border-subtle));
+  background: color-mix(in srgb, var(--accent-primary) 17%, var(--surface-panel));
+  color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
+}
+
+.voice-input-button {
+  width: 36px;
+  height: 36px;
+  border-color: color-mix(in srgb, var(--state-success) 56%, var(--border-subtle));
+  background: color-mix(in srgb, var(--state-success) 13%, var(--surface-panel));
+  color: color-mix(in srgb, var(--state-success) 82%, var(--text-primary));
+  box-shadow: none;
+}
+
+.voice-input-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--state-success) 19%, var(--surface-panel));
+}
+
+@media (max-width: 900px) {
+  .chat-composer {
+    padding-right: 12px;
+    padding-bottom: max(4px, var(--wm-safe-area-bottom));
+    padding-left: 12px;
+  }
+
+  .chat-composer-content,
+  .chat-composer-frame {
+    max-width: calc(100vw - 24px);
+  }
+
+  .chat-slash-menu,
+  .chat-file-mention-menu,
+  .chat-config-overflow-menu,
+  .chat-config-value-menu {
+    max-width: calc(100vw - 24px);
+    max-height: min(56vh, 420px);
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+}

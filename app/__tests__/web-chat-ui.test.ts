@@ -2383,4 +2383,18 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('max-width: 100%');
     expect(stylesCss).toContain('overflow-wrap: anywhere');
   });
+
+  test('keeps the two-row composer and current control sizes on portrait mobile', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const stylesCss = readWebStyles(projectRoot);
+    expect(mainTsx).toMatch(/chat-composer-frame[\s\S]*chat-composer-input-row[\s\S]*chat-composer-toolbar/);
+    expect(stylesCss).toMatch(/\.chat-composer-action-column\s*\{[^}]*width:\s*36px;[^}]*height:\s*36px;/s);
+    expect(stylesCss).toMatch(/\.chat-send-button\s*\{[^}]*width:\s*36px;[^}]*height:\s*36px;/s);
+    expect(stylesCss).toMatch(/\.voice-input-button\s*\{[^}]*width:\s*36px;[^}]*height:\s*36px;/s);
+    expect(stylesCss).toMatch(/\.chat-tool-button\s*\{[^}]*width:\s*24px;[^}]*height:\s*24px;/s);
+    expect(stylesCss).toContain('/* workspace-ui-targeted-evolution: composer */');
+    expect(stylesCss).toContain('max-width: calc(100vw - 24px)');
+    expect(stylesCss).toContain('padding-bottom: max(4px, var(--wm-safe-area-bottom))');
+  });
 });

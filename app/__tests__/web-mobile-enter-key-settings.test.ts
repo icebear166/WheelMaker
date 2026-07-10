@@ -30,7 +30,8 @@ describe('web mobile enter key settings', () => {
     expect(persistence).toContain("mobileEnterKeyBehavior: 'mobileEnterKeyBehavior',");
     expect(persistence).toContain('mobileEnterKeyBehavior: DEFAULT_MOBILE_ENTER_KEY_BEHAVIOR,');
     expect(persistence).toContain('mobileEnterKeyBehavior: normalizeMobileEnterKeyBehavior(input.mobileEnterKeyBehavior, base.mobileEnterKeyBehavior),');
-    expect(persistence).toContain('{k: GLOBAL_KEYS.mobileEnterKeyBehavior, v: serialize(next.mobileEnterKeyBehavior), updatedAt: now}');
+    expect(persistence).toContain('const rows = globalRowsForPatch(patch, next, now);');
+    expect(persistence).toContain('{k: GLOBAL_KEYS.mobileEnterKeyBehavior, v: serialize(this.state.global.mobileEnterKeyBehavior), updatedAt}');
 
     expect(mainTsx).toContain('const [mobileEnterKeyBehavior, setMobileEnterKeyBehavior] = useState<MobileEnterKeyBehavior>(');
     expect(mainTsx).toContain('normalizeMobileEnterKeyBehavior(persistedGlobal.mobileEnterKeyBehavior)');
