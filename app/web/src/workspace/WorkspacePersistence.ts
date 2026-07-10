@@ -160,6 +160,7 @@ export type WorkspaceDatabaseDump = {
   meta: Array<{k: string; v: string; updatedAt: number}>;
   localStorage: {address: string; token: string};
   storage: WorkspaceDatabaseStorageStats;
+  storageError: WorkspaceStorageError | null;
 };
 
 export type WorkspaceDatabaseStoreStorageStats = {
@@ -183,6 +184,14 @@ export type WorkspaceDatabaseStorageStats = {
   stores: WorkspaceDatabaseStoreStorageStats[];
 };
 
+export type WorkspaceStorageError = {
+  operation: string;
+  name: string;
+  message: string;
+  quotaExceeded: boolean;
+  occurredAt: string;
+};
+
 const LOCAL_ADDRESS_KEY = 'wheelmaker.workspace.address';
 const LOCAL_TOKEN_KEY = 'wheelmaker.workspace.token';
 const WORKSPACE_DB_NAME = 'wheelmaker.workspace.db';
@@ -196,6 +205,74 @@ const TABLE_FILE_CACHE = 'wm_file_cache';
 const TABLE_DIFF_CACHE = 'wm_diff_cache';
 const TABLE_META = 'wm_meta';
 const DIFF_CACHE_LIMIT = 120;
+const CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+const FILE_CACHE_MAX_ENTRIES = 1500;
+const FILE_CACHE_MAX_BYTES = 32 * 1024 * 1024;
+const DIFF_CACHE_MAX_ENTRIES = 600;
+const DIFF_CACHE_MAX_BYTES = 16 * 1024 * 1024;
+const CHAT_CONTENT_CACHE_MAX_ENTRIES = 250;
+const CHAT_CONTENT_CACHE_MAX_BYTES = 48 * 1024 * 1024;
+const PROJECT_COMMITS_CACHE_MAX_ENTRIES = 40;
+const PROJECT_COMMITS_CACHE_MAX_BYTES = 24 * 1024 * 1024;
+
+export type CacheBudgetEntry = {
+  key: string;
+  updatedAt: number;
+  approximateBytes: number;
+};
+
+export type CacheBudgetLimits = {
+  now: number;
+  maxAgeMs: number;
+  maxEntries: number;
+  maxBytes: number;
+};
+
+export function selectCacheEvictionKeys(
+  entries: CacheBudgetEntry[],
+  limits: CacheBudgetLimits,
+): string[] {
+  const expiredKeys = new Set(
+    entries
+      .filter(item => limits.now - item.updatedAt > limits.maxAgeMs)
+      .map(item => item.key),
+  );
+  const survivors = entries.filter(item => !expiredKeys.has(item.key));
+  const evicted = [...expiredKeys];
+  let remainingCount = survivors.length;
+  let bytes = survivors.reduce((sum, item) => sum + item.approximateBytes, 0);
+  const oldestFirst = [...survivors].sort(
+    (left, right) => left.updatedAt - right.updatedAt || left.key.localeCompare(right.key),
+  );
+  for (const item of oldestFirst) {
+    if (remainingCount <= limits.maxEntries && bytes <= limits.maxBytes) break;
+    evicted.push(item.key);
+    remainingCount -= 1;
+    bytes -= item.approximateBytes;
+  }
+  return evicted;
+}
+
+function approximateTextBytes(value: string): number {
+  return value.length * 2;
+}
+
+function errorName(error: unknown): string {
+  if (error && typeof error === 'object' && 'name' in error) {
+    return String((error as {name?: unknown}).name || 'Error');
+  }
+  return 'Error';
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+function isQuotaExceededError(error: unknown): boolean {
+  const name = errorName(error);
+  return name === 'QuotaExceededError' || name === 'NS_ERROR_DOM_QUOTA_REACHED';
+}
 
 function approximateJsonBytes(value: unknown): number {
   const json = JSON.stringify(value);
@@ -636,6 +713,21 @@ type RawKVRow = {
   updatedAt: number;
 };
 
+function globalRowsForPatch(
+  patch: Partial<PersistedGlobalState>,
+  state: PersistedGlobalState,
+  updatedAt: number,
+): RawKVRow[] {
+  const storageKeys = GLOBAL_KEYS as Partial<Record<keyof PersistedGlobalState, string>>;
+  const rows: RawKVRow[] = [];
+  for (const key of Object.keys(patch) as Array<keyof PersistedGlobalState>) {
+    const storageKey = storageKeys[key];
+    if (!storageKey) continue;
+    rows.push({k: storageKey, v: serialize(state[key]), updatedAt});
+  }
+  return rows;
+}
+
 function redactGlobalDumpRows(rows: RawKVRow[]): RawKVRow[] {
   return rows.map(row => {
     if (row.k === GLOBAL_KEYS.speechSettings) {
@@ -697,7 +789,22 @@ type RawDiffCacheRow = {
   updatedAt: number;
 };
 
-class WorkspaceDatabase {
+export type WorkspaceDatabaseMutation = {
+  storeName: string;
+  clear?: boolean;
+  puts?: unknown[];
+  deletes?: IDBValidKey[];
+};
+
+export interface WorkspaceDatabaseAdapter {
+  getAllRows<T>(storeName: string): Promise<T[]>;
+  mutateStores(mutations: WorkspaceDatabaseMutation[]): Promise<void>;
+  putRow(storeName: string, row: unknown): Promise<void>;
+  deleteRow(storeName: string, key: IDBValidKey): Promise<void>;
+  clearStores(storeNames: string[]): Promise<void>;
+}
+
+class WorkspaceDatabase implements WorkspaceDatabaseAdapter {
   private openPromise: Promise<IDBDatabase> | null = null;
 
   private open(): Promise<IDBDatabase> {
@@ -782,23 +889,32 @@ class WorkspaceDatabase {
   }
 
   async putRow(storeName: string, row: unknown): Promise<void> {
-    await this.run(storeName, 'readwrite', async tx => {
-      const store = tx.objectStore(storeName);
-      await this.request(store.put(row));
-    });
+    await this.mutateStores([{storeName, puts: [row]}]);
   }
 
   async deleteRow(storeName: string, key: IDBValidKey): Promise<void> {
-    await this.run(storeName, 'readwrite', async tx => {
-      const store = tx.objectStore(storeName);
-      await this.request(store.delete(key));
-    });
+    await this.mutateStores([{storeName, deletes: [key]}]);
   }
 
   async clearStores(storeNames: string[]): Promise<void> {
+    await this.mutateStores(storeNames.map(storeName => ({storeName, clear: true})));
+  }
+
+  async mutateStores(mutations: WorkspaceDatabaseMutation[]): Promise<void> {
+    if (mutations.length === 0) return;
+    const storeNames = Array.from(new Set(mutations.map(mutation => mutation.storeName)));
     await this.run(storeNames, 'readwrite', async tx => {
-      for (const name of storeNames) {
-        await this.request(tx.objectStore(name).clear());
+      for (const mutation of mutations) {
+        const store = tx.objectStore(mutation.storeName);
+        if (mutation.clear) {
+          await this.request(store.clear());
+        }
+        for (const key of mutation.deletes ?? []) {
+          await this.request(store.delete(key));
+        }
+        for (const row of mutation.puts ?? []) {
+          await this.request(store.put(row));
+        }
       }
     });
   }
@@ -822,22 +938,39 @@ function compareUpdatedAtDesc(a: string, b: string): number {
 }
 
 export class WorkspacePersistenceRepository {
-  private readonly db = new WorkspaceDatabase();
   private state: PersistedWorkspaceState;
   private readonly projectCommits: Record<string, PersistedProjectCommitsState> = {};
+  private readonly projectCommitUpdatedAt = new Map<string, number>();
   private readonly chatSessionIndex = new Map<string, PersistedChatSessionEntry>();
   private readonly chatSessionContent = new Map<string, PersistedChatSessionContent>();
+  private readonly chatSessionContentUpdatedAt = new Map<string, number>();
   private readonly diffCache = new Map<string, DiffCacheEntry>();
   private readonly fileCache = new Map<string, FileCacheEntry>();
   private readonly readyPromise: Promise<void>;
+  private writeQueue: Promise<void> = Promise.resolve();
+  private lastStorageError: WorkspaceStorageError | null = null;
+  private readonly storageErrorListeners = new Set<(error: WorkspaceStorageError) => void>();
 
-  constructor() {
+  constructor(private readonly db: WorkspaceDatabaseAdapter = new WorkspaceDatabase()) {
     this.state = defaultWorkspaceState();
     this.readyPromise = this.initialize();
   }
 
   ready(): Promise<void> {
     return this.readyPromise;
+  }
+
+  async flushPendingWrites(): Promise<void> {
+    await this.readyPromise;
+    await this.writeQueue;
+  }
+
+  subscribeStorageErrors(listener: (error: WorkspaceStorageError) => void): () => void {
+    this.storageErrorListeners.add(listener);
+    if (this.lastStorageError) {
+      listener(this.lastStorageError);
+    }
+    return () => this.storageErrorListeners.delete(listener);
   }
 
   private async initialize(): Promise<void> {
@@ -862,7 +995,7 @@ export class WorkspacePersistenceRepository {
 
     if (!hasPersisted) {
       this.state = defaultWorkspaceState();
-      await this.saveAllStateToDb();
+      await this.seedInitialStateToDb();
       return;
     }
 
@@ -877,7 +1010,16 @@ export class WorkspacePersistenceRepository {
     this.restoreDiffCache(diffRows);
     this.restoreFileCache(fileRows);
     if (repairedChatCache) {
-      await this.saveAllStateToDb();
+      try {
+        await this.persistRepairedChatCache();
+      } catch (error) {
+        this.reportStorageError('repair chat cache', error);
+      }
+    }
+    try {
+      await this.pruneCachesAfterRestore();
+    } catch (error) {
+      this.reportStorageError('prune restored caches', error);
     }
   }
 
@@ -905,6 +1047,7 @@ export class WorkspacePersistenceRepository {
     for (const key of Object.keys(this.projectCommits)) {
       delete this.projectCommits[key];
     }
+    this.projectCommitUpdatedAt.clear();
     for (const row of rows) {
       const commits = tryParse<RegistryGitCommit[]>(row.commitsJson, []);
       const commitFilesBySha = tryParse<Record<string, RegistryGitCommitFile[]>>(row.commitFilesByShaJson, {});
@@ -912,12 +1055,14 @@ export class WorkspacePersistenceRepository {
         commits,
         commitFilesBySha,
       });
+      this.projectCommitUpdatedAt.set(row.projectId, row.updatedAt);
     }
   }
 
   private restoreChatSessions(indexRows: RawChatSessionIndexRow[], contentRows: RawChatSessionContentRow[]): boolean {
     this.chatSessionIndex.clear();
     this.chatSessionContent.clear();
+    this.chatSessionContentUpdatedAt.clear();
     let repaired = false;
 
     for (const row of indexRows) {
@@ -940,6 +1085,7 @@ export class WorkspacePersistenceRepository {
       this.chatSessionContent.set(row.k, {
         turns: sanitizePersistedTurns(turns),
       });
+      this.chatSessionContentUpdatedAt.set(row.k, row.updatedAt);
     }
 
     for (const [key, entry] of this.chatSessionIndex.entries()) {
@@ -970,6 +1116,7 @@ export class WorkspacePersistenceRepository {
   private async resetPersistentCacheAfterIncompatibleSchema(): Promise<void> {
     this.chatSessionIndex.clear();
     this.chatSessionContent.clear();
+    this.chatSessionContentUpdatedAt.clear();
     this.diffCache.clear();
     this.fileCache.clear();
     const now = Date.now();
@@ -1014,132 +1161,340 @@ export class WorkspacePersistenceRepository {
     }
   }
 
-  private async saveAllStateToDb(): Promise<void> {
+  private projectCommitBudgetEntries(): CacheBudgetEntry[] {
+    return Object.entries(this.projectCommits).map(([projectId, state]) => ({
+      key: projectId,
+      updatedAt: this.projectCommitUpdatedAt.get(projectId) ?? 0,
+      approximateBytes: approximateTextBytes(serialize(state)),
+    }));
+  }
+
+  private chatContentBudgetEntries(): CacheBudgetEntry[] {
+    return [...this.chatSessionContent.entries()].map(([key, content]) => ({
+      key,
+      updatedAt: this.chatSessionContentUpdatedAt.get(key) ?? 0,
+      approximateBytes: approximateTextBytes(serialize(content.turns)),
+    }));
+  }
+
+  private diffBudgetEntries(): CacheBudgetEntry[] {
+    return [...this.diffCache.entries()].map(([key, entry]) => ({
+      key,
+      updatedAt: entry.updatedAt,
+      approximateBytes: approximateTextBytes(serialize(entry)),
+    }));
+  }
+
+  private fileBudgetEntries(): CacheBudgetEntry[] {
+    return [...this.fileCache.entries()].map(([key, entry]) => ({
+      key,
+      updatedAt: entry.updatedAt,
+      approximateBytes: approximateTextBytes(key) + approximateTextBytes(entry.hash) + approximateTextBytes(entry.value),
+    }));
+  }
+
+  private cacheEvictionKeys(
+    entries: CacheBudgetEntry[],
+    maxEntries: number,
+    maxBytes: number,
+    now: number,
+  ): string[] {
+    return selectCacheEvictionKeys(entries, {
+      now,
+      maxAgeMs: CACHE_MAX_AGE_MS,
+      maxEntries,
+      maxBytes,
+    });
+  }
+
+  private evictProjectCommitEntries(now: number): string[] {
+    const keys = this.cacheEvictionKeys(
+      this.projectCommitBudgetEntries(),
+      PROJECT_COMMITS_CACHE_MAX_ENTRIES,
+      PROJECT_COMMITS_CACHE_MAX_BYTES,
+      now,
+    );
+    for (const projectId of keys) {
+      delete this.projectCommits[projectId];
+      this.projectCommitUpdatedAt.delete(projectId);
+    }
+    return keys;
+  }
+
+  private evictChatContentEntries(now: number): {keys: string[]; indexRows: RawChatSessionIndexRow[]} {
+    const keys = this.cacheEvictionKeys(
+      this.chatContentBudgetEntries(),
+      CHAT_CONTENT_CACHE_MAX_ENTRIES,
+      CHAT_CONTENT_CACHE_MAX_BYTES,
+      now,
+    );
+    const indexRows: RawChatSessionIndexRow[] = [];
+    for (const key of keys) {
+      this.chatSessionContent.delete(key);
+      this.chatSessionContentUpdatedAt.delete(key);
+      const indexEntry = this.chatSessionIndex.get(key);
+      if (!indexEntry) continue;
+      const resetEntry = {...indexEntry, cursor: defaultChatCursor()};
+      this.chatSessionIndex.set(key, resetEntry);
+      const parsed = parseChatSessionKey(key);
+      indexRows.push({
+        k: key,
+        projectId: parsed?.projectId || '',
+        sessionId: parsed?.sessionId || resetEntry.session.sessionId,
+        sessionJson: serialize(resetEntry.session),
+        cursorJson: serialize(resetEntry.cursor),
+        updatedAt: now,
+      });
+    }
+    return {keys, indexRows};
+  }
+
+  private evictDiffEntries(now: number): string[] {
+    const keys = this.cacheEvictionKeys(
+      this.diffBudgetEntries(),
+      DIFF_CACHE_MAX_ENTRIES,
+      DIFF_CACHE_MAX_BYTES,
+      now,
+    );
+    for (const key of keys) this.diffCache.delete(key);
+    return keys;
+  }
+
+  private evictFileEntries(now: number): string[] {
+    const keys = this.cacheEvictionKeys(
+      this.fileBudgetEntries(),
+      FILE_CACHE_MAX_ENTRIES,
+      FILE_CACHE_MAX_BYTES,
+      now,
+    );
+    for (const key of keys) this.fileCache.delete(key);
+    return keys;
+  }
+
+  private async pruneCachesAfterRestore(): Promise<void> {
     const now = Date.now();
-    await this.db.clearStores([
-      TABLE_GLOBAL_KV,
-      TABLE_PROJECT_STATE,
-      TABLE_PROJECT_COMMITS,
-      TABLE_CHAT_SESSION_INDEX,
-      TABLE_CHAT_SESSION_CONTENT,
-      TABLE_DIFF_CACHE,
-      TABLE_FILE_CACHE,
-      TABLE_META,
-    ]);
+    const projectCommitKeys = this.evictProjectCommitEntries(now);
+    const chatEvictions = this.evictChatContentEntries(now);
+    const diffKeys = this.evictDiffEntries(now);
+    const fileKeys = this.evictFileEntries(now);
+    const mutations: WorkspaceDatabaseMutation[] = [];
 
-    const globalRows: Array<{k: string; v: string; updatedAt: number}> = [
-      {k: GLOBAL_KEYS.deepseekApiKey, v: serialize(this.state.global.deepseekApiKey), updatedAt: now},
-      {k: GLOBAL_KEYS.themeMode, v: serialize(this.state.global.themeMode), updatedAt: now},
-      {k: GLOBAL_KEYS.codeTheme, v: serialize(this.state.global.codeTheme), updatedAt: now},
-      {k: GLOBAL_KEYS.codeFont, v: serialize(this.state.global.codeFont), updatedAt: now},
-      {k: GLOBAL_KEYS.codeFontSize, v: serialize(this.state.global.codeFontSize), updatedAt: now},
-      {k: GLOBAL_KEYS.codeLineHeight, v: serialize(this.state.global.codeLineHeight), updatedAt: now},
-      {k: GLOBAL_KEYS.codeTabSize, v: serialize(this.state.global.codeTabSize), updatedAt: now},
-      {k: GLOBAL_KEYS.chatFont, v: serialize(this.state.global.chatFont), updatedAt: now},
-      {k: GLOBAL_KEYS.chatViewWidth, v: serialize(this.state.global.chatViewWidth), updatedAt: now},
-      {k: GLOBAL_KEYS.mobileEnterKeyBehavior, v: serialize(this.state.global.mobileEnterKeyBehavior), updatedAt: now},
-      {k: GLOBAL_KEYS.speechSettings, v: serialize(this.state.global.speechSettings), updatedAt: now},
-      {k: GLOBAL_KEYS.ttsSettings, v: serialize(this.state.global.ttsSettings), updatedAt: now},
-      {k: GLOBAL_KEYS.wrapLines, v: serialize(this.state.global.wrapLines), updatedAt: now},
-      {k: GLOBAL_KEYS.showLineNumbers, v: serialize(this.state.global.showLineNumbers), updatedAt: now},
-      {k: GLOBAL_KEYS.hideToolCalls, v: serialize(this.state.global.hideToolCalls), updatedAt: now},
-      {k: GLOBAL_KEYS.messageViewerEnabled, v: serialize(this.state.global.messageViewerEnabled), updatedAt: now},
-      {k: GLOBAL_KEYS.logLevel, v: serialize(this.state.global.logLevel), updatedAt: now},
-      {k: GLOBAL_KEYS.disableFileCache, v: serialize(this.state.global.disableFileCache), updatedAt: now},
-      {k: GLOBAL_KEYS.localHubReadEnabled, v: serialize(this.state.global.localHubReadEnabled), updatedAt: now},
-      {k: GLOBAL_KEYS.promptCompletionNotificationsEnabled, v: serialize(this.state.global.promptCompletionNotificationsEnabled), updatedAt: now},
-      {k: GLOBAL_KEYS.tab, v: serialize(this.state.global.tab), updatedAt: now},
-      {k: GLOBAL_KEYS.selectedProjectId, v: serialize(this.state.global.selectedProjectId), updatedAt: now},
-      {k: GLOBAL_KEYS.selectedChatProjectId, v: serialize(this.state.global.selectedChatProjectId), updatedAt: now},
-      {k: GLOBAL_KEYS.selectedChatSessionId, v: serialize(this.state.global.selectedChatSessionId), updatedAt: now},
-      {k: GLOBAL_KEYS.floatingControlYRatio, v: serialize(this.state.global.floatingControlYRatio), updatedAt: now},
-      {k: GLOBAL_KEYS.floatingControlSide, v: serialize(this.state.global.floatingControlSide), updatedAt: now},
-      {k: GLOBAL_KEYS.desktopSidebarWidth, v: serialize(this.state.global.desktopSidebarWidth), updatedAt: now},
-      {k: GLOBAL_KEYS.collapsedProjectIds, v: serialize(this.state.global.collapsedProjectIds), updatedAt: now},
-      {k: GLOBAL_KEYS.desktopCollapsedProjectIds, v: serialize(this.state.global.desktopCollapsedProjectIds), updatedAt: now},
-      {k: GLOBAL_KEYS.pinnedProjectIds, v: serialize(this.state.global.pinnedProjectIds), updatedAt: now},
-      {k: GLOBAL_KEYS.hubColors, v: serialize(this.state.global.hubColors), updatedAt: now},
-      {k: GLOBAL_KEYS.hiddenProjectIds, v: serialize(this.state.global.hiddenProjectIds), updatedAt: now},
-      {k: GLOBAL_KEYS.expandedHubIds, v: serialize(this.state.global.expandedHubIds), updatedAt: now},
-      {k: GLOBAL_KEYS.portRelayTargets, v: serialize(this.state.global.portRelayTargets), updatedAt: now},
-      {k: GLOBAL_KEYS.selectedPortRelayTarget, v: serialize(this.state.global.selectedPortRelayTarget), updatedAt: now},
-      {k: GLOBAL_KEYS.portRelayListenPort, v: serialize(this.state.global.portRelayListenPort), updatedAt: now},
-      {k: GLOBAL_KEYS.previewWorkbenchSnapshot, v: serialize(this.state.global.previewWorkbenchSnapshot), updatedAt: now},
+    if (projectCommitKeys.length > 0) {
+      mutations.push({storeName: TABLE_PROJECT_COMMITS, deletes: projectCommitKeys});
+    }
+
+    if (chatEvictions.keys.length > 0) {
+      mutations.push({storeName: TABLE_CHAT_SESSION_CONTENT, deletes: chatEvictions.keys});
+    }
+    if (chatEvictions.indexRows.length > 0) {
+      mutations.push({storeName: TABLE_CHAT_SESSION_INDEX, puts: chatEvictions.indexRows});
+    }
+
+    if (diffKeys.length > 0) {
+      mutations.push({storeName: TABLE_DIFF_CACHE, deletes: diffKeys});
+    }
+
+    if (fileKeys.length > 0) {
+      mutations.push({storeName: TABLE_FILE_CACHE, deletes: fileKeys});
+    }
+
+    if (mutations.length > 0) {
+      await this.db.mutateStores(mutations);
+    }
+  }
+
+  private globalRows(updatedAt: number): RawKVRow[] {
+    return [
+      {k: GLOBAL_KEYS.deepseekApiKey, v: serialize(this.state.global.deepseekApiKey), updatedAt},
+      {k: GLOBAL_KEYS.themeMode, v: serialize(this.state.global.themeMode), updatedAt},
+      {k: GLOBAL_KEYS.codeTheme, v: serialize(this.state.global.codeTheme), updatedAt},
+      {k: GLOBAL_KEYS.codeFont, v: serialize(this.state.global.codeFont), updatedAt},
+      {k: GLOBAL_KEYS.codeFontSize, v: serialize(this.state.global.codeFontSize), updatedAt},
+      {k: GLOBAL_KEYS.codeLineHeight, v: serialize(this.state.global.codeLineHeight), updatedAt},
+      {k: GLOBAL_KEYS.codeTabSize, v: serialize(this.state.global.codeTabSize), updatedAt},
+      {k: GLOBAL_KEYS.chatFont, v: serialize(this.state.global.chatFont), updatedAt},
+      {k: GLOBAL_KEYS.chatViewWidth, v: serialize(this.state.global.chatViewWidth), updatedAt},
+      {k: GLOBAL_KEYS.mobileEnterKeyBehavior, v: serialize(this.state.global.mobileEnterKeyBehavior), updatedAt},
+      {k: GLOBAL_KEYS.speechSettings, v: serialize(this.state.global.speechSettings), updatedAt},
+      {k: GLOBAL_KEYS.ttsSettings, v: serialize(this.state.global.ttsSettings), updatedAt},
+      {k: GLOBAL_KEYS.wrapLines, v: serialize(this.state.global.wrapLines), updatedAt},
+      {k: GLOBAL_KEYS.showLineNumbers, v: serialize(this.state.global.showLineNumbers), updatedAt},
+      {k: GLOBAL_KEYS.hideToolCalls, v: serialize(this.state.global.hideToolCalls), updatedAt},
+      {k: GLOBAL_KEYS.messageViewerEnabled, v: serialize(this.state.global.messageViewerEnabled), updatedAt},
+      {k: GLOBAL_KEYS.logLevel, v: serialize(this.state.global.logLevel), updatedAt},
+      {k: GLOBAL_KEYS.disableFileCache, v: serialize(this.state.global.disableFileCache), updatedAt},
+      {k: GLOBAL_KEYS.localHubReadEnabled, v: serialize(this.state.global.localHubReadEnabled), updatedAt},
+      {k: GLOBAL_KEYS.promptCompletionNotificationsEnabled, v: serialize(this.state.global.promptCompletionNotificationsEnabled), updatedAt},
+      {k: GLOBAL_KEYS.tab, v: serialize(this.state.global.tab), updatedAt},
+      {k: GLOBAL_KEYS.selectedProjectId, v: serialize(this.state.global.selectedProjectId), updatedAt},
+      {k: GLOBAL_KEYS.selectedChatProjectId, v: serialize(this.state.global.selectedChatProjectId), updatedAt},
+      {k: GLOBAL_KEYS.selectedChatSessionId, v: serialize(this.state.global.selectedChatSessionId), updatedAt},
+      {k: GLOBAL_KEYS.floatingControlYRatio, v: serialize(this.state.global.floatingControlYRatio), updatedAt},
+      {k: GLOBAL_KEYS.floatingControlSide, v: serialize(this.state.global.floatingControlSide), updatedAt},
+      {k: GLOBAL_KEYS.desktopSidebarWidth, v: serialize(this.state.global.desktopSidebarWidth), updatedAt},
+      {k: GLOBAL_KEYS.collapsedProjectIds, v: serialize(this.state.global.collapsedProjectIds), updatedAt},
+      {k: GLOBAL_KEYS.desktopCollapsedProjectIds, v: serialize(this.state.global.desktopCollapsedProjectIds), updatedAt},
+      {k: GLOBAL_KEYS.pinnedProjectIds, v: serialize(this.state.global.pinnedProjectIds), updatedAt},
+      {k: GLOBAL_KEYS.hubColors, v: serialize(this.state.global.hubColors), updatedAt},
+      {k: GLOBAL_KEYS.hiddenProjectIds, v: serialize(this.state.global.hiddenProjectIds), updatedAt},
+      {k: GLOBAL_KEYS.expandedHubIds, v: serialize(this.state.global.expandedHubIds), updatedAt},
+      {k: GLOBAL_KEYS.portRelayTargets, v: serialize(this.state.global.portRelayTargets), updatedAt},
+      {k: GLOBAL_KEYS.selectedPortRelayTarget, v: serialize(this.state.global.selectedPortRelayTarget), updatedAt},
+      {k: GLOBAL_KEYS.portRelayListenPort, v: serialize(this.state.global.portRelayListenPort), updatedAt},
+      {k: GLOBAL_KEYS.previewWorkbenchSnapshot, v: serialize(this.state.global.previewWorkbenchSnapshot), updatedAt},
     ];
+  }
 
-    for (const row of globalRows) {
-      await this.db.putRow(TABLE_GLOBAL_KV, row);
-    }
-
-    for (const [projectId, state] of Object.entries(this.state.projects)) {
-      await this.db.putRow(TABLE_PROJECT_STATE, {
-        projectId,
-        stateJson: serialize(state),
-        updatedAt: now,
-      });
-    }
-
-    for (const [projectId, state] of Object.entries(this.projectCommits)) {
-      await this.db.putRow(TABLE_PROJECT_COMMITS, {
-        projectId,
-        commitsJson: serialize(state.commits),
-        commitFilesByShaJson: serialize(state.commitFilesBySha),
-        updatedAt: now,
-      });
-    }
-
-    for (const [k, entry] of this.chatSessionIndex.entries()) {
+  private chatIndexRows(updatedAt: number): RawChatSessionIndexRow[] {
+    return [...this.chatSessionIndex.entries()].map(([k, entry]) => {
       const parsed = parseChatSessionKey(k);
       const projectId = parsed?.projectId || '';
       const sessionId = parsed?.sessionId || entry.session.sessionId;
-      await this.db.putRow(TABLE_CHAT_SESSION_INDEX, {
+      return {
         k,
         projectId,
         sessionId,
         sessionJson: serialize(entry.session),
         cursorJson: serialize(entry.cursor),
-        updatedAt: now,
-      });
-    }
+        updatedAt,
+      };
+    });
+  }
 
-    for (const [k, content] of this.chatSessionContent.entries()) {
+  private chatContentRows(updatedAt: number): RawChatSessionContentRow[] {
+    return [...this.chatSessionContent.entries()].map(([k, content]) => {
       const parsed = parseChatSessionKey(k);
       const projectId = parsed?.projectId || '';
       const sessionId = parsed?.sessionId || '';
-      await this.db.putRow(TABLE_CHAT_SESSION_CONTENT, {
+      return {
         k,
         projectId,
         sessionId,
         turnsJson: serialize(content.turns),
-        updatedAt: now,
-      });
-    }
-    for (const [k, entry] of this.diffCache.entries()) {
-      await this.db.putRow(TABLE_DIFF_CACHE, {
-        k,
-        v: serialize({
-          diff: entry.diff,
-          isBinary: entry.isBinary,
-          truncated: entry.truncated,
-        }),
-        updatedAt: entry.updatedAt,
-      });
-    }
-
-    for (const [k, entry] of this.fileCache.entries()) {
-      await this.db.putRow(TABLE_FILE_CACHE, {
-        k,
-        hash: entry.hash,
-        v: entry.value,
-        updatedAt: entry.updatedAt,
-      });
-    }
-
-    await this.db.putRow(TABLE_META, {
-      k: 'schemaVersion',
-      v: serialize(WORKSPACE_DB_VERSION),
-      updatedAt: now,
+        updatedAt,
+      };
     });
+  }
+
+  private async seedInitialStateToDb(): Promise<void> {
+    const now = Date.now();
+    await this.db.mutateStores([
+      {storeName: TABLE_GLOBAL_KV, puts: this.globalRows(now)},
+      {
+        storeName: TABLE_META,
+        puts: [{
+          k: 'schemaVersion',
+          v: serialize(WORKSPACE_DB_VERSION),
+          updatedAt: now,
+        }],
+      },
+    ]);
+  }
+
+  private async persistRepairedChatCache(): Promise<void> {
+    const now = Date.now();
+    await this.db.mutateStores([
+      {storeName: TABLE_CHAT_SESSION_INDEX, clear: true, puts: this.chatIndexRows(now)},
+      {storeName: TABLE_CHAT_SESSION_CONTENT, clear: true, puts: this.chatContentRows(now)},
+    ]);
+  }
+
+  private reportStorageError(
+    operation: string,
+    error: unknown,
+    quotaExceeded = isQuotaExceededError(error),
+  ): void {
+    const storageError: WorkspaceStorageError = {
+      operation,
+      name: errorName(error),
+      message: errorMessage(error),
+      quotaExceeded,
+      occurredAt: new Date().toISOString(),
+    };
+    this.lastStorageError = storageError;
+    console.error(`[workspace-persistence] ${operation}: ${storageError.message}`);
+    for (const listener of this.storageErrorListeners) {
+      listener(storageError);
+    }
+  }
+
+  private enqueueCacheMutation(operation: string, mutations: WorkspaceDatabaseMutation[]): void {
+    if (mutations.length === 0) return;
+    this.writeQueue = this.writeQueue
+      .then(() => this.readyPromise)
+      .then(() => this.db.mutateStores(mutations))
+      .catch(error => this.reportStorageError(operation, error));
+  }
+
+  private enqueueBoundedChatContentWrite(
+    key: string,
+    projectId: string,
+    sessionId: string,
+    payload: PersistedChatSessionContent,
+    updatedAt: number,
+    indexRows: RawChatSessionIndexRow[] = [],
+  ): void {
+    this.chatSessionContent.set(key, payload);
+    this.chatSessionContentUpdatedAt.set(key, updatedAt);
+    const evictions = this.evictChatContentEntries(updatedAt);
+    const retained = this.chatSessionContent.get(key);
+    const mutations: WorkspaceDatabaseMutation[] = [{
+      storeName: TABLE_CHAT_SESSION_CONTENT,
+      deletes: evictions.keys,
+      puts: retained ? [{
+        k: key,
+        projectId,
+        sessionId,
+        turnsJson: serialize(retained.turns),
+        updatedAt,
+      }] : [],
+    }];
+    const nextIndexRows = [...indexRows, ...evictions.indexRows];
+    if (nextIndexRows.length > 0) {
+      mutations.push({storeName: TABLE_CHAT_SESSION_INDEX, puts: nextIndexRows});
+    }
+    this.enqueueCacheMutation('save chat content cache', mutations);
+  }
+
+  private async clearRebuildableCachesForStoragePressure(): Promise<void> {
+    for (const projectId of Object.keys(this.projectCommits)) {
+      delete this.projectCommits[projectId];
+    }
+    this.projectCommitUpdatedAt.clear();
+    this.chatSessionIndex.clear();
+    this.chatSessionContent.clear();
+    this.chatSessionContentUpdatedAt.clear();
+    this.diffCache.clear();
+    this.fileCache.clear();
+    await this.db.mutateStores([
+      {storeName: TABLE_PROJECT_COMMITS, clear: true},
+      {storeName: TABLE_CHAT_SESSION_INDEX, clear: true},
+      {storeName: TABLE_CHAT_SESSION_CONTENT, clear: true},
+      {storeName: TABLE_DIFF_CACHE, clear: true},
+      {storeName: TABLE_FILE_CACHE, clear: true},
+    ]);
+  }
+
+  private async persistGlobalRowsWithQuotaRecovery(rows: RawKVRow[]): Promise<void> {
+    const mutation: WorkspaceDatabaseMutation[] = [{storeName: TABLE_GLOBAL_KV, puts: rows}];
+    let quotaExceeded = false;
+    try {
+      await this.db.mutateStores(mutation);
+      return;
+    } catch (error) {
+      if (!isQuotaExceededError(error)) {
+        this.reportStorageError('save global settings', error);
+        return;
+      }
+      quotaExceeded = true;
+    }
+
+    try {
+      await this.clearRebuildableCachesForStoragePressure();
+      await this.db.mutateStores(mutation);
+    } catch (error) {
+      this.reportStorageError('save global settings after cache cleanup', error, quotaExceeded);
+    }
   }
 
   private readLocalIdentityState(): LocalIdentityState {
@@ -1256,25 +1611,25 @@ export class WorkspacePersistenceRepository {
       };
       this.chatSessionIndex.set(key, entry);
       const contentChanged = !samePersistedTurns(existingContent.turns, nextCache.turns);
-      if (contentChanged) {
-        this.chatSessionContent.set(key, {turns: nextCache.turns});
-      }
-      void this.ready().then(() => this.db.putRow(TABLE_CHAT_SESSION_INDEX, {
+      const indexRow: RawChatSessionIndexRow = {
         k: key,
         projectId,
         sessionId,
         sessionJson: serialize(entry.session),
         cursorJson: serialize(entry.cursor),
         updatedAt: now,
-      })).catch(() => undefined);
+      };
       if (contentChanged) {
-        void this.ready().then(() => this.db.putRow(TABLE_CHAT_SESSION_CONTENT, {
-          k: key,
+        this.enqueueBoundedChatContentWrite(
+          key,
           projectId,
           sessionId,
-          turnsJson: serialize(nextCache.turns),
-          updatedAt: now,
-        })).catch(() => undefined);
+          {turns: nextCache.turns},
+          now,
+          [indexRow],
+        );
+      } else {
+        void this.ready().then(() => this.db.putRow(TABLE_CHAT_SESSION_INDEX, indexRow)).catch(() => undefined);
       }
     }
 
@@ -1288,6 +1643,7 @@ export class WorkspacePersistenceRepository {
     for (const key of deleteKeys) {
       this.chatSessionIndex.delete(key);
       this.chatSessionContent.delete(key);
+      this.chatSessionContentUpdatedAt.delete(key);
       void this.ready().then(async () => {
         await this.db.deleteRow(TABLE_CHAT_SESSION_INDEX, key);
         await this.db.deleteRow(TABLE_CHAT_SESSION_CONTENT, key);
@@ -1308,25 +1664,25 @@ export class WorkspacePersistenceRepository {
     };
     this.chatSessionIndex.set(key, entry);
     const contentChanged = !samePersistedTurns(existingContent.turns, nextCache.turns);
-    if (contentChanged) {
-      this.chatSessionContent.set(key, {turns: nextCache.turns});
-    }
-    void this.ready().then(() => this.db.putRow(TABLE_CHAT_SESSION_INDEX, {
+    const indexRow: RawChatSessionIndexRow = {
       k: key,
       projectId,
       sessionId,
       sessionJson: serialize(entry.session),
       cursorJson: serialize(entry.cursor),
       updatedAt: now,
-    })).catch(() => undefined);
+    };
     if (contentChanged) {
-      void this.ready().then(() => this.db.putRow(TABLE_CHAT_SESSION_CONTENT, {
-        k: key,
+      this.enqueueBoundedChatContentWrite(
+        key,
         projectId,
         sessionId,
-        turnsJson: serialize(nextCache.turns),
-        updatedAt: now,
-      })).catch(() => undefined);
+        {turns: nextCache.turns},
+        now,
+        [indexRow],
+      );
+    } else {
+      void this.ready().then(() => this.db.putRow(TABLE_CHAT_SESSION_INDEX, indexRow)).catch(() => undefined);
     }
   }
 
@@ -1351,29 +1707,23 @@ export class WorkspacePersistenceRepository {
     const payload: PersistedChatSessionContent = {
       turns: repairedCache.turns,
     };
-    this.chatSessionContent.set(key, payload);
+    const indexRows: RawChatSessionIndexRow[] = [];
     if (existingIndex && existingIndex.cursor.turnIndex !== repairedCache.cursor.turnIndex) {
       const nextIndex = {
         session: existingIndex.session,
         cursor: repairedCache.cursor,
       };
       this.chatSessionIndex.set(key, nextIndex);
-      void this.ready().then(() => this.db.putRow(TABLE_CHAT_SESSION_INDEX, {
+      indexRows.push({
         k: key,
         projectId,
         sessionId,
         sessionJson: serialize(nextIndex.session),
         cursorJson: serialize(nextIndex.cursor),
         updatedAt: now,
-      })).catch(() => undefined);
+      });
     }
-    void this.ready().then(() => this.db.putRow(TABLE_CHAT_SESSION_CONTENT, {
-      k: key,
-      projectId,
-      sessionId,
-      turnsJson: serialize(payload.turns),
-      updatedAt: now,
-    })).catch(() => undefined);
+    this.enqueueBoundedChatContentWrite(key, projectId, sessionId, payload, now, indexRows);
   }
 
   deleteProjectChatSession(projectId: string, sessionId: string): void {
@@ -1381,6 +1731,7 @@ export class WorkspacePersistenceRepository {
     const key = chatSessionKey(projectId, sessionId);
     this.chatSessionIndex.delete(key);
     this.chatSessionContent.delete(key);
+    this.chatSessionContentUpdatedAt.delete(key);
     void this.ready().then(async () => {
       await this.db.deleteRow(TABLE_CHAT_SESSION_INDEX, key);
       await this.db.deleteRow(TABLE_CHAT_SESSION_CONTENT, key);
@@ -1394,45 +1745,11 @@ export class WorkspacePersistenceRepository {
 
     const now = Date.now();
     const next = cloneState(this.state.global);
-    void this.ready().then(async () => {
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.deepseekApiKey, v: serialize(next.deepseekApiKey), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.themeMode, v: serialize(next.themeMode), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.codeTheme, v: serialize(next.codeTheme), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.codeFont, v: serialize(next.codeFont), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.codeFontSize, v: serialize(next.codeFontSize), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.codeLineHeight, v: serialize(next.codeLineHeight), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.codeTabSize, v: serialize(next.codeTabSize), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.chatFont, v: serialize(next.chatFont), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.chatViewWidth, v: serialize(next.chatViewWidth), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.mobileEnterKeyBehavior, v: serialize(next.mobileEnterKeyBehavior), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.speechSettings, v: serialize(next.speechSettings), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.ttsSettings, v: serialize(next.ttsSettings), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.wrapLines, v: serialize(next.wrapLines), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.showLineNumbers, v: serialize(next.showLineNumbers), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.hideToolCalls, v: serialize(next.hideToolCalls), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.messageViewerEnabled, v: serialize(next.messageViewerEnabled), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.logLevel, v: serialize(next.logLevel), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.disableFileCache, v: serialize(next.disableFileCache), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.localHubReadEnabled, v: serialize(next.localHubReadEnabled), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.promptCompletionNotificationsEnabled, v: serialize(next.promptCompletionNotificationsEnabled), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.tab, v: serialize(next.tab), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.selectedProjectId, v: serialize(next.selectedProjectId), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.selectedChatProjectId, v: serialize(next.selectedChatProjectId), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.selectedChatSessionId, v: serialize(next.selectedChatSessionId), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.floatingControlYRatio, v: serialize(next.floatingControlYRatio), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.floatingControlSide, v: serialize(next.floatingControlSide), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.desktopSidebarWidth, v: serialize(next.desktopSidebarWidth), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.collapsedProjectIds, v: serialize(next.collapsedProjectIds), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.desktopCollapsedProjectIds, v: serialize(next.desktopCollapsedProjectIds), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.pinnedProjectIds, v: serialize(next.pinnedProjectIds), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.hubColors, v: serialize(next.hubColors), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.hiddenProjectIds, v: serialize(next.hiddenProjectIds), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.expandedHubIds, v: serialize(next.expandedHubIds), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.portRelayTargets, v: serialize(next.portRelayTargets), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.selectedPortRelayTarget, v: serialize(next.selectedPortRelayTarget), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.portRelayListenPort, v: serialize(next.portRelayListenPort), updatedAt: now});
-      await this.db.putRow(TABLE_GLOBAL_KV, {k: GLOBAL_KEYS.previewWorkbenchSnapshot, v: serialize(next.previewWorkbenchSnapshot), updatedAt: now});
-    }).catch(() => undefined);
+    const rows = globalRowsForPatch(patch, next, now);
+    if (rows.length === 0) return;
+    this.writeQueue = this.writeQueue
+      .then(() => this.readyPromise)
+      .then(() => this.persistGlobalRowsWithQuotaRecovery(rows));
   }
 
   patchProjectState(projectId: string, patch: Partial<PersistedProjectState>): void {
@@ -1453,13 +1770,19 @@ export class WorkspacePersistenceRepository {
     const current = this.ensureProjectCommits(projectId);
     this.projectCommits[projectId] = sanitizeProjectCommitsState({...current, ...patch});
     const now = Date.now();
-    const nextState = cloneState(this.projectCommits[projectId]);
-    void this.ready().then(() => this.db.putRow(TABLE_PROJECT_COMMITS, {
-      projectId,
-      commitsJson: serialize(nextState.commits),
-      commitFilesByShaJson: serialize(nextState.commitFilesBySha),
-      updatedAt: now,
-    })).catch(() => undefined);
+    this.projectCommitUpdatedAt.set(projectId, now);
+    const evictedKeys = this.evictProjectCommitEntries(now);
+    const retained = this.projectCommits[projectId];
+    this.enqueueCacheMutation('save project commit cache', [{
+      storeName: TABLE_PROJECT_COMMITS,
+      deletes: evictedKeys,
+      puts: retained ? [{
+        projectId,
+        commitsJson: serialize(retained.commits),
+        commitFilesByShaJson: serialize(retained.commitFilesBySha),
+        updatedAt: now,
+      }] : [],
+    }]);
   }
 
   getProjectDiff(projectId: string, key: string): DiffCacheEntry | null {
@@ -1485,24 +1808,30 @@ export class WorkspacePersistenceRepository {
       .map(item => item[0]);
 
     const keepSet = new Set(keysByNewest);
+    const evictedKeys = new Set<string>();
     for (const cacheKey of [...this.diffCache.keys()]) {
       if (!cacheKey.startsWith(prefix)) continue;
       if (keepSet.has(cacheKey)) continue;
       this.diffCache.delete(cacheKey);
-      void this.ready().then(() => this.db.deleteRow(TABLE_DIFF_CACHE, cacheKey)).catch(() => undefined);
+      evictedKeys.add(cacheKey);
     }
 
+    for (const cacheKey of this.evictDiffEntries(now)) evictedKeys.add(cacheKey);
+
     const payload = this.diffCache.get(k);
-    if (!payload) return;
-    void this.ready().then(() => this.db.putRow(TABLE_DIFF_CACHE, {
-      k,
-      v: serialize({
-        diff: payload.diff,
-        isBinary: payload.isBinary,
-        truncated: payload.truncated,
-      }),
-      updatedAt: payload.updatedAt,
-    })).catch(() => undefined);
+    this.enqueueCacheMutation('save diff cache', [{
+      storeName: TABLE_DIFF_CACHE,
+      deletes: [...evictedKeys],
+      puts: payload ? [{
+        k,
+        v: serialize({
+          diff: payload.diff,
+          isBinary: payload.isBinary,
+          truncated: payload.truncated,
+        }),
+        updatedAt: payload.updatedAt,
+      }] : [],
+    }]);
   }
 
   getCachedFile(projectId: string, kind: 'file' | 'dir', path: string): FileCacheEntry | null {
@@ -1520,66 +1849,56 @@ export class WorkspacePersistenceRepository {
       value,
       updatedAt: now,
     });
-    void this.ready().then(() => this.db.putRow(TABLE_FILE_CACHE, {
-      k,
-      hash: hash || '',
-      v: value,
-      updatedAt: now,
-    })).catch(() => undefined);
+    const evictedKeys = this.evictFileEntries(now);
+    const payload = this.fileCache.get(k);
+    this.enqueueCacheMutation('save file cache', [{
+      storeName: TABLE_FILE_CACHE,
+      deletes: evictedKeys,
+      puts: payload ? [{
+        k,
+        hash: payload.hash,
+        v: payload.value,
+        updatedAt: payload.updatedAt,
+      }] : [],
+    }]);
   }
 
   clearFileCache(): void {
     this.fileCache.clear();
-    void this.ready().then(async () => {
-      await this.db.clearStores([TABLE_FILE_CACHE]);
-    }).catch(() => undefined);
+    this.enqueueCacheMutation('clear file cache', [{storeName: TABLE_FILE_CACHE, clear: true}]);
   }
 
   clearCachePreservingToken(): void {
-    const localIdentity = this.readLocalIdentityState();
-    const preservedToken = localIdentity.token || this.state.global.token;
-    const preservedAddress = localIdentity.address || this.state.global.address;
-
-    this.state = defaultWorkspaceState();
-    this.state.global.token = preservedToken;
-    this.state.global.address = preservedAddress;
-    this.saveLocalIdentityState({address: preservedAddress, token: preservedToken});
-
     for (const key of Object.keys(this.projectCommits)) {
       delete this.projectCommits[key];
     }
+    this.projectCommitUpdatedAt.clear();
     this.chatSessionIndex.clear();
     this.chatSessionContent.clear();
+    this.chatSessionContentUpdatedAt.clear();
     this.diffCache.clear();
     this.fileCache.clear();
 
     const now = Date.now();
-    void this.ready().then(async () => {
-      await this.db.clearStores([
-        TABLE_GLOBAL_KV,
-        TABLE_PROJECT_STATE,
-        TABLE_PROJECT_COMMITS,
-        TABLE_CHAT_SESSION_INDEX,
-        TABLE_CHAT_SESSION_CONTENT,
-        TABLE_DIFF_CACHE,
-        TABLE_FILE_CACHE,
-        TABLE_META,
-      ]);
-      await this.db.putRow(TABLE_META, {
-        k: 'schemaVersion',
-        v: serialize(WORKSPACE_DB_VERSION),
-        updatedAt: now,
-      });
-      await this.db.putRow(TABLE_META, {
-        k: 'cacheClearedAt',
-        v: serialize(new Date(now).toISOString()),
-        updatedAt: now,
-      });
-    }).catch(() => undefined);
+    this.enqueueCacheMutation('clear local cache', [
+      {storeName: TABLE_PROJECT_COMMITS, clear: true},
+      {storeName: TABLE_CHAT_SESSION_INDEX, clear: true},
+      {storeName: TABLE_CHAT_SESSION_CONTENT, clear: true},
+      {storeName: TABLE_DIFF_CACHE, clear: true},
+      {storeName: TABLE_FILE_CACHE, clear: true},
+      {
+        storeName: TABLE_META,
+        puts: [{
+          k: 'cacheClearedAt',
+          v: serialize(new Date(now).toISOString()),
+          updatedAt: now,
+        }],
+      },
+    ]);
   }
 
   async dumpDatabase(): Promise<WorkspaceDatabaseDump> {
-    await this.ready();
+    await this.flushPendingWrites();
     const [global, projects, projectCommits, chatSessionIndex, chatSessionContent, fileCache, diffCache, meta] = await Promise.all([
       this.db.getAllRows<{k: string; v: string; updatedAt: number}>(TABLE_GLOBAL_KV),
       this.db.getAllRows<{projectId: string; stateJson: string; updatedAt: number}>(TABLE_PROJECT_STATE),
@@ -1628,6 +1947,7 @@ export class WorkspacePersistenceRepository {
         token: localIdentity.token ?? '',
       },
       storage,
+      storageError: this.lastStorageError ? cloneState(this.lastStorageError) : null,
     };
   }
 }

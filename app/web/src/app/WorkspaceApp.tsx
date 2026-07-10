@@ -3936,6 +3936,12 @@ export function App() {
     return () => window.clearTimeout(timer);
   }, [toastMessage]);
 
+  useEffect(() => workspaceStore.subscribeStorageErrors(storageError => {
+    setToastMessage(storageError.quotaExceeded
+      ? 'Local storage is full. Cache was cleared, but settings could not be saved.'
+      : 'Local settings could not be saved. Export the database from Settings for diagnostics.');
+  }), []);
+
   useEffect(() => {
     if (!chatSlashMenuVisible) {
       setChatSlashActiveIndex(0);

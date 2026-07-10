@@ -18,6 +18,7 @@ import {
   type PersistedChatCursor,
   type PersistedGlobalState,
   type WorkspaceDatabaseDump,
+  type WorkspaceStorageError,
 } from './WorkspacePersistence';
 
 type ProjectSnapshot = {
@@ -125,6 +126,10 @@ export class WorkspaceStore {
 
   ready(): Promise<void> {
     return this.persistence.ready();
+  }
+
+  subscribeStorageErrors(listener: (error: WorkspaceStorageError) => void): () => void {
+    return this.persistence.subscribeStorageErrors(listener);
   }
 
   getGlobalState(defaultAddress: string): PersistedGlobalState {

@@ -1,0 +1,523 @@
+import fs from 'fs';
+import path from 'path';
+import {
+  WorkspacePersistenceRepository,
+  selectCacheEvictionKeys,
+} from '../web/src/workspace/WorkspacePersistence';
+import {WorkspaceStore} from '../web/src/workspace/WorkspaceStore';
+
+type DatabaseMutation = {
+  storeName: string;
+  clear?: boolean;
+  puts?: unknown[];
+  deletes?: unknown[];
+};
+
+const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+class MemoryWorkspaceDatabase {
+  private readonly stores = new Map<string, unknown[]>();
+  private readonly mutationLog: DatabaseMutation[][] = [];
+  private readonly mutationFailures: unknown[] = [];
+  private readonly mutationWaiters = new Set<{count: number; resolve: () => void}>();
+
+  constructor(seed: Record<string, unknown[]> = {}) {
+    for (const [storeName, rows] of Object.entries(seed)) {
+      this.stores.set(storeName, clone(rows));
+    }
+  }
+
+  async getAllRows<T>(storeName: string): Promise<T[]> {
+    return clone((this.stores.get(storeName) ?? []) as T[]);
+  }
+
+  async mutateStores(mutations: DatabaseMutation[]): Promise<void> {
+    const failure = this.mutationFailures.shift();
+    if (failure) throw failure;
+    const nextStores = new Map(
+      [...this.stores.entries()].map(([storeName, rows]) => [storeName, clone(rows)]),
+    );
+    for (const mutation of mutations) {
+      const rows = mutation.clear ? [] : [...(nextStores.get(mutation.storeName) ?? [])];
+      const deleteKeys = new Set(mutation.deletes ?? []);
+      const retained = rows.filter(row => !deleteKeys.has(this.rowKey(row)));
+      for (const put of mutation.puts ?? []) {
+        const key = this.rowKey(put);
+        const existingIndex = retained.findIndex(row => this.rowKey(row) === key);
+        if (existingIndex >= 0) {
+          retained[existingIndex] = clone(put);
+        } else {
+          retained.push(clone(put));
+        }
+      }
+      nextStores.set(mutation.storeName, retained);
+    }
+    this.stores.clear();
+    for (const [storeName, rows] of nextStores.entries()) {
+      this.stores.set(storeName, rows);
+    }
+    this.mutationLog.push(clone(mutations));
+    for (const waiter of [...this.mutationWaiters]) {
+      if (this.mutationLog.length < waiter.count) continue;
+      this.mutationWaiters.delete(waiter);
+      waiter.resolve();
+    }
+  }
+
+  async putRow(storeName: string, row: unknown): Promise<void> {
+    await this.mutateStores([{storeName, puts: [row]}]);
+  }
+
+  async deleteRow(storeName: string, key: unknown): Promise<void> {
+    await this.mutateStores([{storeName, deletes: [key]}]);
+  }
+
+  async clearStores(storeNames: string[]): Promise<void> {
+    await this.mutateStores(storeNames.map(storeName => ({storeName, clear: true})));
+  }
+
+  rows<T>(storeName: string): T[] {
+    return clone((this.stores.get(storeName) ?? []) as T[]);
+  }
+
+  mutationsFor(storeName: string): DatabaseMutation[] {
+    return this.mutationLog.flat().filter(mutation => mutation.storeName === storeName);
+  }
+
+  lastMutationStores(): string[] {
+    return (this.mutationLog.at(-1) ?? []).map(mutation => mutation.storeName);
+  }
+
+  lastMutation(): DatabaseMutation[] {
+    return clone(this.mutationLog.at(-1) ?? []);
+  }
+
+  resetMutationLog(): void {
+    this.mutationLog.length = 0;
+  }
+
+  failNextMutation(error: unknown): void {
+    this.mutationFailures.push(error);
+  }
+
+  clearedStores(): string[] {
+    return this.mutationLog
+      .flat()
+      .filter(mutation => mutation.clear)
+      .map(mutation => mutation.storeName);
+  }
+
+  waitForMutations(count: number): Promise<void> {
+    if (this.mutationLog.length >= count) return Promise.resolve();
+    return new Promise(resolve => {
+      this.mutationWaiters.add({count, resolve});
+    });
+  }
+
+  private rowKey(row: unknown): unknown {
+    if (!row || typeof row !== 'object') return undefined;
+    const record = row as Record<string, unknown>;
+    return record.k ?? record.projectId;
+  }
+}
+
+function seedWithGlobalSettings(extra: Record<string, unknown[]> = {}): Record<string, unknown[]> {
+  const now = Date.now();
+  return {
+    wm_global_kv: [
+      {k: 'themeMode', v: JSON.stringify('light'), updatedAt: now},
+      {k: 'deepseekApiKey', v: JSON.stringify('secret-key'), updatedAt: now},
+    ],
+    ...extra,
+  };
+}
+
+function rowValue(rows: Array<{k: string; v: string}>, key: string): unknown {
+  const row = rows.find(item => item.k === key);
+  return row ? JSON.parse(row.v) : undefined;
+}
+
+describe('workspace persistence safety', () => {
+  test('evicts expired entries first and then the least recently used entries', () => {
+    const evicted = selectCacheEvictionKeys([
+      {key: 'expired', updatedAt: 1, approximateBytes: 2},
+      {key: 'old', updatedAt: 90, approximateBytes: 4},
+      {key: 'new', updatedAt: 100, approximateBytes: 4},
+    ], {
+      now: 110,
+      maxAgeMs: 100,
+      maxEntries: 1,
+      maxBytes: 5,
+    });
+
+    expect(evicted).toEqual(['expired', 'old']);
+  });
+
+  test('repairs stale chat cache without rewriting global settings', async () => {
+    const now = Date.now();
+    const db = new MemoryWorkspaceDatabase({
+      wm_global_kv: [
+        {k: 'themeMode', v: JSON.stringify('light'), updatedAt: now},
+        {k: 'deepseekApiKey', v: JSON.stringify('secret-key'), updatedAt: now},
+      ],
+      wm_chat_session_index: [{
+        k: 'cs:p1:s1',
+        projectId: 'p1',
+        sessionId: 's1',
+        sessionJson: JSON.stringify({
+          sessionId: 's1',
+          title: 'Session',
+          preview: '',
+          updatedAt: new Date(now).toISOString(),
+          messageCount: 1,
+          latestTurnIndex: 1,
+        }),
+        cursorJson: JSON.stringify({turnIndex: 2}),
+        updatedAt: now,
+      }],
+      wm_chat_session_content: [{
+        k: 'cs:p1:s1',
+        projectId: 'p1',
+        sessionId: 's1',
+        turnsJson: JSON.stringify([{turnIndex: 1, content: 'turn-1', finished: true}]),
+        updatedAt: now,
+      }],
+    });
+    const before = db.rows('wm_global_kv');
+
+    const repository = new WorkspacePersistenceRepository(db as never);
+    await repository.ready();
+
+    expect(repository.getGlobalState()).toMatchObject({
+      themeMode: 'light',
+      deepseekApiKey: 'secret-key',
+    });
+    expect(db.rows('wm_global_kv')).toEqual(before);
+    expect(db.mutationsFor('wm_global_kv')).toEqual([]);
+    expect(db.lastMutationStores()).toEqual([
+      'wm_chat_session_index',
+      'wm_chat_session_content',
+    ]);
+  });
+
+  test('keeps loaded settings available when chat cache repair aborts', async () => {
+    const now = Date.now();
+    const db = new MemoryWorkspaceDatabase({
+      wm_global_kv: [
+        {k: 'themeMode', v: JSON.stringify('light'), updatedAt: now},
+        {k: 'deepseekApiKey', v: JSON.stringify('secret-key'), updatedAt: now},
+      ],
+      wm_chat_session_index: [{
+        k: 'cs:p1:s1',
+        projectId: 'p1',
+        sessionId: 's1',
+        sessionJson: JSON.stringify({
+          sessionId: 's1',
+          title: 'Session',
+          preview: '',
+          updatedAt: new Date(now).toISOString(),
+          messageCount: 1,
+          latestTurnIndex: 1,
+        }),
+        cursorJson: JSON.stringify({turnIndex: 2}),
+        updatedAt: now,
+      }],
+      wm_chat_session_content: [{
+        k: 'cs:p1:s1',
+        projectId: 'p1',
+        sessionId: 's1',
+        turnsJson: JSON.stringify([{turnIndex: 1, content: 'turn-1', finished: true}]),
+        updatedAt: now,
+      }],
+    });
+    db.failNextMutation(new DOMException('repair aborted', 'AbortError'));
+    const repository = new WorkspacePersistenceRepository(db as never);
+    const errors: Array<{operation: string}> = [];
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const unsubscribe = repository.subscribeStorageErrors(error => errors.push(error));
+
+    await expect(repository.ready()).resolves.toBeUndefined();
+    expect(repository.getGlobalState()).toMatchObject({
+      themeMode: 'light',
+      deepseekApiKey: 'secret-key',
+    });
+    expect(errors).toEqual([expect.objectContaining({operation: 'repair chat cache'})]);
+    unsubscribe();
+    consoleError.mockRestore();
+  });
+
+  test('persists only patched global keys in one mutation', async () => {
+    const db = new MemoryWorkspaceDatabase(seedWithGlobalSettings());
+    const repository = new WorkspacePersistenceRepository(db as never);
+    await repository.ready();
+    db.resetMutationLog();
+
+    repository.patchGlobalState({themeMode: 'dark', codeFontSize: 16});
+    await repository.flushPendingWrites();
+
+    const mutation = db.lastMutation();
+    const puts = mutation[0]?.puts as Array<{k: string}> | undefined;
+    expect(mutation).toHaveLength(1);
+    expect(mutation[0]).toMatchObject({storeName: 'wm_global_kv'});
+    expect((puts ?? []).map(row => row.k).sort()).toEqual([
+      'codeFontSize',
+      'themeMode',
+    ]);
+  });
+
+  test('clears only rebuildable caches and retries a setting after quota failure', async () => {
+    const db = new MemoryWorkspaceDatabase(seedWithGlobalSettings({
+      wm_project_state: [{projectId: 'p1', stateJson: '{}', updatedAt: Date.now()}],
+      wm_project_commits: [{projectId: 'p1', commitsJson: '[]', commitFilesByShaJson: '{}', updatedAt: Date.now()}],
+      wm_file_cache: [{k: 'fc:p1:file:a.txt', hash: 'hash', v: 'cached', updatedAt: Date.now()}],
+      wm_diff_cache: [{k: 'dc:p1:sha:a.txt', v: JSON.stringify({diff: 'cached'}), updatedAt: Date.now()}],
+    }));
+    const repository = new WorkspacePersistenceRepository(db as never);
+    await repository.ready();
+    db.resetMutationLog();
+    db.failNextMutation(new DOMException('quota', 'QuotaExceededError'));
+
+    repository.patchGlobalState({themeMode: 'dark'});
+    await repository.flushPendingWrites();
+
+    expect(rowValue(db.rows('wm_global_kv'), 'themeMode')).toBe('dark');
+    expect(rowValue(db.rows('wm_global_kv'), 'deepseekApiKey')).toBe('secret-key');
+    expect(db.clearedStores()).toEqual(expect.arrayContaining([
+      'wm_project_commits',
+      'wm_chat_session_index',
+      'wm_chat_session_content',
+      'wm_diff_cache',
+      'wm_file_cache',
+    ]));
+    expect(db.clearedStores()).not.toContain('wm_global_kv');
+    expect(db.clearedStores()).not.toContain('wm_project_state');
+  });
+
+  test('prunes expired caches without changing global selection settings', async () => {
+    const now = Date.now();
+    const db = new MemoryWorkspaceDatabase(seedWithGlobalSettings({
+      wm_global_kv: [
+        {k: 'themeMode', v: JSON.stringify('light'), updatedAt: now},
+        {k: 'selectedChatProjectId', v: JSON.stringify('p1'), updatedAt: now},
+        {k: 'selectedChatSessionId', v: JSON.stringify('s1'), updatedAt: now},
+      ],
+      wm_project_commits: [{
+        projectId: 'p1',
+        commitsJson: JSON.stringify([{sha: 'abc'}]),
+        commitFilesByShaJson: '{}',
+        updatedAt: 1,
+      }],
+      wm_chat_session_index: [{
+        k: 'cs:p1:s1',
+        projectId: 'p1',
+        sessionId: 's1',
+        sessionJson: JSON.stringify({
+          sessionId: 's1',
+          title: 'Session',
+          preview: '',
+          updatedAt: new Date(now).toISOString(),
+          messageCount: 1,
+          latestTurnIndex: 1,
+        }),
+        cursorJson: JSON.stringify({turnIndex: 1}),
+        updatedAt: now,
+      }],
+      wm_chat_session_content: [{
+        k: 'cs:p1:s1',
+        projectId: 'p1',
+        sessionId: 's1',
+        turnsJson: JSON.stringify([{turnIndex: 1, content: 'turn-1', finished: true}]),
+        updatedAt: 1,
+      }],
+      wm_file_cache: [{k: 'fc:p1:file:a.txt', hash: 'hash', v: 'cached', updatedAt: 1}],
+      wm_diff_cache: [{k: 'dc:p1:sha:a.txt', v: JSON.stringify({diff: 'cached'}), updatedAt: 1}],
+    }));
+
+    const repository = new WorkspacePersistenceRepository(db as never);
+    await repository.ready();
+
+    expect(db.rows('wm_project_commits')).toEqual([]);
+    expect(db.rows('wm_chat_session_content')).toEqual([]);
+    expect(db.rows('wm_file_cache')).toEqual([]);
+    expect(db.rows('wm_diff_cache')).toEqual([]);
+    const indexRows = db.rows<Array<{cursorJson: string}>[number]>('wm_chat_session_index');
+    expect(JSON.parse(indexRows[0].cursorJson)).toEqual({turnIndex: 0});
+    expect(repository.getGlobalState()).toMatchObject({
+      selectedChatProjectId: 'p1',
+      selectedChatSessionId: 's1',
+    });
+    expect(db.mutationsFor('wm_global_kv')).toEqual([]);
+  });
+
+  test('applies global LRU budgets after cache writes', async () => {
+    const now = Date.now();
+    const fileRows = Array.from({length: 1500}, (_, index) => ({
+      k: `fc:p${index}:file:f${index}.txt`,
+      hash: `h${index}`,
+      v: `file-${index}`,
+      updatedAt: now - 1500 + index,
+    }));
+    const diffRows = Array.from({length: 600}, (_, index) => ({
+      k: `dc:p${index}:diff-${index}`,
+      v: JSON.stringify({diff: `diff-${index}`, isBinary: false, truncated: false}),
+      updatedAt: now - 600 + index,
+    }));
+    const projectCommitRows = Array.from({length: 40}, (_, index) => ({
+      projectId: `p${index}`,
+      commitsJson: '[]',
+      commitFilesByShaJson: '{}',
+      updatedAt: now - 40 + index,
+    }));
+    const chatIndexRows = Array.from({length: 251}, (_, index) => ({
+      k: `cs:p-chat:s${index}`,
+      projectId: 'p-chat',
+      sessionId: `s${index}`,
+      sessionJson: JSON.stringify({
+        sessionId: `s${index}`,
+        title: `Session ${index}`,
+        preview: '',
+        updatedAt: new Date(now).toISOString(),
+        messageCount: 0,
+        latestTurnIndex: 0,
+      }),
+      cursorJson: JSON.stringify({turnIndex: 0}),
+      updatedAt: now - 251 + index,
+    }));
+    const chatContentRows = chatIndexRows.slice(0, 250).map((row, index) => ({
+      k: row.k,
+      projectId: row.projectId,
+      sessionId: row.sessionId,
+      turnsJson: '[]',
+      updatedAt: now - 250 + index,
+    }));
+    const db = new MemoryWorkspaceDatabase(seedWithGlobalSettings({
+      wm_project_commits: projectCommitRows,
+      wm_chat_session_index: chatIndexRows,
+      wm_chat_session_content: chatContentRows,
+      wm_file_cache: fileRows,
+      wm_diff_cache: diffRows,
+    }));
+    const repository = new WorkspacePersistenceRepository(db as never);
+    await repository.ready();
+    db.resetMutationLog();
+
+    repository.patchProjectCommitsState('p-new', {commits: [], commitFilesBySha: {}});
+    repository.patchProjectChatSessionContent('p-chat', 's250', []);
+    repository.putProjectDiff('p-new', 'diff-new', {diff: 'new', isBinary: false, truncated: false});
+    repository.putCachedFile('p-new', 'file', 'new.txt', 'new-hash', 'new-file');
+    await db.waitForMutations(4);
+
+    const commitIds = db.rows<Array<{projectId: string}>[number]>('wm_project_commits').map(row => row.projectId);
+    const chatKeys = db.rows<Array<{k: string}>[number]>('wm_chat_session_content').map(row => row.k);
+    const diffKeys = db.rows<Array<{k: string}>[number]>('wm_diff_cache').map(row => row.k);
+    const fileKeys = db.rows<Array<{k: string}>[number]>('wm_file_cache').map(row => row.k);
+    expect(commitIds).toHaveLength(40);
+    expect(commitIds).not.toContain('p0');
+    expect(commitIds).toContain('p-new');
+    expect(chatKeys).toHaveLength(250);
+    expect(chatKeys).not.toContain('cs:p-chat:s0');
+    expect(chatKeys).toContain('cs:p-chat:s250');
+    expect(diffKeys).toHaveLength(600);
+    expect(diffKeys).not.toContain('dc:p0:diff-0');
+    expect(diffKeys).toContain('dc:p-new:diff-new');
+    expect(fileKeys).toHaveLength(1500);
+    expect(fileKeys).not.toContain('fc:p0:file:f0.txt');
+    expect(fileKeys).toContain('fc:p-new:file:new.txt');
+  });
+
+  test('clears rebuildable caches while preserving all settings', async () => {
+    const now = Date.now();
+    const db = new MemoryWorkspaceDatabase(seedWithGlobalSettings({
+      wm_project_state: [{
+        projectId: 'p1',
+        stateJson: JSON.stringify({
+          expandedDirs: ['.'],
+          selectedFile: 'a.txt',
+          pinnedFiles: ['a.txt'],
+          gitCurrentBranch: 'main',
+          selectedCommit: '',
+          selectedDiff: '',
+          selectedChatSessionId: '',
+        }),
+        updatedAt: now,
+      }],
+      wm_project_commits: [{projectId: 'p1', commitsJson: '[]', commitFilesByShaJson: '{}', updatedAt: now}],
+      wm_chat_session_index: [{
+        k: 'cs:p1:s1',
+        projectId: 'p1',
+        sessionId: 's1',
+        sessionJson: JSON.stringify({sessionId: 's1', title: 'Session', preview: '', updatedAt: new Date(now).toISOString(), messageCount: 0}),
+        cursorJson: JSON.stringify({turnIndex: 0}),
+        updatedAt: now,
+      }],
+      wm_chat_session_content: [{k: 'cs:p1:s1', projectId: 'p1', sessionId: 's1', turnsJson: '[]', updatedAt: now}],
+      wm_file_cache: [{k: 'fc:p1:file:a.txt', hash: 'hash', v: 'cached', updatedAt: now}],
+      wm_diff_cache: [{k: 'dc:p1:sha:a.txt', v: JSON.stringify({diff: 'cached'}), updatedAt: now}],
+    }));
+    const repository = new WorkspacePersistenceRepository(db as never);
+    await repository.ready();
+    const globalBefore = db.rows('wm_global_kv');
+    const projectsBefore = db.rows('wm_project_state');
+    db.resetMutationLog();
+
+    repository.clearCachePreservingToken();
+    await repository.flushPendingWrites();
+
+    expect(repository.getGlobalState()).toMatchObject({
+      themeMode: 'light',
+      deepseekApiKey: 'secret-key',
+    });
+    expect(repository.getProjectState('p1')).toMatchObject({
+      selectedFile: 'a.txt',
+      pinnedFiles: ['a.txt'],
+    });
+    expect(db.rows('wm_global_kv')).toEqual(globalBefore);
+    expect(db.rows('wm_project_state')).toEqual(projectsBefore);
+    expect(db.rows('wm_project_commits')).toEqual([]);
+    expect(db.rows('wm_chat_session_index')).toEqual([]);
+    expect(db.rows('wm_chat_session_content')).toEqual([]);
+    expect(db.rows('wm_diff_cache')).toEqual([]);
+    expect(db.rows('wm_file_cache')).toEqual([]);
+    expect(db.mutationsFor('wm_global_kv')).toEqual([]);
+  });
+
+  test('reports one quota error through the store and replays it to late subscribers', async () => {
+    const db = new MemoryWorkspaceDatabase(seedWithGlobalSettings());
+    const repository = new WorkspacePersistenceRepository(db as never);
+    const store = new WorkspaceStore(repository);
+    await repository.ready();
+    const errors: Array<{quotaExceeded: boolean; operation: string}> = [];
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const unsubscribe = store.subscribeStorageErrors(error => errors.push(error));
+    db.failNextMutation(new DOMException('quota', 'QuotaExceededError'));
+    db.failNextMutation(new DOMException('cleanup aborted', 'AbortError'));
+
+    store.rememberGlobalState({themeMode: 'dark'});
+    await repository.flushPendingWrites();
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({
+      quotaExceeded: true,
+      operation: 'save global settings after cache cleanup',
+    });
+    const lateErrors: typeof errors = [];
+    const unsubscribeLate = store.subscribeStorageErrors(error => lateErrors.push(error));
+    expect(lateErrors).toEqual(errors);
+    const dump = await store.dumpDatabase();
+    expect(dump.storageError).toMatchObject(errors[0]);
+    unsubscribeLate();
+    unsubscribe();
+    consoleError.mockRestore();
+  });
+
+  test('subscribes the existing app toast to persistence errors', () => {
+    const source = fs.readFileSync(
+      path.join(__dirname, '..', 'web', 'src', 'app', 'WorkspaceApp.tsx'),
+      'utf8',
+    );
+
+    expect(source).toContain('workspaceStore.subscribeStorageErrors(storageError => {');
+    expect(source).toContain('Local storage is full. Cache was cleared, but settings could not be saved.');
+    expect(source).toContain('Local settings could not be saved. Export the database from Settings for diagnostics.');
+  });
+});

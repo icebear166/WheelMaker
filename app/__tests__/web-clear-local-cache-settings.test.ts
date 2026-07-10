@@ -22,7 +22,7 @@ describe('web clear local cache settings', () => {
     expect(mainTsx).toContain("kind: 'clearCache'");
     expect(mainTsx).toContain("setConfirmTarget({kind: 'clearCache'});");
     expect(appDialogsTsx).toContain('Clear local cache?');
-    expect(appDialogsTsx).toContain('Token and server address will be preserved.');
+    expect(appDialogsTsx).toContain('Settings and connection details will be preserved.');
     expect(mainTsx).toContain('workspaceStore.clearLocalCachePreservingToken();');
     expect(mainTsx).toContain('window.location.reload();');
     expect(mainTsx).toContain('<AppConfirmDialog');
@@ -42,9 +42,14 @@ describe('web clear local cache settings', () => {
     expect(workspacePersistence).toContain('turnsJson');
     expect(workspacePersistence).not.toContain('messagesJson');
     expect(workspacePersistence).toContain('saveLocalIdentityState');
-    expect(workspacePersistence).toContain('const preservedAddress =');
-    expect(workspacePersistence).toContain('this.state.global.address = preservedAddress;');
-    expect(workspacePersistence).toContain('this.state.global.token = preservedToken;');
+    const clearCacheFunctionStart = workspacePersistence.indexOf('clearCachePreservingToken(): void {');
+    const dumpDatabaseStart = workspacePersistence.indexOf('async dumpDatabase()', clearCacheFunctionStart);
+    expect(clearCacheFunctionStart).toBeGreaterThanOrEqual(0);
+    expect(dumpDatabaseStart).toBeGreaterThan(clearCacheFunctionStart);
+    const clearCacheBlock = workspacePersistence.slice(clearCacheFunctionStart, dumpDatabaseStart);
+    expect(clearCacheBlock).not.toContain('TABLE_GLOBAL_KV');
+    expect(clearCacheBlock).not.toContain('TABLE_PROJECT_STATE');
+    expect(clearCacheBlock).not.toContain('defaultWorkspaceState()');
     expect(workspacePersistence).not.toContain('STORAGE_KEY');
     expect(workspacePersistence).not.toContain('loadLegacyState');
     expect(workspacePersistence).not.toContain('metaJson');
