@@ -51,4 +51,25 @@ describe('workspace visual foundation', () => {
     expect(base).toContain('.feedback-state.error');
     expect(base).toContain('.feedback-state.loading');
   });
+
+  test('maps existing workspace feedback hooks to semantic states', () => {
+    const styles = [
+      read('web/src/styles/base.css'),
+      read('web/src/styles/chat.css'),
+      read('web/src/styles/settings.css'),
+    ].join('\n');
+    for (const selector of [
+      '.chat-empty-hint',
+      '.wide-project-empty',
+      '.mobile-project-session-error',
+      '.session-search-error',
+      '.empty-card',
+      '.chat-loading-state',
+    ]) {
+      expect(styles).toContain(selector);
+    }
+    expect(styles).toContain('var(--state-danger)');
+    expect(read('web/src/app/WorkspaceApp.tsx')).toContain('className="session-archive-progress" role="status"');
+    expect(read('web/src/app/WorkspaceApp.tsx')).toContain('className="chat-loading-state" role="status"');
+  });
 });

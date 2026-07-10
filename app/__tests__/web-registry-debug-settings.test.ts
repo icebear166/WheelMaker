@@ -25,10 +25,13 @@ describe('web registry debug settings', () => {
       'logLevel: normalizePersistedLogLevel(input.logLevel, base.logLevel)',
     );
     expect(workspacePersistence).toContain(
-      '{k: GLOBAL_KEYS.messageViewerEnabled, v: serialize(next.messageViewerEnabled), updatedAt: now}',
+      'const rows = globalRowsForPatch(patch, next, now);',
     );
     expect(workspacePersistence).toContain(
-      '{k: GLOBAL_KEYS.logLevel, v: serialize(next.logLevel), updatedAt: now}',
+      '{k: GLOBAL_KEYS.messageViewerEnabled, v: serialize(this.state.global.messageViewerEnabled), updatedAt}',
+    );
+    expect(workspacePersistence).toContain(
+      '{k: GLOBAL_KEYS.logLevel, v: serialize(this.state.global.logLevel), updatedAt}',
     );
     expect(workspacePersistence).not.toContain('registryDebug: boolean;');
   });

@@ -18298,7 +18298,11 @@ export function App() {
               onTouchCancel={() => { chatPointerScrollingRef.current = false; }}
             >
               {!chatReadOnlyPreview && chatLoading ? (
-                <div className="muted block">Loading chat...</div>
+                <div className="chat-loading-state" role="status" aria-label="Loading chat">
+                  <span className="chat-loading-line" />
+                  <span className="chat-loading-line" />
+                  <span className="chat-loading-line" />
+                </div>
               ) : null}
               {archivedMode && !archivedPreview ? (
                 <div className="chat-view-content chat-empty-state-content">

@@ -5245,3 +5245,61 @@
     overscroll-behavior: contain;
   }
 }
+
+.chat-empty-hint,
+.wide-project-empty,
+.empty-card {
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.mobile-project-session-error,
+.session-search-error {
+  border: 1px solid color-mix(in srgb, var(--state-danger) 28%, var(--border-subtle));
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--state-danger) 7%, var(--surface-panel));
+  color: var(--state-danger);
+  padding: 8px 10px;
+}
+
+.mobile-project-session-error button,
+.session-search-error button {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.session-archive-progress[role='status'] {
+  border-color: var(--border-subtle);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-floating);
+}
+
+.chat-loading-state {
+  display: grid;
+  gap: 10px;
+  width: min(620px, 100%);
+  margin: 0 auto;
+  padding: 12px 0;
+}
+
+.chat-loading-line {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--surface-raised);
+  animation: feedbackStatePulse 1.4s ease-in-out infinite;
+}
+
+.chat-loading-line:nth-child(2) {
+  width: 86%;
+}
+
+.chat-loading-line:nth-child(3) {
+  width: 62%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-loading-line {
+    animation: none;
+  }
+}
