@@ -397,6 +397,33 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('onFileTreeClose={() => setPreviewWorkbench(current => ({...current, treeOpen: false}))}');
   });
 
+  test('preview title actions are consolidated into an accessible menu with current-project indexing', () => {
+    const chromeTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'preview', 'PreviewWorkbenchChrome.tsx'));
+    const mainTsx = readSourceText(mainPath);
+    const stylesCss = readWebStyles(projectRoot);
+    const pollStart = mainTsx.indexOf('const scheduleProjectIndexPoll = useCallback');
+    const pollEnd = mainTsx.indexOf('const scheduleWheelMakerUpdatePoll', pollStart);
+    const pollBody = mainTsx.slice(pollStart, pollEnd);
+
+    expect(chromeTsx).toContain('actionsMenuOpen: boolean;');
+    expect(chromeTsx).toContain('onActionsMenuToggle: () => void;');
+    expect(chromeTsx).toContain('onActionsMenuClose: () => void;');
+    expect(chromeTsx).toContain('className="preview-workbench-actions-menu"');
+    expect(chromeTsx).toContain('title="Preview actions"');
+    expect(chromeTsx).toContain('aria-haspopup="menu"');
+
+    expect(mainTsx).toContain('const [previewWorkbenchActionsMenuOpen, setPreviewWorkbenchActionsMenuOpen] = useState(false);');
+    expect(mainTsx).toContain('const handlePreviewProjectIndexRebuild = useCallback(async (projectId: string) => {');
+    expect(mainTsx).toContain("projectIndexScanPendingByProjectId[tab.projectId] ? 'Indexing...' : 'Rebuild file index'");
+    expect(mainTsx).toContain('actionsMenuOpen={previewWorkbenchActionsMenuOpen}');
+    expect(mainTsx).toContain('onActionsMenuToggle={() => setPreviewWorkbenchActionsMenuOpen(open => !open)}');
+    expect(mainTsx).toContain('onActionsMenuClose={() => setPreviewWorkbenchActionsMenuOpen(false)}');
+    expect(pollBody).not.toContain("settingsDetailViewRef.current !== 'update'");
+
+    expect(stylesCss).toContain('.preview-workbench-actions-menu');
+    expect(stylesCss).toContain('.preview-workbench-action-menu-item');
+  });
+
   test('preview workbench wires tab tooltips, keyboard navigation, search, quick open, and selection copy', () => {
     const mainTsx = readSourceText(mainPath);
     const chromeTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'preview', 'PreviewWorkbenchChrome.tsx'));

@@ -2767,6 +2767,7 @@ export function App() {
   const [projectIndexByHubId, setProjectIndexByHubId] = useState<Record<string, RegistryFileIndexStatusResponse>>({});
   const [projectIndexLoading, setProjectIndexLoading] = useState(false);
   const [projectIndexError, setProjectIndexError] = useState('');
+  const [projectIndexErrorByProjectId, setProjectIndexErrorByProjectId] = useState<Record<string, string>>({});
   const [projectIndexScanPendingByProjectId, setProjectIndexScanPendingByProjectId] = useState<Record<string, boolean>>({});
   const [projectIndexScanAllPendingByHubId, setProjectIndexScanAllPendingByHubId] = useState<Record<string, boolean>>({});
   const agentPackageScanPollTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
@@ -2812,6 +2813,7 @@ export function App() {
   );
   const [chatPreviewManualOpen, setChatPreviewManualOpen] = useState(false);
   const [chatPreviewManualCollapsed, setChatPreviewManualCollapsed] = useState(false);
+  const [previewWorkbenchActionsMenuOpen, setPreviewWorkbenchActionsMenuOpen] = useState(false);
   const [previewSearchOpen, setPreviewSearchOpen] = useState(false);
   const [previewSearchQuery, setPreviewSearchQuery] = useState('');
   const [previewSearchActiveIndex, setPreviewSearchActiveIndex] = useState(0);
@@ -2872,6 +2874,10 @@ export function App() {
   const chatPreviewHasContent = previewWorkbenchHasTabs;
   const chatPreviewOpen = chatPreviewManualOpen || (chatPreviewHasContent && !chatPreviewManualCollapsed);
   const portRelayWorkbenchOpen = !!activePortRelayPreview && chatPreviewOpen;
+
+  useEffect(() => {
+    setPreviewWorkbenchActionsMenuOpen(false);
+  }, [activeWorkbenchTab?.id, chatPreviewOpen]);
 
   useEffect(() => {
     if (!isWide && chatPreviewHasContent && !chatPreviewManualCollapsed) {
@@ -12953,9 +12959,6 @@ export function App() {
     }
     projectIndexPollTimerRef.current = window.setTimeout(() => {
       projectIndexPollTimerRef.current = null;
-      if (settingsDetailViewRef.current !== 'update') {
-        return;
-      }
       refreshProjectFileIndexesRef.current?.(ids, {silent: true}).catch(() => undefined);
     }, 1000);
   }, []);
@@ -13267,6 +13270,22 @@ export function App() {
               projects: result.projects ?? [],
             },
           }));
+          const completedProjectIds = (result.projects ?? [])
+            .filter(project => project.projectId && project.running !== true && project.status !== 'scanning')
+            .map(project => project.projectId);
+          if (completedProjectIds.length > 0) {
+            setProjectIndexScanPendingByProjectId(prev => {
+              let changed = false;
+              const next = {...prev};
+              completedProjectIds.forEach(projectId => {
+                if (next[projectId]) {
+                  next[projectId] = false;
+                  changed = true;
+                }
+              });
+              return changed ? next : prev;
+            });
+          }
           if ((result.projects ?? []).some(project => project.running === true || project.status === 'scanning')) {
             runningHubIds.add(hubId);
           }
@@ -13785,24 +13804,36 @@ export function App() {
       return;
     }
     setProjectIndexError('');
+    setProjectIndexErrorByProjectId(prev => ({...prev, [projectId]: ''}));
     setProjectIndexScanPendingByProjectId(prev => ({...prev, [projectId]: true}));
+    let scanRunning = false;
     try {
       const result = await service.rebuildFileIndex(projectId);
       if (!result.ok) {
         throw new Error(result.error || 'Project index scan failed.');
       }
+      scanRunning = result.running === true;
       await refreshProjectFileIndexes(hubId, {silent: true});
-      if (result.running) {
+      if (scanRunning) {
         scheduleProjectIndexPoll(hubId);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setProjectIndexError(message);
+      setProjectIndexErrorByProjectId(prev => ({...prev, [projectId]: message}));
       setError(message);
     } finally {
-      setProjectIndexScanPendingByProjectId(prev => ({...prev, [projectId]: false}));
+      if (!scanRunning) {
+        setProjectIndexScanPendingByProjectId(prev => ({...prev, [projectId]: false}));
+      }
     }
   }, [projectIndexScanPendingByProjectId, refreshProjectFileIndexes, scheduleProjectIndexPoll]);
+
+  const handlePreviewProjectIndexRebuild = useCallback(async (projectId: string) => {
+    const project = projects.find(item => item.projectId === projectId);
+    const hubId = project?.hubId || projectId.split(':', 1)[0] || 'local';
+    await handleScanProjectIndex(hubId, projectId);
+  }, [handleScanProjectIndex, projects]);
 
   const handleScanAllProjectIndexes = useCallback(async (hubId: string, projectIndexProjects: RegistryFileIndexStatus[]) => {
     const targets = projectIndexProjects.filter(project => project.projectId);
@@ -20085,44 +20116,67 @@ export function App() {
     if (!tab) {
       return null;
     }
-    if (tab.type === 'file') {
-      return (
-        <>
+    const closeActionsMenu = () => setPreviewWorkbenchActionsMenuOpen(false);
+    const indexPending = projectIndexScanPendingByProjectId[tab.projectId] === true;
+    const indexError = projectIndexErrorByProjectId[tab.projectId] || '';
+    return (
+      <>
+        {tab.type === 'file' ? (
+          <>
+            <button
+              type="button"
+              role="menuitem"
+              className="preview-workbench-action-menu-item"
+              onClick={() => {
+                copyChatFilePreviewPath();
+                closeActionsMenu();
+              }}
+            >
+              <span className="codicon codicon-clippy" aria-hidden="true" />
+              <span>Copy absolute path</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="preview-workbench-action-menu-item"
+              onClick={() => {
+                openPeekFileInFullFileTab();
+                closeActionsMenu();
+              }}
+            >
+              <span className="codicon codicon-go-to-file" aria-hidden="true" />
+              <span>Open in File tab</span>
+            </button>
+          </>
+        ) : null}
+        {tab.type === 'port-relay' ? (
           <button
             type="button"
-            className="chat-preview-icon-button"
-            onClick={copyChatFilePreviewPath}
-            title="Copy absolute path"
-            aria-label="Copy absolute path"
+            role="menuitem"
+            className="preview-workbench-action-menu-item"
+            onClick={() => {
+              openPortRelayPreviewInBrowser();
+              closeActionsMenu();
+            }}
           >
-            <span className="codicon codicon-clippy" />
+            <span className="codicon codicon-link-external" aria-hidden="true" />
+            <span>Open relay page in browser</span>
           </button>
-          <button
-            type="button"
-            className="chat-preview-icon-button"
-            onClick={openPeekFileInFullFileTab}
-            title="Open in File tab"
-            aria-label="Open in File tab"
-          >
-            <span className="codicon codicon-go-to-file" />
-          </button>
-        </>
-      );
-    }
-    if (tab.type === 'port-relay') {
-      return (
+        ) : null}
+        <div className="preview-workbench-action-menu-separator" role="separator" />
         <button
           type="button"
-          className="chat-preview-icon-button"
-          onClick={openPortRelayPreviewInBrowser}
-          title="Open relay page in browser"
-          aria-label="Open relay page in browser"
+          role="menuitem"
+          className="preview-workbench-action-menu-item"
+          onClick={() => handlePreviewProjectIndexRebuild(tab.projectId).catch(() => undefined)}
+          disabled={indexPending}
         >
-          <span className="codicon codicon-link-external" />
+          <span className={`codicon ${indexPending ? 'codicon-sync' : 'codicon-refresh'}`} aria-hidden="true" />
+          <span>{projectIndexScanPendingByProjectId[tab.projectId] ? 'Indexing...' : 'Rebuild file index'}</span>
         </button>
-      );
-    }
-    return null;
+        {indexError ? <div className="preview-workbench-action-menu-error" role="alert">{indexError}</div> : null}
+      </>
+    );
   };
   const renderPreviewWorkbenchTabBody = (tab: PreviewWorkbenchTab, mode: 'desktop' | 'mobile', active: boolean) => {
     if (tab.type === 'file') {
@@ -20317,11 +20371,14 @@ export function App() {
       fileTree={previewWorkbenchFileTreeContent}
       fileTreeSearch={previewFileTreeSearch}
       actions={renderPreviewWorkbenchActions()}
+      actionsMenuOpen={previewWorkbenchActionsMenuOpen}
       onClose={closeChatFilePeekFromChrome}
       onTabSelect={selectWorkbenchTab}
       onTabClose={closeWorkbenchTab}
       onFileTreeToggle={toggleChatFilePreviewTree}
       onFileTreeClose={() => setPreviewWorkbench(current => ({...current, treeOpen: false}))}
+      onActionsMenuToggle={() => setPreviewWorkbenchActionsMenuOpen(open => !open)}
+      onActionsMenuClose={() => setPreviewWorkbenchActionsMenuOpen(false)}
       onWorkbenchKeyDown={handlePreviewWorkbenchKeyDown}
       onMobilePortRelayRefresh={refreshActivePortRelayPreview}
     >

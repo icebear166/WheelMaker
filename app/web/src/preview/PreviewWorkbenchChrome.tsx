@@ -17,11 +17,14 @@ type PreviewWorkbenchChromeProps = {
   fileTree: React.ReactNode;
   fileTreeSearch?: React.ReactNode;
   actions?: React.ReactNode;
+  actionsMenuOpen: boolean;
   onClose: () => void;
   onTabSelect: (tabId: string) => void;
   onTabClose: (tabId: string) => void;
   onFileTreeToggle: () => void;
   onFileTreeClose: () => void;
+  onActionsMenuToggle: () => void;
+  onActionsMenuClose: () => void;
   onWorkbenchKeyDown?: React.KeyboardEventHandler<HTMLElement>;
   onMobilePortRelayRefresh?: () => void;
   children: React.ReactNode;
@@ -42,11 +45,14 @@ export function PreviewWorkbenchChrome({
   fileTree,
   fileTreeSearch,
   actions,
+  actionsMenuOpen,
   onClose,
   onTabSelect,
   onTabClose,
   onFileTreeToggle,
   onFileTreeClose,
+  onActionsMenuToggle,
+  onActionsMenuClose,
   onWorkbenchKeyDown,
   onMobilePortRelayRefresh,
   children,
@@ -56,6 +62,7 @@ export function PreviewWorkbenchChrome({
   const fileTreeButtonRef = React.useRef<HTMLButtonElement | null>(null);
   const fileTreeSearchRef = React.useRef<HTMLDivElement | null>(null);
   const fileTreePanelRef = React.useRef<HTMLDivElement | null>(null);
+  const actionsMenuRef = React.useRef<HTMLDivElement | null>(null);
   const activeTitle = previewWorkbenchHeaderTitle(activeTab);
   const toolbar = (
     <>
@@ -69,12 +76,31 @@ export function PreviewWorkbenchChrome({
         <span className={`codicon ${mode === 'mobile' ? 'codicon-arrow-left' : 'codicon-close'}`} />
       </button>
       <div className="preview-workbench-title" title={activeTitle}>{activeTitle}</div>
-      {actions ? <div className="preview-workbench-actions">{actions}</div> : null}
+      {actions ? (
+        <div ref={actionsMenuRef} className="preview-workbench-actions">
+          <button
+            type="button"
+            className="chat-preview-icon-button"
+            onClick={onActionsMenuToggle}
+            title="Preview actions"
+            aria-label="Preview actions"
+            aria-haspopup="menu"
+            aria-expanded={actionsMenuOpen}
+          >
+            <span className="codicon codicon-ellipsis" aria-hidden="true" />
+          </button>
+          {actionsMenuOpen ? (
+            <div className="preview-workbench-actions-menu" role="menu" aria-label="Preview actions">
+              {actions}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </>
   );
 
   React.useEffect(() => {
-    if (!fileTreeOpen) {
+    if (!fileTreeOpen && !actionsMenuOpen) {
       return undefined;
     }
     const containsTarget = (node: HTMLElement | null, target: Node | null) =>
@@ -88,11 +114,17 @@ export function PreviewWorkbenchChrome({
       ) {
         onFileTreeClose();
       }
+      if (actionsMenuOpen && !containsTarget(actionsMenuRef.current, target)) {
+        onActionsMenuClose();
+      }
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         if (fileTreeOpen) {
           onFileTreeClose();
+        }
+        if (actionsMenuOpen) {
+          onActionsMenuClose();
         }
       }
     };
@@ -102,7 +134,7 @@ export function PreviewWorkbenchChrome({
       window.removeEventListener('pointerdown', handlePointerDown, true);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [fileTreeOpen, onFileTreeClose]);
+  }, [actionsMenuOpen, fileTreeOpen, onActionsMenuClose, onFileTreeClose]);
 
   return (
     <section
