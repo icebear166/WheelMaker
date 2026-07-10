@@ -1,3 +1,6 @@
+import fs from 'fs';
+import path from 'path';
+
 import {
   SETTINGS_CHILD_DETAILS,
   SETTINGS_PEER_DETAILS,
@@ -47,5 +50,20 @@ describe('settings navigation model', () => {
     expect(settingsDetailTitle('database')).toBe('Database');
     expect(settingsDetailTitle('debugLogs')).toBe('Logs');
     expect(settingsDetailTitle('skillDetail')).toBe('Skill Detail');
+  });
+
+  test('styles settings groups without changing shortcut order', () => {
+    const css = fs.readFileSync(
+      path.resolve(__dirname, '../web/src/styles/settings.css'),
+      'utf8',
+    ).replace(/\r\n/g, '\n');
+    expect(mobileSettingsShortcutIndex(null)).toBe(0);
+    expect(mobileSettingsShortcutIndex('update')).toBe(1);
+    expect(mobileSettingsShortcutIndex('skills')).toBe(2);
+    expect(mobileSettingsShortcutIndex('portRelay')).toBe(3);
+    expect(mobileSettingsShortcutIndex('tokenStats')).toBe(4);
+    expect(css).toContain('/* workspace-ui-targeted-evolution: settings */');
+    expect(css).toContain('.settings-danger-row');
+    expect(css).toContain('var(--state-danger)');
   });
 });

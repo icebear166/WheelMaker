@@ -3,10 +3,12 @@ import path from 'path';
 
 import {readWebStyles} from '../testHelpers/webStyles';
 const root = path.resolve(__dirname, '..');
-const mainTsx = fs.readFileSync(path.join(root, 'web/src/app/WorkspaceApp.tsx'), 'utf8');
-const settingsSurfaceTsx = fs.readFileSync(path.join(root, 'web/src/settings/SettingsSurface.tsx'), 'utf8');
+const mainTsx = fs.readFileSync(path.join(root, 'web/src/app/WorkspaceApp.tsx'), 'utf8').replace(/\r\n/g, '\n');
+const settingsSurfaceTsx = fs.readFileSync(path.join(root, 'web/src/settings/SettingsSurface.tsx'), 'utf8').replace(/\r\n/g, '\n');
 const detailPath = path.join(root, 'web/src/settings/SkillsSettingsDetail.tsx');
-const detailTsx = fs.existsSync(detailPath) ? fs.readFileSync(detailPath, 'utf8') : '';
+const detailTsx = fs.existsSync(detailPath)
+  ? fs.readFileSync(detailPath, 'utf8').replace(/\r\n/g, '\n')
+  : '';
 const skillsDetailSource = `${mainTsx}\n${detailTsx}`;
 const stylesCss = readWebStyles(root);
 
