@@ -742,8 +742,16 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.gesture-nav-pill {');
     expect(stylesCss).toContain('.gesture-nav-button {');
     expect(stylesCss).toContain('.drawer-toggle-bubble {');
+    expect(cssRuleBlock(stylesCss, '.gesture-nav-pill')).toContain('padding: 0;');
+    expect(cssRuleBlock(stylesCss, '.gesture-nav-pill')).toContain('grid-template-rows: 48px;');
     expect(stylesCss).toMatch(
       /\.drawer-toggle-bubble\[data-active='true'\] \{[\s\S]*background: transparent;[\s\S]*border-color: color-mix\(in srgb, var\(--accent\) 72%, transparent\);[\s\S]*color: color-mix\(in srgb, var\(--accent\) 88%, var\(--text\)\);/,
+    );
+    expect(stylesCss).toMatch(
+      /\.gesture-nav-control\[data-expanded='false'\] \.gesture-nav-current-button \{[\s\S]*width: 50px;[\s\S]*height: 48px;[\s\S]*\}/,
+    );
+    expect(stylesCss).toMatch(
+      /\.gesture-nav-current-button\[data-active='true'\] \{[\s\S]*background: color-mix\(in srgb, var\(--accent\) 16%, var\(--surface-overlay\)\);[\s\S]*box-shadow: var\(--shadow-floating\);[\s\S]*\}/,
     );
     expect(stylesCss).toContain('-webkit-tap-highlight-color: transparent;');
     expect(stylesCss).toContain('.breadcrumb-title {');
@@ -1260,6 +1268,7 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-at-symbol {');
     expect(stylesCss).not.toContain('.chat-attachment-plus-button {');
     expect(stylesCss).toContain('.chat-attachment-action-tray {');
+    expect(cssRuleBlock(stylesCss, '.chat-attachment-action-tray')).toContain('background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));');
     expect(stylesCss).not.toContain('.chat-attachment-action-tray::after {');
     expect(stylesCss).toContain('.chat-attachment-action-button {');
     expect(stylesCss).toContain('.chat-attachment-action-label {');
@@ -1280,6 +1289,7 @@ describe('web chat integration', () => {
     expect(stylesCss).toMatch(
       /\.chat-config-value-menu \{[\s\S]*width: max-content;[\s\S]*min-width: 100%;[\s\S]*max-width: min\(320px, calc\(100vw - 24px\)\);[\s\S]*\}/,
     );
+    expect(cssRuleBlock(stylesCss, '.chat-config-value-menu')).toContain('background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));');
     expect(stylesCss).toContain('.chat-config-value-option {');
     expect(stylesCss).toContain('.chat-config-value-menu .chat-config-value-option {');
     expect(stylesCss).toMatch(
@@ -1292,6 +1302,8 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-config-options .chat-config-item:first-child:not(:only-child) .chat-config-value-menu {');
     expect(stylesCss).toContain('.chat-config-options .chat-config-item:only-child .chat-config-value-menu {');
     expect(stylesCss).toContain('.chat-config-overflow-group {');
+    expect(cssRuleBlock(stylesCss, '.chat-config-overflow-menu')).toContain('background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));');
+    expect(cssRuleBlock(stylesCss, '.chat-slash-menu')).toContain('background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));');
     expect(stylesCss).not.toContain('.chat-config-select {');
     expect(stylesCss).not.toContain('.chat-config-feedback {');
   });
@@ -1552,14 +1564,13 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('const keyboardShift = Math.min(');
     expect(stylesCss).not.toContain('.floating-nav-group');
     expect(stylesCss).toMatch(
-      /\.drawer-toggle-bubble \{[\s\S]*background: color-mix\(in srgb, var\(--panel\) 34%, transparent\);[\s\S]*backdrop-filter: blur\(1px\);[\s\S]*\}/,
+      /\.drawer-toggle-bubble \{[\s\S]*background: transparent;[\s\S]*backdrop-filter: none;[\s\S]*\}/,
     );
     expect(stylesCss).not.toContain('[data-backdrop-tone');
     expect(stylesCss).toMatch(
       /\.floating-control-stack\[data-idle='true'\] \{[\s\S]*opacity: 0\.6;[\s\S]*\}/,
     );
     expect(stylesCss).not.toContain(".floating-control-stack[data-idle='true'] .drawer-toggle-bubble");
-    expect(stylesCss).not.toContain('backdrop-filter: none;');
     expect(stylesCss).not.toContain('.floating-nav-button');
     expect(stylesCss).toMatch(
       /\.port-relay-floating-bubble\[data-active='true'\] \{[\s\S]*background: transparent;[\s\S]*border-color: color-mix\(in srgb, var\(--accent\) 72%, transparent\);[\s\S]*color: color-mix\(in srgb, var\(--accent\) 88%, var\(--text\)\);[\s\S]*\}/,
@@ -1987,11 +1998,11 @@ describe('web chat integration', () => {
     expect(stylesCss).not.toContain('.wide-project-section.active > .wide-project-row::before {');
     expect(stylesCss).not.toContain('.wide-project-section.pinned > .wide-project-row::before {');
     expect(stylesCss).toMatch(/\.wide-project-toggle \{[^}]*height: 30px;[^}]*\}/);
-    expect(stylesCss).toMatch(/\.wide-session-row \{[^}]*min-height: 26px;[^}]*\}/);
+    expect(stylesCss).toMatch(/\.wide-session-row \{[^}]*min-height: 24px;[^}]*\}/);
     const wideSessionRowBlock = stylesCss.match(/\.wide-session-row \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(wideSessionRowBlock).toContain('grid-template-columns: 9px minmax(0, 1fr) auto auto;');
-    expect(wideSessionRowBlock).toContain('gap: 5px;');
-    expect(wideSessionRowBlock).toContain('padding: 0 6px 0 3px;');
+    expect(wideSessionRowBlock).toContain('gap: 4px;');
+    expect(wideSessionRowBlock).toContain('padding: 0 5px 0 2px;');
     const sessionStateMarkerBlock = stylesCss.match(/\.session-state-marker \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(sessionStateMarkerBlock).toContain('width: 9px;');
     expect(sessionStateMarkerBlock).toContain('flex: 0 0 9px;');
@@ -1999,6 +2010,7 @@ describe('web chat integration', () => {
     const sessionStateRunningBlock = stylesCss.match(/\.session-state-marker\.running \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(sessionStateRunningBlock).toContain('font-size: 11px;');
     expect(stylesCss).toMatch(/\.mobile-session-row \{[^}]*min-height: 30px;[^}]*\}/);
+    expect(stylesCss).toMatch(/@media \(max-width: 900px\) \{[\s\S]*?\.mobile-session-row \{[\s\S]*?min-height: 40px;[\s\S]*?\}[\s\S]*?\}/);
     expect(stylesCss).toContain('font-size: 10.5px;');
     expect(stylesCss).toContain('.wide-project-folder-icon.codicon-folder {');
     expect(stylesCss).toContain('.wide-project-folder-icon.codicon-folder-opened {');
@@ -2008,7 +2020,7 @@ describe('web chat integration', () => {
     const selectedSessionRowBlock = stylesCss.match(/\.wide-session-row\.selected \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(selectedSessionRowBlock).toContain('margin-left: -21px;');
     expect(selectedSessionRowBlock).toContain('width: calc(100% + 21px);');
-    expect(selectedSessionRowBlock).toContain('padding-left: 24px;');
+    expect(selectedSessionRowBlock).toContain('padding-left: 23px;');
     expect(selectedSessionRowBlock).toContain('background: linear-gradient(');
     expect(selectedSessionRowBlock).toContain('to right,');
     expect(selectedSessionRowBlock).toContain('color-mix(in srgb, var(--accent) 5%, transparent) 0,');

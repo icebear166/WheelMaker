@@ -127,10 +127,13 @@ describe('gesture navigation', () => {
       /\.gesture-nav-control \{[\s\S]*width: 50px;[\s\S]*height: 48px;[\s\S]*\}/,
     );
     expect(styles).toMatch(
-      /\.gesture-nav-pill \{[\s\S]*width: 50px;[\s\S]*grid-template-rows: 40px;[\s\S]*padding: 4px;[\s\S]*\}/,
+      /\.gesture-nav-pill \{[\s\S]*width: 50px;[\s\S]*grid-template-rows: 48px;[\s\S]*padding: 0;[\s\S]*\}/,
     );
     expect(styles).toMatch(
-      /\.gesture-nav-control\[data-expanded='true'\] \.gesture-nav-pill \{[\s\S]*top: -40px;[\s\S]*height: 128px;[\s\S]*grid-template-rows: repeat\(3, 40px\);[\s\S]*\}/,
+      /\.gesture-nav-control\[data-expanded='true'\] \.gesture-nav-pill \{[\s\S]*top: -40px;[\s\S]*height: 128px;[\s\S]*grid-template-rows: repeat\(3, 40px\);[\s\S]*padding: 4px;[\s\S]*\}/,
+    );
+    expect(styles).toMatch(
+      /\.gesture-nav-control\[data-expanded='false'\] \.gesture-nav-current-button \{[\s\S]*width: 50px;[\s\S]*height: 48px;[\s\S]*\}/,
     );
     expect(styles).not.toContain('height: 168px;');
     expect(styles).not.toContain('grid-template-rows: repeat(4, 40px);');
@@ -156,6 +159,9 @@ describe('gesture navigation', () => {
     expect(main).toContain('aria-pressed={chatPreviewOpen}');
     expect(styles).toMatch(
       /\.gesture-nav-capsule\[data-active='true'\] \{[\s\S]*color: color-mix\(in srgb, var\(--accent\) 88%, var\(--text\)\);[\s\S]*\}/,
+    );
+    expect(styles).toMatch(
+      /\.gesture-nav-current-button\[data-active='true'\] \{[\s\S]*background: color-mix\(in srgb, var\(--accent\) 16%, var\(--surface-overlay\)\);[\s\S]*box-shadow: var\(--shadow-floating\);[\s\S]*\}/,
     );
     expect(styles).toMatch(
       /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*\.gesture-nav-pill,[\s\S]*\.gesture-nav-capsule[\s\S]*animation: none;[\s\S]*transition: none;[\s\S]*\}/,

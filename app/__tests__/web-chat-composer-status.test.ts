@@ -208,6 +208,8 @@ describe('chat composer status helpers', () => {
     const valueMenu = cssRuleBlock(stylesCss, '.chat-config-value-menu');
     expect(overflowMenu).toContain('z-index: var(--chat-config-popover-layer);');
     expect(valueMenu).toContain('z-index: var(--chat-config-popover-layer);');
+    expect(overflowMenu).toContain('background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));');
+    expect(valueMenu).toContain('background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));');
   });
 
   test('raises composer trigger menus above the current task surface only while open', () => {
@@ -226,5 +228,7 @@ describe('chat composer status helpers', () => {
     const fileMentionMenu = cssRuleBlock(stylesCss, '.chat-file-mention-menu');
     expect(slashMenu).toContain('z-index: 36;');
     expect(fileMentionMenu).toContain('z-index: 37;');
+    expect(slashMenu).toContain('background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));');
+    expect(fileMentionMenu).toContain('background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));');
   });
 });

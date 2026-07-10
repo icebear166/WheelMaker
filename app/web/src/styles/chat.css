@@ -1319,7 +1319,7 @@
 .wide-session-row {
   position: relative;
   width: 100%;
-  min-height: 26px;
+  min-height: 24px;
   border: none;
   border-radius: 6px;
   background: transparent;
@@ -1327,8 +1327,8 @@
   display: grid;
   grid-template-columns: 9px minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 5px;
-  padding: 0 6px 0 3px;
+  gap: 4px;
+  padding: 0 5px 0 2px;
   cursor: pointer;
   text-align: left;
   -webkit-touch-callout: none;
@@ -1346,7 +1346,7 @@
 .wide-session-row.selected {
   margin-left: -21px;
   width: calc(100% + 21px);
-  padding-left: 24px;
+  padding-left: 23px;
   background: linear-gradient(
     to right,
     color-mix(in srgb, var(--accent) 5%, transparent) 0,
@@ -3699,10 +3699,12 @@
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
   overscroll-behavior: contain;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: 10px;
-  background: var(--panel);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+  background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));
+  box-shadow: var(--shadow-overlay);
+  backdrop-filter: blur(16px) saturate(1.06);
+  -webkit-backdrop-filter: blur(16px) saturate(1.06);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -4142,15 +4144,10 @@
   padding: 4px;
   border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border));
   border-radius: 10px;
-  background:
-    linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--panel) 96%, var(--accent)) 0%,
-      color-mix(in srgb, var(--panel) 92%, var(--accent)) 72%,
-      color-mix(in srgb, var(--panel) 64%, transparent) 100%
-    );
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
-  backdrop-filter: blur(10px);
+  background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));
+  box-shadow: var(--shadow-overlay);
+  backdrop-filter: blur(16px) saturate(1.06);
+  -webkit-backdrop-filter: blur(16px) saturate(1.06);
 }
 
 .chat-attachment-action-button {
@@ -4443,10 +4440,8 @@
   padding: 8px 10px;
   border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--panel-2) 94%, #111);
-  box-shadow:
-    0 18px 42px rgba(0, 0, 0, 0.36),
-    0 0 0 1px color-mix(in srgb, #fff 4%, transparent);
+  background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));
+  box-shadow: var(--shadow-overlay);
   color: var(--text);
   display: flex;
   flex-direction: column;
@@ -4458,7 +4453,8 @@
   transition:
     opacity 120ms ease,
     transform 120ms ease;
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(16px) saturate(1.06);
+  -webkit-backdrop-filter: blur(16px) saturate(1.06);
 }
 
 .chat-context-usage-anchor:hover .chat-context-usage-popover,
@@ -4628,11 +4624,10 @@
   padding: 10px;
   border: 1px solid color-mix(in srgb, var(--border) 82%, var(--accent));
   border-radius: 8px;
-  background: color-mix(in srgb, var(--panel-2) 96%, var(--surface-1));
-  box-shadow:
-    0 16px 38px rgba(0, 0, 0, 0.32),
-    0 0 0 1px color-mix(in srgb, #fff 3%, transparent);
-  backdrop-filter: blur(8px);
+  background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));
+  box-shadow: var(--shadow-overlay);
+  backdrop-filter: blur(16px) saturate(1.06);
+  -webkit-backdrop-filter: blur(16px) saturate(1.06);
   z-index: var(--chat-config-popover-layer);
 }
 
@@ -4711,11 +4706,10 @@
   overflow-y: auto;
   border: 1px solid color-mix(in srgb, var(--border) 82%, var(--accent));
   border-radius: 8px;
-  background: color-mix(in srgb, var(--panel-2) 96%, var(--surface-1));
-  box-shadow:
-    0 16px 38px rgba(0, 0, 0, 0.32),
-    0 0 0 1px color-mix(in srgb, #fff 3%, transparent);
-  backdrop-filter: blur(8px);
+  background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));
+  box-shadow: var(--shadow-overlay);
+  backdrop-filter: blur(16px) saturate(1.06);
+  -webkit-backdrop-filter: blur(16px) saturate(1.06);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -5021,8 +5015,12 @@
 
 @media (max-width: 900px) {
   .mobile-project-row,
-  .mobile-session-row {
+  .mobile-project-row {
     min-height: 44px;
+  }
+
+  .mobile-session-row {
+    min-height: 40px;
   }
 
   .mobile-project-sheet {
