@@ -1575,7 +1575,7 @@ describe('web chat integration', () => {
     expect(stylesCss).not.toContain(".floating-control-stack[data-idle='true'] .drawer-toggle-bubble");
     expect(stylesCss).not.toContain('.floating-nav-button');
     expect(stylesCss).toMatch(
-      /\.port-relay-floating-bubble\[data-active='true'\] \{[\s\S]*background: transparent;[\s\S]*border-color: color-mix\(in srgb, var\(--accent\) 72%, transparent\);[\s\S]*color: color-mix\(in srgb, var\(--accent\) 88%, var\(--text\)\);[\s\S]*\}/,
+      /\.port-relay-floating-bubble\[data-active='true'\] \{[\s\S]*background: transparent;[\s\S]*border-color: color-mix\(in srgb, var\(--accent-primary\) 72%, transparent\);[\s\S]*color: color-mix\(in srgb, var\(--accent-primary\) 88%, var\(--text-primary\)\);[\s\S]*\}/,
     );
   });
 

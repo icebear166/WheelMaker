@@ -70,7 +70,7 @@ describe('web chat font settings', () => {
     expect(stylesCss).toContain('--chat-message-text: #e0e4e9;');
     expect(stylesCss).toContain('--chat-message-text: #252c34;');
     expect(stylesCss).toMatch(
-      /\.chat-main-message \{[\s\S]*font-family: var\(--chat-message-font-family, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', 'Noto Sans CJK SC', 'Noto Sans', sans-serif\);[\s\S]*line-height: 1\.58;[\s\S]*color: var\(--chat-message-text, var\(--text\)\);[\s\S]*letter-spacing: 0;[\s\S]*\}/,
+      /\.chat-main-message \{[\s\S]*font-family: var\(--chat-message-font-family, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', 'Noto Sans CJK SC', 'Noto Sans', sans-serif\);[\s\S]*line-height: 1\.58;[\s\S]*color: var\(--chat-message-text, var\(--text-primary\)\);[\s\S]*letter-spacing: 0;[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
       /\.chat-main-message code:not\(\.wm-shiki-code\) \{[\s\S]*font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;[\s\S]*\}/,

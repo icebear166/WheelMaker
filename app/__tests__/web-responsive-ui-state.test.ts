@@ -580,7 +580,7 @@ describe('web responsive ui state', () => {
 
     const selectedSwatchBlock = stylesCss.match(/\.chat-hub-color-swatch\.selected \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(selectedSwatchBlock).toContain('inset 0 0 0 1px rgba(255, 255, 255, 0.24)');
-    expect(selectedSwatchBlock).toContain('0 0 0 2px color-mix(in srgb, var(--panel) 80%, transparent)');
+    expect(selectedSwatchBlock).toContain('0 0 0 2px color-mix(in srgb, var(--surface-panel) 80%, transparent)');
     expect(selectedSwatchBlock).not.toContain('0 0 16px');
     expect(stylesCss).toContain('.chat-hub-color-swatch.selected::after {');
     const defaultBadgeBlock = stylesCss.match(/\.chat-hub-color-default-badge \{[\s\S]*?\n\}/)?.[0] ?? '';
@@ -601,7 +601,7 @@ describe('web responsive ui state', () => {
     const colorLabelBlock = stylesCss.match(/\.chat-hub-color-custom-label \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(colorLabelBlock).toContain('font-size: 11px;');
     expect(colorLabelBlock).toContain('font-weight: 700;');
-    expect(colorLabelBlock).toContain('color: color-mix(in srgb, var(--text) 86%, var(--muted));');
+    expect(colorLabelBlock).toContain('color: color-mix(in srgb, var(--text-primary) 86%, var(--text-secondary));');
     const customHeaderBlock = stylesCss.match(/\.chat-hub-color-custom-header \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(customHeaderBlock).toContain('grid-template-columns: minmax(0, 1fr) var(--chat-hub-color-chip-width);');
     const customPreviewBlock = stylesCss.match(/\.chat-hub-color-custom-preview \{[\s\S]*?\n\}/)?.[0] ?? '';

@@ -34,6 +34,36 @@ describe('workspace visual foundation', () => {
     expect(tokens).toContain('.theme-light {');
   });
 
+  test('uses semantic tokens directly throughout the runtime chrome', () => {
+    const runtimeStyles = [
+      'web/src/styles/base.css',
+      'web/src/styles/shell.css',
+      'web/src/styles/surfaces.css',
+      'web/src/styles/chat.css',
+      'web/src/styles/code.css',
+      'web/src/styles/settings.css',
+      'web/src/styles/debug.css',
+      'web/src/styles/portRelay.css',
+    ].map(read).join('\n');
+    const runtimeChrome = [
+      'web/src/styles/shell.css',
+      'web/src/styles/chat.css',
+      'web/src/styles/debug.css',
+      'web/src/styles/portRelay.css',
+    ].map(read).join('\n');
+    const tokens = read('web/src/styles/tokens.css');
+
+    expect(tokens.match(/--surface-workspace-content:/g) ?? []).toHaveLength(2);
+    expect(tokens.match(/--state-info:/g) ?? []).toHaveLength(2);
+    expect(runtimeStyles).not.toMatch(/var\(--(?:bg|panel|panel-2|panel-3|text|muted|border|accent|danger)\)/);
+    expect(runtimeChrome).not.toMatch(/#094771|#4fbf6b|#f46d6d|#d29922|#3fb950|#ff7b72|#18a999|#5eead4|#ff8a82/);
+    expect(runtimeChrome).toContain('var(--accent-primary)');
+    expect(runtimeChrome).toContain('var(--state-success)');
+    expect(runtimeChrome).toContain('var(--state-warning)');
+    expect(runtimeChrome).toContain('var(--state-danger)');
+    expect(runtimeChrome).toContain('var(--state-info)');
+  });
+
   test('keeps File and Git out of page-specific redesign work', () => {
     const index = read('web/src/styles/index.css');
     expect(index).toContain("@import './file.css';");

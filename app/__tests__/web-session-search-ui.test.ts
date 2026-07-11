@@ -168,8 +168,8 @@ describe('web session search UI wiring', () => {
     const styles = readWebStyles(projectRoot);
 
     const focusWithinBlock = styles.match(/\.session-search-control\.open:focus-within,\s*\.chat-header-search-control\.open:focus-within \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(focusWithinBlock).toContain('border-color: color-mix(in srgb, var(--accent) 45%, var(--border));');
-    expect(focusWithinBlock).toContain('box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 14%, transparent);');
+    expect(focusWithinBlock).toContain('border-color: color-mix(in srgb, var(--accent-primary) 45%, var(--border-subtle));');
+    expect(focusWithinBlock).toContain('box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-primary) 14%, transparent);');
 
     const inputFocusVisibleBlock = styles.match(/\.session-search-input:focus-visible \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(inputFocusVisibleBlock).toContain('outline: none;');

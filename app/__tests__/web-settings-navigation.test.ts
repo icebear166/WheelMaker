@@ -95,7 +95,7 @@ describe('settings navigation model', () => {
     expect(css).toMatch(/\.settings-row \{[\s\S]*transition:[\s\S]*background var\(--motion-fast\) var\(--ease-standard\),[\s\S]*color var\(--motion-fast\) var\(--ease-standard\),[\s\S]*box-shadow var\(--motion-fast\) var\(--ease-standard\);[\s\S]*\}/);
     expect(css).toMatch(/\.settings-workbench-panel \.sidebar-setting-select,[\s\S]*\.settings-workbench-panel \.sidebar-setting-input \{[\s\S]*border-radius: var\(--radius-control\);[\s\S]*\}/);
     expect(css).toMatch(/\.mobile-settings-screen \.settings-row \{[\s\S]*min-height: 56px;[\s\S]*\}/);
-    expect(css).toMatch(/\.mobile-settings-shortcut-button\.active \{[\s\S]*color: var\(--accent\);[\s\S]*background: transparent;[\s\S]*\}/);
+    expect(css).toMatch(/\.mobile-settings-shortcut-button\.active \{[\s\S]*color: var\(--accent-primary\);[\s\S]*background: transparent;[\s\S]*\}/);
   });
 
   test('shares a durable surface contract across settings details', () => {
@@ -116,7 +116,11 @@ describe('settings navigation model', () => {
     expect(settingsCss).toMatch(/\.settings-detail-header \{[\s\S]*background: color-mix\(in srgb, var\(--surface-panel\) 96%, transparent\);[\s\S]*\}/);
     expect(settingsCss).toMatch(/\.settings-metadata-card,[\s\S]*\.settings-database-storage-metric,[\s\S]*\.settings-database-store-list,[\s\S]*\.update-summary-bar \{[\s\S]*border-radius: var\(--radius-panel\);[\s\S]*\}/);
     expect(settingsCss).toMatch(/\.settings-detail-action-btn \{[\s\S]*border-radius: var\(--radius-control\);[\s\S]*\}/);
+    expect(settingsCss).not.toMatch(/var\(--(?:bg|panel|panel-2|panel-3|text|muted|border|accent|danger)\)/);
     expect(portRelayCss).toMatch(/\.port-relay-section \{[\s\S]*border-radius: var\(--radius-panel\);[\s\S]*\}/);
+    expect(portRelayCss).toContain('var(--state-warning)');
+    expect(portRelayCss).toContain('var(--state-success)');
+    expect(debugCss).toContain('var(--state-warning)');
     expect(debugCss).toMatch(/\.debug-log-detail-footer \{[\s\S]*background: color-mix\(in srgb, var\(--surface-panel\) 96%, transparent\);[\s\S]*\}/);
   });
 

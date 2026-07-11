@@ -158,10 +158,10 @@ describe('gesture navigation', () => {
     expect(main).toContain('data-active={chatPreviewOpen}');
     expect(main).toContain('aria-pressed={chatPreviewOpen}');
     expect(styles).toMatch(
-      /\.gesture-nav-capsule\[data-active='true'\] \{[\s\S]*color: color-mix\(in srgb, var\(--accent\) 88%, var\(--text\)\);[\s\S]*\}/,
+      /\.gesture-nav-capsule\[data-active='true'\] \{[\s\S]*color: color-mix\(in srgb, var\(--accent-primary\) 88%, var\(--text-primary\)\);[\s\S]*\}/,
     );
     expect(styles).toMatch(
-      /\.gesture-nav-current-button\[data-active='true'\] \{[\s\S]*color: color-mix\(in srgb, var\(--accent\) 88%, var\(--text\)\);[\s\S]*\}/,
+      /\.gesture-nav-current-button\[data-active='true'\] \{[\s\S]*color: color-mix\(in srgb, var\(--accent-primary\) 88%, var\(--text-primary\)\);[\s\S]*\}/,
     );
     const activeCurrentButtonBlock = styles.match(/\.gesture-nav-current-button\[data-active='true'\] \{[\s\S]*?\n\}/)?.[0] ?? '';
     const activeCapsuleBlock = styles.match(/\.gesture-nav-capsule\[data-active='true'\] \{[\s\S]*?\n\}/)?.[0] ?? '';

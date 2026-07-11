@@ -148,8 +148,8 @@ describe('chat composer status helpers', () => {
     expect(stylesCss).not.toContain('.chat-context-usage::after');
     const contextUsageRule = cssRuleBlock(stylesCss, '.chat-context-usage');
     expect(contextUsageRule).toContain('--chat-context-ring-width: 1.5px;');
-    expect(contextUsageRule).toContain('--chat-context-used-color: color-mix(in srgb, var(--text) 72%, #ffffff);');
-    expect(contextUsageRule).toContain('--chat-context-rest-color: color-mix(in srgb, var(--muted) 48%, transparent);');
+    expect(contextUsageRule).toContain('--chat-context-used-color: color-mix(in srgb, var(--text-primary) 72%, #ffffff);');
+    expect(contextUsageRule).toContain('--chat-context-rest-color: color-mix(in srgb, var(--text-secondary) 48%, transparent);');
     expect(contextUsageRule).toContain('aspect-ratio: 1 / 1;');
     expect(contextUsageRule).toContain('var(--chat-context-used-color) var(--chat-context-used)');
     expect(contextUsageRule).toContain('var(--chat-context-rest-color) 0');
@@ -158,7 +158,7 @@ describe('chat composer status helpers', () => {
     expect(contextUsageRule).toContain('transparent calc(100% - var(--chat-context-ring-width))');
     expect(contextUsageRule).not.toContain('var(--accent)');
     const contextUsageHoverRule = cssRuleBlock(stylesCss, '.chat-context-usage:hover,\n.chat-context-usage:focus-visible,\n.chat-context-usage-anchor.open .chat-context-usage');
-    expect(contextUsageHoverRule).toContain('outline: 3px solid color-mix(in srgb, var(--text) 9%, transparent);');
+    expect(contextUsageHoverRule).toContain('outline: 3px solid color-mix(in srgb, var(--text-primary) 9%, transparent);');
     expect(contextUsageHoverRule).not.toContain('var(--accent)');
     expect(stylesCss).not.toContain('.chat-context-usage.pending');
   });

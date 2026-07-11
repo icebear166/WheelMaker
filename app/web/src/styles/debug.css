@@ -18,17 +18,17 @@
   padding: 14px 12px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-panel);
-  color: var(--muted);
+  color: var(--text-secondary);
   background: color-mix(in srgb, var(--surface-raised) 82%, var(--surface-panel));
   font-size: 12px;
 }
 
 .debug-log-line {
   border: 1px solid var(--border-subtle);
-  border-left: 3px solid color-mix(in srgb, var(--muted) 72%, transparent);
+  border-left: 3px solid color-mix(in srgb, var(--text-secondary) 72%, transparent);
   border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--surface-raised) 76%, var(--surface-panel));
-  color: color-mix(in srgb, var(--text) 90%, var(--muted));
+  color: color-mix(in srgb, var(--text-primary) 90%, var(--text-secondary));
   font-family: var(--code-font-family, Consolas, monospace);
   font-size: 10.5px;
   line-height: 1.35;
@@ -38,15 +38,15 @@
 }
 
 .debug-log-line.info {
-  border-left-color: color-mix(in srgb, var(--accent) 72%, transparent);
+  border-left-color: color-mix(in srgb, var(--accent-primary) 72%, transparent);
 }
 
 .debug-log-line.warn {
-  border-left-color: #d7a43a;
+  border-left-color: var(--state-warning);
 }
 
 .debug-log-line.error {
-  border-left-color: var(--danger);
+  border-left-color: var(--state-danger);
 }
 
 .debug-log-category-label,
@@ -69,7 +69,7 @@
 }
 
 .debug-log-category-label {
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 700;
 }
@@ -80,7 +80,7 @@
 
 .debug-log-upload-status {
   min-width: 0;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -95,9 +95,9 @@
   min-width: 620px;
   min-height: 360px;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--border) 88%, var(--accent));
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 88%, var(--accent-primary));
   border-radius: 6px;
-  background: var(--panel);
+  background: var(--surface-panel);
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
 }
 
@@ -109,8 +109,8 @@
   justify-content: space-between;
   gap: 12px;
   padding: 0 8px 0 10px;
-  border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel-2) 88%, var(--panel-3));
+  border-bottom: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface-panel));
   cursor: move;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
@@ -133,15 +133,15 @@
 }
 
 .registry-debug-title .codicon {
-  color: var(--accent);
+  color: var(--accent-primary);
 }
 
 .registry-debug-count {
   min-width: 22px;
   height: 18px;
   border-radius: 999px;
-  background: var(--panel-3);
-  color: var(--muted);
+  background: var(--surface-panel);
+  color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -157,10 +157,10 @@
 
 .registry-debug-action,
 .registry-debug-icon-action {
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: 5px;
-  background: var(--panel-3);
-  color: var(--text);
+  background: var(--surface-panel);
+  color: var(--text-primary);
   font: inherit;
   font-size: 11px;
   min-height: 24px;
@@ -192,8 +192,8 @@
   gap: 12px;
   min-height: 38px;
   padding: 6px 10px;
-  border-bottom: 1px solid var(--border);
-  background: var(--panel);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-panel);
 }
 
 .registry-debug-select-label,
@@ -202,21 +202,21 @@
   align-items: center;
   gap: 7px;
   min-width: 0;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 11px;
 }
 
 .registry-debug-check {
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .registry-debug-select {
   max-width: 240px;
   height: 26px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: 4px;
-  background: var(--panel-3);
-  color: var(--text);
+  background: var(--surface-panel);
+  color: var(--text-primary);
   font-size: 11px;
 }
 
@@ -224,7 +224,7 @@
   min-height: 0;
   flex: 1 1 auto;
   display: flex;
-  background: var(--panel);
+  background: var(--surface-panel);
 }
 
 .registry-debug-list-pane,
@@ -254,8 +254,8 @@
   gap: 3px;
   align-items: center;
   padding: 0 8px;
-  border-bottom: 1px solid var(--border);
-  color: var(--muted);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
@@ -270,9 +270,9 @@
   width: 100%;
   min-height: 30px;
   border: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 58%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 58%, transparent);
   background: transparent;
-  color: var(--text);
+  color: var(--text-primary);
   display: grid;
   grid-template-columns: 56px 28px 44px 50px minmax(72px, 150px) 30px minmax(66px, 120px) minmax(70px, 1fr);
   gap: 3px;
@@ -290,7 +290,7 @@
 }
 
 .registry-debug-row.selected {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  background: color-mix(in srgb, var(--accent-primary) 18%, transparent);
 }
 
 .registry-debug-cell {
@@ -301,7 +301,7 @@
 }
 
 .registry-debug-cell.direction {
-  color: var(--muted);
+  color: var(--text-secondary);
   text-transform: uppercase;
 }
 
@@ -325,7 +325,7 @@
 .registry-debug-connection-tag {
   max-width: 100%;
   min-width: 0;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: 4px;
   padding: 1px 4px;
   overflow: hidden;
@@ -337,13 +337,13 @@
 }
 
 .registry-debug-connection-tag.local {
-  border-color: color-mix(in srgb, #4db6ac 58%, var(--border));
+  border-color: color-mix(in srgb, #4db6ac 58%, var(--border-subtle));
   background: color-mix(in srgb, #4db6ac 16%, transparent);
   color: #4db6ac;
 }
 
 .registry-debug-connection-tag.remote {
-  border-color: color-mix(in srgb, #dcdcaa 48%, var(--border));
+  border-color: color-mix(in srgb, #dcdcaa 48%, var(--border-subtle));
   background: color-mix(in srgb, #dcdcaa 12%, transparent);
   color: #dcdcaa;
 }
@@ -352,10 +352,10 @@
   position: absolute;
   right: 12px;
   bottom: 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: 999px;
-  background: var(--panel-3);
-  color: var(--text);
+  background: var(--surface-panel);
+  color: var(--text-primary);
   min-height: 28px;
   padding: 0 12px;
   box-shadow: var(--soft-shadow);
@@ -367,13 +367,13 @@
 .registry-debug-splitter {
   flex: 0 0 4px;
   border: 0;
-  border-left: 1px solid var(--border);
+  border-left: 1px solid var(--border-subtle);
   background: transparent;
   cursor: col-resize;
 }
 
 .registry-debug-splitter:hover {
-  background: color-mix(in srgb, var(--accent) 16%, var(--panel));
+  background: color-mix(in srgb, var(--accent-primary) 16%, var(--surface-panel));
 }
 
 .registry-debug-detail-shell {
@@ -386,7 +386,7 @@
 
 .registry-debug-detail-pane {
   flex: 1 1 auto;
-  background: var(--panel-3);
+  background: var(--surface-panel);
 }
 
 .registry-debug-detail-header {
@@ -395,8 +395,8 @@
   justify-content: space-between;
   gap: 12px;
   padding: 0 8px 0 10px;
-  border-bottom: 1px solid var(--border);
-  color: var(--muted);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
   font-size: 11px;
 }
 
@@ -406,7 +406,7 @@
   margin: 0;
   padding: 12px;
   overflow: auto;
-  color: var(--text);
+  color: var(--text-primary);
   font-family: 'JetBrains Mono', Consolas, monospace;
   font-size: 11px;
   line-height: 1.5;
@@ -415,7 +415,7 @@
 
 .registry-debug-empty {
   padding: 14px;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -426,6 +426,6 @@
   width: 18px;
   height: 18px;
   border: 0;
-  background: linear-gradient(135deg, transparent 48%, var(--border) 50%, var(--border) 58%, transparent 60%);
+  background: linear-gradient(135deg, transparent 48%, var(--border-subtle) 50%, var(--border-subtle) 58%, transparent 60%);
   cursor: nwse-resize;
 }
