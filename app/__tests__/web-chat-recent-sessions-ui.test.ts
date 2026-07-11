@@ -24,19 +24,28 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('codicon-history recent-sessions-icon');
   });
 
-  test('recent sessions reuse the shared builder with an 8-item cap', () => {
-    expect(mainTsx).toContain('buildRecentChatSessionRows({');
+  test('recent sessions reuse the grouped shared builder with an 8-item cap', () => {
+    expect(mainTsx).toContain('buildRecentChatSessionProjectSections({');
     expect(mainTsx).toContain('limit: 8,');
     // Right-click quick switch keeps its own 6-item cap.
     expect(mainTsx).toContain('limit: 6,');
   });
 
-  test('each recent row shows the project name as a clear marker', () => {
-    expect(mainTsx).toContain('recent-session-project-tag');
-    expect(mainTsx).toContain('renderRecentSessionRow(row, mobile)');
-    expect(chatCss).toContain('.recent-session-project-tag.wide-project-hub-tag');
-    // Project name (not hub id) is displayed on the row.
-    expect(mainTsx).toContain('{projectName}</span>');
+  test('renders recent sessions in lightweight project groups with shared session actions', () => {
+    expect(mainTsx).toContain('renderRecentProjectSessionSection(section, mobile)');
+    expect(mainTsx).toContain('recent-project-session-group');
+    expect(mainTsx).toContain('recent-project-session-heading');
+    expect(mainTsx).toContain('recent-project-session-create');
+    expect(mainTsx).toContain('codicon codicon-add');
+    expect(mainTsx).toContain("openWideProjectActionMenu(targetProjectId, 'new', event.currentTarget);");
+    expect(mainTsx).toContain("openMobileProjectActionMenu(targetProjectId, 'new');");
+    expect(mainTsx).toContain('onContextMenu={event => openProjectSessionContextMenu(targetProjectId, session.sessionId, event)}');
+    expect(mainTsx).toContain('onPointerDown={event => startProjectSessionLongPress(targetProjectId, session.sessionId, event)}');
+    expect(mainTsx).toContain('wide-session-agent-tag');
+    expect(mainTsx).not.toContain('recent-session-project-tag');
+    expect(chatCss).toContain('.recent-project-session-heading');
+    expect(chatCss).toContain('.recent-project-session-create');
+    expect(chatCss).not.toContain('.recent-session-project-tag.wide-project-hub-tag');
   });
 
   test('recent sessions refresh only on prompt start / done', () => {
@@ -77,11 +86,11 @@ describe('web chat recent sessions', () => {
   test('renders the pinned recent surface only above desktop chat with a collapsed session rail', () => {
     expect(mainTsx).toContain("import {ChatRecentSessionsSurface} from '../chat/ChatRecentSessionsSurface';");
     expect(mainTsx).toContain(
-      'const showPinnedRecentSessionsSurface = isWide && sidebarCollapsed && recentSessionsPinned && !archivedMode && !sessionSearchActive && recentSessions.length > 0;',
+      'const showPinnedRecentSessionsSurface = isWide && sidebarCollapsed && recentSessionsPinned && !archivedMode && !sessionSearchActive && recentSessionSections.length > 0;',
     );
     expect(mainTsx).toContain('showPinnedRecentSessionsSurface ? (');
     expect(mainTsx).toContain('<ChatRecentSessionsSurface onUnpin={() => setRecentSessionsPinned(false)}>');
-    expect(mainTsx).toContain('{recentSessions.map(row => renderRecentSessionRow(row, false))}');
+    expect(mainTsx).toContain('{recentSessionSections.map(section => renderRecentProjectSessionSection(section, false))}');
     expect(mainTsx).toContain('</ChatRecentSessionsSurface>');
   });
 });

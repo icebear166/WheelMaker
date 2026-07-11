@@ -142,6 +142,23 @@ export type RecentChatSessionRow = {
   session: RegistryChatSession;
 };
 
+export type RecentChatSessionProjectSection = {
+  projectId: string;
+  projectName: string;
+  sessions: RegistryChatSession[];
+};
+
+function latestRecentProjectSectionUpdatedAt(section: RecentChatSessionProjectSection): string {
+  let latestUpdatedAt = '';
+  for (const session of section.sessions) {
+    const updatedAt = session.updatedAt || '';
+    if (compareUpdatedAtDesc(updatedAt, latestUpdatedAt) < 0) {
+      latestUpdatedAt = updatedAt;
+    }
+  }
+  return latestUpdatedAt;
+}
+
 // Flat, cross-project "recent sessions" list (global recency order), used by
 // the persistent Recent Sessions section. Shares the same candidate building and
 // sort as the right-click quick-switch menu (which keeps the grouped layout).
@@ -159,6 +176,32 @@ export function buildRecentChatSessionRows({
       projectHubId: candidate.projectHubId,
       session: candidate.session,
     }));
+}
+
+export function buildRecentChatSessionProjectSections(
+  input: BuildMobileChatQuickSwitchSectionsInput,
+): RecentChatSessionProjectSection[] {
+  const sections: RecentChatSessionProjectSection[] = [];
+  const sectionsByProjectId = new Map<string, RecentChatSessionProjectSection>();
+
+  for (const row of buildRecentChatSessionRows(input)) {
+    let section = sectionsByProjectId.get(row.projectId);
+    if (!section) {
+      section = {
+        projectId: row.projectId,
+        projectName: row.projectName,
+        sessions: [],
+      };
+      sectionsByProjectId.set(row.projectId, section);
+      sections.push(section);
+    }
+    section.sessions.push(row.session);
+  }
+
+  return sections.sort((left, right) => compareUpdatedAtDesc(
+    latestRecentProjectSectionUpdatedAt(left),
+    latestRecentProjectSectionUpdatedAt(right),
+  ));
 }
 
 export function buildMobileChatQuickSwitchSections({

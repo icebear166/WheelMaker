@@ -1216,24 +1216,73 @@
   text-align: left;
 }
 
-.recent-session-project-tag.wide-project-hub-tag {
-  flex: 0 0 auto;
-  min-height: 20px;
-  max-width: 112px;
-  padding: 1px 7px;
-  border: 1px solid color-mix(in srgb, var(--hub-accent) 40%, var(--border-subtle));
-  background: color-mix(in srgb, var(--hub-accent) 14%, transparent);
-  color: color-mix(in srgb, var(--hub-accent) 70%, var(--text-primary));
-  border-radius: 999px;
-  font-size: 10.5px;
-  font-weight: 600;
-  line-height: 1.25;
-  text-transform: none;
-  letter-spacing: 0;
+.recent-sessions-list {
+  margin-top: 0;
+  padding: 1px 0;
 }
 
-.recent-session-project-tag .wide-project-hub-dot {
-  display: none;
+.recent-project-session-group {
+  margin: 5px 0 7px;
+}
+
+.recent-project-session-heading {
+  min-height: 26px;
+  padding: 0 5px 0 2px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.recent-project-session-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-project-session-create {
+  width: 22px;
+  height: 22px;
+  margin-left: auto;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0.56;
+  transition: opacity 140ms ease, color 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.recent-project-session-heading:hover .recent-project-session-create {
+  opacity: 0.9;
+}
+
+.recent-project-session-create:hover {
+  border-color: color-mix(in srgb, var(--border-subtle) 80%, transparent);
+  background: var(--hover);
+  color: var(--text-primary);
+  opacity: 1;
+}
+
+.recent-project-session-create:focus-visible {
+  outline: 1px solid var(--accent-primary);
+  outline-offset: 1px;
+  opacity: 1;
+}
+
+.recent-project-session-create:active {
+  transform: scale(0.94);
+}
+
+.recent-project-session-list {
+  padding-left: 21px;
 }
 
 .wide-project-actions {

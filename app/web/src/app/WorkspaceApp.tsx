@@ -88,9 +88,9 @@ import {
 } from '../chat/session/chatPromptQueue';
 import {
   buildMobileChatQuickSwitchSections,
-  buildRecentChatSessionRows,
+  buildRecentChatSessionProjectSections,
   hasCompletedUnreadChatSession,
-  type RecentChatSessionRow,
+  type RecentChatSessionProjectSection,
 } from '../chat/mobileChatQuickSwitch';
 import {ChatQuickSwitchMenu} from '../chat/ChatQuickSwitchMenu';
 import { ChatSessionNav } from '../chat/ChatSessionNav';
@@ -3153,7 +3153,7 @@ export function App() {
   const [chatSessions, setChatSessions] = useState<RegistryChatSession[]>([]);
   const chatSessionsRef = useRef<RegistryChatSession[]>([]);
   const [projectSessionsByProjectId, setProjectSessionsByProjectId] = useState<Record<string, RegistryChatSession[]>>({});
-  const [recentSessions, setRecentSessions] = useState<RecentChatSessionRow[]>([]);
+  const [recentSessionSections, setRecentSessionSections] = useState<RecentChatSessionProjectSection[]>([]);
   const [recentSessionsTick, setRecentSessionsTick] = useState(0);
   const [recentSessionsPinned, setRecentSessionsPinned] = useState(false);
   const projectSessionsByProjectIdRef = useRef<Record<string, RegistryChatSession[]>>({});
@@ -4988,8 +4988,8 @@ export function App() {
     if (!allVisibleProjectsLoaded) {
       return;
     }
-    setRecentSessions(
-      buildRecentChatSessionRows({
+    setRecentSessionSections(
+      buildRecentChatSessionProjectSections({
         projects: visibleProjectItems,
         sessionsByProjectId: projectSessionsByProjectId,
         limit: 8,
@@ -5007,7 +5007,7 @@ export function App() {
       setRecentSessionsTick(t => t + 1);
     }
   }, [allVisibleProjectsLoaded, projectSessionsByProjectId]);
-  const showPinnedRecentSessionsSurface = isWide && sidebarCollapsed && recentSessionsPinned && !archivedMode && !sessionSearchActive && recentSessions.length > 0;
+  const showPinnedRecentSessionsSurface = isWide && sidebarCollapsed && recentSessionsPinned && !archivedMode && !sessionSearchActive && recentSessionSections.length > 0;
 
   const mobileChatQuickSwitchMenuStyle = useMemo<React.CSSProperties>(() => ({
     top: portRelayReady && portRelayFrameUrl ? 56 : 0,
@@ -14757,49 +14757,101 @@ export function App() {
     );
   };
 
-  const renderRecentSessionRow = (row: RecentChatSessionRow, mobile: boolean) => {
+  const renderRecentSessionRow = (
+    targetProjectId: string,
+    session: RegistryChatSession,
+    mobile: boolean,
+  ) => {
     // Resolve the live session from the store so the state marker stays in
-    // sync with the project list (the recentSessions snapshot can lag until the
+    // sync with the project list (the recent session snapshot can lag until the
     // next prompt event). Fall back to the captured snapshot if not found.
     const liveSession =
-      projectSessionsByProjectId[row.projectId]?.find(
-        item => item.sessionId === row.session.sessionId,
-      ) ?? row.session;
-    const selected = selectedChatEncodedKey === buildChatRuntimeKey(row.projectId, liveSession.sessionId);
-    const projectHubVariant = tagVariantClass('wide-project-hub', row.projectHubId);
-    const projectName = row.projectName || row.projectId;
+      projectSessionsByProjectId[targetProjectId]?.find(
+        item => item.sessionId === session.sessionId,
+      ) ?? session;
+    const sessionAgent = (liveSession.agentType || '').trim();
+    const displaySessionAgent = normalizeAgentTypeName(sessionAgent);
+    const selected = selectedChatEncodedKey === buildChatRuntimeKey(targetProjectId, liveSession.sessionId);
+    const sessionActionsOpen =
+      projectSessionActionMenu?.projectId === targetProjectId &&
+      projectSessionActionMenu.sessionId === liveSession.sessionId;
     return (
       <div
-        key={`recent:${row.projectId}:${row.session.sessionId}`}
-        className="project-session-row-wrap recent-session-row-wrap"
+        key={`recent:${targetProjectId}:${session.sessionId}`}
+        className={`project-session-row-wrap recent-session-row-wrap${sessionActionsOpen ? ' actions-open' : ''}`}
       >
         <button
           type="button"
           className={`wide-session-row recent-session-row${mobile ? ' mobile-session-row' : ''}${selected ? ' selected' : ''}`}
-          title={resolveSessionDisplayTitle(row.session) || row.session.sessionId}
-          onClick={() => {
+          title={resolveSessionDisplayTitle(liveSession) || liveSession.sessionId}
+          onPointerDown={event => startProjectSessionLongPress(targetProjectId, session.sessionId, event)}
+          onPointerUp={finishProjectSessionLongPress}
+          onPointerCancel={finishProjectSessionLongPress}
+          onPointerLeave={finishProjectSessionLongPress}
+          onContextMenu={event => openProjectSessionContextMenu(targetProjectId, session.sessionId, event)}
+          onClick={event => {
+            if (consumeProjectSessionLongPressClick(targetProjectId, session.sessionId, event)) {
+              return;
+            }
             if (mobile) {
-              selectProjectChatSession(row.projectId, row.session.sessionId, {closeMobileDrawer: true}).catch(() => undefined);
+              selectProjectChatSession(targetProjectId, session.sessionId, {closeMobileDrawer: true}).catch(() => undefined);
             } else {
-              selectWideProjectSession(row.projectId, row.session.sessionId).catch(() => undefined);
+              selectWideProjectSession(targetProjectId, session.sessionId).catch(() => undefined);
             }
           }}
         >
-          {renderSessionStateMarker(liveSession, row.projectId)}
+          {renderSessionStateMarker(liveSession, targetProjectId)}
           <span className="wide-session-title">
             {resolveSessionDisplayTitle(liveSession) || liveSession.sessionId}
           </span>
-          <span
-            className={`wide-project-hub-tag recent-session-project-tag ${projectHubVariant}`}
-            style={hubAccentStyle(row.projectHubId)}
-          >
-            <span className="wide-project-hub-dot" aria-hidden="true" />
-            <span className="wide-project-hub-label">{projectName}</span>
-          </span>
+          {displaySessionAgent ? (
+            <span className={`wide-session-agent-tag ${tagVariantClass('wide-session-agent', sessionAgent)}`}>
+              {displaySessionAgent}
+            </span>
+          ) : null}
           <span className="wide-session-time" title={liveSession.updatedAt || ''}>
             {formatCompactRelativeAge(liveSession.updatedAt)}
           </span>
         </button>
+        {renderProjectSessionActionMenu(targetProjectId, liveSession)}
+      </div>
+    );
+  };
+
+  const renderRecentProjectSessionSection = (
+    section: RecentChatSessionProjectSection,
+    mobile: boolean,
+  ) => {
+    const targetProjectId = section.projectId;
+    const projectName = section.projectName || targetProjectId;
+    return (
+      <div
+        key={`recent-project:${targetProjectId}`}
+        className="recent-project-session-group"
+      >
+        <div className="recent-project-session-heading">
+          <span className="recent-project-session-name" title={projectName}>
+            {projectName}
+          </span>
+          <button
+            type="button"
+            className="recent-project-session-create"
+            title="New session"
+            aria-label={`New session in ${projectName}`}
+            onClick={event => {
+              if (mobile) {
+                openMobileProjectActionMenu(targetProjectId, 'new');
+                return;
+              }
+              openWideProjectActionMenu(targetProjectId, 'new', event.currentTarget);
+            }}
+          >
+            <span className="codicon codicon-add" aria-hidden="true" />
+          </button>
+        </div>
+        <div className="recent-project-session-list">
+          {section.sessions.map(session => renderRecentSessionRow(targetProjectId, session, mobile))}
+        </div>
       </div>
     );
   };
@@ -14808,7 +14860,7 @@ export function App() {
     if (archivedMode || sessionSearchActive) {
       return null;
     }
-    if (recentSessions.length === 0) {
+    if (recentSessionSections.length === 0) {
       return null;
     }
     const recentCollapsed = collapsedProjectIds.includes(RECENT_SESSIONS_VIRTUAL_PROJECT_ID);
@@ -14845,7 +14897,7 @@ export function App() {
         </div>
         {!recentCollapsed ? (
           <div className={`wide-project-session-list recent-sessions-list${mobile ? ' mobile-project-session-list' : ''}`}>
-            {recentSessions.map(row => renderRecentSessionRow(row, mobile))}
+            {recentSessionSections.map(section => renderRecentProjectSessionSection(section, mobile))}
           </div>
         ) : null}
       </div>
@@ -18383,7 +18435,7 @@ export function App() {
           {showPinnedRecentSessionsSurface ? (
             <ChatRecentSessionsSurface onUnpin={() => setRecentSessionsPinned(false)}>
               <div className="wide-project-session-list recent-sessions-list chat-recent-sessions-rows">
-                {recentSessions.map(row => renderRecentSessionRow(row, false))}
+                {recentSessionSections.map(section => renderRecentProjectSessionSection(section, false))}
               </div>
             </ChatRecentSessionsSurface>
           ) : null}

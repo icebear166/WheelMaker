@@ -1,5 +1,6 @@
 import {
   buildMobileChatQuickSwitchSections,
+  buildRecentChatSessionProjectSections,
   hasCompletedUnreadChatSession,
 } from '../web/src/chat/mobileChatQuickSwitch';
 import type {RegistryChatSession, RegistryProject} from '../web/src/registry/registryTypes';
@@ -76,6 +77,45 @@ describe('mobile chat quick switch', () => {
       {projectId: 'p3', projectName: 'Gamma', projectHubId: 'local', projectHubLabel: 'local'},
       {projectId: 'p2', projectName: 'Beta', projectHubId: 'hub-b', projectHubLabel: 'hub-b'},
     ]);
+  });
+
+  test('groups selected recent sessions by project while retaining recent order', () => {
+    const sections = buildRecentChatSessionProjectSections({
+      projects: [project('p1', 'Alpha'), project('p2', 'Beta'), project('p3', 'Gamma')],
+      sessionsByProjectId: {
+        p1: [session('p1-old', '2026-05-01T00:00:00.000Z')],
+        p2: [
+          session('p2-newest', '2026-05-05T00:00:00.000Z'),
+          session('p2-next', '2026-05-03T00:00:00.000Z'),
+        ],
+        p3: [session('p3-middle', '2026-05-04T00:00:00.000Z')],
+      },
+      limit: 8,
+    });
+
+    expect(sections.map(section => ({
+      projectId: section.projectId,
+      projectName: section.projectName,
+      sessionIds: section.sessions.map(item => item.sessionId),
+    }))).toEqual([
+      {projectId: 'p2', projectName: 'Beta', sessionIds: ['p2-newest', 'p2-next']},
+      {projectId: 'p3', projectName: 'Gamma', sessionIds: ['p3-middle']},
+      {projectId: 'p1', projectName: 'Alpha', sessionIds: ['p1-old']},
+    ]);
+  });
+
+  test('orders recent project groups by their newest selected session', () => {
+    const sections = buildRecentChatSessionProjectSections({
+      projects: [project('p1', 'Alpha'), project('p2', 'Beta'), project('p3', 'Gamma')],
+      sessionsByProjectId: {
+        p1: [session('p1-newest', '2026-05-08T00:00:00.000Z')],
+        p2: [session('p2-running-old', '2026-01-03T00:00:00.000Z', {running: true})],
+        p3: [session('p3-newer', '2026-05-07T00:00:00.000Z')],
+      },
+      limit: 8,
+    });
+
+    expect(sections.map(section => section.projectId)).toEqual(['p1', 'p3', 'p2']);
   });
 
   test('returns an empty section list when no known sessions exist', () => {
