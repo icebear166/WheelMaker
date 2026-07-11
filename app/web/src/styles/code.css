@@ -1,14 +1,14 @@
 
 
 .markdown-preview [data-source-line-target='true'] {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  outline: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
+  background: color-mix(in srgb, var(--accent-primary) 14%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--accent-primary) 38%, transparent);
   outline-offset: 3px;
   border-radius: 4px;
 }
 
 .code-wrap [data-line-number].wm-line-target {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  background: color-mix(in srgb, var(--accent-primary) 14%, transparent);
 }
 
 .markdown-preview-toggle {
@@ -33,7 +33,7 @@
 .markdown-preview {
   padding: 12px 14px 18px;
   line-height: 1.6;
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .markdown-preview > :first-child {
@@ -83,7 +83,7 @@
 
 .markdown-preview th,
 .markdown-preview td {
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   padding: 6px 8px;
   text-align: left;
   vertical-align: top;
@@ -134,17 +134,17 @@
   box-sizing: border-box;
   width: 100%;
   padding: 26px 30px 30px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  background: var(--panel);
-  color: var(--text);
+  background: var(--surface-panel);
+  color: var(--text-primary);
 }
 
 .markdown-image-export-surface a,
 .markdown-image-export-surface a:visited {
-  color: color-mix(in srgb, var(--accent) 82%, var(--text));
+  color: color-mix(in srgb, var(--accent-primary) 82%, var(--text-primary));
   text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  text-decoration-color: color-mix(in srgb, var(--accent-primary) 60%, transparent);
 }
 
 .markdown-image-export-surface table {
@@ -161,9 +161,9 @@
 .mermaid-block {
   margin: 10px 0 12px;
   padding: 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  background: var(--panel);
+  background: var(--surface-panel);
   overflow: auto;
 }
 
@@ -180,7 +180,7 @@
   border-radius: 8px;
   border: 1px solid rgba(244, 135, 113, 0.35);
   background: rgba(244, 135, 113, 0.1);
-  color: var(--danger);
+  color: var(--state-danger);
   white-space: pre-wrap;
   word-break: break-word;
   font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
@@ -243,7 +243,7 @@
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
-  color: var(--muted);
+  color: var(--text-secondary);
   background: transparent;
 }
 
@@ -252,7 +252,7 @@
   padding: 0;
   text-align: right;
   opacity: 0.75;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 
 .diff-inline .wm-shiki-diff-marker {
@@ -264,7 +264,7 @@
 }
 
 .diff-inline .wm-shiki-diff-marker-removed {
-  color: #f85149;
+  color: var(--state-danger);
 }
 
 .diff-inline .wm-shiki-diff-marker-context {
@@ -308,7 +308,7 @@
 
 .diff-inline .wm-shiki-diff-line[data-separator='hunk'] .wm-shiki-line-content,
 .diff-inline .wm-shiki-diff-line[data-separator='file'] .wm-shiki-line-content {
-  color: var(--muted);
+  color: var(--text-secondary);
   font-style: italic;
   letter-spacing: 0.03em;
 }

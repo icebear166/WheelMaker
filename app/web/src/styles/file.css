@@ -9,7 +9,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border-left: 1px solid var(--border);
+  border-left: 1px solid var(--border-subtle);
   background: var(--surface-workspace-content);
   overflow: hidden;
 }
@@ -41,7 +41,7 @@
   left: 3px;
   width: 2px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 64%, transparent);
+  background: color-mix(in srgb, var(--accent-primary) 64%, transparent);
   opacity: 0;
   transition: opacity 120ms ease;
 }
@@ -57,7 +57,7 @@
   display: flex;
   flex-direction: column;
   background: var(--surface-workspace-content);
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .chat-file-peek-surface.mobile {
@@ -71,7 +71,7 @@
   display: flex;
   flex-direction: column;
   background: var(--surface-workspace-content);
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .chat-attachment-preview-surface.mobile {
@@ -111,17 +111,17 @@
   min-width: 104px;
   max-width: 168px;
   height: 24px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--panel-2);
-  color: var(--text);
+  background: var(--surface-raised);
+  color: var(--text-primary);
   font-size: 12px;
   outline: none;
 }
 
 .chat-file-workbench-tree-toggle.active {
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 14%, transparent);
 }
 
 .chat-file-workbench-tabs {
@@ -131,8 +131,8 @@
   gap: 1px;
   overflow-x: auto;
   overflow-y: hidden;
-  border-bottom: 1px solid var(--border);
-  background: var(--panel);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-panel);
 }
 
 .chat-file-workbench-tab {
@@ -142,13 +142,13 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) 24px;
   align-items: center;
-  border-right: 1px solid var(--border);
-  color: var(--muted);
+  border-right: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
 }
 
 .chat-file-workbench-tab.active {
-  color: var(--text);
-  background: var(--panel-3);
+  color: var(--text-primary);
+  background: var(--surface-panel);
 }
 
 .chat-file-workbench-tab-open,
@@ -179,7 +179,7 @@
 
 .chat-file-workbench-tab-close:hover {
   opacity: 1;
-  color: var(--danger);
+  color: var(--state-danger);
 }
 
 .chat-file-workbench-tree-popover {
@@ -190,9 +190,9 @@
   width: min(340px, calc(100% - 16px));
   max-height: min(560px, calc(100% - 76px));
   overflow: auto;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  background: var(--panel);
+  background: var(--surface-panel);
   box-shadow: 0 18px 48px color-mix(in srgb, #000 36%, transparent);
 }
 
@@ -206,7 +206,7 @@
   place-items: center;
   align-content: center;
   gap: 8px;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
@@ -220,17 +220,17 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
   border-radius: 6px;
-  background: var(--panel);
-  color: var(--text);
+  background: var(--surface-panel);
+  color: var(--text-primary);
   padding: 0 10px;
   font-size: 12px;
 }
 
 .chat-file-workbench-empty-action:hover {
-  border-color: color-mix(in srgb, var(--accent) 46%, transparent);
-  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+  border-color: color-mix(in srgb, var(--accent-primary) 46%, transparent);
+  background: color-mix(in srgb, var(--accent-primary) 14%, var(--surface-panel));
 }
 
 .chat-file-workbench-empty-action .codicon {
@@ -265,7 +265,7 @@
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  color: var(--text);
+  color: var(--text-primary);
   font-size: 12px;
   font-weight: 600;
   text-overflow: ellipsis;
@@ -289,9 +289,9 @@
   display: grid;
   gap: 1px;
   padding: 4px;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
   border-radius: 7px;
-  background: var(--panel);
+  background: var(--surface-panel);
   box-shadow: 0 14px 34px color-mix(in srgb, #000 32%, transparent);
 }
 
@@ -305,7 +305,7 @@
   border: 0;
   border-radius: 5px;
   background: transparent;
-  color: var(--text);
+  color: var(--text-primary);
   padding: 0 8px;
   font: inherit;
   font-size: 12px;
@@ -318,20 +318,20 @@
 }
 
 .preview-workbench-action-menu-item:disabled {
-  color: var(--muted);
+  color: var(--text-secondary);
   cursor: default;
 }
 
 .preview-workbench-action-menu-separator {
   height: 1px;
   margin: 3px 4px;
-  background: color-mix(in srgb, var(--border) 80%, transparent);
+  background: color-mix(in srgb, var(--border-subtle) 80%, transparent);
 }
 
 .preview-workbench-action-menu-error {
   max-width: 250px;
   padding: 4px 8px 3px;
-  color: var(--danger);
+  color: var(--state-danger);
   font-size: 11px;
   line-height: 1.35;
 }
@@ -342,33 +342,33 @@
   grid-template-columns: 16px minmax(80px, 1fr) auto 24px 24px 24px;
   align-items: center;
   gap: 6px;
-  border-bottom: 1px solid var(--border);
-  background: var(--panel);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-panel);
   padding: 4px 8px;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 
 .preview-workbench-search-input {
   min-width: 0;
   height: 24px;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
   border-radius: 5px;
-  background: var(--panel-2);
-  color: var(--text);
+  background: var(--surface-raised);
+  color: var(--text-primary);
   padding: 0 7px;
   font-size: 12px;
   outline: none;
 }
 
 .preview-workbench-search-input:focus {
-  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+  border-color: color-mix(in srgb, var(--accent-primary) 58%, var(--border-subtle));
 }
 
 .preview-workbench-search-status {
   min-width: 56px;
   max-width: 168px;
   overflow: hidden;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 11px;
   text-align: right;
   text-overflow: ellipsis;
@@ -418,8 +418,8 @@
   overflow: hidden;
   border: 1px solid transparent;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--panel) 90%, transparent);
-  color: var(--muted);
+  background: color-mix(in srgb, var(--surface-panel) 90%, transparent);
+  color: var(--text-secondary);
   opacity: 0;
   padding: 0;
   pointer-events: none;
@@ -436,7 +436,7 @@
 
 .preview-workbench-tree-search-shell[data-open='true'] {
   width: min(292px, calc(100vw - 108px));
-  border-color: color-mix(in srgb, var(--border) 78%, transparent);
+  border-color: color-mix(in srgb, var(--border-subtle) 78%, transparent);
   opacity: 1;
   padding: 0 10px;
   pointer-events: auto;
@@ -453,13 +453,13 @@
   height: 24px;
   border: 0;
   background: transparent;
-  color: var(--text);
+  color: var(--text-primary);
   font-size: 12px;
   outline: none;
 }
 
 .preview-workbench-tree-search-input::placeholder {
-  color: color-mix(in srgb, var(--muted) 82%, transparent);
+  color: color-mix(in srgb, var(--text-secondary) 82%, transparent);
 }
 
 .preview-workbench-tree-tool-button {
@@ -470,12 +470,12 @@
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 
 .preview-workbench-tree-tool-button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  color: var(--accent);
+  background: color-mix(in srgb, var(--accent-primary) 14%, transparent);
+  color: var(--accent-primary);
 }
 
 .preview-workbench-tree-tool-button:disabled {
@@ -488,17 +488,17 @@
   height: 30px;
   display: grid;
   place-items: center;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--panel) 86%, transparent);
-  color: var(--text);
+  background: color-mix(in srgb, var(--surface-panel) 86%, transparent);
+  color: var(--text-primary);
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.24);
 }
 
 .preview-workbench-tree-fab.active {
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 46%, transparent);
-  background: color-mix(in srgb, var(--accent) 16%, var(--panel));
+  color: var(--accent-primary);
+  border-color: color-mix(in srgb, var(--accent-primary) 46%, transparent);
+  background: color-mix(in srgb, var(--accent-primary) 16%, var(--surface-panel));
 }
 
 .preview-workbench-tree-panel {
@@ -509,9 +509,9 @@
   width: min(340px, calc(100% - 20px));
   max-height: min(560px, calc(100% - 64px));
   overflow: auto;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  background: var(--panel);
+  background: var(--surface-panel);
   box-shadow: 0 18px 48px color-mix(in srgb, #000 36%, transparent);
 }
 
@@ -537,7 +537,7 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: var(--text);
+  color: var(--text-primary);
   padding-top: 3px;
   padding-right: 8px;
   padding-bottom: 3px;
@@ -554,12 +554,12 @@
 }
 
 .preview-workbench-file-search-node.dir:hover {
-  background: color-mix(in srgb, var(--text) 7%, transparent);
+  background: color-mix(in srgb, var(--text-primary) 7%, transparent);
 }
 
 .preview-workbench-file-search-node.file:hover,
 .preview-workbench-file-search-node.file.selected {
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
 }
 
 .preview-workbench-file-search-node .label {
@@ -571,7 +571,7 @@
 
 .preview-workbench-file-search-empty {
   padding: 18px 10px;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 12px;
   text-align: center;
 }
@@ -608,17 +608,17 @@
   height: 36px;
   display: grid;
   place-items: center;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--panel) 88%, transparent);
-  color: var(--text);
+  background: color-mix(in srgb, var(--surface-panel) 88%, transparent);
+  color: var(--text-primary);
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.26);
 }
 
 .preview-workbench-mobile-port-relay-refresh:hover {
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 46%, transparent);
-  background: color-mix(in srgb, var(--accent) 16%, var(--panel));
+  color: var(--accent-primary);
+  border-color: color-mix(in srgb, var(--accent-primary) 46%, transparent);
+  background: color-mix(in srgb, var(--accent-primary) 16%, var(--surface-panel));
 }
 
 .preview-workbench-mobile-header-toggle {
@@ -630,17 +630,17 @@
   height: 36px;
   display: grid;
   place-items: center;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--panel) 88%, transparent);
-  color: var(--text);
+  background: color-mix(in srgb, var(--surface-panel) 88%, transparent);
+  color: var(--text-primary);
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.26);
 }
 
 .preview-workbench-mobile-header-toggle.active {
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 46%, transparent);
-  background: color-mix(in srgb, var(--accent) 16%, var(--panel));
+  color: var(--accent-primary);
+  border-color: color-mix(in srgb, var(--accent-primary) 46%, transparent);
+  background: color-mix(in srgb, var(--accent-primary) 16%, var(--surface-panel));
 }
 
 .quick-file-search-overlay {
@@ -660,9 +660,9 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
   border-radius: 8px;
-  background: var(--panel);
+  background: var(--surface-panel);
   box-shadow: 0 22px 54px rgba(0, 0, 0, 0.34);
 }
 
@@ -671,16 +671,16 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-subtle);
   padding: 0 10px;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
 .quick-file-search-project {
   min-width: 0;
   overflow: hidden;
-  color: var(--text);
+  color: var(--text-primary);
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -689,10 +689,10 @@
 .quick-file-search-input {
   height: 38px;
   border: 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-subtle);
   border-radius: 0;
-  background: var(--panel-2);
-  color: var(--text);
+  background: var(--surface-raised);
+  color: var(--text-primary);
   padding: 0 12px;
   font-size: 14px;
   outline: none;
@@ -715,14 +715,14 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--text);
+  color: var(--text-primary);
   padding: 5px 7px;
   text-align: left;
 }
 
 .quick-file-search-option:hover,
 .quick-file-search-option.selected {
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
 }
 
 .quick-file-search-name,
@@ -739,14 +739,14 @@
 }
 
 .quick-file-search-path {
-  color: var(--muted);
+  color: var(--text-secondary);
   font-family: var(--mono-font);
   font-size: 11px;
 }
 
 .quick-file-search-empty {
   padding: 18px 10px;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 12px;
   text-align: center;
 }
@@ -755,9 +755,9 @@
   position: fixed;
   z-index: 120;
   min-width: 108px;
-  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 76%, transparent);
   border-radius: 7px;
-  background: var(--panel);
+  background: var(--surface-panel);
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.3);
   padding: 4px;
 }
@@ -771,7 +771,7 @@
   border: 0;
   border-radius: 5px;
   background: transparent;
-  color: var(--text);
+  color: var(--text-primary);
   padding: 0 8px;
   text-align: left;
 }
@@ -797,7 +797,7 @@
   justify-content: center;
   gap: 8px;
   padding: 18px;
-  color: var(--danger);
+  color: var(--state-danger);
   font-size: 13px;
   text-align: center;
 }
@@ -820,9 +820,9 @@
   max-width: min(100%, 1600px);
   max-height: min(78vh, 1200px);
   object-fit: contain;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  background: var(--panel-2);
+  background: var(--surface-raised);
 }
 
 .chat-attachment-preview-placeholder {
@@ -833,18 +833,18 @@
   justify-content: center;
   gap: 10px;
   padding: 24px;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 
 .chat-attachment-preview-placeholder .codicon {
   width: 32px;
   height: 32px;
-  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 82%, transparent);
   border-radius: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: color-mix(in srgb, var(--accent) 72%, var(--text));
+  color: color-mix(in srgb, var(--accent-primary) 72%, var(--text-primary));
 }
 
 .chat-attachment-preview-placeholder-main {
@@ -856,7 +856,7 @@
 .chat-attachment-preview-placeholder-title {
   min-width: 0;
   overflow: hidden;
-  color: var(--text);
+  color: var(--text-primary);
   font-size: 13px;
   font-weight: 600;
   line-height: 1.3;
@@ -867,7 +867,7 @@
 .chat-attachment-preview-placeholder-meta,
 .chat-attachment-preview-placeholder-status {
   min-width: 0;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.35;
 }
@@ -891,19 +891,19 @@
   align-items: center;
   gap: 7px;
   padding: 0 8px;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
 .chat-prompt-diff-overview .codicon {
-  color: color-mix(in srgb, var(--accent) 82%, var(--text));
+  color: color-mix(in srgb, var(--accent-primary) 82%, var(--text-primary));
 }
 
 .chat-prompt-diff-file {
   min-width: 0;
-  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 82%, transparent);
   border-radius: 6px;
-  background: color-mix(in srgb, var(--panel) 82%, var(--panel-3));
+  background: color-mix(in srgb, var(--surface-panel) 82%, var(--surface-panel));
   overflow: hidden;
 }
 
@@ -913,7 +913,7 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: var(--text);
+  color: var(--text-primary);
   display: grid;
   grid-template-columns: 16px 22px minmax(0, 1fr) auto;
   align-items: center;
@@ -946,13 +946,13 @@
 .chat-prompt-diff-file-name {
   font-family: var(--mono-font);
   font-size: 12px;
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .chat-prompt-diff-file-path {
   font-family: var(--mono-font);
   font-size: 10px;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 
 .chat-prompt-diff-file-counts {
@@ -967,15 +967,15 @@
 }
 
 .chat-prompt-diff-file-counts .additions {
-  color: #3fb950;
+  color: var(--state-success);
 }
 
 .chat-prompt-diff-file-counts .deletions {
-  color: #f85149;
+  color: var(--state-danger);
 }
 
 .chat-prompt-diff-file-body {
-  border-top: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
   background: var(--surface-workspace-content);
   overflow-x: auto;
 }
@@ -1201,7 +1201,7 @@
   max-height: min(42vh, 296px);
   overflow-y: auto;
   padding: 5px 6px;
-  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, transparent);
   border-radius: 14px;
   background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));
   box-shadow: var(--shadow-overlay);
@@ -1214,10 +1214,10 @@
   min-width: 0;
   max-width: 190px;
   min-height: 30px;
-  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 28%, var(--border-subtle));
   border-radius: 8px;
-  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
-  color: var(--text);
+  background: color-mix(in srgb, var(--accent-primary) 8%, var(--surface-panel));
+  color: var(--text-primary);
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -1226,7 +1226,7 @@
 
 .chat-file-mention-chip .codicon {
   flex: 0 0 auto;
-  color: var(--accent);
+  color: var(--accent-primary);
   font-size: 13px;
 }
 
@@ -1246,7 +1246,7 @@
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: color-mix(in srgb, var(--muted) 82%, var(--text));
+  color: color-mix(in srgb, var(--text-secondary) 82%, var(--text-primary));
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -1254,8 +1254,8 @@
 }
 
 .chat-file-mention-remove:hover {
-  background: color-mix(in srgb, #f85149 12%, transparent);
-  color: #ff6b62;
+  background: color-mix(in srgb, var(--state-danger) 12%, transparent);
+  color: var(--state-danger);
 }
 
 .chat-file-mention-remove .codicon {
@@ -1266,7 +1266,7 @@
 .chat-file-mention-empty {
   min-height: 32px;
   border-radius: 8px;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.3;
   display: flex;
@@ -1281,7 +1281,7 @@
   min-height: 26px;
   border-radius: 8px;
   background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));
-  color: color-mix(in srgb, var(--muted) 78%, var(--text));
+  color: color-mix(in srgb, var(--text-secondary) 78%, var(--text-primary));
   display: flex;
   align-items: center;
   padding: 0 8px;
@@ -1294,7 +1294,7 @@
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: var(--text);
+  color: var(--text-primary);
   text-align: left;
 }
 
@@ -1317,7 +1317,7 @@
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: var(--text);
+  color: var(--text-primary);
   display: grid;
   grid-template-columns: 16px minmax(0, auto) minmax(0, 1fr);
   align-items: center;
@@ -1328,7 +1328,7 @@
 }
 
 .chat-file-mention-option-main .codicon {
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
@@ -1338,7 +1338,7 @@
   border: 0;
   border-radius: 7px;
   background: transparent;
-  color: color-mix(in srgb, var(--muted) 78%, var(--text));
+  color: color-mix(in srgb, var(--text-secondary) 78%, var(--text-primary));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1347,8 +1347,8 @@
 
 .chat-file-mention-preview-button:hover,
 .chat-file-mention-preview-button:focus-visible {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  color: color-mix(in srgb, var(--accent) 86%, var(--text));
+  background: color-mix(in srgb, var(--accent-primary) 14%, transparent);
+  color: color-mix(in srgb, var(--accent-primary) 86%, var(--text-primary));
 }
 
 .chat-file-mention-preview-button .codicon {
@@ -1361,7 +1361,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
-  color: color-mix(in srgb, var(--muted) 74%, var(--text));
+  color: color-mix(in srgb, var(--text-secondary) 74%, var(--text-primary));
 }
 
 .chat-file-mention-name {
@@ -1369,7 +1369,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text);
+  color: var(--text-primary);
   font-size: 13px;
   font-weight: 500;
 }

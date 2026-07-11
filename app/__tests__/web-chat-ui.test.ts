@@ -462,7 +462,7 @@ describe('web chat integration', () => {
     expect(exportTableCellBlock).toContain('word-break: break-word;');
     expect(exportTableCellBlock).toBe(cssRuleBlockContainingSelector(stylesCss, '.markdown-image-export-surface td'));
     const exportLinkBlock = cssRuleBlockContainingSelector(stylesCss, '.markdown-image-export-surface a');
-    expect(exportLinkBlock).toContain('color: color-mix(in srgb, var(--accent) 82%, var(--text));');
+    expect(exportLinkBlock).toContain('color: color-mix(in srgb, var(--accent-primary) 82%, var(--text-primary));');
     expect(exportLinkBlock).toBe(cssRuleBlockContainingSelector(stylesCss, '.markdown-image-export-surface a:visited'));
     expect(stylesCss).toContain('.app-toast {');
     const sendExistingStart = mainTsx.indexOf('const sendChatMessage = async');
@@ -700,10 +700,10 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.mobile-settings-shortcut-label {');
     expect(stylesCss).not.toContain('.project-menu-state');
     expect(stylesCss).toMatch(
-      /\.project-menu-hub \{[\s\S]*background: color-mix\(in srgb, var\(--accent\) 18%, var\(--panel-2\)\);/,
+      /\.project-menu-hub \{[\s\S]*background: color-mix\(in srgb, var\(--accent-primary\) 18%, var\(--surface-raised\)\);/,
     );
     expect(stylesCss).toMatch(
-      /\.project-menu-hub \{[\s\S]*border: 1px solid color-mix\(in srgb, var\(--accent\) 42%, transparent\);/,
+      /\.project-menu-hub \{[\s\S]*border: 1px solid color-mix\(in srgb, var\(--accent-primary\) 42%, transparent\);/,
     );
     expect(stylesCss).toMatch(
       /\.header \.project-btn \{[\s\S]*max-width: none;[\s\S]*\}/,
@@ -745,14 +745,14 @@ describe('web chat integration', () => {
     expect(cssRuleBlock(stylesCss, '.gesture-nav-pill')).toContain('padding: 0;');
     expect(cssRuleBlock(stylesCss, '.gesture-nav-pill')).toContain('grid-template-rows: 48px;');
     expect(stylesCss).toMatch(
-      /\.drawer-toggle-bubble\[data-active='true'\] \{[\s\S]*background: transparent;[\s\S]*border-color: color-mix\(in srgb, var\(--accent\) 72%, transparent\);[\s\S]*color: color-mix\(in srgb, var\(--accent\) 88%, var\(--text\)\);/,
+      /\.drawer-toggle-bubble\[data-active='true'\] \{[\s\S]*background: transparent;[\s\S]*border-color: color-mix\(in srgb, var\(--accent-primary\) 72%, transparent\);[\s\S]*color: color-mix\(in srgb, var\(--accent-primary\) 88%, var\(--text-primary\)\);/,
     );
     expect(stylesCss).toMatch(
       /\.gesture-nav-control\[data-expanded='false'\] \.gesture-nav-current-button \{[\s\S]*width: 50px;[\s\S]*height: 48px;[\s\S]*\}/,
     );
     const activeGestureButtonBlock = cssRuleBlock(stylesCss, ".gesture-nav-current-button[data-active='true']");
-    expect(activeGestureButtonBlock).toContain('border-color: color-mix(in srgb, var(--accent) 54%, var(--border));');
-    expect(activeGestureButtonBlock).toContain('color: color-mix(in srgb, var(--accent) 88%, var(--text));');
+    expect(activeGestureButtonBlock).toContain('border-color: color-mix(in srgb, var(--accent-primary) 54%, var(--border-subtle));');
+    expect(activeGestureButtonBlock).toContain('color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));');
     expect(activeGestureButtonBlock).not.toContain('background:');
     expect(activeGestureButtonBlock).not.toContain('box-shadow:');
     expect(stylesCss).toContain('-webkit-tap-highlight-color: transparent;');
@@ -762,10 +762,10 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.breadcrumb-project-button:hover {');
     expect(stylesCss).not.toContain('max-width: min(42%, 160px);');
     expect(stylesCss).toMatch(
-      /\.breadcrumb-project-name \{[\s\S]*flex: 0 0 auto;[\s\S]*max-width: none;[\s\S]*border: 1px solid color-mix\(in srgb, var\(--accent\) 54%, transparent\);[\s\S]*border-radius: 8px;[\s\S]*background: color-mix\(in srgb, var\(--accent\) 13%, var\(--panel\)\);[\s\S]*color: color-mix\(in srgb, var\(--accent\) 78%, var\(--text\)\);[\s\S]*\}/,
+      /\.breadcrumb-project-name \{[\s\S]*flex: 0 0 auto;[\s\S]*max-width: none;[\s\S]*border: 1px solid color-mix\(in srgb, var\(--accent-primary\) 54%, transparent\);[\s\S]*border-radius: 8px;[\s\S]*background: color-mix\(in srgb, var\(--accent-primary\) 13%, var\(--surface-panel\)\);[\s\S]*color: color-mix\(in srgb, var\(--accent-primary\) 78%, var\(--text-primary\)\);[\s\S]*\}/,
     );
     const breadcrumbProjectBlock = stylesCss.match(/\.breadcrumb-project-name \{[\s\S]*?\n    \}/)?.[0] ?? '';
-    expect(breadcrumbProjectBlock).not.toContain('box-shadow: inset 3px 0 0 var(--accent);');
+    expect(breadcrumbProjectBlock).not.toContain('box-shadow: inset 3px 0 0 var(--accent-primary);');
     expect(stylesCss).toMatch(
       /\.breadcrumb-current \{[\s\S]*min-width: 0;[\s\S]*overflow: hidden;[\s\S]*text-overflow: ellipsis;[\s\S]*\}/,
     );
@@ -1200,21 +1200,21 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-confirmation-reply-check {');
     expect(stylesCss).toContain('.chat-confirmation-reply-text {');
     expect(stylesCss).toMatch(
-      /\.chat-confirmation-reply-action \{[\s\S]*border: 1px solid color-mix\(in srgb, var\(--accent\) 22%, var\(--border\)\);[\s\S]*background: color-mix\(in srgb, var\(--surface-panel\) 88%, var\(--accent\)\);[\s\S]*padding: 4px 8px;[\s\S]*\}/,
+      /\.chat-confirmation-reply-action \{[\s\S]*border: 1px solid color-mix\(in srgb, var\(--accent-primary\) 22%, var\(--border-subtle\)\);[\s\S]*background: color-mix\(in srgb, var\(--surface-panel\) 88%, var\(--accent-primary\)\);[\s\S]*padding: 4px 8px;[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
-      /\.chat-option-reply-inline-button \{[\s\S]*border-color: color-mix\(in srgb, var\(--accent\) 22%, var\(--border\)\);[\s\S]*background: color-mix\(in srgb, var\(--surface-panel\) 88%, var\(--accent\)\);/,
+      /\.chat-option-reply-inline-button \{[\s\S]*border-color: color-mix\(in srgb, var\(--accent-primary\) 22%, var\(--border-subtle\)\);[\s\S]*background: color-mix\(in srgb, var\(--surface-panel\) 88%, var\(--accent-primary\)\);/,
     );
     expect(stylesCss).toMatch(
       /\.chat-option-reply-inline-button,\s*\.chat-scroll-bottom-button \{[\s\S]*backdrop-filter: blur\(1px\);[\s\S]*\}/,
     );
     const historicalOptionBlocks = stylesCss.match(/\.chat-option-reply-static \{[\s\S]*?\n\}/g) ?? [];
     const historicalOptionBlock = historicalOptionBlocks[historicalOptionBlocks.length - 1] ?? '';
-    expect(historicalOptionBlock).toContain('border-color: var(--border);');
+    expect(historicalOptionBlock).toContain('border-color: var(--border-subtle);');
     expect(historicalOptionBlock).toContain('background: transparent;');
     expect(historicalOptionBlock).not.toContain('background: color-mix');
     expect(stylesCss).toMatch(
-      /\.chat-option-reply-static \.chat-option-reply-label \{[\s\S]*color: var\(--muted\);[\s\S]*\}/,
+      /\.chat-option-reply-static \.chat-option-reply-label \{[\s\S]*color: var\(--text-secondary\);[\s\S]*\}/,
     );
     expect(stylesCss).not.toContain('.chat-option-replies {');
     expect(stylesCss).not.toContain('.chat-option-reply-button {');
@@ -1253,13 +1253,13 @@ describe('web chat integration', () => {
     const toolButtonBlock = cssRuleBlock(stylesCss, '.chat-tool-button');
     expect(toolButtonBlock).toContain('border: none;');
     expect(toolButtonBlock).toContain('background: transparent;');
-    expect(toolButtonBlock).toContain('color: color-mix(in srgb, var(--muted) 86%, var(--text));');
+    expect(toolButtonBlock).toContain('color: color-mix(in srgb, var(--text-secondary) 86%, var(--text-primary));');
     expect(toolButtonBlock).not.toContain('border: 1px');
-    expect(toolButtonBlock).not.toContain('color: color-mix(in srgb, var(--text) 72%, var(--muted));');
+    expect(toolButtonBlock).not.toContain('color: color-mix(in srgb, var(--text-primary) 72%, var(--text-secondary));');
     expect(cssRuleBlock(stylesCss, '.chat-tool-button')).toContain('display: inline-grid;');
     expect(cssRuleBlock(stylesCss, '.chat-tool-button')).toContain('place-items: center;');
     expect(cssRuleBlock(stylesCss, '.chat-tool-button:hover,\n.chat-tool-button:focus-visible')).toContain('background: var(--hover);');
-    expect(cssRuleBlock(stylesCss, '.chat-tool-button:hover,\n.chat-tool-button:focus-visible')).toContain('color: var(--text);');
+    expect(cssRuleBlock(stylesCss, '.chat-tool-button:hover,\n.chat-tool-button:focus-visible')).toContain('color: var(--text-primary);');
     expect(cssRuleBlock(stylesCss, '.chat-tool-button:hover,\n.chat-tool-button:focus-visible')).not.toContain('border-color:');
     expect(stylesCss).not.toContain('.chat-slash-button,\n.chat-file-mention-trigger-button,\n.chat-attachment-plus-button {');
     expect(stylesCss).toMatch(/\.chat-composer-stop-slot \{[\s\S]*width: 24px;[\s\S]*height: 24px;[\s\S]*flex: 0 0 24px;[\s\S]*\}/);
@@ -1278,10 +1278,10 @@ describe('web chat integration', () => {
     expect(stylesCss).not.toContain('.chat-mention-symbol {');
     expect(stylesCss).not.toContain('.chat-skill-button {');
     expect(stylesCss).toMatch(
-      /\.chat-attach-button \{[\s\S]*color: color-mix\(in srgb, #4db6ac 78%, var\(--text\)\);[\s\S]*\}/,
+      /\.chat-attach-button \{[\s\S]*color: color-mix\(in srgb, var\(--state-info\) 78%, var\(--text-primary\)\);[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
-      /\.chat-image-attach-button \{[\s\S]*color: color-mix\(in srgb, #d7a84f 78%, var\(--text\)\);[\s\S]*\}/,
+      /\.chat-image-attach-button \{[\s\S]*color: color-mix\(in srgb, var\(--state-warning\) 78%, var\(--text-primary\)\);[\s\S]*\}/,
     );
     expect(stylesCss).not.toContain('.chat-stop-button {');
     expect(stylesCss).not.toContain('.chat-stop-button.active {');
@@ -1417,10 +1417,10 @@ describe('web chat integration', () => {
     expect(toolsBlock).not.toContain('codicon-new-file');
 
     expect(stylesCss).toMatch(
-      /\.chat-attach-button \{[\s\S]*color: color-mix\(in srgb, #4db6ac 78%, var\(--text\)\);[\s\S]*\}/,
+      /\.chat-attach-button \{[\s\S]*color: color-mix\(in srgb, var\(--state-info\) 78%, var\(--text-primary\)\);[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
-      /\.chat-image-attach-button \{[\s\S]*color: color-mix\(in srgb, #d7a84f 78%, var\(--text\)\);[\s\S]*\}/,
+      /\.chat-image-attach-button \{[\s\S]*color: color-mix\(in srgb, var\(--state-warning\) 78%, var\(--text-primary\)\);[\s\S]*\}/,
     );
   });
 
@@ -1460,7 +1460,7 @@ describe('web chat integration', () => {
       /\.drawer \{[\s\S]*position: fixed;[\s\S]*width: min\(440px, calc\(100vw - var\(--mobile-floating-control-lane\) - env\(safe-area-inset-right, 0px\)\)\);[\s\S]*z-index: 50;[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
-      /\.narrow-shell\[data-floating-control-side='left'\] \.drawer \{[\s\S]*inset: 0 0 0 auto;[\s\S]*width: min\(440px, calc\(100vw - var\(--mobile-floating-control-lane\) - env\(safe-area-inset-left, 0px\)\)\);[\s\S]*border-left: 1px solid var\(--border\);[\s\S]*transform: translateX\(100%\);[\s\S]*\}/,
+      /\.narrow-shell\[data-floating-control-side='left'\] \.drawer \{[\s\S]*inset: 0 0 0 auto;[\s\S]*width: min\(440px, calc\(100vw - var\(--mobile-floating-control-lane\) - env\(safe-area-inset-left, 0px\)\)\);[\s\S]*border-left: 1px solid var\(--border-subtle\);[\s\S]*transform: translateX\(100%\);[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
       /\.narrow-shell\[data-floating-control-side='left'\] \.drawer\.show \{[\s\S]*transform: translateX\(0\);[\s\S]*box-shadow: -8px 0 28px rgba\(0, 0, 0, 0\.38\);[\s\S]*\}/,
@@ -1927,7 +1927,7 @@ describe('web chat integration', () => {
 
     expect(stylesCss).toContain('.wide-project-session-nav {');
     expect(stylesCss).toContain('--desktop-side-surface: var(--desktop-top-surface);');
-    expect(stylesCss).toContain('--desktop-top-surface: color-mix(in srgb, var(--panel) 62%, var(--panel-3));');
+    expect(stylesCss).toContain('--desktop-top-surface: color-mix(in srgb, var(--surface-sidebar) 62%, var(--surface-panel));');
     expect(stylesCss).toContain('--desktop-window-controls-width: 176px;');
     expect(stylesCss).toContain('.desktop-window-controls {');
     expect(stylesCss).toContain('.desktop-window-source-button {');
@@ -1954,7 +1954,7 @@ describe('web chat integration', () => {
       /\.desktop-sidebar-resize-handle \{[\s\S]*cursor: ew-resize;[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
-      /\.sidebar-title-row \{[\s\S]*background: var\(--desktop-top-surface\);[\s\S]*border-bottom: 1px solid var\(--border\);[\s\S]*\}/,
+      /\.sidebar-title-row \{[\s\S]*background: var\(--desktop-top-surface\);[\s\S]*border-bottom: 1px solid var\(--border-subtle\);[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
       /\.chat-title-bar \{[\s\S]*background: var\(--desktop-top-surface\);[\s\S]*\}/,
@@ -2017,7 +2017,7 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.wide-project-folder-icon.codicon-folder {');
     expect(stylesCss).toContain('.wide-project-folder-icon.codicon-folder-opened {');
     expect(stylesCss).toMatch(
-      /\.wide-project-folder-icon\.codicon-folder-opened \{[\s\S]*color: color-mix\(in srgb, var\(--hub-accent\) 82%, var\(--text\)\);[\s\S]*\}/,
+      /\.wide-project-folder-icon\.codicon-folder-opened \{[\s\S]*color: color-mix\(in srgb, var\(--hub-accent\) 82%, var\(--text-primary\)\);[\s\S]*\}/,
     );
     const selectedSessionRowBlock = stylesCss.match(/\.wide-session-row\.selected \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(selectedSessionRowBlock).toContain('margin-left: -21px;');
@@ -2025,8 +2025,8 @@ describe('web chat integration', () => {
     expect(selectedSessionRowBlock).toContain('padding-left: 23px;');
     expect(selectedSessionRowBlock).toContain('background: linear-gradient(');
     expect(selectedSessionRowBlock).toContain('to right,');
-    expect(selectedSessionRowBlock).toContain('color-mix(in srgb, var(--accent) 5%, transparent) 0,');
-    expect(selectedSessionRowBlock).toContain('color-mix(in srgb, var(--accent) 16%, var(--panel-2)) 28px,');
+    expect(selectedSessionRowBlock).toContain('color-mix(in srgb, var(--accent-primary) 5%, transparent) 0,');
+    expect(selectedSessionRowBlock).toContain('color-mix(in srgb, var(--accent-primary) 16%, var(--surface-raised)) 28px,');
     expect(selectedSessionRowBlock).not.toContain('box-shadow: inset');
     const wideProjectActionBtnBlock = stylesCss.match(/\.wide-project-action-btn \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(wideProjectActionBtnBlock).toContain('opacity: 0.45;');
@@ -2166,10 +2166,10 @@ describe('web chat integration', () => {
     const previewToggleBlock = cssRuleBlock(stylesCss, '.chat-preview-toggle');
     expect(previewToggleBlock).toContain('border: 0;');
     expect(previewToggleBlock).toContain('background: transparent;');
-    expect(previewToggleBlock).toContain('color: color-mix(in srgb, var(--accent) 88%, var(--text));');
-    expect(previewToggleBlock).not.toContain('var(--panel-2)');
+    expect(previewToggleBlock).toContain('color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));');
+    expect(previewToggleBlock).not.toContain('var(--surface-raised)');
     const previewToggleActiveBlock = cssRuleBlock(stylesCss, '.chat-preview-toggle:hover');
-    expect(previewToggleActiveBlock).toContain('background: color-mix(in srgb, var(--accent) 13%, transparent);');
+    expect(previewToggleActiveBlock).toContain('background: color-mix(in srgb, var(--accent-primary) 13%, transparent);');
     const previewToggleOpenBlock = cssRuleBlock(stylesCss, '.chat-preview-toggle.active');
     expect(previewToggleOpenBlock).not.toContain('border-color:');
   });
@@ -2336,17 +2336,17 @@ describe('web chat integration', () => {
     const toolButtonBlock = cssRuleBlock(stylesCss, '.chat-tool-button');
     expect(toolButtonBlock).toContain('border: none;');
     expect(toolButtonBlock).toContain('background: transparent;');
-    expect(toolButtonBlock).toContain('color: color-mix(in srgb, var(--muted) 86%, var(--text));');
+    expect(toolButtonBlock).toContain('color: color-mix(in srgb, var(--text-secondary) 86%, var(--text-primary));');
     expect(toolButtonBlock).not.toContain('border: 1px');
-    expect(toolButtonBlock).not.toContain('color: color-mix(in srgb, var(--text) 72%, var(--muted));');
+    expect(toolButtonBlock).not.toContain('color: color-mix(in srgb, var(--text-primary) 72%, var(--text-secondary));');
     expect(stylesCss).not.toContain('.chat-slash-button,\n.chat-file-mention-trigger-button,\n.chat-attachment-plus-button {');
     expect(stylesCss).toMatch(/\.chat-composer-tool-glyph \{[\s\S]*width: 16px;[\s\S]*height: 16px;[\s\S]*display: grid;[\s\S]*font-size: 14px;[\s\S]*line-height: 1;[\s\S]*\}/);
-    expect(stylesCss).not.toContain('.chat-file-mention-trigger-button {\n  color: color-mix(in srgb, #8bd5ff 82%, var(--text));\n}');
+    expect(stylesCss).not.toContain('.chat-file-mention-trigger-button {\n  color: color-mix(in srgb, #8bd5ff 82%, var(--text-primary));\n}');
     expect(stylesCss).not.toContain('.chat-attachment-action-button.file .codicon');
     expect(stylesCss).not.toContain('.chat-attachment-action-button.photo .codicon');
     expect(stylesCss).toMatch(/\.chat-file-mention-option-main \{[\s\S]*grid-template-columns: 16px minmax\(0, auto\) minmax\(0, 1fr\);/);
     expect(stylesCss).toMatch(/\.chat-composer-capsule,[\s\S]*\.chat-prompt-inline-capsule \{[\s\S]*max-width: min\(260px, 100%\);/);
-    expect(stylesCss).toMatch(/\.chat-composer-stop-trigger \{[\s\S]*color: #f85149;[\s\S]*opacity: 1;/);
+    expect(stylesCss).toMatch(/\.chat-composer-stop-trigger \{[\s\S]*color: var\(--state-danger\);[\s\S]*opacity: 1;/);
   });
 
   test('keeps running chat editable and queues another send for that chat', () => {
@@ -2410,5 +2410,13 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('/* workspace-ui-targeted-evolution: composer */');
     expect(stylesCss).toContain('max-width: calc(100vw - 24px)');
     expect(stylesCss).toContain('padding-bottom: max(4px, var(--wm-safe-area-bottom))');
+  });
+
+  test('uses semantic selection and information-state colors for chat chrome', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(stylesCss).toMatch(/\.wide-session-row\.selected \{[\s\S]*background: color-mix\(in srgb, var\(--accent-primary\) 11%, var\(--surface-sidebar\)\);[\s\S]*\}/);
+    expect(stylesCss).toMatch(/\.voice-input-button \{[\s\S]*var\(--state-info\)[\s\S]*\}/);
   });
 });

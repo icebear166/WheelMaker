@@ -15,17 +15,17 @@
   width: min(320px, calc(100dvw - 96px));
   overflow: visible;
   padding: 7px;
-  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
   border-radius: 8px;
   background:
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--panel) 98%, transparent),
-      color-mix(in srgb, var(--panel) 90%, transparent)
+      color-mix(in srgb, var(--surface-panel) 98%, transparent),
+      color-mix(in srgb, var(--surface-panel) 90%, transparent)
     );
   box-shadow:
     0 18px 42px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 color-mix(in srgb, var(--text) 7%, transparent);
+    inset 0 1px 0 color-mix(in srgb, var(--text-primary) 7%, transparent);
   backdrop-filter: blur(12px);
   pointer-events: auto;
   z-index: 2;
@@ -44,13 +44,13 @@
 .chat-quick-switch-project + .chat-quick-switch-project {
   margin-top: 5px;
   padding-top: 5px;
-  border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 50%, transparent);
 }
 
 .chat-quick-switch-project-heading {
   min-width: 0;
   padding: 0 8px 4px;
-  color: var(--muted);
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -68,14 +68,14 @@
 }
 
 .chat-quick-switch-project-hub {
-  --hub-accent: var(--accent);
+  --hub-accent: var(--accent-primary);
   max-width: 96px;
   height: 18px;
   padding: 0 6px 0 5px;
   border: 1px solid color-mix(in srgb, var(--hub-accent) 24%, transparent);
   border-radius: 999px;
   background: color-mix(in srgb, var(--hub-accent) 9%, transparent);
-  color: color-mix(in srgb, var(--hub-accent) 82%, var(--text));
+  color: color-mix(in srgb, var(--hub-accent) 82%, var(--text-primary));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -104,7 +104,7 @@
   border: 1px solid transparent;
   border-radius: 5px;
   background: transparent;
-  color: color-mix(in srgb, var(--muted) 86%, var(--text));
+  color: color-mix(in srgb, var(--text-secondary) 86%, var(--text-primary));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -116,17 +116,17 @@
 
 .chat-quick-switch-project-create:hover,
 .chat-quick-switch-project-create[aria-expanded='true'] {
-  border-color: color-mix(in srgb, var(--border) 72%, transparent);
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  color: var(--text);
+  border-color: color-mix(in srgb, var(--border-subtle) 72%, transparent);
+  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+  color: var(--text-primary);
 }
 
 .chat-quick-switch-create-menu {
   margin: 0 4px 5px;
   padding: 4px;
-  border: 1px solid color-mix(in srgb, var(--border) 68%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 68%, transparent);
   border-radius: 6px;
-  background: color-mix(in srgb, var(--panel-2) 62%, transparent);
+  background: color-mix(in srgb, var(--surface-raised) 62%, transparent);
   display: grid;
   gap: 1px;
 }
@@ -138,7 +138,7 @@
   border: 0;
   border-radius: 5px;
   background: transparent;
-  color: color-mix(in srgb, var(--text) 82%, var(--muted));
+  color: color-mix(in srgb, var(--text-primary) 82%, var(--text-secondary));
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr);
   align-items: center;
@@ -154,8 +154,8 @@
 }
 
 .chat-quick-switch-create-item:hover {
-  background: color-mix(in srgb, var(--accent) 11%, transparent);
-  color: var(--text);
+  background: color-mix(in srgb, var(--accent-primary) 11%, transparent);
+  color: var(--text-primary);
 }
 
 .chat-quick-switch-create-item:disabled {
@@ -171,7 +171,7 @@
 }
 
 .chat-quick-switch-create-empty {
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 
 .chat-quick-switch-session-list {
@@ -186,7 +186,7 @@
   border: 0;
   border-radius: 5px;
   background: transparent;
-  color: var(--text);
+  color: var(--text-primary);
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr) auto auto;
   align-items: center;
@@ -200,7 +200,7 @@
 
 .chat-quick-switch-item:hover,
 .chat-quick-switch-item[data-selected='true'] {
-  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  background: color-mix(in srgb, var(--accent-primary) 13%, transparent);
 }
 
 .chat-quick-switch-title {
@@ -214,7 +214,7 @@
 }
 
 .chat-quick-switch-time {
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 11px;
   line-height: 1.1;
   white-space: nowrap;
@@ -225,8 +225,8 @@
   height: 16px;
   padding: 0 4px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 30%, transparent);
-  color: var(--text);
+  background: color-mix(in srgb, var(--accent-primary) 30%, transparent);
+  color: var(--text-primary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -238,7 +238,7 @@
 .chat-quick-switch-empty {
   min-height: 32px;
   padding: 0 7px;
-  color: var(--muted);
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   font-size: 12px;
@@ -349,7 +349,7 @@
   border-radius: 6px;
   padding: 0;
   background: transparent;
-  color: color-mix(in srgb, var(--accent) 88%, var(--text));
+  color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
   cursor: pointer;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
@@ -360,14 +360,14 @@
 .chat-title-prompt-icon-button:hover,
 .chat-title-prompt-icon-button.open,
 .chat-preview-toggle:hover {
-  background: color-mix(in srgb, var(--accent) 13%, transparent);
-  color: color-mix(in srgb, var(--accent) 96%, var(--text));
+  background: color-mix(in srgb, var(--accent-primary) 13%, transparent);
+  color: color-mix(in srgb, var(--accent-primary) 96%, var(--text-primary));
 }
 
 .chat-sidebar-toggle.collapsed,
 .chat-preview-toggle.active {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  color: color-mix(in srgb, var(--accent) 96%, var(--text));
+  background: color-mix(in srgb, var(--accent-primary) 18%, transparent);
+  color: color-mix(in srgb, var(--accent-primary) 96%, var(--text-primary));
 }
 
 .chat-title-prompt-icon-button:disabled {
@@ -377,7 +377,7 @@
 
 .chat-title-prompt-icon-button:disabled:hover {
   background: transparent;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 
 .chat-title-project-button {
@@ -393,7 +393,7 @@
   border-radius: 6px;
   padding: 0 6px;
   background: transparent;
-  color: color-mix(in srgb, var(--accent) 86%, var(--text));
+  color: color-mix(in srgb, var(--accent-primary) 86%, var(--text-primary));
   font: inherit;
   line-height: inherit;
   overflow: hidden;
@@ -403,8 +403,8 @@
 
 .chat-title-project-button:hover,
 .chat-title-project-button.open {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: color-mix(in srgb, var(--accent) 96%, var(--text));
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+  color: color-mix(in srgb, var(--accent-primary) 96%, var(--text-primary));
 }
 
 .chat-title-project-button .breadcrumb-project-name {
@@ -429,7 +429,7 @@
 .chat-title-session-text {
   min-width: 0;
   flex: 1 1 0;
-  color: var(--muted);
+  color: var(--text-secondary);
   cursor: default;
 }
 
@@ -446,7 +446,7 @@
 
 .chat-title-session-button:hover,
 .chat-title-session-button.open {
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .chat-title-project-menu {
@@ -458,9 +458,9 @@
   max-height: min(380px, calc(100vh - 72px));
   overflow-y: auto;
   padding: 5px;
-  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 76%, transparent);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--panel) 94%, var(--panel-2));
+  background: color-mix(in srgb, var(--surface-panel) 94%, var(--surface-raised));
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
 }
 
@@ -475,14 +475,14 @@
   border-radius: 6px;
   padding: 6px 8px;
   background: transparent;
-  color: var(--text);
+  color: var(--text-primary);
   text-align: left;
   cursor: pointer;
 }
 
 .chat-title-project-menu-item:hover,
 .chat-title-project-menu-item.selected {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
 }
 
 .chat-title-project-menu-name {
@@ -498,7 +498,7 @@
 .chat-title-project-menu-path {
   min-width: 0;
   overflow: hidden;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 11px;
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -514,9 +514,9 @@
   max-height: min(360px, calc(100vh - 96px));
   overflow-y: auto;
   padding: 5px;
-  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 76%, transparent);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--panel) 94%, var(--panel-2));
+  background: color-mix(in srgb, var(--surface-panel) 94%, var(--surface-raised));
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
 }
 
@@ -531,17 +531,17 @@
   border-radius: 6px;
   padding: 6px 8px;
   background: transparent;
-  color: var(--text);
+  color: var(--text-primary);
   text-align: left;
   cursor: pointer;
 }
 
 .chat-title-prompt-menu-item:hover {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
 }
 
 .chat-title-prompt-menu-label {
-  color: color-mix(in srgb, var(--accent) 82%, var(--text));
+  color: color-mix(in srgb, var(--accent-primary) 82%, var(--text-primary));
   font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
@@ -550,7 +550,7 @@
 .chat-title-prompt-menu-preview {
   min-width: 0;
   overflow: hidden;
-  color: color-mix(in srgb, var(--text) 82%, var(--muted));
+  color: color-mix(in srgb, var(--text-primary) 82%, var(--text-secondary));
   font-size: 12px;
   line-height: 1.35;
   text-overflow: ellipsis;
@@ -574,8 +574,8 @@
   align-items: center;
   gap: 6px;
   padding: 0 6px;
-  border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel) 92%, var(--panel-3));
+  border-bottom: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-panel) 92%, var(--surface-panel));
 }
 
 .chat-preview-icon-button {
@@ -589,13 +589,13 @@
   border-radius: 4px;
   padding: 0;
   background: transparent;
-  color: var(--muted);
+  color: var(--text-secondary);
   cursor: pointer;
 }
 
 .chat-preview-icon-button:hover {
   background: var(--hover);
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .chat-preview-title {
@@ -605,7 +605,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 
 .chat-empty-preview-surface {
@@ -620,7 +620,7 @@
   justify-content: center;
   gap: 8px;
   padding: 24px;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -641,7 +641,7 @@
   display: flex;
   padding-top: var(--wm-safe-area-top);
   background: var(--surface-workspace-content);
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .narrow-shell[data-chat-preview-open='true'] .floating-control-stack-layer {
@@ -669,7 +669,7 @@
 }
 
 .item.selected {
-  background: #094771;
+  background: color-mix(in srgb, var(--accent-primary) 11%, var(--surface-sidebar));
 }
 
 .wide-project-session-nav {
@@ -677,7 +677,7 @@
   overflow: auto;
   scrollbar-gutter: auto;
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--muted) 46%, transparent) transparent;
+  scrollbar-color: color-mix(in srgb, var(--text-secondary) 46%, transparent) transparent;
 }
 
 .session-search-control {
@@ -730,19 +730,19 @@
   z-index: 95;
   width: min(196px, calc(100vw - 18px));
   padding: 5px;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--panel) 96%, var(--panel-2));
+  background: color-mix(in srgb, var(--surface-panel) 96%, var(--surface-raised));
   box-shadow: 0 16px 34px rgba(0, 0, 0, 0.34);
 }
 
 .session-archive-progress {
   margin: 0 4px 8px;
   padding: 7px 8px;
-  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
   border-radius: 7px;
-  background: color-mix(in srgb, var(--panel-2) 78%, transparent);
-  color: var(--muted);
+  background: color-mix(in srgb, var(--surface-raised) 78%, transparent);
+  color: var(--text-secondary);
   display: grid;
   gap: 5px;
   font-size: 11px;
@@ -760,7 +760,7 @@
 .session-archive-progress-label {
   min-width: 0;
   overflow: hidden;
-  color: color-mix(in srgb, var(--muted) 78%, transparent);
+  color: color-mix(in srgb, var(--text-secondary) 78%, transparent);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0;
@@ -773,10 +773,10 @@
   flex: 0 0 auto;
   width: 20px;
   height: 20px;
-  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
   border-radius: 5px;
   background: transparent;
-  color: color-mix(in srgb, var(--muted) 72%, transparent);
+  color: color-mix(in srgb, var(--text-secondary) 72%, transparent);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -786,7 +786,7 @@
 
 .session-archive-progress-dismiss:hover:not(:disabled) {
   background: var(--hover);
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .session-archive-progress-dismiss:disabled {
@@ -798,7 +798,7 @@
   display: flex;
   justify-content: space-between;
   gap: 10px;
-  color: color-mix(in srgb, var(--text) 82%, transparent);
+  color: color-mix(in srgb, var(--text-primary) 82%, transparent);
   font-weight: 600;
 }
 
@@ -806,14 +806,14 @@
   height: 4px;
   overflow: hidden;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--border) 72%, transparent);
+  background: color-mix(in srgb, var(--border-subtle) 72%, transparent);
 }
 
 .session-archive-progress-track span {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: color-mix(in srgb, #65c27a 72%, var(--accent));
+  background: color-mix(in srgb, #65c27a 72%, var(--accent-primary));
 }
 
 .session-archive-progress-current,
@@ -827,21 +827,21 @@
 .session-search-control.open,
 .chat-header-search-control.open {
   height: 30px;
-  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 82%, transparent);
   border-radius: 7px;
-  background: color-mix(in srgb, var(--panel-2) 86%, transparent);
+  background: color-mix(in srgb, var(--surface-raised) 86%, transparent);
   padding: 0 3px 0 7px;
 }
 
 .session-search-control.active,
 .chat-header-search-control.active {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-color: color-mix(in srgb, var(--accent-primary) 45%, var(--border-subtle));
 }
 
 .session-search-control.open:focus-within,
 .chat-header-search-control.open:focus-within {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent-primary) 45%, var(--border-subtle));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-primary) 14%, transparent);
 }
 
 .chat-header-search-control.open {
@@ -850,7 +850,7 @@
 
 .session-search-leading-icon {
   flex: 0 0 auto;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
@@ -860,7 +860,7 @@
   height: 24px;
   border: 0;
   background: transparent;
-  color: var(--text);
+  color: var(--text-primary);
   font-size: 12px;
   outline: none;
 }
@@ -871,7 +871,7 @@
 }
 
 .session-search-input::placeholder {
-  color: color-mix(in srgb, var(--muted) 80%, transparent);
+  color: color-mix(in srgb, var(--text-secondary) 80%, transparent);
 }
 
 .session-search-icon-btn {
@@ -881,7 +881,7 @@
   border: 1px solid transparent;
   border-radius: 5px;
   background: transparent;
-  color: var(--muted);
+  color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -890,14 +890,14 @@
 }
 
 .session-search-icon-btn:hover {
-  border-color: color-mix(in srgb, var(--border) 80%, transparent);
+  border-color: color-mix(in srgb, var(--border-subtle) 80%, transparent);
   background: var(--hover);
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .session-search-status {
   padding: 1px 6px 7px 22px;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 11px;
   line-height: 1.3;
 }
@@ -907,7 +907,7 @@
   display: flex;
   align-items: center;
   padding: 0 7px 0 22px;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 11px;
   font-weight: 600;
   line-height: 1.25;
@@ -933,7 +933,7 @@
 .session-search-title-highlight {
   border-radius: 3px;
   background: color-mix(in srgb, #ffd166 38%, transparent);
-  color: color-mix(in srgb, var(--text) 94%, #ffd166);
+  color: color-mix(in srgb, var(--text-primary) 94%, #ffd166);
 }
 
 .session-search-empty {
@@ -953,17 +953,17 @@
 }
 
 .session-state-marker.archived {
-  color: color-mix(in srgb, #75a7df 74%, var(--text));
+  color: color-mix(in srgb, #75a7df 74%, var(--text-primary));
   font-size: 11px;
 }
 
 .session-older-toggle {
   grid-template-columns: 9px minmax(0, 1fr) auto auto;
-  color: color-mix(in srgb, var(--muted) 58%, transparent);
+  color: color-mix(in srgb, var(--text-secondary) 58%, transparent);
 }
 
 .session-older-toggle .wide-session-title {
-  color: color-mix(in srgb, var(--muted) 62%, transparent);
+  color: color-mix(in srgb, var(--text-secondary) 62%, transparent);
   font-weight: 500;
 }
 
@@ -973,15 +973,15 @@
 }
 
 .session-older-toggle:hover {
-  color: color-mix(in srgb, var(--text) 72%, transparent);
+  color: color-mix(in srgb, var(--text-primary) 72%, transparent);
 }
 
 .session-older-toggle:hover .wide-session-title {
-  color: color-mix(in srgb, var(--text) 68%, transparent);
+  color: color-mix(in srgb, var(--text-primary) 68%, transparent);
 }
 
 .project-session-menu-btn.restore {
-  color: color-mix(in srgb, #65c27a 78%, var(--text));
+  color: color-mix(in srgb, #65c27a 78%, var(--text-primary));
 }
 
 .wide-project-section {
@@ -990,7 +990,7 @@
 }
 
 .wide-project-section.active .wide-project-row {
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
 }
 
 .wide-project-row {
@@ -1014,7 +1014,7 @@
   height: 30px;
   border: none;
   background: transparent;
-  color: var(--text);
+  color: var(--text-primary);
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr);
   align-items: center;
@@ -1043,8 +1043,8 @@
 }
 
 .wide-project-folder-icon {
-  --hub-accent: var(--accent);
-  color: color-mix(in srgb, var(--hub-accent) 72%, var(--text));
+  --hub-accent: var(--accent-primary);
+  color: color-mix(in srgb, var(--hub-accent) 72%, var(--text-primary));
   font-size: 14px;
   transition: color 160ms ease, text-shadow 220ms ease, transform 160ms ease;
 }
@@ -1060,11 +1060,11 @@
 }
 
 .wide-project-folder-icon.codicon-folder {
-  color: color-mix(in srgb, var(--muted) 74%, var(--hub-accent));
+  color: color-mix(in srgb, var(--text-secondary) 74%, var(--hub-accent));
 }
 
 .wide-project-folder-icon.codicon-folder-opened {
-  color: color-mix(in srgb, var(--hub-accent) 82%, var(--text));
+  color: color-mix(in srgb, var(--hub-accent) 82%, var(--text-primary));
   text-shadow: 0 0 8px color-mix(in srgb, var(--hub-accent) 30%, transparent);
 }
 
@@ -1099,7 +1099,7 @@
 }
 
 .wide-project-hub-tag {
-  --hub-accent: var(--accent);
+  --hub-accent: var(--accent-primary);
   flex: 1 1 0;
   min-width: 0;
   max-width: max-content;
@@ -1107,7 +1107,7 @@
   border: none;
   border-radius: 999px;
   background: transparent;
-  color: var(--muted);
+  color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -1150,7 +1150,7 @@
 .recent-sessions-section:not(.collapsed) {
   padding-bottom: 6px;
   margin-bottom: 8px;
-  border-bottom: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 12%, transparent);
 }
 
 /* When pinned, the Recent Sessions block stays at the top of the scroll area
@@ -1173,25 +1173,25 @@
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: color-mix(in srgb, var(--text) 55%, transparent);
+  color: color-mix(in srgb, var(--text-primary) 55%, transparent);
   cursor: pointer;
   flex: 0 0 auto;
 }
 
 .recent-sessions-pin-btn:hover {
-  background: color-mix(in srgb, var(--text) 12%, transparent);
-  color: var(--text);
+  background: color-mix(in srgb, var(--text-primary) 12%, transparent);
+  color: var(--text-primary);
 }
 
 .recent-sessions-pin-btn.active {
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 16%, transparent);
 }
 
 .recent-sessions-icon {
   font-size: 14px;
   line-height: 1;
-  color: color-mix(in srgb, var(--accent) 82%, var(--text));
+  color: color-mix(in srgb, var(--accent-primary) 82%, var(--text-primary));
 }
 
 .recent-sessions-section .wide-project-name {
@@ -1204,7 +1204,7 @@
   padding: 1px 7px;
   border: 1px solid color-mix(in srgb, var(--hub-accent) 38%, transparent);
   background: color-mix(in srgb, var(--hub-accent) 14%, transparent);
-  color: color-mix(in srgb, var(--hub-accent) 88%, var(--text));
+  color: color-mix(in srgb, var(--hub-accent) 88%, var(--text-primary));
   border-radius: 999px;
   text-transform: none;
   letter-spacing: 0;
@@ -1224,7 +1224,7 @@
   border: 1px solid transparent;
   border-radius: 5px;
   background: transparent;
-  color: var(--muted);
+  color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1239,16 +1239,16 @@
 }
 
 .wide-project-action-btn:hover {
-  border-color: color-mix(in srgb, var(--border) 80%, transparent);
+  border-color: color-mix(in srgb, var(--border-subtle) 80%, transparent);
   background: var(--hover);
-  color: var(--text);
+  color: var(--text-primary);
   opacity: 1;
 }
 
 .chat-hidden-project-list {
   margin-top: 8px;
   padding-top: 6px;
-  border-top: 1px dashed color-mix(in srgb, var(--border) 82%, transparent);
+  border-top: 1px dashed color-mix(in srgb, var(--border-subtle) 82%, transparent);
 }
 
 .chat-hidden-project-list.mobile {
@@ -1261,8 +1261,8 @@
 }
 
 .chat-hidden-project-row .wide-project-row {
-  border: 1px dashed color-mix(in srgb, var(--border) 90%, transparent);
-  background: color-mix(in srgb, var(--panel) 72%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--border-subtle) 90%, transparent);
+  background: color-mix(in srgb, var(--surface-panel) 72%, transparent);
 }
 
 .chat-hidden-project-row .wide-project-row:hover {
@@ -1271,7 +1271,7 @@
 
 .chat-hidden-project-toggle {
   cursor: default;
-  color: color-mix(in srgb, var(--muted) 86%, var(--text));
+  color: color-mix(in srgb, var(--text-secondary) 86%, var(--text-primary));
 }
 
 .chat-hidden-project-toggle:active {
@@ -1282,19 +1282,19 @@
   content: '';
   position: absolute;
   inset: 0;
-  border: 1px dashed color-mix(in srgb, var(--muted) 72%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--text-secondary) 72%, transparent);
   border-radius: 4px;
   pointer-events: none;
 }
 
 .chat-hidden-project-folder {
-  color: color-mix(in srgb, var(--muted) 84%, transparent) !important;
+  color: color-mix(in srgb, var(--text-secondary) 84%, transparent) !important;
   text-shadow: none !important;
   opacity: 0.72;
 }
 
 .chat-hidden-project-row .wide-project-hub-tag {
-  color: color-mix(in srgb, var(--muted) 78%, var(--text));
+  color: color-mix(in srgb, var(--text-secondary) 78%, var(--text-primary));
 }
 
 .chat-hidden-project-restore-btn {
@@ -1334,7 +1334,7 @@
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: color-mix(in srgb, var(--text) 76%, transparent);
+  color: color-mix(in srgb, var(--text-primary) 76%, transparent);
   display: grid;
   grid-template-columns: 9px minmax(0, 1fr) auto auto;
   align-items: center;
@@ -1351,7 +1351,7 @@
 
 .wide-session-row:hover {
   background: var(--hover);
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .wide-session-row.selected {
@@ -1360,16 +1360,16 @@
   padding-left: 23px;
   background: linear-gradient(
     to right,
-    color-mix(in srgb, var(--accent) 5%, transparent) 0,
-    color-mix(in srgb, var(--accent) 16%, var(--panel-2)) 28px,
-    color-mix(in srgb, var(--accent) 10%, var(--panel-2)) 100%
+    color-mix(in srgb, var(--accent-primary) 5%, transparent) 0,
+    color-mix(in srgb, var(--accent-primary) 16%, var(--surface-raised)) 28px,
+    color-mix(in srgb, var(--accent-primary) 10%, var(--surface-raised)) 100%
   );
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .wide-session-row.selected .wide-session-title {
   font-weight: 600;
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .wide-session-row:active {
@@ -1382,7 +1382,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: color-mix(in srgb, var(--text) 38%, transparent);
+  color: color-mix(in srgb, var(--text-primary) 38%, transparent);
   flex: 0 0 9px;
 }
 
@@ -1399,13 +1399,13 @@
 }
 
 .session-state-marker.completed-unviewed .session-state-dot {
-  background: #4fbf6b;
-  box-shadow: 0 0 0 2px color-mix(in srgb, #4fbf6b 18%, transparent);
+  background: var(--state-success);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--state-success) 18%, transparent);
 }
 
 .session-state-marker.failed-unviewed .session-state-dot {
-  background: #f46d6d;
-  box-shadow: 0 0 0 2px color-mix(in srgb, #f46d6d 18%, transparent);
+  background: var(--state-danger);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--state-danger) 18%, transparent);
 }
 
 .draft-session-row-wrap.has-dismiss .draft-session-row {
@@ -1414,11 +1414,11 @@
 
 .draft-session-row.creating,
 .draft-session-row.sendingFirstPrompt {
-  color: color-mix(in srgb, var(--text) 82%, transparent);
+  color: color-mix(in srgb, var(--text-primary) 82%, transparent);
 }
 
 .draft-session-row.failed {
-  color: color-mix(in srgb, #f46d6d 74%, var(--text));
+  color: color-mix(in srgb, var(--state-danger) 74%, var(--text-primary));
 }
 
 .session-state-marker.draft {
@@ -1431,7 +1431,7 @@
 }
 
 .session-state-marker.draft.failed {
-  color: #f46d6d;
+  color: var(--state-danger);
 }
 
 .draft-session-dismiss {
@@ -1443,7 +1443,7 @@
   border: none;
   border-radius: 5px;
   background: transparent;
-  color: color-mix(in srgb, var(--text) 54%, transparent);
+  color: color-mix(in srgb, var(--text-primary) 54%, transparent);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1455,8 +1455,8 @@
 }
 
 .draft-session-dismiss:hover {
-  background: color-mix(in srgb, #f46d6d 13%, var(--hover));
-  color: #f46d6d;
+  background: color-mix(in srgb, var(--state-danger) 13%, var(--hover));
+  color: var(--state-danger);
 }
 
 .project-session-action-menu {
@@ -1470,9 +1470,9 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 5px;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--panel) 96%, var(--panel-2));
+  background: color-mix(in srgb, var(--surface-panel) 96%, var(--surface-raised));
   box-shadow: 0 16px 34px rgba(0, 0, 0, 0.34);
 }
 
@@ -1482,7 +1482,7 @@
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: var(--muted);
+  color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
@@ -1510,15 +1510,15 @@
 }
 
 .project-session-menu-btn.reload {
-  color: color-mix(in srgb, #65c27a 76%, var(--text));
+  color: color-mix(in srgb, #65c27a 76%, var(--text-primary));
 }
 
 .project-session-menu-btn.rename {
-  color: color-mix(in srgb, #9f8be8 76%, var(--text));
+  color: color-mix(in srgb, #9f8be8 76%, var(--text-primary));
 }
 
 .project-session-menu-btn.archive {
-  color: color-mix(in srgb, #75a7df 78%, var(--text));
+  color: color-mix(in srgb, #75a7df 78%, var(--text-primary));
 }
 
 .project-session-menu-btn.delete {
@@ -1527,11 +1527,11 @@
 
 .project-session-menu-btn:hover {
   background: var(--hover);
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .project-session-menu-btn.delete:hover {
-  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  background: color-mix(in srgb, var(--state-danger) 14%, transparent);
   color: #fecaca;
 }
 
@@ -1543,7 +1543,7 @@
 .project-session-menu-separator {
   height: 1px;
   margin: 4px 3px;
-  background: color-mix(in srgb, var(--border) 62%, transparent);
+  background: color-mix(in srgb, var(--border-subtle) 62%, transparent);
 }
 
 .wide-session-title {
@@ -1557,7 +1557,7 @@
 }
 
 .wide-session-agent-tag {
-  --agent-accent: var(--accent);
+  --agent-accent: var(--accent-primary);
   display: inline-flex;
   align-items: center;
   min-height: 20px;
@@ -1568,7 +1568,7 @@
   border: 1px solid color-mix(in srgb, var(--agent-accent) 28%, transparent);
   border-radius: 999px;
   padding: 1px 7px;
-  color: color-mix(in srgb, var(--text) 78%, var(--agent-accent));
+  color: color-mix(in srgb, var(--text-primary) 78%, var(--agent-accent));
   background: color-mix(in srgb, var(--agent-accent) 6%, transparent);
   font-size: 10.5px;
   font-weight: 600;
@@ -1588,7 +1588,7 @@
 .wide-session-agent-8 { --agent-accent: #69db7c; }
 
 .wide-session-time {
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 10.5px;
   min-width: 22px;
   text-align: right;
@@ -1597,7 +1597,7 @@
 
 .wide-project-empty,
 .wide-project-action-empty {
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 11.5px;
   display: inline-flex;
   align-items: center;
@@ -1624,9 +1624,9 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   z-index: 80;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  background: var(--panel);
+  background: var(--surface-panel);
   box-shadow: var(--soft-shadow);
   padding: 6px;
 }
@@ -1638,11 +1638,11 @@
   min-width: 0;
   padding: 6px 7px 9px;
   margin-bottom: 4px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
 }
 
 .wide-project-action-title .codicon {
-  color: color-mix(in srgb, var(--text) 74%, var(--accent));
+  color: color-mix(in srgb, var(--text-primary) 74%, var(--accent-primary));
   font-size: 15px;
 }
 
@@ -1664,7 +1664,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 11px;
   line-height: 1.2;
 }
@@ -1676,7 +1676,7 @@
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: var(--text);
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1696,7 +1696,7 @@
   overflow: auto;
   scrollbar-gutter: auto;
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--muted) 46%, transparent) transparent;
+  scrollbar-color: color-mix(in srgb, var(--text-secondary) 46%, transparent) transparent;
   padding: 9px 7px calc(env(safe-area-inset-bottom, 0px) + 18px);
 }
 
@@ -1722,16 +1722,16 @@
   margin: 0 8px 6px 23px;
   padding: 6px 8px;
   border-radius: 7px;
-  background: color-mix(in srgb, var(--danger) 9%, transparent);
-  color: color-mix(in srgb, var(--text) 74%, var(--danger));
+  background: color-mix(in srgb, var(--state-danger) 9%, transparent);
+  color: color-mix(in srgb, var(--text-primary) 74%, var(--state-danger));
   font-size: 11px;
 }
 
 .mobile-project-session-error button {
   border: none;
   border-radius: 5px;
-  background: color-mix(in srgb, var(--danger) 16%, transparent);
-  color: var(--text);
+  background: color-mix(in srgb, var(--state-danger) 16%, transparent);
+  color: var(--text-primary);
   padding: 3px 7px;
   font: inherit;
   cursor: pointer;
@@ -1756,7 +1756,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #4fbf6b;
+  background: var(--state-success);
 }
 
 .chat-hub-summary {
@@ -1771,10 +1771,10 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 34%, transparent);
   border-radius: 7px;
-  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
-  color: var(--text);
+  background: color-mix(in srgb, var(--accent-primary) 12%, var(--surface-panel));
+  color: var(--text-primary);
   padding: 0 7px;
   font-size: 11px;
   font-weight: 700;
@@ -1806,14 +1806,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: color-mix(in srgb, var(--muted) 86%, var(--text));
+  color: color-mix(in srgb, var(--text-secondary) 86%, var(--text-primary));
   font-size: 10px;
   font-weight: 600;
 }
 
 .chat-hub-summary-button:hover {
-  border-color: color-mix(in srgb, var(--accent) 52%, transparent);
-  background: color-mix(in srgb, var(--accent) 18%, var(--panel));
+  border-color: color-mix(in srgb, var(--accent-primary) 52%, transparent);
+  background: color-mix(in srgb, var(--accent-primary) 18%, var(--surface-panel));
 }
 
 .chat-hub-summary-button .codicon {
@@ -1832,9 +1832,9 @@
   max-height: calc(100vh - var(--chat-hub-popover-viewport-offset));
   max-height: calc(100dvh - var(--chat-hub-popover-viewport-offset));
   overflow: auto;
-  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--panel) 82%, var(--panel-2));
+  background: color-mix(in srgb, var(--surface-panel) 82%, var(--surface-raised));
   backdrop-filter: blur(20px) saturate(1.4);
   -webkit-backdrop-filter: blur(20px) saturate(1.4);
   box-shadow:
@@ -1852,7 +1852,7 @@
 .chat-hub-tree + .chat-hub-tree {
   margin-top: 4px;
   padding-top: 6px;
-  border-top: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 40%, transparent);
 }
 
 .chat-hub-tree {
@@ -1860,14 +1860,14 @@
   --chat-hub-color-chip-width: 36px;
   --chat-hub-color-chip-height: 20px;
   --chat-hub-color-chip-radius: 6px;
-  border-left: 3px solid var(--hub-accent, var(--accent));
+  border-left: 3px solid var(--hub-accent, var(--accent-primary));
   border-radius: 0 7px 7px 0;
   padding: 2px 4px 2px 6px;
   transition: background 160ms ease;
 }
 
 .chat-hub-tree:hover {
-  background: color-mix(in srgb, var(--hub-accent, var(--accent)) 4%, transparent);
+  background: color-mix(in srgb, var(--hub-accent, var(--accent-primary)) 4%, transparent);
 }
 
 .chat-hub-tree.color-open {
@@ -1907,7 +1907,7 @@
 .chat-hub-project-row {
   border: none;
   background: transparent;
-  color: var(--muted);
+  color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1923,11 +1923,11 @@
 .chat-hub-color-square:hover,
 .chat-hub-project-row:hover {
   background: color-mix(in srgb, var(--hover) 86%, transparent);
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .chat-hub-project-toggle {
-  --hub-accent: var(--accent);
+  --hub-accent: var(--accent-primary);
   width: 24px;
   height: 24px;
   border-radius: 6px;
@@ -1948,7 +1948,7 @@
 }
 
 .chat-hub-color-square {
-  --hub-accent: var(--accent);
+  --hub-accent: var(--accent-primary);
   width: 32px;
   height: 24px;
   border: 1px solid transparent;
@@ -1977,7 +1977,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text);
+  color: var(--text-primary);
   font-weight: 650;
 }
 
@@ -2012,9 +2012,9 @@
   display: flex;
   flex-direction: column;
   gap: 7px;
-  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 60%, transparent);
   border-radius: 9px;
-  background: color-mix(in srgb, var(--panel) 88%, var(--panel-2));
+  background: color-mix(in srgb, var(--surface-panel) 88%, var(--surface-raised));
   backdrop-filter: blur(24px) saturate(1.5);
   -webkit-backdrop-filter: blur(24px) saturate(1.5);
   box-shadow:
@@ -2041,10 +2041,10 @@
   right: 56px;
   width: 12px;
   height: 12px;
-  border-left: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
-  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--border-subtle) 60%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 60%, transparent);
   border-radius: 2px 0 0 0;
-  background: color-mix(in srgb, var(--panel) 86%, var(--panel-2));
+  background: color-mix(in srgb, var(--surface-panel) 86%, var(--surface-raised));
   transform: rotate(45deg);
 }
 
@@ -2055,19 +2055,19 @@
 }
 
 .chat-hub-color-swatch {
-  --swatch-color: var(--accent);
+  --swatch-color: var(--accent-primary);
   position: relative;
   width: var(--chat-hub-color-chip-width);
   height: var(--chat-hub-color-chip-height);
   justify-self: center;
-  border: 1px solid color-mix(in srgb, var(--swatch-color) 46%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--swatch-color) 46%, var(--border-subtle));
   border-radius: var(--chat-hub-color-chip-radius);
   background: var(--swatch-color);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.13);
 }
 
 .chat-hub-color-custom {
-  --hub-accent: var(--accent);
+  --hub-accent: var(--accent-primary);
   --hub-custom-hue: #ff0000;
   --hub-custom-s: 100%;
   --hub-custom-v: 0%;
@@ -2075,9 +2075,9 @@
   display: grid;
   gap: 7px;
   padding: 7px;
-  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
   border-radius: 7px;
-  background: color-mix(in srgb, var(--panel-2) 46%, transparent);
+  background: color-mix(in srgb, var(--surface-raised) 46%, transparent);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
@@ -2095,7 +2095,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: color-mix(in srgb, var(--text) 86%, var(--muted));
+  color: color-mix(in srgb, var(--text-primary) 86%, var(--text-secondary));
   font-size: 11px;
   font-weight: 700;
 }
@@ -2116,7 +2116,7 @@
   position: relative;
   aspect-ratio: 2 / 1;
   width: 100%;
-  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 76%, transparent);
   border-radius: 7px;
   overflow: hidden;
   cursor: pointer;
@@ -2144,7 +2144,7 @@
 .chat-hub-color-hue {
   position: relative;
   height: 14px;
-  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
   border-radius: 999px;
   cursor: pointer;
   touch-action: none;
@@ -2174,10 +2174,10 @@
 }
 
 .chat-hub-color-swatch.selected {
-  border-color: color-mix(in srgb, var(--swatch-color) 64%, var(--text));
+  border-color: color-mix(in srgb, var(--swatch-color) 64%, var(--text-primary));
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.24),
-    0 0 0 2px color-mix(in srgb, var(--panel) 80%, transparent);
+    0 0 0 2px color-mix(in srgb, var(--surface-panel) 80%, transparent);
 }
 
 .chat-hub-color-swatch.selected::after {
@@ -2232,24 +2232,24 @@
 .chat-hub-project-check {
   width: 14px;
   height: 14px;
-  border: 1.5px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
   border-radius: 4px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--accent);
+  color: var(--accent-primary);
   font-size: 10px;
   background: transparent;
   transition: border-color 140ms ease, background 140ms ease;
 }
 
 .chat-hub-project-row:not(.hidden) .chat-hub-project-check {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 14%, transparent);
 }
 
 .chat-hub-project-row:hover .chat-hub-project-check {
-  border-color: var(--accent);
+  border-color: var(--accent-primary);
 }
 
 .chat-hub-project-row.hidden .chat-hub-project-check {
@@ -2259,7 +2259,7 @@
 .chat-hub-project-row.hidden .chat-hub-project-name {
   opacity: 0.45;
   text-decoration: line-through;
-  text-decoration-color: color-mix(in srgb, var(--muted) 50%, transparent);
+  text-decoration-color: color-mix(in srgb, var(--text-secondary) 50%, transparent);
 }
 
 .chat-hub-project-name,
@@ -2272,22 +2272,22 @@
 
 .chat-hub-project-empty {
   padding: 3px 5px;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 11px;
 }
 
 .chat-hub-read-tag.local {
   background: color-mix(in srgb, #2f9e44 18%, transparent);
-  color: color-mix(in srgb, #2f9e44 86%, var(--text));
+  color: color-mix(in srgb, #2f9e44 86%, var(--text-primary));
 }
 
 .chat-hub-read-tag.remote {
-  background: color-mix(in srgb, var(--muted) 16%, transparent);
-  color: var(--muted);
+  background: color-mix(in srgb, var(--text-secondary) 16%, transparent);
+  color: var(--text-secondary);
 }
 
 .chat-hub-empty {
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 
 .chat-main {
@@ -2366,11 +2366,11 @@
   align-self: flex-start;
   max-width: min(920px, 100%);
   padding: 8px 12px;
-  border: 1px solid color-mix(in srgb, var(--accent) 72%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 72%, var(--border-subtle));
   border-radius: 10px;
-  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  background: color-mix(in srgb, var(--accent-primary) 9%, transparent);
   font-size: 13px;
-  color: color-mix(in srgb, var(--text) 78%, var(--accent));
+  color: color-mix(in srgb, var(--text-primary) 78%, var(--accent-primary));
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -2391,7 +2391,7 @@
   justify-content: center;
   width: 18px;
   height: 18px;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 
 .chat-prompt-status-sent .codicon {
@@ -2404,7 +2404,7 @@
 }
 
 .chat-prompt-status-confirming {
-  color: color-mix(in srgb, var(--muted) 88%, var(--accent));
+  color: color-mix(in srgb, var(--text-secondary) 88%, var(--accent-primary));
 }
 
 .chat-prompt-status-confirming .codicon {
@@ -2414,10 +2414,10 @@
 .chat-prompt-status-queued {
   width: auto;
   height: 18px;
-  border: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 42%, transparent);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  color: color-mix(in srgb, var(--accent) 82%, var(--text));
+  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+  color: color-mix(in srgb, var(--accent-primary) 82%, var(--text-primary));
   font-size: 11px;
   line-height: 16px;
   padding: 0 7px;
@@ -2428,7 +2428,7 @@
   gap: 1px;
   font-size: 12px;
   line-height: 1;
-  color: color-mix(in srgb, var(--text) 76%, var(--accent));
+  color: color-mix(in srgb, var(--text-primary) 76%, var(--accent-primary));
   contain: paint;
 }
 
@@ -2459,7 +2459,7 @@
 
 .chat-prompt-status-done {
   border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 78%, #22c55e);
+  background: color-mix(in srgb, var(--accent-primary) 78%, #22c55e);
   color: #ffffff;
 }
 
@@ -2475,15 +2475,15 @@
   gap: 6px;
   margin-top: -2px;
   font-size: 11px;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 
 .chat-prompt-delivery-line button {
   height: 22px;
-  border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 86%, transparent);
   border-radius: 7px;
   background: transparent;
-  color: var(--text);
+  color: var(--text-primary);
   cursor: pointer;
   font-size: 11px;
   line-height: 1;
@@ -2491,8 +2491,8 @@
 }
 
 .chat-prompt-delivery-line button:hover {
-  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-color: color-mix(in srgb, var(--accent-primary) 34%, var(--border-subtle));
+  background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
 }
 
 .chat-prompt-queue-actions {
@@ -2503,9 +2503,9 @@
 
 .chat-prompt-queue-action {
   min-height: 26px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--panel);
+  background: var(--surface-panel);
   color: var(--text-muted);
   cursor: pointer;
   font-size: 12px;
@@ -2514,13 +2514,13 @@
 }
 
 .chat-prompt-queue-action:hover {
-  border-color: color-mix(in srgb, var(--accent) 44%, var(--border));
-  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent-primary) 44%, var(--border-subtle));
+  color: var(--text-primary);
 }
 
 .chat-prompt-queue-action.danger:hover {
-  border-color: color-mix(in srgb, #f85149 50%, var(--border));
-  color: #f85149;
+  border-color: color-mix(in srgb, var(--state-danger) 50%, var(--border-subtle));
+  color: var(--state-danger);
 }
 
 .chat-tool-stack {
@@ -2536,7 +2536,7 @@
   min-height: 16px;
   font-size: 11px;
   line-height: 1.25;
-  color: color-mix(in srgb, var(--muted) 86%, var(--text));
+  color: color-mix(in srgb, var(--text-secondary) 86%, var(--text-primary));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2555,7 +2555,7 @@
 .chat-thought-block {
   margin: 2px 0;
   padding-left: 10px;
-  border-left: 2px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-left: 2px solid color-mix(in srgb, var(--accent-primary) 30%, var(--border-subtle));
 }
 
 .chat-thought-header {
@@ -2577,7 +2577,7 @@
 .chat-thought-preview {
   font-size: 12px;
   line-height: 1.35;
-  color: color-mix(in srgb, var(--text) 68%, var(--muted));
+  color: color-mix(in srgb, var(--text-primary) 68%, var(--text-secondary));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2597,10 +2597,10 @@
   margin-top: 6px;
   padding: 8px 10px;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--surface-raised) 88%, var(--accent));
+  background: color-mix(in srgb, var(--surface-raised) 88%, var(--accent-primary));
   font-size: 12px;
   line-height: 1.55;
-  color: color-mix(in srgb, var(--text) 74%, var(--muted));
+  color: color-mix(in srgb, var(--text-primary) 74%, var(--text-secondary));
 }
 
 .chat-thought-content p {
@@ -2612,7 +2612,7 @@
 }
 
 .chat-plan-surface {
-  color: var(--text);
+  color: var(--text-primary);
   font-family: inherit;
   letter-spacing: 0;
 }
@@ -2632,7 +2632,7 @@
   width: var(--chat-plan-resolved-width);
   max-height: min(42vh, 360px);
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--border) 82%, var(--accent));
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 82%, var(--accent-primary));
   border-radius: 8px;
   background: color-mix(in srgb, var(--surface-panel) 92%, var(--surface-workspace-content));
   box-shadow: 0 14px 34px color-mix(in srgb, #000 28%, transparent);
@@ -2659,7 +2659,7 @@
   gap: 7px;
   min-height: 34px;
   padding: 0 10px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
 }
 
 .chat-plan-surface-toggle {
@@ -2670,7 +2670,7 @@
   border: none;
   border-radius: 999px;
   background: transparent;
-  color: color-mix(in srgb, var(--accent) 74%, var(--text));
+  color: color-mix(in srgb, var(--accent-primary) 74%, var(--text-primary));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2683,12 +2683,12 @@
 }
 
 .chat-plan-surface-toggle:hover {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: color-mix(in srgb, var(--accent) 88%, var(--text));
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+  color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
 }
 
 .chat-plan-surface-toggle:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent) 58%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--accent-primary) 58%, transparent);
   outline-offset: 2px;
 }
 
@@ -2706,7 +2706,7 @@
   font-size: 11px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
-  color: var(--muted);
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 
@@ -2731,7 +2731,7 @@
   align-items: flex-start;
   gap: 8px;
   min-height: 21px;
-  color: color-mix(in srgb, var(--text) 82%, var(--muted));
+  color: color-mix(in srgb, var(--text-primary) 82%, var(--text-secondary));
   font-size: 12px;
   line-height: 1.4;
 }
@@ -2744,27 +2744,27 @@
   justify-content: center;
   font-size: 12px;
   line-height: 1;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 
 .chat-plan-step.in-progress .chat-plan-step-marker,
 .chat-plan-compact-marker.codicon-arrow-right {
-  color: #d29922;
+  color: var(--state-warning);
 }
 
 .chat-plan-step.completed .chat-plan-step-marker,
 .chat-plan-compact-marker.codicon-check {
-  color: #3fb950;
+  color: var(--state-success);
 }
 
 .chat-plan-step.completed .chat-plan-step-content {
-  color: color-mix(in srgb, #3fb950 74%, var(--text));
+  color: color-mix(in srgb, var(--state-success) 74%, var(--text-primary));
   text-decoration: line-through;
   text-decoration-thickness: 1px;
 }
 
 .chat-plan-step.pending .chat-plan-step-content {
-  color: color-mix(in srgb, var(--text) 62%, var(--muted));
+  color: color-mix(in srgb, var(--text-primary) 62%, var(--text-secondary));
 }
 
 .chat-plan-step-content {
@@ -2782,10 +2782,10 @@
 .chat-plan-compact-trigger {
   width: 100%;
   min-height: 32px;
-  border: 1px solid color-mix(in srgb, var(--border) 84%, var(--accent));
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, var(--accent-primary));
   border-radius: 999px;
   background: color-mix(in srgb, var(--surface-panel) 92%, var(--surface-workspace-content));
-  color: var(--text);
+  color: var(--text-primary);
   display: grid;
   grid-template-columns: 18px auto minmax(0, 1fr) 18px;
   align-items: center;
@@ -2808,16 +2808,16 @@
 }
 
 .chat-plan-surface.desktop.collapsed .chat-plan-compact-trigger:hover {
-  background: color-mix(in srgb, var(--panel) 86%, var(--accent));
+  background: color-mix(in srgb, var(--surface-panel) 86%, var(--accent-primary));
 }
 
 .chat-plan-compact-trigger:hover {
-  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
-  background: color-mix(in srgb, var(--panel) 86%, var(--accent));
+  border-color: color-mix(in srgb, var(--accent-primary) 42%, var(--border-subtle));
+  background: color-mix(in srgb, var(--surface-panel) 86%, var(--accent-primary));
 }
 
 .chat-plan-compact-trigger:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent) 58%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--accent-primary) 58%, transparent);
   outline-offset: 2px;
 }
 
@@ -2828,7 +2828,7 @@
 }
 
 .chat-plan-compact-chevron {
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 
 .chat-plan-current {
@@ -2836,12 +2836,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: color-mix(in srgb, var(--text) 84%, var(--muted));
+  color: color-mix(in srgb, var(--text-primary) 84%, var(--text-secondary));
 }
 
 .chat-plan-surface.mobile.expanded {
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--border) 84%, var(--accent));
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, var(--accent-primary));
   border-radius: 10px;
   background: color-mix(in srgb, var(--surface-panel) 94%, var(--surface-workspace-content));
   box-shadow: 0 10px 24px color-mix(in srgb, #000 22%, transparent);
@@ -2849,7 +2849,7 @@
 
 .chat-plan-surface.mobile.expanded .chat-plan-compact-trigger {
   border: none;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
   border-radius: 0;
   background: transparent;
   box-shadow: none;
@@ -2866,7 +2866,7 @@
   line-height: 1.58;
   font-size: 14px;
   font-weight: 400;
-  color: var(--chat-message-text, var(--text));
+  color: var(--chat-message-text, var(--text-primary));
   letter-spacing: 0;
   white-space: normal;
   word-break: break-word;
@@ -2915,9 +2915,9 @@
 
 .chat-main-message a,
 .chat-main-message a:visited {
-  color: color-mix(in srgb, var(--accent) 82%, var(--text));
+  color: color-mix(in srgb, var(--accent-primary) 82%, var(--text-primary));
   text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  text-decoration-color: color-mix(in srgb, var(--accent-primary) 60%, transparent);
 }
 
 .chat-main-message .chat-file-link-line {
@@ -2953,18 +2953,18 @@
 }
 
 .chat-option-reply-inline-button {
-  border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
-  background: color-mix(in srgb, var(--surface-panel) 88%, var(--accent));
+  border-color: color-mix(in srgb, var(--accent-primary) 22%, var(--border-subtle));
+  background: color-mix(in srgb, var(--surface-panel) 88%, var(--accent-primary));
   cursor: pointer;
 }
 
 .chat-option-reply-inline-button:hover {
-  border-color: color-mix(in srgb, var(--accent) 44%, var(--border));
-  background: color-mix(in srgb, var(--surface-panel) 78%, var(--accent));
+  border-color: color-mix(in srgb, var(--accent-primary) 44%, var(--border-subtle));
+  background: color-mix(in srgb, var(--surface-panel) 78%, var(--accent-primary));
 }
 
 .chat-option-reply-inline-button:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent) 58%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--accent-primary) 58%, transparent);
   outline-offset: 2px;
 }
 
@@ -2974,13 +2974,13 @@
 }
 
 .chat-option-reply-static {
-  border-color: var(--border);
+  border-color: var(--border-subtle);
   background: transparent;
-  color: color-mix(in srgb, var(--text) 72%, var(--muted));
+  color: color-mix(in srgb, var(--text-primary) 72%, var(--text-secondary));
 }
 
 .chat-option-reply-static .chat-option-reply-label {
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 
 .chat-confirmation-reply-line {
@@ -2989,9 +2989,9 @@
 
 .chat-confirmation-reply-action {
   max-width: min(100%, 620px);
-  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 22%, var(--border-subtle));
   border-radius: 7px;
-  background: color-mix(in srgb, var(--surface-panel) 88%, var(--accent));
+  background: color-mix(in srgb, var(--surface-panel) 88%, var(--accent-primary));
   color: inherit;
   padding: 4px 8px;
   display: inline-flex;
@@ -3009,7 +3009,7 @@
   height: 22px;
   border: none;
   background: transparent;
-  color: color-mix(in srgb, var(--accent) 82%, var(--text));
+  color: color-mix(in srgb, var(--accent-primary) 82%, var(--text-primary));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3020,12 +3020,12 @@
 }
 
 .chat-confirmation-reply-action:hover {
-  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
-  background: color-mix(in srgb, var(--surface-panel) 80%, var(--accent));
+  border-color: color-mix(in srgb, var(--accent-primary) 48%, var(--border-subtle));
+  background: color-mix(in srgb, var(--surface-panel) 80%, var(--accent-primary));
 }
 
 .chat-confirmation-reply-action:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent) 58%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--accent-primary) 58%, transparent);
   outline-offset: 2px;
   border-radius: 7px;
 }
@@ -3038,7 +3038,7 @@
 .chat-option-reply-label {
   flex: 0 0 auto;
   min-width: 1.5em;
-  color: color-mix(in srgb, var(--accent) 78%, var(--text));
+  color: color-mix(in srgb, var(--accent-primary) 78%, var(--text-primary));
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -3049,7 +3049,7 @@
   overflow-wrap: anywhere;
 }
 .chat-main-message a:hover {
-  color: color-mix(in srgb, var(--accent) 92%, var(--text));
+  color: color-mix(in srgb, var(--accent-primary) 92%, var(--text-primary));
 }
 
 .chat-main-message .chat-relay-code-link {
@@ -3057,7 +3057,7 @@
 }
 
 .chat-main-message .chat-relay-code-link code {
-  color: color-mix(in srgb, var(--accent) 88%, var(--text));
+  color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
   cursor: pointer;
 }
 
@@ -3072,7 +3072,7 @@
 
 .chat-main-message th,
 .chat-main-message td {
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   padding: 6px 8px;
   text-align: left;
   vertical-align: top;
@@ -3089,7 +3089,7 @@
   max-width: min(280px, 100%);
   max-height: 220px;
   border-radius: 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   object-fit: cover;
 }
 
@@ -3110,18 +3110,18 @@
   max-width: min(340px, 100%);
   min-height: 50px;
   padding: 4px 9px 4px 4px;
-  border: 1px solid color-mix(in srgb, var(--border) 82%, var(--accent));
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 82%, var(--accent-primary));
   border-radius: 8px;
-  background: color-mix(in srgb, var(--surface-panel) 90%, var(--accent));
-  color: color-mix(in srgb, var(--text) 82%, var(--muted));
+  background: color-mix(in srgb, var(--surface-panel) 90%, var(--accent-primary));
+  color: color-mix(in srgb, var(--text-primary) 82%, var(--text-secondary));
   cursor: pointer;
   font: inherit;
   text-align: left;
 }
 
 .chat-prompt-attachment-chip:hover {
-  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
-  background: color-mix(in srgb, var(--surface-panel) 82%, var(--accent));
+  border-color: color-mix(in srgb, var(--accent-primary) 48%, var(--border-subtle));
+  background: color-mix(in srgb, var(--surface-panel) 82%, var(--accent-primary));
 }
 
 .chat-prompt-attachment-icon {
@@ -3131,15 +3131,15 @@
   align-items: center;
   justify-content: center;
   font-size: 15px;
-  color: color-mix(in srgb, var(--accent) 74%, var(--text));
+  color: color-mix(in srgb, var(--accent-primary) 74%, var(--text-primary));
 }
 
 .chat-prompt-attachment-thumb {
   width: 42px;
   height: 42px;
-  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 82%, transparent);
   border-radius: 6px;
-  background: color-mix(in srgb, var(--panel-2) 80%, transparent);
+  background: color-mix(in srgb, var(--surface-raised) 80%, transparent);
   object-fit: cover;
 }
 
@@ -3157,7 +3157,7 @@
   white-space: nowrap;
   font-size: 12px;
   line-height: 1.25;
-  color: color-mix(in srgb, var(--text) 86%, var(--accent));
+  color: color-mix(in srgb, var(--text-primary) 86%, var(--accent-primary));
 }
 
 .chat-prompt-attachment-meta {
@@ -3167,7 +3167,7 @@
   white-space: nowrap;
   font-size: 10px;
   line-height: 1.2;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 
 .chat-prompt-artifacts {
@@ -3190,14 +3190,14 @@
   border: none;
   padding: 0;
   background: transparent;
-  color: color-mix(in srgb, var(--text) 86%, var(--muted));
+  color: color-mix(in srgb, var(--text-primary) 86%, var(--text-secondary));
   font-size: 12px;
   line-height: 1;
   cursor: pointer;
 }
 
 .chat-prompt-artifact-summary:hover {
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .chat-prompt-artifact-summary:disabled {
@@ -3207,7 +3207,7 @@
 
 .chat-prompt-artifact-summary .codicon {
   font-size: 14px;
-  color: color-mix(in srgb, var(--accent) 82%, var(--text));
+  color: color-mix(in srgb, var(--accent-primary) 82%, var(--text-primary));
 }
 
 .chat-prompt-artifact-files {
@@ -3228,7 +3228,7 @@
   border-radius: 5px;
   padding: 0 6px 0 0;
   background: transparent;
-  color: var(--muted);
+  color: var(--text-secondary);
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -3236,7 +3236,7 @@
 
 .chat-prompt-artifact-file:hover {
   background: var(--hover);
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .chat-prompt-artifact-file-status {
@@ -3249,20 +3249,20 @@
   font-family: var(--mono-font);
   font-size: 11px;
   line-height: 1;
-  color: color-mix(in srgb, var(--text) 82%, var(--muted));
+  color: color-mix(in srgb, var(--text-primary) 82%, var(--text-secondary));
 }
 
 .chat-prompt-artifact-file-status.status-a {
-  color: #3fb950;
+  color: var(--state-success);
 }
 
 .chat-prompt-artifact-file-status.status-d {
-  color: #f85149;
+  color: var(--state-danger);
 }
 
 .chat-prompt-artifact-file-status.status-r,
 .chat-prompt-artifact-file-status.status-c {
-  color: #d29922;
+  color: var(--state-warning);
 }
 
 .chat-prompt-artifact-file-path {
@@ -3286,17 +3286,17 @@
 }
 
 .chat-prompt-artifact-file-counts .additions {
-  color: #3fb950;
+  color: var(--state-success);
 }
 
 .chat-prompt-artifact-file-counts .deletions {
-  color: #f85149;
+  color: var(--state-danger);
 }
 
 .chat-prompt-artifact-error {
   margin-top: 4px;
   padding-left: 21px;
-  color: #f85149;
+  color: var(--state-danger);
   font-size: 11px;
 }
 
@@ -3310,7 +3310,7 @@
 
 .chat-prompt-separator hr {
   border: none;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-subtle);
   flex: 1;
   margin: 0;
 }
@@ -3320,7 +3320,7 @@
   align-items: center;
   gap: 6px;
   font-size: 10px;
-  color: var(--muted);
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 
@@ -3329,7 +3329,7 @@
   align-items: center;
   height: 16px;
   padding: 0 6px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: 999px;
   font-size: 10px;
   line-height: 1;
@@ -3337,12 +3337,12 @@
 
 .chat-prompt-stop-reason.cancelled,
 .chat-prompt-stop-reason.interrupted {
-  color: color-mix(in srgb, var(--muted) 84%, var(--text));
+  color: color-mix(in srgb, var(--text-secondary) 84%, var(--text-primary));
 }
 
 .chat-prompt-stop-reason.failed {
-  border-color: color-mix(in srgb, #f85149 58%, var(--border));
-  color: #f85149;
+  border-color: color-mix(in srgb, var(--state-danger) 58%, var(--border-subtle));
+  color: var(--state-danger);
 }
 
 .chat-prompt-actions {
@@ -3358,7 +3358,7 @@
   border: none;
   border-radius: 5px;
   background: transparent;
-  color: var(--muted);
+  color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3370,7 +3370,7 @@
 }
 
 .chat-prompt-action-button:hover {
-  color: var(--text);
+  color: var(--text-primary);
   background: var(--hover);
 }
 
@@ -3380,7 +3380,7 @@
 }
 
 .chat-prompt-action-button:disabled:hover {
-  color: var(--muted);
+  color: var(--text-secondary);
   background: transparent;
 }
 
@@ -3388,11 +3388,11 @@
   flex-basis: 100%;
   margin-left: auto;
   font-size: 11px;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 
 .chat-prompt-result-line.failed {
-  color: #f85149;
+  color: var(--state-danger);
 }
 
 .chat-scroll-bottom-button {
@@ -3402,10 +3402,10 @@
   z-index: 5;
   width: 32px;
   height: 32px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--bg) 88%, var(--panel));
-  color: var(--text);
+  background: color-mix(in srgb, var(--surface-canvas) 88%, var(--surface-panel));
+  color: var(--text-primary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3466,10 +3466,10 @@
 }
 
 .chat-composer.config-menu-open .chat-composer-frame {
-  border-color: color-mix(in srgb, var(--border) 68%, var(--accent));
+  border-color: color-mix(in srgb, var(--border-subtle) 68%, var(--accent-primary));
   box-shadow:
     0 14px 34px rgba(0, 0, 0, 0.2),
-    0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent);
+    0 0 0 1px color-mix(in srgb, var(--accent-primary) 12%, transparent);
 }
 
 @media (min-width: 901px) {
@@ -3487,16 +3487,16 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 88%, transparent);
   border-radius: 12px;
-  background: var(--panel);
+  background: var(--surface-panel);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
   padding: 8px 8px 4px;
 }
 
 .chat-composer-frame.drag-over {
-  border-color: color-mix(in srgb, var(--accent) 62%, var(--border));
-  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+  border-color: color-mix(in srgb, var(--accent-primary) 62%, var(--border-subtle));
+  background: color-mix(in srgb, var(--accent-primary) 8%, var(--surface-panel));
 }
 
 .chat-composer-input-row {
@@ -3508,25 +3508,25 @@
 }
 
 .chat-composer-stop-trigger {
-  color: #f85149;
+  color: var(--state-danger);
   opacity: 1;
 }
 
 .chat-composer-stop-trigger:not(:disabled):hover {
-  background: color-mix(in srgb, #f85149 10%, transparent);
+  background: color-mix(in srgb, var(--state-danger) 10%, transparent);
 }
 
 .chat-composer-stop-trigger.active {
-  color: #f85149;
+  color: var(--state-danger);
   opacity: 1;
 }
 
 .chat-composer-stop-trigger.active:hover {
-  color: #ff6b62;
+  color: var(--state-danger);
 }
 
 .chat-composer-stop-trigger.cancelling {
-  color: #f85149;
+  color: var(--state-danger);
   opacity: 0.78;
 }
 
@@ -3585,14 +3585,14 @@
   border: none;
   border-radius: 0;
   background: transparent;
-  color: var(--text);
+  color: var(--text-primary);
   padding: 5px 8px 2px;
   font: inherit;
   font-size: 15px;
   line-height: 1.4;
   resize: none;
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--muted) 46%, transparent) transparent;
+  scrollbar-color: color-mix(in srgb, var(--text-secondary) 46%, transparent) transparent;
   scrollbar-gutter: stable;
 }
 
@@ -3614,7 +3614,7 @@
   z-index: 0;
   max-width: calc(100% - 16px);
   overflow: hidden;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 15px;
   line-height: 1.4;
   white-space: nowrap;
@@ -3634,7 +3634,7 @@
   gap: 1px;
   margin: 0 2px;
   padding: 0 5px;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, var(--accent));
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, var(--accent-primary));
   border-radius: 999px;
   vertical-align: baseline;
   line-height: 1.1;
@@ -3643,7 +3643,7 @@
 
 .chat-composer-capsule.skill,
 .chat-prompt-inline-capsule.skill {
-  color: color-mix(in srgb, #79c0ff 76%, var(--text));
+  color: color-mix(in srgb, #79c0ff 76%, var(--text-primary));
   background: color-mix(in srgb, #1f6feb 12%, transparent);
 }
 
@@ -3651,12 +3651,12 @@
 .chat-prompt-inline-capsule.file {
   max-width: 100%;
   white-space: normal;
-  color: color-mix(in srgb, var(--text) 84%, var(--muted));
-  background: color-mix(in srgb, var(--surface-panel) 82%, var(--accent));
+  color: color-mix(in srgb, var(--text-primary) 84%, var(--text-secondary));
+  background: color-mix(in srgb, var(--surface-panel) 82%, var(--accent-primary));
 }
 
 .chat-composer-capsule.selected {
-  outline: 2px solid color-mix(in srgb, var(--accent) 58%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--accent-primary) 58%, transparent);
   outline-offset: 1px;
 }
 
@@ -3697,7 +3697,7 @@
 
 .chat-composer-input::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: color-mix(in srgb, var(--muted) 42%, transparent);
+  background: color-mix(in srgb, var(--text-secondary) 42%, transparent);
 }
 
 .chat-slash-menu {
@@ -3729,7 +3729,7 @@
   min-height: 34px;
   padding: 6px 10px;
   background: transparent;
-  color: var(--text);
+  color: var(--text-primary);
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -3754,7 +3754,7 @@
 
 .chat-slash-description {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--text-secondary);
   line-height: 1.2;
   margin-left: auto;
   text-align: right;
@@ -3780,20 +3780,20 @@
   width: 36px;
   height: 36px;
   flex: 0 0 auto;
-  border: 1px solid color-mix(in srgb, var(--accent) 68%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 68%, transparent);
   border-radius: 10px;
   background:
     linear-gradient(
       145deg,
-      color-mix(in srgb, var(--accent) 26%, var(--panel)) 0%,
-      color-mix(in srgb, var(--accent) 14%, var(--panel)) 100%
+      color-mix(in srgb, var(--accent-primary) 26%, var(--surface-panel)) 0%,
+      color-mix(in srgb, var(--accent-primary) 14%, var(--surface-panel)) 100%
     );
-  color: color-mix(in srgb, var(--accent) 92%, var(--text));
+  color: color-mix(in srgb, var(--accent-primary) 92%, var(--text-primary));
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 6px 14px color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--accent-primary) 16%, transparent);
 }
 
 .chat-send-button .codicon {
@@ -3801,14 +3801,14 @@
 }
 
 .chat-send-button:hover {
-  border-color: color-mix(in srgb, var(--accent) 82%, transparent);
+  border-color: color-mix(in srgb, var(--accent-primary) 82%, transparent);
   background:
     linear-gradient(
       145deg,
-      color-mix(in srgb, var(--accent) 34%, var(--panel)) 0%,
-      color-mix(in srgb, var(--accent) 18%, var(--panel)) 100%
+      color-mix(in srgb, var(--accent-primary) 34%, var(--surface-panel)) 0%,
+      color-mix(in srgb, var(--accent-primary) 18%, var(--surface-panel)) 100%
     );
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .chat-send-button:disabled {
@@ -3818,14 +3818,14 @@
 }
 
 .chat-send-button:disabled:hover {
-  border-color: color-mix(in srgb, var(--accent) 68%, transparent);
+  border-color: color-mix(in srgb, var(--accent-primary) 68%, transparent);
   background:
     linear-gradient(
       145deg,
-      color-mix(in srgb, var(--accent) 26%, var(--panel)) 0%,
-      color-mix(in srgb, var(--accent) 14%, var(--panel)) 100%
+      color-mix(in srgb, var(--accent-primary) 26%, var(--surface-panel)) 0%,
+      color-mix(in srgb, var(--accent-primary) 14%, var(--surface-panel)) 100%
     );
-  color: color-mix(in srgb, var(--accent) 92%, var(--text));
+  color: color-mix(in srgb, var(--accent-primary) 92%, var(--text-primary));
 }
 
 .voice-input-button {
@@ -3833,22 +3833,22 @@
   width: 36px;
   height: 36px;
   flex: 0 0 auto;
-  border: 1px solid color-mix(in srgb, #18a999 60%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--state-info) 60%, var(--border-subtle));
   border-radius: 10px;
   background:
     linear-gradient(
       145deg,
-      color-mix(in srgb, #18a999 22%, var(--panel)) 0%,
-      color-mix(in srgb, var(--accent) 10%, var(--panel)) 100%
+      color-mix(in srgb, var(--state-info) 22%, var(--surface-panel)) 0%,
+      color-mix(in srgb, var(--accent-primary) 10%, var(--surface-panel)) 100%
     );
-  color: color-mix(in srgb, #5eead4 72%, var(--text));
+  color: color-mix(in srgb, var(--state-info) 72%, var(--text-primary));
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   touch-action: none;
   overflow: visible;
-  box-shadow: 0 6px 14px color-mix(in srgb, #18a999 16%, transparent);
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--state-info) 16%, transparent);
   transition: border-color 140ms ease, background 140ms ease, color 140ms ease, transform 140ms ease;
 }
 
@@ -3857,19 +3857,19 @@
 }
 
 .voice-input-button:hover:not(:disabled) {
-  border-color: color-mix(in srgb, #5eead4 72%, var(--border));
-  color: var(--text);
+  border-color: color-mix(in srgb, var(--state-info) 72%, var(--border-subtle));
+  color: var(--text-primary);
 }
 
 .voice-input-button.send-with-voice {
-  border-color: color-mix(in srgb, var(--accent) 72%, var(--border));
+  border-color: color-mix(in srgb, var(--accent-primary) 72%, var(--border-subtle));
   background:
     linear-gradient(
       145deg,
-      color-mix(in srgb, var(--accent) 24%, var(--panel)) 0%,
-      color-mix(in srgb, #18a999 10%, var(--panel)) 100%
+      color-mix(in srgb, var(--accent-primary) 24%, var(--surface-panel)) 0%,
+      color-mix(in srgb, var(--state-info) 10%, var(--surface-panel)) 100%
     );
-  color: color-mix(in srgb, var(--accent) 82%, var(--text));
+  color: color-mix(in srgb, var(--accent-primary) 82%, var(--text-primary));
 }
 
 .voice-input-badge {
@@ -3878,14 +3878,14 @@
   bottom: -4px;
   width: 16px;
   height: 16px;
-  border: 2px solid var(--panel);
+  border: 2px solid var(--surface-panel);
   border-radius: 999px;
-  background: #18a999;
+  background: var(--state-info);
   color: #f7fffc;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 8px color-mix(in srgb, #18a999 20%, transparent);
+  box-shadow: 0 4px 8px color-mix(in srgb, var(--state-info) 20%, transparent);
   pointer-events: none;
 }
 
@@ -3895,18 +3895,18 @@
 
 .voice-input-button.recording {
   transform: translateY(-1px);
-  border-color: color-mix(in srgb, #5eead4 82%, var(--border));
+  border-color: color-mix(in srgb, var(--state-info) 82%, var(--border-subtle));
   background:
     linear-gradient(
       145deg,
-      color-mix(in srgb, #18a999 30%, var(--panel)) 0%,
-      color-mix(in srgb, #5eead4 14%, var(--panel)) 100%
+      color-mix(in srgb, var(--state-info) 30%, var(--surface-panel)) 0%,
+      color-mix(in srgb, var(--state-info) 14%, var(--surface-panel)) 100%
     );
 }
 
 .voice-input-button.locked-recording,
 .voice-input-button.hold-recording {
-  box-shadow: 0 0 0 4px color-mix(in srgb, #18a999 14%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--state-info) 14%, transparent);
 }
 
 .voice-input-button.locked-recording::after,
@@ -3914,20 +3914,20 @@
   content: '';
   position: absolute;
   inset: -5px;
-  border: 1px solid color-mix(in srgb, #5eead4 48%, transparent);
+  border: 1px solid color-mix(in srgb, var(--state-info) 48%, transparent);
   border-radius: 14px;
   animation: voiceButtonPulse 1100ms ease-out infinite;
   pointer-events: none;
 }
 
 .voice-input-button.hold-recording {
-  border-color: color-mix(in srgb, var(--accent) 84%, var(--border));
+  border-color: color-mix(in srgb, var(--accent-primary) 84%, var(--border-subtle));
 }
 
 .voice-input-button.cancel-intent {
-  border-color: color-mix(in srgb, #f85149 82%, var(--border));
-  background: color-mix(in srgb, #f85149 14%, var(--panel));
-  color: #ff8a82;
+  border-color: color-mix(in srgb, var(--state-danger) 82%, var(--border-subtle));
+  background: color-mix(in srgb, var(--state-danger) 14%, var(--surface-panel));
+  color: var(--state-danger);
 }
 
 .voice-input-button:disabled {
@@ -3939,15 +3939,15 @@
 .voice-recording-bar {
   position: relative;
   min-height: 26px;
-  border: 1px solid color-mix(in srgb, #18a999 32%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--state-info) 32%, var(--border-subtle));
   border-radius: 8px;
   background:
     linear-gradient(
       90deg,
-      color-mix(in srgb, #18a999 16%, var(--panel)) 0%,
-      color-mix(in srgb, var(--panel-2) 92%, transparent) 100%
+      color-mix(in srgb, var(--state-info) 16%, var(--surface-panel)) 0%,
+      color-mix(in srgb, var(--surface-raised) 92%, transparent) 100%
     );
-  color: var(--text);
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   gap: 9px;
@@ -3956,21 +3956,21 @@
 }
 
 .voice-recording-bar.cancel-intent {
-  border-color: color-mix(in srgb, #f85149 55%, var(--border));
-  background: color-mix(in srgb, #f85149 12%, var(--panel));
+  border-color: color-mix(in srgb, var(--state-danger) 55%, var(--border-subtle));
+  background: color-mix(in srgb, var(--state-danger) 12%, var(--surface-panel));
 }
 
 .voice-recording-dot {
   width: 7px;
   height: 7px;
   border-radius: 999px;
-  background: #5eead4;
-  box-shadow: 0 0 0 4px color-mix(in srgb, #5eead4 16%, transparent);
+  background: var(--state-info);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--state-info) 16%, transparent);
 }
 
 .voice-recording-bar.cancel-intent .voice-recording-dot {
-  background: #ff8a82;
-  box-shadow: 0 0 0 4px color-mix(in srgb, #f85149 18%, transparent);
+  background: var(--state-danger);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--state-danger) 18%, transparent);
 }
 
 .voice-recording-wave {
@@ -4022,7 +4022,7 @@
 
 .voice-recording-time {
   flex: 0 0 auto;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 11px;
   line-height: 1;
@@ -4098,7 +4098,7 @@
   border: none;
   border-radius: 7px;
   background: transparent;
-  color: color-mix(in srgb, var(--muted) 86%, var(--text));
+  color: color-mix(in srgb, var(--text-secondary) 86%, var(--text-primary));
   cursor: pointer;
   display: inline-grid;
   place-items: center;
@@ -4134,11 +4134,11 @@
 }
 
 .chat-attach-button {
-  color: color-mix(in srgb, #4db6ac 78%, var(--text));
+  color: color-mix(in srgb, var(--state-info) 78%, var(--text-primary));
 }
 
 .chat-image-attach-button {
-  color: color-mix(in srgb, #d7a84f 78%, var(--text));
+  color: color-mix(in srgb, var(--state-warning) 78%, var(--text-primary));
 }
 
 .chat-attachment-action-tray {
@@ -4153,7 +4153,7 @@
   max-width: calc(100vw - 46px);
   min-height: 34px;
   padding: 4px;
-  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 26%, var(--border-subtle));
   border-radius: 10px;
   background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));
   box-shadow: var(--shadow-overlay);
@@ -4167,7 +4167,7 @@
   border: none;
   border-radius: 8px;
   background: color-mix(in srgb, var(--surface-raised) 86%, transparent);
-  color: var(--text);
+  color: var(--text-primary);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -4186,7 +4186,7 @@
 }
 
 .chat-attachment-action-button .codicon {
-  color: color-mix(in srgb, var(--accent) 72%, var(--text));
+  color: color-mix(in srgb, var(--accent-primary) 72%, var(--text-primary));
 }
 
 .chat-attachment-action-label {
@@ -4199,7 +4199,7 @@
 .chat-tool-button:hover,
 .chat-tool-button:focus-visible {
   background: var(--hover);
-  color: var(--text);
+  color: var(--text-primary);
   box-shadow: none;
   outline: none;
 }
@@ -4212,7 +4212,7 @@
 
 .chat-tool-button:disabled:hover {
   background: transparent;
-  color: color-mix(in srgb, var(--muted) 86%, var(--text));
+  color: color-mix(in srgb, var(--text-secondary) 86%, var(--text-primary));
 }
 
 
@@ -4228,9 +4228,9 @@
   flex-direction: column;
   align-items: stretch;
   gap: 6px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: 10px;
-  background: var(--panel);
+  background: var(--surface-panel);
   padding: 6px;
   width: 88px;
   position: relative;
@@ -4238,18 +4238,18 @@
 
 .chat-attachment-preview.uploading,
 .chat-attachment-preview.queued {
-  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+  border-color: color-mix(in srgb, var(--accent-primary) 42%, var(--border-subtle));
 }
 
 .chat-attachment-preview.failed {
-  border-color: color-mix(in srgb, var(--danger) 58%, var(--border));
+  border-color: color-mix(in srgb, var(--state-danger) 58%, var(--border-subtle));
 }
 
 .chat-attachment-thumb {
   width: 76px;
   height: 76px;
   border-radius: 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   object-fit: cover;
 }
 
@@ -4257,8 +4257,8 @@
   display: flex !important;
   align-items: center;
   justify-content: center;
-  color: color-mix(in srgb, var(--accent) 70%, var(--text));
-  background: color-mix(in srgb, var(--accent) 9%, var(--panel-2));
+  color: color-mix(in srgb, var(--accent-primary) 70%, var(--text-primary));
+  background: color-mix(in srgb, var(--accent-primary) 9%, var(--surface-raised));
 }
 
 .chat-attachment-thumb.file .codicon {
@@ -4275,7 +4275,7 @@
 
 .chat-attachment-name {
   font-size: 12px;
-  color: var(--muted);
+  color: var(--text-secondary);
   line-height: 1.2;
   white-space: normal;
   overflow: hidden;
@@ -4283,7 +4283,7 @@
 }
 
 .chat-attachment-status {
-  color: color-mix(in srgb, var(--muted) 86%, var(--text));
+  color: color-mix(in srgb, var(--text-secondary) 86%, var(--text-primary));
   font-size: 10.5px;
   line-height: 1.2;
   white-space: nowrap;
@@ -4296,23 +4296,23 @@
   height: 3px;
   border-radius: 999px;
   overflow: hidden;
-  background: color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--border-subtle) 70%, transparent);
 }
 
 .chat-attachment-progress span {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: color-mix(in srgb, var(--accent) 75%, #4db6ac);
+  background: color-mix(in srgb, var(--accent-primary) 75%, var(--state-info));
 }
 
 .chat-attachment-remove {
   position: absolute;
   top: 4px;
   right: 4px;
-  border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel) 88%, transparent);
-  color: var(--text);
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-panel) 88%, transparent);
+  color: var(--text-primary);
   width: 22px;
   height: 22px;
   border-radius: 999px;
@@ -4326,9 +4326,9 @@
   position: absolute;
   top: 4px;
   left: 4px;
-  border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--panel) 88%, transparent);
-  color: var(--text);
+  border: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-panel) 88%, transparent);
+  color: var(--text-primary);
   width: 22px;
   height: 22px;
   border-radius: 999px;
@@ -4339,13 +4339,13 @@
 }
 
 .chat-attachment-retry:hover {
-  color: color-mix(in srgb, var(--accent) 75%, var(--text));
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  color: color-mix(in srgb, var(--accent-primary) 75%, var(--text-primary));
+  border-color: color-mix(in srgb, var(--accent-primary) 55%, var(--border-subtle));
 }
 
 .chat-attachment-remove:hover {
-  color: var(--danger);
-  border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
+  color: var(--state-danger);
+  border-color: color-mix(in srgb, var(--state-danger) 55%, var(--border-subtle));
 }
 
 .chat-config-options-wrap {
@@ -4402,8 +4402,8 @@
 .chat-context-usage {
   --chat-context-used: 0%;
   --chat-context-ring-width: 1.5px;
-  --chat-context-used-color: color-mix(in srgb, var(--text) 72%, #ffffff);
-  --chat-context-rest-color: color-mix(in srgb, var(--muted) 48%, transparent);
+  --chat-context-used-color: color-mix(in srgb, var(--text-primary) 72%, #ffffff);
+  --chat-context-rest-color: color-mix(in srgb, var(--text-secondary) 48%, transparent);
   position: relative;
   display: block;
   width: 16px;
@@ -4436,7 +4436,7 @@
 .chat-context-usage:hover,
 .chat-context-usage:focus-visible,
 .chat-context-usage-anchor.open .chat-context-usage {
-  outline: 3px solid color-mix(in srgb, var(--text) 9%, transparent);
+  outline: 3px solid color-mix(in srgb, var(--text-primary) 9%, transparent);
   outline-offset: 1px;
 }
 
@@ -4449,11 +4449,11 @@
   min-width: 154px;
   max-width: min(220px, calc(100vw - 24px));
   padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 86%, transparent);
   border-radius: 8px;
   background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));
   box-shadow: var(--shadow-overlay);
-  color: var(--text);
+  color: var(--text-primary);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -4477,14 +4477,14 @@
 }
 
 .chat-context-usage-popover-kicker {
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 10.5px;
   font-weight: 650;
   line-height: 1.2;
 }
 
 .chat-context-usage-popover-value {
-  color: var(--text);
+  color: var(--text-primary);
   font-size: 13px;
   font-weight: 700;
   line-height: 1.25;
@@ -4512,8 +4512,8 @@
   height: 24px;
   border: 1px solid transparent;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--panel-2) 52%, transparent);
-  color: var(--text);
+  background: color-mix(in srgb, var(--surface-raised) 52%, transparent);
+  color: var(--text-primary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4562,8 +4562,8 @@
 .chat-status-effort-button[aria-expanded='true'],
 .chat-config-overflow-button:hover,
 .chat-config-overflow-button[aria-expanded='true'] {
-  border-color: color-mix(in srgb, var(--border) 72%, transparent);
-  background: color-mix(in srgb, var(--hover) 88%, var(--panel-2));
+  border-color: color-mix(in srgb, var(--border-subtle) 72%, transparent);
+  background: color-mix(in srgb, var(--hover) 88%, var(--surface-raised));
 }
 
 .chat-status-model-button:focus,
@@ -4600,8 +4600,8 @@
   height: 24px;
   border: 1px solid transparent;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--panel-2) 52%, transparent);
-  color: var(--muted);
+  background: color-mix(in srgb, var(--surface-raised) 52%, transparent);
+  color: var(--text-secondary);
   padding: 0 7px;
   font: inherit;
   font-size: 12px;
@@ -4619,7 +4619,7 @@
 }
 
 .chat-config-overflow-button:hover {
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .chat-config-overflow-menu {
@@ -4633,7 +4633,7 @@
   max-height: min(42vh, 360px);
   overflow-y: auto;
   padding: 10px;
-  border: 1px solid color-mix(in srgb, var(--border) 82%, var(--accent));
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 82%, var(--accent-primary));
   border-radius: 8px;
   background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));
   box-shadow: var(--shadow-overlay);
@@ -4660,7 +4660,7 @@
   flex: 0 0 auto;
   font-size: 10px;
   line-height: 1.1;
-  color: var(--muted);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   white-space: nowrap;
@@ -4671,8 +4671,8 @@
   height: 24px;
   border: 1px solid transparent;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--panel-2) 52%, transparent);
-  color: var(--text);
+  background: color-mix(in srgb, var(--surface-raised) 52%, transparent);
+  color: var(--text-primary);
   display: inline-flex;
   align-items: center;
   padding: 0 7px;
@@ -4684,8 +4684,8 @@
 
 .chat-config-pill:hover,
 .chat-config-pill[aria-expanded='true'] {
-  border-color: color-mix(in srgb, var(--border) 72%, transparent);
-  background: color-mix(in srgb, var(--hover) 88%, var(--panel-2));
+  border-color: color-mix(in srgb, var(--border-subtle) 72%, transparent);
+  background: color-mix(in srgb, var(--hover) 88%, var(--surface-raised));
 }
 
 .chat-config-pill:focus {
@@ -4715,7 +4715,7 @@
   max-width: min(320px, calc(100vw - 24px));
   max-height: min(42vh, 360px);
   overflow-y: auto;
-  border: 1px solid color-mix(in srgb, var(--border) 82%, var(--accent));
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 82%, var(--accent-primary));
   border-radius: 8px;
   background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));
   box-shadow: var(--shadow-overlay);
@@ -4742,7 +4742,7 @@
   border: none;
   border-radius: 7px;
   background: transparent;
-  color: var(--text);
+  color: var(--text-primary);
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
@@ -4779,7 +4779,7 @@
 }
 
 .chat-config-value-option .codicon {
-  color: var(--accent);
+  color: var(--accent-primary);
   font-size: 12px;
   flex: 0 0 auto;
   margin-top: 1px;
@@ -4788,7 +4788,7 @@
 .chat-empty-hint {
   padding: 8px 8px;
   font-size: 11px;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-style: italic;
 }
 
@@ -4807,15 +4807,15 @@
 
 /* ── Thinking Block ── */
 .thinking-block {
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  background: var(--panel);
+  background: var(--surface-panel);
   overflow: hidden;
   transition: border-color 200ms ease;
 }
 
 .thinking-block.streaming {
-  border-color: rgba(0, 122, 204, 0.4);
+  border-color: color-mix(in srgb, var(--accent-primary) 40%, var(--border-subtle));
 }
 
 .thinking-header {
@@ -4826,7 +4826,7 @@
   padding: 6px 10px;
   border: none;
   background: transparent;
-  color: var(--text);
+  color: var(--text-primary);
   font-family: inherit;
   font-size: 12px;
   line-height: 1.4;
@@ -4849,12 +4849,12 @@
 .thinking-icon {
   flex: 0 0 auto;
   font-size: 13px;
-  color: var(--muted);
+  color: var(--text-secondary);
   opacity: 0.7;
 }
 
 .thinking-block.streaming .thinking-icon {
-  color: var(--accent);
+  color: var(--accent-primary);
   opacity: 1;
   animation: thinkPulse 1.6s ease-in-out infinite;
 }
@@ -4868,12 +4868,12 @@
 }
 
 .thinking-title.streaming-text {
-  color: var(--muted);
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
 .thinking-title.summary-text {
-  color: var(--text);
+  color: var(--text-primary);
   opacity: 0.85;
 }
 
@@ -4896,12 +4896,12 @@
 .thinking-chevron {
   flex: 0 0 auto;
   font-size: 12px;
-  color: var(--muted);
+  color: var(--text-secondary);
   transition: transform 180ms ease, color 100ms ease;
 }
 
 .thinking-block.done .thinking-header:hover .thinking-chevron {
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .thinking-body {
@@ -4914,7 +4914,7 @@
   padding: 0 10px 10px 30px;
   font-size: 12px;
   line-height: 1.55;
-  color: var(--muted);
+  color: var(--text-secondary);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -4955,7 +4955,7 @@
   border-bottom: 0;
   border-left: 1px solid transparent;
   border-radius: 999px 0 0 999px;
-  background: color-mix(in srgb, var(--muted) 48%, transparent);
+  background: color-mix(in srgb, var(--text-secondary) 48%, transparent);
   background-clip: padding-box;
 }
 
