@@ -130,7 +130,7 @@ describe('gesture navigation', () => {
       /\.gesture-nav-pill \{[\s\S]*width: 50px;[\s\S]*grid-template-rows: 48px;[\s\S]*padding: 0;[\s\S]*\}/,
     );
     expect(styles).toMatch(
-      /\.gesture-nav-control\[data-expanded='true'\] \.gesture-nav-pill \{[\s\S]*top: -40px;[\s\S]*height: 128px;[\s\S]*grid-template-rows: repeat\(3, 40px\);[\s\S]*padding: 4px;[\s\S]*\}/,
+      /\.gesture-nav-control\[data-expanded='true'\] \.gesture-nav-pill \{[\s\S]*top: -41px;[\s\S]*height: 130px;[\s\S]*grid-template-rows: repeat\(3, 40px\);[\s\S]*padding: 4px;[\s\S]*\}/,
     );
     expect(styles).toMatch(
       /\.gesture-nav-control\[data-expanded='false'\] \.gesture-nav-current-button \{[\s\S]*width: 50px;[\s\S]*height: 48px;[\s\S]*\}/,
@@ -161,8 +161,14 @@ describe('gesture navigation', () => {
       /\.gesture-nav-capsule\[data-active='true'\] \{[\s\S]*color: color-mix\(in srgb, var\(--accent\) 88%, var\(--text\)\);[\s\S]*\}/,
     );
     expect(styles).toMatch(
-      /\.gesture-nav-current-button\[data-active='true'\] \{[\s\S]*background: color-mix\(in srgb, var\(--accent\) 16%, var\(--surface-overlay\)\);[\s\S]*box-shadow: var\(--shadow-floating\);[\s\S]*\}/,
+      /\.gesture-nav-current-button\[data-active='true'\] \{[\s\S]*color: color-mix\(in srgb, var\(--accent\) 88%, var\(--text\)\);[\s\S]*\}/,
     );
+    const activeCurrentButtonBlock = styles.match(/\.gesture-nav-current-button\[data-active='true'\] \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const activeCapsuleBlock = styles.match(/\.gesture-nav-capsule\[data-active='true'\] \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(activeCurrentButtonBlock).not.toContain('background:');
+    expect(activeCurrentButtonBlock).not.toContain('box-shadow:');
+    expect(activeCapsuleBlock).not.toContain('background:');
+    expect(activeCapsuleBlock).not.toContain('box-shadow:');
     expect(styles).toMatch(
       /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*\.gesture-nav-pill,[\s\S]*\.gesture-nav-capsule[\s\S]*animation: none;[\s\S]*transition: none;[\s\S]*\}/,
     );

@@ -750,9 +750,11 @@ describe('web chat integration', () => {
     expect(stylesCss).toMatch(
       /\.gesture-nav-control\[data-expanded='false'\] \.gesture-nav-current-button \{[\s\S]*width: 50px;[\s\S]*height: 48px;[\s\S]*\}/,
     );
-    expect(stylesCss).toMatch(
-      /\.gesture-nav-current-button\[data-active='true'\] \{[\s\S]*background: color-mix\(in srgb, var\(--accent\) 16%, var\(--surface-overlay\)\);[\s\S]*box-shadow: var\(--shadow-floating\);[\s\S]*\}/,
-    );
+    const activeGestureButtonBlock = cssRuleBlock(stylesCss, ".gesture-nav-current-button[data-active='true']");
+    expect(activeGestureButtonBlock).toContain('border-color: color-mix(in srgb, var(--accent) 54%, var(--border));');
+    expect(activeGestureButtonBlock).toContain('color: color-mix(in srgb, var(--accent) 88%, var(--text));');
+    expect(activeGestureButtonBlock).not.toContain('background:');
+    expect(activeGestureButtonBlock).not.toContain('box-shadow:');
     expect(stylesCss).toContain('-webkit-tap-highlight-color: transparent;');
     expect(stylesCss).toContain('.breadcrumb-title {');
     expect(stylesCss).toContain('.breadcrumb-project-name {');
@@ -2010,7 +2012,7 @@ describe('web chat integration', () => {
     const sessionStateRunningBlock = stylesCss.match(/\.session-state-marker\.running \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(sessionStateRunningBlock).toContain('font-size: 11px;');
     expect(stylesCss).toMatch(/\.mobile-session-row \{[^}]*min-height: 30px;[^}]*\}/);
-    expect(stylesCss).toMatch(/@media \(max-width: 900px\) \{[\s\S]*?\.mobile-session-row \{[\s\S]*?min-height: 40px;[\s\S]*?\}[\s\S]*?\}/);
+    expect(stylesCss).not.toMatch(/@media \(max-width: 900px\) \{[\s\S]*?\.mobile-session-row \{[\s\S]*?min-height: 40px;[\s\S]*?\}[\s\S]*?\}/);
     expect(stylesCss).toContain('font-size: 10.5px;');
     expect(stylesCss).toContain('.wide-project-folder-icon.codicon-folder {');
     expect(stylesCss).toContain('.wide-project-folder-icon.codicon-folder-opened {');

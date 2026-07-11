@@ -605,8 +605,8 @@
 }
 
 .gesture-nav-control[data-expanded='true'] .gesture-nav-pill {
-  top: -40px;
-  height: 128px;
+  top: -41px;
+  height: 130px;
   grid-template-rows: repeat(3, 40px);
   padding: 4px;
 }
@@ -647,13 +647,11 @@
 
 .gesture-nav-current-button[data-active='true'] {
   border-color: color-mix(in srgb, var(--accent) 54%, var(--border));
-  background: color-mix(in srgb, var(--accent) 16%, var(--surface-overlay));
-  box-shadow: var(--shadow-floating);
   color: color-mix(in srgb, var(--accent) 88%, var(--text));
 }
 
 .gesture-nav-current-button[data-active='true']:hover {
-  background: color-mix(in srgb, var(--accent) 20%, var(--surface-overlay));
+  background: transparent;
   color: color-mix(in srgb, var(--accent) 88%, var(--text));
 }
 
@@ -665,8 +663,6 @@
 .gesture-nav-capsule[data-active='true'] {
   border-color: color-mix(in srgb, var(--accent) 46%, var(--border));
   color: color-mix(in srgb, var(--accent) 88%, var(--text));
-  background: color-mix(in srgb, var(--accent) 16%, var(--surface-overlay));
-  box-shadow: var(--shadow-floating);
 }
 
 @keyframes gesture-capsule-fade-in {

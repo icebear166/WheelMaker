@@ -5025,13 +5025,8 @@
 }
 
 @media (max-width: 900px) {
-  .mobile-project-row,
   .mobile-project-row {
     min-height: 44px;
-  }
-
-  .mobile-session-row {
-    min-height: 40px;
   }
 
   .mobile-project-sheet {
