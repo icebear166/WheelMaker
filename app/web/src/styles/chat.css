@@ -1227,11 +1227,12 @@
 
 .recent-project-session-heading {
   min-height: 27px;
-  padding: 0 5px 0 24px;
+  padding: 0 5px;
   color: var(--text-secondary);
-  display: flex;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) 22px;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
 }
 
 .wide-project-session-nav[data-session-list-density='compact'] .recent-project-session-heading {
@@ -1242,7 +1243,26 @@
   min-height: 27px;
 }
 
+.recent-project-session-icon {
+  --hub-accent: var(--accent-primary);
+  width: 16px;
+  color: color-mix(in srgb, var(--hub-accent) 66%, var(--text-secondary));
+  font-size: 13px;
+  line-height: 1;
+  text-align: center;
+  opacity: 0.82;
+}
+
+.recent-project-session-title {
+  min-width: 0;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
 .recent-project-session-name {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   color: var(--text-primary);
@@ -1251,6 +1271,12 @@
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.recent-project-session-hub.wide-project-hub-tag {
+  flex: 0 1 auto;
+  font-size: 9px;
+  opacity: 0.72;
 }
 
 .recent-project-session-create {

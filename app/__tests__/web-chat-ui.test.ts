@@ -2442,7 +2442,7 @@ describe('web chat integration', () => {
     expect(promptBlock).toContain('background: color-mix(in srgb, var(--accent-primary) 12%, var(--surface-workspace-content));');
   });
 
-  test('tightens relaxed session rows and aligns recent project capsules with agent capsules', () => {
+  test('tightens relaxed session rows and keeps recent project hub markers lightweight', () => {
     const projectRoot = path.join(__dirname, '..');
     const stylesCss = readWebStyles(projectRoot);
     const relaxedRow = cssRuleBlock(
@@ -2453,16 +2453,13 @@ describe('web chat integration', () => {
       stylesCss,
       ".wide-project-session-nav[data-session-list-density='relaxed'] .wide-session-title",
     );
-    const recentTag = cssRuleBlock(stylesCss, '.recent-session-project-tag.wide-project-hub-tag');
+    const recentHub = cssRuleBlock(stylesCss, '.recent-project-session-hub.wide-project-hub-tag');
 
     expect(relaxedRow).toContain('min-height: 30px;');
     expect(relaxedTitle).toContain('font-size: 13.5px;');
     expect(relaxedTitle).toContain('line-height: 1.25;');
-    expect(recentTag).toContain('min-height: 20px;');
-    expect(recentTag).toContain('border: 1px solid color-mix(in srgb, var(--hub-accent) 40%, var(--border-subtle));');
-    expect(recentTag).toContain('background: color-mix(in srgb, var(--hub-accent) 14%, transparent);');
-    expect(recentTag).toContain('color: color-mix(in srgb, var(--hub-accent) 70%, var(--text-primary));');
-    expect(recentTag).toContain('font-size: 10.5px;');
-    expect(recentTag).toContain('font-weight: 600;');
+    expect(recentHub).toContain('flex: 0 1 auto;');
+    expect(recentHub).toContain('font-size: 9px;');
+    expect(recentHub).toContain('opacity: 0.72;');
   });
 });

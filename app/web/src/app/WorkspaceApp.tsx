@@ -14824,14 +14824,30 @@ export function App() {
   ) => {
     const targetProjectId = section.projectId;
     const projectName = section.projectName || targetProjectId;
+    const projectHubId = section.projectHubId || 'local';
+    const projectHubVariant = tagVariantClass('wide-project-hub', projectHubId);
     return (
       <div
         key={`recent-project:${targetProjectId}`}
         className="recent-project-session-group"
       >
         <div className="recent-project-session-heading">
-          <span className="recent-project-session-name" title={projectName}>
-            {projectName}
+          <span
+            className={`codicon codicon-folder recent-project-session-icon ${projectHubVariant}`}
+            style={hubAccentStyle(projectHubId)}
+            aria-hidden="true"
+          />
+          <span className="recent-project-session-title">
+            <span className="recent-project-session-name" title={projectName}>
+              {projectName}
+            </span>
+            <span
+              className={`recent-project-session-hub wide-project-hub-tag ${projectHubVariant}`}
+              style={hubAccentStyle(projectHubId)}
+            >
+              <span className="wide-project-hub-dot" aria-hidden="true" />
+              <span className="wide-project-hub-label">{projectHubId}</span>
+            </span>
           </span>
           <button
             type="button"

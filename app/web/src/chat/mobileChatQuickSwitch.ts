@@ -145,6 +145,7 @@ export type RecentChatSessionRow = {
 export type RecentChatSessionProjectSection = {
   projectId: string;
   projectName: string;
+  projectHubId: string;
   sessions: RegistryChatSession[];
 };
 
@@ -190,6 +191,7 @@ export function buildRecentChatSessionProjectSections(
       section = {
         projectId: row.projectId,
         projectName: row.projectName,
+        projectHubId: row.projectHubId,
         sessions: [],
       };
       sectionsByProjectId.set(row.projectId, section);
