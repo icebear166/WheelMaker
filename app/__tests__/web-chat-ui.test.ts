@@ -1200,10 +1200,10 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-confirmation-reply-check {');
     expect(stylesCss).toContain('.chat-confirmation-reply-text {');
     expect(stylesCss).toMatch(
-      /\.chat-confirmation-reply-action \{[\s\S]*border: 1px solid color-mix\(in srgb, var\(--accent\) 22%, var\(--border\)\);[\s\S]*background: color-mix\(in srgb, var\(--surface-1\) 88%, var\(--accent\)\);[\s\S]*padding: 4px 8px;[\s\S]*\}/,
+      /\.chat-confirmation-reply-action \{[\s\S]*border: 1px solid color-mix\(in srgb, var\(--accent\) 22%, var\(--border\)\);[\s\S]*background: color-mix\(in srgb, var\(--surface-panel\) 88%, var\(--accent\)\);[\s\S]*padding: 4px 8px;[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
-      /\.chat-option-reply-inline-button \{[\s\S]*border-color: color-mix\(in srgb, var\(--accent\) 22%, var\(--border\)\);[\s\S]*background: color-mix\(in srgb, var\(--surface-1\) 88%, var\(--accent\)\);/,
+      /\.chat-option-reply-inline-button \{[\s\S]*border-color: color-mix\(in srgb, var\(--accent\) 22%, var\(--border\)\);[\s\S]*background: color-mix\(in srgb, var\(--surface-panel\) 88%, var\(--accent\)\);/,
     );
     expect(stylesCss).toMatch(
       /\.chat-option-reply-inline-button,\s*\.chat-scroll-bottom-button \{[\s\S]*backdrop-filter: blur\(1px\);[\s\S]*\}/,

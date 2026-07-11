@@ -1,6 +1,7 @@
 :root {
   color-scheme: dark;
   --surface-canvas: #191c21;
+  --surface-workspace-content: #1e1e1e;
   --surface-sidebar: #20242a;
   --surface-panel: #242930;
   --surface-raised: #2a3038;
@@ -50,6 +51,7 @@
 .theme-light {
   color-scheme: light;
   --surface-canvas: #eef1f4;
+  --surface-workspace-content: #ffffff;
   --surface-sidebar: #f6f7f9;
   --surface-panel: #ffffff;
   --surface-raised: #e8ecf1;

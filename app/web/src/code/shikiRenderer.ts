@@ -66,6 +66,7 @@ const INLINE_CACHE_LIMIT = 4000;
 const TOKENIZE_CHUNK_LINES = 50;
 const TOKENIZE_MAX_LINE_LENGTH = 20_000;
 const TOKENIZE_TIME_LIMIT_MS = 20;
+const WORKSPACE_CONTENT_SURFACE = 'var(--surface-workspace-content)';
 const inlineCache = new Map<string, string>();
 const loadedThemes = new Set<string>();
 const loadedLanguages = new Set<string>(['text']);
@@ -77,6 +78,15 @@ function resolveTheme(themeMode: ThemeMode, codeTheme: CodeThemeId): CuratedCode
     return themeMode === 'light' ? SHIKI_THEME_LIGHT : SHIKI_THEME_DARK;
   }
   return codeTheme;
+}
+
+function resolveCodeBackground(codeTheme: CodeThemeId, background: string): string {
+  return codeTheme === 'auto-plus' ? WORKSPACE_CONTENT_SURFACE : background;
+}
+
+function alignAutomaticThemeBackground(html: string, codeTheme: CodeThemeId): string {
+  if (codeTheme !== 'auto-plus') return html;
+  return html.replace(/background-color:[^;"]+/g, `background-color:${WORKSPACE_CONTENT_SURFACE}`);
 }
 
 function resolveLanguage(language: string): string {
@@ -380,10 +390,13 @@ export async function renderShikiHtml(options: RenderShikiOptions): Promise<stri
         undefined,
         options.highlightedLines,
       );
+      const output = options.mode === 'block'
+        ? alignAutomaticThemeBackground(html, options.codeTheme)
+        : html;
       if (options.mode === 'inline') {
-        setInlineCache(inlineCacheKey, html);
+        setInlineCache(inlineCacheKey, output);
       }
-      return html;
+      return output;
     } catch {
       // Try fallback language.
     }
@@ -410,7 +423,7 @@ export async function renderShikiDiffHtml(options: RenderShikiDiffOptions): Prom
   for (const lang of langCandidates) {
     try {
       await ensureLanguageLoaded(highlighter, lang);
-      return renderWithHighlighter(
+      return alignAutomaticThemeBackground(renderWithHighlighter(
         highlighter,
         code,
         lang,
@@ -423,7 +436,7 @@ export async function renderShikiDiffHtml(options: RenderShikiDiffOptions): Prom
         options.codeTabSize,
         'block',
         options.lines,
-      );
+      ), options.codeTheme);
     } catch {
       // Try fallback language.
     }
@@ -474,7 +487,7 @@ export async function tokenizeShikiCode(
       return {
         tokens: result.tokens,
         fg: result.fg || 'inherit',
-        bg: result.bg || 'inherit',
+        bg: resolveCodeBackground(codeTheme, result.bg || 'inherit'),
         themeName: result.themeName || '',
       };
     } catch {
@@ -485,7 +498,7 @@ export async function tokenizeShikiCode(
   return {
     tokens: lines.map(line => [{content: line, fontStyle: 0, offset: 0}]),
     fg: 'inherit',
-    bg: 'inherit',
+    bg: resolveCodeBackground(codeTheme, 'inherit'),
     themeName: '',
   };
 }
@@ -571,7 +584,7 @@ export async function tokenizeShikiCodeInChunks(
         await options.onChunk({
           tokens: result.tokens,
           fg: result.fg || 'inherit',
-          bg: result.bg || 'inherit',
+          bg: resolveCodeBackground(codeTheme, result.bg || 'inherit'),
           themeName: result.themeName || '',
           startLine,
           totalLines,
@@ -599,7 +612,7 @@ export async function tokenizeShikiCodeInChunks(
     await options.onChunk({
       tokens: lines.slice(startLine, endLine).map(line => [{content: line, fontStyle: 0, offset: 0}]),
       fg: 'inherit',
-      bg: 'inherit',
+      bg: resolveCodeBackground(codeTheme, 'inherit'),
       themeName: '',
       startLine,
       totalLines,

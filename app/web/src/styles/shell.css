@@ -1115,7 +1115,7 @@
   flex-direction: column;
   overflow: hidden;
   overscroll-behavior-x: none;
-  background: var(--panel-3);
+  background: var(--surface-workspace-content);
   animation: wmFadeIn 180ms ease-out;
 }
 

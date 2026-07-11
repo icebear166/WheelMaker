@@ -640,7 +640,7 @@
   z-index: 70;
   display: flex;
   padding-top: var(--wm-safe-area-top);
-  background: var(--bg);
+  background: var(--surface-workspace-content);
   color: var(--text);
 }
 
@@ -2597,7 +2597,7 @@
   margin-top: 6px;
   padding: 8px 10px;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--surface-2) 88%, var(--accent));
+  background: color-mix(in srgb, var(--surface-raised) 88%, var(--accent));
   font-size: 12px;
   line-height: 1.55;
   color: color-mix(in srgb, var(--text) 74%, var(--muted));
@@ -2634,7 +2634,7 @@
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--border) 82%, var(--accent));
   border-radius: 8px;
-  background: color-mix(in srgb, var(--panel) 92%, var(--surface-1));
+  background: color-mix(in srgb, var(--surface-panel) 92%, var(--surface-workspace-content));
   box-shadow: 0 14px 34px color-mix(in srgb, #000 28%, transparent);
   backdrop-filter: blur(4px);
 }
@@ -2784,7 +2784,7 @@
   min-height: 32px;
   border: 1px solid color-mix(in srgb, var(--border) 84%, var(--accent));
   border-radius: 999px;
-  background: color-mix(in srgb, var(--panel) 92%, var(--surface-1));
+  background: color-mix(in srgb, var(--surface-panel) 92%, var(--surface-workspace-content));
   color: var(--text);
   display: grid;
   grid-template-columns: 18px auto minmax(0, 1fr) 18px;
@@ -2843,7 +2843,7 @@
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--border) 84%, var(--accent));
   border-radius: 10px;
-  background: color-mix(in srgb, var(--panel) 94%, var(--surface-1));
+  background: color-mix(in srgb, var(--surface-panel) 94%, var(--surface-workspace-content));
   box-shadow: 0 10px 24px color-mix(in srgb, #000 22%, transparent);
 }
 
@@ -2954,13 +2954,13 @@
 
 .chat-option-reply-inline-button {
   border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
-  background: color-mix(in srgb, var(--surface-1) 88%, var(--accent));
+  background: color-mix(in srgb, var(--surface-panel) 88%, var(--accent));
   cursor: pointer;
 }
 
 .chat-option-reply-inline-button:hover {
   border-color: color-mix(in srgb, var(--accent) 44%, var(--border));
-  background: color-mix(in srgb, var(--surface-1) 78%, var(--accent));
+  background: color-mix(in srgb, var(--surface-panel) 78%, var(--accent));
 }
 
 .chat-option-reply-inline-button:focus-visible {
@@ -2991,7 +2991,7 @@
   max-width: min(100%, 620px);
   border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
   border-radius: 7px;
-  background: color-mix(in srgb, var(--surface-1) 88%, var(--accent));
+  background: color-mix(in srgb, var(--surface-panel) 88%, var(--accent));
   color: inherit;
   padding: 4px 8px;
   display: inline-flex;
@@ -3021,7 +3021,7 @@
 
 .chat-confirmation-reply-action:hover {
   border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
-  background: color-mix(in srgb, var(--surface-1) 80%, var(--accent));
+  background: color-mix(in srgb, var(--surface-panel) 80%, var(--accent));
 }
 
 .chat-confirmation-reply-action:focus-visible {
@@ -3112,7 +3112,7 @@
   padding: 4px 9px 4px 4px;
   border: 1px solid color-mix(in srgb, var(--border) 82%, var(--accent));
   border-radius: 8px;
-  background: color-mix(in srgb, var(--surface-1) 90%, var(--accent));
+  background: color-mix(in srgb, var(--surface-panel) 90%, var(--accent));
   color: color-mix(in srgb, var(--text) 82%, var(--muted));
   cursor: pointer;
   font: inherit;
@@ -3121,7 +3121,7 @@
 
 .chat-prompt-attachment-chip:hover {
   border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
-  background: color-mix(in srgb, var(--surface-1) 82%, var(--accent));
+  background: color-mix(in srgb, var(--surface-panel) 82%, var(--accent));
 }
 
 .chat-prompt-attachment-icon {
@@ -3652,7 +3652,7 @@
   max-width: 100%;
   white-space: normal;
   color: color-mix(in srgb, var(--text) 84%, var(--muted));
-  background: color-mix(in srgb, var(--surface-1) 82%, var(--accent));
+  background: color-mix(in srgb, var(--surface-panel) 82%, var(--accent));
 }
 
 .chat-composer-capsule.selected {
@@ -4166,7 +4166,7 @@
   height: 30px;
   border: none;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--surface-1) 86%, transparent);
+  background: color-mix(in srgb, var(--surface-raised) 86%, transparent);
   color: var(--text);
   cursor: pointer;
   display: inline-flex;

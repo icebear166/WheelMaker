@@ -597,6 +597,22 @@ describe('web chat file peek viewer', () => {
     expect(stylesCss).toContain(".narrow-shell[data-chat-preview-open='true'] .floating-control-stack-layer");
   });
 
+  test('keeps chat and preview content on one workspace canvas at every viewport', () => {
+    const stylesCss = readWebStyles(projectRoot);
+    const tokens = readSourceText(path.join(projectRoot, 'web', 'src', 'styles', 'tokens.css'));
+
+    expect(tokens.match(/--surface-workspace-content:/g) ?? []).toHaveLength(2);
+    expect(cssRuleBlock(stylesCss, '.workspace-right')).toContain('background: var(--surface-workspace-content);');
+    expect(cssRuleBlock(stylesCss, '.chat-preview-pane')).toContain('background: var(--surface-workspace-content);');
+    expect(cssRuleBlock(stylesCss, '.chat-file-peek-surface')).toContain('background: var(--surface-workspace-content);');
+    expect(cssRuleBlock(stylesCss, '.chat-file-peek-scroll')).toContain('background: var(--surface-workspace-content);');
+    expect(cssRuleBlock(stylesCss, '.chat-preview-mobile-overlay')).toContain('background: var(--surface-workspace-content);');
+
+    const chatCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles', 'chat.css'));
+    expect(chatCss).not.toContain('--surface-1');
+    expect(chatCss).not.toContain('--surface-2');
+  });
+
   test('peek viewer code scroll exposes desktop horizontal overflow', () => {
     const stylesCss = readWebStyles(projectRoot);
 

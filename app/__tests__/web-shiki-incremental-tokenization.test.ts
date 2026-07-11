@@ -25,6 +25,7 @@ jest.mock('@shikijs/core', () => ({
         grammarState: {inComment},
       };
     },
+    codeToHtml: () => '<pre class="shiki" style="background-color:#background;color:#foreground"><code>const value = 1;</code></pre>',
   })),
 }));
 jest.mock('@shikijs/engine-javascript', () => ({
@@ -35,6 +36,7 @@ jest.mock('@shikijs/themes/light-plus', () => ({__esModule: true, default: {name
 jest.mock('@shikijs/langs/typescript', () => ({__esModule: true, default: {name: 'typescript'}}));
 
 import {
+  renderShikiHtml,
   tokenizeShikiCode,
   tokenizeShikiCodeInChunks,
   type ShikiTokenChunk,
@@ -51,6 +53,52 @@ function comparableTokens(chunks: ShikiTokenChunk[]) {
 }
 
 describe('incremental Shiki tokenization', () => {
+  test('uses the workspace canvas only for the automatic code theme', async () => {
+    const automatic = await tokenizeShikiCode('const value = 1;', 'typescript', 'dark', 'auto-plus');
+    const explicit = await tokenizeShikiCode('const value = 1;', 'typescript', 'dark', 'dark-plus');
+    const automaticChunks: ShikiTokenChunk[] = [];
+
+    await tokenizeShikiCodeInChunks('const value = 1;', 'typescript', 'dark', 'auto-plus', {
+      onChunk: chunk => automaticChunks.push(chunk),
+      yieldToMainThread: async () => undefined,
+    });
+
+    expect(automatic.bg).toBe('var(--surface-workspace-content)');
+    expect(automaticChunks).toHaveLength(1);
+    expect(automaticChunks[0].bg).toBe('var(--surface-workspace-content)');
+    expect(explicit.bg).toBe('#background');
+
+    const automaticHtml = await renderShikiHtml({
+      code: 'const value = 1;',
+      language: 'typescript',
+      themeMode: 'dark',
+      codeTheme: 'auto-plus',
+      codeFont: 'consolas',
+      codeFontSize: 13,
+      codeLineHeight: 1.5,
+      codeTabSize: 2,
+      wrap: true,
+      lineNumbers: true,
+      mode: 'block',
+    });
+    const explicitHtml = await renderShikiHtml({
+      code: 'const value = 1;',
+      language: 'typescript',
+      themeMode: 'dark',
+      codeTheme: 'dark-plus',
+      codeFont: 'consolas',
+      codeFontSize: 13,
+      codeLineHeight: 1.5,
+      codeTabSize: 2,
+      wrap: true,
+      lineNumbers: true,
+      mode: 'block',
+    });
+
+    expect(automaticHtml).toContain('background-color:var(--surface-workspace-content)');
+    expect(explicitHtml).toContain('background-color:#background');
+  });
+
   test('the virtualized viewer publishes chunks progressively and aborts stale jobs', () => {
     const shikiBlock = fs.readFileSync(
       path.join(__dirname, '..', 'web', 'src', 'code', 'ShikiCodeBlock.tsx'),
