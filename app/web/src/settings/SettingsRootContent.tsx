@@ -3,6 +3,11 @@ import React from 'react';
 import {CHAT_FONT_OPTIONS, isChatFontId, type ChatFontId} from '../chat/chatTypography';
 import {CHAT_VIEW_WIDTH_OPTIONS, isChatViewWidth, type ChatViewWidth} from '../chat/chatViewWidth';
 import {
+  SESSION_LIST_DENSITY_OPTIONS,
+  isSessionListDensity,
+  type SessionListDensity,
+} from '../chat/sessionListDensity';
+import {
   MOBILE_ENTER_KEY_BEHAVIOR_OPTIONS,
   isMobileEnterKeyBehavior,
   type MobileEnterKeyBehavior,
@@ -34,6 +39,8 @@ type SettingsRootContentProps = {
   isWide: boolean;
   chatViewWidth: ChatViewWidth;
   setChatViewWidth: (value: ChatViewWidth) => void;
+  sessionListDensity: SessionListDensity;
+  setSessionListDensity: (value: SessionListDensity) => void;
   mobileEnterKeyBehavior: MobileEnterKeyBehavior;
   setMobileEnterKeyBehavior: (value: MobileEnterKeyBehavior) => void;
   hideToolCalls: boolean;
@@ -106,6 +113,8 @@ export function SettingsRootContent({
   isWide,
   chatViewWidth,
   setChatViewWidth,
+  sessionListDensity,
+  setSessionListDensity,
   mobileEnterKeyBehavior,
   setMobileEnterKeyBehavior,
   hideToolCalls,
@@ -194,6 +203,28 @@ export function SettingsRootContent({
         )})}
         {renderSettingsSection({id: 'chat', title: 'Chat', icon: 'comment-discussion', rows: (
         <>
+        {isWide ? (
+          <label className="settings-row sidebar-setting-row">
+            <span>
+              <span className="codicon codicon-list-flat settings-row-icon" aria-hidden="true" />
+              Session List Density
+            </span>
+            <select
+              className="sidebar-setting-select"
+              value={sessionListDensity}
+              onChange={event => {
+                const next = event.target.value;
+                if (isSessionListDensity(next)) setSessionListDensity(next);
+              }}
+            >
+              {SESSION_LIST_DENSITY_OPTIONS.map(item => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <label className="settings-row sidebar-setting-row">
           <span>
             <span className="codicon codicon-tools settings-row-icon" aria-hidden="true" />

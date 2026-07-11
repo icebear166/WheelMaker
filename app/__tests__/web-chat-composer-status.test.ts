@@ -231,4 +231,33 @@ describe('chat composer status helpers', () => {
     expect(slashMenu).toContain('background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));');
     expect(fileMentionMenu).toContain('background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));');
   });
+
+  test('keeps only temporary chat layers translucently frosted', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+    const marker = '/* workspace-ui-temporary-layers */';
+    const temporaryLayerStyles = stylesCss.slice(stylesCss.indexOf(marker));
+
+    expect(stylesCss.indexOf(marker)).toBeGreaterThanOrEqual(0);
+    [
+      '.chat-plan-surface.desktop',
+      '.chat-plan-surface.mobile.expanded',
+      '.chat-config-overflow-menu',
+      '.chat-config-value-menu',
+      '.chat-slash-menu',
+      '.chat-file-mention-menu',
+      '.chat-title-project-menu',
+      '.chat-title-prompt-menu',
+      '.chat-hub-popover',
+      '.chat-quick-switch-menu',
+      '.session-archive-menu',
+      '.project-session-action-menu',
+      '.wide-project-action-popover',
+    ].forEach(selector => expect(temporaryLayerStyles).toContain(selector));
+    expect(temporaryLayerStyles).toContain(
+      'background: color-mix(in srgb, var(--surface-overlay) 90%, transparent);',
+    );
+    expect(temporaryLayerStyles).toContain('backdrop-filter: blur(14px) saturate(1.04);');
+    expect(temporaryLayerStyles).toContain('-webkit-backdrop-filter: blur(14px) saturate(1.04);');
+  });
 });

@@ -57,4 +57,20 @@ describe('web chat recent sessions', () => {
     expect(chatCss).toContain('.recent-sessions-section.pinned');
     expect(chatCss).toContain('position: sticky;');
   });
+
+  test('uses a vertical pin and gives pinned recent sessions one contained graphite surface', () => {
+    expect(mainTsx).toContain('className="codicon codicon-pinned" aria-hidden="true"');
+    expect(mainTsx).not.toContain('className="codicon codicon-pin" aria-hidden="true"');
+
+    const pinnedBlock = chatCss.match(/\.recent-sessions-section\.pinned \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(pinnedBlock).toContain('top: 4px;');
+    expect(pinnedBlock).toContain('border: 1px solid color-mix(in srgb, var(--border-strong) 74%, var(--border-subtle));');
+    expect(pinnedBlock).toContain('background: color-mix(in srgb, var(--surface-panel) 88%, var(--surface-sidebar));');
+    expect(pinnedBlock).toContain('box-shadow: 0 8px 18px rgb(0 0 0 / 16%);');
+    expect(pinnedBlock).not.toContain('backdrop-filter');
+
+    const activePinBlock = chatCss.match(/\.recent-sessions-pin-btn\.active \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(activePinBlock).toContain('color: var(--accent-primary);');
+    expect(activePinBlock).toContain('background: transparent;');
+  });
 });

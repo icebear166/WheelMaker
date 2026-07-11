@@ -21,6 +21,11 @@ import {
   type ChatViewWidth,
 } from '../chat/chatViewWidth';
 import {
+  DEFAULT_SESSION_LIST_DENSITY,
+  normalizeSessionListDensity,
+  type SessionListDensity,
+} from '../chat/sessionListDensity';
+import {
   DEFAULT_MOBILE_ENTER_KEY_BEHAVIOR,
   normalizeMobileEnterKeyBehavior,
   type MobileEnterKeyBehavior,
@@ -99,6 +104,7 @@ export type PersistedGlobalState = {
   codeTabSize: number;
   chatFont: ChatFontId;
   chatViewWidth: ChatViewWidth;
+  sessionListDensity: SessionListDensity;
   mobileEnterKeyBehavior: MobileEnterKeyBehavior;
   speechSettings: SpeechSettings;
   ttsSettings: TtsSettings;
@@ -336,6 +342,7 @@ const GLOBAL_KEYS = {
   codeTabSize: 'codeTabSize',
   chatFont: 'chatFont',
   chatViewWidth: 'chatViewWidth',
+  sessionListDensity: 'sessionListDensity',
   mobileEnterKeyBehavior: 'mobileEnterKeyBehavior',
   speechSettings: 'speechSettings',
   ttsSettings: 'ttsSettings',
@@ -380,6 +387,7 @@ function defaultGlobalState(): PersistedGlobalState {
     codeTabSize: DEFAULT_CODE_TAB_SIZE,
     chatFont: DEFAULT_CHAT_FONT,
     chatViewWidth: DEFAULT_CHAT_VIEW_WIDTH,
+    sessionListDensity: DEFAULT_SESSION_LIST_DENSITY,
     mobileEnterKeyBehavior: DEFAULT_MOBILE_ENTER_KEY_BEHAVIOR,
     speechSettings: DEFAULT_SPEECH_SETTINGS,
     ttsSettings: DEFAULT_TTS_SETTINGS,
@@ -630,6 +638,7 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
     codeTabSize: typeof input.codeTabSize === 'number' && Number.isFinite(input.codeTabSize) ? input.codeTabSize : base.codeTabSize,
     chatFont: typeof input.chatFont === 'string' && isChatFontId(input.chatFont) ? input.chatFont : base.chatFont,
     chatViewWidth: normalizeChatViewWidth(input.chatViewWidth, base.chatViewWidth),
+    sessionListDensity: normalizeSessionListDensity(input.sessionListDensity, base.sessionListDensity),
     mobileEnterKeyBehavior: normalizeMobileEnterKeyBehavior(input.mobileEnterKeyBehavior, base.mobileEnterKeyBehavior),
     speechSettings: normalizeSpeechSettings(input.speechSettings),
     ttsSettings: normalizeTtsSettings(input.ttsSettings),
@@ -1314,6 +1323,7 @@ export class WorkspacePersistenceRepository {
       {k: GLOBAL_KEYS.codeTabSize, v: serialize(this.state.global.codeTabSize), updatedAt},
       {k: GLOBAL_KEYS.chatFont, v: serialize(this.state.global.chatFont), updatedAt},
       {k: GLOBAL_KEYS.chatViewWidth, v: serialize(this.state.global.chatViewWidth), updatedAt},
+      {k: GLOBAL_KEYS.sessionListDensity, v: serialize(this.state.global.sessionListDensity), updatedAt},
       {k: GLOBAL_KEYS.mobileEnterKeyBehavior, v: serialize(this.state.global.mobileEnterKeyBehavior), updatedAt},
       {k: GLOBAL_KEYS.speechSettings, v: serialize(this.state.global.speechSettings), updatedAt},
       {k: GLOBAL_KEYS.ttsSettings, v: serialize(this.state.global.ttsSettings), updatedAt},

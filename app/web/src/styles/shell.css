@@ -1501,7 +1501,7 @@
 }
 
 .sidebar-title-row {
-  min-height: 44px;
+  min-height: var(--chat-menu-header-height);
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-sidebar);
 }

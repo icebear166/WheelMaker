@@ -130,6 +130,16 @@ describe('web responsive shell split', () => {
     expect(sidebarTitleRowBlock).toContain('flex: 0 0 var(--chat-menu-header-height);');
     expect(sidebarTitleRowBlock).toContain('min-height: var(--chat-menu-header-height);');
 
+    const shellCss = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles', 'shell.css'), 'utf8');
+    const shellEvolutionStart = shellCss.indexOf('/* workspace-ui-targeted-evolution: shell */');
+    const sidebarTitleStart = shellCss.indexOf('.sidebar-title-row {', shellEvolutionStart);
+    const sidebarTitleEnd = shellCss.indexOf('\n}', sidebarTitleStart) + 2;
+    const evolvedSidebarTitleRow = shellCss.slice(sidebarTitleStart, sidebarTitleEnd);
+    expect(evolvedSidebarTitleRow).toContain('min-height: var(--chat-menu-header-height);');
+    expect(evolvedSidebarTitleRow).not.toContain('min-height: 44px;');
+    const mobileSessionHeaderBlock = cssRuleBlock(stylesCss, '.chat-session-header.mobile');
+    expect(mobileSessionHeaderBlock).toContain('min-height: calc(var(--wm-safe-area-top) + var(--chat-menu-header-height));');
+
     const controlsBlock = cssRuleBlock(stylesCss, '.desktop-window-controls');
     expect(controlsBlock).toContain('position: fixed;');
     expect(controlsBlock).toContain('top: 0;');

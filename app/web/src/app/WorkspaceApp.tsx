@@ -147,6 +147,10 @@ import {
   type ChatViewWidth,
 } from '../chat/chatViewWidth';
 import {
+  normalizeSessionListDensity,
+  type SessionListDensity,
+} from '../chat/sessionListDensity';
+import {
   normalizeMobileEnterKeyBehavior,
   type MobileEnterKeyBehavior,
 } from '../chat/mobileEnterKeyBehavior';
@@ -2496,6 +2500,9 @@ export function App() {
   );
   const [chatViewWidth, setChatViewWidth] = useState<ChatViewWidth>(
     normalizeChatViewWidth(persistedGlobal.chatViewWidth),
+  );
+  const [sessionListDensity, setSessionListDensity] = useState<SessionListDensity>(
+    normalizeSessionListDensity(persistedGlobal.sessionListDensity),
   );
   const [mobileEnterKeyBehavior, setMobileEnterKeyBehavior] = useState<MobileEnterKeyBehavior>(
     normalizeMobileEnterKeyBehavior(persistedGlobal.mobileEnterKeyBehavior),
@@ -6011,6 +6018,7 @@ export function App() {
       codeTabSize,
       chatFont,
       chatViewWidth,
+      sessionListDensity,
       mobileEnterKeyBehavior,
       wrapLines,
       showLineNumbers,
@@ -6041,6 +6049,7 @@ export function App() {
     codeTabSize,
     chatFont,
     chatViewWidth,
+    sessionListDensity,
     mobileEnterKeyBehavior,
     wrapLines,
     showLineNumbers,
@@ -14829,7 +14838,7 @@ export function App() {
             title={recentSessionsPinned ? 'Unpin Recent Sessions' : 'Pin Recent Sessions to top'}
             aria-pressed={recentSessionsPinned}
           >
-            <span className="codicon codicon-pin" aria-hidden="true" />
+            <span className="codicon codicon-pinned" aria-hidden="true" />
           </button>
         </div>
         {!recentCollapsed ? (
@@ -16328,6 +16337,8 @@ export function App() {
         isWide={isWide}
         chatViewWidth={chatViewWidth}
         setChatViewWidth={setChatViewWidth}
+        sessionListDensity={sessionListDensity}
+        setSessionListDensity={setSessionListDensity}
         mobileEnterKeyBehavior={mobileEnterKeyBehavior}
         setMobileEnterKeyBehavior={setMobileEnterKeyBehavior}
         hideToolCalls={hideToolCalls}
@@ -16682,7 +16693,10 @@ export function App() {
 
   const renderWideProjectSessionNav = () => {
     return (
-      <ChatSessionNav className="wide-project-session-nav">
+      <ChatSessionNav
+        className="wide-project-session-nav"
+        dataSessionListDensity={sessionListDensity}
+      >
         {renderArchiveBatchStatus()}
         {projects.length === 0 ? (
           <div className="chat-empty-hint">No projects available.</div>

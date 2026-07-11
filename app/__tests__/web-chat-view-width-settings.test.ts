@@ -32,6 +32,83 @@ describe('web chat view width settings', () => {
     expect(normalizeChatViewWidth(undefined)).toBe('fixed-800');
   });
 
+  test('defines relaxed desktop session density and persists it without changing mobile density', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const densityModulePath = path.join(projectRoot, 'web', 'src', 'chat', 'sessionListDensity.ts');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const settingsRootTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'));
+    const persistence = readSourceText(path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'));
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(fs.existsSync(densityModulePath)).toBe(true);
+    const density = require(densityModulePath) as {
+      DEFAULT_SESSION_LIST_DENSITY: string;
+      SESSION_LIST_DENSITY_OPTIONS: Array<{id: string; label: string}>;
+      isSessionListDensity: (value: unknown) => boolean;
+      normalizeSessionListDensity: (value: unknown, fallback?: string) => string;
+    };
+    expect(density.DEFAULT_SESSION_LIST_DENSITY).toBe('relaxed');
+    expect(density.SESSION_LIST_DENSITY_OPTIONS).toEqual([
+      {id: 'relaxed', label: 'Relaxed'},
+      {id: 'compact', label: 'Compact'},
+    ]);
+    expect(density.isSessionListDensity('relaxed')).toBe(true);
+    expect(density.isSessionListDensity('compact')).toBe(true);
+    expect(density.isSessionListDensity('mobile')).toBe(false);
+    expect(density.normalizeSessionListDensity('invalid')).toBe('relaxed');
+    expect(density.normalizeSessionListDensity(undefined, 'compact')).toBe('compact');
+
+    expect(persistence).toContain('sessionListDensity: SessionListDensity;');
+    expect(persistence).toContain("sessionListDensity: 'sessionListDensity',");
+    expect(persistence).toContain('sessionListDensity: DEFAULT_SESSION_LIST_DENSITY,');
+    expect(persistence).toContain('sessionListDensity: normalizeSessionListDensity(input.sessionListDensity, base.sessionListDensity),');
+    expect(persistence).toContain(
+      '{k: GLOBAL_KEYS.sessionListDensity, v: serialize(this.state.global.sessionListDensity), updatedAt}',
+    );
+
+    expect(mainTsx).toContain('const [sessionListDensity, setSessionListDensity] = useState<SessionListDensity>(');
+    expect(mainTsx).toContain('normalizeSessionListDensity(persistedGlobal.sessionListDensity)');
+    expect(mainTsx).toContain('sessionListDensity,');
+    expect(mainTsx).toContain('sessionListDensity={sessionListDensity}');
+    expect(mainTsx).toContain('setSessionListDensity={setSessionListDensity}');
+    expect(mainTsx).toContain('dataSessionListDensity={sessionListDensity}');
+
+    expect(settingsRootTsx).toContain('sessionListDensity: SessionListDensity;');
+    expect(settingsRootTsx).toContain('setSessionListDensity: (value: SessionListDensity) => void;');
+    expect(settingsRootTsx).toContain('Session List Density');
+    expect(settingsRootTsx).toContain('value={sessionListDensity}');
+    expect(settingsRootTsx).toContain('if (isSessionListDensity(next)) setSessionListDensity(next);');
+    expect(settingsRootTsx).toContain('SESSION_LIST_DENSITY_OPTIONS.map(item => (');
+    const chatStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'chat'");
+    const densitySettingStart = settingsRootTsx.indexOf('Session List Density');
+    expect(densitySettingStart).toBeGreaterThan(chatStart);
+    expect(settingsRootTsx.slice(chatStart, densitySettingStart)).toContain('isWide ? (');
+
+    const relaxedRow = cssRuleBlock(
+      stylesCss,
+      ".wide-project-session-nav[data-session-list-density='relaxed'] .wide-session-row",
+    );
+    const compactRow = cssRuleBlock(
+      stylesCss,
+      ".wide-project-session-nav[data-session-list-density='compact'] .wide-session-row",
+    );
+    const relaxedTitle = cssRuleBlock(
+      stylesCss,
+      ".wide-project-session-nav[data-session-list-density='relaxed'] .wide-session-title",
+    );
+    const compactTitle = cssRuleBlock(
+      stylesCss,
+      ".wide-project-session-nav[data-session-list-density='compact'] .wide-session-title",
+    );
+    expect(relaxedRow).toContain('min-height: 32px;');
+    expect(compactRow).toContain('min-height: 28px;');
+    expect(relaxedTitle).toContain('font-size: 14px;');
+    expect(relaxedTitle).toContain('line-height: 1.4;');
+    expect(compactTitle).toContain('font-size: 13px;');
+    expect(compactTitle).toContain('line-height: 1.35;');
+    expect(cssRuleBlock(stylesCss, '.mobile-session-row')).toContain('min-height: 30px;');
+  });
+
   test('persists chat view width and exposes it in PC Appearance settings', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));

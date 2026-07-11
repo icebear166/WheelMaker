@@ -1157,9 +1157,27 @@
    while the rest of the session list scrolls underneath it. */
 .recent-sessions-section.pinned {
   position: sticky;
-  top: 0;
+  top: 4px;
   z-index: 5;
-  background: var(--bg, #1e1e1e);
+  margin: 4px 2px 10px;
+  padding: 4px 4px 5px;
+  border: 1px solid color-mix(in srgb, var(--border-strong) 74%, var(--border-subtle));
+  border-radius: var(--radius-panel);
+  background: color-mix(in srgb, var(--surface-panel) 88%, var(--surface-sidebar));
+  box-shadow: 0 8px 18px rgb(0 0 0 / 16%);
+}
+
+.recent-sessions-section.pinned .wide-project-row {
+  min-height: 30px;
+  padding: 0 2px;
+  border-radius: calc(var(--radius-panel) - 4px);
+  background: color-mix(in srgb, var(--surface-raised) 58%, transparent);
+}
+
+.recent-sessions-section.pinned .recent-sessions-list {
+  margin-top: 3px;
+  padding-top: 3px;
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
 }
 
 .recent-sessions-pin-btn {
@@ -1185,7 +1203,7 @@
 
 .recent-sessions-pin-btn.active {
   color: var(--accent-primary);
-  background: color-mix(in srgb, var(--accent-primary) 16%, transparent);
+  background: transparent;
 }
 
 .recent-sessions-icon {
@@ -1556,6 +1574,24 @@
   line-height: 1.2;
 }
 
+.wide-project-session-nav[data-session-list-density='relaxed'] .wide-session-row {
+  min-height: 32px;
+}
+
+.wide-project-session-nav[data-session-list-density='relaxed'] .wide-session-title {
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.wide-project-session-nav[data-session-list-density='compact'] .wide-session-row {
+  min-height: 28px;
+}
+
+.wide-project-session-nav[data-session-list-density='compact'] .wide-session-title {
+  font-size: 13px;
+  line-height: 1.35;
+}
+
 .wide-session-agent-tag {
   --agent-accent: var(--accent-primary);
   display: inline-flex;
@@ -1565,11 +1601,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  border: 1px solid color-mix(in srgb, var(--agent-accent) 28%, transparent);
+  border: 1px solid color-mix(in srgb, var(--agent-accent) 40%, var(--border-subtle));
   border-radius: 999px;
   padding: 1px 7px;
-  color: color-mix(in srgb, var(--text-primary) 78%, var(--agent-accent));
-  background: color-mix(in srgb, var(--agent-accent) 6%, transparent);
+  color: color-mix(in srgb, var(--agent-accent) 70%, var(--text-primary));
+  background: color-mix(in srgb, var(--agent-accent) 14%, transparent);
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0;
@@ -4981,8 +5017,7 @@
   font-weight: 500;
 }
 
-.wide-project-hub-tag,
-.wide-session-agent-tag {
+.wide-project-hub-tag {
   border-color: color-mix(in srgb, currentColor 20%, var(--border-subtle));
   background: color-mix(in srgb, currentColor 8%, transparent);
 }
@@ -5024,6 +5059,47 @@
   box-shadow: var(--shadow-overlay);
 }
 
+/* workspace-ui-temporary-layers */
+.chat-plan-surface.desktop,
+.chat-plan-surface.mobile.expanded,
+.chat-config-overflow-menu,
+.chat-config-value-menu,
+.chat-slash-menu,
+.chat-file-mention-menu,
+.chat-title-project-menu,
+.chat-title-prompt-menu,
+.chat-hub-popover,
+.chat-quick-switch-menu,
+.session-archive-menu,
+.project-session-action-menu,
+.wide-project-action-popover,
+.mobile-project-sheet {
+  background: color-mix(in srgb, var(--surface-overlay) 90%, transparent);
+  backdrop-filter: blur(14px) saturate(1.04);
+  -webkit-backdrop-filter: blur(14px) saturate(1.04);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .chat-plan-surface.desktop,
+  .chat-plan-surface.mobile.expanded,
+  .chat-config-overflow-menu,
+  .chat-config-value-menu,
+  .chat-slash-menu,
+  .chat-file-mention-menu,
+  .chat-title-project-menu,
+  .chat-title-prompt-menu,
+  .chat-hub-popover,
+  .chat-quick-switch-menu,
+  .session-archive-menu,
+  .project-session-action-menu,
+  .wide-project-action-popover,
+  .mobile-project-sheet {
+    background: var(--surface-overlay);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
 @media (max-width: 900px) {
   .mobile-project-row {
     min-height: 44px;
@@ -5047,9 +5123,9 @@
 }
 
 .chat-prompt-user {
-  border: 1px solid color-mix(in srgb, var(--accent-primary) 20%, var(--border-subtle));
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 26%, var(--border-subtle));
   border-radius: var(--radius-panel);
-  background: color-mix(in srgb, var(--accent-primary) 9%, var(--surface-raised));
+  background: color-mix(in srgb, var(--accent-primary) 12%, var(--surface-workspace-content));
   box-shadow: none;
 }
 

@@ -2425,4 +2425,18 @@ describe('web chat integration', () => {
     );
     expect(stylesCss).toMatch(/\.voice-input-button \{[\s\S]*var\(--state-info\)[\s\S]*\}/);
   });
+
+  test('keeps agent types and user prompts visibly aligned with the chat body palette', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+    const agentTagBlock = cssRuleBlock(stylesCss, '.wide-session-agent-tag');
+    const promptBlocks = cssRuleBlocksContainingSelector(stylesCss, '.chat-prompt-user');
+    const promptBlock = promptBlocks[promptBlocks.length - 1] ?? '';
+
+    expect(agentTagBlock).toContain('border: 1px solid color-mix(in srgb, var(--agent-accent) 40%, var(--border-subtle));');
+    expect(agentTagBlock).toContain('background: color-mix(in srgb, var(--agent-accent) 14%, transparent);');
+    expect(agentTagBlock).toContain('color: color-mix(in srgb, var(--agent-accent) 70%, var(--text-primary));');
+    expect(promptBlock).toContain('border: 1px solid color-mix(in srgb, var(--accent-primary) 26%, var(--border-subtle));');
+    expect(promptBlock).toContain('background: color-mix(in srgb, var(--accent-primary) 12%, var(--surface-workspace-content));');
+  });
 });
