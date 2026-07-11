@@ -15,8 +15,8 @@ describe('agent package update settings UI source structure', () => {
     expect(settingsRootTsx).not.toContain("renderSettingsSection('More'");
     expect(settingsRootTsx).not.toContain("renderSettingsSection('Storage'");
 
-    const chatStart = settingsRootTsx.indexOf("renderSettingsSection('Chat'");
-    const codeDisplayStart = settingsRootTsx.indexOf("renderSettingsSection('Code Display'", chatStart);
+    const chatStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'chat'");
+    const codeDisplayStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'code-display'", chatStart);
     expect(chatStart).toBeGreaterThanOrEqual(0);
     expect(codeDisplayStart).toBeGreaterThan(chatStart);
     const chatSection = settingsRootTsx.slice(chatStart, codeDisplayStart);
@@ -25,7 +25,7 @@ describe('agent package update settings UI source structure', () => {
     expect(chatSection).not.toContain('Token Stats');
     expect(chatSection).not.toContain('CC Switch');
 
-    const debugStart = settingsRootTsx.indexOf("renderSettingsSection('Debug'");
+    const debugStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'debug'");
     expect(debugStart).toBeGreaterThan(codeDisplayStart);
     const debugSection = settingsRootTsx.slice(debugStart);
     expect(debugSection).not.toContain("setSettingsDetailView('update')");

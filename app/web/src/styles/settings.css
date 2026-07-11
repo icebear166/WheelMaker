@@ -55,7 +55,7 @@ textarea,
   display: flex;
   min-width: 0;
   min-height: 0;
-  background: var(--bg);
+  background: var(--surface-canvas);
   color: var(--text);
 }
 
@@ -65,7 +65,7 @@ textarea,
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
+  background: var(--surface-panel);
   color: var(--text);
 }
 
@@ -247,9 +247,9 @@ textarea,
   -webkit-backdrop-filter: blur(18px);
 }
 
-.desktop-settings-screen .mobile-settings-panel {
+.desktop-settings-screen .settings-workbench-panel {
   flex: 0 1 auto;
-  width: min(720px, calc(100vw - 56px));
+  width: min(920px, calc(100vw - 56px));
   height: calc(100vh - 56px);
   min-height: 420px;
   border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
@@ -270,11 +270,11 @@ textarea,
 }
 
 .desktop-settings-screen.has-settings-side-panel .settings-screen-panel-row {
-  width: min(1220px, calc(100vw - 56px));
+  width: min(1440px, calc(100vw - 56px));
   height: calc(100vh - 56px);
   min-height: 420px;
   display: grid;
-  grid-template-columns: minmax(0, 720px) minmax(360px, 500px);
+  grid-template-columns: minmax(0, 920px) minmax(360px, 500px);
   gap: 12px;
 }
 
@@ -282,6 +282,38 @@ textarea,
   width: auto;
   height: 100%;
   min-height: 0;
+}
+
+@media (min-width: 860px) {
+  .desktop-settings-screen .settings-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .desktop-settings-screen .settings-section-appearance {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .desktop-settings-screen .settings-section-chat {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  .desktop-settings-screen .settings-section-connection {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .desktop-settings-screen .settings-section-code-display {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .desktop-settings-screen .settings-section-debug {
+    grid-column: 2;
+    grid-row: 3;
+  }
 }
 
 .desktop-settings-screen .mobile-settings-nav {
@@ -2953,9 +2985,18 @@ textarea,
   }
 }
 
-/* workspace-ui-targeted-evolution: settings */
+/* settings workbench tokens */
 .mobile-settings-screen {
   background: var(--surface-canvas);
+}
+
+.settings-workbench-screen {
+  background: var(--surface-canvas);
+}
+
+.settings-workbench-panel {
+  border-color: var(--border-subtle);
+  background: var(--surface-panel);
 }
 
 .mobile-settings-panel {

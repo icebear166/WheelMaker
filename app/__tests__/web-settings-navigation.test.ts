@@ -72,6 +72,19 @@ describe('settings navigation model', () => {
     expect(root.indexOf("id: 'code-display'")).toBeLessThan(root.indexOf("id: 'debug'"));
   });
 
+  test('lays out the desktop settings workbench without changing mobile navigation', () => {
+    const css = fs.readFileSync(
+      path.resolve(__dirname, '../web/src/styles/settings.css'),
+      'utf8',
+    ).replace(/\r\n/g, '\n');
+
+    expect(css).toMatch(/\.desktop-settings-screen \.settings-workbench-panel \{[\s\S]*width: min\(920px, calc\(100vw - 56px\)\);[\s\S]*\}/);
+    expect(css).toMatch(/\.desktop-settings-screen\.has-settings-side-panel \.settings-screen-panel-row \{[\s\S]*width: min\(1440px, calc\(100vw - 56px\)\);[\s\S]*grid-template-columns: minmax\(0, 920px\) minmax\(360px, 500px\);[\s\S]*\}/);
+    expect(css).toMatch(/@media \(min-width: 860px\) \{[\s\S]*\.desktop-settings-screen \.settings-list \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[\s\S]*\}/);
+    expect(css).toMatch(/\.desktop-settings-screen \.settings-section-chat \{[\s\S]*grid-column: 2;[\s\S]*grid-row: 1 \/ span 2;[\s\S]*\}/);
+    expect(css).toMatch(/\.desktop-settings-screen \.settings-section-debug \{[\s\S]*grid-column: 2;[\s\S]*grid-row: 3;[\s\S]*\}/);
+  });
+
   test('styles settings groups without changing shortcut order', () => {
     const css = fs.readFileSync(
       path.resolve(__dirname, '../web/src/styles/settings.css'),
@@ -82,7 +95,8 @@ describe('settings navigation model', () => {
     expect(mobileSettingsShortcutIndex('skills')).toBe(2);
     expect(mobileSettingsShortcutIndex('portRelay')).toBe(3);
     expect(mobileSettingsShortcutIndex('tokenStats')).toBe(4);
-    expect(css).toContain('/* workspace-ui-targeted-evolution: settings */');
+    expect(css).toContain('.settings-workbench-screen {');
+    expect(css).not.toContain('/* workspace-ui-targeted-evolution: settings */');
     expect(css).toContain('.settings-danger-row');
     expect(css).toContain('var(--state-danger)');
   });
