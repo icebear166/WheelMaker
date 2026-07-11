@@ -61,8 +61,8 @@ describe('web chat view width settings', () => {
     expect(settingsRootTsx).toContain('value={chatViewWidth}');
     expect(settingsRootTsx).toContain('if (isChatViewWidth(next)) setChatViewWidth(next);');
     expect(settingsRootTsx).toContain('CHAT_VIEW_WIDTH_OPTIONS.map(item => (');
-    const appearanceStart = settingsRootTsx.indexOf("renderSettingsSection('Appearance'");
-    const chatStart = settingsRootTsx.indexOf("renderSettingsSection('Chat'");
+    const appearanceStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'appearance'");
+    const chatStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'chat'");
     const settingStart = settingsRootTsx.indexOf('Chat View Width');
     expect(appearanceStart).toBeGreaterThanOrEqual(0);
     expect(chatStart).toBeGreaterThan(appearanceStart);

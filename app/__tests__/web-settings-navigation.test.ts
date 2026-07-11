@@ -98,6 +98,28 @@ describe('settings navigation model', () => {
     expect(css).toMatch(/\.mobile-settings-shortcut-button\.active \{[\s\S]*color: var\(--accent\);[\s\S]*background: transparent;[\s\S]*\}/);
   });
 
+  test('shares a durable surface contract across settings details', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const settingsCss = fs.readFileSync(
+      path.join(projectRoot, 'web', 'src', 'styles', 'settings.css'),
+      'utf8',
+    ).replace(/\r\n/g, '\n');
+    const portRelayCss = fs.readFileSync(
+      path.join(projectRoot, 'web', 'src', 'styles', 'portRelay.css'),
+      'utf8',
+    ).replace(/\r\n/g, '\n');
+    const debugCss = fs.readFileSync(
+      path.join(projectRoot, 'web', 'src', 'styles', 'debug.css'),
+      'utf8',
+    ).replace(/\r\n/g, '\n');
+
+    expect(settingsCss).toMatch(/\.settings-detail-header \{[\s\S]*background: color-mix\(in srgb, var\(--surface-panel\) 96%, transparent\);[\s\S]*\}/);
+    expect(settingsCss).toMatch(/\.settings-metadata-card,[\s\S]*\.settings-database-storage-metric,[\s\S]*\.settings-database-store-list,[\s\S]*\.update-summary-bar \{[\s\S]*border-radius: var\(--radius-panel\);[\s\S]*\}/);
+    expect(settingsCss).toMatch(/\.settings-detail-action-btn \{[\s\S]*border-radius: var\(--radius-control\);[\s\S]*\}/);
+    expect(portRelayCss).toMatch(/\.port-relay-section \{[\s\S]*border-radius: var\(--radius-panel\);[\s\S]*\}/);
+    expect(debugCss).toMatch(/\.debug-log-detail-footer \{[\s\S]*background: color-mix\(in srgb, var\(--surface-panel\) 96%, transparent\);[\s\S]*\}/);
+  });
+
   test('styles settings groups without changing shortcut order', () => {
     const css = fs.readFileSync(
       path.resolve(__dirname, '../web/src/styles/settings.css'),

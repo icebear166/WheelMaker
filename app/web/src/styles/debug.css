@@ -16,18 +16,18 @@
 
 .debug-log-empty {
   padding: 14px 12px;
-  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-panel);
   color: var(--muted);
-  background: color-mix(in srgb, var(--panel-2) 70%, transparent);
+  background: color-mix(in srgb, var(--surface-raised) 82%, var(--surface-panel));
   font-size: 12px;
 }
 
 .debug-log-line {
-  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border: 1px solid var(--border-subtle);
   border-left: 3px solid color-mix(in srgb, var(--muted) 72%, transparent);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--panel-2) 76%, transparent);
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--surface-raised) 76%, var(--surface-panel));
   color: color-mix(in srgb, var(--text) 90%, var(--muted));
   font-family: var(--code-font-family, Consolas, monospace);
   font-size: 10.5px;
@@ -61,8 +61,8 @@
   position: sticky;
   bottom: 0;
   margin-top: auto;
-  border-top: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
-  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  border-top: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-panel) 96%, transparent);
   padding: 10px 2px 2px;
   display: grid;
   gap: 8px;

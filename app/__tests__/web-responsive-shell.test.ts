@@ -197,8 +197,8 @@ describe('web responsive shell split', () => {
     expect(desktopScreenBlock).toContain('display: grid;');
     expect(desktopScreenBlock).toContain('place-items: center;');
 
-    const desktopPanelBlock = cssRuleBlock(stylesCss, '.desktop-settings-screen .mobile-settings-panel');
-    expect(desktopPanelBlock).toContain('width: min(720px, calc(100vw - 56px));');
+    const desktopPanelBlock = cssRuleBlock(stylesCss, '.desktop-settings-screen .settings-workbench-panel');
+    expect(desktopPanelBlock).toContain('width: min(920px, calc(100vw - 56px));');
     expect(desktopPanelBlock).toContain('height: calc(100vh - 56px);');
     expect(desktopPanelBlock).toContain('border-radius: 14px;');
     expect(desktopPanelBlock).toContain('overflow: hidden;');

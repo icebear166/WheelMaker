@@ -50,7 +50,7 @@ describe('web registry debug settings', () => {
     expect(mainTsx).toContain('registryDebugStore.setEnabled(messageViewerEnabled);');
     expect(mainTsx).toContain('appDiagnosticStore.setLogLevel(logLevel);');
     expect(mainTsx).toContain('setNativeDiagnosticLogLevel(logLevel);');
-    expect(settingsRootTsx).toContain("renderSettingsSection('Debug'");
+    expect(settingsRootTsx).toContain("renderSettingsSection({id: 'debug'");
     expect(settingsRootTsx).toContain('Message Viewer');
     expect(settingsRootTsx).toContain('Log Level');
     expect(settingsNavigationTs).toContain("'debugLogs'");
@@ -72,7 +72,7 @@ describe('web registry debug settings', () => {
     expect(mainTsx).toContain('handleDesktopRemoteDebugEnabledChange');
     expect(mainTsx).not.toContain('Open Debug Panel');
     expect(mainTsx).not.toContain('disabled={!registryDebug}');
-    const debugSectionStart = settingsRootTsx.indexOf("renderSettingsSection('Debug'");
+    const debugSectionStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'debug'");
     const debugSectionEnd = settingsRootTsx.indexOf("), 'bug')", debugSectionStart);
     const debugSection = settingsRootTsx.slice(debugSectionStart, debugSectionEnd);
     expect(debugSection).toContain("openSettingsChild('debugLogs')");
@@ -125,8 +125,8 @@ describe('web registry debug settings', () => {
   test('places debug maintenance settings at the bottom after code display', () => {
     const settingsRootTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
 
-    const codeDisplaySectionIndex = settingsRootTsx.indexOf("renderSettingsSection('Code Display'");
-    const debugSectionIndex = settingsRootTsx.indexOf("renderSettingsSection('Debug'");
+    const codeDisplaySectionIndex = settingsRootTsx.indexOf("renderSettingsSection({id: 'code-display'");
+    const debugSectionIndex = settingsRootTsx.indexOf("renderSettingsSection({id: 'debug'");
     expect(debugSectionIndex).toBeGreaterThan(codeDisplaySectionIndex);
     expect(settingsRootTsx).not.toContain("renderSettingsSection('More'");
 

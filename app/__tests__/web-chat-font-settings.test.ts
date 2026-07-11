@@ -53,7 +53,7 @@ describe('web chat font settings', () => {
     expect(mainTsx).toContain('const [chatFont, setChatFont] = useState<ChatFontId>(');
     expect(mainTsx).toContain('const chatFontFamily = useMemo(');
     expect(mainTsx).toContain('chatFont,');
-    expect(settingsRootTsx).toContain("renderSettingsSection('Chat'");
+    expect(settingsRootTsx).toContain("renderSettingsSection({id: 'chat'");
     expect(settingsRootTsx).toContain('Chat Font');
     expect(settingsRootTsx).toContain('value={chatFont}');
     expect(settingsRootTsx).toContain('if (isChatFontId(next)) setChatFont(next);');

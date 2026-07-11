@@ -471,9 +471,10 @@ textarea,
   gap: 8px;
   min-height: 44px;
   padding: 6px 2px 8px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  border-bottom: 1px solid var(--border-subtle);
   margin-bottom: 8px;
-  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  background: color-mix(in srgb, var(--surface-panel) 96%, transparent);
+  box-shadow: 0 1px 0 color-mix(in srgb, #fff 7%, transparent) inset;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
@@ -1357,7 +1358,7 @@ textarea,
   min-width: 58px;
   min-height: 28px;
   border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--accent) 10%, var(--panel));
   color: var(--text);
   font: inherit;
@@ -3080,6 +3081,33 @@ textarea,
 .mobile-settings-shortcut-button.active {
   color: var(--accent);
   background: transparent;
+}
+
+.settings-metadata-card,
+.settings-database-storage-metric,
+.settings-database-store-list,
+.update-summary-bar {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-panel);
+  background: color-mix(in srgb, var(--surface-raised) 82%, var(--surface-panel));
+  box-shadow: 0 1px 0 color-mix(in srgb, #fff 6%, transparent) inset;
+}
+
+.settings-skills-scope,
+.settings-skills-install-panel,
+.settings-skills-detail-panel,
+.token-stats-account-item,
+.settings-database-dump {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-panel);
+  background: color-mix(in srgb, var(--surface-raised) 82%, var(--surface-panel));
+  box-shadow: 0 1px 0 color-mix(in srgb, #fff 6%, transparent) inset;
+}
+
+.update-summary-value,
+.settings-database-storage-metric strong,
+.token-stats-account-metrics {
+  font-variant-numeric: tabular-nums;
 }
 
 @media (max-width: 900px) {

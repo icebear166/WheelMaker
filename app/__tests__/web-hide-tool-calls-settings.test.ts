@@ -29,8 +29,8 @@ describe('web hide tool calls setting', () => {
     expect(mainTsx).toMatch(
       /typeof persistedGlobal\.hideToolCalls === 'boolean'\r?\n\s*\? persistedGlobal\.hideToolCalls\r?\n\s*: true/,
     );
-    expect(settingsRootTsx).toContain("renderSettingsSection('Chat'");
-    const chatSettingsStart = settingsRootTsx.indexOf("renderSettingsSection('Chat'");
+    expect(settingsRootTsx).toContain("renderSettingsSection({id: 'chat'");
+    const chatSettingsStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'chat'");
     const hideToolCallsSettingStart = settingsRootTsx.indexOf('Hide Tool Calls', chatSettingsStart);
     expect(settingsRootTsx).not.toContain('Use Latest Prompt Title');
     expect(hideToolCallsSettingStart).toBeGreaterThan(chatSettingsStart);

@@ -266,8 +266,8 @@ describe('skill management settings UI source structure', () => {
     expect(panelStyles).toContain('max-height: 100%;');
     expect(stylesCss).toContain('.settings-screen-panel-row');
     expect(stylesCss).toContain('.desktop-settings-screen.has-settings-side-panel .settings-screen-panel-row');
-    expect(stylesCss).toContain('grid-template-columns: minmax(0, 720px) minmax(360px, 500px);');
-    expect(stylesCss).toContain('width: min(1220px, calc(100vw - 56px));');
+    expect(stylesCss).toContain('grid-template-columns: minmax(0, 920px) minmax(360px, 500px);');
+    expect(stylesCss).toContain('width: min(1440px, calc(100vw - 56px));');
 
     const markdownStart = stylesCss.indexOf('.settings-skills-detail-markdown {', panelStart);
     const markdownEnd = stylesCss.indexOf('.settings-skills-detail-files {', markdownStart);

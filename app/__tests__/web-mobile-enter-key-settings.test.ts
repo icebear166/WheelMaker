@@ -47,8 +47,8 @@ describe('web mobile enter key settings', () => {
     expect(settingsRootTsx).toContain('MOBILE_ENTER_KEY_BEHAVIOR_OPTIONS.map(item => (');
     expect(settingsRootTsx).toContain('{!isWide ? (');
 
-    const chatStart = settingsRootTsx.indexOf("renderSettingsSection('Chat'");
-    const connectionStart = settingsRootTsx.indexOf("renderSettingsSection('Connection'", chatStart);
+    const chatStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'chat'");
+    const connectionStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'connection'", chatStart);
     const settingStart = settingsRootTsx.indexOf('Mobile Enter Key');
     const mobileOnlyStart = settingsRootTsx.lastIndexOf('{!isWide ? (', settingStart);
     const mobileOnlyEnd = settingsRootTsx.indexOf(') : null}', settingStart);

@@ -16,15 +16,10 @@
   min-width: 0;
   overflow: hidden;
   padding: 11px;
-  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-  border-radius: 8px;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--panel-3) 82%, transparent),
-      color-mix(in srgb, var(--panel) 88%, transparent)
-    );
-  box-shadow: inset 0 1px 0 color-mix(in srgb, white 5%, transparent);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-panel);
+  background: color-mix(in srgb, var(--surface-raised) 82%, var(--surface-panel));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 6%, transparent);
 }
 
 .port-relay-status-section {
@@ -152,10 +147,10 @@
   min-width: 0;
   height: 30px;
   padding: 0 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
-  background: var(--panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  color: var(--text-primary);
+  background: var(--surface-raised);
 }
 
 .port-relay-code-row input {
@@ -218,8 +213,8 @@
   min-height: 32px;
   padding: 3px 4px;
   border: 1px solid transparent;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--panel-3) 38%, transparent);
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--surface-raised) 68%, transparent);
 }
 
 .port-relay-target-list-row.selected {
