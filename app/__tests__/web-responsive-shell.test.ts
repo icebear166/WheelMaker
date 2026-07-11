@@ -119,7 +119,7 @@ describe('web responsive shell split', () => {
     const stylesCss = readWebStyles(projectRoot);
 
     expect(stylesCss).toContain('--desktop-window-controls-width: 176px;');
-    expect(stylesCss).toContain('--desktop-top-surface: color-mix(in srgb, var(--panel) 62%, var(--panel-3));');
+    expect(stylesCss).toContain('--desktop-top-surface: color-mix(in srgb, var(--surface-sidebar) 62%, var(--surface-panel));');
     expect(stylesCss).not.toContain('.desktop-titlebar {');
     expect(stylesCss).not.toContain('.desktop-activity-bar {');
 
@@ -139,7 +139,7 @@ describe('web responsive shell split', () => {
     expect(controlsBlock).toContain('height: 32px;');
     expect(controlsBlock).toContain('background: var(--desktop-top-surface);');
     expect(controlsBlock).not.toContain('border-left:');
-    expect(controlsBlock).toContain('border-bottom: 1px solid var(--border);');
+    expect(controlsBlock).toContain('border-bottom: 1px solid var(--border-subtle);');
     expect(stylesCss).not.toContain('.theme-light .desktop-window-controls {');
 
     expect(stylesCss).toContain('.desktop-window-source-button {');

@@ -3,15 +3,15 @@
 .page,
 .workspace {
   --desktop-window-controls-width: 176px;
-  --desktop-top-surface: color-mix(in srgb, var(--panel) 62%, var(--panel-3));
+  --desktop-top-surface: color-mix(in srgb, var(--surface-sidebar) 62%, var(--surface-panel));
   --chat-menu-header-height: 32px;
   --chat-menu-header-gap: 6px;
   --chat-menu-icon-button-size: 30px;
   --chat-menu-icon-button-radius: 6px;
   width: 100%;
   height: 100%;
-  background: var(--bg);
-  color: var(--text);
+  background: var(--surface-canvas);
+  color: var(--text-primary);
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
@@ -31,10 +31,10 @@
   z-index: 240;
   max-width: min(420px, calc(100vw - 32px));
   padding: 8px 12px;
-  border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 86%, transparent);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--panel) 94%, var(--bg));
-  color: var(--text);
+  background: color-mix(in srgb, var(--surface-panel) 94%, var(--surface-canvas));
+  color: var(--text-primary);
   box-shadow: 0 12px 28px color-mix(in srgb, #000 22%, transparent);
   font-size: 12px;
   line-height: 1.35;
@@ -51,9 +51,9 @@
   display: inline-flex;
   align-items: stretch;
   justify-content: flex-end;
-  color: var(--text);
+  color: var(--text-primary);
   background: var(--desktop-top-surface);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-subtle);
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
@@ -73,7 +73,7 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: var(--text);
+  color: var(--text-primary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -86,7 +86,7 @@
 .desktop-window-source-button:focus-visible,
 .desktop-window-source-button[aria-expanded="true"] {
   background: var(--hover);
-  color: var(--text);
+  color: var(--text-primary);
   outline: none;
 }
 
@@ -103,23 +103,23 @@
   width: 236px;
   max-width: min(236px, calc(100vw - 12px));
   padding: 6px;
-  border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 86%, transparent);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--panel) 92%, var(--bg));
+  background: color-mix(in srgb, var(--surface-panel) 92%, var(--surface-canvas));
   box-shadow: 0 18px 38px color-mix(in srgb, #000 34%, transparent);
 }
 
 .theme-light .desktop-window-source-popover {
-  background: color-mix(in srgb, var(--panel) 96%, #ffffff);
+  background: color-mix(in srgb, var(--surface-panel) 96%, #ffffff);
   box-shadow: 0 14px 28px color-mix(in srgb, #000 16%, transparent);
 }
 
 .desktop-window-source-panel {
   margin: 4px 0 6px;
   padding: 7px;
-  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
   border-radius: 7px;
-  background: color-mix(in srgb, var(--panel-3) 84%, transparent);
+  background: color-mix(in srgb, var(--surface-panel) 84%, transparent);
   display: grid;
   gap: 5px;
 }
@@ -129,7 +129,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: color-mix(in srgb, var(--text) 76%, var(--muted));
+  color: color-mix(in srgb, var(--text-primary) 76%, var(--text-secondary));
   font-size: 11px;
   line-height: 1.35;
 }
@@ -141,7 +141,7 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: color-mix(in srgb, var(--text) 84%, var(--muted));
+  color: color-mix(in srgb, var(--text-primary) 84%, var(--text-secondary));
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -158,7 +158,7 @@
 .desktop-window-source-choice:focus-visible,
 .desktop-window-source-choice[aria-checked="true"] {
   background: var(--hover);
-  color: var(--text);
+  color: var(--text-primary);
   outline: none;
 }
 
@@ -168,7 +168,7 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: color-mix(in srgb, var(--text) 78%, var(--muted));
+  color: color-mix(in srgb, var(--text-primary) 78%, var(--text-secondary));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -181,7 +181,7 @@
 
 .desktop-titlebar-button:hover {
   background: var(--hover);
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .desktop-titlebar-close:hover {
@@ -210,15 +210,15 @@
   border-radius: var(--chat-menu-icon-button-radius);
   padding: 0;
   background: transparent;
-  color: color-mix(in srgb, var(--accent) 86%, var(--text));
+  color: color-mix(in srgb, var(--accent-primary) 86%, var(--text-primary));
   cursor: pointer;
 }
 
 .chat-menu-icon-button:hover,
 .chat-menu-icon-button:focus-visible,
 .chat-menu-icon-button[aria-expanded='true'] {
-  background: color-mix(in srgb, var(--accent) 13%, transparent);
-  color: color-mix(in srgb, var(--accent) 96%, var(--text));
+  background: color-mix(in srgb, var(--accent-primary) 13%, transparent);
+  color: color-mix(in srgb, var(--accent-primary) 96%, var(--text-primary));
   outline: none;
 }
 
@@ -233,7 +233,7 @@
   min-height: 0;
   display: flex;
   overflow: hidden;
-  background: var(--bg);
+  background: var(--surface-canvas);
 }
 
 .desktop-shell > .body {
@@ -243,8 +243,8 @@
 
 .header {
   height: 46px;
-  border-bottom: 1px solid var(--border);
-  background: var(--panel-2);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-raised);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -256,7 +256,7 @@
 .project-btn {
   border: none;
   background: transparent;
-  color: var(--text);
+  color: var(--text-primary);
   min-height: 30px;
   border-radius: 4px;
   cursor: pointer;
@@ -298,8 +298,8 @@
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: #ff4d4f;
-  box-shadow: 0 0 0 2px var(--panel-2);
+  background: var(--state-danger);
+  box-shadow: 0 0 0 2px var(--surface-raised);
 }
 
 .tab-icon {
@@ -319,7 +319,7 @@
 
 .project-arrow {
   font-size: 12px;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 
 .project-name {
@@ -351,8 +351,8 @@
   align-items: center;
   gap: 7px;
   padding: calc(var(--wm-safe-area-top) + 6px) 7px 6px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
-  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 84%, transparent);
+  background: color-mix(in srgb, var(--surface-panel) 92%, transparent);
   backdrop-filter: blur(12px);
   z-index: 2;
 }
@@ -366,9 +366,9 @@
   align-items: center;
   gap: 6px;
   padding: 2px 5px;
-  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 88%, transparent);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--panel-2) 88%, transparent);
+  background: color-mix(in srgb, var(--surface-raised) 88%, transparent);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
 }
 
@@ -431,8 +431,8 @@
   border-radius: 999px;
   pointer-events: none;
   opacity: 0;
-  background: color-mix(in srgb, var(--accent) 62%, transparent);
-  box-shadow: 0 0 0 rgba(0, 122, 204, 0);
+  background: color-mix(in srgb, var(--accent-primary) 62%, transparent);
+  box-shadow: 0 0 0 color-mix(in srgb, var(--accent-primary) 0%, transparent);
   transform: scaleY(0.92);
   transform-origin: center;
   transition: opacity 160ms ease, transform 160ms ease, box-shadow 160ms ease;
@@ -449,13 +449,13 @@
 .floating-control-stack-layer[data-drag-state='dragging'] .floating-control-dock-rail {
   opacity: 0.36;
   transform: scaleY(1);
-  box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 20%, transparent);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--accent-primary) 20%, transparent);
 }
 
 .floating-control-stack-layer[data-drag-state='dragging'][data-side='left'] .floating-control-dock-rail.left,
 .floating-control-stack-layer[data-drag-state='dragging'][data-side='right'] .floating-control-dock-rail.right {
   opacity: 0.78;
-  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 34%, transparent);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent-primary) 34%, transparent);
 }
 
 .floating-control-stack-layer[data-side-pulse='left'] .floating-control-dock-rail.left,
@@ -502,7 +502,7 @@
 }
 
 .drawer-toggle-bubble {
-  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 88%, transparent);
   background: transparent;
   box-shadow: none;
   backdrop-filter: none;
@@ -520,7 +520,7 @@
   display: grid;
   grid-template-rows: 48px;
   padding: 0;
-  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 88%, transparent);
   border-radius: 999px;
   background: transparent;
   box-shadow: none;
@@ -538,10 +538,10 @@
   width: 7px;
   height: 7px;
   border-radius: 999px;
-  background: #4fbf6b;
+  background: var(--state-success);
   box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--panel) 78%, transparent),
-    0 0 10px color-mix(in srgb, #4fbf6b 34%, transparent);
+    0 0 0 2px color-mix(in srgb, var(--surface-panel) 78%, transparent),
+    0 0 10px color-mix(in srgb, var(--state-success) 34%, transparent);
   pointer-events: none;
 }
 
@@ -553,13 +553,13 @@
   height: 12px;
   padding: 0 3px;
   border-radius: 999px;
-  background: var(--accent);
+  background: var(--accent-primary);
   color: #fff;
   font-size: 8px;
   font-weight: 600;
   line-height: 12px;
   text-align: center;
-  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--panel) 78%, transparent);
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--surface-panel) 78%, transparent);
   pointer-events: none;
 }
 
@@ -567,7 +567,7 @@
   width: 48px;
   height: 48px;
   border-radius: 999px;
-  color: var(--text);
+  color: var(--text-primary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -577,8 +577,8 @@
 }
 
 .drawer-toggle-bubble:hover {
-  color: var(--text);
-  background: color-mix(in srgb, var(--panel) 64%, transparent);
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--surface-panel) 64%, transparent);
 }
 
 .drawer-toggle-bubble:active {
@@ -587,8 +587,8 @@
 
 .drawer-toggle-bubble[data-active='true'] {
   background: transparent;
-  border-color: color-mix(in srgb, var(--accent) 72%, transparent);
-  color: color-mix(in srgb, var(--accent) 88%, var(--text));
+  border-color: color-mix(in srgb, var(--accent-primary) 72%, transparent);
+  color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
 }
 
 .floating-control-stack[data-idle='true'] {
@@ -625,7 +625,7 @@
   border: 1px solid transparent;
   border-radius: 999px;
   background: transparent;
-  color: var(--muted);
+  color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -635,34 +635,34 @@
 }
 
 .gesture-nav-button:hover {
-  color: var(--text);
-  border-color: color-mix(in srgb, var(--border) 82%, transparent);
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--border-subtle) 82%, transparent);
   background: color-mix(in srgb, var(--surface-overlay) 84%, transparent);
 }
 
 .gesture-nav-button:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--accent) 58%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--accent-primary) 58%, transparent);
   outline-offset: 2px;
 }
 
 .gesture-nav-current-button[data-active='true'] {
-  border-color: color-mix(in srgb, var(--accent) 54%, var(--border));
-  color: color-mix(in srgb, var(--accent) 88%, var(--text));
+  border-color: color-mix(in srgb, var(--accent-primary) 54%, var(--border-subtle));
+  color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
 }
 
 .gesture-nav-current-button[data-active='true']:hover {
   background: transparent;
-  color: color-mix(in srgb, var(--accent) 88%, var(--text));
+  color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
 }
 
 .gesture-nav-capsule {
-  color: var(--muted);
+  color: var(--text-secondary);
   animation: gesture-capsule-fade-in 200ms ease-out;
 }
 
 .gesture-nav-capsule[data-active='true'] {
-  border-color: color-mix(in srgb, var(--accent) 46%, var(--border));
-  color: color-mix(in srgb, var(--accent) 88%, var(--text));
+  border-color: color-mix(in srgb, var(--accent-primary) 46%, var(--border-subtle));
+  color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
 }
 
 @keyframes gesture-capsule-fade-in {
@@ -696,13 +696,13 @@
 .breadcrumb-project-name {
   flex: 0 0 auto;
   max-width: none;
-  border: 1px solid color-mix(in srgb, var(--accent) 54%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 54%, transparent);
   border-radius: 8px;
   padding: 1px 8px;
-  background: color-mix(in srgb, var(--accent) 13%, var(--panel));
+  background: color-mix(in srgb, var(--accent-primary) 13%, var(--surface-panel));
   white-space: nowrap;
   font-weight: 700;
-  color: color-mix(in srgb, var(--accent) 78%, var(--text));
+  color: color-mix(in srgb, var(--accent-primary) 78%, var(--text-primary));
 }
 
 .breadcrumb-project-button {
@@ -713,8 +713,8 @@
 }
 
 .breadcrumb-project-button:hover {
-  background: color-mix(in srgb, var(--accent) 18%, var(--panel));
-  color: color-mix(in srgb, var(--accent) 88%, var(--text));
+  background: color-mix(in srgb, var(--accent-primary) 18%, var(--surface-panel));
+  color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
 }
 
 .breadcrumb-project-button:active {
@@ -723,7 +723,7 @@
 
 .breadcrumb-separator {
   flex: 0 0 auto;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 
 .breadcrumb-current {
@@ -731,7 +731,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 
 .project-menu {
@@ -758,12 +758,12 @@
 }
 
 .project-menu-item:hover {
-  border-color: var(--border);
+  border-color: var(--border-subtle);
 }
 
 .project-menu-item.selected {
-  background: rgba(0, 122, 204, 0.18);
-  border-color: rgba(0, 122, 204, 0.45);
+  background: color-mix(in srgb, var(--accent-primary) 18%, transparent);
+  border-color: color-mix(in srgb, var(--accent-primary) 45%, var(--border-subtle));
 }
 
 .project-menu-main {
@@ -778,12 +778,12 @@
   font-size: 14px;
   font-weight: 600;
   line-height: 1.15;
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .project-menu-path {
   font-size: 12px;
-  color: var(--muted);
+  color: var(--text-secondary);
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
@@ -797,24 +797,24 @@
   font-weight: 700;
   letter-spacing: 0.2px;
   text-transform: uppercase;
-  border: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 42%, transparent);
   border-radius: 999px;
   padding: 3px 9px;
-  color: color-mix(in srgb, var(--text) 84%, var(--accent));
-  background: color-mix(in srgb, var(--accent) 18%, var(--panel-2));
+  color: color-mix(in srgb, var(--text-primary) 84%, var(--accent-primary));
+  background: color-mix(in srgb, var(--accent-primary) 18%, var(--surface-raised));
 }
 
 .workspace-project-selector {
   position: relative;
   padding: 8px 10px 6px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .workspace-project-label {
   margin-bottom: 4px;
   font-size: 10px;
   line-height: 1;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-weight: 700;
 }
 
@@ -825,9 +825,9 @@
 .workspace-project-button {
   width: 100%;
   min-height: 30px;
-  border: 1px solid var(--border);
-  background: var(--panel-2);
-  color: var(--text);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-raised);
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -859,8 +859,8 @@
   right: 0;
   max-height: 320px;
   overflow: auto;
-  border: 1px solid var(--border);
-  background: var(--panel);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-panel);
   box-shadow: var(--soft-shadow);
   border-radius: 6px;
   padding: 4px;
@@ -870,7 +870,7 @@
   width: 100%;
   border: 0;
   background: transparent;
-  color: var(--text);
+  color: var(--text-primary);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -900,7 +900,7 @@
 
 .workspace-project-menu-path {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 
 .sidebar-scroll {
@@ -915,20 +915,20 @@
   overflow-y: auto;
   scrollbar-gutter: auto;
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--muted) 46%, transparent) transparent;
+  scrollbar-color: color-mix(in srgb, var(--text-secondary) 46%, transparent) transparent;
 }
 
 .sidebar-title-row {
   position: relative;
   flex: 0 0 var(--chat-menu-header-height);
   min-height: var(--chat-menu-header-height);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-subtle);
   background: var(--desktop-top-surface);
   display: flex;
   align-items: center;
   gap: var(--chat-menu-header-gap);
   padding: 0 8px;
-  color: color-mix(in srgb, var(--muted) 78%, var(--text));
+  color: color-mix(in srgb, var(--text-secondary) 78%, var(--text-primary));
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -951,7 +951,7 @@
 }
 
 .sidebar-footer {
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-subtle);
   padding: 6px;
   flex: 0 0 auto;
 }
@@ -962,10 +962,10 @@
 
 .sidebar-setting-select {
   max-width: 180px;
-  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
   border-radius: 6px;
-  background: var(--panel-3);
-  color: var(--text);
+  background: var(--surface-panel);
+  color: var(--text-primary);
   padding: 4px 8px;
   font-size: 12px;
   outline: none;
@@ -973,19 +973,19 @@
 }
 
 .sidebar-setting-select:hover {
-  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  border-color: color-mix(in srgb, var(--accent-primary) 50%, var(--border-subtle));
 }
 
 .sidebar-setting-select:focus {
-  border-color: var(--accent);
+  border-color: var(--accent-primary);
 }
 
 .sidebar-setting-input {
   width: min(180px, 48vw);
-  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
   border-radius: 6px;
-  background: var(--panel-3);
-  color: var(--text);
+  background: var(--surface-panel);
+  color: var(--text-primary);
   padding: 4px 8px;
   font-size: 12px;
   outline: none;
@@ -993,20 +993,20 @@
 }
 
 .sidebar-setting-input:hover {
-  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  border-color: color-mix(in srgb, var(--accent-primary) 50%, var(--border-subtle));
 }
 
 .sidebar-setting-input:focus {
-  border-color: var(--accent);
+  border-color: var(--accent-primary);
 }
 
 .sidebar-secondary-btn {
   width: calc(100% - 16px);
   margin: 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--panel-2);
-  color: var(--text);
+  background: var(--surface-raised);
+  color: var(--text-primary);
   min-height: 32px;
   padding: 0 10px;
   cursor: pointer;
@@ -1035,7 +1035,7 @@
   border-bottom: 2px solid transparent;
   border-top: 2px solid transparent;
   background: transparent;
-  color: var(--muted);
+  color: var(--text-secondary);
   min-width: 60px;
   height: 100%;
   padding: 0 10px;
@@ -1050,7 +1050,7 @@
 }
 
 .tab:hover {
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .body {
@@ -1065,7 +1065,7 @@
   width: var(--desktop-sidebar-width, 380px);
   min-width: 320px;
   max-width: min(560px, 45vw);
-  border-right: 1px solid var(--border);
+  border-right: 1px solid var(--border-subtle);
   background: var(--desktop-side-surface);
   display: flex;
   flex-direction: column;
@@ -1097,7 +1097,7 @@
   left: 3px;
   width: 2px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 64%, transparent);
+  background: color-mix(in srgb, var(--accent-primary) 64%, transparent);
   opacity: 0;
   transition: opacity 120ms ease;
 }
@@ -1145,9 +1145,9 @@
   grid-template-columns: 40px minmax(0, 1fr);
   gap: 12px;
   padding: 16px;
-  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 82%, transparent);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--panel) 96%, var(--panel-2));
+  background: color-mix(in srgb, var(--surface-panel) 96%, var(--surface-raised));
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
 }
 
@@ -1158,13 +1158,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: color-mix(in srgb, #2b6cb0 88%, var(--text));
+  color: color-mix(in srgb, #2b6cb0 88%, var(--text-primary));
   background: color-mix(in srgb, #2b6cb0 16%, transparent);
 }
 
 .app-confirm-icon.danger {
-  color: color-mix(in srgb, var(--danger) 88%, var(--text));
-  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: color-mix(in srgb, var(--state-danger) 88%, var(--text-primary));
+  background: color-mix(in srgb, var(--state-danger) 14%, transparent);
 }
 
 .app-confirm-icon .codicon {
@@ -1176,7 +1176,7 @@
 }
 
 .app-confirm-title {
-  color: var(--text);
+  color: var(--text-primary);
   font-size: 14px;
   font-weight: 700;
   line-height: 1.25;
@@ -1185,7 +1185,7 @@
 .app-confirm-name {
   margin-top: 5px;
   max-width: 100%;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.35;
   overflow: hidden;
@@ -1195,7 +1195,7 @@
 
 .app-confirm-copy {
   margin-top: 9px;
-  color: var(--muted);
+  color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -1218,7 +1218,7 @@
 .app-confirm-btn {
   min-height: 32px;
   border-radius: 7px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-subtle);
   padding: 0 12px;
   display: inline-flex;
   align-items: center;
@@ -1230,8 +1230,8 @@
 }
 
 .app-confirm-btn.secondary {
-  color: var(--muted);
-  background: var(--panel-2);
+  color: var(--text-secondary);
+  background: var(--surface-raised);
 }
 
 .app-confirm-btn.secondary.danger {
@@ -1245,8 +1245,8 @@
 }
 
 .app-confirm-btn.primary.danger {
-  border-color: color-mix(in srgb, var(--danger) 74%, transparent);
-  background: color-mix(in srgb, var(--danger) 86%, #111);
+  border-color: color-mix(in srgb, var(--state-danger) 74%, transparent);
+  background: color-mix(in srgb, var(--state-danger) 86%, #111);
 }
 
 .app-confirm-btn:hover:not(:disabled) {
@@ -1277,9 +1277,9 @@
 
 .mobile-project-action-panel {
   margin: 2px 7px 6px 21px;
-  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 82%, transparent);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--panel-2) 74%, transparent);
+  background: color-mix(in srgb, var(--surface-raised) 74%, transparent);
   padding: 4px;
 }
 
@@ -1304,10 +1304,10 @@
   padding: 8px 10px calc(env(safe-area-inset-bottom, 0px) + 14px);
   border-top-left-radius: 18px;
   border-top-right-radius: 18px;
-  background: color-mix(in srgb, var(--panel) 96%, transparent);
+  background: color-mix(in srgb, var(--surface-panel) 96%, transparent);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 60%, transparent);
   border-bottom: 0;
   box-shadow: 0 -16px 40px rgba(0, 0, 0, 0.42);
   animation: mobile-sheet-slide-up 260ms cubic-bezier(0.2, 0.85, 0.3, 1);
@@ -1323,7 +1323,7 @@
   width: 38px;
   height: 4px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--muted) 55%, transparent);
+  background: color-mix(in srgb, var(--text-secondary) 55%, transparent);
   margin: 2px 0 4px;
 }
 
@@ -1333,12 +1333,12 @@
   align-items: center;
   gap: 10px;
   padding: 4px 4px 8px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent);
 }
 
 .mobile-project-sheet-icon {
   font-size: 17px;
-  color: var(--accent);
+  color: var(--accent-primary);
 }
 
 .mobile-project-sheet-title-copy {
@@ -1351,13 +1351,13 @@
 .mobile-project-sheet-title {
   font-size: 14px;
   font-weight: 800;
-  color: var(--text);
+  color: var(--text-primary);
   line-height: 1.2;
 }
 
 .mobile-project-sheet-subtitle {
   font-size: 11.5px;
-  color: var(--muted);
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1370,7 +1370,7 @@
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: var(--muted);
+  color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1381,7 +1381,7 @@
 
 .mobile-project-sheet-close:hover {
   background: var(--hover);
-  color: var(--text);
+  color: var(--text-primary);
 }
 
 .mobile-project-sheet-body {
@@ -1419,7 +1419,7 @@
   margin-bottom: 4px;
   border-radius: 8px;
   padding: 0 10px;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 
 .drawer-overlay {
@@ -1441,8 +1441,8 @@
   position: fixed;
   inset: 0 auto 0 0;
   width: min(440px, calc(100vw - var(--mobile-floating-control-lane) - env(safe-area-inset-right, 0px)));
-  border-right: 1px solid var(--border);
-  background: var(--panel);
+  border-right: 1px solid var(--border-subtle);
+  background: var(--surface-panel);
   transform: translateX(-100%);
   transition: transform 220ms cubic-bezier(0.2, 0.85, 0.3, 1), box-shadow 220ms ease;
   display: flex;
@@ -1455,14 +1455,14 @@
 .drawer .sidebar-scroll {
   scrollbar-gutter: auto;
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--muted) 46%, transparent) transparent;
+  scrollbar-color: color-mix(in srgb, var(--text-secondary) 46%, transparent) transparent;
 }
 
 .narrow-shell[data-floating-control-side='left'] .drawer {
   inset: 0 0 0 auto;
   width: min(440px, calc(100vw - var(--mobile-floating-control-lane) - env(safe-area-inset-left, 0px)));
   border-right: none;
-  border-left: 1px solid var(--border);
+  border-left: 1px solid var(--border-subtle);
   transform: translateX(100%);
 }
 
