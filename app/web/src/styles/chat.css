@@ -1148,8 +1148,8 @@
 }
 
 .recent-sessions-section:not(.collapsed) {
-  padding-bottom: 6px;
-  margin-bottom: 8px;
+  padding-bottom: 4px;
+  margin-bottom: 5px;
   border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 12%, transparent);
 }
 
@@ -1222,16 +1222,24 @@
 }
 
 .recent-project-session-group {
-  margin: 5px 0 7px;
+  margin: 2px 0 3px;
 }
 
 .recent-project-session-heading {
-  min-height: 28px;
+  min-height: 27px;
   padding: 0 5px 0 24px;
   color: var(--text-secondary);
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.wide-project-session-nav[data-session-list-density='compact'] .recent-project-session-heading {
+  min-height: 24px;
+}
+
+.wide-project-session-nav[data-session-list-density='relaxed'] .recent-project-session-heading {
+  min-height: 27px;
 }
 
 .recent-project-session-name {

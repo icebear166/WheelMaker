@@ -61,6 +61,23 @@ describe('web chat recent sessions', () => {
     expect(sessionListBlock).toContain('padding-left: 21px;');
   });
 
+  test('compresses recent project rhythm without shrinking session rows', () => {
+    const expandedSectionBlock = chatCss.match(/\.recent-sessions-section:not\(\.collapsed\) \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const groupBlock = chatCss.match(/\.recent-project-session-group \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const headingBlock = chatCss.match(/\.recent-project-session-heading \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const compactHeadingBlock = chatCss.match(/\.wide-project-session-nav\[data-session-list-density='compact'\] \.recent-project-session-heading \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const relaxedHeadingBlock = chatCss.match(/\.wide-project-session-nav\[data-session-list-density='relaxed'\] \.recent-project-session-heading \{[\s\S]*?\n\}/)?.[0] ?? '';
+
+    expect(expandedSectionBlock).toContain('padding-bottom: 4px;');
+    expect(expandedSectionBlock).toContain('margin-bottom: 5px;');
+    expect(groupBlock).toContain('margin: 2px 0 3px;');
+    expect(headingBlock).toContain('min-height: 27px;');
+    expect(compactHeadingBlock).toContain('min-height: 24px;');
+    expect(relaxedHeadingBlock).toContain('min-height: 27px;');
+    expect(compactHeadingBlock).not.toContain('.wide-session-row');
+    expect(relaxedHeadingBlock).not.toContain('.wide-session-row');
+  });
+
   test('recent sessions refresh only on prompt start / done', () => {
     expect(mainTsx).toContain(
       "if (message.method === 'prompt_request' || message.method === 'prompt_done') {",
