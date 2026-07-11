@@ -669,7 +669,7 @@
 }
 
 .item.selected {
-  background: color-mix(in srgb, var(--accent-primary) 11%, var(--surface-sidebar));
+  background: color-mix(in srgb, var(--surface-panel) 52%, var(--surface-sidebar));
 }
 
 .wide-project-session-nav {
@@ -4998,8 +4998,8 @@
 }
 
 .wide-session-row.selected {
-  border-color: color-mix(in srgb, var(--accent-primary) 32%, var(--border-subtle));
-  background: color-mix(in srgb, var(--accent-primary) 11%, var(--surface-sidebar));
+  border-color: color-mix(in srgb, var(--border-subtle) 88%, transparent);
+  background: color-mix(in srgb, var(--surface-panel) 52%, var(--surface-sidebar));
   color: var(--text-primary);
 }
 
@@ -5173,21 +5173,21 @@
   gap: 8px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-floating);
-  background: color-mix(in srgb, var(--surface-panel) 96%, transparent);
-  box-shadow: 0 4px 14px rgb(3 8 15 / 12%);
+  background: color-mix(in srgb, var(--surface-panel) 64%, var(--surface-workspace-content));
+  box-shadow: 0 4px 14px rgb(0 0 0 / 12%);
   padding: 8px 8px 4px;
   transition: border-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard), background var(--motion-fast) var(--ease-standard);
 }
 
 .chat-composer:focus-within .chat-composer-frame {
-  border-color: color-mix(in srgb, var(--accent-primary) 56%, var(--border-subtle));
-  box-shadow: 0 4px 16px rgb(3 8 15 / 14%), 0 0 0 1px color-mix(in srgb, var(--accent-primary) 10%, transparent);
+  border-color: color-mix(in srgb, var(--accent-primary) 36%, var(--border-subtle));
+  box-shadow: 0 4px 16px rgb(0 0 0 / 14%), 0 0 0 1px color-mix(in srgb, var(--accent-primary) 6%, transparent);
 }
 
 .chat-composer.config-menu-open .chat-composer-frame,
 .chat-composer.trigger-menu-open .chat-composer-frame {
-  border-color: color-mix(in srgb, var(--accent-primary) 48%, var(--border-subtle));
-  box-shadow: 0 8px 22px rgb(3 8 15 / 18%);
+  border-color: color-mix(in srgb, var(--accent-primary) 32%, var(--border-subtle));
+  box-shadow: 0 8px 22px rgb(0 0 0 / 18%);
 }
 
 .chat-composer-frame.drag-over {

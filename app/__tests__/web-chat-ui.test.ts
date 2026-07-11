@@ -2412,11 +2412,17 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('padding-bottom: max(4px, var(--wm-safe-area-bottom))');
   });
 
-  test('uses semantic selection and information-state colors for chat chrome', () => {
+  test('uses neutral selection surfaces and restrained information-state colors for chat chrome', () => {
     const projectRoot = path.join(__dirname, '..');
     const stylesCss = readWebStyles(projectRoot);
 
-    expect(stylesCss).toMatch(/\.wide-session-row\.selected \{[\s\S]*background: color-mix\(in srgb, var\(--accent-primary\) 11%, var\(--surface-sidebar\)\);[\s\S]*\}/);
+    expect(stylesCss).toMatch(
+      /\.wide-session-row\.selected \{[\s\S]*border-color: color-mix\(in srgb, var\(--border-subtle\) 88%, transparent\);[\s\S]*background: color-mix\(in srgb, var\(--surface-panel\) 52%, var\(--surface-sidebar\)\);[\s\S]*\}/,
+    );
+    expect(stylesCss).toMatch(/\.wide-session-row\.selected::before \{[\s\S]*background: var\(--accent-primary\);[\s\S]*\}/);
+    expect(stylesCss).toMatch(
+      /\.chat-composer:focus-within \.chat-composer-frame \{[\s\S]*border-color: color-mix\(in srgb, var\(--accent-primary\) 36%, var\(--border-subtle\)\);[\s\S]*0 0 0 1px color-mix\(in srgb, var\(--accent-primary\) 6%, transparent\);[\s\S]*\}/,
+    );
     expect(stylesCss).toMatch(/\.voice-input-button \{[\s\S]*var\(--state-info\)[\s\S]*\}/);
   });
 });
