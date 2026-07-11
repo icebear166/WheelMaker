@@ -60,6 +60,7 @@ describe('registry session attachment preview service', () => {
           mimeType: 'image/png',
           encoding: 'base64',
           content: 'iVBORw0=',
+          isBinary: true,
           size: 456,
           hash: 'original-hash',
         },
@@ -83,6 +84,35 @@ describe('registry session attachment preview service', () => {
     });
     expect(response.content).toBe('iVBORw0=');
     expect(response.mimeType).toBe('image/png');
+    expect(response.isBinary).toBe(true);
+  });
+
+  test('preserves text attachment binary metadata through the registry repository', async () => {
+    const client = {
+      request: jest.fn().mockResolvedValue({
+        payload: {
+          ok: true,
+          sessionId: 'sess-1',
+          attachmentId: 'sha256-b',
+          mimeType: 'text/plain',
+          encoding: 'utf-8',
+          content: 'hello world',
+          isBinary: false,
+          size: 11,
+          hash: 'text-hash',
+        },
+      }),
+    };
+    const repository = new RegistryRepository(client as never);
+
+    const response = await repository.readSessionAttachment('project-1', {
+      sessionId: 'sess-1',
+      attachmentId: 'sha256-b',
+    });
+
+    expect(response.content).toBe('hello world');
+    expect(response.mimeType).toBe('text/plain');
+    expect(response.isBinary).toBe(false);
   });
 
   test('workspace service delegates attachment thumbnail and original reads to the selected chat project', async () => {
