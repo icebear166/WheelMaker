@@ -67,8 +67,8 @@ describe('web chat font settings', () => {
     const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain("'--chat-message-font-family': chatFontFamily,");
-    expect(stylesCss).toContain('--chat-message-text: #e0e4e9;');
-    expect(stylesCss).toContain('--chat-message-text: #252c34;');
+    expect(stylesCss).toContain('--chat-message-text: #e0e0e0;');
+    expect(stylesCss).toContain('--chat-message-text: #2b2b2b;');
     expect(stylesCss).toMatch(
       /\.chat-main-message \{[\s\S]*font-family: var\(--chat-message-font-family, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', 'Noto Sans CJK SC', 'Noto Sans', sans-serif\);[\s\S]*line-height: 1\.58;[\s\S]*color: var\(--chat-message-text, var\(--text-primary\)\);[\s\S]*letter-spacing: 0;[\s\S]*\}/,
     );
