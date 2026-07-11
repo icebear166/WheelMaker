@@ -1535,7 +1535,14 @@
 }
 
 .drawer-toggle-bubble,
-.gesture-nav-pill,
+.gesture-nav-pill {
+  border-color: var(--border-subtle);
+  background: color-mix(in srgb, var(--surface-panel) 32%, transparent);
+  box-shadow: none;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
 .gesture-nav-button {
   border-color: var(--border-subtle);
   background: transparent;
