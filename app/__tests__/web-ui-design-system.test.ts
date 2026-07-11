@@ -34,6 +34,23 @@ describe('workspace visual foundation', () => {
     expect(tokens).toContain('.theme-light {');
   });
 
+  test('anchors neutral runtime surfaces to the chat body palette', () => {
+    const tokens = read('web/src/styles/tokens.css');
+
+    expect(tokens).toContain('--surface-workspace-content: #1e1e1e;');
+    expect(tokens).toContain('--surface-canvas: #1b1b1b;');
+    expect(tokens).toContain('--surface-sidebar: #202020;');
+    expect(tokens).toContain('--surface-panel: #242424;');
+    expect(tokens).toContain('--surface-raised: #292929;');
+    expect(tokens).toContain('--surface-overlay: #2e2e2e;');
+    expect(tokens).toContain('--surface-workspace-content: #ffffff;');
+    expect(tokens).toContain('--surface-canvas: #f3f3f3;');
+    expect(tokens).toContain('--surface-sidebar: #f7f7f7;');
+    expect(tokens).toContain('--surface-panel: #fafafa;');
+    expect(tokens).toContain('--surface-raised: #f0f0f0;');
+    expect(tokens).toContain('--surface-overlay: #ffffff;');
+  });
+
   test('uses semantic tokens directly throughout the runtime chrome', () => {
     const runtimeStyles = [
       'web/src/styles/base.css',
