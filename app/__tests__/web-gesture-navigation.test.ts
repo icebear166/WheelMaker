@@ -122,7 +122,6 @@ describe('gesture navigation', () => {
 
     expect(styles).toContain('.gesture-nav-control');
     expect(styles).toContain('.gesture-nav-pill');
-    expect(styles.match(/^\.gesture-nav-pill \{/gm) ?? []).toHaveLength(1);
     expect(styles).toMatch(
       /\.gesture-nav-control \{[\s\S]*width: 50px;[\s\S]*height: 48px;[\s\S]*\}/,
     );
@@ -149,6 +148,12 @@ describe('gesture navigation', () => {
     expect(styles).not.toContain('.gesture-nav-option-git');
     expect(styles).not.toContain('.gesture-nav-drawer-button');
     expect(styles).not.toContain('gesture-nav-capsule-drawer');
+    expect(styles).toMatch(
+      /\.floating-control-stack\[data-idle='true'\] \.drawer-toggle-bubble,\s*\.floating-control-stack\[data-idle='true'\] \.gesture-nav-pill \{[\s\S]*background: color-mix\(in srgb, var\(--surface-panel\) 48%, transparent\);[\s\S]*backdrop-filter: blur\(8px\) saturate\(1\.08\);[\s\S]*\}/,
+    );
+    expect(styles).not.toMatch(
+      /\.floating-control-stack\[data-idle='true'\] \{[\s\S]*opacity:/,
+    );
   });
 
   test('shows preview capsule state and respects reduced motion', () => {

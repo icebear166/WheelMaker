@@ -81,7 +81,11 @@ describe('mobile chat quick switch', () => {
 
   test('groups selected recent sessions by project while retaining recent order', () => {
     const sections = buildRecentChatSessionProjectSections({
-      projects: [project('p1', 'Alpha'), project('p2', 'Beta'), project('p3', 'Gamma')],
+      projects: [
+        project('p1', 'Alpha', 'hub-a'),
+        project('p2', 'Beta', 'hub-b'),
+        project('p3', 'Gamma', 'hub-c'),
+      ],
       sessionsByProjectId: {
         p1: [session('p1-old', '2026-05-01T00:00:00.000Z')],
         p2: [
@@ -96,11 +100,12 @@ describe('mobile chat quick switch', () => {
     expect(sections.map(section => ({
       projectId: section.projectId,
       projectName: section.projectName,
+      projectHubId: section.projectHubId,
       sessionIds: section.sessions.map(item => item.sessionId),
     }))).toEqual([
-      {projectId: 'p2', projectName: 'Beta', sessionIds: ['p2-newest', 'p2-next']},
-      {projectId: 'p3', projectName: 'Gamma', sessionIds: ['p3-middle']},
-      {projectId: 'p1', projectName: 'Alpha', sessionIds: ['p1-old']},
+      {projectId: 'p2', projectName: 'Beta', projectHubId: 'hub-b', sessionIds: ['p2-newest', 'p2-next']},
+      {projectId: 'p3', projectName: 'Gamma', projectHubId: 'hub-c', sessionIds: ['p3-middle']},
+      {projectId: 'p1', projectName: 'Alpha', projectHubId: 'hub-a', sessionIds: ['p1-old']},
     ]);
   });
 

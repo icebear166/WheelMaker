@@ -35,6 +35,12 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('renderRecentProjectSessionSection(section, mobile)');
     expect(mainTsx).toContain('recent-project-session-group');
     expect(mainTsx).toContain('recent-project-session-heading');
+    expect(mainTsx).toContain('recent-project-session-icon');
+    expect(mainTsx).toContain('codicon codicon-folder recent-project-session-icon');
+    expect(mainTsx).toContain('recent-project-session-title');
+    expect(mainTsx).toContain('recent-project-session-hub');
+    expect(mainTsx).toContain('style={hubAccentStyle(projectHubId)}');
+    expect(mainTsx).toContain('{projectHubId}</span>');
     expect(mainTsx).toContain('recent-project-session-create');
     expect(mainTsx).toContain('codicon codicon-add');
     expect(mainTsx).toContain("openWideProjectActionMenu(targetProjectId, 'new', event.currentTarget);");
@@ -44,6 +50,8 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('wide-session-agent-tag');
     expect(mainTsx).not.toContain('recent-session-project-tag');
     expect(chatCss).toContain('.recent-project-session-heading');
+    expect(chatCss).toContain('.recent-project-session-icon');
+    expect(chatCss).toContain('.recent-project-session-hub.wide-project-hub-tag');
     expect(chatCss).toContain('.recent-project-session-create');
     expect(chatCss).not.toContain('.recent-session-project-tag.wide-project-hub-tag');
   });
@@ -55,7 +63,8 @@ describe('web chat recent sessions', () => {
     const sessionListBlock = chatCss.match(/\.recent-project-session-list \{[\s\S]*?\n\}/)?.[0] ?? '';
 
     expect(recentListBlock).toContain('padding: 1px 0;');
-    expect(headingBlock).toContain('padding: 0 5px 0 24px;');
+    expect(headingBlock).toContain('grid-template-columns: 16px minmax(0, 1fr) 22px;');
+    expect(headingBlock).toContain('padding: 0 5px;');
     expect(nameBlock).toContain('font-size: 12.5px;');
     expect(nameBlock).toContain('font-weight: 600;');
     expect(sessionListBlock).toContain('padding-left: 21px;');
