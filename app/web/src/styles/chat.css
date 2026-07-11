@@ -1216,7 +1216,7 @@
   text-align: left;
 }
 
-.recent-sessions-list {
+.wide-project-session-list.recent-sessions-list {
   margin-top: 0;
   padding: 1px 0;
 }
@@ -1226,8 +1226,8 @@
 }
 
 .recent-project-session-heading {
-  min-height: 26px;
-  padding: 0 5px 0 2px;
+  min-height: 28px;
+  padding: 0 5px 0 24px;
   color: var(--text-secondary);
   display: flex;
   align-items: center;
@@ -1238,8 +1238,9 @@
   min-width: 0;
   overflow: hidden;
   color: var(--text-primary);
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 600;
+  line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

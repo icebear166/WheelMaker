@@ -48,6 +48,19 @@ describe('web chat recent sessions', () => {
     expect(chatCss).not.toContain('.recent-session-project-tag.wide-project-hub-tag');
   });
 
+  test('aligns recent project groups with the standard project session rail', () => {
+    const recentListBlock = chatCss.match(/\.wide-project-session-list\.recent-sessions-list \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const headingBlock = chatCss.match(/\.recent-project-session-heading \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const nameBlock = chatCss.match(/\.recent-project-session-name \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const sessionListBlock = chatCss.match(/\.recent-project-session-list \{[\s\S]*?\n\}/)?.[0] ?? '';
+
+    expect(recentListBlock).toContain('padding: 1px 0;');
+    expect(headingBlock).toContain('padding: 0 5px 0 24px;');
+    expect(nameBlock).toContain('font-size: 12.5px;');
+    expect(nameBlock).toContain('font-weight: 600;');
+    expect(sessionListBlock).toContain('padding-left: 21px;');
+  });
+
   test('recent sessions refresh only on prompt start / done', () => {
     expect(mainTsx).toContain(
       "if (message.method === 'prompt_request' || message.method === 'prompt_done') {",
