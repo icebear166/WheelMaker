@@ -73,4 +73,15 @@ describe('web chat recent sessions', () => {
     expect(activePinBlock).toContain('color: var(--accent-primary);');
     expect(activePinBlock).toContain('background: transparent;');
   });
+
+  test('renders the pinned recent surface only above desktop chat with a collapsed session rail', () => {
+    expect(mainTsx).toContain("import {ChatRecentSessionsSurface} from '../chat/ChatRecentSessionsSurface';");
+    expect(mainTsx).toContain(
+      'const showPinnedRecentSessionsSurface = isWide && sidebarCollapsed && recentSessionsPinned && !archivedMode && !sessionSearchActive && recentSessions.length > 0;',
+    );
+    expect(mainTsx).toContain('showPinnedRecentSessionsSurface ? (');
+    expect(mainTsx).toContain('<ChatRecentSessionsSurface onUnpin={() => setRecentSessionsPinned(false)}>');
+    expect(mainTsx).toContain('{recentSessions.map(row => renderRecentSessionRow(row, false))}');
+    expect(mainTsx).toContain('</ChatRecentSessionsSurface>');
+  });
 });

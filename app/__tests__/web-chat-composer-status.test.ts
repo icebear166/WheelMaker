@@ -242,6 +242,7 @@ describe('chat composer status helpers', () => {
     [
       '.chat-plan-surface.desktop',
       '.chat-plan-surface.mobile.expanded',
+      '.chat-recent-sessions-surface.desktop',
       '.chat-config-overflow-menu',
       '.chat-config-value-menu',
       '.chat-slash-menu',
@@ -255,9 +256,9 @@ describe('chat composer status helpers', () => {
       '.wide-project-action-popover',
     ].forEach(selector => expect(temporaryLayerStyles).toContain(selector));
     expect(temporaryLayerStyles).toContain(
-      'background: color-mix(in srgb, var(--surface-overlay) 90%, transparent);',
+      'background: color-mix(in srgb, var(--surface-overlay) 86%, transparent);',
     );
-    expect(temporaryLayerStyles).toContain('backdrop-filter: blur(14px) saturate(1.04);');
-    expect(temporaryLayerStyles).toContain('-webkit-backdrop-filter: blur(14px) saturate(1.04);');
+    expect(temporaryLayerStyles).toContain('backdrop-filter: blur(20px) saturate(1.04);');
+    expect(temporaryLayerStyles).toContain('-webkit-backdrop-filter: blur(20px) saturate(1.04);');
   });
 });

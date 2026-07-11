@@ -2412,14 +2412,16 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('padding-bottom: max(4px, var(--wm-safe-area-bottom))');
   });
 
-  test('uses neutral selection surfaces and restrained information-state colors for chat chrome', () => {
+  test('uses a clear but restrained selection surface and information-state colors for chat chrome', () => {
     const projectRoot = path.join(__dirname, '..');
     const stylesCss = readWebStyles(projectRoot);
 
     expect(stylesCss).toMatch(
-      /\.wide-session-row\.selected \{[\s\S]*border-color: color-mix\(in srgb, var\(--border-subtle\) 88%, transparent\);[\s\S]*background: color-mix\(in srgb, var\(--surface-panel\) 52%, var\(--surface-sidebar\)\);[\s\S]*\}/,
+      /\.wide-session-row\.selected \{[\s\S]*border-color: color-mix\(in srgb, var\(--accent-primary\) 32%, var\(--border-subtle\)\);[\s\S]*background: color-mix\(in srgb, var\(--accent-primary\) 11%, var\(--surface-panel\)\);[\s\S]*\}/,
     );
-    expect(stylesCss).toMatch(/\.wide-session-row\.selected::before \{[\s\S]*background: var\(--accent-primary\);[\s\S]*\}/);
+    expect(stylesCss).toMatch(
+      /\.wide-session-row\.selected::before \{[\s\S]*content: ''\;[\s\S]*position: absolute;[\s\S]*width: 2px;[\s\S]*background: var\(--accent-primary\);[\s\S]*\}/,
+    );
     expect(stylesCss).toMatch(
       /\.chat-composer:focus-within \.chat-composer-frame \{[\s\S]*border-color: color-mix\(in srgb, var\(--accent-primary\) 36%, var\(--border-subtle\)\);[\s\S]*0 0 0 1px color-mix\(in srgb, var\(--accent-primary\) 6%, transparent\);[\s\S]*\}/,
     );
@@ -2438,5 +2440,29 @@ describe('web chat integration', () => {
     expect(agentTagBlock).toContain('color: color-mix(in srgb, var(--agent-accent) 70%, var(--text-primary));');
     expect(promptBlock).toContain('border: 1px solid color-mix(in srgb, var(--accent-primary) 26%, var(--border-subtle));');
     expect(promptBlock).toContain('background: color-mix(in srgb, var(--accent-primary) 12%, var(--surface-workspace-content));');
+  });
+
+  test('tightens relaxed session rows and aligns recent project capsules with agent capsules', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+    const relaxedRow = cssRuleBlock(
+      stylesCss,
+      ".wide-project-session-nav[data-session-list-density='relaxed'] .wide-session-row",
+    );
+    const relaxedTitle = cssRuleBlock(
+      stylesCss,
+      ".wide-project-session-nav[data-session-list-density='relaxed'] .wide-session-title",
+    );
+    const recentTag = cssRuleBlock(stylesCss, '.recent-session-project-tag.wide-project-hub-tag');
+
+    expect(relaxedRow).toContain('min-height: 30px;');
+    expect(relaxedTitle).toContain('font-size: 13.5px;');
+    expect(relaxedTitle).toContain('line-height: 1.25;');
+    expect(recentTag).toContain('min-height: 20px;');
+    expect(recentTag).toContain('border: 1px solid color-mix(in srgb, var(--hub-accent) 40%, var(--border-subtle));');
+    expect(recentTag).toContain('background: color-mix(in srgb, var(--hub-accent) 14%, transparent);');
+    expect(recentTag).toContain('color: color-mix(in srgb, var(--hub-accent) 70%, var(--text-primary));');
+    expect(recentTag).toContain('font-size: 10.5px;');
+    expect(recentTag).toContain('font-weight: 600;');
   });
 });

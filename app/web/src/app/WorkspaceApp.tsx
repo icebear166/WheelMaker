@@ -97,6 +97,7 @@ import { ChatSessionNav } from '../chat/ChatSessionNav';
 import { ChatSurface } from '../chat/ChatSurface';
 import { ChatTurnView } from '../chat/ChatTurnView';
 import {ChatPlanSurface} from '../chat/ChatPlanSurface';
+import {ChatRecentSessionsSurface} from '../chat/ChatRecentSessionsSurface';
 import {extractLatestChatPlan} from '../chat/chatPlan';
 import { resolveChatSessionTitle } from '../chat/session/chatSessionTitle';
 import { formatChatContextUsage, splitChatComposerStatusOptions } from '../chat/session/chatComposerStatus';
@@ -5006,6 +5007,7 @@ export function App() {
       setRecentSessionsTick(t => t + 1);
     }
   }, [allVisibleProjectsLoaded, projectSessionsByProjectId]);
+  const showPinnedRecentSessionsSurface = isWide && sidebarCollapsed && recentSessionsPinned && !archivedMode && !sessionSearchActive && recentSessions.length > 0;
 
   const mobileChatQuickSwitchMenuStyle = useMemo<React.CSSProperties>(() => ({
     top: portRelayReady && portRelayFrameUrl ? 56 : 0,
@@ -18378,6 +18380,13 @@ export function App() {
             mode={isWide ? 'desktop' : 'mobile'}
             plan={selectedChatPlan}
           />
+          {showPinnedRecentSessionsSurface ? (
+            <ChatRecentSessionsSurface onUnpin={() => setRecentSessionsPinned(false)}>
+              <div className="wide-project-session-list recent-sessions-list chat-recent-sessions-rows">
+                {recentSessions.map(row => renderRecentSessionRow(row, false))}
+              </div>
+            </ChatRecentSessionsSurface>
+          ) : null}
           <div
             ref={chatComposerRef}
             className={`chat-composer${chatConfigMenuOptionId || chatConfigOverflowOpen || chatContextUsageOpen ? ' config-menu-open' : ''}${chatSlashMenuVisible || chatFileMentionMenuOpen ? ' trigger-menu-open' : ''}`}

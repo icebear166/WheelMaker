@@ -100,10 +100,10 @@ describe('web chat view width settings', () => {
       stylesCss,
       ".wide-project-session-nav[data-session-list-density='compact'] .wide-session-title",
     );
-    expect(relaxedRow).toContain('min-height: 32px;');
+    expect(relaxedRow).toContain('min-height: 30px;');
     expect(compactRow).toContain('min-height: 28px;');
-    expect(relaxedTitle).toContain('font-size: 14px;');
-    expect(relaxedTitle).toContain('line-height: 1.4;');
+    expect(relaxedTitle).toContain('font-size: 13.5px;');
+    expect(relaxedTitle).toContain('line-height: 1.25;');
     expect(compactTitle).toContain('font-size: 13px;');
     expect(compactTitle).toContain('line-height: 1.35;');
     expect(cssRuleBlock(stylesCss, '.mobile-session-row')).toContain('min-height: 30px;');
