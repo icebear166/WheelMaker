@@ -28,7 +28,7 @@
 - Modify: `app/web/src/settings/SettingsSurface.tsx`
 - Modify: `app/web/src/settings/SettingsRootContent.tsx`
 
-- [ ] **Step 1: Write the failing source-structure test for the workbench hooks.**
+- [x] **Step 1: Write the failing source-structure test for the workbench hooks.**
 
   Add this test to `app/__tests__/web-settings-navigation.test.ts`:
 
@@ -54,7 +54,7 @@
   });
   ```
 
-- [ ] **Step 2: Run the focused test to verify it fails for missing hooks.**
+- [x] **Step 2: Run the focused test to verify it fails for missing hooks.**
 
   Run:
 
@@ -64,7 +64,7 @@
 
   Expected: FAIL because the new workbench class names and `SettingsSectionId` do not exist yet.
 
-- [ ] **Step 3: Add the semantic hooks without changing the rendered content.**
+- [x] **Step 3: Add the semantic hooks without changing the rendered content.**
 
   In `SettingsSurface.tsx`, use these exact class compositions:
 
@@ -135,7 +135,7 @@
 
   Do not alter any child label, input, select, callback, conditional, or action between each listed prefix and suffix.
 
-- [ ] **Step 4: Run the focused test to verify the hooks pass.**
+- [x] **Step 4: Run the focused test to verify the hooks pass.**
 
   Run:
 
@@ -145,7 +145,7 @@
 
   Expected: PASS.
 
-- [ ] **Step 5: Commit the semantic-only change.**
+- [x] **Step 5: Commit the semantic-only change.**
 
   ```powershell
   git add app/__tests__/web-settings-navigation.test.ts
@@ -162,7 +162,7 @@
 - Modify: `app/__tests__/web-agent-package-update-settings.test.ts`
 - Modify: `app/web/src/styles/settings.css`
 
-- [ ] **Step 1: Write failing CSS-contract assertions for the wider desktop canvas and root grid.**
+- [x] **Step 1: Write failing CSS-contract assertions for the wider desktop canvas and root grid.**
 
   Add these assertions to the settings navigation test:
 
@@ -176,7 +176,7 @@
 
   In `web-agent-package-update-settings.test.ts`, update the desktop settings panel expectation from `720px` to `920px` and preserve the existing side-panel behavior assertions.
 
-- [ ] **Step 2: Run both tests and verify they fail on the current 720px shell.**
+- [x] **Step 2: Run both tests and verify they fail on the current 720px shell.**
 
   Run:
 
@@ -186,7 +186,7 @@
 
   Expected: FAIL because the current desktop panel is `720px`, has no workbench-scoped width selector, and has no 860px root grid.
 
-- [ ] **Step 3: Replace the duplicated settings shell overrides with one workbench frame.**
+- [x] **Step 3: Replace the duplicated settings shell overrides with one workbench frame.**
 
   In `settings.css`, remove the trailing duplicate `.mobile-settings-screen`, `.settings-list`, `.settings-section-title`, `.settings-section-rows`, `.settings-row`, and `.settings-danger-row` overrides under `/* workspace-ui-targeted-evolution: settings */`. Move their intended token values into the primary rules so every selector has one authoritative definition.
 
@@ -243,7 +243,7 @@
 
   Scope the panel and overlay surfaces through `.settings-workbench-screen` and `.settings-workbench-panel`; use `var(--surface-canvas)`, `var(--surface-panel)`, `var(--border-subtle)`, `var(--shadow-overlay)`, and a near-opaque background mix. Do not add a new color token, brand color, font, image, or gradient.
 
-- [ ] **Step 4: Run the focused layout tests to verify the desktop frame passes.**
+- [x] **Step 4: Run the focused layout tests to verify the desktop frame passes.**
 
   Run:
 
@@ -253,7 +253,7 @@
 
   Expected: PASS.
 
-- [ ] **Step 5: Commit the responsive shell and grid.**
+- [x] **Step 5: Commit the responsive shell and grid.**
 
   ```powershell
   git add app/__tests__/web-settings-navigation.test.ts
@@ -270,7 +270,7 @@
 - Modify: `app/__tests__/web-agent-package-update-settings.test.ts`
 - Modify: `app/web/src/styles/settings.css`
 
-- [ ] **Step 1: Write failing assertions for the shared root-control visual contract.**
+- [x] **Step 1: Write failing assertions for the shared root-control visual contract.**
 
   Add assertions that require all of the following:
 
@@ -284,7 +284,7 @@
 
   Keep the existing shortcut-order and `height: 58px` assertions unchanged.
 
-- [ ] **Step 2: Run the focused tests and verify the new appearance expectations fail.**
+- [x] **Step 2: Run the focused tests and verify the new appearance expectations fail.**
 
   Run:
 
@@ -294,7 +294,7 @@
 
   Expected: FAIL because titles are currently forced uppercase, the controls are styled in `shell.css` without a workbench contract, and active shortcuts do not declare their no-fill active state.
 
-- [ ] **Step 3: Apply the root and mobile visual system in `settings.css`.**
+- [x] **Step 3: Apply the root and mobile visual system in `settings.css`.**
 
   Implement these rules while preserving the current selector names and input behavior:
 
@@ -344,7 +344,7 @@
 
   Give `.settings-section-rows` a single `var(--radius-panel)` surface, use a low-contrast inner edge instead of a heavy shadow, and preserve the existing 56px mobile row and 58px shortcut button heights. Keep the moving shortcut indicator, but use it as the only active fill; no active button background may be added.
 
-- [ ] **Step 4: Run the root and mobile tests to verify they pass.**
+- [x] **Step 4: Run the root and mobile tests to verify they pass.**
 
   Run:
 
@@ -354,7 +354,7 @@
 
   Expected: PASS.
 
-- [ ] **Step 5: Commit the root and mobile control redesign.**
+- [x] **Step 5: Commit the root and mobile control redesign.**
 
   ```powershell
   git add app/__tests__/web-settings-navigation.test.ts
@@ -378,7 +378,7 @@
 - Modify: `app/web/src/styles/portRelay.css`
 - Modify: `app/web/src/styles/debug.css`
 
-- [ ] **Step 1: Write failing style-contract tests for shared detail semantics.**
+- [x] **Step 1: Write failing style-contract tests for shared detail semantics.**
 
   Extend the existing feature tests to assert the exact shared rules below rather than changing their component or behavior assertions:
 
@@ -392,7 +392,7 @@
 
   In `web-settings-navigation.test.ts`, read `portRelay.css` and `debug.css` with `fs.readFileSync` so those rules remain independently testable.
 
-- [ ] **Step 2: Run the complete settings test group and verify the new detail assertions fail.**
+- [x] **Step 2: Run the complete settings test group and verify the new detail assertions fail.**
 
   Run:
 
@@ -402,7 +402,7 @@
 
   Expected: FAIL because the detail components currently use unrelated 6px, 7px, 8px, and 10px radius rules and different surface formulas.
 
-- [ ] **Step 3: Implement the shared detail contract and align page-specific surfaces.**
+- [x] **Step 3: Implement the shared detail contract and align page-specific surfaces.**
 
   In `settings.css`, make the generic detail primitives authoritative:
 
@@ -443,7 +443,7 @@
 
   In `debug.css`, align `.debug-log-empty`, `.debug-log-line`, and `.debug-log-detail-footer` with the shared near-opaque panel surfaces. Preserve the current `info`, `warn`, and `error` left-edge colors and sticky footer behavior.
 
-- [ ] **Step 4: Run the complete settings test group to verify the visual contract and functionality tests pass.**
+- [x] **Step 4: Run the complete settings test group to verify the visual contract and functionality tests pass.**
 
   Run:
 
@@ -453,7 +453,7 @@
 
   Expected: PASS.
 
-- [ ] **Step 5: Commit the shared detail redesign.**
+- [x] **Step 5: Commit the shared detail redesign.**
 
   ```powershell
   git add app/__tests__/web-settings-navigation.test.ts
@@ -475,7 +475,7 @@
 
 - Modify only when a verification failure identifies a missing requirement in the files listed above.
 
-- [ ] **Step 1: Type-check the Web UI.**
+- [x] **Step 1: Type-check the Web UI.**
 
   Run:
 
@@ -485,7 +485,7 @@
 
   Expected: exit code 0.
 
-- [ ] **Step 2: Run the full application test suite.**
+- [x] **Step 2: Run the full application test suite.**
 
   Run:
 
@@ -495,7 +495,7 @@
 
   Expected: all Jest suites pass.
 
-- [ ] **Step 3: Build the production Web UI.**
+- [x] **Step 3: Build the production Web UI.**
 
   Run:
 
@@ -506,6 +506,8 @@
   Expected: webpack completes successfully; the existing large-bundle warning, if emitted, is recorded but does not fail the build.
 
 - [ ] **Step 4: Manually inspect the preserved interaction paths.**
+
+  Verification note (2026-07-11): the local browser check could load the Web UI, but this environment has no connected workspace and only exposes the `Connect` screen. The cross-viewport settings interaction pass therefore remains pending a connected app environment; automated type, test, and production-build verification passed.
 
   Check dark and light themes at a wide desktop viewport, a narrow desktop viewport, and a portrait mobile viewport:
 
