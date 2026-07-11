@@ -115,7 +115,7 @@ export function SettingsDetailShell({
   hideDetailHeader = false,
 }: SettingsDetailShellProps) {
   return (
-    <div className={`settings-detail-page${hideDetailHeader ? ' settings-detail-page-body-only' : ''}`}>
+    <div className={`settings-detail-page settings-workbench-detail-page${hideDetailHeader ? ' settings-detail-page-body-only' : ''}`}>
       {hideDetailHeader ? null : (
         <div className="settings-detail-header">
           <button
@@ -190,8 +190,8 @@ export function SettingsScreen({
   onBackdropClick,
 }: SettingsScreenProps) {
   const screenClassName = className
-    ? `mobile-settings-screen ${className}`
-    : 'mobile-settings-screen';
+    ? `settings-workbench-screen mobile-settings-screen ${className}`
+    : 'settings-workbench-screen mobile-settings-screen';
   const effectiveScreenClassName = sidePanel ? `${screenClassName} has-settings-side-panel` : screenClassName;
   const handleBackdropClick = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     if (event.target !== event.currentTarget || !onBackdropClick) {
@@ -209,8 +209,8 @@ export function SettingsScreen({
       onClick={handleBackdropClick}
     >
       <div className="settings-screen-panel-row">
-        <div className="mobile-settings-panel">
-          <div className="mobile-settings-nav">
+        <div className="mobile-settings-panel settings-workbench-panel">
+          <div className="mobile-settings-nav settings-workbench-nav">
             <button
               type="button"
               className="mobile-settings-back"

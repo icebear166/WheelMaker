@@ -52,6 +52,26 @@ describe('settings navigation model', () => {
     expect(settingsDetailTitle('skillDetail')).toBe('Skill Detail');
   });
 
+  test('keeps settings content stable while exposing workbench layout hooks', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const surface = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsSurface.tsx'), 'utf8');
+    const root = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
+
+    expect(surface).toContain('settings-workbench-screen');
+    expect(surface).toContain('settings-workbench-panel');
+    expect(surface).toContain('settings-workbench-nav');
+    expect(surface).toContain('settings-workbench-detail-page');
+    expect(root).toContain("type SettingsSectionId = 'appearance' | 'chat' | 'connection' | 'code-display' | 'debug';");
+    expect(root).toContain('settings-section-${id}');
+    for (const id of ['appearance', 'chat', 'connection', 'code-display', 'debug']) {
+      expect(root).toContain(`id: '${id}'`);
+    }
+    expect(root.indexOf("id: 'appearance'")).toBeLessThan(root.indexOf("id: 'chat'"));
+    expect(root.indexOf("id: 'chat'")).toBeLessThan(root.indexOf("id: 'connection'"));
+    expect(root.indexOf("id: 'connection'")).toBeLessThan(root.indexOf("id: 'code-display'"));
+    expect(root.indexOf("id: 'code-display'")).toBeLessThan(root.indexOf("id: 'debug'"));
+  });
+
   test('styles settings groups without changing shortcut order', () => {
     const css = fs.readFileSync(
       path.resolve(__dirname, '../web/src/styles/settings.css'),

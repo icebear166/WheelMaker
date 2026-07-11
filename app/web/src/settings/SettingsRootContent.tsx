@@ -78,9 +78,18 @@ type SettingsRootContentProps = {
   handleRegistryDebugLogout: () => void;
 };
 
-function renderSettingsSection(title: string, rows: React.ReactNode, icon?: string) {
+type SettingsSectionId = 'appearance' | 'chat' | 'connection' | 'code-display' | 'debug';
+
+type SettingsSectionOptions = {
+  id: SettingsSectionId;
+  title: string;
+  rows: React.ReactNode;
+  icon?: string;
+};
+
+function renderSettingsSection({id, title, rows, icon}: SettingsSectionOptions) {
   return (
-    <section className="settings-section" aria-label={title}>
+    <section className={`settings-section settings-section-${id}`} aria-label={title}>
       <div className="settings-section-title">
         {icon ? <span className={`codicon codicon-${icon}`} aria-hidden="true" /> : null}
         <span>{title}</span>
@@ -144,7 +153,7 @@ export function SettingsRootContent({
     <>
       {showSectionTitle ? <div className="section-title">SETTINGS</div> : null}
       <div className="settings-list">
-        {renderSettingsSection('Appearance', (
+        {renderSettingsSection({id: 'appearance', title: 'Appearance', icon: 'paintcan', rows: (
         <>
           <label className="settings-row sidebar-setting-row">
             <span>
@@ -182,8 +191,8 @@ export function SettingsRootContent({
             </label>
           ) : null}
         </>
-        ), 'paintcan')}
-        {renderSettingsSection('Chat', (
+        )})}
+        {renderSettingsSection({id: 'chat', title: 'Chat', icon: 'comment-discussion', rows: (
         <>
         <label className="settings-row sidebar-setting-row">
           <span>
@@ -391,8 +400,8 @@ export function SettingsRootContent({
           </select>
         </label>
         </>
-        ), 'comment-discussion')}
-        {renderSettingsSection('Connection', (
+        )})}
+        {renderSettingsSection({id: 'connection', title: 'Connection', icon: 'radio-tower', rows: (
         <>
         <label className="settings-row sidebar-setting-row">
           <span>
@@ -417,8 +426,8 @@ export function SettingsRootContent({
           <span className="codicon codicon-chevron-right" aria-hidden="true" />
         </button>
         </>
-        ), 'radio-tower')}
-        {renderSettingsSection('Code Display', (
+        )})}
+        {renderSettingsSection({id: 'code-display', title: 'Code Display', icon: 'code', rows: (
         <>
         <label className="settings-row sidebar-setting-row">
           <span>
@@ -534,8 +543,8 @@ export function SettingsRootContent({
           </select>
         </label>
         </>
-        ), 'code')}
-        {renderSettingsSection('Debug', (
+        )})}
+        {renderSettingsSection({id: 'debug', title: 'Debug', icon: 'bug', rows: (
         <>
         <label className="settings-row sidebar-setting-row">
           <span>
@@ -640,7 +649,7 @@ export function SettingsRootContent({
           <span className="codicon codicon-chevron-right" />
         </button>
         </>
-        ), 'bug')}
+        )})}
       </div>
     </>
   );
