@@ -85,6 +85,19 @@ describe('settings navigation model', () => {
     expect(css).toMatch(/\.desktop-settings-screen \.settings-section-debug \{[\s\S]*grid-column: 2;[\s\S]*grid-row: 3;[\s\S]*\}/);
   });
 
+  test('uses restrained root controls while preserving mobile touch targets', () => {
+    const css = fs.readFileSync(
+      path.resolve(__dirname, '../web/src/styles/settings.css'),
+      'utf8',
+    ).replace(/\r\n/g, '\n');
+
+    expect(css).toMatch(/\.settings-section-title \{[\s\S]*text-transform: none;[\s\S]*font-weight: 600;[\s\S]*\}/);
+    expect(css).toMatch(/\.settings-row \{[\s\S]*transition:[\s\S]*background var\(--motion-fast\) var\(--ease-standard\),[\s\S]*color var\(--motion-fast\) var\(--ease-standard\),[\s\S]*box-shadow var\(--motion-fast\) var\(--ease-standard\);[\s\S]*\}/);
+    expect(css).toMatch(/\.settings-workbench-panel \.sidebar-setting-select,[\s\S]*\.settings-workbench-panel \.sidebar-setting-input \{[\s\S]*border-radius: var\(--radius-control\);[\s\S]*\}/);
+    expect(css).toMatch(/\.mobile-settings-screen \.settings-row \{[\s\S]*min-height: 56px;[\s\S]*\}/);
+    expect(css).toMatch(/\.mobile-settings-shortcut-button\.active \{[\s\S]*color: var\(--accent\);[\s\S]*background: transparent;[\s\S]*\}/);
+  });
+
   test('styles settings groups without changing shortcut order', () => {
     const css = fs.readFileSync(
       path.resolve(__dirname, '../web/src/styles/settings.css'),

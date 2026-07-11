@@ -3012,8 +3012,8 @@ textarea,
   color: var(--text-secondary);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  text-transform: none;
 }
 
 .settings-section-rows {
@@ -3021,18 +3021,22 @@ textarea,
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-panel);
   background: var(--surface-panel);
-  box-shadow: none;
+  box-shadow: 0 1px 0 color-mix(in srgb, #fff 6%, transparent) inset;
 }
 
 .settings-row {
-  min-height: 44px;
+  min-height: 46px;
   border-bottom-color: var(--border-subtle);
   color: var(--text-primary);
-  transition: background var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard);
+  transition:
+    background var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-fast) var(--ease-standard);
 }
 
 .settings-row:hover {
-  background: var(--hover);
+  background: color-mix(in srgb, var(--surface-raised) 62%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--accent-primary) 54%, transparent);
 }
 
 .settings-row-icon,
@@ -3053,9 +3057,29 @@ textarea,
 
 .mobile-settings-shortcut-bar {
   border-top-color: var(--border-subtle);
-  background: color-mix(in srgb, var(--surface-panel) 94%, transparent);
+  background: color-mix(in srgb, var(--surface-panel) 98%, transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+}
+
+.settings-workbench-panel .sidebar-setting-select,
+.settings-workbench-panel .sidebar-setting-input {
+  border-color: var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+}
+
+.settings-workbench-panel .sidebar-setting-select:focus-visible,
+.settings-workbench-panel .sidebar-setting-input:focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent-primary) 58%, var(--border-subtle));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-primary) 20%, transparent);
+}
+
+.mobile-settings-shortcut-button.active {
+  color: var(--accent);
+  background: transparent;
 }
 
 @media (max-width: 900px) {
