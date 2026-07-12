@@ -1,0 +1,118 @@
+import React, {forwardRef, useEffect, useImperativeHandle, useRef} from 'react';
+import {Terminal} from '@xterm/xterm';
+import {FitAddon} from '@xterm/addon-fit';
+
+export type TerminalViewHandle = {
+  resetAndWrite(data: Uint8Array): Promise<void>;
+  write(data: Uint8Array): void;
+  focus(): void;
+  fit(): {cols: number; rows: number} | null;
+};
+
+export type TerminalViewProps = {
+  active: boolean;
+  resizeEnabled: boolean;
+  onInput: (data: Uint8Array) => void;
+  onResize: (cols: number, rows: number) => void;
+};
+
+export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(function TerminalView(
+  {active, resizeEnabled, onInput, onResize},
+  ref,
+) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const terminalRef = useRef<Terminal | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
+  const inputRef = useRef(onInput);
+  const resizeRef = useRef(onResize);
+  const activeRef = useRef(active);
+  const resizeEnabledRef = useRef(resizeEnabled);
+  const resizeFrameRef = useRef<number | null>(null);
+  const lastSizeRef = useRef('');
+  inputRef.current = onInput;
+  resizeRef.current = onResize;
+  activeRef.current = active;
+  resizeEnabledRef.current = resizeEnabled;
+
+  const fit = (): {cols: number; rows: number} | null => {
+    const terminal = terminalRef.current;
+    const addon = fitAddonRef.current;
+    if (!terminal || !addon) return null;
+    addon.fit();
+    return {cols: terminal.cols, rows: terminal.rows};
+  };
+
+  useImperativeHandle(ref, () => ({
+    resetAndWrite(data: Uint8Array) {
+      const terminal = terminalRef.current;
+      if (!terminal) return Promise.resolve();
+      terminal.reset();
+      return new Promise<void>(resolve => terminal.write(data, resolve));
+    },
+    write(data: Uint8Array) {
+      terminalRef.current?.write(data);
+    },
+    focus() {
+      terminalRef.current?.focus();
+    },
+    fit,
+  }), []);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const terminal = new Terminal({
+      scrollback: 10000,
+      convertEol: false,
+      cursorBlink: true,
+      fontFamily: "'JetBrains Mono', Consolas, monospace",
+      fontSize: 13,
+      theme: {background: '#101214'},
+    });
+    const fitAddon = new FitAddon();
+    terminal.loadAddon(fitAddon);
+    terminal.open(container);
+    terminalRef.current = terminal;
+    fitAddonRef.current = fitAddon;
+
+    const dataDisposable = terminal.onData(data => inputRef.current(new TextEncoder().encode(data)));
+    const binaryDisposable = terminal.onBinary(data => {
+      const bytes = new Uint8Array(data.length);
+      for (let index = 0; index < data.length; index += 1) bytes[index] = data.charCodeAt(index) & 0xff;
+      inputRef.current(bytes);
+    });
+    const reportFit = () => {
+      resizeFrameRef.current = null;
+      const size = fit();
+      if (!size || !activeRef.current || !resizeEnabledRef.current) return;
+      const key = `${size.cols}x${size.rows}`;
+      if (key === lastSizeRef.current) return;
+      lastSizeRef.current = key;
+      resizeRef.current(size.cols, size.rows);
+    };
+    const observer = new ResizeObserver(() => {
+      if (resizeFrameRef.current !== null) cancelAnimationFrame(resizeFrameRef.current);
+      resizeFrameRef.current = requestAnimationFrame(reportFit);
+    });
+    observer.observe(container);
+    fitAddon.fit();
+
+    return () => {
+      if (resizeFrameRef.current !== null) cancelAnimationFrame(resizeFrameRef.current);
+      observer.disconnect();
+      dataDisposable.dispose();
+      binaryDisposable.dispose();
+      terminal.dispose();
+      terminalRef.current = null;
+      fitAddonRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!active) return;
+    const size = fit();
+    if (size) terminalRef.current?.focus();
+  }, [active]);
+
+  return <div ref={containerRef} className="terminal-xterm-host" />;
+});
