@@ -2,6 +2,7 @@ package registry
 
 import (
 	"bytes"
+	"errors"
 	"github.com/gorilla/websocket"
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
 	logger "github.com/swm8023/wheelmaker/internal/shared"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -23,6 +25,96 @@ type testEnvelope struct {
 	HubID     string         `json:"hubId,omitempty"`
 	ProjectID string         `json:"projectId,omitempty"`
 	Payload   map[string]any `json:"payload,omitempty"`
+}
+
+type blockingWebsocketWriter struct {
+	started   chan struct{}
+	release   chan struct{}
+	writes    chan envelope
+	closed    chan struct{}
+	startOnce sync.Once
+	closeOnce sync.Once
+}
+
+func newBlockingWebsocketWriter() *blockingWebsocketWriter {
+	return &blockingWebsocketWriter{
+		started: make(chan struct{}), release: make(chan struct{}),
+		writes: make(chan envelope, 256), closed: make(chan struct{}),
+	}
+}
+
+func (w *blockingWebsocketWriter) WriteJSON(value any) error {
+	w.startOnce.Do(func() { close(w.started) })
+	select {
+	case <-w.release:
+	case <-w.closed:
+		return errors.New("closed")
+	}
+	env, ok := value.(envelope)
+	if !ok {
+		return errors.New("unexpected write type")
+	}
+	w.writes <- env
+	return nil
+}
+
+func (w *blockingWebsocketWriter) Close() error {
+	w.closeOnce.Do(func() { close(w.closed) })
+	return nil
+}
+
+func TestPeerWriterPrioritizesControlOverTerminalOutput(t *testing.T) {
+	writer := newBlockingWebsocketWriter()
+	peer := newPeerConn(writer, "priority-peer")
+	defer peer.close()
+	if err := peer.writeTerminal(envelope{Type: "event", Method: rp.RegistryMethodTerminalOutput, Payload: rp.MustRaw(map[string]any{"seq": 1})}); err != nil {
+		t.Fatal(err)
+	}
+	<-writer.started
+	if err := peer.writeTerminal(envelope{Type: "event", Method: rp.RegistryMethodTerminalOutput, Payload: rp.MustRaw(map[string]any{"seq": 2})}); err != nil {
+		t.Fatal(err)
+	}
+	controlDone := make(chan error, 1)
+	go func() {
+		controlDone <- peer.write(envelope{Type: "response", Method: rp.RegistryMethodTerminalList})
+	}()
+	deadline := time.Now().Add(time.Second)
+	for len(peer.priorityWrites) == 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	close(writer.release)
+	first := <-writer.writes
+	second := <-writer.writes
+	third := <-writer.writes
+	if first.Method != rp.RegistryMethodTerminalOutput || second.Method != rp.RegistryMethodTerminalList || third.Method != rp.RegistryMethodTerminalOutput {
+		t.Fatalf("write order=%s,%s,%s", first.Method, second.Method, third.Method)
+	}
+	if err := <-controlDone; err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPeerWriterClosesSlowTerminalClientOnOverflow(t *testing.T) {
+	writer := newBlockingWebsocketWriter()
+	peer := newPeerConn(writer, "slow-terminal-peer")
+	defer close(writer.release)
+	if err := peer.writeTerminal(envelope{Type: "event", Method: rp.RegistryMethodTerminalOutput}); err != nil {
+		t.Fatal(err)
+	}
+	<-writer.started
+	for i := 0; i < terminalWriteQueueSize; i++ {
+		if err := peer.writeTerminal(envelope{Type: "event", Method: rp.RegistryMethodTerminalOutput}); err != nil {
+			t.Fatalf("fill %d: %v", i, err)
+		}
+	}
+	if err := peer.writeTerminal(envelope{Type: "event", Method: rp.RegistryMethodTerminalOutput}); !errors.Is(err, errTerminalBacklog) {
+		t.Fatalf("overflow err=%v", err)
+	}
+	select {
+	case <-writer.closed:
+	case <-time.After(time.Second):
+		t.Fatal("slow client was not closed")
+	}
 }
 
 func TestConnectInit(t *testing.T) {
