@@ -235,6 +235,13 @@ export type RegistryTerminalListResponse = {terminals: RegistryTerminal[]};
 export type RegistryTerminalCreateResponse = {terminal: RegistryTerminal; resizeToken: string};
 export type RegistryTerminalGetResponse = {terminal: RegistryTerminal; snapshotSeq: number; snapshot: string};
 export type RegistryTerminalResizeResponse = {terminal: RegistryTerminal; resizeToken?: string};
+export type RegistryTerminalResizeRequest = {
+  terminalId: string;
+  cols: number;
+  rows: number;
+  claim?: boolean;
+  resizeToken?: string;
+};
 export type RegistryTerminalInputEvent = {terminalId: string; runId: string; data: string};
 export type RegistryTerminalOutputEvent = {terminalId: string; runId: string; seq: number; data: string};
 export type RegistryTerminalChangedEvent = {

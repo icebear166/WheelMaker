@@ -62,6 +62,12 @@ import type {
   RegistrySpeechStartPayload,
   RegistrySpeechStartResponse,
   RegistryTokenScanResult,
+  RegistryTerminalCreateResponse,
+  RegistryTerminalGetResponse,
+  RegistryTerminalInputEvent,
+  RegistryTerminalListResponse,
+  RegistryTerminalResizeRequest,
+  RegistryTerminalResizeResponse,
   RegistryWheelMakerUpdateResponse,
   RegistryWorkingTreeFileDiff,
 } from './registryTypes';
@@ -865,6 +871,41 @@ export class RegistryWorkspaceService {
       throw new Error('session is not ready');
     }
     return this.repository.startSpeech(payload);
+  }
+
+  async listTerminals(hubId: string): Promise<RegistryTerminalListResponse> {
+    if (!this.repository) throw new Error('session is not ready');
+    return this.repository.listTerminals(hubId);
+  }
+
+  async createTerminal(projectId: string, cols: number, rows: number): Promise<RegistryTerminalCreateResponse> {
+    if (!this.repository) throw new Error('session is not ready');
+    return this.repository.createTerminal(projectId, cols, rows);
+  }
+
+  async getTerminal(hubId: string, terminalId: string): Promise<RegistryTerminalGetResponse> {
+    if (!this.repository) throw new Error('session is not ready');
+    return this.repository.getTerminal(hubId, terminalId);
+  }
+
+  async resizeTerminal(hubId: string, payload: RegistryTerminalResizeRequest): Promise<RegistryTerminalResizeResponse> {
+    if (!this.repository) throw new Error('session is not ready');
+    return this.repository.resizeTerminal(hubId, payload);
+  }
+
+  async closeTerminal(hubId: string, terminalId: string): Promise<void> {
+    if (!this.repository) throw new Error('session is not ready');
+    await this.repository.closeTerminal(hubId, terminalId);
+  }
+
+  async restartTerminal(hubId: string, terminalId: string): Promise<RegistryTerminalCreateResponse> {
+    if (!this.repository) throw new Error('session is not ready');
+    return this.repository.restartTerminal(hubId, terminalId);
+  }
+
+  sendTerminalInput(hubId: string, payload: RegistryTerminalInputEvent): void {
+    if (!this.repository) throw new Error('session is not ready');
+    this.repository.sendTerminalInput(hubId, payload);
   }
 
   async sendSpeechChunk(payload: RegistrySpeechChunkPayload): Promise<void> {

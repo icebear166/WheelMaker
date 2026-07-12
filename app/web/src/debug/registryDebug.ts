@@ -115,7 +115,8 @@ function estimateBase64ByteCount(value: string): number {
 }
 
 export function redactRegistryDebugEnvelope<TEnvelope extends RegistryEnvelope>(envelope: TEnvelope): TEnvelope {
-  if (envelope.method !== 'speech.start' && envelope.method !== 'speech.chunk') {
+  const terminalMethod = envelope.method?.startsWith('terminal.') === true;
+  if (envelope.method !== 'speech.start' && envelope.method !== 'speech.chunk' && !terminalMethod) {
     return envelope;
   }
   const payload = envelope.payload;
@@ -123,6 +124,19 @@ export function redactRegistryDebugEnvelope<TEnvelope extends RegistryEnvelope>(
     return envelope;
   }
   const record = payload as Record<string, unknown>;
+  if (terminalMethod) {
+    const next: Record<string, unknown> = {...record};
+    if (typeof record.data === 'string') {
+      next.byteCount = estimateBase64ByteCount(record.data);
+      delete next.data;
+    }
+    if (typeof record.snapshot === 'string') {
+      next.snapshotByteCount = estimateBase64ByteCount(record.snapshot);
+      delete next.snapshot;
+    }
+    delete next.resizeToken;
+    return {...envelope, payload: next} as TEnvelope;
+  }
   if (envelope.method === 'speech.start') {
     return {
       ...envelope,
