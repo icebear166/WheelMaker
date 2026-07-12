@@ -218,12 +218,40 @@ describe('terminal components', () => {
     const root = renderer!.root;
     const press = (label: string) => root.findByProps({'aria-label': label}).props.onClick();
     act(() => press('Terminal Escape'));
+    act(() => press('Terminal Enter'));
     act(() => press('Terminal Ctrl+C'));
     act(() => press('Terminal Ctrl modifier'));
     act(() => press('Terminal Arrow Up'));
     expect(onSendBytes.mock.calls.map(([bytes]) => Array.from(bytes as Uint8Array))).toEqual([
-      [27], [3], Array.from(new TextEncoder().encode('\x1b[1;5A')),
+      [27], [13], [3], Array.from(new TextEncoder().encode('\x1b[1;5A')),
     ]);
+  });
+
+  test('keeps the Fit action visible and usable in mobile chrome', () => {
+    const onClaimResize = jest.fn();
+    let renderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <TerminalWorkbench
+          mode="mobile"
+          terminals={[terminal()]}
+          activeKey="hub-a:t1"
+          unavailableHubIds={{}}
+          onSelect={jest.fn()}
+          onCreate={jest.fn()}
+          onRequestClose={jest.fn()}
+          onRestart={jest.fn()}
+          onClaimResize={onClaimResize}
+          onSendBytes={jest.fn()}
+          onCloseSurface={jest.fn()}
+        />,
+      );
+    });
+
+    const fit = renderer!.root.findByProps({'aria-label': 'Fit terminal to this screen'});
+    expect(fit.children).toEqual(['Fit']);
+    act(() => fit.props.onClick());
+    expect(onClaimResize).toHaveBeenCalledTimes(1);
   });
 
   test('mobile surface provides a way back to Chat without closing a terminal', () => {

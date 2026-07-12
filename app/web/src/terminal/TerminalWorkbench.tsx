@@ -19,6 +19,7 @@ export type TerminalWorkbenchProps = {
 const MOBILE_KEYS: Array<{label: string; aria: string; sequence: string}> = [
   {label: 'Esc', aria: 'Terminal Escape', sequence: '\x1b'},
   {label: 'Tab', aria: 'Terminal Tab', sequence: '\t'},
+  {label: 'Enter', aria: 'Terminal Enter', sequence: '\r'},
   {label: '←', aria: 'Terminal Arrow Left', sequence: '\x1b[D'},
   {label: '↑', aria: 'Terminal Arrow Up', sequence: '\x1b[A'},
   {label: '↓', aria: 'Terminal Arrow Down', sequence: '\x1b[B'},
@@ -73,9 +74,11 @@ export function TerminalWorkbench(props: TerminalWorkbenchProps) {
         {active ? (
           <div className="terminal-actions">
             {active.status !== 'running' ? (
-              <button type="button" onClick={() => props.onRestart(active)}>Restart</button>
+              <button type="button" className="terminal-restart" onClick={() => props.onRestart(active)}>Restart</button>
             ) : null}
-            <button type="button" onClick={props.onClaimResize}>Fit to this screen</button>
+            <button type="button" className="terminal-fit" aria-label="Fit terminal to this screen" onClick={props.onClaimResize}>
+              {props.mode === 'mobile' ? 'Fit' : 'Fit to this screen'}
+            </button>
           </div>
         ) : null}
       </div>

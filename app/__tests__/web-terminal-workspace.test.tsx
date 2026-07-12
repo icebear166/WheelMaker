@@ -59,5 +59,6 @@ describe('terminal workspace integration', () => {
       '  overscroll-behavior: contain;',
       '}',
     ].join('\n'));
+    expect(terminalCss).toContain('.terminal-actions .terminal-fit { display: inline-flex; }');
   });
 });
