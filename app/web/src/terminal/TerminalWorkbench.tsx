@@ -12,6 +12,7 @@ export type TerminalWorkbenchProps = {
   onRestart: (terminal: RegistryTerminal) => void;
   onClaimResize: () => void;
   onSendBytes: (data: Uint8Array) => void;
+  onCloseSurface?: () => void;
   children?: ReactNode;
 };
 
@@ -46,6 +47,11 @@ export function TerminalWorkbench(props: TerminalWorkbenchProps) {
   return (
     <div className={`terminal-workbench ${props.mode}`}>
       <div className="terminal-tabbar" role="tablist" aria-label="Terminals">
+        {props.mode === 'mobile' ? (
+          <button type="button" className="terminal-back" aria-label="Back to Chat" onClick={props.onCloseSurface}>
+            <span className="codicon codicon-chevron-left" aria-hidden="true" />
+          </button>
+        ) : null}
         <div className="terminal-tabs">
           {props.terminals.map(item => {
             const key = terminalKey(item);

@@ -83,6 +83,11 @@
   scrollbar-width: thin;
 }
 
+.terminal-back {
+  flex: 0 0 44px;
+  align-self: stretch;
+}
+
 .terminal-tab {
   appearance: none;
   display: inline-flex;

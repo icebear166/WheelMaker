@@ -16,10 +16,12 @@ jest.mock('@xterm/xterm', () => ({
     reset = jest.fn();
     focus = jest.fn();
     dispose = jest.fn();
+    resize = jest.fn();
     write = jest.fn((_data: Uint8Array, callback?: () => void) => callback?.());
     dataHandler?: (data: string) => void;
     binaryHandler?: (data: string) => void;
-    constructor() { mockTerminalInstances.push(this); }
+    options: unknown;
+    constructor(options: unknown) { this.options = options; mockTerminalInstances.push(this); }
     onData(handler: (data: string) => void) { this.dataHandler = handler; return {dispose: jest.fn()}; }
     onBinary(handler: (data: string) => void) { this.binaryHandler = handler; return {dispose: jest.fn()}; }
   },
@@ -67,7 +69,7 @@ describe('terminal components', () => {
     let renderer: TestRenderer.ReactTestRenderer;
     await act(async () => {
       renderer = TestRenderer.create(
-        <TerminalView ref={ref} active resizeEnabled onInput={onInput} onResize={onResize} />,
+        <TerminalView ref={ref} active resizeEnabled cols={80} rows={24} onInput={onInput} onResize={onResize} />,
         {createNodeMock: () => ({})},
       );
     });
@@ -95,6 +97,17 @@ describe('terminal components', () => {
     expect(MockResizeObserver.instances[0].disconnect).toHaveBeenCalled();
   });
 
+  test('keeps the Hub dimensions when this page does not own resize', async () => {
+    await act(async () => {
+      TestRenderer.create(
+        <TerminalView active resizeEnabled={false} cols={132} rows={44} onInput={jest.fn()} onResize={jest.fn()} />,
+        {createNodeMock: () => ({})},
+      );
+    });
+    expect(mockTerminalInstances[0].options).toMatchObject({cols: 132, rows: 44});
+    expect(mockFitInstances[0].fit).not.toHaveBeenCalled();
+  });
+
   test('renders tabs and sends standard mobile key sequences with one-shot modifiers', () => {
     const onSendBytes = jest.fn();
     let renderer: TestRenderer.ReactTestRenderer;
@@ -111,6 +124,7 @@ describe('terminal components', () => {
           onRestart={jest.fn()}
           onClaimResize={jest.fn()}
           onSendBytes={onSendBytes}
+          onCloseSurface={jest.fn()}
         >
           <div>terminal</div>
         </TerminalWorkbench>,
@@ -125,5 +139,30 @@ describe('terminal components', () => {
     expect(onSendBytes.mock.calls.map(([bytes]) => Array.from(bytes as Uint8Array))).toEqual([
       [27], [3], Array.from(new TextEncoder().encode('\x1b[1;5A')),
     ]);
+  });
+
+  test('mobile surface provides a way back to Chat without closing a terminal', () => {
+    const onCloseSurface = jest.fn();
+    let renderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <TerminalWorkbench
+          mode="mobile"
+          terminals={[]}
+          activeKey=""
+          unavailableHubIds={{}}
+          onSelect={jest.fn()}
+          onCreate={jest.fn()}
+          onRequestClose={jest.fn()}
+          onRestart={jest.fn()}
+          onClaimResize={jest.fn()}
+          onSendBytes={jest.fn()}
+          onCloseSurface={onCloseSurface}
+        />,
+      );
+    });
+
+    act(() => renderer!.root.findByProps({'aria-label': 'Back to Chat'}).props.onClick());
+    expect(onCloseSurface).toHaveBeenCalledTimes(1);
   });
 });

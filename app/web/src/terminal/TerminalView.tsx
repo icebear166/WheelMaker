@@ -12,12 +12,14 @@ export type TerminalViewHandle = {
 export type TerminalViewProps = {
   active: boolean;
   resizeEnabled: boolean;
+  cols: number;
+  rows: number;
   onInput: (data: Uint8Array) => void;
   onResize: (cols: number, rows: number) => void;
 };
 
 export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(function TerminalView(
-  {active, resizeEnabled, onInput, onResize},
+  {active, resizeEnabled, cols, rows, onInput, onResize},
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -63,6 +65,8 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     if (!container) return;
     const terminal = new Terminal({
       scrollback: 10000,
+      cols,
+      rows,
       convertEol: false,
       cursorBlink: true,
       fontFamily: "'JetBrains Mono', Consolas, monospace",
@@ -95,7 +99,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       resizeFrameRef.current = requestAnimationFrame(reportFit);
     });
     observer.observe(container);
-    fitAddon.fit();
+    if (resizeEnabledRef.current) fitAddon.fit();
 
     return () => {
       if (resizeFrameRef.current !== null) cancelAnimationFrame(resizeFrameRef.current);
@@ -110,9 +114,13 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
 
   useEffect(() => {
     if (!active) return;
-    const size = fit();
-    if (size) terminalRef.current?.focus();
-  }, [active]);
+    if (resizeEnabled) fit();
+    terminalRef.current?.focus();
+  }, [active, resizeEnabled]);
+
+  useEffect(() => {
+    if (!resizeEnabled && cols > 0 && rows > 0) terminalRef.current?.resize(cols, rows);
+  }, [cols, resizeEnabled, rows]);
 
   return <div ref={containerRef} className="terminal-xterm-host" />;
 });

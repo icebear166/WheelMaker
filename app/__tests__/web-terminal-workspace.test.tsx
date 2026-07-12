@@ -22,6 +22,8 @@ describe('terminal workspace integration', () => {
     expect(source).toContain('className="terminal-mobile-overlay"');
     expect(source).toContain('mobileOverlay={terminalMobileOverlay ?? chatPreviewMobileOverlay}');
     expect(source).toContain("if (!isWide) setTerminalOpen(false);");
+    expect(source).toContain('onCloseSurface={() => setTerminalOpen(false)}');
+    expect(source).toContain('if (!isWide && terminalOpen) {');
   });
 
   test('handles terminal events, reconnect lists, and page-memory ownership', () => {

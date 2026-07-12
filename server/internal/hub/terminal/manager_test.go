@@ -267,3 +267,24 @@ func TestManagerRetainsExitRestartsAndCloses(t *testing.T) {
 		t.Fatalf("terminals=%+v", got)
 	}
 }
+
+func TestManagerHasNoIdleExpiryAndDoesNotRestoreAcrossManagerRestart(t *testing.T) {
+	manager, _, _ := newTestManager(t)
+	created, err := manager.Create(context.Background(), "hub-a:wheelmaker", rp.TerminalCreateRequest{Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(3 * outputFlushInterval)
+	listed := manager.List().Terminals
+	if len(listed) != 1 || listed[0].TerminalID != created.Terminal.TerminalID || listed[0].Status != rp.TerminalStatusRunning {
+		t.Fatalf("idle terminal changed unexpectedly: %+v", listed)
+	}
+	if err := manager.Close(); err != nil {
+		t.Fatal(err)
+	}
+	restartedManager := NewManager(Config{HubID: "hub-a"})
+	defer restartedManager.Close()
+	if got := restartedManager.List().Terminals; len(got) != 0 {
+		t.Fatalf("new manager restored process-local terminals: %+v", got)
+	}
+}

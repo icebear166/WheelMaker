@@ -7337,6 +7337,10 @@ export function App() {
     closeChatPortRelayPreview();
   }, [closeChatAttachmentPreview, closeChatFilePeek, closeChatPortRelayPreview, closeChatPromptArtifactPreview]);
   const handleAndroidNativeBack = useCallback(() => {
+    if (!isWide && terminalOpen) {
+      setTerminalOpen(false);
+      return true;
+    }
     if (!isWide && chatPreviewOpen) {
       chatFilePeekHistoryActiveRef.current = false;
       closeChatPreview();
@@ -7357,7 +7361,7 @@ export function App() {
       setSidebarSettingsOpen(false);
     }
     return true;
-  }, [chatPreviewOpen, closeChatPreview, isWide, setSidebarSettingsOpen]);
+  }, [chatPreviewOpen, closeChatPreview, isWide, setSidebarSettingsOpen, terminalOpen]);
   useEffect(() => {
     window.WheelMakerAndroidBack = {
       handleBack: handleAndroidNativeBack,
@@ -19367,6 +19371,8 @@ export function App() {
                       ref={terminalViewRef}
                       active
                       resizeEnabled={terminalResizeTokensRef.current.has(activeTerminalKey)}
+                      cols={activeTerminal.cols}
+                      rows={activeTerminal.rows}
                       onInput={handleTerminalInput}
                       onResize={handleTerminalResize}
                     />
@@ -20860,6 +20866,7 @@ export function App() {
         onRestart={item => { handleRestartTerminal(item).catch(err => setError(err instanceof Error ? err.message : String(err))); }}
         onClaimResize={handleClaimTerminalResize}
         onSendBytes={handleTerminalInput}
+        onCloseSurface={() => setTerminalOpen(false)}
       >
         {activeTerminal ? (
           <TerminalView
@@ -20867,6 +20874,8 @@ export function App() {
             ref={terminalViewRef}
             active
             resizeEnabled={terminalResizeTokensRef.current.has(activeTerminalKey)}
+            cols={activeTerminal.cols}
+            rows={activeTerminal.rows}
             onInput={handleTerminalInput}
             onResize={handleTerminalResize}
           />
