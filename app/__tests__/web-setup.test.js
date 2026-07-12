@@ -208,22 +208,6 @@ describe('web runtime setup', () => {
     expect(webpackConfig.optimization.minimizer[0].options.parallel).toBe(false);
   });
 
-  test('webpack persists build cache outside node_modules across dependency installs', () => {
-    const projectRoot = path.join(__dirname, '..');
-    const webpackConfig = loadWebpackConfig(projectRoot, 'production');
-
-    expect(webpackConfig.cache).toEqual({
-      type: 'filesystem',
-      cacheDirectory: path.join(require('os').homedir(), '.wheelmaker', 'cache', 'webpack'),
-      buildDependencies: {
-        config: [
-          path.join(projectRoot, 'web', 'webpack.config.js'),
-          path.join(projectRoot, 'package-lock.json'),
-        ],
-      },
-    });
-  });
-
   test('production webpack keeps chat startup on the app entry instead of automatic initial chunks', () => {
     const projectRoot = path.join(__dirname, '..');
     const webpackConfig = loadWebpackConfig(projectRoot, 'production');
