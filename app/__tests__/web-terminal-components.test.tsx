@@ -31,6 +31,7 @@ jest.mock('@xterm/xterm', () => ({
 jest.mock('@xterm/addon-fit', () => ({
   FitAddon: class {
     fit = jest.fn();
+    proposeDimensions = jest.fn(() => ({cols: 120, rows: 40}));
     constructor() { mockFitInstances.push(this); }
   },
 }));
@@ -63,6 +64,18 @@ function terminalHost() {
   };
 }
 
+function interactiveTerminalHost() {
+  const listeners = new Map<string, (event: any) => void>();
+  return {
+    host: {
+      clientHeight: 300,
+      addEventListener: jest.fn((type: string, listener: (event: any) => void) => listeners.set(type, listener)),
+      removeEventListener: jest.fn((type: string) => listeners.delete(type)),
+    },
+    fire(type: string, event: any = {}) { listeners.get(type)?.(event); },
+  };
+}
+
 describe('terminal components', () => {
   beforeEach(() => {
     mockTerminalInstances.length = 0;
@@ -75,15 +88,20 @@ describe('terminal components', () => {
     const ref = createRef<TerminalViewHandle>();
     const onInput = jest.fn();
     const onResize = jest.fn();
+    const host = interactiveTerminalHost();
     let renderer: TestRenderer.ReactTestRenderer;
     await act(async () => {
       renderer = TestRenderer.create(
         <TerminalView ref={ref} active resizeEnabled cols={80} rows={24} onInput={onInput} onResize={onResize} />,
-        {createNodeMock: terminalHost},
+        {createNodeMock: () => host.host},
       );
     });
     const xterm = mockTerminalInstances[0];
     expect(xterm.open).toHaveBeenCalledTimes(1);
+    expect(mockFitInstances[0].fit).not.toHaveBeenCalled();
+
+    act(() => host.fire('focusin'));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 5)); });
     expect(mockFitInstances[0].fit).toHaveBeenCalled();
 
     act(() => xterm.dataHandler?.('界'));
@@ -107,14 +125,85 @@ describe('terminal components', () => {
   });
 
   test('keeps the Hub dimensions when this page does not own resize', async () => {
+    const host = interactiveTerminalHost();
+    const onAutoResize = jest.fn();
+    let renderer: TestRenderer.ReactTestRenderer;
     await act(async () => {
-      TestRenderer.create(
-        <TerminalView active resizeEnabled={false} cols={132} rows={44} onInput={jest.fn()} onResize={jest.fn()} />,
-        {createNodeMock: terminalHost},
+      renderer = TestRenderer.create(
+        <TerminalView active resizeEnabled={false} cols={132} rows={44} onInput={jest.fn()} onResize={jest.fn()}
+          onAutoResize={onAutoResize} />,
+        {createNodeMock: () => host.host},
       );
     });
     expect(mockTerminalInstances[0].options).toMatchObject({cols: 132, rows: 44});
     expect(mockFitInstances[0].fit).not.toHaveBeenCalled();
+
+    act(() => {
+      host.fire('focusin');
+      MockResizeObserver.instances[0].fire();
+    });
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 5)); });
+
+    expect(mockFitInstances[0].proposeDimensions).toHaveBeenCalled();
+    expect(mockFitInstances[0].fit).not.toHaveBeenCalled();
+    expect(onAutoResize).toHaveBeenCalledWith(120, 40);
+
+    await act(async () => {
+      renderer!.update(
+        <TerminalView active resizeEnabled cols={120} rows={40} onInput={jest.fn()} onResize={jest.fn()}
+          onAutoResize={onAutoResize} />,
+      );
+    });
+    expect(mockFitInstances[0].fit).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not request resize ownership for the Hub size or a background terminal', async () => {
+    const sameSizeHost = interactiveTerminalHost();
+    const sameSizeAutoResize = jest.fn();
+    mockFitInstances.length = 0;
+    await act(async () => {
+      TestRenderer.create(
+        <TerminalView active resizeEnabled={false} cols={120} rows={40} onInput={jest.fn()} onResize={jest.fn()}
+          onAutoResize={sameSizeAutoResize} />,
+        {createNodeMock: () => sameSizeHost.host},
+      );
+    });
+    act(() => sameSizeHost.fire('focusin'));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 5)); });
+    expect(sameSizeAutoResize).not.toHaveBeenCalled();
+
+    const backgroundHost = interactiveTerminalHost();
+    const backgroundAutoResize = jest.fn();
+    await act(async () => {
+      TestRenderer.create(
+        <TerminalView active={false} resizeEnabled={false} cols={80} rows={24} onInput={jest.fn()} onResize={jest.fn()}
+          onAutoResize={backgroundAutoResize} />,
+        {createNodeMock: () => backgroundHost.host},
+      );
+    });
+    act(() => backgroundHost.fire('focusin'));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 5)); });
+    expect(backgroundAutoResize).not.toHaveBeenCalled();
+  });
+
+  test('applies Hub dimensions when another page resizes an owned terminal', async () => {
+    let renderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        <TerminalView active resizeEnabled cols={80} rows={24} onInput={jest.fn()} onResize={jest.fn()} />,
+        {createNodeMock: terminalHost},
+      );
+    });
+    const xterm = mockTerminalInstances[0];
+    xterm.resize.mockClear();
+
+    await act(async () => {
+      renderer!.update(
+        <TerminalView active resizeEnabled cols={50} rows={30} onInput={jest.fn()} onResize={jest.fn()} />,
+      );
+    });
+
+    expect(xterm.resize).toHaveBeenCalledWith(50, 30);
   });
 
   test('scrolls terminal history from a one-finger vertical drag', async () => {
@@ -249,7 +338,9 @@ describe('terminal components', () => {
     });
 
     const fit = renderer!.root.findByProps({'aria-label': 'Fit terminal to this screen'});
-    expect(fit.children).toEqual(['Fit']);
+    expect(fit.props.title).toBe('Fit terminal to this screen');
+    expect(fit.findByProps({'aria-hidden': 'true'}).props.className).toContain('codicon-screen-normal');
+    expect(fit.children).not.toContain('Fit');
     act(() => fit.props.onClick());
     expect(onClaimResize).toHaveBeenCalledTimes(1);
   });

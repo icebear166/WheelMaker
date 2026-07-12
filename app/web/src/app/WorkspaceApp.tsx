@@ -2846,6 +2846,7 @@ export function App() {
   const activeTerminalKeyRef = useRef('');
   const terminalViewRef = useRef<TerminalViewHandle | null>(null);
   const terminalResizeTokensRef = useRef(new Map<string, string>());
+  const terminalResizeClaimsRef = useRef(new Set<string>());
   const terminalRefreshInFlightRef = useRef(new Set<string>());
   const terminalRefreshRef = useRef<(key: string) => Promise<void>>(async () => undefined);
   const [terminalPanelHeight, setTerminalPanelHeight] = useState(280);
@@ -14958,32 +14959,56 @@ export function App() {
     }
   }, [commitTerminalSync]);
 
+  const claimTerminalResize = useCallback((key: string, cols: number, rows: number) => {
+    if (terminalResizeClaimsRef.current.has(key)) return;
+    const terminal = terminalSyncRef.current.terminals[key];
+    if (!terminal || !connectedRef.current || cols <= 0 || rows <= 0) return;
+    terminalResizeClaimsRef.current.add(key);
+    service.resizeTerminal(terminal.hubId, {
+      terminalId: terminal.terminalId, cols, rows, claim: true,
+    }).then(result => {
+      if (result.resizeToken) terminalResizeTokensRef.current.set(key, result.resizeToken);
+      commitTerminalSync(applyTerminalChanged(terminalSyncRef.current, terminal.hubId, {
+        change: 'resized', terminalId: terminal.terminalId, terminal: result.terminal,
+      }));
+    }).catch(() => undefined).finally(() => {
+      terminalResizeClaimsRef.current.delete(key);
+    });
+  }, [commitTerminalSync]);
+
+  const handleAutoClaimTerminalResize = useCallback((cols: number, rows: number) => {
+    const key = activeTerminalKeyRef.current;
+    const terminal = terminalSyncRef.current.terminals[key];
+    if (!terminal || (terminal.cols === cols && terminal.rows === rows)) return;
+    claimTerminalResize(key, cols, rows);
+  }, [claimTerminalResize]);
+
   const handleTerminalResize = useCallback((cols: number, rows: number) => {
     const key = activeTerminalKeyRef.current;
     const terminal = terminalSyncRef.current.terminals[key];
     const resizeToken = terminalResizeTokensRef.current.get(key);
-    if (!terminal || !resizeToken || !connectedRef.current) return;
+    if (!terminal || !connectedRef.current) return;
+    if (!resizeToken) {
+      claimTerminalResize(key, cols, rows);
+      return;
+    }
     service.resizeTerminal(terminal.hubId, {terminalId: terminal.terminalId, cols, rows, resizeToken})
       .then(result => commitTerminalSync(applyTerminalChanged(terminalSyncRef.current, terminal.hubId, {
         change: 'resized', terminalId: terminal.terminalId, terminal: result.terminal,
       })))
-      .catch(() => undefined);
-  }, [commitTerminalSync]);
+      .catch(() => {
+        terminalResizeTokensRef.current.delete(key);
+        claimTerminalResize(key, cols, rows);
+      });
+  }, [claimTerminalResize, commitTerminalSync]);
 
   const handleClaimTerminalResize = useCallback(() => {
     const key = activeTerminalKeyRef.current;
     const terminal = terminalSyncRef.current.terminals[key];
     const size = terminalViewRef.current?.fit();
     if (!terminal || !size || !connectedRef.current) return;
-    service.resizeTerminal(terminal.hubId, {
-      terminalId: terminal.terminalId, cols: size.cols, rows: size.rows, claim: true,
-    }).then(result => {
-      if (result.resizeToken) terminalResizeTokensRef.current.set(key, result.resizeToken);
-      commitTerminalSync(applyTerminalChanged(terminalSyncRef.current, terminal.hubId, {
-        change: 'resized', terminalId: terminal.terminalId, terminal: result.terminal,
-      }));
-    }).catch(() => undefined);
-  }, [commitTerminalSync]);
+    claimTerminalResize(key, size.cols, size.rows);
+  }, [claimTerminalResize]);
 
   const handleCloseTerminal = useCallback(async (terminal: RegistryTerminal) => {
     await service.closeTerminal(terminal.hubId, terminal.terminalId);
@@ -19375,6 +19400,7 @@ export function App() {
                       rows={activeTerminal.rows}
                       onInput={handleTerminalInput}
                       onResize={handleTerminalResize}
+                      onAutoResize={handleAutoClaimTerminalResize}
                     />
                   ) : null}
                 </TerminalWorkbench>
@@ -20878,6 +20904,7 @@ export function App() {
             rows={activeTerminal.rows}
             onInput={handleTerminalInput}
             onResize={handleTerminalResize}
+            onAutoResize={handleAutoClaimTerminalResize}
           />
         ) : null}
       </TerminalWorkbench>

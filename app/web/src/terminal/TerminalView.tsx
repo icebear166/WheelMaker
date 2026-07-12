@@ -16,10 +16,11 @@ export type TerminalViewProps = {
   rows: number;
   onInput: (data: Uint8Array) => void;
   onResize: (cols: number, rows: number) => void;
+  onAutoResize?: (cols: number, rows: number) => void;
 };
 
 export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(function TerminalView(
-  {active, resizeEnabled, cols, rows, onInput, onResize},
+  {active, resizeEnabled, cols, rows, onInput, onResize, onAutoResize},
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -27,14 +28,22 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
   const fitAddonRef = useRef<FitAddon | null>(null);
   const inputRef = useRef(onInput);
   const resizeRef = useRef(onResize);
+  const autoResizeRef = useRef(onAutoResize);
   const activeRef = useRef(active);
   const resizeEnabledRef = useRef(resizeEnabled);
+  const colsRef = useRef(cols);
+  const rowsRef = useRef(rows);
+  const focusedRef = useRef(false);
+  const previousResizeEnabledRef = useRef(resizeEnabled);
   const resizeFrameRef = useRef<number | null>(null);
   const lastSizeRef = useRef('');
   inputRef.current = onInput;
   resizeRef.current = onResize;
+  autoResizeRef.current = onAutoResize;
   activeRef.current = active;
   resizeEnabledRef.current = resizeEnabled;
+  colsRef.current = cols;
+  rowsRef.current = rows;
 
   const fit = (): {cols: number; rows: number} | null => {
     const terminal = terminalRef.current;
@@ -85,19 +94,46 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       for (let index = 0; index < data.length; index += 1) bytes[index] = data.charCodeAt(index) & 0xff;
       inputRef.current(bytes);
     });
+    const isForegroundFocused = () => (
+      activeRef.current &&
+      focusedRef.current &&
+      (typeof document === 'undefined' || document.visibilityState === 'visible')
+    );
     const reportFit = () => {
       resizeFrameRef.current = null;
-      const size = fit();
-      if (!size || !activeRef.current || !resizeEnabledRef.current) return;
+      if (!isForegroundFocused()) return;
+      const proposed = fitAddon.proposeDimensions();
+      if (!proposed || proposed.cols <= 0 || proposed.rows <= 0) return;
+      if (proposed.cols === colsRef.current && proposed.rows === rowsRef.current) return;
+      if (!resizeEnabledRef.current) {
+        autoResizeRef.current?.(proposed.cols, proposed.rows);
+        return;
+      }
+      fitAddon.fit();
+      const size = {cols: terminal.cols, rows: terminal.rows};
       const key = `${size.cols}x${size.rows}`;
       if (key === lastSizeRef.current) return;
       lastSizeRef.current = key;
       resizeRef.current(size.cols, size.rows);
     };
-    const observer = new ResizeObserver(() => {
+    const scheduleFitReport = () => {
       if (resizeFrameRef.current !== null) cancelAnimationFrame(resizeFrameRef.current);
       resizeFrameRef.current = requestAnimationFrame(reportFit);
-    });
+    };
+    const observer = new ResizeObserver(scheduleFitReport);
+    const onFocusIn = () => {
+      focusedRef.current = true;
+      scheduleFitReport();
+    };
+    const onFocusOut = (event: FocusEvent) => {
+      const next = event.relatedTarget;
+      if (typeof Node !== 'undefined' && next instanceof Node &&
+        typeof container.contains === 'function' && container.contains(next)) return;
+      focusedRef.current = false;
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && focusedRef.current) scheduleFitReport();
+    };
     let touchScroll: {
       startX: number;
       startY: number;
@@ -147,8 +183,10 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     container.addEventListener('touchmove', onTouchMove, {passive: false});
     container.addEventListener('touchend', onTouchEnd);
     container.addEventListener('touchcancel', resetTouchScroll);
+    container.addEventListener('focusin', onFocusIn);
+    container.addEventListener('focusout', onFocusOut);
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisibilityChange);
     observer.observe(container);
-    if (resizeEnabledRef.current) fitAddon.fit();
 
     return () => {
       if (resizeFrameRef.current !== null) cancelAnimationFrame(resizeFrameRef.current);
@@ -157,6 +195,9 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       container.removeEventListener('touchmove', onTouchMove);
       container.removeEventListener('touchend', onTouchEnd);
       container.removeEventListener('touchcancel', resetTouchScroll);
+      container.removeEventListener('focusin', onFocusIn);
+      container.removeEventListener('focusout', onFocusOut);
+      if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisibilityChange);
       dataDisposable.dispose();
       binaryDisposable.dispose();
       terminal.dispose();
@@ -166,14 +207,23 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
   }, []);
 
   useEffect(() => {
+    const gainedResizeOwnership = resizeEnabled && !previousResizeEnabledRef.current;
+    previousResizeEnabledRef.current = resizeEnabled;
     if (!active) return;
-    if (resizeEnabled) fit();
+    if (gainedResizeOwnership && focusedRef.current &&
+      (typeof document === 'undefined' || document.visibilityState === 'visible')) {
+      const size = fit();
+      if (size) lastSizeRef.current = `${size.cols}x${size.rows}`;
+    }
     terminalRef.current?.focus();
   }, [active, resizeEnabled]);
 
   useEffect(() => {
-    if (!resizeEnabled && cols > 0 && rows > 0) terminalRef.current?.resize(cols, rows);
-  }, [cols, resizeEnabled, rows]);
+    const terminal = terminalRef.current;
+    if (!terminal || cols <= 0 || rows <= 0) return;
+    if (terminal.cols !== cols || terminal.rows !== rows) terminal.resize(cols, rows);
+    lastSizeRef.current = `${cols}x${rows}`;
+  }, [cols, rows]);
 
   return <div ref={containerRef} className="terminal-xterm-host" />;
 });
