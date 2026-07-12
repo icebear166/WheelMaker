@@ -149,10 +149,10 @@ describe('gesture navigation', () => {
     expect(styles).not.toContain('.gesture-nav-drawer-button');
     expect(styles).not.toContain('gesture-nav-capsule-drawer');
     expect(styles).toMatch(
-      /\.floating-control-stack\[data-idle='true'\] \.drawer-toggle-bubble,\s*\.floating-control-stack\[data-idle='true'\] \.gesture-nav-pill \{[\s\S]*background: color-mix\(in srgb, var\(--surface-panel\) 32%, transparent\);[\s\S]*box-shadow: 0 8px 20px rgb\(0 0 0 \/ 12%\);[\s\S]*backdrop-filter: blur\(10px\) saturate\(1\.15\);[\s\S]*\}/,
+      /\.floating-control-stack\[data-idle='true'\] \.drawer-toggle-bubble,\s*\.floating-control-stack\[data-idle='true'\] \.gesture-nav-pill \{[\s\S]*opacity: 0\.6;[\s\S]*background: color-mix\(in srgb, var\(--surface-panel\) 32%, transparent\);[\s\S]*box-shadow: 0 8px 20px rgb\(0 0 0 \/ 12%\);[\s\S]*backdrop-filter: blur\(10px\) saturate\(1\.15\);[\s\S]*\}/,
     );
-    expect(styles).toMatch(
-      /\.floating-control-stack\[data-idle='true'\] \{[\s\S]*opacity: 0\.6;[\s\S]*\}/,
+    expect(styles).not.toMatch(
+      /\.floating-control-stack\[data-idle='true'\] \{[\s\S]*opacity:/,
     );
   });
 

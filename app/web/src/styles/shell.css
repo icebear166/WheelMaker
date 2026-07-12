@@ -591,11 +591,6 @@
   color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
 }
 
-.floating-control-stack[data-idle='true'] {
-  opacity: 0.6;
-  filter: none;
-}
-
 .gesture-nav-control {
   position: relative;
   width: 50px;
@@ -1536,6 +1531,7 @@
 
 .floating-control-stack[data-idle='true'] .drawer-toggle-bubble,
 .floating-control-stack[data-idle='true'] .gesture-nav-pill {
+  opacity: 0.6;
   border-color: color-mix(in srgb, var(--border-subtle) 92%, transparent);
   background: color-mix(in srgb, var(--surface-panel) 32%, transparent);
   box-shadow: 0 8px 20px rgb(0 0 0 / 12%);
