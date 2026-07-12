@@ -160,7 +160,11 @@
 .terminal-new { width: 28px; font-size: 18px; }
 .terminal-actions { display: flex; align-items: center; }
 .terminal-actions button { padding: 0 8px; font-size: 11px; }
-.terminal-actions .terminal-fit { display: inline-flex; }
+.terminal-actions .terminal-fit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 
 .terminal-content,
 .terminal-xterm-host {
@@ -209,4 +213,17 @@
   .terminal-tabbar { flex-basis: 40px; }
   .terminal-tab { height: 40px; min-width: 132px; }
   .terminal-actions button { display: none; }
+  .terminal-actions .terminal-fit {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+    font-size: 16px;
+  }
+  .terminal-actions .terminal-fit:hover,
+  .terminal-actions .terminal-fit:focus-visible {
+    border-color: #3a424a;
+    background: #252b31;
+  }
 }

@@ -76,8 +76,11 @@ export function TerminalWorkbench(props: TerminalWorkbenchProps) {
             {active.status !== 'running' ? (
               <button type="button" className="terminal-restart" onClick={() => props.onRestart(active)}>Restart</button>
             ) : null}
-            <button type="button" className="terminal-fit" aria-label="Fit terminal to this screen" onClick={props.onClaimResize}>
-              {props.mode === 'mobile' ? 'Fit' : 'Fit to this screen'}
+            <button type="button" className="terminal-fit" aria-label="Fit terminal to this screen"
+              title="Fit terminal to this screen" onClick={props.onClaimResize}>
+              {props.mode === 'mobile'
+                ? <span className="codicon codicon-screen-normal" aria-hidden="true" />
+                : 'Fit to this screen'}
             </button>
           </div>
         ) : null}
