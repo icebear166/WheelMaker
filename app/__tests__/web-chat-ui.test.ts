@@ -958,7 +958,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('aria-label="Open skills"');
     expect(mainTsx).toContain('className="chat-tool-button chat-slash-button"');
     expect(mainTsx).not.toContain('className="chat-composer-skill-trigger chat-slash-button"');
-    expect(mainTsx).not.toContain('codicon-terminal');
+    expect(mainTsx).toContain('className="codicon codicon-terminal" aria-hidden="true"');
     expect(mainTsx).not.toContain('className="chat-composer-quick-trigger"');
     expect(mainTsx).not.toContain('title="Quick replies"');
     expect(mainTsx).not.toContain('aria-label="Quick replies"');
