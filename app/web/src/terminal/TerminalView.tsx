@@ -98,12 +98,65 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       if (resizeFrameRef.current !== null) cancelAnimationFrame(resizeFrameRef.current);
       resizeFrameRef.current = requestAnimationFrame(reportFit);
     });
+    let touchScroll: {
+      startX: number;
+      startY: number;
+      lastY: number;
+      remainder: number;
+      axis: 'pending' | 'horizontal' | 'vertical';
+    } | null = null;
+    const resetTouchScroll = () => { touchScroll = null; };
+    const onTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1) {
+        resetTouchScroll();
+        return;
+      }
+      const touch = event.touches[0];
+      touchScroll = {
+        startX: touch.clientX,
+        startY: touch.clientY,
+        lastY: touch.clientY,
+        remainder: 0,
+        axis: 'pending',
+      };
+    };
+    const onTouchMove = (event: TouchEvent) => {
+      if (!touchScroll || event.touches.length !== 1) return;
+      const touch = event.touches[0];
+      if (touchScroll.axis === 'pending') {
+        const deltaX = Math.abs(touch.clientX - touchScroll.startX);
+        const deltaY = Math.abs(touch.clientY - touchScroll.startY);
+        if (Math.max(deltaX, deltaY) < 6) return;
+        touchScroll.axis = deltaY > deltaX ? 'vertical' : 'horizontal';
+      }
+      if (touchScroll.axis !== 'vertical') return;
+      event.preventDefault();
+      event.stopPropagation();
+      const rowHeight = container.clientHeight / terminal.rows;
+      if (!(rowHeight > 0)) return;
+      const pixelDelta = touchScroll.lastY - touch.clientY + touchScroll.remainder;
+      touchScroll.lastY = touch.clientY;
+      const lines = Math.trunc(pixelDelta / rowHeight);
+      touchScroll.remainder = pixelDelta - lines * rowHeight;
+      if (lines !== 0) terminal.scrollLines(lines);
+    };
+    const onTouchEnd = (event: TouchEvent) => {
+      if (event.touches.length === 0) resetTouchScroll();
+    };
+    container.addEventListener('touchstart', onTouchStart, {passive: true});
+    container.addEventListener('touchmove', onTouchMove, {passive: false});
+    container.addEventListener('touchend', onTouchEnd);
+    container.addEventListener('touchcancel', resetTouchScroll);
     observer.observe(container);
     if (resizeEnabledRef.current) fitAddon.fit();
 
     return () => {
       if (resizeFrameRef.current !== null) cancelAnimationFrame(resizeFrameRef.current);
       observer.disconnect();
+      container.removeEventListener('touchstart', onTouchStart);
+      container.removeEventListener('touchmove', onTouchMove);
+      container.removeEventListener('touchend', onTouchEnd);
+      container.removeEventListener('touchcancel', resetTouchScroll);
       dataDisposable.dispose();
       binaryDisposable.dispose();
       terminal.dispose();
