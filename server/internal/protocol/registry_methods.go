@@ -21,23 +21,27 @@ const (
 type RegistryRouteKind string
 
 const (
-	RegistryRouteConnect         RegistryRouteKind = "connect"
-	RegistryRouteHubControl      RegistryRouteKind = "hub_control"
-	RegistryRouteHubReport       RegistryRouteKind = "hub_report"
-	RegistryRouteHubState        RegistryRouteKind = "hub_state"
-	RegistryRouteHubSessionEvent RegistryRouteKind = "hub_session_event"
-	RegistryRouteProjectCache    RegistryRouteKind = "project_cache"
-	RegistryRouteProjectForward  RegistryRouteKind = "project_forward"
-	RegistryRouteSessionForward  RegistryRouteKind = "session_forward"
-	RegistryRouteHubCommand      RegistryRouteKind = "hub_command"
-	RegistryRouteMonitorCache    RegistryRouteKind = "monitor_cache"
-	RegistryRouteMonitorForward  RegistryRouteKind = "monitor_forward"
-	RegistryRouteRelayControl    RegistryRouteKind = "relay_control"
-	RegistryRouteRelayHub        RegistryRouteKind = "relay_hub"
-	RegistryRouteSpeech          RegistryRouteKind = "speech"
-	RegistryRouteClientEvent     RegistryRouteKind = "client_event"
-	RegistryRouteLocalRead       RegistryRouteKind = "local_read"
-	RegistryRouteDebug           RegistryRouteKind = "debug"
+	RegistryRouteConnect                RegistryRouteKind = "connect"
+	RegistryRouteHubControl             RegistryRouteKind = "hub_control"
+	RegistryRouteHubReport              RegistryRouteKind = "hub_report"
+	RegistryRouteHubState               RegistryRouteKind = "hub_state"
+	RegistryRouteHubSessionEvent        RegistryRouteKind = "hub_session_event"
+	RegistryRouteProjectCache           RegistryRouteKind = "project_cache"
+	RegistryRouteProjectForward         RegistryRouteKind = "project_forward"
+	RegistryRouteSessionForward         RegistryRouteKind = "session_forward"
+	RegistryRouteHubCommand             RegistryRouteKind = "hub_command"
+	RegistryRouteMonitorCache           RegistryRouteKind = "monitor_cache"
+	RegistryRouteMonitorForward         RegistryRouteKind = "monitor_forward"
+	RegistryRouteRelayControl           RegistryRouteKind = "relay_control"
+	RegistryRouteRelayHub               RegistryRouteKind = "relay_hub"
+	RegistryRouteSpeech                 RegistryRouteKind = "speech"
+	RegistryRouteClientEvent            RegistryRouteKind = "client_event"
+	RegistryRouteLocalRead              RegistryRouteKind = "local_read"
+	RegistryRouteDebug                  RegistryRouteKind = "debug"
+	RegistryRouteTerminalProjectRequest RegistryRouteKind = "terminal_project_request"
+	RegistryRouteTerminalHubRequest     RegistryRouteKind = "terminal_hub_request"
+	RegistryRouteTerminalClientEvent    RegistryRouteKind = "terminal_client_event"
+	RegistryRouteTerminalHubEvent       RegistryRouteKind = "terminal_hub_event"
 )
 
 const (
@@ -117,6 +121,16 @@ const (
 	RegistryMethodSpeechChunk  = "speech.chunk"
 	RegistryMethodSpeechFinish = "speech.finish"
 	RegistryMethodSpeechCancel = "speech.cancel"
+
+	RegistryMethodTerminalList    = "terminal.list"
+	RegistryMethodTerminalCreate  = "terminal.create"
+	RegistryMethodTerminalGet     = "terminal.get"
+	RegistryMethodTerminalResize  = "terminal.resize"
+	RegistryMethodTerminalClose   = "terminal.close"
+	RegistryMethodTerminalRestart = "terminal.restart"
+	RegistryMethodTerminalInput   = "terminal.input"
+	RegistryMethodTerminalOutput  = "terminal.output"
+	RegistryMethodTerminalChanged = "terminal.changed"
 
 	LegacyRegistryMethodChatSend = "chat.send"
 )
@@ -208,6 +222,16 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodSpeechChunk:  registrySpeechMethod(RegistryMethodSpeechChunk),
 	RegistryMethodSpeechFinish: registrySpeechMethod(RegistryMethodSpeechFinish),
 	RegistryMethodSpeechCancel: registrySpeechMethod(RegistryMethodSpeechCancel),
+
+	RegistryMethodTerminalList:    registryTerminalHubMethod(RegistryMethodTerminalList, RegistryRoleClient, RegistryRouteTerminalHubRequest),
+	RegistryMethodTerminalCreate:  registryProjectMethod(RegistryMethodTerminalCreate, RegistryRouteTerminalProjectRequest),
+	RegistryMethodTerminalGet:     registryTerminalHubMethod(RegistryMethodTerminalGet, RegistryRoleClient, RegistryRouteTerminalHubRequest),
+	RegistryMethodTerminalResize:  registryTerminalHubMethod(RegistryMethodTerminalResize, RegistryRoleClient, RegistryRouteTerminalHubRequest),
+	RegistryMethodTerminalClose:   registryTerminalHubMethod(RegistryMethodTerminalClose, RegistryRoleClient, RegistryRouteTerminalHubRequest),
+	RegistryMethodTerminalRestart: registryTerminalHubMethod(RegistryMethodTerminalRestart, RegistryRoleClient, RegistryRouteTerminalHubRequest),
+	RegistryMethodTerminalInput:   registryTerminalHubMethod(RegistryMethodTerminalInput, RegistryRoleClient, RegistryRouteTerminalClientEvent),
+	RegistryMethodTerminalOutput:  registryTerminalHubMethod(RegistryMethodTerminalOutput, RegistryRoleHub, RegistryRouteTerminalHubEvent),
+	RegistryMethodTerminalChanged: registryTerminalHubMethod(RegistryMethodTerminalChanged, RegistryRoleHub, RegistryRouteTerminalHubEvent),
 }
 
 func registryMethod(method string, route RegistryRouteKind, roles []RegistryRole) RegistryMethodDescriptor {
@@ -258,6 +282,12 @@ func registryHubStateMethod(method string) RegistryMethodDescriptor {
 
 func registrySpeechMethod(method string) RegistryMethodDescriptor {
 	return registryMethod(method, RegistryRouteSpeech, []RegistryRole{RegistryRoleClient})
+}
+
+func registryTerminalHubMethod(method string, role RegistryRole, route RegistryRouteKind) RegistryMethodDescriptor {
+	desc := registryMethod(method, route, []RegistryRole{role})
+	desc.RequiresHubID = true
+	return desc
 }
 
 func registryHubSessionEventMethod(method string, clientEventMethod string) RegistryMethodDescriptor {

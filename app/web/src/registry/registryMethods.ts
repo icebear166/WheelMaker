@@ -1,4 +1,4 @@
-export const RegistryProtocolVersion = '2.5' as const;
+export const RegistryProtocolVersion = '2.6' as const;
 
 export const RegistryMethods = {
   ConnectInit: 'connect.init',
@@ -68,6 +68,15 @@ export const RegistryMethods = {
   MonitorLog: 'monitor.log',
   MonitorDB: 'monitor.db',
   MonitorAction: 'monitor.action',
+  TerminalList: 'terminal.list',
+  TerminalCreate: 'terminal.create',
+  TerminalGet: 'terminal.get',
+  TerminalResize: 'terminal.resize',
+  TerminalClose: 'terminal.close',
+  TerminalRestart: 'terminal.restart',
+  TerminalInput: 'terminal.input',
+  TerminalOutput: 'terminal.output',
+  TerminalChanged: 'terminal.changed',
 } as const;
 
 export type RegistryMethod = typeof RegistryMethods[keyof typeof RegistryMethods];

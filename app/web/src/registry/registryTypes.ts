@@ -213,6 +213,36 @@ export interface RegistrySessionAttachmentContentResponse {
   hash?: string;
 }
 
+export type RegistryTerminalStatus = 'running' | 'exited' | 'error';
+
+export type RegistryTerminal = {
+  terminalId: string;
+  runId: string;
+  hubId: string;
+  projectId: string;
+  projectName: string;
+  initialCwd: string;
+  shell: string;
+  status: RegistryTerminalStatus;
+  cols: number;
+  rows: number;
+  exitCode?: number;
+  createdAt: string;
+  exitedAt?: string;
+};
+
+export type RegistryTerminalListResponse = {terminals: RegistryTerminal[]};
+export type RegistryTerminalCreateResponse = {terminal: RegistryTerminal; resizeToken: string};
+export type RegistryTerminalGetResponse = {terminal: RegistryTerminal; snapshotSeq: number; snapshot: string};
+export type RegistryTerminalResizeResponse = {terminal: RegistryTerminal; resizeToken?: string};
+export type RegistryTerminalInputEvent = {terminalId: string; runId: string; data: string};
+export type RegistryTerminalOutputEvent = {terminalId: string; runId: string; seq: number; data: string};
+export type RegistryTerminalChangedEvent = {
+  change: 'created' | 'running' | 'resized' | 'exited' | 'restarted' | 'closed' | 'error';
+  terminalId: string;
+  terminal?: RegistryTerminal;
+};
+
 export interface RegistrySessionMessage {
   sessionId: string;
   turnIndex: number;

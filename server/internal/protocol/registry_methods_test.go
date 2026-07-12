@@ -1,15 +1,64 @@
 package protocol
 
 import (
+	"bytes"
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
-func TestRegistryDefaultProtocolVersionIs25(t *testing.T) {
-	if DefaultProtocolVersion != "2.5" {
-		t.Fatalf("DefaultProtocolVersion=%q, want 2.5", DefaultProtocolVersion)
+func TestRegistryDefaultProtocolVersionIs26(t *testing.T) {
+	if DefaultProtocolVersion != "2.6" {
+		t.Fatalf("DefaultProtocolVersion=%q, want 2.6", DefaultProtocolVersion)
+	}
+}
+
+func TestRegistryTerminalMethods(t *testing.T) {
+	tests := []struct {
+		method    string
+		role      RegistryRole
+		route     RegistryRouteKind
+		projectID bool
+		hubID     bool
+	}{
+		{RegistryMethodTerminalList, RegistryRoleClient, RegistryRouteTerminalHubRequest, false, true},
+		{RegistryMethodTerminalCreate, RegistryRoleClient, RegistryRouteTerminalProjectRequest, true, false},
+		{RegistryMethodTerminalGet, RegistryRoleClient, RegistryRouteTerminalHubRequest, false, true},
+		{RegistryMethodTerminalResize, RegistryRoleClient, RegistryRouteTerminalHubRequest, false, true},
+		{RegistryMethodTerminalClose, RegistryRoleClient, RegistryRouteTerminalHubRequest, false, true},
+		{RegistryMethodTerminalRestart, RegistryRoleClient, RegistryRouteTerminalHubRequest, false, true},
+		{RegistryMethodTerminalInput, RegistryRoleClient, RegistryRouteTerminalClientEvent, false, true},
+		{RegistryMethodTerminalOutput, RegistryRoleHub, RegistryRouteTerminalHubEvent, false, true},
+		{RegistryMethodTerminalChanged, RegistryRoleHub, RegistryRouteTerminalHubEvent, false, true},
+	}
+	for _, tt := range tests {
+		desc, ok := RegistryMethod(tt.method)
+		if !ok {
+			t.Fatalf("method %q is not registered", tt.method)
+		}
+		if desc.Route != tt.route || desc.RequiresProjectID != tt.projectID || desc.RequiresHubID != tt.hubID {
+			t.Fatalf("method %q descriptor=%+v", tt.method, desc)
+		}
+		if !RegistryMethodAllowed(string(tt.role), tt.method) {
+			t.Fatalf("method %q should allow %q", tt.method, tt.role)
+		}
+	}
+}
+
+func TestTerminalDataPayloadValidation(t *testing.T) {
+	valid := base64.StdEncoding.EncodeToString([]byte{0, 3, 0xff})
+	decoded, err := DecodeTerminalData(valid)
+	if err != nil || !bytes.Equal(decoded, []byte{0, 3, 0xff}) {
+		t.Fatalf("DecodeTerminalData()=%v,%v", decoded, err)
+	}
+	if _, err := DecodeTerminalData("not-base64"); err == nil {
+		t.Fatal("invalid base64 should fail")
+	}
+	oversized := base64.StdEncoding.EncodeToString(make([]byte, MaxTerminalEventBytes+1))
+	if _, err := DecodeTerminalData(oversized); err == nil {
+		t.Fatal("oversized decoded payload should fail")
 	}
 }
 
