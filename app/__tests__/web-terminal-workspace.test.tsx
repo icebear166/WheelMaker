@@ -51,5 +51,13 @@ describe('terminal workspace integration', () => {
     expect(terminalCss).toContain('.terminal-mobile-overlay');
     expect(terminalCss).toContain('position: fixed;');
     expect(terminalCss).toContain('z-index: 70;');
+    expect(terminalCss).toContain([
+      '.terminal-xterm-host {',
+      '  width: 100%;',
+      '  height: 100%;',
+      '  touch-action: none;',
+      '  overscroll-behavior: contain;',
+      '}',
+    ].join('\n'));
   });
 });

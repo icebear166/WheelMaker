@@ -17,6 +17,7 @@ jest.mock('@xterm/xterm', () => ({
     focus = jest.fn();
     dispose = jest.fn();
     resize = jest.fn();
+    scrollLines = jest.fn();
     write = jest.fn((_data: Uint8Array, callback?: () => void) => callback?.());
     dataHandler?: (data: string) => void;
     binaryHandler?: (data: string) => void;
@@ -54,6 +55,14 @@ function terminal(overrides: Partial<RegistryTerminal> = {}): RegistryTerminal {
   };
 }
 
+function terminalHost() {
+  return {
+    clientHeight: 300,
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+  };
+}
+
 describe('terminal components', () => {
   beforeEach(() => {
     mockTerminalInstances.length = 0;
@@ -70,7 +79,7 @@ describe('terminal components', () => {
     await act(async () => {
       renderer = TestRenderer.create(
         <TerminalView ref={ref} active resizeEnabled cols={80} rows={24} onInput={onInput} onResize={onResize} />,
-        {createNodeMock: () => ({})},
+        {createNodeMock: terminalHost},
       );
     });
     const xterm = mockTerminalInstances[0];
@@ -101,11 +110,87 @@ describe('terminal components', () => {
     await act(async () => {
       TestRenderer.create(
         <TerminalView active resizeEnabled={false} cols={132} rows={44} onInput={jest.fn()} onResize={jest.fn()} />,
-        {createNodeMock: () => ({})},
+        {createNodeMock: terminalHost},
       );
     });
     expect(mockTerminalInstances[0].options).toMatchObject({cols: 132, rows: 44});
     expect(mockFitInstances[0].fit).not.toHaveBeenCalled();
+  });
+
+  test('scrolls terminal history from a one-finger vertical drag', async () => {
+    const listeners = new Map<string, (event: any) => void>();
+    const host = {
+      clientHeight: 300,
+      addEventListener: jest.fn((type: string, listener: (event: any) => void) => listeners.set(type, listener)),
+      removeEventListener: jest.fn((type: string) => listeners.delete(type)),
+    };
+    let renderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        <TerminalView active resizeEnabled={false} cols={80} rows={30} onInput={jest.fn()} onResize={jest.fn()} />,
+        {createNodeMock: () => host},
+      );
+    });
+    const preventDefault = jest.fn();
+    const stopPropagation = jest.fn();
+
+    expect(listeners.get('touchstart')).toBeDefined();
+    expect(listeners.get('touchmove')).toBeDefined();
+    act(() => {
+      listeners.get('touchstart')?.({touches: [{clientX: 40, clientY: 100}]});
+      listeners.get('touchmove')?.({
+        touches: [{clientX: 42, clientY: 70}],
+        preventDefault,
+        stopPropagation,
+      });
+      listeners.get('touchmove')?.({
+        touches: [{clientX: 41, clientY: 100}],
+        preventDefault,
+        stopPropagation,
+      });
+    });
+
+    expect(mockTerminalInstances[0].scrollLines.mock.calls).toEqual([[3], [-3]]);
+    expect(preventDefault).toHaveBeenCalledTimes(2);
+    expect(stopPropagation).toHaveBeenCalledTimes(2);
+    act(() => renderer!.unmount());
+    expect(host.removeEventListener).toHaveBeenCalledWith('touchmove', expect.any(Function));
+  });
+
+  test('leaves horizontal and multi-touch gestures alone', async () => {
+    const listeners = new Map<string, (event: any) => void>();
+    const host = {
+      clientHeight: 300,
+      addEventListener: jest.fn((type: string, listener: (event: any) => void) => listeners.set(type, listener)),
+      removeEventListener: jest.fn(),
+    };
+    await act(async () => {
+      TestRenderer.create(
+        <TerminalView active resizeEnabled={false} cols={80} rows={30} onInput={jest.fn()} onResize={jest.fn()} />,
+        {createNodeMock: () => host},
+      );
+    });
+    const preventDefault = jest.fn();
+
+    expect(listeners.get('touchstart')).toBeDefined();
+    expect(listeners.get('touchmove')).toBeDefined();
+    act(() => {
+      listeners.get('touchstart')?.({touches: [{clientX: 20, clientY: 100}]});
+      listeners.get('touchmove')?.({
+        touches: [{clientX: 60, clientY: 104}],
+        preventDefault,
+        stopPropagation: jest.fn(),
+      });
+      listeners.get('touchstart')?.({touches: [{clientX: 20, clientY: 100}, {clientX: 30, clientY: 100}]});
+      listeners.get('touchmove')?.({
+        touches: [{clientX: 20, clientY: 50}, {clientX: 30, clientY: 50}],
+        preventDefault,
+        stopPropagation: jest.fn(),
+      });
+    });
+
+    expect(mockTerminalInstances[0].scrollLines).not.toHaveBeenCalled();
+    expect(preventDefault).not.toHaveBeenCalled();
   });
 
   test('renders tabs and sends standard mobile key sequences with one-shot modifiers', () => {
