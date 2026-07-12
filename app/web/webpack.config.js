@@ -55,6 +55,13 @@ module.exports = (_env = {}, argv = {}) => {
       publicPath: '/',
       clean: true,
     },
+    cache: {
+      type: 'filesystem',
+      cacheDirectory: path.join(os.homedir(), '.wheelmaker', 'cache', 'webpack'),
+      buildDependencies: {
+        config: [__filename, path.resolve(__dirname, '..', 'package-lock.json')],
+      },
+    },
     resolve: {
       extensions: ['.tsx', '.ts', '.js'],
     },
