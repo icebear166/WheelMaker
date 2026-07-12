@@ -1144,7 +1144,10 @@
 .wide-project-hub-7 { --hub-accent: #7b6cb8; }
 
 .recent-sessions-section {
-  margin-bottom: 4px;
+  margin: 0 2px 4px;
+  border-radius: calc(var(--radius-panel) - 2px);
+  background: color-mix(in srgb, var(--surface-panel) 62%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border-subtle) 72%, transparent);
 }
 
 .recent-sessions-section:not(.collapsed) {
