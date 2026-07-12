@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/swm8023/wheelmaker/internal/hub/agent"
 	"github.com/swm8023/wheelmaker/internal/hub/client"
+	terminalpkg "github.com/swm8023/wheelmaker/internal/hub/terminal"
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
 	logger "github.com/swm8023/wheelmaker/internal/shared"
 )
@@ -22,11 +24,12 @@ import (
 // Hub orchestrates one or more WheelMaker project clients.
 // Each project has its own client, agent session, and state partition.
 type Hub struct {
-	cfg           *logger.AppConfig
-	dbPath        string
-	clients       []*client.Client
-	regSync       *Reporter
-	clientsByName map[string]*client.Client
+	cfg             *logger.AppConfig
+	dbPath          string
+	clients         []*client.Client
+	regSync         *Reporter
+	terminalManager *terminalpkg.Manager
+	clientsByName   map[string]*client.Client
 }
 
 // New creates a Hub from the given config and client DB path.
@@ -130,6 +133,11 @@ func (h *Hub) Run(ctx context.Context) error {
 // Close calls Close() on all project clients, collecting any errors.
 func (h *Hub) Close() error {
 	var errs []error
+	if h.terminalManager != nil {
+		if err := h.terminalManager.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
 	for _, c := range h.clients {
 		if err := c.Close(); err != nil {
 			errs = append(errs, err)
@@ -178,6 +186,25 @@ func (h *Hub) setupRegistrySync() {
 		ReconnectInterval: 2 * time.Second,
 		MonitorBaseDir:    filepath.Dir(filepath.Dir(h.dbPath)),
 	}, projects)
+	projectsByID := make(map[string]terminalpkg.Project, len(projects))
+	for _, project := range projects {
+		projectID := rp.ProjectID(hubID, project.Name)
+		projectsByID[projectID] = terminalpkg.Project{ID: projectID, Name: project.Name, Root: project.Path}
+	}
+	terminalManager := terminalpkg.NewManager(terminalpkg.Config{
+		HubID: hubID,
+		ResolveProject: func(projectID string) (terminalpkg.Project, bool) {
+			project, ok := projectsByID[projectID]
+			return project, ok
+		},
+		ResolveShell: func() (string, error) {
+			return terminalpkg.DetectShell(exec.LookPath)
+		},
+		PTYFactory: terminalpkg.NewPlatformPTYFactory(),
+		Publish:    rep.PublishTerminalEvent,
+	})
+	rep.SetTerminalHandler(&terminalReporterHandler{manager: terminalManager})
+	h.terminalManager = terminalManager
 	rep.SetMonitorResetSessionPromptState(func() {
 		for _, projectClient := range h.clientsByName {
 			if projectClient != nil {
@@ -196,6 +223,56 @@ func (h *Hub) setupRegistrySync() {
 		}
 	}
 	h.regSync = rep
+}
+
+type terminalReporterHandler struct {
+	manager *terminalpkg.Manager
+}
+
+func (h *terminalReporterHandler) HandleTerminalRequest(ctx context.Context, method, projectID string, payload json.RawMessage) (any, error) {
+	switch method {
+	case rp.RegistryMethodTerminalList:
+		return h.manager.List(), nil
+	case rp.RegistryMethodTerminalCreate:
+		var req rp.TerminalCreateRequest
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, fmt.Errorf("decode terminal.create: %w", err)
+		}
+		return h.manager.Create(ctx, projectID, req)
+	case rp.RegistryMethodTerminalGet:
+		var req rp.TerminalGetRequest
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, fmt.Errorf("decode terminal.get: %w", err)
+		}
+		return h.manager.Get(req)
+	case rp.RegistryMethodTerminalResize:
+		var req rp.TerminalResizeRequest
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, fmt.Errorf("decode terminal.resize: %w", err)
+		}
+		return h.manager.Resize(req)
+	case rp.RegistryMethodTerminalClose:
+		var req rp.TerminalRefRequest
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, fmt.Errorf("decode terminal.close: %w", err)
+		}
+		if err := h.manager.CloseTerminal(req); err != nil {
+			return nil, err
+		}
+		return map[string]any{"ok": true}, nil
+	case rp.RegistryMethodTerminalRestart:
+		var req rp.TerminalRefRequest
+		if err := json.Unmarshal(payload, &req); err != nil {
+			return nil, fmt.Errorf("decode terminal.restart: %w", err)
+		}
+		return h.manager.Restart(ctx, req)
+	default:
+		return nil, fmt.Errorf("unsupported terminal method %q", method)
+	}
+}
+
+func (h *terminalReporterHandler) HandleTerminalInput(event rp.TerminalInputEvent) {
+	h.manager.Input(event)
 }
 
 func (h *Hub) collectProjectInfo(cfgProject logger.ProjectConfig) ProjectInfo {

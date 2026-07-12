@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/gorilla/websocket"
 	clientpkg "github.com/swm8023/wheelmaker/internal/hub/client"
@@ -408,6 +409,24 @@ type testEnvelope struct {
 type stubSessionHandler struct {
 	lastMethod string
 	lastBody   string
+}
+
+type stubTerminalHandler struct {
+	requests chan string
+	inputs   chan rp.TerminalInputEvent
+}
+
+func (s *stubTerminalHandler) HandleTerminalRequest(_ context.Context, method, projectID string, payload json.RawMessage) (any, error) {
+	if s.requests != nil {
+		s.requests <- method + ":" + projectID + ":" + string(payload)
+	}
+	return rp.TerminalListResponse{Terminals: []rp.TerminalMetadata{{TerminalID: "term-1", HubID: "hub-terminal"}}}, nil
+}
+
+func (s *stubTerminalHandler) HandleTerminalInput(event rp.TerminalInputEvent) {
+	if s.inputs != nil {
+		s.inputs <- event
+	}
 }
 
 func (s *stubSessionHandler) HandleSessionRequest(_ context.Context, method string, _ string, payload json.RawMessage) (any, error) {
@@ -1050,6 +1069,172 @@ func TestReporterRespondsToSessionRequests(t *testing.T) {
 		t.Fatal("did not receive session.send response from reporter")
 	}
 
+}
+
+func TestReporterRespondsToTerminalRequests(t *testing.T) {
+	respSeen := make(chan testEnvelope, 1)
+	errSeen := make(chan error, 1)
+	ts := newFakeReporterRegistry(t, "hub-terminal", testEnvelope{
+		RequestID: 101,
+		Type:      rp.RegistryEnvelopeTypeRequest,
+		Method:    rp.RegistryMethodTerminalList,
+		HubID:     "hub-terminal",
+		Payload:   map[string]any{},
+	}, respSeen, errSeen)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	reporter := NewReporter(ReporterConfig{
+		Server: strings.TrimPrefix(ts.URL, "http://"), HubID: "hub-terminal", ReconnectInterval: 50 * time.Millisecond,
+	}, nil)
+	handler := &stubTerminalHandler{requests: make(chan string, 1)}
+	reporter.SetTerminalHandler(handler)
+	done := make(chan error, 1)
+	go func() { done <- reporter.Run(ctx) }()
+	defer stopReporterForTest(t, cancel, done)
+
+	select {
+	case err := <-errSeen:
+		t.Fatal(err)
+	case request := <-handler.requests:
+		if request != rp.RegistryMethodTerminalList+"::{ }" && !strings.HasPrefix(request, rp.RegistryMethodTerminalList+"::") {
+			t.Fatalf("request=%q", request)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("terminal handler did not receive request")
+	}
+	select {
+	case response := <-respSeen:
+		if response.Type != rp.RegistryEnvelopeTypeResponse || response.Method != rp.RegistryMethodTerminalList {
+			t.Fatalf("response=%+v", response)
+		}
+		terminals, ok := response.Payload["terminals"].([]any)
+		if !ok || len(terminals) != 1 {
+			t.Fatalf("payload=%+v", response.Payload)
+		}
+	case err := <-errSeen:
+		t.Fatal(err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("terminal response was not sent")
+	}
+}
+
+func TestReporterHandlesTerminalInputAndPublishesOutputEvents(t *testing.T) {
+	upgrader := websocket.Upgrader{CheckOrigin: func(_ *http.Request) bool { return true }}
+	outputSeen := make(chan testEnvelope, 1)
+	errSeen := make(chan error, 1)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		ws, err := upgrader.Upgrade(w, req, nil)
+		if err != nil {
+			errSeen <- err
+			return
+		}
+		defer ws.Close()
+		initReq := mustReadEnvelope(t, ws)
+		mustWriteJSON(t, ws, testEnvelope{RequestID: initReq.RequestID, Type: "response", Method: initReq.Method, Payload: map[string]any{
+			"ok": true, "principal": map[string]any{"role": "hub", "hubId": "hub-terminal-events", "connectionEpoch": 1},
+			"serverInfo": map[string]any{"serverVersion": "test", "protocolVersion": rp.DefaultProtocolVersion},
+			"features":   map[string]any{}, "hashAlgorithms": []string{"sha256"},
+		}})
+		reportReq := mustReadEnvelope(t, ws)
+		mustWriteJSON(t, ws, testEnvelope{RequestID: reportReq.RequestID, Type: "response", Method: reportReq.Method, Payload: map[string]any{"ok": true}})
+		mustWriteJSON(t, ws, testEnvelope{Type: "event", Method: rp.RegistryMethodTerminalInput, HubID: "hub-terminal-events", Payload: map[string]any{
+			"terminalId": "term-1", "runId": "run-1", "data": "YQ==",
+		}})
+		_ = ws.SetReadDeadline(time.Now().Add(2 * time.Second))
+		outputSeen <- mustReadEnvelope(t, ws)
+	}))
+	t.Cleanup(ts.Close)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	reporter := NewReporter(ReporterConfig{
+		Server: strings.TrimPrefix(ts.URL, "http://"), HubID: "hub-terminal-events", ReconnectInterval: 50 * time.Millisecond,
+	}, nil)
+	handler := &stubTerminalHandler{inputs: make(chan rp.TerminalInputEvent, 1)}
+	reporter.SetTerminalHandler(handler)
+	done := make(chan error, 1)
+	go func() { done <- reporter.Run(ctx) }()
+	defer stopReporterForTest(t, cancel, done)
+
+	select {
+	case input := <-handler.inputs:
+		if input.TerminalID != "term-1" || input.RunID != "run-1" || input.Data != "YQ==" {
+			t.Fatalf("input=%+v", input)
+		}
+	case err := <-errSeen:
+		t.Fatal(err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("terminal input was not handled")
+	}
+	if err := reporter.PublishTerminalEvent(rp.RegistryMethodTerminalOutput, rp.TerminalOutputEvent{
+		TerminalID: "term-1", RunID: "run-1", Seq: 1, Data: "Yg==",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case output := <-outputSeen:
+		if output.Type != rp.RegistryEnvelopeTypeEvent || output.RequestID != 0 || output.Method != rp.RegistryMethodTerminalOutput || output.HubID != "hub-terminal-events" {
+			t.Fatalf("output=%+v", output)
+		}
+	case err := <-errSeen:
+		t.Fatal(err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("terminal output event was not published")
+	}
+}
+
+func TestReporterTerminalDebugEnvelopeRedactsDataAndSnapshot(t *testing.T) {
+	var log strings.Builder
+	reporter := NewReporter(ReporterConfig{HubID: "hub-terminal-log"}, nil)
+	reporter.SetDebugLogger(&log)
+	reporter.writeDebugEnvelope("->", envelope{
+		Type: rp.RegistryEnvelopeTypeEvent, Method: rp.RegistryMethodTerminalOutput, HubID: "hub-terminal-log",
+		Payload: rp.MustRaw(rp.TerminalOutputEvent{TerminalID: "term-1", RunID: "run-1", Seq: 9, Data: "c2VjcmV0LW91dHB1dA=="}),
+	})
+	reporter.writeDebugEnvelope("<-", envelope{
+		Type: rp.RegistryEnvelopeTypeResponse, Method: rp.RegistryMethodTerminalGet, HubID: "hub-terminal-log",
+		Payload: rp.MustRaw(rp.TerminalGetResponse{Terminal: rp.TerminalMetadata{TerminalID: "term-1", RunID: "run-1"}, Snapshot: "c2VjcmV0LXNuYXBzaG90"}),
+	})
+	got := log.String()
+	if strings.Contains(got, "c2VjcmV0LW91dHB1dA==") || strings.Contains(got, "c2VjcmV0LXNuYXBzaG90") {
+		t.Fatalf("terminal contents leaked into debug log: %s", got)
+	}
+	if !strings.Contains(got, `"terminalId":"term-1"`) || !strings.Contains(got, `"seq":9`) {
+		t.Fatalf("terminal metadata missing from debug log: %s", got)
+	}
+}
+
+func TestReporterTerminalPublishQueueIsBounded(t *testing.T) {
+	reporter := NewReporter(ReporterConfig{HubID: "hub-terminal-backlog"}, nil)
+	sink := newTerminalEventSink()
+	reporter.terminalEventSink = sink
+	for i := 0; i < cap(sink.events); i++ {
+		if err := reporter.PublishTerminalEvent(rp.RegistryMethodTerminalOutput, rp.TerminalOutputEvent{
+			TerminalID: "term-1", RunID: "run-1", Seq: uint64(i + 1), Data: "YQ==",
+		}); err != nil {
+			t.Fatalf("enqueue %d: %v", i, err)
+		}
+	}
+	if err := reporter.PublishTerminalEvent(rp.RegistryMethodTerminalOutput, rp.TerminalOutputEvent{
+		TerminalID: "term-1", RunID: "run-1", Seq: 257, Data: "Yg==",
+	}); !errors.Is(err, errTerminalPublishBacklog) {
+		t.Fatalf("full queue err=%v", err)
+	}
+}
+
+func TestHubSetupRegistryCreatesTerminalManager(t *testing.T) {
+	projectRoot := t.TempDir()
+	h := New(&logger.AppConfig{
+		Projects: []logger.ProjectConfig{{Name: "proj1", Path: projectRoot}},
+		Registry: logger.RegistryConfig{Server: "127.0.0.1", Port: 9630, HubID: "hub-terminal-setup"},
+	}, filepath.Join(t.TempDir(), "state.db"))
+	h.setupRegistrySync()
+	defer h.Close()
+	if h.regSync == nil || h.terminalManager == nil {
+		t.Fatalf("registry=%v terminalManager=%v", h.regSync, h.terminalManager)
+	}
+	if h.regSync.terminalHandler == nil {
+		t.Fatal("Reporter terminal handler was not registered")
+	}
 }
 
 func TestReporterVerboseEnvelopeLogsDoNotIncludePayloadOrTiming(t *testing.T) {
