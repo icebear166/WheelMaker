@@ -204,7 +204,7 @@ describe('web runtime setup', () => {
     const projectRoot = path.join(__dirname, '..');
     const webpackConfig = loadWebpackConfig(projectRoot, 'production');
 
-    expect(webpackConfig.devtool).toBe('source-map');
+    expect(webpackConfig.devtool).toBe(false);
     expect(webpackConfig.optimization.minimizer[0].options.parallel).toBe(false);
   });
 
@@ -233,23 +233,23 @@ describe('web runtime setup', () => {
     expect(webpackConfig.optimization.minimizer[0].options.parallel).toBe(false);
   });
 
-  test('production webpack source maps are enabled by default and can be disabled', () => {
+  test('production webpack source maps are disabled by default and can be enabled', () => {
     const projectRoot = path.join(__dirname, '..');
-    const previousDisable = process.env.WHEELMAKER_WEB_DISABLE_SOURCEMAP;
+    const previousEnable = process.env.WHEELMAKER_WEB_ENABLE_SOURCEMAP;
 
-    delete process.env.WHEELMAKER_WEB_DISABLE_SOURCEMAP;
+    delete process.env.WHEELMAKER_WEB_ENABLE_SOURCEMAP;
     const defaultConfig = loadWebpackConfig(projectRoot, 'production');
-    process.env.WHEELMAKER_WEB_DISABLE_SOURCEMAP = '1';
-    const disabledConfig = loadWebpackConfig(projectRoot, 'production');
+    process.env.WHEELMAKER_WEB_ENABLE_SOURCEMAP = '1';
+    const enabledConfig = loadWebpackConfig(projectRoot, 'production');
 
-    if (previousDisable === undefined) {
-      delete process.env.WHEELMAKER_WEB_DISABLE_SOURCEMAP;
+    if (previousEnable === undefined) {
+      delete process.env.WHEELMAKER_WEB_ENABLE_SOURCEMAP;
     } else {
-      process.env.WHEELMAKER_WEB_DISABLE_SOURCEMAP = previousDisable;
+      process.env.WHEELMAKER_WEB_ENABLE_SOURCEMAP = previousEnable;
     }
 
-    expect(defaultConfig.devtool).toBe('source-map');
-    expect(disabledConfig.devtool).toBe(false);
+    expect(defaultConfig.devtool).toBe(false);
+    expect(enabledConfig.devtool).toBe('source-map');
   });
 
   test('production webpack extracts css instead of injecting it through javascript', () => {
