@@ -360,6 +360,22 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 		}
+		if in.Type == rp.RegistryEnvelopeTypeEvent {
+			if !state.initialized {
+				_ = s.writeError(state.peer, 0, in.Method, codeUnauthorized, "connect.init required", nil)
+				continue
+			}
+			if in.RequestID != 0 {
+				_ = s.writeError(state.peer, in.RequestID, in.Method, codeInvalidArgument, "event must not include requestId", nil)
+				continue
+			}
+			if !methodAllowed(state.role, in.Method) {
+				_ = s.writeError(state.peer, 0, in.Method, codeForbidden, "event method not allowed for role", map[string]any{"role": state.role})
+				continue
+			}
+			s.handleTerminalEvent(state, in)
+			continue
+		}
 		if in.Type != rp.RegistryEnvelopeTypeRequest {
 			_ = s.writeError(state.peer, in.RequestID, in.Method, codeInvalidArgument, "type must be request", nil)
 			continue
@@ -385,7 +401,6 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 			resetIdleTimer()
 			continue
 		}
-
 		if state.role == string(rp.RegistryRoleClient) && isRemovedClientRequestMethod(in.Method) {
 			_ = s.writeError(state.peer, in.RequestID, in.Method, codeInvalidArgument, "unsupported method", map[string]any{"method": in.Method})
 			continue
@@ -406,7 +421,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 func shouldHandleRegistryRequestAsync(method string) bool {
 	return rp.RegistryRelayControlMethod(method) ||
 		rp.RegistryMonitorForwardMethod(method) ||
-		rp.RegistryHubStateMethod(method) ||
+		rp.RegistryHubStateMethod(method) || isTerminalHubRequestMethod(method) ||
 		isClientForwardMethod(method)
 }
 
@@ -437,7 +452,7 @@ func (s *Server) handleRequest(state *connectionState, in envelope) {
 		s.handleRelayRequest(state.peer, state, in)
 	case rp.RegistryMonitorForwardMethod(in.Method):
 		s.handleMonitorForwardRequest(state.peer, state, in)
-	case rp.RegistryHubStateMethod(in.Method):
+	case rp.RegistryHubStateMethod(in.Method) || isTerminalHubRequestMethod(in.Method):
 		s.handleHubStateForwardRequest(state.peer, state, in)
 	case isSpeechRequestMethod(in.Method):
 		s.speech.handleRequest(state.peer, state, in)
@@ -489,7 +504,82 @@ func isRemovedClientRequestMethod(method string) bool {
 }
 
 func isClientForwardMethod(method string) bool {
-	return rp.RegistryClientForwardMethod(method)
+	return rp.RegistryClientForwardMethod(method) || rp.RegistryMethodHasRoute(method, rp.RegistryRouteTerminalProjectRequest)
+}
+
+func isTerminalHubRequestMethod(method string) bool {
+	return rp.RegistryMethodHasRoute(method, rp.RegistryRouteTerminalHubRequest)
+}
+
+func (s *Server) handleTerminalEvent(state *connectionState, in envelope) {
+	switch in.Method {
+	case rp.RegistryMethodTerminalInput:
+		s.forwardTerminalInput(state, in)
+	case rp.RegistryMethodTerminalOutput, rp.RegistryMethodTerminalChanged:
+		s.broadcastTerminalHubEvent(state, in)
+	default:
+		_ = s.writeError(state.peer, 0, in.Method, codeInvalidArgument, "unsupported event method", map[string]any{"method": in.Method})
+	}
+}
+
+func (s *Server) forwardTerminalInput(state *connectionState, in envelope) {
+	hubID := strings.TrimSpace(in.HubID)
+	if hubID == "" {
+		_ = s.writeError(state.peer, 0, in.Method, codeInvalidArgument, "hubId is required", nil)
+		return
+	}
+	if state.scopeHubID != "" && state.scopeHubID != hubID {
+		_ = s.writeError(state.peer, 0, in.Method, codeForbidden, "hub out of client scope", map[string]any{"hubId": hubID})
+		return
+	}
+	s.mu.RLock()
+	hubPeer := s.hubPeers[hubID]
+	s.mu.RUnlock()
+	if hubPeer == nil {
+		_ = s.writeError(state.peer, 0, in.Method, codeUnavailable, "hub offline", map[string]any{"hubId": hubID})
+		return
+	}
+	if err := hubPeer.write(envelope{
+		Type:    rp.RegistryEnvelopeTypeEvent,
+		Method:  in.Method,
+		HubID:   hubID,
+		Payload: in.Payload,
+	}); err != nil {
+		_ = s.writeError(state.peer, 0, in.Method, codeInternal, "forward event write failed", nil)
+	}
+}
+
+func (s *Server) broadcastTerminalHubEvent(state *connectionState, in envelope) {
+	hubID := strings.TrimSpace(in.HubID)
+	if hubID == "" {
+		_ = s.writeError(state.peer, 0, in.Method, codeInvalidArgument, "hubId is required", nil)
+		return
+	}
+	if state.hubID == "" || state.hubID != hubID {
+		_ = s.writeError(state.peer, 0, in.Method, codeForbidden, "hubId mismatch", nil)
+		return
+	}
+	s.mu.RLock()
+	peers := make([]*peerConn, 0, len(s.clientPeers))
+	for _, client := range s.clientPeers {
+		if client == nil || client.peer == nil {
+			continue
+		}
+		if client.scopeHubID != "" && client.scopeHubID != hubID {
+			continue
+		}
+		peers = append(peers, client.peer)
+	}
+	s.mu.RUnlock()
+	msg := envelope{
+		Type:    rp.RegistryEnvelopeTypeEvent,
+		Method:  in.Method,
+		HubID:   hubID,
+		Payload: in.Payload,
+	}
+	for _, peer := range peers {
+		_ = peer.write(msg)
+	}
 }
 
 func registrySessionEventMethod(method string) string {
