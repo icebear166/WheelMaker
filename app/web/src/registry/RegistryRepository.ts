@@ -75,6 +75,12 @@ import type {
   RegistryTokenProvider,
   RegistryDeepSeekTokenStats,
   RegistryTokenScanResult,
+  RegistryTerminalCreateResponse,
+  RegistryTerminalGetResponse,
+  RegistryTerminalInputEvent,
+  RegistryTerminalListResponse,
+  RegistryTerminalResizeRequest,
+  RegistryTerminalResizeResponse,
   RegistryWheelMakerUpdateResponse,
   RegistryWorkingTreeFileDiff,
 } from './registryTypes';
@@ -1558,6 +1564,68 @@ export class RegistryRepository {
     });
     const payload = (resp.payload ?? {}) as {state?: unknown};
     return this.normalizeHubState(payload.state, hubId);
+  }
+
+  async listTerminals(hubId: string): Promise<RegistryTerminalListResponse> {
+    const resp = await this.client.request({
+      method: RegistryMethods.TerminalList,
+      hubId,
+      payload: {},
+    });
+    const payload = (resp.payload ?? {}) as Partial<RegistryTerminalListResponse>;
+    return {terminals: Array.isArray(payload.terminals) ? payload.terminals : []};
+  }
+
+  async createTerminal(projectId: string, cols: number, rows: number): Promise<RegistryTerminalCreateResponse> {
+    const resp = await this.client.request({
+      method: RegistryMethods.TerminalCreate,
+      projectId,
+      payload: {cols, rows},
+    });
+    return (resp.payload ?? {}) as RegistryTerminalCreateResponse;
+  }
+
+  async getTerminal(hubId: string, terminalId: string): Promise<RegistryTerminalGetResponse> {
+    const resp = await this.client.request({
+      method: RegistryMethods.TerminalGet,
+      hubId,
+      payload: {terminalId},
+    });
+    return (resp.payload ?? {}) as RegistryTerminalGetResponse;
+  }
+
+  async resizeTerminal(hubId: string, payload: RegistryTerminalResizeRequest): Promise<RegistryTerminalResizeResponse> {
+    const resp = await this.client.request({
+      method: RegistryMethods.TerminalResize,
+      hubId,
+      payload,
+    });
+    return (resp.payload ?? {}) as RegistryTerminalResizeResponse;
+  }
+
+  async closeTerminal(hubId: string, terminalId: string): Promise<void> {
+    await this.client.request({
+      method: RegistryMethods.TerminalClose,
+      hubId,
+      payload: {terminalId},
+    });
+  }
+
+  async restartTerminal(hubId: string, terminalId: string): Promise<RegistryTerminalCreateResponse> {
+    const resp = await this.client.request({
+      method: RegistryMethods.TerminalRestart,
+      hubId,
+      payload: {terminalId},
+    });
+    return (resp.payload ?? {}) as RegistryTerminalCreateResponse;
+  }
+
+  sendTerminalInput(hubId: string, payload: RegistryTerminalInputEvent): void {
+    this.client.sendEvent({
+      method: RegistryMethods.TerminalInput,
+      hubId,
+      payload,
+    });
   }
 
   async scanTokenStats(hubId: string): Promise<RegistryTokenScanResult> {

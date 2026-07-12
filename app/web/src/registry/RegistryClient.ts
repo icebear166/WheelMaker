@@ -1,4 +1,5 @@
 import type {RegistryDebugCaptureEvent, RegistryDebugConnection} from '../debug/registryDebug';
+import {redactRegistryDebugEnvelope} from '../debug/registryDebug';
 import type {RegistryConnectInitPayload, RegistryEnvelope, RegistryErrorPayload} from './registryTypes';
 import {RegistryMethods} from './registryMethods';
 
@@ -177,9 +178,36 @@ export class RegistryClient {
         : undefined;
       args.signal?.addEventListener('abort', handleAbort, {once: true});
       this.pending.set(requestId, {resolve, reject, timer, removeAbortListener});
-      this.emitDebug({kind: 'outbound', envelope, raw});
+      const debugEnvelope = redactRegistryDebugEnvelope(envelope);
+      if (debugEnvelope === envelope) {
+        this.emitDebug({kind: 'outbound', envelope, raw});
+      } else {
+        this.emitDebug({kind: 'outbound', envelope: debugEnvelope, raw: JSON.stringify(debugEnvelope)});
+      }
       this.ws?.send(raw);
     });
+  }
+
+  sendEvent(args: {
+    method: string;
+    payload: unknown;
+    projectId?: string;
+    hubId?: string;
+  }): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      throw new Error('registry websocket is not connected');
+    }
+    const envelope: RegistryEnvelope = {
+      type: 'event',
+      method: args.method,
+      payload: args.payload,
+      ...(args.projectId ? {projectId: args.projectId} : {}),
+      ...(args.hubId ? {hubId: args.hubId} : {}),
+    };
+    const raw = JSON.stringify(envelope);
+    const debugEnvelope = redactRegistryDebugEnvelope(envelope);
+    this.emitDebug({kind: 'outbound', envelope: debugEnvelope, raw: JSON.stringify(debugEnvelope)});
+    this.ws.send(raw);
   }
 
   close(): void {
@@ -224,7 +252,12 @@ export class RegistryClient {
         this.emitDebug({kind: 'parse_error', raw: event.data, error: error instanceof Error ? error.message : String(error)});
         return;
       }
-      this.emitDebug({kind: 'inbound', envelope, raw: event.data});
+      const debugEnvelope = redactRegistryDebugEnvelope(envelope);
+      if (debugEnvelope === envelope) {
+        this.emitDebug({kind: 'inbound', envelope, raw: event.data});
+      } else {
+        this.emitDebug({kind: 'inbound', envelope: debugEnvelope, raw: JSON.stringify(debugEnvelope)});
+      }
       if (envelope.type === 'event') {
         this.emitEvent(envelope);
         return;

@@ -228,6 +228,21 @@ import {
 } from '../chat/chatSelectionGuard';
 import { RegistryWorkspaceService } from '../registry/RegistryWorkspaceService';
 import {RegistryMethods} from '../registry/registryMethods';
+import {TerminalView, type TerminalViewHandle} from '../terminal/TerminalView';
+import {TerminalWorkbench} from '../terminal/TerminalWorkbench';
+import {bytesToBase64} from '../terminal/terminalEncoding';
+import {
+  applyTerminalChanged,
+  applyTerminalSnapshot,
+  beginTerminalSnapshot,
+  canSendTerminalInput,
+  createTerminalSyncState,
+  markTerminalsUnavailable,
+  mergeTerminalLists,
+  receiveTerminalOutput,
+  type TerminalEffect,
+  type TerminalSyncState,
+} from '../terminal/terminalSync';
 import { sortProjectsByPin, togglePinnedProjectId } from '../workspace/projectNavigation';
 import {
   HUB_COLOR_PRESETS,
@@ -486,6 +501,9 @@ import type {
   RegistryFileIndexSearchResult,
   RegistryFileIndexStatus,
   RegistryFileIndexStatusResponse,
+  RegistryTerminal,
+  RegistryTerminalChangedEvent,
+  RegistryTerminalOutputEvent,
 } from '../registry/registryTypes';
 
 const RegistryDebugPanel = React.lazy(() => import('../debug/RegistryDebugPanel').then(module => ({
@@ -2821,6 +2839,17 @@ export function App() {
   );
   const [chatPreviewManualOpen, setChatPreviewManualOpen] = useState(false);
   const [chatPreviewManualCollapsed, setChatPreviewManualCollapsed] = useState(false);
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalSync, setTerminalSync] = useState<TerminalSyncState>(() => createTerminalSyncState());
+  const terminalSyncRef = useRef(terminalSync);
+  const [activeTerminalKey, setActiveTerminalKey] = useState('');
+  const activeTerminalKeyRef = useRef('');
+  const terminalViewRef = useRef<TerminalViewHandle | null>(null);
+  const terminalResizeTokensRef = useRef(new Map<string, string>());
+  const terminalRefreshInFlightRef = useRef(new Set<string>());
+  const terminalRefreshRef = useRef<(key: string) => Promise<void>>(async () => undefined);
+  const [terminalPanelHeight, setTerminalPanelHeight] = useState(280);
+  const terminalPanelResizeRef = useRef<{pointerId: number; originY: number; startHeight: number} | null>(null);
   const [previewWorkbenchActionsMenuOpen, setPreviewWorkbenchActionsMenuOpen] = useState(false);
   const [previewSearchOpen, setPreviewSearchOpen] = useState(false);
   const [previewSearchQuery, setPreviewSearchQuery] = useState('');
@@ -7308,6 +7337,10 @@ export function App() {
     closeChatPortRelayPreview();
   }, [closeChatAttachmentPreview, closeChatFilePeek, closeChatPortRelayPreview, closeChatPromptArtifactPreview]);
   const handleAndroidNativeBack = useCallback(() => {
+    if (!isWide && terminalOpen) {
+      setTerminalOpen(false);
+      return true;
+    }
     if (!isWide && chatPreviewOpen) {
       chatFilePeekHistoryActiveRef.current = false;
       closeChatPreview();
@@ -7328,7 +7361,7 @@ export function App() {
       setSidebarSettingsOpen(false);
     }
     return true;
-  }, [chatPreviewOpen, closeChatPreview, isWide, setSidebarSettingsOpen]);
+  }, [chatPreviewOpen, closeChatPreview, isWide, setSidebarSettingsOpen, terminalOpen]);
   useEffect(() => {
     window.WheelMakerAndroidBack = {
       handleBack: handleAndroidNativeBack,
@@ -7773,6 +7806,8 @@ export function App() {
   };
   currentProjectRef.current = currentProject;
   projectsRef.current = projects;
+  terminalSyncRef.current = terminalSync;
+  activeTerminalKeyRef.current = activeTerminalKey;
   expandedDirsRef.current = expandedDirs;
   selectedFileRef.current = selectedFile;
   previewWorkbenchRef.current = previewWorkbench;
@@ -12093,6 +12128,7 @@ export function App() {
       reconnectStartedAtRef.current = null;
       setReconnecting(false);
       setConnected(true);
+      refreshTerminalLists(result.hubs).catch(() => undefined);
       if (!silentReconnect) {
         clearChatRuntimeState();
         if (preferredSelectedChatKey) {
@@ -14818,6 +14854,182 @@ export function App() {
     );
   };
 
+  const commitTerminalSync = useCallback((next: TerminalSyncState) => {
+    terminalSyncRef.current = next;
+    setTerminalSync(next);
+  }, []);
+
+  const runTerminalEffects = useCallback(async (effects: TerminalEffect[]) => {
+    for (const effect of effects) {
+      if (effect.kind === 'refresh') {
+        await terminalRefreshRef.current(effect.terminalKey);
+        continue;
+      }
+      if (activeTerminalKeyRef.current !== effect.terminalKey) continue;
+      if (effect.kind === 'reset') {
+        await terminalViewRef.current?.resetAndWrite(effect.data);
+      } else {
+        terminalViewRef.current?.write(effect.data);
+      }
+    }
+  }, []);
+
+  const refreshTerminal = useCallback(async (key: string) => {
+    if (!key || terminalRefreshInFlightRef.current.has(key)) return;
+    const terminal = terminalSyncRef.current.terminals[key];
+    if (!terminal) return;
+    terminalRefreshInFlightRef.current.add(key);
+    let retrySnapshot = false;
+    commitTerminalSync(beginTerminalSnapshot(terminalSyncRef.current, terminal.hubId, terminal.terminalId));
+    try {
+      const snapshot = await service.getTerminal(terminal.hubId, terminal.terminalId);
+      const result = applyTerminalSnapshot(terminalSyncRef.current, terminal.hubId, snapshot);
+      commitTerminalSync(result.state);
+      retrySnapshot = result.effects.some(effect => effect.kind === 'refresh');
+      await runTerminalEffects(result.effects.filter(effect => effect.kind !== 'refresh'));
+    } catch {
+      commitTerminalSync(markTerminalsUnavailable(terminalSyncRef.current, [terminal.hubId]));
+    } finally {
+      terminalRefreshInFlightRef.current.delete(key);
+    }
+    if (retrySnapshot) await terminalRefreshRef.current(key);
+  }, [commitTerminalSync, runTerminalEffects]);
+  terminalRefreshRef.current = refreshTerminal;
+
+  const refreshTerminalLists = useCallback(async (hubs: RegistryHub[]) => {
+    const hubIds = deriveRegistryHubIds(hubs);
+    const results = await Promise.allSettled(hubIds.map(hubId => service.listTerminals(hubId)));
+    const successful = results.flatMap((result, index) => result.status === 'fulfilled'
+      ? [{hubId: hubIds[index], terminals: result.value.terminals}]
+      : []);
+    const failedHubIds = results.flatMap((result, index) => result.status === 'rejected' ? [hubIds[index]] : []);
+    let next = mergeTerminalLists(terminalSyncRef.current, successful);
+    if (failedHubIds.length > 0) next = markTerminalsUnavailable(next, failedHubIds);
+    commitTerminalSync(next);
+    const currentKey = activeTerminalKeyRef.current;
+    const selectedKey = currentKey && next.terminals[currentKey]
+      ? currentKey
+      : Object.keys(next.terminals)[0] ?? '';
+    activeTerminalKeyRef.current = selectedKey;
+    setActiveTerminalKey(selectedKey);
+  }, [commitTerminalSync]);
+
+  useEffect(() => {
+    if (!terminalOpen || !activeTerminalKey || !connected) return;
+    const frame = window.requestAnimationFrame(() => {
+      terminalRefreshRef.current(activeTerminalKey).catch(() => undefined);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeTerminalKey, connected, terminalOpen]);
+
+  const handleCreateTerminal = useCallback(async () => {
+    const currentProjectId = projectIdRef.current;
+    if (!currentProjectId || !connectedRef.current) return;
+    const size = terminalViewRef.current?.fit() ?? {cols: 80, rows: 24};
+    const created = await service.createTerminal(currentProjectId, size.cols, size.rows);
+    const key = `${created.terminal.hubId}:${created.terminal.terminalId}`;
+    terminalResizeTokensRef.current.set(key, created.resizeToken);
+    const next = applyTerminalChanged(terminalSyncRef.current, created.terminal.hubId, {
+      change: 'created', terminalId: created.terminal.terminalId, terminal: created.terminal,
+    });
+    commitTerminalSync(next);
+    activeTerminalKeyRef.current = key;
+    setActiveTerminalKey(key);
+    setTerminalOpen(true);
+    if (!isWide) {
+      setChatPreviewManualOpen(false);
+      setChatPreviewManualCollapsed(true);
+    }
+  }, [commitTerminalSync, isWide]);
+
+  const handleTerminalInput = useCallback((data: Uint8Array) => {
+    const key = activeTerminalKeyRef.current;
+    const state = terminalSyncRef.current;
+    const terminal = state.terminals[key];
+    if (!terminal || !canSendTerminalInput(state, key, connectedRef.current)) return;
+    try {
+      service.sendTerminalInput(terminal.hubId, {
+        terminalId: terminal.terminalId,
+        runId: terminal.runId,
+        data: bytesToBase64(data),
+      });
+    } catch {
+      commitTerminalSync(markTerminalsUnavailable(state, [terminal.hubId]));
+    }
+  }, [commitTerminalSync]);
+
+  const handleTerminalResize = useCallback((cols: number, rows: number) => {
+    const key = activeTerminalKeyRef.current;
+    const terminal = terminalSyncRef.current.terminals[key];
+    const resizeToken = terminalResizeTokensRef.current.get(key);
+    if (!terminal || !resizeToken || !connectedRef.current) return;
+    service.resizeTerminal(terminal.hubId, {terminalId: terminal.terminalId, cols, rows, resizeToken})
+      .then(result => commitTerminalSync(applyTerminalChanged(terminalSyncRef.current, terminal.hubId, {
+        change: 'resized', terminalId: terminal.terminalId, terminal: result.terminal,
+      })))
+      .catch(() => undefined);
+  }, [commitTerminalSync]);
+
+  const handleClaimTerminalResize = useCallback(() => {
+    const key = activeTerminalKeyRef.current;
+    const terminal = terminalSyncRef.current.terminals[key];
+    const size = terminalViewRef.current?.fit();
+    if (!terminal || !size || !connectedRef.current) return;
+    service.resizeTerminal(terminal.hubId, {
+      terminalId: terminal.terminalId, cols: size.cols, rows: size.rows, claim: true,
+    }).then(result => {
+      if (result.resizeToken) terminalResizeTokensRef.current.set(key, result.resizeToken);
+      commitTerminalSync(applyTerminalChanged(terminalSyncRef.current, terminal.hubId, {
+        change: 'resized', terminalId: terminal.terminalId, terminal: result.terminal,
+      }));
+    }).catch(() => undefined);
+  }, [commitTerminalSync]);
+
+  const handleCloseTerminal = useCallback(async (terminal: RegistryTerminal) => {
+    await service.closeTerminal(terminal.hubId, terminal.terminalId);
+    const key = `${terminal.hubId}:${terminal.terminalId}`;
+    terminalResizeTokensRef.current.delete(key);
+    const next = applyTerminalChanged(terminalSyncRef.current, terminal.hubId, {
+      change: 'closed', terminalId: terminal.terminalId,
+    });
+    commitTerminalSync(next);
+    if (activeTerminalKeyRef.current === key) {
+      const nextKey = Object.keys(next.terminals)[0] ?? '';
+      activeTerminalKeyRef.current = nextKey;
+      setActiveTerminalKey(nextKey);
+    }
+  }, [commitTerminalSync]);
+
+  const handleRestartTerminal = useCallback(async (terminal: RegistryTerminal) => {
+    const restarted = await service.restartTerminal(terminal.hubId, terminal.terminalId);
+    const key = `${terminal.hubId}:${terminal.terminalId}`;
+    terminalResizeTokensRef.current.set(key, restarted.resizeToken);
+    commitTerminalSync(applyTerminalChanged(terminalSyncRef.current, terminal.hubId, {
+      change: 'restarted', terminalId: terminal.terminalId, terminal: restarted.terminal,
+    }));
+    activeTerminalKeyRef.current = key;
+    setActiveTerminalKey(key);
+    terminalRefreshRef.current(key).catch(() => undefined);
+  }, [commitTerminalSync]);
+
+  const handleSelectTerminal = useCallback((key: string) => {
+    activeTerminalKeyRef.current = key;
+    setActiveTerminalKey(key);
+    setTerminalOpen(true);
+  }, []);
+
+  const handleRequestCloseTerminal = useCallback((terminal: RegistryTerminal) => {
+    if (terminal.status === 'running') {
+      setConfirmError('');
+      setConfirmTarget({
+        kind: 'terminalClose', hubId: terminal.hubId, terminalId: terminal.terminalId,
+        label: `${terminal.projectName || terminal.terminalId} · ${terminal.hubId}`,
+      });
+      return;
+    }
+    handleCloseTerminal(terminal).catch(err => setError(err instanceof Error ? err.message : String(err)));
+  }, [handleCloseTerminal]);
+
   const renderRecentProjectSessionSection = (
     section: RecentChatSessionProjectSection,
     mobile: boolean,
@@ -15796,6 +16008,36 @@ export function App() {
 
   useEffect(() => {
     const unsubscribeEvent = service.onEvent(event => {
+      if (event.method === RegistryMethods.TerminalOutput && event.hubId) {
+        const result = receiveTerminalOutput(
+          terminalSyncRef.current,
+          event.hubId,
+          event.payload as RegistryTerminalOutputEvent,
+        );
+        commitTerminalSync(result.state);
+        runTerminalEffects(result.effects).catch(() => undefined);
+        return;
+      }
+      if (event.method === RegistryMethods.TerminalChanged && event.hubId) {
+        const payload = event.payload as RegistryTerminalChangedEvent;
+        const next = applyTerminalChanged(terminalSyncRef.current, event.hubId, payload);
+        commitTerminalSync(next);
+        if (payload.change === 'closed') {
+          const closedKey = `${event.hubId}:${payload.terminalId}`;
+          terminalResizeTokensRef.current.delete(closedKey);
+          if (activeTerminalKeyRef.current === closedKey) {
+            const nextKey = Object.keys(next.terminals)[0] ?? '';
+            activeTerminalKeyRef.current = nextKey;
+            setActiveTerminalKey(nextKey);
+          }
+        } else if (
+          activeTerminalKeyRef.current === `${event.hubId}:${payload.terminalId}` &&
+          payload.terminal?.runId !== terminalSyncRef.current.attached[activeTerminalKeyRef.current]?.runId
+        ) {
+          terminalRefreshRef.current(activeTerminalKeyRef.current).catch(() => undefined);
+        }
+        return;
+      }
       if (isSpeechTranscriptEvent(event)) {
         const payload = event.payload;
         if (payload) {
@@ -15962,6 +16204,8 @@ export function App() {
     const unsubscribeClose = service.onClose(() => {
       connectedRef.current = false;
       setConnected(false);
+      const terminalHubIds = Array.from(new Set(Object.values(terminalSyncRef.current.terminals).map(item => item.hubId)));
+      commitTerminalSync(markTerminalsUnavailable(terminalSyncRef.current, terminalHubIds));
       if (isVoiceInputActive()) {
         handleVoiceRegistryClosedDuringInput('close');
       }
@@ -17996,7 +18240,13 @@ export function App() {
     if (!url) return;
     window.open(url, '_blank', 'noopener,noreferrer');
   }, [portRelayFrameUrl]);
+  const terminalItems = useMemo(
+    () => Object.values(terminalSync.terminals).sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
+    [terminalSync.terminals],
+  );
+  const activeTerminal = activeTerminalKey ? terminalSync.terminals[activeTerminalKey] : undefined;
   const toggleChatPreviewFromTitle = useCallback(() => {
+    if (!isWide) setTerminalOpen(false);
     if (chatPreviewOpen) {
       setChatPreviewManualOpen(false);
       setChatPreviewManualCollapsed(true);
@@ -18004,7 +18254,43 @@ export function App() {
     }
     setChatPreviewManualCollapsed(false);
     setChatPreviewManualOpen(open => !open);
-  }, [chatPreviewOpen]);
+  }, [chatPreviewOpen, isWide]);
+  const toggleTerminalFromTitle = useCallback(() => {
+    setTerminalOpen(open => {
+      const next = !open;
+      if (next && !isWide) {
+        setChatPreviewManualOpen(false);
+        setChatPreviewManualCollapsed(true);
+      }
+      return next;
+    });
+  }, [isWide]);
+  const beginTerminalPanelResize = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (!isWide) return;
+    event.preventDefault();
+    terminalPanelResizeRef.current = {
+      pointerId: event.pointerId,
+      originY: event.clientY,
+      startHeight: terminalPanelHeight,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }, [isWide, terminalPanelHeight]);
+  const moveTerminalPanelResize = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const resize = terminalPanelResizeRef.current;
+    if (!resize || resize.pointerId !== event.pointerId) return;
+    const maxHeight = Math.max(160, Math.floor(window.innerHeight * 0.7));
+    setTerminalPanelHeight(Math.max(160, Math.min(maxHeight, resize.startHeight + resize.originY - event.clientY)));
+  }, []);
+  const finishTerminalPanelResize = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const resize = terminalPanelResizeRef.current;
+    if (!resize || resize.pointerId !== event.pointerId) return;
+    terminalPanelResizeRef.current = null;
+    try {
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+    } catch {}
+  }, []);
   useEffect(() => {
     if (!isWide) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -18349,6 +18635,16 @@ export function App() {
               {renderChatBreadcrumbTitle()}
             </div>
             <div className="chat-title-actions">
+              <button
+                type="button"
+                className={`chat-terminal-toggle${terminalOpen ? ' active' : ''}`}
+                onClick={toggleTerminalFromTitle}
+                title={terminalOpen ? 'Hide terminal' : 'Show terminal'}
+                aria-label={terminalOpen ? 'Hide terminal' : 'Show terminal'}
+                aria-pressed={terminalOpen}
+              >
+                <span className="codicon codicon-terminal" aria-hidden="true" />
+              </button>
               <button
                 type="button"
                 className={`chat-preview-toggle${chatPreviewOpen ? ' active' : ''}`}
@@ -19045,6 +19341,46 @@ export function App() {
           </div>
           </div>
           </div>
+          {isWide && terminalOpen ? (
+            <>
+              <div
+                className="terminal-splitter"
+                role="separator"
+                aria-orientation="horizontal"
+                aria-label="Resize terminal panel"
+                onPointerDown={beginTerminalPanelResize}
+                onPointerMove={moveTerminalPanelResize}
+                onPointerUp={finishTerminalPanelResize}
+                onPointerCancel={finishTerminalPanelResize}
+              />
+              <section className="terminal-desktop-panel" style={{height: terminalPanelHeight}}>
+                <TerminalWorkbench mode="desktop"
+                  terminals={terminalItems}
+                  activeKey={activeTerminalKey}
+                  unavailableHubIds={terminalSync.unavailableHubIds}
+                  onSelect={handleSelectTerminal}
+                  onCreate={() => { handleCreateTerminal().catch(err => setError(err instanceof Error ? err.message : String(err))); }}
+                  onRequestClose={handleRequestCloseTerminal}
+                  onRestart={item => { handleRestartTerminal(item).catch(err => setError(err instanceof Error ? err.message : String(err))); }}
+                  onClaimResize={handleClaimTerminalResize}
+                  onSendBytes={handleTerminalInput}
+                >
+                  {activeTerminal ? (
+                    <TerminalView
+                      key={activeTerminalKey}
+                      ref={terminalViewRef}
+                      active
+                      resizeEnabled={terminalResizeTokensRef.current.has(activeTerminalKey)}
+                      cols={activeTerminal.cols}
+                      rows={activeTerminal.rows}
+                      onInput={handleTerminalInput}
+                      onResize={handleTerminalResize}
+                    />
+                  ) : null}
+                </TerminalWorkbench>
+              </section>
+            </>
+          ) : null}
         </ChatSurface>
       );
     }
@@ -20518,6 +20854,35 @@ export function App() {
       {renderPreviewWorkbenchSurface('mobile')}
     </div>
   ) : null;
+  const terminalMobileOverlay = !isWide && terminalOpen ? (
+    <div className="terminal-mobile-overlay" role="dialog" aria-modal="true" aria-label="Terminal">
+      <TerminalWorkbench mode="mobile"
+        terminals={terminalItems}
+        activeKey={activeTerminalKey}
+        unavailableHubIds={terminalSync.unavailableHubIds}
+        onSelect={handleSelectTerminal}
+        onCreate={() => { handleCreateTerminal().catch(err => setError(err instanceof Error ? err.message : String(err))); }}
+        onRequestClose={handleRequestCloseTerminal}
+        onRestart={item => { handleRestartTerminal(item).catch(err => setError(err instanceof Error ? err.message : String(err))); }}
+        onClaimResize={handleClaimTerminalResize}
+        onSendBytes={handleTerminalInput}
+        onCloseSurface={() => setTerminalOpen(false)}
+      >
+        {activeTerminal ? (
+          <TerminalView
+            key={`mobile:${activeTerminalKey}`}
+            ref={terminalViewRef}
+            active
+            resizeEnabled={terminalResizeTokensRef.current.has(activeTerminalKey)}
+            cols={activeTerminal.cols}
+            rows={activeTerminal.rows}
+            onInput={handleTerminalInput}
+            onResize={handleTerminalResize}
+          />
+        ) : null}
+      </TerminalWorkbench>
+    </div>
+  ) : null;
   const quickFileProjectName =
     projects.find(project => project.projectId === quickFileProjectId)?.name ||
     quickFileProjectId ||
@@ -20651,6 +21016,18 @@ export function App() {
     if (!confirmTarget) {
       return;
     }
+    if (confirmTarget.kind === 'terminalClose') {
+      const key = `${confirmTarget.hubId}:${confirmTarget.terminalId}`;
+      const terminal = terminalSyncRef.current.terminals[key];
+      if (!terminal) {
+        setConfirmTarget(null);
+        return;
+      }
+      handleCloseTerminal(terminal)
+        .then(() => { setConfirmTarget(null); setConfirmError(''); })
+        .catch(err => setConfirmError(err instanceof Error ? err.message : String(err)));
+      return;
+    }
     if (confirmTarget.kind === 'clearCache') {
       clearLocalCache();
       return;
@@ -20782,7 +21159,7 @@ export function App() {
         floatingControlStack={floatingControlStack}
         floatingControlSide={floatingControlSide}
         mobileSettingsScreen={mobileSettingsScreen}
-        mobileOverlay={chatPreviewMobileOverlay}
+        mobileOverlay={terminalMobileOverlay ?? chatPreviewMobileOverlay}
         sidebar={renderSidebar()}
         main={renderMain()}
         sidebarCollapsed={sidebarCollapsed}

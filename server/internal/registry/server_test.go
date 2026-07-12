@@ -2,6 +2,7 @@ package registry
 
 import (
 	"bytes"
+	"errors"
 	"github.com/gorilla/websocket"
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
 	logger "github.com/swm8023/wheelmaker/internal/shared"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -23,6 +25,96 @@ type testEnvelope struct {
 	HubID     string         `json:"hubId,omitempty"`
 	ProjectID string         `json:"projectId,omitempty"`
 	Payload   map[string]any `json:"payload,omitempty"`
+}
+
+type blockingWebsocketWriter struct {
+	started   chan struct{}
+	release   chan struct{}
+	writes    chan envelope
+	closed    chan struct{}
+	startOnce sync.Once
+	closeOnce sync.Once
+}
+
+func newBlockingWebsocketWriter() *blockingWebsocketWriter {
+	return &blockingWebsocketWriter{
+		started: make(chan struct{}), release: make(chan struct{}),
+		writes: make(chan envelope, 256), closed: make(chan struct{}),
+	}
+}
+
+func (w *blockingWebsocketWriter) WriteJSON(value any) error {
+	w.startOnce.Do(func() { close(w.started) })
+	select {
+	case <-w.release:
+	case <-w.closed:
+		return errors.New("closed")
+	}
+	env, ok := value.(envelope)
+	if !ok {
+		return errors.New("unexpected write type")
+	}
+	w.writes <- env
+	return nil
+}
+
+func (w *blockingWebsocketWriter) Close() error {
+	w.closeOnce.Do(func() { close(w.closed) })
+	return nil
+}
+
+func TestPeerWriterPrioritizesControlOverTerminalOutput(t *testing.T) {
+	writer := newBlockingWebsocketWriter()
+	peer := newPeerConn(writer, "priority-peer")
+	defer peer.close()
+	if err := peer.writeTerminal(envelope{Type: "event", Method: rp.RegistryMethodTerminalOutput, Payload: rp.MustRaw(map[string]any{"seq": 1})}); err != nil {
+		t.Fatal(err)
+	}
+	<-writer.started
+	if err := peer.writeTerminal(envelope{Type: "event", Method: rp.RegistryMethodTerminalOutput, Payload: rp.MustRaw(map[string]any{"seq": 2})}); err != nil {
+		t.Fatal(err)
+	}
+	controlDone := make(chan error, 1)
+	go func() {
+		controlDone <- peer.write(envelope{Type: "response", Method: rp.RegistryMethodTerminalList})
+	}()
+	deadline := time.Now().Add(time.Second)
+	for len(peer.priorityWrites) == 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	close(writer.release)
+	first := <-writer.writes
+	second := <-writer.writes
+	third := <-writer.writes
+	if first.Method != rp.RegistryMethodTerminalOutput || second.Method != rp.RegistryMethodTerminalList || third.Method != rp.RegistryMethodTerminalOutput {
+		t.Fatalf("write order=%s,%s,%s", first.Method, second.Method, third.Method)
+	}
+	if err := <-controlDone; err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPeerWriterClosesSlowTerminalClientOnOverflow(t *testing.T) {
+	writer := newBlockingWebsocketWriter()
+	peer := newPeerConn(writer, "slow-terminal-peer")
+	defer close(writer.release)
+	if err := peer.writeTerminal(envelope{Type: "event", Method: rp.RegistryMethodTerminalOutput}); err != nil {
+		t.Fatal(err)
+	}
+	<-writer.started
+	for i := 0; i < terminalWriteQueueSize; i++ {
+		if err := peer.writeTerminal(envelope{Type: "event", Method: rp.RegistryMethodTerminalOutput}); err != nil {
+			t.Fatalf("fill %d: %v", i, err)
+		}
+	}
+	if err := peer.writeTerminal(envelope{Type: "event", Method: rp.RegistryMethodTerminalOutput}); !errors.Is(err, errTerminalBacklog) {
+		t.Fatalf("overflow err=%v", err)
+	}
+	select {
+	case <-writer.closed:
+	case <-time.After(time.Second):
+		t.Fatal("slow client was not closed")
+	}
 }
 
 func TestConnectInit(t *testing.T) {
@@ -1959,6 +2051,96 @@ func connectRegistryHub(t *testing.T, ws *websocket.Conn, hubID string) int64 {
 	principal, _ := initResp.Payload["principal"].(map[string]any)
 	connectionEpoch, _ := principal["connectionEpoch"].(float64)
 	return int64(connectionEpoch)
+}
+
+func TestTerminalRoutingForwardsControlAndBidirectionalEvents(t *testing.T) {
+	s := New(Config{})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	hub := dialWS(t, ts.URL+"/ws")
+	defer hub.Close()
+	mustReportHubProjects(t, hub, "hub-terminal", []map[string]any{{"name": "proj1", "path": `C:\src\proj1`, "online": true}})
+	clientA := dialWS(t, ts.URL+"/ws")
+	defer clientA.Close()
+	connectRegistryClient(t, clientA)
+	clientB := dialWS(t, ts.URL+"/ws")
+	defer clientB.Close()
+	connectRegistryClient(t, clientB)
+
+	mustWriteJSON(t, clientA, testEnvelope{
+		RequestID: 2, Type: "request", Method: rp.RegistryMethodTerminalCreate,
+		ProjectID: "hub-terminal:proj1", Payload: map[string]any{"cols": 80, "rows": 24},
+	})
+	_ = hub.SetReadDeadline(time.Now().Add(2 * time.Second))
+	create := mustReadEnvelope(t, hub)
+	if create.Type != "request" || create.Method != rp.RegistryMethodTerminalCreate || create.ProjectID != "hub-terminal:proj1" {
+		t.Fatalf("create=%+v", create)
+	}
+	mustWriteJSON(t, hub, testEnvelope{
+		RequestID: create.RequestID, Type: "response", Method: create.Method,
+		Payload: map[string]any{"terminal": map[string]any{"terminalId": "term-1", "runId": "run-1"}, "resizeToken": "private"},
+	})
+	if response := mustReadEnvelope(t, clientA); response.Type != "response" || response.RequestID != 2 {
+		t.Fatalf("create response=%+v", response)
+	}
+
+	mustWriteJSON(t, clientA, testEnvelope{
+		RequestID: 3, Type: "request", Method: rp.RegistryMethodTerminalList,
+		HubID: "hub-terminal", Payload: map[string]any{},
+	})
+	list := mustReadEnvelope(t, hub)
+	if list.Method != rp.RegistryMethodTerminalList || list.HubID != "hub-terminal" {
+		t.Fatalf("list=%+v", list)
+	}
+	mustWriteJSON(t, hub, testEnvelope{RequestID: list.RequestID, Type: "response", Method: list.Method, Payload: map[string]any{"terminals": []any{}}})
+	if response := mustReadEnvelope(t, clientA); response.Type != "response" || response.RequestID != 3 {
+		t.Fatalf("list response=%+v", response)
+	}
+
+	mustWriteJSON(t, clientA, testEnvelope{
+		Type: "event", Method: rp.RegistryMethodTerminalInput, HubID: "hub-terminal",
+		Payload: map[string]any{"terminalId": "term-1", "runId": "run-1", "data": "YQ=="},
+	})
+	input := mustReadEnvelope(t, hub)
+	if input.Type != "event" || input.Method != rp.RegistryMethodTerminalInput || input.RequestID != 0 {
+		t.Fatalf("input=%+v", input)
+	}
+
+	mustWriteJSON(t, hub, testEnvelope{
+		Type: "event", Method: rp.RegistryMethodTerminalOutput, HubID: "hub-terminal",
+		Payload: map[string]any{"terminalId": "term-1", "runId": "run-1", "seq": 1, "data": "Yg=="},
+	})
+	for index, client := range []*websocket.Conn{clientA, clientB} {
+		_ = client.SetReadDeadline(time.Now().Add(2 * time.Second))
+		output := mustReadEnvelope(t, client)
+		if output.Type != "event" || output.Method != rp.RegistryMethodTerminalOutput || output.HubID != "hub-terminal" {
+			t.Fatalf("client %d output=%+v", index, output)
+		}
+	}
+}
+
+func TestTerminalRoutingRejectsWrongDirectionEvents(t *testing.T) {
+	s := New(Config{})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+	hub := dialReportedHub(t, ts.URL+"/ws", "hub-terminal-reject")
+	defer hub.Close()
+	client := dialWS(t, ts.URL+"/ws")
+	defer client.Close()
+	connectRegistryClient(t, client)
+
+	mustWriteJSON(t, client, testEnvelope{Type: "event", Method: rp.RegistryMethodTerminalOutput, HubID: "hub-terminal-reject", Payload: map[string]any{}})
+	clientError := mustReadEnvelope(t, client)
+	if clientError.Type != "error" || clientError.Payload["code"] != codeForbidden {
+		t.Fatalf("client error=%+v", clientError)
+	}
+
+	mustWriteJSON(t, hub, testEnvelope{Type: "event", Method: rp.RegistryMethodTerminalInput, HubID: "hub-terminal-reject", Payload: map[string]any{}})
+	hubError := mustReadEnvelope(t, hub)
+	if hubError.Type != "error" || hubError.Payload["code"] != codeForbidden {
+		t.Fatalf("hub error=%+v", hubError)
+	}
 }
 
 func httptestNewRegistryServer(t *testing.T, handler http.Handler) string {

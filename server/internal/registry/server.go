@@ -3,6 +3,7 @@ package registry
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -26,6 +27,13 @@ const (
 	removedChatSendMethod  = rp.LegacyRegistryMethodChatSend
 	maxDebugUploadLogBytes = 512 * 1024
 	asyncQueueBuffer       = 64
+	priorityWriteQueueSize = 64
+	terminalWriteQueueSize = 128
+)
+
+var (
+	errPeerClosed      = errors.New("registry peer is closed")
+	errTerminalBacklog = errors.New("terminal output backlog is full")
 )
 
 // Config configures the project registry server.
@@ -40,7 +48,11 @@ type Config struct {
 type peerConn struct {
 	ws websocketWriter
 
-	writeMu sync.Mutex
+	priorityWrites chan queuedWrite
+	terminalWrites chan queuedWrite
+	closed         chan struct{}
+	writerDone     chan struct{}
+	closeOnce      sync.Once
 
 	metaMu sync.RWMutex
 	id     string
@@ -51,12 +63,23 @@ type peerConn struct {
 	pending   map[int64]chan envelope
 }
 
+type queuedWrite struct {
+	value any
+	done  chan error
+}
+
 func newPeerConn(ws websocketWriter, id string) *peerConn {
-	return &peerConn{
-		id:      id,
-		ws:      ws,
-		pending: make(map[int64]chan envelope),
+	p := &peerConn{
+		id:             id,
+		ws:             ws,
+		pending:        make(map[int64]chan envelope),
+		priorityWrites: make(chan queuedWrite, priorityWriteQueueSize),
+		terminalWrites: make(chan queuedWrite, terminalWriteQueueSize),
+		closed:         make(chan struct{}),
+		writerDone:     make(chan struct{}),
 	}
+	go p.runWriter()
+	return p
 }
 
 func (p *peerConn) setMeta(role, hubID string) {
@@ -83,12 +106,83 @@ func (p *peerConn) logEnvelope(direction string, env envelope) {
 }
 
 func (p *peerConn) write(v any) error {
-	if env, ok := v.(envelope); ok {
+	item := queuedWrite{value: v, done: make(chan error, 1)}
+	select {
+	case p.priorityWrites <- item:
+	case <-p.closed:
+		return errPeerClosed
+	}
+	select {
+	case err := <-item.done:
+		return err
+	case <-p.closed:
+		select {
+		case err := <-item.done:
+			return err
+		default:
+			return errPeerClosed
+		}
+	}
+}
+
+func (p *peerConn) writeTerminal(v any) error {
+	select {
+	case <-p.closed:
+		return errPeerClosed
+	default:
+	}
+	select {
+	case p.terminalWrites <- queuedWrite{value: v}:
+		return nil
+	default:
+		p.shutdown()
+		return errTerminalBacklog
+	}
+}
+
+func (p *peerConn) runWriter() {
+	defer close(p.writerDone)
+	for {
+		select {
+		case item := <-p.priorityWrites:
+			p.writeItem(item)
+			continue
+		default:
+		}
+		select {
+		case item := <-p.priorityWrites:
+			p.writeItem(item)
+		case item := <-p.terminalWrites:
+			p.writeItem(item)
+		case <-p.closed:
+			return
+		}
+	}
+}
+
+func (p *peerConn) writeItem(item queuedWrite) {
+	if env, ok := item.value.(envelope); ok {
 		p.logEnvelope("out", env)
 	}
-	p.writeMu.Lock()
-	defer p.writeMu.Unlock()
-	return p.ws.WriteJSON(v)
+	err := p.ws.WriteJSON(item.value)
+	if item.done != nil {
+		item.done <- err
+	}
+	if err != nil {
+		p.shutdown()
+	}
+}
+
+func (p *peerConn) shutdown() {
+	p.closeOnce.Do(func() {
+		close(p.closed)
+		_ = p.ws.Close()
+	})
+}
+
+func (p *peerConn) close() {
+	p.shutdown()
+	<-p.writerDone
 }
 
 func (p *peerConn) registerPending(id int64) chan envelope {
@@ -124,6 +218,7 @@ func (p *peerConn) dropAllPending() {
 
 type websocketWriter interface {
 	WriteJSON(v any) error
+	Close() error
 }
 
 // Server accepts client/hub connections and routes client requests to hub responders.
@@ -314,6 +409,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	defer s.unregisterClient(state)
 	defer s.speech.cancelConnection(state.id)
 	defer state.peer.dropAllPending()
+	defer state.peer.close()
 
 	dispatcher := newRequestDispatcher(context.Background(), s, state)
 	defer dispatcher.stop()
@@ -360,6 +456,22 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 		}
+		if in.Type == rp.RegistryEnvelopeTypeEvent {
+			if !state.initialized {
+				_ = s.writeError(state.peer, 0, in.Method, codeUnauthorized, "connect.init required", nil)
+				continue
+			}
+			if in.RequestID != 0 {
+				_ = s.writeError(state.peer, in.RequestID, in.Method, codeInvalidArgument, "event must not include requestId", nil)
+				continue
+			}
+			if !methodAllowed(state.role, in.Method) {
+				_ = s.writeError(state.peer, 0, in.Method, codeForbidden, "event method not allowed for role", map[string]any{"role": state.role})
+				continue
+			}
+			s.handleTerminalEvent(state, in)
+			continue
+		}
 		if in.Type != rp.RegistryEnvelopeTypeRequest {
 			_ = s.writeError(state.peer, in.RequestID, in.Method, codeInvalidArgument, "type must be request", nil)
 			continue
@@ -385,7 +497,6 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 			resetIdleTimer()
 			continue
 		}
-
 		if state.role == string(rp.RegistryRoleClient) && isRemovedClientRequestMethod(in.Method) {
 			_ = s.writeError(state.peer, in.RequestID, in.Method, codeInvalidArgument, "unsupported method", map[string]any{"method": in.Method})
 			continue
@@ -406,7 +517,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 func shouldHandleRegistryRequestAsync(method string) bool {
 	return rp.RegistryRelayControlMethod(method) ||
 		rp.RegistryMonitorForwardMethod(method) ||
-		rp.RegistryHubStateMethod(method) ||
+		rp.RegistryHubStateMethod(method) || isTerminalHubRequestMethod(method) ||
 		isClientForwardMethod(method)
 }
 
@@ -437,7 +548,7 @@ func (s *Server) handleRequest(state *connectionState, in envelope) {
 		s.handleRelayRequest(state.peer, state, in)
 	case rp.RegistryMonitorForwardMethod(in.Method):
 		s.handleMonitorForwardRequest(state.peer, state, in)
-	case rp.RegistryHubStateMethod(in.Method):
+	case rp.RegistryHubStateMethod(in.Method) || isTerminalHubRequestMethod(in.Method):
 		s.handleHubStateForwardRequest(state.peer, state, in)
 	case isSpeechRequestMethod(in.Method):
 		s.speech.handleRequest(state.peer, state, in)
@@ -489,7 +600,86 @@ func isRemovedClientRequestMethod(method string) bool {
 }
 
 func isClientForwardMethod(method string) bool {
-	return rp.RegistryClientForwardMethod(method)
+	return rp.RegistryClientForwardMethod(method) || rp.RegistryMethodHasRoute(method, rp.RegistryRouteTerminalProjectRequest)
+}
+
+func isTerminalHubRequestMethod(method string) bool {
+	return rp.RegistryMethodHasRoute(method, rp.RegistryRouteTerminalHubRequest)
+}
+
+func (s *Server) handleTerminalEvent(state *connectionState, in envelope) {
+	switch in.Method {
+	case rp.RegistryMethodTerminalInput:
+		s.forwardTerminalInput(state, in)
+	case rp.RegistryMethodTerminalOutput, rp.RegistryMethodTerminalChanged:
+		s.broadcastTerminalHubEvent(state, in)
+	default:
+		_ = s.writeError(state.peer, 0, in.Method, codeInvalidArgument, "unsupported event method", map[string]any{"method": in.Method})
+	}
+}
+
+func (s *Server) forwardTerminalInput(state *connectionState, in envelope) {
+	hubID := strings.TrimSpace(in.HubID)
+	if hubID == "" {
+		_ = s.writeError(state.peer, 0, in.Method, codeInvalidArgument, "hubId is required", nil)
+		return
+	}
+	if state.scopeHubID != "" && state.scopeHubID != hubID {
+		_ = s.writeError(state.peer, 0, in.Method, codeForbidden, "hub out of client scope", map[string]any{"hubId": hubID})
+		return
+	}
+	s.mu.RLock()
+	hubPeer := s.hubPeers[hubID]
+	s.mu.RUnlock()
+	if hubPeer == nil {
+		_ = s.writeError(state.peer, 0, in.Method, codeUnavailable, "hub offline", map[string]any{"hubId": hubID})
+		return
+	}
+	if err := hubPeer.write(envelope{
+		Type:    rp.RegistryEnvelopeTypeEvent,
+		Method:  in.Method,
+		HubID:   hubID,
+		Payload: in.Payload,
+	}); err != nil {
+		_ = s.writeError(state.peer, 0, in.Method, codeInternal, "forward event write failed", nil)
+	}
+}
+
+func (s *Server) broadcastTerminalHubEvent(state *connectionState, in envelope) {
+	hubID := strings.TrimSpace(in.HubID)
+	if hubID == "" {
+		_ = s.writeError(state.peer, 0, in.Method, codeInvalidArgument, "hubId is required", nil)
+		return
+	}
+	if state.hubID == "" || state.hubID != hubID {
+		_ = s.writeError(state.peer, 0, in.Method, codeForbidden, "hubId mismatch", nil)
+		return
+	}
+	s.mu.RLock()
+	peers := make([]*peerConn, 0, len(s.clientPeers))
+	for _, client := range s.clientPeers {
+		if client == nil || client.peer == nil {
+			continue
+		}
+		if client.scopeHubID != "" && client.scopeHubID != hubID {
+			continue
+		}
+		peers = append(peers, client.peer)
+	}
+	s.mu.RUnlock()
+	msg := envelope{
+		Type:    rp.RegistryEnvelopeTypeEvent,
+		Method:  in.Method,
+		HubID:   hubID,
+		Payload: in.Payload,
+	}
+	for _, peer := range peers {
+		if in.Method == rp.RegistryMethodTerminalOutput {
+			_ = peer.writeTerminal(msg)
+		} else {
+			_ = peer.write(msg)
+		}
+	}
 }
 
 func registrySessionEventMethod(method string) string {

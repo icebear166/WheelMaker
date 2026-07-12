@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -67,6 +68,27 @@ type SessionHandler interface {
 	HandleSessionRequest(ctx context.Context, method string, projectID string, payload json.RawMessage) (any, error)
 }
 
+type TerminalHandler interface {
+	HandleTerminalRequest(ctx context.Context, method string, projectID string, payload json.RawMessage) (any, error)
+	HandleTerminalInput(event rp.TerminalInputEvent)
+}
+
+var errTerminalPublishBacklog = errors.New("terminal publish backlog is full")
+
+type terminalEventSink struct {
+	events chan envelope
+	done   chan struct{}
+	once   sync.Once
+}
+
+func newTerminalEventSink() *terminalEventSink {
+	return &terminalEventSink{events: make(chan envelope, 256), done: make(chan struct{})}
+}
+
+func (s *terminalEventSink) stop() {
+	s.once.Do(func() { close(s.done) })
+}
+
 type toolCommandHandler interface {
 	Handle(ctx context.Context, method string, payload json.RawMessage) (any, *tools.CommandError)
 	SetProjects(projects []ProjectInfo)
@@ -102,13 +124,15 @@ type Reporter struct {
 	requestSeq   atomic.Int64
 	updateSeq    atomic.Int64
 
-	connectionEpoch int64
-	monitorCore     *MonitorCore
-	toolHandlerMu   sync.Mutex
-	toolHandler     toolCommandHandler
-	relayClient     *portrelay.HubClient
-	fileIndex       *projectFileIndexManager
-	hubStateManager *HubStateManager
+	connectionEpoch   int64
+	monitorCore       *MonitorCore
+	toolHandlerMu     sync.Mutex
+	toolHandler       toolCommandHandler
+	relayClient       *portrelay.HubClient
+	fileIndex         *projectFileIndexManager
+	hubStateManager   *HubStateManager
+	terminalHandler   TerminalHandler
+	terminalEventSink *terminalEventSink
 
 	localReadMu         sync.RWMutex
 	localReadServer     *http.Server
@@ -302,6 +326,12 @@ func (r *Reporter) RegisterSessionHandler(projectID string, handler SessionHandl
 	r.sessionByID[projectID] = handler
 }
 
+func (r *Reporter) SetTerminalHandler(handler TerminalHandler) {
+	r.mu.Lock()
+	r.terminalHandler = handler
+	r.mu.Unlock()
+}
+
 func (r *Reporter) UpdateProject(project ProjectInfo) error {
 	project.Name = strings.TrimSpace(project.Name)
 	if project.Name == "" {
@@ -412,6 +442,19 @@ func (r *Reporter) runSession(ctx context.Context) error {
 	if err := r.handshake(conn); err != nil {
 		return err
 	}
+	sink := newTerminalEventSink()
+	r.mu.Lock()
+	r.terminalEventSink = sink
+	r.mu.Unlock()
+	defer func() {
+		sink.stop()
+		r.mu.Lock()
+		if r.terminalEventSink == sink {
+			r.terminalEventSink = nil
+		}
+		r.mu.Unlock()
+	}()
+	go r.runTerminalEventSink(conn, sink)
 
 	keepaliveDone := make(chan struct{})
 	defer close(keepaliveDone)
@@ -426,6 +469,10 @@ func (r *Reporter) runSession(ctx context.Context) error {
 			if r.resolvePending(in.RequestID, in) {
 				continue
 			}
+		}
+		if in.Type == rp.RegistryEnvelopeTypeEvent && in.Method == rp.RegistryMethodTerminalInput {
+			r.handleTerminalInput(in)
+			continue
 		}
 		if in.Type != rp.RegistryEnvelopeTypeRequest {
 			continue
@@ -497,6 +544,9 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 		r.replyGitStatus(conn, in)
 	case rp.RegistryMethodProjectGitWorkingTreeFileDiff:
 		r.replyGitWorkingTreeFileDiff(conn, in)
+	case rp.RegistryMethodTerminalList, rp.RegistryMethodTerminalCreate, rp.RegistryMethodTerminalGet,
+		rp.RegistryMethodTerminalResize, rp.RegistryMethodTerminalClose, rp.RegistryMethodTerminalRestart:
+		r.replyTerminal(conn, in)
 	default:
 		_ = r.writeJSON(conn, "->", envelope{
 			RequestID: in.RequestID,
@@ -508,6 +558,42 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 				Details: map[string]any{"method": in.Method},
 			}),
 		})
+	}
+}
+
+func (r *Reporter) replyTerminal(conn *websocket.Conn, req envelope) {
+	r.mu.RLock()
+	handler := r.terminalHandler
+	r.mu.RUnlock()
+	if handler == nil {
+		_ = r.writeError(conn, req.RequestID, codeInternal, "terminal handler is unavailable")
+		return
+	}
+	result, err := handler.HandleTerminalRequest(context.Background(), req.Method, req.ProjectID, req.Payload)
+	if err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, err.Error())
+		return
+	}
+	_ = r.writeJSON(conn, "->", envelope{
+		RequestID: req.RequestID,
+		Type:      rp.RegistryEnvelopeTypeResponse,
+		Method:    req.Method,
+		HubID:     r.cfg.HubID,
+		ProjectID: req.ProjectID,
+		Payload:   rp.MustRaw(result),
+	})
+}
+
+func (r *Reporter) handleTerminalInput(in envelope) {
+	var event rp.TerminalInputEvent
+	if err := decodePayload(in.Payload, &event); err != nil {
+		return
+	}
+	r.mu.RLock()
+	handler := r.terminalHandler
+	r.mu.RUnlock()
+	if handler != nil {
+		handler.HandleTerminalInput(event)
 	}
 }
 
@@ -838,6 +924,43 @@ func (r *Reporter) PublishProjectEvent(projectID string, method string, payload 
 		delete(r.pending, requestID)
 		r.mu.Unlock()
 		return fmt.Errorf("registry event publish timeout")
+	}
+}
+
+func (r *Reporter) PublishTerminalEvent(method string, payload any) error {
+	r.mu.RLock()
+	sink := r.terminalEventSink
+	r.mu.RUnlock()
+	if sink == nil {
+		return nil
+	}
+	event := envelope{
+		Type:    rp.RegistryEnvelopeTypeEvent,
+		Method:  method,
+		HubID:   r.cfg.HubID,
+		Payload: rp.MustRaw(payload),
+	}
+	select {
+	case sink.events <- event:
+		return nil
+	case <-sink.done:
+		return nil
+	default:
+		return errTerminalPublishBacklog
+	}
+}
+
+func (r *Reporter) runTerminalEventSink(conn *websocket.Conn, sink *terminalEventSink) {
+	for {
+		select {
+		case event := <-sink.events:
+			if err := r.writeJSON(conn, "->", event); err != nil {
+				_ = conn.Close()
+				return
+			}
+		case <-sink.done:
+			return
+		}
 	}
 }
 
@@ -2626,6 +2749,9 @@ func (r *Reporter) writeDebugEnvelope(direction string, v any) {
 	if r.debugLog == nil {
 		return
 	}
+	if env, ok := envelopeFromValue(v); ok && terminalDebugMethod(env.Method) {
+		v = redactTerminalDebugEnvelope(env)
+	}
 	raw, err := json.Marshal(v)
 	if err != nil {
 		return
@@ -2633,6 +2759,42 @@ func (r *Reporter) writeDebugEnvelope(direction string, v any) {
 	if d := strings.TrimSpace(direction); d != "" {
 		_, _ = fmt.Fprintf(r.debugLog, "%s[registry] %s\n", d, strings.TrimSpace(string(raw)))
 	}
+}
+
+func terminalDebugMethod(method string) bool {
+	switch method {
+	case rp.RegistryMethodTerminalList, rp.RegistryMethodTerminalCreate, rp.RegistryMethodTerminalGet,
+		rp.RegistryMethodTerminalResize, rp.RegistryMethodTerminalClose, rp.RegistryMethodTerminalRestart,
+		rp.RegistryMethodTerminalInput, rp.RegistryMethodTerminalOutput, rp.RegistryMethodTerminalChanged:
+		return true
+	default:
+		return false
+	}
+}
+
+func redactTerminalDebugEnvelope(env envelope) envelope {
+	var payload map[string]any
+	if len(env.Payload) > 0 && json.Unmarshal(env.Payload, &payload) == nil {
+		if data, ok := payload["data"].(string); ok {
+			byteLength := 0
+			if decoded, err := base64.StdEncoding.DecodeString(data); err == nil {
+				byteLength = len(decoded)
+			}
+			delete(payload, "data")
+			payload["byteLength"] = byteLength
+		}
+		if snapshot, ok := payload["snapshot"].(string); ok {
+			byteLength := 0
+			if decoded, err := base64.StdEncoding.DecodeString(snapshot); err == nil {
+				byteLength = len(decoded)
+			}
+			delete(payload, "snapshot")
+			payload["snapshotByteLength"] = byteLength
+		}
+		delete(payload, "resizeToken")
+		env.Payload = rp.MustRaw(payload)
+	}
+	return env
 }
 
 func buildWSURL(server string, port int) (string, error) {

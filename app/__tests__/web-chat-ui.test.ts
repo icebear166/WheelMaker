@@ -958,7 +958,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('aria-label="Open skills"');
     expect(mainTsx).toContain('className="chat-tool-button chat-slash-button"');
     expect(mainTsx).not.toContain('className="chat-composer-skill-trigger chat-slash-button"');
-    expect(mainTsx).not.toContain('codicon-terminal');
+    expect(mainTsx).toContain('className="codicon codicon-terminal" aria-hidden="true"');
     expect(mainTsx).not.toContain('className="chat-composer-quick-trigger"');
     expect(mainTsx).not.toContain('title="Quick replies"');
     expect(mainTsx).not.toContain('aria-label="Quick replies"');
@@ -1569,8 +1569,8 @@ describe('web chat integration', () => {
       /\.drawer-toggle-bubble \{[\s\S]*background: transparent;[\s\S]*backdrop-filter: none;[\s\S]*\}/,
     );
     expect(stylesCss).not.toContain('[data-backdrop-tone');
-    expect(stylesCss).not.toMatch(
-      /\.floating-control-stack\[data-idle='true'\] \{[\s\S]*opacity:/,
+    expect(stylesCss).toMatch(
+      /\.floating-control-stack\[data-idle='true'\] \{[\s\S]*opacity: 0\.6;[\s\S]*\}/,
     );
     expect(stylesCss).toContain(".floating-control-stack[data-idle='true'] .drawer-toggle-bubble");
     expect(stylesCss).not.toContain('.floating-nav-button');

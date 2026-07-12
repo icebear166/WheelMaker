@@ -88,6 +88,12 @@ export type ConfirmTarget =
       scope: RegistrySkillScope;
       projectName?: string;
       includeProjects?: boolean;
+    }
+  | {
+      kind: 'terminalClose';
+      hubId: string;
+      terminalId: string;
+      label: string;
     };
 
 type AppConfirmDialogProps = {
@@ -124,6 +130,7 @@ function agentPackageActionLabel(action: 'install' | 'update' | 'uninstall'): st
 }
 
 function resolveConfirmTitle(target: ConfirmTarget): string {
+  if (target.kind === 'terminalClose') return 'Close running terminal?';
   if (target.kind === 'clearCache') return 'Clear local cache?';
   if (target.kind === 'archiveBatch') return `Archive sessions older than ${target.days} days?`;
   if (target.kind === 'restoreArchived') return 'Restore archived session?';
@@ -140,6 +147,7 @@ function resolveConfirmTitle(target: ConfirmTarget): string {
 }
 
 function resolveConfirmName(target: ConfirmTarget): string {
+  if (target.kind === 'terminalClose') return target.label;
   if (target.kind === 'clearCache') return 'Settings and connection details will be preserved.';
   if (target.kind === 'archiveBatch') return `${target.candidates.length} sessions`;
   if (target.kind === 'restoreArchived') return target.title || 'Untitled session';
@@ -158,6 +166,9 @@ function resolveConfirmName(target: ConfirmTarget): string {
 }
 
 function resolveConfirmCopy(target: ConfirmTarget): string {
+  if (target.kind === 'terminalClose') {
+    return 'This terminates the terminal process tree and removes the terminal from every connected device.';
+  }
   if (target.kind === 'clearCache') {
     return 'The app will reload after local cached workspace data is cleared.';
   }
@@ -200,6 +211,7 @@ function resolveConfirmCopy(target: ConfirmTarget): string {
 }
 
 function resolveConfirmIcon(target: ConfirmTarget): string {
+  if (target.kind === 'terminalClose') return 'codicon-debug-stop';
   if (target.kind === 'clearCache') return 'codicon-trash';
   if (target.kind === 'restoreArchived') return 'codicon-debug-restart';
   if (target.kind === 'delete') return 'codicon-trash';
@@ -217,6 +229,7 @@ function resolveConfirmIcon(target: ConfirmTarget): string {
 }
 
 function resolveConfirmPrimaryLabel(target: ConfirmTarget): string {
+  if (target.kind === 'terminalClose') return 'Close Terminal';
   if (target.kind === 'clearCache') return 'Clear Cache';
   if (target.kind === 'restoreArchived') return 'Restore';
   if (target.kind === 'delete') return 'Delete';
@@ -235,6 +248,7 @@ function isDangerConfirmTarget(target: ConfirmTarget): boolean {
   return (
     target.kind === 'clearCache' ||
     target.kind === 'delete' ||
+    target.kind === 'terminalClose' ||
     (target.kind === 'npmPackage' && target.action === 'uninstall') ||
     target.kind === 'skillUninstall' ||
     target.kind === 'skillBatchUninstall'

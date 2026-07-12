@@ -1,0 +1,206 @@
+@import '@xterm/xterm/css/xterm.css';
+
+.chat-terminal-toggle {
+  appearance: none;
+  position: relative;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  padding: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
+  cursor: pointer;
+}
+
+.chat-terminal-toggle:hover,
+.chat-terminal-toggle.active {
+  background: color-mix(in srgb, var(--accent-primary) 16%, transparent);
+  color: color-mix(in srgb, var(--accent-primary) 96%, var(--text-primary));
+}
+
+.terminal-splitter {
+  position: relative;
+  flex: 0 0 5px;
+  height: 5px;
+  cursor: row-resize;
+  background: var(--border-subtle);
+  touch-action: none;
+}
+
+.terminal-splitter:hover,
+.terminal-splitter:active {
+  background: var(--accent-primary);
+}
+
+.terminal-desktop-panel {
+  flex: 0 0 auto;
+  min-height: 160px;
+  max-height: 70%;
+  overflow: hidden;
+  background: #101214;
+}
+
+.terminal-mobile-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  padding-top: var(--wm-safe-area-top);
+  background: #101214;
+}
+
+.terminal-workbench {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  color: #d7dce2;
+  background: #101214;
+}
+
+.terminal-tabbar {
+  display: flex;
+  align-items: center;
+  flex: 0 0 34px;
+  min-width: 0;
+  border-bottom: 1px solid #292d31;
+  background: #171a1e;
+}
+
+.terminal-tabs {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.terminal-back {
+  flex: 0 0 44px;
+  align-self: stretch;
+}
+
+.terminal-tab {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 120px;
+  max-width: 220px;
+  height: 34px;
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid #292d31;
+  color: #9ba3ac;
+  background: transparent;
+  cursor: pointer;
+}
+
+.terminal-tab.active {
+  color: #f2f5f7;
+  background: #101214;
+  box-shadow: inset 0 2px var(--accent-primary);
+}
+
+.terminal-status {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: #7d8791;
+}
+
+.terminal-status.running { background: #56b870; }
+.terminal-status.exited { background: #8d96a0; }
+.terminal-status.error { background: #d96868; }
+.terminal-status.unavailable { background: #d8a34c; }
+
+.terminal-tab-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.terminal-tab-hub {
+  min-width: 0;
+  overflow: hidden;
+  color: #6f7881;
+  font-size: 10px;
+  text-overflow: ellipsis;
+}
+
+.terminal-tab-close {
+  margin-left: auto;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.terminal-tab-close:hover { background: #343a40; }
+
+.terminal-new,
+.terminal-actions button {
+  height: 26px;
+  margin: 0 4px;
+  border: 1px solid #343a40;
+  border-radius: 5px;
+  color: #c7cdd3;
+  background: #20242a;
+  cursor: pointer;
+}
+
+.terminal-new { width: 28px; font-size: 18px; }
+.terminal-actions { display: flex; align-items: center; }
+.terminal-actions button { padding: 0 8px; font-size: 11px; }
+
+.terminal-content,
+.terminal-xterm-host {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.terminal-content { position: relative; padding: 6px 0 0 6px; overflow: hidden; }
+.terminal-xterm-host { width: 100%; height: 100%; }
+.terminal-xterm-host .xterm { height: 100%; }
+.terminal-empty { padding: 24px; color: #747d86; }
+
+.terminal-keybar {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  padding: 6px 6px calc(6px + var(--wm-safe-area-bottom));
+  overflow-x: auto;
+  border-top: 1px solid #292d31;
+  background: #171a1e;
+}
+
+.terminal-keybar button {
+  min-width: 44px;
+  min-height: 44px;
+  flex: 0 0 auto;
+  border: 1px solid #353b42;
+  border-radius: 7px;
+  color: #d7dce2;
+  background: #22272d;
+}
+
+.terminal-keybar button[aria-pressed='true'] {
+  color: #fff;
+  border-color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 30%, #22272d);
+}
+
+@media (max-width: 720px) {
+  .terminal-tabbar { flex-basis: 40px; }
+  .terminal-tab { height: 40px; min-width: 132px; }
+  .terminal-actions button { display: none; }
+}
