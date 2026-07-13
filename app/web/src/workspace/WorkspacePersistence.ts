@@ -1,4 +1,6 @@
 import type {RegistryChatSession, RegistryGitCommit, RegistryGitCommitFile, RegistrySessionTurn} from '../registry/registryTypes';
+import type {RegistrySecretKind} from '../registry/registryTypes';
+import type {LegacyBackendSecrets} from '../settings/backendSecretSettings';
 import {
   DEFAULT_CODE_FONT,
   DEFAULT_CODE_FONT_SIZE,
@@ -95,7 +97,6 @@ export type PersistedProjectCommitsState = {
 export type PersistedGlobalState = {
   address: string;
   token: string;
-  deepseekApiKey: string;
   themeMode: PersistedThemeMode;
   codeTheme: CodeThemeId;
   codeFont: CodeFontId;
@@ -332,7 +333,6 @@ export function buildWorkspaceDatabaseStorageStats(
 }
 
 const GLOBAL_KEYS = {
-  deepseekApiKey: 'deepseekApiKey',
   themeMode: 'themeMode',
   codeTheme: 'codeTheme',
   codeFont: 'codeFont',
@@ -376,7 +376,6 @@ function defaultGlobalState(): PersistedGlobalState {
   return {
     address: '',
     token: '',
-    deepseekApiKey: '',
     themeMode: 'dark',
     codeTheme: DEFAULT_CODE_THEME,
     codeFont: DEFAULT_CODE_FONT,
@@ -626,7 +625,6 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
   return {
     address: typeof input.address === 'string' ? input.address : base.address,
     token: typeof input.token === 'string' ? input.token : base.token,
-    deepseekApiKey: typeof input.deepseekApiKey === 'string' ? input.deepseekApiKey : base.deepseekApiKey,
     themeMode: input.themeMode === 'light' ? 'light' : 'dark',
     codeTheme: typeof input.codeTheme === 'string' && isCodeThemeId(input.codeTheme) ? input.codeTheme : base.codeTheme,
     codeFont: typeof input.codeFont === 'string' && isCodeFontId(input.codeFont) ? input.codeFont : base.codeFont,
@@ -735,6 +733,9 @@ function globalRowsForPatch(
 
 function redactGlobalDumpRows(rows: RawKVRow[]): RawKVRow[] {
   return rows.map(row => {
+    if (row.k === 'deepseekApiKey') {
+      return {...row, v: serialize('')};
+    }
     if (row.k === GLOBAL_KEYS.speechSettings) {
       return {
         ...row,
@@ -749,6 +750,33 @@ function redactGlobalDumpRows(rows: RawKVRow[]): RawKVRow[] {
     }
     return row;
   });
+}
+
+export function extractLegacyBackendSecrets(rows: RawKVRow[]): LegacyBackendSecrets {
+  const legacy: LegacyBackendSecrets = {};
+  for (const row of rows) {
+    if (row.k === 'deepseekApiKey') {
+      const value = tryParse<unknown>(row.v, '');
+      if (typeof value === 'string' && value.trim()) legacy.deepseek = value.trim();
+      continue;
+    }
+    if (row.k === GLOBAL_KEYS.speechSettings) {
+      const value = tryParse<unknown>(row.v, {});
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        const secret = (value as Record<string, unknown>).volcengineApiKey;
+        if (typeof secret === 'string' && secret.trim()) legacy.volcengineAsr = secret.trim();
+      }
+      continue;
+    }
+    if (row.k === GLOBAL_KEYS.ttsSettings) {
+      const value = tryParse<unknown>(row.v, {});
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        const secret = (value as Record<string, unknown>).apiKey;
+        if (typeof secret === 'string' && secret.trim()) legacy.mimoTts = secret.trim();
+      }
+    }
+  }
+  return legacy;
 }
 
 type RawProjectStateRow = {
@@ -955,6 +983,7 @@ export class WorkspacePersistenceRepository {
   private writeQueue: Promise<void> = Promise.resolve();
   private lastStorageError: WorkspaceStorageError | null = null;
   private readonly storageErrorListeners = new Set<(error: WorkspaceStorageError) => void>();
+  private legacyBackendSecrets: LegacyBackendSecrets = {};
 
   constructor(private readonly db: WorkspaceDatabaseAdapter = new WorkspaceDatabase()) {
     this.state = defaultWorkspaceState();
@@ -1004,6 +1033,7 @@ export class WorkspacePersistenceRepository {
       return;
     }
 
+    this.legacyBackendSecrets = extractLegacyBackendSecrets(globalRows);
     this.state = this.fromDbRows(globalRows, projectRows);
     this.restoreProjectCommits(projectCommitRows);
     if (this.hasIncompatibleChatContentRows(chatContentRows)) {
@@ -1310,7 +1340,6 @@ export class WorkspacePersistenceRepository {
 
   private globalRows(updatedAt: number): RawKVRow[] {
     return [
-      {k: GLOBAL_KEYS.deepseekApiKey, v: serialize(this.state.global.deepseekApiKey), updatedAt},
       {k: GLOBAL_KEYS.themeMode, v: serialize(this.state.global.themeMode), updatedAt},
       {k: GLOBAL_KEYS.codeTheme, v: serialize(this.state.global.codeTheme), updatedAt},
       {k: GLOBAL_KEYS.codeFont, v: serialize(this.state.global.codeFont), updatedAt},
@@ -1562,6 +1591,35 @@ export class WorkspacePersistenceRepository {
   getGlobalState(): PersistedGlobalState {
     this.state.global = this.mergeLocalIdentityState(this.state.global);
     return cloneState(this.state.global);
+  }
+
+  getLegacyBackendSecrets(): LegacyBackendSecrets {
+    return cloneState(this.legacyBackendSecrets);
+  }
+
+  async clearLegacyBackendSecret(kind: RegistrySecretKind): Promise<void> {
+    await this.readyPromise;
+    const now = Date.now();
+    switch (kind) {
+      case 'deepseek':
+        await this.db.deleteRow(TABLE_GLOBAL_KV, 'deepseekApiKey');
+        break;
+      case 'volcengineAsr':
+        await this.db.putRow(TABLE_GLOBAL_KV, {
+          k: GLOBAL_KEYS.speechSettings,
+          v: serialize(this.state.global.speechSettings),
+          updatedAt: now,
+        });
+        break;
+      case 'mimoTts':
+        await this.db.putRow(TABLE_GLOBAL_KV, {
+          k: GLOBAL_KEYS.ttsSettings,
+          v: serialize(this.state.global.ttsSettings),
+          updatedAt: now,
+        });
+        break;
+    }
+    delete this.legacyBackendSecrets[kind];
   }
 
   getProjectState(projectId: string): PersistedProjectState {

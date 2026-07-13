@@ -25,6 +25,8 @@ import {
   type CodeThemeId,
 } from '../code/shikiSettings';
 import type {SettingsChildDetail} from './settingsNavigation';
+import type {RegistrySecretKind, RegistrySecretStatus} from '../registry/registryTypes';
+import {backendSecretKinds, backendSecretLabel} from './backendSecretSettings';
 
 const CODE_FONT_SIZE_OPTIONS = [12, 13, 14, 15, 16] as const;
 const CODE_LINE_HEIGHT_OPTIONS = [1.35, 1.45, 1.5, 1.6, 1.7] as const;
@@ -81,6 +83,12 @@ type SettingsRootContentProps = {
   setDesktopRemoteDebugEnabled: (value: boolean) => void;
   requestClearLocalCache: () => void;
   handleRegistryDebugLogout: () => void;
+  backendSecretStatuses: RegistrySecretStatus[];
+  backendSecretBusy: boolean;
+  backendSecretError: string;
+  replaceBackendSecret: (kind: RegistrySecretKind, value: string) => Promise<void>;
+  clearBackendSecret: (kind: RegistrySecretKind) => Promise<void>;
+  retryBackendSecretMigration: () => Promise<void>;
 };
 
 type SettingsSectionId = 'appearance' | 'chat' | 'connection' | 'code-display' | 'debug';
@@ -101,6 +109,62 @@ function renderSettingsSection({id, title, rows, icon}: SettingsSectionOptions) 
       </div>
       <div className="settings-section-rows">{rows}</div>
     </section>
+  );
+}
+
+function BackendSecretEditor({
+  kind,
+  status,
+  busy,
+  onReplace,
+  onClear,
+}: {
+  kind: RegistrySecretKind;
+  status: RegistrySecretStatus | undefined;
+  busy: boolean;
+  onReplace: (kind: RegistrySecretKind, value: string) => Promise<void>;
+  onClear: (kind: RegistrySecretKind) => Promise<void>;
+}) {
+  const [draft, setDraft] = React.useState('');
+  const submit = async () => {
+    const value = draft.trim();
+    if (!value) return;
+    try {
+      await onReplace(kind, value);
+      setDraft('');
+    } catch {
+      // Parent exposes the failure while keeping this draft available for retry.
+    }
+  };
+  return (
+    <div className="voice-input-settings-nested">
+      <div className="settings-row sidebar-setting-row voice-input-settings-child-row">
+        <span>
+          <span className="codicon codicon-key settings-row-icon" aria-hidden="true" />
+          {backendSecretLabel(kind)}
+          <span className="settings-metadata-line">
+            {status?.configured ? 'Configured' : 'Not configured'}
+            {status?.updatedAt ? ` · ${new Date(status.updatedAt).toLocaleString()}` : ''}
+          </span>
+        </span>
+      </div>
+      <div className="settings-row sidebar-setting-row voice-input-settings-child-row">
+        <input
+          type="password"
+          autoComplete="new-password"
+          placeholder="Enter a new secret"
+          value={draft}
+          disabled={busy}
+          onChange={event => setDraft(event.target.value)}
+        />
+        <button type="button" disabled={busy || !draft.trim()} onClick={() => void submit()}>
+          {status?.configured ? 'Replace' : 'Set'}
+        </button>
+        {status?.configured ? (
+          <button type="button" disabled={busy} onClick={() => void onClear(kind).catch(() => undefined)}>Clear</button>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -153,6 +217,12 @@ export function SettingsRootContent({
   setDesktopRemoteDebugEnabled,
   requestClearLocalCache,
   handleRegistryDebugLogout,
+  backendSecretStatuses,
+  backendSecretBusy,
+  backendSecretError,
+  replaceBackendSecret,
+  clearBackendSecret,
+  retryBackendSecretMigration,
 }: SettingsRootContentProps) {
   return (
     <>
@@ -409,6 +479,26 @@ export function SettingsRootContent({
           </span>
           <span className="codicon codicon-chevron-right" aria-hidden="true" />
         </button>
+        <div className="voice-input-settings-menu">
+          {backendSecretKinds.map(kind => (
+            <BackendSecretEditor
+              key={kind}
+              kind={kind}
+              status={backendSecretStatuses.find(item => item.kind === kind)}
+              busy={backendSecretBusy}
+              onReplace={replaceBackendSecret}
+              onClear={clearBackendSecret}
+            />
+          ))}
+          {backendSecretError ? (
+            <div className="voice-input-settings-nested">
+              <div className="settings-metadata-line">{backendSecretError}</div>
+              <button type="button" disabled={backendSecretBusy} onClick={() => void retryBackendSecretMigration()}>
+                Retry
+              </button>
+            </div>
+          ) : null}
+        </div>
         </>
         )})}
         {renderSettingsSection({id: 'code-display', title: 'Code Display', icon: 'code', rows: (

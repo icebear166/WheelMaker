@@ -506,7 +506,10 @@ import type {
   RegistryTerminal,
   RegistryTerminalChangedEvent,
   RegistryTerminalOutputEvent,
+  RegistrySecretKind,
+  RegistrySecretStatus,
 } from '../registry/registryTypes';
+import {migrateLegacyBackendSecrets} from '../settings/backendSecretSettings';
 
 const RegistryDebugPanel = React.lazy(() => import('../debug/RegistryDebugPanel').then(module => ({
   default: module.RegistryDebugPanel,
@@ -2566,6 +2569,9 @@ export function App() {
   const [ttsSettings, setTtsSettings] = useState<TtsSettings>(() =>
     normalizeTtsSettings(persistedGlobal.ttsSettings ?? DEFAULT_TTS_SETTINGS),
   );
+  const [backendSecretStatuses, setBackendSecretStatuses] = useState<RegistrySecretStatus[]>([]);
+  const [backendSecretBusy, setBackendSecretBusy] = useState(false);
+  const [backendSecretError, setBackendSecretError] = useState('');
   const [ttsState, setTtsState] = useState<TtsPlaybackState>('idle');
   const ttsActiveTurnIndexRef = useRef<number | null>(null);
   const [webSourceState, setWebSourceState] = useState<DesktopWebSourceState | null>(null);
@@ -12089,6 +12095,57 @@ export function App() {
     }, 0);
   };
 
+  const synchronizeBackendSecrets = async () => {
+    setBackendSecretBusy(true);
+    setBackendSecretError('');
+    try {
+      const statuses = await service.getSecretStatus();
+      const migration = await migrateLegacyBackendSecrets({
+        legacy: workspaceStore.getLegacyBackendSecrets(),
+        statuses,
+        updateSecret: payload => service.updateSecret(payload),
+        clearLegacySecret: kind => workspaceStore.clearLegacyBackendSecret(kind),
+      });
+      const refreshed = await service.getSecretStatus();
+      setBackendSecretStatuses(refreshed);
+      if (migration.failures.length > 0) {
+        setBackendSecretError(`Secret migration failed: ${migration.failures.map(item => `${item.kind}: ${item.message}`).join('; ')}`);
+      }
+    } catch (secretError) {
+      setBackendSecretError(secretError instanceof Error ? secretError.message : String(secretError));
+    } finally {
+      setBackendSecretBusy(false);
+    }
+  };
+
+  const replaceBackendSecret = async (kind: RegistrySecretKind, value: string) => {
+    setBackendSecretBusy(true);
+    setBackendSecretError('');
+    try {
+      await service.updateSecret({kind, action: 'set', value});
+      setBackendSecretStatuses(await service.getSecretStatus());
+    } catch (secretError) {
+      setBackendSecretError(secretError instanceof Error ? secretError.message : String(secretError));
+      throw secretError;
+    } finally {
+      setBackendSecretBusy(false);
+    }
+  };
+
+  const clearBackendSecret = async (kind: RegistrySecretKind) => {
+    setBackendSecretBusy(true);
+    setBackendSecretError('');
+    try {
+      await service.updateSecret({kind, action: 'clear'});
+      setBackendSecretStatuses(await service.getSecretStatus());
+    } catch (secretError) {
+      setBackendSecretError(secretError instanceof Error ? secretError.message : String(secretError));
+      throw secretError;
+    } finally {
+      setBackendSecretBusy(false);
+    }
+  };
+
   const connect = async ({
     silentReconnect = false,
   }: { silentReconnect?: boolean } = {}) => {
@@ -12146,6 +12203,7 @@ export function App() {
       reconnectStartedAtRef.current = null;
       setReconnecting(false);
       setConnected(true);
+      void synchronizeBackendSecrets();
       refreshTerminalLists(result.hubs).catch(() => undefined);
       if (!silentReconnect) {
         clearChatRuntimeState();
@@ -16725,6 +16783,12 @@ export function App() {
         setDesktopRemoteDebugEnabled={handleDesktopRemoteDebugEnabledChange}
         requestClearLocalCache={requestClearLocalCache}
         handleRegistryDebugLogout={handleRegistryDebugLogout}
+        backendSecretStatuses={backendSecretStatuses}
+        backendSecretBusy={backendSecretBusy}
+        backendSecretError={backendSecretError}
+        replaceBackendSecret={replaceBackendSecret}
+        clearBackendSecret={clearBackendSecret}
+        retryBackendSecretMigration={synchronizeBackendSecrets}
       />
     </React.Suspense>
   );

@@ -49,6 +49,8 @@ import type {
   RegistrySessionReadResponse,
   RegistrySessionSearchResponse,
   RegistrySessionSearchStatusResponse,
+  RegistrySecretStatus,
+  RegistrySecretUpdatePayload,
   RegistryResumableSession,
   RegistrySessionSummary,
   RegistrySkillCommandResponse,
@@ -805,6 +807,16 @@ export class RegistryWorkspaceService {
       throw new Error('session is not ready');
     }
     return this.repository.startSpeech(payload);
+  }
+
+  async getSecretStatus(): Promise<RegistrySecretStatus[]> {
+    if (!this.repository) throw new Error('session is not ready');
+    return this.repository.getSecretStatus();
+  }
+
+  async updateSecret(payload: RegistrySecretUpdatePayload): Promise<void> {
+    if (!this.repository) throw new Error('session is not ready');
+    await this.repository.updateSecret(payload);
   }
 
 	async synthesizeTTS(payload: RegistryTTSSynthesizePayload): Promise<RegistryTTSSynthesizeResponse> {

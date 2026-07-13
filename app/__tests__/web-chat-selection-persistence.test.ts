@@ -46,6 +46,17 @@ function createFakeChatPersistence() {
 }
 
 describe('global selected chat session persistence', () => {
+  test('exposes the explicit legacy backend-secret migration lifecycle', async () => {
+    const persistence = createFakePersistence();
+    (persistence as any).getLegacyBackendSecrets = jest.fn(() => ({deepseek: 'legacy-key'}));
+    (persistence as any).clearLegacyBackendSecret = jest.fn().mockResolvedValue(undefined);
+    const store = new WorkspaceStore(persistence as any);
+
+    expect(store.getLegacyBackendSecrets()).toEqual({deepseek: 'legacy-key'});
+    await store.clearLegacyBackendSecret('deepseek');
+    expect((persistence as any).clearLegacyBackendSecret).toHaveBeenCalledWith('deepseek');
+  });
+
   test('clears the saved registry token without clearing the address', () => {
     const persistence = createFakePersistence({
       address: 'ws://registry.example/ws',

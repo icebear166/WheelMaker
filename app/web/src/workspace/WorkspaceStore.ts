@@ -20,6 +20,8 @@ import {
   type WorkspaceDatabaseDump,
   type WorkspaceStorageError,
 } from './WorkspacePersistence';
+import type {RegistrySecretKind} from '../registry/registryTypes';
+import type {LegacyBackendSecrets} from '../settings/backendSecretSettings';
 
 type ProjectSnapshot = {
   expandedDirs: string[];
@@ -147,6 +149,14 @@ export class WorkspaceStore {
       nextPatch.selectedProjectId = current.selectedProjectId;
     }
     this.persistence.patchGlobalState(nextPatch);
+  }
+
+  getLegacyBackendSecrets(): LegacyBackendSecrets {
+    return this.persistence.getLegacyBackendSecrets();
+  }
+
+  clearLegacyBackendSecret(kind: RegistrySecretKind): Promise<void> {
+    return this.persistence.clearLegacyBackendSecret(kind);
   }
 
   selectProjectOnConnect(projects: RegistryProject[], fallbackProjectId: string): string {

@@ -298,13 +298,13 @@ Expected: PASS；浏览器 payload 不含 DeepSeek key。
 - Create: `app/__tests__/web-backend-secret-settings.test.ts`
 - Modify: `app/__tests__/web-chat-selection-persistence.test.ts`
 
-- [ ] **Step 1: 写 set-only UI 和一次性迁移测试**
+- [x] **Step 1: 写 set-only UI 和一次性迁移测试**
 
 UI 每个密钥只显示 `Configured/Not configured`、updatedAt、Replace、Clear；输入框始终为空，保存成功立即清空组件 state。不得用 masked value 填回 input。
 
 迁移规则：认证连接后先读后端 status；若本地旧值非空且服务端未配置，调用一次 set；set 成功或服务端本就 configured 后，删除 IndexedDB/global state 中的旧 key。失败时显示迁移失败并允许用户重试，但阶段 5 硬切换前必须完成或由用户重新输入，最终版本不保留旧值。
 
-- [ ] **Step 2: 运行测试并确认失败**
+- [x] **Step 2: 运行测试并确认失败**
 
 Run:
 
@@ -315,11 +315,11 @@ npm test -- --runInBand __tests__/web-backend-secret-settings.test.ts __tests__/
 
 Expected: FAIL；当前设置把原文绑定到持久 state 和 input value。
 
-- [ ] **Step 3: 实现状态 UI 和迁移器**
+- [x] **Step 3: 实现状态 UI 和迁移器**
 
 Migration 只识别三个已知旧字段：`deepseekApiKey`、`speechSettings.volcengineApiKey`、`ttsSettings.apiKey`。不要递归上传未知字段。清理时保留 speech/TTS 的非敏感 enabled/model/voice。
 
-- [ ] **Step 4: 运行 Web 全量门并提交**
+- [x] **Step 4: 运行 Web 全量门并提交**
 
 Run:
 

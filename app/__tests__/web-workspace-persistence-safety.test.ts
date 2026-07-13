@@ -138,6 +138,41 @@ function rowValue(rows: Array<{k: string; v: string}>, key: string): unknown {
 }
 
 describe('workspace persistence safety', () => {
+  test('clears migrated legacy secrets while preserving non-sensitive speech settings', async () => {
+    const now = Date.now();
+    const db = new MemoryWorkspaceDatabase({
+      wm_global_kv: [
+        {k: 'deepseekApiKey', v: JSON.stringify('old-deepseek'), updatedAt: now},
+        {k: 'speechSettings', v: JSON.stringify({enabled: true, volcengineApiKey: 'old-asr'}), updatedAt: now},
+        {k: 'ttsSettings', v: JSON.stringify({enabled: true, model: 'mimo-v2.5-tts', voice: 'Mia', apiKey: 'old-tts'}), updatedAt: now},
+      ],
+    });
+    const repository = new WorkspacePersistenceRepository(db as never);
+    await repository.ready();
+
+    expect(repository.getLegacyBackendSecrets()).toEqual({
+      deepseek: 'old-deepseek',
+      volcengineAsr: 'old-asr',
+      mimoTts: 'old-tts',
+    });
+    await repository.clearLegacyBackendSecret('deepseek');
+    await repository.clearLegacyBackendSecret('volcengineAsr');
+    await repository.clearLegacyBackendSecret('mimoTts');
+
+    expect(repository.getLegacyBackendSecrets()).toEqual({});
+    expect(rowValue(db.rows('wm_global_kv'), 'deepseekApiKey')).toBeUndefined();
+    expect(rowValue(db.rows('wm_global_kv'), 'speechSettings')).toEqual({
+      enabled: true,
+      provider: 'volcengine',
+      model: 'doubao-streaming-asr-2.0',
+    });
+    expect(rowValue(db.rows('wm_global_kv'), 'ttsSettings')).toEqual({
+      enabled: true,
+      model: 'mimo-v2.5-tts',
+      voice: 'Mia',
+    });
+  });
+
   test('evicts expired entries first and then the least recently used entries', () => {
     const evicted = selectCacheEvictionKeys([
       {key: 'expired', updatedAt: 1, approximateBytes: 2},
@@ -190,8 +225,8 @@ describe('workspace persistence safety', () => {
 
     expect(repository.getGlobalState()).toMatchObject({
       themeMode: 'light',
-      deepseekApiKey: 'secret-key',
     });
+    expect(repository.getLegacyBackendSecrets()).toEqual({deepseek: 'secret-key'});
     expect(db.rows('wm_global_kv')).toEqual(before);
     expect(db.mutationsFor('wm_global_kv')).toEqual([]);
     expect(db.lastMutationStores()).toEqual([
@@ -239,8 +274,8 @@ describe('workspace persistence safety', () => {
     await expect(repository.ready()).resolves.toBeUndefined();
     expect(repository.getGlobalState()).toMatchObject({
       themeMode: 'light',
-      deepseekApiKey: 'secret-key',
     });
+    expect(repository.getLegacyBackendSecrets()).toEqual({deepseek: 'secret-key'});
     expect(errors).toEqual([expect.objectContaining({operation: 'repair chat cache'})]);
     unsubscribe();
     consoleError.mockRestore();
@@ -465,8 +500,8 @@ describe('workspace persistence safety', () => {
 
     expect(repository.getGlobalState()).toMatchObject({
       themeMode: 'light',
-      deepseekApiKey: 'secret-key',
     });
+    expect(repository.getLegacyBackendSecrets()).toEqual({deepseek: 'secret-key'});
     expect(repository.getProjectState('p1')).toMatchObject({
       selectedFile: 'a.txt',
       pinnedFiles: ['a.txt'],
