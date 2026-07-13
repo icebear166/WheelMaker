@@ -88,3 +88,44 @@ func TestForwardedHeadersAreTrustedOnlyFromLoopbackProxy(t *testing.T) {
 		t.Fatal("direct TLS request was not recognized")
 	}
 }
+
+func TestBrowserWriteRequiresSameOriginFetchMetadata(t *testing.T) {
+	base := &http.Request{
+		Host:       "wheelmaker.example.com",
+		RemoteAddr: "127.0.0.1:50000",
+		Header: http.Header{
+			"Origin":            []string{"https://wheelmaker.example.com"},
+			"X-Forwarded-Proto": []string{"https"},
+		},
+	}
+	tests := []struct {
+		name      string
+		origin    string
+		fetchSite string
+		fetchMode string
+		ok        bool
+	}{
+		{name: "metadata omitted", origin: "https://wheelmaker.example.com", ok: true},
+		{name: "same origin cors", origin: "https://wheelmaker.example.com", fetchSite: "same-origin", fetchMode: "cors", ok: true},
+		{name: "same origin mode", origin: "https://wheelmaker.example.com", fetchSite: "same-origin", fetchMode: "same-origin", ok: true},
+		{name: "missing origin", ok: false},
+		{name: "cross origin", origin: "https://attacker.example", fetchSite: "same-origin", fetchMode: "cors", ok: false},
+		{name: "cross site metadata", origin: "https://wheelmaker.example.com", fetchSite: "cross-site", fetchMode: "cors", ok: false},
+		{name: "same site metadata", origin: "https://wheelmaker.example.com", fetchSite: "same-site", fetchMode: "cors", ok: false},
+		{name: "navigate mode", origin: "https://wheelmaker.example.com", fetchSite: "same-origin", fetchMode: "navigate", ok: false},
+		{name: "no cors mode", origin: "https://wheelmaker.example.com", fetchSite: "same-origin", fetchMode: "no-cors", ok: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			request := base.Clone(base.Context())
+			request.Header = base.Header.Clone()
+			request.Header.Set("Origin", tt.origin)
+			request.Header.Set("Sec-Fetch-Site", tt.fetchSite)
+			request.Header.Set("Sec-Fetch-Mode", tt.fetchMode)
+			if got := BrowserWriteRequestAllowed(request); got != tt.ok {
+				t.Fatalf("BrowserWriteRequestAllowed()=%t, want %t", got, tt.ok)
+			}
+		})
+	}
+}

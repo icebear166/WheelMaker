@@ -38,6 +38,22 @@ func RequestOriginMatchesHost(r *http.Request) bool {
 	return ok && origin == expected
 }
 
+// BrowserWriteRequestAllowed validates browser provenance for state-changing requests.
+func BrowserWriteRequestAllowed(r *http.Request) bool {
+	if !RequestOriginMatchesHost(r) {
+		return false
+	}
+	if fetchSite := r.Header.Get("Sec-Fetch-Site"); fetchSite != "" && fetchSite != "same-origin" {
+		return false
+	}
+	switch r.Header.Get("Sec-Fetch-Mode") {
+	case "navigate", "no-cors":
+		return false
+	default:
+		return true
+	}
+}
+
 func normalizeOrigin(raw string) (string, bool) {
 	u, err := url.Parse(raw)
 	if err != nil || u.User != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {

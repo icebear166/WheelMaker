@@ -3,6 +3,7 @@ package registry
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"github.com/gorilla/websocket"
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
@@ -2041,6 +2042,215 @@ func TestWebLoginSetsSecureSessionCookie(t *testing.T) {
 	cookie := cookies[0]
 	if cookie.Name != registrySessionCookieName || !cookie.HttpOnly || !cookie.Secure || cookie.SameSite != http.SameSiteStrictMode {
 		t.Fatalf("unsafe session cookie: %+v", cookie)
+	}
+}
+
+func TestWebAuthRejectsInvalidLoginRequests(t *testing.T) {
+	s := New(Config{Token: "custom-token"})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	tests := []struct {
+		name      string
+		body      string
+		fetchSite string
+		fetchMode string
+	}{
+		{name: "body over 4 KiB", body: `{"token":"` + strings.Repeat("x", 4097) + `"}`},
+		{name: "second JSON value", body: `{"token":"custom-token"} {}`},
+		{name: "unknown field", body: `{"token":"custom-token","unknown":true}`},
+		{name: "empty token", body: `{"token":""}`},
+		{name: "device name over 80 characters", body: `{"token":"custom-token","deviceName":"` + strings.Repeat("界", 81) + `"}`},
+		{name: "cross site fetch", body: `{"token":"custom-token"}`, fetchSite: "cross-site"},
+		{name: "navigate fetch", body: `{"token":"custom-token"}`, fetchSite: "same-origin", fetchMode: "navigate"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			headers := sameOriginWebAuthHeaders(ts.URL)
+			if tt.fetchSite != "" {
+				headers.Set("Sec-Fetch-Site", tt.fetchSite)
+			}
+			if tt.fetchMode != "" {
+				headers.Set("Sec-Fetch-Mode", tt.fetchMode)
+			}
+			resp := doRegistryWebAuthRequest(t, ts.URL, http.MethodPost, "/", "login", tt.body, headers, nil)
+			defer resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				t.Fatalf("invalid login status=%d, want rejection", resp.StatusCode)
+			}
+			assertWebAuthSecurityHeaders(t, resp)
+		})
+	}
+}
+
+func TestWebAuthCookieStatusAndLogoutUseBasePath(t *testing.T) {
+	tests := []struct {
+		name       string
+		basePath   string
+		deviceName string
+		wantName   string
+	}{
+		{name: "root", basePath: "/", deviceName: "   ", wantName: "Browser"},
+		{name: "subpath", basePath: "/wheelmaker/", deviceName: "  Work Tablet  ", wantName: "Work Tablet"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := New(Config{Token: "x"})
+			ts := httptest.NewServer(s.Handler())
+			t.Cleanup(ts.Close)
+			headers := sameOriginWebAuthHeaders(ts.URL)
+			loginBody := `{"token":"x","deviceName":` + strconv.Quote(tt.deviceName) + `}`
+			loginResp := doRegistryWebAuthRequest(t, ts.URL, http.MethodPost, tt.basePath, "login", loginBody, headers, nil)
+			assertWebAuthSecurityHeaders(t, loginResp)
+			var loginPayload struct {
+				Authenticated bool   `json:"authenticated"`
+				CSRFToken     string `json:"csrfToken"`
+			}
+			if err := json.NewDecoder(loginResp.Body).Decode(&loginPayload); err != nil {
+				t.Fatalf("decode login: %v", err)
+			}
+			_ = loginResp.Body.Close()
+			if loginResp.StatusCode != http.StatusOK || !loginPayload.Authenticated || loginPayload.CSRFToken == "" {
+				t.Fatalf("login status=%d payload=%+v", loginResp.StatusCode, loginPayload)
+			}
+			cookies := loginResp.Cookies()
+			if len(cookies) != 1 {
+				t.Fatalf("login cookies=%v, want one", cookies)
+			}
+			cookie := cookies[0]
+			if cookie.Domain != "" || cookie.Path != tt.basePath || !cookie.HttpOnly || !cookie.Secure || cookie.SameSite != http.SameSiteStrictMode || cookie.MaxAge != int(webSessionTTL.Seconds()) {
+				t.Fatalf("login cookie=%+v", cookie)
+			}
+
+			statusResp := doRegistryWebAuthRequest(t, ts.URL, http.MethodGet, tt.basePath, "status", "", nil, cookie)
+			assertWebAuthSecurityHeaders(t, statusResp)
+			var statusPayload struct {
+				Authenticated bool   `json:"authenticated"`
+				CSRFToken     string `json:"csrfToken"`
+				Device        struct {
+					DeviceID   string    `json:"deviceId"`
+					DeviceName string    `json:"deviceName"`
+					BasePath   string    `json:"basePath"`
+					CreatedAt  time.Time `json:"createdAt"`
+					LastSeenAt time.Time `json:"lastSeenAt"`
+					ExpiresAt  time.Time `json:"expiresAt"`
+					Current    bool      `json:"current"`
+				} `json:"device"`
+			}
+			if err := json.NewDecoder(statusResp.Body).Decode(&statusPayload); err != nil {
+				t.Fatalf("decode status: %v", err)
+			}
+			_ = statusResp.Body.Close()
+			if statusResp.StatusCode != http.StatusOK || !statusPayload.Authenticated || statusPayload.CSRFToken != loginPayload.CSRFToken {
+				t.Fatalf("status=%d payload=%+v", statusResp.StatusCode, statusPayload)
+			}
+			if statusPayload.Device.DeviceID == "" || statusPayload.Device.DeviceName != tt.wantName || statusPayload.Device.BasePath != tt.basePath || statusPayload.Device.CreatedAt.IsZero() || statusPayload.Device.LastSeenAt.IsZero() || statusPayload.Device.ExpiresAt.IsZero() || !statusPayload.Device.Current {
+				t.Fatalf("status device=%+v", statusPayload.Device)
+			}
+			encodedStatus, err := json.Marshal(statusPayload)
+			if err != nil {
+				t.Fatalf("marshal status: %v", err)
+			}
+			for _, forbidden := range []string{cookie.Value, `"digest"`, `"fingerprint"`, `"cookie"`, `"registryToken"`} {
+				if bytes.Contains(encodedStatus, []byte(forbidden)) {
+					t.Fatalf("status leaks %q: %s", forbidden, encodedStatus)
+				}
+			}
+
+			wrongHeaders := sameOriginWebAuthHeaders(ts.URL)
+			wrongHeaders.Set(registryCSRFHeaderName, "wrong")
+			wrongLogout := doRegistryWebAuthRequest(t, ts.URL, http.MethodPost, tt.basePath, "logout", "", wrongHeaders, cookie)
+			assertWebAuthSecurityHeaders(t, wrongLogout)
+			_ = wrongLogout.Body.Close()
+			if wrongLogout.StatusCode != http.StatusForbidden {
+				t.Fatalf("wrong-CSRF logout status=%d, want 403", wrongLogout.StatusCode)
+			}
+
+			logoutHeaders := sameOriginWebAuthHeaders(ts.URL)
+			logoutHeaders.Set(registryCSRFHeaderName, statusPayload.CSRFToken)
+			logoutResp := doRegistryWebAuthRequest(t, ts.URL, http.MethodPost, tt.basePath, "logout", "", logoutHeaders, cookie)
+			assertWebAuthSecurityHeaders(t, logoutResp)
+			_ = logoutResp.Body.Close()
+			if logoutResp.StatusCode != http.StatusOK {
+				t.Fatalf("logout status=%d", logoutResp.StatusCode)
+			}
+			cleared := logoutResp.Cookies()
+			if len(cleared) != 1 || cleared[0].Path != tt.basePath || cleared[0].MaxAge != -1 || !cleared[0].HttpOnly || !cleared[0].Secure || cleared[0].SameSite != http.SameSiteStrictMode {
+				t.Fatalf("cleared cookies=%+v", cleared)
+			}
+
+			after := doRegistryWebAuthRequest(t, ts.URL, http.MethodGet, tt.basePath, "status", "", nil, cookie)
+			defer after.Body.Close()
+			var afterPayload map[string]any
+			if err := json.NewDecoder(after.Body).Decode(&afterPayload); err != nil {
+				t.Fatalf("decode status after logout: %v", err)
+			}
+			if afterPayload["authenticated"] != false {
+				t.Fatalf("status after logout=%v", afterPayload)
+			}
+		})
+	}
+}
+
+func TestWebAuthRejectsSessionFromDifferentBasePath(t *testing.T) {
+	s := New(Config{Token: "custom-token"})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+	login := doRegistryWebAuthRequest(t, ts.URL, http.MethodPost, "/", "login", `{"token":"custom-token"}`, sameOriginWebAuthHeaders(ts.URL), nil)
+	if login.StatusCode != http.StatusOK || len(login.Cookies()) != 1 {
+		t.Fatalf("login status=%d cookies=%v", login.StatusCode, login.Cookies())
+	}
+	cookie := login.Cookies()[0]
+	_ = login.Body.Close()
+
+	status := doRegistryWebAuthRequest(t, ts.URL, http.MethodGet, "/wheelmaker/", "status", "", nil, cookie)
+	defer status.Body.Close()
+	var payload map[string]any
+	if err := json.NewDecoder(status.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode status: %v", err)
+	}
+	if payload["authenticated"] != false {
+		t.Fatalf("cross-base status=%v, want unauthenticated", payload)
+	}
+}
+
+func sameOriginWebAuthHeaders(origin string) http.Header {
+	return http.Header{
+		"Content-Type":   []string{"application/json"},
+		"Origin":         []string{origin},
+		"Sec-Fetch-Site": []string{"same-origin"},
+		"Sec-Fetch-Mode": []string{"cors"},
+	}
+}
+
+func doRegistryWebAuthRequest(t *testing.T, serverURL, method, basePath, action, body string, headers http.Header, cookie *http.Cookie) *http.Response {
+	t.Helper()
+	requestURL := serverURL + strings.TrimSuffix(basePath, "/") + "/ws?auth=" + action
+	req, err := http.NewRequest(method, requestURL, strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("NewRequest(%s): %v", action, err)
+	}
+	for name, values := range headers {
+		for _, value := range values {
+			req.Header.Add(name, value)
+		}
+	}
+	if cookie != nil {
+		req.AddCookie(cookie)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("%s: %v", action, err)
+	}
+	return resp
+}
+
+func assertWebAuthSecurityHeaders(t *testing.T, resp *http.Response) {
+	t.Helper()
+	if resp.Header.Get("Cache-Control") != "no-store" || resp.Header.Get("Referrer-Policy") != "no-referrer" {
+		t.Fatalf("security headers=%v", resp.Header)
 	}
 }
 

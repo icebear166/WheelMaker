@@ -101,6 +101,14 @@ func (s *webSessionStore) Create(deviceName, basePath string) (string, string, e
 }
 
 func (s *webSessionStore) Authenticate(raw string) (webSession, bool) {
+	return s.authenticate(raw, "")
+}
+
+func (s *webSessionStore) AuthenticateForBasePath(raw, basePath string) (webSession, bool) {
+	return s.authenticate(raw, basePath)
+}
+
+func (s *webSessionStore) authenticate(raw, basePath string) (webSession, bool) {
 	if raw == "" {
 		return webSession{}, false
 	}
@@ -110,6 +118,9 @@ func (s *webSessionStore) Authenticate(raw string) (webSession, bool) {
 	defer s.mu.Unlock()
 	session, ok := s.sessions[digest]
 	if !ok {
+		return webSession{}, false
+	}
+	if basePath != "" && session.BasePath != basePath {
 		return webSession{}, false
 	}
 	if !now.Before(session.ExpiresAt) {
