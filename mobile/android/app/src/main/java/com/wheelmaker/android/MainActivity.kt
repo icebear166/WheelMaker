@@ -232,6 +232,10 @@ class MainActivity : Activity() {
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+		if (requestCode == ANDROID_APK_INSTALL_REQUEST_CODE) {
+			androidApkUpdateRuntime.onInstallerResult()
+			return
+		}
         if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
             deliverFileChooserResult(resultCode, data)
             return

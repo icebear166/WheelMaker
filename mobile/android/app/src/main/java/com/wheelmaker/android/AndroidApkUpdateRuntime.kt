@@ -2,6 +2,7 @@ package com.wheelmaker.android
 
 import android.content.Intent
 import android.content.pm.PackageInfo
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -11,23 +12,126 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
+import java.io.InputStream
+import java.net.URI
 import java.security.MessageDigest
 
 private const val ANDROID_APK_UPDATE_EVENT = "wheelmaker:android-apk-update"
 private const val ANDROID_APK_MIME_TYPE = "application/vnd.android.package-archive"
+private const val MAX_APK_UPDATE_BYTES = 200L * 1024L * 1024L
+private const val APK_UPDATE_DIRECTORY = "apk-verified-updates"
+private const val STALE_APK_AGE_MILLIS = 24L * 60L * 60L * 1_000L
+internal const val ANDROID_APK_INSTALL_REQUEST_CODE = 1005
 
-fun normalizeApkSha256(value: String): String {
-    return value.removePrefix("sha256:")
-        .removePrefix("SHA256:")
-        .trim()
-        .lowercase()
+data class ApkDownloadExpectation(
+    val downloadUrl: String,
+    val sha256: String,
+    val size: Long,
+    val tagName: String
+)
+
+data class VerifiedApkDownload(val byteCount: Long, val sha256: String)
+
+data class ApkArchiveIdentity(
+    val packageName: String,
+    val versionCode: Long,
+    val signerSha256: Set<String>
+)
+
+fun normalizeApkSha256(value: String): String = value
+    .removePrefix("sha256:")
+    .removePrefix("SHA256:")
+    .trim()
+    .lowercase()
+
+fun parseApkDownloadExpectation(rawJson: String): ApkDownloadExpectation? {
+    val input = try {
+        JSONObject(rawJson)
+    } catch (_: Exception) {
+        return null
+    }
+    val downloadUrl = input.optString("downloadUrl").trim()
+    val uri = try {
+        URI(downloadUrl)
+    } catch (_: Exception) {
+        return null
+    }
+    if (!uri.scheme.equals("https", ignoreCase = true) || uri.host.isNullOrBlank() || uri.userInfo != null) {
+        return null
+    }
+    val sha256 = normalizeApkSha256(input.optString("expectedSha256"))
+    if (!sha256.matches(Regex("^[0-9a-f]{64}$"))) {
+        return null
+    }
+    val size = input.optLong("expectedSize", -1L)
+    if (size <= 0L || size > MAX_APK_UPDATE_BYTES) {
+        return null
+    }
+    return ApkDownloadExpectation(downloadUrl, sha256, size, input.optString("tagName"))
 }
+
+fun sha256Hex(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256")
+    .digest(bytes)
+    .joinToString("") { "%02x".format(it) }
+
+fun streamAndVerifyApk(
+    input: InputStream,
+    output: File,
+    expectedSize: Long,
+    contentLength: Long,
+    expectedSha256: String
+): VerifiedApkDownload {
+    require(expectedSize in 1..MAX_APK_UPDATE_BYTES) { "invalid_apk_size" }
+    require(contentLength < 0L || contentLength == expectedSize) { "content_length_mismatch" }
+    val digest = MessageDigest.getInstance("SHA-256")
+    var byteCount = 0L
+    try {
+        output.parentFile?.mkdirs()
+        output.outputStream().buffered().use { sink ->
+            input.use { source ->
+                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                while (true) {
+                    val read = source.read(buffer)
+                    if (read < 0) break
+                    if (read == 0) continue
+                    byteCount += read
+                    if (byteCount > expectedSize || byteCount > MAX_APK_UPDATE_BYTES) {
+                        throw IllegalStateException("apk_size_mismatch")
+                    }
+                    digest.update(buffer, 0, read)
+                    sink.write(buffer, 0, read)
+                }
+            }
+        }
+        if (byteCount != expectedSize) {
+            throw IllegalStateException("apk_size_mismatch")
+        }
+        val actualSha256 = digest.digest().joinToString("") { "%02x".format(it) }
+        if (actualSha256 != expectedSha256) {
+            throw IllegalStateException("sha256_mismatch")
+        }
+        return VerifiedApkDownload(byteCount, actualSha256)
+    } catch (error: Exception) {
+        output.delete()
+        throw error
+    }
+}
+
+fun isTrustedApkArchive(installed: ApkArchiveIdentity, candidate: ApkArchiveIdentity): Boolean =
+    candidate.packageName == installed.packageName &&
+        candidate.versionCode > installed.versionCode &&
+        candidate.signerSha256.isNotEmpty() &&
+        candidate.signerSha256 == installed.signerSha256
 
 class AndroidApkUpdateRuntime(
     private val activity: MainActivity,
     private val webView: WebView
 ) {
-    private val httpClient = OkHttpClient()
+    private val httpClient = OkHttpClient.Builder()
+        .followRedirects(false)
+        .followSslRedirects(false)
+        .build()
+    @Volatile private var pendingInstallerFile: File? = null
 
     fun getReleaseState(): String {
         return try {
@@ -52,66 +156,82 @@ class AndroidApkUpdateRuntime(
     }
 
     fun installRelease(rawJson: String): String {
-        val input = try {
-            JSONObject(rawJson)
-        } catch (_: Exception) {
-            return androidApkUpdateResultJson(false, "invalid_payload", "invalid_payload")
-        }
-        val downloadUrl = input.optString("downloadUrl")
-        if (downloadUrl.isBlank()) {
-            return androidApkUpdateResultJson(false, "invalid_payload", "missing_download_url")
-        }
+        val expectation = parseApkDownloadExpectation(rawJson)
+            ?: return androidApkUpdateResultJson(false, "invalid_payload", "invalid_update_metadata")
         if (!canRequestPackageInstalls()) {
             openInstallPermissionSettings()
             dispatchUpdateEvent("permission_required")
             return androidApkUpdateResultJson(true, "permission_required")
         }
-        val expectedSha256 = normalizeApkSha256(input.optString("expectedSha256"))
-        val tagName = input.optString("tagName")
         Thread {
-            downloadAndInstall(downloadUrl, expectedSha256, tagName)
+            downloadAndInstall(expectation)
         }.start()
         dispatchUpdateEvent("downloading")
         return androidApkUpdateResultJson(true, "downloading")
     }
 
-    private fun downloadAndInstall(downloadUrl: String, expectedSha256: String, tagName: String) {
+    fun onInstallerResult() {
+        pendingInstallerFile?.delete()
+        pendingInstallerFile = null
+    }
+
+    private fun downloadAndInstall(expectation: ApkDownloadExpectation) {
+        var apkFile: File? = null
         try {
             dispatchUpdateEvent("downloading")
-            val apkFile = downloadApk(downloadUrl)
-            val actualSha256 = fileSha256(apkFile)
-            if (expectedSha256.isNotBlank() && actualSha256 != expectedSha256) {
-                dispatchUpdateEvent("failed", "sha256_mismatch", actualSha256, tagName)
-                return
-            }
-            dispatchUpdateEvent("downloaded", "", actualSha256, tagName)
-            startPackageInstaller(apkFile)
-            dispatchUpdateEvent("installing", "", actualSha256, tagName)
+            val download = downloadApk(expectation)
+            apkFile = download.first
+            verifyArchiveIdentity(apkFile)
+            dispatchUpdateEvent("downloaded", "", download.second.sha256, expectation.tagName)
+            startPackageInstaller(apkFile, download.second.sha256, expectation.tagName)
+            apkFile = null
         } catch (error: Exception) {
-            dispatchUpdateEvent("failed", error.message ?: "download_failed", "", tagName)
+            apkFile?.delete()
+            dispatchUpdateEvent("failed", error.message ?: "download_failed", "", expectation.tagName)
         }
     }
 
-    private fun downloadApk(downloadUrl: String): File {
-        val request = Request.Builder().url(downloadUrl).build()
-        httpClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw IllegalStateException("download_failed_${response.code}")
-            }
-            val body = response.body ?: throw IllegalStateException("download_empty")
-            val outputDir = File(activity.cacheDir, "apk-updates")
-            outputDir.mkdirs()
-            val output = File(outputDir, "WheelMakerAndroid.apk")
-            output.outputStream().use { stream ->
-                body.byteStream().use { input ->
-                    input.copyTo(stream)
+    private fun downloadApk(expectation: ApkDownloadExpectation): Pair<File, VerifiedApkDownload> {
+        val request = Request.Builder().url(expectation.downloadUrl).build()
+        val outputDir = File(activity.cacheDir, APK_UPDATE_DIRECTORY)
+        cleanupStaleApkFiles(outputDir)
+        outputDir.mkdirs()
+        val output = File.createTempFile("WheelMakerAndroid-", ".apk", outputDir)
+        try {
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.request.url.isHttps || response.isRedirect) {
+                    throw IllegalStateException("download_redirect_rejected")
                 }
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("download_failed_${response.code}")
+                }
+                val body = response.body ?: throw IllegalStateException("download_empty")
+                val verified = streamAndVerifyApk(
+                    input = body.byteStream(),
+                    output = output,
+                    expectedSize = expectation.size,
+                    contentLength = body.contentLength(),
+                    expectedSha256 = expectation.sha256
+                )
+                return output to verified
             }
-            return output
+        } catch (error: Exception) {
+            output.delete()
+            throw error
         }
     }
 
-    private fun startPackageInstaller(apkFile: File) {
+    private fun verifyArchiveIdentity(apkFile: File) {
+        val installed = activity.packageManager.getInstalledPackageInfo(activity.packageName).toArchiveIdentity()
+        val candidate = activity.packageManager.getArchivePackageInfo(apkFile)
+            ?.toArchiveIdentity()
+            ?: throw IllegalStateException("invalid_apk_archive")
+        if (!isTrustedApkArchive(installed, candidate)) {
+            throw IllegalStateException("apk_identity_mismatch")
+        }
+    }
+
+    private fun startPackageInstaller(apkFile: File, apkSha256: String, tagName: String) {
         val apkUri = FileProvider.getUriForFile(
             activity,
             "${activity.packageName}.apkprovider",
@@ -123,8 +243,25 @@ class AndroidApkUpdateRuntime(
             putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
             putExtra(Intent.EXTRA_RETURN_RESULT, true)
         }
+        pendingInstallerFile?.delete()
+        pendingInstallerFile = apkFile
         activity.runOnUiThread {
-            activity.startActivity(intent)
+            try {
+                activity.startActivityForResult(intent, ANDROID_APK_INSTALL_REQUEST_CODE)
+                dispatchUpdateEvent("installing", "", apkSha256, tagName)
+            } catch (error: Exception) {
+                onInstallerResult()
+                dispatchUpdateEvent("failed", error.message ?: "installer_failed", "", tagName)
+            }
+        }
+    }
+
+    private fun cleanupStaleApkFiles(directory: File) {
+        val cutoff = System.currentTimeMillis() - STALE_APK_AGE_MILLIS
+        directory.listFiles()?.forEach { file ->
+            if (file != pendingInstallerFile && file.lastModified() < cutoff) {
+                file.delete()
+            }
         }
     }
 
@@ -191,12 +328,40 @@ private fun fileSha256(file: File): String {
     return digest.digest().joinToString("") { "%02x".format(it) }
 }
 
+private fun PackageInfo.toArchiveIdentity(): ApkArchiveIdentity = ApkArchiveIdentity(
+    packageName = packageName,
+    versionCode = longVersionCodeCompat(),
+    signerSha256 = signingCertificateDigests()
+)
+
 @Suppress("DEPRECATION")
-private fun android.content.pm.PackageManager.getInstalledPackageInfo(packageName: String): PackageInfo {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        getPackageInfo(packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+private fun PackageInfo.signingCertificateDigests(): Set<String> {
+    val certificates = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        signingInfo?.apkContentsSigners?.toList().orEmpty()
     } else {
-        getPackageInfo(packageName, 0)
+        signatures?.toList().orEmpty()
+    }
+    return certificates.map { signature -> sha256Hex(signature.toByteArray()) }.toSet()
+}
+
+@Suppress("DEPRECATION")
+private fun PackageManager.getInstalledPackageInfo(packageName: String): PackageInfo {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(PackageManager.GET_SIGNING_CERTIFICATES.toLong()))
+    } else {
+        getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+    }
+}
+
+@Suppress("DEPRECATION")
+private fun PackageManager.getArchivePackageInfo(apkFile: File): PackageInfo? {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        getPackageArchiveInfo(
+            apkFile.absolutePath,
+            PackageManager.PackageInfoFlags.of(PackageManager.GET_SIGNING_CERTIFICATES.toLong())
+        )
+    } else {
+        getPackageArchiveInfo(apkFile.absolutePath, PackageManager.GET_SIGNING_CERTIFICATES)
     }
 }
 
