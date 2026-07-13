@@ -19398,6 +19398,8 @@ export function App() {
                       resizeEnabled={terminalResizeTokensRef.current.has(activeTerminalKey)}
                       cols={activeTerminal.cols}
                       rows={activeTerminal.rows}
+                      shell={activeTerminal.shell}
+                      initialCwd={activeTerminal.initialCwd}
                       onInput={handleTerminalInput}
                       onResize={handleTerminalResize}
                       onAutoResize={handleAutoClaimTerminalResize}
@@ -20902,6 +20904,8 @@ export function App() {
             resizeEnabled={terminalResizeTokensRef.current.has(activeTerminalKey)}
             cols={activeTerminal.cols}
             rows={activeTerminal.rows}
+            shell={activeTerminal.shell}
+            initialCwd={activeTerminal.initialCwd}
             onInput={handleTerminalInput}
             onResize={handleTerminalResize}
             onAutoResize={handleAutoClaimTerminalResize}
