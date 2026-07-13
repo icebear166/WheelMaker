@@ -93,7 +93,8 @@ func (c *TokenCommand) Handle(ctx context.Context, raw json.RawMessage) (any, *t
 		}
 		result, err := fetchHubDeepSeekTokenStats(ctx, payload.APIKey, payload.RangeType, payload.Month)
 		if err != nil {
-			return nil, &tokenCommandError{Code: rp.CodeInvalidArgument, Message: err.Error()}
+			message := strings.ReplaceAll(err.Error(), payload.APIKey, "[redacted]")
+			return nil, &tokenCommandError{Code: rp.CodeInvalidArgument, Message: message}
 		}
 		return result, nil
 	default:

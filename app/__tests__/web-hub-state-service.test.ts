@@ -133,7 +133,6 @@ describe('hub state registry service', () => {
     const repository = new RegistryRepository(client);
 
     const stats = await repository.fetchDeepSeekTokenStats('hub-a:project-a', {
-      apiKey: 'sk-test',
       rangeType: 'month',
       month: '2026-06',
     });
@@ -145,7 +144,7 @@ describe('hub state registry service', () => {
       payload: {
         section: 'tokenStats',
         action: 'deepseekStats',
-        params: {apiKey: 'sk-test', rangeType: 'month', month: '2026-06'},
+        params: {rangeType: 'month', month: '2026-06'},
       },
       timeoutMs: 60000,
     });

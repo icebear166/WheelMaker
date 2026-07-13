@@ -1777,6 +1777,90 @@ func TestHubStateForwardTimeoutsMatchOperationCost(t *testing.T) {
 	}
 }
 
+func TestRegistryDeepSeekSecretRejectsClientAPIKey(t *testing.T) {
+	s := New(Config{})
+	_, requestErr := s.prepareHubStatePayload(envelope{
+		Method: rp.RegistryMethodHubStateAction,
+		Payload: rp.MustRaw(map[string]any{
+			"section": "tokenStats",
+			"action":  "deepseekStats",
+			"params": map[string]any{
+				"apiKey":    "client-secret-must-not-pass",
+				"rangeType": "month",
+			},
+		}),
+	})
+	if requestErr == nil || requestErr.code != codeInvalidArgument {
+		t.Fatalf("requestErr=%v, want invalid argument", requestErr)
+	}
+	if strings.Contains(requestErr.message, "client-secret-must-not-pass") {
+		t.Fatalf("error leaked client secret: %q", requestErr.message)
+	}
+}
+
+func TestRegistryDeepSeekSecretIsInjectedOnlyForBackendForward(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	cfg := logger.AppConfig{
+		Projects: []logger.ProjectConfig{{Name: "p", Path: "."}},
+		Secrets: logger.SecretsConfig{
+			DeepSeek: logger.SecretValueConfig{Value: "backend-only-secret"},
+		},
+	}
+	raw, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := logger.WriteConfigFile(path, raw); err != nil {
+		t.Fatal(err)
+	}
+
+	s := New(Config{ConfigPath: path})
+	prepared, requestErr := s.prepareHubStatePayload(envelope{
+		Method: rp.RegistryMethodHubStateAction,
+		Payload: rp.MustRaw(map[string]any{
+			"section": "tokenStats",
+			"action":  "deepseekStats",
+			"params":  map[string]any{"rangeType": "month", "month": "2026-06"},
+		}),
+	})
+	if requestErr != nil {
+		t.Fatalf("prepareHubStatePayload(): %v", requestErr)
+	}
+	var payload struct {
+		Params map[string]any `json:"params"`
+	}
+	if err := json.Unmarshal(prepared, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Params["apiKey"] != "backend-only-secret" {
+		t.Fatalf("params=%#v, want backend secret injection", payload.Params)
+	}
+}
+
+func TestRegistryDeepSeekSecretMissingReturnsNotConfigured(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	raw, err := json.Marshal(logger.AppConfig{Projects: []logger.ProjectConfig{{Name: "p", Path: "."}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := logger.WriteConfigFile(path, raw); err != nil {
+		t.Fatal(err)
+	}
+
+	s := New(Config{ConfigPath: path})
+	_, requestErr := s.prepareHubStatePayload(envelope{
+		Method: rp.RegistryMethodHubStateAction,
+		Payload: rp.MustRaw(map[string]any{
+			"section": "tokenStats",
+			"action":  "deepseekStats",
+			"params":  map[string]any{},
+		}),
+	})
+	if requestErr == nil || requestErr.code != "not_configured" {
+		t.Fatalf("requestErr=%v, want not_configured", requestErr)
+	}
+}
+
 func TestProjectForwardTimeoutsMatchOperationCost(t *testing.T) {
 	tests := []struct {
 		name   string

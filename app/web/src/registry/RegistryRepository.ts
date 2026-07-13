@@ -1486,7 +1486,7 @@ export class RegistryRepository {
 
   async fetchDeepSeekTokenStats(
     projectId: string,
-    payload: {apiKey: string; rangeType?: 'day' | 'month'; month?: string},
+    payload: {rangeType?: 'day' | 'month'; month?: string},
   ): Promise<RegistryDeepSeekTokenStats> {
     const hubId = hubIdFromProjectId(projectId);
     const state = await this.runHubStateAction(hubId, 'tokenStats', 'deepseekStats', payload);

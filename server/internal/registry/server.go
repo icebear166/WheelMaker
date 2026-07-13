@@ -265,6 +265,18 @@ type connectionState struct {
 	lastProjectSeq  map[string]int64
 }
 
+type hubStatePayloadError struct {
+	code    string
+	message string
+}
+
+func (e *hubStatePayloadError) Error() string {
+	if e == nil {
+		return ""
+	}
+	return e.message
+}
+
 type requestDispatcher struct {
 	server *Server
 	state  *connectionState
@@ -1154,6 +1166,12 @@ func (s *Server) executeHubStateRequest(state *connectionState, in envelope) env
 		resp.HubID = hubID
 		return resp
 	}
+	preparedPayload, payloadErr := s.prepareHubStatePayload(in)
+	if payloadErr != nil {
+		resp := s.errorEnvelope(in.Method, payloadErr.code, payloadErr.message, nil)
+		resp.HubID = hubID
+		return resp
+	}
 
 	s.mu.RLock()
 	hub := s.hubs[hubID]
@@ -1177,7 +1195,7 @@ func (s *Server) executeHubStateRequest(state *connectionState, in envelope) env
 		Type:      rp.RegistryEnvelopeTypeRequest,
 		Method:    in.Method,
 		HubID:     hubID,
-		Payload:   in.Payload,
+		Payload:   preparedPayload,
 	})
 	if err != nil {
 		hubPeer.resolvePending(forwardID, envelope{})
@@ -1202,6 +1220,60 @@ func (s *Server) executeHubStateRequest(state *connectionState, in envelope) env
 		resp.HubID = hubID
 		return resp
 	}
+}
+
+// prepareHubStatePayload injects backend credentials only for the one action
+// that requires them. Other hub-state requests pass through unchanged.
+func (s *Server) prepareHubStatePayload(in envelope) (json.RawMessage, *hubStatePayloadError) {
+	if in.Method != rp.RegistryMethodHubStateAction {
+		return in.Payload, nil
+	}
+	var selector struct {
+		Section string `json:"section"`
+		Action  string `json:"action"`
+	}
+	if err := decodePayload(in.Payload, &selector); err != nil ||
+		strings.TrimSpace(selector.Section) != "tokenStats" ||
+		strings.TrimSpace(selector.Action) != "deepseekStats" {
+		return in.Payload, nil
+	}
+
+	var request struct {
+		Section string          `json:"section"`
+		Action  string          `json:"action"`
+		Params  json.RawMessage `json:"params,omitempty"`
+	}
+	if err := decodeStrictPayload(in.Payload, &request); err != nil {
+		return nil, &hubStatePayloadError{code: codeInvalidArgument, message: "invalid DeepSeek stats payload"}
+	}
+	var params struct {
+		RangeType string `json:"rangeType,omitempty"`
+		Month     string `json:"month,omitempty"`
+	}
+	if err := decodeStrictPayload(request.Params, &params); err != nil {
+		return nil, &hubStatePayloadError{code: codeInvalidArgument, message: "DeepSeek stats params only allow rangeType and month"}
+	}
+
+	secret, configured, err := s.secrets.Value(secretKindDeepSeek)
+	if err != nil {
+		return nil, &hubStatePayloadError{code: codeInternal, message: "read DeepSeek backend secret failed"}
+	}
+	if !configured {
+		return nil, &hubStatePayloadError{code: "not_configured", message: "DeepSeek is not configured"}
+	}
+	prepared, err := json.Marshal(map[string]any{
+		"section": "tokenStats",
+		"action":  "deepseekStats",
+		"params": map[string]any{
+			"apiKey":    secret,
+			"rangeType": params.RangeType,
+			"month":     params.Month,
+		},
+	})
+	if err != nil {
+		return nil, &hubStatePayloadError{code: codeInternal, message: "prepare DeepSeek stats request failed"}
+	}
+	return prepared, nil
 }
 
 func (s *Server) handleForwardRequest(clientPeer *peerConn, state *connectionState, in envelope) {

@@ -2328,8 +2328,14 @@ func (r *Reporter) writeDebugEnvelope(direction string, v any) {
 	if r.debugLog == nil {
 		return
 	}
-	if env, ok := envelopeFromValue(v); ok && terminalDebugMethod(env.Method) {
-		v = redactTerminalDebugEnvelope(env)
+	if env, ok := envelopeFromValue(v); ok {
+		if terminalDebugMethod(env.Method) {
+			env = redactTerminalDebugEnvelope(env)
+		}
+		if env.Method == rp.RegistryMethodHubStateAction {
+			env = redactHubStateActionDebugEnvelope(env)
+		}
+		v = env
 	}
 	raw, err := json.Marshal(v)
 	if err != nil {
@@ -2338,6 +2344,22 @@ func (r *Reporter) writeDebugEnvelope(direction string, v any) {
 	if d := strings.TrimSpace(direction); d != "" {
 		_, _ = fmt.Fprintf(r.debugLog, "%s[registry] %s\n", d, strings.TrimSpace(string(raw)))
 	}
+}
+
+func redactHubStateActionDebugEnvelope(env envelope) envelope {
+	var payload map[string]any
+	if len(env.Payload) == 0 || json.Unmarshal(env.Payload, &payload) != nil {
+		return env
+	}
+	params, ok := payload["params"].(map[string]any)
+	if !ok {
+		return env
+	}
+	if _, exists := params["apiKey"]; exists {
+		params["apiKey"] = "[redacted]"
+		env.Payload = rp.MustRaw(payload)
+	}
+	return env
 }
 
 func terminalDebugMethod(method string) bool {

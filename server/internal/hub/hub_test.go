@@ -1201,6 +1201,27 @@ func TestReporterTerminalDebugEnvelopeRedactsDataAndSnapshot(t *testing.T) {
 	}
 }
 
+func TestReporterDeepSeekSecretIsRedactedFromDebugEnvelope(t *testing.T) {
+	var log strings.Builder
+	reporter := NewReporter(ReporterConfig{HubID: "hub-deepseek-log"}, nil)
+	reporter.SetDebugLogger(&log)
+	reporter.writeDebugEnvelope("<-", envelope{
+		Type: rp.RegistryEnvelopeTypeRequest, Method: rp.RegistryMethodHubStateAction, HubID: "hub-deepseek-log",
+		Payload: rp.MustRaw(map[string]any{
+			"section": "tokenStats",
+			"action":  "deepseekStats",
+			"params":  map[string]any{"apiKey": "backend-secret-in-envelope", "month": "2026-06"},
+		}),
+	})
+	got := log.String()
+	if strings.Contains(got, "backend-secret-in-envelope") {
+		t.Fatalf("DeepSeek secret leaked into debug log: %s", got)
+	}
+	if !strings.Contains(got, `"apiKey":"[redacted]"`) {
+		t.Fatalf("redaction marker missing from debug log: %s", got)
+	}
+}
+
 func TestReporterTerminalPublishQueueIsBounded(t *testing.T) {
 	reporter := NewReporter(ReporterConfig{HubID: "hub-terminal-backlog"}, nil)
 	sink := newTerminalEventSink()

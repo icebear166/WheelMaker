@@ -1517,6 +1517,27 @@ func TestTokenCommandDeepSeekStatsValidatesAPIKey(t *testing.T) {
 	}
 }
 
+func TestTokenCommandDeepSeekSecretIsRedactedFromProviderError(t *testing.T) {
+	original := fetchHubDeepSeekTokenStats
+	t.Cleanup(func() { fetchHubDeepSeekTokenStats = original })
+	fetchHubDeepSeekTokenStats = func(context.Context, string, string, string) (any, error) {
+		return nil, errors.New("provider rejected backend-deepseek-secret")
+	}
+
+	cmd := NewTokenCommand()
+	_, cmdErr := cmd.Handle(context.Background(), rp.MustRaw(map[string]any{
+		"action": "deepseekStats",
+		"hubId":  "hub-token",
+		"apiKey": "backend-deepseek-secret",
+	}))
+	if cmdErr == nil {
+		t.Fatal("cmdErr=nil, want provider error")
+	}
+	if strings.Contains(cmdErr.Message, "backend-deepseek-secret") {
+		t.Fatalf("provider error leaked secret: %q", cmdErr.Message)
+	}
+}
+
 func TestFetchCodexUsageLimitsDoesNotRefreshRejectedAccessToken(t *testing.T) {
 	calls := make([]string, 0, 2)
 	scanner := &tokenScanner{

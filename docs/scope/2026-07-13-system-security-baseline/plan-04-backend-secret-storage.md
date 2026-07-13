@@ -245,13 +245,13 @@ Expected: PASS；Web 源码中不再出现 TTS Authorization header。
 - Modify: `app/web/src/settings/tokenStatsView.ts`
 - Create: `app/__tests__/web-backend-deepseek-secret.test.ts`
 
-- [ ] **Step 1: 写客户端 payload 拒绝和后端注入测试**
+- [x] **Step 1: 写客户端 payload 拒绝和后端注入测试**
 
 客户端 `deepseekStats` payload 只允许 `rangeType`/`month`。若浏览器发送 `apiKey`，Registry 返回 invalid argument，而不是悄悄接受。Registry 从 secret store 取值，构造仅在 Registry→Hub 后端链路存在的内部 payload；debug logging 对该字段一律 `[redacted]`。
 
 未配置时不向 Hub 发请求，返回 `not_configured`。
 
-- [ ] **Step 2: 运行测试并确认失败**
+- [x] **Step 2: 运行测试并确认失败**
 
 Run:
 
@@ -264,11 +264,11 @@ npm test -- --runInBand __tests__/web-backend-deepseek-secret.test.ts
 
 Expected: FAIL；当前 repository 把页面 apiKey 发送给 Hub。
 
-- [ ] **Step 3: 实现可信转发边界**
+- [x] **Step 3: 实现可信转发边界**
 
 Registry 在 `tokenStats/deepseekStats` 专用 handler 内注入；不要做通用“任意 payload secret merge”。Hub 工具保留后端参数，但所有 envelope redactor 必须在日志前处理 `apiKey`。Registry↔Hub 公网连接继续依赖现有 WSS；明文 ws 只允许 loopback。
 
-- [ ] **Step 4: 运行测试并提交**
+- [x] **Step 4: 运行测试并提交**
 
 Run:
 
