@@ -3,7 +3,7 @@ import path from 'path';
 
 import { createNotificationProvider } from '../web/src/notifications/NotificationProvider';
 import type { WheelMakerNotificationPayload } from '../web/src/notifications/notificationPayload';
-import {createAndroidNativeMessageTestHost} from './androidNativeMessageTestHost';
+import {createAndroidNativeMessageTestHost} from '../testUtils/androidNativeMessageTestHost';
 
 const payload: WheelMakerNotificationPayload = {
   type: 'chat.prompt.completed',

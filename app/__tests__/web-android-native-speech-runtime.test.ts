@@ -4,7 +4,7 @@ import {
   isAndroidNativeSpeechHost,
   type AndroidNativeSpeechEvent,
 } from '../web/src/platform/android/androidNativeSpeechRuntime';
-import {createAndroidNativeMessageTestHost} from './androidNativeMessageTestHost';
+import {createAndroidNativeMessageTestHost} from '../testUtils/androidNativeMessageTestHost';
 
 describe('android native speech runtime', () => {
   afterEach(() => {

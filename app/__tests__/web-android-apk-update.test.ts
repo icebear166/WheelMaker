@@ -5,7 +5,7 @@ import {
   parseAndroidLatestRelease,
   resolveAndroidApkUpdateStatus,
 } from '../web/src/platform/android/androidApkUpdate';
-import {createAndroidNativeMessageTestHost} from './androidNativeMessageTestHost';
+import {createAndroidNativeMessageTestHost} from '../testUtils/androidNativeMessageTestHost';
 
 describe('android apk update model', () => {
   test('parses latest GitHub release apk asset metadata', () => {

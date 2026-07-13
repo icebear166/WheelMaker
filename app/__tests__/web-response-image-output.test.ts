@@ -2,7 +2,7 @@ import {
   blobToDataUrl,
   outputResponseImage,
 } from '../web/src/chat/export/responseImageOutput';
-import {createAndroidNativeMessageTestHost} from './androidNativeMessageTestHost';
+import {createAndroidNativeMessageTestHost} from '../testUtils/androidNativeMessageTestHost';
 
 describe('response image output', () => {
   afterEach(() => {

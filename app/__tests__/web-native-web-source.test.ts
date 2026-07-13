@@ -5,7 +5,7 @@ import {
   isNativeWebViewHost,
   submitNativeRemoteWebCandidate,
 } from '../web/src/platform/native/webSource';
-import {createAndroidNativeMessageTestHost} from './androidNativeMessageTestHost';
+import {createAndroidNativeMessageTestHost} from '../testUtils/androidNativeMessageTestHost';
 
 describe('native Web source helpers', () => {
   afterEach(() => {

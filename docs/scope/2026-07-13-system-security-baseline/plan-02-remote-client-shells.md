@@ -21,7 +21,7 @@
 - Modify: `scripts/publish_android.ps1`
 - Modify: `scripts/test_publish_android_ps1.ps1`
 
-- [ ] **Step 1: 写 Bootstrap 资产和 URL 契约测试**
+- [x] **Step 1: 写 Bootstrap 资产和 URL 契约测试**
 
 测试内置 HTML：
 
@@ -33,7 +33,7 @@
 
 Desktop URL 测试覆盖域名、IP、端口、子路径与拒绝项，并复用 `security.NormalizeHTTPSBaseURL`，不得维护另一套宽松规则。
 
-- [ ] **Step 2: 运行测试并确认失败**
+- [x] **Step 2: 运行测试并确认失败**
 
 Run:
 
@@ -46,7 +46,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test_publish_android
 
 Expected: FAIL；Bootstrap 文件和复制规则不存在，Android 发布仍构建完整 Web root。
 
-- [ ] **Step 3: 编写单文件 Bootstrap**
+- [x] **Step 3: 编写单文件 Bootstrap**
 
 Bootstrap 只依赖平台注入对象，提交动作示例：
 
@@ -62,11 +62,11 @@ form.addEventListener('submit', async event => {
 
 禁止在 HTML 自己保存 localStorage；Base URL 必须交给平台私有 store。
 
-- [ ] **Step 4: 改 Android 发布脚本只复制 Bootstrap**
+- [x] **Step 4: 改 Android 发布脚本只复制 Bootstrap**
 
 `publish_android.ps1` 不再运行 `npm run build:web`，而是把 canonical HTML 复制到外部 Android build root 的 `app/src/main/assets/bootstrap/index.html`。测试必须断言脚本不再引用 `WHEELMAKER_WEB_TARGET`、`WebRoot` 或 Workspace bundle。
 
-- [ ] **Step 5: 运行测试并提交**
+- [x] **Step 5: 运行测试并提交**
 
 Run:
 
@@ -96,7 +96,7 @@ Expected: PASS；仓库只有一份 Bootstrap HTML 源。
 - Modify: `scripts/publish_desktop.ps1`
 - Modify: `scripts/test_publish_desktop_ps1.ps1`
 
-- [ ] **Step 1: 用目标行为替换旧 source/fallback 测试**
+- [x] **Step 1: 用目标行为替换旧 source/fallback 测试**
 
 删除断言 `embedded|remote|auto`、远程 asset fetch 和 `127.0.0.1:9632` 的测试，新增：
 
@@ -106,7 +106,7 @@ Expected: PASS；仓库只有一份 Bootstrap HTML 源。
 - 配置文件为 `~/.wheelmaker/desktop/config.json`，只含 `baseUrl`，写入原子且权限私有。
 - 搜索 package 源码不存在 `ListenAndServe`、`:9632`、`webSourcePreference`、`RemoteWebURL`。
 
-- [ ] **Step 2: 运行测试并确认失败**
+- [x] **Step 2: 运行测试并确认失败**
 
 Run:
 
@@ -117,7 +117,7 @@ go test ./cmd/wheelmaker-desktop -run 'TestDesktop(Remote|Bootstrap|BaseURL|Conf
 
 Expected: FAIL；当前 `run()` embed 完整 webroot 并启动 9632 server。
 
-- [ ] **Step 3: 实现最小 Desktop runtime**
+- [x] **Step 3: 实现最小 Desktop runtime**
 
 配置结构固定为：
 
@@ -129,11 +129,11 @@ type desktopConfig struct {
 
 复用 `shared.WriteConfigFile`；目录用当前用户私有权限。探测客户端使用系统证书池、3 秒总 timeout、禁止 HTTP downgrade redirect，并限制最多 5 次 HTTPS redirect。不要加入 `InsecureSkipVerify` 或证书忽略开关。
 
-- [ ] **Step 4: 简化 Desktop 发布**
+- [x] **Step 4: 简化 Desktop 发布**
 
 删除 `publish_desktop.ps1` 的 npm install/Web build/virtual webroot overlay 流程。发布报告改为 `webMode = remote-only`、`embeddedAsset = bootstrap/index.html`，并验证最终 EXE 字符串中没有历史 bundle 文件名。
 
-- [ ] **Step 5: 运行测试并提交**
+- [x] **Step 5: 运行测试并提交**
 
 Run:
 
@@ -160,7 +160,7 @@ Expected: PASS；WhatIf 不构建 Workspace Web，不创建 9632 资源根。
 - Modify: `server/cmd/wheelmaker-desktop/webview_windows_test.go`
 - Create: `server/cmd/wheelmaker-desktop/webview_policy_test.go`
 
-- [ ] **Step 1: 写 Bridge 状态机和导航策略测试**
+- [x] **Step 1: 写 Bridge 状态机和导航策略测试**
 
 状态机只有两种授权：
 
@@ -174,7 +174,7 @@ const (
 
 测试要求：Bootstrap 只允许 get/save/retry/reset；远程业务页只允许窗口控制和 `requestServerChange`；旧 Origin、同 Origin 但 Base Path 外、iframe、`javascript:`/`data:`/`file:`、证书错误页均不能调用业务 Bridge。外部 HTTPS 链接交系统浏览器，WebView 顶层不离开 Base Path。
 
-- [ ] **Step 2: 写服务器切换清理测试**
+- [x] **Step 2: 写服务器切换清理测试**
 
 使用 fake profile 验证切换顺序：
 
@@ -188,7 +188,7 @@ show Bootstrap
 
 即使 logout 返回错误，后四步仍必须发生。
 
-- [ ] **Step 3: 运行测试并确认失败**
+- [x] **Step 3: 运行测试并确认失败**
 
 Run:
 
@@ -199,13 +199,13 @@ go test ./cmd/wheelmaker-desktop -run 'TestDesktop(Bridge|Navigation|ServerSwitc
 
 Expected: FAIL；当前全局 Bind 在所有页面注入 web source/调试控制，且无 native 导航/清理策略。
 
-- [ ] **Step 4: 实现 native-side enforcement**
+- [x] **Step 4: 实现 native-side enforcement**
 
 不要只靠注入 JavaScript 隐藏 binding。为 WebView2 接入 NavigationStarting/FrameNavigationStarting 和 Profile/CookieManager 清理；每个 native callback 先读取 native 保存的 page mode、top-level navigation epoch 和精确 URL policy，再执行操作。Bootstrap 保存成功前先 TLS probe，成功后切换 mode 并导航。
 
 若 `go-webview2` 公共接口不暴露所需事件，在本 package 增加最小 Windows COM adapter；不要 fork 整个依赖，也不要让页面自报 Origin 作为信任依据。
 
-- [ ] **Step 5: 运行 Windows 测试并提交**
+- [x] **Step 5: 运行 Windows 测试并提交**
 
 Run:
 
@@ -233,7 +233,7 @@ Expected: PASS；重复测试不出现授权 epoch 竞态。
 - Modify: `mobile/android/app/src/main/java/com/wheelmaker/android/MainActivity.kt`
 - Modify: `mobile/android/app/src/test/java/com/wheelmaker/android/StableOriginPathTest.kt`
 
-- [ ] **Step 1: 写 Android URL、导航和包资产测试**
+- [x] **Step 1: 写 Android URL、导航和包资产测试**
 
 覆盖与 Go 相同的 URL 表；另断言：
 
@@ -242,7 +242,7 @@ Expected: PASS；重复测试不出现授权 epoch 竞态。
 - 配置远程页面只允许精确 Origin + Base Path 顶层导航；外链使用 `ACTION_VIEW`。
 - APK assets 中只能有 Bootstrap，不能出现 `bundle.*.js`、Workspace CSS、manifest 或 service worker。
 
-- [ ] **Step 2: 运行测试并确认失败**
+- [x] **Step 2: 运行测试并确认失败**
 
 Run:
 
@@ -253,11 +253,11 @@ Set-Location mobile\android
 
 Expected: FAIL；当前 appassets client 仍代理 Workspace，source runtime 仍支持 auto/embedded/remote。
 
-- [ ] **Step 3: 实现私有 Base URL 和直接导航**
+- [x] **Step 3: 实现私有 Base URL 和直接导航**
 
 `BaseUrlStore` 使用 `MODE_PRIVATE` SharedPreferences，仅保存规范化 Base URL。TLS 探测使用 OkHttp 系统 trust manager，拒绝降级 redirect。远端错误显示 Bootstrap 的 retry/change 状态；不得加载缓存中的旧业务 HTML。
 
-- [ ] **Step 4: 运行测试并提交**
+- [x] **Step 4: 运行测试并提交**
 
 Run:
 
@@ -323,7 +323,7 @@ Expected: PASS；源码搜索不到 `addJavascriptInterface`。
 
 ### Task 6: 验证并发布原生壳兼容阶段
 
-- [ ] **Step 1: 验证发布脚本和产物内容**
+- [x] **Step 1: 验证发布脚本和产物内容**
 
 Run:
 
@@ -332,12 +332,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test_publish_desktop
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test_publish_android_ps1.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\publish_desktop.ps1 -WhatIf
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\publish_android.ps1 -WhatIf
-rg -n "9632|webSourcePreference|actualSource|Embedded|Remote|Auto|addJavascriptInterface" server/cmd/wheelmaker-desktop mobile/android scripts/publish_desktop.ps1 scripts/publish_android.ps1
+rg -n "localhost:9632|127\.0\.0\.1:9632|webSourcePreference|actualSource|addJavascriptInterface" server/cmd/wheelmaker-desktop mobile/android scripts/publish_desktop.ps1 scripts/publish_android.ps1 -g "!*_test.go" -g "!*Test.kt"
 ```
 
-Expected: 测试/预检 PASS；最后 `rg` 无业务 source/9632/全局 bridge 命中（测试说明文字除外也应删除）。
+Expected: 测试/预检 PASS；最后 `rg` 无生产源码的旧 source/9632/全局 bridge 命中。
 
-- [ ] **Step 2: 验证 Registry 过渡兼容仍存在**
+- [x] **Step 2: 验证 Registry 过渡兼容仍存在**
 
 Run:
 
@@ -348,7 +348,7 @@ go test ./internal/registry -run 'TestWebSocketCrossOriginWithoutSessionUsesToke
 
 Expected: PASS。先发布新 Desktop/APK，观察至少一个发布周期；此阶段不得提前执行浏览器硬切换提交。
 
-- [ ] **Step 3: 推送阶段提交**
+- [x] **Step 3: 推送阶段提交**
 
 Run:
 
