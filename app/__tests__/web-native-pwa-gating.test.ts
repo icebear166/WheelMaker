@@ -10,7 +10,7 @@ describe('native shell PWA gating', () => {
     );
 
     expect(mainTsx).toContain("import {cleanupNativeWebViewPWA} from '../platform/pwa/nativePwaGuard';");
-    expect(mainTsx).toContain("import {isNativeShellHost} from '../platform/native/webSource';");
+    expect(mainTsx).toContain("import {getNativeRuntimeBridge, isNativeShellHost} from '../platform/native/nativeRuntime';");
     expect(mainTsx).toContain('const nativeShellHost = isNativeShellHost();');
     expect(mainTsx).toContain('if (nativeShellHost) {');
     expect(mainTsx).toContain('cleanupNativeWebViewPWA().catch(() => undefined);');

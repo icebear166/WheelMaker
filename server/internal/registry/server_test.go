@@ -2037,31 +2037,66 @@ func TestAuthRoutesUseWSPath(t *testing.T) {
 	}
 }
 
-func TestWebSocketCrossOriginWithoutSessionUsesTokenAuthentication(t *testing.T) {
+func TestWebSocketCrossOriginWithoutSessionRejectedBeforeUpgrade(t *testing.T) {
 	s := New(Config{Token: "custom-token"})
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)
 	header := http.Header{"Origin": []string{"https://appassets.androidplatform.net"}}
-	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", header)
-	if err != nil {
-		t.Fatalf("dial cross-origin token client: %v", err)
+	conn, resp, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", header)
+	if conn != nil {
+		_ = conn.Close()
 	}
-	defer conn.Close()
-	mustWriteJSON(t, conn, testEnvelope{
-		RequestID: 1,
-		Type:      "request",
-		Method:    "connect.init",
-		Payload: map[string]any{
-			"clientName":      "wm-web",
-			"clientVersion":   "0.1.0",
-			"protocolVersion": rp.DefaultProtocolVersion,
-			"role":            "client",
-			"token":           "custom-token",
-		},
-	})
-	resp := mustReadEnvelope(t, conn)
-	if resp.Type != "response" {
-		t.Fatalf("connect response=%+v, want token-authenticated response", resp)
+	if err == nil || resp == nil || resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("dial error=%v response=%v, want HTTP 403", err, resp)
+	}
+}
+
+func TestWebSocketSameOriginWithoutSessionRejectedBeforeUpgrade(t *testing.T) {
+	s := New(Config{Token: "custom-token"})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+	header := http.Header{"Origin": []string{ts.URL}}
+	conn, resp, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", header)
+	if conn != nil {
+		_ = conn.Close()
+	}
+	if err == nil || resp == nil || resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("dial error=%v response=%v, want HTTP 401", err, resp)
+	}
+}
+
+func TestWebSocketBrowserSessionRejectsTokenAndHubRoles(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		payload map[string]any
+	}{
+		{name: "token", payload: map[string]any{"role": "client", "token": "custom-token"}},
+		{name: "hub role", payload: map[string]any{"role": "hub", "hubId": "browser-hub"}},
+		{name: "unknown role", payload: map[string]any{"role": "unknown"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s := New(Config{Token: "custom-token"})
+			ts := httptest.NewServer(s.Handler())
+			t.Cleanup(ts.Close)
+			cookie := loginRegistryBrowser(t, ts.URL, "custom-token", ts.URL)
+			header := http.Header{"Origin": []string{ts.URL}, "Cookie": []string{cookie.String()}}
+			conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", header)
+			if err != nil {
+				t.Fatalf("dial browser session: %v", err)
+			}
+			defer conn.Close()
+			payload := map[string]any{
+				"clientName": "wheelmaker-web", "clientVersion": "0.1.0", "protocolVersion": rp.DefaultProtocolVersion,
+			}
+			for key, value := range tt.payload {
+				payload[key] = value
+			}
+			mustWriteJSON(t, conn, testEnvelope{RequestID: 1, Type: "request", Method: rp.RegistryMethodConnectInit, Payload: payload})
+			resp := mustReadEnvelope(t, conn)
+			if resp.Type != "error" || resp.Payload["code"] != codeForbidden {
+				t.Fatalf("connect response=%+v, want forbidden", resp)
+			}
+		})
 	}
 }
 
@@ -2479,33 +2514,6 @@ func assertWebAuthSecurityHeaders(t *testing.T, resp *http.Response) {
 	}
 }
 
-func TestWebSocketWithoutSessionStillRequiresTokenInit(t *testing.T) {
-	s := New(Config{Token: "custom-token"})
-	ts := httptest.NewServer(s.Handler())
-	t.Cleanup(ts.Close)
-	header := http.Header{"Origin": []string{ts.URL}}
-	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", header)
-	if err != nil {
-		t.Fatalf("dial allowlisted browser: %v", err)
-	}
-	defer conn.Close()
-	mustWriteJSON(t, conn, testEnvelope{
-		RequestID: 1,
-		Type:      "request",
-		Method:    "connect.init",
-		Payload: map[string]any{
-			"clientName":      "wm-web",
-			"clientVersion":   "0.1.0",
-			"protocolVersion": rp.DefaultProtocolVersion,
-			"role":            "client",
-		},
-	})
-	resp := mustReadEnvelope(t, conn)
-	if resp.Type != "error" || resp.Payload["code"] != codeUnauthorized {
-		t.Fatalf("connect response=%+v, want unauthorized", resp)
-	}
-}
-
 func TestWebSocketSessionAllowsClientWithoutToken(t *testing.T) {
 	s := New(Config{Token: "custom-token"})
 	ts := httptest.NewServer(s.Handler())
@@ -2535,6 +2543,48 @@ func TestWebSocketSessionAllowsClientWithoutToken(t *testing.T) {
 	if resp.Type != "response" {
 		t.Fatalf("connect response=%+v", resp)
 	}
+}
+
+func TestWebSocketSubpathSessionAllowsClientWithoutToken(t *testing.T) {
+	s := New(Config{Token: "custom-token"})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+	login := doRegistryWebAuthRequest(t, ts.URL, http.MethodPost, "/wheelmaker/", "login", `{"token":"custom-token"}`, sameOriginWebAuthHeaders(ts.URL), nil)
+	if login.StatusCode != http.StatusOK || len(login.Cookies()) != 1 {
+		t.Fatalf("login status=%d cookies=%v", login.StatusCode, login.Cookies())
+	}
+	cookie := login.Cookies()[0]
+	_ = login.Body.Close()
+	header := http.Header{"Origin": []string{ts.URL}, "Cookie": []string{cookie.String()}}
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(ts.URL, "http")+"/wheelmaker/ws", header)
+	if err != nil {
+		t.Fatalf("dial authenticated subpath browser: %v", err)
+	}
+	defer conn.Close()
+	mustWriteJSON(t, conn, testEnvelope{RequestID: 1, Type: "request", Method: rp.RegistryMethodConnectInit, Payload: map[string]any{
+		"clientName": "wm-web", "clientVersion": "0.1.0", "protocolVersion": rp.DefaultProtocolVersion, "role": "client",
+	}})
+	if resp := mustReadEnvelope(t, conn); resp.Type != "response" {
+		t.Fatalf("connect response=%+v", resp)
+	}
+}
+
+func TestWebSocketTrustsForwardedHTTPSOnlyFromLoopbackProxy(t *testing.T) {
+	s := New(Config{Token: "custom-token"})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+	cookie := loginRegistryBrowser(t, ts.URL, "custom-token", ts.URL)
+	host := strings.TrimPrefix(ts.URL, "http://")
+	header := http.Header{
+		"Origin":            []string{"https://" + host},
+		"Cookie":            []string{cookie.String()},
+		"X-Forwarded-Proto": []string{"https"},
+	}
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", header)
+	if err != nil {
+		t.Fatalf("dial forwarded HTTPS browser: %v", err)
+	}
+	_ = conn.Close()
 }
 
 func loginRegistryBrowser(t *testing.T, baseURL, token, origin string) *http.Cookie {

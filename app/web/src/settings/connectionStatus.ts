@@ -1,70 +1,40 @@
-import type {NativeWebSourceState} from '../platform/native/webSource';
-
 export type ConnectionStatusLine = {
   label: string;
   detail: string;
 };
 
-export type WebResourceConnectionStatus = ConnectionStatusLine & {
-  remoteUrl: string;
-};
-
-export function resolveWebResourceConnectionStatus(
-  state: NativeWebSourceState | null,
-): WebResourceConnectionStatus {
-  if (!state) {
-    return {
-      label: 'Browser',
-      detail: 'Native Web source state is unavailable',
-      remoteUrl: '',
-    };
-  }
-  if (state.actualSource === 'remote') {
-    return {
-      label: 'Remote',
-      detail: state.remoteHost || state.displaySource || state.remoteUrl || 'Remote Web resources',
-      remoteUrl: state.remoteUrl || '',
-    };
-  }
-  return {
-    label: 'Local',
-    detail: 'Embedded Web resources',
-    remoteUrl: state.remoteUrl || '',
-  };
-}
-
 export function resolveRegistryConnectionStatus({
   connected,
   reconnecting,
   autoConnecting,
-  address,
+  baseURL,
 }: {
   connected: boolean;
   reconnecting: boolean;
   autoConnecting: boolean;
-  address: string;
+  baseURL: string;
 }): ConnectionStatusLine {
   if (connected) {
     return {
       label: 'Connected',
-      detail: address || 'Registry address unavailable',
+      detail: baseURL || 'Page base URL unavailable',
     };
   }
   if (reconnecting) {
     return {
       label: 'Reconnecting',
-      detail: address || 'Registry address unavailable',
+      detail: baseURL || 'Page base URL unavailable',
     };
   }
   if (autoConnecting) {
     return {
       label: 'Connecting',
-      detail: address || 'Registry address unavailable',
+      detail: baseURL || 'Page base URL unavailable',
     };
   }
   return {
     label: 'Disconnected',
-    detail: address || 'Registry address unavailable',
+    detail: baseURL || 'Page base URL unavailable',
   };
 }
 

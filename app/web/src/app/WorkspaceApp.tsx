@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
-import { resolveInitialRegistryAddress } from './workspaceBootstrap';
 import {resolveWindowsWorkspaceShortcut} from './workspaceShortcuts';
 
 declare global {
@@ -11,7 +10,6 @@ declare global {
   }
 }
 
-import { getDefaultRegistryAddress, toRegistryWsUrl } from '../runtime';
 import {deriveRegistryEndpoints} from '../registry/registryBaseUrl';
 import {RegistryWebAuthClient} from '../registry/RegistryWebAuthClient';
 import {RegistryAuthController, type RegistryAuthSnapshot} from '../registry/RegistryAuthController';
@@ -36,14 +34,7 @@ import {cleanupNativeWebViewPWA} from '../platform/pwa/nativePwaGuard';
 import { DesktopDragRegion, DesktopWindowControls } from '../shell/layouts/desktop/DesktopTitleBar';
 import {resolveDesktopChatQuickSwitchContextMenu} from '../shell/layouts/desktop/chatQuickSwitchContextMenu';
 import {getDesktopWindowBridge} from '../platform/desktop/desktopRuntime';
-import {
-  readDesktopWebSourceState,
-  setDesktopRemoteDebugEnabled as persistDesktopRemoteDebugEnabled,
-  submitDesktopRemoteWebCandidate,
-  type DesktopWebSourceState,
-} from '../platform/desktop/webSource';
-import {getNativeWebSourceBridge} from '../platform/native/webSource';
-import {isNativeShellHost} from '../platform/native/webSource';
+import {getNativeRuntimeBridge, isNativeShellHost} from '../platform/native/nativeRuntime';
 import {
   AppConfirmDialog,
   AppRenameDialog,
@@ -469,6 +460,7 @@ import type {
   PersistedFloatingControlSide,
   WorkspaceDatabaseStorageStats,
 } from '../workspace/WorkspacePersistence';
+import {scrubLegacyBrowserCredentials} from '../workspace/WorkspacePersistence';
 import type {
   RegistryChatContentBlock,
   RegistryChatMessage,
@@ -798,6 +790,7 @@ if (nativeShellHost) {
 }
 const registryDebugStore = createRegistryDebugStore();
 const service = new RegistryWorkspaceService(registryDebugStore.recordCaptureEvent);
+scrubLegacyBrowserCredentials();
 const workspaceStore = new WorkspaceStore();
 const workspaceController = new WorkspaceController(service, workspaceStore);
 const MAX_AUTO_RENDER_DIFF_CHARS = 200000;
@@ -2480,20 +2473,12 @@ const ChatPromptArtifactPreviewViewer = React.memo(function ChatPromptArtifactPr
 ));
 
 export function App() {
-  const defaultRegistryAddress = useMemo(() => getDefaultRegistryAddress(), []);
-  const persistedGlobal = useMemo(
-    () => workspaceStore.getGlobalState(defaultRegistryAddress),
-    [defaultRegistryAddress],
-  );
-  const initialRegistryAddress = resolveInitialRegistryAddress(
-    persistedGlobal.address || '',
-    defaultRegistryAddress,
-  );
+  const persistedGlobal = useMemo(() => workspaceStore.getGlobalState(), []);
+  const registryEndpoints = useMemo(() => deriveRegistryEndpoints(document.baseURI, {
+    allowInsecureLoopback: window.location.protocol === 'http:',
+  }), []);
+  const registryAddress = registryEndpoints.wsURL;
   const [connected, setConnected] = useState(false);
-  const [address, setAddress] = useState(initialRegistryAddress);
-  const addressRef = useRef(initialRegistryAddress);
-  const [token, setToken] = useState(persistedGlobal.token || '');
-  const tokenRef = useRef(persistedGlobal.token || '');
   const [error, setError] = useState('');
   const registryAuthController = useMemo(() => {
     const endpoints = deriveRegistryEndpoints(document.baseURI, {
@@ -2598,7 +2583,6 @@ export function App() {
   }, [registryAuthController]);
   const [ttsState, setTtsState] = useState<TtsPlaybackState>('idle');
   const ttsActiveTurnIndexRef = useRef<number | null>(null);
-  const [webSourceState, setWebSourceState] = useState<DesktopWebSourceState | null>(null);
   const [registryDebugRecords, setRegistryDebugRecords] = useState(registryDebugStore.getRecords());
   const [selectedRegistryDebugRecordId, setSelectedRegistryDebugRecordId] = useState<number | null>(null);
   const [selectedRegistryDebugScope, setSelectedRegistryDebugScope] = useState('All');
@@ -2988,14 +2972,14 @@ export function App() {
     }
     const baseUrl = resolvePortRelayOpenUrl({
       relayUrl: portRelaySnapshot.relayUrl,
-      registryAddress: address,
+      registryAddress,
       listenPort: portRelaySnapshot.listenPort || portRelayListenPort,
     });
     return appendPortRelayAutoAuthCode(
       appendPortRelayOpenPath(baseUrl, portRelayFramePath),
       portRelayFrameAccessCode,
     );
-  }, [address, portRelayFrameAccessCode, portRelayFramePath, portRelayListenPort, portRelayReady, portRelaySnapshot.listenPort, portRelaySnapshot.relayUrl]);
+  }, [registryAddress, portRelayFrameAccessCode, portRelayFramePath, portRelayListenPort, portRelayReady, portRelaySnapshot.listenPort, portRelaySnapshot.relayUrl]);
   const snapshotPortRelayTarget = useMemo(() => normalizePortRelayTarget({
     hubId: portRelaySnapshot.hubId,
     targetPort: portRelaySnapshot.targetPort,
@@ -5095,14 +5079,6 @@ export function App() {
   }, [projectId]);
 
   useEffect(() => {
-    addressRef.current = address;
-  }, [address]);
-
-  useEffect(() => {
-    tokenRef.current = token;
-  }, [token]);
-
-  useEffect(() => {
     chatSelectedIdRef.current = selectedChatId;
   }, [selectedChatId]);
   useEffect(() => {
@@ -6044,36 +6020,7 @@ export function App() {
   }, [ttsSettings]);
 
   useEffect(() => {
-    if (!sidebarSettingsOpen && settingsDetailView !== 'connectionStatus') {
-      return undefined;
-    }
-    let cancelled = false;
-    readDesktopWebSourceState().then(state => {
-      if (!cancelled) {
-        setWebSourceState(state);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [sidebarSettingsOpen, settingsDetailView]);
-
-  const handleDesktopRemoteDebugEnabledChange = useCallback((enabled: boolean) => {
-    setWebSourceState(current => current ? {
-      ...current,
-      remoteDebugEnabled: enabled,
-    } : current);
-    persistDesktopRemoteDebugEnabled(enabled).then(state => {
-      if (state) {
-        setWebSourceState(state);
-      }
-    }).catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
     workspaceStore.rememberGlobalState({
-      address,
-      token,
       themeMode,
       codeTheme,
       codeFont,
@@ -6102,8 +6049,6 @@ export function App() {
       hubColors,
     });
   }, [
-    address,
-    token,
     themeMode,
     codeTheme,
     codeFont,
@@ -11172,7 +11117,7 @@ export function App() {
   };
 
   const voiceInputReconnectAvailable = () => (
-    !!addressRef.current.trim() && !!projectIdRef.current
+    !!projectIdRef.current
   );
 
   const currentVoiceInputRuntimeKey = () => (
@@ -12183,8 +12128,6 @@ export function App() {
     let reconnectScheduled = false;
     let connectedProjectId = '';
     connectInFlightRef.current = true;
-    const trimmedToken = tokenRef.current.trim();
-    const nextAddress = addressRef.current.trim();
     const previousSelectedChatKey = selectedChatKeyRef.current;
     setError('');
     clearReconnectTimer();
@@ -12193,10 +12136,9 @@ export function App() {
       setReconnecting(false);
     }
     try {
-      const ws = toRegistryWsUrl(nextAddress);
-      const result = await workspaceController.connect(ws, trimmedToken, {disableFileCache});
+      await registryAuthController.requireSession();
+      const result = await workspaceController.connect(registryEndpoints.wsURL, {disableFileCache});
       connectedProjectId = result.hydrated.projectId;
-      submitDesktopRemoteWebCandidate(ws);
       const persistedSelectedChatKey = workspaceStore.migrateSelectedChatSessionKey(result.hydrated.projectId);
       const preferredSelectedChatKey =
         previousSelectedChatKey ||
@@ -12296,22 +12238,11 @@ export function App() {
     }
   };
 
-  const connectAuthenticatedRegistry = async () => {
-    tokenRef.current = '';
-    setToken('');
-    const {wsURL} = deriveRegistryEndpoints(document.baseURI, {
-      allowInsecureLoopback: window.location.protocol === 'http:',
-    });
-    addressRef.current = wsURL;
-    setAddress(wsURL);
-    await connect();
-  };
-
   const handleRegistryLogin = async () => {
     const snapshot = await registryAuthController.login(loginToken, loginDeviceName);
     if (snapshot.state !== 'authenticated') return;
     setLoginToken('');
-    await connectAuthenticatedRegistry();
+    await connect();
   };
 
   const refreshDeviceSessions = async () => {
@@ -12357,7 +12288,7 @@ export function App() {
     clearReconnectTimer();
     reconnectStartedAtRef.current = null;
     const shouldKeepWorkspaceVisible =
-      reason !== 'stop' && !!addressRef.current.trim() && !!projectIdRef.current;
+      reason !== 'stop' && !!projectIdRef.current;
     setReconnecting(shouldKeepWorkspaceVisible);
     setAutoConnecting(false);
     setConnected(false);
@@ -12371,9 +12302,6 @@ export function App() {
     supervisorManagedCloseRef.current = true;
     clearReconnectTimer();
     reconnectStartedAtRef.current = null;
-    workspaceStore.clearLocalToken();
-    tokenRef.current = '';
-    setToken('');
     setError('');
     setAutoConnecting(false);
     setReconnecting(false);
@@ -12381,6 +12309,7 @@ export function App() {
     setConnected(false);
     clearChatRuntimeState();
     service.close();
+    void registryAuthController.logout();
   };
 
   const maybeNotifyPromptCompletion = (
@@ -12430,7 +12359,7 @@ export function App() {
       {
         connect: async () => {
           const canSilentReconnect =
-            !!addressRef.current.trim() && !!projectIdRef.current;
+            !!projectIdRef.current;
           if (!canSilentReconnect) {
             return;
           }
@@ -12453,13 +12382,13 @@ export function App() {
   useEffect(() => {
     if (connected || autoConnecting) return;
     if (autoConnectTriedRef.current) return;
-    if (!address.trim()) return;
+    if (registryAuth.state !== 'authenticated') return;
     autoConnectTriedRef.current = true;
     setAutoConnecting(true);
     connect().catch(() => {
       setAutoConnecting(false);
     });
-  }, [address, autoConnecting, connected]);
+  }, [registryAuth.state, autoConnecting, connected]);
 
   const mergeTokenProviders = useCallback(
     (entries: Array<{hubId: string; projectId?: string; result: RegistryTokenScanResult}>): TokenProviderSectionView[] => {
@@ -12941,7 +12870,7 @@ export function App() {
         portRelayClearSiteDataTimerRef.current = null;
       }
       setPortRelayClearSiteDataUrl('');
-      const nativeResult = await Promise.resolve(getNativeWebSourceBridge()?.clearPortRelaySiteData?.(portRelayFrameUrl));
+      const nativeResult = await Promise.resolve(getNativeRuntimeBridge()?.clearPortRelaySiteData?.(portRelayFrameUrl));
       if (nativeResult?.ok === false) {
         throw new Error(nativeResult.error || 'Failed to clear relay site data.');
       }
@@ -14251,7 +14180,6 @@ export function App() {
         wm_diff_cache: dump.diffCache,
         wm_meta: dump.meta,
         storage: dump.storage,
-        local_storage: dump.localStorage,
       },
       null,
       2,
@@ -14301,7 +14229,7 @@ export function App() {
   };
 
   const clearLocalCache = () => {
-    workspaceStore.clearLocalCachePreservingToken();
+    workspaceStore.clearLocalCache();
     window.location.reload();
   };
 
@@ -16385,7 +16313,7 @@ export function App() {
         return;
       }
       const canSilentReconnect =
-        !!addressRef.current.trim() && !!projectIdRef.current;
+        !!projectIdRef.current;
       if (!canSilentReconnect) {
         reconnectStartedAtRef.current = null;
         setReconnecting(false);
@@ -16765,11 +16693,10 @@ export function App() {
       'Connection Status',
       <React.Suspense fallback={null}>
         <ConnectionStatusSettingsDetail
-          webSourceState={webSourceState}
           connected={connected}
           reconnecting={reconnecting}
           autoConnecting={autoConnecting}
-          address={address}
+          baseURL={document.baseURI}
           speechEnabled={speechSettings.enabled}
           androidNativeHost={isAndroidNativeSpeechHost()}
           androidNativeAvailable={!!getAndroidNativeSpeechBridge()}
@@ -16875,10 +16802,6 @@ export function App() {
         setLogLevel={setLogLevel}
         disableFileCache={disableFileCache}
         setDisableFileCache={setDisableFileCache}
-        desktopRemoteDebugAvailable={Boolean(getNativeWebSourceBridge()?.setRemoteDebugEnabled)}
-        desktopRemoteDebugEnabled={webSourceState?.remoteDebugEnabled === true}
-        desktopRemoteDebugPort={webSourceState?.remoteDebugPort ?? 9222}
-        setDesktopRemoteDebugEnabled={handleDesktopRemoteDebugEnabledChange}
         requestClearLocalCache={requestClearLocalCache}
         handleRegistryDebugLogout={handleRegistryDebugLogout}
         backendSecretStatuses={backendSecretStatuses}
@@ -20032,7 +19955,7 @@ export function App() {
           <h3>WheelMaker Registry</h3>
           {registryAuth.state === 'checking' ? <div>Checking login...</div> : null}
           {registryAuth.state === 'authenticated' ? (
-            <button className="button" disabled={autoConnecting} onClick={() => connectAuthenticatedRegistry().catch(() => undefined)}>
+            <button className="button" disabled={autoConnecting} onClick={() => connect().catch(() => undefined)}>
               {autoConnecting ? 'Connecting...' : 'Connect'}
             </button>
           ) : null}

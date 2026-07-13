@@ -4,13 +4,13 @@ import {
   type AppDiagnosticLevel,
 } from './appDiagnostics';
 import {
-  getNativeWebSourceBridge,
+  getNativeRuntimeBridge,
   type NativeWebDiagnosticRecord,
-  type NativeWebSourceBridge,
-} from '../platform/native/webSource';
+  type NativeRuntimeBridge,
+} from '../platform/native/nativeRuntime';
 
-type NativeWebDiagnosticBridge = Pick<NativeWebSourceBridge, 'drainWebDiagnostics'>;
-type NativeDiagnosticLogLevelBridge = Pick<NativeWebSourceBridge, 'setDiagnosticLogLevel'>;
+type NativeWebDiagnosticBridge = Pick<NativeRuntimeBridge, 'drainWebDiagnostics'>;
+type NativeDiagnosticLogLevelBridge = Pick<NativeRuntimeBridge, 'setDiagnosticLogLevel'>;
 type UploadableDiagnosticLevel = Extract<AppDiagnosticLevel, 'info' | 'warn' | 'error'>;
 
 const UPLOADABLE_LEVELS = new Set<UploadableDiagnosticLevel>(['info', 'warn', 'error']);
@@ -33,7 +33,7 @@ function isDetails(value: unknown): value is Record<string, unknown> {
 }
 
 export async function drainNativeWebDiagnosticsToAppLog(
-  bridge: NativeWebDiagnosticBridge | null = getNativeWebSourceBridge(),
+  bridge: NativeWebDiagnosticBridge | null = getNativeRuntimeBridge(),
 ): Promise<number> {
   const drain = bridge?.drainWebDiagnostics;
   if (!drain) {
@@ -72,7 +72,7 @@ export async function drainNativeWebDiagnosticsToAppLog(
 
 export async function setNativeDiagnosticLogLevel(
   logLevel: AppDiagnosticLogLevel,
-  bridge: NativeDiagnosticLogLevelBridge | null = getNativeWebSourceBridge(),
+  bridge: NativeDiagnosticLogLevelBridge | null = getNativeRuntimeBridge(),
 ): Promise<boolean> {
   const setLogLevel = bridge?.setDiagnosticLogLevel;
   if (!setLogLevel) {

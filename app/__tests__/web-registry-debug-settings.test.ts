@@ -65,11 +65,9 @@ describe('web registry debug settings', () => {
     expect(settingsRootTsx).toContain('onChange={event => setMessageViewerEnabled(event.target.checked)}');
     expect(settingsRootTsx).toContain('value={logLevel}');
     expect(settingsRootTsx).toContain('onChange={event => setLogLevel(normalizeAppDiagnosticLogLevel(event.target.value))}');
-    expect(settingsRootTsx).toContain('WebView2 Remote Debug');
-    expect(settingsRootTsx).toContain('checked={desktopRemoteDebugEnabled}');
-    expect(settingsRootTsx).toContain('setDesktopRemoteDebugEnabled(event.target.checked)');
-    expect(mainTsx).toContain('setDesktopRemoteDebugEnabled as persistDesktopRemoteDebugEnabled');
-    expect(mainTsx).toContain('handleDesktopRemoteDebugEnabledChange');
+    expect(settingsRootTsx).not.toContain('WebView2 Remote Debug');
+    expect(mainTsx).not.toContain('persistDesktopRemoteDebugEnabled');
+    expect(mainTsx).not.toContain('handleDesktopRemoteDebugEnabledChange');
     expect(mainTsx).not.toContain('Open Debug Panel');
     expect(mainTsx).not.toContain('disabled={!registryDebug}');
     const debugSectionStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'debug'");
@@ -80,8 +78,7 @@ describe('web registry debug settings', () => {
     expect(debugSection).toContain('Logout');
     expect(debugSection).toContain('handleRegistryDebugLogout');
     expect(debugSection).toContain('settings-danger-row');
-    expect(mainTsx).toContain('workspaceStore.clearLocalToken();');
-    expect(mainTsx).toContain("setToken('');");
+    expect(mainTsx).toContain('registryAuthController.logout()');
     expect(mainTsx).toContain('supervisorManagedCloseRef.current = true;');
     expect(mainTsx).not.toContain('registryDebugRecordsJson');
   });
@@ -132,8 +129,7 @@ describe('web registry debug settings', () => {
 
     const debugSection = settingsRootTsx.slice(debugSectionIndex);
     expect(debugSection.indexOf('Message Viewer')).toBeLessThan(debugSection.indexOf('Log Level'));
-    expect(debugSection.indexOf('Log Level')).toBeLessThan(debugSection.indexOf('WebView2 Remote Debug'));
-    expect(debugSection.indexOf('WebView2 Remote Debug')).toBeLessThan(debugSection.indexOf('Logs'));
+    expect(debugSection.indexOf('Log Level')).toBeLessThan(debugSection.indexOf('Logs'));
     expect(debugSection.indexOf('Logs')).toBeLessThan(debugSection.indexOf('Database'));
     expect(debugSection.indexOf('Database')).toBeLessThan(debugSection.indexOf('Clear Local Cache'));
     expect(debugSection.indexOf('Clear Local Cache')).toBeLessThan(debugSection.indexOf('Logout'));

@@ -1,25 +1,13 @@
-import React, { type ReactNode, useEffect, useRef, useState } from 'react';
-import { getDesktopWindowBridge, type DesktopWebSourceState } from '../../../platform/desktop/desktopRuntime';
-import {
-  readDesktopWebSourceState,
-  setDesktopWebSourcePreference,
-} from '../../../platform/desktop/webSource';
+import React, { type ReactNode, useRef } from 'react';
+import { getDesktopWindowBridge } from '../../../platform/desktop/desktopRuntime';
 
 type DesktopDragRegionProps = {
   className: string;
   children: ReactNode;
 };
 
-type DesktopSourcePreference = 'auto' | 'embedded';
-
 function invokeDesktopAction(action: (() => Promise<void> | void) | undefined) {
   void action?.();
-}
-
-function isDesktopWindowSourceTarget(target: EventTarget | null) {
-  const targetElement = target as { closest?: (selector: string) => Element | null } | null;
-  return typeof targetElement?.closest === 'function'
-    && Boolean(targetElement.closest('[data-desktop-window-source-root]'));
 }
 
 function isDesktopDragInteractiveTarget(target: EventTarget | null) {
@@ -72,125 +60,6 @@ export function DesktopDragRegion({ className, children }: DesktopDragRegionProp
   );
 }
 
-export function DesktopWindowSourceButton() {
-  const bridge = getDesktopWindowBridge();
-  const [webSourceState, setWebSourceState] = useState<DesktopWebSourceState | null>(null);
-  const [panelOpen, setPanelOpen] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    readDesktopWebSourceState().then(state => {
-      if (!cancelled) {
-        setWebSourceState(state);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!panelOpen || typeof window === 'undefined' || typeof window.addEventListener !== 'function') {
-      return undefined;
-    }
-    const closePanel = (event: PointerEvent) => {
-      if (isDesktopWindowSourceTarget(event.target)) {
-        return;
-      }
-      setPanelOpen(false);
-    };
-    window.addEventListener('pointerdown', closePanel);
-    return () => window.removeEventListener('pointerdown', closePanel);
-  }, [panelOpen]);
-
-  if (!bridge) {
-    return null;
-  }
-
-  const actualSourceLabel = webSourceState?.displaySource || '';
-  const hasRemoteWebSource = Boolean(webSourceState?.remoteUrl && webSourceState.remoteHost && bridge.setWebSourcePreference);
-  const remoteSourceLabel = webSourceState?.remoteHost || webSourceState?.displaySource || 'Auto';
-  const sourceTitle = webSourceState?.remoteUrl || actualSourceLabel;
-
-  const handleWebSourcePreferenceSelect = async (preference: DesktopSourcePreference) => {
-    setPanelOpen(false);
-    const nextState = await setDesktopWebSourcePreference(preference);
-    if (nextState) {
-      setWebSourceState(nextState);
-    }
-    window.location.reload();
-  };
-
-  const handleWebSourceRefresh = () => {
-    setPanelOpen(false);
-    window.location.reload();
-  };
-
-  return (
-    <div className="desktop-window-source-root" data-desktop-window-source-root={true}>
-      <button
-        type="button"
-        className="desktop-window-source-button"
-        aria-label="Show source"
-        title="Source"
-        aria-haspopup="menu"
-        aria-expanded={panelOpen}
-        onClick={() => setPanelOpen(open => !open)}
-      >
-        <span className="codicon codicon-info" aria-hidden="true" />
-      </button>
-      {panelOpen ? (
-        <div className="desktop-window-source-popover" role="menu">
-          {webSourceState ? (
-            <div className="desktop-window-source-panel">
-              <div className="desktop-window-source-current" title={sourceTitle}>
-                {actualSourceLabel}
-              </div>
-              {hasRemoteWebSource ? (
-                <>
-                  <button
-                    type="button"
-                    className="desktop-window-source-refresh"
-                    aria-label="Refresh web source"
-                    title="Refresh web source"
-                    onClick={handleWebSourceRefresh}
-                  >
-                    <span className="codicon codicon-refresh" aria-hidden="true" />
-                    <span>Refresh</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="desktop-window-source-choice"
-                    role="menuitemradio"
-                    aria-checked={webSourceState.preference === 'auto'}
-                    title={webSourceState.remoteUrl}
-                    onClick={() => void handleWebSourcePreferenceSelect('auto')}
-                  >
-                    {remoteSourceLabel}
-                  </button>
-                  <button
-                    type="button"
-                    className="desktop-window-source-choice"
-                    role="menuitemradio"
-                    aria-checked={webSourceState.preference === 'embedded'}
-                    onClick={() => void handleWebSourcePreferenceSelect('embedded')}
-                  >
-                    Embedded
-                  </button>
-                </>
-              ) : null}
-            </div>
-          ) : (
-            <div className="desktop-window-source-panel">
-              <div className="desktop-window-source-current">Source unavailable</div>
-            </div>
-          )}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 export function DesktopWindowControls() {
   const bridge = getDesktopWindowBridge();
 
@@ -200,7 +69,6 @@ export function DesktopWindowControls() {
 
   return (
     <div className="desktop-window-controls" data-desktop-window-controls={true}>
-      <DesktopWindowSourceButton />
       <button
         type="button"
         className="desktop-titlebar-button"

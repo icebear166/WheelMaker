@@ -19,26 +19,11 @@ Browser requests are accepted only when `Origin` exactly matches the effective s
 
 ## Nginx configuration
 
-Define login rate limiting in the `http` block:
+Inside the TLS-enabled `server` block, keep the existing Registry `/ws` route and proxy it to loopback:
 
 ```nginx
-limit_req_zone $binary_remote_addr zone=wheelmaker_login:10m rate=2r/m;
-```
-
-Inside the TLS-enabled `server` block, proxy login and Registry traffic to loopback:
-
-```nginx
-location = /registry/auth/login {
-    limit_req zone=wheelmaker_login burst=5 nodelay;
-
-    proxy_pass http://127.0.0.1:9630/auth/login;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Real-IP $remote_addr;
-}
-
-location /registry/ {
-    proxy_pass http://127.0.0.1:9630/;
+location /ws {
+    proxy_pass http://127.0.0.1:9630;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-Proto $scheme;
@@ -47,6 +32,8 @@ location /registry/ {
     proxy_set_header Connection "upgrade";
 }
 ```
+
+Nginx forwards the query string unchanged when `proxy_pass` has no replacement URI. Therefore `/ws?auth=status`, `/ws?auth=login`, `/ws?auth=logout`, and the WebSocket Upgrade all share this single location. Root-path deployments with this existing route require no Nginx change. Registry applies the login rate limiter itself. For a subpath deployment, map that base path's existing endpoint (for example `location /wheelmaker/ws`) to the same upstream while preserving the request path and query.
 
 The public server must redirect HTTP to HTTPS, allow only TLS 1.2 or TLS 1.3, and send HSTS after HTTPS deployment is verified. Do not log request bodies or authentication headers. Default Nginx access logs do not include request bodies; custom log formats must preserve that property.
 
@@ -63,5 +50,5 @@ After deployment:
 1. Confirm Registry listens only on loopback with `Get-NetTCPConnection` on Windows or `ss -ltnp` on Linux.
 2. Confirm HTTP redirects to HTTPS.
 3. Confirm an unlisted `Origin` receives HTTP 403 for login and WebSocket requests.
-4. Confirm repeated failed logins receive HTTP 429 from Nginx and from WheelMaker's application limiter.
+4. Confirm repeated failed logins receive HTTP 429 from WheelMaker's application limiter.
 5. Confirm successful login sets a host-only `HttpOnly; Secure; SameSite=Strict` session cookie.

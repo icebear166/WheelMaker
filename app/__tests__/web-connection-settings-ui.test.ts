@@ -25,9 +25,11 @@ describe('connection settings UI source structure', () => {
     expect(settingsRootTsx).toContain('Connection Status');
     expect(settingsRootTsx).not.toContain('Local Hub Read');
     expect(fs.existsSync(detailPath)).toBe(true);
-    expect(detailTsx).toContain('resolveWebResourceConnectionStatus(webSourceState)');
+    expect(detailTsx).not.toContain('Web Resources');
+    expect(detailTsx).not.toContain('webSourceState');
     expect(detailTsx).toContain('resolveRegistryConnectionStatus({');
     expect(detailTsx).toContain('resolveVoiceCapabilityStatus({');
+    expect(detailTsx).toContain('baseURL');
     expect(detailTsx).not.toContain('Local Hub Read');
 
     const chatSectionStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'chat'");

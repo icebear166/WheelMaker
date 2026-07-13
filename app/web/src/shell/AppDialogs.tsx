@@ -148,7 +148,7 @@ function resolveConfirmTitle(target: ConfirmTarget): string {
 
 function resolveConfirmName(target: ConfirmTarget): string {
   if (target.kind === 'terminalClose') return target.label;
-  if (target.kind === 'clearCache') return 'Settings and connection details will be preserved.';
+  if (target.kind === 'clearCache') return 'Settings will be preserved.';
   if (target.kind === 'archiveBatch') return `${target.candidates.length} sessions`;
   if (target.kind === 'restoreArchived') return target.title || 'Untitled session';
   if (target.kind === 'delete') return target.title || 'Untitled session';

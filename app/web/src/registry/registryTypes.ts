@@ -950,9 +950,7 @@ export type RegistryConnectInitPayload = {
   clientName: string;
   clientVersion: string;
   protocolVersion: string;
-  role: 'client' | 'hub';
-  hubId?: string;
-  token: string;
+  role: 'client';
   ts?: number;
   nonce?: string;
 };

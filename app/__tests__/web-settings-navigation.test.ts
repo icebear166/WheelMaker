@@ -17,7 +17,7 @@ import {
 describe('settings navigation model', () => {
   test('classifies settings pages into root, peers, and children', () => {
     expect(SETTINGS_PEER_DETAILS).toEqual(['update', 'skills', 'portRelay', 'tokenStats']);
-    expect(SETTINGS_CHILD_DETAILS).toEqual(['connectionStatus', 'database', 'debugLogs', 'skillDetail']);
+    expect(SETTINGS_CHILD_DETAILS).toEqual(['connectionStatus', 'database', 'debugLogs', 'deviceSessions', 'skillDetail']);
 
     expect(settingsPageKind(null)).toBe('root');
     expect(settingsPageKind('update')).toBe('peer');
@@ -49,6 +49,7 @@ describe('settings navigation model', () => {
     expect(settingsDetailTitle('connectionStatus')).toBe('Connection Status');
     expect(settingsDetailTitle('database')).toBe('Database');
     expect(settingsDetailTitle('debugLogs')).toBe('Logs');
+    expect(settingsDetailTitle('deviceSessions')).toBe('Devices');
     expect(settingsDetailTitle('skillDetail')).toBe('Skill Detail');
   });
 

@@ -41,21 +41,20 @@ describe('workspace persistence reset policy', () => {
     expect(resetBlock).not.toContain('TABLE_GLOBAL_KV');
   });
 
-  test('reads local identity as partial values so missing localStorage does not blank IndexedDB state', () => {
+  test('does not retain browser registry identity in local state', () => {
     const source = workspacePersistenceSource();
 
-    expect(source).toContain("type LocalIdentityState = Partial<Pick<PersistedGlobalState, 'address' | 'token'>>");
-    expect(source).toContain("private mergeLocalIdentityState(base: PersistedGlobalState): PersistedGlobalState");
-    expect(source).toContain("return sanitizeGlobalState({...base, ...localIdentity});");
-    expect(source).not.toContain("return {address: '', token: ''};");
+    expect(source).not.toContain('LocalIdentityState');
+    expect(source).not.toContain('mergeLocalIdentityState');
+    expect(source).not.toContain('saveLocalIdentityState');
   });
 
-  test('only explicit identity patches write localStorage mirrors', () => {
+  test('scrubs only known legacy credential fields while preserving preferences', () => {
     const source = workspacePersistenceSource();
-    const patchBlock = functionBlock(source, 'patchGlobalState(patch: Partial<PersistedGlobalState>): void');
 
-    expect(patchBlock).toContain("'address' in patch || 'token' in patch");
-    expect(patchBlock).toContain('this.saveLocalIdentityState(this.state.global)');
-    expect(patchBlock).not.toContain('this.saveLocalIdentityState(this.state.global);\n\n    const now');
+    expect(source).toContain('scrubLegacyBrowserCredentials');
+    expect(source).toContain("'deepseekApiKey'");
+    expect(source).toContain("'speechSettings'");
+    expect(source).toContain("'ttsSettings'");
   });
 });

@@ -134,12 +134,8 @@ export class WorkspaceStore {
     return this.persistence.subscribeStorageErrors(listener);
   }
 
-  getGlobalState(defaultAddress: string): PersistedGlobalState {
-    const saved = this.persistence.getGlobalState();
-    return {
-      ...saved,
-      address: saved.address || defaultAddress,
-    };
+  getGlobalState(): PersistedGlobalState {
+    return this.persistence.getGlobalState();
   }
 
   rememberGlobalState(patch: Partial<PersistedGlobalState>): void {
@@ -398,12 +394,8 @@ export class WorkspaceStore {
     this.persistence.clearFileCache();
   }
 
-  clearLocalCachePreservingToken(): void {
-    this.persistence.clearCachePreservingToken();
-  }
-
-  clearLocalToken(): void {
-    this.persistence.patchGlobalState({token: ''});
+  clearLocalCache(): void {
+    this.persistence.clearCache();
   }
 
   dumpDatabase(): Promise<WorkspaceDatabaseDump> {

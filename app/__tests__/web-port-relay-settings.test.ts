@@ -52,7 +52,7 @@ describe('port relay settings UI source structure', () => {
     expect(mainTsx).toContain('appendPortRelayAutoAuthCode(');
     expect(mainTsx).toContain('buildPortRelayClearSiteDataUrl(');
     expect(mainTsx).toContain('const clearPortRelaySiteData = useCallback(async () => {');
-    expect(mainTsx).toContain('getNativeWebSourceBridge()?.clearPortRelaySiteData?.(portRelayFrameUrl)');
+    expect(mainTsx).toContain('getNativeRuntimeBridge()?.clearPortRelaySiteData?.(portRelayFrameUrl)');
     expect(mainTsx).toContain('setPortRelayClearSiteDataUrl(clearUrl);');
     expect(mainTsx).toContain('setPortRelayFrameReloadKey(key => key + 1);');
     expect(mainTsx).not.toContain('preferDirectPortRelayUrl');

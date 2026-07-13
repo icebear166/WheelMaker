@@ -100,11 +100,10 @@ export class RegistryWorkspaceService {
     this.createRepository = options.createRepository ?? createRegistryRepository;
   }
 
-  async connect(wsUrl: string, token: string): Promise<WorkspaceSession> {
+  async connect(wsUrl: string): Promise<WorkspaceSession> {
     const repository = this.createRepository(this.debugSink, 'Remote');
-    const normalizedToken = token.trim();
     try {
-      await repository.initialize(wsUrl, normalizedToken);
+      await repository.initialize(wsUrl);
       const previousRepository = this.repository;
       this.bindRepository(repository);
       const snapshot = await this.listProjectSnapshotWithRetry(repository);

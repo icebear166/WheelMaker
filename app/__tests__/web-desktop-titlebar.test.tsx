@@ -3,7 +3,6 @@ import ReactTestRenderer from 'react-test-renderer';
 import {
   DesktopDragRegion,
   DesktopWindowControls,
-  DesktopWindowSourceButton,
 } from '../web/src/shell/layouts/desktop/DesktopTitleBar';
 
 describe('desktop window controls', () => {
@@ -24,7 +23,7 @@ describe('desktop window controls', () => {
     expect(renderer!.toJSON()).toBeNull();
   });
 
-  test('renders frameless controls with settings and window actions', async () => {
+  test('renders frameless window actions without a Web source chooser', async () => {
     const minimize = jest.fn();
     const toggleMaximize = jest.fn();
     const close = jest.fn();
@@ -45,18 +44,16 @@ describe('desktop window controls', () => {
     const root = renderer!.root;
     expect(root.findByProps({'data-desktop-window-controls': true})).toBeDefined();
     expect(root.findAllByProps({'data-desktop-titlebar': true})).toHaveLength(0);
-    expect(root.findAllByProps({className: 'desktop-window-source-button'})).toHaveLength(1);
+    expect(root.findAllByProps({className: 'desktop-window-source-button'})).toHaveLength(0);
     expect(root.findAllByProps({className: 'desktop-titlebar-title-group'})).toHaveLength(0);
 
     const buttons = root.findAllByType('button');
     expect(buttons.map(button => button.props['aria-label']).filter(Boolean)).toEqual([
-      'Show source',
       'Minimize',
       'Maximize or restore',
       'Close',
     ]);
 
-    expect(root.findByProps({'aria-label': 'Show source'}).findByProps({className: 'codicon codicon-info'})).toBeDefined();
     root.findByProps({'aria-label': 'Minimize'}).props.onClick();
     root.findByProps({'aria-label': 'Maximize or restore'}).props.onClick();
     root.findByProps({'aria-label': 'Close'}).props.onClick();
@@ -64,94 +61,6 @@ describe('desktop window controls', () => {
     expect(minimize).toHaveBeenCalled();
     expect(toggleMaximize).toHaveBeenCalled();
     expect(close).toHaveBeenCalled();
-  });
-
-  test('renders the source info button with source panel controls', async () => {
-    const getWebSourceState = jest.fn(async () => ({
-      preference: 'auto',
-      actualSource: 'remote',
-      displayTitle: 'WheelMaker - example.com',
-      displaySource: 'example.com',
-      remoteUrl: 'https://example.com/',
-      remoteHost: 'example.com',
-    }));
-    const setWebSourcePreference = jest.fn(async () => ({
-      preference: 'embedded',
-      actualSource: 'embedded',
-      displayTitle: 'WheelMaker - Embedded',
-      displaySource: 'Embedded',
-      remoteUrl: '',
-      remoteHost: '',
-    }));
-    const reload = jest.fn();
-    (global as typeof globalThis & { window?: unknown }).window = {
-      location: {reload},
-      WheelMakerDesktop: {
-        enabled: true,
-        getWebSourceState,
-        setWebSourcePreference,
-      },
-    };
-
-    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
-    await ReactTestRenderer.act(async () => {
-      renderer = ReactTestRenderer.create(<DesktopWindowSourceButton />);
-    });
-
-    const root = renderer!.root;
-    expect(root.findByProps({className: 'desktop-window-source-button'}).findByProps({className: 'codicon codicon-info'})).toBeDefined();
-    expect(root.findAllByProps({className: 'desktop-titlebar-icon'})).toHaveLength(0);
-
-    const menuButton = root.findByProps({className: 'desktop-window-source-button'});
-    expect(menuButton.props['aria-expanded']).toBe(false);
-    await ReactTestRenderer.act(async () => {
-      menuButton.props.onClick();
-    });
-    expect(root.findByProps({className: 'desktop-window-source-popover'}).props.role).toBe('menu');
-    expect(root.findByProps({className: 'desktop-window-source-panel'})).toBeDefined();
-    expect(root.findByProps({className: 'desktop-window-source-current'}).props.title).toBe('https://example.com/');
-    const sourceRefreshButton = root.findByProps({className: 'desktop-window-source-refresh'});
-    sourceRefreshButton.props.onClick();
-    expect(reload).toHaveBeenCalledTimes(1);
-
-    const sourceItems = root.findAllByProps({className: 'desktop-window-source-choice'});
-    expect(sourceItems.map(item => item.props.children)).toEqual(['example.com', 'Embedded']);
-    await ReactTestRenderer.act(async () => {
-      await sourceItems[1].props.onClick();
-    });
-    expect(setWebSourcePreference).toHaveBeenCalledWith('embedded');
-    expect(reload).toHaveBeenCalledTimes(2);
-  });
-
-  test('renders plain embedded source text when no remote URL is available', async () => {
-    const getWebSourceState = jest.fn(async () => ({
-      preference: 'auto',
-      actualSource: 'embedded',
-      displayTitle: 'WheelMaker - Embedded',
-      displaySource: 'Embedded',
-      remoteUrl: '',
-      remoteHost: '',
-    }));
-    (global as typeof globalThis & { window?: unknown }).window = {
-      WheelMakerDesktop: {
-        enabled: true,
-        getWebSourceState,
-      },
-    };
-
-    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
-    await ReactTestRenderer.act(async () => {
-      renderer = ReactTestRenderer.create(<DesktopWindowSourceButton />);
-    });
-
-    const root = renderer!.root;
-    await ReactTestRenderer.act(async () => {
-      root.findByProps({className: 'desktop-window-source-button'}).props.onClick();
-    });
-
-    expect(root.findByProps({className: 'desktop-window-source-current'}).props.children).toBe('Embedded');
-    expect(root.findAllByProps({className: 'desktop-window-source-choice'})).toHaveLength(0);
-    expect(root.findAllByProps({className: 'desktop-window-source-refresh'})).toHaveLength(0);
   });
 
   test('drags desktop title rows except interactive targets', async () => {

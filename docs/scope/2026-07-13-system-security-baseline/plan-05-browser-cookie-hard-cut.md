@@ -137,7 +137,7 @@ Expected: PASS；仍未删除旧 WebSocket 参数。
 - Modify: `app/__tests__/web-workspace-persistence-reset-policy.test.ts`
 - Create: `app/__tests__/web-browser-credential-hard-cut.test.ts`
 
-- [ ] **Step 1: 写清理和结构失败测试**
+- [x] **Step 1: 写清理和结构失败测试**
 
 测试必须先于生产改动，并断言：
 
@@ -148,7 +148,7 @@ Expected: PASS；仍未删除旧 WebSocket 参数。
 - `connect.init` payload 不包含 token。
 - Connection 设置不显示独立 Registry address 或 Token；普通浏览器总用 current Base URL。
 
-- [ ] **Step 2: 运行测试并确认失败**
+- [x] **Step 2: 运行测试并确认失败**
 
 Run:
 
@@ -182,7 +182,7 @@ Expected: FAIL；当前类型、localStorage 和 connect chain 仍携带 Token�
 - Modify: `server/internal/registry/server_test.go`
 - Modify: `docs/nginx-security.md`
 
-- [ ] **Step 1: 先写 Registry 最终分流测试**
+- [x] **Step 1: 先写 Registry 最终分流测试**
 
 替换过渡测试 `TestWebSocketCrossOriginWithoutSessionUsesTokenAuthentication`，最终矩阵：
 
@@ -198,7 +198,7 @@ Expected: FAIL；当前类型、localStorage 和 connect chain 仍携带 Token�
 
 根路径、子路径、可信 loopback forwarded HTTPS、外部伪造 forwarded header 都要覆盖。
 
-- [ ] **Step 2: 实现 Web 凭据硬删除**
+- [x] **Step 2: 实现 Web 凭据硬删除**
 
 在任何 status/connect 之前执行一次 legacy scrub。删除 Token/address state 和持久 key，而不是把它们保留为空字符串。连接链固定为：
 
@@ -210,17 +210,17 @@ await workspaceService.connect(wsURL); // no token parameter
 
 `RegistryRepository.initialize` 的 `connect.init` 只发送 clientName/clientVersion/protocolVersion/role=client。WebSocket 构造器依靠浏览器自动发送同源 Cookie。
 
-- [ ] **Step 3: 实现 Registry 最终分流**
+- [x] **Step 3: 实现 Registry 最终分流**
 
 在 Upgrade 前读取 Origin。存在 Origin 时必须：请求 Origin 与可信 scheme/host/port 精确一致、Cookie Session 有效且 Session BasePath 等于当前 `/.../ws` 提取的 Base Path。升级后的 `connect.init` 强制 client/no-token。不存在 Origin 时忽略 Cookie，继续常量时间 Token 验证。
 
 不要保留 appassets、localhost、Desktop、Android allowlist；新版壳的业务页已经是远程同源。
 
-- [ ] **Step 4: 更新 Nginx 说明但不新增路由**
+- [x] **Step 4: 更新 Nginx 说明但不新增路由**
 
 `docs/nginx-security.md` 只展示现有 `location /ws`；说明 query 会原样转发，因此 login/status/logout 和 Upgrade 共用该 location。删除旧 `/auth/login` 专用 location。根路径用户无需修改路由；子路径用户映射 `<base>/ws`。
 
-- [ ] **Step 5: 运行硬切换定向测试**
+- [x] **Step 5: 运行硬切换定向测试**
 
 Run:
 
@@ -234,7 +234,7 @@ npm run tsc:web
 
 Expected: PASS；旧跨 Origin Token 测试已删除而不是跳过。
 
-- [ ] **Step 6: 以一个提交落下双方改动**
+- [x] **Step 6: 以一个提交落下双方改动**
 
 Run:
 

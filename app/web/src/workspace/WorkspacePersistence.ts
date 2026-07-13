@@ -95,8 +95,6 @@ export type PersistedProjectCommitsState = {
 };
 
 export type PersistedGlobalState = {
-  address: string;
-  token: string;
   themeMode: PersistedThemeMode;
   codeTheme: CodeThemeId;
   codeFont: CodeFontId;
@@ -153,8 +151,6 @@ type PersistedWorkspaceState = {
   projects: Record<string, PersistedProjectState>;
 };
 
-type LocalIdentityState = Partial<Pick<PersistedGlobalState, 'address' | 'token'>>;
-
 export type WorkspaceDatabaseDump = {
   global: Array<{k: string; v: string; updatedAt: number}>;
   projects: Array<{projectId: string; stateJson: string; updatedAt: number}>;
@@ -164,7 +160,6 @@ export type WorkspaceDatabaseDump = {
   fileCache: Array<{k: string; hash: string; v: string; updatedAt: number}>;
   diffCache: Array<{k: string; v: string; updatedAt: number}>;
   meta: Array<{k: string; v: string; updatedAt: number}>;
-  localStorage: {address: string; token: string};
   storage: WorkspaceDatabaseStorageStats;
   storageError: WorkspaceStorageError | null;
 };
@@ -198,8 +193,6 @@ export type WorkspaceStorageError = {
   occurredAt: string;
 };
 
-const LOCAL_ADDRESS_KEY = 'wheelmaker.workspace.address';
-const LOCAL_TOKEN_KEY = 'wheelmaker.workspace.token';
 const WORKSPACE_DB_NAME = 'wheelmaker.workspace.db';
 const WORKSPACE_DB_VERSION = 6;
 const TABLE_GLOBAL_KV = 'wm_global_kv';
@@ -374,8 +367,6 @@ const GLOBAL_KEYS = {
 
 function defaultGlobalState(): PersistedGlobalState {
   return {
-    address: '',
-    token: '',
     themeMode: 'dark',
     codeTheme: DEFAULT_CODE_THEME,
     codeFont: DEFAULT_CODE_FONT,
@@ -623,8 +614,6 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
   const sanitizeFloatingControlSide = (value: unknown, fallback: PersistedFloatingControlSide): PersistedFloatingControlSide =>
     value === 'left' || value === 'right' ? value : fallback;
   return {
-    address: typeof input.address === 'string' ? input.address : base.address,
-    token: typeof input.token === 'string' ? input.token : base.token,
     themeMode: input.themeMode === 'light' ? 'light' : 'dark',
     codeTheme: typeof input.codeTheme === 'string' && isCodeThemeId(input.codeTheme) ? input.codeTheme : base.codeTheme,
     codeFont: typeof input.codeFont === 'string' && isCodeFontId(input.codeFont) ? input.codeFont : base.codeFont,
@@ -680,6 +669,15 @@ function tryParse<T>(value: string, fallback: T): T {
   }
 }
 
+export function scrubLegacyBrowserCredentials(): void {
+  try {
+    globalThis.localStorage?.removeItem(['wheelmaker', 'workspace', 'address'].join('.'));
+    globalThis.localStorage?.removeItem(['wheelmaker', 'workspace', 'token'].join('.'));
+  } catch {
+    // Storage can be unavailable; IndexedDB cleanup still runs during initialization.
+  }
+}
+
 function fileCacheKey(projectId: string, kind: 'file' | 'dir', path: string): string {
   return `fc:${projectId}:${kind}:${path}`;
 }
@@ -715,6 +713,31 @@ type RawKVRow = {
   v: string;
   updatedAt: number;
 };
+
+export function scrubLegacyGlobalRows(rows: RawKVRow[]): {deletes: string[]; puts: RawKVRow[]} {
+  const deletes: string[] = [];
+  const puts: RawKVRow[] = [];
+  for (const row of rows) {
+    if (row.k === 'address' || row.k === 'token' || row.k === 'deepseekApiKey') {
+      deletes.push(row.k);
+      continue;
+    }
+    if (row.k === GLOBAL_KEYS.speechSettings) {
+      const raw = tryParse<unknown>(row.v, {});
+      if (raw && typeof raw === 'object' && !Array.isArray(raw) && 'volcengineApiKey' in raw) {
+        puts.push({...row, v: serialize(normalizeSpeechSettings(raw))});
+      }
+      continue;
+    }
+    if (row.k === GLOBAL_KEYS.ttsSettings) {
+      const raw = tryParse<unknown>(row.v, {});
+      if (raw && typeof raw === 'object' && !Array.isArray(raw) && 'apiKey' in raw) {
+        puts.push({...row, v: serialize(normalizeTtsSettings(raw))});
+      }
+    }
+  }
+  return {deletes: [...new Set(deletes)], puts};
+}
 
 function globalRowsForPatch(
   patch: Partial<PersistedGlobalState>,
@@ -1018,6 +1041,21 @@ export class WorkspacePersistenceRepository {
       this.db.getAllRows<RawFileCacheRow>(TABLE_FILE_CACHE),
     ]);
 
+    const legacyScrub = scrubLegacyGlobalRows(globalRows);
+    if (legacyScrub.deletes.length > 0 || legacyScrub.puts.length > 0) {
+      await this.db.mutateStores([{
+        storeName: TABLE_GLOBAL_KV,
+        deletes: legacyScrub.deletes,
+        puts: legacyScrub.puts,
+      }]);
+      const deleted = new Set(legacyScrub.deletes);
+      const replacements = new Map(legacyScrub.puts.map(row => [row.k, row]));
+      const scrubbed = globalRows
+        .filter(row => !deleted.has(row.k))
+        .map(row => replacements.get(row.k) ?? row);
+      globalRows.splice(0, globalRows.length, ...scrubbed);
+    }
+
     const hasPersisted =
       globalRows.length > 0 ||
       projectRows.length > 0 ||
@@ -1073,7 +1111,7 @@ export class WorkspacePersistenceRepository {
     }
 
     return {
-      global: this.mergeLocalIdentityState(sanitizeGlobalState({...base.global, ...globalPatch})),
+      global: sanitizeGlobalState({...base.global, ...globalPatch}),
       projects,
     };
   }
@@ -1531,49 +1569,6 @@ export class WorkspacePersistenceRepository {
     }
   }
 
-  private readLocalIdentityState(): LocalIdentityState {
-    if (typeof window === 'undefined') {
-      return {};
-    }
-    const identity: LocalIdentityState = {};
-    try {
-      const rawAddress = window.localStorage.getItem(LOCAL_ADDRESS_KEY);
-      if (typeof rawAddress === 'string') {
-        identity.address = rawAddress;
-      }
-    } catch {
-      // ignore
-    }
-    try {
-      const rawToken = window.localStorage.getItem(LOCAL_TOKEN_KEY);
-      if (typeof rawToken === 'string') {
-        identity.token = rawToken;
-      }
-    } catch {
-      // ignore
-    }
-    return identity;
-  }
-
-  private mergeLocalIdentityState(base: PersistedGlobalState): PersistedGlobalState {
-    const localIdentity = this.readLocalIdentityState();
-    return sanitizeGlobalState({...base, ...localIdentity});
-  }
-
-  private saveLocalIdentityState(value: Pick<PersistedGlobalState, 'address' | 'token'>): void {
-    if (typeof window === 'undefined') return;
-    try {
-      window.localStorage.setItem(LOCAL_ADDRESS_KEY, value.address || '');
-    } catch {
-      // ignore
-    }
-    try {
-      window.localStorage.setItem(LOCAL_TOKEN_KEY, value.token || '');
-    } catch {
-      // ignore
-    }
-  }
-
   private ensureProject(projectId: string): PersistedProjectState {
     if (!this.state.projects[projectId]) {
       this.state.projects[projectId] = defaultProjectState();
@@ -1589,7 +1584,6 @@ export class WorkspacePersistenceRepository {
   }
 
   getGlobalState(): PersistedGlobalState {
-    this.state.global = this.mergeLocalIdentityState(this.state.global);
     return cloneState(this.state.global);
   }
 
@@ -1802,10 +1796,6 @@ export class WorkspacePersistenceRepository {
   }
   patchGlobalState(patch: Partial<PersistedGlobalState>): void {
     this.state.global = sanitizeGlobalState({...this.state.global, ...patch});
-    if ('address' in patch || 'token' in patch) {
-      this.saveLocalIdentityState(this.state.global);
-    }
-
     const now = Date.now();
     const next = cloneState(this.state.global);
     const rows = globalRowsForPatch(patch, next, now);
@@ -1931,7 +1921,7 @@ export class WorkspacePersistenceRepository {
     this.enqueueCacheMutation('clear file cache', [{storeName: TABLE_FILE_CACHE, clear: true}]);
   }
 
-  clearCachePreservingToken(): void {
+  clearCache(): void {
     for (const key of Object.keys(this.projectCommits)) {
       delete this.projectCommits[key];
     }
@@ -1995,7 +1985,6 @@ export class WorkspacePersistenceRepository {
       estimate as WorkspaceBrowserStorageEstimate | null,
       persisted,
     );
-    const localIdentity = this.readLocalIdentityState();
     return {
       global: sortByKey(redactGlobalDumpRows(global)),
       projects: sortByProjectId(projects),
@@ -2005,10 +1994,6 @@ export class WorkspacePersistenceRepository {
       fileCache: sortByKey(fileCache),
       diffCache: sortByKey(diffCache),
       meta: sortByKey(meta),
-      localStorage: {
-        address: localIdentity.address ?? '',
-        token: localIdentity.token ?? '',
-      },
       storage,
       storageError: this.lastStorageError ? cloneState(this.lastStorageError) : null,
     };

@@ -11,8 +11,9 @@ describe('web reconnect fallback behavior', () => {
 
     expect(mainTsx).toContain('const RECONNECT_GRACE_PERIOD_MS = 30_000;');
     expect(mainTsx).toMatch(
-      /const\s+canSilentReconnect\s*=\s*!!addressRef\.current\.trim\(\)\s*&&\s*!!projectIdRef\.current;/,
+      /const\s+canSilentReconnect\s*=\s*!!projectIdRef\.current;/,
     );
+    expect(mainTsx).not.toContain('addressRef');
     expect(mainTsx).toContain('if (elapsed < RECONNECT_GRACE_PERIOD_MS) {');
     expect(mainTsx).toMatch(
       /connect\(\{\s*silentReconnect:\s*true\s*\}\)\.catch\(\(\)\s*=>\s*undefined\);/,
@@ -160,7 +161,7 @@ describe('web reconnect fallback behavior', () => {
 
     expect(mainTsx).toContain('const shouldKeepWorkspaceVisible =');
     expect(mainTsx).toContain(
-      "reason !== 'stop' && !!addressRef.current.trim() && !!projectIdRef.current;",
+      "reason !== 'stop' && !!projectIdRef.current;",
     );
     expect(mainTsx).toContain('setReconnecting(shouldKeepWorkspaceVisible);');
   });

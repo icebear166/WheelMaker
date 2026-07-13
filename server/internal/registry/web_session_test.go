@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func TestWebSessionPersistsPrivateCredentialsAndRestores(t *testing.T) {
+func TestWebSessionRestartRestoresPrivateCredentials(t *testing.T) {
 	now := time.Date(2026, 7, 13, 12, 0, 0, 0, time.UTC)
 	statePath := filepath.Join(t.TempDir(), "registry-sessions.json")
 	token := "short-custom-token"
@@ -110,6 +110,12 @@ func TestWebSessionSlidesExpirationAndCoalescesPersistence(t *testing.T) {
 	}
 }
 
+func TestWebSession180DaySlidingTTL(t *testing.T) {
+	if webSessionTTL != 180*24*time.Hour {
+		t.Fatalf("webSessionTTL=%s, want 180 days", webSessionTTL)
+	}
+}
+
 func TestWebSessionStoreExpiresSession(t *testing.T) {
 	now := time.Date(2026, 7, 13, 12, 0, 0, 0, time.UTC)
 	store := newWebSessionStore(&sequenceReader{}, func() time.Time { return now }, "token", "")
@@ -123,7 +129,7 @@ func TestWebSessionStoreExpiresSession(t *testing.T) {
 	}
 }
 
-func TestWebSessionRotatesTokenFingerprintForShortTokens(t *testing.T) {
+func TestWebSessionTokenRotationInvalidatesShortTokens(t *testing.T) {
 	now := time.Date(2026, 7, 13, 12, 0, 0, 0, time.UTC)
 	statePath := filepath.Join(t.TempDir(), "registry-sessions.json")
 	store := newWebSessionStore(&sequenceReader{}, func() time.Time { return now }, "a", statePath)

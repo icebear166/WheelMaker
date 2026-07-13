@@ -126,7 +126,6 @@ function seedWithGlobalSettings(extra: Record<string, unknown[]> = {}): Record<s
   return {
     wm_global_kv: [
       {k: 'themeMode', v: JSON.stringify('light'), updatedAt: now},
-      {k: 'deepseekApiKey', v: JSON.stringify('secret-key'), updatedAt: now},
     ],
     ...extra,
   };
@@ -138,7 +137,7 @@ function rowValue(rows: Array<{k: string; v: string}>, key: string): unknown {
 }
 
 describe('workspace persistence safety', () => {
-  test('clears migrated legacy secrets while preserving non-sensitive speech settings', async () => {
+  test('scrubs legacy secrets at startup while preserving non-sensitive speech settings', async () => {
     const now = Date.now();
     const db = new MemoryWorkspaceDatabase({
       wm_global_kv: [
@@ -149,15 +148,6 @@ describe('workspace persistence safety', () => {
     });
     const repository = new WorkspacePersistenceRepository(db as never);
     await repository.ready();
-
-    expect(repository.getLegacyBackendSecrets()).toEqual({
-      deepseek: 'old-deepseek',
-      volcengineAsr: 'old-asr',
-      mimoTts: 'old-tts',
-    });
-    await repository.clearLegacyBackendSecret('deepseek');
-    await repository.clearLegacyBackendSecret('volcengineAsr');
-    await repository.clearLegacyBackendSecret('mimoTts');
 
     expect(repository.getLegacyBackendSecrets()).toEqual({});
     expect(rowValue(db.rows('wm_global_kv'), 'deepseekApiKey')).toBeUndefined();
@@ -188,7 +178,7 @@ describe('workspace persistence safety', () => {
     expect(evicted).toEqual(['expired', 'old']);
   });
 
-  test('repairs stale chat cache without rewriting global settings', async () => {
+  test('repairs stale chat cache after the one-time credential scrub', async () => {
     const now = Date.now();
     const db = new MemoryWorkspaceDatabase({
       wm_global_kv: [
@@ -218,17 +208,17 @@ describe('workspace persistence safety', () => {
         updatedAt: now,
       }],
     });
-    const before = db.rows('wm_global_kv');
-
     const repository = new WorkspacePersistenceRepository(db as never);
     await repository.ready();
 
     expect(repository.getGlobalState()).toMatchObject({
       themeMode: 'light',
     });
-    expect(repository.getLegacyBackendSecrets()).toEqual({deepseek: 'secret-key'});
-    expect(db.rows('wm_global_kv')).toEqual(before);
-    expect(db.mutationsFor('wm_global_kv')).toEqual([]);
+    expect(repository.getLegacyBackendSecrets()).toEqual({});
+    expect(db.rows('wm_global_kv')).toEqual([
+      {k: 'themeMode', v: JSON.stringify('light'), updatedAt: now},
+    ]);
+    expect(db.mutationsFor('wm_global_kv')).toHaveLength(1);
     expect(db.lastMutationStores()).toEqual([
       'wm_chat_session_index',
       'wm_chat_session_content',
@@ -240,7 +230,6 @@ describe('workspace persistence safety', () => {
     const db = new MemoryWorkspaceDatabase({
       wm_global_kv: [
         {k: 'themeMode', v: JSON.stringify('light'), updatedAt: now},
-        {k: 'deepseekApiKey', v: JSON.stringify('secret-key'), updatedAt: now},
       ],
       wm_chat_session_index: [{
         k: 'cs:p1:s1',
@@ -275,7 +264,7 @@ describe('workspace persistence safety', () => {
     expect(repository.getGlobalState()).toMatchObject({
       themeMode: 'light',
     });
-    expect(repository.getLegacyBackendSecrets()).toEqual({deepseek: 'secret-key'});
+    expect(repository.getLegacyBackendSecrets()).toEqual({});
     expect(errors).toEqual([expect.objectContaining({operation: 'repair chat cache'})]);
     unsubscribe();
     consoleError.mockRestore();
@@ -316,7 +305,7 @@ describe('workspace persistence safety', () => {
     await repository.flushPendingWrites();
 
     expect(rowValue(db.rows('wm_global_kv'), 'themeMode')).toBe('dark');
-    expect(rowValue(db.rows('wm_global_kv'), 'deepseekApiKey')).toBe('secret-key');
+    expect(rowValue(db.rows('wm_global_kv'), 'deepseekApiKey')).toBeUndefined();
     expect(db.clearedStores()).toEqual(expect.arrayContaining([
       'wm_project_commits',
       'wm_chat_session_index',
@@ -495,13 +484,13 @@ describe('workspace persistence safety', () => {
     const projectsBefore = db.rows('wm_project_state');
     db.resetMutationLog();
 
-    repository.clearCachePreservingToken();
+    repository.clearCache();
     await repository.flushPendingWrites();
 
     expect(repository.getGlobalState()).toMatchObject({
       themeMode: 'light',
     });
-    expect(repository.getLegacyBackendSecrets()).toEqual({deepseek: 'secret-key'});
+    expect(repository.getLegacyBackendSecrets()).toEqual({});
     expect(repository.getProjectState('p1')).toMatchObject({
       selectedFile: 'a.txt',
       pinnedFiles: ['a.txt'],

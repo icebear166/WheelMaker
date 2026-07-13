@@ -157,7 +157,7 @@ describe('web runtime setup', () => {
     expect(mainTsx).toContain("import '@vscode/codicons/dist/codicon.css';");
     expect(indexHtml).toContain('rel="preload"');
     expect(indexHtml).toContain('as="font"');
-    expect(indexHtml).toContain('href="/codicon.ttf"');
+    expect(indexHtml).toContain('href="codicon.ttf"');
     expect(indexHtml).toContain('crossorigin');
   });
 

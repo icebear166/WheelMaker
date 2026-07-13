@@ -28,8 +28,8 @@ export class WorkspaceController {
     private readonly store: WorkspaceStore,
   ) {}
 
-  async connect(wsUrl: string, token: string, options?: {disableFileCache?: boolean}): Promise<ProjectLoadResult> {
-    const baseSession = await this.service.connect(wsUrl, token.trim());
+  async connect(wsUrl: string, options?: {disableFileCache?: boolean}): Promise<ProjectLoadResult> {
+    const baseSession = await this.service.connect(wsUrl);
     const targetProjectId = this.store.selectProjectOnConnect(baseSession.projects, baseSession.selectedProjectId);
     const session = targetProjectId !== baseSession.selectedProjectId
       ? await this.service.selectProject(targetProjectId)

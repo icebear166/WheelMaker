@@ -430,14 +430,17 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	browserSession := false
 	browserDeviceID := ""
 	if origin != "" {
-		if session, ok := s.authenticateWebRequest(r); ok {
-			if !security.RequestOriginMatchesHost(r) {
-				http.Error(w, "forbidden", http.StatusForbidden)
-				return
-			}
-			browserSession = true
-			browserDeviceID = session.DeviceID
+		if !security.RequestOriginMatchesHost(r) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
 		}
+		session, ok := s.authenticateWebRequest(r)
+		if !ok {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		browserSession = true
+		browserDeviceID = session.DeviceID
 	}
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(_ *http.Request) bool { return true },
@@ -820,6 +823,10 @@ func (s *Server) handleConnectInit(peer *peerConn, state *connectionState, in en
 		return true
 	}
 	role := strings.TrimSpace(payload.Role)
+	if state.browserSession && (role != string(rp.RegistryRoleClient) || strings.TrimSpace(payload.Token) != "") {
+		_ = s.writeError(peer, in.RequestID, in.Method, codeForbidden, "browser session requires client role without token", nil)
+		return false
+	}
 	if role == "monitor" {
 		_ = s.writeError(peer, in.RequestID, in.Method, codeForbidden, "monitor role has been retired", nil)
 		return true
@@ -832,12 +839,7 @@ func (s *Server) handleConnectInit(peer *peerConn, state *connectionState, in en
 		_ = s.writeError(peer, in.RequestID, in.Method, codeInvalidArgument, "hubId is required for hub role", nil)
 		return true
 	}
-	if state.browserSession {
-		if role != string(rp.RegistryRoleClient) || strings.TrimSpace(payload.Token) != "" {
-			_ = s.writeError(peer, in.RequestID, in.Method, codeForbidden, "browser session requires client role without token", nil)
-			return false
-		}
-	} else if s.cfg.Token != "" && subtle.ConstantTimeCompare([]byte(strings.TrimSpace(payload.Token)), []byte(s.cfg.Token)) != 1 {
+	if !state.browserSession && s.cfg.Token != "" && subtle.ConstantTimeCompare([]byte(strings.TrimSpace(payload.Token)), []byte(s.cfg.Token)) != 1 {
 		_ = s.writeError(peer, in.RequestID, in.Method, codeUnauthorized, "invalid token", nil)
 		return false
 	}

@@ -543,14 +543,13 @@ export class RegistryRepository {
       latestTurnIndex: normalized.latestTurnIndex,
     };
   }
-  async initialize(url: string, token?: string): Promise<void> {
+  async initialize(url: string): Promise<void> {
     await this.client.connect(url);
     await this.client.connectInit({
       clientName: 'wheelmaker-web',
       clientVersion: '0.1.0',
       protocolVersion: RegistryProtocolVersion,
       role: 'client',
-      token: token?.trim() ?? '',
     });
   }
 
