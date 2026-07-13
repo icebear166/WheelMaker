@@ -18,6 +18,7 @@ jest.mock('@xterm/xterm', () => ({
     dispose = jest.fn();
     resize = jest.fn();
     scrollLines = jest.fn();
+    clearSelection = jest.fn();
     write = jest.fn((_data: Uint8Array, callback?: () => void) => callback?.());
     dataHandler?: (data: string) => void;
     binaryHandler?: (data: string) => void;
@@ -122,6 +123,19 @@ describe('terminal components', () => {
     act(() => renderer!.unmount());
     expect(xterm.dispose).toHaveBeenCalled();
     expect(MockResizeObserver.instances[0].disconnect).toHaveBeenCalled();
+  });
+
+  test('enables ConPTY compatibility for a Windows terminal', async () => {
+    await act(async () => {
+      TestRenderer.create(
+        <TerminalView active resizeEnabled={false} cols={80} rows={24}
+          shell="C:\\Program Files\\PowerShell\\7\\pwsh.exe" initialCwd="D:\\Code\\WheelMaker"
+          onInput={jest.fn()} onResize={jest.fn()} />,
+        {createNodeMock: terminalHost},
+      );
+    });
+
+    expect(mockTerminalInstances[0].options).toMatchObject({windowsPty: {backend: 'conpty'}});
   });
 
   test('keeps the Hub dimensions when this page does not own resize', async () => {
@@ -244,6 +258,59 @@ describe('terminal components', () => {
     expect(stopPropagation).toHaveBeenCalledTimes(2);
     act(() => renderer!.unmount());
     expect(host.removeEventListener).toHaveBeenCalledWith('touchmove', expect.any(Function));
+  });
+
+  test('uses the rendered xterm cell height when Hub rows exceed the local viewport', async () => {
+    const listeners = new Map<string, (event: any) => void>();
+    const host = {
+      clientHeight: 300,
+      querySelector: jest.fn(() => ({getBoundingClientRect: () => ({height: 600})})),
+      addEventListener: jest.fn((type: string, listener: (event: any) => void) => listeners.set(type, listener)),
+      removeEventListener: jest.fn(),
+    };
+    await act(async () => {
+      TestRenderer.create(
+        <TerminalView active resizeEnabled={false} cols={80} rows={30} onInput={jest.fn()} onResize={jest.fn()} />,
+        {createNodeMock: () => host},
+      );
+    });
+
+    act(() => {
+      listeners.get('touchstart')?.({touches: [{clientX: 40, clientY: 100}]});
+      listeners.get('touchmove')?.({
+        touches: [{clientX: 41, clientY: 60}],
+        preventDefault: jest.fn(),
+        stopPropagation: jest.fn(),
+      });
+    });
+
+    expect(mockTerminalInstances[0].scrollLines.mock.calls).toEqual([[2]]);
+  });
+
+  test('clears accidental text selection when a gesture becomes vertical scrolling', async () => {
+    const listeners = new Map<string, (event: any) => void>();
+    const host = {
+      clientHeight: 300,
+      addEventListener: jest.fn((type: string, listener: (event: any) => void) => listeners.set(type, listener)),
+      removeEventListener: jest.fn(),
+    };
+    await act(async () => {
+      TestRenderer.create(
+        <TerminalView active resizeEnabled={false} cols={80} rows={30} onInput={jest.fn()} onResize={jest.fn()} />,
+        {createNodeMock: () => host},
+      );
+    });
+
+    act(() => {
+      listeners.get('touchstart')?.({touches: [{clientX: 40, clientY: 100}]});
+      listeners.get('touchmove')?.({
+        touches: [{clientX: 42, clientY: 70}],
+        preventDefault: jest.fn(),
+        stopPropagation: jest.fn(),
+      });
+    });
+
+    expect(mockTerminalInstances[0].clearSelection).toHaveBeenCalledTimes(1);
   });
 
   test('leaves horizontal and multi-touch gestures alone', async () => {

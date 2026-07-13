@@ -3,6 +3,7 @@ package terminal
 import (
 	"bytes"
 	"fmt"
+	"runtime"
 	"testing"
 )
 
@@ -33,5 +34,30 @@ func TestXTermScreenKeepsOnlyConfiguredScrollback(t *testing.T) {
 	}
 	if !bytes.Contains(snapshot, []byte("line-10049")) {
 		t.Fatal("snapshot omitted the newest line")
+	}
+}
+
+func TestXTermScreenPreservesHistoryWhenConPTYRepaintsAfterGrowingRows(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("ConPTY compatibility is enabled only on Windows")
+	}
+	screen := newXTermScreen(80, 36)
+	defer screen.Close()
+	for index := 1; index <= 200; index++ {
+		_, _ = screen.Write([]byte(fmt.Sprintf("__WM_LINE_%04d__\r\n", index)))
+	}
+
+	screen.Resize(80, 80)
+	_, _ = screen.Write([]byte("\x1b[?25l\x1b[H"))
+	for index := 166; index <= 200; index++ {
+		_, _ = screen.Write([]byte(fmt.Sprintf("__WM_LINE_%04d__\x1b[K\r\n", index)))
+	}
+
+	snapshot := screen.Snapshot()
+	for index := 1; index <= 200; index++ {
+		marker := []byte(fmt.Sprintf("__WM_LINE_%04d__", index))
+		if !bytes.Contains(snapshot, marker) {
+			t.Fatalf("snapshot lost line %d after ConPTY repaint", index)
+		}
 	}
 }

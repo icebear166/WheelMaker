@@ -71,5 +71,7 @@ describe('terminal workspace integration', () => {
     expect(source).toContain('terminalResizeClaimsRef');
     expect(source).toContain('terminalResizeTokensRef.current.delete(key);');
     expect(source).toContain('claimTerminalResize(key, cols, rows)');
+    expect(source).toContain('shell={activeTerminal.shell}');
+    expect(source).toContain('initialCwd={activeTerminal.initialCwd}');
   });
 });

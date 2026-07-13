@@ -1,6 +1,10 @@
 package terminal
 
-import xterm "github.com/gitpod-io/xterm-go"
+import (
+	"runtime"
+
+	xterm "github.com/gitpod-io/xterm-go"
+)
 
 const terminalScrollbackLines = 10000
 
@@ -17,11 +21,18 @@ type xtermScreen struct {
 }
 
 func newXTermScreen(cols, rows int) Screen {
-	term := xterm.New(
+	options := []xterm.Option{
 		xterm.WithCols(cols),
 		xterm.WithRows(rows),
 		xterm.WithScrollback(terminalScrollbackLines),
-	)
+	}
+	if runtime.GOOS == "windows" {
+		// xterm-go currently enables its ConPTY row-growth protection through
+		// the legacy compatibility branch. This keeps scrollback rows out of the
+		// expanded viewport so ConPTY's subsequent repaint cannot overwrite them.
+		options = append(options, xterm.WithWindowsPty(xterm.WindowsPty{Backend: "conpty", BuildNo: 21375}))
+	}
+	term := xterm.New(options...)
 	return &xtermScreen{
 		term:      term,
 		serialize: xterm.NewSerializeAddon(term),

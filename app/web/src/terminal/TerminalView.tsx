@@ -14,13 +14,15 @@ export type TerminalViewProps = {
   resizeEnabled: boolean;
   cols: number;
   rows: number;
+  shell?: string;
+  initialCwd?: string;
   onInput: (data: Uint8Array) => void;
   onResize: (cols: number, rows: number) => void;
   onAutoResize?: (cols: number, rows: number) => void;
 };
 
 export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(function TerminalView(
-  {active, resizeEnabled, cols, rows, onInput, onResize, onAutoResize},
+  {active, resizeEnabled, cols, rows, shell = '', initialCwd = '', onInput, onResize, onAutoResize},
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -72,6 +74,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+    const windowsTerminal = /^[a-z]:[\\/]/i.test(shell) || /^[a-z]:[\\/]/i.test(initialCwd);
     const terminal = new Terminal({
       scrollback: 10000,
       cols,
@@ -81,6 +84,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       fontFamily: "'JetBrains Mono', Consolas, monospace",
       fontSize: 13,
       theme: {background: '#101214'},
+      ...(windowsTerminal ? {windowsPty: {backend: 'conpty' as const}} : {}),
     });
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
@@ -164,11 +168,13 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
         const deltaY = Math.abs(touch.clientY - touchScroll.startY);
         if (Math.max(deltaX, deltaY) < 6) return;
         touchScroll.axis = deltaY > deltaX ? 'vertical' : 'horizontal';
+        if (touchScroll.axis === 'vertical') terminal.clearSelection();
       }
       if (touchScroll.axis !== 'vertical') return;
       event.preventDefault();
       event.stopPropagation();
-      const rowHeight = container.clientHeight / terminal.rows;
+      const screenHeight = container.querySelector?.('.xterm-screen')?.getBoundingClientRect().height ?? 0;
+      const rowHeight = (screenHeight > 0 ? screenHeight : container.clientHeight) / terminal.rows;
       if (!(rowHeight > 0)) return;
       const pixelDelta = touchScroll.lastY - touch.clientY + touchScroll.remainder;
       touchScroll.lastY = touch.clientY;
