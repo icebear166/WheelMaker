@@ -3,15 +3,11 @@
 package main
 
 import (
-	"os"
 	"strconv"
-	"strings"
 	"unsafe"
 
 	webview2 "github.com/jchv/go-webview2"
 )
-
-const webView2AdditionalBrowserArgumentsEnv = "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"
 
 type webView2Launcher struct{}
 
@@ -19,12 +15,8 @@ func newWebView2Launcher() desktopLauncher {
 	return webView2Launcher{}
 }
 
-func (webView2Launcher) Launch(url string, opts desktopWindowOptions) error {
-	restoreBrowserArguments := applyWebView2AdditionalBrowserArguments(opts)
-	defer restoreBrowserArguments()
-
+func (webView2Launcher) Launch(target desktopLaunchTarget, opts desktopWindowOptions) error {
 	w := webview2.NewWithOptions(webview2.WebViewOptions{
-		Debug:     webView2DebugEnabled(opts),
 		AutoFocus: true,
 		WindowOptions: webview2.WindowOptions{
 			Title:  opts.Title,
@@ -44,20 +36,21 @@ func (webView2Launcher) Launch(url string, opts desktopWindowOptions) error {
 			applyCustomTitleBarFrame(hwnd)
 		}
 		applyDesktopWindowTheme(hwnd, opts.ThemeColor)
-		if err := bindDesktopWindowBridge(w, hwnd, opts.WebSource); err != nil {
+		if err := bindDesktopWindowBridge(w, hwnd); err != nil {
 			return err
 		}
 		w.Init(desktopRuntimeInitScript())
 	}
-	w.Navigate(url)
+	if target.HTML != "" {
+		w.SetHtml(target.HTML)
+	} else {
+		w.Navigate(target.URL)
+	}
 	w.Run()
 	return nil
 }
 
-func bindDesktopWindowBridge(w webview2.WebView, hwnd uintptr, webSource *desktopWebSourceRuntime) error {
-	if webSource == nil {
-		webSource = newEmbeddedOnlyDesktopWebSourceRuntime()
-	}
+func bindDesktopWindowBridge(w webview2.WebView, hwnd uintptr) error {
 	maximizeController := newDesktopMaximizeController(hwnd, win32DesktopWindowOps{})
 	bindings := []struct {
 		name string
@@ -79,26 +72,6 @@ func bindDesktopWindowBridge(w webview2.WebView, hwnd uintptr, webSource *deskto
 			postWindowClose(hwnd)
 			return nil
 		}},
-		{desktopGetWebSourceBinding, func() desktopWebSourceState {
-			return webSource.State()
-		}},
-		{desktopSetWebSourceBinding, func(preference string) (desktopWebSourceState, error) {
-			state, err := webSource.SetPreference(preference)
-			if err == nil {
-				w.SetTitle(state.DisplayTitle)
-			}
-			return state, err
-		}},
-		{desktopSetRemoteWebBinding, func(candidate desktopRemoteWebCandidate) (desktopWebSourceState, error) {
-			state, err := webSource.SetRemoteCandidate(candidate)
-			if err == nil {
-				w.SetTitle(state.DisplayTitle)
-			}
-			return state, err
-		}},
-		{desktopSetRemoteDebugBinding, func(enabled bool) (desktopWebSourceState, error) {
-			return webSource.SetRemoteDebugEnabled(enabled)
-		}},
 	}
 	for _, binding := range bindings {
 		if err := w.Bind(binding.name, binding.fn); err != nil {
@@ -106,53 +79,6 @@ func bindDesktopWindowBridge(w webview2.WebView, hwnd uintptr, webSource *deskto
 		}
 	}
 	return nil
-}
-
-func applyWebView2AdditionalBrowserArguments(opts desktopWindowOptions) func() {
-	remoteDebugArgument := webView2RemoteDebugArgument(opts)
-	if remoteDebugArgument == "" {
-		return func() {}
-	}
-	previous, hadPrevious := os.LookupEnv(webView2AdditionalBrowserArgumentsEnv)
-	next := mergeWebView2AdditionalBrowserArguments(previous, remoteDebugArgument)
-	_ = os.Setenv(webView2AdditionalBrowserArgumentsEnv, next)
-	return func() {
-		if hadPrevious {
-			_ = os.Setenv(webView2AdditionalBrowserArgumentsEnv, previous)
-			return
-		}
-		_ = os.Unsetenv(webView2AdditionalBrowserArgumentsEnv)
-	}
-}
-
-func webView2RemoteDebugArgument(opts desktopWindowOptions) string {
-	if !opts.RemoteDebugEnabled {
-		return ""
-	}
-	port := opts.RemoteDebugPort
-	if port <= 0 {
-		port = desktopRemoteDebugPort
-	}
-	return "--remote-debugging-port=" + strconv.Itoa(port)
-}
-
-func webView2DebugEnabled(opts desktopWindowOptions) bool {
-	return opts.Debug || opts.RemoteDebugEnabled
-}
-
-func mergeWebView2AdditionalBrowserArguments(existing string, extraArgs ...string) string {
-	parts := make([]string, 0, len(extraArgs)+1)
-	if trimmed := strings.TrimSpace(existing); trimmed != "" {
-		parts = append(parts, trimmed)
-	}
-	for _, arg := range extraArgs {
-		trimmed := strings.TrimSpace(arg)
-		if trimmed == "" {
-			continue
-		}
-		parts = append(parts, trimmed)
-	}
-	return strings.Join(parts, " ")
 }
 
 func applyCustomTitleBarFrame(hwnd uintptr) {

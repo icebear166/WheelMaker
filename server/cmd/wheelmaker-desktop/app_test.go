@@ -1,15 +1,16 @@
 package main
 
 import (
+	"context"
 	"errors"
-	"io"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
-	"testing/fstest"
 	"time"
 )
 
@@ -96,745 +97,236 @@ func TestDesktopBaseURLContract(t *testing.T) {
 }
 
 type recordingLauncher struct {
-	url  string
-	opts desktopWindowOptions
-	err  error
+	target desktopLaunchTarget
+	opts   desktopWindowOptions
+	err    error
 }
 
-func (r *recordingLauncher) Launch(url string, opts desktopWindowOptions) error {
-	r.url = url
+func (r *recordingLauncher) Launch(target desktopLaunchTarget, opts desktopWindowOptions) error {
+	r.target = target
 	r.opts = opts
 	return r.err
 }
 
-func TestRunDesktopAppLaunchesStableLoopbackStorageOrigin(t *testing.T) {
-	launcher := &recordingLauncher{}
-	err := runDesktopApp(fstest.MapFS{
-		"index.html": {Data: []byte("<html>desktop</html>")},
-	}, launcher)
-
-	if err != nil {
-		t.Fatalf("runDesktopApp: %v", err)
-	}
-	if launcher.url != "http://127.0.0.1:9632/" {
-		t.Fatalf("url=%q should use stable desktop storage origin", launcher.url)
-	}
+type memoryDesktopConfigStore struct {
+	config desktopConfig
+	err    error
 }
 
-func TestRunDesktopAppLaunchesWithCustomTitleBarAndIcon(t *testing.T) {
-	launcher := &recordingLauncher{}
-	err := runDesktopApp(fstest.MapFS{
-		"index.html": {Data: []byte("<html>desktop</html>")},
-	}, launcher)
-
-	if err != nil {
-		t.Fatalf("runDesktopApp: %v", err)
-	}
-	if launcher.opts.Title != "WheelMaker - Embedded" {
-		t.Fatalf("title=%q, want WheelMaker - Embedded", launcher.opts.Title)
-	}
-	if !launcher.opts.CustomTitleBar {
-		t.Fatal("expected custom title bar to be enabled")
-	}
-	if launcher.opts.IconID != desktopResourceIconID {
-		t.Fatalf("IconID=%d, want %d", launcher.opts.IconID, desktopResourceIconID)
-	}
-	if launcher.opts.ThemeColor != desktopTitleBarThemeColor {
-		t.Fatalf("ThemeColor=%q, want %q", launcher.opts.ThemeColor, desktopTitleBarThemeColor)
-	}
-	if launcher.opts.RemoteDebugEnabled {
-		t.Fatal("remote debug should be disabled by default")
-	}
-}
-
-func TestDesktopWindowOptionsUseRemoteDebugConfig(t *testing.T) {
-	runtime := newDesktopWebSourceRuntime(&memoryDesktopWebSourceConfigStore{config: desktopWebSourceConfig{
-		WebSourcePreference: desktopWebSourcePreferenceAuto,
-		RemoteDebugEnabled:  true,
-	}}, nil)
-
-	opts := desktopWindowOptionsForWebSource(runtime)
-
-	if !opts.RemoteDebugEnabled {
-		t.Fatal("expected remote debug launch option to be enabled")
-	}
-	if opts.RemoteDebugPort != desktopRemoteDebugPort {
-		t.Fatalf("RemoteDebugPort=%d, want %d", opts.RemoteDebugPort, desktopRemoteDebugPort)
-	}
-}
-
-func TestRunDesktopAppReturnsActionableWebViewError(t *testing.T) {
-	launcher := &recordingLauncher{err: errWebView2Unavailable}
-	err := runDesktopApp(fstest.MapFS{
-		"index.html": {Data: []byte("<html>desktop</html>")},
-	}, launcher)
-
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	if !strings.Contains(err.Error(), "Microsoft Edge WebView2 Runtime") {
-		t.Fatalf("error=%q should mention WebView2 runtime", err.Error())
-	}
-}
-
-func TestRunDesktopAppReportsMissingIndex(t *testing.T) {
-	launcher := &recordingLauncher{}
-	err := runDesktopApp(fstest.MapFS{}, launcher)
-
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	if !errors.Is(err, fs.ErrNotExist) {
-		t.Fatalf("error=%v should wrap fs.ErrNotExist", err)
-	}
-}
-
-func TestDesktopRuntimeInitScriptExposesWindowBridge(t *testing.T) {
-	script := desktopRuntimeInitScript()
-
-	for _, want := range []string{
-		"window.WheelMakerDesktop",
-		"enabled: true",
-		desktopStartDragBinding,
-		desktopMinimizeBinding,
-		desktopToggleMaximizeBinding,
-		desktopCloseBinding,
-		desktopGetWebSourceBinding,
-		desktopSetWebSourceBinding,
-		desktopSetRemoteWebBinding,
-		desktopSetRemoteDebugBinding,
-	} {
-		if !strings.Contains(script, want) {
-			t.Fatalf("desktop runtime init script missing %q: %s", want, script)
-		}
-	}
-}
-
-func TestDesktopAssetHandlerServesRootIndex(t *testing.T) {
-	handler := newDesktopAssetHandler(fstest.MapFS{
-		"index.html": {Data: []byte("<html>WheelMaker</html>")},
-	})
-
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status=%d want %d", rec.Code, http.StatusOK)
-	}
-	if !strings.Contains(rec.Body.String(), "WheelMaker") {
-		t.Fatalf("body=%q should include index content", rec.Body.String())
-	}
-	if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "text/html") {
-		t.Fatalf("Content-Type=%q should be text/html", got)
-	}
-}
-
-func TestDesktopAssetHandlerServesStaticAsset(t *testing.T) {
-	handler := newDesktopAssetHandler(fstest.MapFS{
-		"index.html": {Data: []byte("<html></html>")},
-		"bundle.js":  {Data: []byte("console.log('wm')")},
-	})
-
-	req := httptest.NewRequest(http.MethodGet, "/bundle.js", nil)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status=%d want %d", rec.Code, http.StatusOK)
-	}
-	if got := rec.Body.String(); got != "console.log('wm')" {
-		t.Fatalf("body=%q", got)
-	}
-}
-
-func TestDesktopAssetHandlerSetsFreshWebCacheHeaders(t *testing.T) {
-	handler := newDesktopAssetHandler(fstest.MapFS{
-		"index.html":              {Data: []byte("<html></html>")},
-		"service-worker.js":       {Data: []byte("self.addEventListener('install', () => {})")},
-		"manifest.webmanifest":    {Data: []byte(`{"name":"real manifest"}`)},
-		"bundle.abc123.js":        {Data: []byte("console.log('wm')")},
-		"font.abc123.woff2":       {Data: []byte("font")},
-		"codicon.abc123.ttf":      {Data: []byte("font")},
-		"legacy.abc123.eot":       {Data: []byte("font")},
-		"unexpected.abc123.asset": {Data: []byte("asset")},
-	})
-
-	tests := []struct {
-		path string
-		want string
-	}{
-		{path: "/", want: "no-cache, must-revalidate"},
-		{path: "/index.html", want: "no-cache, must-revalidate"},
-		{path: "/service-worker.js", want: "no-store"},
-		{path: "/manifest.webmanifest", want: "no-store"},
-		{path: "/bundle.abc123.js", want: "public, max-age=31536000, immutable"},
-		{path: "/font.abc123.woff2", want: "public, max-age=31536000, immutable"},
-		{path: "/codicon.abc123.ttf", want: "public, max-age=31536000, immutable"},
-		{path: "/legacy.abc123.eot", want: "public, max-age=31536000, immutable"},
-		{path: "/unexpected.abc123.asset", want: "public, max-age=31536000, immutable"},
-	}
-
-	for _, tt := range tests {
-		req := httptest.NewRequest(http.MethodGet, tt.path, nil)
-		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, req)
-		if got := rec.Header().Get("Cache-Control"); got != tt.want {
-			t.Fatalf("%s Cache-Control=%q want %q", tt.path, got, tt.want)
-		}
-	}
-}
-
-func TestDesktopAssetHandlerServesNativeShellPWAStubs(t *testing.T) {
-	handler := newDesktopAssetHandler(fstest.MapFS{
-		"index.html":           {Data: []byte("<html></html>")},
-		"service-worker.js":    {Data: []byte("self.addEventListener('install', () => {})")},
-		"manifest.webmanifest": {Data: []byte(`{"name":"real manifest"}`)},
-	})
-
-	tests := []struct {
-		path        string
-		contentType string
-		body        string
-	}{
-		{path: "/service-worker.js", contentType: "application/javascript", body: "disabled"},
-		{path: "/manifest.webmanifest", contentType: "application/manifest+json", body: `"icons":[]`},
-	}
-
-	for _, tt := range tests {
-		req := httptest.NewRequest(http.MethodGet, tt.path, nil)
-		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, req)
-		if rec.Code != http.StatusOK {
-			t.Fatalf("%s status=%d want %d", tt.path, rec.Code, http.StatusOK)
-		}
-		if got := rec.Header().Get("Content-Type"); got != tt.contentType {
-			t.Fatalf("%s Content-Type=%q want %q", tt.path, got, tt.contentType)
-		}
-		if got := rec.Header().Get("Cache-Control"); got != "no-store" {
-			t.Fatalf("%s Cache-Control=%q want no-store", tt.path, got)
-		}
-		if got := rec.Body.String(); !strings.Contains(got, tt.body) {
-			t.Fatalf("%s body=%q should contain %q", tt.path, got, tt.body)
-		}
-	}
-}
-
-func TestDesktopAssetHandlerFallsBackToIndexForWorkspaceRoute(t *testing.T) {
-	handler := newDesktopAssetHandler(fstest.MapFS{
-		"index.html": {Data: []byte("<html>shell</html>")},
-	})
-
-	req := httptest.NewRequest(http.MethodGet, "/settings/skills", nil)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status=%d want %d", rec.Code, http.StatusOK)
-	}
-	if got := rec.Body.String(); !strings.Contains(got, "shell") {
-		t.Fatalf("body=%q should be index fallback", got)
-	}
-}
-
-func TestDesktopAssetHandlerDoesNotFallbackForMissingFileAsset(t *testing.T) {
-	handler := newDesktopAssetHandler(fstest.MapFS{
-		"index.html": {Data: []byte("<html>shell</html>")},
-	})
-
-	req := httptest.NewRequest(http.MethodGet, "/missing.js", nil)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("status=%d want %d", rec.Code, http.StatusNotFound)
-	}
-}
-
-func TestDesktopAssetHandlerDoesNotFallbackForRegistryWebSocketPath(t *testing.T) {
-	handler := newDesktopAssetHandler(fstest.MapFS{
-		"index.html": {Data: []byte("<html>shell</html>")},
-	})
-
-	req := httptest.NewRequest(http.MethodGet, "/ws", nil)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("status=%d want %d", rec.Code, http.StatusNotFound)
-	}
-}
-
-func TestStartDesktopAssetServerUsesLoopback(t *testing.T) {
-	srv, err := startDesktopAssetServer(fstest.MapFS{
-		"index.html": {Data: []byte("<html>loopback</html>")},
-	})
-	if err != nil {
-		t.Fatalf("startDesktopAssetServer: %v", err)
-	}
-	defer srv.Close()
-
-	resp, err := http.Get(srv.URL())
-	if err != nil {
-		t.Fatalf("GET server root: %v", err)
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("ReadAll: %v", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status=%d want %d", resp.StatusCode, http.StatusOK)
-	}
-	if !strings.Contains(string(body), "loopback") {
-		t.Fatalf("body=%q should include embedded index", string(body))
-	}
-	if srv.URL() != "http://127.0.0.1:9632/" {
-		t.Fatalf("url=%q should use stable desktop storage origin", srv.URL())
-	}
-}
-
-type memoryDesktopWebSourceConfigStore struct {
-	config desktopWebSourceConfig
-	saved  desktopWebSourceConfig
-}
-
-func (s *memoryDesktopWebSourceConfigStore) Load() (desktopWebSourceConfig, error) {
-	return s.config, nil
-}
-
-func (s *memoryDesktopWebSourceConfigStore) Save(config desktopWebSourceConfig) error {
-	s.saved = config
+func (s *memoryDesktopConfigStore) Load() (desktopConfig, error) { return s.config, s.err }
+func (s *memoryDesktopConfigStore) Save(config desktopConfig) error {
 	s.config = config
-	return nil
+	return s.err
 }
 
-func TestDesktopWebSourceCandidateReplacesRemoteForSecureRegistry(t *testing.T) {
-	store := &memoryDesktopWebSourceConfigStore{config: desktopWebSourceConfig{
-		WebSourcePreference:     desktopWebSourcePreferenceAuto,
-		RemoteWebURL:            "https://old.example.com/",
-		RemoteWebRegistryOrigin: "wss://old.example.com",
-	}}
-	runtime := newDesktopWebSourceRuntime(store, nil)
-	runtime.SetActualSource(desktopWebSourceActualEmbedded)
+type recordingDesktopProber struct {
+	url string
+	err error
+}
 
-	state, err := runtime.SetRemoteCandidate(desktopRemoteWebCandidate{
-		RegistryAddress: "wss://new.example.com/ws",
-		RemoteWebURL:    "https://new.example.com/",
-	})
+func (p *recordingDesktopProber) Probe(_ context.Context, baseURL string) error {
+	p.url = baseURL
+	return p.err
+}
+
+func TestDesktopBootstrapLaunchWithoutConfig(t *testing.T) {
+	launcher := &recordingLauncher{}
+	prober := &recordingDesktopProber{}
+	err := runDesktopApp(context.Background(), launcher, &memoryDesktopConfigStore{}, prober)
 	if err != nil {
-		t.Fatalf("SetRemoteCandidate: %v", err)
+		t.Fatalf("runDesktopApp: %v", err)
 	}
-
-	if store.saved.RemoteWebURL != "https://new.example.com/" {
-		t.Fatalf("RemoteWebURL=%q", store.saved.RemoteWebURL)
+	if launcher.target.HTML != desktopBootstrapHTML || launcher.target.URL != "" {
+		t.Fatalf("target=%+v, want embedded Bootstrap HTML", launcher.target)
 	}
-	if store.saved.RemoteWebRegistryOrigin != "wss://new.example.com" {
-		t.Fatalf("RemoteWebRegistryOrigin=%q", store.saved.RemoteWebRegistryOrigin)
+	if prober.url != "" {
+		t.Fatalf("unexpected probe for empty configuration: %q", prober.url)
 	}
-	if state.RemoteHost != "new.example.com" {
-		t.Fatalf("RemoteHost=%q", state.RemoteHost)
-	}
-	if state.ActualSource != desktopWebSourceActualEmbedded {
-		t.Fatalf("ActualSource=%q should not change current window source", state.ActualSource)
+	if launcher.opts.BootstrapState.BaseURL != "" || launcher.opts.BootstrapState.Error != "" {
+		t.Fatalf("bootstrap state=%+v", launcher.opts.BootstrapState)
 	}
 }
 
-func TestDesktopWebSourceCandidateAcceptsPublicPlainHTTPRegistry(t *testing.T) {
-	store := &memoryDesktopWebSourceConfigStore{config: desktopWebSourceConfig{
-		WebSourcePreference: desktopWebSourcePreferenceAuto,
-	}}
-	runtime := newDesktopWebSourceRuntime(store, nil)
+func TestDesktopRemoteLaunchAfterTLSProbe(t *testing.T) {
+	launcher := &recordingLauncher{}
+	prober := &recordingDesktopProber{}
+	store := &memoryDesktopConfigStore{config: desktopConfig{BaseURL: "https://example.com/app"}}
 
-	state, err := runtime.SetRemoteCandidate(desktopRemoteWebCandidate{
-		RegistryAddress: "ws://47.86.63.26:28800/ws",
-		RemoteWebURL:    "http://47.86.63.26:28800/",
-	})
+	if err := runDesktopApp(context.Background(), launcher, store, prober); err != nil {
+		t.Fatalf("runDesktopApp: %v", err)
+	}
+	if prober.url != "https://example.com/app/" {
+		t.Fatalf("probe URL=%q", prober.url)
+	}
+	if launcher.target.URL != "https://example.com/app/" || launcher.target.HTML != "" {
+		t.Fatalf("target=%+v, want direct remote URL", launcher.target)
+	}
+	if store.config.BaseURL != "https://example.com/app/" {
+		t.Fatalf("stored base URL=%q, want normalized value", store.config.BaseURL)
+	}
+}
+
+func TestDesktopRemoteProbeFailureShowsBootstrapState(t *testing.T) {
+	launcher := &recordingLauncher{}
+	prober := &recordingDesktopProber{err: errors.New("certificate is not trusted")}
+	store := &memoryDesktopConfigStore{config: desktopConfig{BaseURL: "https://example.com/app/"}}
+
+	if err := runDesktopApp(context.Background(), launcher, store, prober); err != nil {
+		t.Fatalf("runDesktopApp: %v", err)
+	}
+	if launcher.target.HTML != desktopBootstrapHTML || launcher.target.URL != "" {
+		t.Fatalf("target=%+v, want Bootstrap error state", launcher.target)
+	}
+	if launcher.opts.BootstrapState.BaseURL != store.config.BaseURL {
+		t.Fatalf("bootstrap base URL=%q", launcher.opts.BootstrapState.BaseURL)
+	}
+	if !strings.Contains(launcher.opts.BootstrapState.Error, "certificate is not trusted") {
+		t.Fatalf("bootstrap error=%q", launcher.opts.BootstrapState.Error)
+	}
+}
+
+func TestDesktopRemoteProbeRejectsBadStatusAndUntrustedCertificate(t *testing.T) {
+	notFound := httptest.NewTLSServer(http.NotFoundHandler())
+	defer notFound.Close()
+	trustedTestClient := notFound.Client()
+	trustedTestClient.Timeout = 3 * time.Second
+	if err := (&httpDesktopBaseURLProber{client: trustedTestClient}).Probe(context.Background(), notFound.URL+"/"); err == nil {
+		t.Fatal("expected non-2xx/3xx status rejection")
+	}
+
+	untrusted := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer untrusted.Close()
+	if err := newDefaultDesktopBaseURLProber().Probe(context.Background(), untrusted.URL+"/"); err == nil {
+		t.Fatal("expected system trust validation to reject the test certificate")
+	}
+}
+
+func TestDesktopBaseURLProbeClientPolicy(t *testing.T) {
+	client := newDesktopProbeHTTPClient()
+	if client.Timeout != 3*time.Second {
+		t.Fatalf("timeout=%s, want 3s", client.Timeout)
+	}
+
+	request, err := http.NewRequest(http.MethodGet, "https://example.com/app/", nil)
 	if err != nil {
-		t.Fatalf("SetRemoteCandidate: %v", err)
+		t.Fatal(err)
 	}
-
-	if store.saved.RemoteWebURL != "http://47.86.63.26:28800/" {
-		t.Fatalf("RemoteWebURL=%q", store.saved.RemoteWebURL)
-	}
-	if store.saved.RemoteWebRegistryOrigin != "ws://47.86.63.26:28800" {
-		t.Fatalf("RemoteWebRegistryOrigin=%q", store.saved.RemoteWebRegistryOrigin)
-	}
-	if state.RemoteHost != "47.86.63.26:28800" {
-		t.Fatalf("RemoteHost=%q", state.RemoteHost)
-	}
-}
-
-func TestDesktopAssetHandlerDoesNotUseNewRemoteCandidateUntilActualSourceChanges(t *testing.T) {
-	remoteHits := 0
-	remote := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		remoteHits++
-		_, _ = io.WriteString(w, "console.log('remote')")
-	}))
-	defer remote.Close()
-
-	runtime := newDesktopWebSourceRuntime(&memoryDesktopWebSourceConfigStore{config: desktopWebSourceConfig{
-		WebSourcePreference: desktopWebSourcePreferenceAuto,
-	}}, remote.Client())
-	runtime.mu.Lock()
-	runtime.config.RemoteWebURL = remote.URL + "/"
-	runtime.actual = desktopWebSourceActualEmbedded
-	runtime.actualRemoteURL = ""
-	runtime.mu.Unlock()
-
-	handler := newDesktopAssetHandlerWithWebSource(fstest.MapFS{
-		"index.html": {Data: []byte("<html>embedded</html>")},
-		"bundle.js":  {Data: []byte("console.log('embedded')")},
-	}, runtime)
-
-	req := httptest.NewRequest(http.MethodGet, "/bundle.js", nil)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	if got := rec.Body.String(); got != "console.log('embedded')" {
-		t.Fatalf("body=%q", got)
-	}
-	if remoteHits != 0 {
-		t.Fatalf("remoteHits=%d, want 0", remoteHits)
-	}
-}
-
-func TestDesktopWebSourceCandidateClearsRemoteForLocalRegistry(t *testing.T) {
-	store := &memoryDesktopWebSourceConfigStore{config: desktopWebSourceConfig{
-		WebSourcePreference:     desktopWebSourcePreferenceAuto,
-		RemoteWebURL:            "https://old.example.com/",
-		RemoteWebRegistryOrigin: "wss://old.example.com",
-	}}
-	runtime := newDesktopWebSourceRuntime(store, nil)
-	runtime.SetActualSource(desktopWebSourceActualEmbedded)
-
-	state, err := runtime.SetRemoteCandidate(desktopRemoteWebCandidate{
-		RegistryAddress: "ws://127.0.0.1:9630/ws",
-		RemoteWebURL:    "",
-	})
-	if err != nil {
-		t.Fatalf("SetRemoteCandidate: %v", err)
-	}
-
-	if store.saved.RemoteWebURL != "" {
-		t.Fatalf("RemoteWebURL=%q, want cleared", store.saved.RemoteWebURL)
-	}
-	if store.saved.RemoteWebRegistryOrigin != "" {
-		t.Fatalf("RemoteWebRegistryOrigin=%q, want cleared", store.saved.RemoteWebRegistryOrigin)
-	}
-	if state.ActualSource != desktopWebSourceActualEmbedded {
-		t.Fatalf("ActualSource=%q", state.ActualSource)
-	}
-}
-
-func TestDesktopWebSourcePreferencePersistsWithoutClearingRemoteURL(t *testing.T) {
-	store := &memoryDesktopWebSourceConfigStore{config: desktopWebSourceConfig{
-		WebSourcePreference:     desktopWebSourcePreferenceAuto,
-		RemoteWebURL:            "https://remote.example.com/",
-		RemoteWebRegistryOrigin: "wss://remote.example.com",
-	}}
-	runtime := newDesktopWebSourceRuntime(store, nil)
-
-	state, err := runtime.SetPreference(desktopWebSourcePreferenceEmbedded)
-	if err != nil {
-		t.Fatalf("SetPreference: %v", err)
-	}
-
-	if store.saved.WebSourcePreference != desktopWebSourcePreferenceEmbedded {
-		t.Fatalf("WebSourcePreference=%q", store.saved.WebSourcePreference)
-	}
-	if store.saved.RemoteWebURL != "https://remote.example.com/" {
-		t.Fatalf("RemoteWebURL=%q should be retained", store.saved.RemoteWebURL)
-	}
-	if state.Preference != desktopWebSourcePreferenceEmbedded {
-		t.Fatalf("Preference=%q", state.Preference)
-	}
-	if state.ActualSource != desktopWebSourceActualEmbedded {
-		t.Fatalf("ActualSource=%q", state.ActualSource)
-	}
-}
-
-func TestDesktopRemoteDebugSettingPersistsAndReturnsStatus(t *testing.T) {
-	store := &memoryDesktopWebSourceConfigStore{config: desktopWebSourceConfig{
-		WebSourcePreference: desktopWebSourcePreferenceAuto,
-	}}
-	runtime := newDesktopWebSourceRuntime(store, nil)
-
-	state, err := runtime.SetRemoteDebugEnabled(true)
-	if err != nil {
-		t.Fatalf("SetRemoteDebugEnabled: %v", err)
-	}
-
-	if !store.saved.RemoteDebugEnabled {
-		t.Fatal("RemoteDebugEnabled should be persisted")
-	}
-	if !state.RemoteDebugEnabled {
-		t.Fatal("RemoteDebugEnabled should be reflected in state")
-	}
-	if state.RemoteDebugPort != desktopRemoteDebugPort {
-		t.Fatalf("RemoteDebugPort=%d, want %d", state.RemoteDebugPort, desktopRemoteDebugPort)
-	}
-	if state.RemoteDebugURL != "http://127.0.0.1:9222/" {
-		t.Fatalf("RemoteDebugURL=%q", state.RemoteDebugURL)
-	}
-}
-
-func TestDesktopWebSourceRefreshActualSourceUsesEmbeddedWhenRemoteFails(t *testing.T) {
-	remote := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "remote down", http.StatusInternalServerError)
-	}))
-	defer remote.Close()
-
-	runtime := newDesktopWebSourceRuntime(&memoryDesktopWebSourceConfigStore{config: desktopWebSourceConfig{
-		WebSourcePreference: desktopWebSourcePreferenceAuto,
-	}}, remote.Client())
-	runtime.mu.Lock()
-	runtime.config.WebSourcePreference = desktopWebSourcePreferenceAuto
-	runtime.config.RemoteWebURL = remote.URL + "/"
-	runtime.actual = desktopWebSourceActualRemote
-	runtime.actualRemoteURL = remote.URL + "/"
-	runtime.mu.Unlock()
-
-	state := runtime.RefreshActualSource()
-
-	if state.ActualSource != desktopWebSourceActualEmbedded {
-		t.Fatalf("ActualSource=%q", state.ActualSource)
-	}
-	if state.DisplayTitle != "WheelMaker - Embedded" {
-		t.Fatalf("DisplayTitle=%q", state.DisplayTitle)
-	}
-}
-
-func TestDesktopAssetHandlerKeepsRemoteSourceWhenRemoteAssetFails(t *testing.T) {
-	remoteFails := false
-	remote := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if remoteFails {
-			http.Error(w, "remote down", http.StatusInternalServerError)
-			return
+	for hop, target := range []string{
+		"https://example.com/next/",
+		"http://example.com/downgrade/",
+		"https://example.com/too-many/",
+	} {
+		next, err := http.NewRequest(http.MethodGet, target, nil)
+		if err != nil {
+			t.Fatal(err)
 		}
-		if r.URL.Path == "/bundle.js" {
-			w.Header().Set("Content-Type", "application/javascript")
-			_, _ = io.WriteString(w, "console.log('remote')")
-			return
+		via := make([]*http.Request, hop)
+		for index := range via {
+			via[index] = request
 		}
-		http.NotFound(w, r)
-	}))
-	defer remote.Close()
-
-	runtime := newDesktopWebSourceRuntime(&memoryDesktopWebSourceConfigStore{config: desktopWebSourceConfig{
-		WebSourcePreference: desktopWebSourcePreferenceAuto,
-		RemoteWebURL:        remote.URL + "/",
-	}}, remote.Client())
-	runtime.mu.Lock()
-	runtime.config.WebSourcePreference = desktopWebSourcePreferenceAuto
-	runtime.config.RemoteWebURL = remote.URL + "/"
-	runtime.actual = desktopWebSourceActualRemote
-	runtime.actualRemoteURL = remote.URL + "/"
-	runtime.mu.Unlock()
-	handler := newDesktopAssetHandlerWithWebSource(fstest.MapFS{
-		"index.html": {Data: []byte("<html>embedded</html>")},
-		"bundle.js":  {Data: []byte("console.log('embedded')")},
-	}, runtime)
-
-	req := httptest.NewRequest(http.MethodGet, "/bundle.js", nil)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-	if got := rec.Body.String(); got != "console.log('remote')" {
-		t.Fatalf("remote body=%q", got)
-	}
-	if runtime.State().ActualSource != desktopWebSourceActualRemote {
-		t.Fatalf("ActualSource=%q", runtime.State().ActualSource)
-	}
-
-	remoteFails = true
-	rec = httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("status=%d want %d body=%q", rec.Code, http.StatusNotFound, rec.Body.String())
-	}
-	if strings.Contains(rec.Body.String(), "embedded") {
-		t.Fatalf("body=%q should not include embedded fallback", rec.Body.String())
-	}
-	if runtime.State().ActualSource != desktopWebSourceActualRemote {
-		t.Fatalf("ActualSource=%q", runtime.State().ActualSource)
-	}
-}
-
-func TestDesktopAssetHandlerDoesNotApplyProbeTimeoutToRemoteAssetDownloads(t *testing.T) {
-	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/bundle.js" {
-			http.NotFound(w, r)
-			return
-		}
-		time.Sleep(75 * time.Millisecond)
-		w.Header().Set("Content-Type", "application/javascript")
-		_, _ = io.WriteString(w, "console.log('remote delayed')")
-	}))
-	defer remote.Close()
-
-	client := remote.Client()
-	client.Timeout = 50 * time.Millisecond
-	runtime := newDesktopWebSourceRuntime(&memoryDesktopWebSourceConfigStore{config: desktopWebSourceConfig{
-		WebSourcePreference: desktopWebSourcePreferenceAuto,
-	}}, client)
-	runtime.mu.Lock()
-	runtime.config.WebSourcePreference = desktopWebSourcePreferenceAuto
-	runtime.config.RemoteWebURL = remote.URL + "/"
-	runtime.actual = desktopWebSourceActualRemote
-	runtime.actualRemoteURL = remote.URL + "/"
-	runtime.mu.Unlock()
-	handler := newDesktopAssetHandlerWithWebSource(fstest.MapFS{
-		"index.html": {Data: []byte("<html>embedded</html>")},
-		"bundle.js":  {Data: []byte("console.log('embedded')")},
-	}, runtime)
-
-	req := httptest.NewRequest(http.MethodGet, "/bundle.js", nil)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status=%d want %d body=%q", rec.Code, http.StatusOK, rec.Body.String())
-	}
-	if got := rec.Body.String(); got != "console.log('remote delayed')" {
-		t.Fatalf("body=%q", got)
-	}
-	if runtime.State().ActualSource != desktopWebSourceActualRemote {
-		t.Fatalf("ActualSource=%q", runtime.State().ActualSource)
-	}
-}
-
-func TestDesktopAssetHandlerRemoteResponsesUseClientFreshnessHeaders(t *testing.T) {
-	var pwaAssetRemoteRequests int
-	remote := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/", "/index.html":
-			w.Header().Set("Cache-Control", "public, max-age=31536000")
-			_, _ = io.WriteString(w, "<html>remote shell</html>")
-		case "/service-worker.js", "/manifest.webmanifest":
-			pwaAssetRemoteRequests++
-			http.Error(w, "native shell should not request this asset", http.StatusInternalServerError)
-		case "/bundle.abc123.js", "/bundle.abc123.css", "/font.abc123.woff2", "/codicon.abc123.ttf", "/logo.svg", "/misc.txt":
-			w.Header().Set("Cache-Control", "no-store")
-			_, _ = io.WriteString(w, "remote asset")
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer remote.Close()
-
-	runtime := newDesktopWebSourceRuntime(&memoryDesktopWebSourceConfigStore{config: desktopWebSourceConfig{
-		WebSourcePreference: desktopWebSourcePreferenceAuto,
-	}}, remote.Client())
-	runtime.mu.Lock()
-	runtime.config.WebSourcePreference = desktopWebSourcePreferenceAuto
-	runtime.config.RemoteWebURL = remote.URL + "/"
-	runtime.actual = desktopWebSourceActualRemote
-	runtime.actualRemoteURL = remote.URL + "/"
-	runtime.mu.Unlock()
-	handler := newDesktopAssetHandlerWithWebSource(fstest.MapFS{
-		"index.html": {Data: []byte("<html>embedded</html>")},
-	}, runtime)
-
-	tests := []struct {
-		path       string
-		cache      string
-		wantPragma bool
-	}{
-		{path: "/", cache: "no-cache, must-revalidate", wantPragma: true},
-		{path: "/index.html", cache: "no-cache, must-revalidate", wantPragma: true},
-		{path: "/service-worker.js", cache: "no-store", wantPragma: true},
-		{path: "/manifest.webmanifest", cache: "no-store", wantPragma: true},
-		{path: "/bundle.abc123.js", cache: "public, max-age=31536000, immutable"},
-		{path: "/bundle.abc123.css", cache: "public, max-age=31536000, immutable"},
-		{path: "/font.abc123.woff2", cache: "public, max-age=31536000, immutable"},
-		{path: "/codicon.abc123.ttf", cache: "public, max-age=31536000, immutable"},
-		{path: "/logo.svg", cache: "public, max-age=31536000, immutable"},
-		{path: "/misc.txt", cache: "public, max-age=31536000, immutable"},
-	}
-
-	for _, tt := range tests {
-		req := httptest.NewRequest(http.MethodGet, tt.path, nil)
-		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, req)
-		if got := rec.Header().Get("Cache-Control"); got != tt.cache {
-			t.Fatalf("%s Cache-Control=%q want %q", tt.path, got, tt.cache)
-		}
-		if tt.wantPragma {
-			if got := rec.Header().Get("Pragma"); got != "no-cache" {
-				t.Fatalf("%s Pragma=%q want no-cache", tt.path, got)
+		err = client.CheckRedirect(next, via)
+		switch hop {
+		case 0:
+			if err != nil {
+				t.Fatalf("HTTPS redirect rejected: %v", err)
 			}
-			if got := rec.Header().Get("Expires"); got != "0" {
-				t.Fatalf("%s Expires=%q want 0", tt.path, got)
+		case 1:
+			if err == nil {
+				t.Fatal("HTTP downgrade redirect was accepted")
+			}
+		case 2:
+			// Replace the synthetic redirect history with five completed hops.
+			via = make([]*http.Request, 6)
+			for index := range via {
+				via[index] = request
+			}
+			if err := client.CheckRedirect(next, via); err == nil {
+				t.Fatal("sixth redirect was accepted")
 			}
 		}
 	}
-	if pwaAssetRemoteRequests != 0 {
-		t.Fatalf("native shell PWA assets reached remote server %d times", pwaAssetRemoteRequests)
-	}
 }
 
-func TestDesktopAssetHandlerFallsBackToRemoteIndexForWorkspaceRoute(t *testing.T) {
-	remote := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/index.html" || r.URL.Path == "/" {
-			_, _ = io.WriteString(w, "<html>remote shell</html>")
-			return
+func TestDesktopConfigStoreUsesPrivateAtomicBaseURLFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".wheelmaker", "desktop", "config.json")
+	store := newFileDesktopConfigStore(path)
+	want := desktopConfig{BaseURL: "https://example.com/app/"}
+	if err := store.Save(want); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	if string(raw) != "{\"baseUrl\":\"https://example.com/app/\"}\n" {
+		t.Fatalf("config=%q, want only baseUrl", raw)
+	}
+	got, err := store.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got != want {
+		t.Fatalf("Load=%+v, want %+v", got, want)
+	}
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
 		}
-		http.NotFound(w, r)
-	}))
-	defer remote.Close()
-
-	runtime := newDesktopWebSourceRuntime(&memoryDesktopWebSourceConfigStore{config: desktopWebSourceConfig{
-		WebSourcePreference: desktopWebSourcePreferenceAuto,
-	}}, remote.Client())
-	runtime.mu.Lock()
-	runtime.config.WebSourcePreference = desktopWebSourcePreferenceAuto
-	runtime.config.RemoteWebURL = remote.URL + "/"
-	runtime.actual = desktopWebSourceActualRemote
-	runtime.actualRemoteURL = remote.URL + "/"
-	runtime.mu.Unlock()
-	handler := newDesktopAssetHandlerWithWebSource(fstest.MapFS{
-		"index.html": {Data: []byte("<html>embedded shell</html>")},
-	}, runtime)
-
-	req := httptest.NewRequest(http.MethodGet, "/settings/update", nil)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	if got := rec.Body.String(); !strings.Contains(got, "remote shell") {
-		t.Fatalf("body=%q should use remote shell fallback", got)
+		if info.Mode().Perm() != 0o600 {
+			t.Fatalf("config mode=%#o, want 0600", info.Mode().Perm())
+		}
 	}
 }
 
-func TestDesktopAssetHandlerDoesNotFallbackToEmbeddedIndexForRemoteWorkspaceRoute(t *testing.T) {
-	remote := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.NotFound(w, r)
-	}))
-	defer remote.Close()
-
-	runtime := newDesktopWebSourceRuntime(&memoryDesktopWebSourceConfigStore{config: desktopWebSourceConfig{
-		WebSourcePreference: desktopWebSourcePreferenceAuto,
-	}}, remote.Client())
-	runtime.mu.Lock()
-	runtime.config.WebSourcePreference = desktopWebSourcePreferenceAuto
-	runtime.config.RemoteWebURL = remote.URL + "/"
-	runtime.actual = desktopWebSourceActualRemote
-	runtime.actualRemoteURL = remote.URL + "/"
-	runtime.mu.Unlock()
-	handler := newDesktopAssetHandlerWithWebSource(fstest.MapFS{
-		"index.html": {Data: []byte("<html>embedded shell</html>")},
-	}, runtime)
-
-	req := httptest.NewRequest(http.MethodGet, "/settings/update", nil)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("status=%d want %d body=%q", rec.Code, http.StatusNotFound, rec.Body.String())
+func TestDesktopConfigMissingFileLoadsEmpty(t *testing.T) {
+	store := newFileDesktopConfigStore(filepath.Join(t.TempDir(), "missing", "config.json"))
+	got, err := store.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
 	}
-	if strings.Contains(rec.Body.String(), "embedded shell") {
-		t.Fatalf("body=%q should not include embedded fallback", rec.Body.String())
+	if got != (desktopConfig{}) {
+		t.Fatalf("Load=%+v, want empty config", got)
 	}
-	if runtime.State().ActualSource != desktopWebSourceActualRemote {
-		t.Fatalf("ActualSource=%q", runtime.State().ActualSource)
+}
+
+func TestDesktopNoAssetServerSource(t *testing.T) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var source strings.Builder
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		body, err := os.ReadFile(entry.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		source.Write(body)
+	}
+	for _, forbidden := range []string{
+		"ListenAndServe",
+		":9632",
+		"webSourcePreference",
+		"RemoteWebURL",
+	} {
+		if strings.Contains(source.String(), forbidden) {
+			t.Errorf("desktop production source still contains %q", forbidden)
+		}
+	}
+	for _, removed := range []string{"assets.go", "server.go", "web_source.go"} {
+		if _, err := os.Stat(removed); !errors.Is(err, fs.ErrNotExist) {
+			t.Errorf("legacy source %s still exists", removed)
+		}
+	}
+}
+
+func TestDesktopBootstrapLaunchReturnsActionableWebViewError(t *testing.T) {
+	launcher := &recordingLauncher{err: errWebView2Unavailable}
+	err := runDesktopApp(context.Background(), launcher, &memoryDesktopConfigStore{}, &recordingDesktopProber{})
+	if err == nil || !strings.Contains(err.Error(), "Microsoft Edge WebView2 Runtime") {
+		t.Fatalf("error=%v should mention WebView2 runtime", err)
 	}
 }

@@ -1,47 +1,73 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 )
 
 var errWebView2Unavailable = errors.New("Microsoft Edge WebView2 Runtime is required to run WheelMaker Desktop")
 
+type desktopBootstrapState struct {
+	BaseURL string `json:"baseUrl"`
+	Error   string `json:"error"`
+	Busy    bool   `json:"busy"`
+}
+
+type desktopLaunchTarget struct {
+	HTML string
+	URL  string
+}
+
 type desktopWindowOptions struct {
-	Title              string
-	Width              uint
-	Height             uint
-	Debug              bool
-	RemoteDebugEnabled bool
-	RemoteDebugPort    int
-	IconID             uint
-	CustomTitleBar     bool
-	ThemeColor         string
-	WebSource          *desktopWebSourceRuntime
+	Title          string
+	Width          uint
+	Height         uint
+	IconID         uint
+	CustomTitleBar bool
+	ThemeColor     string
+	BootstrapState desktopBootstrapState
 }
 
 type desktopLauncher interface {
-	Launch(url string, opts desktopWindowOptions) error
+	Launch(target desktopLaunchTarget, opts desktopWindowOptions) error
 }
 
-func runDesktopApp(assets fs.FS, launcher desktopLauncher) error {
-	return runDesktopAppWithWebSource(assets, launcher, newEmbeddedOnlyDesktopWebSourceRuntime())
+type desktopBaseURLProber interface {
+	Probe(ctx context.Context, baseURL string) error
 }
 
-func runDesktopAppWithWebSource(assets fs.FS, launcher desktopLauncher, webSource *desktopWebSourceRuntime) error {
-	if _, err := fs.Stat(assets, "index.html"); err != nil {
-		return fmt.Errorf("desktop web assets missing index.html: %w", err)
-	}
-	webSource.RefreshActualSource()
-	srv, err := startDesktopAssetServerWithWebSource(assets, webSource)
+func runDesktopApp(ctx context.Context, launcher desktopLauncher, store desktopConfigStore, prober desktopBaseURLProber) error {
+	config, err := store.Load()
 	if err != nil {
-		return err
+		return fmt.Errorf("load desktop config: %w", err)
 	}
-	defer srv.Close()
 
-	opts := desktopWindowOptionsForWebSource(webSource)
-	if err := launcher.Launch(srv.URL(), opts); err != nil {
+	target := desktopLaunchTarget{HTML: desktopBootstrapHTML}
+	state := desktopBootstrapState{BaseURL: config.BaseURL}
+	if config.BaseURL != "" {
+		normalized, normalizeErr := normalizeDesktopBaseURL(config.BaseURL)
+		if normalizeErr != nil {
+			state.Error = "Invalid server address. Enter an HTTPS URL."
+		} else {
+			if normalized != config.BaseURL {
+				config.BaseURL = normalized
+				state.BaseURL = normalized
+				if err := store.Save(config); err != nil {
+					return fmt.Errorf("save normalized desktop config: %w", err)
+				}
+			}
+			if err := prober.Probe(ctx, normalized); err != nil {
+				state.Error = fmt.Sprintf("Unable to connect securely: %v", err)
+			} else {
+				target = desktopLaunchTarget{URL: normalized}
+			}
+		}
+	}
+
+	opts := defaultDesktopWindowOptions()
+	opts.BootstrapState = state
+	if err := launcher.Launch(target, opts); err != nil {
 		if errors.Is(err, errWebView2Unavailable) {
 			return fmt.Errorf("%w. Install it from https://developer.microsoft.com/microsoft-edge/webview2/", err)
 		}
@@ -50,20 +76,13 @@ func runDesktopAppWithWebSource(assets fs.FS, launcher desktopLauncher, webSourc
 	return nil
 }
 
-func desktopWindowOptionsForWebSource(webSource *desktopWebSourceRuntime) desktopWindowOptions {
-	if webSource == nil {
-		webSource = newEmbeddedOnlyDesktopWebSourceRuntime()
-	}
-	state := webSource.State()
+func defaultDesktopWindowOptions() desktopWindowOptions {
 	return desktopWindowOptions{
-		Title:              state.DisplayTitle,
-		RemoteDebugEnabled: state.RemoteDebugEnabled,
-		RemoteDebugPort:    state.RemoteDebugPort,
-		Width:              1280,
-		Height:             840,
-		IconID:             desktopResourceIconID,
-		CustomTitleBar:     true,
-		ThemeColor:         desktopTitleBarThemeColor,
-		WebSource:          webSource,
+		Title:          "WheelMaker",
+		Width:          1280,
+		Height:         840,
+		IconID:         desktopResourceIconID,
+		CustomTitleBar: true,
+		ThemeColor:     desktopTitleBarThemeColor,
 	}
 }

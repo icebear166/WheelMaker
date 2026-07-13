@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 )
@@ -13,9 +14,9 @@ func main() {
 }
 
 func run() error {
-	assets, err := embeddedAssets()
+	store, err := newDefaultDesktopConfigStore()
 	if err != nil {
 		return err
 	}
-	return runDesktopAppWithWebSource(assets, newWebView2Launcher(), newDefaultDesktopWebSourceRuntime())
+	return runDesktopApp(context.Background(), newWebView2Launcher(), store, newDefaultDesktopBaseURLProber())
 }

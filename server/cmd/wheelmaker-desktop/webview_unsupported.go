@@ -8,6 +8,6 @@ func newWebView2Launcher() desktopLauncher {
 	return unsupportedLauncher{}
 }
 
-func (unsupportedLauncher) Launch(_ string, _ desktopWindowOptions) error {
+func (unsupportedLauncher) Launch(_ desktopLaunchTarget, _ desktopWindowOptions) error {
 	return errWebView2Unavailable
 }
