@@ -2,6 +2,8 @@
 
 本文档给 AI 操作员使用。目标是首次双机部署：先判断当前机器是 Registry 入口机还是 Worker，再按角色执行。
 
+部署前先阅读 [安全模型](docs/security.md) 和 [已知风险](docs/security-known-risks.md)。
+
 ## 1. 环境准备
 
 每台机器都需要：
@@ -86,23 +88,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install_git_hooks.ps
 
 该脚本固定安装 Gitleaks v8.28.0，并把当前仓库的 `core.hooksPath` 设置为 `.githooks`。Gitleaks 缺失时 hook 会 fail closed；不要用 `--no-verify` 绕过安全提交门。CI 还会扫描当前 tree 和完整 Git 历史。
 
-## 3. 生成共享 Token
+## 3. 确认共享 Token 策略
 
-先问用户是否已有共享 Registry token。没有则生成一个高熵 token。
+首次部署在缺少配置时会从系统加密随机源自动生成独立的 32-byte/256-bit Base64URL Registry Token；不要设置默认值，也不要把 Token 放进仓库或命令行。随机源失败时部署会直接失败。
 
-Windows：
-
-```powershell
-[Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
-```
-
-macOS/Linux：
-
-```bash
-openssl rand -base64 32
-```
-
-Registry 入口机和所有 Worker 必须使用同一个 token。
+Registry 入口机和所有受信任 Worker 使用同一个 Token。入口机部署完成后，通过受保护的本地方式把 `~/.wheelmaker/config.json` 中的 `registry.token` 配置到 Worker；不要在聊天或普通日志中传递。显式配置的短 Token 会被接受，但抗猜测强度更低，不推荐新部署使用。
 
 ## 4. 首次部署
 
@@ -213,8 +203,8 @@ Worker 机器负责：
 要点：
 
 - `registry.server` 写 Registry 入口机的 origin，不要写 `/ws`。
-- 推荐使用 `https://<registry-host>:28800`；内网临时部署也可以用用户确认过的 `http://...`。
-- WheelMaker 会把 HTTP/HTTPS origin 转换成 WebSocket endpoint。
+- 远程地址必须使用 `https://<registry-host>:28800`；WheelMaker 会把 HTTPS origin 转换成 WSS endpoint。
+- 证书必须能通过系统信任链验证，不提供证书忽略开关。
 - `registry.token` 必须和入口机一致。
 - 每台机器的 `registry.hubId` 必须唯一。
 
@@ -226,8 +216,8 @@ Worker 机器负责：
 
 - 域名或 IP
 - 对外端口，默认 `28800`
-- 使用 HTTPS 还是 HTTP。推荐 HTTPS；公网部署应优先 HTTPS。内网临时部署可在用户确认后使用 HTTP。
-- 如果使用 HTTPS，确认 TLS 证书路径和私钥路径。
+- TLS 证书和私钥路径。远程入口只支持 HTTPS/WSS。
+- 证书应由公开 CA 签发，或由已经正确安装进所有客户端系统信任链的组织 CA 签发。
 - Nginx 配置目录或目标配置文件路径。
 
 默认只暴露：
@@ -318,38 +308,6 @@ server {
 }
 ```
 
-HTTP 临时内网模板只去掉 `ssl` 和证书配置：
-
-```nginx
-server {
-    listen 28800;
-    server_name _;
-    root /home/<user>/.wheelmaker/web;
-
-    location / {
-        index index.html;
-        try_files $uri $uri/ /index.html;
-        add_header Cache-Control "no-cache, must-revalidate" always;
-        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
-        add_header Referrer-Policy "no-referrer" always;
-        add_header X-Content-Type-Options "nosniff" always;
-        add_header X-Frame-Options "DENY" always;
-    }
-
-    location /ws {
-        proxy_pass http://127.0.0.1:9630;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_read_timeout 3600s;
-        proxy_send_timeout 3600s;
-        proxy_buffering off;
-    }
-}
-```
-
 Windows 路径示例：
 
 ```nginx
@@ -382,16 +340,10 @@ sudo nginx -s reload
 
 ## 8. 验证
 
-Registry 入口机：
+Registry 入口机（不得使用 `-k` 跳过证书校验）：
 
 ```bash
-curl -k https://<registry-host>:28800/
-```
-
-如果使用 HTTP：
-
-```bash
-curl http://<registry-host>:28800/
+curl https://<registry-host>:28800/
 ```
 
 确认服务状态：

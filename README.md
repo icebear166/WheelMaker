@@ -4,6 +4,8 @@ WheelMaker is a self-hosted daemon that lets you use AI coding workflows against
 
 > Workspace Web UI / App -> WheelMaker -> Claude / Codex / Copilot -> your codebase
 
+The supported trust and deployment boundaries are documented in [WheelMaker security model](docs/security.md); review the [known risks and deferred items](docs/security-known-risks.md) before exposing a Registry.
+
 ![Dual-machine topology](docs/readme-assets/topology-dual-machine.svg)
 
 ## Usage
@@ -325,7 +327,7 @@ This will:
 ### 6. Build Android APK
 
 WheelMaker Android is a native Kotlin WebView shell under `mobile/android/`.
-It packages an embedded Workspace Web snapshot and uses a stable Android app origin so Web IndexedDB data survives Remote Web and Embedded Web fallback.
+It contains a dedicated bootstrap page where the user enters their own HTTPS server Base URL, then loads the Workspace Web from that server. Changing servers clears state associated with the previous site.
 
 Requirements:
 
