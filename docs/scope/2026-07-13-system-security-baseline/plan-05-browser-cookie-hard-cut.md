@@ -21,7 +21,7 @@
 - Modify: `app/web/webpack.config.js`
 - Modify: `app/web/public/index.html`
 
-- [ ] **Step 1: 写根路径/子路径 URL 派生测试**
+- [x] **Step 1: 写根路径/子路径 URL 派生测试**
 
 固定派生结果：
 
@@ -39,11 +39,11 @@ deriveRegistryEndpoints('https://example.com:8443/wheelmaker/')
 
 拒绝 HTTP（测试环境可显式注入 localhost exception，但生产 build 不允许）、userinfo/query/fragment 和非目录 URL。测试 `authURL.searchParams.set('auth', action)`，禁止字符串拼接 query。
 
-- [ ] **Step 2: 写 auth client 请求测试**
+- [x] **Step 2: 写 auth client 请求测试**
 
 使用 fake fetch 断言 status/login/logout 都 `credentials: 'same-origin'`、`cache: 'no-store'`；写请求带 `Origin` 由浏览器控制、应用只设置 JSON/CSRF header。Login 局部 token 在 fetch resolve/reject 后清空，不写 debug sink。
 
-- [ ] **Step 3: 运行测试并确认失败**
+- [x] **Step 3: 运行测试并确认失败**
 
 Run:
 
@@ -54,7 +54,7 @@ npm test -- --runInBand __tests__/web-registry-base-url.test.ts __tests__/web-re
 
 Expected: FAIL；endpoint/auth client 尚不存在。
 
-- [ ] **Step 4: 实现 helper 和子路径 asset 支持**
+- [x] **Step 4: 实现 helper 和子路径 asset 支持**
 
 webpack production `output.publicPath` 使用 `'auto'`，HTML 保持相对部署可用。不要硬编码 `wheelmaker.top` 或任何用户域名。Auth client API：
 
@@ -64,7 +64,7 @@ login(token: string, deviceName: string): Promise<RegistryAuthStatus>;
 logout(csrfToken: string): Promise<void>;
 ```
 
-- [ ] **Step 5: 运行测试并提交**
+- [x] **Step 5: 运行测试并提交**
 
 Run:
 

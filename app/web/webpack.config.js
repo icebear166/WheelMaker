@@ -52,7 +52,7 @@ module.exports = (_env = {}, argv = {}) => {
       path: webTarget,
       filename: jsFilename(isProduction),
       chunkFilename: jsChunkFilename(isProduction),
-      publicPath: '/',
+      publicPath: isProduction ? 'auto' : '/',
       clean: true,
     },
     cache: {
