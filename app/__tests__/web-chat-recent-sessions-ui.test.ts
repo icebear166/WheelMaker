@@ -9,6 +9,7 @@ describe('web chat recent sessions', () => {
   const projectRoot = path.join(__dirname, '..');
   const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
   const chatCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles', 'chat.css'));
+  const surfaceTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'ChatRecentSessionsSurface.tsx'));
 
   test('recent sessions section renders at top of the session list', () => {
     expect(mainTsx).toContain('Recent Sessions');
@@ -31,17 +32,21 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('limit: 6,');
   });
 
-  test('renders recent sessions in lightweight project groups with shared session actions', () => {
+  test('renders recent sessions in colored project groups with background identity', () => {
     expect(mainTsx).toContain('renderRecentProjectSessionSection(section, mobile)');
     expect(mainTsx).toContain('recent-project-session-group');
-    expect(mainTsx).toContain('recent-project-session-heading');
-    expect(mainTsx).toContain('recent-project-session-icon');
-    expect(mainTsx).toContain('codicon codicon-folder recent-project-session-icon');
-    expect(mainTsx).toContain('recent-project-session-title');
-    expect(mainTsx).toContain('recent-project-session-hub');
+    expect(mainTsx).toContain("tagVariantClass('recent-project-accent', targetProjectId)");
+    expect(mainTsx).toContain('role="group"');
+    expect(mainTsx).toContain('recent-project-session-watermark');
+    expect(mainTsx).toContain('codicon codicon-folder recent-project-session-watermark-icon');
+    expect(mainTsx).toContain('recent-project-session-watermark-name');
+    expect(mainTsx).toContain('recent-project-session-watermark-hub');
     expect(mainTsx).toContain('style={hubAccentStyle(projectHubId)}');
-    expect(mainTsx).toContain('{projectHubId}</span>');
+    expect(mainTsx).toContain('<span className="wide-project-hub-label">{projectHubId}</span>');
     expect(mainTsx).toContain('recent-project-session-create');
+    expect(mainTsx).toContain('recent-session-create-slot');
+    expect(mainTsx).toContain('showProjectCreateAction');
+    expect(mainTsx).toContain('sessionIndex === 0');
     expect(mainTsx).toContain('codicon codicon-add');
     expect(mainTsx).toContain("openWideProjectActionMenu(targetProjectId, 'new', event.currentTarget);");
     expect(mainTsx).toContain("openMobileProjectActionMenu(targetProjectId, 'new');");
@@ -49,42 +54,43 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('onPointerDown={event => startProjectSessionLongPress(targetProjectId, session.sessionId, event)}');
     expect(mainTsx).toContain('wide-session-agent-tag');
     expect(mainTsx).not.toContain('recent-session-project-tag');
-    expect(chatCss).toContain('.recent-project-session-heading');
-    expect(chatCss).toContain('.recent-project-session-icon');
-    expect(chatCss).toContain('.recent-project-session-hub.wide-project-hub-tag');
+    expect(mainTsx).not.toContain('recent-project-session-heading');
+    expect(chatCss).toContain('.recent-project-session-watermark');
+    expect(chatCss).toContain('.recent-project-accent-0');
+    expect(chatCss).toContain('.recent-project-accent-7');
     expect(chatCss).toContain('.recent-project-session-create');
+    expect(chatCss).not.toContain('.recent-project-session-heading');
     expect(chatCss).not.toContain('.recent-session-project-tag.wide-project-hub-tag');
   });
 
-  test('aligns recent project groups with the standard project session rail', () => {
+  test('keeps project identity behind full-width aligned session rows', () => {
     const recentListBlock = chatCss.match(/\.wide-project-session-list\.recent-sessions-list \{[\s\S]*?\n\}/)?.[0] ?? '';
-    const headingBlock = chatCss.match(/\.recent-project-session-heading \{[\s\S]*?\n\}/)?.[0] ?? '';
-    const nameBlock = chatCss.match(/\.recent-project-session-name \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const groupBlock = chatCss.match(/\.recent-project-session-group \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const watermarkBlock = chatCss.match(/\.recent-project-session-watermark \{[\s\S]*?\n\}/)?.[0] ?? '';
     const sessionListBlock = chatCss.match(/\.recent-project-session-list \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const sessionRowBlock = chatCss.match(/\.recent-project-session-group \.recent-session-row \{[\s\S]*?\n\}/)?.[0] ?? '';
 
     expect(recentListBlock).toContain('padding: 1px 0;');
-    expect(headingBlock).toContain('grid-template-columns: 16px minmax(0, 1fr) 22px;');
-    expect(headingBlock).toContain('padding: 0 5px;');
-    expect(nameBlock).toContain('font-size: 12.5px;');
-    expect(nameBlock).toContain('font-weight: 600;');
-    expect(sessionListBlock).toContain('padding-left: 21px;');
+    expect(groupBlock).toContain('position: relative;');
+    expect(groupBlock).toContain('overflow: hidden;');
+    expect(groupBlock).toContain('background: color-mix(in srgb, var(--recent-project-accent) 7%, transparent);');
+    expect(watermarkBlock).toContain('position: absolute;');
+    expect(watermarkBlock).toContain('left: 7px;');
+    expect(watermarkBlock).toContain('bottom: 2px;');
+    expect(watermarkBlock).toContain('pointer-events: none;');
+    expect(sessionListBlock).toContain('position: relative;');
+    expect(sessionListBlock).toContain('z-index: 1;');
+    expect(sessionRowBlock).toContain('grid-template-columns: 9px minmax(0, 1fr) auto 34px 20px;');
   });
 
-  test('compresses recent project rhythm without shrinking session rows', () => {
-    const expandedSectionBlock = chatCss.match(/\.recent-sessions-section:not\(\.collapsed\) \{[\s\S]*?\n\}/)?.[0] ?? '';
-    const groupBlock = chatCss.match(/\.recent-project-session-group \{[\s\S]*?\n\}/)?.[0] ?? '';
-    const headingBlock = chatCss.match(/\.recent-project-session-heading \{[\s\S]*?\n\}/)?.[0] ?? '';
-    const compactHeadingBlock = chatCss.match(/\.wide-project-session-nav\[data-session-list-density='compact'\] \.recent-project-session-heading \{[\s\S]*?\n\}/)?.[0] ?? '';
-    const relaxedHeadingBlock = chatCss.match(/\.wide-project-session-nav\[data-session-list-density='relaxed'\] \.recent-project-session-heading \{[\s\S]*?\n\}/)?.[0] ?? '';
-
-    expect(expandedSectionBlock).toContain('padding-bottom: 4px;');
-    expect(expandedSectionBlock).toContain('margin-bottom: 5px;');
-    expect(groupBlock).toContain('margin: 2px 0 3px;');
-    expect(headingBlock).toContain('min-height: 27px;');
-    expect(compactHeadingBlock).toContain('min-height: 24px;');
-    expect(relaxedHeadingBlock).toContain('min-height: 27px;');
-    expect(compactHeadingBlock).not.toContain('.wide-session-row');
-    expect(relaxedHeadingBlock).not.toContain('.wide-session-row');
+  test('shares compact and relaxed row density with the pinned surface', () => {
+    expect(mainTsx).toContain('sessionListDensity={sessionListDensity}');
+    expect(surfaceTsx).toContain('sessionListDensity: SessionListDensity;');
+    expect(surfaceTsx).toContain('data-session-list-density={sessionListDensity}');
+    expect(chatCss).toContain("[data-session-list-density='compact'] .wide-session-row");
+    expect(chatCss).toContain("[data-session-list-density='relaxed'] .wide-session-row");
+    expect(chatCss).toContain('min-height: 28px;');
+    expect(chatCss).toContain('min-height: 30px;');
   });
 
   test('recent sessions refresh only on prompt start / done', () => {
@@ -142,7 +148,8 @@ describe('web chat recent sessions', () => {
       'const showPinnedRecentSessionsSurface = isWide && sidebarCollapsed && recentSessionsPinned && !archivedMode && !sessionSearchActive && recentSessionSections.length > 0;',
     );
     expect(mainTsx).toContain('showPinnedRecentSessionsSurface ? (');
-    expect(mainTsx).toContain('<ChatRecentSessionsSurface onUnpin={() => setRecentSessionsPinned(false)}>');
+    expect(mainTsx).toContain('onUnpin={() => setRecentSessionsPinned(false)}');
+    expect(mainTsx).toContain('sessionListDensity={sessionListDensity}');
     expect(mainTsx).toContain('{recentSessionSections.map(section => renderRecentProjectSessionSection(section, false))}');
     expect(mainTsx).toContain('</ChatRecentSessionsSurface>');
   });

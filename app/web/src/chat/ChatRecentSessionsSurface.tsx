@@ -1,19 +1,26 @@
 import React, { type ReactNode } from 'react';
+import type {SessionListDensity} from './sessionListDensity';
 
 export type ChatRecentSessionsSurfaceProps = {
   children: ReactNode;
   onUnpin: () => void;
+  sessionListDensity: SessionListDensity;
 };
 
 export const ChatRecentSessionsSurface = React.memo(function ChatRecentSessionsSurface({
   children,
   onUnpin,
+  sessionListDensity,
 }: ChatRecentSessionsSurfaceProps) {
   const [collapsed, setCollapsed] = React.useState(false);
 
   if (collapsed) {
     return (
-      <aside className="chat-recent-sessions-surface desktop collapsed" aria-label="Recent sessions">
+      <aside
+        className="chat-recent-sessions-surface desktop collapsed"
+        data-session-list-density={sessionListDensity}
+        aria-label="Recent sessions"
+      >
         <button
           type="button"
           className="chat-recent-sessions-compact-trigger"
@@ -31,7 +38,11 @@ export const ChatRecentSessionsSurface = React.memo(function ChatRecentSessionsS
   }
 
   return (
-    <aside className="chat-recent-sessions-surface desktop expanded" aria-label="Recent sessions">
+    <aside
+      className="chat-recent-sessions-surface desktop expanded"
+      data-session-list-density={sessionListDensity}
+      aria-label="Recent sessions"
+    >
       <div className="chat-recent-sessions-surface-header">
         <button
           type="button"

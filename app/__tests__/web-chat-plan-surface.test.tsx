@@ -61,6 +61,7 @@ describe('ChatPlanSurface', () => {
       ChatRecentSessionsSurface: React.ComponentType<{
         children: React.ReactNode;
         onUnpin: () => void;
+        sessionListDensity: 'relaxed' | 'compact';
       }>;
     };
     const onUnpin = jest.fn();
@@ -68,12 +69,13 @@ describe('ChatPlanSurface', () => {
 
     await ReactTestRenderer.act(() => {
       renderer = ReactTestRenderer.create(
-        <ChatRecentSessionsSurface onUnpin={onUnpin}>
+        <ChatRecentSessionsSurface onUnpin={onUnpin} sessionListDensity="compact">
           <div data-test-id="recent-row">Recent row</div>
         </ChatRecentSessionsSurface>,
       );
     });
 
+    expect(renderer!.root.findByProps({'aria-label': 'Recent sessions'}).props['data-session-list-density']).toBe('compact');
     expect(renderer!.root.findAllByProps({className: 'chat-recent-sessions-surface-list'})).toHaveLength(1);
     const collapse = renderer!.root.findByProps({'aria-label': 'Collapse recent sessions'});
 

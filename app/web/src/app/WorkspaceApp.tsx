@@ -14789,6 +14789,8 @@ export function App() {
     targetProjectId: string,
     session: RegistryChatSession,
     mobile: boolean,
+    showProjectCreateAction: boolean,
+    projectName: string,
   ) => {
     // Resolve the live session from the store so the state marker stays in
     // sync with the project list (the recent session snapshot can lag until the
@@ -14840,7 +14842,25 @@ export function App() {
           <span className="wide-session-time" title={liveSession.updatedAt || ''}>
             {formatCompactRelativeAge(liveSession.updatedAt)}
           </span>
+          <span className="recent-session-create-slot" aria-hidden="true" />
         </button>
+        {showProjectCreateAction ? (
+          <button
+            type="button"
+            className="recent-project-session-create"
+            title={`New session in ${projectName}`}
+            aria-label={`New session in ${projectName}`}
+            onClick={event => {
+              if (mobile) {
+                openMobileProjectActionMenu(targetProjectId, 'new');
+                return;
+              }
+              openWideProjectActionMenu(targetProjectId, 'new', event.currentTarget);
+            }}
+          >
+            <span className="codicon codicon-add" aria-hidden="true" />
+          </button>
+        ) : null}
         {renderProjectSessionActionMenu(targetProjectId, liveSession)}
       </div>
     );
@@ -15054,47 +15074,35 @@ export function App() {
     const projectName = section.projectName || targetProjectId;
     const projectHubId = section.projectHubId || 'local';
     const projectHubVariant = tagVariantClass('wide-project-hub', projectHubId);
+    const projectAccentVariant = tagVariantClass('recent-project-accent', targetProjectId);
     return (
       <div
         key={`recent-project:${targetProjectId}`}
-        className="recent-project-session-group"
+        className={`recent-project-session-group ${projectAccentVariant}`}
+        role="group"
+        aria-label={`${projectName} recent sessions`}
       >
-        <div className="recent-project-session-heading">
+        <div className="recent-project-session-watermark" aria-hidden="true">
           <span
-            className={`codicon codicon-folder recent-project-session-icon ${projectHubVariant}`}
-            style={hubAccentStyle(projectHubId)}
-            aria-hidden="true"
+            className="codicon codicon-folder recent-project-session-watermark-icon"
           />
-          <span className="recent-project-session-title">
-            <span className="recent-project-session-name" title={projectName}>
-              {projectName}
-            </span>
-            <span
-              className={`recent-project-session-hub wide-project-hub-tag ${projectHubVariant}`}
-              style={hubAccentStyle(projectHubId)}
-            >
-              <span className="wide-project-hub-dot" aria-hidden="true" />
-              <span className="wide-project-hub-label">{projectHubId}</span>
-            </span>
-          </span>
-          <button
-            type="button"
-            className="recent-project-session-create"
-            title="New session"
-            aria-label={`New session in ${projectName}`}
-            onClick={event => {
-              if (mobile) {
-                openMobileProjectActionMenu(targetProjectId, 'new');
-                return;
-              }
-              openWideProjectActionMenu(targetProjectId, 'new', event.currentTarget);
-            }}
+          <span className="recent-project-session-watermark-name">{projectName}</span>
+          <span
+            className={`recent-project-session-hub recent-project-session-watermark-hub wide-project-hub-tag ${projectHubVariant}`}
+            style={hubAccentStyle(projectHubId)}
           >
-            <span className="codicon codicon-add" aria-hidden="true" />
-          </button>
+            <span className="wide-project-hub-dot" />
+            <span className="wide-project-hub-label">{projectHubId}</span>
+          </span>
         </div>
         <div className="recent-project-session-list">
-          {section.sessions.map(session => renderRecentSessionRow(targetProjectId, session, mobile))}
+          {section.sessions.map((session, sessionIndex) => renderRecentSessionRow(
+            targetProjectId,
+            session,
+            mobile,
+            sessionIndex === 0,
+            projectName,
+          ))}
         </div>
       </div>
     );
@@ -18760,7 +18768,10 @@ export function App() {
             plan={selectedChatPlan}
           />
           {showPinnedRecentSessionsSurface ? (
-            <ChatRecentSessionsSurface onUnpin={() => setRecentSessionsPinned(false)}>
+            <ChatRecentSessionsSurface
+              onUnpin={() => setRecentSessionsPinned(false)}
+              sessionListDensity={sessionListDensity}
+            >
               <div className="wide-project-session-list recent-sessions-list chat-recent-sessions-rows">
                 {recentSessionSections.map(section => renderRecentProjectSessionSection(section, false))}
               </div>
