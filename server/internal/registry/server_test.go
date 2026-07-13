@@ -1873,6 +1873,101 @@ func dialWS(t *testing.T, rawURL string) *websocket.Conn {
 	return conn
 }
 
+func TestRegistryBasePath(t *testing.T) {
+	tests := []struct {
+		requestPath string
+		basePath    string
+		ok          bool
+	}{
+		{requestPath: "/ws", basePath: "/", ok: true},
+		{requestPath: "/wheelmaker/ws", basePath: "/wheelmaker/", ok: true},
+		{requestPath: "/teams/alpha/ws", basePath: "/teams/alpha/", ok: true},
+		{requestPath: "/auth/login", ok: false},
+		{requestPath: "/wheelmaker/not-ws", ok: false},
+		{requestPath: "/foo/ws/extra", ok: false},
+		{requestPath: "/foo//ws", ok: false},
+		{requestPath: "/foo/../ws", ok: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.requestPath, func(t *testing.T) {
+			got, ok := registryBasePath(tt.requestPath)
+			if ok != tt.ok || got != tt.basePath {
+				t.Fatalf("registryBasePath(%q)=(%q, %t), want (%q, %t)", tt.requestPath, got, ok, tt.basePath, tt.ok)
+			}
+		})
+	}
+}
+
+func TestRegistryBasePathRoutesWebSocketUpgrade(t *testing.T) {
+	s := New(Config{Token: "custom-token"})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(ts.URL, "http")+"/wheelmaker/ws", nil)
+	if err != nil {
+		t.Fatalf("dial base-path websocket: %v", err)
+	}
+	_ = conn.Close()
+}
+
+func TestAuthRoutesUseWSPath(t *testing.T) {
+	s := New(Config{Token: "custom-token"})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	loginReq, err := http.NewRequest(http.MethodPost, ts.URL+"/ws?auth=login", strings.NewReader(`{"token":"custom-token"}`))
+	if err != nil {
+		t.Fatalf("NewRequest(login): %v", err)
+	}
+	loginReq.Host = "wheelmaker.example.com"
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginReq.Header.Set("Origin", "https://wheelmaker.example.com")
+	loginReq.Header.Set("X-Forwarded-Proto", "https")
+	loginResp, err := http.DefaultClient.Do(loginReq)
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	_ = loginResp.Body.Close()
+	if loginResp.StatusCode != http.StatusOK {
+		t.Fatalf("POST /ws?auth=login status=%d, want 200", loginResp.StatusCode)
+	}
+
+	statusResp, err := http.Get(ts.URL + "/wheelmaker/ws?auth=status")
+	if err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	_ = statusResp.Body.Close()
+	if statusResp.StatusCode != http.StatusOK {
+		t.Fatalf("GET /wheelmaker/ws?auth=status status=%d, want 200", statusResp.StatusCode)
+	}
+
+	for _, request := range []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodPost, path: "/auth/login"},
+		{method: http.MethodGet, path: "/wheelmaker/not-ws"},
+		{method: http.MethodGet, path: "/foo/ws/extra"},
+		{method: http.MethodGet, path: "/ws?auth=unknown"},
+		{method: http.MethodGet, path: "/ws?auth=login"},
+		{method: http.MethodGet, path: "/ws?auth=status&extra=1"},
+	} {
+		req, err := http.NewRequest(request.method, ts.URL+request.path, nil)
+		if err != nil {
+			t.Fatalf("NewRequest(%s %s): %v", request.method, request.path, err)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatalf("%s %s: %v", request.method, request.path, err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Errorf("%s %s status=%d, want 404", request.method, request.path, resp.StatusCode)
+		}
+	}
+}
+
 func TestWebSocketCrossOriginWithoutSessionUsesTokenAuthentication(t *testing.T) {
 	s := New(Config{Token: "custom-token"})
 	ts := httptest.NewServer(s.Handler())
@@ -1923,7 +2018,7 @@ func TestWebLoginSetsSecureSessionCookie(t *testing.T) {
 	s := New(Config{Token: "custom-token"})
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)
-	req, err := http.NewRequest(http.MethodPost, ts.URL+"/auth/login", strings.NewReader(`{"token":"custom-token"}`))
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/ws?auth=login", strings.NewReader(`{"token":"custom-token"}`))
 	if err != nil {
 		t.Fatalf("NewRequest(): %v", err)
 	}
@@ -2009,7 +2104,7 @@ func TestWebSocketSessionAllowsClientWithoutToken(t *testing.T) {
 
 func loginRegistryBrowser(t *testing.T, baseURL, token, origin string) *http.Cookie {
 	t.Helper()
-	req, err := http.NewRequest(http.MethodPost, baseURL+"/auth/login", strings.NewReader(`{"token":`+strconv.Quote(token)+`}`))
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/ws?auth=login", strings.NewReader(`{"token":`+strconv.Quote(token)+`}`))
 	if err != nil {
 		t.Fatalf("NewRequest(): %v", err)
 	}

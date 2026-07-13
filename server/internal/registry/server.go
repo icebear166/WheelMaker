@@ -364,12 +364,7 @@ func New(cfg Config) *Server {
 
 // Handler returns the HTTP handler for this server.
 func (s *Server) Handler() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /auth/login", s.handleWebLogin)
-	mux.HandleFunc("GET /auth/status", s.handleWebAuthStatus)
-	mux.HandleFunc("POST /auth/logout", s.handleWebLogout)
-	mux.HandleFunc("/ws", s.handleWS)
-	return mux
+	return http.HandlerFunc(s.handleHTTP)
 }
 
 // Run starts HTTP server and blocks until context cancellation.
