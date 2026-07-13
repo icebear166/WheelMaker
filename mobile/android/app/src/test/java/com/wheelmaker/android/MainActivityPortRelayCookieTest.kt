@@ -43,4 +43,14 @@ class MainActivityPortRelayCookieTest {
         assertFalse(mainActivity.contains("addJava" + "scriptInterface"))
         assertFalse(bridge.contains("@Java" + "scriptInterface"))
     }
+
+    @Test
+    fun flushesRemoteSessionCookiesWhenActivityPauses() {
+        val mainActivity = source("src/main/java/com/wheelmaker/android/MainActivity.kt")
+        val onPause = mainActivity
+            .substringAfter("override fun onPause() {")
+            .substringBefore("override fun onDestroy()")
+
+        assertTrue(onPause.contains("CookieManager.getInstance().flush()"))
+    }
 }

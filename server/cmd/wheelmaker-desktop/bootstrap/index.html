@@ -9,6 +9,7 @@
     :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
     * { box-sizing: border-box; }
     body { margin: 0; min-height: 100vh; display: grid; grid-template-rows: 32px minmax(0, 1fr); background: #111318; color: #f5f7fb; }
+    body.android-bootstrap { grid-template-rows: minmax(0, 1fr); }
     #titlebar { display: flex; align-items: stretch; justify-content: space-between; background: #1b1f27; border-bottom: 1px solid #303540; user-select: none; }
     .title { display: flex; min-width: 0; align-items: center; padding: 0 12px; color: #f5f7fb; font-size: 12px; font-weight: 600; }
     .window-controls { display: inline-flex; align-items: stretch; }
@@ -68,6 +69,8 @@
     const hasDesktopWindowControls = typeof window.wheelMakerBootstrap?.startDrag === 'function';
 
     windowControls.hidden = !hasDesktopWindowControls;
+    document.body.classList.toggle('android-bootstrap', !hasDesktopWindowControls);
+    titlebar.hidden = !hasDesktopWindowControls;
 
     for (const eventName of ['pointerdown', 'keydown', 'touchstart']) {
       window.addEventListener(eventName, () => {

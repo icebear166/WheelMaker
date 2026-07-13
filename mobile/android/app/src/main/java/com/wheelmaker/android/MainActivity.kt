@@ -161,6 +161,7 @@ class MainActivity : Activity() {
         if (::androidSpeechRuntime.isInitialized) {
             androidSpeechRuntime.stopForAppBackground()
         }
+        CookieManager.getInstance().flush()
         super.onPause()
     }
 

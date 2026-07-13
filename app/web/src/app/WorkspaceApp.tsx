@@ -19951,7 +19951,7 @@ export function App() {
     return (
       <div className={`page theme-${themeMode}`}>
         {setiFontCss ? <style>{setiFontCss}</style> : null}
-        {isNativeShellHost() ? (
+        {getDesktopWindowBridge() ? (
           <div className="connect-titlebar">
             <span>WheelMaker</span>
             <DesktopWindowControls />

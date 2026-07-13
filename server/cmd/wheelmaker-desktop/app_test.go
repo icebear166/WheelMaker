@@ -72,6 +72,9 @@ func TestBootstrapOnlyShowsWindowControlsForDesktopBridge(t *testing.T) {
 		`id="window-controls" class="window-controls" hidden`,
 		`const hasDesktopWindowControls = typeof window.wheelMakerBootstrap?.startDrag === 'function';`,
 		`windowControls.hidden = !hasDesktopWindowControls;`,
+		`const titlebar = document.getElementById('titlebar');`,
+		`document.body.classList.toggle('android-bootstrap', !hasDesktopWindowControls);`,
+		`titlebar.hidden = !hasDesktopWindowControls;`,
 		`if (!hasDesktopWindowControls) return;`,
 	} {
 		if !strings.Contains(html, want) {

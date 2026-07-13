@@ -8,6 +8,7 @@ describe('registry login device UI', () => {
     expect(source).not.toContain('loginDeviceName');
     expect(source).toContain('resolveLoginDeviceName');
     expect(source.match(/className="connect-titlebar"/g)).toHaveLength(1);
+    expect(source).toMatch(/\{getDesktopWindowBridge\(\) \? \(\s*<div className="connect-titlebar">/);
     expect(source).toContain('<DesktopWindowControls />');
   });
 });
