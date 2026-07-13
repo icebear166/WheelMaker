@@ -1,6 +1,7 @@
 package com.wheelmaker.android
 
 import android.os.SystemClock
+import android.os.Build
 import org.json.JSONObject
 
 class WheelMakerBridge(
@@ -18,6 +19,7 @@ class WheelMakerBridge(
 			throw SecurityException("expired native capability")
 		}
 		return when (action) {
+        "device.getName" -> JSONObject.quote(Build.MODEL.trim().ifBlank { "Android" }.take(80))
         "diagnostics.drain" -> androidWebDiagnostics.drainJson()
         "diagnostics.setLogLevel" -> setDiagnosticLogLevel(payload.optString("logLevel"))
         "speech.start" -> androidSpeechRuntime.start(payload.toString())

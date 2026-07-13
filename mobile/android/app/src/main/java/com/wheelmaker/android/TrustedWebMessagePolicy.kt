@@ -99,6 +99,7 @@ class TrustedWebMessagePolicy(private val configuredBaseUrl: String) {
             "bootstrap.reset"
         )
         val BUSINESS_ACTIONS = setOf(
+            "device.getName",
             "diagnostics.drain",
             "diagnostics.setLogLevel",
             "speech.start",
