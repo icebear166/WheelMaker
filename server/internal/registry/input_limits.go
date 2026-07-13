@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	rp "github.com/swm8023/wheelmaker/internal/protocol"
 )
 
 const (
@@ -30,9 +32,9 @@ func validateRegistryInput(method string, messageBytes int, payloadBytes int) er
 	if messageBytes > maxWireMessageBytes {
 		return fmt.Errorf("%w: wire message exceeds %d bytes", errRegistryInputTooLarge, maxWireMessageBytes)
 	}
-	if method == speechMethodChunk {
+	if method == speechMethodChunk || method == rp.RegistryMethodSessionRead {
 		if payloadBytes > maxSpeechChunkPayloadBytes {
-			return fmt.Errorf("%w: speech chunk payload exceeds %d bytes", errRegistryInputTooLarge, maxSpeechChunkPayloadBytes)
+			return fmt.Errorf("%w: %s payload exceeds %d bytes", errRegistryInputTooLarge, method, maxSpeechChunkPayloadBytes)
 		}
 		return nil
 	}

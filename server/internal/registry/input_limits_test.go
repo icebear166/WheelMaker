@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	rp "github.com/swm8023/wheelmaker/internal/protocol"
 )
 
 func TestInputLimitBoundaries(t *testing.T) {
@@ -26,6 +28,8 @@ func TestInputLimitBoundaries(t *testing.T) {
 		{name: "speech payload limit minus one", method: speechMethodChunk, messageBytes: maxSpeechChunkPayloadBytes - 1, payloadBytes: maxSpeechChunkPayloadBytes - 1, valid: true},
 		{name: "speech payload limit", method: speechMethodChunk, messageBytes: maxSpeechChunkPayloadBytes, payloadBytes: maxSpeechChunkPayloadBytes, valid: true},
 		{name: "speech payload limit plus one", method: speechMethodChunk, messageBytes: maxSpeechChunkPayloadBytes + 1, payloadBytes: maxSpeechChunkPayloadBytes + 1},
+		{name: "session read payload limit", method: rp.RegistryMethodSessionRead, messageBytes: maxSpeechChunkPayloadBytes, payloadBytes: maxSpeechChunkPayloadBytes, valid: true},
+		{name: "session read payload limit plus one", method: rp.RegistryMethodSessionRead, messageBytes: maxSpeechChunkPayloadBytes + 1, payloadBytes: maxSpeechChunkPayloadBytes + 1},
 		{name: "wire limit minus one", method: speechMethodChunk, messageBytes: maxWireMessageBytes - 1, valid: true},
 		{name: "wire limit", method: speechMethodChunk, messageBytes: maxWireMessageBytes, valid: true},
 		{name: "wire limit plus one", method: speechMethodChunk, messageBytes: maxWireMessageBytes + 1},
