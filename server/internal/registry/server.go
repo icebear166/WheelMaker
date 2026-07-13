@@ -2,6 +2,8 @@ package registry
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -237,7 +239,9 @@ type Server struct {
 	nextForwardID atomic.Int64
 	nextConnEpoch atomic.Int64
 
-	relay *portrelay.Controller
+	relay        *portrelay.Controller
+	webSessions  *webSessionStore
+	loginLimiter *loginLimiter
 
 	speech *speechService
 }
@@ -252,6 +256,7 @@ type connectionState struct {
 	initialized     bool
 	connectionEpoch int64
 	peer            *peerConn
+	browserSession  bool
 	seenRequestIDs  map[int64]struct{}
 	lastProjectSeq  map[string]int64
 }
@@ -347,6 +352,8 @@ func New(cfg Config) *Server {
 		projectToHub: make(map[string]string),
 		hubPeers:     make(map[string]*peerConn),
 		clientPeers:  make(map[string]*connectionState),
+		webSessions:  newWebSessionStore(rand.Reader, time.Now),
+		loginLimiter: newLoginLimiter(time.Now),
 	}
 	s.speech = newSpeechService(newVolcengineSpeechProvider())
 	s.relay = portrelay.NewController(portrelay.ControllerConfig{
@@ -359,6 +366,9 @@ func New(cfg Config) *Server {
 // Handler returns the HTTP handler for this server.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("POST /auth/login", s.handleWebLogin)
+	mux.HandleFunc("GET /auth/status", s.handleWebAuthStatus)
+	mux.HandleFunc("POST /auth/logout", s.handleWebLogout)
 	mux.HandleFunc("/ws", s.handleWS)
 	return mux
 }
@@ -392,6 +402,17 @@ func (s *Server) Run(ctx context.Context) error {
 }
 
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
+	origin := r.Header.Get("Origin")
+	browserSession := false
+	if origin != "" {
+		if !security.OriginAllowed(origin, s.cfg.AllowedOrigins) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		if _, ok := s.authenticateWebRequest(r); ok {
+			browserSession = true
+		}
+	}
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(request *http.Request) bool {
 			origin := request.Header.Get("Origin")
@@ -412,6 +433,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		relaySecure:    relayControlSecure(r),
 		seenRequestIDs: map[int64]struct{}{},
 		lastProjectSeq: map[string]int64{},
+		browserSession: browserSession,
 	}
 	registryLogger("").Info("ws connected id=%s remote=%s", state.id, r.RemoteAddr)
 	defer registryLogger("").Info("ws disconnected id=%s role=%s hub=%s remote=%s", state.id, state.role, state.hubID, r.RemoteAddr)
@@ -780,7 +802,12 @@ func (s *Server) handleConnectInit(peer *peerConn, state *connectionState, in en
 		_ = s.writeError(peer, in.RequestID, in.Method, codeInvalidArgument, "hubId is required for hub role", nil)
 		return true
 	}
-	if s.cfg.Token != "" && strings.TrimSpace(payload.Token) != s.cfg.Token {
+	if state.browserSession {
+		if role != string(rp.RegistryRoleClient) || strings.TrimSpace(payload.Token) != "" {
+			_ = s.writeError(peer, in.RequestID, in.Method, codeForbidden, "browser session requires client role without token", nil)
+			return false
+		}
+	} else if s.cfg.Token != "" && subtle.ConstantTimeCompare([]byte(strings.TrimSpace(payload.Token)), []byte(s.cfg.Token)) != 1 {
 		_ = s.writeError(peer, in.RequestID, in.Method, codeUnauthorized, "invalid token", nil)
 		return false
 	}

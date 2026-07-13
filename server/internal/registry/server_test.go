@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -1890,16 +1891,111 @@ func TestWebSocketRejectsUnlistedBrowserOrigin(t *testing.T) {
 	}
 }
 
-func TestWebSocketAcceptsAllowlistedBrowserOrigin(t *testing.T) {
-	s := New(Config{AllowedOrigins: []string{"https://wheelmaker.example.com"}})
+func TestWebLoginSetsSecureSessionCookie(t *testing.T) {
+	s := New(Config{Token: "custom-token", AllowedOrigins: []string{"https://wheelmaker.example.com"}})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/auth/login", strings.NewReader(`{"token":"custom-token"}`))
+	if err != nil {
+		t.Fatalf("NewRequest(): %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "https://wheelmaker.example.com")
+	req.Header.Set("X-Forwarded-Proto", "https")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("login status=%d", resp.StatusCode)
+	}
+	cookies := resp.Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("cookies=%v, want one session cookie", cookies)
+	}
+	cookie := cookies[0]
+	if cookie.Name != registrySessionCookieName || !cookie.HttpOnly || !cookie.Secure || cookie.SameSite != http.SameSiteStrictMode {
+		t.Fatalf("unsafe session cookie: %+v", cookie)
+	}
+}
+
+func TestWebSocketWithoutSessionStillRequiresTokenInit(t *testing.T) {
+	s := New(Config{Token: "custom-token", AllowedOrigins: []string{"https://wheelmaker.example.com"}})
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)
 	header := http.Header{"Origin": []string{"https://wheelmaker.example.com"}}
 	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", header)
 	if err != nil {
-		t.Fatalf("dial allowlisted origin: %v", err)
+		t.Fatalf("dial allowlisted browser: %v", err)
 	}
-	_ = conn.Close()
+	defer conn.Close()
+	mustWriteJSON(t, conn, testEnvelope{
+		RequestID: 1,
+		Type:      "request",
+		Method:    "connect.init",
+		Payload: map[string]any{
+			"clientName":      "wm-web",
+			"clientVersion":   "0.1.0",
+			"protocolVersion": rp.DefaultProtocolVersion,
+			"role":            "client",
+		},
+	})
+	resp := mustReadEnvelope(t, conn)
+	if resp.Type != "error" || resp.Payload["code"] != codeUnauthorized {
+		t.Fatalf("connect response=%+v, want unauthorized", resp)
+	}
+}
+
+func TestWebSocketSessionAllowsClientWithoutToken(t *testing.T) {
+	s := New(Config{Token: "custom-token", AllowedOrigins: []string{"https://wheelmaker.example.com"}})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+	cookie := loginRegistryBrowser(t, ts.URL, "custom-token", "https://wheelmaker.example.com")
+	header := http.Header{
+		"Origin": []string{"https://wheelmaker.example.com"},
+		"Cookie": []string{cookie.String()},
+	}
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", header)
+	if err != nil {
+		t.Fatalf("dial authenticated browser: %v", err)
+	}
+	defer conn.Close()
+	mustWriteJSON(t, conn, testEnvelope{
+		RequestID: 1,
+		Type:      "request",
+		Method:    "connect.init",
+		Payload: map[string]any{
+			"clientName":      "wm-web",
+			"clientVersion":   "0.1.0",
+			"protocolVersion": rp.DefaultProtocolVersion,
+			"role":            "client",
+		},
+	})
+	resp := mustReadEnvelope(t, conn)
+	if resp.Type != "response" {
+		t.Fatalf("connect response=%+v", resp)
+	}
+}
+
+func loginRegistryBrowser(t *testing.T, baseURL, token, origin string) *http.Cookie {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/auth/login", strings.NewReader(`{"token":`+strconv.Quote(token)+`}`))
+	if err != nil {
+		t.Fatalf("NewRequest(): %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", origin)
+	req.Header.Set("X-Forwarded-Proto", "https")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || len(resp.Cookies()) != 1 {
+		t.Fatalf("login status=%d cookies=%v", resp.StatusCode, resp.Cookies())
+	}
+	return resp.Cookies()[0]
 }
 
 func TestRunRejectsNonLoopbackAddress(t *testing.T) {
