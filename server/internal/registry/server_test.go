@@ -2132,6 +2132,18 @@ func TestRunRejectsNonLoopbackAddress(t *testing.T) {
 	}
 }
 
+func TestRunRegistryFailsClosedOnCorruptSessionFile(t *testing.T) {
+	stateDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(stateDir, "registry-sessions.json"), []byte(`{"version":99}`), 0o600); err != nil {
+		t.Fatalf("WriteFile(): %v", err)
+	}
+	s := New(Config{Addr: "127.0.0.1:0", Token: "custom-token", StateDir: stateDir})
+	err := s.Run(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "registry sessions") {
+		t.Fatalf("Run() error=%v, want registry sessions failure", err)
+	}
+}
+
 func dialReportedHub(t *testing.T, rawURL string, hubID string) *websocket.Conn {
 	t.Helper()
 	hub := dialWS(t, rawURL)

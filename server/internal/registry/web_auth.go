@@ -40,7 +40,7 @@ func (s *Server) handleWebLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.loginLimiter.Success(source)
-	raw, csrf, err := s.webSessions.Create()
+	raw, csrf, err := s.webSessions.Create(defaultWebSessionDeviceName, requestRegistryBasePath(r))
 	if err != nil {
 		http.Error(w, "create session", http.StatusInternalServerError)
 		return
@@ -81,7 +81,10 @@ func (s *Server) handleWebLogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if cookie, err := r.Cookie(registrySessionCookieName); err == nil {
-		s.webSessions.Revoke(cookie.Value)
+		if err := s.webSessions.Revoke(cookie.Value); err != nil {
+			http.Error(w, "revoke session", http.StatusInternalServerError)
+			return
+		}
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     registrySessionCookieName,

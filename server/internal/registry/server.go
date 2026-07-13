@@ -46,6 +46,7 @@ type Config struct {
 	ProtocolVersion string
 	ServerVersion   string
 	LogDir          string
+	StateDir        string
 }
 
 type peerConn struct {
@@ -351,7 +352,12 @@ func New(cfg Config) *Server {
 		projectToHub: make(map[string]string),
 		hubPeers:     make(map[string]*peerConn),
 		clientPeers:  make(map[string]*connectionState),
-		webSessions:  newWebSessionStore(rand.Reader, time.Now),
+		webSessions: newWebSessionStore(
+			rand.Reader,
+			time.Now,
+			cfg.Token,
+			webSessionStatePath(cfg.StateDir),
+		),
 		loginLimiter: newLoginLimiter(time.Now),
 	}
 	s.speech = newSpeechService(newVolcengineSpeechProvider())
@@ -374,6 +380,9 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 	if err := security.RequireLoopbackAddress(s.cfg.Addr); err != nil {
 		return fmt.Errorf("registry listen address: %w", err)
+	}
+	if err := s.webSessions.Load(); err != nil {
+		return fmt.Errorf("registry sessions: %w", err)
 	}
 	registryLogger("").Info("listening on %s", s.cfg.Addr)
 	srv := &http.Server{

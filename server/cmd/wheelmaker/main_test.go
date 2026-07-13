@@ -50,6 +50,14 @@ func TestLoadValidatedRuntimeConfigAcceptsCustomRegistryToken(t *testing.T) {
 	}
 }
 
+func TestRunRegistryConfigIncludesStateDir(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), ".wheelmaker")
+	cfg := registryServerConfig("127.0.0.1:9630", "token", stateDir)
+	if cfg.Addr != "127.0.0.1:9630" || cfg.Token != "token" || cfg.StateDir != stateDir || cfg.LogDir != filepath.Join(stateDir, "log") {
+		t.Fatalf("registryServerConfig()=%+v", cfg)
+	}
+}
+
 func writeRuntimeConfigForTest(t *testing.T, baseDir string, token string) {
 	t.Helper()
 	raw, err := json.Marshal(map[string]any{
