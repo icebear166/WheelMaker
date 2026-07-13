@@ -8,28 +8,26 @@ import org.junit.Test
 
 class AndroidSpeechBridgeProtocolTest {
     @Test
-    fun parsesStartRequestAndRequiresApiKey() {
+    fun parsesCaptureRequestAndRejectsApiKey() {
         val request = parseAndroidSpeechStartRequest(
             """
             {
               "provider": "volcengine",
-              "model": "doubao-streaming-asr-2.0",
-              "apiKey": "secret-key",
+			  "streamId": "speech-1",
               "audio": {"format": "pcm", "codec": "raw", "rate": 16000, "bits": 16, "channel": 1}
             }
             """.trimIndent()
         )
 
         assertEquals("volcengine", request.provider)
-        assertEquals("doubao-streaming-asr-2.0", request.model)
-        assertEquals("secret-key", request.apiKey)
+		assertEquals("speech-1", request.streamId)
         assertEquals(16000, request.audio.rate)
 
         try {
-            parseAndroidSpeechStartRequest("""{"provider":"volcengine","apiKey":""}""")
-            throw AssertionError("expected missing api key error")
-        } catch (error: IllegalArgumentException) {
-            assertEquals("Volcengine API Key is required.", error.message)
+			parseAndroidSpeechStartRequest("""{"provider":"volcengine","streamId":"speech-1","apiKey":"client-key"}""")
+			throw AssertionError("expected client api key rejection")
+		} catch (error: IllegalArgumentException) {
+			assertEquals("Android speech must not receive an API key.", error.message)
         }
     }
 
@@ -49,10 +47,9 @@ class AndroidSpeechBridgeProtocolTest {
 
     @Test
     fun serializesEventsForWebCallback() {
-        val transcript = JSONObject(AndroidSpeechEvent.Transcript(
-            streamId = "speech-1",
-            text = "hello",
-            final = false
+		val audio = JSONObject(AndroidSpeechEvent.Audio(
+			streamId = "speech-1",
+			pcm = "AQID"
         ).toJson())
         val error = JSONObject(AndroidSpeechEvent.Error(
             streamId = "speech-1",
@@ -61,10 +58,9 @@ class AndroidSpeechBridgeProtocolTest {
             retryable = false
         ).toJson())
 
-        assertEquals("transcript", transcript.getString("type"))
-        assertEquals("speech-1", transcript.getString("streamId"))
-        assertEquals("hello", transcript.getString("text"))
-        assertFalse(transcript.getBoolean("final"))
+		assertEquals("audio", audio.getString("type"))
+		assertEquals("speech-1", audio.getString("streamId"))
+		assertEquals("AQID", audio.getString("pcm"))
         assertEquals("error", error.getString("type"))
         assertEquals("NETWORK", error.getString("code"))
         assertFalse(error.getBoolean("retryable"))

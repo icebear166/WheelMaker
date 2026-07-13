@@ -367,7 +367,7 @@ func New(cfg Config) *Server {
 		loginLimiter: newLoginLimiter(time.Now),
 		secrets:      newSecretStore(cfg.ConfigPath),
 	}
-	s.speech = newSpeechService(newVolcengineSpeechProvider())
+	s.speech = newSpeechService(newVolcengineSpeechProvider(), s.resolveVolcengineASRSecret)
 	s.relay = portrelay.NewController(portrelay.ControllerConfig{
 		RegistryAddr:      cfg.Addr,
 		ForwardHubRequest: s.forwardRelayHubRequest,

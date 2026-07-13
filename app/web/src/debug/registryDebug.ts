@@ -137,15 +137,7 @@ export function redactRegistryDebugEnvelope<TEnvelope extends RegistryEnvelope>(
     delete next.resizeToken;
     return {...envelope, payload: next} as TEnvelope;
   }
-  if (envelope.method === 'speech.start') {
-    return {
-      ...envelope,
-      payload: {
-        ...record,
-        apiKey: typeof record.apiKey === 'string' && record.apiKey ? '[redacted]' : '',
-      },
-    } as TEnvelope;
-  }
+  if (envelope.method === 'speech.start') return envelope;
   const pcm = typeof record.pcm === 'string' ? record.pcm : '';
   return {
     ...envelope,

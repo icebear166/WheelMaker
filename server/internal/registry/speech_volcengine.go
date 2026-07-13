@@ -89,7 +89,7 @@ func newVolcengineSpeechProvider() speechProvider {
 
 func (p *volcengineSpeechProvider) Start(ctx context.Context, req speechProviderStartRequest, events speechEventSink) (speechProviderStream, error) {
 	headers := http.Header{}
-	headers.Set("X-Api-Key", req.APIKey)
+	headers.Set("X-Api-Key", req.credential)
 	headers.Set("X-Api-Resource-Id", p.resourceID)
 	headers.Set("X-Api-Request-Id", newSpeechRequestID())
 	headers.Set("X-Api-Sequence", "-1")

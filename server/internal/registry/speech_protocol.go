@@ -33,8 +33,6 @@ type speechAudioConfig struct {
 
 type speechStartPayload struct {
 	Provider string            `json:"provider"`
-	Model    string            `json:"model"`
-	APIKey   string            `json:"apiKey"`
 	Audio    speechAudioConfig `json:"audio"`
 }
 
@@ -88,11 +86,6 @@ func isSpeechRequestMethod(method string) bool {
 
 func redactSpeechPayload(method string, payload any) any {
 	switch method {
-	case speechMethodStart:
-		if typed, ok := payload.(speechStartPayload); ok {
-			typed.APIKey = "[redacted]"
-			return typed
-		}
 	case speechMethodChunk:
 		if typed, ok := payload.(speechChunkPayload); ok {
 			byteCount := 0

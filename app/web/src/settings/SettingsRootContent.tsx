@@ -296,22 +296,6 @@ export function SettingsRootContent({
             <div className="voice-input-settings-nested">
               <label className="settings-row sidebar-setting-row voice-input-settings-child-row">
                 <span>
-                  <span className="codicon codicon-key settings-row-icon" aria-hidden="true" />
-                  API Key
-                </span>
-                <input
-                  className="sidebar-setting-input"
-                  type="text"
-                  autoComplete="off"
-                  spellCheck={false}
-                  value={speechSettings.volcengineApiKey}
-                  onChange={event => setSpeechSettings(current =>
-                    normalizeSpeechSettings({...current, volcengineApiKey: event.target.value}),
-                  )}
-                />
-              </label>
-              <label className="settings-row sidebar-setting-row voice-input-settings-child-row">
-                <span>
                   <span className="codicon codicon-symbol-misc settings-row-icon" aria-hidden="true" />
                   Model
                 </span>

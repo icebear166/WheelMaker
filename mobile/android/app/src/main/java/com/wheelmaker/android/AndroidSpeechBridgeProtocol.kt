@@ -2,10 +2,17 @@ package com.wheelmaker.android
 
 import org.json.JSONObject
 
+data class SpeechAudioConfig(
+    val format: String = "pcm",
+    val codec: String = "raw",
+    val rate: Int = 16000,
+    val bits: Int = 16,
+    val channel: Int = 1
+)
+
 data class AndroidSpeechStartRequest(
+    val streamId: String,
     val provider: String,
-    val model: String,
-    val apiKey: String,
     val audio: SpeechAudioConfig
 )
 
@@ -35,16 +42,14 @@ sealed class AndroidSpeechEvent {
             .toString()
     }
 
-    data class Transcript(
+    data class Audio(
         override val streamId: String,
-        val text: String,
-        val final: Boolean
+        val pcm: String
     ) : AndroidSpeechEvent() {
         override fun toJson(): String = JSONObject()
-            .put("type", "transcript")
+            .put("type", "audio")
             .put("streamId", streamId)
-            .put("text", text)
-            .put("final", final)
+            .put("pcm", pcm)
             .toString()
     }
 
@@ -60,9 +65,7 @@ sealed class AndroidSpeechEvent {
                 .put("code", code)
                 .put("message", message)
                 .put("retryable", retryable)
-            if (streamId.isNotBlank()) {
-                payload.put("streamId", streamId)
-            }
+            if (streamId.isNotBlank()) payload.put("streamId", streamId)
             return payload.toString()
         }
     }
@@ -81,31 +84,21 @@ sealed class AndroidSpeechEvent {
 
 fun parseAndroidSpeechStartRequest(rawJson: String): AndroidSpeechStartRequest {
     val root = JSONObject(rawJson)
+    val streamId = root.optString("streamId", "").trim()
     val provider = root.optString("provider", "").trim()
-    val model = root.optString("model", "").trim()
-    val apiKey = root.optString("apiKey", "").trim()
-    if (apiKey.isBlank()) {
-        throw IllegalArgumentException("Volcengine API Key is required.")
-    }
-    if (provider != "volcengine") {
-        throw IllegalArgumentException("Only Volcengine speech is supported on Android.")
-    }
-    if (model != "doubao-streaming-asr-2.0") {
-        throw IllegalArgumentException("Unsupported Android speech model.")
-    }
+    if (streamId.isBlank()) throw IllegalArgumentException("Registry speech stream ID is required.")
+    if (provider != "volcengine") throw IllegalArgumentException("Only Volcengine speech is supported on Android.")
+    if (root.has("apiKey")) throw IllegalArgumentException("Android speech must not receive an API key.")
     val audio = root.optJSONObject("audio")
-    return AndroidSpeechStartRequest(
-        provider = provider,
-        model = model,
-        apiKey = apiKey,
-        audio = SpeechAudioConfig(
-            format = audio?.optString("format", "pcm") ?: "pcm",
-            codec = audio?.optString("codec", "raw") ?: "raw",
-            rate = audio?.optInt("rate", 16000) ?: 16000,
-            bits = audio?.optInt("bits", 16) ?: 16,
-            channel = audio?.optInt("channel", 1) ?: 1
-        )
+    val config = SpeechAudioConfig(
+        format = audio?.optString("format", "pcm") ?: "pcm",
+        codec = audio?.optString("codec", "raw") ?: "raw",
+        rate = audio?.optInt("rate", 16000) ?: 16000,
+        bits = audio?.optInt("bits", 16) ?: 16,
+        channel = audio?.optInt("channel", 1) ?: 1
     )
+    if (config != SpeechAudioConfig()) throw IllegalArgumentException("Android speech requires pcm/raw 16kHz 16-bit mono audio.")
+    return AndroidSpeechStartRequest(streamId = streamId, provider = provider, audio = config)
 }
 
 fun androidSpeechCommandAccepted(streamId: String): String = JSONObject()

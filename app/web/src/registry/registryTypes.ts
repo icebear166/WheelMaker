@@ -16,8 +16,6 @@ export interface RegistrySpeechAudioConfig {
 
 export interface RegistrySpeechStartPayload {
   provider: 'volcengine';
-  model: 'doubao-streaming-asr-2.0';
-  apiKey: string;
   audio: RegistrySpeechAudioConfig;
 }
 

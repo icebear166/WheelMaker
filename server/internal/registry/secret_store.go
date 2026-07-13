@@ -16,6 +16,8 @@ import (
 
 const maxSecretValueBytes = 16 * 1024
 
+var errSpeechSecretNotConfigured = errors.New("speech secret not configured")
+
 type secretKind string
 
 const (
@@ -148,6 +150,17 @@ func (s *Server) handleSecretRequest(peer *peerConn, in envelope) {
 	default:
 		_ = s.writeError(peer, in.RequestID, in.Method, codeInvalidArgument, "unsupported secret method", nil)
 	}
+}
+
+func (s *Server) resolveVolcengineASRSecret() (string, error) {
+	value, configured, err := s.secrets.Value(secretKindVolcengineASR)
+	if err != nil {
+		return "", err
+	}
+	if !configured {
+		return "", errSpeechSecretNotConfigured
+	}
+	return value, nil
 }
 
 func (s *Server) handleSecretUpdate(peer *peerConn, in envelope) {

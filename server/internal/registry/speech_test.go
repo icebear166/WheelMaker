@@ -3,11 +3,87 @@ package registry
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/swm8023/wheelmaker/internal/shared"
 )
+
+func TestSpeechBackendSecretIsPassedOnlyToProvider(t *testing.T) {
+	provider := newFakeSpeechProvider()
+	configPath := writeSpeechSecretConfig(t, "backend-speech-key")
+	s := New(Config{ConfigPath: configPath})
+	s.speech.provider = provider
+	ts := httptestNewRegistryServer(t, s.Handler())
+	client := dialWS(t, "http://"+ts+"/ws")
+	defer client.Close()
+	connectRegistryClient(t, client)
+	writeSpeechStartRequest(t, client, 2)
+	resp := mustReadEnvelope(t, client)
+	if resp.Type != "response" {
+		t.Fatalf("speech start response=%#v", resp)
+	}
+	if provider.start.credential != "backend-speech-key" {
+		t.Fatalf("provider credential was not resolved from backend")
+	}
+	encoded, _ := json.Marshal(resp)
+	if bytes.Contains(encoded, []byte("backend-speech-key")) {
+		t.Fatalf("response leaks backend key: %s", encoded)
+	}
+}
+
+func TestSpeechRejectsAPIKeyFromClient(t *testing.T) {
+	provider := newFakeSpeechProvider()
+	s := New(Config{ConfigPath: writeSpeechSecretConfig(t, "backend-key")})
+	s.speech.provider = provider
+	ts := httptestNewRegistryServer(t, s.Handler())
+	client := dialWS(t, "http://"+ts+"/ws")
+	defer client.Close()
+	connectRegistryClient(t, client)
+	mustWriteJSON(t, client, testEnvelope{RequestID: 2, Type: "request", Method: "speech.start", Payload: map[string]any{
+		"provider": "volcengine", "apiKey": "client-key", "audio": map[string]any{"format": "pcm", "codec": "raw", "rate": 16000, "bits": 16, "channel": 1},
+	}})
+	resp := mustReadEnvelope(t, client)
+	if resp.Type != "error" || resp.Payload["code"] != codeInvalidArgument {
+		t.Fatalf("response=%#v, want invalid argument", resp)
+	}
+	if provider.stream != nil {
+		t.Fatal("provider started for client-supplied apiKey")
+	}
+}
+
+func TestSpeechNotConfiguredUsesStableCode(t *testing.T) {
+	provider := newFakeSpeechProvider()
+	s := New(Config{ConfigPath: writeSpeechSecretConfig(t, "")})
+	s.speech.provider = provider
+	ts := httptestNewRegistryServer(t, s.Handler())
+	client := dialWS(t, "http://"+ts+"/ws")
+	defer client.Close()
+	connectRegistryClient(t, client)
+	writeSpeechStartRequest(t, client, 2)
+	resp := mustReadEnvelope(t, client)
+	if resp.Type != "error" || resp.Payload["code"] != "not_configured" {
+		t.Fatalf("response=%#v, want not_configured", resp)
+	}
+	if provider.stream != nil {
+		t.Fatal("provider started without backend secret")
+	}
+}
+
+func writeSpeechSecretConfig(t *testing.T, value string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "config.json")
+	cfg := shared.AppConfig{Projects: []shared.ProjectConfig{{Name: "p", Path: "."}}}
+	cfg.Secrets.VolcengineASR.Value = value
+	raw, _ := json.Marshal(cfg)
+	if err := shared.WriteConfigFile(path, raw); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	return path
+}
 
 func TestSpeechMethodsAreClientOnly(t *testing.T) {
 	for _, method := range []string{
@@ -31,11 +107,11 @@ func TestSpeechMethodsAreClientOnly(t *testing.T) {
 	}
 }
 
+func testSpeechSecretResolver() (string, error) { return "secret-key", nil }
+
 func TestRedactSpeechPayloadHidesSecretsAndAudio(t *testing.T) {
 	start := redactSpeechPayload("speech.start", speechStartPayload{
 		Provider: "volcengine",
-		Model:    "doubao-streaming-asr-2.0",
-		APIKey:   "secret-key",
 		Audio: speechAudioConfig{
 			Format:  "pcm",
 			Codec:   "raw",
@@ -47,9 +123,6 @@ func TestRedactSpeechPayloadHidesSecretsAndAudio(t *testing.T) {
 	startPayload, ok := start.(speechStartPayload)
 	if !ok {
 		t.Fatalf("redacted start type=%T, want speechStartPayload", start)
-	}
-	if startPayload.APIKey != "[redacted]" {
-		t.Fatalf("apiKey=%q, want [redacted]", startPayload.APIKey)
 	}
 	if startPayload.Provider != "volcengine" || startPayload.Audio.Rate != 16000 {
 		t.Fatalf("redaction should preserve non-secret metadata: %#v", startPayload)
@@ -75,7 +148,7 @@ func TestRedactSpeechPayloadHidesSecretsAndAudio(t *testing.T) {
 func TestSpeechLifecycleUsesRegistryLocalProvider(t *testing.T) {
 	provider := newFakeSpeechProvider()
 	s := New(Config{})
-	s.speech = newSpeechService(provider)
+	s.speech = newSpeechService(provider, testSpeechSecretResolver)
 	ts := httptestNewRegistryServer(t, s.Handler())
 
 	client := dialWS(t, "http://"+ts+"/ws")
@@ -88,8 +161,6 @@ func TestSpeechLifecycleUsesRegistryLocalProvider(t *testing.T) {
 		Method:    "speech.start",
 		Payload: map[string]any{
 			"provider": "volcengine",
-			"model":    "doubao-streaming-asr-2.0",
-			"apiKey":   "secret-key",
 			"audio": map[string]any{
 				"format":  "pcm",
 				"codec":   "raw",
@@ -107,7 +178,7 @@ func TestSpeechLifecycleUsesRegistryLocalProvider(t *testing.T) {
 	if !ok || streamID == "" {
 		t.Fatalf("missing streamId in response: %#v", startResp.Payload)
 	}
-	if provider.start.APIKey != "secret-key" || provider.start.Audio.Rate != 16000 {
+	if provider.start.credential != "secret-key" || provider.start.Audio.Rate != 16000 {
 		t.Fatalf("provider start=%#v", provider.start)
 	}
 
@@ -158,7 +229,7 @@ func TestSpeechLifecycleUsesRegistryLocalProvider(t *testing.T) {
 func TestSpeechChunkRejectsBadBase64(t *testing.T) {
 	provider := newFakeSpeechProvider()
 	s := New(Config{})
-	s.speech = newSpeechService(provider)
+	s.speech = newSpeechService(provider, testSpeechSecretResolver)
 	ts := httptestNewRegistryServer(t, s.Handler())
 
 	client := dialWS(t, "http://"+ts+"/ws")
@@ -191,7 +262,7 @@ func TestSpeechChunkRejectsBadBase64(t *testing.T) {
 func TestSpeechDisconnectCancelsActiveStreams(t *testing.T) {
 	provider := newFakeSpeechProvider()
 	s := New(Config{})
-	s.speech = newSpeechService(provider)
+	s.speech = newSpeechService(provider, testSpeechSecretResolver)
 	ts := httptestNewRegistryServer(t, s.Handler())
 
 	client := dialWS(t, "http://"+ts+"/ws")
@@ -209,7 +280,7 @@ func TestSpeechDisconnectCancelsActiveStreams(t *testing.T) {
 func TestSpeechStartReplacesActiveStreamForSameConnection(t *testing.T) {
 	provider := newFakeSpeechProvider()
 	s := New(Config{})
-	s.speech = newSpeechService(provider)
+	s.speech = newSpeechService(provider, testSpeechSecretResolver)
 	ts := httptestNewRegistryServer(t, s.Handler())
 
 	client := dialWS(t, "http://"+ts+"/ws")
@@ -236,7 +307,7 @@ func TestSpeechStartReplacesActiveStreamForSameConnection(t *testing.T) {
 func TestSpeechFinishReleasesActiveStreamImmediately(t *testing.T) {
 	provider := newFakeSpeechProvider()
 	s := New(Config{})
-	s.speech = newSpeechService(provider)
+	s.speech = newSpeechService(provider, testSpeechSecretResolver)
 	ts := httptestNewRegistryServer(t, s.Handler())
 
 	client := dialWS(t, "http://"+ts+"/ws")
@@ -271,6 +342,7 @@ func TestSpeechStartCancelsClosingStreamForConnection(t *testing.T) {
 	provider := newFakeSpeechProvider()
 	s := New(Config{})
 	s.speech = newSpeechServiceWithOptions(provider, speechServiceOptions{
+		secretResolver:      testSpeechSecretResolver,
 		idleTimeout:         time.Second,
 		startTimeout:        time.Second,
 		finishTimeout:       time.Second,
@@ -309,6 +381,7 @@ func TestSpeechCancelCancelsClosingStream(t *testing.T) {
 	provider := newFakeSpeechProvider()
 	s := New(Config{})
 	s.speech = newSpeechServiceWithOptions(provider, speechServiceOptions{
+		secretResolver:      testSpeechSecretResolver,
 		idleTimeout:         time.Second,
 		startTimeout:        time.Second,
 		finishTimeout:       time.Second,
@@ -356,6 +429,7 @@ func TestSpeechFinishKeepsClosingRouteForFinalTranscript(t *testing.T) {
 	provider := newFakeSpeechProvider()
 	s := New(Config{})
 	s.speech = newSpeechServiceWithOptions(provider, speechServiceOptions{
+		secretResolver:      testSpeechSecretResolver,
 		idleTimeout:         time.Second,
 		startTimeout:        time.Second,
 		finishTimeout:       time.Second,
@@ -396,6 +470,7 @@ func TestSpeechFinishClosingRouteForwardsInterimTranscript(t *testing.T) {
 	provider := newFakeSpeechProvider()
 	s := New(Config{})
 	s.speech = newSpeechServiceWithOptions(provider, speechServiceOptions{
+		secretResolver:      testSpeechSecretResolver,
 		idleTimeout:         time.Second,
 		startTimeout:        time.Second,
 		finishTimeout:       time.Second,
@@ -438,6 +513,7 @@ func TestSpeechFinishClosingRouteExpires(t *testing.T) {
 	provider := newFakeSpeechProvider()
 	s := New(Config{})
 	s.speech = newSpeechServiceWithOptions(provider, speechServiceOptions{
+		secretResolver:      testSpeechSecretResolver,
 		idleTimeout:         time.Second,
 		startTimeout:        time.Second,
 		finishTimeout:       time.Second,
@@ -474,7 +550,7 @@ func TestSpeechFinishClosingRouteExpires(t *testing.T) {
 func TestSpeechProviderErrorReleasesActiveStream(t *testing.T) {
 	provider := newFakeSpeechProvider()
 	s := New(Config{})
-	s.speech = newSpeechService(provider)
+	s.speech = newSpeechService(provider, testSpeechSecretResolver)
 	ts := httptestNewRegistryServer(t, s.Handler())
 
 	client := dialWS(t, "http://"+ts+"/ws")
@@ -501,9 +577,10 @@ func TestSpeechIdleTimeoutCancelsStreamAndEmitsError(t *testing.T) {
 	provider := newFakeSpeechProvider()
 	s := New(Config{})
 	s.speech = newSpeechServiceWithOptions(provider, speechServiceOptions{
-		idleTimeout:   20 * time.Millisecond,
-		startTimeout:  time.Second,
-		finishTimeout: time.Second,
+		secretResolver: testSpeechSecretResolver,
+		idleTimeout:    20 * time.Millisecond,
+		startTimeout:   time.Second,
+		finishTimeout:  time.Second,
 	})
 	ts := httptestNewRegistryServer(t, s.Handler())
 
@@ -540,9 +617,10 @@ func TestSpeechProviderStartTimeoutReleasesActiveStream(t *testing.T) {
 	provider := &timeoutFirstSpeechProvider{}
 	s := New(Config{})
 	s.speech = newSpeechServiceWithOptions(provider, speechServiceOptions{
-		idleTimeout:   time.Second,
-		startTimeout:  20 * time.Millisecond,
-		finishTimeout: time.Second,
+		secretResolver: testSpeechSecretResolver,
+		idleTimeout:    time.Second,
+		startTimeout:   20 * time.Millisecond,
+		finishTimeout:  time.Second,
 	})
 	ts := httptestNewRegistryServer(t, s.Handler())
 
@@ -569,9 +647,10 @@ func TestSpeechProviderFinishTimeoutDoesNotRestoreActiveStream(t *testing.T) {
 	provider := &blockingFinishSpeechProvider{}
 	s := New(Config{})
 	s.speech = newSpeechServiceWithOptions(provider, speechServiceOptions{
-		idleTimeout:   time.Second,
-		startTimeout:  time.Second,
-		finishTimeout: 20 * time.Millisecond,
+		secretResolver: testSpeechSecretResolver,
+		idleTimeout:    time.Second,
+		startTimeout:   time.Second,
+		finishTimeout:  20 * time.Millisecond,
 	})
 	ts := httptestNewRegistryServer(t, s.Handler())
 
@@ -626,8 +705,6 @@ func writeSpeechStartRequest(t *testing.T, client *websocket.Conn, requestID int
 		Method:    "speech.start",
 		Payload: map[string]any{
 			"provider": "volcengine",
-			"model":    "doubao-streaming-asr-2.0",
-			"apiKey":   "secret-key",
 			"audio": map[string]any{
 				"format":  "pcm",
 				"codec":   "raw",

@@ -2,10 +2,9 @@ export type SpeechProviderId = 'volcengine';
 export type SpeechModelId = 'doubao-streaming-asr-2.0';
 
 export type SpeechSettings = {
-  enabled: boolean;
-  provider: SpeechProviderId;
-  model: SpeechModelId;
-  volcengineApiKey: string;
+	enabled: boolean;
+	provider: SpeechProviderId;
+	model: SpeechModelId;
 };
 
 export type SpeechModelOption = {
@@ -26,7 +25,6 @@ export const DEFAULT_SPEECH_SETTINGS: SpeechSettings = {
   enabled: false,
   provider: 'volcengine',
   model: 'doubao-streaming-asr-2.0',
-  volcengineApiKey: '',
 };
 
 export function normalizeSpeechSettings(input: unknown): SpeechSettings {
@@ -38,16 +36,10 @@ export function normalizeSpeechSettings(input: unknown): SpeechSettings {
     enabled: record.enabled === true,
     provider: 'volcengine',
     model: 'doubao-streaming-asr-2.0',
-    volcengineApiKey: typeof record.volcengineApiKey === 'string'
-      ? record.volcengineApiKey
-      : '',
   };
 }
 
 export function maskSpeechSettingsForExport(input: unknown): SpeechSettings {
   const settings = normalizeSpeechSettings(input);
-  return {
-    ...settings,
-    volcengineApiKey: settings.volcengineApiKey ? '[redacted]' : '',
-  };
+	return settings;
 }

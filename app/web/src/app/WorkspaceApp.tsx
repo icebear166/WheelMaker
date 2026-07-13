@@ -3303,7 +3303,6 @@ export function App() {
   const voiceCaptureGenerationRef = useRef(0);
   const voiceRemoteStartRequestedRef = useRef(false);
   const voiceActiveSettingsRef = useRef<ReturnType<typeof normalizeSpeechSettings> | null>(null);
-  const voiceActiveApiKeyRef = useRef('');
   const voiceRuntimeKeyRef = useRef('');
   const voiceStartedAtRef = useRef(0);
   const voiceTransportModeRef = useRef<VoiceTransportMode>('registry');
@@ -11110,7 +11109,6 @@ export function App() {
     voiceReconnectBufferingRef.current = false;
     voiceRemoteStartRequestedRef.current = false;
     voiceActiveSettingsRef.current = null;
-    voiceActiveApiKeyRef.current = '';
     voiceRuntimeKeyRef.current = '';
     voiceTransportModeRef.current = 'registry';
     resetVoiceRecordingUi();
@@ -11201,7 +11199,12 @@ export function App() {
     }
     try {
       if (transportMode === 'android-native') {
-        await androidSpeechRuntime?.cancel(streamId, reason);
+		const results = await Promise.allSettled([
+			androidSpeechRuntime?.cancel(streamId, reason),
+			service.cancelSpeech({streamId, reason}),
+		]);
+		const backend = results[1];
+		if (backend?.status === 'rejected') throw backend.reason;
       } else {
         await service.cancelSpeech({streamId, reason});
       }
@@ -11247,7 +11250,10 @@ export function App() {
     }
     if (streamId && options.cancelStream !== false && (transportMode === 'android-native' || connectedRef.current)) {
       const cancelPromise = transportMode === 'android-native'
-        ? androidSpeechRuntime?.cancel(streamId, 'error')
+		? Promise.allSettled([
+			androidSpeechRuntime?.cancel(streamId, 'error'),
+			service.cancelSpeech({streamId, reason: 'error'}),
+		  ]).then(() => undefined)
         : service.cancelSpeech({streamId, reason: 'error'});
       cancelPromise?.catch(err => {
         logVoiceInputDiagnostic('error', 'preserve_cancel_failed', {
@@ -11327,9 +11333,8 @@ export function App() {
       maxBytes: voiceInputBufferRef.current.stats().maxBytes,
     });
     const settings = voiceActiveSettingsRef.current;
-    const apiKey = voiceActiveApiKeyRef.current;
-    if (settings && apiKey) {
-      void runVoiceStartLoop(generation, settings, apiKey);
+    if (settings) {
+      void runVoiceStartLoop(generation, settings);
     }
     return true;
   };
@@ -11371,15 +11376,12 @@ export function App() {
   const startVoiceRegistryStream = async (
     generation: number,
     settings: ReturnType<typeof normalizeSpeechSettings>,
-    apiKey: string,
   ) => {
     if (voiceStreamIdRef.current || !isVoiceGenerationActive(generation)) {
       return true;
     }
     const response = await service.startSpeech({
       provider: 'volcengine',
-      model: settings.model,
-      apiKey,
       audio: {
         format: 'pcm',
         codec: 'raw',
@@ -11420,7 +11422,6 @@ export function App() {
   const runVoiceStartLoop = async (
     generation: number,
     settings: ReturnType<typeof normalizeSpeechSettings>,
-    apiKey: string,
   ) => {
     while (isVoiceGenerationActive(generation) && !voiceStreamIdRef.current) {
       if (!connectedRef.current) {
@@ -11439,7 +11440,7 @@ export function App() {
         }
       }
       try {
-        const started = await startVoiceRegistryStream(generation, settings, apiKey);
+        const started = await startVoiceRegistryStream(generation, settings);
         if (started) {
           return;
         }
@@ -11518,12 +11519,11 @@ export function App() {
         return;
       }
       const settings = voiceActiveSettingsRef.current;
-      const apiKey = voiceActiveApiKeyRef.current;
-      if (!settings || !apiKey) {
+      if (!settings) {
         return;
       }
       voiceRemoteStartRequestedRef.current = true;
-      void runVoiceStartLoop(generation, settings, apiKey);
+      void runVoiceStartLoop(generation, settings);
     },
     onLevel: level => {
       if (voiceCaptureGenerationRef.current > 0) {
@@ -11577,16 +11577,7 @@ export function App() {
         if (!isVoiceGenerationActive(generation)) {
           return;
         }
-        voiceAwaitingFinalRef.current = true;
-        voiceRecordingRef.current = false;
-        voiceInteractionModeRef.current = null;
-        setVoiceInteractionMode(null);
-        setVoiceRecording(true);
-        setVoiceRecordingStatus('recognizing');
-        setVoiceCancelIntent(false);
-        setVoiceLevel(0);
-        scheduleVoiceFinalTimeout(generation);
-        logVoiceInputState('debug', 'native_finish_completed');
+		logVoiceInputState('debug', 'native_capture_finish_requested');
       } catch (err) {
         if (!isVoiceGenerationActive(generation)) {
           return;
@@ -11684,15 +11675,43 @@ export function App() {
     finishVoiceInputPreservingTranscript(payload.message, {cancelStream: false});
   };
 
+	const finishAndroidRegistryStream = async () => {
+		const generation = voiceStartGenerationRef.current;
+		try {
+			await voiceSendQueueRef.current?.drain();
+			const streamId = voiceStreamIdRef.current;
+			if (!streamId || !isVoiceGenerationActive(generation)) return;
+			await service.finishSpeech({streamId});
+			voiceAwaitingFinalRef.current = true;
+			voiceRecordingRef.current = false;
+			voiceInteractionModeRef.current = null;
+			setVoiceInteractionMode(null);
+			setVoiceRecording(true);
+			setVoiceRecordingStatus('recognizing');
+			setVoiceCancelIntent(false);
+			setVoiceLevel(0);
+			scheduleVoiceFinalTimeout(generation);
+			logVoiceInputState('debug', 'native_backend_finish_completed');
+		} catch (err) {
+			if (!isVoiceGenerationActive(generation)) return;
+			finishVoiceInputPreservingTranscript(err instanceof Error ? err.message : String(err));
+		}
+	};
+
   const handleAndroidNativeSpeechEvent = (event: AndroidNativeSpeechEvent) => {
-    if (event.type === 'transcript') {
-      handleVoiceSpeechTranscriptEvent({
-        streamId: event.streamId,
-        text: event.text,
-        final: event.final,
-      });
-      return;
-    }
+		if (event.type === 'audio') {
+			if (event.streamId !== voiceStreamIdRef.current) return;
+			try {
+				const binary = window.atob(event.pcm);
+				const pcm = Uint8Array.from(binary, char => char.charCodeAt(0));
+				voiceSendQueueRef.current?.enqueue(pcm).catch(err => (
+					handleVoiceChunkSendFailure(voiceStartGenerationRef.current, err)
+				));
+			} catch (err) {
+				handleVoiceChunkSendFailure(voiceStartGenerationRef.current, err);
+			}
+			return;
+		}
     if (event.type === 'error') {
       if (event.streamId && event.streamId !== voiceStreamIdRef.current) {
         return;
@@ -11726,9 +11745,13 @@ export function App() {
       }
       return;
     }
-    if (event.type === 'closed' && event.reason === 'app_background') {
-      finishVoiceInputPreservingTranscript(undefined, {cancelStream: false});
-    }
+		if (event.type === 'closed' && event.reason === 'finished') {
+			void finishAndroidRegistryStream();
+			return;
+		}
+		if (event.type === 'closed' && event.reason === 'app_background') {
+			finishVoiceInputPreservingTranscript();
+		}
   };
 
   const startVoiceInput = async (interactionMode: VoiceInputInteractionMode = 'locked') => {
@@ -11737,7 +11760,6 @@ export function App() {
       return;
     }
     const settings = normalizeSpeechSettings(speechSettings);
-    const apiKey = settings.volcengineApiKey.trim();
     if (!settings.enabled) {
       logVoiceInputState('warn', 'start_ignored_disabled');
       return;
@@ -11752,14 +11774,9 @@ export function App() {
         return;
       }
     }
-    if (!nativeSpeechHost && !connected && !voiceInputReconnectAvailable()) {
+	if (!connected && !voiceInputReconnectAvailable()) {
       logVoiceInputState('warn', 'start_ignored_disconnected');
       setError('Connect Registry before using voice input.');
-      return;
-    }
-    if (!apiKey) {
-      logVoiceInputState('warn', 'start_ignored_missing_api_key');
-      setError('Fill Volcengine API Key in Chat settings first.');
       return;
     }
     const composerSelection = chatRichComposerRef.current?.getPlainTextSelection();
@@ -11775,7 +11792,7 @@ export function App() {
       interactionMode,
       transportMode: nativeSpeechHost ? 'android-native' : 'registry',
     });
-    if (!nativeSpeechHost && !connected) {
+	if (!connected) {
       logVoiceInputState('warn', 'start_buffering_disconnected', {
         reconnectAvailable: voiceInputReconnectAvailable(),
       });
@@ -11790,7 +11807,6 @@ export function App() {
     voiceReconnectBufferingRef.current = false;
     voiceRemoteStartRequestedRef.current = false;
     voiceActiveSettingsRef.current = settings;
-    voiceActiveApiKeyRef.current = apiKey;
     voiceRuntimeKeyRef.current = currentVoiceInputRuntimeKey();
     voiceTransportModeRef.current = nativeSpeechHost ? 'android-native' : 'registry';
     voiceStartedAtRef.current = Date.now();
@@ -11816,11 +11832,14 @@ export function App() {
         if (!androidSpeechRuntime) {
           throw new Error('Android native speech is unavailable.');
         }
-        logVoiceInputState('debug', 'native_start_requested');
+		if (!connectedRef.current) await connect({silentReconnect: true});
+		const started = await startVoiceRegistryStream(generation, settings);
+		if (!started || !voiceStreamIdRef.current) throw new Error('Registry speech did not start.');
+		const registryStreamId = voiceStreamIdRef.current;
+		logVoiceInputState('debug', 'native_start_requested');
         const response = await androidSpeechRuntime.start({
+			streamId: registryStreamId,
           provider: 'volcengine',
-          model: settings.model,
-          apiKey,
           audio: {
             format: 'pcm',
             codec: 'raw',
@@ -11831,9 +11850,10 @@ export function App() {
         });
         if (!isVoiceGenerationActive(generation)) {
           await androidSpeechRuntime.cancel(response.streamId, 'gesture');
+			await service.cancelSpeech({streamId: registryStreamId, reason: 'gesture'});
           return;
         }
-        voiceStreamIdRef.current = response.streamId;
+		if (response.streamId !== registryStreamId) throw new Error('Android speech stream does not match Registry stream.');
         voiceRemoteStartRequestedRef.current = true;
         setVoiceRecordingStatus('buffering');
         logVoiceInputState('debug', 'native_started', {streamIdPresent: true});
@@ -11853,8 +11873,10 @@ export function App() {
       voiceCaptureRef.current = capture;
       setVoiceRecordingStatus('starting');
     } catch (err) {
+		const activeStreamId = voiceStreamIdRef.current;
       stopVoiceCapture();
       clearVoiceInputState();
+		if (activeStreamId) service.cancelSpeech({streamId: activeStreamId, reason: 'error'}).catch(() => undefined);
       logVoiceInputDiagnostic('error', 'start_failed', {
         connected,
         model: settings.model,

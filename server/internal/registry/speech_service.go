@@ -3,7 +3,6 @@ package registry
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -22,10 +21,10 @@ const (
 )
 
 type speechProviderStartRequest struct {
-	Provider string
-	Model    string
-	APIKey   string
-	Audio    speechAudioConfig
+	Provider   string
+	Model      string
+	credential string
+	Audio      speechAudioConfig
 }
 
 type speechProvider interface {
@@ -44,7 +43,8 @@ type speechEventSink interface {
 }
 
 type speechService struct {
-	provider speechProvider
+	provider       speechProvider
+	secretResolver func() (string, error)
 
 	idleTimeout         time.Duration
 	startTimeout        time.Duration
@@ -60,6 +60,7 @@ type speechService struct {
 }
 
 type speechServiceOptions struct {
+	secretResolver      func() (string, error)
 	idleTimeout         time.Duration
 	startTimeout        time.Duration
 	finishTimeout       time.Duration
@@ -81,14 +82,22 @@ type activeSpeechStream struct {
 	closingTimer *time.Timer
 }
 
-func newSpeechService(provider speechProvider) *speechService {
-	return newSpeechServiceWithOptions(provider, speechServiceOptions{})
+func newSpeechService(provider speechProvider, resolvers ...func() (string, error)) *speechService {
+	return newSpeechServiceWithOptions(provider, speechServiceOptions{}, resolvers...)
 }
 
-func newSpeechServiceWithOptions(provider speechProvider, options speechServiceOptions) *speechService {
+func newSpeechServiceWithOptions(provider speechProvider, options speechServiceOptions, resolvers ...func() (string, error)) *speechService {
 	options = normalizeSpeechServiceOptions(options)
+	resolver := func() (string, error) { return "", errSpeechSecretNotConfigured }
+	if options.secretResolver != nil {
+		resolver = options.secretResolver
+	}
+	if len(resolvers) > 0 && resolvers[0] != nil {
+		resolver = resolvers[0]
+	}
 	return &speechService{
 		provider:            provider,
+		secretResolver:      resolver,
 		idleTimeout:         options.idleTimeout,
 		startTimeout:        options.startTimeout,
 		finishTimeout:       options.finishTimeout,
@@ -144,6 +153,15 @@ func (s *speechService) handleStart(peer *peerConn, state *connectionState, in e
 		_ = writeSpeechError(peer, in.RequestID, in.Method, codeInvalidArgument, err.Error(), nil)
 		return
 	}
+	credential, err := s.secretResolver()
+	if err != nil {
+		if errors.Is(err, errSpeechSecretNotConfigured) {
+			_ = writeSpeechError(peer, in.RequestID, in.Method, "not_configured", "Volcengine speech is not configured", nil)
+			return
+		}
+		_ = writeSpeechError(peer, in.RequestID, in.Method, codeInternal, "load speech credential failed", nil)
+		return
+	}
 
 	streamID := fmt.Sprintf("speech-%d", s.nextStreamID.Add(1))
 	ctx, cancel := context.WithCancel(context.Background())
@@ -176,15 +194,16 @@ func (s *speechService) handleStart(peer *peerConn, state *connectionState, in e
 	}
 
 	stream, err := s.startProvider(ctx, speechProviderStartRequest{
-		Provider: payload.Provider,
-		Model:    payload.Model,
-		APIKey:   payload.APIKey,
-		Audio:    payload.Audio,
+		Provider:   payload.Provider,
+		Model:      speechModelDoubaoASR2,
+		credential: credential,
+		Audio:      payload.Audio,
 	}, speechStreamEvents{service: s, streamID: streamID})
+	credential = ""
 	if err != nil {
 		cancel()
 		s.detachStream(state.id, streamID)
-		_ = writeSpeechError(peer, in.RequestID, in.Method, codeUnavailable, "speech provider start failed", map[string]any{"error": err.Error()})
+		_ = writeSpeechError(peer, in.RequestID, in.Method, codeUnavailable, "speech provider start failed", nil)
 		return
 	}
 	if !s.attachProviderStream(state.id, streamID, stream) {
@@ -574,22 +593,16 @@ func (s *speechService) streamForError(streamID string) (*activeSpeechStream, bo
 	return nil, false
 }
 
-func decodeSpeechPayload(payload json.RawMessage, out any) error {
+func decodeSpeechPayload(payload []byte, out any) error {
 	if len(payload) == 0 {
 		return errors.New("missing payload")
 	}
-	return json.Unmarshal(payload, out)
+	return decodeStrictPayload(payload, out)
 }
 
 func validateSpeechStart(payload speechStartPayload) error {
 	if strings.TrimSpace(payload.Provider) != speechProviderVolcengine {
 		return errors.New("provider must be volcengine")
-	}
-	if strings.TrimSpace(payload.Model) != speechModelDoubaoASR2 {
-		return errors.New("model must be doubao-streaming-asr-2.0")
-	}
-	if strings.TrimSpace(payload.APIKey) == "" {
-		return errors.New("apiKey is required")
 	}
 	if payload.Audio.Format != "pcm" || payload.Audio.Codec != "raw" || payload.Audio.Rate != 16000 || payload.Audio.Bits != 16 || payload.Audio.Channel != 1 {
 		return errors.New("audio must be pcm/raw 16kHz 16-bit mono")

@@ -13,7 +13,6 @@ describe('web speech settings', () => {
       enabled: false,
       provider: 'volcengine',
       model: 'doubao-streaming-asr-2.0',
-      volcengineApiKey: '',
     });
     expect(SPEECH_MODEL_OPTIONS).toEqual([
       {
@@ -24,33 +23,31 @@ describe('web speech settings', () => {
     ]);
   });
 
-  test('normalizes and masks user supplied speech settings', () => {
+	test('normalizes non-secret speech settings and drops legacy keys', () => {
     expect(normalizeSpeechSettings({
       enabled: true,
       provider: 'bad',
       model: 'bad-model',
-      volcengineApiKey: '  key-with-spaces  ',
+		volcengineApiKey: 'legacy-key-is-dropped',
     })).toEqual({
       enabled: true,
       provider: 'volcengine',
       model: 'doubao-streaming-asr-2.0',
-      volcengineApiKey: '  key-with-spaces  ',
     });
 
     expect(maskSpeechSettingsForExport({
       enabled: true,
       provider: 'volcengine',
       model: 'doubao-streaming-asr-2.0',
-      volcengineApiKey: 'secret-key',
+		volcengineApiKey: 'legacy-key-is-dropped',
     })).toEqual({
       enabled: true,
       provider: 'volcengine',
       model: 'doubao-streaming-asr-2.0',
-      volcengineApiKey: '[redacted]',
     });
   });
 
-  test('persists speech settings and redacts API key from database dumps', () => {
+	test('persists only non-secret speech settings', () => {
     const projectRoot = path.join(__dirname, '..');
     const persistence = fs.readFileSync(
       path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'),

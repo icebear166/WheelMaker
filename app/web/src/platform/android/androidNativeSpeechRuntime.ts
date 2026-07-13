@@ -28,10 +28,9 @@ export type AndroidNativeSpeechEvent =
       level: number;
     }
   | {
-      type: 'transcript';
+		type: 'audio';
       streamId: string;
-      text: string;
-      final: boolean;
+		pcm: string;
     }
   | {
       type: 'error';
@@ -53,7 +52,7 @@ export type AndroidNativeSpeechBridge = {
 };
 
 export type AndroidNativeSpeechRuntime = {
-  start: (payload: RegistrySpeechStartPayload) => Promise<RegistrySpeechStartResponse>;
+	start: (payload: RegistrySpeechStartPayload & {streamId: string}) => Promise<RegistrySpeechStartResponse>;
   finish: (streamId: string) => Promise<void>;
   cancel: (streamId: string, reason: RegistrySpeechCancelPayload['reason']) => Promise<void>;
   onEvent: (listener: (event: AndroidNativeSpeechEvent) => void) => () => void;

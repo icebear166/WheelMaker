@@ -124,7 +124,7 @@ Expected: PASS；Web 类型中不存在可读取 secret value 的 response。
 - Modify: `app/__tests__/web-android-native-speech-runtime.test.ts`
 - Modify: `app/__tests__/web-speech-client.test.ts`
 
-- [ ] **Step 1: 写无页面 API Key 的语音测试**
+- [x] **Step 1: 写无页面 API Key 的语音测试**
 
 Go payload 删除 `apiKey`：
 
@@ -139,7 +139,7 @@ type speechStartPayload struct {
 
 Web 测试断言 `speech.start` envelope 和 persisted `SpeechSettings` 不含 `volcengineApiKey`。
 
-- [ ] **Step 2: 运行测试并确认失败**
+- [x] **Step 2: 运行测试并确认失败**
 
 Run:
 
@@ -152,11 +152,11 @@ npm test -- --runInBand __tests__/web-android-native-speech-runtime.test.ts __te
 
 Expected: FAIL；当前 API key 来自页面 payload。
 
-- [ ] **Step 3: 注入后端 secret resolver**
+- [x] **Step 3: 注入后端 secret resolver**
 
 `speechService` 接收 `func() (string, error)` resolver；只在建立 provider stream 前取值，不把 key 放入长期 speech session struct。Provider request 可在 Registry 内部保留 unexported credential 字段，debug redactor 在任何日志前删除。
 
-- [ ] **Step 4: 运行测试并提交**
+- [x] **Step 4: 运行测试并提交**
 
 Run:
 

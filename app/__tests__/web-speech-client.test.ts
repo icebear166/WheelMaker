@@ -8,21 +8,20 @@ import {
   isSpeechTranscriptEvent,
 } from '../web/src/features/speech/registrySpeechClient';
 import type {RegistryEnvelope} from '../web/src/registry/registryTypes';
+import fs from 'fs';
+import path from 'path';
 
 describe('web speech registry debug redaction', () => {
-  test('redacts speech start API key and speech chunk PCM before debug records are stored', () => {
+  test('speech start has no API key and speech chunk PCM is redacted', () => {
     const startEnvelope = redactRegistryDebugEnvelope({
       requestId: 1,
       type: 'request',
       method: 'speech.start',
       payload: {
         provider: 'volcengine',
-        model: 'doubao-streaming-asr-2.0',
-        apiKey: 'secret-key',
       },
     });
-    expect(JSON.stringify(startEnvelope)).not.toContain('secret-key');
-    expect(startEnvelope.payload).toMatchObject({apiKey: '[redacted]'});
+    expect(startEnvelope.payload).toEqual({provider: 'volcengine'});
 
     const chunkEnvelope = redactRegistryDebugEnvelope({
       requestId: 2,
@@ -43,7 +42,15 @@ describe('web speech registry debug redaction', () => {
     });
   });
 
-  test('debug store records only redacted speech payloads', () => {
+  test('speech settings and start DTO do not persist a Volcengine key', () => {
+	const root = path.resolve(__dirname, '..');
+	const settings = fs.readFileSync(path.join(root, 'web/src/features/speech/speechSettings.ts'), 'utf8');
+	const types = fs.readFileSync(path.join(root, 'web/src/registry/registryTypes.ts'), 'utf8');
+	expect(settings).not.toContain('volcengineApiKey');
+	expect(types).not.toMatch(/RegistrySpeechStartPayload[\s\S]{0,300}apiKey/);
+  });
+
+  test('debug store records speech start without credentials', () => {
     const store = createRegistryDebugStore(() => 1000);
     store.setEnabled(true);
 
@@ -54,17 +61,13 @@ describe('web speech registry debug redaction', () => {
         method: 'speech.start',
         payload: {
           provider: 'volcengine',
-          model: 'doubao-streaming-asr-2.0',
-          apiKey: 'secret-key',
         },
       },
-      raw: '{"apiKey":"secret-key"}',
+      raw: '{"provider":"volcengine"}',
     });
 
     const [record] = store.getRecords();
-    expect(JSON.stringify(record.envelope)).not.toContain('secret-key');
-    expect(record.raw).not.toContain('secret-key');
-    expect(record.envelope?.payload).toMatchObject({apiKey: '[redacted]'});
+    expect(record.envelope?.payload).toEqual({provider: 'volcengine'});
   });
 });
 
@@ -102,8 +105,6 @@ describe('registry speech client', () => {
 
     const start = await client.start({
       provider: 'volcengine',
-      model: 'doubao-streaming-asr-2.0',
-      apiKey: 'secret-key',
       audio: {format: 'pcm', codec: 'raw', rate: 16000, bits: 16, channel: 1},
     });
     await client.chunk({streamId: start.streamId, seq: 1, pcm: 'AQID'});
