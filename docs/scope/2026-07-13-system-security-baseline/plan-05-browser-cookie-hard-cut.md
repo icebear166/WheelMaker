@@ -247,7 +247,7 @@ Expected: 单一提交同时包含 Web 无 Token 连接和 Registry strict Origi
 
 ### Task 5: 验证同批发布和重启体验
 
-- [ ] **Step 1: 运行全量测试与生产构建**
+- [x] **Step 1: 运行全量测试与生产构建**
 
 Run:
 
@@ -262,7 +262,7 @@ npm run build:web:release
 
 Expected: PASS；release 资源从子路径加载规则正确。
 
-- [ ] **Step 2: 运行源码泄漏门**
+- [x] **Step 2: 运行源码泄漏门**
 
 Run:
 
@@ -272,7 +272,7 @@ rg -n 'LOCAL_TOKEN_KEY|wheelmaker\.workspace\.token|token: normalizedToken|conne
 
 Expected: 无输出。
 
-- [ ] **Step 3: 用 Registry 重启测试证明无需每周重登**
+- [x] **Step 3: 用 Registry 重启测试证明无需每周重登**
 
 Run:
 
@@ -283,7 +283,7 @@ go test ./internal/registry -run 'TestWebSession.*(Restart|Slide|180|TokenRotati
 
 Expected: Session 跨重启有效、活跃续期为 180 天、Token 轮换立即失效。
 
-- [ ] **Step 4: 生成同一提交的发布产物并推送**
+- [x] **Step 4: 生成同一提交的发布产物并推送**
 
 Run:
 
