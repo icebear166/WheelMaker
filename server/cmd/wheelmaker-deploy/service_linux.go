@@ -13,7 +13,6 @@ import (
 
 const (
 	systemdHubService     = "wheelmaker-hub.service"
-	systemdMonitorService = "wheelmaker-monitor.service"
 	systemdUpdaterService = "wheelmaker-updater.service"
 )
 
@@ -80,8 +79,6 @@ func (m serviceManager) Configure(ctx context.Context) error {
 			return fmt.Errorf("write unit %s: %w", unit.name, err)
 		}
 	}
-	_, _ = m.runner.Run(ctx, "", "systemctl", "--user", "disable", "--now", systemdMonitorService)
-	_ = os.Remove(filepath.Join(unitDir, systemdMonitorService))
 	if _, err := m.runner.Run(ctx, "", "systemctl", "--user", "daemon-reload"); err != nil {
 		return err
 	}
@@ -138,7 +135,7 @@ func (m serviceManager) services(includeUpdater bool) []string {
 }
 
 func (m serviceManager) stopServices(includeUpdater bool) []string {
-	services := []string{systemdHubService, systemdMonitorService}
+	services := []string{systemdHubService}
 	if includeUpdater && !m.cfg.NoUpdater {
 		services = append(services, systemdUpdaterService)
 	}

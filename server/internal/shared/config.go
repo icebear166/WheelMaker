@@ -11,7 +11,6 @@ import (
 type AppConfig struct {
 	Projects []ProjectConfig `json:"projects"`
 	Registry RegistryConfig  `json:"registry,omitempty"`
-	Monitor  MonitorConfig   `json:"monitor,omitempty"`
 	Log      LogConfig       `json:"log,omitempty"`
 }
 
@@ -66,12 +65,6 @@ func (c *FeishuConfig) UnmarshalJSON(data []byte) error {
 	c.AppID = firstNonEmpty(raw.AppIDSnake, raw.AppIDLegacy)
 	c.AppSecret = firstNonEmpty(raw.AppSecretSnake, raw.AppSecretTypo, raw.AppSecretLegacy)
 	return nil
-}
-
-// MonitorConfig configures the wheelmaker-monitor web dashboard.
-type MonitorConfig struct {
-	Server string `json:"server,omitempty"` // HTTP listen host (default: 127.0.0.1)
-	Port   int    `json:"port,omitempty"`   // HTTP listen port (default: 9631)
 }
 
 // RegistryConfig configures registry sync.

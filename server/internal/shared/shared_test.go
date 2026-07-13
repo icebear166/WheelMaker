@@ -60,13 +60,13 @@ func TestLoadConfig_AllowsDebugLogLevel(t *testing.T) {
 	}
 }
 
-func TestLoadConfig_AllowsMonitorServer(t *testing.T) {
+func TestLoadConfig_RejectsRemovedMonitor(t *testing.T) {
 	path := writeTempConfig(t, `{
 		"monitor": {"server": "127.0.0.1", "port": 9631},
 		"projects": [{"name": "p", "path": "."}]
 	}`)
-	if _, err := LoadConfig(path); err != nil {
-		t.Fatalf("LoadConfig() error = %v, want monitor server accepted", err)
+	if _, err := LoadConfig(path); err == nil || !strings.Contains(err.Error(), `unknown field "monitor"`) {
+		t.Fatalf("LoadConfig() error = %v, want removed monitor field rejected", err)
 	}
 }
 

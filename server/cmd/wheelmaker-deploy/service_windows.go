@@ -15,7 +15,6 @@ import (
 
 const (
 	windowsHubService         = "WheelMaker"
-	windowsMonitorService     = "WheelMakerMonitor"
 	windowsUpdaterService     = "WheelMakerUpdater"
 	windowsRuntimeAsUser      = "asuser"
 	windowsRuntimeServiceMode = "service"
@@ -450,7 +449,7 @@ func (m serviceManager) serviceNames(includeUpdater bool) []string {
 }
 
 func (m serviceManager) stopServiceNames(includeUpdater bool) []string {
-	names := []string{windowsHubService, windowsMonitorService}
+	names := []string{windowsHubService}
 	if includeUpdater && !m.cfg.NoUpdater {
 		names = append(names, windowsUpdaterService)
 	}
@@ -458,11 +457,11 @@ func (m serviceManager) stopServiceNames(includeUpdater bool) []string {
 }
 
 func windowsRuntimeNames() []string {
-	return []string{windowsHubService, windowsMonitorService, windowsUpdaterService}
+	return []string{windowsHubService, windowsUpdaterService}
 }
 
 func windowsRuntimeProcessNames() []string {
-	return []string{"wheelmaker.exe", "wheelmaker-monitor.exe", "wheelmaker-updater.exe"}
+	return []string{"wheelmaker.exe", "wheelmaker-updater.exe"}
 }
 
 func windowsRuntimeProcessNamesForServices(serviceNames []string) []string {
@@ -471,8 +470,6 @@ func windowsRuntimeProcessNamesForServices(serviceNames []string) []string {
 		switch name {
 		case windowsHubService:
 			out = append(out, "wheelmaker.exe")
-		case windowsMonitorService:
-			out = append(out, "wheelmaker-monitor.exe")
 		case windowsUpdaterService:
 			out = append(out, "wheelmaker-updater.exe")
 		}

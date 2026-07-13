@@ -160,9 +160,10 @@ func TestWindowsPrepareInstallCleansServicesTasksAndProcesses(t *testing.T) {
 			assertEventsContainInOrder(t, events, "sc.exe delete")
 			assertEventsContainInOrder(t, events, "Get-CimInstance Win32_Process")
 			assertEventsContainInOrder(t, events, "Stop-Process")
-			for _, needle := range []string{"wheelmaker.exe", "wheelmaker-monitor.exe", "wheelmaker-updater.exe"} {
+			for _, needle := range []string{"wheelmaker.exe", "wheelmaker-updater.exe"} {
 				assertEventsContainInOrder(t, events, needle)
 			}
+			assertEventsDoNotContain(t, events, "wheelmaker-monitor.exe")
 		})
 	}
 }
@@ -211,8 +212,8 @@ func TestWindowsPrepareInstallFindsRuntimeProcessesByInstallPath(t *testing.T) {
 
 func TestWindowsUpdatePrepareInstallDoesNotMatchEveryInstallDirProcess(t *testing.T) {
 	script := windowsPrepareInstallScript(
-		[]string{windowsHubService, windowsMonitorService},
-		[]string{"wheelmaker.exe", "wheelmaker-monitor.exe"},
+		[]string{windowsHubService},
+		[]string{"wheelmaker.exe"},
 		`C:\Users\me\.wheelmaker\bin`,
 		false,
 	)

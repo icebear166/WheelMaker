@@ -11,7 +11,6 @@ import (
 
 const (
 	launchHubLabel     = "com.wheelmaker.hub"
-	launchMonitorLabel = "com.wheelmaker.monitor"
 	launchUpdaterLabel = "com.wheelmaker.updater"
 )
 
@@ -55,8 +54,6 @@ func (m serviceManager) Configure(ctx context.Context) error {
 			return fmt.Errorf("write %s: %w", path, err)
 		}
 	}
-	_, _ = m.runner.Run(ctx, "", "launchctl", "bootout", launchTarget(launchMonitorLabel))
-	_ = os.Remove(launchPlistPath(m.cfg.HomeDir, launchMonitorLabel))
 	return nil
 }
 
@@ -109,7 +106,7 @@ func (m serviceManager) labels(includeUpdater bool) []string {
 }
 
 func (m serviceManager) stopLabels(includeUpdater bool) []string {
-	labels := []string{launchHubLabel, launchMonitorLabel}
+	labels := []string{launchHubLabel}
 	if includeUpdater && !m.cfg.NoUpdater {
 		labels = append(labels, launchUpdaterLabel)
 	}

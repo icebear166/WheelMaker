@@ -165,11 +165,11 @@ Expected: PASS；协议不再承认 Monitor。
 - Modify: `server/cmd/wheelmaker-deploy/main_test.go`
 - Modify: `app/web/src/shell/AppDialogs.tsx`
 
-- [ ] **Step 1: 把 shared config 测试改为严格拒绝 Monitor**
+- [x] **Step 1: 把 shared config 测试改为严格拒绝 Monitor**
 
 `shared.LoadConfig` 对顶层 `monitor` 返回 unknown field；部署器 migration 后再调用相同 parser 则成功。`config.example.json` 不含 Monitor。
 
-- [ ] **Step 2: 运行测试并确认失败**
+- [x] **Step 2: 运行测试并确认失败**
 
 Run:
 
@@ -180,11 +180,11 @@ go test ./internal/shared ./cmd/wheelmaker-deploy -run 'TestLoadConfig.*Monitor|
 
 Expected: FAIL；`MonitorConfig` 仍被接受。
 
-- [ ] **Step 3: 删除运行源码和 UI 文案**
+- [x] **Step 3: 删除运行源码和 UI 文案**
 
 删除整个 command 目录、`AppConfig.Monitor`、`MonitorConfig` 和默认 9631。Deploy build/publish 清单不得再产出 Monitor；仅 Task 1 的 legacy cleanup 可提及旧文件名。删除 Web 中打开/重启/查看 Monitor 的对话框或按钮分支。
 
-- [ ] **Step 4: 运行测试并提交**
+- [x] **Step 4: 运行测试并提交**
 
 Run:
 

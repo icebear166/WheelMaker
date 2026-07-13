@@ -12,10 +12,6 @@
     "token": "",
     "hubId": "local-hub"
   },
-  "monitor": {
-    "server": "127.0.0.1",
-    "port": 9631
-  },
   "log": {
     "level": "warn"
   }

@@ -581,7 +581,6 @@ func TestWindowsCommandManifestsRequestAsInvoker(t *testing.T) {
 	serverRoot := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
 	for _, rel := range []string{
 		filepath.Join("cmd", "wheelmaker", "wheelmaker_windows_amd64.syso"),
-		filepath.Join("cmd", "wheelmaker-monitor", "wheelmaker_monitor_windows_amd64.syso"),
 		filepath.Join("cmd", "wheelmaker-updater", "wheelmaker_updater_windows_amd64.syso"),
 		filepath.Join("cmd", "wheelmaker-deploy", "wheelmaker_deploy_windows_amd64.syso"),
 	} {
@@ -650,10 +649,6 @@ func TestEnsureConfigWritesRunnableWheelMakerDefault(t *testing.T) {
 		Registry struct {
 			Token string `json:"token"`
 		} `json:"registry"`
-		Monitor struct {
-			Server string `json:"server"`
-			Port   int    `json:"port"`
-		} `json:"monitor"`
 	}
 	if err := json.Unmarshal(raw, &parsed); err != nil {
 		t.Fatalf("parse generated config: %v", err)
@@ -661,11 +656,12 @@ func TestEnsureConfigWritesRunnableWheelMakerDefault(t *testing.T) {
 	if len(parsed.Registry.Token) != 43 || parsed.Registry.Token == "wheelmaker-local-token" {
 		t.Fatalf("registry.token=%q, want unique 256-bit Base64URL token", parsed.Registry.Token)
 	}
-	if parsed.Monitor.Server != "127.0.0.1" {
-		t.Fatalf("monitor.server=%q, want 127.0.0.1", parsed.Monitor.Server)
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &root); err != nil {
+		t.Fatalf("parse generated config root: %v", err)
 	}
-	if parsed.Monitor.Port != 9631 {
-		t.Fatalf("monitor.port=%d, want 9631", parsed.Monitor.Port)
+	if _, exists := root["monitor"]; exists {
+		t.Fatalf("generated config still contains retired monitor: %s", raw)
 	}
 }
 

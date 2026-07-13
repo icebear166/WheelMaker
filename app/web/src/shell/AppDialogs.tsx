@@ -188,7 +188,7 @@ function resolveConfirmCopy(target: ConfirmTarget): string {
     return `Runs latest install/update for ${target.packages.map(pkg => pkg.displayName || pkg.packageName).join(', ')}. Restart WheelMaker or start a new agent session for changes to take effect.`;
   }
   if (target.kind === 'wheelMakerUpdate') {
-    return `Current: ${shortGitSha(target.currentSha)}. Latest: ${shortGitSha(target.latestSha)}. ${target.behindCount > 0 ? `${target.behindCount} commits behind. ` : ''}This writes a full-update signal; updater will pull, build, publish Web, and restart Hub/Monitor. Updater itself is not restarted.`;
+    return `Current: ${shortGitSha(target.currentSha)}. Latest: ${shortGitSha(target.latestSha)}. ${target.behindCount > 0 ? `${target.behindCount} commits behind. ` : ''}This writes a full-update signal; updater will pull, build, publish Web, and restart Hub. Updater itself is not restarted.`;
   }
   if (target.kind === 'wheelMakerUpdateAll') {
     return `This sends update-publish to ${target.hubIds.length} hubs. Each hub may pull, build, publish Web, and restart independently.`;
