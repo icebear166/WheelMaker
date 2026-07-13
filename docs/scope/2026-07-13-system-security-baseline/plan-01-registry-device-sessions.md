@@ -20,7 +20,7 @@
 - Modify: `server/internal/registry/server.go`
 - Modify: `server/internal/registry/server_test.go`
 
-- [ ] **Step 1: 写 HTTPS Base URL 和 Registry 路由失败测试**
+- [x] **Step 1: 写 HTTPS Base URL 和 Registry 路由失败测试**
 
 测试表必须覆盖：
 
@@ -41,7 +41,7 @@ tests := []struct {
 
 另在 `server_test.go` 对 `POST /ws?auth=login`、`GET /wheelmaker/ws?auth=status` 和 `/wheelmaker/ws` Upgrade 写路由测试；`/auth/login`、`/wheelmaker/not-ws`、`/foo/ws/extra` 必须为 `404`。
 
-- [ ] **Step 2: 运行测试并确认失败**
+- [x] **Step 2: 运行测试并确认失败**
 
 Run:
 
@@ -52,7 +52,7 @@ go test ./internal/security ./internal/registry -run 'TestNormalizeHTTPSBaseURL|
 
 Expected: FAIL，因为规范化函数和 suffix route 尚不存在，当前 handler 仍注册 `/auth/*`。
 
-- [ ] **Step 3: 实现规范化和单一 handler**
+- [x] **Step 3: 实现规范化和单一 handler**
 
 `NormalizeHTTPSBaseURL` 必须使用 `net/url` 解析、拒绝不安全字段并以目录 URL 返回；不得通过字符串前缀判断 hostname。
 
@@ -72,7 +72,7 @@ func NormalizeHTTPSBaseURL(raw string) (*url.URL, error) {
 
 `http_routes.go` 从严格的 `/<optional segments>/ws` 提取 Base Path：`/ws -> /`，`/wheelmaker/ws -> /wheelmaker/`。query 只允许 `login|status|logout`；无 `auth` 时才进入 WebSocket handler。不要注册新的 Nginx Location。
 
-- [ ] **Step 4: 运行测试并提交**
+- [x] **Step 4: 运行测试并提交**
 
 Run:
 
@@ -95,7 +95,7 @@ Expected: PASS；提交只包含 Base URL/路由基础。
 - Modify: `server/internal/registry/server.go`
 - Modify: `server/cmd/wheelmaker/main.go`
 
-- [ ] **Step 1: 写持久化、滑动续期和 Token 轮换测试**
+- [x] **Step 1: 写持久化、滑动续期和 Token 轮换测试**
 
 使用临时目录和可控 clock 验证：
 
@@ -121,7 +121,7 @@ type persistedDeviceSession struct {
 }
 ```
 
-- [ ] **Step 2: 运行测试并确认失败**
+- [x] **Step 2: 运行测试并确认失败**
 
 Run:
 
@@ -132,7 +132,7 @@ go test ./internal/registry -run 'TestWebSession.*(Persist|Slide|Rotate|Capacity
 
 Expected: FAIL；当前 store 只有内存 map、7 天固定到期和明文 CSRF。
 
-- [ ] **Step 3: 实现摘要存储和派生 CSRF**
+- [x] **Step 3: 实现摘要存储和派生 CSRF**
 
 使用固定域分离字符串，避免同一 HMAC 被其他用途复用：
 
@@ -152,11 +152,11 @@ func registryTokenFingerprint(token string) string {
 
 `web_session_file.go` 用 `io.LimitReader(file, 1<<20+1)` 限制读取，用 `shared.WriteConfigFile` 写版本化 JSON。禁止保存 raw Cookie 和 CSRF。Store 对外返回复制后的安全 DTO，不把内部 digest 暴露给协议层。
 
-- [ ] **Step 4: 接入 Registry state dir**
+- [x] **Step 4: 接入 Registry state dir**
 
 给 `registry.Config` 增加 `StateDir string`。`runRegistryServer` 和 `runRegistryWorker` 传入 WheelMaker `baseDir`，Registry 在开始监听前加载 `<StateDir>/registry-sessions.json`。加载或权限修复失败时 `Run` 返回错误，不启动弱化的空内存替代方案。
 
-- [ ] **Step 5: 运行测试并提交**
+- [x] **Step 5: 运行测试并提交**
 
 Run:
 
@@ -178,7 +178,7 @@ Expected: PASS；Session 文件走现有跨平台私有权限实现。
 - Modify: `server/internal/registry/web_auth.go`
 - Modify: `server/internal/registry/server_test.go`
 
-- [ ] **Step 1: 写请求来源和 Cookie 属性测试**
+- [x] **Step 1: 写请求来源和 Cookie 属性测试**
 
 测试根路径和 `/wheelmaker/`：
 
@@ -190,7 +190,7 @@ Expected: PASS；Session 文件走现有跨平台私有权限实现。
 - logout 要求 CSRF 常量时间比较，撤销当前设备并使用相同 Path 清 Cookie。
 - 所有响应含 `Cache-Control: no-store` 和 `Referrer-Policy: no-referrer`。
 
-- [ ] **Step 2: 运行测试并确认失败**
+- [x] **Step 2: 运行测试并确认失败**
 
 Run:
 
@@ -201,7 +201,7 @@ go test ./internal/security ./internal/registry -run 'TestWebAuth|TestBrowserWri
 
 Expected: FAIL；当前路径固定、Cookie Path 为 `/`、Secure 取决于请求且 Fetch Metadata 未验证。
 
-- [ ] **Step 3: 实现认证处理**
+- [x] **Step 3: 实现认证处理**
 
 Login payload 固定为：
 
@@ -214,7 +214,7 @@ type webLoginPayload struct {
 
 设备名 trim 后限制 1–80 UTF-8 字符；空值使用 `Browser`。比较 Token 使用 `subtle.ConstantTimeCompare`，成功后立即把 payload Token 置空。`status` 不返回 Token fingerprint、digest 或内部 CSRF key。
 
-- [ ] **Step 4: 运行测试并提交**
+- [x] **Step 4: 运行测试并提交**
 
 Run:
 
@@ -241,7 +241,7 @@ Expected: PASS；根路径用户仍只需现有 `/ws` 代理。
 - Modify: `app/web/src/registry/RegistryRepository.ts`
 - Create: `app/__tests__/web-registry-device-session-protocol.test.ts`
 
-- [ ] **Step 1: 写 Go/TypeScript 协议契约测试**
+- [x] **Step 1: 写 Go/TypeScript 协议契约测试**
 
 固定方法名与 payload，禁止后续阶段各自发明名称：
 
@@ -253,7 +253,7 @@ security.session.revokeAll    {}
 
 列表 DTO 只允许 `deviceId`、`deviceName`、`basePath`、`createdAt`、`lastSeenAt`、`expiresAt`、`current`。测试断言序列化结果不含 `token`、`cookie`、`digest`、`csrf`、`fingerprint`。
 
-- [ ] **Step 2: 运行测试并确认失败**
+- [x] **Step 2: 运行测试并确认失败**
 
 Run:
 
@@ -266,11 +266,11 @@ npm test -- --runInBand __tests__/web-registry-device-session-protocol.test.ts
 
 Expected: FAIL；方法、类型和 repository API 尚不存在。
 
-- [ ] **Step 3: 实现协议和 Registry handler**
+- [x] **Step 3: 实现协议和 Registry handler**
 
 只有完成 `connect.init` 的 `client` 可调用。撤销其他设备只删目标；撤销当前设备或 `revokeAll` 在响应写出后关闭对应已连接浏览器 peer。用 `connectionState.browserDeviceID` 关联在线连接，不把 Cookie 原文放入 state 或日志。
 
-- [ ] **Step 4: 实现 Web repository 方法**
+- [x] **Step 4: 实现 Web repository 方法**
 
 ```ts
 listDeviceSessions(): Promise<RegistryDeviceSession[]>;
@@ -280,7 +280,7 @@ revokeAllDeviceSessions(): Promise<void>;
 
 Repository 只传 public `deviceId`，不得接受或返回 raw credential。
 
-- [ ] **Step 5: 运行测试并提交**
+- [x] **Step 5: 运行测试并提交**
 
 Run:
 
@@ -299,7 +299,7 @@ Expected: Go/TypeScript 契约一致且全部 PASS。
 
 ### Task 5: 验证兼容阶段并发布基础
 
-- [ ] **Step 1: 运行 Registry 全量测试和 race 检查**
+- [x] **Step 1: 运行 Registry 全量测试和 race 检查**
 
 Run:
 
@@ -311,7 +311,7 @@ go test -race ./internal/registry
 
 Expected: PASS；Windows 若 race 构建环境不可用，记录工具链错误，并在 Linux CI 必须执行该命令。
 
-- [ ] **Step 2: 明确保留过渡认证测试**
+- [x] **Step 2: 明确保留过渡认证测试**
 
 Run:
 
@@ -322,7 +322,7 @@ go test ./internal/registry -run 'TestWebSocketCrossOriginWithoutSessionUsesToke
 
 Expected: PASS。此处刻意不删除跨 Origin 原生壳 Token 路径；删除动作只允许在阶段 5 与 Web 同批完成。
 
-- [ ] **Step 3: 推送阶段提交**
+- [x] **Step 3: 推送阶段提交**
 
 Run:
 

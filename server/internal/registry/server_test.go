@@ -1997,6 +1997,33 @@ func TestWebSocketCrossOriginWithoutSessionUsesTokenAuthentication(t *testing.T)
 	}
 }
 
+func TestWebSocketNoOriginUsesTokenAuthentication(t *testing.T) {
+	s := New(Config{Token: "custom-token"})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", nil)
+	if err != nil {
+		t.Fatalf("dial no-origin token client: %v", err)
+	}
+	defer conn.Close()
+	mustWriteJSON(t, conn, testEnvelope{
+		RequestID: 1,
+		Type:      "request",
+		Method:    rp.RegistryMethodConnectInit,
+		Payload: map[string]any{
+			"clientName":      "wheelmaker-native",
+			"clientVersion":   "0.1.0",
+			"protocolVersion": rp.DefaultProtocolVersion,
+			"role":            "client",
+			"token":           "custom-token",
+		},
+	})
+	resp := mustReadEnvelope(t, conn)
+	if resp.Type != "response" {
+		t.Fatalf("connect response=%+v, want token-authenticated response", resp)
+	}
+}
+
 func TestWebSocketRejectsCrossOriginSessionCookie(t *testing.T) {
 	s := New(Config{Token: "custom-token"})
 	ts := httptest.NewServer(s.Handler())

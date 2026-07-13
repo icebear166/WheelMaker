@@ -24,3 +24,14 @@ The build reached `:app:lintDebug` and failed with 3 existing errors and 13 warn
 3. `styles.xml:4` — `NewApi`: `android:windowLightNavigationBar` requires API 27 while the app minimum is API 23.
 
 Phase 01 does not modify Android sources. These failures are the comparison baseline and must not be reported as Phase 01 regressions.
+
+## Phase 01 race-tooling limitation
+
+The Phase 01 race gate was attempted with both the default environment and explicit CGO:
+
+```text
+go test -race ./internal/registry
+CGO_ENABLED=1 go test -race ./internal/registry
+```
+
+The default Windows toolchain reported that `-race` requires CGO. With `CGO_ENABLED=1`, the build reported `C compiler "gcc" not found`. This is a local toolchain limitation rather than a test failure. Linux CI must run `go test -race ./internal/registry` before release.
