@@ -146,4 +146,17 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('{recentSessionSections.map(section => renderRecentProjectSessionSection(section, false))}');
     expect(mainTsx).toContain('</ChatRecentSessionsSurface>');
   });
+
+  test('lets the pinned recent surface expand naturally at the standard session density', () => {
+    const surfaceBlock = chatCss.match(/\.chat-recent-sessions-surface\.desktop \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const listBlock = chatCss.match(/\.chat-recent-sessions-surface-list \{[\s\S]*?\n\}/)?.[0] ?? '';
+
+    expect(surfaceBlock).toContain('--chat-recent-sessions-width: 360px;');
+    expect(surfaceBlock).not.toContain('max-height:');
+    expect(listBlock).not.toContain('max-height:');
+    expect(listBlock).not.toContain('overflow-y: auto;');
+    expect(listBlock).not.toContain('scrollbar-width: thin;');
+    expect(chatCss).not.toContain('.chat-recent-sessions-surface-list .wide-session-row');
+    expect(chatCss).not.toContain('.chat-recent-sessions-surface-list .wide-session-title');
+  });
 });
