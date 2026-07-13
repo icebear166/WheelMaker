@@ -121,9 +121,26 @@ function New-DesktopWebOverlay {
   [System.IO.File]::WriteAllText($script:DesktopOverlay, $json, $utf8NoBom)
 }
 
+function Sync-DesktopWebDependencies {
+  Assert-Command -Name "npm" -Hint "Install Node.js 22+."
+  Assert-Command -Name "node" -Hint "Install Node.js 22+."
+  Push-Location $script:AppRoot
+  try {
+    Write-Step "sync Workspace Web UI dependencies"
+    if ($WhatIf) {
+      Write-Host "[whatif] npm ci --include=dev"
+      return
+    }
+    Invoke-Checked -FilePath "npm" -Arguments @("ci", "--include=dev") -FailureMessage "desktop web dependency install failed"
+  } finally {
+    Pop-Location
+  }
+}
+
 function Build-DesktopWeb {
   Assert-Command -Name "npm" -Hint "Install Node.js 22+."
   Assert-Command -Name "node" -Hint "Install Node.js 22+."
+  Sync-DesktopWebDependencies
   New-DesktopWebBuildRoot
   $previousTarget = $env:WHEELMAKER_WEB_TARGET
   $env:WHEELMAKER_WEB_TARGET = $script:DesktopWebBuildRoot
