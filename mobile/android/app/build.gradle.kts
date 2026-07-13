@@ -11,12 +11,12 @@ val webAssetsDir = providers.gradleProperty("wheelmakerWebAssetsDir")
     .get()
 
 val requestedAndroidTasks = gradle.startParameter.taskNames.map { it.substringAfterLast(':').lowercase() }
+val releasePackagingTask = Regex("^(assemble|bundle|package|sign|publish|install).*release.*$")
 val releaseBuildRequested = requestedAndroidTasks.any { taskName ->
-    taskName.contains("release") ||
+	releasePackagingTask.matches(taskName) ||
         taskName == "assemble" ||
         taskName == "build" ||
-        taskName == "bundle" ||
-        taskName.startsWith("publish")
+		taskName == "bundle"
 }
 val releaseSigningEnvironmentNames = listOf(
     "WHEELMAKER_ANDROID_KEYSTORE",
@@ -119,8 +119,8 @@ kotlin {
 }
 
 dependencies {
-    implementation("androidx.core:core-ktx:1.17.0")
-    implementation("androidx.webkit:webkit:1.15.0")
+	implementation("androidx.core:core-ktx:1.18.0")
+	implementation("androidx.webkit:webkit:1.15.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
