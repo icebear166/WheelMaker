@@ -2171,6 +2171,62 @@ func TestReporterAuth(t *testing.T) {
 	waitForProjectOnline(t, ts, rp.ProjectID("hub-auth", "server"), "token-1")
 }
 
+func TestReporterGitRevisionOptionRejected(t *testing.T) {
+	root := t.TempDir()
+	initGitRepo(t, root)
+	outputPath := filepath.Join(root, "injected-output.txt")
+	for _, testCase := range []struct {
+		name    string
+		method  string
+		payload map[string]any
+	}{
+		{name: "ref", method: "project.git.log", payload: map[string]any{"ref": "--output=" + outputPath}},
+		{name: "refs", method: "project.git.log", payload: map[string]any{"refs": []string{"HEAD", "--help"}}},
+		{name: "sha files", method: "project.git.commit.files", payload: map[string]any{"sha": "-cprotocol.file.allow=always"}},
+		{name: "sha diff", method: "project.git.commit.fileDiff", payload: map[string]any{"sha": "--help", "path": "tracked.txt"}},
+		{name: "base", method: "project.git.diff", payload: map[string]any{"base": "--help", "head": "HEAD"}},
+		{name: "head", method: "project.git.diff.fileDiff", payload: map[string]any{"base": "HEAD", "head": "--help", "path": "tracked.txt"}},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			respSeen := make(chan testEnvelope, 1)
+			errSeen := make(chan error, 1)
+			server := newFakeReporterRegistry(t, "hub-git-guard", testEnvelope{
+				RequestID: 100,
+				Type:      "request",
+				Method:    testCase.method,
+				ProjectID: rp.ProjectID("hub-git-guard", "proj1"),
+				Payload:   testCase.payload,
+			}, respSeen, errSeen)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			reporter := NewReporter(ReporterConfig{
+				Server:            strings.TrimPrefix(server.URL, "http://"),
+				HubID:             "hub-git-guard",
+				ReconnectInterval: 50 * time.Millisecond,
+			}, []ProjectInfo{{Name: "proj1", Path: root, Online: true}})
+			done := make(chan error, 1)
+			go func() { done <- reporter.Run(ctx) }()
+
+			select {
+			case err := <-errSeen:
+				stopReporterForTest(t, cancel, done)
+				t.Fatalf("fake registry error: %v", err)
+			case response := <-respSeen:
+				stopReporterForTest(t, cancel, done)
+				if response.Type != "error" || response.Payload["code"] != rp.CodeInvalidArgument {
+					t.Fatalf("response=%#v, want invalid_argument", response)
+				}
+			case <-time.After(2 * time.Second):
+				stopReporterForTest(t, cancel, done)
+				t.Fatal("did not receive git revision rejection")
+			}
+		})
+	}
+	if _, err := os.Stat(outputPath); !os.IsNotExist(err) {
+		t.Fatalf("malicious revision created %s: %v", outputPath, err)
+	}
+}
+
 func TestReporterUpdateProjectRefreshesRegistrySnapshot(t *testing.T) {
 	ts := newRegistryServer(t, registry.New(registry.Config{}).Handler())
 

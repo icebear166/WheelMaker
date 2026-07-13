@@ -137,11 +137,11 @@ Expected: PASS；正常浏览器 code 打开仍一次跳转成功。
 - Modify: `server/internal/hub/reporter.go`
 - Modify: `server/internal/hub/hub_test.go`
 
-- [ ] **Step 1: 写恶意 revision 回归测试**
+- [x] **Step 1: 写恶意 revision 回归测试**
 
 覆盖 `ref`、`refs[]`、`sha`、`base`、`head`：空、前导 `-`、NUL、CR/LF、超过 1024 bytes 均 invalid argument。至少用临时 Git repo 验证 `--output=<temp>`、`--help`、`-c...` 不能创建文件或改变参数解析。合法 `HEAD`、SHA、`origin/main`、tag 和 `base..head` 继续成功。
 
-- [ ] **Step 2: 运行测试并确认失败**
+- [x] **Step 2: 运行测试并确认失败**
 
 Run:
 
@@ -152,7 +152,7 @@ go test ./internal/hub -run 'TestGitRevision|TestReporterGit.*Option' -v
 
 Expected: FAIL；当前多个方法直接把用户 revision 传给 Git。
 
-- [ ] **Step 3: 实现统一 validator 和参数 builder**
+- [x] **Step 3: 实现统一 validator 和参数 builder**
 
 ```go
 func validateGitRevision(value string) (string, error) {
@@ -166,7 +166,7 @@ func validateGitRevision(value string) (string, error) {
 
 每条含 revision 的命令在 options 后、revision 前放 `--end-of-options`；path 继续在独立 `--` 后。先分别校验 base/head，再构造 range。Git 输出得到的 tag 再作为参数使用时也走相同 builder。
 
-- [ ] **Step 4: 运行测试并提交**
+- [x] **Step 4: 运行测试并提交**
 
 Run:
 

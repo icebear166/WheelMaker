@@ -1453,7 +1453,11 @@ func (r *Reporter) replyGitRefs(conn *websocket.Conn, req envelope) {
 		if tag == "" {
 			continue
 		}
-		sha, err := runGit(root, "rev-list", "-n", "1", tag)
+		revisionArgs, err := gitRevisionArgs(tag)
+		if err != nil {
+			continue
+		}
+		sha, err := runGit(root, append([]string{"rev-list", "-n", "1"}, revisionArgs...)...)
 		if err != nil {
 			continue
 		}
@@ -1494,13 +1498,19 @@ func (r *Reporter) replyGitLog(conn *websocket.Conn, req envelope) {
 	}
 
 	requestedRefs := make([]string, 0, len(payload.Refs)+1)
-	if ref := strings.TrimSpace(payload.Ref); ref != "" {
+	if strings.TrimSpace(payload.Ref) != "" {
+		ref, err := validateGitRevision(payload.Ref)
+		if err != nil {
+			_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid git.log revision")
+			return
+		}
 		requestedRefs = append(requestedRefs, ref)
 	}
 	for _, candidate := range payload.Refs {
-		candidate = strings.TrimSpace(candidate)
-		if candidate == "" {
-			continue
+		candidate, err = validateGitRevision(candidate)
+		if err != nil {
+			_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid git.log revision")
+			return
 		}
 		requestedRefs = append(requestedRefs, candidate)
 	}
@@ -1528,9 +1538,13 @@ func (r *Reporter) replyGitLog(conn *websocket.Conn, req envelope) {
 		}
 	}
 
-	args := []string{"log"}
-	args = append(args, refs...)
-	args = append(args, "--date=iso-strict", "--pretty=format:%H%x1f%an%x1f%ae%x1f%aI%x1f%s")
+	revisionArgs, err := gitRevisionArgs(refs...)
+	if err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid git.log revision")
+		return
+	}
+	args := []string{"log", "--date=iso-strict", "--pretty=format:%H%x1f%an%x1f%ae%x1f%aI%x1f%s"}
+	args = append(args, revisionArgs...)
 	raw, err := runGit(root, args...)
 	if err != nil {
 		_ = r.writeError(conn, req.RequestID, codeInternal, err.Error())
@@ -1585,21 +1599,28 @@ func (r *Reporter) replyGitCommitFiles(conn *websocket.Conn, req envelope) {
 		SHA string `json:"sha"`
 	}
 	var p payload
-	if err := decodePayload(req.Payload, &p); err != nil || strings.TrimSpace(p.SHA) == "" {
+	if err := decodePayload(req.Payload, &p); err != nil {
 		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid git.commit.files payload")
 		return
 	}
+	sha, err := validateGitRevision(p.SHA)
+	if err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid git.commit.files revision")
+		return
+	}
+	p.SHA = sha
 	root, err := r.projectRoot(req.ProjectID)
 	if err != nil {
 		_ = r.writeError(conn, req.RequestID, codeNotFound, err.Error())
 		return
 	}
-	numstatRaw, err := runGit(root, "show", "--numstat", "--format=", p.SHA)
+	revisionArgs, _ := gitRevisionArgs(p.SHA)
+	numstatRaw, err := runGit(root, append([]string{"show", "--numstat", "--format="}, revisionArgs...)...)
 	if err != nil {
 		_ = r.writeError(conn, req.RequestID, codeInternal, err.Error())
 		return
 	}
-	statusRaw, _ := runGit(root, "diff-tree", "--no-commit-id", "--name-status", "-r", p.SHA)
+	statusRaw, _ := runGit(root, append([]string{"diff-tree", "--no-commit-id", "--name-status", "-r"}, revisionArgs...)...)
 	statusMap := map[string]string{}
 	for _, line := range strings.Split(strings.TrimSpace(statusRaw), "\n") {
 		parts := strings.SplitN(line, "\t", 2)
@@ -1646,10 +1667,16 @@ func (r *Reporter) replyGitCommitFileDiff(conn *websocket.Conn, req envelope) {
 		ContextLines int    `json:"contextLines,omitempty"`
 	}
 	var p payload
-	if err := decodePayload(req.Payload, &p); err != nil || strings.TrimSpace(p.SHA) == "" || strings.TrimSpace(p.Path) == "" {
+	if err := decodePayload(req.Payload, &p); err != nil || strings.TrimSpace(p.Path) == "" {
 		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid git.commit.fileDiff payload")
 		return
 	}
+	sha, err := validateGitRevision(p.SHA)
+	if err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid git.commit.fileDiff revision")
+		return
+	}
+	p.SHA = sha
 	root, err := r.projectRoot(req.ProjectID)
 	if err != nil {
 		_ = r.writeError(conn, req.RequestID, codeNotFound, err.Error())
@@ -1659,7 +1686,10 @@ func (r *Reporter) replyGitCommitFileDiff(conn *websocket.Conn, req envelope) {
 	if contextLines < 0 || contextLines > 20 {
 		contextLines = 3
 	}
-	diff, err := runGit(root, "show", "--no-color", fmt.Sprintf("--unified=%d", contextLines), p.SHA, "--", p.Path)
+	revisionArgs, _ := gitRevisionArgs(p.SHA)
+	args := append([]string{"show", "--no-color", fmt.Sprintf("--unified=%d", contextLines)}, revisionArgs...)
+	args = append(args, "--", p.Path)
+	diff, err := runGit(root, args...)
 	if err != nil {
 		_ = r.writeError(conn, req.RequestID, codeInternal, err.Error())
 		return
@@ -1686,10 +1716,21 @@ func (r *Reporter) replyGitDiff(conn *websocket.Conn, req envelope) {
 		Head string `json:"head"`
 	}
 	var p payload
-	if err := decodePayload(req.Payload, &p); err != nil || strings.TrimSpace(p.Base) == "" || strings.TrimSpace(p.Head) == "" {
+	if err := decodePayload(req.Payload, &p); err != nil {
 		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid git.diff payload")
 		return
 	}
+	base, err := validateGitRevision(p.Base)
+	if err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid git.diff base revision")
+		return
+	}
+	head, err := validateGitRevision(p.Head)
+	if err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid git.diff head revision")
+		return
+	}
+	p.Base, p.Head = base, head
 	root, err := r.projectRoot(req.ProjectID)
 	if err != nil {
 		_ = r.writeError(conn, req.RequestID, codeNotFound, err.Error())
@@ -1722,17 +1763,31 @@ func (r *Reporter) replyGitDiffFileDiff(conn *websocket.Conn, req envelope) {
 		ContextLines int    `json:"contextLines,omitempty"`
 	}
 	var p payload
-	if err := decodePayload(req.Payload, &p); err != nil || strings.TrimSpace(p.Base) == "" || strings.TrimSpace(p.Head) == "" || strings.TrimSpace(p.Path) == "" {
+	if err := decodePayload(req.Payload, &p); err != nil || strings.TrimSpace(p.Path) == "" {
 		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid git.diff.fileDiff payload")
 		return
 	}
+	base, err := validateGitRevision(p.Base)
+	if err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid git.diff.fileDiff base revision")
+		return
+	}
+	head, err := validateGitRevision(p.Head)
+	if err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid git.diff.fileDiff head revision")
+		return
+	}
+	p.Base, p.Head = base, head
 	root, err := r.projectRoot(req.ProjectID)
 	if err != nil {
 		_ = r.writeError(conn, req.RequestID, codeNotFound, err.Error())
 		return
 	}
 	contextLines := normalizeContextLines(p.ContextLines)
-	diff, err := runGit(root, "diff", "--no-color", fmt.Sprintf("--unified=%d", contextLines), p.Base, p.Head, "--", p.Path)
+	revisionArgs, _ := gitRevisionArgs(p.Base, p.Head)
+	args := append([]string{"diff", "--no-color", fmt.Sprintf("--unified=%d", contextLines)}, revisionArgs...)
+	args = append(args, "--", p.Path)
+	diff, err := runGit(root, args...)
 	if err != nil {
 		_ = r.writeError(conn, req.RequestID, codeInternal, err.Error())
 		return
@@ -2153,11 +2208,16 @@ func parsePorcelainStatus(raw string) ([]map[string]any, []map[string]any, []map
 }
 
 func gitDiffFiles(root, base, head string) ([]map[string]any, error) {
-	numstatRaw, err := runGit(root, "diff", "--numstat", fmt.Sprintf("%s..%s", base, head))
+	rangeArg, err := gitRevisionRangeArg(base, head)
 	if err != nil {
 		return nil, err
 	}
-	statusRaw, err := runGit(root, "diff", "--name-status", fmt.Sprintf("%s..%s", base, head))
+	revisionArgs, _ := gitRevisionArgs(rangeArg)
+	numstatRaw, err := runGit(root, append([]string{"diff", "--numstat"}, revisionArgs...)...)
+	if err != nil {
+		return nil, err
+	}
+	statusRaw, err := runGit(root, append([]string{"diff", "--name-status"}, revisionArgs...)...)
 	if err != nil {
 		return nil, err
 	}
