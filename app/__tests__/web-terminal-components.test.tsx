@@ -125,6 +125,36 @@ describe('terminal components', () => {
     expect(MockResizeObserver.instances[0].disconnect).toHaveBeenCalled();
   });
 
+  test('fits an active terminal when its container resizes after focus moves to the splitter', async () => {
+    const onResize = jest.fn();
+    const host = interactiveTerminalHost();
+    await act(async () => {
+      TestRenderer.create(
+        <TerminalView active resizeEnabled cols={80} rows={24} onInput={jest.fn()} onResize={onResize} />,
+        {createNodeMock: () => host.host},
+      );
+    });
+    const xterm = mockTerminalInstances[0];
+    const fitAddon = mockFitInstances[0];
+
+    act(() => host.fire('focusin'));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 5)); });
+    onResize.mockClear();
+    fitAddon.fit.mockClear();
+    fitAddon.proposeDimensions.mockReturnValue({cols: 92, rows: 18});
+    xterm.cols = 92;
+    xterm.rows = 18;
+
+    act(() => {
+      host.fire('focusout', {relatedTarget: null});
+      MockResizeObserver.instances[0].fire();
+    });
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 5)); });
+
+    expect(fitAddon.fit).toHaveBeenCalledTimes(1);
+    expect(onResize).toHaveBeenCalledWith(92, 18);
+  });
+
   test('enables ConPTY compatibility for a Windows terminal', async () => {
     await act(async () => {
       TestRenderer.create(
