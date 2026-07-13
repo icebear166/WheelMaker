@@ -44,6 +44,8 @@ import type {
   RegistrySpeechFinishPayload,
   RegistrySpeechStartPayload,
   RegistrySpeechStartResponse,
+	RegistryTTSSynthesizePayload,
+	RegistryTTSSynthesizeResponse,
   RegistrySessionAttachmentCancelPayload,
   RegistrySessionAttachmentCancelResponse,
   RegistrySessionAttachmentChunkPayload,
@@ -670,6 +672,19 @@ export class RegistryRepository {
       fileName: body.fileName ?? '',
     };
   }
+
+	async synthesizeTTS(payload: RegistryTTSSynthesizePayload): Promise<RegistryTTSSynthesizeResponse> {
+		const resp = await this.client.request({
+			method: RegistryMethods.TTSSynthesize,
+			payload,
+			timeoutMs: 50000,
+		});
+		const body = (resp.payload ?? {}) as Partial<RegistryTTSSynthesizeResponse>;
+		if (typeof body.audioBase64 !== 'string' || !body.audioBase64) {
+			throw new Error('TTS response contains no audio data');
+		}
+		return {audioBase64: body.audioBase64, format: typeof body.format === 'string' ? body.format : 'wav'};
+	}
 
   async getPortRelayStatus(): Promise<RegistryPortRelaySnapshot> {
     const resp = await this.client.request({

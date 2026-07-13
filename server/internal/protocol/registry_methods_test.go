@@ -54,6 +54,16 @@ func TestSecretMethodsAndSerializationAreSetOnly(t *testing.T) {
 	}
 }
 
+func TestTTSMethodIsClientOnly(t *testing.T) {
+	desc, ok := RegistryMethod(RegistryMethodTTSSynthesize)
+	if !ok || desc.Route != RegistryRouteTTS || !RegistryMethodAllowed(string(RegistryRoleClient), desc.Method) {
+		t.Fatalf("tts descriptor=%+v ok=%v", desc, ok)
+	}
+	if RegistryMethodAllowed(string(RegistryRoleHub), desc.Method) {
+		t.Fatal("hub can call client TTS method")
+	}
+}
+
 func TestMonitorMethodsRemoved(t *testing.T) {
 	prefix := "monitor."
 	for _, method := range []string{prefix + "listHub", prefix + "status", prefix + "log", prefix + "db", prefix + "action", prefix + "restart"} {

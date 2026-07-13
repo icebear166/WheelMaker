@@ -163,6 +163,17 @@ func (s *Server) resolveVolcengineASRSecret() (string, error) {
 	return value, nil
 }
 
+func (s *Server) resolveMiMoTTSSecret() (string, error) {
+	value, configured, err := s.secrets.Value(secretKindMiMoTTS)
+	if err != nil {
+		return "", err
+	}
+	if !configured {
+		return "", errTTSSecretNotConfigured
+	}
+	return value, nil
+}
+
 func (s *Server) handleSecretUpdate(peer *peerConn, in envelope) {
 	var payload rp.SecretUpdatePayload
 	if err := decodeStrictPayload(in.Payload, &payload); err != nil {

@@ -60,6 +60,8 @@ import type {
   RegistrySpeechFinishPayload,
   RegistrySpeechStartPayload,
   RegistrySpeechStartResponse,
+	RegistryTTSSynthesizePayload,
+	RegistryTTSSynthesizeResponse,
   RegistryTokenScanResult,
   RegistryTerminalCreateResponse,
   RegistryTerminalGetResponse,
@@ -804,6 +806,11 @@ export class RegistryWorkspaceService {
     }
     return this.repository.startSpeech(payload);
   }
+
+	async synthesizeTTS(payload: RegistryTTSSynthesizePayload): Promise<RegistryTTSSynthesizeResponse> {
+		if (!this.repository) throw new Error('session is not ready');
+		return this.repository.synthesizeTTS(payload);
+	}
 
   async listTerminals(hubId: string): Promise<RegistryTerminalListResponse> {
     if (!this.repository) throw new Error('session is not ready');

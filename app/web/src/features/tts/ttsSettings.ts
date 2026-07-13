@@ -17,7 +17,6 @@ export type TtsVoiceId =
 
 export type TtsSettings = {
   enabled: boolean;
-  apiKey: string;
   model: TtsModelId;
   voice: TtsVoiceId;
 };
@@ -51,11 +50,8 @@ export const TTS_VOICE_OPTIONS: TtsVoiceOption[] = [
   { id: 'Dean', label: 'Dean' },
 ];
 
-export const TTS_API_BASE = 'https://token-plan-cn.xiaomimimo.com/v1';
-
 export const DEFAULT_TTS_SETTINGS: TtsSettings = {
   enabled: false,
-  apiKey: '',
   model: 'mimo-v2.5-tts',
   voice: 'Mia',
 };
@@ -75,7 +71,6 @@ export function normalizeTtsSettings(input: unknown): TtsSettings {
   const record = input as Partial<TtsSettings>;
   return {
     enabled: record.enabled === true,
-    apiKey: typeof record.apiKey === 'string' ? record.apiKey : '',
     model: typeof record.model === 'string' && isTtsModelId(record.model)
       ? record.model
       : DEFAULT_TTS_SETTINGS.model,
@@ -86,9 +81,5 @@ export function normalizeTtsSettings(input: unknown): TtsSettings {
 }
 
 export function maskTtsSettingsForExport(input: unknown): TtsSettings {
-  const settings = normalizeTtsSettings(input);
-  return {
-    ...settings,
-    apiKey: settings.apiKey ? '[redacted]' : '',
-  };
+	return normalizeTtsSettings(input);
 }

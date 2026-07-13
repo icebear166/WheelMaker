@@ -67,6 +67,7 @@ export const RegistryMethods = {
   SpeechCancel: 'speech.cancel',
   SpeechTranscript: 'speech.transcript',
   SpeechError: 'speech.error',
+	TTSSynthesize: 'tts.synthesize',
   TerminalList: 'terminal.list',
   TerminalCreate: 'terminal.create',
   TerminalGet: 'terminal.get',

@@ -31,6 +31,7 @@ const (
 	RegistryRouteRelayControl           RegistryRouteKind = "relay_control"
 	RegistryRouteRelayHub               RegistryRouteKind = "relay_hub"
 	RegistryRouteSpeech                 RegistryRouteKind = "speech"
+	RegistryRouteTTS                    RegistryRouteKind = "tts"
 	RegistryRouteClientEvent            RegistryRouteKind = "client_event"
 	RegistryRouteDebug                  RegistryRouteKind = "debug"
 	RegistryRouteSecuritySession        RegistryRouteKind = "security_session"
@@ -113,10 +114,11 @@ const (
 	RegistryMethodHubRelayOpen                      = "hub.relay.open"
 	RegistryMethodHubRelayClose                     = "hub.relay.close"
 
-	RegistryMethodSpeechStart  = "speech.start"
-	RegistryMethodSpeechChunk  = "speech.chunk"
-	RegistryMethodSpeechFinish = "speech.finish"
-	RegistryMethodSpeechCancel = "speech.cancel"
+	RegistryMethodSpeechStart   = "speech.start"
+	RegistryMethodSpeechChunk   = "speech.chunk"
+	RegistryMethodSpeechFinish  = "speech.finish"
+	RegistryMethodSpeechCancel  = "speech.cancel"
+	RegistryMethodTTSSynthesize = "tts.synthesize"
 
 	RegistryMethodTerminalList    = "terminal.list"
 	RegistryMethodTerminalCreate  = "terminal.create"
@@ -211,10 +213,11 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodHubRelayOpen:                      registryMethod(RegistryMethodHubRelayOpen, RegistryRouteRelayHub, nil),
 	RegistryMethodHubRelayClose:                     registryMethod(RegistryMethodHubRelayClose, RegistryRouteRelayHub, nil),
 
-	RegistryMethodSpeechStart:  registrySpeechMethod(RegistryMethodSpeechStart),
-	RegistryMethodSpeechChunk:  registrySpeechMethod(RegistryMethodSpeechChunk),
-	RegistryMethodSpeechFinish: registrySpeechMethod(RegistryMethodSpeechFinish),
-	RegistryMethodSpeechCancel: registrySpeechMethod(RegistryMethodSpeechCancel),
+	RegistryMethodSpeechStart:   registrySpeechMethod(RegistryMethodSpeechStart),
+	RegistryMethodSpeechChunk:   registrySpeechMethod(RegistryMethodSpeechChunk),
+	RegistryMethodSpeechFinish:  registrySpeechMethod(RegistryMethodSpeechFinish),
+	RegistryMethodSpeechCancel:  registrySpeechMethod(RegistryMethodSpeechCancel),
+	RegistryMethodTTSSynthesize: registryMethod(RegistryMethodTTSSynthesize, RegistryRouteTTS, []RegistryRole{RegistryRoleClient}),
 
 	RegistryMethodTerminalList:    registryTerminalHubMethod(RegistryMethodTerminalList, RegistryRoleClient, RegistryRouteTerminalHubRequest),
 	RegistryMethodTerminalCreate:  registryProjectMethod(RegistryMethodTerminalCreate, RegistryRouteTerminalProjectRequest),
@@ -327,6 +330,10 @@ func RegistryRelayHubMethod(method string) bool {
 
 func RegistrySpeechMethod(method string) bool {
 	return RegistryMethodHasRoute(method, RegistryRouteSpeech)
+}
+
+func RegistryTTSMethod(method string) bool {
+	return RegistryMethodHasRoute(method, RegistryRouteTTS)
 }
 
 func RegistrySecuritySessionMethod(method string) bool {

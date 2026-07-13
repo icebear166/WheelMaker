@@ -246,6 +246,7 @@ type Server struct {
 	secrets      *secretStore
 
 	speech *speechService
+	tts    *ttsService
 }
 
 type connectionState struct {
@@ -368,6 +369,7 @@ func New(cfg Config) *Server {
 		secrets:      newSecretStore(cfg.ConfigPath),
 	}
 	s.speech = newSpeechService(newVolcengineSpeechProvider(), s.resolveVolcengineASRSecret)
+	s.tts = newTTSService(s.resolveMiMoTTSSecret)
 	s.relay = portrelay.NewController(portrelay.ControllerConfig{
 		RegistryAddr:      cfg.Addr,
 		ForwardHubRequest: s.forwardRelayHubRequest,
@@ -558,6 +560,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 
 func shouldHandleRegistryRequestAsync(method string) bool {
 	return rp.RegistryRelayControlMethod(method) ||
+		rp.RegistryTTSMethod(method) ||
 		rp.RegistryHubStateMethod(method) || isTerminalHubRequestMethod(method) ||
 		isClientForwardMethod(method)
 }
@@ -593,6 +596,8 @@ func (s *Server) handleRequest(state *connectionState, in envelope) {
 		s.handleHubStateForwardRequest(state.peer, state, in)
 	case isSpeechRequestMethod(in.Method):
 		s.speech.handleRequest(state.peer, state, in)
+	case rp.RegistryTTSMethod(in.Method):
+		s.tts.handleRequest(state.peer, in)
 	case isClientForwardMethod(in.Method):
 		s.handleForwardRequest(state.peer, state, in)
 	default:

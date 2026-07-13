@@ -191,13 +191,13 @@ Expected: PASS；浏览器发送的语音协议不含长期密钥。
 - Modify: `app/web/src/features/tts/ttsSettings.ts`
 - Create: `app/__tests__/web-backend-tts.test.ts`
 
-- [ ] **Step 1: 写 TTS 协议和上游边界测试**
+- [x] **Step 1: 写 TTS 协议和上游边界测试**
 
 固定方法 `tts.synthesize`，request 只含 `model`、`voice`、`text`；response 为 `audioBase64`、`format`。限制 text 16 KiB，上游 response body 16 MiB、HTTP timeout 45 秒、只请求固定 `https://token-plan-cn.xiaomimimo.com/v1/chat/completions`，禁止客户端提供 URL。
 
 测试 fake upstream 收到后端 `Authorization: Bearer <secret>`，但 Registry response、日志和错误不回显 header/body secret。错误 body 最多读取 4 KiB 并脱敏。
 
-- [ ] **Step 2: 运行测试并确认失败**
+- [x] **Step 2: 运行测试并确认失败**
 
 Run:
 
@@ -210,11 +210,11 @@ npm test -- --runInBand __tests__/web-backend-tts.test.ts
 
 Expected: FAIL；当前浏览器直接 fetch MiMo 并组装 Authorization。
 
-- [ ] **Step 3: 实现后端 service 和 Web repository client**
+- [x] **Step 3: 实现后端 service 和 Web repository client**
 
 Registry 只接受允许的 model/voice 枚举；用 `json.Decoder` 解析限定响应。Web `ttsClient` 改为调用当前 `RegistryRepository.synthesizeTTS`，`TtsSettings` 只保留 enabled/model/voice。
 
-- [ ] **Step 4: 运行测试并提交**
+- [x] **Step 4: 运行测试并提交**
 
 Run:
 

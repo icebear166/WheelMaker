@@ -61,6 +61,17 @@ export interface RegistryDebugUploadLogResponse {
   fileName: string;
 }
 
+export interface RegistryTTSSynthesizePayload {
+	model: 'mimo-v2-tts' | 'mimo-v2.5-tts' | 'mimo-v2.5-tts-voiceclone' | 'mimo-v2.5-tts-voicedesign';
+	voice: 'mimo_default' | '冰糖' | '茉莉' | '苏打' | '白桦' | 'Mia' | 'Chloe' | 'Milo' | 'Dean';
+	text: string;
+}
+
+export interface RegistryTTSSynthesizeResponse {
+	audioBase64: string;
+	format: string;
+}
+
 export interface RegistryDeviceSession {
   deviceId: string;
   deviceName: string;

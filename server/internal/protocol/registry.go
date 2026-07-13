@@ -183,6 +183,17 @@ type SecretUpdatePayload struct {
 	Value  string     `json:"value,omitempty"`
 }
 
+type TTSSynthesizePayload struct {
+	Model string `json:"model"`
+	Voice string `json:"voice"`
+	Text  string `json:"text"`
+}
+
+type TTSSynthesizeResponse struct {
+	AudioBase64 string `json:"audioBase64"`
+	Format      string `json:"format"`
+}
+
 type ProjectListItem struct {
 	ProjectID     string                `json:"projectId"`
 	Name          string                `json:"name"`

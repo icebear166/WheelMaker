@@ -1,4 +1,4 @@
-import { synthesizeSpeech, audioBase64ToBlobUrl } from './ttsClient';
+import {synthesizeSpeech, audioBase64ToBlobUrl, type TtsBackend} from './ttsClient';
 import type { TtsSettings } from './ttsSettings';
 
 export type TtsPlaybackState = 'idle' | 'loading' | 'playing';
@@ -123,6 +123,7 @@ class TTSPlayer {
     index: number,
     segments: string[],
     settings: TtsSettings,
+	backend: TtsBackend,
     gen: number,
   ): Promise<string | null> {
     // Already have it
@@ -139,8 +140,7 @@ class TTSPlayer {
     const fetchPromise = (async (): Promise<string | null> => {
       if (this.generation !== gen) return null;
 
-      const result = await synthesizeSpeech({
-        apiKey: settings.apiKey,
+		const result = await synthesizeSpeech(backend, {
         model: settings.model,
         voice: settings.voice,
         text: segments[index],
@@ -167,28 +167,28 @@ class TTSPlayer {
    * Play text segments sequentially with prefetch.
    * Automatically stops any previous playback.
    */
-  async play(segments: string[], settings: TtsSettings): Promise<void> {
+	async play(segments: string[], settings: TtsSettings, backend: TtsBackend): Promise<void> {
     // Stop existing and get a new generation
     this.stop();
     const gen = this.generation;
 
-    if (segments.length === 0 || !settings.enabled || !settings.apiKey) {
+	if (segments.length === 0 || !settings.enabled) {
       return;
     }
 
     this.setState('loading');
 
     // Start fetching the first segment
-    const firstUrl = await this.prefetchSegment(0, segments, settings, gen);
+	const firstUrl = await this.prefetchSegment(0, segments, settings, backend, gen);
     if (this.generation !== gen) return;
 
     if (!firstUrl) {
       // First segment failed, try remaining
       for (let i = 1; i < segments.length; i++) {
-        const url = await this.prefetchSegment(i, segments, settings, gen);
+		const url = await this.prefetchSegment(i, segments, settings, backend, gen);
         if (this.generation !== gen) return;
         if (url) {
-          await this.playFromSegment(i, segments, settings, gen, url);
+		  await this.playFromSegment(i, segments, settings, backend, gen, url);
           return;
         }
       }
@@ -201,7 +201,7 @@ class TTSPlayer {
     }
 
     // Start playback from segment 0
-    await this.playFromSegment(0, segments, settings, gen, firstUrl);
+	await this.playFromSegment(0, segments, settings, backend, gen, firstUrl);
   }
 
   /**
@@ -211,6 +211,7 @@ class TTSPlayer {
     startIndex: number,
     segments: string[],
     settings: TtsSettings,
+	backend: TtsBackend,
     gen: number,
     startUrl: string,
   ): Promise<void> {
@@ -222,7 +223,7 @@ class TTSPlayer {
         // Current segment failed, try next
         currentIndex++;
         if (currentIndex < segments.length) {
-          currentUrl = await this.prefetchSegment(currentIndex, segments, settings, gen);
+		  currentUrl = await this.prefetchSegment(currentIndex, segments, settings, backend, gen);
         }
         continue;
       }
@@ -231,7 +232,7 @@ class TTSPlayer {
       const nextIndex = currentIndex + 1;
       if (nextIndex < segments.length) {
         // Fire and forget - don't await
-        this.prefetchSegment(nextIndex, segments, settings, gen).catch(() => {});
+		this.prefetchSegment(nextIndex, segments, settings, backend, gen).catch(() => {});
       }
 
       // Play current segment
@@ -241,7 +242,7 @@ class TTSPlayer {
       // Advance to next segment
       currentIndex++;
       currentUrl = currentIndex < segments.length
-        ? (this.prefetched.get(currentIndex) ?? await this.prefetchSegment(currentIndex, segments, settings, gen))
+		? (this.prefetched.get(currentIndex) ?? await this.prefetchSegment(currentIndex, segments, settings, backend, gen))
         : null;
     }
 

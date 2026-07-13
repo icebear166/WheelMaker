@@ -17789,7 +17789,9 @@ export function App() {
     }
 
     ttsActiveTurnIndexRef.current = doneTurnIndex;
-    ttsPlayer.play(segments, ttsSettings).catch(() => undefined);
+	ttsPlayer.play(segments, ttsSettings, {
+		synthesizeTTS: payload => service.synthesizeTTS(payload),
+	}).catch(() => undefined);
   };
 
   const exportPromptDoneMarkdownImage = async (doneTurnIndex: number) => {
