@@ -416,6 +416,8 @@ Hub 上传和 Registry 广播使用同一事件名：
 - `session.updated`
 - `session.message`
 
+`session.create` 可在 payload 中携带可选的 `createRequestId`。Hub 将其持久化到会话摘要，并在创建响应、`session.list` 与 `session.updated` 中原样返回，使客户端能在请求响应丢失后将已创建会话与本地草稿重新关联。
+
 `session.read` 响应 payload 使用 top-level `sessionId` 和 `turns[]`；turn 内不重复 `sessionId`。
 
 ## 9. Registry Relay

@@ -63,6 +63,7 @@ import {
 import {
   canStartDraftChatSessionCreate,
   createDraftChatSession,
+  findDraftChatSessionForCreatedSession,
   isDraftChatSessionId,
   markDraftChatSessionFailed,
   markDraftChatSessionSending,
@@ -3769,6 +3770,25 @@ export function App() {
     }
   };
 
+  const reconcileCreatedDraftSessions = (
+    targetProjectId: string,
+    sessions: RegistryChatSession[],
+  ) => {
+    for (const session of sessions) {
+      const draft = findDraftChatSessionForCreatedSession(
+        draftSessionsByProjectIdRef.current[targetProjectId] ?? [],
+        session,
+      );
+      if (!draft) {
+        continue;
+      }
+      applyDraftSessionCreateSuccess(targetProjectId, draft, session);
+      if (draft.errorMessage) {
+        setError(current => current === draft.errorMessage ? '' : current);
+      }
+    }
+  };
+
   const startDraftSessionCreate = (
     targetProjectId: string,
     agentType: string,
@@ -3786,7 +3806,7 @@ export function App() {
     if (!canStartDraftChatSessionCreate(draft)) {
       return Promise.reject(new Error(draft.errorMessage || 'Session create failed.'));
     }
-    const promise = service.createProjectSession(targetProjectId, agentType, '')
+    const promise = service.createProjectSession(targetProjectId, agentType, '', draft.draftId)
       .then(result => {
         if (!result.ok || !result.session.sessionId) {
           throw new Error('project session.create returned ok=false');
@@ -15901,6 +15921,7 @@ export function App() {
     sessions: RegistryChatSession[],
   ) => {
     const listedSessions = sortChatSessions(sessions);
+    reconcileCreatedDraftSessions(targetProjectId, listedSessions);
     const knownSessions = knownChatSessionsForProject(targetProjectId);
     const nextSessions = mergeChatSessionList(knownSessions, listedSessions);
     setProjectSessionsByProjectId(prev => ({
@@ -16131,6 +16152,7 @@ export function App() {
           session?: RegistryChatSession;
         };
         if (payload.session?.sessionId) {
+          reconcileCreatedDraftSessions(eventProjectId, [payload.session]);
           const runtimeKey = buildChatRuntimeKey(eventProjectId, payload.session.sessionId);
           if (payload.session.running === false) {
             setChatCancellingRuntimeKey(current => (current === runtimeKey ? '' : current));

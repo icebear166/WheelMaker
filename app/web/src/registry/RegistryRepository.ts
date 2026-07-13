@@ -386,6 +386,9 @@ export class RegistryRepository {
       messageCount: typeof input.messageCount === 'number' && Number.isFinite(input.messageCount) ? input.messageCount : 0,
       unreadCount: typeof input.unreadCount === 'number' && Number.isFinite(input.unreadCount) ? input.unreadCount : undefined,
       agentType: normalizeAgentType(input.agentType),
+      createRequestId: typeof input.createRequestId === 'string' && input.createRequestId.trim()
+        ? input.createRequestId.trim()
+        : undefined,
       latestTurnIndex: typeof input.latestTurnIndex === 'number' && Number.isFinite(input.latestTurnIndex)
         ? Math.max(0, Math.trunc(input.latestTurnIndex))
         : undefined,
@@ -1088,12 +1091,23 @@ export class RegistryRepository {
     };
   }
 
-  async createSession(projectId: string, agentType: string, title?: string): Promise<{ok: boolean; session: RegistrySessionSummary}> {
+  async createSession(
+    projectId: string,
+    agentType: string,
+    title?: string,
+    createRequestId?: string,
+  ): Promise<{ok: boolean; session: RegistrySessionSummary}> {
     agentType = normalizeAgentType(agentType) ?? agentType.trim();
+    const normalizedTitle = title?.trim() || '';
+    const normalizedCreateRequestId = createRequestId?.trim() || '';
     const resp = await this.client.request({
       method: RegistryMethods.SessionCreate,
       projectId,
-      payload: title?.trim() ? {agentType, title: title.trim()} : {agentType},
+      payload: {
+        agentType,
+        ...(normalizedTitle ? {title: normalizedTitle} : {}),
+        ...(normalizedCreateRequestId ? {createRequestId: normalizedCreateRequestId} : {}),
+      },
       timeoutMs: SESSION_CREATE_TIMEOUT_MS,
     });
     const body = (resp.payload ?? {}) as {ok?: boolean; session?: RegistrySessionSummary};
@@ -1101,7 +1115,7 @@ export class RegistryRepository {
       ok: body.ok ?? false,
       session: body.session ?? {
         sessionId: '',
-        title: title?.trim() || '',
+        title: normalizedTitle,
         preview: '',
         updatedAt: '',
         messageCount: 0,

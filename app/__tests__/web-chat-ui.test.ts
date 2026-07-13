@@ -215,9 +215,11 @@ describe('web chat integration', () => {
     expect(repositoryTs).not.toContain('afterSubIndex');
     expect(repositoryTs).toContain('RegistryMethods.SessionCreate');
     expect(registryTypes).toContain('agentType?: string;');
+    expect(registryTypes).toContain('createRequestId?: string;');
     expect(registryTypes).toContain('agents?: string[];');
-    expect(repositoryTs).toContain('async createSession(projectId: string, agentType: string, title?: string)');
-    expect(repositoryTs).toContain('payload: title?.trim() ? {agentType, title: title.trim()} : {agentType}');
+    expect(repositoryTs).toContain('async createSession(');
+    expect(repositoryTs).toContain('createRequestId?: string,');
+    expect(repositoryTs).toContain('...(normalizedCreateRequestId ? {createRequestId: normalizedCreateRequestId} : {}),');
     expect(repositoryTs).toContain('RegistryMethods.SessionSend');
     expect(repositoryTs).toContain('RegistryMethods.SessionMarkRead');
     expect(repositoryTs).toContain('RegistryMethods.SessionRename');
@@ -229,7 +231,7 @@ describe('web chat integration', () => {
     expect(workspaceServiceTs).toContain('async listSessions(');
     expect(workspaceServiceTs).toContain('async readSession(');
     expect(workspaceServiceTs).toContain('async createSession(');
-    expect(workspaceServiceTs).toContain('async createSession(agentType: string, title?: string)');
+    expect(workspaceServiceTs).toContain('async createSession(agentType: string, title?: string, createRequestId?: string)');
     expect(workspaceServiceTs).toContain('async sendSessionMessage(');
     expect(workspaceServiceTs).toContain('async markSessionRead(');
     expect(workspaceServiceTs).toContain('async markProjectSessionRead(');

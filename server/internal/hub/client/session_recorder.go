@@ -40,6 +40,7 @@ type sessionViewSummary struct {
 	Title             string             `json:"title"`
 	UpdatedAt         string             `json:"updatedAt"`
 	AgentType         string             `json:"agentType,omitempty"`
+	CreateRequestID   string             `json:"createRequestId,omitempty"`
 	LatestTurnIndex   int64              `json:"latestTurnIndex"`
 	Running           bool               `json:"running"`
 	LastDoneTurnIndex int64              `json:"lastDoneTurnIndex"`
@@ -852,9 +853,12 @@ func (r *SessionRecorder) sessionViewSummaryFromRecordLocked(rec SessionRecord) 
 		projection.LastReadTurnIndex,
 	)
 	var agentState SessionAgentState
-	if strings.TrimSpace(rec.AgentJSON) != "" && json.Unmarshal([]byte(rec.AgentJSON), &agentState) == nil && agentState.Usage != nil {
-		usage := *agentState.Usage
-		summary.Usage = &usage
+	if strings.TrimSpace(rec.AgentJSON) != "" && json.Unmarshal([]byte(rec.AgentJSON), &agentState) == nil {
+		summary.CreateRequestID = agentState.CreateRequestID
+		if agentState.Usage != nil {
+			usage := *agentState.Usage
+			summary.Usage = &usage
+		}
 	}
 	return summary
 }

@@ -25,8 +25,8 @@ describe('web chat project scoping', () => {
 
     expect(serviceTs).toContain('async listProjectSessions(projectId: string)');
     expect(serviceTs).toContain('return this.repository.listSessions(projectId);');
-    expect(serviceTs).toContain('async createProjectSession(projectId: string, agentType: string, title?: string)');
-    expect(serviceTs).toContain('return this.repository.createSession(projectId, agentType, title);');
+    expect(serviceTs).toContain('async createProjectSession(projectId: string, agentType: string, title?: string, createRequestId?: string)');
+    expect(serviceTs).toContain('return this.repository.createSession(projectId, agentType, title, createRequestId);');
     expect(serviceTs).toContain('async listProjectResumableSessions(projectId: string, agentType: string)');
     expect(serviceTs).toContain('return this.repository.listResumableSessions(projectId, agentType);');
     expect(serviceTs).toContain('async importProjectResumedSession(projectId: string, agentType: string, sessionId: string)');

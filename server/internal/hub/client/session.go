@@ -30,6 +30,7 @@ type SessionAgentState struct {
 	ConfigOptions     []acp.ConfigOption     `json:"configOptions,omitempty"`
 	Commands          []acp.AvailableCommand `json:"commands,omitempty"`
 	Title             string                 `json:"title,omitempty"`
+	CreateRequestID   string                 `json:"createRequestId,omitempty"`
 	UpdatedAt         string                 `json:"updatedAt,omitempty"`
 	Usage             *acp.SessionUsage      `json:"usage,omitempty"`
 	AgentCapabilities acp.AgentCapabilities  `json:"agentCapabilities,omitempty"`

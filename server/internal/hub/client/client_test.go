@@ -6677,6 +6677,65 @@ func TestHandleSessionRequest_SessionNewPersistsProjectDefaultAgent(t *testing.T
 	}
 }
 
+func TestHandleSessionRequestSessionCreatePersistsCreateRequestID(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+
+	c := New(store, "proj1", "/tmp")
+	inst := &testInjectedInstance{name: "codex", initResult: acp.InitializeResult{ProtocolVersion: "0.1"}, newResult: &acp.SessionNewResult{SessionID: "sess-created"}}
+	c.registry = agent.DefaultACPFactory().Clone()
+	c.registry.Register(acp.ACPProviderCodex, func(context.Context, string) (agent.Instance, error) { return inst, nil })
+
+	resp, err := c.HandleSessionRequest(
+		context.Background(),
+		"session.create",
+		"proj1",
+		json.RawMessage(`{"agentType":"codex","createRequestId":"draft-request-1"}`),
+	)
+	if err != nil {
+		t.Fatalf("HandleSessionRequest(session.create): %v", err)
+	}
+	body, ok := resp.(map[string]any)
+	if !ok {
+		t.Fatalf("response type = %T, want map[string]any", resp)
+	}
+	created, ok := body["session"].(sessionViewSummary)
+	if !ok {
+		t.Fatalf("response session = %#v, want sessionViewSummary", body["session"])
+	}
+	if created.CreateRequestID != "draft-request-1" {
+		t.Fatalf("response createRequestId = %q, want draft-request-1", created.CreateRequestID)
+	}
+
+	record, err := store.LoadSession(context.Background(), "proj1", "sess-created")
+	if err != nil {
+		t.Fatalf("LoadSession: %v", err)
+	}
+	if record == nil {
+		t.Fatal("created session record is missing")
+	}
+	var state SessionAgentState
+	if err := json.Unmarshal([]byte(record.AgentJSON), &state); err != nil {
+		t.Fatalf("decode AgentJSON: %v", err)
+	}
+	if state.CreateRequestID != "draft-request-1" {
+		t.Fatalf("persisted createRequestId = %q, want draft-request-1", state.CreateRequestID)
+	}
+
+	listedResp, err := c.HandleSessionRequest(context.Background(), "session.list", "proj1", json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("HandleSessionRequest(session.list): %v", err)
+	}
+	listedBody := listedResp.(map[string]any)
+	listed := listedBody["sessions"].([]sessionViewSummary)
+	if len(listed) != 1 || listed[0].CreateRequestID != "draft-request-1" {
+		t.Fatalf("listed sessions = %#v, want persisted createRequestId", listed)
+	}
+}
+
 func TestHandleSessionRequest_SessionListIncludesConfigOptions(t *testing.T) {
 	c := newSessionViewTestClient(t)
 	ctx := context.Background()

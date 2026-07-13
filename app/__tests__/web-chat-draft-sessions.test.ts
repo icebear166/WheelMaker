@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { RegistryRepository } from '../web/src/registry/RegistryRepository';
 
 function projectRoot(): string {
   return path.join(__dirname, '..');
@@ -127,6 +128,78 @@ describe('web chat draft sessions', () => {
     })).toBeNull();
   });
 
+  test('matches a late created session to the draft that initiated it', () => {
+    const {
+      DRAFT_CHAT_SESSION_ID_PREFIX,
+      createDraftChatSession,
+      findDraftChatSessionForCreatedSession,
+    } = loadDraftSessionModule();
+    const matchingDraft = createDraftChatSession({
+      projectId: 'project-a',
+      agentType: 'Codex',
+      draftId: `${DRAFT_CHAT_SESSION_ID_PREFIX}matching`,
+      nowIso: '2026-07-13T08:00:00.000Z',
+    });
+    const otherDraft = createDraftChatSession({
+      projectId: 'project-a',
+      agentType: 'Codex',
+      draftId: `${DRAFT_CHAT_SESSION_ID_PREFIX}other`,
+      nowIso: '2026-07-13T08:00:01.000Z',
+    });
+
+    expect(findDraftChatSessionForCreatedSession(
+      [otherDraft, matchingDraft],
+      {sessionId: 'real-session', createRequestId: matchingDraft.draftId},
+    )).toBe(matchingDraft);
+    expect(findDraftChatSessionForCreatedSession(
+      [matchingDraft],
+      {sessionId: 'unrelated-session'},
+    )).toBeUndefined();
+  });
+
+  test('carries the draft id through session.create and normalized session lists', async () => {
+    const request = jest.fn()
+      .mockResolvedValueOnce({
+        payload: {
+          ok: true,
+          session: {
+            sessionId: 'real-session',
+            title: '',
+            preview: '',
+            updatedAt: '2026-07-13T08:00:02Z',
+            messageCount: 0,
+            agentType: 'codex',
+            createRequestId: 'draft-request-1',
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        payload: {
+          sessions: [{
+            sessionId: 'real-session',
+            title: '',
+            preview: '',
+            updatedAt: '2026-07-13T08:00:02Z',
+            messageCount: 0,
+            agentType: 'codex',
+            createRequestId: 'draft-request-1',
+          }],
+        },
+      });
+    const repository = new RegistryRepository({request} as never);
+
+    const created = await repository.createSession('project-a', 'codex', '', 'draft-request-1');
+    const listed = await repository.listSessions('project-a');
+
+    expect(request).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      method: 'session.create',
+      projectId: 'project-a',
+      payload: {agentType: 'codex', createRequestId: 'draft-request-1'},
+    }));
+    expect(created.session.createRequestId).toBe('draft-request-1');
+    expect(listed[0].createRequestId).toBe('draft-request-1');
+  });
+
   test('wires draft sessions without adding backend protocol operations to draft rows', () => {
     const root = projectRoot();
     const mainTsx = readSourceText(path.join(root, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
@@ -139,6 +212,9 @@ describe('web chat draft sessions', () => {
     expect(mainTsx).toContain('const resolveSelectedDraftSessionForSend = async');
     expect(mainTsx).toContain('const renderDraftSessionRow = (');
     expect(mainTsx).toContain('canStartDraftChatSessionCreate(draft)');
+    expect(mainTsx).toContain("service.createProjectSession(targetProjectId, agentType, '', draft.draftId)");
+    expect(mainTsx).toContain('reconcileCreatedDraftSessions(eventProjectId, [payload.session]);');
+    expect(mainTsx).toContain('reconcileCreatedDraftSessions(targetProjectId, listedSessions);');
 
     const sendBody = extractConstFunctionBody(mainTsx, 'sendChatMessage');
     const resolveIndex = sendBody.indexOf('await resolveSelectedDraftSessionForSend(');
@@ -161,7 +237,7 @@ describe('web chat draft sessions', () => {
   test('keeps session.create RPC alive long enough for slow Codex startup drafts', () => {
     const root = projectRoot();
     const repositoryTs = readSourceText(path.join(root, 'web', 'src', 'registry', 'RegistryRepository.ts'));
-    const createSessionStart = repositoryTs.indexOf('async createSession(projectId: string, agentType: string, title?: string)');
+    const createSessionStart = repositoryTs.indexOf('async createSession(');
     expect(createSessionStart).toBeGreaterThanOrEqual(0);
     const sendSessionStart = repositoryTs.indexOf('async sendSessionMessage(', createSessionStart);
     expect(sendSessionStart).toBeGreaterThan(createSessionStart);

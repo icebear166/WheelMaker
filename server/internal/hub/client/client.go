@@ -212,7 +212,7 @@ func sanitizePreferenceConfigOptions(options []PreferenceConfigOption) []Prefere
 	return out
 }
 
-func (c *Client) createSessionState(ctx context.Context, agentType, title string) (*createdSessionState, error) {
+func (c *Client) createSessionState(ctx context.Context, agentType, title, createRequestID string) (*createdSessionState, error) {
 	agentType = normalizeAgentType(agentType)
 	if _, ok := acp.ParseACPProvider(agentType); !ok {
 		return nil, fmt.Errorf("no agent registered for %q", agentType)
@@ -291,6 +291,7 @@ func (c *Client) createSessionState(ctx context.Context, agentType, title string
 		ConfigOptions:     append([]acp.ConfigOption(nil), resolved...),
 		Commands:          []acp.AvailableCommand{},
 		Title:             sessionTitle,
+		CreateRequestID:   createRequestID,
 		AgentCapabilities: initResult.AgentCapabilities,
 		AgentInfo:         cloneAgentInfo(initResult.AgentInfo),
 		AuthMethods:       append([]acp.AuthMethod(nil), initResult.AuthMethods...),
@@ -307,11 +308,15 @@ func (c *Client) createSessionState(ctx context.Context, agentType, title string
 }
 
 func (c *Client) CreateSession(ctx context.Context, agentType, title string) (*Session, error) {
+	return c.createSession(ctx, agentType, title, "")
+}
+
+func (c *Client) createSession(ctx context.Context, agentType, title, createRequestID string) (*Session, error) {
 	agentType = normalizeAgentType(agentType)
 	if agentType == "" {
 		return nil, fmt.Errorf("agent type is required")
 	}
-	created, err := c.createSessionState(ctx, agentType, title)
+	created, err := c.createSessionState(ctx, agentType, title, createRequestID)
 	if err != nil {
 		return nil, err
 	}
@@ -535,8 +540,9 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 		return map[string]any{"ok": true, "sessionId": summary.SessionID, "session": summary}, nil
 	case acp.RegistryMethodSessionCreate:
 		var req struct {
-			AgentType string `json:"agentType"`
-			Title     string `json:"title,omitempty"`
+			AgentType       string `json:"agentType"`
+			Title           string `json:"title,omitempty"`
+			CreateRequestID string `json:"createRequestId,omitempty"`
 		}
 		if err := decodeSessionRequestPayload(payload, &req); err != nil {
 			return nil, fmt.Errorf("invalid session.create payload: %w", err)
@@ -544,7 +550,7 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 		if strings.TrimSpace(req.AgentType) == "" {
 			return nil, fmt.Errorf("agentType is required")
 		}
-		sess, err := c.CreateSession(ctx, req.AgentType, req.Title)
+		sess, err := c.createSession(ctx, req.AgentType, req.Title, strings.TrimSpace(req.CreateRequestID))
 		if err != nil {
 			return nil, err
 		}
@@ -870,6 +876,9 @@ func (c *Client) ListSessions(ctx context.Context) ([]SessionRecord, error) {
 		}
 		if strings.TrimSpace(storedEntry.Title) != "" {
 			entries[i].Title = storedEntry.Title
+		}
+		if strings.TrimSpace(storedEntry.AgentJSON) != "" {
+			entries[i].AgentJSON = storedEntry.AgentJSON
 		}
 		if strings.TrimSpace(storedEntry.SessionSyncJSON) != "" {
 			entries[i].SessionSyncJSON = storedEntry.SessionSyncJSON

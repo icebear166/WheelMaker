@@ -28,6 +28,11 @@ type ResolveDraftReplacementSelectionInput = {
   realSessionId: string;
 };
 
+type CreatedChatSession = {
+  sessionId: string;
+  createRequestId?: string;
+};
+
 function createDraftChatSessionId(): string {
   const timePart = Date.now().toString(36);
   const randomPart = Math.random().toString(36).slice(2, 10);
@@ -94,6 +99,17 @@ export function removeDraftChatSession(
   draftId: string,
 ): DraftChatSession[] {
   return drafts.filter(draft => draft.draftId !== draftId);
+}
+
+export function findDraftChatSessionForCreatedSession(
+  drafts: DraftChatSession[],
+  session: CreatedChatSession,
+): DraftChatSession | undefined {
+  const createRequestId = session.createRequestId?.trim();
+  if (!createRequestId) {
+    return undefined;
+  }
+  return drafts.find(draft => draft.draftId === createRequestId);
 }
 
 export function resolveDraftReplacementSelection({

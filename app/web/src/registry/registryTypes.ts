@@ -328,6 +328,7 @@ export interface RegistrySessionSummary {
   messageCount: number;
   unreadCount?: number;
   agentType?: string;
+  createRequestId?: string;
   latestTurnIndex?: number;
   running?: boolean;
   lastDoneTurnIndex?: number;
