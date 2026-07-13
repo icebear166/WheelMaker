@@ -34,7 +34,8 @@ fun notificationTargetUrl(intent: Intent?): String? {
 class AndroidNotificationRuntime(
     private val activity: Activity,
     private val webView: WebView,
-    private val notificationPermissionRequestCode: Int
+    private val notificationPermissionRequestCode: Int,
+    private val baseUrlProvider: () -> String = { "" }
 ) {
     fun getPermissionState(): String {
         return permissionStateJson(permissionState())
@@ -161,10 +162,12 @@ class AndroidNotificationRuntime(
     }
 
     private fun buildNotificationTargetUrl(projectId: String, sessionId: String): String {
-        return Uri.Builder()
-            .scheme("https")
-            .authority("appassets.androidplatform.net")
-            .path("/")
+        val baseUrl = baseUrlProvider()
+        val normalized = normalizeHttpsBaseUrl(baseUrl) ?: return baseUrl
+        return Uri.parse(normalized)
+            .buildUpon()
+            .clearQuery()
+            .fragment(null)
             .appendQueryParameter("wmProjectId", projectId)
             .appendQueryParameter("wmSessionId", sessionId)
             .build()

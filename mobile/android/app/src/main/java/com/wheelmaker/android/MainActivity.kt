@@ -37,11 +37,17 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import java.util.Locale
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 class MainActivity : Activity() {
     private lateinit var rootView: FrameLayout
     private lateinit var webView: WebView
-    private lateinit var webSourceRuntime: WebSourceRuntime
+    private lateinit var baseUrlStore: BaseUrlStore
+    private lateinit var baseUrlProbe: BaseUrlProbe
+    private lateinit var navigationExecutor: ExecutorService
+    @Volatile private var configuredBaseUrl: String = ""
+    @Volatile private var bootstrapError: String = ""
     private lateinit var androidSpeechRuntime: AndroidSpeechRuntime
     private lateinit var androidNotificationRuntime: AndroidNotificationRuntime
     private lateinit var androidApkUpdateRuntime: AndroidApkUpdateRuntime
@@ -56,22 +62,24 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        webSourceRuntime = WebSourceRuntime(SharedPreferencesWebSourceStore(this))
+        baseUrlStore = BaseUrlStore(this)
+        baseUrlProbe = BaseUrlProbe()
+        navigationExecutor = Executors.newSingleThreadExecutor()
+        configuredBaseUrl = baseUrlStore.load()
         androidDiagnosticLogLevelStore = SharedPreferencesAndroidDiagnosticLogLevelStore(this)
         androidWebDiagnostics = AndroidWebDiagnostics(logLevel = androidDiagnosticLogLevelStore.loadDiagnosticLogLevel())
-        val webSourceState = webSourceRuntime.state()
-        androidWebDiagnostics.record("startup_web_source", mapOf(
-            "preference" to webSourceState.preference,
-            "actualSource" to webSourceState.actualSource,
-            "remoteUrl" to webSourceState.remoteUrl,
-            "remoteHost" to webSourceState.remoteHost
-        ))
+        androidWebDiagnostics.record("startup_remote_shell", mapOf("baseUrl" to configuredBaseUrl))
 
         rootView = FrameLayout(this)
         rootView.setBackgroundColor(APP_BACKGROUND_COLOR)
         webView = WebView(this)
         androidSpeechRuntime = AndroidSpeechRuntime(this, webView, NATIVE_SPEECH_PERMISSION_REQUEST_CODE)
-        androidNotificationRuntime = AndroidNotificationRuntime(this, webView, NOTIFICATION_PERMISSION_REQUEST_CODE)
+        androidNotificationRuntime = AndroidNotificationRuntime(
+            this,
+            webView,
+            NOTIFICATION_PERMISSION_REQUEST_CODE,
+            baseUrlProvider = { configuredBaseUrl }
+        )
         androidApkUpdateRuntime = AndroidApkUpdateRuntime(this, webView)
         androidImageShareRuntime = AndroidImageShareRuntime(this)
         androidPortRelaySiteDataRuntime = AndroidPortRelaySiteDataRuntime(webView)
@@ -86,7 +94,7 @@ class MainActivity : Activity() {
         rootView.addView(splashOverlay)
         setContentView(rootView)
         registerSystemBackCallback()
-        webView.loadUrl(notificationTargetUrl(intent) ?: ANDROID_APP_ORIGIN)
+        startInitialNavigation(notificationTargetUrl(intent))
     }
 
     private fun createSplashOverlay(): FrameLayout {
@@ -141,6 +149,9 @@ class MainActivity : Activity() {
         unregisterSystemBackCallback()
         if (::androidSpeechRuntime.isInitialized) {
             androidSpeechRuntime.stopForAppBackground()
+        }
+        if (::navigationExecutor.isInitialized) {
+            navigationExecutor.shutdownNow()
         }
         super.onDestroy()
     }
@@ -229,12 +240,16 @@ class MainActivity : Activity() {
         target.settings.databaseEnabled = true
         target.settings.cacheMode = WebSettings.LOAD_DEFAULT
         target.settings.allowContentAccess = true
-        target.settings.allowFileAccess = true
+        target.settings.allowFileAccess = false
         target.settings.mediaPlaybackRequiresUserGesture = false
-        target.settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+        target.settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
         CookieManager.getInstance().setAcceptCookie(true)
         CookieManager.getInstance().setAcceptThirdPartyCookies(target, true)
-        target.webViewClient = object : StableOriginWebViewClient(this, webSourceRuntime, androidWebDiagnostics) {
+        target.webViewClient = object : StableOriginWebViewClient(
+            this,
+            configuredBaseUrl = { configuredBaseUrl },
+            onRemoteFailure = { message -> showBootstrap(message) }
+        ) {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 dismissSplashOverlay()
@@ -271,7 +286,6 @@ class MainActivity : Activity() {
         }
         target.addJavascriptInterface(
             WheelMakerBridge(
-                webSourceRuntime,
                 androidSpeechRuntime,
                 androidNotificationRuntime,
                 androidApkUpdateRuntime,
@@ -285,9 +299,49 @@ class MainActivity : Activity() {
     }
 
     private fun handleNotificationIntent(intent: Intent?) {
-        notificationTargetUrl(intent)?.let { targetUrl ->
+        val targetUrl = notificationTargetUrl(intent) ?: return
+        val baseUrl = configuredBaseUrl
+        if (baseUrl.isNotBlank() && BaseUrlPolicy(baseUrl).contains(targetUrl)) {
             webView.loadUrl(targetUrl)
         }
+    }
+
+    private fun startInitialNavigation(notificationUrl: String?) {
+        val baseUrl = configuredBaseUrl
+        if (baseUrl.isBlank()) {
+            showBootstrap("")
+            return
+        }
+        probeAndLoad(baseUrl, notificationUrl)
+    }
+
+    private fun probeAndLoad(baseUrl: String, requestedUrl: String? = null) {
+        navigationExecutor.execute {
+            val result = baseUrlProbe.probe(baseUrl)
+            runOnUiThread {
+                if (isFinishing || isDestroyed || baseUrl != configuredBaseUrl) return@runOnUiThread
+                if (!result.ok) {
+                    showBootstrap(result.error)
+                    return@runOnUiThread
+                }
+                bootstrapError = ""
+                val policy = BaseUrlPolicy(baseUrl)
+                val targetUrl = requestedUrl?.takeIf(policy::contains) ?: baseUrl
+                loadConfiguredRemote(webView, targetUrl)
+            }
+        }
+    }
+
+    private fun loadConfiguredRemote(target: WebView, configuredBaseUrl: String) {
+        target.loadUrl(configuredBaseUrl)
+    }
+
+    private fun showBootstrap(error: String) {
+        bootstrapError = error
+        if (::webView.isInitialized && webView.url != ANDROID_BOOTSTRAP_URL) {
+            webView.loadUrl(ANDROID_BOOTSTRAP_URL)
+        }
+        dismissSplashOverlay()
     }
 
     private fun createAndroidFileChooserIntent(fileChooserParams: WebChromeClient.FileChooserParams): Intent {

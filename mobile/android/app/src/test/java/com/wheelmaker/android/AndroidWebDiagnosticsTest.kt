@@ -57,17 +57,6 @@ class AndroidWebDiagnosticsTest {
     }
 
     @Test
-    fun recordsOnlyStableOriginAssetsThatHelpDiagnoseNativeWebSource() {
-        assertTrue(shouldRecordStableOriginDiagnosticAsset("index.html"))
-        assertTrue(shouldRecordStableOriginDiagnosticAsset("settings/update"))
-        assertTrue(shouldRecordStableOriginDiagnosticAsset("bundle.abc123.js"))
-        assertTrue(shouldRecordStableOriginDiagnosticAsset("styles.abc123.css"))
-        assertTrue(shouldRecordStableOriginDiagnosticAsset("service-worker.js"))
-        assertFalse(shouldRecordStableOriginDiagnosticAsset("font.abc123.woff2"))
-        assertFalse(shouldRecordStableOriginDiagnosticAsset("image.abc123.png"))
-    }
-
-    @Test
     fun diagnosticsDefaultToWarningLogLevelAndFilterLowerLevels() {
         val diagnostics = AndroidWebDiagnostics(capacity = 3, now = { 1000L })
 
@@ -96,7 +85,8 @@ class AndroidWebDiagnosticsTest {
         assertTrue(mainActivity.contains("private lateinit var androidDiagnosticLogLevelStore: AndroidDiagnosticLogLevelStore"))
         assertTrue(mainActivity.contains("AndroidWebDiagnostics(logLevel = androidDiagnosticLogLevelStore.loadDiagnosticLogLevel())"))
         assertFalse(mainActivity.contains("webSourceRuntime.refreshActualSource()"))
-        assertTrue(mainActivity.contains("StableOriginWebViewClient(this, webSourceRuntime, androidWebDiagnostics)"))
+        assertTrue(mainActivity.contains("StableOriginWebViewClient("))
+        assertTrue(mainActivity.contains("configuredBaseUrl = { configuredBaseUrl }"))
         assertTrue(mainActivity.contains("WheelMakerBridge("))
         assertTrue(mainActivity.contains("androidWebDiagnostics"))
         assertTrue(bridge.contains("fun drainWebDiagnostics(): String"))
