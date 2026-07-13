@@ -5,6 +5,8 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $manifestPath = Join-Path $repoRoot "mobile\android\app\src\main\AndroidManifest.xml"
 $resRoot = Join-Path $repoRoot "mobile\android\app\src\main\res"
 $stringsPath = Join-Path $resRoot "values\strings.xml"
+$stylesPath = Join-Path $resRoot "values\styles.xml"
+$stylesV27Path = Join-Path $resRoot "values-v27\styles.xml"
 
 function Assert-Contains {
   param(
@@ -35,6 +37,12 @@ Assert-Contains -Label "AndroidManifest.xml" -Text $manifest -Needle 'android:la
 
 $strings = Get-Content -LiteralPath $stringsPath -Raw
 Assert-Contains -Label "strings.xml" -Text $strings -Needle '<string name="app_name">Wheel Maker</string>'
+
+$styles = Get-Content -LiteralPath $stylesPath -Raw
+Assert-Contains -Label "values/styles.xml" -Text $styles -Needle '<style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">'
+
+$stylesV27 = Get-Content -LiteralPath $stylesV27Path -Raw
+Assert-Contains -Label "values-v27/styles.xml" -Text $stylesV27 -Needle '<style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">'
 
 Assert-FileExists -Path (Join-Path $resRoot "mipmap-anydpi\ic_launcher.xml")
 Assert-FileExists -Path (Join-Path $resRoot "mipmap-anydpi\ic_launcher_round.xml")
