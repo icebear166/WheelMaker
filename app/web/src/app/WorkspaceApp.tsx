@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import { resolveInitialRegistryAddress } from './workspaceBootstrap';
+import {resolveWindowsWorkspaceShortcut} from './workspaceShortcuts';
 
 declare global {
   interface Window {
@@ -18304,23 +18305,25 @@ export function App() {
     } catch {}
   }, []);
   useEffect(() => {
-    if (!isWide) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.isComposing || event.altKey) return;
-      if (!event.ctrlKey || event.metaKey) return;
-      if (event.key === 't' || event.key === 'T') {
-        event.preventDefault();
-        setSidebarCollapsed(value => !value);
-        return;
-      }
-      if (event.code === 'Backquote') {
-        event.preventDefault();
-        toggleChatPreviewFromTitle();
+      const shortcut = resolveWindowsWorkspaceShortcut(event, {isWindows: isWindowsPlatform, isWide});
+      if (!shortcut) return;
+      event.preventDefault();
+      switch (shortcut) {
+        case 'sessions':
+          setSidebarCollapsed(value => !value);
+          return;
+        case 'preview':
+          toggleChatPreviewFromTitle();
+          return;
+        case 'terminal':
+          toggleTerminalFromTitle();
+          return;
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isWide, setSidebarCollapsed, toggleChatPreviewFromTitle]);
+  }, [isWide, isWindowsPlatform, setSidebarCollapsed, toggleChatPreviewFromTitle, toggleTerminalFromTitle]);
   const renderMain = () => {
     const heavyDiffDeferred =
       !!selectedDiff &&
