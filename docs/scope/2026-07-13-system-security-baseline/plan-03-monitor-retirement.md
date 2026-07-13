@@ -242,7 +242,7 @@ Expected: 提交成功。
 
 ### Task 5: 执行 Monitor 退出验收
 
-- [ ] **Step 1: 运行全量 Go/Web 测试**
+- [x] **Step 1: 运行全量 Go/Web 测试**
 
 Run:
 
@@ -256,7 +256,7 @@ npm run tsc:web
 
 Expected: PASS。
 
-- [ ] **Step 2: 检查剩余引用只属于升级清理或历史记录**
+- [x] **Step 2: 检查剩余引用只属于升级清理或历史记录**
 
 Run:
 
@@ -266,7 +266,7 @@ rg -n -i 'wheelmaker-monitor|:9631|monitor\.status|registryrolemonitor|monitorco
 
 Expected: 无输出。若命中，逐一删除运行/现行引用，不能扩大 allowlist。
 
-- [ ] **Step 3: 推送阶段提交**
+- [x] **Step 3: 推送阶段提交**
 
 Run:
 
