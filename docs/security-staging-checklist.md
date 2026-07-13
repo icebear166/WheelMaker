@@ -17,6 +17,12 @@ This checklist records the device and reverse-proxy evidence that cannot be esta
 
 Allowed Status values are `PASS`, `FAIL`, `BLOCKED`, and `NOT RUN`. Evidence must be non-sensitive: use status codes, timestamps, version numbers, redacted screenshots, certificate issuer names, or local log event names.
 
+## Repository automation evidence
+
+The repository-only acceptance gate passed on 2026-07-13 after rebasing commit `ea50103f` onto `origin/main`. Evidence: Gitleaks current tree zero findings; baseline and full Go tests passed; 177 Jest suites / 862 tests passed; Web typecheck and release build passed; production and complete npm audits passed; Android `test lint` completed 69 tasks successfully; publish/deployment source tests and forbidden production-source checks passed.
+
+This evidence does not replace the staging and real-device rows below. Those rows remain `NOT RUN` or `BLOCKED` until an operator with the required Nginx environment, Desktop/Android devices, signing material, and credential-owner access records separate evidence.
+
 ## Reverse proxy, login, and sessions
 
 | ID | Scenario | Expected result | Status (PASS/FAIL) | Evidence |
