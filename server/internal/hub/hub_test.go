@@ -1228,6 +1228,28 @@ func TestReporterDeepSeekSecretIsRedactedFromDebugEnvelope(t *testing.T) {
 	}
 }
 
+func TestReporterDebugEnvelopeRecursivelyRedactsSecretsForEveryMethod(t *testing.T) {
+	var log strings.Builder
+	reporter := NewReporter(ReporterConfig{HubID: "hub-recursive-redaction"}, nil)
+	reporter.SetDebugLogger(&log)
+	reporter.writeDebugEnvelope("<-", envelope{
+		Type: rp.RegistryEnvelopeTypeRequest, Method: "connect.init", HubID: "hub-recursive-redaction",
+		Payload: rp.MustRaw(map[string]any{
+			"token":  "connect-secret",
+			"nested": []any{map[string]any{"api_key": "nested-secret", "tokenCount": 7}},
+		}),
+	})
+	got := log.String()
+	for _, secret := range []string{"connect-secret", "nested-secret"} {
+		if strings.Contains(got, secret) {
+			t.Fatalf("secret %q leaked into debug log: %s", secret, got)
+		}
+	}
+	if !strings.Contains(got, `"tokenCount":7`) {
+		t.Fatalf("allowed statistics missing from debug log: %s", got)
+	}
+}
+
 func TestReporterTerminalPublishQueueIsBounded(t *testing.T) {
 	reporter := NewReporter(ReporterConfig{HubID: "hub-terminal-backlog"}, nil)
 	sink := newTerminalEventSink()

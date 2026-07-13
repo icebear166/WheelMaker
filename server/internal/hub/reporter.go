@@ -28,6 +28,7 @@ import (
 	"github.com/swm8023/wheelmaker/internal/hub/tools"
 	"github.com/swm8023/wheelmaker/internal/portrelay"
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
+	"github.com/swm8023/wheelmaker/internal/security"
 	"github.com/swm8023/wheelmaker/internal/shared"
 )
 
@@ -2392,9 +2393,7 @@ func (r *Reporter) writeDebugEnvelope(direction string, v any) {
 		if terminalDebugMethod(env.Method) {
 			env = redactTerminalDebugEnvelope(env)
 		}
-		if env.Method == rp.RegistryMethodHubStateAction {
-			env = redactHubStateActionDebugEnvelope(env)
-		}
+		env = redactDebugEnvelopePayload(env)
 		v = env
 	}
 	raw, err := json.Marshal(v)
@@ -2406,19 +2405,12 @@ func (r *Reporter) writeDebugEnvelope(direction string, v any) {
 	}
 }
 
-func redactHubStateActionDebugEnvelope(env envelope) envelope {
-	var payload map[string]any
+func redactDebugEnvelopePayload(env envelope) envelope {
+	var payload any
 	if len(env.Payload) == 0 || json.Unmarshal(env.Payload, &payload) != nil {
 		return env
 	}
-	params, ok := payload["params"].(map[string]any)
-	if !ok {
-		return env
-	}
-	if _, exists := params["apiKey"]; exists {
-		params["apiKey"] = "[redacted]"
-		env.Payload = rp.MustRaw(payload)
-	}
+	env.Payload = rp.MustRaw(security.RedactDiagnosticValue(payload))
 	return env
 }
 

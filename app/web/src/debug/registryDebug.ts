@@ -1,4 +1,5 @@
 import type {RegistryEnvelope} from '../registry/registryTypes';
+import {redactDiagnosticValue} from './redaction';
 
 export type RegistryDebugDirection = 'out' | 'in' | 'lifecycle';
 export type RegistryDebugScope = string;
@@ -115,6 +116,8 @@ function estimateBase64ByteCount(value: string): number {
 }
 
 export function redactRegistryDebugEnvelope<TEnvelope extends RegistryEnvelope>(envelope: TEnvelope): TEnvelope {
+	const recursivelyRedacted = redactDiagnosticValue(envelope) as TEnvelope;
+	envelope = recursivelyRedacted;
   const terminalMethod = envelope.method?.startsWith('terminal.') === true;
   if (envelope.method !== 'speech.start' && envelope.method !== 'speech.chunk' && !terminalMethod) {
     return envelope;
@@ -366,7 +369,7 @@ export function createRegistryDebugStore(now: () => number = () => Date.now()): 
     }
   };
 
-  const recordInboundParseError = (input: Omit<RegistryDebugParseErrorInput, 'kind'>) => {
+	  const recordInboundParseError = (input: Omit<RegistryDebugParseErrorInput, 'kind'>) => {
     if (!enabled) {
       return;
     }
@@ -379,8 +382,8 @@ export function createRegistryDebugStore(now: () => number = () => Date.now()): 
       connection: input.connection,
       sessionIds: [],
       multiSession: false,
-      raw: input.raw,
-      parseError: input.error,
+	      raw: '[unparsed payload omitted]',
+	      parseError: 'registry payload parse failed',
     });
   };
 

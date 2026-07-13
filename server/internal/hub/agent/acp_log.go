@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/swm8023/wheelmaker/internal/protocol"
+	"github.com/swm8023/wheelmaker/internal/security"
 	logger "github.com/swm8023/wheelmaker/internal/shared"
 )
 
@@ -65,17 +66,6 @@ func (s defaultACPProcessLogSink) Errorf(format string, args ...any) {
 	allArgs = append(allArgs, s.provider)
 	allArgs = append(allArgs, args...)
 	logger.Error("[acp] ![%s] "+format, allArgs...)
-}
-
-var acpSensitiveKeys = map[string]struct{}{
-	"token":         {},
-	"authorization": {},
-	"cookie":        {},
-	"secret":        {},
-	"api_key":       {},
-	"access_token":  {},
-	"refresh_token": {},
-	"password":      {},
 }
 
 func formatACPLogLine(dir rune, provider string, raw []byte) string {
@@ -245,7 +235,7 @@ func redactACPPayload(raw []byte) []byte {
 	if err := json.Unmarshal(raw, &v); err != nil {
 		return []byte(redactPlainText(string(raw)))
 	}
-	sanitizeJSONValue(v)
+	v = security.RedactDiagnosticValue(v)
 
 	buf := bytes.NewBuffer(nil)
 	enc := json.NewEncoder(buf)
@@ -256,34 +246,12 @@ func redactACPPayload(raw []byte) []byte {
 	return bytes.TrimSpace(buf.Bytes())
 }
 
-func sanitizeJSONValue(v any) {
-	switch x := v.(type) {
-	case map[string]any:
-		for k, vv := range x {
-			if isSensitiveKey(k) {
-				x[k] = "***"
-				continue
-			}
-			sanitizeJSONValue(vv)
-		}
-	case []any:
-		for i := range x {
-			sanitizeJSONValue(x[i])
-		}
-	}
-}
-
-func isSensitiveKey(k string) bool {
-	_, ok := acpSensitiveKeys[strings.ToLower(strings.TrimSpace(k))]
-	return ok
-}
-
 func redactPlainText(s string) string {
-	repls := []string{"token", "authorization", "cookie", "secret", "api_key", "password"}
-	out := s
-	for _, key := range repls {
-		out = strings.ReplaceAll(out, key+":", key+":***")
-		out = strings.ReplaceAll(out, key+"=", key+"=***")
+	normalized := strings.ToLower(s)
+	for _, key := range []string{"token", "authorization", "cookie", "secret", "api_key", "apikey", "password", "credential", "nonce", "csrf"} {
+		if strings.Contains(normalized, key+":") || strings.Contains(normalized, key+"=") {
+			return security.RedactedValue
+		}
 	}
-	return out
+	return s
 }

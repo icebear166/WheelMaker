@@ -36,8 +36,6 @@ export type AppDiagnosticStore = {
 };
 
 const MAX_APP_DIAGNOSTIC_RECORDS = 200;
-const SENSITIVE_DETAIL_KEYS = new Set(['apiKey', 'streamId']);
-const OMITTED_DETAIL_KEYS = new Set(['pcm', 'base64']);
 const APP_DIAGNOSTIC_LEVEL_ORDER: Record<AppDiagnosticLevel, number> = {
   debug: 0,
   info: 1,
@@ -65,33 +63,8 @@ export function formatAppDiagnosticTime(timestamp: number): string {
   ].join(':') + `.${pad(date.getMilliseconds(), 3)}`;
 }
 
-function sanitizeDiagnosticValue(value: unknown, depth: number): unknown {
-  if (depth > 4) {
-    return '[truncated]';
-  }
-  if (!value || typeof value !== 'object') {
-    return value;
-  }
-  if (Array.isArray(value)) {
-    return value.map(item => sanitizeDiagnosticValue(item, depth + 1));
-  }
-  const output: Record<string, unknown> = {};
-  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-    if (SENSITIVE_DETAIL_KEYS.has(key)) {
-      output[key] = '[redacted]';
-      continue;
-    }
-    if (OMITTED_DETAIL_KEYS.has(key)) {
-      output[key] = '[omitted]';
-      continue;
-    }
-    output[key] = sanitizeDiagnosticValue(item, depth + 1);
-  }
-  return output;
-}
-
 export function sanitizeAppDiagnosticDetails(details: Record<string, unknown> = {}): Record<string, unknown> {
-  return sanitizeDiagnosticValue(details, 0) as Record<string, unknown>;
+  return redactDiagnosticValue(details) as Record<string, unknown>;
 }
 
 export function normalizeAppDiagnosticLogLevel(
@@ -224,3 +197,4 @@ export function createAppDiagnosticStore(
 }
 
 export const appDiagnosticStore = createAppDiagnosticStore();
+import {redactDiagnosticValue} from './redaction';

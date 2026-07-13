@@ -47,7 +47,7 @@ func TestRedactACPPayload_JSONKeys(t *testing.T) {
 	if strings.Contains(s, "Bearer X") || strings.Contains(s, "abc") || strings.Contains(s, "\"p\"") {
 		t.Fatalf("redaction failed: %s", s)
 	}
-	if !strings.Contains(s, "***") {
+	if !strings.Contains(s, "[redacted]") {
 		t.Fatalf("expected masked marker: %s", s)
 	}
 	var obj map[string]any
