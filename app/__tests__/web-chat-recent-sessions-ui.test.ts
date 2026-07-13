@@ -38,13 +38,12 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain("tagVariantClass('recent-project-accent', targetProjectId)");
     expect(mainTsx).toContain('role="group"');
     expect(mainTsx).toContain('recent-project-session-watermark');
-    expect(mainTsx).toContain('codicon codicon-folder recent-project-session-watermark-icon');
     expect(mainTsx).toContain('recent-project-session-watermark-name');
-    expect(mainTsx).toContain('recent-project-session-watermark-hub');
-    expect(mainTsx).toContain('style={hubAccentStyle(projectHubId)}');
-    expect(mainTsx).toContain('<span className="wide-project-hub-label">{projectHubId}</span>');
+    expect(mainTsx).toContain('{projectName.toUpperCase()}');
+    expect(mainTsx).not.toContain('recent-project-session-watermark-icon');
+    expect(mainTsx).not.toContain('recent-project-session-watermark-hub');
     expect(mainTsx).toContain('recent-project-session-create');
-    expect(mainTsx).toContain('recent-session-create-slot');
+    expect(mainTsx).not.toContain('recent-session-create-slot');
     expect(mainTsx).toContain('showProjectCreateAction');
     expect(mainTsx).toContain('sessionIndex === 0');
     expect(mainTsx).toContain('codicon codicon-add');
@@ -74,13 +73,29 @@ describe('web chat recent sessions', () => {
     expect(groupBlock).toContain('position: relative;');
     expect(groupBlock).toContain('overflow: hidden;');
     expect(groupBlock).toContain('background: color-mix(in srgb, var(--recent-project-accent) 7%, transparent);');
+    expect(groupBlock).not.toContain('border:');
     expect(watermarkBlock).toContain('position: absolute;');
-    expect(watermarkBlock).toContain('left: 7px;');
-    expect(watermarkBlock).toContain('bottom: 2px;');
+    expect(watermarkBlock).toContain('left: 11px;');
+    expect(watermarkBlock).toContain('bottom: -10px;');
+    expect(watermarkBlock).toContain('font-size: 36px;');
+    expect(watermarkBlock).toContain('font-weight: 800;');
+    expect(watermarkBlock).toContain('color: color-mix(in srgb, var(--recent-project-accent) 12%, transparent);');
     expect(watermarkBlock).toContain('pointer-events: none;');
     expect(sessionListBlock).toContain('position: relative;');
     expect(sessionListBlock).toContain('z-index: 1;');
-    expect(sessionRowBlock).toContain('grid-template-columns: 9px minmax(0, 1fr) auto 34px 20px;');
+    expect(sessionListBlock).toContain('padding: 1px 0 1px 21px;');
+    expect(sessionRowBlock).toContain('grid-template-columns: 9px minmax(0, 1fr) auto auto;');
+  });
+
+  test('places one create action in the first-row leading rail and removes only the recent selection bar', () => {
+    const createBlock = chatCss.match(/\.recent-project-session-create \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const recentSelectionBlock = chatCss.match(/\.recent-project-session-group \.recent-session-row\.selected::before \{[\s\S]*?\n\}/)?.[0] ?? '';
+
+    expect(mainTsx).toContain('sessionIndex === 0');
+    expect(createBlock).toContain('left: -20px;');
+    expect(createBlock).not.toContain('right:');
+    expect(recentSelectionBlock).toContain('content: none;');
+    expect(chatCss).toContain('.wide-session-row.selected::before');
   });
 
   test('shares compact and relaxed row density with the pinned surface', () => {
@@ -112,18 +127,21 @@ describe('web chat recent sessions', () => {
     expect(chatCss).toContain('position: sticky;');
   });
 
-  test('gives unpinned recent sessions a contained surface without floating elevation', () => {
+  test('keeps the same frameless geometry before and after pinning', () => {
     const baseBlock = chatCss.match(/\.recent-sessions-section \{[\s\S]*?\n\}/)?.[0] ?? '';
     const pinnedBlock = chatCss.match(/\.recent-sessions-section\.pinned \{[\s\S]*?\n\}/)?.[0] ?? '';
 
-    expect(baseBlock).toContain('margin: 0 2px 4px;');
-    expect(baseBlock).toContain('border-radius: calc(var(--radius-panel) - 2px);');
-    expect(baseBlock).toContain('background: color-mix(in srgb, var(--surface-panel) 62%, transparent);');
-    expect(baseBlock).toContain('box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border-subtle) 72%, transparent);');
+    expect(baseBlock).toContain('margin: 0 0 5px;');
+    expect(baseBlock).not.toContain('border:');
+    expect(baseBlock).not.toContain('box-shadow:');
     expect(baseBlock).not.toContain('padding:');
     expect(baseBlock).not.toContain('position: sticky;');
     expect(pinnedBlock).toContain('position: sticky;');
+    expect(pinnedBlock).not.toContain('margin:');
+    expect(pinnedBlock).not.toContain('padding:');
+    expect(pinnedBlock).not.toContain('border:');
     expect(pinnedBlock).toContain('box-shadow: 0 8px 18px rgb(0 0 0 / 16%);');
+    expect(chatCss).not.toContain('.recent-sessions-section.pinned .recent-sessions-list');
   });
 
   test('uses a vertical pin and gives pinned recent sessions one contained graphite surface', () => {
@@ -132,7 +150,6 @@ describe('web chat recent sessions', () => {
 
     const pinnedBlock = chatCss.match(/\.recent-sessions-section\.pinned \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(pinnedBlock).toContain('top: 4px;');
-    expect(pinnedBlock).toContain('border: 1px solid color-mix(in srgb, var(--border-strong) 74%, var(--border-subtle));');
     expect(pinnedBlock).toContain('background: color-mix(in srgb, var(--surface-panel) 88%, var(--surface-sidebar));');
     expect(pinnedBlock).toContain('box-shadow: 0 8px 18px rgb(0 0 0 / 16%);');
     expect(pinnedBlock).not.toContain('backdrop-filter');

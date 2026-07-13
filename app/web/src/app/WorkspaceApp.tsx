@@ -14842,7 +14842,6 @@ export function App() {
           <span className="wide-session-time" title={liveSession.updatedAt || ''}>
             {formatCompactRelativeAge(liveSession.updatedAt)}
           </span>
-          <span className="recent-session-create-slot" aria-hidden="true" />
         </button>
         {showProjectCreateAction ? (
           <button
@@ -15072,8 +15071,6 @@ export function App() {
   ) => {
     const targetProjectId = section.projectId;
     const projectName = section.projectName || targetProjectId;
-    const projectHubId = section.projectHubId || 'local';
-    const projectHubVariant = tagVariantClass('wide-project-hub', projectHubId);
     const projectAccentVariant = tagVariantClass('recent-project-accent', targetProjectId);
     return (
       <div
@@ -15083,17 +15080,7 @@ export function App() {
         aria-label={`${projectName} recent sessions`}
       >
         <div className="recent-project-session-watermark" aria-hidden="true">
-          <span
-            className="codicon codicon-folder recent-project-session-watermark-icon"
-          />
-          <span className="recent-project-session-watermark-name">{projectName}</span>
-          <span
-            className={`recent-project-session-hub recent-project-session-watermark-hub wide-project-hub-tag ${projectHubVariant}`}
-            style={hubAccentStyle(projectHubId)}
-          >
-            <span className="wide-project-hub-dot" />
-            <span className="wide-project-hub-label">{projectHubId}</span>
-          </span>
+          <span className="recent-project-session-watermark-name">{projectName.toUpperCase()}</span>
         </div>
         <div className="recent-project-session-list">
           {section.sessions.map((session, sessionIndex) => renderRecentSessionRow(

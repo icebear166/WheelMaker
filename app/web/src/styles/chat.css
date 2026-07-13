@@ -1144,16 +1144,12 @@
 .wide-project-hub-7 { --hub-accent: #7b6cb8; }
 
 .recent-sessions-section {
-  margin: 0 2px 4px;
-  border-radius: calc(var(--radius-panel) - 2px);
-  background: color-mix(in srgb, var(--surface-panel) 62%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border-subtle) 72%, transparent);
+  margin: 0 0 5px;
 }
 
 .recent-sessions-section:not(.collapsed) {
   padding-bottom: 4px;
   margin-bottom: 5px;
-  border-bottom: 1px solid color-mix(in srgb, var(--text-primary) 12%, transparent);
 }
 
 /* When pinned, the Recent Sessions block stays at the top of the scroll area
@@ -1162,25 +1158,8 @@
   position: sticky;
   top: 4px;
   z-index: 5;
-  margin: 4px 2px 10px;
-  padding: 4px 4px 5px;
-  border: 1px solid color-mix(in srgb, var(--border-strong) 74%, var(--border-subtle));
-  border-radius: var(--radius-panel);
   background: color-mix(in srgb, var(--surface-panel) 88%, var(--surface-sidebar));
   box-shadow: 0 8px 18px rgb(0 0 0 / 16%);
-}
-
-.recent-sessions-section.pinned .wide-project-row {
-  min-height: 30px;
-  padding: 0 2px;
-  border-radius: calc(var(--radius-panel) - 4px);
-  background: color-mix(in srgb, var(--surface-raised) 58%, transparent);
-}
-
-.recent-sessions-section.pinned .recent-sessions-list {
-  margin-top: 3px;
-  padding-top: 3px;
-  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
 }
 
 .recent-sessions-pin-btn {
@@ -1229,10 +1208,10 @@
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  margin: 2px 1px;
-  border: 1px solid color-mix(in srgb, var(--recent-project-accent) 18%, var(--border-subtle));
+  margin: 2px 0;
   border-radius: 7px;
   background: color-mix(in srgb, var(--recent-project-accent) 7%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--recent-project-accent) 18%, var(--border-subtle));
 }
 
 .recent-project-accent-0 { --recent-project-accent: #4f86c6; }
@@ -1246,26 +1225,18 @@
 
 .recent-project-session-watermark {
   position: absolute;
-  left: 7px;
-  bottom: 2px;
+  left: 11px;
+  bottom: -10px;
   z-index: 0;
-  max-width: calc(100% - 14px);
+  max-width: calc(100% - 22px);
   overflow: hidden;
-  color: color-mix(in srgb, var(--recent-project-accent) 22%, transparent);
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.02em;
+  color: color-mix(in srgb, var(--recent-project-accent) 12%, transparent);
+  font-size: 36px;
+  font-weight: 800;
+  line-height: 0.9;
+  letter-spacing: -0.04em;
   white-space: nowrap;
   pointer-events: none;
-}
-
-.recent-project-session-watermark-icon {
-  flex: 0 0 auto;
-  font-size: 13px;
 }
 
 .recent-project-session-watermark-name {
@@ -1274,17 +1245,10 @@
   text-overflow: ellipsis;
 }
 
-.recent-project-session-hub.wide-project-hub-tag {
-  flex: 0 1 auto;
-  color: color-mix(in srgb, var(--hub-accent) 70%, var(--recent-project-accent));
-  font-size: 9px;
-  opacity: 0.72;
-}
-
 .recent-project-session-create {
   position: absolute;
   top: 50%;
-  right: 2px;
+  left: -20px;
   z-index: 2;
   width: 18px;
   height: 18px;
@@ -1326,12 +1290,11 @@
 .recent-project-session-list {
   position: relative;
   z-index: 1;
-  padding: 1px 2px;
+  padding: 1px 0 1px 21px;
 }
 
 .recent-project-session-group .recent-session-row {
-  grid-template-columns: 9px minmax(0, 1fr) auto 34px 20px;
-  padding-right: 2px;
+  grid-template-columns: 9px minmax(0, 1fr) auto auto;
 }
 
 .recent-project-session-group .recent-session-row.selected {
@@ -1341,13 +1304,11 @@
 }
 
 .recent-project-session-group .wide-session-time {
-  width: 34px;
-  min-width: 34px;
+  min-width: 22px;
 }
 
-.recent-session-create-slot {
-  width: 20px;
-  height: 20px;
+.recent-project-session-group .recent-session-row.selected::before {
+  content: none;
 }
 
 .wide-project-actions {

@@ -79,7 +79,7 @@ describe('mobile chat quick switch', () => {
     ]);
   });
 
-  test('groups selected recent sessions by project while retaining recent order', () => {
+  test('groups selected recent sessions in stable project order', () => {
     const sections = buildRecentChatSessionProjectSections({
       projects: [
         project('p1', 'Alpha', 'hub-a'),
@@ -103,13 +103,13 @@ describe('mobile chat quick switch', () => {
       projectHubId: section.projectHubId,
       sessionIds: section.sessions.map(item => item.sessionId),
     }))).toEqual([
+      {projectId: 'p1', projectName: 'Alpha', projectHubId: 'hub-a', sessionIds: ['p1-old']},
       {projectId: 'p2', projectName: 'Beta', projectHubId: 'hub-b', sessionIds: ['p2-newest', 'p2-next']},
       {projectId: 'p3', projectName: 'Gamma', projectHubId: 'hub-c', sessionIds: ['p3-middle']},
-      {projectId: 'p1', projectName: 'Alpha', projectHubId: 'hub-a', sessionIds: ['p1-old']},
     ]);
   });
 
-  test('orders recent project groups by their newest selected session', () => {
+  test('does not move a project group when one of its sessions becomes newer', () => {
     const sections = buildRecentChatSessionProjectSections({
       projects: [project('p1', 'Alpha'), project('p2', 'Beta'), project('p3', 'Gamma')],
       sessionsByProjectId: {
@@ -120,7 +120,7 @@ describe('mobile chat quick switch', () => {
       limit: 8,
     });
 
-    expect(sections.map(section => section.projectId)).toEqual(['p1', 'p3', 'p2']);
+    expect(sections.map(section => section.projectId)).toEqual(['p1', 'p2', 'p3']);
   });
 
   test('returns an empty section list when no known sessions exist', () => {

@@ -149,17 +149,6 @@ export type RecentChatSessionProjectSection = {
   sessions: RegistryChatSession[];
 };
 
-function latestRecentProjectSectionUpdatedAt(section: RecentChatSessionProjectSection): string {
-  let latestUpdatedAt = '';
-  for (const session of section.sessions) {
-    const updatedAt = session.updatedAt || '';
-    if (compareUpdatedAtDesc(updatedAt, latestUpdatedAt) < 0) {
-      latestUpdatedAt = updatedAt;
-    }
-  }
-  return latestUpdatedAt;
-}
-
 // Flat, cross-project "recent sessions" list (global recency order), used by
 // the persistent Recent Sessions section. Shares the same candidate building and
 // sort as the right-click quick-switch menu (which keeps the grouped layout).
@@ -200,9 +189,12 @@ export function buildRecentChatSessionProjectSections(
     section.sessions.push(row.session);
   }
 
-  return sections.sort((left, right) => compareUpdatedAtDesc(
-    latestRecentProjectSectionUpdatedAt(left),
-    latestRecentProjectSectionUpdatedAt(right),
+  const projectOrder = new Map(
+    input.projects.map((project, projectIndex) => [project.projectId, projectIndex]),
+  );
+  return sections.sort((left, right) => (
+    (projectOrder.get(left.projectId) ?? Number.MAX_SAFE_INTEGER) -
+    (projectOrder.get(right.projectId) ?? Number.MAX_SAFE_INTEGER)
   ));
 }
 
