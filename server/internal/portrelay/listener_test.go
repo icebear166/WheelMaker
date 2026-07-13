@@ -3,7 +3,7 @@ package portrelay
 import (
 	"bytes"
 	"context"
-	rp "github.com/swm8023/wheelmaker/internal/protocol"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -11,7 +11,78 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	rp "github.com/swm8023/wheelmaker/internal/protocol"
 )
+
+type failAfterReader struct {
+	remaining int
+}
+
+func newTestController(t *testing.T, cfg ControllerConfig) *Controller {
+	t.Helper()
+	controller, err := NewController(cfg)
+	if err != nil {
+		t.Fatalf("NewController(): %v", err)
+	}
+	return controller
+}
+
+func (r *failAfterReader) Read(p []byte) (int, error) {
+	if r.remaining <= 0 {
+		return 0, io.ErrUnexpectedEOF
+	}
+	n := len(p)
+	if n > r.remaining {
+		n = r.remaining
+	}
+	for index := 0; index < n; index++ {
+		p[index] = byte(index + 1)
+	}
+	r.remaining -= n
+	return n, nil
+}
+
+func TestControllerRandomFailureFailsClosed(t *testing.T) {
+	if controller, err := NewController(ControllerConfig{Random: &failAfterReader{}}); err == nil || controller != nil {
+		t.Fatalf("NewController() controller=%v err=%v, want random failure", controller, err)
+	}
+
+	for _, testCase := range []struct {
+		name      string
+		remaining int
+	}{
+		{name: "relay id", remaining: 32},
+		{name: "nonce", remaining: 32 + 16},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			forwardCalled := false
+			controller, err := NewController(ControllerConfig{
+				Random: &failAfterReader{remaining: testCase.remaining},
+				ForwardHubRequest: func(context.Context, string, string, any) ControlResult {
+					forwardCalled = true
+					return ControlResult{}
+				},
+			})
+			if err != nil {
+				t.Fatalf("NewController(): %v", err)
+			}
+			_, failure := controller.Enable(context.Background(), rp.RelayEnablePayload{
+				ListenPort: reserveRelayTestPort(t),
+				HubID:      "hub-local",
+				TargetHost: "127.0.0.1",
+				TargetPort: 80,
+				AccessCode: "123456",
+			}, "127.0.0.1:9630", false)
+			if failure == nil || failure.Code != rp.CodeInternal {
+				t.Fatalf("Enable() failure=%#v, want internal random failure", failure)
+			}
+			if controller.listener != nil || forwardCalled {
+				t.Fatalf("random failure started relay listener=%v forwardCalled=%v", controller.listener != nil, forwardCalled)
+			}
+		})
+	}
+}
 
 func TestRelayListenerBindsLoopbackOnly(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -183,7 +254,7 @@ func TestCopyWebSocketResponseHeadersKeepsSubprotocolAndDropsExtensions(t *testi
 }
 
 func TestRelayEnableAllowsOnlyExactLoopbackTargetHost(t *testing.T) {
-	c := NewController(ControllerConfig{
+	c := newTestController(t, ControllerConfig{
 		RegistryAddr: "127.0.0.1:9630",
 		ForwardHubRequest: func(context.Context, string, string, any) ControlResult {
 			t.Fatal("ForwardHubRequest must not be called for invalid targetHost")
@@ -210,7 +281,7 @@ func TestRelayEnableAllowsOnlyExactLoopbackTargetHost(t *testing.T) {
 }
 
 func TestRelayLoginFlowUsesSafeRelativeNextAndHidesMappingInfo(t *testing.T) {
-	c := NewController(ControllerConfig{})
+	c := newTestController(t, ControllerConfig{})
 	c.mu.Lock()
 	c.slot = relaySlot{
 		Enabled:              true,
@@ -270,7 +341,7 @@ func TestRelayLoginFlowUsesSafeRelativeNextAndHidesMappingInfo(t *testing.T) {
 }
 
 func TestUnauthenticatedRelayRequestRedirectsToLoginWithNext(t *testing.T) {
-	c := NewController(ControllerConfig{})
+	c := newTestController(t, ControllerConfig{})
 	c.mu.Lock()
 	c.slot = relaySlot{
 		Enabled:              true,
@@ -293,7 +364,7 @@ func TestUnauthenticatedRelayRequestRedirectsToLoginWithNext(t *testing.T) {
 }
 
 func TestRelayURLAccessCodeAuthenticatesAndStripsCodeQuery(t *testing.T) {
-	c := NewController(ControllerConfig{})
+	c := newTestController(t, ControllerConfig{})
 	c.mu.Lock()
 	c.slot = relaySlot{
 		Enabled:              true,
@@ -334,7 +405,7 @@ func TestRelayURLAccessCodeAuthenticatesAndStripsCodeQuery(t *testing.T) {
 }
 
 func TestRelayURLAccessCodeUsesEmbeddableCookieForForwardedHTTPS(t *testing.T) {
-	c := NewController(ControllerConfig{})
+	c := newTestController(t, ControllerConfig{})
 	c.mu.Lock()
 	c.slot = relaySlot{
 		Enabled:              true,
@@ -360,7 +431,7 @@ func TestRelayURLAccessCodeUsesEmbeddableCookieForForwardedHTTPS(t *testing.T) {
 }
 
 func TestRelayClearSiteDataPageClearsOriginStorageAndReauthenticatesWithURLCode(t *testing.T) {
-	c := NewController(ControllerConfig{})
+	c := newTestController(t, ControllerConfig{})
 	c.mu.Lock()
 	c.slot = relaySlot{
 		Enabled:              true,
@@ -405,7 +476,7 @@ func TestRelayClearSiteDataPageClearsOriginStorageAndReauthenticatesWithURLCode(
 }
 
 func TestRelayClearSiteDataPageRequiresAuthOrValidURLCode(t *testing.T) {
-	c := NewController(ControllerConfig{})
+	c := newTestController(t, ControllerConfig{})
 	c.mu.Lock()
 	c.slot = relaySlot{
 		Enabled:              true,
@@ -440,7 +511,7 @@ func TestRelayClearSiteDataPageRequiresAuthOrValidURLCode(t *testing.T) {
 }
 
 func TestRelayLoginPostUsesEmbeddableCookieForForwardedHTTPS(t *testing.T) {
-	c := NewController(ControllerConfig{})
+	c := newTestController(t, ControllerConfig{})
 	c.mu.Lock()
 	c.slot = relaySlot{
 		Enabled:              true,

@@ -3,6 +3,7 @@ package portrelay
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
 	"net/http"
@@ -10,6 +11,26 @@ import (
 	"strings"
 	"time"
 )
+
+func accessCodeEqual(candidate string, expected string) bool {
+	var left, right [6]byte
+	copy(left[:], []byte(candidate))
+	copy(right[:], []byte(expected))
+	validLength := subtle.ConstantTimeEq(int32(len(candidate)), 6)
+	return validLength&subtle.ConstantTimeCompare(left[:], right[:]) == 1
+}
+
+func (c *Controller) authorizeAccessCode(candidate string, source string, slot relaySlot) (bool, time.Duration) {
+	if accessCodeEqual(candidate, slot.AccessCode) {
+		c.loginGuard.recordSuccess(source)
+		return true, 0
+	}
+	limited, retryAfter := c.loginGuard.recordFailure(source, slot.AccessCodeGeneration)
+	if !limited {
+		retryAfter = 0
+	}
+	return false, retryAfter
+}
 
 func (c *Controller) setAuthCookie(w http.ResponseWriter, r *http.Request, slot relaySlot) {
 	expires := time.Now().Add(12 * time.Hour)

@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -136,7 +137,12 @@ func (c *Controller) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	next := safeRelayNext(r.Form.Get("next"))
-	if r.Form.Get("code") != slot.AccessCode {
+	authorized, retryAfter := c.authorizeAccessCode(r.Form.Get("code"), relayRequestSource(r), slot)
+	if retryAfter > 0 {
+		writeRelayRateLimited(w, retryAfter)
+		return
+	}
+	if !authorized {
 		http.Redirect(w, r, relayLoginLocation(next, true), http.StatusSeeOther)
 		return
 	}
@@ -146,7 +152,12 @@ func (c *Controller) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 func (c *Controller) handleURLAccessCode(w http.ResponseWriter, r *http.Request, slot relaySlot, code string) {
 	next := requestPathWithoutRelayURLCode(r)
-	if code != slot.AccessCode {
+	authorized, retryAfter := c.authorizeAccessCode(code, relayRequestSource(r), slot)
+	if retryAfter > 0 {
+		writeRelayRateLimited(w, retryAfter)
+		return
+	}
+	if !authorized {
 		http.Redirect(w, r, relayLoginLocation(next, true), http.StatusSeeOther)
 		return
 	}
@@ -171,7 +182,12 @@ func (c *Controller) handleClearSiteData(w http.ResponseWriter, r *http.Request)
 	}
 	next := safeRelayNext(r.URL.Query().Get("next"))
 	if code := r.URL.Query().Get(relayURLCodeParam); code != "" {
-		if code != slot.AccessCode {
+		authorized, retryAfter := c.authorizeAccessCode(code, relayRequestSource(r), slot)
+		if retryAfter > 0 {
+			writeRelayRateLimited(w, retryAfter)
+			return
+		}
+		if !authorized {
 			http.Redirect(w, r, relayLoginLocation(next, true), http.StatusSeeOther)
 			return
 		}
@@ -184,6 +200,29 @@ func (c *Controller) handleClearSiteData(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	writeClearSiteDataPage(w, next)
+}
+
+func relayRequestSource(r *http.Request) string {
+	if r == nil {
+		return "unknown"
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err == nil && host != "" {
+		return host
+	}
+	if r.RemoteAddr != "" {
+		return r.RemoteAddr
+	}
+	return "unknown"
+}
+
+func writeRelayRateLimited(w http.ResponseWriter, retryAfter time.Duration) {
+	seconds := int64((retryAfter + time.Second - 1) / time.Second)
+	if seconds < 1 {
+		seconds = 1
+	}
+	w.Header().Set("Retry-After", strconv.FormatInt(seconds, 10))
+	http.Error(w, "too many attempts", http.StatusTooManyRequests)
 }
 
 func (c *Controller) handleExternalHTTP(w http.ResponseWriter, r *http.Request, tunnel *registryTunnel) {

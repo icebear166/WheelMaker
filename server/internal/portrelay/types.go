@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"strconv"
@@ -46,12 +47,16 @@ type ControllerConfig struct {
 	RegistryAddr      string
 	ForwardHubRequest ForwardHubRequestFunc
 	TunnelWait        time.Duration
+	Random            io.Reader
+	Now               func() time.Time
 }
 
 type Controller struct {
 	cfg          ControllerConfig
 	standardPort int
 	secret       []byte
+	random       io.Reader
+	loginGuard   *loginGuard
 
 	mu       sync.RWMutex
 	slot     relaySlot
@@ -78,23 +83,29 @@ type relaySlot struct {
 	readyOnce            sync.Once
 }
 
-func NewController(cfg ControllerConfig) *Controller {
+func NewController(cfg ControllerConfig) (*Controller, error) {
 	if cfg.TunnelWait <= 0 {
 		cfg.TunnelWait = defaultTunnelWait
 	}
-	secret := make([]byte, 32)
-	if _, err := rand.Read(secret); err != nil {
-		now := time.Now().UnixNano()
-		secret = []byte(fmt.Sprintf("wheelmaker-port-relay-%d", now))
+	if cfg.Random == nil {
+		cfg.Random = rand.Reader
 	}
+	secret := make([]byte, 32)
+	if _, err := io.ReadFull(cfg.Random, secret); err != nil {
+		return nil, fmt.Errorf("generate relay controller secret: %w", err)
+	}
+	guard := newLoginGuard(cfg.Now)
+	guard.reset(0)
 	return &Controller{
 		cfg:          cfg,
 		standardPort: parsePort(cfg.RegistryAddr, 9630),
 		secret:       secret,
+		random:       cfg.Random,
+		loginGuard:   guard,
 		slot: relaySlot{
 			Status: rp.RelayStatusDisabled,
 		},
-	}
+	}, nil
 }
 
 func (c *Controller) Handle(ctx context.Context, method string, raw json.RawMessage, controlHost string, secure bool) (any, *rp.ErrorPayload) {
@@ -147,11 +158,11 @@ func (c *Controller) Enable(ctx context.Context, payload rp.RelayEnablePayload, 
 		return c.Status(), relayError(rp.CodeInternal, "relay forwarder is not configured", nil)
 	}
 
-	relayID, err := randomToken("relay_", 16)
+	relayID, err := randomToken(c.random, "relay_", 16)
 	if err != nil {
 		return c.Status(), relayError(rp.CodeInternal, "generate relay id failed", nil)
 	}
-	nonce, err := randomToken("", 24)
+	nonce, err := randomToken(c.random, "", 24)
 	if err != nil {
 		return c.Status(), relayError(rp.CodeInternal, "generate relay nonce failed", nil)
 	}
@@ -212,6 +223,7 @@ func (c *Controller) Enable(ctx context.Context, payload rp.RelayEnablePayload, 
 		Nonce:                nonce,
 		Ready:                ready,
 	}
+	c.loginGuard.reset(c.slot.AccessCodeGeneration)
 	c.listener = listener
 	if c.tunnel != nil {
 		oldTunnel = c.tunnel
@@ -290,6 +302,7 @@ func (c *Controller) RegenerateAccessCode(accessCode string) (rp.RelaySnapshot, 
 	}
 	c.slot.AccessCode = accessCode
 	c.slot.AccessCodeGeneration++
+	c.loginGuard.reset(c.slot.AccessCodeGeneration)
 	return c.snapshotLocked(), nil
 }
 
@@ -406,9 +419,9 @@ func validAccessCode(code string) bool {
 	return true
 }
 
-func randomToken(prefix string, size int) (string, error) {
+func randomToken(random io.Reader, prefix string, size int) (string, error) {
 	buf := make([]byte, size)
-	if _, err := rand.Read(buf); err != nil {
+	if _, err := io.ReadFull(random, buf); err != nil {
 		return "", err
 	}
 	return prefix + base64.RawURLEncoding.EncodeToString(buf), nil

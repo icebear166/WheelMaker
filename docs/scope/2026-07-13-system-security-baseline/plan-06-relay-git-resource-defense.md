@@ -22,15 +22,15 @@
 - Modify: `server/internal/portrelay/listener_test.go`
 - Modify: `server/internal/registry/server.go`
 
-- [ ] **Step 1: 写精确 token bucket 测试**
+- [x] **Step 1: 写精确 token bucket 测试**
 
 用 fake clock 固定规则：source burst 5、generation burst 20、两者每 30 秒 refill 1。一次错误必须同时消费两个桶；任一为空返回 `429` 和向上取整的 `Retry-After`。成功清除该 source；regenerate/enable 新 generation 清除全局及 source 状态。Source map 上限 4096，超过后淘汰最久未活动项；1 小时未活动项可清理。
 
-- [ ] **Step 2: 写随机源失败测试**
+- [x] **Step 2: 写随机源失败测试**
 
 Controller secret、relay ID、nonce 任一随机读取失败都返回 error，不能使用时间戳 fallback，也不能启动 listener。把 random reader 注入测试，不替换全局 `crypto/rand.Reader`。
 
-- [ ] **Step 3: 运行测试并确认失败**
+- [x] **Step 3: 运行测试并确认失败**
 
 Run:
 
@@ -41,7 +41,7 @@ go test ./internal/portrelay -run 'TestLoginGuard|TestControllerRandomFailure' -
 
 Expected: FAIL；guard 不存在，`NewController` 当前会用 UnixNano 生成弱 secret。
 
-- [ ] **Step 4: 实现 guard 和 error-returning constructor**
+- [x] **Step 4: 实现 guard 和 error-returning constructor**
 
 `NewController` 改为 `func NewController(cfg ControllerConfig) (*Controller, error)`；Registry 必须向上传递初始化错误。比较器对 6 字节候选执行常量时间比较：
 
@@ -57,7 +57,7 @@ func accessCodeEqual(candidate, expected string) bool {
 
 登录 POST、URL code 和 clear-site-data 的 code 参数必须调用同一个 `authorizeAccessCode`，禁止分支各自直接 `==`。
 
-- [ ] **Step 5: 运行测试并提交**
+- [x] **Step 5: 运行测试并提交**
 
 Run:
 

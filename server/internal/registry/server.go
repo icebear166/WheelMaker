@@ -241,6 +241,7 @@ type Server struct {
 	nextConnEpoch atomic.Int64
 
 	relay        *portrelay.Controller
+	relayInitErr error
 	webSessions  *webSessionStore
 	loginLimiter *loginLimiter
 	secrets      *secretStore
@@ -382,10 +383,12 @@ func New(cfg Config) *Server {
 	}
 	s.speech = newSpeechService(newVolcengineSpeechProvider(), s.resolveVolcengineASRSecret)
 	s.tts = newTTSService(s.resolveMiMoTTSSecret)
-	s.relay = portrelay.NewController(portrelay.ControllerConfig{
+	relay, relayErr := portrelay.NewController(portrelay.ControllerConfig{
 		RegistryAddr:      cfg.Addr,
 		ForwardHubRequest: s.forwardRelayHubRequest,
 	})
+	s.relay = relay
+	s.relayInitErr = relayErr
 	return s
 }
 
@@ -396,6 +399,9 @@ func (s *Server) Handler() http.Handler {
 
 // Run starts HTTP server and blocks until context cancellation.
 func (s *Server) Run(ctx context.Context) error {
+	if s.relayInitErr != nil {
+		return fmt.Errorf("registry relay initialization: %w", s.relayInitErr)
+	}
 	if err := security.ValidateRegistryToken(s.cfg.Token); err != nil {
 		return fmt.Errorf("registry authentication: %w", err)
 	}
