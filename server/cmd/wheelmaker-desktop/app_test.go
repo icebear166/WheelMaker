@@ -62,6 +62,24 @@ func TestBootstrapAssetIsMinimalAndSelfContained(t *testing.T) {
 	}
 }
 
+func TestBootstrapOnlyShowsWindowControlsForDesktopBridge(t *testing.T) {
+	body, err := os.ReadFile("bootstrap/index.html")
+	if err != nil {
+		t.Fatalf("read bootstrap asset: %v", err)
+	}
+	html := string(body)
+	for _, want := range []string{
+		`id="window-controls" class="window-controls" hidden`,
+		`const hasDesktopWindowControls = typeof window.wheelMakerBootstrap?.startDrag === 'function';`,
+		`windowControls.hidden = !hasDesktopWindowControls;`,
+		`if (!hasDesktopWindowControls) return;`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("bootstrap missing desktop-only window control guard %q", want)
+		}
+	}
+}
+
 func TestDesktopBaseURLContract(t *testing.T) {
 	tests := []struct {
 		name string

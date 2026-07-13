@@ -8,9 +8,10 @@ class BaseUrlPolicyTest {
     @Test
     fun normalizesHttpsDomainIpPortAndSubpath() {
         val cases = mapOf(
+            "example.com" to "https://example.com/",
+            "192.0.2.10" to "https://192.0.2.10/",
+            "example.com:8443/wheelmaker" to "https://example.com:8443/wheelmaker/",
             "https://example.com" to "https://example.com/",
-            "https://192.0.2.10" to "https://192.0.2.10/",
-            "https://example.com:8443/wheelmaker" to "https://example.com:8443/wheelmaker/",
             "https://example.com/a%20b" to "https://example.com/a%20b/"
         )
         cases.forEach { (raw, want) -> assertEquals(want, normalizeHttpsBaseUrl(raw)) }

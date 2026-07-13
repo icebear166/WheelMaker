@@ -12,7 +12,9 @@ enum class NavigationDecision {
 }
 
 fun normalizeHttpsBaseUrl(raw: String): String? {
-    val parsed = parseUri(raw.trim()) ?: return null
+    val input = raw.trim()
+    if (input.isEmpty()) return null
+    val parsed = parseUri(if (input.contains("://")) input else "https://$input") ?: return null
     if (
         parsed.isOpaque ||
         !parsed.scheme.equals("https", ignoreCase = true) ||
