@@ -74,8 +74,15 @@ function Assert-NoProductionMatches([string]$Label, [string]$Pattern, [string[]]
 Set-Location $repoRoot
 
 Write-Gate 'Gitleaks current tree'
-& gitleaks dir --redact --no-banner . *> $null
-Assert-ExitCode 'gitleaks current tree' $LASTEXITCODE
+$previousPreference = $ErrorActionPreference
+try {
+    $ErrorActionPreference = 'Continue'
+    & gitleaks dir --redact --no-banner . *> $null
+    $gitleaksExitCode = $LASTEXITCODE
+} finally {
+    $ErrorActionPreference = $previousPreference
+}
+Assert-ExitCode 'gitleaks current tree' $gitleaksExitCode
 
 Write-Gate 'Baseline security regressions'
 Push-Location $serverRoot
