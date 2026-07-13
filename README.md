@@ -228,32 +228,56 @@ server {
     location = / {
         try_files /index.html =404;
         add_header Cache-Control "no-cache, must-revalidate" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Referrer-Policy "no-referrer" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
     }
 
     location = /index.html {
         try_files /index.html =404;
         add_header Cache-Control "no-cache, must-revalidate" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Referrer-Policy "no-referrer" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
     }
 
     location = /service-worker.js {
         try_files /service-worker.js =404;
         add_header Cache-Control "no-cache, must-revalidate" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Referrer-Policy "no-referrer" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
     }
 
     location = /manifest.webmanifest {
         try_files /manifest.webmanifest =404;
         add_header Cache-Control "no-cache, must-revalidate" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Referrer-Policy "no-referrer" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
     }
 
     location ~* \.[a-z0-9]+$ {
         try_files $uri =404;
         add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Referrer-Policy "no-referrer" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
     }
 
     location / {
         index index.html;
         try_files $uri $uri/ /index.html;
         add_header Cache-Control "no-cache, must-revalidate" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Referrer-Policy "no-referrer" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
     }
 
     location /ws {
@@ -275,6 +299,7 @@ In this layout:
 
 - `/` serves the published Web UI assets
 - `/ws` forwards to the registry WebSocket
+- Existing Nginx files continue to work because `index.html` carries meta CSP/referrer protection, but full `frame-ancestors` and non-HTML coverage requires the four response headers in every static location above.
 
 ### 5. Publish the Web UI
 

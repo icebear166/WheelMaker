@@ -37,6 +37,17 @@ Nginx forwards the query string unchanged when `proxy_pass` has no replacement U
 
 The public server must redirect HTTP to HTTPS, allow only TLS 1.2 or TLS 1.3, and send HSTS after HTTPS deployment is verified. Do not log request bodies or authentication headers. Default Nginx access logs do not include request bodies; custom log formats must preserve that property.
 
+Every location that serves WheelMaker static content must also send these headers (Nginx does not inherit server-level `add_header` values into a location that defines its own `add_header`):
+
+```nginx
+add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+add_header Referrer-Policy "no-referrer" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header X-Frame-Options "DENY" always;
+```
+
+The production `index.html` repeats CSP and referrer protection as meta tags, so existing deployments receive partial protection before their Nginx configuration is updated. Meta tags cannot enforce every response-header directive (notably `frame-ancestors`) and do not protect non-HTML responses; update existing Nginx configurations before claiming full header acceptance. This change does not add or split authentication locations.
+
 ## Forwarded headers
 
 WheelMaker accepts `X-Forwarded-Proto` and `X-Real-IP` only when the immediate TCP peer is loopback. Requests from any non-loopback peer cannot use forwarded headers to claim HTTPS or another client address.
@@ -52,3 +63,4 @@ After deployment:
 3. Confirm an unlisted `Origin` receives HTTP 403 for login and WebSocket requests.
 4. Confirm repeated failed logins receive HTTP 429 from WheelMaker's application limiter.
 5. Confirm successful login sets a host-only `HttpOnly; Secure; SameSite=Strict` session cookie.
+6. Confirm `/`, `/index.html`, JavaScript, and CSS responses include the four static security headers above.

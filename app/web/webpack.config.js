@@ -4,6 +4,22 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const TerserPlugin = require('terser-webpack-plugin');
 
+const WEB_SECURITY_POLICY = [
+  "default-src 'self'",
+  "base-uri 'none'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "script-src 'self'",
+  "connect-src 'self' wss: https://api.github.com",
+  "img-src 'self' data: blob:",
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self'",
+  "media-src 'self' blob:",
+  "worker-src 'self' blob:",
+  "form-action 'self'",
+  'upgrade-insecure-requests',
+].join('; ');
+
 function envFlag(value) {
   return ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase());
 }
@@ -114,9 +130,15 @@ module.exports = (_env = {}, argv = {}) => {
       })] : []),
     ],
     devServer: {
-      host: '0.0.0.0',
+		host: '127.0.0.1',
       port: 8080,
-      allowedHosts: 'all',
+		allowedHosts: ['localhost', '127.0.0.1'],
+		headers: {
+			'Content-Security-Policy': WEB_SECURITY_POLICY,
+			'Referrer-Policy': 'no-referrer',
+			'X-Content-Type-Options': 'nosniff',
+			'X-Frame-Options': 'DENY',
+		},
       historyApiFallback: true,
       static: {
         directory: path.resolve(__dirname, 'public'),

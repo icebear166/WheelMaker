@@ -244,32 +244,56 @@ server {
     location = / {
         try_files /index.html =404;
         add_header Cache-Control "no-cache, must-revalidate" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Referrer-Policy "no-referrer" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
     }
 
     location = /index.html {
         try_files /index.html =404;
         add_header Cache-Control "no-cache, must-revalidate" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Referrer-Policy "no-referrer" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
     }
 
     location = /service-worker.js {
         try_files /service-worker.js =404;
         add_header Cache-Control "no-cache, must-revalidate" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Referrer-Policy "no-referrer" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
     }
 
     location = /manifest.webmanifest {
         try_files /manifest.webmanifest =404;
         add_header Cache-Control "no-cache, must-revalidate" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Referrer-Policy "no-referrer" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
     }
 
     location ~* \.[a-z0-9]+$ {
         try_files $uri =404;
         add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Referrer-Policy "no-referrer" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
     }
 
     location / {
         index index.html;
         try_files $uri $uri/ /index.html;
         add_header Cache-Control "no-cache, must-revalidate" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Referrer-Policy "no-referrer" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
     }
 
     location /ws {
@@ -298,6 +322,10 @@ server {
         index index.html;
         try_files $uri $uri/ /index.html;
         add_header Cache-Control "no-cache, must-revalidate" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Referrer-Policy "no-referrer" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
     }
 
     location /ws {
@@ -321,6 +349,8 @@ root C:/Users/<User>/.wheelmaker/web;
 ssl_certificate     C:/path/to/fullchain.pem;
 ssl_certificate_key C:/path/to/privkey.pem;
 ```
+
+旧 Nginx 配置不加上述四个安全响应头时，新的 `index.html` 仍会通过 meta CSP 和 `no-referrer` 获得部分保护，但 `frame-ancestors` 和非 HTML 资源保护无法通过完整验收。无需新增认证 location；只需在计划升级既有 Nginx 时，把同样的四行加入每个静态 location。`upgrade-insecure-requests` 面向正式 HTTPS 部署，公网入口应使用 HTTPS。
 
 安全流程：
 
