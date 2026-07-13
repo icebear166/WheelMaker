@@ -66,9 +66,11 @@ Assert-Contains -Label "publish_android.ps1" -Text $script -Needle "Get-ApkSigni
 Assert-Contains -Label "publish_android.ps1" -Text $script -Needle "certificateSha256"
 Assert-Contains -Label "publish_android.ps1" -Text $script -Needle "keystoreFileName"
 Assert-Contains -Label "publish_android.ps1" -Text $script -Needle "Split-Path -Leaf"
+Assert-Contains -Label "publish_android.ps1" -Text $script -Needle "Get-AndroidReleaseSigningConfiguration"
+Assert-Contains -Label "publish_android.ps1" -Text $script -Needle "wheelmaker-android-release.p12"
 Assert-NotContains -Label "publish_android.ps1" -Text $script -Needle "Get-FileHash"
-Assert-NotContains -Label "publish_android.ps1" -Text $script -Needle "WHEELMAKER_ANDROID_STORE_PASSWORD"
-Assert-NotContains -Label "publish_android.ps1" -Text $script -Needle "WHEELMAKER_ANDROID_KEY_PASSWORD"
+Assert-NotContains -Label "publish_android.ps1" -Text $script -Needle "STORE_PASSWORD="
+Assert-NotContains -Label "publish_android.ps1" -Text $script -Needle "KEY_PASSWORD="
 Assert-NotContains -Label "publish_android.ps1" -Text $script -Needle "WHEELMAKER_WEB_TARGET"
 Assert-NotContains -Label "publish_android.ps1" -Text $script -Needle "Build-AndroidWeb"
 Assert-NotContains -Label "publish_android.ps1" -Text $script -Needle "npm run build:web"
@@ -79,11 +81,22 @@ Assert-NotContains -Label "publish_android.ps1" -Text $script -Needle "mobile\an
 Assert-Contains -Label "publish-android.bat" -Text $bat -Needle "scripts\publish_android.ps1"
 Assert-Contains -Label "publish-android.bat" -Text $bat -Needle "powershell"
 
-$whatIfOutput = & powershell -NoProfile -ExecutionPolicy Bypass -File $scriptPath -WhatIf 2>&1
-if ($LASTEXITCODE -ne 0) {
-  throw "publish_android.ps1 -WhatIf failed: $whatIfOutput"
+$tempOutput = Join-Path ([System.IO.Path]::GetTempPath()) ("wheelmaker-android-signing-test-" + [Guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Path $tempOutput -Force | Out-Null
+try {
+  $whatIfOutput = & powershell -NoProfile -ExecutionPolicy Bypass -File $scriptPath -WhatIf -OutputDir $tempOutput 2>&1
+  if ($LASTEXITCODE -ne 0) {
+    throw "publish_android.ps1 -WhatIf failed: $whatIfOutput"
+  }
+  $whatIfText = $whatIfOutput -join [Environment]::NewLine
+  Assert-Contains -Label "publish_android.ps1 -WhatIf" -Text $whatIfText -Needle (Get-ExpectedAndroidBuildRoot)
+  Assert-Contains -Label "publish_android.ps1 -WhatIf" -Text $whatIfText -Needle "[whatif] create Android release keystore"
+  Assert-Contains -Label "publish_android.ps1 -WhatIf" -Text $whatIfText -Needle "wheelmaker-android-release.p12"
+  Assert-NotContains -Label "publish_android.ps1 -WhatIf" -Text $whatIfText -Needle "STORE_PASSWORD"
+} finally {
+  if (Test-Path -LiteralPath $tempOutput) {
+    Remove-Item -LiteralPath $tempOutput -Recurse -Force
+  }
 }
-Assert-Contains -Label "publish_android.ps1 -WhatIf" -Text ($whatIfOutput -join [Environment]::NewLine) -Needle (Get-ExpectedAndroidBuildRoot)
-Assert-NotContains -Label "publish_android.ps1 -WhatIf" -Text ($whatIfOutput -join [Environment]::NewLine) -Needle "STORE_PASSWORD"
 
 Write-Host "publish_android.ps1 checks passed"

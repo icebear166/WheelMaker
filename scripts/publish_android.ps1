@@ -45,6 +45,81 @@ function Get-GitValue {
   }
 }
 
+$script:AndroidSigningPasswordNames = @(
+  "WHEELMAKER_ANDROID_STORE_PASSWORD",
+  "WHEELMAKER_ANDROID_KEY_ALIAS",
+  "WHEELMAKER_ANDROID_KEY_PASSWORD"
+)
+
+function Get-AndroidSigningEnvironmentValue {
+  param([Parameter(Mandatory = $true)][string]$Name)
+  $value = [Environment]::GetEnvironmentVariable($Name, "Process")
+  if (-not [string]::IsNullOrWhiteSpace($value)) { return $value }
+  $value = [Environment]::GetEnvironmentVariable($Name, "User")
+  if ([string]::IsNullOrWhiteSpace($value)) { return "" }
+  if (-not $WhatIf) {
+    [Environment]::SetEnvironmentVariable($Name, $value, "Process")
+  }
+  return $value
+}
+
+function Set-AndroidSigningEnvironmentValue {
+  param(
+    [Parameter(Mandatory = $true)][string]$Name,
+    [Parameter(Mandatory = $true)][string]$Value
+  )
+  if ($WhatIf) { return }
+  [Environment]::SetEnvironmentVariable($Name, $Value, "Process")
+  [Environment]::SetEnvironmentVariable($Name, $Value, "User")
+}
+
+function New-AndroidSigningPassword {
+  $bytes = [byte[]]::new(36)
+  try {
+    [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+    return [Convert]::ToBase64String($bytes).Replace("+", "A").Replace("/", "B").Replace("=", "")
+  } finally {
+    [Array]::Clear($bytes, 0, $bytes.Length)
+  }
+}
+
+function Get-AndroidReleaseSigningConfiguration {
+  $keystorePath = $script:ReleaseKeystorePath
+  if (Test-Path -LiteralPath $keystorePath) {
+    $missing = @($script:AndroidSigningPasswordNames | Where-Object {
+      [string]::IsNullOrWhiteSpace((Get-AndroidSigningEnvironmentValue -Name $_))
+    })
+    if ($missing.Count -gt 0) {
+      throw ("Android release keystore exists but signing settings are missing: {0}" -f ($missing -join ", "))
+    }
+    Write-Step ("use Android release keystore: {0}" -f $keystorePath)
+    Set-AndroidSigningEnvironmentValue -Name "WHEELMAKER_ANDROID_KEYSTORE" -Value $keystorePath
+    return
+  }
+
+  if ($WhatIf) {
+    Write-Host ("[whatif] create Android release keystore: {0}" -f $keystorePath)
+    Write-Host "[whatif] configure Android release signing environment"
+    return
+  }
+
+  Assert-Command -Name "keytool" -Hint "Install a JDK that provides keytool to create the Android release certificate."
+  New-Item -ItemType Directory -Path (Split-Path -Parent $keystorePath) -Force | Out-Null
+  $password = New-AndroidSigningPassword
+  try {
+    Write-Step ("create Android release keystore: {0}" -f $keystorePath)
+    $keytool = (Get-Command "keytool").Source
+    & $keytool -genkeypair -v -keystore $keystorePath -storetype PKCS12 -storepass $password -alias "wheelmaker" -keypass $password -keyalg RSA -keysize 4096 -validity 9125 -dname "CN=WheelMaker Android Release, OU=WheelMaker, O=WheelMaker, L=Shanghai, ST=Shanghai, C=CN"
+    if ($LASTEXITCODE -ne 0) { throw ("keytool release keystore creation failed (exit={0})" -f $LASTEXITCODE) }
+    Set-AndroidSigningEnvironmentValue -Name "WHEELMAKER_ANDROID_KEYSTORE" -Value $keystorePath
+    Set-AndroidSigningEnvironmentValue -Name "WHEELMAKER_ANDROID_STORE_PASSWORD" -Value $password
+    Set-AndroidSigningEnvironmentValue -Name "WHEELMAKER_ANDROID_KEY_ALIAS" -Value "wheelmaker"
+    Set-AndroidSigningEnvironmentValue -Name "WHEELMAKER_ANDROID_KEY_PASSWORD" -Value $password
+  } finally {
+    $password = $null
+  }
+}
+
 function New-CleanDirectory {
   param([Parameter(Mandatory = $true)][string]$Path)
   $resolved = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
@@ -256,7 +331,9 @@ $script:GradleCacheDir = Join-Path $script:BuildRoot "gradle-cache"
 $script:GradleHomeDir = Join-Path $script:BuildRoot "gradle-home"
 $script:OutputDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputDir)
 $script:ManifestPath = Join-Path $script:OutputDir "android-release.json"
+$script:ReleaseKeystorePath = Join-Path $script:OutputDir "wheelmaker-android-release.p12"
 
+Get-AndroidReleaseSigningConfiguration
 Copy-AndroidBootstrap
 Build-AndroidApk
 if ($WhatIf) {
