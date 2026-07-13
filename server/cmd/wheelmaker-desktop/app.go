@@ -27,6 +27,7 @@ type desktopWindowOptions struct {
 	CustomTitleBar bool
 	ThemeColor     string
 	BootstrapState desktopBootstrapState
+	Runtime        *desktopRuntime
 }
 
 type desktopLauncher interface {
@@ -67,6 +68,15 @@ func runDesktopApp(ctx context.Context, launcher desktopLauncher, store desktopC
 
 	opts := defaultDesktopWindowOptions()
 	opts.BootstrapState = state
+	mode := desktopBootstrapPage
+	if target.URL != "" {
+		mode = desktopTrustedRemotePage
+	}
+	securityState, err := newDesktopWebViewSecurityState(target.URL, mode)
+	if err != nil {
+		return err
+	}
+	opts.Runtime = newDesktopRuntime(store, prober, config, state, securityState)
 	if err := launcher.Launch(target, opts); err != nil {
 		if errors.Is(err, errWebView2Unavailable) {
 			return fmt.Errorf("%w. Install it from https://developer.microsoft.com/microsoft-edge/webview2/", err)
@@ -82,7 +92,7 @@ func defaultDesktopWindowOptions() desktopWindowOptions {
 		Width:          1280,
 		Height:         840,
 		IconID:         desktopResourceIconID,
-		CustomTitleBar: true,
+		CustomTitleBar: false,
 		ThemeColor:     desktopTitleBarThemeColor,
 	}
 }

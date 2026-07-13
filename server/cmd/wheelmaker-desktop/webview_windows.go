@@ -3,6 +3,9 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"runtime"
 	"strconv"
 	"unsafe"
 
@@ -30,13 +33,18 @@ func (webView2Launcher) Launch(target desktopLaunchTarget, opts desktopWindowOpt
 		return errWebView2Unavailable
 	}
 	defer w.Destroy()
+	adapter, err := installDesktopWebViewPolicyAdapter(w, opts.Runtime)
+	if err != nil {
+		return err
+	}
+	defer adapter.Close()
 	hwnd := uintptr(w.Window())
 	if hwnd != 0 {
 		if opts.CustomTitleBar {
 			applyCustomTitleBarFrame(hwnd)
 		}
 		applyDesktopWindowTheme(hwnd, opts.ThemeColor)
-		if err := bindDesktopWindowBridge(w, hwnd); err != nil {
+		if err := bindDesktopWindowBridge(w, hwnd, opts.Runtime); err != nil {
 			return err
 		}
 		w.Init(desktopRuntimeInitScript())
@@ -47,30 +55,82 @@ func (webView2Launcher) Launch(target desktopLaunchTarget, opts desktopWindowOpt
 		w.Navigate(target.URL)
 	}
 	w.Run()
+	runtime.KeepAlive(adapter)
 	return nil
 }
 
-func bindDesktopWindowBridge(w webview2.WebView, hwnd uintptr) error {
+func bindDesktopWindowBridge(w webview2.WebView, hwnd uintptr, desktopRuntime *desktopRuntime) error {
+	if desktopRuntime == nil {
+		return errors.New("desktop runtime is unavailable")
+	}
 	maximizeController := newDesktopMaximizeController(hwnd, win32DesktopWindowOps{})
+	authorize := func(action desktopBridgeAction) error {
+		if !desktopRuntime.security.AuthorizeCurrent(action) {
+			return errors.New("desktop bridge action is not authorized for the current page")
+		}
+		return nil
+	}
 	bindings := []struct {
 		name string
 		fn   interface{}
 	}{
+		{desktopBootstrapGetStateBinding, func() (desktopBootstrapState, error) {
+			if err := authorize(desktopBridgeGetState); err != nil {
+				return desktopBootstrapState{}, err
+			}
+			return desktopRuntime.GetState(), nil
+		}},
+		{desktopBootstrapSaveBinding, func(raw string) (desktopBootstrapResult, error) {
+			if err := authorize(desktopBridgeSaveBaseURL); err != nil {
+				return desktopBootstrapResult{}, err
+			}
+			return desktopRuntime.SaveBaseURL(context.Background(), raw), nil
+		}},
+		{desktopBootstrapRetryBinding, func() (desktopBootstrapResult, error) {
+			if err := authorize(desktopBridgeRetry); err != nil {
+				return desktopBootstrapResult{}, err
+			}
+			return desktopRuntime.Retry(context.Background()), nil
+		}},
+		{desktopBootstrapResetBinding, func() (desktopBootstrapResult, error) {
+			if err := authorize(desktopBridgeReset); err != nil {
+				return desktopBootstrapResult{}, err
+			}
+			return desktopRuntime.Reset(context.Background()), nil
+		}},
 		{desktopStartDragBinding, func() error {
+			if err := authorize(desktopBridgeStartDrag); err != nil {
+				return err
+			}
 			startWindowDrag(hwnd)
 			return nil
 		}},
 		{desktopMinimizeBinding, func() error {
+			if err := authorize(desktopBridgeMinimize); err != nil {
+				return err
+			}
 			showWindow(hwnd, swMinimize)
 			return nil
 		}},
 		{desktopToggleMaximizeBinding, func() error {
+			if err := authorize(desktopBridgeToggleMaximize); err != nil {
+				return err
+			}
 			maximizeController.toggle()
 			return nil
 		}},
 		{desktopCloseBinding, func() error {
+			if err := authorize(desktopBridgeClose); err != nil {
+				return err
+			}
 			postWindowClose(hwnd)
 			return nil
+		}},
+		{desktopRequestServerBinding, func() error {
+			if err := authorize(desktopBridgeRequestServerChange); err != nil {
+				return err
+			}
+			return desktopRuntime.RequestServerChange(context.Background())
 		}},
 	}
 	for _, binding := range bindings {

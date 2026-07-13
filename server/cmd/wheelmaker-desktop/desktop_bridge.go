@@ -4,27 +4,43 @@ const (
 	desktopResourceIconID     uint = 1
 	desktopTitleBarThemeColor      = "#1e1e1e"
 
-	desktopStartDragBinding      = "__wheelMakerDesktopStartDrag"
-	desktopMinimizeBinding       = "__wheelMakerDesktopMinimize"
-	desktopToggleMaximizeBinding = "__wheelMakerDesktopToggleMaximize"
-	desktopCloseBinding          = "__wheelMakerDesktopClose"
+	desktopBootstrapGetStateBinding = "__wheelMakerBootstrapGetState"
+	desktopBootstrapSaveBinding     = "__wheelMakerBootstrapSaveBaseURL"
+	desktopBootstrapRetryBinding    = "__wheelMakerBootstrapRetry"
+	desktopBootstrapResetBinding    = "__wheelMakerBootstrapReset"
+	desktopStartDragBinding         = "__wheelMakerDesktopStartDrag"
+	desktopMinimizeBinding          = "__wheelMakerDesktopMinimize"
+	desktopToggleMaximizeBinding    = "__wheelMakerDesktopToggleMaximize"
+	desktopCloseBinding             = "__wheelMakerDesktopClose"
+	desktopRequestServerBinding     = "__wheelMakerDesktopRequestServerChange"
 )
 
 func desktopRuntimeInitScript() string {
 	return `(() => {
+  if (window !== window.top) return;
   const invoke = name => (...args) => {
     const fn = window[name];
-    if (typeof fn === 'function') {
-      return fn(...args);
-    }
-    return Promise.resolve();
+    if (typeof fn !== 'function') return Promise.reject(new Error('Native bridge unavailable'));
+    return fn(...args);
   };
-  window.WheelMakerDesktop = Object.freeze({
-    enabled: true,
-    startDrag: invoke('` + desktopStartDragBinding + `'),
-    minimize: invoke('` + desktopMinimizeBinding + `'),
-    toggleMaximize: invoke('` + desktopToggleMaximizeBinding + `'),
-    close: invoke('` + desktopCloseBinding + `'),
-  });
+  if (location.href === 'about:blank') {
+    window.wheelMakerBootstrap = Object.freeze({
+      getState: invoke('` + desktopBootstrapGetStateBinding + `'),
+      saveBaseUrl: invoke('` + desktopBootstrapSaveBinding + `'),
+      retry: invoke('` + desktopBootstrapRetryBinding + `'),
+      reset: invoke('` + desktopBootstrapResetBinding + `'),
+    });
+    return;
+  }
+  if (location.protocol === 'https:') {
+    window.WheelMakerDesktop = Object.freeze({
+      enabled: true,
+      startDrag: invoke('` + desktopStartDragBinding + `'),
+      minimize: invoke('` + desktopMinimizeBinding + `'),
+      toggleMaximize: invoke('` + desktopToggleMaximizeBinding + `'),
+      close: invoke('` + desktopCloseBinding + `'),
+      requestServerChange: invoke('` + desktopRequestServerBinding + `'),
+    });
+  }
 })();`
 }
