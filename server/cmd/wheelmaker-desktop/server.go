@@ -170,7 +170,7 @@ func serveRemoteDesktopAsset(w http.ResponseWriter, r *http.Request, name string
 }
 
 func serveRemoteDesktopAssetURL(w http.ResponseWriter, r *http.Request, remoteURL string, name string, webSource *desktopWebSourceRuntime) bool {
-	resp, err := webSource.httpClient().Get(remoteURL)
+	resp, err := webSource.assetHTTPClient().Get(remoteURL)
 	if err != nil {
 		return false
 	}

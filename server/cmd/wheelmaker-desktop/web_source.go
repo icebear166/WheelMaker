@@ -20,7 +20,9 @@ const (
 	desktopWebSourceActualEmbedded = "embedded"
 	desktopWebSourceActualRemote   = "remote"
 
-	desktopRemoteDebugPort = 9222
+	desktopRemoteDebugPort    = 9222
+	desktopRemoteProbeTimeout = 3 * time.Second
+	desktopRemoteAssetTimeout = 30 * time.Second
 )
 
 type desktopWebSourceConfig struct {
@@ -95,6 +97,7 @@ type desktopWebSourceRuntime struct {
 	mu              sync.RWMutex
 	store           desktopWebSourceConfigStore
 	client          *http.Client
+	assetClient     *http.Client
 	config          desktopWebSourceConfig
 	actual          string
 	actualRemoteURL string
@@ -112,7 +115,7 @@ func newDefaultDesktopWebSourceRuntime() *desktopWebSourceRuntime {
 
 func newDesktopWebSourceRuntime(store desktopWebSourceConfigStore, client *http.Client) *desktopWebSourceRuntime {
 	if client == nil {
-		client = &http.Client{Timeout: 3 * time.Second}
+		client = &http.Client{Timeout: desktopRemoteProbeTimeout}
 	}
 	config, err := store.Load()
 	if err != nil {
@@ -120,10 +123,11 @@ func newDesktopWebSourceRuntime(store desktopWebSourceConfigStore, client *http.
 	}
 	config = sanitizeDesktopWebSourceConfig(config)
 	runtime := &desktopWebSourceRuntime{
-		store:  store,
-		client: client,
-		config: config,
-		actual: actualDesktopWebSourceForConfig(config),
+		store:       store,
+		client:      client,
+		assetClient: cloneDesktopRemoteAssetClient(client),
+		config:      config,
+		actual:      actualDesktopWebSourceForConfig(config),
 	}
 	if runtime.actual == desktopWebSourceActualRemote {
 		runtime.actualRemoteURL = config.RemoteWebURL
@@ -237,6 +241,24 @@ func (r *desktopWebSourceRuntime) httpClient() *http.Client {
 		return r.client
 	}
 	return http.DefaultClient
+}
+
+func (r *desktopWebSourceRuntime) assetHTTPClient() *http.Client {
+	if r.assetClient != nil {
+		return r.assetClient
+	}
+	return r.httpClient()
+}
+
+func cloneDesktopRemoteAssetClient(client *http.Client) *http.Client {
+	if client == nil {
+		return &http.Client{Timeout: desktopRemoteAssetTimeout}
+	}
+	clone := *client
+	if clone.Timeout > 0 && clone.Timeout < desktopRemoteAssetTimeout {
+		clone.Timeout = desktopRemoteAssetTimeout
+	}
+	return &clone
 }
 
 func (r *desktopWebSourceRuntime) WindowTitle() string {

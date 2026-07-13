@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 )
 
 type recordingLauncher struct {
@@ -570,6 +571,49 @@ func TestDesktopAssetHandlerKeepsRemoteSourceWhenRemoteAssetFails(t *testing.T) 
 	}
 	if strings.Contains(rec.Body.String(), "embedded") {
 		t.Fatalf("body=%q should not include embedded fallback", rec.Body.String())
+	}
+	if runtime.State().ActualSource != desktopWebSourceActualRemote {
+		t.Fatalf("ActualSource=%q", runtime.State().ActualSource)
+	}
+}
+
+func TestDesktopAssetHandlerDoesNotApplyProbeTimeoutToRemoteAssetDownloads(t *testing.T) {
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/bundle.js" {
+			http.NotFound(w, r)
+			return
+		}
+		time.Sleep(75 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/javascript")
+		_, _ = io.WriteString(w, "console.log('remote delayed')")
+	}))
+	defer remote.Close()
+
+	client := remote.Client()
+	client.Timeout = 50 * time.Millisecond
+	runtime := newDesktopWebSourceRuntime(&memoryDesktopWebSourceConfigStore{config: desktopWebSourceConfig{
+		WebSourcePreference: desktopWebSourcePreferenceAuto,
+	}}, client)
+	runtime.mu.Lock()
+	runtime.config.WebSourcePreference = desktopWebSourcePreferenceAuto
+	runtime.config.RemoteWebURL = remote.URL + "/"
+	runtime.actual = desktopWebSourceActualRemote
+	runtime.actualRemoteURL = remote.URL + "/"
+	runtime.mu.Unlock()
+	handler := newDesktopAssetHandlerWithWebSource(fstest.MapFS{
+		"index.html": {Data: []byte("<html>embedded</html>")},
+		"bundle.js":  {Data: []byte("console.log('embedded')")},
+	}, runtime)
+
+	req := httptest.NewRequest(http.MethodGet, "/bundle.js", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d want %d body=%q", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if got := rec.Body.String(); got != "console.log('remote delayed')" {
+		t.Fatalf("body=%q", got)
 	}
 	if runtime.State().ActualSource != desktopWebSourceActualRemote {
 		t.Fatalf("ActualSource=%q", runtime.State().ActualSource)
