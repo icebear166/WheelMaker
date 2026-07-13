@@ -54,13 +54,13 @@ The public server must redirect HTTP to HTTPS, allow only TLS 1.2 or TLS 1.3, an
 
 WheelMaker accepts `X-Forwarded-Proto` and `X-Real-IP` only when the immediate TCP peer is loopback. Requests from any non-loopback peer cannot use forwarded headers to claim HTTPS or another client address.
 
-Nginx must overwrite the forwarded headers as shown above rather than append client-supplied values. Public traffic must not have a direct route to Registry or Monitor ports.
+Nginx must overwrite the forwarded headers as shown above rather than append client-supplied values. Public traffic must not have a direct route to the Registry port.
 
 ## Verification
 
 After deployment:
 
-1. Confirm Registry and Monitor listen only on loopback with `Get-NetTCPConnection` on Windows or `ss -ltnp` on Linux.
+1. Confirm Registry listens only on loopback with `Get-NetTCPConnection` on Windows or `ss -ltnp` on Linux.
 2. Confirm HTTP redirects to HTTPS.
 3. Confirm an unlisted `Origin` receives HTTP 403 for login and WebSocket requests.
 4. Confirm repeated failed logins receive HTTP 429 from Nginx and from WheelMaker's application limiter.

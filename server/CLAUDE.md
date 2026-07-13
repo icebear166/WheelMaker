@@ -39,7 +39,7 @@ Full design: [../docs/architecture-3.0.md](../docs/architecture-3.0.md)
 
 ## Config Files
 
-- `~/.wheelmaker/config.json` - project config (agent, working dir, registry/monitor settings)
+- `~/.wheelmaker/config.json` - project config (agent, working dir, registry settings)
 - `~/.wheelmaker/state.json` - runtime state (session IDs, agent metadata)
 
 ## Dev Conventions
@@ -58,7 +58,6 @@ Full design: [../docs/architecture-3.0.md](../docs/architecture-3.0.md)
 go run ./cmd/wheelmaker/            # requires ~/.wheelmaker/config.json
 go test ./...
 go build -o bin/windows_amd64/wheelmaker.exe ./cmd/wheelmaker/
-go build -o bin/windows_amd64/wheelmaker-monitor.exe ./cmd/wheelmaker-monitor/
 go build -o bin/windows_amd64/wheelmaker-updater.exe ./cmd/wheelmaker-updater/
 
 # Root-level helper scripts

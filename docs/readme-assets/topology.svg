@@ -30,22 +30,16 @@
   
   <!-- Services under Nginx -->
   <!-- Web -->
-  <rect x="70" y="200" width="100" height="60" rx="4" class="service-box"/>
-  <text x="120" y="222" text-anchor="middle" class="service-text" style="font-weight: bold;">Web UI</text>
-  <text x="120" y="240" text-anchor="middle" class="port-label">:8080</text>
-  <text x="120" y="255" text-anchor="middle" class="port-label">→ 28800/</text>
+  <rect x="70" y="200" width="160" height="60" rx="4" class="service-box"/>
+  <text x="150" y="222" text-anchor="middle" class="service-text" style="font-weight: bold;">Web UI</text>
+  <text x="150" y="240" text-anchor="middle" class="port-label">Published assets</text>
+  <text x="150" y="255" text-anchor="middle" class="port-label">→ 28800/</text>
   
   <!-- Hub WS -->
-  <rect x="190" y="200" width="100" height="60" rx="4" class="service-box"/>
-  <text x="240" y="222" text-anchor="middle" class="service-text" style="font-weight: bold;">Hub WS</text>
-  <text x="240" y="240" text-anchor="middle" class="port-label">:9630</text>
-  <text x="240" y="255" text-anchor="middle" class="port-label">→ 28800/ws</text>
-  
-  <!-- Monitor -->
-  <rect x="310" y="200" width="100" height="60" rx="4" class="service-box"/>
-  <text x="360" y="222" text-anchor="middle" class="service-text" style="font-weight: bold;">Monitor</text>
-  <text x="360" y="240" text-anchor="middle" class="port-label">:9631</text>
-  <text x="360" y="255" text-anchor="middle" class="port-label">→ 28800/monitor/</text>
+  <rect x="250" y="200" width="160" height="60" rx="4" class="service-box"/>
+  <text x="330" y="222" text-anchor="middle" class="service-text" style="font-weight: bold;">Registry WS</text>
+  <text x="330" y="240" text-anchor="middle" class="port-label">:9630</text>
+  <text x="330" y="255" text-anchor="middle" class="port-label">→ 28800/ws</text>
   
   <!-- Registry -->
   <rect x="70" y="290" width="340" height="50" rx="4" fill="#e6ffe6" stroke="#00cc00" stroke-width="1.5"/>
@@ -86,7 +80,7 @@
   <!-- Legend -->
   <g transform="translate(50, 580)">
     <text x="0" y="0" style="font-size: 12px; font-weight: bold; fill: #1f2328;">
-      Endpoints: • Web / WS / Monitor routes through Nginx SSL tunnel • Registry = gRPC backend • Agents = Remote workers
+      Endpoints: • Web / WS route through Nginx TLS • Registry = WebSocket backend • Agents = Remote workers
     </text>
   </g>
 </svg>

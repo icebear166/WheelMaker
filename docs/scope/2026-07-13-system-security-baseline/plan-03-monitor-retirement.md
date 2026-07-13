@@ -214,11 +214,11 @@ Expected: PASS；Go package list 不再包含 `cmd/wheelmaker-monitor`。
 - Modify: `docs/readme-assets/topology.svg`
 - Modify: `docs/readme-assets/topology-dual-machine.svg`
 
-- [ ] **Step 1: 删除现行 Monitor 指引**
+- [x] **Step 1: 删除现行 Monitor 指引**
 
 README/INSTALL 的配置和 Nginx 示例只保留 Web 与 `/ws`。SVG 删除 :9631、Monitor 节点和 `/monitor/` 箭头，并同步 `<desc>` 可访问文本。协议文档删除 Monitor role/method。
 
-- [ ] **Step 2: 运行文档引用门**
+- [x] **Step 2: 运行文档引用门**
 
 Run:
 
@@ -229,7 +229,7 @@ rg -n -i 'wheelmaker-monitor|registryrolemonitor|monitorcore|monitorbasedir|moni
 
 Expected: 无输出。部署器 legacy cleanup 和历史 scope/plan 不在此门中，允许保留审计所需名称。
 
-- [ ] **Step 3: 提交文档更新**
+- [x] **Step 3: 提交文档更新**
 
 Run:
 

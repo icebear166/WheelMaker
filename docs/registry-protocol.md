@@ -1,6 +1,6 @@
 # WheelMaker Registry Protocol 2.5
 
-本文定义 WheelMaker Registry 2.5 协议。2.5 是一次硬切版本：Registry、Hub、App、Monitor 的 `connect.init.payload.protocolVersion` 必须为 `2.5`，不保留旧端兼容入口。
+本文定义 WheelMaker Registry 2.5 协议。2.5 是一次硬切版本：Registry、Hub、App 的 `connect.init.payload.protocolVersion` 必须为 `2.5`，不保留旧端兼容入口。
 
 ## 0. 单一来源
 
@@ -83,7 +83,7 @@
 
 规则：
 
-- `role` 只能是 `hub`、`client`、`monitor`。
+- `role` 只能是 `hub`、`client`。
 - `role=hub` 必须在 payload 中携带 `hubId`。
 - `role=client` 可选携带 `hubId`；携带后 client scope 限定在该 Hub。
 - `protocolVersion` 必须等于 `2.5`。
@@ -100,14 +100,12 @@
 | `project.*` | Project | 文件、Git |
 | `session.*` | Session | 会话、归档、附件、配置、会话事件 |
 | `speech.*` | Registry speech | 语音输入流式通道 |
-| `monitor.*` | Monitor | 监控面板 |
 | `debug.*` | Debug | 调试日志上传 |
 
 | 角色 | 允许请求 |
 | --- | --- |
 | `hub` | `hub.report.projects`、`hub.report.project`、`hub.ping`、`session.message`、`session.updated` |
 | `client` | `registry.project.list`、`registry.relay.*`、`hub.state.*`、`project.*`、`session.*`、`speech.*`、`debug.uploadLog` |
-| `monitor` | `registry.project.list`、`monitor.*` |
 
 事件方法由服务端推送，不作为 client request 白名单处理，包括 `registry.project.report`、`hub.state.updated`、`session.message`、`session.updated`、`connect.close`。
 
@@ -174,7 +172,7 @@ Registry 使用 `connectionEpoch` 和 per-project `seq` 拒绝旧连接或乱序
 
 ### `registry.project.list`
 
-Client/Monitor 读取 Registry 当前项目目录。返回范围受 client scope 限制。
+Client 读取 Registry 当前项目目录。返回范围受 client scope 限制。
 
 ```json
 {
@@ -450,7 +448,7 @@ Registry 下发给 Hub 的内部方法：
 - `listenPort` 与 `targetPort` 必须在 `1..65535`。
 - `hubId` 必须指向在线 Hub。
 
-## 10. Speech、Monitor、Debug
+## 10. Speech、Debug
 
 Speech：
 
@@ -459,14 +457,6 @@ Speech：
 - `speech.finish`
 - `speech.cancel`
 - 事件：`speech.transcript`、`speech.error`
-
-Monitor：
-
-- `monitor.listHub`
-- `monitor.status`
-- `monitor.log`
-- `monitor.db`
-- `monitor.action`
 
 Debug：
 

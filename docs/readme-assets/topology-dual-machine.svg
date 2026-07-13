@@ -29,11 +29,10 @@
   <rect x="60" y="180" width="220" height="120" class="local"/>
   <text x="90" y="225" class="sub">Browser / Phone</text>
   <text x="90" y="258" class="tiny">Web UI</text>
-  <text x="90" y="286" class="tiny">Monitor</text>
 
   <rect x="360" y="130" width="470" height="470" class="box"/>
   <text x="390" y="180" class="label" style="font-size:28px">Machine A</text>
-  <text x="390" y="210" class="note">Hub A + Registry + Monitor + Web + Nginx</text>
+  <text x="390" y="210" class="note">Hub A + Registry + Web + Nginx</text>
 
   <rect x="390" y="245" width="180" height="92" class="soft"/>
   <text x="420" y="286" class="sub">Nginx :28800</text>
@@ -43,13 +42,9 @@
   <text x="630" y="286" class="sub">Published Web Assets</text>
   <text x="622" y="316" class="tiny">~/.wheelmaker/web</text>
 
-  <rect x="390" y="380" width="180" height="92" class="local"/>
+  <rect x="390" y="380" width="400" height="92" class="local"/>
   <text x="420" y="421" class="sub">Registry</text>
   <text x="420" y="451" class="tiny">127.0.0.1:9630 /ws</text>
-
-  <rect x="610" y="380" width="180" height="92" class="local"/>
-  <text x="645" y="421" class="sub">Monitor</text>
-  <text x="645" y="451" class="tiny">127.0.0.1:9631</text>
 
   <rect x="500" y="515" width="180" height="60" class="local"/>
   <text x="558" y="552" class="sub">Hub A</text>
@@ -66,12 +61,10 @@
 
   <path d="M280 240 C320 240, 330 292, 390 292" class="line"/>
   <path d="M570 291 C590 291, 595 291, 610 291" class="line"/>
-  <path d="M570 425 C590 425, 595 425, 610 425" class="line"/>
   <path d="M1025 380 C1025 380, 1025 380, 1025 410" class="dash"/>
   <path d="M948 340 C875 340, 860 425, 570 425" class="dash"/>
 
   <text x="300" y="227" class="tiny">HTTPS :28800</text>
-  <text x="746" y="405" class="tiny">/monitor/</text>
   <text x="736" y="275" class="tiny">/</text>
   <text x="796" y="330" class="tiny">/ws</text>
   <text x="758" y="360" class="note">Hub B connects with the same shared token</text>

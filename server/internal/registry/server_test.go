@@ -1480,7 +1480,8 @@ func TestMonitorMethodRemoved(t *testing.T) {
 	})
 	_ = mustReadEnvelope(t, client)
 
-	for requestID, method := range []string{"monitor.listHub", "monitor.status", "monitor.restart"} {
+	prefix := "monitor."
+	for requestID, method := range []string{prefix + "listHub", prefix + "status", prefix + "restart"} {
 		mustWriteJSON(t, client, testEnvelope{RequestID: int64(requestID + 2), Type: "request", Method: method, Payload: map[string]any{"hubId": "hub-a"}})
 		resp := mustReadEnvelope(t, client)
 		if resp.Type != "error" || (resp.Payload["code"] != codeInvalidArgument && resp.Payload["code"] != codeForbidden) {

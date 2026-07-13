@@ -15,7 +15,6 @@ This README uses the current two-machine shape discussed for this repository:
 - **Machine A**
   - runs one hub
   - hosts the registry service
-  - hosts the monitor service
   - publishes the Web UI
   - exposes a single HTTPS entrypoint through Nginx
 - **Machine B**
@@ -36,9 +35,7 @@ This model works well when you want one machine to expose the public entrypoint 
 | --- | --- | --- |
 | Machine A / Nginx | `https://<host>:28800/` | Web UI |
 | Machine A / Nginx | `wss://<host>:28800/ws` | Registry WebSocket |
-| Machine A / Nginx | `https://<host>:28800/monitor/` | Monitor UI |
 | Machine A / internal | `127.0.0.1:9630` | Registry listener |
-| Machine A / internal | `127.0.0.1:9631` | Monitor listener |
 
 ### 1. Deploy, build, and install services
 
@@ -84,16 +81,16 @@ The deploy CLI flow will:
 
 - pull with `git pull --ff-only`
 - run `npm ci --include=dev` for the Web app before Web publish
-- build `wheelmaker`, `wheelmaker-monitor`, `wheelmaker-updater`, and `wheelmaker-deploy`
+- build `wheelmaker`, `wheelmaker-updater`, and `wheelmaker-deploy`
 - publish the Web UI to `~/.wheelmaker/web`
 - stop managed runtime processes before replacing binaries and remove legacy Windows Services/Scheduled Tasks during Windows deploy cleanup
 - install binaries to `~/.wheelmaker/bin`
 - preserve an existing `~/.wheelmaker/config.json`, or create a runnable default for this WheelMaker checkout with the registry listening locally
 - generate platform-specific `start`, `stop`, `restart`, and `status` wrapper scripts under `~/.wheelmaker`
 - register or update startup entries/services:
-  - Windows: HKCU Run values `WheelMaker`, `WheelMakerMonitor`, `WheelMakerUpdater`
-  - macOS: `com.wheelmaker.hub`, `com.wheelmaker.monitor`, `com.wheelmaker.updater`
-  - Linux: `wheelmaker-hub.service`, `wheelmaker-monitor.service`, `wheelmaker-updater.service`
+  - Windows: HKCU Run values `WheelMaker`, `WheelMakerUpdater`
+  - macOS: `com.wheelmaker.hub`, `com.wheelmaker.updater`
+  - Linux: `wheelmaker-hub.service`, `wheelmaker-updater.service`
 - write `~/.wheelmaker/release.json` with the published Git SHA
 - start managed runtime processes/services
 - clean regenerable deploy artifacts and stale entry scripts: Android JVM probe builds, `~/.wheelmaker/cache/go-build`, `~/.wheelmaker/tmp`, root `web-dev*.log`, old `~/.wheelmaker/logs/<timestamp>` backups beyond the latest 3, legacy `refresh_server.*` copies, and helper wrappers for the other platform family
@@ -128,7 +125,6 @@ The deploy scripts do not install or configure Nginx, Caddy, certificates, or pu
 | --- | --- |
 | `/` | static files from `~/.wheelmaker/web` |
 | `/ws` | `http://127.0.0.1:9630` with WebSocket upgrade |
-| `/monitor/` | `http://127.0.0.1:9631` |
 
 ### 2. Configure Machine A
 
@@ -155,9 +151,6 @@ Example for Machine A:
     "token": "replace-with-shared-token",
     "hubId": "hub-a"
   },
-  "monitor": {
-    "port": 9631
-  },
   "log": {
     "level": "warn"
   }
@@ -168,10 +161,8 @@ Notes:
 
 - `registry.listen: true` means Machine A hosts the registry server.
 - `registry.port` is the internal registry port.
-- `registry.token` is shared by other hubs, Web clients, and the monitor login page.
-- `wheelmaker-monitor` refuses to start when `registry.token` is empty.
+- `registry.token` is shared by trusted non-browser hubs and clients. Browsers authenticate through the Registry login endpoint and then use a session cookie.
 - `registry.hubId` should be stable and recognizable, for example `hub-a`.
-- `monitor.port` is the internal monitor port that Nginx forwards to.
 
 ### 3. Configure Machine B
 
@@ -192,9 +183,6 @@ Machine B does not expose the public entrypoint. It only reports projects to Mac
     "token": "replace-with-shared-token",
     "hubId": "hub-b"
   },
-  "monitor": {
-    "port": 9631
-  },
   "log": {
     "level": "warn"
   }
@@ -204,7 +192,7 @@ Machine B does not expose the public entrypoint. It only reports projects to Mac
 Notes:
 
 - `registry.server` can be `https://machine-a.example.com:28800`. WheelMaker will convert it to `wss://.../ws`.
-- `registry.token` must match Machine A and is required by the monitor login page.
+- `registry.token` must match Machine A.
 - `hubId` must be unique, for example `hub-b`.
 - `listen: false` means Machine B does not host its own registry listener.
 
@@ -280,18 +268,6 @@ server {
         proxy_buffering off;
     }
 
-    location = /monitor {
-        return 301 /monitor/;
-    }
-
-    location ^~ /monitor/ {
-        proxy_pass http://127.0.0.1:9631;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_http_version 1.1;
-    }
 }
 ```
 
@@ -299,7 +275,6 @@ In this layout:
 
 - `/` serves the published Web UI assets
 - `/ws` forwards to the registry WebSocket
-- `/monitor/` forwards to the monitor UI
 
 ### 5. Publish the Web UI
 
@@ -355,7 +330,7 @@ Build workspace:
 On Windows, if the repository and `HOME` are on different drives, the publisher uses the repository drive instead, for example `D:\.wheelmaker\build\mobile\android\`. This keeps Android Gradle build paths on one filesystem root while still staying outside the git worktree.
 
 The Android build does not write generated Web assets, Gradle output, APK files, or release manifests into the git worktree.
-The first Android slice only builds a local APK. It does not publish APK downloads through Nginx, Monitor, or the Update screen.
+The first Android slice only builds a local APK. It does not publish APK downloads through Nginx or the Update screen.
 
 ### 7. Install the Web UI as a PWA
 
@@ -448,7 +423,7 @@ The updater trigger path is:
 
 - `update-publish.bat` / `update-publish.sh` writes a `full-update` signal.
 - `WheelMakerUpdater` calls the installed `wheelmaker-deploy bootstrap-update`.
-- `bootstrap-update` pulls the repository, builds a temporary latest deploy CLI, then runs `update` to rebuild and replace Hub, Monitor, and the deploy CLI, publish Web, write the release manifest, and restart Hub and Monitor.
+- `bootstrap-update` pulls the repository, builds a temporary latest deploy CLI, then runs `update` to rebuild and replace Hub and the deploy CLI, publish Web, write the release manifest, and restart Hub.
 - On Windows, `WheelMakerUpdater` runs a temporary copy of the installed deploy CLI first, so the installed deploy CLI can be replaced during the update.
 
 `WheelMakerUpdater` self-upgrade is reserved but not implemented in this transitional CLI.
@@ -458,11 +433,10 @@ The updater trigger path is:
 After deployment:
 
 1. Open `https://<host>:28800/` and confirm the Web UI loads.
-2. Open `https://<host>:28800/monitor/`, enter `registry.token`, and confirm the monitor page loads.
-3. Confirm Machine B points `registry.server` at Machine A.
-4. Confirm both machines use the same `registry.token`.
-5. Confirm projects from multiple hubs appear in the UI.
-6. Confirm the browser offers **Install app** / **Add to Home Screen** when opened over HTTPS.
+2. Confirm Machine B points `registry.server` at Machine A.
+3. Confirm both machines use the same `registry.token`.
+4. Confirm projects from multiple hubs appear in the UI.
+5. Confirm the browser offers **Install app** / **Add to Home Screen** when opened over HTTPS.
 
 ### Chat commands
 
@@ -565,24 +539,20 @@ The app includes behavior aimed at unstable mobile or backgrounded connections:
 - local notifications
 - service-worker-backed static asset caching
 
-### 7. Settings and observability
+### 7. Settings and runtime visibility
 
-![Monitor overview](docs/readme-assets/ui-monitor.svg)
-
-WheelMaker also includes a configuration and observability surface:
+WheelMaker also includes configuration and runtime visibility in the main app:
 
 - runtime and registry address settings
 - token provider and token stats, including DeepSeek token stats
-- monitor page for service status
-- log inspection
 - hub and registry project visibility
-- operational actions such as start / stop / restart / update-publish
+- update-publish status and actions
 
 ## Repository structure
 
 ```text
 WheelMaker/
-  server/   — Go daemon (hub, agent adapters, registry, monitor)
+  server/   — Go daemon (hub, agent adapters, registry)
   app/      — Workspace Web UI for browsers and WheelMaker Desktop
   docs/     — protocols, design docs, and README visual assets
   scripts/  — build, deploy, and update scripts

@@ -145,10 +145,6 @@ Registry 入口机负责：
     "token": "<shared-token>",
     "hubId": "hub-a"
   },
-  "monitor": {
-    "server": "127.0.0.1",
-    "port": 9631
-  },
   "log": {
     "level": "warn"
   }
@@ -161,7 +157,6 @@ Registry 入口机负责：
 - `registry.server` 在 Registry 入口机上用 `127.0.0.1`。
 - `registry.token` 使用共享 token。
 - `registry.hubId` 要稳定且唯一。
-- Monitor 默认只保留本机监听，不对外暴露。
 
 重启服务：
 
@@ -201,10 +196,6 @@ Worker 机器负责：
     "token": "<shared-token>",
     "hubId": "hub-b"
   },
-  "monitor": {
-    "server": "127.0.0.1",
-    "port": 9631
-  },
   "log": {
     "level": "warn"
   }
@@ -235,8 +226,6 @@ Worker 机器负责：
 
 - `/`：Web UI 静态文件，root 指向 `~/.wheelmaker/web`
 - `/ws`：反代到 `http://127.0.0.1:9630`
-
-默认不暴露 Monitor，也不要在主流程里询问 Monitor。
 
 HTTPS 模板：
 

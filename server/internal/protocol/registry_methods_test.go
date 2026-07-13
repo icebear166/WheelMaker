@@ -34,7 +34,8 @@ func TestRegistryDeviceSessionMethods(t *testing.T) {
 }
 
 func TestMonitorMethodsRemoved(t *testing.T) {
-	for _, method := range []string{"monitor.listHub", "monitor.status", "monitor.log", "monitor.db", "monitor.action", "monitor.restart"} {
+	prefix := "monitor."
+	for _, method := range []string{prefix + "listHub", prefix + "status", prefix + "log", prefix + "db", prefix + "action", prefix + "restart"} {
 		if desc, ok := RegistryMethod(method); ok {
 			t.Fatalf("removed monitor method %q still registered as %+v", method, desc)
 		}
