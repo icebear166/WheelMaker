@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/swm8023/wheelmaker/internal/security"
 	"github.com/swm8023/wheelmaker/internal/shared"
 	"github.com/swm8023/wheelmaker/internal/shared/winsvc"
 )
@@ -88,6 +89,9 @@ func resolveMonitorListenAddr(addrFlag string, cfg *shared.AppConfig) string {
 }
 
 func runHTTPServer(ctx context.Context, addr string, handler http.Handler) error {
+	if err := security.RequireLoopbackAddress(addr); err != nil {
+		return fmt.Errorf("monitor listen address: %w", err)
+	}
 
 	srv := &http.Server{
 		Addr:              addr,

@@ -76,11 +76,12 @@ type MonitorConfig struct {
 
 // RegistryConfig configures registry sync.
 type RegistryConfig struct {
-	Port   int    `json:"port,omitempty"`
-	Listen bool   `json:"listen,omitempty"`
-	Server string `json:"server,omitempty"`
-	Token  string `json:"token,omitempty"`
-	HubID  string `json:"hubId,omitempty"`
+	Port           int      `json:"port,omitempty"`
+	Listen         bool     `json:"listen,omitempty"`
+	Server         string   `json:"server,omitempty"`
+	Token          string   `json:"token,omitempty"`
+	HubID          string   `json:"hubId,omitempty"`
+	AllowedOrigins []string `json:"allowedOrigins,omitempty"`
 }
 
 // LoadConfig reads and parses the config file at path.

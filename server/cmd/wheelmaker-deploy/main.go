@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -17,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/swm8023/wheelmaker/internal/security"
 	"github.com/swm8023/wheelmaker/internal/shared"
 )
 
@@ -707,9 +709,24 @@ func renameWithRetry(src string, dst string) error {
 func ensureConfig(cfg deployConfig, deps deployDeps) (bool, error) {
 	path := filepath.Join(wheelMakerHome(cfg), "config.json")
 	if _, err := os.Stat(path); err == nil {
-		return false, nil
+		changed, err := migrateRegistryToken(path)
+		if err != nil {
+			return false, err
+		}
+		if !changed {
+			if err := shared.SecureConfigFile(path); err != nil {
+				return false, err
+			}
+			return false, nil
+		}
+		deps.record("write config")
+		return true, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return false, fmt.Errorf("stat config: %w", err)
+	}
+	token, err := security.NewRegistryToken(rand.Reader)
+	if err != nil {
+		return false, err
 	}
 	config := map[string]any{
 		"projects": []map[string]string{
@@ -719,11 +736,12 @@ func ensureConfig(cfg deployConfig, deps deployDeps) (bool, error) {
 			},
 		},
 		"registry": map[string]any{
-			"listen": true,
-			"port":   9630,
-			"server": "127.0.0.1",
-			"token":  "wheelmaker-local-token",
-			"hubId":  "local-hub",
+			"listen":         true,
+			"port":           9630,
+			"server":         "127.0.0.1",
+			"token":          token,
+			"hubId":          "local-hub",
+			"allowedOrigins": []string{},
 		},
 		"monitor": map[string]any{
 			"server": "127.0.0.1",
@@ -737,13 +755,52 @@ func ensureConfig(cfg deployConfig, deps deployDeps) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("encode config: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return false, fmt.Errorf("create config dir: %w", err)
-	}
-	if err := os.WriteFile(path, append(raw, '\n'), 0o644); err != nil {
+	if err := shared.WriteConfigFile(path, append(raw, '\n')); err != nil {
 		return false, fmt.Errorf("write config: %w", err)
 	}
 	deps.record("write config")
+	return true, nil
+}
+
+func migrateRegistryToken(path string) (bool, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return false, fmt.Errorf("read config for token migration: %w", err)
+	}
+	var config map[string]any
+	if err := json.Unmarshal(raw, &config); err != nil {
+		// Preserve invalid user-authored config for diagnostics. Runtime loading
+		// remains fail-closed, while deployment may still publish artifacts.
+		return false, nil
+	}
+	registryValue, ok := config["registry"]
+	if !ok {
+		registryValue = map[string]any{}
+		config["registry"] = registryValue
+	}
+	registryConfig, ok := registryValue.(map[string]any)
+	if !ok {
+		return false, errors.New("parse config for token migration: registry must be an object")
+	}
+	token, ok := registryConfig["token"].(string)
+	if !ok && registryConfig["token"] != nil {
+		return false, errors.New("parse config for token migration: registry.token must be a string")
+	}
+	if security.ValidateRegistryToken(token) == nil {
+		return false, nil
+	}
+	token, err = security.NewRegistryToken(rand.Reader)
+	if err != nil {
+		return false, err
+	}
+	registryConfig["token"] = token
+	encoded, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return false, fmt.Errorf("encode migrated config: %w", err)
+	}
+	if err := shared.WriteConfigFile(path, append(encoded, '\n')); err != nil {
+		return false, fmt.Errorf("write migrated config: %w", err)
+	}
 	return true, nil
 }
 

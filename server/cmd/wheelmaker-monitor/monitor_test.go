@@ -52,6 +52,15 @@ func TestResolveMonitorListenAddrPrefersExplicitAddrFlag(t *testing.T) {
 	}
 }
 
+func TestRunHTTPServerRejectsNonLoopbackAddress(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := runHTTPServer(ctx, "0.0.0.0:0", http.NewServeMux())
+	if err == nil || !strings.Contains(err.Error(), "loopback") {
+		t.Fatalf("runHTTPServer() error=%v, want loopback rejection", err)
+	}
+}
+
 func TestResolveLogFilePath_PrefersLogDir(t *testing.T) {
 	base := t.TempDir()
 	m := NewMonitor(base)
@@ -443,12 +452,16 @@ func newAuthedMonitorMux(t *testing.T) (*http.ServeMux, string) {
 }
 
 func TestLoadMonitorRuntimeConfigRequiresRegistryToken(t *testing.T) {
-	baseDir := t.TempDir()
-	writeMonitorTestConfig(t, baseDir, "")
+	for _, token := range []string{"", "wheelmaker-local-token"} {
+		t.Run(token, func(t *testing.T) {
+			baseDir := t.TempDir()
+			writeMonitorTestConfig(t, baseDir, token)
 
-	_, err := loadMonitorRuntimeConfig(baseDir)
-	if err == nil || !strings.Contains(err.Error(), "registry.token is required for monitor authentication") {
-		t.Fatalf("err=%v, want registry token required error", err)
+			_, err := loadMonitorRuntimeConfig(baseDir)
+			if err == nil || !strings.Contains(err.Error(), "registry.token is required for monitor authentication") {
+				t.Fatalf("err=%v, want registry token required error", err)
+			}
+		})
 	}
 }
 

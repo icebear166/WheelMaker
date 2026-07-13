@@ -465,7 +465,6 @@ func TestEnsureConfigWritesRunnableWheelMakerDefault(t *testing.T) {
 		`"name": "WheelMaker"`,
 		`"listen": true`,
 		`"server": "127.0.0.1"`,
-		`"token": "wheelmaker-local-token"`,
 		`"hubId": "local-hub"`,
 	} {
 		if !strings.Contains(text, needle) {
@@ -486,6 +485,9 @@ func TestEnsureConfigWritesRunnableWheelMakerDefault(t *testing.T) {
 		}
 	}
 	var parsed struct {
+		Registry struct {
+			Token string `json:"token"`
+		} `json:"registry"`
 		Monitor struct {
 			Server string `json:"server"`
 			Port   int    `json:"port"`
@@ -494,12 +496,100 @@ func TestEnsureConfigWritesRunnableWheelMakerDefault(t *testing.T) {
 	if err := json.Unmarshal(raw, &parsed); err != nil {
 		t.Fatalf("parse generated config: %v", err)
 	}
+	if len(parsed.Registry.Token) != 43 || parsed.Registry.Token == "wheelmaker-local-token" {
+		t.Fatalf("registry.token=%q, want unique 256-bit Base64URL token", parsed.Registry.Token)
+	}
 	if parsed.Monitor.Server != "127.0.0.1" {
 		t.Fatalf("monitor.server=%q, want 127.0.0.1", parsed.Monitor.Server)
 	}
 	if parsed.Monitor.Port != 9631 {
 		t.Fatalf("monitor.port=%d, want 9631", parsed.Monitor.Port)
 	}
+}
+
+func TestEnsureConfigGeneratesIndependentRegistryTokens(t *testing.T) {
+	first := newDeployHarness(t)
+	second := newDeployHarness(t)
+	if _, err := ensureConfig(first.cfg, first.deps); err != nil {
+		t.Fatalf("ensureConfig(first): %v", err)
+	}
+	if _, err := ensureConfig(second.cfg, second.deps); err != nil {
+		t.Fatalf("ensureConfig(second): %v", err)
+	}
+	firstToken := readGeneratedRegistryToken(t, first.cfg)
+	secondToken := readGeneratedRegistryToken(t, second.cfg)
+	if firstToken == secondToken {
+		t.Fatalf("independent installs share registry token %q", firstToken)
+	}
+}
+
+func TestEnsureConfigRotatesLegacyRegistryToken(t *testing.T) {
+	h := newDeployHarness(t)
+	writeExistingRegistryTokenConfig(t, h.cfg, "wheelmaker-local-token")
+	if changed, err := ensureConfig(h.cfg, h.deps); err != nil {
+		t.Fatalf("ensureConfig(): %v", err)
+	} else if !changed {
+		t.Fatal("ensureConfig() changed=false, want legacy token migration")
+	}
+	got := readGeneratedRegistryToken(t, h.cfg)
+	if got == "wheelmaker-local-token" || len(got) != 43 {
+		t.Fatalf("migrated registry.token=%q, want generated token", got)
+	}
+}
+
+func TestEnsureConfigPreservesCustomRegistryToken(t *testing.T) {
+	h := newDeployHarness(t)
+	const custom = "user-supplied-random-token"
+	writeExistingRegistryTokenConfig(t, h.cfg, custom)
+	if changed, err := ensureConfig(h.cfg, h.deps); err != nil {
+		t.Fatalf("ensureConfig(): %v", err)
+	} else if changed {
+		t.Fatal("ensureConfig() changed=true, want custom token preserved")
+	}
+	if got := readGeneratedRegistryToken(t, h.cfg); got != custom {
+		t.Fatalf("registry.token=%q, want %q", got, custom)
+	}
+}
+
+func writeExistingRegistryTokenConfig(t *testing.T, cfg deployConfig, token string) {
+	t.Helper()
+	raw, err := json.Marshal(map[string]any{
+		"projects": []map[string]string{{"name": "WheelMaker", "path": cfg.RepoRoot}},
+		"registry": map[string]any{
+			"listen": true,
+			"server": "127.0.0.1",
+			"port":   9630,
+			"token":  token,
+			"hubId":  "local-hub",
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal existing config: %v", err)
+	}
+	path := filepath.Join(wheelMakerHome(cfg), "config.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+	if err := os.WriteFile(path, append(raw, '\n'), 0o644); err != nil {
+		t.Fatalf("write existing config: %v", err)
+	}
+}
+
+func readGeneratedRegistryToken(t *testing.T, cfg deployConfig) string {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(wheelMakerHome(cfg), "config.json"))
+	if err != nil {
+		t.Fatalf("read generated config: %v", err)
+	}
+	var parsed struct {
+		Registry struct {
+			Token string `json:"token"`
+		} `json:"registry"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		t.Fatalf("parse generated config: %v", err)
+	}
+	return parsed.Registry.Token
 }
 
 func TestWriteHelperWrappers(t *testing.T) {

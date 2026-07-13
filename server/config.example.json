@@ -9,8 +9,11 @@
     "listen": true,
     "port": 9630,
     "server": "127.0.0.1",
-    "token": "wheelmaker-local-token",
-    "hubId": "local-hub"
+    "token": "",
+    "hubId": "local-hub",
+    "allowedOrigins": [
+      "https://wheelmaker.example.com"
+    ]
   },
   "monitor": {
     "server": "127.0.0.1",

@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/swm8023/wheelmaker/internal/security"
 	"github.com/swm8023/wheelmaker/internal/shared"
 )
 
@@ -37,7 +38,7 @@ func loadMonitorRuntimeConfig(baseDir string) (*shared.AppConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot load config.json at %s: %w", cfgPath, err)
 	}
-	if strings.TrimSpace(cfg.Registry.Token) == "" {
+	if security.ValidateRegistryToken(cfg.Registry.Token) != nil {
 		return nil, errMonitorTokenRequired
 	}
 	return cfg, nil

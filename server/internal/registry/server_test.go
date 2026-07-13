@@ -2,6 +2,7 @@ package registry
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"github.com/gorilla/websocket"
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
@@ -1873,6 +1874,40 @@ func dialWS(t *testing.T, rawURL string) *websocket.Conn {
 		t.Fatalf("dial ws: %v", err)
 	}
 	return conn
+}
+
+func TestWebSocketRejectsUnlistedBrowserOrigin(t *testing.T) {
+	s := New(Config{AllowedOrigins: []string{"https://wheelmaker.example.com"}})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+	header := http.Header{"Origin": []string{"https://attacker.example"}}
+	conn, resp, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", header)
+	if conn != nil {
+		_ = conn.Close()
+	}
+	if err == nil || resp == nil || resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("dial error=%v response=%v, want HTTP 403", err, resp)
+	}
+}
+
+func TestWebSocketAcceptsAllowlistedBrowserOrigin(t *testing.T) {
+	s := New(Config{AllowedOrigins: []string{"https://wheelmaker.example.com"}})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+	header := http.Header{"Origin": []string{"https://wheelmaker.example.com"}}
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", header)
+	if err != nil {
+		t.Fatalf("dial allowlisted origin: %v", err)
+	}
+	_ = conn.Close()
+}
+
+func TestRunRejectsNonLoopbackAddress(t *testing.T) {
+	s := New(Config{Addr: "0.0.0.0:0", Token: "custom-token"})
+	err := s.Run(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "loopback") {
+		t.Fatalf("Run() error=%v, want loopback rejection", err)
+	}
 }
 
 func dialReportedHub(t *testing.T, rawURL string, hubID string) *websocket.Conn {

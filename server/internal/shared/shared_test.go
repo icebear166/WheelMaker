@@ -70,6 +70,23 @@ func TestLoadConfig_AllowsMonitorServer(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_AllowsRegistryOrigins(t *testing.T) {
+	path := writeTempConfig(t, `{
+		"registry": {
+			"token": "custom-token",
+			"allowedOrigins": ["https://wheelmaker.example.com"]
+		},
+		"projects": []
+	}`)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig(): %v", err)
+	}
+	if len(cfg.Registry.AllowedOrigins) != 1 || cfg.Registry.AllowedOrigins[0] != "https://wheelmaker.example.com" {
+		t.Fatalf("allowed origins=%v", cfg.Registry.AllowedOrigins)
+	}
+}
+
 func TestLoadConfig_RejectsRemovedProjectClient(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	data := []byte(`{"projects":[{"name":"p","path":".","client":{"agent":"codex"}}]}`)
@@ -174,6 +191,23 @@ func TestLoadConfig_ConfigExampleIsValid(t *testing.T) {
 	path := filepath.Join("..", "..", "config.example.json")
 	if _, err := LoadConfig(path); err != nil {
 		t.Fatalf("LoadConfig(config.example.json) error = %v", err)
+	}
+}
+
+func TestWriteConfigFileAtomicallyReplacesContent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte("old"), 0o644); err != nil {
+		t.Fatalf("write old config: %v", err)
+	}
+	if err := WriteConfigFile(path, []byte("new\n")); err != nil {
+		t.Fatalf("WriteConfigFile(): %v", err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	if string(got) != "new\n" {
+		t.Fatalf("config content=%q, want new content", got)
 	}
 }
 

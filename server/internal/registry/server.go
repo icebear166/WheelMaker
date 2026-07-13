@@ -17,6 +17,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/swm8023/wheelmaker/internal/portrelay"
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
+	"github.com/swm8023/wheelmaker/internal/security"
 )
 
 const (
@@ -40,6 +41,7 @@ var (
 type Config struct {
 	Addr            string
 	Token           string
+	AllowedOrigins  []string
 	ProtocolVersion string
 	ServerVersion   string
 	LogDir          string
@@ -325,10 +327,6 @@ func (d *requestDispatcher) handle(in envelope) {
 	}
 }
 
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(_ *http.Request) bool { return true },
-}
-
 // New creates a registry server instance.
 func New(cfg Config) *Server {
 	if cfg.Addr == "" {
@@ -367,6 +365,12 @@ func (s *Server) Handler() http.Handler {
 
 // Run starts HTTP server and blocks until context cancellation.
 func (s *Server) Run(ctx context.Context) error {
+	if err := security.ValidateRegistryToken(s.cfg.Token); err != nil {
+		return fmt.Errorf("registry authentication: %w", err)
+	}
+	if err := security.RequireLoopbackAddress(s.cfg.Addr); err != nil {
+		return fmt.Errorf("registry listen address: %w", err)
+	}
 	registryLogger("").Info("listening on %s", s.cfg.Addr)
 	srv := &http.Server{
 		Addr:    s.cfg.Addr,
@@ -388,6 +392,12 @@ func (s *Server) Run(ctx context.Context) error {
 }
 
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(request *http.Request) bool {
+			origin := request.Header.Get("Origin")
+			return origin == "" || security.OriginAllowed(origin, s.cfg.AllowedOrigins)
+		},
+	}
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return

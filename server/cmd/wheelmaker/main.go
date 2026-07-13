@@ -12,6 +12,7 @@ import (
 
 	"github.com/swm8023/wheelmaker/internal/hub"
 	"github.com/swm8023/wheelmaker/internal/registry"
+	"github.com/swm8023/wheelmaker/internal/security"
 	logger "github.com/swm8023/wheelmaker/internal/shared"
 	"github.com/swm8023/wheelmaker/internal/shared/winsvc"
 )
@@ -20,6 +21,7 @@ const daemonWorkerArg = "--daemon-worker"
 const hubWorkerArg = "--hub-worker"
 const registryWorkerArg = "--registry-worker"
 const wheelmakerWindowsServiceName = "WheelMaker"
+const defaultRegistryAddr = "127.0.0.1:9630"
 
 func main() {
 	if err := run(); err != nil {
@@ -36,8 +38,7 @@ func run() error {
 	hubWorker := fs.Bool("hub-worker", false, "internal: hub worker mode for guardian")
 	registryWorker := fs.Bool("registry-worker", false, "internal: registry worker mode for guardian")
 	registryServer := fs.Bool("registry-server", false, "run registry websocket server mode")
-	registryAddr := fs.String("registry-addr", ":9630", "registry websocket listen address")
-	registryToken := fs.String("registry-token", "", "registry shared token (optional)")
+	registryAddr := fs.String("registry-addr", defaultRegistryAddr, "registry websocket listen address")
 	wmDir := fs.String("dir", "", "WheelMaker home directory (default: ~/.wheelmaker)")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return err
@@ -55,7 +56,7 @@ func run() error {
 
 	switch {
 	case *registryServer:
-		return runRegistryServer(*registryAddr, *registryToken)
+		return runRegistryServer(*registryAddr, *wmDir)
 	case *registryWorker:
 		return runRegistryWorker(*wmDir)
 	case *hubWorker:
@@ -74,20 +75,38 @@ func run() error {
 	}
 }
 
-func runRegistryServer(addr, token string) error {
+func runRegistryServer(addr, stateDir string) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("home dir: %w", err)
+	}
+	baseDir := wheelMakerStateDir(home, stateDir)
+	cfg, err := loadValidatedRuntimeConfig(baseDir)
+	if err != nil {
+		return err
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	logDir := ""
-	if home, err := os.UserHomeDir(); err == nil {
-		logDir = wheelmakerLogDir(home)
-	}
 	s := registry.New(registry.Config{
-		Addr:   addr,
-		Token:  token,
-		LogDir: logDir,
+		Addr:           addr,
+		Token:          cfg.Registry.Token,
+		AllowedOrigins: cfg.Registry.AllowedOrigins,
+		LogDir:         filepath.Join(baseDir, "log"),
 	})
 	return s.Run(ctx)
+}
+
+func loadValidatedRuntimeConfig(baseDir string) (*logger.AppConfig, error) {
+	cfgPath := filepath.Join(baseDir, "config.json")
+	cfg, err := logger.LoadConfig(cfgPath)
+	if err != nil {
+		return nil, fmt.Errorf("cannot load config.json at %s: %w", cfgPath, err)
+	}
+	if err := security.ValidateRegistryToken(cfg.Registry.Token); err != nil {
+		return nil, fmt.Errorf("invalid config.json at %s: %w", cfgPath, err)
+	}
+	return cfg, nil
 }
 
 func runHubWorker(stateDir string) error {
@@ -97,13 +116,13 @@ func runHubWorker(stateDir string) error {
 	}
 
 	baseDir := wheelMakerStateDir(home, stateDir)
-	cfgPath := filepath.Join(baseDir, "config.json")
 	dbPath := filepath.Join(baseDir, "db", "client.sqlite3")
 
-	cfg, err := logger.LoadConfig(cfgPath)
+	cfg, err := loadValidatedRuntimeConfig(baseDir)
 	if err != nil {
-		return fmt.Errorf("cannot load config.json at %s: %w\n\nCreate one based on config.example.json in the project root.", cfgPath, err)
+		return err
 	}
+	cfgPath := filepath.Join(baseDir, "config.json")
 	hubLogPath := filepath.Join(baseDir, "log", "hub.log")
 
 	if err := logger.Setup(logger.LoggerConfig{
@@ -140,10 +159,9 @@ func runRegistryWorker(stateDir string) error {
 		return fmt.Errorf("home dir: %w", err)
 	}
 	baseDir := wheelMakerStateDir(home, stateDir)
-	cfgPath := filepath.Join(baseDir, "config.json")
-	cfg, err := logger.LoadConfig(cfgPath)
+	cfg, err := loadValidatedRuntimeConfig(baseDir)
 	if err != nil {
-		return fmt.Errorf("cannot load config.json at %s: %w\n\nCreate one based on config.example.json in the project root.", cfgPath, err)
+		return err
 	}
 	regLog := filepath.Join(baseDir, "log", "registry.log")
 
@@ -169,9 +187,10 @@ func runRegistryWorker(stateDir string) error {
 	defer stop()
 	registryScopedLogger.Info("worker start addr=%s", addr)
 	s := registry.New(registry.Config{
-		Addr:   addr,
-		Token:  cfg.Registry.Token,
-		LogDir: filepath.Join(baseDir, "log"),
+		Addr:           addr,
+		Token:          cfg.Registry.Token,
+		AllowedOrigins: cfg.Registry.AllowedOrigins,
+		LogDir:         filepath.Join(baseDir, "log"),
 	})
 	if err := s.Run(ctx); err != nil {
 		registryScopedLogger.Error("worker run failed err=%v", err)

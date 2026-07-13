@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"github.com/swm8023/wheelmaker/internal/shared"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -14,6 +16,51 @@ func TestWheelmakerLogDir(t *testing.T) {
 	want := filepath.Join(home, ".wheelmaker", "log")
 	if got != want {
 		t.Fatalf("wheelmakerLogDir()=%q, want %q", got, want)
+	}
+}
+
+func TestDefaultRegistryListenAddressIsLoopback(t *testing.T) {
+	if defaultRegistryAddr != "127.0.0.1:9630" {
+		t.Fatalf("defaultRegistryAddr=%q, want loopback", defaultRegistryAddr)
+	}
+}
+
+func TestLoadValidatedRuntimeConfigRejectsUnsafeRegistryToken(t *testing.T) {
+	for _, token := range []string{"", "wheelmaker-local-token"} {
+		t.Run(token, func(t *testing.T) {
+			baseDir := t.TempDir()
+			writeRuntimeConfigForTest(t, baseDir, token)
+			_, err := loadValidatedRuntimeConfig(baseDir)
+			if err == nil || !strings.Contains(err.Error(), "registry.token") {
+				t.Fatalf("loadValidatedRuntimeConfig() error=%v, want registry.token rejection", err)
+			}
+		})
+	}
+}
+
+func TestLoadValidatedRuntimeConfigAcceptsCustomRegistryToken(t *testing.T) {
+	baseDir := t.TempDir()
+	writeRuntimeConfigForTest(t, baseDir, "user-supplied-random-token")
+	cfg, err := loadValidatedRuntimeConfig(baseDir)
+	if err != nil {
+		t.Fatalf("loadValidatedRuntimeConfig(): %v", err)
+	}
+	if cfg.Registry.Token != "user-supplied-random-token" {
+		t.Fatalf("registry.token=%q", cfg.Registry.Token)
+	}
+}
+
+func writeRuntimeConfigForTest(t *testing.T, baseDir string, token string) {
+	t.Helper()
+	raw, err := json.Marshal(map[string]any{
+		"projects": []any{},
+		"registry": map[string]any{"token": token},
+	})
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(baseDir, "config.json"), raw, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
 	}
 }
 
