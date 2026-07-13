@@ -1,6 +1,7 @@
 package com.wheelmaker.android
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.DownloadManager
 import android.content.ActivityNotFoundException
@@ -12,6 +13,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.SystemClock
+import android.os.ext.SdkExtensions
 import android.provider.MediaStore
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -36,6 +39,11 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
+import androidx.webkit.JavaScriptReplyProxy
+import org.json.JSONObject
+import org.json.JSONTokener
 import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -48,6 +56,8 @@ class MainActivity : Activity() {
     private lateinit var navigationExecutor: ExecutorService
     @Volatile private var configuredBaseUrl: String = ""
     @Volatile private var bootstrapError: String = ""
+    @Volatile private var bootstrapBusy: Boolean = false
+    @Volatile private var navigationStartedAtElapsedRealtime: Long = 0
     private lateinit var androidSpeechRuntime: AndroidSpeechRuntime
     private lateinit var androidNotificationRuntime: AndroidNotificationRuntime
     private lateinit var androidApkUpdateRuntime: AndroidApkUpdateRuntime
@@ -55,6 +65,8 @@ class MainActivity : Activity() {
     private lateinit var androidPortRelaySiteDataRuntime: AndroidPortRelaySiteDataRuntime
     private lateinit var androidWebDiagnostics: AndroidWebDiagnostics
     private lateinit var androidDiagnosticLogLevelStore: AndroidDiagnosticLogLevelStore
+    private lateinit var wheelMakerBridge: WheelMakerBridge
+    private var businessMessageListenerRegistered = false
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
     private var pendingAudioPermissionRequest: PermissionRequest? = null
     private var systemBackCallback: OnBackInvokedCallback? = null
@@ -83,6 +95,15 @@ class MainActivity : Activity() {
         androidApkUpdateRuntime = AndroidApkUpdateRuntime(this, webView)
         androidImageShareRuntime = AndroidImageShareRuntime(this)
         androidPortRelaySiteDataRuntime = AndroidPortRelaySiteDataRuntime(webView)
+        wheelMakerBridge = WheelMakerBridge(
+            androidSpeechRuntime,
+            androidNotificationRuntime,
+            androidApkUpdateRuntime,
+            androidImageShareRuntime,
+            androidPortRelaySiteDataRuntime,
+            androidWebDiagnostics,
+            androidDiagnosticLogLevelStore
+        )
         webView.setBackgroundColor(APP_BACKGROUND_COLOR)
         configureWindowInsets(rootView)
         configureWebView(webView)
@@ -153,9 +174,13 @@ class MainActivity : Activity() {
         if (::navigationExecutor.isInitialized) {
             navigationExecutor.shutdownNow()
         }
+        if (::webView.isInitialized) {
+            unregisterBusinessMessageListener()
+        }
         super.onDestroy()
     }
 
+    @SuppressLint("GestureBackNavigation")
     override fun onBackPressed() {
         handleSystemBack()
     }
@@ -250,6 +275,11 @@ class MainActivity : Activity() {
             configuredBaseUrl = { configuredBaseUrl },
             onRemoteFailure = { message -> showBootstrap(message) }
         ) {
+            override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                navigationStartedAtElapsedRealtime = SystemClock.elapsedRealtime()
+                super.onPageStarted(view, url, favicon)
+            }
+
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 dismissSplashOverlay()
@@ -284,18 +314,209 @@ class MainActivity : Activity() {
         target.setDownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
             enqueueDownload(url, userAgent, contentDisposition, mimeType)
         }
-        target.addJavascriptInterface(
-            WheelMakerBridge(
-                androidSpeechRuntime,
-                androidNotificationRuntime,
-                androidApkUpdateRuntime,
-                androidImageShareRuntime,
-                androidPortRelaySiteDataRuntime,
-                androidWebDiagnostics,
-                androidDiagnosticLogLevelStore
-            ),
-            "WheelMakerAndroidNative"
-        )
+        registerBootstrapMessageListener(target)
+        if (configuredBaseUrl.isNotBlank()) {
+            registerBusinessMessageListener(configuredBaseUrl)
+        }
+    }
+
+    private fun registerBootstrapMessageListener(target: WebView) {
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+            bootstrapError = "This Android WebView is too old for the secure native bridge."
+            return
+        }
+        WebViewCompat.addWebMessageListener(
+            target,
+            BOOTSTRAP_MESSAGE_LISTENER,
+            setOf(BOOTSTRAP_ORIGIN)
+        ) { view, message, sourceOrigin, isMainFrame, replyProxy ->
+            val parsed = parseTrustedMessage(message.data)
+            if (parsed == null || !messagePolicy().isAllowed(
+                    surface = TrustedMessageSurface.BOOTSTRAP,
+                    sourceOrigin = sourceOrigin.toString(),
+                    isMainFrame = isMainFrame,
+                    topLevelUrl = view.url.orEmpty(),
+                    navigationStartedAtElapsedRealtime = navigationStartedAtElapsedRealtime,
+                    nowElapsedRealtime = SystemClock.elapsedRealtime(),
+                    request = parsed.first
+                )) {
+                parsed?.first?.requestId?.let { sendError(replyProxy, it, "request_not_allowed") }
+                return@addWebMessageListener
+            }
+            handleBootstrapMessage(parsed.first, parsed.second, replyProxy)
+        }
+    }
+
+    private fun registerBusinessMessageListener(baseUrl: String) {
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) return
+        unregisterBusinessMessageListener()
+        val origin = TrustedWebMessagePolicy.originOf(baseUrl) ?: return
+        WebViewCompat.addWebMessageListener(
+            webView,
+            BUSINESS_MESSAGE_LISTENER,
+            setOf(origin)
+        ) { view, message, sourceOrigin, isMainFrame, replyProxy ->
+            val parsed = parseTrustedMessage(message.data)
+            if (parsed == null || !messagePolicy().isAllowed(
+                    surface = TrustedMessageSurface.BUSINESS,
+                    sourceOrigin = sourceOrigin.toString(),
+                    isMainFrame = isMainFrame,
+                    topLevelUrl = view.url.orEmpty(),
+                    navigationStartedAtElapsedRealtime = navigationStartedAtElapsedRealtime,
+                    nowElapsedRealtime = SystemClock.elapsedRealtime(),
+                    request = parsed.first
+                )) {
+                parsed?.first?.requestId?.let { sendError(replyProxy, it, "request_not_allowed") }
+                return@addWebMessageListener
+            }
+            try {
+                sendSuccess(replyProxy, parsed.first.requestId, wheelMakerBridge.dispatch(parsed.first.action, parsed.second))
+            } catch (_: Exception) {
+                sendError(replyProxy, parsed.first.requestId, "native_action_failed")
+            }
+        }
+        businessMessageListenerRegistered = true
+    }
+
+    private fun unregisterBusinessMessageListener() {
+        if (!businessMessageListenerRegistered || !WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+            return
+        }
+        WebViewCompat.removeWebMessageListener(webView, BUSINESS_MESSAGE_LISTENER)
+        businessMessageListenerRegistered = false
+    }
+
+    private fun messagePolicy(): TrustedWebMessagePolicy = TrustedWebMessagePolicy(configuredBaseUrl)
+
+    private fun parseTrustedMessage(rawMessage: String?): Pair<TrustedWebMessageRequest, JSONObject>? {
+        if (rawMessage.isNullOrBlank() || rawMessage.length > MAX_NATIVE_MESSAGE_LENGTH) return null
+        val message = try {
+            JSONObject(rawMessage)
+        } catch (_: Exception) {
+            return null
+        }
+        val requestId = message.optString("requestId")
+        val action = message.optString("action")
+        if (requestId.isBlank() || requestId.length > 128 || action.isBlank() || action.length > 80) return null
+        val userGestureAt = if (message.has("userGestureAt") && !message.isNull("userGestureAt")) {
+            message.optLong("userGestureAt")
+        } else {
+            null
+        }
+        return TrustedWebMessageRequest(requestId, action, userGestureAt) to
+            (message.optJSONObject("payload") ?: JSONObject())
+    }
+
+    private fun handleBootstrapMessage(
+        request: TrustedWebMessageRequest,
+        payload: JSONObject,
+        replyProxy: JavaScriptReplyProxy
+    ) {
+        when (request.action) {
+            "bootstrap.getState" -> sendSuccess(replyProxy, request.requestId, bootstrapState())
+            "bootstrap.saveBaseUrl" -> {
+                val normalized = normalizeHttpsBaseUrl(payload.optString("baseUrl"))
+                if (normalized == null) {
+                    sendSuccess(replyProxy, request.requestId, bootstrapState("Enter a valid HTTPS server address."))
+                    return
+                }
+                probeForBootstrap(normalized, request.requestId, replyProxy, saveOnSuccess = true)
+            }
+            "bootstrap.retry" -> {
+                val baseUrl = configuredBaseUrl
+                if (baseUrl.isBlank()) {
+                    sendSuccess(replyProxy, request.requestId, bootstrapState("Enter a valid HTTPS server address."))
+                    return
+                }
+                probeForBootstrap(baseUrl, request.requestId, replyProxy, saveOnSuccess = false)
+            }
+            "bootstrap.reset" -> clearCurrentServerState {
+                configuredBaseUrl = ""
+                bootstrapError = ""
+                bootstrapBusy = false
+                baseUrlStore.clear()
+                sendSuccess(replyProxy, request.requestId, bootstrapState())
+            }
+        }
+    }
+
+    private fun probeForBootstrap(
+        baseUrl: String,
+        requestId: String,
+        replyProxy: JavaScriptReplyProxy,
+        saveOnSuccess: Boolean
+    ) {
+        if (bootstrapBusy) {
+            sendSuccess(replyProxy, requestId, bootstrapState("A connection attempt is already running."))
+            return
+        }
+        bootstrapBusy = true
+        bootstrapError = ""
+        navigationExecutor.execute {
+            val result = baseUrlProbe.probe(baseUrl)
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (!result.ok) {
+                    bootstrapBusy = false
+                    bootstrapError = result.error
+                    sendSuccess(replyProxy, requestId, bootstrapState())
+                    return@runOnUiThread
+                }
+                val activate = {
+                    val activeBaseUrl = if (saveOnSuccess) baseUrlStore.save(baseUrl) else baseUrl
+                    configuredBaseUrl = activeBaseUrl
+                    bootstrapError = ""
+                    bootstrapBusy = false
+                    registerBusinessMessageListener(activeBaseUrl)
+                    sendSuccess(replyProxy, requestId, bootstrapState())
+                    loadConfiguredRemote(webView, activeBaseUrl)
+                }
+                if (saveOnSuccess && configuredBaseUrl.isNotBlank() && configuredBaseUrl != baseUrl) {
+                    clearCurrentServerState(activate)
+                } else {
+                    activate()
+                }
+            }
+        }
+    }
+
+    private fun clearCurrentServerState(onComplete: () -> Unit) {
+        val oldBaseUrl = configuredBaseUrl
+        val currentUrl = webView.url.orEmpty()
+        val finish = {
+            unregisterBusinessMessageListener()
+            androidPortRelaySiteDataRuntime.clearAllForServerSwitch(onComplete)
+        }
+        if (oldBaseUrl.isNotBlank() && BaseUrlPolicy(oldBaseUrl).contains(currentUrl)) {
+            webView.evaluateJavascript(SERVER_LOGOUT_AND_STORAGE_CLEAR_SCRIPT) {
+                webView.postDelayed({ finish() }, 250)
+            }
+        } else {
+            finish()
+        }
+    }
+
+    private fun bootstrapState(errorOverride: String? = null): JSONObject = JSONObject()
+        .put("ok", (errorOverride ?: bootstrapError).isBlank())
+        .put("baseUrl", configuredBaseUrl)
+        .put("error", errorOverride ?: bootstrapError)
+        .put("busy", bootstrapBusy)
+
+    private fun sendSuccess(replyProxy: JavaScriptReplyProxy, requestId: String, result: JSONObject) {
+        replyProxy.postMessage(JSONObject().put("requestId", requestId).put("ok", true).put("result", result).toString())
+    }
+
+    private fun sendSuccess(replyProxy: JavaScriptReplyProxy, requestId: String, rawResult: String) {
+        val result = try {
+            JSONTokener(rawResult.ifBlank { "{}" }).nextValue()
+        } catch (_: Exception) {
+            JSONObject()
+        }
+        replyProxy.postMessage(JSONObject().put("requestId", requestId).put("ok", true).put("result", result).toString())
+    }
+
+    private fun sendError(replyProxy: JavaScriptReplyProxy, requestId: String, error: String) {
+        replyProxy.postMessage(JSONObject().put("requestId", requestId).put("ok", false).put("error", error).toString())
     }
 
     private fun handleNotificationIntent(intent: Intent?) {
@@ -369,7 +590,11 @@ class MainActivity : Activity() {
     private fun createAndroidPhotoPickerIntent(acceptTypes: List<String>, allowMultiple: Boolean): Intent {
         return Intent(MediaStore.ACTION_PICK_IMAGES).apply {
             photoPickerTypeForAcceptTypes(acceptTypes)?.let { type = it }
-            if (allowMultiple) {
+            if (
+                allowMultiple &&
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+                SdkExtensions.getExtensionVersion(Build.VERSION_CODES.R) >= 2
+            ) {
                 putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, MediaStore.getPickImagesMaxLimit())
             }
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -479,7 +704,38 @@ class MainActivity : Activity() {
         private const val FILE_CHOOSER_REQUEST_CODE = 1002
         private const val NATIVE_SPEECH_PERMISSION_REQUEST_CODE = 1003
         private const val NOTIFICATION_PERMISSION_REQUEST_CODE = 1004
+        private const val BOOTSTRAP_MESSAGE_LISTENER = "wheelMakerBootstrap"
+        private const val BUSINESS_MESSAGE_LISTENER = "WheelMakerAndroidNative"
+        private const val BOOTSTRAP_ORIGIN = "https://appassets.androidplatform.net"
+        private const val MAX_NATIVE_MESSAGE_LENGTH = 512 * 1024
         private const val ANDROID_BACK_SCRIPT = "(function(){try{var handler=window.WheelMakerAndroidBack&&window.WheelMakerAndroidBack.handleBack;if(typeof handler==='function'){return handler()===true;}}catch(error){}return false;})()"
+        private val SERVER_LOGOUT_AND_STORAGE_CLEAR_SCRIPT = """
+            (() => {
+              try {
+                const status = new XMLHttpRequest();
+                status.open('GET', new URL('ws?auth=status', document.baseURI), false);
+                status.withCredentials = true;
+                status.send(null);
+                if (status.status >= 200 && status.status < 300) {
+                  const csrf = JSON.parse(status.responseText).csrfToken;
+                  if (csrf) {
+                    const logout = new XMLHttpRequest();
+                    logout.open('POST', new URL('ws?auth=logout', document.baseURI), false);
+                    logout.withCredentials = true;
+                    logout.setRequestHeader('X-WheelMaker-CSRF', csrf);
+                    logout.send(null);
+                  }
+                }
+              } catch (_) {}
+              try {
+                navigator.serviceWorker.getRegistrations().then(items => items.forEach(item => item.unregister()));
+              } catch (_) {}
+              try {
+                caches.keys().then(keys => keys.forEach(key => caches.delete(key)));
+              } catch (_) {}
+              return true;
+            })()
+        """.trimIndent()
         private val APP_BACKGROUND_COLOR = Color.rgb(11, 18, 32)
     }
 }

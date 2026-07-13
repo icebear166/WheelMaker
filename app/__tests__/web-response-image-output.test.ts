@@ -2,6 +2,7 @@ import {
   blobToDataUrl,
   outputResponseImage,
 } from '../web/src/chat/export/responseImageOutput';
+import {createAndroidNativeMessageTestHost} from './androidNativeMessageTestHost';
 
 describe('response image output', () => {
   afterEach(() => {
@@ -66,23 +67,22 @@ describe('response image output', () => {
   });
 
   test('shares response image through Android bridge when available', async () => {
-    const native = {
-      shareResponseImage: jest.fn(() => JSON.stringify({ok: true, status: 'shared'})),
-    };
+    const {target, requests} = createAndroidNativeMessageTestHost({
+      'image.share': () => ({ok: true, status: 'shared'}),
+    });
     const blob = new Blob(['png'], {type: 'image/png'});
 
     await expect(outputResponseImage({
       blob,
       fileName: 'response.png',
       download: jest.fn(),
-      env: {WheelMakerAndroidNative: native} as unknown as Window,
+      env: {WheelMakerAndroidNative: target} as unknown as Window,
     })).resolves.toEqual({ok: true, status: 'shared'});
 
-    const raw = native.shareResponseImage.mock.calls[0][0];
-    expect(JSON.parse(raw)).toMatchObject({
+    expect(requests[0]).toMatchObject({action: 'image.share', payload: {
       fileName: 'response.png',
       dataUrl: 'data:image/png;base64,cG5n',
-    });
+    }});
   });
 
   test('asks users to update old Android APKs without falling back to blob download', async () => {
@@ -103,14 +103,15 @@ describe('response image output', () => {
   });
 
   test('returns Android bridge failures to the caller', async () => {
+    const {target} = createAndroidNativeMessageTestHost({
+      'image.share': () => ({ok: false, status: 'share_failed', error: 'no target'}),
+    });
     await expect(outputResponseImage({
       blob: new Blob(['png'], {type: 'image/png'}),
       fileName: 'response.png',
       download: jest.fn(),
       env: {
-        WheelMakerAndroidNative: {
-          shareResponseImage: () => JSON.stringify({ok: false, status: 'share_failed', error: 'no target'}),
-        },
+        WheelMakerAndroidNative: target,
       } as unknown as Window,
     })).resolves.toEqual({ok: false, status: 'share_failed', error: 'no target'});
   });

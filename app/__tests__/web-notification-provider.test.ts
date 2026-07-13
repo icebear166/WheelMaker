@@ -3,6 +3,7 @@ import path from 'path';
 
 import { createNotificationProvider } from '../web/src/notifications/NotificationProvider';
 import type { WheelMakerNotificationPayload } from '../web/src/notifications/notificationPayload';
+import {createAndroidNativeMessageTestHost} from './androidNativeMessageTestHost';
 
 const payload: WheelMakerNotificationPayload = {
   type: 'chat.prompt.completed',
@@ -29,40 +30,41 @@ describe('notification provider selection', () => {
   });
 
   test('prefers Android native bridge when available', async () => {
-    const calls: string[] = [];
+    const {target, requests} = createAndroidNativeMessageTestHost({
+      'notification.show': () => ({ok: true}),
+      'notification.getPermissionState': () => ({state: 'granted'}),
+    });
     const provider = createNotificationProvider({
-      WheelMakerAndroidNative: {
-        showNotification: raw => {
-          calls.push(raw);
-          return JSON.stringify({ ok: true });
-        },
-        getNotificationPermissionState: () => JSON.stringify({ state: 'granted' }),
-      },
+      WheelMakerAndroidNative: target,
     } as any);
 
     await expect(provider.show(payload)).resolves.toBe(true);
 
-    expect(calls[0]).toContain('chat.prompt.completed');
+    expect(requests[0]).toMatchObject({
+      action: 'notification.show',
+      payload: {type: 'chat.prompt.completed'},
+    });
   });
 
   test('waits for Android notification permission result events', async () => {
     let permissionListener: ((event: { detail: { state: string } }) => void) | null = null;
+    const {target} = createAndroidNativeMessageTestHost({
+      'notification.requestPermission': () => ({state: 'default', pending: true}),
+      'notification.getPermissionState': () => ({state: 'default'}),
+      'notification.show': () => ({ok: false}),
+    });
     const provider = createNotificationProvider({
-      WheelMakerAndroidNative: {
-        requestNotificationPermission: () => JSON.stringify({ state: 'default', pending: true }),
-        getNotificationPermissionState: () => JSON.stringify({ state: 'default' }),
-        showNotification: () => JSON.stringify({ ok: false }),
-      },
+      WheelMakerAndroidNative: target,
       addEventListener: (eventName: string, listener: EventListener) => {
         if (eventName === 'wheelmaker:android-notification-permission') {
           permissionListener = listener as unknown as typeof permissionListener;
+          queueMicrotask(() => permissionListener?.({ detail: { state: 'granted' } }));
         }
       },
       removeEventListener: () => undefined,
     } as any);
 
     const result = provider.requestPermission();
-    permissionListener?.({ detail: { state: 'granted' } });
 
     await expect(result).resolves.toBe('granted');
   });

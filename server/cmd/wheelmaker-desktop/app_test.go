@@ -26,10 +26,11 @@ func TestBootstrapAssetIsMinimalAndSelfContained(t *testing.T) {
 	html := string(body)
 	for _, want := range []string{
 		`default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'`,
-		`window.wheelMakerBootstrap.getState()`,
-		`window.wheelMakerBootstrap.saveBaseUrl(input.value)`,
-		`window.wheelMakerBootstrap.retry()`,
-		`window.wheelMakerBootstrap.reset()`,
+		`callBootstrap('bootstrap.getState')`,
+		`callBootstrap('bootstrap.saveBaseUrl', {baseUrl: input.value})`,
+		`callBootstrap('bootstrap.retry')`,
+		`callBootstrap('bootstrap.reset')`,
+		`bridge.postMessage(JSON.stringify({requestId, action, payload, userGestureAt: lastUserGestureAt}))`,
 		`type="url"`,
 		`id="error"`,
 	} {
@@ -50,9 +51,6 @@ func TestBootstrapAssetIsMinimalAndSelfContained(t *testing.T) {
 		if strings.Contains(html, forbidden) {
 			t.Errorf("bootstrap contains forbidden capability %q", forbidden)
 		}
-	}
-	if got := strings.Count(html, "window.wheelMakerBootstrap."); got != 4 {
-		t.Errorf("bootstrap bridge call count=%d, want 4", got)
 	}
 }
 

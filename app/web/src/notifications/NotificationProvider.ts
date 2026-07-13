@@ -1,10 +1,13 @@
 import type { WheelMakerNotificationPayload } from './notificationPayload';
 import {
   createAndroidNotificationProvider,
-  type AndroidNotificationBridge,
   type AndroidNotificationBridgeEnv,
   type AndroidNotificationPermissionState,
 } from '../platform/android/notificationBridge';
+import {
+  getAndroidNativeRpcFacade,
+  type AndroidNativeMessageTarget,
+} from '../platform/android/androidNativeMessageBridge';
 
 type NotificationLike = {
   permission?: NotificationPermission;
@@ -27,7 +30,7 @@ type NotificationProviderEnv = AndroidNotificationBridgeEnv & {
       register?: (scriptURL: string) => Promise<ServiceWorkerRegistrationLike | null | undefined>;
     };
   };
-  WheelMakerAndroidNative?: AndroidNotificationBridge;
+  WheelMakerAndroidNative?: AndroidNativeMessageTarget;
 };
 
 export type WheelMakerNotificationPermissionState = AndroidNotificationPermissionState;
@@ -110,8 +113,8 @@ const unsupportedProvider: WheelMakerNotificationProvider = {
 export function createNotificationProvider(
   env: NotificationProviderEnv = globalThis as NotificationProviderEnv,
 ): WheelMakerNotificationProvider {
-  const bridge = env.WheelMakerAndroidNative;
-  if (bridge?.showNotification) {
+  const bridge = getAndroidNativeRpcFacade(env as unknown as Parameters<typeof getAndroidNativeRpcFacade>[0]);
+  if (bridge) {
     return createAndroidNotificationProvider(bridge, env);
   }
   const pwaProvider = createPwaProvider(env);

@@ -34,6 +34,23 @@ class AndroidPortRelaySiteDataRuntime(private val webView: WebView) {
             .toString()
     }
 
+    fun clearAllForServerSwitch(onComplete: () -> Unit) {
+        val clearNativeData = {
+            WebStorage.getInstance().deleteAllData()
+            webView.clearHistory()
+            webView.clearCache(true)
+            CookieManager.getInstance().removeAllCookies {
+                CookieManager.getInstance().flush()
+                webView.post(onComplete)
+            }
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            clearNativeData()
+        } else {
+            webView.post(clearNativeData)
+        }
+    }
+
     private fun clearWebViewCache() {
         if (Looper.myLooper() == Looper.getMainLooper()) {
             webView.clearCache(true)

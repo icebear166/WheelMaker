@@ -19,7 +19,7 @@ class MainActivityFileChooserTest {
         val mainActivity = source
 
         assertTrue(mainActivity.contains("target.settings.allowContentAccess = true"))
-        assertTrue(mainActivity.contains("target.settings.allowFileAccess = true"))
+        assertTrue(mainActivity.contains("target.settings.allowFileAccess = false"))
         assertTrue(mainActivity.contains("createAndroidFileChooserIntent(fileChooserParams)"))
         assertTrue(mainActivity.contains("createAndroidDocumentFileChooserIntent("))
         assertTrue(mainActivity.contains("Intent.ACTION_OPEN_DOCUMENT"))

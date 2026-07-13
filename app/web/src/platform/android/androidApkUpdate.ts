@@ -40,14 +40,7 @@ export type AndroidApkInstallResult = {
   error?: string;
 };
 
-type AndroidNativeApkUpdateBridge = {
-  getAndroidReleaseState?: () => string;
-  installAndroidRelease?: (rawJson: string) => string;
-};
-
-type AndroidApkUpdateEnv = {
-  WheelMakerAndroidNative?: AndroidNativeApkUpdateBridge;
-};
+type AndroidApkUpdateEnv = AndroidNativeMessageEnvironment;
 
 export type AndroidApkUpdateBridge = {
   isSupported(): boolean;
@@ -122,14 +115,12 @@ function parseJsonObject<T>(raw: string | undefined, fallback: T): T {
 export function createAndroidApkUpdateBridge(
   env: AndroidApkUpdateEnv = globalThis as AndroidApkUpdateEnv,
 ): AndroidApkUpdateBridge {
-  const native = env.WheelMakerAndroidNative;
-  const supported =
-    typeof native?.getAndroidReleaseState === 'function' &&
-    typeof native?.installAndroidRelease === 'function';
+  const native = getAndroidNativeRpcFacade(env);
+  const supported = native !== null;
   return {
     isSupported: () => supported,
     getLocalRelease: async () => parseJsonObject<AndroidApkLocalRelease>(
-      native?.getAndroidReleaseState?.(),
+      await native?.getAndroidReleaseState(),
       {
         supported: false,
         packageName: '',
@@ -142,8 +133,12 @@ export function createAndroidApkUpdateBridge(
       },
     ),
     installLatest: async request => parseJsonObject<AndroidApkInstallResult>(
-      native?.installAndroidRelease?.(JSON.stringify(request)),
+      await native?.installAndroidRelease(JSON.stringify(request)),
       {ok: false, status: 'unsupported', error: 'unsupported'},
     ),
   };
 }
+import {
+  getAndroidNativeRpcFacade,
+  type AndroidNativeMessageEnvironment,
+} from './androidNativeMessageBridge';

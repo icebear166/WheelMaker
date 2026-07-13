@@ -89,7 +89,8 @@ class AndroidWebDiagnosticsTest {
         assertTrue(mainActivity.contains("configuredBaseUrl = { configuredBaseUrl }"))
         assertTrue(mainActivity.contains("WheelMakerBridge("))
         assertTrue(mainActivity.contains("androidWebDiagnostics"))
-        assertTrue(bridge.contains("fun drainWebDiagnostics(): String"))
-        assertTrue(bridge.contains("fun setDiagnosticLogLevel(logLevel: String): String"))
+        assertTrue(bridge.contains("\"diagnostics.drain\""))
+        assertTrue(bridge.contains("\"diagnostics.setLogLevel\""))
+        assertTrue(bridge.contains("private fun setDiagnosticLogLevel(logLevel: String): String"))
     }
 }

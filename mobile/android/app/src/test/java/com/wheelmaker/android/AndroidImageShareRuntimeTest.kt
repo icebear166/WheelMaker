@@ -16,7 +16,8 @@ class AndroidImageShareRuntimeTest {
         val mainActivity = source("src/main/java/com/wheelmaker/android/MainActivity.kt")
 
         assertTrue(bridge.contains("private val androidImageShareRuntime: AndroidImageShareRuntime"))
-        assertTrue(bridge.contains("fun shareResponseImage(rawJson: String): String"))
+        assertTrue(bridge.contains("\"image.share\""))
+        assertTrue(bridge.contains("androidImageShareRuntime.shareResponseImage(payload.toString())"))
         assertTrue(mainActivity.contains("private lateinit var androidImageShareRuntime: AndroidImageShareRuntime"))
         assertTrue(mainActivity.contains("AndroidImageShareRuntime(this)"))
     }

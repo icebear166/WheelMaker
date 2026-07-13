@@ -1,7 +1,7 @@
 export type AndroidNotificationBridge = {
-  showNotification?: (rawJson: string) => string;
-  getNotificationPermissionState?: () => string;
-  requestNotificationPermission?: () => string;
+  showNotification?: (rawJson: string) => Promise<string> | string;
+  getNotificationPermissionState?: () => Promise<string> | string;
+  requestNotificationPermission?: () => Promise<string> | string;
 };
 
 export type AndroidNotificationBridgeEnv = {
@@ -100,13 +100,13 @@ export function createAndroidNotificationProvider(
   return {
     kind: 'android',
     isSupported: () => typeof bridge.showNotification === 'function',
-    getPermissionState: async () => parsePermissionState(bridge.getNotificationPermissionState?.()),
+    getPermissionState: async () => parsePermissionState(await bridge.getNotificationPermissionState?.()),
     requestPermission: async () => {
-      const response = parseAndroidPermissionResponse(bridge.requestNotificationPermission?.());
+      const response = parseAndroidPermissionResponse(await bridge.requestNotificationPermission?.());
       return response.pending
         ? waitForAndroidPermissionEvent(env)
         : response.state;
     },
-    show: async payload => parseOk(bridge.showNotification?.(JSON.stringify(payload))),
+    show: async payload => parseOk(await bridge.showNotification?.(JSON.stringify(payload))),
   };
 }

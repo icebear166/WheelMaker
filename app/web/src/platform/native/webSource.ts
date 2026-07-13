@@ -61,19 +61,10 @@ export type NativeWebSourceBridge = {
   ) => Promise<NativePortRelaySiteDataResult> | NativePortRelaySiteDataResult;
 };
 
-type AndroidNativeBridge = {
-  getWebSourceState?: () => string;
-  setWebSourcePreference?: (preference: NativeWebSourcePreference) => string;
-  setRemoteWebCandidate?: (candidateJson: string) => string;
-  drainWebDiagnostics?: () => string;
-  setDiagnosticLogLevel?: (logLevel: NativeDiagnosticLogLevel) => string;
-  clearPortRelaySiteData?: (relayUrl: string) => string;
-};
-
 type NativeWindow = Window & {
   WheelMakerAndroid?: NativeWebSourceBridge;
   WheelMakerDesktop?: NativeWebSourceBridge;
-  WheelMakerAndroidNative?: AndroidNativeBridge;
+  WheelMakerAndroidNative?: AndroidNativeMessageTarget;
 };
 
 function parseNativeState(value: string | undefined): NativeWebSourceState {
@@ -97,27 +88,14 @@ function isLoopbackHost(hostname: string): boolean {
   return value === 'localhost' || value === '127.0.0.1' || value === '::1' || value === '[::1]';
 }
 
-function wrapAndroidNativeBridge(native: AndroidNativeBridge): NativeWebSourceBridge {
+function wrapAndroidNativeBridge(native: AndroidNativeRpcFacade): NativeWebSourceBridge {
   return {
     enabled: true,
-    getWebSourceState: native.getWebSourceState
-      ? () => Promise.resolve(parseNativeState(native.getWebSourceState?.()))
-      : undefined,
-    setWebSourcePreference: native.setWebSourcePreference
-      ? preference => Promise.resolve(parseNativeState(native.setWebSourcePreference?.(preference)))
-      : undefined,
-    setRemoteWebCandidate: native.setRemoteWebCandidate
-      ? candidate => Promise.resolve(parseNativeState(native.setRemoteWebCandidate?.(JSON.stringify(candidate))))
-      : undefined,
-    drainWebDiagnostics: native.drainWebDiagnostics
-      ? () => Promise.resolve(parseNativeWebDiagnostics(native.drainWebDiagnostics?.()))
-      : undefined,
-    setDiagnosticLogLevel: native.setDiagnosticLogLevel
-      ? logLevel => Promise.resolve(parseNativeDiagnosticLogLevelState(native.setDiagnosticLogLevel?.(logLevel)))
-      : undefined,
-    clearPortRelaySiteData: native.clearPortRelaySiteData
-      ? relayUrl => Promise.resolve(parseNativePortRelaySiteDataResult(native.clearPortRelaySiteData?.(relayUrl)))
-      : undefined,
+    drainWebDiagnostics: async () => parseNativeWebDiagnostics(await native.drainWebDiagnostics()),
+    setDiagnosticLogLevel: async logLevel =>
+      parseNativeDiagnosticLogLevelState(await native.setDiagnosticLogLevel(logLevel)),
+    clearPortRelaySiteData: async relayUrl =>
+      parseNativePortRelaySiteDataResult(await native.clearPortRelaySiteData(relayUrl)),
   };
 }
 
@@ -159,8 +137,9 @@ export function getNativeWebSourceBridge(): NativeWebSourceBridge | null {
   if (nativeWindow.WheelMakerAndroid) {
     return nativeWindow.WheelMakerAndroid;
   }
-  if (nativeWindow.WheelMakerAndroidNative) {
-    return wrapAndroidNativeBridge(nativeWindow.WheelMakerAndroidNative);
+  const androidBridge = getAndroidNativeRpcFacade(nativeWindow);
+  if (androidBridge) {
+    return wrapAndroidNativeBridge(androidBridge);
   }
   return nativeWindow.WheelMakerDesktop ?? null;
 }
@@ -169,7 +148,10 @@ export function isNativeWebViewHost(
   target: unknown = typeof window === 'undefined' ? undefined : window,
 ): boolean {
   const nativeWindow = target as Partial<NativeWindow> | undefined;
-  return Boolean(nativeWindow?.WheelMakerAndroid || nativeWindow?.WheelMakerAndroidNative);
+  return Boolean(
+    nativeWindow?.WheelMakerAndroid ||
+    typeof nativeWindow?.WheelMakerAndroidNative?.postMessage === 'function'
+  );
 }
 
 export function isNativeShellHost(
@@ -178,7 +160,7 @@ export function isNativeShellHost(
   const nativeWindow = target as Partial<NativeWindow> | undefined;
   return Boolean(
     nativeWindow?.WheelMakerAndroid ||
-    nativeWindow?.WheelMakerAndroidNative ||
+    typeof nativeWindow?.WheelMakerAndroidNative?.postMessage === 'function' ||
     nativeWindow?.WheelMakerDesktop,
   );
 }
@@ -197,3 +179,8 @@ export function submitNativeRemoteWebCandidate(registryAddress: string): void {
     remoteWebUrl: '',
   })).catch(() => undefined);
 }
+import {
+  getAndroidNativeRpcFacade,
+  type AndroidNativeMessageTarget,
+  type AndroidNativeRpcFacade,
+} from '../android/androidNativeMessageBridge';

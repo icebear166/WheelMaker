@@ -14,9 +14,9 @@ class AndroidNotificationRuntimeTest {
     fun bridgeExposesNotificationMethods() {
         val bridge = source("src/main/java/com/wheelmaker/android/WheelMakerBridge.kt")
 
-        assertTrue(bridge.contains("requestNotificationPermission()"))
-        assertTrue(bridge.contains("getNotificationPermissionState()"))
-        assertTrue(bridge.contains("showNotification(rawJson: String)"))
+        assertTrue(bridge.contains("\"notification.requestPermission\""))
+        assertTrue(bridge.contains("\"notification.getPermissionState\""))
+        assertTrue(bridge.contains("\"notification.show\""))
     }
 
     @Test

@@ -5,6 +5,7 @@ import {
   parseAndroidLatestRelease,
   resolveAndroidApkUpdateStatus,
 } from '../web/src/platform/android/androidApkUpdate';
+import {createAndroidNativeMessageTestHost} from './androidNativeMessageTestHost';
 
 describe('android apk update model', () => {
   test('parses latest GitHub release apk asset metadata', () => {
@@ -74,17 +75,19 @@ describe('android apk update model', () => {
     expect(resolveAndroidApkUpdateStatus({...local, apkSha256: ''}, latest)).toBe('unknown');
   });
 
-  test('selects Android bridge only when APK update methods are present', async () => {
+  test('uses the Android WebMessage bridge for APK updates', async () => {
+    const {target, requests} = createAndroidNativeMessageTestHost({
+      'apk.getReleaseState': () => ({supported: true, apkSha256: 'abc'}),
+      'apk.install': payload => ({ok: typeof payload.downloadUrl === 'string'}),
+    });
     const bridge = createAndroidApkUpdateBridge({
-      WheelMakerAndroidNative: {
-        getAndroidReleaseState: () => JSON.stringify({supported: true, apkSha256: 'abc'}),
-        installAndroidRelease: (raw: string) => JSON.stringify({ok: raw.includes('downloadUrl')}),
-      },
+      WheelMakerAndroidNative: target,
     } as any);
 
     expect(bridge.isSupported()).toBe(true);
     await expect(bridge.getLocalRelease()).resolves.toMatchObject({supported: true, apkSha256: 'abc'});
     await expect(bridge.installLatest({downloadUrl: 'https://example.com/app.apk'})).resolves.toMatchObject({ok: true});
+    expect(requests.map(request => request.action)).toEqual(['apk.getReleaseState', 'apk.install']);
 
     expect(createAndroidApkUpdateBridge({} as any).isSupported()).toBe(false);
     expect(GITHUB_ANDROID_LATEST_RELEASE_API).toContain('/repos/swm8023/WheelMaker/releases/latest');

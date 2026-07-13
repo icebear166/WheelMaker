@@ -5,6 +5,7 @@ import {
   isNativeWebViewHost,
   submitNativeRemoteWebCandidate,
 } from '../web/src/platform/native/webSource';
+import {createAndroidNativeMessageTestHost} from './androidNativeMessageTestHost';
 
 describe('native Web source helpers', () => {
   afterEach(() => {
@@ -50,65 +51,29 @@ describe('native Web source helpers', () => {
   });
 
   test('detects Android native WebView hosts only', () => {
-    expect(isNativeWebViewHost({WheelMakerAndroidNative: {}})).toBe(true);
+    expect(isNativeWebViewHost({WheelMakerAndroidNative: {postMessage: jest.fn()}})).toBe(true);
     expect(isNativeWebViewHost({WheelMakerAndroid: {enabled: true}})).toBe(true);
     expect(isNativeWebViewHost({WheelMakerDesktop: {enabled: true}})).toBe(false);
     expect(isNativeWebViewHost({})).toBe(false);
   });
 
   test('detects all native shell hosts for browser-only features', () => {
-    expect(isNativeShellHost({WheelMakerAndroidNative: {}})).toBe(true);
+    expect(isNativeShellHost({WheelMakerAndroidNative: {postMessage: jest.fn()}})).toBe(true);
     expect(isNativeShellHost({WheelMakerAndroid: {enabled: true}})).toBe(true);
     expect(isNativeShellHost({WheelMakerDesktop: {enabled: true}})).toBe(true);
     expect(isNativeShellHost({})).toBe(false);
   });
 
-  test('wraps Android native bridge when JavaScript facade is absent', async () => {
-    const native = {
-      getWebSourceState: jest.fn(() => JSON.stringify({
-        preference: 'auto',
-        actualSource: 'embedded',
-        displayTitle: 'WheelMaker - Embedded',
-        displaySource: 'Embedded',
-        remoteUrl: '',
-        remoteHost: '',
-      })),
-      setWebSourcePreference: jest.fn((preference: string) => JSON.stringify({
-        preference,
-        actualSource: 'embedded',
-        displayTitle: 'WheelMaker - Embedded',
-        displaySource: 'Embedded',
-        remoteUrl: '',
-        remoteHost: '',
-      })),
-      setRemoteWebCandidate: jest.fn(() => JSON.stringify({
-        preference: 'auto',
-        actualSource: 'remote',
-        displayTitle: 'WheelMaker - workspace.example.com',
-        displaySource: 'workspace.example.com',
-        remoteUrl: 'https://workspace.example.com/',
-        remoteHost: 'workspace.example.com',
-      })),
-    };
+  test('does not expose removed Android Web source controls', () => {
+    const {target} = createAndroidNativeMessageTestHost({});
     (globalThis as {window?: unknown}).window = {
-      WheelMakerAndroidNative: native,
+      WheelMakerAndroidNative: target,
     };
 
     const bridge = getNativeWebSourceBridge();
-    expect(await bridge?.getWebSourceState?.()).toMatchObject({actualSource: 'embedded'});
-    await bridge?.setWebSourcePreference?.('embedded');
-    await bridge?.setRemoteWebCandidate?.({
-      source: 'registry',
-      registryAddress: 'wss://workspace.example.com/ws',
-      remoteWebUrl: 'https://workspace.example.com/',
-    });
-
-    expect(native.setWebSourcePreference).toHaveBeenCalledWith('embedded');
-    expect(native.setRemoteWebCandidate).toHaveBeenCalledWith(JSON.stringify({
-      source: 'registry',
-      registryAddress: 'wss://workspace.example.com/ws',
-      remoteWebUrl: 'https://workspace.example.com/',
-    }));
+    expect(bridge?.getWebSourceState).toBeUndefined();
+    expect(bridge?.setWebSourcePreference).toBeUndefined();
+    expect(bridge?.setRemoteWebCandidate).toBeUndefined();
   });
 
   test('wraps Android native Web diagnostics drain payload', async () => {
@@ -124,39 +89,42 @@ describe('native Web source helpers', () => {
         },
       ],
     };
-    const native = {
-      drainWebDiagnostics: jest.fn(() => JSON.stringify(payload)),
-    };
+    const {target, requests} = createAndroidNativeMessageTestHost({
+      'diagnostics.drain': () => payload,
+    });
     (globalThis as {window?: unknown}).window = {
-      WheelMakerAndroidNative: native,
+      WheelMakerAndroidNative: target,
     };
 
     const bridge = getNativeWebSourceBridge();
 
     await expect(bridge?.drainWebDiagnostics?.()).resolves.toEqual(payload);
-    expect(native.drainWebDiagnostics).toHaveBeenCalledTimes(1);
+    expect(requests.map(request => request.action)).toEqual(['diagnostics.drain']);
   });
 
   test('wraps Android native diagnostic log level setting', async () => {
-    const native = {
-      setDiagnosticLogLevel: jest.fn((logLevel: string) => JSON.stringify({logLevel})),
-    };
+    const {target, requests} = createAndroidNativeMessageTestHost({
+      'diagnostics.setLogLevel': payload => ({logLevel: payload.logLevel}),
+    });
     (globalThis as {window?: unknown}).window = {
-      WheelMakerAndroidNative: native,
+      WheelMakerAndroidNative: target,
     };
 
     const bridge = getNativeWebSourceBridge();
 
     await expect(bridge?.setDiagnosticLogLevel?.('warning')).resolves.toEqual({logLevel: 'warning'});
-    expect(native.setDiagnosticLogLevel).toHaveBeenCalledWith('warning');
+    expect(requests[0]).toMatchObject({
+      action: 'diagnostics.setLogLevel',
+      payload: {logLevel: 'warning'},
+    });
   });
 
   test('wraps Android native port relay site-data clearing', async () => {
-    const native = {
-      clearPortRelaySiteData: jest.fn((relayUrl: string) => JSON.stringify({ok: true, relayUrl})),
-    };
+    const {target, requests} = createAndroidNativeMessageTestHost({
+      'relay.clearSiteData': payload => ({ok: true, relayUrl: payload.relayUrl}),
+    });
     (globalThis as {window?: unknown}).window = {
-      WheelMakerAndroidNative: native,
+      WheelMakerAndroidNative: target,
     };
 
     const bridge = getNativeWebSourceBridge();
@@ -165,7 +133,10 @@ describe('native Web source helpers', () => {
       ok: true,
       relayUrl: 'https://relay.example.com:28801/',
     });
-    expect(native.clearPortRelaySiteData).toHaveBeenCalledWith('https://relay.example.com:28801/');
+    expect(requests[0]).toMatchObject({
+      action: 'relay.clearSiteData',
+      payload: {relayUrl: 'https://relay.example.com:28801/'},
+    });
   });
 
   test('falls back to Desktop bridge when Android bridge is absent', () => {

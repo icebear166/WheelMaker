@@ -282,7 +282,7 @@ Expected: PASS；source 模式类和测试已删除。
 - Modify: `mobile/android/app/src/main/java/com/wheelmaker/android/AndroidPortRelaySiteDataRuntime.kt`
 - Modify: `mobile/android/app/src/test/java/com/wheelmaker/android/MainActivityPortRelayCookieTest.kt`
 
-- [ ] **Step 1: 写 Bootstrap/业务消息 allowlist 测试**
+- [x] **Step 1: 写 Bootstrap/业务消息 allowlist 测试**
 
 消息统一为：
 
@@ -292,7 +292,7 @@ Expected: PASS；source 模式类和测试已删除。
 
 Bootstrap listener 只接受 appassets bootstrap origin 的四个配置 action；业务 listener 只接受配置的精确 HTTPS Origin，并在 native 侧同时验证当前顶层 URL 位于 Base Path、`isMainFrame`、action allowlist。敏感 action 的手势时间必须在当前 elapsed realtime 的 5 秒内。
 
-- [ ] **Step 2: 运行测试并确认失败**
+- [x] **Step 2: 运行测试并确认失败**
 
 Run:
 
@@ -303,11 +303,11 @@ Set-Location mobile\android
 
 Expected: FAIL；当前 `addJavascriptInterface` 对任意已加载页面暴露对象。
 
-- [ ] **Step 3: 改用 WebViewCompat 消息 listener**
+- [x] **Step 3: 改用 WebViewCompat 消息 listener**
 
 删除 `addJavascriptInterface`。使用两个独立 listener 名称和 origin rules；服务器切换时先 `removeWebMessageListener`，再清 Cookie、`WebStorage.deleteAllData()`、cache 和 service worker 数据，最后为新 Base URL 注册业务 listener。旧 server logout 是 best effort，但本地清理无条件执行。
 
-- [ ] **Step 4: 运行 Android 测试和 lint 并提交**
+- [x] **Step 4: 运行 Android 测试和 lint 并提交**
 
 Run:
 

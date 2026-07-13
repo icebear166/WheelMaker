@@ -21,8 +21,10 @@ class AndroidApkUpdateRuntimeTest {
         val bridge = source("src/main/java/com/wheelmaker/android/WheelMakerBridge.kt")
         val mainActivity = source("src/main/java/com/wheelmaker/android/MainActivity.kt")
 
-        assertTrue(bridge.contains("getAndroidReleaseState()"))
-        assertTrue(bridge.contains("installAndroidRelease(rawJson: String)"))
+        assertTrue(bridge.contains("\"apk.getReleaseState\""))
+        assertTrue(bridge.contains("\"apk.install\""))
+        assertTrue(bridge.contains("androidApkUpdateRuntime.getReleaseState()"))
+        assertTrue(bridge.contains("androidApkUpdateRuntime.installRelease(payload.toString())"))
         assertTrue(mainActivity.contains("private lateinit var androidApkUpdateRuntime: AndroidApkUpdateRuntime"))
         assertTrue(mainActivity.contains("AndroidApkUpdateRuntime(this, webView)"))
     }

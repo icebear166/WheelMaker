@@ -26,9 +26,20 @@ class MainActivityPortRelayCookieTest {
 
         assertTrue(mainActivity.contains("private lateinit var androidPortRelaySiteDataRuntime: AndroidPortRelaySiteDataRuntime"))
         assertTrue(mainActivity.contains("AndroidPortRelaySiteDataRuntime(webView)"))
-        assertTrue(bridge.contains("fun clearPortRelaySiteData(relayUrl: String): String"))
-        assertTrue(bridge.contains("androidPortRelaySiteDataRuntime.clear(relayUrl)"))
-        assertFalse(mainActivity.contains("removeAllCookies"))
-        assertFalse(bridge.contains("removeAllCookies"))
+        assertTrue(bridge.contains("\"relay.clearSiteData\""))
+        assertTrue(bridge.contains("androidPortRelaySiteDataRuntime.clear("))
+    }
+
+    @Test
+    fun nativeCapabilitiesUseOriginRestrictedWebMessageListeners() {
+        val mainActivity = source("src/main/java/com/wheelmaker/android/MainActivity.kt")
+        val bridge = source("src/main/java/com/wheelmaker/android/WheelMakerBridge.kt")
+
+        assertTrue(mainActivity.contains("WebViewCompat.addWebMessageListener"))
+        assertTrue(mainActivity.contains("BOOTSTRAP_MESSAGE_LISTENER"))
+        assertTrue(mainActivity.contains("BUSINESS_MESSAGE_LISTENER"))
+        assertTrue(mainActivity.contains("WebViewCompat.removeWebMessageListener"))
+        assertFalse(mainActivity.contains("addJava" + "scriptInterface"))
+        assertFalse(bridge.contains("@Java" + "scriptInterface"))
     }
 }

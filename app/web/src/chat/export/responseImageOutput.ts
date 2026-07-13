@@ -1,13 +1,13 @@
 import { downloadBlobAsFile } from './chatMarkdownImageExport';
+import {
+  getAndroidNativeRpcFacade,
+  type AndroidNativeMessageTarget,
+} from '../../platform/android/androidNativeMessageBridge';
 
 export type ResponseImageOutputResult = {
   ok: boolean;
   status: string;
   error?: string;
-};
-
-type AndroidResponseImageBridge = {
-  shareResponseImage?: (rawJson: string) => string;
 };
 
 type DesktopResponseImageBridge = {
@@ -17,7 +17,7 @@ type DesktopResponseImageBridge = {
 type ClipboardItemConstructor = new (items: Record<string, Blob>) => ClipboardItem;
 
 type ResponseImageOutputEnv = Window & {
-  WheelMakerAndroidNative?: AndroidResponseImageBridge;
+  WheelMakerAndroidNative?: AndroidNativeMessageTarget;
   WheelMakerDesktop?: DesktopResponseImageBridge;
 };
 
@@ -83,13 +83,12 @@ export async function outputResponseImage({
   env = window as ResponseImageOutputEnv,
   download = downloadBlobAsFile,
 }: ResponseImageOutputOptions): Promise<ResponseImageOutputResult> {
-  const native = env.WheelMakerAndroidNative;
-  if (native) {
-    if (typeof native.shareResponseImage !== 'function') {
-      return {ok: false, status: 'unsupported', error: ANDROID_UPDATE_REQUIRED_MESSAGE};
-    }
+  const nativeTarget = env.WheelMakerAndroidNative;
+  if (nativeTarget) {
+    const native = getAndroidNativeRpcFacade(env);
+    if (!native) return {ok: false, status: 'unsupported', error: ANDROID_UPDATE_REQUIRED_MESSAGE};
     const dataUrl = await blobToDataUrl(blob);
-    return parseBridgeResult(native.shareResponseImage(JSON.stringify({fileName, dataUrl})));
+    return parseBridgeResult(await native.shareResponseImage(JSON.stringify({fileName, dataUrl})));
   }
 
   if (env.WheelMakerDesktop) {

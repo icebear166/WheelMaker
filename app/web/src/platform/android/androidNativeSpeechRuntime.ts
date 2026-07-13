@@ -3,6 +3,10 @@ import type {
   RegistrySpeechStartPayload,
   RegistrySpeechStartResponse,
 } from '../../registry/registryTypes';
+import {
+  getAndroidNativeRpcFacade,
+  type AndroidNativeMessageTarget,
+} from './androidNativeMessageBridge';
 
 export type AndroidNativeSpeechStatus =
   | 'permission'
@@ -43,9 +47,9 @@ export type AndroidNativeSpeechEvent =
     };
 
 export type AndroidNativeSpeechBridge = {
-  startSpeech: (payloadJson: string) => string;
-  finishSpeech: (streamId: string) => string;
-  cancelSpeech: (streamId: string, reason: RegistrySpeechCancelPayload['reason']) => string;
+  startSpeech: (payloadJson: string) => Promise<string>;
+  finishSpeech: (streamId: string) => Promise<string>;
+  cancelSpeech: (streamId: string, reason: RegistrySpeechCancelPayload['reason']) => Promise<string>;
 };
 
 export type AndroidNativeSpeechRuntime = {
@@ -63,7 +67,7 @@ type AndroidSpeechCommandResponse = {
 };
 
 type NativeSpeechWindow = Window & {
-  WheelMakerAndroidNative?: Partial<AndroidNativeSpeechBridge>;
+  WheelMakerAndroidNative?: AndroidNativeMessageTarget;
   __wheelmakerAndroidSpeechEvent?: (event: unknown) => void;
 };
 
@@ -126,19 +130,11 @@ function ensureCallbackInstalled(): void {
 }
 
 export function isAndroidNativeSpeechHost(): boolean {
-  return !!nativeWindow()?.WheelMakerAndroidNative;
+  return !!getAndroidNativeRpcFacade(nativeWindow() ?? undefined);
 }
 
 export function getAndroidNativeSpeechBridge(): AndroidNativeSpeechBridge | null {
-  const bridge = nativeWindow()?.WheelMakerAndroidNative;
-  if (
-    typeof bridge?.startSpeech === 'function' &&
-    typeof bridge.finishSpeech === 'function' &&
-    typeof bridge.cancelSpeech === 'function'
-  ) {
-    return bridge as AndroidNativeSpeechBridge;
-  }
-  return null;
+  return getAndroidNativeRpcFacade(nativeWindow() ?? undefined);
 }
 
 export function createAndroidNativeSpeechRuntime(): AndroidNativeSpeechRuntime | null {
@@ -149,17 +145,17 @@ export function createAndroidNativeSpeechRuntime(): AndroidNativeSpeechRuntime |
   ensureCallbackInstalled();
   return {
     start: async payload => {
-      const response = assertAccepted(bridge.startSpeech(JSON.stringify(payload)));
+      const response = assertAccepted(await bridge.startSpeech(JSON.stringify(payload)));
       if (!response.streamId) {
         throw new Error('Android native speech returned no streamId.');
       }
       return {streamId: response.streamId};
     },
     finish: async streamId => {
-      assertAccepted(bridge.finishSpeech(streamId));
+      assertAccepted(await bridge.finishSpeech(streamId));
     },
     cancel: async (streamId, reason) => {
-      assertAccepted(bridge.cancelSpeech(streamId, reason));
+      assertAccepted(await bridge.cancelSpeech(streamId, reason));
     },
     onEvent: listener => {
       ensureCallbackInstalled();

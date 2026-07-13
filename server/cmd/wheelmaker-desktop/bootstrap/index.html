@@ -44,6 +44,41 @@
     const retry = document.getElementById('retry');
     const reset = document.getElementById('reset');
     const error = document.getElementById('error');
+    const pending = new Map();
+    let lastUserGestureAt = null;
+
+    for (const eventName of ['pointerdown', 'keydown', 'touchstart']) {
+      window.addEventListener(eventName, () => {
+        lastUserGestureAt = Math.round(performance.now());
+      }, {capture: true, passive: true});
+    }
+
+    if (typeof window.wheelMakerBootstrap?.postMessage === 'function') {
+      window.wheelMakerBootstrap.onmessage = event => {
+        let response;
+        try { response = JSON.parse(event.data); } catch (_) { return; }
+        const request = pending.get(response.requestId);
+        if (!request) return;
+        pending.delete(response.requestId);
+        response.ok ? request.resolve(response.result) : request.reject(new Error(response.error || 'Native request failed.'));
+      };
+    }
+
+    function callBootstrap(action, payload = {}) {
+      const bridge = window.wheelMakerBootstrap;
+      if (typeof bridge?.postMessage === 'function') {
+        return new Promise((resolve, reject) => {
+          const requestId = crypto.randomUUID();
+          pending.set(requestId, {resolve, reject});
+          bridge.postMessage(JSON.stringify({requestId, action, payload, userGestureAt: lastUserGestureAt}));
+        });
+      }
+      if (action === 'bootstrap.getState') return bridge.getState();
+      if (action === 'bootstrap.saveBaseUrl') return bridge.saveBaseUrl(payload.baseUrl);
+      if (action === 'bootstrap.retry') return bridge.retry();
+      if (action === 'bootstrap.reset') return bridge.reset();
+      throw new Error('Unsupported bootstrap action.');
+    }
 
     function render(state) {
       input.value = state.baseUrl || '';
@@ -56,13 +91,13 @@
     form.addEventListener('submit', async event => {
       event.preventDefault();
       save.disabled = true;
-      const result = await window.wheelMakerBootstrap.saveBaseUrl(input.value);
+      const result = await callBootstrap('bootstrap.saveBaseUrl', {baseUrl: input.value});
       if (!result.ok) render(result);
       save.disabled = false;
     });
-    retry.addEventListener('click', async () => render(await window.wheelMakerBootstrap.retry()));
-    reset.addEventListener('click', async () => render(await window.wheelMakerBootstrap.reset()));
-    window.addEventListener('DOMContentLoaded', async () => render(await window.wheelMakerBootstrap.getState()));
+    retry.addEventListener('click', async () => render(await callBootstrap('bootstrap.retry')));
+    reset.addEventListener('click', async () => render(await callBootstrap('bootstrap.reset')));
+    window.addEventListener('DOMContentLoaded', async () => render(await callBootstrap('bootstrap.getState')));
   </script>
 </body>
 </html>
