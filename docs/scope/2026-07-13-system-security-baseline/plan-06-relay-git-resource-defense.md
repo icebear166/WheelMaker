@@ -78,7 +78,7 @@ Expected: PASS；随机源失败 fail closed。
 - Modify: `server/internal/portrelay/listener.go`
 - Modify: `server/internal/portrelay/listener_test.go`
 
-- [ ] **Step 1: 写 Origin/Fetch Metadata 表测试**
+- [x] **Step 1: 写 Origin/Fetch Metadata 表测试**
 
 - POST login：要求 `Origin` 与可信请求 scheme/host/port 完全一致；cross-origin/missing Origin 拒绝 403。
 - 顶层 URL code：只接受 `GET` + `Sec-Fetch-Mode: navigate` + `Sec-Fetch-Dest: document` + `Sec-Fetch-Site: none|same-origin`；iframe/cors/no-cors/cross-site 拒绝。
@@ -86,7 +86,7 @@ Expected: PASS；随机源失败 fail closed。
 - 成功 code 立刻 `303` 到不含 `__wm_relay_code` 的相对 URL。
 - login/code/error/429/redirect 都含 `Cache-Control: no-store`、`Referrer-Policy: no-referrer`；日志不含 code 或完整 query。
 
-- [ ] **Step 2: 运行测试并确认失败**
+- [x] **Step 2: 运行测试并确认失败**
 
 Run:
 
@@ -97,11 +97,11 @@ go test ./internal/portrelay -run 'TestRelay.*(Origin|Fetch|Headers|StripsCode|F
 
 Expected: FAIL；当前 POST/URL code 无来源校验且 forwarded proto 无 peer 限制。
 
-- [ ] **Step 3: 实现统一 header middleware**
+- [x] **Step 3: 实现统一 header middleware**
 
 在 Relay internal handler 最外层先设置 no-store/no-referrer；source 地址复用 `security.ClientIP` 的可信 proxy 规则。不要限制被 relay 的业务站点自身响应缓存，只限制 `__wheelmaker` 门禁响应和带 code 的 redirect。
 
-- [ ] **Step 4: 加入 listener HTTP timeouts**
+- [x] **Step 4: 加入 listener HTTP timeouts**
 
 ```go
 srv := &http.Server{
@@ -115,7 +115,7 @@ srv := &http.Server{
 
 WebSocket/tunnel 的长连接在 Upgrade 后不受 HTTP WriteTimeout 误杀。
 
-- [ ] **Step 5: 运行测试并提交**
+- [x] **Step 5: 运行测试并提交**
 
 Run:
 

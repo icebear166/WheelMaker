@@ -15,6 +15,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
+	"github.com/swm8023/wheelmaker/internal/security"
 )
 
 var relayUpgrader = websocket.Upgrader{CheckOrigin: func(_ *http.Request) bool { return true }}
@@ -31,7 +32,13 @@ func newRelayListener(port int, handler http.Handler) (*relayListener, error) {
 	if err != nil {
 		return nil, fmt.Errorf("start relay listener on %s: %w", addr, err)
 	}
-	srv := &http.Server{Handler: handler}
+	srv := &http.Server{
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
 	listener := &relayListener{port: port, srv: srv, ln: ln}
 	go func() {
 		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
@@ -51,6 +58,10 @@ func (l *relayListener) Close() error {
 }
 
 func (c *Controller) handleDataPlane(w http.ResponseWriter, r *http.Request) {
+	if relaySensitiveRequest(r) {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+	}
 	switch r.URL.Path {
 	case internalHubPath:
 		c.handleHubTunnel(w, r)
@@ -132,6 +143,10 @@ func (c *Controller) handleLogin(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	if !security.RequestOriginMatchesHost(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", http.StatusBadRequest)
 		return
@@ -152,6 +167,10 @@ func (c *Controller) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 func (c *Controller) handleURLAccessCode(w http.ResponseWriter, r *http.Request, slot relaySlot, code string) {
 	next := requestPathWithoutRelayURLCode(r)
+	if !relayTopLevelCodeRequestAllowed(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
 	authorized, retryAfter := c.authorizeAccessCode(code, relayRequestSource(r), slot)
 	if retryAfter > 0 {
 		writeRelayRateLimited(w, retryAfter)
@@ -203,17 +222,32 @@ func (c *Controller) handleClearSiteData(w http.ResponseWriter, r *http.Request)
 }
 
 func relayRequestSource(r *http.Request) string {
-	if r == nil {
-		return "unknown"
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err == nil && host != "" {
-		return host
-	}
-	if r.RemoteAddr != "" {
-		return r.RemoteAddr
+	if source := security.ClientIP(r); source != "" {
+		return source
 	}
 	return "unknown"
+}
+
+func relayTopLevelCodeRequestAllowed(r *http.Request) bool {
+	if r == nil || r.Method != http.MethodGet {
+		return false
+	}
+	if r.Header.Get("Sec-Fetch-Mode") != "navigate" || r.Header.Get("Sec-Fetch-Dest") != "document" {
+		return false
+	}
+	switch r.Header.Get("Sec-Fetch-Site") {
+	case "none", "same-origin":
+		return true
+	default:
+		return false
+	}
+}
+
+func relaySensitiveRequest(r *http.Request) bool {
+	if r == nil || r.URL == nil {
+		return false
+	}
+	return strings.HasPrefix(r.URL.Path, "/__wheelmaker/") || r.URL.Query().Has(relayURLCodeParam)
 }
 
 func writeRelayRateLimited(w http.ResponseWriter, retryAfter time.Duration) {

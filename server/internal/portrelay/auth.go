@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/swm8023/wheelmaker/internal/security"
 )
 
 func accessCodeEqual(candidate string, expected string) bool {
@@ -113,17 +115,5 @@ func (c *Controller) signCookiePayload(payload string) string {
 }
 
 func relayRequestIsHTTPS(r *http.Request) bool {
-	if r != nil && r.TLS != nil {
-		return true
-	}
-	if r == nil {
-		return false
-	}
-	for _, part := range strings.Split(r.Header.Get("X-Forwarded-Proto"), ",") {
-		switch strings.ToLower(strings.TrimSpace(part)) {
-		case "https", "wss":
-			return true
-		}
-	}
-	return false
+	return security.RequestIsHTTPS(r)
 }

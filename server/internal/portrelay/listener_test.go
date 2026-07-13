@@ -28,6 +28,12 @@ func newTestController(t *testing.T, cfg ControllerConfig) *Controller {
 	return controller
 }
 
+func markRelayTopLevelNavigation(request *http.Request) {
+	request.Header.Set("Sec-Fetch-Mode", "navigate")
+	request.Header.Set("Sec-Fetch-Dest", "document")
+	request.Header.Set("Sec-Fetch-Site", "same-origin")
+}
+
 func (r *failAfterReader) Read(p []byte) (int, error) {
 	if r.remaining <= 0 {
 		return 0, io.ErrUnexpectedEOF
@@ -315,6 +321,7 @@ func TestRelayLoginFlowUsesSafeRelativeNextAndHidesMappingInfo(t *testing.T) {
 	badForm := url.Values{"code": {"000000"}, "next": {"/console?tab=relay"}}
 	badReq := httptest.NewRequest(http.MethodPost, internalLoginPath, strings.NewReader(badForm.Encode()))
 	badReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	badReq.Header.Set("Origin", "http://example.com")
 	badResp := httptest.NewRecorder()
 	c.handleLogin(badResp, badReq)
 	if badResp.Code != http.StatusSeeOther {
@@ -327,6 +334,7 @@ func TestRelayLoginFlowUsesSafeRelativeNextAndHidesMappingInfo(t *testing.T) {
 	goodForm := url.Values{"code": {"123456"}, "next": {"https://evil.example/steal"}}
 	goodReq := httptest.NewRequest(http.MethodPost, internalLoginPath, strings.NewReader(goodForm.Encode()))
 	goodReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	goodReq.Header.Set("Origin", "http://example.com")
 	goodResp := httptest.NewRecorder()
 	c.handleLogin(goodResp, goodReq)
 	if goodResp.Code != http.StatusSeeOther {
@@ -376,6 +384,7 @@ func TestRelayURLAccessCodeAuthenticatesAndStripsCodeQuery(t *testing.T) {
 	c.mu.Unlock()
 
 	req := httptest.NewRequest(http.MethodGet, "/console?tab=relay&__wm_relay_code=123456&x=1", nil)
+	markRelayTopLevelNavigation(req)
 	resp := httptest.NewRecorder()
 	c.handleDataPlane(resp, req)
 
@@ -390,6 +399,7 @@ func TestRelayURLAccessCodeAuthenticatesAndStripsCodeQuery(t *testing.T) {
 	}
 
 	badReq := httptest.NewRequest(http.MethodGet, "/console?tab=relay&__wm_relay_code=000000", nil)
+	markRelayTopLevelNavigation(badReq)
 	badResp := httptest.NewRecorder()
 	c.handleDataPlane(badResp, badReq)
 
@@ -417,6 +427,8 @@ func TestRelayURLAccessCodeUsesEmbeddableCookieForForwardedHTTPS(t *testing.T) {
 	c.mu.Unlock()
 
 	req := httptest.NewRequest(http.MethodGet, "/console?__wm_relay_code=123456", nil)
+	markRelayTopLevelNavigation(req)
+	req.RemoteAddr = "127.0.0.1:50000"
 	req.Header.Set("X-Forwarded-Proto", "https")
 	resp := httptest.NewRecorder()
 	c.handleDataPlane(resp, req)
@@ -443,6 +455,7 @@ func TestRelayClearSiteDataPageClearsOriginStorageAndReauthenticatesWithURLCode(
 	c.mu.Unlock()
 
 	req := httptest.NewRequest(http.MethodGet, internalClearSiteDataPath+"?next=%2Fconsole%3Ftab%3Drelay&__wm_relay_code=123456", nil)
+	req.RemoteAddr = "127.0.0.1:50000"
 	req.Header.Set("X-Forwarded-Proto", "https")
 	resp := httptest.NewRecorder()
 
@@ -525,6 +538,8 @@ func TestRelayLoginPostUsesEmbeddableCookieForForwardedHTTPS(t *testing.T) {
 	form := url.Values{"code": {"123456"}, "next": {"/console"}}
 	req := httptest.NewRequest(http.MethodPost, internalLoginPath, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Origin", "https://example.com")
+	req.RemoteAddr = "127.0.0.1:50000"
 	req.Header.Set("X-Forwarded-Proto", "https")
 	resp := httptest.NewRecorder()
 	c.handleLogin(resp, req)
@@ -538,6 +553,135 @@ func TestRelayLoginPostUsesEmbeddableCookieForForwardedHTTPS(t *testing.T) {
 	}
 	if got := resp.Header().Get("Location"); got != "/console" {
 		t.Fatalf("Location=%q, want /console", got)
+	}
+}
+
+func TestRelayLoginOriginValidation(t *testing.T) {
+	for _, testCase := range []struct {
+		name       string
+		origin     string
+		remoteAddr string
+		forwarded  string
+		wantStatus int
+	}{
+		{name: "same origin", origin: "https://relay.example.com", remoteAddr: "127.0.0.1:50000", forwarded: "https", wantStatus: http.StatusSeeOther},
+		{name: "missing origin", remoteAddr: "127.0.0.1:50000", forwarded: "https", wantStatus: http.StatusForbidden},
+		{name: "cross origin", origin: "https://attacker.example", remoteAddr: "127.0.0.1:50000", forwarded: "https", wantStatus: http.StatusForbidden},
+		{name: "untrusted forwarded scheme", origin: "https://relay.example.com", remoteAddr: "198.51.100.8:50000", forwarded: "https", wantStatus: http.StatusForbidden},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			controller := newTestController(t, ControllerConfig{})
+			controller.mu.Lock()
+			controller.slot = relaySlot{Enabled: true, RelayID: "relay-test", AccessCode: "123456", AccessCodeGeneration: 1}
+			controller.mu.Unlock()
+
+			form := url.Values{"code": {"123456"}, "next": {"/console"}}
+			request := httptest.NewRequest(http.MethodPost, "http://relay.example.com"+internalLoginPath, strings.NewReader(form.Encode()))
+			request.RemoteAddr = testCase.remoteAddr
+			request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			request.Header.Set("Origin", testCase.origin)
+			request.Header.Set("X-Forwarded-Proto", testCase.forwarded)
+			response := httptest.NewRecorder()
+			controller.handleDataPlane(response, request)
+			if response.Code != testCase.wantStatus {
+				t.Fatalf("status=%d, want %d", response.Code, testCase.wantStatus)
+			}
+		})
+	}
+}
+
+func TestRelayURLCodeFetchMetadataValidation(t *testing.T) {
+	for _, testCase := range []struct {
+		name       string
+		method     string
+		mode       string
+		dest       string
+		site       string
+		wantStatus int
+	}{
+		{name: "same origin navigation", method: http.MethodGet, mode: "navigate", dest: "document", site: "same-origin", wantStatus: http.StatusSeeOther},
+		{name: "direct navigation", method: http.MethodGet, mode: "navigate", dest: "document", site: "none", wantStatus: http.StatusSeeOther},
+		{name: "post", method: http.MethodPost, mode: "navigate", dest: "document", site: "same-origin", wantStatus: http.StatusForbidden},
+		{name: "missing metadata", method: http.MethodGet, wantStatus: http.StatusForbidden},
+		{name: "iframe", method: http.MethodGet, mode: "navigate", dest: "iframe", site: "same-origin", wantStatus: http.StatusForbidden},
+		{name: "cors", method: http.MethodGet, mode: "cors", dest: "document", site: "same-origin", wantStatus: http.StatusForbidden},
+		{name: "no cors", method: http.MethodGet, mode: "no-cors", dest: "document", site: "same-origin", wantStatus: http.StatusForbidden},
+		{name: "cross site", method: http.MethodGet, mode: "navigate", dest: "document", site: "cross-site", wantStatus: http.StatusForbidden},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			controller := newTestController(t, ControllerConfig{})
+			controller.mu.Lock()
+			controller.slot = relaySlot{Enabled: true, RelayID: "relay-test", AccessCode: "123456", AccessCodeGeneration: 1}
+			controller.mu.Unlock()
+
+			request := httptest.NewRequest(testCase.method, "http://relay.example.com/console?__wm_relay_code=123456&tab=relay", nil)
+			request.Header.Set("Sec-Fetch-Mode", testCase.mode)
+			request.Header.Set("Sec-Fetch-Dest", testCase.dest)
+			request.Header.Set("Sec-Fetch-Site", testCase.site)
+			response := httptest.NewRecorder()
+			controller.handleDataPlane(response, request)
+			if response.Code != testCase.wantStatus {
+				t.Fatalf("status=%d, want %d", response.Code, testCase.wantStatus)
+			}
+			if testCase.wantStatus == http.StatusSeeOther {
+				if location := response.Header().Get("Location"); location != "/console?tab=relay" {
+					t.Fatalf("Location=%q, want code-stripped redirect", location)
+				}
+			}
+		})
+	}
+}
+
+func TestRelayForwardedHeadersRequireLoopbackPeer(t *testing.T) {
+	trusted := httptest.NewRequest(http.MethodGet, "http://relay.example.com/", nil)
+	trusted.RemoteAddr = "127.0.0.1:50000"
+	trusted.Header.Set("X-Forwarded-Proto", "https")
+	trusted.Header.Set("X-Real-IP", "203.0.113.9")
+	if !relayRequestIsHTTPS(trusted) || relayRequestSource(trusted) != "203.0.113.9" {
+		t.Fatalf("trusted proxy resolved https=%t source=%q", relayRequestIsHTTPS(trusted), relayRequestSource(trusted))
+	}
+
+	untrusted := trusted.Clone(trusted.Context())
+	untrusted.RemoteAddr = "198.51.100.7:50000"
+	if relayRequestIsHTTPS(untrusted) || relayRequestSource(untrusted) != "198.51.100.7" {
+		t.Fatalf("untrusted peer resolved https=%t source=%q", relayRequestIsHTTPS(untrusted), relayRequestSource(untrusted))
+	}
+}
+
+func TestRelaySensitiveResponsesSetHeaders(t *testing.T) {
+	controller := newTestController(t, ControllerConfig{})
+	controller.mu.Lock()
+	controller.slot = relaySlot{Enabled: true, RelayID: "relay-test", AccessCode: "123456", AccessCodeGeneration: 1}
+	controller.mu.Unlock()
+
+	for _, target := range []string{
+		internalLoginPath,
+		internalStatusPath,
+		"/console?__wm_relay_code=000000",
+	} {
+		request := httptest.NewRequest(http.MethodGet, target, nil)
+		if strings.Contains(target, relayURLCodeParam) {
+			markRelayTopLevelNavigation(request)
+		}
+		response := httptest.NewRecorder()
+		controller.handleDataPlane(response, request)
+		if got := response.Header().Get("Cache-Control"); got != "no-store" {
+			t.Errorf("%s Cache-Control=%q", target, got)
+		}
+		if got := response.Header().Get("Referrer-Policy"); got != "no-referrer" {
+			t.Errorf("%s Referrer-Policy=%q", target, got)
+		}
+	}
+}
+
+func TestRelayListenerHeadersAndTimeouts(t *testing.T) {
+	listener, err := newRelayListener(0, http.NotFoundHandler())
+	if err != nil {
+		t.Fatalf("newRelayListener(): %v", err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	if listener.srv.ReadHeaderTimeout != 5*time.Second || listener.srv.ReadTimeout != 15*time.Second || listener.srv.WriteTimeout != 30*time.Second || listener.srv.IdleTimeout != 60*time.Second {
+		t.Fatalf("relay server timeouts=%s/%s/%s/%s", listener.srv.ReadHeaderTimeout, listener.srv.ReadTimeout, listener.srv.WriteTimeout, listener.srv.IdleTimeout)
 	}
 }
 
