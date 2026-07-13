@@ -11,12 +11,13 @@ class MainActivityPortRelayCookieTest {
         String(Files.readAllBytes(Paths.get(path)))
 
     @Test
-    fun webViewAcceptsThirdPartyCookiesForEmbeddedPortRelayIframe() {
+	fun webViewRejectsThirdPartyCookiesForEmbeddedPortRelayIframe() {
         val mainActivity = source("src/main/java/com/wheelmaker/android/MainActivity.kt")
 
         assertTrue(mainActivity.contains("import android.webkit.CookieManager"))
         assertTrue(mainActivity.contains("CookieManager.getInstance().setAcceptCookie(true)"))
-        assertTrue(mainActivity.contains("CookieManager.getInstance().setAcceptThirdPartyCookies(target, true)"))
+		assertTrue(mainActivity.contains("CookieManager.getInstance().setAcceptThirdPartyCookies(target, false)"))
+		assertFalse(mainActivity.contains("CookieManager.getInstance().setAcceptThirdPartyCookies(target, true)"))
     }
 
     @Test

@@ -135,4 +135,22 @@ class TrustedWebMessagePolicyTest {
             request = recent.copy(userGestureAt = null)
         ))
     }
+
+    @Test
+    fun authorizationReturnsShortLivedActionBoundCapability() {
+        val capability = policy.authorize(
+            surface = TrustedMessageSurface.BUSINESS,
+            sourceOrigin = "https://example.com",
+            isMainFrame = true,
+            topLevelUrl = "https://example.com/app/",
+            navigationStartedAtElapsedRealtime = 10_000,
+            nowElapsedRealtime = 20_000,
+            request = TrustedWebMessageRequest("request-4", "image.share", 6_000)
+        )
+
+		assertTrue(capability != null)
+		assertTrue(capability!!.allows("image.share", 20_999))
+		assertFalse(capability.allows("apk.install", 20_999))
+		assertFalse(capability.allows("image.share", 21_001))
+    }
 }

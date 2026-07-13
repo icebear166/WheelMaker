@@ -18,8 +18,9 @@ class MainActivityFileChooserTest {
     fun fileChooserUsesOpenDocumentIntentWithReadableContentUris() {
         val mainActivity = source
 
-        assertTrue(mainActivity.contains("target.settings.allowContentAccess = true"))
+		assertTrue(mainActivity.contains("target.settings.allowContentAccess = false"))
         assertTrue(mainActivity.contains("target.settings.allowFileAccess = false"))
+		assertTrue(mainActivity.contains("isTrustedBusinessUiRequest("))
         assertTrue(mainActivity.contains("createAndroidFileChooserIntent(fileChooserParams)"))
         assertTrue(mainActivity.contains("createAndroidDocumentFileChooserIntent("))
         assertTrue(mainActivity.contains("Intent.ACTION_OPEN_DOCUMENT"))
@@ -37,6 +38,7 @@ class MainActivityFileChooserTest {
         assertTrue(mainActivity.contains("data?.clipData"))
         assertTrue(mainActivity.contains("data?.data"))
         assertTrue(mainActivity.contains("takePersistableUriPermission"))
+		assertTrue(mainActivity.contains("it.scheme == ContentResolver.SCHEME_CONTENT"))
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.wheelmaker.android
 
+import android.os.SystemClock
 import org.json.JSONObject
 
 class WheelMakerBridge(
@@ -11,7 +12,12 @@ class WheelMakerBridge(
     private val androidWebDiagnostics: AndroidWebDiagnostics,
     private val androidDiagnosticLogLevelStore: AndroidDiagnosticLogLevelStore
 ) {
-    fun dispatch(action: String, payload: JSONObject): String = when (action) {
+	fun dispatch(capability: TrustedNativeCapability, payload: JSONObject): String {
+		val action = capability.action
+		if (!capability.allows(action, SystemClock.elapsedRealtime())) {
+			throw SecurityException("expired native capability")
+		}
+		return when (action) {
         "diagnostics.drain" -> androidWebDiagnostics.drainJson()
         "diagnostics.setLogLevel" -> setDiagnosticLogLevel(payload.optString("logLevel"))
         "speech.start" -> androidSpeechRuntime.start(payload.toString())
@@ -27,7 +33,8 @@ class WheelMakerBridge(
         "apk.install" -> androidApkUpdateRuntime.installRelease(payload.toString())
         "image.share" -> androidImageShareRuntime.shareResponseImage(payload.toString())
         "relay.clearSiteData" -> androidPortRelaySiteDataRuntime.clear(payload.optString("relayUrl"))
-        else -> throw IllegalArgumentException("unsupported native action")
+			else -> throw IllegalArgumentException("unsupported native action")
+		}
     }
 
     private fun setDiagnosticLogLevel(logLevel: String): String {

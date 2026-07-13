@@ -1,13 +1,13 @@
 package com.wheelmaker.android
 
-import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.DownloadManager
 import android.content.ActivityNotFoundException
+import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
+import android.content.pm.ApplicationInfo
 import android.graphics.Color
 import android.net.Uri
 import android.os.Build
@@ -17,9 +17,9 @@ import android.os.SystemClock
 import android.os.ext.SdkExtensions
 import android.provider.MediaStore
 import android.view.ViewGroup
+import android.view.MotionEvent
 import android.view.WindowManager
 import android.webkit.CookieManager
-import android.webkit.PermissionRequest
 import android.webkit.URLUtil
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -33,8 +33,6 @@ import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.Toast
 import androidx.core.graphics.Insets
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -57,7 +55,8 @@ class MainActivity : Activity() {
     @Volatile private var configuredBaseUrl: String = ""
     @Volatile private var bootstrapError: String = ""
     @Volatile private var bootstrapBusy: Boolean = false
-    @Volatile private var navigationStartedAtElapsedRealtime: Long = 0
+	@Volatile private var navigationStartedAtElapsedRealtime: Long = 0
+	@Volatile private var lastTrustedUserGestureAtElapsedRealtime: Long = 0
     private lateinit var androidSpeechRuntime: AndroidSpeechRuntime
     private lateinit var androidNotificationRuntime: AndroidNotificationRuntime
     private lateinit var androidApkUpdateRuntime: AndroidApkUpdateRuntime
@@ -68,7 +67,6 @@ class MainActivity : Activity() {
     private lateinit var wheelMakerBridge: WheelMakerBridge
     private var businessMessageListenerRegistered = false
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
-    private var pendingAudioPermissionRequest: PermissionRequest? = null
     private var systemBackCallback: OnBackInvokedCallback? = null
     private var splashOverlay: FrameLayout? = null
 
@@ -249,14 +247,6 @@ class MainActivity : Activity() {
         if (::androidNotificationRuntime.isInitialized && androidNotificationRuntime.onRequestPermissionsResult(requestCode, grantResults)) {
             return
         }
-        if (requestCode != AUDIO_PERMISSION_REQUEST_CODE) return
-        val request = pendingAudioPermissionRequest ?: return
-        pendingAudioPermissionRequest = null
-        if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
-            request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
-        } else {
-            request.deny()
-        }
     }
 
     private fun configureWebView(target: WebView) {
@@ -264,12 +254,26 @@ class MainActivity : Activity() {
         target.settings.domStorageEnabled = true
         target.settings.databaseEnabled = true
         target.settings.cacheMode = WebSettings.LOAD_DEFAULT
-        target.settings.allowContentAccess = true
+		target.settings.allowContentAccess = false
         target.settings.allowFileAccess = false
+		target.settings.javaScriptCanOpenWindowsAutomatically = false
         target.settings.mediaPlaybackRequiresUserGesture = false
         target.settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
         CookieManager.getInstance().setAcceptCookie(true)
-        CookieManager.getInstance().setAcceptThirdPartyCookies(target, true)
+		CookieManager.getInstance().setAcceptThirdPartyCookies(target, false)
+		WebView.setWebContentsDebuggingEnabled(
+			(applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+		)
+		target.setOnTouchListener { _, event ->
+			if (
+				event.actionMasked == MotionEvent.ACTION_DOWN &&
+				configuredBaseUrl.isNotBlank() &&
+				BaseUrlPolicy(configuredBaseUrl).contains(target.url.orEmpty())
+			) {
+				lastTrustedUserGestureAtElapsedRealtime = SystemClock.elapsedRealtime()
+			}
+			false
+		}
         target.webViewClient = object : StableOriginWebViewClient(
             this,
             configuredBaseUrl = { configuredBaseUrl },
@@ -286,19 +290,22 @@ class MainActivity : Activity() {
             }
         }
         target.webChromeClient = object : WebChromeClient() {
-            override fun onPermissionRequest(request: PermissionRequest) {
-                if (request.resources.contains(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) {
-                    handleAudioPermissionRequest(request)
-                    return
-                }
-                request.deny()
-            }
+			override fun onPermissionRequest(request: android.webkit.PermissionRequest) = request.deny()
 
             override fun onShowFileChooser(
                 webView: WebView,
                 filePathCallback: ValueCallback<Array<Uri>>,
                 fileChooserParams: FileChooserParams
             ): Boolean {
+				if (!isTrustedBusinessUiRequest(
+						configuredBaseUrl = configuredBaseUrl,
+						topLevelUrl = webView.url.orEmpty(),
+						lastGestureElapsedRealtime = lastTrustedUserGestureAtElapsedRealtime,
+						nowElapsedRealtime = SystemClock.elapsedRealtime()
+					)) {
+					filePathCallback.onReceiveValue(null)
+					return false
+				}
                 fileChooserCallback?.onReceiveValue(null)
                 fileChooserCallback = filePathCallback
                 return try {
@@ -356,21 +363,24 @@ class MainActivity : Activity() {
             BUSINESS_MESSAGE_LISTENER,
             setOf(origin)
         ) { view, message, sourceOrigin, isMainFrame, replyProxy ->
-            val parsed = parseTrustedMessage(message.data)
-            if (parsed == null || !messagePolicy().isAllowed(
+			val parsed = parseTrustedMessage(message.data)
+			val capability = parsed?.let {
+				messagePolicy().authorize(
                     surface = TrustedMessageSurface.BUSINESS,
                     sourceOrigin = sourceOrigin.toString(),
                     isMainFrame = isMainFrame,
                     topLevelUrl = view.url.orEmpty(),
                     navigationStartedAtElapsedRealtime = navigationStartedAtElapsedRealtime,
                     nowElapsedRealtime = SystemClock.elapsedRealtime(),
-                    request = parsed.first
-                )) {
+					request = it.first
+				)
+			}
+			if (parsed == null || capability == null) {
                 parsed?.first?.requestId?.let { sendError(replyProxy, it, "request_not_allowed") }
                 return@addWebMessageListener
             }
             try {
-                sendSuccess(replyProxy, parsed.first.requestId, wheelMakerBridge.dispatch(parsed.first.action, parsed.second))
+				sendSuccess(replyProxy, parsed.first.requestId, wheelMakerBridge.dispatch(capability, parsed.second))
             } catch (_: Exception) {
                 sendError(replyProxy, parsed.first.requestId, "native_action_failed")
             }
@@ -619,12 +629,13 @@ class MainActivity : Activity() {
             }
         }
         data?.data?.let { uris.add(it) }
-        WebChromeClient.FileChooserParams.parseResult(resultCode, data)?.forEach { uris.add(it) }
-        if (uris.isEmpty()) {
+		WebChromeClient.FileChooserParams.parseResult(resultCode, data)?.forEach { uris.add(it) }
+		val contentUris = uris.filter { it.scheme == ContentResolver.SCHEME_CONTENT }.toSet()
+		if (contentUris.isEmpty()) {
             return null
         }
-        persistFileChooserReadPermissions(uris, data)
-        return uris.toTypedArray()
+		persistFileChooserReadPermissions(contentUris, data)
+		return contentUris.toTypedArray()
     }
 
     private fun persistFileChooserReadPermissions(uris: Set<Uri>, data: Intent?) {
@@ -671,16 +682,6 @@ class MainActivity : Activity() {
         ViewCompat.requestApplyInsets(target)
     }
 
-    private fun handleAudioPermissionRequest(request: PermissionRequest) {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-            request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE))
-            return
-        }
-        pendingAudioPermissionRequest?.deny()
-        pendingAudioPermissionRequest = request
-        ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), AUDIO_PERMISSION_REQUEST_CODE)
-    }
-
     private fun enqueueDownload(url: String, userAgent: String, contentDisposition: String, mimeType: String) {
         if (!url.startsWith("http://") && !url.startsWith("https://")) {
             Toast.makeText(this, "Download is not available for this file.", Toast.LENGTH_SHORT).show()
@@ -700,7 +701,6 @@ class MainActivity : Activity() {
     }
 
     companion object {
-        private const val AUDIO_PERMISSION_REQUEST_CODE = 1001
         private const val FILE_CHOOSER_REQUEST_CODE = 1002
         private const val NATIVE_SPEECH_PERMISSION_REQUEST_CODE = 1003
         private const val NOTIFICATION_PERMISSION_REQUEST_CODE = 1004
