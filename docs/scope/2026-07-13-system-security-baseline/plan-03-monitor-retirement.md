@@ -22,7 +22,7 @@
 - Modify: `server/cmd/wheelmaker-deploy/service_linux.go`
 - Modify: `server/cmd/wheelmaker-deploy/service_darwin.go`
 
-- [ ] **Step 1: 写旧配置 migration 测试**
+- [x] **Step 1: 写旧配置 migration 测试**
 
 从包含未知旧 Monitor 子字段的原始 JSON 开始：
 
@@ -37,7 +37,7 @@
 
 断言 migration：只删除顶层 `monitor`；保留短自定义 Token 和所有其他字段；用 `shared.WriteConfigFile` 原子私有写；第二次执行不改字节；损坏 JSON 不覆盖原文件。
 
-- [ ] **Step 2: 写三平台 cleanup 命令测试**
+- [x] **Step 2: 写三平台 cleanup 命令测试**
 
 用现有 command runner/fake 验证：
 
@@ -47,7 +47,7 @@
 - 服务/文件不存在视为成功；真实权限错误和其他命令错误向上返回。
 - 目标路径必须先 resolve 并确认位于 WheelMaker 安装目录，不执行计算路径的递归删除。
 
-- [ ] **Step 3: 运行测试并确认失败**
+- [x] **Step 3: 运行测试并确认失败**
 
 Run:
 
@@ -58,7 +58,7 @@ go test ./cmd/wheelmaker-deploy -run 'TestMigrateLegacyMonitor|TestCleanupLegacy
 
 Expected: FAIL；统一 migration/cleanup 尚不存在或现有平台逻辑不完整。
 
-- [ ] **Step 4: 实现迁移和幂等清理**
+- [x] **Step 4: 实现迁移和幂等清理**
 
 迁移在任何 `shared.LoadConfig` 之前运行，使用 `map[string]json.RawMessage` 只移除精确顶层 key：
 
@@ -78,7 +78,7 @@ func migrateLegacyMonitorConfig(path string) (bool, error) {
 
 不要保留一个会启动 Monitor 的兼容分支；legacy 常量只能被 cleanup 调用。
 
-- [ ] **Step 5: 运行测试并提交**
+- [x] **Step 5: 运行测试并提交**
 
 Run:
 

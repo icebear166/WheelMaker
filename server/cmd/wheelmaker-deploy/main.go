@@ -278,6 +278,9 @@ func runDeployWithDeps(ctx context.Context, cfg deployConfig, deps deployDeps) e
 	cfg.Mode = modeDeploy
 	cfg = resolveDefaults(cfg)
 	deps = resolveDeps(cfg, deps)
+	if err := retireLegacyMonitor(ctx, cfg, deps); err != nil {
+		return err
+	}
 	cfg = applyExistingConfigWebPolicy(cfg, deps)
 	deps.report("checking deploy prerequisites")
 	if err := deps.Services.CheckDeployPrerequisites(ctx); err != nil {
@@ -352,6 +355,9 @@ func runUpdateWithDeps(ctx context.Context, cfg deployConfig, deps deployDeps) e
 	cfg.NoConfig = true
 	cfg = resolveDefaults(cfg)
 	deps = resolveDeps(cfg, deps)
+	if err := retireLegacyMonitor(ctx, cfg, deps); err != nil {
+		return err
+	}
 	cfg = applyExistingConfigWebPolicy(cfg, deps)
 	if !cfg.NoPull {
 		deps.report("pulling latest source")
@@ -406,6 +412,9 @@ func runBootstrapUpdateWithDeps(ctx context.Context, cfg deployConfig, deps depl
 	cfg.Mode = modeBootstrapUpdate
 	cfg = resolveDefaults(cfg)
 	deps = resolveDeps(cfg, deps)
+	if _, err := migrateLegacyMonitorConfig(filepath.Join(wheelMakerHome(cfg), "config.json")); err != nil {
+		return err
+	}
 	cfg = applyExistingConfigWebPolicy(cfg, deps)
 	if !cfg.NoPull {
 		deps.report("pulling latest source")
@@ -708,12 +717,16 @@ func renameWithRetry(src string, dst string) error {
 
 func ensureConfig(cfg deployConfig, deps deployDeps) (bool, error) {
 	path := filepath.Join(wheelMakerHome(cfg), "config.json")
+	legacyChanged, err := migrateLegacyMonitorConfig(path)
+	if err != nil {
+		return false, err
+	}
 	if _, err := os.Stat(path); err == nil {
 		changed, err := migrateRegistryToken(path)
 		if err != nil {
 			return false, err
 		}
-		if !changed {
+		if !changed && !legacyChanged {
 			if err := shared.SecureConfigFile(path); err != nil {
 				return false, err
 			}
@@ -759,6 +772,14 @@ func ensureConfig(cfg deployConfig, deps deployDeps) (bool, error) {
 	}
 	deps.record("write config")
 	return true, nil
+}
+
+func retireLegacyMonitor(ctx context.Context, cfg deployConfig, deps deployDeps) error {
+	path := filepath.Join(wheelMakerHome(cfg), "config.json")
+	if _, err := migrateLegacyMonitorConfig(path); err != nil {
+		return err
+	}
+	return cleanupLegacyMonitor(ctx, cfg, deps.Runner, runtime.GOOS)
 }
 
 func migrateRegistryToken(path string) (bool, error) {

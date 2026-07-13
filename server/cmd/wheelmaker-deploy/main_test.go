@@ -112,6 +112,8 @@ func (r testRunner) Run(_ context.Context, dir string, name string, args ...stri
 		*r.events = append(*r.events, "git "+strings.Join(args, " "))
 	case name == "npm":
 		*r.events = append(*r.events, "npm "+strings.Join(args, " "))
+	case name == "powershell" && strings.Contains(strings.Join(args, " "), "-NonInteractive") && strings.Contains(strings.Join(args, " "), legacyWindowsMonitorService):
+		return "", nil
 	case name == "go" && len(args) >= 4 && args[0] == "build":
 		out := goBuildOutputArgForTest(args)
 		*r.events = append(*r.events, "go build "+buildLabelFromOutput(out))
@@ -170,6 +172,162 @@ func (s testServices) Status(context.Context) error        { return nil }
 type capturedCommand struct {
 	name string
 	args []string
+}
+
+type legacyMonitorRunner struct {
+	calls []capturedCommand
+	err   error
+}
+
+func (r *legacyMonitorRunner) Run(_ context.Context, _ string, name string, args ...string) (string, error) {
+	r.calls = append(r.calls, capturedCommand{name: name, args: append([]string(nil), args...)})
+	if r.err != nil {
+		return "", r.err
+	}
+	return "", nil
+}
+
+func TestMigrateLegacyMonitorConfigRemovesOnlyTopLevelMonitor(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	raw := []byte("{\n  \"projects\": [],\n  \"registry\": {\"token\": \"custom-short\"},\n  \"monitor\": {\"server\": \"127.0.0.1\", \"port\": 9631, \"legacy\": true},\n  \"log\": {\"level\": \"warn\"}\n}\n")
+	if err := os.WriteFile(path, raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	changed, err := migrateLegacyMonitorConfig(path)
+	if err != nil || !changed {
+		t.Fatalf("migrate changed=%v err=%v", changed, err)
+	}
+	first, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal(first, &root); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := root["monitor"]; ok {
+		t.Fatalf("migrated config still contains monitor: %s", first)
+	}
+	for _, key := range []string{"projects", "registry", "log"} {
+		if _, ok := root[key]; !ok {
+			t.Fatalf("migrated config lost %q: %s", key, first)
+		}
+	}
+	var registry struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(root["registry"], &registry); err != nil || registry.Token != "custom-short" {
+		t.Fatalf("registry=%+v err=%v", registry, err)
+	}
+
+	changed, err = migrateLegacyMonitorConfig(path)
+	if err != nil || changed {
+		t.Fatalf("second migrate changed=%v err=%v", changed, err)
+	}
+	second, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(second) != string(first) {
+		t.Fatalf("second migration changed bytes\nfirst=%q\nsecond=%q", first, second)
+	}
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := info.Mode().Perm(); got != 0o600 {
+			t.Fatalf("config mode=%o, want 600", got)
+		}
+	}
+}
+
+func TestMigrateLegacyMonitorConfigDoesNotOverwriteMalformedJSON(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	raw := []byte(`{"monitor":`)
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := migrateLegacyMonitorConfig(path); err == nil || changed {
+		t.Fatalf("migrate malformed changed=%v err=%v", changed, err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(raw) {
+		t.Fatalf("malformed config overwritten: %q", got)
+	}
+}
+
+func TestCleanupLegacyMonitorCommandsAndFiles(t *testing.T) {
+	for _, platform := range []string{"windows", "linux", "darwin"} {
+		t.Run(platform, func(t *testing.T) {
+			root := t.TempDir()
+			cfg := deployConfig{
+				HomeDir:    filepath.Join(root, "home"),
+				InstallDir: filepath.Join(root, "home", ".wheelmaker", "bin"),
+			}
+			if err := os.MkdirAll(cfg.InstallDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			binary := filepath.Join(cfg.InstallDir, legacyMonitorBinaryName(platform))
+			if err := os.WriteFile(binary, []byte("legacy"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			runner := &legacyMonitorRunner{}
+			if err := cleanupLegacyMonitor(context.Background(), cfg, runner, platform); err != nil {
+				t.Fatalf("cleanup: %v", err)
+			}
+			if _, err := os.Stat(binary); !os.IsNotExist(err) {
+				t.Fatalf("legacy binary remains: %v", err)
+			}
+			joined := ""
+			for _, call := range runner.calls {
+				joined += call.name + " " + strings.Join(call.args, " ") + "\n"
+			}
+			switch platform {
+			case "windows":
+				for _, needle := range []string{"powershell", "WheelMakerMonitor", "Stop-Service", "sc.exe delete"} {
+					if !strings.Contains(joined, needle) {
+						t.Fatalf("windows cleanup missing %q:\n%s", needle, joined)
+					}
+				}
+			case "linux":
+				for _, needle := range []string{"systemctl --user disable --now wheelmaker-monitor.service", "systemctl --user daemon-reload"} {
+					if !strings.Contains(joined, needle) {
+						t.Fatalf("linux cleanup missing %q:\n%s", needle, joined)
+					}
+				}
+			case "darwin":
+				if !strings.Contains(joined, "launchctl bootout") || !strings.Contains(joined, "com.wheelmaker.monitor") {
+					t.Fatalf("darwin cleanup commands:\n%s", joined)
+				}
+			}
+			if err := cleanupLegacyMonitor(context.Background(), cfg, runner, platform); err != nil {
+				t.Fatalf("second cleanup: %v", err)
+			}
+		})
+	}
+}
+
+func TestCleanupLegacyMonitorRejectsBinaryOutsideInstallDirectory(t *testing.T) {
+	root := t.TempDir()
+	cfg := deployConfig{HomeDir: root, InstallDir: filepath.Join(root, "bin")}
+	if err := os.MkdirAll(cfg.InstallDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(root, "outside")
+	if err := os.WriteFile(outside, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := removeLegacyMonitorBinary(cfg.InstallDir, outside); err == nil {
+		t.Fatal("outside binary removal succeeded")
+	}
+	if _, err := os.Stat(outside); err != nil {
+		t.Fatalf("outside file changed: %v", err)
+	}
 }
 
 type captureBuildRunner struct {
@@ -302,7 +460,7 @@ func TestDeployPublishesWebWhenConfigIsMissing(t *testing.T) {
 	assertEventsContainInOrder(t, *h.events, "npm ci --include=dev", "npm run build:web:release")
 }
 
-func TestDeployPublishesWebWhenExistingConfigCannotBeParsed(t *testing.T) {
+func TestDeployRejectsMalformedExistingConfigWithoutOverwritingIt(t *testing.T) {
 	h := newDeployHarness(t)
 	path := filepath.Join(wheelMakerHome(h.cfg), "config.json")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -312,11 +470,15 @@ func TestDeployPublishesWebWhenExistingConfigCannotBeParsed(t *testing.T) {
 		t.Fatalf("write invalid config: %v", err)
 	}
 
-	if err := runDeployWithDeps(context.Background(), h.cfg, h.deps); err != nil {
-		t.Fatalf("runDeployWithDeps: %v", err)
+	err := runDeployWithDeps(context.Background(), h.cfg, h.deps)
+	if err == nil || !strings.Contains(err.Error(), "legacy monitor migration") {
+		t.Fatalf("runDeployWithDeps err=%v, want migration parse error", err)
 	}
-
-	assertEventsContainInOrder(t, *h.events, "npm ci --include=dev", "npm run build:web:release")
+	assertEventsDoNotContain(t, *h.events, "npm ci")
+	got, readErr := os.ReadFile(path)
+	if readErr != nil || string(got) != "{" {
+		t.Fatalf("malformed config changed: %q err=%v", got, readErr)
+	}
 }
 
 func TestUpdateSkipsWebWhenExistingConfigDoesNotListen(t *testing.T) {
