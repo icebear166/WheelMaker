@@ -175,8 +175,9 @@ type capturedCommand struct {
 }
 
 type legacyMonitorRunner struct {
-	calls []capturedCommand
-	err   error
+	calls  []capturedCommand
+	err    error
+	output string
 }
 
 func (r *legacyMonitorRunner) Run(_ context.Context, _ string, name string, args ...string) (string, error) {
@@ -184,7 +185,18 @@ func (r *legacyMonitorRunner) Run(_ context.Context, _ string, name string, args
 	if r.err != nil {
 		return "", r.err
 	}
-	return "", nil
+	return r.output, nil
+}
+
+type legacyElevationTestRunner struct {
+	testRunner
+}
+
+func (r legacyElevationTestRunner) Run(ctx context.Context, dir string, name string, args ...string) (string, error) {
+	if name == "powershell" && strings.Contains(strings.Join(args, " "), legacyWindowsMonitorService) {
+		return "legacy monitor cleanup requires elevation", nil
+	}
+	return r.testRunner.Run(ctx, dir, name, args...)
 }
 
 func TestMigrateLegacyMonitorConfigRemovesOnlyTopLevelMonitor(t *testing.T) {
@@ -309,6 +321,30 @@ func TestCleanupLegacyMonitorCommandsAndFiles(t *testing.T) {
 				t.Fatalf("second cleanup: %v", err)
 			}
 		})
+	}
+}
+
+func TestCleanupLegacyMonitorPreservesBinaryWhenWindowsServiceRequiresElevation(t *testing.T) {
+	root := t.TempDir()
+	cfg := deployConfig{
+		HomeDir:    filepath.Join(root, "home"),
+		InstallDir: filepath.Join(root, "home", ".wheelmaker", "bin"),
+	}
+	if err := os.MkdirAll(cfg.InstallDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	binary := filepath.Join(cfg.InstallDir, legacyMonitorBinaryName("windows"))
+	if err := os.WriteFile(binary, []byte("legacy"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runner := &legacyMonitorRunner{output: "legacy monitor cleanup requires elevation"}
+
+	err := cleanupLegacyMonitor(context.Background(), cfg, runner, "windows")
+	if err == nil || err.Error() != "legacy monitor cleanup requires elevation" {
+		t.Fatalf("cleanup err=%v, want elevation requirement", err)
+	}
+	if _, err := os.Stat(binary); err != nil {
+		t.Fatalf("legacy binary should be preserved: %v", err)
 	}
 }
 
@@ -492,6 +528,24 @@ func TestUpdateSkipsWebWhenExistingConfigDoesNotListen(t *testing.T) {
 
 	assertEventsDoNotContain(t, *h.events, "npm ci")
 	assertEventsDoNotContain(t, *h.events, "npm run build:web:release")
+}
+
+func TestUpdateContinuesWhenLegacyMonitorCleanupRequiresElevation(t *testing.T) {
+	h := newDeployHarness(t)
+	h.cfg.Mode = modeUpdate
+	h.cfg.NoPull = true
+	h.cfg.NoWeb = true
+	h.deps.Runner = legacyElevationTestRunner{testRunner{events: h.events}}
+	reports := []string{}
+	h.deps.Report = func(message string) { reports = append(reports, message) }
+
+	if err := runUpdateWithDeps(context.Background(), h.cfg, h.deps); err != nil {
+		t.Fatalf("runUpdateWithDeps: %v", err)
+	}
+	if !strings.Contains(strings.Join(reports, "\n"), "legacy monitor cleanup requires elevation") {
+		t.Fatalf("reports=%q, want elevation warning", reports)
+	}
+	assertEventsContainInOrder(t, *h.events, "go build wheelmaker", "write release")
 }
 
 func TestUpdateWritesReleaseManifestWhenWebPublishIsSkipped(t *testing.T) {

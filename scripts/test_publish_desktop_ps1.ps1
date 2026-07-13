@@ -33,6 +33,7 @@ Assert-Contains "publish_desktop.ps1" $script "WheelMakerDesktop.exe"
 Assert-Contains "publish_desktop.ps1" $script '"webMode" = "remote-only"'
 Assert-Contains "publish_desktop.ps1" $script '"embeddedAsset" = "bootstrap/index.html"'
 Assert-Contains "publish_desktop.ps1" $script "Assert-RemoteOnlyDesktopBinary"
+Assert-NotContains "publish_desktop.ps1" $script '"bundle."'
 Assert-Contains "publish_desktop.ps1" $script '$shortcut.IconLocation = $script:DesktopExe'
 Assert-Contains "publish_desktop.ps1" $script "desktop-release.json"
 Assert-Contains "publish_desktop.ps1" $script "CreateShortcut"

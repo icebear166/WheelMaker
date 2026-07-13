@@ -279,7 +279,11 @@ func runDeployWithDeps(ctx context.Context, cfg deployConfig, deps deployDeps) e
 	cfg = resolveDefaults(cfg)
 	deps = resolveDeps(cfg, deps)
 	if err := retireLegacyMonitor(ctx, cfg, deps); err != nil {
-		return err
+		if errors.Is(err, errLegacyMonitorCleanupRequiresElevation) {
+			deps.report("legacy monitor cleanup requires elevation; preserving the legacy service and binary")
+		} else {
+			return err
+		}
 	}
 	cfg = applyExistingConfigWebPolicy(cfg, deps)
 	deps.report("checking deploy prerequisites")
@@ -356,7 +360,11 @@ func runUpdateWithDeps(ctx context.Context, cfg deployConfig, deps deployDeps) e
 	cfg = resolveDefaults(cfg)
 	deps = resolveDeps(cfg, deps)
 	if err := retireLegacyMonitor(ctx, cfg, deps); err != nil {
-		return err
+		if errors.Is(err, errLegacyMonitorCleanupRequiresElevation) {
+			deps.report("legacy monitor cleanup requires elevation; preserving the legacy service and binary")
+		} else {
+			return err
+		}
 	}
 	cfg = applyExistingConfigWebPolicy(cfg, deps)
 	if !cfg.NoPull {

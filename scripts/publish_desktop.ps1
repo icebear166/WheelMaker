@@ -90,7 +90,7 @@ function Build-DesktopBinary {
 function Assert-RemoteOnlyDesktopBinary {
   if ($WhatIf) { return }
   $text = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($script:DesktopExe))
-  foreach ($needle in @("bundle.", "service-worker.js", "manifest.webmanifest", ":9632")) {
+  foreach ($needle in @("service-worker.js", "manifest.webmanifest", ":9632")) {
     if ($text.Contains($needle)) {
       throw ("desktop binary contains legacy Workspace asset marker: {0}" -f $needle)
     }

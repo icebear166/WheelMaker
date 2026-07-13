@@ -14,10 +14,13 @@ import (
 )
 
 const (
-	legacyWindowsMonitorService = "WheelMakerMonitor"
-	legacyLinuxMonitorUnit      = "wheelmaker-monitor.service"
-	legacyDarwinMonitorLabel    = "com.wheelmaker.monitor"
+	legacyWindowsMonitorService           = "WheelMakerMonitor"
+	legacyLinuxMonitorUnit                = "wheelmaker-monitor.service"
+	legacyDarwinMonitorLabel              = "com.wheelmaker.monitor"
+	legacyMonitorCleanupRequiresElevation = "legacy monitor cleanup requires elevation"
 )
+
+var errLegacyMonitorCleanupRequiresElevation = errors.New(legacyMonitorCleanupRequiresElevation)
 
 func migrateLegacyMonitorConfig(path string) (bool, error) {
 	raw, err := os.ReadFile(path)
@@ -53,11 +56,20 @@ func cleanupLegacyMonitor(ctx context.Context, cfg deployConfig, runner commandR
 		script := fmt.Sprintf(`$ErrorActionPreference = 'Stop'
 $service = Get-Service -Name '%s' -ErrorAction SilentlyContinue
 if ($null -ne $service) {
+  $principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+  if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Output '%s'
+    exit 0
+  }
   if ($service.Status -ne 'Stopped') { Stop-Service -Name '%s' -Force -ErrorAction Stop }
   sc.exe delete '%s' | Out-Null
   if ($LASTEXITCODE -ne 0) { throw 'failed to delete legacy monitor service' }
-}`, legacyWindowsMonitorService, legacyWindowsMonitorService, legacyWindowsMonitorService)
-		_, err = runner.Run(ctx, "", "powershell", "-NoProfile", "-NonInteractive", "-Command", script)
+}`, legacyWindowsMonitorService, legacyMonitorCleanupRequiresElevation, legacyWindowsMonitorService, legacyWindowsMonitorService)
+		var output string
+		output, err = runner.Run(ctx, "", "powershell", "-NoProfile", "-NonInteractive", "-Command", script)
+		if err == nil && strings.Contains(output, legacyMonitorCleanupRequiresElevation) {
+			return errLegacyMonitorCleanupRequiresElevation
+		}
 	case "linux":
 		_, err = runner.Run(ctx, "", "systemctl", "--user", "disable", "--now", legacyLinuxMonitorUnit)
 		unitPath := filepath.Join(cfg.HomeDir, ".config", "systemd", "user", legacyLinuxMonitorUnit)
