@@ -2719,7 +2719,7 @@
 }
 
 .chat-recent-sessions-surface.desktop {
-  --chat-recent-sessions-width: 320px;
+  --chat-recent-sessions-width: 360px;
   --chat-recent-sessions-column-gap: 12px;
   --chat-recent-sessions-edge-gap: calc(18px + var(--chat-scrollbar-gutter-width, 8px));
   --chat-recent-sessions-resolved-width: min(
@@ -2731,7 +2731,6 @@
   left: var(--chat-recent-sessions-edge-gap);
   z-index: 6;
   width: var(--chat-recent-sessions-resolved-width);
-  max-height: min(42vh, 360px);
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--border-subtle) 82%, var(--accent-primary));
   border-radius: 8px;
@@ -2801,24 +2800,9 @@
   line-height: 1.2;
 }
 
-.chat-recent-sessions-surface-list {
-  max-height: calc(min(42vh, 360px) - 34px);
-  overflow-y: auto;
-  scrollbar-width: thin;
-}
-
 .chat-recent-sessions-surface-list .chat-recent-sessions-rows {
   margin-top: 0;
   animation: none;
-}
-
-.chat-recent-sessions-surface-list .wide-session-row {
-  min-height: 30px;
-}
-
-.chat-recent-sessions-surface-list .wide-session-title {
-  font-size: 13.5px;
-  line-height: 1.25;
 }
 
 .chat-recent-sessions-compact-trigger {
