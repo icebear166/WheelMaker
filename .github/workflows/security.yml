@@ -1,0 +1,23 @@
+name: Security
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  credential-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.x'
+      - name: Scan current tree
+        run: go run github.com/zricethezav/gitleaks/v8@v8.28.0 dir --redact --no-banner .
+      - name: Scan Git history
+        run: go run github.com/zricethezav/gitleaks/v8@v8.28.0 git --redact --no-banner

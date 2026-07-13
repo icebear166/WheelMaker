@@ -78,6 +78,14 @@ cd WheelMaker
 
 不要猜其他仓库地址。
 
+克隆后安装本仓库的凭据泄漏 pre-commit 门：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install_git_hooks.ps1
+```
+
+该脚本固定安装 Gitleaks v8.28.0，并把当前仓库的 `core.hooksPath` 设置为 `.githooks`。Gitleaks 缺失时 hook 会 fail closed；不要用 `--no-verify` 绕过安全提交门。CI 还会扫描当前 tree 和完整 Git 历史。
+
 ## 3. 生成共享 Token
 
 先问用户是否已有共享 Registry token。没有则生成一个高熵 token。
