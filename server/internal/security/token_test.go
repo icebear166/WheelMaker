@@ -51,9 +51,10 @@ func TestValidateRegistryTokenRejectsUnsafeValues(t *testing.T) {
 	}
 }
 
-func TestValidateRegistryTokenAcceptsGeneratedValue(t *testing.T) {
-	token := strings.Repeat("a", 43)
-	if err := ValidateRegistryToken(token); err != nil {
-		t.Fatalf("ValidateRegistryToken() error=%v", err)
+func TestValidateRegistryTokenAcceptsGeneratedAndShortCustomValues(t *testing.T) {
+	for _, token := range []string{strings.Repeat("a", 43), "short-custom"} {
+		if err := ValidateRegistryToken(token); err != nil {
+			t.Fatalf("ValidateRegistryToken(%q) error=%v", token, err)
+		}
 	}
 }
