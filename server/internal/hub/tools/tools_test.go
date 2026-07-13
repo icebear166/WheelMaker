@@ -25,7 +25,7 @@ func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func TestManagerRoutesToolCommands(t *testing.T) {
-	manager := NewManager(ManagerConfig{HubID: "hub-a", MonitorBaseDir: t.TempDir()})
+	manager := NewManager(ManagerConfig{HubID: "hub-a", StateDir: t.TempDir()})
 
 	resp, cmdErr := manager.Handle(context.Background(), "cmd.update", rawToolPayload(t, map[string]any{
 		"action": "query",

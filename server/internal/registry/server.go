@@ -452,7 +452,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 
 	var idleTimer *time.Timer
 	resetIdleTimer := func() {
-		if !state.initialized || (state.role != string(rp.RegistryRoleClient) && state.role != string(rp.RegistryRoleMonitor)) {
+		if !state.initialized || state.role != string(rp.RegistryRoleClient) {
 			return
 		}
 		if idleTimer == nil {
@@ -552,7 +552,6 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 
 func shouldHandleRegistryRequestAsync(method string) bool {
 	return rp.RegistryRelayControlMethod(method) ||
-		rp.RegistryMonitorForwardMethod(method) ||
 		rp.RegistryHubStateMethod(method) || isTerminalHubRequestMethod(method) ||
 		isClientForwardMethod(method)
 }
@@ -578,14 +577,10 @@ func (s *Server) handleRequest(state *connectionState, in envelope) {
 		s.handleDebugUploadLog(state.peer, in)
 	case rp.RegistrySecuritySessionMethod(in.Method):
 		s.handleDeviceSessionRequest(state.peer, state, in)
-	case in.Method == rp.RegistryMethodMonitorListHub:
-		s.handleMonitorListHub(state.peer, state, in)
 	case in.Method == rp.RegistryMethodHubPing:
 		_ = s.writeResponse(state.peer, in.RequestID, in.Method, "", map[string]any{"ok": true})
 	case rp.RegistryRelayControlMethod(in.Method):
 		s.handleRelayRequest(state.peer, state, in)
-	case rp.RegistryMonitorForwardMethod(in.Method):
-		s.handleMonitorForwardRequest(state.peer, state, in)
 	case rp.RegistryHubStateMethod(in.Method) || isTerminalHubRequestMethod(in.Method):
 		s.handleHubStateForwardRequest(state.peer, state, in)
 	case isSpeechRequestMethod(in.Method):
@@ -800,8 +795,12 @@ func (s *Server) handleConnectInit(peer *peerConn, state *connectionState, in en
 		return true
 	}
 	role := strings.TrimSpace(payload.Role)
-	if role != string(rp.RegistryRoleHub) && role != string(rp.RegistryRoleClient) && role != string(rp.RegistryRoleMonitor) {
-		_ = s.writeError(peer, in.RequestID, in.Method, codeInvalidArgument, "role must be hub, client, or monitor", nil)
+	if role == "monitor" {
+		_ = s.writeError(peer, in.RequestID, in.Method, codeForbidden, "monitor role has been retired", nil)
+		return true
+	}
+	if role != string(rp.RegistryRoleHub) && role != string(rp.RegistryRoleClient) {
+		_ = s.writeError(peer, in.RequestID, in.Method, codeInvalidArgument, "role must be hub or client", nil)
 		return true
 	}
 	if role == string(rp.RegistryRoleHub) && strings.TrimSpace(payload.HubID) == "" {
@@ -828,7 +827,7 @@ func (s *Server) handleConnectInit(peer *peerConn, state *connectionState, in en
 	state.scopeHubID = strings.TrimSpace(payload.HubID)
 	state.connectionEpoch = s.nextConnEpoch.Add(1)
 	peer.setMeta(state.role, state.hubID)
-	if state.role == string(rp.RegistryRoleClient) || state.role == string(rp.RegistryRoleMonitor) {
+	if state.role == string(rp.RegistryRoleClient) {
 		s.mu.Lock()
 		s.clientPeers[state.id] = state
 		s.mu.Unlock()
@@ -1108,37 +1107,6 @@ func (s *Server) debugUploadLogEnvelope(in envelope) envelope {
 	}
 }
 
-func (s *Server) handleMonitorListHub(peer *peerConn, state *connectionState, in envelope) {
-	hubs := s.snapshotHubs()
-	_ = s.writeResponse(peer, in.RequestID, in.Method, "", map[string]any{"hubs": hubs})
-}
-
-func (s *Server) snapshotHubs() []map[string]any {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	items := make([]map[string]any, 0, len(s.hubs))
-	for hubID := range s.hubs {
-		_, online := s.hubPeers[hubID]
-		items = append(items, map[string]any{
-			"hubId":  hubID,
-			"online": online,
-		})
-	}
-	sort.Slice(items, func(i, j int) bool {
-		li, _ := items[i]["hubId"].(string)
-		lj, _ := items[j]["hubId"].(string)
-		return li < lj
-	})
-	return items
-}
-
-func (s *Server) handleMonitorForwardRequest(clientPeer *peerConn, state *connectionState, in envelope) {
-	resp := s.executeMonitorRequest(state, in)
-	resp.RequestID = in.RequestID
-	_ = clientPeer.write(resp)
-}
-
 func (s *Server) handleHubStateForwardRequest(clientPeer *peerConn, state *connectionState, in envelope) {
 	resp := s.executeHubStateRequest(state, in)
 	resp.RequestID = in.RequestID
@@ -1220,48 +1188,6 @@ func (s *Server) executeHubStateRequest(state *connectionState, in envelope) env
 		resp := s.errorEnvelope(in.Method, codeTimeout, "hub response timeout", nil)
 		resp.HubID = hubID
 		return resp
-	}
-}
-
-func (s *Server) executeMonitorRequest(_ *connectionState, in envelope) envelope {
-	var payload monitorHubRefPayload
-	if err := decodePayload(in.Payload, &payload); err != nil {
-		return s.errorEnvelope(in.Method, codeInvalidArgument, "invalid monitor payload", nil)
-	}
-	hubID := strings.TrimSpace(payload.HubID)
-	if hubID == "" {
-		return s.errorEnvelope(in.Method, codeInvalidArgument, "hubId is required", nil)
-	}
-
-	s.mu.RLock()
-	hubPeer := s.hubPeers[hubID]
-	s.mu.RUnlock()
-	if hubPeer == nil {
-		return s.errorEnvelope(in.Method, codeUnavailable, "hub offline", map[string]any{"hubId": hubID})
-	}
-
-	forwardID := s.nextForwardID.Add(1)
-	waitCh := hubPeer.registerPending(forwardID)
-	err := hubPeer.write(envelope{
-		RequestID: forwardID,
-		Type:      rp.RegistryEnvelopeTypeRequest,
-		Method:    in.Method,
-		Payload:   in.Payload,
-	})
-	if err != nil {
-		hubPeer.resolvePending(forwardID, envelope{})
-		return s.errorEnvelope(in.Method, codeInternal, "forward request write failed", nil)
-	}
-
-	select {
-	case resp, ok := <-waitCh:
-		if !ok {
-			return s.errorEnvelope(in.Method, codeInternal, "hub disconnected", nil)
-		}
-		return resp
-	case <-time.After(defaultRequestTimeout):
-		hubPeer.resolvePending(forwardID, envelope{})
-		return s.errorEnvelope(in.Method, codeTimeout, "hub response timeout", nil)
 	}
 }
 
@@ -1487,7 +1413,7 @@ func (s *Server) unregisterHub(peer *peerConn, state *connectionState) {
 }
 
 func (s *Server) unregisterClient(state *connectionState) {
-	if state == nil || (state.role != string(rp.RegistryRoleClient) && state.role != string(rp.RegistryRoleMonitor)) {
+	if state == nil || state.role != string(rp.RegistryRoleClient) {
 		return
 	}
 	s.mu.Lock()

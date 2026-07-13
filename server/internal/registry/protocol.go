@@ -30,8 +30,3 @@ type projectListItem = rp.ProjectListItem
 type debugUploadLogPayload = rp.DebugUploadLogPayload
 
 type debugUploadLogResponsePayload = rp.DebugUploadLogResponsePayload
-type monitorHubRefPayload = rp.MonitorHubRefPayload
-
-type monitorActionPayload = rp.MonitorActionPayload
-
-type monitorLogPayload = rp.MonitorLogPayload

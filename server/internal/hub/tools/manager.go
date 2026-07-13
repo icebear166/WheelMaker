@@ -11,11 +11,11 @@ import (
 type ProjectInfo = rp.ProjectInfo
 
 type ManagerConfig struct {
-	HubID                string
-	Projects             []ProjectInfo
-	MonitorBaseDir       string
-	GlobalLockPath       string
-	HomeDir              string
+	HubID                 string
+	Projects              []ProjectInfo
+	StateDir              string
+	GlobalLockPath        string
+	HomeDir               string
 	OnSkillsOperationDone func(scope, projectName string)
 }
 
@@ -48,19 +48,19 @@ func NewManager(config ManagerConfig) *Manager {
 	if config.HubID == "" {
 		config.HubID = "wheelmaker-hub"
 	}
-	config.MonitorBaseDir = strings.TrimSpace(config.MonitorBaseDir)
+	config.StateDir = strings.TrimSpace(config.StateDir)
 	config.GlobalLockPath = strings.TrimSpace(config.GlobalLockPath)
 	config.HomeDir = strings.TrimSpace(config.HomeDir)
 	config.Projects = append([]ProjectInfo(nil), config.Projects...)
 	return &Manager{
 		cfg:           config,
 		npmCommand:    NewNPMCommand(),
-		updateCommand: NewUpdateCommand(config.MonitorBaseDir),
+		updateCommand: NewUpdateCommand(config.StateDir),
 		skillsCommand: NewSkillsCommand(skillsCommandConfig{
-			HubID:          config.HubID,
-			Projects:       config.Projects,
-			GlobalLockPath: config.GlobalLockPath,
-			HomeDir:        config.HomeDir,
+			HubID:           config.HubID,
+			Projects:        config.Projects,
+			GlobalLockPath:  config.GlobalLockPath,
+			HomeDir:         config.HomeDir,
 			OnOperationDone: config.OnSkillsOperationDone,
 		}),
 		tokenCommand: NewTokenCommand(),
@@ -90,17 +90,17 @@ func (m *Manager) Handle(ctx context.Context, method string, payload json.RawMes
 		return out, npmErr(err)
 	case "cmd.update":
 		if m.updateCommand == nil {
-			m.updateCommand = NewUpdateCommand(m.cfg.MonitorBaseDir)
+			m.updateCommand = NewUpdateCommand(m.cfg.StateDir)
 		}
 		out, err := m.updateCommand.Handle(ctx, payload)
 		return out, updateErr(err)
 	case "cmd.skills":
 		if m.skillsCommand == nil {
 			m.skillsCommand = NewSkillsCommand(skillsCommandConfig{
-				HubID:          m.cfg.HubID,
-				Projects:       m.cfg.Projects,
-				GlobalLockPath: m.cfg.GlobalLockPath,
-				HomeDir:        m.cfg.HomeDir,
+				HubID:           m.cfg.HubID,
+				Projects:        m.cfg.Projects,
+				GlobalLockPath:  m.cfg.GlobalLockPath,
+				HomeDir:         m.cfg.HomeDir,
 				OnOperationDone: m.cfg.OnSkillsOperationDone,
 			})
 		}

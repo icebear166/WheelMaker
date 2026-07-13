@@ -111,13 +111,13 @@ Expected: PASS；三平台清理可重复执行。
 - Modify: `app/web/src/registry/RegistryRepository.ts`
 - Create: `app/__tests__/web-monitor-retirement.test.ts`
 
-- [ ] **Step 1: 写拒绝已删除角色/方法测试**
+- [x] **Step 1: 写拒绝已删除角色/方法测试**
 
 协议枚举测试中删除 Monitor descriptors，并新增 Registry 回归：`connect.init role=monitor` 返回 `forbidden`；`monitor.status`、`monitor.restart` 或现有 Monitor 方法一律返回 unknown/forbidden，不能路由到 Hub。
 
 `web-monitor-retirement.test.ts` 断言 `RegistryMethods`、repository 和 DTO 不包含 `Monitor`。
 
-- [ ] **Step 2: 运行测试并确认失败**
+- [x] **Step 2: 运行测试并确认失败**
 
 Run:
 
@@ -130,13 +130,13 @@ npm test -- --runInBand __tests__/web-monitor-retirement.test.ts
 
 Expected: FAIL；当前 role/method/route 仍存在。
 
-- [ ] **Step 3: 删除协议和运行路由**
+- [x] **Step 3: 删除协议和运行路由**
 
 删除 `RegistryRoleMonitor`、Monitor method 常量/descriptor/payload、Registry monitor peer map、`MonitorCore` 及其 status/log/database/action handler。不要将旧方法改成 alias；删除后统一走现有 unsupported method 错误。
 
 `ReporterConfig.MonitorBaseDir` 和 `tools.ManagerConfig.MonitorBaseDir` 还被 file index/update tools 当作 WheelMaker state dir 使用，必须同步重命名为 `StateDir`，更新 `hub.go` 和测试；不能因为删除 Monitor 而丢掉 file index/update 的目录能力。删除 `SetMonitorResetSessionPromptState` 及只服务于 Monitor action 的回调。
 
-- [ ] **Step 4: 运行测试并提交**
+- [x] **Step 4: 运行测试并提交**
 
 Run:
 

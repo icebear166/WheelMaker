@@ -27,9 +27,20 @@ func TestRegistryDeviceSessionMethods(t *testing.T) {
 		if !RegistryMethodAllowed(string(RegistryRoleClient), method) {
 			t.Fatalf("method %q should allow client", method)
 		}
-		if RegistryMethodAllowed(string(RegistryRoleHub), method) || RegistryMethodAllowed(string(RegistryRoleMonitor), method) {
+		if RegistryMethodAllowed(string(RegistryRoleHub), method) || RegistryMethodAllowed("monitor", method) {
 			t.Fatalf("method %q allowed a non-client role", method)
 		}
+	}
+}
+
+func TestMonitorMethodsRemoved(t *testing.T) {
+	for _, method := range []string{"monitor.listHub", "monitor.status", "monitor.log", "monitor.db", "monitor.action", "monitor.restart"} {
+		if desc, ok := RegistryMethod(method); ok {
+			t.Fatalf("removed monitor method %q still registered as %+v", method, desc)
+		}
+	}
+	if RegistryMethodAllowed("monitor", RegistryMethodRegistryProjectList) {
+		t.Fatal("removed monitor role can still list projects")
 	}
 }
 

@@ -184,7 +184,7 @@ func (h *Hub) setupRegistrySync() {
 		Token:             cfg.Token,
 		HubID:             hubID,
 		ReconnectInterval: 2 * time.Second,
-		MonitorBaseDir:    filepath.Dir(filepath.Dir(h.dbPath)),
+		StateDir:          filepath.Dir(filepath.Dir(h.dbPath)),
 	}, projects)
 	projectsByID := make(map[string]terminalpkg.Project, len(projects))
 	for _, project := range projects {
@@ -205,13 +205,6 @@ func (h *Hub) setupRegistrySync() {
 	})
 	rep.SetTerminalHandler(&terminalReporterHandler{manager: terminalManager})
 	h.terminalManager = terminalManager
-	rep.SetMonitorResetSessionPromptState(func() {
-		for _, projectClient := range h.clientsByName {
-			if projectClient != nil {
-				projectClient.ResetSessionPromptState()
-			}
-		}
-	})
 	for _, project := range projects {
 		projectClient := h.clientsByName[project.Name]
 		projectID := rp.ProjectID(hubID, project.Name)

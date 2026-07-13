@@ -12,9 +12,8 @@ const (
 type RegistryRole string
 
 const (
-	RegistryRoleHub     RegistryRole = "hub"
-	RegistryRoleClient  RegistryRole = "client"
-	RegistryRoleMonitor RegistryRole = "monitor"
+	RegistryRoleHub    RegistryRole = "hub"
+	RegistryRoleClient RegistryRole = "client"
 )
 
 type RegistryRouteKind string
@@ -29,8 +28,6 @@ const (
 	RegistryRouteProjectForward         RegistryRouteKind = "project_forward"
 	RegistryRouteSessionForward         RegistryRouteKind = "session_forward"
 	RegistryRouteHubCommand             RegistryRouteKind = "hub_command"
-	RegistryRouteMonitorCache           RegistryRouteKind = "monitor_cache"
-	RegistryRouteMonitorForward         RegistryRouteKind = "monitor_forward"
 	RegistryRouteRelayControl           RegistryRouteKind = "relay_control"
 	RegistryRouteRelayHub               RegistryRouteKind = "relay_hub"
 	RegistryRouteSpeech                 RegistryRouteKind = "speech"
@@ -106,12 +103,6 @@ const (
 	RegistryMethodSessionAttachmentThumbnail = "session.attachment.thumbnail"
 	RegistryMethodSessionAttachmentRead      = "session.attachment.read"
 
-	RegistryMethodMonitorListHub = "monitor.listHub"
-	RegistryMethodMonitorStatus  = "monitor.status"
-	RegistryMethodMonitorLog     = "monitor.log"
-	RegistryMethodMonitorDB      = "monitor.db"
-	RegistryMethodMonitorAction  = "monitor.action"
-
 	RegistryMethodRegistryRelayEnable               = "registry.relay.enable"
 	RegistryMethodRegistryRelayDisable              = "registry.relay.disable"
 	RegistryMethodRegistryRelayStatus               = "registry.relay.status"
@@ -161,7 +152,7 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 
 	RegistryMethodHubReportProjects:     registryHubReportMethod(RegistryMethodHubReportProjects),
 	RegistryMethodHubReportProject:      registryHubReportMethod(RegistryMethodHubReportProject),
-	RegistryMethodRegistryProjectList:   registryMethod(RegistryMethodRegistryProjectList, RegistryRouteProjectCache, []RegistryRole{RegistryRoleClient, RegistryRoleMonitor}),
+	RegistryMethodRegistryProjectList:   registryMethod(RegistryMethodRegistryProjectList, RegistryRouteProjectCache, []RegistryRole{RegistryRoleClient}),
 	RegistryMethodRegistryProjectReport: registryClientEventMethod(RegistryMethodRegistryProjectReport),
 
 	RegistryMethodProjectFSList:                 registryProjectMethod(RegistryMethodProjectFSList, RegistryRouteProjectForward),
@@ -207,12 +198,6 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodSessionAttachmentDelete:    registryProjectMethod(RegistryMethodSessionAttachmentDelete, RegistryRouteSessionForward),
 	RegistryMethodSessionAttachmentThumbnail: registryProjectMethod(RegistryMethodSessionAttachmentThumbnail, RegistryRouteSessionForward),
 	RegistryMethodSessionAttachmentRead:      registryProjectMethod(RegistryMethodSessionAttachmentRead, RegistryRouteSessionForward),
-
-	RegistryMethodMonitorListHub: registryMethod(RegistryMethodMonitorListHub, RegistryRouteMonitorCache, []RegistryRole{RegistryRoleMonitor}),
-	RegistryMethodMonitorStatus:  registryMethod(RegistryMethodMonitorStatus, RegistryRouteMonitorForward, []RegistryRole{RegistryRoleMonitor}),
-	RegistryMethodMonitorLog:     registryMethod(RegistryMethodMonitorLog, RegistryRouteMonitorForward, []RegistryRole{RegistryRoleMonitor}),
-	RegistryMethodMonitorDB:      registryMethod(RegistryMethodMonitorDB, RegistryRouteMonitorForward, []RegistryRole{RegistryRoleMonitor}),
-	RegistryMethodMonitorAction:  registryMethod(RegistryMethodMonitorAction, RegistryRouteMonitorForward, []RegistryRole{RegistryRoleMonitor}),
 
 	RegistryMethodRegistryRelayEnable:               registryMethod(RegistryMethodRegistryRelayEnable, RegistryRouteRelayControl, []RegistryRole{RegistryRoleClient}),
 	RegistryMethodRegistryRelayDisable:              registryMethod(RegistryMethodRegistryRelayDisable, RegistryRouteRelayControl, []RegistryRole{RegistryRoleClient}),
@@ -325,10 +310,6 @@ func RegistryHubCommandMethod(method string) bool {
 
 func RegistryHubStateMethod(method string) bool {
 	return RegistryMethodHasRoute(method, RegistryRouteHubState)
-}
-
-func RegistryMonitorForwardMethod(method string) bool {
-	return RegistryMethodHasRoute(method, RegistryRouteMonitorForward)
 }
 
 func RegistryRelayControlMethod(method string) bool {

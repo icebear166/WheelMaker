@@ -513,7 +513,7 @@ func TestReporterRespondsToHubStateGet(t *testing.T) {
 		Server:            strings.TrimPrefix(ts.URL, "http://"),
 		HubID:             "hub-state-get",
 		ReconnectInterval: 50 * time.Millisecond,
-		MonitorBaseDir:    t.TempDir(),
+		StateDir:          t.TempDir(),
 	}, nil)
 
 	done := make(chan error, 1)
@@ -563,7 +563,7 @@ func TestReporterRespondsToHubStateRefresh(t *testing.T) {
 		Server:            strings.TrimPrefix(ts.URL, "http://"),
 		HubID:             "hub-state-refresh",
 		ReconnectInterval: 50 * time.Millisecond,
-		MonitorBaseDir:    t.TempDir(),
+		StateDir:          t.TempDir(),
 	}, nil)
 	reporter.toolHandler = toolHandler
 
@@ -625,7 +625,7 @@ func TestReporterRejectsUnsupportedHubStateAction(t *testing.T) {
 				Server:            strings.TrimPrefix(ts.URL, "http://"),
 				HubID:             "hub-state-action",
 				ReconnectInterval: 50 * time.Millisecond,
-				MonitorBaseDir:    t.TempDir(),
+				StateDir:          t.TempDir(),
 			}, nil)
 
 			done := make(chan error, 1)
@@ -651,7 +651,7 @@ func TestReporterRejectsUnsupportedHubStateAction(t *testing.T) {
 
 func TestHubStateToolHandlingSerializesSharedHandler(t *testing.T) {
 	toolHandler := &overlapDetectingToolCommandHandler{}
-	reporter := NewReporter(ReporterConfig{HubID: "hub-state-serialized", MonitorBaseDir: t.TempDir()}, nil)
+	reporter := NewReporter(ReporterConfig{HubID: "hub-state-serialized", StateDir: t.TempDir()}, nil)
 	reporter.toolHandler = toolHandler
 
 	errCh := make(chan error, 20)
@@ -678,7 +678,7 @@ func TestHubStateToolHandlingSerializesSharedHandler(t *testing.T) {
 func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 	root := t.TempDir()
 	reporter := NewReporter(
-		ReporterConfig{HubID: "hub-state-action-parity", MonitorBaseDir: t.TempDir()},
+		ReporterConfig{HubID: "hub-state-action-parity", StateDir: t.TempDir()},
 		[]ProjectInfo{{Name: "proj1", Path: root, Online: true}},
 	)
 	toolHandler := &stubToolCommandHandler{response: map[string]any{"ok": true}}
@@ -811,7 +811,7 @@ func stopReporterForTest(t *testing.T, cancel context.CancelFunc, done <-chan er
 
 func TestHubStateToolAdaptersMapSectionsToExistingCommands(t *testing.T) {
 	toolHandler := &stubToolCommandHandler{response: map[string]any{"ok": true}}
-	reporter := NewReporter(ReporterConfig{HubID: "hub-state-adapter", MonitorBaseDir: t.TempDir()}, nil)
+	reporter := NewReporter(ReporterConfig{HubID: "hub-state-adapter", StateDir: t.TempDir()}, nil)
 	reporter.toolHandler = toolHandler
 
 	handlers := reporter.hubStateSectionHandlers()
@@ -855,7 +855,7 @@ func TestHubStateToolAdaptersMapSectionsToExistingCommands(t *testing.T) {
 func TestHubStateFileIndexAdapterReturnsStatus(t *testing.T) {
 	root := t.TempDir()
 	reporter := NewReporter(
-		ReporterConfig{HubID: "hub-file-index", MonitorBaseDir: t.TempDir()},
+		ReporterConfig{HubID: "hub-file-index", StateDir: t.TempDir()},
 		[]ProjectInfo{{Name: "proj1", Path: root, Online: true}},
 	)
 
@@ -2395,40 +2395,6 @@ func TestReporterDebugEnvelope_OneLineWithDirection(t *testing.T) {
 	}
 }
 
-func TestReporterRespondsToMonitorStatusRequests(t *testing.T) {
-	ts := newRegistryServer(t, registry.New(registry.Config{}).Handler())
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	r := NewReporter(ReporterConfig{Server: ts, HubID: "hub-monitor", ReconnectInterval: 50 * time.Millisecond, MonitorBaseDir: t.TempDir()}, []ProjectInfo{{Name: "proj1", Path: t.TempDir(), Online: true}})
-	done := make(chan error, 1)
-	go func() { done <- r.Run(ctx) }()
-	defer func() {
-		cancel()
-		select {
-		case <-done:
-		case <-time.After(2 * time.Second):
-			t.Fatal("reporter did not stop")
-		}
-	}()
-
-	waitForProjectOnline(t, ts, rp.ProjectID("hub-monitor", "proj1"), "")
-
-	monitor := dialWS(t, "http://"+ts+"/ws")
-	defer monitor.Close()
-	mustWriteJSON(t, monitor, testEnvelope{RequestID: 1, Type: "request", Method: "connect.init", Payload: map[string]any{"clientName": "wm-monitor", "clientVersion": "0.1.0", "protocolVersion": rp.DefaultProtocolVersion, "role": "monitor"}})
-	_ = mustReadEnvelope(t, monitor)
-
-	mustWriteJSON(t, monitor, testEnvelope{RequestID: 2, Type: "request", Method: "monitor.status", Payload: map[string]any{"hubId": "hub-monitor"}})
-	resp := mustReadEnvelope(t, monitor)
-	if resp.Type != "response" || resp.Method != "monitor.status" {
-		t.Fatalf("unexpected monitor.status response: %#v", resp)
-	}
-	if _, ok := resp.Payload["running"]; !ok {
-		t.Fatalf("missing running field: %#v", resp.Payload)
-	}
-}
-
 func newRegistryServer(t *testing.T, h http.Handler) string {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -2570,98 +2536,6 @@ func mustReadEnvelope(t *testing.T, ws *websocket.Conn) testEnvelope {
 		t.Fatalf("read json: %v", err)
 	}
 	return out
-}
-
-func TestMonitorCoreGetStatus(t *testing.T) {
-	core := NewMonitorCore(t.TempDir())
-	status, err := core.GetServiceStatus()
-	if err != nil {
-		t.Fatalf("GetServiceStatus: %v", err)
-	}
-	if status.Timestamp == "" {
-		t.Fatalf("timestamp should not be empty")
-	}
-}
-
-func TestMonitorCoreGetLogs_NormalizesFileAndTail(t *testing.T) {
-	base := t.TempDir()
-	core := NewMonitorCore(base)
-	logPath := filepath.Join(base, "log", "hub.log")
-	if err := writeMonitorFile(logPath, "line1\nline2\nline3\n"); err != nil {
-		t.Fatalf("write log: %v", err)
-	}
-	res, err := core.GetLogs("hub", "", 2)
-	if err != nil {
-		t.Fatalf("GetLogs: %v", err)
-	}
-	if res.File != "hub" {
-		t.Fatalf("file=%q want hub", res.File)
-	}
-	if res.Total != 2 {
-		t.Fatalf("total=%d want 2", res.Total)
-	}
-	if len(res.Entries) != 2 || res.Entries[0].Message != "line2" || res.Entries[1].Message != "line3" {
-		t.Fatalf("unexpected entries: %#v", res.Entries)
-	}
-}
-
-func TestMonitorCoreGetLogs_ParsesAndFiltersVerboseLevel(t *testing.T) {
-	base := t.TempDir()
-	core := NewMonitorCore(base)
-	logPath := filepath.Join(base, "log", "hub.log")
-	lines := strings.Join([]string{
-		"2026/06/12 13:10:00 VERBOSE [Hub:WheelMaker] session handler start method=session.read",
-		"2026/06/12 13:10:01 INFO  [Hub] started",
-	}, "\n")
-	if err := writeMonitorFile(logPath, lines+"\n"); err != nil {
-		t.Fatalf("write log: %v", err)
-	}
-	res, err := core.GetLogs("hub", "verbose", 100)
-	if err != nil {
-		t.Fatalf("GetLogs: %v", err)
-	}
-	if len(res.Entries) != 2 {
-		t.Fatalf("entries=%d want 2: %#v", len(res.Entries), res.Entries)
-	}
-	if res.Entries[0].Level != "VERBOSE" || !strings.Contains(res.Entries[0].Message, "session handler start") {
-		t.Fatalf("verbose entry=%#v", res.Entries[0])
-	}
-}
-
-func TestMonitorCoreGetDBTables_NoDBReturnsErrorResult(t *testing.T) {
-	core := NewMonitorCore(t.TempDir())
-	res := core.GetDBTables()
-	if res.Error == "" {
-		t.Fatalf("expected db error when client.sqlite3 missing")
-	}
-}
-
-func TestMonitorCoreGetDBTablesDoesNotExposeRouteBindings(t *testing.T) {
-	base := t.TempDir()
-	store, err := clientpkg.NewStore(filepath.Join(base, "db", "client.sqlite3"))
-	if err != nil {
-		t.Fatalf("NewStore: %v", err)
-	}
-	defer store.Close()
-
-	core := NewMonitorCore(base)
-	res := core.GetDBTables()
-	if res.Error != "" {
-		t.Fatalf("GetDBTables error: %s", res.Error)
-	}
-	legacyRouteTableName := strings.Join([]string{"route", "bindings"}, "_")
-	for _, table := range res.Tables {
-		if table.Name == legacyRouteTableName {
-			t.Fatalf("%s table unexpectedly present: %#v", legacyRouteTableName, res.Tables)
-		}
-	}
-}
-
-func TestMonitorCoreAction_UnsupportedAction(t *testing.T) {
-	core := NewMonitorCore(t.TempDir())
-	if err := core.ExecuteAction("unknown-action"); err == nil {
-		t.Fatalf("expected unsupported action error")
-	}
 }
 
 func TestProjectFileIndexRebuildWritesGitIgnoredLineIndexAndSearchesFuzzy(t *testing.T) {
@@ -3043,12 +2917,4 @@ func querySessionCandidateIndexCountForTest(manager *projectFileIndexManager) in
 		total += len(session.indexes)
 	}
 	return total
-}
-
-func writeMonitorFile(path string, content string) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, []byte(content), 0o644)
 }

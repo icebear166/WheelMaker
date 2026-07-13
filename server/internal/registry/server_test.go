@@ -1403,7 +1403,7 @@ func TestChatSendIsUnsupportedAfterIMRemoval(t *testing.T) {
 	}
 }
 
-func TestConnectInitMonitorRole(t *testing.T) {
+func TestMonitorRoleRejected(t *testing.T) {
 	s := New(Config{})
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)
@@ -1424,16 +1424,12 @@ func TestConnectInitMonitorRole(t *testing.T) {
 		},
 	})
 	resp := mustReadEnvelope(t, ws)
-	if resp.Type != "response" || resp.Method != "connect.init" {
-		t.Fatalf("unexpected response: %#v", resp)
-	}
-	principal, _ := resp.Payload["principal"].(map[string]any)
-	if principal["role"] != "monitor" {
-		t.Fatalf("principal.role=%v, want monitor", principal["role"])
+	if resp.Type != "error" || resp.Payload["code"] != codeForbidden {
+		t.Fatalf("monitor connect response=%#v, want forbidden", resp)
 	}
 }
 
-func TestMonitorListHubAndMonitorStatusForwarding(t *testing.T) {
+func TestMonitorMethodRemoved(t *testing.T) {
 	s := New(Config{})
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)
@@ -1469,40 +1465,27 @@ func TestMonitorListHubAndMonitorStatusForwarding(t *testing.T) {
 	})
 	_ = mustReadEnvelope(t, hub)
 
-	monitor := dialWS(t, ts.URL+"/ws")
-	defer monitor.Close()
-	mustWriteJSON(t, monitor, testEnvelope{
+	client := dialWS(t, ts.URL+"/ws")
+	defer client.Close()
+	mustWriteJSON(t, client, testEnvelope{
 		RequestID: 1,
 		Type:      "request",
 		Method:    "connect.init",
 		Payload: map[string]any{
-			"clientName":      "wm-monitor",
+			"clientName":      "wm-client",
 			"clientVersion":   "0.1.0",
 			"protocolVersion": rp.DefaultProtocolVersion,
-			"role":            "monitor",
+			"role":            "client",
 		},
 	})
-	_ = mustReadEnvelope(t, monitor)
+	_ = mustReadEnvelope(t, client)
 
-	mustWriteJSON(t, monitor, testEnvelope{RequestID: 2, Type: "request", Method: "monitor.listHub", Payload: map[string]any{}})
-	listResp := mustReadEnvelope(t, monitor)
-	if listResp.Type != "response" || listResp.Method != "monitor.listHub" {
-		t.Fatalf("unexpected monitor.listHub response: %#v", listResp)
-	}
-	hubs, _ := listResp.Payload["hubs"].([]any)
-	if len(hubs) != 1 {
-		t.Fatalf("hubs=%v, want 1", listResp.Payload["hubs"])
-	}
-
-	mustWriteJSON(t, monitor, testEnvelope{RequestID: 3, Type: "request", Method: "monitor.status", Payload: map[string]any{"hubId": "hub-a"}})
-	forwarded := mustReadEnvelope(t, hub)
-	if forwarded.Method != "monitor.status" {
-		t.Fatalf("forwarded.method=%q, want monitor.status", forwarded.Method)
-	}
-	mustWriteJSON(t, hub, testEnvelope{RequestID: forwarded.RequestID, Type: "response", Method: "monitor.status", Payload: map[string]any{"running": true}})
-	statusResp := mustReadEnvelope(t, monitor)
-	if statusResp.Type != "response" || statusResp.Method != "monitor.status" {
-		t.Fatalf("unexpected monitor.status response: %#v", statusResp)
+	for requestID, method := range []string{"monitor.listHub", "monitor.status", "monitor.restart"} {
+		mustWriteJSON(t, client, testEnvelope{RequestID: int64(requestID + 2), Type: "request", Method: method, Payload: map[string]any{"hubId": "hub-a"}})
+		resp := mustReadEnvelope(t, client)
+		if resp.Type != "error" || (resp.Payload["code"] != codeInvalidArgument && resp.Payload["code"] != codeForbidden) {
+			t.Fatalf("method %q response=%#v, want unsupported/forbidden", method, resp)
+		}
 	}
 }
 

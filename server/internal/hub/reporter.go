@@ -43,8 +43,6 @@ const (
 type ProjectInfo = rp.ProjectInfo
 type envelope = rp.Envelope
 type errorPayload = rp.ErrorPayload
-type monitorActionPayload = rp.MonitorActionPayload
-type monitorLogPayload = rp.MonitorLogPayload
 
 type hubStateGetPayload struct {
 	Sections []string `json:"sections,omitempty"`
@@ -100,7 +98,7 @@ type ReporterConfig struct {
 	ReconnectInterval time.Duration
 	PingInterval      time.Duration
 	PongTimeout       time.Duration
-	MonitorBaseDir    string
+	StateDir          string
 }
 
 // Reporter keeps a long-lived hub connection and serves local project queries.
@@ -118,7 +116,6 @@ type Reporter struct {
 	updateSeq    atomic.Int64
 
 	connectionEpoch   int64
-	monitorCore       *MonitorCore
 	toolHandlerMu     sync.Mutex
 	toolHandler       toolCommandHandler
 	relayClient       *portrelay.HubClient
@@ -157,27 +154,26 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 		byID[publicID] = p
 		byID[name] = p
 	}
-	monitorBase := strings.TrimSpace(cfg.MonitorBaseDir)
-	if monitorBase == "" {
+	stateDir := strings.TrimSpace(cfg.StateDir)
+	if stateDir == "" {
 		if home, err := os.UserHomeDir(); err == nil {
-			monitorBase = filepath.Join(home, ".wheelmaker")
+			stateDir = filepath.Join(home, ".wheelmaker")
 		}
 	}
-	cfg.MonitorBaseDir = monitorBase
+	cfg.StateDir = stateDir
 	r := &Reporter{
 		cfg:          cfg,
 		projects:     cp,
 		projectsByID: byID,
 		sessionByID:  make(map[string]SessionHandler),
 		pending:      make(map[int64]chan envelope),
-		monitorCore:  NewMonitorCore(monitorBase),
 		relayClient:  portrelay.NewHubClient(),
-		fileIndex:    newProjectFileIndexManager(monitorBase),
+		fileIndex:    newProjectFileIndexManager(stateDir),
 	}
 	r.toolHandler = tools.NewManager(tools.ManagerConfig{
 		HubID:                 cfg.HubID,
 		Projects:              cp,
-		MonitorBaseDir:        monitorBase,
+		StateDir:              stateDir,
 		OnSkillsOperationDone: r.refreshSkillsAgentProfiles,
 	})
 	r.hubStateManager = newHubStateManager(r.cfg.HubID, r.hubStateSectionHandlers())
@@ -202,13 +198,6 @@ func (r *Reporter) Run(ctx context.Context) error {
 // SetDebugLogger sets an optional writer for debug logging of registry envelopes.
 func (r *Reporter) SetDebugLogger(w io.Writer) {
 	r.debugLog = w
-}
-
-func (r *Reporter) SetMonitorResetSessionPromptState(reset func()) {
-	if r == nil || r.monitorCore == nil {
-		return
-	}
-	r.monitorCore.ResetSessionPromptState = reset
 }
 
 func (r *Reporter) RegisterSessionHandler(projectID string, handler SessionHandler) {
@@ -388,14 +377,6 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 		rp.RegistryMethodSessionAttachmentDelete, rp.RegistryMethodSessionAttachmentThumbnail,
 		rp.RegistryMethodSessionAttachmentRead:
 		r.replySession(conn, in)
-	case rp.RegistryMethodMonitorStatus:
-		r.replyMonitorStatus(conn, in)
-	case rp.RegistryMethodMonitorLog:
-		r.replyMonitorLog(conn, in)
-	case rp.RegistryMethodMonitorDB:
-		r.replyMonitorDB(conn, in)
-	case rp.RegistryMethodMonitorAction:
-		r.replyMonitorAction(conn, in)
 	case rp.RegistryMethodHubRelayOpen:
 		r.replyRelayOpen(conn, in)
 	case rp.RegistryMethodHubRelayClose:
@@ -969,52 +950,6 @@ func (r *Reporter) replyFSList(conn *websocket.Conn, req envelope) {
 	})
 }
 
-func (r *Reporter) replyMonitorStatus(conn *websocket.Conn, req envelope) {
-	status, err := r.monitorCore.GetServiceStatus()
-	if err != nil {
-		_ = r.writeError(conn, req.RequestID, codeInternal, err.Error())
-		return
-	}
-	_ = r.writeJSON(conn, "->", envelope{RequestID: req.RequestID, Type: rp.RegistryEnvelopeTypeResponse, Method: req.Method, Payload: rp.MustRaw(status)})
-}
-
-func (r *Reporter) replyMonitorLog(conn *websocket.Conn, req envelope) {
-	var payload monitorLogPayload
-	if err := decodePayload(req.Payload, &payload); err != nil {
-		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid monitor.log payload")
-		return
-	}
-	result, err := r.monitorCore.GetLogs(payload.File, payload.Level, payload.Tail)
-	if err != nil {
-		_ = r.writeError(conn, req.RequestID, codeInternal, err.Error())
-		return
-	}
-	_ = r.writeJSON(conn, "->", envelope{RequestID: req.RequestID, Type: rp.RegistryEnvelopeTypeResponse, Method: req.Method, Payload: rp.MustRaw(result)})
-}
-
-func (r *Reporter) replyMonitorDB(conn *websocket.Conn, req envelope) {
-	result := r.monitorCore.GetDBTables()
-	_ = r.writeJSON(conn, "->", envelope{RequestID: req.RequestID, Type: rp.RegistryEnvelopeTypeResponse, Method: req.Method, Payload: rp.MustRaw(result)})
-}
-
-func (r *Reporter) replyMonitorAction(conn *websocket.Conn, req envelope) {
-	var payload monitorActionPayload
-	if err := decodePayload(req.Payload, &payload); err != nil {
-		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid monitor.action payload")
-		return
-	}
-	action := strings.TrimSpace(payload.Action)
-	if action == "" {
-		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "action is required")
-		return
-	}
-	if err := r.monitorCore.ExecuteAction(action); err != nil {
-		_ = r.writeError(conn, req.RequestID, codeInternal, err.Error())
-		return
-	}
-	_ = r.writeJSON(conn, "->", envelope{RequestID: req.RequestID, Type: rp.RegistryEnvelopeTypeResponse, Method: req.Method, Payload: rp.MustRaw(map[string]any{"ok": true, "action": action})})
-}
-
 func (r *Reporter) replyCmdNPM(conn *websocket.Conn, req envelope) {
 	r.replyToolCommand(conn, req)
 }
@@ -1057,7 +992,7 @@ func (r *Reporter) ensureToolHandler() toolCommandHandler {
 	r.toolHandler = tools.NewManager(tools.ManagerConfig{
 		HubID:                 r.cfg.HubID,
 		Projects:              r.projectsSnapshot(),
-		MonitorBaseDir:        r.cfg.MonitorBaseDir,
+		StateDir:              r.cfg.StateDir,
 		OnSkillsOperationDone: r.refreshSkillsAgentProfiles,
 	})
 	return r.toolHandler
@@ -1915,7 +1850,7 @@ func (r *Reporter) ensureFileIndexManager() *projectFileIndexManager {
 	if r.fileIndex != nil {
 		return r.fileIndex
 	}
-	r.fileIndex = newProjectFileIndexManager(r.cfg.MonitorBaseDir)
+	r.fileIndex = newProjectFileIndexManager(r.cfg.StateDir)
 	return r.fileIndex
 }
 
