@@ -6,3 +6,4 @@ export { SkillDetailPanel, SkillsSettingsDetail } from './SkillsSettingsDetail';
 export { TokenStatsSettingsDetail } from './TokenStatsSettingsDetail';
 export { UpdateSettingsDetail } from './UpdateSettingsDetail';
 export { DebugLogsSettingsDetail } from './DebugLogsSettingsDetail';
+export { DeviceSessionsSettingsDetail } from './DeviceSessionsSettingsDetail';

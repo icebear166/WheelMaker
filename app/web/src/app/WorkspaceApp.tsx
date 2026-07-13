@@ -12,6 +12,9 @@ declare global {
 }
 
 import { getDefaultRegistryAddress, toRegistryWsUrl } from '../runtime';
+import {deriveRegistryEndpoints} from '../registry/registryBaseUrl';
+import {RegistryWebAuthClient} from '../registry/RegistryWebAuthClient';
+import {RegistryAuthController, type RegistryAuthSnapshot} from '../registry/RegistryAuthController';
 import { appendPortRelayAutoAuthCode, appendPortRelayOpenPath, parsePortRelayLocalHttpUrl, resolvePortRelayOpenUrl } from '../portRelay/portRelayUrl';
 import { buildPortRelayClearSiteDataUrl } from '../portRelay/portRelayUrl';
 import type { PortRelayLocalHttpUrl } from '../portRelay/portRelayUrl';
@@ -508,6 +511,7 @@ import type {
   RegistryTerminalOutputEvent,
   RegistrySecretKind,
   RegistrySecretStatus,
+  RegistryDeviceSession,
 } from '../registry/registryTypes';
 import {migrateLegacyBackendSecrets} from '../settings/backendSecretSettings';
 
@@ -520,6 +524,9 @@ const DebugLogsSettingsDetail = React.lazy(() => loadSettingsBundle().then(modul
 })));
 const ConnectionStatusSettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.ConnectionStatusSettingsDetail,
+})));
+const DeviceSessionsSettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
+  default: module.DeviceSessionsSettingsDetail,
 })));
 const TokenStatsSettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.TokenStatsSettingsDetail,
@@ -2488,6 +2495,15 @@ export function App() {
   const [token, setToken] = useState(persistedGlobal.token || '');
   const tokenRef = useRef(persistedGlobal.token || '');
   const [error, setError] = useState('');
+  const registryAuthController = useMemo(() => {
+    const endpoints = deriveRegistryEndpoints(document.baseURI, {
+      allowInsecureLoopback: window.location.protocol === 'http:',
+    });
+    return new RegistryAuthController(new RegistryWebAuthClient(endpoints.authURL));
+  }, []);
+  const [registryAuth, setRegistryAuth] = useState<RegistryAuthSnapshot>(() => registryAuthController.snapshot());
+  const [loginToken, setLoginToken] = useState('');
+  const [loginDeviceName, setLoginDeviceName] = useState(() => window.navigator.userAgent.includes('Android') ? 'Android' : 'Browser');
   const [autoConnecting, setAutoConnecting] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const autoConnectTriedRef = useRef(false);
@@ -2572,6 +2588,14 @@ export function App() {
   const [backendSecretStatuses, setBackendSecretStatuses] = useState<RegistrySecretStatus[]>([]);
   const [backendSecretBusy, setBackendSecretBusy] = useState(false);
   const [backendSecretError, setBackendSecretError] = useState('');
+  const [deviceSessions, setDeviceSessions] = useState<RegistryDeviceSession[]>([]);
+  const [deviceSessionsLoading, setDeviceSessionsLoading] = useState(false);
+  const [deviceSessionsError, setDeviceSessionsError] = useState('');
+  useEffect(() => {
+    const unsubscribe = registryAuthController.subscribe(setRegistryAuth);
+    void registryAuthController.check();
+    return unsubscribe;
+  }, [registryAuthController]);
   const [ttsState, setTtsState] = useState<TtsPlaybackState>('idle');
   const ttsActiveTurnIndexRef = useRef<number | null>(null);
   const [webSourceState, setWebSourceState] = useState<DesktopWebSourceState | null>(null);
@@ -12272,6 +12296,60 @@ export function App() {
     }
   };
 
+  const connectAuthenticatedRegistry = async () => {
+    tokenRef.current = '';
+    setToken('');
+    const {wsURL} = deriveRegistryEndpoints(document.baseURI, {
+      allowInsecureLoopback: window.location.protocol === 'http:',
+    });
+    addressRef.current = wsURL;
+    setAddress(wsURL);
+    await connect();
+  };
+
+  const handleRegistryLogin = async () => {
+    const snapshot = await registryAuthController.login(loginToken, loginDeviceName);
+    if (snapshot.state !== 'authenticated') return;
+    setLoginToken('');
+    await connectAuthenticatedRegistry();
+  };
+
+  const refreshDeviceSessions = async () => {
+    setDeviceSessionsLoading(true);
+    setDeviceSessionsError('');
+    try {
+      setDeviceSessions(await service.listDeviceSessions());
+    } catch (deviceError) {
+      setDeviceSessionsError(deviceError instanceof Error ? deviceError.message : String(deviceError));
+    } finally {
+      setDeviceSessionsLoading(false);
+    }
+  };
+
+  const revokeDeviceSession = async (deviceId: string) => {
+    await service.revokeDeviceSession(deviceId);
+    await refreshDeviceSessions();
+  };
+
+  const revokeAllDeviceSessions = async () => {
+    await service.revokeAllDeviceSessions();
+    setDeviceSessions([]);
+  };
+
+  const returnToRegistryLogin = () => {
+    supervisorManagedCloseRef.current = true;
+    service.close();
+    setConnected(false);
+    setReconnecting(false);
+    void registryAuthController.check();
+  };
+
+  useEffect(() => {
+    if (connected && settingsDetailView === 'deviceSessions') {
+      void refreshDeviceSessions();
+    }
+  }, [connected, settingsDetailView]);
+
   const disconnectForSupervisor = (
     reason: 'background' | 'offline' | 'stop',
   ) => {
@@ -16701,6 +16779,23 @@ export function App() {
       options,
     );
 
+  const renderDeviceSessionsSettingsDetail = (options?: SettingsDetailShellOptions) =>
+    renderSettingsDetailShell(
+      'Devices',
+      <React.Suspense fallback={null}>
+        <DeviceSessionsSettingsDetail
+          sessions={deviceSessions}
+          loading={deviceSessionsLoading}
+          error={deviceSessionsError}
+          onRevoke={revokeDeviceSession}
+          onRevokeAll={revokeAllDeviceSessions}
+          onCurrentRevoked={returnToRegistryLogin}
+        />
+      </React.Suspense>,
+      undefined,
+      options,
+    );
+
   const renderSettingsDetailContent = (
     detail: SettingsDetailId,
     options: SettingsDetailShellOptions = {},
@@ -16725,6 +16820,9 @@ export function App() {
     }
     if (detail === 'connectionStatus') {
       return renderConnectionStatusSettingsDetail(options);
+    }
+    if (detail === 'deviceSessions') {
+      return renderDeviceSessionsSettingsDetail(options);
     }
     if (detail === 'debugLogs') {
       return renderDebugLogsSettingsDetail(options);
@@ -19931,26 +20029,42 @@ export function App() {
         {setiFontCss ? <style>{setiFontCss}</style> : null}
         <DesktopWindowControls />
         <div className="connect" aria-busy={autoConnecting}>
-          <h3>Connect to WheelMaker Registry</h3>
-          <input
-            className="input"
-            value={address}
-            onChange={e => setAddress(e.target.value)}
-            placeholder="127.0.0.1:9630 or ws://127.0.0.1:9630/ws"
-          />
-          <input
-            className="input"
-            value={token}
-            onChange={e => setToken(e.target.value)}
-            placeholder="Token (optional)"
-          />
-          <button
-            className="button"
-            disabled={autoConnecting}
-            onClick={() => connect().catch(() => undefined)}
-          >
-            {autoConnecting ? 'Connecting...' : 'Connect'}
-          </button>
+          <h3>WheelMaker Registry</h3>
+          {registryAuth.state === 'checking' ? <div>Checking login...</div> : null}
+          {registryAuth.state === 'authenticated' ? (
+            <button className="button" disabled={autoConnecting} onClick={() => connectAuthenticatedRegistry().catch(() => undefined)}>
+              {autoConnecting ? 'Connecting...' : 'Connect'}
+            </button>
+          ) : null}
+          {registryAuth.state === 'unauthenticated' || registryAuth.state === 'logging-in' || registryAuth.state === 'error' ? (
+            <>
+              <input
+                className="input"
+                type="password"
+                autoComplete="current-password"
+                value={loginToken}
+                onChange={event => setLoginToken(event.target.value)}
+                placeholder="Registry token"
+              />
+              <input
+                className="input"
+                value={loginDeviceName}
+                onChange={event => setLoginDeviceName(event.target.value)}
+                placeholder="Device name"
+              />
+              <button
+                className="button"
+                disabled={registryAuth.state === 'logging-in' || !loginToken.trim()}
+                onClick={() => handleRegistryLogin().catch(() => undefined)}
+              >
+                {registryAuth.state === 'logging-in' ? 'Logging in...' : 'Log in'}
+              </button>
+              {registryAuth.state === 'error' ? (
+                <button className="button" onClick={() => void registryAuthController.check()}>Retry</button>
+              ) : null}
+              {registryAuth.error ? <div className="error" role="alert">{registryAuth.error}</div> : null}
+            </>
+          ) : null}
           {error ? <div className="error" role="alert">{error}</div> : null}
         </div>
       </div>

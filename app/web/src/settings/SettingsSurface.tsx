@@ -91,6 +91,8 @@ export function settingsDetailTitle(detail: SettingsDetailId): string {
       return 'Port Relay';
     case 'connectionStatus':
       return 'Connection Status';
+    case 'deviceSessions':
+      return 'Devices';
     case 'debugLogs':
       return 'Logs';
     case 'skillDetail':

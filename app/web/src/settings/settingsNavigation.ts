@@ -8,6 +8,7 @@ export type SettingsChildDetail =
   | 'connectionStatus'
   | 'database'
   | 'debugLogs'
+  | 'deviceSessions'
   | 'skillDetail';
 
 export type SettingsDetailId = SettingsPeerDetail | SettingsChildDetail;
@@ -24,6 +25,7 @@ export const SETTINGS_CHILD_DETAILS: readonly SettingsChildDetail[] = [
   'connectionStatus',
   'database',
   'debugLogs',
+  'deviceSessions',
   'skillDetail',
 ];
 

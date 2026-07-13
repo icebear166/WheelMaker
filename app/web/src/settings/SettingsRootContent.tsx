@@ -479,6 +479,17 @@ export function SettingsRootContent({
           </span>
           <span className="codicon codicon-chevron-right" aria-hidden="true" />
         </button>
+        <button
+          type="button"
+          className="settings-row settings-detail-row"
+          onClick={() => openSettingsChild('deviceSessions')}
+        >
+          <span>
+            <span className="codicon codicon-devices settings-row-icon" aria-hidden="true" />
+            Devices
+          </span>
+          <span className="codicon codicon-chevron-right" aria-hidden="true" />
+        </button>
         <div className="voice-input-settings-menu">
           {backendSecretKinds.map(kind => (
             <BackendSecretEditor

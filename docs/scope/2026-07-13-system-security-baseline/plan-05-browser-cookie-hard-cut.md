@@ -92,15 +92,15 @@ Expected: PASS；此提交尚未改变现有连接调用，旧客户端不受影
 - Create: `app/__tests__/web-registry-login-ui.test.ts`
 - Create: `app/__tests__/web-device-session-settings.test.ts`
 
-- [ ] **Step 1: 写登录状态机测试**
+- [x] **Step 1: 写登录状态机测试**
 
 状态固定为 `checking | unauthenticated | logging-in | authenticated | error`。启动先 status；401/unauthenticated 显示 Token + device name；成功立即把 input state 设空，再连接 Registry。网络错误提供 retry，不把用户输入写 localStorage/IndexedDB/diagnostics。
 
-- [ ] **Step 2: 写设备管理 UI 测试**
+- [x] **Step 2: 写设备管理 UI 测试**
 
 列表显示 deviceName/createdAt/lastSeenAt/current；单项 Revoke 带确认；Revoke all 二次确认。撤销当前设备后回到 unauthenticated。DOM、React props 和 snapshot 不含 digest/cookie/csrf/token。
 
-- [ ] **Step 3: 运行测试并确认失败**
+- [x] **Step 3: 运行测试并确认失败**
 
 Run:
 
@@ -111,7 +111,7 @@ npm test -- --runInBand __tests__/web-registry-login-ui.test.ts __tests__/web-de
 
 Expected: FAIL；controller 和 settings detail 尚不存在。
 
-- [ ] **Step 4: 实现 UI 并提交**
+- [x] **Step 4: 实现 UI 并提交**
 
 登录 controller 只依赖 Task 1 auth client；设备页面只依赖阶段 1 repository 方法。不得在设置中再增加 Session TTL、Cookie 内容或第二个 Token 配置。
 
