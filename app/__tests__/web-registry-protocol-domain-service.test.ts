@@ -31,7 +31,7 @@ describe('registry protocol domain service', () => {
   test('RegistryRepository uses protocol constants for target method domains', () => {
     const repositoryTs = readAppSource('web/src/registry/RegistryRepository.ts');
 
-    expect(repositoryTs).toContain('RegistryMethods.ConnectLocalReadProof');
+    expect(repositoryTs).not.toContain('ConnectLocalReadProof');
     expect(repositoryTs).toContain('RegistryMethods.RegistryProjectList');
     expect(repositoryTs).toContain('RegistryMethods.ProjectFSRead');
     expect(repositoryTs).toContain('RegistryMethods.ProjectGitRev');

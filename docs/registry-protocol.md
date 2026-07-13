@@ -83,7 +83,7 @@
 
 规则：
 
-- `role` 只能是 `hub`、`client`、`monitor`、`local_read`。
+- `role` 只能是 `hub`、`client`、`monitor`。
 - `role=hub` 必须在 payload 中携带 `hubId`。
 - `role=client` 可选携带 `hubId`；携带后 client scope 限定在该 Hub。
 - `protocolVersion` 必须等于 `2.5`。
@@ -94,7 +94,7 @@
 
 | 顶级域 | 归属 | 用途 |
 | --- | --- | --- |
-| `connect.*` | 连接层 | 初始化、关闭事件、本地读证明 |
+| `connect.*` | 连接层 | 初始化、关闭事件 |
 | `registry.*` | Registry | Registry 自有目录、Project 报告事件、Relay 控制 |
 | `hub.*` | Hub | Hub 报告、HubState、Hub 内部 Relay |
 | `project.*` | Project | 文件、Git |
@@ -108,7 +108,6 @@
 | `hub` | `hub.report.projects`、`hub.report.project`、`hub.ping`、`session.message`、`session.updated` |
 | `client` | `registry.project.list`、`registry.relay.*`、`hub.state.*`、`project.*`、`session.*`、`speech.*`、`debug.uploadLog` |
 | `monitor` | `registry.project.list`、`monitor.*` |
-| `local_read` | `connect.localRead.proof`、`connect.init`、允许本地读的 `registry.project.list` 与 `project.*` 只读方法 |
 
 事件方法由服务端推送，不作为 client request 白名单处理，包括 `registry.project.report`、`hub.state.updated`、`session.message`、`session.updated`、`connect.close`。
 
@@ -142,8 +141,7 @@ Hub 建连后必须先发全量项目报告，后续按需发单项目报告。�
           "worktreeRev": "sha256:..."
         }
       }
-    ],
-    "localRead": {}
+    ]
   }
 }
 ```
@@ -205,10 +203,7 @@ Client/Monitor 读取 Registry 当前项目目录。返回范围受 client scope
       }
     ],
     "hubs": [
-      {
-        "hubId": "hub-a",
-        "localRead": {}
-      }
+      {"hubId": "hub-a"}
     ]
   }
 }
@@ -455,37 +450,7 @@ Registry 下发给 Hub 的内部方法：
 - `listenPort` 与 `targetPort` 必须在 `1..65535`。
 - `hubId` 必须指向在线 Hub。
 
-## 10. Local Read
-
-Local read 是 Hub 暴露的 loopback 只读 WebSocket 端点。连接流程：
-
-1. App 连接 Hub local-read endpoint。
-2. App 调用 `connect.localRead.proof` 获取签名证明。
-3. App 校验证明通过后调用 `connect.init`，role 为 `local_read`，协议版本为 `2.5`。
-4. App 只能调用注册表中标记为 LocalRead 的方法。
-
-允许的本地读方法包括：
-
-- `registry.project.list`
-- `project.fs.list`
-- `project.fs.info`
-- `project.fs.read`
-- `project.fs.search`
-- `project.fs.grep`
-- `project.fs.index.search`
-- `project.git.rev`
-- `project.git.refs`
-- `project.git.log`
-- `project.git.commit.files`
-- `project.git.commit.fileDiff`
-- `project.git.diff`
-- `project.git.diff.fileDiff`
-- `project.git.status`
-- `project.git.workingTree.fileDiff`
-
-Session 方法不允许走 local-read endpoint。
-
-## 11. Speech、Monitor、Debug
+## 10. Speech、Monitor、Debug
 
 Speech：
 
@@ -507,7 +472,7 @@ Debug：
 
 - `debug.uploadLog`
 
-## 12. 错误
+## 11. 错误
 
 错误 envelope：
 
@@ -538,7 +503,7 @@ Debug：
 | `TIMEOUT` | 超时 | 是 |
 | `INTERNAL` | 内部错误 | 是 |
 
-## 13. Hash 与版本戳
+## 12. Hash 与版本戳
 
 - Hash 算法：`sha256`。
 - Hash 输出：`sha256:<hex-lowercase>`。
@@ -548,7 +513,7 @@ Debug：
 - `worktreeRev`：由 `git status --porcelain` 归一生成。
 - `projectRev`：当前由 `gitRev + worktreeRev` 派生。
 
-## 14. 版本历史
+## 13. 版本历史
 
 ### 2.5 相比 2.4
 
@@ -561,8 +526,7 @@ Debug：
 7. App 面向的维护命令全部迁入 `hub.state.refresh` / `hub.state.action`，公开协议删除 `cmd.*`。
 8. File index status/rebuild 迁入 HubState `fileIndex` section；`project.fs.index.search` 保持 Project 级搜索。
 9. Relay 公开方法改为 `registry.relay.*`；Registry 下发 Hub 的内部方法改为 `hub.relay.*`。
-10. Local read proof 改为 `connect.localRead.proof`。
-11. 已删除旧公开方法：`connection.closing`、`local_read.proof`、`registry.reportProjects`、`registry.updateProject`、`registry.session.*`、`project.list`、`project.sync.check`、`project.syncCheck`、`project.online`、`project.offline`、`session.new`、`session.setConfig`、`session.token.*`、裸 `fs.*`、裸 `git.*`、`cmd.*`、裸 `relay.*`。
+10. 已删除旧公开方法：`connection.closing`、`registry.reportProjects`、`registry.updateProject`、`registry.session.*`、`project.list`、`project.sync.check`、`project.syncCheck`、`project.online`、`project.offline`、`session.new`、`session.setConfig`、`session.token.*`、裸 `fs.*`、裸 `git.*`、`cmd.*`、裸 `relay.*`。
 
 ### 2.4 相比 2.3
 

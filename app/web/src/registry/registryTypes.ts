@@ -739,16 +739,8 @@ export interface RegistryProjectAgentProfile {
   skills?: string[];
 }
 
-export interface RegistryLocalReadCandidate {
-  endpointId: string;
-  url: string;
-  proofPublicKey: string;
-  proofFingerprint: string;
-}
-
 export interface RegistryHub {
   hubId: string;
-  localRead?: RegistryLocalReadCandidate;
 }
 
 export interface RegistryProjectListResponse {
@@ -925,7 +917,7 @@ export type RegistryConnectInitPayload = {
   clientName: string;
   clientVersion: string;
   protocolVersion: string;
-  role: 'client' | 'hub' | 'local_read';
+  role: 'client' | 'hub';
   hubId?: string;
   token: string;
   ts?: number;

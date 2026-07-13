@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 describe('connection settings UI source structure', () => {
-  test('adds a Connection section with status detail and local hub read settings', () => {
+  test('adds a Connection section with status detail', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const settingsSurfaceTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsSurface.tsx'), 'utf8');
@@ -23,26 +23,21 @@ describe('connection settings UI source structure', () => {
     expect(settingsRootTsx).toContain("renderSettingsSection({id: 'connection'");
     expect(settingsRootTsx).toContain("openSettingsChild('connectionStatus')");
     expect(settingsRootTsx).toContain('Connection Status');
-    expect(settingsRootTsx).toContain('Local Hub Read');
-    expect(settingsRootTsx).toContain('checked={localHubReadEnabled}');
+    expect(settingsRootTsx).not.toContain('Local Hub Read');
     expect(fs.existsSync(detailPath)).toBe(true);
     expect(detailTsx).toContain('resolveWebResourceConnectionStatus(webSourceState)');
     expect(detailTsx).toContain('resolveRegistryConnectionStatus({');
     expect(detailTsx).toContain('resolveVoiceCapabilityStatus({');
-    expect(detailTsx).toContain('registryHubs.map(hub =>');
-    expect(detailTsx).toContain('chat-hub-read-tag');
+    expect(detailTsx).not.toContain('Local Hub Read');
 
     const chatSectionStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'chat'");
     const connectionSectionStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'connection'");
     const codeSectionStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'code-display'");
     const connectionSection = settingsRootTsx.slice(connectionSectionStart, codeSectionStart);
-    const localHubReadIndex = connectionSection.indexOf('Local Hub Read');
     const connectionStatusIndex = connectionSection.indexOf('Connection Status');
 
     expect(connectionSectionStart).toBeGreaterThan(chatSectionStart);
     expect(connectionSectionStart).toBeLessThan(codeSectionStart);
-    expect(localHubReadIndex).toBeGreaterThanOrEqual(0);
     expect(connectionStatusIndex).toBeGreaterThanOrEqual(0);
-    expect(localHubReadIndex).toBeLessThan(connectionStatusIndex);
   });
 });

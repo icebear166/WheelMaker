@@ -55,8 +55,6 @@ type SettingsRootContentProps = {
   setTtsSettings: React.Dispatch<React.SetStateAction<TtsSettings>>;
   chatFont: ChatFontId;
   setChatFont: (value: ChatFontId) => void;
-  localHubReadEnabled: boolean;
-  setLocalHubReadEnabled: (value: boolean) => void;
   openSettingsChild: (detail: SettingsChildDetail) => void;
   codeTheme: CodeThemeId;
   setCodeTheme: (value: CodeThemeId) => void;
@@ -129,8 +127,6 @@ export function SettingsRootContent({
   setTtsSettings,
   chatFont,
   setChatFont,
-  localHubReadEnabled,
-  setLocalHubReadEnabled,
   openSettingsChild,
   codeTheme,
   setCodeTheme,
@@ -434,17 +430,6 @@ export function SettingsRootContent({
         )})}
         {renderSettingsSection({id: 'connection', title: 'Connection', icon: 'radio-tower', rows: (
         <>
-        <label className="settings-row sidebar-setting-row">
-          <span>
-            <span className="codicon codicon-cloud-download settings-row-icon" aria-hidden="true" />
-            Local Hub Read
-          </span>
-          <input
-            type="checkbox"
-            checked={localHubReadEnabled}
-            onChange={event => setLocalHubReadEnabled(event.target.checked)}
-          />
-        </label>
         <button
           type="button"
           className="settings-row settings-detail-row"

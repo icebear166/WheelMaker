@@ -171,7 +171,7 @@ describe('web chat file peek viewer', () => {
     const mainTsx = readSourceText(mainPath);
 
     expect(serviceTs).toContain('async listProjectDirectory(');
-    expect(serviceTs).toContain("this.readRepositoryForProject(projectId).listFiles(projectId, path || '.', knownHash)");
+    expect(serviceTs).toContain("this.repository.listFiles(projectId, path || '.', knownHash)");
     expect(mainTsx).toContain('const result = await service.listProjectDirectory(');
     expect(mainTsx).toContain('targetProjectId,');
     expect(mainTsx).not.toContain('syncWorkspaceProject(previewWorkbench.activeProjectId');

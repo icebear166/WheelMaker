@@ -114,7 +114,6 @@ export type PersistedGlobalState = {
   messageViewerEnabled: boolean;
   logLevel: PersistedLogLevel;
   disableFileCache: boolean;
-  localHubReadEnabled: boolean;
   promptCompletionNotificationsEnabled: boolean;
   tab: PersistedTab;
   selectedProjectId: string;
@@ -352,7 +351,6 @@ const GLOBAL_KEYS = {
   messageViewerEnabled: 'messageViewerEnabled',
   logLevel: 'logLevel',
   disableFileCache: 'disableFileCache',
-  localHubReadEnabled: 'localHubReadEnabled',
   promptCompletionNotificationsEnabled: 'promptCompletionNotificationsEnabled',
   tab: 'tab',
   selectedProjectId: 'selectedProjectId',
@@ -397,7 +395,6 @@ function defaultGlobalState(): PersistedGlobalState {
     messageViewerEnabled: false,
     logLevel: 'warning',
     disableFileCache: false,
-    localHubReadEnabled: true,
     promptCompletionNotificationsEnabled: true,
     tab: 'chat',
     selectedProjectId: '',
@@ -648,7 +645,6 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
     messageViewerEnabled: typeof input.messageViewerEnabled === 'boolean' ? input.messageViewerEnabled : base.messageViewerEnabled,
     logLevel: normalizePersistedLogLevel(input.logLevel, base.logLevel),
     disableFileCache: typeof input.disableFileCache === 'boolean' ? input.disableFileCache : base.disableFileCache,
-    localHubReadEnabled: typeof input.localHubReadEnabled === 'boolean' ? input.localHubReadEnabled : base.localHubReadEnabled,
     promptCompletionNotificationsEnabled: typeof input.promptCompletionNotificationsEnabled === 'boolean' ? input.promptCompletionNotificationsEnabled : base.promptCompletionNotificationsEnabled,
     tab: input.tab === 'file' || input.tab === 'git' ? input.tab : 'chat',
     selectedProjectId: typeof input.selectedProjectId === 'string' ? input.selectedProjectId : base.selectedProjectId,
@@ -1333,7 +1329,6 @@ export class WorkspacePersistenceRepository {
       {k: GLOBAL_KEYS.messageViewerEnabled, v: serialize(this.state.global.messageViewerEnabled), updatedAt},
       {k: GLOBAL_KEYS.logLevel, v: serialize(this.state.global.logLevel), updatedAt},
       {k: GLOBAL_KEYS.disableFileCache, v: serialize(this.state.global.disableFileCache), updatedAt},
-      {k: GLOBAL_KEYS.localHubReadEnabled, v: serialize(this.state.global.localHubReadEnabled), updatedAt},
       {k: GLOBAL_KEYS.promptCompletionNotificationsEnabled, v: serialize(this.state.global.promptCompletionNotificationsEnabled), updatedAt},
       {k: GLOBAL_KEYS.tab, v: serialize(this.state.global.tab), updatedAt},
       {k: GLOBAL_KEYS.selectedProjectId, v: serialize(this.state.global.selectedProjectId), updatedAt},

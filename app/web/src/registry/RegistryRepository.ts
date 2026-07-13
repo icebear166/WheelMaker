@@ -23,7 +23,6 @@ import type {
   RegistryHub,
   RegistryHubState,
   RegistryHubStateSectionName,
-  RegistryLocalReadCandidate,
   RegistryNpmCommandResponse,
   RegistryNpmHubSnapshot,
   RegistryNpmPackage,
@@ -84,25 +83,6 @@ import type {
   RegistryWheelMakerUpdateResponse,
   RegistryWorkingTreeFileDiff,
 } from './registryTypes';
-
-export type LocalReadProofResponse = {
-  endpointId?: string;
-  nonce?: string;
-  signature?: string;
-  proofPublicKey?: string;
-  proofFingerprint?: string;
-};
-
-export type LocalReadProofVerifier = (input: {
-  candidate: RegistryLocalReadCandidate;
-  response: LocalReadProofResponse;
-  nonce: string;
-}) => Promise<boolean>;
-
-export type LocalReadInitOptions = {
-  createNonce?: () => string;
-  verifyProof?: LocalReadProofVerifier;
-};
 
 export type QueryWheelMakerUpdateOptions = {
   force?: boolean;
@@ -197,66 +177,6 @@ function hubIdFromProjectId(projectId: string): string {
 
 function hubStateSectionData<T>(state: RegistryHubState, section: RegistryHubStateSectionName): T | undefined {
   return state.sections[section]?.data as T | undefined;
-}
-
-function base64ToArrayBuffer(value: string): ArrayBuffer {
-  const binary = globalThis.atob(value);
-  const buffer = new ArrayBuffer(binary.length);
-  const bytes = new Uint8Array(buffer);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-  return buffer;
-}
-
-function createLocalReadNonce(): string {
-  const crypto = globalThis.crypto;
-  if (!crypto?.getRandomValues) {
-    throw new Error('local read proof requires WebCrypto random values');
-  }
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes)
-    .map(byte => byte.toString(16).padStart(2, '0'))
-    .join('');
-}
-
-export async function verifyLocalReadProof(input: {
-  candidate: RegistryLocalReadCandidate;
-  response: LocalReadProofResponse;
-  nonce: string;
-}): Promise<boolean> {
-  const subtle = globalThis.crypto?.subtle;
-  if (!subtle) {
-    return false;
-  }
-  if (
-    input.response.endpointId !== input.candidate.endpointId ||
-    input.response.nonce !== input.nonce ||
-    input.response.proofPublicKey !== input.candidate.proofPublicKey ||
-    input.response.proofFingerprint !== input.candidate.proofFingerprint ||
-    !input.response.signature
-  ) {
-    return false;
-  }
-  try {
-    const key = await subtle.importKey(
-      'raw',
-      base64ToArrayBuffer(input.candidate.proofPublicKey),
-      {name: 'Ed25519'} as AlgorithmIdentifier,
-      false,
-      ['verify'],
-    );
-    const data = new TextEncoder().encode(`${input.candidate.endpointId}\n${input.nonce}`);
-    return await subtle.verify(
-      {name: 'Ed25519'} as AlgorithmIdentifier,
-      key,
-      base64ToArrayBuffer(input.response.signature),
-      data,
-    );
-  } catch {
-    return false;
-  }
 }
 
 export class RegistryRepository {
@@ -602,39 +522,6 @@ export class RegistryRepository {
     });
   }
 
-  async initializeLocalRead(
-    url: string,
-    token: string,
-    hubId: string,
-    candidate: RegistryLocalReadCandidate,
-    options: LocalReadInitOptions = {},
-  ): Promise<void> {
-    await this.client.connect(url);
-    const nonce = options.createNonce?.() ?? createLocalReadNonce();
-    const proofResp = await this.client.request({
-      method: RegistryMethods.ConnectLocalReadProof,
-      payload: {
-        endpointId: candidate.endpointId,
-        nonce,
-      },
-    });
-    const proofPayload = (proofResp.payload ?? {}) as LocalReadProofResponse;
-    const verify = options.verifyProof ?? verifyLocalReadProof;
-    const verified = await verify({candidate, response: proofPayload, nonce});
-    if (!verified) {
-      this.client.close();
-      throw new Error('local read proof verification failed');
-    }
-    await this.client.connectInit({
-      clientName: 'wheelmaker-web',
-      clientVersion: '0.1.0',
-      protocolVersion: RegistryProtocolVersion,
-      role: 'local_read',
-      hubId,
-      token: token.trim(),
-    });
-  }
-
   async listProjectSnapshot(): Promise<RegistryProjectListResponse> {
     const resp = await this.client.request({
       method: RegistryMethods.RegistryProjectList,
@@ -672,28 +559,10 @@ export class RegistryRepository {
         hubId: project.hubId || project.projectId.split(':', 1)[0] || '',
       }));
     const seenHubIds = new Set<string>();
-    const normalizeLocalRead = (raw: unknown): RegistryLocalReadCandidate | undefined => {
-      if (!raw || typeof raw !== 'object') {
-        return undefined;
-      }
-      const input = raw as Record<string, unknown>;
-      const endpointId = typeof input.endpointId === 'string' ? input.endpointId.trim() : '';
-      const url = typeof input.url === 'string' ? input.url.trim() : '';
-      const proofPublicKey = typeof input.proofPublicKey === 'string' ? input.proofPublicKey.trim() : '';
-      const proofFingerprint = typeof input.proofFingerprint === 'string' ? input.proofFingerprint.trim() : '';
-      if (!endpointId || !url || !proofPublicKey || !proofFingerprint) {
-        return undefined;
-      }
-      return {endpointId, url, proofPublicKey, proofFingerprint};
-    };
     const hubs = (payload.hubs ?? [])
-      .map((hub): RegistryHub => {
-        const localRead = normalizeLocalRead((hub as {localRead?: unknown})?.localRead);
-        return {
-          hubId: typeof hub?.hubId === 'string' ? hub.hubId.trim() : '',
-          ...(localRead ? {localRead} : {}),
-        };
-      })
+      .map((hub): RegistryHub => ({
+        hubId: typeof hub?.hubId === 'string' ? hub.hubId.trim() : '',
+      }))
       .filter(hub => {
         if (!hub.hubId || seenHubIds.has(hub.hubId)) {
           return false;

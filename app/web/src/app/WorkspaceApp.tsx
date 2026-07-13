@@ -2551,11 +2551,6 @@ export function App() {
       ? persistedGlobal.disableFileCache
       : false,
   );
-  const [localHubReadEnabled, setLocalHubReadEnabled] = useState(
-    typeof persistedGlobal.localHubReadEnabled === 'boolean'
-      ? persistedGlobal.localHubReadEnabled
-      : true,
-  );
   const [promptCompletionNotificationsEnabled, setPromptCompletionNotificationsEnabled] = useState(
     typeof persistedGlobal.promptCompletionNotificationsEnabled === 'boolean'
       ? persistedGlobal.promptCompletionNotificationsEnabled
@@ -3065,7 +3060,6 @@ export function App() {
 
   const [projects, setProjects] = useState<RegistryProject[]>([]);
   const [registryHubs, setRegistryHubs] = useState<RegistryHub[]>([]);
-  const [localHubReadStatuses, setLocalHubReadStatuses] = useState<Record<string, 'Local' | 'Remote'>>({});
   const [projectId, setProjectId] = useState('');
   const projectIdRef = useRef('');
   const projectsRef = useRef<RegistryProject[]>([]);
@@ -5978,12 +5972,6 @@ export function App() {
   }, [disableFileCache]);
 
   useEffect(() => {
-    service.setLocalHubReadEnabled(localHubReadEnabled);
-    setLocalHubReadStatuses(service.getLocalHubReadStatuses(registryHubs));
-    workspaceStore.rememberGlobalState({ localHubReadEnabled });
-  }, [localHubReadEnabled, registryHubs]);
-
-  useEffect(() => {
     promptCompletionNotificationsEnabledRef.current = promptCompletionNotificationsEnabled;
   }, [promptCompletionNotificationsEnabled]);
 
@@ -6016,12 +6004,6 @@ export function App() {
       setPromptCompletionNotificationsEnabled(false);
     });
   };
-
-  useEffect(() => {
-    return service.onLocalHubReadStatusChange(() => {
-      setLocalHubReadStatuses(service.getLocalHubReadStatuses(registryHubs));
-    });
-  }, [registryHubs]);
 
   useEffect(() => {
     workspaceStore.rememberGlobalState({ speechSettings });
@@ -6077,7 +6059,6 @@ export function App() {
       hideToolCalls,
       messageViewerEnabled,
       logLevel,
-      localHubReadEnabled,
       promptCompletionNotificationsEnabled,
       tab,
       selectedProjectId: projectId,
@@ -6108,7 +6089,6 @@ export function App() {
     hideToolCalls,
     messageViewerEnabled,
     logLevel,
-    localHubReadEnabled,
     promptCompletionNotificationsEnabled,
     tab,
     projectId,
@@ -6295,7 +6275,6 @@ export function App() {
             {registryHubs.length > 0 ? (
               registryHubs.map(hub => {
                 const treeItem = chatHubTreeItems.find(item => item.hubId === hub.hubId) ?? {hubId: hub.hubId, projects: []};
-                const readStatus = localHubReadStatuses[hub.hubId] ?? 'Remote';
                 const expanded = effectiveExpandedHubIds.includes(hub.hubId);
                 const colorMenuOpen = chatHubColorMenuHubId === hub.hubId;
                 const currentHubColor = resolveHubColor(hubColors, hub.hubId);
@@ -6333,9 +6312,6 @@ export function App() {
                       >
                         <span className="chat-hub-color-square-fill" aria-hidden="true" />
                       </button>
-                      <span className={`chat-hub-read-tag ${readStatus.toLowerCase()}`}>
-                        {readStatus}
-                      </span>
                     </div>
                     {colorMenuOpen ? (
                       <div className="chat-hub-color-palette" aria-label={`Color options for ${hub.hubId}`}>
@@ -6451,7 +6427,6 @@ export function App() {
     hiddenProjectIdSet,
     hubAccentStyle,
     hubColors,
-    localHubReadStatuses,
     projects.length,
     registryHubs,
     setChatConfigOverflowOpen,
@@ -12129,7 +12104,6 @@ export function App() {
       const preferredSelectedChatId = preferredSelectedChatKey?.sessionId ?? '';
       setProjects(result.projects);
       setRegistryHubs(result.hubs);
-      setLocalHubReadStatuses(service.getLocalHubReadStatuses(result.hubs));
       setHasPendingProjectUpdates(false);
       captureSelectedFileScrollPosition();
       dirHashRef.current = {};
@@ -12384,7 +12358,6 @@ export function App() {
         setProjects(snapshot.projects);
       }
       setRegistryHubs(snapshot.hubs);
-      setLocalHubReadStatuses(service.getLocalHubReadStatuses(snapshot.hubs));
       const hubIds = deriveRegistryHubIds(snapshot.hubs);
       if (hubIds.length === 0) {
         setTokenStatsProviders([]);
@@ -12436,7 +12409,6 @@ export function App() {
       setProjects(snapshot.projects);
     }
     setRegistryHubs(snapshot.hubs);
-    setLocalHubReadStatuses(service.getLocalHubReadStatuses(snapshot.hubs));
     return deriveRegistryHubIds(snapshot.hubs);
   }, []);
 
@@ -13508,7 +13480,6 @@ export function App() {
         setProjects(snapshot.projects);
       }
       setRegistryHubs(snapshot.hubs);
-      setLocalHubReadStatuses(service.getLocalHubReadStatuses(snapshot.hubs));
       const hubIds = deriveSkillHubIds(snapshot.hubs);
       if (hubIds.length === 0) {
         setSkillHubs({});
@@ -14220,7 +14191,6 @@ export function App() {
       projectsRef.current = result.projects;
       setProjects(result.projects);
       setRegistryHubs(result.hubs);
-      setLocalHubReadStatuses(service.getLocalHubReadStatuses(result.hubs));
       setHasPendingProjectUpdates(false);
       workspaceStore.rememberGlobalState({
         selectedProjectId: nextProjectId,
@@ -16649,9 +16619,6 @@ export function App() {
           speechEnabled={speechSettings.enabled}
           androidNativeHost={isAndroidNativeSpeechHost()}
           androidNativeAvailable={!!getAndroidNativeSpeechBridge()}
-          localHubReadEnabled={localHubReadEnabled}
-          registryHubs={registryHubs}
-          localHubReadStatuses={localHubReadStatuses}
         />
       </React.Suspense>,
       undefined,
@@ -16714,8 +16681,6 @@ export function App() {
         setTtsSettings={setTtsSettings}
         chatFont={chatFont}
         setChatFont={setChatFont}
-        localHubReadEnabled={localHubReadEnabled}
-        setLocalHubReadEnabled={setLocalHubReadEnabled}
         openSettingsChild={openSettingsChild}
         codeTheme={codeTheme}
         setCodeTheme={setCodeTheme}

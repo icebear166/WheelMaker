@@ -44,11 +44,10 @@ type ProjectInfo struct {
 }
 
 type HubSnapshot struct {
-	HubID           string              `json:"hubId"`
-	ConnectionEpoch int64               `json:"connectionEpoch"`
-	Projects        []ProjectInfo       `json:"projects"`
-	UpdatedAt       string              `json:"updatedAt"`
-	LocalRead       *LocalReadCandidate `json:"localRead,omitempty"`
+	HubID           string        `json:"hubId"`
+	ConnectionEpoch int64         `json:"connectionEpoch"`
+	Projects        []ProjectInfo `json:"projects"`
+	UpdatedAt       string        `json:"updatedAt"`
 }
 
 type Envelope struct {
@@ -104,20 +103,18 @@ type ConnectInitResponsePayload struct {
 }
 
 type HubReportProjectsPayload struct {
-	HubID           string              `json:"hubId"`
-	ConnectionEpoch int64               `json:"connectionEpoch"`
-	Projects        []ProjectInfo       `json:"projects"`
-	LocalRead       *LocalReadCandidate `json:"localRead,omitempty"`
+	HubID           string        `json:"hubId"`
+	ConnectionEpoch int64         `json:"connectionEpoch"`
+	Projects        []ProjectInfo `json:"projects"`
 }
 
 type HubUpdateProjectPayload struct {
-	HubID           string              `json:"hubId"`
-	ConnectionEpoch int64               `json:"connectionEpoch"`
-	Seq             int64               `json:"seq"`
-	Project         ProjectInfo         `json:"project"`
-	ChangedDomains  []string            `json:"changedDomains,omitempty"`
-	UpdatedAt       string              `json:"updatedAt"`
-	LocalRead       *LocalReadCandidate `json:"localRead,omitempty"`
+	HubID           string      `json:"hubId"`
+	ConnectionEpoch int64       `json:"connectionEpoch"`
+	Seq             int64       `json:"seq"`
+	Project         ProjectInfo `json:"project"`
+	ChangedDomains  []string    `json:"changedDomains,omitempty"`
+	UpdatedAt       string      `json:"updatedAt"`
 }
 
 type DebugUploadLogPayload struct {
@@ -147,16 +144,8 @@ type ProjectListItem struct {
 	Git           ProjectGitState       `json:"git"`
 }
 
-type LocalReadCandidate struct {
-	EndpointID       string `json:"endpointId"`
-	URL              string `json:"url"`
-	ProofPublicKey   string `json:"proofPublicKey"`
-	ProofFingerprint string `json:"proofFingerprint"`
-}
-
 type HubListItem struct {
-	HubID     string              `json:"hubId"`
-	LocalRead *LocalReadCandidate `json:"localRead,omitempty"`
+	HubID string `json:"hubId"`
 }
 
 type MonitorHubRefPayload struct {

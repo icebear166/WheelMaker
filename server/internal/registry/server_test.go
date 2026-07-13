@@ -669,7 +669,7 @@ func TestRegistryReportProjectsThenListProjects(t *testing.T) {
 	}
 }
 
-func TestProjectListIncludesLocalReadCandidate(t *testing.T) {
+func TestProjectListIgnoresLegacyLocalReadCandidate(t *testing.T) {
 	s := New(Config{})
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)
@@ -745,12 +745,8 @@ func TestProjectListIncludesLocalReadCandidate(t *testing.T) {
 		t.Fatalf("hubs=%v, want one hub", listResp.Payload["hubs"])
 	}
 	firstHub, _ := hubs[0].(map[string]any)
-	localRead, _ := firstHub["localRead"].(map[string]any)
-	if localRead["endpointId"] != "local-hub-1" {
-		t.Fatalf("localRead=%#v, want candidate endpointId", localRead)
-	}
-	if localRead["url"] != "ws://127.0.0.1:53123/ws" {
-		t.Fatalf("localRead url=%v", localRead["url"])
+	if _, exists := firstHub["localRead"]; exists {
+		t.Fatalf("hub should not expose removed localRead metadata: %#v", firstHub)
 	}
 
 	projects, ok := listResp.Payload["projects"].([]any)

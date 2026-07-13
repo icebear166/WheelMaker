@@ -105,17 +105,8 @@ func TestRegistryMethodRolesAndRoutes(t *testing.T) {
 	if RegistryHubCommandMethod("cmd.skills") {
 		t.Fatal("cmd.skills should not be a public hub command method")
 	}
-	if !RegistryLocalReadMethodAllowed(RegistryMethodProjectFSRead) {
-		t.Fatal("project.fs.read should be allowed on local read")
-	}
 	if RegistryHubCommandMethod("fs.index.status") {
 		t.Fatal("fs.index.status should not be a public hub command method")
-	}
-	if !RegistryLocalReadMethodAllowed(RegistryMethodProjectFSIndexSearch) {
-		t.Fatal("project.fs.index.search should be allowed on local read")
-	}
-	if RegistryLocalReadMethodAllowed("fs.index.rebuild") {
-		t.Fatal("fs.index.rebuild should not be allowed on local read")
 	}
 	gitRev, ok := RegistryMethod(RegistryMethodProjectGitRev)
 	if !ok {
@@ -127,18 +118,11 @@ func TestRegistryMethodRolesAndRoutes(t *testing.T) {
 	if !gitRev.RequiresProjectID {
 		t.Fatal("project.git.rev should require projectId")
 	}
-	if !gitRev.LocalRead {
-		t.Fatal("project.git.rev should be allowed on local read")
-	}
-	if RegistryLocalReadMethodAllowed(RegistryMethodSessionList) {
-		t.Fatal("session.list should not be allowed on local read")
-	}
 }
 
 func TestRegistryProtocolDomainTargetMethods(t *testing.T) {
 	targets := []string{
 		"connect.close",
-		"connect.localRead.proof",
 		"hub.report.projects",
 		"hub.report.project",
 		"registry.project.list",
@@ -173,6 +157,9 @@ func TestRegistryProtocolDomainTargetMethods(t *testing.T) {
 		if _, ok := RegistryMethod(method); !ok {
 			t.Fatalf("%s should be registered", method)
 		}
+	}
+	if _, ok := RegistryMethod("connect.localRead.proof"); ok {
+		t.Fatal("connect.localRead.proof should be removed")
 	}
 }
 

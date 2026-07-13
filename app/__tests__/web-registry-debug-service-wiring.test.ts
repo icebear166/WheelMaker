@@ -26,7 +26,7 @@ describe('registry debug service wiring', () => {
       'constructor(private readonly debugSink?: RegistryDebugSink, options: RegistryWorkspaceServiceOptions = {})',
     );
     expect(workspaceServiceTs).toContain('this.createRepository = options.createRepository ?? createRegistryRepository;');
-    expect(workspaceServiceTs).toContain("createRepository: () => this.createRepository(this.debugSink, 'Local')");
+    expect(workspaceServiceTs).not.toContain("this.createRepository(this.debugSink, 'Local')");
     expect(workspaceServiceTs).toContain("const repository = this.createRepository(this.debugSink, 'Remote');");
   });
 });

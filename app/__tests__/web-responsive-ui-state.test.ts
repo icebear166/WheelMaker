@@ -454,10 +454,9 @@ describe('web responsive ui state', () => {
 
     const hubNameIndex = mainTsx.indexOf('<span className="chat-hub-row-name">{hub.hubId}</span>');
     const colorSquareIndex = mainTsx.indexOf('className="chat-hub-color-square"', hubNameIndex);
-    const readTagIndex = mainTsx.indexOf('className={`chat-hub-read-tag ${readStatus.toLowerCase()}`}', hubNameIndex);
     expect(hubNameIndex).toBeGreaterThanOrEqual(0);
     expect(colorSquareIndex).toBeGreaterThan(hubNameIndex);
-    expect(readTagIndex).toBeGreaterThan(colorSquareIndex);
+    expect(mainTsx).not.toContain('chat-hub-read-tag');
     expect(mainTsx).not.toContain('className="chat-hub-color-trigger"');
     expect(mainTsx).not.toContain('className={`chat-hub-visibility-check ${visibilityState}`}');
     expect(mainTsx).not.toContain("const hubEnabled = visibilityState !== 'unchecked';");

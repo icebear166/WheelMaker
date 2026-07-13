@@ -1,43 +1,18 @@
 import fs from 'fs';
 import path from 'path';
 
-import {readWebStyles} from '../testHelpers/webStyles';
-describe('local hub read UI settings', () => {
-  test('persists local hub read acceleration as default enabled', () => {
+describe('local hub read removal', () => {
+  test('removes local hub read runtime, settings, and persistence', () => {
     const projectRoot = path.join(__dirname, '..');
     const workspacePersistence = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'), 'utf8');
-
-    expect(workspacePersistence).toContain('localHubReadEnabled: boolean;');
-    expect(workspacePersistence).toContain("localHubReadEnabled: 'localHubReadEnabled',");
-    expect(workspacePersistence).toContain('localHubReadEnabled: true,');
-    expect(workspacePersistence).toContain(
-      "localHubReadEnabled: typeof input.localHubReadEnabled === 'boolean' ? input.localHubReadEnabled : base.localHubReadEnabled",
-    );
-    expect(workspacePersistence).toContain('const rows = globalRowsForPatch(patch, next, now);');
-    expect(workspacePersistence).toContain(
-      '{k: GLOBAL_KEYS.localHubReadEnabled, v: serialize(this.state.global.localHubReadEnabled), updatedAt}',
-    );
-  });
-
-  test('adds settings switch and simple Remote Local hub tags', () => {
-    const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const settingsRootTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
-    const stylesCss = readWebStyles(projectRoot);
+    const serviceTs = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'registry', 'RegistryWorkspaceService.ts'), 'utf8');
 
-    expect(mainTsx).toContain('const [localHubReadEnabled, setLocalHubReadEnabled] = useState(');
-    expect(mainTsx).toContain('service.setLocalHubReadEnabled(localHubReadEnabled);');
-    expect(mainTsx).toContain("workspaceStore.rememberGlobalState({ localHubReadEnabled });");
-    expect(settingsRootTsx).toContain('Local Hub Read');
-    expect(settingsRootTsx).toContain('checked={localHubReadEnabled}');
-    expect(settingsRootTsx).toContain('setLocalHubReadEnabled(event.target.checked)');
-    expect(mainTsx).toContain('localHubReadStatuses[hub.hubId] ?? \'Remote\'');
-    expect(mainTsx).toContain('className={`chat-hub-read-tag ${readStatus.toLowerCase()}`}');
-    expect(mainTsx).toContain('{readStatus}');
-    expect(mainTsx).not.toContain('53123');
-
-    expect(stylesCss).toContain('.chat-hub-read-tag {');
-    expect(stylesCss).toContain('.chat-hub-read-tag.local {');
-    expect(stylesCss).toContain('.chat-hub-read-tag.remote {');
+    expect(workspacePersistence).not.toMatch(/localHubRead/i);
+    expect(mainTsx).not.toMatch(/localHubRead/i);
+    expect(settingsRootTsx).not.toMatch(/Local Hub Read|localHubRead/i);
+    expect(serviceTs).not.toMatch(/localHubRead|localRead/i);
+    expect(fs.existsSync(path.join(projectRoot, 'web', 'src', 'registry', 'localRead', 'LocalHubReadManager.ts'))).toBe(false);
   });
 });

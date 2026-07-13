@@ -2112,26 +2112,6 @@
   font-weight: 650;
 }
 
-.chat-hub-read-tag {
-  flex: 0 0 auto;
-  min-width: 36px;
-  height: 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  font-size: 9px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: 0;
-  opacity: 0.7;
-  transition: opacity 140ms ease;
-}
-
-.chat-hub-row:hover .chat-hub-read-tag {
-  opacity: 1;
-}
-
 .chat-hub-color-palette {
   position: absolute;
   top: 34px;
@@ -2405,16 +2385,6 @@
   padding: 3px 5px;
   color: var(--text-secondary);
   font-size: 11px;
-}
-
-.chat-hub-read-tag.local {
-  background: color-mix(in srgb, #2f9e44 18%, transparent);
-  color: color-mix(in srgb, #2f9e44 86%, var(--text-primary));
-}
-
-.chat-hub-read-tag.remote {
-  background: color-mix(in srgb, var(--text-secondary) 16%, transparent);
-  color: var(--text-secondary);
 }
 
 .chat-hub-empty {

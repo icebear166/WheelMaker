@@ -3,7 +3,6 @@ export const RegistryProtocolVersion = '2.6' as const;
 export const RegistryMethods = {
   ConnectInit: 'connect.init',
   ConnectClose: 'connect.close',
-  ConnectLocalReadProof: 'connect.localRead.proof',
   DebugUploadLog: 'debug.uploadLog',
   RegistryProjectList: 'registry.project.list',
   RegistryProjectReport: 'registry.project.report',

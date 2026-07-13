@@ -12,10 +12,9 @@ const (
 type RegistryRole string
 
 const (
-	RegistryRoleHub       RegistryRole = "hub"
-	RegistryRoleClient    RegistryRole = "client"
-	RegistryRoleMonitor   RegistryRole = "monitor"
-	RegistryRoleLocalRead RegistryRole = "local_read"
+	RegistryRoleHub     RegistryRole = "hub"
+	RegistryRoleClient  RegistryRole = "client"
+	RegistryRoleMonitor RegistryRole = "monitor"
 )
 
 type RegistryRouteKind string
@@ -36,7 +35,6 @@ const (
 	RegistryRouteRelayHub               RegistryRouteKind = "relay_hub"
 	RegistryRouteSpeech                 RegistryRouteKind = "speech"
 	RegistryRouteClientEvent            RegistryRouteKind = "client_event"
-	RegistryRouteLocalRead              RegistryRouteKind = "local_read"
 	RegistryRouteDebug                  RegistryRouteKind = "debug"
 	RegistryRouteTerminalProjectRequest RegistryRouteKind = "terminal_project_request"
 	RegistryRouteTerminalHubRequest     RegistryRouteKind = "terminal_hub_request"
@@ -45,15 +43,14 @@ const (
 )
 
 const (
-	RegistryMethodConnectInit           = "connect.init"
-	RegistryMethodConnectClose          = "connect.close"
-	RegistryMethodConnectLocalReadProof = "connect.localRead.proof"
-	RegistryMethodHubPing               = "hub.ping"
-	RegistryMethodHubStateGet           = "hub.state.get"
-	RegistryMethodHubStateRefresh       = "hub.state.refresh"
-	RegistryMethodHubStateAction        = "hub.state.action"
-	RegistryMethodHubStateUpdated       = "hub.state.updated"
-	RegistryMethodDebugUploadLog        = "debug.uploadLog"
+	RegistryMethodConnectInit     = "connect.init"
+	RegistryMethodConnectClose    = "connect.close"
+	RegistryMethodHubPing         = "hub.ping"
+	RegistryMethodHubStateGet     = "hub.state.get"
+	RegistryMethodHubStateRefresh = "hub.state.refresh"
+	RegistryMethodHubStateAction  = "hub.state.action"
+	RegistryMethodHubStateUpdated = "hub.state.updated"
+	RegistryMethodDebugUploadLog  = "debug.uploadLog"
 
 	RegistryMethodHubReportProjects             = "hub.report.projects"
 	RegistryMethodHubReportProject              = "hub.report.project"
@@ -141,41 +138,39 @@ type RegistryMethodDescriptor struct {
 	Roles             []RegistryRole
 	RequiresProjectID bool
 	RequiresHubID     bool
-	LocalRead         bool
 	ClientEventMethod string
 }
 
 var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
-	RegistryMethodConnectInit:           registryMethod(RegistryMethodConnectInit, RegistryRouteConnect, nil),
-	RegistryMethodConnectClose:          registryClientEventMethod(RegistryMethodConnectClose),
-	RegistryMethodConnectLocalReadProof: registryMethod(RegistryMethodConnectLocalReadProof, RegistryRouteLocalRead, []RegistryRole{RegistryRoleLocalRead}),
-	RegistryMethodHubPing:               registryMethod(RegistryMethodHubPing, RegistryRouteHubControl, []RegistryRole{RegistryRoleHub}),
-	RegistryMethodHubStateGet:           registryHubStateMethod(RegistryMethodHubStateGet),
-	RegistryMethodHubStateRefresh:       registryHubStateMethod(RegistryMethodHubStateRefresh),
-	RegistryMethodHubStateAction:        registryHubStateMethod(RegistryMethodHubStateAction),
-	RegistryMethodHubStateUpdated:       registryClientEventMethod(RegistryMethodHubStateUpdated),
-	RegistryMethodDebugUploadLog:        registryMethod(RegistryMethodDebugUploadLog, RegistryRouteDebug, []RegistryRole{RegistryRoleClient}),
+	RegistryMethodConnectInit:     registryMethod(RegistryMethodConnectInit, RegistryRouteConnect, nil),
+	RegistryMethodConnectClose:    registryClientEventMethod(RegistryMethodConnectClose),
+	RegistryMethodHubPing:         registryMethod(RegistryMethodHubPing, RegistryRouteHubControl, []RegistryRole{RegistryRoleHub}),
+	RegistryMethodHubStateGet:     registryHubStateMethod(RegistryMethodHubStateGet),
+	RegistryMethodHubStateRefresh: registryHubStateMethod(RegistryMethodHubStateRefresh),
+	RegistryMethodHubStateAction:  registryHubStateMethod(RegistryMethodHubStateAction),
+	RegistryMethodHubStateUpdated: registryClientEventMethod(RegistryMethodHubStateUpdated),
+	RegistryMethodDebugUploadLog:  registryMethod(RegistryMethodDebugUploadLog, RegistryRouteDebug, []RegistryRole{RegistryRoleClient}),
 
 	RegistryMethodHubReportProjects:     registryHubReportMethod(RegistryMethodHubReportProjects),
 	RegistryMethodHubReportProject:      registryHubReportMethod(RegistryMethodHubReportProject),
-	RegistryMethodRegistryProjectList:   registryLocalReadMethod(RegistryMethodRegistryProjectList, RegistryRouteProjectCache, []RegistryRole{RegistryRoleClient, RegistryRoleMonitor}),
+	RegistryMethodRegistryProjectList:   registryMethod(RegistryMethodRegistryProjectList, RegistryRouteProjectCache, []RegistryRole{RegistryRoleClient, RegistryRoleMonitor}),
 	RegistryMethodRegistryProjectReport: registryClientEventMethod(RegistryMethodRegistryProjectReport),
 
-	RegistryMethodProjectFSList:                 registryLocalReadProjectMethod(RegistryMethodProjectFSList),
-	RegistryMethodProjectFSInfo:                 registryLocalReadProjectMethod(RegistryMethodProjectFSInfo),
-	RegistryMethodProjectFSRead:                 registryLocalReadProjectMethod(RegistryMethodProjectFSRead),
-	RegistryMethodProjectFSSearch:               registryLocalReadProjectMethod(RegistryMethodProjectFSSearch),
-	RegistryMethodProjectFSGrep:                 registryLocalReadProjectMethod(RegistryMethodProjectFSGrep),
-	RegistryMethodProjectFSIndexSearch:          registryLocalReadProjectMethod(RegistryMethodProjectFSIndexSearch),
-	RegistryMethodProjectGitRev:                 registryLocalReadProjectMethod(RegistryMethodProjectGitRev),
-	RegistryMethodProjectGitRefs:                registryLocalReadProjectMethod(RegistryMethodProjectGitRefs),
-	RegistryMethodProjectGitLog:                 registryLocalReadProjectMethod(RegistryMethodProjectGitLog),
-	RegistryMethodProjectGitCommitFiles:         registryLocalReadProjectMethod(RegistryMethodProjectGitCommitFiles),
-	RegistryMethodProjectGitCommitFileDiff:      registryLocalReadProjectMethod(RegistryMethodProjectGitCommitFileDiff),
-	RegistryMethodProjectGitDiff:                registryLocalReadProjectMethod(RegistryMethodProjectGitDiff),
-	RegistryMethodProjectGitDiffFileDiff:        registryLocalReadProjectMethod(RegistryMethodProjectGitDiffFileDiff),
-	RegistryMethodProjectGitStatus:              registryLocalReadProjectMethod(RegistryMethodProjectGitStatus),
-	RegistryMethodProjectGitWorkingTreeFileDiff: registryLocalReadProjectMethod(RegistryMethodProjectGitWorkingTreeFileDiff),
+	RegistryMethodProjectFSList:                 registryProjectMethod(RegistryMethodProjectFSList, RegistryRouteProjectForward),
+	RegistryMethodProjectFSInfo:                 registryProjectMethod(RegistryMethodProjectFSInfo, RegistryRouteProjectForward),
+	RegistryMethodProjectFSRead:                 registryProjectMethod(RegistryMethodProjectFSRead, RegistryRouteProjectForward),
+	RegistryMethodProjectFSSearch:               registryProjectMethod(RegistryMethodProjectFSSearch, RegistryRouteProjectForward),
+	RegistryMethodProjectFSGrep:                 registryProjectMethod(RegistryMethodProjectFSGrep, RegistryRouteProjectForward),
+	RegistryMethodProjectFSIndexSearch:          registryProjectMethod(RegistryMethodProjectFSIndexSearch, RegistryRouteProjectForward),
+	RegistryMethodProjectGitRev:                 registryProjectMethod(RegistryMethodProjectGitRev, RegistryRouteProjectForward),
+	RegistryMethodProjectGitRefs:                registryProjectMethod(RegistryMethodProjectGitRefs, RegistryRouteProjectForward),
+	RegistryMethodProjectGitLog:                 registryProjectMethod(RegistryMethodProjectGitLog, RegistryRouteProjectForward),
+	RegistryMethodProjectGitCommitFiles:         registryProjectMethod(RegistryMethodProjectGitCommitFiles, RegistryRouteProjectForward),
+	RegistryMethodProjectGitCommitFileDiff:      registryProjectMethod(RegistryMethodProjectGitCommitFileDiff, RegistryRouteProjectForward),
+	RegistryMethodProjectGitDiff:                registryProjectMethod(RegistryMethodProjectGitDiff, RegistryRouteProjectForward),
+	RegistryMethodProjectGitDiffFileDiff:        registryProjectMethod(RegistryMethodProjectGitDiffFileDiff, RegistryRouteProjectForward),
+	RegistryMethodProjectGitStatus:              registryProjectMethod(RegistryMethodProjectGitStatus, RegistryRouteProjectForward),
+	RegistryMethodProjectGitWorkingTreeFileDiff: registryProjectMethod(RegistryMethodProjectGitWorkingTreeFileDiff, RegistryRouteProjectForward),
 	RegistryMethodSessionUpdated:                registryHubSessionEventMethod(RegistryMethodSessionUpdated, RegistryMethodSessionUpdated),
 	RegistryMethodSessionMessage:                registryHubSessionEventMethod(RegistryMethodSessionMessage, RegistryMethodSessionMessage),
 
@@ -244,27 +239,9 @@ func registryProjectMethod(method string, route RegistryRouteKind) RegistryMetho
 	return desc
 }
 
-func registryLocalReadMethod(method string, route RegistryRouteKind, roles []RegistryRole) RegistryMethodDescriptor {
-	desc := registryMethod(method, route, roles)
-	desc.LocalRead = true
-	return desc
-}
-
 func registryHubReportMethod(method string) RegistryMethodDescriptor {
 	desc := registryMethod(method, RegistryRouteHubReport, []RegistryRole{RegistryRoleHub})
 	desc.RequiresHubID = true
-	return desc
-}
-
-func registryLocalReadProjectCacheMethod(method string, roles []RegistryRole) RegistryMethodDescriptor {
-	desc := registryLocalReadMethod(method, RegistryRouteProjectCache, roles)
-	desc.RequiresProjectID = true
-	return desc
-}
-
-func registryLocalReadProjectMethod(method string) RegistryMethodDescriptor {
-	desc := registryProjectMethod(method, RegistryRouteProjectForward)
-	desc.LocalRead = true
 	return desc
 }
 
@@ -356,11 +333,6 @@ func RegistryRelayHubMethod(method string) bool {
 
 func RegistrySpeechMethod(method string) bool {
 	return RegistryMethodHasRoute(method, RegistryRouteSpeech)
-}
-
-func RegistryLocalReadMethodAllowed(method string) bool {
-	desc, ok := RegistryMethod(method)
-	return ok && desc.LocalRead
 }
 
 func RegistryHubSessionEventMethod(method string) (string, bool) {
