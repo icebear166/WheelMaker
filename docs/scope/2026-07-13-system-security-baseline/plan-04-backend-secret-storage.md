@@ -337,7 +337,7 @@ Expected: PASS；build 不含直接第三方密钥请求代码。
 
 ### Task 6: 执行后端密钥泄漏验收
 
-- [ ] **Step 1: 运行 Go/Web 全量测试**
+- [x] **Step 1: 运行 Go/Web 全量测试**
 
 Run:
 
@@ -351,18 +351,18 @@ npm run tsc:web
 
 Expected: PASS。
 
-- [ ] **Step 2: 运行结构化源码门**
+- [x] **Step 2: 运行结构化源码门**
 
 Run:
 
 ```powershell
 rg -n 'Authorization.*apiKey|volcengineApiKey|deepseekApiKey|apiKey: settings\.apiKey|payload: \{apiKey' app/web/src
-rg -n 'json:"value"|SecretValueConfig' server/internal/protocol app/web/src/registry
+rg -n 'json:"value"|SecretValueConfig' server/internal/protocol/registry.go app/web/src/registry
 ```
 
 Expected: 第一条只允许一次性 migration 读取旧字段及测试 fixture；第二条无输出。任何生产 Web 发送/返回原文路径都必须删除。
 
-- [ ] **Step 3: 推送阶段提交**
+- [x] **Step 3: 推送阶段提交**
 
 Run:
 

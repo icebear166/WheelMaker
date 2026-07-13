@@ -1493,11 +1493,12 @@ describe('web chat integration', () => {
     const chatSection = settingsRootTsx.slice(chatStart, codeDisplayStart);
     expect(chatSection).toContain('Voice Input');
     expect(chatSection).toContain('className="voice-input-settings-nested"');
-    expect(chatSection).toContain('API Key');
     expect(chatSection).toContain('Model');
-    expect(chatSection).toContain('type="text"');
     expect(chatSection).not.toContain('type="password"');
+    expect(chatSection).not.toContain('API Key');
     expect(chatSection).not.toContain('Volcengine API Key');
+    expect(settingsRootTsx).toContain('BackendSecretEditor');
+    expect(settingsRootTsx).toContain('type="password"');
     expect(chatSection).not.toContain('Speech Model');
     expect(chatSection).not.toContain("setSettingsDetailView('voiceInput')");
     expect(settingsRootTsx).toContain('Doubao Streaming ASR 2.0');
