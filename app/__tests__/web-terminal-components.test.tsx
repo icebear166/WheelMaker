@@ -49,6 +49,25 @@ class MockResizeObserver {
   fire() { this.callback([], this as unknown as ResizeObserver); }
 }
 
+class MockVisualViewport {
+  private listeners = new Map<string, Set<EventListenerOrEventListenerObject>>();
+  addEventListener = jest.fn((type: string, listener: EventListenerOrEventListenerObject) => {
+    const listeners = this.listeners.get(type) ?? new Set<EventListenerOrEventListenerObject>();
+    listeners.add(listener);
+    this.listeners.set(type, listeners);
+  });
+  removeEventListener = jest.fn((type: string, listener: EventListenerOrEventListenerObject) => {
+    this.listeners.get(type)?.delete(listener);
+  });
+  fire(type: string) {
+    const event = new Event(type);
+    this.listeners.get(type)?.forEach(listener => {
+      if (typeof listener === 'function') listener(event);
+      else listener.handleEvent(event);
+    });
+  }
+}
+
 function terminal(overrides: Partial<RegistryTerminal> = {}): RegistryTerminal {
   return {
     terminalId: 't1', runId: 'r1', hubId: 'hub-a', projectId: 'hub-a:p1', projectName: 'p1',
@@ -78,11 +97,15 @@ function interactiveTerminalHost() {
 }
 
 describe('terminal components', () => {
+  let visualViewport: MockVisualViewport;
+
   beforeEach(() => {
     mockTerminalInstances.length = 0;
     mockFitInstances.length = 0;
     MockResizeObserver.instances.length = 0;
     (globalThis as typeof globalThis & {ResizeObserver: typeof ResizeObserver}).ResizeObserver = MockResizeObserver as never;
+    visualViewport = new MockVisualViewport();
+    Object.defineProperty(window, 'visualViewport', {configurable: true, value: visualViewport});
   });
 
   test('opens xterm, sends bytes, resets snapshots, fits, and disposes', async () => {
@@ -142,8 +165,10 @@ describe('terminal components', () => {
     onResize.mockClear();
     fitAddon.fit.mockClear();
     fitAddon.proposeDimensions.mockReturnValue({cols: 92, rows: 18});
-    xterm.cols = 92;
-    xterm.rows = 18;
+    fitAddon.fit.mockImplementation(() => {
+      xterm.cols = 92;
+      xterm.rows = 18;
+    });
 
     act(() => {
       host.fire('focusout', {relatedTarget: null});
@@ -153,6 +178,107 @@ describe('terminal components', () => {
 
     expect(fitAddon.fit).toHaveBeenCalledTimes(1);
     expect(onResize).toHaveBeenCalledWith(92, 18);
+  });
+
+  test('fits an active terminal when the mobile visual viewport changes', async () => {
+    const onResize = jest.fn();
+    let renderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        <TerminalView active resizeEnabled cols={80} rows={40} onInput={jest.fn()} onResize={onResize} />,
+        {createNodeMock: terminalHost},
+      );
+    });
+    const xterm = mockTerminalInstances[0];
+    const fitAddon = mockFitInstances[0];
+    fitAddon.proposeDimensions.mockReturnValue({cols: 80, rows: 20});
+    fitAddon.fit.mockImplementation(() => {
+      xterm.cols = 80;
+      xterm.rows = 20;
+    });
+
+    act(() => visualViewport.fire('resize'));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 5)); });
+
+    expect(fitAddon.fit).toHaveBeenCalledTimes(1);
+    expect(onResize).toHaveBeenCalledWith(80, 20);
+
+    act(() => renderer!.unmount());
+    expect(visualViewport.removeEventListener).toHaveBeenCalledWith('resize', expect.any(Function));
+    expect(visualViewport.removeEventListener).toHaveBeenCalledWith('scroll', expect.any(Function));
+  });
+
+  test('restores local rows when the keyboard closes before the shrink resize is acknowledged', async () => {
+    const onResize = jest.fn();
+    await act(async () => {
+      TestRenderer.create(
+        <TerminalView active resizeEnabled cols={80} rows={40} onInput={jest.fn()} onResize={onResize} />,
+        {createNodeMock: terminalHost},
+      );
+    });
+    const xterm = mockTerminalInstances[0];
+    const fitAddon = mockFitInstances[0];
+    let proposed = {cols: 80, rows: 20};
+    xterm.cols = 80;
+    xterm.rows = 40;
+    fitAddon.proposeDimensions.mockImplementation(() => proposed);
+    fitAddon.fit.mockImplementation(() => {
+      xterm.cols = proposed.cols;
+      xterm.rows = proposed.rows;
+    });
+
+    act(() => MockResizeObserver.instances[0].fire());
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 5)); });
+    proposed = {cols: 80, rows: 40};
+    act(() => MockResizeObserver.instances[0].fire());
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 5)); });
+
+    expect(fitAddon.fit).toHaveBeenCalledTimes(2);
+    expect(onResize.mock.calls).toEqual([[80, 20], [80, 40]]);
+  });
+
+  test('sends the restored viewport after a keyboard resize claim completes', async () => {
+    const onResize = jest.fn();
+    const onAutoResize = jest.fn();
+    let renderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        <TerminalView active resizeEnabled={false} cols={80} rows={40} onInput={jest.fn()}
+          onResize={onResize} onAutoResize={onAutoResize} />,
+        {createNodeMock: terminalHost},
+      );
+    });
+    const xterm = mockTerminalInstances[0];
+    const fitAddon = mockFitInstances[0];
+    let proposed = {cols: 80, rows: 20};
+    xterm.cols = 80;
+    xterm.rows = 40;
+    xterm.resize.mockImplementation((nextCols: number, nextRows: number) => {
+      xterm.cols = nextCols;
+      xterm.rows = nextRows;
+    });
+    fitAddon.proposeDimensions.mockImplementation(() => proposed);
+    fitAddon.fit.mockImplementation(() => {
+      xterm.cols = proposed.cols;
+      xterm.rows = proposed.rows;
+    });
+
+    act(() => visualViewport.fire('resize'));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 5)); });
+    expect(onAutoResize).toHaveBeenCalledWith(80, 20);
+
+    proposed = {cols: 80, rows: 40};
+    act(() => visualViewport.fire('resize'));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 5)); });
+    await act(async () => {
+      renderer!.update(
+        <TerminalView active resizeEnabled cols={80} rows={20} onInput={jest.fn()}
+          onResize={onResize} onAutoResize={onAutoResize} />,
+      );
+    });
+
+    expect(onResize).toHaveBeenCalledWith(80, 40);
+    expect({cols: xterm.cols, rows: xterm.rows}).toEqual({cols: 80, rows: 40});
   });
 
   test('enables ConPTY compatibility for a Windows terminal', async () => {

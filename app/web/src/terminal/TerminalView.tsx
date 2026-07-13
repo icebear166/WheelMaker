@@ -35,7 +35,6 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
   const resizeEnabledRef = useRef(resizeEnabled);
   const colsRef = useRef(cols);
   const rowsRef = useRef(rows);
-  const focusedRef = useRef(false);
   const previousResizeEnabledRef = useRef(resizeEnabled);
   const resizeFrameRef = useRef<number | null>(null);
   const lastSizeRef = useRef('');
@@ -107,11 +106,12 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       if (!isForegroundActive()) return;
       const proposed = fitAddon.proposeDimensions();
       if (!proposed || proposed.cols <= 0 || proposed.rows <= 0) return;
-      if (proposed.cols === colsRef.current && proposed.rows === rowsRef.current) return;
       if (!resizeEnabledRef.current) {
+        if (proposed.cols === colsRef.current && proposed.rows === rowsRef.current) return;
         autoResizeRef.current?.(proposed.cols, proposed.rows);
         return;
       }
+      if (proposed.cols === terminal.cols && proposed.rows === terminal.rows) return;
       fitAddon.fit();
       const size = {cols: terminal.cols, rows: terminal.rows};
       const key = `${size.cols}x${size.rows}`;
@@ -125,14 +125,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     };
     const observer = new ResizeObserver(scheduleFitReport);
     const onFocusIn = () => {
-      focusedRef.current = true;
       scheduleFitReport();
-    };
-    const onFocusOut = (event: FocusEvent) => {
-      const next = event.relatedTarget;
-      if (typeof Node !== 'undefined' && next instanceof Node &&
-        typeof container.contains === 'function' && container.contains(next)) return;
-      focusedRef.current = false;
     };
     const onVisibilityChange = () => {
       if (document.visibilityState === 'visible') scheduleFitReport();
@@ -189,8 +182,10 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     container.addEventListener('touchend', onTouchEnd);
     container.addEventListener('touchcancel', resetTouchScroll);
     container.addEventListener('focusin', onFocusIn);
-    container.addEventListener('focusout', onFocusOut);
     if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisibilityChange);
+    const visualViewport = typeof window === 'undefined' ? null : window.visualViewport;
+    visualViewport?.addEventListener('resize', scheduleFitReport);
+    visualViewport?.addEventListener('scroll', scheduleFitReport);
     observer.observe(container);
 
     return () => {
@@ -201,8 +196,9 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       container.removeEventListener('touchend', onTouchEnd);
       container.removeEventListener('touchcancel', resetTouchScroll);
       container.removeEventListener('focusin', onFocusIn);
-      container.removeEventListener('focusout', onFocusOut);
       if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisibilityChange);
+      visualViewport?.removeEventListener('resize', scheduleFitReport);
+      visualViewport?.removeEventListener('scroll', scheduleFitReport);
       dataDisposable.dispose();
       binaryDisposable.dispose();
       terminal.dispose();
@@ -212,23 +208,28 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
   }, []);
 
   useEffect(() => {
-    const gainedResizeOwnership = resizeEnabled && !previousResizeEnabledRef.current;
-    previousResizeEnabledRef.current = resizeEnabled;
-    if (!active) return;
-    if (gainedResizeOwnership && focusedRef.current &&
-      (typeof document === 'undefined' || document.visibilityState === 'visible')) {
-      const size = fit();
-      if (size) lastSizeRef.current = `${size.cols}x${size.rows}`;
-    }
-    terminalRef.current?.focus();
-  }, [active, resizeEnabled]);
-
-  useEffect(() => {
     const terminal = terminalRef.current;
     if (!terminal || cols <= 0 || rows <= 0) return;
     if (terminal.cols !== cols || terminal.rows !== rows) terminal.resize(cols, rows);
     lastSizeRef.current = `${cols}x${rows}`;
   }, [cols, rows]);
+
+  useEffect(() => {
+    const gainedResizeOwnership = resizeEnabled && !previousResizeEnabledRef.current;
+    previousResizeEnabledRef.current = resizeEnabled;
+    if (!active) return;
+    if (gainedResizeOwnership &&
+      (typeof document === 'undefined' || document.visibilityState === 'visible')) {
+      const size = fit();
+      if (size) {
+        lastSizeRef.current = `${size.cols}x${size.rows}`;
+        if (size.cols !== colsRef.current || size.rows !== rowsRef.current) {
+          resizeRef.current(size.cols, size.rows);
+        }
+      }
+    }
+    terminalRef.current?.focus();
+  }, [active, resizeEnabled]);
 
   return <div ref={containerRef} className="terminal-xterm-host" />;
 });
