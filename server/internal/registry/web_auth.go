@@ -14,7 +14,7 @@ const registryCSRFHeaderName = "X-WheelMaker-CSRF"
 
 func (s *Server) handleWebLogin(w http.ResponseWriter, r *http.Request) {
 	setNoStore(w)
-	if !security.OriginAllowed(r.Header.Get("Origin"), s.cfg.AllowedOrigins) {
+	if !security.RequestOriginMatchesHost(r) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
@@ -71,7 +71,7 @@ func (s *Server) handleWebAuthStatus(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleWebLogout(w http.ResponseWriter, r *http.Request) {
 	setNoStore(w)
-	if !security.OriginAllowed(r.Header.Get("Origin"), s.cfg.AllowedOrigins) {
+	if !security.RequestOriginMatchesHost(r) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}

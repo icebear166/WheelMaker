@@ -736,12 +736,11 @@ func ensureConfig(cfg deployConfig, deps deployDeps) (bool, error) {
 			},
 		},
 		"registry": map[string]any{
-			"listen":         true,
-			"port":           9630,
-			"server":         "127.0.0.1",
-			"token":          token,
-			"hubId":          "local-hub",
-			"allowedOrigins": []string{},
+			"listen": true,
+			"port":   9630,
+			"server": "127.0.0.1",
+			"token":  token,
+			"hubId":  "local-hub",
 		},
 		"monitor": map[string]any{
 			"server": "127.0.0.1",

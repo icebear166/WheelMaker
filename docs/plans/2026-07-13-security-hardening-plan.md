@@ -44,7 +44,7 @@
 - Modify: `server/internal/shared/shared_test.go` — 配置权限、Token 验证与失败路径测试。
 - Create: `server/internal/security/loopback.go` — 统一监听地址、Host 和浏览器 Origin 校验。
 - Create: `server/internal/security/loopback_test.go` — IPv4/IPv6 loopback 与拒绝非 loopback 测试。
-- Modify: `server/internal/shared/config.go` — 增加 `registry.allowedOrigins`，保留单一 `registry.token`。
+- Modify: `server/internal/shared/config.go` — 保留单一 `registry.token`，浏览器来源由请求同源关系自动验证，不增加用户配置项。
 - Modify: `server/cmd/wheelmaker-deploy/main.go` — 首次安装生成随机 Token，升级时替换旧默认值并收紧配置权限。
 - Modify: `server/cmd/wheelmaker-deploy/main_test.go` — 验证不同安装 Token 不同、旧默认值被替换、现有自定义 Token 保持不变。
 - Modify: `server/cmd/wheelmaker/main.go` — Registry/Hub 启动时必须加载有效 Token 并强制 loopback。
@@ -234,7 +234,7 @@ func IsTrustedProxyRequest(r *http.Request) bool {
 
 - [ ] **Step 3: 接入监听入口和 WebSocket Origin**
 
-Registry、Monitor 和所有可配置 listener 在 `net.Listen` 前调用 `RequireLoopbackAddress`。移除 Registry `CheckOrigin: true`，浏览器 WebSocket 必须匹配 `registry.allowedOrigins`；无 Origin 的 Hub/Monitor 原生连接继续通过 `connect.init` Token 验证。
+Registry、Monitor 和所有可配置 listener 在 `net.Listen` 前调用 `RequireLoopbackAddress`。移除 Registry `CheckOrigin: true`，浏览器 WebSocket 的 `Origin` 必须与可信请求 scheme、Host 和端口严格同源；无 Origin 的 Hub/Monitor 原生连接继续通过 `connect.init` Token 验证。
 
 - [ ] **Step 4: 固定 Nginx 同源入口规则**
 

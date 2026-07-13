@@ -43,7 +43,6 @@ var (
 type Config struct {
 	Addr            string
 	Token           string
-	AllowedOrigins  []string
 	ProtocolVersion string
 	ServerVersion   string
 	LogDir          string
@@ -405,7 +404,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	origin := r.Header.Get("Origin")
 	browserSession := false
 	if origin != "" {
-		if !security.OriginAllowed(origin, s.cfg.AllowedOrigins) {
+		if !security.RequestOriginMatchesHost(r) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
@@ -416,7 +415,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(request *http.Request) bool {
 			origin := request.Header.Get("Origin")
-			return origin == "" || security.OriginAllowed(origin, s.cfg.AllowedOrigins)
+			return origin == "" || security.RequestOriginMatchesHost(request)
 		},
 	}
 	ws, err := upgrader.Upgrade(w, r, nil)

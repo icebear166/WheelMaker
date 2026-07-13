@@ -4,19 +4,18 @@ WheelMaker backend services must listen only on `127.0.0.1` or `::1`. Nginx is t
 
 ## Required topology
 
-Use one public origin for the Web app, authentication endpoints, HTTP APIs, and Registry WebSocket. Add that exact origin to `registry.allowedOrigins` in `~/.wheelmaker/config.json`.
+Use one public origin for the Web app, authentication endpoints, HTTP APIs, and Registry WebSocket. Registry derives the expected browser origin from the trusted request scheme and Host, so users do not configure an origin allowlist.
 
 ```json
 {
   "registry": {
     "server": "127.0.0.1",
-    "port": 9630,
-    "allowedOrigins": ["https://wheelmaker.example.com"]
+    "port": 9630
   }
 }
 ```
 
-The example domain must be replaced with the deployed HTTPS origin. Do not add wildcards, parent domains, HTTP variants, or unrelated development origins to a production allowlist.
+Browser requests are accepted only when `Origin` exactly matches the effective scheme, Host, and port. Cross-origin requests, parent domains, HTTP/HTTPS mismatches, and different ports are rejected automatically.
 
 ## Nginx configuration
 

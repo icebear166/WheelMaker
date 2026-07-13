@@ -89,10 +89,9 @@ func runRegistryServer(addr, stateDir string) error {
 	defer stop()
 
 	s := registry.New(registry.Config{
-		Addr:           addr,
-		Token:          cfg.Registry.Token,
-		AllowedOrigins: cfg.Registry.AllowedOrigins,
-		LogDir:         filepath.Join(baseDir, "log"),
+		Addr:   addr,
+		Token:  cfg.Registry.Token,
+		LogDir: filepath.Join(baseDir, "log"),
 	})
 	return s.Run(ctx)
 }
@@ -187,10 +186,9 @@ func runRegistryWorker(stateDir string) error {
 	defer stop()
 	registryScopedLogger.Info("worker start addr=%s", addr)
 	s := registry.New(registry.Config{
-		Addr:           addr,
-		Token:          cfg.Registry.Token,
-		AllowedOrigins: cfg.Registry.AllowedOrigins,
-		LogDir:         filepath.Join(baseDir, "log"),
+		Addr:   addr,
+		Token:  cfg.Registry.Token,
+		LogDir: filepath.Join(baseDir, "log"),
 	})
 	if err := s.Run(ctx); err != nil {
 		registryScopedLogger.Error("worker run failed err=%v", err)

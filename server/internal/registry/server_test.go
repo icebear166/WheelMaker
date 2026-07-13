@@ -1873,8 +1873,8 @@ func dialWS(t *testing.T, rawURL string) *websocket.Conn {
 	return conn
 }
 
-func TestWebSocketRejectsUnlistedBrowserOrigin(t *testing.T) {
-	s := New(Config{AllowedOrigins: []string{"https://wheelmaker.example.com"}})
+func TestWebSocketRejectsCrossOriginBrowser(t *testing.T) {
+	s := New(Config{})
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)
 	header := http.Header{"Origin": []string{"https://attacker.example"}}
@@ -1888,7 +1888,7 @@ func TestWebSocketRejectsUnlistedBrowserOrigin(t *testing.T) {
 }
 
 func TestWebLoginSetsSecureSessionCookie(t *testing.T) {
-	s := New(Config{Token: "custom-token", AllowedOrigins: []string{"https://wheelmaker.example.com"}})
+	s := New(Config{Token: "custom-token"})
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)
 	req, err := http.NewRequest(http.MethodPost, ts.URL+"/auth/login", strings.NewReader(`{"token":"custom-token"}`))
@@ -1898,6 +1898,7 @@ func TestWebLoginSetsSecureSessionCookie(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Origin", "https://wheelmaker.example.com")
 	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Host = "wheelmaker.example.com"
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("login: %v", err)
@@ -1917,10 +1918,10 @@ func TestWebLoginSetsSecureSessionCookie(t *testing.T) {
 }
 
 func TestWebSocketWithoutSessionStillRequiresTokenInit(t *testing.T) {
-	s := New(Config{Token: "custom-token", AllowedOrigins: []string{"https://wheelmaker.example.com"}})
+	s := New(Config{Token: "custom-token"})
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)
-	header := http.Header{"Origin": []string{"https://wheelmaker.example.com"}}
+	header := http.Header{"Origin": []string{ts.URL}}
 	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", header)
 	if err != nil {
 		t.Fatalf("dial allowlisted browser: %v", err)
@@ -1944,12 +1945,12 @@ func TestWebSocketWithoutSessionStillRequiresTokenInit(t *testing.T) {
 }
 
 func TestWebSocketSessionAllowsClientWithoutToken(t *testing.T) {
-	s := New(Config{Token: "custom-token", AllowedOrigins: []string{"https://wheelmaker.example.com"}})
+	s := New(Config{Token: "custom-token"})
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)
-	cookie := loginRegistryBrowser(t, ts.URL, "custom-token", "https://wheelmaker.example.com")
+	cookie := loginRegistryBrowser(t, ts.URL, "custom-token", ts.URL)
 	header := http.Header{
-		"Origin": []string{"https://wheelmaker.example.com"},
+		"Origin": []string{ts.URL},
 		"Cookie": []string{cookie.String()},
 	}
 	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", header)
@@ -1982,7 +1983,9 @@ func loginRegistryBrowser(t *testing.T, baseURL, token, origin string) *http.Coo
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Origin", origin)
-	req.Header.Set("X-Forwarded-Proto", "https")
+	if strings.HasPrefix(origin, "https://") {
+		req.Header.Set("X-Forwarded-Proto", "https")
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("login: %v", err)

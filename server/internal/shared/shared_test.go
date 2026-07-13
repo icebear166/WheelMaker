@@ -70,23 +70,6 @@ func TestLoadConfig_AllowsMonitorServer(t *testing.T) {
 	}
 }
 
-func TestLoadConfig_AllowsRegistryOrigins(t *testing.T) {
-	path := writeTempConfig(t, `{
-		"registry": {
-			"token": "custom-token",
-			"allowedOrigins": ["https://wheelmaker.example.com"]
-		},
-		"projects": []
-	}`)
-	cfg, err := LoadConfig(path)
-	if err != nil {
-		t.Fatalf("LoadConfig(): %v", err)
-	}
-	if len(cfg.Registry.AllowedOrigins) != 1 || cfg.Registry.AllowedOrigins[0] != "https://wheelmaker.example.com" {
-		t.Fatalf("allowed origins=%v", cfg.Registry.AllowedOrigins)
-	}
-}
-
 func TestLoadConfig_RejectsRemovedProjectClient(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	data := []byte(`{"projects":[{"name":"p","path":".","client":{"agent":"codex"}}]}`)

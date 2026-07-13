@@ -24,18 +24,18 @@ func RequireLoopbackAddress(addr string) error {
 	return nil
 }
 
-// OriginAllowed compares a browser Origin against an exact configured allowlist.
-func OriginAllowed(origin string, allowed []string) bool {
-	normalized, ok := normalizeOrigin(origin)
+// RequestOriginMatchesHost verifies that a browser request is strictly same-origin.
+func RequestOriginMatchesHost(r *http.Request) bool {
+	origin, ok := normalizeOrigin(r.Header.Get("Origin"))
 	if !ok {
 		return false
 	}
-	for _, candidate := range allowed {
-		if candidateOrigin, valid := normalizeOrigin(candidate); valid && candidateOrigin == normalized {
-			return true
-		}
+	scheme := "http"
+	if RequestIsHTTPS(r) {
+		scheme = "https"
 	}
-	return false
+	expected, ok := normalizeOrigin(scheme + "://" + r.Host)
+	return ok && origin == expected
 }
 
 func normalizeOrigin(raw string) (string, bool) {

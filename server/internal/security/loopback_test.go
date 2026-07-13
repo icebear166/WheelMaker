@@ -33,12 +33,17 @@ func TestRequireLoopbackAddress(t *testing.T) {
 	}
 }
 
-func TestOriginAllowedUsesExactOrigin(t *testing.T) {
-	allowed := []string{"https://wheelmaker.example.com", "https://wheelmaker.example.com:8443"}
-	for _, origin := range []string{"https://wheelmaker.example.com", "https://WHEELMAKER.EXAMPLE.COM:443", "https://wheelmaker.example.com:8443"} {
-		if !OriginAllowed(origin, allowed) {
-			t.Fatalf("OriginAllowed(%q)=false", origin)
-		}
+func TestRequestOriginMatchesHostUsesExactSameOrigin(t *testing.T) {
+	request := &http.Request{
+		Host:       "wheelmaker.example.com",
+		RemoteAddr: "127.0.0.1:50000",
+		Header: http.Header{
+			"Origin":            []string{"https://wheelmaker.example.com"},
+			"X-Forwarded-Proto": []string{"https"},
+		},
+	}
+	if !RequestOriginMatchesHost(request) {
+		t.Fatal("same-origin request was rejected")
 	}
 	for _, origin := range []string{
 		"http://wheelmaker.example.com",
@@ -47,8 +52,9 @@ func TestOriginAllowedUsesExactOrigin(t *testing.T) {
 		"https://wheelmaker.example.com:9443",
 		"https://wheelmaker.example.com/path",
 	} {
-		if OriginAllowed(origin, allowed) {
-			t.Fatalf("OriginAllowed(%q)=true", origin)
+		request.Header.Set("Origin", origin)
+		if RequestOriginMatchesHost(request) {
+			t.Fatalf("cross-origin request %q was accepted", origin)
 		}
 	}
 }
