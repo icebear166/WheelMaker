@@ -132,6 +132,33 @@ type DebugUploadLogResponsePayload struct {
 	FileName string `json:"fileName"`
 }
 
+type RegistryDeviceSession struct {
+	DeviceID   string `json:"deviceId"`
+	DeviceName string `json:"deviceName"`
+	BasePath   string `json:"basePath"`
+	CreatedAt  string `json:"createdAt"`
+	LastSeenAt string `json:"lastSeenAt"`
+	ExpiresAt  string `json:"expiresAt"`
+	Current    bool   `json:"current"`
+}
+
+type RegistryDeviceSessionListResponse struct {
+	Sessions []RegistryDeviceSession `json:"sessions"`
+}
+
+type RegistryDeviceSessionRevokePayload struct {
+	DeviceID string `json:"deviceId"`
+}
+
+type RegistryDeviceSessionRevokeResponse struct {
+	DeviceID string `json:"deviceId"`
+	Revoked  bool   `json:"revoked"`
+}
+
+type RegistryDeviceSessionRevokeAllResponse struct {
+	Revoked int `json:"revoked"`
+}
+
 type ProjectListItem struct {
 	ProjectID     string                `json:"projectId"`
 	Name          string                `json:"name"`

@@ -2216,6 +2216,136 @@ func TestWebAuthRejectsSessionFromDifferentBasePath(t *testing.T) {
 	}
 }
 
+func TestDeviceSessionListAndRevokeCloseTargetBrowser(t *testing.T) {
+	s := New(Config{Token: "custom-token"})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+	firstCookie, firstDeviceID := loginRegistryBrowserDevice(t, ts.URL, "custom-token", "First")
+	secondCookie, secondDeviceID := loginRegistryBrowserDevice(t, ts.URL, "custom-token", "Second")
+	firstWS := connectRegistryBrowser(t, ts.URL, firstCookie)
+	defer firstWS.Close()
+	secondWS := connectRegistryBrowser(t, ts.URL, secondCookie)
+	defer secondWS.Close()
+
+	mustWriteJSON(t, firstWS, testEnvelope{RequestID: 2, Type: "request", Method: rp.RegistryMethodSecuritySessionList, Payload: map[string]any{}})
+	listResp := mustReadEnvelope(t, firstWS)
+	if listResp.Type != "response" || listResp.Method != rp.RegistryMethodSecuritySessionList {
+		t.Fatalf("list response=%+v", listResp)
+	}
+	sessions, ok := listResp.Payload["sessions"].([]any)
+	if !ok || len(sessions) != 2 {
+		t.Fatalf("list payload=%+v", listResp.Payload)
+	}
+	encoded, err := json.Marshal(listResp.Payload)
+	if err != nil {
+		t.Fatalf("Marshal(list): %v", err)
+	}
+	for _, forbidden := range []string{firstCookie.Value, secondCookie.Value, "digest", "csrf", "fingerprint"} {
+		if bytes.Contains(bytes.ToLower(encoded), bytes.ToLower([]byte(forbidden))) {
+			t.Fatalf("list leaks %q: %s", forbidden, encoded)
+		}
+	}
+	current := ""
+	for _, raw := range sessions {
+		item, _ := raw.(map[string]any)
+		if item["current"] == true {
+			current, _ = item["deviceId"].(string)
+		}
+	}
+	if current != firstDeviceID {
+		t.Fatalf("current device=%q, want %q", current, firstDeviceID)
+	}
+
+	mustWriteJSON(t, firstWS, testEnvelope{RequestID: 3, Type: "request", Method: rp.RegistryMethodSecuritySessionRevoke, Payload: map[string]any{"deviceId": secondDeviceID}})
+	revokeResp := mustReadEnvelope(t, firstWS)
+	if revokeResp.Type != "response" || revokeResp.Payload["revoked"] != true {
+		t.Fatalf("revoke response=%+v", revokeResp)
+	}
+	if err := secondWS.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatalf("SetReadDeadline(): %v", err)
+	}
+	if _, _, err := secondWS.ReadMessage(); err == nil {
+		t.Fatal("revoked target browser remained connected")
+	}
+
+	mustWriteJSON(t, firstWS, testEnvelope{RequestID: 4, Type: "request", Method: rp.RegistryMethodSecuritySessionRevoke, Payload: map[string]any{"deviceId": firstDeviceID}})
+	currentResp := mustReadEnvelope(t, firstWS)
+	if currentResp.Type != "response" || currentResp.Payload["revoked"] != true {
+		t.Fatalf("current revoke response=%+v", currentResp)
+	}
+	if err := firstWS.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatalf("SetReadDeadline(): %v", err)
+	}
+	if _, _, err := firstWS.ReadMessage(); err == nil {
+		t.Fatal("revoked current browser remained connected")
+	}
+}
+
+func TestDeviceSessionRevokeAllClosesCurrentBrowser(t *testing.T) {
+	s := New(Config{Token: "custom-token"})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+	cookie, _ := loginRegistryBrowserDevice(t, ts.URL, "custom-token", "Browser")
+	ws := connectRegistryBrowser(t, ts.URL, cookie)
+	defer ws.Close()
+	mustWriteJSON(t, ws, testEnvelope{RequestID: 2, Type: "request", Method: rp.RegistryMethodSecuritySessionRevokeAll, Payload: map[string]any{}})
+	resp := mustReadEnvelope(t, ws)
+	if resp.Type != "response" || resp.Payload["revoked"] != float64(1) {
+		t.Fatalf("revokeAll response=%+v", resp)
+	}
+	if err := ws.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatalf("SetReadDeadline(): %v", err)
+	}
+	if _, _, err := ws.ReadMessage(); err == nil {
+		t.Fatal("revokeAll left current browser connected")
+	}
+}
+
+func loginRegistryBrowserDevice(t *testing.T, baseURL, token, deviceName string) (*http.Cookie, string) {
+	t.Helper()
+	login := doRegistryWebAuthRequest(t, baseURL, http.MethodPost, "/", "login", `{"token":`+strconv.Quote(token)+`,"deviceName":`+strconv.Quote(deviceName)+`}`, sameOriginWebAuthHeaders(baseURL), nil)
+	if login.StatusCode != http.StatusOK || len(login.Cookies()) != 1 {
+		t.Fatalf("login status=%d cookies=%v", login.StatusCode, login.Cookies())
+	}
+	cookie := login.Cookies()[0]
+	_ = login.Body.Close()
+	status := doRegistryWebAuthRequest(t, baseURL, http.MethodGet, "/", "status", "", nil, cookie)
+	defer status.Body.Close()
+	var payload struct {
+		Device struct {
+			DeviceID string `json:"deviceId"`
+		} `json:"device"`
+	}
+	if err := json.NewDecoder(status.Body).Decode(&payload); err != nil || payload.Device.DeviceID == "" {
+		t.Fatalf("decode status deviceId=%q err=%v", payload.Device.DeviceID, err)
+	}
+	return cookie, payload.Device.DeviceID
+}
+
+func connectRegistryBrowser(t *testing.T, baseURL string, cookie *http.Cookie) *websocket.Conn {
+	t.Helper()
+	header := http.Header{"Origin": []string{baseURL}, "Cookie": []string{cookie.String()}}
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(baseURL, "http")+"/ws", header)
+	if err != nil {
+		t.Fatalf("dial browser websocket: %v", err)
+	}
+	mustWriteJSON(t, conn, testEnvelope{
+		RequestID: 1,
+		Type:      "request",
+		Method:    rp.RegistryMethodConnectInit,
+		Payload: map[string]any{
+			"clientName":      "wheelmaker-web",
+			"clientVersion":   "0.1.0",
+			"protocolVersion": rp.DefaultProtocolVersion,
+			"role":            "client",
+		},
+	})
+	if resp := mustReadEnvelope(t, conn); resp.Type != "response" {
+		t.Fatalf("connect response=%+v", resp)
+	}
+	return conn
+}
+
 func sameOriginWebAuthHeaders(origin string) http.Header {
 	return http.Header{
 		"Content-Type":   []string{"application/json"},

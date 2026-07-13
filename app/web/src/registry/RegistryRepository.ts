@@ -8,6 +8,7 @@ import {
 import type {
   RegistryDebugUploadLogPayload,
   RegistryDebugUploadLogResponse,
+  RegistryDeviceSession,
   RegistryEnvelope,
   RegistryFileIndexRebuildResponse,
   RegistryFileIndexSearchResponse,
@@ -113,6 +114,32 @@ function normalizeAgentTypes(agentTypes: unknown): string[] {
   return agentTypes
     .map(item => normalizeAgentType(item))
     .filter((item): item is string => !!item);
+}
+
+function normalizeDeviceSession(raw: unknown): RegistryDeviceSession | null {
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+  const input = raw as Record<string, unknown>;
+  if (
+    typeof input.deviceId !== 'string' || input.deviceId.length === 0 ||
+    typeof input.deviceName !== 'string' ||
+    typeof input.basePath !== 'string' ||
+    typeof input.createdAt !== 'string' ||
+    typeof input.lastSeenAt !== 'string' ||
+    typeof input.expiresAt !== 'string'
+  ) {
+    return null;
+  }
+  return {
+    deviceId: input.deviceId,
+    deviceName: input.deviceName,
+    basePath: input.basePath,
+    createdAt: input.createdAt,
+    lastSeenAt: input.lastSeenAt,
+    expiresAt: input.expiresAt,
+    current: input.current === true,
+  };
 }
 
 function normalizeNpmPackage(raw: unknown): RegistryNpmPackage | null {
@@ -575,6 +602,31 @@ export class RegistryRepository {
 
   async listProjects(): Promise<RegistryProject[]> {
     return (await this.listProjectSnapshot()).projects;
+  }
+
+  async listDeviceSessions(): Promise<RegistryDeviceSession[]> {
+    const resp = await this.client.request({
+      method: RegistryMethods.SecuritySessionList,
+      payload: {},
+    });
+    const payload = (resp.payload ?? {}) as {sessions?: unknown[]};
+    return (Array.isArray(payload.sessions) ? payload.sessions : [])
+      .map(normalizeDeviceSession)
+      .filter((session): session is RegistryDeviceSession => session !== null);
+  }
+
+  async revokeDeviceSession(deviceId: string): Promise<void> {
+    await this.client.request({
+      method: RegistryMethods.SecuritySessionRevoke,
+      payload: {deviceId},
+    });
+  }
+
+  async revokeAllDeviceSessions(): Promise<void> {
+    await this.client.request({
+      method: RegistryMethods.SecuritySessionRevokeAll,
+      payload: {},
+    });
   }
 
   async uploadDebugLog(payload: RegistryDebugUploadLogPayload): Promise<RegistryDebugUploadLogResponse> {

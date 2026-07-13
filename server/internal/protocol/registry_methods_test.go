@@ -3,11 +3,56 @@ package protocol
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestRegistryDeviceSessionMethods(t *testing.T) {
+	methods := []string{
+		RegistryMethodSecuritySessionList,
+		RegistryMethodSecuritySessionRevoke,
+		RegistryMethodSecuritySessionRevokeAll,
+	}
+	for _, method := range methods {
+		desc, ok := RegistryMethod(method)
+		if !ok {
+			t.Fatalf("method %q is not registered", method)
+		}
+		if desc.Route != RegistryRouteSecuritySession {
+			t.Fatalf("method %q route=%q, want %q", method, desc.Route, RegistryRouteSecuritySession)
+		}
+		if !RegistryMethodAllowed(string(RegistryRoleClient), method) {
+			t.Fatalf("method %q should allow client", method)
+		}
+		if RegistryMethodAllowed(string(RegistryRoleHub), method) || RegistryMethodAllowed(string(RegistryRoleMonitor), method) {
+			t.Fatalf("method %q allowed a non-client role", method)
+		}
+	}
+}
+
+func TestRegistryDeviceSessionListSerializationExcludesCredentials(t *testing.T) {
+	payload := RegistryDeviceSessionListResponse{Sessions: []RegistryDeviceSession{{
+		DeviceID:   "device-public-id",
+		DeviceName: "Work Laptop",
+		BasePath:   "/wheelmaker/",
+		CreatedAt:  "2026-07-13T12:00:00Z",
+		LastSeenAt: "2026-07-13T12:01:00Z",
+		ExpiresAt:  "2027-01-09T12:01:00Z",
+		Current:    true,
+	}}}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("Marshal(): %v", err)
+	}
+	for _, forbidden := range []string{"token", "cookie", "digest", "csrf", "fingerprint"} {
+		if bytes.Contains(bytes.ToLower(encoded), []byte(forbidden)) {
+			t.Fatalf("serialized sessions contain %q: %s", forbidden, encoded)
+		}
+	}
+}
 
 func TestRegistryDefaultProtocolVersionIs26(t *testing.T) {
 	if DefaultProtocolVersion != "2.6" {

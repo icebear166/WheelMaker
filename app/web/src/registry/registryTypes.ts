@@ -63,6 +63,16 @@ export interface RegistryDebugUploadLogResponse {
   fileName: string;
 }
 
+export interface RegistryDeviceSession {
+  deviceId: string;
+  deviceName: string;
+  basePath: string;
+  createdAt: string;
+  lastSeenAt: string;
+  expiresAt: string;
+  current: boolean;
+}
+
 export interface RegistryEnvelope<TPayload = unknown> {
   requestId?: number;
   type: RegistryMessageType;

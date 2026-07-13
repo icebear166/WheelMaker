@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -31,6 +32,16 @@ type webSession struct {
 	CreatedAt  time.Time
 	LastSeenAt time.Time
 	ExpiresAt  time.Time
+}
+
+type webSessionInfo struct {
+	DeviceID   string
+	DeviceName string
+	BasePath   string
+	CreatedAt  time.Time
+	LastSeenAt time.Time
+	ExpiresAt  time.Time
+	Current    bool
 }
 
 type webSessionStore struct {
@@ -159,6 +170,82 @@ func (s *webSessionStore) Revoke(raw string) error {
 		return err
 	}
 	return nil
+}
+
+func (s *webSessionStore) List(currentDeviceID string) ([]webSessionInfo, error) {
+	now := s.now()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	previous := cloneWebSessions(s.sessions)
+	s.removeExpiredLocked(now)
+	if len(previous) != len(s.sessions) {
+		if err := s.persistLocked(now); err != nil {
+			s.sessions = previous
+			return nil, err
+		}
+	}
+	items := make([]webSessionInfo, 0, len(s.sessions))
+	for _, session := range s.sessions {
+		items = append(items, webSessionInfo{
+			DeviceID:   session.DeviceID,
+			DeviceName: session.DeviceName,
+			BasePath:   session.BasePath,
+			CreatedAt:  session.CreatedAt,
+			LastSeenAt: session.LastSeenAt,
+			ExpiresAt:  session.ExpiresAt,
+			Current:    session.DeviceID == currentDeviceID,
+		})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Current != items[j].Current {
+			return items[i].Current
+		}
+		if items[i].LastSeenAt.Equal(items[j].LastSeenAt) {
+			return items[i].DeviceID < items[j].DeviceID
+		}
+		return items[i].LastSeenAt.After(items[j].LastSeenAt)
+	})
+	return items, nil
+}
+
+func (s *webSessionStore) RevokeDevice(deviceID string) (bool, error) {
+	if deviceID == "" {
+		return false, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for digest, session := range s.sessions {
+		if session.DeviceID != deviceID {
+			continue
+		}
+		delete(s.sessions, digest)
+		if err := s.persistLocked(s.now()); err != nil {
+			s.sessions[digest] = session
+			return false, err
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+func (s *webSessionStore) RevokeAll() ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.sessions) == 0 {
+		return []string{}, nil
+	}
+	previous := cloneWebSessions(s.sessions)
+	deviceIDs := make([]string, 0, len(s.sessions))
+	for _, session := range s.sessions {
+		deviceIDs = append(deviceIDs, session.DeviceID)
+	}
+	sort.Strings(deviceIDs)
+	s.sessions = make(map[[32]byte]webSession)
+	if err := s.persistLocked(s.now()); err != nil {
+		s.sessions = previous
+		return nil, err
+	}
+	return deviceIDs, nil
 }
 
 func (s *webSessionStore) randomValue() (string, error) {

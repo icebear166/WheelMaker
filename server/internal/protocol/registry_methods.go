@@ -36,6 +36,7 @@ const (
 	RegistryRouteSpeech                 RegistryRouteKind = "speech"
 	RegistryRouteClientEvent            RegistryRouteKind = "client_event"
 	RegistryRouteDebug                  RegistryRouteKind = "debug"
+	RegistryRouteSecuritySession        RegistryRouteKind = "security_session"
 	RegistryRouteTerminalProjectRequest RegistryRouteKind = "terminal_project_request"
 	RegistryRouteTerminalHubRequest     RegistryRouteKind = "terminal_hub_request"
 	RegistryRouteTerminalClientEvent    RegistryRouteKind = "terminal_client_event"
@@ -74,6 +75,10 @@ const (
 
 	RegistryMethodSessionUpdated = "session.updated"
 	RegistryMethodSessionMessage = "session.message"
+
+	RegistryMethodSecuritySessionList      = "security.session.list"
+	RegistryMethodSecuritySessionRevoke    = "security.session.revoke"
+	RegistryMethodSecuritySessionRevokeAll = "security.session.revokeAll"
 
 	RegistryMethodSessionList                = "session.list"
 	RegistryMethodSessionRead                = "session.read"
@@ -142,14 +147,17 @@ type RegistryMethodDescriptor struct {
 }
 
 var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
-	RegistryMethodConnectInit:     registryMethod(RegistryMethodConnectInit, RegistryRouteConnect, nil),
-	RegistryMethodConnectClose:    registryClientEventMethod(RegistryMethodConnectClose),
-	RegistryMethodHubPing:         registryMethod(RegistryMethodHubPing, RegistryRouteHubControl, []RegistryRole{RegistryRoleHub}),
-	RegistryMethodHubStateGet:     registryHubStateMethod(RegistryMethodHubStateGet),
-	RegistryMethodHubStateRefresh: registryHubStateMethod(RegistryMethodHubStateRefresh),
-	RegistryMethodHubStateAction:  registryHubStateMethod(RegistryMethodHubStateAction),
-	RegistryMethodHubStateUpdated: registryClientEventMethod(RegistryMethodHubStateUpdated),
-	RegistryMethodDebugUploadLog:  registryMethod(RegistryMethodDebugUploadLog, RegistryRouteDebug, []RegistryRole{RegistryRoleClient}),
+	RegistryMethodConnectInit:              registryMethod(RegistryMethodConnectInit, RegistryRouteConnect, nil),
+	RegistryMethodConnectClose:             registryClientEventMethod(RegistryMethodConnectClose),
+	RegistryMethodHubPing:                  registryMethod(RegistryMethodHubPing, RegistryRouteHubControl, []RegistryRole{RegistryRoleHub}),
+	RegistryMethodHubStateGet:              registryHubStateMethod(RegistryMethodHubStateGet),
+	RegistryMethodHubStateRefresh:          registryHubStateMethod(RegistryMethodHubStateRefresh),
+	RegistryMethodHubStateAction:           registryHubStateMethod(RegistryMethodHubStateAction),
+	RegistryMethodHubStateUpdated:          registryClientEventMethod(RegistryMethodHubStateUpdated),
+	RegistryMethodDebugUploadLog:           registryMethod(RegistryMethodDebugUploadLog, RegistryRouteDebug, []RegistryRole{RegistryRoleClient}),
+	RegistryMethodSecuritySessionList:      registryMethod(RegistryMethodSecuritySessionList, RegistryRouteSecuritySession, []RegistryRole{RegistryRoleClient}),
+	RegistryMethodSecuritySessionRevoke:    registryMethod(RegistryMethodSecuritySessionRevoke, RegistryRouteSecuritySession, []RegistryRole{RegistryRoleClient}),
+	RegistryMethodSecuritySessionRevokeAll: registryMethod(RegistryMethodSecuritySessionRevokeAll, RegistryRouteSecuritySession, []RegistryRole{RegistryRoleClient}),
 
 	RegistryMethodHubReportProjects:     registryHubReportMethod(RegistryMethodHubReportProjects),
 	RegistryMethodHubReportProject:      registryHubReportMethod(RegistryMethodHubReportProject),
@@ -333,6 +341,10 @@ func RegistryRelayHubMethod(method string) bool {
 
 func RegistrySpeechMethod(method string) bool {
 	return RegistryMethodHasRoute(method, RegistryRouteSpeech)
+}
+
+func RegistrySecuritySessionMethod(method string) bool {
+	return RegistryMethodHasRoute(method, RegistryRouteSecuritySession)
 }
 
 func RegistryHubSessionEventMethod(method string) (string, bool) {

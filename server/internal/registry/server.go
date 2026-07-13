@@ -257,6 +257,7 @@ type connectionState struct {
 	connectionEpoch int64
 	peer            *peerConn
 	browserSession  bool
+	browserDeviceID string
 	seenRequestIDs  map[int64]struct{}
 	lastProjectSeq  map[string]int64
 }
@@ -407,13 +408,15 @@ func (s *Server) Run(ctx context.Context) error {
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	origin := r.Header.Get("Origin")
 	browserSession := false
+	browserDeviceID := ""
 	if origin != "" {
-		if _, ok := s.authenticateWebRequest(r); ok {
+		if session, ok := s.authenticateWebRequest(r); ok {
 			if !security.RequestOriginMatchesHost(r) {
 				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
 			browserSession = true
+			browserDeviceID = session.DeviceID
 		}
 	}
 	upgrader := websocket.Upgrader{
@@ -427,13 +430,14 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 
 	connID := fmt.Sprintf("conn-%d", s.nextConnID.Add(1))
 	state := &connectionState{
-		id:             connID,
-		peer:           newPeerConn(ws, connID),
-		relayHost:      relayControlHost(r),
-		relaySecure:    relayControlSecure(r),
-		seenRequestIDs: map[int64]struct{}{},
-		lastProjectSeq: map[string]int64{},
-		browserSession: browserSession,
+		id:              connID,
+		peer:            newPeerConn(ws, connID),
+		relayHost:       relayControlHost(r),
+		relaySecure:     relayControlSecure(r),
+		seenRequestIDs:  map[int64]struct{}{},
+		lastProjectSeq:  map[string]int64{},
+		browserSession:  browserSession,
+		browserDeviceID: browserDeviceID,
 	}
 	registryLogger("").Info("ws connected id=%s remote=%s", state.id, r.RemoteAddr)
 	defer registryLogger("").Info("ws disconnected id=%s role=%s hub=%s remote=%s", state.id, state.role, state.hubID, r.RemoteAddr)
@@ -572,6 +576,8 @@ func (s *Server) handleRequest(state *connectionState, in envelope) {
 		s.handleProjectList(state.peer, state, in)
 	case in.Method == rp.RegistryMethodDebugUploadLog:
 		s.handleDebugUploadLog(state.peer, in)
+	case rp.RegistrySecuritySessionMethod(in.Method):
+		s.handleDeviceSessionRequest(state.peer, state, in)
 	case in.Method == rp.RegistryMethodMonitorListHub:
 		s.handleMonitorListHub(state.peer, state, in)
 	case in.Method == rp.RegistryMethodHubPing:

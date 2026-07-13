@@ -231,6 +231,60 @@ func TestWebSessionPrivatePermissionRepairFailureFailsClosed(t *testing.T) {
 	}
 }
 
+func TestWebSessionListAndRevokeExposeOnlyPublicDeviceIDs(t *testing.T) {
+	now := time.Date(2026, 7, 13, 12, 0, 0, 0, time.UTC)
+	store := newWebSessionStore(&sequenceReader{}, func() time.Time { return now }, "registry-token", "")
+	firstRaw, _, err := store.Create("First", "/")
+	if err != nil {
+		t.Fatalf("Create(first): %v", err)
+	}
+	first, ok := store.Authenticate(firstRaw)
+	if !ok {
+		t.Fatal("authenticate first")
+	}
+	now = now.Add(time.Minute)
+	secondRaw, _, err := store.Create("Second", "/wheelmaker/")
+	if err != nil {
+		t.Fatalf("Create(second): %v", err)
+	}
+	second, ok := store.Authenticate(secondRaw)
+	if !ok {
+		t.Fatal("authenticate second")
+	}
+
+	listed, err := store.List(first.DeviceID)
+	if err != nil {
+		t.Fatalf("List(): %v", err)
+	}
+	if len(listed) != 2 {
+		t.Fatalf("List()=%+v, want two sessions", listed)
+	}
+	encoded, err := json.Marshal(listed)
+	if err != nil {
+		t.Fatalf("Marshal(): %v", err)
+	}
+	for _, forbidden := range []string{firstRaw, secondRaw, first.CSRFToken, second.CSRFToken, "registry-token", "digest", "csrf", "token", "cookie", "fingerprint"} {
+		if bytes.Contains(bytes.ToLower(encoded), bytes.ToLower([]byte(forbidden))) {
+			t.Fatalf("List() leaks %q: %s", forbidden, encoded)
+		}
+	}
+	if revoked, err := store.RevokeDevice(second.DeviceID); err != nil || !revoked {
+		t.Fatalf("RevokeDevice() revoked=%t err=%v", revoked, err)
+	}
+	if _, ok := store.Authenticate(secondRaw); ok {
+		t.Fatal("revoked device authenticated")
+	}
+	if _, ok := store.Authenticate(firstRaw); !ok {
+		t.Fatal("unrelated device was revoked")
+	}
+	if revoked, err := store.RevokeAll(); err != nil || len(revoked) != 1 || revoked[0] != first.DeviceID {
+		t.Fatalf("RevokeAll() revoked=%v err=%v", revoked, err)
+	}
+	if _, ok := store.Authenticate(firstRaw); ok {
+		t.Fatal("revokeAll left a session active")
+	}
+}
+
 type sequenceReader struct {
 	next uint64
 }
