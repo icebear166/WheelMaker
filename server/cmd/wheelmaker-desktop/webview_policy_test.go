@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"reflect"
 	"testing"
@@ -24,6 +25,7 @@ func TestDesktopBridgeAuthorization(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	bootstrapDocumentURL := "data:text/html;charset=utf-8;base64," + base64.StdEncoding.EncodeToString([]byte(desktopBootstrapHTML))
 
 	tests := []struct {
 		name      string
@@ -34,6 +36,7 @@ func TestDesktopBridgeAuthorization(t *testing.T) {
 		want      bool
 	}{
 		{name: "bootstrap get state", mode: desktopBootstrapPage, url: "about:blank", mainFrame: true, action: desktopBridgeGetState, want: true},
+		{name: "embedded bootstrap get state", mode: desktopBootstrapPage, url: bootstrapDocumentURL, mainFrame: true, action: desktopBridgeGetState, want: true},
 		{name: "bootstrap save", mode: desktopBootstrapPage, url: "about:blank", mainFrame: true, action: desktopBridgeSaveBaseURL, want: true},
 		{name: "bootstrap retry", mode: desktopBootstrapPage, url: "about:blank", mainFrame: true, action: desktopBridgeRetry, want: true},
 		{name: "bootstrap reset", mode: desktopBootstrapPage, url: "about:blank", mainFrame: true, action: desktopBridgeReset, want: true},
@@ -56,6 +59,25 @@ func TestDesktopBridgeAuthorization(t *testing.T) {
 				t.Fatalf("AllowsBridge()=%v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestDesktopEmbeddedBootstrapDocumentNavigationAndBridge(t *testing.T) {
+	state, err := newDesktopWebViewSecurityState("", desktopBootstrapPage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bootstrapURL := desktopBootstrapDocumentURL()
+	if got := state.DecideNavigation(bootstrapURL, true, false); got != desktopNavigationAllow {
+		t.Fatalf("DecideNavigation()=%v, want embedded bootstrap page allowed", got)
+	}
+	epoch := state.BeginTopLevelNavigation(bootstrapURL)
+	state.CommitTopLevelNavigation(epoch, bootstrapURL)
+	if !state.Authorize(epoch, true, desktopBridgeGetState) {
+		t.Fatal("embedded bootstrap page was not authorized for bootstrap bridge")
+	}
+	if got := state.DecideNavigation("data:text/html,evil", true, false); got != desktopNavigationBlock {
+		t.Fatalf("DecideNavigation()=%v, want arbitrary data URL blocked", got)
 	}
 }
 

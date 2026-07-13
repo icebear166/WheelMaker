@@ -73,6 +73,10 @@ Run: `go test ./cmd/wheelmaker-deploy -run 'TestCleanupLegacyMonitor|TestUpdate.
 
 Expected: PASS.
 
+- [x] **Step 5: Preserve a successful missing-service cleanup result**
+
+Add `TestWindowsLegacyMonitorCleanupScriptExitsZeroWhenServiceIsMissing`, verify that it fails because the generated PowerShell script has no terminal success exit, then append `exit 0` after the service block and rerun the focused tests.
+
 ### Task 3: Verify the Windows release paths end to end
 
 **Files:**
@@ -99,7 +103,11 @@ Run: `pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/publish_desktop.ps1`
 
 Expected: it writes `~/.wheelmaker/desktop/WheelMakerDesktop.exe`, creates/updates the desktop shortcut, and prints `desktop publish complete`.
 
-- [ ] **Step 3: Commit and push the verified change**
+- [ ] **Step 3: Trigger and observe updater-driven publishing**
+
+Run: `update-publish.bat`, then confirm the latest `~/.wheelmaker/log/updater.log` round completes without an update error.
+
+- [ ] **Step 4: Commit and push the verified change**
 
 Run:
 

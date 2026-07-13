@@ -1,5 +1,7 @@
 package main
 
+import "strconv"
+
 const (
 	desktopResourceIconID     uint = 1
 	desktopTitleBarThemeColor      = "#1e1e1e"
@@ -16,6 +18,7 @@ const (
 )
 
 func desktopRuntimeInitScript() string {
+	bootstrapDocumentURL := strconv.Quote(desktopBootstrapDocumentURL())
 	return `(() => {
   if (window !== window.top) return;
   const invoke = name => (...args) => {
@@ -23,7 +26,7 @@ func desktopRuntimeInitScript() string {
     if (typeof fn !== 'function') return Promise.reject(new Error('Native bridge unavailable'));
     return fn(...args);
   };
-  if (location.href === 'about:blank') {
+	if (location.href === 'about:blank' || location.href === ` + bootstrapDocumentURL + `) {
     window.wheelMakerBootstrap = Object.freeze({
       getState: invoke('` + desktopBootstrapGetStateBinding + `'),
       saveBaseUrl: invoke('` + desktopBootstrapSaveBinding + `'),

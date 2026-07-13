@@ -348,6 +348,20 @@ func TestCleanupLegacyMonitorPreservesBinaryWhenWindowsServiceRequiresElevation(
 	}
 }
 
+func TestWindowsLegacyMonitorCleanupScriptExitsZeroWhenServiceIsMissing(t *testing.T) {
+	runner := &legacyMonitorRunner{}
+	if err := cleanupLegacyMonitor(context.Background(), deployConfig{InstallDir: t.TempDir()}, runner, "windows"); err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+	if len(runner.calls) != 1 {
+		t.Fatalf("calls=%d, want 1", len(runner.calls))
+	}
+	script := runner.calls[0].args[len(runner.calls[0].args)-1]
+	if !strings.Contains(script, "\n}\nexit 0") {
+		t.Fatalf("Windows cleanup script must explicitly exit 0 when the service is missing:\n%s", script)
+	}
+}
+
 func TestCleanupLegacyMonitorRejectsBinaryOutsideInstallDirectory(t *testing.T) {
 	root := t.TempDir()
 	cfg := deployConfig{HomeDir: root, InstallDir: filepath.Join(root, "bin")}

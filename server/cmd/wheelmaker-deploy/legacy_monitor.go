@@ -64,7 +64,8 @@ if ($null -ne $service) {
   if ($service.Status -ne 'Stopped') { Stop-Service -Name '%s' -Force -ErrorAction Stop }
   sc.exe delete '%s' | Out-Null
   if ($LASTEXITCODE -ne 0) { throw 'failed to delete legacy monitor service' }
-}`, legacyWindowsMonitorService, legacyMonitorCleanupRequiresElevation, legacyWindowsMonitorService, legacyWindowsMonitorService)
+}
+exit 0`, legacyWindowsMonitorService, legacyMonitorCleanupRequiresElevation, legacyWindowsMonitorService, legacyWindowsMonitorService)
 		var output string
 		output, err = runner.Run(ctx, "", "powershell", "-NoProfile", "-NonInteractive", "-Command", script)
 		if err == nil && strings.Contains(output, legacyMonitorCleanupRequiresElevation) {

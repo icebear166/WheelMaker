@@ -59,7 +59,7 @@ func (p *desktopWebViewPolicy) AllowsBridge(mode desktopPageMode, rawURL string,
 		return false
 	}
 	if mode == desktopBootstrapPage {
-		if rawURL != "about:blank" {
+		if !isDesktopBootstrapDocumentURL(rawURL) {
 			return false
 		}
 		return action >= desktopBridgeGetState && action <= desktopBridgeReset
@@ -153,7 +153,7 @@ func (s *desktopWebViewSecurityState) CommitTopLevelNavigation(epoch uint64, raw
 
 func (s *desktopWebViewSecurityState) allowsTopLevelNavigation(rawURL string) bool {
 	if s.mode == desktopBootstrapPage {
-		return rawURL == "about:blank"
+		return isDesktopBootstrapDocumentURL(rawURL)
 	}
 	return s.policy != nil && s.policy.DecideNavigation(rawURL, true, false) == desktopNavigationAllow
 }
@@ -162,7 +162,7 @@ func (s *desktopWebViewSecurityState) DecideNavigation(rawURL string, mainFrame 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.mode == desktopBootstrapPage {
-		if mainFrame && rawURL == "about:blank" && !certificateError {
+		if mainFrame && isDesktopBootstrapDocumentURL(rawURL) && !certificateError {
 			return desktopNavigationAllow
 		}
 		return desktopNavigationBlock
@@ -188,7 +188,7 @@ func (s *desktopWebViewSecurityState) Authorize(epoch uint64, mainFrame bool, ac
 		return false
 	}
 	if s.mode == desktopBootstrapPage {
-		return mainFrame && s.committedURL == "about:blank" && action >= desktopBridgeGetState && action <= desktopBridgeReset
+		return mainFrame && isDesktopBootstrapDocumentURL(s.committedURL) && action >= desktopBridgeGetState && action <= desktopBridgeReset
 	}
 	return s.policy != nil && s.policy.AllowsBridge(s.mode, s.committedURL, mainFrame, action)
 }

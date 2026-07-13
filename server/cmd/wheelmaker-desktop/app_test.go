@@ -145,6 +145,16 @@ func TestDesktopBootstrapLaunchWithoutConfig(t *testing.T) {
 	}
 }
 
+func TestDesktopBootstrapInitScriptRecognizesEmbeddedDocument(t *testing.T) {
+	script := desktopRuntimeInitScript()
+	if !strings.Contains(script, desktopBootstrapDocumentURL()) {
+		t.Fatal("desktop init script does not recognize the embedded bootstrap document URL")
+	}
+	if !strings.Contains(script, "window.wheelMakerBootstrap") {
+		t.Fatal("desktop init script does not expose the bootstrap bridge")
+	}
+}
+
 func TestDesktopRemoteLaunchAfterTLSProbe(t *testing.T) {
 	launcher := &recordingLauncher{}
 	prober := &recordingDesktopProber{}
