@@ -1873,11 +1873,43 @@ func dialWS(t *testing.T, rawURL string) *websocket.Conn {
 	return conn
 }
 
-func TestWebSocketRejectsCrossOriginBrowser(t *testing.T) {
-	s := New(Config{})
+func TestWebSocketCrossOriginWithoutSessionUsesTokenAuthentication(t *testing.T) {
+	s := New(Config{Token: "custom-token"})
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close)
-	header := http.Header{"Origin": []string{"https://attacker.example"}}
+	header := http.Header{"Origin": []string{"https://appassets.androidplatform.net"}}
+	conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", header)
+	if err != nil {
+		t.Fatalf("dial cross-origin token client: %v", err)
+	}
+	defer conn.Close()
+	mustWriteJSON(t, conn, testEnvelope{
+		RequestID: 1,
+		Type:      "request",
+		Method:    "connect.init",
+		Payload: map[string]any{
+			"clientName":      "wm-web",
+			"clientVersion":   "0.1.0",
+			"protocolVersion": rp.DefaultProtocolVersion,
+			"role":            "client",
+			"token":           "custom-token",
+		},
+	})
+	resp := mustReadEnvelope(t, conn)
+	if resp.Type != "response" {
+		t.Fatalf("connect response=%+v, want token-authenticated response", resp)
+	}
+}
+
+func TestWebSocketRejectsCrossOriginSessionCookie(t *testing.T) {
+	s := New(Config{Token: "custom-token"})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+	cookie := loginRegistryBrowser(t, ts.URL, "custom-token", ts.URL)
+	header := http.Header{
+		"Origin": []string{"https://attacker.example"},
+		"Cookie": []string{cookie.String()},
+	}
 	conn, resp, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(ts.URL, "http")+"/ws", header)
 	if conn != nil {
 		_ = conn.Close()

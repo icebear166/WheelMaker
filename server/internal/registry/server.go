@@ -404,19 +404,16 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	origin := r.Header.Get("Origin")
 	browserSession := false
 	if origin != "" {
-		if !security.RequestOriginMatchesHost(r) {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
 		if _, ok := s.authenticateWebRequest(r); ok {
+			if !security.RequestOriginMatchesHost(r) {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
 			browserSession = true
 		}
 	}
 	upgrader := websocket.Upgrader{
-		CheckOrigin: func(request *http.Request) bool {
-			origin := request.Header.Get("Origin")
-			return origin == "" || security.RequestOriginMatchesHost(request)
-		},
+		CheckOrigin: func(_ *http.Request) bool { return true },
 	}
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
