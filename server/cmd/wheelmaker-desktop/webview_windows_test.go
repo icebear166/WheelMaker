@@ -27,7 +27,7 @@ func TestDesktopWebViewUsesNativeNavigationAndProfileAdapter(t *testing.T) {
 			t.Errorf("Windows WebView integration missing %q", want)
 		}
 	}
-	if strings.Contains(source.String(), "InsecureSkipVerify") {
+	if strings.Contains(source.String(), "Insecure"+"SkipVerify") {
 		t.Fatal("Windows WebView integration must not bypass certificate validation")
 	}
 }

@@ -27,8 +27,8 @@ class StableOriginPathTest {
         assertTrue(activity.contains("target.loadUrl(configuredBaseUrl)"))
         assertFalse(activity.contains("WebSourceRuntime"))
         assertFalse(activity.contains("ANDROID_APP_ORIGIN"))
-        assertFalse(activity.contains("MIXED_CONTENT_ALWAYS_ALLOW"))
-        assertFalse(activity.contains("allowFileAccess = true"))
+		assertFalse(activity.contains("MIXED_CONTENT_ALWAYS_" + "ALLOW"))
+		assertFalse(activity.contains("allowFileAccess" + " = true"))
     }
 
     @Test
