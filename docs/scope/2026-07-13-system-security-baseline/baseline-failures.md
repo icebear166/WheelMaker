@@ -35,3 +35,5 @@ CGO_ENABLED=1 go test -race ./internal/registry
 ```
 
 The default Windows toolchain reported that `-race` requires CGO. With `CGO_ENABLED=1`, the build reported `C compiler "gcc" not found`. This is a local toolchain limitation rather than a test failure. Linux CI must run `go test -race ./internal/registry` before release.
+
+Phase 06 Task 5 又对定向压力门执行了 `-count=10`；默认环境与显式 CGO 的结果相同，因此继续沿用上述 Linux CI 发布门。

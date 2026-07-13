@@ -32,12 +32,18 @@ const (
 	asyncQueueBuffer       = 64
 	priorityWriteQueueSize = 64
 	terminalWriteQueueSize = 128
+	asyncWorkerCount       = 8
+	maxPendingForwards     = 1024
 )
 
 var (
 	errPeerClosed      = errors.New("registry peer is closed")
 	errTerminalBacklog = errors.New("terminal output backlog is full")
+	errPriorityBacklog = errors.New("registry priority write backlog is full")
+	errPendingFull     = errors.New("registry pending forward limit reached")
 )
+
+const codeBusy = "busy"
 
 // Config configures the project registry server.
 type Config struct {
@@ -116,6 +122,9 @@ func (p *peerConn) write(v any) error {
 	case p.priorityWrites <- item:
 	case <-p.closed:
 		return errPeerClosed
+	default:
+		p.shutdown()
+		return errPriorityBacklog
 	}
 	select {
 	case err := <-item.done:
@@ -190,12 +199,15 @@ func (p *peerConn) close() {
 	<-p.writerDone
 }
 
-func (p *peerConn) registerPending(id int64) chan envelope {
+func (p *peerConn) registerPending(id int64) (chan envelope, error) {
 	ch := make(chan envelope, 1)
 	p.pendingMu.Lock()
+	defer p.pendingMu.Unlock()
+	if len(p.pending) >= maxPendingForwards {
+		return nil, errPendingFull
+	}
 	p.pending[id] = ch
-	p.pendingMu.Unlock()
-	return ch
+	return ch, nil
 }
 
 func (p *peerConn) resolvePending(id int64, msg envelope) bool {
@@ -262,7 +274,7 @@ type connectionState struct {
 	peer            *peerConn
 	browserSession  bool
 	browserDeviceID string
-	seenRequestIDs  map[int64]struct{}
+	seenRequestIDs  *requestIDWindow
 	lastProjectSeq  map[string]int64
 }
 
@@ -286,34 +298,45 @@ type requestDispatcher struct {
 	cancel context.CancelFunc
 	mu     sync.Mutex
 	queues map[string]chan envelope
+	async  chan envelope
 }
 
 func newRequestDispatcher(parent context.Context, server *Server, state *connectionState) *requestDispatcher {
 	ctx, cancel := context.WithCancel(parent)
-	return &requestDispatcher{
+	dispatcher := &requestDispatcher{
 		server: server,
 		state:  state,
 		ctx:    ctx,
 		cancel: cancel,
 		queues: make(map[string]chan envelope),
+		async:  make(chan envelope, asyncQueueBuffer),
 	}
+	for index := 0; index < asyncWorkerCount; index++ {
+		go dispatcher.runQueue(dispatcher.async)
+	}
+	return dispatcher
 }
 
 func (d *requestDispatcher) stop() {
 	d.cancel()
 }
 
-func (d *requestDispatcher) dispatch(in envelope) {
+func (d *requestDispatcher) dispatch(in envelope) bool {
 	queueKey := registryRequestQueueKey(in.Method)
 	if queueKey == "" {
-		go d.handle(in)
-		return
+		return tryEnqueueRequest(d.async, in)
 	}
 
 	queue := d.queue(queueKey)
+	return tryEnqueueRequest(queue, in)
+}
+
+func tryEnqueueRequest(queue chan<- envelope, in envelope) bool {
 	select {
 	case queue <- in:
-	case <-d.ctx.Done():
+		return true
+	default:
+		return false
 	}
 }
 
@@ -461,7 +484,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		peer:            newPeerConn(ws, connID),
 		relayHost:       relayControlHost(r),
 		relaySecure:     relayControlSecure(r),
-		seenRequestIDs:  map[int64]struct{}{},
+		seenRequestIDs:  newRequestIDWindow(maxSeenRequestIDs),
 		lastProjectSeq:  map[string]int64{},
 		browserSession:  browserSession,
 		browserDeviceID: browserDeviceID,
@@ -546,11 +569,10 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 			_ = s.writeError(state.peer, in.RequestID, in.Method, codeInvalidArgument, "requestId must be >= 1", nil)
 			continue
 		}
-		if _, exists := state.seenRequestIDs[in.RequestID]; exists {
+		if state.seenRequestIDs.Add(in.RequestID) {
 			_ = s.writeError(state.peer, in.RequestID, in.Method, codeConflict, "duplicate requestId", nil)
 			continue
 		}
-		state.seenRequestIDs[in.RequestID] = struct{}{}
 
 		if !state.initialized {
 			if in.Method != rp.RegistryMethodConnectInit {
@@ -573,7 +595,9 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if shouldHandleRegistryRequestAsync(in.Method) {
-			dispatcher.dispatch(in)
+			if !dispatcher.dispatch(in) {
+				_ = s.writeError(state.peer, in.RequestID, in.Method, codeBusy, "request queue is full", nil)
+			}
 			continue
 		}
 		s.handleRequest(state, in)
@@ -780,7 +804,10 @@ func (s *Server) forwardRelayHubRequest(ctx context.Context, hubID string, metho
 	}
 
 	forwardID := s.nextForwardID.Add(1)
-	waitCh := hubPeer.registerPending(forwardID)
+	waitCh, err := hubPeer.registerPending(forwardID)
+	if err != nil {
+		return portrelay.ControlResult{Code: codeBusy, Message: "hub request backlog is full"}
+	}
 	if err := hubPeer.write(envelope{
 		RequestID: forwardID,
 		Type:      rp.RegistryEnvelopeTypeRequest,
@@ -1104,10 +1131,6 @@ func (s *Server) debugUploadLogEnvelope(in envelope) envelope {
 			"maxBytes": maxDebugUploadLogBytes,
 		})
 	}
-	if err := os.MkdirAll(s.cfg.LogDir, 0755); err != nil {
-		return s.errorEnvelope(in.Method, codeInternal, "create log directory failed", nil)
-	}
-
 	now := time.Now().UTC()
 	fileName := fmt.Sprintf(
 		"%s-diagnostics-%s-%d-%d.log",
@@ -1116,8 +1139,7 @@ func (s *Server) debugUploadLogEnvelope(in envelope) envelope {
 		now.UnixNano(),
 		in.RequestID,
 	)
-	path := filepath.Join(s.cfg.LogDir, fileName)
-	if err := os.WriteFile(path, []byte(payload.Text), 0644); err != nil {
+	if err := writeDebugUpload(s.cfg.LogDir, fileName, []byte(payload.Text)); err != nil {
 		return s.errorEnvelope(in.Method, codeInternal, "write debug log failed", nil)
 	}
 
@@ -1188,8 +1210,13 @@ func (s *Server) executeHubStateRequest(state *connectionState, in envelope) env
 	}
 
 	forwardID := s.nextForwardID.Add(1)
-	waitCh := hubPeer.registerPending(forwardID)
-	err := hubPeer.write(envelope{
+	waitCh, err := hubPeer.registerPending(forwardID)
+	if err != nil {
+		resp := s.errorEnvelope(in.Method, codeBusy, "hub request backlog is full", nil)
+		resp.HubID = hubID
+		return resp
+	}
+	err = hubPeer.write(envelope{
 		RequestID: forwardID,
 		Type:      rp.RegistryEnvelopeTypeRequest,
 		Method:    in.Method,
@@ -1302,8 +1329,11 @@ func (s *Server) executeClientRequest(state *connectionState, in envelope) envel
 	}
 
 	forwardID := s.nextForwardID.Add(1)
-	waitCh := hubPeer.registerPending(forwardID)
-	err := hubPeer.write(envelope{
+	waitCh, err := hubPeer.registerPending(forwardID)
+	if err != nil {
+		return s.errorEnvelope(in.Method, codeBusy, "hub request backlog is full", nil)
+	}
+	err = hubPeer.write(envelope{
 		RequestID: forwardID,
 		Type:      rp.RegistryEnvelopeTypeRequest,
 		Method:    in.Method,

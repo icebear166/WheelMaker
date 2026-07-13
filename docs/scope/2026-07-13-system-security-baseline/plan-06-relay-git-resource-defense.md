@@ -241,11 +241,11 @@ Expected: PASS；超限行为确定且无 panic。
 - Modify: `server/internal/shared/logger.go`
 - Modify: `server/internal/shared/shared_test.go`
 
-- [ ] **Step 1: 写容量和淘汰测试**
+- [x] **Step 1: 写容量和淘汰测试**
 
 固定：每连接 seen request ID 1024 ring；pending forward 1024；每 queue 64（terminal 现有 128）；debug uploads 最多 128 文件且目录总计 64 MiB；单文件仍 512 KiB；daily log archive 最多当前 + 7 个。达到 pending/queue 上限返回 `busy`，不能 block reader goroutine 或创建额外 goroutine。
 
-- [ ] **Step 2: 运行测试并确认失败**
+- [x] **Step 2: 运行测试并确认失败**
 
 Run:
 
@@ -256,11 +256,11 @@ go test ./internal/registry ./internal/shared -run 'Test(RequestIDWindow|Pending
 
 Expected: FAIL；seen request ID 和 pending map 可无界增长，upload 目录无总量淘汰。
 
-- [ ] **Step 3: 实现 ring/LRU 和上传 quota**
+- [x] **Step 3: 实现 ring/LRU 和上传 quota**
 
 Request ID ring 在覆盖旧 ID 时同步从 set 删除。Upload 写入临时私有文件，sync/close 后 rename；写前/后都执行 quota，按 mtime 删除最旧 regular file，拒绝 symlink/reparse point 和目录项。所有删除目标先 resolve 并验证仍在 LogDir 内。
 
-- [ ] **Step 4: 运行 race/压力测试并提交**
+- [x] **Step 4: 运行 race/压力测试并提交**
 
 Run:
 
@@ -274,6 +274,8 @@ git commit -m "fix: bound registry memory and upload retention"
 ```
 
 Expected: PASS；Windows 本机 race 不可用时由 Linux CI 执行同命令。
+
+Windows 本机普通测试已通过；`-race -count=10` 已分别以默认环境和 `CGO_ENABLED=1` 执行，仍受缺少 CGO/GCC 的既有工具链限制，Linux CI 发布门保持必跑。
 
 ### Task 6: 执行资源防护验收
 

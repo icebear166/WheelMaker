@@ -350,3 +350,29 @@ func TestLoggerDebugRotator_KeepOneDay(t *testing.T) {
 		}
 	}
 }
+
+func TestLogRetentionKeepsSevenArchives(t *testing.T) {
+	base := t.TempDir()
+	path := filepath.Join(base, "hub.debug.log")
+	now := time.Date(2026, 7, 13, 0, 0, 0, 0, time.UTC)
+	rotator := newDebugDailyRotator(path, debugLogArchiveDays, func() time.Time { return now })
+	defer rotator.Close()
+
+	for daysAgo := 1; daysAgo <= debugLogArchiveDays+2; daysAgo++ {
+		day := now.AddDate(0, 0, -daysAgo)
+		archive := filepath.Join(base, "hub.debug."+day.Format(logDayLayout)+".log")
+		if err := os.WriteFile(archive, []byte("archive"), 0o600); err != nil {
+			t.Fatalf("write archive: %v", err)
+		}
+	}
+	if err := rotator.cleanupOldArchives(); err != nil {
+		t.Fatalf("cleanupOldArchives(): %v", err)
+	}
+	matches, err := filepath.Glob(filepath.Join(base, "hub.debug.*.log"))
+	if err != nil {
+		t.Fatalf("Glob(): %v", err)
+	}
+	if len(matches) != debugLogArchiveDays {
+		t.Fatalf("archive count=%d, want %d: %v", len(matches), debugLogArchiveDays, matches)
+	}
+}

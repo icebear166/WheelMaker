@@ -135,7 +135,7 @@ func (l *loggerInst) setup(cfg LoggerConfig) error {
 			if err := os.MkdirAll(filepath.Dir(dbgPath), 0o755); err != nil {
 				return fmt.Errorf("logger: mkdir %q: %w", filepath.Dir(dbgPath), err)
 			}
-			l.debugOut = newDebugDailyRotator(dbgPath, 1, time.Now)
+			l.debugOut = newDebugDailyRotator(dbgPath, debugLogArchiveDays, time.Now)
 		}
 	}
 
@@ -234,6 +234,8 @@ type debugDailyRotator struct {
 	file      *os.File
 	dayString string
 }
+
+const debugLogArchiveDays = 7
 
 func newDebugDailyRotator(path string, keepDays int, now func() time.Time) *debugDailyRotator {
 	if keepDays <= 0 {
