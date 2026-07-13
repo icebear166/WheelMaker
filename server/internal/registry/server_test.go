@@ -2214,6 +2214,39 @@ func TestWebAuthRejectsInvalidLoginRequests(t *testing.T) {
 	}
 }
 
+func TestWebSocketNormalPayloadTooLarge(t *testing.T) {
+	server := New(Config{})
+	address := httptestNewRegistryServer(t, server.Handler())
+	client := dialWS(t, "http://"+address+"/ws")
+	defer client.Close()
+	connectRegistryClient(t, client)
+
+	payload := `{"data":"` + strings.Repeat("x", maxJSONPayloadBytes) + `"}`
+	message := `{"requestId":2,"type":"request","method":"registry.project.list","payload":` + payload + `}`
+	if err := client.WriteMessage(websocket.TextMessage, []byte(message)); err != nil {
+		t.Fatalf("WriteMessage(): %v", err)
+	}
+	response := mustReadEnvelope(t, client)
+	if response.Type != "error" || response.Payload["code"] != codePayloadTooLarge {
+		t.Fatalf("response=%#v, want payload_too_large", response)
+	}
+}
+
+func TestWebSocketWireMessageTooLargeClosesConnection(t *testing.T) {
+	server := New(Config{})
+	address := httptestNewRegistryServer(t, server.Handler())
+	client := dialWS(t, "http://"+address+"/ws")
+	defer client.Close()
+	connectRegistryClient(t, client)
+
+	message := []byte(`{"type":"request","method":"speech.chunk","payload":"` + strings.Repeat("x", maxWireMessageBytes) + `"}`)
+	_ = client.WriteMessage(websocket.TextMessage, message)
+	_ = client.SetReadDeadline(time.Now().Add(2 * time.Second))
+	if _, _, err := client.ReadMessage(); err == nil {
+		t.Fatal("oversized wire message left connection open")
+	}
+}
+
 func TestWebAuthCookieStatusAndLogoutUseBasePath(t *testing.T) {
 	tests := []struct {
 		name       string

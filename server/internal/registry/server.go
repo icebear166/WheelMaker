@@ -412,10 +412,7 @@ func (s *Server) Run(ctx context.Context) error {
 		return fmt.Errorf("registry sessions: %w", err)
 	}
 	registryLogger("").Info("listening on %s", s.cfg.Addr)
-	srv := &http.Server{
-		Addr:    s.cfg.Addr,
-		Handler: s.Handler(),
-	}
+	srv := newRegistryHTTPServer(s.cfg.Addr, s.Handler())
 	errCh := make(chan error, 1)
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -456,6 +453,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer ws.Close()
+	ws.SetReadLimit(maxWireMessageBytes)
 
 	connID := fmt.Sprintf("conn-%d", s.nextConnID.Add(1))
 	state := &connectionState{
@@ -508,6 +506,9 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	for {
 		in, invalidRequestID, err := readEnvelope(ws)
 		if err != nil {
+			if errors.Is(err, errRegistryInputTooLarge) {
+				_ = s.writeError(state.peer, in.RequestID, in.Method, codePayloadTooLarge, "payload too large", nil)
+			}
 			return
 		}
 		state.peer.logEnvelope("in", in)
@@ -627,35 +628,25 @@ func (s *Server) handleRequest(state *connectionState, in envelope) {
 }
 
 func readEnvelope(ws *websocket.Conn) (envelope, bool, error) {
-	type rawEnvelope struct {
-		RequestID json.RawMessage `json:"requestId,omitempty"`
-		Type      string          `json:"type"`
-		Method    string          `json:"method,omitempty"`
-		HubID     string          `json:"hubId,omitempty"`
-		ProjectID string          `json:"projectId,omitempty"`
-		Payload   json.RawMessage `json:"payload,omitempty"`
-	}
-	var raw rawEnvelope
-	if err := ws.ReadJSON(&raw); err != nil {
+	messageType, message, err := ws.ReadMessage()
+	if err != nil {
 		return envelope{}, false, err
 	}
+	if messageType != websocket.TextMessage {
+		return envelope{}, false, errors.New("registry websocket message must be text")
+	}
+	return decodeEnvelopeMessage(message)
+}
 
-	out := envelope{
-		Type:      raw.Type,
-		Method:    raw.Method,
-		HubID:     raw.HubID,
-		ProjectID: raw.ProjectID,
-		Payload:   raw.Payload,
+func newRegistryHTTPServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
-	if len(raw.RequestID) == 0 || strings.TrimSpace(string(raw.RequestID)) == "null" {
-		return out, false, nil
-	}
-	var id int64
-	if err := json.Unmarshal(raw.RequestID, &id); err != nil {
-		return out, true, nil
-	}
-	out.RequestID = id
-	return out, false, nil
 }
 
 func methodAllowed(role string, method string) bool {

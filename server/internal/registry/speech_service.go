@@ -216,6 +216,10 @@ func (s *speechService) handleStart(peer *peerConn, state *connectionState, in e
 }
 
 func (s *speechService) handleChunk(peer *peerConn, state *connectionState, in envelope) {
+	if len(in.Payload) > maxSpeechChunkPayloadBytes {
+		_ = writeSpeechError(peer, in.RequestID, in.Method, codePayloadTooLarge, "payload too large", nil)
+		return
+	}
 	var payload speechChunkPayload
 	if err := decodeSpeechPayload(in.Payload, &payload); err != nil {
 		_ = writeSpeechError(peer, in.RequestID, in.Method, codeInvalidArgument, "invalid speech.chunk payload", nil)

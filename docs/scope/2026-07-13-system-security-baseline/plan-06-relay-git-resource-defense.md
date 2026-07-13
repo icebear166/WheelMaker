@@ -190,13 +190,13 @@ Expected: PASS；恶意 option 无副作用。
 - Modify: `server/internal/registry/speech_service.go`
 - Modify: `server/internal/registry/speech_test.go`
 
-- [ ] **Step 1: 写边界值测试**
+- [x] **Step 1: 写边界值测试**
 
 固定上限：普通 JSON payload 64 KiB、普通 envelope 1 MiB、speech chunk payload 8 MiB、wire message 8 MiB + 64 KiB framing allowance。测试 limit-1/limit/limit+1，超限返回稳定 `payload_too_large` 后关闭或丢弃，不分配第二份无界 buffer。
 
 登录 4 KiB 已在阶段 1 覆盖，本 Task 加 second JSON/trailing garbage 和 Content-Length 欺骗测试。
 
-- [ ] **Step 2: 运行测试并确认失败**
+- [x] **Step 2: 运行测试并确认失败**
 
 Run:
 
@@ -207,15 +207,15 @@ go test ./internal/registry -run 'Test(InputLimit|WebSocket.*TooLarge|Speech.*To
 
 Expected: FAIL；当前 websocket `ReadJSON` 没有全局 read limit，普通 payload 无 64 KiB 门。
 
-- [ ] **Step 3: 实现单次受限 decode**
+- [x] **Step 3: 实现单次受限 decode**
 
 WebSocket 先 `SetReadLimit(maxWireMessageBytes)`，用 `ReadMessage` 得到受限 frame，再 decode envelope header/RawMessage；只有 method 为 `speech.chunk` 才允许大 payload。不要先 unmarshal 到 `map[string]any` 再检查长度。
 
-- [ ] **Step 4: 给 Registry HTTP server 设置 timeout**
+- [x] **Step 4: 给 Registry HTTP server 设置 timeout**
 
 `ReadHeaderTimeout=5s`、`ReadTimeout=15s`、`WriteTimeout=30s`、`IdleTimeout=60s`。Upgrade 后的 WebSocket 使用现有 ping/idle 规则，不依赖 HTTP timeout。
 
-- [ ] **Step 5: 运行测试并提交**
+- [x] **Step 5: 运行测试并提交**
 
 Run:
 

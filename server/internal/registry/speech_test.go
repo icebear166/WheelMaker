@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -256,6 +257,24 @@ func TestSpeechChunkRejectsBadBase64(t *testing.T) {
 	}
 	if len(provider.stream.writes) != 0 {
 		t.Fatalf("provider should not receive invalid audio: %#v", provider.stream.writes)
+	}
+}
+
+func TestSpeechChunkPayloadTooLarge(t *testing.T) {
+	server := New(Config{})
+	address := httptestNewRegistryServer(t, server.Handler())
+	client := dialWS(t, "http://"+address+"/ws")
+	defer client.Close()
+	connectRegistryClient(t, client)
+
+	payload := `{"streamId":"speech-1","seq":1,"pcm":"` + strings.Repeat("A", maxSpeechChunkPayloadBytes) + `"}`
+	message := `{"requestId":2,"type":"request","method":"speech.chunk","payload":` + payload + `}`
+	if err := client.WriteMessage(websocket.TextMessage, []byte(message)); err != nil {
+		t.Fatalf("WriteMessage(): %v", err)
+	}
+	response := mustReadEnvelope(t, client)
+	if response.Type != "error" || response.Payload["code"] != codePayloadTooLarge {
+		t.Fatalf("response=%#v, want payload_too_large", response)
 	}
 }
 
