@@ -64,7 +64,7 @@ export function formatAppDiagnosticTime(timestamp: number): string {
 }
 
 export function sanitizeAppDiagnosticDetails(details: Record<string, unknown> = {}): Record<string, unknown> {
-  return redactDiagnosticValue(details) as Record<string, unknown>;
+	return redactDiagnosticValue(details, ['streamId']) as Record<string, unknown>;
 }
 
 export function normalizeAppDiagnosticLogLevel(

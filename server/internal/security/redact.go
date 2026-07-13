@@ -34,7 +34,6 @@ var sensitiveKeySuffixes = []string{
 	"token",
 	"nonce",
 	"csrf",
-	"streamid",
 }
 
 type redactionState struct {

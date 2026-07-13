@@ -26,7 +26,6 @@ const SENSITIVE_KEY_SUFFIXES = [
   'token',
   'nonce',
   'csrf',
-  'streamid',
 ];
 
 const OMITTED_PAYLOAD_KEYS = new Set(['pcm', 'base64']);
@@ -43,8 +42,12 @@ function isSensitiveDiagnosticKey(key: string): boolean {
   return SENSITIVE_KEY_SUFFIXES.some(suffix => normalized.endsWith(suffix));
 }
 
-export function redactDiagnosticValue(value: unknown): unknown {
+export function redactDiagnosticValue(
+	value: unknown,
+	additionalSensitiveKeys: readonly string[] = [],
+): unknown {
   const seen = new WeakSet<object>();
+	const extraSensitiveKeys = new Set(additionalSensitiveKeys.map(normalizeDiagnosticKey));
   let nodes = 0;
 
   const visit = (input: unknown, depth: number): unknown => {
@@ -66,7 +69,7 @@ export function redactDiagnosticValue(value: unknown): unknown {
 
     const output: Record<string, unknown> = {};
     for (const [key, item] of Object.entries(input as Record<string, unknown>)) {
-      if (isSensitiveDiagnosticKey(key)) {
+		if (isSensitiveDiagnosticKey(key) || extraSensitiveKeys.has(normalizeDiagnosticKey(key))) {
         output[key] = REDACTED_DIAGNOSTIC_VALUE;
       } else if (OMITTED_PAYLOAD_KEYS.has(normalizeDiagnosticKey(key))) {
         output[key] = '[omitted]';

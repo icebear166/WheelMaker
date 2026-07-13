@@ -116,6 +116,7 @@ function estimateBase64ByteCount(value: string): number {
 }
 
 export function redactRegistryDebugEnvelope<TEnvelope extends RegistryEnvelope>(envelope: TEnvelope): TEnvelope {
+	const originalPayload = envelope.payload;
 	const recursivelyRedacted = redactDiagnosticValue(envelope) as TEnvelope;
 	envelope = recursivelyRedacted;
   const terminalMethod = envelope.method?.startsWith('terminal.') === true;
@@ -141,7 +142,10 @@ export function redactRegistryDebugEnvelope<TEnvelope extends RegistryEnvelope>(
     return {...envelope, payload: next} as TEnvelope;
   }
   if (envelope.method === 'speech.start') return envelope;
-  const pcm = typeof record.pcm === 'string' ? record.pcm : '';
+	const originalRecord = originalPayload && typeof originalPayload === 'object' && !Array.isArray(originalPayload)
+		? originalPayload as Record<string, unknown>
+		: {};
+	const pcm = typeof originalRecord.pcm === 'string' ? originalRecord.pcm : '';
   return {
     ...envelope,
     payload: {
