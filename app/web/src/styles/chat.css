@@ -1226,7 +1226,7 @@
 .recent-project-session-watermark {
   position: absolute;
   left: 11px;
-  bottom: -10px;
+  bottom: -6px;
   z-index: 0;
   max-width: calc(100% - 22px);
   overflow: hidden;

@@ -76,7 +76,7 @@ describe('web chat recent sessions', () => {
     expect(groupBlock).not.toContain('border:');
     expect(watermarkBlock).toContain('position: absolute;');
     expect(watermarkBlock).toContain('left: 11px;');
-    expect(watermarkBlock).toContain('bottom: -10px;');
+    expect(watermarkBlock).toContain('bottom: -6px;');
     expect(watermarkBlock).toContain('font-size: 36px;');
     expect(watermarkBlock).toContain('font-weight: 800;');
     expect(watermarkBlock).toContain('color: color-mix(in srgb, var(--recent-project-accent) 12%, transparent);');
