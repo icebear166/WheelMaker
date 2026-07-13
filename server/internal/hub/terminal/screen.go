@@ -20,6 +20,10 @@ type xtermScreen struct {
 	serialize *xterm.SerializeAddon
 }
 
+func (s *xtermScreen) CanSuppressConPTYResizeRepaint() bool {
+	return !s.term.IsAltBufferActive() && !s.term.IsCursorHidden()
+}
+
 func newXTermScreen(cols, rows int) Screen {
 	options := []xterm.Option{
 		xterm.WithCols(cols),

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"runtime"
 	"sort"
 	"sync"
 	"time"
@@ -57,12 +58,13 @@ type session struct {
 	mu      sync.Mutex
 	inputMu sync.Mutex
 
-	meta        rp.TerminalMetadata
-	resizeToken string
-	seq         uint64
-	pty         PTY
-	screen      Screen
-	closed      bool
+	meta          rp.TerminalMetadata
+	resizeToken   string
+	seq           uint64
+	pty           PTY
+	screen        Screen
+	repaintFilter conPTYResizeRepaintFilter
+	closed        bool
 }
 
 func NewManager(cfg Config) *Manager {
@@ -216,7 +218,14 @@ func (m *Manager) Resize(req rp.TerminalResizeRequest) (rp.TerminalResizeRespons
 	if !req.Claim && (req.ResizeToken == "" || req.ResizeToken != s.resizeToken) {
 		return rp.TerminalResizeResponse{}, ErrResizeOwnership
 	}
+	filterRepaint := canSuppressConPTYResizeRepaint(s.screen)
+	if filterRepaint {
+		s.repaintFilter.Arm()
+	}
 	if err := s.pty.Resize(req.Cols, req.Rows); err != nil {
+		if filterRepaint {
+			s.repaintFilter.Cancel()
+		}
 		return rp.TerminalResizeResponse{}, fmt.Errorf("resize terminal PTY: %w", err)
 	}
 	s.screen.Resize(req.Cols, req.Rows)
@@ -363,6 +372,7 @@ func (m *Manager) pumpOutput(s *session, runID string, pty PTY, done chan<- stru
 		case chunk, ok := <-chunks:
 			if !ok {
 				flush()
+				m.flushOutputFilter(s, runID)
 				return
 			}
 			batch = append(batch, chunk...)
@@ -378,21 +388,62 @@ func (m *Manager) pumpOutput(s *session, runID string, pty PTY, done chan<- stru
 }
 
 func (m *Manager) commitOutput(s *session, runID string, data []byte) {
+	m.commitPreparedOutput(s, runID, func(filter *conPTYResizeRepaintFilter) []byte {
+		return filter.Filter(data)
+	})
+}
+
+func (m *Manager) flushOutputFilter(s *session, runID string) {
+	m.commitPreparedOutput(s, runID, func(filter *conPTYResizeRepaintFilter) []byte {
+		return filter.Flush()
+	})
+}
+
+func (m *Manager) commitPreparedOutput(
+	s *session,
+	runID string,
+	prepare func(*conPTYResizeRepaintFilter) []byte,
+) {
 	s.mu.Lock()
 	if s.closed || s.meta.RunID != runID || s.meta.Status != rp.TerminalStatusRunning {
 		s.mu.Unlock()
 		return
 	}
-	_, _ = s.screen.Write(data)
-	s.seq++
-	event := rp.TerminalOutputEvent{
-		TerminalID: s.meta.TerminalID,
-		RunID:      runID,
-		Seq:        s.seq,
-		Data:       base64.StdEncoding.EncodeToString(data),
+	data := prepare(&s.repaintFilter)
+	if len(data) == 0 {
+		s.mu.Unlock()
+		return
+	}
+	events := make([]rp.TerminalOutputEvent, 0, (len(data)+rp.MaxTerminalEventBytes-1)/rp.MaxTerminalEventBytes)
+	for len(data) > 0 {
+		size := min(len(data), rp.MaxTerminalEventBytes)
+		chunk := data[:size]
+		_, _ = s.screen.Write(chunk)
+		s.seq++
+		events = append(events, rp.TerminalOutputEvent{
+			TerminalID: s.meta.TerminalID,
+			RunID:      runID,
+			Seq:        s.seq,
+			Data:       base64.StdEncoding.EncodeToString(chunk),
+		})
+		data = data[size:]
 	}
 	s.mu.Unlock()
-	m.publish(rp.RegistryMethodTerminalOutput, event)
+	for _, event := range events {
+		m.publish(rp.RegistryMethodTerminalOutput, event)
+	}
+}
+
+type conPTYResizeRepaintSuppressible interface {
+	CanSuppressConPTYResizeRepaint() bool
+}
+
+func canSuppressConPTYResizeRepaint(screen Screen) bool {
+	if runtime.GOOS != "windows" {
+		return false
+	}
+	suppressible, ok := screen.(conPTYResizeRepaintSuppressible)
+	return ok && suppressible.CanSuppressConPTYResizeRepaint()
 }
 
 func (m *Manager) finishRun(s *session, runID string, pty PTY, exitCode int, waitErr error) {

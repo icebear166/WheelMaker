@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"io"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -22,9 +23,10 @@ type fakePTY struct {
 	reader *io.PipeReader
 	writer *io.PipeWriter
 
-	inputMu sync.Mutex
-	input   bytes.Buffer
-	resize  [][2]int
+	inputMu   sync.Mutex
+	input     bytes.Buffer
+	resize    [][2]int
+	resizeErr error
 
 	exitOnce sync.Once
 	exitCh   chan fakePTYResult
@@ -52,6 +54,9 @@ func (p *fakePTY) Write(data []byte) (int, error) {
 func (p *fakePTY) Resize(cols, rows int) error {
 	p.inputMu.Lock()
 	defer p.inputMu.Unlock()
+	if p.resizeErr != nil {
+		return p.resizeErr
+	}
 	p.resize = append(p.resize, [2]int{cols, rows})
 	return nil
 }
@@ -86,6 +91,12 @@ func (p *fakePTY) inputBytes() []byte {
 	p.inputMu.Lock()
 	defer p.inputMu.Unlock()
 	return append([]byte(nil), p.input.Bytes()...)
+}
+
+func (p *fakePTY) setResizeError(err error) {
+	p.inputMu.Lock()
+	p.resizeErr = err
+	p.inputMu.Unlock()
 }
 
 type fakePTYFactory struct {
@@ -147,6 +158,79 @@ func waitForOutput(t *testing.T, published <-chan publishedEvent) rp.TerminalOut
 		case <-deadline:
 			t.Fatal("timed out waiting for terminal output")
 		}
+	}
+}
+
+func TestConPTYResizeRepaintFilterHandlesFragmentedFrame(t *testing.T) {
+	var filter conPTYResizeRepaintFilter
+	filter.Arm()
+	input := []byte("before\x1b[?25l\x1b[Hrepaint\x1b[K\r\n\x1b[18;42H\x1b[?25hafter")
+	var got []byte
+	for _, value := range input {
+		got = append(got, filter.Filter([]byte{value})...)
+	}
+	if want := []byte("beforeafter"); !bytes.Equal(got, want) {
+		t.Fatalf("filtered=%q, want %q", got, want)
+	}
+}
+
+func TestConPTYResizeRepaintFilterHandlesMultiplePendingFrames(t *testing.T) {
+	var filter conPTYResizeRepaintFilter
+	filter.Arm()
+	filter.Arm()
+	got := filter.Filter([]byte(
+		"\x1b[?25l\x1b[Hfirst\x1b[1;1H\x1b[?25h" +
+			"between" +
+			"\x1b[?25l\x1b[Hsecond\x1b[2;2H\x1b[?25h" +
+			"after",
+	))
+	if want := []byte("betweenafter"); !bytes.Equal(got, want) {
+		t.Fatalf("filtered=%q, want %q", got, want)
+	}
+}
+
+func TestConPTYResizeRepaintFilterCancelAndOverflowFailOpen(t *testing.T) {
+	var filter conPTYResizeRepaintFilter
+	filter.Arm()
+	filter.Cancel()
+	frame := []byte("\x1b[?25l\x1b[Hnormal\x1b[1;1H\x1b[?25h")
+	if got := filter.Filter(frame); !bytes.Equal(got, frame) {
+		t.Fatalf("cancelled filter=%q, want %q", got, frame)
+	}
+
+	filter.Arm()
+	oversized := append([]byte("\x1b[?25l\x1b[H"), bytes.Repeat([]byte{'x'}, maxConPTYResizeRepaintBytes+1)...)
+	if got := filter.Filter(oversized); !bytes.Equal(got, oversized) {
+		t.Fatalf("overflow filter returned %d bytes, want %d", len(got), len(oversized))
+	}
+	tail := []byte("still-normal")
+	if got := filter.Filter(tail); !bytes.Equal(got, tail) {
+		t.Fatalf("fail-open tail=%q, want %q", got, tail)
+	}
+}
+
+func TestConPTYResizeRepaintFilterFlushesIncompleteCandidate(t *testing.T) {
+	var filter conPTYResizeRepaintFilter
+	filter.Arm()
+	candidate := []byte("\x1b[?25l\x1b[Hincomplete")
+	if got := filter.Filter(candidate); len(got) != 0 {
+		t.Fatalf("candidate leaked before flush: %q", got)
+	}
+	if got := filter.Flush(); !bytes.Equal(got, candidate) {
+		t.Fatalf("flush=%q, want %q", got, candidate)
+	}
+	if got := filter.Filter([]byte("after")); !bytes.Equal(got, []byte("after")) {
+		t.Fatalf("post-flush=%q", got)
+	}
+}
+
+func TestConPTYResizeRepaintFilterExpiredArmFailsOpen(t *testing.T) {
+	var filter conPTYResizeRepaintFilter
+	filter.Arm()
+	filter.expiresAt = time.Now().Add(-time.Second)
+	frame := []byte("\x1b[?25l\x1b[Happlication-redraw\x1b[1;1H\x1b[?25h")
+	if got := filter.Filter(frame); !bytes.Equal(got, frame) {
+		t.Fatalf("expired filter=%q, want %q", got, frame)
 	}
 }
 
@@ -229,6 +313,150 @@ func TestManagerRotatesResizeOwnership(t *testing.T) {
 	}
 	if got := factory.latest().resize; len(got) != 2 || got[1] != [2]int{90, 28} {
 		t.Fatalf("resize calls=%v", got)
+	}
+}
+
+func TestManagerFiltersResizeRepaintFromOutputAndSnapshot(t *testing.T) {
+	requireWindowsConPTYRepaintFilter(t)
+	manager, factory, published := newTestManager(t)
+	created, err := manager.Create(context.Background(), "hub-a:wheelmaker", rp.TerminalCreateRequest{Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Resize(rp.TerminalResizeRequest{
+		TerminalID: created.Terminal.TerminalID, Cols: 42, Rows: 18, ResizeToken: created.ResizeToken,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	repaint := "\x1b[?25l\x1b[Hstale-history\x1b[K\r\n\x1b[18;42H\x1b[?25h"
+	factory.latest().emit(repaint + "normal-output")
+	output := waitForOutput(t, published)
+	data, err := base64.StdEncoding.DecodeString(output.Data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []byte("normal-output"); !bytes.Equal(data, want) {
+		t.Fatalf("output=%q, want %q", data, want)
+	}
+	snapshot, err := manager.Get(rp.TerminalGetRequest{TerminalID: created.Terminal.TerminalID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := base64.StdEncoding.DecodeString(snapshot.Snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(decoded, []byte("stale-history")) || !bytes.Contains(decoded, []byte("normal-output")) {
+		t.Fatalf("snapshot=%q", decoded)
+	}
+}
+
+func TestManagerPassesResizeRepaintForAlternateScreen(t *testing.T) {
+	requireWindowsConPTYRepaintFilter(t)
+	manager, factory, published := newTestManager(t)
+	created, err := manager.Create(context.Background(), "hub-a:wheelmaker", rp.TerminalCreateRequest{Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatal(err)
+	}
+	factory.latest().emit("\x1b[?1049h")
+	_ = waitForOutput(t, published)
+	if _, err := manager.Resize(rp.TerminalResizeRequest{
+		TerminalID: created.Terminal.TerminalID, Cols: 42, Rows: 18, ResizeToken: created.ResizeToken,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	repaint := []byte("\x1b[?25l\x1b[Hfull-screen-redraw\x1b[18;42H\x1b[?25h")
+	factory.latest().emit(string(repaint))
+	output := waitForOutput(t, published)
+	data, err := base64.StdEncoding.DecodeString(output.Data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(data, repaint) {
+		t.Fatalf("output=%q, want %q", data, repaint)
+	}
+}
+
+func TestManagerResizeRepaintArmIsCancelledOnResizeFailure(t *testing.T) {
+	requireWindowsConPTYRepaintFilter(t)
+	manager, factory, published := newTestManager(t)
+	created, err := manager.Create(context.Background(), "hub-a:wheelmaker", rp.TerminalCreateRequest{Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pty := factory.latest()
+	pty.setResizeError(errors.New("resize failed"))
+	if _, err := manager.Resize(rp.TerminalResizeRequest{
+		TerminalID: created.Terminal.TerminalID, Cols: 42, Rows: 18, ResizeToken: created.ResizeToken,
+	}); err == nil {
+		t.Fatal("resize unexpectedly succeeded")
+	}
+	pty.setResizeError(nil)
+	frame := []byte("\x1b[?25l\x1b[Hnormal-after-failure\x1b[18;42H\x1b[?25h")
+	pty.emit(string(frame))
+	output := waitForOutput(t, published)
+	data, err := base64.StdEncoding.DecodeString(output.Data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(data, frame) {
+		t.Fatalf("output=%q, want %q", data, frame)
+	}
+}
+
+func TestManagerBoundsFailOpenResizeRepaintOutputEvents(t *testing.T) {
+	requireWindowsConPTYRepaintFilter(t)
+	manager, _, published := newTestManager(t)
+	created, err := manager.Create(context.Background(), "hub-a:wheelmaker", rp.TerminalCreateRequest{Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Resize(rp.TerminalResizeRequest{
+		TerminalID: created.Terminal.TerminalID, Cols: 42, Rows: 18, ResizeToken: created.ResizeToken,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	s, ok := manager.lookup(created.Terminal.TerminalID)
+	if !ok {
+		t.Fatal("terminal session not found")
+	}
+	candidate := append([]byte("\x1b[?25l\x1b[H"), bytes.Repeat([]byte{'x'}, maxConPTYResizeRepaintBytes+1)...)
+	for offset := 0; offset < len(candidate); {
+		end := min(offset+rp.MaxTerminalEventBytes, len(candidate))
+		manager.commitOutput(s, created.Terminal.RunID, candidate[offset:end])
+		offset = end
+	}
+
+	var restored []byte
+	deadline := time.After(2 * time.Second)
+	for len(restored) < len(candidate) {
+		select {
+		case event := <-published:
+			if event.method != rp.RegistryMethodTerminalOutput {
+				continue
+			}
+			payload := event.payload.(rp.TerminalOutputEvent)
+			data, err := base64.StdEncoding.DecodeString(payload.Data)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(data) > rp.MaxTerminalEventBytes {
+				t.Fatalf("terminal.output contains %d bytes, max %d", len(data), rp.MaxTerminalEventBytes)
+			}
+			restored = append(restored, data...)
+		case <-deadline:
+			t.Fatalf("timed out after restoring %d of %d bytes", len(restored), len(candidate))
+		}
+	}
+	if !bytes.Equal(restored, candidate) {
+		t.Fatal("fail-open output changed")
+	}
+}
+
+func requireWindowsConPTYRepaintFilter(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS != "windows" {
+		t.Skip("ConPTY resize repaint filtering is Windows-only")
 	}
 }
 
