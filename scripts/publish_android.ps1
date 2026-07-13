@@ -162,15 +162,57 @@ function Get-FileSha256 {
   }
 }
 
+function Get-ApkSignerCommand {
+  $fromPath = Get-Command "apksigner" -ErrorAction SilentlyContinue
+  if ($null -ne $fromPath) { return $fromPath.Source }
+  foreach ($sdkRoot in @($env:ANDROID_HOME, $env:ANDROID_SDK_ROOT)) {
+    if ([string]::IsNullOrWhiteSpace($sdkRoot)) { continue }
+    $buildToolsRoot = Join-Path $sdkRoot "build-tools"
+    if (-not (Test-Path -LiteralPath $buildToolsRoot)) { continue }
+    $candidate = Get-ChildItem -LiteralPath $buildToolsRoot -Directory |
+      Sort-Object -Property Name -Descending |
+      ForEach-Object { Join-Path $_.FullName "apksigner.bat" } |
+      Where-Object { Test-Path -LiteralPath $_ } |
+      Select-Object -First 1
+    if ($null -ne $candidate) { return $candidate }
+  }
+  throw "apksigner was not found; install Android SDK Build Tools or add apksigner to PATH"
+}
+
+function Get-ApkSigningCertificateSha256 {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  $apksigner = Get-ApkSignerCommand
+  $output = & $apksigner verify --print-certs $Path 2>&1
+  if ($LASTEXITCODE -ne 0) {
+    throw "APK signature verification failed"
+  }
+  $digests = @($output | ForEach-Object {
+    if ([string]$_ -match 'certificate SHA-256 digest:\s*([0-9a-fA-F]{64})') {
+      $Matches[1].ToLowerInvariant()
+    }
+  } | Select-Object -Unique)
+  if ($digests.Count -eq 0) {
+    throw "APK signer certificate SHA-256 was not reported"
+  }
+  return $digests
+}
+
 function Write-AndroidReleaseManifest {
   Assert-Command -Name "git" -Hint "Install Git and ensure git.exe is available."
   $apkPath = Join-Path $script:OutputDir "WheelMakerAndroid.apk"
   $apkHash = ""
   $apkSize = 0
+	$certificateSha256 = @()
   if (-not $WhatIf -and (Test-Path -LiteralPath $apkPath)) {
     $apkHash = Get-FileSha256 -Path $apkPath
     $apkSize = (Get-Item -LiteralPath $apkPath).Length
+	$certificateSha256 = @(Get-ApkSigningCertificateSha256 -Path $apkPath)
   }
+	$keystoreFileName = if ([string]::IsNullOrWhiteSpace($env:WHEELMAKER_ANDROID_KEYSTORE)) {
+		""
+	} else {
+		Split-Path -Leaf $env:WHEELMAKER_ANDROID_KEYSTORE
+	}
   $manifest = [ordered]@{
     "schemaVersion" = 1
     "platform" = "android"
@@ -184,6 +226,10 @@ function Write-AndroidReleaseManifest {
       "sha256" = $apkHash
       "size" = $apkSize
     }
+	"signing" = [ordered]@{
+		"keystoreFileName" = $keystoreFileName
+		"certificateSha256" = $certificateSha256
+	}
     "embeddedAsset" = "bootstrap/index.html"
     "gradleBuildRoot" = $script:GradleBuildRoot
   }

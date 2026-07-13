@@ -62,7 +62,13 @@ Assert-Contains -Label "publish_android.ps1" -Text $script -Needle "https.protoc
 Assert-Contains -Label "publish_android.ps1" -Text $script -Needle "GetPathRoot"
 Assert-Contains -Label "publish_android.ps1" -Text $script -Needle "android-release.json"
 Assert-Contains -Label "publish_android.ps1" -Text $script -Needle "Get-FileSha256"
+Assert-Contains -Label "publish_android.ps1" -Text $script -Needle "Get-ApkSigningCertificateSha256"
+Assert-Contains -Label "publish_android.ps1" -Text $script -Needle "certificateSha256"
+Assert-Contains -Label "publish_android.ps1" -Text $script -Needle "keystoreFileName"
+Assert-Contains -Label "publish_android.ps1" -Text $script -Needle "Split-Path -Leaf"
 Assert-NotContains -Label "publish_android.ps1" -Text $script -Needle "Get-FileHash"
+Assert-NotContains -Label "publish_android.ps1" -Text $script -Needle "WHEELMAKER_ANDROID_STORE_PASSWORD"
+Assert-NotContains -Label "publish_android.ps1" -Text $script -Needle "WHEELMAKER_ANDROID_KEY_PASSWORD"
 Assert-NotContains -Label "publish_android.ps1" -Text $script -Needle "WHEELMAKER_WEB_TARGET"
 Assert-NotContains -Label "publish_android.ps1" -Text $script -Needle "Build-AndroidWeb"
 Assert-NotContains -Label "publish_android.ps1" -Text $script -Needle "npm run build:web"
@@ -78,5 +84,6 @@ if ($LASTEXITCODE -ne 0) {
   throw "publish_android.ps1 -WhatIf failed: $whatIfOutput"
 }
 Assert-Contains -Label "publish_android.ps1 -WhatIf" -Text ($whatIfOutput -join [Environment]::NewLine) -Needle (Get-ExpectedAndroidBuildRoot)
+Assert-NotContains -Label "publish_android.ps1 -WhatIf" -Text ($whatIfOutput -join [Environment]::NewLine) -Needle "STORE_PASSWORD"
 
 Write-Host "publish_android.ps1 checks passed"

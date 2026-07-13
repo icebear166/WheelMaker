@@ -375,3 +375,26 @@ Worker 无法连上入口机时，优先检查：
 - Nginx `/ws` WebSocket 代理
 - 防火墙和对外端口
 - Registry 入口机服务状态
+
+## 9. Android Release 签名
+
+Android `release` 构建不会再回退到 debug key。执行 `assembleRelease`、`bundleRelease`、`build` 或发布脚本前，必须在当前进程环境中提供：
+
+- `WHEELMAKER_ANDROID_KEYSTORE`：JKS/PKCS12 文件的绝对路径
+- `WHEELMAKER_ANDROID_STORE_PASSWORD`
+- `WHEELMAKER_ANDROID_KEY_ALIAS`
+- `WHEELMAKER_ANDROID_KEY_PASSWORD`
+
+缺少任一项、keystore 不存在、alias 不存在或密码无法加载 key 时，构建会直接失败；debug/test/lint 不需要这些变量。不要把密码写进仓库、Gradle 参数、命令历史或发布报告。变量名说明见 `mobile/android/release-signing.properties.example`。
+
+发布报告只记录 keystore 文件名和从已签名 APK 读取的证书 SHA-256，不记录 keystore 路径或密码。发布机器需要 Android SDK Build Tools 的 `apksigner`：
+
+```powershell
+$env:WHEELMAKER_ANDROID_KEYSTORE = "C:\secure\wheelmaker-release.jks"
+$env:WHEELMAKER_ANDROID_STORE_PASSWORD = Read-Host "Keystore password"
+$env:WHEELMAKER_ANDROID_KEY_ALIAS = "wheelmaker-release"
+$env:WHEELMAKER_ANDROID_KEY_PASSWORD = Read-Host "Key password"
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\publish_android.ps1
+```
+
+发布完成后从当前进程清除密码变量。

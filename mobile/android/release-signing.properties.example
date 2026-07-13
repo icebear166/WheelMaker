@@ -1,0 +1,8 @@
+# Android release signing is configured only through process environment variables.
+# Keep real keystore passwords out of files, shell history, CI logs, and Gradle arguments.
+#
+# Required environment variable names:
+# WHEELMAKER_ANDROID_KEYSTORE          (absolute path to a JKS or PKCS12 file)
+# WHEELMAKER_ANDROID_STORE_PASSWORD    (secret; set in the process environment)
+# WHEELMAKER_ANDROID_KEY_ALIAS         (alias in that keystore)
+# WHEELMAKER_ANDROID_KEY_PASSWORD      (secret; set in the process environment)
