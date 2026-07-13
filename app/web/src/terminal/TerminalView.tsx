@@ -98,14 +98,13 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       for (let index = 0; index < data.length; index += 1) bytes[index] = data.charCodeAt(index) & 0xff;
       inputRef.current(bytes);
     });
-    const isForegroundFocused = () => (
+    const isForegroundActive = () => (
       activeRef.current &&
-      focusedRef.current &&
       (typeof document === 'undefined' || document.visibilityState === 'visible')
     );
     const reportFit = () => {
       resizeFrameRef.current = null;
-      if (!isForegroundFocused()) return;
+      if (!isForegroundActive()) return;
       const proposed = fitAddon.proposeDimensions();
       if (!proposed || proposed.cols <= 0 || proposed.rows <= 0) return;
       if (proposed.cols === colsRef.current && proposed.rows === rowsRef.current) return;
@@ -136,7 +135,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       focusedRef.current = false;
     };
     const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && focusedRef.current) scheduleFitReport();
+      if (document.visibilityState === 'visible') scheduleFitReport();
     };
     let touchScroll: {
       startX: number;

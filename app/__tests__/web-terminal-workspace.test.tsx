@@ -47,6 +47,12 @@ describe('terminal workspace integration', () => {
     const terminalCss = read('web/src/styles/terminal.css');
     expect(indexCss.trimEnd().endsWith("@import './terminal.css';")).toBe(true);
     expect(terminalCss).toContain('.terminal-desktop-panel');
+    expect(terminalCss).toContain([
+      '.terminal-desktop-panel {',
+      '  display: flex;',
+      '  flex: 0 0 auto;',
+      '  flex-direction: column;',
+    ].join('\n'));
     expect(terminalCss).toContain('min-height: 160px;');
     expect(terminalCss).toContain('.terminal-mobile-overlay');
     expect(terminalCss).toContain('position: fixed;');
