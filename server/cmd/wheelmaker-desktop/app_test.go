@@ -6,11 +6,94 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
 )
+
+func TestBootstrapAssetIsMinimalAndSelfContained(t *testing.T) {
+	body, err := os.ReadFile("bootstrap/index.html")
+	if err != nil {
+		t.Fatalf("read bootstrap asset: %v", err)
+	}
+	if len(body) > 24*1024 {
+		t.Fatalf("bootstrap size=%d, want at most 24 KiB", len(body))
+	}
+
+	html := string(body)
+	for _, want := range []string{
+		`default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'`,
+		`window.wheelMakerBootstrap.getState()`,
+		`window.wheelMakerBootstrap.saveBaseUrl(input.value)`,
+		`window.wheelMakerBootstrap.retry()`,
+		`window.wheelMakerBootstrap.reset()`,
+		`type="url"`,
+		`id="error"`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("bootstrap missing %q", want)
+		}
+	}
+	for _, forbidden := range []string{
+		"Registry Token",
+		"localStorage",
+		"serviceWorker",
+		"<script src=",
+		"speech",
+		"notification",
+		"share",
+		"update",
+	} {
+		if strings.Contains(html, forbidden) {
+			t.Errorf("bootstrap contains forbidden capability %q", forbidden)
+		}
+	}
+	if got := strings.Count(html, "window.wheelMakerBootstrap."); got != 4 {
+		t.Errorf("bootstrap bridge call count=%d, want 4", got)
+	}
+}
+
+func TestDesktopBaseURLContract(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "domain", raw: "https://example.com", want: "https://example.com/"},
+		{name: "ip", raw: "https://192.0.2.10", want: "https://192.0.2.10/"},
+		{name: "port and subpath", raw: "https://example.com:8443/wheelmaker", want: "https://example.com:8443/wheelmaker/"},
+		{name: "encoded path", raw: "https://example.com/a%20b", want: "https://example.com/a%20b/"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := normalizeDesktopBaseURL(tt.raw)
+			if err != nil {
+				t.Fatalf("normalizeDesktopBaseURL(%q): %v", tt.raw, err)
+			}
+			if got != tt.want {
+				t.Fatalf("normalizeDesktopBaseURL(%q)=%q, want %q", tt.raw, got, tt.want)
+			}
+		})
+	}
+
+	for _, raw := range []string{
+		"",
+		"http://example.com/",
+		"https://user@example.com/",
+		"https://example.com/?token=secret",
+		"https://example.com/#fragment",
+		"javascript:alert(1)",
+		"file:///tmp/index.html",
+	} {
+		t.Run("reject_"+raw, func(t *testing.T) {
+			if got, err := normalizeDesktopBaseURL(raw); err == nil {
+				t.Fatalf("normalizeDesktopBaseURL(%q)=%q, want rejection", raw, got)
+			}
+		})
+	}
+}
 
 type recordingLauncher struct {
 	url  string

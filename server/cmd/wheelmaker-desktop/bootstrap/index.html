@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+  <title>WheelMaker</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #111318; color: #f5f7fb; }
+    main { width: min(30rem, calc(100% - 2rem)); padding: 2rem; border: 1px solid #303540; border-radius: 1rem; background: #1a1e25; }
+    h1 { margin: 0 0 .5rem; font-size: 1.6rem; }
+    p { margin: 0 0 1.25rem; color: #aeb6c5; line-height: 1.5; }
+    label { display: block; margin-bottom: .5rem; font-weight: 600; }
+    input { width: 100%; padding: .8rem; border: 1px solid #465064; border-radius: .55rem; background: #101319; color: inherit; }
+    .actions { display: flex; flex-wrap: wrap; gap: .65rem; margin-top: 1rem; }
+    button { padding: .7rem 1rem; border: 0; border-radius: .55rem; background: #e4ebff; color: #111318; font-weight: 700; cursor: pointer; }
+    button.secondary { background: #313846; color: #f5f7fb; }
+    button:disabled { opacity: .55; cursor: wait; }
+    #error { min-height: 1.4rem; margin-top: 1rem; color: #ff9d9d; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Connect to WheelMaker</h1>
+    <p>Enter the HTTPS address of your WheelMaker server.</p>
+    <form id="form">
+      <label for="base-url">Server address</label>
+      <input id="base-url" name="baseUrl" type="url" inputmode="url" autocomplete="url" placeholder="https://example.com/" required>
+      <div class="actions">
+        <button id="save" type="submit">Connect</button>
+        <button id="retry" class="secondary" type="button" hidden>Retry</button>
+        <button id="reset" class="secondary" type="button" hidden>Change address</button>
+      </div>
+      <div id="error" role="alert" aria-live="polite"></div>
+    </form>
+  </main>
+  <script>
+    const form = document.getElementById('form');
+    const input = document.getElementById('base-url');
+    const save = document.getElementById('save');
+    const retry = document.getElementById('retry');
+    const reset = document.getElementById('reset');
+    const error = document.getElementById('error');
+
+    function render(state) {
+      input.value = state.baseUrl || '';
+      error.textContent = state.error || '';
+      retry.hidden = !state.baseUrl || !state.error;
+      reset.hidden = !state.baseUrl;
+      save.disabled = Boolean(state.busy);
+    }
+
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      save.disabled = true;
+      const result = await window.wheelMakerBootstrap.saveBaseUrl(input.value);
+      if (!result.ok) render(result);
+      save.disabled = false;
+    });
+    retry.addEventListener('click', async () => render(await window.wheelMakerBootstrap.retry()));
+    reset.addEventListener('click', async () => render(await window.wheelMakerBootstrap.reset()));
+    window.addEventListener('DOMContentLoaded', async () => render(await window.wheelMakerBootstrap.getState()));
+  </script>
+</body>
+</html>

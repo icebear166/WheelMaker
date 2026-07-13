@@ -87,35 +87,16 @@ function Get-AndroidBuildRoot {
   return [System.IO.Path]::GetFullPath((Join-Path $repoPathRoot ".wheelmaker\build\mobile\android"))
 }
 
-function Build-AndroidWeb {
-  if (-not $WhatIf) {
-    Assert-Command -Name "npm" -Hint "Install Node.js 22+."
-    Assert-Command -Name "node" -Hint "Install Node.js 22+."
+function Copy-AndroidBootstrap {
+  New-CleanDirectory -Path $script:BootstrapAssetsRoot
+  $targetDir = Split-Path -Parent $script:BootstrapTarget
+  New-Directory -Path $targetDir
+  Write-Step "copy shared Android Bootstrap"
+  if ($WhatIf) {
+    Write-Host ("[whatif] copy {0} -> {1}" -f $script:BootstrapSource, $script:BootstrapTarget)
+    return
   }
-  New-CleanDirectory -Path $script:WebRoot
-  $previousTarget = $env:WHEELMAKER_WEB_TARGET
-  $env:WHEELMAKER_WEB_TARGET = $script:WebRoot
-  Push-Location $script:AppRoot
-  try {
-    Write-Step "build embedded Android Workspace Web UI"
-    if ($WhatIf) {
-      Write-Host ("[whatif] WHEELMAKER_WEB_TARGET={0} npm run build:web" -f $script:WebRoot)
-      Write-Host "[whatif] node scripts/export_web_release.js"
-      return
-    }
-    Invoke-Checked -FilePath "npm" -Arguments @("run", "build:web") -FailureMessage "Android Web build failed"
-    Invoke-Checked -FilePath "node" -Arguments @("scripts/export_web_release.js") -FailureMessage "Android Web public asset export failed"
-    if (-not (Test-Path -LiteralPath (Join-Path $script:WebRoot "index.html"))) {
-      throw ("Android Web build missing index.html: {0}" -f $script:WebRoot)
-    }
-  } finally {
-    if ($null -ne $previousTarget) {
-      $env:WHEELMAKER_WEB_TARGET = $previousTarget
-    } else {
-      Remove-Item Env:WHEELMAKER_WEB_TARGET -ErrorAction SilentlyContinue
-    }
-    Pop-Location
-  }
+  Copy-Item -LiteralPath $script:BootstrapSource -Destination $script:BootstrapTarget -Force
 }
 
 function Build-AndroidApk {
@@ -136,7 +117,7 @@ function Build-AndroidApk {
       "-Dorg.gradle.jvmargs=-Djava.net.preferIPv4Stack=true -Dhttps.protocols=TLSv1.2",
       "-PwheelmakerBuildRoot=$script:GradleBuildRoot",
       "-Pkotlin.project.persistent.dir=$script:KotlinPersistentDir",
-      "-PwheelmakerWebAssetsDir=$script:WebRoot"
+      "-PwheelmakerWebAssetsDir=$script:BootstrapAssetsRoot"
     )
     if ($WhatIf) {
       Write-Host ("[whatif] gradle {0}" -f ($args -join " "))
@@ -203,7 +184,7 @@ function Write-AndroidReleaseManifest {
       "sha256" = $apkHash
       "size" = $apkSize
     }
-    "webRoot" = $script:WebRoot
+    "embeddedAsset" = "bootstrap/index.html"
     "gradleBuildRoot" = $script:GradleBuildRoot
   }
   if ($WhatIf) {
@@ -217,11 +198,12 @@ function Write-AndroidReleaseManifest {
 }
 
 $script:RepoRoot = if ([string]::IsNullOrWhiteSpace($RepoRoot)) { (Resolve-Path (Join-Path $PSScriptRoot "..")).Path } else { (Resolve-Path $RepoRoot).Path }
-$script:AppRoot = Join-Path $script:RepoRoot "app"
 $script:AndroidRoot = Join-Path $script:RepoRoot "mobile\android"
 $script:WheelMakerHome = Join-Path $HOME ".wheelmaker"
 $script:BuildRoot = Get-AndroidBuildRoot
-$script:WebRoot = Join-Path $script:BuildRoot "webroot"
+$script:BootstrapSource = Join-Path $script:RepoRoot "server\cmd\wheelmaker-desktop\bootstrap\index.html"
+$script:BootstrapAssetsRoot = Join-Path $script:BuildRoot "app\src\main\assets"
+$script:BootstrapTarget = Join-Path $script:BuildRoot "app\src\main\assets\bootstrap\index.html"
 $script:GradleBuildRoot = Join-Path $script:BuildRoot "gradle-build"
 $script:KotlinPersistentDir = Join-Path $script:GradleBuildRoot "kotlin-persistent"
 $script:GradleCacheDir = Join-Path $script:BuildRoot "gradle-cache"
@@ -229,7 +211,7 @@ $script:GradleHomeDir = Join-Path $script:BuildRoot "gradle-home"
 $script:OutputDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputDir)
 $script:ManifestPath = Join-Path $script:OutputDir "android-release.json"
 
-Build-AndroidWeb
+Copy-AndroidBootstrap
 Build-AndroidApk
 if ($WhatIf) {
   $target = Join-Path $script:OutputDir "WheelMakerAndroid.apk"
