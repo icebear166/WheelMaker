@@ -41,20 +41,20 @@ WheelMaker 是由单个所有者管理、通过 Nginx 对外提供 HTTPS/WSS 访
 | 安全项 | 当前状态 | 目标处理 |
 | --- | --- | --- |
 | 安装 Token | 已完成：新安装生成 256-bit Token，空值和公开旧默认值迁移或拒绝 | 保持；自定义值不增加长度阻断 |
-| Token 运行入口 | 已完成：Hub、Registry 和现有 Monitor 拒绝空值和旧默认值；Registry 不再从命令行接收 Token | Monitor 删除后保留 Hub/Registry fail-closed |
+| Token 运行入口 | 已完成：Hub、Registry 拒绝空值和旧默认值；Registry 不再从命令行接收 Token | 保持 Hub/Registry fail-closed |
 | `config.json` | 已完成：原子写入，Unix `0600`，Windows 当前用户与 SYSTEM Protected DACL | 所有后端密钥配置写入复用同一保护机制 |
-| Listener | 已完成：Registry、Monitor 拒绝非 loopback 地址 | Monitor 删除；其余 WheelMaker 后端继续强制 loopback |
+| Listener | 已完成：Registry 和 Relay listener 强制 loopback；Monitor 已删除 | 保持其余 WheelMaker 后端强制 loopback |
 | 代理头 | 已完成：仅 loopback 直接对端可提供可信 `X-Forwarded-Proto` 和 `X-Real-IP` | 保持并覆盖所有新增 HTTP 入口 |
 | Origin 配置 | 已完成：用户可配置的 `allowedOrigins` 已删除 | 浏览器严格使用请求同源关系和配置 Base Path |
-| Registry Web Session | 部分完成：已有随机 Session、摘要、CSRF、登录限速、安全 Cookie、过期和撤销的内存实现 | 改为 Base URL 路由、180 天滑动持久化和设备管理 |
-| 浏览器凭据 | 未完成：Token 仍写入 localStorage 并在 `connect.init` 发送 | 硬删除持久化和浏览器 Token WebSocket 路径 |
-| 跨 Origin WebSocket | 过渡状态：为 appassets、localhost 等旧客户端允许跨 Origin 握手后用 Token 认证 | EXE/Android 远程同源化后，所有带 Origin 的连接只接受同源 Cookie |
+| Registry Web Session | 已完成：Base Path 绑定、180 天滑动持久化、设备管理、CSRF、登录限速和安全 Cookie 已落地 | 保持并在最终端到端门复验 |
+| 浏览器凭据 | 已完成：旧 Token 持久化和浏览器 Token WebSocket 路径已硬删除 | 保持 Cookie-only 浏览器认证 |
+| 跨 Origin WebSocket | 已完成：所有带 Origin 的连接只接受严格同源 Cookie；无 Origin Hub 继续使用 Token | 保持并在最终恶意 Origin 门复验 |
 | LocalHubRead | 已完成：Listener、证明交换、协议角色、方法、前端管理器和 UI 全部删除 | 不恢复兼容路径 |
-| Monitor | 部分退出：新部署流程已不再构建，源码、配置和遗留服务处理仍存在 | 完整硬删除并执行一次性升级清理 |
-| Relay Cookie | 既有能力已审计：随机进程密钥、HMAC-SHA256、generation 和过期绑定可靠 | 保留；补齐 Access Code 在线防爆破和来源校验 |
-| Android WebView/APK | 未完成 | 按本规格完成来源隔离、WebView、权限、更新包和签名加固 |
+| Monitor | 已完成：源码、配置、协议、构建目标和遗留服务/二进制升级清理已硬删除 | 不恢复兼容路径 |
+| Relay Cookie | 已完成：随机进程密钥 fail-closed、HMAC/generation/过期绑定、双层限速和来源校验已落地 | 保持并在最终 Relay 门复验 |
+| Android WebView/APK | 部分完成：远程 HTTPS Bootstrap 壳已落地，完整 Workspace/appassets 回退已删除 | 阶段 7 完成 Bridge、权限、APK 和 release 签名纵深加固 |
 | 诊断与仓库凭据 | 未完成 | 递归脱敏、轮换、Gitleaks；历史重写另行审批 |
-| Git/DoS/Web 纵深防御 | 未完成或仅有零散限制 | 完成本规格列出的输入、资源、CSP、开发服务器和依赖措施 |
+| Git/DoS/Web 纵深防御 | 部分完成：Git revision、Relay、Registry 输入/队列/上传/日志资源边界已落地 | 阶段 7 完成 CSP、开发服务器和兼容依赖措施 |
 
 ## 架构
 

@@ -279,7 +279,7 @@ Windows 本机普通测试已通过；`-race -count=10` 已分别以默认环境
 
 ### Task 6: 执行资源防护验收
 
-- [ ] **Step 1: 运行受影响全量测试**
+- [x] **Step 1: 运行受影响全量测试**
 
 Run:
 
@@ -290,7 +290,7 @@ go test ./internal/portrelay ./internal/hub ./internal/registry ./internal/share
 
 Expected: PASS。
 
-- [ ] **Step 2: 运行结构门**
+- [x] **Step 2: 运行结构门**
 
 Run:
 
@@ -301,7 +301,7 @@ rg -n 'runGit\(root.*(p\.SHA|p\.Base|p\.Head|ref)' server/internal/hub/reporter.
 
 Expected: 第一条所有比较点都汇聚到统一 authorizer，日志不打印 code；第二条无直接未验证参数命中。
 
-- [ ] **Step 3: 推送阶段提交**
+- [x] **Step 3: 推送阶段提交**
 
 Run:
 

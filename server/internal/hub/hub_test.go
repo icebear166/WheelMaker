@@ -257,7 +257,13 @@ func TestReporterPortRelayHTTPAndWebSocketSmoke(t *testing.T) {
 	}
 	_ = unauthResp.Body.Close()
 
-	loginResp, err := jarClient.Post(relayBase+"/__wheelmaker/relay/login", "application/x-www-form-urlencoded", strings.NewReader("code=483921"))
+	loginRequest, err := http.NewRequest(http.MethodPost, relayBase+"/__wheelmaker/relay/login", strings.NewReader("code=483921"))
+	if err != nil {
+		t.Fatalf("new relay login request: %v", err)
+	}
+	loginRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	loginRequest.Header.Set("Origin", relayBase)
+	loginResp, err := jarClient.Do(loginRequest)
 	if err != nil {
 		t.Fatalf("login relay: %v", err)
 	}
