@@ -7,6 +7,8 @@ export const RegistryMethods = {
   SecuritySessionList: 'security.session.list',
   SecuritySessionRevoke: 'security.session.revoke',
   SecuritySessionRevokeAll: 'security.session.revokeAll',
+  SecuritySecretStatus: 'security.secret.status',
+  SecuritySecretUpdate: 'security.secret.update',
   RegistryProjectList: 'registry.project.list',
   RegistryProjectReport: 'registry.project.report',
   RegistryRelayStatus: 'registry.relay.status',

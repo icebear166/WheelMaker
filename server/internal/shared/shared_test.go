@@ -177,6 +177,27 @@ func TestLoadConfig_ConfigExampleIsValid(t *testing.T) {
 	}
 }
 
+func TestSecretConfigLoadsBackendValues(t *testing.T) {
+	path := writeTempConfig(t, `{
+		"projects": [{"name": "p", "path": "."}],
+		"secrets": {
+			"deepseek": {"value": "deep-key", "updatedAt": "2026-07-13T00:00:00Z"},
+			"volcengineAsr": {"value": "speech-key"},
+			"mimoTts": {"value": "tts-key"}
+		}
+	}`)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig(): %v", err)
+	}
+	if cfg.Secrets.DeepSeek.Value != "deep-key" || cfg.Secrets.VolcengineASR.Value != "speech-key" || cfg.Secrets.MiMoTTS.Value != "tts-key" {
+		t.Fatalf("secrets=%+v", cfg.Secrets)
+	}
+	if got := cfg.Secrets.DeepSeek.UpdatedAt.UTC().Format(time.RFC3339); got != "2026-07-13T00:00:00Z" {
+		t.Fatalf("deepseek updatedAt=%q", got)
+	}
+}
+
 func TestWriteConfigFileAtomicallyReplacesContent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	if err := os.WriteFile(path, []byte("old"), 0o644); err != nil {

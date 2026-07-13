@@ -34,6 +34,7 @@ const (
 	RegistryRouteClientEvent            RegistryRouteKind = "client_event"
 	RegistryRouteDebug                  RegistryRouteKind = "debug"
 	RegistryRouteSecuritySession        RegistryRouteKind = "security_session"
+	RegistryRouteSecuritySecret         RegistryRouteKind = "security_secret"
 	RegistryRouteTerminalProjectRequest RegistryRouteKind = "terminal_project_request"
 	RegistryRouteTerminalHubRequest     RegistryRouteKind = "terminal_hub_request"
 	RegistryRouteTerminalClientEvent    RegistryRouteKind = "terminal_client_event"
@@ -76,6 +77,8 @@ const (
 	RegistryMethodSecuritySessionList      = "security.session.list"
 	RegistryMethodSecuritySessionRevoke    = "security.session.revoke"
 	RegistryMethodSecuritySessionRevokeAll = "security.session.revokeAll"
+	RegistryMethodSecuritySecretStatus     = "security.secret.status"
+	RegistryMethodSecuritySecretUpdate     = "security.secret.update"
 
 	RegistryMethodSessionList                = "session.list"
 	RegistryMethodSessionRead                = "session.read"
@@ -149,6 +152,8 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodSecuritySessionList:      registryMethod(RegistryMethodSecuritySessionList, RegistryRouteSecuritySession, []RegistryRole{RegistryRoleClient}),
 	RegistryMethodSecuritySessionRevoke:    registryMethod(RegistryMethodSecuritySessionRevoke, RegistryRouteSecuritySession, []RegistryRole{RegistryRoleClient}),
 	RegistryMethodSecuritySessionRevokeAll: registryMethod(RegistryMethodSecuritySessionRevokeAll, RegistryRouteSecuritySession, []RegistryRole{RegistryRoleClient}),
+	RegistryMethodSecuritySecretStatus:     registryMethod(RegistryMethodSecuritySecretStatus, RegistryRouteSecuritySecret, []RegistryRole{RegistryRoleClient}),
+	RegistryMethodSecuritySecretUpdate:     registryMethod(RegistryMethodSecuritySecretUpdate, RegistryRouteSecuritySecret, []RegistryRole{RegistryRoleClient}),
 
 	RegistryMethodHubReportProjects:     registryHubReportMethod(RegistryMethodHubReportProjects),
 	RegistryMethodHubReportProject:      registryHubReportMethod(RegistryMethodHubReportProject),
@@ -326,6 +331,10 @@ func RegistrySpeechMethod(method string) bool {
 
 func RegistrySecuritySessionMethod(method string) bool {
 	return RegistryMethodHasRoute(method, RegistryRouteSecuritySession)
+}
+
+func RegistrySecuritySecretMethod(method string) bool {
+	return RegistryMethodHasRoute(method, RegistryRouteSecuritySecret)
 }
 
 func RegistryHubSessionEventMethod(method string) (string, bool) {

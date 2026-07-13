@@ -28,7 +28,7 @@
 - Modify: `app/web/src/registry/RegistryRepository.ts`
 - Create: `app/__tests__/web-backend-secret-protocol.test.ts`
 
-- [ ] **Step 1: 写配置和 store 测试**
+- [x] **Step 1: 写配置和 store 测试**
 
 固定后端配置模型：
 
@@ -47,7 +47,7 @@ type SecretsConfig struct {
 
 测试 set/replace/clear；写后仍为当前用户私有权限；每次 update 从磁盘 fresh load，保留 projects/registry/log；配置写失败不改变内存可见状态；读取 status 永远不含 `Value`。
 
-- [ ] **Step 2: 写协议契约测试**
+- [x] **Step 2: 写协议契约测试**
 
 固定方法：
 
@@ -64,7 +64,7 @@ Status item 只能为：
 
 测试序列化响应不含 `value`、`apiKey`、摘要或配置路径。`set` 拒绝空值和大于 16 KiB 的值；`clear` 拒绝附带非空 value。
 
-- [ ] **Step 3: 运行测试并确认失败**
+- [x] **Step 3: 运行测试并确认失败**
 
 Run:
 
@@ -77,7 +77,7 @@ npm test -- --runInBand __tests__/web-backend-secret-protocol.test.ts
 
 Expected: FAIL；配置、store 和协议方法尚不存在。
 
-- [ ] **Step 4: 实现 store 和 Registry handler**
+- [x] **Step 4: 实现 store 和 Registry handler**
 
 `registry.Config` 增加 `ConfigPath`，由 `cmd/wheelmaker` 传 `<baseDir>/config.json`。只允许完成认证的 client role 调用；handler 日志只记录 kind/action/success，不记录 request payload。Update 成功后清空局部 `value` 变量。
 
@@ -93,7 +93,7 @@ func (s *secretStore) Value(kind secretKind) (string, bool, error)
 
 `Value` 只在 Registry 后端 package 内使用，不放入 protocol DTO。
 
-- [ ] **Step 5: 实现 TypeScript repository 并提交**
+- [x] **Step 5: 实现 TypeScript repository 并提交**
 
 Run:
 

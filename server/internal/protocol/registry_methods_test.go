@@ -33,6 +33,27 @@ func TestRegistryDeviceSessionMethods(t *testing.T) {
 	}
 }
 
+func TestSecretMethodsAndSerializationAreSetOnly(t *testing.T) {
+	for _, method := range []string{RegistryMethodSecuritySecretStatus, RegistryMethodSecuritySecretUpdate} {
+		desc, ok := RegistryMethod(method)
+		if !ok || desc.Route != RegistryRouteSecuritySecret || !RegistryMethodAllowed(string(RegistryRoleClient), method) {
+			t.Fatalf("secret method %q descriptor=%+v ok=%v", method, desc, ok)
+		}
+		if RegistryMethodAllowed(string(RegistryRoleHub), method) {
+			t.Fatalf("secret method %q allowed hub", method)
+		}
+	}
+	encoded, err := json.Marshal(SecretStatusResponse{Secrets: []SecretStatus{{Kind: SecretKindDeepSeek, Configured: true, UpdatedAt: "2026-07-13T00:00:00Z"}}})
+	if err != nil {
+		t.Fatalf("Marshal(): %v", err)
+	}
+	for _, forbidden := range []string{`"value"`, "apiKey", "digest", "configPath"} {
+		if strings.Contains(string(encoded), forbidden) {
+			t.Fatalf("secret status contains %q: %s", forbidden, encoded)
+		}
+	}
+}
+
 func TestMonitorMethodsRemoved(t *testing.T) {
 	prefix := "monitor."
 	for _, method := range []string{prefix + "listHub", prefix + "status", prefix + "log", prefix + "db", prefix + "action", prefix + "restart"} {

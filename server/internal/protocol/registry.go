@@ -159,6 +159,30 @@ type RegistryDeviceSessionRevokeAllResponse struct {
 	Revoked int `json:"revoked"`
 }
 
+type SecretKind string
+
+const (
+	SecretKindDeepSeek      SecretKind = "deepseek"
+	SecretKindVolcengineASR SecretKind = "volcengineAsr"
+	SecretKindMiMoTTS       SecretKind = "mimoTts"
+)
+
+type SecretStatus struct {
+	Kind       SecretKind `json:"kind"`
+	Configured bool       `json:"configured"`
+	UpdatedAt  string     `json:"updatedAt,omitempty"`
+}
+
+type SecretStatusResponse struct {
+	Secrets []SecretStatus `json:"secrets"`
+}
+
+type SecretUpdatePayload struct {
+	Kind   SecretKind `json:"kind"`
+	Action string     `json:"action"`
+	Value  string     `json:"value,omitempty"`
+}
+
 type ProjectListItem struct {
 	ProjectID     string                `json:"projectId"`
 	Name          string                `json:"name"`

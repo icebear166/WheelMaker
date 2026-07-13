@@ -47,6 +47,7 @@ type Config struct {
 	ServerVersion   string
 	LogDir          string
 	StateDir        string
+	ConfigPath      string
 }
 
 type peerConn struct {
@@ -242,6 +243,7 @@ type Server struct {
 	relay        *portrelay.Controller
 	webSessions  *webSessionStore
 	loginLimiter *loginLimiter
+	secrets      *secretStore
 
 	speech *speechService
 }
@@ -347,6 +349,9 @@ func New(cfg Config) *Server {
 	if cfg.LogDir == "" {
 		cfg.LogDir = defaultDebugUploadLogDir()
 	}
+	if strings.TrimSpace(cfg.ConfigPath) == "" && strings.TrimSpace(cfg.StateDir) != "" {
+		cfg.ConfigPath = filepath.Join(cfg.StateDir, "config.json")
+	}
 	s := &Server{
 		cfg:          cfg,
 		hubs:         make(map[string]rp.HubSnapshot),
@@ -360,6 +365,7 @@ func New(cfg Config) *Server {
 			webSessionStatePath(cfg.StateDir),
 		),
 		loginLimiter: newLoginLimiter(time.Now),
+		secrets:      newSecretStore(cfg.ConfigPath),
 	}
 	s.speech = newSpeechService(newVolcengineSpeechProvider())
 	s.relay = portrelay.NewController(portrelay.ControllerConfig{
@@ -577,6 +583,8 @@ func (s *Server) handleRequest(state *connectionState, in envelope) {
 		s.handleDebugUploadLog(state.peer, in)
 	case rp.RegistrySecuritySessionMethod(in.Method):
 		s.handleDeviceSessionRequest(state.peer, state, in)
+	case rp.RegistrySecuritySecretMethod(in.Method):
+		s.handleSecretRequest(state.peer, in)
 	case in.Method == rp.RegistryMethodHubPing:
 		_ = s.writeResponse(state.peer, in.RequestID, in.Method, "", map[string]any{"ok": true})
 	case rp.RegistryRelayControlMethod(in.Method):
