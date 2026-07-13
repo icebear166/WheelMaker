@@ -1539,6 +1539,20 @@
   -webkit-backdrop-filter: blur(10px) saturate(1.15);
 }
 
+.connect-titlebar {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  padding-left: 12px;
+  background: var(--desktop-top-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 .gesture-nav-button {
   border-color: var(--border-subtle);
   background: transparent;

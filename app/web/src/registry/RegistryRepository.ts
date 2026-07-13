@@ -130,6 +130,8 @@ function normalizeDeviceSession(raw: unknown): RegistryDeviceSession | null {
     typeof input.deviceId !== 'string' || input.deviceId.length === 0 ||
     typeof input.deviceName !== 'string' ||
     typeof input.basePath !== 'string' ||
+    typeof input.lastLoginIp !== 'string' ||
+    typeof input.lastLoginLocation !== 'string' ||
     typeof input.createdAt !== 'string' ||
     typeof input.lastSeenAt !== 'string' ||
     typeof input.expiresAt !== 'string'
@@ -140,6 +142,8 @@ function normalizeDeviceSession(raw: unknown): RegistryDeviceSession | null {
     deviceId: input.deviceId,
     deviceName: input.deviceName,
     basePath: input.basePath,
+    lastLoginIp: input.lastLoginIp,
+    lastLoginLocation: input.lastLoginLocation,
     createdAt: input.createdAt,
     lastSeenAt: input.lastSeenAt,
     expiresAt: input.expiresAt,

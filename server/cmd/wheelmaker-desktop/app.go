@@ -92,7 +92,7 @@ func defaultDesktopWindowOptions() desktopWindowOptions {
 		Width:          1280,
 		Height:         840,
 		IconID:         desktopResourceIconID,
-		CustomTitleBar: false,
+		CustomTitleBar: true,
 		ThemeColor:     desktopTitleBarThemeColor,
 	}
 }

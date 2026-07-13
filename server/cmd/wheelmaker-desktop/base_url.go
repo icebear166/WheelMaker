@@ -5,12 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/swm8023/wheelmaker/internal/security"
 )
 
 func normalizeDesktopBaseURL(raw string) (string, error) {
+	if !strings.Contains(strings.TrimSpace(raw), "://") {
+		raw = "https://" + raw
+	}
 	baseURL, err := security.NormalizeHTTPSBaseURL(raw)
 	if err != nil {
 		return "", err

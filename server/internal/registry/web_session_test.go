@@ -20,7 +20,7 @@ func TestWebSessionRestartRestoresPrivateCredentials(t *testing.T) {
 	if err := store.Load(); err != nil {
 		t.Fatalf("Load(): %v", err)
 	}
-	raw, csrf, err := store.Create("Work Laptop", "/wheelmaker/")
+	raw, csrf, err := store.CreateWithLoginMetadata("Work Laptop", "/wheelmaker/", "203.0.113.9", "Shanghai, China")
 	if err != nil {
 		t.Fatalf("Create(): %v", err)
 	}
@@ -45,7 +45,7 @@ func TestWebSessionRestartRestoresPrivateCredentials(t *testing.T) {
 		t.Fatalf("persisted sessions=%d, want 1", len(persisted.Sessions))
 	}
 	record := persisted.Sessions[0]
-	if record.Digest == "" || record.DeviceID == "" || record.DeviceName != "Work Laptop" || record.BasePath != "/wheelmaker/" {
+	if record.Digest == "" || record.DeviceID == "" || record.DeviceName != "Work Laptop" || record.BasePath != "/wheelmaker/" || record.LastLoginIP != "203.0.113.9" || record.LastLoginLocation != "Shanghai, China" {
 		t.Fatalf("persisted session=%+v", record)
 	}
 
@@ -54,7 +54,7 @@ func TestWebSessionRestartRestoresPrivateCredentials(t *testing.T) {
 		t.Fatalf("restored Load(): %v", err)
 	}
 	session, ok := restored.Authenticate(raw)
-	if !ok || session.CSRFToken != csrf || session.DeviceID != record.DeviceID || session.DeviceName != "Work Laptop" || session.BasePath != "/wheelmaker/" {
+	if !ok || session.CSRFToken != csrf || session.DeviceID != record.DeviceID || session.DeviceName != "Work Laptop" || session.BasePath != "/wheelmaker/" || session.LastLoginIP != "203.0.113.9" || session.LastLoginLocation != "Shanghai, China" {
 		t.Fatalf("Authenticate() session=%+v ok=%v", session, ok)
 	}
 	if err := restored.Revoke(raw); err != nil {

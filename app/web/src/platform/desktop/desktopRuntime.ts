@@ -1,5 +1,6 @@
 export type DesktopWindowBridge = {
   enabled: true;
+  getDeviceName?: () => Promise<string> | string;
   startDrag?: () => Promise<void> | void;
   minimize?: () => Promise<void> | void;
   toggleMaximize?: () => Promise<void> | void;

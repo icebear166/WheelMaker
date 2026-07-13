@@ -133,13 +133,15 @@ type DebugUploadLogResponsePayload struct {
 }
 
 type RegistryDeviceSession struct {
-	DeviceID   string `json:"deviceId"`
-	DeviceName string `json:"deviceName"`
-	BasePath   string `json:"basePath"`
-	CreatedAt  string `json:"createdAt"`
-	LastSeenAt string `json:"lastSeenAt"`
-	ExpiresAt  string `json:"expiresAt"`
-	Current    bool   `json:"current"`
+	DeviceID          string `json:"deviceId"`
+	DeviceName        string `json:"deviceName"`
+	BasePath          string `json:"basePath"`
+	LastLoginIP       string `json:"lastLoginIp"`
+	LastLoginLocation string `json:"lastLoginLocation"`
+	CreatedAt         string `json:"createdAt"`
+	LastSeenAt        string `json:"lastSeenAt"`
+	ExpiresAt         string `json:"expiresAt"`
+	Current           bool   `json:"current"`
 }
 
 type RegistryDeviceSessionListResponse struct {

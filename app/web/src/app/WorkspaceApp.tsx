@@ -13,6 +13,7 @@ declare global {
 import {deriveRegistryEndpoints} from '../registry/registryBaseUrl';
 import {RegistryWebAuthClient} from '../registry/RegistryWebAuthClient';
 import {RegistryAuthController, type RegistryAuthSnapshot} from '../registry/RegistryAuthController';
+import {resolveLoginDeviceName} from '../registry/deviceName';
 import { appendPortRelayAutoAuthCode, appendPortRelayOpenPath, parsePortRelayLocalHttpUrl, resolvePortRelayOpenUrl } from '../portRelay/portRelayUrl';
 import { buildPortRelayClearSiteDataUrl } from '../portRelay/portRelayUrl';
 import type { PortRelayLocalHttpUrl } from '../portRelay/portRelayUrl';
@@ -2488,7 +2489,6 @@ export function App() {
   }, []);
   const [registryAuth, setRegistryAuth] = useState<RegistryAuthSnapshot>(() => registryAuthController.snapshot());
   const [loginToken, setLoginToken] = useState('');
-  const [loginDeviceName, setLoginDeviceName] = useState(() => window.navigator.userAgent.includes('Android') ? 'Android' : 'Browser');
   const [autoConnecting, setAutoConnecting] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const autoConnectTriedRef = useRef(false);
@@ -12239,7 +12239,8 @@ export function App() {
   };
 
   const handleRegistryLogin = async () => {
-    const snapshot = await registryAuthController.login(loginToken, loginDeviceName);
+    const deviceName = await resolveLoginDeviceName();
+    const snapshot = await registryAuthController.login(loginToken, deviceName);
     if (snapshot.state !== 'authenticated') return;
     setLoginToken('');
     await connect();
@@ -19950,7 +19951,12 @@ export function App() {
     return (
       <div className={`page theme-${themeMode}`}>
         {setiFontCss ? <style>{setiFontCss}</style> : null}
-        <DesktopWindowControls />
+        {isNativeShellHost() ? (
+          <div className="connect-titlebar">
+            <span>WheelMaker</span>
+            <DesktopWindowControls />
+          </div>
+        ) : null}
         <div className="connect" aria-busy={autoConnecting}>
           <h3>WheelMaker Registry</h3>
           {registryAuth.state === 'checking' ? <div>Checking login...</div> : null}
@@ -19968,12 +19974,6 @@ export function App() {
                 value={loginToken}
                 onChange={event => setLoginToken(event.target.value)}
                 placeholder="Registry token"
-              />
-              <input
-                className="input"
-                value={loginDeviceName}
-                onChange={event => setLoginDeviceName(event.target.value)}
-                placeholder="Device name"
               />
               <button
                 className="button"

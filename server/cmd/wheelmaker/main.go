@@ -192,11 +192,12 @@ func runRegistryWorker(stateDir string) error {
 
 func registryServerConfig(addr, token, stateDir string) registry.Config {
 	return registry.Config{
-		Addr:       addr,
-		Token:      token,
-		LogDir:     filepath.Join(stateDir, "log"),
-		StateDir:   stateDir,
-		ConfigPath: filepath.Join(stateDir, "config.json"),
+		Addr:               addr,
+		Token:              token,
+		LogDir:             filepath.Join(stateDir, "log"),
+		StateDir:           stateDir,
+		ConfigPath:         filepath.Join(stateDir, "config.json"),
+		IPLocationResolver: registry.NewIPWhoisLocationResolver(),
 	}
 }
 

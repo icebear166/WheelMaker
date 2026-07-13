@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"errors"
+	"os"
 	"runtime"
 	"strconv"
 	"unsafe"
@@ -97,6 +98,12 @@ func bindDesktopWindowBridge(w webview2.WebView, hwnd uintptr, desktopRuntime *d
 				return desktopBootstrapResult{}, err
 			}
 			return desktopRuntime.Reset(context.Background()), nil
+		}},
+		{desktopGetDeviceNameBinding, func() (string, error) {
+			if err := authorize(desktopBridgeGetDeviceName); err != nil {
+				return "", err
+			}
+			return os.Hostname()
 		}},
 		{desktopStartDragBinding, func() error {
 			if err := authorize(desktopBridgeStartDrag); err != nil {

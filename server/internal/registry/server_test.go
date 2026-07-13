@@ -2357,6 +2357,46 @@ func TestWebAuthCookieStatusAndLogoutUseBasePath(t *testing.T) {
 	}
 }
 
+type recordingIPLocationResolver struct {
+	ips []string
+}
+
+func (r *recordingIPLocationResolver) ResolveIPLocation(_ context.Context, ip string) string {
+	r.ips = append(r.ips, ip)
+	return "Shanghai, China"
+}
+
+func TestWebLoginStoresTrustedClientIPAndLocation(t *testing.T) {
+	resolver := &recordingIPLocationResolver{}
+	s := New(Config{Token: "token", IPLocationResolver: resolver})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+	headers := sameOriginWebAuthHeaders(ts.URL)
+	headers.Set("X-Real-IP", "203.0.113.9")
+
+	failed := doRegistryWebAuthRequest(t, ts.URL, http.MethodPost, "/", "login", `{"token":"wrong","deviceName":"Browser"}`, headers, nil)
+	_ = failed.Body.Close()
+	if failed.StatusCode != http.StatusUnauthorized || len(resolver.ips) != 0 {
+		t.Fatalf("failed login status=%d resolver=%v", failed.StatusCode, resolver.ips)
+	}
+
+	login := doRegistryWebAuthRequest(t, ts.URL, http.MethodPost, "/", "login", `{"token":"token","deviceName":"Browser"}`, headers, nil)
+	_ = login.Body.Close()
+	if login.StatusCode != http.StatusOK {
+		t.Fatalf("login status=%d", login.StatusCode)
+	}
+	if !reflect.DeepEqual(resolver.ips, []string{"203.0.113.9"}) {
+		t.Fatalf("resolver ips=%v", resolver.ips)
+	}
+	items, err := s.webSessions.List("")
+	if err != nil || len(items) != 1 {
+		t.Fatalf("sessions=%+v err=%v", items, err)
+	}
+	if items[0].LastLoginIP != "203.0.113.9" || items[0].LastLoginLocation != "Shanghai, China" {
+		t.Fatalf("session=%+v", items[0])
+	}
+}
+
 func TestWebAuthRejectsSessionFromDifferentBasePath(t *testing.T) {
 	s := New(Config{Token: "custom-token"})
 	ts := httptest.NewServer(s.Handler())

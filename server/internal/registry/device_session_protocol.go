@@ -26,13 +26,15 @@ func (s *Server) handleDeviceSessionRequest(peer *peerConn, state *connectionSta
 		response := rp.RegistryDeviceSessionListResponse{Sessions: make([]rp.RegistryDeviceSession, 0, len(items))}
 		for _, item := range items {
 			response.Sessions = append(response.Sessions, rp.RegistryDeviceSession{
-				DeviceID:   item.DeviceID,
-				DeviceName: item.DeviceName,
-				BasePath:   item.BasePath,
-				CreatedAt:  item.CreatedAt.Format(time.RFC3339Nano),
-				LastSeenAt: item.LastSeenAt.Format(time.RFC3339Nano),
-				ExpiresAt:  item.ExpiresAt.Format(time.RFC3339Nano),
-				Current:    item.Current,
+				DeviceID:          item.DeviceID,
+				DeviceName:        item.DeviceName,
+				BasePath:          item.BasePath,
+				LastLoginIP:       item.LastLoginIP,
+				LastLoginLocation: item.LastLoginLocation,
+				CreatedAt:         item.CreatedAt.Format(time.RFC3339Nano),
+				LastSeenAt:        item.LastSeenAt.Format(time.RFC3339Nano),
+				ExpiresAt:         item.ExpiresAt.Format(time.RFC3339Nano),
+				Current:           item.Current,
 			})
 		}
 		_ = s.writeResponse(peer, in.RequestID, in.Method, "", response)

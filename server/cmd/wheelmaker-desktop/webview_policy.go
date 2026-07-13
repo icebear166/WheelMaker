@@ -23,6 +23,7 @@ const (
 	desktopBridgeSaveBaseURL
 	desktopBridgeRetry
 	desktopBridgeReset
+	desktopBridgeGetDeviceName
 	desktopBridgeStartDrag
 	desktopBridgeMinimize
 	desktopBridgeToggleMaximize
@@ -62,10 +63,13 @@ func (p *desktopWebViewPolicy) AllowsBridge(mode desktopPageMode, rawURL string,
 		if !isDesktopBootstrapDocumentURL(rawURL) {
 			return false
 		}
-		return action >= desktopBridgeGetState && action <= desktopBridgeReset
+		return desktopBootstrapActionAllowed(action)
 	}
 	if mode != desktopTrustedRemotePage || !p.contains(rawURL) {
 		return false
+	}
+	if action == desktopBridgeGetDeviceName {
+		return true
 	}
 	return action >= desktopBridgeStartDrag && action <= desktopBridgeRequestServerChange
 }
@@ -188,9 +192,14 @@ func (s *desktopWebViewSecurityState) Authorize(epoch uint64, mainFrame bool, ac
 		return false
 	}
 	if s.mode == desktopBootstrapPage {
-		return mainFrame && isDesktopBootstrapDocumentURL(s.committedURL) && action >= desktopBridgeGetState && action <= desktopBridgeReset
+		return mainFrame && isDesktopBootstrapDocumentURL(s.committedURL) && desktopBootstrapActionAllowed(action)
 	}
 	return s.policy != nil && s.policy.AllowsBridge(s.mode, s.committedURL, mainFrame, action)
+}
+
+func desktopBootstrapActionAllowed(action desktopBridgeAction) bool {
+	return (action >= desktopBridgeGetState && action <= desktopBridgeGetDeviceName) ||
+		(action >= desktopBridgeStartDrag && action <= desktopBridgeClose)
 }
 
 func (s *desktopWebViewSecurityState) AuthorizeCurrent(action desktopBridgeAction) bool {

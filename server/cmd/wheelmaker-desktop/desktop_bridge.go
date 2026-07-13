@@ -10,6 +10,7 @@ const (
 	desktopBootstrapSaveBinding     = "__wheelMakerBootstrapSaveBaseURL"
 	desktopBootstrapRetryBinding    = "__wheelMakerBootstrapRetry"
 	desktopBootstrapResetBinding    = "__wheelMakerBootstrapReset"
+	desktopGetDeviceNameBinding     = "__wheelMakerDesktopGetDeviceName"
 	desktopStartDragBinding         = "__wheelMakerDesktopStartDrag"
 	desktopMinimizeBinding          = "__wheelMakerDesktopMinimize"
 	desktopToggleMaximizeBinding    = "__wheelMakerDesktopToggleMaximize"
@@ -32,12 +33,18 @@ func desktopRuntimeInitScript() string {
       saveBaseUrl: invoke('` + desktopBootstrapSaveBinding + `'),
       retry: invoke('` + desktopBootstrapRetryBinding + `'),
       reset: invoke('` + desktopBootstrapResetBinding + `'),
+		getDeviceName: invoke('` + desktopGetDeviceNameBinding + `'),
+      startDrag: invoke('` + desktopStartDragBinding + `'),
+      minimize: invoke('` + desktopMinimizeBinding + `'),
+      toggleMaximize: invoke('` + desktopToggleMaximizeBinding + `'),
+      close: invoke('` + desktopCloseBinding + `'),
     });
     return;
   }
   if (location.protocol === 'https:') {
     window.WheelMakerDesktop = Object.freeze({
       enabled: true,
+		getDeviceName: invoke('` + desktopGetDeviceNameBinding + `'),
       startDrag: invoke('` + desktopStartDragBinding + `'),
       minimize: invoke('` + desktopMinimizeBinding + `'),
       toggleMaximize: invoke('` + desktopToggleMaximizeBinding + `'),

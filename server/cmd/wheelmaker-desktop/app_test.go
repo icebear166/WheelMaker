@@ -30,8 +30,16 @@ func TestBootstrapAssetIsMinimalAndSelfContained(t *testing.T) {
 		`callBootstrap('bootstrap.saveBaseUrl', {baseUrl: input.value})`,
 		`callBootstrap('bootstrap.retry')`,
 		`callBootstrap('bootstrap.reset')`,
+		`id="titlebar"`,
+		`id="minimize"`,
+		`id="maximize"`,
+		`id="close"`,
+		`callWindow('startDrag')`,
+		`callWindow('minimize')`,
+		`callWindow('toggleMaximize')`,
+		`callWindow('close')`,
 		`bridge.postMessage(JSON.stringify({requestId, action, payload, userGestureAt: lastUserGestureAt}))`,
-		`type="url"`,
+		`type="text"`,
 		`id="error"`,
 	} {
 		if !strings.Contains(html, want) {
@@ -60,6 +68,7 @@ func TestDesktopBaseURLContract(t *testing.T) {
 		raw  string
 		want string
 	}{
+		{name: "domain without scheme", raw: "example.com", want: "https://example.com/"},
 		{name: "domain", raw: "https://example.com", want: "https://example.com/"},
 		{name: "ip", raw: "https://192.0.2.10", want: "https://192.0.2.10/"},
 		{name: "port and subpath", raw: "https://example.com:8443/wheelmaker", want: "https://example.com:8443/wheelmaker/"},
@@ -91,6 +100,12 @@ func TestDesktopBaseURLContract(t *testing.T) {
 				t.Fatalf("normalizeDesktopBaseURL(%q)=%q, want rejection", raw, got)
 			}
 		})
+	}
+}
+
+func TestDesktopUsesCustomTitleBar(t *testing.T) {
+	if !defaultDesktopWindowOptions().CustomTitleBar {
+		t.Fatal("desktop window must use the custom title bar")
 	}
 }
 

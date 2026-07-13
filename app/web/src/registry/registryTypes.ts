@@ -76,6 +76,8 @@ export interface RegistryDeviceSession {
   deviceId: string;
   deviceName: string;
   basePath: string;
+	lastLoginIp: string;
+	lastLoginLocation: string;
   createdAt: string;
   lastSeenAt: string;
   expiresAt: string;

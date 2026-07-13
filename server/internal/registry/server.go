@@ -47,13 +47,14 @@ const codeBusy = "busy"
 
 // Config configures the project registry server.
 type Config struct {
-	Addr            string
-	Token           string
-	ProtocolVersion string
-	ServerVersion   string
-	LogDir          string
-	StateDir        string
-	ConfigPath      string
+	Addr               string
+	Token              string
+	ProtocolVersion    string
+	ServerVersion      string
+	LogDir             string
+	StateDir           string
+	ConfigPath         string
+	IPLocationResolver IPLocationResolver
 }
 
 type peerConn struct {
@@ -256,6 +257,7 @@ type Server struct {
 	relayInitErr error
 	webSessions  *webSessionStore
 	loginLimiter *loginLimiter
+	ipLocation   IPLocationResolver
 	secrets      *secretStore
 
 	speech *speechService
@@ -402,6 +404,7 @@ func New(cfg Config) *Server {
 			webSessionStatePath(cfg.StateDir),
 		),
 		loginLimiter: newLoginLimiter(time.Now),
+		ipLocation:   cfg.IPLocationResolver,
 		secrets:      newSecretStore(cfg.ConfigPath),
 	}
 	s.speech = newSpeechService(newVolcengineSpeechProvider(), s.resolveVolcengineASRSecret)

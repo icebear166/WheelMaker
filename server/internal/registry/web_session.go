@@ -24,24 +24,28 @@ const (
 var errInvalidWebSessionMetadata = errors.New("invalid web session metadata")
 
 type webSession struct {
-	DeviceID   string
-	Digest     [32]byte
-	DeviceName string
-	BasePath   string
-	CSRFToken  string
-	CreatedAt  time.Time
-	LastSeenAt time.Time
-	ExpiresAt  time.Time
+	DeviceID          string
+	Digest            [32]byte
+	DeviceName        string
+	BasePath          string
+	LastLoginIP       string
+	LastLoginLocation string
+	CSRFToken         string
+	CreatedAt         time.Time
+	LastSeenAt        time.Time
+	ExpiresAt         time.Time
 }
 
 type webSessionInfo struct {
-	DeviceID   string
-	DeviceName string
-	BasePath   string
-	CreatedAt  time.Time
-	LastSeenAt time.Time
-	ExpiresAt  time.Time
-	Current    bool
+	DeviceID          string
+	DeviceName        string
+	BasePath          string
+	LastLoginIP       string
+	LastLoginLocation string
+	CreatedAt         time.Time
+	LastSeenAt        time.Time
+	ExpiresAt         time.Time
+	Current           bool
 }
 
 type webSessionStore struct {
@@ -69,6 +73,10 @@ func newWebSessionStore(source io.Reader, now func() time.Time, registryToken, f
 }
 
 func (s *webSessionStore) Create(deviceName, basePath string) (string, string, error) {
+	return s.CreateWithLoginMetadata(deviceName, basePath, "", "")
+}
+
+func (s *webSessionStore) CreateWithLoginMetadata(deviceName, basePath, lastLoginIP, lastLoginLocation string) (string, string, error) {
 	deviceName = strings.TrimSpace(deviceName)
 	if deviceName == "" {
 		deviceName = defaultWebSessionDeviceName
@@ -87,13 +95,15 @@ func (s *webSessionStore) Create(deviceName, basePath string) (string, string, e
 	now := s.now()
 	digest := sha256.Sum256([]byte(raw))
 	session := webSession{
-		DeviceID:   deviceID,
-		Digest:     digest,
-		DeviceName: deviceName,
-		BasePath:   basePath,
-		CreatedAt:  now,
-		LastSeenAt: now,
-		ExpiresAt:  now.Add(webSessionTTL),
+		DeviceID:          deviceID,
+		Digest:            digest,
+		DeviceName:        deviceName,
+		BasePath:          basePath,
+		LastLoginIP:       lastLoginIP,
+		LastLoginLocation: lastLoginLocation,
+		CreatedAt:         now,
+		LastSeenAt:        now,
+		ExpiresAt:         now.Add(webSessionTTL),
 	}
 
 	s.mu.Lock()
@@ -187,13 +197,15 @@ func (s *webSessionStore) List(currentDeviceID string) ([]webSessionInfo, error)
 	items := make([]webSessionInfo, 0, len(s.sessions))
 	for _, session := range s.sessions {
 		items = append(items, webSessionInfo{
-			DeviceID:   session.DeviceID,
-			DeviceName: session.DeviceName,
-			BasePath:   session.BasePath,
-			CreatedAt:  session.CreatedAt,
-			LastSeenAt: session.LastSeenAt,
-			ExpiresAt:  session.ExpiresAt,
-			Current:    session.DeviceID == currentDeviceID,
+			DeviceID:          session.DeviceID,
+			DeviceName:        session.DeviceName,
+			BasePath:          session.BasePath,
+			LastLoginIP:       session.LastLoginIP,
+			LastLoginLocation: session.LastLoginLocation,
+			CreatedAt:         session.CreatedAt,
+			LastSeenAt:        session.LastSeenAt,
+			ExpiresAt:         session.ExpiresAt,
+			Current:           session.DeviceID == currentDeviceID,
 		})
 	}
 	sort.Slice(items, func(i, j int) bool {

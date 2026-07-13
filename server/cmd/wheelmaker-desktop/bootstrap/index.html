@@ -8,8 +8,14 @@
   <style>
     :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
     * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #111318; color: #f5f7fb; }
-    main { width: min(30rem, calc(100% - 2rem)); padding: 2rem; border: 1px solid #303540; border-radius: 1rem; background: #1a1e25; }
+    body { margin: 0; min-height: 100vh; display: grid; grid-template-rows: 32px minmax(0, 1fr); background: #111318; color: #f5f7fb; }
+    #titlebar { display: flex; align-items: stretch; justify-content: space-between; background: #1b1f27; border-bottom: 1px solid #303540; user-select: none; }
+    .title { display: flex; min-width: 0; align-items: center; padding: 0 12px; color: #f5f7fb; font-size: 12px; font-weight: 600; }
+    .window-controls { display: inline-flex; align-items: stretch; }
+    .window-control { width: 46px; padding: 0; border: 0; border-radius: 0; background: transparent; color: #c9d1df; font: inherit; font-size: 16px; font-weight: 400; cursor: pointer; }
+    .window-control:hover { background: #303846; color: #ffffff; }
+    .window-control.close:hover { background: #c42b1c; color: #ffffff; }
+    main { width: min(30rem, calc(100% - 2rem)); align-self: center; justify-self: center; padding: 2rem; border: 1px solid #303540; border-radius: 1rem; background: #1a1e25; }
     h1 { margin: 0 0 .5rem; font-size: 1.6rem; }
     p { margin: 0 0 1.25rem; color: #aeb6c5; line-height: 1.5; }
     label { display: block; margin-bottom: .5rem; font-weight: 600; }
@@ -23,12 +29,20 @@
   </style>
 </head>
 <body>
+  <header id="titlebar">
+    <span class="title">WheelMaker</span>
+    <div class="window-controls">
+      <button id="minimize" class="window-control" type="button" aria-label="Minimize" title="Minimize">−</button>
+      <button id="maximize" class="window-control" type="button" aria-label="Maximize or restore" title="Maximize or restore">□</button>
+      <button id="close" class="window-control close" type="button" aria-label="Close" title="Close">×</button>
+    </div>
+  </header>
   <main>
     <h1>Connect to WheelMaker</h1>
     <p>Enter the HTTPS address of your WheelMaker server.</p>
     <form id="form">
       <label for="base-url">Server address</label>
-      <input id="base-url" name="baseUrl" type="url" inputmode="url" autocomplete="url" placeholder="https://example.com/" required>
+      <input id="base-url" name="baseUrl" type="text" inputmode="url" autocomplete="url" placeholder="example.com" required>
       <div class="actions">
         <button id="save" type="submit">Connect</button>
         <button id="retry" class="secondary" type="button" hidden>Retry</button>
@@ -44,6 +58,10 @@
     const retry = document.getElementById('retry');
     const reset = document.getElementById('reset');
     const error = document.getElementById('error');
+    const titlebar = document.getElementById('titlebar');
+    const minimize = document.getElementById('minimize');
+    const maximize = document.getElementById('maximize');
+    const close = document.getElementById('close');
     const pending = new Map();
     let lastUserGestureAt = null;
 
@@ -80,6 +98,12 @@
       throw new Error('Unsupported bootstrap action.');
     }
 
+    function callWindow(action) {
+      const bridge = window.wheelMakerBootstrap;
+      if (typeof bridge?.[action] !== 'function') return Promise.reject(new Error('Window control unavailable.'));
+      return bridge[action]();
+    }
+
     function render(state) {
       input.value = state.baseUrl || '';
       error.textContent = state.error || '';
@@ -97,6 +121,18 @@
     });
     retry.addEventListener('click', async () => render(await callBootstrap('bootstrap.retry')));
     reset.addEventListener('click', async () => render(await callBootstrap('bootstrap.reset')));
+    titlebar.addEventListener('mousedown', event => {
+      if (event.button !== 0 || (event.target instanceof Element && event.target.closest('button'))) return;
+      event.preventDefault();
+      void callWindow('startDrag');
+    });
+    titlebar.addEventListener('dblclick', event => {
+      if (event.target instanceof Element && event.target.closest('button')) return;
+      void callWindow('toggleMaximize');
+    });
+    minimize.addEventListener('click', () => void callWindow('minimize'));
+    maximize.addEventListener('click', () => void callWindow('toggleMaximize'));
+    close.addEventListener('click', () => void callWindow('close'));
     window.addEventListener('DOMContentLoaded', async () => render(await callBootstrap('bootstrap.getState')));
   </script>
 </body>

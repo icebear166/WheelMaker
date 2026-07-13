@@ -29,13 +29,15 @@ type persistedWebSessionFile struct {
 }
 
 type persistedDeviceSession struct {
-	DeviceID   string    `json:"deviceId"`
-	Digest     string    `json:"digest"`
-	DeviceName string    `json:"deviceName"`
-	BasePath   string    `json:"basePath"`
-	CreatedAt  time.Time `json:"createdAt"`
-	LastSeenAt time.Time `json:"lastSeenAt"`
-	ExpiresAt  time.Time `json:"expiresAt"`
+	DeviceID          string    `json:"deviceId"`
+	Digest            string    `json:"digest"`
+	DeviceName        string    `json:"deviceName"`
+	BasePath          string    `json:"basePath"`
+	LastLoginIP       string    `json:"lastLoginIp,omitempty"`
+	LastLoginLocation string    `json:"lastLoginLocation,omitempty"`
+	CreatedAt         time.Time `json:"createdAt"`
+	LastSeenAt        time.Time `json:"lastSeenAt"`
+	ExpiresAt         time.Time `json:"expiresAt"`
 }
 
 func (s *webSessionStore) Load() error {
@@ -113,13 +115,15 @@ func (s *webSessionStore) persistLocked(now time.Time) error {
 	records := make([]persistedDeviceSession, 0, len(s.sessions))
 	for _, session := range s.sessions {
 		records = append(records, persistedDeviceSession{
-			DeviceID:   session.DeviceID,
-			Digest:     base64.RawURLEncoding.EncodeToString(session.Digest[:]),
-			DeviceName: session.DeviceName,
-			BasePath:   session.BasePath,
-			CreatedAt:  session.CreatedAt,
-			LastSeenAt: session.LastSeenAt,
-			ExpiresAt:  session.ExpiresAt,
+			DeviceID:          session.DeviceID,
+			Digest:            base64.RawURLEncoding.EncodeToString(session.Digest[:]),
+			DeviceName:        session.DeviceName,
+			BasePath:          session.BasePath,
+			LastLoginIP:       session.LastLoginIP,
+			LastLoginLocation: session.LastLoginLocation,
+			CreatedAt:         session.CreatedAt,
+			LastSeenAt:        session.LastSeenAt,
+			ExpiresAt:         session.ExpiresAt,
 		})
 	}
 	sort.Slice(records, func(i, j int) bool {
@@ -190,13 +194,15 @@ func decodePersistedDeviceSession(record persistedDeviceSession) (webSession, er
 	var digest [sha256.Size]byte
 	copy(digest[:], digestBytes)
 	return webSession{
-		DeviceID:   record.DeviceID,
-		Digest:     digest,
-		DeviceName: record.DeviceName,
-		BasePath:   record.BasePath,
-		CreatedAt:  record.CreatedAt,
-		LastSeenAt: record.LastSeenAt,
-		ExpiresAt:  record.ExpiresAt,
+		DeviceID:          record.DeviceID,
+		Digest:            digest,
+		DeviceName:        record.DeviceName,
+		BasePath:          record.BasePath,
+		LastLoginIP:       record.LastLoginIP,
+		LastLoginLocation: record.LastLoginLocation,
+		CreatedAt:         record.CreatedAt,
+		LastSeenAt:        record.LastSeenAt,
+		ExpiresAt:         record.ExpiresAt,
 	}, nil
 }
 

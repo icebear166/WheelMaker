@@ -66,7 +66,11 @@ func (s *Server) handleWebLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	s.loginLimiter.Success(source)
 	basePath := requestRegistryBasePath(r)
-	raw, csrf, err := s.webSessions.Create(payload.DeviceName, basePath)
+	location := ""
+	if s.ipLocation != nil {
+		location = s.ipLocation.ResolveIPLocation(r.Context(), source)
+	}
+	raw, csrf, err := s.webSessions.CreateWithLoginMetadata(payload.DeviceName, basePath, source, location)
 	if err != nil {
 		http.Error(w, "create session", http.StatusInternalServerError)
 		return
@@ -154,13 +158,15 @@ func decodeWebLoginPayload(w http.ResponseWriter, r *http.Request) (webLoginPayl
 
 func webSessionPublicView(session webSession, current bool) map[string]any {
 	return map[string]any{
-		"deviceId":   session.DeviceID,
-		"deviceName": session.DeviceName,
-		"basePath":   session.BasePath,
-		"createdAt":  session.CreatedAt,
-		"lastSeenAt": session.LastSeenAt,
-		"expiresAt":  session.ExpiresAt,
-		"current":    current,
+		"deviceId":          session.DeviceID,
+		"deviceName":        session.DeviceName,
+		"basePath":          session.BasePath,
+		"lastLoginIp":       session.LastLoginIP,
+		"lastLoginLocation": session.LastLoginLocation,
+		"createdAt":         session.CreatedAt,
+		"lastSeenAt":        session.LastSeenAt,
+		"expiresAt":         session.ExpiresAt,
+		"current":           current,
 	}
 }
 

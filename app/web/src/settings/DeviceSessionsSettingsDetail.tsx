@@ -45,6 +45,8 @@ export function DeviceSessionsSettingsDetail({
             <span className="settings-metadata-title">{session.deviceName}</span>
             {session.current ? <span className="agent-package-status">Current</span> : null}
           </div>
+          <div className="settings-metadata-line">Last login IP: {session.lastLoginIp || 'Unknown'}</div>
+          <div className="settings-metadata-line">Location: {session.lastLoginLocation || 'Unknown'}</div>
           <div className="settings-metadata-line">Created: {formatDate(session.createdAt)}</div>
           <div className="settings-metadata-line">Last seen: {formatDate(session.lastSeenAt)}</div>
           <button type="button" disabled={loading} onClick={() => revoke(session).catch(() => undefined)}>
