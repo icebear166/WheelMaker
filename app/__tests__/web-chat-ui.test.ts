@@ -958,8 +958,8 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className="chat-composer-input-row"');
     expect(mainTsx).toContain("const chatComposerStopTriggerClassName = `chat-tool-button chat-composer-stop-trigger${selectedChatPromptRunning ? ' active' : ''}${selectedChatPromptCancelling ? ' cancelling' : ''}`;");
     expect(mainTsx).toContain('className={chatComposerStopTriggerClassName}');
-    expect(mainTsx).toContain('title="Skills"');
-    expect(mainTsx).toContain('aria-label="Open skills"');
+    expect(mainTsx).toContain('title="Commands and skills"');
+    expect(mainTsx).toContain('aria-label="Open commands and skills"');
     expect(mainTsx).toContain('className="chat-tool-button chat-slash-button"');
     expect(mainTsx).not.toContain('className="chat-composer-skill-trigger chat-slash-button"');
     expect(mainTsx).toContain('className="codicon codicon-terminal" aria-hidden="true"');
@@ -2367,7 +2367,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('const selectedChatSubmitPending = selectedChatEncodedKey');
     expect(mainTsx).toContain('const chatSendDisabled = selectedChatSubmitPending || chatAttachmentUploadPending;');
     expect(mainTsx).toContain('enqueueSelectedChatPrompt(');
-    expect(mainTsx).toContain('drainNextQueuedChatPrompt(selectedChatEncodedKey)');
+    expect(mainTsx).toContain('drainNextQueuedChatItem(selectedChatEncodedKey)');
     expect(mainTsx).toContain('cancelQueuedPrompt(selectedChatEncodedKey, queuedPrompt.id)');
     expect(mainTsx).toContain('prioritizeQueuedPrompt(selectedChatEncodedKey, queuedPrompt.id)');
     expect(mainTsx).toContain('readOnly={selectedChatSubmitPending}');
@@ -2492,5 +2492,37 @@ describe('Android deferred native action ordering', () => {
     expect(startModeIndex).toBeLessThan(speechStartIndex);
     expect(nativeSpeechBranch).toContain("if (credentialStartMode === 'sync') {");
     expect(nativeSpeechBranch).toContain("if (!connectedRef.current) await connect({silentReconnect: true});");
+  });
+});
+
+describe('workspace session actions', () => {
+  test('wires a unified command and skill menu with native action dispatch', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+
+    expect(mainTsx).toContain("from '../chat/session/chatSessionActions';");
+    expect(mainTsx).toContain('buildChatSessionActionOptions(chatSlashSkills, selectedChatSession?.sessionActions)');
+    expect(mainTsx).toContain("command.behavior === 'invoke'");
+    expect(mainTsx).toContain('option.kind === \'skill\'');
+    expect(mainTsx).toContain('option.icon');
+    expect(mainTsx).toContain('option.disabledReason');
+    expect(mainTsx).toContain('service.statusProjectSession(');
+    expect(mainTsx).toContain('service.compactProjectSession(');
+    expect(mainTsx).toContain('shiftNextQueuedChatItem(');
+    expect(mainTsx).toContain('<AppSessionStatusDialog');
+    expect(mainTsx).not.toContain("agentType === 'codex'");
+  });
+
+  test('intercepts typed actions before attachment upload and clears queue on disconnect', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const sendStart = mainTsx.indexOf('const sendChatMessage = async');
+    const parseIndex = mainTsx.indexOf('resolveStandaloneSessionAction(', sendStart);
+    const uploadIndex = mainTsx.indexOf('uploadChatAttachmentsForSend(', sendStart);
+
+    expect(parseIndex).toBeGreaterThan(sendStart);
+    expect(parseIndex).toBeLessThan(uploadIndex);
+    expect(mainTsx).toContain('chatQueuedPromptsByKeyRef.current = {};');
+    expect(mainTsx).toContain('setChatQueuedPromptsByKey({});');
   });
 });

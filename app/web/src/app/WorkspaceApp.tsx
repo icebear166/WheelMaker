@@ -39,6 +39,7 @@ import {getNativeRuntimeBridge, isNativeShellHost} from '../platform/native/nati
 import {
   AppConfirmDialog,
   AppRenameDialog,
+  AppSessionStatusDialog,
   type ConfirmTarget,
   type RenameSessionTarget,
 } from '../shell/AppDialogs';
@@ -76,14 +77,25 @@ import {
 import {
   buildQueuedPromptMessage,
   cancelQueuedChatPrompt,
+  enqueueChatCompact,
+  enqueueChatItemToFront,
   enqueueChatPrompt,
   moveQueuedChatPromptToFront,
   moveQueuedChatPrompts,
   queuedChatPrompts,
-  shiftNextQueuedChatPrompt,
+  shiftNextQueuedChatItem,
+  type QueuedChatCompact,
   type QueuedChatPrompt,
   type QueuedChatPromptsByKey,
 } from '../chat/session/chatPromptQueue';
+import {
+  buildChatSessionActionOptions,
+  filterChatSessionActionOptions,
+  removeActiveSlashQuery,
+  resolveStandaloneSessionAction,
+  type ChatSessionActionKind,
+  type ChatSessionSlashOption,
+} from '../chat/session/chatSessionActions';
 import {
   buildMobileChatQuickSwitchSections,
   buildRecentChatSessionProjectSections,
@@ -490,6 +502,8 @@ import type {
   RegistrySessionPromptArtifact,
   RegistrySessionPromptArtifactFile,
   RegistrySessionSummary,
+  RegistrySessionStatusResult,
+  RegistrySessionUsage,
   RegistrySessionTurn,
   RegistryFsEntry,
   RegistryFsInfo,
@@ -654,9 +668,13 @@ type PendingChatPrompt = {
   status: 'confirming' | 'undelivered';
   errorMessage?: string;
 };
-type ChatSlashCommandOption = {
-  name: string;
-  description?: string;
+type SessionStatusDialogState = {
+  projectId: string;
+  sessionId: string;
+  cachedUsage?: RegistrySessionUsage;
+  status: RegistrySessionStatusResult | null;
+  loading: boolean;
+  error: string;
 };
 type FloatingDragState = {
   active: boolean;
@@ -1291,50 +1309,6 @@ function projectHubId(project: Pick<RegistryProject, 'hubId'>): string {
   return project.hubId || 'local';
 }
 
-function normalizeChatSlashCommandName(name: string): string {
-  const normalized = name.trim();
-  if (!normalized) {
-    return '';
-  }
-  return normalized.startsWith('/') ? normalized : `/${normalized}`;
-}
-
-function normalizeChatSlashCommands(skills?: string[]): ChatSlashCommandOption[] {
-  const merged = new Map<string, ChatSlashCommandOption>();
-  for (const skill of skills ?? []) {
-    const normalizedSkill = (skill || '').trim();
-    if (!normalizedSkill) {
-      continue;
-    }
-    const name = normalizeChatSlashCommandName(normalizedSkill);
-    if (!name) {
-      continue;
-    }
-    const key = name.toLowerCase();
-    if (merged.has(key)) {
-      continue;
-    }
-    merged.set(key, { name });
-  }
-  return Array.from(merged.values()).sort((left, right) => left.name.localeCompare(right.name));
-}
-
-function filterChatSlashCommands(
-  options: ChatSlashCommandOption[],
-  query: string | null,
-): ChatSlashCommandOption[] {
-  if (query === null) {
-    return [];
-  }
-  if (!query) {
-    return options;
-  }
-  return options.filter(option =>
-    option.name.toLowerCase().includes(query) ||
-    (option.description || '').toLowerCase().includes(query),
-  );
-}
-
 function sortChatSessions(items: RegistryChatSession[]): RegistryChatSession[] {
   return [...items].sort((a, b) => compareUpdatedAtDesc(a.updatedAt || '', b.updatedAt || ''));
 }
@@ -1370,6 +1344,9 @@ function mergeChatSession(
     usage:
       next.usage ??
       (existing?.usage ? { ...existing.usage } : undefined),
+    sessionActions:
+      next.sessionActions ??
+      existing?.sessionActions,
   };
   const filtered = list.filter(item => item.sessionId !== next.sessionId);
   return sortChatSessions([merged, ...filtered]);
@@ -1620,6 +1597,9 @@ function shouldRenderChatTurn(
       groupPromptAttachmentBlocks([message]).length > 0;
   }
   if (message.method === 'prompt_done') {
+    return true;
+  }
+  if (message.method === 'session_operation') {
     return true;
   }
   if (message.method === 'agent_plan') {
@@ -3276,6 +3256,7 @@ export function App() {
   const [renameError, setRenameError] = useState('');
   const [confirmTarget, setConfirmTarget] = useState<ConfirmTarget | null>(null);
   const [confirmError, setConfirmError] = useState('');
+  const [sessionStatusDialog, setSessionStatusDialog] = useState<SessionStatusDialogState | null>(null);
   const [chatConfigUpdatingKey, setChatConfigUpdatingKey] = useState('');
   const [chatComposerText, setChatComposerText] = useState('');
   const [chatComposerTokens, setChatComposerTokens] = useState<ChatComposerToken[]>([]);
@@ -3293,6 +3274,7 @@ export function App() {
   const [chatComposerDrafts, setChatComposerDrafts] = useState<Record<string, ChatComposerDraft>>({});
   const [chatPendingPromptsByKey, setChatPendingPromptsByKey] = useState<Record<string, PendingChatPrompt>>({});
   const [chatQueuedPromptsByKey, setChatQueuedPromptsByKey] = useState<QueuedChatPromptsByKey>({});
+  const [chatCompactingByKey, setChatCompactingByKey] = useState<Record<string, boolean>>({});
   const [chatCancellingRuntimeKey, setChatCancellingRuntimeKey] = useState('');
   const [markdownImageExportRequest, setMarkdownImageExportRequest] = useState<MarkdownImageExportRequest | null>(null);
   const [exportingMarkdownImageTurnIndex, setExportingMarkdownImageTurnIndex] = useState<number | null>(null);
@@ -3305,6 +3287,8 @@ export function App() {
   const chatComposerDraftsRef = useRef<Record<string, ChatComposerDraft>>({});
   const chatPendingPromptsByKeyRef = useRef<Record<string, PendingChatPrompt>>({});
   const chatQueuedPromptsByKeyRef = useRef<QueuedChatPromptsByKey>({});
+  const chatCompactingByKeyRef = useRef<Record<string, boolean>>({});
+  const terminalCompactionOperationIdsRef = useRef<Set<string>>(new Set());
   const chatSubmittingByKeyRef = useRef<Record<string, boolean>>({});
   const chatPendingPromptTimersRef = useRef<Record<string, number>>({});
   const chatDraftGenerationRef = useRef<Record<string, number>>({});
@@ -3610,12 +3594,12 @@ export function App() {
   }, [projects, projectId]);
 
   const chatSlashCommands = useMemo(
-    () => normalizeChatSlashCommands(chatSlashSkills),
-    [chatSlashSkills],
+    () => buildChatSessionActionOptions(chatSlashSkills, selectedChatSession?.sessionActions),
+    [chatSlashSkills, selectedChatSession?.sessionActions],
   );
 
   const chatSlashCommandOptions = useMemo(
-    () => filterChatSlashCommands(chatSlashCommands, chatSlashQuery),
+    () => filterChatSessionActionOptions(chatSlashCommands, chatSlashQuery),
     [chatSlashCommands, chatSlashQuery],
   );
 
@@ -4203,12 +4187,30 @@ export function App() {
   }, []);
 
   const applyChatSlashCommand = useCallback(
-    (command: ChatSlashCommandOption) => {
+    (command: ChatSessionSlashOption) => {
       setChatPromptMenuOpen(false);
       setChatFileMentionMenuOpen(false);
       setChatAttachmentTrayOpen(false);
       setChatConfigMenuOptionId('');
       setChatConfigOverflowOpen(false);
+      if (command.behavior === 'invoke') {
+        if (!command.enabled || !command.action) {
+          setError(command.disabledReason || 'This action is unavailable.');
+          return;
+        }
+        const next = removeActiveSlashQuery(
+          chatComposerTextRef.current,
+          chatComposerTextCursorRef.current,
+        );
+        updateChatComposerText(next.text, next.cursor);
+        invokeChatSessionAction(command.action).catch(err => {
+          setError(err instanceof Error ? err.message : String(err));
+        });
+        window.requestAnimationFrame(() => {
+          chatRichComposerRef.current?.focus();
+        });
+        return;
+      }
       chatRichComposerRef.current?.insertSkill({
         command: command.name,
         label: chatSlashCommandLabel(command.name),
@@ -4217,7 +4219,7 @@ export function App() {
         chatRichComposerRef.current?.focus();
       });
     },
-    [setChatConfigOverflowOpen],
+    [setChatConfigOverflowOpen, updateChatComposerText],
   );
 
   const openChatPromptMenu = useCallback(() => {
@@ -10256,6 +10258,7 @@ export function App() {
   };
 
   const makeQueuedPromptId = () => `queued-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const makeQueuedCompactId = () => `compact-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
   const setQueuedPrompts = useCallback((updater: (current: QueuedChatPromptsByKey) => QueuedChatPromptsByKey) => {
     setChatQueuedPromptsByKey(current => {
@@ -10268,6 +10271,128 @@ export function App() {
   const enqueueSelectedChatPrompt = useCallback((runtimeKey: string, prompt: QueuedChatPrompt) => {
     setQueuedPrompts(current => enqueueChatPrompt(current, runtimeKey, prompt));
   }, [setQueuedPrompts]);
+
+  const enqueueSelectedChatCompact = (runtimeKey: string, sessionId: string) => {
+    const compact: QueuedChatCompact = {
+      kind: 'compact',
+      id: makeQueuedCompactId(),
+      sessionId,
+      createdAt: new Date().toISOString(),
+    };
+    setQueuedPrompts(current => enqueueChatCompact(current, runtimeKey, compact));
+  };
+
+  const setRuntimeCompacting = (runtimeKey: string, compacting: boolean) => {
+    const next = {...chatCompactingByKeyRef.current};
+    if (compacting) {
+      next[runtimeKey] = true;
+    } else {
+      delete next[runtimeKey];
+    }
+    chatCompactingByKeyRef.current = next;
+    setChatCompactingByKey(next);
+  };
+
+  const sessionActionCapability = (
+    targetProjectId: string,
+    sessionId: string,
+    action: ChatSessionActionKind,
+  ) => knownChatSessionsForProject(targetProjectId)
+    .find(session => session.sessionId === sessionId)
+    ?.sessionActions?.[action];
+
+  const runtimeSessionIsBusy = (targetProjectId: string, sessionId: string, runtimeKey: string) =>
+    chatSubmittingByKeyRef.current[runtimeKey] === true ||
+    chatCompactingByKeyRef.current[runtimeKey] === true ||
+    knownChatSessionsForProject(targetProjectId).some(session =>
+      session.sessionId === sessionId && session.running === true,
+    );
+
+  const isSessionBusyError = (errorValue: unknown) => {
+    const message = errorValue instanceof Error ? errorValue.message : String(errorValue);
+    const normalized = message.toLowerCase();
+    return normalized.includes('busy') || normalized.includes('running');
+  };
+
+  const requestSessionCompaction = async (
+    targetProjectId: string,
+    sessionId: string,
+    runtimeKey: string,
+  ) => {
+    const result = await service.compactProjectSession(targetProjectId, sessionId);
+    if (!result.ok || !result.accepted || !result.operationId) {
+      throw new Error('session.compact returned accepted=false');
+    }
+    if (!terminalCompactionOperationIdsRef.current.delete(result.operationId)) {
+      setRuntimeCompacting(runtimeKey, true);
+    }
+  };
+
+  const refreshSessionStatusDialog = async (targetProjectId: string, sessionId: string) => {
+    setSessionStatusDialog(current => current?.projectId === targetProjectId && current.sessionId === sessionId
+      ? {...current, loading: true, error: ''}
+      : current);
+    try {
+      const status = await service.statusProjectSession(targetProjectId, sessionId);
+      setSessionStatusDialog(current => current?.projectId === targetProjectId && current.sessionId === sessionId
+        ? {...current, status, loading: false, error: ''}
+        : current);
+    } catch (errorValue) {
+      const message = errorValue instanceof Error ? errorValue.message : String(errorValue);
+      setSessionStatusDialog(current => current?.projectId === targetProjectId && current.sessionId === sessionId
+        ? {...current, loading: false, error: message}
+        : current);
+    }
+  };
+
+  async function invokeChatSessionAction(action: ChatSessionActionKind): Promise<void> {
+    const selectedKey = selectedChatKeyRef.current;
+    if (!selectedKey || !selectedKey.sessionId || isDraftChatSessionId(selectedKey.sessionId)) {
+      setError('Select a created chat session first.');
+      return;
+    }
+    const capability = sessionActionCapability(selectedKey.projectId, selectedKey.sessionId, action);
+    if (!capability?.supported) {
+      setError(capability?.reason || 'Current Agent does not support this action.');
+      return;
+    }
+    const runtimeKey = buildChatRuntimeKey(selectedKey.projectId, selectedKey.sessionId);
+    if (action === 'status') {
+      const session = knownChatSessionsForProject(selectedKey.projectId)
+        .find(item => item.sessionId === selectedKey.sessionId);
+      setSessionStatusDialog({
+        projectId: selectedKey.projectId,
+        sessionId: selectedKey.sessionId,
+        cachedUsage: session?.usage,
+        status: null,
+        loading: true,
+        error: '',
+      });
+      await refreshSessionStatusDialog(selectedKey.projectId, selectedKey.sessionId);
+      return;
+    }
+    if (
+      runtimeSessionIsBusy(selectedKey.projectId, selectedKey.sessionId, runtimeKey) ||
+      (chatQueuedPromptsByKeyRef.current[runtimeKey] ?? []).length > 0
+    ) {
+      enqueueSelectedChatCompact(runtimeKey, selectedKey.sessionId);
+      setToastMessage('Context compaction queued.');
+      return;
+    }
+    setChatSubmittingForRuntimeKey(runtimeKey, true);
+    try {
+      await requestSessionCompaction(selectedKey.projectId, selectedKey.sessionId, runtimeKey);
+    } catch (errorValue) {
+      if (isSessionBusyError(errorValue)) {
+        enqueueSelectedChatCompact(runtimeKey, selectedKey.sessionId);
+        setToastMessage('Context compaction queued.');
+        return;
+      }
+      throw errorValue;
+    } finally {
+      setChatSubmittingForRuntimeKey(runtimeKey, false);
+    }
+  }
 
   const cancelQueuedPrompt = useCallback((runtimeKey: string, promptId: string) => {
     setQueuedPrompts(current => cancelQueuedChatPrompt(current, runtimeKey, promptId));
@@ -10913,6 +11038,20 @@ export function App() {
       setError('Select or create a chat session first.');
       return;
     }
+    if (!options.blocksOverride) {
+      const nativeAction = resolveStandaloneSessionAction(trimmedText, sourceAttachments.length);
+      if (nativeAction?.kind === 'invalid') {
+        setError(`${nativeAction.command} must be used without arguments or attachments.`);
+        return;
+      }
+      if (nativeAction) {
+        if (!options.preserveComposer) {
+          resetChatComposerDraft(currentChatDraftKeyRef.current);
+        }
+        await invokeChatSessionAction(nativeAction.kind);
+        return;
+      }
+    }
     let runtimeKey = buildChatRuntimeKey(selectedProjectId, sessionId);
     if (chatSubmittingByKeyRef.current[runtimeKey] === true) {
       return;
@@ -10956,7 +11095,7 @@ export function App() {
         setChatSubmittingForRuntimeKey(submittingRuntimeKey, false);
         return;
       }
-      if (selectedChatPromptRunning) {
+      if (runtimeSessionIsBusy(selectedProjectId, sessionId, runtimeKey)) {
         const queuedPrompt: QueuedChatPrompt = {
           kind: 'prompt',
           id: makeQueuedPromptId(),
@@ -11042,17 +11181,33 @@ export function App() {
     sendDirectChatText(replyText).catch(() => undefined);
   }, [sendDirectChatText]);
 
-  const drainNextQueuedChatPrompt = (runtimeKey: string) => {
+  const drainNextQueuedChatItem = (runtimeKey: string) => {
     const selectedKey = selectedChatKeyRef.current;
     if (!selectedKey) return;
     if (buildChatRuntimeKey(selectedKey.projectId, selectedKey.sessionId) !== runtimeKey) return;
-    if (chatSubmittingByKeyRef.current[runtimeKey] === true) return;
-    const result = shiftNextQueuedChatPrompt(chatQueuedPromptsByKeyRef.current, runtimeKey);
-    if (!result.prompt) return;
+    if (runtimeSessionIsBusy(selectedKey.projectId, selectedKey.sessionId, runtimeKey)) return;
+    const result = shiftNextQueuedChatItem(chatQueuedPromptsByKeyRef.current, runtimeKey);
+    if (!result.item) return;
+    if (result.item.kind === 'compact') {
+      const compact = result.item;
+      setChatSubmittingForRuntimeKey(runtimeKey, true);
+      setQueuedPrompts(() => result.state);
+      requestSessionCompaction(selectedKey.projectId, compact.sessionId, runtimeKey)
+        .catch(errorValue => {
+          if (isSessionBusyError(errorValue)) {
+            setQueuedPrompts(current => enqueueChatItemToFront(current, runtimeKey, compact));
+            return;
+          }
+          setError(errorValue instanceof Error ? errorValue.message : String(errorValue));
+        })
+        .finally(() => setChatSubmittingForRuntimeKey(runtimeKey, false));
+      return;
+    }
+    const prompt = result.item;
     setQueuedPrompts(() => result.state);
     sendChatMessage({
-      textOverride: result.prompt.text,
-      blocksOverride: result.prompt.blocks,
+      textOverride: prompt.text,
+      blocksOverride: prompt.blocks,
       attachmentsOverride: [],
       preserveComposer: true,
     }).catch(err => setError(err instanceof Error ? err.message : String(err)));
@@ -16215,6 +16370,19 @@ export function App() {
         }
         const sessionId = message.sessionId;
         const runtimeKey = buildChatRuntimeKey(eventProjectId, sessionId);
+        if (message.method === 'session_operation') {
+          const operationId = typeof message.param.operationId === 'string' ? message.param.operationId : '';
+          const operationType = typeof message.param.type === 'string' ? message.param.type : '';
+          const operationStatus = typeof message.param.status === 'string' ? message.param.status : '';
+          if (operationType === 'compact' && operationId) {
+            if (operationStatus === 'queued' || operationStatus === 'started') {
+              setRuntimeCompacting(runtimeKey, true);
+            } else if (operationStatus === 'completed' || operationStatus === 'failed') {
+              terminalCompactionOperationIdsRef.current.add(operationId);
+              setRuntimeCompacting(runtimeKey, false);
+            }
+          }
+        }
         const isSelectedSession = encodeChatSessionKey(selectedChatKeyRef.current) === runtimeKey;
         const knownProjectSessions = projectSessionsByProjectIdRef.current[eventProjectId] ?? [];
         const knownSession = knownProjectSessions.some(session => session.sessionId === sessionId);
@@ -16283,6 +16451,11 @@ export function App() {
     const unsubscribeClose = service.onClose(() => {
       connectedRef.current = false;
       setConnected(false);
+      chatQueuedPromptsByKeyRef.current = {};
+      setChatQueuedPromptsByKey({});
+      chatCompactingByKeyRef.current = {};
+      setChatCompactingByKey({});
+      terminalCompactionOperationIdsRef.current.clear();
       const terminalHubIds = Array.from(new Set(Object.values(terminalSyncRef.current.terminals).map(item => item.hubId)));
       commitTerminalSync(markTerminalsUnavailable(terminalSyncRef.current, terminalHubIds));
       if (isVoiceInputActive()) {
@@ -18051,33 +18224,50 @@ export function App() {
     isPromptStartMessage(message) &&
     resolvePromptTurnStatus(selectedFullChatMessages, message) === 'responding',
   );
+  const selectedChatCompactionRunning = useMemo(() => {
+    if (selectedChatEncodedKey && chatCompactingByKey[selectedChatEncodedKey] === true) {
+      return true;
+    }
+    const operationStates = new Map<string, string>();
+    for (const message of selectedFullChatMessages) {
+      if (message.method !== 'session_operation') continue;
+      const operationId = typeof message.param.operationId === 'string' ? message.param.operationId : '';
+      const operationType = typeof message.param.type === 'string' ? message.param.type : '';
+      const status = typeof message.param.status === 'string' ? message.param.status : '';
+      if (operationId && operationType === 'compact') {
+        operationStates.set(operationId, status);
+      }
+    }
+    return Array.from(operationStates.values()).some(status => status === 'queued' || status === 'started');
+  }, [chatCompactingByKey, selectedChatEncodedKey, selectedFullChatMessages]);
   const selectedChatPromptRunning =
     !!selectedChatEncodedKey &&
     !selectedPendingPrompt &&
     (
-      selectedChatSession?.running === true ||
+      (selectedChatSession?.running === true && !selectedChatCompactionRunning) ||
       selectedChatHasOpenPromptTurn
     );
+  const selectedChatExecutionRunning = selectedChatPromptRunning || selectedChatCompactionRunning;
   const chatSendDisabled = selectedChatSubmitPending || chatAttachmentUploadPending;
   const selectedChatPromptCancelling =
     !!selectedChatEncodedKey && chatCancellingRuntimeKey === selectedChatEncodedKey;
   const chatComposerStopTriggerClassName = `chat-tool-button chat-composer-stop-trigger${selectedChatPromptRunning ? ' active' : ''}${selectedChatPromptCancelling ? ' cancelling' : ''}`;
 
   useEffect(() => {
-    if (selectedChatPromptRunning) {
+    if (selectedChatExecutionRunning) {
       setChatAttachmentTrayOpen(false);
     }
-  }, [selectedChatPromptRunning]);
+  }, [selectedChatExecutionRunning]);
 
   useEffect(() => {
-    if (!selectedChatEncodedKey || selectedChatPromptRunning || selectedChatSubmitPending) {
+    if (!selectedChatEncodedKey || selectedChatExecutionRunning || selectedChatSubmitPending) {
       return;
     }
     if ((chatQueuedPromptsByKeyRef.current[selectedChatEncodedKey] ?? []).length === 0) {
       return;
     }
-    drainNextQueuedChatPrompt(selectedChatEncodedKey);
-  }, [selectedChatEncodedKey, selectedChatPromptRunning, selectedChatSubmitPending, chatMessages.length, chatQueuedPromptsByKey]);
+    drainNextQueuedChatItem(selectedChatEncodedKey);
+  }, [selectedChatEncodedKey, selectedChatExecutionRunning, selectedChatSubmitPending, chatMessages.length, chatQueuedPromptsByKey]);
 
   const latestSelectableAssistantReply = useMemo(() => {
     if (selectedPendingPrompt) {
@@ -18985,7 +19175,7 @@ export function App() {
                     onTokensChange={updateChatComposerTokens}
                     readOnly={selectedChatSubmitPending}
                     enterKeyHint={isWide ? undefined : mobileEnterKeyBehavior === 'send' ? 'send' : 'enter'}
-                    slashCommands={chatSlashCommands.map(command => ({
+                    slashCommands={chatSlashCommands.filter(option => option.kind === 'skill').map(command => ({
                       command: command.name,
                       label: chatSlashCommandLabel(command.name),
                     }))}
@@ -19220,23 +19410,27 @@ export function App() {
                 </div>
               ) : null}
               {chatSlashMenuVisible ? (
-                <div ref={chatSlashMenuRef} className="chat-slash-menu" role="listbox" aria-label="Available skills">
+                <div ref={chatSlashMenuRef} className="chat-slash-menu" role="listbox" aria-label="Available commands and skills">
                   {chatSlashMenuOptions.map((option, index) => {
                     const selected = index === chatSlashActiveIndex;
                     return (
                       <button
                         key={option.name}
                         type="button"
-                        className={`chat-slash-item${selected ? ' active' : ''}`}
+                        className={`chat-slash-item ${option.kind}${selected ? ' active' : ''}${option.enabled ? '' : ' disabled'}`}
                         role="option"
                         aria-selected={selected}
+                        aria-disabled={!option.enabled}
+                        disabled={!option.enabled}
+                        title={option.enabled ? option.description : option.disabledReason}
                         onMouseEnter={() => setChatSlashActiveIndex(index)}
                         onMouseDown={event => event.preventDefault()}
                         onClick={() => applyChatSlashCommand(option)}
                       >
+                        <span className={`codicon ${option.icon} chat-slash-icon`} aria-hidden="true" />
                         <span className="chat-slash-name">{option.name}</span>
-                        {option.description ? (
-                          <span className="chat-slash-description">{option.description}</span>
+                        {option.description || option.disabledReason ? (
+                          <span className="chat-slash-description">{option.enabled ? option.description : option.disabledReason}</span>
                         ) : null}
                       </button>
                     );
@@ -19259,8 +19453,8 @@ export function App() {
                     className="chat-tool-button chat-slash-button"
                     onPointerDown={event => event.preventDefault()}
                     onClick={openChatPromptMenu}
-                    title="Skills"
-                    aria-label="Open skills"
+                    title="Commands and skills"
+                    aria-label="Open commands and skills"
                     aria-haspopup="listbox"
                     aria-expanded={chatPromptMenuOpen}
                   >
@@ -21251,6 +21445,22 @@ export function App() {
       onSubmit={submitRenameTarget}
     />
   );
+  const appSessionStatusDialog = (
+    <AppSessionStatusDialog
+      sessionId={sessionStatusDialog?.sessionId ?? ''}
+      cachedUsage={sessionStatusDialog?.cachedUsage}
+      status={sessionStatusDialog?.status ?? null}
+      loading={sessionStatusDialog?.loading === true}
+      error={sessionStatusDialog?.error ?? ''}
+      onClose={() => setSessionStatusDialog(null)}
+      onRefresh={() => {
+        if (sessionStatusDialog) {
+          refreshSessionStatusDialog(sessionStatusDialog.projectId, sessionStatusDialog.sessionId)
+            .catch(() => undefined);
+        }
+      }}
+    />
+  );
   const registryDebugPanel = isWide && messageViewerEnabled ? (
     <React.Suspense fallback={null}>
       <RegistryDebugPanel
@@ -21323,6 +21533,7 @@ export function App() {
       ) : null}
       {appRenameDialog}
       {appConfirmDialog}
+      {appSessionStatusDialog}
     </>
   );
 }

@@ -4017,6 +4017,27 @@
   background: var(--hover);
 }
 
+.chat-slash-item.disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.chat-slash-item.disabled:hover,
+.chat-slash-item.disabled.active {
+  background: transparent;
+}
+
+.chat-slash-icon {
+  width: 16px;
+  flex: 0 0 16px;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+.chat-slash-item.command .chat-slash-icon {
+  color: color-mix(in srgb, var(--accent-primary) 76%, var(--text-secondary));
+}
+
 .chat-slash-name {
   font-size: 12px;
   font-weight: 600;
