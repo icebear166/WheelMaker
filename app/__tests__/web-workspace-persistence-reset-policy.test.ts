@@ -51,10 +51,15 @@ describe('workspace persistence reset policy', () => {
 
   test('scrubs only known legacy credential fields while preserving preferences', () => {
     const source = workspacePersistenceSource();
+    const cleanup = fs.readFileSync(
+      path.join(__dirname, '..', 'web', 'src', 'compatibility', 'browserCredentialCleanup.ts'),
+      'utf8',
+    );
 
-    expect(source).toContain('scrubLegacyBrowserCredentials');
-    expect(source).toContain("'deepseekApiKey'");
-    expect(source).toContain("'speechSettings'");
-    expect(source).toContain("'ttsSettings'");
+    expect(source).toContain('obsoleteBrowserCredentialRows');
+    expect(cleanup).toContain("'deepseekApiKey'");
+    expect(cleanup).toContain("'speechSettings'");
+    expect(cleanup).toContain("'ttsSettings'");
+    expect(cleanup).not.toContain('JSON.parse');
   });
 });

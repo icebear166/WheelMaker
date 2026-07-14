@@ -52,8 +52,6 @@ import type {
   RegistrySessionReadResponse,
   RegistrySessionSearchResponse,
   RegistrySessionSearchStatusResponse,
-  RegistrySecretStatus,
-  RegistrySecretUpdatePayload,
   RegistryResumableSession,
   RegistrySessionSummary,
   RegistrySkillCommandResponse,
@@ -814,11 +812,6 @@ export class RegistryWorkspaceService {
     return this.repository.startSpeech(payload);
   }
 
-  async getSecretStatus(): Promise<RegistrySecretStatus[]> {
-    if (!this.repository) throw new Error('session is not ready');
-    return this.repository.getSecretStatus();
-  }
-
   async listDeviceSessions(): Promise<RegistryDeviceSession[]> {
     if (!this.repository) throw new Error('session is not ready');
     return this.repository.listDeviceSessions();
@@ -832,11 +825,6 @@ export class RegistryWorkspaceService {
   async revokeAllDeviceSessions(): Promise<void> {
     if (!this.repository) throw new Error('session is not ready');
     await this.repository.revokeAllDeviceSessions();
-  }
-
-  async updateSecret(payload: RegistrySecretUpdatePayload): Promise<void> {
-    if (!this.repository) throw new Error('session is not ready');
-    await this.repository.updateSecret(payload);
   }
 
   async getServerSettings(): Promise<ServerSettings> {

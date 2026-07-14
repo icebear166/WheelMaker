@@ -84,20 +84,6 @@ export interface RegistryDeviceSession {
   current: boolean;
 }
 
-export type RegistrySecretKind = 'deepseek' | 'volcengineAsr' | 'mimoTts';
-
-export interface RegistrySecretStatus {
-  kind: RegistrySecretKind;
-  configured: boolean;
-  updatedAt?: string;
-}
-
-export interface RegistrySecretUpdatePayload {
-  kind: RegistrySecretKind;
-  action: 'set' | 'clear';
-  value?: string;
-}
-
 export type RegistryClientName = 'wheelmaker-web' | 'wheelmaker-desktop' | 'wheelmaker-android';
 
 export interface RegistryServerConfigUpdatePayload {

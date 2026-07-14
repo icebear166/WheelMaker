@@ -277,6 +277,7 @@ export type ChatTurnViewProps = {
   onCopyPromptDone?: () => void;
   onExportPromptDoneImage?: () => void;
   ttsState?: 'idle' | 'loading' | 'playing';
+  readAloudEnabled?: boolean;
   onReadAloud?: () => void;
   optionReplies?: ChatOptionReply[];
   optionRepliesDisabled?: boolean;
@@ -365,6 +366,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   onCopyPromptDone,
   onExportPromptDoneImage,
   ttsState = 'idle',
+  readAloudEnabled = false,
   onReadAloud,
   optionReplies = [],
   optionRepliesDisabled = false,
@@ -552,7 +554,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
               type="button"
               className="chat-prompt-action-button"
               onClick={() => onReadAloud?.()}
-              disabled={copyDisabled || ttsState === 'loading'}
+              disabled={copyDisabled || !readAloudEnabled || ttsState === 'loading'}
               aria-busy={ttsState === 'loading'}
               title={ttsState === 'playing' ? 'Stop reading' : 'Read aloud'}
               aria-label={ttsState === 'playing' ? 'Stop reading aloud' : 'Read response aloud'}

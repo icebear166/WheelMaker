@@ -62,9 +62,9 @@ describe('settings navigation model', () => {
     expect(surface).toContain('settings-workbench-panel');
     expect(surface).toContain('settings-workbench-nav');
     expect(surface).toContain('settings-workbench-detail-page');
-    expect(root).toContain("type SettingsSectionId = 'appearance' | 'chat' | 'connection' | 'code-display' | 'debug';");
+    expect(root).toContain("type SettingsSectionId = 'appearance' | 'chat' | 'server' | 'connection' | 'code-display' | 'debug';");
     expect(root).toContain('settings-section-${id}');
-    for (const id of ['appearance', 'chat', 'connection', 'code-display', 'debug']) {
+    for (const id of ['appearance', 'chat', 'server', 'connection', 'code-display', 'debug']) {
       expect(root).toContain(`id: '${id}'`);
     }
     expect(root.indexOf("id: 'appearance'")).toBeLessThan(root.indexOf("id: 'chat'"));

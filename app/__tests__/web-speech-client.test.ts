@@ -44,7 +44,7 @@ describe('web speech registry debug redaction', () => {
 
   test('speech settings and start DTO do not persist a Volcengine key', () => {
 	const root = path.resolve(__dirname, '..');
-	const settings = fs.readFileSync(path.join(root, 'web/src/features/speech/speechSettings.ts'), 'utf8');
+	const settings = fs.readFileSync(path.join(root, 'web/src/settings/serverSettings.ts'), 'utf8');
 	const types = fs.readFileSync(path.join(root, 'web/src/registry/registryTypes.ts'), 'utf8');
 	expect(settings).not.toContain('volcengineApiKey');
 	expect(types).not.toMatch(/RegistrySpeechStartPayload[\s\S]{0,300}apiKey/);

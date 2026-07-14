@@ -7,8 +7,6 @@ export const RegistryMethods = {
   SecuritySessionList: 'security.session.list',
   SecuritySessionRevoke: 'security.session.revoke',
   SecuritySessionRevokeAll: 'security.session.revokeAll',
-  SecuritySecretStatus: 'security.secret.status',
-  SecuritySecretUpdate: 'security.secret.update',
   ServerConfigGet: 'server.config.get',
   ServerConfigUpdate: 'server.config.update',
   ServerAndroidSpeechCredentialGet: 'server.androidSpeechCredential.get',

@@ -2,7 +2,7 @@ import type {
   RegistryTTSSynthesizePayload,
   RegistryTTSSynthesizeResponse,
 } from '../../registry/registryTypes';
-import type {TtsModelId, TtsVoiceId} from './ttsSettings';
+import type {TtsModelId, TtsVoiceId} from '../../settings/serverSettings';
 
 export type TtsRequestOptions = {
   model: TtsModelId;

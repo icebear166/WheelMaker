@@ -7,7 +7,7 @@ describe('backend TTS boundary', () => {
     const methods = fs.readFileSync(path.join(root, 'web/src/registry/registryMethods.ts'), 'utf8');
     const repository = fs.readFileSync(path.join(root, 'web/src/registry/RegistryRepository.ts'), 'utf8');
     const client = fs.readFileSync(path.join(root, 'web/src/features/tts/ttsClient.ts'), 'utf8');
-    const settings = fs.readFileSync(path.join(root, 'web/src/features/tts/ttsSettings.ts'), 'utf8');
+    const settings = fs.readFileSync(path.join(root, 'web/src/settings/serverSettings.ts'), 'utf8');
 
     expect(methods).toContain("TTSSynthesize: 'tts.synthesize'");
     expect(repository).toContain('synthesizeTTS');

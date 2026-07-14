@@ -46,15 +46,12 @@ function createFakeChatPersistence() {
 }
 
 describe('global selected chat session persistence', () => {
-  test('exposes the explicit legacy backend-secret migration lifecycle', async () => {
+  test('does not expose the removed legacy backend-secret migration lifecycle', () => {
     const persistence = createFakePersistence();
-    (persistence as any).getLegacyBackendSecrets = jest.fn(() => ({deepseek: 'legacy-key'}));
-    (persistence as any).clearLegacyBackendSecret = jest.fn().mockResolvedValue(undefined);
     const store = new WorkspaceStore(persistence as any);
 
-    expect(store.getLegacyBackendSecrets()).toEqual({deepseek: 'legacy-key'});
-    await store.clearLegacyBackendSecret('deepseek');
-    expect((persistence as any).clearLegacyBackendSecret).toHaveBeenCalledWith('deepseek');
+    expect((store as any).getLegacyBackendSecrets).toBeUndefined();
+    expect((store as any).clearLegacyBackendSecret).toBeUndefined();
   });
 
   test('remembers and restores one global project-scoped chat key', () => {

@@ -137,7 +137,7 @@ function rowValue(rows: Array<{k: string; v: string}>, key: string): unknown {
 }
 
 describe('workspace persistence safety', () => {
-  test('scrubs legacy secrets at startup while preserving non-sensitive speech settings', async () => {
+  test('deletes obsolete browser credential and server-settings rows at startup', async () => {
     const now = Date.now();
     const db = new MemoryWorkspaceDatabase({
       wm_global_kv: [
@@ -149,18 +149,9 @@ describe('workspace persistence safety', () => {
     const repository = new WorkspacePersistenceRepository(db as never);
     await repository.ready();
 
-    expect(repository.getLegacyBackendSecrets()).toEqual({});
     expect(rowValue(db.rows('wm_global_kv'), 'deepseekApiKey')).toBeUndefined();
-    expect(rowValue(db.rows('wm_global_kv'), 'speechSettings')).toEqual({
-      enabled: true,
-      provider: 'volcengine',
-      model: 'doubao-streaming-asr-2.0',
-    });
-    expect(rowValue(db.rows('wm_global_kv'), 'ttsSettings')).toEqual({
-      enabled: true,
-      model: 'mimo-v2.5-tts',
-      voice: 'Mia',
-    });
+    expect(rowValue(db.rows('wm_global_kv'), 'speechSettings')).toBeUndefined();
+    expect(rowValue(db.rows('wm_global_kv'), 'ttsSettings')).toBeUndefined();
   });
 
   test('evicts expired entries first and then the least recently used entries', () => {
@@ -214,7 +205,6 @@ describe('workspace persistence safety', () => {
     expect(repository.getGlobalState()).toMatchObject({
       themeMode: 'light',
     });
-    expect(repository.getLegacyBackendSecrets()).toEqual({});
     expect(db.rows('wm_global_kv')).toEqual([
       {k: 'themeMode', v: JSON.stringify('light'), updatedAt: now},
     ]);
@@ -264,7 +254,6 @@ describe('workspace persistence safety', () => {
     expect(repository.getGlobalState()).toMatchObject({
       themeMode: 'light',
     });
-    expect(repository.getLegacyBackendSecrets()).toEqual({});
     expect(errors).toEqual([expect.objectContaining({operation: 'repair chat cache'})]);
     unsubscribe();
     consoleError.mockRestore();
@@ -490,7 +479,6 @@ describe('workspace persistence safety', () => {
     expect(repository.getGlobalState()).toMatchObject({
       themeMode: 'light',
     });
-    expect(repository.getLegacyBackendSecrets()).toEqual({});
     expect(repository.getProjectState('p1')).toMatchObject({
       selectedFile: 'a.txt',
       pinnedFiles: ['a.txt'],

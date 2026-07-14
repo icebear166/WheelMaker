@@ -375,9 +375,12 @@ import {
   type VoiceInputRuntimeSnapshot,
 } from '../features/speech/voiceInputFlow';
 import {isSpeechErrorEvent, isSpeechTranscriptEvent} from '../features/speech/registrySpeechClient';
-import {DEFAULT_SPEECH_SETTINGS, normalizeSpeechSettings} from '../features/speech/speechSettings';
-import {DEFAULT_TTS_SETTINGS, normalizeTtsSettings} from '../features/tts/ttsSettings';
-import type {TtsSettings} from '../features/tts/ttsSettings';
+import {
+  DEFAULT_SERVER_SETTINGS,
+  normalizeServerSettings,
+  type ServerSettings,
+  type ServerSettingsUpdate,
+} from '../settings/serverSettings';
 import {prepareTextForTTS} from '../features/tts/prepareTextForTTS';
 import {segmentText, ttsPlayer} from '../features/tts/ttsPlayback';
 import type {TtsPlaybackState} from '../features/tts/ttsPlayback';
@@ -461,7 +464,7 @@ import type {
   PersistedFloatingControlSide,
   WorkspaceDatabaseStorageStats,
 } from '../workspace/WorkspacePersistence';
-import {scrubLegacyBrowserCredentials} from '../workspace/WorkspacePersistence';
+import {scrubLegacyBrowserCredentials} from '../compatibility/browserCredentialCleanup';
 import type {
   RegistryChatContentBlock,
   RegistryChatMessage,
@@ -502,11 +505,8 @@ import type {
   RegistryTerminal,
   RegistryTerminalChangedEvent,
   RegistryTerminalOutputEvent,
-  RegistrySecretKind,
-  RegistrySecretStatus,
   RegistryDeviceSession,
 } from '../registry/registryTypes';
-import {migrateLegacyBackendSecrets} from '../settings/backendSecretSettings';
 
 const RegistryDebugPanel = React.lazy(() => import('../debug/RegistryDebugPanel').then(module => ({
   default: module.RegistryDebugPanel,
@@ -2569,15 +2569,11 @@ export function App() {
   const notificationProvider = useMemo(() => createNotificationProvider(), []);
   const [notificationPermissionState, setNotificationPermissionState] =
     useState<WheelMakerNotificationPermissionState>('unsupported');
-  const [speechSettings, setSpeechSettings] = useState(() =>
-    normalizeSpeechSettings(persistedGlobal.speechSettings ?? DEFAULT_SPEECH_SETTINGS),
-  );
-  const [ttsSettings, setTtsSettings] = useState<TtsSettings>(() =>
-    normalizeTtsSettings(persistedGlobal.ttsSettings ?? DEFAULT_TTS_SETTINGS),
-  );
-  const [backendSecretStatuses, setBackendSecretStatuses] = useState<RegistrySecretStatus[]>([]);
-  const [backendSecretBusy, setBackendSecretBusy] = useState(false);
-  const [backendSecretError, setBackendSecretError] = useState('');
+  const [serverSettings, setServerSettings] = useState<ServerSettings>(DEFAULT_SERVER_SETTINGS);
+  const [serverSettingsBusy, setServerSettingsBusy] = useState(false);
+  const [serverSettingsError, setServerSettingsError] = useState('');
+  const voiceInputEnabled = serverSettings.voiceInput.configured;
+  const ttsEnabled = serverSettings.textToSpeech.configured;
   const [deviceSessions, setDeviceSessions] = useState<RegistryDeviceSession[]>([]);
   const [deviceSessionsLoading, setDeviceSessionsLoading] = useState(false);
   const [deviceSessionsError, setDeviceSessionsError] = useState('');
@@ -3321,7 +3317,7 @@ export function App() {
   const voiceReconnectBufferingRef = useRef(false);
   const voiceCaptureGenerationRef = useRef(0);
   const voiceRemoteStartRequestedRef = useRef(false);
-  const voiceActiveSettingsRef = useRef<ReturnType<typeof normalizeSpeechSettings> | null>(null);
+  const voiceActiveSettingsRef = useRef<ServerSettings['voiceInput'] | null>(null);
   const voiceRuntimeKeyRef = useRef('');
   const voiceStartedAtRef = useRef(0);
   const voiceTransportModeRef = useRef<VoiceTransportMode>('registry');
@@ -6015,14 +6011,6 @@ export function App() {
       setPromptCompletionNotificationsEnabled(false);
     });
   };
-
-  useEffect(() => {
-    workspaceStore.rememberGlobalState({ speechSettings });
-  }, [speechSettings]);
-
-  useEffect(() => {
-    workspaceStore.rememberGlobalState({ ttsSettings });
-  }, [ttsSettings]);
 
   useEffect(() => {
     workspaceStore.rememberGlobalState({
@@ -11355,7 +11343,7 @@ export function App() {
 
   const startVoiceRegistryStream = async (
     generation: number,
-    settings: ReturnType<typeof normalizeSpeechSettings>,
+    settings: ServerSettings['voiceInput'],
   ) => {
     if (voiceStreamIdRef.current || !isVoiceGenerationActive(generation)) {
       return true;
@@ -11401,7 +11389,7 @@ export function App() {
 
   const runVoiceStartLoop = async (
     generation: number,
-    settings: ReturnType<typeof normalizeSpeechSettings>,
+    settings: ServerSettings['voiceInput'],
   ) => {
     while (isVoiceGenerationActive(generation) && !voiceStreamIdRef.current) {
       if (!connectedRef.current) {
@@ -11739,8 +11727,8 @@ export function App() {
       logVoiceInputState('warn', 'start_ignored_active_session');
       return;
     }
-    const settings = normalizeSpeechSettings(speechSettings);
-    if (!settings.enabled) {
+    const settings = serverSettings.voiceInput;
+    if (!voiceInputEnabled) {
       logVoiceInputState('warn', 'start_ignored_disabled');
       return;
     }
@@ -12069,54 +12057,29 @@ export function App() {
     }, 0);
   };
 
-  const synchronizeBackendSecrets = async () => {
-    setBackendSecretBusy(true);
-    setBackendSecretError('');
+  const synchronizeServerSettings = async () => {
+    setServerSettingsBusy(true);
+    setServerSettingsError('');
     try {
-      const statuses = await service.getSecretStatus();
-      const migration = await migrateLegacyBackendSecrets({
-        legacy: workspaceStore.getLegacyBackendSecrets(),
-        statuses,
-        updateSecret: payload => service.updateSecret(payload),
-        clearLegacySecret: kind => workspaceStore.clearLegacyBackendSecret(kind),
-      });
-      const refreshed = await service.getSecretStatus();
-      setBackendSecretStatuses(refreshed);
-      if (migration.failures.length > 0) {
-        setBackendSecretError(`Secret migration failed: ${migration.failures.map(item => `${item.kind}: ${item.message}`).join('; ')}`);
-      }
-    } catch (secretError) {
-      setBackendSecretError(secretError instanceof Error ? secretError.message : String(secretError));
+      setServerSettings(normalizeServerSettings(await service.getServerSettings()));
+    } catch (settingsError) {
+      setServerSettingsError(settingsError instanceof Error ? settingsError.message : String(settingsError));
     } finally {
-      setBackendSecretBusy(false);
+      setServerSettingsBusy(false);
     }
   };
 
-  const replaceBackendSecret = async (kind: RegistrySecretKind, value: string) => {
-    setBackendSecretBusy(true);
-    setBackendSecretError('');
+  const updateServerSetting = async (update: ServerSettingsUpdate) => {
+    setServerSettingsBusy(true);
+    setServerSettingsError('');
     try {
-      await service.updateSecret({kind, action: 'set', value});
-      setBackendSecretStatuses(await service.getSecretStatus());
-    } catch (secretError) {
-      setBackendSecretError(secretError instanceof Error ? secretError.message : String(secretError));
-      throw secretError;
+      const updated = await service.updateServerSettings(update);
+      setServerSettings(normalizeServerSettings(updated));
+    } catch (settingsError) {
+      setServerSettingsError(settingsError instanceof Error ? settingsError.message : String(settingsError));
+      throw settingsError;
     } finally {
-      setBackendSecretBusy(false);
-    }
-  };
-
-  const clearBackendSecret = async (kind: RegistrySecretKind) => {
-    setBackendSecretBusy(true);
-    setBackendSecretError('');
-    try {
-      await service.updateSecret({kind, action: 'clear'});
-      setBackendSecretStatuses(await service.getSecretStatus());
-    } catch (secretError) {
-      setBackendSecretError(secretError instanceof Error ? secretError.message : String(secretError));
-      throw secretError;
-    } finally {
-      setBackendSecretBusy(false);
+      setServerSettingsBusy(false);
     }
   };
 
@@ -12174,7 +12137,7 @@ export function App() {
       reconnectStartedAtRef.current = null;
       setReconnecting(false);
       setConnected(true);
-      void synchronizeBackendSecrets();
+      void synchronizeServerSettings();
       refreshTerminalLists(result.hubs).catch(() => undefined);
       if (!silentReconnect) {
         clearChatRuntimeState();
@@ -16703,7 +16666,7 @@ export function App() {
           reconnecting={reconnecting}
           autoConnecting={autoConnecting}
           baseURL={document.baseURI}
-          speechEnabled={speechSettings.enabled}
+          speechEnabled={voiceInputEnabled}
           androidNativeHost={isAndroidNativeSpeechHost()}
           androidNativeAvailable={!!getAndroidNativeSpeechBridge()}
         />
@@ -16782,10 +16745,10 @@ export function App() {
         setPromptCompletionNotificationsEnabled={setPromptCompletionNotificationsEnabled}
         handlePromptCompletionNotificationsChange={handlePromptCompletionNotificationsChange}
         notificationPermissionState={notificationPermissionState}
-        speechSettings={speechSettings}
-        setSpeechSettings={setSpeechSettings}
-        ttsSettings={ttsSettings}
-        setTtsSettings={setTtsSettings}
+        serverSettings={serverSettings}
+        serverSettingsBusy={serverSettingsBusy}
+        serverSettingsError={serverSettingsError}
+        updateServerSetting={updateServerSetting}
         chatFont={chatFont}
         setChatFont={setChatFont}
         openSettingsChild={openSettingsChild}
@@ -16810,12 +16773,6 @@ export function App() {
         setDisableFileCache={setDisableFileCache}
         requestClearLocalCache={requestClearLocalCache}
         handleRegistryDebugLogout={handleRegistryDebugLogout}
-        backendSecretStatuses={backendSecretStatuses}
-        backendSecretBusy={backendSecretBusy}
-        backendSecretError={backendSecretError}
-        replaceBackendSecret={replaceBackendSecret}
-        clearBackendSecret={clearBackendSecret}
-        retryBackendSecretMigration={synchronizeBackendSecrets}
       />
     </React.Suspense>
   );
@@ -17861,6 +17818,10 @@ export function App() {
     if (ttsPlayer.currentState !== 'idle') {
       ttsPlayer.stop();
     }
+    if (!ttsEnabled) {
+      setError('Configure a Text-to-Speech key in Server settings first.');
+      return;
+    }
 
     const result = buildPromptDoneCopyRange(selectedFullChatMessages, doneTurnIndex);
     if (!result.ok) {
@@ -17880,7 +17841,7 @@ export function App() {
     }
 
     ttsActiveTurnIndexRef.current = doneTurnIndex;
-	ttsPlayer.play(segments, ttsSettings, {
+	ttsPlayer.play(segments, serverSettings.textToSpeech, {
 		synthesizeTTS: payload => service.synthesizeTTS(payload),
 	}).catch(() => undefined);
   };
@@ -18198,6 +18159,7 @@ export function App() {
               : undefined
           }
           ttsState={message.method === 'prompt_done' && ttsActiveTurnIndexRef.current === doneTurnIndex ? ttsState : 'idle'}
+          readAloudEnabled={ttsEnabled}
           onReadAloud={
             message.method === 'prompt_done'
               ? () => readAloudPromptDoneEvent(doneTurnIndex).catch(() => undefined)
@@ -19158,7 +19120,7 @@ export function App() {
                   />
                 </div>
                 <div className="chat-composer-action-column">
-                  {speechSettings.enabled ? (
+                  {voiceInputEnabled ? (
                     <VoiceInputButton
                       recording={voiceRecording}
                       recordingMode={voiceInteractionMode}

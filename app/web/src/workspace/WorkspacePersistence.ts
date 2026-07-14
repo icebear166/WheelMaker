@@ -1,6 +1,5 @@
 import type {RegistryChatSession, RegistryGitCommit, RegistryGitCommitFile, RegistrySessionTurn} from '../registry/registryTypes';
-import type {RegistrySecretKind} from '../registry/registryTypes';
-import type {LegacyBackendSecrets} from '../settings/backendSecretSettings';
+import {obsoleteBrowserCredentialRows} from '../compatibility/browserCredentialCleanup';
 import {
   DEFAULT_CODE_FONT,
   DEFAULT_CODE_FONT_SIZE,
@@ -38,18 +37,6 @@ import {
   normalizePortRelayTargets,
   type PortRelayTarget,
 } from '../portRelay/portRelayTargets';
-import {
-  DEFAULT_SPEECH_SETTINGS,
-  maskSpeechSettingsForExport,
-  normalizeSpeechSettings,
-  type SpeechSettings,
-} from '../features/speech/speechSettings';
-import {
-  DEFAULT_TTS_SETTINGS,
-  maskTtsSettingsForExport,
-  normalizeTtsSettings,
-  type TtsSettings,
-} from '../features/tts/ttsSettings';
 import {
   PREVIEW_WORKBENCH_SNAPSHOT_VERSION,
   type PreviewWorkbenchSnapshot,
@@ -105,8 +92,6 @@ export type PersistedGlobalState = {
   chatViewWidth: ChatViewWidth;
   sessionListDensity: SessionListDensity;
   mobileEnterKeyBehavior: MobileEnterKeyBehavior;
-  speechSettings: SpeechSettings;
-  ttsSettings: TtsSettings;
   wrapLines: boolean;
   showLineNumbers: boolean;
   hideToolCalls: boolean;
@@ -336,8 +321,6 @@ const GLOBAL_KEYS = {
   chatViewWidth: 'chatViewWidth',
   sessionListDensity: 'sessionListDensity',
   mobileEnterKeyBehavior: 'mobileEnterKeyBehavior',
-  speechSettings: 'speechSettings',
-  ttsSettings: 'ttsSettings',
   wrapLines: 'wrapLines',
   showLineNumbers: 'showLineNumbers',
   hideToolCalls: 'hideToolCalls',
@@ -377,8 +360,6 @@ function defaultGlobalState(): PersistedGlobalState {
     chatViewWidth: DEFAULT_CHAT_VIEW_WIDTH,
     sessionListDensity: DEFAULT_SESSION_LIST_DENSITY,
     mobileEnterKeyBehavior: DEFAULT_MOBILE_ENTER_KEY_BEHAVIOR,
-    speechSettings: DEFAULT_SPEECH_SETTINGS,
-    ttsSettings: DEFAULT_TTS_SETTINGS,
     wrapLines: false,
     showLineNumbers: true,
     hideToolCalls: true,
@@ -624,8 +605,6 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
     chatViewWidth: normalizeChatViewWidth(input.chatViewWidth, base.chatViewWidth),
     sessionListDensity: normalizeSessionListDensity(input.sessionListDensity, base.sessionListDensity),
     mobileEnterKeyBehavior: normalizeMobileEnterKeyBehavior(input.mobileEnterKeyBehavior, base.mobileEnterKeyBehavior),
-    speechSettings: normalizeSpeechSettings(input.speechSettings),
-    ttsSettings: normalizeTtsSettings(input.ttsSettings),
     wrapLines: typeof input.wrapLines === 'boolean' ? input.wrapLines : base.wrapLines,
     showLineNumbers: typeof input.showLineNumbers === 'boolean' ? input.showLineNumbers : base.showLineNumbers,
     hideToolCalls: typeof input.hideToolCalls === 'boolean' ? input.hideToolCalls : base.hideToolCalls,
@@ -669,15 +648,6 @@ function tryParse<T>(value: string, fallback: T): T {
   }
 }
 
-export function scrubLegacyBrowserCredentials(): void {
-  try {
-    globalThis.localStorage?.removeItem(['wheelmaker', 'workspace', 'address'].join('.'));
-    globalThis.localStorage?.removeItem(['wheelmaker', 'workspace', 'token'].join('.'));
-  } catch {
-    // Storage can be unavailable; IndexedDB cleanup still runs during initialization.
-  }
-}
-
 function fileCacheKey(projectId: string, kind: 'file' | 'dir', path: string): string {
   return `fc:${projectId}:${kind}:${path}`;
 }
@@ -714,31 +684,6 @@ type RawKVRow = {
   updatedAt: number;
 };
 
-export function scrubLegacyGlobalRows(rows: RawKVRow[]): {deletes: string[]; puts: RawKVRow[]} {
-  const deletes: string[] = [];
-  const puts: RawKVRow[] = [];
-  for (const row of rows) {
-    if (row.k === 'address' || row.k === 'token' || row.k === 'deepseekApiKey') {
-      deletes.push(row.k);
-      continue;
-    }
-    if (row.k === GLOBAL_KEYS.speechSettings) {
-      const raw = tryParse<unknown>(row.v, {});
-      if (raw && typeof raw === 'object' && !Array.isArray(raw) && 'volcengineApiKey' in raw) {
-        puts.push({...row, v: serialize(normalizeSpeechSettings(raw))});
-      }
-      continue;
-    }
-    if (row.k === GLOBAL_KEYS.ttsSettings) {
-      const raw = tryParse<unknown>(row.v, {});
-      if (raw && typeof raw === 'object' && !Array.isArray(raw) && 'apiKey' in raw) {
-        puts.push({...row, v: serialize(normalizeTtsSettings(raw))});
-      }
-    }
-  }
-  return {deletes: [...new Set(deletes)], puts};
-}
-
 function globalRowsForPatch(
   patch: Partial<PersistedGlobalState>,
   state: PersistedGlobalState,
@@ -755,51 +700,8 @@ function globalRowsForPatch(
 }
 
 function redactGlobalDumpRows(rows: RawKVRow[]): RawKVRow[] {
-  return rows.map(row => {
-    if (row.k === 'deepseekApiKey') {
-      return {...row, v: serialize('')};
-    }
-    if (row.k === GLOBAL_KEYS.speechSettings) {
-      return {
-        ...row,
-        v: serialize(maskSpeechSettingsForExport(tryParse(row.v, DEFAULT_SPEECH_SETTINGS))),
-      };
-    }
-    if (row.k === GLOBAL_KEYS.ttsSettings) {
-      return {
-        ...row,
-        v: serialize(maskTtsSettingsForExport(tryParse(row.v, DEFAULT_TTS_SETTINGS))),
-      };
-    }
-    return row;
-  });
-}
-
-export function extractLegacyBackendSecrets(rows: RawKVRow[]): LegacyBackendSecrets {
-  const legacy: LegacyBackendSecrets = {};
-  for (const row of rows) {
-    if (row.k === 'deepseekApiKey') {
-      const value = tryParse<unknown>(row.v, '');
-      if (typeof value === 'string' && value.trim()) legacy.deepseek = value.trim();
-      continue;
-    }
-    if (row.k === GLOBAL_KEYS.speechSettings) {
-      const value = tryParse<unknown>(row.v, {});
-      if (value && typeof value === 'object' && !Array.isArray(value)) {
-        const secret = (value as Record<string, unknown>).volcengineApiKey;
-        if (typeof secret === 'string' && secret.trim()) legacy.volcengineAsr = secret.trim();
-      }
-      continue;
-    }
-    if (row.k === GLOBAL_KEYS.ttsSettings) {
-      const value = tryParse<unknown>(row.v, {});
-      if (value && typeof value === 'object' && !Array.isArray(value)) {
-        const secret = (value as Record<string, unknown>).apiKey;
-        if (typeof secret === 'string' && secret.trim()) legacy.mimoTts = secret.trim();
-      }
-    }
-  }
-  return legacy;
+  const obsolete = new Set(obsoleteBrowserCredentialRows(rows));
+  return rows.filter(row => !obsolete.has(row.k));
 }
 
 type RawProjectStateRow = {
@@ -1006,7 +908,6 @@ export class WorkspacePersistenceRepository {
   private writeQueue: Promise<void> = Promise.resolve();
   private lastStorageError: WorkspaceStorageError | null = null;
   private readonly storageErrorListeners = new Set<(error: WorkspaceStorageError) => void>();
-  private legacyBackendSecrets: LegacyBackendSecrets = {};
 
   constructor(private readonly db: WorkspaceDatabaseAdapter = new WorkspaceDatabase()) {
     this.state = defaultWorkspaceState();
@@ -1041,18 +942,14 @@ export class WorkspacePersistenceRepository {
       this.db.getAllRows<RawFileCacheRow>(TABLE_FILE_CACHE),
     ]);
 
-    const legacyScrub = scrubLegacyGlobalRows(globalRows);
-    if (legacyScrub.deletes.length > 0 || legacyScrub.puts.length > 0) {
+    const obsoleteRows = obsoleteBrowserCredentialRows(globalRows);
+    if (obsoleteRows.length > 0) {
       await this.db.mutateStores([{
         storeName: TABLE_GLOBAL_KV,
-        deletes: legacyScrub.deletes,
-        puts: legacyScrub.puts,
+        deletes: obsoleteRows,
       }]);
-      const deleted = new Set(legacyScrub.deletes);
-      const replacements = new Map(legacyScrub.puts.map(row => [row.k, row]));
-      const scrubbed = globalRows
-        .filter(row => !deleted.has(row.k))
-        .map(row => replacements.get(row.k) ?? row);
+      const deleted = new Set(obsoleteRows);
+      const scrubbed = globalRows.filter(row => !deleted.has(row.k));
       globalRows.splice(0, globalRows.length, ...scrubbed);
     }
 
@@ -1071,7 +968,6 @@ export class WorkspacePersistenceRepository {
       return;
     }
 
-    this.legacyBackendSecrets = extractLegacyBackendSecrets(globalRows);
     this.state = this.fromDbRows(globalRows, projectRows);
     this.restoreProjectCommits(projectCommitRows);
     if (this.hasIncompatibleChatContentRows(chatContentRows)) {
@@ -1388,8 +1284,6 @@ export class WorkspacePersistenceRepository {
       {k: GLOBAL_KEYS.chatViewWidth, v: serialize(this.state.global.chatViewWidth), updatedAt},
       {k: GLOBAL_KEYS.sessionListDensity, v: serialize(this.state.global.sessionListDensity), updatedAt},
       {k: GLOBAL_KEYS.mobileEnterKeyBehavior, v: serialize(this.state.global.mobileEnterKeyBehavior), updatedAt},
-      {k: GLOBAL_KEYS.speechSettings, v: serialize(this.state.global.speechSettings), updatedAt},
-      {k: GLOBAL_KEYS.ttsSettings, v: serialize(this.state.global.ttsSettings), updatedAt},
       {k: GLOBAL_KEYS.wrapLines, v: serialize(this.state.global.wrapLines), updatedAt},
       {k: GLOBAL_KEYS.showLineNumbers, v: serialize(this.state.global.showLineNumbers), updatedAt},
       {k: GLOBAL_KEYS.hideToolCalls, v: serialize(this.state.global.hideToolCalls), updatedAt},
@@ -1585,35 +1479,6 @@ export class WorkspacePersistenceRepository {
 
   getGlobalState(): PersistedGlobalState {
     return cloneState(this.state.global);
-  }
-
-  getLegacyBackendSecrets(): LegacyBackendSecrets {
-    return cloneState(this.legacyBackendSecrets);
-  }
-
-  async clearLegacyBackendSecret(kind: RegistrySecretKind): Promise<void> {
-    await this.readyPromise;
-    const now = Date.now();
-    switch (kind) {
-      case 'deepseek':
-        await this.db.deleteRow(TABLE_GLOBAL_KV, 'deepseekApiKey');
-        break;
-      case 'volcengineAsr':
-        await this.db.putRow(TABLE_GLOBAL_KV, {
-          k: GLOBAL_KEYS.speechSettings,
-          v: serialize(this.state.global.speechSettings),
-          updatedAt: now,
-        });
-        break;
-      case 'mimoTts':
-        await this.db.putRow(TABLE_GLOBAL_KV, {
-          k: GLOBAL_KEYS.ttsSettings,
-          v: serialize(this.state.global.ttsSettings),
-          updatedAt: now,
-        });
-        break;
-    }
-    delete this.legacyBackendSecrets[kind];
   }
 
   getProjectState(projectId: string): PersistedProjectState {

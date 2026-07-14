@@ -16,9 +16,6 @@ import type {
   RegistryDebugUploadLogResponse,
   RegistryDeviceSession,
   RegistryClientName,
-  RegistrySecretKind,
-  RegistrySecretStatus,
-  RegistrySecretUpdatePayload,
   RegistryEnvelope,
   RegistryFileIndexRebuildResponse,
   RegistryFileIndexSearchResponse,
@@ -554,7 +551,7 @@ export class RegistryRepository {
       latestTurnIndex: normalized.latestTurnIndex,
     };
   }
-  async initialize(url: string, clientName: RegistryClientName = 'wheelmaker-web'): Promise<void> {
+  async initialize(url: string, clientName: RegistryClientName): Promise<void> {
     await this.client.connect(url);
     await this.client.connectInit({
       clientName,
@@ -641,32 +638,6 @@ export class RegistryRepository {
     await this.client.request({
       method: RegistryMethods.SecuritySessionRevokeAll,
       payload: {},
-    });
-  }
-
-  async getSecretStatus(): Promise<RegistrySecretStatus[]> {
-    const resp = await this.client.request({
-      method: RegistryMethods.SecuritySecretStatus,
-      payload: {},
-    });
-    const payload = (resp.payload ?? {}) as {secrets?: unknown[]};
-    const known = new Set<RegistrySecretKind>(['deepseek', 'volcengineAsr', 'mimoTts']);
-    return (Array.isArray(payload.secrets) ? payload.secrets : []).flatMap(item => {
-      if (!item || typeof item !== 'object') return [];
-      const input = item as Record<string, unknown>;
-      if (typeof input.kind !== 'string' || !known.has(input.kind as RegistrySecretKind)) return [];
-      return [{
-        kind: input.kind as RegistrySecretKind,
-        configured: input.configured === true,
-        updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : undefined,
-      }];
-    });
-  }
-
-  async updateSecret(payload: RegistrySecretUpdatePayload): Promise<void> {
-    await this.client.request({
-      method: RegistryMethods.SecuritySecretUpdate,
-      payload,
     });
   }
 

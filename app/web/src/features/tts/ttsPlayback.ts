@@ -1,5 +1,7 @@
 import {synthesizeSpeech, audioBase64ToBlobUrl, type TtsBackend} from './ttsClient';
-import type { TtsSettings } from './ttsSettings';
+import type {ServerSettings} from '../../settings/serverSettings';
+
+type TtsPlaybackSettings = Pick<ServerSettings['textToSpeech'], 'model' | 'voice'>;
 
 export type TtsPlaybackState = 'idle' | 'loading' | 'playing';
 
@@ -122,7 +124,7 @@ class TTSPlayer {
   private prefetchSegment(
     index: number,
     segments: string[],
-    settings: TtsSettings,
+    settings: TtsPlaybackSettings,
 	backend: TtsBackend,
     gen: number,
   ): Promise<string | null> {
@@ -167,12 +169,12 @@ class TTSPlayer {
    * Play text segments sequentially with prefetch.
    * Automatically stops any previous playback.
    */
-	async play(segments: string[], settings: TtsSettings, backend: TtsBackend): Promise<void> {
+	async play(segments: string[], settings: TtsPlaybackSettings, backend: TtsBackend): Promise<void> {
     // Stop existing and get a new generation
     this.stop();
     const gen = this.generation;
 
-	if (segments.length === 0 || !settings.enabled) {
+	if (segments.length === 0) {
       return;
     }
 
@@ -210,7 +212,7 @@ class TTSPlayer {
   private async playFromSegment(
     startIndex: number,
     segments: string[],
-    settings: TtsSettings,
+    settings: TtsPlaybackSettings,
 	backend: TtsBackend,
     gen: number,
     startUrl: string,

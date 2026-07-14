@@ -13,8 +13,15 @@ import {
   type MobileEnterKeyBehavior,
 } from '../chat/mobileEnterKeyBehavior';
 import {normalizeAppDiagnosticLogLevel, type AppDiagnosticLogLevel} from '../debug/appDiagnostics';
-import {SPEECH_MODEL_OPTIONS, normalizeSpeechSettings, type SpeechSettings} from '../features/speech/speechSettings';
-import {TTS_MODEL_OPTIONS, TTS_VOICE_OPTIONS, normalizeTtsSettings, type TtsSettings, type TtsModelId, type TtsVoiceId} from '../features/tts/ttsSettings';
+import {
+  SPEECH_MODEL_OPTIONS,
+  TTS_MODEL_OPTIONS,
+  TTS_VOICE_OPTIONS,
+  type ServerSettings,
+  type ServerSettingsUpdate,
+  type TtsModelId,
+  type TtsVoiceId,
+} from './serverSettings';
 import {
   CODE_FONT_OPTIONS,
   CODE_THEME_OPTIONS,
@@ -25,8 +32,6 @@ import {
   type CodeThemeId,
 } from '../code/shikiSettings';
 import type {SettingsChildDetail} from './settingsNavigation';
-import type {RegistrySecretKind, RegistrySecretStatus} from '../registry/registryTypes';
-import {backendSecretKinds, backendSecretLabel} from './backendSecretSettings';
 
 const CODE_FONT_SIZE_OPTIONS = [12, 13, 14, 15, 16] as const;
 const CODE_LINE_HEIGHT_OPTIONS = [1.35, 1.45, 1.5, 1.6, 1.7] as const;
@@ -51,10 +56,10 @@ type SettingsRootContentProps = {
   setPromptCompletionNotificationsEnabled: (value: boolean) => void;
   handlePromptCompletionNotificationsChange: (enabled: boolean) => void;
   notificationPermissionState: string;
-  speechSettings: SpeechSettings;
-  setSpeechSettings: React.Dispatch<React.SetStateAction<SpeechSettings>>;
-  ttsSettings: TtsSettings;
-  setTtsSettings: React.Dispatch<React.SetStateAction<TtsSettings>>;
+  serverSettings: ServerSettings;
+  serverSettingsBusy: boolean;
+  serverSettingsError: string;
+  updateServerSetting: (update: ServerSettingsUpdate) => Promise<void>;
   chatFont: ChatFontId;
   setChatFont: (value: ChatFontId) => void;
   openSettingsChild: (detail: SettingsChildDetail) => void;
@@ -79,15 +84,9 @@ type SettingsRootContentProps = {
   setDisableFileCache: (value: boolean) => void;
   requestClearLocalCache: () => void;
   handleRegistryDebugLogout: () => void;
-  backendSecretStatuses: RegistrySecretStatus[];
-  backendSecretBusy: boolean;
-  backendSecretError: string;
-  replaceBackendSecret: (kind: RegistrySecretKind, value: string) => Promise<void>;
-  clearBackendSecret: (kind: RegistrySecretKind) => Promise<void>;
-  retryBackendSecretMigration: () => Promise<void>;
 };
 
-type SettingsSectionId = 'appearance' | 'chat' | 'connection' | 'code-display' | 'debug';
+type SettingsSectionId = 'appearance' | 'chat' | 'server' | 'connection' | 'code-display' | 'debug';
 
 type SettingsSectionOptions = {
   id: SettingsSectionId;
@@ -108,25 +107,27 @@ function renderSettingsSection({id, title, rows, icon}: SettingsSectionOptions) 
   );
 }
 
-function BackendSecretEditor({
-  kind,
-  status,
+function ServerSecretEditor({
+  label,
+  section,
+  configured,
+  updatedAt,
   busy,
-  onReplace,
-  onClear,
+  onUpdate,
 }: {
-  kind: RegistrySecretKind;
-  status: RegistrySecretStatus | undefined;
+  label: string;
+  section: ServerSettingsUpdate['section'];
+  configured: boolean;
+  updatedAt?: string;
   busy: boolean;
-  onReplace: (kind: RegistrySecretKind, value: string) => Promise<void>;
-  onClear: (kind: RegistrySecretKind) => Promise<void>;
+  onUpdate: (update: ServerSettingsUpdate) => Promise<void>;
 }) {
   const [draft, setDraft] = React.useState('');
   const submit = async () => {
     const value = draft.trim();
     if (!value) return;
     try {
-      await onReplace(kind, value);
+      await onUpdate({section, field: 'key', action: 'set', value});
       setDraft('');
     } catch {
       // Parent exposes the failure while keeping this draft available for retry.
@@ -137,10 +138,10 @@ function BackendSecretEditor({
       <div className="settings-row sidebar-setting-row voice-input-settings-child-row">
         <span>
           <span className="codicon codicon-key settings-row-icon" aria-hidden="true" />
-          {backendSecretLabel(kind)}
+          {label}
           <span className="settings-metadata-line">
-            {status?.configured ? 'Configured' : 'Not configured'}
-            {status?.updatedAt ? ` · ${new Date(status.updatedAt).toLocaleString()}` : ''}
+            {configured ? 'Configured' : 'Not configured'}
+            {updatedAt ? ` · ${new Date(updatedAt).toLocaleString()}` : ''}
           </span>
         </span>
       </div>
@@ -154,10 +155,16 @@ function BackendSecretEditor({
           onChange={event => setDraft(event.target.value)}
         />
         <button type="button" disabled={busy || !draft.trim()} onClick={() => void submit()}>
-          {status?.configured ? 'Replace' : 'Set'}
+          {configured ? 'Replace' : 'Set'}
         </button>
-        {status?.configured ? (
-          <button type="button" disabled={busy} onClick={() => void onClear(kind).catch(() => undefined)}>Clear</button>
+        {configured ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void onUpdate({section, field: 'key', action: 'clear'}).catch(() => undefined)}
+          >
+            Clear
+          </button>
         ) : null}
       </div>
     </div>
@@ -181,10 +188,10 @@ export function SettingsRootContent({
   setPromptCompletionNotificationsEnabled,
   handlePromptCompletionNotificationsChange,
   notificationPermissionState,
-  speechSettings,
-  setSpeechSettings,
-  ttsSettings,
-  setTtsSettings,
+  serverSettings,
+  serverSettingsBusy,
+  serverSettingsError,
+  updateServerSetting,
   chatFont,
   setChatFont,
   openSettingsChild,
@@ -209,12 +216,6 @@ export function SettingsRootContent({
   setDisableFileCache,
   requestClearLocalCache,
   handleRegistryDebugLogout,
-  backendSecretStatuses,
-  backendSecretBusy,
-  backendSecretError,
-  replaceBackendSecret,
-  clearBackendSecret,
-  retryBackendSecretMigration,
 }: SettingsRootContentProps) {
   return (
     <>
@@ -340,102 +341,6 @@ export function SettingsRootContent({
             </div>
           ) : null}
         </div>
-        <div className="voice-input-settings-menu">
-          <label className="settings-row sidebar-setting-row">
-            <span>
-              <span className="codicon codicon-mic settings-row-icon" aria-hidden="true" />
-              Voice Input
-            </span>
-            <input
-              type="checkbox"
-              checked={speechSettings.enabled}
-              onChange={event => setSpeechSettings(current =>
-                normalizeSpeechSettings({...current, enabled: event.target.checked}),
-              )}
-            />
-          </label>
-          {speechSettings.enabled ? (
-            <div className="voice-input-settings-nested">
-              <label className="settings-row sidebar-setting-row voice-input-settings-child-row">
-                <span>
-                  <span className="codicon codicon-symbol-misc settings-row-icon" aria-hidden="true" />
-                  Model
-                </span>
-                <select
-                  className="sidebar-setting-select"
-                  title="Doubao Streaming ASR 2.0"
-                  value={speechSettings.model}
-                  onChange={event => setSpeechSettings(current =>
-                    normalizeSpeechSettings({...current, model: event.target.value}),
-                  )}
-                >
-                  {SPEECH_MODEL_OPTIONS.map(item => (
-                    <option key={item.id} value={item.id}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          ) : null}
-        </div>
-        <div className="voice-input-settings-menu">
-          <label className="settings-row sidebar-setting-row">
-            <span>
-              <span className="codicon codicon-unmute settings-row-icon" aria-hidden="true" />
-              Text-to-Speech
-            </span>
-            <input
-              type="checkbox"
-              checked={ttsSettings.enabled}
-              onChange={event => setTtsSettings(current =>
-                normalizeTtsSettings({...current, enabled: event.target.checked}),
-              )}
-            />
-          </label>
-          {ttsSettings.enabled ? (
-            <div className="voice-input-settings-nested">
-              <label className="settings-row sidebar-setting-row voice-input-settings-child-row">
-                <span>
-                  <span className="codicon codicon-symbol-misc settings-row-icon" aria-hidden="true" />
-                  Model
-                </span>
-                <select
-                  className="sidebar-setting-select"
-                  value={ttsSettings.model}
-                  onChange={event => setTtsSettings(current =>
-                    normalizeTtsSettings({...current, model: event.target.value as TtsModelId}),
-                  )}
-                >
-                  {TTS_MODEL_OPTIONS.map(item => (
-                    <option key={item.id} value={item.id}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="settings-row sidebar-setting-row voice-input-settings-child-row">
-                <span>
-                  <span className="codicon codicon-person settings-row-icon" aria-hidden="true" />
-                  Voice
-                </span>
-                <select
-                  className="sidebar-setting-select"
-                  value={ttsSettings.voice}
-                  onChange={event => setTtsSettings(current =>
-                    normalizeTtsSettings({...current, voice: event.target.value as TtsVoiceId}),
-                  )}
-                >
-                  {TTS_VOICE_OPTIONS.map(item => (
-                    <option key={item.id} value={item.id}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          ) : null}
-        </div>
         <label className="settings-row sidebar-setting-row">
           <span>
             <span className="codicon codicon-text-size settings-row-icon" aria-hidden="true" />
@@ -456,6 +361,131 @@ export function SettingsRootContent({
             ))}
           </select>
         </label>
+        </>
+        )})}
+        {renderSettingsSection({id: 'server', title: 'Server', icon: 'server', rows: (
+        <>
+          <div className="voice-input-settings-menu">
+            <div className="settings-row sidebar-setting-row">
+              <span>
+                <span className="codicon codicon-mic settings-row-icon" aria-hidden="true" />
+                Voice Input
+              </span>
+            </div>
+            <ServerSecretEditor
+              label="Volcengine ASR Access Token"
+              section="voiceInput"
+              configured={serverSettings.voiceInput.configured}
+              updatedAt={serverSettings.voiceInput.updatedAt}
+              busy={serverSettingsBusy}
+              onUpdate={updateServerSetting}
+            />
+            <div className="voice-input-settings-nested">
+              <label className="settings-row sidebar-setting-row voice-input-settings-child-row">
+                <span>
+                  <span className="codicon codicon-symbol-misc settings-row-icon" aria-hidden="true" />
+                  Model
+                </span>
+                <select
+                  className="sidebar-setting-select"
+                  title="Doubao Streaming ASR 2.0"
+                  value={serverSettings.voiceInput.model}
+                  disabled={serverSettingsBusy}
+                  onChange={event => void updateServerSetting({
+                    section: 'voiceInput',
+                    field: 'model',
+                    action: 'set',
+                    value: event.target.value,
+                  }).catch(() => undefined)}
+                >
+                  {SPEECH_MODEL_OPTIONS.map(item => (
+                    <option key={item.id} value={item.id}>{item.label}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+          <div className="voice-input-settings-menu">
+            <div className="settings-row sidebar-setting-row">
+              <span>
+                <span className="codicon codicon-unmute settings-row-icon" aria-hidden="true" />
+                Text-to-Speech
+              </span>
+            </div>
+            <ServerSecretEditor
+              label="MiMo TTS API Key"
+              section="textToSpeech"
+              configured={serverSettings.textToSpeech.configured}
+              updatedAt={serverSettings.textToSpeech.updatedAt}
+              busy={serverSettingsBusy}
+              onUpdate={updateServerSetting}
+            />
+            <div className="voice-input-settings-nested">
+              <label className="settings-row sidebar-setting-row voice-input-settings-child-row">
+                <span>
+                  <span className="codicon codicon-symbol-misc settings-row-icon" aria-hidden="true" />
+                  Model
+                </span>
+                <select
+                  className="sidebar-setting-select"
+                  value={serverSettings.textToSpeech.model}
+                  disabled={serverSettingsBusy}
+                  onChange={event => void updateServerSetting({
+                    section: 'textToSpeech',
+                    field: 'model',
+                    action: 'set',
+                    value: event.target.value as TtsModelId,
+                  }).catch(() => undefined)}
+                >
+                  {TTS_MODEL_OPTIONS.map(item => (
+                    <option key={item.id} value={item.id}>{item.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="settings-row sidebar-setting-row voice-input-settings-child-row">
+                <span>
+                  <span className="codicon codicon-person settings-row-icon" aria-hidden="true" />
+                  Voice
+                </span>
+                <select
+                  className="sidebar-setting-select"
+                  value={serverSettings.textToSpeech.voice}
+                  disabled={serverSettingsBusy}
+                  onChange={event => void updateServerSetting({
+                    section: 'textToSpeech',
+                    field: 'voice',
+                    action: 'set',
+                    value: event.target.value as TtsVoiceId,
+                  }).catch(() => undefined)}
+                >
+                  {TTS_VOICE_OPTIONS.map(item => (
+                    <option key={item.id} value={item.id}>{item.label}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+          <div className="voice-input-settings-menu">
+            <div className="settings-row sidebar-setting-row">
+              <span>
+                <span className="codicon codicon-sparkle settings-row-icon" aria-hidden="true" />
+                DeepSeek
+              </span>
+            </div>
+            <ServerSecretEditor
+              label="DeepSeek API Key"
+              section="deepSeek"
+              configured={serverSettings.deepSeek.configured}
+              updatedAt={serverSettings.deepSeek.updatedAt}
+              busy={serverSettingsBusy}
+              onUpdate={updateServerSetting}
+            />
+          </div>
+          {serverSettingsError ? (
+            <div className="voice-input-settings-nested">
+              <div className="settings-metadata-line">{serverSettingsError}</div>
+            </div>
+          ) : null}
         </>
         )})}
         {renderSettingsSection({id: 'connection', title: 'Connection', icon: 'radio-tower', rows: (
@@ -482,26 +512,6 @@ export function SettingsRootContent({
           </span>
           <span className="codicon codicon-chevron-right" aria-hidden="true" />
         </button>
-        <div className="voice-input-settings-menu">
-          {backendSecretKinds.map(kind => (
-            <BackendSecretEditor
-              key={kind}
-              kind={kind}
-              status={backendSecretStatuses.find(item => item.kind === kind)}
-              busy={backendSecretBusy}
-              onReplace={replaceBackendSecret}
-              onClear={clearBackendSecret}
-            />
-          ))}
-          {backendSecretError ? (
-            <div className="voice-input-settings-nested">
-              <div className="settings-metadata-line">{backendSecretError}</div>
-              <button type="button" disabled={backendSecretBusy} onClick={() => void retryBackendSecretMigration()}>
-                Retry
-              </button>
-            </div>
-          ) : null}
-        </div>
         </>
         )})}
         {renderSettingsSection({id: 'code-display', title: 'Code Display', icon: 'code', rows: (
