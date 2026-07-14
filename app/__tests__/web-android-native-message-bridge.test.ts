@@ -1,4 +1,8 @@
-import {createAndroidNativeMessageClient} from '../web/src/platform/android/androidNativeMessageBridge';
+import {
+  createAndroidNativeMessageClient,
+  getAndroidNativeRpcFacade,
+} from '../web/src/platform/android/androidNativeMessageBridge';
+import {createAndroidNativeMessageTestHost} from '../testUtils/androidNativeMessageTestHost';
 
 describe('Android native web message bridge', () => {
   test('sends the unified request envelope and resolves the matching reply', async () => {
@@ -40,5 +44,27 @@ describe('Android native web message bridge', () => {
     target.onmessage?.({data: JSON.stringify({requestId: 'other', ok: true, result: {}})});
     target.onmessage?.({data: JSON.stringify({requestId: 'request-2', ok: false, error: 'request_not_allowed'})});
     await expect(response).rejects.toThrow('request_not_allowed');
+  });
+
+  test('exposes origin-gated speech credential actions through the RPC facade', async () => {
+    const {target, requests} = createAndroidNativeMessageTestHost({
+      'speech.credentialState': () => ({configured: false, version: ''}),
+      'speech.configureCredential': () => ({configured: true, version: 'v1'}),
+      'speech.clearCredential': () => ({configured: false, version: ''}),
+    });
+    const facade = getAndroidNativeRpcFacade({WheelMakerAndroidNative: target});
+
+    await facade?.getSpeechCredentialState();
+    await facade?.configureSpeechCredential('secret-token', 'v1');
+    await facade?.clearSpeechCredential();
+
+    expect(requests).toEqual([
+      expect.objectContaining({action: 'speech.credentialState', payload: {}}),
+      expect.objectContaining({
+        action: 'speech.configureCredential',
+        payload: {accessToken: 'secret-token', version: 'v1'},
+      }),
+      expect.objectContaining({action: 'speech.clearCredential', payload: {}}),
+    ]);
   });
 });

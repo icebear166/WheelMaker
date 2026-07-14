@@ -361,7 +361,9 @@ import {
 import {
   createAndroidNativeSpeechRuntime,
   getAndroidNativeSpeechBridge,
+  isAndroidNativeSpeechAuthenticationError,
   isAndroidNativeSpeechHost,
+  synchronizeAndroidSpeechCredential,
   type AndroidNativeSpeechEvent,
   type AndroidNativeSpeechRuntime,
 } from '../platform/android/androidNativeSpeechRuntime';
@@ -11167,12 +11169,7 @@ export function App() {
     }
     try {
       if (transportMode === 'android-native') {
-		const results = await Promise.allSettled([
-			androidSpeechRuntime?.cancel(streamId, reason),
-			service.cancelSpeech({streamId, reason}),
-		]);
-		const backend = results[1];
-		if (backend?.status === 'rejected') throw backend.reason;
+        await androidSpeechRuntime?.cancel(streamId, reason);
       } else {
         await service.cancelSpeech({streamId, reason});
       }
@@ -11218,10 +11215,7 @@ export function App() {
     }
     if (streamId && options.cancelStream !== false && (transportMode === 'android-native' || connectedRef.current)) {
       const cancelPromise = transportMode === 'android-native'
-		? Promise.allSettled([
-			androidSpeechRuntime?.cancel(streamId, 'error'),
-			service.cancelSpeech({streamId, reason: 'error'}),
-		  ]).then(() => undefined)
+        ? androidSpeechRuntime?.cancel(streamId, 'error')
         : service.cancelSpeech({streamId, reason: 'error'});
       cancelPromise?.catch(err => {
         logVoiceInputDiagnostic('error', 'preserve_cancel_failed', {
@@ -11643,46 +11637,13 @@ export function App() {
     finishVoiceInputPreservingTranscript(payload.message, {cancelStream: false});
   };
 
-	const finishAndroidRegistryStream = async () => {
-		const generation = voiceStartGenerationRef.current;
-		try {
-			await voiceSendQueueRef.current?.drain();
-			const streamId = voiceStreamIdRef.current;
-			if (!streamId || !isVoiceGenerationActive(generation)) return;
-			await service.finishSpeech({streamId});
-			voiceAwaitingFinalRef.current = true;
-			voiceRecordingRef.current = false;
-			voiceInteractionModeRef.current = null;
-			setVoiceInteractionMode(null);
-			setVoiceRecording(true);
-			setVoiceRecordingStatus('recognizing');
-			setVoiceCancelIntent(false);
-			setVoiceLevel(0);
-			scheduleVoiceFinalTimeout(generation);
-			logVoiceInputState('debug', 'native_backend_finish_completed');
-		} catch (err) {
-			if (!isVoiceGenerationActive(generation)) return;
-			finishVoiceInputPreservingTranscript(err instanceof Error ? err.message : String(err));
-		}
-	};
-
   const handleAndroidNativeSpeechEvent = (event: AndroidNativeSpeechEvent) => {
-		if (event.type === 'audio') {
-			if (event.streamId !== voiceStreamIdRef.current) return;
-			try {
-				const binary = window.atob(event.pcm);
-				const pcm = Uint8Array.from(binary, char => char.charCodeAt(0));
-				voiceSendQueueRef.current?.enqueue(pcm).catch(err => (
-					handleVoiceChunkSendFailure(voiceStartGenerationRef.current, err)
-				));
-			} catch (err) {
-				handleVoiceChunkSendFailure(voiceStartGenerationRef.current, err);
-			}
-			return;
-		}
     if (event.type === 'error') {
       if (event.streamId && event.streamId !== voiceStreamIdRef.current) {
         return;
+      }
+      if (isAndroidNativeSpeechAuthenticationError(event.code)) {
+        void androidSpeechRuntimeRef.current?.clearCredential().catch(() => undefined);
       }
       handleVoiceSpeechErrorEvent({
         streamId: event.streamId,
@@ -11713,13 +11674,17 @@ export function App() {
       }
       return;
     }
-		if (event.type === 'closed' && event.reason === 'finished') {
-			void finishAndroidRegistryStream();
-			return;
-		}
-		if (event.type === 'closed' && event.reason === 'app_background') {
-			finishVoiceInputPreservingTranscript();
-		}
+    if (event.type === 'transcript') {
+      handleVoiceSpeechTranscriptEvent({
+        streamId: event.streamId,
+        text: event.text,
+        final: event.final,
+      });
+      return;
+    }
+    if (event.type === 'closed' && event.reason !== 'finished') {
+      finishVoiceInputPreservingTranscript();
+    }
   };
 
   const startVoiceInput = async (interactionMode: VoiceInputInteractionMode = 'locked') => {
@@ -11800,14 +11765,16 @@ export function App() {
         if (!androidSpeechRuntime) {
           throw new Error('Android native speech is unavailable.');
         }
-		if (!connectedRef.current) await connect({silentReconnect: true});
-		const started = await startVoiceRegistryStream(generation, settings);
-		if (!started || !voiceStreamIdRef.current) throw new Error('Registry speech did not start.');
-		const registryStreamId = voiceStreamIdRef.current;
-		logVoiceInputState('debug', 'native_start_requested');
+        if (!connectedRef.current) await connect({silentReconnect: true});
+        await synchronizeAndroidSpeechCredential(
+          androidSpeechRuntime,
+          serverSettings,
+          () => service.getAndroidSpeechCredential(),
+        );
+        logVoiceInputState('debug', 'native_start_requested');
         const response = await androidSpeechRuntime.start({
-			streamId: registryStreamId,
           provider: 'volcengine',
+          model: settings.model,
           audio: {
             format: 'pcm',
             codec: 'raw',
@@ -11818,10 +11785,9 @@ export function App() {
         });
         if (!isVoiceGenerationActive(generation)) {
           await androidSpeechRuntime.cancel(response.streamId, 'gesture');
-			await service.cancelSpeech({streamId: registryStreamId, reason: 'gesture'});
           return;
         }
-		if (response.streamId !== registryStreamId) throw new Error('Android speech stream does not match Registry stream.');
+        voiceStreamIdRef.current = response.streamId;
         voiceRemoteStartRequestedRef.current = true;
         setVoiceRecordingStatus('buffering');
         logVoiceInputState('debug', 'native_started', {streamIdPresent: true});
@@ -11844,7 +11810,13 @@ export function App() {
 		const activeStreamId = voiceStreamIdRef.current;
       stopVoiceCapture();
       clearVoiceInputState();
-		if (activeStreamId) service.cancelSpeech({streamId: activeStreamId, reason: 'error'}).catch(() => undefined);
+      if (activeStreamId) {
+        if (nativeSpeechHost) {
+          androidSpeechRuntime?.cancel(activeStreamId, 'error').catch(() => undefined);
+        } else {
+          service.cancelSpeech({streamId: activeStreamId, reason: 'error'}).catch(() => undefined);
+        }
+      }
       logVoiceInputDiagnostic('error', 'start_failed', {
         connected,
         model: settings.model,
@@ -12057,11 +12029,25 @@ export function App() {
     }, 0);
   };
 
+  const synchronizeAndroidSpeechCredentialSnapshot = async (snapshot: ServerSettings) => {
+    if (!isAndroidNativeSpeechHost()) return;
+    const runtime = androidSpeechRuntimeRef.current ?? createAndroidNativeSpeechRuntime();
+    if (!runtime) return;
+    androidSpeechRuntimeRef.current = runtime;
+    await synchronizeAndroidSpeechCredential(
+      runtime,
+      snapshot,
+      () => service.getAndroidSpeechCredential(),
+    );
+  };
+
   const synchronizeServerSettings = async () => {
     setServerSettingsBusy(true);
     setServerSettingsError('');
     try {
-      setServerSettings(normalizeServerSettings(await service.getServerSettings()));
+      const snapshot = normalizeServerSettings(await service.getServerSettings());
+      setServerSettings(snapshot);
+      await synchronizeAndroidSpeechCredentialSnapshot(snapshot);
     } catch (settingsError) {
       setServerSettingsError(settingsError instanceof Error ? settingsError.message : String(settingsError));
     } finally {
@@ -12073,8 +12059,9 @@ export function App() {
     setServerSettingsBusy(true);
     setServerSettingsError('');
     try {
-      const updated = await service.updateServerSettings(update);
-      setServerSettings(normalizeServerSettings(updated));
+      const snapshot = normalizeServerSettings(await service.updateServerSettings(update));
+      setServerSettings(snapshot);
+      await synchronizeAndroidSpeechCredentialSnapshot(snapshot);
     } catch (settingsError) {
       setServerSettingsError(settingsError instanceof Error ? settingsError.message : String(settingsError));
       throw settingsError;
@@ -12237,6 +12224,7 @@ export function App() {
   };
 
   const returnToRegistryLogin = () => {
+    void androidSpeechRuntimeRef.current?.clearCredential().catch(() => undefined);
     supervisorManagedCloseRef.current = true;
     service.close();
     setConnected(false);
@@ -12268,6 +12256,7 @@ export function App() {
   };
 
   const handleRegistryDebugLogout = () => {
+    void androidSpeechRuntimeRef.current?.clearCredential().catch(() => undefined);
     supervisorManagedCloseRef.current = true;
     clearReconnectTimer();
     reconnectStartedAtRef.current = null;

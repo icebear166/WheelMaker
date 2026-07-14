@@ -3,6 +3,8 @@ import {
   replaceVoiceSegment,
   resolveVoiceGestureState,
 } from '../web/src/features/speech/useVoiceInputController';
+import fs from 'fs';
+import path from 'path';
 
 describe('voice input controller helpers', () => {
   test('replaces the active voice segment instead of appending text', () => {
@@ -54,5 +56,22 @@ describe('voice input controller helpers', () => {
   test('detects swipe-up cancellation threshold', () => {
     expect(resolveVoiceGestureState(200, 170)).toBe('recording');
     expect(resolveVoiceGestureState(200, 144)).toBe('cancel');
+  });
+
+  test('keeps Android direct speech out of the Registry PCM lifecycle', () => {
+    const app = fs.readFileSync(path.join(__dirname, '..', 'web/src/app/WorkspaceApp.tsx'), 'utf8');
+    const nativeStart = app.slice(
+      app.indexOf('if (nativeSpeechHost) {', app.indexOf('const startVoiceInput = async')),
+      app.indexOf("logVoiceInputState('debug', 'microphone_start_requested')"),
+    );
+
+    expect(nativeStart).toContain('synchronizeAndroidSpeechCredential');
+    expect(nativeStart).toContain('androidSpeechRuntime.start({');
+    expect(nativeStart).toContain("model: settings.model");
+    expect(nativeStart).not.toContain('service.startSpeech');
+    expect(nativeStart).not.toContain('service.sendSpeechChunk');
+    expect(nativeStart).not.toContain('streamId: registryStreamId');
+    expect(app).not.toContain('finishAndroidRegistryStream');
+    expect(app).not.toContain("event.type === 'audio'");
   });
 });

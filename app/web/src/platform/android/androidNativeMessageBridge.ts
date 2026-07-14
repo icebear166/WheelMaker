@@ -23,6 +23,9 @@ export type AndroidNativeMessageClient = {
 export type AndroidNativeRpcFacade = {
   drainWebDiagnostics(): Promise<string>;
   setDiagnosticLogLevel(logLevel: string): Promise<string>;
+  getSpeechCredentialState(): Promise<string>;
+  configureSpeechCredential(accessToken: string, version: string): Promise<string>;
+  clearSpeechCredential(): Promise<string>;
   startSpeech(payloadJson: string): Promise<string>;
   finishSpeech(streamId: string): Promise<string>;
   cancelSpeech(streamId: string, reason: string): Promise<string>;
@@ -155,6 +158,10 @@ export function getAndroidNativeRpcFacade(
   return {
     drainWebDiagnostics: () => request('diagnostics.drain'),
     setDiagnosticLogLevel: logLevel => request('diagnostics.setLogLevel', {logLevel}),
+    getSpeechCredentialState: () => request('speech.credentialState'),
+    configureSpeechCredential: (accessToken, version) =>
+      request('speech.configureCredential', {accessToken, version}),
+    clearSpeechCredential: () => request('speech.clearCredential'),
     startSpeech: payloadJson => request('speech.start', objectPayload(payloadJson)),
     finishSpeech: streamId => request('speech.finish', {streamId}),
     cancelSpeech: (streamId, reason) => request('speech.cancel', {streamId, reason}),
