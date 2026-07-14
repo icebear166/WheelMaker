@@ -112,6 +112,21 @@ func TestRegistryDefaultProtocolVersionIs26(t *testing.T) {
 	}
 }
 
+func TestRegistrySessionActionMethods(t *testing.T) {
+	for _, method := range []string{RegistryMethodSessionStatus, RegistryMethodSessionCompact} {
+		desc, ok := RegistryMethod(method)
+		if !ok {
+			t.Fatalf("method %q is not registered", method)
+		}
+		if desc.Route != RegistryRouteSessionForward || !desc.RequiresProjectID {
+			t.Fatalf("method %q descriptor=%+v", method, desc)
+		}
+		if !RegistryMethodAllowed(string(RegistryRoleClient), method) {
+			t.Fatalf("method %q should allow client", method)
+		}
+	}
+}
+
 func TestRegistryTerminalMethods(t *testing.T) {
 	tests := []struct {
 		method    string
