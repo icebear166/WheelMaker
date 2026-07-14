@@ -37,6 +37,8 @@ export type AndroidSpeechCredentialState = {
   version: string;
 };
 
+export type AndroidSpeechCredentialStartMode = 'sync' | 'cached' | 'blocked';
+
 export type AndroidNativeSpeechBridge = {
   reserveUserAction: (action: 'image.share' | 'speech.start') => Promise<string>;
   getSpeechCredentialState: () => Promise<string>;
@@ -220,6 +222,24 @@ export async function synchronizeAndroidSpeechCredential(
   } finally {
     if (credential) credential.accessToken = '';
   }
+}
+
+export function resolveAndroidSpeechCredentialStartMode({
+  credentialState,
+  snapshot,
+  connected,
+}: {
+  credentialState: AndroidSpeechCredentialState;
+  snapshot: ServerSettings;
+  connected: boolean;
+}): AndroidSpeechCredentialStartMode {
+  if (!snapshot.voiceInput.configured) {
+    return 'blocked';
+  }
+  if (connected || !credentialState.configured) {
+    return 'sync';
+  }
+  return 'cached';
 }
 
 export function isAndroidNativeSpeechAuthenticationError(code: string): boolean {

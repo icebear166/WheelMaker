@@ -19,6 +19,7 @@ import java.security.MessageDigest
 private const val ANDROID_APK_UPDATE_EVENT = "wheelmaker:android-apk-update"
 private const val ANDROID_APK_MIME_TYPE = "application/vnd.android.package-archive"
 private const val MAX_APK_UPDATE_BYTES = 200L * 1024L * 1024L
+private const val MAX_APK_DOWNLOAD_REDIRECTS = 5
 private const val APK_UPDATE_DIRECTORY = "apk-verified-updates"
 private const val STALE_APK_AGE_MILLIS = 24L * 60L * 60L * 1_000L
 internal const val ANDROID_APK_INSTALL_REQUEST_CODE = 1005
@@ -73,6 +74,35 @@ fun parseApkDownloadExpectation(rawJson: String): ApkDownloadExpectation? {
 fun sha256Hex(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256")
     .digest(bytes)
     .joinToString("") { "%02x".format(it) }
+
+fun resolveApkDownloadRedirect(currentUrl: String, location: String, hopCount: Int): String? {
+    if (hopCount !in 1..MAX_APK_DOWNLOAD_REDIRECTS) {
+        return null
+    }
+    val normalizedLocation = location.trim()
+    if (normalizedLocation.isEmpty()) {
+        return null
+    }
+    val base = try {
+        URI(currentUrl)
+    } catch (_: Exception) {
+        return null
+    }
+    val resolved = try {
+        base.resolve(normalizedLocation).normalize()
+    } catch (_: Exception) {
+        return null
+    }
+    if (
+        resolved.isOpaque ||
+        !resolved.scheme.equals("https", ignoreCase = true) ||
+        resolved.host.isNullOrBlank() ||
+        resolved.rawUserInfo != null
+    ) {
+        return null
+    }
+    return resolved.toString()
+}
 
 fun streamAndVerifyApk(
     input: InputStream,
@@ -192,28 +222,43 @@ class AndroidApkUpdateRuntime(
     }
 
     private fun downloadApk(expectation: ApkDownloadExpectation): Pair<File, VerifiedApkDownload> {
-        val request = Request.Builder().url(expectation.downloadUrl).build()
         val outputDir = File(activity.cacheDir, APK_UPDATE_DIRECTORY)
         cleanupStaleApkFiles(outputDir)
         outputDir.mkdirs()
         val output = File.createTempFile("WheelMakerAndroid-", ".apk", outputDir)
         try {
-            httpClient.newCall(request).execute().use { response ->
-                if (!response.request.url.isHttps || response.isRedirect) {
-                    throw IllegalStateException("download_redirect_rejected")
+            var currentUrl = expectation.downloadUrl
+            var redirectCount = 0
+            while (true) {
+                val request = Request.Builder().url(currentUrl).build()
+                var redirectUrl: String? = null
+                httpClient.newCall(request).execute().use { response ->
+                    if (!response.request.url.isHttps) {
+                        throw IllegalStateException("download_redirect_rejected")
+                    }
+                    if (response.isRedirect) {
+                        redirectCount += 1
+                        redirectUrl = resolveApkDownloadRedirect(
+                            currentUrl = response.request.url.toString(),
+                            location = response.header("Location").orEmpty(),
+                            hopCount = redirectCount
+                        ) ?: throw IllegalStateException("download_redirect_rejected")
+                        return@use
+                    }
+                    if (!response.isSuccessful) {
+                        throw IllegalStateException("download_failed_${response.code}")
+                    }
+                    val body = response.body ?: throw IllegalStateException("download_empty")
+                    val verified = streamAndVerifyApk(
+                        input = body.byteStream(),
+                        output = output,
+                        expectedSize = expectation.size,
+                        contentLength = body.contentLength(),
+                        expectedSha256 = expectation.sha256
+                    )
+                    return output to verified
                 }
-                if (!response.isSuccessful) {
-                    throw IllegalStateException("download_failed_${response.code}")
-                }
-                val body = response.body ?: throw IllegalStateException("download_empty")
-                val verified = streamAndVerifyApk(
-                    input = body.byteStream(),
-                    output = output,
-                    expectedSize = expectation.size,
-                    contentLength = body.contentLength(),
-                    expectedSha256 = expectation.sha256
-                )
-                return output to verified
+                currentUrl = redirectUrl ?: throw IllegalStateException("download_redirect_rejected")
             }
         } catch (error: Exception) {
             output.delete()

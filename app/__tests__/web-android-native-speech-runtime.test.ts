@@ -3,6 +3,7 @@ import {
   getAndroidNativeSpeechBridge,
   isAndroidNativeSpeechAuthenticationError,
   isAndroidNativeSpeechHost,
+  resolveAndroidSpeechCredentialStartMode,
   synchronizeAndroidSpeechCredential,
   type AndroidNativeSpeechEvent,
   type AndroidNativeSpeechRuntime,
@@ -107,6 +108,31 @@ describe('android native speech runtime', () => {
 
     await synchronizeAndroidSpeechCredential(runtime, DEFAULT_SERVER_SETTINGS, loadCredential);
     expect(runtime.clearCredential).toHaveBeenCalledTimes(1);
+  });
+
+  test('reuses cached native credential when disconnected and only blocks when nothing is cached', () => {
+    const configured = {
+      ...DEFAULT_SERVER_SETTINGS,
+      voiceInput: {configured: true, updatedAt: 'v1', model: 'doubao-streaming-asr-2.0' as const},
+    };
+
+    expect(resolveAndroidSpeechCredentialStartMode({
+      credentialState: {configured: true, version: 'stale-v0'},
+      snapshot: configured,
+      connected: false,
+    })).toBe('cached');
+
+    expect(resolveAndroidSpeechCredentialStartMode({
+      credentialState: {configured: false, version: ''},
+      snapshot: configured,
+      connected: false,
+    })).toBe('sync');
+
+    expect(resolveAndroidSpeechCredentialStartMode({
+      credentialState: {configured: true, version: 'v1'},
+      snapshot: configured,
+      connected: true,
+    })).toBe('sync');
   });
 
   test('recognizes provider authentication errors without treating network failures as auth', () => {

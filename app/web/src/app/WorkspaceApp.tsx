@@ -368,6 +368,7 @@ import {
   getAndroidNativeSpeechBridge,
   isAndroidNativeSpeechAuthenticationError,
   isAndroidNativeSpeechHost,
+  resolveAndroidSpeechCredentialStartMode,
   synchronizeAndroidSpeechCredential,
   type AndroidNativeSpeechEvent,
   type AndroidNativeSpeechRuntime,
@@ -11773,12 +11774,23 @@ export function App() {
           throw new Error('Android native speech is unavailable.');
         }
         const nativeSpeechStartToken = await androidSpeechRuntime.reserveStart();
-        if (!connectedRef.current) await connect({silentReconnect: true});
-        await synchronizeAndroidSpeechCredential(
-          androidSpeechRuntime,
-          serverSettings,
-          () => service.getAndroidSpeechCredential(),
-        );
+        const credentialState = await androidSpeechRuntime.credentialState();
+        const credentialStartMode = resolveAndroidSpeechCredentialStartMode({
+          credentialState,
+          snapshot: serverSettings,
+          connected: connectedRef.current,
+        });
+        if (credentialStartMode === 'blocked') {
+          throw new Error('Voice input is not configured.');
+        }
+        if (credentialStartMode === 'sync') {
+          if (!connectedRef.current) await connect({silentReconnect: true});
+          await synchronizeAndroidSpeechCredential(
+            androidSpeechRuntime,
+            serverSettings,
+            () => service.getAndroidSpeechCredential(),
+          );
+        }
         logVoiceInputState('debug', 'native_start_requested');
         const response = await androidSpeechRuntime.start({
           provider: 'volcengine',

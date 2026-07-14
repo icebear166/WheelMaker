@@ -2469,7 +2469,7 @@ describe('web chat integration', () => {
 });
 
 describe('Android deferred native action ordering', () => {
-  test('reserves image sharing before render state and speech before reconnect', () => {
+  test('reserves image sharing before render state and reuses cached speech credential before forcing reconnect', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
 
@@ -2480,11 +2480,17 @@ describe('Android deferred native action ordering', () => {
     expect(imageReserveIndex).toBeLessThan(imageRenderStateIndex);
 
     const nativeSpeechBranchIndex = mainTsx.indexOf('if (nativeSpeechHost) {');
+    const nativeSpeechBranchEnd = mainTsx.indexOf("logVoiceInputState('debug', 'microphone_start_requested')", nativeSpeechBranchIndex);
+    const nativeSpeechBranch = mainTsx.slice(nativeSpeechBranchIndex, nativeSpeechBranchEnd);
     const speechReserveIndex = mainTsx.indexOf('await androidSpeechRuntime.reserveStart()', nativeSpeechBranchIndex);
-    const connectIndex = mainTsx.indexOf('if (!connectedRef.current) await connect', nativeSpeechBranchIndex);
+    const credentialStateIndex = mainTsx.indexOf('await androidSpeechRuntime.credentialState()', nativeSpeechBranchIndex);
+    const startModeIndex = mainTsx.indexOf('resolveAndroidSpeechCredentialStartMode({', nativeSpeechBranchIndex);
     const speechStartIndex = mainTsx.indexOf('await androidSpeechRuntime.start(', nativeSpeechBranchIndex);
     expect(speechReserveIndex).toBeGreaterThan(nativeSpeechBranchIndex);
-    expect(speechReserveIndex).toBeLessThan(connectIndex);
-    expect(connectIndex).toBeLessThan(speechStartIndex);
+    expect(speechReserveIndex).toBeLessThan(credentialStateIndex);
+    expect(credentialStateIndex).toBeLessThan(startModeIndex);
+    expect(startModeIndex).toBeLessThan(speechStartIndex);
+    expect(nativeSpeechBranch).toContain("if (credentialStartMode === 'sync') {");
+    expect(nativeSpeechBranch).toContain("if (!connectedRef.current) await connect({silentReconnect: true});");
   });
 });

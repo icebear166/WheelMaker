@@ -88,6 +88,41 @@ class AndroidApkUpdateRuntimeTest {
 	}
 
     @Test
+    fun apkDownloadRedirectsAllowBoundedHttpsHopsOnly() {
+        assertEquals(
+            "https://release-assets.githubusercontent.com/github-production-release-asset/example.apk",
+            resolveApkDownloadRedirect(
+                currentUrl = "https://github.com/swm8023/WheelMaker/releases/download/android-v1/WheelMakerAndroid.apk",
+                location = "https://release-assets.githubusercontent.com/github-production-release-asset/example.apk",
+                hopCount = 1
+            )
+        )
+        assertEquals(
+            "https://github.com/downloads/WheelMakerAndroid.apk",
+            resolveApkDownloadRedirect(
+                currentUrl = "https://github.com/swm8023/WheelMaker/releases/download/android-v1/WheelMakerAndroid.apk",
+                location = "/downloads/WheelMakerAndroid.apk",
+                hopCount = 2
+            )
+        )
+        assertNull(resolveApkDownloadRedirect(
+            currentUrl = "https://github.com/swm8023/WheelMaker/releases/download/android-v1/WheelMakerAndroid.apk",
+            location = "http://release-assets.githubusercontent.com/github-production-release-asset/example.apk",
+            hopCount = 1
+        ))
+        assertNull(resolveApkDownloadRedirect(
+            currentUrl = "https://github.com/swm8023/WheelMaker/releases/download/android-v1/WheelMakerAndroid.apk",
+            location = "https://user:pass@release-assets.githubusercontent.com/github-production-release-asset/example.apk",
+            hopCount = 1
+        ))
+        assertNull(resolveApkDownloadRedirect(
+            currentUrl = "https://github.com/swm8023/WheelMaker/releases/download/android-v1/WheelMakerAndroid.apk",
+            location = "https://release-assets.githubusercontent.com/github-production-release-asset/example.apk",
+            hopCount = 6
+        ))
+    }
+
+    @Test
     fun bridgeExposesAndroidApkUpdateMethods() {
         val bridge = source("src/main/java/com/wheelmaker/android/WheelMakerBridge.kt")
         val mainActivity = source("src/main/java/com/wheelmaker/android/MainActivity.kt")
