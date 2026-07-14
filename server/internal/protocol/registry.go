@@ -161,28 +161,39 @@ type RegistryDeviceSessionRevokeAllResponse struct {
 	Revoked int `json:"revoked"`
 }
 
-type SecretKind string
-
-const (
-	SecretKindDeepSeek      SecretKind = "deepseek"
-	SecretKindVolcengineASR SecretKind = "volcengineAsr"
-	SecretKindMiMoTTS       SecretKind = "mimoTts"
-)
-
-type SecretStatus struct {
-	Kind       SecretKind `json:"kind"`
-	Configured bool       `json:"configured"`
-	UpdatedAt  string     `json:"updatedAt,omitempty"`
+type ServerFeatureConfig struct {
+	Configured bool   `json:"configured"`
+	UpdatedAt  string `json:"updatedAt,omitempty"`
 }
 
-type SecretStatusResponse struct {
-	Secrets []SecretStatus `json:"secrets"`
+type ServerVoiceInputConfig struct {
+	ServerFeatureConfig
+	Model string `json:"model"`
 }
 
-type SecretUpdatePayload struct {
-	Kind   SecretKind `json:"kind"`
-	Action string     `json:"action"`
-	Value  string     `json:"value,omitempty"`
+type ServerTextToSpeechConfig struct {
+	ServerFeatureConfig
+	Model string `json:"model"`
+	Voice string `json:"voice"`
+}
+
+type ServerConfigResponse struct {
+	VoiceInput   ServerVoiceInputConfig   `json:"voiceInput"`
+	TextToSpeech ServerTextToSpeechConfig `json:"textToSpeech"`
+	DeepSeek     ServerFeatureConfig      `json:"deepSeek"`
+}
+
+type ServerConfigUpdatePayload struct {
+	Section string `json:"section"`
+	Field   string `json:"field"`
+	Action  string `json:"action"`
+	Value   string `json:"value,omitempty"`
+}
+
+type AndroidSpeechCredentialResponse struct {
+	AccessToken string `json:"accessToken"`
+	Version     string `json:"version"`
+	Model       string `json:"model"`
 }
 
 type TTSSynthesizePayload struct {

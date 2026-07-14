@@ -2,12 +2,15 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/swm8023/wheelmaker/internal/shared"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/swm8023/wheelmaker/internal/serverdata"
+	"github.com/swm8023/wheelmaker/internal/shared"
 )
 
 func TestWheelmakerLogDir(t *testing.T) {
@@ -53,8 +56,14 @@ func TestLoadValidatedRuntimeConfigAcceptsCustomRegistryToken(t *testing.T) {
 func TestRunRegistryConfigIncludesStateDir(t *testing.T) {
 	stateDir := filepath.Join(t.TempDir(), ".wheelmaker")
 	cfg := registryServerConfig("127.0.0.1:9630", "token", stateDir)
-	if cfg.Addr != "127.0.0.1:9630" || cfg.Token != "token" || cfg.StateDir != stateDir || cfg.LogDir != filepath.Join(stateDir, "log") {
+	if cfg.Addr != "127.0.0.1:9630" || cfg.Token != "token" || cfg.StateDir != stateDir || cfg.LogDir != filepath.Join(stateDir, "log") || cfg.ServerData == nil {
 		t.Fatalf("registryServerConfig()=%+v", cfg)
+	}
+	if err := cfg.ServerData.UpdateSecret(serverdata.SecretDeepSeek, "set", "short", time.Now()); err != nil {
+		t.Fatalf("ServerData.UpdateSecret(): %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(stateDir, "db", "server-data.json")); err != nil {
+		t.Fatalf("server data path: %v", err)
 	}
 }
 

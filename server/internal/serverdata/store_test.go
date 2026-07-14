@@ -225,3 +225,20 @@ func TestStoreValidatesInputs(t *testing.T) {
 		})
 	}
 }
+
+func TestStoreAcceptsExistingTTSOptions(t *testing.T) {
+	models := []string{"mimo-v2-tts", "mimo-v2.5-tts", "mimo-v2.5-tts-voiceclone", "mimo-v2.5-tts-voicedesign"}
+	voices := []string{"mimo_default", "冰糖", "茉莉", "苏打", "白桦", "Mia", "Chloe", "Milo", "Dean"}
+	for _, model := range models {
+		store := New(filepath.Join(t.TempDir(), "server-data.json"))
+		if err := store.UpdateTTS(model, TTSVoiceMia, time.Now()); err != nil {
+			t.Fatalf("model %q: %v", model, err)
+		}
+	}
+	for _, voice := range voices {
+		store := New(filepath.Join(t.TempDir(), "server-data.json"))
+		if err := store.UpdateTTS(TTSModelMiMoV25, voice, time.Now()); err != nil {
+			t.Fatalf("voice %q: %v", voice, err)
+		}
+	}
+}

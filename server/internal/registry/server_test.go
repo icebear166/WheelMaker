@@ -7,6 +7,7 @@ import (
 	"errors"
 	"github.com/gorilla/websocket"
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
+	"github.com/swm8023/wheelmaker/internal/serverdata"
 	logger "github.com/swm8023/wheelmaker/internal/shared"
 	"net"
 	"net/http"
@@ -1799,22 +1800,12 @@ func TestRegistryDeepSeekSecretRejectsClientAPIKey(t *testing.T) {
 }
 
 func TestRegistryDeepSeekSecretIsInjectedOnlyForBackendForward(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.json")
-	cfg := logger.AppConfig{
-		Projects: []logger.ProjectConfig{{Name: "p", Path: "."}},
-		Secrets: logger.SecretsConfig{
-			DeepSeek: logger.SecretValueConfig{Value: "backend-only-secret"},
-		},
-	}
-	raw, err := json.Marshal(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := logger.WriteConfigFile(path, raw); err != nil {
+	store := serverdata.New(filepath.Join(t.TempDir(), "server-data.json"))
+	if err := store.UpdateSecret(serverdata.SecretDeepSeek, "set", "backend-only-secret", time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
-	s := New(Config{ConfigPath: path})
+	s := New(Config{ServerData: store})
 	prepared, requestErr := s.prepareHubStatePayload(envelope{
 		Method: rp.RegistryMethodHubStateAction,
 		Payload: rp.MustRaw(map[string]any{
@@ -1838,16 +1829,8 @@ func TestRegistryDeepSeekSecretIsInjectedOnlyForBackendForward(t *testing.T) {
 }
 
 func TestRegistryDeepSeekSecretMissingReturnsNotConfigured(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "config.json")
-	raw, err := json.Marshal(logger.AppConfig{Projects: []logger.ProjectConfig{{Name: "p", Path: "."}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := logger.WriteConfigFile(path, raw); err != nil {
-		t.Fatal(err)
-	}
-
-	s := New(Config{ConfigPath: path})
+	store := serverdata.New(filepath.Join(t.TempDir(), "server-data.json"))
+	s := New(Config{ServerData: store})
 	_, requestErr := s.prepareHubStatePayload(envelope{
 		Method: rp.RegistryMethodHubStateAction,
 		Payload: rp.MustRaw(map[string]any{

@@ -20,6 +20,7 @@ import (
 	"github.com/swm8023/wheelmaker/internal/portrelay"
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
 	"github.com/swm8023/wheelmaker/internal/security"
+	"github.com/swm8023/wheelmaker/internal/serverdata"
 )
 
 const (
@@ -53,7 +54,7 @@ type Config struct {
 	ServerVersion      string
 	LogDir             string
 	StateDir           string
-	ConfigPath         string
+	ServerData         ServerDataStore
 	IPLocationResolver IPLocationResolver
 }
 
@@ -258,7 +259,7 @@ type Server struct {
 	webSessions  *webSessionStore
 	loginLimiter *loginLimiter
 	ipLocation   IPLocationResolver
-	secrets      *secretStore
+	serverData   ServerDataStore
 
 	speech *speechService
 	tts    *ttsService
@@ -276,6 +277,7 @@ type connectionState struct {
 	peer            *peerConn
 	browserSession  bool
 	browserDeviceID string
+	clientName      string
 	seenRequestIDs  *requestIDWindow
 	lastProjectSeq  map[string]int64
 }
@@ -388,9 +390,6 @@ func New(cfg Config) *Server {
 	if cfg.LogDir == "" {
 		cfg.LogDir = defaultDebugUploadLogDir()
 	}
-	if strings.TrimSpace(cfg.ConfigPath) == "" && strings.TrimSpace(cfg.StateDir) != "" {
-		cfg.ConfigPath = filepath.Join(cfg.StateDir, "config.json")
-	}
 	s := &Server{
 		cfg:          cfg,
 		hubs:         make(map[string]rp.HubSnapshot),
@@ -405,7 +404,7 @@ func New(cfg Config) *Server {
 		),
 		loginLimiter: newLoginLimiter(time.Now),
 		ipLocation:   cfg.IPLocationResolver,
-		secrets:      newSecretStore(cfg.ConfigPath),
+		serverData:   cfg.ServerData,
 	}
 	s.speech = newSpeechService(newVolcengineSpeechProvider(), s.resolveVolcengineASRSecret)
 	s.tts = newTTSService(s.resolveMiMoTTSSecret)
@@ -609,6 +608,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 
 func shouldHandleRegistryRequestAsync(method string) bool {
 	return rp.RegistryRelayControlMethod(method) ||
+		rp.RegistryServerDataMethod(method) ||
 		rp.RegistryTTSMethod(method) ||
 		rp.RegistryHubStateMethod(method) || isTerminalHubRequestMethod(method) ||
 		isClientForwardMethod(method)
@@ -617,6 +617,9 @@ func shouldHandleRegistryRequestAsync(method string) bool {
 func registryRequestQueueKey(method string) string {
 	if rp.RegistryRelayControlMethod(method) {
 		return "registry.relay"
+	}
+	if rp.RegistryServerDataMethod(method) {
+		return "server.data"
 	}
 	return ""
 }
@@ -635,8 +638,8 @@ func (s *Server) handleRequest(state *connectionState, in envelope) {
 		s.handleDebugUploadLog(state.peer, in)
 	case rp.RegistrySecuritySessionMethod(in.Method):
 		s.handleDeviceSessionRequest(state.peer, state, in)
-	case rp.RegistrySecuritySecretMethod(in.Method):
-		s.handleSecretRequest(state.peer, in)
+	case rp.RegistryServerDataMethod(in.Method):
+		s.handleServerDataRequest(state.peer, state, in)
 	case in.Method == rp.RegistryMethodHubPing:
 		_ = s.writeResponse(state.peer, in.RequestID, in.Method, "", map[string]any{"ok": true})
 	case rp.RegistryRelayControlMethod(in.Method):
@@ -850,6 +853,11 @@ func (s *Server) handleConnectInit(peer *peerConn, state *connectionState, in en
 		return true
 	}
 	role := strings.TrimSpace(payload.Role)
+	clientName := strings.TrimSpace(payload.ClientName)
+	if clientName == "" || len(clientName) > 80 {
+		_ = s.writeError(peer, in.RequestID, in.Method, codeInvalidArgument, "clientName must be between 1 and 80 bytes", nil)
+		return true
+	}
 	if state.browserSession && (role != string(rp.RegistryRoleClient) || strings.TrimSpace(payload.Token) != "") {
 		_ = s.writeError(peer, in.RequestID, in.Method, codeForbidden, "browser session requires client role without token", nil)
 		return false
@@ -876,6 +884,7 @@ func (s *Server) handleConnectInit(peer *peerConn, state *connectionState, in en
 	}
 
 	state.initialized = true
+	state.clientName = clientName
 	state.role = role
 	state.hubID = strings.TrimSpace(payload.HubID)
 	state.scopeHubID = strings.TrimSpace(payload.HubID)
@@ -1283,11 +1292,14 @@ func (s *Server) prepareHubStatePayload(in envelope) (json.RawMessage, *hubState
 		return nil, &hubStatePayloadError{code: codeInvalidArgument, message: "DeepSeek stats params only allow rangeType and month"}
 	}
 
-	secret, configured, err := s.secrets.Value(secretKindDeepSeek)
+	if s.serverData == nil {
+		return nil, &hubStatePayloadError{code: "not_configured", message: "DeepSeek is not configured"}
+	}
+	secret, _, err := s.serverData.Secret(serverdata.SecretDeepSeek)
 	if err != nil {
 		return nil, &hubStatePayloadError{code: codeInternal, message: "read DeepSeek backend secret failed"}
 	}
-	if !configured {
+	if secret == "" {
 		return nil, &hubStatePayloadError{code: "not_configured", message: "DeepSeek is not configured"}
 	}
 	prepared, err := json.Marshal(map[string]any{

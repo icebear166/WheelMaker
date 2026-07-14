@@ -13,6 +13,7 @@ import (
 	"github.com/swm8023/wheelmaker/internal/hub"
 	"github.com/swm8023/wheelmaker/internal/registry"
 	"github.com/swm8023/wheelmaker/internal/security"
+	"github.com/swm8023/wheelmaker/internal/serverdata"
 	logger "github.com/swm8023/wheelmaker/internal/shared"
 	"github.com/swm8023/wheelmaker/internal/shared/winsvc"
 )
@@ -196,7 +197,7 @@ func registryServerConfig(addr, token, stateDir string) registry.Config {
 		Token:              token,
 		LogDir:             filepath.Join(stateDir, "log"),
 		StateDir:           stateDir,
-		ConfigPath:         filepath.Join(stateDir, "config.json"),
+		ServerData:         serverdata.New(filepath.Join(stateDir, "db", "server-data.json")),
 		IPLocationResolver: registry.NewIPWhoisLocationResolver(),
 	}
 }

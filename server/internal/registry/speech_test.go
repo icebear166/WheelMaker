@@ -10,13 +10,12 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/swm8023/wheelmaker/internal/shared"
+	"github.com/swm8023/wheelmaker/internal/serverdata"
 )
 
 func TestSpeechBackendSecretIsPassedOnlyToProvider(t *testing.T) {
 	provider := newFakeSpeechProvider()
-	configPath := writeSpeechSecretConfig(t, "backend-speech-key")
-	s := New(Config{ConfigPath: configPath})
+	s := New(Config{ServerData: writeSpeechServerData(t, "backend-speech-key")})
 	s.speech.provider = provider
 	ts := httptestNewRegistryServer(t, s.Handler())
 	client := dialWS(t, "http://"+ts+"/ws")
@@ -38,7 +37,7 @@ func TestSpeechBackendSecretIsPassedOnlyToProvider(t *testing.T) {
 
 func TestSpeechRejectsAPIKeyFromClient(t *testing.T) {
 	provider := newFakeSpeechProvider()
-	s := New(Config{ConfigPath: writeSpeechSecretConfig(t, "backend-key")})
+	s := New(Config{ServerData: writeSpeechServerData(t, "backend-key")})
 	s.speech.provider = provider
 	ts := httptestNewRegistryServer(t, s.Handler())
 	client := dialWS(t, "http://"+ts+"/ws")
@@ -58,7 +57,7 @@ func TestSpeechRejectsAPIKeyFromClient(t *testing.T) {
 
 func TestSpeechNotConfiguredUsesStableCode(t *testing.T) {
 	provider := newFakeSpeechProvider()
-	s := New(Config{ConfigPath: writeSpeechSecretConfig(t, "")})
+	s := New(Config{ServerData: writeSpeechServerData(t, "")})
 	s.speech.provider = provider
 	ts := httptestNewRegistryServer(t, s.Handler())
 	client := dialWS(t, "http://"+ts+"/ws")
@@ -74,16 +73,15 @@ func TestSpeechNotConfiguredUsesStableCode(t *testing.T) {
 	}
 }
 
-func writeSpeechSecretConfig(t *testing.T, value string) string {
+func writeSpeechServerData(t *testing.T, value string) *serverdata.Store {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "config.json")
-	cfg := shared.AppConfig{Projects: []shared.ProjectConfig{{Name: "p", Path: "."}}}
-	cfg.Secrets.VolcengineASR.Value = value
-	raw, _ := json.Marshal(cfg)
-	if err := shared.WriteConfigFile(path, raw); err != nil {
-		t.Fatalf("write config: %v", err)
+	store := serverdata.New(filepath.Join(t.TempDir(), "server-data.json"))
+	if value != "" {
+		if err := store.UpdateSecret(serverdata.SecretVolcengineASR, "set", value, time.Now()); err != nil {
+			t.Fatalf("write server data: %v", err)
+		}
 	}
-	return path
+	return store
 }
 
 func TestSpeechMethodsAreClientOnly(t *testing.T) {

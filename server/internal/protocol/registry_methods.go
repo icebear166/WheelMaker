@@ -35,7 +35,7 @@ const (
 	RegistryRouteClientEvent            RegistryRouteKind = "client_event"
 	RegistryRouteDebug                  RegistryRouteKind = "debug"
 	RegistryRouteSecuritySession        RegistryRouteKind = "security_session"
-	RegistryRouteSecuritySecret         RegistryRouteKind = "security_secret"
+	RegistryRouteServerData             RegistryRouteKind = "server_data"
 	RegistryRouteTerminalProjectRequest RegistryRouteKind = "terminal_project_request"
 	RegistryRouteTerminalHubRequest     RegistryRouteKind = "terminal_hub_request"
 	RegistryRouteTerminalClientEvent    RegistryRouteKind = "terminal_client_event"
@@ -75,11 +75,12 @@ const (
 	RegistryMethodSessionUpdated = "session.updated"
 	RegistryMethodSessionMessage = "session.message"
 
-	RegistryMethodSecuritySessionList      = "security.session.list"
-	RegistryMethodSecuritySessionRevoke    = "security.session.revoke"
-	RegistryMethodSecuritySessionRevokeAll = "security.session.revokeAll"
-	RegistryMethodSecuritySecretStatus     = "security.secret.status"
-	RegistryMethodSecuritySecretUpdate     = "security.secret.update"
+	RegistryMethodSecuritySessionList              = "security.session.list"
+	RegistryMethodSecuritySessionRevoke            = "security.session.revoke"
+	RegistryMethodSecuritySessionRevokeAll         = "security.session.revokeAll"
+	RegistryMethodServerConfigGet                  = "server.config.get"
+	RegistryMethodServerConfigUpdate               = "server.config.update"
+	RegistryMethodServerAndroidSpeechCredentialGet = "server.androidSpeechCredential.get"
 
 	RegistryMethodSessionList                = "session.list"
 	RegistryMethodSessionRead                = "session.read"
@@ -143,19 +144,20 @@ type RegistryMethodDescriptor struct {
 }
 
 var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
-	RegistryMethodConnectInit:              registryMethod(RegistryMethodConnectInit, RegistryRouteConnect, nil),
-	RegistryMethodConnectClose:             registryClientEventMethod(RegistryMethodConnectClose),
-	RegistryMethodHubPing:                  registryMethod(RegistryMethodHubPing, RegistryRouteHubControl, []RegistryRole{RegistryRoleHub}),
-	RegistryMethodHubStateGet:              registryHubStateMethod(RegistryMethodHubStateGet),
-	RegistryMethodHubStateRefresh:          registryHubStateMethod(RegistryMethodHubStateRefresh),
-	RegistryMethodHubStateAction:           registryHubStateMethod(RegistryMethodHubStateAction),
-	RegistryMethodHubStateUpdated:          registryClientEventMethod(RegistryMethodHubStateUpdated),
-	RegistryMethodDebugUploadLog:           registryMethod(RegistryMethodDebugUploadLog, RegistryRouteDebug, []RegistryRole{RegistryRoleClient}),
-	RegistryMethodSecuritySessionList:      registryMethod(RegistryMethodSecuritySessionList, RegistryRouteSecuritySession, []RegistryRole{RegistryRoleClient}),
-	RegistryMethodSecuritySessionRevoke:    registryMethod(RegistryMethodSecuritySessionRevoke, RegistryRouteSecuritySession, []RegistryRole{RegistryRoleClient}),
-	RegistryMethodSecuritySessionRevokeAll: registryMethod(RegistryMethodSecuritySessionRevokeAll, RegistryRouteSecuritySession, []RegistryRole{RegistryRoleClient}),
-	RegistryMethodSecuritySecretStatus:     registryMethod(RegistryMethodSecuritySecretStatus, RegistryRouteSecuritySecret, []RegistryRole{RegistryRoleClient}),
-	RegistryMethodSecuritySecretUpdate:     registryMethod(RegistryMethodSecuritySecretUpdate, RegistryRouteSecuritySecret, []RegistryRole{RegistryRoleClient}),
+	RegistryMethodConnectInit:                      registryMethod(RegistryMethodConnectInit, RegistryRouteConnect, nil),
+	RegistryMethodConnectClose:                     registryClientEventMethod(RegistryMethodConnectClose),
+	RegistryMethodHubPing:                          registryMethod(RegistryMethodHubPing, RegistryRouteHubControl, []RegistryRole{RegistryRoleHub}),
+	RegistryMethodHubStateGet:                      registryHubStateMethod(RegistryMethodHubStateGet),
+	RegistryMethodHubStateRefresh:                  registryHubStateMethod(RegistryMethodHubStateRefresh),
+	RegistryMethodHubStateAction:                   registryHubStateMethod(RegistryMethodHubStateAction),
+	RegistryMethodHubStateUpdated:                  registryClientEventMethod(RegistryMethodHubStateUpdated),
+	RegistryMethodDebugUploadLog:                   registryMethod(RegistryMethodDebugUploadLog, RegistryRouteDebug, []RegistryRole{RegistryRoleClient}),
+	RegistryMethodSecuritySessionList:              registryMethod(RegistryMethodSecuritySessionList, RegistryRouteSecuritySession, []RegistryRole{RegistryRoleClient}),
+	RegistryMethodSecuritySessionRevoke:            registryMethod(RegistryMethodSecuritySessionRevoke, RegistryRouteSecuritySession, []RegistryRole{RegistryRoleClient}),
+	RegistryMethodSecuritySessionRevokeAll:         registryMethod(RegistryMethodSecuritySessionRevokeAll, RegistryRouteSecuritySession, []RegistryRole{RegistryRoleClient}),
+	RegistryMethodServerConfigGet:                  registryMethod(RegistryMethodServerConfigGet, RegistryRouteServerData, []RegistryRole{RegistryRoleClient}),
+	RegistryMethodServerConfigUpdate:               registryMethod(RegistryMethodServerConfigUpdate, RegistryRouteServerData, []RegistryRole{RegistryRoleClient}),
+	RegistryMethodServerAndroidSpeechCredentialGet: registryMethod(RegistryMethodServerAndroidSpeechCredentialGet, RegistryRouteServerData, []RegistryRole{RegistryRoleClient}),
 
 	RegistryMethodHubReportProjects:     registryHubReportMethod(RegistryMethodHubReportProjects),
 	RegistryMethodHubReportProject:      registryHubReportMethod(RegistryMethodHubReportProject),
@@ -340,8 +342,8 @@ func RegistrySecuritySessionMethod(method string) bool {
 	return RegistryMethodHasRoute(method, RegistryRouteSecuritySession)
 }
 
-func RegistrySecuritySecretMethod(method string) bool {
-	return RegistryMethodHasRoute(method, RegistryRouteSecuritySecret)
+func RegistryServerDataMethod(method string) bool {
+	return RegistryMethodHasRoute(method, RegistryRouteServerData)
 }
 
 func RegistryHubSessionEventMethod(method string) (string, bool) {

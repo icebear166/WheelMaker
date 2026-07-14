@@ -1,6 +1,6 @@
-# WheelMaker Registry Protocol 2.5
+# WheelMaker Registry Protocol 2.6
 
-本文定义 WheelMaker Registry 2.5 协议。2.5 是一次硬切版本：Registry、Hub、App 的 `connect.init.payload.protocolVersion` 必须为 `2.5`，不保留旧端兼容入口。
+本文定义 WheelMaker Registry 2.6 协议。2.6 是一次硬切版本：Registry、Hub、App 的 `connect.init.payload.protocolVersion` 必须为 `2.6`，不保留旧端兼容入口。
 
 ## 0. 单一来源
 
@@ -52,7 +52,7 @@
   "payload": {
     "clientName": "wheelmaker-web",
     "clientVersion": "0.1.0",
-    "protocolVersion": "2.5",
+    "protocolVersion": "2.6",
     "role": "client",
     "hubId": "hub-a",
     "token": "******"
@@ -75,7 +75,7 @@
       "connectionEpoch": 42
     },
     "serverInfo": {
-      "protocolVersion": "2.5"
+      "protocolVersion": "2.6"
     }
   }
 }
@@ -86,7 +86,7 @@
 - `role` 只能是 `hub`、`client`。
 - `role=hub` 必须在 payload 中携带 `hubId`。
 - `role=client` 可选携带 `hubId`；携带后 client scope 限定在该 Hub。
-- `protocolVersion` 必须等于 `2.5`。
+- `protocolVersion` 必须等于 `2.6`。
 - 配置了 token 时必须携带并匹配。
 - 所有非 `connect.*` 业务请求必须在 `connect.init` 成功后发送。
 
@@ -100,12 +100,14 @@
 | `project.*` | Project | 文件、Git |
 | `session.*` | Session | 会话、归档、附件、配置、会话事件 |
 | `speech.*` | Registry speech | 语音输入流式通道 |
+| `server.*` | Registry adapter | 服务端配置快照、更新与 Android ASR 凭据门禁 |
+| `tts.*` | Registry TTS | 服务端文本转语音 |
 | `debug.*` | Debug | 调试日志上传 |
 
 | 角色 | 允许请求 |
 | --- | --- |
 | `hub` | `hub.report.projects`、`hub.report.project`、`hub.ping`、`session.message`、`session.updated` |
-| `client` | `registry.project.list`、`registry.relay.*`、`hub.state.*`、`project.*`、`session.*`、`speech.*`、`debug.uploadLog` |
+| `client` | `registry.project.list`、`registry.relay.*`、`hub.state.*`、`project.*`、`session.*`、`speech.*`、`server.*`、`tts.*`、`debug.uploadLog` |
 
 事件方法由服务端推送，不作为 client request 白名单处理，包括 `registry.project.report`、`hub.state.updated`、`session.message`、`session.updated`、`connect.close`。
 
@@ -448,7 +450,31 @@ Registry 下发给 Hub 的内部方法：
 - `listenPort` 与 `targetPort` 必须在 `1..65535`。
 - `hubId` 必须指向在线 Hub。
 
-## 10. Speech、Debug
+## 10. Server Data、Speech、TTS、Debug
+
+Server Data 复用已认证的 Registry WebSocket，不新增 HTTP 或 Nginx 路径：
+
+- `server.config.get` 接受空对象，返回 Voice Input、Text-to-Speech、DeepSeek 的 `configured` / `updatedAt` 以及 Model / Voice；响应永远不包含 Key。
+- `server.config.update` 接受 `section`、`field`、`action`、可选 `value`，更新成功后返回完整非敏感快照。Key 只接受 `set` / `clear`，Model / Voice 只接受 `set`。
+- `server.androidSpeechCredential.get` 接受空对象，只向“有效浏览器设备 Session + `role=client` + `clientName=wheelmaker-android`”返回 Volcengine `accessToken`、版本和 Model。
+
+Android 客户端名称只是当前单用户模型下的便利门禁，不是设备硬件证明；持有有效登录 Cookie 的调用方可以伪造该名称。该方法不会返回 DeepSeek 或 MiMo Key。
+
+`server.config.get` 响应示例：
+
+```json
+{
+  "voiceInput": {"configured": true, "updatedAt": "2026-07-14T01:02:03Z", "model": "doubao-streaming-asr-2.0"},
+  "textToSpeech": {"configured": false, "model": "mimo-v2.5-tts", "voice": "Mia"},
+  "deepSeek": {"configured": false}
+}
+```
+
+`server.config.update` Key 更新示例：
+
+```json
+{"section": "voiceInput", "field": "key", "action": "set", "value": "<access-token>"}
+```
 
 Speech：
 
@@ -457,6 +483,10 @@ Speech：
 - `speech.finish`
 - `speech.cancel`
 - 事件：`speech.transcript`、`speech.error`
+
+TTS：
+
+- `tts.synthesize`
 
 Debug：
 
@@ -504,6 +534,12 @@ Debug：
 - `projectRev`：当前由 `gitRev + worktreeRev` 派生。
 
 ## 13. 版本历史
+
+### 2.6 相比 2.5
+
+1. 协议版本硬切到 `2.6`，不接受 `2.5` 连接。
+2. 后端 Key 配置由旧 `security.secret.*` 硬切为 `server.config.*` 非敏感快照与更新。
+3. 新增受设备 Session 与 Android 客户端名称门禁的 `server.androidSpeechCredential.get`。
 
 ### 2.5 相比 2.4
 

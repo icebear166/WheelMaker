@@ -139,10 +139,10 @@ func (s *Store) UpdateVoiceInputModel(model string, _ time.Time) error {
 }
 
 func (s *Store) UpdateTTS(model, voice string, _ time.Time) error {
-	if model != TTSModelMiMoV25 {
+	if !validTTSModel(model) {
 		return fmt.Errorf("unsupported text-to-speech model %q", model)
 	}
-	if voice != TTSVoiceMia {
+	if !validTTSVoice(voice) {
 		return fmt.Errorf("unsupported text-to-speech voice %q", voice)
 	}
 	s.mu.Lock()
@@ -256,10 +256,10 @@ func validateData(data *fileData) error {
 	if data.VoiceInput.Model != VoiceInputModelDoubaoStreamingASR2 {
 		return fmt.Errorf("unsupported voice input model %q", data.VoiceInput.Model)
 	}
-	if data.TextToSpeech.Model != TTSModelMiMoV25 {
+	if !validTTSModel(data.TextToSpeech.Model) {
 		return fmt.Errorf("unsupported text-to-speech model %q", data.TextToSpeech.Model)
 	}
-	if data.TextToSpeech.Voice != TTSVoiceMia {
+	if !validTTSVoice(data.TextToSpeech.Voice) {
 		return fmt.Errorf("unsupported text-to-speech voice %q", data.TextToSpeech.Voice)
 	}
 	for _, secret := range []*secretValue{
@@ -284,6 +284,24 @@ func secretForKind(data *fileData, kind SecretKind) (*secretValue, error) {
 		return &data.TextToSpeech.APIKey, nil
 	default:
 		return nil, fmt.Errorf("unsupported secret kind %q", kind)
+	}
+}
+
+func validTTSModel(value string) bool {
+	switch value {
+	case "mimo-v2-tts", "mimo-v2.5-tts", "mimo-v2.5-tts-voiceclone", "mimo-v2.5-tts-voicedesign":
+		return true
+	default:
+		return false
+	}
+}
+
+func validTTSVoice(value string) bool {
+	switch value {
+	case "mimo_default", "冰糖", "茉莉", "苏打", "白桦", "Mia", "Chloe", "Milo", "Dean":
+		return true
+	default:
+		return false
 	}
 }
 

@@ -33,23 +33,32 @@ func TestRegistryDeviceSessionMethods(t *testing.T) {
 	}
 }
 
-func TestSecretMethodsAndSerializationAreSetOnly(t *testing.T) {
-	for _, method := range []string{RegistryMethodSecuritySecretStatus, RegistryMethodSecuritySecretUpdate} {
+func TestServerConfigMethodsAndSerializationAreSetOnly(t *testing.T) {
+	for _, method := range []string{RegistryMethodServerConfigGet, RegistryMethodServerConfigUpdate, RegistryMethodServerAndroidSpeechCredentialGet} {
 		desc, ok := RegistryMethod(method)
-		if !ok || desc.Route != RegistryRouteSecuritySecret || !RegistryMethodAllowed(string(RegistryRoleClient), method) {
-			t.Fatalf("secret method %q descriptor=%+v ok=%v", method, desc, ok)
+		if !ok || desc.Route != RegistryRouteServerData || !RegistryMethodAllowed(string(RegistryRoleClient), method) {
+			t.Fatalf("server data method %q descriptor=%+v ok=%v", method, desc, ok)
 		}
 		if RegistryMethodAllowed(string(RegistryRoleHub), method) {
-			t.Fatalf("secret method %q allowed hub", method)
+			t.Fatalf("server data method %q allowed hub", method)
 		}
 	}
-	encoded, err := json.Marshal(SecretStatusResponse{Secrets: []SecretStatus{{Kind: SecretKindDeepSeek, Configured: true, UpdatedAt: "2026-07-13T00:00:00Z"}}})
+	for _, method := range []string{"security.secret.status", "security.secret.update"} {
+		if _, ok := RegistryMethod(method); ok {
+			t.Fatalf("legacy method remains: %s", method)
+		}
+	}
+	encoded, err := json.Marshal(ServerConfigResponse{
+		VoiceInput:   ServerVoiceInputConfig{ServerFeatureConfig: ServerFeatureConfig{Configured: true, UpdatedAt: "2026-07-13T00:00:00Z"}, Model: "doubao-streaming-asr-2.0"},
+		TextToSpeech: ServerTextToSpeechConfig{Model: "mimo-v2.5-tts", Voice: "Mia"},
+		DeepSeek:     ServerFeatureConfig{Configured: true},
+	})
 	if err != nil {
 		t.Fatalf("Marshal(): %v", err)
 	}
-	for _, forbidden := range []string{`"value"`, "apiKey", "digest", "configPath"} {
+	for _, forbidden := range []string{`"value"`, "apiKey", "accessToken", "digest", "configPath"} {
 		if strings.Contains(string(encoded), forbidden) {
-			t.Fatalf("secret status contains %q: %s", forbidden, encoded)
+			t.Fatalf("server config contains %q: %s", forbidden, encoded)
 		}
 	}
 }
