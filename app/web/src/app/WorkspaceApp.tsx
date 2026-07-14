@@ -10301,12 +10301,15 @@ export function App() {
     .find(session => session.sessionId === sessionId)
     ?.sessionActions?.[action];
 
-  const runtimeSessionIsBusy = (targetProjectId: string, sessionId: string, runtimeKey: string) =>
-    chatSubmittingByKeyRef.current[runtimeKey] === true ||
+  const runtimeSessionHasActiveExecution = (targetProjectId: string, sessionId: string, runtimeKey: string) =>
     chatCompactingByKeyRef.current[runtimeKey] === true ||
     knownChatSessionsForProject(targetProjectId).some(session =>
       session.sessionId === sessionId && session.running === true,
     );
+
+  const runtimeSessionIsBusy = (targetProjectId: string, sessionId: string, runtimeKey: string) =>
+    chatSubmittingByKeyRef.current[runtimeKey] === true ||
+    runtimeSessionHasActiveExecution(targetProjectId, sessionId, runtimeKey);
 
   const isSessionBusyError = (errorValue: unknown) => {
     const message = errorValue instanceof Error ? errorValue.message : String(errorValue);
@@ -11095,7 +11098,7 @@ export function App() {
         setChatSubmittingForRuntimeKey(submittingRuntimeKey, false);
         return;
       }
-      if (runtimeSessionIsBusy(selectedProjectId, sessionId, runtimeKey)) {
+      if (runtimeSessionHasActiveExecution(selectedProjectId, sessionId, runtimeKey)) {
         const queuedPrompt: QueuedChatPrompt = {
           kind: 'prompt',
           id: makeQueuedPromptId(),

@@ -2382,6 +2382,20 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('disabled={chatSending || chatAttachmentUploadPending}');
   });
 
+  test('does not requeue an idle send because of its own submitting lock', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const sendStart = mainTsx.indexOf('const sendChatMessage = async');
+    const sendEnd = mainTsx.indexOf('const sendChatMessageEvent = useStableEvent(sendChatMessage);', sendStart);
+    const sendBlock = mainTsx.slice(sendStart, sendEnd);
+
+    expect(sendStart).toBeGreaterThanOrEqual(0);
+    expect(sendEnd).toBeGreaterThan(sendStart);
+    expect(mainTsx).toContain('const runtimeSessionHasActiveExecution = (');
+    expect(sendBlock).toContain('if (runtimeSessionHasActiveExecution(selectedProjectId, sessionId, runtimeKey)) {');
+    expect(sendBlock).not.toContain('if (runtimeSessionIsBusy(selectedProjectId, sessionId, runtimeKey)) {');
+  });
+
   test('keeps sidebar search fixed in the title region and new sessions project-scoped', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
