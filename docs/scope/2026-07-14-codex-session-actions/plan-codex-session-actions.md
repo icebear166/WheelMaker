@@ -499,7 +499,7 @@ Run: `git status --short`
 
 Expected: no whitespace errors and only intended files changed.
 
-- [ ] **Step 5: Commit any final verification fixes, then perform the repository completion gate**
+- [x] **Step 5: Commit any final verification fixes, then perform the repository completion gate**
 
 ```powershell
 git add -A
