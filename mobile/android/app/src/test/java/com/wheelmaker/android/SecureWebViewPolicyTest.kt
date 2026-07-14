@@ -34,6 +34,33 @@ class SecureWebViewPolicyTest {
     }
 
     @Test
+    fun trustedTouchIsCapturedAtActivityDispatchBoundary() {
+        val activity = source("src/main/java/com/wheelmaker/android/MainActivity.kt")
+        val dispatchIndex = activity.indexOf("override fun dispatchTouchEvent(event: MotionEvent): Boolean")
+        val recordIndex = activity.indexOf(
+            "trustedUserGestureGate.record(SystemClock.elapsedRealtime())",
+            dispatchIndex.coerceAtLeast(0)
+        )
+        val superIndex = activity.indexOf("return super.dispatchTouchEvent(event)", dispatchIndex.coerceAtLeast(0))
+
+        assertTrue(dispatchIndex >= 0)
+        assertTrue(recordIndex > dispatchIndex)
+        assertTrue(superIndex > recordIndex)
+        assertFalse(activity.contains("target.setOnTouchListener"))
+    }
+
+    @Test
+    fun nativeBridgeDenialsIdentifyMissingTrustedGesture() {
+        val activity = source("src/main/java/com/wheelmaker/android/MainActivity.kt")
+
+        assertTrue(activity.contains("private fun recordNativeMessageRejection("))
+        assertTrue(activity.contains("native_message_rejected"))
+        assertTrue(activity.contains("trusted_user_gesture_missing_or_expired"))
+        assertTrue(activity.contains("message_policy_rejected"))
+        assertTrue(activity.contains("level = \"warn\""))
+    }
+
+    @Test
     fun nativeUiRequestsRequireTrustedTopLevel() {
         assertTrue(isTrustedBusinessUiRequest(
             configuredBaseUrl = "https://example.com/app/",

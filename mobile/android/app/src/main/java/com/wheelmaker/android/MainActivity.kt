@@ -167,6 +167,17 @@ class MainActivity : Activity() {
         super.onPause()
     }
 
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (
+            ::webView.isInitialized &&
+            event.actionMasked == MotionEvent.ACTION_DOWN &&
+            isTrustedTopLevelUi(webView.url.orEmpty())
+        ) {
+            trustedUserGestureGate.record(SystemClock.elapsedRealtime())
+        }
+        return super.dispatchTouchEvent(event)
+    }
+
     override fun onDestroy() {
         unregisterSystemBackCallback()
         if (::androidSpeechRuntime.isInitialized) {
@@ -271,12 +282,6 @@ class MainActivity : Activity() {
 		WebView.setWebContentsDebuggingEnabled(
 			(applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 		)
-        target.setOnTouchListener { _, event ->
-            if (event.actionMasked == MotionEvent.ACTION_DOWN && isTrustedTopLevelUi(target.url.orEmpty())) {
-                trustedUserGestureGate.record(SystemClock.elapsedRealtime())
-            }
-            false
-        }
         target.setOnKeyListener { _, _, event ->
             if (event.action == KeyEvent.ACTION_DOWN && isTrustedTopLevelUi(target.url.orEmpty())) {
                 trustedUserGestureGate.record(SystemClock.elapsedRealtime())
@@ -345,6 +350,7 @@ class MainActivity : Activity() {
             setOf(BOOTSTRAP_ORIGIN)
         ) { view, message, sourceOrigin, isMainFrame, replyProxy ->
             val parsed = parseTrustedMessage(message.data)
+            var trustedUserGestureAccepted: Boolean? = null
             if (parsed == null || !messagePolicy().isAllowed(
                     surface = TrustedMessageSurface.BOOTSTRAP,
                     sourceOrigin = sourceOrigin.toString(),
@@ -353,9 +359,12 @@ class MainActivity : Activity() {
                     nowElapsedRealtime = SystemClock.elapsedRealtime(),
                     request = parsed.first,
                     consumeTrustedUserGesture = {
-                        trustedUserGestureGate.consume(SystemClock.elapsedRealtime())
+                        trustedUserGestureGate.consume(SystemClock.elapsedRealtime()).also {
+                            trustedUserGestureAccepted = it
+                        }
                     }
                 )) {
+                recordNativeMessageRejection(parsed?.first, trustedUserGestureAccepted)
                 parsed?.first?.requestId?.let { sendError(replyProxy, it, "request_not_allowed") }
                 return@addWebMessageListener
             }
@@ -373,6 +382,7 @@ class MainActivity : Activity() {
             setOf(origin)
         ) { view, message, sourceOrigin, isMainFrame, replyProxy ->
 			val parsed = parseTrustedMessage(message.data)
+			var trustedUserGestureAccepted: Boolean? = null
 			val capability = parsed?.let {
 				messagePolicy().authorize(
                     surface = TrustedMessageSurface.BUSINESS,
@@ -382,11 +392,14 @@ class MainActivity : Activity() {
                     nowElapsedRealtime = SystemClock.elapsedRealtime(),
 					request = it.first,
                     consumeTrustedUserGesture = {
-                        trustedUserGestureGate.consume(SystemClock.elapsedRealtime())
+                        trustedUserGestureGate.consume(SystemClock.elapsedRealtime()).also { accepted ->
+                            trustedUserGestureAccepted = accepted
+                        }
                     }
 				)
 			}
 			if (parsed == null || capability == null) {
+                recordNativeMessageRejection(parsed?.first, trustedUserGestureAccepted)
                 parsed?.first?.requestId?.let { sendError(replyProxy, it, "request_not_allowed") }
                 return@addWebMessageListener
             }
@@ -520,6 +533,24 @@ class MainActivity : Activity() {
     private fun isTrustedTopLevelUi(topLevelUrl: String): Boolean =
         topLevelUrl == ANDROID_BOOTSTRAP_URL ||
             (configuredBaseUrl.isNotBlank() && BaseUrlPolicy(configuredBaseUrl).contains(topLevelUrl))
+
+    private fun recordNativeMessageRejection(
+        request: TrustedWebMessageRequest?,
+        trustedUserGestureAccepted: Boolean?
+    ) {
+        androidWebDiagnostics.record(
+            "native_message_rejected",
+            mapOf(
+                "action" to (request?.action ?: "invalid_request"),
+                "reason" to if (trustedUserGestureAccepted == false) {
+                    "trusted_user_gesture_missing_or_expired"
+                } else {
+                    "message_policy_rejected"
+                }
+            ),
+            level = "warn"
+        )
+    }
 
     private fun bootstrapState(errorOverride: String? = null): JSONObject = JSONObject()
         .put("ok", (errorOverride ?: bootstrapError).isBlank())
