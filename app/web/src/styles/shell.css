@@ -1306,7 +1306,7 @@
   border-top: 1px solid var(--border-subtle);
 }
 
-@media (max-width: 560px) {
+@media (width <= 560px) {
   .app-session-status-dialog {
     max-height: calc(100vh - 20px);
   }
