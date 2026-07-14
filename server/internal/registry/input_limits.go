@@ -10,10 +10,11 @@ import (
 )
 
 const (
-	maxJSONPayloadBytes        = 64 * 1024
-	maxEnvelopeBytes           = 1 * 1024 * 1024
+	maxJSONPayloadBytes        = 1 * 1024 * 1024
+	maxEnvelopeFramingBytes    = 64 * 1024
+	maxEnvelopeBytes           = maxJSONPayloadBytes + maxEnvelopeFramingBytes
 	maxSpeechChunkPayloadBytes = 8 * 1024 * 1024
-	maxWireMessageBytes        = maxSpeechChunkPayloadBytes + 64*1024
+	maxWireMessageBytes        = maxSpeechChunkPayloadBytes + maxEnvelopeFramingBytes
 	codePayloadTooLarge        = "payload_too_large"
 )
 

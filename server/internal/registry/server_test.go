@@ -2197,6 +2197,24 @@ func TestWebAuthRejectsInvalidLoginRequests(t *testing.T) {
 	}
 }
 
+func TestWebSocketNormalPayloadAbove64KiBAllowed(t *testing.T) {
+	server := New(Config{})
+	address := httptestNewRegistryServer(t, server.Handler())
+	client := dialWS(t, "http://"+address+"/ws")
+	defer client.Close()
+	connectRegistryClient(t, client)
+
+	payload := `{"data":"` + strings.Repeat("x", 70*1024) + `"}`
+	message := `{"requestId":2,"type":"request","method":"registry.project.list","payload":` + payload + `}`
+	if err := client.WriteMessage(websocket.TextMessage, []byte(message)); err != nil {
+		t.Fatalf("WriteMessage(): %v", err)
+	}
+	response := mustReadEnvelope(t, client)
+	if response.Type != "response" || response.Method != "registry.project.list" {
+		t.Fatalf("response=%#v, want registry.project.list response", response)
+	}
+}
+
 func TestWebSocketNormalPayloadTooLarge(t *testing.T) {
 	server := New(Config{})
 	address := httptestNewRegistryServer(t, server.Handler())

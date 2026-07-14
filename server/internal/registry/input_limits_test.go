@@ -46,6 +46,23 @@ func TestInputLimitBoundaries(t *testing.T) {
 	}
 }
 
+func TestInputLimitAllowsOneMiBNormalPayloadWithFraming(t *testing.T) {
+	const (
+		oneMiB           = 1 * 1024 * 1024
+		framingAllowance = 64 * 1024
+	)
+
+	if err := validateRegistryInput("registry.project.list", oneMiB+framingAllowance, oneMiB); err != nil {
+		t.Fatalf("validateRegistryInput() err=%v, want 1 MiB normal payload to be allowed", err)
+	}
+	if err := validateRegistryInput("registry.project.list", oneMiB+framingAllowance, oneMiB+1); !errors.Is(err, errRegistryInputTooLarge) {
+		t.Fatalf("validateRegistryInput() err=%v, want payload over 1 MiB to be rejected", err)
+	}
+	if err := validateRegistryInput("registry.project.list", oneMiB+framingAllowance+1, oneMiB); !errors.Is(err, errRegistryInputTooLarge) {
+		t.Fatalf("validateRegistryInput() err=%v, want envelope framing overflow to be rejected", err)
+	}
+}
+
 func TestInputLimitRejectsSecondJSONAndTrailingGarbage(t *testing.T) {
 	for _, message := range []string{
 		`{"requestId":1,"type":"request","method":"connect.init","payload":{}} {}`,
