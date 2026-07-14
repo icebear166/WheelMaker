@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -191,6 +192,154 @@ type appServerThreadReadParams struct {
 
 type appServerThreadArchiveParams struct {
 	ThreadID string `json:"threadId"`
+}
+
+type appServerThreadCompactStartParams struct {
+	ThreadID string `json:"threadId"`
+}
+
+type appServerGetAccountRateLimitsResponse struct {
+	RateLimits            appServerRateLimitSnapshot            `json:"rateLimits"`
+	RateLimitsByLimitID   map[string]appServerRateLimitSnapshot `json:"rateLimitsByLimitId,omitempty"`
+	RateLimitResetCredits *appServerRateLimitResetCredits       `json:"rateLimitResetCredits,omitempty"`
+}
+
+type appServerRateLimitSnapshot struct {
+	LimitID              *string                        `json:"limitId,omitempty"`
+	LimitName            *string                        `json:"limitName,omitempty"`
+	PlanType             *string                        `json:"planType,omitempty"`
+	Primary              *appServerRateLimitWindow      `json:"primary,omitempty"`
+	Secondary            *appServerRateLimitWindow      `json:"secondary,omitempty"`
+	Credits              *appServerCreditsSnapshot      `json:"credits,omitempty"`
+	IndividualLimit      *appServerSpendControlSnapshot `json:"individualLimit,omitempty"`
+	RateLimitReachedType *string                        `json:"rateLimitReachedType,omitempty"`
+}
+
+type appServerRateLimitWindow struct {
+	UsedPercent        int    `json:"usedPercent"`
+	WindowDurationMins *int64 `json:"windowDurationMins,omitempty"`
+	ResetsAt           *int64 `json:"resetsAt,omitempty"`
+}
+
+type appServerCreditsSnapshot struct {
+	HasCredits bool    `json:"hasCredits"`
+	Unlimited  bool    `json:"unlimited"`
+	Balance    *string `json:"balance,omitempty"`
+}
+
+type appServerSpendControlSnapshot struct {
+	Limit            string `json:"limit"`
+	Used             string `json:"used"`
+	RemainingPercent int    `json:"remainingPercent"`
+	ResetsAt         int64  `json:"resetsAt"`
+}
+
+type appServerRateLimitResetCredits struct {
+	AvailableCount int64 `json:"availableCount"`
+}
+
+type codexappNamedRateLimitSnapshot struct {
+	ID       string
+	Snapshot appServerRateLimitSnapshot
+}
+
+func normalizeCodexappRateLimits(resp appServerGetAccountRateLimitsResponse, now time.Time) protocol.SessionActionStatusResult {
+	snapshots := make([]codexappNamedRateLimitSnapshot, 0, len(resp.RateLimitsByLimitID))
+	for id, snapshot := range resp.RateLimitsByLimitID {
+		resolvedID := strings.TrimSpace(id)
+		if snapshot.LimitID != nil && strings.TrimSpace(*snapshot.LimitID) != "" {
+			resolvedID = strings.TrimSpace(*snapshot.LimitID)
+		}
+		if resolvedID == "" {
+			resolvedID = "default"
+		}
+		snapshots = append(snapshots, codexappNamedRateLimitSnapshot{ID: resolvedID, Snapshot: snapshot})
+	}
+	if len(snapshots) == 0 {
+		id := "default"
+		if resp.RateLimits.LimitID != nil && strings.TrimSpace(*resp.RateLimits.LimitID) != "" {
+			id = strings.TrimSpace(*resp.RateLimits.LimitID)
+		}
+		snapshots = append(snapshots, codexappNamedRateLimitSnapshot{ID: id, Snapshot: resp.RateLimits})
+	}
+	sort.Slice(snapshots, func(i, j int) bool { return snapshots[i].ID < snapshots[j].ID })
+
+	result := protocol.SessionActionStatusResult{
+		OK:        true,
+		Limits:    []protocol.SessionActionRateLimit{},
+		UpdatedAt: now.UTC().Format(time.RFC3339),
+	}
+	for _, named := range snapshots {
+		name := named.ID
+		if named.Snapshot.LimitName != nil && strings.TrimSpace(*named.Snapshot.LimitName) != "" {
+			name = strings.TrimSpace(*named.Snapshot.LimitName)
+		}
+		for _, window := range []struct {
+			kind  string
+			value *appServerRateLimitWindow
+		}{{kind: "primary", value: named.Snapshot.Primary}, {kind: "secondary", value: named.Snapshot.Secondary}} {
+			if window.value == nil {
+				continue
+			}
+			used := clampCodexappPercent(window.value.UsedPercent)
+			result.Limits = append(result.Limits, protocol.SessionActionRateLimit{
+				ID:                 named.ID + ":" + window.kind,
+				Name:               strings.TrimSpace(name + " " + window.kind),
+				UsedPercent:        used,
+				RemainingPercent:   100 - used,
+				WindowDurationMins: window.value.WindowDurationMins,
+				ResetsAt:           codexappUnixTime(window.value.ResetsAt),
+			})
+		}
+	}
+
+	accountSource := snapshots[0].Snapshot
+	account := &protocol.SessionActionStatusAccount{}
+	if accountSource.PlanType != nil {
+		account.PlanType = strings.TrimSpace(*accountSource.PlanType)
+	}
+	if accountSource.Credits != nil {
+		account.Credits = &protocol.SessionActionCredits{
+			HasCredits: accountSource.Credits.HasCredits,
+			Unlimited:  accountSource.Credits.Unlimited,
+			Balance:    accountSource.Credits.Balance,
+		}
+	}
+	if accountSource.IndividualLimit != nil {
+		account.IndividualLimit = &protocol.SessionActionIndividualLimit{
+			Limit:            accountSource.IndividualLimit.Limit,
+			Used:             accountSource.IndividualLimit.Used,
+			RemainingPercent: clampCodexappPercent(accountSource.IndividualLimit.RemainingPercent),
+			ResetsAt:         time.Unix(accountSource.IndividualLimit.ResetsAt, 0).UTC().Format(time.RFC3339),
+		}
+	}
+	if accountSource.RateLimitReachedType != nil {
+		account.RateLimitReachedType = strings.TrimSpace(*accountSource.RateLimitReachedType)
+	}
+	if resp.RateLimitResetCredits != nil {
+		account.RateLimitResetCredits = &protocol.SessionActionResetCredits{AvailableCount: resp.RateLimitResetCredits.AvailableCount}
+	}
+	if account.PlanType != "" || account.Credits != nil || account.IndividualLimit != nil || account.RateLimitReachedType != "" || account.RateLimitResetCredits != nil {
+		result.Account = account
+	}
+	return result
+}
+
+func clampCodexappPercent(value int) int {
+	if value < 0 {
+		return 0
+	}
+	if value > 100 {
+		return 100
+	}
+	return value
+}
+
+func codexappUnixTime(value *int64) string {
+	if value == nil {
+		return ""
+	}
+	return time.Unix(*value, 0).UTC().Format(time.RFC3339)
 }
 
 type appServerTurnStartParams struct {
