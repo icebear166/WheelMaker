@@ -177,7 +177,7 @@ func TestLoadConfig_ConfigExampleIsValid(t *testing.T) {
 	}
 }
 
-func TestSecretConfigLoadsBackendValues(t *testing.T) {
+func TestLoadConfigRejectsServerDataSecrets(t *testing.T) {
 	path := writeTempConfig(t, `{
 		"projects": [{"name": "p", "path": "."}],
 		"secrets": {
@@ -186,15 +186,8 @@ func TestSecretConfigLoadsBackendValues(t *testing.T) {
 			"mimoTts": {"value": "tts-key"}
 		}
 	}`)
-	cfg, err := LoadConfig(path)
-	if err != nil {
-		t.Fatalf("LoadConfig(): %v", err)
-	}
-	if cfg.Secrets.DeepSeek.Value != "deep-key" || cfg.Secrets.VolcengineASR.Value != "speech-key" || cfg.Secrets.MiMoTTS.Value != "tts-key" {
-		t.Fatalf("secrets=%+v", cfg.Secrets)
-	}
-	if got := cfg.Secrets.DeepSeek.UpdatedAt.UTC().Format(time.RFC3339); got != "2026-07-13T00:00:00Z" {
-		t.Fatalf("deepseek updatedAt=%q", got)
+	if _, err := LoadConfig(path); err == nil || !strings.Contains(err.Error(), `unknown field "secrets"`) {
+		t.Fatalf("LoadConfig() error=%v, want secrets rejected", err)
 	}
 }
 
