@@ -67,6 +67,16 @@ import type {
   RegistrySessionConfigOption,
   RegistrySessionConfigOptionValue,
   RegistrySessionCommand,
+  RegistrySessionActionCapabilities,
+  RegistrySessionActionCapability,
+  RegistrySessionCompactAccepted,
+  RegistrySessionCredits,
+  RegistrySessionIndividualLimit,
+  RegistrySessionRateLimit,
+  RegistrySessionResetCredits,
+  RegistrySessionStatusAccount,
+  RegistrySessionStatusContext,
+  RegistrySessionStatusResult,
   RegistrySessionUsage,
   RegistrySessionMessage,
   RegistrySessionMessageEventPayload,
@@ -329,6 +339,115 @@ export class RegistryRepository {
       updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : undefined,
     };
   }
+  private normalizeSessionActionCapability(raw: unknown): RegistrySessionActionCapability {
+    const input = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+    return {
+      supported: input.supported === true,
+      reason: typeof input.reason === 'string' && input.reason.trim() ? input.reason.trim() : undefined,
+    };
+  }
+  private normalizeSessionActions(raw: unknown): RegistrySessionActionCapabilities | undefined {
+    if (!raw || typeof raw !== 'object') {
+      return undefined;
+    }
+    const input = raw as Record<string, unknown>;
+    return {
+      status: this.normalizeSessionActionCapability(input.status),
+      compact: this.normalizeSessionActionCapability(input.compact),
+    };
+  }
+  private normalizeSessionStatusContext(raw: unknown): RegistrySessionStatusContext | undefined {
+    if (!raw || typeof raw !== 'object') {
+      return undefined;
+    }
+    const input = raw as Record<string, unknown>;
+    if (typeof input.used !== 'number' || !Number.isFinite(input.used)) {
+      return undefined;
+    }
+    return {
+      used: Math.max(0, Math.trunc(input.used)),
+      size: typeof input.size === 'number' && Number.isFinite(input.size)
+        ? Math.max(0, Math.trunc(input.size))
+        : undefined,
+      updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : undefined,
+    };
+  }
+  private normalizeSessionRateLimit(raw: unknown): RegistrySessionRateLimit | null {
+    if (!raw || typeof raw !== 'object') {
+      return null;
+    }
+    const input = raw as Record<string, unknown>;
+    const id = typeof input.id === 'string' ? input.id.trim() : '';
+    if (!id) {
+      return null;
+    }
+    const percent = (value: unknown) => typeof value === 'number' && Number.isFinite(value)
+      ? Math.min(100, Math.max(0, Math.trunc(value)))
+      : 0;
+    return {
+      id,
+      name: typeof input.name === 'string' && input.name.trim() ? input.name.trim() : id,
+      usedPercent: percent(input.usedPercent),
+      remainingPercent: percent(input.remainingPercent),
+      windowDurationMins: typeof input.windowDurationMins === 'number' && Number.isFinite(input.windowDurationMins)
+        ? Math.max(0, Math.trunc(input.windowDurationMins))
+        : undefined,
+      resetsAt: typeof input.resetsAt === 'string' ? input.resetsAt : undefined,
+    };
+  }
+  private normalizeSessionCredits(raw: unknown): RegistrySessionCredits | undefined {
+    if (!raw || typeof raw !== 'object') {
+      return undefined;
+    }
+    const input = raw as Record<string, unknown>;
+    return {
+      hasCredits: input.hasCredits === true,
+      unlimited: input.unlimited === true,
+      balance: typeof input.balance === 'string' ? input.balance : undefined,
+    };
+  }
+  private normalizeSessionIndividualLimit(raw: unknown): RegistrySessionIndividualLimit | undefined {
+    if (!raw || typeof raw !== 'object') {
+      return undefined;
+    }
+    const input = raw as Record<string, unknown>;
+    const limit = typeof input.limit === 'string' ? input.limit : '';
+    const used = typeof input.used === 'string' ? input.used : '';
+    if (!limit && !used) {
+      return undefined;
+    }
+    return {
+      limit,
+      used,
+      remainingPercent: typeof input.remainingPercent === 'number' && Number.isFinite(input.remainingPercent)
+        ? Math.min(100, Math.max(0, Math.trunc(input.remainingPercent)))
+        : 0,
+      resetsAt: typeof input.resetsAt === 'string' ? input.resetsAt : undefined,
+    };
+  }
+  private normalizeSessionResetCredits(raw: unknown): RegistrySessionResetCredits | undefined {
+    if (!raw || typeof raw !== 'object') {
+      return undefined;
+    }
+    const input = raw as Record<string, unknown>;
+    if (typeof input.availableCount !== 'number' || !Number.isFinite(input.availableCount)) {
+      return undefined;
+    }
+    return {availableCount: Math.max(0, Math.trunc(input.availableCount))};
+  }
+  private normalizeSessionStatusAccount(raw: unknown): RegistrySessionStatusAccount | undefined {
+    if (!raw || typeof raw !== 'object') {
+      return undefined;
+    }
+    const input = raw as Record<string, unknown>;
+    return {
+      planType: typeof input.planType === 'string' ? input.planType : undefined,
+      credits: this.normalizeSessionCredits(input.credits),
+      individualLimit: this.normalizeSessionIndividualLimit(input.individualLimit),
+      rateLimitReachedType: typeof input.rateLimitReachedType === 'string' ? input.rateLimitReachedType : undefined,
+      rateLimitResetCredits: this.normalizeSessionResetCredits(input.rateLimitResetCredits),
+    };
+  }
   private normalizeSessionSummary(raw: unknown): RegistrySessionSummary | null {
     if (!raw || typeof raw !== 'object') {
       return null;
@@ -371,6 +490,7 @@ export class RegistryRepository {
             .filter((item): item is RegistrySessionCommand => !!item)
         : undefined,
       usage: this.normalizeSessionUsage(input.usage),
+      sessionActions: this.normalizeSessionActions(input.sessionActions),
     };
   }
 
@@ -1115,6 +1235,48 @@ export class RegistryRepository {
     return {
       ok: body.ok ?? false,
       sessionId: body.sessionId ?? payload.sessionId,
+    };
+  }
+
+  async statusSession(projectId: string, sessionId: string): Promise<RegistrySessionStatusResult> {
+    const resp = await this.client.request({
+      method: RegistryMethods.SessionStatus,
+      projectId,
+      payload: {sessionId},
+      timeoutMs: 30000,
+    });
+    const body = resp.payload && typeof resp.payload === 'object'
+      ? resp.payload as Record<string, unknown>
+      : {};
+    return {
+      ok: body.ok === true,
+      sessionId,
+      context: this.normalizeSessionStatusContext(body.context),
+      limits: Array.isArray(body.limits)
+        ? body.limits
+            .map(item => this.normalizeSessionRateLimit(item))
+            .filter((item): item is RegistrySessionRateLimit => !!item)
+        : [],
+      account: this.normalizeSessionStatusAccount(body.account),
+      updatedAt: typeof body.updatedAt === 'string' ? body.updatedAt : '',
+    };
+  }
+
+  async compactSession(projectId: string, sessionId: string): Promise<RegistrySessionCompactAccepted> {
+    const resp = await this.client.request({
+      method: RegistryMethods.SessionCompact,
+      projectId,
+      payload: {sessionId},
+      timeoutMs: 30000,
+    });
+    const body = resp.payload && typeof resp.payload === 'object'
+      ? resp.payload as Record<string, unknown>
+      : {};
+    return {
+      ok: body.ok === true,
+      accepted: body.accepted === true,
+      sessionId,
+      operationId: typeof body.operationId === 'string' ? body.operationId : '',
     };
   }
 

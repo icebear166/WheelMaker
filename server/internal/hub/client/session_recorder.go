@@ -36,18 +36,19 @@ type SessionViewSink interface {
 }
 
 type sessionViewSummary struct {
-	SessionID         string             `json:"sessionId"`
-	Title             string             `json:"title"`
-	UpdatedAt         string             `json:"updatedAt"`
-	AgentType         string             `json:"agentType,omitempty"`
-	CreateRequestID   string             `json:"createRequestId,omitempty"`
-	LatestTurnIndex   int64              `json:"latestTurnIndex"`
-	Running           bool               `json:"running"`
-	LastDoneTurnIndex int64              `json:"lastDoneTurnIndex"`
-	LastDoneSuccess   bool               `json:"lastDoneSuccess"`
-	LastReadTurnIndex int64              `json:"lastReadTurnIndex"`
-	ConfigOptions     []acp.ConfigOption `json:"configOptions,omitempty"`
-	Usage             *acp.SessionUsage  `json:"usage,omitempty"`
+	SessionID         string                        `json:"sessionId"`
+	Title             string                        `json:"title"`
+	UpdatedAt         string                        `json:"updatedAt"`
+	AgentType         string                        `json:"agentType,omitempty"`
+	CreateRequestID   string                        `json:"createRequestId,omitempty"`
+	LatestTurnIndex   int64                         `json:"latestTurnIndex"`
+	Running           bool                          `json:"running"`
+	LastDoneTurnIndex int64                         `json:"lastDoneTurnIndex"`
+	LastDoneSuccess   bool                          `json:"lastDoneSuccess"`
+	LastReadTurnIndex int64                         `json:"lastReadTurnIndex"`
+	ConfigOptions     []acp.ConfigOption            `json:"configOptions,omitempty"`
+	Usage             *acp.SessionUsage             `json:"usage,omitempty"`
+	SessionActions    acp.SessionActionCapabilities `json:"sessionActions"`
 }
 
 type sessionTitleFacts struct {
@@ -107,22 +108,25 @@ type SessionRecorder struct {
 	mu      sync.Mutex
 	publish func(method string, payload any) error
 
-	writeMu       sync.Mutex
-	promptState   map[string]*sessionPromptState
-	nextTurnIndex map[string]int64
-	finishedTurns map[string][]sessionViewTurn
+	writeMu          sync.Mutex
+	promptState      map[string]*sessionPromptState
+	nextTurnIndex    map[string]int64
+	finishedTurns    map[string][]sessionViewTurn
+	activeOperations map[string]map[string]struct{}
 
-	modelLookup func(sessionID string) string
+	modelLookup  func(sessionID string) string
+	actionLookup func(agentType string) acp.SessionActionCapabilities
 }
 
 func newSessionRecorder(projectName string, store Store, listSessions func(context.Context) ([]SessionRecord, error)) *SessionRecorder {
 	return &SessionRecorder{
-		projectName:   projectName,
-		store:         store,
-		listSessions:  listSessions,
-		promptState:   map[string]*sessionPromptState{},
-		nextTurnIndex: map[string]int64{},
-		finishedTurns: map[string][]sessionViewTurn{},
+		projectName:      projectName,
+		store:            store,
+		listSessions:     listSessions,
+		promptState:      map[string]*sessionPromptState{},
+		nextTurnIndex:    map[string]int64{},
+		finishedTurns:    map[string][]sessionViewTurn{},
+		activeOperations: map[string]map[string]struct{}{},
 	}
 }
 
@@ -137,6 +141,7 @@ func (r *SessionRecorder) Close() {
 	r.promptState = map[string]*sessionPromptState{}
 	r.nextTurnIndex = map[string]int64{}
 	r.finishedTurns = map[string][]sessionViewTurn{}
+	r.activeOperations = map[string]map[string]struct{}{}
 	r.writeMu.Unlock()
 }
 
@@ -148,6 +153,7 @@ func (r *SessionRecorder) ResetPromptState() {
 	r.promptState = map[string]*sessionPromptState{}
 	r.nextTurnIndex = map[string]int64{}
 	r.finishedTurns = map[string][]sessionViewTurn{}
+	r.activeOperations = map[string]map[string]struct{}{}
 	r.writeMu.Unlock()
 }
 
@@ -163,6 +169,7 @@ func (r *SessionRecorder) RemovePromptState(sessionID string) {
 	delete(r.promptState, sessionID)
 	delete(r.nextTurnIndex, sessionID)
 	delete(r.finishedTurns, sessionID)
+	delete(r.activeOperations, sessionID)
 	r.writeMu.Unlock()
 }
 
@@ -197,6 +204,9 @@ func (r *SessionRecorder) DeleteSessionData(ctx context.Context, sessionID strin
 		return nil
 	}
 	r.RemovePromptState(sessionID)
+	r.writeMu.Lock()
+	delete(r.activeOperations, sessionID)
+	r.writeMu.Unlock()
 	if r.turnStore != nil {
 		if err := r.turnStore.DeleteSession(ctx, r.projectName, sessionID); err != nil {
 			return err
@@ -207,6 +217,86 @@ func (r *SessionRecorder) DeleteSessionData(ctx context.Context, sessionID strin
 			return err
 		}
 	}
+	return nil
+}
+
+func (r *SessionRecorder) RecordSessionOperation(ctx context.Context, sessionID string, payload acp.SessionOperationPayload) error {
+	if r == nil {
+		return fmt.Errorf("session recorder is required")
+	}
+	sessionID = strings.TrimSpace(sessionID)
+	payload.OperationID = strings.TrimSpace(payload.OperationID)
+	payload.Type = strings.TrimSpace(payload.Type)
+	payload.Status = strings.TrimSpace(payload.Status)
+	if sessionID == "" || payload.OperationID == "" || payload.Type == "" {
+		return fmt.Errorf("session operation identity is required")
+	}
+	switch payload.Status {
+	case acp.SessionOperationStatusStarted, acp.SessionOperationStatusCompleted, acp.SessionOperationStatusFailed:
+	default:
+		return fmt.Errorf("unsupported session operation status: %s", payload.Status)
+	}
+
+	r.writeMu.Lock()
+	defer r.writeMu.Unlock()
+	rec, err := r.store.LoadSession(ctx, r.projectName, sessionID)
+	if err != nil {
+		return err
+	}
+	if rec == nil {
+		return fmt.Errorf("session not found: %s", sessionID)
+	}
+	projection := sessionSyncProjectionFromJSON(rec.SessionSyncJSON)
+	turnIndex := projection.LatestPersistedTurnIndex + 1
+	content := buildSessionTurnContentJSON(acp.SessionTurnMethodOperation, payload)
+	if r.turnStore != nil {
+		latest, err := r.turnStore.WriteTurns(ctx, r.projectName, sessionID, turnIndex, []string{content})
+		if err != nil {
+			return err
+		}
+		turnIndex = latest
+	} else {
+		r.finishedTurns[sessionID] = append(r.finishedTurns[sessionID], sessionViewTurn{
+			TurnIndex: turnIndex,
+			Content:   content,
+			Finished:  true,
+		})
+	}
+	if r.activeOperations[sessionID] == nil {
+		r.activeOperations[sessionID] = map[string]struct{}{}
+	}
+	if payload.Status == acp.SessionOperationStatusStarted {
+		r.activeOperations[sessionID][payload.OperationID] = struct{}{}
+	} else {
+		delete(r.activeOperations[sessionID], payload.OperationID)
+		if len(r.activeOperations[sessionID]) == 0 {
+			delete(r.activeOperations, sessionID)
+		}
+	}
+	projection.LatestPersistedTurnIndex = turnIndex
+	rec.SessionSyncJSON = sessionSyncProjectionJSON(projection)
+	updatedAt := time.Now().UTC()
+	if payload.Status == acp.SessionOperationStatusStarted {
+		if parsed, err := time.Parse(time.RFC3339, payload.StartedAt); err == nil {
+			updatedAt = parsed.UTC()
+		}
+	} else if parsed, err := time.Parse(time.RFC3339, payload.CompletedAt); err == nil {
+		updatedAt = parsed.UTC()
+	}
+	rec.LastActiveAt = updatedAt
+	if err := r.store.SaveSession(ctx, rec); err != nil {
+		return err
+	}
+	r.nextTurnIndex[sessionID] = turnIndex + 1
+	turn := sessionTurnMessage{
+		sessionID: sessionID,
+		method:    acp.SessionTurnMethodOperation,
+		payload:   payload,
+		turnIndex: turnIndex,
+		finished:  true,
+	}
+	r.publishSessionTurn(turn, content)
+	r.publishSessionUpdated(r.sessionViewSummaryFromRecordLocked(*rec))
 	return nil
 }
 
@@ -836,6 +926,9 @@ func (r *SessionRecorder) sessionViewSummaryFromRecordLocked(rec SessionRecord) 
 		}
 		running = !sessionPromptStateTerminal(state)
 	}
+	if len(r.activeOperations[rec.ID]) > 0 {
+		running = true
+	}
 	for _, turn := range r.finishedTurns[rec.ID] {
 		if turn.TurnIndex > latestTurnIndex {
 			latestTurnIndex = turn.TurnIndex
@@ -859,6 +952,9 @@ func (r *SessionRecorder) sessionViewSummaryFromRecordLocked(rec SessionRecord) 
 			usage := *agentState.Usage
 			summary.Usage = &usage
 		}
+	}
+	if r.actionLookup != nil {
+		summary.SessionActions = r.actionLookup(summary.AgentType)
 	}
 	return summary
 }

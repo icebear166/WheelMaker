@@ -732,6 +732,212 @@ func TestCodexAppRuntimeRoutesNotificationsByThread(t *testing.T) {
 	}
 }
 
+func TestCodexappSessionStatusNormalizesRateLimits(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	tr.onSend = func(msg map[string]any) {
+		if msg["method"] != "account/rateLimits/read" {
+			return
+		}
+		_ = tr.emit(map[string]any{
+			"id": msg["id"],
+			"result": map[string]any{
+				"rateLimits": map[string]any{},
+				"rateLimitsByLimitId": map[string]any{
+					"codex": map[string]any{
+						"limitId":   "codex",
+						"limitName": "Codex",
+						"planType":  "plus",
+						"primary": map[string]any{
+							"usedPercent":        37,
+							"windowDurationMins": 10080,
+							"resetsAt":           1783958400,
+						},
+						"secondary": map[string]any{
+							"usedPercent": 140,
+						},
+						"credits": map[string]any{
+							"hasCredits": true,
+							"unlimited":  false,
+							"balance":    "42.00",
+						},
+						"individualLimit": map[string]any{
+							"limit":            "1000",
+							"used":             "250",
+							"remainingPercent": 75,
+							"resetsAt":         1785542400,
+						},
+						"rateLimitReachedType": "rate_limit_reached",
+					},
+				},
+				"rateLimitResetCredits": map[string]any{"availableCount": 2},
+			},
+		})
+	}
+
+	conn := newCodexappConnWithRuntime(rt, t.TempDir())
+	result, err := conn.SessionStatus(context.Background())
+	if err != nil {
+		t.Fatalf("SessionStatus(): %v", err)
+	}
+	if !result.OK || len(result.Limits) != 2 {
+		t.Fatalf("status = %+v", result)
+	}
+	if result.Limits[0].ID != "codex:primary" || result.Limits[0].UsedPercent != 37 || result.Limits[0].RemainingPercent != 63 {
+		t.Fatalf("primary = %+v", result.Limits[0])
+	}
+	if result.Limits[0].ResetsAt != "2026-07-13T16:00:00Z" {
+		t.Fatalf("primary resetsAt = %q", result.Limits[0].ResetsAt)
+	}
+	if result.Limits[1].ID != "codex:secondary" || result.Limits[1].UsedPercent != 100 || result.Limits[1].RemainingPercent != 0 {
+		t.Fatalf("secondary = %+v", result.Limits[1])
+	}
+	if result.Account == nil || result.Account.PlanType != "plus" || result.Account.Credits == nil || result.Account.IndividualLimit == nil {
+		t.Fatalf("account = %+v", result.Account)
+	}
+	if result.Account.RateLimitResetCredits == nil || result.Account.RateLimitResetCredits.AvailableCount != 2 {
+		t.Fatalf("reset credits = %+v", result.Account.RateLimitResetCredits)
+	}
+}
+
+func TestCodexappCompactTracksContextCompaction(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	tr.onSend = func(msg map[string]any) {
+		if msg["method"] != "thread/compact/start" {
+			return
+		}
+		params, _ := msg["params"].(map[string]any)
+		if params["threadId"] != "thread-runtime" {
+			t.Errorf("threadId = %v", params["threadId"])
+		}
+		_ = tr.emit(map[string]any{"id": msg["id"], "result": map[string]any{}})
+		_ = tr.emit(map[string]any{
+			"method": "item/started",
+			"params": map[string]any{
+				"threadId": "thread-runtime",
+				"turnId":   "turn-compact",
+				"item":     map[string]any{"id": "compact-1", "type": "contextCompaction", "status": "inProgress"},
+			},
+		})
+		_ = tr.emit(map[string]any{
+			"method": "item/completed",
+			"params": map[string]any{
+				"threadId": "thread-runtime",
+				"turnId":   "turn-compact",
+				"item":     map[string]any{"id": "compact-1", "type": "contextCompaction", "status": "completed"},
+			},
+		})
+	}
+
+	conn := newCodexappConnWithRuntime(rt, t.TempDir())
+	conn.bindSessionIDs("session-stable", "thread-runtime")
+	done, err := conn.CompactSession(context.Background(), "session-stable")
+	if err != nil {
+		t.Fatalf("CompactSession(): %v", err)
+	}
+	select {
+	case result := <-done:
+		if result.Err != nil {
+			t.Fatalf("compact result: %v", result.Err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for compaction completion")
+	}
+}
+
+func TestCodexappCompactFailsOnTurnFailure(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	tr.onSend = func(msg map[string]any) {
+		if msg["method"] != "thread/compact/start" {
+			return
+		}
+		_ = tr.emit(map[string]any{"id": msg["id"], "result": map[string]any{}})
+		_ = tr.emit(map[string]any{
+			"method": "turn/completed",
+			"params": map[string]any{
+				"threadId": "thread-1",
+				"turn":     map[string]any{"id": "turn-compact", "status": "failed"},
+			},
+		})
+	}
+
+	conn := newCodexappConnWithRuntime(rt, t.TempDir())
+	conn.BindSessionID("thread-1")
+	done, err := conn.CompactSession(context.Background(), "thread-1")
+	if err != nil {
+		t.Fatalf("CompactSession(): %v", err)
+	}
+	select {
+	case result := <-done:
+		if result.Err == nil || !strings.Contains(result.Err.Error(), "failed") {
+			t.Fatalf("compact result = %+v", result)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for failed compaction")
+	}
+}
+
+func TestCodexappCompactFailsWhenRuntimeCloses(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	tr.onSend = func(msg map[string]any) {
+		if msg["method"] == "thread/compact/start" {
+			_ = tr.emit(map[string]any{"id": msg["id"], "result": map[string]any{}})
+		}
+	}
+	conn := newCodexappConnWithRuntime(rt, t.TempDir())
+	conn.BindSessionID("thread-1")
+	done, err := conn.CompactSession(context.Background(), "thread-1")
+	if err != nil {
+		t.Fatalf("CompactSession(): %v", err)
+	}
+	if err := rt.close(); err != nil {
+		t.Fatalf("runtime close: %v", err)
+	}
+	select {
+	case result := <-done:
+		if result.Err == nil || !strings.Contains(result.Err.Error(), "closed") {
+			t.Fatalf("compact result = %+v", result)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for runtime-close compaction result")
+	}
+}
+
+func TestCodexappCompactTimesOut(t *testing.T) {
+	previousTimeout := codexappCompactCompletionTimeout
+	codexappCompactCompletionTimeout = 10 * time.Millisecond
+	t.Cleanup(func() { codexappCompactCompletionTimeout = previousTimeout })
+
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	tr.onSend = func(msg map[string]any) {
+		if msg["method"] == "thread/compact/start" {
+			_ = tr.emit(map[string]any{"id": msg["id"], "result": map[string]any{}})
+		}
+	}
+	conn := newCodexappConnWithRuntime(rt, t.TempDir())
+	conn.BindSessionID("thread-1")
+	done, err := conn.CompactSession(context.Background(), "thread-1")
+	if err != nil {
+		t.Fatalf("CompactSession(): %v", err)
+	}
+	select {
+	case result := <-done:
+		if result.Err == nil || !strings.Contains(result.Err.Error(), "timed out") {
+			t.Fatalf("compact result = %+v", result)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for compaction timeout")
+	}
+}
+
 func TestCodexAppRuntimeDispatchesNotificationsAsynchronously(t *testing.T) {
 	tr := newFakeCodexappTransport()
 	rt := newCodexappRuntimeWithTransport(tr)
@@ -3497,5 +3703,25 @@ func TestClaudePreset_UsesClaudeUserSkillsDirOnly(t *testing.T) {
 	}
 	if !hasClaudeDir {
 		t.Fatalf("claude preset user dirs missing ~/.claude/skills: %v", ClaudeACPProviderPreset.SkillUserDirs)
+	}
+}
+
+func TestFactorySessionActionsAreProviderSpecific(t *testing.T) {
+	factory := &ACPFactory{}
+	factory.RegisterSessionActions(protocol.ACPProviderCodex, SessionActionSupport{
+		Status:  true,
+		Compact: true,
+	})
+
+	if got := factory.SessionActions(protocol.ACPProviderCodex); !got.Status || !got.Compact {
+		t.Fatalf("codex session actions = %+v", got)
+	}
+	if got := factory.SessionActions(protocol.ACPProviderClaude); got.Status || got.Compact {
+		t.Fatalf("claude session actions = %+v", got)
+	}
+
+	cloned := factory.Clone()
+	if got := cloned.SessionActions(protocol.ACPProviderCodex); !got.Status || !got.Compact {
+		t.Fatalf("cloned codex session actions = %+v", got)
 	}
 }

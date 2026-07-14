@@ -87,6 +87,14 @@ function displayKey(message: RegistryChatMessage): string {
   return `${message.sessionId}:${positiveTurnIndex(message)}:${message.method}`;
 }
 
+function sessionOperationId(message: RegistryChatMessage): string {
+  if (message.method !== 'session_operation' || !message.param || typeof message.param !== 'object') {
+    return '';
+  }
+  const operationId = (message.param as Record<string, unknown>).operationId;
+  return typeof operationId === 'string' ? operationId.trim() : '';
+}
+
 function normalizeMetrics(input: Partial<ChatTurnHeightMetrics> | undefined): ChatTurnHeightMetrics {
   const base = DEFAULT_CHAT_TURN_HEIGHT_METRICS;
   const metrics = {...base, ...(input ?? {})};
@@ -337,6 +345,9 @@ export function estimateChatTurnHeight(
   if (isPromptStartMethod(message.method)) {
     return estimatePromptStartHeight(message, context, metrics);
   }
+  if (message.method === 'session_operation') {
+    return 44;
+  }
   if (message.method === 'prompt_done') {
     return clampHeight(38 + (promptDoneHasResultLine(message) ? 18 : 0));
   }
@@ -362,6 +373,13 @@ export function buildChatDisplayIndex(
     .filter(item => positiveTurnIndex(item.message) > 0)
     .sort((left, right) => positiveTurnIndex(left.message) - positiveTurnIndex(right.message));
   const items: ChatDisplayIndexItem[] = [];
+  const latestOperationSourceIndex = new Map<string, number>();
+  for (const item of sorted) {
+    const operationId = sessionOperationId(item.message);
+    if (operationId) {
+      latestOperationSourceIndex.set(operationId, item.sourceIndex);
+    }
+  }
   for (const item of sorted) {
     if (item.message.method === 'agent_plan') {
       continue;
@@ -369,8 +387,12 @@ export function buildChatDisplayIndex(
     if (options.hideToolCalls && isToolCallMethod(item.message.method)) {
       continue;
     }
+    const operationId = sessionOperationId(item.message);
+    if (operationId && latestOperationSourceIndex.get(operationId) !== item.sourceIndex) {
+      continue;
+    }
     const promptStatus = options.promptStatus?.(item.message) ?? null;
-    if (options.shouldRender && !options.shouldRender(item.message, promptStatus)) {
+    if (!operationId && options.shouldRender && !options.shouldRender(item.message, promptStatus)) {
       continue;
     }
     const estimatedHeight = estimateChatTurnHeight(item.message, {
