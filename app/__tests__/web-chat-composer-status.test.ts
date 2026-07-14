@@ -232,7 +232,7 @@ describe('chat composer status helpers', () => {
     expect(fileMentionMenu).toContain('background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));');
   });
 
-  test('keeps only temporary chat layers translucently frosted', () => {
+  test('uses one stronger glass treatment for temporary chat layers', () => {
     const projectRoot = path.join(__dirname, '..');
     const stylesCss = readWebStyles(projectRoot);
     const marker = '/* workspace-ui-temporary-layers */';
@@ -245,6 +245,7 @@ describe('chat composer status helpers', () => {
       '.chat-recent-sessions-surface.desktop',
       '.chat-config-overflow-menu',
       '.chat-config-value-menu',
+      '.chat-context-usage-popover',
       '.chat-slash-menu',
       '.chat-file-mention-menu',
       '.chat-title-project-menu',
@@ -256,9 +257,43 @@ describe('chat composer status helpers', () => {
       '.wide-project-action-popover',
     ].forEach(selector => expect(temporaryLayerStyles).toContain(selector));
     expect(temporaryLayerStyles).toContain(
-      'background: color-mix(in srgb, var(--surface-overlay) 86%, transparent);',
+      '--workspace-temporary-layer-background: color-mix(in srgb, var(--surface-overlay) 88%, transparent);',
     );
-    expect(temporaryLayerStyles).toContain('backdrop-filter: blur(20px) saturate(1.04);');
-    expect(temporaryLayerStyles).toContain('-webkit-backdrop-filter: blur(20px) saturate(1.04);');
+    expect(temporaryLayerStyles).toContain(
+      '--workspace-temporary-layer-filter: blur(30px) saturate(1.12) contrast(1.03);',
+    );
+    expect(temporaryLayerStyles).toContain('background: var(--workspace-temporary-layer-background);');
+    expect(temporaryLayerStyles).toContain('backdrop-filter: var(--workspace-temporary-layer-filter);');
+    expect(temporaryLayerStyles).toContain('-webkit-backdrop-filter: var(--workspace-temporary-layer-filter);');
+    expect(temporaryLayerStyles).toContain(
+      'inset 0 1px 0 color-mix(in srgb, var(--text-primary) 8%, transparent);',
+    );
+  });
+
+  test('fades desktop edge surfaces toward chat text until interaction', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+    const temporaryLayerStyles = stylesCss.slice(stylesCss.indexOf('/* workspace-ui-temporary-layers */'));
+
+    expect(cssRuleBlock(temporaryLayerStyles, '.chat-recent-sessions-surface.desktop::before')).toContain(
+      'mask-image: linear-gradient(to right, #000 0%, #000 52%, rgb(0 0 0 / 68%) 72%, transparent 100%);',
+    );
+    expect(cssRuleBlock(temporaryLayerStyles, '.chat-plan-surface.desktop::before')).toContain(
+      'mask-image: linear-gradient(to left, #000 0%, #000 52%, rgb(0 0 0 / 68%) 72%, transparent 100%);',
+    );
+    expect(temporaryLayerStyles).toContain(
+      '.chat-recent-sessions-surface.desktop:hover::after,\n.chat-recent-sessions-surface.desktop:focus-within::after,',
+    );
+    expect(temporaryLayerStyles).toContain(
+      '.chat-plan-surface.desktop:hover::after,\n.chat-plan-surface.desktop:focus-within::after {',
+    );
+    expect(temporaryLayerStyles).toContain('opacity: 1;');
+    expect(temporaryLayerStyles).toContain('transition: opacity 180ms var(--ease-out);');
+    expect(temporaryLayerStyles).toContain('@media (prefers-reduced-transparency: reduce)');
+    expect(temporaryLayerStyles).toContain('content: none;');
+    expect(temporaryLayerStyles).toContain(
+      '@media (prefers-reduced-motion: reduce) {\n  .chat-plan-surface.desktop::before,\n  .chat-plan-surface.desktop::after,',
+    );
+    expect(cssRuleBlock(stylesCss, '.chat-plan-surface.desktop')).not.toContain('backdrop-filter: blur(4px);');
   });
 });
