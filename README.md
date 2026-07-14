@@ -166,6 +166,10 @@ Notes:
 - `registry.token` is shared by trusted non-browser hubs and clients. Browsers authenticate through the Registry login endpoint and then use a session cookie.
 - `registry.hubId` should be stable and recognizable, for example `hub-a`.
 
+After signing in through the HTTPS page, configure DeepSeek, Volcengine ASR, and MiMo TTS under **Settings > Server**. A Key's presence determines whether its feature is available; there are no separate enable switches. These values are stored only on Machine A in `~/.wheelmaker/db/server-data.json`, with private file permissions and atomic replacement. The file contains plaintext secrets required at runtime, so protect its backups like credentials and never commit it.
+
+Web and Desktop keep provider Keys on the server and use server-side speech/TTS providers. Android is the narrow exception: an authenticated APK receives only the Volcengine ASR credential, keeps it in process memory, and connects directly to Volcengine; it never persists that Key locally. Existing client-side Key settings are not migrated. Upgrade every client and re-enter the Keys in the Server section.
+
 ### 3. Configure Machine B
 
 Machine B does not expose the public entrypoint. It only reports projects to Machine A.
@@ -197,6 +201,7 @@ Notes:
 - `registry.token` must match Machine A.
 - `hubId` must be unique, for example `hub-b`.
 - `listen: false` means Machine B does not host its own registry listener.
+- Machine B does not need a copy of `server-data.json`; provider settings belong to the Registry entry machine.
 
 ### 4. Nginx + HTTPS example
 

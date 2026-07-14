@@ -71,6 +71,30 @@ function Assert-NoProductionMatches([string]$Label, [string]$Pattern, [string[]]
     }
 }
 
+function Assert-DeployCompatibilityCentralized() {
+    $deployRoot = Join-Path $serverRoot 'cmd\wheelmaker-deploy'
+    $mainPath = Join-Path $deployRoot 'main.go'
+    $compatibilityPath = Join-Path $deployRoot 'compatibility.go'
+    $legacyMonitorPath = Join-Path $deployRoot 'legacy_monitor.go'
+    if (Test-Path -LiteralPath $legacyMonitorPath) {
+        throw 'legacy_monitor.go must be replaced by compatibility.go'
+    }
+    if (-not (Test-Path -LiteralPath $compatibilityPath -PathType Leaf)) {
+        throw 'wheelmaker-deploy compatibility.go is missing'
+    }
+    $mainSource = Get-Content -Raw -Encoding UTF8 -LiteralPath $mainPath
+    $compatibilitySource = Get-Content -Raw -Encoding UTF8 -LiteralPath $compatibilityPath
+    foreach ($name in @('migrateRegistryToken', 'retireLegacyMonitor', 'migrateLegacyMonitorConfig', 'cleanupLegacyMonitor')) {
+        $definition = "func $name("
+        if ($mainSource.Contains($definition)) {
+            throw "wheelmaker-deploy main.go contains compatibility implementation $name"
+        }
+        if (-not $compatibilitySource.Contains($definition)) {
+            throw "wheelmaker-deploy compatibility.go is missing $name"
+        }
+    }
+}
+
 Set-Location $repoRoot
 
 Write-Gate 'Gitleaks current tree'
@@ -175,6 +199,9 @@ foreach ($relativePath in $scriptTests) {
 Write-Gate 'Forbidden production source gate'
 Assert-NoProductionMatches 'legacy default token' 'wheelmaker-local-token'
 Assert-NoProductionMatches 'retired interfaces' 'LOCAL_TOKEN_KEY|LocalHubRead|addJavascriptInterface|RegistryRoleMonitor|registry\.monitor|monitor\.(listHub|status|log|db|action|restart)|:9632|InsecureSkipVerify'
+Assert-NoProductionMatches 'retired backend key migration' 'migrateLegacyBackendSecrets|extractLegacyBackendSecrets|getLegacyBackendSecrets|clearLegacyBackendSecret|retryBackendSecretMigration|config\.json.{0,80}secrets'
+Assert-NoProductionMatches 'Android Server Data key persistence' '(SharedPreferences|DataStore|Room|SQLite|FileOutputStream).{0,120}(accessToken|speechCredential|volcengine)|(accessToken|speechCredential|volcengine).{0,120}(SharedPreferences|DataStore|Room|SQLite|FileOutputStream)'
+Assert-DeployCompatibilityCentralized
 $debugSigningFallback = 'signingConfigs.getByName("debug")'
 $androidBuildScript = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $androidRoot 'app\build.gradle.kts')
 if ($androidBuildScript.Contains($debugSigningFallback)) {

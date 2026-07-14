@@ -1,6 +1,6 @@
 # WheelMaker 安全模型
 
-最后复核：2026-07-13
+最后复核：2026-07-14
 
 本文描述当前实现的安全边界和日常操作。已知但尚未消除的风险见 [security-known-risks.md](security-known-risks.md)，Nginx 响应头配置见 [nginx-security.md](nginx-security.md)。
 
@@ -32,11 +32,17 @@ Base URL 是完整 HTTPS 目录地址，可以是根路径 `https://host/`，也
 
 公开入口应部署 CSP、`Referrer-Policy: no-referrer`、`X-Content-Type-Options: nosniff` 和防 iframe 响应头。HTML meta 策略只能作为补充，不能替代 Nginx 对所有静态响应设置的 header。
 
-## 后端密钥
+## Server 配置和后端密钥
 
-DeepSeek、Volcengine ASR 和 MiMo TTS 等后端密钥采用 set-only backend secrets 接口。前端只能执行 set、replace、clear 和读取 `configured`/`updatedAt` 状态，协议没有读取明文的操作，诊断和日志也会递归脱敏。
+DeepSeek、Volcengine ASR 和 MiMo TTS 统一在设置页的 `Server` 分组配置，Key 是否存在直接决定功能是否可用，不再维护独立的 enable 开关。普通前端接口采用 set-only backend secrets 模型：只能 set、replace、clear 和读取 `configured`/`updatedAt`，不能读回明文。Key 不进入 React state、浏览器存储或 Hub `config.json`；诊断和日志在记录协议响应前递归脱敏。
 
-密钥仍由 Registry 写入同一个 `~/.wheelmaker/config.json` 的 `secrets` 区域，因此不会引入第二套 Hub 配置格式。安全提升来自访问面收窄和私有原子文件权限，而不是把明文伪装成可逆编码。Registry 进程必须能读取这些值来调用第三方服务；能控制当前 OS 用户或管理员权限的攻击者仍在已知风险范围内。
+Server 配置由 Registry 入口机写入 `~/.wheelmaker/db/server-data.json`。这是运行时必须读取的明文 JSON，不是加密保险箱；安全边界来自仅当前 OS 用户可访问的 private file permissions、原子替换写入和受限协议。备份该文件等同于备份所有第三方 Key，必须使用同等级的访问控制，不得上传 Git、诊断包或普通云盘。能控制当前 OS 用户或管理员权限的攻击者仍在已知风险范围内。
+
+Android direct speech（直连语音）是唯一的明文读取例外。APK 先通过 HTTPS 页面和浏览器 Session Cookie 接入 Registry；只有声明为 `wheelmaker-android` 的已认证 client 才能读取 Volcengine ASR 的 Key、版本和模型，不能读取 DeepSeek 或 TTS Key。这个 client-name gate 可以被自制客户端伪装，本项目在 single-user、所有客户端均受信任的边界内明确接受（accepted）该风险，不能把它当成多租户授权。
+
+Key 由 Web 通过受限 Native Bridge 交给 Android，只保存在 APK 进程内存，不写 SharedPreferences、数据库或文件。相同版本不会重复获取；Key 变化、服务器切换、退出登录、服务端变为未配置、认证失败或进程死亡会触发清理/重新同步。Android 随后直连 Volcengine firehose endpoint 并把 transcript 返回页面，不把 PCM 音频发给 Registry。Web 和 Desktop 不取得第三方 Key，语音识别与 TTS 仍由服务端 provider 调用。
+
+旧客户端配置不会迁移到 Server Data（old clients are not migrated; mandatory reconfiguration）。升级后必须使用新 Web/Desktop/APK，并在 `Server` 分组重新配置 Key。Registry 只承担认证、协议路由和适配；持久化与 provider 实现分别集中在独立的 `serverdata`、`speech`、`tts` 包，避免把业务实现散落进 Registry 主流程。
 
 ## Relay 边界
 
@@ -48,7 +54,7 @@ Relay 使用 six-digit Relay access code 作为临时在线门禁，并配合来
 
 Desktop 和 Android 只内置专用启动配置页，业务 Web 从用户填写的 HTTPS Base URL 加载。Native Bridge 使用 origin-restricted WebMessage listener，不使用 `addJavascriptInterface`。启动动作只允许本地 bootstrap Origin；业务动作必须来自已配置的精确 Origin、主 frame 和 allowlist。
 
-需要敏感原生能力的请求还必须携带近期用户手势，授权结果是 action-bound 的短期 capability：手势窗口为 5 秒，发放后的 capability 只在 1 秒内用于同一动作。切换服务器会清理旧站点状态。
+需要用户主动触发的敏感原生能力仍必须携带近期用户手势，授权结果是 action-bound 的短期 capability：手势窗口为 5 秒，发放后的 capability 只在 1 秒内用于同一动作。Android 语音凭据同步不要求新的点击手势，但只对已配置的业务 Origin 和明确的语音 allowlist 开放，本地 bootstrap 页不能调用。切换服务器会清理旧站点状态和内存语音凭据。
 
 ## 项目路径和 Junction
 
@@ -58,7 +64,7 @@ LocalHubRead 已 deleted/retired，listener、role、method 和 manager 都不�
 
 ## 日志和安全报告
 
-运行日志位于 `~/.wheelmaker/log/`。Registry 浏览器 Session 元数据位于 `~/.wheelmaker/registry-sessions.json`，配置和后端密钥位于 `~/.wheelmaker/config.json`。诊断导出会对敏感键递归脱敏，但分享前仍应人工检查。
+运行日志位于 `~/.wheelmaker/log/`。Registry 浏览器 Session 元数据位于 `~/.wheelmaker/registry-sessions.json`，Hub/Registry 配置位于 `~/.wheelmaker/config.json`，Server 配置和后端密钥位于 `~/.wheelmaker/db/server-data.json`。诊断导出会对敏感键递归脱敏，但分享前仍应人工检查。
 
 Gitleaks 私有报告位于 Git 工作树外的 `$HOME/.wheelmaker/security-reports/wheelmaker/`。报告不得提交；仓库只记录脱敏 fingerprint、位置、分类和处置状态。当前响应记录见 [security-credential-response.md](security-credential-response.md)。
 

@@ -4,6 +4,30 @@ import {obsoleteBrowserCredentialRows} from '../web/src/compatibility/browserCre
 
 const source = (relative: string): string => fs.readFileSync(path.join(__dirname, '..', relative), 'utf8');
 
+const productionSources = (): string => {
+  const repositoryRoot = path.join(__dirname, '..', '..');
+  const roots = ['app/web/src', 'server', 'mobile/android/app/src/main'];
+  const files: string[] = [];
+  const visit = (directory: string): void => {
+    for (const entry of fs.readdirSync(directory, {withFileTypes: true})) {
+      const fullPath = path.join(directory, entry.name);
+      const relative = path.relative(repositoryRoot, fullPath).replace(/\\/g, '/');
+      if (entry.isDirectory()) {
+        if (!relative.includes('/dist/') && !relative.includes('/test/')) visit(fullPath);
+      } else if (
+        /\.(?:go|ts|tsx|kt|kts)$/.test(entry.name) &&
+        !entry.name.endsWith('_test.go') &&
+        !relative.includes('/__tests__/') &&
+        !relative.includes('/compatibility/')
+      ) {
+        files.push(fullPath);
+      }
+    }
+  };
+  for (const root of roots) visit(path.join(repositoryRoot, root));
+  return files.map(file => fs.readFileSync(file, 'utf8')).join('\n');
+};
+
 describe('browser credential hard cut', () => {
   test('deletes every obsolete credential/settings row without parsing or replacing it', () => {
     const deletes = obsoleteBrowserCredentialRows([
@@ -50,5 +74,19 @@ describe('browser credential hard cut', () => {
     expect(initialize).not.toMatch(/token/);
     expect(app).toContain('deriveRegistryEndpoints(document.baseURI');
     expect(app).not.toMatch(/Registry token \(optional\)|Registry address|setAddress\(|setToken\(/);
+  });
+
+  test('keeps retired backend key migration APIs out of production sources', () => {
+    const production = productionSources();
+    for (const retired of [
+      'migrateLegacyBackendSecrets',
+      'extractLegacyBackendSecrets',
+      'getLegacyBackendSecrets',
+      'clearLegacyBackendSecret',
+      'retryBackendSecretMigration',
+      'config.json.secrets',
+    ]) {
+      expect(production).not.toContain(retired);
+    }
   });
 });

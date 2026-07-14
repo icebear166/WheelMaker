@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,6 +27,40 @@ func parseDeployArgsForTest(t *testing.T, args []string) deployConfig {
 func runDeployCLIForTest(t *testing.T, args []string) error {
 	t.Helper()
 	return run(context.Background(), args)
+}
+
+func TestDeployCompatibilityEntryPointsAreCentralized(t *testing.T) {
+	t.Parallel()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolve deploy test source path")
+	}
+	deployDir := filepath.Dir(file)
+	mainSource, err := os.ReadFile(filepath.Join(deployDir, "main.go"))
+	if err != nil {
+		t.Fatalf("read main.go: %v", err)
+	}
+	compatibilitySource, err := os.ReadFile(filepath.Join(deployDir, "compatibility.go"))
+	if err != nil {
+		t.Fatalf("read compatibility.go: %v", err)
+	}
+	for _, name := range []string{
+		"migrateRegistryToken",
+		"retireLegacyMonitor",
+		"migrateLegacyMonitorConfig",
+		"cleanupLegacyMonitor",
+	} {
+		definition := "func " + name + "("
+		if strings.Contains(string(mainSource), definition) {
+			t.Fatalf("main.go contains compatibility implementation %s", name)
+		}
+		if !strings.Contains(string(compatibilitySource), definition) {
+			t.Fatalf("compatibility.go is missing %s", name)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(deployDir, "legacy_monitor.go")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("legacy_monitor.go must be replaced by compatibility.go: %v", err)
+	}
 }
 
 func TestParseDeployDefaults(t *testing.T) {

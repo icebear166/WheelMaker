@@ -2,14 +2,17 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 
+	"github.com/swm8023/wheelmaker/internal/security"
 	"github.com/swm8023/wheelmaker/internal/shared"
 )
 
@@ -155,4 +158,54 @@ func isMissingLegacyMonitorError(err error) bool {
 		}
 	}
 	return false
+}
+
+func retireLegacyMonitor(ctx context.Context, cfg deployConfig, deps deployDeps) error {
+	path := filepath.Join(wheelMakerHome(cfg), "config.json")
+	if _, err := migrateLegacyMonitorConfig(path); err != nil {
+		return err
+	}
+	return cleanupLegacyMonitor(ctx, cfg, deps.Runner, runtime.GOOS)
+}
+
+func migrateRegistryToken(path string) (bool, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return false, fmt.Errorf("read config for token migration: %w", err)
+	}
+	var config map[string]any
+	if err := json.Unmarshal(raw, &config); err != nil {
+		// Preserve invalid user-authored config for diagnostics. Runtime loading
+		// remains fail-closed, while deployment may still publish artifacts.
+		return false, nil
+	}
+	registryValue, ok := config["registry"]
+	if !ok {
+		registryValue = map[string]any{}
+		config["registry"] = registryValue
+	}
+	registryConfig, ok := registryValue.(map[string]any)
+	if !ok {
+		return false, errors.New("parse config for token migration: registry must be an object")
+	}
+	token, ok := registryConfig["token"].(string)
+	if !ok && registryConfig["token"] != nil {
+		return false, errors.New("parse config for token migration: registry.token must be a string")
+	}
+	if security.ValidateRegistryToken(token) == nil {
+		return false, nil
+	}
+	token, err = security.NewRegistryToken(rand.Reader)
+	if err != nil {
+		return false, err
+	}
+	registryConfig["token"] = token
+	encoded, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return false, fmt.Errorf("encode migrated config: %w", err)
+	}
+	if err := shared.WriteConfigFile(path, append(encoded, '\n')); err != nil {
+		return false, fmt.Errorf("write migrated config: %w", err)
+	}
+	return true, nil
 }

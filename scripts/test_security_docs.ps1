@@ -34,6 +34,10 @@ $requiredSecurityPatterns = [ordered]@{
     '180-day sliding browser session' = '(?is)180.day.*sliding'
     'device revocation' = '(?i)device revocation'
     'set-only backend secrets' = '(?is)set.only.*backend secret'
+    'private Server Data file' = '(?is)server-data\.json.*private file permissions'
+    'Android direct Volcengine speech' = '(?is)Android direct speech.*Volcengine'
+    'mandatory client reconfiguration' = '(?is)old clients.*mandatory reconfiguration'
+    'accepted Android client-name gate' = '(?is)client-name gate.*accepted'
     'six-digit Relay online boundary' = '(?is)six.digit.*Relay|Relay.*six.digit'
     'Native Bridge boundary' = '(?i)Native Bridge'
     'Junction trust semantics' = '(?i)Junction'
@@ -43,7 +47,7 @@ $requiredSecurityPatterns = [ordered]@{
     'private vulnerability reporting' = '(?i)vulnerability report'
 }
 foreach ($entry in $requiredSecurityPatterns.GetEnumerator()) {
-    if ($security -notmatch $entry.Value) {
+    if (-not [regex]::IsMatch([string]$security, [string]$entry.Value)) {
         Fail "docs/security.md is missing: $($entry.Key)"
     }
 }

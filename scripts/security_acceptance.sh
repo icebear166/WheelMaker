@@ -47,6 +47,21 @@ assert_no_production_matches() {
   fi
 }
 
+assert_deploy_compatibility_centralized() {
+  deploy_root="$server_root/cmd/wheelmaker-deploy"
+  [ ! -e "$deploy_root/legacy_monitor.go" ] || fail 'legacy_monitor.go must be replaced by compatibility.go'
+  [ -f "$deploy_root/compatibility.go" ] || fail 'wheelmaker-deploy compatibility.go is missing'
+  for name in migrateRegistryToken retireLegacyMonitor migrateLegacyMonitorConfig cleanupLegacyMonitor
+  do
+    definition="func $name("
+    if grep -F "$definition" "$deploy_root/main.go" >"$scan_output" 2>&1; then
+      fail "wheelmaker-deploy main.go contains compatibility implementation $name"
+    fi
+    grep -F "$definition" "$deploy_root/compatibility.go" >"$scan_output" 2>&1 || \
+      fail "wheelmaker-deploy compatibility.go is missing $name"
+  done
+}
+
 cd "$repo_root"
 
 gate 'Gitleaks current tree'
@@ -115,6 +130,9 @@ done
 gate 'Forbidden production source gate'
 assert_no_production_matches 'legacy default token' 'wheelmaker-local-token'
 assert_no_production_matches 'retired interfaces' 'LOCAL_TOKEN_KEY|LocalHubRead|addJavascriptInterface|RegistryRoleMonitor|registry\.monitor|monitor\.(listHub|status|log|db|action|restart)|:9632|InsecureSkipVerify'
+assert_no_production_matches 'retired backend key migration' 'migrateLegacyBackendSecrets|extractLegacyBackendSecrets|getLegacyBackendSecrets|clearLegacyBackendSecret|retryBackendSecretMigration|config\.json.{0,80}secrets'
+assert_no_production_matches 'Android Server Data key persistence' '(SharedPreferences|DataStore|Room|SQLite|FileOutputStream).{0,120}(accessToken|speechCredential|volcengine)|(accessToken|speechCredential|volcengine).{0,120}(SharedPreferences|DataStore|Room|SQLite|FileOutputStream)'
+assert_deploy_compatibility_centralized
 debug_signing_fallback='signingConfigs.getByName("debug")'
 if grep -F "$debug_signing_fallback" "$android_root/app/build.gradle.kts" >"$scan_output" 2>&1; then
   fail 'Android release build contains a debug signing fallback'

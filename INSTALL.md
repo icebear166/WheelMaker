@@ -168,6 +168,18 @@ Windows：
 ~/.wheelmaker/restart.bat
 ```
 
+### 配置 Server 功能
+
+使用新版本浏览器、Desktop 或 APK，通过 Registry 的 HTTPS 页面登录后，打开 **设置 > Server**，按需填写：
+
+- Volcengine ASR Key 和模型
+- MiMo TTS Key、模型和音色
+- DeepSeek Key
+
+不再有独立 enable 开关；有 Key 即启用，清除 Key 即停用。配置保存在 Registry 入口机的 `~/.wheelmaker/db/server-data.json`，不会写入 `config.json`、浏览器本地存储或 Worker。该文件是运行时需要的明文凭据文件，部署程序会收紧文件权限并原子写入，但备份仍必须按密钥保护。
+
+旧版客户端保存的 Key 不会迁移。所有客户端都必须升级，并在 Server 分组重新配置。Web/Desktop 的语音和 TTS 由服务端调用 provider；Android 只在认证后取得 Volcengine ASR Key，保存在进程内存并直连火山，退出登录、切换服务器或进程退出后会清除。Nginx 不需要为这些 Server 配置增加新 location，仍使用现有 HTTPS 页面和 `/ws`。
+
 ## 6. Worker 机器配置
 
 Worker 机器负责：
