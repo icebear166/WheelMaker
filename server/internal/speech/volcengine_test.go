@@ -1,4 +1,4 @@
-package registry
+package speech
 
 import (
 	"bytes"
@@ -12,8 +12,15 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+func TestVolcengineProviderImplementsBoundary(t *testing.T) {
+	var provider Provider = NewVolcengineProvider()
+	if provider == nil {
+		t.Fatal("provider is nil")
+	}
+}
+
 func TestVolcengineFullClientRequestFrame(t *testing.T) {
-	frame, err := buildVolcengineFullClientRequest(speechAudioConfig{
+	frame, err := buildVolcengineFullClientRequest(AudioConfig{
 		Format:  "pcm",
 		Codec:   "raw",
 		Rate:    16000,

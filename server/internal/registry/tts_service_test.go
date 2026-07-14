@@ -3,37 +3,36 @@ package registry
 import (
 	"context"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
+	"errors"
 	"strings"
 	"testing"
 
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
+	ttsprovider "github.com/swm8023/wheelmaker/internal/tts"
 )
 
-func TestTTSUsesBackendSecretAndFixedRequestShape(t *testing.T) {
-	var authorization string
-	var upstream map[string]any
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authorization = r.Header.Get("Authorization")
-		if err := json.NewDecoder(r.Body).Decode(&upstream); err != nil {
-			t.Fatalf("decode upstream request: %v", err)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"audio":{"data":"UklGRg=="}}}]}`))
-	}))
-	defer ts.Close()
+type recordingTTSClient struct {
+	request  ttsprovider.Request
+	response ttsprovider.Response
+	err      error
+}
 
-	service := newTTSService(func() (string, error) { return "backend-tts-key", nil })
-	service.endpoint = ts.URL
+func (c *recordingTTSClient) Synthesize(_ context.Context, request ttsprovider.Request) (ttsprovider.Response, error) {
+	c.request = request
+	return c.response, c.err
+}
+
+func TestTTSAdapterPassesBackendSecretOnlyToClient(t *testing.T) {
+	client := &recordingTTSClient{response: ttsprovider.Response{AudioBase64: "UklGRg==", Format: "wav"}}
+	service := newTTSService(client, func() (string, error) { return "backend-tts-key", nil })
 	response, serviceErr := service.synthesize(context.Background(), rp.TTSSynthesizePayload{
 		Model: "mimo-v2.5-tts", Voice: "Mia", Text: "hello",
 	})
 	if serviceErr != nil {
 		t.Fatalf("synthesize: %v", serviceErr)
 	}
-	if authorization != "Bearer backend-tts-key" {
-		t.Fatalf("Authorization=%q", authorization)
+	if client.request.APIKey != "backend-tts-key" || client.request.Model != "mimo-v2.5-tts" || client.request.Voice != "Mia" || client.request.Text != "hello" {
+		t.Fatalf("request=%+v", client.request)
 	}
 	if response.AudioBase64 != "UklGRg==" || response.Format != "wav" {
 		t.Fatalf("response=%+v", response)
@@ -42,32 +41,28 @@ func TestTTSUsesBackendSecretAndFixedRequestShape(t *testing.T) {
 	if strings.Contains(string(encoded), "backend-tts-key") {
 		t.Fatalf("response leaks secret: %s", encoded)
 	}
-	if upstream["model"] != "mimo-v2.5-tts" {
-		t.Fatalf("upstream=%#v", upstream)
-	}
 }
 
-func TestTTSValidatesInputAndBoundsUpstreamErrors(t *testing.T) {
-	secret := "never-echo-this-key"
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusBadGateway)
-		_, _ = w.Write([]byte(strings.Repeat("x", 5000) + secret))
-	}))
-	defer ts.Close()
-	service := newTTSService(func() (string, error) { return secret, nil })
-	service.endpoint = ts.URL
-
-	for _, payload := range []rp.TTSSynthesizePayload{
-		{Model: "bad", Voice: "Mia", Text: "hello"},
-		{Model: "mimo-v2.5-tts", Voice: "bad", Text: "hello"},
-		{Model: "mimo-v2.5-tts", Voice: "Mia", Text: strings.Repeat("x", 16*1024+1)},
-	} {
-		if _, serviceErr := service.synthesize(context.Background(), payload); serviceErr == nil || serviceErr.Code != codeInvalidArgument {
-			t.Fatalf("payload=%+v error=%v", payload, serviceErr)
-		}
+func TestTTSAdapterMapsCredentialAndProviderErrors(t *testing.T) {
+	payload := rp.TTSSynthesizePayload{Model: "mimo-v2.5-tts", Voice: "Mia", Text: "hello"}
+	tests := []struct {
+		name     string
+		resolver func() (string, error)
+		client   *recordingTTSClient
+		wantCode string
+	}{
+		{name: "not configured", resolver: func() (string, error) { return "", errTTSSecretNotConfigured }, client: &recordingTTSClient{}, wantCode: "not_configured"},
+		{name: "credential read", resolver: func() (string, error) { return "", errors.New("disk") }, client: &recordingTTSClient{}, wantCode: codeInternal},
+		{name: "invalid request", resolver: func() (string, error) { return "key", nil }, client: &recordingTTSClient{err: ttsprovider.ErrInvalidRequest}, wantCode: codeInvalidArgument},
+		{name: "upstream", resolver: func() (string, error) { return "key", nil }, client: &recordingTTSClient{err: ttsprovider.ErrUnavailable}, wantCode: codeUnavailable},
 	}
-	_, serviceErr := service.synthesize(context.Background(), rp.TTSSynthesizePayload{Model: "mimo-v2.5-tts", Voice: "Mia", Text: "hello"})
-	if serviceErr == nil || strings.Contains(serviceErr.Message, secret) || len(serviceErr.Message) > 4096 {
-		t.Fatalf("unsafe upstream error=%v", serviceErr)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service := newTTSService(tt.client, tt.resolver)
+			_, serviceErr := service.synthesize(context.Background(), payload)
+			if serviceErr == nil || serviceErr.Code != tt.wantCode {
+				t.Fatalf("error=%v, want code %s", serviceErr, tt.wantCode)
+			}
+		})
 	}
 }

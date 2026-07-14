@@ -21,6 +21,8 @@ import (
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
 	"github.com/swm8023/wheelmaker/internal/security"
 	"github.com/swm8023/wheelmaker/internal/serverdata"
+	speechprovider "github.com/swm8023/wheelmaker/internal/speech"
+	ttsprovider "github.com/swm8023/wheelmaker/internal/tts"
 )
 
 const (
@@ -406,8 +408,8 @@ func New(cfg Config) *Server {
 		ipLocation:   cfg.IPLocationResolver,
 		serverData:   cfg.ServerData,
 	}
-	s.speech = newSpeechService(newVolcengineSpeechProvider(), s.resolveVolcengineASRSecret)
-	s.tts = newTTSService(s.resolveMiMoTTSSecret)
+	s.speech = newSpeechService(speechprovider.NewVolcengineProvider(), s.resolveVolcengineASRSecret)
+	s.tts = newTTSService(ttsprovider.NewClient(), s.resolveMiMoTTSSecret)
 	relay, relayErr := portrelay.NewController(portrelay.ControllerConfig{
 		RegistryAddr:      cfg.Addr,
 		ForwardHubRequest: s.forwardRelayHubRequest,

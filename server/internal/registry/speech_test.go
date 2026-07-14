@@ -11,6 +11,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/swm8023/wheelmaker/internal/serverdata"
+	speechprovider "github.com/swm8023/wheelmaker/internal/speech"
 )
 
 func TestSpeechBackendSecretIsPassedOnlyToProvider(t *testing.T) {
@@ -734,16 +735,21 @@ func writeSpeechStartRequest(t *testing.T, client *websocket.Conn, requestID int
 }
 
 type fakeSpeechProvider struct {
-	start  speechProviderStartRequest
+	start  fakeSpeechStart
 	stream *fakeSpeechStream
+}
+
+type fakeSpeechStart struct {
+	credential string
+	Audio      speechprovider.AudioConfig
 }
 
 func newFakeSpeechProvider() *fakeSpeechProvider {
 	return &fakeSpeechProvider{}
 }
 
-func (p *fakeSpeechProvider) Start(_ context.Context, req speechProviderStartRequest, events speechEventSink) (speechProviderStream, error) {
-	p.start = req
+func (p *fakeSpeechProvider) Start(_ context.Context, credential string, audio speechprovider.AudioConfig, events speechprovider.Events) (speechprovider.Stream, error) {
+	p.start = fakeSpeechStart{credential: credential, Audio: audio}
 	p.stream = &fakeSpeechStream{
 		events:    events,
 		cancelled: make(chan struct{}),
@@ -752,7 +758,7 @@ func (p *fakeSpeechProvider) Start(_ context.Context, req speechProviderStartReq
 }
 
 type fakeSpeechStream struct {
-	events    speechEventSink
+	events    speechprovider.Events
 	writes    [][]byte
 	finished  bool
 	cancelled chan struct{}
@@ -781,7 +787,7 @@ type timeoutFirstSpeechProvider struct {
 	stream *fakeSpeechStream
 }
 
-func (p *timeoutFirstSpeechProvider) Start(ctx context.Context, req speechProviderStartRequest, events speechEventSink) (speechProviderStream, error) {
+func (p *timeoutFirstSpeechProvider) Start(ctx context.Context, _ string, _ speechprovider.AudioConfig, events speechprovider.Events) (speechprovider.Stream, error) {
 	p.calls++
 	if p.calls == 1 {
 		<-ctx.Done()
@@ -798,7 +804,7 @@ type blockingFinishSpeechProvider struct {
 	stream *blockingFinishSpeechStream
 }
 
-func (p *blockingFinishSpeechProvider) Start(_ context.Context, req speechProviderStartRequest, events speechEventSink) (speechProviderStream, error) {
+func (p *blockingFinishSpeechProvider) Start(_ context.Context, _ string, _ speechprovider.AudioConfig, _ speechprovider.Events) (speechprovider.Stream, error) {
 	p.stream = &blockingFinishSpeechStream{
 		cancelled: make(chan struct{}),
 	}

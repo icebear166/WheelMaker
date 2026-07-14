@@ -1,4 +1,4 @@
-package registry
+package speech
 
 import (
 	"bytes"
@@ -18,6 +18,10 @@ import (
 )
 
 const (
+	volcengineSpeechEndpoint   = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
+	volcengineSpeechResourceID = "volc.seedasr.sauc.duration"
+	volcengineSpeechModelName  = "bigmodel"
+
 	volcProtocolVersion = 0x1
 	volcHeaderSize      = 0x1
 
@@ -77,7 +81,7 @@ func (e volcengineError) Error() string {
 	return fmt.Sprintf("volcengine error code %d: %s", e.Code, e.Message)
 }
 
-func newVolcengineSpeechProvider() speechProvider {
+func NewVolcengineProvider() Provider {
 	return &volcengineSpeechProvider{
 		endpoint:   volcengineSpeechEndpoint,
 		resourceID: volcengineSpeechResourceID,
@@ -87,9 +91,9 @@ func newVolcengineSpeechProvider() speechProvider {
 	}
 }
 
-func (p *volcengineSpeechProvider) Start(ctx context.Context, req speechProviderStartRequest, events speechEventSink) (speechProviderStream, error) {
+func (p *volcengineSpeechProvider) Start(ctx context.Context, credential string, audio AudioConfig, events Events) (Stream, error) {
 	headers := http.Header{}
-	headers.Set("X-Api-Key", req.credential)
+	headers.Set("X-Api-Key", credential)
 	headers.Set("X-Api-Resource-Id", p.resourceID)
 	headers.Set("X-Api-Request-Id", newSpeechRequestID())
 	headers.Set("X-Api-Sequence", "-1")
@@ -99,12 +103,10 @@ func (p *volcengineSpeechProvider) Start(ctx context.Context, req speechProvider
 		return nil, err
 	}
 	if resp != nil {
-		if logID := resp.Header.Get("X-Tt-Logid"); logID != "" {
-			registryLogger("").Info("volcengine speech connected logid=%s", logID)
-		}
+		_ = resp.Header.Get("X-Tt-Logid")
 	}
 
-	fullRequest, err := buildVolcengineFullClientRequest(req.Audio)
+	fullRequest, err := buildVolcengineFullClientRequest(audio)
 	if err != nil {
 		_ = conn.Close()
 		return nil, err
@@ -159,13 +161,13 @@ func (s *volcengineSpeechStream) Cancel() {
 	_ = s.conn.Close()
 }
 
-func (s *volcengineSpeechStream) readLoop(events speechEventSink) {
+func (s *volcengineSpeechStream) readLoop(events Events) {
 	defer s.cancel()
 	for {
 		messageType, frame, err := s.conn.ReadMessage()
 		if err != nil {
 			if s.ctx.Err() == nil {
-				events.Error(codeUnavailable, "speech provider disconnected", true)
+				events.Error(ErrorCodeUnavailable, "speech provider disconnected", true)
 			}
 			return
 		}
@@ -175,7 +177,7 @@ func (s *volcengineSpeechStream) readLoop(events speechEventSink) {
 		parsed, err := parseVolcengineFrame(frame)
 		if err != nil {
 			if s.ctx.Err() == nil {
-				events.Error(codeUnavailable, err.Error(), false)
+				events.Error(ErrorCodeUnavailable, err.Error(), false)
 			}
 			return
 		}
@@ -188,7 +190,7 @@ func (s *volcengineSpeechStream) readLoop(events speechEventSink) {
 	}
 }
 
-func buildVolcengineFullClientRequest(audio speechAudioConfig) ([]byte, error) {
+func buildVolcengineFullClientRequest(audio AudioConfig) ([]byte, error) {
 	payload := map[string]any{
 		"user": map[string]any{
 			"uid": "wheelmaker",

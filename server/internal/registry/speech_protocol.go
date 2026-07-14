@@ -16,11 +16,6 @@ const (
 	speechMethodError      = "speech.error"
 
 	speechProviderVolcengine = "volcengine"
-	speechModelDoubaoASR2    = "doubao-streaming-asr-2.0"
-
-	volcengineSpeechEndpoint   = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
-	volcengineSpeechResourceID = "volc.seedasr.sauc.duration"
-	volcengineSpeechModelName  = "bigmodel"
 )
 
 type speechAudioConfig struct {

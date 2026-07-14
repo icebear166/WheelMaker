@@ -11,6 +11,7 @@ import (
 	"time"
 
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
+	speechprovider "github.com/swm8023/wheelmaker/internal/speech"
 )
 
 const (
@@ -20,30 +21,8 @@ const (
 	defaultSpeechClosingRouteTimeout = 15 * time.Second
 )
 
-type speechProviderStartRequest struct {
-	Provider   string
-	Model      string
-	credential string
-	Audio      speechAudioConfig
-}
-
-type speechProvider interface {
-	Start(ctx context.Context, req speechProviderStartRequest, events speechEventSink) (speechProviderStream, error)
-}
-
-type speechProviderStream interface {
-	WriteAudio(ctx context.Context, pcm []byte) error
-	Finish(ctx context.Context) error
-	Cancel()
-}
-
-type speechEventSink interface {
-	Transcript(text string, final bool)
-	Error(code string, message string, retryable bool)
-}
-
 type speechService struct {
-	provider       speechProvider
+	provider       speechprovider.Provider
 	secretResolver func() (string, error)
 
 	idleTimeout         time.Duration
@@ -68,7 +47,7 @@ type speechServiceOptions struct {
 }
 
 type speechStartResult struct {
-	stream speechProviderStream
+	stream speechprovider.Stream
 	err    error
 }
 
@@ -76,17 +55,17 @@ type activeSpeechStream struct {
 	connectionID string
 	streamID     string
 	peer         *peerConn
-	stream       speechProviderStream
+	stream       speechprovider.Stream
 	cancel       context.CancelFunc
 	idleTimer    *time.Timer
 	closingTimer *time.Timer
 }
 
-func newSpeechService(provider speechProvider, resolvers ...func() (string, error)) *speechService {
+func newSpeechService(provider speechprovider.Provider, resolvers ...func() (string, error)) *speechService {
 	return newSpeechServiceWithOptions(provider, speechServiceOptions{}, resolvers...)
 }
 
-func newSpeechServiceWithOptions(provider speechProvider, options speechServiceOptions, resolvers ...func() (string, error)) *speechService {
+func newSpeechServiceWithOptions(provider speechprovider.Provider, options speechServiceOptions, resolvers ...func() (string, error)) *speechService {
 	options = normalizeSpeechServiceOptions(options)
 	resolver := func() (string, error) { return "", errSpeechSecretNotConfigured }
 	if options.secretResolver != nil {
@@ -193,11 +172,9 @@ func (s *speechService) handleStart(peer *peerConn, state *connectionState, in e
 		cancelSpeechProviderStream(old)
 	}
 
-	stream, err := s.startProvider(ctx, speechProviderStartRequest{
-		Provider:   payload.Provider,
-		Model:      speechModelDoubaoASR2,
-		credential: credential,
-		Audio:      payload.Audio,
+	stream, err := s.startProvider(ctx, credential, speechprovider.AudioConfig{
+		Format: payload.Audio.Format, Channel: payload.Audio.Channel, Codec: payload.Audio.Codec,
+		Rate: payload.Audio.Rate, Bits: payload.Audio.Bits,
 	}, speechStreamEvents{service: s, streamID: streamID})
 	credential = ""
 	if err != nil {
@@ -323,10 +300,10 @@ func (s *speechService) cancelStream(stream *activeSpeechStream) {
 	cancelSpeechProviderStream(stream)
 }
 
-func (s *speechService) startProvider(ctx context.Context, req speechProviderStartRequest, events speechEventSink) (speechProviderStream, error) {
+func (s *speechService) startProvider(ctx context.Context, credential string, audio speechprovider.AudioConfig, events speechprovider.Events) (speechprovider.Stream, error) {
 	resultCh := make(chan speechStartResult, 1)
 	go func() {
-		stream, err := s.provider.Start(ctx, req, events)
+		stream, err := s.provider.Start(ctx, credential, audio, events)
 		resultCh <- speechStartResult{stream: stream, err: err}
 	}()
 
@@ -351,7 +328,7 @@ func discardLateSpeechStart(resultCh <-chan speechStartResult) {
 	}
 }
 
-func (s *speechService) attachProviderStream(connectionID string, streamID string, providerStream speechProviderStream) bool {
+func (s *speechService) attachProviderStream(connectionID string, streamID string, providerStream speechprovider.Stream) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	stream := s.streams[streamID]
@@ -638,10 +615,10 @@ func writeSpeechError(peer *peerConn, requestID int64, method, code, message str
 
 type unavailableSpeechProvider struct{}
 
-func newUnavailableSpeechProvider() speechProvider {
+func newUnavailableSpeechProvider() speechprovider.Provider {
 	return unavailableSpeechProvider{}
 }
 
-func (unavailableSpeechProvider) Start(context.Context, speechProviderStartRequest, speechEventSink) (speechProviderStream, error) {
+func (unavailableSpeechProvider) Start(context.Context, string, speechprovider.AudioConfig, speechprovider.Events) (speechprovider.Stream, error) {
 	return nil, errors.New("speech provider unavailable")
 }
