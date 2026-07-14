@@ -7,8 +7,10 @@ import {
 import {RegistryRequestError} from './RegistryClient';
 import type {RegistryDebugSink} from './RegistryClient';
 import type {RegistryDebugConnection} from '../debug/registryDebug';
+import type {ServerSettings, ServerSettingsUpdate, SpeechModelId} from '../settings/serverSettings';
 import type {
   RegistryEnvelope,
+  RegistryClientName,
   RegistryDebugUploadLogPayload,
   RegistryDebugUploadLogResponse,
   RegistryDeviceSession,
@@ -85,6 +87,7 @@ export type WorkspaceSession = {
 
 export type RegistryWorkspaceServiceOptions = {
   createRepository?: (debugSink?: RegistryDebugSink, debugConnection?: RegistryDebugConnection) => RegistryRepository;
+  clientName?: RegistryClientName;
 };
 
 export class RegistryWorkspaceService {
@@ -95,15 +98,17 @@ export class RegistryWorkspaceService {
   private unsubscribeRepositoryEvent: (() => void) | null = null;
   private unsubscribeRepositoryClose: (() => void) | null = null;
   private readonly createRepository: (debugSink?: RegistryDebugSink, debugConnection?: RegistryDebugConnection) => RegistryRepository;
+  private readonly clientName: RegistryClientName;
 
   constructor(private readonly debugSink?: RegistryDebugSink, options: RegistryWorkspaceServiceOptions = {}) {
     this.createRepository = options.createRepository ?? createRegistryRepository;
+    this.clientName = options.clientName ?? 'wheelmaker-web';
   }
 
   async connect(wsUrl: string): Promise<WorkspaceSession> {
     const repository = this.createRepository(this.debugSink, 'Remote');
     try {
-      await repository.initialize(wsUrl);
+      await repository.initialize(wsUrl, this.clientName);
       const previousRepository = this.repository;
       this.bindRepository(repository);
       const snapshot = await this.listProjectSnapshotWithRetry(repository);
@@ -832,6 +837,21 @@ export class RegistryWorkspaceService {
   async updateSecret(payload: RegistrySecretUpdatePayload): Promise<void> {
     if (!this.repository) throw new Error('session is not ready');
     await this.repository.updateSecret(payload);
+  }
+
+  async getServerSettings(): Promise<ServerSettings> {
+    if (!this.repository) throw new Error('session is not ready');
+    return this.repository.getServerSettings();
+  }
+
+  async updateServerSettings(payload: ServerSettingsUpdate): Promise<ServerSettings> {
+    if (!this.repository) throw new Error('session is not ready');
+    return this.repository.updateServerSettings(payload);
+  }
+
+  async getAndroidSpeechCredential(): Promise<{accessToken: string; version: string; model: SpeechModelId}> {
+    if (!this.repository) throw new Error('session is not ready');
+    return this.repository.getAndroidSpeechCredential();
   }
 
 	async synthesizeTTS(payload: RegistryTTSSynthesizePayload): Promise<RegistryTTSSynthesizeResponse> {

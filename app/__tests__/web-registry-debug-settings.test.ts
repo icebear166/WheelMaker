@@ -44,7 +44,8 @@ describe('web registry debug settings', () => {
 
     expect(mainTsx).toContain("import {createRegistryDebugStore} from '../debug/registryDebug';");
     expect(mainTsx).toContain('const registryDebugStore = createRegistryDebugStore();');
-    expect(mainTsx).toContain('const service = new RegistryWorkspaceService(registryDebugStore.recordCaptureEvent);');
+    expect(mainTsx).toContain('const registryClientName = isAndroidNativeSpeechHost()');
+    expect(mainTsx).toContain('const service = new RegistryWorkspaceService(registryDebugStore.recordCaptureEvent, {clientName: registryClientName});');
     expect(mainTsx).toContain('const [messageViewerEnabled, setMessageViewerEnabled] = useState(');
     expect(mainTsx).toContain('const [logLevel, setLogLevel] = useState(');
     expect(mainTsx).toContain('registryDebugStore.setEnabled(messageViewerEnabled);');

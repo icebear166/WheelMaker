@@ -1,4 +1,5 @@
 import type {RegistryEnvelope} from '../registry/registryTypes';
+import {RegistryMethods} from '../registry/registryMethods';
 import {redactDiagnosticValue} from './redaction';
 
 export type RegistryDebugDirection = 'out' | 'in' | 'lifecycle';
@@ -117,7 +118,10 @@ function estimateBase64ByteCount(value: string): number {
 
 export function redactRegistryDebugEnvelope<TEnvelope extends RegistryEnvelope>(envelope: TEnvelope): TEnvelope {
 	const originalPayload = envelope.payload;
-	const recursivelyRedacted = redactDiagnosticValue(envelope) as TEnvelope;
+	const extraSensitiveKeys = envelope.method === RegistryMethods.ServerAndroidSpeechCredentialGet
+		? ['accessToken']
+		: [];
+	const recursivelyRedacted = redactDiagnosticValue(envelope, extraSensitiveKeys) as TEnvelope;
 	envelope = recursivelyRedacted;
   const terminalMethod = envelope.method?.startsWith('terminal.') === true;
   if (envelope.method !== 'speech.start' && envelope.method !== 'speech.chunk' && !terminalMethod) {

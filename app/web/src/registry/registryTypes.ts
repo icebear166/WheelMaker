@@ -98,6 +98,21 @@ export interface RegistrySecretUpdatePayload {
   value?: string;
 }
 
+export type RegistryClientName = 'wheelmaker-web' | 'wheelmaker-desktop' | 'wheelmaker-android';
+
+export interface RegistryServerConfigUpdatePayload {
+  section: 'voiceInput' | 'textToSpeech' | 'deepSeek';
+  field: 'key' | 'model' | 'voice';
+  action: 'set' | 'clear';
+  value?: string;
+}
+
+export interface RegistryAndroidSpeechCredentialResponse {
+  accessToken: string;
+  version: string;
+  model: 'doubao-streaming-asr-2.0';
+}
+
 export interface RegistryEnvelope<TPayload = unknown> {
   requestId?: number;
   type: RegistryMessageType;
@@ -949,7 +964,7 @@ export interface RegistryWorkingTreeFileDiff {
 }
 
 export type RegistryConnectInitPayload = {
-  clientName: string;
+  clientName: RegistryClientName;
   clientVersion: string;
   protocolVersion: string;
   role: 'client';

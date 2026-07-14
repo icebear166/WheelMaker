@@ -36,4 +36,10 @@ describe('web registry client debug hooks', () => {
     expect(clientTs).toContain("phase: 'connect_close'");
     expect(clientTs).toContain("phase: 'connect_error'");
   });
+
+  test('never stores an Android speech credential in raw debug JSON', () => {
+    const debugTs = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'debug', 'registryDebug.ts'), 'utf8');
+    expect(debugTs).toContain('redactDiagnosticValue(envelope');
+    expect(debugTs).not.toContain("accessToken: record.accessToken");
+  });
 });

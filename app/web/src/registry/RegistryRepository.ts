@@ -2,6 +2,12 @@ import { RegistryClient, type RegistryDebugSink } from './RegistryClient';
 import type {RegistryDebugConnection} from '../debug/registryDebug';
 import {RegistryMethods, RegistryProtocolVersion} from './registryMethods';
 import {
+  normalizeServerSettings,
+  type ServerSettings,
+  type ServerSettingsUpdate,
+  type SpeechModelId,
+} from '../settings/serverSettings';
+import {
   decodeSessionTurnToMessage,
   normalizeSessionReadPayload,
 } from '../chat/chatWire';
@@ -9,6 +15,7 @@ import type {
   RegistryDebugUploadLogPayload,
   RegistryDebugUploadLogResponse,
   RegistryDeviceSession,
+  RegistryClientName,
   RegistrySecretKind,
   RegistrySecretStatus,
   RegistrySecretUpdatePayload,
@@ -547,10 +554,10 @@ export class RegistryRepository {
       latestTurnIndex: normalized.latestTurnIndex,
     };
   }
-  async initialize(url: string): Promise<void> {
+  async initialize(url: string, clientName: RegistryClientName = 'wheelmaker-web'): Promise<void> {
     await this.client.connect(url);
     await this.client.connectInit({
-      clientName: 'wheelmaker-web',
+      clientName,
       clientVersion: '0.1.0',
       protocolVersion: RegistryProtocolVersion,
       role: 'client',
@@ -661,6 +668,40 @@ export class RegistryRepository {
       method: RegistryMethods.SecuritySecretUpdate,
       payload,
     });
+  }
+
+  async getServerSettings(): Promise<ServerSettings> {
+    const response = await this.client.request({
+      method: RegistryMethods.ServerConfigGet,
+      payload: {},
+    });
+    return normalizeServerSettings(response.payload);
+  }
+
+  async updateServerSettings(payload: ServerSettingsUpdate): Promise<ServerSettings> {
+    const response = await this.client.request({
+      method: RegistryMethods.ServerConfigUpdate,
+      payload,
+    });
+    return normalizeServerSettings(response.payload);
+  }
+
+  async getAndroidSpeechCredential(): Promise<{accessToken: string; version: string; model: SpeechModelId}> {
+    const response = await this.client.request({
+      method: RegistryMethods.ServerAndroidSpeechCredentialGet,
+      payload: {},
+    });
+    const input = response.payload && typeof response.payload === 'object'
+      ? response.payload as Record<string, unknown>
+      : {};
+    if (
+      typeof input.accessToken !== 'string' || input.accessToken.length === 0 ||
+      typeof input.version !== 'string' ||
+      input.model !== 'doubao-streaming-asr-2.0'
+    ) {
+      throw new Error('invalid Android speech credential response');
+    }
+    return {accessToken: input.accessToken, version: input.version, model: input.model};
   }
 
   async uploadDebugLog(payload: RegistryDebugUploadLogPayload): Promise<RegistryDebugUploadLogResponse> {

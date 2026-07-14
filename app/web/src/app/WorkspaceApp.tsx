@@ -790,7 +790,12 @@ if (nativeShellHost) {
   cleanupNativeWebViewPWA().catch(() => undefined);
 }
 const registryDebugStore = createRegistryDebugStore();
-const service = new RegistryWorkspaceService(registryDebugStore.recordCaptureEvent);
+const registryClientName = isAndroidNativeSpeechHost()
+  ? 'wheelmaker-android'
+  : getDesktopWindowBridge()
+    ? 'wheelmaker-desktop'
+    : 'wheelmaker-web';
+const service = new RegistryWorkspaceService(registryDebugStore.recordCaptureEvent, {clientName: registryClientName});
 scrubLegacyBrowserCredentials();
 const workspaceStore = new WorkspaceStore();
 const workspaceController = new WorkspaceController(service, workspaceStore);
