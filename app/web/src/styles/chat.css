@@ -5341,8 +5341,8 @@
 .project-session-action-menu,
 .wide-project-action-popover,
 .mobile-project-sheet {
-  --workspace-temporary-layer-background: color-mix(in srgb, var(--surface-overlay) 88%, transparent);
-  --workspace-temporary-layer-filter: blur(30px) saturate(1.12) contrast(1.03);
+  --workspace-temporary-layer-background: color-mix(in srgb, var(--surface-overlay) 58%, transparent);
+  --workspace-temporary-layer-filter: blur(36px) saturate(1.18) contrast(1.04);
   background: var(--workspace-temporary-layer-background);
   border-color: color-mix(in srgb, var(--border-subtle) 84%, transparent);
   box-shadow:
@@ -5352,63 +5352,40 @@
   -webkit-backdrop-filter: var(--workspace-temporary-layer-filter);
 }
 
-.chat-plan-surface.desktop,
 .chat-recent-sessions-surface.desktop {
-  isolation: isolate;
-  background: transparent;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 50%, rgb(0 0 0 / 12%) 68%, transparent 74%);
+  mask-image: linear-gradient(to right, #000 0%, #000 50%, rgb(0 0 0 / 12%) 68%, transparent 74%);
+  -webkit-mask-size: 200% 100%;
+  mask-size: 200% 100%;
+  -webkit-mask-position: right center;
+  mask-position: right center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  transition: -webkit-mask-position 180ms var(--ease-out), mask-position 180ms var(--ease-out);
 }
 
-.chat-plan-surface.desktop::before,
-.chat-plan-surface.desktop::after,
-.chat-recent-sessions-surface.desktop::before,
-.chat-recent-sessions-surface.desktop::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  border-radius: inherit;
-  background: var(--workspace-temporary-layer-background);
-  pointer-events: none;
-  backdrop-filter: var(--workspace-temporary-layer-filter);
-  -webkit-backdrop-filter: var(--workspace-temporary-layer-filter);
-  transition: opacity 180ms var(--ease-out);
+.chat-plan-surface.desktop {
+  -webkit-mask-image: linear-gradient(to left, #000 0%, #000 50%, rgb(0 0 0 / 12%) 68%, transparent 74%);
+  mask-image: linear-gradient(to left, #000 0%, #000 50%, rgb(0 0 0 / 12%) 68%, transparent 74%);
+  -webkit-mask-size: 200% 100%;
+  mask-size: 200% 100%;
+  -webkit-mask-position: left center;
+  mask-position: left center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  transition: -webkit-mask-position 180ms var(--ease-out), mask-position 180ms var(--ease-out);
 }
 
-.chat-plan-surface.desktop > *,
-.chat-recent-sessions-surface.desktop > * {
-  position: relative;
-  z-index: 1;
+.chat-recent-sessions-surface.desktop:hover,
+.chat-recent-sessions-surface.desktop:focus-within {
+  -webkit-mask-position: left center;
+  mask-position: left center;
 }
 
-.chat-recent-sessions-surface.desktop::before {
-  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 52%, rgb(0 0 0 / 68%) 72%, transparent 100%);
-  mask-image: linear-gradient(to right, #000 0%, #000 52%, rgb(0 0 0 / 68%) 72%, transparent 100%);
-}
-
-.chat-plan-surface.desktop::before {
-  -webkit-mask-image: linear-gradient(to left, #000 0%, #000 52%, rgb(0 0 0 / 68%) 72%, transparent 100%);
-  mask-image: linear-gradient(to left, #000 0%, #000 52%, rgb(0 0 0 / 68%) 72%, transparent 100%);
-}
-
-.chat-plan-surface.desktop::after,
-.chat-recent-sessions-surface.desktop::after {
-  opacity: 0;
-}
-
-.chat-recent-sessions-surface.desktop:hover::before,
-.chat-recent-sessions-surface.desktop:focus-within::before,
-.chat-plan-surface.desktop:hover::before,
-.chat-plan-surface.desktop:focus-within::before {
-  opacity: 0;
-}
-
-.chat-recent-sessions-surface.desktop:hover::after,
-.chat-recent-sessions-surface.desktop:focus-within::after,
-.chat-plan-surface.desktop:hover::after,
-.chat-plan-surface.desktop:focus-within::after {
-  opacity: 1;
+.chat-plan-surface.desktop:hover,
+.chat-plan-surface.desktop:focus-within {
+  -webkit-mask-position: right center;
+  mask-position: right center;
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -5433,19 +5410,16 @@
     -webkit-backdrop-filter: none;
   }
 
-  .chat-plan-surface.desktop::before,
-  .chat-plan-surface.desktop::after,
-  .chat-recent-sessions-surface.desktop::before,
-  .chat-recent-sessions-surface.desktop::after {
-    content: none;
+  .chat-plan-surface.desktop,
+  .chat-recent-sessions-surface.desktop {
+    -webkit-mask-image: none;
+    mask-image: none;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .chat-plan-surface.desktop::before,
-  .chat-plan-surface.desktop::after,
-  .chat-recent-sessions-surface.desktop::before,
-  .chat-recent-sessions-surface.desktop::after {
+  .chat-plan-surface.desktop,
+  .chat-recent-sessions-surface.desktop {
     transition: none;
   }
 }
