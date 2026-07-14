@@ -270,6 +270,27 @@ describe('chat composer status helpers', () => {
     );
   });
 
+  test('restores the translucent glass recipe only for desktop temporary layers', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+    const marker = '/* workspace-ui-temporary-layers */';
+    const temporaryLayerStyles = stylesCss.slice(stylesCss.indexOf(marker));
+    const desktopOverride = temporaryLayerStyles.slice(
+      temporaryLayerStyles.indexOf('@media (min-width: 900px)'),
+    );
+
+    expect(desktopOverride).toContain('.chat-plan-surface.desktop');
+    expect(desktopOverride).toContain('.chat-recent-sessions-surface.desktop');
+    expect(desktopOverride).toContain('.chat-slash-menu');
+    expect(desktopOverride).toContain('.chat-config-overflow-menu');
+    expect(desktopOverride).toContain(
+      '--workspace-temporary-layer-background: color-mix(in srgb, var(--surface-overlay) 58%, transparent);',
+    );
+    expect(desktopOverride).not.toContain(
+      '--workspace-temporary-layer-background: color-mix(in srgb, var(--surface-overlay) 82%, transparent);',
+    );
+  });
+
   test('separates desktop edge glass from content and aligns both masks to measured text bounds', () => {
     const projectRoot = path.join(__dirname, '..');
     const stylesCss = readWebStyles(projectRoot);

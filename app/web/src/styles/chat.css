@@ -5390,6 +5390,27 @@
   --workspace-temporary-layer-filter: blur(36px) saturate(1.18) contrast(1.04);
 }
 
+@media (min-width: 900px) {
+  .chat-plan-surface.desktop,
+  .chat-plan-surface.mobile.expanded,
+  .chat-recent-sessions-surface.desktop,
+  .chat-config-overflow-menu,
+  .chat-config-value-menu,
+  .chat-context-usage-popover,
+  .chat-slash-menu,
+  .chat-file-mention-menu,
+  .chat-title-project-menu,
+  .chat-title-prompt-menu,
+  .chat-hub-popover,
+  .chat-quick-switch-menu,
+  .session-archive-menu,
+  .project-session-action-menu,
+  .wide-project-action-popover,
+  .mobile-project-sheet {
+    --workspace-temporary-layer-background: color-mix(in srgb, var(--surface-overlay) 58%, transparent);
+  }
+}
+
 .chat-plan-surface.mobile.expanded,
 .chat-config-overflow-menu,
 .chat-config-value-menu,
