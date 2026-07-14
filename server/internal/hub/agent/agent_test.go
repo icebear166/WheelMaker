@@ -3519,3 +3519,23 @@ func TestClaudePreset_UsesClaudeUserSkillsDirOnly(t *testing.T) {
 		t.Fatalf("claude preset user dirs missing ~/.claude/skills: %v", ClaudeACPProviderPreset.SkillUserDirs)
 	}
 }
+
+func TestFactorySessionActionsAreProviderSpecific(t *testing.T) {
+	factory := &ACPFactory{}
+	factory.RegisterSessionActions(protocol.ACPProviderCodex, SessionActionSupport{
+		Status:  true,
+		Compact: true,
+	})
+
+	if got := factory.SessionActions(protocol.ACPProviderCodex); !got.Status || !got.Compact {
+		t.Fatalf("codex session actions = %+v", got)
+	}
+	if got := factory.SessionActions(protocol.ACPProviderClaude); got.Status || got.Compact {
+		t.Fatalf("claude session actions = %+v", got)
+	}
+
+	cloned := factory.Clone()
+	if got := cloned.SessionActions(protocol.ACPProviderCodex); !got.Status || !got.Compact {
+		t.Fatalf("cloned codex session actions = %+v", got)
+	}
+}
