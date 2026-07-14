@@ -53,4 +53,14 @@ class MainActivityPortRelayCookieTest {
 
         assertTrue(onPause.contains("CookieManager.getInstance().flush()"))
     }
+
+    @Test
+    fun clearsSpeechCredentialWhenTheConfiguredServerIsReset() {
+        val mainActivity = source("src/main/java/com/wheelmaker/android/MainActivity.kt")
+        val clearServer = mainActivity
+            .substringAfter("private fun clearCurrentServerState(onComplete: () -> Unit) {")
+            .substringBefore("private fun bootstrapState")
+
+        assertTrue(clearServer.contains("androidSpeechRuntime.clearCredential()"))
+    }
 }

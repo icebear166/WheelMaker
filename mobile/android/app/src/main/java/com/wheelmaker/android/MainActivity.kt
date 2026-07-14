@@ -496,6 +496,7 @@ class MainActivity : Activity() {
     }
 
     private fun clearCurrentServerState(onComplete: () -> Unit) {
+        androidSpeechRuntime.clearCredential()
         val oldBaseUrl = configuredBaseUrl
         val currentUrl = webView.url.orEmpty()
         val finish = {

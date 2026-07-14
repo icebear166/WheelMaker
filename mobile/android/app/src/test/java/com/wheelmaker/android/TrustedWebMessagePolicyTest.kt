@@ -165,6 +165,31 @@ class TrustedWebMessagePolicyTest {
     }
 
     @Test
+    fun speechCredentialActionsRequireTrustedBusinessPageButNoGesture() {
+        for (action in listOf("speech.credentialState", "speech.configureCredential", "speech.clearCredential")) {
+            val request = TrustedWebMessageRequest("credential-request", action, null)
+            assertTrue(policy.isAllowed(
+                surface = TrustedMessageSurface.BUSINESS,
+                sourceOrigin = "https://example.com",
+                isMainFrame = true,
+                topLevelUrl = "https://example.com/app/chat",
+                navigationStartedAtElapsedRealtime = 1_000,
+                nowElapsedRealtime = 2_000,
+                request = request
+            ))
+            assertFalse(policy.isAllowed(
+                surface = TrustedMessageSurface.BOOTSTRAP,
+                sourceOrigin = "https://appassets.androidplatform.net",
+                isMainFrame = true,
+                topLevelUrl = ANDROID_BOOTSTRAP_URL,
+                navigationStartedAtElapsedRealtime = 1_000,
+                nowElapsedRealtime = 2_000,
+                request = request
+            ))
+        }
+    }
+
+    @Test
     fun authorizationReturnsShortLivedActionBoundCapability() {
         val capability = policy.authorize(
             surface = TrustedMessageSurface.BUSINESS,

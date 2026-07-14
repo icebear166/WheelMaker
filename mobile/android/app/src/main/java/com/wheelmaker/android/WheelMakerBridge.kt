@@ -22,6 +22,12 @@ class WheelMakerBridge(
         "device.getName" -> JSONObject.quote(Build.MODEL.trim().ifBlank { "Android" }.take(80))
         "diagnostics.drain" -> androidWebDiagnostics.drainJson()
         "diagnostics.setLogLevel" -> setDiagnosticLogLevel(payload.optString("logLevel"))
+        "speech.credentialState" -> androidSpeechRuntime.credentialState()
+        "speech.configureCredential" -> androidSpeechRuntime.configureCredential(
+            payload.optString("accessToken"),
+            payload.optString("version")
+        )
+        "speech.clearCredential" -> androidSpeechRuntime.clearCredential()
         "speech.start" -> androidSpeechRuntime.start(payload.toString())
         "speech.finish" -> androidSpeechRuntime.finish(payload.optString("streamId"))
         "speech.cancel" -> androidSpeechRuntime.cancel(
