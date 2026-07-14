@@ -260,7 +260,8 @@ describe('web chat turn rendering', () => {
     expect(main).toContain('const selectedChatPlan = useMemo(');
     expect(main).toContain('extractLatestChatPlan(selectedFullChatMessages)');
     expect(main).toContain('<ChatPlanSurface');
-    expect(main).toContain("mode={isWide ? 'desktop' : 'mobile'}");
+    expect(main).toContain('mode="desktop"');
+    expect(main).toContain('mode="mobile"');
     expect(main).toContain('plan={selectedChatPlan}');
     expect(chatTurn).not.toContain("case 'agent_plan':");
     expect(chatTurn).not.toContain("kind === 'plan'");
@@ -272,17 +273,22 @@ describe('web chat turn rendering', () => {
     expect(styles).toContain('.chat-plan-surface.mobile.expanded');
   });
 
-  test('anchors fixed-width desktop plan beside the 800px chat text column before squeezing inward', () => {
+  test('anchors desktop plan in the shared 360px left stack beside the 800px text column', () => {
     const styles = readStyles();
-    const desktopBlock = cssRuleBlock(styles, '.chat-plan-surface.desktop');
-    const fixedBlock = cssRuleBlock(styles, '.chat-view-width-fixed-800 .chat-plan-surface.desktop');
+    const stackBlock = cssRuleBlock(styles, '.chat-edge-surface-stack');
+    const fixedBlock = cssRuleBlock(styles, '.chat-view-width-fixed-800 .chat-edge-surface-stack');
+    const itemBlock = cssRuleBlock(
+      styles,
+      '.chat-edge-surface-stack > .chat-recent-sessions-surface.desktop,\n.chat-edge-surface-stack > .chat-plan-surface.desktop',
+    );
 
-    expect(desktopBlock).toContain('--chat-plan-desktop-width: 320px;');
-    expect(desktopBlock).toContain('width: var(--chat-plan-resolved-width);');
-    expect(fixedBlock).toContain('right: auto;');
-    expect(fixedBlock).toContain('left: min(');
-    expect(fixedBlock).toContain('calc((100% + 800px) / 2 + var(--chat-plan-column-gap))');
-    expect(fixedBlock).toContain('calc(100% - var(--chat-plan-resolved-width) - var(--chat-plan-edge-gap))');
+    expect(stackBlock).toContain('--chat-edge-surface-stack-width: 360px;');
+    expect(stackBlock).toContain('width: var(--chat-edge-surface-stack-resolved-width);');
+    expect(fixedBlock).toContain('left: max(');
+    expect(fixedBlock).toContain('(100% - 800px) / 2 - var(--chat-edge-surface-stack-resolved-width)');
+    expect(itemBlock).toContain('left: auto;');
+    expect(itemBlock).toContain('right: auto;');
+    expect(itemBlock).toContain('width: 100%;');
   });
 
   test('settles chat bottom after the mobile keyboard inset changes without fighting keyboard close animation', () => {

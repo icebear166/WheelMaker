@@ -6,6 +6,16 @@ import path from 'path';
 import {ChatPlanSurface} from '../web/src/chat/ChatPlanSurface';
 import type {ChatPlanSnapshot} from '../web/src/chat/chatPlan';
 
+function readSourceText(filePath: string): string {
+  return fs.readFileSync(filePath, 'utf8').replace(/\r\n/g, '\n');
+}
+
+function cssRuleBlock(stylesCss: string, selector: string): string {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = stylesCss.match(new RegExp(`${escapedSelector} \\{([\\s\\S]*?)\\}`));
+  return match?.[1] ?? '';
+}
+
 function planSnapshot(): ChatPlanSnapshot {
   return {
     turnIndex: 12,
@@ -22,6 +32,55 @@ function planSnapshot(): ChatPlanSnapshot {
 }
 
 describe('ChatPlanSurface', () => {
+  test('renders Recent Sessions before Plan in one desktop-only left stack', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainSource = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const stackStart = mainSource.indexOf('className="chat-edge-surface-stack"');
+    const stackSource = stackStart >= 0 ? mainSource.slice(stackStart, stackStart + 1800) : '';
+
+    expect(stackStart).toBeGreaterThanOrEqual(0);
+    expect(stackSource).toContain('showPinnedRecentSessionsSurface ? (');
+    expect(stackSource.indexOf('<ChatRecentSessionsSurface')).toBeLessThan(
+      stackSource.indexOf('<ChatPlanSurface'),
+    );
+    expect(mainSource).toContain('isWide && (showPinnedRecentSessionsSurface || selectedChatPlan) ? (');
+  });
+
+  test('uses one 360px stack width and an 8px gap without reserving a Recent placeholder', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles', 'chat.css'));
+    const stackRule = cssRuleBlock(stylesCss, '.chat-edge-surface-stack');
+    const stackItemRule = cssRuleBlock(
+      stylesCss,
+      '.chat-edge-surface-stack > .chat-recent-sessions-surface.desktop,\n.chat-edge-surface-stack > .chat-plan-surface.desktop',
+    );
+
+    expect(stackRule).toContain('--chat-edge-surface-stack-width: 360px;');
+    expect(stackRule).toContain('display: flex;');
+    expect(stackRule).toContain('flex-direction: column;');
+    expect(stackRule).toContain('gap: 8px;');
+    expect(stackItemRule).toContain('position: relative;');
+    expect(stackItemRule).toContain('width: 100%;');
+    expect(stackItemRule).toContain('pointer-events: auto;');
+  });
+
+  test('keeps mobile Plan outside the stack and restores only the hovered desktop panel', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainSource = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const planSource = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'ChatPlanSurface.tsx'));
+    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles', 'chat.css'));
+
+    expect(planSource).toContain("useChatEdgeSurfaceGeometry('left'");
+    expect(stylesCss).toContain(
+      '.chat-recent-sessions-surface.desktop .chat-edge-surface-content,\n.chat-plan-surface.desktop .chat-edge-surface-glass,\n.chat-plan-surface.desktop .chat-edge-surface-content {',
+    );
+    expect(mainSource).toContain('<ChatPlanSurface\n              mode="mobile"');
+    expect(stylesCss).toContain(
+      '.chat-recent-sessions-surface.desktop:is(:hover, :focus-within),\n.chat-plan-surface.desktop:is(:hover, :focus-within) {',
+    );
+    expect(stylesCss).not.toContain('.chat-edge-surface-stack:is(:hover, :focus-within)');
+  });
+
   test('renders separate geometry-aware glass and content layers on desktop', () => {
     const projectRoot = path.join(__dirname, '..');
     const planSource = fs.readFileSync(

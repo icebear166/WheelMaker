@@ -95,7 +95,7 @@ export const ChatPlanSurface = React.memo(function ChatPlanSurface({
 }: ChatPlanSurfaceProps) {
   const [expanded, setExpanded] = React.useState(false);
   const [desktopCollapsed, setDesktopCollapsed] = React.useState(false);
-  const desktopSurfaceRef = useChatEdgeSurfaceGeometry('right', mode === 'desktop' && !!plan);
+  const desktopSurfaceRef = useChatEdgeSurfaceGeometry('left', mode === 'desktop' && !!plan);
 
   React.useEffect(() => {
     setExpanded(false);

@@ -19040,19 +19040,29 @@ export function App() {
               </span>
             </button>
           ) : null}
-          <ChatPlanSurface
-            mode={isWide ? 'desktop' : 'mobile'}
-            plan={selectedChatPlan}
-          />
-          {showPinnedRecentSessionsSurface ? (
-            <ChatRecentSessionsSurface
-              onUnpin={() => setRecentSessionsPinned(false)}
-              sessionListDensity={sessionListDensity}
-            >
-              <div className="wide-project-session-list recent-sessions-list chat-recent-sessions-rows">
-                {recentSessionSections.map(section => renderRecentProjectSessionSection(section, false))}
-              </div>
-            </ChatRecentSessionsSurface>
+          {isWide && (showPinnedRecentSessionsSurface || selectedChatPlan) ? (
+            <div className="chat-edge-surface-stack">
+              {showPinnedRecentSessionsSurface ? (
+                <ChatRecentSessionsSurface
+                  onUnpin={() => setRecentSessionsPinned(false)}
+                  sessionListDensity={sessionListDensity}
+                >
+                  <div className="wide-project-session-list recent-sessions-list chat-recent-sessions-rows">
+                    {recentSessionSections.map(section => renderRecentProjectSessionSection(section, false))}
+                  </div>
+                </ChatRecentSessionsSurface>
+              ) : null}
+              <ChatPlanSurface
+                mode="desktop"
+                plan={selectedChatPlan}
+              />
+            </div>
+          ) : null}
+          {!isWide ? (
+            <ChatPlanSurface
+              mode="mobile"
+              plan={selectedChatPlan}
+            />
           ) : null}
           <div
             ref={chatComposerRef}

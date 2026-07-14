@@ -2763,6 +2763,34 @@
   letter-spacing: 0;
 }
 
+.chat-edge-surface-stack {
+  --chat-edge-surface-stack-width: 360px;
+  --chat-edge-surface-stack-column-gap: 12px;
+  --chat-edge-surface-stack-edge-gap: calc(18px + var(--chat-scrollbar-gutter-width, 8px));
+  --chat-edge-surface-stack-resolved-width: min(
+    var(--chat-edge-surface-stack-width),
+    calc(100% - var(--chat-edge-surface-stack-edge-gap) - var(--chat-edge-surface-stack-edge-gap))
+  );
+  position: absolute;
+  top: 12px;
+  left: var(--chat-edge-surface-stack-edge-gap);
+  z-index: 6;
+  width: var(--chat-edge-surface-stack-resolved-width);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.chat-view-width-fixed-800 .chat-edge-surface-stack {
+  left: max(
+    var(--chat-edge-surface-stack-edge-gap),
+    calc(
+      (100% - 800px) / 2 - var(--chat-edge-surface-stack-resolved-width) - var(--chat-edge-surface-stack-column-gap)
+    )
+  );
+}
+
 .chat-recent-sessions-surface.desktop {
   --chat-recent-sessions-width: 360px;
   --chat-recent-sessions-column-gap: 12px;
@@ -2923,6 +2951,17 @@
     calc(100% - var(--chat-plan-resolved-width) - var(--chat-plan-edge-gap))
   );
   right: auto;
+}
+
+.chat-edge-surface-stack > .chat-recent-sessions-surface.desktop,
+.chat-edge-surface-stack > .chat-plan-surface.desktop {
+  position: relative;
+  top: auto;
+  right: auto;
+  left: auto;
+  z-index: auto;
+  width: 100%;
+  pointer-events: auto;
 }
 
 .chat-plan-surface-header {
@@ -5382,14 +5421,10 @@
   box-shadow: none;
 }
 
-.chat-recent-sessions-surface.desktop {
+.chat-recent-sessions-surface.desktop,
+.chat-plan-surface.desktop {
   --chat-edge-fade-start: calc(100% - 28px);
   --chat-edge-fade-end: 100%;
-}
-
-.chat-plan-surface.desktop {
-  --chat-edge-fade-start: 0px;
-  --chat-edge-fade-end: 28px;
 }
 
 .chat-edge-surface-glass {
@@ -5421,38 +5456,22 @@
 }
 
 .chat-recent-sessions-surface.desktop .chat-edge-surface-glass,
-.chat-recent-sessions-surface.desktop .chat-edge-surface-content {
-  -webkit-mask-image: linear-gradient(
-    to right,
-    #000 0%,
-    #000 var(--chat-edge-fade-start),
-    rgb(0 0 0 / var(--chat-edge-hidden-alpha)) var(--chat-edge-fade-end),
-    rgb(0 0 0 / var(--chat-edge-hidden-alpha)) 100%
-  );
-  mask-image: linear-gradient(
-    to right,
-    #000 0%,
-    #000 var(--chat-edge-fade-start),
-    rgb(0 0 0 / var(--chat-edge-hidden-alpha)) var(--chat-edge-fade-end),
-    rgb(0 0 0 / var(--chat-edge-hidden-alpha)) 100%
-  );
-}
-
+.chat-recent-sessions-surface.desktop .chat-edge-surface-content,
 .chat-plan-surface.desktop .chat-edge-surface-glass,
 .chat-plan-surface.desktop .chat-edge-surface-content {
   -webkit-mask-image: linear-gradient(
     to right,
-    rgb(0 0 0 / var(--chat-edge-hidden-alpha)) 0%,
-    rgb(0 0 0 / var(--chat-edge-hidden-alpha)) var(--chat-edge-fade-start),
-    #000 var(--chat-edge-fade-end),
-    #000 100%
+    #000 0%,
+    #000 var(--chat-edge-fade-start),
+    rgb(0 0 0 / var(--chat-edge-hidden-alpha)) var(--chat-edge-fade-end),
+    rgb(0 0 0 / var(--chat-edge-hidden-alpha)) 100%
   );
   mask-image: linear-gradient(
     to right,
-    rgb(0 0 0 / var(--chat-edge-hidden-alpha)) 0%,
-    rgb(0 0 0 / var(--chat-edge-hidden-alpha)) var(--chat-edge-fade-start),
-    #000 var(--chat-edge-fade-end),
-    #000 100%
+    #000 0%,
+    #000 var(--chat-edge-fade-start),
+    rgb(0 0 0 / var(--chat-edge-hidden-alpha)) var(--chat-edge-fade-end),
+    rgb(0 0 0 / var(--chat-edge-hidden-alpha)) 100%
   );
 }
 
