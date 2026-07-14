@@ -10,8 +10,7 @@ enum class TrustedMessageSurface {
 
 data class TrustedWebMessageRequest(
     val requestId: String,
-    val action: String,
-    val userGestureAt: Long?
+    val action: String
 )
 
 class TrustedNativeCapability internal constructor(
@@ -29,67 +28,53 @@ class TrustedWebMessagePolicy(private val configuredBaseUrl: String) {
         sourceOrigin: String,
         isMainFrame: Boolean,
         topLevelUrl: String,
-        navigationStartedAtElapsedRealtime: Long,
         nowElapsedRealtime: Long,
-        request: TrustedWebMessageRequest
-    ): Boolean {
-		return authorize(
-			surface,
-			sourceOrigin,
-			isMainFrame,
-			topLevelUrl,
-			navigationStartedAtElapsedRealtime,
-			nowElapsedRealtime,
-			request
-		) != null
-	}
+        request: TrustedWebMessageRequest,
+        consumeTrustedUserGesture: () -> Boolean = { false }
+    ): Boolean = authorize(
+        surface = surface,
+        sourceOrigin = sourceOrigin,
+        isMainFrame = isMainFrame,
+        topLevelUrl = topLevelUrl,
+        nowElapsedRealtime = nowElapsedRealtime,
+        request = request,
+        consumeTrustedUserGesture = consumeTrustedUserGesture
+    ) != null
 
-	fun authorize(
-		surface: TrustedMessageSurface,
-		sourceOrigin: String,
-		isMainFrame: Boolean,
-		topLevelUrl: String,
-		navigationStartedAtElapsedRealtime: Long,
-		nowElapsedRealtime: Long,
-		request: TrustedWebMessageRequest
-	): TrustedNativeCapability? {
-		if (!isMainFrame || request.requestId.isBlank()) {
-			return null
-		}
+    fun authorize(
+        surface: TrustedMessageSurface,
+        sourceOrigin: String,
+        isMainFrame: Boolean,
+        topLevelUrl: String,
+        nowElapsedRealtime: Long,
+        request: TrustedWebMessageRequest,
+        consumeTrustedUserGesture: () -> Boolean = { false }
+    ): TrustedNativeCapability? {
+        if (!isMainFrame || request.requestId.isBlank()) return null
         val actions = when (surface) {
             TrustedMessageSurface.BOOTSTRAP -> BOOTSTRAP_ACTIONS
             TrustedMessageSurface.BUSINESS -> BUSINESS_ACTIONS
         }
-		if (request.action !in actions) {
-			return null
-		}
+        if (request.action !in actions) return null
 
         val sourceAllowed = when (surface) {
             TrustedMessageSurface.BOOTSTRAP ->
                 sourceOrigin == BOOTSTRAP_ORIGIN && topLevelUrl == ANDROID_BOOTSTRAP_URL
             TrustedMessageSurface.BUSINESS -> {
-				val baseUrl = normalizeHttpsBaseUrl(configuredBaseUrl) ?: return null
+                val baseUrl = normalizeHttpsBaseUrl(configuredBaseUrl) ?: return null
                 sourceOrigin == originOf(baseUrl) && BaseUrlPolicy(baseUrl).contains(topLevelUrl)
             }
         }
-		if (!sourceAllowed) return null
-		if (request.action !in SENSITIVE_ACTIONS) {
-			return capability(request.action, nowElapsedRealtime)
-		}
-
-		val gestureOffset = request.userGestureAt ?: return null
-		if (gestureOffset < 0 || navigationStartedAtElapsedRealtime <= 0) return null
-        val gestureElapsedRealtime = navigationStartedAtElapsedRealtime + gestureOffset
-        val age = nowElapsedRealtime - gestureElapsedRealtime
-		if (age !in -MAX_FUTURE_SKEW_MILLIS..MAX_GESTURE_AGE_MILLIS) return null
-		return capability(request.action, nowElapsedRealtime)
+        if (!sourceAllowed) return null
+        if (request.action in SENSITIVE_ACTIONS && !consumeTrustedUserGesture()) return null
+        return capability(request.action, nowElapsedRealtime)
     }
 
-	private fun capability(action: String, nowElapsedRealtime: Long) = TrustedNativeCapability(
-		action = action,
-		issuedAtElapsedRealtime = nowElapsedRealtime,
-		expiresAtElapsedRealtime = nowElapsedRealtime + CAPABILITY_TTL_MILLIS
-	)
+    private fun capability(action: String, nowElapsedRealtime: Long) = TrustedNativeCapability(
+        action = action,
+        issuedAtElapsedRealtime = nowElapsedRealtime,
+        expiresAtElapsedRealtime = nowElapsedRealtime + CAPABILITY_TTL_MILLIS
+    )
 
     companion object {
         val BOOTSTRAP_ACTIONS = setOf(
@@ -99,6 +84,7 @@ class TrustedWebMessagePolicy(private val configuredBaseUrl: String) {
             "bootstrap.reset"
         )
         val BUSINESS_ACTIONS = setOf(
+            "userAction.reserve",
             "device.getName",
             "diagnostics.drain",
             "diagnostics.setLogLevel",
@@ -113,24 +99,24 @@ class TrustedWebMessagePolicy(private val configuredBaseUrl: String) {
             "notification.show",
             "apk.getReleaseState",
             "apk.install",
-            "image.share",
+            "image.share.begin",
+            "image.share.chunk",
+            "image.share.commit",
+            "image.share.cancel",
             "relay.clearSiteData"
         )
         val SENSITIVE_ACTIONS = setOf(
             "bootstrap.saveBaseUrl",
             "bootstrap.retry",
             "bootstrap.reset",
-            "speech.start",
+            "userAction.reserve",
             "notification.requestPermission",
             "apk.install",
-            "image.share",
             "relay.clearSiteData"
         )
 
         private const val BOOTSTRAP_ORIGIN = "https://appassets.androidplatform.net"
-        private const val MAX_GESTURE_AGE_MILLIS = 5_000L
-        private const val MAX_FUTURE_SKEW_MILLIS = 1_000L
-		private const val CAPABILITY_TTL_MILLIS = 1_000L
+        private const val CAPABILITY_TTL_MILLIS = 1_000L
 
         fun originOf(rawUrl: String): String? {
             val uri = try {
@@ -148,14 +134,9 @@ class TrustedWebMessagePolicy(private val configuredBaseUrl: String) {
 }
 
 fun isTrustedBusinessUiRequest(
-	configuredBaseUrl: String,
-	topLevelUrl: String,
-	lastGestureElapsedRealtime: Long,
-	nowElapsedRealtime: Long
+    configuredBaseUrl: String,
+    topLevelUrl: String
 ): Boolean {
-	val baseUrl = normalizeHttpsBaseUrl(configuredBaseUrl) ?: return false
-	if (!BaseUrlPolicy(baseUrl).contains(topLevelUrl)) return false
-	if (lastGestureElapsedRealtime <= 0) return false
-	val age = nowElapsedRealtime - lastGestureElapsedRealtime
-	return age in 0..5_000L
+    val baseUrl = normalizeHttpsBaseUrl(configuredBaseUrl) ?: return false
+    return BaseUrlPolicy(baseUrl).contains(topLevelUrl)
 }

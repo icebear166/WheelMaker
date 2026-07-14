@@ -177,7 +177,11 @@ import {
   resolveMarkdownImageExportWidth,
   type MarkdownImageExportMode,
 } from '../chat/export/chatMarkdownImageExport';
-import { outputResponseImage, type ResponseImageOutputResult } from '../chat/export/responseImageOutput';
+import {
+  outputResponseImage,
+  reserveResponseImageShare,
+  type ResponseImageOutputResult,
+} from '../chat/export/responseImageOutput';
 import {createRegistryDebugStore} from '../debug/registryDebug';
 import type {RegistryDebugRecord} from '../debug/registryDebug';
 import {
@@ -1884,6 +1888,7 @@ type MarkdownImageExportRequest = {
   id: number;
   content: string;
   fileName: string;
+  userActionToken?: string;
 };
 
 type MarkdownImageExportSurfaceProps = {
@@ -1935,6 +1940,7 @@ const MarkdownImageExportSurface = React.memo(function MarkdownImageExportSurfac
         const result = await outputResponseImage({
           blob,
           fileName: request.fileName,
+          userActionToken: request.userActionToken,
         });
         if (cancelled) {
           return;
@@ -11765,6 +11771,7 @@ export function App() {
         if (!androidSpeechRuntime) {
           throw new Error('Android native speech is unavailable.');
         }
+        const nativeSpeechStartToken = await androidSpeechRuntime.reserveStart();
         if (!connectedRef.current) await connect({silentReconnect: true});
         await synchronizeAndroidSpeechCredential(
           androidSpeechRuntime,
@@ -11782,7 +11789,7 @@ export function App() {
             bits: 16,
             channel: 1,
           },
-        });
+        }, nativeSpeechStartToken);
         if (!isVoiceGenerationActive(generation)) {
           await androidSpeechRuntime.cancel(response.streamId, 'gesture');
           return;
@@ -17843,13 +17850,22 @@ export function App() {
     if (!result.ok) {
       return;
     }
-    markdownImageExportIdRef.current += 1;
     setError('');
     setExportingMarkdownImageTurnIndex(doneTurnIndex);
+    let userActionToken: string | undefined;
+    try {
+      userActionToken = await reserveResponseImageShare();
+    } catch (error) {
+      setExportingMarkdownImageTurnIndex(null);
+      setError(`Failed to share response image: ${error instanceof Error ? error.message : String(error)}`);
+      return;
+    }
+    markdownImageExportIdRef.current += 1;
     setMarkdownImageExportRequest({
       id: markdownImageExportIdRef.current,
       content: result.markdown,
       fileName: buildPromptMarkdownImageFileName(doneTurnIndex),
+      userActionToken,
     });
   };
   const copyPromptDoneMarkdownEvent = useStableEvent(copyPromptDoneMarkdown);

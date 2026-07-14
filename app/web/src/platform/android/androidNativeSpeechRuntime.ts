@@ -38,6 +38,7 @@ export type AndroidSpeechCredentialState = {
 };
 
 export type AndroidNativeSpeechBridge = {
+  reserveUserAction: (action: 'image.share' | 'speech.start') => Promise<string>;
   getSpeechCredentialState: () => Promise<string>;
   configureSpeechCredential: (accessToken: string, version: string) => Promise<string>;
   clearSpeechCredential: () => Promise<string>;
@@ -50,7 +51,8 @@ export type AndroidNativeSpeechRuntime = {
   credentialState: () => Promise<AndroidSpeechCredentialState>;
   configureCredential: (accessToken: string, version: string) => Promise<AndroidSpeechCredentialState>;
   clearCredential: () => Promise<AndroidSpeechCredentialState>;
-  start: (payload: AndroidNativeSpeechStartPayload) => Promise<{streamId: string}>;
+  reserveStart: () => Promise<string>;
+  start: (payload: AndroidNativeSpeechStartPayload, userActionToken: string) => Promise<{streamId: string}>;
   finish: (streamId: string) => Promise<void>;
   cancel: (streamId: string, reason: RegistrySpeechCancelPayload['reason']) => Promise<void>;
   onEvent: (listener: (event: AndroidNativeSpeechEvent) => void) => () => void;
@@ -169,8 +171,12 @@ export function createAndroidNativeSpeechRuntime(): AndroidNativeSpeechRuntime |
     configureCredential: async (accessToken, version) =>
       parseCredentialState(await bridge.configureSpeechCredential(accessToken, version)),
     clearCredential: async () => parseCredentialState(await bridge.clearSpeechCredential()),
-    start: async payload => {
-      const response = assertAccepted(await bridge.startSpeech(JSON.stringify(payload)));
+    reserveStart: () => bridge.reserveUserAction('speech.start'),
+    start: async (payload, userActionToken) => {
+      const response = assertAccepted(await bridge.startSpeech(JSON.stringify({
+        ...payload,
+        userActionToken,
+      })));
       if (!response.streamId) throw new Error('Android native speech returned no streamId.');
       return {streamId: response.streamId};
     },

@@ -9,182 +9,66 @@ class TrustedWebMessagePolicyTest {
 
     @Test
     fun bootstrapOnlyAcceptsItsExactOriginMainFrameAndAllowlist() {
-        val request = TrustedWebMessageRequest(
-            requestId = "request-1",
-            action = "bootstrap.getState",
-            userGestureAt = null
-        )
+        val request = TrustedWebMessageRequest("request-1", "bootstrap.getState")
 
-        assertTrue(policy.isAllowed(
-            surface = TrustedMessageSurface.BOOTSTRAP,
-            sourceOrigin = "https://appassets.androidplatform.net",
-            isMainFrame = true,
-            topLevelUrl = ANDROID_BOOTSTRAP_URL,
-            navigationStartedAtElapsedRealtime = 1_000,
-            nowElapsedRealtime = 2_000,
-            request = request
-        ))
-        assertFalse(policy.isAllowed(
-            surface = TrustedMessageSurface.BOOTSTRAP,
-            sourceOrigin = "https://evil.example",
-            isMainFrame = true,
-            topLevelUrl = ANDROID_BOOTSTRAP_URL,
-            navigationStartedAtElapsedRealtime = 1_000,
-            nowElapsedRealtime = 2_000,
-            request = request
-        ))
-        assertFalse(policy.isAllowed(
-            surface = TrustedMessageSurface.BOOTSTRAP,
-            sourceOrigin = "https://appassets.androidplatform.net",
-            isMainFrame = false,
-            topLevelUrl = ANDROID_BOOTSTRAP_URL,
-            navigationStartedAtElapsedRealtime = 1_000,
-            nowElapsedRealtime = 2_000,
-            request = request
-        ))
-        assertFalse(policy.isAllowed(
-            surface = TrustedMessageSurface.BOOTSTRAP,
-            sourceOrigin = "https://appassets.androidplatform.net",
-            isMainFrame = true,
-            topLevelUrl = ANDROID_BOOTSTRAP_URL,
-            navigationStartedAtElapsedRealtime = 1_000,
-            nowElapsedRealtime = 2_000,
-            request = request.copy(action = "speech.start")
-        ))
+        assertTrue(authorizeBootstrap(request))
+        assertFalse(authorizeBootstrap(request, sourceOrigin = "https://evil.example"))
+        assertFalse(authorizeBootstrap(request, isMainFrame = false))
+        assertFalse(authorizeBootstrap(request.copy(action = "speech.start")))
     }
 
     @Test
     fun businessMessagesRequireExactConfiguredOriginAndBasePath() {
-        val request = TrustedWebMessageRequest(
-            requestId = "request-2",
-            action = "diagnostics.drain",
-            userGestureAt = null
-        )
+        val request = TrustedWebMessageRequest("request-2", "diagnostics.drain")
 
-        assertTrue(policy.isAllowed(
-            surface = TrustedMessageSurface.BUSINESS,
-            sourceOrigin = "https://example.com",
-            isMainFrame = true,
-            topLevelUrl = "https://example.com/app/chat",
-            navigationStartedAtElapsedRealtime = 1_000,
-            nowElapsedRealtime = 2_000,
-            request = request
+        assertTrue(authorizeBusiness(request))
+        assertFalse(authorizeBusiness(request, sourceOrigin = "https://example.com:444"))
+        assertFalse(authorizeBusiness(request, topLevelUrl = "https://example.com/other/"))
+        assertFalse(authorizeBusiness(request.copy(action = "bootstrap.reset")))
+    }
+
+    @Test
+    fun sensitiveActionsUseNativeGestureConsumerAfterTrustChecks() {
+        var consumeCount = 0
+        val consumeGesture = {
+            consumeCount += 1
+            true
+        }
+
+        assertTrue(authorizeBusiness(
+            TrustedWebMessageRequest("request-3", "apk.install"),
+            consumeTrustedUserGesture = consumeGesture
         ))
-        assertFalse(policy.isAllowed(
-            surface = TrustedMessageSurface.BUSINESS,
-            sourceOrigin = "https://example.com:444",
-            isMainFrame = true,
-            topLevelUrl = "https://example.com/app/chat",
-            navigationStartedAtElapsedRealtime = 1_000,
-            nowElapsedRealtime = 2_000,
-            request = request
+        assertTrue(authorizeBusiness(
+            TrustedWebMessageRequest("request-4", "diagnostics.drain"),
+            consumeTrustedUserGesture = consumeGesture
         ))
-        assertFalse(policy.isAllowed(
-            surface = TrustedMessageSurface.BUSINESS,
-            sourceOrigin = "https://example.com",
-            isMainFrame = true,
-            topLevelUrl = "https://example.com/other/",
-            navigationStartedAtElapsedRealtime = 1_000,
-            nowElapsedRealtime = 2_000,
-            request = request
+        assertFalse(authorizeBusiness(
+            TrustedWebMessageRequest("request-5", "apk.install"),
+            sourceOrigin = "https://evil.example",
+            consumeTrustedUserGesture = consumeGesture
         ))
-        assertFalse(policy.isAllowed(
-            surface = TrustedMessageSurface.BUSINESS,
-            sourceOrigin = "https://example.com",
-            isMainFrame = true,
-            topLevelUrl = "https://example.com/app/chat",
-            navigationStartedAtElapsedRealtime = 1_000,
-            nowElapsedRealtime = 2_000,
-            request = request.copy(action = "bootstrap.reset")
+        assertEquals(1, consumeCount)
+        assertFalse(authorizeBusiness(
+            TrustedWebMessageRequest("request-6", "userAction.reserve"),
+            consumeTrustedUserGesture = { false }
         ))
     }
 
     @Test
-    fun businessSurfaceAllowsDeviceNameWithoutUserGesture() {
-        val request = TrustedWebMessageRequest(
-            requestId = "request-device-name",
-            action = "device.getName",
-            userGestureAt = null
-        )
+    fun deferredActionsRequireActionGrantAtDispatchInsteadOfImmediateGesture() {
+        val noGesture = { false }
 
-        assertTrue(policy.isAllowed(
-            surface = TrustedMessageSurface.BUSINESS,
-            sourceOrigin = "https://example.com",
-            isMainFrame = true,
-            topLevelUrl = "https://example.com/app/",
-            navigationStartedAtElapsedRealtime = 1_000,
-            nowElapsedRealtime = 2_000,
-            request = request
-        ))
-        assertFalse(policy.isAllowed(
-            surface = TrustedMessageSurface.BOOTSTRAP,
-            sourceOrigin = "https://appassets.androidplatform.net",
-            isMainFrame = true,
-            topLevelUrl = ANDROID_BOOTSTRAP_URL,
-            navigationStartedAtElapsedRealtime = 1_000,
-            nowElapsedRealtime = 2_000,
-            request = request
-        ))
-    }
-
-    @Test
-    fun sensitiveActionsRequireRecentPageGestureTimestamp() {
-        val recent = TrustedWebMessageRequest(
-            requestId = "request-3",
-            action = "apk.install",
-            userGestureAt = 6_000
-        )
-
-        assertTrue(policy.isAllowed(
-            surface = TrustedMessageSurface.BUSINESS,
-            sourceOrigin = "https://example.com",
-            isMainFrame = true,
-            topLevelUrl = "https://example.com/app/",
-            navigationStartedAtElapsedRealtime = 10_000,
-            nowElapsedRealtime = 20_000,
-            request = recent
-        ))
-        assertFalse(policy.isAllowed(
-            surface = TrustedMessageSurface.BUSINESS,
-            sourceOrigin = "https://example.com",
-            isMainFrame = true,
-            topLevelUrl = "https://example.com/app/",
-            navigationStartedAtElapsedRealtime = 10_000,
-            nowElapsedRealtime = 21_001,
-            request = recent
-        ))
-        assertFalse(policy.isAllowed(
-            surface = TrustedMessageSurface.BUSINESS,
-            sourceOrigin = "https://example.com",
-            isMainFrame = true,
-            topLevelUrl = "https://example.com/app/",
-            navigationStartedAtElapsedRealtime = 10_000,
-            nowElapsedRealtime = 20_000,
-            request = recent.copy(userGestureAt = null)
-        ))
-    }
-
-    @Test
-    fun speechCredentialActionsRequireTrustedBusinessPageButNoGesture() {
-        for (action in listOf("speech.credentialState", "speech.configureCredential", "speech.clearCredential")) {
-            val request = TrustedWebMessageRequest("credential-request", action, null)
-            assertTrue(policy.isAllowed(
-                surface = TrustedMessageSurface.BUSINESS,
-                sourceOrigin = "https://example.com",
-                isMainFrame = true,
-                topLevelUrl = "https://example.com/app/chat",
-                navigationStartedAtElapsedRealtime = 1_000,
-                nowElapsedRealtime = 2_000,
-                request = request
-            ))
-            assertFalse(policy.isAllowed(
-                surface = TrustedMessageSurface.BOOTSTRAP,
-                sourceOrigin = "https://appassets.androidplatform.net",
-                isMainFrame = true,
-                topLevelUrl = ANDROID_BOOTSTRAP_URL,
-                navigationStartedAtElapsedRealtime = 1_000,
-                nowElapsedRealtime = 2_000,
-                request = request
+        for (action in listOf(
+            "speech.start",
+            "image.share.begin",
+            "image.share.chunk",
+            "image.share.commit",
+            "image.share.cancel"
+        )) {
+            assertTrue(authorizeBusiness(
+                TrustedWebMessageRequest("deferred-$action", action),
+                consumeTrustedUserGesture = noGesture
             ))
         }
     }
@@ -196,14 +80,48 @@ class TrustedWebMessagePolicyTest {
             sourceOrigin = "https://example.com",
             isMainFrame = true,
             topLevelUrl = "https://example.com/app/",
-            navigationStartedAtElapsedRealtime = 10_000,
             nowElapsedRealtime = 20_000,
-            request = TrustedWebMessageRequest("request-4", "image.share", 6_000)
+            request = TrustedWebMessageRequest("request-7", "image.share.begin"),
+            consumeTrustedUserGesture = { false }
         )
 
-		assertTrue(capability != null)
-		assertTrue(capability!!.allows("image.share", 20_999))
-		assertFalse(capability.allows("apk.install", 20_999))
-		assertFalse(capability.allows("image.share", 21_001))
+        assertTrue(capability != null)
+        assertTrue(capability!!.allows("image.share.begin", 20_999))
+        assertFalse(capability.allows("apk.install", 20_999))
+        assertFalse(capability.allows("image.share.begin", 21_001))
+    }
+
+    private fun authorizeBootstrap(
+        request: TrustedWebMessageRequest,
+        sourceOrigin: String = "https://appassets.androidplatform.net",
+        isMainFrame: Boolean = true,
+        consumeTrustedUserGesture: () -> Boolean = { false }
+    ): Boolean = policy.isAllowed(
+        surface = TrustedMessageSurface.BOOTSTRAP,
+        sourceOrigin = sourceOrigin,
+        isMainFrame = isMainFrame,
+        topLevelUrl = ANDROID_BOOTSTRAP_URL,
+        nowElapsedRealtime = 2_000,
+        request = request,
+        consumeTrustedUserGesture = consumeTrustedUserGesture
+    )
+
+    private fun authorizeBusiness(
+        request: TrustedWebMessageRequest,
+        sourceOrigin: String = "https://example.com",
+        topLevelUrl: String = "https://example.com/app/chat",
+        consumeTrustedUserGesture: () -> Boolean = { false }
+    ): Boolean = policy.isAllowed(
+        surface = TrustedMessageSurface.BUSINESS,
+        sourceOrigin = sourceOrigin,
+        isMainFrame = true,
+        topLevelUrl = topLevelUrl,
+        nowElapsedRealtime = 2_000,
+        request = request,
+        consumeTrustedUserGesture = consumeTrustedUserGesture
+    )
+
+    private fun assertEquals(expected: Int, actual: Int) {
+        org.junit.Assert.assertEquals(expected, actual)
     }
 }

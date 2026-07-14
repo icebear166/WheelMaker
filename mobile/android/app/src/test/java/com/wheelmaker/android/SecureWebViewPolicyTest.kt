@@ -29,27 +29,19 @@ class SecureWebViewPolicyTest {
         assertTrue(activity.contains("setAcceptThirdPartyCookies(target, false)"))
 		assertTrue(activity.contains("ApplicationInfo.FLAG_DEBUGGABLE"))
 		assertFalse(activity.contains("WebView.setWebContentsDebuggingEnabled(true)"))
+        assertTrue(activity.contains("target.setOnKeyListener"))
+        assertTrue(activity.contains("event.action == KeyEvent.ACTION_DOWN"))
     }
 
     @Test
-    fun nativeUiRequestsRequireTrustedTopLevelAndRecentGesture() {
+    fun nativeUiRequestsRequireTrustedTopLevel() {
         assertTrue(isTrustedBusinessUiRequest(
             configuredBaseUrl = "https://example.com/app/",
-            topLevelUrl = "https://example.com/app/chat",
-            lastGestureElapsedRealtime = 10_000,
-            nowElapsedRealtime = 14_999
+            topLevelUrl = "https://example.com/app/chat"
         ))
         assertFalse(isTrustedBusinessUiRequest(
             configuredBaseUrl = "https://example.com/app/",
-            topLevelUrl = "https://evil.example/app/",
-            lastGestureElapsedRealtime = 10_000,
-            nowElapsedRealtime = 11_000
-        ))
-        assertFalse(isTrustedBusinessUiRequest(
-            configuredBaseUrl = "https://example.com/app/",
-            topLevelUrl = "https://example.com/app/chat",
-            lastGestureElapsedRealtime = 10_000,
-            nowElapsedRealtime = 15_001
+            topLevelUrl = "https://evil.example/app/"
         ))
     }
 }

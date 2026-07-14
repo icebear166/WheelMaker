@@ -21,6 +21,7 @@ class MainActivityFileChooserTest {
 		assertTrue(mainActivity.contains("target.settings.allowContentAccess = false"))
         assertTrue(mainActivity.contains("target.settings.allowFileAccess = false"))
 		assertTrue(mainActivity.contains("isTrustedBusinessUiRequest("))
+        assertTrue(mainActivity.contains("trustedUserGestureGate.consume(SystemClock.elapsedRealtime())"))
         assertTrue(mainActivity.contains("createAndroidFileChooserIntent(fileChooserParams)"))
         assertTrue(mainActivity.contains("createAndroidDocumentFileChooserIntent("))
         assertTrue(mainActivity.contains("Intent.ACTION_OPEN_DOCUMENT"))

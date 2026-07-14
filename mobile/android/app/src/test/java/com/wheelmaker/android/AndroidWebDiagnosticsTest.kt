@@ -77,6 +77,17 @@ class AndroidWebDiagnosticsTest {
     }
 
     @Test
+    fun clearDropsBufferedRecordsWithoutChangingLogLevel() {
+        val diagnostics = AndroidWebDiagnostics(capacity = 3, logLevel = "error", now = { 1000L })
+        diagnostics.record("old_server", level = "error")
+
+        diagnostics.clear()
+
+        assertEquals("error", diagnostics.getLogLevel())
+        assertEquals(0, JSONObject(diagnostics.drainJson()).getJSONArray("records").length())
+    }
+
+    @Test
     fun mainActivitySharesNativeWebDiagnosticsBetweenClientAndBridge() {
         val mainActivity = source("src/main/java/com/wheelmaker/android/MainActivity.kt")
         val bridge = source("src/main/java/com/wheelmaker/android/WheelMakerBridge.kt")

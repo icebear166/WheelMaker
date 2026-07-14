@@ -65,18 +65,13 @@
     const maximize = document.getElementById('maximize');
     const close = document.getElementById('close');
     const pending = new Map();
-    let lastUserGestureAt = null;
+    const BRIDGE_TIMEOUT_MS = 30_000;
+    let fallbackRequestSequence = 0;
     const hasDesktopWindowControls = typeof window.wheelMakerBootstrap?.startDrag === 'function';
 
     windowControls.hidden = !hasDesktopWindowControls;
     document.body.classList.toggle('android-bootstrap', !hasDesktopWindowControls);
     titlebar.hidden = !hasDesktopWindowControls;
-
-    for (const eventName of ['pointerdown', 'keydown', 'touchstart']) {
-      window.addEventListener(eventName, () => {
-        lastUserGestureAt = Math.round(performance.now());
-      }, {capture: true, passive: true});
-    }
 
     if (typeof window.wheelMakerBootstrap?.postMessage === 'function') {
       window.wheelMakerBootstrap.onmessage = event => {
@@ -85,17 +80,33 @@
         const request = pending.get(response.requestId);
         if (!request) return;
         pending.delete(response.requestId);
+        window.clearTimeout(request.timeout);
         response.ok ? request.resolve(response.result) : request.reject(new Error(response.error || 'Native request failed.'));
       };
+    }
+
+    function newRequestId() {
+      return crypto.randomUUID?.() ||
+        `wm-${Date.now().toString(36)}-${(++fallbackRequestSequence).toString(36)}`;
     }
 
     function callBootstrap(action, payload = {}) {
       const bridge = window.wheelMakerBootstrap;
       if (typeof bridge?.postMessage === 'function') {
         return new Promise((resolve, reject) => {
-          const requestId = crypto.randomUUID();
-          pending.set(requestId, {resolve, reject});
-          bridge.postMessage(JSON.stringify({requestId, action, payload, userGestureAt: lastUserGestureAt}));
+          const requestId = newRequestId();
+          const timeout = window.setTimeout(() => {
+            pending.delete(requestId);
+            reject(new Error('Native request timed out.'));
+          }, BRIDGE_TIMEOUT_MS);
+          pending.set(requestId, {resolve, reject, timeout});
+          try {
+            bridge.postMessage(JSON.stringify({requestId, action, payload}));
+          } catch (requestError) {
+            pending.delete(requestId);
+            window.clearTimeout(timeout);
+            reject(requestError);
+          }
         });
       }
       if (action === 'bootstrap.getState') return bridge.getState();
@@ -119,15 +130,23 @@
       save.disabled = Boolean(state.busy);
     }
 
+    async function runBootstrapAction(action, payload = {}, button = null) {
+      if (button) button.disabled = true;
+      try {
+        render(await callBootstrap(action, payload));
+      } catch (requestError) {
+        error.textContent = requestError instanceof Error ? requestError.message : String(requestError);
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
+
     form.addEventListener('submit', async event => {
       event.preventDefault();
-      save.disabled = true;
-      const result = await callBootstrap('bootstrap.saveBaseUrl', {baseUrl: input.value});
-      if (!result.ok) render(result);
-      save.disabled = false;
+      await runBootstrapAction('bootstrap.saveBaseUrl', {baseUrl: input.value}, save);
     });
-    retry.addEventListener('click', async () => render(await callBootstrap('bootstrap.retry')));
-    reset.addEventListener('click', async () => render(await callBootstrap('bootstrap.reset')));
+    retry.addEventListener('click', () => void runBootstrapAction('bootstrap.retry', {}, retry));
+    reset.addEventListener('click', () => void runBootstrapAction('bootstrap.reset', {}, reset));
     titlebar.addEventListener('mousedown', event => {
       if (!hasDesktopWindowControls) return;
       if (event.button !== 0 || (event.target instanceof Element && event.target.closest('button'))) return;
@@ -142,7 +161,7 @@
     minimize.addEventListener('click', () => void callWindow('minimize'));
     maximize.addEventListener('click', () => void callWindow('toggleMaximize'));
     close.addEventListener('click', () => void callWindow('close'));
-    window.addEventListener('DOMContentLoaded', async () => render(await callBootstrap('bootstrap.getState')));
+    window.addEventListener('DOMContentLoaded', () => void runBootstrapAction('bootstrap.getState'));
   </script>
 </body>
 </html>

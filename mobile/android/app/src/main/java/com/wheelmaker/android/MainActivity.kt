@@ -18,6 +18,7 @@ import android.os.ext.SdkExtensions
 import android.provider.MediaStore
 import android.view.ViewGroup
 import android.view.MotionEvent
+import android.view.KeyEvent
 import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.URLUtil
@@ -55,8 +56,8 @@ class MainActivity : Activity() {
     @Volatile private var configuredBaseUrl: String = ""
     @Volatile private var bootstrapError: String = ""
     @Volatile private var bootstrapBusy: Boolean = false
-	@Volatile private var navigationStartedAtElapsedRealtime: Long = 0
-	@Volatile private var lastTrustedUserGestureAtElapsedRealtime: Long = 0
+    private val trustedUserGestureGate = TrustedUserGestureGate()
+    private val trustedNativeActionGrantStore = TrustedNativeActionGrantStore()
     private lateinit var androidSpeechRuntime: AndroidSpeechRuntime
     private lateinit var androidNotificationRuntime: AndroidNotificationRuntime
     private lateinit var androidApkUpdateRuntime: AndroidApkUpdateRuntime
@@ -100,7 +101,8 @@ class MainActivity : Activity() {
             androidImageShareRuntime,
             androidPortRelaySiteDataRuntime,
             androidWebDiagnostics,
-            androidDiagnosticLogLevelStore
+            androidDiagnosticLogLevelStore,
+            trustedNativeActionGrantStore
         )
         webView.setBackgroundColor(APP_BACKGROUND_COLOR)
         configureWindowInsets(rootView)
@@ -269,23 +271,25 @@ class MainActivity : Activity() {
 		WebView.setWebContentsDebuggingEnabled(
 			(applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 		)
-		target.setOnTouchListener { _, event ->
-			if (
-				event.actionMasked == MotionEvent.ACTION_DOWN &&
-				configuredBaseUrl.isNotBlank() &&
-				BaseUrlPolicy(configuredBaseUrl).contains(target.url.orEmpty())
-			) {
-				lastTrustedUserGestureAtElapsedRealtime = SystemClock.elapsedRealtime()
-			}
-			false
-		}
+        target.setOnTouchListener { _, event ->
+            if (event.actionMasked == MotionEvent.ACTION_DOWN && isTrustedTopLevelUi(target.url.orEmpty())) {
+                trustedUserGestureGate.record(SystemClock.elapsedRealtime())
+            }
+            false
+        }
+        target.setOnKeyListener { _, _, event ->
+            if (event.action == KeyEvent.ACTION_DOWN && isTrustedTopLevelUi(target.url.orEmpty())) {
+                trustedUserGestureGate.record(SystemClock.elapsedRealtime())
+            }
+            false
+        }
         target.webViewClient = object : StableOriginWebViewClient(
             this,
             configuredBaseUrl = { configuredBaseUrl },
             onRemoteFailure = { message -> showBootstrap(message) }
         ) {
             override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
-                navigationStartedAtElapsedRealtime = SystemClock.elapsedRealtime()
+                trustedUserGestureGate.clear()
                 super.onPageStarted(view, url, favicon)
             }
 
@@ -302,12 +306,10 @@ class MainActivity : Activity() {
                 filePathCallback: ValueCallback<Array<Uri>>,
                 fileChooserParams: FileChooserParams
             ): Boolean {
-				if (!isTrustedBusinessUiRequest(
-						configuredBaseUrl = configuredBaseUrl,
-						topLevelUrl = webView.url.orEmpty(),
-						lastGestureElapsedRealtime = lastTrustedUserGestureAtElapsedRealtime,
-						nowElapsedRealtime = SystemClock.elapsedRealtime()
-					)) {
+                if (
+                    !isTrustedBusinessUiRequest(configuredBaseUrl, webView.url.orEmpty()) ||
+                    !trustedUserGestureGate.consume(SystemClock.elapsedRealtime())
+                ) {
 					filePathCallback.onReceiveValue(null)
 					return false
 				}
@@ -348,9 +350,11 @@ class MainActivity : Activity() {
                     sourceOrigin = sourceOrigin.toString(),
                     isMainFrame = isMainFrame,
                     topLevelUrl = view.url.orEmpty(),
-                    navigationStartedAtElapsedRealtime = navigationStartedAtElapsedRealtime,
                     nowElapsedRealtime = SystemClock.elapsedRealtime(),
-                    request = parsed.first
+                    request = parsed.first,
+                    consumeTrustedUserGesture = {
+                        trustedUserGestureGate.consume(SystemClock.elapsedRealtime())
+                    }
                 )) {
                 parsed?.first?.requestId?.let { sendError(replyProxy, it, "request_not_allowed") }
                 return@addWebMessageListener
@@ -375,9 +379,11 @@ class MainActivity : Activity() {
                     sourceOrigin = sourceOrigin.toString(),
                     isMainFrame = isMainFrame,
                     topLevelUrl = view.url.orEmpty(),
-                    navigationStartedAtElapsedRealtime = navigationStartedAtElapsedRealtime,
                     nowElapsedRealtime = SystemClock.elapsedRealtime(),
-					request = it.first
+					request = it.first,
+                    consumeTrustedUserGesture = {
+                        trustedUserGestureGate.consume(SystemClock.elapsedRealtime())
+                    }
 				)
 			}
 			if (parsed == null || capability == null) {
@@ -413,12 +419,7 @@ class MainActivity : Activity() {
         val requestId = message.optString("requestId")
         val action = message.optString("action")
         if (requestId.isBlank() || requestId.length > 128 || action.isBlank() || action.length > 80) return null
-        val userGestureAt = if (message.has("userGestureAt") && !message.isNull("userGestureAt")) {
-            message.optLong("userGestureAt")
-        } else {
-            null
-        }
-        return TrustedWebMessageRequest(requestId, action, userGestureAt) to
+        return TrustedWebMessageRequest(requestId, action) to
             (message.optJSONObject("payload") ?: JSONObject())
     }
 
@@ -497,6 +498,10 @@ class MainActivity : Activity() {
 
     private fun clearCurrentServerState(onComplete: () -> Unit) {
         androidSpeechRuntime.clearCredential()
+        trustedUserGestureGate.clear()
+        trustedNativeActionGrantStore.clear()
+        androidImageShareRuntime.clear()
+        androidWebDiagnostics.clear()
         val oldBaseUrl = configuredBaseUrl
         val currentUrl = webView.url.orEmpty()
         val finish = {
@@ -511,6 +516,10 @@ class MainActivity : Activity() {
             finish()
         }
     }
+
+    private fun isTrustedTopLevelUi(topLevelUrl: String): Boolean =
+        topLevelUrl == ANDROID_BOOTSTRAP_URL ||
+            (configuredBaseUrl.isNotBlank() && BaseUrlPolicy(configuredBaseUrl).contains(topLevelUrl))
 
     private fun bootstrapState(errorOverride: String? = null): JSONObject = JSONObject()
         .put("ok", (errorOverride ?: bootstrapError).isBlank())

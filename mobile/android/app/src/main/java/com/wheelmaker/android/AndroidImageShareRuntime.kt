@@ -13,36 +13,57 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 private const val RESPONSE_IMAGE_MIME_TYPE = "image/png"
-private const val RESPONSE_IMAGE_DATA_URL_PREFIX = "data:image/png;base64,"
 private const val RESPONSE_IMAGE_SHARE_TIMEOUT_SECONDS = 2L
-private const val RESPONSE_IMAGE_SHARE_FILE_NAME = "wheelmaker-response-share.png"
+private const val MAX_RESPONSE_IMAGE_BYTES = 16 * 1024 * 1024
+private const val MAX_RESPONSE_IMAGE_CHUNK_BYTES = 128 * 1024
+private const val MAX_RESPONSE_IMAGE_ENCODED_CHUNK_LENGTH = 180_000
 
 class AndroidImageShareRuntime(
     private val activity: MainActivity
 ) {
-    fun shareResponseImage(rawJson: String): String {
-        val input = try {
-            JSONObject(rawJson)
-        } catch (_: Exception) {
-            return androidImageShareResultJson(false, "invalid_payload", "invalid_payload")
+    private val transferStore = AndroidImageShareTransferStore(
+        rootDirectory = File(activity.cacheDir, "image-shares"),
+        maxTotalBytes = MAX_RESPONSE_IMAGE_BYTES,
+        maxChunkBytes = MAX_RESPONSE_IMAGE_CHUNK_BYTES
+    )
+
+    fun begin(rawJson: String): String {
+        val input = parseInput(rawJson)
+            ?: return androidImageShareResultJson(false, "invalid_payload", "invalid_payload")
+        val expectedBytes = input.optLong("size", -1)
+        if (expectedBytes !in 1..MAX_RESPONSE_IMAGE_BYTES.toLong()) {
+            return androidImageShareResultJson(false, "invalid_size", "invalid_size")
         }
-        val dataUrl = input.optString("dataUrl")
-        if (dataUrl.isBlank()) {
-            return androidImageShareResultJson(false, "invalid_payload", "missing_data_url")
-        }
-        if (!dataUrl.startsWith(RESPONSE_IMAGE_DATA_URL_PREFIX)) {
-            return androidImageShareResultJson(false, "invalid_data_url", "invalid_data_url")
+        val transferId = transferStore.begin(expectedBytes.toInt())
+            ?: return androidImageShareResultJson(false, "begin_failed", "begin_failed")
+        return androidImageShareResultJson(true, "ready", extra = mapOf("transferId" to transferId))
+    }
+
+    fun append(rawJson: String): String {
+        val input = parseInput(rawJson)
+            ?: return androidImageShareResultJson(false, "invalid_payload", "invalid_payload")
+        val transferId = input.optString("transferId")
+        val index = input.optInt("index", -1)
+        val encoded = input.optString("data")
+        if (transferId.isBlank() || index < 0 || encoded.isBlank() || encoded.length > MAX_RESPONSE_IMAGE_ENCODED_CHUNK_LENGTH) {
+            return androidImageShareResultJson(false, "invalid_chunk", "invalid_chunk")
         }
         val bytes = try {
-            Base64.decode(dataUrl.removePrefix(RESPONSE_IMAGE_DATA_URL_PREFIX), Base64.DEFAULT)
+            Base64.decode(encoded, Base64.NO_WRAP)
         } catch (_: Exception) {
             return androidImageShareResultJson(false, "decode_failed", "decode_failed")
         }
-        val imageFile = try {
-            writeResponseImage(bytes)
-        } catch (error: Exception) {
-            return androidImageShareResultJson(false, "write_failed", error.message ?: "write_failed")
+        if (!transferStore.append(transferId, index, bytes)) {
+            return androidImageShareResultJson(false, "chunk_rejected", "chunk_rejected")
         }
+        return androidImageShareResultJson(true, "chunk_received")
+    }
+
+    fun commit(rawJson: String): String {
+        val input = parseInput(rawJson)
+            ?: return androidImageShareResultJson(false, "invalid_payload", "invalid_payload")
+        val imageFile = transferStore.commit(input.optString("transferId"))
+            ?: return androidImageShareResultJson(false, "commit_rejected", "commit_rejected")
         return try {
             startShareChooser(imageFile)
             androidImageShareResultJson(true, "shared")
@@ -53,19 +74,21 @@ class AndroidImageShareRuntime(
         }
     }
 
-    private fun writeResponseImage(bytes: ByteArray): File {
-        val outputDir = File(activity.cacheDir, "image-shares")
-        cleanupResponseImageShareDirectory(outputDir)
-        outputDir.mkdirs()
-        val output = File(outputDir, RESPONSE_IMAGE_SHARE_FILE_NAME)
-        output.writeBytes(bytes)
-        return output
+    fun cancel(rawJson: String): String {
+        val input = parseInput(rawJson)
+            ?: return androidImageShareResultJson(false, "invalid_payload", "invalid_payload")
+        val cancelled = transferStore.cancel(input.optString("transferId"))
+        return androidImageShareResultJson(cancelled, if (cancelled) "cancelled" else "not_found")
     }
 
-    private fun cleanupResponseImageShareDirectory(outputDir: File) {
-        if (outputDir.exists()) {
-            outputDir.deleteRecursively()
-        }
+    fun clear() {
+        transferStore.clear()
+    }
+
+    private fun parseInput(rawJson: String): JSONObject? = try {
+        JSONObject(rawJson)
+    } catch (_: Exception) {
+        null
     }
 
     private fun startShareChooser(imageFile: File) {
@@ -110,12 +133,16 @@ class AndroidImageShareRuntime(
     }
 }
 
-private fun androidImageShareResultJson(ok: Boolean, status: String, error: String = ""): String {
+private fun androidImageShareResultJson(
+    ok: Boolean,
+    status: String,
+    error: String = "",
+    extra: Map<String, String> = emptyMap()
+): String {
     val output = JSONObject()
         .put("ok", ok)
         .put("status", status)
-    if (error.isNotBlank()) {
-        output.put("error", error)
-    }
+    if (error.isNotBlank()) output.put("error", error)
+    for ((key, value) in extra) output.put(key, value)
     return output.toString()
 }

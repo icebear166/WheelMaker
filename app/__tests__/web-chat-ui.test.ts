@@ -426,7 +426,9 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain("import { buildPromptDoneCopyRange } from '../chat/chatCopyRange';");
     expect(mainTsx).toContain('resolveMarkdownImageExportWidth,');
     expect(mainTsx).toContain('type MarkdownImageExportMode,');
-    expect(mainTsx).toContain("import { outputResponseImage, type ResponseImageOutputResult } from '../chat/export/responseImageOutput';");
+    expect(mainTsx).toContain('outputResponseImage,');
+    expect(mainTsx).toContain('reserveResponseImageShare,');
+    expect(mainTsx).toContain("} from '../chat/export/responseImageOutput';");
     expect(mainTsx).toContain('exportMode: MarkdownImageExportMode;');
     expect(mainTsx).toContain('const markdownImageExportWidth = resolveMarkdownImageExportWidth(exportMode);');
     expect(mainTsx).toContain("style={{'--markdown-image-export-width': `${markdownImageExportWidth}px`} as React.CSSProperties}");
@@ -2463,5 +2465,26 @@ describe('web chat integration', () => {
     expect(recentWatermark).toContain('font-size: 36px;');
     expect(recentWatermark).toContain('font-weight: 800;');
     expect(stylesCss).not.toContain('.recent-project-session-hub.wide-project-hub-tag');
+  });
+});
+
+describe('Android deferred native action ordering', () => {
+  test('reserves image sharing before render state and speech before reconnect', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+
+    const imageHandlerIndex = mainTsx.indexOf('const exportPromptDoneMarkdownImage = async');
+    const imageReserveIndex = mainTsx.indexOf('await reserveResponseImageShare()', imageHandlerIndex);
+    const imageRenderStateIndex = mainTsx.indexOf('setMarkdownImageExportRequest({', imageHandlerIndex);
+    expect(imageReserveIndex).toBeGreaterThan(imageHandlerIndex);
+    expect(imageReserveIndex).toBeLessThan(imageRenderStateIndex);
+
+    const nativeSpeechBranchIndex = mainTsx.indexOf('if (nativeSpeechHost) {');
+    const speechReserveIndex = mainTsx.indexOf('await androidSpeechRuntime.reserveStart()', nativeSpeechBranchIndex);
+    const connectIndex = mainTsx.indexOf('if (!connectedRef.current) await connect', nativeSpeechBranchIndex);
+    const speechStartIndex = mainTsx.indexOf('await androidSpeechRuntime.start(', nativeSpeechBranchIndex);
+    expect(speechReserveIndex).toBeGreaterThan(nativeSpeechBranchIndex);
+    expect(speechReserveIndex).toBeLessThan(connectIndex);
+    expect(connectIndex).toBeLessThan(speechStartIndex);
   });
 });

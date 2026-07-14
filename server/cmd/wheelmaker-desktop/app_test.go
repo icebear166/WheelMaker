@@ -26,10 +26,10 @@ func TestBootstrapAssetIsMinimalAndSelfContained(t *testing.T) {
 	html := string(body)
 	for _, want := range []string{
 		`default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'`,
-		`callBootstrap('bootstrap.getState')`,
-		`callBootstrap('bootstrap.saveBaseUrl', {baseUrl: input.value})`,
-		`callBootstrap('bootstrap.retry')`,
-		`callBootstrap('bootstrap.reset')`,
+		`runBootstrapAction('bootstrap.getState')`,
+		`runBootstrapAction('bootstrap.saveBaseUrl', {baseUrl: input.value}, save)`,
+		`runBootstrapAction('bootstrap.retry', {}, retry)`,
+		`runBootstrapAction('bootstrap.reset', {}, reset)`,
 		`id="titlebar"`,
 		`id="minimize"`,
 		`id="maximize"`,
@@ -38,7 +38,12 @@ func TestBootstrapAssetIsMinimalAndSelfContained(t *testing.T) {
 		`callWindow('minimize')`,
 		`callWindow('toggleMaximize')`,
 		`callWindow('close')`,
-		`bridge.postMessage(JSON.stringify({requestId, action, payload, userGestureAt: lastUserGestureAt}))`,
+		`const BRIDGE_TIMEOUT_MS = 30_000;`,
+		`crypto.randomUUID?.() ||`,
+		`const timeout = window.setTimeout(() => {`,
+		`pending.delete(requestId);`,
+		`bridge.postMessage(JSON.stringify({requestId, action, payload}))`,
+		`finally {`,
 		`type="text"`,
 		`id="error"`,
 	} {
@@ -55,6 +60,7 @@ func TestBootstrapAssetIsMinimalAndSelfContained(t *testing.T) {
 		"notification",
 		"share",
 		"update",
+		"userGestureAt",
 	} {
 		if strings.Contains(html, forbidden) {
 			t.Errorf("bootstrap contains forbidden capability %q", forbidden)

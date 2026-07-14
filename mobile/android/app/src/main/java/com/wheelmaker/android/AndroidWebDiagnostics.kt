@@ -69,6 +69,11 @@ class AndroidWebDiagnostics(
     }
 
     @Synchronized
+    fun clear() {
+        records.clear()
+    }
+
+    @Synchronized
     fun drainJson(): String {
         val snapshot = records.toList()
         records.clear()

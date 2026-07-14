@@ -30,6 +30,7 @@ describe('android native speech runtime', () => {
 
   test('starts direct native speech without a Registry stream and routes transcripts', async () => {
     const {target, requests} = createAndroidNativeMessageTestHost({
+      'userAction.reserve': () => ({token: 'speech-grant-1'}),
       'speech.start': () => ({accepted: true, streamId: 'android-speech-1'}),
       'speech.finish': () => ({accepted: true, streamId: 'android-speech-1'}),
       'speech.cancel': () => ({accepted: true, streamId: 'android-speech-1'}),
@@ -42,20 +43,26 @@ describe('android native speech runtime', () => {
     const events: AndroidNativeSpeechEvent[] = [];
     const unsubscribe = runtime?.onEvent(event => events.push(event));
 
+    const userActionToken = await runtime?.reserveStart();
     await expect(runtime?.start({
       provider: 'volcengine',
       model: 'doubao-streaming-asr-2.0',
       audio: {format: 'pcm', codec: 'raw', rate: 16000, bits: 16, channel: 1},
-    })).resolves.toEqual({streamId: 'android-speech-1'});
+    }, userActionToken ?? '')).resolves.toEqual({streamId: 'android-speech-1'});
     await runtime?.finish('android-speech-1');
     await runtime?.cancel('android-speech-1', 'gesture');
 
-    expect(requests[0]).toMatchObject({action: 'speech.start', payload: {
+    expect(requests[0]).toMatchObject({
+      action: 'userAction.reserve',
+      payload: {action: 'speech.start'},
+    });
+    expect(requests[1]).toMatchObject({action: 'speech.start', payload: {
       provider: 'volcengine',
       model: 'doubao-streaming-asr-2.0',
       audio: {format: 'pcm', codec: 'raw', rate: 16000, bits: 16, channel: 1},
+      userActionToken: 'speech-grant-1',
     }});
-    expect(requests[0].payload).not.toHaveProperty('streamId');
+    expect(requests[1].payload).not.toHaveProperty('streamId');
 
     const callback = (window as Window & {
       __wheelmakerAndroidSpeechEvent?: (event: unknown) => void;

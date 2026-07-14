@@ -2,7 +2,6 @@ export type AndroidNativeTestRequest = {
   requestId: string;
   action: string;
   payload: Record<string, unknown>;
-  userGestureAt: number | null;
 };
 
 export function createAndroidNativeMessageTestHost(
@@ -10,10 +9,13 @@ export function createAndroidNativeMessageTestHost(
 ): {
   target: {postMessage(message: string): void; onmessage?: (event: {data: string}) => void};
   requests: AndroidNativeTestRequest[];
+  messages: string[];
 } {
   const requests: AndroidNativeTestRequest[] = [];
+  const messages: string[] = [];
   const target: {postMessage(message: string): void; onmessage?: (event: {data: string}) => void} = {
     postMessage(message: string) {
+      messages.push(message);
       const request = JSON.parse(message) as AndroidNativeTestRequest;
       requests.push(request);
       const handler = handlers[request.action];
@@ -42,5 +44,5 @@ export function createAndroidNativeMessageTestHost(
       });
     },
   };
-  return {target, requests};
+  return {target, requests, messages};
 }

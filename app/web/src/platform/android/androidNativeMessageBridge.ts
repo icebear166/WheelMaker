@@ -21,6 +21,7 @@ export type AndroidNativeMessageClient = {
 };
 
 export type AndroidNativeRpcFacade = {
+  reserveUserAction(action: 'image.share' | 'speech.start'): Promise<string>;
   drainWebDiagnostics(): Promise<string>;
   setDiagnosticLogLevel(logLevel: string): Promise<string>;
   getSpeechCredentialState(): Promise<string>;
@@ -34,13 +35,17 @@ export type AndroidNativeRpcFacade = {
   showNotification(payloadJson: string): Promise<string>;
   getAndroidReleaseState(): Promise<string>;
   installAndroidRelease(payloadJson: string): Promise<string>;
-  shareResponseImage(payloadJson: string): Promise<string>;
+  beginResponseImageShare(fileName: string, size: number, userActionToken: string): Promise<string>;
+  appendResponseImageShare(transferId: string, index: number, data: string): Promise<string>;
+  commitResponseImageShare(transferId: string): Promise<string>;
+  cancelResponseImageShare(transferId: string): Promise<string>;
   clearPortRelaySiteData(relayUrl: string): Promise<string>;
 };
 
 let fallbackRequestSequence = 0;
 let cachedTarget: AndroidNativeMessageTarget | undefined;
 let cachedClient: AndroidNativeMessageClient | null = null;
+const MAX_ANDROID_NATIVE_MESSAGE_LENGTH = 512 * 1024;
 
 function newRequestId(env: AndroidNativeMessageEnvironment): string {
   return env.crypto?.randomUUID?.() ??
@@ -55,17 +60,13 @@ export function createAndroidNativeMessageClient(
     throw new Error('Android native message bridge is unavailable.');
   }
   const pending = new Map<string, PendingRequest>();
-  let lastUserGestureAt: number | null = null;
-  const rememberGesture = () => {
-    lastUserGestureAt = Math.round(env.performance?.now() ?? 0);
-  };
-  for (const eventName of ['pointerdown', 'keydown', 'touchstart']) {
-    env.addEventListener?.(eventName, rememberGesture, {capture: true, passive: true});
-  }
-
   const previous = target.onmessage;
   target.onmessage = event => {
-    previous?.(event);
+    try {
+      previous?.(event);
+    } catch {
+      // A stale consumer must not block replies for the active bridge client.
+    }
     let response: {requestId?: string; ok?: boolean; result?: unknown; error?: string};
     try {
       response = JSON.parse(typeof event.data === 'string' ? event.data : '') as typeof response;
@@ -88,18 +89,18 @@ export function createAndroidNativeMessageClient(
   return {
     request: (action, payload = {}) => new Promise((resolve, reject) => {
       const requestId = newRequestId(env);
+      const message = JSON.stringify({requestId, action, payload});
+      if (message.length > MAX_ANDROID_NATIVE_MESSAGE_LENGTH) {
+        reject(new Error('Request exceeds the Android native message limit.'));
+        return;
+      }
       const timeout = setTimeout(() => {
         pending.delete(requestId);
         reject(new Error('Android native request timed out.'));
       }, 30_000);
       pending.set(requestId, {resolve, reject, timeout});
       try {
-        target.postMessage(JSON.stringify({
-          requestId,
-          action,
-          payload,
-          userGestureAt: lastUserGestureAt,
-        }));
+        target.postMessage(message);
       } catch (error) {
         pending.delete(requestId);
         clearTimeout(timeout);
@@ -147,6 +148,29 @@ function objectPayload(rawJson: string): Record<string, unknown> {
   }
 }
 
+function requiredStringResult(rawJson: string, key: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawJson || '{}');
+  } catch {
+    throw new Error('Android native bridge returned invalid JSON.');
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Android native bridge returned an invalid result.');
+  }
+  const value = (parsed as Record<string, unknown>)[key];
+  if (typeof value !== 'string' || !value) {
+    const error = (parsed as Record<string, unknown>).error;
+    const status = (parsed as Record<string, unknown>).status;
+    throw new Error(
+      typeof error === 'string' && error ? error :
+        typeof status === 'string' && status ? status :
+          `Android native bridge returned no ${key}.`,
+    );
+  }
+  return value;
+}
+
 export function getAndroidNativeRpcFacade(
   env: AndroidNativeMessageEnvironment = globalThis as AndroidNativeMessageEnvironment,
 ): AndroidNativeRpcFacade | null {
@@ -156,6 +180,10 @@ export function getAndroidNativeRpcFacade(
   const request = (action: string, payload: Record<string, unknown> = {}) =>
     requestAndroidNativeJson(action, payload, env);
   return {
+    reserveUserAction: async action => requiredStringResult(
+      await request('userAction.reserve', {action}),
+      'token',
+    ),
     drainWebDiagnostics: () => request('diagnostics.drain'),
     setDiagnosticLogLevel: logLevel => request('diagnostics.setLogLevel', {logLevel}),
     getSpeechCredentialState: () => request('speech.credentialState'),
@@ -170,7 +198,14 @@ export function getAndroidNativeRpcFacade(
     showNotification: payloadJson => request('notification.show', objectPayload(payloadJson)),
     getAndroidReleaseState: () => request('apk.getReleaseState'),
     installAndroidRelease: payloadJson => request('apk.install', objectPayload(payloadJson)),
-    shareResponseImage: payloadJson => request('image.share', objectPayload(payloadJson)),
+    beginResponseImageShare: async (fileName, size, userActionToken) => requiredStringResult(
+      await request('image.share.begin', {fileName, size, userActionToken}),
+      'transferId',
+    ),
+    appendResponseImageShare: (transferId, index, data) =>
+      request('image.share.chunk', {transferId, index, data}),
+    commitResponseImageShare: transferId => request('image.share.commit', {transferId}),
+    cancelResponseImageShare: transferId => request('image.share.cancel', {transferId}),
     clearPortRelaySiteData: relayUrl => request('relay.clearSiteData', {relayUrl}),
   };
 }

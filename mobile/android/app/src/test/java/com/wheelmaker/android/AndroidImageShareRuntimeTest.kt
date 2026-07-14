@@ -16,8 +16,14 @@ class AndroidImageShareRuntimeTest {
         val mainActivity = source("src/main/java/com/wheelmaker/android/MainActivity.kt")
 
         assertTrue(bridge.contains("private val androidImageShareRuntime: AndroidImageShareRuntime"))
-        assertTrue(bridge.contains("\"image.share\""))
-        assertTrue(bridge.contains("androidImageShareRuntime.shareResponseImage(payload.toString())"))
+        assertTrue(bridge.contains("\"image.share.begin\""))
+        assertTrue(bridge.contains("\"image.share.chunk\""))
+        assertTrue(bridge.contains("\"image.share.commit\""))
+        assertTrue(bridge.contains("\"image.share.cancel\""))
+        assertTrue(bridge.contains("androidImageShareRuntime.begin(payload.toString())"))
+        assertTrue(bridge.contains("androidImageShareRuntime.append(payload.toString())"))
+        assertTrue(bridge.contains("androidImageShareRuntime.commit(payload.toString())"))
+        assertTrue(bridge.contains("androidImageShareRuntime.cancel(payload.toString())"))
         assertTrue(mainActivity.contains("private lateinit var androidImageShareRuntime: AndroidImageShareRuntime"))
         assertTrue(mainActivity.contains("AndroidImageShareRuntime(this)"))
     }
@@ -34,9 +40,9 @@ class AndroidImageShareRuntimeTest {
     fun runtimeUsesSystemImageShareIntentWithoutLocalSaveFallback() {
         val runtime = source("src/main/java/com/wheelmaker/android/AndroidImageShareRuntime.kt")
 
-        assertTrue(runtime.contains("RESPONSE_IMAGE_SHARE_FILE_NAME = \"wheelmaker-response-share.png\""))
-        assertTrue(runtime.contains("cleanupResponseImageShareDirectory(outputDir)"))
-        assertTrue(runtime.contains("outputDir.deleteRecursively()"))
+        assertTrue(runtime.contains("MAX_RESPONSE_IMAGE_BYTES = 16 * 1024 * 1024"))
+        assertTrue(runtime.contains("MAX_RESPONSE_IMAGE_CHUNK_BYTES = 128 * 1024"))
+        assertTrue(runtime.contains("AndroidImageShareTransferStore"))
         assertTrue(runtime.contains("Intent.ACTION_SEND"))
         assertTrue(runtime.contains("image/png"))
         assertTrue(runtime.contains("Intent.EXTRA_STREAM"))
@@ -48,5 +54,16 @@ class AndroidImageShareRuntimeTest {
         assertFalse(runtime.contains("DownloadManager"))
         assertFalse(runtime.contains("MediaStore"))
         assertFalse(runtime.contains("DIRECTORY_DOWNLOADS"))
+    }
+
+    @Test
+    fun serverSwitchClearsAllTransientNativeBridgeState() {
+        val mainActivity = source("src/main/java/com/wheelmaker/android/MainActivity.kt")
+
+        assertTrue(mainActivity.contains("androidSpeechRuntime.clearCredential()"))
+        assertTrue(mainActivity.contains("trustedUserGestureGate.clear()"))
+        assertTrue(mainActivity.contains("trustedNativeActionGrantStore.clear()"))
+        assertTrue(mainActivity.contains("androidImageShareRuntime.clear()"))
+        assertTrue(mainActivity.contains("androidWebDiagnostics.clear()"))
     }
 }

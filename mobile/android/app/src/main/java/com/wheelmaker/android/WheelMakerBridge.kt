@@ -11,7 +11,8 @@ class WheelMakerBridge(
     private val androidImageShareRuntime: AndroidImageShareRuntime,
     private val androidPortRelaySiteDataRuntime: AndroidPortRelaySiteDataRuntime,
     private val androidWebDiagnostics: AndroidWebDiagnostics,
-    private val androidDiagnosticLogLevelStore: AndroidDiagnosticLogLevelStore
+    private val androidDiagnosticLogLevelStore: AndroidDiagnosticLogLevelStore,
+    private val trustedNativeActionGrantStore: TrustedNativeActionGrantStore
 ) {
 	fun dispatch(capability: TrustedNativeCapability, payload: JSONObject): String {
 		val action = capability.action
@@ -19,6 +20,7 @@ class WheelMakerBridge(
 			throw SecurityException("expired native capability")
 		}
 		return when (action) {
+        "userAction.reserve" -> reserveUserAction(payload)
         "device.getName" -> JSONObject.quote(Build.MODEL.trim().ifBlank { "Android" }.take(80))
         "diagnostics.drain" -> androidWebDiagnostics.drainJson()
         "diagnostics.setLogLevel" -> setDiagnosticLogLevel(payload.optString("logLevel"))
@@ -28,7 +30,7 @@ class WheelMakerBridge(
             payload.optString("version")
         )
         "speech.clearCredential" -> androidSpeechRuntime.clearCredential()
-        "speech.start" -> androidSpeechRuntime.start(payload.toString())
+        "speech.start" -> startSpeech(payload)
         "speech.finish" -> androidSpeechRuntime.finish(payload.optString("streamId"))
         "speech.cancel" -> androidSpeechRuntime.cancel(
             payload.optString("streamId"),
@@ -39,10 +41,39 @@ class WheelMakerBridge(
         "notification.show" -> androidNotificationRuntime.showNotification(payload.toString())
         "apk.getReleaseState" -> androidApkUpdateRuntime.getReleaseState()
         "apk.install" -> androidApkUpdateRuntime.installRelease(payload.toString())
-        "image.share" -> androidImageShareRuntime.shareResponseImage(payload.toString())
+        "image.share.begin" -> beginResponseImageShare(payload)
+        "image.share.chunk" -> androidImageShareRuntime.append(payload.toString())
+        "image.share.commit" -> androidImageShareRuntime.commit(payload.toString())
+        "image.share.cancel" -> androidImageShareRuntime.cancel(payload.toString())
         "relay.clearSiteData" -> androidPortRelaySiteDataRuntime.clear(payload.optString("relayUrl"))
 			else -> throw IllegalArgumentException("unsupported native action")
 		}
+    }
+
+    private fun reserveUserAction(payload: JSONObject): String = JSONObject()
+        .put("token", trustedNativeActionGrantStore.issue(payload.optString("action")))
+        .toString()
+
+    private fun startSpeech(payload: JSONObject): String {
+        if (!trustedNativeActionGrantStore.consume(
+                payload.optString("userActionToken"),
+                "speech.start"
+            )) {
+            throw SecurityException("invalid native user-action grant")
+        }
+        payload.remove("userActionToken")
+        return androidSpeechRuntime.start(payload.toString())
+    }
+
+    private fun beginResponseImageShare(payload: JSONObject): String {
+        if (!trustedNativeActionGrantStore.consume(
+                payload.optString("userActionToken"),
+                "image.share"
+            )) {
+            throw SecurityException("invalid native user-action grant")
+        }
+        payload.remove("userActionToken")
+        return androidImageShareRuntime.begin(payload.toString())
     }
 
     private fun setDiagnosticLogLevel(logLevel: String): String {

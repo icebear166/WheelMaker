@@ -54,7 +54,9 @@ Relay 使用 six-digit Relay access code 作为临时在线门禁，并配合来
 
 Desktop 和 Android 只内置专用启动配置页，业务 Web 从用户填写的 HTTPS Base URL 加载。Native Bridge 使用 origin-restricted WebMessage listener，不使用 `addJavascriptInterface`。启动动作只允许本地 bootstrap Origin；业务动作必须来自已配置的精确 Origin、主 frame 和 allowlist。
 
-需要用户主动触发的敏感原生能力仍必须携带近期用户手势，授权结果是 action-bound 的短期 capability：手势窗口为 5 秒，发放后的 capability 只在 1 秒内用于同一动作。Android 语音凭据同步不要求新的点击手势，但只对已配置的业务 Origin 和明确的语音 allowlist 开放，本地 bootstrap 页不能调用。切换服务器会清理旧站点状态和内存语音凭据。
+需要用户主动触发的敏感原生能力必须由 Android 在受信任顶层页面上记录真实 `ACTION_DOWN`，页面提交的时间戳不作为用户在场证明。手势最长保留 5 秒且只能消费一次；来源校验通过后发放的 native capability 只在 1 秒内用于同一动作。图片渲染和语音连接可能在点击后执行较长的异步准备，因此会在点击时换取随机的 action-bound、single-use 授权，授权最长保留 60 秒，不能跨动作复用。
+
+Android 响应图片使用 begin/chunk/commit 协议传输：每个解码块最大 128 KiB，总图片最大 16 MiB，块索引必须连续，提交时实际字节数必须与声明一致；取消、过期或切换服务器都会删除半成品。Android 语音凭据同步不要求新的点击手势，但只对已配置的业务 Origin 和明确的语音 allowlist 开放，本地 bootstrap 页不能调用。切换服务器会同时清理旧站点状态、内存语音凭据、用户手势、延期授权、图片传输和原生诊断缓存。
 
 ## 项目路径和 Junction
 
