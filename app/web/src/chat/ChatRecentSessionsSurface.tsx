@@ -1,5 +1,6 @@
 import React, { type ReactNode } from 'react';
 import type {SessionListDensity} from './sessionListDensity';
+import {useChatEdgeSurfaceGeometry} from './layout/chatEdgeSurfaceGeometry';
 
 export type ChatRecentSessionsSurfaceProps = {
   children: ReactNode;
@@ -13,59 +14,68 @@ export const ChatRecentSessionsSurface = React.memo(function ChatRecentSessionsS
   sessionListDensity,
 }: ChatRecentSessionsSurfaceProps) {
   const [collapsed, setCollapsed] = React.useState(false);
+  const surfaceRef = useChatEdgeSurfaceGeometry('left');
 
   if (collapsed) {
     return (
       <aside
+        ref={surfaceRef}
         className="chat-recent-sessions-surface desktop collapsed"
         data-session-list-density={sessionListDensity}
         aria-label="Recent sessions"
       >
-        <button
-          type="button"
-          className="chat-recent-sessions-compact-trigger"
-          onClick={() => setCollapsed(false)}
-          aria-expanded={false}
-          aria-label="Expand recent sessions"
-          title="Expand recent sessions"
-        >
-          <span className="codicon codicon-history chat-recent-sessions-compact-icon" aria-hidden="true" />
-          <span className="chat-recent-sessions-surface-title">Recent Sessions</span>
-          <span className="codicon codicon-chevron-down chat-recent-sessions-compact-chevron" aria-hidden="true" />
-        </button>
+        <div className="chat-edge-surface-glass" aria-hidden="true" />
+        <div className="chat-edge-surface-content">
+          <button
+            type="button"
+            className="chat-recent-sessions-compact-trigger"
+            onClick={() => setCollapsed(false)}
+            aria-expanded={false}
+            aria-label="Expand recent sessions"
+            title="Expand recent sessions"
+          >
+            <span className="codicon codicon-history chat-recent-sessions-compact-icon" aria-hidden="true" />
+            <span className="chat-recent-sessions-surface-title">Recent Sessions</span>
+            <span className="codicon codicon-chevron-down chat-recent-sessions-compact-chevron" aria-hidden="true" />
+          </button>
+        </div>
       </aside>
     );
   }
 
   return (
     <aside
+      ref={surfaceRef}
       className="chat-recent-sessions-surface desktop expanded"
       data-session-list-density={sessionListDensity}
       aria-label="Recent sessions"
     >
-      <div className="chat-recent-sessions-surface-header">
-        <button
-          type="button"
-          className="chat-recent-sessions-surface-toggle"
-          onClick={() => setCollapsed(true)}
-          aria-expanded={true}
-          aria-label="Collapse recent sessions"
-          title="Collapse recent sessions"
-        >
-          <span className="codicon codicon-chevron-up" aria-hidden="true" />
-        </button>
-        <span className="chat-recent-sessions-surface-title">Recent Sessions</span>
-        <button
-          type="button"
-          className="chat-recent-sessions-surface-unpin"
-          onClick={onUnpin}
-          aria-label="Unpin recent sessions"
-          title="Unpin recent sessions"
-        >
-          <span className="codicon codicon-pinned" aria-hidden="true" />
-        </button>
+      <div className="chat-edge-surface-glass" aria-hidden="true" />
+      <div className="chat-edge-surface-content">
+        <div className="chat-recent-sessions-surface-header">
+          <button
+            type="button"
+            className="chat-recent-sessions-surface-toggle"
+            onClick={() => setCollapsed(true)}
+            aria-expanded={true}
+            aria-label="Collapse recent sessions"
+            title="Collapse recent sessions"
+          >
+            <span className="codicon codicon-chevron-up" aria-hidden="true" />
+          </button>
+          <span className="chat-recent-sessions-surface-title">Recent Sessions</span>
+          <button
+            type="button"
+            className="chat-recent-sessions-surface-unpin"
+            onClick={onUnpin}
+            aria-label="Unpin recent sessions"
+            title="Unpin recent sessions"
+          >
+            <span className="codicon codicon-pinned" aria-hidden="true" />
+          </button>
+        </div>
+        <div className="chat-recent-sessions-surface-list">{children}</div>
       </div>
-      <div className="chat-recent-sessions-surface-list">{children}</div>
     </aside>
   );
 });

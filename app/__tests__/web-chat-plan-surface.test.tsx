@@ -22,6 +22,24 @@ function planSnapshot(): ChatPlanSnapshot {
 }
 
 describe('ChatPlanSurface', () => {
+  test('renders separate geometry-aware glass and content layers on desktop', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const planSource = fs.readFileSync(
+      path.join(projectRoot, 'web', 'src', 'chat', 'ChatPlanSurface.tsx'),
+      'utf8',
+    );
+    const recentSource = fs.readFileSync(
+      path.join(projectRoot, 'web', 'src', 'chat', 'ChatRecentSessionsSurface.tsx'),
+      'utf8',
+    );
+
+    [planSource, recentSource].forEach(source => {
+      expect(source).toContain('useChatEdgeSurfaceGeometry');
+      expect(source).toContain('className="chat-edge-surface-glass"');
+      expect(source).toContain('className="chat-edge-surface-content"');
+    });
+  });
+
   test('collapses desktop plan to a compact current-step row from the leading control', async () => {
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
 

@@ -5325,6 +5325,12 @@
 }
 
 /* workspace-ui-temporary-layers */
+@property --chat-edge-hidden-alpha {
+  syntax: '<percentage>';
+  inherits: true;
+  initial-value: 3%;
+}
+
 .chat-plan-surface.desktop,
 .chat-plan-surface.mobile.expanded,
 .chat-recent-sessions-surface.desktop,
@@ -5341,8 +5347,24 @@
 .project-session-action-menu,
 .wide-project-action-popover,
 .mobile-project-sheet {
-  --workspace-temporary-layer-background: color-mix(in srgb, var(--surface-overlay) 58%, transparent);
+  --workspace-temporary-layer-background: color-mix(in srgb, var(--surface-overlay) 82%, transparent);
   --workspace-temporary-layer-filter: blur(36px) saturate(1.18) contrast(1.04);
+}
+
+.chat-plan-surface.mobile.expanded,
+.chat-config-overflow-menu,
+.chat-config-value-menu,
+.chat-context-usage-popover,
+.chat-slash-menu,
+.chat-file-mention-menu,
+.chat-title-project-menu,
+.chat-title-prompt-menu,
+.chat-hub-popover,
+.chat-quick-switch-menu,
+.session-archive-menu,
+.project-session-action-menu,
+.wide-project-action-popover,
+.mobile-project-sheet {
   background: var(--workspace-temporary-layer-background);
   border-color: color-mix(in srgb, var(--border-subtle) 84%, transparent);
   box-shadow:
@@ -5352,46 +5374,96 @@
   -webkit-backdrop-filter: var(--workspace-temporary-layer-filter);
 }
 
+.chat-plan-surface.desktop,
 .chat-recent-sessions-surface.desktop {
-  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 50%, rgb(0 0 0 / 12%) 68%, transparent 74%);
-  mask-image: linear-gradient(to right, #000 0%, #000 50%, rgb(0 0 0 / 12%) 68%, transparent 74%);
-  -webkit-mask-size: 200% 100%;
-  mask-size: 200% 100%;
-  -webkit-mask-position: right center;
-  mask-position: right center;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  transition: -webkit-mask-position 180ms var(--ease-out), mask-position 180ms var(--ease-out);
+  --chat-edge-hidden-alpha: 3%;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.chat-recent-sessions-surface.desktop {
+  --chat-edge-fade-start: calc(100% - 28px);
+  --chat-edge-fade-end: 100%;
 }
 
 .chat-plan-surface.desktop {
-  -webkit-mask-image: linear-gradient(to left, #000 0%, #000 50%, rgb(0 0 0 / 12%) 68%, transparent 74%);
-  mask-image: linear-gradient(to left, #000 0%, #000 50%, rgb(0 0 0 / 12%) 68%, transparent 74%);
-  -webkit-mask-size: 200% 100%;
-  mask-size: 200% 100%;
-  -webkit-mask-position: left center;
-  mask-position: left center;
+  --chat-edge-fade-start: 0px;
+  --chat-edge-fade-end: 28px;
+}
+
+.chat-edge-surface-glass {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 84%, transparent);
+  border-radius: inherit;
+  background: var(--workspace-temporary-layer-background);
+  box-shadow:
+    var(--shadow-overlay),
+    inset 0 1px 0 color-mix(in srgb, var(--text-primary) 8%, transparent);
+  backdrop-filter: var(--workspace-temporary-layer-filter);
+  -webkit-backdrop-filter: var(--workspace-temporary-layer-filter);
+  pointer-events: none;
+}
+
+.chat-edge-surface-content {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+}
+
+.chat-edge-surface-glass,
+.chat-edge-surface-content {
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
-  transition: -webkit-mask-position 180ms var(--ease-out), mask-position 180ms var(--ease-out);
+  transition: --chat-edge-hidden-alpha 180ms var(--ease-out);
 }
 
-.chat-recent-sessions-surface.desktop:hover,
-.chat-recent-sessions-surface.desktop:focus-within {
-  -webkit-mask-position: left center;
-  mask-position: left center;
+.chat-recent-sessions-surface.desktop .chat-edge-surface-glass,
+.chat-recent-sessions-surface.desktop .chat-edge-surface-content {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 0%,
+    #000 var(--chat-edge-fade-start),
+    rgb(0 0 0 / var(--chat-edge-hidden-alpha)) var(--chat-edge-fade-end),
+    rgb(0 0 0 / var(--chat-edge-hidden-alpha)) 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    #000 0%,
+    #000 var(--chat-edge-fade-start),
+    rgb(0 0 0 / var(--chat-edge-hidden-alpha)) var(--chat-edge-fade-end),
+    rgb(0 0 0 / var(--chat-edge-hidden-alpha)) 100%
+  );
 }
 
-.chat-plan-surface.desktop:hover,
-.chat-plan-surface.desktop:focus-within {
-  -webkit-mask-position: right center;
-  mask-position: right center;
+.chat-plan-surface.desktop .chat-edge-surface-glass,
+.chat-plan-surface.desktop .chat-edge-surface-content {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    rgb(0 0 0 / var(--chat-edge-hidden-alpha)) 0%,
+    rgb(0 0 0 / var(--chat-edge-hidden-alpha)) var(--chat-edge-fade-start),
+    #000 var(--chat-edge-fade-end),
+    #000 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    rgb(0 0 0 / var(--chat-edge-hidden-alpha)) 0%,
+    rgb(0 0 0 / var(--chat-edge-hidden-alpha)) var(--chat-edge-fade-start),
+    #000 var(--chat-edge-fade-end),
+    #000 100%
+  );
+}
+
+.chat-recent-sessions-surface.desktop:is(:hover, :focus-within),
+.chat-plan-surface.desktop:is(:hover, :focus-within) {
+  --chat-edge-hidden-alpha: 100%;
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  .chat-plan-surface.desktop,
   .chat-plan-surface.mobile.expanded,
-  .chat-recent-sessions-surface.desktop,
+  .chat-edge-surface-glass,
   .chat-config-overflow-menu,
   .chat-config-value-menu,
   .chat-context-usage-popover,
@@ -5412,14 +5484,13 @@
 
   .chat-plan-surface.desktop,
   .chat-recent-sessions-surface.desktop {
-    -webkit-mask-image: none;
-    mask-image: none;
+    --chat-edge-hidden-alpha: 100%;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .chat-plan-surface.desktop,
-  .chat-recent-sessions-surface.desktop {
+  .chat-edge-surface-glass,
+  .chat-edge-surface-content {
     transition: none;
   }
 }

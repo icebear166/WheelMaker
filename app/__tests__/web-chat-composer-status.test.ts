@@ -232,7 +232,7 @@ describe('chat composer status helpers', () => {
     expect(fileMentionMenu).toContain('background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));');
   });
 
-  test('keeps temporary chat glass translucent enough for blur to remain visible', () => {
+  test('keeps temporary chat glass readable when backdrop sampling degrades', () => {
     const projectRoot = path.join(__dirname, '..');
     const stylesCss = readWebStyles(projectRoot);
     const marker = '/* workspace-ui-temporary-layers */';
@@ -257,7 +257,7 @@ describe('chat composer status helpers', () => {
       '.wide-project-action-popover',
     ].forEach(selector => expect(temporaryLayerStyles).toContain(selector));
     expect(temporaryLayerStyles).toContain(
-      '--workspace-temporary-layer-background: color-mix(in srgb, var(--surface-overlay) 58%, transparent);',
+      '--workspace-temporary-layer-background: color-mix(in srgb, var(--surface-overlay) 82%, transparent);',
     );
     expect(temporaryLayerStyles).toContain(
       '--workspace-temporary-layer-filter: blur(36px) saturate(1.18) contrast(1.04);',
@@ -270,38 +270,29 @@ describe('chat composer status helpers', () => {
     );
   });
 
-  test('masks entire desktop edge surfaces away from chat text until interaction', () => {
+  test('separates desktop edge glass from content and aligns both masks to measured text bounds', () => {
     const projectRoot = path.join(__dirname, '..');
     const stylesCss = readWebStyles(projectRoot);
     const temporaryLayerStyles = stylesCss.slice(stylesCss.indexOf('/* workspace-ui-temporary-layers */'));
 
-    const recentSurface = cssRuleBlock(temporaryLayerStyles, '.chat-recent-sessions-surface.desktop');
-    const planSurface = cssRuleBlock(temporaryLayerStyles, '.chat-plan-surface.desktop');
-
-    expect(recentSurface).toContain(
-      'mask-image: linear-gradient(to right, #000 0%, #000 50%, rgb(0 0 0 / 12%) 68%, transparent 74%);',
+    expect(temporaryLayerStyles).toContain('@property --chat-edge-hidden-alpha');
+    expect(temporaryLayerStyles).toContain('.chat-edge-surface-glass,\n.chat-edge-surface-content {');
+    expect(temporaryLayerStyles).toContain('--chat-edge-hidden-alpha: 3%;');
+    expect(temporaryLayerStyles).toContain('var(--chat-edge-fade-start)');
+    expect(temporaryLayerStyles).toContain('var(--chat-edge-fade-end)');
+    expect(temporaryLayerStyles).toContain('rgb(0 0 0 / var(--chat-edge-hidden-alpha))');
+    expect(temporaryLayerStyles).toContain('transition: --chat-edge-hidden-alpha 180ms var(--ease-out);');
+    expect(temporaryLayerStyles).toContain(".chat-recent-sessions-surface.desktop:is(:hover, :focus-within),");
+    expect(temporaryLayerStyles).toContain(".chat-plan-surface.desktop:is(:hover, :focus-within) {");
+    expect(temporaryLayerStyles).toContain('--chat-edge-hidden-alpha: 100%;');
+    expect(temporaryLayerStyles).toContain('.chat-edge-surface-glass {');
+    expect(cssRuleBlock(temporaryLayerStyles, '.chat-edge-surface-glass')).toContain(
+      'backdrop-filter: var(--workspace-temporary-layer-filter);',
     );
-    expect(recentSurface).toContain('-webkit-mask-position: right center;');
-    expect(recentSurface).toContain('mask-position: right center;');
-    expect(planSurface).toContain(
-      'mask-image: linear-gradient(to left, #000 0%, #000 50%, rgb(0 0 0 / 12%) 68%, transparent 74%);',
-    );
-    expect(planSurface).toContain('-webkit-mask-position: left center;');
-    expect(planSurface).toContain('mask-position: left center;');
-    expect(cssRuleBlock(temporaryLayerStyles, '.chat-recent-sessions-surface.desktop:focus-within')).toContain(
-      '-webkit-mask-position: left center;',
-    );
-    expect(cssRuleBlock(temporaryLayerStyles, '.chat-plan-surface.desktop:focus-within')).toContain(
-      '-webkit-mask-position: right center;',
-    );
-    expect(temporaryLayerStyles).toContain('transition: -webkit-mask-position 180ms var(--ease-out), mask-position 180ms var(--ease-out);');
-    expect(temporaryLayerStyles).not.toContain('.chat-plan-surface.desktop::before');
-    expect(temporaryLayerStyles).not.toContain('.chat-recent-sessions-surface.desktop::before');
     expect(temporaryLayerStyles).toContain('@media (prefers-reduced-transparency: reduce)');
-    expect(temporaryLayerStyles).toContain('-webkit-mask-image: none;');
-    expect(temporaryLayerStyles).toContain('mask-image: none;');
+    expect(temporaryLayerStyles).toContain('--chat-edge-hidden-alpha: 100%;');
     expect(temporaryLayerStyles).toContain(
-      '@media (prefers-reduced-motion: reduce) {\n  .chat-plan-surface.desktop,\n  .chat-recent-sessions-surface.desktop {',
+      '@media (prefers-reduced-motion: reduce) {\n  .chat-edge-surface-glass,\n  .chat-edge-surface-content {',
     );
     expect(cssRuleBlock(stylesCss, '.chat-plan-surface.desktop')).not.toContain('backdrop-filter: blur(4px);');
   });

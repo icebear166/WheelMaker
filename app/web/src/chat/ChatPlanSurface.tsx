@@ -1,6 +1,7 @@
 import React from 'react';
 
 import type {ChatPlanEntry, ChatPlanSnapshot} from './chatPlan';
+import {useChatEdgeSurfaceGeometry} from './layout/chatEdgeSurfaceGeometry';
 
 export type ChatPlanSurfaceProps = {
   plan: ChatPlanSnapshot | null;
@@ -94,6 +95,7 @@ export const ChatPlanSurface = React.memo(function ChatPlanSurface({
 }: ChatPlanSurfaceProps) {
   const [expanded, setExpanded] = React.useState(false);
   const [desktopCollapsed, setDesktopCollapsed] = React.useState(false);
+  const desktopSurfaceRef = useChatEdgeSurfaceGeometry('right', mode === 'desktop' && !!plan);
 
   React.useEffect(() => {
     setExpanded(false);
@@ -113,35 +115,41 @@ export const ChatPlanSurface = React.memo(function ChatPlanSurface({
   if (mode === 'desktop') {
     if (desktopCollapsed) {
       return (
-        <aside className="chat-plan-surface desktop collapsed" aria-label="Current plan">
-          {renderCompactTrigger({
-            activeEntry,
-            expanded: false,
-            mode,
-            onClick: () => setDesktopCollapsed(false),
-            progressLabel,
-          })}
+        <aside ref={desktopSurfaceRef} className="chat-plan-surface desktop collapsed" aria-label="Current plan">
+          <div className="chat-edge-surface-glass" aria-hidden="true" />
+          <div className="chat-edge-surface-content">
+            {renderCompactTrigger({
+              activeEntry,
+              expanded: false,
+              mode,
+              onClick: () => setDesktopCollapsed(false),
+              progressLabel,
+            })}
+          </div>
         </aside>
       );
     }
 
     return (
-      <aside className="chat-plan-surface desktop expanded" aria-label="Current plan">
-        <div className="chat-plan-surface-header">
-          <button
-            type="button"
-            className="chat-plan-surface-toggle"
-            onClick={() => setDesktopCollapsed(true)}
-            aria-expanded={true}
-            aria-label="Collapse current plan"
-            title="Collapse current plan"
-          >
-            <span className="codicon codicon-chevron-up" aria-hidden="true" />
-          </button>
-          <span className="chat-plan-surface-title">Plan</span>
-          <span className="chat-plan-progress">{progressLabel}</span>
+      <aside ref={desktopSurfaceRef} className="chat-plan-surface desktop expanded" aria-label="Current plan">
+        <div className="chat-edge-surface-glass" aria-hidden="true" />
+        <div className="chat-edge-surface-content">
+          <div className="chat-plan-surface-header">
+            <button
+              type="button"
+              className="chat-plan-surface-toggle"
+              onClick={() => setDesktopCollapsed(true)}
+              aria-expanded={true}
+              aria-label="Collapse current plan"
+              title="Collapse current plan"
+            >
+              <span className="codicon codicon-chevron-up" aria-hidden="true" />
+            </button>
+            <span className="chat-plan-surface-title">Plan</span>
+            <span className="chat-plan-progress">{progressLabel}</span>
+          </div>
+          {renderPlanList(plan)}
         </div>
-        {renderPlanList(plan)}
       </aside>
     );
   }
