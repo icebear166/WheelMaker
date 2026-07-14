@@ -19,7 +19,7 @@ describe('web chat file peek viewer', () => {
 
   test('chat file links open the peek viewer without switching to the File tab', () => {
     const mainTsx = readSourceText(mainPath);
-    const clickStart = mainTsx.indexOf('openChatFilePeek(targetFile.path, jumpLine ?? null, resolveChatFilePreviewProjectId())');
+    const clickStart = mainTsx.indexOf('openChatFilePeek(targetFile.path, jumpLine ?? null, linkProjectId)');
     expect(clickStart).toBeGreaterThanOrEqual(0);
     const clickEnd = mainTsx.indexOf('</a>', clickStart);
     const clickBody = mainTsx.slice(clickStart, clickEnd);
@@ -172,7 +172,7 @@ describe('web chat file peek viewer', () => {
 
     expect(serviceTs).toContain('async listProjectDirectory(');
     expect(serviceTs).toContain("this.repository.listFiles(projectId, path || '.', knownHash)");
-    expect(mainTsx).toContain('const result = await service.listProjectDirectory(');
+    expect(mainTsx).toContain('request: requestHash => service.listProjectDirectory(');
     expect(mainTsx).toContain('targetProjectId,');
     expect(mainTsx).not.toContain('syncWorkspaceProject(previewWorkbench.activeProjectId');
   });
@@ -199,7 +199,9 @@ describe('web chat file peek viewer', () => {
     const mainTsx = readSourceText(mainPath);
 
     expect(mainTsx).toContain('const resolveChatFilePreviewProjectId = useCallback(');
-    expect(mainTsx).toContain('openChatFilePeek(targetFile.path, jumpLine ?? null, resolveChatFilePreviewProjectId())');
+    expect(mainTsx).toContain('const linkProjectId = resolveChatFilePreviewProjectId();');
+    expect(mainTsx).toContain('resolveChatFileLink(linkHref, linkProjectRoot)');
+    expect(mainTsx).toContain('openChatFilePeek(targetFile.path, jumpLine ?? null, linkProjectId)');
     expect(mainTsx).toContain('openChatFilePeek(path, null, resolveChatFilePreviewProjectId())');
   });
 

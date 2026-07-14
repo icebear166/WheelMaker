@@ -299,6 +299,21 @@ export function buildPreviewSearchMatches(
   return [];
 }
 
+export function previewSearchDocumentKey(tab: PreviewWorkbenchTab | null): string {
+  if (!tab) {
+    return '';
+  }
+  if (tab.type === 'file') {
+    return tab.content;
+  }
+  if (tab.type === 'prompt-diff') {
+    return tab.files
+      .map(file => `${file.path}\0${file.diff}`)
+      .join('\u0001');
+  }
+  return '';
+}
+
 function validPreviewInput(input: PreviewWorkbenchOpenInput): boolean {
   if (!input.projectId) {
     return false;

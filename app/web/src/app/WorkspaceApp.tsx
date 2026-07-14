@@ -438,6 +438,7 @@ import {
   isPromptDiffPreviewTab,
   openPreviewTab,
   previewRenderedTabs,
+  previewSearchDocumentKey,
   previewWorkbenchSnapshotFromState,
   previewWorkbenchStateFromSnapshot,
   previewTabId,
@@ -453,6 +454,15 @@ import {
   type PromptDiffPreviewTab,
 } from '../preview/previewWorkbenchState';
 import {PreviewWorkbenchChrome} from '../preview/PreviewWorkbenchChrome';
+import {
+  fetchPreviewDirectoryEntries,
+  togglePreviewDirectoryExpansion,
+} from '../preview/previewDirectoryLoader';
+import {
+  jumpToPreviewLineNow,
+  schedulePreviewLineJump,
+} from '../preview/previewLineNavigation';
+import {resolvePreviewFileLink} from '../preview/previewFileLink';
 import { FilePreviewPane } from '../file/FilePreviewPane';
 import { FileSurface } from '../file/FileSurface';
 import { GitSurface } from '../git/GitSurface';
@@ -2907,6 +2917,7 @@ export function App() {
     () => buildPreviewSearchMatches(activeWorkbenchTab, previewSearchQuery),
     [activeWorkbenchTab, previewSearchQuery],
   );
+  const previewSearchDocument = previewSearchDocumentKey(activeWorkbenchTab);
   const previewSearchUnavailableMessage =
     activeWorkbenchTab && activeWorkbenchTab.type !== 'file' && activeWorkbenchTab.type !== 'prompt-diff'
       ? 'Search is not available for this preview.'
@@ -3107,6 +3118,12 @@ export function App() {
     useState<Record<string, DirEntries>>({});
   const [chatFilePreviewLoadingDirsByProject, setChatFilePreviewLoadingDirsByProject] =
     useState<Record<string, Record<string, boolean>>>({});
+  const [chatFilePreviewDirErrorsByProject, setChatFilePreviewDirErrorsByProject] =
+    useState<Record<string, Record<string, string>>>({});
+  const [chatFilePreviewExpandedDirsByProject, setChatFilePreviewExpandedDirsByProject] =
+    useState<Record<string, string[]>>({});
+  const previewDirectoryLoadKeysRef = useRef<Set<string>>(new Set());
+  const previewSearchJumpCancelRef = useRef<(() => void) | null>(null);
   const [chatAttachmentThumbnails, setChatAttachmentThumbnails] = useState<Record<string, ChatAttachmentThumbnailState>>({});
   const chatFilePeekRef = useRef<FilePreviewTab | null>(null);
   const chatFilePeekScrollRef = useRef<HTMLDivElement | null>(null);
@@ -7809,8 +7826,28 @@ export function App() {
     : false;
   const hasPinnedFiles = pinnedFiles.length > 0;
   const fileLines = useMemo(() => fileContent.split('\n'), [fileContent]);
-  const chatFilePreviewDirEntries =
-    chatFilePreviewDirEntriesByProject[previewWorkbench.activeProjectId] ?? EMPTY_DIR_ENTRIES;
+  const activePreviewProjectId = previewWorkbench.activeProjectId;
+  const activePreviewProjectDirEntries =
+    chatFilePreviewDirEntriesByProject[activePreviewProjectId];
+  const chatFilePreviewRootLoaded = !!activePreviewProjectDirEntries &&
+    Object.prototype.hasOwnProperty.call(activePreviewProjectDirEntries, '.');
+  const chatFilePreviewDirEntries = activePreviewProjectDirEntries ?? EMPTY_DIR_ENTRIES;
+  const chatFilePreviewLoadingDirs =
+    chatFilePreviewLoadingDirsByProject[activePreviewProjectId] ?? {};
+  const chatFilePreviewDirErrors =
+    chatFilePreviewDirErrorsByProject[activePreviewProjectId] ?? {};
+  const chatFilePreviewExpandedDirs =
+    chatFilePreviewExpandedDirsByProject[activePreviewProjectId] ?? ['.'];
+  const chatFilePreviewRootState: 'ready' | 'loading' | 'error' | 'empty' =
+    !chatFilePreviewRootLoaded
+      ? chatFilePreviewDirErrors['.']
+        ? 'error'
+        : 'loading'
+      : chatFilePreviewDirEntries['.'].length > 0
+        ? 'ready'
+        : 'empty';
+  const isPreviewDirectoryExpanded = (path: string) =>
+    chatFilePreviewExpandedDirs.includes(path);
   const previewFileTreeSearchTree = useMemo(
     () => buildFileSearchResultTree(previewFileTreeSearchResults, {
       dirEntries: chatFilePreviewDirEntries,
@@ -7948,6 +7985,8 @@ export function App() {
         controller.abort();
       }
       previewFileLoadControllersRef.current.clear();
+      previewSearchJumpCancelRef.current?.();
+      previewSearchJumpCancelRef.current = null;
       if (liveRefreshTimerRef.current !== null) {
         window.clearTimeout(liveRefreshTimerRef.current);
       }
@@ -7993,35 +8032,13 @@ export function App() {
     line: number,
     options?: {content?: string},
   ) => {
-    const normalizedLine = Math.max(1, Math.trunc(line));
-    const lineElement = container.querySelector(
-      `.code-wrap [data-line-number="${normalizedLine}"]`,
-    ) as HTMLElement | null;
-    if (lineElement) {
-      const containerRect = container.getBoundingClientRect();
-      const lineRect = lineElement.getBoundingClientRect();
-      const delta =
-        lineRect.top -
-        containerRect.top -
-        container.clientHeight / 2 +
-        lineRect.height / 2;
-      const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
-      container.scrollTop = Math.min(maxScrollTop, Math.max(0, container.scrollTop + delta));
-      return;
-    }
-    const codeElement = container.querySelector(
-      '.code-wrap pre code',
-    ) as HTMLElement | null;
-    const lineHeight = codeElement
-      ? Number.parseFloat(window.getComputedStyle(codeElement).lineHeight) ||
-        Math.max(12, codeFontSize * codeLineHeight)
-      : Math.max(12, codeFontSize * codeLineHeight);
-    const contentLineCount = Math.max(1, options?.content?.split('\n').length ?? normalizedLine);
-    const maxLine = Math.max(1, Math.min(normalizedLine, contentLineCount));
-    const centeredTop =
-      (maxLine - 1) * lineHeight - container.clientHeight / 2 + lineHeight / 2;
-    const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
-    container.scrollTop = Math.min(maxScrollTop, Math.max(0, Math.round(centeredTop)));
+    jumpToPreviewLineNow({
+      container,
+      line,
+      content: options?.content ?? '',
+      mode: 'code',
+      lineHeight: Math.max(12, codeFontSize * codeLineHeight),
+    });
   };
 
   const scrollToFileLine = (line: number) => {
@@ -8038,99 +8055,50 @@ export function App() {
 
     const targetPath = pendingFileJump.path;
     const targetLine = pendingFileJump.line;
-    const maxAttempts = 16;
-    const runScroll = (attempt: number) => {
-      if (selectedFileRef.current !== targetPath) return;
-      const container = fileScrollRef.current;
-      if (!container) {
-        if (attempt < maxAttempts) {
-          window.requestAnimationFrame(() => runScroll(attempt + 1));
-        }
-        return;
-      }
-
-      const exactLineElement = container.querySelector(
-        `.code-wrap [data-line-number="${targetLine}"]`,
-      );
-      if (!exactLineElement && attempt < maxAttempts) {
-        window.requestAnimationFrame(() => runScroll(attempt + 1));
-        return;
-      }
-
-      scrollToFileLine(targetLine);
-      fileTabAnchorRef.current = targetLine;
-      setFileTabSelectedLines(new Set([targetLine]));
-      setPendingFileJump(current =>
-        current && current.path === targetPath && current.line === targetLine
-          ? null
-          : current,
-      );
-    };
-
-    window.requestAnimationFrame(() => runScroll(0));
-  }, [pendingFileJump, tab, fileLoading, selectedFile, fileContent]);
-
-  const jumpToMarkdownPreviewLineNow = (
-    container: HTMLElement,
-    line: number,
-    content: string,
-  ) => {
-    const exactTarget = container.querySelector(
-      `[data-source-line-target="true"]`,
-    ) as HTMLElement | null;
-    if (exactTarget) {
-      const containerRect = container.getBoundingClientRect();
-      const targetRect = exactTarget.getBoundingClientRect();
-      const delta =
-        targetRect.top -
-        containerRect.top -
-        container.clientHeight / 2 +
-        targetRect.height / 2;
-      const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
-      container.scrollTop = Math.min(maxScrollTop, Math.max(0, container.scrollTop + delta));
-      return;
-    }
-    const totalLines = Math.max(1, content.split('\n').length);
-    const ratio = Math.min(1, Math.max(0, (line - 1) / Math.max(1, totalLines - 1)));
-    const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
-    container.scrollTop = Math.round(maxScrollTop * ratio);
-  };
+    return schedulePreviewLineJump({
+      getContainer: () => fileScrollRef.current,
+      isCurrent: () => tab === 'file' && selectedFileRef.current === targetPath,
+      line: targetLine,
+      content: fileContent,
+      mode: 'code',
+      lineHeight: Math.max(12, codeFontSize * codeLineHeight),
+      onFinish: () => {
+        if (selectedFileRef.current !== targetPath) return;
+        fileTabAnchorRef.current = targetLine;
+        setFileTabSelectedLines(new Set([targetLine]));
+        setPendingFileJump(current =>
+          current && current.path === targetPath && current.line === targetLine
+            ? null
+            : current,
+        );
+      },
+    });
+  }, [
+    pendingFileJump,
+    tab,
+    fileLoading,
+    selectedFile,
+    fileContent,
+    codeFontSize,
+    codeLineHeight,
+  ]);
 
   useEffect(() => {
     if (!chatFilePeek || chatFilePeek.loading || chatFilePeek.error || !chatFilePeek.targetLine) return;
     const targetLine = chatFilePeek.targetLine;
     const targetPath = chatFilePeek.path;
     const targetContent = chatFilePeek.content;
-    const isMarkdownPreview = isMarkdownPath(targetPath);
     const isHtmlPreview = isHtmlPath(targetPath);
     const isImagePreview = isImageFile(targetPath, chatFilePeek.info?.mimeType);
     if (isHtmlPreview || isImagePreview) return;
-
-    const maxAttempts = 16;
-    const runJump = (attempt: number) => {
-      if (chatFilePeekRef.current?.path !== targetPath) return;
-      const container = chatFilePeekScrollRef.current;
-      if (!container) {
-        if (attempt < maxAttempts) {
-          window.requestAnimationFrame(() => runJump(attempt + 1));
-        }
-        return;
-      }
-      if (isMarkdownPreview) {
-        jumpToMarkdownPreviewLineNow(container, targetLine, targetContent);
-        return;
-      }
-      const exactLineElement = container.querySelector(
-        `.code-wrap [data-line-number="${targetLine}"]`,
-      );
-      if (!exactLineElement && attempt < maxAttempts) {
-        window.requestAnimationFrame(() => runJump(attempt + 1));
-        return;
-      }
-      jumpToFileLineNow(container, targetLine, {content: targetContent});
-    };
-
-    window.requestAnimationFrame(() => runJump(0));
+    return schedulePreviewLineJump({
+      getContainer: () => chatFilePeekScrollRef.current,
+      isCurrent: () => chatFilePeekRef.current?.path === targetPath,
+      line: targetLine,
+      content: targetContent,
+      mode: isMarkdownPath(targetPath) ? 'markdown' : 'code',
+      lineHeight: Math.max(12, codeFontSize * codeLineHeight),
+    });
   }, [
     chatFilePeek?.path,
     chatFilePeek?.targetLine,
@@ -8138,6 +8106,8 @@ export function App() {
     chatFilePeek?.loading,
     chatFilePeek?.error,
     chatFilePeek?.info?.mimeType,
+    codeFontSize,
+    codeLineHeight,
   ]);
 
   const navigateSearchMatch = (delta: 1 | -1) => {
@@ -8237,9 +8207,14 @@ export function App() {
   const loadPreviewDirectory = async (projectId: string, path: string) => {
     const targetProjectId = projectId;
     if (!targetProjectId) return;
-    const loadingForProject = chatFilePreviewLoadingDirsByProject[targetProjectId] ?? {};
-    if (loadingForProject[path]) return;
+    const loadKey = fileMemoryCacheKey(targetProjectId, path);
+    if (previewDirectoryLoadKeysRef.current.has(loadKey)) return;
+    previewDirectoryLoadKeysRef.current.add(loadKey);
     const fileCacheDisabled = disableFileCache === true;
+    setChatFilePreviewDirErrorsByProject(prev => ({
+      ...prev,
+      [targetProjectId]: {...(prev[targetProjectId] ?? {}), [path]: ''},
+    }));
     setChatFilePreviewLoadingDirsByProject(prev => ({
       ...prev,
       [targetProjectId]: {...(prev[targetProjectId] ?? {}), [path]: true},
@@ -8248,36 +8223,19 @@ export function App() {
       const persistedCache = !fileCacheDisabled
         ? workspaceStore.getCachedDirectory(targetProjectId, path)
         : null;
-      const knownHash = fileCacheDisabled ? '' :
-        dirHashRef.current[fileMemoryCacheKey(targetProjectId, path)] || persistedCache?.hash || '';
-      const result = await service.listProjectDirectory(
-        targetProjectId,
-        path,
-        fileCacheDisabled ? undefined : knownHash || undefined,
-      );
-
-      if (result.notModified) {
-        const cachedEntries = persistedCache?.entries;
-        if (Array.isArray(cachedEntries)) {
-          setChatFilePreviewDirEntriesByProject(prev => ({
-            ...prev,
-            [targetProjectId]: {
-              ...(prev[targetProjectId] ?? {}),
-              [path]: sortEntries(cachedEntries),
-            },
-          }));
-        }
-        if (result.hash) {
-          if (!fileCacheDisabled) {
-            dirHashRef.current[fileMemoryCacheKey(targetProjectId, path)] = result.hash;
-          }
-          if (!fileCacheDisabled && Array.isArray(cachedEntries)) {
-            workspaceStore.cacheDirectory(targetProjectId, path, result.hash, cachedEntries);
-          }
-        }
-        return;
-      }
-
+      const cachedEntries = persistedCache?.entries;
+      const knownHash = !fileCacheDisabled && cachedEntries
+        ? dirHashRef.current[loadKey] || persistedCache?.hash || ''
+        : '';
+      const result = await fetchPreviewDirectoryEntries({
+        cachedEntries,
+        knownHash,
+        request: requestHash => service.listProjectDirectory(
+          targetProjectId,
+          path,
+          requestHash,
+        ),
+      });
       const entries = sortEntries(result.entries);
       setChatFilePreviewDirEntriesByProject(prev => ({
         ...prev,
@@ -8288,10 +8246,20 @@ export function App() {
       }));
       const nextHash = result.hash || persistedCache?.hash || '';
       if (!fileCacheDisabled && nextHash) {
-        dirHashRef.current[fileMemoryCacheKey(targetProjectId, path)] = nextHash;
+        dirHashRef.current[loadKey] = nextHash;
+      }
+      if (!fileCacheDisabled) {
         workspaceStore.cacheDirectory(targetProjectId, path, nextHash, entries);
       }
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      setChatFilePreviewDirErrorsByProject(prev => ({
+        ...prev,
+        [targetProjectId]: {...(prev[targetProjectId] ?? {}), [path]: reason},
+      }));
+      throw err;
     } finally {
+      previewDirectoryLoadKeysRef.current.delete(loadKey);
       setChatFilePreviewLoadingDirsByProject(prev => {
         const projectLoading = {...(prev[targetProjectId] ?? {})};
         delete projectLoading[path];
@@ -8306,17 +8274,22 @@ export function App() {
   const togglePreviewDirectory = async (path: string) => {
     const targetProjectId = previewWorkbench.activeProjectId;
     if (!targetProjectId) return;
-    if (isExpanded(path)) {
-      setExpandedDirs(prev => prev.filter(item => item !== path));
+    const expanded = chatFilePreviewExpandedDirsByProject[targetProjectId] ?? ['.'];
+    setChatFilePreviewExpandedDirsByProject(prev =>
+      togglePreviewDirectoryExpansion(prev, targetProjectId, path),
+    );
+    if (expanded.includes(path)) {
       return;
     }
-    setExpandedDirs(prev => [...prev, path]);
     const projectEntries = chatFilePreviewDirEntriesByProject[targetProjectId] ?? {};
     if (!projectEntries[path]) {
       try {
         await loadPreviewDirectory(targetProjectId, path);
       } catch (err) {
-        setExpandedDirs(prev => prev.filter(item => item !== path));
+        setChatFilePreviewExpandedDirsByProject(prev => ({
+          ...prev,
+          [targetProjectId]: (prev[targetProjectId] ?? ['.']).filter(item => item !== path),
+        }));
         const reason = err instanceof Error ? err.message : String(err);
         setError(`Failed to load directory "${path}": ${reason}`);
       }
@@ -8324,14 +8297,22 @@ export function App() {
   };
 
   useEffect(() => {
+    if (!previewWorkbench.treeOpen) return;
     const targetProjectId = previewWorkbench.activeProjectId;
     if (!targetProjectId) return;
     if (chatFilePreviewDirEntriesByProject[targetProjectId]?.['.']) return;
-    loadPreviewDirectory(targetProjectId, '.').catch(err => {
-      const reason = err instanceof Error ? err.message : String(err);
-      setError(`Failed to load project files: ${reason}`);
-    });
-  }, [previewWorkbench.activeProjectId, chatFilePreviewDirEntriesByProject]);
+    loadPreviewDirectory(targetProjectId, '.').catch(() => undefined);
+  }, [
+    previewWorkbench.activeProjectId,
+    previewWorkbench.treeOpen,
+    chatFilePreviewDirEntriesByProject,
+  ]);
+
+  const retryPreviewRootDirectory = () => {
+    const targetProjectId = previewWorkbench.activeProjectId;
+    if (!targetProjectId) return;
+    loadPreviewDirectory(targetProjectId, '.').catch(() => undefined);
+  };
 
   const readSelectedFile = async (path: string, options?: {restoreScroll?: boolean; silent?: boolean}) => {
     if (!path) return;
@@ -17727,115 +17708,9 @@ export function App() {
 
   const resolveChatFileLink = (
     href: string,
-  ): { path: string; line: number | null } | null => {
-    const rawHref = href.trim();
-    if (!rawHref) return null;
-    const isWindowsDrivePath = /^\/?[a-zA-Z]:/.test(rawHref);
-
-    const decodePath = (value: string) => {
-      try {
-        return decodeURIComponent(value);
-      } catch {
-        return value;
-      }
-    };
-
-    let pathCandidate = rawHref;
-    if (/^\/?[a-zA-Z]:[^\\/]/.test(pathCandidate)) {
-      const hasLeadingSlash = pathCandidate.startsWith('/');
-      const prefix = hasLeadingSlash
-        ? pathCandidate.slice(0, 3)
-        : pathCandidate.slice(0, 2);
-      const suffix = hasLeadingSlash
-        ? pathCandidate.slice(3)
-        : pathCandidate.slice(2);
-      pathCandidate = `${prefix}/${suffix}`;
-    }
-    if (/^file:\/\//i.test(rawHref)) {
-      try {
-        const parsed = new URL(rawHref);
-        pathCandidate = `${parsed.hostname || ''}${decodePath(
-          parsed.pathname,
-        )}`;
-      } catch {
-        return null;
-      }
-    } else if (/^vscode:\/\//i.test(rawHref)) {
-      try {
-        const parsed = new URL(rawHref);
-        if (parsed.hostname.toLowerCase() !== 'file') return null;
-        pathCandidate = decodePath(parsed.pathname);
-      } catch {
-        return null;
-      }
-    } else if (isWindowsDrivePath) {
-      pathCandidate = decodePath(rawHref);
-    } else if (/^[a-z][a-z0-9+.-]*:/i.test(rawHref)) {
-      return null;
-    } else {
-      pathCandidate = decodePath(rawHref);
-    }
-
-    const normalizeSlashes = (value: string) => value.replaceAll('\\', '/');
-    let normalized = normalizeSlashes(pathCandidate.trim());
-    if (!normalized) return null;
-
-    let line: number | null = null;
-    const hashMatch = /#L(\d+)(?:C\d+)?$/i.exec(normalized);
-    if (hashMatch) {
-      const parsedLine = Number.parseInt(hashMatch[1], 10);
-      if (Number.isFinite(parsedLine) && parsedLine > 0) {
-        line = parsedLine;
-      }
-      normalized = normalized.slice(0, hashMatch.index);
-    }
-    const suffixLineMatch = /:(\d+)(?::\d+)?$/.exec(normalized);
-    if (suffixLineMatch) {
-      const parsedLine = Number.parseInt(suffixLineMatch[1], 10);
-      if (Number.isFinite(parsedLine) && parsedLine > 0) {
-        line = parsedLine;
-      }
-      normalized = normalized.slice(0, suffixLineMatch.index);
-    }
-    normalized = normalized.trim();
-    if (!normalized) return null;
-    if (/^(\/\/|[a-z]+:\/\/)/i.test(normalized)) {
-      return null;
-    }
-
-    const root = normalizeSlashes(currentProject?.path ?? '').replace(
-      /\/+$/,
-      '',
-    );
-    const rootLower = root.toLowerCase();
-    let candidateLower = normalized.toLowerCase();
-    if (root && candidateLower === rootLower) {
-      return null;
-    }
-
-    if (/^\/[a-z]:\//i.test(normalized)) {
-      normalized = normalized.slice(1);
-      candidateLower = normalized.toLowerCase();
-    }
-
-    let resolvedPath = normalized;
-    if (root) {
-      const normalizedRootWithSlash = `${rootLower}/`;
-      if (candidateLower.startsWith(normalizedRootWithSlash)) {
-        resolvedPath = normalized.slice(root.length + 1);
-      }
-    }
-
-    resolvedPath = resolvedPath
-      .replace(/^\.\/+/, '')
-      .replace(/^\/+/, '')
-      .replace(/\/+/g, '/');
-    if (!resolvedPath || resolvedPath.startsWith('../')) {
-      return null;
-    }
-
-    return { path: resolvedPath, line };
-  };
+    projectRoot = currentProject?.path ?? '',
+  ): { path: string; line: number | null } | null =>
+    resolvePreviewFileLink(href, projectRoot);
   const chatMarkdownUrlTransform = useCallback((value: string) => {
     const trimmed = value.trim();
     if (!trimmed) return '';
@@ -17903,7 +17778,13 @@ export function App() {
       ),
       a: ({ href, children, ...rest }) => {
         const linkHref = typeof href === 'string' ? href : '';
-        const targetFile = linkHref ? resolveChatFileLink(linkHref) : null;
+        const linkProjectId = resolveChatFilePreviewProjectId();
+        const linkProjectRoot = projects.find(
+          project => project.projectId === linkProjectId,
+        )?.path ?? currentProject?.path ?? '';
+        const targetFile = linkHref
+          ? resolveChatFileLink(linkHref, linkProjectRoot)
+          : null;
         const relayLocalUrl = parsePortRelayLocalHttpUrl(linkHref);
         const isFileLink = !!targetFile;
         const isWindowsLocalPath = /^\/?[a-zA-Z]:/.test(linkHref.trim());
@@ -17940,7 +17821,7 @@ export function App() {
                 return;
               }
               event.preventDefault();
-              openChatFilePeek(targetFile.path, jumpLine ?? null, resolveChatFilePreviewProjectId());
+              openChatFilePeek(targetFile.path, jumpLine ?? null, linkProjectId);
             }}
           >
             <>
@@ -17957,6 +17838,7 @@ export function App() {
       currentProject?.path,
       openChatFilePeek,
       openChatPortRelayLink,
+      projects,
       renderChatInlineCode,
       resolveChatFilePreviewProjectId,
     ],
@@ -19985,15 +19867,32 @@ export function App() {
 
   const scrollToPreviewSearchMatch = (match: PreviewSearchMatch) => {
     const tab = activePreviewTab(previewWorkbenchRef.current);
-    const container = chatFilePeekScrollRef.current;
-    if (!tab || !container) {
+    if (!tab) {
       return;
     }
+    previewSearchJumpCancelRef.current?.();
+    previewSearchJumpCancelRef.current = null;
     if (match.kind === 'file') {
       if (tab.type !== 'file') {
         return;
       }
-      jumpToFileLineNow(container, match.line, {content: tab.content});
+      if (isHtmlPath(tab.path)) {
+        setPreviewWorkbench(current =>
+          updatePreviewTab(current, tab.projectId, tab.id, item =>
+            item.type === 'file' ? {...item, targetLine: match.line} : item,
+          ),
+        );
+        chatPeekAnchorRef.current = match.line;
+        return;
+      }
+      previewSearchJumpCancelRef.current = schedulePreviewLineJump({
+        getContainer: () => chatFilePeekScrollRef.current,
+        isCurrent: () => activePreviewTab(previewWorkbenchRef.current)?.id === tab.id,
+        line: match.line,
+        content: tab.content,
+        mode: isMarkdownPath(tab.path) ? 'markdown' : 'code',
+        lineHeight: Math.max(12, codeFontSize * codeLineHeight),
+      });
       chatPeekAnchorRef.current = match.line;
       setChatPeekSelectedLines(new Set([match.line]));
       return;
@@ -20013,23 +19912,45 @@ export function App() {
           : item,
       ),
     );
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        const currentContainer = chatFilePeekScrollRef.current;
-        if (!currentContainer) {
-          return;
-        }
+    previewSearchJumpCancelRef.current = schedulePreviewLineJump({
+      getContainer: () => chatFilePeekScrollRef.current,
+      isCurrent: () => activePreviewTab(previewWorkbenchRef.current)?.id === tab.id,
+      line: match.line,
+      content: '',
+      mode: 'code',
+      lineHeight: Math.max(12, codeFontSize * codeLineHeight),
+      approximate: false,
+      resolveTarget: rawContainer => {
+        const currentContainer = rawContainer as HTMLElement;
         const fileNode = Array.from(
           currentContainer.querySelectorAll<HTMLElement>('.chat-prompt-diff-file'),
         ).find(node => node.dataset.previewDiffPath === match.path);
-        if (!fileNode) {
-          return;
-        }
-        const lineNode = fileNode.querySelector<HTMLElement>(
+        return fileNode?.querySelector<HTMLElement>(
           `.code-wrap [data-line-number="${match.line}"]`,
+        ) ?? null;
+      },
+      onMiss: rawContainer => {
+        const currentContainer = rawContainer as HTMLElement;
+        const fileNode = Array.from(
+          currentContainer.querySelectorAll<HTMLElement>('.chat-prompt-diff-file'),
+        ).find(node => node.dataset.previewDiffPath === match.path);
+        if (!fileNode) return;
+        const codeNode = fileNode.querySelector<HTMLElement>('.code-wrap') ?? fileNode;
+        const containerRect = currentContainer.getBoundingClientRect();
+        const codeRect = codeNode.getBoundingClientRect();
+        const renderedLineHeight = Math.max(12, codeFontSize * codeLineHeight);
+        const targetTop =
+          currentContainer.scrollTop +
+          codeRect.top -
+          containerRect.top +
+          (match.line - 1) * renderedLineHeight -
+          currentContainer.clientHeight / 2;
+        const maxScrollTop = Math.max(
+          0,
+          currentContainer.scrollHeight - currentContainer.clientHeight,
         );
-        (lineNode ?? fileNode).scrollIntoView({block: 'center', inline: 'nearest'});
-      });
+        currentContainer.scrollTop = Math.min(maxScrollTop, Math.max(0, targetTop));
+      },
     });
   };
 
@@ -20047,7 +19968,12 @@ export function App() {
     window.requestAnimationFrame(() => {
       scrollToPreviewSearchMatch(previewSearchMatches[0]);
     });
-  }, [previewSearchMatches, previewSearchOpen]);
+  }, [
+    previewSearchOpen,
+    previewSearchQuery,
+    previewSearchDocument,
+    activeWorkbenchTab?.id,
+  ]);
 
   useEffect(() => {
     if (!quickFileOpen) {
@@ -20503,8 +20429,6 @@ export function App() {
       />
   ) : null;
   const previewWorkbenchActiveTab = activeWorkbenchTab;
-  const chatFilePreviewLoadingDirs =
-    chatFilePreviewLoadingDirsByProject[previewWorkbench.activeProjectId] ?? {};
   const previewFileTreeDepthIndent = 8;
   const scrollLocatedPreviewFileIntoView = () => {
     window.requestAnimationFrame(() => {
@@ -20525,14 +20449,14 @@ export function App() {
     const ancestors = previewFileAncestorDirs(targetPath);
     setPreviewWorkbench(current => ({...current, treeOpen: true}));
     updatePreviewFileTreeSearchQuery('');
-    setExpandedDirs(current => {
-      const next = [...current];
+    setChatFilePreviewExpandedDirsByProject(current => {
+      const next = [...(current[targetProjectId] ?? ['.'])];
       ancestors.forEach(path => {
         if (!next.includes(path)) {
           next.push(path);
         }
       });
-      return next;
+      return {...current, [targetProjectId]: next};
     });
     const projectEntries = chatFilePreviewDirEntriesByProject[targetProjectId] ?? {};
     const missingAncestors = ancestors.filter(path => !projectEntries[path]);
@@ -20640,12 +20564,15 @@ export function App() {
           selectedFile={chatFilePeek?.path ?? ''}
           setSelectedFile={setSelectedFile}
           setDrawerOpen={() => undefined}
-          isExpanded={isExpanded}
+          isExpanded={isPreviewDirectoryExpanded}
           toggleDirectory={path => {
             togglePreviewDirectory(path).catch(() => undefined);
           }}
           resolveFileIcon={resolveFileIcon}
           depthIndent={previewFileTreeDepthIndent}
+          rootState={chatFilePreviewRootState}
+          rootError={chatFilePreviewDirErrors['.']}
+          onRetryRoot={retryPreviewRootDirectory}
           onFileSelect={path => {
             openChatFilePeek(path, null, previewWorkbench.activeProjectId);
           }}
@@ -20699,6 +20626,8 @@ export function App() {
     });
   };
   const closePreviewSearch = () => {
+    previewSearchJumpCancelRef.current?.();
+    previewSearchJumpCancelRef.current = null;
     setPreviewSearchOpen(false);
     setPreviewSearchQuery('');
     setPreviewSearchActiveIndex(0);

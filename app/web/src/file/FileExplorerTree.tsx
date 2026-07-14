@@ -29,6 +29,9 @@ type FileExplorerTreeProps = WorkspaceProjectSelectorProps & {
   resolveFileIcon: (name: string) => FileResolvedIcon;
   onFileSelect?: (path: string) => void;
   depthIndent?: number;
+  rootState?: 'ready' | 'loading' | 'error' | 'empty';
+  rootError?: string;
+  onRetryRoot?: () => void;
 };
 
 export function WorkspaceProjectSelector({
@@ -104,6 +107,9 @@ export function FileExplorerTree({
   resolveFileIcon,
   onFileSelect,
   depthIndent = 14,
+  rootState = 'ready',
+  rootError = '',
+  onRetryRoot,
 }: FileExplorerTreeProps) {
   const renderFileTree = (path: string, depth: number): React.ReactNode => {
     const entries = dirEntries[path] ?? [];
@@ -178,7 +184,22 @@ export function FileExplorerTree({
         />
       ) : null}
       {showSectionTitle ? <div className="section-title">EXPLORER</div> : null}
-      <div className="list">{renderFileTree('.', 0)}</div>
+      <div className="list">
+        {rootState === 'loading' ? (
+          <div className="file-tree-root-state" role="status">Loading files...</div>
+        ) : rootState === 'error' ? (
+          <div className="file-tree-root-state error" role="alert">
+            <span>{rootError || 'Failed to load files.'}</span>
+            {onRetryRoot ? (
+              <button type="button" onClick={onRetryRoot}>Retry</button>
+            ) : null}
+          </div>
+        ) : rootState === 'empty' ? (
+          <div className="file-tree-root-state" role="status">No files found</div>
+        ) : (
+          renderFileTree('.', 0)
+        )}
+      </div>
     </>
   );
 }

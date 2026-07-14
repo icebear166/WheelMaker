@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import { ShikiCodeBlock } from './ShikiCodeBlock';
 import type { CodeFontId, CodeThemeId } from './shikiSettings';
+import {markdownSourceTargetProps} from '../preview/previewLineNavigation';
 
 type ThemeMode = 'dark' | 'light';
 type MarkdownRemarkPlugins = NonNullable<React.ComponentProps<typeof ReactMarkdown>['remarkPlugins']>;
@@ -274,34 +275,6 @@ const markdownPreviewPropsEqual = (
   prev.lineNumbers === next.lineNumbers &&
   prev.targetLine === next.targetLine;
 
-function sourceLineRange(node: unknown): {start: number; end: number} | null {
-  const position = (node as {
-    position?: {
-      start?: {line?: unknown};
-      end?: {line?: unknown};
-    };
-  } | null)?.position;
-  const start = Number(position?.start?.line);
-  const end = Number(position?.end?.line);
-  if (!Number.isFinite(start) || start <= 0) return null;
-  return {
-    start,
-    end: Number.isFinite(end) && end >= start ? end : start,
-  };
-}
-
-function markdownSourceTargetProps(node: unknown, targetLine?: number | null) {
-  if (!targetLine) return {};
-  const range = sourceLineRange(node);
-  if (!range) return {};
-  const isTarget = targetLine >= range.start && targetLine <= range.end;
-  return {
-    'data-source-line-start': String(range.start),
-    'data-source-line-end': String(range.end),
-    'data-source-line-target': isTarget ? 'true' : undefined,
-  };
-}
-
 function scrollHtmlPreviewFrameToLine(
   frame: HTMLIFrameElement,
   content: string,
@@ -343,7 +316,14 @@ export const MarkdownPreview = React.memo(function MarkdownPreview({
 }: MarkdownPreviewProps) {
   const markdownComponents = useMemo<Components>(
     () => ({
-      pre: markdownPreRenderer,
+      pre: ({node, children}) => (
+        <div
+          className="markdown-source-code-block"
+          {...markdownSourceTargetProps(node, targetLine)}
+        >
+          {children}
+        </div>
+      ),
       code: ({ className, children }) =>
         markdownCodeRenderer({
           className,
@@ -442,9 +422,18 @@ export const HtmlPreview = React.memo(function HtmlPreview({
   content,
   targetLine,
 }: HtmlPreviewProps) {
+  const frameRef = useRef<HTMLIFrameElement | null>(null);
+
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame || !targetLine) return;
+    scrollHtmlPreviewFrameToLine(frame, content, targetLine);
+  }, [content, targetLine]);
+
   return (
     <div className="html-preview">
       <iframe
+        ref={frameRef}
         className="html-preview-frame"
         title="HTML preview"
         sandbox="allow-scripts"
