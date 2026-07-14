@@ -193,6 +193,7 @@ import {
 import {
   isChatUserScrollLocked,
   nextChatUserScrollLockUntil,
+  resolveChatKeyboardInset,
   resolveChatKeyboardInsetScrollAction,
   resolveChatSessionReadWindowUpdate,
   resolveChatScrollToBottomVisibility,
@@ -5571,11 +5572,11 @@ export function App() {
     }
     let raf = 0;
     const updateInset = () => {
-      const bottomGap = Math.max(
-        0,
-        Math.round(window.innerHeight - (viewport.height + viewport.offsetTop)),
-      );
-      const nextInset = bottomGap >= 72 ? bottomGap : 0;
+      const nextInset = resolveChatKeyboardInset({
+        windowInnerHeight: window.innerHeight,
+        visualViewportHeight: viewport.height,
+        visualViewportOffsetTop: viewport.offsetTop,
+      });
       setChatKeyboardInset(prev => (prev === nextInset ? prev : nextInset));
     };
     const scheduleUpdate = () => {
@@ -5612,11 +5613,11 @@ export function App() {
     }
     let raf = 0;
     const updateOffset = () => {
-      const bottomGap = Math.max(
-        0,
-        Math.round(window.innerHeight - (viewport.height + viewport.offsetTop)),
-      );
-      const nextOffset = bottomGap >= 72 ? bottomGap : 0;
+      const nextOffset = resolveChatKeyboardInset({
+        windowInnerHeight: window.innerHeight,
+        visualViewportHeight: viewport.height,
+        visualViewportOffsetTop: viewport.offsetTop,
+      });
       setFloatingKeyboardOffset(prev => (prev === nextOffset ? prev : nextOffset));
     };
     const scheduleUpdate = () => {

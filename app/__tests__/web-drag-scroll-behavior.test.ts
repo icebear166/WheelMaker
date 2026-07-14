@@ -4,6 +4,7 @@ import {
   CHAT_USER_SCROLL_LOCK_MS,
   isChatUserScrollLocked,
   nextChatUserScrollLockUntil,
+  resolveChatKeyboardInset,
   resolveChatKeyboardInsetScrollAction,
   resolveChatSessionReadWindowUpdate,
   resolveChatScrollBottomTop,
@@ -140,6 +141,29 @@ describe('web drag scroll behavior', () => {
     expect(mainTsx).toContain("if (keyboardInsetScrollAction === 'immediate') {");
     expect(mainTsx).toContain("if (keyboardInsetScrollAction === 'deferred') {");
     expect(mainTsx).toContain('CHAT_KEYBOARD_INSET_SETTLE_DELAY_MS');
+  });
+
+  test('keeps mobile keyboard inset stable when iOS pans the visual viewport', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
+
+    expect(resolveChatKeyboardInset({
+      windowInnerHeight: 844,
+      visualViewportHeight: 520,
+      visualViewportOffsetTop: 0,
+    })).toBe(324);
+    expect(resolveChatKeyboardInset({
+      windowInnerHeight: 844,
+      visualViewportHeight: 520,
+      visualViewportOffsetTop: 120,
+    })).toBe(324);
+    expect(resolveChatKeyboardInset({
+      windowInnerHeight: 844,
+      visualViewportHeight: 808,
+      visualViewportOffsetTop: 0,
+    })).toBe(0);
+    expect(mainTsx).toContain('resolveChatKeyboardInset({');
+    expect(mainTsx).not.toContain('window.innerHeight - (viewport.height + viewport.offsetTop)');
   });
 
   test('settles programmatic chat bottom scrolling against the actual scroll parent', () => {

@@ -22,8 +22,32 @@ export function shouldAutoScrollChatToBottom(input: {
 
 export type ChatKeyboardInsetScrollAction = 'none' | 'immediate' | 'deferred';
 
+export const CHAT_KEYBOARD_INSET_OPEN_THRESHOLD_PX = 72;
+
 function normalizeChatKeyboardInset(value: number): number {
   return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
+}
+
+export function resolveChatKeyboardInset(input: {
+  windowInnerHeight: number;
+  visualViewportHeight: number;
+  visualViewportOffsetTop: number;
+  openThreshold?: number;
+}): number {
+  const windowInnerHeight = normalizeChatKeyboardInset(input.windowInnerHeight);
+  const visualViewportHeight = normalizeChatKeyboardInset(input.visualViewportHeight);
+  const visualViewportOffsetTop = normalizeChatKeyboardInset(input.visualViewportOffsetTop);
+  const openThreshold = normalizeChatKeyboardInset(input.openThreshold ?? CHAT_KEYBOARD_INSET_OPEN_THRESHOLD_PX);
+  const visualViewportBottomGap = Math.max(
+    0,
+    windowInnerHeight - (visualViewportHeight + visualViewportOffsetTop),
+  );
+  const visualViewportHeightGap = Math.max(
+    0,
+    windowInnerHeight - visualViewportHeight,
+  );
+  const inset = Math.max(visualViewportBottomGap, visualViewportHeightGap);
+  return inset >= openThreshold ? inset : 0;
 }
 
 export function resolveChatKeyboardInsetScrollAction(input: {
