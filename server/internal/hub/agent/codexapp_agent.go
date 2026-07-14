@@ -284,7 +284,6 @@ func (r *codexappRuntime) close() error {
 	r.mu.Unlock()
 	for _, conn := range conns {
 		conn.failActivePrompt(r.closeErr)
-		conn.failActiveCompact(r.closeErr)
 	}
 	if r.transport == nil {
 		return nil
@@ -438,10 +437,6 @@ type codexappConn struct {
 	activeTurnID  string
 	lastTurnID    string
 	promptDone    chan codexappPromptResult
-	compactDone   chan SessionCompactResult
-	compactTurnID string
-	compactItemID string
-	compactGen    uint64
 	startedTools  map[string]bool
 
 	pendingPromptStops   map[string]string
@@ -456,7 +451,6 @@ type codexappPromptResult struct {
 }
 
 var codexappCancelCompletionTimeout = 3 * time.Second
-var codexappCompactCompletionTimeout = 2 * time.Minute
 
 func newCodexappConnWithRuntime(runtime *codexappRuntime, cwd string) *codexappConn {
 	return newCodexappConnWithRuntimeAndProject(runtime, cwd, "")
@@ -767,41 +761,6 @@ func (c *codexappConn) sendThreadArchiveState(ctx context.Context, sessionID str
 	return c.runtime.request(ctx, method, appServerThreadArchiveParams{ThreadID: threadID}, &ignored)
 }
 
-func (c *codexappConn) SessionStatus(ctx context.Context) (protocol.SessionActionStatusResult, error) {
-	var response appServerGetAccountRateLimitsResponse
-	if err := c.runtime.request(ctx, "account/rateLimits/read", nil, &response); err != nil {
-		return protocol.SessionActionStatusResult{}, err
-	}
-	return normalizeCodexappRateLimits(response, time.Now()), nil
-}
-
-func (c *codexappConn) CompactSession(ctx context.Context, sessionID string) (<-chan SessionCompactResult, error) {
-	threadID := firstNonEmptyString(c.runtimeThreadIDForSession(sessionID), codexappMappedThreadID(sessionID))
-	if strings.TrimSpace(threadID) == "" {
-		return nil, errors.New("codexapp compact requires sessionId")
-	}
-	done := make(chan SessionCompactResult, 1)
-	c.mu.Lock()
-	if c.promptDone != nil || c.compactDone != nil {
-		c.mu.Unlock()
-		return nil, ErrSessionBusy
-	}
-	c.compactGen++
-	generation := c.compactGen
-	c.compactDone = done
-	c.compactTurnID = ""
-	c.compactItemID = ""
-	c.mu.Unlock()
-
-	var ignored json.RawMessage
-	if err := c.runtime.request(ctx, "thread/compact/start", appServerThreadCompactStartParams{ThreadID: threadID}, &ignored); err != nil {
-		c.clearCompactDone(done)
-		return nil, err
-	}
-	go c.waitForCompactTimeout(done, generation)
-	return done, nil
-}
-
 func (c *codexappConn) sendSessionPrompt(ctx context.Context, p protocol.SessionPromptParams, result any) error {
 	threadID := c.runtimeThreadIDForSession(p.SessionID)
 	if threadID == "" {
@@ -911,9 +870,6 @@ func (c *codexappConn) handleAppServerNotification(method string, params json.Ra
 	case "item/started", "item/completed":
 		var p appServerItemEventParams
 		if json.Unmarshal(params, &p) == nil && p.ThreadID != "" {
-			if c.handleCompactionItem(p, method == "item/completed") {
-				return
-			}
 			c.emitItemUpdate(p, method == "item/completed")
 		}
 	case "item/commandExecution/outputDelta", "item/fileChange/outputDelta":
@@ -965,23 +921,12 @@ func (c *codexappConn) handleAppServerNotification(method string, params json.Ra
 	case "turn/started":
 		var p appServerTurnEventParams
 		if json.Unmarshal(params, &p) == nil {
-			if c.markCompactTurn(p.turnID()) {
-				return
-			}
 			c.setActiveTurnID(p.turnID())
 		}
 	case "turn/completed":
 		var p appServerTurnCompletedParams
 		if json.Unmarshal(params, &p) == nil {
-			if c.completeCompactTurn(p.turnID(), p.status()) {
-				return
-			}
 			c.completePrompt(p.turnID(), codexappStopReason(p.status()))
-		}
-	case "thread/compacted":
-		var p appServerTurnEventParams
-		if json.Unmarshal(params, &p) == nil {
-			c.completeCompact(nil)
 		}
 	case "thread/name/updated":
 		var p appServerThreadNameUpdatedParams
@@ -1011,114 +956,6 @@ func (c *codexappConn) handleAppServerNotification(method string, params json.Ra
 			})
 		}
 	}
-}
-
-func (c *codexappConn) handleCompactionItem(p appServerItemEventParams, completed bool) bool {
-	if p.Item.Type != "contextCompaction" {
-		return false
-	}
-	c.mu.Lock()
-	if c.compactDone == nil {
-		c.mu.Unlock()
-		return false
-	}
-	if strings.TrimSpace(p.TurnID) != "" {
-		c.compactTurnID = strings.TrimSpace(p.TurnID)
-	}
-	if strings.TrimSpace(p.Item.ID) != "" {
-		c.compactItemID = strings.TrimSpace(p.Item.ID)
-	}
-	c.mu.Unlock()
-	if completed {
-		status := strings.ToLower(strings.TrimSpace(p.Item.Status))
-		if status == "failed" || status == "error" || status == "cancelled" || status == "canceled" || status == "declined" {
-			c.completeCompact(fmt.Errorf("context compaction %s", status))
-		} else {
-			c.completeCompact(nil)
-		}
-	}
-	return true
-}
-
-func (c *codexappConn) markCompactTurn(turnID string) bool {
-	turnID = strings.TrimSpace(turnID)
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.compactDone == nil {
-		return false
-	}
-	if turnID != "" {
-		c.compactTurnID = turnID
-	}
-	return true
-}
-
-func (c *codexappConn) completeCompactTurn(turnID string, status string) bool {
-	turnID = strings.TrimSpace(turnID)
-	c.mu.Lock()
-	pending := c.compactDone != nil
-	expectedTurnID := c.compactTurnID
-	c.mu.Unlock()
-	if !pending || (expectedTurnID != "" && turnID != "" && expectedTurnID != turnID) {
-		return false
-	}
-	normalized := strings.ToLower(strings.TrimSpace(status))
-	if normalized == "failed" || normalized == "error" || normalized == "cancelled" || normalized == "canceled" {
-		c.completeCompact(fmt.Errorf("context compaction %s", normalized))
-	} else {
-		c.completeCompact(nil)
-	}
-	return true
-}
-
-func (c *codexappConn) waitForCompactTimeout(done chan SessionCompactResult, generation uint64) {
-	timer := time.NewTimer(codexappCompactCompletionTimeout)
-	defer timer.Stop()
-	select {
-	case <-timer.C:
-		c.mu.Lock()
-		matches := c.compactDone == done && c.compactGen == generation
-		c.mu.Unlock()
-		if matches {
-			c.completeCompact(errors.New("context compaction timed out"))
-		}
-	case <-c.runtime.done:
-		c.failActiveCompact(errors.New("codexapp runtime stopped"))
-	}
-}
-
-func (c *codexappConn) completeCompact(err error) {
-	c.mu.Lock()
-	done := c.compactDone
-	if done == nil {
-		c.mu.Unlock()
-		return
-	}
-	c.compactDone = nil
-	c.compactTurnID = ""
-	c.compactItemID = ""
-	c.compactGen++
-	c.mu.Unlock()
-	done <- SessionCompactResult{Err: err}
-	close(done)
-}
-
-func (c *codexappConn) failActiveCompact(err error) {
-	if err == nil {
-		err = errors.New("codexapp runtime stopped")
-	}
-	c.completeCompact(err)
-}
-
-func (c *codexappConn) clearCompactDone(done chan SessionCompactResult) {
-	c.mu.Lock()
-	if c.compactDone == done {
-		c.compactDone = nil
-		c.compactTurnID = ""
-		c.compactItemID = ""
-		c.compactGen++
-	}
-	c.mu.Unlock()
 }
 
 func (c *codexappConn) emitItemUpdate(p appServerItemEventParams, completed bool) {

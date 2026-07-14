@@ -2,11 +2,7 @@ import React from 'react';
 import type { ArchiveCandidate } from '../chat/session/sessionArchiveState';
 import { npmPackageUpdateSummary, type NpmPackageUpdateTarget } from '../settings/agentPackageUpdateView';
 import { skillScopeLabel } from '../settings/skillManagementView';
-import type {
-  RegistrySessionStatusResult,
-  RegistrySessionUsage,
-  RegistrySkillScope,
-} from '../registry/registryTypes';
+import type { RegistrySkillScope } from '../registry/registryTypes';
 
 export type RenameSessionTarget = {
   projectId: string;
@@ -117,27 +113,6 @@ type AppRenameDialogProps = {
   onCancel: () => void;
   onSubmit: () => void;
 };
-
-export type AppSessionStatusDialogProps = {
-  sessionId: string;
-  cachedUsage?: RegistrySessionUsage;
-  status: RegistrySessionStatusResult | null;
-  loading: boolean;
-  error: string;
-  onClose: () => void;
-  onRefresh: () => void;
-};
-
-function formatStatusPlan(value: string | undefined): string {
-  if (!value) return '';
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
-function formatStatusReset(value: string | undefined): string {
-  if (!value) return '';
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toLocaleString() : value;
-}
 
 function shortGitSha(value: string): string {
   return value ? value.slice(0, 7) : '-';
@@ -444,117 +419,6 @@ export function AppRenameDialog({
             />
             Save
           </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export function AppSessionStatusDialog({
-  sessionId,
-  cachedUsage,
-  status,
-  loading,
-  error,
-  onClose,
-  onRefresh,
-}: AppSessionStatusDialogProps) {
-  React.useEffect(() => {
-    if (!sessionId) return undefined;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose, sessionId]);
-
-  if (!sessionId) return null;
-  const context = status?.context ?? cachedUsage;
-  const account = status?.account;
-  const plan = formatStatusPlan(account?.planType);
-
-  return (
-    <div className="app-confirm-backdrop" role="presentation" onPointerDown={onClose}>
-      <div
-        className="app-session-status-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="app-session-status-title"
-        onPointerDown={event => event.stopPropagation()}
-      >
-        <div className="app-session-status-header">
-          <div>
-            <div id="app-session-status-title" className="app-session-status-title">Session status</div>
-            <div className="app-session-status-id" data-testid="session-status-id">
-              <span>Session ID</span>
-              <code>{sessionId}</code>
-            </div>
-          </div>
-          <button type="button" className="app-session-status-close" onClick={onClose} aria-label="Close session status">
-            <span className="codicon codicon-close" aria-hidden="true" />
-          </button>
-        </div>
-
-        <div className="app-session-status-body">
-          <section className="app-session-status-section" data-testid="session-status-context">
-            <div className="app-session-status-section-title">Context</div>
-            {context ? (
-              <div className="app-session-status-context-value">
-                <strong>{context.used.toLocaleString('en-US')}</strong>
-                {typeof context.size === 'number' ? <span> / {context.size.toLocaleString('en-US')} tokens</span> : <span> tokens used</span>}
-              </div>
-            ) : <div className="app-session-status-muted">Context usage is not available yet.</div>}
-          </section>
-
-          {status?.limits.length ? (
-            <section className="app-session-status-section">
-              <div className="app-session-status-section-title">Rate limits</div>
-              <div className="app-session-status-limits">
-                {status.limits.map(limit => (
-                  <div key={limit.id} className="app-session-status-limit">
-                    <div className="app-session-status-limit-heading">
-                      <span>{limit.name}</span>
-                      <strong>{limit.remainingPercent}% remaining</strong>
-                    </div>
-                    <div className="app-session-status-limit-track" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={limit.remainingPercent}>
-                      <span className="app-session-status-limit-fill" style={{width: `${limit.remainingPercent}%`}} />
-                    </div>
-                    {limit.resetsAt ? <div className="app-session-status-muted">Resets {formatStatusReset(limit.resetsAt)}</div> : null}
-                  </div>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          {account ? (
-            <section className="app-session-status-section">
-              <div className="app-session-status-section-title">Account</div>
-              <dl className="app-session-status-account">
-                {plan ? <><dt>Plan</dt><dd>{plan}</dd></> : null}
-                {account.credits ? <><dt>Credits</dt><dd>{account.credits.unlimited ? 'Unlimited' : account.credits.balance ?? (account.credits.hasCredits ? 'Available' : 'None')}</dd></> : null}
-                {account.individualLimit ? <><dt>Individual limit</dt><dd>{account.individualLimit.used} / {account.individualLimit.limit} ({account.individualLimit.remainingPercent}% remaining)</dd></> : null}
-                {account.rateLimitResetCredits ? <><dt>Reset credits</dt><dd>{account.rateLimitResetCredits.availableCount}</dd></> : null}
-              </dl>
-            </section>
-          ) : null}
-
-          {loading ? (
-            <div className="app-session-status-loading" aria-label="Refreshing session status">
-              <span className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
-              Refreshing limits…
-            </div>
-          ) : null}
-          {error ? <div className="app-confirm-error" role="alert">{error}</div> : null}
-        </div>
-
-        <div className="app-session-status-actions">
-          <button type="button" className="app-confirm-btn secondary" onClick={onRefresh} disabled={loading}>
-            <span className={`codicon ${loading ? 'codicon-loading codicon-modifier-spin' : 'codicon-refresh'}`} aria-hidden="true" />
-            Refresh
-          </button>
-          <button type="button" className="app-confirm-btn primary" onClick={onClose}>Close</button>
         </div>
       </div>
     </div>

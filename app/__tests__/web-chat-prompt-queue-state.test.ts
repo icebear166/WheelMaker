@@ -1,31 +1,18 @@
 import {
   buildQueuedPromptMessage,
   cancelQueuedChatPrompt,
-  enqueueChatCompact,
   enqueueChatPrompt,
-  hasQueuedChatCompact,
   moveQueuedChatPromptToFront,
-  queuedChatPrompts,
-  shiftNextQueuedChatItem,
   shiftNextQueuedChatPrompt,
-  type QueuedChatCompact,
   type QueuedChatPrompt,
 } from '../web/src/chat/session/chatPromptQueue';
 
 const basePrompt = (id: string, text: string): QueuedChatPrompt => ({
-  kind: 'prompt',
   id,
   sessionId: 'sess-1',
   blocks: [{type: 'text', text}],
   createdAt: `2026-06-18T00:00:0${id}.000Z`,
   text,
-});
-
-const baseCompact = (id = 'compact-1'): QueuedChatCompact => ({
-  kind: 'compact',
-  id,
-  sessionId: 'sess-1',
-  createdAt: '2026-06-18T00:00:04.000Z',
 });
 
 describe('chat prompt queue state', () => {
@@ -73,28 +60,5 @@ describe('chat prompt queue state', () => {
     expect(message.turnIndex).toBe(42);
     expect(message.param.queuedPromptId).toBe('1');
     expect(message.param.queueStatus).toBe('queued');
-  });
-
-  test('keeps prompt and compact work in one FIFO queue', () => {
-    const runtimeKey = 'project:sess-1';
-    const state = enqueueChatPrompt(
-      enqueueChatCompact(enqueueChatPrompt({}, runtimeKey, basePrompt('1', 'first')), runtimeKey, baseCompact()),
-      runtimeKey,
-      basePrompt('2', 'second'),
-    );
-
-    expect(state[runtimeKey].map(item => item.kind)).toEqual(['prompt', 'compact', 'prompt']);
-    expect(queuedChatPrompts(state, runtimeKey).map(item => item.text)).toEqual(['first', 'second']);
-    expect(hasQueuedChatCompact(state, runtimeKey)).toBe(true);
-    expect(shiftNextQueuedChatItem(state, runtimeKey).item?.kind).toBe('prompt');
-  });
-
-  test('allows only one waiting compact per runtime queue', () => {
-    const runtimeKey = 'project:sess-1';
-    const once = enqueueChatCompact({}, runtimeKey, baseCompact('compact-1'));
-    const twice = enqueueChatCompact(once, runtimeKey, baseCompact('compact-2'));
-
-    expect(twice).toBe(once);
-    expect(twice[runtimeKey]).toHaveLength(1);
   });
 });

@@ -102,26 +102,6 @@ function msgText(method: string, param: Record<string, unknown>): string {
   return extractTextFromSessionTurnParam(param);
 }
 
-function sessionOperationView(param: Record<string, unknown>): {
-  label: string;
-  detail: string;
-  icon: string;
-  status: string;
-} {
-  const status = typeof param.status === 'string' ? param.status : '';
-  const detail = typeof param.message === 'string' ? param.message.trim() : '';
-  switch (status) {
-    case 'queued':
-      return {label: 'Context compaction queued', detail, icon: 'codicon-circle-large-outline', status};
-    case 'completed':
-      return {label: 'Context compressed', detail, icon: 'codicon-pass-filled', status};
-    case 'failed':
-      return {label: 'Context compaction failed', detail, icon: 'codicon-error', status};
-    default:
-      return {label: 'Compressing context', detail, icon: 'codicon-loading codicon-modifier-spin', status: 'started'};
-  }
-}
-
 function msgBlocks(
   method: string,
   param: Record<string, unknown>,
@@ -407,17 +387,6 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   const text = msgText(message.method, message.param).trim();
   const kind = msgKind(message.method);
   const markdownCapabilities = useMarkdownCapabilityPlugins(text);
-
-  if (message.method === 'session_operation') {
-    const operation = sessionOperationView(message.param);
-    return (
-      <div className={`chat-session-operation ${operation.status}`} role="status">
-        <span className={`codicon ${operation.icon} chat-session-operation-icon`} aria-hidden="true" />
-        <span className="chat-session-operation-label">{operation.label}</span>
-        {operation.detail ? <span className="chat-session-operation-detail">{operation.detail}</span> : null}
-      </div>
-    );
-  }
 
   if (message.method === 'prompt_request' || message.method === 'user_message_chunk') {
     const imageBlocks = groupImageBlocks([message]);

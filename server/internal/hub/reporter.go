@@ -373,7 +373,6 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 		rp.RegistryMethodSessionArtifactRead, rp.RegistryMethodSessionDelete,
 		rp.RegistryMethodSessionRename, rp.RegistryMethodSessionSend, rp.RegistryMethodSessionCancel,
 		rp.RegistryMethodSessionMarkRead, rp.RegistryMethodSessionConfig,
-		rp.RegistryMethodSessionStatus, rp.RegistryMethodSessionCompact,
 		rp.RegistryMethodSessionAttachmentStart, rp.RegistryMethodSessionAttachmentChunk,
 		rp.RegistryMethodSessionAttachmentFinish, rp.RegistryMethodSessionAttachmentCancel,
 		rp.RegistryMethodSessionAttachmentDelete, rp.RegistryMethodSessionAttachmentThumbnail,

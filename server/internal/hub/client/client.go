@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/swm8023/wheelmaker/internal/hub/agent"
 	acp "github.com/swm8023/wheelmaker/internal/protocol"
 )
@@ -88,39 +87,8 @@ func New(store Store, projectName string, cwd string) *Client {
 		}
 		return ""
 	}
-	c.sessionRecorder.actionLookup = func(agentType string) acp.SessionActionCapabilities {
-		provider, ok := acp.ParseACPProvider(agentType)
-		if !ok || c.registry == nil {
-			return unsupportedSessionActions("Current Agent does not support this action.")
-		}
-		support := c.registry.SessionActions(provider)
-		return acp.SessionActionCapabilities{
-			Status: acp.SessionActionCapability{
-				Supported: support.Status,
-				Reason:    unsupportedSessionActionReason(support.Status),
-			},
-			Compact: acp.SessionActionCapability{
-				Supported: support.Compact,
-				Reason:    unsupportedSessionActionReason(support.Compact),
-			},
-		}
-	}
 	c.viewSink = c.sessionRecorder
 	return c
-}
-
-func unsupportedSessionActionReason(supported bool) string {
-	if supported {
-		return ""
-	}
-	return "Current Agent does not support this action."
-}
-
-func unsupportedSessionActions(reason string) acp.SessionActionCapabilities {
-	return acp.SessionActionCapabilities{
-		Status:  acp.SessionActionCapability{Supported: false, Reason: reason},
-		Compact: acp.SessionActionCapability{Supported: false, Reason: reason},
-	}
 }
 
 func (c *Client) ProjectName() string {
@@ -363,7 +331,6 @@ func (c *Client) createSession(ctx context.Context, agentType, title, createRequ
 	sess.createdAt = created.createdAt
 	// New sessions already completed initialize + session/new before Session construction,
 	// so they start ready without re-entering ensureReady.
-	sess.initialized = true
 	sess.ready = true
 	sess.mu.Unlock()
 	created.instance.SetCallbacks(sess)
@@ -371,10 +338,7 @@ func (c *Client) createSession(ctx context.Context, agentType, title, createRequ
 	if err := sess.persistSession(ctx); err != nil {
 		sess.mu.Lock()
 		sess.instance = nil
-		sess.initialized = false
 		sess.ready = false
-		sess.initializing = false
-		sess.loading = false
 		sess.mu.Unlock()
 		_ = created.instance.Close()
 		return nil, fmt.Errorf("save session: %w", err)
@@ -422,7 +386,8 @@ func (c *Client) PromptToSession(ctx context.Context, sessionID string, blocks [
 	if err != nil {
 		return err
 	}
-	return sess.handlePromptBlocks(blocks)
+	sess.handlePromptBlocks(blocks)
+	return nil
 }
 
 func promptTitleFromBlocks(blocks []acp.ContentBlock) string {
@@ -732,53 +697,6 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 			"sessionId":     sess.acpSessionID,
 			"configOptions": options,
 		}, nil
-	case acp.RegistryMethodSessionStatus:
-		var req struct {
-			SessionID string `json:"sessionId"`
-		}
-		if err := decodeSessionRequestPayload(payload, &req); err != nil {
-			return nil, fmt.Errorf("invalid session.status payload: %w", err)
-		}
-		sessionID := strings.TrimSpace(req.SessionID)
-		if sessionID == "" {
-			return nil, fmt.Errorf("sessionId is required")
-		}
-		sess, err := c.SessionByID(ctx, sessionID)
-		if err != nil {
-			return nil, err
-		}
-		if !c.sessionSupportsAction(sess, acp.SessionActionStatus) {
-			return nil, fmt.Errorf("%w: status", agent.ErrSessionActionUnsupported)
-		}
-		return sess.SessionStatus(ctx)
-	case acp.RegistryMethodSessionCompact:
-		var req struct {
-			SessionID string `json:"sessionId"`
-		}
-		if err := decodeSessionRequestPayload(payload, &req); err != nil {
-			return nil, fmt.Errorf("invalid session.compact payload: %w", err)
-		}
-		sessionID := strings.TrimSpace(req.SessionID)
-		if sessionID == "" {
-			return nil, fmt.Errorf("sessionId is required")
-		}
-		sess, err := c.SessionByID(ctx, sessionID)
-		if err != nil {
-			return nil, err
-		}
-		if !c.sessionSupportsAction(sess, acp.SessionActionCompact) {
-			return nil, fmt.Errorf("%w: compact", agent.ErrSessionActionUnsupported)
-		}
-		operationID := uuid.NewString()
-		if err := sess.StartCompaction(ctx, operationID); err != nil {
-			return nil, err
-		}
-		return acp.SessionCompactAccepted{
-			OK:          true,
-			Accepted:    true,
-			SessionID:   sessionID,
-			OperationID: operationID,
-		}, nil
 	case acp.RegistryMethodSessionSend:
 		var req struct {
 			SessionID string             `json:"sessionId"`
@@ -831,28 +749,6 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 		return map[string]any{"ok": true, "sessionId": sessionID}, nil
 	default:
 		return nil, fmt.Errorf("unsupported session method: %s", method)
-	}
-}
-
-func (c *Client) sessionSupportsAction(sess *Session, action string) bool {
-	if c == nil || c.registry == nil || sess == nil {
-		return false
-	}
-	sess.mu.Lock()
-	agentType := sess.agentType
-	sess.mu.Unlock()
-	provider, ok := acp.ParseACPProvider(agentType)
-	if !ok {
-		return false
-	}
-	support := c.registry.SessionActions(provider)
-	switch strings.TrimSpace(action) {
-	case acp.SessionActionStatus:
-		return support.Status
-	case acp.SessionActionCompact:
-		return support.Compact
-	default:
-		return false
 	}
 }
 
@@ -1036,10 +932,8 @@ func (c *Client) deleteActiveSession(ctx context.Context, sessionID string, reje
 		agentType = sess.agentType
 		inst := sess.instance
 		sess.instance = nil
-		sess.initialized = false
 		sess.ready = false
 		sess.initializing = false
-		sess.loading = false
 		sess.Status = SessionSuspended
 		sess.mu.Unlock()
 		if inst != nil {

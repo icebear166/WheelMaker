@@ -1075,49 +1075,6 @@ func TestReporterRespondsToSessionRequests(t *testing.T) {
 
 }
 
-func TestReporterForwardsSessionActionRequests(t *testing.T) {
-	for _, method := range []string{rp.RegistryMethodSessionStatus, rp.RegistryMethodSessionCompact} {
-		t.Run(method, func(t *testing.T) {
-			respSeen := make(chan testEnvelope, 1)
-			errSeen := make(chan error, 1)
-			server := newFakeReporterRegistry(t, "hub-session-actions", testEnvelope{
-				RequestID: 100,
-				Type:      rp.RegistryEnvelopeTypeRequest,
-				Method:    method,
-				ProjectID: rp.ProjectID("hub-session-actions", "proj1"),
-				Payload:   map[string]any{"sessionId": "sess-1"},
-			}, respSeen, errSeen)
-
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			reporter := NewReporter(ReporterConfig{
-				Server:            strings.TrimPrefix(server.URL, "http://"),
-				HubID:             "hub-session-actions",
-				ReconnectInterval: 50 * time.Millisecond,
-			}, []ProjectInfo{{Name: "proj1", Path: t.TempDir(), Online: true}})
-			handler := &stubSessionHandler{}
-			reporter.RegisterSessionHandler(rp.ProjectID("hub-session-actions", "proj1"), handler)
-			done := make(chan error, 1)
-			go func() { done <- reporter.Run(ctx) }()
-			defer stopReporterForTest(t, cancel, done)
-
-			select {
-			case err := <-errSeen:
-				t.Fatalf("fake registry error: %v", err)
-			case response := <-respSeen:
-				if response.Type != rp.RegistryEnvelopeTypeResponse || response.Method != method {
-					t.Fatalf("response=%#v, want response for %s", response, method)
-				}
-				if handler.lastMethod != method || !strings.Contains(handler.lastBody, `"sessionId":"sess-1"`) {
-					t.Fatalf("handler saw method=%q body=%q", handler.lastMethod, handler.lastBody)
-				}
-			case <-time.After(2 * time.Second):
-				t.Fatalf("did not receive %s response from reporter", method)
-			}
-		})
-	}
-}
-
 func TestReporterRespondsToTerminalRequests(t *testing.T) {
 	respSeen := make(chan testEnvelope, 1)
 	errSeen := make(chan error, 1)

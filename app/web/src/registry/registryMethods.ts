@@ -1,4 +1,4 @@
-export const RegistryProtocolVersion = '2.7' as const;
+export const RegistryProtocolVersion = '2.6' as const;
 
 export const RegistryMethods = {
   ConnectInit: 'connect.init',
@@ -36,8 +36,6 @@ export const RegistryMethods = {
   SessionSearch: 'session.search',
   SessionCreate: 'session.create',
   SessionSend: 'session.send',
-  SessionStatus: 'session.status',
-  SessionCompact: 'session.compact',
   SessionCancel: 'session.cancel',
   SessionMarkRead: 'session.markRead',
   SessionConfig: 'session.config',

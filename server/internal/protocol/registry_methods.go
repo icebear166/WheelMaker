@@ -100,8 +100,6 @@ const (
 	RegistryMethodSessionCancel              = "session.cancel"
 	RegistryMethodSessionMarkRead            = "session.markRead"
 	RegistryMethodSessionConfig              = "session.config"
-	RegistryMethodSessionStatus              = "session.status"
-	RegistryMethodSessionCompact             = "session.compact"
 	RegistryMethodSessionAttachmentStart     = "session.attachment.start"
 	RegistryMethodSessionAttachmentChunk     = "session.attachment.chunk"
 	RegistryMethodSessionAttachmentFinish    = "session.attachment.finish"
@@ -202,8 +200,6 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodSessionCancel:              registryProjectMethod(RegistryMethodSessionCancel, RegistryRouteSessionForward),
 	RegistryMethodSessionMarkRead:            registryProjectMethod(RegistryMethodSessionMarkRead, RegistryRouteSessionForward),
 	RegistryMethodSessionConfig:              registryProjectMethod(RegistryMethodSessionConfig, RegistryRouteSessionForward),
-	RegistryMethodSessionStatus:              registryProjectMethod(RegistryMethodSessionStatus, RegistryRouteSessionForward),
-	RegistryMethodSessionCompact:             registryProjectMethod(RegistryMethodSessionCompact, RegistryRouteSessionForward),
 	RegistryMethodSessionAttachmentStart:     registryProjectMethod(RegistryMethodSessionAttachmentStart, RegistryRouteSessionForward),
 	RegistryMethodSessionAttachmentChunk:     registryProjectMethod(RegistryMethodSessionAttachmentChunk, RegistryRouteSessionForward),
 	RegistryMethodSessionAttachmentFinish:    registryProjectMethod(RegistryMethodSessionAttachmentFinish, RegistryRouteSessionForward),

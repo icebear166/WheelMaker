@@ -106,24 +106,9 @@ func TestRegistryDeviceSessionListSerializationExcludesCredentials(t *testing.T)
 	}
 }
 
-func TestRegistryDefaultProtocolVersionIs27(t *testing.T) {
-	if DefaultProtocolVersion != "2.7" {
-		t.Fatalf("DefaultProtocolVersion=%q, want 2.7", DefaultProtocolVersion)
-	}
-}
-
-func TestRegistrySessionActionMethods(t *testing.T) {
-	for _, method := range []string{RegistryMethodSessionStatus, RegistryMethodSessionCompact} {
-		desc, ok := RegistryMethod(method)
-		if !ok {
-			t.Fatalf("method %q is not registered", method)
-		}
-		if desc.Route != RegistryRouteSessionForward || !desc.RequiresProjectID {
-			t.Fatalf("method %q descriptor=%+v", method, desc)
-		}
-		if !RegistryMethodAllowed(string(RegistryRoleClient), method) {
-			t.Fatalf("method %q should allow client", method)
-		}
+func TestRegistryDefaultProtocolVersionIs26(t *testing.T) {
+	if DefaultProtocolVersion != "2.6" {
+		t.Fatalf("DefaultProtocolVersion=%q, want 2.6", DefaultProtocolVersion)
 	}
 }
 

@@ -16,11 +16,6 @@ import (
 // Providers that ignore cwd can receive an empty string.
 type InstanceCreator func(ctx context.Context, cwd string) (Instance, error)
 
-type SessionActionSupport struct {
-	Status  bool
-	Compact bool
-}
-
 type projectNameContextKey struct{}
 
 func WithProjectName(ctx context.Context, projectName string) context.Context {
@@ -45,9 +40,8 @@ func ProjectNameFromContext(ctx context.Context) string {
 // ACPFactory resolves one provider enum to one instance creator.
 // A creator map contains both default built-ins and optional overrides.
 type ACPFactory struct {
-	mu             sync.RWMutex
-	creators       map[protocol.ACPProvider]InstanceCreator
-	sessionActions map[protocol.ACPProvider]SessionActionSupport
+	mu       sync.RWMutex
+	creators map[protocol.ACPProvider]InstanceCreator
 }
 
 var (
@@ -64,14 +58,10 @@ func DefaultACPFactory() *ACPFactory {
 }
 
 func newACPFactoryWithDefaults() *ACPFactory {
-	f := &ACPFactory{
-		creators:       map[protocol.ACPProvider]InstanceCreator{},
-		sessionActions: map[protocol.ACPProvider]SessionActionSupport{},
-	}
+	f := &ACPFactory{creators: map[protocol.ACPProvider]InstanceCreator{}}
 	codexProvider := NewCodexProvider()
 	if isProviderAvailable(codexProvider) {
 		f.Register(protocol.ACPProviderCodex, codexappInstanceCreator(codexProvider))
-		f.RegisterSessionActions(protocol.ACPProviderCodex, SessionActionSupport{Status: true, Compact: true})
 	}
 	candidates := []struct {
 		provider protocol.ACPProvider
@@ -108,39 +98,11 @@ func (f *ACPFactory) Clone() *ACPFactory {
 	}
 	f.mu.RLock()
 	defer f.mu.RUnlock()
-	cp := &ACPFactory{
-		creators:       make(map[protocol.ACPProvider]InstanceCreator, len(f.creators)),
-		sessionActions: make(map[protocol.ACPProvider]SessionActionSupport, len(f.sessionActions)),
-	}
+	cp := &ACPFactory{creators: make(map[protocol.ACPProvider]InstanceCreator, len(f.creators))}
 	for provider, creator := range f.creators {
 		cp.creators[provider] = creator
 	}
-	for provider, actions := range f.sessionActions {
-		cp.sessionActions[provider] = actions
-	}
 	return cp
-}
-
-func (f *ACPFactory) RegisterSessionActions(provider protocol.ACPProvider, actions SessionActionSupport) {
-	if f == nil {
-		return
-	}
-	f.mu.Lock()
-	if f.sessionActions == nil {
-		f.sessionActions = map[protocol.ACPProvider]SessionActionSupport{}
-	}
-	f.sessionActions[provider] = actions
-	f.mu.Unlock()
-}
-
-func (f *ACPFactory) SessionActions(provider protocol.ACPProvider) SessionActionSupport {
-	if f == nil {
-		return SessionActionSupport{}
-	}
-	f.mu.RLock()
-	actions := f.sessionActions[provider]
-	f.mu.RUnlock()
-	return actions
 }
 
 // Register binds a provider to a creator. Existing binding is replaced.

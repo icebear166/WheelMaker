@@ -356,83 +356,6 @@ export interface RegistrySessionUsage {
   updatedAt?: string;
 }
 
-export interface RegistrySessionActionCapability {
-  supported: boolean;
-  reason?: string;
-}
-
-export interface RegistrySessionActionCapabilities {
-  status: RegistrySessionActionCapability;
-  compact: RegistrySessionActionCapability;
-}
-
-export interface RegistrySessionStatusContext {
-  used: number;
-  size?: number;
-  updatedAt?: string;
-}
-
-export interface RegistrySessionRateLimit {
-  id: string;
-  name: string;
-  usedPercent: number;
-  remainingPercent: number;
-  windowDurationMins?: number;
-  resetsAt?: string;
-}
-
-export interface RegistrySessionCredits {
-  hasCredits: boolean;
-  unlimited: boolean;
-  balance?: string;
-}
-
-export interface RegistrySessionIndividualLimit {
-  limit: string;
-  used: string;
-  remainingPercent: number;
-  resetsAt?: string;
-}
-
-export interface RegistrySessionResetCredits {
-  availableCount: number;
-}
-
-export interface RegistrySessionStatusAccount {
-  planType?: string;
-  credits?: RegistrySessionCredits;
-  individualLimit?: RegistrySessionIndividualLimit;
-  rateLimitReachedType?: string;
-  rateLimitResetCredits?: RegistrySessionResetCredits;
-}
-
-export interface RegistrySessionStatusResult {
-  ok: boolean;
-  sessionId: string;
-  context?: RegistrySessionStatusContext;
-  limits: RegistrySessionRateLimit[];
-  account?: RegistrySessionStatusAccount;
-  updatedAt: string;
-}
-
-export interface RegistrySessionCompactAccepted {
-  ok: boolean;
-  accepted: boolean;
-  sessionId: string;
-  operationId: string;
-}
-
-export type RegistrySessionOperationStatus = 'queued' | 'started' | 'completed' | 'failed';
-
-export interface RegistrySessionOperationPayload {
-  operationId: string;
-  type: 'compact';
-  status: RegistrySessionOperationStatus;
-  startedAt?: string;
-  completedAt?: string;
-  message?: string;
-}
-
 export interface RegistrySessionSummary {
   sessionId: string;
   title: string;
@@ -450,7 +373,6 @@ export interface RegistrySessionSummary {
   configOptions?: RegistrySessionConfigOption[];
   commands?: RegistrySessionCommand[];
   usage?: RegistrySessionUsage;
-  sessionActions?: RegistrySessionActionCapabilities;
 }
 
 export interface RegistryArchivedSessionSummary extends RegistrySessionSummary {

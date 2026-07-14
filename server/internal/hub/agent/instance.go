@@ -36,23 +36,6 @@ type Instance interface {
 
 var ErrSessionArchiveUnsupported = errors.New("session archive unsupported")
 
-var (
-	ErrSessionActionUnsupported = errors.New("session action unsupported")
-	ErrSessionBusy              = errors.New("session is busy")
-)
-
-type SessionCompactResult struct {
-	Err error
-}
-
-type SessionStatusProvider interface {
-	SessionStatus(ctx context.Context) (protocol.SessionActionStatusResult, error)
-}
-
-type SessionCompactor interface {
-	CompactSession(ctx context.Context, sessionID string) (<-chan SessionCompactResult, error)
-}
-
 type SessionArchiver interface {
 	ArchiveSession(ctx context.Context, sessionID string) error
 	UnarchiveSession(ctx context.Context, sessionID string) error
@@ -270,28 +253,6 @@ func (i *instance) UnarchiveSession(ctx context.Context, sessionID string) error
 		return ErrSessionArchiveUnsupported
 	}
 	return archiver.UnarchiveSession(ctx, sessionID)
-}
-
-func (i *instance) SessionStatus(ctx context.Context) (protocol.SessionActionStatusResult, error) {
-	if err := i.ensureConn(); err != nil {
-		return protocol.SessionActionStatusResult{}, err
-	}
-	provider, ok := i.conn.(SessionStatusProvider)
-	if !ok {
-		return protocol.SessionActionStatusResult{}, ErrSessionActionUnsupported
-	}
-	return provider.SessionStatus(ctx)
-}
-
-func (i *instance) CompactSession(ctx context.Context, sessionID string) (<-chan SessionCompactResult, error) {
-	if err := i.ensureConn(); err != nil {
-		return nil, err
-	}
-	compactor, ok := i.conn.(SessionCompactor)
-	if !ok {
-		return nil, ErrSessionActionUnsupported
-	}
-	return compactor.CompactSession(ctx, sessionID)
 }
 
 func (i *instance) HandleACPResponse(_ context.Context, method string, params json.RawMessage) {

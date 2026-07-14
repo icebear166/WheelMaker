@@ -51,12 +51,6 @@ type testInjectedInstance struct {
 	unarchiveErr   error
 	archiveCalls   []string
 	unarchiveCalls []string
-	initCalls      int
-	loadCalls      int
-	statusResult   acp.SessionActionStatusResult
-	statusErr      error
-	compactDone    chan agent.SessionCompactResult
-	compactErr     error
 }
 
 func (c *Client) InjectForwarder(agentName, sessionID string, promptFn func(context.Context, string) (<-chan acp.SessionUpdateParams, acp.SessionPromptResult, error), cancelFn func() error) {
@@ -155,7 +149,6 @@ func (i *testInjectedInstance) HandleACPRequest(context.Context, int64, string, 
 }
 func (i *testInjectedInstance) HandleACPResponse(context.Context, string, json.RawMessage) {}
 func (i *testInjectedInstance) Initialize(context.Context, acp.InitializeParams) (acp.InitializeResult, error) {
-	i.initCalls++
 	if i.initResult.ProtocolVersion != "" || i.initResult.AgentInfo != nil || i.initResult.AgentCapabilities.LoadSession {
 		return i.initResult, nil
 	}
@@ -178,7 +171,6 @@ func (i *testInjectedInstance) SessionNew(context.Context, acp.SessionNewParams)
 	return acp.SessionNewResult{SessionID: sid}, nil
 }
 func (i *testInjectedInstance) SessionLoad(context.Context, acp.SessionLoadParams) (acp.SessionLoadResult, error) {
-	i.loadCalls++
 	for _, params := range i.loadUpdates {
 		if strings.TrimSpace(params.SessionID) == "" {
 			params.SessionID = i.sessionID
@@ -251,19 +243,9 @@ func (i *testInjectedInstance) UnarchiveSession(_ context.Context, sessionID str
 	return i.unarchiveErr
 }
 
-func (i *testInjectedInstance) SessionStatus(context.Context) (acp.SessionActionStatusResult, error) {
-	return i.statusResult, i.statusErr
-}
-
-func (i *testInjectedInstance) CompactSession(context.Context, string) (<-chan agent.SessionCompactResult, error) {
-	return i.compactDone, i.compactErr
-}
-
 func (i *testInjectedInstance) Close() error { return nil }
 
 var _ agent.Instance = (*testInjectedInstance)(nil)
-var _ agent.SessionStatusProvider = (*testInjectedInstance)(nil)
-var _ agent.SessionCompactor = (*testInjectedInstance)(nil)
 
 type noopStore struct{}
 
@@ -4330,88 +4312,6 @@ func TestSessionRecorderResetPromptStateRestartsTurnIndexWhenNothingPersisted(t 
 	}
 }
 
-func TestSessionRecorderPersistsOperationLifecycle(t *testing.T) {
-	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
-	if err != nil {
-		t.Fatalf("NewStore: %v", err)
-	}
-	ctx := context.Background()
-	if err := store.SaveSession(ctx, &SessionRecord{
-		ID:           "sess-operation",
-		ProjectName:  "proj1",
-		AgentType:    string(acp.ACPProviderCodex),
-		CreatedAt:    time.Now().Add(-time.Hour),
-		LastActiveAt: time.Now().Add(-time.Minute),
-	}); err != nil {
-		t.Fatalf("SaveSession: %v", err)
-	}
-	c := New(store, "proj1", t.TempDir())
-	c.SetSessionHistoryRoot(filepath.Join(t.TempDir(), "db", "session"))
-	t.Cleanup(func() { _ = c.Close() })
-	published := captureSessionMessageEvents(t, c)
-
-	startedAt := time.Date(2026, 7, 14, 10, 0, 0, 0, time.UTC)
-	if err := c.sessionRecorder.RecordSessionOperation(ctx, "sess-operation", acp.SessionOperationPayload{
-		OperationID: "op-1",
-		Type:        acp.SessionOperationTypeCompact,
-		Status:      acp.SessionOperationStatusStarted,
-		StartedAt:   startedAt.Format(time.RFC3339),
-	}); err != nil {
-		t.Fatalf("RecordSessionOperation(started): %v", err)
-	}
-	summary, err := c.sessionRecorder.ReadSessionSummary(ctx, "sess-operation")
-	if err != nil {
-		t.Fatalf("ReadSessionSummary(started): %v", err)
-	}
-	if !summary.Running {
-		t.Fatal("summary running = false after operation start")
-	}
-
-	completedAt := startedAt.Add(3 * time.Second)
-	if err := c.sessionRecorder.RecordSessionOperation(ctx, "sess-operation", acp.SessionOperationPayload{
-		OperationID: "op-1",
-		Type:        acp.SessionOperationTypeCompact,
-		Status:      acp.SessionOperationStatusCompleted,
-		StartedAt:   startedAt.Format(time.RFC3339),
-		CompletedAt: completedAt.Format(time.RFC3339),
-	}); err != nil {
-		t.Fatalf("RecordSessionOperation(completed): %v", err)
-	}
-	summary, err = c.sessionRecorder.ReadSessionSummary(ctx, "sess-operation")
-	if err != nil {
-		t.Fatalf("ReadSessionSummary(completed): %v", err)
-	}
-	if summary.Running {
-		t.Fatal("summary running = true after operation completion")
-	}
-
-	latest, turns, err := c.sessionRecorder.ReadSessionTurns(ctx, "sess-operation", 0)
-	if err != nil {
-		t.Fatalf("ReadSessionTurns: %v", err)
-	}
-	if latest != 2 || len(turns) != 2 {
-		t.Fatalf("latest=%d turns=%d", latest, len(turns))
-	}
-	for index, turn := range turns {
-		var message acp.SessionTurnMessage
-		if err := json.Unmarshal([]byte(turn.Content), &message); err != nil {
-			t.Fatalf("decode turn %d: %v", index, err)
-		}
-		if message.Method != acp.SessionTurnMethodOperation {
-			t.Fatalf("turn %d method = %q", index, message.Method)
-		}
-	}
-	messageEvents := 0
-	for _, event := range *published {
-		if event.method == acp.RegistryMethodSessionMessage {
-			messageEvents++
-		}
-	}
-	if messageEvents != 2 {
-		t.Fatalf("session.message events = %d, want 2", messageEvents)
-	}
-}
-
 func TestSessionViewListPreservesStoredProjectionMetadataForRuntimeSessions(t *testing.T) {
 	c := newSessionViewTestClient(t)
 
@@ -6893,7 +6793,7 @@ func TestHandleSessionRequest_SessionListIncludesUsage(t *testing.T) {
 		ID:           "sess-1",
 		ProjectName:  "proj1",
 		Status:       SessionPersisted,
-		AgentType:    string(acp.ACPProviderCodex),
+		AgentType:    "codexapp",
 		AgentJSON:    `{"usage":{"used":19000,"size":258000,"updatedAt":"2026-07-07T08:00:00Z"}}`,
 		Title:        "Session 1",
 		CreatedAt:    now,
@@ -6922,146 +6822,6 @@ func TestHandleSessionRequest_SessionListIncludesUsage(t *testing.T) {
 	}
 	if sessions[0].Usage.Used != 19000 || sessions[0].Usage.Size != 258000 || sessions[0].Usage.UpdatedAt != "2026-07-07T08:00:00Z" {
 		t.Fatalf("usage = %+v", sessions[0].Usage)
-	}
-	if !sessions[0].SessionActions.Status.Supported || !sessions[0].SessionActions.Compact.Supported {
-		t.Fatalf("sessionActions = %+v, want Codex status and compact support", sessions[0].SessionActions)
-	}
-}
-
-func TestHandleSessionRequestSessionStatusInitializesWithoutLoading(t *testing.T) {
-	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
-	if err != nil {
-		t.Fatalf("NewStore: %v", err)
-	}
-	ctx := context.Background()
-	if err := store.SaveSession(ctx, &SessionRecord{
-		ID:           "sess-status",
-		ProjectName:  "proj1",
-		AgentType:    string(acp.ACPProviderCodex),
-		AgentJSON:    `{"usage":{"used":42000,"size":258400,"updatedAt":"2026-07-14T10:00:00Z"}}`,
-		CreatedAt:    time.Now().Add(-time.Hour),
-		LastActiveAt: time.Now().Add(-time.Minute),
-	}); err != nil {
-		t.Fatalf("SaveSession: %v", err)
-	}
-
-	inst := &testInjectedInstance{
-		name:      string(acp.ACPProviderCodex),
-		sessionID: "sess-status",
-		alive:     true,
-		initResult: acp.InitializeResult{
-			ProtocolVersion: "1",
-			AgentCapabilities: acp.AgentCapabilities{
-				LoadSession: true,
-			},
-		},
-		statusResult: acp.SessionActionStatusResult{
-			OK:        true,
-			Limits:    []acp.SessionActionRateLimit{{ID: "codex:primary", Name: "Codex primary", UsedPercent: 37, RemainingPercent: 63}},
-			UpdatedAt: "2026-07-14T10:00:01Z",
-		},
-	}
-	c := New(store, "proj1", t.TempDir())
-	c.registry = agent.DefaultACPFactory().Clone()
-	c.registry.Register(acp.ACPProviderCodex, func(context.Context, string) (agent.Instance, error) { return inst, nil })
-	c.registry.RegisterSessionActions(acp.ACPProviderCodex, agent.SessionActionSupport{Status: true, Compact: true})
-	t.Cleanup(func() { _ = c.Close() })
-
-	response, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionStatus, "proj1", json.RawMessage(`{"sessionId":"sess-status"}`))
-	if err != nil {
-		t.Fatalf("HandleSessionRequest(session.status): %v", err)
-	}
-	status, ok := response.(acp.SessionActionStatusResult)
-	if !ok {
-		t.Fatalf("status response type = %T", response)
-	}
-	if status.SessionID != "sess-status" || status.Context == nil || status.Context.Used != 42000 || status.Context.Size == nil || *status.Context.Size != 258400 {
-		t.Fatalf("status response = %+v", status)
-	}
-	if inst.initCalls != 1 || inst.loadCalls != 0 {
-		t.Fatalf("initialize calls=%d load calls=%d", inst.initCalls, inst.loadCalls)
-	}
-}
-
-func TestHandleSessionRequestSessionCompactRejectsBusyPrompt(t *testing.T) {
-	promptStarted := make(chan struct{})
-	releasePrompt := make(chan struct{})
-	mock := &mockSession{
-		agentName: string(acp.ACPProviderCodex),
-		sessionID: "sess-compact-busy",
-		promptFn: func(string) (<-chan acp.SessionUpdateParams, acp.SessionPromptResult, error) {
-			close(promptStarted)
-			<-releasePrompt
-			updates := make(chan acp.SessionUpdateParams)
-			close(updates)
-			return updates, acp.SessionPromptResult{StopReason: acp.StopReasonEndTurn}, nil
-		},
-	}
-	c := newTestClient(t, mock)
-	sendDone := make(chan error, 1)
-	go func() {
-		_, err := c.HandleSessionRequest(context.Background(), acp.RegistryMethodSessionSend, "test", json.RawMessage(`{"sessionId":"sess-compact-busy","text":"working"}`))
-		sendDone <- err
-	}()
-	select {
-	case <-promptStarted:
-	case <-time.After(time.Second):
-		t.Fatal("prompt did not start")
-	}
-	_, err := c.HandleSessionRequest(context.Background(), acp.RegistryMethodSessionCompact, "test", json.RawMessage(`{"sessionId":"sess-compact-busy"}`))
-	if !errors.Is(err, agent.ErrSessionBusy) {
-		t.Fatalf("session.compact err = %v, want busy", err)
-	}
-	close(releasePrompt)
-	if err := <-sendDone; err != nil {
-		t.Fatalf("session.send: %v", err)
-	}
-}
-
-func TestHandleSessionRequestSessionCompactAcceptsAndBlocksPrompt(t *testing.T) {
-	c := newTestClient(t, &mockSession{agentName: string(acp.ACPProviderCodex), sessionID: "sess-compact"})
-	ctx := context.Background()
-	if err := c.store.SaveSession(ctx, &SessionRecord{
-		ID:           "sess-compact",
-		ProjectName:  "test",
-		AgentType:    string(acp.ACPProviderCodex),
-		CreatedAt:    time.Now().Add(-time.Hour),
-		LastActiveAt: time.Now().Add(-time.Minute),
-	}); err != nil {
-		t.Fatalf("SaveSession: %v", err)
-	}
-	sess, err := c.SessionByID(ctx, "sess-compact")
-	if err != nil {
-		t.Fatalf("SessionByID: %v", err)
-	}
-	inst := sess.instance.(*testInjectedInstance)
-	inst.compactDone = make(chan agent.SessionCompactResult, 1)
-
-	response, err := c.HandleSessionRequest(ctx, acp.RegistryMethodSessionCompact, "test", json.RawMessage(`{"sessionId":"sess-compact"}`))
-	if err != nil {
-		t.Fatalf("session.compact: %v", err)
-	}
-	accepted, ok := response.(acp.SessionCompactAccepted)
-	if !ok || !accepted.OK || !accepted.Accepted || accepted.OperationID == "" {
-		t.Fatalf("compact response = %#v", response)
-	}
-	_, err = c.HandleSessionRequest(ctx, acp.RegistryMethodSessionSend, "test", json.RawMessage(`{"sessionId":"sess-compact","text":"must not overlap"}`))
-	if !errors.Is(err, agent.ErrSessionBusy) {
-		t.Fatalf("session.send err = %v, want busy", err)
-	}
-
-	inst.compactDone <- agent.SessionCompactResult{}
-	close(inst.compactDone)
-	deadline := time.Now().Add(time.Second)
-	for {
-		summary, readErr := c.sessionRecorder.ReadSessionSummary(ctx, "sess-compact")
-		if readErr == nil && !summary.Running && summary.LatestTurnIndex >= 2 {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("compact did not reach terminal summary: %+v err=%v", summary, readErr)
-		}
-		time.Sleep(5 * time.Millisecond)
 	}
 }
 

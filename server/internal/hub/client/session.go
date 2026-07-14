@@ -60,10 +60,8 @@ type Session struct {
 
 	// Runtime ACP session state (moved from Client.session / Client.sessionMeta / Client.initMeta).
 	acpSessionID string
-	initialized  bool
 	ready        bool
 	initializing bool
-	loading      bool
 
 	prompt   promptState
 	initCond *sync.Cond
@@ -80,9 +78,8 @@ type Session struct {
 	createdAt    time.Time
 	lastActiveAt time.Time
 
-	mu            sync.Mutex
-	promptMu      sync.Mutex
-	executionKind string
+	mu       sync.Mutex
+	promptMu sync.Mutex
 }
 
 // newSession creates a Session with sensible defaults.
@@ -325,7 +322,6 @@ func (s *Session) ensureInstance(ctx context.Context) error {
 		return nil
 	}
 	s.instance = inst
-	s.initialized = false
 	s.ready = false
 	s.mu.Unlock()
 	return nil
@@ -337,20 +333,15 @@ func emptyMCPServers() []acp.MCPServer {
 	return []acp.MCPServer{}
 }
 
-func (s *Session) ensureInitialized(ctx context.Context) (acp.InitializeResult, error) {
+// ensureReady performs ACP initialize + session/load for an existing ACP session ID.
+func (s *Session) ensureReady(ctx context.Context) error {
 	s.mu.Lock()
 	for s.initializing {
 		s.initCond.Wait()
 	}
-	if s.initialized {
-		result := acp.InitializeResult{
-			ProtocolVersion:   json.Number("1"),
-			AgentCapabilities: s.agentState.AgentCapabilities,
-			AgentInfo:         cloneAgentInfo(s.agentState.AgentInfo),
-			AuthMethods:       append([]acp.AuthMethod(nil), s.agentState.AuthMethods...),
-		}
+	if s.ready {
 		s.mu.Unlock()
-		return result, nil
+		return nil
 	}
 	s.initializing = true
 	inst := s.instance
@@ -358,11 +349,16 @@ func (s *Session) ensureInitialized(ctx context.Context) (acp.InitializeResult, 
 		s.initializing = false
 		s.mu.Unlock()
 		s.initCond.Broadcast()
-		return acp.InitializeResult{}, errors.New("ensureInitialized: instance is nil")
+		return errors.New("ensureReady: instance is nil")
 	}
+	agentName := s.agentType
+	savedSID := s.acpSessionID
+	cwd := s.cwd
+	persistedConfigOptions := append([]acp.ConfigOption(nil), s.agentState.ConfigOptions...)
+	persistedCommands := append([]acp.AvailableCommand(nil), s.agentState.Commands...)
 	s.mu.Unlock()
 
-	finish := func() {
+	notifyDone := func() {
 		s.mu.Lock()
 		s.initializing = false
 		s.mu.Unlock()
@@ -382,65 +378,16 @@ func (s *Session) ensureInitialized(ctx context.Context) (acp.InitializeResult, 
 		ClientInfo:         acpClientInfo,
 	})
 	if err != nil {
-		finish()
-		return acp.InitializeResult{}, fmt.Errorf("ensureInitialized: initialize: %w", err)
-	}
-
-	s.mu.Lock()
-	s.agentState.AgentCapabilities = initResult.AgentCapabilities
-	s.agentState.AgentInfo = cloneAgentInfo(initResult.AgentInfo)
-	s.agentState.AuthMethods = append([]acp.AuthMethod(nil), initResult.AuthMethods...)
-	s.initialized = true
-	s.initializing = false
-	s.mu.Unlock()
-	s.initCond.Broadcast()
-	return initResult, nil
-}
-
-// ensureReady performs ACP initialize + session/load for an existing ACP session ID.
-func (s *Session) ensureReady(ctx context.Context) error {
-	s.mu.Lock()
-	if s.ready {
-		s.mu.Unlock()
-		return nil
-	}
-	s.mu.Unlock()
-
-	initResult, err := s.ensureInitialized(ctx)
-	if err != nil {
-		return err
-	}
-
-	s.mu.Lock()
-	for s.loading {
-		s.initCond.Wait()
-	}
-	if s.ready {
-		s.mu.Unlock()
-		return nil
-	}
-	s.loading = true
-	inst := s.instance
-	agentName := s.agentType
-	savedSID := s.acpSessionID
-	cwd := s.cwd
-	persistedConfigOptions := append([]acp.ConfigOption(nil), s.agentState.ConfigOptions...)
-	persistedCommands := append([]acp.AvailableCommand(nil), s.agentState.Commands...)
-	s.mu.Unlock()
-
-	finishLoad := func() {
-		s.mu.Lock()
-		s.loading = false
-		s.mu.Unlock()
-		s.initCond.Broadcast()
+		notifyDone()
+		return fmt.Errorf("ensureReady: initialize: %w", err)
 	}
 
 	if savedSID == "" {
-		finishLoad()
+		notifyDone()
 		return errors.New("ensureReady: session id is required")
 	}
 	if !initResult.AgentCapabilities.LoadSession {
-		finishLoad()
+		notifyDone()
 		return fmt.Errorf("ensureReady: agent %q does not support session/load", agentName)
 	}
 
@@ -450,7 +397,7 @@ func (s *Session) ensureReady(ctx context.Context) error {
 		MCPServers: emptyMCPServers(),
 	})
 	if loadErr != nil {
-		finishLoad()
+		notifyDone()
 		return fmt.Errorf("ensureReady: session/load: %w", loadErr)
 	}
 
@@ -475,153 +422,12 @@ func (s *Session) ensureReady(ctx context.Context) error {
 	state.AgentInfo = cloneAgentInfo(initResult.AgentInfo)
 	state.AuthMethods = initResult.AuthMethods
 	s.ready = true
-	s.loading = false
+	s.initializing = false
 	s.mu.Unlock()
 	s.initCond.Broadcast()
 
 	s.persistAgentPreferenceState(agentName, resolved)
 	hubLogger(s.projectName).Info("connected agent=%s session=%s resumed", inst.Name(), savedSID)
-	return nil
-}
-
-func (s *Session) SessionStatus(ctx context.Context) (acp.SessionActionStatusResult, error) {
-	if err := s.ensureInstance(ctx); err != nil {
-		return acp.SessionActionStatusResult{}, err
-	}
-	if _, err := s.ensureInitialized(ctx); err != nil {
-		return acp.SessionActionStatusResult{}, err
-	}
-
-	s.mu.Lock()
-	inst := s.instance
-	sessionID := s.acpSessionID
-	usage := s.agentState.Usage
-	s.mu.Unlock()
-	provider, ok := inst.(agent.SessionStatusProvider)
-	if !ok {
-		return acp.SessionActionStatusResult{}, agent.ErrSessionActionUnsupported
-	}
-	result, err := provider.SessionStatus(ctx)
-	if err != nil {
-		return acp.SessionActionStatusResult{}, err
-	}
-	result.OK = true
-	result.SessionID = sessionID
-	if usage != nil {
-		var size *int64
-		if usage.Size > 0 {
-			value := usage.Size
-			size = &value
-		}
-		result.Context = &acp.SessionActionStatusContext{
-			Used:      usage.Used,
-			Size:      size,
-			UpdatedAt: usage.UpdatedAt,
-		}
-	}
-	s.persistSessionBestEffort()
-	return result, nil
-}
-
-func (s *Session) beginExecution(kind string) error {
-	if !s.promptMu.TryLock() {
-		return agent.ErrSessionBusy
-	}
-	s.mu.Lock()
-	s.executionKind = strings.TrimSpace(kind)
-	s.mu.Unlock()
-	return nil
-}
-
-func (s *Session) endExecution() {
-	s.mu.Lock()
-	s.executionKind = ""
-	s.mu.Unlock()
-	s.promptMu.Unlock()
-}
-
-func (s *Session) StartCompaction(ctx context.Context, operationID string) error {
-	operationID = strings.TrimSpace(operationID)
-	if operationID == "" {
-		return fmt.Errorf("operationId is required")
-	}
-	if err := s.beginExecution(acp.SessionOperationTypeCompact); err != nil {
-		return err
-	}
-	release := true
-	defer func() {
-		if release {
-			s.endExecution()
-		}
-	}()
-	if err := s.ensureInstance(ctx); err != nil {
-		return err
-	}
-	if err := s.ensureReadyAndNotify(ctx); err != nil {
-		return err
-	}
-
-	s.mu.Lock()
-	inst := s.instance
-	sessionID := s.acpSessionID
-	s.mu.Unlock()
-	compactor, ok := inst.(agent.SessionCompactor)
-	if !ok {
-		return agent.ErrSessionActionUnsupported
-	}
-	recorder, ok := s.viewSink.(interface {
-		RecordSessionOperation(context.Context, string, acp.SessionOperationPayload) error
-	})
-	if !ok {
-		return fmt.Errorf("session operation recorder is required")
-	}
-	startedAt := time.Now().UTC()
-	started := acp.SessionOperationPayload{
-		OperationID: operationID,
-		Type:        acp.SessionOperationTypeCompact,
-		Status:      acp.SessionOperationStatusStarted,
-		StartedAt:   startedAt.Format(time.RFC3339),
-	}
-	if err := recorder.RecordSessionOperation(ctx, sessionID, started); err != nil {
-		return err
-	}
-	done, err := compactor.CompactSession(ctx, sessionID)
-	if err != nil {
-		failed := started
-		failed.Status = acp.SessionOperationStatusFailed
-		failed.CompletedAt = time.Now().UTC().Format(time.RFC3339)
-		failed.Message = err.Error()
-		_ = recorder.RecordSessionOperation(context.Background(), sessionID, failed)
-		return err
-	}
-	if done == nil {
-		err := errors.New("session compactor returned no completion channel")
-		failed := started
-		failed.Status = acp.SessionOperationStatusFailed
-		failed.CompletedAt = time.Now().UTC().Format(time.RFC3339)
-		failed.Message = err.Error()
-		_ = recorder.RecordSessionOperation(context.Background(), sessionID, failed)
-		return err
-	}
-	release = false
-	go func() {
-		result, open := <-done
-		finished := started
-		finished.CompletedAt = time.Now().UTC().Format(time.RFC3339)
-		if !open {
-			finished.Status = acp.SessionOperationStatusFailed
-			finished.Message = "session compaction ended without a result"
-		} else if result.Err != nil {
-			finished.Status = acp.SessionOperationStatusFailed
-			finished.Message = result.Err.Error()
-		} else {
-			finished.Status = acp.SessionOperationStatusCompleted
-		}
-		if err := recorder.RecordSessionOperation(context.Background(), sessionID, finished); err != nil {
-			hubLogger(s.projectName).Warn("record session operation failed session=%s operation=%s err=%v", sessionID, operationID, err)
-		}
-		s.endExecution()
-	}()
 	return nil
 }
 func configPreferenceFromACPOptions(options []acp.ConfigOption) []PreferenceConfigOption {
@@ -998,10 +804,8 @@ func (s *Session) Suspend(ctx context.Context) error {
 	s.mu.Lock()
 	inst := s.instance
 	s.instance = nil
-	s.initialized = false
 	s.ready = false
 	s.initializing = false
-	s.loading = false
 	s.Status = SessionSuspended
 	s.mu.Unlock()
 
@@ -1017,7 +821,7 @@ func (s *Session) isRunning() bool {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.executionKind != "" || s.prompt.ctx != nil || s.prompt.cancel != nil || s.prompt.updatesCh != nil || s.prompt.currentCh != nil
+	return s.prompt.ctx != nil || s.prompt.cancel != nil || s.prompt.updatesCh != nil || s.prompt.currentCh != nil
 }
 
 // SessionUpdate receives session/update notifications from the agent.
@@ -1166,19 +970,15 @@ func (s *Session) handlePrompt(text string) {
 	if text == "" {
 		return
 	}
-	_ = s.handlePromptBlocks([]acp.ContentBlock{{Type: acp.ContentBlockTypeText, Text: text}})
+	s.handlePromptBlocks([]acp.ContentBlock{{Type: acp.ContentBlockTypeText, Text: text}})
 }
 
 // handlePromptBlocks sends content blocks to the active (or lazily initialized) session.
 // promptMu is held for the full duration, serializing with switchAgent.
-func (s *Session) handlePromptBlocks(blocks []acp.ContentBlock) error {
+func (s *Session) handlePromptBlocks(blocks []acp.ContentBlock) {
 	if len(blocks) == 0 {
-		return nil
+		return
 	}
-	if err := s.beginExecution("prompt"); err != nil {
-		return err
-	}
-	defer s.endExecution()
 	s.recordSessionViewEvent(SessionViewEvent{
 		Type:      SessionViewEventTypeACP,
 		SessionID: s.acpSessionID,
@@ -1189,21 +989,23 @@ func (s *Session) handlePromptBlocks(blocks []acp.ContentBlock) error {
 			},
 		}),
 	})
+	s.promptMu.Lock()
+	defer s.promptMu.Unlock()
 	ctx := context.Background()
 	if err := s.ensureInstance(ctx); err != nil {
 		s.recordPromptFailed(fmt.Sprintf("No active session: %v. %s", err, s.connectHint()))
-		return nil
+		return
 	}
 
 	if err := s.ensureReadyAndNotify(ctx); err != nil {
 		s.recordPromptFailed(fmt.Sprintf("No active session: %v. %s", err, s.connectHint()))
-		return nil
+		return
 	}
 
 	promptBlocks, err := s.promptBlocksForAgent(blocks)
 	if err != nil {
 		s.recordPromptFailed(fmt.Sprintf("Prompt error: %v", err))
-		return nil
+		return
 	}
 
 	updates, err := s.promptStream(ctx, promptBlocks)
@@ -1212,7 +1014,7 @@ func (s *Session) handlePromptBlocks(blocks []acp.ContentBlock) error {
 			_ = s.resetDeadConnection(err)
 		}
 		s.recordPromptFailed(fmt.Sprintf("Prompt error: %v", err))
-		return nil
+		return
 	}
 
 	s.mu.Lock()
@@ -1239,7 +1041,7 @@ func (s *Session) handlePromptBlocks(blocks []acp.ContentBlock) error {
 					s.prompt.currentCh = nil
 					s.mu.Unlock()
 					observeTicker.Stop()
-					return nil
+					return
 				}
 				recovered := false
 				if !s.agentProcessAlive() && s.resetDeadConnection(ev.err) {
@@ -1257,7 +1059,7 @@ func (s *Session) handlePromptBlocks(blocks []acp.ContentBlock) error {
 				s.prompt.currentCh = nil
 				s.mu.Unlock()
 				observeTicker.Stop()
-				return nil
+				return
 			}
 			if ev.update != nil {
 				params := *ev.update
@@ -1318,7 +1120,6 @@ func (s *Session) handlePromptBlocks(blocks []acp.ContentBlock) error {
 	if buf.Len() > 0 {
 		s.reply(buf.String())
 	}
-	return nil
 }
 
 func extractTextChunk(raw json.RawMessage) string {
@@ -1463,10 +1264,8 @@ func (s *Session) resetDeadConnection(err error) bool {
 	s.mu.Lock()
 	old := s.instance
 	s.instance = nil
-	s.initialized = false
 	s.ready = false
 	s.initializing = false
-	s.loading = false
 	s.prompt.ctx = nil
 	s.prompt.cancel = nil
 	s.prompt.updatesCh = nil
