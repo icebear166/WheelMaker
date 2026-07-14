@@ -480,7 +480,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer ws.Close()
-	ws.SetReadLimit(maxWireMessageBytes)
+	ws.SetReadLimit(maxRegistryMessageBytes)
 
 	connID := fmt.Sprintf("conn-%d", s.nextConnID.Add(1))
 	state := &connectionState{

@@ -7,60 +7,40 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	rp "github.com/swm8023/wheelmaker/internal/protocol"
 )
 
 func TestInputLimitBoundaries(t *testing.T) {
 	for _, testCase := range []struct {
 		name         string
-		method       string
 		messageBytes int
-		payloadBytes int
 		valid        bool
 	}{
-		{name: "normal payload limit minus one", method: "registry.project.list", messageBytes: maxJSONPayloadBytes - 1, payloadBytes: maxJSONPayloadBytes - 1, valid: true},
-		{name: "normal payload limit", method: "registry.project.list", messageBytes: maxJSONPayloadBytes, payloadBytes: maxJSONPayloadBytes, valid: true},
-		{name: "normal payload limit plus one", method: "registry.project.list", messageBytes: maxJSONPayloadBytes + 1, payloadBytes: maxJSONPayloadBytes + 1},
-		{name: "normal envelope limit minus one", method: "registry.project.list", messageBytes: maxEnvelopeBytes - 1, valid: true},
-		{name: "normal envelope limit", method: "registry.project.list", messageBytes: maxEnvelopeBytes, valid: true},
-		{name: "normal envelope limit plus one", method: "registry.project.list", messageBytes: maxEnvelopeBytes + 1},
-		{name: "speech payload limit minus one", method: speechMethodChunk, messageBytes: maxSpeechChunkPayloadBytes - 1, payloadBytes: maxSpeechChunkPayloadBytes - 1, valid: true},
-		{name: "speech payload limit", method: speechMethodChunk, messageBytes: maxSpeechChunkPayloadBytes, payloadBytes: maxSpeechChunkPayloadBytes, valid: true},
-		{name: "speech payload limit plus one", method: speechMethodChunk, messageBytes: maxSpeechChunkPayloadBytes + 1, payloadBytes: maxSpeechChunkPayloadBytes + 1},
-		{name: "session read payload limit", method: rp.RegistryMethodSessionRead, messageBytes: maxSpeechChunkPayloadBytes, payloadBytes: maxSpeechChunkPayloadBytes, valid: true},
-		{name: "session read payload limit plus one", method: rp.RegistryMethodSessionRead, messageBytes: maxSpeechChunkPayloadBytes + 1, payloadBytes: maxSpeechChunkPayloadBytes + 1},
-		{name: "wire limit minus one", method: speechMethodChunk, messageBytes: maxWireMessageBytes - 1, valid: true},
-		{name: "wire limit", method: speechMethodChunk, messageBytes: maxWireMessageBytes, valid: true},
-		{name: "wire limit plus one", method: speechMethodChunk, messageBytes: maxWireMessageBytes + 1},
+		{name: "limit minus one", messageBytes: 16*1024*1024 - 1, valid: true},
+		{name: "limit", messageBytes: 16 * 1024 * 1024, valid: true},
+		{name: "limit plus one", messageBytes: 16*1024*1024 + 1},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			err := validateRegistryInput(testCase.method, testCase.messageBytes, testCase.payloadBytes)
+			message := registryMessageWithBytes(t, testCase.messageBytes)
+			_, _, err := decodeEnvelopeMessage(message)
 			if testCase.valid && err != nil {
-				t.Fatalf("validateRegistryInput() err=%v", err)
+				t.Fatalf("decodeEnvelopeMessage() err=%v", err)
 			}
 			if !testCase.valid && !errors.Is(err, errRegistryInputTooLarge) {
-				t.Fatalf("validateRegistryInput() err=%v, want too large", err)
+				t.Fatalf("decodeEnvelopeMessage() err=%v, want too large", err)
 			}
 		})
 	}
 }
 
-func TestInputLimitAllowsOneMiBNormalPayloadWithFraming(t *testing.T) {
-	const (
-		oneMiB           = 1 * 1024 * 1024
-		framingAllowance = 64 * 1024
-	)
-
-	if err := validateRegistryInput("registry.project.list", oneMiB+framingAllowance, oneMiB); err != nil {
-		t.Fatalf("validateRegistryInput() err=%v, want 1 MiB normal payload to be allowed", err)
+func registryMessageWithBytes(t *testing.T, messageBytes int) []byte {
+	t.Helper()
+	prefix := `{"type":"event","method":"registry.project.list","payload":{"data":"`
+	suffix := `"}}`
+	padding := messageBytes - len(prefix) - len(suffix)
+	if padding < 0 {
+		t.Fatalf("messageBytes=%d is too small", messageBytes)
 	}
-	if err := validateRegistryInput("registry.project.list", oneMiB+framingAllowance, oneMiB+1); !errors.Is(err, errRegistryInputTooLarge) {
-		t.Fatalf("validateRegistryInput() err=%v, want payload over 1 MiB to be rejected", err)
-	}
-	if err := validateRegistryInput("registry.project.list", oneMiB+framingAllowance+1, oneMiB); !errors.Is(err, errRegistryInputTooLarge) {
-		t.Fatalf("validateRegistryInput() err=%v, want envelope framing overflow to be rejected", err)
-	}
+	return []byte(prefix + strings.Repeat("x", padding) + suffix)
 }
 
 func TestInputLimitRejectsSecondJSONAndTrailingGarbage(t *testing.T) {

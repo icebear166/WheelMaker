@@ -3,6 +3,7 @@ package registry
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"github.com/gorilla/websocket"
@@ -2197,14 +2198,14 @@ func TestWebAuthRejectsInvalidLoginRequests(t *testing.T) {
 	}
 }
 
-func TestWebSocketNormalPayloadAbove64KiBAllowed(t *testing.T) {
+func TestWebSocketNormalPayloadAboveOneMiBAllowed(t *testing.T) {
 	server := New(Config{})
 	address := httptestNewRegistryServer(t, server.Handler())
 	client := dialWS(t, "http://"+address+"/ws")
 	defer client.Close()
 	connectRegistryClient(t, client)
 
-	payload := `{"data":"` + strings.Repeat("x", 70*1024) + `"}`
+	payload := `{"data":"` + strings.Repeat("x", 2*1024*1024) + `"}`
 	message := `{"requestId":2,"type":"request","method":"registry.project.list","payload":` + payload + `}`
 	if err := client.WriteMessage(websocket.TextMessage, []byte(message)); err != nil {
 		t.Fatalf("WriteMessage(): %v", err)
@@ -2215,32 +2216,56 @@ func TestWebSocketNormalPayloadAbove64KiBAllowed(t *testing.T) {
 	}
 }
 
-func TestWebSocketNormalPayloadTooLarge(t *testing.T) {
+func TestWebSocketForwardsOneMiBAttachmentChunk(t *testing.T) {
 	server := New(Config{})
 	address := httptestNewRegistryServer(t, server.Handler())
+
+	hub := dialWS(t, "http://"+address+"/ws")
+	defer hub.Close()
+	epoch := connectRegistryHub(t, hub, "hub-attachment")
+	mustWriteJSON(t, hub, testEnvelope{
+		RequestID: 2,
+		Type:      "request",
+		Method:    "hub.report.projects",
+		HubID:     "hub-attachment",
+		Payload: map[string]any{
+			"connectionEpoch": epoch,
+			"projects":        []map[string]any{{"name": "project", "path": "D:/project", "online": true}},
+		},
+	})
+	_ = mustReadEnvelope(t, hub)
+
 	client := dialWS(t, "http://"+address+"/ws")
 	defer client.Close()
 	connectRegistryClient(t, client)
-
-	payload := `{"data":"` + strings.Repeat("x", maxJSONPayloadBytes) + `"}`
-	message := `{"requestId":2,"type":"request","method":"registry.project.list","payload":` + payload + `}`
-	if err := client.WriteMessage(websocket.TextMessage, []byte(message)); err != nil {
-		t.Fatalf("WriteMessage(): %v", err)
-	}
-	response := mustReadEnvelope(t, client)
-	if response.Type != "error" || response.Payload["code"] != codePayloadTooLarge {
-		t.Fatalf("response=%#v, want payload_too_large", response)
+	data := base64.StdEncoding.EncodeToString(make([]byte, 1024*1024))
+	mustWriteJSON(t, client, testEnvelope{
+		RequestID: 2,
+		Type:      "request",
+		Method:    rp.RegistryMethodSessionAttachmentChunk,
+		ProjectID: "hub-attachment:project",
+		Payload: map[string]any{
+			"sessionId": "session-1",
+			"uploadId":  "upload-1",
+			"offset":    0,
+			"data":      data,
+		},
+	})
+	_ = hub.SetReadDeadline(time.Now().Add(2 * time.Second))
+	forwarded := mustReadEnvelope(t, hub)
+	if forwarded.Method != rp.RegistryMethodSessionAttachmentChunk || forwarded.Payload["data"] != data {
+		t.Fatalf("forwarded attachment chunk does not match request")
 	}
 }
 
-func TestWebSocketWireMessageTooLargeClosesConnection(t *testing.T) {
+func TestWebSocketMessageTooLargeClosesConnection(t *testing.T) {
 	server := New(Config{})
 	address := httptestNewRegistryServer(t, server.Handler())
 	client := dialWS(t, "http://"+address+"/ws")
 	defer client.Close()
 	connectRegistryClient(t, client)
 
-	message := []byte(`{"type":"request","method":"speech.chunk","payload":"` + strings.Repeat("x", maxWireMessageBytes) + `"}`)
+	message := []byte(`{"type":"request","method":"speech.chunk","payload":"` + strings.Repeat("x", maxRegistryMessageBytes) + `"}`)
 	_ = client.WriteMessage(websocket.TextMessage, message)
 	_ = client.SetReadDeadline(time.Now().Add(2 * time.Second))
 	if _, _, err := client.ReadMessage(); err == nil {
