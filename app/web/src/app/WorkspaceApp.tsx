@@ -79,6 +79,7 @@ import {
   enqueueChatPrompt,
   moveQueuedChatPromptToFront,
   moveQueuedChatPrompts,
+  queuedChatPrompts,
   shiftNextQueuedChatPrompt,
   type QueuedChatPrompt,
   type QueuedChatPromptsByKey,
@@ -3509,7 +3510,7 @@ export function App() {
     : undefined;
   const selectedQueuedPrompts = useMemo(
     () => selectedChatEncodedKey
-      ? chatQueuedPromptsByKey[selectedChatEncodedKey] ?? []
+      ? queuedChatPrompts(chatQueuedPromptsByKey, selectedChatEncodedKey)
       : [],
     [chatQueuedPromptsByKey, selectedChatEncodedKey],
   );
@@ -10957,6 +10958,7 @@ export function App() {
       }
       if (selectedChatPromptRunning) {
         const queuedPrompt: QueuedChatPrompt = {
+          kind: 'prompt',
           id: makeQueuedPromptId(),
           sessionId,
           blocks: blocks.map(block => ({...block})),
