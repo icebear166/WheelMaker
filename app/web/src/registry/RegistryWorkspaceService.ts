@@ -54,6 +54,8 @@ import type {
   RegistrySessionSearchStatusResponse,
   RegistryResumableSession,
   RegistrySessionSummary,
+  RegistrySessionCompactAccepted,
+  RegistrySessionStatusResult,
   RegistrySkillCommandResponse,
   RegistrySkillDetailPayload,
   RegistrySkillInstallPayload,
@@ -495,6 +497,20 @@ export class RegistryWorkspaceService {
       throw new Error('session is not ready');
     }
     return this.repository.sendSessionMessage(projectId, payload);
+  }
+
+  async statusProjectSession(projectId: string, sessionId: string): Promise<RegistrySessionStatusResult> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.statusSession(projectId, sessionId);
+  }
+
+  async compactProjectSession(projectId: string, sessionId: string): Promise<RegistrySessionCompactAccepted> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.compactSession(projectId, sessionId);
   }
 
   async startProjectSessionAttachment(
