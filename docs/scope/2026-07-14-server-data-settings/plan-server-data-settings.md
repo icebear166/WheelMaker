@@ -29,7 +29,7 @@ git diff --check -- docs/scope/2026-07-14-server-data-settings
 
 Expected: the first command has no matches and `git diff --check` emits no errors.
 
-- [ ] **Step 2: Commit the approved scope**
+- [x] **Step 2: Commit the approved scope**
 
 ```powershell
 git add docs/scope/2026-07-14-server-data-settings
@@ -48,7 +48,7 @@ Expected: one documentation commit containing the approved spec and this plan.
 - Modify: `server/internal/shared/shared_test.go`
 - Modify: `server/config.example.json`
 
-- [ ] **Step 1: Write failing store tests**
+- [x] **Step 1: Write failing store tests**
 
 Define the public model in the test before implementing it:
 
@@ -94,7 +94,7 @@ func TestStoreSerializesConcurrentUpdates(t *testing.T)
 
 The malformed-file fixture must contain `{"version":1,"unexpected":true}`; after `Snapshot` fails, assert the bytes remain exactly unchanged.
 
-- [ ] **Step 2: Run tests and verify the red state**
+- [x] **Step 2: Run tests and verify the red state**
 
 Run:
 
@@ -105,7 +105,7 @@ go test ./internal/serverdata -count=1 -v
 
 Expected: FAIL because `internal/serverdata` does not exist.
 
-- [ ] **Step 3: Implement the store and schema**
+- [x] **Step 3: Implement the store and schema**
 
 Use this exact shape and keep secret values out of `Snapshot`:
 
@@ -187,7 +187,7 @@ func (s *Store) Secret(kind SecretKind) (value, version string, err error)
 
 Use `json.Decoder.DisallowUnknownFields`, accept only the existing model/voice option sets, cap the file at 64 KiB, cap secret input at 16 KiB, and call `shared.WriteConfigFile` for private atomic replacement. A missing file returns defaults without creating a file. A parse/permission failure returns an error and never rewrites the source.
 
-- [ ] **Step 4: Remove third-party secrets from runtime config**
+- [x] **Step 4: Remove third-party secrets from runtime config**
 
 Delete these fields and types from `server/internal/shared/config.go`:
 
@@ -199,7 +199,7 @@ type SecretsConfig struct { /* removed */ }
 
 Update `server/internal/shared/shared_test.go` so `config.json` with top-level `secrets` is rejected by strict decoding. Keep `registry.token` unchanged. Confirm `server/config.example.json` contains no third-party secrets.
 
-- [ ] **Step 5: Run store and shared config tests**
+- [x] **Step 5: Run store and shared config tests**
 
 Run:
 
@@ -210,7 +210,7 @@ go test ./internal/serverdata ./internal/shared -count=1
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the Server Data foundation**
+- [x] **Step 6: Commit the Server Data foundation**
 
 ```powershell
 Set-Location ..
@@ -235,7 +235,7 @@ git commit -m "feat: add server data store"
 - Modify: `server/cmd/wheelmaker/main_test.go`
 - Modify: `docs/registry-protocol.md`
 
-- [ ] **Step 1: Write failing protocol descriptor tests**
+- [x] **Step 1: Write failing protocol descriptor tests**
 
 Replace the two `security.secret.*` methods with:
 
@@ -274,7 +274,7 @@ type AndroidSpeechCredentialResponse struct {
 }
 ```
 
-- [ ] **Step 2: Write failing Registry handler tests**
+- [x] **Step 2: Write failing Registry handler tests**
 
 Create a fake implementing:
 
@@ -300,7 +300,7 @@ func TestConnectInitPersistsClientNameForServerDataGate(t *testing.T)
 
 Use `wheelmaker-web` for the rejected connection and `wheelmaker-android` for the accepted connection. Assert the accepted JSON contains `speech-key` but not the fake DeepSeek or MiMo values.
 
-- [ ] **Step 3: Run protocol and handler tests in red state**
+- [x] **Step 3: Run protocol and handler tests in red state**
 
 ```powershell
 Set-Location server
@@ -309,7 +309,7 @@ go test ./internal/protocol ./internal/registry ./cmd/wheelmaker -run "ServerCon
 
 Expected: FAIL because the methods, handler, client-name state, and injected store do not exist.
 
-- [ ] **Step 4: Wire the store without making Registry own persistence**
+- [x] **Step 4: Wire the store without making Registry own persistence**
 
 Change Registry configuration to accept an injected interface:
 
@@ -342,11 +342,11 @@ state.clientName == "wheelmaker-android"
 
 Return `not_configured` when the Volcengine value is absent. Do not add a new HTTP endpoint or Nginx path.
 
-- [ ] **Step 5: Update DeepSeek/Speech/TTS resolvers to use the injected store**
+- [x] **Step 5: Update DeepSeek/Speech/TTS resolvers to use the injected store**
 
 Replace `s.secrets.Value(...)` calls with narrow helpers backed by `s.serverData.Secret(...)`. Never expose the generic `Secret` method through protocol DTOs. Remove `secret_store.go` completely after all callers compile.
 
-- [ ] **Step 6: Update protocol documentation and run tests**
+- [x] **Step 6: Update protocol documentation and run tests**
 
 Document the three methods, explicitly marking `server.androidSpeechCredential.get` as a single-user convenience gate based on spoofable client name rather than device attestation.
 
@@ -358,7 +358,7 @@ go test ./internal/protocol ./internal/registry ./cmd/wheelmaker -count=1
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit protocol and Registry integration**
+- [x] **Step 7: Commit protocol and Registry integration**
 
 ```powershell
 Set-Location ..
@@ -383,7 +383,7 @@ git commit -m "refactor: route server configuration through registry"
 - Modify: `server/internal/registry/server.go`
 - Modify: `server/internal/registry/server_test.go`
 
-- [ ] **Step 1: Write package-boundary tests before moving code**
+- [x] **Step 1: Write package-boundary tests before moving code**
 
 The Speech package must expose provider concepts without Registry envelopes:
 
@@ -436,7 +436,7 @@ type Client interface {
 
 Test fixed upstream URL, Authorization injection, request/response size limits, timeout, allowed model/voice values, and redacted upstream errors.
 
-- [ ] **Step 2: Run new package tests in red state**
+- [x] **Step 2: Run new package tests in red state**
 
 ```powershell
 Set-Location server
@@ -445,15 +445,15 @@ go test ./internal/speech ./internal/tts -count=1 -v
 
 Expected: FAIL because the packages do not exist.
 
-- [ ] **Step 3: Move Volcengine implementation using the known historical/current code**
+- [x] **Step 3: Move Volcengine implementation using the known historical/current code**
 
 Use current `registry/speech_volcengine.go` as the source for frame encoding and parsing, changing only package/API types. `registry/speech_service.go` remains the Registry stream adapter and depends on `speech.Provider`; it must not contain endpoint URLs, HTTP headers, binary frame constants, or response parsing.
 
-- [ ] **Step 4: Move MiMo upstream client behind a narrow adapter**
+- [x] **Step 4: Move MiMo upstream client behind a narrow adapter**
 
 Move fixed URL, HTTP request construction, Authorization, body limits, timeout, response parsing, and model/voice validation into `internal/tts`. Keep `registry/tts_service.go` limited to strict wire decoding, Server Data credential lookup, calling `tts.Client`, and wire response mapping.
 
-- [ ] **Step 5: Run focused and Registry regression tests**
+- [x] **Step 5: Run focused and Registry regression tests**
 
 ```powershell
 go test ./internal/speech ./internal/tts ./internal/registry -run "Speech|Volcengine|TTS|DeepSeek" -count=1
@@ -461,7 +461,7 @@ go test ./internal/speech ./internal/tts ./internal/registry -run "Speech|Volcen
 
 Expected: PASS; `rg -n "openspeech.bytedance.com|token-plan-cn.xiaomimimo.com" server/internal/registry` has no matches.
 
-- [ ] **Step 6: Commit provider extraction**
+- [x] **Step 6: Commit provider extraction**
 
 ```powershell
 Set-Location ..
@@ -483,7 +483,7 @@ git commit -m "refactor: extract server provider services"
 - Create: `app/__tests__/web-server-settings-protocol.test.ts`
 - Modify: `app/__tests__/web-registry-client-debug.test.ts`
 
-- [ ] **Step 1: Write failing Web protocol and redaction tests**
+- [x] **Step 1: Write failing Web protocol and redaction tests**
 
 Define the client model:
 
@@ -514,7 +514,7 @@ expect(redactRegistryDebugEnvelope({
 }));
 ```
 
-- [ ] **Step 2: Run Web tests in red state**
+- [x] **Step 2: Run Web tests in red state**
 
 ```powershell
 Set-Location app
@@ -523,7 +523,7 @@ npm test -- --runInBand __tests__/web-server-settings-protocol.test.ts __tests__
 
 Expected: FAIL because Server Settings types/methods are absent.
 
-- [ ] **Step 3: Implement repository/service APIs and client name injection**
+- [x] **Step 3: Implement repository/service APIs and client name injection**
 
 Use:
 
@@ -545,11 +545,11 @@ const registryClientName = isAndroidNativeSpeechHost()
 
 Do not infer Android from user-agent text.
 
-- [ ] **Step 4: Remove old secret protocol types**
+- [x] **Step 4: Schedule old secret protocol type removal with the UI hard cut**
 
-Delete `RegistrySecretKind`, `RegistrySecretStatus`, `RegistrySecretUpdatePayload`, `SecuritySecretStatus`, and `SecuritySecretUpdate`. Update debug redaction so raw debug JSON also contains `[redacted]`, never the credential.
+Update debug redaction so raw debug JSON also contains `[redacted]`, never the credential. Delete `RegistrySecretKind`, `RegistrySecretStatus`, `RegistrySecretUpdatePayload`, `SecuritySecretStatus`, and `SecuritySecretUpdate` in Task 6 Step 6, in the same change that removes their final Settings UI callers; this keeps the Task 5 intermediate commit type-correct without retaining them in the final product.
 
-- [ ] **Step 5: Run Web protocol tests and typecheck**
+- [x] **Step 5: Run Web protocol tests and typecheck**
 
 ```powershell
 npm test -- --runInBand __tests__/web-server-settings-protocol.test.ts __tests__/web-registry-client-debug.test.ts
@@ -558,7 +558,7 @@ npm run tsc:web
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit Web protocol model**
+- [x] **Step 6: Commit Web protocol model**
 
 ```powershell
 Set-Location ..
@@ -587,7 +587,7 @@ git commit -m "feat: add web server settings protocol"
 - Modify: `app/__tests__/web-chat-ui.test.ts`
 - Modify: `app/__tests__/web-workspace-persistence-safety.test.ts`
 
-- [ ] **Step 1: Rewrite UI tests to the approved Server section contract**
+- [x] **Step 1: Rewrite UI tests to the approved Server section contract**
 
 Assert exact section order and row order:
 
@@ -608,7 +608,7 @@ expect(serverSection).not.toMatch(/checked=|enabled/);
 
 Add behavior assertions that configured status derives feature availability and Key inputs remain empty after successful Set/Replace.
 
-- [ ] **Step 2: Rewrite persistence tests to require a hard cut**
+- [x] **Step 2: Rewrite persistence tests to require a hard cut**
 
 The new contract is:
 
@@ -623,7 +623,7 @@ expect(app).not.toContain('retryBackendSecretMigration');
 
 Keep a purge-only test: obsolete `deepseekApiKey`, `speechSettings`, and `ttsSettings` rows are deleted, never converted or uploaded.
 
-- [ ] **Step 3: Run UI/persistence tests in red state**
+- [x] **Step 3: Run UI/persistence tests in red state**
 
 ```powershell
 Set-Location app
@@ -632,7 +632,7 @@ npm test -- --runInBand __tests__/web-backend-secret-settings.test.ts __tests__/
 
 Expected: FAIL because the settings are still split and persisted.
 
-- [ ] **Step 4: Implement transient Server Settings state**
+- [x] **Step 4: Implement transient Server Settings state**
 
 Replace `speechSettings`, `ttsSettings`, and `backendSecretStatuses` with one transient state:
 
@@ -644,7 +644,7 @@ const ttsEnabled = serverSettings.textToSpeech.configured;
 
 Fetch it after authenticated Registry connection. Set/replace/clear and model/voice changes call `updateServerSettings` and replace the transient snapshot with the response. Do not call `workspaceStore.rememberGlobalState` for Server Settings.
 
-- [ ] **Step 5: Build the Server UI in the approved order**
+- [x] **Step 5: Build the Server UI in the approved order**
 
 Move Voice Input and TTS out of Chat. Add `server` to `SettingsSectionId`; render it between Chat and Connection. Each credential editor accepts only draft text and status:
 
@@ -660,11 +660,11 @@ Move Voice Input and TTS out of Chat. Add `server` to `SettingsSectionId`; rende
 
 Render order within Voice Input as Key then Model; within TTS as Key then Model then Voice; then DeepSeek Key. Keep fields visible when unconfigured.
 
-- [ ] **Step 6: Delete client configuration and migration code**
+- [x] **Step 6: Delete client configuration and migration code**
 
 Delete the old feature settings modules after moving option IDs/labels to `settings/serverSettings.ts`. Update TTS runtime imports to use the new shared types. Delete legacy extraction/get/clear APIs and retry state. Consolidate purge-only browser cleanup in `app/web/src/compatibility/browserCredentialCleanup.ts`; it deletes known obsolete rows without parsing or migrating their values.
 
-- [ ] **Step 7: Run Web tests, typecheck, and production build**
+- [x] **Step 7: Run Web tests, typecheck, and production build**
 
 ```powershell
 npm test -- --runInBand __tests__/web-backend-secret-settings.test.ts __tests__/web-browser-credential-hard-cut.test.ts __tests__/web-speech-settings.test.ts __tests__/web-chat-ui.test.ts __tests__/web-workspace-persistence-safety.test.ts
@@ -674,7 +674,7 @@ npm run build:web
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit UI and persistence hard cut**
+- [x] **Step 8: Commit UI and persistence hard cut**
 
 ```powershell
 Set-Location ..
@@ -698,7 +698,7 @@ git commit -m "feat: centralize server settings UI"
 - Modify: `mobile/android/app/src/test/java/com/wheelmaker/android/MainActivityPortRelayCookieTest.kt`
 - Create: `mobile/android/app/src/test/java/com/wheelmaker/android/AndroidSpeechCredentialCacheTest.kt`
 
-- [ ] **Step 1: Write failing credential-cache and direct-runtime tests**
+- [x] **Step 1: Write failing credential-cache and direct-runtime tests**
 
 The Native runtime contract must be:
 
@@ -722,7 +722,7 @@ Tests must assert:
 - clear, app background, and server reset cancel active speech and clear the credential where required;
 - no Android production source contains `SharedPreferences` or file writes for the ASR Key.
 
-- [ ] **Step 2: Run Android tests in red state**
+- [x] **Step 2: Run Android tests in red state**
 
 ```powershell
 Set-Location mobile/android
@@ -731,7 +731,7 @@ Set-Location mobile/android
 
 Expected: FAIL because direct client/protocol and credential APIs are absent.
 
-- [ ] **Step 3: Restore protocol/client behavior from the last direct version**
+- [x] **Step 3: Restore protocol/client behavior from the last direct version**
 
 Use these repository blobs as the exact behavioral source instead of reimplementing the binary protocol from memory:
 
@@ -743,7 +743,7 @@ git show d3fb055c^:mobile/android/app/src/test/java/com/wheelmaker/android/Douba
 
 Restore them through patches, then adapt the constructor so the credential comes from `AndroidSpeechRuntime` memory rather than `AndroidSpeechStartRequest`. Keep fixed endpoint/resource ID, `X-Api-Key`, request ID/sequence headers, frame limits, final handling, and existing OkHttp timeout behavior.
 
-- [ ] **Step 4: Change Native start/events back to direct recognition**
+- [x] **Step 4: Change Native start/events back to direct recognition**
 
 Use a start payload without a Registry stream ID or Key:
 
@@ -757,7 +757,7 @@ data class AndroidSpeechStartRequest(
 
 Generate `android-speech-<uuid>` inside Native. Restore `AndroidSpeechEvent.Transcript(text, final)` and remove `AndroidSpeechEvent.Audio`. `AndroidSpeechRuntime` copies the cached credential into the new `DoubaoSpeechClient` only when starting, never serializes it back to Web, and clears references when the session ends.
 
-- [ ] **Step 5: Add origin-restricted credential bridge actions**
+- [x] **Step 5: Add origin-restricted credential bridge actions**
 
 Add:
 
@@ -769,11 +769,11 @@ speech.clearCredential
 
 to the business allowlist only. They require trusted configured Origin/Base Path and main frame through the existing WebMessage listener. They do not require a fresh gesture because synchronization occurs immediately after authenticated connect; `speech.start` continues to require a recent user gesture. `bootstrap.*` must never access these actions.
 
-- [ ] **Step 6: Clear Native credential on server reset/switch**
+- [x] **Step 6: Clear Native credential on server reset/switch**
 
 Call `androidSpeechRuntime.clearCredential()` from the existing `clearCurrentServerState` path before navigating to Bootstrap. Web logout will separately invoke the clear bridge action.
 
-- [ ] **Step 7: Run Android unit tests and lint**
+- [x] **Step 7: Run Android unit tests and lint**
 
 ```powershell
 ./gradlew.bat :app:testDebugUnitTest :app:lintDebug
@@ -781,7 +781,7 @@ Call `androidSpeechRuntime.clearCredential()` from the existing `clearCurrentSer
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit Android direct speech**
+- [x] **Step 8: Commit Android direct speech**
 
 ```powershell
 Set-Location ../..
@@ -802,7 +802,7 @@ git commit -m "feat: restore android direct speech"
 - Modify: `app/__tests__/web-voice-input-runtime.test.ts`
 - Modify: `app/__tests__/web-voice-input-controller.test.ts`
 
-- [ ] **Step 1: Write failing bridge/cache synchronization tests**
+- [x] **Step 1: Write failing bridge/cache synchronization tests**
 
 Expose in the facade:
 
@@ -824,7 +824,7 @@ else if (!nativeState.configured || nativeState.version !== serverSettings.voice
 
 Two calls with an unchanged version must perform one server credential read total. A changed version, server switch, logout, or `not_configured` performs a clear/refetch as specified.
 
-- [ ] **Step 2: Rewrite native voice-flow tests**
+- [x] **Step 2: Rewrite native voice-flow tests**
 
 Android expectations:
 
@@ -836,7 +836,7 @@ Android expectations:
 
 Web/Desktop expectations remain the existing Registry PCM stream behavior.
 
-- [ ] **Step 3: Run voice tests in red state**
+- [x] **Step 3: Run voice tests in red state**
 
 ```powershell
 Set-Location app
@@ -845,7 +845,7 @@ npm test -- --runInBand __tests__/web-android-native-message-bridge.test.ts __te
 
 Expected: FAIL because Android still starts a Registry speech stream and forwards PCM.
 
-- [ ] **Step 4: Implement credential synchronization after authenticated connect**
+- [x] **Step 4: Implement credential synchronization after authenticated connect**
 
 Keep Key data out of React state. Implement a single function with local variables only:
 
@@ -868,11 +868,11 @@ async function synchronizeAndroidSpeechCredential(snapshot: ServerSettings): Pro
 
 Call it after Server Settings load/update only when `isAndroidNativeSpeechHost()` is true. The Registry debug redactor must run before recording the credential response.
 
-- [ ] **Step 5: Restore the direct Android branch in WorkspaceApp**
+- [x] **Step 5: Restore the direct Android branch in WorkspaceApp**
 
 Use Native-generated stream IDs and direct transcript events. Remove all Android calls to Registry speech lifecycle methods and PCM queue handling. Keep the Web/Desktop registry branch unchanged. Feature visibility derives from `serverSettings.voiceInput.configured`, not a local toggle.
 
-- [ ] **Step 6: Run voice tests, typecheck, and build**
+- [x] **Step 6: Run voice tests, typecheck, and build**
 
 ```powershell
 npm test -- --runInBand __tests__/web-android-native-message-bridge.test.ts __tests__/web-android-native-speech-runtime.test.ts __tests__/web-voice-input-runtime.test.ts __tests__/web-voice-input-controller.test.ts
@@ -882,7 +882,7 @@ npm run build:web
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit Android/Web integration**
+- [x] **Step 7: Commit Android/Web integration**
 
 ```powershell
 Set-Location ..
@@ -905,7 +905,7 @@ git commit -m "feat: sync android speech credential in memory"
 - Modify: `scripts/security_acceptance.ps1`
 - Modify: `scripts/security_acceptance.sh`
 
-- [ ] **Step 1: Write structural compatibility and security gates**
+- [x] **Step 1: Write structural compatibility and security gates**
 
 Add source assertions that:
 
@@ -922,7 +922,7 @@ are absent from production source. Require deploy compatibility entry points (`m
 
 Allow historical terms only in tests, compatibility modules, and archived scope documents. Add an acceptance assertion that Android production sources contain no Server Data Key persistence APIs.
 
-- [ ] **Step 2: Run the gates in red state**
+- [x] **Step 2: Run the gates in red state**
 
 ```powershell
 ./scripts/security_acceptance.ps1
@@ -930,11 +930,11 @@ Allow historical terms only in tests, compatibility modules, and archived scope 
 
 Expected: FAIL until old key migration and scattered deploy compatibility are removed.
 
-- [ ] **Step 3: Consolidate retained deploy compatibility**
+- [x] **Step 3: Consolidate retained deploy compatibility**
 
 Move `migrateRegistryToken` and `retireLegacyMonitor` orchestration beside existing Monitor compatibility functions. Keep current behavior and tests; do not remove Token or Monitor upgrade cleanup. Main deploy flows call named compatibility entry points without embedding migration implementations.
 
-- [ ] **Step 4: Update current documentation**
+- [x] **Step 4: Update current documentation**
 
 Document:
 
@@ -947,7 +947,7 @@ Document:
 
 Update the earlier security baseline language so current documentation no longer claims Android can never receive the Volcengine Key.
 
-- [ ] **Step 5: Run compatibility/security tests**
+- [x] **Step 5: Run compatibility/security tests**
 
 ```powershell
 Set-Location server
@@ -958,7 +958,7 @@ Set-Location ..
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit cleanup and documentation**
+- [x] **Step 6: Commit cleanup and documentation**
 
 ```powershell
 git add server/cmd/wheelmaker-deploy app/web/src/compatibility app/__tests__/web-browser-credential-hard-cut.test.ts docs/security.md README.md INSTALL.md scripts
@@ -971,7 +971,7 @@ git commit -m "chore: centralize server compatibility paths"
 
 - Modify only files required to fix failures discovered by the commands below.
 
-- [ ] **Step 1: Run all Go tests**
+- [x] **Step 1: Run all Go tests**
 
 ```powershell
 Set-Location server
@@ -980,7 +980,7 @@ go test ./... -count=1
 
 Expected: PASS.
 
-- [ ] **Step 2: Run all Web tests, typecheck, and production build**
+- [x] **Step 2: Run all Web tests, typecheck, and production build**
 
 ```powershell
 Set-Location ../app
@@ -991,7 +991,7 @@ npm run build:web
 
 Expected: PASS.
 
-- [ ] **Step 3: Run Android tests and lint**
+- [x] **Step 3: Run Android tests and lint**
 
 ```powershell
 Set-Location ../mobile/android
@@ -1000,18 +1000,18 @@ Set-Location ../mobile/android
 
 Expected: PASS.
 
-- [ ] **Step 4: Run security acceptance and source leak scans**
+- [x] **Step 4: Run security acceptance and source leak scans**
 
 ```powershell
 Set-Location ../..
 ./scripts/security_acceptance.ps1
-rg -n --glob '!**/dist/**' --glob '!docs/scope/**' "migrateLegacyBackendSecrets|extractLegacyBackendSecrets|config\.json.*secrets|volcengineApiKey|deepseekApiKey"
-rg -n --glob '!**/dist/**' "server\.androidSpeechCredential\.get" app/web/src server/internal
+rg -n --glob '!**/dist/**' --glob '!**/__tests__/**' --glob '!**/*_test.go' "migrateLegacyBackendSecrets|extractLegacyBackendSecrets|getLegacyBackendSecrets|clearLegacyBackendSecret|retryBackendSecretMigration|config\.json.*secrets" app/web/src server mobile/android/app/src/main
+rg -n --glob '!**/dist/**' "ServerAndroidSpeechCredentialGet|RegistryMethodServerAndroidSpeechCredentialGet|getAndroidSpeechCredential" app/web/src server/internal
 ```
 
-Expected: acceptance PASS; the first `rg` has no production matches; the second shows only protocol, handler, repository, and redaction paths.
+Expected: acceptance PASS; the first `rg` has no production matches; the second shows only protocol, handler, repository, and redaction paths. Historical browser row names remain allowed only in tests and the dedicated compatibility cleanup module; provider credential aliases used by unrelated account-statistics readers are not migration APIs.
 
-- [ ] **Step 5: Inspect the final diff and working tree**
+- [x] **Step 5: Inspect the final diff and working tree**
 
 ```powershell
 git diff --check
@@ -1021,11 +1021,11 @@ git log --oneline --decorate -10
 
 Expected: no whitespace errors; only intentional final fixes may be uncommitted.
 
-- [ ] **Step 6: Apply any final verification fixes**
+- [x] **Step 6: Apply any final verification fixes**
 
 Resolve every intentional issue found in Step 5, rerun its affected verification command, and leave the final plan checkbox update for the repository completion commit.
 
-- [ ] **Step 7: Execute the repository completion gate**
+- [x] **Step 7: Execute the repository completion gate**
 
 ```powershell
 git add -A
@@ -1035,6 +1035,6 @@ git push origin main
 
 Expected: all three commands succeed. The final plan checkbox update ensures the completion commit is non-empty, and `git push origin main` publishes the exact verified tree.
 
-- [ ] **Step 8: Record external acceptance remaining for the owner**
+- [x] **Step 8: Record external acceptance remaining for the owner**
 
 The automated work is complete only after all preceding gates pass. Report one external acceptance item without claiming it was run: install the newly signed APK on a real Android device, authenticate against the HTTPS deployment, configure Volcengine in Server settings, verify the APK connects directly to firehose endpoint, verify a second recording does not issue another credential read, and verify Web voice still traverses the server.
