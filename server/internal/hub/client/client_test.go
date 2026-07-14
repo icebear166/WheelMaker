@@ -333,12 +333,20 @@ func (f *failingSessionViewSink) RecordEvent(context.Context, SessionViewEvent) 
 	return errors.New("session view sink failed")
 }
 
+func (f *failingSessionViewSink) RecordSessionOperation(context.Context, string, acp.SessionOperationPayload) error {
+	return errors.New("session view sink failed")
+}
+
 type recordingSessionViewSink struct {
 	events []SessionViewEvent
 }
 
 func (s *recordingSessionViewSink) RecordEvent(_ context.Context, event SessionViewEvent) error {
 	s.events = append(s.events, event)
+	return nil
+}
+
+func (s *recordingSessionViewSink) RecordSessionOperation(context.Context, string, acp.SessionOperationPayload) error {
 	return nil
 }
 
@@ -7020,6 +7028,7 @@ func TestHandleSessionRequestSessionCompactRejectsBusyPrompt(t *testing.T) {
 
 func TestHandleSessionRequestSessionCompactAcceptsAndBlocksPrompt(t *testing.T) {
 	c := newTestClient(t, &mockSession{agentName: string(acp.ACPProviderCodex), sessionID: "sess-compact"})
+	c.SetSessionViewSink(c)
 	ctx := context.Background()
 	if err := c.store.SaveSession(ctx, &SessionRecord{
 		ID:           "sess-compact",

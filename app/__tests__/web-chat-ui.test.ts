@@ -2539,4 +2539,18 @@ describe('workspace session actions', () => {
     expect(mainTsx).toContain('chatQueuedPromptsByKeyRef.current = {};');
     expect(mainTsx).toContain('setChatQueuedPromptsByKey({});');
   });
+
+  test('surfaces compact request failures in the active workspace', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const requestStart = mainTsx.indexOf('const requestSessionCompaction = async');
+    const requestEnd = mainTsx.indexOf('const refreshSessionStatusDialog = async', requestStart);
+    const requestBody = mainTsx.slice(requestStart, requestEnd);
+
+    expect(requestStart).toBeGreaterThanOrEqual(0);
+    expect(requestEnd).toBeGreaterThan(requestStart);
+    expect(requestBody).toContain('if (!isSessionBusyError(errorValue)) {');
+    expect(requestBody).toContain('setToastMessage(`Context compaction failed: ${message}`);');
+    expect(requestBody).toContain('throw errorValue;');
+  });
 });

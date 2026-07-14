@@ -569,10 +569,8 @@ func (s *Session) StartCompaction(ctx context.Context, operationID string) error
 	if !ok {
 		return agent.ErrSessionActionUnsupported
 	}
-	recorder, ok := s.viewSink.(interface {
-		RecordSessionOperation(context.Context, string, acp.SessionOperationPayload) error
-	})
-	if !ok {
+	recorder := s.viewSink
+	if recorder == nil {
 		return fmt.Errorf("session operation recorder is required")
 	}
 	startedAt := time.Now().UTC()

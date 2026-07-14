@@ -10322,12 +10322,20 @@ export function App() {
     sessionId: string,
     runtimeKey: string,
   ) => {
-    const result = await service.compactProjectSession(targetProjectId, sessionId);
-    if (!result.ok || !result.accepted || !result.operationId) {
-      throw new Error('session.compact returned accepted=false');
-    }
-    if (!terminalCompactionOperationIdsRef.current.delete(result.operationId)) {
-      setRuntimeCompacting(runtimeKey, true);
+    try {
+      const result = await service.compactProjectSession(targetProjectId, sessionId);
+      if (!result.ok || !result.accepted || !result.operationId) {
+        throw new Error('session.compact returned accepted=false');
+      }
+      if (!terminalCompactionOperationIdsRef.current.delete(result.operationId)) {
+        setRuntimeCompacting(runtimeKey, true);
+      }
+    } catch (errorValue) {
+      if (!isSessionBusyError(errorValue)) {
+        const message = errorValue instanceof Error ? errorValue.message : String(errorValue);
+        setToastMessage(`Context compaction failed: ${message}`);
+      }
+      throw errorValue;
     }
   };
 

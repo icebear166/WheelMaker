@@ -496,6 +496,10 @@ func (c *Client) RecordEvent(ctx context.Context, event SessionViewEvent) error 
 	return c.sessionRecorder.RecordEvent(ctx, event)
 }
 
+func (c *Client) RecordSessionOperation(ctx context.Context, sessionID string, payload acp.SessionOperationPayload) error {
+	return c.sessionRecorder.RecordSessionOperation(ctx, sessionID, payload)
+}
+
 func (c *Client) HandleSessionRequest(ctx context.Context, method string, projectID string, payload json.RawMessage) (any, error) {
 	switch strings.TrimSpace(method) {
 	case acp.RegistryMethodSessionList:

@@ -33,6 +33,7 @@ type SessionViewEvent struct {
 
 type SessionViewSink interface {
 	RecordEvent(ctx context.Context, event SessionViewEvent) error
+	RecordSessionOperation(ctx context.Context, sessionID string, payload acp.SessionOperationPayload) error
 }
 
 type sessionViewSummary struct {

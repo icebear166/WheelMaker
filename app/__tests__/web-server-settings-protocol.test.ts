@@ -57,7 +57,9 @@ describe('server settings protocol', () => {
   });
 
   test('chooses Android, Desktop, and Web names without user-agent inference', () => {
-    const source = fs.readFileSync(path.join(__dirname, '..', 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
+    const source = fs
+      .readFileSync(path.join(__dirname, '..', 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8')
+      .replace(/\r\n/g, '\n');
     const start = source.indexOf('const registryClientName');
     const end = source.indexOf('const workspaceStore', start);
     const selection = source.slice(start, end);
