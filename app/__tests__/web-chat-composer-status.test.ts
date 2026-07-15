@@ -260,7 +260,7 @@ describe('chat composer status helpers', () => {
       '--workspace-temporary-layer-background: color-mix(in srgb, var(--surface-overlay) 82%, transparent);',
     );
     expect(temporaryLayerStyles).toContain(
-      '--workspace-temporary-layer-filter: blur(36px) saturate(1.18) contrast(1.04);',
+      '--workspace-temporary-layer-filter: blur(12px) saturate(1.08);',
     );
     expect(temporaryLayerStyles).toContain('background: var(--workspace-temporary-layer-background);');
     expect(temporaryLayerStyles).toContain('backdrop-filter: var(--workspace-temporary-layer-filter);');
@@ -268,6 +268,17 @@ describe('chat composer status helpers', () => {
     expect(temporaryLayerStyles).toContain(
       'inset 0 1px 0 color-mix(in srgb, var(--text-primary) 8%, transparent);',
     );
+  });
+
+  test('releases the chat page opacity animation after entry so temporary layers can sample their backdrop', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+    const chatPageRule = cssRuleBlock(stylesCss, '.workspace-right > .content:has(> .chat-title-bar)');
+
+    expect(chatPageRule).toContain(
+      'animation: workspacePageEnter var(--motion-standard) var(--ease-out);',
+    );
+    expect(chatPageRule).not.toMatch(/\b(?:both|forwards)\b/);
   });
 
   test('restores the translucent glass recipe only for desktop temporary layers', () => {

@@ -5387,7 +5387,7 @@
 .wide-project-action-popover,
 .mobile-project-sheet {
   --workspace-temporary-layer-background: color-mix(in srgb, var(--surface-overlay) 82%, transparent);
-  --workspace-temporary-layer-filter: blur(36px) saturate(1.18) contrast(1.04);
+  --workspace-temporary-layer-filter: blur(12px) saturate(1.08);
 }
 
 @media (min-width: 900px) {
