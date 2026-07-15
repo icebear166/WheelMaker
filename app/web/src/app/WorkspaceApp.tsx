@@ -443,6 +443,7 @@ import {
   previewWorkbenchSnapshotFromState,
   previewWorkbenchStateFromSnapshot,
   previewTabId,
+  resolvePromptDiffActiveFilePath,
   selectPreviewProject,
   selectPreviewTab,
   updatePreviewTab,
@@ -2413,10 +2414,11 @@ const ChatPromptArtifactPreviewViewer = React.memo(function ChatPromptArtifactPr
         </div>
         {preview.files.map(file => {
           const {fileName, parentPath} = splitPathForDisplay(file.path);
+          const active = file.path === preview.activeFilePath;
           return (
             <section
               key={file.path}
-              className={`chat-prompt-diff-file${file.expanded ? ' expanded' : ''}`}
+              className={`chat-prompt-diff-file${file.expanded ? ' expanded' : ''}${active ? ' active' : ''}`}
               data-preview-diff-path={file.path}
             >
               <button
@@ -2424,6 +2426,7 @@ const ChatPromptArtifactPreviewViewer = React.memo(function ChatPromptArtifactPr
                 className="chat-prompt-diff-file-header"
                 onClick={() => onToggleFile(file.path)}
                 aria-expanded={file.expanded}
+                aria-current={active || undefined}
                 title={file.path}
               >
                 <span className={`codicon ${file.expanded ? 'codicon-chevron-down' : 'codicon-chevron-right'}`} aria-hidden="true" />
@@ -8597,6 +8600,7 @@ export function App() {
                   ...currentTab,
                   title: promptArtifactPreviewTitle(files.length),
                   files,
+                  activeFilePath: resolvePromptDiffActiveFilePath(files, currentTab.activeFilePath),
                   loading: false,
                   error: '',
                 }
@@ -18022,6 +18026,7 @@ export function App() {
           promptText,
           promptSummary,
           files: initialFiles,
+          activeFilePath: initialPath || initialFiles[0]?.path || '',
         }),
         artifactProjectId,
         tabId,
@@ -18056,6 +18061,12 @@ export function App() {
                 promptText,
                 promptSummary,
                 files,
+                activeFilePath: files.some(file => file.path === tab.activeFilePath)
+                  ? tab.activeFilePath
+                  : resolvePromptDiffActiveFilePath(
+                      files,
+                      initialPath || initialFiles[0]?.path || '',
+                    ),
                 loading: false,
                 error: '',
               }
@@ -18102,6 +18113,7 @@ export function App() {
         item.type === 'prompt-diff'
           ? {
               ...item,
+              activeFilePath: path,
               files: item.files.map(file =>
                 file.path === path ? {...file, expanded: !file.expanded} : file,
               ),

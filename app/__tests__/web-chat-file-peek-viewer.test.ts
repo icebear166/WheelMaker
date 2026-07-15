@@ -62,6 +62,44 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('togglePromptArtifactPreviewFile');
   });
 
+  test('prompt diff active file selection survives open, load, restore, and header toggles', () => {
+    const mainTsx = readSourceText(mainPath);
+    const restoreStart = mainTsx.indexOf('const loadRestoredPreviewTab = useCallback(');
+    const restoreEnd = mainTsx.indexOf('const resolvePromptAttachmentThumbnail', restoreStart);
+    const restoreBody = mainTsx.slice(restoreStart, restoreEnd);
+    const openStart = mainTsx.indexOf('const openPromptArtifactDiff = useCallback(');
+    const openEnd = mainTsx.indexOf('const togglePromptArtifactPreviewFile', openStart);
+    const openBody = mainTsx.slice(openStart, openEnd);
+    const toggleStart = openEnd;
+    const toggleEnd = mainTsx.indexOf('const selectedChatHasOpenPromptTurn', toggleStart);
+    const toggleBody = mainTsx.slice(toggleStart, toggleEnd);
+    const viewerStart = mainTsx.indexOf('const ChatPromptArtifactPreviewViewer = React.memo(function ChatPromptArtifactPreviewViewer');
+    const viewerEnd = mainTsx.indexOf('}, (prev, next) => (', viewerStart);
+    const viewerBody = mainTsx.slice(viewerStart, viewerEnd);
+    const viewerComparatorEnd = mainTsx.indexOf('));', viewerEnd);
+    const viewerComparatorBody = mainTsx.slice(viewerEnd, viewerComparatorEnd);
+
+    expect(restoreStart).toBeGreaterThanOrEqual(0);
+    expect(restoreEnd).toBeGreaterThan(restoreStart);
+    expect(openStart).toBeGreaterThanOrEqual(0);
+    expect(openEnd).toBeGreaterThan(openStart);
+    expect(toggleEnd).toBeGreaterThan(toggleStart);
+    expect(viewerStart).toBeGreaterThanOrEqual(0);
+    expect(viewerEnd).toBeGreaterThan(viewerStart);
+    expect(viewerComparatorEnd).toBeGreaterThan(viewerEnd);
+    expect(mainTsx).toContain('resolvePromptDiffActiveFilePath,');
+    expect(openBody).toContain("activeFilePath: initialPath || initialFiles[0]?.path || '',");
+    expect(openBody).toContain('files.some(file => file.path === tab.activeFilePath)');
+    expect(openBody).toContain('resolvePromptDiffActiveFilePath(');
+    expect(restoreBody).toContain('activeFilePath: resolvePromptDiffActiveFilePath(files, currentTab.activeFilePath),');
+    expect(toggleBody).toContain('activeFilePath: path,');
+    expect(toggleBody).toContain("file.path === path ? {...file, expanded: !file.expanded} : file");
+    expect(viewerBody).toContain('const active = file.path === preview.activeFilePath;');
+    expect(viewerBody).toContain("className={`chat-prompt-diff-file${file.expanded ? ' expanded' : ''}${active ? ' active' : ''}`}");
+    expect(viewerBody).toContain('aria-current={active || undefined}');
+    expect(viewerComparatorBody).toContain('prev.preview === next.preview');
+  });
+
   test('prompt attachments open unified attachment tabs', () => {
     const mainTsx = readSourceText(mainPath);
     const stylesCss = readWebStyles(projectRoot);
