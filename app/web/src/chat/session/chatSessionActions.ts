@@ -1,7 +1,10 @@
-import type {RegistrySessionActionCapabilities} from '../../registry/registryTypes';
+import type {
+  RegistrySessionActionCapabilities,
+  RegistrySessionConfigOption,
+} from '../../registry/registryTypes';
 import {resolveChatSlashQuery} from '../composer/chatComposerTriggerQueries';
 
-export type ChatSessionActionKind = 'status' | 'compact';
+export type ChatSessionActionKind = 'status' | 'compact' | 'fast';
 
 export type ChatSessionSlashOption = {
   name: string;
@@ -12,11 +15,12 @@ export type ChatSessionSlashOption = {
   enabled: boolean;
   disabledReason?: string;
   action?: ChatSessionActionKind;
+  checked?: boolean;
 };
 
 export type StandaloneSessionActionResolution =
   | {kind: ChatSessionActionKind}
-  | {kind: 'invalid'; command: '/status' | '/compact'}
+  | {kind: 'invalid'; command: '/status' | '/compact' | '/fast'}
   | null;
 
 const unsupportedReason = 'Current Agent does not support this action.';
@@ -24,9 +28,11 @@ const unsupportedReason = 'Current Agent does not support this action.';
 export function buildChatSessionActionOptions(
   skills: string[],
   capabilities?: RegistrySessionActionCapabilities,
+  configOptions: RegistrySessionConfigOption[] = [],
 ): ChatSessionSlashOption[] {
   const compact = capabilities?.compact;
   const status = capabilities?.status;
+  const fastMode = configOptions.find(option => option.id === 'fast_mode');
   const fixed: ChatSessionSlashOption[] = [
     {
       name: '/compact',
@@ -49,12 +55,25 @@ export function buildChatSessionActionOptions(
       action: 'status',
     },
   ];
+  if (fastMode) {
+    const checked = fastMode.currentValue === 'on';
+    fixed.push({
+      name: '/fast',
+      description: checked ? 'On · 1.5x speed, increased usage' : 'Off · Standard speed',
+      kind: 'command',
+      behavior: 'invoke',
+      icon: 'codicon-zap',
+      enabled: true,
+      action: 'fast',
+      checked,
+    });
+  }
   const deduped = new Map<string, string>();
   for (const rawSkill of skills) {
     const skill = rawSkill.trim().replace(/^\/+/, '');
     if (!skill) continue;
     const key = skill.toLowerCase();
-    if (!deduped.has(key) && key !== 'status' && key !== 'compact') {
+    if (!deduped.has(key) && key !== 'status' && key !== 'compact' && key !== 'fast') {
       deduped.set(key, skill);
     }
   }
@@ -87,9 +106,9 @@ export function filterChatSessionActionOptions(
 
 export function resolveStandaloneSessionAction(text: string, attachmentCount: number): StandaloneSessionActionResolution {
   const trimmed = text.trim();
-  const match = /^(\/compact|\/status)(?:\s|$)/i.exec(trimmed);
+  const match = /^(\/compact|\/status|\/fast)(?:\s|$)/i.exec(trimmed);
   if (!match) return null;
-  const command = match[1].toLowerCase() as '/status' | '/compact';
+  const command = match[1].toLowerCase() as '/status' | '/compact' | '/fast';
   if (trimmed.toLowerCase() !== command || attachmentCount > 0) {
     return {kind: 'invalid', command};
   }

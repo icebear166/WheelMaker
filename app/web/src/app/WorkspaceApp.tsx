@@ -3426,6 +3426,11 @@ export function App() {
     return selectedChatSession?.configOptions ?? [];
   }, [selectedChatSession]);
 
+  const selectedFastModeOption = useMemo(
+    () => selectedChatConfigOptions.find(option => option.id === 'fast_mode'),
+    [selectedChatConfigOptions],
+  );
+
   const chatContextUsage = useMemo(
     () => selectedChatSession ? formatChatContextUsage(selectedChatSession.usage) : null,
     [selectedChatSession],
@@ -3613,8 +3618,12 @@ export function App() {
   }, [projects, projectId]);
 
   const chatSlashCommands = useMemo(
-    () => buildChatSessionActionOptions(chatSlashSkills, selectedChatSession?.sessionActions),
-    [chatSlashSkills, selectedChatSession?.sessionActions],
+    () => buildChatSessionActionOptions(
+      chatSlashSkills,
+      selectedChatSession?.sessionActions,
+      selectedChatConfigOptions,
+    ),
+    [chatSlashSkills, selectedChatConfigOptions, selectedChatSession?.sessionActions],
   );
 
   const chatSlashCommandOptions = useMemo(
@@ -10275,7 +10284,7 @@ export function App() {
   const sessionActionCapability = (
     targetProjectId: string,
     sessionId: string,
-    action: ChatSessionActionKind,
+    action: Exclude<ChatSessionActionKind, 'fast'>,
   ) => knownChatSessionsForProject(targetProjectId)
     .find(session => session.sessionId === sessionId)
     ?.sessionActions?.[action];
@@ -10339,6 +10348,17 @@ export function App() {
     const selectedKey = selectedChatKeyRef.current;
     if (!selectedKey || !selectedKey.sessionId || isDraftChatSessionId(selectedKey.sessionId)) {
       setError('Select a created chat session first.');
+      return;
+    }
+    if (action === 'fast') {
+      const option = knownChatSessionsForProject(selectedKey.projectId)
+        .find(session => session.sessionId === selectedKey.sessionId)
+        ?.configOptions?.find(configOption => configOption.id === 'fast_mode');
+      if (!option) {
+        setError('Current Agent does not support Fast mode.');
+        return;
+      }
+      await handleChatConfigOptionChange(option, option.currentValue === 'on' ? 'off' : 'on');
       return;
     }
     const capability = sessionActionCapability(selectedKey.projectId, selectedKey.sessionId, action);
@@ -18626,6 +18646,20 @@ export function App() {
         </div>
       );
     };
+    const renderChatFastModeIndicator = () => {
+      if (!selectedFastModeOption) {
+        return null;
+      }
+      const enabled = selectedFastModeOption.currentValue === 'on';
+      return (
+        <span
+          className={`codicon codicon-zap chat-fast-mode-indicator${enabled ? ' enabled' : ''}`}
+          role="img"
+          aria-label={`Fast mode ${enabled ? 'on' : 'off'}`}
+          title={`Fast mode ${enabled ? 'on' : 'off'}`}
+        />
+      );
+    };
     const renderChatStatusModel = (option?: RegistrySessionConfigOption) => {
       if (!option) {
         return null;
@@ -19333,6 +19367,11 @@ export function App() {
                         {option.description || option.disabledReason ? (
                           <span className="chat-slash-description">{option.enabled ? option.description : option.disabledReason}</span>
                         ) : null}
+                        {option.checked !== undefined ? (
+                          <span className={`chat-slash-switch${option.checked ? ' checked' : ''}`} aria-hidden="true">
+                            <span className="chat-slash-switch-knob" />
+                          </span>
+                        ) : null}
                       </button>
                     );
                   })}
@@ -19461,6 +19500,7 @@ export function App() {
                         ref={chatConfigOptionsRef}
                         className={`chat-config-options-shell${chatComposerStatusCompact ? ' compact' : ''}`}
                       >
+                        {renderChatFastModeIndicator()}
                         {renderChatContextUsage()}
                         {renderChatStatusModel(chatConfigStatus.modelOption)}
                         {renderChatStatusEffort(chatConfigStatus.reasoningOption)}

@@ -96,6 +96,12 @@ export function formatChatContextUsage(
   };
 }
 
+export function isChatFastModeOption(
+  option: RegistrySessionConfigOption,
+): boolean {
+  return option.id === 'fast_mode';
+}
+
 function secondaryOptionRank(option: RegistrySessionConfigOption): number {
   const text = optionSearchText(option);
   if (text.includes('personality')) {
@@ -119,7 +125,7 @@ export function splitChatComposerStatusOptions(
     [modelOption?.id, reasoningOption?.id].filter((id): id is string => !!id),
   );
   const secondaryOptions = options
-    .filter(option => !coreIds.has(option.id))
+    .filter(option => !coreIds.has(option.id) && !isChatFastModeOption(option))
     .map((option, index) => ({ option, index, rank: secondaryOptionRank(option) }))
     .sort((left, right) => {
       if (left.rank !== right.rank) {

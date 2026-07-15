@@ -1124,7 +1124,7 @@ describe('web chat integration', () => {
     expect(toolsBlock).toContain('className={chatComposerStopTriggerClassName}');
 
     const configPillStart = mainTsx.indexOf('const renderChatConfigPill = (option: RegistrySessionConfigOption) => {');
-    const configPillEnd = mainTsx.indexOf('const chatReadOnlyPreview = archivedMode && archivedPreview !== null;', configPillStart);
+    const configPillEnd = mainTsx.indexOf('const renderChatContextUsage = () => {', configPillStart);
     expect(configPillStart).toBeGreaterThanOrEqual(0);
     expect(configPillEnd).toBeGreaterThan(configPillStart);
     const configPillBlock = mainTsx.slice(configPillStart, configPillEnd);
@@ -2515,7 +2515,9 @@ describe('workspace session actions', () => {
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
 
     expect(mainTsx).toContain("from '../chat/session/chatSessionActions';");
-    expect(mainTsx).toContain('buildChatSessionActionOptions(chatSlashSkills, selectedChatSession?.sessionActions)');
+    expect(mainTsx).toContain('buildChatSessionActionOptions(');
+    expect(mainTsx).toContain('selectedChatSession?.sessionActions,');
+    expect(mainTsx).toContain('selectedChatConfigOptions,');
     expect(mainTsx).toContain("command.behavior === 'invoke'");
     expect(mainTsx).toContain('option.kind === \'skill\'');
     expect(mainTsx).toContain('option.icon');

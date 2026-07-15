@@ -1855,6 +1855,106 @@ func TestCodexAppConfigStateIncludesPersonalityInRequests(t *testing.T) {
 	}
 }
 
+func TestCodexAppConfigStateExposesFastModeAsSessionOption(t *testing.T) {
+	state := newCodexappConfigState()
+	options := state.options()
+	if got := currentConfigValue(options, "fast_mode"); got != "off" {
+		t.Fatalf("default fast mode=%q, want off", got)
+	}
+
+	var values []protocol.ConfigOptionValue
+	for _, option := range options {
+		if option.ID == "fast_mode" {
+			if option.Category != "speed" {
+				t.Fatalf("fast mode category=%q, want speed", option.Category)
+			}
+			values = option.Options
+			break
+		}
+	}
+	want := []protocol.ConfigOptionValue{
+		{Value: "off", Name: "Off"},
+		{Value: "on", Name: "On"},
+	}
+	if !reflect.DeepEqual(values, want) {
+		t.Fatalf("fast mode options=%#v, want %#v", values, want)
+	}
+	if err := state.set("fast_mode", "on"); err != nil {
+		t.Fatalf("set fast mode on: %v", err)
+	}
+	if got := currentConfigValue(state.options(), "fast_mode"); got != "on" {
+		t.Fatalf("fast mode=%q, want on", got)
+	}
+	if err := state.set("fast_mode", "turbo"); err == nil {
+		t.Fatal("set invalid fast mode succeeded")
+	}
+}
+
+func TestCodexAppFastModeMapsCatalogTierIntoTurnStart(t *testing.T) {
+	var response appServerModelListResponse
+	if err := json.Unmarshal([]byte(`{
+		"data": [{
+			"id": "gpt-fast",
+			"displayName": "GPT Fast",
+			"serviceTiers": [{
+				"id": "priority",
+				"name": "Fast",
+				"description": "1.5x speed, increased usage"
+			}],
+			"defaultServiceTier": null
+		}]
+	}`), &response); err != nil {
+		t.Fatalf("unmarshal model list: %v", err)
+	}
+	state := newCodexappConfigState()
+	state.setModels(response.Models)
+	if err := state.set("fast_mode", "on"); err != nil {
+		t.Fatalf("set fast mode on: %v", err)
+	}
+
+	onParams := mustJSONMap(t, state.turnStartParams("thread-1", "/tmp/project", []appServerUserInput{{Type: "text", Text: "hello"}}))
+	if got := onParams["serviceTier"]; got != "priority" {
+		t.Fatalf("fast serviceTier=%#v, want priority", got)
+	}
+
+	if err := state.set("fast_mode", "off"); err != nil {
+		t.Fatalf("set fast mode off: %v", err)
+	}
+	offParams := mustJSONMap(t, state.turnStartParams("thread-1", "/tmp/project", []appServerUserInput{{Type: "text", Text: "hello"}}))
+	if value, ok := offParams["serviceTier"]; !ok || value != nil {
+		t.Fatalf("standard serviceTier present=%v value=%#v, want explicit null", ok, value)
+	}
+}
+
+func TestCodexAppFastModeRemainsOnWhenCurrentModelHasNoFastTier(t *testing.T) {
+	state := newCodexappConfigState()
+	if err := state.set("fast_mode", "on"); err != nil {
+		t.Fatalf("set fast mode on: %v", err)
+	}
+	state.setModels([]appServerModel{{ID: "gpt-standard"}})
+	if got := currentConfigValue(state.options(), "fast_mode"); got != "on" {
+		t.Fatalf("fast mode after model refresh=%q, want on", got)
+	}
+
+	params := mustJSONMap(t, state.turnStartParams("thread-1", "/tmp/project", []appServerUserInput{{Type: "text", Text: "hello"}}))
+	if value, ok := params["serviceTier"]; !ok || value != nil {
+		t.Fatalf("unsupported serviceTier present=%v value=%#v, want explicit null", ok, value)
+	}
+}
+
+func mustJSONMap(t *testing.T, value any) map[string]any {
+	t.Helper()
+	raw, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("marshal JSON object: %v", err)
+	}
+	var object map[string]any
+	if err := json.Unmarshal(raw, &object); err != nil {
+		t.Fatalf("unmarshal JSON object: %v", err)
+	}
+	return object
+}
+
 func TestCodexAppTokenUsageNotificationEmitsUsageUpdate(t *testing.T) {
 	conn := newCodexappConnWithRuntimeAndProject(nil, t.TempDir(), "proj")
 	conn.BindSessionID("thread-1")

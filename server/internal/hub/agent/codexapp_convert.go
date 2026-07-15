@@ -77,19 +77,29 @@ type appServerModelListResponse struct {
 }
 
 type appServerModel struct {
-	ID                        string   `json:"id"`
-	Name                      string   `json:"name,omitempty"`
-	SupportedReasoningEfforts []string `json:"supportedReasoningEfforts,omitempty"`
-	DefaultReasoningEffort    string   `json:"defaultReasoningEffort,omitempty"`
+	ID                        string                 `json:"id"`
+	Name                      string                 `json:"name,omitempty"`
+	SupportedReasoningEfforts []string               `json:"supportedReasoningEfforts,omitempty"`
+	DefaultReasoningEffort    string                 `json:"defaultReasoningEffort,omitempty"`
+	ServiceTiers              []appServerServiceTier `json:"serviceTiers,omitempty"`
+	DefaultServiceTier        *string                `json:"defaultServiceTier"`
+}
+
+type appServerServiceTier struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
 }
 
 func (m *appServerModel) UnmarshalJSON(data []byte) error {
 	var raw struct {
-		ID                        string            `json:"id"`
-		Name                      string            `json:"name"`
-		DisplayName               string            `json:"displayName"`
-		SupportedReasoningEfforts []json.RawMessage `json:"supportedReasoningEfforts"`
-		DefaultReasoningEffort    string            `json:"defaultReasoningEffort"`
+		ID                        string                 `json:"id"`
+		Name                      string                 `json:"name"`
+		DisplayName               string                 `json:"displayName"`
+		SupportedReasoningEfforts []json.RawMessage      `json:"supportedReasoningEfforts"`
+		DefaultReasoningEffort    string                 `json:"defaultReasoningEffort"`
+		ServiceTiers              []appServerServiceTier `json:"serviceTiers"`
+		DefaultServiceTier        *string                `json:"defaultServiceTier"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
@@ -97,6 +107,8 @@ func (m *appServerModel) UnmarshalJSON(data []byte) error {
 	m.ID = raw.ID
 	m.Name = firstNonEmptyString(raw.Name, raw.DisplayName)
 	m.DefaultReasoningEffort = raw.DefaultReasoningEffort
+	m.ServiceTiers = append(m.ServiceTiers[:0], raw.ServiceTiers...)
+	m.DefaultServiceTier = raw.DefaultServiceTier
 	m.SupportedReasoningEfforts = m.SupportedReasoningEfforts[:0]
 	for _, effort := range raw.SupportedReasoningEfforts {
 		var value string
@@ -351,6 +363,7 @@ type appServerTurnStartParams struct {
 	Effort         string               `json:"effort,omitempty"`
 	ApprovalPolicy string               `json:"approvalPolicy,omitempty"`
 	SandboxPolicy  appServerSandbox     `json:"sandboxPolicy,omitempty"`
+	ServiceTier    *string              `json:"serviceTier"`
 }
 
 type appServerSandbox struct {
@@ -574,6 +587,7 @@ type codexappConfigState struct {
 	model           string
 	reasoningEffort string
 	personality     string
+	fastMode        string
 	models          []appServerModel
 }
 
@@ -582,6 +596,7 @@ func newCodexappConfigState() codexappConfigState {
 		approvalPreset:  "auto",
 		reasoningEffort: "medium",
 		personality:     "none",
+		fastMode:        "off",
 	}
 }
 
@@ -637,6 +652,18 @@ func (s codexappConfigState) options() []protocol.ConfigOption {
 				{Value: "pragmatic", Name: "Pragmatic"},
 			},
 		},
+		{
+			ID:           protocol.ConfigOptionIDFastMode,
+			Name:         "Fast",
+			Description:  "1.5x speed, increased usage",
+			Category:     protocol.ConfigOptionCategorySpeed,
+			Type:         "select",
+			CurrentValue: s.fastMode,
+			Options: []protocol.ConfigOptionValue{
+				{Value: "off", Name: "Off"},
+				{Value: "on", Name: "On"},
+			},
+		},
 	}
 }
 
@@ -666,6 +693,11 @@ func (s *codexappConfigState) set(id, value string) error {
 			return fmt.Errorf("invalid personality %q", value)
 		}
 		s.personality = value
+	case protocol.ConfigOptionIDFastMode:
+		if value != "off" && value != "on" {
+			return fmt.Errorf("invalid fast mode %q", value)
+		}
+		s.fastMode = value
 	default:
 		return fmt.Errorf("unsupported config option %q", id)
 	}
@@ -707,7 +739,21 @@ func (s codexappConfigState) turnStartParams(threadID, cwd string, input []appSe
 		Effort:         s.reasoningEffort,
 		ApprovalPolicy: profile.approvalPolicy,
 		SandboxPolicy:  profile.sandboxPolicy(cwd),
+		ServiceTier:    s.fastServiceTier(),
 	}
+}
+
+func (s codexappConfigState) fastServiceTier() *string {
+	if s.fastMode != "on" {
+		return nil
+	}
+	for _, tier := range s.currentModel().ServiceTiers {
+		if tier.ID != "" && strings.EqualFold(tier.Name, "Fast") {
+			value := tier.ID
+			return &value
+		}
+	}
+	return nil
 }
 
 func (s codexappConfigState) modelOptions() []protocol.ConfigOptionValue {

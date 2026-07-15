@@ -97,6 +97,7 @@ describe('chat composer status helpers', () => {
         options: [{ value: 'high', name: 'High' }],
       }),
       option({ id: 'approval_preset', name: 'Access', currentValue: 'full' }),
+      option({ id: 'fast_mode', category: 'speed', name: 'Fast', currentValue: 'on' }),
       option({
         id: 'personality',
         name: 'Personality',
@@ -268,6 +269,19 @@ describe('chat composer status helpers', () => {
     expect(temporaryLayerStyles).toContain(
       'inset 0 1px 0 color-mix(in srgb, var(--text-primary) 8%, transparent);',
     );
+  });
+
+  test('renders the fast lightning immediately before context usage', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+
+    const fastIndex = mainTsx.indexOf('{renderChatFastModeIndicator()}');
+    const contextIndex = mainTsx.indexOf('{renderChatContextUsage()}');
+    expect(fastIndex).toBeGreaterThan(0);
+    expect(contextIndex).toBeGreaterThan(fastIndex);
+    expect(mainTsx).toContain('codicon codicon-zap chat-fast-mode-indicator');
+    expect(stylesCss).toContain('.chat-fast-mode-indicator.enabled');
   });
 
   test('releases the chat page opacity animation after entry so temporary layers can sample their backdrop', () => {
