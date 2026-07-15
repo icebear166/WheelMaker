@@ -1,5 +1,6 @@
 import type {
   RegistrySessionConfigOption,
+  RegistrySessionConfigOptionValue,
   RegistrySessionUsage,
 } from '../../registry/registryTypes';
 
@@ -52,12 +53,28 @@ export function isChatReasoningOption(
   );
 }
 
+function capitalizeFirstCharacter(value: string): string {
+  return value ? `${value[0].toUpperCase()}${value.slice(1)}` : value;
+}
+
+export function chatConfigValueLabel(
+  option: RegistrySessionConfigOption,
+  value: RegistrySessionConfigOptionValue,
+): string {
+  const label = value.name || value.value;
+  return isChatReasoningOption(option) ? capitalizeFirstCharacter(label) : label;
+}
+
 export function chatConfigCurrentLabel(
   option: RegistrySessionConfigOption,
 ): string {
   const currentValue = option.currentValue ?? '';
   const current = option.options?.find(item => item.value === currentValue);
-  return current?.name || currentValue || option.name || option.id;
+  if (current) {
+    return chatConfigValueLabel(option, current);
+  }
+  const fallback = currentValue || option.name || option.id;
+  return isChatReasoningOption(option) ? capitalizeFirstCharacter(fallback) : fallback;
 }
 
 export function formatCompactTokenCount(value: number): string {

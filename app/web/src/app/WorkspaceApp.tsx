@@ -110,7 +110,7 @@ import {ChatPlanSurface} from '../chat/ChatPlanSurface';
 import {ChatRecentSessionsSurface} from '../chat/ChatRecentSessionsSurface';
 import {extractLatestChatPlan} from '../chat/chatPlan';
 import { resolveChatSessionTitle } from '../chat/session/chatSessionTitle';
-import { formatChatContextUsage, splitChatComposerStatusOptions } from '../chat/session/chatComposerStatus';
+import { chatConfigValueLabel, formatChatContextUsage, splitChatComposerStatusOptions } from '../chat/session/chatComposerStatus';
 import {decodeSessionTurnToMessage, normalizeSessionMessagePayload} from '../chat/chatWire';
 import {
   applySessionReadResult,
@@ -1540,7 +1540,9 @@ function chatConfigCurrentLabel(option: RegistrySessionConfigOption): string {
   const currentValue = chatConfigCurrentValue(option);
   const optionValues = option.options ?? [];
   const currentOption = optionValues.find(item => item.value === currentValue);
-  return currentOption?.name || currentValue || option.name || option.id;
+  return chatConfigValueLabel(option, currentOption ?? {
+    value: currentValue || option.name || option.id,
+  });
 }
 
 function decodeSessionMessageFromEventPayload(
@@ -3175,7 +3177,7 @@ export function App() {
   const chatSlashMenuRef = useRef<HTMLDivElement | null>(null);
   const chatContextUsageRef = useRef<HTMLDivElement | null>(null);
   const chatConfigOptionsRef = useRef<HTMLDivElement | null>(null);
-  const chatConfigOverflowRef = useRef<HTMLDivElement | null>(null);
+  const chatCoreConfigTriggerRef = useRef<HTMLButtonElement | null>(null);
   const wideProjectActionMenuRef = useRef<HTMLDivElement | null>(null);
   const chatSelectedIdRef = useRef('');
   const selectedChatKeyRef = useRef<ChatSessionKey | null>(null);
@@ -3349,6 +3351,13 @@ export function App() {
   const [chatContextUsagePopoverStyle, setChatContextUsagePopoverStyle] = useState<React.CSSProperties>({});
   const [chatCoreConfigMenuOpen, setChatCoreConfigMenuOpen] = useState(false);
   const [chatConfigMenuOptionId, setChatConfigMenuOptionId] = useState('');
+  const closeChatCoreConfigMenu = useCallback((restoreFocus = false) => {
+    setChatCoreConfigMenuOpen(false);
+    setChatConfigOverflowOpen(false);
+    if (restoreFocus) {
+      chatCoreConfigTriggerRef.current?.focus();
+    }
+  }, [setChatConfigOverflowOpen]);
   const [chatHubMenuOpen, setChatHubMenuOpen] = useState(false);
   const [chatHubColorMenuHubId, setChatHubColorMenuHubId] = useState('');
   const chatHubMenuRef = useRef<HTMLDivElement | null>(null);
@@ -5879,11 +5888,11 @@ export function App() {
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null;
       if (target && chatConfigOptionsRef.current?.contains(target)) return;
-      setChatCoreConfigMenuOpen(false);
+      closeChatCoreConfigMenu();
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setChatCoreConfigMenuOpen(false);
+        closeChatCoreConfigMenu(true);
       }
     };
     window.addEventListener('pointerdown', onPointerDown);
@@ -5892,7 +5901,7 @@ export function App() {
       window.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [chatCoreConfigMenuOpen]);
+  }, [chatCoreConfigMenuOpen, closeChatCoreConfigMenu]);
 
   useEffect(() => {
     if (!chatContextUsageOpen) return;
@@ -5912,17 +5921,6 @@ export function App() {
       window.removeEventListener('scroll', onReposition, true);
     };
   }, [chatContextUsageOpen, updateChatContextUsagePopoverPosition]);
-
-  useEffect(() => {
-    if (!chatConfigOverflowOpen) return;
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as Node | null;
-      if (target && chatConfigOverflowRef.current?.contains(target)) return;
-      setChatConfigOverflowOpen(false);
-    };
-    window.addEventListener('pointerdown', onPointerDown);
-    return () => window.removeEventListener('pointerdown', onPointerDown);
-  }, [chatConfigOverflowOpen, setChatConfigOverflowOpen]);
 
   useEffect(() => {
     if (!chatHubMenuOpen) return;
@@ -5982,7 +5980,8 @@ export function App() {
 
   useEffect(() => {
     setChatCoreConfigMenuOpen(false);
-  }, [selectedChatEncodedKey]);
+    setChatConfigOverflowOpen(false);
+  }, [selectedChatEncodedKey, setChatConfigOverflowOpen]);
 
   useEffect(() => {
     if (chatConfigDisplay.status.coreOptions.length === 0) {
@@ -18600,7 +18599,7 @@ export function App() {
                   handleChatConfigOptionChange(option, item.value).catch(() => undefined);
                 }}
               >
-                <span className="chat-config-value-label">{item.name || item.value}</span>
+                <span className="chat-config-value-label">{chatConfigValueLabel(option, item)}</span>
                 {selected ? (
                   <span className="codicon codicon-check" aria-hidden="true" />
                 ) : null}
@@ -18699,14 +18698,10 @@ export function App() {
         effortOption ? `Effort: ${effortLabel}` : '',
         fastOption ? `Fast: ${fastEnabled ? 'On' : 'Off'}` : '',
       ].filter(Boolean).join(', ');
-      const gridTemplateColumns = coreOptions.map(item => {
-        if (item.kind === 'model') return 'minmax(0, 1.7fr)';
-        if (item.kind === 'fast') return 'minmax(0, 0.72fr)';
-        return 'minmax(0, 1fr)';
-      }).join(' ');
       return (
         <div className="chat-core-config">
           <button
+            ref={chatCoreConfigTriggerRef}
             type="button"
             className="chat-core-config-trigger"
             title={title}
@@ -18718,8 +18713,12 @@ export function App() {
               setChatFileMentionMenuOpen(false);
               setChatContextUsageOpen(false);
               setChatConfigMenuOptionId('');
-              setChatConfigOverflowOpen(false);
-              setChatCoreConfigMenuOpen(open => !open);
+              if (chatCoreConfigMenuOpen) {
+                closeChatCoreConfigMenu();
+              } else {
+                setChatConfigOverflowOpen(false);
+                setChatCoreConfigMenuOpen(true);
+              }
             }}
           >
             {modelOption ? <span className="chat-core-config-model">{modelLabel}</span> : null}
@@ -18738,47 +18737,116 @@ export function App() {
             <div
               className="chat-core-config-menu"
               role="menu"
-              aria-label="Model, effort, and Fast"
-              style={{ '--chat-core-config-columns': gridTemplateColumns } as React.CSSProperties}
+              aria-label={chatConfigOverflowOpen ? 'More options' : 'Model, effort, and Fast'}
             >
-              {coreOptions.map(item => {
-                const values = item.option.options ?? [];
-                const currentValue = chatConfigCurrentValue(item.option);
-                const updating = chatConfigUpdatingKeys.has(`${selectedChatEncodedKey}:${item.option.id}`);
-                const heading = item.kind === 'model' ? 'Model' : item.kind === 'effort' ? 'Effort' : 'Fast';
-                return (
-                  <div
-                    key={`core:${item.option.id}`}
-                    className={`chat-core-config-column ${item.kind}`}
-                    aria-busy={updating}
-                  >
-                    <div className="chat-core-config-heading">{heading}</div>
-                    <div className="chat-core-config-values">
-                      {values.length > 0 ? values.map(value => {
-                        const selected = value.value === currentValue;
-                        return (
-                          <button
-                            key={`core:${item.option.id}:${value.value}`}
-                            type="button"
-                            className={`chat-core-config-option${selected ? ' selected' : ''}`}
-                            role="menuitemradio"
-                            aria-checked={selected}
-                            disabled={updating}
-                            onClick={() => {
-                              handleChatConfigOptionChange(item.option, value.value).catch(() => undefined);
-                            }}
-                          >
-                            <span className="chat-core-config-option-label">{value.name || value.value}</span>
-                            {selected ? <span className="codicon codicon-check" aria-hidden="true" /> : null}
-                          </button>
-                        );
-                      }) : (
-                        <span className="chat-core-config-empty">No options</span>
-                      )}
-                    </div>
+              {chatConfigOverflowOpen ? (
+                <div className="chat-core-config-more">
+                  <div className="chat-core-config-more-heading">More Options</div>
+                  <div className="chat-core-config-more-groups">
+                    {chatConfigOverflowOptions.map(option => {
+                      const optionValues = option.options ?? [];
+                      const currentValue = chatConfigCurrentValue(option);
+                      const updating = chatConfigUpdatingKeys.has(`${selectedChatEncodedKey}:${option.id}`);
+                      const optionLabel = option.name || option.id;
+                      return (
+                        <div key={`more:${option.id}`} className="chat-config-overflow-group">
+                          <div className="chat-config-item-label" title={optionLabel}>
+                            {optionLabel}
+                          </div>
+                          <div className="chat-config-overflow-values">
+                            {optionValues.map(item => {
+                              const selected = item.value === currentValue;
+                              return (
+                                <button
+                                  key={`more:${option.id}:${item.value}`}
+                                  type="button"
+                                  className={`chat-config-value-option${selected ? ' selected' : ''}`}
+                                  role="menuitemradio"
+                                  aria-checked={selected}
+                                  disabled={updating}
+                                  onClick={() => {
+                                    closeChatCoreConfigMenu(true);
+                                    handleChatConfigOptionChange(option, item.value).catch(() => undefined);
+                                  }}
+                                >
+                                  <span className="chat-config-value-label">{chatConfigValueLabel(option, item)}</span>
+                                  {selected ? (
+                                    <span className="codicon codicon-check" aria-hidden="true" />
+                                  ) : null}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
+                </div>
+              ) : (
+                <>
+                  <div className="chat-core-config-columns">
+                    {coreOptions.map(item => {
+                      const values = item.option.options ?? [];
+                      const currentValue = chatConfigCurrentValue(item.option);
+                      const updating = chatConfigUpdatingKeys.has(`${selectedChatEncodedKey}:${item.option.id}`);
+                      const heading = item.kind === 'model' ? 'Model' : item.kind === 'effort' ? 'Effort' : 'Fast';
+                      return (
+                        <div
+                          key={`core:${item.option.id}`}
+                          className={`chat-core-config-column ${item.kind}`}
+                          aria-busy={updating}
+                        >
+                          <div className="chat-core-config-heading">{heading}</div>
+                          <div className="chat-core-config-values">
+                            {values.length > 0 ? values.map(value => {
+                              const selected = value.value === currentValue;
+                              return (
+                                <button
+                                  key={`core:${item.option.id}:${value.value}`}
+                                  type="button"
+                                  className={`chat-core-config-option${selected ? ' selected' : ''}`}
+                                  role="menuitemradio"
+                                  aria-checked={selected}
+                                  disabled={updating}
+                                  onClick={() => {
+                                    closeChatCoreConfigMenu(true);
+                                    handleChatConfigOptionChange(item.option, value.value).catch(() => undefined);
+                                  }}
+                                >
+                                  <span className="chat-core-config-option-label">
+                                    {chatConfigValueLabel(item.option, value)}
+                                  </span>
+                                  <span
+                                    className={`codicon codicon-check chat-core-config-check${selected ? ' visible' : ''}`}
+                                    aria-hidden="true"
+                                  />
+                                </button>
+                              );
+                            }) : (
+                              <span className="chat-core-config-empty">No options</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {chatComposerStatusCompact && chatConfigOverflowOptions.length > 0 ? (
+                    <div className="chat-core-config-footer">
+                      <button
+                        type="button"
+                        className="chat-core-config-more-button"
+                        role="menuitem"
+                        onClick={() => {
+                          setChatConfigOverflowOpen(true);
+                        }}
+                      >
+                        <span>More Options</span>
+                        <span className="codicon codicon-chevron-right" aria-hidden="true" />
+                      </button>
+                    </div>
+                  ) : null}
+                </>
+              )}
             </div>
           ) : null}
         </div>
@@ -19563,72 +19631,6 @@ export function App() {
                         {chatConfigOptions.length > 0 ? (
                           <div className="chat-config-options">
                             {chatConfigOptions.map(option => renderChatConfigPill(option))}
-                          </div>
-                        ) : null}
-                        {chatConfigStatus.showOverflowToggle ? (
-                          <div ref={chatConfigOverflowRef} className="chat-config-overflow-anchor">
-                            <button
-                              type="button"
-                              className="chat-config-overflow-button chat-config-expand-button"
-                              aria-label={chatConfigOverflowOpen ? 'Hide config options' : `Show ${chatConfigOverflowOptions.length} config options`}
-                              aria-expanded={chatConfigOverflowOpen}
-                              title={chatConfigOverflowOpen ? 'Hide config options' : 'Show config options'}
-                              onClick={() => {
-                                setChatPromptMenuOpen(false);
-                                setChatFileMentionMenuOpen(false);
-                                setChatCoreConfigMenuOpen(false);
-                                setChatConfigMenuOptionId('');
-                                setChatConfigOverflowOpen(prev => !prev);
-                              }}
-                            >
-                              <span
-                                className={`codicon ${chatConfigOverflowOpen ? 'codicon-chevron-up' : 'codicon-chevron-down'}`}
-                                aria-hidden="true"
-                              />
-                            </button>
-                            {chatConfigOverflowOpen ? (
-                              <div className="chat-config-overflow-menu" aria-label="Config options">
-                                {chatConfigOverflowOptions.map(option => {
-                                  const optionValues = option.options ?? [];
-                                  const currentValue = chatConfigCurrentValue(option);
-                                  const updating = chatConfigUpdatingKeys.has(`${selectedChatEncodedKey}:${option.id}`);
-                                  const optionLabel = option.name || option.id;
-                                  return (
-                                    <div key={`overflow:${option.id}`} className="chat-config-overflow-group">
-                                      <div className="chat-config-item-label" title={optionLabel}>
-                                        {optionLabel}
-                                      </div>
-                                      <div className="chat-config-overflow-values">
-                                        {optionValues.map(item => {
-                                          const selected = item.value === currentValue;
-                                          return (
-                                            <button
-                                              key={`overflow:${option.id}:${item.value}`}
-                                              type="button"
-                                              className={`chat-config-value-option${selected ? ' selected' : ''}`}
-                                              disabled={updating}
-                                              aria-pressed={selected}
-                                              onClick={() => {
-                                                setChatConfigOverflowOpen(false);
-                                                handleChatConfigOptionChange(
-                                                  option,
-                                                  item.value,
-                                                ).catch(() => undefined);
-                                              }}
-                                            >
-                                              <span className="chat-config-value-label">{item.name || item.value}</span>
-                                              {selected ? (
-                                                <span className="codicon codicon-check" aria-hidden="true" />
-                                              ) : null}
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ) : null}
                           </div>
                         ) : null}
                       </div>

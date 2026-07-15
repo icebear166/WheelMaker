@@ -5064,10 +5064,10 @@
   right: 0;
   bottom: calc(100% + 10px);
   z-index: var(--chat-config-popover-layer);
-  width: min(680px, calc(100vw - 24px));
+  width: max-content;
+  max-width: calc(100vw - 24px);
   height: min(44vh, 380px);
   min-height: 180px;
-  grid-template-columns: var(--chat-core-config-columns);
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--border-subtle) 82%, var(--accent-primary));
   border-radius: 10px;
@@ -5075,12 +5075,25 @@
   box-shadow: var(--shadow-overlay);
   backdrop-filter: blur(16px) saturate(1.06);
   -webkit-backdrop-filter: blur(16px) saturate(1.06);
-  display: grid;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-core-config-columns {
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
 }
 
 .chat-core-config-column {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+  width: max-content;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -5106,7 +5119,6 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 6px;
-  scrollbar-gutter: stable;
 }
 
 .chat-core-config-option {
@@ -5117,9 +5129,9 @@
   border-radius: 7px;
   background: transparent;
   color: var(--text-primary);
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: max-content 12px;
+  align-items: center;
   gap: 8px;
   font: inherit;
   font-size: 12px;
@@ -5140,14 +5152,21 @@
 
 .chat-core-config-option-label {
   min-width: 0;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 
 .chat-core-config-option .codicon {
-  flex: 0 0 auto;
   margin-top: 1px;
   color: var(--accent-primary);
   font-size: 12px;
+}
+
+.chat-core-config-check {
+  visibility: hidden;
+}
+
+.chat-core-config-check.visible {
+  visibility: visible;
 }
 
 .chat-core-config-empty {
@@ -5157,9 +5176,66 @@
   font-size: 12px;
 }
 
+.chat-core-config-footer {
+  display: flex;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  padding: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
+}
+
+.chat-core-config-more-button {
+  min-height: 28px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.chat-core-config-more-button:hover,
+.chat-core-config-more-button:focus-visible {
+  background: var(--hover);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.chat-core-config-more {
+  display: flex;
+  flex-direction: column;
+  width: max-content;
+  max-width: 100%;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.chat-core-config-more-heading {
+  padding: 10px 11px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.chat-core-config-more-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+}
+
 @media (max-width: 520px) {
   .chat-core-config-menu {
-    width: calc(100vw - 16px);
+    max-width: calc(100vw - 16px);
     height: min(52vh, 420px);
     min-height: 160px;
   }

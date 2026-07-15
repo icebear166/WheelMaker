@@ -70,7 +70,7 @@ describe('chat composer status helpers', () => {
     ).toBe('High');
   });
 
-  test('falls back to the raw reasoning effort value when no label is configured', () => {
+  test('capitalizes a raw reasoning effort value when no label is configured', () => {
     expect(
       chatConfigCurrentLabel(
         option({
@@ -79,7 +79,20 @@ describe('chat composer status helpers', () => {
           currentValue: 'max',
         }),
       ),
-    ).toBe('max');
+    ).toBe('Max');
+  });
+
+  test('capitalizes a stale lowercase reasoning effort display name', () => {
+    expect(
+      chatConfigCurrentLabel(
+        option({
+          id: 'reasoning_effort',
+          name: 'Reasoning',
+          currentValue: 'high',
+          options: [{ value: 'high', name: 'high' }],
+        }),
+      ),
+    ).toBe('High');
   });
 
   test('keeps usage model and reasoning visible while compacting secondary options', () => {
@@ -287,7 +300,7 @@ describe('chat composer status helpers', () => {
     );
   });
 
-  test('renders a compact core config trigger and an independently scrolling column menu', () => {
+  test('renders a compact core config trigger and independently scrolling columns', () => {
     const projectRoot = path.join(__dirname, '..');
     const stylesCss = readWebStyles(projectRoot);
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
@@ -298,14 +311,76 @@ describe('chat composer status helpers', () => {
     expect(mainTsx).toContain("fastEnabled ? (");
     expect(mainTsx).toContain('className="codicon codicon-zap chat-core-config-fast"');
     expect(mainTsx).toContain('className="chat-core-config-menu"');
+    expect(mainTsx).toContain('className="chat-core-config-columns"');
     expect(mainTsx).toContain('className={`chat-core-config-column ${item.kind}`}');
     expect(mainTsx).toContain('className="chat-core-config-values"');
     expect(mainTsx).toContain('handleChatConfigOptionChange(item.option, value.value)');
     expect(mainTsx).not.toContain("invokeChatSessionAction('fast')");
-    expect(cssRuleBlock(stylesCss, '.chat-core-config-menu')).toContain('grid-template-columns: var(--chat-core-config-columns);');
     expect(cssRuleBlock(stylesCss, '.chat-core-config-values')).toContain('overflow-y: auto;');
     expect(cssRuleBlock(stylesCss, '.chat-core-config-trigger')).not.toContain('max-width:');
     expect(stylesCss).toContain('.chat-config-options-shell.compact .chat-core-config-model');
+  });
+
+  test('sizes each core config column to its longest label plus a reserved checkmark', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const menuRule = cssRuleBlock(stylesCss, '.chat-core-config-menu');
+    const columnsRule = cssRuleBlock(stylesCss, '.chat-core-config-columns');
+    const optionRule = cssRuleBlock(stylesCss, '.chat-core-config-option');
+
+    expect(mainTsx).not.toContain('const gridTemplateColumns =');
+    expect(mainTsx).not.toContain('--chat-core-config-columns');
+    expect(mainTsx).toContain('chat-core-config-check${selected ? \' visible\' : \'\'}');
+    expect(menuRule).toContain('width: max-content;');
+    expect(menuRule).toContain('max-width: calc(100vw - 24px);');
+    expect(menuRule).not.toContain('680px');
+    expect(columnsRule).toContain('grid-auto-columns: max-content;');
+    expect(optionRule).toContain('grid-template-columns: max-content 12px;');
+  });
+
+  test('closes the core config panel immediately after selecting any value', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const rendererStart = mainTsx.indexOf('const renderChatCoreConfigSelector = () => {');
+    const rendererEnd = mainTsx.indexOf('const chatReadOnlyPreview =', rendererStart);
+    const renderer = mainTsx.slice(rendererStart, rendererEnd);
+
+    expect(renderer).toMatch(/onClick=\{\(\) => \{\s*closeChatCoreConfigMenu\(true\);\s*handleChatConfigOptionChange\(item\.option, value\.value\)/);
+  });
+
+  test('moves compact More Options into the core panel and switches the panel content', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const rendererStart = mainTsx.indexOf('const renderChatCoreConfigSelector = () => {');
+    const rendererEnd = mainTsx.indexOf('const chatReadOnlyPreview =', rendererStart);
+    const renderer = mainTsx.slice(rendererStart, rendererEnd);
+
+    expect(renderer).toContain('chatComposerStatusCompact && chatConfigOverflowOptions.length > 0');
+    expect(renderer).toContain('className="chat-core-config-footer"');
+    expect(renderer).toContain('className="chat-core-config-more-button"');
+    expect(renderer).toContain('role="menuitem"');
+    expect(renderer).toContain('More Options');
+    expect(renderer).toContain('setChatConfigOverflowOpen(true);');
+    expect(renderer).toContain('chatConfigOverflowOpen ? (');
+    expect(renderer).toContain('className="chat-core-config-more"');
+    expect(renderer).toMatch(/className=\{`chat-config-value-option\$\{selected \? ' selected' : ''\}`\}[\s\S]*?role="menuitemradio"[\s\S]*?aria-checked=\{selected\}/);
+    expect(mainTsx).not.toContain('className="chat-config-overflow-anchor"');
+    expect(cssRuleBlock(stylesCss, '.chat-core-config-footer')).toContain('justify-content: flex-end;');
+  });
+
+  test('returns focus to the core config trigger after choosing an option', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const rendererStart = mainTsx.indexOf('const renderChatCoreConfigSelector = () => {');
+    const rendererEnd = mainTsx.indexOf('const chatReadOnlyPreview =', rendererStart);
+    const renderer = mainTsx.slice(rendererStart, rendererEnd);
+
+    expect(mainTsx).toContain('const chatCoreConfigTriggerRef = useRef<HTMLButtonElement | null>(null);');
+    expect(mainTsx).toContain('chatCoreConfigTriggerRef.current?.focus();');
+    expect(renderer).toContain('ref={chatCoreConfigTriggerRef}');
+    expect(renderer.match(/closeChatCoreConfigMenu\(true\);/g)).toHaveLength(2);
   });
 
   test('releases the chat page opacity animation after entry so temporary layers can sample their backdrop', () => {
