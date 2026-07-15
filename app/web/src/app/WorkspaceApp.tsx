@@ -5620,6 +5620,8 @@ export function App() {
       const layoutViewportHeight = resolveChatKeyboardLayoutViewportHeight({
         currentLayoutViewportHeight: readLayoutViewportHeight(),
         previousLayoutViewportHeight: mobileKeyboardLayoutViewportHeightRef.current,
+        visualViewportHeight: viewport.height,
+        visualViewportOffsetTop: viewport.offsetTop,
       });
       const nextInset = resolveChatKeyboardInset({
         windowInnerHeight: window.innerHeight,

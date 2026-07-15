@@ -173,10 +173,14 @@ describe('web drag scroll behavior', () => {
     expect(resolveChatKeyboardLayoutViewportHeight({
       currentLayoutViewportHeight: 844,
       previousLayoutViewportHeight: 0,
+      visualViewportHeight: 844,
+      visualViewportOffsetTop: 0,
     })).toBe(844);
     expect(resolveChatKeyboardLayoutViewportHeight({
       currentLayoutViewportHeight: 520,
       previousLayoutViewportHeight: 844,
+      visualViewportHeight: 520,
+      visualViewportOffsetTop: 120,
     })).toBe(844);
     expect(resolveChatKeyboardInset({
       windowInnerHeight: 844,
@@ -190,6 +194,23 @@ describe('web drag scroll behavior', () => {
     expect(mainTsx).toContain('mobileKeyboardLayoutViewportHeightRef.current = layoutViewportHeight;');
     expect(mainTsx).toContain("window.addEventListener('resize', handleWindowResize);");
     expect(mainTsx).not.toContain('window.innerHeight - (viewport.height + viewport.offsetTop)');
+  });
+
+  test('does not double-apply keyboard inset when Android resizes the layout viewport', () => {
+    const layoutViewportHeight = resolveChatKeyboardLayoutViewportHeight({
+      currentLayoutViewportHeight: 520,
+      previousLayoutViewportHeight: 844,
+      visualViewportHeight: 520,
+      visualViewportOffsetTop: 0,
+    });
+
+    expect(layoutViewportHeight).toBe(520);
+    expect(resolveChatKeyboardInset({
+      windowInnerHeight: 520,
+      layoutViewportHeight,
+      visualViewportHeight: 520,
+      visualViewportOffsetTop: 0,
+    })).toBe(0);
   });
 
   test('settles programmatic chat bottom scrolling against the actual scroll parent', () => {

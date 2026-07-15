@@ -31,10 +31,23 @@ function normalizeChatKeyboardInset(value: number): number {
 export function resolveChatKeyboardLayoutViewportHeight(input: {
   currentLayoutViewportHeight: number;
   previousLayoutViewportHeight: number;
+  visualViewportHeight: number;
+  visualViewportOffsetTop: number;
 }): number {
-  // iOS can temporarily collapse innerHeight to the visual viewport while the keyboard stays open.
+  const currentLayoutViewportHeight = normalizeChatKeyboardInset(input.currentLayoutViewportHeight);
+  const visualViewportHeight = normalizeChatKeyboardInset(input.visualViewportHeight);
+  const visualViewportOffsetTop = normalizeChatKeyboardInset(input.visualViewportOffsetTop);
+  const layoutFollowsVisualViewport = currentLayoutViewportHeight > 0
+    && visualViewportHeight > 0
+    && visualViewportOffsetTop <= 4
+    && Math.abs(currentLayoutViewportHeight - visualViewportHeight) < CHAT_KEYBOARD_INSET_OPEN_THRESHOLD_PX;
+  // A resized layout already keeps the composer above the keyboard. Retain the taller
+  // layout only while the visual viewport overlays or pans within it, as on iOS.
+  if (layoutFollowsVisualViewport) {
+    return currentLayoutViewportHeight;
+  }
   return Math.max(
-    normalizeChatKeyboardInset(input.currentLayoutViewportHeight),
+    currentLayoutViewportHeight,
     normalizeChatKeyboardInset(input.previousLayoutViewportHeight),
   );
 }
