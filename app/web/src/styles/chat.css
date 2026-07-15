@@ -4733,15 +4733,41 @@
 
 .chat-fast-mode-indicator {
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
   color: color-mix(in srgb, var(--text-secondary) 42%, transparent);
+  font: inherit;
   font-size: 15px;
   line-height: 1;
+  cursor: pointer;
   transition: color 120ms ease, filter 120ms ease;
 }
 
 .chat-fast-mode-indicator.enabled {
   color: #e7b84b;
   filter: drop-shadow(0 0 4px color-mix(in srgb, #e7b84b 42%, transparent));
+}
+
+.chat-fast-mode-indicator:hover,
+.chat-fast-mode-indicator:focus-visible {
+  border-color: color-mix(in srgb, var(--border-subtle) 72%, transparent);
+  background: color-mix(in srgb, var(--hover) 88%, var(--surface-raised));
+}
+
+.chat-fast-mode-indicator:disabled {
+  cursor: wait;
+}
+
+.chat-config-options-shell.compact .chat-fast-mode-indicator {
+  display: inline-flex;
+  flex: 0 0 auto;
 }
 
 .chat-config-options {

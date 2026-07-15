@@ -18651,12 +18651,22 @@ export function App() {
         return null;
       }
       const enabled = selectedFastModeOption.currentValue === 'on';
+      const updating =
+        chatConfigUpdatingKey ===
+        `${selectedChatSession?.sessionId ?? ''}:${selectedFastModeOption.id}`;
       return (
-        <span
+        <button
+          type="button"
           className={`codicon codicon-zap chat-fast-mode-indicator${enabled ? ' enabled' : ''}`}
-          role="img"
+          disabled={updating}
+          aria-pressed={enabled}
           aria-label={`Fast mode ${enabled ? 'on' : 'off'}`}
           title={`Fast mode ${enabled ? 'on' : 'off'}`}
+          onClick={() => {
+            invokeChatSessionAction('fast').catch(err => {
+              setError(err instanceof Error ? err.message : String(err));
+            });
+          }}
         />
       );
     };
@@ -19502,8 +19512,8 @@ export function App() {
                       >
                         {renderChatContextUsage()}
                         {renderChatStatusModel(chatConfigStatus.modelOption)}
-                        {renderChatFastModeIndicator()}
                         {renderChatStatusEffort(chatConfigStatus.reasoningOption)}
+                        {renderChatFastModeIndicator()}
                         {chatConfigOptions.length > 0 ? (
                           <div className="chat-config-options">
                             {chatConfigOptions.map(option => renderChatConfigPill(option))}

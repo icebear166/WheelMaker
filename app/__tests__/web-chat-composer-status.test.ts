@@ -271,18 +271,25 @@ describe('chat composer status helpers', () => {
     );
   });
 
-  test('renders the fast lightning immediately after the model status', () => {
+  test('renders an always-visible fast toggle immediately after reasoning status', () => {
     const projectRoot = path.join(__dirname, '..');
     const stylesCss = readWebStyles(projectRoot);
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
 
     const fastIndex = mainTsx.indexOf('{renderChatFastModeIndicator()}');
-    const modelIndex = mainTsx.indexOf('{renderChatStatusModel(chatConfigStatus.modelOption)}');
+    const effortIndex = mainTsx.indexOf('{renderChatStatusEffort(chatConfigStatus.reasoningOption)}');
+    const fastRendererStart = mainTsx.indexOf('const renderChatFastModeIndicator = () => {');
+    const fastRendererEnd = mainTsx.indexOf('const renderChatStatusModel =', fastRendererStart);
+    const fastRenderer = mainTsx.slice(fastRendererStart, fastRendererEnd);
     expect(fastIndex).toBeGreaterThan(0);
-    expect(modelIndex).toBeGreaterThan(0);
-    expect(fastIndex).toBeGreaterThan(modelIndex);
-    expect(mainTsx).toContain('codicon codicon-zap chat-fast-mode-indicator');
+    expect(effortIndex).toBeGreaterThan(0);
+    expect(fastIndex).toBeGreaterThan(effortIndex);
+    expect(fastRenderer).toContain('className={`codicon codicon-zap chat-fast-mode-indicator${enabled ? \' enabled\' : \'\'}`}');
+    expect(fastRenderer).toContain('aria-pressed={enabled}');
+    expect(fastRenderer).toContain("invokeChatSessionAction('fast')");
     expect(stylesCss).toContain('.chat-fast-mode-indicator.enabled');
+    expect(cssRuleBlock(stylesCss, '.chat-config-options-shell.compact .chat-fast-mode-indicator')).toContain('display: inline-flex;');
+    expect(cssRuleBlock(stylesCss, '.chat-config-options-shell.compact .chat-fast-mode-indicator')).toContain('flex: 0 0 auto;');
   });
 
   test('releases the chat page opacity animation after entry so temporary layers can sample their backdrop', () => {
