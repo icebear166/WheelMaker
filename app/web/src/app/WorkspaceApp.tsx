@@ -19511,9 +19511,9 @@ export function App() {
                         className={`chat-config-options-shell${chatComposerStatusCompact ? ' compact' : ''}`}
                       >
                         {renderChatContextUsage()}
+                        {renderChatFastModeIndicator()}
                         {renderChatStatusModel(chatConfigStatus.modelOption)}
                         {renderChatStatusEffort(chatConfigStatus.reasoningOption)}
-                        {renderChatFastModeIndicator()}
                         {chatConfigOptions.length > 0 ? (
                           <div className="chat-config-options">
                             {chatConfigOptions.map(option => renderChatConfigPill(option))}

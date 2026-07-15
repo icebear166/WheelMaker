@@ -271,19 +271,22 @@ describe('chat composer status helpers', () => {
     );
   });
 
-  test('renders an always-visible fast toggle immediately after reasoning status', () => {
+  test('renders an always-visible fast toggle between context and model', () => {
     const projectRoot = path.join(__dirname, '..');
     const stylesCss = readWebStyles(projectRoot);
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
 
+    const contextIndex = mainTsx.indexOf('{renderChatContextUsage()}');
     const fastIndex = mainTsx.indexOf('{renderChatFastModeIndicator()}');
-    const effortIndex = mainTsx.indexOf('{renderChatStatusEffort(chatConfigStatus.reasoningOption)}');
+    const modelIndex = mainTsx.indexOf('{renderChatStatusModel(chatConfigStatus.modelOption)}');
     const fastRendererStart = mainTsx.indexOf('const renderChatFastModeIndicator = () => {');
     const fastRendererEnd = mainTsx.indexOf('const renderChatStatusModel =', fastRendererStart);
     const fastRenderer = mainTsx.slice(fastRendererStart, fastRendererEnd);
+    expect(contextIndex).toBeGreaterThan(0);
     expect(fastIndex).toBeGreaterThan(0);
-    expect(effortIndex).toBeGreaterThan(0);
-    expect(fastIndex).toBeGreaterThan(effortIndex);
+    expect(modelIndex).toBeGreaterThan(0);
+    expect(fastIndex).toBeGreaterThan(contextIndex);
+    expect(modelIndex).toBeGreaterThan(fastIndex);
     expect(fastRenderer).toContain('className={`codicon codicon-zap chat-fast-mode-indicator${enabled ? \' enabled\' : \'\'}`}');
     expect(fastRenderer).toContain('aria-pressed={enabled}');
     expect(fastRenderer).toContain("invokeChatSessionAction('fast')");
