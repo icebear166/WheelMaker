@@ -6,16 +6,18 @@ const (
 	desktopResourceIconID     uint = 1
 	desktopTitleBarThemeColor      = "#1e1e1e"
 
-	desktopBootstrapGetStateBinding = "__wheelMakerBootstrapGetState"
-	desktopBootstrapSaveBinding     = "__wheelMakerBootstrapSaveBaseURL"
-	desktopBootstrapRetryBinding    = "__wheelMakerBootstrapRetry"
-	desktopBootstrapResetBinding    = "__wheelMakerBootstrapReset"
-	desktopGetDeviceNameBinding     = "__wheelMakerDesktopGetDeviceName"
-	desktopStartDragBinding         = "__wheelMakerDesktopStartDrag"
-	desktopMinimizeBinding          = "__wheelMakerDesktopMinimize"
-	desktopToggleMaximizeBinding    = "__wheelMakerDesktopToggleMaximize"
-	desktopCloseBinding             = "__wheelMakerDesktopClose"
-	desktopRequestServerBinding     = "__wheelMakerDesktopRequestServerChange"
+	desktopBootstrapGetStateBinding       = "__wheelMakerBootstrapGetState"
+	desktopBootstrapSaveBinding           = "__wheelMakerBootstrapSaveBaseURL"
+	desktopBootstrapRetryBinding          = "__wheelMakerBootstrapRetry"
+	desktopBootstrapResetBinding          = "__wheelMakerBootstrapReset"
+	desktopGetDeviceNameBinding           = "__wheelMakerDesktopGetDeviceName"
+	desktopStartDragBinding               = "__wheelMakerDesktopStartDrag"
+	desktopMinimizeBinding                = "__wheelMakerDesktopMinimize"
+	desktopToggleMaximizeBinding          = "__wheelMakerDesktopToggleMaximize"
+	desktopCloseBinding                   = "__wheelMakerDesktopClose"
+	desktopRequestServerBinding           = "__wheelMakerDesktopRequestServerChange"
+	desktopOpenProjectFileInVSCodeBinding = "__wheelMakerDesktopOpenProjectFileInVSCode"
+	desktopShowProjectFileInFolderBinding = "__wheelMakerDesktopShowProjectFileInFolder"
 )
 
 func desktopRuntimeInitScript() string {
@@ -50,6 +52,8 @@ func desktopRuntimeInitScript() string {
       toggleMaximize: invoke('` + desktopToggleMaximizeBinding + `'),
       close: invoke('` + desktopCloseBinding + `'),
       requestServerChange: invoke('` + desktopRequestServerBinding + `'),
+		openProjectFileInVSCode: invoke('` + desktopOpenProjectFileInVSCodeBinding + `'),
+		showProjectFileInFolder: invoke('` + desktopShowProjectFileInFolderBinding + `'),
     });
   }
 })();`

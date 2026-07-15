@@ -139,6 +139,18 @@ func bindDesktopWindowBridge(w webview2.WebView, hwnd uintptr, desktopRuntime *d
 			}
 			return desktopRuntime.RequestServerChange(context.Background())
 		}},
+		{desktopOpenProjectFileInVSCodeBinding, func(projectRoot, relativePath string) error {
+			if err := authorize(desktopBridgeOpenProjectFileInVSCode); err != nil {
+				return err
+			}
+			return newDefaultDesktopFileActionEnvironment().openProjectFileInVSCode(projectRoot, relativePath)
+		}},
+		{desktopShowProjectFileInFolderBinding, func(projectRoot, relativePath string) error {
+			if err := authorize(desktopBridgeShowProjectFileInFolder); err != nil {
+				return err
+			}
+			return newDefaultDesktopFileActionEnvironment().showProjectFileInFolder(projectRoot, relativePath)
+		}},
 	}
 	for _, binding := range bindings {
 		if err := w.Bind(binding.name, binding.fn); err != nil {

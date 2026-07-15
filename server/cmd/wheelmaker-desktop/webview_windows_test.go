@@ -31,3 +31,50 @@ func TestDesktopWebViewUsesNativeNavigationAndProfileAdapter(t *testing.T) {
 		t.Fatal("Windows WebView integration must not bypass certificate validation")
 	}
 }
+
+func TestDesktopRuntimeFileActionBindings(t *testing.T) {
+	script := desktopRuntimeInitScript()
+	for _, want := range []string{
+		"openProjectFileInVSCode",
+		"showProjectFileInFolder",
+		desktopOpenProjectFileInVSCodeBinding,
+		desktopShowProjectFileInFolderBinding,
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("desktop runtime script missing %q", want)
+		}
+	}
+
+	bootstrapStart := strings.Index(script, "window.wheelMakerBootstrap")
+	if bootstrapStart < 0 {
+		t.Fatal("desktop runtime script bootstrap object section was not found")
+	}
+	bootstrapEnd := strings.Index(script[bootstrapStart:], "return;")
+	if bootstrapEnd < 0 {
+		t.Fatal("desktop runtime script bootstrap object section was not found")
+	}
+	bootstrapSection := script[bootstrapStart : bootstrapStart+bootstrapEnd]
+	for _, privateName := range []string{
+		desktopOpenProjectFileInVSCodeBinding,
+		desktopShowProjectFileInFolderBinding,
+	} {
+		if strings.Contains(bootstrapSection, privateName) {
+			t.Errorf("bootstrap object exposes private file action binding %q", privateName)
+		}
+	}
+
+	source, err := os.ReadFile("webview_windows.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"authorize(desktopBridgeOpenProjectFileInVSCode)",
+		"newDefaultDesktopFileActionEnvironment().openProjectFileInVSCode(projectRoot, relativePath)",
+		"authorize(desktopBridgeShowProjectFileInFolder)",
+		"newDefaultDesktopFileActionEnvironment().showProjectFileInFolder(projectRoot, relativePath)",
+	} {
+		if !strings.Contains(string(source), want) {
+			t.Errorf("Windows desktop binding source missing %q", want)
+		}
+	}
+}
