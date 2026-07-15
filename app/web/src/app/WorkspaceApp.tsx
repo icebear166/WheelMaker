@@ -34,7 +34,11 @@ import { initializePWAFoundation } from '../platform/pwa';
 import {cleanupNativeWebViewPWA} from '../platform/pwa/nativePwaGuard';
 import { DesktopDragRegion, DesktopWindowControls } from '../shell/layouts/desktop/DesktopTitleBar';
 import {resolveDesktopChatQuickSwitchContextMenu} from '../shell/layouts/desktop/chatQuickSwitchContextMenu';
-import {getDesktopWindowBridge} from '../platform/desktop/desktopRuntime';
+import {
+  getDesktopWindowBridge,
+  invokeDesktopProjectFileAction,
+  type DesktopProjectFileAction,
+} from '../platform/desktop/desktopRuntime';
 import {getNativeRuntimeBridge, isNativeShellHost} from '../platform/native/nativeRuntime';
 import {
   AppConfirmDialog,
@@ -20831,10 +20835,53 @@ export function App() {
       return null;
     }
     const closeActionsMenu = () => setPreviewWorkbenchActionsMenuOpen(false);
+    const projectRoot = projects.find(project => project.projectId === tab.projectId)?.path;
+    const relativePath = tab.type === 'prompt-diff' ? tab.activeFilePath : '';
+    const desktopBridge = getDesktopWindowBridge();
+    const canOpenPromptDiffInVSCode = Boolean(projectRoot && relativePath && desktopBridge?.openProjectFileInVSCode);
+    const canShowPromptDiffInFolder = Boolean(projectRoot && relativePath && desktopBridge?.showProjectFileInFolder);
+    const runPromptDiffDesktopFileAction = (
+      action: DesktopProjectFileAction,
+      failurePrefix: string,
+    ) => {
+      closeActionsMenu();
+      setToastMessage('');
+      if (!desktopBridge || !projectRoot || !relativePath) {
+        return;
+      }
+      Promise.resolve()
+        .then(() => invokeDesktopProjectFileAction(desktopBridge, action, projectRoot, relativePath))
+        .catch(err => {
+          const reason = err instanceof Error ? err.message : String(err);
+          setToastMessage(`${failurePrefix}: ${reason}`);
+        });
+    };
     const indexPending = projectIndexScanPendingByProjectId[tab.projectId] === true;
     const indexError = projectIndexErrorByProjectId[tab.projectId] || '';
     return (
       <>
+        {canOpenPromptDiffInVSCode ? (
+          <button
+            type="button"
+            role="menuitem"
+            className="preview-workbench-action-menu-item"
+            onClick={() => runPromptDiffDesktopFileAction('vscode', 'Failed to open file in VS Code')}
+          >
+            <span className="codicon codicon-code" aria-hidden="true" />
+            <span>Open with VS Code</span>
+          </button>
+        ) : null}
+        {canShowPromptDiffInFolder ? (
+          <button
+            type="button"
+            role="menuitem"
+            className="preview-workbench-action-menu-item"
+            onClick={() => runPromptDiffDesktopFileAction('folder', 'Failed to show file in File Explorer')}
+          >
+            <span className="codicon codicon-folder-opened" aria-hidden="true" />
+            <span>Show in File Explorer</span>
+          </button>
+        ) : null}
         {tab.type === 'file' ? (
           <>
             <button

@@ -551,6 +551,13 @@ Do not normalize or concatenate paths in this layer.
 
 Run the Step 2 command again. Expected: PASS.
 
+- [ ] **Step 5: Commit the isolated desktop runtime helper**
+
+```powershell
+git add app/web/src/platform/desktop/desktopRuntime.ts app/__tests__/web-desktop-runtime.test.ts
+git commit -m "feat: add desktop file action client"
+```
+
 ### Task 5: Wire prompt-diff selection through open, reload, and file headers
 
 **Files:**
@@ -611,6 +618,13 @@ npm test -- __tests__/web-preview-workbench-state.test.ts __tests__/web-chat-fil
 ```
 
 Expected: PASS.
+
+- [ ] **Step 5: Commit the prompt-diff selection wiring**
+
+```powershell
+git add app/web/src/app/WorkspaceApp.tsx app/__tests__/web-chat-file-peek-viewer.test.ts
+git commit -m "feat: select active prompt diff files"
+```
 
 ### Task 6: Render desktop-only actions, errors, and styling
 
@@ -701,7 +715,7 @@ npm run tsc:web
 
 Expected: both commands PASS with no TypeScript errors.
 
-Do not commit Tasks 4–6 yet. The repository completion gate requires the final implementation commit in the exact tail sequence below.
+Do not commit Task 6 yet. The repository completion gate requires its UI/menu changes and this plan update to form the final implementation commit in the exact tail sequence below.
 
 ### Task 7: Verify and satisfy the repository completion gate
 
@@ -717,7 +731,7 @@ git status --short
 git diff HEAD
 ```
 
-Expected: no whitespace errors; only the plan and intended Tasks 4–6 changes remain uncommitted, while prior focused commits contain Tasks 1–3.
+Expected: no whitespace errors; only the plan and intended Task 6 changes remain uncommitted, while prior focused commits contain Tasks 1–5.
 
 - [ ] **Step 2: Run focused regression tests fresh**
 

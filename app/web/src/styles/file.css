@@ -928,6 +928,15 @@
   background: var(--hover);
 }
 
+.chat-prompt-diff-file.active > .chat-prompt-diff-file-header {
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+  box-shadow: inset 2px 0 0 var(--accent-primary);
+}
+
+.chat-prompt-diff-file.active > .chat-prompt-diff-file-header:hover {
+  background: color-mix(in srgb, var(--accent-primary) 18%, var(--hover));
+}
+
 .chat-prompt-diff-file-title {
   min-width: 0;
   display: flex;

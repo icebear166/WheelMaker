@@ -100,6 +100,65 @@ describe('web chat file peek viewer', () => {
     expect(viewerComparatorBody).toContain('prev.preview === next.preview');
   });
 
+  test('prompt diff actions target the active file through independently gated desktop methods', () => {
+    const mainTsx = readSourceText(mainPath);
+    const stylesCss = readWebStyles(projectRoot);
+    const actionsStart = mainTsx.indexOf('const renderPreviewWorkbenchActions = () => {');
+    const actionsEnd = mainTsx.indexOf('const renderPreviewWorkbenchTabBody =', actionsStart);
+    const actionsBody = mainTsx.slice(actionsStart, actionsEnd);
+    const runnerStart = actionsBody.indexOf('const runPromptDiffDesktopFileAction = (');
+    const runnerEnd = actionsBody.indexOf('const indexPending =', runnerStart);
+    const runnerBody = actionsBody.slice(runnerStart, runnerEnd);
+    const disconnectedReturnStart = mainTsx.indexOf('if (!connected && !keepWorkspaceVisible) {');
+    const connectedReturnStart = mainTsx.indexOf('return (\n    <>\n      <ResponsiveShell', disconnectedReturnStart);
+    const connectedToastStart = mainTsx.indexOf('{toastMessage ? (', connectedReturnStart);
+    const connectedToastEnd = mainTsx.indexOf('{appRenameDialog}', connectedToastStart);
+    const connectedToastBody = mainTsx.slice(connectedToastStart, connectedToastEnd);
+
+    expect(actionsStart).toBeGreaterThanOrEqual(0);
+    expect(actionsEnd).toBeGreaterThan(actionsStart);
+    expect(runnerStart).toBeGreaterThanOrEqual(0);
+    expect(runnerEnd).toBeGreaterThan(runnerStart);
+    expect(mainTsx).toContain('invokeDesktopProjectFileAction,');
+    expect(mainTsx).toContain('type DesktopProjectFileAction,');
+    expect(actionsBody).toContain('const projectRoot = projects.find(project => project.projectId === tab.projectId)?.path;');
+    expect(actionsBody).toContain("const relativePath = tab.type === 'prompt-diff' ? tab.activeFilePath : '';");
+    expect(actionsBody).toContain('const desktopBridge = getDesktopWindowBridge();');
+    expect(actionsBody).toContain('const canOpenPromptDiffInVSCode = Boolean(projectRoot && relativePath && desktopBridge?.openProjectFileInVSCode);');
+    expect(actionsBody).toContain('const canShowPromptDiffInFolder = Boolean(projectRoot && relativePath && desktopBridge?.showProjectFileInFolder);');
+    expect(actionsBody).toContain('{canOpenPromptDiffInVSCode ? (');
+    expect(actionsBody).toContain('{canShowPromptDiffInFolder ? (');
+    expect(actionsBody).toContain("runPromptDiffDesktopFileAction('vscode', 'Failed to open file in VS Code')");
+    expect(actionsBody).toContain("runPromptDiffDesktopFileAction('folder', 'Failed to show file in File Explorer')");
+    expect(actionsBody).toContain('<span>Open with VS Code</span>');
+    expect(actionsBody).toContain('<span>Show in File Explorer</span>');
+    expect(runnerBody).toContain('closeActionsMenu();');
+    expect(runnerBody).toContain("setToastMessage('');");
+    expect(runnerBody).toContain('if (!desktopBridge || !projectRoot || !relativePath) {');
+    expect(runnerBody).toContain('Promise.resolve()');
+    expect(runnerBody).toContain('.then(() => invokeDesktopProjectFileAction(desktopBridge, action, projectRoot, relativePath))');
+    expect(runnerBody).toContain('.catch(err => {');
+    expect(runnerBody).toContain('const reason = err instanceof Error ? err.message : String(err);');
+    expect(runnerBody).toContain('setToastMessage(`${failurePrefix}: ${reason}`);');
+    expect(runnerBody.indexOf('closeActionsMenu();')).toBeLessThan(runnerBody.indexOf("setToastMessage('');"));
+    expect(runnerBody.indexOf("setToastMessage('');")).toBeLessThan(runnerBody.indexOf('Promise.resolve()'));
+    expect(runnerBody.indexOf('.catch(err => {')).toBeLessThan(runnerBody.indexOf('setToastMessage(`${failurePrefix}: ${reason}`);'));
+    expect(disconnectedReturnStart).toBeGreaterThanOrEqual(0);
+    expect(connectedReturnStart).toBeGreaterThan(disconnectedReturnStart);
+    expect(connectedToastStart).toBeGreaterThan(connectedReturnStart);
+    expect(connectedToastEnd).toBeGreaterThan(connectedToastStart);
+    expect(connectedToastBody).toContain('{toastMessage ? (');
+    expect(connectedToastBody).toContain('className="app-toast"');
+
+    const activeHeader = cssRuleBlock(stylesCss, '.chat-prompt-diff-file.active > .chat-prompt-diff-file-header');
+    const activeHeaderHover = cssRuleBlock(stylesCss, '.chat-prompt-diff-file.active > .chat-prompt-diff-file-header:hover');
+    expect(stylesCss).toContain('.chat-prompt-diff-file.active > .chat-prompt-diff-file-header {');
+    expect(activeHeader).toContain('background: color-mix(in srgb, var(--accent-primary) 12%, transparent);');
+    expect(activeHeader).toContain('box-shadow: inset 2px 0 0 var(--accent-primary);');
+    expect(stylesCss).toContain('.chat-prompt-diff-file.active > .chat-prompt-diff-file-header:hover {');
+    expect(activeHeaderHover).toContain('background: color-mix(in srgb, var(--accent-primary) 18%, var(--hover));');
+  });
+
   test('prompt attachments open unified attachment tabs', () => {
     const mainTsx = readSourceText(mainPath);
     const stylesCss = readWebStyles(projectRoot);
