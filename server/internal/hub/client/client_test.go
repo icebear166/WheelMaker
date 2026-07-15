@@ -402,31 +402,6 @@ func TestReplyWithTitleRecordsSystemEventThroughViewSink(t *testing.T) {
 	}
 }
 
-func TestReportTimeoutErrorRecordsSystemEventThroughViewSink(t *testing.T) {
-	sink := &recordingSessionViewSink{}
-	s := mustNewSession(t, "sess-1", "/tmp", "claude")
-	s.viewSink = sink
-
-	s.reportTimeoutError("stream", "silence")
-
-	if len(sink.events) != 1 {
-		t.Fatalf("session view events len = %d, want 1", len(sink.events))
-	}
-	event := sink.events[0]
-	if event.Type != SessionViewEventTypeSystem {
-		t.Fatalf("event.Type = %q, want %q", event.Type, SessionViewEventTypeSystem)
-	}
-	if !strings.Contains(event.Content, "category=timeout stage=stream") {
-		t.Fatalf("event.Content = %q, want timeout payload", event.Content)
-	}
-	if strings.Contains(event.Content, "/status") {
-		t.Fatalf("event.Content = %q, want no stale slash-command hint", event.Content)
-	}
-	if event.SourceChannel != "" || event.SourceChatID != "" {
-		t.Fatalf("event source = (%q, %q), want empty source", event.SourceChannel, event.SourceChatID)
-	}
-}
-
 func TestConnectHintUsesAppSessionUIAction(t *testing.T) {
 	s := mustNewSession(t, "sess-1", "/tmp", "claude")
 
@@ -844,45 +819,6 @@ func TestSessionUpdate_UsageUpdatesAgentStateWithoutPromptDelivery(t *testing.T)
 	}
 	if state.Usage.Used != used || state.Usage.Size != size || state.Usage.UpdatedAt != "2026-07-07T08:00:00Z" {
 		t.Fatalf("usage state = %+v, want used=%d size=%d", state.Usage, used, size)
-	}
-}
-
-func TestPromptObserve_FirstWaitTransitions(t *testing.T) {
-	st := newPromptObserveState(time.Unix(0, 0))
-	e := st.Eval(time.Unix(60, 0), false)
-	if !e.WarnFirstWait || e.ErrorFirstWait {
-		t.Fatalf("unexpected first wait events: %+v", e)
-	}
-	e = st.Eval(time.Unix(180, 0), false)
-	if !e.ErrorFirstWait {
-		t.Fatalf("expected first wait error at 180s: %+v", e)
-	}
-}
-
-func TestPromptObserve_SilenceTransitions(t *testing.T) {
-	st := newPromptObserveState(time.Unix(0, 0))
-	st.MarkActivity(time.Unix(5, 0), true)
-	e := st.Eval(time.Unix(65, 0), true)
-	if !e.WarnSilence || e.ErrorSilence {
-		t.Fatalf("unexpected silence events: %+v", e)
-	}
-	e = st.Eval(time.Unix(185, 0), true)
-	if !e.ErrorSilence {
-		t.Fatalf("expected silence error at 180s: %+v", e)
-	}
-}
-
-func TestTimeoutNotifyLimiter_Cooldown(t *testing.T) {
-	n := newTimeoutNotifyLimiter(60 * time.Second)
-	now := time.Unix(100, 0)
-	if !n.Allow("sess-1:first-wait", now) {
-		t.Fatal("first report should be allowed")
-	}
-	if n.Allow("sess-1:first-wait", now.Add(30*time.Second)) {
-		t.Fatal("report inside cooldown should be blocked")
-	}
-	if !n.Allow("sess-1:first-wait", now.Add(61*time.Second)) {
-		t.Fatal("report after cooldown should be allowed")
 	}
 }
 

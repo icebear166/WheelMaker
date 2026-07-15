@@ -68,8 +68,6 @@ type Session struct {
 	prompt   promptState
 	initCond *sync.Cond
 
-	timeoutLimiter *timeoutNotifyLimiter
-
 	// Back-references to Client-owned resources needed by Session methods.
 	projectName string
 	cwd         string
@@ -97,13 +95,12 @@ func newSession(id, cwd, agentType string) (*Session, error) {
 		return nil, fmt.Errorf("agent type is required")
 	}
 	s := &Session{
-		acpSessionID:   id,
-		agentType:      agentType,
-		Status:         SessionActive,
-		cwd:            cwd,
-		createdAt:      time.Now(),
-		prompt:         promptState{},
-		timeoutLimiter: newTimeoutNotifyLimiter(timeoutNotifyCooldown),
+		acpSessionID: id,
+		agentType:    agentType,
+		Status:       SessionActive,
+		cwd:          cwd,
+		createdAt:    time.Now(),
+		prompt:       promptState{},
 	}
 	s.initCond = sync.NewCond(&s.mu)
 	return s, nil
@@ -1218,94 +1215,71 @@ func (s *Session) handlePromptBlocks(blocks []acp.ContentBlock) error {
 	s.mu.Unlock()
 
 	var buf strings.Builder
-	observe := newPromptObserveState(time.Now())
-	observeTicker := time.NewTicker(promptObserveInterval)
-
 	streamDone := false
 	for !streamDone {
-		select {
-		case ev, ok := <-updates:
-			if !ok {
-				streamDone = true
-				break
-			}
-			observe.MarkActivity(time.Now(), true)
-			if ev.err != nil {
-				if errors.Is(ev.err, context.Canceled) {
-					s.recordPromptDone(acp.StopReasonCancelled, "")
-					s.mu.Lock()
-					s.prompt.currentCh = nil
-					s.mu.Unlock()
-					observeTicker.Stop()
-					return nil
-				}
-				recovered := false
-				if !s.agentProcessAlive() && s.resetDeadConnection(ev.err) {
-					if recErr := s.ensureInstance(ctx); recErr == nil {
-						_ = s.ensureReadyAndNotify(ctx)
-						recovered = true
-					}
-				}
-				if recovered {
-					s.recordPromptFailed("Agent process exited and was reconnected. Please resend if this reply was interrupted.")
-				} else {
-					s.recordPromptFailed(fmt.Sprintf("Agent error: %v", ev.err))
-				}
+		ev, ok := <-updates
+		if !ok {
+			streamDone = true
+			break
+		}
+		if ev.err != nil {
+			if errors.Is(ev.err, context.Canceled) {
+				s.recordPromptDone(acp.StopReasonCancelled, "")
 				s.mu.Lock()
 				s.prompt.currentCh = nil
 				s.mu.Unlock()
-				observeTicker.Stop()
 				return nil
 			}
-			if ev.update != nil {
-				params := *ev.update
-				s.recordSessionViewEvent(SessionViewEvent{
-					Type:      SessionViewEventTypeACP,
-					SessionID: s.acpSessionID,
-					Content: acp.BuildACPContentJSON(acp.MethodSessionUpdate, map[string]any{
-						"params": params,
-					}),
-				})
-				if params.Update.SessionUpdate == acp.SessionUpdateAgentMessageChunk {
-					text := extractTextChunk(params.Update.Content)
-					if strings.TrimSpace(text) != "" {
-						buf.WriteString(text)
-					}
-				}
-				if params.Update.SessionUpdate == acp.SessionUpdateConfigOptionUpdate {
-					raw, _ := json.Marshal(params.Update)
-					s.reply(formatConfigOptionUpdateMessage(raw))
-					s.persistSessionBestEffort()
+			recovered := false
+			if !s.agentProcessAlive() && s.resetDeadConnection(ev.err) {
+				if recErr := s.ensureInstance(ctx); recErr == nil {
+					_ = s.ensureReadyAndNotify(ctx)
+					recovered = true
 				}
 			}
-			if ev.result != nil {
-				s.recordSessionViewEvent(SessionViewEvent{
-					Type:      SessionViewEventTypeACP,
-					SessionID: s.acpSessionID,
-					Content: acp.BuildACPContentJSON(acp.MethodSessionPrompt, map[string]any{
-						"result": *ev.result,
-					}),
-					Artifacts: cloneSessionPromptArtifactPayloads(ev.result.Artifacts),
-				})
-				streamDone = true
+			if recovered {
+				s.recordPromptFailed("Agent process exited and was reconnected. Please resend if this reply was interrupted.")
+			} else {
+				s.recordPromptFailed(fmt.Sprintf("Agent error: %v", ev.err))
 			}
-		case <-observeTicker.C:
-			ev := observe.Eval(time.Now(), observe.Started())
-			if ev.WarnFirstWait {
-				hubLogger(s.projectName).Warn("timeout warn category=timeout stage=stream kind=first_wait session=%s", s.acpSessionID)
+			s.mu.Lock()
+			s.prompt.currentCh = nil
+			s.mu.Unlock()
+			return nil
+		}
+		if ev.update != nil {
+			params := *ev.update
+			s.recordSessionViewEvent(SessionViewEvent{
+				Type:      SessionViewEventTypeACP,
+				SessionID: s.acpSessionID,
+				Content: acp.BuildACPContentJSON(acp.MethodSessionUpdate, map[string]any{
+					"params": params,
+				}),
+			})
+			if params.Update.SessionUpdate == acp.SessionUpdateAgentMessageChunk {
+				text := extractTextChunk(params.Update.Content)
+				if strings.TrimSpace(text) != "" {
+					buf.WriteString(text)
+				}
 			}
-			if ev.ErrorFirstWait {
-				s.reportTimeoutError("stream", "first_wait")
-			}
-			if ev.WarnSilence {
-				hubLogger(s.projectName).Warn("timeout warn category=timeout stage=stream kind=silence session=%s", s.acpSessionID)
-			}
-			if ev.ErrorSilence {
-				s.reportTimeoutError("stream", "silence")
+			if params.Update.SessionUpdate == acp.SessionUpdateConfigOptionUpdate {
+				raw, _ := json.Marshal(params.Update)
+				s.reply(formatConfigOptionUpdateMessage(raw))
+				s.persistSessionBestEffort()
 			}
 		}
+		if ev.result != nil {
+			s.recordSessionViewEvent(SessionViewEvent{
+				Type:      SessionViewEventTypeACP,
+				SessionID: s.acpSessionID,
+				Content: acp.BuildACPContentJSON(acp.MethodSessionPrompt, map[string]any{
+					"result": *ev.result,
+				}),
+				Artifacts: cloneSessionPromptArtifactPayloads(ev.result.Artifacts),
+			})
+			streamDone = true
+		}
 	}
-	observeTicker.Stop()
 
 	s.mu.Lock()
 	s.prompt.currentCh = nil
@@ -1368,31 +1342,6 @@ func renderUnknown(v string) string {
 		return "unknown"
 	}
 	return v
-}
-
-func (s *Session) reportTimeoutError(stage string, kind string) {
-	now := time.Now()
-	s.mu.Lock()
-	agent := s.agentType
-	sid := s.acpSessionID
-	allow := true
-	if s.timeoutLimiter != nil {
-		allow = s.timeoutLimiter.Allow(kind, now)
-	}
-	s.mu.Unlock()
-
-	hubLogger(s.projectName).Error("timeout error category=timeout stage=%s kind=%s agent=%s session=%s",
-		stage, kind, renderUnknown(agent), renderUnknown(sid))
-	if !allow {
-		return
-	}
-	body := fmt.Sprintf(
-		"category=timeout stage=%s agent=%s sessionID=%s action=check session status in the app, then retry",
-		stage,
-		renderUnknown(agent),
-		renderUnknown(sid),
-	)
-	s.reply(body)
 }
 
 func (s *Session) connectHint() string {
