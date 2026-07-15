@@ -207,6 +207,7 @@ import {
   isChatUserScrollLocked,
   nextChatUserScrollLockUntil,
   resolveChatKeyboardInset,
+  resolveChatKeyboardLayoutViewportHeight,
   resolveChatKeyboardInsetScrollAction,
   resolveChatSessionReadWindowUpdate,
   resolveChatScrollToBottomVisibility,
@@ -2677,6 +2678,7 @@ export function App() {
   const chatKeyboardInset = workspaceUiState.transient.chatKeyboardInset;
   const chatKeyboardInsetRef = useRef(chatKeyboardInset);
   const chatKeyboardInsetSettleTimerRef = useRef<number | null>(null);
+  const mobileKeyboardLayoutViewportHeightRef = useRef(0);
   const tabRef = useRef<Tab>(tab);
   const floatingDragStateRef = useRef<FloatingDragState | null>(null);
   const [gestureNavState, setGestureNavState] = useState<GestureNavigationState | null>(null);
@@ -5584,21 +5586,41 @@ export function App() {
 
   useEffect(() => {
     if (isWide || tab !== 'chat') {
+      mobileKeyboardLayoutViewportHeightRef.current = 0;
       setChatKeyboardInset(0);
+      setFloatingKeyboardOffset(0);
       return;
     }
     const viewport = window.visualViewport;
     if (!viewport) {
+      mobileKeyboardLayoutViewportHeightRef.current = 0;
+      setChatKeyboardInset(0);
+      setFloatingKeyboardOffset(0);
       return;
     }
     let raf = 0;
+    let lastWindowWidth = window.innerWidth;
+    const readLayoutViewportHeight = () => Math.max(
+      window.innerHeight || 0,
+      document.documentElement.clientHeight || 0,
+    );
+    const resetLayoutViewportHeight = () => {
+      mobileKeyboardLayoutViewportHeightRef.current = readLayoutViewportHeight();
+    };
     const updateInset = () => {
+      const layoutViewportHeight = resolveChatKeyboardLayoutViewportHeight({
+        currentLayoutViewportHeight: readLayoutViewportHeight(),
+        previousLayoutViewportHeight: mobileKeyboardLayoutViewportHeightRef.current,
+      });
       const nextInset = resolveChatKeyboardInset({
         windowInnerHeight: window.innerHeight,
+        layoutViewportHeight,
         visualViewportHeight: viewport.height,
         visualViewportOffsetTop: viewport.offsetTop,
       });
+      mobileKeyboardLayoutViewportHeightRef.current = layoutViewportHeight;
       setChatKeyboardInset(prev => (prev === nextInset ? prev : nextInset));
+      setFloatingKeyboardOffset(prev => (prev === nextInset ? prev : nextInset));
     };
     const scheduleUpdate = () => {
       if (raf) {
@@ -5609,58 +5631,34 @@ export function App() {
         updateInset();
       });
     };
+    const handleWindowResize = () => {
+      const nextWindowWidth = window.innerWidth;
+      if (Math.abs(nextWindowWidth - lastWindowWidth) > 24) {
+        lastWindowWidth = nextWindowWidth;
+        resetLayoutViewportHeight();
+      }
+      scheduleUpdate();
+    };
+    const handleOrientationChange = () => {
+      resetLayoutViewportHeight();
+      scheduleUpdate();
+    };
+    resetLayoutViewportHeight();
     updateInset();
     viewport.addEventListener('resize', scheduleUpdate);
     viewport.addEventListener('scroll', scheduleUpdate);
-    window.addEventListener('orientationchange', scheduleUpdate);
+    window.addEventListener('resize', handleWindowResize);
+    window.addEventListener('scroll', scheduleUpdate, {passive: true});
+    window.addEventListener('orientationchange', handleOrientationChange);
     return () => {
       if (raf) {
         window.cancelAnimationFrame(raf);
       }
       viewport.removeEventListener('resize', scheduleUpdate);
       viewport.removeEventListener('scroll', scheduleUpdate);
-      window.removeEventListener('orientationchange', scheduleUpdate);
-    };
-  }, [isWide, tab]);
-
-  useEffect(() => {
-    if (isWide || tab !== 'chat') {
-      setFloatingKeyboardOffset(0);
-      return;
-    }
-    const viewport = window.visualViewport;
-    if (!viewport) {
-      return;
-    }
-    let raf = 0;
-    const updateOffset = () => {
-      const nextOffset = resolveChatKeyboardInset({
-        windowInnerHeight: window.innerHeight,
-        visualViewportHeight: viewport.height,
-        visualViewportOffsetTop: viewport.offsetTop,
-      });
-      setFloatingKeyboardOffset(prev => (prev === nextOffset ? prev : nextOffset));
-    };
-    const scheduleUpdate = () => {
-      if (raf) {
-        window.cancelAnimationFrame(raf);
-      }
-      raf = window.requestAnimationFrame(() => {
-        raf = 0;
-        updateOffset();
-      });
-    };
-    updateOffset();
-    viewport.addEventListener('resize', scheduleUpdate);
-    viewport.addEventListener('scroll', scheduleUpdate);
-    window.addEventListener('orientationchange', scheduleUpdate);
-    return () => {
-      if (raf) {
-        window.cancelAnimationFrame(raf);
-      }
-      viewport.removeEventListener('resize', scheduleUpdate);
-      viewport.removeEventListener('scroll', scheduleUpdate);
-      window.removeEventListener('orientationchange', scheduleUpdate);
+      window.removeEventListener('resize', handleWindowResize);
+      window.removeEventListener('scroll', scheduleUpdate);
+      window.removeEventListener('orientationchange', handleOrientationChange);
     };
   }, [isWide, tab]);
 

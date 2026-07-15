@@ -28,26 +28,42 @@ function normalizeChatKeyboardInset(value: number): number {
   return Number.isFinite(value) ? Math.max(0, Math.round(value)) : 0;
 }
 
+export function resolveChatKeyboardLayoutViewportHeight(input: {
+  currentLayoutViewportHeight: number;
+  previousLayoutViewportHeight: number;
+}): number {
+  // iOS can temporarily collapse innerHeight to the visual viewport while the keyboard stays open.
+  return Math.max(
+    normalizeChatKeyboardInset(input.currentLayoutViewportHeight),
+    normalizeChatKeyboardInset(input.previousLayoutViewportHeight),
+  );
+}
+
 export function resolveChatKeyboardInset(input: {
   windowInnerHeight: number;
+  layoutViewportHeight?: number;
   visualViewportHeight: number;
   visualViewportOffsetTop: number;
   openThreshold?: number;
 }): number {
   const windowInnerHeight = normalizeChatKeyboardInset(input.windowInnerHeight);
+  const layoutViewportHeight = Math.max(
+    windowInnerHeight,
+    normalizeChatKeyboardInset(input.layoutViewportHeight ?? 0),
+  );
   const visualViewportHeight = normalizeChatKeyboardInset(input.visualViewportHeight);
   const visualViewportOffsetTop = normalizeChatKeyboardInset(input.visualViewportOffsetTop);
   const openThreshold = normalizeChatKeyboardInset(input.openThreshold ?? CHAT_KEYBOARD_INSET_OPEN_THRESHOLD_PX);
   const visualViewportBottomGap = Math.max(
     0,
-    windowInnerHeight - (visualViewportHeight + visualViewportOffsetTop),
+    layoutViewportHeight - (visualViewportHeight + visualViewportOffsetTop),
   );
   const visualViewportHeightGap = Math.max(
     0,
-    windowInnerHeight - visualViewportHeight,
+    layoutViewportHeight - visualViewportHeight,
   );
-  const inset = Math.max(visualViewportBottomGap, visualViewportHeightGap);
-  return inset >= openThreshold ? inset : 0;
+  // Offset-aware padding keeps the composer at the same screen coordinate when iOS pans the visual viewport.
+  return visualViewportHeightGap >= openThreshold ? visualViewportBottomGap : 0;
 }
 
 export function resolveChatKeyboardInsetScrollAction(input: {

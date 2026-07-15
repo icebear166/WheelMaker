@@ -5,6 +5,7 @@ import {
   isChatUserScrollLocked,
   nextChatUserScrollLockUntil,
   resolveChatKeyboardInset,
+  resolveChatKeyboardLayoutViewportHeight,
   resolveChatKeyboardInsetScrollAction,
   resolveChatSessionReadWindowUpdate,
   resolveChatScrollBottomTop,
@@ -143,7 +144,7 @@ describe('web drag scroll behavior', () => {
     expect(mainTsx).toContain('CHAT_KEYBOARD_INSET_SETTLE_DELAY_MS');
   });
 
-  test('keeps mobile keyboard inset stable when iOS pans the visual viewport', () => {
+  test('keeps the mobile composer visually anchored while iOS pans or shrinks the viewport', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
 
@@ -156,13 +157,38 @@ describe('web drag scroll behavior', () => {
       windowInnerHeight: 844,
       visualViewportHeight: 520,
       visualViewportOffsetTop: 120,
-    })).toBe(324);
+    })).toBe(204);
+    expect(resolveChatKeyboardInset({
+      windowInnerHeight: 520,
+      layoutViewportHeight: 844,
+      visualViewportHeight: 520,
+      visualViewportOffsetTop: 120,
+    })).toBe(204);
+    expect(resolveChatKeyboardInset({
+      windowInnerHeight: 520,
+      layoutViewportHeight: 844,
+      visualViewportHeight: 520,
+      visualViewportOffsetTop: 324,
+    })).toBe(0);
+    expect(resolveChatKeyboardLayoutViewportHeight({
+      currentLayoutViewportHeight: 844,
+      previousLayoutViewportHeight: 0,
+    })).toBe(844);
+    expect(resolveChatKeyboardLayoutViewportHeight({
+      currentLayoutViewportHeight: 520,
+      previousLayoutViewportHeight: 844,
+    })).toBe(844);
     expect(resolveChatKeyboardInset({
       windowInnerHeight: 844,
       visualViewportHeight: 808,
       visualViewportOffsetTop: 0,
     })).toBe(0);
     expect(mainTsx).toContain('resolveChatKeyboardInset({');
+    expect(mainTsx).toContain('resolveChatKeyboardLayoutViewportHeight({');
+    expect(mainTsx).toContain('const mobileKeyboardLayoutViewportHeightRef = useRef(0);');
+    expect(mainTsx).toContain('layoutViewportHeight,');
+    expect(mainTsx).toContain('mobileKeyboardLayoutViewportHeightRef.current = layoutViewportHeight;');
+    expect(mainTsx).toContain("window.addEventListener('resize', handleWindowResize);");
     expect(mainTsx).not.toContain('window.innerHeight - (viewport.height + viewport.offsetTop)');
   });
 
