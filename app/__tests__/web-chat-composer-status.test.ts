@@ -271,15 +271,16 @@ describe('chat composer status helpers', () => {
     );
   });
 
-  test('renders the fast lightning immediately before context usage', () => {
+  test('renders the fast lightning immediately after the model status', () => {
     const projectRoot = path.join(__dirname, '..');
     const stylesCss = readWebStyles(projectRoot);
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
 
     const fastIndex = mainTsx.indexOf('{renderChatFastModeIndicator()}');
-    const contextIndex = mainTsx.indexOf('{renderChatContextUsage()}');
+    const modelIndex = mainTsx.indexOf('{renderChatStatusModel(chatConfigStatus.modelOption)}');
     expect(fastIndex).toBeGreaterThan(0);
-    expect(contextIndex).toBeGreaterThan(fastIndex);
+    expect(modelIndex).toBeGreaterThan(0);
+    expect(fastIndex).toBeGreaterThan(modelIndex);
     expect(mainTsx).toContain('codicon codicon-zap chat-fast-mode-indicator');
     expect(stylesCss).toContain('.chat-fast-mode-indicator.enabled');
   });
