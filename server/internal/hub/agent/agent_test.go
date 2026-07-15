@@ -2236,6 +2236,31 @@ func TestCodexAppModelRefreshResetsMissingSelectedModel(t *testing.T) {
 	}
 }
 
+func TestCodexAppReasoningOptionsCapitalizeDisplayNames(t *testing.T) {
+	state := newCodexappConfigState()
+	state.setModels([]appServerModel{{
+		ID:                        "gpt-5.5",
+		SupportedReasoningEfforts: []string{"low", "medium", "high", "xhigh"},
+	}})
+
+	var got []protocol.ConfigOptionValue
+	for _, option := range state.options() {
+		if option.ID == protocol.ConfigOptionIDReasoningEffort {
+			got = option.Options
+			break
+		}
+	}
+	want := []protocol.ConfigOptionValue{
+		{Value: "low", Name: "Low"},
+		{Value: "medium", Name: "Medium"},
+		{Value: "high", Name: "High"},
+		{Value: "xhigh", Name: "Xhigh"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("reasoning options=%#v, want %#v", got, want)
+	}
+}
+
 func TestCodexAppModelListDecodesAppServerDataShape(t *testing.T) {
 	var resp appServerModelListResponse
 	if err := json.Unmarshal([]byte(`{

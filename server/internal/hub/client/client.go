@@ -82,7 +82,12 @@ func New(store Store, projectName string, cwd string) *Client {
 	c.sessionRecorder.modelLookup = func(sessionID string) string {
 		options := c.sessionConfigOptions(context.Background(), sessionID)
 		for _, opt := range options {
-			if opt.ID == "model" {
+			if opt.ID == acp.ConfigOptionIDModel {
+				for _, value := range opt.Options {
+					if value.Value == opt.CurrentValue && value.Name != "" {
+						return value.Name
+					}
+				}
 				return opt.CurrentValue
 			}
 		}

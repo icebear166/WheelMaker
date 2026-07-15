@@ -108,6 +108,8 @@ describe('chat composer status helpers', () => {
     const compact = splitChatComposerStatusOptions(options, true);
     expect(compact.modelOption?.id).toBe('model');
     expect(compact.reasoningOption?.id).toBe('reasoning_effort');
+    expect(compact.fastOption?.id).toBe('fast_mode');
+    expect(compact.coreOptions.map(item => item.kind)).toEqual(['model', 'effort', 'fast']);
     expect(compact.secondaryOptions).toEqual([]);
     expect(compact.overflowOptions.map(item => item.id)).toEqual([
       'personality',
@@ -118,6 +120,8 @@ describe('chat composer status helpers', () => {
     const wide = splitChatComposerStatusOptions(options, false);
     expect(wide.modelOption?.id).toBe('model');
     expect(wide.reasoningOption?.id).toBe('reasoning_effort');
+    expect(wide.fastOption?.id).toBe('fast_mode');
+    expect(wide.coreOptions.map(item => item.kind)).toEqual(['model', 'effort', 'fast']);
     expect(wide.secondaryOptions.map(item => item.id)).toEqual([
       'personality',
       'approval_preset',
@@ -126,22 +130,31 @@ describe('chat composer status helpers', () => {
     expect(wide.showOverflowToggle).toBe(false);
   });
 
+  test('degrades the core selector to the available config columns', () => {
+    const model = option({ id: 'model', name: 'Model', currentValue: 'gpt-5.6' });
+    const effort = option({ id: 'reasoning_effort', name: 'Reasoning', currentValue: 'high' });
+    const fast = option({ id: 'fast_mode', name: 'Fast', currentValue: 'off' });
+
+    expect(splitChatComposerStatusOptions([model, effort], false).coreOptions.map(item => item.kind)).toEqual(['model', 'effort']);
+    expect(splitChatComposerStatusOptions([model], false).coreOptions.map(item => item.kind)).toEqual(['model']);
+    expect(splitChatComposerStatusOptions([effort], false).coreOptions.map(item => item.kind)).toEqual(['effort']);
+    expect(splitChatComposerStatusOptions([fast], false).coreOptions.map(item => item.kind)).toEqual(['fast']);
+    expect(splitChatComposerStatusOptions([], false).coreOptions).toEqual([]);
+  });
+
   test('keeps composer status controls on a single visual rhythm', () => {
     const projectRoot = path.join(__dirname, '..');
     const stylesCss = readWebStyles(projectRoot);
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
 
-    expect(mainTsx).toContain('renderChatStatusEffort(chatConfigStatus.reasoningOption)');
+    expect(mainTsx).toContain('renderChatCoreConfigSelector()');
     expect(mainTsx).not.toContain('chat-status-secondary-divider');
     expect(mainTsx).not.toContain('chatConfigIconClass(option)');
     expect(mainTsx).not.toContain('chat-status-signal-bar');
     expect(stylesCss).not.toContain('.chat-status-secondary-divider');
     expect(stylesCss).not.toContain('.chat-config-pill .codicon');
     expect(stylesCss).not.toContain('chat-status-signal-bar');
-    expect(stylesCss).toMatch(/\.chat-status-model-button,\s*\.chat-status-effort-button \{[\s\S]*height: 24px;/);
-    expect(cssRuleBlock(stylesCss, '.chat-status-model-control')).toContain('flex: 0 1 auto;');
-    expect(cssRuleBlock(stylesCss, '.chat-status-model-button')).toContain('flex: 0 1 auto;');
-    expect(cssRuleBlock(stylesCss, '.chat-status-effort-button')).toContain('flex: 0 0 auto;');
+    expect(cssRuleBlock(stylesCss, '.chat-core-config-trigger')).toContain('height: 24px;');
     expect(cssRuleBlock(stylesCss, '.chat-config-options-shell')).toContain('max-width: 100%;');
     expect(cssRuleBlock(stylesCss, '.chat-config-options-wrap')).toContain('flex: 1 1 auto;');
     expect(cssRuleBlock(stylesCss, '.chat-config-pill')).toContain('height: 24px;');
@@ -198,7 +211,7 @@ describe('chat composer status helpers', () => {
     const stylesCss = readWebStyles(projectRoot);
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
 
-    expect(mainTsx).toContain("chatConfigMenuOptionId || chatConfigOverflowOpen || chatContextUsageOpen ? ' config-menu-open' : ''");
+    expect(mainTsx).toContain("chatCoreConfigMenuOpen || chatConfigMenuOptionId || chatConfigOverflowOpen || chatContextUsageOpen ? ' config-menu-open' : ''");
 
     const planLayer = zIndexValue(cssRuleBlock(stylesCss, '.chat-plan-surface.desktop'));
     const openComposerLayer = zIndexValue(cssRuleBlock(stylesCss, '.chat-composer.config-menu-open'));
@@ -207,8 +220,10 @@ describe('chat composer status helpers', () => {
 
     const overflowMenu = cssRuleBlock(stylesCss, '.chat-config-overflow-menu');
     const valueMenu = cssRuleBlock(stylesCss, '.chat-config-value-menu');
+    const coreMenu = cssRuleBlock(stylesCss, '.chat-core-config-menu');
     expect(overflowMenu).toContain('z-index: var(--chat-config-popover-layer);');
     expect(valueMenu).toContain('z-index: var(--chat-config-popover-layer);');
+    expect(coreMenu).toContain('z-index: var(--chat-config-popover-layer);');
     expect(overflowMenu).toContain('background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));');
     expect(valueMenu).toContain('background: color-mix(in srgb, var(--surface-overlay) 98%, var(--surface-panel));');
   });
@@ -246,6 +261,7 @@ describe('chat composer status helpers', () => {
       '.chat-recent-sessions-surface.desktop',
       '.chat-config-overflow-menu',
       '.chat-config-value-menu',
+      '.chat-core-config-menu',
       '.chat-context-usage-popover',
       '.chat-slash-menu',
       '.chat-file-mention-menu',
@@ -271,28 +287,25 @@ describe('chat composer status helpers', () => {
     );
   });
 
-  test('renders an always-visible fast toggle between context and model', () => {
+  test('renders a compact core config trigger and an independently scrolling column menu', () => {
     const projectRoot = path.join(__dirname, '..');
     const stylesCss = readWebStyles(projectRoot);
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
 
-    const contextIndex = mainTsx.indexOf('{renderChatContextUsage()}');
-    const fastIndex = mainTsx.indexOf('{renderChatFastModeIndicator()}');
-    const modelIndex = mainTsx.indexOf('{renderChatStatusModel(chatConfigStatus.modelOption)}');
-    const fastRendererStart = mainTsx.indexOf('const renderChatFastModeIndicator = () => {');
-    const fastRendererEnd = mainTsx.indexOf('const renderChatStatusModel =', fastRendererStart);
-    const fastRenderer = mainTsx.slice(fastRendererStart, fastRendererEnd);
-    expect(contextIndex).toBeGreaterThan(0);
-    expect(fastIndex).toBeGreaterThan(0);
-    expect(modelIndex).toBeGreaterThan(0);
-    expect(fastIndex).toBeGreaterThan(contextIndex);
-    expect(modelIndex).toBeGreaterThan(fastIndex);
-    expect(fastRenderer).toContain('className={`codicon codicon-zap chat-fast-mode-indicator${enabled ? \' enabled\' : \'\'}`}');
-    expect(fastRenderer).toContain('aria-pressed={enabled}');
-    expect(fastRenderer).toContain("invokeChatSessionAction('fast')");
-    expect(stylesCss).toContain('.chat-fast-mode-indicator.enabled');
-    expect(cssRuleBlock(stylesCss, '.chat-config-options-shell.compact .chat-fast-mode-indicator')).toContain('display: inline-flex;');
-    expect(cssRuleBlock(stylesCss, '.chat-config-options-shell.compact .chat-fast-mode-indicator')).toContain('flex: 0 0 auto;');
+    expect(mainTsx).toContain("const [chatCoreConfigMenuOpen, setChatCoreConfigMenuOpen] = useState(false);");
+    expect(mainTsx).toContain('className="chat-core-config-trigger"');
+    expect(mainTsx).toContain('className="chat-core-config-separator" aria-hidden="true">/</span>');
+    expect(mainTsx).toContain("fastEnabled ? (");
+    expect(mainTsx).toContain('className="codicon codicon-zap chat-core-config-fast"');
+    expect(mainTsx).toContain('className="chat-core-config-menu"');
+    expect(mainTsx).toContain('className={`chat-core-config-column ${item.kind}`}');
+    expect(mainTsx).toContain('className="chat-core-config-values"');
+    expect(mainTsx).toContain('handleChatConfigOptionChange(item.option, value.value)');
+    expect(mainTsx).not.toContain("invokeChatSessionAction('fast')");
+    expect(cssRuleBlock(stylesCss, '.chat-core-config-menu')).toContain('grid-template-columns: var(--chat-core-config-columns);');
+    expect(cssRuleBlock(stylesCss, '.chat-core-config-values')).toContain('overflow-y: auto;');
+    expect(cssRuleBlock(stylesCss, '.chat-core-config-trigger')).not.toContain('max-width:');
+    expect(stylesCss).toContain('.chat-config-options-shell.compact .chat-core-config-model');
   });
 
   test('releases the chat page opacity animation after entry so temporary layers can sample their backdrop', () => {

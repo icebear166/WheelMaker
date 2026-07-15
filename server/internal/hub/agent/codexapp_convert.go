@@ -771,7 +771,11 @@ func (s codexappConfigState) reasoningOptions() []protocol.ConfigOptionValue {
 	}
 	out := make([]protocol.ConfigOptionValue, 0, len(efforts))
 	for _, effort := range efforts {
-		out = append(out, protocol.ConfigOptionValue{Value: effort, Name: effort})
+		name := effort
+		if name != "" {
+			name = strings.ToUpper(name[:1]) + name[1:]
+		}
+		out = append(out, protocol.ConfigOptionValue{Value: effort, Name: name})
 	}
 	return out
 }

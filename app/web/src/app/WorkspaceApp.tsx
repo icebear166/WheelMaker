@@ -3276,7 +3276,7 @@ export function App() {
   const [confirmTarget, setConfirmTarget] = useState<ConfirmTarget | null>(null);
   const [confirmError, setConfirmError] = useState('');
   const [sessionStatusDialog, setSessionStatusDialog] = useState<SessionStatusDialogState | null>(null);
-  const [chatConfigUpdatingKey, setChatConfigUpdatingKey] = useState('');
+  const [chatConfigUpdatingKeys, setChatConfigUpdatingKeys] = useState<Set<string>>(() => new Set());
   const [chatComposerText, setChatComposerText] = useState('');
   const [chatComposerTokens, setChatComposerTokens] = useState<ChatComposerToken[]>([]);
   const [chatComposerSelectionRestore, setChatComposerSelectionRestore] = useState<ChatRichComposerSelectionRestore | null>(null);
@@ -3347,6 +3347,7 @@ export function App() {
   const [chatAttachmentTrayOpen, setChatAttachmentTrayOpen] = useState(false);
   const [chatContextUsageOpen, setChatContextUsageOpen] = useState(false);
   const [chatContextUsagePopoverStyle, setChatContextUsagePopoverStyle] = useState<React.CSSProperties>({});
+  const [chatCoreConfigMenuOpen, setChatCoreConfigMenuOpen] = useState(false);
   const [chatConfigMenuOptionId, setChatConfigMenuOptionId] = useState('');
   const [chatHubMenuOpen, setChatHubMenuOpen] = useState(false);
   const [chatHubColorMenuHubId, setChatHubColorMenuHubId] = useState('');
@@ -3590,11 +3591,7 @@ export function App() {
     const status = splitChatComposerStatusOptions(selectedChatConfigOptions, chatComposerStatusCompact);
     return {
       status,
-      visible: [
-        ...(status.modelOption ? [status.modelOption] : []),
-        ...(status.reasoningOption ? [status.reasoningOption] : []),
-        ...status.secondaryOptions,
-      ],
+      visible: status.secondaryOptions,
       overflow: status.overflowOptions,
     };
   }, [chatComposerStatusCompact, selectedChatConfigOptions]);
@@ -5878,6 +5875,26 @@ export function App() {
   }, [chatConfigMenuOptionId]);
 
   useEffect(() => {
+    if (!chatCoreConfigMenuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (target && chatConfigOptionsRef.current?.contains(target)) return;
+      setChatCoreConfigMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setChatCoreConfigMenuOpen(false);
+      }
+    };
+    window.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [chatCoreConfigMenuOpen]);
+
+  useEffect(() => {
     if (!chatContextUsageOpen) return;
     updateChatContextUsagePopoverPosition();
     const onPointerDown = (event: PointerEvent) => {
@@ -5962,6 +5979,16 @@ export function App() {
       setChatConfigMenuOptionId('');
     }
   }, [chatConfigMenuOptionId, chatConfigDisplay.visible]);
+
+  useEffect(() => {
+    setChatCoreConfigMenuOpen(false);
+  }, [selectedChatEncodedKey]);
+
+  useEffect(() => {
+    if (chatConfigDisplay.status.coreOptions.length === 0) {
+      setChatCoreConfigMenuOpen(false);
+    }
+  }, [chatConfigDisplay.status.coreOptions.length]);
 
   useEffect(() => {
     return registryDebugStore.subscribe((records: RegistryDebugRecord[]) => {
@@ -12156,7 +12183,11 @@ export function App() {
       return;
     }
     const updatingKey = `${encodeChatSessionKey(selectedKey)}:${configId}`;
-    setChatConfigUpdatingKey(updatingKey);
+    setChatConfigUpdatingKeys(current => {
+      const next = new Set(current);
+      next.add(updatingKey);
+      return next;
+    });
 
     try {
       const result = await service.setProjectSessionConfig(selectedKey.projectId, {
@@ -12174,7 +12205,11 @@ export function App() {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
     } finally {
-      setChatConfigUpdatingKey(prev => (prev === updatingKey ? '' : prev));
+      setChatConfigUpdatingKeys(current => {
+        const next = new Set(current);
+        next.delete(updatingKey);
+        return next;
+      });
     }
   };
 
@@ -18579,9 +18614,7 @@ export function App() {
       const optionValues = option.options ?? [];
       const optionLabel = option.name || option.id;
       const currentLabel = chatConfigCurrentLabel(option);
-      const updating =
-        chatConfigUpdatingKey ===
-        `${selectedChatSession?.sessionId ?? ''}:${option.id}`;
+      const updating = chatConfigUpdatingKeys.has(`${selectedChatEncodedKey}:${option.id}`);
       const open = chatConfigMenuOptionId === option.id;
       return (
         <div key={option.id} className="chat-config-item">
@@ -18596,6 +18629,7 @@ export function App() {
             onClick={() => {
               setChatPromptMenuOpen(false);
               setChatFileMentionMenuOpen(false);
+              setChatCoreConfigMenuOpen(false);
               setChatConfigOverflowOpen(false);
               setChatConfigMenuOptionId(current => (current === option.id ? '' : option.id));
             }}
@@ -18631,6 +18665,7 @@ export function App() {
               updateChatContextUsagePopoverPosition();
               setChatPromptMenuOpen(false);
               setChatFileMentionMenuOpen(false);
+              setChatCoreConfigMenuOpen(false);
               setChatConfigMenuOptionId('');
               setChatConfigOverflowOpen(false);
               setChatContextUsageOpen(open => !open);
@@ -18648,93 +18683,104 @@ export function App() {
         </div>
       );
     };
-    const renderChatFastModeIndicator = () => {
-      if (!selectedFastModeOption) {
+    const renderChatCoreConfigSelector = () => {
+      const coreOptions = chatConfigStatus.coreOptions;
+      if (coreOptions.length === 0) {
         return null;
       }
-      const enabled = selectedFastModeOption.currentValue === 'on';
-      const updating =
-        chatConfigUpdatingKey ===
-        `${selectedChatSession?.sessionId ?? ''}:${selectedFastModeOption.id}`;
+      const modelOption = chatConfigStatus.modelOption;
+      const effortOption = chatConfigStatus.reasoningOption;
+      const fastOption = chatConfigStatus.fastOption;
+      const modelLabel = modelOption ? chatConfigCurrentLabel(modelOption) : '';
+      const effortLabel = effortOption ? chatConfigCurrentLabel(effortOption) : '';
+      const fastEnabled = fastOption?.currentValue === 'on';
+      const title = [
+        modelOption ? `Model: ${modelLabel}` : '',
+        effortOption ? `Effort: ${effortLabel}` : '',
+        fastOption ? `Fast: ${fastEnabled ? 'On' : 'Off'}` : '',
+      ].filter(Boolean).join(', ');
+      const gridTemplateColumns = coreOptions.map(item => {
+        if (item.kind === 'model') return 'minmax(0, 1.7fr)';
+        if (item.kind === 'fast') return 'minmax(0, 0.72fr)';
+        return 'minmax(0, 1fr)';
+      }).join(' ');
       return (
-        <button
-          type="button"
-          className={`codicon codicon-zap chat-fast-mode-indicator${enabled ? ' enabled' : ''}`}
-          disabled={updating}
-          aria-pressed={enabled}
-          aria-label={`Fast mode ${enabled ? 'on' : 'off'}`}
-          title={`Fast mode ${enabled ? 'on' : 'off'}`}
-          onClick={() => {
-            invokeChatSessionAction('fast').catch(err => {
-              setError(err instanceof Error ? err.message : String(err));
-            });
-          }}
-        />
-      );
-    };
-    const renderChatStatusModel = (option?: RegistrySessionConfigOption) => {
-      if (!option) {
-        return null;
-      }
-      const optionValues = option.options ?? [];
-      const label = chatConfigCurrentLabel(option);
-      const updating =
-        chatConfigUpdatingKey ===
-        `${selectedChatSession?.sessionId ?? ''}:${option.id}`;
-      const open = chatConfigMenuOptionId === option.id;
-      return (
-        <div key={`status:${option.id}`} className="chat-status-control chat-status-model-control">
+        <div className="chat-core-config">
           <button
             type="button"
-            className="chat-status-model-button"
-            disabled={updating || optionValues.length === 0}
-            title={`Model: ${label}`}
-            aria-label={`Model: ${label}`}
+            className="chat-core-config-trigger"
+            title={title}
+            aria-label={title}
             aria-haspopup="menu"
-            aria-expanded={open}
+            aria-expanded={chatCoreConfigMenuOpen}
             onClick={() => {
               setChatPromptMenuOpen(false);
               setChatFileMentionMenuOpen(false);
+              setChatContextUsageOpen(false);
+              setChatConfigMenuOptionId('');
               setChatConfigOverflowOpen(false);
-              setChatConfigMenuOptionId(current => (current === option.id ? '' : option.id));
+              setChatCoreConfigMenuOpen(open => !open);
             }}
           >
-            <span className="chat-status-model-label">{label}</span>
+            {modelOption ? <span className="chat-core-config-model">{modelLabel}</span> : null}
+            {modelOption && effortOption ? (
+              <span className="chat-core-config-separator" aria-hidden="true">/</span>
+            ) : null}
+            {effortOption ? <span className="chat-core-config-effort">{effortLabel}</span> : null}
+            {!modelOption && !effortOption && fastOption ? (
+              <span className="chat-core-config-fast-label">Fast</span>
+            ) : null}
+            {fastEnabled ? (
+              <span className="codicon codicon-zap chat-core-config-fast" aria-hidden="true" />
+            ) : null}
           </button>
-          {open ? renderChatConfigValueMenu(option) : null}
-        </div>
-      );
-    };
-    const renderChatStatusEffort = (option?: RegistrySessionConfigOption) => {
-      if (!option) {
-        return null;
-      }
-      const label = chatConfigCurrentLabel(option);
-      const optionValues = option.options ?? [];
-      const updating =
-        chatConfigUpdatingKey ===
-        `${selectedChatSession?.sessionId ?? ''}:${option.id}`;
-      const open = chatConfigMenuOptionId === option.id;
-      return (
-        <div key={`status:${option.id}`} className="chat-status-control chat-status-effort-control">
-          <button
-            type="button"
-            className="chat-status-effort-button"
-            disabled={updating || optionValues.length === 0}
-            title={`Reasoning: ${label}`}
-            aria-label={`Reasoning: ${label}`}
-            aria-haspopup="menu"
-            aria-expanded={open}
-            onClick={() => {
-              setChatPromptMenuOpen(false);
-              setChatFileMentionMenuOpen(false);
-              setChatConfigOverflowOpen(false);
-              setChatConfigMenuOptionId(current => (current === option.id ? '' : option.id));
-            }}
-          >
-            <span className="chat-status-effort-label">{label}</span>
-          </button>
-          {open ? renderChatConfigValueMenu(option) : null}
+          {chatCoreConfigMenuOpen ? (
+            <div
+              className="chat-core-config-menu"
+              role="menu"
+              aria-label="Model, effort, and Fast"
+              style={{ '--chat-core-config-columns': gridTemplateColumns } as React.CSSProperties}
+            >
+              {coreOptions.map(item => {
+                const values = item.option.options ?? [];
+                const currentValue = chatConfigCurrentValue(item.option);
+                const updating = chatConfigUpdatingKeys.has(`${selectedChatEncodedKey}:${item.option.id}`);
+                const heading = item.kind === 'model' ? 'Model' : item.kind === 'effort' ? 'Effort' : 'Fast';
+                return (
+                  <div
+                    key={`core:${item.option.id}`}
+                    className={`chat-core-config-column ${item.kind}`}
+                    aria-busy={updating}
+                  >
+                    <div className="chat-core-config-heading">{heading}</div>
+                    <div className="chat-core-config-values">
+                      {values.length > 0 ? values.map(value => {
+                        const selected = value.value === currentValue;
+                        return (
+                          <button
+                            key={`core:${item.option.id}:${value.value}`}
+                            type="button"
+                            className={`chat-core-config-option${selected ? ' selected' : ''}`}
+                            role="menuitemradio"
+                            aria-checked={selected}
+                            disabled={updating}
+                            onClick={() => {
+                              handleChatConfigOptionChange(item.option, value.value).catch(() => undefined);
+                            }}
+                          >
+                            <span className="chat-core-config-option-label">{value.name || value.value}</span>
+                            {selected ? <span className="codicon codicon-check" aria-hidden="true" /> : null}
+                          </button>
+                        );
+                      }) : (
+                        <span className="chat-core-config-empty">No options</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
       );
     };
@@ -19000,7 +19046,7 @@ export function App() {
           ) : null}
           <div
             ref={chatComposerRef}
-            className={`chat-composer${chatConfigMenuOptionId || chatConfigOverflowOpen || chatContextUsageOpen ? ' config-menu-open' : ''}${chatSlashMenuVisible || chatFileMentionMenuOpen ? ' trigger-menu-open' : ''}`}
+            className={`chat-composer${chatCoreConfigMenuOpen || chatConfigMenuOptionId || chatConfigOverflowOpen || chatContextUsageOpen ? ' config-menu-open' : ''}${chatSlashMenuVisible || chatFileMentionMenuOpen ? ' trigger-menu-open' : ''}`}
             hidden={archivedMode}
           >
             <div className="chat-composer-content">
@@ -19513,9 +19559,7 @@ export function App() {
                         className={`chat-config-options-shell${chatComposerStatusCompact ? ' compact' : ''}`}
                       >
                         {renderChatContextUsage()}
-                        {renderChatFastModeIndicator()}
-                        {renderChatStatusModel(chatConfigStatus.modelOption)}
-                        {renderChatStatusEffort(chatConfigStatus.reasoningOption)}
+                        {renderChatCoreConfigSelector()}
                         {chatConfigOptions.length > 0 ? (
                           <div className="chat-config-options">
                             {chatConfigOptions.map(option => renderChatConfigPill(option))}
@@ -19532,6 +19576,7 @@ export function App() {
                               onClick={() => {
                                 setChatPromptMenuOpen(false);
                                 setChatFileMentionMenuOpen(false);
+                                setChatCoreConfigMenuOpen(false);
                                 setChatConfigMenuOptionId('');
                                 setChatConfigOverflowOpen(prev => !prev);
                               }}
@@ -19546,9 +19591,7 @@ export function App() {
                                 {chatConfigOverflowOptions.map(option => {
                                   const optionValues = option.options ?? [];
                                   const currentValue = chatConfigCurrentValue(option);
-                                  const updating =
-                                    chatConfigUpdatingKey ===
-                                    `${selectedChatSession?.sessionId ?? ''}:${option.id}`;
+                                  const updating = chatConfigUpdatingKeys.has(`${selectedChatEncodedKey}:${option.id}`);
                                   const optionLabel = option.name || option.id;
                                   return (
                                     <div key={`overflow:${option.id}`} className="chat-config-overflow-group">

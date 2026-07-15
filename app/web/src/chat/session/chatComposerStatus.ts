@@ -16,9 +16,16 @@ export type ChatContextUsageView = {
 export type ChatComposerStatusOptions = {
   modelOption?: RegistrySessionConfigOption;
   reasoningOption?: RegistrySessionConfigOption;
+  fastOption?: RegistrySessionConfigOption;
+  coreOptions: ChatCoreConfigOption[];
   secondaryOptions: RegistrySessionConfigOption[];
   overflowOptions: RegistrySessionConfigOption[];
   showOverflowToggle: boolean;
+};
+
+export type ChatCoreConfigOption = {
+  kind: 'model' | 'effort' | 'fast';
+  option: RegistrySessionConfigOption;
 };
 
 function optionSearchText(option: RegistrySessionConfigOption): string {
@@ -121,11 +128,22 @@ export function splitChatComposerStatusOptions(
   const reasoningOption = options.find(
     option => option !== modelOption && isChatReasoningOption(option),
   );
+  const fastOption = options.find(isChatFastModeOption);
+  const coreOptions: ChatCoreConfigOption[] = [];
+  if (modelOption) {
+    coreOptions.push({ kind: 'model', option: modelOption });
+  }
+  if (reasoningOption) {
+    coreOptions.push({ kind: 'effort', option: reasoningOption });
+  }
+  if (fastOption) {
+    coreOptions.push({ kind: 'fast', option: fastOption });
+  }
   const coreIds = new Set(
-    [modelOption?.id, reasoningOption?.id].filter((id): id is string => !!id),
+    [modelOption?.id, reasoningOption?.id, fastOption?.id].filter((id): id is string => !!id),
   );
   const secondaryOptions = options
-    .filter(option => !coreIds.has(option.id) && !isChatFastModeOption(option))
+    .filter(option => !coreIds.has(option.id))
     .map((option, index) => ({ option, index, rank: secondaryOptionRank(option) }))
     .sort((left, right) => {
       if (left.rank !== right.rank) {
@@ -137,6 +155,8 @@ export function splitChatComposerStatusOptions(
   return {
     modelOption,
     reasoningOption,
+    fastOption,
+    coreOptions,
     secondaryOptions: compact ? [] : secondaryOptions,
     overflowOptions: compact ? secondaryOptions : [],
     showOverflowToggle: compact && secondaryOptions.length > 0,

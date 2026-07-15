@@ -3766,16 +3766,22 @@ func TestSessionTurnsUseSessionGlobalTurnIndexAcrossPrompts(t *testing.T) {
 	}
 }
 
-func TestPromptBoundaryTurnsCarryModelAndTimes(t *testing.T) {
+func TestPromptBoundaryTurnsCarryModelDisplayNameAndTimes(t *testing.T) {
 	c := newSessionViewTestClient(t)
 	ctx := context.Background()
 	published := captureSessionMessageEvents(t, c)
-	c.sessionRecorder.modelLookup = func(sessionID string) string {
-		if sessionID == "sess-1" {
-			return "gpt-5.3-codex"
-		}
-		return ""
-	}
+	addRuntimeSession(c, "sess-1", "Task", "codex", time.Time{}, time.Time{})
+	sess := c.sessions["sess-1"]
+	sess.mu.Lock()
+	sess.agentState.ConfigOptions = []acp.ConfigOption{{
+		ID:           acp.ConfigOptionIDModel,
+		CurrentValue: "gpt-5.3-codex",
+		Options: []acp.ConfigOptionValue{{
+			Value: "gpt-5.3-codex",
+			Name:  "GPT-5.3 Codex",
+		}},
+	}}
+	sess.mu.Unlock()
 
 	if err := c.RecordEvent(ctx, sessionViewCreatedEvent("sess-1", "Task")); err != nil {
 		t.Fatalf("RecordEvent session created: %v", err)
@@ -3812,8 +3818,8 @@ func TestPromptBoundaryTurnsCarryModelAndTimes(t *testing.T) {
 		t.Fatalf("missing prompt boundary turns request=%q done=%q", requestContent, doneContent)
 	}
 	requestParam := decodeTurnParamMap(t, requestContent)
-	if got := requestParam["modelName"]; got != "gpt-5.3-codex" {
-		t.Fatalf("prompt_request modelName = %v, want gpt-5.3-codex", got)
+	if got := requestParam["modelName"]; got != "GPT-5.3 Codex" {
+		t.Fatalf("prompt_request modelName = %v, want GPT-5.3 Codex", got)
 	}
 	if got := requestParam["createdAt"]; got != "2026-05-14T01:02:03Z" {
 		t.Fatalf("prompt_request createdAt = %v, want %s", got, "2026-05-14T01:02:03Z")
