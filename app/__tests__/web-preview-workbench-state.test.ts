@@ -13,8 +13,13 @@ import {
   previewWorkbenchStateFromSnapshot,
   previewWorkbenchHeaderTitle,
   previewWorkbenchTabTooltip,
+  resolvePreviewDesktopFilePath,
   selectPreviewProject,
   selectPreviewTab,
+  type AttachmentPreviewTab,
+  type FilePreviewTab,
+  type PortRelayPreviewTab,
+  type PromptDiffPreviewTab,
   updatePreviewTabAfterLoad,
 } from '../web/src/preview/previewWorkbenchState';
 
@@ -37,7 +42,94 @@ const promptDiffFiles = (firstPath = 'src/a.ts', secondPath = 'src/b.ts') => [
   },
 ];
 
+const filePreviewTab = (overrides: Partial<FilePreviewTab> = {}): FilePreviewTab => ({
+  id: 'file:README.md',
+  type: 'file',
+  projectId: 'p1',
+  title: 'README.md',
+  loading: false,
+  error: '',
+  requestId: 1,
+  path: 'README.md',
+  targetLine: null,
+  content: '# README',
+  info: {path: 'README.md', kind: 'file'},
+  ...overrides,
+});
+
+const promptDiffPreviewTab = (): PromptDiffPreviewTab => ({
+  id: 'prompt-diff:s1:diff-1',
+  type: 'prompt-diff',
+  projectId: 'p1',
+  title: 'Prompt diff',
+  loading: false,
+  error: '',
+  requestId: 1,
+  sessionId: 's1',
+  artifactId: 'diff-1',
+  promptText: '',
+  promptSummary: '',
+  files: promptDiffFiles(),
+  activeFilePath: 'src/b.ts',
+});
+
+const attachmentPreviewTab = (): AttachmentPreviewTab => ({
+  id: 'attachment:s1:file-1',
+  type: 'attachment',
+  projectId: 'p1',
+  title: 'image.png',
+  loading: false,
+  error: '',
+  requestId: 1,
+  sessionId: 's1',
+  attachmentKey: 'file-1',
+  meta: '',
+  mimeType: 'image/png',
+  kind: 'image',
+  src: 'data:image/png;base64,',
+});
+
+const portRelayPreviewTab = (): PortRelayPreviewTab => ({
+  id: 'port-relay:hub-a:5173:/',
+  type: 'port-relay',
+  projectId: 'p1',
+  title: 'hub-a:5173',
+  loading: false,
+  error: '',
+  requestId: 1,
+  hubId: 'hub-a',
+  targetPort: 5173,
+  framePath: '/',
+  url: 'https://example.test/',
+  reloadKey: 0,
+});
+
 describe('preview workbench state', () => {
+  test('resolves only server-confirmed paths for loaded ordinary files', () => {
+    expect(resolvePreviewDesktopFilePath(filePreviewTab())).toBe('README.md');
+    expect(resolvePreviewDesktopFilePath(filePreviewTab({
+      path: 'src/../README.md',
+      info: {path: 'README.md', kind: 'file'},
+    }))).toBe('README.md');
+  });
+
+  test.each([
+    ['without server info', {info: null}],
+    ['while loading with stale info', {loading: true}],
+    ['after an error with stale info', {error: 'read failed'}],
+  ] as const)('hides ordinary file desktop actions %s', (_label, overrides) => {
+    expect(resolvePreviewDesktopFilePath(filePreviewTab(overrides))).toBe('');
+  });
+
+  test('resolves the active prompt diff file', () => {
+    expect(resolvePreviewDesktopFilePath(promptDiffPreviewTab())).toBe('src/b.ts');
+  });
+
+  test('does not resolve desktop paths for attachment or port relay tabs', () => {
+    expect(resolvePreviewDesktopFilePath(attachmentPreviewTab())).toBe('');
+    expect(resolvePreviewDesktopFilePath(portRelayPreviewTab())).toBe('');
+  });
+
   test('reuses the same file resource within a project and updates target line', () => {
     const initial = createPreviewWorkbenchState('p1');
     const first = openPreviewTab(initial, {

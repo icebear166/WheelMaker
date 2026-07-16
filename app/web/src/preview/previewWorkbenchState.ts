@@ -223,6 +223,16 @@ export function resolvePromptDiffActiveFilePath(
     : files[0]?.path ?? '';
 }
 
+export function resolvePreviewDesktopFilePath(tab: PreviewWorkbenchTab): string {
+  if (tab.type === 'file') {
+    return tab.loading || tab.error ? '' : tab.info?.path ?? '';
+  }
+  if (tab.type === 'prompt-diff') {
+    return resolvePromptDiffActiveFilePath(tab.files, tab.activeFilePath);
+  }
+  return '';
+}
+
 export function previewTabId(input: PreviewWorkbenchTabIdInput): string {
   if (input.type === 'file') {
     return `file:${input.path || ''}`;

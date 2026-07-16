@@ -447,6 +447,7 @@ import {
   previewWorkbenchSnapshotFromState,
   previewWorkbenchStateFromSnapshot,
   previewTabId,
+  resolvePreviewDesktopFilePath,
   resolvePromptDiffActiveFilePath,
   selectPreviewProject,
   selectPreviewTab,
@@ -20837,11 +20838,7 @@ export function App() {
     }
     const closeActionsMenu = () => setPreviewWorkbenchActionsMenuOpen(false);
     const projectRoot = projects.find(project => project.projectId === tab.projectId)?.path;
-    const relativePath = tab.type === 'file'
-      ? (tab.info?.path ?? '')
-      : tab.type === 'prompt-diff'
-        ? resolvePromptDiffActiveFilePath(tab.files, tab.activeFilePath)
-        : '';
+    const relativePath = resolvePreviewDesktopFilePath(tab);
     const desktopBridge = getDesktopWindowBridge();
     const canOpenProjectFileInVSCode = Boolean(projectRoot && relativePath && desktopBridge?.openProjectFileInVSCode);
     const canShowProjectFileInFolder = Boolean(projectRoot && relativePath && desktopBridge?.showProjectFileInFolder);

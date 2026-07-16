@@ -1,5 +1,7 @@
 import fs from 'fs';
 import path from 'path';
+import {RegistryRepository} from '../web/src/registry/RegistryRepository';
+import {RegistryMethods} from '../web/src/registry/registryMethods';
 
 describe('web file read cache on notModified', () => {
   test('restores cached content when fs.read returns notModified', () => {
@@ -59,5 +61,58 @@ describe('web file read cache on notModified', () => {
     expect(readBody).toContain('signal: controller.signal');
     expect(readBody).toContain('if (isAbortError(err))');
     expect(readBody).toContain('knownHash: fileCacheDisabled ? undefined : knownHash || undefined,');
+  });
+});
+
+describe('RegistryRepository file info canonical paths', () => {
+  test.each([
+    ['missing', {}],
+    ['null', {path: null}],
+  ])('fails closed when the server path is %s while preserving file metadata', async (_label, pathPayload) => {
+    const request = jest.fn().mockResolvedValue({
+      payload: {
+        ...pathPayload,
+        kind: 'file',
+        size: 128,
+        isBinary: false,
+        mimeType: 'text/markdown',
+        totalLines: 8,
+        tabSize: 2,
+        entryCount: 0,
+        hash: 'readme-hash',
+      },
+    });
+    const repository = new RegistryRepository({request} as never);
+
+    const info = await repository.getFileInfo('p1', 'src/../README.md');
+
+    expect(request).toHaveBeenCalledWith({
+      method: RegistryMethods.ProjectFSInfo,
+      projectId: 'p1',
+      payload: {path: 'src/../README.md'},
+      signal: undefined,
+    });
+    expect(info).toEqual({
+      path: '',
+      kind: 'file',
+      size: 128,
+      isBinary: false,
+      mimeType: 'text/markdown',
+      totalLines: 8,
+      tabSize: 2,
+      entryCount: 0,
+      hash: 'readme-hash',
+    });
+  });
+
+  test('preserves a canonical path returned by the server', async () => {
+    const request = jest.fn().mockResolvedValue({
+      payload: {path: 'README.md', kind: 'file'},
+    });
+    const repository = new RegistryRepository({request} as never);
+
+    const info = await repository.getFileInfo('p1', 'src/../README.md');
+
+    expect(info.path).toBe('README.md');
   });
 });

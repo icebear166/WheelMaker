@@ -122,13 +122,10 @@ describe('web chat file peek viewer', () => {
     expect(runnerEnd).toBeGreaterThan(runnerStart);
     expect(mainTsx).toContain('invokeDesktopProjectFileAction,');
     expect(mainTsx).toContain('type DesktopProjectFileAction,');
+    expect(mainTsx).toContain('resolvePreviewDesktopFilePath,');
     expect(actionsBody).toContain('const projectRoot = projects.find(project => project.projectId === tab.projectId)?.path;');
-    expect(actionsBody).toContain("const relativePath = tab.type === 'file'");
-    expect(actionsBody).toContain("? (tab.info?.path ?? '')");
-    expect(actionsBody).not.toContain('? tab.path');
-    expect(actionsBody).toContain(": tab.type === 'prompt-diff'");
-    expect(actionsBody).toContain('? resolvePromptDiffActiveFilePath(tab.files, tab.activeFilePath)');
-    expect(actionsBody).toContain(": '';");
+    expect(actionsBody).toContain('const relativePath = resolvePreviewDesktopFilePath(tab);');
+    expect(actionsBody).not.toContain("const relativePath = tab.type === 'file'");
     expect(actionsBody).toContain('const desktopBridge = getDesktopWindowBridge();');
     expect(actionsBody).toContain('const canOpenProjectFileInVSCode = Boolean(projectRoot && relativePath && desktopBridge?.openProjectFileInVSCode);');
     expect(actionsBody).toContain('const canShowProjectFileInFolder = Boolean(projectRoot && relativePath && desktopBridge?.showProjectFileInFolder);');

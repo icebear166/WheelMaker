@@ -22,17 +22,19 @@ For an ordinary file preview tab, the actions menu is ordered as follows:
 4. `Open in File tab`
 5. `Rebuild file index`
 
-The first two actions are shown only when all required runtime data is available: the project has a root path, the ordinary file has finished loading, the server has returned its canonical `tab.info.path`, and the native desktop bridge exposes the corresponding action. While `info` is unavailable, including loading and error states, both desktop actions are hidden. Browser-only sessions therefore retain their current menu.
+The first two actions are shown only when all required runtime data is available: the project has a root path, the ordinary file satisfies `!tab.loading && !tab.error`, the server has returned its canonical `tab.info.path`, and the native desktop bridge exposes the corresponding action. Loading and error states hide both desktop actions even if stale `info` remains on the tab. Browser-only sessions therefore retain their current menu.
 
 ## Architecture and Data Flow
 
-`renderPreviewWorkbenchActions` will derive one project-relative file path for desktop actions:
+`resolvePreviewDesktopFilePath` is the single source of project-relative paths for desktop actions:
 
-- `file` tab: use the server-returned canonical `tab.info.path` after `safeJoin` has confirmed and normalized it; never use the raw `tab.path` for a desktop action.
+- `file` tab: only when `!tab.loading && !tab.error`, use the server-returned canonical `tab.info.path` after `safeJoin` has confirmed and normalized it; otherwise return an empty path. Never use the raw `tab.path` for a desktop action.
 - `prompt-diff` tab: use the resolved active diff file path.
 - other tab types: use no desktop-action path.
 
-The menu will use this derived path with the existing `invokeDesktopProjectFileAction` helper and `WheelMakerDesktop` bridge. The native layer continues to resolve the path against the selected project's root and reject paths outside that root.
+`renderPreviewWorkbenchActions` calls this helper and uses the result with the existing `invokeDesktopProjectFileAction` helper and `WheelMakerDesktop` bridge. The native layer continues to resolve the path against the selected project's root and reject paths outside that root.
+
+`RegistryRepository.getFileInfo` preserves `payload.path` only when the server provides a string. A missing or `null` path becomes an empty string and never falls back to the raw requested path. This keeps old servers able to return preview metadata while failing closed for desktop actions.
 
 The existing Prompt Diff-specific variable and handler names will become generic project-file action names so the shared behavior is explicit and future changes cannot accidentally update only one tab type.
 
@@ -49,12 +51,12 @@ Missing bridge capabilities do not produce disabled or nonfunctional entries; th
 
 Extend the existing preview-workbench action regression test to verify:
 
-- A loaded `file` tab supplies its server-returned canonical `tab.info.path` to the shared desktop action path.
-- A raw file path containing an internal `..` segment is not passed to the desktop bridge.
-- A file tab without `info`, including loading and error states, hides both desktop actions.
+- `resolvePreviewDesktopFilePath` returns a loaded file's server-confirmed path, including when the raw `tab.path` contains an internal `..` segment.
+- The helper returns an empty path for no `info`, loading with stale `info`, and error with stale `info`.
 - A Prompt Diff tab still supplies its resolved active file path.
+- Attachment and port-relay tabs return no desktop-action path.
+- `RegistryRepository.getFileInfo` preserves a canonical string response path but returns an empty path for missing or `null` response paths while retaining other metadata.
 - Both VS Code and File Explorer menu actions use the shared availability checks and handler.
 - Existing ordinary-file actions remain present.
-- Attachment and port-relay tabs do not gain these project-file actions through path derivation.
 
 Run the focused Jest suite first, followed by the complete Web test suite, Web TypeScript checking, the production Web build, and `git diff --check`.

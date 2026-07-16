@@ -4,7 +4,7 @@
 
 **Goal:** Add the existing VS Code and File Explorer desktop actions to loaded ordinary source-file preview tabs using server-confirmed canonical paths while preserving all current menu actions.
 
-**Architecture:** Derive a single project-file action path inside `renderPreviewWorkbenchActions`: loaded ordinary file tabs use the server-returned canonical `tab.info.path` after `safeJoin` confirmation, Prompt Diff tabs keep using the resolved active file path, and other tab types have no path. An ordinary file without `info` has no desktop-action path. Rename the Prompt Diff-specific availability flags and runner to generic project-file names, then reuse the existing desktop bridge and toast error handling.
+**Architecture:** Centralize path derivation in `resolvePreviewDesktopFilePath`: ordinary file tabs return the server-confirmed `tab.info.path` only when `!tab.loading && !tab.error`, Prompt Diff tabs return the resolved active file path, and other tab types return no path. `RegistryRepository.getFileInfo` maps missing or `null` response paths to an empty string instead of the raw request. `renderPreviewWorkbenchActions` reuses the helper with the existing desktop bridge and toast error handling.
 
 **Tech Stack:** React, TypeScript, Jest, webpack, WheelMaker Desktop JavaScript bridge
 
@@ -15,22 +15,25 @@
 ### Task 1: Extend preview actions to ordinary file tabs
 
 **Files:**
-- Modify: `app/__tests__/web-chat-file-peek-viewer.test.ts:106-148`
-- Modify: `app/web/src/app/WorkspaceApp.tsx:20833-20886`
+- Modify: `app/__tests__/web-preview-workbench-state.test.ts`
+- Modify: `app/__tests__/web-chat-file-peek-viewer.test.ts`
+- Modify: `app/__tests__/web-file-not-modified-cache.test.ts`
+- Modify: `app/web/src/preview/previewWorkbenchState.ts`
+- Modify: `app/web/src/registry/RegistryRepository.ts`
+- Modify: `app/web/src/app/WorkspaceApp.tsx`
 
 - [ ] **Step 1: Write the failing regression assertions**
 
-Update the preview action test so it locates the generic runner, requires ordinary file tabs to use canonical `tab.info.path`, and rejects the raw `tab.path`:
+Add behavioral tests for `resolvePreviewDesktopFilePath` covering a loaded canonical file, a raw `tab.path` containing `src/../` with canonical `info.path`, no `info`, loading with stale `info`, error with stale `info`, an active Prompt Diff file, attachment, and port relay tabs.
+
+Update the preview action source test so it locates the generic runner and requires `WorkspaceApp` to call the shared helper:
 
 ```ts
 const runnerStart = actionsBody.indexOf('const runProjectFileDesktopAction = (');
 
-expect(actionsBody).toContain("const relativePath = tab.type === 'file'");
-expect(actionsBody).toContain("? (tab.info?.path ?? '')");
-expect(actionsBody).not.toContain('? tab.path');
-expect(actionsBody).toContain(": tab.type === 'prompt-diff'");
-expect(actionsBody).toContain('? resolvePromptDiffActiveFilePath(tab.files, tab.activeFilePath)');
-expect(actionsBody).toContain(": '';");
+expect(mainTsx).toContain('resolvePreviewDesktopFilePath,');
+expect(actionsBody).toContain('const relativePath = resolvePreviewDesktopFilePath(tab);');
+expect(actionsBody).not.toContain("const relativePath = tab.type === 'file'");
 expect(actionsBody).toContain('const canOpenProjectFileInVSCode = Boolean(projectRoot && relativePath && desktopBridge?.openProjectFileInVSCode);');
 expect(actionsBody).toContain('const canShowProjectFileInFolder = Boolean(projectRoot && relativePath && desktopBridge?.showProjectFileInFolder);');
 expect(actionsBody).toContain('{canOpenProjectFileInVSCode ? (');
@@ -49,31 +52,35 @@ expect(folderLabelIndex).toBeLessThan(copyPathLabelIndex);
 expect(copyPathLabelIndex).toBeLessThan(fileTabLabelIndex);
 ```
 
-The `?? ''` assertion verifies that a file tab without server `info`, including loading and error states, has no desktop-action path and therefore hides both actions. Rejecting `? tab.path` verifies that a raw path containing an internal `..` segment is never passed to the desktop bridge. Also require the final path branch to be `: '';`, which explicitly leaves attachment and port-relay tabs without a project-file action path. Keep the existing assertions for bridge invocation, toast errors, and labels.
+Add actual `RegistryRepository.getFileInfo` mock request tests requiring a canonical server path to be preserved and missing or `null` response paths to become empty while other metadata remains intact. Keep the existing assertions for bridge invocation, toast errors, labels, and menu ordering.
 
 - [ ] **Step 2: Run the focused test and verify RED**
 
 Run from `app`:
 
 ```powershell
-npm test -- --runInBand __tests__/web-chat-file-peek-viewer.test.ts
+npm test -- --runInBand __tests__/web-preview-workbench-state.test.ts __tests__/web-chat-file-peek-viewer.test.ts __tests__/web-file-not-modified-cache.test.ts
 ```
 
-Expected: FAIL because the production code does not yet derive the ordinary-file action path from canonical server `info` and still uses Prompt Diff-specific names.
+Expected: FAIL because the shared helper does not exist and `getFileInfo` still falls back to the raw requested path.
 
 - [ ] **Step 3: Implement the minimal shared path and action names**
 
-In `renderPreviewWorkbenchActions`, replace the current Prompt Diff-only path derivation with:
+Export the shared resolver from `previewWorkbenchState.ts`:
 
 ```ts
-const relativePath = tab.type === 'file'
-  ? (tab.info?.path ?? '')
-  : tab.type === 'prompt-diff'
-    ? resolvePromptDiffActiveFilePath(tab.files, tab.activeFilePath)
-    : '';
+export function resolvePreviewDesktopFilePath(tab: PreviewWorkbenchTab): string {
+  if (tab.type === 'file') {
+    return tab.loading || tab.error ? '' : tab.info?.path ?? '';
+  }
+  if (tab.type === 'prompt-diff') {
+    return resolvePromptDiffActiveFilePath(tab.files, tab.activeFilePath);
+  }
+  return '';
+}
 ```
 
-The server returns `info.path` only after resolving the request through `safeJoin`, so the desktop bridge receives the canonical project-relative path rather than the raw preview link. When `info` is unavailable, the empty path keeps both desktop actions hidden.
+Use `const relativePath = resolvePreviewDesktopFilePath(tab);` in `renderPreviewWorkbenchActions`. In `RegistryRepository.getFileInfo`, map the path with `typeof payload.path === 'string' ? payload.path : ''`; do not fall back to the raw request. The empty path keeps both desktop actions hidden for unconfirmed, loading, and error states while old servers can still return the rest of the preview metadata.
 
 Rename the shared variables and function without changing bridge behavior:
 
@@ -105,7 +112,7 @@ Update the two existing conditional menu entries and their click handlers to use
 Run from `app`:
 
 ```powershell
-npm test -- --runInBand __tests__/web-chat-file-peek-viewer.test.ts
+npm test -- --runInBand __tests__/web-preview-workbench-state.test.ts __tests__/web-chat-file-peek-viewer.test.ts __tests__/web-file-not-modified-cache.test.ts
 ```
 
 Expected: the target suite passes with zero failures.
