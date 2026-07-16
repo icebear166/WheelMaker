@@ -8,9 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"os/user"
@@ -29,9 +26,6 @@ const (
 	updateStagingDirectoryName = "staging"
 	updateLeaseFileName        = "lock.json"
 	updateStatusFileName       = "status.json"
-	defaultStableURL           = "https://raw.githubusercontent.com/swm8023/wheelmaker-release/main/stable.json"
-	defaultPublishStatusURL    = "https://raw.githubusercontent.com/swm8023/wheelmaker-release/main/publish-status.json"
-	maxUpdateMetadataBytes     = 1024 * 1024
 )
 
 type installedRelease struct {
@@ -41,13 +35,6 @@ type installedRelease struct {
 	SourceSHA     string `json:"sourceSha"`
 	ManifestSHA   string `json:"manifestSha256"`
 	InstalledAt   string `json:"installedAt"`
-}
-
-type stableRelease struct {
-	Schema      int    `json:"schema"`
-	Version     string `json:"version"`
-	PublishedAt string `json:"publishedAt"`
-	SourceSHA   string `json:"sourceSha"`
 }
 
 type stableReleaseSummary struct {
@@ -135,56 +122,28 @@ func (e *updateCommandError) commandMessage() string {
 	return e.Message
 }
 
-type updateHTTPClient interface {
-	Do(*http.Request) (*http.Response, error)
-}
-
 type updateTrigger interface {
 	Trigger(context.Context) error
 }
 
 type UpdateCommand struct {
-	baseDir          string
-	httpClient       updateHTTPClient
-	trigger          updateTrigger
-	now              func() time.Time
-	stableURL        string
-	publishStatusURL string
+	baseDir string
+	trigger updateTrigger
+	now     func() time.Time
 }
 
 func NewUpdateCommand(baseDir string) *UpdateCommand {
-	return newUpdateCommandWithDependencies(baseDir, newUpdateHTTPClient(), execUpdateTrigger{})
+	return newUpdateCommandWithDependencies(baseDir, execUpdateTrigger{})
 }
 
-func newUpdateCommandWithDependencies(baseDir string, client updateHTTPClient, trigger updateTrigger) *UpdateCommand {
-	if client == nil {
-		client = newUpdateHTTPClient()
-	}
+func newUpdateCommandWithDependencies(baseDir string, trigger updateTrigger) *UpdateCommand {
 	if trigger == nil {
 		trigger = execUpdateTrigger{}
 	}
 	return &UpdateCommand{
-		baseDir:          filepath.Clean(baseDir),
-		httpClient:       client,
-		trigger:          trigger,
-		now:              func() time.Time { return time.Now().UTC() },
-		stableURL:        defaultStableURL,
-		publishStatusURL: defaultPublishStatusURL,
-	}
-}
-
-func newUpdateHTTPClient() *http.Client {
-	return &http.Client{
-		Timeout: 15 * time.Second,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 5 {
-				return errors.New("too many redirects")
-			}
-			if req.URL.Scheme != "https" {
-				return errors.New("update metadata redirect must use HTTPS")
-			}
-			return nil
-		},
+		baseDir: filepath.Clean(baseDir),
+		trigger: trigger,
+		now:     func() time.Time { return time.Now().UTC() },
 	}
 }
 
@@ -200,7 +159,7 @@ func (c *UpdateCommand) Handle(ctx context.Context, raw json.RawMessage) (any, *
 	}
 	switch payload.Action {
 	case "query":
-		return c.query(ctx, payload.HubID), nil
+		return c.query(payload.HubID), nil
 	case "request":
 		response, err := c.request(ctx, payload.HubID)
 		if err != nil {
@@ -212,69 +171,37 @@ func (c *UpdateCommand) Handle(ctx context.Context, raw json.RawMessage) (any, *
 	}
 }
 
-func (c *UpdateCommand) query(ctx context.Context, hubID string) updateCommandResponse {
+func (c *UpdateCommand) query(hubID string) updateCommandResponse {
+	job, activeJob := c.readJobState()
 	installed, err := c.readInstalledRelease()
 	if errors.Is(err, os.ErrNotExist) {
 		return updateCommandResponse{
 			OK:         true,
 			Status:     "not_installed",
 			HubID:      hubID,
-			Job:        c.readJobStatus(),
+			Job:        job,
 			CanRequest: false,
 		}
 	}
 	if err != nil {
-		return updateQueryFailure(hubID, "installed_release_invalid")
-	}
-
-	stable, errorCode := c.readStable(ctx)
-	if errorCode != "" {
-		response := updateQueryFailure(hubID, errorCode)
-		response.Installed = installed
-		response.Job = c.readJobStatus()
-		return response
-	}
-
-	installedSequence, err := releaseSequence(installed.Version)
-	if err != nil {
 		response := updateQueryFailure(hubID, "installed_release_invalid")
-		response.Installed = installed
-		return response
-	}
-	stableSequence, err := releaseSequence(stable.Version)
-	if err != nil {
-		response := updateQueryFailure(hubID, "stable_metadata_invalid")
-		response.Installed = installed
+		response.Job = job
 		return response
 	}
 
-	status := "up_to_date"
-	canRequest := false
-	switch {
-	case stableSequence > installedSequence:
-		status = "update_available"
-		canRequest = true
-	case stableSequence < installedSequence:
-		status = "local_newer"
-	}
-	job := c.readJobStatus()
-	if job != nil && activeUpdateState(job.State) {
+	status := "installed"
+	canRequest := true
+	if activeJob {
 		status = "update_pending"
 		canRequest = false
 	}
 	return updateCommandResponse{
-		OK:        true,
-		Status:    status,
-		HubID:     hubID,
-		Installed: installed,
-		Stable: &stableReleaseSummary{
-			Version:     stable.Version,
-			PublishedAt: stable.PublishedAt,
-			SourceSHA:   stable.SourceSHA,
-		},
-		Job:           job,
-		PublishStatus: c.readPublishStatus(ctx),
-		CanRequest:    canRequest,
+		OK:         true,
+		Status:     status,
+		HubID:      hubID,
+		Installed:  installed,
+		Job:        job,
+		CanRequest: canRequest,
 	}
 }
 
@@ -385,63 +312,6 @@ func (c *UpdateCommand) readInstalledRelease() (*installedRelease, error) {
 	return &release, nil
 }
 
-func (c *UpdateCommand) readStable(ctx context.Context) (*stableRelease, string) {
-	raw, err := c.fetchBytes(ctx, c.stableURL)
-	if err != nil {
-		return nil, "stable_download_failed"
-	}
-	var stable stableRelease
-	if err := json.Unmarshal(raw, &stable); err != nil {
-		return nil, "stable_metadata_invalid"
-	}
-	if stable.Schema != 1 || stable.PublishedAt == "" || !validHexDigest(stable.SourceSHA, 40) {
-		return nil, "stable_metadata_invalid"
-	}
-	if _, err := releaseSequence(stable.Version); err != nil {
-		return nil, "stable_metadata_invalid"
-	}
-	return &stable, ""
-}
-
-func (c *UpdateCommand) readPublishStatus(ctx context.Context) *publishStatus {
-	raw, err := c.fetchBytes(ctx, c.publishStatusURL)
-	if err != nil {
-		return nil
-	}
-	var status publishStatus
-	if err := json.Unmarshal(raw, &status); err != nil || status.Schema != 1 || status.State == "" || status.Phase == "" {
-		return nil
-	}
-	return &status
-}
-
-func (c *UpdateCommand) fetchBytes(ctx context.Context, rawURL string) ([]byte, error) {
-	parsed, err := url.Parse(rawURL)
-	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
-		return nil, errors.New("update metadata URL must use HTTPS")
-	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	response, err := c.httpClient.Do(request)
-	if err != nil {
-		return nil, err
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected HTTP status %d", response.StatusCode)
-	}
-	raw, err := io.ReadAll(io.LimitReader(response.Body, maxUpdateMetadataBytes+1))
-	if err != nil {
-		return nil, err
-	}
-	if len(raw) > maxUpdateMetadataBytes {
-		return nil, errors.New("update metadata exceeds size limit")
-	}
-	return raw, nil
-}
-
 func (c *UpdateCommand) readJobStatus() *updateJobStatus {
 	raw, err := os.ReadFile(filepath.Join(c.baseDir, updateStagingDirectoryName, updateStatusFileName))
 	if err != nil {
@@ -452,6 +322,28 @@ func (c *UpdateCommand) readJobStatus() *updateJobStatus {
 		return nil
 	}
 	return &status
+}
+
+func (c *UpdateCommand) readJobState() (*updateJobStatus, bool) {
+	job := c.readJobStatus()
+	raw, err := os.ReadFile(filepath.Join(c.baseDir, updateStagingDirectoryName, updateLeaseFileName))
+	if err != nil {
+		return job, false
+	}
+	var lease updateLease
+	if err := json.Unmarshal(raw, &lease); err != nil || lease.Schema != 1 || lease.JobID == "" {
+		return job, false
+	}
+	if job == nil || job.JobID != lease.JobID {
+		job = &updateJobStatus{
+			Schema:    1,
+			JobID:     lease.JobID,
+			State:     lease.State,
+			StartedAt: lease.StartedAt,
+			UpdatedAt: lease.HeartbeatAt,
+		}
+	}
+	return job, activeUpdateState(job.State)
 }
 
 func (c *UpdateCommand) writeJobStatus(status updateJobStatus) error {

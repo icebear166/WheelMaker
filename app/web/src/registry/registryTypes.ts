@@ -656,6 +656,7 @@ export interface RegistryNpmCommandResponse {
 }
 
 export type RegistryWheelMakerUpdateStatus =
+  | 'installed'
   | 'up_to_date'
   | 'update_available'
   | 'update_pending'
@@ -1059,4 +1060,3 @@ export type RegistryConnectInitPayload = {
   ts?: number;
   nonce?: string;
 };
-

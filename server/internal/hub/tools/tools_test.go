@@ -1587,7 +1587,7 @@ func TestFetchCodexUsageLimitsDoesNotRefreshRejectedAccessToken(t *testing.T) {
 	}
 }
 
-func TestUpdateQueryComparesInstalledReleaseWithStable(t *testing.T) {
+func TestUpdateQueryReadsOnlyInstalledReleaseAndLocalJobState(t *testing.T) {
 	baseDir := t.TempDir()
 	installed := installedRelease{
 		SchemaVersion: 2,
@@ -1598,68 +1598,46 @@ func TestUpdateQueryComparesInstalledReleaseWithStable(t *testing.T) {
 		InstalledAt:   "2026-07-15T09:05:00Z",
 	}
 	writeInstalledReleaseForTest(t, baseDir, installed)
-	client := stableClient(t, stableRelease{
-		Schema:      1,
-		Version:     "v1.23",
-		PublishedAt: "2026-07-16T09:00:00Z",
-		SourceSHA:   strings.Repeat("b", 40),
-	}, false)
-
-	cmd := newUpdateCommandWithDependencies(baseDir, client, &fakeUpdateTrigger{})
-	cmd.stableURL = updateTestStableURL
-	cmd.publishStatusURL = updateTestPublishStatusURL
+	cmd := newUpdateCommandWithDependencies(baseDir, &fakeUpdateTrigger{})
 	got := handleUpdateForTest(t, cmd, map[string]any{
 		"action": "query",
 		"hubId":  "hub-a",
 	})
 
-	if got.Status != "update_available" || got.Installed == nil || got.Installed.Version != "v1.22" || got.Stable == nil || got.Stable.Version != "v1.23" {
+	if got.Status != "installed" || got.Installed == nil || got.Installed.Version != "v1.22" {
 		t.Fatalf("response=%+v", got)
 	}
 	if !got.OK || !got.CanRequest {
-		t.Fatalf("response=%+v, want successful requestable update", got)
+		t.Fatalf("response=%+v, want installed requestable Hub", got)
 	}
-	if got.PublishStatus == nil || got.PublishStatus.Phase != "packaging" {
-		t.Fatalf("publishStatus=%+v", got.PublishStatus)
+	if got.Stable != nil || got.PublishStatus != nil {
+		t.Fatalf("response includes global metadata: %+v", got)
 	}
 }
 
-func TestUpdateQueryRejectsInvalidStable(t *testing.T) {
+func TestUpdateQueryRejectsInvalidInstalledRelease(t *testing.T) {
 	baseDir := t.TempDir()
-	writeInstalledReleaseForTest(t, baseDir, installedRelease{
-		SchemaVersion: 2,
-		Version:       "v1.22",
-		PublishedAt:   "2026-07-15T09:00:00Z",
-		SourceSHA:     strings.Repeat("a", 40),
-		ManifestSHA:   strings.Repeat("c", 64),
-		InstalledAt:   "2026-07-15T09:05:00Z",
-	})
-	client := stableClient(t, stableRelease{
-		Schema:      1,
-		Version:     "v1.23",
-		PublishedAt: "2026-07-16T09:00:00Z",
-		SourceSHA:   strings.Repeat("b", 40),
-	}, true)
-	cmd := newUpdateCommandWithDependencies(baseDir, client, &fakeUpdateTrigger{})
-	cmd.stableURL = updateTestStableURL
-	cmd.publishStatusURL = updateTestPublishStatusURL
+	if err := os.WriteFile(filepath.Join(baseDir, "release.json"), []byte("{\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := newUpdateCommandWithDependencies(baseDir, &fakeUpdateTrigger{})
 
 	got := handleUpdateForTest(t, cmd, map[string]any{
 		"action": "query",
 		"hubId":  "hub-a",
 	})
-	if got.Status != "checking_failed" || got.ErrorCode != "stable_metadata_invalid" {
+	if got.Status != "checking_failed" || got.ErrorCode != "installed_release_invalid" {
 		t.Fatalf("response=%+v", got)
 	}
 	if got.CanRequest {
-		t.Fatalf("canRequestUpdate=true for invalid stable")
+		t.Fatalf("canRequestUpdate=true for invalid installed release")
 	}
 }
 
 func TestUpdateRequestCreatesOneQueuedJob(t *testing.T) {
 	baseDir := t.TempDir()
 	trigger := &fakeUpdateTrigger{}
-	cmd := newUpdateCommandWithDependencies(baseDir, &http.Client{}, trigger)
+	cmd := newUpdateCommandWithDependencies(baseDir, trigger)
 	cmd.now = func() time.Time {
 		return time.Date(2026, 7, 16, 9, 0, 0, 0, time.UTC)
 	}
@@ -1713,16 +1691,8 @@ func TestUpdateQueryReportsActiveJobWithoutRetriggering(t *testing.T) {
 		ManifestSHA:   strings.Repeat("c", 64),
 		InstalledAt:   "2026-07-15T09:05:00Z",
 	})
-	client := stableClient(t, stableRelease{
-		Schema:      1,
-		Version:     "v1.23",
-		PublishedAt: "2026-07-16T09:00:00Z",
-		SourceSHA:   strings.Repeat("b", 40),
-	}, false)
 	trigger := &fakeUpdateTrigger{}
-	cmd := newUpdateCommandWithDependencies(baseDir, client, trigger)
-	cmd.stableURL = updateTestStableURL
-	cmd.publishStatusURL = updateTestPublishStatusURL
+	cmd := newUpdateCommandWithDependencies(baseDir, trigger)
 
 	requested := handleUpdateForTest(t, cmd, map[string]any{
 		"action": "request",
@@ -1758,10 +1728,7 @@ func TestUpdaterTriggerSpecUsesKnownCurrentUserRuntime(t *testing.T) {
 	}
 }
 
-const (
-	updateTestStableURL        = "https://release.test/stable.json"
-	updateTestPublishStatusURL = "https://release.test/publish-status.json"
-)
+const ()
 
 func handleUpdateForTest(t *testing.T, cmd *UpdateCommand, payload map[string]any) updateCommandResponse {
 	t.Helper()
@@ -1793,44 +1760,6 @@ func writeInstalledReleaseForTest(t *testing.T, baseDir string, release installe
 	}
 	if err := os.WriteFile(filepath.Join(baseDir, "release.json"), append(raw, '\n'), 0o644); err != nil {
 		t.Fatalf("write installed release: %v", err)
-	}
-}
-
-func stableClient(t *testing.T, stable stableRelease, invalid bool) *http.Client {
-	t.Helper()
-	raw, err := json.MarshalIndent(stable, "", "  ")
-	if err != nil {
-		t.Fatalf("marshal stable: %v", err)
-	}
-	raw = append(raw, '\n')
-	stableResponse := append([]byte(nil), raw...)
-	if invalid {
-		stableResponse = []byte("{")
-	}
-	publishStatus := "{\"schema\":1,\"state\":\"running\",\"phase\":\"packaging\",\"version\":\"v1.23\",\"sourceSha\":\"" + strings.Repeat("b", 40) + "\",\"publisher\":\"local\",\"startedAt\":\"2026-07-16T09:00:00Z\",\"updatedAt\":\"2026-07-16T09:01:00Z\"}\n"
-
-	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		var body string
-		switch req.URL.String() {
-		case updateTestStableURL:
-			body = string(stableResponse)
-		case updateTestPublishStatusURL:
-			body = publishStatus
-		default:
-			return updateHTTPResponse(req, http.StatusNotFound, "not found"), nil
-		}
-		return updateHTTPResponse(req, http.StatusOK, body), nil
-	})}
-	return client
-}
-
-func updateHTTPResponse(req *http.Request, status int, body string) *http.Response {
-	return &http.Response{
-		StatusCode: status,
-		Status:     fmt.Sprintf("%d", status),
-		Header:     make(http.Header),
-		Body:       io.NopCloser(strings.NewReader(body)),
-		Request:    req,
 	}
 }
 
