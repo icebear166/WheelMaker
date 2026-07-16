@@ -216,6 +216,42 @@ test('release build routes Webpack and Go caches through the work root', async (
   }
 });
 
+test('independent release compilation uses bounded concurrency', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-release-concurrency-'));
+  const repoRoot = join(root, 'repo');
+  const baseRunner = recordingRunner();
+  let activeBuilds = 0;
+  let maximumBuilds = 0;
+
+  try {
+    await mkdir(join(repoRoot, 'app'), {recursive: true});
+    await mkdir(join(repoRoot, 'server'), {recursive: true});
+    await buildRelease({
+      outputRoot: join(root, 'out'),
+      repoRoot,
+      runner: async (command, args, options) => {
+        const isHubBuild =
+          command === 'go' && args.at(-1) === './cmd/wheelmaker';
+        if (!isHubBuild) return baseRunner(command, args, options);
+        activeBuilds += 1;
+        maximumBuilds = Math.max(maximumBuilds, activeBuilds);
+        await new Promise(resolve => setTimeout(resolve, 10));
+        try {
+          return await baseRunner(command, args, options);
+        } finally {
+          activeBuilds -= 1;
+        }
+      },
+      version: 'v1.24',
+    });
+
+    assert.equal(maximumBuilds > 1, true);
+    assert.equal(maximumBuilds <= 3, true);
+  } finally {
+    await rm(root, {recursive: true, force: true});
+  }
+});
+
 test('optional Desktop is built once outside platform packages', async () => {
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-desktop-build-'));
   const repoRoot = join(root, 'repo');

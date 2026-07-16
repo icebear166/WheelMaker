@@ -252,6 +252,22 @@ describe('web runtime setup', () => {
     expect(enabledConfig.devtool).toBe('source-map');
   });
 
+  test('webpack release cache can be redirected into the unified work root', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const releaseCache = path.join(projectRoot, '..', '.release-work', 'cache', 'webpack');
+    const previous = process.env.WHEELMAKER_WEBPACK_CACHE;
+
+    process.env.WHEELMAKER_WEBPACK_CACHE = releaseCache;
+    const webpackConfig = loadWebpackConfig(projectRoot, 'production');
+    if (previous === undefined) {
+      delete process.env.WHEELMAKER_WEBPACK_CACHE;
+    } else {
+      process.env.WHEELMAKER_WEBPACK_CACHE = previous;
+    }
+
+    expect(webpackConfig.cache.cacheDirectory).toBe(path.resolve(releaseCache));
+  });
+
   test('production webpack extracts css instead of injecting it through javascript', () => {
     const projectRoot = path.join(__dirname, '..');
     const webpackConfig = loadWebpackConfig(projectRoot, 'production');

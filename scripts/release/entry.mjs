@@ -19,19 +19,23 @@ async function runPublish(deps) {
   const withDesktop = affirmative(
     await deps.prompt('是否包含 WheelMaker Desktop？[y/N] '),
   );
+  const withAndroid = affirmative(
+    await deps.prompt('是否包含 WheelMaker Android APK？[y/N] '),
+  );
   const publish = affirmative(
     await deps.prompt('是否发布到 public release 仓库？[y/N] '),
   );
 
   const args = [releaseScriptPath(deps)];
   if (withDesktop) args.push('--with-desktop');
+  if (withAndroid) args.push('--with-android');
   if (publish) args.push('--publish');
   await deps.run(
     process.execPath,
     args,
     { cwd: deps.repoRoot },
   );
-  return { publish, withDesktop };
+  return { publish, withAndroid, withDesktop };
 }
 
 async function runAction(deps) {
@@ -49,12 +53,16 @@ async function runAction(deps) {
   const withDesktop = affirmative(
     await deps.prompt('是否包含 WheelMaker Desktop？[y/N] '),
   );
+  const withAndroid = affirmative(
+    await deps.prompt('是否包含 WheelMaker Android APK？[y/N] '),
+  );
   deps.write(`Workflow branch: ${git.branch}`);
   deps.write(`Source SHA: ${git.head}`);
   deps.write(`Desktop: ${withDesktop ? 'included' : 'not included'}`);
+  deps.write(`Android: ${withAndroid ? 'included' : 'not included'}`);
   if (!affirmative(await deps.prompt('确认触发 GitHub Action？[y/N] '))) {
     deps.write('已取消触发。');
-    return { cancelled: true, withDesktop };
+    return { cancelled: true, withAndroid, withDesktop };
   }
 
   await deps.run(
@@ -69,10 +77,12 @@ async function runAction(deps) {
       `ref=${git.head}`,
       '-f',
       `with_desktop=${withDesktop}`,
+      '-f',
+      `with_android=${withAndroid}`,
     ],
     { cwd: deps.repoRoot },
   );
-  return { cancelled: false, withDesktop };
+  return { cancelled: false, withAndroid, withDesktop };
 }
 
 export async function runReleaseEntry(mode, deps) {

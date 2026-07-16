@@ -74,10 +74,12 @@ function fakeCliDeps() {
 test('CLI builds locally by default and accepts independent publish/Desktop flags', () => {
   assert.deepEqual(parseReleaseArgs([]), {
     publish: false,
+    withAndroid: false,
     withDesktop: false,
   });
-  assert.deepEqual(parseReleaseArgs(['--with-desktop', '--publish']), {
+  assert.deepEqual(parseReleaseArgs(['--with-desktop', '--with-android', '--publish']), {
     publish: true,
+    withAndroid: true,
     withDesktop: true,
   });
   assert.throws(

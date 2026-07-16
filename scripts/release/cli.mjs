@@ -24,6 +24,7 @@ const execFileAsync = promisify(execFile);
 
 export function parseReleaseArgs(args) {
   let publish = false;
+  let withAndroid = false;
   let withDesktop = false;
   for (const option of args) {
     if (option === '--with-desktop' && !withDesktop) {
@@ -34,9 +35,13 @@ export function parseReleaseArgs(args) {
       publish = true;
       continue;
     }
+    if (option === '--with-android' && !withAndroid) {
+      withAndroid = true;
+      continue;
+    }
     throw new Error(`unknown option: ${option}`);
   }
-  return { publish, withDesktop };
+  return { publish, withAndroid, withDesktop };
 }
 
 export async function runRelease(options, deps) {

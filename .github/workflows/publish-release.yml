@@ -12,6 +12,11 @@ on:
         default: false
         required: true
         type: boolean
+      with_android:
+        description: Build and publish WheelMakerAndroid.apk
+        default: false
+        required: true
+        type: boolean
 
 permissions:
   contents: read
@@ -37,8 +42,45 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.26.x'
-          cache: true
-          cache-dependency-path: server/go.sum
+          cache: false
+
+      - name: Restore release compiler caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            .release-work/cache/webpack
+            .release-work/cache/go-build
+            .release-work/cache/go-mod
+          key: ${{ runner.os }}-release-${{ hashFiles('app/package-lock.json', 'server/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-release-
+
+      - name: Set up Java for Android
+        if: ${{ inputs.with_android }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        if: ${{ inputs.with_android }}
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        if: ${{ inputs.with_android }}
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-disabled: true
+          gradle-version: '9.5.1'
+
+      - name: Restore Android build cache
+        if: ${{ inputs.with_android }}
+        uses: actions/cache@v4
+        with:
+          path: .release-work/cache/gradle
+          key: ${{ runner.os }}-android-${{ hashFiles('mobile/android/**/*.gradle.kts', 'mobile/android/gradle.properties', 'mobile/android/signing/release.p12') }}
+          restore-keys: |
+            ${{ runner.os }}-android-
 
       - name: Build and publish release
         env:
@@ -50,5 +92,8 @@ jobs:
           args=(--publish)
           if [[ "${{ inputs.with_desktop }}" == "true" ]]; then
             args+=(--with-desktop)
+          fi
+          if [[ "${{ inputs.with_android }}" == "true" ]]; then
+            args+=(--with-android)
           fi
           node scripts/release.mjs "${args[@]}"

@@ -36,18 +36,19 @@ function fakeDependencies(overrides = {}) {
   };
 }
 
-test('local release entry asks both questions and defaults to build only', async () => {
+test('local release entry asks three questions and defaults to build only', async () => {
   const deps = fakeDependencies();
   await runReleaseEntry('publish', deps);
 
-  assert.equal(deps.state.prompts.length, 2);
+  assert.equal(deps.state.prompts.length, 3);
   assert.match(deps.state.prompts[0], /Desktop.*\[y\/N\]/i);
-  assert.match(deps.state.prompts[1], /public.*\[y\/N\]/i);
+  assert.match(deps.state.prompts[1], /Android.*\[y\/N\]/i);
+  assert.match(deps.state.prompts[2], /public.*\[y\/N\]/i);
   assert.deepEqual(deps.state.commands[0].args, ['scripts/release.mjs']);
 });
 
 test('local release entry passes Desktop and publish choices in one invocation', async () => {
-  const answers = ['y', 'y'];
+  const answers = ['y', 'y', 'y'];
   const deps = fakeDependencies({
     async prompt(question) {
       deps.state.prompts.push(question);
@@ -59,15 +60,17 @@ test('local release entry passes Desktop and publish choices in one invocation',
   assert.deepEqual(deps.state.commands[0].args, [
     'scripts/release.mjs',
     '--with-desktop',
+    '--with-android',
     '--publish',
   ]);
 });
 
-test('action entry requires a clean pushed commit and passes Desktop choice', async () => {
+test('action entry requires a clean pushed commit and passes optional asset choices', async () => {
+  const answers = ['y', 'y', 'y'];
   const deps = fakeDependencies({
     async prompt(question) {
       deps.state.prompts.push(question);
-      return deps.state.prompts.length === 1 ? 'y' : 'y';
+      return answers.shift();
     },
   });
   await runReleaseEntry('action', deps);
@@ -83,6 +86,8 @@ test('action entry requires a clean pushed commit and passes Desktop choice', as
     `ref=${HEAD}`,
     '-f',
     'with_desktop=true',
+    '-f',
+    'with_android=true',
   ]);
 });
 
@@ -127,6 +132,15 @@ test('manual Action builds and publishes in one release invocation', async () =>
   );
   assert.equal(workflow.match(/node scripts\/release\.mjs/g)?.length, 1);
   assert.match(workflow, /args\+?=\(--publish\)/);
+  assert.match(workflow, /with_android:/);
+  assert.match(workflow, /if: \$\{\{ inputs\.with_android \}\}/);
+  assert.match(workflow, /actions\/setup-java@v4/);
+  assert.match(workflow, /android-actions\/setup-android@v3/);
+  assert.match(workflow, /gradle\/actions\/setup-gradle@v4/);
+  assert.match(workflow, /\.release-work\/cache\/webpack/);
+  assert.match(workflow, /\.release-work\/cache\/go-build/);
+  assert.match(workflow, /\.release-work\/cache\/go-mod/);
+  assert.match(workflow, /\.release-work\/cache\/gradle/);
   assert.doesNotMatch(workflow, /WHEELMAKER_SIGNING_PRIVATE_KEY/);
 });
 

@@ -71,26 +71,41 @@ export async function buildRelease({
     env: webEnvironment,
   });
 
-  const platforms = [];
-  for (const target of RELEASE_TARGETS) {
-    const directory = join(
-      versionRoot,
-      `wheelmaker-${version}-${target.key}`,
-    );
-    const hubDirectory = join(directory, 'hub');
-    const binaryPath = join(hubDirectory, target.binary);
-    await mkdir(hubDirectory, { recursive: true });
+  const platforms = Array(RELEASE_TARGETS.length);
+  const jobs = [];
+  let androidApk;
+  let desktopExe;
 
-    const buildArguments = ['build', '-trimpath'];
-    if (target.GOOS === 'windows') {
-      buildArguments.push('-ldflags=-H windowsgui');
-    }
-    buildArguments.push('-o', binaryPath, './cmd/wheelmaker');
+  if (withAndroid) {
+    jobs.push(async () => {
+      androidApk = await androidBuilder({
+        cacheRoot,
+        outputDirectory: join(versionRoot, 'android'),
+        repoRoot,
+        sourceSha,
+        version,
+        workRoot,
+      });
+    });
+  }
 
-    await runner(
-      'go',
-      buildArguments,
-      {
+  RELEASE_TARGETS.forEach((target, index) => {
+    jobs.push(async () => {
+      const directory = join(
+        versionRoot,
+        `wheelmaker-${version}-${target.key}`,
+      );
+      const hubDirectory = join(directory, 'hub');
+      const binaryPath = join(hubDirectory, target.binary);
+      await mkdir(hubDirectory, { recursive: true });
+
+      const buildArguments = ['build', '-trimpath'];
+      if (target.GOOS === 'windows') {
+        buildArguments.push('-ldflags=-H windowsgui');
+      }
+      buildArguments.push('-o', binaryPath, './cmd/wheelmaker');
+
+      await runner('go', buildArguments, {
         cwd: serverRoot,
         env: {
           CGO_ENABLED: '0',
@@ -98,75 +113,67 @@ export async function buildRelease({
           GOARCH: target.GOARCH,
           GOOS: target.GOOS,
         },
-      },
-    );
-    await cp(webSource, join(directory, 'web'), { recursive: true });
-    platforms.push({ ...target, directory, binaryPath });
-  }
+      });
+      await cp(webSource, join(directory, 'web'), { recursive: true });
+      platforms[index] = {...target, binaryPath, directory};
+    });
+  });
 
-  let desktopExe;
   if (withDesktop) {
-    const desktopCommandRoot = join(serverRoot, 'cmd', 'wheelmaker-desktop');
-    const desktopDirectory = join(versionRoot, 'desktop');
-    desktopExe = join(desktopDirectory, 'WheelMakerDesktop.exe');
-    await mkdir(desktopDirectory, { recursive: true });
+    jobs.push(async () => {
+      const desktopCommandRoot = join(serverRoot, 'cmd', 'wheelmaker-desktop');
+      const desktopDirectory = join(versionRoot, 'desktop');
+      desktopExe = join(desktopDirectory, 'WheelMakerDesktop.exe');
+      await mkdir(desktopDirectory, { recursive: true });
 
-    await runner(
-      'go',
-      [
-        'run',
-        'github.com/tc-hib/go-winres@v0.3.3',
-        'simply',
-        '--arch',
-        'amd64',
-        '--out',
-        join(desktopCommandRoot, 'desktop_windows.syso'),
-        '--no-suffix',
-        '--manifest',
-        'gui',
-        '--icon',
-        join(desktopCommandRoot, 'winres', 'icon.png'),
-        '--file-description',
-        'WheelMaker Desktop',
-        '--product-name',
-        'WheelMaker Desktop',
-        '--original-filename',
-        'WheelMakerDesktop.exe',
-      ],
-      { cwd: desktopCommandRoot, env: buildEnvironment },
-    );
-    await runner(
-      'go',
-      [
-        'build',
-        '-trimpath',
-        '-ldflags=-H windowsgui',
-        '-o',
-        desktopExe,
-        './cmd/wheelmaker-desktop',
-      ],
-      {
-        cwd: serverRoot,
-        env: {
-          CGO_ENABLED: '0',
-          ...buildEnvironment,
-          GOARCH: 'amd64',
-          GOOS: 'windows',
+      await runner(
+        'go',
+        [
+          'run',
+          'github.com/tc-hib/go-winres@v0.3.3',
+          'simply',
+          '--arch',
+          'amd64',
+          '--out',
+          join(desktopCommandRoot, 'desktop_windows.syso'),
+          '--no-suffix',
+          '--manifest',
+          'gui',
+          '--icon',
+          join(desktopCommandRoot, 'winres', 'icon.png'),
+          '--file-description',
+          'WheelMaker Desktop',
+          '--product-name',
+          'WheelMaker Desktop',
+          '--original-filename',
+          'WheelMakerDesktop.exe',
+        ],
+        { cwd: desktopCommandRoot, env: buildEnvironment },
+      );
+      await runner(
+        'go',
+        [
+          'build',
+          '-trimpath',
+          '-ldflags=-H windowsgui',
+          '-o',
+          desktopExe,
+          './cmd/wheelmaker-desktop',
+        ],
+        {
+          cwd: serverRoot,
+          env: {
+            CGO_ENABLED: '0',
+            ...buildEnvironment,
+            GOARCH: 'amd64',
+            GOOS: 'windows',
+          },
         },
-      },
-    );
+      );
+    });
   }
 
-  const androidApk = withAndroid
-    ? await androidBuilder({
-        cacheRoot,
-        outputDirectory: join(versionRoot, 'android'),
-        repoRoot,
-        sourceSha,
-        version,
-        workRoot,
-      })
-    : undefined;
+  await runWithConcurrency(jobs, 3);
 
   return {
     androidApk,
@@ -176,4 +183,25 @@ export async function buildRelease({
     versionRoot,
     webSource,
   };
+}
+
+async function runWithConcurrency(jobs, limit) {
+  let nextIndex = 0;
+  let failure;
+  async function worker() {
+    while (!failure) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= jobs.length) return;
+      try {
+        await jobs[index]();
+      } catch (error) {
+        failure ??= error;
+      }
+    }
+  }
+  await Promise.all(
+    Array.from({length: Math.min(limit, jobs.length)}, () => worker()),
+  );
+  if (failure) throw failure;
 }

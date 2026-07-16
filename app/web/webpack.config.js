@@ -73,7 +73,9 @@ module.exports = (_env = {}, argv = {}) => {
     },
     cache: {
       type: 'filesystem',
-      cacheDirectory: path.join(os.homedir(), '.wheelmaker', 'cache', 'webpack'),
+      cacheDirectory: process.env.WHEELMAKER_WEBPACK_CACHE
+        ? path.resolve(process.env.WHEELMAKER_WEBPACK_CACHE)
+        : path.join(os.homedir(), '.wheelmaker', 'cache', 'webpack'),
       buildDependencies: {
         config: [__filename, path.resolve(__dirname, '..', 'package-lock.json')],
       },
