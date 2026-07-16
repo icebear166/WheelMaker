@@ -7,6 +7,7 @@ export function resolveCommand(
   command,
   platform = process.platform,
   nodePath = process.execPath,
+  commandInterpreter = process.env.ComSpec ?? 'cmd.exe',
 ) {
   if (platform === 'win32' && WINDOWS_NPM_CLIS.has(command)) {
     return {
@@ -22,10 +23,20 @@ export function resolveCommand(
       executable: nodePath,
     };
   }
+  if (platform === 'win32' && command === 'gradle') {
+    return {
+      args: ['/d', '/s', '/c', 'gradle.cmd'],
+      executable: commandInterpreter,
+    };
+  }
   return { args: [], executable: command };
 }
 
-export function runCommand(command, args, { cwd, env = {} } = {}) {
+export function runCommand(
+  command,
+  args,
+  { captureOutput = false, cwd, env = {} } = {},
+) {
   if (!cwd) {
     throw new Error(`cwd is required when running ${command}`);
   }
@@ -36,13 +47,31 @@ export function runCommand(command, args, { cwd, env = {} } = {}) {
       cwd,
       env: { ...process.env, ...env },
       shell: false,
-      stdio: 'inherit',
+      stdio: captureOutput ? ['inherit', 'pipe', 'pipe'] : 'inherit',
     });
+    const stdout = [];
+    const stderr = [];
+    child.stdout?.on('data', chunk => stdout.push(chunk));
+    child.stderr?.on('data', chunk => stderr.push(chunk));
 
-    child.once('error', reject);
+    let settled = false;
+    child.once('error', error => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    });
     child.once('exit', (code, signal) => {
+      if (settled) return;
+      settled = true;
       if (code === 0) {
-        resolve();
+        resolve(
+          captureOutput
+            ? {
+                stderr: Buffer.concat(stderr).toString('utf8'),
+                stdout: Buffer.concat(stdout).toString('utf8'),
+              }
+            : undefined,
+        );
         return;
       }
       const reason = signal ? `signal ${signal}` : `exit code ${code}`;

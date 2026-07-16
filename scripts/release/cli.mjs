@@ -41,6 +41,7 @@ export async function runRelease(options, deps) {
   const build = await deps.buildRelease({
     outputRoot: deps.outputRoot,
     repoRoot: deps.repoRoot,
+    sourceSha,
     version,
     workRoot: deps.workRoot,
     withDesktop: options.withDesktop,

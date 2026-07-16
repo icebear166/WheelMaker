@@ -2,6 +2,7 @@ import { cp, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { runCommand } from './commands.mjs';
+import { buildAndroidRelease } from './android.mjs';
 
 export const RELEASE_TARGETS = Object.freeze([
   {
@@ -25,11 +26,14 @@ export const RELEASE_TARGETS = Object.freeze([
 ]);
 
 export async function buildRelease({
+  androidBuilder = buildAndroidRelease,
   repoRoot,
   outputRoot,
+  sourceSha,
   version,
   workRoot = join(repoRoot, '.release-work'),
   withDesktop = false,
+  withAndroid = false,
   runner = runCommand,
 }) {
   if (!/^v1\.(0|[1-9]\d*)$/.test(version)) {
@@ -153,5 +157,23 @@ export async function buildRelease({
     );
   }
 
-  return { desktopExe, platforms, version, versionRoot, webSource };
+  const androidApk = withAndroid
+    ? await androidBuilder({
+        cacheRoot,
+        outputDirectory: join(versionRoot, 'android'),
+        repoRoot,
+        sourceSha,
+        version,
+        workRoot,
+      })
+    : undefined;
+
+  return {
+    androidApk,
+    desktopExe,
+    platforms,
+    version,
+    versionRoot,
+    webSource,
+  };
 }

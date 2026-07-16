@@ -251,6 +251,62 @@ test('optional Desktop is built once outside platform packages', async () => {
   }
 });
 
+test('optional Android is built once with the unified release identity', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-android-integration-'));
+  const repoRoot = join(root, 'repo');
+  const outputRoot = join(root, 'out');
+  const workRoot = join(root, '.release-work');
+  const androidCalls = [];
+
+  try {
+    await mkdir(join(repoRoot, 'app'), {recursive: true});
+    await mkdir(join(repoRoot, 'server'), {recursive: true});
+    const result = await buildRelease({
+      androidBuilder: async input => {
+        androidCalls.push(input);
+        return {
+          apkPath: join(input.outputDirectory, 'WheelMakerAndroid.apk'),
+          manifestPath: join(input.outputDirectory, 'android-release.json'),
+          sha256: 'a'.repeat(64),
+          size: 123,
+          versionCode: 24,
+          versionName: '1.24',
+        };
+      },
+      outputRoot,
+      repoRoot,
+      runner: recordingRunner(),
+      sourceSha: '0123456789abcdef0123456789abcdef01234567',
+      version: 'v1.24',
+      withAndroid: true,
+      workRoot,
+    });
+
+    assert.equal(androidCalls.length, 1);
+    assert.deepEqual(
+      {
+        cacheRoot: androidCalls[0].cacheRoot,
+        outputDirectory: androidCalls[0].outputDirectory,
+        repoRoot: androidCalls[0].repoRoot,
+        sourceSha: androidCalls[0].sourceSha,
+        version: androidCalls[0].version,
+        workRoot: androidCalls[0].workRoot,
+      },
+      {
+        cacheRoot: join(workRoot, 'cache'),
+        outputDirectory: join(outputRoot, 'v1.24', 'android'),
+        repoRoot,
+        sourceSha: '0123456789abcdef0123456789abcdef01234567',
+        version: 'v1.24',
+        workRoot,
+      },
+    );
+    assert.equal(result.androidApk.versionName, '1.24');
+  } finally {
+    await rm(root, {recursive: true, force: true});
+  }
+});
+
 test('Windows command resolution runs npm CLI through Node without a shell', () => {
   assert.deepEqual(resolveCommand('npm', 'win32', 'C:\\Node\\node.exe'), {
     args: ['C:\\Node\\node_modules\\npm\\bin\\npm-cli.js'],
@@ -264,6 +320,13 @@ test('Windows command resolution runs npm CLI through Node without a shell', () 
     args: [],
     executable: 'go',
   });
+  assert.deepEqual(
+    resolveCommand('gradle', 'win32', 'C:\\Node\\node.exe', 'C:\\Windows\\cmd.exe'),
+    {
+      args: ['/d', '/s', '/c', 'gradle.cmd'],
+      executable: 'C:\\Windows\\cmd.exe',
+    },
+  );
   assert.deepEqual(resolveCommand('npm', 'linux'), {
     args: [],
     executable: 'npm',
