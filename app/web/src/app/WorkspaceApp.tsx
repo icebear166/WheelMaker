@@ -20837,13 +20837,15 @@ export function App() {
     }
     const closeActionsMenu = () => setPreviewWorkbenchActionsMenuOpen(false);
     const projectRoot = projects.find(project => project.projectId === tab.projectId)?.path;
-    const relativePath = tab.type === 'prompt-diff'
-      ? resolvePromptDiffActiveFilePath(tab.files, tab.activeFilePath)
-      : '';
+    const relativePath = tab.type === 'file'
+      ? tab.path
+      : tab.type === 'prompt-diff'
+        ? resolvePromptDiffActiveFilePath(tab.files, tab.activeFilePath)
+        : '';
     const desktopBridge = getDesktopWindowBridge();
-    const canOpenPromptDiffInVSCode = Boolean(projectRoot && relativePath && desktopBridge?.openProjectFileInVSCode);
-    const canShowPromptDiffInFolder = Boolean(projectRoot && relativePath && desktopBridge?.showProjectFileInFolder);
-    const runPromptDiffDesktopFileAction = (
+    const canOpenProjectFileInVSCode = Boolean(projectRoot && relativePath && desktopBridge?.openProjectFileInVSCode);
+    const canShowProjectFileInFolder = Boolean(projectRoot && relativePath && desktopBridge?.showProjectFileInFolder);
+    const runProjectFileDesktopAction = (
       action: DesktopProjectFileAction,
       failurePrefix: string,
     ) => {
@@ -20863,23 +20865,23 @@ export function App() {
     const indexError = projectIndexErrorByProjectId[tab.projectId] || '';
     return (
       <>
-        {canOpenPromptDiffInVSCode ? (
+        {canOpenProjectFileInVSCode ? (
           <button
             type="button"
             role="menuitem"
             className="preview-workbench-action-menu-item"
-            onClick={() => runPromptDiffDesktopFileAction('vscode', 'Failed to open file in VS Code')}
+            onClick={() => runProjectFileDesktopAction('vscode', 'Failed to open file in VS Code')}
           >
             <span className="codicon codicon-code" aria-hidden="true" />
             <span>Open with VS Code</span>
           </button>
         ) : null}
-        {canShowPromptDiffInFolder ? (
+        {canShowProjectFileInFolder ? (
           <button
             type="button"
             role="menuitem"
             className="preview-workbench-action-menu-item"
-            onClick={() => runPromptDiffDesktopFileAction('folder', 'Failed to show file in File Explorer')}
+            onClick={() => runProjectFileDesktopAction('folder', 'Failed to show file in File Explorer')}
           >
             <span className="codicon codicon-folder-opened" aria-hidden="true" />
             <span>Show in File Explorer</span>

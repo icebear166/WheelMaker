@@ -101,13 +101,13 @@ describe('web chat file peek viewer', () => {
     expect(viewerComparatorBody).toContain('prev.preview === next.preview');
   });
 
-  test('prompt diff actions target the active file through independently gated desktop methods', () => {
+  test('project file actions target ordinary and prompt diff files through independently gated desktop methods', () => {
     const mainTsx = readSourceText(mainPath);
     const stylesCss = readWebStyles(projectRoot);
     const actionsStart = mainTsx.indexOf('const renderPreviewWorkbenchActions = () => {');
     const actionsEnd = mainTsx.indexOf('const renderPreviewWorkbenchTabBody =', actionsStart);
     const actionsBody = mainTsx.slice(actionsStart, actionsEnd);
-    const runnerStart = actionsBody.indexOf('const runPromptDiffDesktopFileAction = (');
+    const runnerStart = actionsBody.indexOf('const runProjectFileDesktopAction = (');
     const runnerEnd = actionsBody.indexOf('const indexPending =', runnerStart);
     const runnerBody = actionsBody.slice(runnerStart, runnerEnd);
     const disconnectedReturnStart = mainTsx.indexOf('if (!connected && !keepWorkspaceVisible) {');
@@ -123,18 +123,26 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('invokeDesktopProjectFileAction,');
     expect(mainTsx).toContain('type DesktopProjectFileAction,');
     expect(actionsBody).toContain('const projectRoot = projects.find(project => project.projectId === tab.projectId)?.path;');
-    expect(actionsBody).toContain("const relativePath = tab.type === 'prompt-diff'");
+    expect(actionsBody).toContain("const relativePath = tab.type === 'file'");
+    expect(actionsBody).toContain('? tab.path');
+    expect(actionsBody).toContain(": tab.type === 'prompt-diff'");
     expect(actionsBody).toContain('? resolvePromptDiffActiveFilePath(tab.files, tab.activeFilePath)');
     expect(actionsBody).toContain(": '';");
     expect(actionsBody).toContain('const desktopBridge = getDesktopWindowBridge();');
-    expect(actionsBody).toContain('const canOpenPromptDiffInVSCode = Boolean(projectRoot && relativePath && desktopBridge?.openProjectFileInVSCode);');
-    expect(actionsBody).toContain('const canShowPromptDiffInFolder = Boolean(projectRoot && relativePath && desktopBridge?.showProjectFileInFolder);');
-    expect(actionsBody).toContain('{canOpenPromptDiffInVSCode ? (');
-    expect(actionsBody).toContain('{canShowPromptDiffInFolder ? (');
-    expect(actionsBody).toContain("runPromptDiffDesktopFileAction('vscode', 'Failed to open file in VS Code')");
-    expect(actionsBody).toContain("runPromptDiffDesktopFileAction('folder', 'Failed to show file in File Explorer')");
+    expect(actionsBody).toContain('const canOpenProjectFileInVSCode = Boolean(projectRoot && relativePath && desktopBridge?.openProjectFileInVSCode);');
+    expect(actionsBody).toContain('const canShowProjectFileInFolder = Boolean(projectRoot && relativePath && desktopBridge?.showProjectFileInFolder);');
+    expect(actionsBody).toContain('{canOpenProjectFileInVSCode ? (');
+    expect(actionsBody).toContain('{canShowProjectFileInFolder ? (');
+    expect(actionsBody).toContain("runProjectFileDesktopAction('vscode', 'Failed to open file in VS Code')");
+    expect(actionsBody).toContain("runProjectFileDesktopAction('folder', 'Failed to show file in File Explorer')");
+    expect(actionsBody).not.toContain('canOpenPromptDiffInVSCode');
+    expect(actionsBody).not.toContain('canShowPromptDiffInFolder');
+    expect(actionsBody).not.toContain('runPromptDiffDesktopFileAction');
     expect(actionsBody).toContain('<span>Open with VS Code</span>');
     expect(actionsBody).toContain('<span>Show in File Explorer</span>');
+    expect(actionsBody).toContain('<span>Copy absolute path</span>');
+    expect(actionsBody).toContain('<span>Open in File tab</span>');
+    expect(actionsBody).toContain("'Rebuild file index'");
     expect(runnerBody).toContain('closeActionsMenu();');
     expect(runnerBody).toContain("setToastMessage('');");
     expect(runnerBody).toContain('if (!desktopBridge || !projectRoot || !relativePath) {');
@@ -146,6 +154,16 @@ describe('web chat file peek viewer', () => {
     expect(runnerBody.indexOf('closeActionsMenu();')).toBeLessThan(runnerBody.indexOf("setToastMessage('');"));
     expect(runnerBody.indexOf("setToastMessage('');")).toBeLessThan(runnerBody.indexOf('Promise.resolve()'));
     expect(runnerBody.indexOf('.catch(err => {')).toBeLessThan(runnerBody.indexOf('setToastMessage(`${failurePrefix}: ${reason}`);'));
+
+    const vscodeLabelIndex = actionsBody.indexOf('<span>Open with VS Code</span>');
+    const folderLabelIndex = actionsBody.indexOf('<span>Show in File Explorer</span>');
+    const copyPathLabelIndex = actionsBody.indexOf('<span>Copy absolute path</span>');
+    const fileTabLabelIndex = actionsBody.indexOf('<span>Open in File tab</span>');
+    const rebuildLabelIndex = actionsBody.indexOf("'Rebuild file index'");
+    expect(vscodeLabelIndex).toBeLessThan(folderLabelIndex);
+    expect(folderLabelIndex).toBeLessThan(copyPathLabelIndex);
+    expect(copyPathLabelIndex).toBeLessThan(fileTabLabelIndex);
+    expect(fileTabLabelIndex).toBeLessThan(rebuildLabelIndex);
     expect(disconnectedReturnStart).toBeGreaterThanOrEqual(0);
     expect(connectedReturnStart).toBeGreaterThan(disconnectedReturnStart);
     expect(connectedToastStart).toBeGreaterThan(connectedReturnStart);
