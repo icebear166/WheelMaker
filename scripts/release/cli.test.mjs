@@ -6,6 +6,7 @@ import {
   resolvePublishingToken,
   runRelease,
 } from './cli.mjs';
+import {ReleaseVersionConflictError} from './publish.mjs';
 
 const SOURCE_SHA = '0123456789abcdef0123456789abcdef01234567';
 
@@ -37,6 +38,9 @@ function fakeCliDeps() {
       state.order.push('build');
       return {
         desktopExe: input.withDesktop ? 'desktop.exe' : undefined,
+        androidApk: input.withAndroid
+          ? {apkPath: 'android.apk', manifestPath: 'android-release.json'}
+          : undefined,
         platforms: [{ directory: 'windows', key: 'windows-amd64' }],
         versionRoot: `${input.outputRoot}\\${input.version}`,
       };
@@ -58,10 +62,10 @@ function fakeCliDeps() {
       state.sourceCalls.push(options);
       return SOURCE_SHA;
     },
-    async resolveNextVersion() {
+    async resolveNextVersion(options) {
       state.versionCalls += 1;
       state.order.push('version');
-      return 'v1.24';
+      return options?.floorVersion === 'v1.24' ? 'v1.25' : 'v1.24';
     },
   };
   return deps;
@@ -105,6 +109,7 @@ test('publish mode builds once and publishes that same build', async () => {
   assert.equal(deps.state.githubClientCalls, 1);
   assert.equal(deps.state.buildCalls.length, 1);
   assert.equal(deps.state.buildCalls[0].withDesktop, true);
+  assert.equal(deps.state.buildCalls[0].withAndroid, false);
   assert.equal(deps.state.publishCalls.length, 1);
   assert.equal(deps.state.publishCalls[0].input.sourceSha, SOURCE_SHA);
   assert.equal(deps.state.publishCalls[0].input.desktopExe, 'desktop.exe');
@@ -112,6 +117,50 @@ test('publish mode builds once and publishes that same build', async () => {
   assert.equal(deps.state.publishCalls[0].input.version, 'v1.24');
   assert.deepEqual(deps.state.order, ['version', 'build', 'github', 'publish']);
   assert.deepEqual(result, { mode: 'publish', stable: { version: 'v1.1' } });
+});
+
+test('publish version conflict rebuilds every asset with a newly resolved version', async () => {
+  const deps = fakeCliDeps();
+  let publishAttempt = 0;
+  deps.publishBuiltRelease = async input => {
+    deps.state.publishCalls.push({input});
+    deps.state.order.push('publish');
+    publishAttempt += 1;
+    if (publishAttempt === 1) {
+      throw new ReleaseVersionConflictError(input.version);
+    }
+    return {version: input.version};
+  };
+
+  const result = await runRelease(
+    {publish: true, withAndroid: true, withDesktop: false},
+    deps,
+  );
+
+  assert.deepEqual(
+    deps.state.buildCalls.map(({version, withAndroid}) => ({version, withAndroid})),
+    [
+      {version: 'v1.24', withAndroid: true},
+      {version: 'v1.25', withAndroid: true},
+    ],
+  );
+  assert.deepEqual(
+    deps.state.publishCalls.map(({input}) => ({
+      androidApk: input.androidApk,
+      version: input.version,
+    })),
+    [
+      {
+        androidApk: {apkPath: 'android.apk', manifestPath: 'android-release.json'},
+        version: 'v1.24',
+      },
+      {
+        androidApk: {apkPath: 'android.apk', manifestPath: 'android-release.json'},
+        version: 'v1.25',
+      },
+    ],
+  );
+  assert.deepEqual(result, {mode: 'publish', stable: {version: 'v1.25'}});
 });
 
 test('local publishing reuses the authenticated GitHub CLI token', async () => {

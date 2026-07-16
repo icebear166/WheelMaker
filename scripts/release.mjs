@@ -19,6 +19,7 @@ if (result.mode === 'build') {
   process.stdout.write(
     `${JSON.stringify(
       {
+        androidApk: result.build.androidApk ?? null,
         desktopExe: result.build.desktopExe ?? null,
         mode: result.mode,
         platforms: result.build.platforms.map(({ directory, key }) => ({

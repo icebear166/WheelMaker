@@ -8,7 +8,11 @@ import test from 'node:test';
 import { createAppJwt, requestInstallationToken } from './github-app.mjs';
 import { GitHubApi } from './github-api.mjs';
 import { encodeJsonBytes } from './metadata.mjs';
-import { makeStable, publishBuiltRelease } from './publish.mjs';
+import {
+  makeStable,
+  publishBuiltRelease,
+  ReleaseVersionConflictError,
+} from './publish.mjs';
 
 const SOURCE_SHA = '0123456789abcdef0123456789abcdef01234567';
 const SCRIPT_COMMIT_SHA = 'a'.repeat(40);
@@ -92,7 +96,7 @@ class FakeGitHubApi {
   }
 }
 
-async function fixtureRelease() {
+async function fixtureRelease({withAndroid = false} = {}) {
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-publish-'));
   const platforms = [];
   for (const [key, binary] of [
@@ -108,7 +112,7 @@ async function fixtureRelease() {
     platforms.push({ key, directory });
   }
 
-  return {
+  const release = {
     channel: {
       owner: 'swm8023',
       repository: 'wheelmaker-release',
@@ -124,8 +128,38 @@ async function fixtureRelease() {
     publisher: 'local',
     sourceSha: SOURCE_SHA,
     startedAt: PUBLISHED_AT,
+    version: 'v1.1',
     cleanup: () => rm(root, { recursive: true, force: true }),
   };
+  if (withAndroid) {
+    const androidDirectory = join(root, 'android');
+    const apkPath = join(androidDirectory, 'WheelMakerAndroid.apk');
+    const manifestPath = join(androidDirectory, 'android-release.json');
+    const apkBytes = Buffer.from('signed-android-apk');
+    await mkdir(androidDirectory, {recursive: true});
+    await writeFile(apkPath, apkBytes);
+    await writeFile(
+      manifestPath,
+      encodeJsonBytes({
+        apk: {
+          fileName: 'WheelMakerAndroid.apk',
+          sha256: sha256ForTest(apkBytes),
+          size: apkBytes.length,
+        },
+        builtAt: PUBLISHED_AT,
+        embeddedAsset: 'bootstrap/index.html',
+        platform: 'android',
+        schema: 1,
+        signing: {certificateSha256: ['f'.repeat(64)]},
+        sourceSha: SOURCE_SHA,
+        version: 'v1.1',
+        versionCode: 1,
+        versionName: '1.1',
+      }),
+    );
+    release.androidApk = {apkPath, manifestPath};
+  }
+  return release;
 }
 
 test('stable is committed only after the release is public', async () => {
@@ -166,6 +200,51 @@ test('release without Desktop carries the previous Desktop pointer forward', () 
     release: stableReleaseInput({ version: 'v1.13' }),
   });
   assert.equal(next.desktopExe.version, 'v1.12');
+});
+
+test('release with Android uploads APK and manifest and writes its stable pointer', async () => {
+  const release = await fixtureRelease({withAndroid: true});
+  const api = new FakeGitHubApi();
+  try {
+    const stable = await publishBuiltRelease(release, api);
+    assert.deepEqual(
+      api.uploadedAssets
+        .map(({name}) => name)
+        .filter(name => /Android|android-release/.test(name))
+        .sort(),
+      ['WheelMakerAndroid.apk', 'android-release.json'],
+    );
+    assert.deepEqual(stable.androidApk, {
+      publishedAt: PUBLISHED_AT,
+      sha256: sha256ForTest(Buffer.from('signed-android-apk')),
+      size: Buffer.byteLength('signed-android-apk'),
+      sourceSha: SOURCE_SHA,
+      url: 'https://github.com/swm8023/wheelmaker-release/releases/download/v1.1/WheelMakerAndroid.apk',
+      version: 'v1.1',
+      versionCode: 1,
+      versionName: '1.1',
+    });
+  } finally {
+    await release.cleanup();
+  }
+});
+
+test('release without Android carries the previous Android pointer forward', () => {
+  const previousAndroid = {
+    publishedAt: '2026-07-10T00:00:00.000Z',
+    sha256: 'a'.repeat(64),
+    size: 42,
+    sourceSha: 'b'.repeat(40),
+    url: 'https://example.test/v1.4/WheelMakerAndroid.apk',
+    version: 'v1.4',
+    versionCode: 4,
+    versionName: '1.4',
+  };
+  const next = makeStable({
+    previous: {androidApk: previousAndroid, version: 'v1.4'},
+    release: stableReleaseInput({version: 'v1.5'}),
+  });
+  assert.deepEqual(next.androidApk, previousAndroid);
 });
 
 test('first public release starts at v1.1 without a Desktop pointer', () => {
@@ -259,14 +338,18 @@ test('publisher commits exact script bytes and hashes exact manifest bytes', asy
   }
 });
 
-test('tag collision refetches stable and advances to the next v1.x', async () => {
+test('tag collision rejects the already-built version for a full CLI rebuild', async () => {
   const release = await fixtureRelease();
   const api = new FakeGitHubApi({ tagCollisionOnce: true });
   try {
-    const stable = await publishBuiltRelease(release, api);
+    await assert.rejects(
+      () => publishBuiltRelease(release, api),
+      error =>
+        error instanceof ReleaseVersionConflictError &&
+        error.version === 'v1.1',
+    );
     assert.equal(api.tagCollisions, 1);
-    assert.equal(stable.version, 'v1.2');
-    assert.equal(api.createdRelease.tag_name, 'v1.2');
+    assert.equal(api.events.includes('stable:commit'), false);
   } finally {
     await release.cleanup();
   }

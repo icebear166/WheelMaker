@@ -10,8 +10,15 @@ import {
   requestInstallationToken,
 } from './github-app.mjs';
 import { GitHubApi } from './github-api.mjs';
-import { nextVersionFromStableBytes } from './metadata.mjs';
-import { publishBuiltRelease } from './publish.mjs';
+import {
+  nextV1Version,
+  nextVersionFromStableBytes,
+  stableVersionFromBytes,
+} from './metadata.mjs';
+import {
+  publishBuiltRelease,
+  ReleaseVersionConflictError,
+} from './publish.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -35,46 +42,61 @@ export function parseReleaseArgs(args) {
 export async function runRelease(options, deps) {
   const requireClean = options.publish;
   const sourceSha = await deps.resolveSourceSha({ requireClean });
-  const version = await deps.resolveNextVersion();
   const startedAt = deps.now();
+  let api;
+  let deploymentSources;
+  let floorVersion;
 
-  const build = await deps.buildRelease({
-    outputRoot: deps.outputRoot,
-    repoRoot: deps.repoRoot,
-    sourceSha,
-    version,
-    workRoot: deps.workRoot,
-    withDesktop: options.withDesktop,
-  });
-  if (!options.publish) {
-    return { build, mode: 'build', sourceSha };
-  }
-
-  const api = await deps.createGitHubClient();
-  const deploymentSources = deps.loadDeploymentSources
-    ? await deps.loadDeploymentSources()
-    : {
-        coreBytes: deps.coreBytes,
-        deployMjsBytes: deps.deployMjsBytes,
-      };
-
-  const stable = await deps.publishBuiltRelease(
-    {
-      channel: deps.channel,
-      coreBytes: deploymentSources.coreBytes,
-      deployMjsBytes: deploymentSources.deployMjsBytes,
-      desktopExe: build.desktopExe,
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const version = await deps.resolveNextVersion({floorVersion});
+    const build = await deps.buildRelease({
       outputRoot: deps.outputRoot,
-      platforms: build.platforms,
-      publishedAt: deps.now(),
-      publisher: deps.publisher,
+      repoRoot: deps.repoRoot,
       sourceSha,
-      startedAt,
       version,
-    },
-    api,
-  );
-  return { mode: 'publish', stable };
+      workRoot: deps.workRoot,
+      withAndroid: options.withAndroid ?? false,
+      withDesktop: options.withDesktop,
+    });
+    if (!options.publish) {
+      return { build, mode: 'build', sourceSha };
+    }
+
+    api ??= await deps.createGitHubClient();
+    deploymentSources ??= deps.loadDeploymentSources
+      ? await deps.loadDeploymentSources()
+      : {
+          coreBytes: deps.coreBytes,
+          deployMjsBytes: deps.deployMjsBytes,
+        };
+
+    try {
+      const stable = await deps.publishBuiltRelease(
+        {
+          androidApk: build.androidApk,
+          channel: deps.channel,
+          coreBytes: deploymentSources.coreBytes,
+          deployMjsBytes: deploymentSources.deployMjsBytes,
+          desktopExe: build.desktopExe,
+          outputRoot: deps.outputRoot,
+          platforms: build.platforms,
+          publishedAt: deps.now(),
+          publisher: deps.publisher,
+          sourceSha,
+          startedAt,
+          version,
+        },
+        api,
+      );
+      return { mode: 'publish', stable };
+    } catch (error) {
+      if (!(error instanceof ReleaseVersionConflictError) || attempt === 2) {
+        throw error;
+      }
+      floorVersion = error.version;
+    }
+  }
+  throw new Error('release retry limit reached');
 }
 
 async function resolveGitSourceSha(repoRoot, { requireClean }) {
@@ -171,7 +193,7 @@ export async function createDefaultReleaseDependencies({
     },
     now: () => new Date().toISOString(),
     publishBuiltRelease,
-    async resolveNextVersion() {
+    async resolveNextVersion({floorVersion} = {}) {
       const stableUrl = new URL(
         channel.stablePath,
         `https://raw.githubusercontent.com/${channel.owner}/${channel.repository}/${channel.branch}/`,
@@ -182,7 +204,19 @@ export async function createDefaultReleaseDependencies({
           `failed to query stable metadata: ${response.status} ${response.statusText}`,
         );
       }
-      return nextVersionFromStableBytes(Buffer.from(await response.arrayBuffer()));
+      const stableBytes = Buffer.from(await response.arrayBuffer());
+      if (!floorVersion) {
+        return nextVersionFromStableBytes(stableBytes);
+      }
+      const stableVersion = stableVersionFromBytes(stableBytes);
+      const stableNumber = Number(stableVersion.slice(3));
+      const floorNumber = Number(floorVersion.slice(3));
+      if (!/^v1\.(0|[1-9]\d*)$/.test(floorVersion)) {
+        throw new Error(`invalid release version floor: ${floorVersion}`);
+      }
+      return nextV1Version(
+        stableNumber > floorNumber ? stableVersion : floorVersion,
+      );
     },
     resolveSourceSha: (options) => resolveGitSourceSha(repoRoot, options),
   };

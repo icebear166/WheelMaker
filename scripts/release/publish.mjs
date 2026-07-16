@@ -69,6 +69,10 @@ export function makeStable({ previous, release }) {
   if (desktopExe) {
     stable.desktopExe = desktopExe;
   }
+  const androidApk = release.androidApk ?? previous?.androidApk;
+  if (androidApk) {
+    stable.androidApk = androidApk;
+  }
   return stable;
 }
 
@@ -114,7 +118,58 @@ async function packageAttempt(release, version) {
     };
   }
 
-  return { assets, desktopExe, manifestBytes };
+  let androidApk;
+  if (release.androidApk) {
+    const apkBytes = await readFile(release.androidApk.apkPath);
+    const androidManifestBytes = await readFile(
+      release.androidApk.manifestPath,
+    );
+    let androidManifest;
+    try {
+      androidManifest = JSON.parse(androidManifestBytes.toString('utf8'));
+    } catch {
+      throw new Error('Android release manifest is invalid');
+    }
+    const apkSha256 = sha256Bytes(apkBytes);
+    if (
+      androidManifest?.schema !== 1 ||
+      androidManifest.platform !== 'android' ||
+      androidManifest.version !== version ||
+      androidManifest.versionName !== version.slice(1) ||
+      androidManifest.versionCode !== versionNumber(version) ||
+      androidManifest.sourceSha !== release.sourceSha ||
+      androidManifest.apk?.fileName !== 'WheelMakerAndroid.apk' ||
+      androidManifest.apk.sha256 !== apkSha256 ||
+      androidManifest.apk.size !== apkBytes.length ||
+      !Array.isArray(androidManifest.signing?.certificateSha256) ||
+      androidManifest.signing.certificateSha256.length === 0 ||
+      androidManifest.signing.certificateSha256.some(
+        digest => !/^[0-9a-f]{64}$/.test(digest),
+      )
+    ) {
+      throw new Error('Android release manifest does not match the built APK');
+    }
+    assets.push(
+      {bytes: apkBytes, name: 'WheelMakerAndroid.apk'},
+      {bytes: androidManifestBytes, name: 'android-release.json'},
+    );
+    androidApk = {
+      publishedAt: release.publishedAt,
+      sha256: apkSha256,
+      size: apkBytes.length,
+      sourceSha: release.sourceSha,
+      url: releaseAssetUrl(
+        release.channel,
+        version,
+        'WheelMakerAndroid.apk',
+      ),
+      version,
+      versionCode: androidManifest.versionCode,
+      versionName: androidManifest.versionName,
+    };
+  }
+
+  return { androidApk, assets, desktopExe, manifestBytes };
 }
 
 async function cleanOldDrafts(api, nowMilliseconds) {
@@ -134,6 +189,14 @@ async function cleanOldDrafts(api, nowMilliseconds) {
 
 function isTagCollision(error) {
   return error?.status === 422;
+}
+
+export class ReleaseVersionConflictError extends Error {
+  constructor(version, options) {
+    super(`release version already exists: ${version}`, options);
+    this.name = 'ReleaseVersionConflictError';
+    this.version = version;
+  }
 }
 
 function statusDocument(release, { errorCode, phase, state, version }) {
@@ -164,15 +227,19 @@ async function writeStatus(api, release, status) {
 
 export async function publishBuiltRelease(release, api) {
   let currentPhase = 'validating';
-  let version = 'v1.1';
+  let version = release.version;
   let draft = null;
   let releaseIsPublic = false;
   let previous = null;
-  let floorVersion = 'v1.0';
 
   try {
+    if (versionNumber(version) < 1) {
+      throw new Error(`invalid release version: ${version}`);
+    }
     previous = await readStable(api, release.channel);
-    version = nextCandidate(previous, floorVersion);
+    if (versionNumber(previous?.version) >= versionNumber(version)) {
+      throw new ReleaseVersionConflictError(version);
+    }
     await writeStatus(api, release, {
       phase: currentPhase,
       state: 'running',
@@ -186,7 +253,7 @@ export async function publishBuiltRelease(release, api) {
       state: 'running',
       version,
     });
-    let packaged = await packageAttempt(release, version);
+    const packaged = await packageAttempt(release, version);
 
     const scriptCommit = await api.commitFiles(
       [
@@ -211,42 +278,29 @@ export async function publishBuiltRelease(release, api) {
       coreSha256: sha256Bytes(release.coreBytes),
     };
 
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      currentPhase = 'uploading';
-      await writeStatus(api, release, {
-        phase: currentPhase,
-        state: 'running',
-        version,
+    currentPhase = 'uploading';
+    await writeStatus(api, release, {
+      phase: currentPhase,
+      state: 'running',
+      version,
+    });
+    try {
+      draft = await api.createRelease({
+        draft: true,
+        name: `WheelMaker ${version}`,
+        prerelease: false,
+        tag_name: version,
+        target_commitish: scriptCommit.sha,
       });
-      try {
-        draft = await api.createRelease({
-          draft: true,
-          name: `WheelMaker ${version}`,
-          prerelease: false,
-          tag_name: version,
-          target_commitish: scriptCommit.sha,
-        });
-      } catch (error) {
-        if (!isTagCollision(error) || attempt === 2) {
-          throw error;
-        }
-        floorVersion = version;
-        previous = await readStable(api, release.channel);
-        version = nextCandidate(previous, floorVersion);
-        currentPhase = 'packaging';
-        await writeStatus(api, release, {
-          phase: currentPhase,
-          state: 'running',
-          version,
-        });
-        packaged = await packageAttempt(release, version);
-        continue;
+    } catch (error) {
+      if (isTagCollision(error)) {
+        throw new ReleaseVersionConflictError(version, {cause: error});
       }
+      throw error;
+    }
 
-      for (const asset of packaged.assets) {
-        await api.uploadReleaseAsset(draft, asset);
-      }
-      break;
+    for (const asset of packaged.assets) {
+      await api.uploadReleaseAsset(draft, asset);
     }
 
     currentPhase = 'publishing-release';
@@ -268,6 +322,7 @@ export async function publishBuiltRelease(release, api) {
       previous,
       release: {
         deploy,
+        androidApk: packaged.androidApk,
         desktopExe: packaged.desktopExe,
         manifest: {
           sha256: sha256Bytes(packaged.manifestBytes),
