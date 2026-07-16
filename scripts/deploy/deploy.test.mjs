@@ -127,13 +127,13 @@ test('pending launcher is promoted at the beginning of the next invocation', asy
     nextLauncher,
     pendingLauncher: nextLauncher,
   });
-  await runLauncher(['runtime-status'], deps);
+  await runLauncher(['runtime', 'status'], deps);
   assert.deepEqual(deps.files.get('deploy.mjs'), nextLauncher);
   assert.equal(deps.files.has('deploy.next.mjs'), false);
   assert.deepEqual(deps.events, [
     'promote-launcher',
     'verify-stable',
-    'run-core:runtime-status',
+    'run-core:runtime,status',
   ]);
 });
 

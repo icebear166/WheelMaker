@@ -18,12 +18,9 @@ const MAX_REDIRECTS = 5;
 const ALLOWED_COMMANDS = new Set([
   'desktop-update',
   'migrate-uninstall',
-  'runtime-restart',
-  'runtime-start',
-  'runtime-status',
-  'runtime-stop',
   'update',
 ]);
+const RUNTIME_ACTIONS = new Set(['restart', 'start', 'status', 'stop']);
 
 function sha256Bytes(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -82,6 +79,9 @@ export async function fetchHttpsBytes(url, {
 export function parseDeployArgs(args) {
   if (args.length === 0) {
     return [];
+  }
+  if (args.length === 2 && args[0] === 'runtime' && RUNTIME_ACTIONS.has(args[1])) {
+    return ['runtime', args[1]];
   }
   if (args.length !== 1 || !ALLOWED_COMMANDS.has(args[0])) {
     throw new Error(`unknown deploy command: ${args.join(' ')}`);

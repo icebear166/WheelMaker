@@ -8,8 +8,15 @@ import test from 'node:test';
 import {
   RELEASE_PUBLIC_KEY_PEM,
   acquireUpdateLease,
+  createRuntimeAdapter,
+  darwinRuntimeFiles,
   finishUpdate,
+  linuxRuntimeFiles,
+  runCore,
   stageVerifiedRelease,
+  unixWrappers,
+  windowsRuntimePlan,
+  windowsWrappers,
 } from './deploy-core.mjs';
 import {
   encodeJsonBytes,
@@ -18,11 +25,151 @@ import {
 } from '../release/metadata.mjs';
 import { createTarGz } from '../release/tar.mjs';
 
+const RUNTIME_PATHS = {
+  bin: 'C:\\Users\\alice\\.wheelmaker\\bin',
+  deploy: 'C:\\Users\\alice\\.wheelmaker\\deploy.mjs',
+  home: 'C:\\Users\\alice\\.wheelmaker',
+  hub: 'C:\\Users\\alice\\.wheelmaker\\bin\\wheelmaker.exe',
+  node: 'C:\\Program Files\\nodejs\\node.exe',
+  uid: 501,
+  userHome: 'C:\\Users\\alice',
+};
+
 test('core embeds the same release verification key as the source publisher', async () => {
   assert.equal(
     RELEASE_PUBLIC_KEY_PEM,
     await readFile(new URL('../release/release-public-key.pem', import.meta.url), 'utf8'),
   );
+});
+
+test('Windows plan contains current-user tasks and fixed 03:00 updater', () => {
+  const plan = windowsRuntimePlan(RUNTIME_PATHS);
+  assert.deepEqual(plan.names, ['WheelMaker', 'WheelMakerUpdater']);
+  assert.match(plan.script, /AtLogOn/);
+  assert.match(plan.script, /03:00/);
+  assert.match(plan.script, /RunLevel Limited/);
+  assert.doesNotMatch(plan.script, /sc\.exe create/i);
+  assert.doesNotMatch(plan.script, /New-Service/i);
+});
+
+test('Linux files contain Hub service plus one-shot updater timer', () => {
+  const files = linuxRuntimeFiles({
+    ...RUNTIME_PATHS,
+    deploy: '/home/alice/.wheelmaker/deploy.mjs',
+    home: '/home/alice/.wheelmaker',
+    hub: '/home/alice/.wheelmaker/bin/wheelmaker',
+    node: '/usr/bin/node',
+    userHome: '/home/alice',
+  });
+  assert.match(files['wheelmaker-hub.service'], /Restart=always/);
+  assert.match(files['wheelmaker-updater.service'], /Type=oneshot/);
+  assert.match(files['wheelmaker-updater.service'], /deploy\.mjs.*update/);
+  assert.match(
+    files['wheelmaker-updater.timer'],
+    /OnCalendar=\*-\*-\* 03:00:00/,
+  );
+});
+
+test('macOS files keep Hub alive and schedule updater at 03:00', () => {
+  const files = darwinRuntimeFiles({
+    ...RUNTIME_PATHS,
+    deploy: '/Users/alice/.wheelmaker/deploy.mjs',
+    home: '/Users/alice/.wheelmaker',
+    hub: '/Users/alice/.wheelmaker/bin/wheelmaker',
+    node: '/usr/local/bin/node',
+    userHome: '/Users/alice',
+  });
+  assert.match(files['com.wheelmaker.hub.plist'], /<key>KeepAlive<\/key>\s*<true\/>/);
+  assert.match(files['com.wheelmaker.updater.plist'], /<key>Hour<\/key>\s*<integer>3<\/integer>/);
+  assert.match(files['com.wheelmaker.updater.plist'], /<key>Minute<\/key>\s*<integer>0<\/integer>/);
+});
+
+test('helper wrappers preserve existing filenames and call grouped runtime actions', () => {
+  const windows = windowsWrappers(RUNTIME_PATHS);
+  const unix = unixWrappers({
+    ...RUNTIME_PATHS,
+    deploy: '/home/alice/.wheelmaker/deploy.mjs',
+    node: '/usr/bin/node',
+  });
+  const expected = ['restart', 'start', 'status', 'stop'];
+  assert.deepEqual(
+    Object.keys(windows).sort(),
+    expected.map((name) => `${name}.bat`),
+  );
+  assert.deepEqual(
+    Object.keys(unix).sort(),
+    expected.map((name) => `${name}.sh`),
+  );
+  assert.match(windows['start.bat'], /deploy\.mjs" runtime start/);
+  assert.match(unix['status.sh'], /deploy\.mjs' runtime status/);
+});
+
+test('internal update restarts existing runtime without mutating registration', async () => {
+  const events = [];
+  const runtime = {
+    async configureRuntime() {
+      events.push('configureRuntime');
+    },
+    async removeRuntime() {
+      events.push('removeRuntime');
+    },
+    async start() {
+      events.push('start');
+    },
+    async stop() {
+      events.push('stop');
+    },
+    async writeWrappers() {
+      events.push('writeWrappers');
+    },
+  };
+
+  await runCore(['update'], {
+    async applyUpdate() {
+      events.push('applyUpdate');
+    },
+    runtime,
+  });
+  assert.deepEqual(events, ['stop', 'applyUpdate', 'start']);
+});
+
+test('runtime command builds a default adapter from the install directory', async () => {
+  let capturedPaths;
+  let statusCalls = 0;
+  await runCore(['runtime', 'status'], {
+    installDirectory: 'C:\\Users\\alice\\.wheelmaker',
+    nodePath: 'C:\\Program Files\\nodejs\\node.exe',
+    platform: 'win32',
+    runtimeFactory({ paths }) {
+      capturedPaths = paths;
+      return {
+        async status() {
+          statusCalls += 1;
+        },
+      };
+    },
+    userHome: 'C:\\Users\\alice',
+  });
+  assert.equal(capturedPaths.hub.endsWith('bin\\wheelmaker.exe'), true);
+  assert.equal(statusCalls, 1);
+});
+
+test('Windows runtime status is limited to the known task and installed Hub path', async () => {
+  const calls = [];
+  const adapter = createRuntimeAdapter({
+    paths: RUNTIME_PATHS,
+    platform: 'win32',
+    async runner(command, args) {
+      calls.push({ args, command });
+      return { code: 0, stderr: '', stdout: '' };
+    },
+  });
+  await adapter.status();
+  const script = calls[0].args.at(-1);
+  assert.match(script, /TaskName 'WheelMaker'/);
+  assert.match(script, /Win32_Process/);
+  assert.equal(script.includes(RUNTIME_PATHS.bin), true);
+  assert.doesNotMatch(script, /WheelMakerMonitor/);
 });
 
 test('only one update lease can be created atomically', async () => {

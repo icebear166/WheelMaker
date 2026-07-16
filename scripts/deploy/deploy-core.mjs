@@ -1,5 +1,6 @@
 import { createHash, randomUUID, verify } from 'node:crypto';
 import { createReadStream } from 'node:fs';
+import { spawn } from 'node:child_process';
 import {
   chmod,
   mkdir,
@@ -12,6 +13,7 @@ import {
 import { Readable } from 'node:stream';
 import { createGunzip } from 'node:zlib';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
+import { homedir } from 'node:os';
 
 const BLOCK_SIZE = 512;
 const DEFAULT_MAX_ENTRIES = 20_000;
@@ -65,13 +67,13 @@ async function readJsonIfPresent(path) {
   }
 }
 
-async function atomicWrite(path, bytes) {
+async function atomicWrite(path, bytes, mode = 0o600) {
   await mkdir(dirname(path), { recursive: true });
   const temporaryPath = join(
     dirname(path),
     `.${randomUUID()}.${process.pid}.tmp`,
   );
-  await writeFile(temporaryPath, bytes, { mode: 0o600 });
+  await writeFile(temporaryPath, bytes, { mode });
   try {
     await rename(temporaryPath, path);
   } finally {
@@ -521,6 +523,459 @@ export async function stageVerifiedRelease({
   };
 }
 
-export async function runCore() {
+function psQuote(value) {
+  return `'${String(value).replaceAll("'", "''")}'`;
+}
+
+function windowsBatchQuote(value) {
+  return `"${String(value).replaceAll('%', '%%')}"`;
+}
+
+function shellQuote(value) {
+  return `'${String(value).replaceAll("'", `'"'"'`)}'`;
+}
+
+function systemdQuote(value) {
+  return `"${String(value).replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
+}
+
+function xmlEscape(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;');
+}
+
+export function deploymentRuntimePaths({
+  installDirectory,
+  nodePath = process.execPath,
+  platform = process.platform,
+  uid = typeof process.getuid === 'function' ? process.getuid() : 0,
+  userHome = homedir(),
+}) {
+  const home = resolve(installDirectory);
+  const bin = join(home, 'bin');
+  return {
+    bin,
+    deploy: join(home, 'deploy.mjs'),
+    home,
+    hub: join(bin, platform === 'win32' ? 'wheelmaker.exe' : 'wheelmaker'),
+    node: nodePath,
+    uid,
+    userHome,
+  };
+}
+
+export function windowsRuntimePlan(paths) {
+  const names = ['WheelMaker', 'WheelMakerUpdater'];
+  const updaterArguments = `"${paths.deploy.replaceAll('"', '\\"')}" update`;
+  const script = `$ErrorActionPreference = 'Stop'
+$currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+$principal = New-ScheduledTaskPrincipal -UserId $currentUser -LogonType Interactive -RunLevel Limited
+$settings = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -StartWhenAvailable -MultipleInstances IgnoreNew
+$hubAction = New-ScheduledTaskAction -Execute ${psQuote(paths.hub)} -Argument '-d' -WorkingDirectory ${psQuote(paths.home)}
+$hubTrigger = New-ScheduledTaskTrigger -AtLogOn -User $currentUser
+Register-ScheduledTask -TaskName 'WheelMaker' -Action $hubAction -Trigger $hubTrigger -Principal $principal -Settings $settings -Force | Out-Null
+$updaterArguments = ${psQuote(updaterArguments)}
+$updaterAction = New-ScheduledTaskAction -Execute ${psQuote(paths.node)} -Argument $updaterArguments -WorkingDirectory ${psQuote(paths.home)}
+$updaterTrigger = New-ScheduledTaskTrigger -Daily -At '03:00'
+Register-ScheduledTask -TaskName 'WheelMakerUpdater' -Action $updaterAction -Trigger $updaterTrigger -Principal $principal -Settings $settings -Force | Out-Null
+`;
+  return { names, script };
+}
+
+export function linuxRuntimeFiles(paths) {
+  return {
+    'wheelmaker-hub.service': `[Unit]
+Description=WheelMaker Hub
+
+[Service]
+Type=simple
+WorkingDirectory=${systemdQuote(paths.home)}
+ExecStart=${systemdQuote(paths.hub)} -d
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Install]
+WantedBy=default.target
+`,
+    'wheelmaker-updater.service': `[Unit]
+Description=WheelMaker Updater
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=${systemdQuote(paths.home)}
+ExecStart=${systemdQuote(paths.node)} ${systemdQuote(paths.deploy)} update
+`,
+    'wheelmaker-updater.timer': `[Unit]
+Description=Run WheelMaker Updater daily
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+Unit=wheelmaker-updater.service
+
+[Install]
+WantedBy=timers.target
+`,
+  };
+}
+
+function launchAgentPlist({
+  arguments: programArguments,
+  calendar,
+  keepAlive,
+  label,
+  paths,
+}) {
+  const argumentsXml = programArguments
+    .map((argument) => `    <string>${xmlEscape(argument)}</string>`)
+    .join('\n');
+  const scheduleXml = calendar
+    ? `  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>${calendar.hour}</integer>
+    <key>Minute</key>
+    <integer>${calendar.minute}</integer>
+  </dict>\n`
+    : '';
+  const keepAliveXml = keepAlive
+    ? '  <key>KeepAlive</key>\n  <true/>\n  <key>RunAtLoad</key>\n  <true/>\n'
+    : '';
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${xmlEscape(label)}</string>
+  <key>WorkingDirectory</key>
+  <string>${xmlEscape(paths.home)}</string>
+  <key>ProgramArguments</key>
+  <array>
+${argumentsXml}
+  </array>
+${keepAliveXml}${scheduleXml}</dict>
+</plist>
+`;
+}
+
+export function darwinRuntimeFiles(paths) {
+  return {
+    'com.wheelmaker.hub.plist': launchAgentPlist({
+      arguments: [paths.hub, '-d'],
+      keepAlive: true,
+      label: 'com.wheelmaker.hub',
+      paths,
+    }),
+    'com.wheelmaker.updater.plist': launchAgentPlist({
+      arguments: [paths.node, paths.deploy, 'update'],
+      calendar: { hour: 3, minute: 0 },
+      keepAlive: false,
+      label: 'com.wheelmaker.updater',
+      paths,
+    }),
+  };
+}
+
+export function windowsWrappers(paths) {
+  return Object.fromEntries(
+    ['start', 'stop', 'restart', 'status'].map((action) => [
+      `${action}.bat`,
+      `@echo off\r\nsetlocal\r\n${windowsBatchQuote(paths.node)} ${windowsBatchQuote(paths.deploy)} runtime ${action} %*\r\nexit /b %errorlevel%\r\n`,
+    ]),
+  );
+}
+
+export function unixWrappers(paths) {
+  return Object.fromEntries(
+    ['start', 'stop', 'restart', 'status'].map((action) => [
+      `${action}.sh`,
+      `#!/bin/sh\nset -eu\nexec ${shellQuote(paths.node)} ${shellQuote(paths.deploy)} runtime ${action} "$@"\n`,
+    ]),
+  );
+}
+
+async function writeRuntimeWrappers(paths, platform) {
+  const useWindows = platform === 'win32';
+  const active = useWindows ? windowsWrappers(paths) : unixWrappers(paths);
+  const staleNames = useWindows
+    ? ['start.sh', 'stop.sh', 'restart.sh', 'status.sh']
+    : ['start.bat', 'stop.bat', 'restart.bat', 'status.bat'];
+  await mkdir(paths.home, { recursive: true });
+  for (const name of staleNames) {
+    await rm(join(paths.home, name), { force: true });
+  }
+  for (const [name, body] of Object.entries(active)) {
+    const mode = useWindows ? 0o644 : 0o755;
+    await atomicWrite(join(paths.home, name), Buffer.from(body, 'utf8'), mode);
+    await chmod(join(paths.home, name), mode);
+  }
+}
+
+async function runProcess(
+  command,
+  args,
+  { allowFailure = false, cwd, env = process.env } = {},
+) {
+  return new Promise((resolvePromise, rejectPromise) => {
+    const child = spawn(command, args, {
+      cwd,
+      env,
+      shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+    const stdout = [];
+    const stderr = [];
+    child.stdout.on('data', (chunk) => stdout.push(Buffer.from(chunk)));
+    child.stderr.on('data', (chunk) => stderr.push(Buffer.from(chunk)));
+    child.once('error', rejectPromise);
+    child.once('exit', (code, signal) => {
+      const result = {
+        code: code ?? -1,
+        stderr: Buffer.concat(stderr).toString('utf8'),
+        stdout: Buffer.concat(stdout).toString('utf8'),
+      };
+      if (code === 0 || allowFailure) {
+        resolvePromise(result);
+        return;
+      }
+      rejectPromise(
+        new Error(
+          `${command} ${args.join(' ')} failed (${signal ?? `exit ${code}`}): ${result.stderr}`,
+        ),
+      );
+    });
+  });
+}
+
+function windowsStopScript(paths) {
+  return `$ErrorActionPreference = 'Stop'
+Stop-ScheduledTask -TaskName 'WheelMaker' -ErrorAction SilentlyContinue
+$bin = (${psQuote(paths.bin)}.TrimEnd('\\') + '\\').ToLowerInvariant()
+$hub = ${psQuote(paths.hub)}.ToLowerInvariant()
+Get-CimInstance Win32_Process | Where-Object {
+  $path = [string]$_.ExecutablePath
+  -not [string]::IsNullOrWhiteSpace($path) -and
+  $path.ToLowerInvariant().StartsWith($bin) -and
+  $path.ToLowerInvariant() -eq $hub
+} | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop }
+`;
+}
+
+function windowsStatusScript(paths) {
+  return `$ErrorActionPreference = 'Stop'
+Get-ScheduledTask -TaskName 'WheelMaker' -ErrorAction SilentlyContinue | Get-ScheduledTaskInfo | Format-List
+$bin = (${psQuote(paths.bin)}.TrimEnd('\\') + '\\').ToLowerInvariant()
+$hub = ${psQuote(paths.hub)}.ToLowerInvariant()
+Get-CimInstance Win32_Process | Where-Object {
+  $path = [string]$_.ExecutablePath
+  -not [string]::IsNullOrWhiteSpace($path) -and
+  $path.ToLowerInvariant().StartsWith($bin) -and
+  $path.ToLowerInvariant() -eq $hub
+} | Select-Object ProcessId,Name,ExecutablePath,CommandLine | Format-Table -AutoSize
+`;
+}
+
+async function checkLinuxPrerequisites(runner) {
+  await runner('systemctl', ['--user', 'show-environment']);
+  let userName = process.env.USER;
+  if (!userName) {
+    userName = (await runner('id', ['-un'])).stdout.trim();
+  }
+  const lingering = await runner('loginctl', [
+    'show-user',
+    userName,
+    '-p',
+    'Linger',
+  ]);
+  if (!lingering.stdout.includes('Linger=yes')) {
+    throw new Error(
+      'linux deploy requires lingering so systemd user services survive logout; run: sudo loginctl enable-linger "$USER"',
+    );
+  }
+}
+
+export function createRuntimeAdapter({
+  paths,
+  platform = process.platform,
+  runner = runProcess,
+}) {
+  async function configureRuntime() {
+    if (platform === 'win32') {
+      await runner(
+        'powershell',
+        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', windowsRuntimePlan(paths).script],
+        { cwd: paths.home },
+      );
+      return;
+    }
+    if (platform === 'linux') {
+      await checkLinuxPrerequisites(runner);
+      const unitDirectory = join(paths.userHome, '.config', 'systemd', 'user');
+      for (const [name, body] of Object.entries(linuxRuntimeFiles(paths))) {
+        await atomicWrite(join(unitDirectory, name), Buffer.from(body), 0o644);
+      }
+      await runner('systemctl', ['--user', 'daemon-reload']);
+      for (const unit of ['wheelmaker-hub.service', 'wheelmaker-updater.timer']) {
+        await runner('systemctl', ['--user', 'enable', unit]);
+        await runner('systemctl', ['--user', 'start', unit]);
+      }
+      return;
+    }
+    if (platform === 'darwin') {
+      const directory = join(paths.userHome, 'Library', 'LaunchAgents');
+      const files = darwinRuntimeFiles(paths);
+      for (const [name, body] of Object.entries(files)) {
+        await atomicWrite(join(directory, name), Buffer.from(body), 0o644);
+      }
+      const domain = `gui/${paths.uid}`;
+      for (const label of ['com.wheelmaker.hub', 'com.wheelmaker.updater']) {
+        await runner('launchctl', ['bootout', `${domain}/${label}`], {
+          allowFailure: true,
+        });
+        await runner('launchctl', [
+          'bootstrap',
+          domain,
+          join(directory, `${label}.plist`),
+        ]);
+      }
+      await runner('launchctl', ['kickstart', '-k', `${domain}/com.wheelmaker.hub`]);
+      return;
+    }
+    throw new Error(`unsupported runtime platform: ${platform}`);
+  }
+
+  async function action(name) {
+    if (!['start', 'stop', 'restart', 'status'].includes(name)) {
+      throw new Error(`unknown runtime action: ${name}`);
+    }
+    if (platform === 'win32') {
+      if (name === 'stop' || name === 'restart') {
+        await runner(
+          'powershell',
+          ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', windowsStopScript(paths)],
+          { cwd: paths.home },
+        );
+      }
+      if (name === 'start' || name === 'restart') {
+        await runner('powershell', [
+          '-NoProfile',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-Command',
+          "Start-ScheduledTask -TaskName 'WheelMaker' -ErrorAction Stop",
+        ]);
+      }
+      if (name === 'status') {
+        return runner('powershell', [
+          '-NoProfile',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-Command',
+          windowsStatusScript(paths),
+        ]);
+      }
+      return;
+    }
+    if (platform === 'linux') {
+      const verb = name === 'status' ? 'status' : name;
+      return runner('systemctl', ['--user', verb, 'wheelmaker-hub.service']);
+    }
+    if (platform === 'darwin') {
+      const target = `gui/${paths.uid}/com.wheelmaker.hub`;
+      if (name === 'start' || name === 'restart') {
+        return runner('launchctl', ['kickstart', '-k', target]);
+      }
+      if (name === 'stop') {
+        return runner('launchctl', ['kill', 'SIGTERM', target]);
+      }
+      return runner('launchctl', ['print', target]);
+    }
+    throw new Error(`unsupported runtime platform: ${platform}`);
+  }
+
+  return {
+    configureRuntime,
+    isUpdaterRunning: async () => {
+      if (platform === 'win32') {
+        const result = await runner(
+          'powershell',
+          [
+            '-NoProfile',
+            '-Command',
+            "if ((Get-ScheduledTask -TaskName 'WheelMakerUpdater' -ErrorAction SilentlyContinue).State -eq 'Running') { exit 0 } else { exit 1 }",
+          ],
+          { allowFailure: true },
+        );
+        return result.code === 0;
+      }
+      if (platform === 'linux') {
+        const result = await runner(
+          'systemctl',
+          ['--user', 'is-active', '--quiet', 'wheelmaker-updater.service'],
+          { allowFailure: true },
+        );
+        return result.code === 0;
+      }
+      const result = await runner(
+        'launchctl',
+        ['print', `gui/${paths.uid}/com.wheelmaker.updater`],
+        { allowFailure: true },
+      );
+      return result.code === 0;
+    },
+    restart: () => action('restart'),
+    start: () => action('start'),
+    status: () => action('status'),
+    stop: () => action('stop'),
+    writeWrappers: () => writeRuntimeWrappers(paths, platform),
+  };
+}
+
+export async function runCore(args, deps = {}) {
+  let runtime = deps.runtime;
+  if (!runtime && (args[0] === 'runtime' || args[0] === 'update')) {
+    if (!deps.installDirectory) {
+      throw new Error('deployment install directory is required');
+    }
+    const platform = deps.platform ?? process.platform;
+    const paths = deploymentRuntimePaths({
+      installDirectory: deps.installDirectory,
+      nodePath: deps.nodePath ?? process.execPath,
+      platform,
+      uid: deps.uid,
+      userHome: deps.userHome ?? homedir(),
+    });
+    const runtimeFactory = deps.runtimeFactory ?? createRuntimeAdapter;
+    runtime = runtimeFactory({ paths, platform, runner: deps.runner });
+  }
+  if (args[0] === 'runtime' && args.length === 2) {
+    if (!runtime || typeof runtime[args[1]] !== 'function') {
+      throw new Error(`runtime adapter cannot ${args[1]}`);
+    }
+    return runtime[args[1]]();
+  }
+  if (args.length === 1 && args[0] === 'update') {
+    if (!runtime || typeof deps.applyUpdate !== 'function') {
+      throw new Error('internal update dependencies are incomplete');
+    }
+    await runtime.stop();
+    let updateError;
+    try {
+      await deps.applyUpdate();
+    } catch (error) {
+      updateError = error;
+    }
+    await runtime.start();
+    if (updateError) throw updateError;
+    return;
+  }
   throw new Error('deployment application is not implemented yet');
 }
