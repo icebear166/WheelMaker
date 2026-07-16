@@ -699,7 +699,7 @@ func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 		{section: hubStateSectionAgentPackages, action: "install"},
 		{section: hubStateSectionAgentPackages, action: "installMany"},
 		{section: hubStateSectionAgentPackages, action: "uninstall"},
-		{section: hubStateSectionWheelmakerUpdate, action: "updatePublish"},
+		{section: hubStateSectionWheelmakerUpdate, action: "requestUpdate"},
 		{section: hubStateSectionSkills, action: "listSource"},
 		{section: hubStateSectionSkills, action: "install"},
 		{section: hubStateSectionSkills, action: "uninstall"},
@@ -742,6 +742,22 @@ func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 				t.Fatal("validateHubStateAction error = nil, want error")
 			}
 		})
+	}
+
+	updateHandler := handlers[hubStateSectionWheelmakerUpdate]
+	if _, err := updateHandler.Action(context.Background(), "requestUpdate", nil); err != nil {
+		t.Fatalf("requestUpdate action: %v", err)
+	}
+	method, payload, _ := toolHandler.snapshot()
+	if method != hubToolMethodUpdate {
+		t.Fatalf("method=%q, want %q", method, hubToolMethodUpdate)
+	}
+	var body map[string]any
+	if err := json.Unmarshal([]byte(payload), &body); err != nil {
+		t.Fatalf("payload json: %v", err)
+	}
+	if body["action"] != "request" {
+		t.Fatalf("action=%v, want request (payload=%s)", body["action"], payload)
 	}
 }
 

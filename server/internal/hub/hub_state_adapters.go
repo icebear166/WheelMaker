@@ -62,14 +62,13 @@ func (r *Reporter) refreshHubStateWheelmakerUpdate(ctx context.Context, input hu
 	return r.runHubStateTool(ctx, hubToolMethodUpdate, map[string]any{
 		"action": "query",
 		"hubId":  input.HubID,
-		"force":  input.Force,
 	})
 }
 
 func (r *Reporter) actionHubStateWheelmakerUpdate(ctx context.Context, action string, params map[string]any) (any, error) {
 	switch action {
-	case "updatePublish":
-		return r.runHubStateTool(ctx, hubToolMethodUpdate, hubStateToolPayload(r.cfg.HubID, "update-publish", params))
+	case "requestUpdate":
+		return r.runHubStateTool(ctx, hubToolMethodUpdate, hubStateToolPayload(r.cfg.HubID, "request", params))
 	default:
 		return nil, fmt.Errorf("unsupported %s action %q", hubStateSectionWheelmakerUpdate, action)
 	}
