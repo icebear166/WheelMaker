@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -15,70 +15,38 @@ import { publishBuiltRelease } from './publish.mjs';
 const execFileAsync = promisify(execFile);
 
 export function parseReleaseArgs(args) {
-  const [mode, ...options] = args;
-  if (mode !== 'build' && mode !== 'publish') {
-    throw new Error('expected build or publish');
-  }
-
+  let publish = false;
   let withDesktop = false;
-  for (const option of options) {
-    if (option === '--with-desktop' && mode !== 'build') {
-      throw new Error('--with-desktop is only valid with build');
-    }
+  for (const option of args) {
     if (option === '--with-desktop' && !withDesktop) {
       withDesktop = true;
       continue;
     }
+    if (option === '--publish' && !publish) {
+      publish = true;
+      continue;
+    }
     throw new Error(`unknown option: ${option}`);
   }
-  return { mode, withDesktop };
+  return { publish, withDesktop };
 }
 
 export async function runRelease(options, deps) {
-  const requireClean = options.mode === 'publish';
+  const requireClean = options.publish;
   const sourceSha = await deps.resolveSourceSha({ requireClean });
   const buildIdentifier = `local-${sourceSha.slice(0, 12)}`;
   const startedAt = deps.now();
 
-  if (options.mode === 'build') {
-    const cleanSource = await deps.isWorkingTreeClean();
-    const build = await deps.buildRelease({
-      outputRoot: deps.outputRoot,
-      repoRoot: deps.repoRoot,
-      version: buildIdentifier,
-      withDesktop: options.withDesktop,
-    });
-    const recordedBuild = {
-      ...build,
-      desktopExe: build.desktopExe ?? null,
-    };
-    await deps.writeBuildRecord(buildIdentifier, {
-      build: recordedBuild,
-      cleanSource,
-      createdAt: startedAt,
-      desktopIncluded: Boolean(build.desktopExe),
-      schema: 1,
-      sourceSha,
-    });
+  const build = await deps.buildRelease({
+    outputRoot: deps.outputRoot,
+    repoRoot: deps.repoRoot,
+    version: buildIdentifier,
+    withDesktop: options.withDesktop,
+  });
+  if (!options.publish) {
     return { build, mode: 'build', sourceSha };
   }
 
-  const buildRecord = await deps.readBuildRecord(buildIdentifier);
-  if (!buildRecord) {
-    throw new Error(
-      `local release build ${buildIdentifier} was not found; run build-release.bat first`,
-    );
-  }
-  if (buildRecord.sourceSha !== sourceSha) {
-    throw new Error('local release build does not match the current Git HEAD');
-  }
-  if (!buildRecord.cleanSource) {
-    throw new Error(
-      'the local release build was created from a dirty worktree; run build-release.bat from a clean worktree',
-    );
-  }
-
-  const build = buildRecord.build;
   const api = await deps.createGitHubClient();
   const deploymentSources = deps.loadDeploymentSources
     ? await deps.loadDeploymentSources()
@@ -125,15 +93,6 @@ async function resolveGitSourceSha(repoRoot, { requireClean }) {
     throw new Error(`unexpected Git HEAD SHA: ${sourceSha}`);
   }
   return sourceSha;
-}
-
-async function isGitWorkingTreeClean(repoRoot) {
-  const { stdout } = await execFileAsync(
-    'git',
-    ['status', '--porcelain', '--untracked-files=normal'],
-    { cwd: repoRoot, encoding: 'utf8' },
-  );
-  return !stdout.trim();
 }
 
 export async function resolvePublishingToken({
@@ -205,27 +164,8 @@ export async function createDefaultReleaseDependencies({
         ),
       };
     },
-    isWorkingTreeClean: () => isGitWorkingTreeClean(repoRoot),
     now: () => new Date().toISOString(),
     publishBuiltRelease,
-    async readBuildRecord(version) {
-      try {
-        return JSON.parse(
-          await readFile(join(repoRoot, '.release-out', version, 'build.json')),
-        );
-      } catch (error) {
-        if (error?.code === 'ENOENT') {
-          return null;
-        }
-        throw error;
-      }
-    },
     resolveSourceSha: (options) => resolveGitSourceSha(repoRoot, options),
-    async writeBuildRecord(version, record) {
-      await writeFile(
-        join(repoRoot, '.release-out', version, 'build.json'),
-        `${JSON.stringify(record, null, 2)}\n`,
-      );
-    },
   };
 }

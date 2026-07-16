@@ -142,7 +142,7 @@ wheelmaker-v1.23-windows-amd64/
     ...静态站点文件...
 ```
 
-本地构建模式只生成上述目录以及同目录的 `build.json`，不访问 GitHub、不上传、不修改 `stable.json`。构建记录保存 source SHA、构建时工作树是否干净、构建时间、平台目录和 Desktop 是否存在。发布模式只读取这份已有记录和目录，对每个平台创建 `.tar.gz` 并写 manifest，绝不重新构建。
+本地构建模式只生成上述目录，不访问 GitHub、不上传、不修改 `stable.json`。选择 public 发布时，同一次 MJS 调用将刚生成的平台目录打包为 `.tar.gz`、写 manifest 并发布，不保存或复用跨命令的构建记录。
 
 解压实现必须使用 Node 标准库并拒绝绝对路径、`..` 路径穿越、符号链接、硬链接和超过预设文件数/总大小上限的条目。目标端先校验完整压缩包哈希，再解压。
 
@@ -151,23 +151,22 @@ wheelmaker-v1.23-windows-amd64/
 发布脚本只在私有源码仓库中存在。它支持本地直接发布和私有仓库中手动触发的 GitHub Action；二者调用相同 MJS 逻辑。本地发布以 Windows 为正式支持环境，不要求发布者使用 Linux、WSL 或 Unix shell；Windows 主机交叉编译三个 Hub 目标。Ubuntu 仅是手动 Action 的运行环境。
 
 ```text
-build：validate source SHA
+validate source SHA
   → 构建一次 Web
   → 在当前发布环境交叉编译三个 Hub 目标
   → 可选构建 Desktop EXE
-  → 写入 local-<source-sha>/build.json
-publish：校验当前 HEAD、工作树和构建记录
-  → 读取 stable，计算下一个 v1.x
-  → 由已有平台目录生成 tar.gz、SHA-256 和 manifest
+  → 若未选择 public：保留本地产物并结束
+  → 若选择 public：读取 stable，计算下一个 v1.x
+  → 由本轮平台目录生成 tar.gz、SHA-256 和 manifest
   → 将 deploy.mjs/deploy-core.mjs 提交到公开 Git
   → 创建草稿 Release 并上传资产
   → 发布 Release
   → 最后提交 stable.json
 ```
 
-本地发布要求构建时和发布时工作树都干净、当前 `HEAD` 与构建记录一致，并使用 `gh auth token` 写入公开仓库。缺少构建记录时直接提示先运行 `build-release.bat`。Action 使用 `workflow_dispatch` 的必填 `ref`，在同一个 job 内依次执行 `build` 和 `publish`。没有 Release 资产成功公开之前，禁止更新 stable。
+本地 public 发布要求工作树干净，并使用 `gh auth token` 写入公开仓库。Action 使用 `workflow_dispatch` 的必填 `ref`，在一个 MJS 进程内完成构建和发布。没有 Release 资产成功公开之前，禁止更新 stable。
 
-Windows 提供三个交互入口：`build-release.bat` 询问是否包含 Desktop；`publish-release.bat` 从构建记录显示实际 Desktop 状态并确认发布，不再询问 Desktop；`publish-release-action.bat` 要求当前干净 commit 已推送，询问 Desktop 后触发当前分支的 workflow。
+Windows 提供两个交互入口：`publish-release.bat` 依次询问是否包含 Desktop、是否发布到 public 仓库；`publish-release-action.bat` 要求当前干净 commit 已推送，询问 Desktop 后触发当前分支的 workflow。
 
 发布不设置持久化自定义锁。GitHub Release tag 的唯一性是并发仲裁：若创建草稿时 tag 冲突，发布器重新读取 stable，取得下一个版本后重试。失败时删除本轮草稿；下一轮开始前清理超过两小时的同类草稿。
 
@@ -178,7 +177,7 @@ Windows 提供三个交互入口：`build-release.bat` 询问是否包含 Deskto
 - `false`：不构建、不上传 EXE，继承旧 `desktopExe` 指针；
 - `true`：发布脚本调用 Go 和 `go-winres` 自动生成 `WheelMakerDesktop.exe`，上传到本次 Release，更新 `desktopExe` 指针。本地 Windows 发布在 Windows 主机构建；Action 在 Ubuntu 上交叉编译。
 
-现有 `publish_desktop.ps1` 中的“创建桌面快捷方式”不属于构建或 Action；构建逻辑迁入发布 MJS。发布端不运行 Desktop 应用，也不要求 WebView2。
+Desktop 构建逻辑完全位于发布 MJS。发布端不运行 Desktop 应用、不创建桌面快捷方式，也不要求 WebView2。
 
 ### Action 时间控制
 

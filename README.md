@@ -587,10 +587,9 @@ npm run build:web:release
 
 Release and script overview:
 
-- `build-release.bat` — interactively choose whether to include Desktop, then build `.release-out/local-<source-sha>` and its `build.json` record without publishing.
-- `publish-release.bat` — publish that exact recorded build from a clean, matching checkout; it never rebuilds or asks about Desktop and uses the token from the authenticated `gh` CLI.
+- `publish-release.bat` — interactively choose whether to include Desktop and whether to publish. It invokes the release MJS once; choosing not to publish only generates `.release-out/local-<source-sha>`, while choosing public publishes that same in-process build through the authenticated `gh` CLI token.
 - `publish-release-action.bat` — verify the current clean commit is pushed, then interactively trigger the manual Action with the source SHA and Desktop choice.
-- `node scripts/release.mjs build [--with-desktop]` / `node scripts/release.mjs publish` — non-interactive equivalents. `publish` fails with a prompt to run `build-release.bat` when no matching build record exists.
+- `node scripts/release.mjs [--with-desktop] [--publish]` — non-interactive equivalent; without `--publish` it only builds locally.
 - `.github/workflows/publish-release.yml` — manual `workflow_dispatch` fallback with a source `ref` and optional `with_desktop`; Web builds once, while Hub binaries cross-compile for Windows amd64, Linux amd64, and macOS arm64.
 - `deploy.bat` / `deploy.sh` — one-time legacy migration followed by stable deployment.
 - `update_exe.bat` — independently update `WheelMakerDesktop.exe` through the same stable SHA-256 chain.

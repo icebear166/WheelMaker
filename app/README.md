@@ -26,8 +26,8 @@ Windows `WheelMakerDesktop` executable both use this same React/webpack output.
    - Serve hashed/static files such as JS, CSS, fonts, and icons with long immutable cache headers.
 
 2. Desktop release:
-   - Run `publish-desktop.bat` from the repository root.
-   - The desktop publisher embeds this web output into the Go/WebView2 desktop executable.
+   - Run `publish-release.bat` from the repository root and choose Desktop.
+   - Choose whether to keep the generated executable local or publish it with the prebuilt release.
 
 3. Android APK embedded snapshot:
    - Run `publish-android.bat` from the repository root.

@@ -1,5 +1,4 @@
 import { execFile, spawn } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { promisify } from 'node:util';
@@ -16,49 +15,23 @@ function releaseScriptPath(deps) {
     .replaceAll('\\', '/');
 }
 
-async function runBuild(deps) {
+async function runPublish(deps) {
   const withDesktop = affirmative(
     await deps.prompt('是否包含 WheelMaker Desktop？[y/N] '),
   );
-  const args = [releaseScriptPath(deps), 'build'];
-  if (withDesktop) args.push('--with-desktop');
-  await deps.run(process.execPath, args, { cwd: deps.repoRoot });
-  return { cancelled: false, withDesktop };
-}
-
-async function runPublish(deps) {
-  const git = await deps.getGitContext();
-  const record = await deps.readBuildRecord(git.head);
-  if (!record) {
-    throw new Error('local release build was not found; run build-release.bat first');
-  }
-  if (record.sourceSha !== git.head) {
-    throw new Error('local release build does not match the current Git HEAD; run build-release.bat first');
-  }
-  if (!record.cleanSource) {
-    throw new Error('local release build was created from a dirty worktree; run build-release.bat again from a clean worktree');
-  }
-  if (!git.clean) {
-    throw new Error('publish requires a clean Git worktree');
-  }
-
-  deps.write(`Release repository: ${deps.channel.owner}/${deps.channel.repository}`);
-  deps.write(`Source: ${git.branch} @ ${git.head}`);
-  deps.write(`Desktop: ${record.build?.desktopExe ? 'included' : 'not included'}`);
-  deps.write(
-    `Platforms: ${(record.build?.platforms ?? []).map(({ key }) => key).join(', ')}`,
+  const publish = affirmative(
+    await deps.prompt('是否发布到 public release 仓库？[y/N] '),
   );
-  if (!affirmative(await deps.prompt('确认正式发布？[y/N] '))) {
-    deps.write('已取消发布。');
-    return { cancelled: true };
-  }
 
+  const args = [releaseScriptPath(deps)];
+  if (withDesktop) args.push('--with-desktop');
+  if (publish) args.push('--publish');
   await deps.run(
     process.execPath,
-    [releaseScriptPath(deps), 'publish'],
+    args,
     { cwd: deps.repoRoot },
   );
-  return { cancelled: false };
+  return { publish, withDesktop };
 }
 
 async function runAction(deps) {
@@ -103,7 +76,6 @@ async function runAction(deps) {
 }
 
 export async function runReleaseEntry(mode, deps) {
-  if (mode === 'build') return runBuild(deps);
   if (mode === 'publish') return runPublish(deps);
   if (mode === 'action') return runAction(deps);
   throw new Error(`unknown release entry mode: ${mode}`);
@@ -143,13 +115,9 @@ function spawnInherited(command, args, options) {
 export async function createDefaultEntryDependencies() {
   const moduleDirectory = dirname(fileURLToPath(import.meta.url));
   const repoRoot = resolve(moduleDirectory, '..', '..');
-  const channel = JSON.parse(
-    await readFile(join(moduleDirectory, 'channel.json'), 'utf8'),
-  );
   const input = createInterface({ input: process.stdin, output: process.stdout });
 
   return {
-    channel,
     repoRoot,
     async getGitContext() {
       const [branch, head, status, upstreamSha] = await Promise.all([
@@ -163,19 +131,6 @@ export async function createDefaultEntryDependencies() {
       return { branch, clean: status === '', head, upstreamSha };
     },
     prompt: (question) => input.question(question),
-    async readBuildRecord(head) {
-      try {
-        return JSON.parse(
-          await readFile(
-            join(repoRoot, '.release-out', `local-${head.slice(0, 12)}`, 'build.json'),
-            'utf8',
-          ),
-        );
-      } catch (error) {
-        if (error?.code === 'ENOENT') return null;
-        throw error;
-      }
-    },
     run: spawnInherited,
     write(message) {
       process.stdout.write(`${message}\n`);

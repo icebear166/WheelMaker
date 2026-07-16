@@ -13,12 +13,9 @@ function fakeCliDeps() {
   const state = {
     buildCalls: [],
     githubClientCalls: 0,
-    isWorkingTreeCleanCalls: 0,
-    loadSigningCalls: 0,
+    order: [],
     publishCalls: [],
-    readBuildRecordCalls: [],
     sourceCalls: [],
-    writeBuildRecordCalls: [],
   };
   const deps = {
     channel: {
@@ -35,6 +32,7 @@ function fakeCliDeps() {
     state,
     async buildRelease(input) {
       state.buildCalls.push(input);
+      state.order.push('build');
       return {
         desktopExe: input.withDesktop ? 'desktop.exe' : undefined,
         platforms: [{ directory: 'windows', key: 'windows-amd64' }],
@@ -43,144 +41,66 @@ function fakeCliDeps() {
     },
     async createGitHubClient() {
       state.githubClientCalls += 1;
+      state.order.push('github');
       return { kind: 'github-client' };
-    },
-    async isWorkingTreeClean() {
-      state.isWorkingTreeCleanCalls += 1;
-      return true;
-    },
-    async loadSigningMaterial() {
-      state.loadSigningCalls += 1;
-      return { privateKey: 'private', publicKey: 'public' };
     },
     now() {
       return '2026-07-16T09:00:00.000Z';
     },
     async publishBuiltRelease(input, api) {
       state.publishCalls.push({ api, input });
+      state.order.push('publish');
       return { version: 'v1.1' };
     },
     async resolveSourceSha(options) {
       state.sourceCalls.push(options);
       return SOURCE_SHA;
     },
-    async readBuildRecord(version) {
-      state.readBuildRecordCalls.push(version);
-      return {
-        build: {
-          desktopExe: 'desktop.exe',
-          platforms: [{ directory: 'windows', key: 'windows-amd64' }],
-          versionRoot: `${deps.outputRoot}\\${version}`,
-        },
-        cleanSource: true,
-        sourceSha: SOURCE_SHA,
-      };
-    },
-    async writeBuildRecord(version, record) {
-      state.writeBuildRecordCalls.push({ record, version });
-    },
   };
   return deps;
 }
 
-test('CLI allows Desktop selection only while building', () => {
-  assert.deepEqual(parseReleaseArgs(['build']), {
-    mode: 'build',
+test('CLI builds locally by default and accepts independent publish/Desktop flags', () => {
+  assert.deepEqual(parseReleaseArgs([]), {
+    publish: false,
     withDesktop: false,
   });
-  assert.deepEqual(parseReleaseArgs(['publish']), {
-    mode: 'publish',
-    withDesktop: false,
+  assert.deepEqual(parseReleaseArgs(['--with-desktop', '--publish']), {
+    publish: true,
+    withDesktop: true,
   });
   assert.throws(
-    () => parseReleaseArgs(['publish', '--with-desktop']),
-    /only valid with build/,
-  );
-  assert.throws(
-    () => parseReleaseArgs(['publish', '--desktop-exe', 'x.exe']),
+    () => parseReleaseArgs(['--desktop-exe', 'x.exe']),
     /unknown option/,
   );
-  assert.throws(() => parseReleaseArgs(['schedule']), /expected build or publish/);
+  assert.throws(() => parseReleaseArgs(['build']), /unknown option/);
 });
 
-test('build mode never constructs a GitHub client', async () => {
+test('default mode builds locally without constructing a GitHub client', async () => {
   const deps = fakeCliDeps();
-  const result = await runRelease(
-    { mode: 'build', withDesktop: false },
-    deps,
-  );
+  const result = await runRelease({ publish: false, withDesktop: false }, deps);
 
   assert.equal(deps.state.githubClientCalls, 0);
   assert.equal(deps.state.publishCalls.length, 0);
   assert.deepEqual(deps.state.sourceCalls, [{ requireClean: false }]);
   assert.equal(deps.state.buildCalls[0].version, 'local-0123456789ab');
-  assert.equal(deps.state.writeBuildRecordCalls.length, 1);
-  assert.equal(deps.state.writeBuildRecordCalls[0].record.sourceSha, SOURCE_SHA);
-  assert.equal(deps.state.writeBuildRecordCalls[0].record.cleanSource, true);
-  assert.equal(deps.state.writeBuildRecordCalls[0].record.desktopIncluded, false);
-  assert.equal(deps.state.writeBuildRecordCalls[0].record.build.desktopExe, null);
   assert.equal(result.mode, 'build');
 });
 
-test('publish requires a clean source and reuses the recorded local build', async () => {
+test('publish mode builds once and publishes that same build', async () => {
   const deps = fakeCliDeps();
-  const result = await runRelease(
-    { mode: 'publish', withDesktop: false },
-    deps,
-  );
+  const result = await runRelease({ publish: true, withDesktop: true }, deps);
 
   assert.deepEqual(deps.state.sourceCalls, [{ requireClean: true }]);
   assert.equal(deps.state.githubClientCalls, 1);
-  assert.equal(deps.state.buildCalls.length, 0);
-  assert.deepEqual(deps.state.readBuildRecordCalls, ['local-0123456789ab']);
-  assert.equal(deps.state.loadSigningCalls, 0);
+  assert.equal(deps.state.buildCalls.length, 1);
+  assert.equal(deps.state.buildCalls[0].withDesktop, true);
   assert.equal(deps.state.publishCalls.length, 1);
   assert.equal(deps.state.publishCalls[0].input.sourceSha, SOURCE_SHA);
   assert.equal(deps.state.publishCalls[0].input.desktopExe, 'desktop.exe');
   assert.deepEqual(deps.state.publishCalls[0].api, { kind: 'github-client' });
+  assert.deepEqual(deps.state.order, ['build', 'github', 'publish']);
   assert.deepEqual(result, { mode: 'publish', stable: { version: 'v1.1' } });
-});
-
-test('publish fails before authentication when no local build exists', async () => {
-  const deps = fakeCliDeps();
-  deps.readBuildRecord = async () => null;
-
-  await assert.rejects(
-    () => runRelease({ mode: 'publish', withDesktop: false }, deps),
-    /run build-release\.bat first/i,
-  );
-  assert.equal(deps.state.githubClientCalls, 0);
-  assert.equal(deps.state.buildCalls.length, 0);
-});
-
-test('publish refuses an artifact built from a dirty worktree', async () => {
-  const deps = fakeCliDeps();
-  const readBuildRecord = deps.readBuildRecord;
-  deps.readBuildRecord = async (version) => ({
-    ...(await readBuildRecord(version)),
-    cleanSource: false,
-  });
-
-  await assert.rejects(
-    () => runRelease({ mode: 'publish', withDesktop: false }, deps),
-    /created from a dirty worktree/i,
-  );
-  assert.equal(deps.state.githubClientCalls, 0);
-});
-
-test('publish refuses a build record from another source commit', async () => {
-  const deps = fakeCliDeps();
-  const readBuildRecord = deps.readBuildRecord;
-  deps.readBuildRecord = async (version) => ({
-    ...(await readBuildRecord(version)),
-    sourceSha: 'f'.repeat(40),
-  });
-
-  await assert.rejects(
-    () => runRelease({ mode: 'publish', withDesktop: false }, deps),
-    /does not match the current Git HEAD/i,
-  );
-  assert.equal(deps.state.githubClientCalls, 0);
 });
 
 test('local publishing reuses the authenticated GitHub CLI token', async () => {

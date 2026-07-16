@@ -26,20 +26,6 @@ function fakeDependencies(overrides = {}) {
       state.prompts.push(question);
       return 'n';
     },
-    async readBuildRecord() {
-      return {
-        build: {
-          desktopExe: 'D:\\repo\\.release-out\\desktop\\WheelMakerDesktop.exe',
-          platforms: [
-            { key: 'windows-amd64' },
-            { key: 'linux-amd64' },
-            { key: 'darwin-arm64' },
-          ],
-        },
-        cleanSource: true,
-        sourceSha: HEAD,
-      };
-    },
     async run(command, args) {
       state.commands.push({ args, command });
     },
@@ -50,55 +36,30 @@ function fakeDependencies(overrides = {}) {
   };
 }
 
-test('build entry asks for Desktop and defaults to excluding it', async () => {
+test('local release entry asks both questions and defaults to build only', async () => {
   const deps = fakeDependencies();
-  await runReleaseEntry('build', deps);
+  await runReleaseEntry('publish', deps);
 
+  assert.equal(deps.state.prompts.length, 2);
   assert.match(deps.state.prompts[0], /Desktop.*\[y\/N\]/i);
-  assert.deepEqual(deps.state.commands[0].args.slice(-2), [
-    'scripts/release.mjs',
-    'build',
-  ]);
+  assert.match(deps.state.prompts[1], /public.*\[y\/N\]/i);
+  assert.deepEqual(deps.state.commands[0].args, ['scripts/release.mjs']);
 });
 
-test('build entry passes --with-desktop only after an affirmative answer', async () => {
+test('local release entry passes Desktop and publish choices in one invocation', async () => {
+  const answers = ['y', 'y'];
   const deps = fakeDependencies({
     async prompt(question) {
       deps.state.prompts.push(question);
-      return 'y';
-    },
-  });
-  await runReleaseEntry('build', deps);
-
-  assert.equal(deps.state.commands[0].args.at(-1), '--with-desktop');
-});
-
-test('publish entry fails before prompting when no build record exists', async () => {
-  const deps = fakeDependencies({ readBuildRecord: async () => null });
-
-  await assert.rejects(
-    () => runReleaseEntry('publish', deps),
-    /run build-release\.bat first/i,
-  );
-  assert.equal(deps.state.prompts.length, 0);
-  assert.equal(deps.state.commands.length, 0);
-});
-
-test('publish entry shows recorded Desktop state and never asks how to build', async () => {
-  const deps = fakeDependencies({
-    async prompt(question) {
-      deps.state.prompts.push(question);
-      return 'y';
+      return answers.shift();
     },
   });
   await runReleaseEntry('publish', deps);
 
-  assert.equal(deps.state.prompts.length, 1);
-  assert.match(deps.state.prompts[0], /确认正式发布.*\[y\/N\]/);
-  assert.match(deps.state.output.join('\n'), /Desktop: included/i);
-  assert.deepEqual(deps.state.commands[0].args.slice(-2), [
+  assert.deepEqual(deps.state.commands[0].args, [
     'scripts/release.mjs',
-    'publish',
+    '--with-desktop',
+    '--publish',
   ]);
 });
 
@@ -144,9 +105,8 @@ test('action entry fails without triggering when the commit is not pushed', asyn
   assert.equal(deps.state.commands.length, 0);
 });
 
-test('three Windows BAT entrypoints delegate to the interactive release entry', async () => {
+test('two Windows BAT entrypoints delegate to the interactive release entry', async () => {
   for (const [name, mode] of [
-    ['build-release.bat', 'build'],
     ['publish-release.bat', 'publish'],
     ['publish-release-action.bat', 'action'],
   ]) {
@@ -154,18 +114,34 @@ test('three Windows BAT entrypoints delegate to the interactive release entry', 
     assert.match(source, /scripts\\release\\entry\.mjs/);
     assert.match(source, new RegExp(`entry\\.mjs\" ${mode}`));
   }
+  await assert.rejects(
+    () => readFile(new URL('../../build-release.bat', import.meta.url), 'utf8'),
+    /ENOENT/,
+  );
 });
 
-test('manual Action builds once before publishing without a signing secret', async () => {
+test('manual Action builds and publishes in one release invocation', async () => {
   const workflow = await readFile(
     new URL('../../.github/workflows/publish-release.yml', import.meta.url),
     'utf8',
   );
-  const build = workflow.indexOf('node scripts/release.mjs build');
-  const publish = workflow.indexOf('node scripts/release.mjs publish');
-
-  assert.notEqual(build, -1);
-  assert.equal(publish > build, true);
+  assert.equal(workflow.match(/node scripts\/release\.mjs/g)?.length, 1);
+  assert.match(workflow, /args\+?=\(--publish\)/);
   assert.doesNotMatch(workflow, /WHEELMAKER_SIGNING_PRIVATE_KEY/);
-  assert.match(workflow, /run: node scripts\/release\.mjs publish\s*$/m);
+});
+
+test('obsolete source-side Desktop and Web helper scripts are absent', async () => {
+  for (const path of [
+    '../../publish-desktop.bat',
+    '../../update_exe.bat',
+    '../publish_desktop.ps1',
+    '../test_publish_desktop_ps1.ps1',
+    '../test_update_exe_bat.ps1',
+    '../../app/scripts/export_web_release.ps1',
+  ]) {
+    await assert.rejects(
+      () => readFile(new URL(path, import.meta.url), 'utf8'),
+      /ENOENT/,
+    );
+  }
 });
