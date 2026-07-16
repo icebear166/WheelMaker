@@ -207,7 +207,9 @@ Desktop 构建逻辑完全位于发布 MJS。发布端不运行 Desktop 应用�
     <job-id>/
   config.json
   release.json
+  deploy.bat
   start.bat / stop.bat / restart.bat / status.bat
+  deploy.sh
   start.sh  / stop.sh  / restart.sh  / status.sh
 ```
 
@@ -224,6 +226,7 @@ MJS 不放进平台包；产品包只包含 Hub 与 Web。`staging` 是唯一的
 
 ```text
 node deploy.mjs                       日常安装或更新
+deploy.bat / deploy.sh                当前平台的日常部署包装脚本
 node deploy.mjs migrate-uninstall     一次性旧版清理
 node deploy.mjs update                仅供 Hub/系统任务调用
 update_exe.bat                        更新可选 Desktop EXE
@@ -231,7 +234,7 @@ update_exe.bat                        更新可选 Desktop EXE
 
 不提供 `schedule`、`history`、`status` 或单独 `install` 命令。历史由 Web 直接读取公开 GitHub Releases API；状态由 Hub 读取本机 `staging/status.json`；日程固定为本地时间每天 03:00。
 
-继续生成既有包装脚本：Windows 的 `start.bat`、`stop.bat`、`restart.bat`、`status.bat`，以及 macOS/Linux 的同名 `.sh` 文件。它们调用 core 的内部运行时操作，以当前平台的既有任务、LaunchAgent 或 user unit 执行启动、停止、重启、状态查询；这些内部操作不是面向用户的 deploy 子命令。普通部署每次都修复这些包装脚本。
+普通部署同时生成当前平台的 `deploy.bat` 或 `deploy.sh`，只调用 `node deploy.mjs`，不进入迁移或内部更新模式；Windows wrapper 在 Node 结束后暂停，保证双击时能看到结果。继续生成既有生命周期包装脚本：Windows 的 `start.bat`、`stop.bat`、`restart.bat`、`status.bat`，以及 macOS/Linux 的同名 `.sh` 文件。它们调用 core 的内部运行时操作，以当前平台的既有任务、LaunchAgent 或 user unit 执行启动、停止、重启、状态查询；这些内部操作不是面向用户的 deploy 子命令。普通部署每次都修复这些包装脚本。
 
 ### 当前用户运行模型
 
@@ -312,5 +315,5 @@ deploy.bat 或 deploy.sh
 - `migrate-uninstall` 清除旧运行项而保留用户配置/数据；迁移后不再保留旧 updater/monitor。
 - v1.3 未带 Desktop EXE、v1.2 带 EXE 时，v1.3 的 `update_exe.bat` 仍下载 v1.2 EXE。
 - Action 在一个 Ubuntu job 内完成三平台 Hub、可选 Desktop、一次 Web 构建和发布；缓存命中时不重新下载 Go/npm 依赖。
-- 成功安装保持 `bin/`、`web/`、`desktop/` 与 start/stop/restart/status 包装脚本的既有路径约定，且不产生 `app/` 目录。
+- 成功安装保持 `bin/`、`web/`、`desktop/` 与 deploy/start/stop/restart/status 包装脚本的既有路径约定，且不产生 `app/` 目录。
 - App 从 schema v2 的本机 `release.json` 和公开 stable 得出当前/最新版本，不执行 Git 查询或显示提交差异。

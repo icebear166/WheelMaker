@@ -98,6 +98,7 @@ bash deploy.sh
 - 迁移会删除旧 Hub/updater/deploy/monitor 运行时和 `~/.wheelmaker/build/bootstrap`，但保留配置、数据库、日志和 Desktop。
 - Windows 只有发现旧 Windows Service 时才可能触发 UAC；新 Scheduled Task 使用当前用户、Limited 权限。
 - 正常部署下载并验证预编译 Hub + Web，始终一起替换到 `~/.wheelmaker/bin` 和 `~/.wheelmaker/web`，在缺失时创建 `config.json`，写 schema v2 `release.json`，并启动 Hub。
+- 正常部署会在安装目录生成当前平台的日常部署入口：Windows 双击 `~/.wheelmaker/deploy.bat`，macOS/Linux 执行 `~/.wheelmaker/deploy.sh`。两者只调用 `node deploy.mjs`，不执行迁移；Windows 完成后会暂停窗口以便查看结果。
 - 固定的 03:00 updater 和 Web 手动更新都调用 `node ~/.wheelmaker/deploy.mjs update`。该命令只停止/替换/启动现有运行时，不安装或卸载服务/任务，也不需要管理员权限。
 - Windows Desktop 按需单独更新：先关闭 Desktop，再运行 `~/.wheelmaker/update_exe.bat`。若本次 stable 版本没有发布新 EXE，会继续使用 stable 中继承的上一版 Desktop 指针。
 
@@ -110,7 +111,7 @@ bash deploy.sh
 ~/.wheelmaker/staging/   lock.json、status.json 和临时包
 ```
 
-生命周期 helper 保持原文件名：Windows 为 `start.bat`、`stop.bat`、`restart.bat`、`status.bat`；macOS/Linux 为对应 `.sh`。Windows 另有 `update_exe.bat`。
+安装目录 helper 保持原文件名：Windows 为 `deploy.bat`、`start.bat`、`stop.bat`、`restart.bat`、`status.bat`；macOS/Linux 为对应 `.sh`。Windows 另有 `update_exe.bat`。这里的 `deploy.bat/sh` 是日常部署入口，与旧源码仓库根目录的一次性迁移 wrapper 不是同一份脚本。
 
 ## 5. Registry 入口机配置
 

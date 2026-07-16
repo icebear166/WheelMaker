@@ -86,14 +86,23 @@ test('helper wrappers preserve existing filenames and call grouped runtime actio
   const runtimeActions = ['restart', 'start', 'status', 'stop'];
   assert.deepEqual(
     Object.keys(windows).sort(),
-    [...runtimeActions.map((name) => `${name}.bat`), 'update_exe.bat'].sort(),
+    [
+      ...runtimeActions.map((name) => `${name}.bat`),
+      'deploy.bat',
+      'update_exe.bat',
+    ].sort(),
   );
   assert.deepEqual(
     Object.keys(unix).sort(),
-    runtimeActions.map((name) => `${name}.sh`),
+    [...runtimeActions.map((name) => `${name}.sh`), 'deploy.sh'].sort(),
   );
+  assert.match(windows['deploy.bat'], /deploy\.mjs"\s*\r?\n/);
+  assert.doesNotMatch(windows['deploy.bat'], /migrate|runtime|update/);
+  assert.match(windows['deploy.bat'], /\r\npause\r\n/);
   assert.match(windows['start.bat'], /deploy\.mjs" runtime start/);
   assert.match(windows['update_exe.bat'], /deploy\.mjs" desktop-update/);
+  assert.match(unix['deploy.sh'], /deploy\.mjs'\s*\n/);
+  assert.doesNotMatch(unix['deploy.sh'], /migrate|runtime|update/);
   assert.match(unix['status.sh'], /deploy\.mjs' runtime status/);
 });
 

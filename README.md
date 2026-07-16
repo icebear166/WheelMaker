@@ -73,6 +73,7 @@ Every normal deploy replaces Hub and Web together. The resulting layout is:
   staging/                   # update lock/status and verified temporary packages
   deploy.mjs
   deploy-core.mjs
+  deploy.bat or deploy.sh    # normal deployment wrapper for the current platform
   release.json               # installed release schema v2
   config.json                # preserved across deploys
 ```
@@ -87,18 +88,22 @@ The migration requests UAC on Windows only if legacy Windows Services actually e
 
 `release.json` schema v2 records `version`, `publishedAt`, `sourceSha`, `manifestSha256`, and `installedAt`. App version reporting reads this file and public stable metadata; it does not infer the installed version from Git.
 
-Lifecycle commands after deployment on Windows:
+Manual deployment and lifecycle commands after deployment on Windows:
 
 ```powershell
+~/.wheelmaker/deploy.bat
 ~/.wheelmaker/start.bat
 ~/.wheelmaker/stop.bat
 ~/.wheelmaker/restart.bat
 ~/.wheelmaker/status.bat
 ```
 
-Lifecycle commands after deployment on macOS/Linux:
+`deploy.bat` pauses after Node exits so a double-clicked deployment keeps its result visible.
+
+Manual deployment and lifecycle commands after deployment on macOS/Linux:
 
 ```bash
+~/.wheelmaker/deploy.sh
 ~/.wheelmaker/start.sh
 ~/.wheelmaker/stop.sh
 ~/.wheelmaker/restart.sh
@@ -591,8 +596,9 @@ Release and script overview:
 - `publish-release-action.bat` — verify the current clean commit is pushed, then interactively trigger the manual Action with the source SHA and Desktop choice.
 - `node scripts/release.mjs [--with-desktop] [--publish]` — non-interactive equivalent; without `--publish` it only builds locally.
 - `.github/workflows/publish-release.yml` — manual `workflow_dispatch` fallback with a source `ref` and optional `with_desktop`; Web builds once, while Hub binaries cross-compile for Windows amd64, Linux amd64, and macOS arm64.
-- `deploy.bat` / `deploy.sh` — one-time legacy migration followed by stable deployment.
-- `update_exe.bat` — independently update `WheelMakerDesktop.exe` through the same stable SHA-256 chain.
+- Source-root `deploy.bat` / `deploy.sh` — one-time legacy migration followed by stable deployment.
+- Installed `~/.wheelmaker/deploy.bat` / `deploy.sh` — platform wrapper for a normal `node deploy.mjs`; the Windows wrapper pauses when it finishes.
+- Installed `~/.wheelmaker/update_exe.bat` — independently update `WheelMakerDesktop.exe` through the same stable SHA-256 chain.
 
 Local publishing requires `gh auth login` and keeps the token returned by `gh auth token` only in the Node process. GitHub Actions publishing uses App secrets `WHEELMAKER_RELEASE_APP_ID`, `WHEELMAKER_RELEASE_INSTALLATION_ID`, and `WHEELMAKER_RELEASE_APP_PRIVATE_KEY`; the App is installed only on the public `swm8023/wheelmaker-release` repository. A release publishes and hashes all immutable assets before writing `stable.json` last. Release-repository write access is therefore the publication trust boundary.
 

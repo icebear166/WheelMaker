@@ -681,6 +681,7 @@ export function darwinRuntimeFiles(paths) {
 
 export function windowsWrappers(paths) {
   return {
+    'deploy.bat': `@echo off\r\nsetlocal\r\n${windowsBatchQuote(paths.node)} ${windowsBatchQuote(paths.deploy)}\r\nset "_EXIT_CODE=%errorlevel%"\r\necho.\r\npause\r\nexit /b %_EXIT_CODE%\r\n`,
     ...Object.fromEntries(
       ['start', 'stop', 'restart', 'status'].map((action) => [
         `${action}.bat`,
@@ -692,20 +693,24 @@ export function windowsWrappers(paths) {
 }
 
 export function unixWrappers(paths) {
-  return Object.fromEntries(
-    ['start', 'stop', 'restart', 'status'].map((action) => [
-      `${action}.sh`,
-      `#!/bin/sh\nset -eu\nexec ${shellQuote(paths.node)} ${shellQuote(paths.deploy)} runtime ${action} "$@"\n`,
-    ]),
-  );
+  return {
+    'deploy.sh': `#!/bin/sh\nset -eu\nexec ${shellQuote(paths.node)} ${shellQuote(paths.deploy)}\n`,
+    ...Object.fromEntries(
+      ['start', 'stop', 'restart', 'status'].map((action) => [
+        `${action}.sh`,
+        `#!/bin/sh\nset -eu\nexec ${shellQuote(paths.node)} ${shellQuote(paths.deploy)} runtime ${action} "$@"\n`,
+      ]),
+    ),
+  };
 }
 
 async function writeRuntimeWrappers(paths, platform) {
   const useWindows = platform === 'win32';
   const active = useWindows ? windowsWrappers(paths) : unixWrappers(paths);
   const staleNames = useWindows
-    ? ['start.sh', 'stop.sh', 'restart.sh', 'status.sh']
+    ? ['deploy.sh', 'start.sh', 'stop.sh', 'restart.sh', 'status.sh']
     : [
+        'deploy.bat',
         'start.bat',
         'stop.bat',
         'restart.bat',
