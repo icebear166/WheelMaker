@@ -1,17 +1,12 @@
 #!/usr/bin/env node
 
-import { createHash, randomUUID, verify } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-export const RELEASE_PUBLIC_KEY_PEM = `-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEATHBcwgOFQcJHJ/eMNIEzxtZNiK8Wu4bdFsSD9+LLiao=
------END PUBLIC KEY-----
-`;
-
 export const STABLE_URL =
-  'https://raw.githubusercontent.com/swm8023/wheelmaker-releases/main/stable.json';
+  'https://raw.githubusercontent.com/swm8023/wheelmaker-release/main/stable.json';
 
 const MAX_DOWNLOAD_BYTES = 5 * 1024 * 1024;
 const MAX_PACKAGE_DOWNLOAD_BYTES = 2 * 1024 * 1024 * 1024;
@@ -131,19 +126,6 @@ export async function runLauncher(rawArgs, deps = createDefaultLauncherDependenc
   }
 
   const stableBytes = await deps.fetchBytes(deps.stableUrl);
-  const signatureBytes = await deps.fetchBytes(`${deps.stableUrl}.sig`);
-  const signature = signatureBytes.toString('utf8').trim();
-  if (
-    !verify(
-      null,
-      stableBytes,
-      deps.publicKey,
-      Buffer.from(signature, 'base64'),
-    )
-  ) {
-    throw new Error('stable signature verification failed');
-  }
-  deps.onEvent?.('verify-stable');
   const stable = validateStable(JSON.parse(stableBytes.toString('utf8')));
 
   const localLauncher = await deps.readLocalFile('deploy.mjs');
@@ -208,7 +190,6 @@ export function createDefaultLauncherDependencies({
   const pendingLauncherPath = join(installDirectory, 'deploy.next.mjs');
   const corePath = join(installDirectory, 'deploy-core.mjs');
   return {
-    publicKey: RELEASE_PUBLIC_KEY_PEM,
     stableUrl: STABLE_URL,
     fetchBytes: fetchHttpsBytes,
     onEvent() {},
@@ -239,7 +220,6 @@ export function createDefaultLauncherDependencies({
         fetchBytes: (url) =>
           fetchHttpsBytes(url, { maxBytes: MAX_PACKAGE_DOWNLOAD_BYTES }),
         installDirectory,
-        publicKey: RELEASE_PUBLIC_KEY_PEM,
         trustedStable: context.stable,
         trustedStableBytes: context.stableBytes,
       });

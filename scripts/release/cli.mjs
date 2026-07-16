@@ -1,6 +1,5 @@
 import { execFile } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
+import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -23,6 +22,9 @@ export function parseReleaseArgs(args) {
 
   let withDesktop = false;
   for (const option of options) {
+    if (option === '--with-desktop' && mode !== 'build') {
+      throw new Error('--with-desktop is only valid with build');
+    }
     if (option === '--with-desktop' && !withDesktop) {
       withDesktop = true;
       continue;
@@ -38,29 +40,52 @@ export async function runRelease(options, deps) {
   const buildIdentifier = `local-${sourceSha.slice(0, 12)}`;
   const startedAt = deps.now();
 
-  let api;
-  let signingMaterial;
-  let deploymentSources;
-  if (options.mode === 'publish') {
-    signingMaterial = await deps.loadSigningMaterial();
-    api = await deps.createGitHubClient();
-    deploymentSources = deps.loadDeploymentSources
-      ? await deps.loadDeploymentSources()
-      : {
-          coreBytes: deps.coreBytes,
-          deployMjsBytes: deps.deployMjsBytes,
-        };
-  }
-
-  const build = await deps.buildRelease({
-    outputRoot: deps.outputRoot,
-    repoRoot: deps.repoRoot,
-    version: buildIdentifier,
-    withDesktop: options.withDesktop,
-  });
   if (options.mode === 'build') {
+    const cleanSource = await deps.isWorkingTreeClean();
+    const build = await deps.buildRelease({
+      outputRoot: deps.outputRoot,
+      repoRoot: deps.repoRoot,
+      version: buildIdentifier,
+      withDesktop: options.withDesktop,
+    });
+    const recordedBuild = {
+      ...build,
+      desktopExe: build.desktopExe ?? null,
+    };
+    await deps.writeBuildRecord(buildIdentifier, {
+      build: recordedBuild,
+      cleanSource,
+      createdAt: startedAt,
+      desktopIncluded: Boolean(build.desktopExe),
+      schema: 1,
+      sourceSha,
+    });
     return { build, mode: 'build', sourceSha };
   }
+
+  const buildRecord = await deps.readBuildRecord(buildIdentifier);
+  if (!buildRecord) {
+    throw new Error(
+      `local release build ${buildIdentifier} was not found; run build-release.bat first`,
+    );
+  }
+  if (buildRecord.sourceSha !== sourceSha) {
+    throw new Error('local release build does not match the current Git HEAD');
+  }
+  if (!buildRecord.cleanSource) {
+    throw new Error(
+      'the local release build was created from a dirty worktree; run build-release.bat from a clean worktree',
+    );
+  }
+
+  const build = buildRecord.build;
+  const api = await deps.createGitHubClient();
+  const deploymentSources = deps.loadDeploymentSources
+    ? await deps.loadDeploymentSources()
+    : {
+        coreBytes: deps.coreBytes,
+        deployMjsBytes: deps.deployMjsBytes,
+      };
 
   const stable = await deps.publishBuiltRelease(
     {
@@ -70,8 +95,6 @@ export async function runRelease(options, deps) {
       desktopExe: build.desktopExe,
       outputRoot: deps.outputRoot,
       platforms: build.platforms,
-      privateKey: signingMaterial.privateKey,
-      publicKey: signingMaterial.publicKey,
       publishedAt: deps.now(),
       publisher: deps.publisher,
       sourceSha,
@@ -104,27 +127,43 @@ async function resolveGitSourceSha(repoRoot, { requireClean }) {
   return sourceSha;
 }
 
-function normalizePem(value) {
-  return value.includes('\\n') ? value.replaceAll('\\n', '\n') : value;
+async function isGitWorkingTreeClean(repoRoot) {
+  const { stdout } = await execFileAsync(
+    'git',
+    ['status', '--porcelain', '--untracked-files=normal'],
+    { cwd: repoRoot, encoding: 'utf8' },
+  );
+  return !stdout.trim();
 }
 
-async function loadSigningMaterial(repoRoot, env) {
-  const privateKey = env.WHEELMAKER_SIGNING_PRIVATE_KEY
-    ? normalizePem(env.WHEELMAKER_SIGNING_PRIVATE_KEY)
-    : await readFile(
-        join(
-          homedir(),
-          '.wheelmaker',
-          'release-secrets',
-          'signing-private.pem',
-        ),
-        'utf8',
-      );
-  const publicKey = await readFile(
-    join(repoRoot, 'scripts', 'release', 'release-public-key.pem'),
-    'utf8',
-  );
-  return { privateKey, publicKey };
+export async function resolvePublishingToken({
+  env = process.env,
+  execGh = execFileAsync,
+  fetchImpl = fetch,
+  requestAppToken = requestInstallationToken,
+} = {}) {
+  if (env.GITHUB_ACTIONS === 'true') {
+    return requestAppToken({
+      ...githubAppCredentialsFromEnv(env),
+      fetchImpl,
+    });
+  }
+
+  try {
+    const { stdout } = await execGh('gh', ['auth', 'token'], {
+      encoding: 'utf8',
+    });
+    const token = stdout.trim();
+    if (!token) {
+      throw new Error('GitHub CLI returned an empty token');
+    }
+    return token;
+  } catch (error) {
+    throw new Error(
+      'local publishing requires GitHub CLI authentication; install GitHub CLI and run gh auth login first',
+      { cause: error },
+    );
+  }
 }
 
 export async function createDefaultReleaseDependencies({
@@ -144,9 +183,8 @@ export async function createDefaultReleaseDependencies({
     publisher: env.GITHUB_ACTIONS === 'true' ? 'github-actions' : 'local',
     repoRoot,
     async createGitHubClient() {
-      const credentials = githubAppCredentialsFromEnv(env);
-      const token = await requestInstallationToken({
-        ...credentials,
+      const token = await resolvePublishingToken({
+        env,
         fetchImpl,
       });
       return new GitHubApi({
@@ -167,9 +205,27 @@ export async function createDefaultReleaseDependencies({
         ),
       };
     },
-    loadSigningMaterial: () => loadSigningMaterial(repoRoot, env),
+    isWorkingTreeClean: () => isGitWorkingTreeClean(repoRoot),
     now: () => new Date().toISOString(),
     publishBuiltRelease,
+    async readBuildRecord(version) {
+      try {
+        return JSON.parse(
+          await readFile(join(repoRoot, '.release-out', version, 'build.json')),
+        );
+      } catch (error) {
+        if (error?.code === 'ENOENT') {
+          return null;
+        }
+        throw error;
+      }
+    },
     resolveSourceSha: (options) => resolveGitSourceSha(repoRoot, options),
+    async writeBuildRecord(version, record) {
+      await writeFile(
+        join(repoRoot, '.release-out', version, 'build.json'),
+        `${JSON.stringify(record, null, 2)}\n`,
+      );
+    },
   };
 }

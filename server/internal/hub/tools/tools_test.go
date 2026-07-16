@@ -2,9 +2,6 @@ package tools
 
 import (
 	"context"
-	"crypto/ed25519"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1590,7 +1587,7 @@ func TestFetchCodexUsageLimitsDoesNotRefreshRejectedAccessToken(t *testing.T) {
 	}
 }
 
-func TestUpdateQueryComparesInstalledReleaseWithSignedStable(t *testing.T) {
+func TestUpdateQueryComparesInstalledReleaseWithStable(t *testing.T) {
 	baseDir := t.TempDir()
 	installed := installedRelease{
 		SchemaVersion: 2,
@@ -1601,14 +1598,14 @@ func TestUpdateQueryComparesInstalledReleaseWithSignedStable(t *testing.T) {
 		InstalledAt:   "2026-07-15T09:05:00Z",
 	}
 	writeInstalledReleaseForTest(t, baseDir, installed)
-	client, publicKey := signedStableClient(t, stableRelease{
+	client := stableClient(t, stableRelease{
 		Schema:      1,
 		Version:     "v1.23",
 		PublishedAt: "2026-07-16T09:00:00Z",
 		SourceSHA:   strings.Repeat("b", 40),
 	}, false)
 
-	cmd := newUpdateCommandWithDependencies(baseDir, client, &fakeUpdateTrigger{}, publicKey)
+	cmd := newUpdateCommandWithDependencies(baseDir, client, &fakeUpdateTrigger{})
 	cmd.stableURL = updateTestStableURL
 	cmd.publishStatusURL = updateTestPublishStatusURL
 	got := handleUpdateForTest(t, cmd, map[string]any{
@@ -1622,12 +1619,12 @@ func TestUpdateQueryComparesInstalledReleaseWithSignedStable(t *testing.T) {
 	if !got.OK || !got.CanRequest {
 		t.Fatalf("response=%+v, want successful requestable update", got)
 	}
-	if got.PublishStatus == nil || got.PublishStatus.Phase != "building-runtime" {
+	if got.PublishStatus == nil || got.PublishStatus.Phase != "packaging" {
 		t.Fatalf("publishStatus=%+v", got.PublishStatus)
 	}
 }
 
-func TestUpdateQueryRejectsTamperedStable(t *testing.T) {
+func TestUpdateQueryRejectsInvalidStable(t *testing.T) {
 	baseDir := t.TempDir()
 	writeInstalledReleaseForTest(t, baseDir, installedRelease{
 		SchemaVersion: 2,
@@ -1637,13 +1634,13 @@ func TestUpdateQueryRejectsTamperedStable(t *testing.T) {
 		ManifestSHA:   strings.Repeat("c", 64),
 		InstalledAt:   "2026-07-15T09:05:00Z",
 	})
-	client, publicKey := signedStableClient(t, stableRelease{
+	client := stableClient(t, stableRelease{
 		Schema:      1,
 		Version:     "v1.23",
 		PublishedAt: "2026-07-16T09:00:00Z",
 		SourceSHA:   strings.Repeat("b", 40),
 	}, true)
-	cmd := newUpdateCommandWithDependencies(baseDir, client, &fakeUpdateTrigger{}, publicKey)
+	cmd := newUpdateCommandWithDependencies(baseDir, client, &fakeUpdateTrigger{})
 	cmd.stableURL = updateTestStableURL
 	cmd.publishStatusURL = updateTestPublishStatusURL
 
@@ -1651,18 +1648,18 @@ func TestUpdateQueryRejectsTamperedStable(t *testing.T) {
 		"action": "query",
 		"hubId":  "hub-a",
 	})
-	if got.Status != "checking_failed" || got.ErrorCode != "stable_signature_invalid" {
+	if got.Status != "checking_failed" || got.ErrorCode != "stable_metadata_invalid" {
 		t.Fatalf("response=%+v", got)
 	}
 	if got.CanRequest {
-		t.Fatalf("canRequestUpdate=true for tampered stable")
+		t.Fatalf("canRequestUpdate=true for invalid stable")
 	}
 }
 
 func TestUpdateRequestCreatesOneQueuedJob(t *testing.T) {
 	baseDir := t.TempDir()
 	trigger := &fakeUpdateTrigger{}
-	cmd := newUpdateCommandWithDependencies(baseDir, &http.Client{}, trigger, nil)
+	cmd := newUpdateCommandWithDependencies(baseDir, &http.Client{}, trigger)
 	cmd.now = func() time.Time {
 		return time.Date(2026, 7, 16, 9, 0, 0, 0, time.UTC)
 	}
@@ -1716,14 +1713,14 @@ func TestUpdateQueryReportsActiveJobWithoutRetriggering(t *testing.T) {
 		ManifestSHA:   strings.Repeat("c", 64),
 		InstalledAt:   "2026-07-15T09:05:00Z",
 	})
-	client, publicKey := signedStableClient(t, stableRelease{
+	client := stableClient(t, stableRelease{
 		Schema:      1,
 		Version:     "v1.23",
 		PublishedAt: "2026-07-16T09:00:00Z",
 		SourceSHA:   strings.Repeat("b", 40),
 	}, false)
 	trigger := &fakeUpdateTrigger{}
-	cmd := newUpdateCommandWithDependencies(baseDir, client, trigger, publicKey)
+	cmd := newUpdateCommandWithDependencies(baseDir, client, trigger)
 	cmd.stableURL = updateTestStableURL
 	cmd.publishStatusURL = updateTestPublishStatusURL
 
@@ -1799,31 +1796,24 @@ func writeInstalledReleaseForTest(t *testing.T, baseDir string, release installe
 	}
 }
 
-func signedStableClient(t *testing.T, stable stableRelease, tamper bool) (*http.Client, ed25519.PublicKey) {
+func stableClient(t *testing.T, stable stableRelease, invalid bool) *http.Client {
 	t.Helper()
-	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatalf("generate signing key: %v", err)
-	}
 	raw, err := json.MarshalIndent(stable, "", "  ")
 	if err != nil {
 		t.Fatalf("marshal stable: %v", err)
 	}
 	raw = append(raw, '\n')
-	signature := base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, raw)) + "\n"
 	stableResponse := append([]byte(nil), raw...)
-	if tamper {
-		stableResponse = append(stableResponse, ' ')
+	if invalid {
+		stableResponse = []byte("{")
 	}
-	publishStatus := "{\"schema\":1,\"state\":\"running\",\"phase\":\"building-runtime\",\"version\":\"v1.23\",\"sourceSha\":\"" + strings.Repeat("b", 40) + "\",\"publisher\":\"local\",\"startedAt\":\"2026-07-16T09:00:00Z\",\"updatedAt\":\"2026-07-16T09:01:00Z\"}\n"
+	publishStatus := "{\"schema\":1,\"state\":\"running\",\"phase\":\"packaging\",\"version\":\"v1.23\",\"sourceSha\":\"" + strings.Repeat("b", 40) + "\",\"publisher\":\"local\",\"startedAt\":\"2026-07-16T09:00:00Z\",\"updatedAt\":\"2026-07-16T09:01:00Z\"}\n"
 
 	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		var body string
 		switch req.URL.String() {
 		case updateTestStableURL:
 			body = string(stableResponse)
-		case updateTestStableURL + ".sig":
-			body = signature
 		case updateTestPublishStatusURL:
 			body = publishStatus
 		default:
@@ -1831,7 +1821,7 @@ func signedStableClient(t *testing.T, stable stableRelease, tamper bool) (*http.
 		}
 		return updateHTTPResponse(req, http.StatusOK, body), nil
 	})}
-	return client, publicKey
+	return client
 }
 
 func updateHTTPResponse(req *http.Request, status int, body string) *http.Response {

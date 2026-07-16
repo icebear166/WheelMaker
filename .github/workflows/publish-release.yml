@@ -40,16 +40,18 @@ jobs:
           cache: true
           cache-dependency-path: server/go.sum
 
-      - name: Publish release
-        env:
-          WHEELMAKER_RELEASE_APP_ID: ${{ secrets.WHEELMAKER_RELEASE_APP_ID }}
-          WHEELMAKER_RELEASE_INSTALLATION_ID: ${{ secrets.WHEELMAKER_RELEASE_INSTALLATION_ID }}
-          WHEELMAKER_RELEASE_APP_PRIVATE_KEY: ${{ secrets.WHEELMAKER_RELEASE_APP_PRIVATE_KEY }}
-          WHEELMAKER_SIGNING_PRIVATE_KEY: ${{ secrets.WHEELMAKER_SIGNING_PRIVATE_KEY }}
+      - name: Build release
         shell: bash
         run: |
           args=()
           if [[ "${{ inputs.with_desktop }}" == "true" ]]; then
             args+=(--with-desktop)
           fi
-          node scripts/release.mjs publish "${args[@]}"
+          node scripts/release.mjs build "${args[@]}"
+
+      - name: Publish built release
+        env:
+          WHEELMAKER_RELEASE_APP_ID: ${{ secrets.WHEELMAKER_RELEASE_APP_ID }}
+          WHEELMAKER_RELEASE_INSTALLATION_ID: ${{ secrets.WHEELMAKER_RELEASE_INSTALLATION_ID }}
+          WHEELMAKER_RELEASE_APP_PRIVATE_KEY: ${{ secrets.WHEELMAKER_RELEASE_APP_PRIVATE_KEY }}
+        run: node scripts/release.mjs publish

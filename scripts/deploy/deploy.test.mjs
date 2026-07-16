@@ -1,20 +1,16 @@
 import assert from 'node:assert/strict';
-import { generateKeyPairSync } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
-  RELEASE_PUBLIC_KEY_PEM,
   STABLE_URL,
   fetchHttpsBytes,
   parseDeployArgs,
   runLauncher,
 } from './deploy.mjs';
-import { encodeJsonBytes, sha256Bytes, signBytes } from '../release/metadata.mjs';
-
-const KEYS = generateKeyPairSync('ed25519');
+import { encodeJsonBytes, sha256Bytes } from '../release/metadata.mjs';
 
 function launcherFixture({
   localCore = Buffer.from('current-core'),
@@ -22,7 +18,7 @@ function launcherFixture({
   nextCore = Buffer.from('current-core'),
   nextLauncher = Buffer.from('current-launcher'),
   pendingLauncher = null,
-  tamperStable = false,
+  invalidStable = false,
 } = {}) {
   const files = new Map([
     ['deploy.mjs', localLauncher],
@@ -46,23 +42,18 @@ function launcherFixture({
       manifestSha256: 'a'.repeat(64),
     },
   };
-  const stableBytes = encodeJsonBytes(stable);
-  const signature = signBytes(stableBytes, KEYS.privateKey);
+  const stableBytes = encodeJsonBytes(
+    invalidStable ? { ...stable, schema: 2 } : stable,
+  );
   const events = [];
 
   return {
     events,
     files,
-    publicKey: KEYS.publicKey,
     stableUrl: 'https://stable.example/stable.json',
     async fetchBytes(url) {
       if (url === 'https://stable.example/stable.json') {
-        return tamperStable
-          ? Buffer.concat([stableBytes, Buffer.from(' ')])
-          : stableBytes;
-      }
-      if (url === 'https://stable.example/stable.json.sig') {
-        return Buffer.from(`${signature}\n`);
+        return stableBytes;
       }
       if (url === stable.deploy.mjsUrl) return nextLauncher;
       if (url === stable.deploy.coreUrl) return nextCore;
@@ -92,11 +83,11 @@ function launcherFixture({
   };
 }
 
-test('launcher rejects tampered stable bytes before reading URLs', async () => {
-  const deps = launcherFixture({ tamperStable: true });
+test('launcher rejects invalid stable metadata before reading release URLs', async () => {
+  const deps = launcherFixture({ invalidStable: true });
   await assert.rejects(
     () => runLauncher([], deps),
-    /stable signature verification failed/,
+    /stable metadata schema is invalid/,
   );
   assert.deepEqual(deps.events, []);
   assert.equal(deps.files.has('deploy.next.mjs'), false);
@@ -106,7 +97,6 @@ test('launcher refreshes changed core and runs it in the current invocation', as
   const deps = launcherFixture({ nextCore: Buffer.from('new-core') });
   await runLauncher(['update'], deps);
   assert.deepEqual(deps.events, [
-    'verify-stable',
     'replace-core',
     'run-core:update',
   ]);
@@ -132,7 +122,6 @@ test('pending launcher is promoted at the beginning of the next invocation', asy
   assert.equal(deps.files.has('deploy.next.mjs'), false);
   assert.deepEqual(deps.events, [
     'promote-launcher',
-    'verify-stable',
     'run-core:runtime,status',
   ]);
 });
@@ -160,17 +149,12 @@ test('HTTPS downloader rejects insecure URLs and redirect targets', async () => 
   );
 });
 
-test('launcher embeds the committed public key and configured stable URL', async () => {
+test('launcher embeds the configured stable URL', async () => {
   const directory = dirname(fileURLToPath(import.meta.url));
   const repoRoot = resolve(directory, '..', '..');
-  const publicKey = await readFile(
-    resolve(repoRoot, 'scripts', 'release', 'release-public-key.pem'),
-    'utf8',
-  );
   const channel = JSON.parse(
     await readFile(resolve(repoRoot, 'scripts', 'release', 'channel.json'), 'utf8'),
   );
-  assert.equal(RELEASE_PUBLIC_KEY_PEM, publicKey);
   assert.equal(
     STABLE_URL,
     `https://raw.githubusercontent.com/${channel.owner}/${channel.repository}/${channel.branch}/${channel.stablePath}`,

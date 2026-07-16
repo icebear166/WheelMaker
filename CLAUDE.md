@@ -20,7 +20,7 @@ WheelMaker/
 - 未经用户明确同意，禁止修改 protocol version；协议版本变更前必须说明兼容性与发布影响并获得确认
 - 需求澄清、方案选择、设计讨论只用文字对话；不要主动提议用浏览器/Web 可视化伴随工具展示选项
 - 当用户要求“仅构建发布产物”时，在源码仓库运行 `node scripts/release.mjs build`；只有明确要求包含 Desktop 时才加 `--with-desktop`。默认本地构建主机是 Windows，输出到 `.release-out`，不发布也不触发 Action
-- 当用户要求“正式发布 WheelMaker”时，优先从干净的源码工作树运行 `node scripts/release.mjs publish`（按需加 `--with-desktop`）；不要默认触发 GitHub Action。`.github/workflows/publish-release.yml` 只作为手动 `workflow_dispatch` 的远程构建回退
+- 当用户要求“正式发布 WheelMaker”时，必须先从干净的源码工作树运行 `build-release.bat`（按交互选择 Desktop），再运行 `publish-release.bat` 发布同一份已有构建；`publish` 不允许重新构建或接受 `--with-desktop`。不要默认触发 GitHub Action；`.github/workflows/publish-release.yml` 只作为 `publish-release-action.bat` 手动触发的远程构建回退
 - 目标机更新统一走已安装的公共 `deploy.mjs`；`deploy.mjs update` 不安装/卸载运行时，`deploy.bat` / `deploy.sh` 只用于从旧源码部署做一次性迁移。不要恢复旧 updater EXE、文件信号或目标机源码构建流程
 
 ## Completion Gate (Highest Priority)

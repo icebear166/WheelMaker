@@ -3,14 +3,9 @@ package tools
 import (
 	"bytes"
 	"context"
-	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/x509"
-	_ "embed"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -34,13 +29,10 @@ const (
 	updateStagingDirectoryName = "staging"
 	updateLeaseFileName        = "lock.json"
 	updateStatusFileName       = "status.json"
-	defaultStableURL           = "https://raw.githubusercontent.com/swm8023/wheelmaker-releases/main/stable.json"
-	defaultPublishStatusURL    = "https://raw.githubusercontent.com/swm8023/wheelmaker-releases/main/publish-status.json"
+	defaultStableURL           = "https://raw.githubusercontent.com/swm8023/wheelmaker-release/main/stable.json"
+	defaultPublishStatusURL    = "https://raw.githubusercontent.com/swm8023/wheelmaker-release/main/publish-status.json"
 	maxUpdateMetadataBytes     = 1024 * 1024
 )
-
-//go:embed release_public_key.pem
-var embeddedReleasePublicKeyPEM []byte
 
 type installedRelease struct {
 	SchemaVersion int    `json:"schemaVersion"`
@@ -155,18 +147,16 @@ type UpdateCommand struct {
 	baseDir          string
 	httpClient       updateHTTPClient
 	trigger          updateTrigger
-	publicKey        ed25519.PublicKey
 	now              func() time.Time
 	stableURL        string
 	publishStatusURL string
 }
 
 func NewUpdateCommand(baseDir string) *UpdateCommand {
-	publicKey, _ := parseReleasePublicKey(embeddedReleasePublicKeyPEM)
-	return newUpdateCommandWithDependencies(baseDir, newUpdateHTTPClient(), execUpdateTrigger{}, publicKey)
+	return newUpdateCommandWithDependencies(baseDir, newUpdateHTTPClient(), execUpdateTrigger{})
 }
 
-func newUpdateCommandWithDependencies(baseDir string, client updateHTTPClient, trigger updateTrigger, publicKey ed25519.PublicKey) *UpdateCommand {
+func newUpdateCommandWithDependencies(baseDir string, client updateHTTPClient, trigger updateTrigger) *UpdateCommand {
 	if client == nil {
 		client = newUpdateHTTPClient()
 	}
@@ -177,7 +167,6 @@ func newUpdateCommandWithDependencies(baseDir string, client updateHTTPClient, t
 		baseDir:          filepath.Clean(baseDir),
 		httpClient:       client,
 		trigger:          trigger,
-		publicKey:        append(ed25519.PublicKey(nil), publicKey...),
 		now:              func() time.Time { return time.Now().UTC() },
 		stableURL:        defaultStableURL,
 		publishStatusURL: defaultPublishStatusURL,
@@ -238,7 +227,7 @@ func (c *UpdateCommand) query(ctx context.Context, hubID string) updateCommandRe
 		return updateQueryFailure(hubID, "installed_release_invalid")
 	}
 
-	stable, errorCode := c.readSignedStable(ctx)
+	stable, errorCode := c.readStable(ctx)
 	if errorCode != "" {
 		response := updateQueryFailure(hubID, errorCode)
 		response.Installed = installed
@@ -396,21 +385,10 @@ func (c *UpdateCommand) readInstalledRelease() (*installedRelease, error) {
 	return &release, nil
 }
 
-func (c *UpdateCommand) readSignedStable(ctx context.Context) (*stableRelease, string) {
-	if len(c.publicKey) != ed25519.PublicKeySize {
-		return nil, "stable_public_key_invalid"
-	}
+func (c *UpdateCommand) readStable(ctx context.Context) (*stableRelease, string) {
 	raw, err := c.fetchBytes(ctx, c.stableURL)
 	if err != nil {
 		return nil, "stable_download_failed"
-	}
-	signatureRaw, err := c.fetchBytes(ctx, c.stableURL+".sig")
-	if err != nil {
-		return nil, "stable_signature_download_failed"
-	}
-	signature, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(signatureRaw)))
-	if err != nil || !ed25519.Verify(c.publicKey, raw, signature) {
-		return nil, "stable_signature_invalid"
 	}
 	var stable stableRelease
 	if err := json.Unmarshal(raw, &stable); err != nil {
@@ -599,22 +577,6 @@ func activeUpdateState(state string) bool {
 	default:
 		return false
 	}
-}
-
-func parseReleasePublicKey(raw []byte) (ed25519.PublicKey, error) {
-	block, _ := pem.Decode(raw)
-	if block == nil {
-		return nil, errors.New("release public key PEM is invalid")
-	}
-	parsed, err := x509.ParsePKIXPublicKey(block.Bytes)
-	if err != nil {
-		return nil, err
-	}
-	publicKey, ok := parsed.(ed25519.PublicKey)
-	if !ok || len(publicKey) != ed25519.PublicKeySize {
-		return nil, errors.New("release public key is not Ed25519")
-	}
-	return publicKey, nil
 }
 
 type updateTriggerCommand struct {

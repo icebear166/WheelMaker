@@ -1,11 +1,11 @@
 # WheelMaker 预构建发布与部署设计
 
 日期：2026-07-16  
-状态：已确认，待实施
+状态：已实施
 
 ## 目标
 
-将 WheelMaker 从“目标机器拉取私有源码、安装构建工具并现场编译”的发布方式，迁移为“发布端构建并签名、目标机器下载预构建产物”的方式。
+将 WheelMaker 从“目标机器拉取私有源码、安装构建工具并现场编译”的发布方式，迁移为“发布端构建、目标机器下载预构建产物”的方式。
 
 部署目标机器只需要 Node.js 22+，不需要 Git、Go、npm、私有源码访问权限或 GitHub CLI。源码仓库保持私有；可公开下载的部署控制文件和二进制资产位于单独的公开 GitHub release 仓库。
 
@@ -40,32 +40,32 @@
   ├─ scripts/release.mjs
   └─ 手动 workflow_dispatch 发布工作流
 
-公开 wheelmaker-releases 仓库
+公开 wheelmaker-release 仓库
   ├─ deploy.mjs / deploy-core.mjs（由发布流程复制）
-  ├─ stable.json + stable.json.sig
+  ├─ stable.json
   ├─ publish-status.json
   └─ GitHub Releases
        ├─ 三个平台 tar.gz
-       ├─ release-manifest.json + .sig
+       ├─ release-manifest.json
        └─ 可选 WheelMakerDesktop.exe
 ```
 
-发布者使用一个 GitHub App 向公开仓库写入 Contents 和 Releases。该 App 只安装到公开仓库，不能读取私有源码仓库。App 安装令牌只负责上传；它不能替代签名密钥。
+Action 使用一个 GitHub App 向公开仓库写入 Contents 和 Releases。该 App 只安装到公开仓库，不能读取私有源码仓库；本地发布则复用操作员已登录的 `gh auth token`，不保存额外私钥文件。两条路径都只在发布进程内持有临时 token。
 
-发布者还持有独立的 Ed25519 私钥。目标端 `deploy.mjs` 内置对应公钥，按以下顺序建立信任：
+发布仓库的 GitHub HTTPS 内容与写权限是发布信任边界，不再维护独立 Ed25519 密钥和 `.sig` 文件。目标端按以下顺序验证内容完整性：
 
-1. 下载 `stable.json` 和 `stable.json.sig`，验证 `stable.json` 的原始 UTF-8 字节签名；
-2. 只信任已签名 stable 中的脚本 URL、manifest URL 和 SHA-256；
-3. 下载 `release-manifest.json` 和签名，验证其原始 UTF-8 字节签名；
-4. 仅在包的 SHA-256 与已签名 manifest 一致后解压和部署。
+1. 通过固定 GitHub HTTPS 地址下载并校验 `stable.json` schema；
+2. 使用 stable 中的 SHA-256 验证 `deploy.mjs`、`deploy-core.mjs` 和 `release-manifest.json`；
+3. 使用 manifest 中的大小与 SHA-256 验证当前平台压缩包；
+4. 仅在完整压缩包验证成功后解压和部署。
 
-签名文件采用 Base64 编码的 Ed25519 签名。JSON 必须由发布脚本以确定的 UTF-8、无 BOM、末尾单个换行方式写出；验证方签名/验证文件原始字节，避免跨语言 JSON canonicalization 差异。
+因此公开仓库写权限可直接改变 stable，必须严格限制仓库管理员和 GitHub App 权限。JSON 仍由发布脚本以确定的 UTF-8、无 BOM、末尾单个换行方式写出，以便精确计算 SHA-256。
 
 ## 公共控制文件
 
 ### stable.json
 
-`stable.json` 是唯一的部署控制面；其签名有效后才可使用其中的 URL。示例：
+`stable.json` 是唯一的部署控制面；它必须来自固定的公开仓库 HTTPS 地址并通过 schema 校验。示例：
 
 ```json
 {
@@ -128,7 +128,7 @@ manifest 记录当前版本的三个完整资产、大小和 SHA-256。它不包
 }
 ```
 
-允许的 phase 是 `validating`、`building-web`、`building-runtime`、`building-desktop`、`packaging`、`uploading`、`publishing-release`、`updating-stable`。终态为 `succeeded` 或 `failed`；失败状态保留到下一轮发布覆盖，并只包含通用错误码。
+允许的 phase 是 `validating`、`packaging`、`uploading`、`publishing-release`、`updating-stable`。本地/Action 构建发生在建立发布客户端之前，不写远程状态。终态为 `succeeded` 或 `failed`；失败状态保留到下一轮发布覆盖，并只包含通用错误码。
 
 ## 发布物与本地构建
 
@@ -142,7 +142,7 @@ wheelmaker-v1.23-windows-amd64/
     ...静态站点文件...
 ```
 
-本地构建模式只生成上述目录，不访问 GitHub、不上传、不修改 `stable.json`。发布模式对每个目录创建相同内容的 `.tar.gz`，再写 manifest 和签名。
+本地构建模式只生成上述目录以及同目录的 `build.json`，不访问 GitHub、不上传、不修改 `stable.json`。构建记录保存 source SHA、构建时工作树是否干净、构建时间、平台目录和 Desktop 是否存在。发布模式只读取这份已有记录和目录，对每个平台创建 `.tar.gz` 并写 manifest，绝不重新构建。
 
 解压实现必须使用 Node 标准库并拒绝绝对路径、`..` 路径穿越、符号链接、硬链接和超过预设文件数/总大小上限的条目。目标端先校验完整压缩包哈希，再解压。
 
@@ -151,19 +151,23 @@ wheelmaker-v1.23-windows-amd64/
 发布脚本只在私有源码仓库中存在。它支持本地直接发布和私有仓库中手动触发的 GitHub Action；二者调用相同 MJS 逻辑。本地发布以 Windows 为正式支持环境，不要求发布者使用 Linux、WSL 或 Unix shell；Windows 主机交叉编译三个 Hub 目标。Ubuntu 仅是手动 Action 的运行环境。
 
 ```text
-validate source SHA
-  → 读取已签名 stable，计算下一个 v1.x
+build：validate source SHA
   → 构建一次 Web
   → 在当前发布环境交叉编译三个 Hub 目标
   → 可选构建 Desktop EXE
-  → 生成平台目录、tar.gz、SHA-256 和 manifest 签名
+  → 写入 local-<source-sha>/build.json
+publish：校验当前 HEAD、工作树和构建记录
+  → 读取 stable，计算下一个 v1.x
+  → 由已有平台目录生成 tar.gz、SHA-256 和 manifest
   → 将 deploy.mjs/deploy-core.mjs 提交到公开 Git
   → 创建草稿 Release 并上传资产
   → 发布 Release
-  → 最后提交 stable.json 与 stable.json.sig
+  → 最后提交 stable.json
 ```
 
-本地发布要求工作树干净，并使用 `HEAD` SHA。Action 使用 `workflow_dispatch` 的必填 `ref`，解析为最终 commit SHA。没有 Release 资产成功公开之前，禁止更新 stable。
+本地发布要求构建时和发布时工作树都干净、当前 `HEAD` 与构建记录一致，并使用 `gh auth token` 写入公开仓库。缺少构建记录时直接提示先运行 `build-release.bat`。Action 使用 `workflow_dispatch` 的必填 `ref`，在同一个 job 内依次执行 `build` 和 `publish`。没有 Release 资产成功公开之前，禁止更新 stable。
+
+Windows 提供三个交互入口：`build-release.bat` 询问是否包含 Desktop；`publish-release.bat` 从构建记录显示实际 Desktop 状态并确认发布，不再询问 Desktop；`publish-release-action.bat` 要求当前干净 commit 已推送，询问 Desktop 后触发当前分支的 workflow。
 
 发布不设置持久化自定义锁。GitHub Release tag 的唯一性是并发仲裁：若创建草稿时 tag 冲突，发布器重新读取 stable，取得下一个版本后重试。失败时删除本轮草稿；下一轮开始前清理超过两小时的同类草稿。
 
@@ -181,7 +185,7 @@ validate source SHA
 - 默认发布优先在本地执行，零 runner 消耗；Action 是手动兜底。
 - Action 使用单个 Ubuntu job，不使用平台 matrix，不上传/下载中间 Actions artifact。
 - Web 只运行一次 `npm ci` 和一次生产构建，产物复制到三个包。
-- 使用 `setup-node` 的 npm 缓存（`app/package-lock.json`）和 `setup-go` 的 Go 缓存（`server/go.sum`）。不缓存 `node_modules`、签名密钥、App 私钥或 token。
+- 使用 `setup-node` 的 npm 缓存（`app/package-lock.json`）和 `setup-go` 的 Go 缓存（`server/go.sum`）。不缓存 `node_modules`、App 私钥或 token。
 - `with_desktop=false` 时跳过 Desktop 构建；`true` 时仍在该 Ubuntu job 内交叉编译。
 
 ## 目标端部署
@@ -210,7 +214,7 @@ validate source SHA
 
 公开 `deploy.mjs` 是小型启动器，源码在私有源码仓库维护、由发布流程复制到公开 Git。每次调用它时：
 
-1. 下载并验签 stable；
+1. 从固定 GitHub HTTPS 地址下载并校验 stable schema；
 2. 若 stable 指向的 `deploy.mjs` 或 `deploy-core.mjs` 哈希变化，下载到临时文件、验证哈希后替换本地副本；
 3. 当前进程执行已加载的 `deploy-core.mjs`。启动器在本轮被替换时，新启动器从下一次调用生效；
 4. core 下载、验证和解压当前平台资产，并执行安装或内部更新流程。
@@ -274,7 +278,7 @@ Web → Hub update API → 原子创建 lock → 触发 OS updater task
 
 ### App 版本判断
 
-Hub 的 `cmd.update.query` 读取本机 `release.json`，并从公开仓库拉取、验签 `stable.json`。响应包含 `installed` 与 `stable` 的版本、发布时间和 sourceSha，而不再包含 Git remote、分支、behind/ahead count 或工作树状态。App 以 `installed.version === stable.version` 判断 `up_to_date`，版本不同判断 `update_available`；存在 lock 时显示 queued/running 状态；stable 获取或验签失败显示 `checking_failed`。部署 MJS 仍独立重新验证 stable，UI 查询不能成为更新信任链。
+Hub 的 `cmd.update.query` 读取本机 `release.json`，并从固定公开仓库拉取、校验 `stable.json` schema。响应包含 `installed` 与 `stable` 的版本、发布时间和 sourceSha，而不再包含 Git remote、分支、behind/ahead count 或工作树状态。App 以 `installed.version === stable.version` 判断 `up_to_date`，版本不同判断 `update_available`；存在 lock 时显示 queued/running 状态；stable 获取或解析失败显示 `checking_failed`。部署 MJS 仍独立下载 stable 并验证后续 SHA-256 链，UI 查询不能成为更新控制输入。
 
 App 的 Update 页面展示“当前版本”和“最新版本”，而非“Current/Latest Git SHA”或提交差异；更新按钮继续调用受控 job 请求接口。
 
@@ -293,7 +297,7 @@ deploy.bat 或 deploy.sh
 
 ### Desktop 更新
 
-`update_exe.bat` 读取并验签 stable 中的独立 `desktopExe` 指针，下载并校验最近一次发布的 EXE。若 `WheelMakerDesktop.exe` 正在运行，脚本提示用户先退出并结束；不引入自删除、自替换或常驻更新助手。
+`update_exe.bat` 读取 stable 中的独立 `desktopExe` 指针，并按其中的 SHA-256 下载、校验最近一次发布的 EXE。若 `WheelMakerDesktop.exe` 正在运行，脚本提示用户先退出并结束；不引入自删除、自替换或常驻更新助手。
 
 ## 迁移后的程序边界
 
@@ -303,11 +307,11 @@ deploy.bat 或 deploy.sh
 
 - 无 Git/Go/npm 的 Windows、Linux、macOS 目标端可仅凭 Node 22+ 完成新安装和后续更新。
 - 三个平台包分别包含同一轮 Web 与对应 Hub，且目标端不会构建 Web。
-- stable、manifest、MJS 和平台包在任一哈希或签名无效时均不被执行或解压。
+- manifest、MJS 和平台包在任一 SHA-256 无效时均不被执行或解压；stable schema 或 URL 不合法时部署失败。
 - Web 重复点击更新只产生一个 job；Hub 替换期间 HTTP 请求已得到 accepted 响应。
 - 内部 `update` 不改写任意平台运行注册项，且无需管理员权限。
 - `migrate-uninstall` 清除旧运行项而保留用户配置/数据；迁移后不再保留旧 updater/monitor。
 - v1.3 未带 Desktop EXE、v1.2 带 EXE 时，v1.3 的 `update_exe.bat` 仍下载 v1.2 EXE。
 - Action 在一个 Ubuntu job 内完成三平台 Hub、可选 Desktop、一次 Web 构建和发布；缓存命中时不重新下载 Go/npm 依赖。
 - 成功安装保持 `bin/`、`web/`、`desktop/` 与 start/stop/restart/status 包装脚本的既有路径约定，且不产生 `app/` 目录。
-- App 从 schema v2 的本机 `release.json` 和已验签 stable 得出当前/最新版本，不执行 Git 查询或显示提交差异。
+- App 从 schema v2 的本机 `release.json` 和公开 stable 得出当前/最新版本，不执行 Git 查询或显示提交差异。

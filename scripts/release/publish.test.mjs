@@ -7,10 +7,9 @@ import test from 'node:test';
 
 import { createAppJwt, requestInstallationToken } from './github-app.mjs';
 import { GitHubApi } from './github-api.mjs';
-import { encodeJsonBytes, signBytes, verifyBytes } from './metadata.mjs';
+import { encodeJsonBytes } from './metadata.mjs';
 import { makeStable, publishBuiltRelease } from './publish.mjs';
 
-const ED_KEYS = generateKeyPairSync('ed25519');
 const SOURCE_SHA = '0123456789abcdef0123456789abcdef01234567';
 const SCRIPT_COMMIT_SHA = 'a'.repeat(40);
 const PUBLISHED_AT = '2026-07-16T09:00:00.000Z';
@@ -33,13 +32,6 @@ class FakeGitHubApi {
     if (!this.previousStable) return null;
     if (path === 'stable.json') {
       return { bytes: encodeJsonBytes(this.previousStable), sha: 'stable-sha' };
-    }
-    if (path === 'stable.json.sig') {
-      const bytes = encodeJsonBytes(this.previousStable);
-      return {
-        bytes: Buffer.from(`${signBytes(bytes, ED_KEYS.privateKey)}\n`),
-        sha: 'signature-sha',
-      };
     }
     return null;
   }
@@ -119,7 +111,7 @@ async function fixtureRelease() {
   return {
     channel: {
       owner: 'swm8023',
-      repository: 'wheelmaker-releases',
+      repository: 'wheelmaker-release',
       branch: 'main',
       stablePath: 'stable.json',
       publishStatusPath: 'publish-status.json',
@@ -128,8 +120,6 @@ async function fixtureRelease() {
     deployMjsBytes: Buffer.from('launcher-source'),
     outputRoot: join(root, 'assets'),
     platforms,
-    privateKey: ED_KEYS.privateKey,
-    publicKey: ED_KEYS.publicKey,
     publishedAt: PUBLISHED_AT,
     publisher: 'local',
     sourceSha: SOURCE_SHA,
@@ -219,7 +209,7 @@ test('stable failure keeps the already public release and leaves stable unchange
   }
 });
 
-test('publisher commits exact script bytes and signs exact stable bytes', async () => {
+test('publisher commits exact script bytes and hashes exact manifest bytes', async () => {
   const release = await fixtureRelease();
   release.deployMjsBytes = await readFile(
     new URL('../deploy/deploy.mjs', import.meta.url),
@@ -242,20 +232,16 @@ test('publisher commits exact script bytes and signs exact stable bytes', async 
     const stableFiles = Object.fromEntries(
       api.stableFiles.map(({ path, bytes }) => [path, bytes]),
     );
-    assert.equal(
-      verifyBytes(
-        stableFiles['stable.json'],
-        stableFiles['stable.json.sig'].toString('utf8').trim(),
-        ED_KEYS.publicKey,
-      ),
-      true,
+    assert.deepEqual(Object.keys(stableFiles), ['stable.json']);
+    assert.deepEqual(
+      JSON.parse(stableFiles['stable.json'].toString('utf8')),
+      stable,
     );
 
     assert.deepEqual(
       api.uploadedAssets.map(({ name }) => name).sort(),
       [
         'release-manifest.json',
-        'release-manifest.json.sig',
         'wheelmaker-v1.1-darwin-arm64.tar.gz',
         'wheelmaker-v1.1-linux-amd64.tar.gz',
         'wheelmaker-v1.1-windows-amd64.tar.gz',
@@ -264,16 +250,9 @@ test('publisher commits exact script bytes and signs exact stable bytes', async 
     const manifest = api.uploadedAssets.find(
       ({ name }) => name === 'release-manifest.json',
     ).bytes;
-    const manifestSignature = api.uploadedAssets.find(
-      ({ name }) => name === 'release-manifest.json.sig',
-    ).bytes;
     assert.equal(
-      verifyBytes(
-        manifest,
-        manifestSignature.toString('utf8').trim(),
-        ED_KEYS.publicKey,
-      ),
-      true,
+      stable.release.manifestSha256,
+      sha256ForTest(manifest),
     );
   } finally {
     await release.cleanup();
@@ -391,7 +370,7 @@ test('GitHub API commits files atomically through blobs, tree, commit, and ref',
       throw new Error(`unexpected request: ${request.method} ${request.url}`);
     },
     owner: 'swm8023',
-    repository: 'wheelmaker-releases',
+    repository: 'wheelmaker-release',
     token: 'installation-token',
   });
 
@@ -407,13 +386,13 @@ test('GitHub API commits files atomically through blobs, tree, commit, and ref',
   assert.deepEqual(
     requests.map(({ method, url }) => `${method} ${new URL(url).pathname}`),
     [
-      'GET /repos/swm8023/wheelmaker-releases/git/ref/heads/main',
-      'GET /repos/swm8023/wheelmaker-releases/git/commits/parent-commit',
-      'POST /repos/swm8023/wheelmaker-releases/git/blobs',
-      'POST /repos/swm8023/wheelmaker-releases/git/blobs',
-      'POST /repos/swm8023/wheelmaker-releases/git/trees',
-      'POST /repos/swm8023/wheelmaker-releases/git/commits',
-      'PATCH /repos/swm8023/wheelmaker-releases/git/refs/heads/main',
+      'GET /repos/swm8023/wheelmaker-release/git/ref/heads/main',
+      'GET /repos/swm8023/wheelmaker-release/git/commits/parent-commit',
+      'POST /repos/swm8023/wheelmaker-release/git/blobs',
+      'POST /repos/swm8023/wheelmaker-release/git/blobs',
+      'POST /repos/swm8023/wheelmaker-release/git/trees',
+      'POST /repos/swm8023/wheelmaker-release/git/commits',
+      'PATCH /repos/swm8023/wheelmaker-release/git/refs/heads/main',
     ],
   );
   const treeRequest = requests.find(({ url }) => url.endsWith('/git/trees'));
@@ -435,7 +414,7 @@ test('GitHub API uploads a binary release asset with an encoded name', async () 
       return jsonResponse({ id: 99 }, 201);
     },
     owner: 'swm8023',
-    repository: 'wheelmaker-releases',
+    repository: 'wheelmaker-release',
     token: 'installation-token',
   });
   await api.uploadReleaseAsset(

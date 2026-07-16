@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID, verify } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { spawn } from 'node:child_process';
 import {
@@ -32,11 +32,6 @@ const STATUS_STATES = new Set([
   'verifying',
 ]);
 const TERMINAL_STATES = new Set(['failed', 'succeeded']);
-
-export const RELEASE_PUBLIC_KEY_PEM = `-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEATHBcwgOFQcJHJ/eMNIEzxtZNiK8Wu4bdFsSD9+LLiao=
------END PUBLIC KEY-----
-`;
 
 function jsonBytes(value) {
   return Buffer.from(`${JSON.stringify(value, null, 2)}\n`, 'utf8');
@@ -469,7 +464,6 @@ export async function stageVerifiedRelease({
   jobId,
   onPhase = async () => {},
   platform = currentPlatformKey(),
-  publicKey = RELEASE_PUBLIC_KEY_PEM,
   stable,
   stagingDirectory,
 }) {
@@ -486,17 +480,6 @@ export async function stageVerifiedRelease({
     sha256Bytes(manifestBytes) !== stable.release.manifestSha256
   ) {
     throw new Error('release manifest SHA-256 verification failed');
-  }
-  const signatureBytes = await fetchBytes(`${manifestUrl}.sig`);
-  if (
-    !verify(
-      null,
-      manifestBytes,
-      publicKey,
-      Buffer.from(signatureBytes.toString('utf8').trim(), 'base64'),
-    )
-  ) {
-    throw new Error('release manifest signature verification failed');
   }
   const manifest = JSON.parse(manifestBytes.toString('utf8'));
   if (
@@ -1387,7 +1370,6 @@ async function executeDeployment(internalUpdate, deps, runtime) {
         stageVerifiedRelease({
           ...input,
           fetchBytes: deps.fetchBytes,
-          publicKey: deps.publicKey ?? RELEASE_PUBLIC_KEY_PEM,
           stable: deps.trustedStable,
           stagingDirectory,
         }));

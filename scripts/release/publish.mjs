@@ -5,8 +5,6 @@ import {
   encodeJsonBytes,
   nextV1Version,
   sha256Bytes,
-  signBytes,
-  verifyBytes,
 } from './metadata.mjs';
 import { createTarGz } from './tar.mjs';
 
@@ -19,10 +17,6 @@ const PHASE_ERROR_CODES = Object.freeze({
   uploading: 'asset_upload_failed',
   validating: 'validation_failed',
 });
-
-function signatureBytes(bytes, privateKey) {
-  return Buffer.from(`${signBytes(bytes, privateKey)}\n`, 'utf8');
-}
 
 function releaseAssetUrl(channel, version, name) {
   return `https://github.com/${channel.owner}/${channel.repository}/releases/download/${version}/${encodeURIComponent(name)}`;
@@ -46,20 +40,10 @@ function nextCandidate(previous, floorVersion) {
   return nextV1Version(base);
 }
 
-async function readSignedStable(api, channel, publicKey) {
-  const [stableFile, signatureFile] = await Promise.all([
-    api.readFile(channel.stablePath, channel.branch),
-    api.readFile(`${channel.stablePath}.sig`, channel.branch),
-  ]);
-  if (!stableFile && !signatureFile) {
+async function readStable(api, channel) {
+  const stableFile = await api.readFile(channel.stablePath, channel.branch);
+  if (!stableFile) {
     return null;
-  }
-  if (!stableFile || !signatureFile) {
-    throw new Error('stable metadata is incomplete');
-  }
-  const signature = signatureFile.bytes.toString('utf8').trim();
-  if (!verifyBytes(stableFile.bytes, signature, publicKey)) {
-    throw new Error('stable signature is invalid');
   }
   const stable = JSON.parse(stableFile.bytes.toString('utf8'));
   if (stable.schema !== 1 || versionNumber(stable.version) < 0) {
@@ -113,15 +97,7 @@ async function packageAttempt(release, version) {
     artifacts,
   };
   const manifestBytes = encodeJsonBytes(manifest);
-  const manifestSignatureBytes = signatureBytes(
-    manifestBytes,
-    release.privateKey,
-  );
   assets.push({ bytes: manifestBytes, name: 'release-manifest.json' });
-  assets.push({
-    bytes: manifestSignatureBytes,
-    name: 'release-manifest.json.sig',
-  });
 
   let desktopExe;
   if (release.desktopExe) {
@@ -195,7 +171,7 @@ export async function publishBuiltRelease(release, api) {
   let floorVersion = 'v1.0';
 
   try {
-    previous = await readSignedStable(api, release.channel, release.publicKey);
+    previous = await readStable(api, release.channel);
     version = nextCandidate(previous, floorVersion);
     await writeStatus(api, release, {
       phase: currentPhase,
@@ -255,11 +231,7 @@ export async function publishBuiltRelease(release, api) {
           throw error;
         }
         floorVersion = version;
-        previous = await readSignedStable(
-          api,
-          release.channel,
-          release.publicKey,
-        );
+        previous = await readStable(api, release.channel);
         version = nextCandidate(previous, floorVersion);
         currentPhase = 'packaging';
         await writeStatus(api, release, {
@@ -312,13 +284,7 @@ export async function publishBuiltRelease(release, api) {
     });
     const stableBytes = encodeJsonBytes(stable);
     await api.commitFiles(
-      [
-        { path: release.channel.stablePath, bytes: stableBytes },
-        {
-          path: `${release.channel.stablePath}.sig`,
-          bytes: signatureBytes(stableBytes, release.privateKey),
-        },
-      ],
+      [{ path: release.channel.stablePath, bytes: stableBytes }],
       `chore: publish stable ${version}`,
       release.channel.branch,
     );

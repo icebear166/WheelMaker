@@ -1,12 +1,10 @@
 import assert from 'node:assert/strict';
-import { generateKeyPairSync } from 'node:crypto';
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
 import {
-  RELEASE_PUBLIC_KEY_PEM,
   acquireUpdateLease,
   createLegacyMigrationAdapter,
   createRuntimeAdapter,
@@ -23,7 +21,6 @@ import {
 import {
   encodeJsonBytes,
   sha256Bytes,
-  signBytes,
 } from '../release/metadata.mjs';
 import { createTarGz } from '../release/tar.mjs';
 
@@ -36,13 +33,6 @@ const RUNTIME_PATHS = {
   uid: 501,
   userHome: 'C:\\Users\\alice',
 };
-
-test('core embeds the same release verification key as the source publisher', async () => {
-  assert.equal(
-    RELEASE_PUBLIC_KEY_PEM,
-    await readFile(new URL('../release/release-public-key.pem', import.meta.url), 'utf8'),
-  );
-});
 
 test('Windows plan contains current-user tasks and fixed 03:00 updater', () => {
   const plan = windowsRuntimePlan(RUNTIME_PATHS);
@@ -268,8 +258,6 @@ test('manifest and completed archive are verified before extraction', async () =
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-stage-'));
   const source = join(root, 'source');
   const archivePath = join(root, 'package.tar.gz');
-  const { privateKey, publicKey } = generateKeyPairSync('ed25519');
-
   try {
     await mkdir(join(source, 'hub'), { recursive: true });
     await mkdir(join(source, 'web'), { recursive: true });
@@ -302,10 +290,6 @@ test('manifest and completed archive are verified before extraction', async () =
     };
     const downloads = new Map([
       [stable.release.manifestUrl, manifestBytes],
-      [
-        `${stable.release.manifestUrl}.sig`,
-        Buffer.from(`${signBytes(manifestBytes, privateKey)}\n`),
-      ],
       [manifest.artifacts['windows-amd64'].url, archiveBytes],
     ]);
 
@@ -313,7 +297,6 @@ test('manifest and completed archive are verified before extraction', async () =
       fetchBytes: async (url) => downloads.get(url),
       jobId: 'job-a',
       platform: 'windows-amd64',
-      publicKey,
       stable,
       stagingDirectory: join(root, 'staging'),
     });
@@ -331,7 +314,6 @@ test('manifest and completed archive are verified before extraction', async () =
           fetchBytes: async (url) => downloads.get(url),
           jobId: 'job-b',
           platform: 'windows-amd64',
-          publicKey,
           stable,
           stagingDirectory: join(root, 'staging'),
         }),

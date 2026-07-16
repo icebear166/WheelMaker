@@ -39,7 +39,7 @@ This model works well when you want one machine to expose the public entrypoint 
 | Machine A / Nginx | `wss://<host>:28800/ws` | Registry WebSocket |
 | Machine A / internal | `127.0.0.1:9630` | Registry listener |
 
-### 1. Deploy the signed prebuilt release
+### 1. Deploy the prebuilt release
 
 The target machine does not need the WheelMaker source tree, Git, Go, npm, or a platform build toolchain. It needs:
 
@@ -51,7 +51,7 @@ The target machine does not need the WheelMaker source tree, Git, Go, npm, or a 
 sudo loginctl enable-linger "$USER"
 ```
 
-For the one-time migration from the old source deployment, run the wrapper from the source checkout. It copies the lightweight launcher into `~/.wheelmaker`, removes old services/programs while preserving user data, and installs the current signed stable release:
+For the one-time migration from the old source deployment, run the wrapper from the source checkout. It copies the lightweight launcher into `~/.wheelmaker`, removes old services/programs while preserving user data, and installs the current stable release:
 
 ```bat
 deploy.bat
@@ -61,7 +61,7 @@ deploy.bat
 bash deploy.sh
 ```
 
-For a new installation, place the public `deploy.mjs` at `~/.wheelmaker/deploy.mjs` and run `node ~/.wheelmaker/deploy.mjs`. The launcher downloads `stable.json` and its signature, refreshes itself/core from the public release repository, verifies every hash/signature, and then installs the platform archive.
+For a new installation, place the public `deploy.mjs` at `~/.wheelmaker/deploy.mjs` and run `node ~/.wheelmaker/deploy.mjs`. The launcher downloads `stable.json`, refreshes itself/core from the public release repository, and verifies the SHA-256 chain from stable to the manifest and platform archive before installation.
 
 Every normal deploy replaces Hub and Web together. The resulting layout is:
 
@@ -85,7 +85,7 @@ Normal deployment registers only current-user runtimes and does not require admi
 
 The migration requests UAC on Windows only if legacy Windows Services actually exist. It also removes old tasks/HKCU Run values, updater/deploy/monitor executables, and `build/bootstrap`; it preserves `config.json`, databases, logs, Desktop, and other user data.
 
-`release.json` schema v2 records `version`, `publishedAt`, `sourceSha`, `manifestSha256`, and `installedAt`. App version reporting reads this file and the signed stable metadata; it does not infer the installed version from Git.
+`release.json` schema v2 records `version`, `publishedAt`, `sourceSha`, `manifestSha256`, and `installedAt`. App version reporting reads this file and public stable metadata; it does not infer the installed version from Git.
 
 Lifecycle commands after deployment on Windows:
 
@@ -431,7 +431,7 @@ macOS/Linux:
 The scheduled and Web-triggered update flow is:
 
 ```text
-verify signed stable -> acquire staging lock -> download -> verify -> stop Hub -> apply Hub + Web -> write release.json -> restart Hub
+validate stable -> acquire staging lock -> download -> verify SHA-256 -> stop Hub -> apply Hub + Web -> write release.json -> restart Hub
 ```
 
 The Web UI requests an update by creating one atomic job in `staging/lock.json`; repeated clicks reuse the active job. `staging/status.json` exposes the current phase (`queued`, `downloading`, `verifying`, `applying`, `restarting`, `succeeded`, or `failed`). `node ~/.wheelmaker/deploy.mjs update` is the non-administrative updater entrypoint and never installs or removes runtime registrations.
@@ -554,7 +554,7 @@ WheelMaker also includes configuration and runtime visibility in the main app:
 - runtime and registry address settings
 - token provider and token stats, including DeepSeek token stats
 - hub and registry project visibility
-- signed stable version, release history, publish status, and active update job
+- stable version, release history, publish status, and active update job
 
 ## Repository structure
 
@@ -587,13 +587,15 @@ npm run build:web:release
 
 Release and script overview:
 
-- `node scripts/release.mjs build [--with-desktop]` — build `.release-out` locally without publishing; Windows is the primary local release host, and the output layout matches deployment staging.
-- `node scripts/release.mjs publish [--with-desktop]` — build and publish from a clean checkout, incrementing only `v1.x`.
+- `build-release.bat` — interactively choose whether to include Desktop, then build `.release-out/local-<source-sha>` and its `build.json` record without publishing.
+- `publish-release.bat` — publish that exact recorded build from a clean, matching checkout; it never rebuilds or asks about Desktop and uses the token from the authenticated `gh` CLI.
+- `publish-release-action.bat` — verify the current clean commit is pushed, then interactively trigger the manual Action with the source SHA and Desktop choice.
+- `node scripts/release.mjs build [--with-desktop]` / `node scripts/release.mjs publish` — non-interactive equivalents. `publish` fails with a prompt to run `build-release.bat` when no matching build record exists.
 - `.github/workflows/publish-release.yml` — manual `workflow_dispatch` fallback with a source `ref` and optional `with_desktop`; Web builds once, while Hub binaries cross-compile for Windows amd64, Linux amd64, and macOS arm64.
-- `deploy.bat` / `deploy.sh` — one-time legacy migration followed by signed stable deployment.
-- `update_exe.bat` — independently update `WheelMakerDesktop.exe` through the same signed stable trust chain.
+- `deploy.bat` / `deploy.sh` — one-time legacy migration followed by stable deployment.
+- `update_exe.bat` — independently update `WheelMakerDesktop.exe` through the same stable SHA-256 chain.
 
-Publishing uses GitHub App secrets `WHEELMAKER_RELEASE_APP_ID`, `WHEELMAKER_RELEASE_INSTALLATION_ID`, and `WHEELMAKER_RELEASE_APP_PRIVATE_KEY`, plus signing secret `WHEELMAKER_SIGNING_PRIVATE_KEY`. The GitHub App is installed only on the public release repository; the signing private key is never committed. A release publishes assets first and writes signed `stable.json` last.
+Local publishing requires `gh auth login` and keeps the token returned by `gh auth token` only in the Node process. GitHub Actions publishing uses App secrets `WHEELMAKER_RELEASE_APP_ID`, `WHEELMAKER_RELEASE_INSTALLATION_ID`, and `WHEELMAKER_RELEASE_APP_PRIVATE_KEY`; the App is installed only on the public `swm8023/wheelmaker-release` repository. A release publishes and hashes all immutable assets before writing `stable.json` last. Release-repository write access is therefore the publication trust boundary.
 
 ## License
 

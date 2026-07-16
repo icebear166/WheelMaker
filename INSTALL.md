@@ -6,7 +6,7 @@
 
 ## 1. 环境准备
 
-目标机器只需要 Node.js `22+`。部署流程从公共发布仓库下载签名元数据和预编译包，不需要 WheelMaker 源码、Git、Go、npm 或本机交叉编译环境。
+目标机器只需要 Node.js `22+`。部署流程从公共发布仓库下载元数据和预编译包，不需要 WheelMaker 源码、Git、Go、npm 或本机交叉编译环境。
 
 Registry 入口机额外需要：
 
@@ -54,7 +54,7 @@ Windows PowerShell：
 ```powershell
 $install = Join-Path $HOME '.wheelmaker'
 New-Item -ItemType Directory -Force -Path $install | Out-Null
-Invoke-WebRequest 'https://raw.githubusercontent.com/swm8023/wheelmaker-releases/main/deploy.mjs' -OutFile (Join-Path $install 'deploy.mjs')
+Invoke-WebRequest 'https://raw.githubusercontent.com/swm8023/wheelmaker-release/main/deploy.mjs' -OutFile (Join-Path $install 'deploy.mjs')
 node (Join-Path $install 'deploy.mjs')
 ```
 
@@ -63,12 +63,12 @@ macOS/Linux：
 ```bash
 mkdir -p "$HOME/.wheelmaker"
 curl --fail --location --proto '=https' --tlsv1.2 \
-  https://raw.githubusercontent.com/swm8023/wheelmaker-releases/main/deploy.mjs \
+  https://raw.githubusercontent.com/swm8023/wheelmaker-release/main/deploy.mjs \
   --output "$HOME/.wheelmaker/deploy.mjs"
 node "$HOME/.wheelmaker/deploy.mjs"
 ```
 
-启动器会验证 `stable.json` 的 Ed25519 签名，并按其中的固定 SHA-256 地址刷新自身核心、下载对应平台包。后续目标机版本判断只读签名 stable 和本地 schema v2 `release.json`，不读取 Git。
+启动器通过 GitHub HTTPS 下载 `stable.json`，并按其中的固定 SHA-256 刷新自身核心，再按 stable → manifest → 平台包的 SHA-256 链验证下载内容。后续目标机版本判断只读公开 stable 和本地 schema v2 `release.json`，不读取 Git。发布安全边界是公开发布仓库的写权限，因此应严格保护该仓库及发布 GitHub App。
 
 ## 3. 确认共享 Token 策略
 

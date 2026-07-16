@@ -2,11 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace source-based deployment with signed prebuilt Hub + Web releases, a Node 22 deployment launcher/core, current-user runtime registration, and version-aware Hub/App update status.
+**Goal:** Replace source-based deployment with prebuilt Hub + Web releases, a Node 22 deployment launcher/core, current-user runtime registration, and version-aware Hub/App update status.
 
-**Architecture:** The private source repository owns build, signing, publishing, and deployment MJS sources. A source-side publisher produces three complete platform archives, copies the two deployment MJS files to a public `swm8023/wheelmaker-releases` repository, publishes immutable Release assets, and updates signed `stable.json` last. Target machines keep the existing `~/.wheelmaker/bin`, `web`, and `desktop` layout; `deploy.mjs` verifies and refreshes `deploy-core.mjs`, while the core owns extraction, runtime registration, migration, locking, and release metadata.
+**Architecture:** The private source repository owns build, publishing, and deployment MJS sources. A source-side publisher produces three complete platform archives, copies the two deployment MJS files to a public `swm8023/wheelmaker-release` repository, publishes immutable Release assets, and updates `stable.json` last. Target machines keep the existing `~/.wheelmaker/bin`, `web`, and `desktop` layout; `deploy.mjs` verifies SHA-256 values and refreshes `deploy-core.mjs`, while the core owns extraction, runtime registration, migration, locking, and release metadata.
 
-**Tech Stack:** Node.js 22 standard library and `node:test`, Go 1.26, React/TypeScript/Jest, GitHub REST API, GitHub Actions, Ed25519, Windows Task Scheduler, macOS LaunchAgents, Linux systemd user units.
+**Tech Stack:** Node.js 22 standard library and `node:test`, Go 1.26, React/TypeScript/Jest, GitHub REST API, GitHub Actions, Windows Task Scheduler, macOS LaunchAgents, Linux systemd user units.
+
+> **2026-07-17 implementation adjustment:** The detailed task notes below preserve the original execution history. The delivered design removes the Ed25519/`.sig` chain, uses release-repository write permissions plus stable → manifest → archive SHA-256 checks, separates `build` from `publish` with a persistent `build.json`, uses local `gh auth token`, and retains GitHub App credentials only for Actions. [The design document](../../../prebuilt-release-deployment-design.md) is authoritative for the final behavior.
 
 ---
 
@@ -95,7 +97,7 @@ Create `scripts/release/channel.json`:
 ```json
 {
   "owner": "swm8023",
-  "repository": "wheelmaker-releases",
+  "repository": "wheelmaker-release",
   "branch": "main",
   "stablePath": "stable.json",
   "publishStatusPath": "publish-status.json"
@@ -421,7 +423,7 @@ Expected: FAIL because launcher code is missing.
 
 - [ ] **Step 3: Implement launcher-only responsibilities**
 
-`deploy.mjs` must contain the exact public key from `scripts/release/release-public-key.pem` and the stable URL `https://raw.githubusercontent.com/swm8023/wheelmaker-releases/main/stable.json` as source constants, plus HTTPS fetch with redirect validation, raw-byte Ed25519 verification, SHA-256, same-directory temporary writes, next-run launcher promotion, core replacement, and dynamic import of local `deploy-core.mjs`. It must not parse tar, install files, or register runtime tasks. Because the checked-in source is already runnable, legacy `deploy.bat`/`deploy.sh` can copy it directly before the first public download.
+Historical task note: the launcher was initially planned with an embedded Ed25519 key. The implemented launcher instead uses the stable URL `https://raw.githubusercontent.com/swm8023/wheelmaker-release/main/stable.json`, HTTPS redirect validation, SHA-256, same-directory temporary writes, next-run launcher promotion, core replacement, and dynamic import of local `deploy-core.mjs`.
 
 Its public parser passes only no command, `migrate-uninstall`, or internal `update`/runtime/Desktop actions through to core. Unknown arguments fail before any installation mutation.
 
@@ -816,7 +818,7 @@ Remove `shortGitSha`, `wheelMakerBehindCopy`, and `wheelMakerReleaseRef`. Add he
 
 - [ ] **Step 5: Add publish status and public Release history**
 
-Render optional Hub-provided `publishStatus` phase/state near the stable version. Query `https://api.github.com/repos/swm8023/wheelmaker-releases/releases` from the Web client for version history, filter drafts/prereleases, and display version plus published time. This is display-only and does not choose deployment assets.
+Render optional Hub-provided `publishStatus` phase/state near the stable version. Query `https://api.github.com/repos/swm8023/wheelmaker-release/releases` from the Web client for version history, filter drafts/prereleases, and display version plus published time. This is display-only and does not choose deployment assets.
 
 - [ ] **Step 6: Poll only active jobs**
 

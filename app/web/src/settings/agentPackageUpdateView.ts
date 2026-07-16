@@ -9,7 +9,7 @@ import type {
 
 export const AGENT_PACKAGE_SCAN_TIMEOUT_MS = 65000;
 export const WHEELMAKER_RELEASE_HISTORY_URL =
-  'https://api.github.com/repos/swm8023/wheelmaker-releases/releases';
+  'https://api.github.com/repos/swm8023/wheelmaker-release/releases';
 
 const ACTIVE_WHEELMAKER_UPDATE_STATES = new Set([
   'queued',
