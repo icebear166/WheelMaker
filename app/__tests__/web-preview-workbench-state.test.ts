@@ -13,12 +13,123 @@ import {
   previewWorkbenchStateFromSnapshot,
   previewWorkbenchHeaderTitle,
   previewWorkbenchTabTooltip,
+  resolvePreviewDesktopFilePath,
   selectPreviewProject,
   selectPreviewTab,
+  type AttachmentPreviewTab,
+  type FilePreviewTab,
+  type PortRelayPreviewTab,
+  type PromptDiffPreviewTab,
   updatePreviewTabAfterLoad,
 } from '../web/src/preview/previewWorkbenchState';
 
+const promptDiffFiles = (firstPath = 'src/a.ts', secondPath = 'src/b.ts') => [
+  {
+    path: firstPath,
+    status: 'MODIFIED' as const,
+    additions: 2,
+    deletions: 1,
+    diff: `diff for ${firstPath}`,
+    expanded: false,
+  },
+  {
+    path: secondPath,
+    status: 'ADDED' as const,
+    additions: 3,
+    deletions: 0,
+    diff: `diff for ${secondPath}`,
+    expanded: true,
+  },
+];
+
+const filePreviewTab = (overrides: Partial<FilePreviewTab> = {}): FilePreviewTab => ({
+  id: 'file:README.md',
+  type: 'file',
+  projectId: 'p1',
+  title: 'README.md',
+  loading: false,
+  error: '',
+  requestId: 1,
+  path: 'README.md',
+  targetLine: null,
+  content: '# README',
+  info: {path: 'README.md', kind: 'file'},
+  ...overrides,
+});
+
+const promptDiffPreviewTab = (): PromptDiffPreviewTab => ({
+  id: 'prompt-diff:s1:diff-1',
+  type: 'prompt-diff',
+  projectId: 'p1',
+  title: 'Prompt diff',
+  loading: false,
+  error: '',
+  requestId: 1,
+  sessionId: 's1',
+  artifactId: 'diff-1',
+  promptText: '',
+  promptSummary: '',
+  files: promptDiffFiles(),
+  activeFilePath: 'src/b.ts',
+});
+
+const attachmentPreviewTab = (): AttachmentPreviewTab => ({
+  id: 'attachment:s1:file-1',
+  type: 'attachment',
+  projectId: 'p1',
+  title: 'image.png',
+  loading: false,
+  error: '',
+  requestId: 1,
+  sessionId: 's1',
+  attachmentKey: 'file-1',
+  meta: '',
+  mimeType: 'image/png',
+  kind: 'image',
+  src: 'data:image/png;base64,',
+});
+
+const portRelayPreviewTab = (): PortRelayPreviewTab => ({
+  id: 'port-relay:hub-a:5173:/',
+  type: 'port-relay',
+  projectId: 'p1',
+  title: 'hub-a:5173',
+  loading: false,
+  error: '',
+  requestId: 1,
+  hubId: 'hub-a',
+  targetPort: 5173,
+  framePath: '/',
+  url: 'https://example.test/',
+  reloadKey: 0,
+});
+
 describe('preview workbench state', () => {
+  test('resolves only server-confirmed paths for loaded ordinary files', () => {
+    expect(resolvePreviewDesktopFilePath(filePreviewTab())).toBe('README.md');
+    expect(resolvePreviewDesktopFilePath(filePreviewTab({
+      path: 'src/../README.md',
+      info: {path: 'README.md', kind: 'file'},
+    }))).toBe('README.md');
+  });
+
+  test.each([
+    ['without server info', {info: null}],
+    ['while loading with stale info', {loading: true}],
+    ['after an error with stale info', {error: 'read failed'}],
+  ] as const)('hides ordinary file desktop actions %s', (_label, overrides) => {
+    expect(resolvePreviewDesktopFilePath(filePreviewTab(overrides))).toBe('');
+  });
+
+  test('resolves the active prompt diff file', () => {
+    expect(resolvePreviewDesktopFilePath(promptDiffPreviewTab())).toBe('src/b.ts');
+  });
+
+  test('does not resolve desktop paths for attachment or port relay tabs', () => {
+    expect(resolvePreviewDesktopFilePath(attachmentPreviewTab())).toBe('');
+    expect(resolvePreviewDesktopFilePath(portRelayPreviewTab())).toBe('');
+  });
+
   test('reuses the same file resource within a project and updates target line', () => {
     const initial = createPreviewWorkbenchState('p1');
     const first = openPreviewTab(initial, {
@@ -75,6 +186,133 @@ describe('preview workbench state', () => {
     expect(activePreviewTab(p1)?.id).toBe('prompt-diff:s1:diff-1');
     const p2 = selectPreviewProject(p1, 'p2');
     expect(activePreviewTab(p2)?.id).toBe('port-relay:hub-a:5173:/app');
+  });
+
+  test('initializes a prompt diff with the preferred active file', () => {
+    const state = openPreviewTab(createPreviewWorkbenchState('p1'), {
+      type: 'prompt-diff',
+      projectId: 'p1',
+      sessionId: 's1',
+      artifactId: 'diff-1',
+      title: 'Prompt diff',
+      files: promptDiffFiles(),
+      activeFilePath: 'src/b.ts',
+    });
+
+    expect(activePreviewTab(state)).toMatchObject({
+      type: 'prompt-diff',
+      activeFilePath: 'src/b.ts',
+    });
+  });
+
+  test('falls back to the first prompt diff file when the preferred path is missing', () => {
+    const state = openPreviewTab(createPreviewWorkbenchState('p1'), {
+      type: 'prompt-diff',
+      projectId: 'p1',
+      sessionId: 's1',
+      artifactId: 'diff-1',
+      title: 'Prompt diff',
+      files: promptDiffFiles(),
+      activeFilePath: 'src/missing.ts',
+    });
+
+    expect(activePreviewTab(state)).toMatchObject({
+      type: 'prompt-diff',
+      activeFilePath: 'src/a.ts',
+    });
+  });
+
+  test('keeps an empty active path when a prompt diff has no files', () => {
+    const state = openPreviewTab(createPreviewWorkbenchState('p1'), {
+      type: 'prompt-diff',
+      projectId: 'p1',
+      sessionId: 's1',
+      artifactId: 'diff-1',
+      title: 'Prompt diff',
+      files: [],
+      activeFilePath: 'src/b.ts',
+    });
+
+    expect(activePreviewTab(state)).toMatchObject({
+      type: 'prompt-diff',
+      activeFilePath: '',
+    });
+  });
+
+  test('preserves the active prompt diff file when reopening without a preference', () => {
+    const initial = openPreviewTab(createPreviewWorkbenchState('p1'), {
+      type: 'prompt-diff',
+      projectId: 'p1',
+      sessionId: 's1',
+      artifactId: 'diff-1',
+      title: 'Prompt diff',
+      files: promptDiffFiles(),
+      activeFilePath: 'src/b.ts',
+    });
+    const reopened = openPreviewTab(initial, {
+      type: 'prompt-diff',
+      projectId: 'p1',
+      sessionId: 's1',
+      artifactId: 'diff-1',
+      title: 'Updated prompt diff',
+      files: promptDiffFiles(),
+    });
+
+    expect(activePreviewTab(reopened)).toMatchObject({
+      type: 'prompt-diff',
+      activeFilePath: 'src/b.ts',
+    });
+  });
+
+  test('reselects the active prompt diff file when reopening with an explicit preference', () => {
+    const initial = openPreviewTab(createPreviewWorkbenchState('p1'), {
+      type: 'prompt-diff',
+      projectId: 'p1',
+      sessionId: 's1',
+      artifactId: 'diff-1',
+      title: 'Prompt diff',
+      files: promptDiffFiles(),
+      activeFilePath: 'src/b.ts',
+    });
+    const reselected = openPreviewTab(initial, {
+      type: 'prompt-diff',
+      projectId: 'p1',
+      sessionId: 's1',
+      artifactId: 'diff-1',
+      title: 'Updated prompt diff',
+      files: promptDiffFiles(),
+      activeFilePath: 'src/a.ts',
+    });
+
+    expect(activePreviewTab(reselected)).toMatchObject({
+      type: 'prompt-diff',
+      activeFilePath: 'src/a.ts',
+    });
+  });
+
+  test('falls back to the first replacement file when the active prompt diff file disappears', () => {
+    const initial = openPreviewTab(createPreviewWorkbenchState('p1'), {
+      type: 'prompt-diff',
+      projectId: 'p1',
+      sessionId: 's1',
+      artifactId: 'diff-1',
+      title: 'Prompt diff',
+      files: promptDiffFiles(),
+      activeFilePath: 'src/b.ts',
+    });
+    const replaced = openPreviewTab(initial, {
+      type: 'prompt-diff',
+      projectId: 'p1',
+      sessionId: 's1',
+      artifactId: 'diff-1',
+      title: 'Updated prompt diff',
+      files: promptDiffFiles('src/c.ts', 'src/d.ts'),
+    });
+
+    expect(activePreviewTab(replaced)).toMatchObject({
+      type: 'prompt-diff',
+      activeFilePath: 'src/c.ts',
+    });
   });
 
   test('tracks visited tabs for render caching within the active project', () => {
@@ -445,6 +683,50 @@ describe('preview workbench state', () => {
       type: 'attachment',
       src: '',
       attachmentKey: 'p1\u001fs1\u001fsha256-image',
+    });
+  });
+
+  test('serializes and restores the active prompt diff file', () => {
+    const state = openPreviewTab(createPreviewWorkbenchState('p1'), {
+      type: 'prompt-diff',
+      projectId: 'p1',
+      sessionId: 's1',
+      artifactId: 'diff-1',
+      title: 'Prompt diff',
+      files: promptDiffFiles(),
+      activeFilePath: 'src/b.ts',
+    });
+
+    const snapshot = previewWorkbenchSnapshotFromState(state);
+
+    expect(snapshot.tabsByProjectId.p1[0]).toMatchObject({
+      type: 'prompt-diff',
+      activeFilePath: 'src/b.ts',
+    });
+    expect(activePreviewTab(previewWorkbenchStateFromSnapshot(snapshot))).toMatchObject({
+      type: 'prompt-diff',
+      activeFilePath: 'src/b.ts',
+    });
+  });
+
+  test('restores a legacy prompt diff snapshot without an active path to the first file', () => {
+    const state = openPreviewTab(createPreviewWorkbenchState('p1'), {
+      type: 'prompt-diff',
+      projectId: 'p1',
+      sessionId: 's1',
+      artifactId: 'diff-1',
+      title: 'Prompt diff',
+      files: promptDiffFiles(),
+      activeFilePath: 'src/b.ts',
+    });
+    const legacySnapshot = JSON.parse(
+      JSON.stringify(previewWorkbenchSnapshotFromState(state)),
+    ) as ReturnType<typeof previewWorkbenchSnapshotFromState>;
+    delete (legacySnapshot.tabsByProjectId.p1[0] as unknown as {activeFilePath?: string}).activeFilePath;
+
+    expect(activePreviewTab(previewWorkbenchStateFromSnapshot(legacySnapshot))).toMatchObject({
+      type: 'prompt-diff',
+      activeFilePath: 'src/a.ts',
     });
   });
 });

@@ -34,7 +34,11 @@ import { initializePWAFoundation } from '../platform/pwa';
 import {cleanupNativeWebViewPWA} from '../platform/pwa/nativePwaGuard';
 import { DesktopDragRegion, DesktopWindowControls } from '../shell/layouts/desktop/DesktopTitleBar';
 import {resolveDesktopChatQuickSwitchContextMenu} from '../shell/layouts/desktop/chatQuickSwitchContextMenu';
-import {getDesktopWindowBridge} from '../platform/desktop/desktopRuntime';
+import {
+  getDesktopWindowBridge,
+  invokeDesktopProjectFileAction,
+  type DesktopProjectFileAction,
+} from '../platform/desktop/desktopRuntime';
 import {getNativeRuntimeBridge, isNativeShellHost} from '../platform/native/nativeRuntime';
 import {
   AppConfirmDialog,
@@ -443,6 +447,8 @@ import {
   previewWorkbenchSnapshotFromState,
   previewWorkbenchStateFromSnapshot,
   previewTabId,
+  resolvePreviewDesktopFilePath,
+  resolvePromptDiffActiveFilePath,
   selectPreviewProject,
   selectPreviewTab,
   updatePreviewTab,
@@ -2394,6 +2400,7 @@ const ChatPromptArtifactPreviewViewer = React.memo(function ChatPromptArtifactPr
   onToggleFile,
   scrollRef,
 }: ChatPromptArtifactPreviewViewerProps) {
+  const activeFilePath = resolvePromptDiffActiveFilePath(preview.files, preview.activeFilePath);
   let body: React.ReactNode;
   if (preview.loading) {
     body = <div className="muted block">Loading diff...</div>;
@@ -2415,10 +2422,11 @@ const ChatPromptArtifactPreviewViewer = React.memo(function ChatPromptArtifactPr
         </div>
         {preview.files.map(file => {
           const {fileName, parentPath} = splitPathForDisplay(file.path);
+          const active = file.path === activeFilePath;
           return (
             <section
               key={file.path}
-              className={`chat-prompt-diff-file${file.expanded ? ' expanded' : ''}`}
+              className={`chat-prompt-diff-file${file.expanded ? ' expanded' : ''}${active ? ' active' : ''}`}
               data-preview-diff-path={file.path}
             >
               <button
@@ -2426,6 +2434,7 @@ const ChatPromptArtifactPreviewViewer = React.memo(function ChatPromptArtifactPr
                 className="chat-prompt-diff-file-header"
                 onClick={() => onToggleFile(file.path)}
                 aria-expanded={file.expanded}
+                aria-current={active || undefined}
                 title={file.path}
               >
                 <span className={`codicon ${file.expanded ? 'codicon-chevron-down' : 'codicon-chevron-right'}`} aria-hidden="true" />
@@ -8667,6 +8676,7 @@ export function App() {
                   ...currentTab,
                   title: promptArtifactPreviewTitle(files.length),
                   files,
+                  activeFilePath: resolvePromptDiffActiveFilePath(files, currentTab.activeFilePath),
                   loading: false,
                   error: '',
                 }
@@ -18228,6 +18238,7 @@ export function App() {
           promptText,
           promptSummary,
           files: initialFiles,
+          activeFilePath: initialPath || initialFiles[0]?.path || '',
         }),
         artifactProjectId,
         tabId,
@@ -18262,6 +18273,12 @@ export function App() {
                 promptText,
                 promptSummary,
                 files,
+                activeFilePath: files.some(file => file.path === tab.activeFilePath)
+                  ? tab.activeFilePath
+                  : resolvePromptDiffActiveFilePath(
+                      files,
+                      initialPath || initialFiles[0]?.path || '',
+                    ),
                 loading: false,
                 error: '',
               }
@@ -18308,6 +18325,7 @@ export function App() {
         item.type === 'prompt-diff'
           ? {
               ...item,
+              activeFilePath: path,
               files: item.files.map(file =>
                 file.path === path ? {...file, expanded: !file.expanded} : file,
               ),
@@ -21068,10 +21086,53 @@ export function App() {
       return null;
     }
     const closeActionsMenu = () => setPreviewWorkbenchActionsMenuOpen(false);
+    const projectRoot = projects.find(project => project.projectId === tab.projectId)?.path;
+    const relativePath = resolvePreviewDesktopFilePath(tab);
+    const desktopBridge = getDesktopWindowBridge();
+    const canOpenProjectFileInVSCode = Boolean(projectRoot && relativePath && desktopBridge?.openProjectFileInVSCode);
+    const canShowProjectFileInFolder = Boolean(projectRoot && relativePath && desktopBridge?.showProjectFileInFolder);
+    const runProjectFileDesktopAction = (
+      action: DesktopProjectFileAction,
+      failurePrefix: string,
+    ) => {
+      closeActionsMenu();
+      setToastMessage('');
+      if (!desktopBridge || !projectRoot || !relativePath) {
+        return;
+      }
+      Promise.resolve()
+        .then(() => invokeDesktopProjectFileAction(desktopBridge, action, projectRoot, relativePath))
+        .catch(err => {
+          const reason = err instanceof Error ? err.message : String(err);
+          setToastMessage(`${failurePrefix}: ${reason}`);
+        });
+    };
     const indexPending = projectIndexScanPendingByProjectId[tab.projectId] === true;
     const indexError = projectIndexErrorByProjectId[tab.projectId] || '';
     return (
       <>
+        {canOpenProjectFileInVSCode ? (
+          <button
+            type="button"
+            role="menuitem"
+            className="preview-workbench-action-menu-item"
+            onClick={() => runProjectFileDesktopAction('vscode', 'Failed to open file in VS Code')}
+          >
+            <span className="codicon codicon-code" aria-hidden="true" />
+            <span>Open with VS Code</span>
+          </button>
+        ) : null}
+        {canShowProjectFileInFolder ? (
+          <button
+            type="button"
+            role="menuitem"
+            className="preview-workbench-action-menu-item"
+            onClick={() => runProjectFileDesktopAction('folder', 'Failed to show file in File Explorer')}
+          >
+            <span className="codicon codicon-folder-opened" aria-hidden="true" />
+            <span>Show in File Explorer</span>
+          </button>
+        ) : null}
         {tab.type === 'file' ? (
           <>
             <button

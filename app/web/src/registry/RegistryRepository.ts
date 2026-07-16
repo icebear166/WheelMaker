@@ -912,7 +912,7 @@ export class RegistryRepository {
       ? Math.max(1, Math.min(12, Math.trunc(payload.tabSize)))
       : undefined;
     return {
-      path: payload.path ?? path,
+      path: typeof payload.path === 'string' ? payload.path : '',
       kind: payload.kind ?? 'file',
       size: payload.size ?? 0,
       isBinary: payload.isBinary ?? false,

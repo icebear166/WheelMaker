@@ -29,6 +29,8 @@ const (
 	desktopBridgeToggleMaximize
 	desktopBridgeClose
 	desktopBridgeRequestServerChange
+	desktopBridgeOpenProjectFileInVSCode
+	desktopBridgeShowProjectFileInFolder
 )
 
 type desktopNavigationAction uint8
@@ -68,10 +70,19 @@ func (p *desktopWebViewPolicy) AllowsBridge(mode desktopPageMode, rawURL string,
 	if mode != desktopTrustedRemotePage || !p.contains(rawURL) {
 		return false
 	}
-	if action == desktopBridgeGetDeviceName {
+	switch action {
+	case desktopBridgeGetDeviceName,
+		desktopBridgeStartDrag,
+		desktopBridgeMinimize,
+		desktopBridgeToggleMaximize,
+		desktopBridgeClose,
+		desktopBridgeRequestServerChange,
+		desktopBridgeOpenProjectFileInVSCode,
+		desktopBridgeShowProjectFileInFolder:
 		return true
+	default:
+		return false
 	}
-	return action >= desktopBridgeStartDrag && action <= desktopBridgeRequestServerChange
 }
 
 func (p *desktopWebViewPolicy) DecideNavigation(rawURL string, mainFrame bool, certificateError bool) desktopNavigationAction {
@@ -198,8 +209,20 @@ func (s *desktopWebViewSecurityState) Authorize(epoch uint64, mainFrame bool, ac
 }
 
 func desktopBootstrapActionAllowed(action desktopBridgeAction) bool {
-	return (action >= desktopBridgeGetState && action <= desktopBridgeGetDeviceName) ||
-		(action >= desktopBridgeStartDrag && action <= desktopBridgeClose)
+	switch action {
+	case desktopBridgeGetState,
+		desktopBridgeSaveBaseURL,
+		desktopBridgeRetry,
+		desktopBridgeReset,
+		desktopBridgeGetDeviceName,
+		desktopBridgeStartDrag,
+		desktopBridgeMinimize,
+		desktopBridgeToggleMaximize,
+		desktopBridgeClose:
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *desktopWebViewSecurityState) AuthorizeCurrent(action desktopBridgeAction) bool {

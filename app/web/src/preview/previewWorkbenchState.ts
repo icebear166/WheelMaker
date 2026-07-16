@@ -32,6 +32,7 @@ export type PromptDiffPreviewTab = PreviewWorkbenchTabBase & {
   promptText: string;
   promptSummary: string;
   files: PromptDiffPreviewFile[];
+  activeFilePath: string;
 };
 
 export type AttachmentPreviewTab = PreviewWorkbenchTabBase & {
@@ -78,6 +79,7 @@ export type PreviewWorkbenchOpenInput =
       promptText?: string;
       promptSummary?: string;
       files: PromptDiffPreviewFile[];
+      activeFilePath?: string;
     }
   | {
       type: 'attachment';
@@ -134,6 +136,7 @@ export type PreviewWorkbenchSnapshotPromptDiffTab = {
   promptText: string;
   promptSummary: string;
   files: Array<RegistrySessionPromptArtifactFile & {expanded: boolean}>;
+  activeFilePath?: string;
 };
 
 export type PreviewWorkbenchSnapshotAttachmentTab = {
@@ -209,6 +212,25 @@ function fileCountLabel(fileCount: number): string {
 
 function portRelayLabel(tab: Pick<PortRelayPreviewTab, 'hubId' | 'targetPort' | 'framePath'>): string {
   return `${tab.hubId}:${tab.targetPort}${tab.framePath || ''}`;
+}
+
+export function resolvePromptDiffActiveFilePath(
+  files: Array<Pick<PromptDiffPreviewFile, 'path'>>,
+  preferredPath = '',
+): string {
+  return files.some(file => file.path === preferredPath)
+    ? preferredPath
+    : files[0]?.path ?? '';
+}
+
+export function resolvePreviewDesktopFilePath(tab: PreviewWorkbenchTab): string {
+  if (tab.type === 'file') {
+    return tab.loading || tab.error ? '' : tab.info?.path ?? '';
+  }
+  if (tab.type === 'prompt-diff') {
+    return resolvePromptDiffActiveFilePath(tab.files, tab.activeFilePath);
+  }
+  return '';
 }
 
 export function previewTabId(input: PreviewWorkbenchTabIdInput): string {
@@ -359,6 +381,7 @@ function previewSnapshotTab(tab: PreviewWorkbenchTab): PreviewWorkbenchSnapshotT
       title: tab.title,
       promptText: tab.promptText,
       promptSummary: tab.promptSummary,
+      activeFilePath: tab.activeFilePath,
       files: tab.files.map(file => ({
         path: file.path,
         status: file.status,
@@ -436,6 +459,7 @@ function previewSnapshotInput(tab: PreviewWorkbenchSnapshotTab): PreviewWorkbenc
       title: tab.title,
       promptText: tab.promptText,
       promptSummary: tab.promptSummary,
+      activeFilePath: tab.activeFilePath,
       files: tab.files.map(file => ({
         path: file.path,
         status: file.status,
@@ -618,6 +642,7 @@ function createTab(input: PreviewWorkbenchOpenInput): PreviewWorkbenchTab {
       promptText: input.promptText ?? '',
       promptSummary: input.promptSummary ?? compactLabel(input.promptText ?? '', 48),
       files: input.files,
+      activeFilePath: resolvePromptDiffActiveFilePath(input.files, input.activeFilePath),
     };
   }
   if (input.type === 'attachment') {
@@ -654,6 +679,10 @@ function mergeTab(existing: PreviewWorkbenchTab, input: PreviewWorkbenchOpenInpu
       promptText: input.promptText ?? existing.promptText,
       promptSummary: input.promptSummary ?? existing.promptSummary,
       files: input.files,
+      activeFilePath: resolvePromptDiffActiveFilePath(
+        input.files,
+        input.activeFilePath !== undefined ? input.activeFilePath : existing.activeFilePath,
+      ),
     };
   }
   if (existing.type === 'attachment' && input.type === 'attachment') {

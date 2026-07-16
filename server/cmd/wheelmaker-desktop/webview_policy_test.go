@@ -46,9 +46,19 @@ func TestDesktopBridgeAuthorization(t *testing.T) {
 		{name: "bootstrap maximize", mode: desktopBootstrapPage, url: "about:blank", mainFrame: true, action: desktopBridgeToggleMaximize, want: true},
 		{name: "bootstrap close", mode: desktopBootstrapPage, url: "about:blank", mainFrame: true, action: desktopBridgeClose, want: true},
 		{name: "bootstrap cannot change server", mode: desktopBootstrapPage, url: "about:blank", mainFrame: true, action: desktopBridgeRequestServerChange},
+		{name: "bootstrap cannot open project file in VS Code", mode: desktopBootstrapPage, url: "about:blank", mainFrame: true, action: desktopBridgeOpenProjectFileInVSCode},
+		{name: "bootstrap cannot show project file in folder", mode: desktopBootstrapPage, url: "about:blank", mainFrame: true, action: desktopBridgeShowProjectFileInFolder},
 		{name: "remote window control", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/projects", mainFrame: true, action: desktopBridgeClose, want: true},
 		{name: "remote server change", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/", mainFrame: true, action: desktopBridgeRequestServerChange, want: true},
 		{name: "remote device name", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/", mainFrame: true, action: desktopBridgeGetDeviceName, want: true},
+		{name: "remote open project file in VS Code", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/projects", mainFrame: true, action: desktopBridgeOpenProjectFileInVSCode, want: true},
+		{name: "remote show project file in folder", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/projects", mainFrame: true, action: desktopBridgeShowProjectFileInFolder, want: true},
+		{name: "old origin cannot open project file in VS Code", mode: desktopTrustedRemotePage, url: "https://old.example.com/wheelmaker/", mainFrame: true, action: desktopBridgeOpenProjectFileInVSCode},
+		{name: "old origin cannot show project file in folder", mode: desktopTrustedRemotePage, url: "https://old.example.com/wheelmaker/", mainFrame: true, action: desktopBridgeShowProjectFileInFolder},
+		{name: "outside base path cannot open project file in VS Code", mode: desktopTrustedRemotePage, url: "https://example.com/admin/", mainFrame: true, action: desktopBridgeOpenProjectFileInVSCode},
+		{name: "outside base path cannot show project file in folder", mode: desktopTrustedRemotePage, url: "https://example.com/admin/", mainFrame: true, action: desktopBridgeShowProjectFileInFolder},
+		{name: "iframe cannot open project file in VS Code", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/", mainFrame: false, action: desktopBridgeOpenProjectFileInVSCode},
+		{name: "iframe cannot show project file in folder", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/", mainFrame: false, action: desktopBridgeShowProjectFileInFolder},
 		{name: "remote cannot save bootstrap URL", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/", mainFrame: true, action: desktopBridgeSaveBaseURL},
 		{name: "old origin", mode: desktopTrustedRemotePage, url: "https://old.example.com/wheelmaker/", mainFrame: true, action: desktopBridgeClose},
 		{name: "same origin outside base path", mode: desktopTrustedRemotePage, url: "https://example.com/admin/", mainFrame: true, action: desktopBridgeClose},
@@ -65,6 +75,37 @@ func TestDesktopBridgeAuthorization(t *testing.T) {
 				t.Fatalf("AllowsBridge()=%v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestDesktopFileActionsRequireCommittedTrustedNavigation(t *testing.T) {
+	state, err := newDesktopWebViewSecurityState("https://example.com/wheelmaker/", desktopTrustedRemotePage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actions := []desktopBridgeAction{
+		desktopBridgeOpenProjectFileInVSCode,
+		desktopBridgeShowProjectFileInFolder,
+	}
+
+	epoch := state.BeginTopLevelNavigation("https://example.com/wheelmaker/projects")
+	for _, action := range actions {
+		if state.Authorize(epoch, true, action) {
+			t.Fatalf("Authorize(%v) allowed an uncommitted trusted navigation", action)
+		}
+		if state.AuthorizeCurrent(action) {
+			t.Fatalf("AuthorizeCurrent(%v) allowed an uncommitted trusted navigation", action)
+		}
+	}
+
+	state.CommitTopLevelNavigation(epoch, "https://example.com/wheelmaker/projects")
+	for _, action := range actions {
+		if !state.Authorize(epoch, true, action) {
+			t.Fatalf("Authorize(%v) denied a committed trusted navigation", action)
+		}
+		if !state.AuthorizeCurrent(action) {
+			t.Fatalf("AuthorizeCurrent(%v) denied a committed trusted navigation", action)
+		}
 	}
 }
 
