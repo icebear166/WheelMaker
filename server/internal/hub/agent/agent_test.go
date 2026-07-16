@@ -732,6 +732,361 @@ func TestCodexAppRuntimeRoutesNotificationsByThread(t *testing.T) {
 	}
 }
 
+func TestCodexAppRuntimePoolSharesMatchingProjectRuntime(t *testing.T) {
+	var starts int
+	var startedCWD string
+	pool := newCodexappRuntimePool(func(_ context.Context, cwd string, _ string) (*codexappRuntime, error) {
+		starts++
+		startedCWD = cwd
+		return newCodexappRuntimeWithTransport(newFakeCodexappTransport()), nil
+	})
+	cwd := t.TempDir() + string(filepath.Separator) + "."
+
+	leaseA, err := pool.acquire(context.Background(), "project-a", cwd, "launch-a")
+	if err != nil {
+		t.Fatalf("acquire A: %v", err)
+	}
+	t.Cleanup(func() { _ = leaseA.Release() })
+	leaseB, err := pool.acquire(context.Background(), "project-a", cwd, "launch-a")
+	if err != nil {
+		t.Fatalf("acquire B: %v", err)
+	}
+	t.Cleanup(func() { _ = leaseB.Release() })
+
+	if starts != 1 {
+		t.Fatalf("starts = %d, want 1", starts)
+	}
+	if leaseA.Runtime() != leaseB.Runtime() {
+		t.Fatal("matching project runtime leases must share a runtime")
+	}
+	if startedCWD != cwd {
+		t.Fatalf("runtime cwd = %q, want original %q", startedCWD, cwd)
+	}
+}
+
+func TestCodexAppRuntimePoolSeparatesProjectAndRuntimeMetadata(t *testing.T) {
+	var starts int
+	pool := newCodexappRuntimePool(func(context.Context, string, string) (*codexappRuntime, error) {
+		starts++
+		return newCodexappRuntimeWithTransport(newFakeCodexappTransport()), nil
+	})
+	cwd := t.TempDir()
+
+	leaseA, err := pool.acquire(context.Background(), "project-a", cwd, "launch-a")
+	if err != nil {
+		t.Fatalf("acquire A: %v", err)
+	}
+	t.Cleanup(func() { _ = leaseA.Release() })
+	leaseB, err := pool.acquire(context.Background(), "project-b", cwd, "launch-a")
+	if err != nil {
+		t.Fatalf("acquire B: %v", err)
+	}
+	t.Cleanup(func() { _ = leaseB.Release() })
+	leaseC, err := pool.acquire(context.Background(), "project-a", filepath.Join(cwd, "other"), "launch-a")
+	if err != nil {
+		t.Fatalf("acquire C: %v", err)
+	}
+	t.Cleanup(func() { _ = leaseC.Release() })
+	leaseD, err := pool.acquire(context.Background(), "project-a", cwd, "launch-b")
+	if err != nil {
+		t.Fatalf("acquire D: %v", err)
+	}
+	t.Cleanup(func() { _ = leaseD.Release() })
+
+	if starts != 4 {
+		t.Fatalf("starts = %d, want 4", starts)
+	}
+	if leaseA.Runtime() == leaseB.Runtime() || leaseA.Runtime() == leaseC.Runtime() || leaseA.Runtime() == leaseD.Runtime() {
+		t.Fatal("different project or runtime metadata must not share a runtime")
+	}
+	if !leaseA.Runtime().alive() {
+		t.Fatal("acquiring a metadata variant must not close the existing runtime")
+	}
+}
+
+func TestCodexAppRuntimePoolDoesNotShareWithoutProjectID(t *testing.T) {
+	var starts int
+	pool := newCodexappRuntimePool(func(context.Context, string, string) (*codexappRuntime, error) {
+		starts++
+		return newCodexappRuntimeWithTransport(newFakeCodexappTransport()), nil
+	})
+	cwd := t.TempDir()
+
+	leaseA, err := pool.acquire(context.Background(), "", cwd, "launch-a")
+	if err != nil {
+		t.Fatalf("acquire A: %v", err)
+	}
+	t.Cleanup(func() { _ = leaseA.Release() })
+	leaseB, err := pool.acquire(context.Background(), "", cwd, "launch-a")
+	if err != nil {
+		t.Fatalf("acquire B: %v", err)
+	}
+	t.Cleanup(func() { _ = leaseB.Release() })
+
+	if starts != 2 {
+		t.Fatalf("starts = %d, want 2", starts)
+	}
+	if leaseA.Runtime() == leaseB.Runtime() {
+		t.Fatal("unscoped leases must not share a runtime")
+	}
+}
+
+func TestCodexAppSharedRuntimeInitializesOnce(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	connA := newCodexappConnWithRuntime(rt, t.TempDir())
+	connB := newCodexappConnWithRuntime(rt, t.TempDir())
+	initializeSent := make(chan map[string]any, 2)
+	tr.onSend = func(msg map[string]any) {
+		if msg["method"] == "initialize" {
+			initializeSent <- msg
+		}
+	}
+
+	errA := make(chan error, 1)
+	go func() {
+		errA <- connA.Send(context.Background(), protocol.MethodInitialize, nil, &protocol.InitializeResult{})
+	}()
+	first := <-initializeSent
+	errB := make(chan error, 1)
+	go func() {
+		errB <- connB.Send(context.Background(), protocol.MethodInitialize, nil, &protocol.InitializeResult{})
+	}()
+	select {
+	case second := <-initializeSent:
+		t.Fatalf("initialize sent twice: first=%v second=%v", first["id"], second["id"])
+	case <-time.After(50 * time.Millisecond):
+	}
+	if err := tr.emit(map[string]any{"id": first["id"], "result": map[string]any{}}); err != nil {
+		t.Fatalf("emit initialize response: %v", err)
+	}
+
+	if err := <-errA; err != nil {
+		t.Fatalf("initialize A: %v", err)
+	}
+	if err := <-errB; err != nil {
+		t.Fatalf("initialize B: %v", err)
+	}
+	var initialized int
+	for len(tr.sent) > 0 {
+		if msg := <-tr.sent; msg["method"] == "initialized" {
+			initialized++
+		}
+	}
+	if initialized != 1 {
+		t.Fatalf("initialized notifications = %d, want 1", initialized)
+	}
+}
+
+func TestCodexAppSharedRuntimeKeepsThreadConfigAndEventsIsolated(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	connA := newCodexappConnWithRuntime(rt, t.TempDir())
+	connB := newCodexappConnWithRuntime(rt, t.TempDir())
+	models := []appServerModel{{ID: "model-a", SupportedReasoningEfforts: []string{"low", "high"}}, {ID: "model-b", SupportedReasoningEfforts: []string{"low", "high"}}}
+	connA.config.setModels(models)
+	connB.config.setModels(models)
+	set := func(conn *codexappConn, configID string, value string) {
+		t.Helper()
+		if err := conn.Send(context.Background(), protocol.MethodSetConfigOption, protocol.SessionSetConfigOptionParams{ConfigID: configID, Value: value}, &[]protocol.ConfigOption{}); err != nil {
+			t.Fatalf("set %s=%s: %v", configID, value, err)
+		}
+	}
+	set(connA, protocol.ConfigOptionIDModel, "model-a")
+	set(connA, protocol.ConfigOptionIDReasoningEffort, "low")
+	set(connA, protocol.ConfigOptionIDApprovalPreset, "read_only")
+	set(connB, protocol.ConfigOptionIDModel, "model-b")
+	set(connB, protocol.ConfigOptionIDReasoningEffort, "high")
+	set(connB, protocol.ConfigOptionIDApprovalPreset, "full")
+
+	threadA := connA.config.threadStartParams(connA.cwd)
+	threadB := connB.config.threadStartParams(connB.cwd)
+	turnA := connA.config.turnStartParams("thread-a", connA.cwd, nil)
+	turnB := connB.config.turnStartParams("thread-b", connB.cwd, nil)
+	if threadA.Model != "model-a" || threadB.Model != "model-b" || threadA.ApprovalPolicy == threadB.ApprovalPolicy {
+		t.Fatalf("thread configs leaked: A=%+v B=%+v", threadA, threadB)
+	}
+	if turnA.Model != "model-a" || turnA.Effort != "low" || turnB.Model != "model-b" || turnB.Effort != "high" || turnA.ApprovalPolicy == turnB.ApprovalPolicy {
+		t.Fatalf("turn configs leaked: A=%+v B=%+v", turnA, turnB)
+	}
+
+	updatesA := make(chan protocol.SessionUpdateParams, 1)
+	updatesB := make(chan protocol.SessionUpdateParams, 1)
+	connA.OnACPResponse(captureSessionUpdate(t, updatesA))
+	connB.OnACPResponse(captureSessionUpdate(t, updatesB))
+	connA.bindSessionIDs("session-a", "thread-a")
+	connB.bindSessionIDs("session-b", "thread-b")
+	if err := tr.emit(map[string]any{
+		"method": "item/agentMessage/delta",
+		"params": map[string]any{"threadId": "thread-b", "turnId": "turn-b", "delta": "only B"},
+	}); err != nil {
+		t.Fatalf("emit B update: %v", err)
+	}
+	select {
+	case <-updatesB:
+	case <-time.After(time.Second):
+		t.Fatal("connection B did not receive its update")
+	}
+	select {
+	case got := <-updatesA:
+		t.Fatalf("connection A received connection B update: %#v", got)
+	case <-time.After(20 * time.Millisecond):
+	}
+	if err := tr.emit(map[string]any{
+		"method": "item/agentMessage/delta",
+		"params": map[string]any{"threadId": "unknown", "turnId": "turn-unknown", "delta": "drop"},
+	}); err != nil {
+		t.Fatalf("emit unknown update: %v", err)
+	}
+	select {
+	case got := <-updatesA:
+		t.Fatalf("connection A received unknown-thread update: %#v", got)
+	case got := <-updatesB:
+		t.Fatalf("connection B received unknown-thread update: %#v", got)
+	case <-time.After(20 * time.Millisecond):
+	}
+}
+
+func TestCodexAppSharedRuntimeCloseOneConnectionKeepsOtherAliveAndClosesOnLastRelease(t *testing.T) {
+	var transport *fakeCodexappTransport
+	pool := newCodexappRuntimePool(func(context.Context, string, string) (*codexappRuntime, error) {
+		transport = newFakeCodexappTransport()
+		return newCodexappRuntimeWithTransport(transport), nil
+	})
+	cwd := t.TempDir()
+	leaseA, err := pool.acquire(context.Background(), "project-a", cwd, "launch-a")
+	if err != nil {
+		t.Fatalf("acquire A: %v", err)
+	}
+	leaseB, err := pool.acquire(context.Background(), "project-a", cwd, "launch-a")
+	if err != nil {
+		t.Fatalf("acquire B: %v", err)
+	}
+	connA := newCodexappConnWithRuntime(leaseA.Runtime(), t.TempDir())
+	connA.lease = leaseA
+	connB := newCodexappConnWithRuntime(leaseB.Runtime(), t.TempDir())
+	connB.lease = leaseB
+	connA.bindSessionIDs("session-a", "thread-a")
+	connB.bindSessionIDs("session-b", "thread-b")
+	updatesB := make(chan protocol.SessionUpdateParams, 1)
+	connB.OnACPResponse(captureSessionUpdate(t, updatesB))
+
+	if err := connA.Close(); err != nil {
+		t.Fatalf("close A: %v", err)
+	}
+	if !transport.Alive() {
+		t.Fatal("closing one pooled connection closed the sibling runtime")
+	}
+	if err := transport.emit(map[string]any{
+		"method": "item/agentMessage/delta",
+		"params": map[string]any{"threadId": "thread-b", "turnId": "turn-b", "delta": "still alive"},
+	}); err != nil {
+		t.Fatalf("emit B update: %v", err)
+	}
+	select {
+	case <-updatesB:
+	case <-time.After(time.Second):
+		t.Fatal("connection B did not receive an update after A closed")
+	}
+	if err := connB.Close(); err != nil {
+		t.Fatalf("close B: %v", err)
+	}
+	if transport.Alive() {
+		t.Fatal("last pooled connection did not close its runtime")
+	}
+}
+
+func TestCodexAppRuntimeExitClosesOnlyItsRuntimeAndEvictsPoolEntry(t *testing.T) {
+	var transports []*fakeCodexappTransport
+	pool := newCodexappRuntimePool(func(context.Context, string, string) (*codexappRuntime, error) {
+		transport := newFakeCodexappTransport()
+		transports = append(transports, transport)
+		return newCodexappRuntimeWithTransport(transport), nil
+	})
+	cwdA := t.TempDir()
+	leaseA, err := pool.acquire(context.Background(), "project-a", cwdA, "launch-a")
+	if err != nil {
+		t.Fatalf("acquire A: %v", err)
+	}
+	t.Cleanup(func() { _ = leaseA.Release() })
+	leaseB, err := pool.acquire(context.Background(), "project-a", cwdA, "launch-a")
+	if err != nil {
+		t.Fatalf("acquire B: %v", err)
+	}
+	t.Cleanup(func() { _ = leaseB.Release() })
+	connA := newCodexappConnWithRuntime(leaseA.Runtime(), cwdA)
+	connA.bindSessionIDs("session-a", "thread-a")
+	promptDone := make(chan codexappPromptResult, 1)
+	connA.mu.Lock()
+	connA.promptDone = promptDone
+	connA.mu.Unlock()
+	connB := newCodexappConnWithRuntime(leaseB.Runtime(), cwdA)
+	connB.bindSessionIDs("session-b", "thread-b")
+	compactDone := make(chan SessionCompactResult, 1)
+	connB.mu.Lock()
+	connB.compactDone = compactDone
+	connB.mu.Unlock()
+	leaseC, err := pool.acquire(context.Background(), "project-c", t.TempDir(), "launch-a")
+	if err != nil {
+		t.Fatalf("acquire C: %v", err)
+	}
+	t.Cleanup(func() { _ = leaseC.Release() })
+
+	if err := transports[0].Close(); err != nil {
+		t.Fatalf("stop A runtime: %v", err)
+	}
+	select {
+	case <-leaseA.Runtime().done:
+	case <-time.After(time.Second):
+		t.Fatal("runtime did not terminate after its transport stopped")
+	}
+	select {
+	case result := <-promptDone:
+		if result.err == nil {
+			t.Fatal("active prompt did not fail when its runtime stopped")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("active prompt did not complete when its runtime stopped")
+	}
+	select {
+	case result := <-compactDone:
+		if result.Err == nil {
+			t.Fatal("active compact did not fail when its runtime stopped")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("active compact did not complete when its runtime stopped")
+	}
+	if !leaseC.Runtime().alive() {
+		t.Fatal("stopping project A runtime affected project C")
+	}
+	leaseRecovered, err := pool.acquire(context.Background(), "project-a", cwdA, "launch-a")
+	if err != nil {
+		t.Fatalf("recover acquire: %v", err)
+	}
+	t.Cleanup(func() { _ = leaseRecovered.Release() })
+	if leaseRecovered.Runtime() == leaseA.Runtime() {
+		t.Fatal("recovered lease reused stopped runtime")
+	}
+}
+
+func TestCodexAppRuntimeRejectsNotificationsAfterStop(t *testing.T) {
+	tr := newFakeCodexappTransport()
+	rt := newCodexappRuntimeWithTransport(tr)
+	if err := tr.Close(); err != nil {
+		t.Fatalf("stop transport: %v", err)
+	}
+	select {
+	case <-rt.done:
+	case <-time.After(time.Second):
+		t.Fatal("runtime did not observe transport stop")
+	}
+	if err := rt.notify("initialized", nil); err == nil {
+		t.Fatal("notify after stop succeeded")
+	}
+}
+
 func TestCodexappSessionStatusNormalizesRateLimits(t *testing.T) {
 	tr := newFakeCodexappTransport()
 	rt := newCodexappRuntimeWithTransport(tr)

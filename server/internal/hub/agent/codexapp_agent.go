@@ -50,11 +50,20 @@ func codexappInstanceCreator(provider *codexAppProvider) InstanceCreator {
 	if provider == nil {
 		provider = NewCodexAppProvider()
 	}
+	pool := newCodexappRuntimePool(func(_ context.Context, cwd string, projectName string) (*codexappRuntime, error) {
+		return newCodexappRuntime(provider, cwd, projectName)
+	})
 	return func(ctx context.Context, cwd string) (Instance, error) {
-		conn, err := newOwnedCodexappConn(provider, cwd, ProjectNameFromContext(ctx))
+		exe, args, _, err := provider.Launch()
 		if err != nil {
 			return nil, err
 		}
+		lease, err := pool.acquire(ctx, ProjectNameFromContext(ctx), cwd, codexappLaunchFingerprint(exe, args))
+		if err != nil {
+			return nil, err
+		}
+		conn := newCodexappConnWithRuntimeAndProject(lease.Runtime(), cwd, ProjectNameFromContext(ctx))
+		conn.lease = lease
 		return NewInstance(provider.Name(), conn), nil
 	}
 }
@@ -128,6 +137,14 @@ func codexappStoreThreadMapping(acpSessionID string, runtimeThreadID string) {
 }
 
 func newOwnedCodexappConn(provider *codexAppProvider, cwd string, projectName string) (*codexappConn, error) {
+	runtime, err := newCodexappRuntime(provider, cwd, projectName)
+	if err != nil {
+		return nil, err
+	}
+	return newCodexappConnWithRuntimeAndProject(runtime, cwd, projectName), nil
+}
+
+func newCodexappRuntime(provider *codexAppProvider, cwd string, projectName string) (*codexappRuntime, error) {
 	exe, args, env, err := provider.Launch()
 	if err != nil {
 		return nil, err
@@ -137,7 +154,7 @@ func newOwnedCodexappConn(provider *codexAppProvider, cwd string, projectName st
 	if err := raw.Start(); err != nil {
 		return nil, err
 	}
-	return newCodexappConnWithRuntimeAndProject(newCodexappRuntimeWithTransport(raw), cwd, projectName), nil
+	return newCodexappRuntimeWithTransport(raw), nil
 }
 
 type codexappRuntime struct {
@@ -151,6 +168,16 @@ type codexappRuntime struct {
 	closed   bool
 	closeErr error
 	done     chan struct{}
+	onStop   func(*codexappRuntime)
+
+	initializeMu      sync.Mutex
+	initialized       bool
+	initializeAttempt *codexappInitializeAttempt
+}
+
+type codexappInitializeAttempt struct {
+	done chan struct{}
+	err  error
 }
 
 func newCodexappRuntimeWithTransport(transport codexappTransport) *codexappRuntime {
@@ -163,6 +190,7 @@ func newCodexappRuntimeWithTransport(transport codexappTransport) *codexappRunti
 	}
 	if transport != nil {
 		transport.OnMessage(rt.handleMessage)
+		go rt.watchTransport()
 	}
 	return rt
 }
@@ -235,6 +263,16 @@ func (r *codexappRuntime) notify(method string, params any) error {
 	if r == nil || r.transport == nil {
 		return errors.New("codexapp runtime is not ready")
 	}
+	r.mu.Lock()
+	closed := r.closed
+	closeErr := r.closeErr
+	r.mu.Unlock()
+	if closed {
+		if closeErr == nil {
+			closeErr = errors.New("codexapp runtime closed")
+		}
+		return closeErr
+	}
 	return r.transport.SendMessage(codexappRPCNotification{Method: method, Params: codexappParams(params)})
 }
 
@@ -260,19 +298,42 @@ func (r *codexappRuntime) unregister(threadID string, conn *codexappConn) {
 	r.mu.Unlock()
 }
 
+func (r *codexappRuntime) watchTransport() {
+	if r == nil || r.transport == nil {
+		return
+	}
+	<-r.transport.Done()
+	_ = r.terminate(errors.New("codexapp runtime stopped"), false)
+}
+
+func (r *codexappRuntime) setOnStop(onStop func(*codexappRuntime)) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	r.onStop = onStop
+	r.mu.Unlock()
+}
+
 func (r *codexappRuntime) close() error {
+	return r.terminate(errors.New("codexapp runtime closed"), true)
+}
+
+func (r *codexappRuntime) terminate(err error, closeTransport bool) error {
 	if r == nil {
 		return nil
 	}
+	if err == nil {
+		err = errors.New("codexapp runtime stopped")
+	}
 	r.mu.Lock()
-	alreadyClosed := r.closed
+	if r.closed {
+		r.mu.Unlock()
+		return nil
+	}
 	r.closed = true
-	if r.closeErr == nil {
-		r.closeErr = errors.New("codexapp runtime closed")
-	}
-	if !alreadyClosed {
-		close(r.done)
-	}
+	r.closeErr = err
+	close(r.done)
 	for key, ch := range r.pending {
 		delete(r.pending, key)
 		ch <- codexappRPCResponse{Error: &codexappRPCError{Code: -32000, Message: r.closeErr.Error()}}
@@ -281,12 +342,16 @@ func (r *codexappRuntime) close() error {
 	for _, conn := range r.conns {
 		conns = append(conns, conn)
 	}
+	onStop := r.onStop
 	r.mu.Unlock()
 	for _, conn := range conns {
 		conn.failActivePrompt(r.closeErr)
 		conn.failActiveCompact(r.closeErr)
 	}
-	if r.transport == nil {
+	if onStop != nil {
+		onStop(r)
+	}
+	if !closeTransport || r.transport == nil {
 		return nil
 	}
 	return r.transport.Close()
@@ -423,14 +488,15 @@ func (r *codexappRuntime) connForThread(threadID string) *codexappConn {
 }
 
 type codexappConn struct {
-	runtime *codexappRuntime
-	cwd     string
+	runtime   *codexappRuntime
+	lease     *codexappRuntimeLease
+	cwd       string
+	closeOnce sync.Once
+	closeErr  error
 
 	mu            sync.Mutex
 	reqHandler    ACPRequestHandler
 	respHandler   ACPResponseHandler
-	initialized   bool
-	initializeRes protocol.InitializeResult
 	acpSessionID  string
 	threadID      string
 	projectName   string
@@ -538,14 +604,26 @@ func (c *codexappConn) OnACPResponse(h ACPResponseHandler) {
 }
 
 func (c *codexappConn) Close() error {
-	c.mu.Lock()
-	threadID := c.threadID
-	c.mu.Unlock()
-	if c.runtime != nil {
-		c.runtime.unregister(threadID, c)
-		return c.runtime.close()
+	if c == nil {
+		return nil
 	}
-	return nil
+	c.closeOnce.Do(func() {
+		c.mu.Lock()
+		threadID := c.threadID
+		c.mu.Unlock()
+		if c.runtime == nil {
+			return
+		}
+		c.runtime.unregister(threadID, c)
+		c.failActivePrompt(errors.New("codexapp connection closed"))
+		c.failActiveCompact(errors.New("codexapp connection closed"))
+		if c.lease != nil {
+			c.closeErr = c.lease.Release()
+			return
+		}
+		c.closeErr = c.runtime.close()
+	})
+	return c.closeErr
 }
 
 func (c *codexappConn) Alive() bool {
@@ -609,21 +687,15 @@ func (c *codexappConn) outboundSessionID(runtimeThreadID string) string {
 }
 
 func (c *codexappConn) sendInitialize(ctx context.Context, result any) error {
-	c.mu.Lock()
-	if c.initialized {
-		cached := c.initializeRes
-		c.mu.Unlock()
-		return assignResult(result, cached)
-	}
-	c.mu.Unlock()
-
-	var ignored json.RawMessage
-	if err := c.runtime.request(ctx, "initialize", appServerInitializeParams{
-		ClientInfo: appServerClientInfo{Name: "wheelmaker", Title: "WheelMaker", Version: "0.1.0"},
-	}, &ignored); err != nil {
-		return err
-	}
-	if err := c.runtime.notify("initialized", nil); err != nil {
+	if err := c.runtime.initialize(ctx, func(ctx context.Context) error {
+		var ignored json.RawMessage
+		if err := c.runtime.request(ctx, "initialize", appServerInitializeParams{
+			ClientInfo: appServerClientInfo{Name: "wheelmaker", Title: "WheelMaker", Version: "0.1.0"},
+		}, &ignored); err != nil {
+			return err
+		}
+		return c.runtime.notify("initialized", nil)
+	}); err != nil {
 		return err
 	}
 	out := protocol.InitializeResult{
@@ -639,10 +711,6 @@ func (c *codexappConn) sendInitialize(ctx context.Context, result any) error {
 			SessionCapabilities: &protocol.SessionCapabilities{List: &protocol.SessionListCapability{}},
 		},
 	}
-	c.mu.Lock()
-	c.initialized = true
-	c.initializeRes = out
-	c.mu.Unlock()
 	return assignResult(result, out)
 }
 
