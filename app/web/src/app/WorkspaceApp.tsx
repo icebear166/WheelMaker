@@ -114,6 +114,7 @@ import {ChatPlanSurface} from '../chat/ChatPlanSurface';
 import {ChatRecentSessionsSurface} from '../chat/ChatRecentSessionsSurface';
 import {extractLatestChatPlan} from '../chat/chatPlan';
 import { resolveChatSessionTitle } from '../chat/session/chatSessionTitle';
+import { buildProjectAgentChoices } from '../chat/projectAgents';
 import { chatConfigValueLabel, formatChatContextUsage, splitChatComposerStatusOptions } from '../chat/session/chatComposerStatus';
 import {decodeSessionTurnToMessage, normalizeSessionMessagePayload} from '../chat/chatWire';
 import {
@@ -7632,26 +7633,8 @@ export function App() {
     }
   }, [commitChatFilePeekResize]);
   const getWideProjectAgents = useCallback(
-    (projectItem: RegistryProject, sessions: RegistryChatSession[]): string[] => {
-      const seen = new Set<string>();
-      const agents: string[] = [];
-      const append = (value?: string) => {
-        const normalized = normalizeAgentTypeName(value);
-        if (!normalized) return;
-        const key = normalized.toLowerCase();
-        if (seen.has(key)) return;
-        seen.add(key);
-        agents.push(normalized);
-      };
-      for (const item of projectItem.agents ?? []) {
-        append(item);
-      }
-      append(projectItem.agent);
-      for (const session of sessions) {
-        append(session.agentType);
-      }
-      return agents;
-    },
+    (projectItem: RegistryProject, sessions: RegistryChatSession[]): string[] =>
+      buildProjectAgentChoices(projectItem, sessions),
     [],
   );
   const toggleWideProjectCollapsed = useCallback(

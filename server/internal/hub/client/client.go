@@ -256,21 +256,17 @@ func (c *Client) createSessionState(ctx context.Context, agentType, title, creat
 	}
 	creator := c.registry.CreatorByName(agentType)
 	if creator == nil {
-		fallback := ""
+		// The agent name is valid but no creator is registered, meaning its CLI is
+		// not installed/launchable on this hub. Fail loudly instead of silently
+		// falling back to another provider: the old fallback turned a requested
+		// "codex" session into a "claude" session and even overwrote the project's
+		// persisted default agent. This matches the resume/prompt path
+		// (Session.ensureInstance), which already errors the same way.
+		available := ""
 		if c.registry != nil {
-			fallback = strings.TrimSpace(c.registry.PreferredName())
+			available = strings.Join(c.registry.Names(), ", ")
 		}
-		if fallback == "" {
-			return nil, fmt.Errorf("no available ACP provider")
-		}
-		if !strings.EqualFold(fallback, agentType) {
-			hubLogger(c.projectName).Warn("requested agent unavailable requested=%s fallback=%s", agentType, fallback)
-		}
-		agentType = fallback
-		creator = c.registry.CreatorByName(agentType)
-		if creator == nil {
-			return nil, fmt.Errorf("no agent registered for %q", agentType)
-		}
+		return nil, fmt.Errorf("agent %q is not available on this hub (available: %s); install its CLI and ensure it is on PATH, or pick an available agent", agentType, available)
 	}
 
 	inst, err := creator(agent.WithProjectName(ctx, c.projectName), c.cwd)

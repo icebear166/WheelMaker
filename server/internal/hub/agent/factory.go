@@ -63,6 +63,17 @@ func DefaultACPFactory() *ACPFactory {
 	return defaultACPFactory
 }
 
+// NewACPFactory returns an empty ACP factory with no providers registered.
+// Use Register to bind only the providers you need. Tests use this to build a
+// deterministic registry independent of which CLIs happen to be installed on
+// the host (DefaultACPFactory / Clone carry host-specific providers).
+func NewACPFactory() *ACPFactory {
+	return &ACPFactory{
+		creators:       map[protocol.ACPProvider]InstanceCreator{},
+		sessionActions: map[protocol.ACPProvider]SessionActionSupport{},
+	}
+}
+
 func newACPFactoryWithDefaults() *ACPFactory {
 	f := &ACPFactory{
 		creators:       map[protocol.ACPProvider]InstanceCreator{},
