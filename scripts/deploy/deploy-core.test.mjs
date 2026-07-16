@@ -8,6 +8,7 @@ import test from 'node:test';
 import {
   RELEASE_PUBLIC_KEY_PEM,
   acquireUpdateLease,
+  createLegacyMigrationAdapter,
   createRuntimeAdapter,
   darwinRuntimeFiles,
   finishUpdate,
@@ -16,6 +17,7 @@ import {
   stageVerifiedRelease,
   unixWrappers,
   windowsRuntimePlan,
+  windowsLegacyMigrationScript,
   windowsWrappers,
 } from './deploy-core.mjs';
 import {
@@ -372,6 +374,146 @@ test('normal deploy applies Hub and Web to the existing layout', async (t) => {
   const config = JSON.parse(await readFile(join(fixture.home, 'config.json'), 'utf8'));
   assert.deepEqual(config.projects, []);
   assert.match(config.registry.token, /^[A-Za-z0-9_-]{43}$/);
+});
+
+test('migrate-uninstall removes legacy runtimes and preserves user data', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-migration-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const home = join(root, '.wheelmaker');
+  for (const directory of [
+    join(home, 'bin'),
+    join(home, 'build', 'bootstrap'),
+    join(home, 'data'),
+    join(home, 'logs'),
+    join(home, 'desktop'),
+  ]) {
+    await mkdir(directory, { recursive: true });
+  }
+  for (const name of [
+    'wheelmaker.exe',
+    'wheelmaker-updater.exe',
+    'wheelmaker-deploy.exe',
+    'wheelmaker-monitor.exe',
+  ]) {
+    await writeFile(join(home, 'bin', name), name);
+  }
+  await writeFile(join(home, 'build', 'bootstrap', 'wheelmaker-deploy.exe'), 'bootstrap');
+  await writeFile(join(home, 'config.json'), '{"projects":[]}\n');
+  await writeFile(join(home, 'data', 'sessions.db'), 'db');
+  await writeFile(join(home, 'logs', 'hub.log'), 'log');
+  await writeFile(join(home, 'desktop', 'WheelMakerDesktop.exe'), 'desktop');
+
+  let runtimeRemoved = false;
+  await runCore(['migrate-uninstall'], {
+    installDirectory: home,
+    legacyMigration: {
+      async removeRuntime() {
+        runtimeRemoved = true;
+      },
+    },
+    platform: 'win32',
+  });
+
+  assert.equal(runtimeRemoved, true);
+  assert.equal(await exists(join(home, 'bin', 'wheelmaker.exe')), false);
+  assert.equal(await exists(join(home, 'bin', 'wheelmaker-updater.exe')), false);
+  assert.equal(await exists(join(home, 'bin', 'wheelmaker-deploy.exe')), false);
+  assert.equal(await exists(join(home, 'bin', 'wheelmaker-monitor.exe')), false);
+  assert.equal(await exists(join(home, 'build', 'bootstrap')), false);
+  assert.equal(await exists(join(home, 'config.json')), true);
+  assert.equal(await exists(join(home, 'data', 'sessions.db')), true);
+  assert.equal(await exists(join(home, 'logs', 'hub.log')), true);
+  assert.equal(await exists(join(home, 'desktop', 'WheelMakerDesktop.exe')), true);
+});
+
+test('Windows legacy migration is scoped and elevates only for existing services', () => {
+  const script = windowsLegacyMigrationScript(RUNTIME_PATHS);
+
+  for (const name of ['WheelMaker', 'WheelMakerUpdater', 'WheelMakerMonitor']) {
+    assert.match(script, new RegExp(name));
+  }
+  assert.match(script, /HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run/);
+  assert.match(script, /ExecutablePath/);
+  assert.match(script, /StartsWith\(\$binRoot\)/);
+  assert.match(script, /Get-Service -Name \$runtimeNames/);
+  assert.match(script, /if \(\$existingServices\.Count -gt 0\)/);
+  assert.match(script, /sc\.exe delete/);
+  assert.match(script, /-Verb RunAs/);
+});
+
+test('Unix legacy migration disables registrations and removes their files', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-runtime-migration-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const linuxHome = join(root, 'linux');
+  const linuxUnits = [
+    'wheelmaker-hub.service',
+    'wheelmaker-updater.service',
+    'wheelmaker-updater.timer',
+    'wheelmaker-monitor.service',
+  ];
+  const unitDirectory = join(linuxHome, '.config', 'systemd', 'user');
+  await mkdir(unitDirectory, { recursive: true });
+  for (const unit of linuxUnits) await writeFile(join(unitDirectory, unit), unit);
+  const linuxCalls = [];
+  await createLegacyMigrationAdapter({
+    paths: { ...RUNTIME_PATHS, userHome: linuxHome },
+    platform: 'linux',
+    runner: async (command, args, options) => {
+      linuxCalls.push({ args, command, options });
+      return { code: 0, stderr: '', stdout: '' };
+    },
+  }).removeRuntime();
+  for (const unit of linuxUnits) {
+    assert.equal(await exists(join(unitDirectory, unit)), false);
+    assert.equal(
+      linuxCalls.some(
+        (call) =>
+          call.command === 'systemctl' &&
+          call.args.join(' ') === `--user disable --now ${unit}` &&
+          call.options.allowFailure === true,
+      ),
+      true,
+    );
+  }
+  assert.equal(
+    linuxCalls.some(
+      (call) => call.args.join(' ') === '--user daemon-reload',
+    ),
+    true,
+  );
+
+  const macHome = join(root, 'mac');
+  const agentDirectory = join(macHome, 'Library', 'LaunchAgents');
+  const macLabels = [
+    'com.wheelmaker.hub',
+    'com.wheelmaker.updater',
+    'com.wheelmaker.monitor',
+  ];
+  await mkdir(agentDirectory, { recursive: true });
+  for (const label of macLabels) {
+    await writeFile(join(agentDirectory, `${label}.plist`), label);
+  }
+  const macCalls = [];
+  await createLegacyMigrationAdapter({
+    paths: { ...RUNTIME_PATHS, uid: 501, userHome: macHome },
+    platform: 'darwin',
+    runner: async (command, args, options) => {
+      macCalls.push({ args, command, options });
+      return { code: 0, stderr: '', stdout: '' };
+    },
+  }).removeRuntime();
+  for (const label of macLabels) {
+    assert.equal(await exists(join(agentDirectory, `${label}.plist`)), false);
+    assert.equal(
+      macCalls.some(
+        (call) =>
+          call.command === 'launchctl' &&
+          call.args.join(' ') === `bootout gui/501/${label}` &&
+          call.options.allowFailure === true,
+      ),
+      true,
+    );
+  }
 });
 
 test('successful internal update writes release schema v2 without registration changes', async (t) => {

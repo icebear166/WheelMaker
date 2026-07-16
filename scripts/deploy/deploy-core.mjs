@@ -768,6 +768,169 @@ async function runProcess(
   });
 }
 
+export function windowsLegacyMigrationScript(paths) {
+  return `$ErrorActionPreference = 'Stop'
+$runtimeNames = @('WheelMaker', 'WheelMakerUpdater', 'WheelMakerMonitor')
+foreach ($name in $runtimeNames) {
+  Stop-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+  Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction SilentlyContinue
+}
+
+$runKey = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'
+foreach ($name in $runtimeNames) {
+  Remove-ItemProperty -Path $runKey -Name $name -ErrorAction SilentlyContinue
+}
+
+$binRoot = ([System.IO.Path]::GetFullPath(${psQuote(paths.bin)}).TrimEnd('\\') + '\\').ToLowerInvariant()
+$legacyBinaries = @(
+  'wheelmaker.exe',
+  'wheelmaker-updater.exe',
+  'wheelmaker-deploy.exe',
+  'wheelmaker-monitor.exe'
+)
+Get-CimInstance Win32_Process | Where-Object {
+  $path = [string]$_.ExecutablePath
+  -not [string]::IsNullOrWhiteSpace($path) -and
+  $path.ToLowerInvariant().StartsWith($binRoot) -and
+  $legacyBinaries -contains [System.IO.Path]::GetFileName($path).ToLowerInvariant()
+} | ForEach-Object {
+  Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop
+}
+
+$existingServices = @(Get-Service -Name $runtimeNames -ErrorAction SilentlyContinue)
+if ($existingServices.Count -gt 0) {
+  $serviceRemoval = @'
+$ErrorActionPreference = 'Stop'
+foreach ($name in @('WheelMaker', 'WheelMakerUpdater', 'WheelMakerMonitor')) {
+  $service = Get-Service -Name $name -ErrorAction SilentlyContinue
+  if ($null -ne $service) {
+    if ($service.Status -ne 'Stopped') {
+      Stop-Service -Name $name -Force -ErrorAction Stop
+    }
+    & sc.exe delete $name | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+      throw "failed to delete service $name"
+    }
+  }
+}
+'@
+  $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+  $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+  $isAdministrator = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+  if ($isAdministrator) {
+    & ([ScriptBlock]::Create($serviceRemoval))
+  } else {
+    $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($serviceRemoval))
+    $process = Start-Process -FilePath 'powershell.exe' -ArgumentList @(
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-EncodedCommand',
+      $encoded
+    ) -Verb RunAs -Wait -PassThru
+    if ($process.ExitCode -ne 0) {
+      throw "elevated legacy service removal failed with exit code $($process.ExitCode)"
+    }
+  }
+}
+`;
+}
+
+export function createLegacyMigrationAdapter({
+  paths,
+  platform = process.platform,
+  runner = runProcess,
+}) {
+  return {
+    removeRuntime: async () => {
+      if (platform === 'win32') {
+        await runner(
+          'powershell',
+          [
+            '-NoProfile',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-Command',
+            windowsLegacyMigrationScript(paths),
+          ],
+          { cwd: paths.home },
+        );
+        return;
+      }
+      if (platform === 'linux') {
+        const units = [
+          'wheelmaker-hub.service',
+          'wheelmaker-updater.service',
+          'wheelmaker-updater.timer',
+          'wheelmaker-monitor.service',
+        ];
+        for (const unit of units) {
+          await runner('systemctl', ['--user', 'disable', '--now', unit], {
+            allowFailure: true,
+          });
+          await rm(join(paths.userHome, '.config', 'systemd', 'user', unit), {
+            force: true,
+          });
+        }
+        await runner('systemctl', ['--user', 'daemon-reload'], {
+          allowFailure: true,
+        });
+        return;
+      }
+      if (platform === 'darwin') {
+        const labels = [
+          'com.wheelmaker.hub',
+          'com.wheelmaker.updater',
+          'com.wheelmaker.monitor',
+        ];
+        const domain = `gui/${paths.uid}`;
+        for (const label of labels) {
+          await runner('launchctl', ['bootout', `${domain}/${label}`], {
+            allowFailure: true,
+          });
+          await rm(join(paths.userHome, 'Library', 'LaunchAgents', `${label}.plist`), {
+            force: true,
+          });
+        }
+        return;
+      }
+      throw new Error(`unsupported migration platform: ${platform}`);
+    },
+  };
+}
+
+async function executeLegacyMigration(deps) {
+  if (!deps.installDirectory) {
+    throw new Error('deployment install directory is required');
+  }
+  const platform = deps.platform ?? process.platform;
+  const paths = deploymentRuntimePaths({
+    installDirectory: deps.installDirectory,
+    nodePath: deps.nodePath ?? process.execPath,
+    platform,
+    uid: deps.uid,
+    userHome: deps.userHome ?? homedir(),
+  });
+  const migration =
+    deps.legacyMigration ??
+    createLegacyMigrationAdapter({ paths, platform, runner: deps.runner });
+  await migration.removeRuntime();
+
+  const suffix = platform === 'win32' ? '.exe' : '';
+  for (const name of [
+    'wheelmaker',
+    'wheelmaker-updater',
+    'wheelmaker-deploy',
+    'wheelmaker-monitor',
+  ]) {
+    await rm(join(paths.bin, `${name}${suffix}`), { force: true });
+  }
+  await rm(join(paths.home, 'build', 'bootstrap'), {
+    force: true,
+    recursive: true,
+  });
+}
+
 function windowsStopScript(paths) {
   return `$ErrorActionPreference = 'Stop'
 Stop-ScheduledTask -TaskName 'WheelMaker' -ErrorAction SilentlyContinue
@@ -1218,6 +1381,9 @@ async function executeDeployment(internalUpdate, deps, runtime) {
 }
 
 export async function runCore(args, deps = {}) {
+  if (args.length === 1 && args[0] === 'migrate-uninstall') {
+    return executeLegacyMigration(deps);
+  }
   const runtime = resolveRuntime(deps);
   if (args[0] === 'runtime' && args.length === 2) {
     if (!runtime || typeof runtime[args[1]] !== 'function') {

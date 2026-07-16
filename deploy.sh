@@ -3,16 +3,16 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 repo_root="$(pwd)"
-bootstrap_dir="${HOME}/.wheelmaker/build/bootstrap"
-deploy_cli="${bootstrap_dir}/wheelmaker-deploy"
-deploy_source_dir="${repo_root}/server/cmd/wheelmaker-deploy"
+install_dir="${HOME}/.wheelmaker"
+source_deploy="${repo_root}/scripts/deploy/deploy.mjs"
+deploy_script="${install_dir}/deploy.mjs"
 
 cat <<'BANNER'
 ============================================
   WheelMaker All-in-One Deploy
 ============================================
 
-  wheelmaker-deploy deploy: update + build + install + configure + publish web
+  migrate legacy runtime, then install the signed stable release
   supports macOS and Linux
 
 ============================================
@@ -31,19 +31,27 @@ case "$(uname -s)" in
     ;;
 esac
 
-if command -v go >/dev/null 2>&1 && [ -d "$deploy_source_dir" ]; then
-  echo "[INFO] Building bootstrap wheelmaker-deploy..."
-  mkdir -p "$bootstrap_dir"
-  (cd "${repo_root}/server" && go build -o "$deploy_cli" ./cmd/wheelmaker-deploy)
-  chmod +x "$deploy_cli"
-elif [ -x "$deploy_cli" ]; then
-  echo "[INFO] Using existing bootstrap wheelmaker-deploy: $deploy_cli"
-else
-  echo "[FAILED] No existing wheelmaker-deploy and Go/source are unavailable to build it" >&2
+if ! command -v node >/dev/null 2>&1; then
+  echo "[FAILED] Node.js 22 or newer is required" >&2
+  exit 1
+fi
+node_major="$(node -p "process.versions.node.split('.')[0]")"
+if [ "$node_major" -lt 22 ]; then
+  echo "[FAILED] Node.js 22 or newer is required; found $(node --version)" >&2
+  exit 1
+fi
+if [ ! -f "$source_deploy" ]; then
+  echo "[FAILED] Deployment launcher is missing: $source_deploy" >&2
   exit 1
 fi
 
-"$deploy_cli" deploy --repo "$repo_root" "$@"
+mkdir -p "$install_dir"
+cp "$source_deploy" "$deploy_script"
+
+echo "[INFO] Removing the legacy runtime..."
+node "$deploy_script" migrate-uninstall
+echo "[INFO] Installing the signed stable release..."
+node "$deploy_script"
 
 echo
 echo "[OK] deploy complete"

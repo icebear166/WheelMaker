@@ -47,21 +47,6 @@ assert_no_production_matches() {
   fi
 }
 
-assert_deploy_compatibility_centralized() {
-  deploy_root="$server_root/cmd/wheelmaker-deploy"
-  [ ! -e "$deploy_root/legacy_monitor.go" ] || fail 'legacy_monitor.go must be replaced by compatibility.go'
-  [ -f "$deploy_root/compatibility.go" ] || fail 'wheelmaker-deploy compatibility.go is missing'
-  for name in migrateRegistryToken retireLegacyMonitor migrateLegacyMonitorConfig cleanupLegacyMonitor
-  do
-    definition="func $name("
-    if grep -F "$definition" "$deploy_root/main.go" >"$scan_output" 2>&1; then
-      fail "wheelmaker-deploy main.go contains compatibility implementation $name"
-    fi
-    grep -F "$definition" "$deploy_root/compatibility.go" >"$scan_output" 2>&1 || \
-      fail "wheelmaker-deploy compatibility.go is missing $name"
-  done
-}
-
 cd "$repo_root"
 
 gate 'Gitleaks current tree'
@@ -71,7 +56,6 @@ gate 'Baseline security regressions'
 (
   cd "$server_root"
   go test ./internal/security -run 'Test(NewRegistryToken|ValidateRegistryToken|RequireLoopbackAddress|ForwardedHeaders)'
-  go test ./cmd/wheelmaker-deploy -run 'TestEnsureConfig(WritesRunnableWheelMakerDefault|GeneratesIndependentRegistryTokens|RotatesLegacyRegistryToken|PreservesCustomRegistryToken)'
   go test ./internal/shared -run 'Test(WriteConfigFileAtomicallyReplacesContent|SecureConfigFileRestrictsWindowsDACL)'
   go test ./internal/registry ./internal/portrelay -run 'Test(SecurityE2E|RunRejectsNonLoopbackAddress|RelayListenerBindsLoopbackOnly|RelayEnableAllowsOnlyExactLoopbackTargetHost|RelayForwardedHeadersRequireLoopbackPeer)'
 )
@@ -109,12 +93,13 @@ NODE
 gate 'Android JVM tests and lint'
 (cd "$android_root" && gradle test lint)
 
+gate 'Node release and deployment tests'
+node --test "$repo_root"/scripts/release/*.test.mjs "$repo_root"/scripts/deploy/*.test.mjs
+
 gate 'Publish and deployment script tests'
 for script_test in \
   scripts/test_deploy_bat.ps1 \
   scripts/test_deploy_sh.ps1 \
-  scripts/test_update_publish_bat.ps1 \
-  scripts/test_update_publish_sh.ps1 \
   scripts/test_android_project_ps1.ps1 \
   scripts/test_android_release_signing.ps1 \
   scripts/test_publish_android_github_release_ps1.ps1 \
@@ -132,7 +117,6 @@ assert_no_production_matches 'legacy default token' 'wheelmaker-local-token'
 assert_no_production_matches 'retired interfaces' 'LOCAL_TOKEN_KEY|LocalHubRead|addJavascriptInterface|RegistryRoleMonitor|registry\.monitor|monitor\.(listHub|status|log|db|action|restart)|:9632|InsecureSkipVerify'
 assert_no_production_matches 'retired backend key migration' 'migrateLegacyBackendSecrets|extractLegacyBackendSecrets|getLegacyBackendSecrets|clearLegacyBackendSecret|retryBackendSecretMigration|config\.json.{0,80}secrets'
 assert_no_production_matches 'Android Server Data key persistence' '(SharedPreferences|DataStore|Room|SQLite|FileOutputStream).{0,120}(accessToken|speechCredential|volcengine)|(accessToken|speechCredential|volcengine).{0,120}(SharedPreferences|DataStore|Room|SQLite|FileOutputStream)'
-assert_deploy_compatibility_centralized
 debug_signing_fallback='signingConfigs.getByName("debug")'
 if grep -F "$debug_signing_fallback" "$android_root/app/build.gradle.kts" >"$scan_output" 2>&1; then
   fail 'Android release build contains a debug signing fallback'

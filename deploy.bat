@@ -1,11 +1,10 @@
 @echo off
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "& { param([string]$bat, [string]$repo, [Parameter(ValueFromRemainingArguments=$true)][string[]]$deployArgs) $lines=Get-Content -LiteralPath $bat; $idx=[Array]::IndexOf($lines, '# POWERSHELL'); if($idx -lt 0){ throw 'deploy.bat payload marker missing' }; $script=($lines[($idx + 1)..($lines.Count - 1)] -join [Environment]::NewLine); & ([ScriptBlock]::Create($script)) -RepoRoot $repo -DeployArgs $deployArgs }" "%~f0" "%~dp0." %*
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "& { param([string]$bat, [string]$repo) $lines=Get-Content -LiteralPath $bat; $idx=[Array]::IndexOf($lines, '# POWERSHELL'); if($idx -lt 0){ throw 'deploy.bat payload marker missing' }; $script=($lines[($idx + 1)..($lines.Count - 1)] -join [Environment]::NewLine); & ([ScriptBlock]::Create($script)) -RepoRoot $repo }" "%~f0" "%~dp0."
 exit /b %ERRORLEVEL%
 # POWERSHELL
 param(
   [Parameter(Mandatory = $true)]
-  [string]$RepoRoot,
-  [string[]]$DeployArgs = @()
+  [string]$RepoRoot
 )
 
 $ErrorActionPreference = "Stop"
@@ -56,36 +55,43 @@ $logFile = Join-Path $homeDir ".wheelmaker\log\deploy.bat.log"
 
 try {
   New-Item -ItemType Directory -Force -Path $logDir | Out-Null
-  Add-Content -LiteralPath $logFile -Value ("[{0}] deploy.bat entered args={1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), ($DeployArgs -join " "))
+  Add-Content -LiteralPath $logFile -Value ("[{0}] deploy.bat entered" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"))
 
   Write-Host "============================================"
   Write-Host "  WheelMaker All-in-One Deploy"
   Write-Host "============================================"
   Write-Host
-  Write-Host "  wheelmaker-deploy deploy: update + build + install + configure + publish web"
+  Write-Host "  migrate legacy runtime, then install the signed stable release"
   Write-Host
   Write-Host "============================================"
   Write-Host
 
-  $bootstrapDir = Join-Path $homeDir ".wheelmaker\build\bootstrap"
-  $deployExe = Join-Path $bootstrapDir "wheelmaker-deploy.exe"
-  $deploySourceDir = Join-Path $repoRoot "server\cmd\wheelmaker-deploy"
-  $goCommand = Get-Command go -ErrorAction SilentlyContinue
-
-  if ($goCommand -and (Test-Path -LiteralPath $deploySourceDir)) {
-    Write-Deploy "Building bootstrap wheelmaker-deploy.exe..."
-    New-Item -ItemType Directory -Force -Path $bootstrapDir | Out-Null
-    Write-Deploy "Running go build for wheelmaker-deploy.exe"
-    Invoke-Checked -FilePath "go" -Arguments @("build", "-o", $deployExe, ".\cmd\wheelmaker-deploy") -WorkingDirectory (Join-Path $repoRoot "server")
-  } elseif (Test-Path -LiteralPath $deployExe) {
-    Write-Deploy "Using existing bootstrap wheelmaker-deploy.exe: $deployExe"
-  } else {
-    throw "No existing wheelmaker-deploy.exe and Go/source are unavailable to build it"
+  $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
+  if (-not $nodeCommand) {
+    throw "Node.js 22 or newer is required"
+  }
+  $nodeVersionText = & $nodeCommand.Source --version
+  if ($LASTEXITCODE -ne 0) {
+    throw "Unable to determine the installed Node.js version"
+  }
+  $nodeVersion = [Version]$nodeVersionText.TrimStart("v")
+  if ($nodeVersion.Major -lt 22) {
+    throw "Node.js 22 or newer is required; found $nodeVersionText"
   }
 
-  Write-Deploy "Running wheelmaker-deploy deploy..."
-  Write-Deploy "Bootstrap CLI: $deployExe"
-  Invoke-Checked -FilePath $deployExe -Arguments (@("deploy", "--repo", $repoRoot) + $DeployArgs)
+  $sourceDeploy = Join-Path $repoRoot "scripts\deploy\deploy.mjs"
+  if (-not (Test-Path -LiteralPath $sourceDeploy -PathType Leaf)) {
+    throw "Deployment launcher is missing: $sourceDeploy"
+  }
+  $installDir = Join-Path $homeDir ".wheelmaker"
+  $deployPath = Join-Path $homeDir ".wheelmaker\deploy.mjs"
+  New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+  Copy-Item -LiteralPath $sourceDeploy -Destination $deployPath -Force
+
+  Write-Deploy "Removing the legacy runtime..."
+  Invoke-Checked -FilePath $nodeCommand.Source -Arguments @($deployPath, "migrate-uninstall")
+  Write-Deploy "Installing the signed stable release..."
+  Invoke-Checked -FilePath $nodeCommand.Source -Arguments @($deployPath)
 
   Write-Host
   Write-Host "[OK] deploy complete"

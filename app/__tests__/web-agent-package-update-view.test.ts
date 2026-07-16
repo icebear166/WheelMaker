@@ -98,13 +98,13 @@ describe('agent package update view helpers', () => {
 
   test('maps WheelMaker update status values to concise labels', () => {
     expect(wheelMakerUpdateStatusLabel('update_pending')).toBe('Update pending');
-    expect(wheelMakerUpdateStatusLabel('not_published')).toBe('Not published');
-    expect(wheelMakerUpdateStatusLabel('ahead_of_remote')).toBe('Ahead of remote');
-    expect(wheelMakerUpdateStatusLabel('diverged')).toBe('Diverged');
+    expect(wheelMakerUpdateStatusLabel('downloading')).toBe('Downloading');
+    expect(wheelMakerUpdateStatusLabel('verifying')).toBe('Verifying');
+    expect(wheelMakerUpdateStatusLabel('failed')).toBe('Failed');
     expect(wheelMakerUpdateStatusLabel('custom_status')).toBe('custom_status');
   });
 
-  test('allows WheelMaker update when published release is already current', () => {
+  test('shows WheelMaker update only when allowed or a job is active', () => {
     expect(
       shouldShowWheelMakerUpdateAction({
         data: null,
@@ -118,21 +118,19 @@ describe('agent package update view helpers', () => {
           ok: true,
           status: 'up_to_date',
           hubId: 'hub-a',
-          pendingSignal: false,
-          canUpdatePublish: true,
+          canRequestUpdate: false,
         },
         loading: false,
         pending: false,
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       shouldShowWheelMakerUpdateAction({
         data: {
           ok: true,
           status: 'update_available',
           hubId: 'hub-a',
-          pendingSignal: false,
-          canUpdatePublish: true,
+          canRequestUpdate: true,
         },
         loading: false,
         pending: false,
@@ -144,8 +142,14 @@ describe('agent package update view helpers', () => {
           ok: true,
           status: 'update_pending',
           hubId: 'hub-a',
-          pendingSignal: true,
-          canUpdatePublish: true,
+          canRequestUpdate: false,
+          job: {
+            schema: 1,
+            jobId: 'job-a',
+            state: 'queued',
+            startedAt: '2026-07-16T09:00:00Z',
+            updatedAt: '2026-07-16T09:00:00Z',
+          },
         },
         loading: true,
         pending: false,

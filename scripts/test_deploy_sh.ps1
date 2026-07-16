@@ -25,19 +25,24 @@ function Assert-NotContains {
 
 Assert-Contains "WheelMaker All-in-One Deploy"
 Assert-Contains "supports macOS and Linux"
-Assert-Contains "wheelmaker-deploy"
-Assert-Contains ".wheelmaker/build/bootstrap"
-Assert-Contains "go build"
-Assert-Contains "Using existing bootstrap"
-Assert-Contains "No existing wheelmaker-deploy"
-Assert-Contains " deploy "
-Assert-Contains "publish web"
+Assert-Contains "scripts/deploy/deploy.mjs"
+Assert-Contains 'deploy_script="${install_dir}/deploy.mjs"'
+Assert-Contains "command -v node"
+Assert-Contains "Node.js 22 or newer"
+Assert-Contains 'cp "$source_deploy" "$deploy_script"'
+Assert-Contains 'node "$deploy_script" migrate-uninstall'
+Assert-Contains 'node "$deploy_script"'
 Assert-Contains "deploy.sh supports macOS and Linux"
 Assert-Contains "deploy.bat on Windows"
+Assert-NotContains "wheelmaker-deploy"
+Assert-NotContains ".wheelmaker/build/bootstrap"
+Assert-NotContains "go build"
+Assert-NotContains "npm"
+Assert-NotContains "git"
 Assert-NotContains "scripts/refresh_server.sh"
 Assert-NotContains "scripts/refresh_server_linux.sh"
 Assert-NotContains 'bash "$refresh_script" "$@"'
 Assert-NotContains "deploy.sh is macOS-only"
 Assert-NotContains "app/node_modules/.bin/webpack"
 
-Write-Host "deploy.sh source checks passed"
+Write-Host "deploy.sh Node migration wrapper checks passed"
