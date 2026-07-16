@@ -1,6 +1,5 @@
 import {
   createRegistryRepository,
-  type QueryWheelMakerUpdateOptions,
   type RegistryFileRequestOptions,
   type RegistryRepository,
 } from './RegistryRepository';
@@ -765,18 +764,18 @@ export class RegistryWorkspaceService {
     return this.repository.uninstallNpmPackage(hubId, packageName);
   }
 
-  async queryWheelMakerUpdate(hubId: string, options: QueryWheelMakerUpdateOptions = {}): Promise<RegistryWheelMakerUpdateResponse> {
+  async queryWheelMakerUpdate(hubId: string): Promise<RegistryWheelMakerUpdateResponse> {
     if (!this.repository) {
       throw new Error('session is not ready');
     }
-    return this.repository.queryWheelMakerUpdate(hubId, options);
+    return this.repository.queryWheelMakerUpdate(hubId);
   }
 
-  async requestWheelMakerUpdatePublish(hubId: string): Promise<RegistryWheelMakerUpdateResponse> {
+  async requestWheelMakerUpdate(hubId: string): Promise<RegistryWheelMakerUpdateResponse> {
     if (!this.repository) {
       throw new Error('session is not ready');
     }
-    return this.repository.requestWheelMakerUpdatePublish(hubId);
+    return this.repository.requestWheelMakerUpdate(hubId);
   }
 
   async scanSkills(hubId: string): Promise<RegistrySkillCommandResponse> {
@@ -933,7 +932,6 @@ export class RegistryWorkspaceService {
     };
   }
 }
-
 
 
 

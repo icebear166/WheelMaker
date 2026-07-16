@@ -659,44 +659,68 @@ export type RegistryWheelMakerUpdateStatus =
   | 'up_to_date'
   | 'update_available'
   | 'update_pending'
-  | 'not_published'
+  | 'not_installed'
   | 'checking_failed'
-  | 'ahead_of_remote'
-  | 'diverged';
+  | 'local_newer';
 
-export interface RegistryWheelMakerRelease {
+export interface RegistryWheelMakerInstalledRelease {
   schemaVersion: number;
-  repo: string;
-  branch: string;
-  remote: string;
-  sha: string;
+  version: string;
   publishedAt: string;
+  sourceSha: string;
+  manifestSha256: string;
+  installedAt: string;
 }
 
-export interface RegistryWheelMakerGitSnapshot {
-  branch: string;
-  remote: string;
-  currentSha: string;
-  latestSha: string;
-  currentCommittedAt?: string;
-  latestCommittedAt?: string;
-  behindCount: number;
-  aheadCount: number;
-  dirty: boolean;
+export interface RegistryWheelMakerStableRelease {
+  version: string;
+  publishedAt: string;
+  sourceSha: string;
+}
+
+export type RegistryWheelMakerUpdateJobState =
+  | 'queued'
+  | 'downloading'
+  | 'verifying'
+  | 'applying'
+  | 'restarting'
+  | 'succeeded'
+  | 'failed';
+
+export interface RegistryWheelMakerUpdateJob {
+  schema: number;
+  jobId: string;
+  state: RegistryWheelMakerUpdateJobState | string;
+  version?: string;
+  startedAt: string;
+  updatedAt: string;
+  errorCode?: string;
+}
+
+export interface RegistryWheelMakerPublishStatus {
+  schema: number;
+  state: string;
+  phase: string;
+  version?: string;
+  sourceSha?: string;
+  publisher?: string;
+  startedAt?: string;
+  updatedAt?: string;
+  errorCode?: string;
 }
 
 export interface RegistryWheelMakerUpdateResponse {
   ok: boolean;
   accepted?: boolean;
-  requestedAt?: string;
+  jobId?: string;
   status: RegistryWheelMakerUpdateStatus | string;
   hubId: string;
-  release?: RegistryWheelMakerRelease;
-  git?: RegistryWheelMakerGitSnapshot;
-  pendingSignal: boolean;
-  remoteRefreshRunning?: boolean;
-  canUpdatePublish: boolean;
-  error?: string;
+  installed?: RegistryWheelMakerInstalledRelease;
+  stable?: RegistryWheelMakerStableRelease;
+  job?: RegistryWheelMakerUpdateJob;
+  publishStatus?: RegistryWheelMakerPublishStatus;
+  canRequestUpdate: boolean;
+  errorCode?: string;
 }
 
 export type RegistrySkillScope = 'hub' | 'project';
@@ -1035,5 +1059,4 @@ export type RegistryConnectInitPayload = {
   ts?: number;
   nonce?: string;
 };
-
 

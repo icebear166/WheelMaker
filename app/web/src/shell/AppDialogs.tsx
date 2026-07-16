@@ -56,9 +56,8 @@ export type ConfirmTarget =
   | {
       kind: 'wheelMakerUpdate';
       hubId: string;
-      currentSha: string;
-      latestSha: string;
-      behindCount: number;
+      currentVersion: string;
+      latestVersion: string;
     }
   | {
       kind: 'wheelMakerUpdateAll';
@@ -139,10 +138,6 @@ function formatStatusReset(value: string | undefined): string {
   return Number.isFinite(parsed) ? new Date(parsed).toLocaleString() : value;
 }
 
-function shortGitSha(value: string): string {
-  return value ? value.slice(0, 7) : '-';
-}
-
 function agentPackageActionLabel(action: 'install' | 'update' | 'uninstall'): string {
   switch (action) {
     case 'update':
@@ -162,7 +157,7 @@ function resolveConfirmTitle(target: ConfirmTarget): string {
   if (target.kind === 'delete') return 'Delete session?';
   if (target.kind === 'npmPackage') return `${agentPackageActionLabel(target.action)} package?`;
   if (target.kind === 'npmPackageHubUpdate') return 'Update npm packages?';
-  if (target.kind === 'wheelMakerUpdate') return 'Update and publish WheelMaker?';
+  if (target.kind === 'wheelMakerUpdate') return 'Update WheelMaker?';
   if (target.kind === 'wheelMakerUpdateAll') return 'Update all hubs?';
   if (target.kind === 'skillInstall') return 'Install skills?';
   if (target.kind === 'skillUninstall') return 'Uninstall skill?';
@@ -213,10 +208,10 @@ function resolveConfirmCopy(target: ConfirmTarget): string {
     return `Runs latest install/update for ${target.packages.map(pkg => pkg.displayName || pkg.packageName).join(', ')}. Restart WheelMaker or start a new agent session for changes to take effect.`;
   }
   if (target.kind === 'wheelMakerUpdate') {
-    return `Current: ${shortGitSha(target.currentSha)}. Latest: ${shortGitSha(target.latestSha)}. ${target.behindCount > 0 ? `${target.behindCount} commits behind. ` : ''}This writes a full-update signal; updater will pull, build, publish Web, and restart Hub. Updater itself is not restarted.`;
+    return `Current: ${target.currentVersion || '-'}. Latest: ${target.latestVersion || '-'}. The current-user updater will download and verify the stable release, deploy it, and restart Hub.`;
   }
   if (target.kind === 'wheelMakerUpdateAll') {
-    return `This sends update-publish to ${target.hubIds.length} hubs. Each hub may pull, build, publish Web, and restart independently.`;
+    return `This requests the verified stable release on ${target.hubIds.length} hubs. Each current-user updater deploys and restarts its Hub independently.`;
   }
   if (target.kind === 'skillInstall') {
     return `Source: ${target.source}. Skills: ${target.skills.join(', ')}.`;

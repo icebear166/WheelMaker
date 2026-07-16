@@ -1117,7 +1117,7 @@ textarea,
   font-size: 11px;
 }
 
-.wheelmaker-update-sha-lines {
+.wheelmaker-update-release-lines {
   grid-column: 1 / -1;
   grid-row: 3;
   display: grid;
@@ -1126,7 +1126,7 @@ textarea,
   padding-top: 3px;
 }
 
-.wheelmaker-update-sha-line {
+.wheelmaker-update-release-line {
   display: grid;
   grid-template-columns: 52px auto minmax(0, 1fr);
   align-items: baseline;
@@ -1138,34 +1138,34 @@ textarea,
   line-height: 1.3;
 }
 
-.wheelmaker-update-sha-label {
+.wheelmaker-update-release-label {
   color: color-mix(in srgb, var(--text-secondary) 86%, var(--text-primary));
 }
 
-.wheelmaker-update-sha-value {
+.wheelmaker-update-release-value {
   color: var(--text-primary);
   font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
   font-size: 11px;
 }
 
-.wheelmaker-update-sha-time {
+.wheelmaker-update-release-time {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.mobile-settings-screen .wheelmaker-update-sha-line {
+.mobile-settings-screen .wheelmaker-update-release-line {
   grid-template-columns: 52px 7ch max-content;
   column-gap: 10px;
   white-space: nowrap;
 }
 
-.mobile-settings-screen .wheelmaker-update-sha-value {
+.mobile-settings-screen .wheelmaker-update-release-value {
   min-width: 7ch;
 }
 
-.mobile-settings-screen .wheelmaker-update-sha-time {
+.mobile-settings-screen .wheelmaker-update-release-time {
   overflow: visible;
   white-space: nowrap;
 }
@@ -1187,6 +1187,52 @@ textarea,
 
 .wheelmaker-update-panel > .settings-metadata-error {
   grid-column: 1 / -1;
+}
+
+.wheelmaker-publish-status {
+  grid-column: 1 / -1;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.wheelmaker-release-history {
+  display: grid;
+  gap: 8px;
+}
+
+.wheelmaker-release-history-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.wheelmaker-release-history-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.wheelmaker-release-history-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+  padding: 3px 7px;
+  color: var(--text-secondary);
+  font-size: 10.5px;
+  text-decoration: none;
+}
+
+.wheelmaker-release-history-item > :first-child {
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
+}
+
+.wheelmaker-release-history-item:hover {
+  border-color: color-mix(in srgb, var(--accent-primary) 45%, var(--border-subtle));
+  background: var(--hover);
 }
 
 .wheelmaker-update-action-btn:hover:not(:disabled) {
@@ -1276,14 +1322,13 @@ textarea,
 
 .agent-package-status.status-deprecated,
 .agent-package-status.status-failed,
-.agent-package-status.status-checking_failed,
-.agent-package-status.status-diverged {
+.agent-package-status.status-checking_failed {
   color: var(--state-danger);
   border-color: color-mix(in srgb, var(--state-danger) 38%, var(--border-subtle));
 }
 
 .agent-package-status.status-not_published,
-.agent-package-status.status-ahead_of_remote {
+.agent-package-status.status-local_newer {
   color: var(--text-secondary);
 }
 

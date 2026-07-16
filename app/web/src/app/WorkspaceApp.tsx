@@ -330,12 +330,16 @@ import {
   AGENT_PACKAGE_SCAN_TIMEOUT_MS,
   deriveNpmPackageUpdateTargets,
   deriveRegistryHubIds,
+  fetchWheelMakerReleaseHistory,
   npmPackageUpdateSummary,
   packageStatusLabel,
   shouldShowWheelMakerUpdateAction,
+  wheelMakerUpdateErrorLabel,
+  wheelMakerUpdateJobActive,
   wheelMakerUpdateStatusLabel,
   withAgentPackageTimeout,
   type NpmPackageUpdateTarget,
+  type WheelMakerReleaseHistoryEntry,
 } from '../settings/agentPackageUpdateView';
 import {
   deriveSkillHubIds,
@@ -638,7 +642,7 @@ type ChatQuickSwitchMenuPlacement =
   | {kind: 'mobile'}
   | {kind: 'desktop'; style: React.CSSProperties};
 type SettingsDetailView = SettingsDetailId | null;
-const WHEELMAKER_UPDATE_REMOTE_POLL_DELAY_MS = 1500;
+const WHEELMAKER_UPDATE_JOB_POLL_DELAY_MS = 1500;
 type WheelMakerUpdateHubView = {
   hubId: string;
   loading: boolean;
@@ -1170,22 +1174,9 @@ function skillCommandErrorMessage(result: RegistrySkillCommandResponse): string 
   return result.errorSummary || result.message || 'Skill operation failed.';
 }
 
-function shortGitSha(value: string): string {
+function shortDigest(value: string): string {
   const trimmed = value.trim();
   return trimmed.length > 7 ? trimmed.slice(0, 7) : trimmed || '-';
-}
-
-function wheelMakerBehindCopy(data: RegistryWheelMakerUpdateResponse | null): string {
-  if (!data?.release) return 'Unknown';
-  const behind = data.git?.behindCount ?? 0;
-  if (behind <= 0) return 'Up to date';
-  return `${behind} ${behind === 1 ? 'commit' : 'commits'} behind`;
-}
-
-function wheelMakerReleaseRef(data: RegistryWheelMakerUpdateResponse | null): string {
-  const remote = data?.release?.remote || data?.git?.remote || 'origin';
-  const branch = data?.release?.branch || data?.git?.branch || '';
-  return branch ? `${remote}/${branch}` : remote;
 }
 
 function formatWheelMakerDateTime(value: string): string {
@@ -2794,6 +2785,9 @@ export function App() {
   const [wheelMakerUpdatesError, setWheelMakerUpdatesError] = useState('');
   const [wheelMakerUpdatePendingHubId, setWheelMakerUpdatePendingHubId] = useState('');
   const [wheelMakerUpdateAllPending, setWheelMakerUpdateAllPending] = useState(false);
+  const [wheelMakerReleaseHistory, setWheelMakerReleaseHistory] = useState<WheelMakerReleaseHistoryEntry[]>([]);
+  const [wheelMakerReleaseHistoryLoading, setWheelMakerReleaseHistoryLoading] = useState(false);
+  const [wheelMakerReleaseHistoryError, setWheelMakerReleaseHistoryError] = useState('');
   const androidApkUpdateBridge = useMemo(() => createAndroidApkUpdateBridge(), []);
   const [androidApkUpdateSupported, setAndroidApkUpdateSupported] = useState(false);
   const [androidApkLocalRelease, setAndroidApkLocalRelease] = useState<AndroidApkLocalRelease | null>(null);
@@ -2804,8 +2798,8 @@ export function App() {
   const [androidApkInstallPending, setAndroidApkInstallPending] = useState(false);
   const wheelMakerUpdatePollTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const wheelMakerUpdatePollHubIdsRef = useRef<Set<string>>(new Set());
-  const refreshWheelMakerUpdateHubRef = useRef<((hubId: string, options?: {force?: boolean; silent?: boolean}) => Promise<void>) | null>(null);
-  const refreshWheelMakerUpdatesRef = useRef<((options?: {force?: boolean}) => Promise<void>) | null>(null);
+  const refreshWheelMakerUpdateHubRef = useRef<((hubId: string, options?: {silent?: boolean}) => Promise<void>) | null>(null);
+  const refreshWheelMakerUpdatesRef = useRef<(() => Promise<void>) | null>(null);
   const refreshAgentPackagesRef = useRef<((options?: {silent?: boolean}) => Promise<void>) | null>(null);
   const refreshProjectFileIndexesRef = useRef<((hubIds: string | string[], options?: {silent?: boolean}) => Promise<void>) | null>(null);
   const refreshAndroidApkUpdateRef = useRef<(() => Promise<void>) | null>(null);
@@ -13316,10 +13310,13 @@ export function App() {
   }, []);
 
   const scheduleWheelMakerUpdatePoll = useCallback((hubIds: string | string[]) => {
-    const ids = Array.isArray(hubIds) ? hubIds : [hubIds];
-    ids
+    const ids = (Array.isArray(hubIds) ? hubIds : [hubIds])
       .map(hubId => hubId.trim())
-      .filter(Boolean)
+      .filter(Boolean);
+    if (ids.length === 0) {
+      return;
+    }
+    ids
       .forEach(hubId => wheelMakerUpdatePollHubIdsRef.current.add(hubId));
     if (wheelMakerUpdatePollTimerRef.current) {
       return;
@@ -13332,10 +13329,10 @@ export function App() {
         return;
       }
       Promise.all(pendingHubIds.map(hubId => refreshWheelMakerUpdateHubRef.current?.(hubId, {silent: true}))).catch(() => undefined);
-    }, WHEELMAKER_UPDATE_REMOTE_POLL_DELAY_MS);
+    }, WHEELMAKER_UPDATE_JOB_POLL_DELAY_MS);
   }, []);
 
-  const refreshWheelMakerUpdateHub = useCallback(async (hubId: string, options: {force?: boolean; silent?: boolean} = {}) => {
+  const refreshWheelMakerUpdateHub = useCallback(async (hubId: string, options: {silent?: boolean} = {}) => {
     if (!options.silent) {
       setWheelMakerUpdateHubs(prev => ({
         ...prev,
@@ -13347,17 +13344,17 @@ export function App() {
       }));
     }
     try {
-      const result = await service.queryWheelMakerUpdate(hubId, options);
+      const result = await service.queryWheelMakerUpdate(hubId);
       setWheelMakerUpdateHubs(prev => ({
         ...prev,
         [hubId]: {
           hubId,
           loading: false,
-          error: result.ok ? '' : result.error || 'Update check failed.',
+          error: result.ok ? '' : wheelMakerUpdateErrorLabel(result.errorCode) || 'Update check failed.',
           data: result,
         },
       }));
-      if (!options.force && result.remoteRefreshRunning) {
+      if (wheelMakerUpdateJobActive(result.job)) {
         scheduleWheelMakerUpdatePoll(hubId);
       }
     } catch (err) {
@@ -13373,10 +13370,8 @@ export function App() {
     }
   }, [scheduleWheelMakerUpdatePoll]);
 
-  const refreshWheelMakerUpdates = useCallback(async (options: {force?: boolean} = {}) => {
-    if (options.force) {
-      clearWheelMakerUpdatePollTimer();
-    }
+  const refreshWheelMakerUpdates = useCallback(async () => {
+    clearWheelMakerUpdatePollTimer();
     setWheelMakerUpdatesLoading(true);
     setWheelMakerUpdatesError('');
     try {
@@ -13400,17 +13395,17 @@ export function App() {
       });
       await Promise.all(hubIds.map(async hubId => {
         try {
-          const result = await service.queryWheelMakerUpdate(hubId, options);
+          const result = await service.queryWheelMakerUpdate(hubId);
           setWheelMakerUpdateHubs(prev => ({
             ...prev,
             [hubId]: {
               hubId,
               loading: false,
-              error: result.ok ? '' : result.error || 'Update check failed.',
+              error: result.ok ? '' : wheelMakerUpdateErrorLabel(result.errorCode) || 'Update check failed.',
               data: result,
             },
           }));
-          if (!options.force && result.remoteRefreshRunning) {
+          if (wheelMakerUpdateJobActive(result.job)) {
             scheduleWheelMakerUpdatePoll(hubId);
           }
         } catch (err) {
@@ -13432,6 +13427,18 @@ export function App() {
       setWheelMakerUpdatesLoading(false);
     }
   }, [clearWheelMakerUpdatePollTimer, refreshProjectHubSnapshot, scheduleWheelMakerUpdatePoll]);
+
+  const refreshWheelMakerReleaseHistory = useCallback(async () => {
+    setWheelMakerReleaseHistoryLoading(true);
+    setWheelMakerReleaseHistoryError('');
+    try {
+      setWheelMakerReleaseHistory(await fetchWheelMakerReleaseHistory());
+    } catch (err) {
+      setWheelMakerReleaseHistoryError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setWheelMakerReleaseHistoryLoading(false);
+    }
+  }, []);
 
   const refreshAndroidApkUpdate = useCallback(async () => {
     const supported = androidApkUpdateBridge.isSupported();
@@ -13685,6 +13692,7 @@ export function App() {
       return;
     }
     refreshWheelMakerUpdatesRef.current?.().catch(() => undefined);
+    refreshWheelMakerReleaseHistory().catch(() => undefined);
     refreshAgentPackagesRef.current?.().catch(() => undefined);
     refreshProjectHubSnapshot()
       .then(hubIds => refreshProjectFileIndexesRef.current?.(hubIds))
@@ -13695,7 +13703,7 @@ export function App() {
       clearAgentPackageScanPollTimer();
       clearProjectIndexPollTimer();
     };
-  }, [clearAgentPackageScanPollTimer, clearProjectIndexPollTimer, clearWheelMakerUpdatePollTimer, refreshProjectHubSnapshot, settingsDetailView]);
+  }, [clearAgentPackageScanPollTimer, clearProjectIndexPollTimer, clearWheelMakerUpdatePollTimer, refreshProjectHubSnapshot, refreshWheelMakerReleaseHistory, settingsDetailView]);
 
   useEffect(() => {
     if (!androidApkUpdateSupported) {
@@ -14127,14 +14135,13 @@ export function App() {
     });
   }, []);
 
-  const requestWheelMakerUpdatePublish = useCallback((hubId: string, data: RegistryWheelMakerUpdateResponse | null) => {
+  const requestWheelMakerUpdate = useCallback((hubId: string, data: RegistryWheelMakerUpdateResponse | null) => {
     setConfirmError('');
     setConfirmTarget({
       kind: 'wheelMakerUpdate',
       hubId,
-      currentSha: data?.release?.sha || data?.git?.currentSha || '',
-      latestSha: data?.git?.latestSha || '',
-      behindCount: data?.git?.behindCount ?? 0,
+      currentVersion: data?.installed?.version || '',
+      latestVersion: data?.stable?.version || '',
     });
   }, []);
 
@@ -14232,19 +14239,21 @@ export function App() {
     setConfirmError('');
     setWheelMakerUpdatePendingHubId(target.hubId);
     try {
-      const result = await service.requestWheelMakerUpdatePublish(target.hubId);
+      const result = await service.requestWheelMakerUpdate(target.hubId);
       setWheelMakerUpdateHubs(prev => ({
         ...prev,
         [target.hubId]: {
           hubId: target.hubId,
           loading: false,
-          error: result.ok ? '' : result.error || 'Update request failed.',
+          error: result.ok ? '' : wheelMakerUpdateErrorLabel(result.errorCode) || 'Update request failed.',
           data: result,
         },
       }));
       setConfirmTarget(null);
       setConfirmError('');
-      await refreshWheelMakerUpdateHub(target.hubId);
+      if (wheelMakerUpdateJobActive(result.job)) {
+        scheduleWheelMakerUpdatePoll(target.hubId);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setConfirmError(message);
@@ -14253,7 +14262,7 @@ export function App() {
     } finally {
       setWheelMakerUpdatePendingHubId('');
     }
-  }, [refreshWheelMakerUpdateHub]);
+  }, [scheduleWheelMakerUpdatePoll]);
 
   const handleWheelMakerUpdateAllConfirmedAction = useCallback(async (target: Extract<ConfirmTarget, {kind: 'wheelMakerUpdateAll'}>) => {
     if (target.hubIds.length === 0) {
@@ -14267,11 +14276,11 @@ export function App() {
     try {
       const responses = await Promise.all(target.hubIds.map(async hubId => {
         try {
-          const result = await service.requestWheelMakerUpdatePublish(hubId);
+          const result = await service.requestWheelMakerUpdate(hubId);
           return {
             hubId,
             result,
-            error: result.ok ? '' : result.error || 'Update request failed.',
+            error: result.ok ? '' : wheelMakerUpdateErrorLabel(result.errorCode) || 'Update request failed.',
           };
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
@@ -14293,7 +14302,11 @@ export function App() {
       });
       setConfirmTarget(null);
       setConfirmError('');
-      await refreshWheelMakerUpdates();
+      scheduleWheelMakerUpdatePoll(
+        responses
+          .filter(entry => 'result' in entry && wheelMakerUpdateJobActive(entry.result?.job))
+          .map(entry => entry.hubId),
+      );
       const failedUpdates = responses.filter(entry => entry.error);
       if (failedUpdates.length > 0) {
         const message = `Failed to update ${failedUpdates.length} of ${target.hubIds.length} hubs: ${failedUpdates.map(entry => entry.hubId).join(', ')}`;
@@ -14320,7 +14333,7 @@ export function App() {
     } finally {
       setWheelMakerUpdateAllPending(false);
     }
-  }, [refreshWheelMakerUpdates]);
+  }, [scheduleWheelMakerUpdatePoll]);
 
   const handleAgentPackageConfirmedAction = useCallback(async (target: Extract<ConfirmTarget, {kind: 'npmPackage'}>) => {
     const pendingKey = agentPackageActionKey(target.hubId, target.packageName);
@@ -16668,12 +16681,13 @@ export function App() {
           type="button"
           className="token-stats-refresh-btn token-stats-refresh-inline"
           onClick={() => {
-            refreshWheelMakerUpdates({force: true}).catch(() => undefined);
+            refreshWheelMakerUpdates().catch(() => undefined);
+            refreshWheelMakerReleaseHistory().catch(() => undefined);
             refreshAgentPackages().catch(() => undefined);
           }}
-          disabled={wheelMakerUpdatesLoading || agentPackagesLoading}
+          disabled={wheelMakerUpdatesLoading || wheelMakerReleaseHistoryLoading || agentPackagesLoading}
         >
-          {wheelMakerUpdatesLoading || agentPackagesLoading ? 'Refreshing...' : 'Refresh'}
+          {wheelMakerUpdatesLoading || wheelMakerReleaseHistoryLoading || agentPackagesLoading ? 'Refreshing...' : 'Refresh'}
         </button>
       );
     }
@@ -16812,7 +16826,10 @@ export function App() {
           wheelMakerUpdatesError={wheelMakerUpdatesError}
           wheelMakerUpdatePendingHubId={wheelMakerUpdatePendingHubId}
           wheelMakerUpdateAllPending={wheelMakerUpdateAllPending}
-          requestWheelMakerUpdatePublish={requestWheelMakerUpdatePublish}
+          wheelMakerReleaseHistory={wheelMakerReleaseHistory}
+          wheelMakerReleaseHistoryLoading={wheelMakerReleaseHistoryLoading}
+          wheelMakerReleaseHistoryError={wheelMakerReleaseHistoryError}
+          requestWheelMakerUpdate={requestWheelMakerUpdate}
           requestWheelMakerUpdateAll={requestWheelMakerUpdateAll}
           agentPackagesLoading={agentPackagesLoading}
           agentPackagesError={agentPackagesError}
@@ -16832,9 +16849,7 @@ export function App() {
           handleScanAllProjectIndexes={handleScanAllProjectIndexes}
           tagVariantClass={tagVariantClass}
           hubAccentStyle={hubAccentStyle}
-          shortGitSha={shortGitSha}
-          wheelMakerBehindCopy={wheelMakerBehindCopy}
-          wheelMakerReleaseRef={wheelMakerReleaseRef}
+          shortDigest={shortDigest}
           formatWheelMakerDateTime={formatWheelMakerDateTime}
           formatChatAttachmentSize={formatChatAttachmentSize}
           androidApkUpdateStatusLabel={androidApkUpdateStatusLabel}
