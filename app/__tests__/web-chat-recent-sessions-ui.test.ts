@@ -208,13 +208,35 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain("chatViewWidth === 'fixed-800' ? `chat-main chat-view-width-fixed-800${showPinnedRecentSessionsSurface ? ' chat-view-width-fixed-800-pinned-recent' : ''}` : 'chat-main'");
 
     const stackRule = chatCss.match(/\.chat-edge-surface-stack \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const pinnedMainRule = chatCss.match(/\.chat-view-width-fixed-800-pinned-recent \{[\s\S]*?\n\}/)?.[0] ?? '';
     const pinnedFixedRule = chatCss.match(/\.chat-view-width-fixed-800-pinned-recent \.chat-view-content,[\s\S]*?\n\}/)?.[0] ?? '';
 
     expect(stackRule).toContain('--chat-edge-surface-stack-edge-gap: max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px));');
-    expect(pinnedFixedRule).toContain('--chat-pinned-recent-content-left:');
-    expect(pinnedFixedRule).toContain('var(--chat-edge-surface-stack-resolved-width)');
-    expect(pinnedFixedRule).toContain('var(--chat-edge-surface-stack-column-gap)');
+    expect(pinnedMainRule).toContain('--chat-pinned-recent-content-left:');
+    expect(pinnedMainRule).toContain('--chat-pinned-recent-resolved-width:');
+    expect(pinnedMainRule).toContain('--chat-pinned-recent-left:');
     expect(pinnedFixedRule).toContain('margin-left: min(');
+  });
+
+  test('defines fixed Recent reservation on the chat main so sibling content can inherit it', () => {
+    const pinnedMainRule = chatCss.match(/\.chat-view-width-fixed-800-pinned-recent \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const pinnedContentRule = chatCss.match(/\.chat-view-width-fixed-800-pinned-recent \.chat-view-content,[\s\S]*?\n\}/)?.[0] ?? '';
+
+    expect(pinnedMainRule).toContain('--chat-pinned-recent-edge-gap:');
+    expect(pinnedMainRule).toContain('--chat-pinned-recent-content-left:');
+    expect(pinnedContentRule).not.toContain('--chat-edge-surface-stack-edge-gap');
+    expect(pinnedContentRule).not.toContain('--chat-edge-surface-stack-resolved-width');
+  });
+
+  test('uses an opaque session context menu above the pinned Recent surface', () => {
+    const overrideStart = chatCss.lastIndexOf('.project-session-action-menu {');
+    const contextMenuOverride = overrideStart >= 0
+      ? chatCss.slice(overrideStart, chatCss.indexOf('\n}', overrideStart) + 2)
+      : '';
+
+    expect(contextMenuOverride).toContain('background: var(--surface-overlay);');
+    expect(contextMenuOverride).toContain('backdrop-filter: none;');
+    expect(contextMenuOverride).toContain('-webkit-backdrop-filter: none;');
   });
 
   test('lets the pinned recent surface expand naturally at the standard session density', () => {

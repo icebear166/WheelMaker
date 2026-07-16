@@ -4097,15 +4097,27 @@
   max-width: 62%;
 }
 
+.chat-view-width-fixed-800-pinned-recent {
+  --chat-pinned-recent-edge-gap: max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px));
+  --chat-pinned-recent-resolved-width: min(
+    360px,
+    calc(100% - var(--chat-pinned-recent-edge-gap) - var(--chat-pinned-recent-edge-gap))
+  );
+  --chat-pinned-recent-left: max(
+    var(--chat-pinned-recent-edge-gap),
+    calc((100% - 800px) / 2 - var(--chat-pinned-recent-resolved-width) - 12px)
+  );
+  --chat-pinned-recent-content-left: calc(
+    var(--chat-pinned-recent-left) +
+    var(--chat-pinned-recent-resolved-width) +
+    12px
+  );
+}
+
 .chat-view-width-fixed-800-pinned-recent .chat-view-content,
 .chat-view-width-fixed-800-pinned-recent .chat-composer-content {
-  --chat-pinned-recent-content-left: calc(
-    var(--chat-edge-surface-stack-edge-gap) +
-    var(--chat-edge-surface-stack-resolved-width) +
-    var(--chat-edge-surface-stack-column-gap)
-  );
   margin-left: min(
-    calc(100% - min(800px, 100%) - var(--chat-edge-surface-stack-edge-gap)),
+    calc(100% - min(800px, 100%) - var(--chat-pinned-recent-edge-gap)),
     calc(
       var(--chat-pinned-recent-content-left) +
       max(0px, (100% - var(--chat-pinned-recent-content-left) - 800px) / 2)
@@ -5675,6 +5687,12 @@
   border: 0;
   background: transparent;
   box-shadow: none;
+}
+
+.project-session-action-menu {
+  background: var(--surface-overlay);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .chat-recent-sessions-surface.desktop,
