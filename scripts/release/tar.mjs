@@ -37,7 +37,7 @@ async function collectEntries(sourceDir, relative = '') {
       throw new Error(`unsupported tar source entry: ${tarPath}`);
     }
     if (stats.isDirectory()) {
-      entries.push({ path: `${tarPath}/`, size: 0, type: '5' });
+      entries.push({ mode: 0o755, path: `${tarPath}/`, size: 0, type: '5' });
       entries.push(...(await collectEntries(sourcePath, tarPath)));
       continue;
     }
@@ -46,6 +46,10 @@ async function collectEntries(sourceDir, relative = '') {
     }
     entries.push({
       body: await readFile(sourcePath),
+      mode:
+        tarPath === 'hub/wheelmaker' || tarPath === 'hub/wheelmaker.exe'
+          ? 0o755
+          : 0o644,
       path: tarPath,
       size: stats.size,
       type: '0',
@@ -89,7 +93,7 @@ function createHeader(entry) {
   const header = Buffer.alloc(BLOCK_SIZE);
   const { name, prefix } = splitUstarPath(entry.path);
   writeText(header, 0, 100, name);
-  writeOctal(header, 100, 8, entry.type === '5' ? 0o755 : 0o644);
+  writeOctal(header, 100, 8, entry.mode);
   writeOctal(header, 108, 8, 0);
   writeOctal(header, 116, 8, 0);
   writeOctal(header, 124, 12, entry.size);
@@ -135,7 +139,7 @@ function readTarString(bytes) {
   return bytes.subarray(0, end === -1 ? bytes.length : end).toString('utf8');
 }
 
-export async function listTarEntries(tarGzPath) {
+export async function listTarEntries(tarGzPath, { details = false } = {}) {
   const archive = gunzipSync(await readFile(tarGzPath));
   const entries = [];
   for (let offset = 0; offset + BLOCK_SIZE <= archive.length; ) {
@@ -147,7 +151,18 @@ export async function listTarEntries(tarGzPath) {
     const prefix = readTarString(header.subarray(345, 500));
     const sizeText = readTarString(header.subarray(124, 136)).trim();
     const size = sizeText ? Number.parseInt(sizeText, 8) : 0;
-    entries.push(prefix ? `${prefix}/${name}` : name);
+    const modeText = readTarString(header.subarray(100, 108)).trim();
+    const path = prefix ? `${prefix}/${name}` : name;
+    entries.push(
+      details
+        ? {
+            mode: modeText ? Number.parseInt(modeText, 8) : 0,
+            path,
+            size,
+            type: String.fromCharCode(header[156]),
+          }
+        : path,
+    );
     offset += BLOCK_SIZE + Math.ceil(size / BLOCK_SIZE) * BLOCK_SIZE;
   }
   return entries;

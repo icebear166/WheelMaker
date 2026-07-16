@@ -43,3 +43,23 @@ test('tar paths reject absolute and traversal-like names', () => {
   assert.throws(() => normalizeTarPath('C:\\absolute'), /unsafe tar path/);
   assert.equal(normalizeTarPath('web\\assets\\bundle.js'), 'web/assets/bundle.js');
 });
+
+test('Hub binaries are executable while Web files remain read-only data', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-tar-mode-'));
+  const source = join(root, 'source');
+  const archive = join(root, 'package.tar.gz');
+  try {
+    await mkdir(join(source, 'hub'), { recursive: true });
+    await mkdir(join(source, 'web'), { recursive: true });
+    await writeFile(join(source, 'hub', 'wheelmaker'), 'hub');
+    await writeFile(join(source, 'web', 'index.html'), 'web');
+    await createTarGz({ sourceDir: source, outputPath: archive });
+
+    const entries = await listTarEntries(archive, { details: true });
+    const byPath = Object.fromEntries(entries.map((entry) => [entry.path, entry]));
+    assert.equal(byPath['hub/wheelmaker'].mode, 0o755);
+    assert.equal(byPath['web/index.html'].mode, 0o644);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

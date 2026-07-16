@@ -224,6 +224,9 @@ test('publisher commits exact script bytes and signs exact stable bytes', async 
   release.deployMjsBytes = await readFile(
     new URL('../deploy/deploy.mjs', import.meta.url),
   );
+  release.coreBytes = await readFile(
+    new URL('../deploy/deploy-core.mjs', import.meta.url),
+  );
   const api = new FakeGitHubApi();
   try {
     const stable = await publishBuiltRelease(release, api);
