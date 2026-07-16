@@ -13,6 +13,8 @@ import {
   DELETE_CHARACTER_COMMAND,
   KEY_BACKSPACE_COMMAND,
   KEY_DELETE_COMMAND,
+  SKIP_SELECTION_FOCUS_TAG,
+  $addUpdateTag,
   $getSelection,
   $isRangeSelection,
   type LexicalEditor,
@@ -155,14 +157,16 @@ function ChatRichComposerContent({
   const syncingFromPropsRef = React.useRef(false);
   const skipNextRangeCharacterDeleteRef = React.useRef(false);
   const appliedSelectionRestoreRevisionRef = React.useRef<number | null>(null);
+  const slashCommandsKey = JSON.stringify(slashCommands.map(command => [command.command, command.label]));
+  const stableSlashCommands = React.useMemo(() => slashCommands, [slashCommandsKey]);
 
   React.useEffect(() => {
     editor.setEditable(!readOnly);
   }, [editor, readOnly]);
 
   React.useEffect(() => {
-    return registerComposerSlashCommandTransform(editor, slashCommands);
-  }, [editor, slashCommands]);
+    return registerComposerSlashCommandTransform(editor, stableSlashCommands);
+  }, [editor, stableSlashCommands]);
 
   React.useEffect(() => {
     return editor.registerUpdateListener(() => {
@@ -187,6 +191,7 @@ function ChatRichComposerContent({
       if (restoreCursor !== null) {
         syncingFromPropsRef.current = true;
         editor.update(() => {
+          $addUpdateTag(SKIP_SELECTION_FOCUS_TAG);
           $setSelectedComposerCapsule('');
           $setComposerTokens(normalized, '', restoreCursor);
         }, {
@@ -200,6 +205,7 @@ function ChatRichComposerContent({
     }
     syncingFromPropsRef.current = true;
     editor.update(() => {
+      $addUpdateTag(SKIP_SELECTION_FOCUS_TAG);
       $setComposerTokens(normalized, '', restoreCursor ?? undefined);
     }, {
       onUpdate: () => {
@@ -226,7 +232,7 @@ function ChatRichComposerContent({
         };
       }),
       insertSkill: input => {
-        emitLexicalInsertion(editor, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange, slashCommands, [
+        emitLexicalInsertion(editor, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange, stableSlashCommands, [
           {
             type: 'skill',
             id: createTokenId('skill'),
@@ -237,7 +243,7 @@ function ChatRichComposerContent({
         ]);
       },
       insertFile: input => {
-        emitLexicalInsertion(editor, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange, slashCommands, [
+        emitLexicalInsertion(editor, tokensRef, emittedTokensRef, onTokensChange, onPlainTextChange, stableSlashCommands, [
           {
             type: 'file',
             id: createTokenId('file'),
@@ -273,7 +279,7 @@ function ChatRichComposerContent({
         }, {discrete: true});
       },
     };
-  }, [editor, handleRef, onPlainTextChange, onTokensChange, slashCommands]);
+  }, [editor, handleRef, onPlainTextChange, onTokensChange, stableSlashCommands]);
 
   React.useEffect(() => {
     return editor.registerCommand<KeyboardEvent>(

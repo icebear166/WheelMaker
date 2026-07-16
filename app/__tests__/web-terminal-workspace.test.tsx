@@ -106,6 +106,9 @@ describe('terminal workspace integration', () => {
       '  overscroll-behavior: contain;',
       '}',
     ].join('\n'));
+    expect(terminalCss).toContain('.terminal-xterm-surface {');
+    expect(terminalCss).toContain('.terminal-copy-context-menu {');
+    expect(terminalCss).toContain('position: fixed;');
     expect(terminalCss).toContain('.terminal-actions .terminal-fit {');
     expect(terminalCss).toContain('display: inline-flex;');
     expect(terminalCss).toContain('width: 32px;');

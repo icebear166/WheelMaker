@@ -1,4 +1,4 @@
-import React, {forwardRef, useEffect, useImperativeHandle, useRef} from 'react';
+import React, {forwardRef, useEffect, useImperativeHandle, useRef, useState} from 'react';
 import {Terminal} from '@xterm/xterm';
 import {FitAddon} from '@xterm/addon-fit';
 
@@ -25,7 +25,9 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
   {active, resizeEnabled, cols, rows, shell = '', initialCwd = '', onInput, onResize, onAutoResize},
   ref,
 ) {
+  const [copyMenu, setCopyMenu] = useState<{left: number; top: number; text: string} | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const copyMenuRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const inputRef = useRef(onInput);
@@ -88,6 +90,15 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
     terminal.open(container);
+    terminal.attachCustomKeyEventHandler(event => {
+      const isCopyShortcut = (
+        event.type === 'keydown' &&
+        !event.altKey &&
+        (event.ctrlKey || event.metaKey) &&
+        event.key.toLowerCase() === 'c'
+      );
+      return !(isCopyShortcut && terminal.hasSelection());
+    });
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
@@ -231,5 +242,62 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     terminalRef.current?.focus();
   }, [active, resizeEnabled]);
 
-  return <div ref={containerRef} className="terminal-xterm-host" />;
+  useEffect(() => {
+    if (!copyMenu) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (event.target instanceof Node && copyMenuRef.current?.contains(event.target)) return;
+      setCopyMenu(null);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setCopyMenu(null);
+    };
+    window.addEventListener('pointerdown', closeOnOutsidePointer, true);
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      window.removeEventListener('pointerdown', closeOnOutsidePointer, true);
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [copyMenu]);
+
+  const openCopyMenu = (event: React.MouseEvent<HTMLDivElement>) => {
+    const terminal = terminalRef.current;
+    if (!terminal?.hasSelection()) {
+      setCopyMenu(null);
+      return;
+    }
+    const text = terminal.getSelection();
+    if (!text) return;
+    event.preventDefault();
+    setCopyMenu({left: event.clientX, top: event.clientY, text});
+  };
+
+  const copySelection = async () => {
+    const text = copyMenu?.text;
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+    } finally {
+      setCopyMenu(null);
+      terminalRef.current?.focus();
+    }
+  };
+
+  return (
+    <div className="terminal-xterm-surface" onContextMenu={openCopyMenu}>
+      <div ref={containerRef} className="terminal-xterm-host" />
+      {copyMenu ? (
+        <div
+          ref={copyMenuRef}
+          className="terminal-copy-context-menu"
+          role="menu"
+          style={{left: copyMenu.left, top: copyMenu.top}}
+        >
+          <button type="button" role="menuitem" onClick={copySelection}>
+            <span className="codicon codicon-copy" aria-hidden="true" />
+            <span>Copy</span>
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
 });

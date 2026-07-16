@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   $applyNodeReplacement,
+  $addUpdateTag,
   $createLineBreakNode,
   $createParagraphNode,
   $createTextNode,
@@ -20,6 +21,7 @@ import {
   type SerializedLexicalNode,
   type Spread,
   TextNode,
+  SKIP_SELECTION_FOCUS_TAG,
 } from 'lexical';
 
 import {
@@ -310,6 +312,7 @@ export function registerComposerSlashCommandTransform(
     return () => undefined;
   }
   return editor.registerNodeTransform(TextNode, textNode => {
+    $addUpdateTag(SKIP_SELECTION_FOCUS_TAG);
     if (editor.isComposing() || textNode.isComposing()) {
       return;
     }

@@ -9,6 +9,7 @@ import {
   $isRangeSelection,
   DELETE_CHARACTER_COMMAND,
   KEY_BACKSPACE_COMMAND,
+  SKIP_SELECTION_FOCUS_TAG,
   createEditor,
 } from 'lexical';
 import {
@@ -178,6 +179,96 @@ describe('ChatRichComposer', () => {
       {type: 'text', text: ' next'},
     ]);
 
+    unregister();
+  });
+
+  test('marks slash command transforms as background updates that cannot restore DOM focus', () => {
+    const editor = createEditor({
+      namespace: 'WheelMakerChatComposerTest',
+      nodes: [ChatComposerCapsuleNode],
+      onError(error) {
+        throw error;
+      },
+    });
+    const updateTags: Set<string>[] = [];
+    const unregisterUpdate = editor.registerUpdateListener(({tags}) => {
+      updateTags.push(new Set(tags));
+    });
+    const unregisterTransform = registerComposerSlashCommandTransform(editor, [
+      {command: '/review', label: 'Review'},
+    ]);
+
+    editor.update(() => {
+      $setComposerTokens([]);
+      $insertComposerPlainText('/review');
+    }, {discrete: true});
+
+    expect(updateTags.at(-1)?.has(SKIP_SELECTION_FOCUS_TAG)).toBe(true);
+    unregisterTransform();
+    unregisterUpdate();
+  });
+
+  test('does not re-register slash transforms for an equivalent command list', async () => {
+    const tokens: ChatComposerToken[] = [{type: 'text', text: 'draft'}];
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        <ChatRichComposer
+          tokens={tokens}
+          onTokensChange={jest.fn()}
+          readOnly={false}
+          slashCommands={[{command: '/review', label: 'Review'}]}
+        />,
+      );
+    });
+    const editor = renderer!.root.findByType(EditorRefPlugin).props.editorRef.current;
+    const updates = jest.fn();
+    const unregister = editor.registerUpdateListener(updates);
+
+    await ReactTestRenderer.act(() => {
+      renderer!.update(
+        <ChatRichComposer
+          tokens={tokens}
+          onTokensChange={jest.fn()}
+          readOnly={false}
+          slashCommands={[{command: '/review', label: 'Review'}]}
+        />,
+      );
+    });
+
+    expect(updates).not.toHaveBeenCalled();
+    unregister();
+  });
+
+  test('syncs controlled composer content without taking focus from another control', async () => {
+    const onTokensChange = jest.fn();
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        <ChatRichComposer
+          tokens={[{type: 'text', text: 'before'}]}
+          onTokensChange={onTokensChange}
+          readOnly={false}
+        />,
+      );
+    });
+    const editor = renderer!.root.findByType(EditorRefPlugin).props.editorRef.current;
+    const updateTags: Set<string>[] = [];
+    const unregister = editor.registerUpdateListener(({tags}: {tags: Set<string>}) => {
+      updateTags.push(new Set(tags));
+    });
+
+    await ReactTestRenderer.act(() => {
+      renderer!.update(
+        <ChatRichComposer
+          tokens={[{type: 'text', text: 'after'}]}
+          onTokensChange={onTokensChange}
+          readOnly={false}
+        />,
+      );
+    });
+
+    expect(updateTags.at(-1)?.has(SKIP_SELECTION_FOCUS_TAG)).toBe(true);
     unregister();
   });
 

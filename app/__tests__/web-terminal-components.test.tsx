@@ -19,6 +19,12 @@ jest.mock('@xterm/xterm', () => ({
     resize = jest.fn();
     scrollLines = jest.fn();
     clearSelection = jest.fn();
+    hasSelection = jest.fn(() => false);
+    getSelection = jest.fn(() => '');
+    keyEventHandler?: (event: KeyboardEvent) => boolean;
+    attachCustomKeyEventHandler = jest.fn((handler: (event: KeyboardEvent) => boolean) => {
+      this.keyEventHandler = handler;
+    });
     write = jest.fn((_data: Uint8Array, callback?: () => void) => callback?.());
     dataHandler?: (data: string) => void;
     binaryHandler?: (data: string) => void;
@@ -146,6 +152,71 @@ describe('terminal components', () => {
     act(() => renderer!.unmount());
     expect(xterm.dispose).toHaveBeenCalled();
     expect(MockResizeObserver.instances[0].disconnect).toHaveBeenCalled();
+  });
+
+  test('lets the browser copy Ctrl+C when terminal text is selected', async () => {
+    await act(async () => {
+      TestRenderer.create(
+        <TerminalView active resizeEnabled cols={80} rows={24} onInput={jest.fn()} onResize={jest.fn()} />,
+        {createNodeMock: terminalHost},
+      );
+    });
+    const xterm = mockTerminalInstances[0];
+    const ctrlC = {type: 'keydown', key: 'c', ctrlKey: true, metaKey: false, altKey: false} as KeyboardEvent;
+    const ctrlShiftC = {...ctrlC, shiftKey: true} as KeyboardEvent;
+    const commandC = {...ctrlC, ctrlKey: false, metaKey: true} as KeyboardEvent;
+
+    expect(xterm.attachCustomKeyEventHandler).toHaveBeenCalledTimes(1);
+    xterm.hasSelection.mockReturnValue(true);
+    expect(xterm.keyEventHandler?.(ctrlC)).toBe(false);
+    expect(xterm.keyEventHandler?.(ctrlShiftC)).toBe(false);
+    expect(xterm.keyEventHandler?.(commandC)).toBe(false);
+    xterm.hasSelection.mockReturnValue(false);
+    expect(xterm.keyEventHandler?.(ctrlC)).toBe(true);
+  });
+
+  test('shows Copy on right click when terminal text is selected', async () => {
+    const writeText = jest.fn(() => Promise.resolve());
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      configurable: true,
+      value: {writeText},
+    });
+    let renderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        <TerminalView active resizeEnabled cols={80} rows={24} onInput={jest.fn()} onResize={jest.fn()} />,
+        {createNodeMock: terminalHost},
+      );
+    });
+    const xterm = mockTerminalInstances[0];
+    xterm.hasSelection.mockReturnValue(true);
+    xterm.getSelection.mockReturnValue('selected output');
+    const preventDefault = jest.fn();
+    const surface = renderer!.root.findByProps({className: 'terminal-xterm-surface'});
+
+    act(() => surface.props.onContextMenu({clientX: 24, clientY: 36, preventDefault}));
+
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    const copy = renderer!.root.findByProps({role: 'menuitem'});
+    await act(async () => copy.props.onClick());
+    expect(writeText).toHaveBeenCalledWith('selected output');
+  });
+
+  test('keeps the native terminal context menu when there is no selection', async () => {
+    let renderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        <TerminalView active resizeEnabled cols={80} rows={24} onInput={jest.fn()} onResize={jest.fn()} />,
+        {createNodeMock: terminalHost},
+      );
+    });
+    const preventDefault = jest.fn();
+    const surface = renderer!.root.findByProps({className: 'terminal-xterm-surface'});
+
+    act(() => surface.props.onContextMenu({clientX: 24, clientY: 36, preventDefault}));
+
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(renderer!.root.findAllByProps({role: 'menuitem'})).toHaveLength(0);
   });
 
   test('fits an active terminal when its container resizes after focus moves to the splitter', async () => {
