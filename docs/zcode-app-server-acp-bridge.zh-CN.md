@@ -82,20 +82,20 @@
 | 方法 | 入参 | 出参（result）| 用途 |
 |---|---|---|---|
 | `session/list` | `{}` | `{ sessions: SessionInfo[] }` | 列出本机所有 session |
-| `session/create` | `{ workspace: {workspacePath, workspaceKey}, mode?, model?, permission? }` | `{ session, projection, runtime, settings, messages, protocol }` | 创建新 session |
+| `session/create` | `{ workspace: {workspacePath, workspaceKey}, mode?, model? }` | `{ session, projection, runtime, settings, messages, protocol }` | 创建新 session |
 | `session/resume` | `{ sessionId }` | 同 `session/read` | 恢复已有 session（含历史）|
 | `session/read` | `{ sessionId }` | `{ messages, projection, ... }` | 读取 session 完整快照（历史消息 + 当前投影）|
 | `session/send` | `{ sessionId, content }` | `{ accepted: true, sessionId, stateRevision }` | **异步**投递用户消息 |
 | `session/steer` | `{ sessionId, content }` | — | turn 进行中插入消息（steering）|
 | `session/stop` | `{ sessionId }` | `{}` | 停止当前 turn |
 | `session/rewind` | `{ sessionId, target }` | — | 回退到某个检查点 |
-| `session/setMode` | `{ sessionId, mode }` | — | 切换权限模式 |
+| `session/setMode` | `{ sessionId, mode }` | `{ messages, ... }`（快照）| 切换**权限**模式（plan/edit/build/yolo）|
 | `session/events` | `{ sessionId }` | `{ events: [] }` | 拉取/重放事件（配合 seq）|
 | `session/subscribe` | `{ sessionId, deliveryKind }` | `{ sessionId, eventSeq, events: [] }` | 订阅事件流 |
 
-**不存在的方法**（返回 -32601）：`initialize`、`session/new`、`session/load`、`session/prompt`、`session/cancel`、`session/delete`、`session/archive`、`thread/*`、`turn/*`、`model/list`、`auth/*`。
+> **`session/create` 的 `mode` 语义（实测）**：`mode` 参数（`build`/`edit`/`plan`/`yolo`）设置的是**权限模式** `settings.permission.mode`，**不是** `session.mode`。`session.mode` 创建后恒为 `build`（session 类型分类，不可变），`projection.mode` 同样恒为 `build`。要改权限模式用 `session/setMode`。`permission` 不是 create 的合法字段（返回 -32602）。
 
-> 注：bundle 内部可见的 `sendPrompt`/`subscribeSession`/`readMessages`/`readEvents`/`steerSession`/`rewindSession` 等 camelCase 名是内部 JS 函数名，**不是 wire 方法名**。wire 层统一用斜杠形式。
+**不存在的方法**（返回 -32601，已逐个实测验证）：`initialize`、`session/new`、`session/load`、`session/prompt`、`session/cancel`、`session/delete`、`session/archive`、`thread/*`、`turn/*`、`model/list`、`auth/*`，以及 bundle 内部可见的 camelCase 名 `sendPrompt`/`subscribeSession`/`readMessages`/`readEvents`/`steerSession`/`rewindSession`（这些是内部 JS 函数名，**不是 wire 方法名**；wire 层统一用斜杠形式）。
 
 ### deliveryKind 枚举
 
@@ -178,6 +178,31 @@
 - `runtime.stateRevision`：状态版本号，每次 `state.updated` 自增。
 - `projection`：实时状态快照，`session/read` 也返回同结构。
 - `settings.model.available`：可用模型列表（替代 Codex 的 `model/list`）。
+- `settings.permission.mode`：当前权限模式（`build`/`edit`/`plan`/`yolo`）；由 create 的 `mode` 参数或 `session/setMode` 设置。
+
+### Message 结构（session/read / session/resume 返回的 `messages[]` 元素，实测）
+
+`session/create` 时 `messages` 为空；`session/send` 产生 turn 后，`session/read`/`session/resume` 返回完整历史。每个 message 结构：
+
+```json
+{
+  "info": {
+    "agent": "zcode-agent",
+    "messageId": "msg_xxx",
+    "model": { "modelId": "glm-5.2", "providerId": "zai" },
+    "role": "user",                       // "user" | "assistant"
+    "sessionId": "sess_xxx",
+    "time": { "created": 1784184475931 },
+    "tools": { "Bash": true, "Read": true, "Edit": true, "Write": true, ... }  // 仅 assistant 消息：该 turn 启用的工具集
+  },
+  "parts": [
+    { "messageId": "msg_xxx", "partId": "part_xxx", "type": "...", ... }
+  ]
+}
+```
+- `info.role` 区分用户/助手消息（不在顶层，在 `info.role`）。
+- `info.tools` 仅在 assistant 消息出现，枚举该 turn 实际启用的工具（16 个：Agent/AskUserQuestion/Bash/Edit/EnterPlanMode/ExitPlanMode/Read/Skill/TaskStop/TodoRead/TodoWrite/WebFetch/WebSearch/Write/SendMessage/ReadSessionContext）。
+- `parts[]` 是消息内容分块（文本/工具调用等），带 `partId`。历史 replay 时按 message → part 展开。
 
 ## 事件流模型（核心）
 
@@ -236,8 +261,24 @@
 | `model_request_*` | 模型请求结果（started/failed/...）| 模型 IO |
 | `model.streaming` | `{kind:"text_delta", delta:"<增量文本>", assistantMessageId, done:false}` —— 多条，逐 token | **模型输出增量（核心）** |
 | `model.streaming` | `{kind:"reasoning*"（待测具体 kind）, delta, ...}` | reasoning 增量 |
+| `tool.updated` | `{toolCallId, toolName, kind:"scheduled"\|"started"\|"result"\|"batch", ...}` —— 工具生命周期 | **工具执行（实测）** |
+| `permission.requested` | `{requestId, toolCallId, toolName, riskLevel, ...}` —— 权限审批通知通道 | 权限（实测）|
+| `permission.resolved` | 权限已决断 | 权限 |
 | `turn.failed` | `{error:{type,code,message,detail,stack}, turnPhase}` | **终态·失败** |
 | `turn.completed` | `{resultType:"success", response:"<完整文本>", usage:{inputTokens,outputTokens,cacheReadTokens,...}, toolCallCount, duration, cacheStats}` | **终态·成功** |
+
+`tool.updated` 实测样本（Read 工具调用，build 模式只读自动放行）：
+```json
+// scheduled
+{ "type":"tool.updated", "payload":{ "toolCallId":"call_xxx", "toolName":"Read", "kind":"scheduled", "schedule":{...}, "inputRef":"model_stream", "inputOmitted":true } }
+// started
+{ "type":"tool.updated", "payload":{ "toolCallId":"call_xxx", "toolName":"Read", "kind":"started", "startedAt":<ms> } }
+// result
+{ "type":"tool.updated", "payload":{ "toolCallId":"call_xxx", "result":{ "success":true, "content":"..." } } }
+// batch (整批完成)
+{ "type":"tool.updated", "payload":{ "toolCallIds":[...], "successCount":1, "errorCount":0, "kind":"batch" } }
+```
+工具入参 `input` 在事件里默认省略（`inputOmitted:true, inputRef:"model_stream"`），完整入参需从模型流或 `session/read` 的 message parts 取。
 
 `model.streaming` 实测样本（问 "2+2"）：
 ```json
@@ -284,9 +325,9 @@
 | `turn.completed`（`resultType=success`）| `response`、`usage` | 终止挂起的 `session/prompt`，返回 `end_turn` |
 | `turn.failed` | `error` | 终止挂起的 `session/prompt`，返回失败 |
 
-## 权限审批协议（server→client 反向 request）
+## 权限审批协议（server→client 反向 request，已实测触发）
 
-> 基于 bundle 静态逆向（v0.15.2）；wire 实测需在 `build` 模式触发，待补。
+> wire 实测确认（v0.15.2，build 模式 + `rm -rf` 高风险命令触发）：`interaction/requestPermission` 真实发出，且未应答时按指数退避重发（实测 6 次）；同时通过 `session/event` 推送 `permission.requested` 通知。低风险命令（如 `echo`）在 build 模式下**自动放行**，不触发审批。
 
 ### 反向 request 全集
 
@@ -470,14 +511,17 @@ client.Session
 - `probe-create-send.js`：创建 session + send/subscribe schema。
 - `probe-send-live.js` / `probe-events.js`：真实 prompt 事件流捕获。
 - `probe-lifecycle.js`：read/resume/stop/steer/rewind/setMode/events schema。
+- `verify-1.js` … `verify-4c.js`：逐断言验证脚本（PASS/FAIL），用真实 API key 覆盖帧格式/错误码/方法存在性/create/list/read/resume/send 成功闭环/setMode/stop/steer/rewind/events/权限请求。
 
-> harness 会从 `~/.zcode/v2/config.json` 的 `builtin:zai` 读 apiKey 注入子进程 env（不落盘、不打印），便于 session/create 通过 model 配置校验。但模型真实调用受 plan 路由限制（见上）。
+> harness 会从 `~/.zcode/v2/config.json` 的 `builtin:zai` 读 apiKey 注入子进程 env（`ZCODE_MODEL` + `ZCODE_BASE_URL` + `ZCODE_API_KEY`，不落盘、不打印），用真实 API key 跑通完整闭环。`verify-*.js` 是逐断言点的验证脚本（PASS/FAIL）。
 
 ## Phase 1 待补
 
-- [x] 权限请求形态（bundle 静态逆向完成：`interaction/requestPermission` 等 3 个 server-request；`build` 模式 wire 实测待 OAuth 环境补）
-- [ ] 成功路径事件抓包（message delta / tool_call / turn.completed）——需有效 OAuth 凭证
+- [x] 权限请求形态（`interaction/requestPermission` 等 3 个 server-request，wire 实测触发）
+- [x] 成功路径事件（`model.streaming` text_delta / `tool.updated` / `turn.completed`）
+- [x] 配置/凭证：API key 经环境变量已验证可用，无需 OAuth
+- [x] message 结构（`{info, parts}`）、`session/create` mode 语义（设置 permission.mode）
 - [ ] 图片/附件输入（`session/send` 的 `content` 是否支持非文本）待测
 - [ ] `session/rewind` 的 `target` 结构待测
-- [ ] 工具调用成功路径事件（`tool_call_scheduled` 等）——需一个会触发工具的 prompt 补测
-- [x] 配置/凭证：API key 经环境变量（`ZCODE_MODEL` + `ZCODE_BASE_URL` + `ZCODE_API_KEY`）已验证可用，无需 OAuth
+- [ ] reasoning delta 的具体 `model.streaming.kind` 待测
+- [ ] 权限闭环（回复 allow 后的 `permission.resolved` + 工具继续执行）待补完整 capture

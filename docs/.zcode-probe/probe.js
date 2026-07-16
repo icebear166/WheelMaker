@@ -90,6 +90,10 @@ function handleFrame(line) {
     return;
   }
   // route by shape
+  if (rawCatcher && ('result' in frame || 'error' in frame)) {
+    rawCatcher(frame);
+    return;
+  }
   if (('result' in frame || 'error' in frame) && 'id' in frame && frame.id !== 'invalid-message') {
     const p = pending.get(frame.id);
     if (p) {
@@ -141,6 +145,34 @@ function jlog(obj) {
   console.log(JSON.stringify(obj, null, 2));
 }
 
+// One-shot catcher for the next response-like frame (result/error, any id including
+// "invalid-message"). Used by raw() to observe frames handleFrame would otherwise skip.
+let rawCatcher = null;
+function setRawCatcher(fn) { rawCatcher = fn; }
+
+// Send a RAW frame string verbatim (used to test malformed/extra-key frames that
+// call() would normalize away, e.g. {"jsonrpc":"2.0",...}). Resolves with the first
+// response-like frame seen within timeout, or null.
+function raw(frameStr, { timeout = 8000 } = {}) {
+  return new Promise((resolve) => {
+    let settled = false;
+    setRawCatcher((frame) => {
+      if (settled) return;
+      settled = true;
+      setRawCatcher(null);
+      clearTimeout(timer);
+      resolve(frame);
+    });
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      setRawCatcher(null);
+      resolve(null);
+    }, timeout);
+    proc.stdin.write(frameStr.trim() + '\n');
+  });
+}
+
 // expose for scripts
 module.exports.__call = call;
 module.exports.__proc = proc;
@@ -177,7 +209,7 @@ const arg = process.argv[2];
 if (!arg) {
   repl();
 } else if (arg.endsWith('.js')) {
-  globalThis.__harness = { call, jlog, shorten, proc, events: eventTap };
+  globalThis.__harness = { call, jlog, shorten, proc, events: eventTap, raw };
   require(require('path').resolve(arg));
 } else {
   console.log('unknown arg');
