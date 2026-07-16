@@ -5,7 +5,7 @@ import { basename, join, normalize } from 'node:path';
 import test from 'node:test';
 
 import { buildRelease, RELEASE_TARGETS } from './build.mjs';
-import { resolveCommand } from './commands.mjs';
+import { resolveCommand, runCommand } from './commands.mjs';
 
 function recordingRunner() {
   const calls = [];
@@ -176,12 +176,32 @@ test('optional Desktop is built once outside platform packages', async () => {
   }
 });
 
-test('Windows command resolution uses cmd shims without enabling a shell', () => {
-  assert.equal(resolveCommand('npm', 'win32'), 'npm.cmd');
-  assert.equal(resolveCommand('npx', 'win32'), 'npx.cmd');
-  assert.equal(resolveCommand('go', 'win32'), 'go');
-  assert.equal(resolveCommand('npm', 'linux'), 'npm');
+test('Windows command resolution runs npm CLI through Node without a shell', () => {
+  assert.deepEqual(resolveCommand('npm', 'win32', 'C:\\Node\\node.exe'), {
+    args: ['C:\\Node\\node_modules\\npm\\bin\\npm-cli.js'],
+    executable: 'C:\\Node\\node.exe',
+  });
+  assert.deepEqual(resolveCommand('npx', 'win32', 'C:\\Node\\node.exe'), {
+    args: ['C:\\Node\\node_modules\\npm\\bin\\npx-cli.js'],
+    executable: 'C:\\Node\\node.exe',
+  });
+  assert.deepEqual(resolveCommand('go', 'win32'), {
+    args: [],
+    executable: 'go',
+  });
+  assert.deepEqual(resolveCommand('npm', 'linux'), {
+    args: [],
+    executable: 'npm',
+  });
 });
+
+test(
+  'release runner executes the installed npm on Windows',
+  { skip: process.platform !== 'win32' },
+  async () => {
+    await runCommand('npm', ['--version'], { cwd: process.cwd() });
+  },
+);
 
 async function readExists(path) {
   try {

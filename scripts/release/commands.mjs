@@ -1,12 +1,28 @@
 import { spawn } from 'node:child_process';
+import { win32 } from 'node:path';
 
-const WINDOWS_CMD_SHIMS = new Set(['npm', 'npx']);
+const WINDOWS_NPM_CLIS = new Set(['npm', 'npx']);
 
-export function resolveCommand(command, platform = process.platform) {
-  if (platform === 'win32' && WINDOWS_CMD_SHIMS.has(command)) {
-    return `${command}.cmd`;
+export function resolveCommand(
+  command,
+  platform = process.platform,
+  nodePath = process.execPath,
+) {
+  if (platform === 'win32' && WINDOWS_NPM_CLIS.has(command)) {
+    return {
+      args: [
+        win32.join(
+          win32.dirname(nodePath),
+          'node_modules',
+          'npm',
+          'bin',
+          `${command}-cli.js`,
+        ),
+      ],
+      executable: nodePath,
+    };
   }
-  return command;
+  return { args: [], executable: command };
 }
 
 export function runCommand(command, args, { cwd, env = {} } = {}) {
@@ -15,7 +31,8 @@ export function runCommand(command, args, { cwd, env = {} } = {}) {
   }
 
   return new Promise((resolve, reject) => {
-    const child = spawn(resolveCommand(command), args, {
+    const invocation = resolveCommand(command);
+    const child = spawn(invocation.executable, [...invocation.args, ...args], {
       cwd,
       env: { ...process.env, ...env },
       shell: false,

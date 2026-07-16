@@ -93,16 +93,17 @@ test('helper wrappers preserve existing filenames and call grouped runtime actio
     deploy: '/home/alice/.wheelmaker/deploy.mjs',
     node: '/usr/bin/node',
   });
-  const expected = ['restart', 'start', 'status', 'stop'];
+  const runtimeActions = ['restart', 'start', 'status', 'stop'];
   assert.deepEqual(
     Object.keys(windows).sort(),
-    expected.map((name) => `${name}.bat`),
+    [...runtimeActions.map((name) => `${name}.bat`), 'update_exe.bat'].sort(),
   );
   assert.deepEqual(
     Object.keys(unix).sort(),
-    expected.map((name) => `${name}.sh`),
+    runtimeActions.map((name) => `${name}.sh`),
   );
   assert.match(windows['start.bat'], /deploy\.mjs" runtime start/);
+  assert.match(windows['update_exe.bat'], /deploy\.mjs" desktop-update/);
   assert.match(unix['status.sh'], /deploy\.mjs' runtime status/);
 });
 
@@ -374,6 +375,75 @@ test('normal deploy applies Hub and Web to the existing layout', async (t) => {
   const config = JSON.parse(await readFile(join(fixture.home, 'config.json'), 'utf8'));
   assert.deepEqual(config.projects, []);
   assert.match(config.registry.token, /^[A-Za-z0-9_-]{43}$/);
+});
+
+test('Desktop update follows carried stable pointer', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-desktop-update-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const home = join(root, '.wheelmaker');
+  const target = join(home, 'desktop', 'WheelMakerDesktop.exe');
+  await mkdir(join(home, 'desktop'), { recursive: true });
+  await writeFile(target, 'old-desktop');
+  await writeFile(
+    join(home, 'release.json'),
+    '{"schemaVersion":2,"version":"v1.1"}\n',
+  );
+  const nextDesktop = Buffer.from('desktop-v1.2');
+  const desktopUrl = 'https://release.example/v1.2/WheelMakerDesktop.exe';
+
+  await runCore(['desktop-update'], {
+    fetchBytes: async (url) => {
+      assert.equal(url, desktopUrl);
+      return nextDesktop;
+    },
+    installDirectory: home,
+    isDesktopRunning: async () => false,
+    trustedStable: {
+      schema: 1,
+      version: 'v1.3',
+      desktopExe: {
+        version: 'v1.2',
+        url: desktopUrl,
+        sha256: sha256Bytes(nextDesktop),
+      },
+    },
+  });
+
+  assert.deepEqual(await readFile(target), nextDesktop);
+  assert.equal(
+    await readFile(join(home, 'release.json'), 'utf8'),
+    '{"schemaVersion":2,"version":"v1.1"}\n',
+  );
+  assert.equal(await exists(`${target}.tmp`), false);
+});
+
+test('Desktop update refuses to replace a running executable', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-desktop-running-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  let downloadCalls = 0;
+
+  await assert.rejects(
+    () =>
+      runCore(['desktop-update'], {
+        fetchBytes: async () => {
+          downloadCalls += 1;
+          return Buffer.from('new-desktop');
+        },
+        installDirectory: join(root, '.wheelmaker'),
+        isDesktopRunning: async () => true,
+        trustedStable: {
+          schema: 1,
+          version: 'v1.3',
+          desktopExe: {
+            version: 'v1.2',
+            url: 'https://release.example/v1.2/WheelMakerDesktop.exe',
+            sha256: sha256Bytes(Buffer.from('new-desktop')),
+          },
+        },
+      }),
+    /close WheelMaker Desktop/i,
+  );
+  assert.equal(downloadCalls, 0);
 });
 
 test('migrate-uninstall removes legacy runtimes and preserves user data', async (t) => {

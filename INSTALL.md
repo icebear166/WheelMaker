@@ -6,12 +6,7 @@
 
 ## 1. 环境准备
 
-每台机器都需要：
-
-- Git 可用
-- Go `1.26+`
-- Node.js `22.11+`
-- npm 可用
+目标机器只需要 Node.js `22+`。部署流程从公共发布仓库下载签名元数据和预编译包，不需要 WheelMaker 源码、Git、Go、npm 或本机交叉编译环境。
 
 Registry 入口机额外需要：
 
@@ -20,22 +15,16 @@ Registry 入口机额外需要：
 
 执行原则：
 
-- 先检测，再安装或升级。
-- 已存在且版本满足要求就跳过。
-- 已存在但版本不满足时，先尝试升级；升级失败再询问用户。
-- 不要重复安装同类工具链。
-- Windows：如果已有 Scoop，用 Scoop；没有 Scoop 就用 winget。不要自动安装 Scoop。
-- Linux：发行版包版本满足时再用发行版包；不满足时先提出 Go 官方包、NodeSource、nvm 等升级方案，让用户确认。
+- 先检测 Node，再安装或升级；不要在目标机安装无关的源码构建工具链。
+- Windows 可使用现有 Scoop 或 winget 安装 Node；不要自动安装 Scoop。
+- Linux 发行版包不满足 Node 22 时，先提出 NodeSource、nvm 等方案让用户确认。
 - 只有 Registry 入口机才处理 Nginx。
-- Go module 或 npm 下载长时间无进展、超时、连接失败时，可以建议临时换源，但先说明原因并让用户确认。不要一开始就换源。
+- 正常部署和 `deploy.mjs update` 不需要管理员权限。Windows 一次性迁移仅在发现旧 Windows Service 时弹 UAC。
 
 常用检测：
 
 ```bash
-git --version
-go version
 node --version
-npm --version
 nginx -v
 ```
 
@@ -44,6 +33,7 @@ Windows 额外确认：
 ```powershell
 scoop --version
 winget --version
+where node
 where nginx
 ```
 
@@ -55,38 +45,30 @@ loginctl show-user "$USER" -p Linger
 sudo loginctl enable-linger "$USER"
 ```
 
-下载源处理 tips：
+## 2. 获取公共部署启动器
 
-- Go 可临时使用 `GOPROXY=https://goproxy.cn,direct`，或恢复为 `https://proxy.golang.org,direct`。
-- npm 可临时使用 `https://registry.npmmirror.com`，部署后提醒用户是否恢复默认 registry。
-- 换源是环境改动；执行前必须说明当前失败现象和将要修改的配置。
+全新安装不需要克隆私有源码仓库。把公共发布仓库中的 `deploy.mjs` 放到 `~/.wheelmaker/deploy.mjs`：
 
-## 2. 克隆仓库
-
-优先使用 SSH：
-
-```bash
-ssh -T git@github.com
-git clone git@github.com:swm8023/WheelMaker.git
-cd WheelMaker
-```
-
-如果 SSH 不可用，并且用户确认可以用 HTTPS：
-
-```bash
-git clone https://github.com/swm8023/WheelMaker.git
-cd WheelMaker
-```
-
-不要猜其他仓库地址。
-
-克隆后安装本仓库的凭据泄漏 pre-commit 门：
+Windows PowerShell：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install_git_hooks.ps1
+$install = Join-Path $HOME '.wheelmaker'
+New-Item -ItemType Directory -Force -Path $install | Out-Null
+Invoke-WebRequest 'https://raw.githubusercontent.com/swm8023/wheelmaker-releases/main/deploy.mjs' -OutFile (Join-Path $install 'deploy.mjs')
+node (Join-Path $install 'deploy.mjs')
 ```
 
-该脚本固定安装 Gitleaks v8.28.0，并把当前仓库的 `core.hooksPath` 设置为 `.githooks`。Gitleaks 缺失时 hook 会 fail closed；不要用 `--no-verify` 绕过安全提交门。CI 还会扫描当前 tree 和完整 Git 历史。
+macOS/Linux：
+
+```bash
+mkdir -p "$HOME/.wheelmaker"
+curl --fail --location --proto '=https' --tlsv1.2 \
+  https://raw.githubusercontent.com/swm8023/wheelmaker-releases/main/deploy.mjs \
+  --output "$HOME/.wheelmaker/deploy.mjs"
+node "$HOME/.wheelmaker/deploy.mjs"
+```
+
+启动器会验证 `stable.json` 的 Ed25519 签名，并按其中的固定 SHA-256 地址刷新自身核心、下载对应平台包。后续目标机版本判断只读签名 stable 和本地 schema v2 `release.json`，不读取 Git。
 
 ## 3. 确认共享 Token 策略
 
@@ -96,7 +78,7 @@ Registry 入口机和所有受信任 Worker 使用同一个 Token。入口机部
 
 ## 4. 首次部署
 
-在仓库根目录执行。
+全新安装已在第 2 节通过 `node ~/.wheelmaker/deploy.mjs` 完成。只有从旧源码发布模式迁移时，才在旧源码仓库根目录执行一次迁移 wrapper：
 
 Windows：
 
@@ -112,10 +94,23 @@ bash deploy.sh
 
 说明：
 
-- 首次部署必须用 `deploy.bat` 或 `deploy.sh`。
-- 不要用 `update-publish.bat` 或 `update-publish.sh` 做首次部署；它们只适合服务已存在后的更新发布。
-- Windows 可能触发 UAC；首次创建服务时可能要求当前账号密码。AI 运行前要提醒用户关注终端或弹窗，命令长时间停住时先判断是否正在等待人工输入。
-- 部署流程会构建二进制、发布 Web 到 `~/.wheelmaker/web`、安装服务，并在缺失时创建 `~/.wheelmaker/config.json`。
+- wrapper 先把 `scripts/deploy/deploy.mjs` 复制到 `~/.wheelmaker/deploy.mjs`，调用 `migrate-uninstall`，再执行一次正常部署。后续不要再调用迁移模式。
+- 迁移会删除旧 Hub/updater/deploy/monitor 运行时和 `~/.wheelmaker/build/bootstrap`，但保留配置、数据库、日志和 Desktop。
+- Windows 只有发现旧 Windows Service 时才可能触发 UAC；新 Scheduled Task 使用当前用户、Limited 权限。
+- 正常部署下载并验证预编译 Hub + Web，始终一起替换到 `~/.wheelmaker/bin` 和 `~/.wheelmaker/web`，在缺失时创建 `config.json`，写 schema v2 `release.json`，并启动 Hub。
+- 固定的 03:00 updater 和 Web 手动更新都调用 `node ~/.wheelmaker/deploy.mjs update`。该命令只停止/替换/启动现有运行时，不安装或卸载服务/任务，也不需要管理员权限。
+- Windows Desktop 按需单独更新：先关闭 Desktop，再运行 `~/.wheelmaker/update_exe.bat`。若本次 stable 版本没有发布新 EXE，会继续使用 stable 中继承的上一版 Desktop 指针。
+
+安装目录：
+
+```text
+~/.wheelmaker/bin/       Hub
+~/.wheelmaker/web/       每次部署的完整 Web
+~/.wheelmaker/desktop/   可选 Desktop EXE
+~/.wheelmaker/staging/   lock.json、status.json 和临时包
+```
+
+生命周期 helper 保持原文件名：Windows 为 `start.bat`、`stop.bat`、`restart.bat`、`status.bat`；macOS/Linux 为对应 `.sh`。Windows 另有 `update_exe.bat`。
 
 ## 5. Registry 入口机配置
 

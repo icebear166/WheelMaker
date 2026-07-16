@@ -131,7 +131,7 @@ func TestChooseKeepPID(t *testing.T) {
 func TestParseWorkerProcessesFromPSAcceptsPathComm(t *testing.T) {
 	out := []byte(`123 /Users/me/.wheelmaker/bin/wheelmaker /Users/me/.wheelmaker/bin/wheelmaker --hub-worker
 124 /Users/me/.wheelmaker/bin/wheelmaker /Users/me/.wheelmaker/bin/wheelmaker --registry-worker
-125 /Users/me/.wheelmaker/bin/wheelmaker-updater /Users/me/.wheelmaker/bin/wheelmaker-updater --repo /repo
+125 /usr/bin/node /usr/bin/node /Users/me/.wheelmaker/deploy.mjs update
 126 bash bash -lc wheelmaker --hub-worker
 `)
 
@@ -147,7 +147,7 @@ func TestParseWorkerProcessesFromPSAcceptsPathComm(t *testing.T) {
 func TestParseWorkerProcessesFromPSAcceptsTruncatedDarwinComm(t *testing.T) {
 	out := []byte(`123 /Users/me/.whe /Users/me/.wheelmaker/bin/wheelmaker --hub-worker
 124 /Users/me/.whe /Users/me/.wheelmaker/bin/wheelmaker --registry-worker
-125 /Users/me/.whe /Users/me/.wheelmaker/bin/wheelmaker-updater --hub-worker
+125 /usr/bin/nod /usr/bin/node /Users/me/.wheelmaker/deploy.mjs update
 126 bash bash -lc wheelmaker --hub-worker
 `)
 

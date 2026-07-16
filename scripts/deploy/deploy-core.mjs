@@ -697,12 +697,15 @@ export function darwinRuntimeFiles(paths) {
 }
 
 export function windowsWrappers(paths) {
-  return Object.fromEntries(
-    ['start', 'stop', 'restart', 'status'].map((action) => [
-      `${action}.bat`,
-      `@echo off\r\nsetlocal\r\n${windowsBatchQuote(paths.node)} ${windowsBatchQuote(paths.deploy)} runtime ${action} %*\r\nexit /b %errorlevel%\r\n`,
-    ]),
-  );
+  return {
+    ...Object.fromEntries(
+      ['start', 'stop', 'restart', 'status'].map((action) => [
+        `${action}.bat`,
+        `@echo off\r\nsetlocal\r\n${windowsBatchQuote(paths.node)} ${windowsBatchQuote(paths.deploy)} runtime ${action} %*\r\nexit /b %errorlevel%\r\n`,
+      ]),
+    ),
+    'update_exe.bat': `@echo off\r\nsetlocal\r\n${windowsBatchQuote(paths.node)} ${windowsBatchQuote(paths.deploy)} desktop-update\r\nexit /b %errorlevel%\r\n`,
+  };
 }
 
 export function unixWrappers(paths) {
@@ -719,7 +722,13 @@ async function writeRuntimeWrappers(paths, platform) {
   const active = useWindows ? windowsWrappers(paths) : unixWrappers(paths);
   const staleNames = useWindows
     ? ['start.sh', 'stop.sh', 'restart.sh', 'status.sh']
-    : ['start.bat', 'stop.bat', 'restart.bat', 'status.bat'];
+    : [
+        'start.bat',
+        'stop.bat',
+        'restart.bat',
+        'status.bat',
+        'update_exe.bat',
+      ];
   await mkdir(paths.home, { recursive: true });
   for (const name of staleNames) {
     await rm(join(paths.home, name), { force: true });
@@ -929,6 +938,64 @@ async function executeLegacyMigration(deps) {
     force: true,
     recursive: true,
   });
+}
+
+async function detectDesktopRunning(platform, runner) {
+  if (platform !== 'win32') {
+    throw new Error('WheelMaker Desktop update is supported on Windows only');
+  }
+  const result = await runner(
+    'powershell',
+    [
+      '-NoProfile',
+      '-Command',
+      "if (Get-Process -Name 'WheelMakerDesktop' -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }",
+    ],
+    { allowFailure: true },
+  );
+  return result.code === 0;
+}
+
+async function executeDesktopUpdate(deps) {
+  if (!deps.installDirectory) {
+    throw new Error('deployment install directory is required');
+  }
+  const pointer = deps.trustedStable?.desktopExe;
+  if (
+    !pointer ||
+    !/^v1\.(0|[1-9]\d*)$/.test(pointer.version ?? '') ||
+    !/^[0-9a-f]{64}$/.test(pointer.sha256 ?? '')
+  ) {
+    throw new Error('stable release does not contain a valid Desktop executable');
+  }
+  requireHttps(pointer.url, 'Desktop executable');
+  const platform = deps.platform ?? process.platform;
+  const runner = deps.runner ?? runProcess;
+  const isDesktopRunning =
+    deps.isDesktopRunning ?? (() => detectDesktopRunning(platform, runner));
+  if (await isDesktopRunning()) {
+    throw new Error('Close WheelMaker Desktop before updating it');
+  }
+  if (typeof deps.fetchBytes !== 'function') {
+    throw new Error('Desktop executable downloader is required');
+  }
+
+  const home = resolve(deps.installDirectory);
+  const desktopDirectory = join(home, 'desktop');
+  const targetPath = join(desktopDirectory, 'WheelMakerDesktop.exe');
+  const temporaryPath = `${targetPath}.tmp`;
+  const bytes = Buffer.from(await deps.fetchBytes(pointer.url));
+  await mkdir(desktopDirectory, { recursive: true });
+  await rm(temporaryPath, { force: true });
+  try {
+    await writeFile(temporaryPath, bytes, { mode: 0o755 });
+    if (sha256Bytes(bytes) !== pointer.sha256) {
+      throw new Error('Desktop executable SHA-256 verification failed');
+    }
+    await rename(temporaryPath, targetPath);
+  } finally {
+    await rm(temporaryPath, { force: true });
+  }
 }
 
 function windowsStopScript(paths) {
@@ -1383,6 +1450,9 @@ async function executeDeployment(internalUpdate, deps, runtime) {
 export async function runCore(args, deps = {}) {
   if (args.length === 1 && args[0] === 'migrate-uninstall') {
     return executeLegacyMigration(deps);
+  }
+  if (args.length === 1 && args[0] === 'desktop-update') {
+    return executeDesktopUpdate(deps);
   }
   const runtime = resolveRuntime(deps);
   if (args[0] === 'runtime' && args.length === 2) {

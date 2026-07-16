@@ -39,23 +39,19 @@ This model works well when you want one machine to expose the public entrypoint 
 | Machine A / Nginx | `wss://<host>:28800/ws` | Registry WebSocket |
 | Machine A / internal | `127.0.0.1:9630` | Registry listener |
 
-### 1. Deploy, build, and install services
+### 1. Deploy the signed prebuilt release
 
-Requirements:
+The target machine does not need the WheelMaker source tree, Git, Go, npm, or a platform build toolchain. It needs:
 
-- **Go 1.26+**
-- **Node.js 22.11+**
-- `git`
-- `npm`
-- Windows full deploy runs legacy Service and Scheduled Task cleanup in a UAC-elevated child when the main deploy process is not elevated
+- **Node.js 22+**
 - `launchctl` on macOS, or `systemctl --user` on Linux
-- on Linux, lingering enabled for the deploy user:
+- Linux lingering enabled for the deploy user:
 
 ```bash
 sudo loginctl enable-linger "$USER"
 ```
 
-One-shot deploy from the repository root:
+For the one-time migration from the old source deployment, run the wrapper from the source checkout. It copies the lightweight launcher into `~/.wheelmaker`, removes old services/programs while preserving user data, and installs the current signed stable release:
 
 ```bat
 deploy.bat
@@ -65,37 +61,31 @@ deploy.bat
 bash deploy.sh
 ```
 
-`deploy.bat` and `deploy.sh` only prepare the bootstrap environment: when Go and the deploy source are available they refresh the temporary `wheelmaker-deploy` CLI under `~/.wheelmaker/build/bootstrap`; otherwise they reuse an existing bootstrap CLI and fail clearly if none exists. All deploy flow, runtime setup, elevation, and platform differences live in `wheelmaker-deploy`.
+For a new installation, place the public `deploy.mjs` at `~/.wheelmaker/deploy.mjs` and run `node ~/.wheelmaker/deploy.mjs`. The launcher downloads `stable.json` and its signature, refreshes itself/core from the public release repository, verifies every hash/signature, and then installs the platform archive.
 
-On Windows, the deploy CLI configures current-user startup through `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. Before writing HKCU startup entries, deploy must fully remove old `WheelMaker*` Windows Services and Scheduled Tasks. When the main deploy process is not elevated, only the cleanup script is relaunched through UAC, then the normal deploy process continues and writes HKCU entries for the original user.
+Every normal deploy replaces Hub and Web together. The resulting layout is:
 
-After the initial runtime setup, request an updater-driven update and Web publish without recreating startup entries:
-
-```bat
-update-publish.bat
+```text
+~/.wheelmaker/
+  bin/                       # wheelmaker.exe or wheelmaker
+  web/                       # complete Web release
+  desktop/                   # optional WheelMakerDesktop.exe, updated separately
+  staging/                   # update lock/status and verified temporary packages
+  deploy.mjs
+  deploy-core.mjs
+  release.json               # installed release schema v2
+  config.json                # preserved across deploys
 ```
 
-```bash
-bash update-publish.sh
-```
+Normal deployment registers only current-user runtimes and does not require administrator privileges:
 
-The deploy CLI flow will:
+- Windows Scheduled Tasks: `WheelMaker` at logon and `WheelMakerUpdater` daily at 03:00.
+- macOS LaunchAgents: `com.wheelmaker.hub` and `com.wheelmaker.updater` at 03:00.
+- Linux systemd user units: `wheelmaker-hub.service` plus `wheelmaker-updater.timer` at 03:00.
 
-- pull with `git pull --ff-only`
-- run `npm ci --include=dev` for the Web app before Web publish
-- build `wheelmaker`, `wheelmaker-updater`, and `wheelmaker-deploy`
-- publish the Web UI to `~/.wheelmaker/web`
-- stop managed runtime processes before replacing binaries and remove legacy Windows Services/Scheduled Tasks during Windows deploy cleanup
-- install binaries to `~/.wheelmaker/bin`
-- preserve an existing `~/.wheelmaker/config.json`, or create a runnable default for this WheelMaker checkout with the registry listening locally
-- generate platform-specific `start`, `stop`, `restart`, and `status` wrapper scripts under `~/.wheelmaker`
-- register or update startup entries/services:
-  - Windows: HKCU Run values `WheelMaker`, `WheelMakerUpdater`
-  - macOS: `com.wheelmaker.hub`, `com.wheelmaker.updater`
-  - Linux: `wheelmaker-hub.service`, `wheelmaker-updater.service`
-- write `~/.wheelmaker/release.json` with the published Git SHA
-- start managed runtime processes/services
-- clean regenerable deploy artifacts and stale entry scripts: Android JVM probe builds, `~/.wheelmaker/cache/go-build`, `~/.wheelmaker/tmp`, root `web-dev*.log`, old `~/.wheelmaker/logs/<timestamp>` backups beyond the latest 3, legacy `refresh_server.*` copies, and helper wrappers for the other platform family
+The migration requests UAC on Windows only if legacy Windows Services actually exist. It also removes old tasks/HKCU Run values, updater/deploy/monitor executables, and `build/bootstrap`; it preserves `config.json`, databases, logs, Desktop, and other user data.
+
+`release.json` schema v2 records `version`, `publishedAt`, `sourceSha`, `manifestSha256`, and `installedAt`. App version reporting reads this file and the signed stable metadata; it does not infer the installed version from Git.
 
 Lifecycle commands after deployment on Windows:
 
@@ -115,11 +105,13 @@ Lifecycle commands after deployment on macOS/Linux:
 ~/.wheelmaker/status.sh
 ```
 
-You can also call the CLI directly:
+To update Desktop independently, close WheelMaker Desktop first and run:
 
-```bash
-~/.wheelmaker/bin/wheelmaker-deploy service restart
+```powershell
+~/.wheelmaker/update_exe.bat
 ```
+
+The stable release carries the latest available Desktop pointer, so a Hub/Web update can skip Desktop publishing without losing an older Desktop release. A running Desktop is never killed or replaced later on reboot; close it and retry.
 
 The deploy scripts do not install or configure Nginx, Caddy, certificates, or public ports. Point your own reverse proxy at this contract:
 
@@ -308,7 +300,7 @@ In this layout:
 - `/ws` forwards to the registry WebSocket
 - Existing Nginx files continue to work because `index.html` carries meta CSP/referrer protection, but full `frame-ancestors` and non-HTML coverage requires the four response headers in every static location above.
 
-### 5. Publish the Web UI
+### 5. Build the Web UI locally
 
 The Web build is published to:
 
@@ -323,11 +315,13 @@ cd app
 npm run build:web:release
 ```
 
-This will:
+This developer command will:
 
 1. build the Web frontend
 2. export the assets to `~\.wheelmaker\web`
-3. refresh the files served by the Nginx root path
+3. refresh the local files served by the Nginx root path
+
+Production releases do not use this as a conditional target-side step: the release builder compiles Web once, includes it in every platform archive, and every normal deploy replaces `~/.wheelmaker/web`.
 
 ### 6. Build Android APK
 
@@ -434,31 +428,13 @@ macOS/Linux:
 ~/.wheelmaker/status.sh
 ```
 
-Default deploy flow:
+The scheduled and Web-triggered update flow is:
 
 ```text
-pull -> npm ci -> build -> publish web -> prepare install -> install -> config -> write release manifest -> start
+verify signed stable -> acquire staging lock -> download -> verify -> stop Hub -> apply Hub + Web -> write release.json -> restart Hub
 ```
 
-Common deploy flags:
-
-- `--no-pull`
-- `--no-npm`
-- `--no-build`
-- `--no-install`
-- `--no-restart`
-- `--no-config`
-- `--no-web`
-- `--no-updater`
-
-The updater trigger path is:
-
-- `update-publish.bat` / `update-publish.sh` writes a `full-update` signal.
-- `WheelMakerUpdater` calls the installed `wheelmaker-deploy bootstrap-update`.
-- `bootstrap-update` pulls the repository, builds a temporary latest deploy CLI, then runs `update` to rebuild and replace Hub and the deploy CLI, publish Web, write the release manifest, and restart Hub.
-- On Windows, `WheelMakerUpdater` runs a temporary copy of the installed deploy CLI first, so the installed deploy CLI can be replaced during the update.
-
-`WheelMakerUpdater` self-upgrade is reserved but not implemented in this transitional CLI.
+The Web UI requests an update by creating one atomic job in `staging/lock.json`; repeated clicks reuse the active job. `staging/status.json` exposes the current phase (`queued`, `downloading`, `verifying`, `applying`, `restarting`, `succeeded`, or `failed`). `node ~/.wheelmaker/deploy.mjs update` is the non-administrative updater entrypoint and never installs or removes runtime registrations.
 
 ### 9. Quick validation checklist
 
@@ -578,7 +554,7 @@ WheelMaker also includes configuration and runtime visibility in the main app:
 - runtime and registry address settings
 - token provider and token stats, including DeepSeek token stats
 - hub and registry project visibility
-- update-publish status and actions
+- signed stable version, release history, publish status, and active update job
 
 ## Repository structure
 
@@ -609,11 +585,15 @@ npm run tsc:web
 npm run build:web:release
 ```
 
-Script overview:
+Release and script overview:
 
-- `deploy.bat` / `deploy.sh` — build a temporary `wheelmaker-deploy` CLI and run the unified deploy flow
-- `update-publish.bat` / `update-publish.sh` — signal `WheelMakerUpdater` to run the deploy CLI update path
-- `app\scripts\export_web_release.ps1` — export Web assets to `~\.wheelmaker\web`
+- `node scripts/release.mjs build [--with-desktop]` — build `.release-out` locally without publishing; Windows is the primary local release host, and the output layout matches deployment staging.
+- `node scripts/release.mjs publish [--with-desktop]` — build and publish from a clean checkout, incrementing only `v1.x`.
+- `.github/workflows/publish-release.yml` — manual `workflow_dispatch` fallback with a source `ref` and optional `with_desktop`; Web builds once, while Hub binaries cross-compile for Windows amd64, Linux amd64, and macOS arm64.
+- `deploy.bat` / `deploy.sh` — one-time legacy migration followed by signed stable deployment.
+- `update_exe.bat` — independently update `WheelMakerDesktop.exe` through the same signed stable trust chain.
+
+Publishing uses GitHub App secrets `WHEELMAKER_RELEASE_APP_ID`, `WHEELMAKER_RELEASE_INSTALLATION_ID`, and `WHEELMAKER_RELEASE_APP_PRIVATE_KEY`, plus signing secret `WHEELMAKER_SIGNING_PRIVATE_KEY`. The GitHub App is installed only on the public release repository; the signing private key is never committed. A release publishes assets first and writes signed `stable.json` last.
 
 ## License
 

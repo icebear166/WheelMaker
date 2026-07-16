@@ -162,6 +162,7 @@ $powerShellExecutable = (Get-Process -Id $PID).Path
 $scriptTests = @(
     'scripts/test_deploy_bat.ps1',
     'scripts/test_deploy_sh.ps1',
+    'scripts/test_update_exe_bat.ps1',
     'scripts/test_android_project_ps1.ps1',
     'scripts/test_android_release_signing.ps1',
     'scripts/test_publish_android_github_release_ps1.ps1',
