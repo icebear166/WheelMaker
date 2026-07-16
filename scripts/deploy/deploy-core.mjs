@@ -924,7 +924,7 @@ async function executeLegacyMigration(deps) {
   ]) {
     await rm(join(paths.bin, `${name}${suffix}`), { force: true });
   }
-  await rm(join(paths.home, 'build', 'bootstrap'), {
+  await rm(join(paths.home, 'build'), {
     force: true,
     recursive: true,
   });
@@ -1369,6 +1369,7 @@ async function executeDeployment(internalUpdate, deps, runtime) {
     });
   };
 
+  let deploymentError;
   try {
     await setState('downloading');
     const stageRelease =
@@ -1432,8 +1433,27 @@ async function executeDeployment(internalUpdate, deps, runtime) {
       state: 'failed',
       version: deps.trustedStable.version,
     }).catch(() => {});
-    throw error;
+    deploymentError = error;
   }
+
+  let cleanupError;
+  try {
+    validateJobId(jobId);
+    await rm(join(stagingDirectory, jobId), {
+      force: true,
+      recursive: true,
+    });
+  } catch (error) {
+    cleanupError = error;
+  }
+  if (deploymentError && cleanupError) {
+    throw new AggregateError(
+      [deploymentError, cleanupError],
+      'deployment and staging cleanup both failed',
+    );
+  }
+  if (deploymentError) throw deploymentError;
+  if (cleanupError) throw cleanupError;
 }
 
 export async function runCore(args, deps = {}) {

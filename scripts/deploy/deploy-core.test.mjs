@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -306,6 +306,14 @@ test('manifest and completed archive are verified before extraction', async () =
     };
     const manifestBytes = encodeJsonBytes(manifest);
     const stable = {
+      androidApk: {
+        sha256: 'f'.repeat(64),
+        size: 123,
+        url: 'https://release.example/WheelMakerAndroid.apk',
+        version: 'v1.7',
+        versionCode: 7,
+        versionName: '1.7',
+      },
       schema: 1,
       version: 'v1.7',
       sourceSha: '0'.repeat(40),
@@ -319,8 +327,12 @@ test('manifest and completed archive are verified before extraction', async () =
       [manifest.artifacts['windows-amd64'].url, archiveBytes],
     ]);
 
+    const fetchedUrls = [];
     const result = await stageVerifiedRelease({
-      fetchBytes: async (url) => downloads.get(url),
+      fetchBytes: async (url) => {
+        fetchedUrls.push(url);
+        return downloads.get(url);
+      },
       jobId: 'job-a',
       platform: 'windows-amd64',
       stable,
@@ -330,6 +342,10 @@ test('manifest and completed archive are verified before extraction', async () =
       await readFile(join(result.extractionDirectory, 'hub', 'wheelmaker.exe'), 'utf8'),
       'hub',
     );
+    assert.deepEqual(fetchedUrls, [
+      stable.release.manifestUrl,
+      manifest.artifacts['windows-amd64'].url,
+    ]);
 
     const tamperedArchive = Buffer.from(archiveBytes);
     tamperedArchive[tamperedArchive.length - 1] ^= 0xff;
@@ -461,6 +477,7 @@ test('migrate-uninstall removes legacy runtimes and preserves user data', async 
   for (const directory of [
     join(home, 'bin'),
     join(home, 'build', 'bootstrap'),
+    join(home, 'build', 'mobile', 'android'),
     join(home, 'data'),
     join(home, 'logs'),
     join(home, 'desktop'),
@@ -476,6 +493,7 @@ test('migrate-uninstall removes legacy runtimes and preserves user data', async 
     await writeFile(join(home, 'bin', name), name);
   }
   await writeFile(join(home, 'build', 'bootstrap', 'wheelmaker-deploy.exe'), 'bootstrap');
+  await writeFile(join(home, 'build', 'mobile', 'android', 'old.apk'), 'android');
   await writeFile(join(home, 'config.json'), '{"projects":[]}\n');
   await writeFile(join(home, 'data', 'sessions.db'), 'db');
   await writeFile(join(home, 'logs', 'hub.log'), 'log');
@@ -497,7 +515,7 @@ test('migrate-uninstall removes legacy runtimes and preserves user data', async 
   assert.equal(await exists(join(home, 'bin', 'wheelmaker-updater.exe')), false);
   assert.equal(await exists(join(home, 'bin', 'wheelmaker-deploy.exe')), false);
   assert.equal(await exists(join(home, 'bin', 'wheelmaker-monitor.exe')), false);
-  assert.equal(await exists(join(home, 'build', 'bootstrap')), false);
+  assert.equal(await exists(join(home, 'build')), false);
   assert.equal(await exists(join(home, 'config.json')), true);
   assert.equal(await exists(join(home, 'data', 'sessions.db')), true);
   assert.equal(await exists(join(home, 'logs', 'hub.log')), true);
@@ -627,6 +645,7 @@ test('successful internal update writes release schema v2 without registration c
   );
   assert.equal(status.jobId, 'web-job');
   assert.equal(status.state, 'succeeded');
+  assert.equal(await exists(join(fixture.home, 'staging', 'web-job')), false);
 });
 
 test('Hub health timeout persists failure and removes the update lock', async (t) => {
@@ -640,6 +659,7 @@ test('Hub health timeout persists failure and removes the update lock', async (t
   assert.equal(status.errorCode, 'hub_start_timeout');
   assert.equal('stack' in status, false);
   assert.equal('message' in status, false);
+  assert.equal(await exists(join(fixture.home, 'staging', 'timer-job')), false);
 });
 
 async function installFixture(t, { hubRunning = true } = {}) {
@@ -684,10 +704,12 @@ async function installFixture(t, { hubRunning = true } = {}) {
       platform: 'win32',
       runtime,
       sleep: async () => {},
-      async stageRelease({ onPhase }) {
+      async stageRelease({ jobId, onPhase }) {
         events.push('stage');
         await onPhase('verifying');
-        return { extractionDirectory: packageDirectory, manifestSha256: manifestSha };
+        const extractionDirectory = join(home, 'staging', jobId, 'package');
+        await cp(packageDirectory, extractionDirectory, {recursive: true});
+        return { extractionDirectory, manifestSha256: manifestSha };
       },
       trustedStable: {
         schema: 1,
