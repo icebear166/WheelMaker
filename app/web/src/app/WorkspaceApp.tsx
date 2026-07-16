@@ -2397,6 +2397,7 @@ const ChatPromptArtifactPreviewViewer = React.memo(function ChatPromptArtifactPr
   onToggleFile,
   scrollRef,
 }: ChatPromptArtifactPreviewViewerProps) {
+  const activeFilePath = resolvePromptDiffActiveFilePath(preview.files, preview.activeFilePath);
   let body: React.ReactNode;
   if (preview.loading) {
     body = <div className="muted block">Loading diff...</div>;
@@ -2418,7 +2419,7 @@ const ChatPromptArtifactPreviewViewer = React.memo(function ChatPromptArtifactPr
         </div>
         {preview.files.map(file => {
           const {fileName, parentPath} = splitPathForDisplay(file.path);
-          const active = file.path === preview.activeFilePath;
+          const active = file.path === activeFilePath;
           return (
             <section
               key={file.path}
@@ -20836,7 +20837,9 @@ export function App() {
     }
     const closeActionsMenu = () => setPreviewWorkbenchActionsMenuOpen(false);
     const projectRoot = projects.find(project => project.projectId === tab.projectId)?.path;
-    const relativePath = tab.type === 'prompt-diff' ? tab.activeFilePath : '';
+    const relativePath = tab.type === 'prompt-diff'
+      ? resolvePromptDiffActiveFilePath(tab.files, tab.activeFilePath)
+      : '';
     const desktopBridge = getDesktopWindowBridge();
     const canOpenPromptDiffInVSCode = Boolean(projectRoot && relativePath && desktopBridge?.openProjectFileInVSCode);
     const canShowPromptDiffInFolder = Boolean(projectRoot && relativePath && desktopBridge?.showProjectFileInFolder);

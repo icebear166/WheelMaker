@@ -94,7 +94,8 @@ describe('web chat file peek viewer', () => {
     expect(restoreBody).toContain('activeFilePath: resolvePromptDiffActiveFilePath(files, currentTab.activeFilePath),');
     expect(toggleBody).toContain('activeFilePath: path,');
     expect(toggleBody).toContain("file.path === path ? {...file, expanded: !file.expanded} : file");
-    expect(viewerBody).toContain('const active = file.path === preview.activeFilePath;');
+    expect(viewerBody).toContain('const activeFilePath = resolvePromptDiffActiveFilePath(preview.files, preview.activeFilePath);');
+    expect(viewerBody).toContain('const active = file.path === activeFilePath;');
     expect(viewerBody).toContain("className={`chat-prompt-diff-file${file.expanded ? ' expanded' : ''}${active ? ' active' : ''}`}");
     expect(viewerBody).toContain('aria-current={active || undefined}');
     expect(viewerComparatorBody).toContain('prev.preview === next.preview');
@@ -122,7 +123,9 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('invokeDesktopProjectFileAction,');
     expect(mainTsx).toContain('type DesktopProjectFileAction,');
     expect(actionsBody).toContain('const projectRoot = projects.find(project => project.projectId === tab.projectId)?.path;');
-    expect(actionsBody).toContain("const relativePath = tab.type === 'prompt-diff' ? tab.activeFilePath : '';");
+    expect(actionsBody).toContain("const relativePath = tab.type === 'prompt-diff'");
+    expect(actionsBody).toContain('? resolvePromptDiffActiveFilePath(tab.files, tab.activeFilePath)');
+    expect(actionsBody).toContain(": '';");
     expect(actionsBody).toContain('const desktopBridge = getDesktopWindowBridge();');
     expect(actionsBody).toContain('const canOpenPromptDiffInVSCode = Boolean(projectRoot && relativePath && desktopBridge?.openProjectFileInVSCode);');
     expect(actionsBody).toContain('const canShowPromptDiffInFolder = Boolean(projectRoot && relativePath && desktopBridge?.showProjectFileInFolder);');
