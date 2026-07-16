@@ -12,7 +12,7 @@ WheelMaker 目前在目标机器上依赖私有源码、Git、Go 和 npm 拉取�
 - 发布版本严格为 `v1.x`，每次成功发布只递增 `x`；stable 记录版本、UTC 发布时间和私有源码 SHA，不维护 changelog。
 - 每个版本发布 Windows amd64、Linux amd64、macOS arm64 三份完整 `.tar.gz`。每份始终包含对应 Hub 和 Web；不发布 macOS amd64。
 - Desktop `WheelMakerDesktop.exe` 是可选资产。`with_desktop` 决定本轮是否自动构建它；未构建时 stable 继承上一次实际发布的 Desktop 指针。
-- 本地发布直接通过 GitHub API 上传；私有仓库 Action 仅作手动兜底。Action 使用单个 Ubuntu job，Web 只构建一次，Hub 与 Desktop 均交叉编译。
+- 本地发布直接通过 GitHub API 上传，并以 Windows 为正式支持的发布主机；它不要求 Linux、WSL 或 Unix shell，且在 Windows 上交叉编译三份 Hub。私有仓库 Action 仅作手动兜底，使用单个 Ubuntu job，Web 只构建一次，Hub 与 Desktop 均交叉编译。
 - GitHub App 只安装到公开 release 仓库、只用于写 Contents/Releases；独立 Ed25519 私钥签名 stable 和 release manifest。目标端内置公钥，绝不因 App 上传权限而跳过签名验证。
 - 发布过程先公开 Release，再写 stable；失败时 stable 不变，并把公开 `publish-status.json` 写为不含敏感信息的失败状态。Release tag 冲突通过重新读取 stable 并分配下一个版本解决，不维护持久发布锁。
 - 所有 MJS 均由私有源码仓库维护、发布时复制到公开 Git。小型 `deploy.mjs` 每次验证 stable，按需更新自身与 `deploy-core.mjs`，然后执行 core；MJS 不放进平台包。
@@ -41,7 +41,7 @@ deploy.mjs → 验签 stable → 更新 core → 下载/验签 manifest 与平�
 
 ### 发布
 
-发布脚本校验源码 SHA 后读取 stable、分配下一个 `v1.x`，构建一次 Web，交叉编译三个 Hub，按需构建 Desktop，生成 tar.gz、manifest、哈希和签名。它将 MJS 提交到公开 Git，创建并上传草稿 Release，公开 Release，最后提交 stable 与签名。
+发布脚本校验源码 SHA 后读取 stable、分配下一个 `v1.x`，构建一次 Web，交叉编译三个 Hub，按需构建 Desktop，生成 tar.gz、manifest、哈希和签名。它将 MJS 提交到公开 Git，创建并上传草稿 Release，公开 Release，最后提交 stable 与签名。本地运行以 Windows 为正式环境；手动 Action 则在 Ubuntu 执行相同流程。
 
 Action 使用 `workflow_dispatch` 的 commit ref 和 `with_desktop` 布尔值；使用 `app/package-lock.json` 的 npm 缓存及 `server/go.sum` 的 Go 缓存，不缓存凭据或 `node_modules`。
 

@@ -148,14 +148,14 @@ wheelmaker-v1.23-windows-amd64/
 
 ## 发布流程
 
-发布脚本只在私有源码仓库中存在。它支持本地直接发布和私有仓库中手动触发的 GitHub Action；二者调用相同 MJS 逻辑。
+发布脚本只在私有源码仓库中存在。它支持本地直接发布和私有仓库中手动触发的 GitHub Action；二者调用相同 MJS 逻辑。本地发布以 Windows 为正式支持环境，不要求发布者使用 Linux、WSL 或 Unix shell；Windows 主机交叉编译三个 Hub 目标。Ubuntu 仅是手动 Action 的运行环境。
 
 ```text
 validate source SHA
   → 读取已签名 stable，计算下一个 v1.x
   → 构建一次 Web
-  → 在一个 Ubuntu 环境交叉编译三个 Hub 目标
-  → 可选交叉编译 Desktop EXE
+  → 在当前发布环境交叉编译三个 Hub 目标
+  → 可选构建 Desktop EXE
   → 生成平台目录、tar.gz、SHA-256 和 manifest 签名
   → 将 deploy.mjs/deploy-core.mjs 提交到公开 Git
   → 创建草稿 Release 并上传资产
@@ -172,7 +172,7 @@ validate source SHA
 `with_desktop` 是发布输入，不接收用户指定的 EXE 文件路径：
 
 - `false`：不构建、不上传 EXE，继承旧 `desktopExe` 指针；
-- `true`：发布脚本在 Ubuntu 上调用 Go 交叉编译和 `go-winres` 生成 `WheelMakerDesktop.exe`，上传到本次 Release，更新 `desktopExe` 指针。
+- `true`：发布脚本调用 Go 和 `go-winres` 自动生成 `WheelMakerDesktop.exe`，上传到本次 Release，更新 `desktopExe` 指针。本地 Windows 发布在 Windows 主机构建；Action 在 Ubuntu 上交叉编译。
 
 现有 `publish_desktop.ps1` 中的“创建桌面快捷方式”不属于构建或 Action；构建逻辑迁入发布 MJS。发布端不运行 Desktop 应用，也不要求 WebView2。
 
