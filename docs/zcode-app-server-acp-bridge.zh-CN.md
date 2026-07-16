@@ -202,7 +202,42 @@
 ```
 - `info.role` 区分用户/助手消息（不在顶层，在 `info.role`）。
 - `info.tools` 仅在 assistant 消息出现，枚举该 turn 实际启用的工具（16 个：Agent/AskUserQuestion/Bash/Edit/EnterPlanMode/ExitPlanMode/Read/Skill/TaskStop/TodoRead/TodoWrite/WebFetch/WebSearch/Write/SendMessage/ReadSessionContext）。
-- `parts[]` 是消息内容分块（文本/工具调用等），带 `partId`。历史 replay 时按 message → part 展开。
+- `parts[]` 是消息内容分块，每个 part 带 `partId`/`messageId`/`sessionId` + `type`。历史 replay 时按 message → part 展开。
+
+`parts[].type` 谱系（实测）：
+
+| type | 额外字段 | 含义 |
+|---|---|---|
+| `text` | `text` | 文本内容（用户消息只有这一种；助手消息用它承载回复）|
+| `step-start` | （无）| 一个模型 step 开始标记 |
+| `tool` | `callId`、`tool`（工具名）、`state:{input, output, completedAt, metadata}` | **工具调用**，`state` 含完整 `input` 和 `output`（事件流里 input 被省略，这里是权威完整来源）|
+| `step-finish` | `reason`（`"tool-calls"`/`"stop"`）、`tokens:{total,input,output,reasoning,cache}`、`cost` | step 结束 + token 用量 |
+
+> 对 ACP replay 的意义：`text` part → `agent_message_chunk`/`user_message_chunk`；`tool` part → `tool_call pending` + `tool_call_update` final（`state.input`/`state.output`）；`step-finish.tokens` → `usage_update`。一个 assistant message 可能跨多个 step（`step-start`…`step-finish`…`step-start`…），每个 step 一轮模型请求。
+
+### Config options（实测）
+
+ZCode **没有** ACP 的统一 `session/set_config_option`（NOTFOUND）。配置分散在专用方法，且 `session/create`/`session/setMode` 的返回都带完整 `settings` 块：
+
+```json
+"settings": {
+  "mode": { "current": "yolo" },
+  "model": {
+    "available": [ { "ref": {providerId, modelId}, "label", "providerLabel", "contextWindow" } ],
+    "current": { "providerId", "modelId" },
+    "lastUsed": { "providerId", "modelId" }
+  },
+  "permission": { "mode": "yolo" },
+  "thoughtLevel": { "available": [ {label, value} ], "current": "max", "enabled": true }
+}
+```
+
+配置方法（实测存在）：
+- `session/setMode` `{sessionId, mode}`：切换**权限模式**（`plan`/`build`/`edit`/`yolo`/`auto`）。返回**完整快照**（10 个 key：messages/projection/protocol/runtime/session/settings/slashCommands/todos/todoGroups）。
+- `session/setModel` `{sessionId, model: {providerId, modelId}}`：切换模型（需 object）。
+- `thoughtLevel` 仅出现在 settings 读取侧（`available` + `current` + `enabled`），**未发现独立 set 方法**；`available` 实测为 `[{max},{high},{nothink}]`。
+
+> 对 ACP 的映射：ACP `session/set_config_option` 需在桥接层 fan-out 到 `session/setMode`/`session/setModel`；返回时把 ZCode `settings` 折算回 ACP config options 列表（approval_preset←permission.mode、model←model.current、thought_level←thoughtLevel.current）。
 
 ## 事件流模型（核心）
 
@@ -325,9 +360,9 @@
 | `turn.completed`（`resultType=success`）| `response`、`usage` | 终止挂起的 `session/prompt`，返回 `end_turn` |
 | `turn.failed` | `error` | 终止挂起的 `session/prompt`，返回失败 |
 
-## 权限审批协议（server→client 反向 request，已实测触发）
+## 权限审批协议（server→client 反向 request，已实测闭环）
 
-> wire 实测确认（v0.15.2，build 模式 + `rm -rf` 高风险命令触发）：`interaction/requestPermission` 真实发出，且未应答时按指数退避重发（实测 6 次）；同时通过 `session/event` 推送 `permission.requested` 通知。低风险命令（如 `echo`）在 build 模式下**自动放行**，不触发审批。
+> wire 实测确认（v0.15.2，build 模式 + `rm -rf` 高风险命令）：`interaction/requestPermission` 触发 → client 回复 `{decision:"allow"}` → `permission.resolved` 事件返回（含 decision/reason）→ 工具实际执行（Bash scheduled→started→result success）→ turn 正常 completed。未应答时按指数退避重发（实测 6 次）。低风险命令（如 `echo`）在 build 模式下**自动放行**，不触发审批。
 
 ### 反向 request 全集
 
@@ -518,10 +553,12 @@ client.Session
 ## Phase 1 待补
 
 - [x] 权限请求形态（`interaction/requestPermission` 等 3 个 server-request，wire 实测触发）
+- [x] 权限闭环（回复 allow → `permission.resolved` → 工具执行 → turn completed，实测完整跑通）
 - [x] 成功路径事件（`model.streaming` text_delta / `tool.updated` / `turn.completed`）
 - [x] 配置/凭证：API key 经环境变量已验证可用，无需 OAuth
-- [x] message 结构（`{info, parts}`）、`session/create` mode 语义（设置 permission.mode）
+- [x] message 结构（`{info, parts}`）、parts type 谱系（text/step-start/tool/step-finish）
+- [x] config options（无统一 set_config_option；`session/setMode`/`session/setModel` 分散方法 + settings 块）
+- [x] `session/create` mode 语义（设置 permission.mode）
 - [ ] 图片/附件输入（`session/send` 的 `content` 是否支持非文本）待测
 - [ ] `session/rewind` 的 `target` 结构待测
 - [ ] reasoning delta 的具体 `model.streaming.kind` 待测
-- [ ] 权限闭环（回复 allow 后的 `permission.resolved` + 工具继续执行）待补完整 capture
