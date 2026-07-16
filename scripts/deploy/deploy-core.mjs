@@ -1,8 +1,10 @@
-import { createHash, randomUUID, verify } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, verify } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { spawn } from 'node:child_process';
 import {
+  access,
   chmod,
+  cp,
   mkdir,
   open,
   readFile,
@@ -81,24 +83,32 @@ async function atomicWrite(path, bytes, mode = 0o600) {
   }
 }
 
-function statusRecord(status) {
+function statusRecord(status, existing) {
   validateJobId(status.jobId);
   if (!STATUS_STATES.has(status.state)) {
     throw new Error(`invalid update state: ${status.state}`);
   }
   const updatedAt = normalizeTime(status.now ?? new Date().toISOString());
+  const startedAt = normalizeTime(
+    status.startedAt ??
+      (existing?.jobId === status.jobId ? existing.startedAt : updatedAt),
+  );
   return {
     schema: 1,
     jobId: status.jobId,
     state: status.state,
+    startedAt,
     updatedAt,
+    ...(status.version ? { version: status.version } : {}),
     ...(status.errorCode ? { errorCode: status.errorCode } : {}),
   };
 }
 
 export async function writeUpdateStatus(stateDirectory, status) {
-  const record = statusRecord(status);
-  await atomicWrite(join(stateDirectory, 'status.json'), jsonBytes(record));
+  const statusPath = join(stateDirectory, 'status.json');
+  const existing = await readJsonIfPresent(statusPath);
+  const record = statusRecord(status, existing);
+  await atomicWrite(statusPath, jsonBytes(record));
   return record;
 }
 
@@ -130,6 +140,7 @@ async function tryCreateLease(stateDirectory, lease) {
     await writeUpdateStatus(stateDirectory, {
       jobId: lease.jobId,
       now: startedAt,
+      startedAt,
       state: 'queued',
     });
   } catch (error) {
@@ -456,6 +467,7 @@ export function currentPlatformKey(
 export async function stageVerifiedRelease({
   fetchBytes,
   jobId,
+  onPhase = async () => {},
   platform = currentPlatformKey(),
   publicKey = RELEASE_PUBLIC_KEY_PEM,
   stable,
@@ -505,6 +517,7 @@ export async function stageVerifiedRelease({
   }
   const artifactUrl = requireHttps(artifact.url, 'release artifact');
   const archiveBytes = await fetchBytes(artifactUrl);
+  await onPhase('verifying');
   if (archiveBytes.length !== artifact.size) {
     throw new Error('release archive size verification failed');
   }
@@ -886,7 +899,9 @@ export function createRuntimeAdapter({
     }
     if (platform === 'linux') {
       const verb = name === 'status' ? 'status' : name;
-      return runner('systemctl', ['--user', verb, 'wheelmaker-hub.service']);
+      return runner('systemctl', ['--user', verb, 'wheelmaker-hub.service'], {
+        allowFailure: name === 'stop',
+      });
     }
     if (platform === 'darwin') {
       const target = `gui/${paths.uid}/com.wheelmaker.hub`;
@@ -894,7 +909,9 @@ export function createRuntimeAdapter({
         return runner('launchctl', ['kickstart', '-k', target]);
       }
       if (name === 'stop') {
-        return runner('launchctl', ['kill', 'SIGTERM', target]);
+        return runner('launchctl', ['kill', 'SIGTERM', target], {
+          allowFailure: true,
+        });
       }
       return runner('launchctl', ['print', target]);
     }
@@ -903,6 +920,34 @@ export function createRuntimeAdapter({
 
   return {
     configureRuntime,
+    isHubRunning: async () => {
+      if (platform === 'win32') {
+        const result = await runner(
+          'powershell',
+          [
+            '-NoProfile',
+            '-Command',
+            "if ((Get-ScheduledTask -TaskName 'WheelMaker' -ErrorAction SilentlyContinue).State -eq 'Running') { exit 0 } else { exit 1 }",
+          ],
+          { allowFailure: true },
+        );
+        return result.code === 0;
+      }
+      if (platform === 'linux') {
+        const result = await runner(
+          'systemctl',
+          ['--user', 'is-active', '--quiet', 'wheelmaker-hub.service'],
+          { allowFailure: true },
+        );
+        return result.code === 0;
+      }
+      const result = await runner(
+        'launchctl',
+        ['print', `gui/${paths.uid}/com.wheelmaker.hub`],
+        { allowFailure: true },
+      );
+      return result.code === 0;
+    },
     isUpdaterRunning: async () => {
       if (platform === 'win32') {
         const result = await runner(
@@ -939,23 +984,241 @@ export function createRuntimeAdapter({
   };
 }
 
-export async function runCore(args, deps = {}) {
-  let runtime = deps.runtime;
-  if (!runtime && (args[0] === 'runtime' || args[0] === 'update')) {
-    if (!deps.installDirectory) {
-      throw new Error('deployment install directory is required');
-    }
-    const platform = deps.platform ?? process.platform;
-    const paths = deploymentRuntimePaths({
-      installDirectory: deps.installDirectory,
-      nodePath: deps.nodePath ?? process.execPath,
-      platform,
-      uid: deps.uid,
-      userHome: deps.userHome ?? homedir(),
-    });
-    const runtimeFactory = deps.runtimeFactory ?? createRuntimeAdapter;
-    runtime = runtimeFactory({ paths, platform, runner: deps.runner });
+function resolveRuntime(deps) {
+  if (deps.runtime) return deps.runtime;
+  if (!deps.installDirectory) {
+    throw new Error('deployment install directory is required');
   }
+  const platform = deps.platform ?? process.platform;
+  const paths = deploymentRuntimePaths({
+    installDirectory: deps.installDirectory,
+    nodePath: deps.nodePath ?? process.execPath,
+    platform,
+    uid: deps.uid,
+    userHome: deps.userHome ?? homedir(),
+  });
+  const runtimeFactory = deps.runtimeFactory ?? createRuntimeAdapter;
+  return runtimeFactory({ paths, platform, runner: deps.runner });
+}
+
+async function ensureRuntimeConfig(home) {
+  const configPath = join(home, 'config.json');
+  if (await readJsonIfPresent(configPath)) {
+    return false;
+  }
+  const config = {
+    projects: [],
+    registry: {
+      listen: true,
+      port: 9630,
+      server: '127.0.0.1',
+      token: randomBytes(32).toString('base64url'),
+      hubId: 'local-hub',
+    },
+    log: { level: 'warn' },
+  };
+  await atomicWrite(configPath, jsonBytes(config), 0o600);
+  return true;
+}
+
+async function applyStagedPackage({
+  extractionDirectory,
+  home,
+  jobId,
+  platform,
+}) {
+  const binaryName = platform === 'win32' ? 'wheelmaker.exe' : 'wheelmaker';
+  const sourceBinary = join(extractionDirectory, 'hub', binaryName);
+  const sourceWeb = join(extractionDirectory, 'web');
+  await access(sourceBinary);
+  await access(sourceWeb);
+
+  const binDirectory = join(home, 'bin');
+  const targetBinary = join(binDirectory, binaryName);
+  const temporaryBinary = join(binDirectory, `.${binaryName}.${jobId}.tmp`);
+  const targetWeb = join(home, 'web');
+  const temporaryWeb = join(home, `.web.${jobId}.tmp`);
+  await mkdir(binDirectory, { recursive: true });
+  await rm(temporaryBinary, { force: true });
+  await rm(temporaryWeb, { recursive: true, force: true });
+
+  try {
+    await cp(sourceBinary, temporaryBinary);
+    await chmod(temporaryBinary, 0o755);
+    await cp(sourceWeb, temporaryWeb, { recursive: true });
+    await rm(targetBinary, { force: true });
+    await rename(temporaryBinary, targetBinary);
+    await rm(targetWeb, { recursive: true, force: true });
+    await rename(temporaryWeb, targetWeb);
+  } finally {
+    await rm(temporaryBinary, { force: true });
+    await rm(temporaryWeb, { recursive: true, force: true });
+  }
+}
+
+async function writeInstalledRelease(home, stable, manifestSha256, installedAt) {
+  const release = {
+    schemaVersion: 2,
+    version: stable.version,
+    publishedAt: stable.publishedAt,
+    sourceSha: stable.sourceSha,
+    manifestSha256,
+    installedAt,
+  };
+  await atomicWrite(join(home, 'release.json'), jsonBytes(release), 0o644);
+  return release;
+}
+
+async function confirmHubStarted(runtime, deps) {
+  if (typeof runtime.isHubRunning !== 'function') {
+    throw new Error('runtime adapter cannot confirm Hub health');
+  }
+  const timeoutMs = deps.healthTimeoutMs ?? 30_000;
+  const pollIntervalMs = deps.healthPollIntervalMs ?? 500;
+  const attempts = Math.max(1, Math.ceil(timeoutMs / pollIntervalMs));
+  const sleep =
+    deps.sleep ?? ((milliseconds) => new Promise((resolveSleep) => setTimeout(resolveSleep, milliseconds)));
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (await runtime.isHubRunning()) return;
+    if (attempt + 1 < attempts) await sleep(pollIntervalMs);
+  }
+  const error = new Error('Hub did not start within the health check timeout');
+  error.code = 'hub_start_timeout';
+  throw error;
+}
+
+function updateErrorCode(phase, error) {
+  if (error?.code === 'hub_start_timeout') return 'hub_start_timeout';
+  return {
+    applying: 'apply_failed',
+    downloading: 'download_failed',
+    restarting: 'restart_failed',
+    verifying: 'verification_failed',
+  }[phase] ?? 'update_failed';
+}
+
+async function resolveUpdateJob({ deps, internalUpdate, runtime, stagingDirectory }) {
+  const existing = await readJsonIfPresent(join(stagingDirectory, 'lock.json'));
+  if (internalUpdate && existing?.state === 'queued') {
+    validateJobId(existing.jobId);
+    return { jobId: existing.jobId, startedAt: normalizeTime(existing.startedAt) };
+  }
+  const jobId = deps.jobIdFactory?.() ?? randomUUID();
+  const startedAt = normalizeTime(deps.now?.() ?? new Date().toISOString());
+  const acquired = await acquireUpdateLease(
+    stagingDirectory,
+    { jobId, now: startedAt, owner: 'timer' },
+    {
+      isUpdaterRunning:
+        runtime.isUpdaterRunning?.bind(runtime) ?? (async () => false),
+    },
+  );
+  if (!acquired) {
+    throw new Error('another deployment update is already active');
+  }
+  return { jobId, startedAt };
+}
+
+async function executeDeployment(internalUpdate, deps, runtime) {
+  if (!deps.trustedStable) {
+    throw new Error('trusted stable metadata is required');
+  }
+  const home = resolve(deps.installDirectory);
+  const platform = deps.platform ?? process.platform;
+  const stagingDirectory = join(home, 'staging');
+  const { jobId, startedAt } = await resolveUpdateJob({
+    deps,
+    internalUpdate,
+    runtime,
+    stagingDirectory,
+  });
+  let phase = 'downloading';
+  let runtimeStopped = false;
+  let runtimeStarted = false;
+  const now = () => deps.now?.() ?? new Date().toISOString();
+
+  const setState = async (state) => {
+    phase = state;
+    await heartbeatUpdateLease(stagingDirectory, jobId, now());
+    await writeUpdateStatus(stagingDirectory, {
+      jobId,
+      now: now(),
+      startedAt,
+      state,
+      version: deps.trustedStable.version,
+    });
+  };
+
+  try {
+    await setState('downloading');
+    const stageRelease =
+      deps.stageRelease ??
+      ((input) =>
+        stageVerifiedRelease({
+          ...input,
+          fetchBytes: deps.fetchBytes,
+          publicKey: deps.publicKey ?? RELEASE_PUBLIC_KEY_PEM,
+          stable: deps.trustedStable,
+          stagingDirectory,
+        }));
+    const staged = await stageRelease({
+      jobId,
+      onPhase: async (nextPhase) => setState(nextPhase),
+      platform:
+        deps.platformKey ?? currentPlatformKey(platform, deps.arch ?? process.arch),
+    });
+    if (phase !== 'verifying') await setState('verifying');
+    if (!internalUpdate) await ensureRuntimeConfig(home);
+
+    await setState('applying');
+    await runtime.stop();
+    runtimeStopped = true;
+    await applyStagedPackage({
+      extractionDirectory: staged.extractionDirectory,
+      home,
+      jobId,
+      platform,
+    });
+    await writeInstalledRelease(
+      home,
+      deps.trustedStable,
+      staged.manifestSha256,
+      normalizeTime(now()),
+    );
+    if (!internalUpdate) {
+      await runtime.configureRuntime();
+      await runtime.writeWrappers();
+    }
+
+    await setState('restarting');
+    await runtime.start();
+    runtimeStarted = true;
+    await confirmHubStarted(runtime, deps);
+    await finishUpdate(stagingDirectory, {
+      jobId,
+      now: now(),
+      startedAt,
+      state: 'succeeded',
+      version: deps.trustedStable.version,
+    });
+  } catch (error) {
+    if (runtimeStopped && !runtimeStarted) {
+      await runtime.start().catch(() => {});
+    }
+    await finishUpdate(stagingDirectory, {
+      errorCode: updateErrorCode(phase, error),
+      jobId,
+      now: now(),
+      startedAt,
+      state: 'failed',
+      version: deps.trustedStable.version,
+    }).catch(() => {});
+    throw error;
+  }
+}
+
+export async function runCore(args, deps = {}) {
+  const runtime = resolveRuntime(deps);
   if (args[0] === 'runtime' && args.length === 2) {
     if (!runtime || typeof runtime[args[1]] !== 'function') {
       throw new Error(`runtime adapter cannot ${args[1]}`);
@@ -963,19 +1226,20 @@ export async function runCore(args, deps = {}) {
     return runtime[args[1]]();
   }
   if (args.length === 1 && args[0] === 'update') {
-    if (!runtime || typeof deps.applyUpdate !== 'function') {
-      throw new Error('internal update dependencies are incomplete');
+    if (typeof deps.applyUpdate === 'function') {
+      await runtime.stop();
+      let updateError;
+      try {
+        await deps.applyUpdate();
+      } catch (error) {
+        updateError = error;
+      }
+      await runtime.start();
+      if (updateError) throw updateError;
+      return;
     }
-    await runtime.stop();
-    let updateError;
-    try {
-      await deps.applyUpdate();
-    } catch (error) {
-      updateError = error;
-    }
-    await runtime.start();
-    if (updateError) throw updateError;
-    return;
+    return executeDeployment(true, deps, runtime);
   }
+  if (args.length === 0) return executeDeployment(false, deps, runtime);
   throw new Error('deployment application is not implemented yet');
 }

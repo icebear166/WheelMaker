@@ -14,6 +14,7 @@ export const STABLE_URL =
   'https://raw.githubusercontent.com/swm8023/wheelmaker-releases/main/stable.json';
 
 const MAX_DOWNLOAD_BYTES = 5 * 1024 * 1024;
+const MAX_PACKAGE_DOWNLOAD_BYTES = 2 * 1024 * 1024 * 1024;
 const MAX_REDIRECTS = 5;
 const ALLOWED_COMMANDS = new Set([
   'desktop-update',
@@ -235,7 +236,10 @@ export function createDefaultLauncherDependencies({
         throw new Error('deploy-core.mjs does not export runCore');
       }
       return core.runCore(args, {
+        fetchBytes: (url) =>
+          fetchHttpsBytes(url, { maxBytes: MAX_PACKAGE_DOWNLOAD_BYTES }),
         installDirectory,
+        publicKey: RELEASE_PUBLIC_KEY_PEM,
         trustedStable: context.stable,
         trustedStableBytes: context.stableBytes,
       });

@@ -340,6 +340,150 @@ test('manifest and completed archive are verified before extraction', async () =
   }
 });
 
+test('normal deploy applies Hub and Web to the existing layout', async (t) => {
+  const fixture = await installFixture(t);
+  await mkdir(join(fixture.home, 'desktop'), { recursive: true });
+  await mkdir(join(fixture.home, 'data'), { recursive: true });
+  await mkdir(join(fixture.home, 'logs'), { recursive: true });
+  await writeFile(
+    join(fixture.home, 'desktop', 'WheelMakerDesktop.exe'),
+    'desktop',
+  );
+  await writeFile(join(fixture.home, 'data', 'sessions.db'), 'db');
+  await writeFile(join(fixture.home, 'logs', 'hub.log'), 'log');
+
+  await runCore([], fixture.deps);
+
+  assert.equal(await exists(join(fixture.home, 'bin', 'wheelmaker.exe')), true);
+  assert.equal(await readFile(join(fixture.home, 'web', 'index.html'), 'utf8'), 'new-web');
+  assert.equal(await exists(join(fixture.home, 'app')), false);
+  assert.equal(
+    await readFile(
+      join(fixture.home, 'desktop', 'WheelMakerDesktop.exe'),
+      'utf8',
+    ),
+    'desktop',
+  );
+  assert.equal(await readFile(join(fixture.home, 'data', 'sessions.db'), 'utf8'), 'db');
+  assert.equal(await readFile(join(fixture.home, 'logs', 'hub.log'), 'utf8'), 'log');
+  assert.equal(fixture.events.includes('configure-runtime'), true);
+  assert.equal(fixture.events.includes('write-wrappers'), true);
+
+  const config = JSON.parse(await readFile(join(fixture.home, 'config.json'), 'utf8'));
+  assert.deepEqual(config.projects, []);
+  assert.match(config.registry.token, /^[A-Za-z0-9_-]{43}$/);
+});
+
+test('successful internal update writes release schema v2 without registration changes', async (t) => {
+  const fixture = await installFixture(t);
+  await acquireUpdateLease(join(fixture.home, 'staging'), {
+    jobId: 'web-job',
+    now: fixture.installedAt,
+    owner: 'web',
+  });
+
+  await runCore(['update'], fixture.deps);
+
+  assert.deepEqual(
+    JSON.parse(await readFile(join(fixture.home, 'release.json'), 'utf8')),
+    {
+      schemaVersion: 2,
+      version: 'v1.23',
+      publishedAt: '2026-07-16T09:00:00Z',
+      sourceSha: fixture.sourceSha,
+      manifestSha256: fixture.manifestSha,
+      installedAt: fixture.installedAt,
+    },
+  );
+  assert.equal(fixture.events.includes('configure-runtime'), false);
+  assert.equal(fixture.events.includes('write-wrappers'), false);
+  assert.deepEqual(
+    fixture.events.filter((event) => ['stop', 'start'].includes(event)),
+    ['stop', 'start'],
+  );
+  assert.equal(await exists(join(fixture.home, 'staging', 'lock.json')), false);
+  const status = JSON.parse(
+    await readFile(join(fixture.home, 'staging', 'status.json'), 'utf8'),
+  );
+  assert.equal(status.jobId, 'web-job');
+  assert.equal(status.state, 'succeeded');
+});
+
+test('Hub health timeout persists failure and removes the update lock', async (t) => {
+  const fixture = await installFixture(t, { hubRunning: false });
+  await assert.rejects(() => runCore(['update'], fixture.deps), /Hub did not start/);
+  assert.equal(await exists(join(fixture.home, 'staging', 'lock.json')), false);
+  const status = JSON.parse(
+    await readFile(join(fixture.home, 'staging', 'status.json'), 'utf8'),
+  );
+  assert.equal(status.state, 'failed');
+  assert.equal(status.errorCode, 'hub_start_timeout');
+  assert.equal('stack' in status, false);
+  assert.equal('message' in status, false);
+});
+
+async function installFixture(t, { hubRunning = true } = {}) {
+  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-install-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const home = join(root, '.wheelmaker');
+  const packageDirectory = join(root, 'package');
+  await mkdir(join(packageDirectory, 'hub'), { recursive: true });
+  await mkdir(join(packageDirectory, 'web'), { recursive: true });
+  await writeFile(join(packageDirectory, 'hub', 'wheelmaker.exe'), 'new-hub');
+  await writeFile(join(packageDirectory, 'web', 'index.html'), 'new-web');
+
+  const sourceSha = '1'.repeat(40);
+  const manifestSha = '2'.repeat(64);
+  const installedAt = '2026-07-16T09:05:00.000Z';
+  const events = [];
+  const runtime = {
+    async configureRuntime() {
+      events.push('configure-runtime');
+    },
+    async isHubRunning() {
+      events.push('health');
+      return hubRunning;
+    },
+    async start() {
+      events.push('start');
+    },
+    async stop() {
+      events.push('stop');
+    },
+    async writeWrappers() {
+      events.push('write-wrappers');
+    },
+  };
+  return {
+    deps: {
+      healthPollIntervalMs: 1,
+      healthTimeoutMs: 3,
+      installDirectory: home,
+      jobIdFactory: () => 'timer-job',
+      now: () => installedAt,
+      platform: 'win32',
+      runtime,
+      sleep: async () => {},
+      async stageRelease({ onPhase }) {
+        events.push('stage');
+        await onPhase('verifying');
+        return { extractionDirectory: packageDirectory, manifestSha256: manifestSha };
+      },
+      trustedStable: {
+        schema: 1,
+        version: 'v1.23',
+        publishedAt: '2026-07-16T09:00:00Z',
+        sourceSha,
+      },
+    },
+    events,
+    home,
+    installedAt,
+    manifestSha,
+    sourceSha,
+  };
+}
+
 async function exists(path) {
   try {
     await access(path);
