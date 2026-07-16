@@ -1,0 +1,55 @@
+name: Publish prebuilt release
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Private source commit or ref to publish
+        required: true
+        type: string
+      with_desktop:
+        description: Build and publish WheelMakerDesktop.exe
+        default: false
+        required: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out selected source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          ref: ${{ inputs.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.x'
+          cache: true
+          cache-dependency-path: server/go.sum
+
+      - name: Publish release
+        env:
+          WHEELMAKER_RELEASE_APP_ID: ${{ secrets.WHEELMAKER_RELEASE_APP_ID }}
+          WHEELMAKER_RELEASE_INSTALLATION_ID: ${{ secrets.WHEELMAKER_RELEASE_INSTALLATION_ID }}
+          WHEELMAKER_RELEASE_APP_PRIVATE_KEY: ${{ secrets.WHEELMAKER_RELEASE_APP_PRIVATE_KEY }}
+          WHEELMAKER_SIGNING_PRIVATE_KEY: ${{ secrets.WHEELMAKER_SIGNING_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          args=()
+          if [[ "${{ inputs.with_desktop }}" == "true" ]]; then
+            args+=(--with-desktop)
+          fi
+          node scripts/release.mjs publish "${args[@]}"
