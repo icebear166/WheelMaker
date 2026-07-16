@@ -73,11 +73,6 @@ func newACPFactoryWithDefaults() *ACPFactory {
 		f.Register(protocol.ACPProviderCodex, codexappInstanceCreator(codexProvider))
 		f.RegisterSessionActions(protocol.ACPProviderCodex, SessionActionSupport{Status: true, Compact: true})
 	}
-	zcodeProvider := NewZCodeProvider()
-	if isProviderAvailable(zcodeProvider) {
-		f.Register(protocol.ACPProviderZCode, zcodeappInstanceCreator(zcodeProvider))
-		f.RegisterSessionActions(protocol.ACPProviderZCode, SessionActionSupport{Status: true, Compact: true})
-	}
 	candidates := []struct {
 		provider protocol.ACPProvider
 		build    func() ACPProvider
@@ -210,7 +205,6 @@ func (f *ACPFactory) PreferredName() string {
 		protocol.ACPProviderMimo,
 		protocol.ACPProviderCodeBuddy,
 		protocol.ACPProviderFlicker,
-		protocol.ACPProviderZCode,
 	}
 	f.mu.RLock()
 	defer f.mu.RUnlock()
