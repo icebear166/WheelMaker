@@ -22,13 +22,13 @@ For an ordinary file preview tab, the actions menu is ordered as follows:
 4. `Open in File tab`
 5. `Rebuild file index`
 
-The first two actions are shown only when all required runtime data is available: the project has a root path, the file tab has a path, and the native desktop bridge exposes the corresponding action. Browser-only sessions therefore retain their current menu.
+The first two actions are shown only when all required runtime data is available: the project has a root path, the ordinary file has finished loading, the server has returned its canonical `tab.info.path`, and the native desktop bridge exposes the corresponding action. While `info` is unavailable, including loading and error states, both desktop actions are hidden. Browser-only sessions therefore retain their current menu.
 
 ## Architecture and Data Flow
 
 `renderPreviewWorkbenchActions` will derive one project-relative file path for desktop actions:
 
-- `file` tab: use `tab.path`.
+- `file` tab: use the server-returned canonical `tab.info.path` after `safeJoin` has confirmed and normalized it; never use the raw `tab.path` for a desktop action.
 - `prompt-diff` tab: use the resolved active diff file path.
 - other tab types: use no desktop-action path.
 
@@ -49,7 +49,9 @@ Missing bridge capabilities do not produce disabled or nonfunctional entries; th
 
 Extend the existing preview-workbench action regression test to verify:
 
-- A `file` tab supplies `tab.path` to the shared desktop action path.
+- A loaded `file` tab supplies its server-returned canonical `tab.info.path` to the shared desktop action path.
+- A raw file path containing an internal `..` segment is not passed to the desktop bridge.
+- A file tab without `info`, including loading and error states, hides both desktop actions.
 - A Prompt Diff tab still supplies its resolved active file path.
 - Both VS Code and File Explorer menu actions use the shared availability checks and handler.
 - Existing ordinary-file actions remain present.

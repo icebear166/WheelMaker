@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add the existing VS Code and File Explorer desktop actions to ordinary source-file preview tabs while preserving all current menu actions.
+**Goal:** Add the existing VS Code and File Explorer desktop actions to loaded ordinary source-file preview tabs using server-confirmed canonical paths while preserving all current menu actions.
 
-**Architecture:** Derive a single project-file action path inside `renderPreviewWorkbenchActions`: ordinary file tabs use `tab.path`, Prompt Diff tabs keep using the resolved active file path, and other tab types have no path. Rename the Prompt Diff-specific availability flags and runner to generic project-file names, then reuse the existing desktop bridge and toast error handling.
+**Architecture:** Derive a single project-file action path inside `renderPreviewWorkbenchActions`: loaded ordinary file tabs use the server-returned canonical `tab.info.path` after `safeJoin` confirmation, Prompt Diff tabs keep using the resolved active file path, and other tab types have no path. An ordinary file without `info` has no desktop-action path. Rename the Prompt Diff-specific availability flags and runner to generic project-file names, then reuse the existing desktop bridge and toast error handling.
 
 **Tech Stack:** React, TypeScript, Jest, webpack, WheelMaker Desktop JavaScript bridge
 
@@ -20,13 +20,14 @@
 
 - [ ] **Step 1: Write the failing regression assertions**
 
-Update the preview action test so it locates the generic runner and requires ordinary file tabs to use `tab.path`:
+Update the preview action test so it locates the generic runner, requires ordinary file tabs to use canonical `tab.info.path`, and rejects the raw `tab.path`:
 
 ```ts
 const runnerStart = actionsBody.indexOf('const runProjectFileDesktopAction = (');
 
 expect(actionsBody).toContain("const relativePath = tab.type === 'file'");
-expect(actionsBody).toContain('? tab.path');
+expect(actionsBody).toContain("? (tab.info?.path ?? '')");
+expect(actionsBody).not.toContain('? tab.path');
 expect(actionsBody).toContain(": tab.type === 'prompt-diff'");
 expect(actionsBody).toContain('? resolvePromptDiffActiveFilePath(tab.files, tab.activeFilePath)');
 expect(actionsBody).toContain(": '';");
@@ -48,7 +49,7 @@ expect(folderLabelIndex).toBeLessThan(copyPathLabelIndex);
 expect(copyPathLabelIndex).toBeLessThan(fileTabLabelIndex);
 ```
 
-Also require the final path branch to be `: '';`, which explicitly leaves attachment and port-relay tabs without a project-file action path. Keep the existing assertions for bridge invocation, toast errors, and labels.
+The `?? ''` assertion verifies that a file tab without server `info`, including loading and error states, has no desktop-action path and therefore hides both actions. Rejecting `? tab.path` verifies that a raw path containing an internal `..` segment is never passed to the desktop bridge. Also require the final path branch to be `: '';`, which explicitly leaves attachment and port-relay tabs without a project-file action path. Keep the existing assertions for bridge invocation, toast errors, and labels.
 
 - [ ] **Step 2: Run the focused test and verify RED**
 
@@ -58,7 +59,7 @@ Run from `app`:
 npm test -- --runInBand __tests__/web-chat-file-peek-viewer.test.ts
 ```
 
-Expected: FAIL because the production code still derives paths only for Prompt Diff tabs and still uses Prompt Diff-specific names.
+Expected: FAIL because the production code does not yet derive the ordinary-file action path from canonical server `info` and still uses Prompt Diff-specific names.
 
 - [ ] **Step 3: Implement the minimal shared path and action names**
 
@@ -66,11 +67,13 @@ In `renderPreviewWorkbenchActions`, replace the current Prompt Diff-only path de
 
 ```ts
 const relativePath = tab.type === 'file'
-  ? tab.path
+  ? (tab.info?.path ?? '')
   : tab.type === 'prompt-diff'
     ? resolvePromptDiffActiveFilePath(tab.files, tab.activeFilePath)
     : '';
 ```
+
+The server returns `info.path` only after resolving the request through `safeJoin`, so the desktop bridge receives the canonical project-relative path rather than the raw preview link. When `info` is unavailable, the empty path keeps both desktop actions hidden.
 
 Rename the shared variables and function without changing bridge behavior:
 
