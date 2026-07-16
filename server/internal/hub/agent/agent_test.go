@@ -4205,3 +4205,461 @@ func TestFactorySessionActionsAreProviderSpecific(t *testing.T) {
 		t.Fatalf("cloned codex session actions = %+v", got)
 	}
 }
+
+// --- ZCode app-server bridge tests ---
+
+type fakeZcodeappTransport struct {
+	mu sync.RWMutex
+
+	h      func(json.RawMessage)
+	onSend func(map[string]any)
+
+	sent chan map[string]any
+	done chan struct{}
+}
+
+func newFakeZcodeappTransport() *fakeZcodeappTransport {
+	return &fakeZcodeappTransport{
+		sent: make(chan map[string]any, 32),
+		done: make(chan struct{}),
+	}
+}
+
+func (f *fakeZcodeappTransport) SendMessage(v any) error {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	var msg map[string]any
+	if err := json.Unmarshal(raw, &msg); err != nil {
+		return err
+	}
+	f.sent <- msg
+	f.mu.RLock()
+	hook := f.onSend
+	f.mu.RUnlock()
+	if hook != nil {
+		hook(msg)
+	}
+	return nil
+}
+
+func (f *fakeZcodeappTransport) OnMessage(h func(json.RawMessage)) {
+	f.mu.Lock()
+	f.h = h
+	f.mu.Unlock()
+}
+
+func (f *fakeZcodeappTransport) Done() <-chan struct{} { return f.done }
+
+func (f *fakeZcodeappTransport) Alive() bool {
+	select {
+	case <-f.done:
+		return false
+	default:
+		return true
+	}
+}
+
+func (f *fakeZcodeappTransport) Close() error {
+	select {
+	case <-f.done:
+	default:
+		close(f.done)
+	}
+	return nil
+}
+
+func (f *fakeZcodeappTransport) emit(v any) error {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	f.mu.RLock()
+	h := f.h
+	f.mu.RUnlock()
+	if h != nil {
+		h(raw)
+	}
+	return nil
+}
+
+func (f *fakeZcodeappTransport) nextSent(t *testing.T) map[string]any {
+	t.Helper()
+	select {
+	case msg := <-f.sent:
+		return msg
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for sent zcode message")
+		return nil
+	}
+}
+
+// emitEvent emits a ZCode session/event notification with the given sessionId,
+// turnId, type and payload.
+func (f *fakeZcodeappTransport) emitEvent(sessionID, turnID, eventType string, payload any) error {
+	return f.emit(map[string]any{
+		"method": "session/event",
+		"params": map[string]any{
+			"type":      eventType,
+			"sessionId": sessionID,
+			"turnId":    turnID,
+			"seq":       1,
+			"payload":   payload,
+		},
+	})
+}
+
+func TestZCodeAppSessionCreateBindsSessionID(t *testing.T) {
+	tr := newFakeZcodeappTransport()
+	rt := newZcodeappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	tr.onSend = func(msg map[string]any) {
+		if msg["method"] == "session/create" {
+			_ = tr.emit(map[string]any{
+				"id": msg["id"],
+				"result": map[string]any{
+					"session": map[string]any{
+						"sessionId": "sess-zcode-1",
+						"title":     "",
+						"status":    "idle",
+					},
+					"settings": map[string]any{
+						"permission": map[string]any{"mode": "yolo"},
+						"model":      map[string]any{"current": map[string]any{"providerId": "zai", "modelId": "glm-5.2"}},
+					},
+					"messages": []any{},
+				},
+			})
+		}
+	}
+
+	conn := newZcodeappConnWithRuntime(rt, t.TempDir())
+	var res protocol.SessionNewResult
+	if err := conn.Send(context.Background(), protocol.MethodSessionNew, protocol.SessionNewParams{
+		CWD: t.TempDir(),
+	}, &res); err != nil {
+		t.Fatalf("session/new: %v", err)
+	}
+	if res.SessionID != "sess-zcode-1" {
+		t.Fatalf("sessionId = %q, want sess-zcode-1", res.SessionID)
+	}
+	if conn.currentSessionID() != "sess-zcode-1" {
+		t.Fatalf("conn not bound: %q", conn.currentSessionID())
+	}
+	// conn must be registered under the session id so events route to it
+	if rt.connForSession("sess-zcode-1") != conn {
+		t.Fatal("conn not registered in runtime under session id")
+	}
+}
+
+func TestZCodeAppPromptAsyncCompletesOnTurnCompleted(t *testing.T) {
+	tr := newFakeZcodeappTransport()
+	rt := newZcodeappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	conn := newZcodeappConnWithRuntime(rt, t.TempDir())
+	conn.BindSessionID("sess-1")
+
+	tr.onSend = func(msg map[string]any) {
+		if msg["method"] == "session/send" {
+			// session/send returns accepted immediately
+			_ = tr.emit(map[string]any{
+				"id": msg["id"],
+				"result": map[string]any{"accepted": true, "sessionId": "sess-1", "stateRevision": 1},
+			})
+			// then asynchronously stream a delta and complete
+			go func() {
+				_ = tr.emitEvent("sess-1", "turn-1", "model.streaming", map[string]any{
+					"kind": "text_delta", "delta": "hello", "assistantMessageId": "msg-1",
+				})
+				_ = tr.emitEvent("sess-1", "turn-1", "turn.completed", map[string]any{
+					"resultType": "success", "response": "hello",
+				})
+			}()
+		}
+	}
+
+	updates := make(chan protocol.SessionUpdateParams, 4)
+	conn.OnACPResponse(captureSessionUpdate(t, updates))
+
+	errCh := make(chan error, 1)
+	promptResCh := make(chan protocol.SessionPromptResult, 1)
+	go func() {
+		var res protocol.SessionPromptResult
+		errCh <- conn.Send(context.Background(), protocol.MethodSessionPrompt, protocol.SessionPromptParams{
+			SessionID: "sess-1",
+			Prompt:    []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "hi"}},
+		}, &res)
+		promptResCh <- res
+	}()
+
+	// expect an agent_message_chunk for the delta
+	deadline := time.After(2 * time.Second)
+	var sawDelta bool
+	for !sawDelta {
+		select {
+		case update := <-updates:
+			if update.Update.SessionUpdate == protocol.SessionUpdateAgentMessageChunk {
+				var content protocol.ContentBlock
+				if err := json.Unmarshal(update.Update.Content, &content); err != nil {
+					t.Fatalf("unmarshal: %v", err)
+				}
+				if content.Text != "hello" {
+					t.Fatalf("delta = %q, want hello", content.Text)
+				}
+				sawDelta = true
+			}
+		case <-deadline:
+			t.Fatal("delta not emitted")
+		}
+	}
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("prompt: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("prompt did not complete")
+	}
+	res := <-promptResCh
+	if res.StopReason != protocol.StopReasonEndTurn {
+		t.Fatalf("stopReason = %q, want end_turn", res.StopReason)
+	}
+}
+
+func TestZCodeAppToolUpdateLifecycle(t *testing.T) {
+	tr := newFakeZcodeappTransport()
+	rt := newZcodeappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	conn := newZcodeappConnWithRuntime(rt, t.TempDir())
+	conn.BindSessionID("sess-tool")
+
+	tr.onSend = func(msg map[string]any) {
+		if msg["method"] == "session/send" {
+			_ = tr.emit(map[string]any{
+				"id":     msg["id"],
+				"result": map[string]any{"accepted": true, "sessionId": "sess-tool", "stateRevision": 1},
+			})
+			go func() {
+				_ = tr.emitEvent("sess-tool", "turn-tool", "tool.updated", map[string]any{
+					"toolCallId": "call-1", "toolName": "Bash", "kind": "scheduled",
+				})
+				time.Sleep(20 * time.Millisecond)
+				_ = tr.emitEvent("sess-tool", "turn-tool", "tool.updated", map[string]any{
+					"toolCallId": "call-1", "toolName": "Bash", "kind": "started",
+				})
+				time.Sleep(20 * time.Millisecond)
+				_ = tr.emitEvent("sess-tool", "turn-tool", "tool.updated", map[string]any{
+					"toolCallId": "call-1", "toolName": "Bash", "kind": "result",
+					"result":     map[string]any{"success": true, "content": "done"},
+				})
+				time.Sleep(20 * time.Millisecond)
+				_ = tr.emitEvent("sess-tool", "turn-tool", "turn.completed", map[string]any{
+					"resultType": "success", "response": "done",
+				})
+			}()
+		}
+	}
+
+	updates := make(chan protocol.SessionUpdateParams, 8)
+	conn.OnACPResponse(captureSessionUpdate(t, updates))
+
+	errCh := make(chan error, 1)
+	go func() {
+		var res protocol.SessionPromptResult
+		errCh <- conn.Send(context.Background(), protocol.MethodSessionPrompt, protocol.SessionPromptParams{
+			SessionID: "sess-tool",
+			Prompt:    []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "run cmd"}},
+		}, &res)
+	}()
+
+	// Collect tool updates until prompt completes.
+	var statuses []string
+	deadline := time.After(2 * time.Second)
+loop:
+	for {
+		select {
+		case update := <-updates:
+			if update.Update.SessionUpdate == protocol.SessionUpdateToolCall ||
+				update.Update.SessionUpdate == protocol.SessionUpdateToolCallUpdate {
+				if update.Update.Status != "" {
+					statuses = append(statuses, update.Update.Status)
+				}
+			}
+		case err := <-errCh:
+			if err != nil {
+				t.Fatalf("prompt: %v", err)
+			}
+			break loop
+		case <-deadline:
+			t.Fatal("prompt did not complete")
+		}
+	}
+	// Expect at least: pending (scheduled) -> completed (result). started emits
+	// an in_progress update without a status field on the update path used here,
+	// so we only assert the bookends.
+	if len(statuses) < 2 {
+		t.Fatalf("statuses = %v, want at least 2", statuses)
+	}
+	if statuses[0] != protocol.ToolCallStatusPending {
+		t.Fatalf("first status = %q, want pending", statuses[0])
+	}
+	if last := statuses[len(statuses)-1]; last != protocol.ToolCallStatusCompleted {
+		t.Fatalf("last status = %q, want completed", last)
+	}
+}
+
+func TestZCodeAppPermissionRequestRoundTrip(t *testing.T) {
+	tr := newFakeZcodeappTransport()
+	rt := newZcodeappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+	conn := newZcodeappConnWithRuntime(rt, t.TempDir())
+	conn.BindSessionID("sess-perm")
+
+	// The ACP request handler approves the permission.
+	conn.OnACPRequest(func(_ context.Context, _ int64, method string, _ json.RawMessage) (any, error) {
+		if method != protocol.MethodRequestPermission {
+			t.Fatalf("unexpected request method %q", method)
+		}
+		return protocol.PermissionResponse{Outcome: protocol.PermissionResult{Outcome: "allow_once"}}, nil
+	})
+
+	tr.onSend = func(msg map[string]any) {
+		if msg["method"] == "session/send" {
+			_ = tr.emit(map[string]any{
+				"id":     msg["id"],
+				"result": map[string]any{"accepted": true, "sessionId": "sess-perm", "stateRevision": 1},
+			})
+			go func() {
+				// server asks for permission (note: id is present -> server request)
+				_ = tr.emit(map[string]any{
+					"id":     "server-1",
+					"method": "interaction/requestPermission",
+					"params": map[string]any{
+						"sessionId":  "sess-perm",
+						"requestId":  "perm-1",
+						"toolCallId": "call-perm",
+						"toolName":   "Bash",
+						"reason":     "High risk",
+						"riskLevel":  "high",
+						"input":      map[string]any{"command": "rm -rf /tmp/x"},
+						"options": []map[string]any{
+							{"optionId": "allow_once", "kind": "allow_once", "response": map[string]any{"decision": "allow"}},
+						},
+					},
+				})
+				_ = tr.emitEvent("sess-perm", "turn-perm", "turn.completed", map[string]any{
+					"resultType": "success", "response": "ok",
+				})
+			}()
+		}
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		var res protocol.SessionPromptResult
+		errCh <- conn.Send(context.Background(), protocol.MethodSessionPrompt, protocol.SessionPromptParams{
+			SessionID: "sess-perm",
+			Prompt:    []protocol.ContentBlock{{Type: protocol.ContentBlockTypeText, Text: "run rm"}},
+		}, &res)
+	}()
+
+	// The permission reply should be captured as a sent message with decision=allow.
+	deadline := time.After(2 * time.Second)
+	var reply map[string]any
+	for reply == nil {
+		select {
+		case msg := <-tr.sent:
+			if _, ok := msg["result"]; ok && msg["id"] == "server-1" {
+				reply = msg
+			}
+		case <-deadline:
+			t.Fatal("permission reply not sent")
+		}
+	}
+	result, _ := reply["result"].(map[string]any)
+	if decision, _ := result["decision"].(string); decision != "allow" {
+		t.Fatalf("decision = %q, want allow", decision)
+	}
+	// drain prompt completion
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("prompt: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("prompt did not complete after permission approval")
+	}
+}
+
+func TestZCodeAppLaunchFingerprintIncludesEnv(t *testing.T) {
+	// Two launches with different env must produce different fingerprints, so
+	// the pool does not reuse a runtime launched under a stale credential.
+	fp1 := zcodeappLaunchFingerprint("node", []string{"zcode.cjs", "app-server"}, []string{"ZCODE_API_KEY=k1"})
+	fp2 := zcodeappLaunchFingerprint("node", []string{"zcode.cjs", "app-server"}, []string{"ZCODE_API_KEY=k2"})
+	if fp1 == fp2 {
+		t.Fatal("fingerprints should differ when env differs")
+	}
+	// same inputs -> same fingerprint
+	fp3 := zcodeappLaunchFingerprint("node", []string{"zcode.cjs", "app-server"}, []string{"ZCODE_API_KEY=k1"})
+	if fp1 != fp3 {
+		t.Fatal("fingerprints should be stable for identical inputs")
+	}
+}
+
+func TestZCodeAppProviderNameAndEnum(t *testing.T) {
+	provider := NewZCodeProvider()
+	if provider.Name() != string(protocol.ACPProviderZCode) {
+		t.Fatalf("name = %q, want zcode", provider.Name())
+	}
+	parsed, ok := protocol.ParseACPProvider("zcode")
+	if !ok || parsed != protocol.ACPProviderZCode {
+		t.Fatalf("ParseACPProvider(zcode) = %v,%v, want zcode,true", parsed, ok)
+	}
+	// zcode is the last entry in the provider list
+	names := protocol.ACPProviderNames()
+	if names[len(names)-1] != "zcode" {
+		t.Fatalf("last provider = %q, want zcode", names[len(names)-1])
+	}
+}
+
+func TestZCodeAppRuntimeRoutesEventsBySessionID(t *testing.T) {
+	tr := newFakeZcodeappTransport()
+	rt := newZcodeappRuntimeWithTransport(tr)
+	t.Cleanup(func() { _ = rt.close() })
+
+	connA := newZcodeappConnWithRuntime(rt, t.TempDir())
+	connA.BindSessionID("sess-a")
+	connB := newZcodeappConnWithRuntime(rt, t.TempDir())
+	connB.BindSessionID("sess-b")
+
+	updatesA := make(chan protocol.SessionUpdateParams, 4)
+	updatesB := make(chan protocol.SessionUpdateParams, 4)
+	connA.OnACPResponse(captureSessionUpdate(t, updatesA))
+	connB.OnACPResponse(captureSessionUpdate(t, updatesB))
+
+	// emit a delta addressed to sess-b; only connB should see it
+	if err := tr.emitEvent("sess-b", "turn-b", "model.streaming", map[string]any{
+		"kind": "text_delta", "delta": "B-only", "assistantMessageId": "msg-b",
+	}); err != nil {
+		t.Fatalf("emit: %v", err)
+	}
+
+	select {
+	case update := <-updatesB:
+		var content protocol.ContentBlock
+		_ = json.Unmarshal(update.Update.Content, &content)
+		if content.Text != "B-only" {
+			t.Fatalf("B got %q, want B-only", content.Text)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("connB did not receive its event")
+	}
+	select {
+	case <-updatesA:
+		t.Fatal("connA received an event meant for connB")
+	case <-time.After(100 * time.Millisecond):
+		// good: connA got nothing
+	}
+}
