@@ -167,7 +167,7 @@ describe('web chat view width settings', () => {
       /\.chat-main \{[\s\S]*--chat-scrollbar-gutter-width: 8px;[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
-      /\.chat-view-width-fixed-800 \.chat-composer \{[\s\S]*padding-left: 18px;[\s\S]*padding-right: calc\(18px \+ var\(--chat-scrollbar-gutter-width, 8px\)\);[\s\S]*\}/,
+      /\.chat-view-width-fixed-800 \.chat-composer \{[\s\S]*padding-left: 18px;[\s\S]*padding-right: calc\(8px \+ var\(--chat-scrollbar-gutter-width, 8px\)\);[\s\S]*\}/,
     );
     const scrollBottomButtonBlock = cssRuleBlock(stylesCss, '.chat-view-width-fixed-800 .chat-scroll-bottom-button');
     expect(scrollBottomButtonBlock).toContain('right: max(');
