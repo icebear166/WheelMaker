@@ -20838,7 +20838,7 @@ export function App() {
     const closeActionsMenu = () => setPreviewWorkbenchActionsMenuOpen(false);
     const projectRoot = projects.find(project => project.projectId === tab.projectId)?.path;
     const relativePath = tab.type === 'file'
-      ? tab.path
+      ? (tab.info?.path ?? '')
       : tab.type === 'prompt-diff'
         ? resolvePromptDiffActiveFilePath(tab.files, tab.activeFilePath)
         : '';

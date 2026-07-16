@@ -101,7 +101,7 @@ describe('web chat file peek viewer', () => {
     expect(viewerComparatorBody).toContain('prev.preview === next.preview');
   });
 
-  test('project file actions target ordinary and prompt diff files through independently gated desktop methods', () => {
+  test('project file actions use canonical ordinary paths and active prompt diff paths', () => {
     const mainTsx = readSourceText(mainPath);
     const stylesCss = readWebStyles(projectRoot);
     const actionsStart = mainTsx.indexOf('const renderPreviewWorkbenchActions = () => {');
@@ -124,7 +124,8 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('type DesktopProjectFileAction,');
     expect(actionsBody).toContain('const projectRoot = projects.find(project => project.projectId === tab.projectId)?.path;');
     expect(actionsBody).toContain("const relativePath = tab.type === 'file'");
-    expect(actionsBody).toContain('? tab.path');
+    expect(actionsBody).toContain("? (tab.info?.path ?? '')");
+    expect(actionsBody).not.toContain('? tab.path');
     expect(actionsBody).toContain(": tab.type === 'prompt-diff'");
     expect(actionsBody).toContain('? resolvePromptDiffActiveFilePath(tab.files, tab.activeFilePath)');
     expect(actionsBody).toContain(": '';");
