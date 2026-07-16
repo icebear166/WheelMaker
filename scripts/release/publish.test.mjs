@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { generateKeyPairSync, verify } from 'node:crypto';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { createHash, generateKeyPairSync, verify } from 'node:crypto';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -221,6 +221,9 @@ test('stable failure keeps the already public release and leaves stable unchange
 
 test('publisher commits exact script bytes and signs exact stable bytes', async () => {
   const release = await fixtureRelease();
+  release.deployMjsBytes = await readFile(
+    new URL('../deploy/deploy.mjs', import.meta.url),
+  );
   const api = new FakeGitHubApi();
   try {
     const stable = await publishBuiltRelease(release, api);
@@ -230,6 +233,8 @@ test('publisher commits exact script bytes and signs exact stable bytes', async 
     assert.deepEqual(scriptFiles['deploy.mjs'], release.deployMjsBytes);
     assert.deepEqual(scriptFiles['deploy-core.mjs'], release.coreBytes);
     assert.match(stable.deploy.mjsUrl, new RegExp(SCRIPT_COMMIT_SHA));
+    assert.equal(stable.deploy.mjsSha256, sha256ForTest(release.deployMjsBytes));
+    assert.equal(stable.deploy.coreSha256, sha256ForTest(release.coreBytes));
 
     const stableFiles = Object.fromEntries(
       api.stableFiles.map(({ path, bytes }) => [path, bytes]),
@@ -447,6 +452,10 @@ function jsonResponse(value, status = 200) {
     headers: { 'content-type': 'application/json' },
     status,
   });
+}
+
+function sha256ForTest(bytes) {
+  return createHash('sha256').update(bytes).digest('hex');
 }
 
 function stableReleaseInput({ version }) {
