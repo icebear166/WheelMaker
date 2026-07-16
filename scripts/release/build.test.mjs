@@ -81,6 +81,44 @@ test('release build compiles Web once and exactly three Hub targets', async () =
   }
 });
 
+test('Windows Hub uses the GUI subsystem without changing Unix Hub builds', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-windows-gui-build-'));
+  const repoRoot = join(root, 'repo');
+  const outputRoot = join(root, 'out');
+  const runner = recordingRunner();
+
+  try {
+    await mkdir(join(repoRoot, 'app'), { recursive: true });
+    await mkdir(join(repoRoot, 'server'), { recursive: true });
+
+    await buildRelease({
+      repoRoot,
+      outputRoot,
+      version: 'v1.7',
+      withDesktop: false,
+      runner,
+    });
+
+    const hubBuilds = runner.calls.filter(
+      ({ command, args }) =>
+        command === 'go' && args.at(-1) === './cmd/wheelmaker',
+    );
+    const windowsBuild = hubBuilds.find(
+      ({ options }) => options.env.GOOS === 'windows',
+    );
+    const unixBuilds = hubBuilds.filter(
+      ({ options }) => options.env.GOOS !== 'windows',
+    );
+
+    assert.equal(windowsBuild.args.includes('-ldflags=-H windowsgui'), true);
+    for (const build of unixBuilds) {
+      assert.equal(build.args.includes('-ldflags=-H windowsgui'), false);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('platform directories preserve the Hub and Web package layout', async () => {
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-layout-'));
   const repoRoot = join(root, 'repo');

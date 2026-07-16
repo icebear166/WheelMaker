@@ -65,9 +65,15 @@ export async function buildRelease({
     const binaryPath = join(hubDirectory, target.binary);
     await mkdir(hubDirectory, { recursive: true });
 
+    const buildArguments = ['build', '-trimpath'];
+    if (target.GOOS === 'windows') {
+      buildArguments.push('-ldflags=-H windowsgui');
+    }
+    buildArguments.push('-o', binaryPath, './cmd/wheelmaker');
+
     await runner(
       'go',
-      ['build', '-trimpath', '-o', binaryPath, './cmd/wheelmaker'],
+      buildArguments,
       {
         cwd: serverRoot,
         env: {

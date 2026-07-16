@@ -44,6 +44,23 @@ test('Windows plan contains current-user tasks and fixed 03:00 updater', () => {
   assert.doesNotMatch(plan.script, /New-Service/i);
 });
 
+test('Windows tasks hide the Node updater and allow the Hub to run indefinitely', () => {
+  const plan = windowsRuntimePlan(RUNTIME_PATHS);
+
+  assert.match(
+    plan.script,
+    /ExecutionTimeLimit \(New-TimeSpan -Seconds 0\)/,
+  );
+  assert.match(
+    plan.script,
+    /\$updaterArguments = '.*-WindowStyle Hidden.*-EncodedCommand/,
+  );
+  assert.match(
+    plan.script,
+    /\$updaterAction = New-ScheduledTaskAction -Execute 'powershell\.exe' -Argument \$updaterArguments/,
+  );
+});
+
 test('Linux files contain Hub service plus one-shot updater timer', () => {
   const files = linuxRuntimeFiles({
     ...RUNTIME_PATHS,

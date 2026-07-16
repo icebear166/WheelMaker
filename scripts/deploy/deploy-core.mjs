@@ -566,16 +566,18 @@ export function deploymentRuntimePaths({
 
 export function windowsRuntimePlan(paths) {
   const names = ['WheelMaker', 'WheelMakerUpdater'];
-  const updaterArguments = `"${paths.deploy.replaceAll('"', '\\"')}" update`;
+  const updaterCommand = `& ${psQuote(paths.node)} ${psQuote(paths.deploy)} update\nexit $LASTEXITCODE`;
+  const encodedUpdaterCommand = Buffer.from(updaterCommand, 'utf16le').toString('base64');
+  const updaterArguments = `-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand ${encodedUpdaterCommand}`;
   const script = `$ErrorActionPreference = 'Stop'
 $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 $principal = New-ScheduledTaskPrincipal -UserId $currentUser -LogonType Interactive -RunLevel Limited
-$settings = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -StartWhenAvailable -MultipleInstances IgnoreNew
+$settings = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Seconds 0) -StartWhenAvailable -MultipleInstances IgnoreNew
 $hubAction = New-ScheduledTaskAction -Execute ${psQuote(paths.hub)} -Argument '-d' -WorkingDirectory ${psQuote(paths.home)}
 $hubTrigger = New-ScheduledTaskTrigger -AtLogOn -User $currentUser
 Register-ScheduledTask -TaskName 'WheelMaker' -Action $hubAction -Trigger $hubTrigger -Principal $principal -Settings $settings -Force | Out-Null
 $updaterArguments = ${psQuote(updaterArguments)}
-$updaterAction = New-ScheduledTaskAction -Execute ${psQuote(paths.node)} -Argument $updaterArguments -WorkingDirectory ${psQuote(paths.home)}
+$updaterAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $updaterArguments -WorkingDirectory ${psQuote(paths.home)}
 $updaterTrigger = New-ScheduledTaskTrigger -Daily -At '03:00'
 Register-ScheduledTask -TaskName 'WheelMakerUpdater' -Action $updaterAction -Trigger $updaterTrigger -Principal $principal -Settings $settings -Force | Out-Null
 `;
