@@ -155,9 +155,12 @@ describe('terminal components', () => {
   });
 
   test('lets the browser copy Ctrl+C when terminal text is selected', async () => {
+    const onCopy = jest.fn();
+    let renderer: TestRenderer.ReactTestRenderer;
     await act(async () => {
-      TestRenderer.create(
-        <TerminalView active resizeEnabled cols={80} rows={24} onInput={jest.fn()} onResize={jest.fn()} />,
+      renderer = TestRenderer.create(
+        <TerminalView active resizeEnabled cols={80} rows={24} onInput={jest.fn()} onResize={jest.fn()}
+          onCopy={onCopy} />,
         {createNodeMock: terminalHost},
       );
     });
@@ -171,12 +174,19 @@ describe('terminal components', () => {
     expect(xterm.keyEventHandler?.(ctrlC)).toBe(false);
     expect(xterm.keyEventHandler?.(ctrlShiftC)).toBe(false);
     expect(xterm.keyEventHandler?.(commandC)).toBe(false);
+    const surface = renderer!.root.findByProps({className: 'terminal-xterm-surface'});
+    expect(surface.props.onCopy).toEqual(expect.any(Function));
+    act(() => surface.props.onCopy());
+    expect(onCopy).toHaveBeenCalledTimes(1);
     xterm.hasSelection.mockReturnValue(false);
     expect(xterm.keyEventHandler?.(ctrlC)).toBe(true);
+    act(() => surface.props.onCopy());
+    expect(onCopy).toHaveBeenCalledTimes(1);
   });
 
   test('shows Copy on right click when terminal text is selected', async () => {
     const writeText = jest.fn(() => Promise.resolve());
+    const onCopy = jest.fn();
     Object.defineProperty(globalThis.navigator, 'clipboard', {
       configurable: true,
       value: {writeText},
@@ -184,7 +194,8 @@ describe('terminal components', () => {
     let renderer: TestRenderer.ReactTestRenderer;
     await act(async () => {
       renderer = TestRenderer.create(
-        <TerminalView active resizeEnabled cols={80} rows={24} onInput={jest.fn()} onResize={jest.fn()} />,
+        <TerminalView active resizeEnabled cols={80} rows={24} onInput={jest.fn()} onResize={jest.fn()}
+          onCopy={onCopy} />,
         {createNodeMock: terminalHost},
       );
     });
@@ -200,6 +211,41 @@ describe('terminal components', () => {
     const copy = renderer!.root.findByProps({role: 'menuitem'});
     await act(async () => copy.props.onClick());
     expect(writeText).toHaveBeenCalledWith('selected output');
+    expect(onCopy).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not report a successful right-click copy when clipboard writing fails', async () => {
+    const writeError = new Error('clipboard unavailable');
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      configurable: true,
+      value: {writeText: jest.fn(() => Promise.reject(writeError))},
+    });
+    const onCopy = jest.fn();
+    let renderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        <TerminalView active resizeEnabled cols={80} rows={24} onInput={jest.fn()} onResize={jest.fn()}
+          onCopy={onCopy} />,
+        {createNodeMock: terminalHost},
+      );
+    });
+    const xterm = mockTerminalInstances[0];
+    xterm.hasSelection.mockReturnValue(true);
+    xterm.getSelection.mockReturnValue('selected output');
+    const surface = renderer!.root.findByProps({className: 'terminal-xterm-surface'});
+    act(() => surface.props.onContextMenu({clientX: 24, clientY: 36, preventDefault: jest.fn()}));
+
+    let copyError: unknown;
+    await act(async () => {
+      try {
+        await renderer!.root.findByProps({role: 'menuitem'}).props.onClick();
+      } catch (error) {
+        copyError = error;
+      }
+    });
+
+    expect(copyError).toBeUndefined();
+    expect(onCopy).not.toHaveBeenCalled();
   });
 
   test('keeps the native terminal context menu when there is no selection', async () => {

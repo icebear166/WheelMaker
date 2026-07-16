@@ -15268,6 +15268,7 @@ export function App() {
       commitTerminalSync(markTerminalsUnavailable(state, [terminal.hubId]));
     }
   }, [commitTerminalSync]);
+  const handleTerminalCopy = () => setToastMessage('Copied to clipboard.');
 
   const claimTerminalResize = useCallback((key: string, cols: number, rows: number) => {
     if (terminalResizeClaimsRef.current.has(key)) return;
@@ -19830,6 +19831,7 @@ export function App() {
                       onInput={handleTerminalInput}
                       onResize={handleTerminalResize}
                       onAutoResize={handleAutoClaimTerminalResize}
+                      onCopy={handleTerminalCopy}
                     />
                   ) : null}
                 </TerminalWorkbench>
@@ -21398,6 +21400,7 @@ export function App() {
             onInput={handleTerminalInput}
             onResize={handleTerminalResize}
             onAutoResize={handleAutoClaimTerminalResize}
+            onCopy={handleTerminalCopy}
           />
         ) : null}
       </TerminalWorkbench>

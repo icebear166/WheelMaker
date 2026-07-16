@@ -76,6 +76,12 @@ describe('terminal workspace integration', () => {
     expect(source).not.toContain('workspaceStore.rememberTerminal');
   });
 
+  test('shows the global toast after terminal text is copied', () => {
+    const source = read('web/src/app/WorkspaceApp.tsx');
+    expect(source).toContain("const handleTerminalCopy = () => setToastMessage('Copied to clipboard.');");
+    expect(source.match(/onCopy=\{handleTerminalCopy\}/g)).toHaveLength(2);
+  });
+
   test('confirms closing a running terminal', () => {
     const dialogs = read('web/src/shell/AppDialogs.tsx');
     expect(dialogs).toContain("kind: 'terminalClose'");

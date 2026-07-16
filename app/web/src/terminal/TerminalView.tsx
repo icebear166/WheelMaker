@@ -19,10 +19,11 @@ export type TerminalViewProps = {
   onInput: (data: Uint8Array) => void;
   onResize: (cols: number, rows: number) => void;
   onAutoResize?: (cols: number, rows: number) => void;
+  onCopy?: () => void;
 };
 
 export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(function TerminalView(
-  {active, resizeEnabled, cols, rows, shell = '', initialCwd = '', onInput, onResize, onAutoResize},
+  {active, resizeEnabled, cols, rows, shell = '', initialCwd = '', onInput, onResize, onAutoResize, onCopy},
   ref,
 ) {
   const [copyMenu, setCopyMenu] = useState<{left: number; top: number; text: string} | null>(null);
@@ -276,14 +277,21 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     if (!text) return;
     try {
       await navigator.clipboard.writeText(text);
+      onCopy?.();
+    } catch {
+      // Clipboard failures do not produce a success notification.
     } finally {
       setCopyMenu(null);
       terminalRef.current?.focus();
     }
   };
 
+  const handleCopy = () => {
+    if (terminalRef.current?.hasSelection()) onCopy?.();
+  };
+
   return (
-    <div className="terminal-xterm-surface" onContextMenu={openCopyMenu}>
+    <div className="terminal-xterm-surface" onContextMenu={openCopyMenu} onCopy={handleCopy}>
       <div ref={containerRef} className="terminal-xterm-host" />
       {copyMenu ? (
         <div
