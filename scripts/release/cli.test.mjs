@@ -16,6 +16,7 @@ function fakeCliDeps() {
     order: [],
     publishCalls: [],
     sourceCalls: [],
+    versionCalls: 0,
   };
   const deps = {
     channel: {
@@ -29,6 +30,7 @@ function fakeCliDeps() {
     deployMjsBytes: Buffer.from('launcher'),
     outputRoot: 'D:\\repo\\.release-out',
     repoRoot: 'D:\\repo',
+    workRoot: 'D:\\repo\\.release-work',
     state,
     async buildRelease(input) {
       state.buildCalls.push(input);
@@ -56,6 +58,11 @@ function fakeCliDeps() {
       state.sourceCalls.push(options);
       return SOURCE_SHA;
     },
+    async resolveNextVersion() {
+      state.versionCalls += 1;
+      state.order.push('version');
+      return 'v1.24';
+    },
   };
   return deps;
 }
@@ -76,14 +83,17 @@ test('CLI builds locally by default and accepts independent publish/Desktop flag
   assert.throws(() => parseReleaseArgs(['build']), /unknown option/);
 });
 
-test('default mode builds locally without constructing a GitHub client', async () => {
+test('default mode builds the next stable version without constructing a GitHub client', async () => {
   const deps = fakeCliDeps();
   const result = await runRelease({ publish: false, withDesktop: false }, deps);
 
   assert.equal(deps.state.githubClientCalls, 0);
   assert.equal(deps.state.publishCalls.length, 0);
   assert.deepEqual(deps.state.sourceCalls, [{ requireClean: false }]);
-  assert.equal(deps.state.buildCalls[0].version, 'local-0123456789ab');
+  assert.equal(deps.state.versionCalls, 1);
+  assert.equal(deps.state.buildCalls[0].version, 'v1.24');
+  assert.equal(deps.state.buildCalls[0].workRoot, 'D:\\repo\\.release-work');
+  assert.deepEqual(deps.state.order, ['version', 'build']);
   assert.equal(result.mode, 'build');
 });
 
@@ -99,7 +109,8 @@ test('publish mode builds once and publishes that same build', async () => {
   assert.equal(deps.state.publishCalls[0].input.sourceSha, SOURCE_SHA);
   assert.equal(deps.state.publishCalls[0].input.desktopExe, 'desktop.exe');
   assert.deepEqual(deps.state.publishCalls[0].api, { kind: 'github-client' });
-  assert.deepEqual(deps.state.order, ['build', 'github', 'publish']);
+  assert.equal(deps.state.publishCalls[0].input.version, 'v1.24');
+  assert.deepEqual(deps.state.order, ['version', 'build', 'github', 'publish']);
   assert.deepEqual(result, { mode: 'publish', stable: { version: 'v1.1' } });
 });
 

@@ -10,6 +10,7 @@ import {
   requestInstallationToken,
 } from './github-app.mjs';
 import { GitHubApi } from './github-api.mjs';
+import { nextVersionFromStableBytes } from './metadata.mjs';
 import { publishBuiltRelease } from './publish.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -34,13 +35,14 @@ export function parseReleaseArgs(args) {
 export async function runRelease(options, deps) {
   const requireClean = options.publish;
   const sourceSha = await deps.resolveSourceSha({ requireClean });
-  const buildIdentifier = `local-${sourceSha.slice(0, 12)}`;
+  const version = await deps.resolveNextVersion();
   const startedAt = deps.now();
 
   const build = await deps.buildRelease({
     outputRoot: deps.outputRoot,
     repoRoot: deps.repoRoot,
-    version: buildIdentifier,
+    version,
+    workRoot: deps.workRoot,
     withDesktop: options.withDesktop,
   });
   if (!options.publish) {
@@ -67,6 +69,7 @@ export async function runRelease(options, deps) {
       publisher: deps.publisher,
       sourceSha,
       startedAt,
+      version,
     },
     api,
   );
@@ -141,6 +144,7 @@ export async function createDefaultReleaseDependencies({
     outputRoot: join(repoRoot, '.release-out'),
     publisher: env.GITHUB_ACTIONS === 'true' ? 'github-actions' : 'local',
     repoRoot,
+    workRoot: join(repoRoot, '.release-work'),
     async createGitHubClient() {
       const token = await resolvePublishingToken({
         env,
@@ -166,6 +170,19 @@ export async function createDefaultReleaseDependencies({
     },
     now: () => new Date().toISOString(),
     publishBuiltRelease,
+    async resolveNextVersion() {
+      const stableUrl = new URL(
+        channel.stablePath,
+        `https://raw.githubusercontent.com/${channel.owner}/${channel.repository}/${channel.branch}/`,
+      );
+      const response = await fetchImpl(stableUrl, { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(
+          `failed to query stable metadata: ${response.status} ${response.statusText}`,
+        );
+      }
+      return nextVersionFromStableBytes(Buffer.from(await response.arrayBuffer()));
+    },
     resolveSourceSha: (options) => resolveGitSourceSha(repoRoot, options),
   };
 }

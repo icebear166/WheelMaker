@@ -5,6 +5,7 @@ server/bin/**/*
 # 运行时状态
 .wheelmaker/
 .release-out/
+.release-work/
 .wheelmaker-release-secrets/
 .tmp/
 server/.tmp/

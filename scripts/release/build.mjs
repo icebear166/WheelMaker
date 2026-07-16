@@ -28,13 +28,11 @@ export async function buildRelease({
   repoRoot,
   outputRoot,
   version,
+  workRoot = join(repoRoot, '.release-work'),
   withDesktop = false,
   runner = runCommand,
 }) {
-  if (
-    !/^v1\.(0|[1-9]\d*)$/.test(version) &&
-    !/^local-[0-9a-f]{7,40}$/.test(version)
-  ) {
+  if (!/^v1\.(0|[1-9]\d*)$/.test(version)) {
     throw new Error(`invalid release build identifier: ${version}`);
   }
 
@@ -42,17 +40,31 @@ export async function buildRelease({
   const serverRoot = join(repoRoot, 'server');
   const versionRoot = join(outputRoot, version);
   const webSource = join(versionRoot, 'web-source');
+  const cacheRoot = join(workRoot, 'cache');
+  const buildEnvironment = {
+    GOCACHE: join(cacheRoot, 'go-build'),
+    GOMODCACHE: join(cacheRoot, 'go-mod'),
+  };
+  const webEnvironment = {
+    WHEELMAKER_WEB_TARGET: webSource,
+    WHEELMAKER_WEBPACK_CACHE: join(cacheRoot, 'webpack'),
+  };
 
   await rm(versionRoot, { recursive: true, force: true });
   await mkdir(webSource, { recursive: true });
+  await Promise.all([
+    mkdir(buildEnvironment.GOCACHE, { recursive: true }),
+    mkdir(buildEnvironment.GOMODCACHE, { recursive: true }),
+    mkdir(webEnvironment.WHEELMAKER_WEBPACK_CACHE, { recursive: true }),
+  ]);
 
   await runner('npm', ['ci', '--include=dev'], {
     cwd: appRoot,
-    env: { WHEELMAKER_WEB_TARGET: webSource },
+    env: webEnvironment,
   });
   await runner('npm', ['run', 'build:web:release'], {
     cwd: appRoot,
-    env: { WHEELMAKER_WEB_TARGET: webSource },
+    env: webEnvironment,
   });
 
   const platforms = [];
@@ -78,6 +90,7 @@ export async function buildRelease({
         cwd: serverRoot,
         env: {
           CGO_ENABLED: '0',
+          ...buildEnvironment,
           GOARCH: target.GOARCH,
           GOOS: target.GOOS,
         },
@@ -116,7 +129,7 @@ export async function buildRelease({
         '--original-filename',
         'WheelMakerDesktop.exe',
       ],
-      { cwd: desktopCommandRoot, env: {} },
+      { cwd: desktopCommandRoot, env: buildEnvironment },
     );
     await runner(
       'go',
@@ -130,7 +143,12 @@ export async function buildRelease({
       ],
       {
         cwd: serverRoot,
-        env: { CGO_ENABLED: '0', GOARCH: 'amd64', GOOS: 'windows' },
+        env: {
+          CGO_ENABLED: '0',
+          ...buildEnvironment,
+          GOARCH: 'amd64',
+          GOOS: 'windows',
+        },
       },
     );
   }

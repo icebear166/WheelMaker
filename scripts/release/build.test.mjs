@@ -159,23 +159,60 @@ test('platform directories preserve the Hub and Web package layout', async () =>
   }
 });
 
-test('local build identifier matches the source-side output directory', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-local-build-'));
+test('release build rejects the retired local source identifier', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-retired-local-build-'));
   const repoRoot = join(root, 'repo');
 
   try {
     await mkdir(join(repoRoot, 'app'), { recursive: true });
     await mkdir(join(repoRoot, 'server'), { recursive: true });
-    const result = await buildRelease({
-      repoRoot,
-      outputRoot: join(root, 'out'),
-      version: 'local-0123456789ab',
-      runner: recordingRunner(),
-    });
-
-    assert.equal(basename(result.versionRoot), 'local-0123456789ab');
+    await assert.rejects(
+      () => buildRelease({
+        repoRoot,
+        outputRoot: join(root, 'out'),
+        version: 'local-0123456789ab',
+        runner: recordingRunner(),
+      }),
+      /invalid release build identifier/,
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('release build routes Webpack and Go caches through the work root', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-release-cache-'));
+  const repoRoot = join(root, 'repo');
+  const workRoot = join(root, '.release-work');
+  const runner = recordingRunner();
+
+  try {
+    await mkdir(join(repoRoot, 'app'), { recursive: true });
+    await mkdir(join(repoRoot, 'server'), { recursive: true });
+    await buildRelease({
+      repoRoot,
+      outputRoot: join(root, 'out'),
+      version: 'v1.24',
+      workRoot,
+      runner,
+    });
+
+    const npmCalls = runner.calls.filter(({command}) => command === 'npm');
+    const goCalls = runner.calls.filter(({command}) => command === 'go');
+    assert.equal(npmCalls.length, 2);
+    assert.equal(goCalls.length, 3);
+    for (const call of npmCalls) {
+      assert.equal(
+        call.options.env.WHEELMAKER_WEBPACK_CACHE,
+        join(workRoot, 'cache', 'webpack'),
+      );
+    }
+    for (const call of goCalls) {
+      assert.equal(call.options.env.GOCACHE, join(workRoot, 'cache', 'go-build'));
+      assert.equal(call.options.env.GOMODCACHE, join(workRoot, 'cache', 'go-mod'));
+    }
+  } finally {
+    await rm(root, {recursive: true, force: true});
   }
 });
 
