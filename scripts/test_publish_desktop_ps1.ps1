@@ -24,37 +24,20 @@ function Assert-NotContains {
   }
 }
 
-Assert-Contains "publish_desktop.ps1" $script "server\cmd\wheelmaker-desktop\winres\icon.png"
-Assert-Contains "publish_desktop.ps1" $script "go-winres@v0.3.3"
-Assert-Contains "publish_desktop.ps1" $script "--icon"
-Assert-Contains "publish_desktop.ps1" $script "desktop_windows.syso"
-Assert-Contains "publish_desktop.ps1" $script "go build"
+Assert-Contains "publish_desktop.ps1" $script "scripts\release.mjs"
+Assert-Contains "publish_desktop.ps1" $script '"build", "--with-desktop"'
+Assert-Contains "publish_desktop.ps1" $script ".release-out"
+Assert-Contains "publish_desktop.ps1" $script "Copy-Item"
 Assert-Contains "publish_desktop.ps1" $script "WheelMakerDesktop.exe"
-Assert-Contains "publish_desktop.ps1" $script '"webMode" = "remote-only"'
-Assert-Contains "publish_desktop.ps1" $script '"embeddedAsset" = "bootstrap/index.html"'
 Assert-Contains "publish_desktop.ps1" $script "Assert-RemoteOnlyDesktopBinary"
-Assert-NotContains "publish_desktop.ps1" $script '"bundle."'
 Assert-Contains "publish_desktop.ps1" $script '$shortcut.IconLocation = $script:DesktopExe'
-Assert-Contains "publish_desktop.ps1" $script "desktop-release.json"
 Assert-Contains "publish_desktop.ps1" $script "CreateShortcut"
 Assert-Contains "publish_desktop.ps1" $script "Desktop"
-Assert-NotContains "publish_desktop.ps1" $script "Convert-DesktopIconSvgToPng"
-Assert-NotContains "publish_desktop.ps1" $script "app\scripts\render_svg_icon.js"
-Assert-NotContains "publish_desktop.ps1" $script "app\web\public\icons\icon.svg"
-Assert-NotContains "publish_desktop.ps1" $script "Get-EdgeExecutable"
-Assert-NotContains "publish_desktop.ps1" $script "Restart-Services"
-Assert-NotContains "publish_desktop.ps1" $script "update-now.signal"
-Assert-NotContains "publish_desktop.ps1" $script "Reset-DesktopWebRoot"
-Assert-NotContains "publish_desktop.ps1" $script "Restore-DesktopWebRootPlaceholder"
-Assert-NotContains "publish_desktop.ps1" $script "GetRelativePath"
-Assert-NotContains "publish_desktop.ps1" $script "WHEELMAKER_WEB_TARGET"
+Assert-NotContains "publish_desktop.ps1" $script "go build"
+Assert-NotContains "publish_desktop.ps1" $script "go-winres"
+Assert-NotContains "publish_desktop.ps1" $script "desktop_windows.syso"
 Assert-NotContains "publish_desktop.ps1" $script "npm ci"
-Assert-NotContains "publish_desktop.ps1" $script "npm run build:web"
-Assert-NotContains "publish_desktop.ps1" $script "export_web_release"
-Assert-NotContains "publish_desktop.ps1" $script "DesktopWebBuildRoot"
-Assert-NotContains "publish_desktop.ps1" $script "DesktopWebOverlay"
-Assert-NotContains "publish_desktop.ps1" $script "DesktopVirtualWebRoot"
-Assert-NotContains "publish_desktop.ps1" $script '"-overlay"'
+Assert-NotContains "publish_desktop.ps1" $script "build:web:release"
 Assert-Contains "publish-desktop.bat" $bat "scripts\publish_desktop.ps1"
 
 $desktopIconPath = Join-Path $repoRoot "server\cmd\wheelmaker-desktop\winres\icon.png"

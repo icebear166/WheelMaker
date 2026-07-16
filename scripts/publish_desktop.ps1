@@ -15,7 +15,9 @@ function Write-Step {
 function Assert-Command {
   param([Parameter(Mandatory = $true)][string]$Name, [string]$Hint = "")
   if (Get-Command $Name -ErrorAction SilentlyContinue) { return }
-  if ([string]::IsNullOrWhiteSpace($Hint)) { throw ("required command not found in PATH: {0}" -f $Name) }
+  if ([string]::IsNullOrWhiteSpace($Hint)) {
+    throw ("required command not found in PATH: {0}" -f $Name)
+  }
   throw ("required command not found in PATH: {0}. {1}" -f $Name, $Hint)
 }
 
@@ -33,58 +35,39 @@ function Invoke-Checked {
   throw ("{0} (exit={1})" -f $FailureMessage, $LASTEXITCODE)
 }
 
-function Get-GitValue {
-  param([Parameter(Mandatory = $true)][string[]]$Arguments)
-  Push-Location $script:RepoRoot
-  try {
-    $value = ((& git @Arguments) | Select-Object -First 1)
-    if ($LASTEXITCODE -ne 0) { throw ("git {0} failed (exit={1})" -f ($Arguments -join " "), $LASTEXITCODE) }
-    return ([string]$value).Trim()
-  } finally {
-    Pop-Location
+function Get-SourceShortSha {
+  $value = (& git -C $script:RepoRoot rev-parse --short=12 HEAD | Select-Object -First 1)
+  if ($LASTEXITCODE -ne 0) {
+    throw ("git rev-parse failed (exit={0})" -f $LASTEXITCODE)
   }
+  $sha = ([string]$value).Trim()
+  if ($sha -notmatch "^[0-9a-f]{12}$") {
+    throw ("unexpected source SHA: {0}" -f $sha)
+  }
+  return $sha
 }
 
-function Build-DesktopResource {
-  Assert-Command -Name "go" -Hint "Install Go 1.26+."
-  if (-not (Test-Path -LiteralPath $script:DesktopIconPng)) {
-    throw ("desktop icon PNG is missing: {0}" -f $script:DesktopIconPng)
-  }
-  Write-Step "generate desktop exe icon resource"
+function Build-And-CopyDesktop {
+  $releaseScript = Join-Path $script:RepoRoot "scripts\release.mjs"
+  $releaseArgs = @("build", "--with-desktop")
+  Write-Step "build Desktop through the release pipeline"
   if ($WhatIf) {
-    Write-Host ("[whatif] go run github.com/tc-hib/go-winres@v0.3.3 simply --arch amd64 --out {0} --no-suffix --manifest gui --icon {1}" -f $script:DesktopSyso, $script:DesktopIconPng)
+    Write-Host ("[whatif] node {0} {1}" -f $releaseScript, ($releaseArgs -join " "))
+    Write-Host ("[whatif] Copy-Item {0} -> {1}" -f $script:BuiltDesktopExe, $script:DesktopExe)
     return
   }
-  Push-Location (Join-Path $script:RepoRoot "server\cmd\wheelmaker-desktop")
-  try {
-    Invoke-Checked -FilePath "go" -Arguments @(
-      "run", "github.com/tc-hib/go-winres@v0.3.3", "simply",
-      "--arch", "amd64", "--out", $script:DesktopSyso, "--no-suffix",
-      "--manifest", "gui", "--icon", $script:DesktopIconPng,
-      "--file-description", "WheelMaker Desktop",
-      "--product-name", "WheelMaker Desktop",
-      "--original-filename", "WheelMakerDesktop.exe"
-    ) -FailureMessage "desktop Windows resource generation failed"
-  } finally {
-    Pop-Location
-  }
-}
 
-function Build-DesktopBinary {
-  Assert-Command -Name "go" -Hint "Install Go 1.26+."
-  Push-Location $script:ServerRoot
+  Push-Location $script:RepoRoot
   try {
-    Write-Step ("build WheelMakerDesktop.exe: {0}" -f $script:DesktopExe)
-    $buildArgs = @("build", "-ldflags", "-H windowsgui", "-o", $script:DesktopExe, "./cmd/wheelmaker-desktop/")
-    if ($WhatIf) {
-      Write-Host ("[whatif] go build -ldflags -H windowsgui -o {0} ./cmd/wheelmaker-desktop/" -f $script:DesktopExe)
-      return
-    }
-    New-Item -ItemType Directory -Path $script:OutputDir -Force | Out-Null
-    Invoke-Checked -FilePath "go" -Arguments $buildArgs -FailureMessage "desktop binary build failed"
+    Invoke-Checked -FilePath "node" -Arguments (@($releaseScript) + $releaseArgs) -FailureMessage "release build failed"
   } finally {
     Pop-Location
   }
+  if (-not (Test-Path -LiteralPath $script:BuiltDesktopExe)) {
+    throw ("release build did not create Desktop executable: {0}" -f $script:BuiltDesktopExe)
+  }
+  New-Item -ItemType Directory -Path $script:OutputDir -Force | Out-Null
+  Copy-Item -LiteralPath $script:BuiltDesktopExe -Destination $script:DesktopExe -Force
 }
 
 function Assert-RemoteOnlyDesktopBinary {
@@ -97,30 +80,14 @@ function Assert-RemoteOnlyDesktopBinary {
   }
 }
 
-function Write-DesktopReleaseManifest {
-  Assert-Command -Name "git" -Hint "Install Git and ensure git.exe is available."
-  $manifest = [ordered]@{
-    "schemaVersion" = 1
-    "repo" = $script:RepoRoot
-    "branch" = Get-GitValue -Arguments @("branch", "--show-current")
-    "sha" = Get-GitValue -Arguments @("rev-parse", "HEAD")
-    "builtAt" = (Get-Date).ToUniversalTime().ToString("o")
-    "desktopExe" = $script:DesktopExe
-    "webMode" = "remote-only"
-    "embeddedAsset" = "bootstrap/index.html"
-  }
-  if ($WhatIf) { Write-Host ("[whatif] write {0}" -f $script:ManifestPath); return }
-  New-Item -ItemType Directory -Path $script:OutputDir -Force | Out-Null
-  $json = $manifest | ConvertTo-Json -Depth 4
-  $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-  [System.IO.File]::WriteAllText($script:ManifestPath, $json, $utf8NoBom)
-}
-
 function New-DesktopShortcut {
   $desktop = [Environment]::GetFolderPath("Desktop")
   $shortcutPath = Join-Path $desktop "WheelMaker Desktop.lnk"
   Write-Step ("create desktop shortcut: {0}" -f $shortcutPath)
-  if ($WhatIf) { Write-Host ("[whatif] CreateShortcut {0} -> {1}" -f $shortcutPath, $script:DesktopExe); return }
+  if ($WhatIf) {
+    Write-Host ("[whatif] CreateShortcut {0} -> {1}" -f $shortcutPath, $script:DesktopExe)
+    return
+  }
   $shell = New-Object -ComObject WScript.Shell
   $shortcut = $shell.CreateShortcut($shortcutPath)
   $shortcut.TargetPath = $script:DesktopExe
@@ -129,17 +96,20 @@ function New-DesktopShortcut {
   $shortcut.Save()
 }
 
-$script:RepoRoot = if ([string]::IsNullOrWhiteSpace($RepoRoot)) { (Resolve-Path (Join-Path $PSScriptRoot "..")).Path } else { (Resolve-Path $RepoRoot).Path }
-$script:ServerRoot = Join-Path $script:RepoRoot "server"
-$script:DesktopSyso = Join-Path $script:RepoRoot "server\cmd\wheelmaker-desktop\desktop_windows.syso"
-$script:OutputDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputDir)
-$script:DesktopIconPng = Join-Path $script:RepoRoot "server\cmd\wheelmaker-desktop\winres\icon.png"
-$script:DesktopExe = Join-Path $script:OutputDir "WheelMakerDesktop.exe"
-$script:ManifestPath = Join-Path $script:OutputDir "desktop-release.json"
+Assert-Command -Name "node" -Hint "Install Node.js 22+."
+Assert-Command -Name "git" -Hint "Install Git for source builds."
 
-Build-DesktopResource
-Build-DesktopBinary
+$script:RepoRoot = if ([string]::IsNullOrWhiteSpace($RepoRoot)) {
+  (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+} else {
+  (Resolve-Path $RepoRoot).Path
+}
+$script:OutputDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputDir)
+$script:DesktopExe = Join-Path $script:OutputDir "WheelMakerDesktop.exe"
+$sourceShortSha = Get-SourceShortSha
+$script:BuiltDesktopExe = Join-Path $script:RepoRoot ".release-out\local-$sourceShortSha\desktop\WheelMakerDesktop.exe"
+
+Build-And-CopyDesktop
 Assert-RemoteOnlyDesktopBinary
-Write-DesktopReleaseManifest
 New-DesktopShortcut
 Write-Step "desktop publish complete"
