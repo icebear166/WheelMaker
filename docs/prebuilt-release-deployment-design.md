@@ -190,16 +190,22 @@ validate source SHA
 
 ```text
 ~/.wheelmaker/
+  bin/
+    wheelmaker(.exe)
+  web/
+    ...静态站点文件...
+  desktop/
+    WheelMakerDesktop.exe
   deploy.mjs
   deploy-core.mjs
-  app/
-    hub/
-    web/
   staging/
     lock.json
     status.json
     <job-id>/
   config.json
+  release.json
+  start.bat / stop.bat / restart.bat / status.bat
+  start.sh  / stop.sh  / restart.sh  / status.sh
 ```
 
 公开 `deploy.mjs` 是小型启动器，源码在私有源码仓库维护、由发布流程复制到公开 Git。每次调用它时：
@@ -209,7 +215,7 @@ validate source SHA
 3. 当前进程执行已加载的 `deploy-core.mjs`。启动器在本轮被替换时，新启动器从下一次调用生效；
 4. core 下载、验证和解压当前平台资产，并执行安装或内部更新流程。
 
-MJS 不放进平台包；产品包只包含 Hub 与 Web。`staging` 是唯一的更新工作区，同时保存锁和状态；不再使用独立 `update/` 目录。
+MJS 不放进平台包；产品包只包含 Hub 与 Web。`staging` 是唯一的更新工作区，同时保存锁和状态；不再使用独立 `update/` 目录。普通部署和内部更新分别将包中的 Hub/Web 应用到既有 `bin/` 和 `web/`，绝不引入 `app/` 这一层；`desktop/` 只由独立 Desktop 更新流程管理。
 
 ### 公开与内部入口
 
@@ -221,6 +227,8 @@ update_exe.bat                        更新可选 Desktop EXE
 ```
 
 不提供 `schedule`、`history`、`status` 或单独 `install` 命令。历史由 Web 直接读取公开 GitHub Releases API；状态由 Hub 读取本机 `staging/status.json`；日程固定为本地时间每天 03:00。
+
+继续生成既有包装脚本：Windows 的 `start.bat`、`stop.bat`、`restart.bat`、`status.bat`，以及 macOS/Linux 的同名 `.sh` 文件。它们调用 core 的内部运行时操作，以当前平台的既有任务、LaunchAgent 或 user unit 执行启动、停止、重启、状态查询；这些内部操作不是面向用户的 deploy 子命令。普通部署每次都修复这些包装脚本。
 
 ### 当前用户运行模型
 
@@ -234,7 +242,22 @@ update_exe.bat                        更新可选 Desktop EXE
 
 普通新部署只创建上述当前用户注册项。内部 `update` 严格禁止创建、删除或改写计划任务、LaunchAgent 或 systemd unit，因此不需要管理员权限。
 
-更新先在 `staging/<job-id>` 下载、校验和解压；然后请求旧 Hub 正常退出，替换 `app/` 的 Hub/Web 文件，触发既有 Hub 任务重新启动。失败后写入状态，不自动回滚。
+更新先在 `staging/<job-id>` 下载、校验和解压；然后请求旧 Hub 正常退出，替换 `bin/` 中的 Hub 和 `web/` 中的静态站点，触发既有 Hub 任务重新启动。失败后写入状态，不自动回滚。
+
+每次成功应用包后，core 重写既有 `~/.wheelmaker/release.json`，将其升级为预构建安装元数据：
+
+```json
+{
+  "schemaVersion": 2,
+  "version": "v1.23",
+  "publishedAt": "2026-07-16T09:00:00Z",
+  "sourceSha": "<private-source-sha>",
+  "manifestSha256": "<sha256>",
+  "installedAt": "2026-07-16T09:10:00Z"
+}
+```
+
+它是 App 判断“当前已安装版本”的唯一来源，不再记录本机源码仓库、分支、remote 或 Git SHA 推导字段。
 
 ### Web 触发与安装锁
 
@@ -242,12 +265,18 @@ Web 不能同步等待或直接替换 Hub。Web 调用 Hub 的受控 update 接�
 
 ```text
 Web → Hub update API → 原子创建 lock → 触发 OS updater task
-    → deploy.mjs update → 旧 Hub 退出 → 替换 app → 触发 Hub task
+    → deploy.mjs update → 旧 Hub 退出 → 替换 bin/web → 触发 Hub task
 ```
 
 `lock.json` 是短生命周期互斥租约，包含 jobId、owner、开始时间和心跳；成功或失败时删除。重复点击返回同一 job 的状态，不能启动第二个更新。过期锁只有在确认对应任务未运行时才可回收。
 
 `status.json` 是持久的最近一次状态，包含 jobId、`queued|downloading|verifying|applying|restarting|succeeded|failed`、时间和无敏感信息的错误码。它在任务结束后保留，直至下一次任务覆盖。
+
+### App 版本判断
+
+Hub 的 `cmd.update.query` 读取本机 `release.json`，并从公开仓库拉取、验签 `stable.json`。响应包含 `installed` 与 `stable` 的版本、发布时间和 sourceSha，而不再包含 Git remote、分支、behind/ahead count 或工作树状态。App 以 `installed.version === stable.version` 判断 `up_to_date`，版本不同判断 `update_available`；存在 lock 时显示 queued/running 状态；stable 获取或验签失败显示 `checking_failed`。部署 MJS 仍独立重新验证 stable，UI 查询不能成为更新信任链。
+
+App 的 Update 页面展示“当前版本”和“最新版本”，而非“Current/Latest Git SHA”或提交差异；更新按钮继续调用受控 job 请求接口。
 
 ### 旧版迁移
 
@@ -280,3 +309,5 @@ deploy.bat 或 deploy.sh
 - `migrate-uninstall` 清除旧运行项而保留用户配置/数据；迁移后不再保留旧 updater/monitor。
 - v1.3 未带 Desktop EXE、v1.2 带 EXE 时，v1.3 的 `update_exe.bat` 仍下载 v1.2 EXE。
 - Action 在一个 Ubuntu job 内完成三平台 Hub、可选 Desktop、一次 Web 构建和发布；缓存命中时不重新下载 Go/npm 依赖。
+- 成功安装保持 `bin/`、`web/`、`desktop/` 与 start/stop/restart/status 包装脚本的既有路径约定，且不产生 `app/` 目录。
+- App 从 schema v2 的本机 `release.json` 和已验签 stable 得出当前/最新版本，不执行 Git 查询或显示提交差异。
