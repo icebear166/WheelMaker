@@ -4039,11 +4039,6 @@ export function App() {
     }) as React.CSSProperties,
     [chatComposerHeight, chatFontFamily, chatKeyboardInset],
   );
-  const chatMainClassName = isWide
-    ? (chatViewWidth === 'fixed-800' ? 'chat-main chat-view-width-fixed-800' : 'chat-main')
-    : 'chat-main';
-  const desktopChatFixedPreview = isWide && chatPreviewOpen && chatViewWidth === 'fixed-800';
-
   useEffect(() => {
     if (!toastMessage) return undefined;
     const timer = window.setTimeout(() => setToastMessage(''), 2200);
@@ -5114,6 +5109,42 @@ export function App() {
     }
   }, [allVisibleProjectsLoaded, projectSessionsByProjectId]);
   const showPinnedRecentSessionsSurface = isWide && sidebarCollapsed && recentSessionsPinned && !archivedMode && !sessionSearchActive && recentSessionSections.length > 0;
+  const chatMainClassName = isWide
+    ? (chatViewWidth === 'fixed-800' ? `chat-main chat-view-width-fixed-800${showPinnedRecentSessionsSurface ? ' chat-view-width-fixed-800-pinned-recent' : ''}` : 'chat-main')
+    : 'chat-main';
+  const desktopChatFixedPreview = isWide && chatPreviewOpen && chatViewWidth === 'fixed-800';
+  const closeSidebarTransientMenus = useCallback(() => {
+    setProjectMenuOpen(false);
+    setWorkspaceProjectMenuOpen(false);
+    setWideProjectActionMenu(null);
+    setMobileProjectActionMenu(null);
+    setProjectSessionActionMenu(null);
+    setSessionArchiveMenuOpen(false);
+    setChatHubMenuOpen(false);
+    setChatHubColorMenuHubId('');
+    setChatTitleProjectMenuOpen(false);
+    setChatTitlePromptMenuOpen(false);
+    setChatQuickSwitchMenuOpen(false);
+  }, []);
+  useEffect(() => {
+    window.addEventListener('scroll', closeSidebarTransientMenus, true);
+    return () => window.removeEventListener('scroll', closeSidebarTransientMenus, true);
+  }, [closeSidebarTransientMenus]);
+  useEffect(() => {
+    const closeSidebarMenusOnOtherButton = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      if (target?.closest(
+        '.wide-project-action-popover, .project-session-action-menu, .mobile-project-sheet, .session-archive-menu, .chat-hub-popover, .chat-title-project-menu, .chat-title-prompt-menu, .chat-quick-switch-menu',
+      )) {
+        return;
+      }
+      if (target?.closest('button, [role="button"]')) {
+        closeSidebarTransientMenus();
+      }
+    };
+    window.addEventListener('pointerdown', closeSidebarMenusOnOtherButton, true);
+    return () => window.removeEventListener('pointerdown', closeSidebarMenusOnOtherButton, true);
+  }, [closeSidebarTransientMenus]);
 
   const mobileChatQuickSwitchMenuStyle = useMemo<React.CSSProperties>(() => ({
     top: portRelayReady && portRelayFrameUrl ? 56 : 0,
@@ -7622,19 +7653,14 @@ export function App() {
   );
   const toggleWideProjectCollapsed = useCallback(
     (targetProjectId: string) => {
-      setWideProjectActionMenu(current =>
-        current?.projectId === targetProjectId ? null : current,
-      );
-      setMobileProjectActionMenu(current =>
-        current?.projectId === targetProjectId ? null : current,
-      );
+      closeSidebarTransientMenus();
       setCollapsedProjectIds(current =>
         current.includes(targetProjectId)
           ? current.filter(item => item !== targetProjectId)
           : [...current, targetProjectId],
       );
     },
-    [setCollapsedProjectIds],
+    [closeSidebarTransientMenus, setCollapsedProjectIds],
   );
   const clearProjectPinLongPress = useCallback(() => {
     if (projectPinLongPressTimerRef.current !== null) {
@@ -7650,6 +7676,9 @@ export function App() {
   );
   const startProjectPinLongPress = useCallback(
     (targetProjectId: string, event: React.PointerEvent<HTMLButtonElement>) => {
+      if (isWide) {
+        return;
+      }
       if (event.pointerType === 'mouse' && event.button !== 0) {
         return;
       }
@@ -7670,7 +7699,7 @@ export function App() {
         togglePinnedProject(targetProjectId);
       }, PROJECT_PIN_LONG_PRESS_MS);
     },
-    [clearProjectPinLongPress, togglePinnedProject],
+    [clearProjectPinLongPress, isWide, togglePinnedProject],
   );
   const finishProjectPinLongPress = useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -7713,6 +7742,9 @@ export function App() {
       sessionId: string,
       event: React.PointerEvent<HTMLButtonElement>,
     ) => {
+      if (isWide) {
+        return;
+      }
       if (event.pointerType === 'mouse' && event.button !== 0) {
         return;
       }
@@ -7754,7 +7786,7 @@ export function App() {
         });
       }, PROJECT_SESSION_LONG_PRESS_MS);
     },
-    [clearProjectSessionLongPress],
+    [clearProjectSessionLongPress, isWide],
   );
   const finishProjectSessionLongPress = useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -7809,6 +7841,7 @@ export function App() {
   ) => {
     event.preventDefault();
     event.stopPropagation();
+    closeSidebarTransientMenus();
     clearProjectSessionLongPress();
     const normalizedSessionId = sessionId.trim();
     if (!targetProjectId || !normalizedSessionId) {
@@ -10559,8 +10592,8 @@ export function App() {
     kind: 'new' | 'resume',
     anchor: HTMLElement | null,
   ) => {
+    closeSidebarTransientMenus();
     resetProjectResumeState();
-    setMobileProjectActionMenu(null);
     setWideProjectActionMenu({
       projectId: targetProjectId,
       kind,
@@ -10578,8 +10611,8 @@ export function App() {
     targetProjectId: string,
     kind: 'new' | 'resume',
   ) => {
+    closeSidebarTransientMenus();
     resetProjectResumeState();
-    setWideProjectActionMenu(null);
     setMobileProjectActionMenu(current =>
       current?.projectId === targetProjectId && current.kind === kind
         ? null
@@ -17313,6 +17346,122 @@ export function App() {
     );
   };
 
+  const renderWideProjectActionMenu = (
+    projectItem?: RegistryProject,
+    projectSessions?: RegistryChatSession[],
+    projectAgents?: string[],
+  ) => {
+    const actionMenu = wideProjectActionMenu;
+    if (!actionMenu) return null;
+    const actionProject = projectItem ?? sortedProjectItems.find(
+      item => item.projectId === actionMenu.projectId,
+    );
+    if (!actionProject) return null;
+    const targetProjectId = actionProject.projectId;
+    const agents = projectAgents ?? getWideProjectAgents(
+      actionProject,
+      projectSessions ?? projectSessionsByProjectId[targetProjectId] ?? [],
+    );
+    return (
+      <div
+        ref={wideProjectActionMenuRef}
+        className="wide-project-action-popover"
+        style={actionMenu.popover
+          ? {
+              top: `${actionMenu.popover.top}px`,
+              left: `${actionMenu.popover.left}px`,
+              width: `${actionMenu.popover.width}px`,
+              maxHeight: `${actionMenu.popover.maxHeight}px`,
+              transform: actionMenu.popover.placement === 'above'
+                ? 'translateY(-100%)'
+                : undefined,
+            }
+          : undefined}
+      >
+        <div className="wide-project-action-title">
+          <span className={`codicon ${actionMenu.kind === 'new' ? 'codicon-add' : 'codicon-history'}`} />
+          <span className="wide-project-action-title-copy">
+            <span className="wide-project-action-title-main">
+              {actionMenu.kind === 'new' ? 'New Session' : 'Resume Session'}
+            </span>
+            <span className="wide-project-action-title-sub">{actionProject.name}</span>
+          </span>
+        </div>
+        {actionMenu.phase === 'agents' ? (
+          <>
+            {agents.map(agentType => (
+              <button
+                key={`${targetProjectId}:${actionMenu.kind}:${agentType}`}
+                type="button"
+                className="wide-project-action-menu-item"
+                onClick={() => {
+                  if (actionMenu.kind === 'new') {
+                    handleWideProjectCreateSession(targetProjectId, agentType).catch(() => undefined);
+                  } else {
+                    handleWideProjectResumeAgent(targetProjectId, agentType).catch(() => undefined);
+                  }
+                }}
+              >
+                <span className="codicon codicon-sparkle" />
+                <span>{agentType}</span>
+              </button>
+            ))}
+            {agents.length === 0 ? (
+              <div className="wide-project-action-empty">
+                <span className="codicon codicon-circle-slash" aria-hidden="true" />
+                <span>No agents available.</span>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="wide-project-action-back"
+              onClick={() => {
+                setResumeSessions([]);
+                setResumeLoading(false);
+                setWideProjectActionMenu({...actionMenu, phase: 'agents', agentType: ''});
+              }}
+            >
+              <span className="codicon codicon-arrow-left" />
+              <span>{actionMenu.agentType}</span>
+            </button>
+            {resumeLoading ? (
+              <div className="wide-project-action-empty">
+                <span className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
+                <span>Loading sessions...</span>
+              </div>
+            ) : null}
+            {!resumeLoading ? resumeSessions.map(session => (
+              <button
+                key={`${targetProjectId}:resume:${session.sessionId}`}
+                type="button"
+                className="wide-project-action-menu-item"
+                onClick={() => {
+                  handleWideProjectResumeImport(
+                    targetProjectId,
+                    actionMenu.agentType,
+                    session.sessionId,
+                  ).catch(() => undefined);
+                }}
+              >
+                <span className="codicon codicon-history" />
+                <span>{resolveSessionDisplayTitle(session) || session.sessionId}</span>
+              </button>
+            )) : null}
+            {!resumeLoading && resumeSessions.length === 0 ? (
+              <div className="wide-project-action-empty">
+                <span className="codicon codicon-history" aria-hidden="true" />
+                <span>No resumable sessions.</span>
+              </div>
+            ) : null}
+          </>
+        )}
+      </div>
+    );
+  };
+
   const renderWideProjectSessionNav = () => {
     return (
       <ChatSessionNav
@@ -19106,6 +19255,7 @@ export function App() {
               />
             </div>
           ) : null}
+          {sidebarCollapsed ? renderWideProjectActionMenu() : null}
           {!isWide ? (
             <ChatPlanSurface
               mode="mobile"

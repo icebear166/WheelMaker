@@ -2766,7 +2766,7 @@
 .chat-edge-surface-stack {
   --chat-edge-surface-stack-width: 360px;
   --chat-edge-surface-stack-column-gap: 12px;
-  --chat-edge-surface-stack-edge-gap: calc(18px + var(--chat-scrollbar-gutter-width, 8px));
+  --chat-edge-surface-stack-edge-gap: max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px));
   --chat-edge-surface-stack-resolved-width: min(
     var(--chat-edge-surface-stack-width),
     calc(100% - var(--chat-edge-surface-stack-edge-gap) - var(--chat-edge-surface-stack-edge-gap))
@@ -4095,6 +4095,23 @@
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 62%;
+}
+
+.chat-view-width-fixed-800-pinned-recent .chat-view-content,
+.chat-view-width-fixed-800-pinned-recent .chat-composer-content {
+  --chat-pinned-recent-content-left: calc(
+    var(--chat-edge-surface-stack-edge-gap) +
+    var(--chat-edge-surface-stack-resolved-width) +
+    var(--chat-edge-surface-stack-column-gap)
+  );
+  margin-left: min(
+    calc(100% - min(800px, 100%) - var(--chat-edge-surface-stack-edge-gap)),
+    calc(
+      var(--chat-pinned-recent-content-left) +
+      max(0px, (100% - var(--chat-pinned-recent-content-left) - 800px) / 2)
+    )
+  );
+  margin-right: auto;
 }
 
 .chat-slash-switch {

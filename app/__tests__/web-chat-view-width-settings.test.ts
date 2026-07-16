@@ -128,7 +128,7 @@ describe('web chat view width settings', () => {
     expect(mainTsx).toContain('normalizeChatViewWidth(persistedGlobal.chatViewWidth)');
     expect(mainTsx).toContain('chatViewWidth,');
     expect(mainTsx).toContain('const chatMainClassName = isWide');
-    expect(mainTsx).toContain("chatViewWidth === 'fixed-800' ? 'chat-main chat-view-width-fixed-800' : 'chat-main'");
+    expect(mainTsx).toContain("chatViewWidth === 'fixed-800' ? `chat-main chat-view-width-fixed-800${showPinnedRecentSessionsSurface ? ' chat-view-width-fixed-800-pinned-recent' : ''}` : 'chat-main'");
     expect(mainTsx).toContain('chatViewWidth={chatViewWidth}');
     expect(mainTsx).toContain('setChatViewWidth={setChatViewWidth}');
 

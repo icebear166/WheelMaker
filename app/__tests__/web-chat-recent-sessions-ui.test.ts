@@ -171,6 +171,52 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('</ChatRecentSessionsSurface>');
   });
 
+  test('keeps pinned Recent session actions available after the desktop sidebar unmounts', () => {
+    expect(mainTsx).toContain('const renderWideProjectActionMenu = (');
+    expect(mainTsx).toContain('sidebarCollapsed ? renderWideProjectActionMenu() : null');
+  });
+
+  test('limits long-press session and pin actions to the mobile sidebar', () => {
+    const pinLongPressStart = mainTsx.slice(
+      mainTsx.indexOf('const startProjectPinLongPress ='),
+      mainTsx.indexOf('const finishProjectPinLongPress ='),
+    );
+    const sessionLongPressStart = mainTsx.slice(
+      mainTsx.indexOf('const startProjectSessionLongPress ='),
+      mainTsx.indexOf('const finishProjectSessionLongPress ='),
+    );
+
+    expect(pinLongPressStart).toContain('if (isWide) {');
+    expect(sessionLongPressStart).toContain('if (isWide) {');
+    expect(mainTsx).toContain('onContextMenu={event => openProjectSessionContextMenu(targetProjectId, session.sessionId, event)}');
+  });
+
+  test('closes transient sidebar menus only after actual scroll events and when opening another sidebar action', () => {
+    expect(mainTsx).toContain('const closeSidebarTransientMenus = useCallback(() => {');
+    expect(mainTsx).toContain("window.addEventListener('scroll', closeSidebarTransientMenus, true);");
+    expect(mainTsx).toContain("window.removeEventListener('scroll', closeSidebarTransientMenus, true);");
+    expect(mainTsx).toContain("window.addEventListener('pointerdown', closeSidebarMenusOnOtherButton, true);");
+    expect(mainTsx).toContain("window.removeEventListener('pointerdown', closeSidebarMenusOnOtherButton, true);");
+    expect(mainTsx).toContain("target?.closest('button, [role=\"button\"]')");
+    expect(mainTsx).toContain('closeSidebarTransientMenus();\n    resetProjectResumeState();');
+    expect(mainTsx).toContain('setProjectSessionActionMenu(null);');
+    expect(mainTsx).toContain('setWideProjectActionMenu(null);');
+    expect(mainTsx).toContain('setMobileProjectActionMenu(null);');
+  });
+
+  test('reserves pinned Recent before centering the fixed 800px chat content and shifts edge panels left by 8px', () => {
+    expect(mainTsx).toContain("chatViewWidth === 'fixed-800' ? `chat-main chat-view-width-fixed-800${showPinnedRecentSessionsSurface ? ' chat-view-width-fixed-800-pinned-recent' : ''}` : 'chat-main'");
+
+    const stackRule = chatCss.match(/\.chat-edge-surface-stack \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const pinnedFixedRule = chatCss.match(/\.chat-view-width-fixed-800-pinned-recent \.chat-view-content,[\s\S]*?\n\}/)?.[0] ?? '';
+
+    expect(stackRule).toContain('--chat-edge-surface-stack-edge-gap: max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px));');
+    expect(pinnedFixedRule).toContain('--chat-pinned-recent-content-left:');
+    expect(pinnedFixedRule).toContain('var(--chat-edge-surface-stack-resolved-width)');
+    expect(pinnedFixedRule).toContain('var(--chat-edge-surface-stack-column-gap)');
+    expect(pinnedFixedRule).toContain('margin-left: min(');
+  });
+
   test('lets the pinned recent surface expand naturally at the standard session density', () => {
     const surfaceBlock = chatCss.match(/\.chat-recent-sessions-surface\.desktop \{[\s\S]*?\n\}/)?.[0] ?? '';
     const listBlock = chatCss.match(/\.chat-recent-sessions-surface-list \{[\s\S]*?\n\}/)?.[0] ?? '';
