@@ -31,7 +31,7 @@ function buildModelEnv() {
     // explicit override
     env.ZCODE_API_KEY = process.env.ZCODE_API_KEY;
     env.ZCODE_MODEL = process.env.ZCODE_MODEL || 'zai/glm-5.2';
-    env.ZCODE_MODEL_BASE_URL = process.env.ZCODE_MODEL_BASE_URL || 'https://api.z.ai/api/anthropic';
+    env.ZCODE_BASE_URL = process.env.ZCODE_BASE_URL || 'https://api.z.ai/api/anthropic';
     return env;
   }
   try {
@@ -43,7 +43,7 @@ function buildModelEnv() {
     if (key && zai.enabled) {
       env.ZCODE_API_KEY = key;
       env.ZCODE_MODEL = process.env.ZCODE_MODEL || 'zai/glm-5.2';
-      env.ZCODE_MODEL_BASE_URL = zai.options.baseURL || 'https://api.z.ai/api/anthropic';
+      env.ZCODE_BASE_URL = zai.options.baseURL || 'https://api.z.ai/api/anthropic';
     }
   } catch (e) {
     process.stderr.write(`[probe] could not read desktop zai key: ${e.message}\n`);
@@ -57,7 +57,7 @@ const proc = spawn(process.execPath, [ZCODE_CJS, 'app-server', '--cwd', WORKDIR]
   env: { ...process.env, NO_COLOR: '1', ...modelEnv },
 });
 if (modelEnv.ZCODE_API_KEY) {
-  process.stderr.write(`[probe] model env injected: model=${modelEnv.ZCODE_MODEL} baseURL=${modelEnv.ZCODE_MODEL_BASE_URL} key=<${modelEnv.ZCODE_API_KEY.length} chars>\n`);
+  process.stderr.write(`[probe] model env injected: model=${modelEnv.ZCODE_MODEL} baseURL=${modelEnv.ZCODE_BASE_URL} key=<${modelEnv.ZCODE_API_KEY.length} chars>\n`);
 }
 
 let nextId = 1;

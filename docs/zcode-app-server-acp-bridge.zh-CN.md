@@ -1,9 +1,11 @@
 # ZCode App-Server 与 ACP 转换文档
 
 日期：2026-07-16
-状态：协议逆向 Phase 1（基于 wire 抓包，非官方文档）
+状态：协议逆向 Phase 1（基于 wire 抓包 + 成功路径验证，非官方文档）
 
 本文是 WheelMaker 未来接入 `zcode` agent 的协议转换说明。`zcode` 对上必须表现为 ACP agent，对下连接 `zcode app-server`。与 `codex` 一样，转换逻辑只能落在 agent 层，不能污染 `client.Session`、IM、registry、recorder 或 ACP 基础 transport。
+
+> ⚠️ **重要前提**：ZCode 官方（[zcode.z.ai/en/docs](https://zcode.z.ai/en/docs)、[docs.z.ai](https://docs.z.ai)）**未公开任何 app-server 协议规范**。本文结论来自对本机 `zcode app-server`（v0.15.2，`zcode.cjs` bundle）的 wire 抓包与 bundle 静态逆向。其中握手、方法集、schema、配置机制、成功路径事件流（`model.streaming` text_delta → `turn.completed`）均已用真实 API key（`api.z.ai/api/anthropic`）实测跑通；权限协议基于 bundle 静态逆向（待 build 模式 wire 实测）。**协议无稳定契约保证**，ZCode 版本升级可能改变方法名/字段，且不会有 deprecation notice——实现时以"抓包重放 + 行为回归"作为校验手段。
 
 > ⚠️ **重要前提**：ZCode 官方（[zcode.z.ai/en/docs](https://zcode.z.ai/en/docs)、[docs.z.ai](https://docs.z.ai)）**未公开任何 app-server 协议规范**。本文所有结论来自对本机 `zcode app-server`（v0.15.2，`zcode.cjs` bundle）的 wire 抓包与 bundle 静态逆向，**无稳定契约保证**。ZCode 任何版本升级都可能改变方法名/字段，且不会有 deprecation notice。实现时必须以"抓包重放 + 行为回归"作为校验手段。
 
@@ -230,12 +232,24 @@
 | `session.titleUpdated` | `{title, previousTitle, source:"first_input"}` | turn 开始 |
 | `turn.started` | `{turnNumber, input, queryId}` | turn 开始 |
 | `session.updated` | `{turnNumber, model, modelRef, messageCount, toolCount, iteration}` | 模型迭代 |
-| `model_request_started` | `{baseURL, model, requestId, spanId, traceId, providerKind, transport, attempt, requestHeaders...}` | 发起模型请求 |
+| `model_request_started` | `{baseURL, model, requestId, spanId, traceId, providerKind, transport:"sse", attempt, requestHeaders...}` | 发起模型请求 |
 | `model_request_*` | 模型请求结果（started/failed/...）| 模型 IO |
+| `model.streaming` | `{kind:"text_delta", delta:"<增量文本>", assistantMessageId, done:false}` —— 多条，逐 token | **模型输出增量（核心）** |
+| `model.streaming` | `{kind:"reasoning*"（待测具体 kind）, delta, ...}` | reasoning 增量 |
 | `turn.failed` | `{error:{type,code,message,detail,stack}, turnPhase}` | **终态·失败** |
-| `turn.completed` | （成功终态，**待实测**——见下"凭证限制"）| **终态·成功** |
+| `turn.completed` | `{resultType:"success", response:"<完整文本>", usage:{inputTokens,outputTokens,cacheReadTokens,...}, toolCallCount, duration, cacheStats}` | **终态·成功** |
 
-> **凭证限制说明**：由于 app-server 模式强制把模型请求路由到 plan 端点（`zcode.z.ai`），需要有效 OAuth plan 凭证；纯 API key 走不通（详见"配置与凭证"节）。因此本批次抓包只到 `turn.failed`（模型 404）。**成功路径**的 message text delta、tool_call 调度、`turn.completed` 等事件类型，需在具备有效 OAuth 凭证的环境下补测。内部 transcript 日志（`~/.zcode/cli/rollout/*.jsonl`）已确认存在 `model_streaming`/`tool_call_scheduled`/`streaming_tool_ledger_updated`/`tool_batch_complete`/`turn_complete` 等内部事件，可作为 wire 层 type 映射的参照。
+`model.streaming` 实测样本（问 "2+2"）：
+```json
+// seq=5
+{ "type":"model.streaming", "payload":{ "kind":"text_delta", "delta":"2", "assistantMessageId":"msg_...", "done":false } }
+// seq=6
+{ "type":"model.streaming", "payload":{ "kind":"text_delta", "delta":"+2 is 4.", "assistantMessageId":"msg_...", "done":false } }
+// turn.completed
+{ "type":"turn.completed", "payload":{ "resultType":"success", "response":"2+2 is 4.", "usage":{...}, "toolCallCount":0, "duration":2941 } }
+```
+
+> **说明**：早期抓包曾因 harness 用错环境变量名（`ZCODE_MODEL_BASE_URL` 应为 `ZCODE_BASE_URL`）导致 baseURL 未注入、模型 404，只能看到 `turn.failed`。修正后 `model.streaming`（`text_delta`）与 `turn.completed`（`resultType=success`）均已实测捕获。工具调用路径（`tool_call_scheduled` 等）尚未在成功 turn 中触发（测试 prompt 未要求工具），待一个会触发工具的 prompt 补测。
 
 ## ACP 桥接映射（草案）
 
@@ -250,23 +264,25 @@
 | `session/cancel` | `session/stop` | 停止当前 turn |
 | `session/list` | `session/list` | 字段映射见下 |
 
-### 停止原因映射（待成功路径验证）
+### 停止原因映射（已验证）
 
-| ZCode 终态事件 | ACP stopReason |
-|---|---|
-| `turn.completed` | `end_turn`（**待验证**）|
-| `turn.failed` | `refusal` 或 error |
-| `session/stop` 取消 | `cancelled` |
+| ZCode 终态事件 | `payload.resultType` | ACP stopReason |
+|---|---|---|
+| `turn.completed` | `success` | `end_turn` |
+| `turn.failed` | （error 结构）| `refusal` 或 error |
+| `session/stop` 主动取消 | — | `cancelled` |
 
-### 事件 -> ACP 输出映射（草案）
+### 事件 -> ACP 输出映射（已验证）
 
-| ZCode session/event type | ACP 输出 |
-|---|---|
-| message text delta（待测）| `agent_message_chunk` |
-| reasoning delta（待测）| `agent_thought_chunk` |
-| `tool_call_scheduled`（待测）| `tool_call` pending |
-| tool 执行结果（待测）| `tool_call_update` completed/failed |
-| `session.titleUpdated` | `session_info_update.title` |
+| ZCode session/event type | payload 关键字段 | ACP 输出 |
+|---|---|---|
+| `model.streaming`（`kind=text_delta`）| `delta`、`assistantMessageId`、`done` | `agent_message_chunk` |
+| `model.streaming`（`kind=reasoning*`，待测）| reasoning delta | `agent_thought_chunk` |
+| 工具调度（待测）| — | `tool_call` pending |
+| 工具结果（待测）| — | `tool_call_update` completed/failed |
+| `session.titleUpdated` | `title` | `session_info_update.title` |
+| `turn.completed`（`resultType=success`）| `response`、`usage` | 终止挂起的 `session/prompt`，返回 `end_turn` |
+| `turn.failed` | `error` | 终止挂起的 `session/prompt`，返回失败 |
 
 ## 权限审批协议（server→client 反向 request）
 
@@ -366,26 +382,56 @@ client result（`Yx`）：
 
 | 变量 | 作用 |
 |---|---|
-| `ZCODE_MODEL` | model 引用，如 `zai/glm-5.2`（无 `/` 时默认 provider=`anthropic`）|
-| `ZCODE_MODEL_BASE_URL` | model 的 baseURL（**实测在 app-server 模式下被 plan 路由忽略**）|
+| `ZCODE_MODEL` | model 引用，如 `zai/glm-5.2`（无 `/` 时默认 provider=`anthropic`）。解析出**裸 provider id**（如 `zai`，不加 `builtin:` 前缀）|
+| `ZCODE_BASE_URL` | **model 的 baseURL**（注意：是 `ZCODE_BASE_URL`，不是 `ZCODE_MODEL_BASE_URL`——后者 bundle 不读取）|
 | `ZCODE_API_KEY` | API key 兜底（优先级：`<PROVIDER>_API_KEY` > `ZCODE_API_KEY`）|
-| `ZCODE_BASE_URL` / `ZCODE_ENDPOINT_ORIGIN` | 覆盖 plan 端点 origin（默认 `https://zcode.z.ai`）|
+| `ZCODE_ENDPOINT_ORIGIN` | 覆盖 ZCode 平台 origin（默认 `https://zcode.z.ai`，仅用于 plan 计费/OAuth，**不**用于模型 baseURL）|
 
 配置源优先级（数值大者优先）：System(0) < User(10) < Project(20) < Session(30) < **Env(40)** < Cli(50)。
 
+> **关键纠错**：早期版本曾误记 `ZCODE_MODEL_BASE_URL` 为 baseURL 环境变量——这是笔误，bundle 从不读取该名。正确变量是 `ZCODE_BASE_URL`（`ZCODE_` + `BASE_URL`）。baseURL 的唯一来源是 `config.provider.<id>.options.baseURL` 或 `ZCODE_BASE_URL`，二者之一必须给出，否则 provider 解析后 baseURL 为空，模型请求会落到不可达的默认域并 404。
+
 ### 凭证来源
 
-- **OAuth（plan）**：`zcode login` → 写入加密的 `~/.zcode/v2/credentials.json`（`o.encrypt(...)`）。CLI 与桌面版共享该凭证文件路径。**但 `zcode login` 的 OAuth well-known 端点（`zcode.z.ai/.well-known/oauth-authorization-server`）当前返回 Next.js 404 HTML，CLI `login` 命令在 `init` 阶段 `parseJson` 失败**——纯命令行 OAuth 当前不可用，需在桌面版 GUI 内完成登录。
-- **API key**：明文存于 `~/.zcode/v2/config.json` 的 `provider["builtin:zai"].options.apiKey`。实测该 key 对 `https://api.z.ai/api/anthropic/v1/messages` 返回 200（Anthropic Messages 协议，`x-api-key` 认证）。
+- **API key（推荐，已验证可用）**：明文存于 `~/.zcode/v2/config.json` 的 `provider["builtin:zai"].options.apiKey`（49 字符）。实测对 `https://api.z.ai/api/anthropic/v1/messages` 走 Anthropic Messages 协议（`x-api-key` 认证）返回 200；同样在 `zcode app-server` 子进程里实测成功（`turn.completed resultType=success`）。**这是 WheelMaker 接入应采用的凭证路径，无需 OAuth。**
+- **OAuth（plan）**：`zcode login` → 写入加密的 `~/.zcode/v2/credentials.json`。`zcode login` 的 well-known 端点（`zcode.z.ai/.well-known/oauth-authorization-server`）当前返回 Next.js 404 HTML，CLI `login` 在 `init` 阶段 `parseJson` 失败——纯命令行 OAuth 当前不可用，仅能在桌面版 GUI 内完成。app-server 接入不必依赖此路径。
 
-### ⚠️ app-server 模式的 plan 路由限制（关键阻塞）
+### ✅ app-server 用 API key 跑通的正确配置（已验证）
 
-实测发现：**app-server 模式会强制把模型请求路由到 plan 端点**，忽略 `provider.options.baseURL` 和 `ZCODE_MODEL_BASE_URL`：
-- 无论 config 里 provider 的 `baseURL` 设成什么，模型请求都打到 `zcode.z.ai`（plan origin，`ZCODE_BASE_URL` 可改 origin 但 path 固定）。
-- plan 端点（`zcode.z.ai/v1/messages`）要求 **OAuth plan 凭证**，对 API key 返回 404。
-- 直接 curl 同一 API key 到 `api.z.ai/api/anthropic/v1/messages` 则成功（200）。
+**核心要点：provider id 必须自洽、baseURL 必须落对字段。** bundle 没有任何"强制 plan 路由"逻辑——早期抓包失败（baseURL 变成 `zcode.z.ai`）的根因是 harness 用错了环境变量名（`ZCODE_MODEL_BASE_URL` 不存在），导致 baseURL 未注入。修正后即成功。
 
-**结论**：要跑通 app-server 的真实模型闭环，必须有有效的 OAuth plan 凭证（桌面版登录态），而非 API key。这是接入实现前需要解决的环境前提。在 WheelMaker 的接入中，桥接进程应复用桌面版已登录的 OAuth 凭证（`~/.zcode/v2/credentials.json`），或引导用户完成桌面版登录。
+**方式 A：纯环境变量（最小，推荐用于桥接进程）**
+```bash
+ZCODE_MODEL=zai/glm-5.2
+ZCODE_BASE_URL=https://api.z.ai/api/anthropic   # 必须用这个名字
+ZCODE_API_KEY=<49字符key>                        # 或写进 config provider options
+```
+要点：
+- provider id 用**裸 `zai`**（`ZCODE_MODEL` 解析后无前缀）；它必须能匹配到 config 的 `provider.zai` 条目或由 env 自洽。
+- bundle 的 `Xyo` 会自动给 anthropic baseURL 补 `/v1`，最终请求 `https://api.z.ai/api/anthropic/v1/messages`。
+- `kind` 默认 `anthropic`，走 anthropic SDK。
+
+**方式 B：config 文件（`~/.zcode/cli/config.json`）**
+```json
+{
+  "model": { "main": "zai/glm-5.2", "lite": "zai/glm-5.2" },
+  "provider": {
+    "zai": {
+      "kind": "anthropic",
+      "name": "Z.AI",
+      "options": { "apiKey": "<KEY>", "baseURL": "https://api.z.ai/api/anthropic" },
+      "models": { "glm-5.2": { "name": "GLM-5.2" } }
+    }
+  }
+}
+```
+要点：provider key 必须是裸 `zai`（与 `ZCODE_MODEL` 解析出的 id 一致）；baseURL 必须在 `provider.zai.options.baseURL`（不是顶层），且值为 `api.z.ai/api/anthropic`。若 env 和 config 同时存在，env（优先级 40）覆盖 config（优先级 10）。
+
+> **`builtin:` 前缀不是路由开关**：`ZCODE_MODEL=builtin:zai/glm-5.2` 会解析出 provider id `builtin:zai`，则 config 里必须有 `provider["builtin:zai"]` 条目才能匹配，否则 `ProviderNotFound`。桌面版日志显示 `builtin:zai` 是 GUI 运行时的展示归一化；app-server 环境下用裸 `zai` + `provider.zai` 条目最简单。
+
+### 复用桌面版已有 API key
+
+桌面版登录后，可用 API key 存于 `~/.zcode/v2/config.json` 的 `provider["builtin:zai"].options.apiKey`。桥接进程可直接读取该 key 注入子进程 env（参考 `docs/.zcode-probe/probe.js` 的 `buildModelEnv`），无需用户再次配置。注意这是用户私有凭证，进程内使用即可，不要落盘到日志或仓库。
 
 ## 实现框架（草案）
 
@@ -411,7 +457,7 @@ client.Session
 
 1. **异步→同步合成**：`session/send` 立即返回，桥接需挂起 ACP `session/prompt`，订阅事件流，直到 `turn.completed`/`turn.failed` 才 resolve 返回 stopReason。
 2. **二进制发现**：ZCode 入口随安装位置变（`%LOCALAPPDATA%\Programs\ZCode\resources\glm\zcode.cjs`）。`ResolveACPBinary` 需支持定位 ZCode 安装目录，或 preset 允许配置路径。
-3. **凭证复用**：桥接进程需带 OAuth 凭证环境（复用 `~/.zcode/v2/credentials.json`），API key 走不通 plan 路由。
+3. **凭证配置**：桥接进程以环境变量注入 model 配置即可，无需 OAuth——`ZCODE_MODEL=zai/glm-5.2` + `ZCODE_BASE_URL=https://api.z.ai/api/anthropic` + `ZCODE_API_KEY=<key>`（key 可从桌面版 `~/.zcode/v2/config.json` 的 `provider["builtin:zai"].options.apiKey` 复用）。详见"配置与凭证"节。
 4. **`workspace` 映射**：`session/create` 必须传 `{workspacePath, workspaceKey}`，二者通常都等于项目绝对路径。
 
 ## 复现工具
@@ -433,4 +479,5 @@ client.Session
 - [ ] 成功路径事件抓包（message delta / tool_call / turn.completed）——需有效 OAuth 凭证
 - [ ] 图片/附件输入（`session/send` 的 `content` 是否支持非文本）待测
 - [ ] `session/rewind` 的 `target` 结构待测
-- [ ] 配置/凭证前提：解决 app-server plan 路由对 OAuth 的强制依赖（见"配置与凭证"节）
+- [ ] 工具调用成功路径事件（`tool_call_scheduled` 等）——需一个会触发工具的 prompt 补测
+- [x] 配置/凭证：API key 经环境变量（`ZCODE_MODEL` + `ZCODE_BASE_URL` + `ZCODE_API_KEY`）已验证可用，无需 OAuth
