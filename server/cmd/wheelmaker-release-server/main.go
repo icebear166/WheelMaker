@@ -75,6 +75,7 @@ func serve(configPath string, stdout io.Writer) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	handler.StartMaintenance(ctx)
 	serveResult := make(chan error, 1)
 	go func() {
 		fmt.Fprintf(stdout, "listening on %s\n", cfg.Listen)

@@ -6,22 +6,54 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 )
 
 var errPublisherNotConfigured = errors.New("publisher is not configured")
 var errUnauthorized = errors.New("publisher authentication failed")
 
 type Server struct {
-	config Config
+	config         Config
+	now            func() time.Time
+	random         io.Reader
+	randomMu       sync.Mutex
+	sessionLocksMu sync.Mutex
+	sessionLocks   map[string]*sync.Mutex
+	statusMu       sync.Mutex
 }
 
 func New(cfg Config) (*Server, error) {
+	return newServer(cfg, defaultServerDependencies())
+}
+
+func newServer(cfg Config, dependencies serverDependencies) (*Server, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-	return &Server{config: cfg}, nil
+	if dependencies.now == nil || dependencies.random == nil {
+		return nil, errors.New("release server dependencies are incomplete")
+	}
+	for path, mode := range map[string]os.FileMode{
+		filepath.Join(cfg.DataRoot, "public"):  0o750,
+		filepath.Join(cfg.DataRoot, "staging"): 0o700,
+		filepath.Join(cfg.DataRoot, "data"):    0o700,
+	} {
+		if err := os.MkdirAll(path, mode); err != nil {
+			return nil, err
+		}
+	}
+	return &Server{
+		config:       cfg,
+		now:          dependencies.now,
+		random:       dependencies.random,
+		sessionLocks: map[string]*sync.Mutex{},
+	}, nil
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -44,6 +76,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		default:
 			writeError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		if s.handleAPI(w, r) {
 			return
 		}
 	}

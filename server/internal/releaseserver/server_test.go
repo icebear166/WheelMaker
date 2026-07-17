@@ -40,7 +40,7 @@ func TestPublishAuthenticationRunsBeforeRouting(t *testing.T) {
 		"not configured": {want: http.StatusServiceUnavailable},
 		"missing bearer": {tokenHash: sha256String("release-token"), want: http.StatusUnauthorized},
 		"wrong bearer":   {tokenHash: sha256String("release-token"), header: "Bearer wrong", want: http.StatusUnauthorized},
-		"valid bearer":   {tokenHash: sha256String("release-token"), header: "Bearer release-token", want: http.StatusNotFound},
+		"valid bearer":   {tokenHash: sha256String("release-token"), header: "Bearer release-token", want: http.StatusBadRequest},
 	} {
 		t.Run(name, func(t *testing.T) {
 			handler, err := New(Config{
