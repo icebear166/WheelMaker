@@ -18,6 +18,14 @@ WheelMaker 是 single-user / single-token 系统：一个受信任的操作系�
 
 受信任 Hub 仍使用共享 Token 建立连接。这在单用户模型中是有意设计：它简化了部署，但任一 Hub 泄漏都要求轮换整个 Registry Token。
 
+## 自建发布信任边界
+
+`https://release.wheelmaker.top` 的 `stable.json`、`releases.json`、部署 MJS、平台包、Desktop 和 Android 资产允许匿名下载；浏览器、安装器和 Hub 都不会收到发布凭据。所有写操作只通过 Nginx 后的 loopback Go 发布服务完成，并要求一个 Bearer Token。原始共享 publishing Token 只允许存在于发布用户受保护的 `~/.wheelmaker/release-server.json` 和私有源码仓库的 `WHEELMAKER_RELEASE_TOKEN` Secret 中；发布服务器配置只保存该 Token 的 SHA-256，不保存可复用明文。
+
+首次本地发布自动生成 32-byte 随机值，先保护性落盘，再通过 SSH 参数发送其 SHA-256。若配置 Action Secret，原始 Token 只通过 `gh secret set WHEELMAKER_RELEASE_TOKEN` 的标准输入传递，不进入 argv、日志、网页、公开元数据或服务端状态。发布服务器部署脚本不复制 SSH 私钥或发布 Token。这个单一共享 publishing Token 是有意接受的发布写权限边界：获得它即可创建上传 session，因此它与 Registry Token 分离，且不得复制到目标部署机、诊断包或公开下载目录。
+
+发布元数据使用 schema 2 根相对路径并固定解析到一个 HTTPS Origin。发布服务逐文件流式校验声明大小和 SHA-256，只接受会话允许的固定文件名；commit 在校验完整文件集后移动不可变版本目录，并最后原子替换 `stable.json`。磁盘空间不足、并发版本冲突或提交失败都不能把 stable 指向不完整版本。公开 Web 只从同一 Origin 读取 stable、status 和 `releases.json`；Hub 的当前安装版本仍只来自本机 `release.json`。
+
 ## 浏览器 Session 和 device revocation
 
 浏览器 Cookie 的有效期是 180-day sliding session：成功使用会把服务端过期时间向后滑动。Registry 在 `~/.wheelmaker/registry-sessions.json` 中只持久化 Cookie 摘要、设备元数据、Base Path 和过期时间，因此正常重启不会要求重新输入 Token，也不会保存可复用 Cookie 明文。

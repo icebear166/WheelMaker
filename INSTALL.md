@@ -52,16 +52,16 @@ sudo loginctl enable-linger "$USER"
 Windows PowerShell：
 
 ```powershell
-$ErrorActionPreference='Stop'; $d=Join-Path $HOME '.wheelmaker'; New-Item -ItemType Directory -Force -Path $d | Out-Null; $m=Join-Path $d 'deploy.mjs'; Invoke-WebRequest 'https://raw.githubusercontent.com/swm8023/wheelmaker-release/main/deploy.mjs' -OutFile $m; & node $m migrate-uninstall; if ($LASTEXITCODE -eq 0) { & node $m }
+$ErrorActionPreference='Stop'; $d=Join-Path $HOME '.wheelmaker'; New-Item -ItemType Directory -Force -Path $d | Out-Null; $m=Join-Path $d 'deploy.mjs'; Invoke-WebRequest 'https://release.wheelmaker.top/deploy.mjs' -OutFile $m; & node $m migrate-uninstall; if ($LASTEXITCODE -eq 0) { & node $m }
 ```
 
 macOS/Linux：
 
 ```bash
-(d="$HOME/.wheelmaker" && mkdir -p "$d" && curl --fail --location --proto '=https' --tlsv1.2 'https://raw.githubusercontent.com/swm8023/wheelmaker-release/main/deploy.mjs' --output "$d/deploy.mjs" && node "$d/deploy.mjs" migrate-uninstall && node "$d/deploy.mjs")
+(d="$HOME/.wheelmaker" && mkdir -p "$d" && curl --fail --location --proto '=https' --tlsv1.2 --progress-bar 'https://release.wheelmaker.top/deploy.mjs' --output "$d/deploy.mjs" && node "$d/deploy.mjs" migrate-uninstall && node "$d/deploy.mjs")
 ```
 
-启动器通过 GitHub HTTPS 下载 `stable.json`，并按其中的固定 SHA-256 刷新自身核心，再按 stable → manifest → 平台包的 SHA-256 链验证下载内容。后续目标机版本判断只读公开 stable 和本地 schema v2 `release.json`，不读取 Git。发布安全边界是公开发布仓库的写权限，因此应严格保护该仓库及发布 GitHub App。
+启动器从 `https://release.wheelmaker.top` 匿名下载 schema 2 `stable.json`，把其中的根相对路径限制在同一个 Origin，并按固定 SHA-256 刷新自身核心，再按 stable → manifest → 平台包的 SHA-256 链验证下载内容。后续目标机版本判断只读公开 stable 和本地 schema v2 `release.json`，不读取 Git。自建通道从 `v1.1` 重新开始，不迁移或比较旧 GitHub 通道的 stable、历史和版本号。
 
 ## 3. 确认共享 Token 策略
 
@@ -233,7 +233,7 @@ server {
     location = / {
         try_files /index.html =404;
         add_header Cache-Control "no-cache, must-revalidate" always;
-        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://release.wheelmaker.top; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
         add_header Referrer-Policy "no-referrer" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
@@ -242,7 +242,7 @@ server {
     location = /index.html {
         try_files /index.html =404;
         add_header Cache-Control "no-cache, must-revalidate" always;
-        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://release.wheelmaker.top; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
         add_header Referrer-Policy "no-referrer" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
@@ -251,7 +251,7 @@ server {
     location = /service-worker.js {
         try_files /service-worker.js =404;
         add_header Cache-Control "no-cache, must-revalidate" always;
-        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://release.wheelmaker.top; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
         add_header Referrer-Policy "no-referrer" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
@@ -260,7 +260,7 @@ server {
     location = /manifest.webmanifest {
         try_files /manifest.webmanifest =404;
         add_header Cache-Control "no-cache, must-revalidate" always;
-        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://release.wheelmaker.top; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
         add_header Referrer-Policy "no-referrer" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
@@ -269,7 +269,7 @@ server {
     location ~* \.[a-z0-9]+$ {
         try_files $uri =404;
         add_header Cache-Control "public, max-age=31536000, immutable" always;
-        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://release.wheelmaker.top; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
         add_header Referrer-Policy "no-referrer" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
@@ -279,7 +279,7 @@ server {
         index index.html;
         try_files $uri $uri/ /index.html;
         add_header Cache-Control "no-cache, must-revalidate" always;
-        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://release.wheelmaker.top; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
         add_header Referrer-Policy "no-referrer" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
@@ -349,7 +349,7 @@ Worker 无法连上入口机时，优先检查：
 
 ## 9. 统一发布与 Android 签名
 
-从仓库根目录运行 `publish-release.bat`，依次选择是否包含 Desktop、是否包含 Android、是否发布到 public 仓库。三个选项默认都是否；不发布时仍读取公共 `stable.json`，使用下一个 `v1.x` 并写入 `.release-out/v1.x/`。可复用的 Webpack、Go、Gradle 缓存位于 `.release-work/cache/`，本轮临时目录 `.release-work/tmp/` 在成功或失败后清理。
+从仓库根目录运行 `publish-release.bat`，依次选择是否包含 Desktop、是否包含 Android、是否发布到 public release server。三个选项默认都是否；不发布时仍匿名读取 `https://release.wheelmaker.top/stable.json`，使用下一个 `v1.x` 并写入 `.release-out/v1.x/`，不会创建 Token 或远端 session。可复用的 Webpack、Go、Gradle 缓存位于 `.release-work/cache/`，本轮临时目录 `.release-work/tmp/` 在成功或失败后清理。
 
 非交互调用为：
 
@@ -357,6 +357,10 @@ Worker 无法连上入口机时，优先检查：
 node scripts/release.mjs --with-desktop --with-android --publish
 ```
 
-Android `release` 构建不会回退到 debug key。统一发布器从 `mobile/android/signing/signing.properties` 和 `mobile/android/signing/release.p12` 读取已提交的发布身份，不依赖本机环境变量或 GitHub Secrets。修改这两个文件会改变后续 APK 的签名身份，应按发布凭据保护源码仓库写权限和备份。发布机器需安装 JDK 17、Android SDK Build Tools、Gradle 和 Node.js 22+；未选择 Android 时不初始化 Android 工具链。
+Android `release` 构建不会回退到 debug key。统一发布器从 `mobile/android/signing/signing.properties` 和 `mobile/android/signing/release.p12` 读取已提交的发布身份，不依赖本机环境变量。修改这两个文件会改变后续 APK 的签名身份，应按发布凭据保护源码仓库写权限和备份。发布机器需安装 JDK 17、Android SDK Build Tools、Gradle 和 Node.js 22+；未选择 Android 时不初始化 Android 工具链。
 
-`v1.x` 对应 Android `versionName=1.x`、`versionCode=x`。选中 Android 后，APK 与 `android-release.json` 进入同一个 `v1.x` GitHub Release；未选中时 `stable.androidApk` 继承最近一次 Android 资产。主机上的 `deploy.mjs` 不下载 APK，只有原生 Android Update 页面使用该公共指针安装更新。
+`v1.x` 对应 Android `versionName=1.x`、`versionCode=x`。选中 Android 后，APK 与 `android-release.json` 进入同一个自建 `releases/v1.x/` 目录；未选中时 `stable.androidApk` 继承最近一次 Android 资产。主机上的 `deploy.mjs` 不下载 APK，只有原生 Android Update 页面使用该公共指针安装更新。
+
+第一次本地正式发布会自动生成 32-byte Token，先以私有权限写入 `~/.wheelmaker/release-server.json.pending`，通过 SSH 只把 SHA-256 配到服务器，确认 `/healthz` 后再原子改名为 `~/.wheelmaker/release-server.json`。中断后会复用 pending Token，不会生成第二个不匹配的值。若 `gh --version` 和 `gh auth status` 都成功，发布器还会通过标准输入设置私有源码仓库的 `WHEELMAKER_RELEASE_TOKEN` Secret；该步骤失败只给出警告，不影响已经可用的本地发布。Action 只读取这个 Secret，且不使用 SSH。
+
+发布服务单独通过 `deploy-release-server.bat` 部署。运行前需要 Windows 上可用的 `go`、`ssh`、`scp`、干净的源码 commit、`~/.ssh/wheelmaker-release-server_ed25519` 和 `root@release.wheelmaker.top` 权限。它只发布 Linux/amd64 服务自身，幂等更新 systemd/Nginx/Certbot 配置，不删除 `/srv/wheelmaker-release/public/releases`。产品发布以 HTTPS 流式上传；所有文件通过大小和 SHA-256 校验后才提交，`stable.json` 最后原子替换。schema 2 元数据只保存根相对 `path`，每个版本的 MJS 与 tar.gz 并列，资产永久保留；磁盘不足返回失败并保持旧 stable。

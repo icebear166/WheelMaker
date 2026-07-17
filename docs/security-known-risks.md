@@ -12,6 +12,8 @@
 - **Relay is not a permanent high-entropy key**：六位访问码只用于短期、有人值守的在线分享。速率限制和 generation 降低在线猜测风险，但不能把它提升为永久高熵分享密钥。
 - **Self-signed certificates are unsupported**：Desktop、Android 和远程 Hub 不提供证书忽略开关。使用公开 CA，或把组织 CA 正确安装进系统信任链；系统信任失败应保持 fail closed。
 - **Junction**：项目根内的 Junction/目录链接是受信任配置的一部分，可能访问根目录之外。它不适合在不受信任用户可修改的项目树中充当沙箱。
+- **Single release server availability**：`release.wheelmaker.top` 当前是单服务器、无自动备份（no automatic backup）的发布与下载入口。服务机、磁盘、域名或证书故障会阻止新安装、更新和发布；已安装 Hub 仍可继续运行，但这里不承诺自动故障转移、CDN 或恢复点。
+- **Shared publisher Token blast radius**：本地发布和私有 Action 共用一个 publishing Token。任一持有位置泄漏都会赋予整个发布通道的写 session 权限；服务端只存 SHA-256 可以降低服务配置泄漏影响，但不能缩小原始 Token 泄漏的 blast radius。当前批准范围不增加多 Token、轮换、撤销或细粒度发布者授权系统。
 
 ## 工具链和依赖延期
 

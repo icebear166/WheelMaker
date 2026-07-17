@@ -19,9 +19,9 @@ WheelMaker/
 - 禁止无意义的 `strings.TrimSpace`：仅允许在明确的输入边界归一化场景使用，禁止在内部链路重复清洗
 - 未经用户明确同意，禁止修改 protocol version；协议版本变更前必须说明兼容性与发布影响并获得确认
 - 需求澄清、方案选择、设计讨论只用文字对话；不要主动提议用浏览器/Web 可视化伴随工具展示选项
-- 当用户要求“仅构建发布产物”时，运行 `publish-release.bat`，按需选择 Desktop/Android，并选择不发布到 public 仓库；非交互等价命令是 `node scripts/release.mjs [--with-desktop] [--with-android]`。默认本地构建主机是 Windows，输出到 `.release-out/v1.x`，不发布也不触发 Action
-- 当用户要求“正式发布 WheelMaker”时，从干净的源码工作树运行 `publish-release.bat`，按需选择 Desktop/Android，并确认发布到 public 仓库；非交互等价命令是 `node scripts/release.mjs [--with-desktop] [--with-android] --publish`。不要默认触发 GitHub Action；`.github/workflows/publish-release.yml` 只作为 `publish-release-action.bat` 手动触发的远程构建回退
-- 目标机首次安装和旧版迁移统一使用公开 `wheelmaker-release` README 中可在任意目录执行的一行命令；源码仓库根目录不提供 `deploy.bat` / `deploy.sh`。目标机更新统一走已安装的公共 `deploy.mjs`；`deploy.mjs update` 不安装/卸载运行时，安装目录内由普通部署生成的 `deploy.bat` / `deploy.sh` 只调用 `node deploy.mjs`。不要恢复旧 updater EXE、文件信号或目标机源码构建流程
+- 当用户要求“仅构建发布产物”时，运行 `publish-release.bat`，按需选择 Desktop/Android，并选择不发布到 public release server；非交互等价命令是 `node scripts/release.mjs [--with-desktop] [--with-android]`。默认本地构建主机是 Windows，输出到 `.release-out/v1.x`，不发布也不触发 Action
+- 当用户要求“正式发布 WheelMaker”时，从干净的源码工作树运行 `publish-release.bat`，按需选择 Desktop/Android，并确认发布到 public release server；非交互等价命令是 `node scripts/release.mjs [--with-desktop] [--with-android] --publish`。不要默认触发 GitHub Action；`.github/workflows/publish-release.yml` 只作为 `publish-release-action.bat` 手动触发的远程构建回退，并且只读取 `WHEELMAKER_RELEASE_TOKEN`
+- 目标机首次安装和旧版迁移统一使用 `https://release.wheelmaker.top/` 中可在任意目录执行的一行命令；源码仓库根目录不提供 `deploy.bat` / `deploy.sh`。目标机更新统一走已安装的公共 `deploy.mjs`；`deploy.mjs update` 不安装/卸载运行时，安装目录内由普通部署生成的 `deploy.bat` / `deploy.sh` 只调用 `node deploy.mjs`。不要恢复旧 updater EXE、文件信号或目标机源码构建流程
 
 ## Completion Gate (Highest Priority)
 Before the final user-facing completion message in any implementation task, execute this exact tail sequence:

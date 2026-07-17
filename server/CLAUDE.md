@@ -60,9 +60,10 @@ go test ./...
 go build -o bin/windows_amd64/wheelmaker.exe ./cmd/wheelmaker/
 
 # Release/deployment entrypoints live at the repository root
-node ../scripts/release.mjs build    # prebuilt Hub + Web packages, no publish
-../deploy.bat                        # one-time migration from legacy source deploy
-../deploy.sh                         # one-time migration on macOS/Linux
+node ../scripts/release.mjs          # prebuilt Hub + Web packages, no publish
+node ../scripts/release.mjs --publish # authenticated self-hosted publish
+../deploy-release-server.bat         # independently deploy the Go release service
+# target install/migration commands come from https://release.wheelmaker.top/
 # normal target updates use ~/.wheelmaker/deploy.mjs; there is no Go updater/deploy command
 ```
 

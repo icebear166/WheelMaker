@@ -260,3 +260,17 @@ test('release server deployment wrapper delegates to Node and pauses', async () 
   assert.match(source, /pause/i);
   assert.match(source, /exit \/b %EXIT_CODE%/i);
 });
+
+test('active installation docs use the self-hosted channel and one publishing token', async () => {
+  for (const path of ['README.md', 'INSTALL.md', 'CLAUDE.md']) {
+    const source = await readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
+    assert.doesNotMatch(source, /raw\.githubusercontent\.com\/swm8023\/wheelmaker-release/);
+    assert.doesNotMatch(source, /WHEELMAKER_RELEASE_APP_(ID|PRIVATE_KEY)/);
+    assert.doesNotMatch(source, /WHEELMAKER_RELEASE_INSTALLATION_ID/);
+  }
+  const readme = await readFile(new URL('../../README.md', import.meta.url), 'utf8');
+  const install = await readFile(new URL('../../INSTALL.md', import.meta.url), 'utf8');
+  assert.match(readme, /https:\/\/release\.wheelmaker\.top/);
+  assert.match(install, /https:\/\/release\.wheelmaker\.top\/deploy\.mjs/);
+  assert.match(readme, /WHEELMAKER_RELEASE_TOKEN/);
+});

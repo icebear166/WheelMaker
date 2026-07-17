@@ -45,6 +45,8 @@ $requiredSecurityPatterns = [ordered]@{
     'security report location' = '(?i)security-reports'
     'credential rotation procedure' = '(?i)credential rotation'
     'private vulnerability reporting' = '(?i)vulnerability report'
+    'self-hosted publishing token boundary' = '(?is)publishing Token.*release-server\.json.*WHEELMAKER_RELEASE_TOKEN.*SHA-256'
+    'stable-last self-hosted publication' = '(?is)schema 2.*stable\.json'
 }
 foreach ($entry in $requiredSecurityPatterns.GetEnumerator()) {
     if (-not [regex]::IsMatch([string]$security, [string]$entry.Value)) {
@@ -61,6 +63,8 @@ $requiredRiskPatterns = [ordered]@{
     'Go upgrade is deferred' = '(?is)Go.*upgrade.*defer'
     'major dependency upgrades are deferred' = '(?is)major.*dependenc.*defer'
     'Git history rewrite is pending' = '(?is)history rewrite.*pending'
+    'single release server availability' = '(?is)single release server availability.*no automatic backup'
+    'shared publisher token blast radius' = '(?is)shared publisher Token blast radius.*blast radius'
 }
 foreach ($entry in $requiredRiskPatterns.GetEnumerator()) {
     if ($knownRisks -notmatch $entry.Value) {
@@ -79,6 +83,37 @@ foreach ($entry in $forbiddenClaims.GetEnumerator()) {
     if ($allDocs -match $entry.Value) {
         Fail "security documentation still claims: $($entry.Key)"
     }
+}
+
+$retiredReleasePattern = 'raw\.githubusercontent\.com/swm8023/wheelmaker-release|api\.github\.com/repos/swm8023/wheelmaker-release|github\.com/swm8023/wheelmaker-release/releases|WHEELMAKER_RELEASE_APP_ID|WHEELMAKER_RELEASE_INSTALLATION_ID|WHEELMAKER_RELEASE_APP_PRIVATE_KEY'
+$activeReleasePaths = @(
+    'README.md',
+    'INSTALL.md',
+    'CLAUDE.md',
+    'server/CLAUDE.md',
+    '.github',
+    'scripts/release',
+    'scripts/deploy',
+    'scripts/release-server',
+    'app/web/src',
+    'app/web/webpack.config.js',
+    'mobile/android/app/src/main'
+)
+$previousPreference = $ErrorActionPreference
+Push-Location $repoRoot
+try {
+    $ErrorActionPreference = 'Continue'
+    & rg -n --glob '!**/*.test.mjs' --glob '!**/__tests__/**' -e $retiredReleasePattern @activeReleasePaths *> $null
+    $retiredReleaseExitCode = $LASTEXITCODE
+} finally {
+    $ErrorActionPreference = $previousPreference
+    Pop-Location
+}
+if ($retiredReleaseExitCode -eq 0) {
+    Fail 'active release sources still reference the retired GitHub hosting or App credentials'
+}
+if ($retiredReleaseExitCode -ne 1) {
+    Fail "retired release source scan failed with exit $retiredReleaseExitCode"
 }
 
 Write-Host 'security documentation consistency: PASS'

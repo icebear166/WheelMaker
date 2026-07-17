@@ -151,6 +151,7 @@ try {
 
 Write-Gate 'Node release and deployment tests'
 $nodeTests = @(
+    Get-ChildItem -LiteralPath (Join-Path $repoRoot 'scripts\release-server') -Filter '*.test.mjs' -File
     Get-ChildItem -LiteralPath (Join-Path $repoRoot 'scripts\release') -Filter '*.test.mjs' -File
     Get-ChildItem -LiteralPath (Join-Path $repoRoot 'scripts\deploy') -Filter '*.test.mjs' -File
 ) | ForEach-Object { $_.FullName }
@@ -176,6 +177,45 @@ Assert-NoProductionMatches 'legacy default token' 'wheelmaker-local-token'
 Assert-NoProductionMatches 'retired interfaces' 'LOCAL_TOKEN_KEY|LocalHubRead|addJavascriptInterface|RegistryRoleMonitor|registry\.monitor|monitor\.(listHub|status|log|db|action|restart)|:9632|InsecureSkipVerify'
 Assert-NoProductionMatches 'retired backend key migration' 'migrateLegacyBackendSecrets|extractLegacyBackendSecrets|getLegacyBackendSecrets|clearLegacyBackendSecret|retryBackendSecretMigration|config\.json.{0,80}secrets'
 Assert-NoProductionMatches 'Android Server Data key persistence' '(SharedPreferences|DataStore|Room|SQLite|FileOutputStream).{0,120}(accessToken|speechCredential|volcengine)|(accessToken|speechCredential|volcengine).{0,120}(SharedPreferences|DataStore|Room|SQLite|FileOutputStream)'
+
+$retiredReleasePattern = 'raw\.githubusercontent\.com/swm8023/wheelmaker-release|api\.github\.com/repos/swm8023/wheelmaker-release|github\.com/swm8023/wheelmaker-release/releases|WHEELMAKER_RELEASE_APP_ID|WHEELMAKER_RELEASE_INSTALLATION_ID|WHEELMAKER_RELEASE_APP_PRIVATE_KEY'
+$retiredReleasePaths = @(
+    'README.md', 'INSTALL.md', 'CLAUDE.md', 'server/CLAUDE.md', '.github',
+    'scripts/release', 'scripts/deploy', 'scripts/release-server',
+    'app/web/src', 'app/web/webpack.config.js', 'mobile/android/app/src/main'
+)
+$previousPreference = $ErrorActionPreference
+try {
+    $ErrorActionPreference = 'Continue'
+    & rg -n --glob '!**/*.test.mjs' --glob '!**/__tests__/**' -e $retiredReleasePattern @retiredReleasePaths *> $null
+    $retiredReleaseExitCode = $LASTEXITCODE
+} finally {
+    $ErrorActionPreference = $previousPreference
+}
+if ($retiredReleaseExitCode -eq 0) {
+    throw 'retired GitHub release hosting or App credentials remain in active sources'
+}
+if ($retiredReleaseExitCode -ne 1) {
+    throw "retired release source scan failed with exit $retiredReleaseExitCode"
+}
+
+$releaseDeploy = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repoRoot 'scripts\release-server\deploy.mjs')
+$releaseNginx = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repoRoot 'scripts\release-server\nginx.conf')
+$publisherConfig = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repoRoot 'scripts\release\publisher-config.mjs')
+if (-not $releaseDeploy.Contains('"listen":"127.0.0.1:9680"')) {
+    throw 'release service deployment does not bind the application listener to loopback'
+}
+$apiStart = $releaseNginx.IndexOf('location ^~ /api/', [StringComparison]::Ordinal)
+$apiEnd = $releaseNginx.IndexOf('location = /stable.json', $apiStart, [StringComparison]::Ordinal)
+if ($apiStart -lt 0 -or $apiEnd -le $apiStart -or $releaseNginx.Substring($apiStart, $apiEnd - $apiStart).Contains('Access-Control-Allow-Origin')) {
+    throw 'release publish API must not expose wildcard CORS'
+}
+if (-not $publisherConfig.Contains("join(homeDirectory, '.wheelmaker')")) {
+    throw 'publisher Token config is not rooted below the publisher user home'
+}
+if ($releaseDeploy -match '(?is)const files = \[.*?(release-server\.json|WHEELMAKER_RELEASE_TOKEN|identityFile)') {
+    throw 'release server deployment upload list contains a publishing credential or SSH private key'
+}
 $debugSigningFallback = 'signingConfigs.getByName("debug")'
 $androidBuildScript = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $androidRoot 'app\build.gradle.kts')
 if ($androidBuildScript.Contains($debugSigningFallback)) {

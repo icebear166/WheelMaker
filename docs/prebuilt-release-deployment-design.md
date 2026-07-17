@@ -1,13 +1,13 @@
 # WheelMaker 预构建发布与部署设计
 
 日期：2026-07-16  
-状态：已实施
+状态：已被自建发布方案取代（历史文档）
 
-> 2026-07-17 后续方案：公开 GitHub Release 托管将由
-> `https://release.wheelmaker.top` 自建发布服务取代。目标架构见
+> 2026-07-17：本文记录的 GitHub 托管实现已被
+> `https://release.wheelmaker.top` 自建发布服务取代，不再是当前操作依据。目标架构见
 > `docs/self-hosted-release-server-design.md`，已确认范围见
 > `docs/scope/2026-07-17-self-hosted-release-server/spec-self-hosted-release-server.md`。
-> 在该后续方案实施完成前，本文其余部分仍描述当前 GitHub 托管实现。
+> 本文其余部分仅保留为迁移决策的历史背景。
 
 ## 目标
 

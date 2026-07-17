@@ -94,7 +94,7 @@ gate 'Android JVM tests and lint'
 (cd "$android_root" && gradle test lint)
 
 gate 'Node release and deployment tests'
-node --test "$repo_root"/scripts/release/*.test.mjs "$repo_root"/scripts/deploy/*.test.mjs
+node --test "$repo_root"/scripts/release-server/*.test.mjs "$repo_root"/scripts/release/*.test.mjs "$repo_root"/scripts/deploy/*.test.mjs
 
 gate 'Publish and deployment script tests'
 for script_test in \
@@ -112,6 +112,31 @@ assert_no_production_matches 'legacy default token' 'wheelmaker-local-token'
 assert_no_production_matches 'retired interfaces' 'LOCAL_TOKEN_KEY|LocalHubRead|addJavascriptInterface|RegistryRoleMonitor|registry\.monitor|monitor\.(listHub|status|log|db|action|restart)|:9632|InsecureSkipVerify'
 assert_no_production_matches 'retired backend key migration' 'migrateLegacyBackendSecrets|extractLegacyBackendSecrets|getLegacyBackendSecrets|clearLegacyBackendSecret|retryBackendSecretMigration|config\.json.{0,80}secrets'
 assert_no_production_matches 'Android Server Data key persistence' '(SharedPreferences|DataStore|Room|SQLite|FileOutputStream).{0,120}(accessToken|speechCredential|volcengine)|(accessToken|speechCredential|volcengine).{0,120}(SharedPreferences|DataStore|Room|SQLite|FileOutputStream)'
+retired_release_pattern='raw\.githubusercontent\.com/swm8023/wheelmaker-release|api\.github\.com/repos/swm8023/wheelmaker-release|github\.com/swm8023/wheelmaker-release/releases|WHEELMAKER_RELEASE_APP_ID|WHEELMAKER_RELEASE_INSTALLATION_ID|WHEELMAKER_RELEASE_APP_PRIVATE_KEY'
+if rg -n --glob '!**/*.test.mjs' --glob '!**/__tests__/**' \
+    -e "$retired_release_pattern" \
+    "$repo_root/README.md" "$repo_root/INSTALL.md" "$repo_root/CLAUDE.md" \
+    "$repo_root/server/CLAUDE.md" "$repo_root/.github" \
+    "$repo_root/scripts/release" "$repo_root/scripts/deploy" "$repo_root/scripts/release-server" \
+    "$repo_root/app/web/src" "$repo_root/app/web/webpack.config.js" \
+    "$repo_root/mobile/android/app/src/main" >"$scan_output" 2>&1; then
+  fail 'retired GitHub release hosting or App credentials remain in active sources'
+else
+  code=$?
+  [ "$code" -eq 1 ] || fail 'retired release source scan could not complete'
+fi
+
+release_deploy="$repo_root/scripts/release-server/deploy.mjs"
+release_nginx="$repo_root/scripts/release-server/nginx.conf"
+publisher_config="$repo_root/scripts/release/publisher-config.mjs"
+grep -F '"listen":"127.0.0.1:9680"' "$release_deploy" >/dev/null || fail 'release service application listener is not loopback-only'
+if sed -n '/location \^~ \/api\//,/location = \/stable.json/p' "$release_nginx" | grep -F 'Access-Control-Allow-Origin' >/dev/null; then
+  fail 'release publish API exposes wildcard CORS'
+fi
+grep -F "join(homeDirectory, '.wheelmaker')" "$publisher_config" >/dev/null || fail 'publisher Token config is not rooted below the publisher user home'
+if sed -n '/const files = \[/,/\];/p' "$release_deploy" | grep -E 'release-server\.json|WHEELMAKER_RELEASE_TOKEN|identityFile' >/dev/null; then
+  fail 'release server deployment upload list contains a credential or SSH private key'
+fi
 debug_signing_fallback='signingConfigs.getByName("debug")'
 if grep -F "$debug_signing_fallback" "$android_root/app/build.gradle.kts" >"$scan_output" 2>&1; then
   fail 'Android release build contains a debug signing fallback'
