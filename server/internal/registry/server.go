@@ -703,6 +703,8 @@ func (s *Server) handleTerminalEvent(state *connectionState, in envelope) {
 		s.forwardTerminalInput(state, in)
 	case rp.RegistryMethodTerminalOutput, rp.RegistryMethodTerminalChanged:
 		s.broadcastTerminalHubEvent(state, in)
+	case rp.RegistryMethodTokenStatsUpdate:
+		s.broadcastHubEvent(state, in)
 	default:
 		_ = s.writeError(state.peer, 0, in.Method, codeInvalidArgument, "unsupported event method", map[string]any{"method": in.Method})
 	}
@@ -769,6 +771,42 @@ func (s *Server) broadcastTerminalHubEvent(state *connectionState, in envelope) 
 		} else {
 			_ = peer.write(msg)
 		}
+	}
+}
+
+// broadcastHubEvent forwards a hub-originated event (e.g. tokenStats.update) to
+// all connected client peers whose scope matches the hub. Uses the generic
+// write path (no dedicated queue like terminal output).
+func (s *Server) broadcastHubEvent(state *connectionState, in envelope) {
+	hubID := strings.TrimSpace(in.HubID)
+	if hubID == "" {
+		_ = s.writeError(state.peer, 0, in.Method, codeInvalidArgument, "hubId is required", nil)
+		return
+	}
+	if state.hubID == "" || state.hubID != hubID {
+		_ = s.writeError(state.peer, 0, in.Method, codeForbidden, "hubId mismatch", nil)
+		return
+	}
+	s.mu.RLock()
+	peers := make([]*peerConn, 0, len(s.clientPeers))
+	for _, client := range s.clientPeers {
+		if client == nil || client.peer == nil {
+			continue
+		}
+		if client.scopeHubID != "" && client.scopeHubID != hubID {
+			continue
+		}
+		peers = append(peers, client.peer)
+	}
+	s.mu.RUnlock()
+	msg := envelope{
+		Type:    rp.RegistryEnvelopeTypeEvent,
+		Method:  in.Method,
+		HubID:   hubID,
+		Payload: in.Payload,
+	}
+	for _, peer := range peers {
+		_ = peer.write(msg)
 	}
 }
 

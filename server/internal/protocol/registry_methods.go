@@ -133,6 +133,8 @@ const (
 	RegistryMethodTerminalOutput  = "terminal.output"
 	RegistryMethodTerminalChanged = "terminal.changed"
 
+	RegistryMethodTokenStatsUpdate = "tokenStats.update"
+
 	LegacyRegistryMethodChatSend = "chat.send"
 )
 
@@ -234,6 +236,8 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodTerminalInput:   registryTerminalHubMethod(RegistryMethodTerminalInput, RegistryRoleClient, RegistryRouteTerminalClientEvent),
 	RegistryMethodTerminalOutput:  registryTerminalHubMethod(RegistryMethodTerminalOutput, RegistryRoleHub, RegistryRouteTerminalHubEvent),
 	RegistryMethodTerminalChanged: registryTerminalHubMethod(RegistryMethodTerminalChanged, RegistryRoleHub, RegistryRouteTerminalHubEvent),
+
+	RegistryMethodTokenStatsUpdate: registryTerminalHubMethod(RegistryMethodTokenStatsUpdate, RegistryRoleHub, RegistryRouteTerminalHubEvent),
 }
 
 func registryMethod(method string, route RegistryRouteKind, roles []RegistryRole) RegistryMethodDescriptor {
