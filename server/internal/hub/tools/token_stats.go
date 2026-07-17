@@ -83,6 +83,7 @@ type tokenScanPayload struct {
 type tokenScanner struct {
 	httpClient      *http.Client
 	deepSeekBaseURL string
+	publish         func(any) // optional streaming callback; nil = collect-only
 }
 
 type codexAuthProfile struct {
@@ -104,9 +105,17 @@ type codexAuthState struct {
 // results. The current implementation returns the aggregated payload; the
 // streaming hook is added in a later task.
 func ScanTokenStats(ctx context.Context) (any, error) {
+	return ScanTokenStatsWithPublisher(ctx, nil)
+}
+
+// ScanTokenStatsWithPublisher runs the parallel scan and invokes publish (if
+// non-nil) for each completed provider result, in completion order. Used by
+// the streaming refresh path; the non-streaming "scan" action passes nil.
+func ScanTokenStatsWithPublisher(ctx context.Context, publish func(any)) (any, error) {
 	scanner := &tokenScanner{
 		httpClient:      &http.Client{Timeout: 15 * time.Second},
 		deepSeekBaseURL: "https://api.deepseek.com",
+		publish:         publish,
 	}
 	return scanner.scanTokenStats(ctx)
 }
@@ -139,7 +148,11 @@ func (c *tokenScanner) scanTokenStats(ctx context.Context) (tokenScanPayload, er
 			return scanDeepSeekProviderFromOpenCode(ctx, c.httpClient, key, "opencode:deepseek", now)
 		})
 	}
-	providers := driver.run(nil) // publish hook wired in Task 2.3
+	providers := driver.run(func(r tokenProviderScanResult) {
+		if c.publish != nil {
+			c.publish(r)
+		}
+	})
 	return tokenScanPayload{
 		OK:        true,
 		UpdatedAt: now,

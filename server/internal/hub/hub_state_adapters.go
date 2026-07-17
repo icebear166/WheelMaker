@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
+
+	"github.com/swm8023/wheelmaker/internal/hub/tools"
 )
 
 const (
@@ -98,19 +101,24 @@ func (r *Reporter) actionHubStateSkills(ctx context.Context, action string, para
 	}
 }
 
-func (r *Reporter) refreshHubStateTokenStats(ctx context.Context, input hubStateRefreshInput) (any, error) {
-	return r.runHubStateTool(ctx, hubToolMethodToken, map[string]any{
-		"action": "scan",
-		"hubId":  input.HubID,
-	})
+func (r *Reporter) refreshHubStateTokenStats(_ context.Context, input hubStateRefreshInput) (any, error) {
+	go r.runTokenStatsStream()
+	return map[string]any{"ok": true, "hubId": input.HubID, "streaming": true}, nil
+}
+
+// runTokenStatsStream runs the parallel scan with a streaming publish callback
+// that pushes each completed provider result as a tokenStats.update event.
+func (r *Reporter) runTokenStatsStream() {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	publish := func(v any) { _ = r.PublishTokenStatsEvent(v) }
+	_, _ = tools.ScanTokenStatsWithPublisher(ctx, publish)
 }
 
 func (r *Reporter) actionHubStateTokenStats(ctx context.Context, action string, params map[string]any) (any, error) {
 	switch action {
 	case "providers":
 		return r.runHubStateTool(ctx, hubToolMethodToken, hubStateToolPayload(r.cfg.HubID, "providers", params))
-	case "deepseekStats":
-		return r.runHubStateTool(ctx, hubToolMethodToken, hubStateToolPayload(r.cfg.HubID, "deepseekStats", params))
 	default:
 		return nil, fmt.Errorf("unsupported %s action %q", hubStateSectionTokenStats, action)
 	}

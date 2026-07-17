@@ -70,6 +70,7 @@ type TerminalHandler interface {
 }
 
 var errTerminalPublishBacklog = errors.New("terminal publish backlog is full")
+var errTokenStatsPublishBacklog = errors.New("token stats publish backlog is full")
 
 type terminalEventSink struct {
 	events chan envelope
@@ -82,6 +83,20 @@ func newTerminalEventSink() *terminalEventSink {
 }
 
 func (s *terminalEventSink) stop() {
+	s.once.Do(func() { close(s.done) })
+}
+
+type tokenStatsEventSink struct {
+	events chan envelope
+	done   chan struct{}
+	once   sync.Once
+}
+
+func newTokenStatsEventSink() *tokenStatsEventSink {
+	return &tokenStatsEventSink{events: make(chan envelope, 64), done: make(chan struct{})}
+}
+
+func (s *tokenStatsEventSink) stop() {
 	s.once.Do(func() { close(s.done) })
 }
 
@@ -122,8 +137,9 @@ type Reporter struct {
 	relayClient       *portrelay.HubClient
 	fileIndex         *projectFileIndexManager
 	hubStateManager   *HubStateManager
-	terminalHandler   TerminalHandler
-	terminalEventSink *terminalEventSink
+	terminalHandler     TerminalHandler
+	terminalEventSink   *terminalEventSink
+	tokenStatsEventSink *tokenStatsEventSink
 }
 
 // NewReporter creates a Reporter.
@@ -337,6 +353,20 @@ func (r *Reporter) runSession(ctx context.Context) error {
 		r.mu.Unlock()
 	}()
 	go r.runTerminalEventSink(conn, sink)
+
+	tokenSink := newTokenStatsEventSink()
+	r.mu.Lock()
+	r.tokenStatsEventSink = tokenSink
+	r.mu.Unlock()
+	defer func() {
+		tokenSink.stop()
+		r.mu.Lock()
+		if r.tokenStatsEventSink == tokenSink {
+			r.tokenStatsEventSink = nil
+		}
+		r.mu.Unlock()
+	}()
+	go r.runTokenStatsEventSink(conn, tokenSink)
 
 	keepaliveDone := make(chan struct{})
 	defer close(keepaliveDone)
@@ -822,6 +852,45 @@ func (r *Reporter) PublishTerminalEvent(method string, payload any) error {
 }
 
 func (r *Reporter) runTerminalEventSink(conn *websocket.Conn, sink *terminalEventSink) {
+	for {
+		select {
+		case event := <-sink.events:
+			if err := r.writeJSON(conn, "->", event); err != nil {
+				_ = conn.Close()
+				return
+			}
+		case <-sink.done:
+			return
+		}
+	}
+}
+
+// PublishTokenStatsEvent pushes one token-stats incremental update to the
+// server. Non-blocking; drops on backlog (the next full refresh will recover).
+func (r *Reporter) PublishTokenStatsEvent(payload any) error {
+	r.mu.RLock()
+	sink := r.tokenStatsEventSink
+	r.mu.RUnlock()
+	if sink == nil {
+		return nil
+	}
+	event := envelope{
+		Type:    rp.RegistryEnvelopeTypeEvent,
+		Method:  "tokenStats.update",
+		HubID:   r.cfg.HubID,
+		Payload: rp.MustRaw(payload),
+	}
+	select {
+	case sink.events <- event:
+		return nil
+	case <-sink.done:
+		return nil
+	default:
+		return errTokenStatsPublishBacklog
+	}
+}
+
+func (r *Reporter) runTokenStatsEventSink(conn *websocket.Conn, sink *tokenStatsEventSink) {
 	for {
 		select {
 		case event := <-sink.events:

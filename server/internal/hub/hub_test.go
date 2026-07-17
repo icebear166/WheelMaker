@@ -584,16 +584,11 @@ func TestReporterRespondsToHubStateRefresh(t *testing.T) {
 		if resp.Type != "response" || resp.Method != rp.RegistryMethodHubStateRefresh {
 			t.Fatalf("unexpected hub.state.refresh response: %#v", resp)
 		}
-		method, payload, _ := toolHandler.snapshot()
-		if method != hubToolMethodToken {
-			t.Fatalf("tool method=%q, want %q", method, hubToolMethodToken)
-		}
-		var body map[string]any
-		if err := json.Unmarshal([]byte(payload), &body); err != nil {
-			t.Fatalf("tool payload json: %v", err)
-		}
-		if body["action"] != "scan" {
-			t.Fatalf("tool action=%v, want scan (payload=%s)", body["action"], payload)
+		// tokenStats refresh now runs async via streaming (tokenStats.update
+		// events). The immediate response just acks; no toolHandler call.
+		method, _, _ := toolHandler.snapshot()
+		if method != "" {
+			t.Fatalf("tokenStats refresh should not invoke toolHandler, got method=%q", method)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("did not receive hub.state.refresh response from reporter")
@@ -706,7 +701,6 @@ func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 		{section: hubStateSectionSkills, action: "update"},
 		{section: hubStateSectionSkills, action: "detail", params: map[string]any{"scope": "hub", "skillName": "debug"}},
 		{section: hubStateSectionTokenStats, action: "providers"},
-		{section: hubStateSectionTokenStats, action: "deepseekStats", params: map[string]any{"apiKey": "test-key"}},
 		{
 			section: hubStateSectionFileIndex,
 			action:  "rebuild",
@@ -845,7 +839,6 @@ func TestHubStateToolAdaptersMapSectionsToExistingCommands(t *testing.T) {
 		{section: hubStateSectionAgentPackages, method: hubToolMethodNPM, action: "scan"},
 		{section: hubStateSectionWheelmakerUpdate, method: hubToolMethodUpdate, action: "query"},
 		{section: hubStateSectionSkills, method: hubToolMethodSkills, action: "scan"},
-		{section: hubStateSectionTokenStats, method: hubToolMethodToken, action: "scan"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.section, func(t *testing.T) {
@@ -1274,13 +1267,13 @@ func TestReporterDeepSeekSecretIsRedactedFromDebugEnvelope(t *testing.T) {
 		Type: rp.RegistryEnvelopeTypeRequest, Method: rp.RegistryMethodHubStateAction, HubID: "hub-deepseek-log",
 		Payload: rp.MustRaw(map[string]any{
 			"section": "tokenStats",
-			"action":  "deepseekStats",
-			"params":  map[string]any{"apiKey": "backend-secret-in-envelope", "month": "2026-06"},
+			"action":  "providers",
+			"params":  map[string]any{"apiKey": "backend-secret-in-envelope"},
 		}),
 	})
 	got := log.String()
 	if strings.Contains(got, "backend-secret-in-envelope") {
-		t.Fatalf("DeepSeek secret leaked into debug log: %s", got)
+		t.Fatalf("secret leaked into debug log: %s", got)
 	}
 	if !strings.Contains(got, `"apiKey":"[redacted]"`) {
 		t.Fatalf("redaction marker missing from debug log: %s", got)
