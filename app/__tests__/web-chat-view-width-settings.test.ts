@@ -90,16 +90,13 @@ describe('web chat view width settings', () => {
     );
     const compactRow = cssRuleBlock(
       stylesCss,
-      ".wide-project-session-nav[data-session-list-density='compact'] .wide-session-row",
+      '.wide-session-row',
     );
     const relaxedTitle = cssRuleBlock(
       stylesCss,
       ".wide-project-session-nav[data-session-list-density='relaxed'] .wide-session-title",
     );
-    const compactTitle = cssRuleBlock(
-      stylesCss,
-      ".wide-project-session-nav[data-session-list-density='compact'] .wide-session-title",
-    );
+    const compactTitle = stylesCss.match(/\n\.wide-session-title \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(relaxedRow).toContain('min-height: 30px;');
     expect(compactRow).toContain('min-height: 28px;');
     expect(relaxedTitle).toContain('font-size: 13.5px;');
