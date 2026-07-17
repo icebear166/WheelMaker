@@ -7,7 +7,7 @@ const REQUIRED_CSP_DIRECTIVES = [
   "object-src 'none'",
   "frame-ancestors 'none'",
   "script-src 'self'",
-  "connect-src 'self' wss: https://api.github.com",
+  "connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com",
   "img-src 'self' data: blob:",
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self'",

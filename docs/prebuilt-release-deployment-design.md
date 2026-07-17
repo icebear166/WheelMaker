@@ -27,7 +27,7 @@
 - 发布物目标为 Windows amd64、Linux amd64、macOS arm64；不发布 macOS amd64。
 - 每个平台只有一份完整 `.tar.gz`，其中始终包含 Hub 和 Web。即使配置不监听 Web，也始终下载、部署 Web。
 - Desktop 的 `WheelMakerDesktop.exe` 是可选发布资产；它与 Hub/Web 当前版本独立追踪。
-- Android 不属于本次发布/部署迁移范围，保持现有独立流程。
+- Android APK 是与 Desktop 同级的可选发布资产；它使用同一 `v1.x`，但目标机部署始终忽略 Android。
 - 不做自动备份或自动回滚。失败保留失败状态，修复后由下一次更新重试。
 - 目标端的公开入口只有 `node deploy.mjs` 和一次性迁移命令 `node deploy.mjs migrate-uninstall`。`update` 是 Hub 和系统任务使用的内部入口。
 
@@ -37,6 +37,7 @@
 私有 WheelMaker 源码仓库
   ├─ Go Hub、Web、Desktop 源码
   ├─ 所有 deploy/release MJS 源码
+  ├─ Android 工程与仓库内发布签名输入
   ├─ scripts/release.mjs
   └─ 手动 workflow_dispatch 发布工作流
 
@@ -47,7 +48,8 @@
   └─ GitHub Releases
        ├─ 三个平台 tar.gz
        ├─ release-manifest.json
-       └─ 可选 WheelMakerDesktop.exe
+       ├─ 可选 WheelMakerDesktop.exe
+       └─ 可选 WheelMakerAndroid.apk + android-release.json
 ```
 
 Action 使用一个 GitHub App 向公开仓库写入 Contents 和 Releases。该 App 只安装到公开仓库，不能读取私有源码仓库；本地发布则复用操作员已登录的 `gh auth token`，不保存额外私钥文件。两条路径都只在发布进程内持有临时 token。
@@ -87,11 +89,21 @@ Action 使用一个 GitHub App 向公开仓库写入 Contents 和 Releases。该
     "version": "v1.21",
     "url": "https://github.com/<owner>/<repo>/releases/download/v1.21/WheelMakerDesktop.exe",
     "sha256": "<sha256>"
+  },
+  "androidApk": {
+    "version": "v1.22",
+    "versionName": "1.22",
+    "versionCode": 22,
+    "publishedAt": "2026-07-15T09:00:00Z",
+    "sourceSha": "0123456789abcdef0123456789abcdef01234567",
+    "url": "https://github.com/<owner>/<repo>/releases/download/v1.22/WheelMakerAndroid.apk",
+    "sha256": "<sha256>",
+    "size": 123456
   }
 }
 ```
 
-`deploy.*Url` 必须固定到公开仓库的 commit SHA，而不是可变分支名。`desktopExe` 在某次发布未构建 Desktop 时原样继承，所以 stable 从 v1.21 更新到 v1.23 后，仍能获取 v1.21 的最近 Desktop EXE。
+`deploy.*Url` 必须固定到公开仓库的 commit SHA，而不是可变分支名。`desktopExe` 和 `androidApk` 都是可继承指针：某轮未构建对应可选资产时原样保留最近一次成功发布的资产。主机部署接受但忽略 `androidApk`。
 
 ### release-manifest.json
 
@@ -142,7 +154,7 @@ wheelmaker-v1.23-windows-amd64/
     ...静态站点文件...
 ```
 
-本地构建模式只生成上述目录，不访问 GitHub、不上传、不修改 `stable.json`。选择 public 发布时，同一次 MJS 调用将刚生成的平台目录打包为 `.tar.gz`、写 manifest 并发布，不保存或复用跨命令的构建记录。
+本地构建也先读取公共 `stable.json` 并使用下一个 `v1.x`，但不上传、不修改 stable。最终产物位于 `.release-out/v1.x/`；Webpack、Go module、Go build 与 Gradle 的可复用状态位于 `.release-work/cache/`，单次临时目录 `.release-work/tmp/` 在成功或失败后删除。选择 public 时，同一次 MJS 调用将刚生成的平台目录打包、写 manifest 并发布。
 
 解压实现必须使用 Node 标准库并拒绝绝对路径、`..` 路径穿越、符号链接、硬链接和超过预设文件数/总大小上限的条目。目标端先校验完整压缩包哈希，再解压。
 
@@ -152,12 +164,13 @@ wheelmaker-v1.23-windows-amd64/
 
 ```text
 validate source SHA
+  → 读取 stable，计算下一个 v1.x
   → 构建一次 Web
   → 在当前发布环境交叉编译三个 Hub 目标
   → 可选构建 Desktop EXE
+  → 可选构建并验证签名 Android APK
   → 若未选择 public：保留本地产物并结束
-  → 若选择 public：读取 stable，计算下一个 v1.x
-  → 由本轮平台目录生成 tar.gz、SHA-256 和 manifest
+  → 若选择 public：由本轮平台目录生成 tar.gz、SHA-256 和 manifest
   → 将 deploy.mjs/deploy-core.mjs 提交到公开 Git
   → 创建草稿 Release 并上传资产
   → 发布 Release
@@ -166,7 +179,7 @@ validate source SHA
 
 本地 public 发布要求工作树干净，并使用 `gh auth token` 写入公开仓库。Action 使用 `workflow_dispatch` 的必填 `ref`，在一个 MJS 进程内完成构建和发布。没有 Release 资产成功公开之前，禁止更新 stable。
 
-Windows 提供两个交互入口：`publish-release.bat` 依次询问是否包含 Desktop、是否发布到 public 仓库；`publish-release-action.bat` 要求当前干净 commit 已推送，询问 Desktop 后触发当前分支的 workflow。
+Windows 提供两个交互入口：`publish-release.bat` 依次询问 Desktop、Android 和 public；`publish-release-action.bat` 要求当前干净 commit 已推送，询问 Desktop、Android 和最终确认后触发当前分支的 workflow。
 
 发布不设置持久化自定义锁。GitHub Release tag 的唯一性是并发仲裁：若创建草稿时 tag 冲突，发布器重新读取 stable，取得下一个版本后重试。失败时删除本轮草稿；下一轮开始前清理超过两小时的同类草稿。
 
@@ -179,13 +192,18 @@ Windows 提供两个交互入口：`publish-release.bat` 依次询问是否包�
 
 Desktop 构建逻辑完全位于发布 MJS。发布端不运行 Desktop 应用、不创建桌面快捷方式，也不要求 WebView2。
 
+### Android APK
+
+`with_android` 控制是否构建 APK。`v1.x` 映射为 `versionName=1.x`、`versionCode=x`；Gradle 从 `mobile/android/signing/` 读取仓库内发布身份，发布器用 `apksigner` 验证证书并记录 APK 大小与 SHA-256。public 发布上传 `WheelMakerAndroid.apk` 和 `android-release.json` 并更新 `stable.androidApk`；未选择时继承旧指针。Android 原生 Update 页面独立下载并安装该指针，Host deploy 不处理 APK。
+
 ### Action 时间控制
 
 - 默认发布优先在本地执行，零 runner 消耗；Action 是手动兜底。
 - Action 使用单个 Ubuntu job，不使用平台 matrix，不上传/下载中间 Actions artifact。
 - Web 只运行一次 `npm ci` 和一次生产构建，产物复制到三个包。
-- 使用 `setup-node` 的 npm 缓存（`app/package-lock.json`）和 `setup-go` 的 Go 缓存（`server/go.sum`）。不缓存 `node_modules`、App 私钥或 token。
+- 使用显式 `.release-work/cache/{webpack,go-build,go-mod}` 缓存；选择 Android 时再初始化 JDK/SDK/Gradle 并恢复 `.release-work/cache/gradle`。不缓存 `node_modules`、App 私钥或 token。
 - `with_desktop=false` 时跳过 Desktop 构建；`true` 时仍在该 Ubuntu job 内交叉编译。
+- `with_android=false` 时完全跳过 Android 工具链；`true` 时使用仓库内签名输入构建。
 
 ## 目标端部署
 
@@ -248,7 +266,7 @@ update_exe.bat                        更新可选 Desktop EXE
 
 普通新部署只创建上述当前用户注册项。内部 `update` 严格禁止创建、删除或改写计划任务、LaunchAgent 或 systemd unit，因此不需要管理员权限。
 
-更新先在 `staging/<job-id>` 下载、校验和解压；然后请求旧 Hub 正常退出，替换 `bin/` 中的 Hub 和 `web/` 中的静态站点，触发既有 Hub 任务重新启动。失败后写入状态，不自动回滚。
+更新先在 `staging/<job-id>` 下载、校验和解压；然后请求旧 Hub 正常退出，替换 `bin/` 中的 Hub 和 `web/` 中的静态站点，触发既有 Hub 任务重新启动。成功或失败都删除本次 `staging/<job-id>`；失败原因仍保留在 `status.json` 和日志中，不自动回滚。
 
 每次成功应用包后，core 重写既有 `~/.wheelmaker/release.json`，将其升级为预构建安装元数据：
 
@@ -280,9 +298,9 @@ Web → Hub update API → 原子创建 lock → 触发 OS updater task
 
 ### App 版本判断
 
-Hub 的 `cmd.update.query` 读取本机 `release.json`，并从固定公开仓库拉取、校验 `stable.json` schema。响应包含 `installed` 与 `stable` 的版本、发布时间和 sourceSha，而不再包含 Git remote、分支、behind/ahead count 或工作树状态。App 以 `installed.version === stable.version` 判断 `up_to_date`，版本不同判断 `update_available`；存在 lock 时显示 queued/running 状态；stable 获取或解析失败显示 `checking_failed`。部署 MJS 仍独立下载 stable 并验证后续 SHA-256 链，UI 查询不能成为更新控制输入。
+Hub 的 `cmd.update.query` 只读取本机 `release.json`、`lock.json` 与 `status.json`，响应本地安装版本和任务状态，不访问 GitHub。Web 打开 Update 页面时全局读取一次公共 `stable.json` 与 `publish-status.json`，再用各 Hub 本机版本推导 `up_to_date`、`update_available` 或 `local_newer`。它不再包含 Git remote、分支、behind/ahead count 或工作树状态；部署 MJS 仍独立下载 stable 并验证 SHA-256 链，UI 查询不能成为更新控制输入。
 
-App 的 Update 页面展示“当前版本”和“最新版本”，而非“Current/Latest Git SHA”或提交差异；更新按钮继续调用受控 job 请求接口。
+App 的 Update 页面只展示一次全局最新版本、发布时间和发布阶段；每个 Hub 卡片只显示本机版本、安装时间、任务状态和更新按钮。Android 原生环境从同一份 `stable.androidApk` 派生 APK 更新，普通浏览器不显示 Android 安装入口。
 
 ### 旧版迁移
 
@@ -295,7 +313,7 @@ deploy.bat 或 deploy.sh
   → node deploy.mjs
 ```
 
-`migrate-uninstall` 仅处理旧环境：停止并删除旧 Hub、Go updater、monitor 的服务/任务/启动项和旧 EXE；保留 `config.json`、数据库、日志和用户数据。存在旧 Windows 系统服务时该命令请求管理员权限。正常 deploy/update 永不探测或兼容旧模式。
+`migrate-uninstall` 仅处理旧环境：停止并删除旧 Hub、Go updater、monitor 的服务/任务/启动项和旧 EXE，并删除整个旧 `~/.wheelmaker/build/`；保留 `config.json`、数据库、日志和用户数据。存在旧 Windows 系统服务时该命令请求管理员权限。其他盘符根目录的历史 Android 工作区由用户手动清理。正常 deploy/update 永不探测或兼容旧模式。
 
 ### Desktop 更新
 
@@ -309,11 +327,12 @@ deploy.bat 或 deploy.sh
 
 - 无 Git/Go/npm 的 Windows、Linux、macOS 目标端可仅凭 Node 22+ 完成新安装和后续更新。
 - 三个平台包分别包含同一轮 Web 与对应 Hub，且目标端不会构建 Web。
+- 可选 Android APK 与 Hub/Desktop 共用同一 `v1.x` Release；未构建 Android 的后续 stable 仍继承最近 APK 指针，Host deploy 不下载它。
 - manifest、MJS 和平台包在任一 SHA-256 无效时均不被执行或解压；stable schema 或 URL 不合法时部署失败。
 - Web 重复点击更新只产生一个 job；Hub 替换期间 HTTP 请求已得到 accepted 响应。
 - 内部 `update` 不改写任意平台运行注册项，且无需管理员权限。
 - `migrate-uninstall` 清除旧运行项而保留用户配置/数据；迁移后不再保留旧 updater/monitor。
 - v1.3 未带 Desktop EXE、v1.2 带 EXE 时，v1.3 的 `update_exe.bat` 仍下载 v1.2 EXE。
-- Action 在一个 Ubuntu job 内完成三平台 Hub、可选 Desktop、一次 Web 构建和发布；缓存命中时不重新下载 Go/npm 依赖。
+- Action 在一个 Ubuntu job 内完成三平台 Hub、可选 Desktop、可选 Android、一次 Web 构建和发布；未选择 Android 时不初始化其工具链，缓存命中时复用编译状态。
 - 成功安装保持 `bin/`、`web/`、`desktop/` 与 deploy/start/stop/restart/status 包装脚本的既有路径约定，且不产生 `app/` 目录。
-- App 从 schema v2 的本机 `release.json` 和公开 stable 得出当前/最新版本，不执行 Git 查询或显示提交差异。
+- Web 全局读取一次公开 stable/发布状态，各 Hub 只返回 schema v2 本机 `release.json` 与任务状态，不执行 Git 查询或显示提交差异。

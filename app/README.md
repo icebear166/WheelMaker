@@ -30,8 +30,8 @@ Windows `WheelMakerDesktop` executable both use this same React/webpack output.
    - Choose whether to keep the generated executable local or publish it with the prebuilt release.
 
 3. Android APK embedded snapshot:
-   - Run `publish-android.bat` from the repository root.
-   - The publisher builds Web assets into the external Android build root's `webroot` directory. By default this is `~/.wheelmaker/build/mobile/android/webroot`; on Windows cross-drive checkouts use the repository drive, for example `D:\.wheelmaker\build\mobile\android\webroot`.
-   - Gradle packages that external Web root into the APK assets.
-   - APK output is written to `~/.wheelmaker/mobile/android`.
+   - Run `publish-release.bat` from the repository root and choose Android.
+   - The unified publisher copies the canonical bootstrap page into its per-build `.release-work/tmp/` asset root; Gradle packages that snapshot into the APK.
+   - APK and `android-release.json` output are written under `.release-out/v1.x/android/`.
+   - Reusable Gradle state is stored under `.release-work/cache/gradle/`.
    - No Android-generated Web assets are written under `app/` or `mobile/android/`.

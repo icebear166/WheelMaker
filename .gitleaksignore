@@ -1,0 +1,5 @@
+# User-approved committed Android release signing identity. Keep these exact
+# path/rule/line fingerprints instead of excluding the signing directory.
+mobile/android/signing/release.p12:pkcs12-file:0
+mobile/android/signing/signing.properties:generic-api-key:2
+mobile/android/signing/signing.properties:generic-api-key:4

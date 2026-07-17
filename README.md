@@ -232,7 +232,7 @@ server {
     location = / {
         try_files /index.html =404;
         add_header Cache-Control "no-cache, must-revalidate" always;
-        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
         add_header Referrer-Policy "no-referrer" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
@@ -241,7 +241,7 @@ server {
     location = /index.html {
         try_files /index.html =404;
         add_header Cache-Control "no-cache, must-revalidate" always;
-        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
         add_header Referrer-Policy "no-referrer" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
@@ -250,7 +250,7 @@ server {
     location = /service-worker.js {
         try_files /service-worker.js =404;
         add_header Cache-Control "no-cache, must-revalidate" always;
-        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
         add_header Referrer-Policy "no-referrer" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
@@ -259,7 +259,7 @@ server {
     location = /manifest.webmanifest {
         try_files /manifest.webmanifest =404;
         add_header Cache-Control "no-cache, must-revalidate" always;
-        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
         add_header Referrer-Policy "no-referrer" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
@@ -268,7 +268,7 @@ server {
     location ~* \.[a-z0-9]+$ {
         try_files $uri =404;
         add_header Cache-Control "public, max-age=31536000, immutable" always;
-        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
         add_header Referrer-Policy "no-referrer" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
@@ -278,7 +278,7 @@ server {
         index index.html;
         try_files $uri $uri/ /index.html;
         add_header Cache-Control "no-cache, must-revalidate" always;
-        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
         add_header Referrer-Policy "no-referrer" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
@@ -328,10 +328,9 @@ This developer command will:
 
 Production releases do not use this as a conditional target-side step: the release builder compiles Web once, includes it in every platform archive, and every normal deploy replaces `~/.wheelmaker/web`.
 
-### 6. Build Android APK
+### 6. Build releases locally
 
-WheelMaker Android is a native Kotlin WebView shell under `mobile/android/`.
-It contains a dedicated bootstrap page where the user enters their own HTTPS server Base URL, then loads the Workspace Web from that server. Changing servers clears state associated with the previous site.
+WheelMaker Android is a native Kotlin WebView shell under `mobile/android/`. It contains a dedicated bootstrap page where the user enters their HTTPS server Base URL, then loads the Workspace Web from that server. Changing servers clears state associated with the previous site.
 
 Requirements:
 
@@ -339,29 +338,37 @@ Requirements:
 - Gradle in `PATH`
 - Node.js 22+
 
-Build from the repository root:
+Run the unified interactive publisher from the repository root:
 
 ```bat
-publish-android.bat
+publish-release.bat
 ```
 
-Outputs:
+It asks whether to include Desktop, Android, and whether to publish publicly. All choices default to no. A local-only build still reads public `stable.json`, uses the next `v1.x`, and writes the same layout used for publication:
 
 ```text
-~/.wheelmaker/mobile/android/WheelMakerAndroid.apk
-~/.wheelmaker/mobile/android/android-release.json
+.release-out/v1.x/
+  wheelmaker-v1.x-windows-amd64/
+  wheelmaker-v1.x-linux-amd64/
+  wheelmaker-v1.x-darwin-arm64/
+  desktop/                         # optional
+  android/                         # optional
+    WheelMakerAndroid.apk
+    android-release.json
 ```
 
-Build workspace:
+Reusable compiler state is kept separately from final output:
 
 ```text
-~/.wheelmaker/build/mobile/android/
+.release-work/cache/
+  webpack/
+  go-build/
+  go-mod/
+  gradle/
+.release-work/tmp/                 # removed after success or failure
 ```
 
-On Windows, if the repository and `HOME` are on different drives, the publisher uses the repository drive instead, for example `D:\.wheelmaker\build\mobile\android\`. This keeps Android Gradle build paths on one filesystem root while still staying outside the git worktree.
-
-The Android build does not write generated Web assets, Gradle output, APK files, or release manifests into the git worktree.
-The first Android slice only builds a local APK. It does not publish APK downloads through Nginx or the Update screen.
+Android `v1.x` maps directly to `versionName=1.x` and `versionCode=x`. Release signing reads the repository-owned `mobile/android/signing/signing.properties` and `release.p12`; release builds never fall back to the debug key. When Android is selected for a public release, the APK and manifest join the same GitHub Release and `stable.androidApk` is updated. Releases without Android carry the previous Android pointer forward. Host deployment ignores Android; the native Android Update screen downloads only the carried public pointer and verifies size, SHA-256, package identity, version, and signing identity before installation.
 
 ### 7. Install the Web UI as a PWA
 
@@ -592,10 +599,10 @@ npm run build:web:release
 
 Release and script overview:
 
-- `publish-release.bat` — interactively choose whether to include Desktop and whether to publish. It invokes the release MJS once; choosing not to publish only generates `.release-out/local-<source-sha>`, while choosing public publishes that same in-process build through the authenticated `gh` CLI token.
-- `publish-release-action.bat` — verify the current clean commit is pushed, then interactively trigger the manual Action with the source SHA and Desktop choice.
-- `node scripts/release.mjs [--with-desktop] [--publish]` — non-interactive equivalent; without `--publish` it only builds locally.
-- `.github/workflows/publish-release.yml` — manual `workflow_dispatch` fallback with a source `ref` and optional `with_desktop`; Web builds once, while Hub binaries cross-compile for Windows amd64, Linux amd64, and macOS arm64.
+- `publish-release.bat` — interactively choose Desktop, Android, and public publication. It invokes the release MJS once and always writes `.release-out/v1.x`.
+- `publish-release-action.bat` — verify the current clean commit is pushed, then interactively trigger the manual Action with the source SHA, Desktop choice, and Android choice.
+- `node scripts/release.mjs [--with-desktop] [--with-android] [--publish]` — non-interactive equivalent; without `--publish` it builds the next public version locally.
+- `.github/workflows/publish-release.yml` — manual `workflow_dispatch` fallback with a source `ref`, optional Desktop, and optional Android; Android setup is skipped when unused, Web builds once, and Hub binaries cross-compile for Windows amd64, Linux amd64, and macOS arm64.
 - Source-root `deploy.bat` / `deploy.sh` — one-time legacy migration followed by stable deployment.
 - Installed `~/.wheelmaker/deploy.bat` / `deploy.sh` — platform wrapper for a normal `node deploy.mjs`; the Windows wrapper pauses when it finishes.
 - Installed `~/.wheelmaker/update_exe.bat` — independently update `WheelMakerDesktop.exe` through the same stable SHA-256 chain.

@@ -159,3 +159,19 @@ test('obsolete source-side Desktop and Web helper scripts are absent', async () 
     );
   }
 });
+
+test('obsolete standalone Android publishers and their script tests are absent', async () => {
+  for (const path of [
+    '../../publish-android.bat',
+    '../../publish-android-github.bat',
+    '../publish_android.ps1',
+    '../publish_android_github_release.ps1',
+    '../test_publish_android_ps1.ps1',
+    '../test_publish_android_github_release_ps1.ps1',
+  ]) {
+    await assert.rejects(
+      () => readFile(new URL(path, import.meta.url), 'utf8'),
+      /ENOENT/,
+    );
+  }
+});

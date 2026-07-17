@@ -102,8 +102,6 @@ for script_test in \
   scripts/test_deploy_sh.ps1 \
   scripts/test_android_project_ps1.ps1 \
   scripts/test_android_release_signing.ps1 \
-  scripts/test_publish_android_github_release_ps1.ps1 \
-  scripts/test_publish_android_ps1.ps1 \
   scripts/test_security_hooks.ps1 \
   scripts/test_security_docs.ps1 \
   scripts/test_security_acceptance_ps1.ps1
