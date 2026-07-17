@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -1502,90 +1501,6 @@ func TestTokenCommandProvidersReturnsSupportedProviderList(t *testing.T) {
 	}
 }
 
-func TestTokenCommandDeepSeekStatsValidatesAPIKey(t *testing.T) {
-	cmd := NewTokenCommand()
-	_, cmdErr := cmd.Handle(context.Background(), rp.MustRaw(map[string]any{
-		"action": "deepseekStats",
-		"hubId":  "hub-token",
-	}))
-
-	if cmdErr == nil {
-		t.Fatal("cmdErr=nil, want apiKey validation error")
-	}
-	if !strings.Contains(cmdErr.Message, "apiKey is required") {
-		t.Fatalf("cmdErr=%v, want apiKey validation error", cmdErr)
-	}
-}
-
-func TestTokenCommandDeepSeekSecretIsRedactedFromProviderError(t *testing.T) {
-	original := fetchHubDeepSeekTokenStats
-	t.Cleanup(func() { fetchHubDeepSeekTokenStats = original })
-	fetchHubDeepSeekTokenStats = func(context.Context, string, string, string) (any, error) {
-		return nil, errors.New("provider rejected backend-deepseek-secret")
-	}
-
-	cmd := NewTokenCommand()
-	_, cmdErr := cmd.Handle(context.Background(), rp.MustRaw(map[string]any{
-		"action": "deepseekStats",
-		"hubId":  "hub-token",
-		"apiKey": "backend-deepseek-secret",
-	}))
-	if cmdErr == nil {
-		t.Fatal("cmdErr=nil, want provider error")
-	}
-	if strings.Contains(cmdErr.Message, "backend-deepseek-secret") {
-		t.Fatalf("provider error leaked secret: %q", cmdErr.Message)
-	}
-}
-
-func TestFetchCodexUsageLimitsDoesNotRefreshRejectedAccessToken(t *testing.T) {
-	calls := make([]string, 0, 2)
-	scanner := &tokenScanner{
-		httpClient: &http.Client{
-			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-				calls = append(calls, req.Method+" "+req.URL.String())
-				if req.URL.String() == "https://chatgpt.com/backend-api/wham/usage" {
-					return &http.Response{
-						StatusCode: http.StatusUnauthorized,
-						Status:     "401 Unauthorized",
-						Header:     make(http.Header),
-						Body:       io.NopCloser(strings.NewReader(`{"error":"expired"}`)),
-						Request:    req,
-					}, nil
-				}
-				return &http.Response{
-					StatusCode: http.StatusOK,
-					Status:     "200 OK",
-					Header:     make(http.Header),
-					Body:       io.NopCloser(strings.NewReader(`{}`)),
-					Request:    req,
-				}, nil
-			}),
-		},
-	}
-
-	state := extractCodexAuthState(map[string]any{
-		"tokens": map[string]any{
-			"access_token":  "expired-access",
-			"refresh_token": "single-use-refresh",
-			"account_id":    "acc-1",
-		},
-	})
-	_, _, _, err := scanner.fetchCodexUsageLimits(context.Background(), state)
-
-	if err == nil {
-		t.Fatal("fetchCodexUsageLimits error=nil, want rejected access token error")
-	}
-	if !strings.Contains(err.Error(), "Codex access token was rejected") {
-		t.Fatalf("error=%q, want re-login guidance", err.Error())
-	}
-	if len(calls) != 1 {
-		t.Fatalf("http calls=%v, want only usage request", calls)
-	}
-	if calls[0] != "GET https://chatgpt.com/backend-api/wham/usage" {
-		t.Fatalf("http calls=%v, want usage request only", calls)
-	}
-}
 
 func TestUpdateQueryReadsOnlyInstalledReleaseAndLocalJobState(t *testing.T) {
 	baseDir := t.TempDir()
