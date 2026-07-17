@@ -15091,6 +15091,17 @@ export function App() {
             {formatCompactRelativeAge(session.updatedAt)}
           </span>
         </button>
+        {!mobile ? (
+          <button
+            type="button"
+            className="wide-session-more-btn"
+            title="Session actions"
+            aria-label="Session actions"
+            onClick={event => openProjectSessionContextMenu(targetProjectId, session.sessionId, event)}
+          >
+            <span className="codicon codicon-ellipsis" aria-hidden="true" />
+          </button>
+        ) : null}
         {renderProjectSessionActionMenu(targetProjectId, session)}
       </div>
     );
@@ -15152,6 +15163,17 @@ export function App() {
             {formatCompactRelativeAge(liveSession.updatedAt)}
           </span>
         </button>
+        {!mobile ? (
+          <button
+            type="button"
+            className="wide-session-more-btn"
+            title="Session actions"
+            aria-label="Session actions"
+            onClick={event => openProjectSessionContextMenu(targetProjectId, liveSession.sessionId, event)}
+          >
+            <span className="codicon codicon-ellipsis" aria-hidden="true" />
+          </button>
+        ) : null}
         {renderProjectSessionActionMenu(targetProjectId, liveSession)}
       </div>
     );

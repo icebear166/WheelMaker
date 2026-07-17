@@ -1405,6 +1405,38 @@
   min-width: 0;
 }
 
+.wide-session-more-btn {
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--surface-panel) 92%, var(--hover));
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity 120ms ease;
+  z-index: 2;
+}
+
+.project-session-row-wrap:hover .wide-session-more-btn,
+.project-session-row-wrap.actions-open .wide-session-more-btn,
+.wide-session-more-btn:focus-visible {
+  opacity: 1;
+}
+
+.wide-session-more-btn:hover {
+  background: var(--hover);
+  color: var(--text-primary);
+}
+
 .wide-session-row {
   position: relative;
   width: 100%;

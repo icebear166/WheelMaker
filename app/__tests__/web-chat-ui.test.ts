@@ -1736,6 +1736,19 @@ describe('web chat integration', () => {
     }
   });
 
+  test('desktop session rows reveal a hover more-action that opens the same context menu', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(mainTsx).toContain('wide-session-more-btn');
+    expect(mainTsx).toContain('codicon codicon-ellipsis');
+    expect(stylesCss).toContain('.project-session-row-wrap:hover .wide-session-more-btn');
+    const btnBlock = stylesCss.match(/\.wide-session-more-btn \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(btnBlock).toContain('position: absolute;');
+    expect(btnBlock).toContain('opacity: 0;');
+  });
+
   test('session markers render unread counts and a breathing running indicator', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
