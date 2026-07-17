@@ -6,6 +6,7 @@ import {
   resolvePublishingToken,
   runRelease,
 } from './cli.mjs';
+import * as cliModule from './cli.mjs';
 import {ReleaseVersionConflictError} from './publish.mjs';
 
 const SOURCE_SHA = '0123456789abcdef0123456789abcdef01234567';
@@ -13,11 +14,16 @@ const SOURCE_SHA = '0123456789abcdef0123456789abcdef01234567';
 function fakeCliDeps() {
   const state = {
     buildCalls: [],
+    cleanupCalls: [],
     githubClientCalls: 0,
+    messages: [],
     order: [],
+    packageCalls: [],
+    phases: [],
     publishCalls: [],
     sourceCalls: [],
     versionCalls: 0,
+    workspaceCalls: [],
   };
   const deps = {
     channel: {
@@ -30,9 +36,22 @@ function fakeCliDeps() {
     coreBytes: Buffer.from('core'),
     deployMjsBytes: Buffer.from('launcher'),
     outputRoot: 'D:\\repo\\.release-out',
+    progress: {
+      info(message) {
+        state.messages.push(message);
+      },
+      async phase(label, action) {
+        state.phases.push(label);
+        return action();
+      },
+    },
     repoRoot: 'D:\\repo',
     workRoot: 'D:\\repo\\.release-work',
     state,
+    async cleanupReleaseWorkspace(path) {
+      state.cleanupCalls.push(path);
+      state.order.push('cleanup');
+    },
     async buildRelease(input) {
       state.buildCalls.push(input);
       state.order.push('build');
@@ -50,11 +69,31 @@ function fakeCliDeps() {
       state.order.push('github');
       return { kind: 'github-client' };
     },
+    async createReleaseWorkspace(version) {
+      const path = `D:\\repo\\.release-work\\tmp\\release-${version}-test`;
+      state.workspaceCalls.push({path, version});
+      state.order.push('workspace');
+      return path;
+    },
     now() {
       return '2026-07-16T09:00:00.000Z';
     },
+    async packageBuiltRelease(input) {
+      state.packageCalls.push(input);
+      state.order.push('package');
+      return {
+        assets: [{name: `wheelmaker-${input.version}-windows-amd64.tar.gz`}],
+        manifestPath: `${input.outputRoot}\\${input.version}\\release-manifest.json`,
+        platforms: [{
+          archivePath: `${input.outputRoot}\\${input.version}\\wheelmaker-${input.version}-windows-amd64.tar.gz`,
+          key: 'windows-amd64',
+        }],
+        version: input.version,
+        versionRoot: `${input.outputRoot}\\${input.version}`,
+      };
+    },
     async publishBuiltRelease(input, api) {
-      state.publishCalls.push({ api, input });
+      state.publishCalls.push({api, input});
       state.order.push('publish');
       return { version: 'v1.1' };
     },
@@ -99,8 +138,32 @@ test('default mode builds the next stable version without constructing a GitHub 
   assert.equal(deps.state.versionCalls, 1);
   assert.equal(deps.state.buildCalls[0].version, 'v1.24');
   assert.equal(deps.state.buildCalls[0].workRoot, 'D:\\repo\\.release-work');
-  assert.deepEqual(deps.state.order, ['version', 'build']);
+  assert.deepEqual(deps.state.order, [
+    'version',
+    'workspace',
+    'build',
+    'package',
+    'cleanup',
+  ]);
+  assert.equal(
+    deps.state.buildCalls[0].stagingRoot,
+    'D:\\repo\\.release-work\\tmp\\release-v1.24-test',
+  );
+  assert.equal(deps.state.packageCalls.length, 1);
+  assert.equal(deps.state.cleanupCalls.length, 1);
+  assert.deepEqual(deps.state.phases, [
+    'Checking source',
+    'Resolving release version',
+    'Preparing release workspace',
+    'Building release assets',
+    'Packaging and verifying assets',
+    'Cleaning release workspace',
+  ]);
   assert.equal(result.mode, 'build');
+  assert.equal(
+    result.build.versionRoot,
+    'D:\\repo\\.release-out\\v1.24',
+  );
 });
 
 test('publish mode builds once and publishes that same build', async () => {
@@ -117,8 +180,83 @@ test('publish mode builds once and publishes that same build', async () => {
   assert.equal(deps.state.publishCalls[0].input.desktopExe, 'desktop.exe');
   assert.deepEqual(deps.state.publishCalls[0].api, { kind: 'github-client' });
   assert.equal(deps.state.publishCalls[0].input.version, 'v1.24');
-  assert.deepEqual(deps.state.order, ['version', 'build', 'github', 'publish']);
+  assert.deepEqual(deps.state.order, [
+    'version',
+    'github',
+    'workspace',
+    'build',
+    'package',
+    'publish',
+    'cleanup',
+  ]);
+  assert.equal(
+    deps.state.publishCalls[0].input.packaged.versionRoot,
+    'D:\\repo\\.release-out\\v1.24',
+  );
+  assert.deepEqual(deps.state.phases, [
+    'Checking source',
+    'Resolving release version',
+    'Authenticating release repository',
+    'Preparing release workspace',
+    'Building release assets',
+    'Packaging and verifying assets',
+    'Publishing release',
+    'Cleaning release workspace',
+  ]);
   assert.deepEqual(result, { mode: 'publish', stable: { version: 'v1.1' } });
+});
+
+test('local build summary exposes final files instead of unpacked directories', () => {
+  assert.equal(typeof cliModule.releaseBuildSummary, 'function');
+  assert.deepEqual(
+    cliModule.releaseBuildSummary({
+      androidApkPath: 'D:\\out\\v1.24\\WheelMakerAndroid.apk',
+      desktopExePath: undefined,
+      manifestPath: 'D:\\out\\v1.24\\release-manifest.json',
+      platforms: [
+        {
+          archivePath: 'D:\\out\\v1.24\\wheelmaker-v1.24-windows-amd64.tar.gz',
+          key: 'windows-amd64',
+        },
+      ],
+      versionRoot: 'D:\\out\\v1.24',
+    }),
+    {
+      androidApk: 'D:\\out\\v1.24\\WheelMakerAndroid.apk',
+      desktopExe: null,
+      manifest: 'D:\\out\\v1.24\\release-manifest.json',
+      platforms: [
+        {
+          archive: 'D:\\out\\v1.24\\wheelmaker-v1.24-windows-amd64.tar.gz',
+          key: 'windows-amd64',
+        },
+      ],
+      versionRoot: 'D:\\out\\v1.24',
+    },
+  );
+});
+
+test('release workspace is removed when final packaging fails', async () => {
+  const deps = fakeCliDeps();
+  deps.packageBuiltRelease = async () => {
+    deps.state.order.push('package');
+    throw new Error('packaging failed');
+  };
+
+  await assert.rejects(
+    () => runRelease({publish: false, withDesktop: false}, deps),
+    /packaging failed/,
+  );
+  assert.deepEqual(deps.state.cleanupCalls, [
+    'D:\\repo\\.release-work\\tmp\\release-v1.24-test',
+  ]);
+  assert.deepEqual(deps.state.order, [
+    'version',
+    'workspace',
+    'build',
+    'package',
+    'cleanup',
+  ]);
 });
 
 test('publish version conflict rebuilds every asset with a newly resolved version', async () => {

@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -15,12 +15,27 @@ import {
   nextVersionFromStableBytes,
   stableVersionFromBytes,
 } from './metadata.mjs';
+import {createReleaseProgress} from './progress.mjs';
 import {
   publishBuiltRelease,
+  packageBuiltRelease,
   ReleaseVersionConflictError,
 } from './publish.mjs';
 
 const execFileAsync = promisify(execFile);
+
+export function releaseBuildSummary(build) {
+  return {
+    androidApk: build.androidApkPath ?? null,
+    desktopExe: build.desktopExePath ?? null,
+    manifest: build.manifestPath,
+    platforms: build.platforms.map(({archivePath, key}) => ({
+      archive: archivePath,
+      key,
+    })),
+    versionRoot: build.versionRoot,
+  };
+}
 
 export function parseReleaseArgs(args) {
   let publish = false;
@@ -45,53 +60,96 @@ export function parseReleaseArgs(args) {
 }
 
 export async function runRelease(options, deps) {
+  const progress = deps.progress ?? {
+    info() {},
+    phase: (_label, action) => action(),
+  };
   const requireClean = options.publish;
-  const sourceSha = await deps.resolveSourceSha({ requireClean });
+  const sourceSha = await progress.phase(
+    'Checking source',
+    () => deps.resolveSourceSha({requireClean}),
+  );
   const startedAt = deps.now();
   let api;
   let deploymentSources;
   let floorVersion;
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const version = await deps.resolveNextVersion({floorVersion});
-    const build = await deps.buildRelease({
-      outputRoot: deps.outputRoot,
-      repoRoot: deps.repoRoot,
-      sourceSha,
-      version,
-      workRoot: deps.workRoot,
-      withAndroid: options.withAndroid ?? false,
-      withDesktop: options.withDesktop,
-    });
-    if (!options.publish) {
-      return { build, mode: 'build', sourceSha };
+    const version = await progress.phase(
+      'Resolving release version',
+      () => deps.resolveNextVersion({floorVersion}),
+    );
+    progress.info(
+      `${options.publish ? 'Publishing' : 'Building'} ${version} from ${sourceSha}`,
+    );
+    if (options.publish && !api) {
+      api = await progress.phase(
+        'Authenticating release repository',
+        () => deps.createGitHubClient(),
+      );
+      deploymentSources ??= deps.loadDeploymentSources
+        ? await deps.loadDeploymentSources()
+        : {
+            coreBytes: deps.coreBytes,
+            deployMjsBytes: deps.deployMjsBytes,
+          };
     }
-
-    api ??= await deps.createGitHubClient();
-    deploymentSources ??= deps.loadDeploymentSources
-      ? await deps.loadDeploymentSources()
-      : {
-          coreBytes: deps.coreBytes,
-          deployMjsBytes: deps.deployMjsBytes,
-        };
-
+    const stagingRoot = await progress.phase(
+      'Preparing release workspace',
+      () => deps.createReleaseWorkspace(version),
+    );
     try {
-      const stable = await deps.publishBuiltRelease(
-        {
-          androidApk: build.androidApk,
-          channel: deps.channel,
-          coreBytes: deploymentSources.coreBytes,
-          deployMjsBytes: deploymentSources.deployMjsBytes,
-          desktopExe: build.desktopExe,
-          outputRoot: deps.outputRoot,
-          platforms: build.platforms,
-          publishedAt: deps.now(),
-          publisher: deps.publisher,
+      const build = await progress.phase(
+        'Building release assets',
+        () => deps.buildRelease({
+          progress,
+          repoRoot: deps.repoRoot,
           sourceSha,
-          startedAt,
+          stagingRoot,
           version,
-        },
-        api,
+          workRoot: deps.workRoot,
+          withAndroid: options.withAndroid ?? false,
+          withDesktop: options.withDesktop,
+        }),
+      );
+      const publishedAt = deps.now();
+      const packaged = await progress.phase(
+        'Packaging and verifying assets',
+        () => deps.packageBuiltRelease({
+          ...build,
+          channel: deps.channel,
+          outputRoot: deps.outputRoot,
+          publishedAt,
+          sourceSha,
+          stagingRoot,
+          version,
+        }),
+      );
+      if (!options.publish) {
+        return { build: packaged, mode: 'build', sourceSha };
+      }
+
+      const stable = await progress.phase(
+        'Publishing release',
+        () => deps.publishBuiltRelease(
+          {
+            androidApk: build.androidApk,
+            channel: deps.channel,
+            coreBytes: deploymentSources.coreBytes,
+            deployMjsBytes: deploymentSources.deployMjsBytes,
+            desktopExe: build.desktopExe,
+            outputRoot: deps.outputRoot,
+            packaged,
+            platforms: build.platforms,
+            progress,
+            publishedAt,
+            publisher: deps.publisher,
+            sourceSha,
+            startedAt,
+            version,
+          },
+          api,
+        ),
       );
       return { mode: 'publish', stable };
     } catch (error) {
@@ -99,6 +157,11 @@ export async function runRelease(options, deps) {
         throw error;
       }
       floorVersion = error.version;
+    } finally {
+      await progress.phase(
+        'Cleaning release workspace',
+        () => deps.cleanupReleaseWorkspace(stagingRoot),
+      );
     }
   }
   throw new Error('release retry limit reached');
@@ -169,9 +232,21 @@ export async function createDefaultReleaseDependencies({
   return {
     buildRelease,
     channel,
+    async cleanupReleaseWorkspace(path) {
+      await rm(path, {force: true, recursive: true});
+    },
     outputRoot: join(repoRoot, '.release-out'),
+    packageBuiltRelease,
+    progress: createReleaseProgress({
+      githubActions: env.GITHUB_ACTIONS === 'true',
+    }),
     publisher: env.GITHUB_ACTIONS === 'true' ? 'github-actions' : 'local',
     repoRoot,
+    async createReleaseWorkspace(version) {
+      const temporaryRoot = join(repoRoot, '.release-work', 'tmp');
+      await mkdir(temporaryRoot, {recursive: true});
+      return mkdtemp(join(temporaryRoot, `release-${version}-`));
+    },
     workRoot: join(repoRoot, '.release-work'),
     async createGitHubClient() {
       const token = await resolvePublishingToken({

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash, generateKeyPairSync, verify } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -13,6 +13,7 @@ import {
   publishBuiltRelease,
   ReleaseVersionConflictError,
 } from './publish.mjs';
+import * as publishModule from './publish.mjs';
 
 const SOURCE_SHA = '0123456789abcdef0123456789abcdef01234567';
 const SCRIPT_COMMIT_SHA = 'a'.repeat(40);
@@ -127,6 +128,7 @@ async function fixtureRelease({withAndroid = false} = {}) {
     publishedAt: PUBLISHED_AT,
     publisher: 'local',
     sourceSha: SOURCE_SHA,
+    stagingRoot: root,
     startedAt: PUBLISHED_AT,
     version: 'v1.1',
     cleanup: () => rm(root, { recursive: true, force: true }),
@@ -181,6 +183,35 @@ test('stable is committed only after the release is public', async () => {
       'status:succeeded',
     ]);
     assert.equal(api.createdRelease.target_commitish, SCRIPT_COMMIT_SHA);
+  } finally {
+    await release.cleanup();
+  }
+});
+
+test('packaging writes only final release assets to the output directory', async () => {
+  const release = await fixtureRelease({withAndroid: true});
+  try {
+    assert.equal(typeof publishModule.packageBuiltRelease, 'function');
+    const packaged = await publishModule.packageBuiltRelease(release);
+    const versionRoot = join(release.outputRoot, release.version);
+
+    assert.deepEqual((await readdir(versionRoot)).sort(), [
+      'WheelMakerAndroid.apk',
+      'android-release.json',
+      'release-manifest.json',
+      'wheelmaker-v1.1-darwin-arm64.tar.gz',
+      'wheelmaker-v1.1-linux-amd64.tar.gz',
+      'wheelmaker-v1.1-windows-amd64.tar.gz',
+    ]);
+    assert.equal(packaged.versionRoot, versionRoot);
+    assert.deepEqual(
+      packaged.assets.map(({name}) => name).sort(),
+      (await readdir(versionRoot)).sort(),
+    );
+    assert.deepEqual(
+      await readFile(packaged.manifestPath),
+      packaged.manifestBytes,
+    );
   } finally {
     await release.cleanup();
   }
@@ -332,6 +363,27 @@ test('publisher commits exact script bytes and hashes exact manifest bytes', asy
     assert.equal(
       stable.release.manifestSha256,
       sha256ForTest(manifest),
+    );
+  } finally {
+    await release.cleanup();
+  }
+});
+
+test('publisher reports asset upload progress', async () => {
+  const release = await fixtureRelease();
+  const messages = [];
+  release.progress = {info: message => messages.push(message)};
+  const api = new FakeGitHubApi();
+  try {
+    await publishBuiltRelease(release, api);
+    assert.deepEqual(
+      messages.filter(message => message.startsWith('Uploading ')),
+      [
+        'Uploading 1/4 wheelmaker-v1.1-windows-amd64.tar.gz',
+        'Uploading 2/4 wheelmaker-v1.1-linux-amd64.tar.gz',
+        'Uploading 3/4 wheelmaker-v1.1-darwin-arm64.tar.gz',
+        'Uploading 4/4 release-manifest.json',
+      ],
     );
   } finally {
     await release.cleanup();

@@ -29,6 +29,12 @@ function recordingRunner() {
       await mkdir(join(outputPath, '..'), { recursive: true });
       await writeFile(outputPath, basename(outputPath));
     }
+
+    if (command === 'go' && args[0] === 'run' && args.includes('--out')) {
+      const outputPath = args[args.indexOf('--out') + 1];
+      await mkdir(join(outputPath, '..'), {recursive: true});
+      await writeFile(outputPath, 'generated-resource');
+    }
   };
 
   runner.calls = calls;
@@ -70,11 +76,12 @@ test('release build compiles Web once and exactly three Hub targets', async () =
       .map(({ args, options }) => ({
         target: `${options.env.GOOS}/${options.env.GOARCH}`,
         binary: basename(args[args.indexOf('-o') + 1]),
-      }));
+      }))
+      .sort((left, right) => left.target.localeCompare(right.target));
     assert.deepEqual(hubTargets, [
-      { target: 'windows/amd64', binary: 'wheelmaker.exe' },
-      { target: 'linux/amd64', binary: 'wheelmaker' },
       { target: 'darwin/arm64', binary: 'wheelmaker' },
+      { target: 'linux/amd64', binary: 'wheelmaker' },
+      { target: 'windows/amd64', binary: 'wheelmaker.exe' },
     ]);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -216,6 +223,84 @@ test('release build routes Webpack and Go caches through the work root', async (
   }
 });
 
+test('release build keeps every unpacked asset inside its staging directory', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-release-staging-'));
+  const repoRoot = join(root, 'repo');
+  const outputRoot = join(root, '.release-out');
+  const stagingRoot = join(root, '.release-work', 'tmp', 'release-v1.24-test');
+
+  try {
+    await mkdir(join(repoRoot, 'app'), {recursive: true});
+    const desktopCommandRoot = join(
+      repoRoot,
+      'server',
+      'cmd',
+      'wheelmaker-desktop',
+    );
+    await mkdir(desktopCommandRoot, {recursive: true});
+    await writeFile(
+      join(desktopCommandRoot, 'desktop_windows.syso'),
+      'stale-resource',
+    );
+    const result = await buildRelease({
+      outputRoot,
+      repoRoot,
+      runner: recordingRunner(),
+      stagingRoot,
+      version: 'v1.24',
+      workRoot: join(root, '.release-work'),
+    });
+
+    assert.equal(result.versionRoot, stagingRoot);
+    for (const platform of result.platforms) {
+      assert.equal(platform.directory.startsWith(stagingRoot), true);
+    }
+    assert.equal(await readExists(join(outputRoot, 'v1.24')), false);
+    assert.equal(
+      await readExists(join(desktopCommandRoot, 'desktop_windows.syso')),
+      false,
+    );
+  } finally {
+    await rm(root, {recursive: true, force: true});
+  }
+});
+
+test('release build reports Web and platform subtask progress', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-release-progress-'));
+  const repoRoot = join(root, 'repo');
+  const labels = [];
+
+  try {
+    await mkdir(join(repoRoot, 'app'), {recursive: true});
+    await mkdir(join(repoRoot, 'server'), {recursive: true});
+    await buildRelease({
+      progress: {
+        async task(label, action) {
+          labels.push(label);
+          return action();
+        },
+      },
+      repoRoot,
+      runner: recordingRunner(),
+      stagingRoot: join(root, '.release-work', 'tmp', 'release-v1.24-test'),
+      version: 'v1.24',
+      workRoot: join(root, '.release-work'),
+    });
+
+    assert.deepEqual(labels.slice(0, 2), [
+      'Installing Web dependencies',
+      'Building Web',
+    ]);
+    assert.deepEqual(labels.slice(2).sort(), [
+      'Building darwin-arm64',
+      'Building linux-amd64',
+      'Building windows-amd64',
+    ]);
+  } finally {
+    await rm(root, {recursive: true, force: true});
+  }
+});
+
 test('independent release compilation uses bounded concurrency', async () => {
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-release-concurrency-'));
   const repoRoot = join(root, 'repo');
@@ -282,6 +367,18 @@ test('optional Desktop is built once outside platform packages', async () => {
         false,
       );
     }
+    assert.equal(
+      await readExists(
+        join(
+          repoRoot,
+          'server',
+          'cmd',
+          'wheelmaker-desktop',
+          'desktop_windows.syso',
+        ),
+      ),
+      false,
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -330,7 +427,7 @@ test('optional Android is built once with the unified release identity', async (
       },
       {
         cacheRoot: join(workRoot, 'cache'),
-        outputDirectory: join(outputRoot, 'v1.24', 'android'),
+        outputDirectory: join(workRoot, 'tmp', 'release-v1.24', 'android'),
         repoRoot,
         sourceSha: '0123456789abcdef0123456789abcdef01234567',
         version: 'v1.24',

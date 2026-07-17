@@ -7,7 +7,7 @@ import { runReleaseEntry } from './entry.mjs';
 const HEAD = '0123456789abcdef0123456789abcdef01234567';
 
 function fakeDependencies(overrides = {}) {
-  const state = { commands: [], output: [], prompts: [] };
+  const state = {commands: [], output: [], prompts: [], runQueries: []};
   return {
     state,
     channel: {
@@ -22,6 +22,14 @@ function fakeDependencies(overrides = {}) {
         upstreamSha: HEAD,
       };
     },
+    async findWorkflowRun(query) {
+      state.runQueries.push(query);
+      return {
+        databaseId: 4321,
+        url: 'https://github.com/swm8023/WheelMaker/actions/runs/4321',
+      };
+    },
+    now: () => '2026-07-17T01:00:00.000Z',
     async prompt(question) {
       state.prompts.push(question);
       return 'n';
@@ -89,6 +97,46 @@ test('action entry requires a clean pushed commit and passes optional asset choi
     '-f',
     'with_android=true',
   ]);
+  assert.deepEqual(deps.state.runQueries, [
+    {
+      branch: 'feat/release',
+      head: HEAD,
+      startedAt: '2026-07-17T01:00:00.000Z',
+      workflow: 'publish-release.yml',
+    },
+  ]);
+  assert.deepEqual(deps.state.commands[1], {
+    args: ['run', 'watch', '4321', '--exit-status'],
+    command: 'gh',
+  });
+  assert.equal(
+    deps.state.output.includes(
+      'Action: https://github.com/swm8023/WheelMaker/actions/runs/4321',
+    ),
+    true,
+  );
+});
+
+test('action entry prints failed step logs when the watched run fails', async () => {
+  const answers = ['n', 'n', 'y'];
+  const deps = fakeDependencies({
+    async prompt(question) {
+      deps.state.prompts.push(question);
+      return answers.shift();
+    },
+    async run(command, args) {
+      deps.state.commands.push({args, command});
+      if (args[0] === 'run' && args[1] === 'watch') {
+        throw new Error('workflow failed');
+      }
+    },
+  });
+
+  await assert.rejects(() => runReleaseEntry('action', deps), /workflow failed/);
+  assert.deepEqual(deps.state.commands.at(-1), {
+    args: ['run', 'view', '4321', '--log-failed'],
+    command: 'gh',
+  });
 });
 
 test('action entry fails without triggering when the commit is not pushed', async () => {
@@ -118,6 +166,9 @@ test('two Windows BAT entrypoints delegate to the interactive release entry', as
     const source = await readFile(new URL(`../../${name}`, import.meta.url), 'utf8');
     assert.match(source, /scripts\\release\\entry\.mjs/);
     assert.match(source, new RegExp(`entry\\.mjs\" ${mode}`));
+    assert.match(source, /set "EXIT_CODE=%ERRORLEVEL%"/i);
+    assert.match(source, /pause/i);
+    assert.match(source, /exit \/b %EXIT_CODE%/i);
   }
   await assert.rejects(
     () => readFile(new URL('../../build-release.bat', import.meta.url), 'utf8'),
@@ -131,6 +182,18 @@ test('manual Action builds and publishes in one release invocation', async () =>
     'utf8',
   );
   assert.equal(workflow.match(/node scripts\/release\.mjs/g)?.length, 1);
+  const credentialCheck = workflow.indexOf('name: Validate publishing credentials');
+  const checkout = workflow.indexOf('name: Check out selected source');
+  assert.equal(credentialCheck >= 0 && credentialCheck < checkout, true);
+  const preflight = workflow.slice(credentialCheck, checkout);
+  for (const name of [
+    'WHEELMAKER_RELEASE_APP_ID',
+    'WHEELMAKER_RELEASE_INSTALLATION_ID',
+    'WHEELMAKER_RELEASE_APP_PRIVATE_KEY',
+  ]) {
+    assert.match(preflight, new RegExp(name));
+  }
+  assert.match(preflight, /missing publishing credential/i);
   assert.match(workflow, /args\+?=\(--publish\)/);
   assert.match(workflow, /with_android:/);
   assert.match(workflow, /if: \$\{\{ inputs\.with_android \}\}/);

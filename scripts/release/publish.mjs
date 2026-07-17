@@ -1,4 +1,12 @@
-import { readFile, stat } from 'node:fs/promises';
+import {
+  copyFile,
+  mkdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
@@ -76,12 +84,19 @@ export function makeStable({ previous, release }) {
   return stable;
 }
 
-async function packageAttempt(release, version) {
+export async function packageBuiltRelease(release) {
+  const {version} = release;
+  const versionRoot = join(release.outputRoot, version);
+  const packageRoot = join(release.stagingRoot, 'final-assets');
+  await rm(packageRoot, {force: true, recursive: true});
+  await mkdir(packageRoot, {recursive: true});
+
   const artifacts = {};
   const assets = [];
+  const platforms = [];
   for (const platform of release.platforms) {
     const name = `wheelmaker-${version}-${platform.key}.tar.gz`;
-    const path = join(release.outputRoot, version, name);
+    const path = join(packageRoot, name);
     await createTarGz({ sourceDir: platform.directory, outputPath: path });
     const bytes = await readFile(path);
     const info = await stat(path);
@@ -91,6 +106,7 @@ async function packageAttempt(release, version) {
       size: info.size,
     };
     assets.push({ bytes, name });
+    platforms.push({archivePath: join(versionRoot, name), key: platform.key});
   }
 
   const manifest = {
@@ -101,12 +117,16 @@ async function packageAttempt(release, version) {
     artifacts,
   };
   const manifestBytes = encodeJsonBytes(manifest);
+  await writeFile(join(packageRoot, 'release-manifest.json'), manifestBytes);
   assets.push({ bytes: manifestBytes, name: 'release-manifest.json' });
 
   let desktopExe;
+  let desktopExePath;
   if (release.desktopExe) {
     const bytes = await readFile(release.desktopExe);
+    await copyFile(release.desktopExe, join(packageRoot, 'WheelMakerDesktop.exe'));
     assets.push({ bytes, name: 'WheelMakerDesktop.exe' });
+    desktopExePath = join(versionRoot, 'WheelMakerDesktop.exe');
     desktopExe = {
       version,
       url: releaseAssetUrl(
@@ -119,6 +139,8 @@ async function packageAttempt(release, version) {
   }
 
   let androidApk;
+  let androidApkPath;
+  let androidManifestPath;
   if (release.androidApk) {
     const apkBytes = await readFile(release.androidApk.apkPath);
     const androidManifestBytes = await readFile(
@@ -153,6 +175,12 @@ async function packageAttempt(release, version) {
       {bytes: apkBytes, name: 'WheelMakerAndroid.apk'},
       {bytes: androidManifestBytes, name: 'android-release.json'},
     );
+    await Promise.all([
+      copyFile(release.androidApk.apkPath, join(packageRoot, 'WheelMakerAndroid.apk')),
+      copyFile(release.androidApk.manifestPath, join(packageRoot, 'android-release.json')),
+    ]);
+    androidApkPath = join(versionRoot, 'WheelMakerAndroid.apk');
+    androidManifestPath = join(versionRoot, 'android-release.json');
     androidApk = {
       publishedAt: release.publishedAt,
       sha256: apkSha256,
@@ -169,7 +197,26 @@ async function packageAttempt(release, version) {
     };
   }
 
-  return { androidApk, assets, desktopExe, manifestBytes };
+  await rm(versionRoot, {force: true, recursive: true});
+  await mkdir(release.outputRoot, {recursive: true});
+  await rename(packageRoot, versionRoot);
+
+  return {
+    androidApk,
+    androidApkPath,
+    androidManifestPath,
+    assets: assets.map(asset => ({
+      ...asset,
+      path: join(versionRoot, asset.name),
+    })),
+    desktopExe,
+    desktopExePath,
+    manifestBytes,
+    manifestPath: join(versionRoot, 'release-manifest.json'),
+    platforms,
+    version,
+    versionRoot,
+  };
 }
 
 async function cleanOldDrafts(api, nowMilliseconds) {
@@ -226,6 +273,7 @@ async function writeStatus(api, release, status) {
 }
 
 export async function publishBuiltRelease(release, api) {
+  const progress = release.progress ?? {info() {}};
   let currentPhase = 'validating';
   let version = release.version;
   let draft = null;
@@ -253,8 +301,11 @@ export async function publishBuiltRelease(release, api) {
       state: 'running',
       version,
     });
-    const packaged = await packageAttempt(release, version);
+    const packaged = release.packaged ?? await (
+      release.packageRelease?.() ?? packageBuiltRelease(release)
+    );
 
+    progress.info('Committing deployment scripts');
     const scriptCommit = await api.commitFiles(
       [
         { path: 'deploy.mjs', bytes: release.deployMjsBytes },
@@ -285,6 +336,7 @@ export async function publishBuiltRelease(release, api) {
       version,
     });
     try {
+      progress.info(`Creating draft release ${version}`);
       draft = await api.createRelease({
         draft: true,
         name: `WheelMaker ${version}`,
@@ -299,7 +351,10 @@ export async function publishBuiltRelease(release, api) {
       throw error;
     }
 
-    for (const asset of packaged.assets) {
+    for (const [index, asset] of packaged.assets.entries()) {
+      progress.info(
+        `Uploading ${index + 1}/${packaged.assets.length} ${asset.name}`,
+      );
       await api.uploadReleaseAsset(draft, asset);
     }
 
@@ -309,6 +364,7 @@ export async function publishBuiltRelease(release, api) {
       state: 'running',
       version,
     });
+    progress.info(`Publishing GitHub Release ${version}`);
     await api.updateRelease(draft.id, { draft: false });
     releaseIsPublic = true;
 
@@ -338,6 +394,7 @@ export async function publishBuiltRelease(release, api) {
       },
     });
     const stableBytes = encodeJsonBytes(stable);
+    progress.info(`Updating stable.json to ${version}`);
     await api.commitFiles(
       [{ path: release.channel.stablePath, bytes: stableBytes }],
       `chore: publish stable ${version}`,
