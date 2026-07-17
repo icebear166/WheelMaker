@@ -3,16 +3,289 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Install WheelMaker with a single command.">
   <title>WheelMaker Releases</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #fafaf9;
+      --surface: #f4f4f2;
+      --border: #e4e4e0;
+      --text: #1c1c1a;
+      --text-secondary: #57574f;
+      --tab-active-bg: #ffffff;
+      --accent: #047857;
+      --accent-hover: #065f46;
+      --accent-text: #ffffff;
+      --panel-bg: #1c1c1a;
+      --panel-border: #2e2e2a;
+      --panel-text: #e8e8e4;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #101010;
+        --surface: #1a1a19;
+        --border: #2e2e2a;
+        --text: #f0f0ec;
+        --text-secondary: #a3a398;
+        --tab-active-bg: #2e2e2a;
+        --accent: #34d399;
+        --accent-hover: #6ee7b7;
+        --accent-text: #062e1f;
+        --panel-bg: #1a1a19;
+        --panel-border: #2e2e2a;
+        --panel-text: #e8e8e4;
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .wrap {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: clamp(28px, 7vh, 72px) 24px 72px;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .wrap {
+        animation: enter 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .tab, .copy {
+        transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+      }
+    }
+    @keyframes enter {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .wordmark {
+      font-size: 15px;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+    }
+
+    h1 {
+      margin: 40px 0 0;
+      font-size: clamp(28px, 5.5vw, 40px);
+      font-weight: 650;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+    }
+
+    .sub {
+      margin: 14px 0 0;
+      max-width: 52ch;
+      color: var(--text-secondary);
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    .installer { margin-top: 36px; }
+
+    .tab-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .tabs {
+      display: inline-flex;
+      gap: 2px;
+      padding: 3px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    .tab {
+      appearance: none;
+      border: 0;
+      margin: 0;
+      padding: 6px 14px;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-secondary);
+      font: inherit;
+      font-size: 13.5px;
+      font-weight: 550;
+      cursor: pointer;
+    }
+    .tab[aria-selected="true"] {
+      background: var(--tab-active-bg);
+      color: var(--text);
+    }
+
+    .copy {
+      appearance: none;
+      border: 0;
+      margin: 0;
+      padding: 8px 16px;
+      border-radius: 8px;
+      background: var(--accent);
+      color: var(--accent-text);
+      font: inherit;
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .copy:hover { background: var(--accent-hover); }
+    .copy:active { transform: translateY(1px); }
+
+    .tab:focus-visible, .copy:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .panel {
+      margin: 12px 0 0;
+      padding: 18px 20px;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+    .panel[hidden] { display: none; }
+    .panel code {
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 13px;
+      line-height: 1.7;
+      color: var(--panel-text);
+      white-space: pre;
+    }
+
+    .note {
+      margin: 12px 0 0;
+      font-size: 13.5px;
+      color: var(--text-secondary);
+    }
+
+    .what { margin-top: 48px; }
+    .what h2 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+    }
+    .what ol {
+      margin: 12px 0 0;
+      padding-left: 22px;
+      color: var(--text-secondary);
+      font-size: 14.5px;
+      line-height: 1.65;
+    }
+    .what li::marker { color: var(--text-secondary); }
+  </style>
 </head>
 <body>
-  <main>
-    <h1>WheelMaker</h1>
-    <p>Run the command for your platform from any directory.</p>
-    <h2>Windows PowerShell</h2>
-    <pre><code>$ErrorActionPreference='Stop'; $d=Join-Path $HOME '.wheelmaker'; New-Item -ItemType Directory -Force -Path $d | Out-Null; $m=Join-Path $d 'deploy.mjs'; Invoke-WebRequest 'https://release.wheelmaker.top/deploy.mjs' -OutFile $m; &amp; node $m migrate-uninstall; if ($LASTEXITCODE -eq 0) { &amp; node $m }</code></pre>
-    <h2>macOS / Linux</h2>
-    <pre><code>(d="$HOME/.wheelmaker" &amp;&amp; mkdir -p "$d" &amp;&amp; curl --fail --location --progress-bar --proto '=https' --tlsv1.2 'https://release.wheelmaker.top/deploy.mjs' --output "$d/deploy.mjs" &amp;&amp; node "$d/deploy.mjs" migrate-uninstall &amp;&amp; node "$d/deploy.mjs")</code></pre>
+  <main class="wrap">
+    <div class="wordmark">WheelMaker</div>
+
+    <h1>Install WheelMaker</h1>
+    <p class="sub">One command downloads the installer and sets up the latest release. Run it from any directory.</p>
+
+    <div class="installer">
+      <div class="tab-row">
+        <div class="tabs" role="tablist" aria-label="Platform">
+          <button class="tab" role="tab" id="tab-windows" aria-selected="false" aria-controls="panel-windows" type="button">Windows</button>
+          <button class="tab" role="tab" id="tab-unix" aria-selected="true" aria-controls="panel-unix" type="button">macOS / Linux</button>
+        </div>
+        <button class="copy" id="copy" type="button">Copy</button>
+      </div>
+
+      <pre class="panel" id="panel-windows" role="tabpanel" aria-labelledby="tab-windows" hidden><code>$ErrorActionPreference='Stop'; $d=Join-Path $HOME '.wheelmaker'; New-Item -ItemType Directory -Force -Path $d | Out-Null; $m=Join-Path $d 'deploy.mjs'; Invoke-WebRequest 'https://release.wheelmaker.top/deploy.mjs' -OutFile $m; &amp; node $m migrate-uninstall; if ($LASTEXITCODE -eq 0) { &amp; node $m }</code></pre>
+      <pre class="panel" id="panel-unix" role="tabpanel" aria-labelledby="tab-unix"><code>(d="$HOME/.wheelmaker" &amp;&amp; mkdir -p "$d" &amp;&amp; curl --fail --location --progress-bar --proto '=https' --tlsv1.2 'https://release.wheelmaker.top/deploy.mjs' --output "$d/deploy.mjs" &amp;&amp; node "$d/deploy.mjs" migrate-uninstall &amp;&amp; node "$d/deploy.mjs")</code></pre>
+
+      <p class="note">Requires Node.js. Older installations are migrated automatically.</p>
+    </div>
+
+    <section class="what" aria-labelledby="what-heading">
+      <h2 id="what-heading">What happens</h2>
+      <ol>
+        <li>Downloads the installer into <code>~/.wheelmaker</code>.</li>
+        <li>Removes any previous installation.</li>
+        <li>Installs the latest release.</li>
+      </ol>
+    </section>
+
+    <span id="copy-status" role="status" aria-live="polite" hidden></span>
   </main>
+
+  <script>
+    (function () {
+      var tabs = {
+        windows: {
+          tab: document.getElementById('tab-windows'),
+          panel: document.getElementById('panel-windows')
+        },
+        unix: {
+          tab: document.getElementById('tab-unix'),
+          panel: document.getElementById('panel-unix')
+        }
+      };
+      var active = 'unix';
+      var copyButton = document.getElementById('copy');
+      var status = document.getElementById('copy-status');
+
+      function select(name) {
+        active = name;
+        Object.keys(tabs).forEach(function (key) {
+          var selected = key === name;
+          tabs[key].tab.setAttribute('aria-selected', String(selected));
+          tabs[key].panel.hidden = !selected;
+        });
+      }
+
+      tabs.windows.tab.addEventListener('click', function () { select('windows'); });
+      tabs.unix.tab.addEventListener('click', function () { select('unix'); });
+
+      var platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.userAgent || '';
+      select(/win/i.test(platform) ? 'windows' : 'unix');
+
+      var resetTimer = null;
+      copyButton.addEventListener('click', function () {
+        var command = tabs[active].panel.textContent;
+        function done() {
+          copyButton.textContent = 'Copied';
+          status.textContent = 'Command copied to clipboard';
+          clearTimeout(resetTimer);
+          resetTimer = setTimeout(function () {
+            copyButton.textContent = 'Copy';
+            status.textContent = '';
+          }, 1600);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(command).then(done, function () { fallback(command); done(); });
+        } else {
+          fallback(command);
+          done();
+        }
+      });
+
+      function fallback(text) {
+        var area = document.createElement('textarea');
+        area.value = text;
+        area.setAttribute('readonly', '');
+        area.style.position = 'fixed';
+        area.style.opacity = '0';
+        document.body.appendChild(area);
+        area.select();
+        try { document.execCommand('copy'); } catch (error) { /* no-op */ }
+        document.body.removeChild(area);
+      }
+    })();
+  </script>
 </body>
 </html>
