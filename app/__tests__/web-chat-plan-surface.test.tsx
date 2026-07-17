@@ -129,7 +129,7 @@ describe('ChatPlanSurface', () => {
     expect(renderer!.root.findAllByProps({className: 'chat-plan-surface-list'})).toHaveLength(1);
   });
 
-  test('keeps recent sessions expanded until the user collapses them', async () => {
+  test('renders the compact pill when collapsed and reports toggle clicks', async () => {
     const projectRoot = path.join(__dirname, '..');
     const surfacePath = path.join(projectRoot, 'web', 'src', 'chat', 'ChatRecentSessionsSurface.tsx');
 
@@ -137,14 +137,50 @@ describe('ChatPlanSurface', () => {
     const {ChatRecentSessionsSurface} = require(surfacePath) as {
       ChatRecentSessionsSurface: React.ComponentType<{
         children: React.ReactNode;
+        collapsed: boolean;
+        onToggleCollapsed: () => void;
         sessionListDensity: 'relaxed' | 'compact';
       }>;
     };
+    const onToggleCollapsed = jest.fn();
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
 
     await ReactTestRenderer.act(() => {
       renderer = ReactTestRenderer.create(
-        <ChatRecentSessionsSurface sessionListDensity="compact">
+        <ChatRecentSessionsSurface collapsed={true} onToggleCollapsed={onToggleCollapsed} sessionListDensity="compact">
+          <div data-test-id="recent-row">Recent row</div>
+        </ChatRecentSessionsSurface>,
+      );
+    });
+
+    expect(renderer!.root.findAllByProps({className: 'chat-recent-sessions-surface-list'})).toHaveLength(0);
+    const trigger = renderer!.root.findByProps({className: 'chat-recent-sessions-compact-trigger'});
+
+    await ReactTestRenderer.act(() => {
+      trigger.props.onClick();
+    });
+
+    expect(onToggleCollapsed).toHaveBeenCalledTimes(1);
+  });
+
+  test('renders the expanded list when not collapsed and reports toggle clicks', async () => {
+    const projectRoot = path.join(__dirname, '..');
+    const surfacePath = path.join(projectRoot, 'web', 'src', 'chat', 'ChatRecentSessionsSurface.tsx');
+
+    const {ChatRecentSessionsSurface} = require(surfacePath) as {
+      ChatRecentSessionsSurface: React.ComponentType<{
+        children: React.ReactNode;
+        collapsed: boolean;
+        onToggleCollapsed: () => void;
+        sessionListDensity: 'relaxed' | 'compact';
+      }>;
+    };
+    const onToggleCollapsed = jest.fn();
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    await ReactTestRenderer.act(() => {
+      renderer = ReactTestRenderer.create(
+        <ChatRecentSessionsSurface collapsed={false} onToggleCollapsed={onToggleCollapsed} sessionListDensity="compact">
           <div data-test-id="recent-row">Recent row</div>
         </ChatRecentSessionsSurface>,
       );
@@ -152,20 +188,13 @@ describe('ChatPlanSurface', () => {
 
     expect(renderer!.root.findByProps({'aria-label': 'Recent sessions'}).props['data-session-list-density']).toBe('compact');
     expect(renderer!.root.findAllByProps({className: 'chat-recent-sessions-surface-list'})).toHaveLength(1);
+    expect(renderer!.root.findByProps({className: 'chat-recent-sessions-surface-title'}).children).toEqual(['Recent Sessions']);
     const collapse = renderer!.root.findByProps({'aria-label': 'Collapse recent sessions'});
 
     await ReactTestRenderer.act(() => {
       collapse.props.onClick();
     });
 
-    expect(renderer!.root.findAllByProps({className: 'chat-recent-sessions-surface-list'})).toHaveLength(0);
-    const expand = renderer!.root.findByProps({'aria-label': 'Expand recent sessions'});
-    expect(renderer!.root.findByProps({className: 'chat-recent-sessions-surface-title'}).children).toEqual(['Recent Sessions']);
-
-    await ReactTestRenderer.act(() => {
-      expand.props.onClick();
-    });
-
-    expect(renderer!.root.findAllByProps({className: 'chat-recent-sessions-surface-list'})).toHaveLength(1);
+    expect(onToggleCollapsed).toHaveBeenCalledTimes(1);
   });
 });

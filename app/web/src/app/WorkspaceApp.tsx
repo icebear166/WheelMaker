@@ -19250,6 +19250,8 @@ export function App() {
             <div className="chat-edge-surface-stack">
               {showPinnedRecentSessionsSurface ? (
                 <ChatRecentSessionsSurface
+                  collapsed={collapsedProjectIds.includes(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)}
+                  onToggleCollapsed={() => toggleWideProjectCollapsed(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)}
                   sessionListDensity={sessionListDensity}
                 >
                   <div className="wide-project-session-list recent-sessions-list chat-recent-sessions-rows">

@@ -4,14 +4,17 @@ import {useChatEdgeSurfaceGeometry} from './layout/chatEdgeSurfaceGeometry';
 
 export type ChatRecentSessionsSurfaceProps = {
   children: ReactNode;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
   sessionListDensity: SessionListDensity;
 };
 
 export const ChatRecentSessionsSurface = React.memo(function ChatRecentSessionsSurface({
   children,
+  collapsed,
+  onToggleCollapsed,
   sessionListDensity,
 }: ChatRecentSessionsSurfaceProps) {
-  const [collapsed, setCollapsed] = React.useState(false);
   const surfaceRef = useChatEdgeSurfaceGeometry('left');
 
   if (collapsed) {
@@ -27,7 +30,7 @@ export const ChatRecentSessionsSurface = React.memo(function ChatRecentSessionsS
           <button
             type="button"
             className="chat-recent-sessions-compact-trigger"
-            onClick={() => setCollapsed(false)}
+            onClick={onToggleCollapsed}
             aria-expanded={false}
             aria-label="Expand recent sessions"
             title="Expand recent sessions"
@@ -54,7 +57,7 @@ export const ChatRecentSessionsSurface = React.memo(function ChatRecentSessionsS
           <button
             type="button"
             className="chat-recent-sessions-surface-toggle"
-            onClick={() => setCollapsed(true)}
+            onClick={onToggleCollapsed}
             aria-expanded={true}
             aria-label="Collapse recent sessions"
             title="Collapse recent sessions"

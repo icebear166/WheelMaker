@@ -143,6 +143,14 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('sidebarCollapsed ? renderWideProjectActionMenu() : null');
   });
 
+  test('recent surface shares the rail collapse state', () => {
+    expect(mainTsx).toContain('collapsed={collapsedProjectIds.includes(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)}');
+    expect(mainTsx).toContain('onToggleCollapsed={() => toggleWideProjectCollapsed(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)}');
+    expect(surfaceTsx).toContain('collapsed: boolean;');
+    expect(surfaceTsx).toContain('onToggleCollapsed: () => void;');
+    expect(surfaceTsx).not.toContain('useState');
+  });
+
   test('limits long-press session and pin actions to the mobile sidebar', () => {
     const pinLongPressStart = mainTsx.slice(
       mainTsx.indexOf('const startProjectPinLongPress ='),

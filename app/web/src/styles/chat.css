@@ -2795,7 +2795,7 @@
 
 .chat-recent-sessions-surface-header {
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) 20px;
+  grid-template-columns: 20px minmax(0, 1fr);
   align-items: center;
   gap: 7px;
   min-height: 34px;
@@ -2803,8 +2803,7 @@
   border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
 }
 
-.chat-recent-sessions-surface-toggle,
-.chat-recent-sessions-surface-unpin {
+.chat-recent-sessions-surface-toggle {
   width: 20px;
   height: 20px;
   margin: 0;
@@ -2822,12 +2821,7 @@
   color: color-mix(in srgb, var(--text-secondary) 82%, var(--text-primary));
 }
 
-.chat-recent-sessions-surface-unpin {
-  color: var(--accent-primary);
-}
-
-.chat-recent-sessions-surface-toggle:hover,
-.chat-recent-sessions-surface-unpin:hover {
+.chat-recent-sessions-surface-toggle:hover {
   background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
   color: color-mix(in srgb, var(--accent-primary) 88%, var(--text-primary));
 }
