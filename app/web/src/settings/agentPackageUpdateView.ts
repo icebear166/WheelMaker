@@ -3,6 +3,8 @@ import type {
   RegistryNpmPackage,
   RegistryNpmPackageStatus,
   RegistryWheelMakerPublishStatus,
+  RegistryWheelMakerInstalledRelease,
+  RegistryWheelMakerStableRelease,
   RegistryWheelMakerUpdateJob,
   RegistryWheelMakerUpdateResponse,
 } from '../registry/registryTypes';
@@ -10,6 +12,10 @@ import type {
 export const AGENT_PACKAGE_SCAN_TIMEOUT_MS = 65000;
 export const WHEELMAKER_RELEASE_HISTORY_URL =
   'https://api.github.com/repos/swm8023/wheelmaker-release/releases';
+export const WHEELMAKER_STABLE_URL =
+  'https://raw.githubusercontent.com/swm8023/wheelmaker-release/main/stable.json';
+export const WHEELMAKER_PUBLISH_STATUS_URL =
+  'https://raw.githubusercontent.com/swm8023/wheelmaker-release/main/publish-status.json';
 
 const ACTIVE_WHEELMAKER_UPDATE_STATES = new Set([
   'queued',
@@ -23,6 +29,27 @@ export type WheelMakerReleaseHistoryEntry = {
   version: string;
   publishedAt: string;
   url: string;
+};
+
+export type WheelMakerAndroidApkPointer = {
+  version: string;
+  versionName: string;
+  versionCode: number;
+  publishedAt: string;
+  sourceSha: string;
+  url: string;
+  sha256: string;
+  size: number;
+};
+
+export type WheelMakerStableMetadata = RegistryWheelMakerStableRelease & {
+  schema: 1;
+  androidApk?: WheelMakerAndroidApkPointer;
+};
+
+export type WheelMakerPublicMetadata = {
+  stable: WheelMakerStableMetadata;
+  publishStatus: RegistryWheelMakerPublishStatus | null;
 };
 
 export type NpmPackageUpdateTarget = {
@@ -96,6 +123,8 @@ export function npmPackageUpdateSummary(count: number): string {
 
 export function wheelMakerUpdateStatusLabel(status: string): string {
   switch (status) {
+    case 'installed':
+      return 'Installed';
     case 'up_to_date':
       return 'Up to date';
     case 'update_available':
@@ -129,11 +158,110 @@ export function wheelMakerUpdateStatusLabel(status: string): string {
 
 export function wheelMakerVersionCopy(
   data: RegistryWheelMakerUpdateResponse | null,
+  stable?: RegistryWheelMakerStableRelease | null,
 ): {current: string; latest: string} {
   return {
     current: data?.installed?.version || '-',
-    latest: data?.stable?.version || '-',
+    latest: stable?.version || '-',
   };
+}
+
+export function deriveWheelMakerHubStatus(
+  installed: RegistryWheelMakerInstalledRelease | undefined,
+  stable: RegistryWheelMakerStableRelease | null,
+  job?: RegistryWheelMakerUpdateJob,
+): string {
+  if (wheelMakerUpdateJobActive(job)) return 'update_pending';
+  if (!installed) return 'not_installed';
+  if (!stable) return 'checking_failed';
+  const installedMatch = /^v1\.(0|[1-9]\d*)$/.exec(installed.version);
+  const stableMatch = /^v1\.(0|[1-9]\d*)$/.exec(stable.version);
+  if (!installedMatch || !stableMatch) return 'checking_failed';
+  const installedSequence = Number(installedMatch[1]);
+  const stableSequence = Number(stableMatch[1]);
+  if (stableSequence > installedSequence) return 'update_available';
+  if (stableSequence < installedSequence) return 'local_newer';
+  return 'up_to_date';
+}
+
+export function parseWheelMakerStable(input: unknown): WheelMakerStableMetadata {
+  const stable = input as Record<string, unknown>;
+  if (
+    !stable ||
+    typeof stable !== 'object' ||
+    stable.schema !== 1 ||
+    typeof stable.version !== 'string' ||
+    !/^v1\.(0|[1-9]\d*)$/.test(stable.version) ||
+    typeof stable.publishedAt !== 'string' ||
+    !Number.isFinite(Date.parse(stable.publishedAt)) ||
+    typeof stable.sourceSha !== 'string' ||
+    !/^[0-9a-f]{40}$/.test(stable.sourceSha)
+  ) {
+    throw new Error('WheelMaker stable metadata is invalid.');
+  }
+  if (stable.androidApk !== undefined && !validAndroidPointer(stable.androidApk)) {
+    throw new Error('WheelMaker stable metadata has an invalid Android pointer.');
+  }
+  return stable as WheelMakerStableMetadata;
+}
+
+export function parseWheelMakerPublishStatus(
+  input: unknown,
+): RegistryWheelMakerPublishStatus {
+  const status = input as Record<string, unknown>;
+  if (
+    !status ||
+    typeof status !== 'object' ||
+    status.schema !== 1 ||
+    typeof status.state !== 'string' ||
+    !status.state ||
+    typeof status.phase !== 'string' ||
+    !status.phase
+  ) {
+    throw new Error('WheelMaker publish status is invalid.');
+  }
+  return status as unknown as RegistryWheelMakerPublishStatus;
+}
+
+export async function fetchWheelMakerPublicMetadata(
+  request: typeof fetch = globalThis.fetch.bind(globalThis),
+): Promise<WheelMakerPublicMetadata> {
+  const [stableResponse, publishStatusResponse] = await Promise.all([
+    request(WHEELMAKER_STABLE_URL, {cache: 'no-store'}),
+    request(WHEELMAKER_PUBLISH_STATUS_URL, {cache: 'no-store'}),
+  ]);
+  if (!stableResponse.ok) {
+    throw new Error(`Stable metadata request failed (${stableResponse.status}).`);
+  }
+  const stable = parseWheelMakerStable(await stableResponse.json());
+  const publishStatus = publishStatusResponse.ok
+    ? parseWheelMakerPublishStatus(await publishStatusResponse.json())
+    : null;
+  return {publishStatus, stable};
+}
+
+function validAndroidPointer(input: unknown): input is WheelMakerAndroidApkPointer {
+  const pointer = input as Record<string, unknown>;
+  if (!pointer || typeof pointer !== 'object') return false;
+  if (
+    typeof pointer.version !== 'string' ||
+    !/^v1\.([1-9]\d*)$/.test(pointer.version) ||
+    pointer.versionName !== pointer.version.slice(1) ||
+    pointer.versionCode !== Number(pointer.version.slice(3)) ||
+    typeof pointer.publishedAt !== 'string' ||
+    !Number.isFinite(Date.parse(pointer.publishedAt)) ||
+    typeof pointer.sourceSha !== 'string' ||
+    !/^[0-9a-f]{40}$/.test(pointer.sourceSha) ||
+    typeof pointer.url !== 'string' ||
+    !pointer.url.startsWith('https://') ||
+    typeof pointer.sha256 !== 'string' ||
+    !/^[0-9a-f]{64}$/.test(pointer.sha256) ||
+    !Number.isSafeInteger(pointer.size) ||
+    Number(pointer.size) <= 0
+  ) {
+    return false;
+  }
+  return true;
 }
 
 export function wheelMakerUpdateJobActive(

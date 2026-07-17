@@ -211,14 +211,14 @@ describe('agent package update registry service', () => {
     });
   });
 
-  test('defines WheelMaker release and job metadata in the registry type', () => {
+  test('keeps the Registry WheelMaker response local-only', () => {
     const registryTypes = fs.readFileSync(path.join(__dirname, '..', 'web', 'src', 'registry', 'registryTypes.ts'), 'utf8');
 
     expect(registryTypes).toContain('installed?: RegistryWheelMakerInstalledRelease;');
-    expect(registryTypes).toContain('stable?: RegistryWheelMakerStableRelease;');
     expect(registryTypes).toContain('job?: RegistryWheelMakerUpdateJob;');
-    expect(registryTypes).toContain('publishStatus?: RegistryWheelMakerPublishStatus;');
     expect(registryTypes).toContain('canRequestUpdate: boolean;');
+    expect(registryTypes).not.toContain('stable?: RegistryWheelMakerStableRelease;');
+    expect(registryTypes).not.toContain('publishStatus?: RegistryWheelMakerPublishStatus;');
     expect(registryTypes).not.toContain('remoteRefreshRunning?: boolean;');
   });
 

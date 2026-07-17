@@ -1,44 +1,34 @@
 import {
-  GITHUB_ANDROID_LATEST_RELEASE_API,
   createAndroidApkUpdateBridge,
   normalizeSha256Digest,
-  parseAndroidLatestRelease,
+  parseAndroidStableRelease,
   resolveAndroidApkUpdateStatus,
 } from '../web/src/platform/android/androidApkUpdate';
 import {createAndroidNativeMessageTestHost} from '../testUtils/androidNativeMessageTestHost';
 
 describe('android apk update model', () => {
-  test('parses latest GitHub release apk asset metadata', () => {
-    const latest = parseAndroidLatestRelease({
-      tag_name: 'android-v20260531-114748',
-      target_commitish: 'abc123',
-      published_at: '2026-05-31T03:49:50Z',
-      html_url: 'https://github.com/swm8023/WheelMaker/releases/tag/android-v20260531-114748',
-      assets: [
-        {
-          name: 'android-release.json',
-          browser_download_url: 'https://example.com/android-release.json',
-          digest: 'sha256:manifest',
-          size: 695,
-        },
-        {
-          name: 'WheelMakerAndroid.apk',
-          browser_download_url: 'https://example.com/WheelMakerAndroid.apk',
-          digest: 'sha256:ABCDEF',
-          size: 5408163,
-        },
-      ],
+  test('parses carried Android APK pointer from stable metadata', () => {
+    const latest = parseAndroidStableRelease({
+      schema: 1,
+      version: 'v1.24',
+      androidApk: {
+        version: 'v1.22',
+        versionName: '1.22',
+        versionCode: 22,
+        publishedAt: '2026-05-31T03:49:50Z',
+        sourceSha: 'a'.repeat(40),
+        url: 'https://example.com/WheelMakerAndroid.apk',
+        sha256: 'a'.repeat(64),
+        size: 5408163,
+      },
     });
 
     expect(latest).toEqual({
-      tagName: 'android-v20260531-114748',
-      targetCommitish: 'abc123',
+      tagName: 'v1.22',
       publishedAt: '2026-05-31T03:49:50Z',
-      releaseUrl: 'https://github.com/swm8023/WheelMaker/releases/tag/android-v20260531-114748',
-      manifestUrl: 'https://example.com/android-release.json',
       apk: {
         downloadUrl: 'https://example.com/WheelMakerAndroid.apk',
-        sha256: 'abcdef',
+        sha256: 'a'.repeat(64),
         size: 5408163,
       },
     });
@@ -58,19 +48,22 @@ describe('android apk update model', () => {
       builtAt: '2026-05-31T03:49:18Z',
       canRequestPackageInstalls: true,
     };
-    const latest = parseAndroidLatestRelease({
-      tag_name: 'android-v1',
-      target_commitish: 'abc123',
-      published_at: '2026-05-31T03:49:50Z',
-      assets: [{
-        name: 'WheelMakerAndroid.apk',
-        browser_download_url: 'https://example.com/WheelMakerAndroid.apk',
-        digest: 'sha256:abcdef',
+    const latest = parseAndroidStableRelease({
+      schema: 1,
+      version: 'v1.1',
+      androidApk: {
+        version: 'v1.1',
+        versionName: '1.1',
+        versionCode: 1,
+        publishedAt: '2026-05-31T03:49:50Z',
+        sourceSha: 'a'.repeat(40),
+        url: 'https://example.com/WheelMakerAndroid.apk',
+        sha256: 'abcdef'.padEnd(64, '0'),
         size: 1,
-      }],
+      },
     });
 
-    expect(resolveAndroidApkUpdateStatus(local, latest)).toBe('up_to_date');
+    expect(resolveAndroidApkUpdateStatus({...local, apkSha256: 'abcdef'.padEnd(64, '0')}, latest)).toBe('up_to_date');
     expect(resolveAndroidApkUpdateStatus({...local, apkSha256: '0000'}, latest)).toBe('update_available');
     expect(resolveAndroidApkUpdateStatus({...local, apkSha256: ''}, latest)).toBe('unknown');
   });
@@ -90,6 +83,5 @@ describe('android apk update model', () => {
     expect(requests.map(request => request.action)).toEqual(['apk.getReleaseState', 'apk.install']);
 
     expect(createAndroidApkUpdateBridge({} as any).isSupported()).toBe(false);
-    expect(GITHUB_ANDROID_LATEST_RELEASE_API).toContain('/repos/swm8023/WheelMaker/releases/latest');
   });
 });

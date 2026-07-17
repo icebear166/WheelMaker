@@ -230,9 +230,8 @@ import {
   type WheelMakerNotificationPermissionState,
 } from '../notifications/NotificationProvider';
 import {
-  GITHUB_ANDROID_LATEST_RELEASE_API,
   createAndroidApkUpdateBridge,
-  parseAndroidLatestRelease,
+  parseAndroidStableRelease,
   resolveAndroidApkUpdateStatus,
   type AndroidApkInstallResult,
   type AndroidApkLatestRelease,
@@ -331,6 +330,7 @@ import {
   AGENT_PACKAGE_SCAN_TIMEOUT_MS,
   deriveNpmPackageUpdateTargets,
   deriveRegistryHubIds,
+  fetchWheelMakerPublicMetadata,
   fetchWheelMakerReleaseHistory,
   npmPackageUpdateSummary,
   packageStatusLabel,
@@ -340,6 +340,7 @@ import {
   wheelMakerUpdateStatusLabel,
   withAgentPackageTimeout,
   type NpmPackageUpdateTarget,
+  type WheelMakerPublicMetadata,
   type WheelMakerReleaseHistoryEntry,
 } from '../settings/agentPackageUpdateView';
 import {
@@ -2784,6 +2785,7 @@ export function App() {
   const [wheelMakerUpdateHubs, setWheelMakerUpdateHubs] = useState<Record<string, WheelMakerUpdateHubView>>({});
   const [wheelMakerUpdatesLoading, setWheelMakerUpdatesLoading] = useState(false);
   const [wheelMakerUpdatesError, setWheelMakerUpdatesError] = useState('');
+  const [wheelMakerPublicMetadata, setWheelMakerPublicMetadata] = useState<WheelMakerPublicMetadata | null>(null);
   const [wheelMakerUpdatePendingHubId, setWheelMakerUpdatePendingHubId] = useState('');
   const [wheelMakerUpdateAllPending, setWheelMakerUpdateAllPending] = useState(false);
   const [wheelMakerReleaseHistory, setWheelMakerReleaseHistory] = useState<WheelMakerReleaseHistoryEntry[]>([]);
@@ -13359,9 +13361,14 @@ export function App() {
     setWheelMakerUpdatesError('');
     try {
       const hubIds = await refreshProjectHubSnapshot();
+      try {
+        setWheelMakerPublicMetadata(await fetchWheelMakerPublicMetadata());
+      } catch (err) {
+        setWheelMakerPublicMetadata(null);
+        setWheelMakerUpdatesError(err instanceof Error ? err.message : String(err));
+      }
       if (hubIds.length === 0) {
         setWheelMakerUpdateHubs({});
-        setWheelMakerUpdatesError('No hubs available.');
         return;
       }
       setWheelMakerUpdateHubs(prev => {
@@ -13436,29 +13443,23 @@ export function App() {
     setAndroidApkUpdateLoading(true);
     setAndroidApkUpdateError('');
     try {
-      const local = await androidApkUpdateBridge.getLocalRelease();
-      setAndroidApkLocalRelease(local);
-      const response = await fetch(GITHUB_ANDROID_LATEST_RELEASE_API, {
-        cache: 'no-store',
-        headers: {
-          Accept: 'application/vnd.github+json',
-        },
-      });
-      if (!response.ok) {
-        throw new Error(`GitHub release check failed (${response.status})`);
-      }
-      const latest = parseAndroidLatestRelease(await response.json());
-      if (!latest) {
-        throw new Error('Latest Android APK release asset not found.');
-      }
-      setAndroidApkLatestRelease(latest);
+      setAndroidApkLocalRelease(await androidApkUpdateBridge.getLocalRelease());
+      setAndroidApkLatestRelease(
+        parseAndroidStableRelease(wheelMakerPublicMetadata?.stable),
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setAndroidApkUpdateError(message);
     } finally {
       setAndroidApkUpdateLoading(false);
     }
-  }, [androidApkUpdateBridge]);
+  }, [androidApkUpdateBridge, wheelMakerPublicMetadata?.stable]);
+
+  useEffect(() => {
+    setAndroidApkLatestRelease(
+      parseAndroidStableRelease(wheelMakerPublicMetadata?.stable),
+    );
+  }, [wheelMakerPublicMetadata]);
 
   const requestAndroidApkInstall = useCallback(async () => {
     if (!androidApkLatestRelease?.apk.downloadUrl) {
@@ -14124,9 +14125,9 @@ export function App() {
       kind: 'wheelMakerUpdate',
       hubId,
       currentVersion: data?.installed?.version || '',
-      latestVersion: data?.stable?.version || '',
+      latestVersion: wheelMakerPublicMetadata?.stable.version || '',
     });
-  }, []);
+  }, [wheelMakerPublicMetadata?.stable.version]);
 
   const requestWheelMakerUpdateAll = useCallback((hubIds: string[]) => {
     const uniqueHubIds = Array.from(new Set(hubIds.filter(Boolean))).sort();
@@ -16807,6 +16808,7 @@ export function App() {
           projects={projects}
           wheelMakerUpdatesLoading={wheelMakerUpdatesLoading}
           wheelMakerUpdatesError={wheelMakerUpdatesError}
+          wheelMakerPublicMetadata={wheelMakerPublicMetadata}
           wheelMakerUpdatePendingHubId={wheelMakerUpdatePendingHubId}
           wheelMakerUpdateAllPending={wheelMakerUpdateAllPending}
           wheelMakerReleaseHistory={wheelMakerReleaseHistory}

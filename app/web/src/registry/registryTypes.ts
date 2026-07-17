@@ -717,9 +717,7 @@ export interface RegistryWheelMakerUpdateResponse {
   status: RegistryWheelMakerUpdateStatus | string;
   hubId: string;
   installed?: RegistryWheelMakerInstalledRelease;
-  stable?: RegistryWheelMakerStableRelease;
   job?: RegistryWheelMakerUpdateJob;
-  publishStatus?: RegistryWheelMakerPublishStatus;
   canRequestUpdate: boolean;
   errorCode?: string;
 }

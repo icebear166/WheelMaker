@@ -2,7 +2,10 @@ import fs from 'fs';
 import path from 'path';
 
 import {
+  deriveWheelMakerHubStatus,
+  fetchWheelMakerPublicMetadata,
   fetchWheelMakerReleaseHistory,
+  parseWheelMakerStable,
   wheelMakerUpdateJobActive,
   wheelMakerUpdateStatusLabel,
   wheelMakerVersionCopy,
@@ -13,7 +16,7 @@ import {readWebStyles} from '../testHelpers/webStyles';
 test('renders installed and stable WheelMaker release versions', () => {
   const updateResponse: RegistryWheelMakerUpdateResponse = {
     ok: true,
-    status: 'update_available',
+    status: 'installed',
     hubId: 'hub-a',
     installed: {
       schemaVersion: 2,
@@ -23,15 +26,20 @@ test('renders installed and stable WheelMaker release versions', () => {
       manifestSha256: 'c'.repeat(64),
       installedAt: '2026-07-15T09:05:00Z',
     },
-    stable: {
-      version: 'v1.23',
-      publishedAt: '2026-07-16T09:00:00Z',
-      sourceSha: 'b'.repeat(40),
-    },
     canRequestUpdate: true,
   };
 
-  expect(wheelMakerVersionCopy(updateResponse)).toEqual({current: 'v1.22', latest: 'v1.23'});
+  const stable = parseWheelMakerStable({
+    schema: 1,
+    version: 'v1.23',
+    publishedAt: '2026-07-16T09:00:00Z',
+    sourceSha: 'b'.repeat(40),
+  });
+
+  expect(wheelMakerVersionCopy(updateResponse, stable)).toEqual({current: 'v1.22', latest: 'v1.23'});
+  expect(deriveWheelMakerHubStatus(updateResponse.installed, stable)).toBe('update_available');
+  expect(deriveWheelMakerHubStatus({...updateResponse.installed, version: 'v1.23'}, stable)).toBe('up_to_date');
+  expect(deriveWheelMakerHubStatus({...updateResponse.installed, version: 'v1.24'}, stable)).toBe('local_newer');
   expect(wheelMakerUpdateStatusLabel('downloading')).toBe('Downloading');
   expect(wheelMakerUpdateJobActive({
     schema: 1,
@@ -47,6 +55,43 @@ test('renders installed and stable WheelMaker release versions', () => {
     startedAt: '2026-07-16T09:00:00Z',
     updatedAt: '2026-07-16T09:02:00Z',
   })).toBe(false);
+});
+
+test('loads strict public metadata once per global endpoint', async () => {
+  const requests: string[] = [];
+  const request = jest.fn(async (url: string) => {
+    requests.push(url);
+    if (url.endsWith('/stable.json')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          schema: 1,
+          version: 'v1.24',
+          publishedAt: '2026-07-17T09:00:00Z',
+          sourceSha: 'a'.repeat(40),
+        }),
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        schema: 1,
+        state: 'running',
+        phase: 'packaging',
+        version: 'v1.25',
+      }),
+    };
+  }) as unknown as typeof fetch;
+
+  await expect(fetchWheelMakerPublicMetadata(request)).resolves.toMatchObject({
+    stable: {version: 'v1.24'},
+    publishStatus: {phase: 'packaging'},
+  });
+  expect(requests.filter(url => url.endsWith('/stable.json'))).toHaveLength(1);
+  expect(requests.filter(url => url.endsWith('/publish-status.json'))).toHaveLength(1);
+  expect(() => parseWheelMakerStable({schema: 2, version: 'v1.24'})).toThrow(/stable metadata/i);
 });
 
 test('loads only published WheelMaker release history', async () => {
@@ -129,6 +174,8 @@ describe('agent package update settings UI source structure', () => {
     expect(mainTsx).toContain("kind: 'wheelMakerUpdate'");
     expect(mainTsx).toContain("kind: 'wheelMakerUpdateAll'");
     expect(mainTsx).toContain('requestWheelMakerUpdate');
+    expect(mainTsx).toContain("latestVersion: wheelMakerPublicMetadata?.stable.version || ''");
+    expect(mainTsx).not.toContain('latestVersion: data?.stable?.version');
     expect(mainTsx).toContain('requestWheelMakerUpdateAll');
     expect(mainTsx).toContain('handleWheelMakerUpdateAllConfirmedAction');
     expect(mainTsx).toContain('const [wheelMakerUpdateAllPending, setWheelMakerUpdateAllPending] = useState(false);');
@@ -138,8 +185,10 @@ describe('agent package update settings UI source structure', () => {
     expect(detailTsx).toContain('wheelMakerUpdateStatusLabel');
     expect(detailTsx).toContain('wheelMakerVersionCopy');
     expect(detailTsx).toContain('formatWheelMakerDateTime');
-    expect(detailTsx).toContain('wheelMakerData?.stable?.publishedAt');
-    expect(detailTsx).toContain('wheelMakerData?.publishStatus');
+    expect(detailTsx).toContain('wheelMakerPublicMetadata?.stable.publishedAt');
+    expect(detailTsx).toContain('wheelMakerPublicMetadata?.publishStatus');
+    expect(detailTsx).not.toContain('wheelMakerData?.stable');
+    expect(detailTsx).not.toContain('wheelMakerData?.publishStatus');
     expect(detailTsx).toContain('wheelMakerReleaseHistory');
     expect(mainTsx).toContain('refreshAgentPackages');
     expect(mainTsx).toContain('deriveRegistryHubIds');
@@ -374,7 +423,7 @@ describe('agent package update settings UI source structure', () => {
     expect(summaryButtonIndex).toBeLessThan(hubListIndex);
   });
 
-  test('makes WheelMaker installed and stable release rows visually distinct', () => {
+  test('shows public stable metadata once and keeps hub cards local-only', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const detailTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'UpdateSettingsDetail.tsx'), 'utf8');
@@ -391,7 +440,10 @@ describe('agent package update settings UI source structure', () => {
     expect(wheelMakerBlock).toContain('wheelMakerVersions.current');
     expect(wheelMakerBlock).toContain('className="wheelmaker-update-release-line"');
     expect(wheelMakerBlock).toContain('wheelMakerCurrentTime');
-    expect(wheelMakerBlock).toContain('wheelMakerLatestTime');
+    expect(wheelMakerBlock).not.toContain('wheelMakerLatestTime');
+    expect(wheelMakerBlock).not.toContain('wheelMakerVersions.latest');
+    expect(detailTsx).toContain('className="settings-metadata-card wheelmaker-public-release"');
+    expect(detailTsx).toContain('wheelMakerPublicMetadata?.stable.version');
     expect(wheelMakerBlock).toContain(": 'Update'}");
     expect(mainTsx).not.toContain('Update+Publish');
 
