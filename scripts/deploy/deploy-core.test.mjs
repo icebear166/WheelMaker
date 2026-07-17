@@ -61,6 +61,26 @@ test('Windows tasks hide the Node updater and allow the Hub to run indefinitely'
   );
 });
 
+test('Windows runtime registration elevates task mutations and preserves the login user', async () => {
+  const calls = [];
+  const adapter = createRuntimeAdapter({
+    paths: RUNTIME_PATHS,
+    platform: 'win32',
+    async runner(command, args, options) {
+      calls.push({ args, command, options });
+      return { code: 0, stderr: '', stdout: '' };
+    },
+  });
+
+  await adapter.configureRuntime();
+
+  assert.equal(calls.length, 1);
+  const script = calls[0].args.at(-1);
+  assert.match(script, /-Verb RunAs/);
+  assert.match(script, /WHEELMAKER_RUNTIME_USER/);
+  assert.match(script, /-EncodedCommand/);
+});
+
 test('Linux files contain Hub service plus one-shot updater timer', () => {
   const files = linuxRuntimeFiles({
     ...RUNTIME_PATHS,
@@ -77,6 +97,18 @@ test('Linux files contain Hub service plus one-shot updater timer', () => {
     files['wheelmaker-updater.timer'],
     /OnCalendar=\*-\*-\* 03:00:00/,
   );
+  const hubUnit = files['wheelmaker-hub.service'];
+  const unitSection = hubUnit.slice(
+    hubUnit.indexOf('[Unit]'),
+    hubUnit.indexOf('[Service]'),
+  );
+  const serviceSection = hubUnit.slice(
+    hubUnit.indexOf('[Service]'),
+    hubUnit.indexOf('[Install]'),
+  );
+  assert.match(unitSection, /StartLimitIntervalSec=300/);
+  assert.match(unitSection, /StartLimitBurst=5/);
+  assert.doesNotMatch(serviceSection, /StartLimit/);
 });
 
 test('macOS files keep Hub alive and schedule updater at 03:00', () => {
@@ -576,7 +608,7 @@ test('migrate-uninstall removes legacy runtimes and preserves user data', async 
   ]);
 });
 
-test('Windows legacy migration is scoped and elevates only for existing services', () => {
+test('Windows legacy migration elevates scheduled task and service removal', () => {
   const script = windowsLegacyMigrationScript(RUNTIME_PATHS);
 
   for (const name of ['WheelMaker', 'WheelMakerUpdater', 'WheelMakerMonitor']) {
@@ -585,8 +617,12 @@ test('Windows legacy migration is scoped and elevates only for existing services
   assert.match(script, /HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run/);
   assert.match(script, /ExecutablePath/);
   assert.match(script, /StartsWith\(\$binRoot\)/);
-  assert.match(script, /Get-Service -Name \$runtimeNames/);
-  assert.match(script, /if \(\$existingServices\.Count -gt 0\)/);
+  const elevatedBlock = script.slice(
+    script.indexOf("$registrationRemoval = @'"),
+    script.indexOf("'@", script.indexOf("$registrationRemoval = @'") + 1),
+  );
+  assert.match(elevatedBlock, /Unregister-ScheduledTask/);
+  assert.match(elevatedBlock, /Get-Service/);
   assert.match(script, /sc\.exe delete/);
   assert.match(script, /-Verb RunAs/);
 });
