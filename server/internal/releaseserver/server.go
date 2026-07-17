@@ -22,10 +22,13 @@ type Server struct {
 	config         Config
 	now            func() time.Time
 	random         io.Reader
+	diskFree       func(string) (uint64, error)
+	writeJSON      func(string, any, os.FileMode) error
 	randomMu       sync.Mutex
 	sessionLocksMu sync.Mutex
 	sessionLocks   map[string]*sync.Mutex
 	statusMu       sync.Mutex
+	commitMu       sync.Mutex
 }
 
 func New(cfg Config) (*Server, error) {
@@ -38,6 +41,12 @@ func newServer(cfg Config, dependencies serverDependencies) (*Server, error) {
 	}
 	if dependencies.now == nil || dependencies.random == nil {
 		return nil, errors.New("release server dependencies are incomplete")
+	}
+	if dependencies.diskFree == nil {
+		dependencies.diskFree = availableDiskBytes
+	}
+	if dependencies.writeJSON == nil {
+		dependencies.writeJSON = writeJSONFileAtomic
 	}
 	for path, mode := range map[string]os.FileMode{
 		filepath.Join(cfg.DataRoot, "public"):  0o750,
@@ -52,6 +61,8 @@ func newServer(cfg Config, dependencies serverDependencies) (*Server, error) {
 		config:       cfg,
 		now:          dependencies.now,
 		random:       dependencies.random,
+		diskFree:     dependencies.diskFree,
+		writeJSON:    dependencies.writeJSON,
 		sessionLocks: map[string]*sync.Mutex{},
 	}, nil
 }

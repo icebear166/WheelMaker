@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -94,8 +95,10 @@ type statusOwner struct {
 }
 
 type serverDependencies struct {
-	now    func() time.Time
-	random io.Reader
+	now       func() time.Time
+	random    io.Reader
+	diskFree  func(string) (uint64, error)
+	writeJSON func(string, any, os.FileMode) error
 }
 
 func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request) bool {
@@ -129,10 +132,13 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request) bool {
 	case len(parts) == 2 && parts[1] == "status" && r.Method == http.MethodPut:
 		s.handleStatus(w, r, sessionID)
 		return true
+	case len(parts) == 2 && parts[1] == "commit" && r.Method == http.MethodPost:
+		s.handleCommit(w, sessionID)
+		return true
 	case len(parts) == 3 && parts[1] == "files" && r.Method == http.MethodPut:
 		s.handleUpload(w, r, sessionID, parts[2])
 		return true
-	case len(parts) == 1 || (len(parts) == 2 && parts[1] == "status") || (len(parts) >= 2 && parts[1] == "files"):
+	case len(parts) == 1 || (len(parts) == 2 && (parts[1] == "status" || parts[1] == "commit")) || (len(parts) >= 2 && parts[1] == "files"):
 		writeError(w, http.StatusMethodNotAllowed, "method_not_allowed")
 		return true
 	default:
@@ -278,6 +284,15 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request, sessionID 
 		writeError(w, http.StatusRequestEntityTooLarge, "session_too_large")
 		return
 	}
+	freeBytes, err := s.diskFree(s.config.DataRoot)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "storage_check_failed")
+		return
+	}
+	if freeBytes < uint64(r.ContentLength)+(1<<30) {
+		writeError(w, http.StatusInsufficientStorage, "insufficient_storage")
+		return
+	}
 	filesDirectory := filepath.Join(s.config.DataRoot, "staging", sessionID, "files")
 	temporary, err := os.CreateTemp(filesDirectory, ".upload-*.tmp")
 	if err != nil {
@@ -352,7 +367,12 @@ func (s *Server) handleCancel(w http.ResponseWriter, sessionID string) {
 
 func (s *Server) StartMaintenance(ctx context.Context) {
 	go func() {
-		_ = s.cleanupStaleSessions()
+		if err := s.recoverPublishedState(); err != nil {
+			log.Printf("release server: startup recovery failed: %v", err)
+		}
+		if err := s.cleanupStaleSessions(); err != nil {
+			log.Printf("release server: staging cleanup failed: %v", err)
+		}
 		ticker := time.NewTicker(time.Hour)
 		defer ticker.Stop()
 		for {
@@ -360,7 +380,9 @@ func (s *Server) StartMaintenance(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				_ = s.cleanupStaleSessions()
+				if err := s.cleanupStaleSessions(); err != nil {
+					log.Printf("release server: staging cleanup failed: %v", err)
+				}
 			}
 		}
 	}()
@@ -373,6 +395,18 @@ func (s *Server) cleanupStaleSessions() error {
 		return fmt.Errorf("read staging directory: %w", err)
 	}
 	for _, entry := range entries {
+		if entry.IsDir() && strings.HasPrefix(entry.Name(), "recovery-") {
+			info, infoErr := entry.Info()
+			if infoErr != nil {
+				return infoErr
+			}
+			if s.now().UTC().Sub(info.ModTime().UTC()) > staleSessionAge {
+				if err := os.RemoveAll(filepath.Join(stagingRoot, entry.Name())); err != nil {
+					return err
+				}
+			}
+			continue
+		}
 		if !entry.IsDir() || !validLowerHex(entry.Name(), 16) {
 			continue
 		}
@@ -453,7 +487,7 @@ func (s *Server) loadSession(sessionID string) (publishSession, error) {
 }
 
 func (s *Server) writeSession(session publishSession) error {
-	return writeJSONFileAtomic(
+	return s.writeJSON(
 		filepath.Join(s.config.DataRoot, "staging", session.SessionID, "session.json"),
 		session,
 		0o600,
@@ -463,10 +497,10 @@ func (s *Server) writeSession(session publishSession) error {
 func (s *Server) writePublicStatus(sessionID string, status publishStatus) error {
 	s.statusMu.Lock()
 	defer s.statusMu.Unlock()
-	if err := writeJSONFileAtomic(filepath.Join(s.config.DataRoot, "public", "publish-status.json"), status, 0o640); err != nil {
+	if err := s.writeJSON(filepath.Join(s.config.DataRoot, "public", "publish-status.json"), status, 0o640); err != nil {
 		return err
 	}
-	return writeJSONFileAtomic(filepath.Join(s.config.DataRoot, "data", "publish-status-owner.json"), statusOwner{Schema: 1, SessionID: sessionID}, 0o600)
+	return s.writeJSON(filepath.Join(s.config.DataRoot, "data", "publish-status-owner.json"), statusOwner{Schema: 1, SessionID: sessionID}, 0o600)
 }
 
 func (s *Server) writeTimeoutStatusIfCurrent(session publishSession) error {
@@ -484,7 +518,7 @@ func (s *Server) writeTimeoutStatusIfCurrent(session publishSession) error {
 		return nil
 	}
 	now := s.now().UTC().Format(time.RFC3339)
-	return writeJSONFileAtomic(filepath.Join(s.config.DataRoot, "public", "publish-status.json"), publishStatus{
+	return s.writeJSON(filepath.Join(s.config.DataRoot, "public", "publish-status.json"), publishStatus{
 		Schema:    1,
 		State:     "failed",
 		Phase:     "uploading",
@@ -617,5 +651,10 @@ func encodedPathEscapesSegments(value *url.URL) bool {
 }
 
 func defaultServerDependencies() serverDependencies {
-	return serverDependencies{now: time.Now, random: rand.Reader}
+	return serverDependencies{
+		now:       time.Now,
+		random:    rand.Reader,
+		diskFree:  availableDiskBytes,
+		writeJSON: writeJSONFileAtomic,
+	}
 }

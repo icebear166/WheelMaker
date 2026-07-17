@@ -269,8 +269,9 @@ func newSessionTestServer(t *testing.T, now func() time.Time) (*Server, string) 
 			TokenSHA256: sha256String(testPublisherToken),
 		},
 		serverDependencies{
-			now:    now,
-			random: bytes.NewReader(sessionIDFixtureBytes()),
+			now:      now,
+			random:   bytes.NewReader(sessionIDFixtureBytes()),
+			diskFree: func(string) (uint64, error) { return ^uint64(0), nil },
 		},
 	)
 	if err != nil {
