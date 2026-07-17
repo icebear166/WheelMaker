@@ -37,9 +37,11 @@ class StableOriginPathTest {
         assertFalse(Files.exists(Paths.get("src/main/java/com/wheelmaker/android/WebSourceRuntime.kt")))
         assertFalse(Files.exists(Paths.get("src/test/java/com/wheelmaker/android/WebSourceRuntimeTest.kt")))
 
-        val publish = source("../../../scripts/publish_android.ps1")
-        assertTrue(publish.contains("server\\cmd\\wheelmaker-desktop\\bootstrap\\index.html"))
-        assertTrue(publish.contains("app\\src\\main\\assets\\bootstrap\\index.html"))
+        assertFalse(Files.exists(Paths.get("../../../scripts/publish_android.ps1")))
+        val publish = source("../../../scripts/release/android.mjs")
+        assertTrue(publish.contains("'wheelmaker-desktop'"))
+        assertTrue(publish.contains("'bootstrap'"))
+        assertTrue(publish.contains("join(assetsRoot, 'bootstrap', 'index.html')"))
         assertFalse(publish.contains("WHEELMAKER_WEB_TARGET"))
         assertFalse(publish.contains("npm run build:web"))
     }
