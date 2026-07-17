@@ -337,10 +337,10 @@ test('manifest and completed archive are verified before extraction', async () =
       [manifest.artifacts['windows-amd64'].url, archiveBytes],
     ]);
 
-    const fetchedUrls = [];
+    const fetched = [];
     const result = await stageVerifiedRelease({
-      fetchBytes: async (url) => {
-        fetchedUrls.push(url);
+      fetchBytes: async (url, options) => {
+        fetched.push({label: options?.label, url});
         return downloads.get(url);
       },
       jobId: 'job-a',
@@ -352,9 +352,12 @@ test('manifest and completed archive are verified before extraction', async () =
       await readFile(join(result.extractionDirectory, 'hub', 'wheelmaker.exe'), 'utf8'),
       'hub',
     );
-    assert.deepEqual(fetchedUrls, [
-      stable.release.manifestUrl,
-      manifest.artifacts['windows-amd64'].url,
+    assert.deepEqual(fetched, [
+      {label: 'release manifest', url: stable.release.manifestUrl},
+      {
+        label: 'windows-amd64 release package',
+        url: manifest.artifacts['windows-amd64'].url,
+      },
     ]);
 
     const tamperedArchive = Buffer.from(archiveBytes);
@@ -411,6 +414,14 @@ test('normal deploy applies Hub and Web to the existing layout', async (t) => {
   }
   assert.equal(fixture.events.includes('configure-runtime'), true);
   assert.equal(fixture.events.includes('write-wrappers'), true);
+  assert.deepEqual(fixture.messages, [
+    'Downloading release v1.23',
+    'Verifying release v1.23',
+    'Applying Hub and Web',
+    'Configuring runtime',
+    'Starting Hub',
+    'Deployment completed: v1.23',
+  ]);
 
   const config = JSON.parse(await readFile(join(fixture.home, 'config.json'), 'utf8'));
   assert.deepEqual(config.projects, []);
@@ -528,6 +539,7 @@ test('migrate-uninstall removes legacy runtimes and preserves user data', async 
   }
 
   let runtimeRemoved = false;
+  const messages = [];
   await runCore(['migrate-uninstall'], {
     installDirectory: home,
     legacyMigration: {
@@ -536,6 +548,9 @@ test('migrate-uninstall removes legacy runtimes and preserves user data', async 
       },
     },
     platform: 'win32',
+    reportStatus(message) {
+      messages.push(message);
+    },
   });
 
   assert.equal(runtimeRemoved, true);
@@ -555,6 +570,10 @@ test('migrate-uninstall removes legacy runtimes and preserves user data', async 
   assert.equal(await exists(join(home, 'data', 'sessions.db')), true);
   assert.equal(await exists(join(home, 'logs', 'hub.log')), true);
   assert.equal(await exists(join(home, 'desktop', 'WheelMakerDesktop.exe')), true);
+  assert.deepEqual(messages, [
+    'Removing legacy services and files',
+    'Legacy migration cleanup completed',
+  ]);
 });
 
 test('Windows legacy migration is scoped and elevates only for existing services', () => {
@@ -711,6 +730,7 @@ async function installFixture(t, { hubRunning = true } = {}) {
   const manifestSha = '2'.repeat(64);
   const installedAt = '2026-07-16T09:05:00.000Z';
   const events = [];
+  const messages = [];
   const runtime = {
     async configureRuntime() {
       events.push('configure-runtime');
@@ -737,6 +757,9 @@ async function installFixture(t, { hubRunning = true } = {}) {
       jobIdFactory: () => 'timer-job',
       now: () => installedAt,
       platform: 'win32',
+      reportStatus(message) {
+        messages.push(message);
+      },
       runtime,
       sleep: async () => {},
       async stageRelease({ jobId, onPhase }) {
@@ -757,6 +780,7 @@ async function installFixture(t, { hubRunning = true } = {}) {
     home,
     installedAt,
     manifestSha,
+    messages,
     sourceSha,
   };
 }

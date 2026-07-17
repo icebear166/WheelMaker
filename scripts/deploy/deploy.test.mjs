@@ -153,6 +153,94 @@ test('HTTPS downloader rejects insecure URLs and redirect targets', async () => 
   );
 });
 
+test('HTTPS downloader streams without a time limit and reports byte progress', async () => {
+  const chunks = [Buffer.from('abc'), Buffer.from('def')];
+  const progress = [];
+  let fetchOptions;
+  const bytes = await fetchHttpsBytes('https://example.test/file', {
+    fetchImpl: async (_url, options) => {
+      fetchOptions = options;
+      let index = 0;
+      return {
+        body: {
+          getReader() {
+            return {
+              async read() {
+                if (index === chunks.length) return {done: true};
+                return {done: false, value: chunks[index++]};
+              },
+            };
+          },
+        },
+        headers: new Headers({'content-length': '6'}),
+        ok: true,
+        status: 200,
+      };
+    },
+    onProgress(value) {
+      progress.push(value);
+    },
+  });
+
+  assert.equal(fetchOptions.signal, undefined);
+  assert.deepEqual(bytes, Buffer.from('abcdef'));
+  assert.deepEqual(progress, [
+    {done: false, downloadedBytes: 0, totalBytes: 6},
+    {done: false, downloadedBytes: 3, totalBytes: 6},
+    {done: false, downloadedBytes: 6, totalBytes: 6},
+    {done: true, downloadedBytes: 6, totalBytes: 6},
+  ]);
+});
+
+test('HTTPS downloader treats a missing content length as an unknown total', async () => {
+  const progress = [];
+  await fetchHttpsBytes('https://example.test/file', {
+    fetchImpl: async () => new Response(Buffer.from('content')),
+    onProgress(value) {
+      progress.push(value);
+    },
+  });
+
+  assert.equal(progress[0].totalBytes, undefined);
+  assert.equal(progress.at(-1).done, true);
+  assert.equal(progress.at(-1).downloadedBytes, 7);
+});
+
+test('download progress reporter prints bounded readable progress', async () => {
+  const module = await import('./deploy.mjs');
+  assert.equal(typeof module.createDownloadProgressReporter, 'function');
+  const output = [];
+  const report = module.createDownloadProgressReporter('windows-amd64 package', {
+    write: (line) => output.push(line),
+  });
+
+  report({done: false, downloadedBytes: 0, totalBytes: 10_000_000});
+  report({done: false, downloadedBytes: 100, totalBytes: 10_000_000});
+  report({done: false, downloadedBytes: 5_000_000, totalBytes: 10_000_000});
+  report({done: true, downloadedBytes: 10_000_000, totalBytes: 10_000_000});
+
+  assert.deepEqual(output, [
+    '[deploy] Downloading windows-amd64 package: 0 B / 9.5 MB (0%)',
+    '[deploy] Downloading windows-amd64 package: 4.8 MB / 9.5 MB (50%)',
+    '[deploy] Downloading windows-amd64 package: 9.5 MB / 9.5 MB (100%)',
+  ]);
+});
+
+test('launcher reports the selected release and operation', async () => {
+  const deps = launcherFixture();
+  deps.messages = [];
+  deps.reportStatus = (message) => deps.messages.push(message);
+
+  await runLauncher(['update'], deps);
+
+  assert.deepEqual(deps.messages, [
+    'Checking latest release',
+    'Latest release: v1.7',
+    'Deployment scripts are current',
+    'Starting update to v1.7',
+  ]);
+});
+
 test('launcher embeds the configured stable URL', async () => {
   const directory = dirname(fileURLToPath(import.meta.url));
   const repoRoot = resolve(directory, '..', '..');
