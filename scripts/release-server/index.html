@@ -19,7 +19,6 @@
       --panel-bg: #0a1730;
       --panel-border: #1c3255;
       --panel-text: #d9e6f5;
-      --panel-head-text: #7d94b5;
     }
     @media (prefers-color-scheme: dark) {
       :root {
@@ -33,7 +32,6 @@
         --panel-bg: #0a1730;
         --panel-border: #1c3255;
         --panel-text: #d9e6f5;
-        --panel-head-text: #7d94b5;
       }
     }
 
@@ -122,8 +120,7 @@
     }
 
     .panel {
-      background: var(--panel-bg);
-      border: 1px solid var(--panel-border);
+      border: 1px solid var(--border);
       border-radius: 12px;
       overflow: hidden;
     }
@@ -132,18 +129,19 @@
       align-items: center;
       justify-content: space-between;
       gap: 16px;
-      padding: 18px 20px 0;
+      padding: 18px 20px;
     }
     .panel-head h2 {
       margin: 0;
-      color: var(--panel-head-text);
+      color: var(--text);
       font-size: 15px;
       font-weight: 620;
       letter-spacing: -0.01em;
     }
     .panel pre {
-      margin: 14px 0 0;
+      margin: 0;
       padding: 18px 20px 22px;
+      background: var(--panel-bg);
       border-top: 1px solid var(--panel-border);
       overflow-x: auto;
     }
