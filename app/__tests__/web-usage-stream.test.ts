@@ -1,4 +1,4 @@
-import {UsageStream, parseLimitString} from '../usageStream';
+import {UsageStream, parseLimitString} from '../web/src/usage/usageStream';
 
 describe('parseLimitString', () => {
   it('parses remaining percent with reset time', () => {

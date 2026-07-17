@@ -20,11 +20,10 @@ export type TtsVoiceId =
 export type ServerSettings = {
   voiceInput: {configured: boolean; updatedAt?: string; model: SpeechModelId};
   textToSpeech: {configured: boolean; updatedAt?: string; model: TtsModelId; voice: TtsVoiceId};
-  deepSeek: {configured: boolean; updatedAt?: string};
 };
 
 export type ServerSettingsUpdate = {
-  section: 'voiceInput' | 'textToSpeech' | 'deepSeek';
+  section: 'voiceInput' | 'textToSpeech';
   field: 'key' | 'model' | 'voice';
   action: 'set' | 'clear';
   value?: string;
@@ -58,7 +57,6 @@ export const TTS_VOICE_OPTIONS: Array<{id: TtsVoiceId; label: string}> = [
 export const DEFAULT_SERVER_SETTINGS: ServerSettings = {
   voiceInput: {configured: false, model: 'doubao-streaming-asr-2.0'},
   textToSpeech: {configured: false, model: 'mimo-v2.5-tts', voice: 'Mia'},
-  deepSeek: {configured: false},
 };
 
 function recordOf(value: unknown): Record<string, unknown> {
@@ -83,10 +81,8 @@ export function normalizeServerSettings(value: unknown): ServerSettings {
   const root = recordOf(value);
   const voiceInput = recordOf(root.voiceInput);
   const textToSpeech = recordOf(root.textToSpeech);
-  const deepSeek = recordOf(root.deepSeek);
   const voiceUpdatedAt = updatedAtOf(voiceInput.updatedAt);
   const ttsUpdatedAt = updatedAtOf(textToSpeech.updatedAt);
-  const deepSeekUpdatedAt = updatedAtOf(deepSeek.updatedAt);
   return {
     voiceInput: {
       configured: voiceInput.configured === true,
@@ -104,10 +100,6 @@ export function normalizeServerSettings(value: unknown): ServerSettings {
       voice: isTtsVoiceId(textToSpeech.voice)
         ? textToSpeech.voice
         : DEFAULT_SERVER_SETTINGS.textToSpeech.voice,
-    },
-    deepSeek: {
-      configured: deepSeek.configured === true,
-      ...(deepSeekUpdatedAt ? {updatedAt: deepSeekUpdatedAt} : {}),
     },
   };
 }

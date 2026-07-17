@@ -15,7 +15,6 @@ describe('server settings protocol', () => {
     expect(normalizeServerSettings({
       voiceInput: {configured: 'yes', updatedAt: 123, model: 'other'},
       textToSpeech: {configured: true, updatedAt: '2026-07-14T01:02:03Z', model: 'mimo-v2-tts', voice: 'other'},
-      deepSeek: {configured: true, updatedAt: '2026-07-14T01:02:03Z', apiKey: 'must-ignore'},
     })).toEqual({
       voiceInput: DEFAULT_SERVER_SETTINGS.voiceInput,
       textToSpeech: {
@@ -24,7 +23,6 @@ describe('server settings protocol', () => {
         model: 'mimo-v2-tts',
         voice: DEFAULT_SERVER_SETTINGS.textToSpeech.voice,
       },
-      deepSeek: {configured: true, updatedAt: '2026-07-14T01:02:03Z'},
     });
   });
 
@@ -39,7 +37,7 @@ describe('server settings protocol', () => {
 
     await repository.initialize('wss://example.test/ws', 'wheelmaker-android');
     await repository.getServerSettings();
-    const update: ServerSettingsUpdate = {section: 'deepSeek', field: 'key', action: 'set', value: 'short'};
+    const update: ServerSettingsUpdate = {section: 'voiceInput', field: 'key', action: 'set', value: 'short'};
     await repository.updateServerSettings(update);
     await expect(repository.getAndroidSpeechCredential()).resolves.toEqual({
       accessToken: 'speech-key', version: 'v1', model: 'doubao-streaming-asr-2.0',

@@ -1,7 +1,7 @@
 import TestRenderer, {act} from 'react-test-renderer';
 import React from 'react';
-import {UsageCompactBar} from '../UsageCompactBar';
-import {UsageSnapshot} from '../usageStream';
+import {UsageCompactBar} from '../web/src/usage/UsageCompactBar';
+import {UsageSnapshot} from '../web/src/usage/usageStream';
 
 const snap: UsageSnapshot = {
   updatedAt: 0,

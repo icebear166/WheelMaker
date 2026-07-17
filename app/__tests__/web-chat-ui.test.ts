@@ -1633,8 +1633,8 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className="mobile-project-session-error"');
     expect(sidebarSurfaceSource).toContain('if (!isWide) setDrawerOpen(false);');
     expect(mainTsx).toContain("tab === 'chat' && !isWide ? renderMobileChatSessionSheet() : renderSidebarMain()");
-    expect(mainTsx).toContain("if (detail === 'tokenStats') {");
-    expect(mainTsx).toContain('renderTokenStatsSettingsDetail(options)');
+    expect(mainTsx).not.toContain("if (detail === 'tokenStats') {");
+    expect(mainTsx).not.toContain('renderTokenStatsSettingsDetail(options)');
     expect(mainTsx).toContain("const loadSettingsBundle = () => import(/* webpackChunkName: \"settings\" */ '../settings/SettingsBundle')");
     expect(mainTsx).toContain('const SettingsRootContent = React.lazy(() => loadSettingsBundle().then(module => ({');
     expect(mainTsx).toContain('<SettingsRootContent');

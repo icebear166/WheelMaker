@@ -1,7 +1,7 @@
 import TestRenderer, {act} from 'react-test-renderer';
 import React from 'react';
-import {UsageCardPanel} from '../UsageCardPanel';
-import {UsageSnapshot} from '../usageStream';
+import {UsageCardPanel} from '../web/src/usage/UsageCardPanel';
+import {UsageSnapshot} from '../web/src/usage/usageStream';
 
 const snap: UsageSnapshot = {
   updatedAt: 0,

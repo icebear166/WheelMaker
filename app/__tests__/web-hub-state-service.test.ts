@@ -105,51 +105,6 @@ describe('hub state registry service', () => {
     });
   });
 
-  test('runs tokenStats deepseekStats action', async () => {
-    const response = {
-      ok: true,
-      provider: 'deepseek',
-      rangeType: 'month' as const,
-      month: '2026-06',
-      updatedAt: '2026-06-05T00:00:00Z',
-      balance: {isAvailable: true, items: []},
-      usage: {rangeType: 'month' as const, month: '2026-06', rows: []},
-      usageUnavailable: false,
-    };
-    const client = {
-      request: jest.fn().mockResolvedValue({
-        type: 'response',
-        payload: {
-          state: {
-            hubId: 'hub-a',
-            status: 'ready',
-            sections: {
-              tokenStats: {status: 'ready', data: response},
-            },
-          },
-        },
-      }),
-    } as unknown as RegistryClient;
-    const repository = new RegistryRepository(client);
-
-    const stats = await repository.fetchDeepSeekTokenStats('hub-a:project-a', {
-      rangeType: 'month',
-      month: '2026-06',
-    });
-
-    expect(stats).toEqual(response);
-    expect(client.request).toHaveBeenCalledWith({
-      method: RegistryMethods.HubStateAction,
-      hubId: 'hub-a',
-      payload: {
-        section: 'tokenStats',
-        action: 'deepseekStats',
-        params: {rangeType: 'month', month: '2026-06'},
-      },
-      timeoutMs: 60000,
-    });
-  });
-
   test('normalizes malformed hub state sections', async () => {
     const client = {
       request: jest.fn().mockResolvedValue({

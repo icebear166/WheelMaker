@@ -465,22 +465,6 @@ export function SettingsRootContent({
               </label>
             </div>
           </div>
-          <div className="voice-input-settings-menu">
-            <div className="settings-row sidebar-setting-row">
-              <span>
-                <span className="codicon codicon-sparkle settings-row-icon" aria-hidden="true" />
-                DeepSeek
-              </span>
-            </div>
-            <ServerSecretEditor
-              label="DeepSeek API Key"
-              section="deepSeek"
-              configured={serverSettings.deepSeek.configured}
-              updatedAt={serverSettings.deepSeek.updatedAt}
-              busy={serverSettingsBusy}
-              onUpdate={updateServerSetting}
-            />
-          </div>
           {serverSettingsError ? (
             <div className="voice-input-settings-nested">
               <div className="settings-metadata-line">{serverSettingsError}</div>

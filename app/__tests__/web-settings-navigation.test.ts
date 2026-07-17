@@ -16,7 +16,7 @@ import {
 
 describe('settings navigation model', () => {
   test('classifies settings pages into root, peers, and children', () => {
-    expect(SETTINGS_PEER_DETAILS).toEqual(['update', 'skills', 'portRelay', 'tokenStats']);
+    expect(SETTINGS_PEER_DETAILS).toEqual(['update', 'skills', 'portRelay']);
     expect(SETTINGS_CHILD_DETAILS).toEqual(['connectionStatus', 'database', 'debugLogs', 'deviceSessions', 'skillDetail']);
 
     expect(settingsPageKind(null)).toBe('root');
@@ -25,7 +25,7 @@ describe('settings navigation model', () => {
     expect(settingsPageKind('database')).toBe('child');
     expect(settingsPageKind('skillDetail')).toBe('child');
 
-    expect(isSettingsPeerDetail('tokenStats')).toBe(true);
+    expect(isSettingsPeerDetail('portRelay')).toBe(true);
     expect(isSettingsPeerDetail('database')).toBe(false);
     expect(isSettingsChildDetail('debugLogs')).toBe(true);
     expect(isSettingsChildDetail('skills')).toBe(false);
@@ -36,7 +36,6 @@ describe('settings navigation model', () => {
     expect(mobileSettingsShortcutIndex('update')).toBe(1);
     expect(mobileSettingsShortcutIndex('skills')).toBe(2);
     expect(mobileSettingsShortcutIndex('portRelay')).toBe(3);
-    expect(mobileSettingsShortcutIndex('tokenStats')).toBe(4);
     expect(mobileSettingsShortcutIndex('database')).toBe(0);
   });
 
@@ -45,7 +44,6 @@ describe('settings navigation model', () => {
     expect(settingsDetailTitle('update')).toBe('Update');
     expect(settingsDetailTitle('skills')).toBe('Skills');
     expect(settingsDetailTitle('portRelay')).toBe('Port Relay');
-    expect(settingsDetailTitle('tokenStats')).toBe('Token Stats');
     expect(settingsDetailTitle('connectionStatus')).toBe('Connection Status');
     expect(settingsDetailTitle('database')).toBe('Database');
     expect(settingsDetailTitle('debugLogs')).toBe('Logs');
@@ -134,7 +132,6 @@ describe('settings navigation model', () => {
     expect(mobileSettingsShortcutIndex('update')).toBe(1);
     expect(mobileSettingsShortcutIndex('skills')).toBe(2);
     expect(mobileSettingsShortcutIndex('portRelay')).toBe(3);
-    expect(mobileSettingsShortcutIndex('tokenStats')).toBe(4);
     expect(css).toContain('.settings-workbench-screen {');
     expect(css).not.toContain('/* workspace-ui-targeted-evolution: settings */');
     expect(css).toContain('.settings-danger-row');

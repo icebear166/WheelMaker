@@ -1,4 +1,4 @@
-import {remainingPercent, tightnessColor, mergeAccountsAcrossHubs} from '../usageTypes';
+import {remainingPercent, tightnessColor, mergeAccountsAcrossHubs} from '../web/src/usage/usageTypes';
 
 describe('remainingPercent', () => {
   it('converts usedPercent to remaining', () => {

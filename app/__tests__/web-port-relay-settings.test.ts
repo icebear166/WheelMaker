@@ -30,7 +30,6 @@ describe('port relay settings UI source structure', () => {
     expect(mobileShortcutsEnd).toBeGreaterThan(mobileShortcutsStart);
     const mobileShortcuts = settingsSurfaceTsx.slice(mobileShortcutsStart, mobileShortcutsEnd);
     expect(mobileShortcuts.indexOf("detail: 'skills'")).toBeLessThan(mobileShortcuts.indexOf("detail: 'portRelay'"));
-    expect(mobileShortcuts.indexOf("detail: 'portRelay'")).toBeLessThan(mobileShortcuts.indexOf("detail: 'tokenStats'"));
     expect(settingsSurfaceTsx).toContain('onClick={() => onDetailSelect(shortcut.detail)}');
   });
 

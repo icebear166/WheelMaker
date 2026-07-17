@@ -87,7 +87,7 @@ export interface RegistryDeviceSession {
 export type RegistryClientName = 'wheelmaker-web' | 'wheelmaker-desktop' | 'wheelmaker-android';
 
 export interface RegistryServerConfigUpdatePayload {
-  section: 'voiceInput' | 'textToSpeech' | 'deepSeek';
+  section: 'voiceInput' | 'textToSpeech';
   field: 'key' | 'model' | 'voice';
   action: 'set' | 'clear';
   value?: string;
@@ -571,9 +571,6 @@ export interface RegistryTokenProviderAccount {
   plan?: string;
   fiveHourLimit?: string;
   weeklyLimit?: string;
-  premiumRequestsUsed?: number;
-  premiumRequestsRemaining?: number;
-  premiumRequestsMonth?: string;
   balance: RegistryDeepSeekBalanceView;
   usage: RegistryDeepSeekUsageView;
   usageUnavailable: boolean;

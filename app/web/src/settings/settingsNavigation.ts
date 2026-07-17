@@ -1,8 +1,7 @@
 export type SettingsPeerDetail =
   | 'update'
   | 'skills'
-  | 'portRelay'
-  | 'tokenStats';
+  | 'portRelay';
 
 export type SettingsChildDetail =
   | 'connectionStatus'
@@ -18,7 +17,6 @@ export const SETTINGS_PEER_DETAILS: readonly SettingsPeerDetail[] = [
   'update',
   'skills',
   'portRelay',
-  'tokenStats',
 ];
 
 export const SETTINGS_CHILD_DETAILS: readonly SettingsChildDetail[] = [
@@ -72,8 +70,6 @@ export function mobileSettingsShortcutIndex(
       return 2;
     case 'portRelay':
       return 3;
-    case 'tokenStats':
-      return 4;
     default:
       return 0;
   }

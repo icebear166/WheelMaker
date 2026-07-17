@@ -15,10 +15,9 @@ describe('server settings', () => {
     expect(server).toBeGreaterThan(chat);
     expect(connection).toBeGreaterThan(server);
     expect(serverBlock.indexOf('Voice Input')).toBeLessThan(serverBlock.indexOf('Text-to-Speech'));
-    expect(serverBlock.indexOf('Text-to-Speech')).toBeLessThan(serverBlock.indexOf('DeepSeek'));
     expect(serverBlock).toMatch(/Voice Input[\s\S]*Volcengine ASR Access Token[\s\S]*Model/);
     expect(serverBlock).toMatch(/Text-to-Speech[\s\S]*MiMo TTS API Key[\s\S]*Model[\s\S]*Voice/);
-    expect(serverBlock).toMatch(/DeepSeek[\s\S]*DeepSeek API Key/);
+    expect(serverBlock).not.toContain('DeepSeek');
   });
 
   test('renders set-only password editors and never binds a server secret value', () => {
