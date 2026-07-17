@@ -435,15 +435,36 @@ export async function extractTarGz(
   }
 }
 
-function requireHttps(value, label) {
-  let url;
+function resolveReleasePath(baseUrl, path, label) {
+  let base;
   try {
-    url = new URL(value);
+    base = new URL(baseUrl);
   } catch {
-    throw new Error(`${label} URL is invalid`);
+    throw new Error('trusted release base URL is invalid');
   }
-  if (url.protocol !== 'https:') {
-    throw new Error(`${label} URL must use HTTPS`);
+  if (
+    base.protocol !== 'https:' ||
+    base.username ||
+    base.password ||
+    base.pathname !== '/' ||
+    base.search ||
+    base.hash ||
+    baseUrl !== base.origin
+  ) {
+    throw new Error('trusted release base URL is invalid');
+  }
+  if (
+    typeof path !== 'string' ||
+    !path.startsWith('/') ||
+    path.startsWith('//') ||
+    path.includes('?') ||
+    path.includes('#')
+  ) {
+    throw new Error(`${label} path is invalid`);
+  }
+  const url = new URL(path, `${base.origin}/`);
+  if (url.origin !== base.origin) {
+    throw new Error(`${label} path must stay on the trusted release origin`);
   }
   return url.href;
 }
@@ -464,6 +485,7 @@ export async function stageVerifiedRelease({
   jobId,
   onPhase = async () => {},
   platform = currentPlatformKey(),
+  releaseBaseUrl,
   stable,
   stagingDirectory,
 }) {
@@ -471,8 +493,9 @@ export async function stageVerifiedRelease({
   if (!['windows-amd64', 'linux-amd64', 'darwin-arm64'].includes(platform)) {
     throw new Error(`unsupported deployment platform: ${platform}`);
   }
-  const manifestUrl = requireHttps(
-    stable?.release?.manifestUrl,
+  const manifestUrl = resolveReleasePath(
+    releaseBaseUrl,
+    stable?.release?.manifestPath,
     'release manifest',
   );
   const manifestBytes = await fetchBytes(manifestUrl, {
@@ -485,7 +508,7 @@ export async function stageVerifiedRelease({
   }
   const manifest = JSON.parse(manifestBytes.toString('utf8'));
   if (
-    manifest.schema !== 1 ||
+    manifest.schema !== 2 ||
     manifest.version !== stable.version ||
     manifest.sourceSha !== stable.sourceSha
   ) {
@@ -500,7 +523,11 @@ export async function stageVerifiedRelease({
   ) {
     throw new Error(`release artifact metadata is invalid: ${platform}`);
   }
-  const artifactUrl = requireHttps(artifact.url, 'release artifact');
+  const artifactUrl = resolveReleasePath(
+    releaseBaseUrl,
+    artifact.path,
+    'release artifact',
+  );
   const archiveBytes = await fetchBytes(artifactUrl, {
     label: `${platform} release package`,
   });
@@ -979,6 +1006,7 @@ async function executeLegacyMigration(deps) {
     await rm(directory, { force: true, recursive: true });
   }
   await rm(join(paths.home, 'update-now.signal'), { force: true });
+  await rm(join(paths.home, 'release.json'), { force: true });
   await removeRetiredLifecycleWrappers(paths.home);
 }
 
@@ -1010,7 +1038,11 @@ async function executeDesktopUpdate(deps) {
   ) {
     throw new Error('stable release does not contain a valid Desktop executable');
   }
-  requireHttps(pointer.url, 'Desktop executable');
+  const desktopUrl = resolveReleasePath(
+    deps.trustedReleaseBaseUrl,
+    pointer.path,
+    'Desktop executable',
+  );
   const platform = deps.platform ?? process.platform;
   const runner = deps.runner ?? runProcess;
   const isDesktopRunning =
@@ -1026,7 +1058,7 @@ async function executeDesktopUpdate(deps) {
   const desktopDirectory = join(home, 'desktop');
   const targetPath = join(desktopDirectory, 'WheelMakerDesktop.exe');
   const temporaryPath = `${targetPath}.tmp`;
-  const bytes = Buffer.from(await deps.fetchBytes(pointer.url, {
+  const bytes = Buffer.from(await deps.fetchBytes(desktopUrl, {
     label: `Desktop ${pointer.version}`,
   }));
   await mkdir(desktopDirectory, { recursive: true });
@@ -1421,6 +1453,7 @@ async function executeDeployment(internalUpdate, deps, runtime) {
         stageVerifiedRelease({
           ...input,
           fetchBytes: deps.fetchBytes,
+          releaseBaseUrl: deps.trustedReleaseBaseUrl,
           stable: deps.trustedStable,
           stagingDirectory,
         }));

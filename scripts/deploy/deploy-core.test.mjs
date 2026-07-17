@@ -343,7 +343,7 @@ test('manifest and completed archive are verified before extraction', async () =
     await createTarGz({ outputPath: archivePath, sourceDir: source });
     const archiveBytes = await readFile(archivePath);
     const manifest = {
-      schema: 1,
+      schema: 2,
       version: 'v1.7',
       publishedAt: '2026-07-16T09:00:00.000Z',
       sourceSha: '0'.repeat(40),
@@ -351,7 +351,7 @@ test('manifest and completed archive are verified before extraction', async () =
         'windows-amd64': {
           sha256: sha256Bytes(archiveBytes),
           size: archiveBytes.length,
-          url: 'https://release.example/windows.tar.gz',
+          path: '/releases/v1.7/wheelmaker-v1.7-windows-amd64.tar.gz',
         },
       },
     };
@@ -360,22 +360,22 @@ test('manifest and completed archive are verified before extraction', async () =
       androidApk: {
         sha256: 'f'.repeat(64),
         size: 123,
-        url: 'https://release.example/WheelMakerAndroid.apk',
+        path: '/releases/v1.7/WheelMakerAndroid.apk',
         version: 'v1.7',
         versionCode: 7,
         versionName: '1.7',
       },
-      schema: 1,
+      schema: 2,
       version: 'v1.7',
       sourceSha: '0'.repeat(40),
       release: {
         manifestSha256: sha256Bytes(manifestBytes),
-        manifestUrl: 'https://release.example/release-manifest.json',
+        manifestPath: '/releases/v1.7/release-manifest.json',
       },
     };
     const downloads = new Map([
-      [stable.release.manifestUrl, manifestBytes],
-      [manifest.artifacts['windows-amd64'].url, archiveBytes],
+      ['https://release.example/releases/v1.7/release-manifest.json', manifestBytes],
+      ['https://release.example/releases/v1.7/wheelmaker-v1.7-windows-amd64.tar.gz', archiveBytes],
     ]);
 
     const fetched = [];
@@ -386,6 +386,7 @@ test('manifest and completed archive are verified before extraction', async () =
       },
       jobId: 'job-a',
       platform: 'windows-amd64',
+      releaseBaseUrl: 'https://release.example',
       stable,
       stagingDirectory: join(root, 'staging'),
     });
@@ -394,22 +395,23 @@ test('manifest and completed archive are verified before extraction', async () =
       'hub',
     );
     assert.deepEqual(fetched, [
-      {label: 'release manifest', url: stable.release.manifestUrl},
+      {label: 'release manifest', url: 'https://release.example/releases/v1.7/release-manifest.json'},
       {
         label: 'windows-amd64 release package',
-        url: manifest.artifacts['windows-amd64'].url,
+        url: 'https://release.example/releases/v1.7/wheelmaker-v1.7-windows-amd64.tar.gz',
       },
     ]);
 
     const tamperedArchive = Buffer.from(archiveBytes);
     tamperedArchive[tamperedArchive.length - 1] ^= 0xff;
-    downloads.set(manifest.artifacts['windows-amd64'].url, tamperedArchive);
+    downloads.set('https://release.example/releases/v1.7/wheelmaker-v1.7-windows-amd64.tar.gz', tamperedArchive);
     await assert.rejects(
       () =>
         stageVerifiedRelease({
           fetchBytes: async (url) => downloads.get(url),
           jobId: 'job-b',
           platform: 'windows-amd64',
+          releaseBaseUrl: 'https://release.example',
           stable,
           stagingDirectory: join(root, 'staging'),
         }),
@@ -481,7 +483,7 @@ test('Desktop update follows carried stable pointer', async (t) => {
     '{"schemaVersion":2,"version":"v1.1"}\n',
   );
   const nextDesktop = Buffer.from('desktop-v1.2');
-  const desktopUrl = 'https://release.example/v1.2/WheelMakerDesktop.exe';
+  const desktopUrl = 'https://release.example/releases/v1.2/WheelMakerDesktop.exe';
 
   await runCore(['desktop-update'], {
     fetchBytes: async (url) => {
@@ -490,12 +492,13 @@ test('Desktop update follows carried stable pointer', async (t) => {
     },
     installDirectory: home,
     isDesktopRunning: async () => false,
+    trustedReleaseBaseUrl: 'https://release.example',
     trustedStable: {
-      schema: 1,
+      schema: 2,
       version: 'v1.3',
       desktopExe: {
         version: 'v1.2',
-        url: desktopUrl,
+        path: '/releases/v1.2/WheelMakerDesktop.exe',
         sha256: sha256Bytes(nextDesktop),
       },
     },
@@ -523,12 +526,13 @@ test('Desktop update refuses to replace a running executable', async (t) => {
         },
         installDirectory: join(root, '.wheelmaker'),
         isDesktopRunning: async () => true,
+        trustedReleaseBaseUrl: 'https://release.example',
         trustedStable: {
-          schema: 1,
+          schema: 2,
           version: 'v1.3',
           desktopExe: {
             version: 'v1.2',
-            url: 'https://release.example/v1.2/WheelMakerDesktop.exe',
+            path: '/releases/v1.2/WheelMakerDesktop.exe',
             sha256: sha256Bytes(Buffer.from('new-desktop')),
           },
         },
@@ -575,6 +579,7 @@ test('migrate-uninstall removes legacy runtimes and preserves user data', async 
   await writeFile(join(home, 'mobile', 'android', 'old.apk'), 'android');
   await writeFile(join(home, 'tmp', 'deploy.tmp'), 'tmp');
   await writeFile(join(home, 'update-now.signal'), 'full-update');
+  await writeFile(join(home, 'release.json'), '{"schemaVersion":2,"version":"v1.5"}\n');
   for (const name of ['restart.bat', 'restart.sh', 'status.bat', 'status.sh']) {
     await writeFile(join(home, name), name);
   }
@@ -604,6 +609,7 @@ test('migrate-uninstall removes legacy runtimes and preserves user data', async 
   assert.equal(await exists(join(home, 'mobile')), false);
   assert.equal(await exists(join(home, 'tmp')), false);
   assert.equal(await exists(join(home, 'update-now.signal')), false);
+  assert.equal(await exists(join(home, 'release.json')), false);
   for (const name of ['restart.bat', 'restart.sh', 'status.bat', 'status.sh']) {
     assert.equal(await exists(join(home, name)), false);
   }
@@ -834,7 +840,7 @@ async function installFixture(t, { hubRunning = true, platform = 'win32' } = {})
         return { extractionDirectory, manifestSha256: manifestSha };
       },
       trustedStable: {
-        schema: 1,
+        schema: 2,
         version: 'v1.23',
         publishedAt: '2026-07-16T09:00:00Z',
         sourceSha,

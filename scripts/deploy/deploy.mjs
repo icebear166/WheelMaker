@@ -5,8 +5,9 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-export const STABLE_URL =
-  'https://raw.githubusercontent.com/swm8023/wheelmaker-release/main/stable.json';
+export const RELEASE_BASE_URL = '__WHEELMAKER_RELEASE_BASE_URL__';
+export const STABLE_PATH = '/stable.json';
+export const STABLE_URL = `${RELEASE_BASE_URL}${STABLE_PATH}`;
 
 const MAX_DOWNLOAD_BYTES = 5 * 1024 * 1024;
 const MAX_PACKAGE_DOWNLOAD_BYTES = 2 * 1024 * 1024 * 1024;
@@ -24,12 +25,58 @@ function sha256Bytes(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-function requireHttps(value, label) {
+function requireHttps(value, label, trustedOrigin) {
   const url = new URL(value);
   if (url.protocol !== 'https:') {
     throw new Error(`${label} must use HTTPS`);
   }
+  if (trustedOrigin && url.origin !== trustedOrigin) {
+    throw new Error(`${label} must stay on the same origin`);
+  }
   return url;
+}
+
+function validateReleaseBaseUrl(value) {
+  let base;
+  try {
+    base = new URL(value);
+  } catch {
+    throw new Error('deploy.mjs has not been rendered with a release base URL');
+  }
+  if (
+    value === '__WHEELMAKER_' + 'RELEASE_BASE_URL__' ||
+    base.protocol !== 'https:' ||
+    base.username ||
+    base.password ||
+    base.pathname !== '/' ||
+    base.search ||
+    base.hash ||
+    value !== base.origin
+  ) {
+    throw new Error('deploy.mjs has not been rendered with a valid release base URL');
+  }
+  return base.origin;
+}
+
+export function resolveReleasePath(baseUrl, path, label = 'release path') {
+  const base = validateReleaseBaseUrl(baseUrl);
+  if (
+    typeof path !== 'string' ||
+    !path.startsWith('/') ||
+    path.startsWith('//') ||
+    path.includes('?') ||
+    path.includes('#')
+  ) {
+    if (path?.startsWith?.('//')) {
+      throw new Error(`${label} must stay on the same origin`);
+    }
+    throw new Error(`${label} must be a root-relative path`);
+  }
+  const resolved = new URL(path, `${base}/`);
+  if (resolved.origin !== base) {
+    throw new Error(`${label} must stay on the same origin`);
+  }
+  return resolved.href;
 }
 
 function formatBytes(bytes) {
@@ -88,8 +135,9 @@ export async function fetchHttpsBytes(url, {
   maxBytes = MAX_DOWNLOAD_BYTES,
   maxRedirects = MAX_REDIRECTS,
   onProgress,
+  trustedOrigin,
 } = {}) {
-  let currentUrl = requireHttps(url, 'download URL');
+  let currentUrl = requireHttps(url, 'download URL', trustedOrigin);
   for (let redirects = 0; redirects <= maxRedirects; redirects += 1) {
     const response = await fetchImpl(currentUrl, {
       redirect: 'manual',
@@ -105,6 +153,7 @@ export async function fetchHttpsBytes(url, {
       currentUrl = requireHttps(
         new URL(location, currentUrl).href,
         'redirect URL',
+        trustedOrigin,
       );
       continue;
     }
@@ -167,27 +216,52 @@ export function parseDeployArgs(args) {
   return [args[0]];
 }
 
-function validateStable(stable) {
+function validateStable(stable, releaseBaseUrl) {
   if (
-    stable?.schema !== 1 ||
+    stable?.schema !== 2 ||
     !/^v1\.(0|[1-9]\d*)$/.test(stable.version ?? '') ||
     !/^[0-9a-f]{40}$/.test(stable.sourceSha ?? '')
   ) {
     throw new Error('stable metadata schema is invalid');
   }
-  for (const [label, url, hash] of [
-    ['deploy.mjs', stable.deploy?.mjsUrl, stable.deploy?.mjsSha256],
-    ['deploy-core.mjs', stable.deploy?.coreUrl, stable.deploy?.coreSha256],
+  for (const [label, path, hash] of [
+    ['deploy.mjs', stable.deploy?.mjsPath, stable.deploy?.mjsSha256],
+    ['deploy-core.mjs', stable.deploy?.corePath, stable.deploy?.coreSha256],
     [
       'release manifest',
-      stable.release?.manifestUrl,
+      stable.release?.manifestPath,
       stable.release?.manifestSha256,
     ],
   ]) {
-    requireHttps(url, `${label} URL`);
+    resolveReleasePath(releaseBaseUrl, path, label);
     if (!/^[0-9a-f]{64}$/.test(hash ?? '')) {
       throw new Error(`${label} SHA-256 is invalid`);
     }
+  }
+  if (stable.desktopExe !== undefined) {
+    if (
+      !/^v1\.(0|[1-9]\d*)$/.test(stable.desktopExe?.version ?? '') ||
+      !/^[0-9a-f]{64}$/.test(stable.desktopExe?.sha256 ?? '')
+    ) {
+      throw new Error('Desktop executable metadata is invalid');
+    }
+    resolveReleasePath(releaseBaseUrl, stable.desktopExe.path, 'Desktop executable');
+  }
+  if (stable.androidApk !== undefined) {
+    const android = stable.androidApk;
+    if (
+      !/^v1\.(0|[1-9]\d*)$/.test(android?.version ?? '') ||
+      android.versionName !== android.version.slice(1) ||
+      !Number.isSafeInteger(android.versionCode) ||
+      android.versionCode < 1 ||
+      !/^[0-9a-f]{40}$/.test(android.sourceSha ?? '') ||
+      !/^[0-9a-f]{64}$/.test(android.sha256 ?? '') ||
+      !Number.isSafeInteger(android.size) ||
+      android.size < 1
+    ) {
+      throw new Error('Android APK metadata is invalid');
+    }
+    resolveReleasePath(releaseBaseUrl, android.path, 'Android APK');
   }
   return stable;
 }
@@ -209,7 +283,10 @@ export async function runLauncher(rawArgs, deps = createDefaultLauncherDependenc
 
   deps.reportStatus?.('Checking latest release');
   const stableBytes = await deps.fetchBytes(deps.stableUrl, {label: 'stable.json'});
-  const stable = validateStable(JSON.parse(stableBytes.toString('utf8')));
+  const stable = validateStable(
+    JSON.parse(stableBytes.toString('utf8')),
+    deps.releaseBaseUrl,
+  );
   deps.reportStatus?.(`Latest release: ${stable.version}`);
 
   const localLauncher = await deps.readLocalFile('deploy.mjs');
@@ -221,7 +298,7 @@ export async function runLauncher(rawArgs, deps = createDefaultLauncherDependenc
     deps.reportStatus?.('Updating deploy.mjs');
     const launcher = await downloadVerifiedScript(
       deps,
-      stable.deploy.mjsUrl,
+      resolveReleasePath(deps.releaseBaseUrl, stable.deploy.mjsPath, 'deploy.mjs'),
       stable.deploy.mjsSha256,
       'deploy.mjs',
     );
@@ -235,7 +312,7 @@ export async function runLauncher(rawArgs, deps = createDefaultLauncherDependenc
     deps.reportStatus?.('Updating deploy-core.mjs');
     const core = await downloadVerifiedScript(
       deps,
-      stable.deploy.coreUrl,
+      resolveReleasePath(deps.releaseBaseUrl, stable.deploy.corePath, 'deploy-core.mjs'),
       stable.deploy.coreSha256,
       'deploy-core.mjs',
     );
@@ -257,7 +334,11 @@ export async function runLauncher(rawArgs, deps = createDefaultLauncherDependenc
           : `Running ${args.join(' ')}`;
   deps.reportStatus?.(operation);
 
-  return deps.runCore(args, { stable, stableBytes });
+  return deps.runCore(args, {
+    releaseBaseUrl: deps.releaseBaseUrl,
+    stable,
+    stableBytes,
+  });
 }
 
 async function readFileIfPresent(path) {
@@ -288,6 +369,7 @@ async function atomicWrite(path, bytes) {
 export function createDefaultLauncherDependencies({
   installDirectory = dirname(fileURLToPath(import.meta.url)),
 } = {}) {
+  const releaseBaseUrl = validateReleaseBaseUrl(RELEASE_BASE_URL);
   const launcherPath = join(installDirectory, 'deploy.mjs');
   const pendingLauncherPath = join(installDirectory, 'deploy.next.mjs');
   const corePath = join(installDirectory, 'deploy-core.mjs');
@@ -296,9 +378,11 @@ export function createDefaultLauncherDependencies({
     fetchHttpsBytes(url, {
       maxBytes,
       onProgress: createDownloadProgressReporter(label),
+      trustedOrigin: releaseBaseUrl,
     });
   return {
-    stableUrl: STABLE_URL,
+    releaseBaseUrl,
+    stableUrl: resolveReleasePath(releaseBaseUrl, STABLE_PATH, 'stable.json'),
     fetchBytes: (url, {label} = {}) =>
       fetchWithProgress(url, {label, maxBytes: MAX_DOWNLOAD_BYTES}),
     onEvent() {},
@@ -336,6 +420,7 @@ export function createDefaultLauncherDependencies({
         reportStatus,
         trustedStable: context.stable,
         trustedStableBytes: context.stableBytes,
+        trustedReleaseBaseUrl: context.releaseBaseUrl,
       });
     },
     stageLauncher(bytes) {

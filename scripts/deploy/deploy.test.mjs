@@ -5,6 +5,8 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
+  RELEASE_BASE_URL,
+  STABLE_PATH,
   STABLE_URL,
   fetchHttpsBytes,
   parseDeployArgs,
@@ -27,36 +29,37 @@ function launcherFixture({
   if (pendingLauncher) files.set('deploy.next.mjs', pendingLauncher);
 
   const stable = {
-    schema: 1,
+    schema: 2,
     version: 'v1.7',
     publishedAt: '2026-07-16T09:00:00.000Z',
     sourceSha: '0'.repeat(40),
     deploy: {
-      mjsUrl: 'https://raw.example/deploy.mjs',
+      mjsPath: '/releases/v1.7/deploy.mjs',
       mjsSha256: sha256Bytes(nextLauncher),
-      coreUrl: 'https://raw.example/deploy-core.mjs',
+      corePath: '/releases/v1.7/deploy-core.mjs',
       coreSha256: sha256Bytes(nextCore),
     },
     release: {
-      manifestUrl: 'https://release.example/release-manifest.json',
+      manifestPath: '/releases/v1.7/release-manifest.json',
       manifestSha256: 'a'.repeat(64),
     },
   };
   const stableBytes = encodeJsonBytes(
-    invalidStable ? { ...stable, schema: 2 } : stable,
+    invalidStable ? { ...stable, schema: 1 } : stable,
   );
   const events = [];
 
   return {
     events,
     files,
-    stableUrl: 'https://stable.example/stable.json',
+    releaseBaseUrl: 'https://release.example',
+    stableUrl: 'https://release.example/stable.json',
     async fetchBytes(url) {
-      if (url === 'https://stable.example/stable.json') {
+      if (url === 'https://release.example/stable.json') {
         return stableBytes;
       }
-      if (url === stable.deploy.mjsUrl) return nextLauncher;
-      if (url === stable.deploy.coreUrl) return nextCore;
+      if (url === `https://release.example${stable.deploy.mjsPath}`) return nextLauncher;
+      if (url === `https://release.example${stable.deploy.corePath}`) return nextCore;
       throw new Error(`unexpected URL: ${url}`);
     },
     onEvent(event) {
@@ -153,6 +156,17 @@ test('HTTPS downloader rejects insecure URLs and redirect targets', async () => 
   );
 });
 
+test('launcher rejects a path that tries to escape the trusted release origin', async () => {
+  const deps = launcherFixture();
+  const stable = JSON.parse((await deps.fetchBytes(deps.stableUrl)).toString('utf8'));
+  stable.deploy.mjsPath = '//evil.example/deploy.mjs';
+  deps.fetchBytes = async url => {
+    if (url === deps.stableUrl) return encodeJsonBytes(stable);
+    throw new Error(`unexpected URL: ${url}`);
+  };
+  await assert.rejects(() => runLauncher([], deps), /same origin/i);
+});
+
 test('HTTPS downloader streams without a time limit and reports byte progress', async () => {
   const chunks = [Buffer.from('abc'), Buffer.from('def')];
   const progress = [];
@@ -241,14 +255,12 @@ test('launcher reports the selected release and operation', async () => {
   ]);
 });
 
-test('launcher embeds the configured stable URL', async () => {
+test('launcher source contains one render marker and one stable path', async () => {
   const directory = dirname(fileURLToPath(import.meta.url));
   const repoRoot = resolve(directory, '..', '..');
-  const channel = JSON.parse(
-    await readFile(resolve(repoRoot, 'scripts', 'release', 'channel.json'), 'utf8'),
-  );
-  assert.equal(
-    STABLE_URL,
-    `https://raw.githubusercontent.com/${channel.owner}/${channel.repository}/${channel.branch}/${channel.stablePath}`,
-  );
+  const source = await readFile(resolve(repoRoot, 'scripts', 'deploy', 'deploy.mjs'), 'utf8');
+  assert.equal(RELEASE_BASE_URL, '__WHEELMAKER_RELEASE_BASE_URL__');
+  assert.equal(STABLE_PATH, '/stable.json');
+  assert.equal(STABLE_URL, '__WHEELMAKER_RELEASE_BASE_URL__/stable.json');
+  assert.equal(source.match(/__WHEELMAKER_RELEASE_BASE_URL__/g)?.length, 1);
 });
