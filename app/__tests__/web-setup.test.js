@@ -219,6 +219,7 @@ describe('web runtime setup', () => {
         config: [
           path.join(projectRoot, 'web', 'webpack.config.js'),
           path.join(projectRoot, 'package-lock.json'),
+          path.join(projectRoot, '..', 'scripts', 'release', 'channel.json'),
         ],
       },
     });
