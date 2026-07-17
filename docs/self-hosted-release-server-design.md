@@ -184,6 +184,8 @@ DELETE /api/publish/{session}
 
 新安装页提供可在任意目录执行的 PowerShell 和 POSIX shell 一行命令。命令从 `release.wheelmaker.top/deploy.mjs` 下载启动器到 `~/.wheelmaker/`，依次执行 `migrate-uninstall` 和普通部署。下载不设置总时长超时，并显示当前阶段与字节进度。
 
+Windows 迁移删除旧计划任务和服务时，以提权操作后的实际注册状态为准：即使提权子进程返回非零，只要重新枚举后已无残留就继续清理；仍有残留时才失败，并保留一次性诊断文件和具体残留名称，避免第一次已完成删除、第二次重跑才成功的误报。
+
 不发布 GitHub 过渡版本。旧用户的 GitHub 启动器不能自动发现新地址，必须重新执行新命令；迁移完成后，部署、更新、Desktop 更新和 Android 更新都不得访问 GitHub Release 或 `raw.githubusercontent.com`。
 
 Web 从 `/stable.json`、`/publish-status.json` 和 `/releases.json` 读取全局版本、阶段和历史，不再调用 GitHub Releases API。Hub 继续只报告本机 `release.json`、更新 job 和安装状态，不新增远程下载职责，也不修改协议版本。
