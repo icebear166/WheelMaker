@@ -860,7 +860,7 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('chat-header-archive-control compact${mobile');
     expect(mainTsx).toContain('renderChatHubSummary()');
     expect(mainTsx).toMatch(
-      /const renderChatSessionHeader = \(mobile: boolean\) => \{[\s\S]*?const chatSessionHeaderClassName = `sidebar-title-row chat-session-header\$\{sessionSearchHeaderExpanded \? ' search-open' : ''\}\$\{mobile \? ' mobile' : ''\}`;[\s\S]*?\{!sessionSearchHeaderExpanded \? renderChatMenuSettingsButton\(\) : null\}[\s\S]*?<div className="chat-sidebar-title-actions">[\s\S]*?\{renderChatHubSummary\(\)\}[\s\S]*?\{renderChatArchiveControls\(\)\}[\s\S]*?\{renderChatHeaderSearchControls\(\)\}/,
+      /const renderChatSessionHeader = \(mobile: boolean\) => \{[\s\S]*?const chatSessionHeaderClassName = `sidebar-title-row chat-session-header\$\{sessionSearchHeaderExpanded \? ' search-open' : ''\}\$\{mobile \? ' mobile' : ''\}`;[\s\S]*?\{!sessionSearchHeaderExpanded \? \([\s\S]*?\{renderChatMenuUsageButton\(\)\}[\s\S]*?\{renderChatMenuSettingsButton\(\)\}[\s\S]*?\) : null\}[\s\S]*?<div className="chat-sidebar-title-actions">[\s\S]*?\{renderChatHubSummary\(\)\}[\s\S]*?\{renderChatArchiveControls\(\)\}[\s\S]*?\{renderChatHeaderSearchControls\(\)\}/,
     );
     const renderMainStart = mainTsx.indexOf('const renderMain = () => {');
     const chatMainStart = mainTsx.indexOf("if (tab === 'chat') {", renderMainStart);
@@ -1633,8 +1633,8 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className="mobile-project-session-error"');
     expect(sidebarSurfaceSource).toContain('if (!isWide) setDrawerOpen(false);');
     expect(mainTsx).toContain("tab === 'chat' && !isWide ? renderMobileChatSessionSheet() : renderSidebarMain()");
-    expect(mainTsx).toContain("if (detail === 'tokenStats') {");
-    expect(mainTsx).toContain('renderTokenStatsSettingsDetail(options)');
+    expect(mainTsx).not.toContain("if (detail === 'tokenStats') {");
+    expect(mainTsx).not.toContain('renderTokenStatsSettingsDetail(options)');
     expect(mainTsx).toContain("const loadSettingsBundle = () => import(/* webpackChunkName: \"settings\" */ '../settings/SettingsBundle')");
     expect(mainTsx).toContain('const SettingsRootContent = React.lazy(() => loadSettingsBundle().then(module => ({');
     expect(mainTsx).toContain('<SettingsRootContent');

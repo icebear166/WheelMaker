@@ -321,11 +321,10 @@ import {
 } from '../settings/SettingsSurface';
 import { installMobileViewportZoomGuard } from '../shell/layouts/mobile/mobileViewportZoomGuard';
 import { resolveLayoutMode } from '../shell/state/responsiveLayout';
-import {
-  scanTokenStatsAcrossHubs,
-  tokenStatsFailureSummary,
-  type TokenProviderSectionView,
-} from '../settings/tokenStatsView';
+import {UsageStream} from '../usage/usageStream';
+import type {UsageSnapshot} from '../usage/usageStream';
+import {UsageCompactBar} from '../usage/UsageCompactBar';
+import {UsageCardPanel} from '../usage/UsageCardPanel';
 import {
   AGENT_PACKAGE_SCAN_TIMEOUT_MS,
   deriveNpmPackageUpdateTargets,
@@ -542,7 +541,6 @@ import type {
   RegistrySkillDetail,
   RegistrySkillScope,
   RegistrySkillSourceCandidate,
-  RegistryTokenScanResult,
   RegistryWheelMakerUpdateResponse,
   RegistrySpeechTranscriptEvent,
   RegistryFileIndexSearchResult,
@@ -566,9 +564,6 @@ const ConnectionStatusSettingsDetail = React.lazy(() => loadSettingsBundle().the
 })));
 const DeviceSessionsSettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.DeviceSessionsSettingsDetail,
-})));
-const TokenStatsSettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
-  default: module.TokenStatsSettingsDetail,
 })));
 const DatabaseSettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.DatabaseSettingsDetail,
@@ -2778,10 +2773,12 @@ export function App() {
   const settingsDetailViewRef = useRef<SettingsDetailView>(settingsDetailView);
   const [desktopSidebarResizing, setDesktopSidebarResizing] = useState(false);
   const [desktopSidebarDraftWidth, setDesktopSidebarDraftWidth] = useState<number | null>(null);
-  const [tokenStatsLoading, setTokenStatsLoading] = useState(false);
-  const [tokenStatsError, setTokenStatsError] = useState('');
-  const [tokenStatsUpdatedAt, setTokenStatsUpdatedAt] = useState('');
-  const [tokenStatsProviders, setTokenStatsProviders] = useState<TokenProviderSectionView[]>([]);
+  const usageStreamRef = useRef<UsageStream | null>(null);
+  if (usageStreamRef.current === null) {
+    usageStreamRef.current = new UsageStream();
+  }
+  const [usageSnapshot, setUsageSnapshot] = useState<UsageSnapshot>({accounts: [], updatedAt: 0});
+  const [usagePanelOpen, setUsagePanelOpen] = useState(false);
   const [wheelMakerUpdateHubs, setWheelMakerUpdateHubs] = useState<Record<string, WheelMakerUpdateHubView>>({});
   const [wheelMakerUpdatesLoading, setWheelMakerUpdatesLoading] = useState(false);
   const [wheelMakerUpdatesError, setWheelMakerUpdatesError] = useState('');
@@ -7170,9 +7167,6 @@ export function App() {
     setSidebarSettingsOpen(true);
     if (detail === 'skills') {
       setSkillsError('');
-    }
-    if (detail === 'tokenStats') {
-      setTokenStatsError('');
     }
     if (detail === 'portRelay') {
       setPortRelayError('');
@@ -12597,102 +12591,32 @@ export function App() {
     });
   }, [registryAuth.state, autoConnecting, connected]);
 
-  const mergeTokenProviders = useCallback(
-    (entries: Array<{hubId: string; projectId?: string; result: RegistryTokenScanResult}>): TokenProviderSectionView[] => {
-      const sections = new Map<string, TokenProviderSectionView>();
-      for (const entry of entries) {
-        const providers = Array.isArray(entry.result.providers) ? entry.result.providers : [];
-        for (const provider of providers) {
-          const providerId = (provider.id || provider.name || 'unknown').trim().toLowerCase();
-          if (!providerId) continue;
-          const section = sections.get(providerId) ?? {
-            id: providerId,
-            name: provider.name || provider.id || providerId,
-            accounts: [],
-          };
-          const accounts = Array.isArray(provider.accounts) ? provider.accounts : [];
-          for (const account of accounts) {
-            section.accounts.push({
-              ...account,
-              id: account.id || account.alias || account.displayName || 'account',
-              hubId: entry.hubId,
-              projectId: entry.projectId ?? '',
-              providerId: section.id,
-              providerName: section.name,
-            });
-          }
-          sections.set(providerId, section);
-        }
-      }
-      const merged = Array.from(sections.values());
-      merged.forEach(section => {
-        section.accounts.sort((left, right) => {
-          const hubDiff = left.hubId.localeCompare(right.hubId);
-          if (hubDiff !== 0) return hubDiff;
-          return (left.alias || left.displayName || '').localeCompare(right.alias || right.displayName || '');
-        });
-      });
-      merged.sort((left, right) => left.name.localeCompare(right.name));
-      return merged;
-    },
-    [],
-  );
-
-  const tokenTagVariantClass = useCallback((scope: 'agent' | 'hub', value: string): string => {
-    return scope === 'agent'
-      ? tagVariantClass('token-stats-pill-agent', value)
-      : tagVariantClass('token-stats-pill-hub', value);
-  }, []);
-
-  const refreshTokenStats = useCallback(async () => {
-    setTokenStatsLoading(true);
-    setTokenStatsError('');
-    try {
-      const snapshot = await service.listProjectSnapshot();
-      if (snapshot.projects.length > 0) {
-        setProjects(snapshot.projects);
-      }
-      setRegistryHubs(snapshot.hubs);
-      const hubIds = deriveRegistryHubIds(snapshot.hubs);
-      if (hubIds.length === 0) {
-        setTokenStatsProviders([]);
-        setTokenStatsUpdatedAt('');
-        setTokenStatsError('No hubs available.');
-        return;
-      }
-      const applyTokenStatsResponses = (responses: Array<{hubId: string; projectId?: string; result: RegistryTokenScanResult}>) => {
-        setTokenStatsProviders(mergeTokenProviders(responses));
-        const latestUpdatedAt = responses
-          .map(item => item.result.updatedAt || '')
-          .sort((left, right) => right.localeCompare(left))[0] || '';
-        setTokenStatsUpdatedAt(latestUpdatedAt);
-      };
-      const scanResult = await scanTokenStatsAcrossHubs(
-        hubIds,
-        hubId => service.scanTokenStats(hubId),
-        {
-          onSuccess: applyTokenStatsResponses,
-          onFailure: failures => {
-            setTokenStatsError(tokenStatsFailureSummary(failures));
-          },
-        },
-      );
-      applyTokenStatsResponses(scanResult.responses);
-      setTokenStatsError(tokenStatsFailureSummary(scanResult.failures));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setTokenStatsError(message);
-    } finally {
-      setTokenStatsLoading(false);
-    }
-  }, [mergeTokenProviders]);
-
   useEffect(() => {
-    if (settingsDetailView !== 'tokenStats') {
+    const stream = usageStreamRef.current;
+    if (!stream) {
       return;
     }
-    refreshTokenStats().catch(() => undefined);
-  }, [settingsDetailView, refreshTokenStats]);
+    const refreshUsageAcrossHubs = () => {
+      service.listProjectSnapshot().then(snapshot => {
+        if (snapshot.projects.length > 0) {
+          setProjects(snapshot.projects);
+        }
+        setRegistryHubs(snapshot.hubs);
+        for (const hub of snapshot.hubs) {
+          service.scanTokenStats(hub.hubId).catch(() => undefined);
+        }
+      }).catch(() => undefined);
+    };
+    const offEvent = service.onEvent(env => stream.ingest(env as any));
+    const unsub = stream.subscribe(setUsageSnapshot);
+    refreshUsageAcrossHubs();
+    const interval = window.setInterval(refreshUsageAcrossHubs, 5 * 60 * 1000);
+    return () => {
+      offEvent();
+      unsub();
+      window.clearInterval(interval);
+    };
+  }, []);
 
   const agentPackageActionKey = useCallback((hubId: string, packageName: string): string => {
     return `${hubId}:${packageName}`;
@@ -16697,20 +16621,6 @@ export function App() {
         </button>
       );
     }
-    if (detail === 'tokenStats') {
-      return (
-        <button
-          type="button"
-          className="token-stats-refresh-btn token-stats-refresh-inline"
-          onClick={() => {
-            refreshTokenStats().catch(() => undefined);
-          }}
-          disabled={tokenStatsLoading}
-        >
-          {tokenStatsLoading ? 'Refreshing...' : 'Refresh'}
-        </button>
-      );
-    }
     if (detail === 'database') {
       return (
         <button
@@ -16871,23 +16781,6 @@ export function App() {
       options,
     );
 
-  const renderTokenStatsSettingsDetail = (options?: SettingsDetailShellOptions) =>
-    renderSettingsDetailShell(
-      'Token Stats',
-      <React.Suspense fallback={null}>
-        <TokenStatsSettingsDetail
-          providers={tokenStatsProviders}
-          updatedAt={tokenStatsUpdatedAt}
-          loading={tokenStatsLoading}
-          error={tokenStatsError}
-          tagVariantClass={tokenTagVariantClass}
-          hubAccentStyle={hubAccentStyle}
-        />
-      </React.Suspense>,
-      renderSettingsDetailActions('tokenStats'),
-      options,
-    );
-
   const renderDatabaseSettingsDetail = (options?: SettingsDetailShellOptions) =>
     renderSettingsDetailShell(
       'Database',
@@ -17001,9 +16894,6 @@ export function App() {
     if (detail === 'skillDetail') {
       return renderSkillDetailSettingsDetail(options);
     }
-    if (detail === 'tokenStats') {
-      return renderTokenStatsSettingsDetail(options);
-    }
     if (detail === 'database') {
       return renderDatabaseSettingsDetail(options);
     }
@@ -17097,11 +16987,28 @@ export function App() {
     </button>
   );
 
+  const renderChatMenuUsageButton = () => (
+    <button
+      type="button"
+      className="chat-menu-icon-button chat-menu-usage-button"
+      onClick={() => setUsagePanelOpen(true)}
+      title="Agent usage"
+      aria-label="Agent usage"
+    >
+      <span className="codicon codicon-dashboard" aria-hidden="true" />
+    </button>
+  );
+
   const renderChatSessionHeader = (mobile: boolean) => {
     const chatSessionHeaderClassName = `sidebar-title-row chat-session-header${sessionSearchHeaderExpanded ? ' search-open' : ''}${mobile ? ' mobile' : ''}`;
     const chatSessionHeaderContent = (
       <>
-        {!sessionSearchHeaderExpanded ? renderChatMenuSettingsButton() : null}
+        {!sessionSearchHeaderExpanded ? (
+          <>
+            {renderChatMenuUsageButton()}
+            {renderChatMenuSettingsButton()}
+          </>
+        ) : null}
         <div className="chat-sidebar-title-actions">
           {renderChatHubSummary()}
           {renderChatArchiveControls()}
@@ -19330,6 +19237,24 @@ export function App() {
             <ChatPlanSurface
               mode="mobile"
               plan={selectedChatPlan}
+            />
+          ) : null}
+          <UsageCompactBar snapshot={usageSnapshot} onExpand={() => setUsagePanelOpen(true)} />
+          {usagePanelOpen ? (
+            <UsageCardPanel
+              snapshot={usageSnapshot}
+              onClose={() => setUsagePanelOpen(false)}
+              onRefresh={() => {
+                service.listProjectSnapshot().then(snapshot => {
+                  if (snapshot.projects.length > 0) {
+                    setProjects(snapshot.projects);
+                  }
+                  setRegistryHubs(snapshot.hubs);
+                  for (const hub of snapshot.hubs) {
+                    service.scanTokenStats(hub.hubId).catch(() => undefined);
+                  }
+                }).catch(() => undefined);
+              }}
             />
           ) : null}
           <div

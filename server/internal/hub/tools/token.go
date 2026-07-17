@@ -49,7 +49,6 @@ func (e *tokenCommandError) commandMessage() string {
 }
 
 var scanHubTokenStats = ScanTokenStats
-var fetchHubDeepSeekTokenStats = FetchDeepSeekTokenStats
 
 func NewTokenCommand() *TokenCommand {
 	return &TokenCommand{}
@@ -87,16 +86,6 @@ func (c *TokenCommand) Handle(ctx context.Context, raw json.RawMessage) (any, *t
 			"hubId":     payload.HubID,
 			"providers": supportedTokenProviders(),
 		}, nil
-	case "deepseekStats":
-		if strings.TrimSpace(payload.APIKey) == "" {
-			return nil, &tokenCommandError{Code: rp.CodeInvalidArgument, Message: "apiKey is required"}
-		}
-		result, err := fetchHubDeepSeekTokenStats(ctx, payload.APIKey, payload.RangeType, payload.Month)
-		if err != nil {
-			message := strings.ReplaceAll(err.Error(), payload.APIKey, "[redacted]")
-			return nil, &tokenCommandError{Code: rp.CodeInvalidArgument, Message: message}
-		}
-		return result, nil
 	default:
 		return nil, &tokenCommandError{Code: rp.CodeInvalidArgument, Message: "unsupported cmd.token action"}
 	}

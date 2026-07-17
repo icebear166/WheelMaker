@@ -63,7 +63,9 @@ describe('web session search UI wiring', () => {
     expect(sharedHeader).toContain('renderChatHeaderSearchControls()');
     expect(sharedHeader).toContain('renderChatHubSummary()');
     expect(sharedHeader).toContain('className="chat-sidebar-title-actions"');
-    expect(sharedHeader).toContain('{!sessionSearchHeaderExpanded ? renderChatMenuSettingsButton() : null}');
+    expect(sharedHeader).toContain('{!sessionSearchHeaderExpanded ? (');
+    expect(sharedHeader).toContain('{renderChatMenuUsageButton()}');
+    expect(sharedHeader).toContain('{renderChatMenuSettingsButton()}');
     expect(sharedHeader.indexOf('renderChatHubSummary()')).toBeLessThan(sharedHeader.lastIndexOf('renderChatHeaderSearchControls()'));
     expect(main).toContain('{renderChatSessionHeader(true)}');
     expect(main).toContain('renderChatSessionHeader(false)');

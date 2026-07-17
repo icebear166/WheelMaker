@@ -23,13 +23,11 @@ describe('web server speech settings', () => {
     const settings = normalizeServerSettings({
       voiceInput: {configured: true, model: 'bad-model', accessToken: 'must-be-dropped'},
       textToSpeech: {configured: false, apiKey: 'must-be-dropped'},
-      deepSeek: {configured: true, apiKey: 'must-be-dropped'},
     });
 
     expect(settings).toEqual({
       voiceInput: {configured: true, model: 'doubao-streaming-asr-2.0'},
       textToSpeech: {configured: false, model: 'mimo-v2.5-tts', voice: 'Mia'},
-      deepSeek: {configured: true},
     });
     expect(settings.voiceInput.configured).toBe(true);
     expect(settings.textToSpeech.configured).toBe(false);

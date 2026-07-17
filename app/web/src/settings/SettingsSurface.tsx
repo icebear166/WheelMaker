@@ -69,12 +69,6 @@ export const MOBILE_SETTINGS_SHORTCUTS: readonly MobileSettingsShortcut[] = [
     label: 'Port Relay',
     iconClass: 'codicon-radio-tower',
   },
-  {
-    detail: 'tokenStats',
-    title: 'Token Stats',
-    label: 'Token Stats',
-    iconClass: 'codicon-graph-line',
-  },
 ];
 
 export function settingsDetailTitle(detail: SettingsDetailId): string {
@@ -83,8 +77,6 @@ export function settingsDetailTitle(detail: SettingsDetailId): string {
       return 'Update';
     case 'skills':
       return 'Skills';
-    case 'tokenStats':
-      return 'Token Stats';
     case 'database':
       return 'Database';
     case 'portRelay':

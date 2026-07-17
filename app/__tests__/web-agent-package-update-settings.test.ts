@@ -573,7 +573,7 @@ describe('agent package update settings UI source structure', () => {
     const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain('renderUpdateSettingsDetail(options)');
-    expect(mainTsx).toContain('renderTokenStatsSettingsDetail(options)');
+    expect(mainTsx).not.toContain('renderTokenStatsSettingsDetail(options)');
     expect(mainTsx).toContain('renderSkillsSettingsDetail(options)');
     expect(mainTsx).toContain("openSettingsPeer('portRelay')");
     expect(mainTsx).not.toContain("openSettingsPeer('ccSwitch')");
@@ -607,7 +607,6 @@ describe('agent package update settings UI source structure', () => {
     expect(surfaceShortcutEnd).toBeGreaterThan(surfaceShortcutStart);
     expect(surfaceShortcuts.indexOf("detail: 'update'")).toBeLessThan(surfaceShortcuts.indexOf("detail: 'skills'"));
     expect(surfaceShortcuts.indexOf("detail: 'skills'")).toBeLessThan(surfaceShortcuts.indexOf("detail: 'portRelay'"));
-    expect(surfaceShortcuts.indexOf("detail: 'portRelay'")).toBeLessThan(surfaceShortcuts.indexOf("detail: 'tokenStats'"));
     expect(surfaceShortcuts).not.toContain("detail: 'ccSwitch'");
     const surfaceBarStart = settingsSurfaceTsx.indexOf('export function MobileSettingsShortcutBar');
     const surfaceBarEnd = settingsSurfaceTsx.indexOf('export function MobileSettingsScreen', surfaceBarStart);
@@ -624,7 +623,9 @@ describe('agent package update settings UI source structure', () => {
     expect(chatSessionHeaderStart).toBeGreaterThanOrEqual(0);
     expect(chatSessionHeaderEnd).toBeGreaterThan(chatSessionHeaderStart);
     const chatSessionHeader = mainTsx.slice(chatSessionHeaderStart, chatSessionHeaderEnd);
-    expect(chatSessionHeader).toContain('{!sessionSearchHeaderExpanded ? renderChatMenuSettingsButton() : null}');
+    expect(chatSessionHeader).toContain('{!sessionSearchHeaderExpanded ? (');
+    expect(chatSessionHeader).toContain('{renderChatMenuUsageButton()}');
+    expect(chatSessionHeader).toContain('{renderChatMenuSettingsButton()}');
     expect(chatSessionHeader).not.toContain('title="Update"');
     expect(chatSessionHeader).not.toContain('title="Port Relay"');
     expect(chatSessionHeader).not.toContain("openSettingsDetail('update')");

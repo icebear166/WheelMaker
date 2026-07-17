@@ -92,7 +92,6 @@ import type {
   RegistrySkillInstallPayload,
   RegistrySkillScopePayload,
   RegistryTokenProvider,
-  RegistryDeepSeekTokenStats,
   RegistryTokenScanResult,
   RegistryTerminalCreateResponse,
   RegistryTerminalGetResponse,
@@ -1655,25 +1654,6 @@ export class RegistryRepository {
         } as RegistryTokenProvider;
       })
       .filter((item): item is RegistryTokenProvider => !!item);
-  }
-
-  async fetchDeepSeekTokenStats(
-    projectId: string,
-    payload: {rangeType?: 'day' | 'month'; month?: string},
-  ): Promise<RegistryDeepSeekTokenStats> {
-    const hubId = hubIdFromProjectId(projectId);
-    const state = await this.runHubStateAction(hubId, 'tokenStats', 'deepseekStats', payload);
-    return hubStateSectionData<RegistryDeepSeekTokenStats>(state, 'tokenStats') ?? {
-      ok: false,
-      provider: 'deepseek',
-      rangeType: payload.rangeType ?? 'day',
-      month: payload.month ?? '',
-      updatedAt: '',
-      balance: {isAvailable: false, items: []},
-      usage: {rangeType: payload.rangeType ?? 'day', month: payload.month ?? '', rows: []},
-      usageUnavailable: true,
-      usageMessage: 'missing hub state response',
-    };
   }
 
   async getHubState(hubId: string, sections?: RegistryHubStateSectionName[]): Promise<RegistryHubState> {
