@@ -91,7 +91,16 @@ test('Linux files contain Hub service plus one-shot updater timer', () => {
     userHome: '/home/alice',
   });
   assert.match(files['wheelmaker-hub.service'], /Restart=always/);
+  assert.match(
+    files['wheelmaker-hub.service'],
+    /^WorkingDirectory=\/home\/alice\/\.wheelmaker$/m,
+  );
+  assert.doesNotMatch(files['wheelmaker-hub.service'], /WorkingDirectory="/);
   assert.match(files['wheelmaker-updater.service'], /Type=oneshot/);
+  assert.match(
+    files['wheelmaker-updater.service'],
+    /^WorkingDirectory=\/home\/alice\/\.wheelmaker$/m,
+  );
   assert.match(files['wheelmaker-updater.service'], /deploy\.mjs.*update/);
   assert.match(
     files['wheelmaker-updater.timer'],
@@ -738,6 +747,22 @@ test('successful internal update writes release schema v2 without registration c
   assert.equal(await exists(join(fixture.home, 'staging', 'web-job')), false);
 });
 
+test('Linux internal update rewrites user units without rewriting wrappers', async (t) => {
+  const fixture = await installFixture(t, { platform: 'linux' });
+
+  await runCore(['update'], fixture.deps);
+
+  assert.equal(fixture.events.includes('configure-runtime'), true);
+  assert.equal(fixture.events.includes('write-wrappers'), false);
+  assert.deepEqual(
+    fixture.events.filter((event) =>
+      ['stop', 'configure-runtime', 'start'].includes(event),
+    ),
+    ['stop', 'configure-runtime', 'start'],
+  );
+  assert.equal(fixture.messages.includes('Configuring runtime'), true);
+});
+
 test('Hub health timeout persists failure and removes the update lock', async (t) => {
   const fixture = await installFixture(t, { hubRunning: false });
   await assert.rejects(() => runCore(['update'], fixture.deps), /Hub did not start/);
@@ -752,14 +777,17 @@ test('Hub health timeout persists failure and removes the update lock', async (t
   assert.equal(await exists(join(fixture.home, 'staging', 'timer-job')), false);
 });
 
-async function installFixture(t, { hubRunning = true } = {}) {
+async function installFixture(t, { hubRunning = true, platform = 'win32' } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-install-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const home = join(root, '.wheelmaker');
   const packageDirectory = join(root, 'package');
   await mkdir(join(packageDirectory, 'hub'), { recursive: true });
   await mkdir(join(packageDirectory, 'web'), { recursive: true });
-  await writeFile(join(packageDirectory, 'hub', 'wheelmaker.exe'), 'new-hub');
+  await writeFile(
+    join(packageDirectory, 'hub', platform === 'win32' ? 'wheelmaker.exe' : 'wheelmaker'),
+    'new-hub',
+  );
   await writeFile(join(packageDirectory, 'web', 'index.html'), 'new-web');
 
   const sourceSha = '1'.repeat(40);
@@ -792,7 +820,7 @@ async function installFixture(t, { hubRunning = true } = {}) {
       installDirectory: home,
       jobIdFactory: () => 'timer-job',
       now: () => installedAt,
-      platform: 'win32',
+      platform,
       reportStatus(message) {
         messages.push(message);
       },

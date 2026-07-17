@@ -628,7 +628,7 @@ StartLimitBurst=5
 
 [Service]
 Type=simple
-WorkingDirectory=${systemdQuote(paths.home)}
+WorkingDirectory=${paths.home}
 ExecStart=${systemdQuote(paths.hub)} -d
 Restart=always
 RestartSec=5
@@ -642,7 +642,7 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-WorkingDirectory=${systemdQuote(paths.home)}
+WorkingDirectory=${paths.home}
 ExecStart=${systemdQuote(paths.node)} ${systemdQuote(paths.deploy)} update
 `,
     'wheelmaker-updater.timer': `[Unit]
@@ -1449,9 +1449,11 @@ async function executeDeployment(internalUpdate, deps, runtime) {
       staged.manifestSha256,
       normalizeTime(now()),
     );
-    if (!internalUpdate) {
+    if (!internalUpdate || platform === 'linux') {
       deps.reportStatus?.('Configuring runtime');
       await runtime.configureRuntime();
+    }
+    if (!internalUpdate) {
       await runtime.writeWrappers();
     }
 
