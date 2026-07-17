@@ -1736,6 +1736,21 @@ describe('web chat integration', () => {
     }
   });
 
+  test('session markers render unread counts and a breathing running indicator', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(mainTsx).toContain('session-state-unread');
+    expect(mainTsx).toContain('Math.min(99, Math.max(0, Math.trunc(session.unreadCount ?? 0)))');
+    expect(stylesCss).toContain('.session-state-marker.running .session-state-dot');
+    expect(stylesCss).toContain('@keyframes session-state-breathe');
+    expect(stylesCss).toContain('.session-state-marker.completed-unviewed .session-state-unread');
+    expect(stylesCss).toContain('.session-state-marker.failed-unviewed .session-state-unread');
+    const timeBlock = stylesCss.match(/\.wide-session-time \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(timeBlock).toContain('font-variant-numeric: tabular-nums;');
+  });
+
   test('project headers expose an explicit pin action alongside new/resume', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
@@ -2021,12 +2036,12 @@ describe('web chat integration', () => {
     expect(stylesCss).toMatch(/\.wide-project-toggle \{[^}]*height: 30px;[^}]*\}/);
     expect(stylesCss).toMatch(/\.wide-session-row \{[^}]*min-height: 24px;[^}]*\}/);
     const wideSessionRowBlock = stylesCss.match(/\.wide-session-row \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(wideSessionRowBlock).toContain('grid-template-columns: 9px minmax(0, 1fr) auto auto;');
+    expect(wideSessionRowBlock).toContain('grid-template-columns: auto minmax(0, 1fr) auto auto;');
     expect(wideSessionRowBlock).toContain('gap: 4px;');
     expect(wideSessionRowBlock).toContain('padding: 0 5px 0 2px;');
     const sessionStateMarkerBlock = stylesCss.match(/\.session-state-marker \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(sessionStateMarkerBlock).toContain('width: 9px;');
-    expect(sessionStateMarkerBlock).toContain('flex: 0 0 9px;');
+    expect(sessionStateMarkerBlock).toContain('min-width: 9px;');
+    expect(sessionStateMarkerBlock).toContain('flex: 0 0 auto;');
     expect(sessionStateMarkerBlock).not.toContain('transform: translateX');
     const sessionStateRunningBlock = stylesCss.match(/\.session-state-marker\.running \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(sessionStateRunningBlock).toContain('font-size: 11px;');

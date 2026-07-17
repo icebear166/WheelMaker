@@ -9802,6 +9802,7 @@ export function App() {
 
   const renderSessionStateMarker = (session: RegistryChatSession, activeProjectId = projectIdRef.current) => {
     const state = resolveSessionVisualState(session, activeProjectId);
+    const unreadCount = Math.min(99, Math.max(0, Math.trunc(session.unreadCount ?? 0)));
     const title =
       state === 'running'
         ? 'In progress'
@@ -9813,9 +9814,13 @@ export function App() {
     return (
       <span className={`session-state-marker ${state}`} title={title}>
         {state === 'running' ? (
-          <span className="codicon codicon-loading codicon-modifier-spin" />
-        ) : state === 'completed-unviewed' || state === 'failed-unviewed' ? (
           <span className="session-state-dot" />
+        ) : state === 'completed-unviewed' || state === 'failed-unviewed' ? (
+          unreadCount > 0 ? (
+            <span className="session-state-unread">{unreadCount}</span>
+          ) : (
+            <span className="session-state-dot" />
+          )
         ) : null}
       </span>
     );

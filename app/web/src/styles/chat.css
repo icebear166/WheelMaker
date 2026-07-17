@@ -958,7 +958,7 @@
 }
 
 .session-older-toggle {
-  grid-template-columns: 9px minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   color: color-mix(in srgb, var(--text-secondary) 58%, transparent);
 }
 
@@ -1414,7 +1414,7 @@
   background: transparent;
   color: color-mix(in srgb, var(--text-primary) 84%, transparent);
   display: grid;
-  grid-template-columns: 9px minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 4px;
   padding: 0 5px 0 2px;
@@ -1452,18 +1452,57 @@
 }
 
 .session-state-marker {
-  width: 9px;
+  min-width: 9px;
   height: 15px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: color-mix(in srgb, var(--text-primary) 38%, transparent);
-  flex: 0 0 9px;
+  flex: 0 0 auto;
 }
 
 .session-state-marker.running {
   color: #68a8e8;
   font-size: 11px;
+}
+
+.session-state-marker.running .session-state-dot {
+  background: #68a8e8;
+  animation: session-state-breathe 1.6s ease-in-out infinite;
+}
+
+@keyframes session-state-breathe {
+  0%, 100% { opacity: 0.45; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-state-marker.running .session-state-dot {
+    animation: none;
+  }
+}
+
+.session-state-unread {
+  min-width: 15px;
+  height: 14px;
+  padding: 0 4px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.session-state-marker.completed-unviewed .session-state-unread {
+  background: color-mix(in srgb, var(--state-success) 22%, transparent);
+  color: var(--state-success);
+}
+
+.session-state-marker.failed-unviewed .session-state-unread {
+  background: color-mix(in srgb, var(--state-danger) 22%, transparent);
+  color: var(--state-danger);
 }
 
 .session-state-dot {
@@ -1701,6 +1740,7 @@
 .wide-session-time {
   color: var(--text-secondary);
   font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
   min-width: 22px;
   text-align: right;
   white-space: nowrap;
