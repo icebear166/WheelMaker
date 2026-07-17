@@ -15095,8 +15095,6 @@ export function App() {
     targetProjectId: string,
     session: RegistryChatSession,
     mobile: boolean,
-    showProjectCreateAction: boolean,
-    projectName: string,
   ) => {
     // Resolve the live session from the store so the state marker stays in
     // sync with the project list (the recent session snapshot can lag until the
@@ -15149,23 +15147,6 @@ export function App() {
             {formatCompactRelativeAge(liveSession.updatedAt)}
           </span>
         </button>
-        {showProjectCreateAction ? (
-          <button
-            type="button"
-            className="recent-project-session-create"
-            title={`New session in ${projectName}`}
-            aria-label={`New session in ${projectName}`}
-            onClick={event => {
-              if (mobile) {
-                openMobileProjectActionMenu(targetProjectId, 'new');
-                return;
-              }
-              openWideProjectActionMenu(targetProjectId, 'new', event.currentTarget);
-            }}
-          >
-            <span className="codicon codicon-add" aria-hidden="true" />
-          </button>
-        ) : null}
         {renderProjectSessionActionMenu(targetProjectId, liveSession)}
       </div>
     );
@@ -15378,24 +15359,48 @@ export function App() {
   ) => {
     const targetProjectId = section.projectId;
     const projectName = section.projectName || targetProjectId;
-    const projectAccentVariant = tagVariantClass('recent-project-accent', targetProjectId);
+    const projectHub = section.projectHubId || 'local';
+    const projectHubVariant = tagVariantClass('wide-project-hub', section.projectHubId || 'local');
     return (
       <div
         key={`recent-project:${targetProjectId}`}
-        className={`recent-project-session-group ${projectAccentVariant}`}
+        className="recent-project-session-group"
         role="group"
         aria-label={`${projectName} recent sessions`}
       >
-        <div className="recent-project-session-watermark" aria-hidden="true">
-          <span className="recent-project-session-watermark-name">{projectName.toUpperCase()}</span>
+        <div className="recent-project-divider">
+          <span className="codicon codicon-folder recent-project-divider-icon" aria-hidden="true" />
+          <span className="recent-project-divider-name" title={projectName}>
+            {projectName}
+          </span>
+          <span
+            className={`wide-project-hub-tag recent-project-divider-hub ${projectHubVariant}`}
+            style={hubAccentStyle(projectHub)}
+          >
+            <span className="wide-project-hub-dot" aria-hidden="true" />
+            <span className="wide-project-hub-label">{projectHub}</span>
+          </span>
+          <button
+            type="button"
+            className="recent-project-divider-create"
+            title={`New session in ${projectName}`}
+            aria-label={`New session in ${projectName}`}
+            onClick={event => {
+              if (mobile) {
+                openMobileProjectActionMenu(targetProjectId, 'new');
+                return;
+              }
+              openWideProjectActionMenu(targetProjectId, 'new', event.currentTarget);
+            }}
+          >
+            <span className="codicon codicon-add" aria-hidden="true" />
+          </button>
         </div>
         <div className="recent-project-session-list">
-          {section.sessions.map((session, sessionIndex) => renderRecentSessionRow(
+          {section.sessions.map(session => renderRecentSessionRow(
             targetProjectId,
             session,
             mobile,
-            sessionIndex === 0,
-            projectName,
           ))}
         </div>
       </div>

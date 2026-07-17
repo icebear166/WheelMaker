@@ -32,70 +32,36 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('limit: 6,');
   });
 
-  test('renders recent sessions in colored project groups with background identity', () => {
-    expect(mainTsx).toContain('renderRecentProjectSessionSection(section, mobile)');
+  test('renders recent project context as a quiet micro divider between groups', () => {
     expect(mainTsx).toContain('recent-project-session-group');
-    expect(mainTsx).toContain("tagVariantClass('recent-project-accent', targetProjectId)");
     expect(mainTsx).toContain('role="group"');
-    expect(mainTsx).toContain('recent-project-session-watermark');
-    expect(mainTsx).toContain('recent-project-session-watermark-name');
-    expect(mainTsx).toContain('{projectName.toUpperCase()}');
-    expect(mainTsx).not.toContain('recent-project-session-watermark-icon');
-    expect(mainTsx).not.toContain('recent-project-session-watermark-hub');
-    expect(mainTsx).toContain('recent-project-session-create');
-    expect(mainTsx).not.toContain('recent-session-create-slot');
-    expect(mainTsx).toContain('showProjectCreateAction');
-    expect(mainTsx).toContain('sessionIndex === 0');
-    expect(mainTsx).toContain('codicon codicon-add');
+    expect(mainTsx).toContain('recent-project-divider');
+    expect(mainTsx).toContain('recent-project-divider-name');
+    expect(mainTsx).toContain('recent-project-divider-hub');
+    expect(mainTsx).toContain('recent-project-divider-create');
     expect(mainTsx).toContain("openWideProjectActionMenu(targetProjectId, 'new', event.currentTarget);");
     expect(mainTsx).toContain("openMobileProjectActionMenu(targetProjectId, 'new');");
     expect(mainTsx).toContain('onContextMenu={event => openProjectSessionContextMenu(targetProjectId, session.sessionId, event)}');
     expect(mainTsx).toContain('onPointerDown={event => startProjectSessionLongPress(targetProjectId, session.sessionId, event)}');
     expect(mainTsx).toContain('wide-session-agent-tag');
-    expect(mainTsx).not.toContain('recent-session-project-tag');
-    expect(mainTsx).not.toContain('recent-project-session-heading');
-    expect(chatCss).toContain('.recent-project-session-watermark');
-    expect(chatCss).toContain('.recent-project-accent-0');
-    expect(chatCss).toContain('.recent-project-accent-7');
-    expect(chatCss).toContain('.recent-project-session-create');
-    expect(chatCss).not.toContain('.recent-project-session-heading');
-    expect(chatCss).not.toContain('.recent-session-project-tag.wide-project-hub-tag');
+    expect(chatCss).toContain('.recent-project-divider');
+    expect(chatCss).toContain('.recent-project-divider-create');
   });
 
-  test('keeps project identity behind full-width aligned session rows', () => {
-    const recentListBlock = chatCss.match(/\.wide-project-session-list\.recent-sessions-list \{[\s\S]*?\n\}/)?.[0] ?? '';
-    const groupBlock = chatCss.match(/\.recent-project-session-group \{[\s\S]*?\n\}/)?.[0] ?? '';
-    const watermarkBlock = chatCss.match(/\.recent-project-session-watermark \{[\s\S]*?\n\}/)?.[0] ?? '';
-    const sessionListBlock = chatCss.match(/\.recent-project-session-list \{[\s\S]*?\n\}/)?.[0] ?? '';
-    const sessionRowBlock = chatCss.match(/\.recent-project-session-group \.recent-session-row \{[\s\S]*?\n\}/)?.[0] ?? '';
-
-    expect(recentListBlock).toContain('padding: 1px 0;');
-    expect(groupBlock).toContain('position: relative;');
-    expect(groupBlock).toContain('overflow: hidden;');
-    expect(groupBlock).toContain('background: color-mix(in srgb, var(--recent-project-accent) 7%, transparent);');
-    expect(groupBlock).not.toContain('border:');
-    expect(watermarkBlock).toContain('position: absolute;');
-    expect(watermarkBlock).toContain('left: 11px;');
-    expect(watermarkBlock).toContain('bottom: -6px;');
-    expect(watermarkBlock).toContain('font-size: 36px;');
-    expect(watermarkBlock).toContain('font-weight: 800;');
-    expect(watermarkBlock).toContain('color: color-mix(in srgb, var(--recent-project-accent) 12%, transparent);');
-    expect(watermarkBlock).toContain('pointer-events: none;');
-    expect(sessionListBlock).toContain('position: relative;');
-    expect(sessionListBlock).toContain('z-index: 1;');
-    expect(sessionListBlock).toContain('padding: 1px 0 1px 21px;');
-    expect(sessionRowBlock).toContain('grid-template-columns: 9px minmax(0, 1fr) auto auto;');
+  test('removes colored cards, watermarks and floating create rail from recent groups', () => {
+    expect(mainTsx).not.toContain('recent-project-session-watermark');
+    expect(mainTsx).not.toContain('recent-project-session-create');
+    expect(mainTsx).not.toContain("tagVariantClass('recent-project-accent', targetProjectId)");
+    expect(mainTsx).not.toContain('showProjectCreateAction');
+    expect(chatCss).not.toContain('.recent-project-session-watermark');
+    expect(chatCss).not.toContain('.recent-project-accent-0');
+    expect(chatCss).not.toContain('.recent-project-session-create');
+    expect(chatCss).not.toContain('.recent-project-session-group .recent-session-row.selected::before');
   });
 
-  test('places one create action in the first-row leading rail and removes only the recent selection bar', () => {
-    const createBlock = chatCss.match(/\.recent-project-session-create \{[\s\S]*?\n\}/)?.[0] ?? '';
-    const recentSelectionBlock = chatCss.match(/\.recent-project-session-group \.recent-session-row\.selected::before \{[\s\S]*?\n\}/)?.[0] ?? '';
-
-    expect(mainTsx).toContain('sessionIndex === 0');
-    expect(createBlock).toContain('left: -20px;');
-    expect(createBlock).not.toContain('right:');
-    expect(recentSelectionBlock).toContain('content: none;');
+  test('recent session rows keep the shared selection indicator', () => {
     expect(chatCss).toContain('.wide-session-row.selected::before');
+    expect(chatCss).not.toContain('content: none;');
   });
 
   test('shares compact and relaxed row density with the pinned surface', () => {

@@ -2461,7 +2461,7 @@ describe('web chat integration', () => {
     expect(promptBlock).toContain('background: color-mix(in srgb, var(--accent-primary) 12%, var(--surface-workspace-content));');
   });
 
-  test('tightens relaxed session rows and keeps the recent project watermark typographic', () => {
+  test('tightens relaxed session rows', () => {
     const projectRoot = path.join(__dirname, '..');
     const stylesCss = readWebStyles(projectRoot);
     const relaxedRow = cssRuleBlock(
@@ -2472,13 +2472,10 @@ describe('web chat integration', () => {
       stylesCss,
       ".wide-project-session-nav[data-session-list-density='relaxed'] .wide-session-title",
     );
-    const recentWatermark = cssRuleBlock(stylesCss, '.recent-project-session-watermark');
 
     expect(relaxedRow).toContain('min-height: 30px;');
     expect(relaxedTitle).toContain('font-size: 13.5px;');
     expect(relaxedTitle).toContain('line-height: 1.25;');
-    expect(recentWatermark).toContain('font-size: 36px;');
-    expect(recentWatermark).toContain('font-weight: 800;');
     expect(stylesCss).not.toContain('.recent-project-session-hub.wide-project-hub-tag');
   });
 });
