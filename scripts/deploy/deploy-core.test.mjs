@@ -642,6 +642,34 @@ test('Windows legacy migration elevates scheduled task and service removal', () 
   assert.match(script, /-Verb RunAs/);
 });
 
+test('Windows legacy migration accepts a failed elevated exit when no registrations remain', () => {
+  const script = windowsLegacyMigrationScript(RUNTIME_PATHS);
+  const exitCheck = script.indexOf('if ($process.ExitCode -ne 0)');
+  const remainingTasks = script.indexOf('$remainingTasks = @(', exitCheck);
+  const remainingServices = script.indexOf('$remainingServices = @(', exitCheck);
+  const remainingCheck = script.indexOf(
+    'if ($remainingTasks.Count -gt 0 -or $remainingServices.Count -gt 0)',
+    exitCheck,
+  );
+  const failure = script.indexOf('throw "legacy registration removal incomplete', exitCheck);
+
+  assert.notEqual(exitCheck, -1);
+  assert.match(
+    script.slice(exitCheck, remainingTasks),
+    /\$registrationError\s*=/,
+  );
+  assert.doesNotMatch(
+    script.slice(exitCheck, remainingTasks),
+    /throw "elevated legacy registration removal failed/,
+  );
+  assert.ok(remainingTasks > exitCheck);
+  assert.ok(remainingServices > remainingTasks);
+  assert.ok(remainingCheck > remainingServices);
+  assert.ok(failure > remainingCheck);
+  assert.match(script, /wheelmaker-migrate-uninstall-/);
+  assert.match(script, /Get-Content -Raw -LiteralPath \$diagnosticPath/);
+});
+
 test('Unix legacy migration disables registrations and removes their files', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-runtime-migration-'));
   t.after(() => rm(root, { recursive: true, force: true }));

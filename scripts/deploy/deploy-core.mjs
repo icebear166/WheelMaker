@@ -842,22 +842,34 @@ $runtimeNames = @('WheelMaker', 'WheelMakerUpdater', 'WheelMakerMonitor')
 
 $registrationRemoval = @'
 $ErrorActionPreference = 'Stop'
-foreach ($name in @('WheelMaker', 'WheelMakerUpdater', 'WheelMakerMonitor')) {
-  $task = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
-  if ($null -ne $task) {
-    Stop-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
-    Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction Stop
-  }
-  $service = Get-Service -Name $name -ErrorAction SilentlyContinue
-  if ($null -ne $service) {
-    if ($service.Status -ne 'Stopped') {
-      Stop-Service -Name $name -Force -ErrorAction Stop
+try {
+  foreach ($name in @('WheelMaker', 'WheelMakerUpdater', 'WheelMakerMonitor')) {
+    $task = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+    if ($null -ne $task) {
+      Stop-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+      Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction Stop
     }
-    & sc.exe delete $name | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-      throw "failed to delete service $name"
+    $service = Get-Service -Name $name -ErrorAction SilentlyContinue
+    if ($null -ne $service) {
+      if ($service.Status -ne 'Stopped') {
+        Stop-Service -Name $name -Force -ErrorAction Stop
+      }
+      & sc.exe delete $name | Out-Null
+      if ($LASTEXITCODE -ne 0) {
+        throw "failed to delete service $name"
+      }
     }
   }
+} catch {
+  if (-not [string]::IsNullOrWhiteSpace($env:WHEELMAKER_MIGRATION_DIAGNOSTIC)) {
+    try {
+      ($_ | Out-String) | Set-Content -LiteralPath $env:WHEELMAKER_MIGRATION_DIAGNOSTIC -Encoding UTF8 -ErrorAction Stop
+    } catch {}
+  }
+  if ($env:WHEELMAKER_MIGRATION_ELEVATED_CHILD -eq '1') {
+    exit 1
+  }
+  throw
 }
 '@
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -868,21 +880,56 @@ $existingTasks = @($runtimeNames | ForEach-Object {
 })
 $existingServices = @(Get-Service -Name $runtimeNames -ErrorAction SilentlyContinue)
 if ($existingTasks.Count -gt 0 -or $existingServices.Count -gt 0) {
+  $diagnosticName = "wheelmaker-migrate-uninstall-$([Guid]::NewGuid().ToString('N')).log"
+  $diagnosticPath = Join-Path $env:TEMP $diagnosticName
+  $registrationError = $null
   if ($isAdministrator) {
-    & ([ScriptBlock]::Create($registrationRemoval))
+    try {
+      & ([ScriptBlock]::Create($registrationRemoval))
+    } catch {
+      $registrationError = ($_ | Out-String)
+    }
   } else {
     $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($registrationRemoval))
-    $process = Start-Process -FilePath 'powershell.exe' -ArgumentList @(
-      '-NoProfile',
-      '-ExecutionPolicy',
-      'Bypass',
-      '-EncodedCommand',
-      $encoded
-    ) -Verb RunAs -Wait -PassThru
+    $env:WHEELMAKER_MIGRATION_ELEVATED_CHILD = '1'
+    $env:WHEELMAKER_MIGRATION_DIAGNOSTIC = $diagnosticPath
+    try {
+      $process = Start-Process -FilePath 'powershell.exe' -ArgumentList @(
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-EncodedCommand',
+        $encoded
+      ) -Verb RunAs -Wait -PassThru
+    } finally {
+      Remove-Item Env:WHEELMAKER_MIGRATION_ELEVATED_CHILD -ErrorAction SilentlyContinue
+      Remove-Item Env:WHEELMAKER_MIGRATION_DIAGNOSTIC -ErrorAction SilentlyContinue
+    }
     if ($process.ExitCode -ne 0) {
-      throw "elevated legacy registration removal failed with exit code $($process.ExitCode)"
+      $registrationError = "elevated process exited with code $($process.ExitCode)"
+      if (Test-Path -LiteralPath $diagnosticPath) {
+        $registrationError = Get-Content -Raw -LiteralPath $diagnosticPath
+      }
     }
   }
+
+  $remainingTasks = @($runtimeNames | ForEach-Object {
+    Get-ScheduledTask -TaskName $_ -ErrorAction SilentlyContinue
+  })
+  $remainingServices = @(Get-Service -Name $runtimeNames -ErrorAction SilentlyContinue)
+  if ($remainingTasks.Count -gt 0 -or $remainingServices.Count -gt 0) {
+    $remaining = @(
+      $remainingTasks | ForEach-Object { "task:$($_.TaskPath)$($_.TaskName)" }
+      $remainingServices | ForEach-Object { "service:$($_.Name)" }
+    ) -join ', '
+    $detail = if ([string]::IsNullOrWhiteSpace([string]$registrationError)) {
+      ''
+    } else {
+      " Details: $registrationError"
+    }
+    throw "legacy registration removal incomplete; remaining: $remaining. Diagnostic: $diagnosticPath.$detail"
+  }
+  Remove-Item -LiteralPath $diagnosticPath -Force -ErrorAction SilentlyContinue
 }
 
 $runKey = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'
