@@ -1,7 +1,3 @@
 {
-  "owner": "swm8023",
-  "repository": "wheelmaker-release",
-  "branch": "main",
-  "stablePath": "stable.json",
-  "publishStatusPath": "publish-status.json"
+  "baseUrl": "https://release.wheelmaker.top"
 }

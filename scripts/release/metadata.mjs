@@ -16,7 +16,7 @@ export function stableVersionFromBytes(bytes) {
     throw new Error('stable metadata schema is invalid');
   }
   if (
-    stable?.schema !== 1 ||
+    stable?.schema !== 2 ||
     typeof stable.version !== 'string' ||
     !/^v1\.(0|[1-9]\d*)$/.test(stable.version)
   ) {
@@ -26,7 +26,7 @@ export function stableVersionFromBytes(bytes) {
 }
 
 export function nextVersionFromStableBytes(bytes) {
-  return nextV1Version(stableVersionFromBytes(bytes));
+  return bytes === null ? 'v1.1' : nextV1Version(stableVersionFromBytes(bytes));
 }
 
 export function encodeJsonBytes(value) {
