@@ -1736,6 +1736,17 @@ describe('web chat integration', () => {
     }
   });
 
+  test('project headers expose an explicit pin action alongside new/resume', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(mainTsx).toContain('wide-project-action-btn wide-project-pin-btn');
+    expect(mainTsx).toContain('aria-pressed={pinnedProject}');
+    expect(mainTsx).toContain('togglePinnedProject(targetProjectId)');
+    expect(stylesCss).toContain('.wide-project-pin-btn.active');
+  });
+
   test('wide layout uses a project session rail instead of the header project picker', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));

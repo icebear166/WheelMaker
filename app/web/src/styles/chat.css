@@ -1291,6 +1291,11 @@
   transition: opacity 140ms ease;
 }
 
+.wide-project-pin-btn.active {
+  color: var(--accent-primary);
+  opacity: 1;
+}
+
 .wide-project-action-btn {
   width: 24px;
   height: 24px;

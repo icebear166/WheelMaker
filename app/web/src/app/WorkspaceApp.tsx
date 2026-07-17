@@ -17188,6 +17188,20 @@ export function App() {
                     >
                       <span className="codicon codicon-history" />
                     </button>
+                    <button
+                      type="button"
+                      className={`wide-project-action-btn wide-project-pin-btn${pinnedProject ? ' active' : ''}`}
+                      title={pinnedProject ? 'Unpin project' : 'Pin project to top'}
+                      aria-label={pinnedProject ? `Unpin project ${projectItem.name}` : `Pin project ${projectItem.name}`}
+                      aria-pressed={pinnedProject}
+                      onPointerDown={event => event.stopPropagation()}
+                      onClick={event => {
+                        event.stopPropagation();
+                        togglePinnedProject(targetProjectId);
+                      }}
+                    >
+                      <span className="codicon codicon-pinned" />
+                    </button>
                   </div>
                 </div>
                 {sessionError ? (
@@ -17561,6 +17575,20 @@ export function App() {
                     }}
                   >
                     <span className="codicon codicon-history" />
+                  </button>
+                  <button
+                    type="button"
+                    className={`wide-project-action-btn wide-project-pin-btn${pinnedProject ? ' active' : ''}`}
+                    title={pinnedProject ? 'Unpin project' : 'Pin project to top'}
+                    aria-label={pinnedProject ? `Unpin project ${projectItem.name}` : `Pin project ${projectItem.name}`}
+                    aria-pressed={pinnedProject}
+                    onPointerDown={event => event.stopPropagation()}
+                    onClick={event => {
+                      event.stopPropagation();
+                      togglePinnedProject(targetProjectId);
+                    }}
+                  >
+                    <span className="codicon codicon-pinned" />
                   </button>
                 </div>
                 {actionMenuOpen ? (
