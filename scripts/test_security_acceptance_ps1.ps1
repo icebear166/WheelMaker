@@ -37,6 +37,11 @@ function Assert-InOrder([string]$Label, [string]$Text, [string[]]$Needles) {
 $powershell = Read-RequiredFile 'scripts/security_acceptance.ps1'
 $shell = Read-RequiredFile 'scripts/security_acceptance.sh'
 $checklist = Read-RequiredFile 'docs/security-staging-checklist.md'
+$gitleaksConfig = Read-RequiredFile '.gitleaks.toml'
+
+Assert-Contains 'gitleaks config' $gitleaksConfig '^\.release-out([\\/]|$)'
+Assert-Contains 'gitleaks config' $gitleaksConfig '^\.release-work([\\/]|$)'
+Assert-NotContains 'gitleaks config' $gitleaksConfig 'mobile/android/signing/'
 
 $orderedPowerShellGates = @(
     'gitleaks dir --redact --no-banner .',
@@ -48,6 +53,7 @@ $orderedPowerShellGates = @(
     'npm audit --omit=dev --audit-level=moderate --json',
     'npm audit --audit-level=high --json',
     'gradle test lint',
+    'Node release and deployment tests',
     'Publish and deployment script tests',
     'Forbidden production source gate',
     'git diff --check'
@@ -64,6 +70,7 @@ $orderedShellGates = @(
     'npm audit --omit=dev --audit-level=moderate --json',
     'npm audit --audit-level=high --json',
     'gradle test lint',
+    'Node release and deployment tests',
     'Publish and deployment script tests',
     'Forbidden production source gate',
     'git diff --check'
@@ -78,14 +85,22 @@ foreach ($source in @($powershell, $shell)) {
     Assert-Contains 'acceptance entry' $source 'RegistryRoleMonitor'
     Assert-Contains 'acceptance entry' $source 'retired backend key migration'
     Assert-Contains 'acceptance entry' $source 'Android Server Data key persistence'
-    Assert-Contains 'acceptance entry' $source 'compatibility.go'
     Assert-Contains 'acceptance entry' $source '9632'
     Assert-Contains 'acceptance entry' $source 'InsecureSkipVerify'
     Assert-Contains 'acceptance entry' $source 'signingConfigs.getByName("debug")'
     Assert-NotContains 'acceptance entry' $source 'continue-on-error'
     Assert-NotContains 'acceptance entry' $source 'Get-ChildItem Env:'
     Assert-NotContains 'acceptance entry' $source 'set -x'
+    Assert-NotContains 'acceptance entry' $source 'cmd/wheelmaker-deploy'
+    Assert-NotContains 'acceptance entry' $source 'cmd\wheelmaker-deploy'
+    Assert-NotContains 'acceptance entry' $source 'test_update_publish'
+    Assert-NotContains 'acceptance entry' $source 'test_publish_android_ps1.ps1'
+    Assert-NotContains 'acceptance entry' $source 'test_publish_android_github_release_ps1.ps1'
+    Assert-NotContains 'acceptance entry' $source 'test_deploy_bat.ps1'
+    Assert-NotContains 'acceptance entry' $source 'test_deploy_sh.ps1'
 }
+Assert-Contains 'security_acceptance.ps1' $powershell 'scripts\release'
+Assert-Contains 'security_acceptance.sh' $shell 'scripts/release'
 
 foreach ($needle in @(
     'Root path',

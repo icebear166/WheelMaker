@@ -6,12 +6,7 @@
 
 ## 1. 环境准备
 
-每台机器都需要：
-
-- Git 可用
-- Go `1.26+`
-- Node.js `22.11+`
-- npm 可用
+目标机器只需要 Node.js `22+`。部署流程从公共发布仓库下载元数据和预编译包，不需要 WheelMaker 源码、Git、Go、npm 或本机交叉编译环境。
 
 Registry 入口机额外需要：
 
@@ -20,22 +15,16 @@ Registry 入口机额外需要：
 
 执行原则：
 
-- 先检测，再安装或升级。
-- 已存在且版本满足要求就跳过。
-- 已存在但版本不满足时，先尝试升级；升级失败再询问用户。
-- 不要重复安装同类工具链。
-- Windows：如果已有 Scoop，用 Scoop；没有 Scoop 就用 winget。不要自动安装 Scoop。
-- Linux：发行版包版本满足时再用发行版包；不满足时先提出 Go 官方包、NodeSource、nvm 等升级方案，让用户确认。
+- 先检测 Node，再安装或升级；不要在目标机安装无关的源码构建工具链。
+- Windows 可使用现有 Scoop 或 winget 安装 Node；不要自动安装 Scoop。
+- Linux 发行版包不满足 Node 22 时，先提出 NodeSource、nvm 等方案让用户确认。
 - 只有 Registry 入口机才处理 Nginx。
-- Go module 或 npm 下载长时间无进展、超时、连接失败时，可以建议临时换源，但先说明原因并让用户确认。不要一开始就换源。
+- 正常部署和 `deploy.mjs update` 不需要管理员权限。Windows 一次性迁移仅在发现旧 Windows Service 时弹 UAC。
 
 常用检测：
 
 ```bash
-git --version
-go version
 node --version
-npm --version
 nginx -v
 ```
 
@@ -44,6 +33,7 @@ Windows 额外确认：
 ```powershell
 scoop --version
 winget --version
+where node
 where nginx
 ```
 
@@ -55,38 +45,23 @@ loginctl show-user "$USER" -p Linger
 sudo loginctl enable-linger "$USER"
 ```
 
-下载源处理 tips：
+## 2. 获取公共部署启动器
 
-- Go 可临时使用 `GOPROXY=https://goproxy.cn,direct`，或恢复为 `https://proxy.golang.org,direct`。
-- npm 可临时使用 `https://registry.npmmirror.com`，部署后提醒用户是否恢复默认 registry。
-- 换源是环境改动；执行前必须说明当前失败现象和将要修改的配置。
+全新安装和旧源码模式迁移都不需要克隆或进入源码仓库。以下整行命令可在任意目录执行：它把公共 `deploy.mjs` 下载到 `~/.wheelmaker/deploy.mjs`，先幂等清理可能存在的旧运行时，再安装当前 stable。
 
-## 2. 克隆仓库
-
-优先使用 SSH：
-
-```bash
-ssh -T git@github.com
-git clone git@github.com:swm8023/WheelMaker.git
-cd WheelMaker
-```
-
-如果 SSH 不可用，并且用户确认可以用 HTTPS：
-
-```bash
-git clone https://github.com/swm8023/WheelMaker.git
-cd WheelMaker
-```
-
-不要猜其他仓库地址。
-
-克隆后安装本仓库的凭据泄漏 pre-commit 门：
+Windows PowerShell：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install_git_hooks.ps1
+$ErrorActionPreference='Stop'; $d=Join-Path $HOME '.wheelmaker'; New-Item -ItemType Directory -Force -Path $d | Out-Null; $m=Join-Path $d 'deploy.mjs'; Invoke-WebRequest 'https://raw.githubusercontent.com/swm8023/wheelmaker-release/main/deploy.mjs' -OutFile $m; & node $m migrate-uninstall; if ($LASTEXITCODE -eq 0) { & node $m }
 ```
 
-该脚本固定安装 Gitleaks v8.28.0，并把当前仓库的 `core.hooksPath` 设置为 `.githooks`。Gitleaks 缺失时 hook 会 fail closed；不要用 `--no-verify` 绕过安全提交门。CI 还会扫描当前 tree 和完整 Git 历史。
+macOS/Linux：
+
+```bash
+(d="$HOME/.wheelmaker" && mkdir -p "$d" && curl --fail --location --proto '=https' --tlsv1.2 'https://raw.githubusercontent.com/swm8023/wheelmaker-release/main/deploy.mjs' --output "$d/deploy.mjs" && node "$d/deploy.mjs" migrate-uninstall && node "$d/deploy.mjs")
+```
+
+启动器通过 GitHub HTTPS 下载 `stable.json`，并按其中的固定 SHA-256 刷新自身核心，再按 stable → manifest → 平台包的 SHA-256 链验证下载内容。后续目标机版本判断只读公开 stable 和本地 schema v2 `release.json`，不读取 Git。发布安全边界是公开发布仓库的写权限，因此应严格保护该仓库及发布 GitHub App。
 
 ## 3. 确认共享 Token 策略
 
@@ -96,26 +71,28 @@ Registry 入口机和所有受信任 Worker 使用同一个 Token。入口机部
 
 ## 4. 首次部署
 
-在仓库根目录执行。
-
-Windows：
-
-```bat
-deploy.bat
-```
-
-macOS/Linux：
-
-```bash
-bash deploy.sh
-```
+全新安装或旧源码发布模式迁移都已由第 2 节的一行命令完成。源码仓库根目录不再提供迁移 wrapper，当前目录不会参与安装。
 
 说明：
 
-- 首次部署必须用 `deploy.bat` 或 `deploy.sh`。
-- 不要用 `update-publish.bat` 或 `update-publish.sh` 做首次部署；它们只适合服务已存在后的更新发布。
-- Windows 可能触发 UAC；首次创建服务时可能要求当前账号密码。AI 运行前要提醒用户关注终端或弹窗，命令长时间停住时先判断是否正在等待人工输入。
-- 部署流程会构建二进制、发布 Web 到 `~/.wheelmaker/web`、安装服务，并在缺失时创建 `~/.wheelmaker/config.json`。
+- 一行命令下载公共 launcher，调用一次 `migrate-uninstall`，再执行正常部署。后续日常部署不要再调用迁移模式。
+- 迁移会删除旧 Hub/updater/deploy/monitor 运行时、`~/.wheelmaker/build`、`mobile`、`tmp`、旧 `cache/go-build`、`update-now.signal` 和退役的 restart/status helper，但保留配置、数据库、日志、Desktop 与当前 agent cache。
+- Windows 只有发现旧 Windows Service 时才可能触发 UAC；新 Scheduled Task 使用当前用户、Limited 权限。
+- 正常部署下载并验证预编译 Hub + Web，始终一起替换到 `~/.wheelmaker/bin` 和 `~/.wheelmaker/web`，在缺失时创建 `config.json`，写 schema v2 `release.json`，并启动 Hub。
+- 正常部署会在安装目录生成当前平台的日常部署入口：Windows 双击 `~/.wheelmaker/deploy.bat`，macOS/Linux 执行 `~/.wheelmaker/deploy.sh`。两者只调用 `node deploy.mjs`，不执行迁移；Windows 完成后会暂停窗口以便查看结果。
+- 固定的 03:00 updater 和 Web 手动更新都调用 `node ~/.wheelmaker/deploy.mjs update`。该命令只停止/替换/启动现有运行时，不安装或卸载服务/任务，也不需要管理员权限。
+- Windows Desktop 按需单独更新：先关闭 Desktop，再运行 `~/.wheelmaker/update_exe.bat`。若本次 stable 版本没有发布新 EXE，会继续使用 stable 中继承的上一版 Desktop 指针。
+
+安装目录：
+
+```text
+~/.wheelmaker/bin/       Hub
+~/.wheelmaker/web/       每次部署的完整 Web
+~/.wheelmaker/desktop/   可选 Desktop EXE
+~/.wheelmaker/staging/   lock.json、status.json 和临时包
+```
+
+安装目录 helper 保持轻量：Windows 为 `deploy.bat`、`start.bat`、`stop.bat`，macOS/Linux 为对应 `.sh`；Windows 另有 `update_exe.bat`。这里的 `deploy.bat/sh` 是日常部署入口；源码仓库根目录不再提供同名迁移 wrapper。重启时依次调用 `stop`、`start`；发布状态由 Web 和 `staging/status.json` 提供，不生成 restart/status helper。
 
 ## 5. Registry 入口机配置
 
@@ -159,13 +136,15 @@ Registry 入口机负责：
 重启服务：
 
 ```bash
-~/.wheelmaker/restart.sh
+~/.wheelmaker/stop.sh
+~/.wheelmaker/start.sh
 ```
 
 Windows：
 
 ```powershell
-~/.wheelmaker/restart.bat
+~/.wheelmaker/stop.bat
+~/.wheelmaker/start.bat
 ```
 
 ### 配置 Server 功能
@@ -254,7 +233,7 @@ server {
     location = / {
         try_files /index.html =404;
         add_header Cache-Control "no-cache, must-revalidate" always;
-        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
         add_header Referrer-Policy "no-referrer" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
@@ -263,7 +242,7 @@ server {
     location = /index.html {
         try_files /index.html =404;
         add_header Cache-Control "no-cache, must-revalidate" always;
-        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
         add_header Referrer-Policy "no-referrer" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
@@ -272,7 +251,7 @@ server {
     location = /service-worker.js {
         try_files /service-worker.js =404;
         add_header Cache-Control "no-cache, must-revalidate" always;
-        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
         add_header Referrer-Policy "no-referrer" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
@@ -281,7 +260,7 @@ server {
     location = /manifest.webmanifest {
         try_files /manifest.webmanifest =404;
         add_header Cache-Control "no-cache, must-revalidate" always;
-        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
         add_header Referrer-Policy "no-referrer" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
@@ -290,7 +269,7 @@ server {
     location ~* \.[a-z0-9]+$ {
         try_files $uri =404;
         add_header Cache-Control "public, max-age=31536000, immutable" always;
-        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
         add_header Referrer-Policy "no-referrer" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
@@ -300,7 +279,7 @@ server {
         index index.html;
         try_files $uri $uri/ /index.html;
         add_header Cache-Control "no-cache, must-revalidate" always;
-        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
         add_header Referrer-Policy "no-referrer" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
@@ -358,17 +337,7 @@ Registry 入口机（不得使用 `-k` 跳过证书校验）：
 curl https://<registry-host>:28800/
 ```
 
-确认服务状态：
-
-```bash
-~/.wheelmaker/status.sh
-```
-
-Windows：
-
-```powershell
-~/.wheelmaker/status.bat
-```
+确认 Web 可以访问，并在 Web 更新页面或 `~/.wheelmaker/staging/status.json` 查看最近一次发布任务状态。安装目录不再生成单独的 status helper。
 
 Worker 无法连上入口机时，优先检查：
 
@@ -378,25 +347,16 @@ Worker 无法连上入口机时，优先检查：
 - 防火墙和对外端口
 - Registry 入口机服务状态
 
-## 9. Android Release 签名
+## 9. 统一发布与 Android 签名
 
-Android `release` 构建不会再回退到 debug key。执行 `assembleRelease`、`bundleRelease`、`build` 或发布脚本前，必须在当前进程环境中提供：
+从仓库根目录运行 `publish-release.bat`，依次选择是否包含 Desktop、是否包含 Android、是否发布到 public 仓库。三个选项默认都是否；不发布时仍读取公共 `stable.json`，使用下一个 `v1.x` 并写入 `.release-out/v1.x/`。可复用的 Webpack、Go、Gradle 缓存位于 `.release-work/cache/`，本轮临时目录 `.release-work/tmp/` 在成功或失败后清理。
 
-- `WHEELMAKER_ANDROID_KEYSTORE`：JKS/PKCS12 文件的绝对路径
-- `WHEELMAKER_ANDROID_STORE_PASSWORD`
-- `WHEELMAKER_ANDROID_KEY_ALIAS`
-- `WHEELMAKER_ANDROID_KEY_PASSWORD`
-
-缺少任一项、keystore 不存在、alias 不存在或密码无法加载 key 时，构建会直接失败；debug/test/lint 不需要这些变量。不要把密码写进仓库、Gradle 参数、命令历史或发布报告。变量名说明见 `mobile/android/release-signing.properties.example`。
-
-发布报告只记录 keystore 文件名和从已签名 APK 读取的证书 SHA-256，不记录 keystore 路径或密码。发布机器需要 Android SDK Build Tools 的 `apksigner`：
+非交互调用为：
 
 ```powershell
-$env:WHEELMAKER_ANDROID_KEYSTORE = "C:\secure\wheelmaker-release.jks"
-$env:WHEELMAKER_ANDROID_STORE_PASSWORD = Read-Host "Keystore password"
-$env:WHEELMAKER_ANDROID_KEY_ALIAS = "wheelmaker-release"
-$env:WHEELMAKER_ANDROID_KEY_PASSWORD = Read-Host "Key password"
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\publish_android.ps1
+node scripts/release.mjs --with-desktop --with-android --publish
 ```
 
-发布完成后从当前进程清除密码变量。
+Android `release` 构建不会回退到 debug key。统一发布器从 `mobile/android/signing/signing.properties` 和 `mobile/android/signing/release.p12` 读取已提交的发布身份，不依赖本机环境变量或 GitHub Secrets。修改这两个文件会改变后续 APK 的签名身份，应按发布凭据保护源码仓库写权限和备份。发布机器需安装 JDK 17、Android SDK Build Tools、Gradle 和 Node.js 22+；未选择 Android 时不初始化 Android 工具链。
+
+`v1.x` 对应 Android `versionName=1.x`、`versionCode=x`。选中 Android 后，APK 与 `android-release.json` 进入同一个 `v1.x` GitHub Release；未选中时 `stable.androidApk` 继承最近一次 Android 资产。主机上的 `deploy.mjs` 不下载 APK，只有原生 Android Update 页面使用该公共指针安装更新。

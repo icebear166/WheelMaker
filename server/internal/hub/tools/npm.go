@@ -59,8 +59,9 @@ func (execNPMCommandRunner) Run(ctx context.Context, name string, args ...string
 }
 
 type NPMCommand struct {
-	runner npmCommandRunner
-	now    func() time.Time
+	runner   npmCommandRunner
+	now      func() time.Time
+	lookPath func(string) (string, error)
 
 	mu          sync.Mutex
 	operation   *npmOperationSnapshot
@@ -76,12 +77,73 @@ func newNPMCommandWithRunner(runner npmCommandRunner) *NPMCommand {
 		runner = execNPMCommandRunner{}
 	}
 	return &NPMCommand{
-		runner: runner,
-		now: func() time.Time {
-			return time.Now().UTC()
-		},
+		runner:   runner,
+		now:      func() time.Time { return time.Now().UTC() },
+		lookPath: exec.LookPath,
 		latestCache: map[string]npmLatestCacheEntry{},
 	}
+}
+
+// resolveLookPath returns the configured LookPath, falling back to exec.LookPath.
+func (c *NPMCommand) resolveLookPath() func(string) (string, error) {
+	if c != nil && c.lookPath != nil {
+		return c.lookPath
+	}
+	return exec.LookPath
+}
+
+// npmPackageBinaryName returns the CLI binary name a runtime package provides
+// (e.g. @openai/codex -> codex), or "" if the package is not a known runtime
+// package with a resolvable binary.
+func npmPackageBinaryName(packageName string) string {
+	for _, pkg := range runtimeNPMPackages {
+		if pkg.PackageName == packageName && len(pkg.AgentTypes) > 0 {
+			return pkg.AgentTypes[0]
+		}
+	}
+	return ""
+}
+
+// installSuccessMessage describes a finished single-package install. Runtime
+// packages are probed via LookPath so the message tells the user whether the CLI
+// is immediately usable or whether a restart is required (e.g. when the hub's
+// PATH has not yet been augmented with npm's global bin).
+func (c *NPMCommand) installSuccessMessage(packageName, version string) string {
+	base := fmt.Sprintf("Installed %s@%s.", packageName, version)
+	binary := npmPackageBinaryName(packageName)
+	if binary == "" {
+		return base + " Restart WheelMaker or start a new agent session for the change to take effect."
+	}
+	if _, err := c.resolveLookPath()(binary); err == nil {
+		return base + fmt.Sprintf(" `%s` is now on PATH and ready to use.", binary)
+	}
+	return base + fmt.Sprintf(" Restart WheelMaker so `%s` is picked up from PATH (not found on the current PATH yet).", binary)
+}
+
+// installManySuccessMessage describes a finished multi-package install, reporting
+// which installed CLI binaries are immediately usable versus need a restart.
+func (c *NPMCommand) installManySuccessMessage(packageNames []string) string {
+	lookPath := c.resolveLookPath()
+	var ready, missing []string
+	for _, name := range packageNames {
+		binary := npmPackageBinaryName(name)
+		if binary == "" {
+			continue
+		}
+		if _, err := lookPath(binary); err == nil {
+			ready = append(ready, binary)
+		} else {
+			missing = append(missing, binary)
+		}
+	}
+	base := fmt.Sprintf("Installed %d npm %s.", len(packageNames), pluralNoun(len(packageNames), "package", "packages"))
+	if len(ready) == 0 && len(missing) == 0 {
+		return base + " Restart WheelMaker or start a new agent session for the change to take effect."
+	}
+	if len(missing) == 0 {
+		return base + fmt.Sprintf(" All installed CLIs (%s) are now on PATH and ready to use.", strings.Join(ready, ", "))
+	}
+	return base + fmt.Sprintf(" Restart WheelMaker so the following CLIs are picked up from PATH (not found yet): %s.", strings.Join(missing, ", "))
 }
 
 type npmCommandPayload struct {
@@ -528,7 +590,7 @@ func (c *NPMCommand) runCommandOperation(operation *npmOperationSnapshot, name s
 	if operation.Action == "uninstall" {
 		operation.Message = fmt.Sprintf("Uninstalled %s. Restart WheelMaker or start a new agent session for the change to take effect.", operation.PackageName)
 	} else {
-		operation.Message = fmt.Sprintf("Installed %s@%s. Restart WheelMaker or start a new agent session for the change to take effect.", operation.PackageName, operation.Version)
+		operation.Message = c.installSuccessMessage(operation.PackageName, operation.Version)
 	}
 }
 
@@ -562,7 +624,7 @@ func (c *NPMCommand) runInstallManyOperation(operation *npmOperationSnapshot, pa
 		return
 	}
 	operation.Status = "succeeded"
-	operation.Message = fmt.Sprintf("Installed %d npm %s. Restart WheelMaker or start a new agent session for the change to take effect.", len(packageNames), pluralNoun(len(packageNames), "package", "packages"))
+	operation.Message = c.installManySuccessMessage(packageNames)
 }
 
 func (c *NPMCommand) currentOperationSnapshot() *npmOperationSnapshot {

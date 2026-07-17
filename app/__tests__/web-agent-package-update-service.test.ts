@@ -160,7 +160,7 @@ describe('agent package update registry service', () => {
     expect(client.request).toHaveBeenCalledTimes(3);
   });
 
-  test('uses wheelmakerUpdate HubState refresh and update-publish action', async () => {
+  test('uses wheelmakerUpdate HubState refresh and requestUpdate action', async () => {
     const client = {
       request: jest.fn().mockResolvedValue({
         type: 'response',
@@ -171,7 +171,21 @@ describe('agent package update registry service', () => {
             sections: {
               wheelmakerUpdate: {
                 status: 'ready',
-                data: {ok: true, hubId: 'hub-a', status: 'update_pending', pendingSignal: true, canUpdatePublish: true},
+                data: {
+                  ok: true,
+                  accepted: true,
+                  jobId: 'job-a',
+                  hubId: 'hub-a',
+                  status: 'update_pending',
+                  job: {
+                    schema: 1,
+                    jobId: 'job-a',
+                    state: 'queued',
+                    startedAt: '2026-07-16T09:00:00Z',
+                    updatedAt: '2026-07-16T09:00:00Z',
+                  },
+                  canRequestUpdate: false,
+                },
               },
             },
           },
@@ -181,8 +195,7 @@ describe('agent package update registry service', () => {
     const repository = new RegistryRepository(client);
 
     await repository.queryWheelMakerUpdate('hub-a');
-    await repository.queryWheelMakerUpdate('hub-a', {force: true});
-    await repository.requestWheelMakerUpdatePublish('hub-a');
+    await repository.requestWheelMakerUpdate('hub-a');
 
     expect(client.request).toHaveBeenNthCalledWith(1, {
       method: RegistryMethods.HubStateRefresh,
@@ -191,23 +204,22 @@ describe('agent package update registry service', () => {
       timeoutMs: 60000,
     });
     expect(client.request).toHaveBeenNthCalledWith(2, {
-      method: RegistryMethods.HubStateRefresh,
-      hubId: 'hub-a',
-      payload: {sections: ['wheelmakerUpdate'], force: true},
-      timeoutMs: 60000,
-    });
-    expect(client.request).toHaveBeenNthCalledWith(3, {
       method: RegistryMethods.HubStateAction,
       hubId: 'hub-a',
-      payload: {section: 'wheelmakerUpdate', action: 'updatePublish', params: {}},
+      payload: {section: 'wheelmakerUpdate', action: 'requestUpdate', params: {}},
       timeoutMs: 60000,
     });
   });
 
-  test('defines WheelMaker update remote refresh metadata in the registry type', () => {
+  test('keeps the Registry WheelMaker response local-only', () => {
     const registryTypes = fs.readFileSync(path.join(__dirname, '..', 'web', 'src', 'registry', 'registryTypes.ts'), 'utf8');
 
-    expect(registryTypes).toContain('remoteRefreshRunning?: boolean;');
+    expect(registryTypes).toContain('installed?: RegistryWheelMakerInstalledRelease;');
+    expect(registryTypes).toContain('job?: RegistryWheelMakerUpdateJob;');
+    expect(registryTypes).toContain('canRequestUpdate: boolean;');
+    expect(registryTypes).not.toContain('stable?: RegistryWheelMakerStableRelease;');
+    expect(registryTypes).not.toContain('publishStatus?: RegistryWheelMakerPublishStatus;');
+    expect(registryTypes).not.toContain('remoteRefreshRunning?: boolean;');
   });
 
   test('refreshes tokenStats HubState section for token scans', async () => {

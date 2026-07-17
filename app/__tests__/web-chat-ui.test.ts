@@ -275,7 +275,7 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('const result = await service.createSession(normalizedAgentType, title);');
     expect(mainTsx).toContain("const result = await service.createProjectSession(targetProjectId, agentType, '');");
     expect(mainTsx).not.toContain('const completeNewChatFlow = async (agentType: string) => {');
-    expect(mainTsx).toContain('for (const item of projectItem.agents ?? [])');
+    expect(mainTsx).toContain('buildProjectAgentChoices(projectItem, sessions)');
     expect(mainTsx).toContain('resetChatComposer();');
     expect(mainTsx).toContain('attachments: ChatAttachment[];');
     expect(mainTsx).toContain("const EMPTY_CHAT_COMPOSER_DRAFT: ChatComposerDraft = { text: '', tokens: [], attachments: [] };");

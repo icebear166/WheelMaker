@@ -1,0 +1,99 @@
+name: Publish prebuilt release
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Private source commit or ref to publish
+        required: true
+        type: string
+      with_desktop:
+        description: Build and publish WheelMakerDesktop.exe
+        default: false
+        required: true
+        type: boolean
+      with_android:
+        description: Build and publish WheelMakerAndroid.apk
+        default: false
+        required: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out selected source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          ref: ${{ inputs.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.x'
+          cache: false
+
+      - name: Restore release compiler caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            .release-work/cache/webpack
+            .release-work/cache/go-build
+            .release-work/cache/go-mod
+          key: ${{ runner.os }}-release-${{ hashFiles('app/package-lock.json', 'server/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-release-
+
+      - name: Set up Java for Android
+        if: ${{ inputs.with_android }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        if: ${{ inputs.with_android }}
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        if: ${{ inputs.with_android }}
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-disabled: true
+          gradle-version: '9.5.1'
+
+      - name: Restore Android build cache
+        if: ${{ inputs.with_android }}
+        uses: actions/cache@v4
+        with:
+          path: .release-work/cache/gradle
+          key: ${{ runner.os }}-android-${{ hashFiles('mobile/android/**/*.gradle.kts', 'mobile/android/gradle.properties', 'mobile/android/signing/release.p12') }}
+          restore-keys: |
+            ${{ runner.os }}-android-
+
+      - name: Build and publish release
+        env:
+          WHEELMAKER_RELEASE_APP_ID: ${{ secrets.WHEELMAKER_RELEASE_APP_ID }}
+          WHEELMAKER_RELEASE_INSTALLATION_ID: ${{ secrets.WHEELMAKER_RELEASE_INSTALLATION_ID }}
+          WHEELMAKER_RELEASE_APP_PRIVATE_KEY: ${{ secrets.WHEELMAKER_RELEASE_APP_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          args=(--publish)
+          if [[ "${{ inputs.with_desktop }}" == "true" ]]; then
+            args+=(--with-desktop)
+          fi
+          if [[ "${{ inputs.with_android }}" == "true" ]]; then
+            args+=(--with-android)
+          fi
+          node scripts/release.mjs "${args[@]}"

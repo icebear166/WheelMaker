@@ -35,7 +35,7 @@ func TestManagerRoutesToolCommands(t *testing.T) {
 		t.Fatalf("Handle cmd.update error=%v", cmdErr)
 	}
 	body := resp.(updateCommandResponse)
-	if !body.OK || body.HubID != "hub-a" || body.Status != "not_published" {
+	if !body.OK || body.HubID != "hub-a" || body.Status != "not_installed" {
 		t.Fatalf("cmd.update response=%#v", body)
 	}
 
@@ -1587,362 +1587,160 @@ func TestFetchCodexUsageLimitsDoesNotRefreshRejectedAccessToken(t *testing.T) {
 	}
 }
 
-func TestUpdateCommandQueryWithoutReleaseAllowsPublish(t *testing.T) {
-	cmd := newUpdateCommandWithRunner(t.TempDir(), &fakeUpdateRunner{})
-
-	resp, cmdErr := cmd.Handle(context.Background(), rawUpdateCommandPayload(t, map[string]any{
+func TestUpdateQueryReadsOnlyInstalledReleaseAndLocalJobState(t *testing.T) {
+	baseDir := t.TempDir()
+	installed := installedRelease{
+		SchemaVersion: 2,
+		Version:       "v1.22",
+		PublishedAt:   "2026-07-15T09:00:00Z",
+		SourceSHA:     strings.Repeat("a", 40),
+		ManifestSHA:   strings.Repeat("c", 64),
+		InstalledAt:   "2026-07-15T09:05:00Z",
+	}
+	writeInstalledReleaseForTest(t, baseDir, installed)
+	cmd := newUpdateCommandWithDependencies(baseDir, &fakeUpdateTrigger{})
+	got := handleUpdateForTest(t, cmd, map[string]any{
 		"action": "query",
 		"hubId":  "hub-a",
-	}))
-	if cmdErr != nil {
-		t.Fatalf("Handle query: %v", cmdErr)
+	})
+
+	if got.Status != "installed" || got.Installed == nil || got.Installed.Version != "v1.22" {
+		t.Fatalf("response=%+v", got)
 	}
-	out := resp.(updateCommandResponse)
-	if !out.OK || out.Status != "not_published" || !out.CanUpdatePublish {
-		t.Fatalf("response=%+v, want not_published and publish allowed", out)
+	if !got.OK || !got.CanRequest {
+		t.Fatalf("response=%+v, want installed requestable Hub", got)
 	}
-	if out.PendingSignal {
-		t.Fatalf("pendingSignal=true, want false")
-	}
-	if out.Release != nil {
-		t.Fatalf("release=%+v, want nil", out.Release)
+	if got.Stable != nil || got.PublishStatus != nil {
+		t.Fatalf("response includes global metadata: %+v", got)
 	}
 }
 
-func TestUpdateCommandUpdatePublishWritesFullUpdateSignal(t *testing.T) {
+func TestUpdateQueryRejectsInvalidInstalledRelease(t *testing.T) {
 	baseDir := t.TempDir()
-	cmd := newUpdateCommandWithRunner(baseDir, &fakeUpdateRunner{})
+	if err := os.WriteFile(filepath.Join(baseDir, "release.json"), []byte("{\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := newUpdateCommandWithDependencies(baseDir, &fakeUpdateTrigger{})
 
-	resp, cmdErr := cmd.Handle(context.Background(), rawUpdateCommandPayload(t, map[string]any{
-		"action": "update-publish",
+	got := handleUpdateForTest(t, cmd, map[string]any{
+		"action": "query",
 		"hubId":  "hub-a",
-	}))
-	if cmdErr != nil {
-		t.Fatalf("Handle update-publish: %v", cmdErr)
+	})
+	if got.Status != "checking_failed" || got.ErrorCode != "installed_release_invalid" {
+		t.Fatalf("response=%+v", got)
 	}
-	out := resp.(updateCommandResponse)
-	if !out.OK || !out.Accepted || !out.PendingSignal || out.RequestedAt == "" {
-		t.Fatalf("response=%+v, want accepted pending signal", out)
+	if got.CanRequest {
+		t.Fatalf("canRequestUpdate=true for invalid installed release")
 	}
-	raw, err := os.ReadFile(filepath.Join(baseDir, "update-now.signal"))
+}
+
+func TestUpdateRequestCreatesOneQueuedJob(t *testing.T) {
+	baseDir := t.TempDir()
+	trigger := &fakeUpdateTrigger{}
+	cmd := newUpdateCommandWithDependencies(baseDir, trigger)
+	cmd.now = func() time.Time {
+		return time.Date(2026, 7, 16, 9, 0, 0, 0, time.UTC)
+	}
+
+	first := handleUpdateForTest(t, cmd, map[string]any{
+		"action": "request",
+		"hubId":  "hub-a",
+	})
+	second := handleUpdateForTest(t, cmd, map[string]any{
+		"action": "request",
+		"hubId":  "hub-a",
+	})
+	if first.JobID == "" || first.JobID != second.JobID || trigger.Calls() != 1 {
+		t.Fatalf("first=%+v second=%+v calls=%d", first, second, trigger.Calls())
+	}
+	if !first.Accepted || first.Job == nil || first.Job.State != "queued" {
+		t.Fatalf("first=%+v, want accepted queued job", first)
+	}
+
+	lockRaw, err := os.ReadFile(filepath.Join(baseDir, "staging", "lock.json"))
 	if err != nil {
-		t.Fatalf("read signal: %v", err)
+		t.Fatalf("read lock: %v", err)
 	}
-	if !strings.Contains(strings.ToLower(string(raw)), "full-update") {
-		t.Fatalf("signal=%q, want full-update marker", string(raw))
+	var lock updateLease
+	if err := json.Unmarshal(lockRaw, &lock); err != nil {
+		t.Fatalf("parse lock: %v", err)
 	}
-}
-
-func TestUpdateCommandQueryUsesCachedRemoteAndCountsBehindByDefault(t *testing.T) {
-	baseDir := t.TempDir()
-	repoDir := filepath.Join(baseDir, "repo")
-	if err := os.MkdirAll(filepath.Join(repoDir, ".git"), 0o755); err != nil {
-		t.Fatalf("mkdir repo: %v", err)
+	if lock.JobID != first.JobID || lock.Owner != "web" || lock.State != "queued" {
+		t.Fatalf("lock=%+v", lock)
 	}
-	writeReleaseManifestForTest(t, baseDir, updateReleaseManifest{
-		SchemaVersion: 1,
-		Repo:          repoDir,
-		Branch:        "main",
-		Remote:        "origin",
-		SHA:           "local-sha",
-		PublishedAt:   "2026-05-19T10:00:00Z",
-	})
-	fetchKey := updateCallKey("git", "fetch", "--prune", "origin", "main")
-	fetchBlock := make(chan struct{})
-	fetchStarted := make(chan struct{}, 1)
-	runner := &fakeUpdateRunner{
-		results: map[string]updateCommandResult{
-			fetchKey: {
-				ExitCode: 0,
-			},
-			"git rev-parse origin/main": {
-				Stdout:   "remote-sha\n",
-				ExitCode: 0,
-			},
-			"git show -s --format=%cI local-sha": {
-				Stdout:   "2026-05-19T08:00:00Z\n",
-				ExitCode: 0,
-			},
-			"git show -s --format=%cI origin/main": {
-				Stdout:   "2026-05-19T09:00:00Z\n",
-				ExitCode: 0,
-			},
-			"git rev-list --count local-sha..origin/main": {
-				Stdout:   "3\n",
-				ExitCode: 0,
-			},
-			"git rev-list --count origin/main..local-sha": {
-				Stdout:   "0\n",
-				ExitCode: 0,
-			},
-			"git status --porcelain": {
-				Stdout:   "",
-				ExitCode: 0,
-			},
-		},
-		blockKeys:   map[string]chan struct{}{fetchKey: fetchBlock},
-		callSignals: map[string]chan struct{}{fetchKey: fetchStarted},
-	}
-	cmd := newUpdateCommandWithRunner(baseDir, runner)
-
-	resp, cmdErr := cmd.Handle(context.Background(), rawUpdateCommandPayload(t, map[string]any{
-		"action": "query",
-		"hubId":  "hub-a",
-	}))
-	if cmdErr != nil {
-		t.Fatalf("Handle query: %v", cmdErr)
-	}
-	out := resp.(updateCommandResponse)
-	if !out.OK || out.Status != "update_available" {
-		t.Fatalf("response=%+v, want update_available", out)
-	}
-	if out.Git == nil || out.Git.LatestSHA != "remote-sha" || out.Git.BehindCount != 3 || out.Git.AheadCount != 0 {
-		t.Fatalf("git=%+v, want remote-sha behind=3 ahead=0", out.Git)
-	}
-	if out.Git.CurrentCommittedAt != "2026-05-19T08:00:00Z" || out.Git.LatestCommittedAt != "2026-05-19T09:00:00Z" {
-		t.Fatalf("git commit times=%+v, want current/latest commit times", out.Git)
-	}
-	if !out.RemoteRefreshRunning {
-		t.Fatalf("remoteRefreshRunning=false, want true while background fetch is running")
-	}
-	waitForUpdateCall(t, fetchStarted)
-	close(fetchBlock)
-	calls := runner.Calls()
-	for _, want := range []updateCommandCall{
-		{Dir: repoDir, Name: "git", Args: []string{"rev-parse", "origin/main"}},
-		{Dir: repoDir, Name: "git", Args: []string{"show", "-s", "--format=%cI", "local-sha"}},
-		{Dir: repoDir, Name: "git", Args: []string{"show", "-s", "--format=%cI", "origin/main"}},
-		{Dir: repoDir, Name: "git", Args: []string{"rev-list", "--count", "local-sha..origin/main"}},
-		{Dir: repoDir, Name: "git", Args: []string{"rev-list", "--count", "origin/main..local-sha"}},
-		{Dir: repoDir, Name: "git", Args: []string{"status", "--porcelain"}},
-		{Dir: repoDir, Name: "git", Args: []string{"fetch", "--prune", "origin", "main"}},
-	} {
-		if !updateCallsContain(calls, want) {
-			t.Fatalf("call %#v not found in %#v", want, calls)
-		}
-	}
-}
-
-func TestUpdateCommandQueryDoesNotStartDuplicateBackgroundFetch(t *testing.T) {
-	baseDir := t.TempDir()
-	repoDir := filepath.Join(baseDir, "repo")
-	if err := os.MkdirAll(filepath.Join(repoDir, ".git"), 0o755); err != nil {
-		t.Fatalf("mkdir repo: %v", err)
-	}
-	writeReleaseManifestForTest(t, baseDir, updateReleaseManifest{
-		SchemaVersion: 1,
-		Repo:          repoDir,
-		Branch:        "main",
-		Remote:        "origin",
-		SHA:           "local-sha",
-		PublishedAt:   "2026-05-19T10:00:00Z",
-	})
-	fetchKey := updateCallKey("git", "fetch", "--prune", "origin", "main")
-	fetchBlock := make(chan struct{})
-	fetchStarted := make(chan struct{}, 2)
-	runner := &fakeUpdateRunner{
-		results: map[string]updateCommandResult{
-			fetchKey: {"", "", 0, nil},
-			"git rev-parse origin/main": {
-				Stdout:   "remote-sha\n",
-				ExitCode: 0,
-			},
-			"git show -s --format=%cI local-sha": {
-				Stdout:   "2026-05-19T08:00:00Z\n",
-				ExitCode: 0,
-			},
-			"git show -s --format=%cI origin/main": {
-				Stdout:   "2026-05-19T09:00:00Z\n",
-				ExitCode: 0,
-			},
-			"git rev-list --count local-sha..origin/main": {
-				Stdout:   "3\n",
-				ExitCode: 0,
-			},
-			"git rev-list --count origin/main..local-sha": {
-				Stdout:   "0\n",
-				ExitCode: 0,
-			},
-			"git status --porcelain": {
-				Stdout:   "",
-				ExitCode: 0,
-			},
-		},
-		blockKeys:   map[string]chan struct{}{fetchKey: fetchBlock},
-		callSignals: map[string]chan struct{}{fetchKey: fetchStarted},
-	}
-	cmd := newUpdateCommandWithRunner(baseDir, runner)
-
-	resp, cmdErr := cmd.Handle(context.Background(), rawUpdateCommandPayload(t, map[string]any{
-		"action": "query",
-		"hubId":  "hub-a",
-	}))
-	if cmdErr != nil {
-		t.Fatalf("Handle first query: %v", cmdErr)
-	}
-	if out := resp.(updateCommandResponse); !out.RemoteRefreshRunning {
-		t.Fatalf("first query remoteRefreshRunning=false, want true")
-	}
-	waitForUpdateCall(t, fetchStarted)
-	resp, cmdErr = cmd.Handle(context.Background(), rawUpdateCommandPayload(t, map[string]any{
-		"action": "query",
-		"hubId":  "hub-a",
-	}))
-	if cmdErr != nil {
-		t.Fatalf("Handle second query: %v", cmdErr)
-	}
-	if out := resp.(updateCommandResponse); !out.RemoteRefreshRunning {
-		t.Fatalf("second query remoteRefreshRunning=false, want true")
-	}
-	close(fetchBlock)
-	time.Sleep(25 * time.Millisecond)
-	if got := countUpdateCall(runner.Calls(), updateCommandCall{Dir: repoDir, Name: "git", Args: []string{"fetch", "--prune", "origin", "main"}}); got != 1 {
-		t.Fatalf("background fetch calls=%d, want 1", got)
-	}
-}
-
-func TestUpdateCommandQueryForceFetchesRemoteAndCountsBehind(t *testing.T) {
-	baseDir := t.TempDir()
-	repoDir := filepath.Join(baseDir, "repo")
-	if err := os.MkdirAll(filepath.Join(repoDir, ".git"), 0o755); err != nil {
-		t.Fatalf("mkdir repo: %v", err)
-	}
-	writeReleaseManifestForTest(t, baseDir, updateReleaseManifest{
-		SchemaVersion: 1,
-		Repo:          repoDir,
-		Branch:        "main",
-		Remote:        "origin",
-		SHA:           "local-sha",
-		PublishedAt:   "2026-05-19T10:00:00Z",
-	})
-	runner := &fakeUpdateRunner{
-		results: map[string]updateCommandResult{
-			"git fetch --prune origin main": {
-				ExitCode: 0,
-			},
-			"git rev-parse origin/main": {
-				Stdout:   "remote-sha\n",
-				ExitCode: 0,
-			},
-			"git show -s --format=%cI local-sha": {
-				Stdout:   "2026-05-19T08:00:00Z\n",
-				ExitCode: 0,
-			},
-			"git show -s --format=%cI origin/main": {
-				Stdout:   "2026-05-19T09:00:00Z\n",
-				ExitCode: 0,
-			},
-			"git rev-list --count local-sha..origin/main": {
-				Stdout:   "3\n",
-				ExitCode: 0,
-			},
-			"git rev-list --count origin/main..local-sha": {
-				Stdout:   "0\n",
-				ExitCode: 0,
-			},
-			"git status --porcelain": {
-				Stdout:   "",
-				ExitCode: 0,
-			},
-		},
-	}
-	cmd := newUpdateCommandWithRunner(baseDir, runner)
-
-	resp, cmdErr := cmd.Handle(context.Background(), rawUpdateCommandPayload(t, map[string]any{
-		"action": "query",
-		"hubId":  "hub-a",
-		"force":  true,
-	}))
-	if cmdErr != nil {
-		t.Fatalf("Handle query: %v", cmdErr)
-	}
-	out := resp.(updateCommandResponse)
-	if !out.OK || out.Status != "update_available" {
-		t.Fatalf("response=%+v, want update_available", out)
-	}
-	if out.Git == nil || out.Git.LatestSHA != "remote-sha" || out.Git.BehindCount != 3 || out.Git.AheadCount != 0 {
-		t.Fatalf("git=%+v, want remote-sha behind=3 ahead=0", out.Git)
-	}
-	wantCalls := []updateCommandCall{
-		{Dir: repoDir, Name: "git", Args: []string{"fetch", "--prune", "origin", "main"}},
-		{Dir: repoDir, Name: "git", Args: []string{"rev-parse", "origin/main"}},
-		{Dir: repoDir, Name: "git", Args: []string{"show", "-s", "--format=%cI", "local-sha"}},
-		{Dir: repoDir, Name: "git", Args: []string{"show", "-s", "--format=%cI", "origin/main"}},
-		{Dir: repoDir, Name: "git", Args: []string{"rev-list", "--count", "local-sha..origin/main"}},
-		{Dir: repoDir, Name: "git", Args: []string{"rev-list", "--count", "origin/main..local-sha"}},
-		{Dir: repoDir, Name: "git", Args: []string{"status", "--porcelain"}},
-	}
-	if !reflect.DeepEqual(runner.calls, wantCalls) {
-		t.Fatalf("calls mismatch\n got: %#v\nwant: %#v", runner.calls, wantCalls)
-	}
-}
-
-func TestUpdateCommandQueryPendingSignalDoesNotFetch(t *testing.T) {
-	baseDir := t.TempDir()
-	repoDir := filepath.Join(baseDir, "repo")
-	if err := os.MkdirAll(filepath.Join(repoDir, ".git"), 0o755); err != nil {
-		t.Fatalf("mkdir repo: %v", err)
-	}
-	writeReleaseManifestForTest(t, baseDir, updateReleaseManifest{
-		SchemaVersion: 1,
-		Repo:          repoDir,
-		Branch:        "main",
-		Remote:        "origin",
-		SHA:           "local-sha",
-		PublishedAt:   "2026-05-19T10:00:00Z",
-	})
-	if err := os.WriteFile(filepath.Join(baseDir, "update-now.signal"), []byte("full-update\n"), 0o644); err != nil {
-		t.Fatalf("write signal: %v", err)
-	}
-	runner := &fakeUpdateRunner{}
-	cmd := newUpdateCommandWithRunner(baseDir, runner)
-
-	resp, cmdErr := cmd.Handle(context.Background(), rawUpdateCommandPayload(t, map[string]any{
-		"action": "query",
-		"hubId":  "hub-a",
-	}))
-	if cmdErr != nil {
-		t.Fatalf("Handle query: %v", cmdErr)
-	}
-	out := resp.(updateCommandResponse)
-	if !out.OK || out.Status != "update_pending" || !out.PendingSignal {
-		t.Fatalf("response=%+v, want update_pending from signal", out)
-	}
-	if len(runner.calls) != 0 {
-		t.Fatalf("pending query should not run git, calls=%#v", runner.calls)
-	}
-}
-
-func TestUpdateCommandReadReleaseManifestAcceptsUTF8BOM(t *testing.T) {
-	baseDir := t.TempDir()
-	repoDir := filepath.Join(baseDir, "repo")
-	if err := os.MkdirAll(filepath.Join(repoDir, ".git"), 0o755); err != nil {
-		t.Fatalf("mkdir repo: %v", err)
-	}
-	raw, err := json.Marshal(updateReleaseManifest{
-		SchemaVersion: 1,
-		Repo:          repoDir,
-		Branch:        "main",
-		Remote:        "origin",
-		SHA:           "local-sha",
-		PublishedAt:   "2026-05-19T10:00:00Z",
-	})
+	statusRaw, err := os.ReadFile(filepath.Join(baseDir, "staging", "status.json"))
 	if err != nil {
-		t.Fatalf("marshal release: %v", err)
+		t.Fatalf("read status: %v", err)
 	}
-	withBOM := append([]byte{0xEF, 0xBB, 0xBF}, raw...)
-	if err := os.WriteFile(filepath.Join(baseDir, "release.json"), withBOM, 0o644); err != nil {
-		t.Fatalf("write release: %v", err)
+	var status updateJobStatus
+	if err := json.Unmarshal(statusRaw, &status); err != nil {
+		t.Fatalf("parse status: %v", err)
 	}
-	cmd := newUpdateCommandWithRunner(baseDir, &fakeUpdateRunner{})
+	if status.JobID != first.JobID || status.State != "queued" {
+		t.Fatalf("status=%+v", status)
+	}
+}
 
-	manifest, err := cmd.readReleaseManifest()
-	if err != nil {
-		t.Fatalf("readReleaseManifest: %v", err)
+func TestUpdateQueryReportsActiveJobWithoutRetriggering(t *testing.T) {
+	baseDir := t.TempDir()
+	writeInstalledReleaseForTest(t, baseDir, installedRelease{
+		SchemaVersion: 2,
+		Version:       "v1.22",
+		PublishedAt:   "2026-07-15T09:00:00Z",
+		SourceSHA:     strings.Repeat("a", 40),
+		ManifestSHA:   strings.Repeat("c", 64),
+		InstalledAt:   "2026-07-15T09:05:00Z",
+	})
+	trigger := &fakeUpdateTrigger{}
+	cmd := newUpdateCommandWithDependencies(baseDir, trigger)
+
+	requested := handleUpdateForTest(t, cmd, map[string]any{
+		"action": "request",
+		"hubId":  "hub-a",
+	})
+	queried := handleUpdateForTest(t, cmd, map[string]any{
+		"action": "query",
+		"hubId":  "hub-a",
+	})
+	if queried.Job == nil || queried.Job.JobID != requested.JobID || queried.Job.State != "queued" {
+		t.Fatalf("requested=%+v queried=%+v", requested, queried)
 	}
-	if manifest.Repo != repoDir || manifest.Branch != "main" || manifest.SHA != "local-sha" {
-		t.Fatalf("manifest=%+v, want parsed manifest", manifest)
+	if queried.CanRequest {
+		t.Fatalf("canRequestUpdate=true while job is active")
 	}
+	if trigger.Calls() != 1 {
+		t.Fatalf("trigger calls=%d, want 1", trigger.Calls())
+	}
+}
+
+func TestUpdaterTriggerSpecUsesKnownCurrentUserRuntime(t *testing.T) {
+	windows := updaterTriggerSpec("windows", "501")
+	if windows.Name != "powershell" || !strings.Contains(strings.Join(windows.Args, " "), "Start-ScheduledTask") || !strings.Contains(strings.Join(windows.Args, " "), "WheelMakerUpdater") {
+		t.Fatalf("windows spec=%+v", windows)
+	}
+	linux := updaterTriggerSpec("linux", "501")
+	if linux.Name != "systemctl" || !reflect.DeepEqual(linux.Args, []string{"--user", "start", "wheelmaker-updater.service"}) {
+		t.Fatalf("linux spec=%+v", linux)
+	}
+	darwin := updaterTriggerSpec("darwin", "501")
+	if darwin.Name != "launchctl" || !strings.Contains(strings.Join(darwin.Args, " "), "gui/501/com.wheelmaker.updater") {
+		t.Fatalf("darwin spec=%+v", darwin)
+	}
+}
+
+const ()
+
+func handleUpdateForTest(t *testing.T, cmd *UpdateCommand, payload map[string]any) updateCommandResponse {
+	t.Helper()
+	resp, cmdErr := cmd.Handle(context.Background(), rawUpdateCommandPayload(t, payload))
+	if cmdErr != nil {
+		t.Fatalf("Handle update: %v", cmdErr)
+	}
+	out, ok := resp.(updateCommandResponse)
+	if !ok {
+		t.Fatalf("response=%T, want updateCommandResponse", resp)
+	}
+	return out
 }
 
 func rawUpdateCommandPayload(t *testing.T, payload map[string]any) json.RawMessage {
@@ -1954,85 +1752,32 @@ func rawUpdateCommandPayload(t *testing.T, payload map[string]any) json.RawMessa
 	return raw
 }
 
-func writeReleaseManifestForTest(t *testing.T, baseDir string, manifest updateReleaseManifest) {
+func writeInstalledReleaseForTest(t *testing.T, baseDir string, release installedRelease) {
 	t.Helper()
-	raw, err := json.Marshal(manifest)
+	raw, err := json.Marshal(release)
 	if err != nil {
-		t.Fatalf("marshal release: %v", err)
+		t.Fatalf("marshal installed release: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(baseDir, "release.json"), raw, 0o644); err != nil {
-		t.Fatalf("write release: %v", err)
+	if err := os.WriteFile(filepath.Join(baseDir, "release.json"), append(raw, '\n'), 0o644); err != nil {
+		t.Fatalf("write installed release: %v", err)
 	}
 }
 
-type fakeUpdateRunner struct {
-	mu          sync.Mutex
-	calls       []updateCommandCall
-	results     map[string]updateCommandResult
-	blockKeys   map[string]chan struct{}
-	callSignals map[string]chan struct{}
+type fakeUpdateTrigger struct {
+	mu    sync.Mutex
+	calls int
+	err   error
 }
 
-func (f *fakeUpdateRunner) Run(ctx context.Context, dir string, name string, args ...string) updateCommandResult {
-	key := updateCallKey(name, args...)
-	f.mu.Lock()
-	f.calls = append(f.calls, updateCommandCall{Dir: dir, Name: name, Args: append([]string(nil), args...)})
-	result, ok := f.results[key]
-	block := f.blockKeys[key]
-	signal := f.callSignals[key]
-	f.mu.Unlock()
-
-	if signal != nil {
-		select {
-		case signal <- struct{}{}:
-		default:
-		}
-	}
-	if block != nil {
-		select {
-		case <-block:
-		case <-ctx.Done():
-			return updateCommandResult{ExitCode: -1, Err: ctx.Err(), Stderr: ctx.Err().Error()}
-		}
-	}
-	if f.results == nil {
-		return updateCommandResult{ExitCode: 0}
-	}
-	if ok {
-		return result
-	}
-	return updateCommandResult{ExitCode: 1, Stderr: "unexpected command: " + key}
-}
-
-func (f *fakeUpdateRunner) Calls() []updateCommandCall {
+func (f *fakeUpdateTrigger) Trigger(context.Context) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return append([]updateCommandCall(nil), f.calls...)
+	f.calls++
+	return f.err
 }
 
-func updateCallKey(name string, args ...string) string {
-	return name + " " + strings.Join(args, " ")
-}
-
-func waitForUpdateCall(t *testing.T, signal <-chan struct{}) {
-	t.Helper()
-	select {
-	case <-signal:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for update command call")
-	}
-}
-
-func updateCallsContain(calls []updateCommandCall, want updateCommandCall) bool {
-	return countUpdateCall(calls, want) > 0
-}
-
-func countUpdateCall(calls []updateCommandCall, want updateCommandCall) int {
-	count := 0
-	for _, call := range calls {
-		if call.Dir == want.Dir && call.Name == want.Name && reflect.DeepEqual(call.Args, want.Args) {
-			count++
-		}
-	}
-	return count
+func (f *fakeUpdateTrigger) Calls() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.calls
 }

@@ -71,30 +71,6 @@ function Assert-NoProductionMatches([string]$Label, [string]$Pattern, [string[]]
     }
 }
 
-function Assert-DeployCompatibilityCentralized() {
-    $deployRoot = Join-Path $serverRoot 'cmd\wheelmaker-deploy'
-    $mainPath = Join-Path $deployRoot 'main.go'
-    $compatibilityPath = Join-Path $deployRoot 'compatibility.go'
-    $legacyMonitorPath = Join-Path $deployRoot 'legacy_monitor.go'
-    if (Test-Path -LiteralPath $legacyMonitorPath) {
-        throw 'legacy_monitor.go must be replaced by compatibility.go'
-    }
-    if (-not (Test-Path -LiteralPath $compatibilityPath -PathType Leaf)) {
-        throw 'wheelmaker-deploy compatibility.go is missing'
-    }
-    $mainSource = Get-Content -Raw -Encoding UTF8 -LiteralPath $mainPath
-    $compatibilitySource = Get-Content -Raw -Encoding UTF8 -LiteralPath $compatibilityPath
-    foreach ($name in @('migrateRegistryToken', 'retireLegacyMonitor', 'migrateLegacyMonitorConfig', 'cleanupLegacyMonitor')) {
-        $definition = "func $name("
-        if ($mainSource.Contains($definition)) {
-            throw "wheelmaker-deploy main.go contains compatibility implementation $name"
-        }
-        if (-not $compatibilitySource.Contains($definition)) {
-            throw "wheelmaker-deploy compatibility.go is missing $name"
-        }
-    }
-}
-
 Set-Location $repoRoot
 
 Write-Gate 'Gitleaks current tree'
@@ -113,8 +89,6 @@ Push-Location $serverRoot
 try {
     & go test ./internal/security -run 'Test(NewRegistryToken|ValidateRegistryToken|RequireLoopbackAddress|ForwardedHeaders)'
     Assert-ExitCode 'security token and proxy regressions' $LASTEXITCODE
-    & go test ./cmd/wheelmaker-deploy -run 'TestEnsureConfig(WritesRunnableWheelMakerDefault|GeneratesIndependentRegistryTokens|RotatesLegacyRegistryToken|PreservesCustomRegistryToken)'
-    Assert-ExitCode 'deploy token regressions' $LASTEXITCODE
     & go test ./internal/shared -run 'Test(WriteConfigFileAtomicallyReplacesContent|SecureConfigFileRestrictsWindowsDACL)'
     Assert-ExitCode 'private atomic config regressions' $LASTEXITCODE
     & go test ./internal/registry ./internal/portrelay -run 'Test(SecurityE2E|RunRejectsNonLoopbackAddress|RelayListenerBindsLoopbackOnly|RelayEnableAllowsOnlyExactLoopbackTargetHost|RelayForwardedHeadersRequireLoopbackPeer)'
@@ -175,18 +149,19 @@ try {
     Pop-Location
 }
 
+Write-Gate 'Node release and deployment tests'
+$nodeTests = @(
+    Get-ChildItem -LiteralPath (Join-Path $repoRoot 'scripts\release') -Filter '*.test.mjs' -File
+    Get-ChildItem -LiteralPath (Join-Path $repoRoot 'scripts\deploy') -Filter '*.test.mjs' -File
+) | ForEach-Object { $_.FullName }
+& node --test @nodeTests
+Assert-ExitCode 'Node release and deployment tests' $LASTEXITCODE
+
 Write-Gate 'Publish and deployment script tests'
 $powerShellExecutable = (Get-Process -Id $PID).Path
 $scriptTests = @(
-    'scripts/test_deploy_bat.ps1',
-    'scripts/test_deploy_sh.ps1',
-    'scripts/test_update_publish_bat.ps1',
-    'scripts/test_update_publish_sh.ps1',
     'scripts/test_android_project_ps1.ps1',
     'scripts/test_android_release_signing.ps1',
-    'scripts/test_publish_android_github_release_ps1.ps1',
-    'scripts/test_publish_android_ps1.ps1',
-    'scripts/test_publish_desktop_ps1.ps1',
     'scripts/test_security_hooks.ps1',
     'scripts/test_security_docs.ps1',
     'scripts/test_security_acceptance_ps1.ps1'
@@ -201,7 +176,6 @@ Assert-NoProductionMatches 'legacy default token' 'wheelmaker-local-token'
 Assert-NoProductionMatches 'retired interfaces' 'LOCAL_TOKEN_KEY|LocalHubRead|addJavascriptInterface|RegistryRoleMonitor|registry\.monitor|monitor\.(listHub|status|log|db|action|restart)|:9632|InsecureSkipVerify'
 Assert-NoProductionMatches 'retired backend key migration' 'migrateLegacyBackendSecrets|extractLegacyBackendSecrets|getLegacyBackendSecrets|clearLegacyBackendSecret|retryBackendSecretMigration|config\.json.{0,80}secrets'
 Assert-NoProductionMatches 'Android Server Data key persistence' '(SharedPreferences|DataStore|Room|SQLite|FileOutputStream).{0,120}(accessToken|speechCredential|volcengine)|(accessToken|speechCredential|volcengine).{0,120}(SharedPreferences|DataStore|Room|SQLite|FileOutputStream)'
-Assert-DeployCompatibilityCentralized
 $debugSigningFallback = 'signingConfigs.getByName("debug")'
 $androidBuildScript = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $androidRoot 'app\build.gradle.kts')
 if ($androidBuildScript.Contains($debugSigningFallback)) {

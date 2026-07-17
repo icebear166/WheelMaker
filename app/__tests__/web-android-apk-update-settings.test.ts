@@ -18,8 +18,9 @@ describe('android apk update settings card', () => {
     expect(mainTsx).toContain('const androidApkUpdateBridge = useMemo(() => createAndroidApkUpdateBridge(), []);');
     expect(mainTsx).toContain('const [androidApkUpdateSupported, setAndroidApkUpdateSupported]');
     expect(mainTsx).toContain('refreshAndroidApkUpdate');
-    expect(mainTsx).toContain('GITHUB_ANDROID_LATEST_RELEASE_API');
-    expect(mainTsx).toContain('parseAndroidLatestRelease');
+    expect(mainTsx).not.toContain('GITHUB_ANDROID_LATEST_RELEASE_API');
+    expect(mainTsx).toContain('parseAndroidStableRelease');
+    expect(mainTsx).toContain('wheelMakerPublicMetadata?.stable');
     expect(mainTsx).toContain('resolveAndroidApkUpdateStatus');
     expect(mainTsx).toContain('wheelmaker:android-apk-update');
     expect(mainTsx).toContain('requestAndroidApkInstall');

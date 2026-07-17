@@ -8,11 +8,18 @@ import {
 } from '../platform/android/androidApkUpdate';
 import {
   deriveNpmPackageUpdateTargets,
+  deriveWheelMakerHubStatus,
   npmPackageUpdateSummary,
   packageStatusLabel,
   shouldShowWheelMakerUpdateAction,
+  wheelMakerPublishStatusLabel,
+  wheelMakerUpdateErrorLabel,
+  wheelMakerUpdateJobActive,
   wheelMakerUpdateStatusLabel,
+  wheelMakerVersionCopy,
   type NpmPackageUpdateTarget,
+  type WheelMakerPublicMetadata,
+  type WheelMakerReleaseHistoryEntry,
 } from './agentPackageUpdateView';
 import type {
   RegistryFileIndexStatus,
@@ -64,9 +71,13 @@ type UpdateSettingsDetailProps = {
   projects: RegistryProject[];
   wheelMakerUpdatesLoading: boolean;
   wheelMakerUpdatesError: string;
+  wheelMakerPublicMetadata: WheelMakerPublicMetadata | null;
   wheelMakerUpdatePendingHubId: string;
   wheelMakerUpdateAllPending: boolean;
-  requestWheelMakerUpdatePublish: (hubId: string, data: RegistryWheelMakerUpdateResponse | null) => void;
+  wheelMakerReleaseHistory: WheelMakerReleaseHistoryEntry[];
+  wheelMakerReleaseHistoryLoading: boolean;
+  wheelMakerReleaseHistoryError: string;
+  requestWheelMakerUpdate: (hubId: string, data: RegistryWheelMakerUpdateResponse | null) => void;
   requestWheelMakerUpdateAll: (hubIds: string[]) => void;
   agentPackagesLoading: boolean;
   agentPackagesError: string;
@@ -86,9 +97,7 @@ type UpdateSettingsDetailProps = {
   handleScanAllProjectIndexes: (hubId: string, projectIndexProjects: RegistryFileIndexStatus[]) => Promise<void>;
   tagVariantClass: (prefix: string, value: string) => string;
   hubAccentStyle: (hubId: string) => React.CSSProperties;
-  shortGitSha: (value: string) => string;
-  wheelMakerBehindCopy: (data: RegistryWheelMakerUpdateResponse | null) => string;
-  wheelMakerReleaseRef: (data: RegistryWheelMakerUpdateResponse | null) => string;
+  shortDigest: (value: string) => string;
   formatWheelMakerDateTime: (value: string) => string;
   formatChatAttachmentSize: (size: number) => string;
   androidApkUpdateStatusLabel: (status: AndroidApkUpdateStatus) => string;
@@ -114,9 +123,13 @@ export function UpdateSettingsDetail({
   projects,
   wheelMakerUpdatesLoading,
   wheelMakerUpdatesError,
+  wheelMakerPublicMetadata,
   wheelMakerUpdatePendingHubId,
   wheelMakerUpdateAllPending,
-  requestWheelMakerUpdatePublish,
+  wheelMakerReleaseHistory,
+  wheelMakerReleaseHistoryLoading,
+  wheelMakerReleaseHistoryError,
+  requestWheelMakerUpdate,
   requestWheelMakerUpdateAll,
   agentPackagesLoading,
   agentPackagesError,
@@ -136,9 +149,7 @@ export function UpdateSettingsDetail({
   handleScanAllProjectIndexes,
   tagVariantClass,
   hubAccentStyle,
-  shortGitSha,
-  wheelMakerBehindCopy,
-  wheelMakerReleaseRef,
+  shortDigest,
   formatWheelMakerDateTime,
   formatChatAttachmentSize,
   androidApkUpdateStatusLabel,
@@ -151,10 +162,22 @@ export function UpdateSettingsDetail({
   const androidApkUpdateStatus = resolveAndroidApkUpdateStatus(androidApkLocalRelease, androidApkLatestRelease);
   const androidApkCurrentSha = androidApkLocalRelease?.apkSha256 || '';
   const androidApkLatestSha = androidApkLatestRelease?.apk.sha256 || '';
+  const stableRelease = wheelMakerPublicMetadata?.stable ?? null;
+  const wheelMakerPublishCopy = wheelMakerPublishStatusLabel(
+    wheelMakerPublicMetadata?.publishStatus,
+  );
   const wheelMakerUpdateAvailableCount = updateHubCards.filter(card => {
     const data = card.wheelMaker?.data;
-    return data?.status === 'update_available' || data?.status === 'update_pending';
+    const status = deriveWheelMakerHubStatus(data?.installed, stableRelease, data?.job);
+    return status === 'update_available' || status === 'update_pending';
   }).length;
+  const wheelMakerRequestableHubIds = updateHubCards
+    .filter(card => {
+      const data = card.wheelMaker?.data;
+      return data?.canRequestUpdate === true &&
+        deriveWheelMakerHubStatus(data.installed, stableRelease, data.job) === 'update_available';
+    })
+    .map(card => card.hubId);
   const npmUpdateAvailableCount = updateHubCards.reduce(
     (total, card) => total + deriveNpmPackageUpdateTargets(card.agentPackage?.hub?.packages ?? []).length,
     0,
@@ -199,12 +222,12 @@ export function UpdateSettingsDetail({
                   ? `v${androidApkLocalRelease.versionName} (${androidApkLocalRelease.versionCode || '-'})`
                   : '-'}
               </span>
-              <span className="android-apk-update-meta-subvalue">{shortGitSha(androidApkCurrentSha)}</span>
+              <span className="android-apk-update-meta-subvalue">{shortDigest(androidApkCurrentSha)}</span>
             </div>
             <div className="android-apk-update-meta-item" title={`Latest ${androidApkLatestSha || '-'}`}>
               <span className="android-apk-update-meta-label">Latest</span>
               <span className="android-apk-update-meta-value">{androidApkLatestRelease?.tagName || '-'}</span>
-              <span className="android-apk-update-meta-subvalue">{shortGitSha(androidApkLatestSha)}</span>
+              <span className="android-apk-update-meta-subvalue">{shortDigest(androidApkLatestSha)}</span>
             </div>
             <div className="android-apk-update-meta-item">
               <span className="android-apk-update-meta-label">Published</span>
@@ -246,6 +269,23 @@ export function UpdateSettingsDetail({
           </div>
         </div>
       ) : null}
+      <section className="settings-metadata-card wheelmaker-public-release">
+        <div className="settings-metadata-line">
+          <span className="wheelmaker-update-scope">Stable release</span>
+          <span className="settings-metadata-title">
+            {wheelMakerPublicMetadata?.stable.version || '-'}
+          </span>
+        </div>
+        <div className="settings-metadata-line">
+          <span>Published</span>
+          <span>{formatWheelMakerDateTime(wheelMakerPublicMetadata?.stable.publishedAt || '')}</span>
+        </div>
+        {wheelMakerPublishCopy ? (
+          <div className="wheelmaker-publish-status">
+            Publish: {wheelMakerPublishCopy}
+          </div>
+        ) : null}
+      </section>
       <div className="update-summary-bar">
         <div className="update-summary-metrics">
           <div className="update-summary-metric">
@@ -272,8 +312,8 @@ export function UpdateSettingsDetail({
         <button
           type="button"
           className="wheelmaker-update-all-btn"
-          disabled={updateHubCards.length === 0 || wheelMakerUpdateAllPending}
-          onClick={() => requestWheelMakerUpdateAll(updateHubCards.map(card => card.hubId))}
+          disabled={wheelMakerRequestableHubIds.length === 0 || wheelMakerUpdateAllPending}
+          onClick={() => requestWheelMakerUpdateAll(wheelMakerRequestableHubIds)}
         >
           <span
             className={`codicon ${
@@ -285,6 +325,37 @@ export function UpdateSettingsDetail({
           <span>{wheelMakerUpdateAllPending ? 'Updating All Hubs...' : 'Update All Hubs'}</span>
         </button>
       </div>
+      <section className="settings-metadata-card wheelmaker-release-history">
+        <div className="wheelmaker-release-history-heading">
+          <span className="wheelmaker-update-scope">Release history</span>
+          {wheelMakerReleaseHistoryLoading ? (
+            <span className="muted">Loading...</span>
+          ) : (
+            <span className="muted">{wheelMakerReleaseHistory.length} public releases</span>
+          )}
+        </div>
+        {wheelMakerReleaseHistoryError ? (
+          <div className="settings-metadata-error">{wheelMakerReleaseHistoryError}</div>
+        ) : null}
+        {wheelMakerReleaseHistory.length > 0 ? (
+          <div className="wheelmaker-release-history-list">
+            {wheelMakerReleaseHistory.map(release => (
+              <a
+                key={`${release.version}:${release.publishedAt}`}
+                className="wheelmaker-release-history-item"
+                href={release.url || undefined}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <span>{release.version}</span>
+                <span>{formatWheelMakerDateTime(release.publishedAt)}</span>
+              </a>
+            ))}
+          </div>
+        ) : !wheelMakerReleaseHistoryLoading && !wheelMakerReleaseHistoryError ? (
+          <div className="muted">No public releases.</div>
+        ) : null}
+      </section>
       {(wheelMakerUpdatesLoading || agentPackagesLoading || projectIndexLoading) && updateHubCards.length === 0 ? (
         <div className="muted block">Scanning hubs...</div>
       ) : null}
@@ -298,7 +369,18 @@ export function UpdateSettingsDetail({
         {updateHubCards.map(card => {
           const wheelMaker = card.wheelMaker;
           const wheelMakerData = wheelMaker?.data ?? null;
-          const wheelMakerStatus = wheelMakerData?.status || (wheelMaker?.loading ? 'checking' : 'unknown');
+          const wheelMakerStatus = deriveWheelMakerHubStatus(
+            wheelMakerData?.installed,
+            stableRelease,
+            wheelMakerData?.job,
+          );
+          const wheelMakerViewData = wheelMakerData ? {
+            ...wheelMakerData,
+            status: wheelMakerStatus,
+            canRequestUpdate:
+              wheelMakerData.canRequestUpdate === true &&
+              wheelMakerStatus === 'update_available',
+          } : null;
           const agentCard = card.agentPackage;
           const hub = agentCard?.hub;
           const operation = agentCard?.operation;
@@ -323,16 +405,15 @@ export function UpdateSettingsDetail({
           const projectIndexScanAllPending = projectIndexScanAllPendingByHubId[card.hubId] === true;
           const wheelMakerPending = wheelMakerUpdatePendingHubId === card.hubId;
           const showWheelMakerUpdateAction = shouldShowWheelMakerUpdateAction({
-            data: wheelMakerData,
+            data: wheelMakerViewData,
             loading: wheelMaker?.loading === true,
             pending: wheelMakerPending || wheelMakerUpdateAllPending,
           });
-          const wheelMakerCurrentSha = wheelMakerData?.release?.sha || wheelMakerData?.git?.currentSha || '';
-          const wheelMakerLatestSha = wheelMakerData?.git?.latestSha || '';
+          const wheelMakerVersions = wheelMakerVersionCopy(wheelMakerData, stableRelease);
           const wheelMakerCurrentTime = formatWheelMakerDateTime(
-            wheelMakerData?.release?.publishedAt || wheelMakerData?.git?.currentCommittedAt || '',
+            wheelMakerData?.installed?.publishedAt || wheelMakerData?.installed?.installedAt || '',
           );
-          const wheelMakerLatestTime = formatWheelMakerDateTime(wheelMakerData?.git?.latestCommittedAt || '');
+          const wheelMakerJobActive = wheelMakerUpdateJobActive(wheelMakerData?.job);
           return (
             <div key={`update-hub:${card.hubId}`} className="settings-metadata-card agent-package-hub-card">
               <div className="settings-metadata-line settings-metadata-line-tags update-hub-header">
@@ -364,32 +445,39 @@ export function UpdateSettingsDetail({
                   </span>
                 </div>
                 <div className="wheelmaker-update-version-line">
-                  <span className="wheelmaker-update-ref-tag">{wheelMakerReleaseRef(wheelMakerData)}</span>
-                  <span className="wheelmaker-update-behind">{wheelMakerBehindCopy(wheelMakerData)}</span>
+                  <span className="wheelmaker-update-ref-tag">
+                    {wheelMakerVersions.current}
+                  </span>
+                  {wheelMakerData?.job ? (
+                    <span className="wheelmaker-update-behind">
+                      {wheelMakerUpdateStatusLabel(wheelMakerData.job.state)}
+                    </span>
+                  ) : null}
                 </div>
-                <div className="wheelmaker-update-sha-lines">
-                  <div className="wheelmaker-update-sha-line" title={`Current ${wheelMakerCurrentSha || '-'} ${wheelMakerCurrentTime}`}>
-                    <span className="wheelmaker-update-sha-label">Current</span>
-                    <span className="wheelmaker-update-sha-value">{shortGitSha(wheelMakerCurrentSha)}</span>
-                    <span className="wheelmaker-update-sha-time">{wheelMakerCurrentTime}</span>
-                  </div>
-                  <div className="wheelmaker-update-sha-line" title={`Latest ${wheelMakerLatestSha || '-'} ${wheelMakerLatestTime}`}>
-                    <span className="wheelmaker-update-sha-label">Latest</span>
-                    <span className="wheelmaker-update-sha-value">{shortGitSha(wheelMakerLatestSha)}</span>
-                    <span className="wheelmaker-update-sha-time">{wheelMakerLatestTime}</span>
+                <div className="wheelmaker-update-release-lines">
+                  <div className="wheelmaker-update-release-line" title={`Current ${wheelMakerVersions.current} ${wheelMakerCurrentTime}`}>
+                    <span className="wheelmaker-update-release-label">Current</span>
+                    <span className="wheelmaker-update-release-value">{wheelMakerVersions.current}</span>
+                    <span className="wheelmaker-update-release-time">{wheelMakerCurrentTime}</span>
                   </div>
                 </div>
-                {wheelMaker?.error || wheelMakerData?.error ? (
-                  <div className="settings-metadata-error">{wheelMaker?.error || wheelMakerData?.error}</div>
+                {wheelMaker?.error || wheelMakerData?.errorCode || wheelMakerData?.job?.errorCode ? (
+                  <div className="settings-metadata-error">
+                    {wheelMaker?.error || wheelMakerUpdateErrorLabel(wheelMakerData?.job?.errorCode || wheelMakerData?.errorCode)}
+                  </div>
                 ) : null}
                 {showWheelMakerUpdateAction ? (
                   <button
                     type="button"
                     className="wheelmaker-update-action-btn"
-                    disabled={wheelMakerUpdateAllPending || wheelMakerPending || wheelMakerData?.pendingSignal === true}
-                    onClick={() => requestWheelMakerUpdatePublish(card.hubId, wheelMakerData)}
+                    disabled={wheelMakerUpdateAllPending || wheelMakerPending || wheelMakerUpdateJobActive(wheelMakerData?.job)}
+                    onClick={() => requestWheelMakerUpdate(card.hubId, wheelMakerData)}
                   >
-                    {wheelMakerPending ? 'Updating...' : wheelMakerData?.pendingSignal ? 'Requested' : 'Update'}
+                    {wheelMakerPending
+                      ? 'Requesting...'
+                      : wheelMakerJobActive
+                        ? wheelMakerUpdateStatusLabel(wheelMakerData?.job?.state || '')
+                        : 'Update'}
                   </button>
                 ) : null}
               </div>

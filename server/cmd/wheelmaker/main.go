@@ -15,6 +15,7 @@ import (
 	"github.com/swm8023/wheelmaker/internal/security"
 	"github.com/swm8023/wheelmaker/internal/serverdata"
 	logger "github.com/swm8023/wheelmaker/internal/shared"
+	"github.com/swm8023/wheelmaker/internal/shared/agentpath"
 	"github.com/swm8023/wheelmaker/internal/shared/winsvc"
 )
 
@@ -129,6 +130,17 @@ func runHubWorker(stateDir string) error {
 	}
 	defer logger.Close()
 	hubScopedLogger.Info("worker start cfg=%s db=%s", cfgPath, dbPath)
+
+	// Augment PATH with npm's global bin (and common install locations) before
+	// any agent provider is constructed. DefaultACPFactory probes availability
+	// via exec.LookPath at first use, and the hub may have been (re)started by
+	// the updater from a service context whose PATH lacks npm's global bin —
+	// without this, globally-installed CLIs like codex vanish after an update.
+	// Must run before hub.New/Start so the factory sees the augmented PATH.
+	if extra := agentpath.DiscoverExtraDirs(); len(extra) > 0 {
+		agentpath.AppendToPath(extra)
+		hubScopedLogger.Info("agent path augmented dirs=%v", extra)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

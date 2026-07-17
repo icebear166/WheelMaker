@@ -3,15 +3,18 @@ package tools
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
@@ -19,130 +22,75 @@ import (
 )
 
 const (
-	updateSignalFileName  = "update-now.signal"
-	releaseManifestName   = "release.json"
-	fullUpdateSignalToken = "full-update"
+	installedReleaseName       = "release.json"
+	updateStagingDirectoryName = "staging"
+	updateLeaseFileName        = "lock.json"
+	updateStatusFileName       = "status.json"
 )
 
-const (
-	updateBackgroundFetchTTL     = time.Minute
-	updateBackgroundFetchTimeout = 2 * time.Minute
-)
-
-type updateCommandCall struct {
-	Dir  string
-	Name string
-	Args []string
+type installedRelease struct {
+	SchemaVersion int    `json:"schemaVersion"`
+	Version       string `json:"version"`
+	PublishedAt   string `json:"publishedAt"`
+	SourceSHA     string `json:"sourceSha"`
+	ManifestSHA   string `json:"manifestSha256"`
+	InstalledAt   string `json:"installedAt"`
 }
 
-type updateCommandResult struct {
-	Stdout   string
-	Stderr   string
-	ExitCode int
-	Err      error
+type stableReleaseSummary struct {
+	Version     string `json:"version"`
+	PublishedAt string `json:"publishedAt"`
+	SourceSHA   string `json:"sourceSha"`
 }
 
-type updateCommandRunner interface {
-	Run(ctx context.Context, dir string, name string, args ...string) updateCommandResult
+type updateJobStatus struct {
+	Schema    int    `json:"schema"`
+	JobID     string `json:"jobId"`
+	State     string `json:"state"`
+	Version   string `json:"version,omitempty"`
+	StartedAt string `json:"startedAt"`
+	UpdatedAt string `json:"updatedAt"`
+	ErrorCode string `json:"errorCode,omitempty"`
 }
 
-type execUpdateCommandRunner struct{}
-
-func (execUpdateCommandRunner) Run(ctx context.Context, dir string, name string, args ...string) updateCommandResult {
-	cmd := exec.CommandContext(ctx, name, args...)
-	shared.ConfigureBackgroundCommand(cmd)
-	cmd.Dir = dir
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	exitCode := 0
-	if err != nil {
-		exitCode = -1
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			exitCode = exitErr.ExitCode()
-		}
-	}
-	return updateCommandResult{
-		Stdout:   stdout.String(),
-		Stderr:   stderr.String(),
-		ExitCode: exitCode,
-		Err:      err,
-	}
+type updateLease struct {
+	Schema      int    `json:"schema"`
+	JobID       string `json:"jobId"`
+	Owner       string `json:"owner"`
+	State       string `json:"state"`
+	StartedAt   string `json:"startedAt"`
+	HeartbeatAt string `json:"heartbeatAt"`
 }
 
-type UpdateCommand struct {
-	baseDir           string
-	runner            updateCommandRunner
-	now               func() time.Time
-	mu                sync.Mutex
-	backgroundFetches map[string]updateRemoteFetchState
+type publishStatus struct {
+	Schema    int    `json:"schema"`
+	State     string `json:"state"`
+	Phase     string `json:"phase"`
+	Version   string `json:"version,omitempty"`
+	SourceSHA string `json:"sourceSha,omitempty"`
+	Publisher string `json:"publisher,omitempty"`
+	StartedAt string `json:"startedAt,omitempty"`
+	UpdatedAt string `json:"updatedAt,omitempty"`
+	ErrorCode string `json:"errorCode,omitempty"`
 }
 
-func NewUpdateCommand(baseDir string) *UpdateCommand {
-	return newUpdateCommandWithRunner(baseDir, execUpdateCommandRunner{})
-}
-
-func newUpdateCommandWithRunner(baseDir string, runner updateCommandRunner) *UpdateCommand {
-	if runner == nil {
-		runner = execUpdateCommandRunner{}
-	}
-	return &UpdateCommand{
-		baseDir:           strings.TrimSpace(baseDir),
-		runner:            runner,
-		backgroundFetches: map[string]updateRemoteFetchState{},
-		now: func() time.Time {
-			return time.Now().UTC()
-		},
-	}
-}
-
-type updateRemoteFetchState struct {
-	Running      bool
-	LastFinished time.Time
+type updateCommandResponse struct {
+	OK            bool                  `json:"ok"`
+	Accepted      bool                  `json:"accepted,omitempty"`
+	JobID         string                `json:"jobId,omitempty"`
+	Status        string                `json:"status"`
+	HubID         string                `json:"hubId"`
+	Installed     *installedRelease     `json:"installed,omitempty"`
+	Stable        *stableReleaseSummary `json:"stable,omitempty"`
+	Job           *updateJobStatus      `json:"job,omitempty"`
+	PublishStatus *publishStatus        `json:"publishStatus,omitempty"`
+	CanRequest    bool                  `json:"canRequestUpdate"`
+	ErrorCode     string                `json:"errorCode,omitempty"`
 }
 
 type updateCommandPayload struct {
 	Action string `json:"action"`
 	HubID  string `json:"hubId"`
-	Force  bool   `json:"force,omitempty"`
-}
-
-type updateReleaseManifest struct {
-	SchemaVersion int    `json:"schemaVersion"`
-	Repo          string `json:"repo"`
-	Branch        string `json:"branch"`
-	Remote        string `json:"remote"`
-	SHA           string `json:"sha"`
-	PublishedAt   string `json:"publishedAt"`
-}
-
-type updateGitSnapshot struct {
-	Branch             string `json:"branch"`
-	Remote             string `json:"remote"`
-	CurrentSHA         string `json:"currentSha"`
-	LatestSHA          string `json:"latestSha"`
-	CurrentCommittedAt string `json:"currentCommittedAt,omitempty"`
-	LatestCommittedAt  string `json:"latestCommittedAt,omitempty"`
-	BehindCount        int    `json:"behindCount"`
-	AheadCount         int    `json:"aheadCount"`
-	Dirty              bool   `json:"dirty"`
-}
-
-type updateCommandResponse struct {
-	OK                   bool                   `json:"ok"`
-	Accepted             bool                   `json:"accepted,omitempty"`
-	RequestedAt          string                 `json:"requestedAt,omitempty"`
-	Status               string                 `json:"status"`
-	HubID                string                 `json:"hubId"`
-	Release              *updateReleaseManifest `json:"release,omitempty"`
-	Git                  *updateGitSnapshot     `json:"git,omitempty"`
-	PendingSignal        bool                   `json:"pendingSignal"`
-	RemoteRefreshRunning bool                   `json:"remoteRefreshRunning,omitempty"`
-	CanUpdatePublish     bool                   `json:"canUpdatePublish"`
-	Error                string                 `json:"error,omitempty"`
 }
 
 type updateCommandError struct {
@@ -174,6 +122,31 @@ func (e *updateCommandError) commandMessage() string {
 	return e.Message
 }
 
+type updateTrigger interface {
+	Trigger(context.Context) error
+}
+
+type UpdateCommand struct {
+	baseDir string
+	trigger updateTrigger
+	now     func() time.Time
+}
+
+func NewUpdateCommand(baseDir string) *UpdateCommand {
+	return newUpdateCommandWithDependencies(baseDir, execUpdateTrigger{})
+}
+
+func newUpdateCommandWithDependencies(baseDir string, trigger updateTrigger) *UpdateCommand {
+	if trigger == nil {
+		trigger = execUpdateTrigger{}
+	}
+	return &UpdateCommand{
+		baseDir: filepath.Clean(baseDir),
+		trigger: trigger,
+		now:     func() time.Time { return time.Now().UTC() },
+	}
+}
+
 func (c *UpdateCommand) Handle(ctx context.Context, raw json.RawMessage) (any, *updateCommandError) {
 	var payload updateCommandPayload
 	if err := json.Unmarshal(raw, &payload); err != nil {
@@ -186,259 +159,357 @@ func (c *UpdateCommand) Handle(ctx context.Context, raw json.RawMessage) (any, *
 	}
 	switch payload.Action {
 	case "query":
-		return c.query(ctx, payload.HubID, payload.Force), nil
-	case "update-publish":
-		resp, err := c.requestUpdatePublish(payload.HubID)
+		return c.query(payload.HubID), nil
+	case "request":
+		response, err := c.request(ctx, payload.HubID)
 		if err != nil {
 			return nil, err
 		}
-		return resp, nil
+		return response, nil
 	default:
 		return nil, &updateCommandError{Code: rp.CodeInvalidArgument, Message: "unsupported cmd.update action"}
 	}
 }
 
-func (c *UpdateCommand) query(ctx context.Context, hubID string, force bool) updateCommandResponse {
-	pendingSignal := fileExists(filepath.Join(c.baseDir, updateSignalFileName))
-	release, err := c.readReleaseManifest()
-	if pendingSignal {
+func (c *UpdateCommand) query(hubID string) updateCommandResponse {
+	job, activeJob := c.readJobState()
+	installed, err := c.readInstalledRelease()
+	if errors.Is(err, os.ErrNotExist) {
 		return updateCommandResponse{
-			OK:               true,
-			Status:           "update_pending",
-			HubID:            hubID,
-			Release:          release,
-			PendingSignal:    true,
-			CanUpdatePublish: true,
+			OK:         true,
+			Status:     "not_installed",
+			HubID:      hubID,
+			Job:        job,
+			CanRequest: false,
 		}
 	}
 	if err != nil {
-		status := "checking_failed"
-		if os.IsNotExist(err) {
-			status = "not_published"
-			err = nil
-		}
-		return updateCommandResponse{
-			OK:               err == nil,
-			Status:           status,
-			HubID:            hubID,
-			Release:          release,
-			PendingSignal:    pendingSignal,
-			CanUpdatePublish: true,
-			Error:            errorString(err),
-		}
+		response := updateQueryFailure(hubID, "installed_release_invalid")
+		response.Job = job
+		return response
 	}
-	resp := c.queryGit(ctx, release, force)
-	resp.HubID = hubID
-	resp.Release = release
-	resp.PendingSignal = false
-	resp.CanUpdatePublish = true
-	if !force {
-		resp.RemoteRefreshRunning = c.startBackgroundFetchIfNeeded(release)
-	}
-	return resp
-}
 
-func (c *UpdateCommand) requestUpdatePublish(hubID string) (updateCommandResponse, *updateCommandError) {
-	signalPath := filepath.Join(c.baseDir, updateSignalFileName)
-	if err := os.MkdirAll(filepath.Dir(signalPath), 0o755); err != nil {
-		return updateCommandResponse{}, &updateCommandError{Code: rp.CodeInternal, Message: err.Error()}
-	}
-	requestedAt := c.now().Format(time.RFC3339)
-	payload := fullUpdateSignalToken + "\n" + requestedAt
-	if err := os.WriteFile(signalPath, []byte(payload), 0o644); err != nil {
-		return updateCommandResponse{}, &updateCommandError{Code: rp.CodeInternal, Message: err.Error()}
+	status := "installed"
+	canRequest := true
+	if activeJob {
+		status = "update_pending"
+		canRequest = false
 	}
 	return updateCommandResponse{
-		OK:               true,
-		Accepted:         true,
-		RequestedAt:      requestedAt,
-		Status:           "update_pending",
-		HubID:            hubID,
-		PendingSignal:    true,
-		CanUpdatePublish: true,
-	}, nil
+		OK:         true,
+		Status:     status,
+		HubID:      hubID,
+		Installed:  installed,
+		Job:        job,
+		CanRequest: canRequest,
+	}
 }
 
-func (c *UpdateCommand) readReleaseManifest() (*updateReleaseManifest, error) {
-	raw, err := os.ReadFile(filepath.Join(c.baseDir, releaseManifestName))
+func updateQueryFailure(hubID string, errorCode string) updateCommandResponse {
+	return updateCommandResponse{
+		OK:         false,
+		Status:     "checking_failed",
+		HubID:      hubID,
+		CanRequest: false,
+		ErrorCode:  errorCode,
+	}
+}
+
+func (c *UpdateCommand) request(ctx context.Context, hubID string) (updateCommandResponse, *updateCommandError) {
+	stagingDir := filepath.Join(c.baseDir, updateStagingDirectoryName)
+	if err := os.MkdirAll(stagingDir, 0o700); err != nil {
+		return updateCommandResponse{}, internalUpdateError("failed to create update staging directory")
+	}
+	leasePath := filepath.Join(stagingDir, updateLeaseFileName)
+	now := c.now().UTC().Format(time.RFC3339Nano)
+	jobID, err := newUpdateJobID()
+	if err != nil {
+		return updateCommandResponse{}, internalUpdateError("failed to allocate update job")
+	}
+	lease := updateLease{
+		Schema:      1,
+		JobID:       jobID,
+		Owner:       "web",
+		State:       "queued",
+		StartedAt:   now,
+		HeartbeatAt: now,
+	}
+	created, existing, err := createUpdateLease(leasePath, lease)
+	if err != nil {
+		return updateCommandResponse{}, internalUpdateError("failed to create update lease")
+	}
+	if !created {
+		job := c.readJobStatus()
+		if job == nil || job.JobID != existing.JobID {
+			job = &updateJobStatus{
+				Schema:    1,
+				JobID:     existing.JobID,
+				State:     existing.State,
+				StartedAt: existing.StartedAt,
+				UpdatedAt: existing.HeartbeatAt,
+			}
+		}
+		return queuedUpdateResponse(hubID, existing.JobID, job), nil
+	}
+
+	job := &updateJobStatus{
+		Schema:    1,
+		JobID:     jobID,
+		State:     "queued",
+		StartedAt: now,
+		UpdatedAt: now,
+	}
+	if err := c.writeJobStatus(*job); err != nil {
+		_ = os.Remove(leasePath)
+		return updateCommandResponse{}, internalUpdateError("failed to write update status")
+	}
+	if err := c.trigger.Trigger(ctx); err != nil {
+		job.State = "failed"
+		job.ErrorCode = "updater_trigger_failed"
+		job.UpdatedAt = c.now().UTC().Format(time.RFC3339Nano)
+		_ = c.writeJobStatus(*job)
+		_ = os.Remove(leasePath)
+		return updateCommandResponse{}, internalUpdateError("failed to trigger updater runtime")
+	}
+	return queuedUpdateResponse(hubID, jobID, job), nil
+}
+
+func queuedUpdateResponse(hubID string, jobID string, job *updateJobStatus) updateCommandResponse {
+	return updateCommandResponse{
+		OK:         true,
+		Accepted:   true,
+		JobID:      jobID,
+		Status:     "update_pending",
+		HubID:      hubID,
+		Job:        job,
+		CanRequest: false,
+	}
+}
+
+func internalUpdateError(message string) *updateCommandError {
+	return &updateCommandError{Code: rp.CodeInternal, Message: message}
+}
+
+func (c *UpdateCommand) readInstalledRelease() (*installedRelease, error) {
+	raw, err := os.ReadFile(filepath.Join(c.baseDir, installedReleaseName))
 	if err != nil {
 		return nil, err
 	}
 	raw = bytes.TrimPrefix(raw, []byte{0xEF, 0xBB, 0xBF})
-	var manifest updateReleaseManifest
-	if err := json.Unmarshal(raw, &manifest); err != nil {
-		return nil, fmt.Errorf("release manifest is invalid: %w", err)
+	var release installedRelease
+	if err := json.Unmarshal(raw, &release); err != nil {
+		return nil, err
 	}
-	manifest.Repo = strings.TrimSpace(manifest.Repo)
-	manifest.Branch = strings.TrimSpace(manifest.Branch)
-	manifest.Remote = strings.TrimSpace(manifest.Remote)
-	manifest.SHA = strings.TrimSpace(manifest.SHA)
-	if manifest.Remote == "" {
-		manifest.Remote = "origin"
+	if release.SchemaVersion != 2 || release.PublishedAt == "" || release.InstalledAt == "" {
+		return nil, errors.New("invalid installed release metadata")
 	}
-	if manifest.Repo == "" || manifest.SHA == "" || manifest.Branch == "" {
-		return &manifest, fmt.Errorf("release manifest is missing repo, branch, or sha")
+	if _, err := releaseSequence(release.Version); err != nil {
+		return nil, err
 	}
-	if info, err := os.Stat(filepath.Join(manifest.Repo, ".git")); err != nil || !info.IsDir() {
-		return &manifest, fmt.Errorf("release repo path is invalid")
+	if !validHexDigest(release.SourceSHA, 40) || !validHexDigest(release.ManifestSHA, 64) {
+		return nil, errors.New("invalid installed release digest")
 	}
-	return &manifest, nil
+	return &release, nil
 }
 
-func (c *UpdateCommand) queryGit(ctx context.Context, release *updateReleaseManifest, force bool) updateCommandResponse {
-	ref := release.Remote + "/" + release.Branch
-	git := &updateGitSnapshot{
-		Branch:     release.Branch,
-		Remote:     release.Remote,
-		CurrentSHA: release.SHA,
+func (c *UpdateCommand) readJobStatus() *updateJobStatus {
+	raw, err := os.ReadFile(filepath.Join(c.baseDir, updateStagingDirectoryName, updateStatusFileName))
+	if err != nil {
+		return nil
 	}
-	if force {
-		if result := c.runGit(ctx, release.Repo, "fetch", "--prune", release.Remote, release.Branch); updateCommandFailed(result) {
-			return updateCommandResponse{OK: false, Status: "checking_failed", Git: git, Error: updateResultSummary(result), CanUpdatePublish: true}
+	var status updateJobStatus
+	if err := json.Unmarshal(raw, &status); err != nil || status.Schema != 1 || status.JobID == "" || status.State == "" {
+		return nil
+	}
+	return &status
+}
+
+func (c *UpdateCommand) readJobState() (*updateJobStatus, bool) {
+	job := c.readJobStatus()
+	raw, err := os.ReadFile(filepath.Join(c.baseDir, updateStagingDirectoryName, updateLeaseFileName))
+	if err != nil {
+		return job, false
+	}
+	var lease updateLease
+	if err := json.Unmarshal(raw, &lease); err != nil || lease.Schema != 1 || lease.JobID == "" {
+		return job, false
+	}
+	if job == nil || job.JobID != lease.JobID {
+		job = &updateJobStatus{
+			Schema:    1,
+			JobID:     lease.JobID,
+			State:     lease.State,
+			StartedAt: lease.StartedAt,
+			UpdatedAt: lease.HeartbeatAt,
 		}
-		c.recordBackgroundFetchFinished(release)
 	}
-	latest, err := c.gitOutput(ctx, release.Repo, "rev-parse", ref)
+	return job, activeUpdateState(job.State)
+}
+
+func (c *UpdateCommand) writeJobStatus(status updateJobStatus) error {
+	raw, err := json.MarshalIndent(status, "", "  ")
 	if err != nil {
-		return updateCommandResponse{OK: false, Status: "checking_failed", Git: git, Error: err.Error(), CanUpdatePublish: true}
+		return err
 	}
-	git.LatestSHA = latest
-	if currentCommittedAt, err := c.gitOutput(ctx, release.Repo, "show", "-s", "--format=%cI", release.SHA); err == nil {
-		git.CurrentCommittedAt = currentCommittedAt
+	raw = append(raw, '\n')
+	path := filepath.Join(c.baseDir, updateStagingDirectoryName, updateStatusFileName)
+	return replaceUpdateFile(path, raw, 0o600)
+}
+
+func createUpdateLease(path string, lease updateLease) (bool, updateLease, error) {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if errors.Is(err, os.ErrExist) {
+		raw, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return false, updateLease{}, readErr
+		}
+		var existing updateLease
+		if jsonErr := json.Unmarshal(raw, &existing); jsonErr != nil || existing.Schema != 1 || existing.JobID == "" {
+			return false, updateLease{}, errors.New("invalid existing update lease")
+		}
+		return false, existing, nil
 	}
-	if latestCommittedAt, err := c.gitOutput(ctx, release.Repo, "show", "-s", "--format=%cI", ref); err == nil {
-		git.LatestCommittedAt = latestCommittedAt
-	}
-	behind, err := c.gitCount(ctx, release.Repo, release.SHA+".."+ref)
 	if err != nil {
-		return updateCommandResponse{OK: false, Status: "checking_failed", Git: git, Error: err.Error(), CanUpdatePublish: true}
+		return false, updateLease{}, err
 	}
-	ahead, err := c.gitCount(ctx, release.Repo, ref+".."+release.SHA)
-	if err != nil {
-		return updateCommandResponse{OK: false, Status: "checking_failed", Git: git, Error: err.Error(), CanUpdatePublish: true}
-	}
-	git.BehindCount = behind
-	git.AheadCount = ahead
-	if status, err := c.gitOutput(ctx, release.Repo, "status", "--porcelain"); err == nil {
-		git.Dirty = strings.TrimSpace(status) != ""
-	}
-	return updateCommandResponse{
-		OK:               true,
-		Status:           updateStatusFromCounts(ahead, behind),
-		Git:              git,
-		CanUpdatePublish: true,
-	}
-}
-
-func (c *UpdateCommand) startBackgroundFetchIfNeeded(release *updateReleaseManifest) bool {
-	if release == nil {
-		return false
-	}
-	key := updateRemoteFetchKey(release)
-	now := c.now()
-	c.mu.Lock()
-	state := c.backgroundFetches[key]
-	if state.Running {
-		c.mu.Unlock()
-		return true
-	}
-	if !state.LastFinished.IsZero() && now.Sub(state.LastFinished) < updateBackgroundFetchTTL {
-		c.mu.Unlock()
-		return false
-	}
-	state.Running = true
-	c.backgroundFetches[key] = state
-	releaseCopy := *release
-	c.mu.Unlock()
-
-	go c.runBackgroundFetch(key, &releaseCopy)
-	return true
-}
-
-func (c *UpdateCommand) runBackgroundFetch(key string, release *updateReleaseManifest) {
-	ctx, cancel := context.WithTimeout(context.Background(), updateBackgroundFetchTimeout)
-	defer cancel()
-	_ = c.runGit(ctx, release.Repo, "fetch", "--prune", release.Remote, release.Branch)
-	c.mu.Lock()
-	state := c.backgroundFetches[key]
-	state.Running = false
-	state.LastFinished = c.now()
-	c.backgroundFetches[key] = state
-	c.mu.Unlock()
-}
-
-func (c *UpdateCommand) recordBackgroundFetchFinished(release *updateReleaseManifest) {
-	if release == nil {
-		return
-	}
-	key := updateRemoteFetchKey(release)
-	c.mu.Lock()
-	state := c.backgroundFetches[key]
-	state.Running = false
-	state.LastFinished = c.now()
-	c.backgroundFetches[key] = state
-	c.mu.Unlock()
-}
-
-func updateRemoteFetchKey(release *updateReleaseManifest) string {
-	return release.Repo + "\x00" + release.Remote + "\x00" + release.Branch
-}
-
-func (c *UpdateCommand) runGit(ctx context.Context, repo string, args ...string) updateCommandResult {
-	return c.runner.Run(ctx, repo, "git", args...)
-}
-
-func (c *UpdateCommand) gitOutput(ctx context.Context, repo string, args ...string) (string, error) {
-	result := c.runGit(ctx, repo, args...)
-	if result.Err != nil || result.ExitCode != 0 {
-		return "", errors.New(updateResultSummary(result))
-	}
-	return firstNonEmptyLine(result.Stdout), nil
-}
-
-func (c *UpdateCommand) gitCount(ctx context.Context, repo string, revRange string) (int, error) {
-	raw, err := c.gitOutput(ctx, repo, "rev-list", "--count", revRange)
-	if err != nil {
-		return 0, err
-	}
-	count, err := strconv.Atoi(strings.TrimSpace(raw))
-	if err != nil {
-		return 0, fmt.Errorf("invalid git count: %s", raw)
-	}
-	return count, nil
-}
-
-func updateStatusFromCounts(ahead int, behind int) string {
-	switch {
-	case ahead > 0 && behind > 0:
-		return "diverged"
-	case ahead > 0:
-		return "ahead_of_remote"
-	case behind > 0:
-		return "update_available"
-	default:
-		return "up_to_date"
-	}
-}
-
-func updateResultSummary(result updateCommandResult) string {
-	segment := lastNonEmptySegment(result.Stderr)
-	if segment == "" {
-		segment = lastNonEmptySegment(result.Stdout)
-	}
-	if segment == "" {
-		return fmt.Sprintf("git command failed with exit code %d", result.ExitCode)
-	}
-	return fmt.Sprintf("exit code %d: %s", result.ExitCode, truncateRunes(segment, 500))
-}
-
-func updateCommandFailed(result updateCommandResult) bool {
-	return result.Err != nil || result.ExitCode != 0
-}
-
-func errorString(err error) string {
+	raw, err := json.MarshalIndent(lease, "", "  ")
 	if err == nil {
-		return ""
+		raw = append(raw, '\n')
+		_, err = file.Write(raw)
 	}
-	return err.Error()
+	if syncErr := file.Sync(); err == nil {
+		err = syncErr
+	}
+	if closeErr := file.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		_ = os.Remove(path)
+		return false, updateLease{}, err
+	}
+	return true, lease, nil
+}
+
+func replaceUpdateFile(path string, raw []byte, mode os.FileMode) (retErr error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	temporary, err := os.CreateTemp(filepath.Dir(path), ".update-*.tmp")
+	if err != nil {
+		return err
+	}
+	temporaryPath := temporary.Name()
+	defer func() {
+		_ = temporary.Close()
+		if retErr != nil {
+			_ = os.Remove(temporaryPath)
+		}
+	}()
+	if err := temporary.Chmod(mode); err != nil {
+		return err
+	}
+	if _, err := temporary.Write(raw); err != nil {
+		return err
+	}
+	if err := temporary.Sync(); err != nil {
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(temporaryPath, path); err == nil {
+		return nil
+	}
+	backupPath := path + ".previous"
+	_ = os.Remove(backupPath)
+	if err := os.Rename(path, backupPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if err := os.Rename(temporaryPath, path); err != nil {
+		_ = os.Rename(backupPath, path)
+		return err
+	}
+	_ = os.Remove(backupPath)
+	return nil
+}
+
+func newUpdateJobID() (string, error) {
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return "", err
+	}
+	raw[6] = (raw[6] & 0x0f) | 0x40
+	raw[8] = (raw[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", raw[0:4], raw[4:6], raw[6:8], raw[8:10], raw[10:16]), nil
+}
+
+func releaseSequence(version string) (int, error) {
+	if !strings.HasPrefix(version, "v1.") || len(version) <= len("v1.") {
+		return 0, errors.New("invalid v1 release version")
+	}
+	sequence, err := strconv.Atoi(version[len("v1."):])
+	if err != nil || sequence < 1 || strconv.Itoa(sequence) != version[len("v1."):] {
+		return 0, errors.New("invalid v1 release version")
+	}
+	return sequence, nil
+}
+
+func validHexDigest(value string, length int) bool {
+	if len(value) != length {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
+}
+
+func activeUpdateState(state string) bool {
+	switch state {
+	case "queued", "downloading", "verifying", "applying", "restarting":
+		return true
+	default:
+		return false
+	}
+}
+
+type updateTriggerCommand struct {
+	Name string
+	Args []string
+}
+
+func updaterTriggerSpec(goos string, uid string) updateTriggerCommand {
+	switch goos {
+	case "windows":
+		return updateTriggerCommand{
+			Name: "powershell",
+			Args: []string{"-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "Start-ScheduledTask -TaskName 'WheelMakerUpdater' -ErrorAction Stop"},
+		}
+	case "linux":
+		return updateTriggerCommand{Name: "systemctl", Args: []string{"--user", "start", "wheelmaker-updater.service"}}
+	case "darwin":
+		return updateTriggerCommand{Name: "launchctl", Args: []string{"kickstart", "gui/" + uid + "/com.wheelmaker.updater"}}
+	default:
+		return updateTriggerCommand{}
+	}
+}
+
+type execUpdateTrigger struct{}
+
+func (execUpdateTrigger) Trigger(ctx context.Context) error {
+	uid := ""
+	if current, err := user.Current(); err == nil {
+		uid = current.Uid
+	}
+	if runtime.GOOS == "darwin" && uid == "" {
+		return errors.New("current user id is unavailable")
+	}
+	spec := updaterTriggerSpec(runtime.GOOS, uid)
+	if spec.Name == "" {
+		return fmt.Errorf("unsupported updater runtime platform: %s", runtime.GOOS)
+	}
+	command := exec.CommandContext(ctx, spec.Name, spec.Args...)
+	shared.ConfigureBackgroundCommand(command)
+	if err := command.Run(); err != nil {
+		return fmt.Errorf("trigger updater runtime: %w", err)
+	}
+	return nil
 }

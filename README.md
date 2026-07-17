@@ -39,87 +39,70 @@ This model works well when you want one machine to expose the public entrypoint 
 | Machine A / Nginx | `wss://<host>:28800/ws` | Registry WebSocket |
 | Machine A / internal | `127.0.0.1:9630` | Registry listener |
 
-### 1. Deploy, build, and install services
+### 1. Deploy the prebuilt release
 
-Requirements:
+The target machine does not need the WheelMaker source tree, Git, Go, npm, or a platform build toolchain. It needs:
 
-- **Go 1.26+**
-- **Node.js 22.11+**
-- `git`
-- `npm`
-- Windows full deploy runs legacy Service and Scheduled Task cleanup in a UAC-elevated child when the main deploy process is not elevated
+- **Node.js 22+**
 - `launchctl` on macOS, or `systemctl --user` on Linux
-- on Linux, lingering enabled for the deploy user:
+- Linux lingering enabled for the deploy user:
 
 ```bash
 sudo loginctl enable-linger "$USER"
 ```
 
-One-shot deploy from the repository root:
+For either a new installation or a one-time migration from the old source deployment, copy the command for your platform from the public [wheelmaker-release README](https://github.com/swm8023/wheelmaker-release#install-or-migrate). It can run from any directory: it downloads the launcher to `~/.wheelmaker`, removes legacy services/programs when present while preserving user data, and installs the current stable release. No WheelMaker source checkout is required.
 
-```bat
-deploy.bat
+Every normal deploy replaces Hub and Web together. The resulting layout is:
+
+```text
+~/.wheelmaker/
+  bin/                       # wheelmaker.exe or wheelmaker
+  web/                       # complete Web release
+  desktop/                   # optional WheelMakerDesktop.exe, updated separately
+  staging/                   # update lock/status and verified temporary packages
+  deploy.mjs
+  deploy-core.mjs
+  deploy.bat or deploy.sh    # normal deployment wrapper for the current platform
+  release.json               # installed release schema v2
+  config.json                # preserved across deploys
 ```
 
-```bash
-bash deploy.sh
-```
+Normal deployment registers only current-user runtimes and does not require administrator privileges:
 
-`deploy.bat` and `deploy.sh` only prepare the bootstrap environment: when Go and the deploy source are available they refresh the temporary `wheelmaker-deploy` CLI under `~/.wheelmaker/build/bootstrap`; otherwise they reuse an existing bootstrap CLI and fail clearly if none exists. All deploy flow, runtime setup, elevation, and platform differences live in `wheelmaker-deploy`.
+- Windows Scheduled Tasks: `WheelMaker` at logon and `WheelMakerUpdater` daily at 03:00.
+- macOS LaunchAgents: `com.wheelmaker.hub` and `com.wheelmaker.updater` at 03:00.
+- Linux systemd user units: `wheelmaker-hub.service` plus `wheelmaker-updater.timer` at 03:00.
 
-On Windows, the deploy CLI configures current-user startup through `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. Before writing HKCU startup entries, deploy must fully remove old `WheelMaker*` Windows Services and Scheduled Tasks. When the main deploy process is not elevated, only the cleanup script is relaunched through UAC, then the normal deploy process continues and writes HKCU entries for the original user.
+The migration requests UAC on Windows only if legacy Windows Services actually exist. It also removes old tasks/HKCU Run values, updater/deploy/monitor executables, lifecycle wrappers that are no longer generated, and obsolete build/mobile/temp artifacts under `~/.wheelmaker`; it preserves `config.json`, databases, logs, Desktop, the active agent cache, and other user data.
 
-After the initial runtime setup, request an updater-driven update and Web publish without recreating startup entries:
+`release.json` schema v2 records `version`, `publishedAt`, `sourceSha`, `manifestSha256`, and `installedAt`. App version reporting reads this file and public stable metadata; it does not infer the installed version from Git.
 
-```bat
-update-publish.bat
-```
-
-```bash
-bash update-publish.sh
-```
-
-The deploy CLI flow will:
-
-- pull with `git pull --ff-only`
-- run `npm ci --include=dev` for the Web app before Web publish
-- build `wheelmaker`, `wheelmaker-updater`, and `wheelmaker-deploy`
-- publish the Web UI to `~/.wheelmaker/web`
-- stop managed runtime processes before replacing binaries and remove legacy Windows Services/Scheduled Tasks during Windows deploy cleanup
-- install binaries to `~/.wheelmaker/bin`
-- preserve an existing `~/.wheelmaker/config.json`, or create a runnable default for this WheelMaker checkout with the registry listening locally
-- generate platform-specific `start`, `stop`, `restart`, and `status` wrapper scripts under `~/.wheelmaker`
-- register or update startup entries/services:
-  - Windows: HKCU Run values `WheelMaker`, `WheelMakerUpdater`
-  - macOS: `com.wheelmaker.hub`, `com.wheelmaker.updater`
-  - Linux: `wheelmaker-hub.service`, `wheelmaker-updater.service`
-- write `~/.wheelmaker/release.json` with the published Git SHA
-- start managed runtime processes/services
-- clean regenerable deploy artifacts and stale entry scripts: Android JVM probe builds, `~/.wheelmaker/cache/go-build`, `~/.wheelmaker/tmp`, root `web-dev*.log`, old `~/.wheelmaker/logs/<timestamp>` backups beyond the latest 3, legacy `refresh_server.*` copies, and helper wrappers for the other platform family
-
-Lifecycle commands after deployment on Windows:
+Manual deployment and lifecycle commands after deployment on Windows:
 
 ```powershell
+~/.wheelmaker/deploy.bat
 ~/.wheelmaker/start.bat
 ~/.wheelmaker/stop.bat
-~/.wheelmaker/restart.bat
-~/.wheelmaker/status.bat
 ```
 
-Lifecycle commands after deployment on macOS/Linux:
+`deploy.bat` pauses after Node exits so a double-clicked deployment keeps its result visible.
+
+Manual deployment and lifecycle commands after deployment on macOS/Linux:
 
 ```bash
+~/.wheelmaker/deploy.sh
 ~/.wheelmaker/start.sh
 ~/.wheelmaker/stop.sh
-~/.wheelmaker/restart.sh
-~/.wheelmaker/status.sh
 ```
 
-You can also call the CLI directly:
+To update Desktop independently, close WheelMaker Desktop first and run:
 
-```bash
-~/.wheelmaker/bin/wheelmaker-deploy service restart
+```powershell
+~/.wheelmaker/update_exe.bat
 ```
+
+The stable release carries the latest available Desktop pointer, so a Hub/Web update can skip Desktop publishing without losing an older Desktop release. A running Desktop is never killed or replaced later on reboot; close it and retry.
 
 The deploy scripts do not install or configure Nginx, Caddy, certificates, or public ports. Point your own reverse proxy at this contract:
 
@@ -235,7 +218,7 @@ server {
     location = / {
         try_files /index.html =404;
         add_header Cache-Control "no-cache, must-revalidate" always;
-        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
         add_header Referrer-Policy "no-referrer" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
@@ -244,7 +227,7 @@ server {
     location = /index.html {
         try_files /index.html =404;
         add_header Cache-Control "no-cache, must-revalidate" always;
-        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
         add_header Referrer-Policy "no-referrer" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
@@ -253,7 +236,7 @@ server {
     location = /service-worker.js {
         try_files /service-worker.js =404;
         add_header Cache-Control "no-cache, must-revalidate" always;
-        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
         add_header Referrer-Policy "no-referrer" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
@@ -262,7 +245,7 @@ server {
     location = /manifest.webmanifest {
         try_files /manifest.webmanifest =404;
         add_header Cache-Control "no-cache, must-revalidate" always;
-        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
         add_header Referrer-Policy "no-referrer" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
@@ -271,7 +254,7 @@ server {
     location ~* \.[a-z0-9]+$ {
         try_files $uri =404;
         add_header Cache-Control "public, max-age=31536000, immutable" always;
-        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
         add_header Referrer-Policy "no-referrer" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
@@ -281,7 +264,7 @@ server {
         index index.html;
         try_files $uri $uri/ /index.html;
         add_header Cache-Control "no-cache, must-revalidate" always;
-        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
+        add_header Content-Security-Policy "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; media-src 'self' blob:; worker-src 'self' blob:; form-action 'self'; upgrade-insecure-requests" always;
         add_header Referrer-Policy "no-referrer" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header X-Frame-Options "DENY" always;
@@ -308,7 +291,7 @@ In this layout:
 - `/ws` forwards to the registry WebSocket
 - Existing Nginx files continue to work because `index.html` carries meta CSP/referrer protection, but full `frame-ancestors` and non-HTML coverage requires the four response headers in every static location above.
 
-### 5. Publish the Web UI
+### 5. Build the Web UI locally
 
 The Web build is published to:
 
@@ -323,16 +306,17 @@ cd app
 npm run build:web:release
 ```
 
-This will:
+This developer command will:
 
 1. build the Web frontend
 2. export the assets to `~\.wheelmaker\web`
-3. refresh the files served by the Nginx root path
+3. refresh the local files served by the Nginx root path
 
-### 6. Build Android APK
+Production releases do not use this as a conditional target-side step: the release builder compiles Web once, includes it in every platform archive, and every normal deploy replaces `~/.wheelmaker/web`.
 
-WheelMaker Android is a native Kotlin WebView shell under `mobile/android/`.
-It contains a dedicated bootstrap page where the user enters their own HTTPS server Base URL, then loads the Workspace Web from that server. Changing servers clears state associated with the previous site.
+### 6. Build releases locally
+
+WheelMaker Android is a native Kotlin WebView shell under `mobile/android/`. It contains a dedicated bootstrap page where the user enters their HTTPS server Base URL, then loads the Workspace Web from that server. Changing servers clears state associated with the previous site.
 
 Requirements:
 
@@ -340,29 +324,37 @@ Requirements:
 - Gradle in `PATH`
 - Node.js 22+
 
-Build from the repository root:
+Run the unified interactive publisher from the repository root:
 
 ```bat
-publish-android.bat
+publish-release.bat
 ```
 
-Outputs:
+It asks whether to include Desktop, Android, and whether to publish publicly. All choices default to no. A local-only build still reads public `stable.json`, uses the next `v1.x`, and writes the same layout used for publication:
 
 ```text
-~/.wheelmaker/mobile/android/WheelMakerAndroid.apk
-~/.wheelmaker/mobile/android/android-release.json
+.release-out/v1.x/
+  wheelmaker-v1.x-windows-amd64/
+  wheelmaker-v1.x-linux-amd64/
+  wheelmaker-v1.x-darwin-arm64/
+  desktop/                         # optional
+  android/                         # optional
+    WheelMakerAndroid.apk
+    android-release.json
 ```
 
-Build workspace:
+Reusable compiler state is kept separately from final output:
 
 ```text
-~/.wheelmaker/build/mobile/android/
+.release-work/cache/
+  webpack/
+  go-build/
+  go-mod/
+  gradle/
+.release-work/tmp/                 # removed after success or failure
 ```
 
-On Windows, if the repository and `HOME` are on different drives, the publisher uses the repository drive instead, for example `D:\.wheelmaker\build\mobile\android\`. This keeps Android Gradle build paths on one filesystem root while still staying outside the git worktree.
-
-The Android build does not write generated Web assets, Gradle output, APK files, or release manifests into the git worktree.
-The first Android slice only builds a local APK. It does not publish APK downloads through Nginx or the Update screen.
+Android `v1.x` maps directly to `versionName=1.x` and `versionCode=x`. Release signing reads the repository-owned `mobile/android/signing/signing.properties` and `release.p12`; release builds never fall back to the debug key. When Android is selected for a public release, the APK and manifest join the same GitHub Release and `stable.androidApk` is updated. Releases without Android carry the previous Android pointer forward. Host deployment ignores Android; the native Android Update screen downloads only the carried public pointer and verifies size, SHA-256, package identity, version, and signing identity before installation.
 
 ### 7. Install the Web UI as a PWA
 
@@ -421,8 +413,6 @@ Windows:
 ```powershell
 ~/.wheelmaker/start.bat
 ~/.wheelmaker/stop.bat
-~/.wheelmaker/restart.bat
-~/.wheelmaker/status.bat
 ```
 
 macOS/Linux:
@@ -430,35 +420,17 @@ macOS/Linux:
 ```bash
 ~/.wheelmaker/start.sh
 ~/.wheelmaker/stop.sh
-~/.wheelmaker/restart.sh
-~/.wheelmaker/status.sh
 ```
 
-Default deploy flow:
+To restart the Hub manually, run `stop` and then `start`. Runtime and update status is reported by the Web UI from the Hub and `staging/status.json`; separate restart/status wrappers are not installed.
+
+The scheduled and Web-triggered update flow is:
 
 ```text
-pull -> npm ci -> build -> publish web -> prepare install -> install -> config -> write release manifest -> start
+validate stable -> acquire staging lock -> download -> verify SHA-256 -> stop Hub -> apply Hub + Web -> write release.json -> restart Hub
 ```
 
-Common deploy flags:
-
-- `--no-pull`
-- `--no-npm`
-- `--no-build`
-- `--no-install`
-- `--no-restart`
-- `--no-config`
-- `--no-web`
-- `--no-updater`
-
-The updater trigger path is:
-
-- `update-publish.bat` / `update-publish.sh` writes a `full-update` signal.
-- `WheelMakerUpdater` calls the installed `wheelmaker-deploy bootstrap-update`.
-- `bootstrap-update` pulls the repository, builds a temporary latest deploy CLI, then runs `update` to rebuild and replace Hub and the deploy CLI, publish Web, write the release manifest, and restart Hub.
-- On Windows, `WheelMakerUpdater` runs a temporary copy of the installed deploy CLI first, so the installed deploy CLI can be replaced during the update.
-
-`WheelMakerUpdater` self-upgrade is reserved but not implemented in this transitional CLI.
+The Web UI requests an update by creating one atomic job in `staging/lock.json`; repeated clicks reuse the active job. `staging/status.json` exposes the current phase (`queued`, `downloading`, `verifying`, `applying`, `restarting`, `succeeded`, or `failed`). `node ~/.wheelmaker/deploy.mjs update` is the non-administrative updater entrypoint and never installs or removes runtime registrations.
 
 ### 9. Quick validation checklist
 
@@ -578,7 +550,7 @@ WheelMaker also includes configuration and runtime visibility in the main app:
 - runtime and registry address settings
 - token provider and token stats, including DeepSeek token stats
 - hub and registry project visibility
-- update-publish status and actions
+- stable version, release history, publish status, and active update job
 
 ## Repository structure
 
@@ -609,11 +581,17 @@ npm run tsc:web
 npm run build:web:release
 ```
 
-Script overview:
+Release and script overview:
 
-- `deploy.bat` / `deploy.sh` — build a temporary `wheelmaker-deploy` CLI and run the unified deploy flow
-- `update-publish.bat` / `update-publish.sh` — signal `WheelMakerUpdater` to run the deploy CLI update path
-- `app\scripts\export_web_release.ps1` — export Web assets to `~\.wheelmaker\web`
+- `publish-release.bat` — interactively choose Desktop, Android, and public publication. It invokes the release MJS once and always writes `.release-out/v1.x`.
+- `publish-release-action.bat` — verify the current clean commit is pushed, then interactively trigger the manual Action with the source SHA, Desktop choice, and Android choice.
+- `node scripts/release.mjs [--with-desktop] [--with-android] [--publish]` — non-interactive equivalent; without `--publish` it builds the next public version locally.
+- `.github/workflows/publish-release.yml` — manual `workflow_dispatch` fallback with a source `ref`, optional Desktop, and optional Android; Android setup is skipped when unused, Web builds once, and Hub binaries cross-compile for Windows amd64, Linux amd64, and macOS arm64.
+- Public `wheelmaker-release` README command — download the launcher and perform a new install or one-time legacy migration from any directory.
+- Installed `~/.wheelmaker/deploy.bat` / `deploy.sh` — platform wrapper for a normal `node deploy.mjs`; the Windows wrapper pauses when it finishes.
+- Installed `~/.wheelmaker/update_exe.bat` — independently update `WheelMakerDesktop.exe` through the same stable SHA-256 chain.
+
+Local publishing requires `gh auth login` and keeps the token returned by `gh auth token` only in the Node process. GitHub Actions publishing uses App secrets `WHEELMAKER_RELEASE_APP_ID`, `WHEELMAKER_RELEASE_INSTALLATION_ID`, and `WHEELMAKER_RELEASE_APP_PRIVATE_KEY`; the App is installed only on the public `swm8023/wheelmaker-release` repository. A release publishes and hashes all immutable assets before writing `stable.json` last. Release-repository write access is therefore the publication trust boundary.
 
 ## License
 

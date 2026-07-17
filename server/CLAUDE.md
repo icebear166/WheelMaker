@@ -58,12 +58,12 @@ Full design: [../docs/architecture-3.0.md](../docs/architecture-3.0.md)
 go run ./cmd/wheelmaker/            # requires ~/.wheelmaker/config.json
 go test ./...
 go build -o bin/windows_amd64/wheelmaker.exe ./cmd/wheelmaker/
-go build -o bin/windows_amd64/wheelmaker-updater.exe ./cmd/wheelmaker-updater/
 
-# Root-level helper scripts
-../deploy.bat                    # build temporary wheelmaker-deploy and run full deploy
-../deploy.sh                     # macOS/Linux full deploy
-# deployed wrappers under ~/.wheelmaker: Windows .bat, macOS/Linux .sh
+# Release/deployment entrypoints live at the repository root
+node ../scripts/release.mjs build    # prebuilt Hub + Web packages, no publish
+../deploy.bat                        # one-time migration from legacy source deploy
+../deploy.sh                         # one-time migration on macOS/Linux
+# normal target updates use ~/.wheelmaker/deploy.mjs; there is no Go updater/deploy command
 ```
 
 ## Key Invariants (do not break)

@@ -933,6 +933,55 @@ func TestCreateSessionWithAgent_FailsWhenACPReturnsEmptySessionID(t *testing.T) 
 	}
 }
 
+func TestCreateSessionWithAgent_ErrsWhenRequestedAgentUnavailable(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+
+	c := New(store, "proj1", "/tmp")
+	// Deterministic registry independent of the host: only claude is available,
+	// codex is a valid provider name but has no registered creator.
+	c.registry = agent.NewACPFactory()
+	c.registry.Register(acp.ACPProviderClaude, func(context.Context, string) (agent.Instance, error) {
+		t.Fatalf("claude creator must not be invoked when codex was requested")
+		return nil, nil
+	})
+
+	sess, err := c.CreateSession(context.Background(), "codex", "hello")
+	if err == nil {
+		t.Fatalf("CreateSession error = nil, want error for unavailable codex")
+	}
+	if sess != nil {
+		t.Fatalf("CreateSession session = %#v, want nil", sess)
+	}
+	if !strings.Contains(err.Error(), "codex") {
+		t.Fatalf("error %q should mention the requested agent codex", err.Error())
+	}
+	if !strings.Contains(err.Error(), "claude") {
+		t.Fatalf("error %q should list available agents (claude)", err.Error())
+	}
+
+	// The failed request must not silently overwrite the project default agent
+	// (the old fallback persisted the fallback agent as the project default).
+	defaultAgent, err := store.LoadProjectDefaultAgent(context.Background(), "proj1")
+	if err != nil {
+		t.Fatalf("LoadProjectDefaultAgent: %v", err)
+	}
+	if defaultAgent == "claude" || defaultAgent == "codex" {
+		t.Fatalf("default agent = %q, should not be persisted on failed create", defaultAgent)
+	}
+
+	entries, err := store.ListSessions(context.Background(), "proj1")
+	if err != nil {
+		t.Fatalf("ListSessions: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("ListSessions count = %d, want 0", len(entries))
+	}
+}
+
 func TestNewSession_RequiresNonEmptyACPID(t *testing.T) {
 	sess, err := newSession("   ", "/tmp", "claude")
 	if err == nil {

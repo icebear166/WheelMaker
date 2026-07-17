@@ -1,5 +1,6 @@
 import java.io.FileInputStream
 import java.security.KeyStore
+import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -18,27 +19,32 @@ val releaseBuildRequested = requestedAndroidTasks.any { taskName ->
         taskName == "build" ||
 		taskName == "bundle"
 }
-val releaseSigningEnvironmentNames = listOf(
-    "WHEELMAKER_ANDROID_KEYSTORE",
-    "WHEELMAKER_ANDROID_STORE_PASSWORD",
-    "WHEELMAKER_ANDROID_KEY_ALIAS",
-    "WHEELMAKER_ANDROID_KEY_PASSWORD"
-)
+val releaseVersionName = providers.gradleProperty("wheelmakerReleaseVersionName").orNull
+val releaseVersionCode = providers.gradleProperty("wheelmakerReleaseVersionCode").orNull?.toIntOrNull()
 val releaseSigningValues = if (releaseBuildRequested) {
-    val values = releaseSigningEnvironmentNames.associateWith { name ->
-        System.getenv(name)?.trim().orEmpty()
+    if (releaseVersionName.isNullOrBlank() || releaseVersionCode == null || releaseVersionCode <= 0) {
+        throw GradleException("Android release version properties are missing or invalid")
     }
-    val missing = values.filterValues { it.isBlank() }.keys
+    val signingFile = rootProject.file("signing/signing.properties")
+    if (!signingFile.isFile) {
+        throw GradleException("Android release signing properties do not exist")
+    }
+    val properties = Properties().apply {
+        FileInputStream(signingFile).use { load(it) }
+    }
+    val propertyNames = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+    val values = propertyNames.associateWith { name -> properties.getProperty(name).orEmpty() }
+    val missing = values.filterValues { it.isEmpty() }.keys
     if (missing.isNotEmpty()) {
-        throw GradleException("Android release signing is missing required environment variables: ${missing.joinToString()}")
+        throw GradleException("Android release signing properties are missing: ${missing.joinToString()}")
     }
-    val keyStoreFile = file(values.getValue("WHEELMAKER_ANDROID_KEYSTORE"))
+    val keyStoreFile = signingFile.parentFile.resolve(values.getValue("storeFile"))
     if (!keyStoreFile.isFile) {
         throw GradleException("Android release keystore does not exist")
     }
-    val storePassword = values.getValue("WHEELMAKER_ANDROID_STORE_PASSWORD")
-    val keyAlias = values.getValue("WHEELMAKER_ANDROID_KEY_ALIAS")
-    val keyPassword = values.getValue("WHEELMAKER_ANDROID_KEY_PASSWORD")
+    val storePassword = values.getValue("storePassword")
+    val keyAlias = values.getValue("keyAlias")
+    val keyPassword = values.getValue("keyPassword")
     val preferredType = when (keyStoreFile.extension.lowercase()) {
         "p12", "pfx" -> "PKCS12"
         else -> "JKS"
@@ -58,7 +64,7 @@ val releaseSigningValues = if (releaseBuildRequested) {
     if (!validKey) {
         throw GradleException("Android release keystore, alias, or password is invalid")
     }
-    values
+    values + ("keyStorePath" to keyStoreFile.absolutePath)
 } else {
     emptyMap()
 }
@@ -76,8 +82,8 @@ android {
         applicationId = "com.wheelmaker.android"
         minSdk = 23
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.0.1"
+        versionCode = if (releaseBuildRequested) releaseVersionCode!! else 1
+        versionName = if (releaseBuildRequested) releaseVersionName!! else "0.0.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -96,10 +102,10 @@ android {
     signingConfigs {
         if (releaseBuildRequested) {
             create("wheelmakerRelease") {
-                storeFile = file(releaseSigningValues.getValue("WHEELMAKER_ANDROID_KEYSTORE"))
-                storePassword = releaseSigningValues.getValue("WHEELMAKER_ANDROID_STORE_PASSWORD")
-                keyAlias = releaseSigningValues.getValue("WHEELMAKER_ANDROID_KEY_ALIAS")
-                keyPassword = releaseSigningValues.getValue("WHEELMAKER_ANDROID_KEY_PASSWORD")
+                storeFile = file(releaseSigningValues.getValue("keyStorePath"))
+                storePassword = releaseSigningValues.getValue("storePassword")
+                keyAlias = releaseSigningValues.getValue("keyAlias")
+                keyPassword = releaseSigningValues.getValue("keyPassword")
             }
         }
     }

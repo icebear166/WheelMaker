@@ -554,7 +554,7 @@ func validateHubStateAction(section string, action string) error {
 			"uninstall":   {},
 		},
 		hubStateSectionWheelmakerUpdate: {
-			"updatePublish": {},
+			"requestUpdate": {},
 		},
 		hubStateSectionSkills: {
 			"listSource": {},

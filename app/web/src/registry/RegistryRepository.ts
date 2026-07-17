@@ -104,10 +104,6 @@ import type {
   RegistryWorkingTreeFileDiff,
 } from './registryTypes';
 
-export type QueryWheelMakerUpdateOptions = {
-  force?: boolean;
-};
-
 export type RegistryFileRequestOptions = {
   knownHash?: string;
   signal?: AbortSignal;
@@ -1819,27 +1815,25 @@ export class RegistryRepository {
     return normalizeNpmCommandResponse(hubStateSectionData(state, 'agentPackages'), hubId);
   }
 
-  async queryWheelMakerUpdate(hubId: string, options: QueryWheelMakerUpdateOptions = {}): Promise<RegistryWheelMakerUpdateResponse> {
-    const state = await this.refreshHubState(hubId, ['wheelmakerUpdate'], options);
+  async queryWheelMakerUpdate(hubId: string): Promise<RegistryWheelMakerUpdateResponse> {
+    const state = await this.refreshHubState(hubId, ['wheelmakerUpdate']);
     return hubStateSectionData<RegistryWheelMakerUpdateResponse>(state, 'wheelmakerUpdate') ?? {
       ok: false,
       status: 'checking_failed',
       hubId,
-      pendingSignal: false,
-      canUpdatePublish: false,
-      error: 'missing hub state response',
+      canRequestUpdate: false,
+      errorCode: 'missing_hub_state_response',
     };
   }
 
-  async requestWheelMakerUpdatePublish(hubId: string): Promise<RegistryWheelMakerUpdateResponse> {
-    const state = await this.runHubStateAction(hubId, 'wheelmakerUpdate', 'updatePublish');
+  async requestWheelMakerUpdate(hubId: string): Promise<RegistryWheelMakerUpdateResponse> {
+    const state = await this.runHubStateAction(hubId, 'wheelmakerUpdate', 'requestUpdate');
     return hubStateSectionData<RegistryWheelMakerUpdateResponse>(state, 'wheelmakerUpdate') ?? {
       ok: false,
       status: 'checking_failed',
       hubId,
-      pendingSignal: false,
-      canUpdatePublish: false,
-      error: 'missing hub state response',
+      canRequestUpdate: false,
+      errorCode: 'missing_hub_state_response',
     };
   }
 
@@ -1962,7 +1956,6 @@ export const createRegistryRepository = (
 };
 
 export type RegistryResponse<TPayload> = RegistryEnvelope<TPayload>;
-
 
 
 

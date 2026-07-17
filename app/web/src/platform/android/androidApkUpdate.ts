@@ -1,6 +1,3 @@
-export const GITHUB_ANDROID_LATEST_RELEASE_API =
-  'https://api.github.com/repos/swm8023/WheelMaker/releases/latest';
-
 export type AndroidApkLocalRelease = {
   supported: boolean;
   packageName: string;
@@ -14,10 +11,7 @@ export type AndroidApkLocalRelease = {
 
 export type AndroidApkLatestRelease = {
   tagName: string;
-  targetCommitish: string;
   publishedAt: string;
-  releaseUrl: string;
-  manifestUrl: string;
   apk: {
     downloadUrl: string;
     sha256: string;
@@ -48,21 +42,6 @@ export type AndroidApkUpdateBridge = {
   installLatest(request: AndroidApkInstallRequest): Promise<AndroidApkInstallResult>;
 };
 
-type GitHubReleaseAsset = {
-  name?: string;
-  browser_download_url?: string;
-  digest?: string;
-  size?: number;
-};
-
-type GitHubReleaseResponse = {
-  tag_name?: string;
-  target_commitish?: string;
-  published_at?: string;
-  html_url?: string;
-  assets?: GitHubReleaseAsset[];
-};
-
 export function normalizeSha256Digest(value: string | undefined): string {
   return (value || '')
     .replace(/^sha256:/i, '')
@@ -70,24 +49,36 @@ export function normalizeSha256Digest(value: string | undefined): string {
     .toLowerCase();
 }
 
-export function parseAndroidLatestRelease(input: unknown): AndroidApkLatestRelease | null {
-  const release = input as GitHubReleaseResponse;
-  const assets = Array.isArray(release?.assets) ? release.assets : [];
-  const apk = assets.find(asset => asset.name === 'WheelMakerAndroid.apk');
-  if (!apk?.browser_download_url) {
+export function parseAndroidStableRelease(input: unknown): AndroidApkLatestRelease | null {
+  const stable = input as Record<string, unknown>;
+  const pointer = stable?.androidApk as Record<string, unknown> | undefined;
+  if (
+    stable?.schema !== 1 ||
+    !pointer ||
+    typeof pointer.version !== 'string' ||
+    !/^v1\.([1-9]\d*)$/.test(pointer.version) ||
+    pointer.versionName !== pointer.version.slice(1) ||
+    pointer.versionCode !== Number(pointer.version.slice(3)) ||
+    typeof pointer.publishedAt !== 'string' ||
+    !Number.isFinite(Date.parse(pointer.publishedAt)) ||
+    typeof pointer.sourceSha !== 'string' ||
+    !/^[0-9a-f]{40}$/.test(pointer.sourceSha) ||
+    typeof pointer.url !== 'string' ||
+    !pointer.url.startsWith('https://') ||
+    typeof pointer.sha256 !== 'string' ||
+    !/^[0-9a-f]{64}$/.test(pointer.sha256) ||
+    !Number.isSafeInteger(pointer.size) ||
+    Number(pointer.size) <= 0
+  ) {
     return null;
   }
-  const manifest = assets.find(asset => asset.name === 'android-release.json');
   return {
-    tagName: release.tag_name || '',
-    targetCommitish: release.target_commitish || '',
-    publishedAt: release.published_at || '',
-    releaseUrl: release.html_url || '',
-    manifestUrl: manifest?.browser_download_url || '',
+    tagName: pointer.version,
+    publishedAt: pointer.publishedAt as string,
     apk: {
-      downloadUrl: apk.browser_download_url,
-      sha256: normalizeSha256Digest(apk.digest),
-      size: typeof apk.size === 'number' ? apk.size : 0,
+      downloadUrl: pointer.url as string,
+      sha256: pointer.sha256 as string,
+      size: pointer.size as number,
     },
   };
 }
