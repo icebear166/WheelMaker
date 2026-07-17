@@ -226,9 +226,9 @@ Desktop 构建逻辑完全位于发布 MJS。发布端不运行 Desktop 应用�
   config.json
   release.json
   deploy.bat
-  start.bat / stop.bat / restart.bat / status.bat
+  start.bat / stop.bat
   deploy.sh
-  start.sh  / stop.sh  / restart.sh  / status.sh
+  start.sh  / stop.sh
 ```
 
 公开 `deploy.mjs` 是小型启动器，源码在私有源码仓库维护、由发布流程复制到公开 Git。每次调用它时：
@@ -252,7 +252,7 @@ update_exe.bat                        更新可选 Desktop EXE
 
 不提供 `schedule`、`history`、`status` 或单独 `install` 命令。历史由 Web 直接读取公开 GitHub Releases API；状态由 Hub 读取本机 `staging/status.json`；日程固定为本地时间每天 03:00。
 
-普通部署同时生成当前平台的 `deploy.bat` 或 `deploy.sh`，只调用 `node deploy.mjs`，不进入迁移或内部更新模式；Windows wrapper 在 Node 结束后暂停，保证双击时能看到结果。继续生成既有生命周期包装脚本：Windows 的 `start.bat`、`stop.bat`、`restart.bat`、`status.bat`，以及 macOS/Linux 的同名 `.sh` 文件。它们调用 core 的内部运行时操作，以当前平台的既有任务、LaunchAgent 或 user unit 执行启动、停止、重启、状态查询；这些内部操作不是面向用户的 deploy 子命令。普通部署每次都修复这些包装脚本。
+普通部署同时生成当前平台的 `deploy.bat` 或 `deploy.sh`，只调用 `node deploy.mjs`，不进入迁移或内部更新模式；Windows wrapper 在 Node 结束后暂停，保证双击时能看到结果。生命周期包装脚本只保留当前平台的 `start` 与 `stop`，调用 core 的内部运行时操作驱动当前用户任务、LaunchAgent 或 user unit。手动重启依次执行 stop/start；状态由 Hub/Web 与 `staging/status.json` 提供。普通部署和内部更新都会删除退役的 restart/status wrapper。
 
 ### 当前用户运行模型
 
@@ -313,7 +313,7 @@ App 的 Update 页面只展示一次全局最新版本、发布时间和发布�
   → node deploy.mjs
 ```
 
-源码仓库根目录不再保留 `deploy.bat` 或 `deploy.sh`。`migrate-uninstall` 仅处理旧环境：停止并删除旧 Hub、Go updater、monitor 的服务/任务/启动项和旧 EXE，并删除整个旧 `~/.wheelmaker/build/`；保留 `config.json`、数据库、日志和用户数据。存在旧 Windows 系统服务时该命令请求管理员权限。其他盘符根目录的历史 Android 工作区由用户手动清理。正常 deploy/update 永不探测或兼容旧模式。
+源码仓库根目录不再保留 `deploy.bat` 或 `deploy.sh`。`migrate-uninstall` 仅处理旧环境：停止并删除旧 Hub、Go updater、monitor 的服务/任务/启动项和旧 EXE；删除旧 `~/.wheelmaker/build/`、`mobile/`、`tmp/`、`cache/go-build/`、`update-now.signal` 与退役的 restart/status wrapper；保留 `config.json`、数据库、日志、Desktop、`cache/wheelmaker/` 和用户数据。存在旧 Windows 系统服务时该命令请求管理员权限。其他盘符根目录的历史 Android 工作区由用户手动清理。正常 deploy/update 永不探测旧运行模式。
 
 ### Desktop 更新
 
@@ -334,5 +334,5 @@ App 的 Update 页面只展示一次全局最新版本、发布时间和发布�
 - `migrate-uninstall` 清除旧运行项而保留用户配置/数据；迁移后不再保留旧 updater/monitor。
 - v1.3 未带 Desktop EXE、v1.2 带 EXE 时，v1.3 的 `update_exe.bat` 仍下载 v1.2 EXE。
 - Action 在一个 Ubuntu job 内完成三平台 Hub、可选 Desktop、可选 Android、一次 Web 构建和发布；未选择 Android 时不初始化其工具链，缓存命中时复用编译状态。
-- 成功安装保持 `bin/`、`web/`、`desktop/` 与 deploy/start/stop/restart/status 包装脚本的既有路径约定，且不产生 `app/` 目录。
+- 成功安装保持 `bin/`、`web/`、`desktop/` 与 deploy/start/stop 包装脚本的既有路径约定，且不产生 `app/` 目录。
 - Web 全局读取一次公开 stable/发布状态，各 Hub 只返回 schema v2 本机 `release.json` 与任务状态，不执行 Git 查询或显示提交差异。

@@ -17,7 +17,7 @@
 - Android keystore 和包含 store password、alias、key password 的签名配置直接提交到 `mobile/android/signing/`；本地发布与 Action 均读取仓库内容，不依赖本地环境变量或 GitHub Secrets。源码仓库当前公开所带来的凭据暴露风险由用户明确接受，仓库可见性后续由用户自行改为 private。
 - 删除独立 Android BAT、PowerShell 发布器及其专用测试；Android 构建、签名、校验和发布由统一 release MJS 负责。
 - 源码侧最终产物只放 `.release-out/`。可复用构建缓存放 `.release-work/cache/`，单次工作区放 `.release-work/tmp/` 并在成功或失败后清理。
-- `migrate-uninstall` 删除整个旧 `~/.wheelmaker/build/`，而不再只删除 `build/bootstrap`。位于其他盘符根目录的旧 Android 工作区由用户手动清理。
+- `migrate-uninstall` 删除整个旧 `~/.wheelmaker/build/`、`mobile/`、`tmp/`、`cache/go-build/`、`update-now.signal` 与退役的 restart/status wrapper。位于其他盘符根目录的旧 Android 工作区由用户手动清理。
 - 目标机部署无论成功或失败都删除 `~/.wheelmaker/staging/<job-id>/`；`lock.json` 只在活动任务期间存在，完成后仅保留 `status.json` 和日志。
 - Web 全局读取一次 stable、发布状态和 release 历史；每个 Hub 只报告本机 `release.json` 与更新任务状态。Hub 端查询不再为每个 Hub 重复拉取 stable 或发布状态。
 - Registry 主机始终同时运行 Hub，即使没有项目也必须出现在 Hub 列表中。各 Hub 更新任务独立执行，不增加 Registry 标识或特殊顺序；“Update All”可分别下发任务。
@@ -113,7 +113,7 @@ Action 仍只由 `workflow_dispatch` 手动触发。`with_android=false` 时不�
 - Web 不再对每个 Hub 重复获取 stable 或发布状态；Hub 卡片只显示本机版本、安装时间、任务状态和更新操作，不显示 Git 状态。
 - Registry 所在的无项目 Hub 能出现在更新列表中；各 Hub 更新不依赖特殊排序。
 - 本地和 Action 的缓存可跨构建复用；`.release-work/tmp/` 在成功和失败后均被清理。
-- `migrate-uninstall` 删除旧 `~/.wheelmaker/build/`，同时保留配置、数据库、日志、Desktop 和新的源码仓库签名文件。
+- `migrate-uninstall` 删除旧 build/mobile/tmp、Go build cache、信号文件和退役 wrapper，同时保留配置、数据库、日志、Desktop、当前 agent cache 和新的源码仓库签名文件。
 - 部署任务完成后不存在对应的 `staging/<job-id>/`，失败原因仍可从 `status.json` 和日志读取。
 - 旧 Android 独立入口、发布器和失去职责的测试已删除。
 

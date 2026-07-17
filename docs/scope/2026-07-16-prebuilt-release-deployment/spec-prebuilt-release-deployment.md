@@ -20,7 +20,7 @@ WheelMaker 旧流程在目标机器上依赖私有源码、Git、Go 和 npm 拉�
 - 发布过程先公开 Release，再写 stable；失败时 stable 不变，并把公开 `publish-status.json` 写为不含敏感信息的失败状态。Release tag 冲突通过重新读取 stable 并分配下一个版本解决，不维护持久发布锁。
 - 所有 MJS 均由私有源码仓库维护、发布时复制到公开 Git。小型 `deploy.mjs` 每次验证 stable，按需更新自身与 `deploy-core.mjs`，然后执行 core；MJS 不放进平台包。
 - 目标端公开入口只有 `node deploy.mjs`、一次性 `node deploy.mjs migrate-uninstall` 和独立 `update_exe.bat`。`node deploy.mjs update` 是 Hub 与系统任务使用的内部入口。
-- 保持既有安装布局：Hub 位于 `~/.wheelmaker/bin/`，Web 位于 `~/.wheelmaker/web/`，Desktop 位于 `~/.wheelmaker/desktop/`；不引入 `app/` 目录。继续生成既有 start/stop/restart/status 的 `.bat` 与 `.sh` 包装脚本，并由内部运行时操作驱动当前用户注册项。
+- 保持既有安装布局：Hub 位于 `~/.wheelmaker/bin/`，Web 位于 `~/.wheelmaker/web/`，Desktop 位于 `~/.wheelmaker/desktop/`；不引入 `app/` 目录。只生成 deploy/start/stop 的平台包装脚本，并由内部运行时操作驱动当前用户注册项；重启组合 stop/start，状态由 Hub/Web 提供。
 - 新版仅以当前用户身份运行：Windows 计划任务、macOS LaunchAgent、Linux systemd user unit。内部 update 只替换 Hub/Web 文件并重启既有运行项，不安装、删除或改写运行注册，因此无需管理员权限。
 - Web 更新请求由 Hub 原子创建 `staging/lock.json`，触发既有 updater 任务并立即返回 jobId；`status.json` 持久保存最近一次进度/结果。重复请求复用同一 job。
 - 成功部署写入 schema v2 的 `~/.wheelmaker/release.json`，记录已安装的发布版本、发布时间、sourceSha、manifestSha256 和安装时间。Hub 查询只报告本机 release 与更新 job；Web 全局读取一次公开 stable/发布状态并判断更新状态，不再依据本机 Git SHA、分支或提交差异。
@@ -53,7 +53,7 @@ Action 使用 `workflow_dispatch` 的 commit ref、`with_desktop` 和 `with_andr
 
 ### 安装与更新
 
-普通 `node deploy.mjs` 下载并验证当前平台包，应用 Hub 到 `bin/`、Web 到 `web/` 后创建或修复当前用户运行项和 start/stop/restart/status 包装脚本，并确保每日本地时间 03:00 的 updater 任务存在。更新时先下载、校验、解压到 `staging/<job-id>`；旧 Hub 正常退出后替换 `bin/` 与 `web/`，重写 schema v2 `release.json`，再触发现有 Hub 运行项。成功或失败都删除本次 job 目录，失败状态保留但不回滚。
+普通 `node deploy.mjs` 下载并验证当前平台包，应用 Hub 到 `bin/`、Web 到 `web/` 后创建或修复当前用户运行项和 deploy/start/stop 包装脚本，并确保每日本地时间 03:00 的 updater 任务存在。更新时先下载、校验、解压到 `staging/<job-id>`；旧 Hub 正常退出后替换 `bin/` 与 `web/`，删除退役的 restart/status wrapper，重写 schema v2 `release.json`，再触发现有 Hub 运行项。成功或失败都删除本次 job 目录，失败状态保留但不回滚。
 
 Web 不同步执行更新：Hub 先创建 queued lock、触发系统 updater，再返回 accepted/jobId。updater 执行内部 `deploy.mjs update`，接管该 lock，写入下载、验证、应用、重启及终态状态。lock 在终态删除，status 保留到下一轮覆盖。
 
@@ -61,7 +61,7 @@ Hub 的查询接口只读取本机 `release.json` 与 job 状态；Web 全局读
 
 ### 迁移与 Desktop
 
-全新安装和旧用户都使用公开 `wheelmaker-release` README 中可在任意目录执行的一行命令：下载 launcher，执行 `migrate-uninstall`，再执行普通 deploy。源码仓库根目录不保留迁移 wrapper；迁移删除旧运行项、旧 EXE 和整个 `~/.wheelmaker/build/`，不删除用户数据。
+全新安装和旧用户都使用公开 `wheelmaker-release` README 中可在任意目录执行的一行命令：下载 launcher，执行 `migrate-uninstall`，再执行普通 deploy。源码仓库根目录不保留迁移 wrapper；迁移删除旧运行项、旧 EXE、旧 build/mobile/tmp、Go build cache、信号文件和退役 wrapper，不删除配置、数据库、日志、Desktop 或当前 agent cache。
 
 Desktop 更新独立于当前 Hub stable：即使当前 Hub 版本不含 EXE，`update_exe.bat` 也使用 stable 中继承的最近 EXE 指针下载正确资产。
 
@@ -72,8 +72,8 @@ Desktop 更新独立于当前 Hub stable：即使当前 Hub 版本不含 EXE，`
 - 每个 tar.gz 都含 Hub 与 Web；目标端部署从不运行 Web 构建。
 - Web 重复触发只产生一个更新 job；Hub 被替换前已向调用方返回 accepted。
 - 内部 update 不修改 Windows 计划任务、LaunchAgent 或 systemd user unit，且无需管理员权限。
-- 成功安装始终保持 `bin/`、`web/`、`desktop/` 与 start/stop/restart/status 包装脚本的既有路径；不产生 `app/` 目录。
-- 迁移清除旧 updater/monitor/服务和整个旧 build 目录，但保留配置、数据库和日志。
+- 成功安装始终保持 `bin/`、`web/`、`desktop/` 与 deploy/start/stop 包装脚本的既有路径；不产生 `app/` 目录。
+- 迁移清除旧 updater/monitor/服务、旧 build/mobile/tmp、Go build cache、信号文件和退役 wrapper，但保留配置、数据库、日志、Desktop 与当前 agent cache。
 - 后续不带 EXE 的 stable 仍可通过 `update_exe.bat` 下载之前最近发布的 Desktop EXE。
 - Web 用全局 stable 与每 Hub 本机 schema v2 `release.json` 显示当前/最新版本，不再显示 Git SHA、分支或提交差异。
 - 手动 Action 在一个 Ubuntu job 内完成三平台构建和可选 Android；缓存命中时复用 Webpack、Go 与 Gradle 状态。

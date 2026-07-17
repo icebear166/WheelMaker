@@ -93,14 +93,14 @@ test('macOS files keep Hub alive and schedule updater at 03:00', () => {
   assert.match(files['com.wheelmaker.updater.plist'], /<key>Minute<\/key>\s*<integer>0<\/integer>/);
 });
 
-test('helper wrappers preserve existing filenames and call grouped runtime actions', () => {
+test('helper wrappers keep only deploy, start, stop, and optional Desktop update', () => {
   const windows = windowsWrappers(RUNTIME_PATHS);
   const unix = unixWrappers({
     ...RUNTIME_PATHS,
     deploy: '/home/alice/.wheelmaker/deploy.mjs',
     node: '/usr/bin/node',
   });
-  const runtimeActions = ['restart', 'start', 'status', 'stop'];
+  const runtimeActions = ['start', 'stop'];
   assert.deepEqual(
     Object.keys(windows).sort(),
     [
@@ -120,7 +120,11 @@ test('helper wrappers preserve existing filenames and call grouped runtime actio
   assert.match(windows['update_exe.bat'], /deploy\.mjs" desktop-update/);
   assert.match(unix['deploy.sh'], /deploy\.mjs'\s*\n/);
   assert.doesNotMatch(unix['deploy.sh'], /migrate|runtime|update/);
-  assert.match(unix['status.sh'], /deploy\.mjs' runtime status/);
+  assert.match(unix['stop.sh'], /deploy\.mjs' runtime stop/);
+  assert.equal(windows['restart.bat'], undefined);
+  assert.equal(windows['status.bat'], undefined);
+  assert.equal(unix['restart.sh'], undefined);
+  assert.equal(unix['status.sh'], undefined);
 });
 
 test('internal update restarts existing runtime without mutating registration', async () => {
@@ -152,43 +156,49 @@ test('internal update restarts existing runtime without mutating registration', 
   assert.deepEqual(events, ['stop', 'applyUpdate', 'start']);
 });
 
-test('runtime command builds a default adapter from the install directory', async () => {
+test('runtime start command builds a default adapter from the install directory', async () => {
   let capturedPaths;
-  let statusCalls = 0;
-  await runCore(['runtime', 'status'], {
+  let startCalls = 0;
+  await runCore(['runtime', 'start'], {
     installDirectory: 'C:\\Users\\alice\\.wheelmaker',
     nodePath: 'C:\\Program Files\\nodejs\\node.exe',
     platform: 'win32',
     runtimeFactory({ paths }) {
       capturedPaths = paths;
       return {
-        async status() {
-          statusCalls += 1;
+        async start() {
+          startCalls += 1;
         },
       };
     },
     userHome: 'C:\\Users\\alice',
   });
   assert.equal(capturedPaths.hub.endsWith('bin\\wheelmaker.exe'), true);
-  assert.equal(statusCalls, 1);
+  assert.equal(startCalls, 1);
 });
 
-test('Windows runtime status is limited to the known task and installed Hub path', async () => {
-  const calls = [];
+test('runtime adapter exposes only manual start and stop actions', () => {
   const adapter = createRuntimeAdapter({
     paths: RUNTIME_PATHS,
     platform: 'win32',
-    async runner(command, args) {
-      calls.push({ args, command });
-      return { code: 0, stderr: '', stdout: '' };
-    },
+    async runner() {},
   });
-  await adapter.status();
-  const script = calls[0].args.at(-1);
-  assert.match(script, /TaskName 'WheelMaker'/);
-  assert.match(script, /Win32_Process/);
-  assert.equal(script.includes(RUNTIME_PATHS.bin), true);
-  assert.doesNotMatch(script, /WheelMakerMonitor/);
+  assert.equal(typeof adapter.start, 'function');
+  assert.equal(typeof adapter.stop, 'function');
+  assert.equal(adapter.restart, undefined);
+  assert.equal(adapter.status, undefined);
+});
+
+test('core rejects retired runtime actions even when an adapter defines them', async () => {
+  for (const action of ['restart', 'status']) {
+    await assert.rejects(
+      () =>
+        runCore(['runtime', action], {
+          runtime: { async [action]() {} },
+        }),
+      /unknown runtime action/,
+    );
+  }
 });
 
 test('only one update lease can be created atomically', async () => {
@@ -378,6 +388,9 @@ test('normal deploy applies Hub and Web to the existing layout', async (t) => {
   );
   await writeFile(join(fixture.home, 'data', 'sessions.db'), 'db');
   await writeFile(join(fixture.home, 'logs', 'hub.log'), 'log');
+  for (const name of ['restart.bat', 'restart.sh', 'status.bat', 'status.sh']) {
+    await writeFile(join(fixture.home, name), name);
+  }
 
   await runCore([], fixture.deps);
 
@@ -393,6 +406,9 @@ test('normal deploy applies Hub and Web to the existing layout', async (t) => {
   );
   assert.equal(await readFile(join(fixture.home, 'data', 'sessions.db'), 'utf8'), 'db');
   assert.equal(await readFile(join(fixture.home, 'logs', 'hub.log'), 'utf8'), 'log');
+  for (const name of ['restart.bat', 'restart.sh', 'status.bat', 'status.sh']) {
+    assert.equal(await exists(join(fixture.home, name)), false);
+  }
   assert.equal(fixture.events.includes('configure-runtime'), true);
   assert.equal(fixture.events.includes('write-wrappers'), true);
 
@@ -478,9 +494,13 @@ test('migrate-uninstall removes legacy runtimes and preserves user data', async 
     join(home, 'bin'),
     join(home, 'build', 'bootstrap'),
     join(home, 'build', 'mobile', 'android'),
+    join(home, 'cache', 'go-build'),
+    join(home, 'cache', 'wheelmaker'),
     join(home, 'data'),
     join(home, 'logs'),
     join(home, 'desktop'),
+    join(home, 'mobile', 'android'),
+    join(home, 'tmp'),
   ]) {
     await mkdir(directory, { recursive: true });
   }
@@ -494,10 +514,18 @@ test('migrate-uninstall removes legacy runtimes and preserves user data', async 
   }
   await writeFile(join(home, 'build', 'bootstrap', 'wheelmaker-deploy.exe'), 'bootstrap');
   await writeFile(join(home, 'build', 'mobile', 'android', 'old.apk'), 'android');
+  await writeFile(join(home, 'cache', 'go-build', 'cache-entry'), 'go-build');
+  await writeFile(join(home, 'cache', 'wheelmaker', 'agent-entry'), 'agent');
   await writeFile(join(home, 'config.json'), '{"projects":[]}\n');
   await writeFile(join(home, 'data', 'sessions.db'), 'db');
   await writeFile(join(home, 'logs', 'hub.log'), 'log');
   await writeFile(join(home, 'desktop', 'WheelMakerDesktop.exe'), 'desktop');
+  await writeFile(join(home, 'mobile', 'android', 'old.apk'), 'android');
+  await writeFile(join(home, 'tmp', 'deploy.tmp'), 'tmp');
+  await writeFile(join(home, 'update-now.signal'), 'full-update');
+  for (const name of ['restart.bat', 'restart.sh', 'status.bat', 'status.sh']) {
+    await writeFile(join(home, name), name);
+  }
 
   let runtimeRemoved = false;
   await runCore(['migrate-uninstall'], {
@@ -516,6 +544,14 @@ test('migrate-uninstall removes legacy runtimes and preserves user data', async 
   assert.equal(await exists(join(home, 'bin', 'wheelmaker-deploy.exe')), false);
   assert.equal(await exists(join(home, 'bin', 'wheelmaker-monitor.exe')), false);
   assert.equal(await exists(join(home, 'build')), false);
+  assert.equal(await exists(join(home, 'cache', 'go-build')), false);
+  assert.equal(await exists(join(home, 'cache', 'wheelmaker', 'agent-entry')), true);
+  assert.equal(await exists(join(home, 'mobile')), false);
+  assert.equal(await exists(join(home, 'tmp')), false);
+  assert.equal(await exists(join(home, 'update-now.signal')), false);
+  for (const name of ['restart.bat', 'restart.sh', 'status.bat', 'status.sh']) {
+    assert.equal(await exists(join(home, name)), false);
+  }
   assert.equal(await exists(join(home, 'config.json')), true);
   assert.equal(await exists(join(home, 'data', 'sessions.db')), true);
   assert.equal(await exists(join(home, 'logs', 'hub.log')), true);

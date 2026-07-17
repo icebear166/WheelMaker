@@ -117,17 +117,21 @@ test('pending launcher is promoted at the beginning of the next invocation', asy
     nextLauncher,
     pendingLauncher: nextLauncher,
   });
-  await runLauncher(['runtime', 'status'], deps);
+  await runLauncher(['runtime', 'start'], deps);
   assert.deepEqual(deps.files.get('deploy.mjs'), nextLauncher);
   assert.equal(deps.files.has('deploy.next.mjs'), false);
   assert.deepEqual(deps.events, [
     'promote-launcher',
-    'run-core:runtime,status',
+    'run-core:runtime,start',
   ]);
 });
 
 test('unknown commands fail before launcher files are mutated', async () => {
   const deps = launcherFixture({ pendingLauncher: Buffer.from('next') });
+  assert.deepEqual(parseDeployArgs(['runtime', 'start']), ['runtime', 'start']);
+  assert.deepEqual(parseDeployArgs(['runtime', 'stop']), ['runtime', 'stop']);
+  assert.throws(() => parseDeployArgs(['runtime', 'restart']), /unknown deploy command/);
+  assert.throws(() => parseDeployArgs(['runtime', 'status']), /unknown deploy command/);
   assert.throws(() => parseDeployArgs(['schedule']), /unknown deploy command/);
   await assert.rejects(() => runLauncher(['schedule'], deps), /unknown deploy command/);
   assert.equal(deps.files.has('deploy.next.mjs'), true);

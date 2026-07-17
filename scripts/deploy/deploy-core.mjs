@@ -685,7 +685,7 @@ export function windowsWrappers(paths) {
   return {
     'deploy.bat': `@echo off\r\nsetlocal\r\n${windowsBatchQuote(paths.node)} ${windowsBatchQuote(paths.deploy)}\r\nset "_EXIT_CODE=%errorlevel%"\r\necho.\r\npause\r\nexit /b %_EXIT_CODE%\r\n`,
     ...Object.fromEntries(
-      ['start', 'stop', 'restart', 'status'].map((action) => [
+      ['start', 'stop'].map((action) => [
         `${action}.bat`,
         `@echo off\r\nsetlocal\r\n${windowsBatchQuote(paths.node)} ${windowsBatchQuote(paths.deploy)} runtime ${action} %*\r\nexit /b %errorlevel%\r\n`,
       ]),
@@ -698,7 +698,7 @@ export function unixWrappers(paths) {
   return {
     'deploy.sh': `#!/bin/sh\nset -eu\nexec ${shellQuote(paths.node)} ${shellQuote(paths.deploy)}\n`,
     ...Object.fromEntries(
-      ['start', 'stop', 'restart', 'status'].map((action) => [
+      ['start', 'stop'].map((action) => [
         `${action}.sh`,
         `#!/bin/sh\nset -eu\nexec ${shellQuote(paths.node)} ${shellQuote(paths.deploy)} runtime ${action} "$@"\n`,
       ]),
@@ -706,20 +706,27 @@ export function unixWrappers(paths) {
   };
 }
 
+const RETIRED_LIFECYCLE_WRAPPERS = [
+  'restart.bat',
+  'restart.sh',
+  'status.bat',
+  'status.sh',
+];
+
+async function removeRetiredLifecycleWrappers(home) {
+  for (const name of RETIRED_LIFECYCLE_WRAPPERS) {
+    await rm(join(home, name), { force: true });
+  }
+}
+
 async function writeRuntimeWrappers(paths, platform) {
   const useWindows = platform === 'win32';
   const active = useWindows ? windowsWrappers(paths) : unixWrappers(paths);
   const staleNames = useWindows
-    ? ['deploy.sh', 'start.sh', 'stop.sh', 'restart.sh', 'status.sh']
-    : [
-        'deploy.bat',
-        'start.bat',
-        'stop.bat',
-        'restart.bat',
-        'status.bat',
-        'update_exe.bat',
-      ];
+    ? ['deploy.sh', 'start.sh', 'stop.sh']
+    : ['deploy.bat', 'start.bat', 'stop.bat', 'update_exe.bat'];
   await mkdir(paths.home, { recursive: true });
+  await removeRetiredLifecycleWrappers(paths.home);
   for (const name of staleNames) {
     await rm(join(paths.home, name), { force: true });
   }
@@ -924,10 +931,16 @@ async function executeLegacyMigration(deps) {
   ]) {
     await rm(join(paths.bin, `${name}${suffix}`), { force: true });
   }
-  await rm(join(paths.home, 'build'), {
-    force: true,
-    recursive: true,
-  });
+  for (const directory of [
+    join(paths.home, 'build'),
+    join(paths.home, 'cache', 'go-build'),
+    join(paths.home, 'mobile'),
+    join(paths.home, 'tmp'),
+  ]) {
+    await rm(directory, { force: true, recursive: true });
+  }
+  await rm(join(paths.home, 'update-now.signal'), { force: true });
+  await removeRetiredLifecycleWrappers(paths.home);
 }
 
 async function detectDesktopRunning(platform, runner) {
@@ -1002,20 +1015,6 @@ Get-CimInstance Win32_Process | Where-Object {
 `;
 }
 
-function windowsStatusScript(paths) {
-  return `$ErrorActionPreference = 'Stop'
-Get-ScheduledTask -TaskName 'WheelMaker' -ErrorAction SilentlyContinue | Get-ScheduledTaskInfo | Format-List
-$bin = (${psQuote(paths.bin)}.TrimEnd('\\') + '\\').ToLowerInvariant()
-$hub = ${psQuote(paths.hub)}.ToLowerInvariant()
-Get-CimInstance Win32_Process | Where-Object {
-  $path = [string]$_.ExecutablePath
-  -not [string]::IsNullOrWhiteSpace($path) -and
-  $path.ToLowerInvariant().StartsWith($bin) -and
-  $path.ToLowerInvariant() -eq $hub
-} | Select-Object ProcessId,Name,ExecutablePath,CommandLine | Format-Table -AutoSize
-`;
-}
-
 async function checkLinuxPrerequisites(runner) {
   await runner('systemctl', ['--user', 'show-environment']);
   let userName = process.env.USER;
@@ -1086,18 +1085,18 @@ export function createRuntimeAdapter({
   }
 
   async function action(name) {
-    if (!['start', 'stop', 'restart', 'status'].includes(name)) {
+    if (!['start', 'stop'].includes(name)) {
       throw new Error(`unknown runtime action: ${name}`);
     }
     if (platform === 'win32') {
-      if (name === 'stop' || name === 'restart') {
+      if (name === 'stop') {
         await runner(
           'powershell',
           ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', windowsStopScript(paths)],
           { cwd: paths.home },
         );
       }
-      if (name === 'start' || name === 'restart') {
+      if (name === 'start') {
         await runner('powershell', [
           '-NoProfile',
           '-ExecutionPolicy',
@@ -1106,26 +1105,16 @@ export function createRuntimeAdapter({
           "Start-ScheduledTask -TaskName 'WheelMaker' -ErrorAction Stop",
         ]);
       }
-      if (name === 'status') {
-        return runner('powershell', [
-          '-NoProfile',
-          '-ExecutionPolicy',
-          'Bypass',
-          '-Command',
-          windowsStatusScript(paths),
-        ]);
-      }
       return;
     }
     if (platform === 'linux') {
-      const verb = name === 'status' ? 'status' : name;
-      return runner('systemctl', ['--user', verb, 'wheelmaker-hub.service'], {
+      return runner('systemctl', ['--user', name, 'wheelmaker-hub.service'], {
         allowFailure: name === 'stop',
       });
     }
     if (platform === 'darwin') {
       const target = `gui/${paths.uid}/com.wheelmaker.hub`;
-      if (name === 'start' || name === 'restart') {
+      if (name === 'start') {
         return runner('launchctl', ['kickstart', '-k', target]);
       }
       if (name === 'stop') {
@@ -1133,7 +1122,6 @@ export function createRuntimeAdapter({
           allowFailure: true,
         });
       }
-      return runner('launchctl', ['print', target]);
     }
     throw new Error(`unsupported runtime platform: ${platform}`);
   }
@@ -1196,9 +1184,7 @@ export function createRuntimeAdapter({
       );
       return result.code === 0;
     },
-    restart: () => action('restart'),
     start: () => action('start'),
-    status: () => action('status'),
     stop: () => action('stop'),
     writeWrappers: () => writeRuntimeWrappers(paths, platform),
   };
@@ -1399,6 +1385,7 @@ async function executeDeployment(internalUpdate, deps, runtime) {
       jobId,
       platform,
     });
+    await removeRetiredLifecycleWrappers(home);
     await writeInstalledRelease(
       home,
       deps.trustedStable,
@@ -1465,6 +1452,9 @@ export async function runCore(args, deps = {}) {
   }
   const runtime = resolveRuntime(deps);
   if (args[0] === 'runtime' && args.length === 2) {
+    if (!['start', 'stop'].includes(args[1])) {
+      throw new Error(`unknown runtime action: ${args[1]}`);
+    }
     if (!runtime || typeof runtime[args[1]] !== 'function') {
       throw new Error(`runtime adapter cannot ${args[1]}`);
     }

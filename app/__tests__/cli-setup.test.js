@@ -49,4 +49,9 @@ describe('web app package setup', () => {
 
     expect(existingPaths).toEqual([]);
   });
+
+  test('does not keep the retired Windows-only web restart helper', () => {
+    expect(packageJson.scripts).not.toHaveProperty('web:restart');
+    expect(fs.existsSync(path.join(projectRoot, 'scripts', 'restart_web.ps1'))).toBe(false);
+  });
 });

@@ -74,7 +74,7 @@ Normal deployment registers only current-user runtimes and does not require admi
 - macOS LaunchAgents: `com.wheelmaker.hub` and `com.wheelmaker.updater` at 03:00.
 - Linux systemd user units: `wheelmaker-hub.service` plus `wheelmaker-updater.timer` at 03:00.
 
-The migration requests UAC on Windows only if legacy Windows Services actually exist. It also removes old tasks/HKCU Run values, updater/deploy/monitor executables, and the old `~/.wheelmaker/build` directory; it preserves `config.json`, databases, logs, Desktop, and other user data.
+The migration requests UAC on Windows only if legacy Windows Services actually exist. It also removes old tasks/HKCU Run values, updater/deploy/monitor executables, lifecycle wrappers that are no longer generated, and obsolete build/mobile/temp artifacts under `~/.wheelmaker`; it preserves `config.json`, databases, logs, Desktop, the active agent cache, and other user data.
 
 `release.json` schema v2 records `version`, `publishedAt`, `sourceSha`, `manifestSha256`, and `installedAt`. App version reporting reads this file and public stable metadata; it does not infer the installed version from Git.
 
@@ -84,8 +84,6 @@ Manual deployment and lifecycle commands after deployment on Windows:
 ~/.wheelmaker/deploy.bat
 ~/.wheelmaker/start.bat
 ~/.wheelmaker/stop.bat
-~/.wheelmaker/restart.bat
-~/.wheelmaker/status.bat
 ```
 
 `deploy.bat` pauses after Node exits so a double-clicked deployment keeps its result visible.
@@ -96,8 +94,6 @@ Manual deployment and lifecycle commands after deployment on macOS/Linux:
 ~/.wheelmaker/deploy.sh
 ~/.wheelmaker/start.sh
 ~/.wheelmaker/stop.sh
-~/.wheelmaker/restart.sh
-~/.wheelmaker/status.sh
 ```
 
 To update Desktop independently, close WheelMaker Desktop first and run:
@@ -417,8 +413,6 @@ Windows:
 ```powershell
 ~/.wheelmaker/start.bat
 ~/.wheelmaker/stop.bat
-~/.wheelmaker/restart.bat
-~/.wheelmaker/status.bat
 ```
 
 macOS/Linux:
@@ -426,9 +420,9 @@ macOS/Linux:
 ```bash
 ~/.wheelmaker/start.sh
 ~/.wheelmaker/stop.sh
-~/.wheelmaker/restart.sh
-~/.wheelmaker/status.sh
 ```
+
+To restart the Hub manually, run `stop` and then `start`. Runtime and update status is reported by the Web UI from the Hub and `staging/status.json`; separate restart/status wrappers are not installed.
 
 The scheduled and Web-triggered update flow is:
 

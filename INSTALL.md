@@ -76,7 +76,7 @@ Registry 入口机和所有受信任 Worker 使用同一个 Token。入口机部
 说明：
 
 - 一行命令下载公共 launcher，调用一次 `migrate-uninstall`，再执行正常部署。后续日常部署不要再调用迁移模式。
-- 迁移会删除旧 Hub/updater/deploy/monitor 运行时和整个 `~/.wheelmaker/build`，但保留配置、数据库、日志和 Desktop。
+- 迁移会删除旧 Hub/updater/deploy/monitor 运行时、`~/.wheelmaker/build`、`mobile`、`tmp`、旧 `cache/go-build`、`update-now.signal` 和退役的 restart/status helper，但保留配置、数据库、日志、Desktop 与当前 agent cache。
 - Windows 只有发现旧 Windows Service 时才可能触发 UAC；新 Scheduled Task 使用当前用户、Limited 权限。
 - 正常部署下载并验证预编译 Hub + Web，始终一起替换到 `~/.wheelmaker/bin` 和 `~/.wheelmaker/web`，在缺失时创建 `config.json`，写 schema v2 `release.json`，并启动 Hub。
 - 正常部署会在安装目录生成当前平台的日常部署入口：Windows 双击 `~/.wheelmaker/deploy.bat`，macOS/Linux 执行 `~/.wheelmaker/deploy.sh`。两者只调用 `node deploy.mjs`，不执行迁移；Windows 完成后会暂停窗口以便查看结果。
@@ -92,7 +92,7 @@ Registry 入口机和所有受信任 Worker 使用同一个 Token。入口机部
 ~/.wheelmaker/staging/   lock.json、status.json 和临时包
 ```
 
-安装目录 helper 保持原文件名：Windows 为 `deploy.bat`、`start.bat`、`stop.bat`、`restart.bat`、`status.bat`；macOS/Linux 为对应 `.sh`。Windows 另有 `update_exe.bat`。这里的 `deploy.bat/sh` 是日常部署入口；源码仓库根目录不再提供同名迁移 wrapper。
+安装目录 helper 保持轻量：Windows 为 `deploy.bat`、`start.bat`、`stop.bat`，macOS/Linux 为对应 `.sh`；Windows 另有 `update_exe.bat`。这里的 `deploy.bat/sh` 是日常部署入口；源码仓库根目录不再提供同名迁移 wrapper。重启时依次调用 `stop`、`start`；发布状态由 Web 和 `staging/status.json` 提供，不生成 restart/status helper。
 
 ## 5. Registry 入口机配置
 
@@ -136,13 +136,15 @@ Registry 入口机负责：
 重启服务：
 
 ```bash
-~/.wheelmaker/restart.sh
+~/.wheelmaker/stop.sh
+~/.wheelmaker/start.sh
 ```
 
 Windows：
 
 ```powershell
-~/.wheelmaker/restart.bat
+~/.wheelmaker/stop.bat
+~/.wheelmaker/start.bat
 ```
 
 ### 配置 Server 功能
@@ -335,17 +337,7 @@ Registry 入口机（不得使用 `-k` 跳过证书校验）：
 curl https://<registry-host>:28800/
 ```
 
-确认服务状态：
-
-```bash
-~/.wheelmaker/status.sh
-```
-
-Windows：
-
-```powershell
-~/.wheelmaker/status.bat
-```
+确认 Web 可以访问，并在 Web 更新页面或 `~/.wheelmaker/staging/status.json` 查看最近一次发布任务状态。安装目录不再生成单独的 status helper。
 
 Worker 无法连上入口机时，优先检查：
 
