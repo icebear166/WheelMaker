@@ -37,6 +37,11 @@ function Assert-InOrder([string]$Label, [string]$Text, [string[]]$Needles) {
 $powershell = Read-RequiredFile 'scripts/security_acceptance.ps1'
 $shell = Read-RequiredFile 'scripts/security_acceptance.sh'
 $checklist = Read-RequiredFile 'docs/security-staging-checklist.md'
+$gitleaksConfig = Read-RequiredFile '.gitleaks.toml'
+
+Assert-Contains 'gitleaks config' $gitleaksConfig '^\.release-out([\\/]|$)'
+Assert-Contains 'gitleaks config' $gitleaksConfig '^\.release-work([\\/]|$)'
+Assert-NotContains 'gitleaks config' $gitleaksConfig 'mobile/android/signing/'
 
 $orderedPowerShellGates = @(
     'gitleaks dir --redact --no-banner .',

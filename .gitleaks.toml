@@ -2,3 +2,10 @@ title = "WheelMaker credential leak policy"
 
 [extend]
 useDefault = true
+
+[[allowlists]]
+description = "Generated release outputs and dependency/compiler caches"
+paths = [
+  '''^\.release-out([\\/]|$)''',
+  '''^\.release-work([\\/]|$)''',
+]

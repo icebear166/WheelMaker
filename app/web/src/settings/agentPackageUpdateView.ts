@@ -199,10 +199,20 @@ export function parseWheelMakerStable(input: unknown): WheelMakerStableMetadata 
   ) {
     throw new Error('WheelMaker stable metadata is invalid.');
   }
-  if (stable.androidApk !== undefined && !validAndroidPointer(stable.androidApk)) {
-    throw new Error('WheelMaker stable metadata has an invalid Android pointer.');
+  let androidApk: WheelMakerAndroidApkPointer | undefined;
+  if (stable.androidApk !== undefined) {
+    if (!validAndroidPointer(stable.androidApk)) {
+      throw new Error('WheelMaker stable metadata has an invalid Android pointer.');
+    }
+    androidApk = stable.androidApk;
   }
-  return stable as WheelMakerStableMetadata;
+  return {
+    schema: 1,
+    version: stable.version,
+    publishedAt: stable.publishedAt,
+    sourceSha: stable.sourceSha,
+    ...(androidApk ? {androidApk} : {}),
+  };
 }
 
 export function parseWheelMakerPublishStatus(

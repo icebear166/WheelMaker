@@ -603,25 +603,25 @@ git commit -m "docs: finalize unified Android release workflow"
 **Files:**
 - Modify: `docs/scope/2026-07-17-unified-android-release/plan-unified-android-release.md`
 
-- [ ] **Step 1: Run all release and deployment tests**
+- [x] **Step 1: Run all release and deployment tests**
 
 Run: `node --test scripts/release/*.test.mjs scripts/deploy/*.test.mjs`
 
 Expected: PASS.
 
-- [ ] **Step 2: Run the full Web suite**
+- [x] **Step 2: Run the full Web suite**
 
 Run from `app`: `npm test -- --runInBand`
 
 Expected: PASS with no open handles or snapshots changed unintentionally.
 
-- [ ] **Step 3: Run the full Go suite**
+- [x] **Step 3: Run the full Go suite**
 
 Run from `server`: `go test ./... -count=1`
 
 Expected: PASS.
 
-- [ ] **Step 4: Run Android unit tests and signed build inspection**
+- [x] **Step 4: Run Android unit tests and signed build inspection**
 
 Run from `mobile/android`: `gradle test`
 
@@ -631,19 +631,19 @@ Run `apksigner verify --print-certs .release-out/<next-v1.x>/android/WheelMakerA
 
 Expected: exact match.
 
-- [ ] **Step 5: Run security acceptance**
+- [x] **Step 5: Run security acceptance**
 
 Run: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/security_acceptance.ps1`
 
 Expected: all Web, Go, Android, npm audit, govulncheck, and Gitleaks gates pass with only the exact approved signing exception.
 
-- [ ] **Step 6: Verify clean scope and update plan checkboxes**
+- [x] **Step 6: Verify clean scope and update plan checkboxes**
 
 Run: `git status --short`
 
 Expected: only the plan checkbox update remains after prior task commits; no `.release-out`, `.release-work`, Gradle, APK, or generated asset is accidentally untracked.
 
-- [ ] **Step 7: Execute the repository completion gate**
+- [x] **Step 7: Execute the repository completion gate**
 
 ```powershell
 git add -A
