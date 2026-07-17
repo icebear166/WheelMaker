@@ -1999,7 +1999,10 @@ describe('web chat integration', () => {
     );
     expect(stylesCss).toMatch(/\.wide-project-row \{[^}]*min-height: 32px;[^}]*\}/);
     const wideProjectSectionBlock = stylesCss.match(/\.wide-project-section \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(wideProjectSectionBlock).toContain('margin-bottom: 4px;');
+    expect(wideProjectSectionBlock).toContain('margin-bottom: 8px;');
+    expect(wideProjectSectionBlock).toContain('border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);');
+    expect(wideProjectSectionBlock).toContain('background: color-mix(in srgb, var(--surface-panel) 88%, var(--surface-raised));');
+    expect(wideProjectSectionBlock).toContain('padding: 3px;');
     const mobileProjectSectionBlock = stylesCss.match(/\.mobile-project-section \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(mobileProjectSectionBlock).toContain('margin-bottom: 4px;');
     expect(stylesCss).not.toContain('.wide-project-section.active > .wide-project-row::before {');
@@ -2025,14 +2028,11 @@ describe('web chat integration', () => {
       /\.wide-project-folder-icon\.codicon-folder-opened \{[\s\S]*color: color-mix\(in srgb, var\(--hub-accent\) 82%, var\(--text-primary\)\);[\s\S]*\}/,
     );
     const selectedSessionRowBlock = stylesCss.match(/\.wide-session-row\.selected \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(selectedSessionRowBlock).toContain('margin-left: -21px;');
-    expect(selectedSessionRowBlock).toContain('width: calc(100% + 21px);');
-    expect(selectedSessionRowBlock).toContain('padding-left: 23px;');
-    expect(selectedSessionRowBlock).toContain('background: linear-gradient(');
-    expect(selectedSessionRowBlock).toContain('to right,');
-    expect(selectedSessionRowBlock).toContain('color-mix(in srgb, var(--accent-primary) 5%, transparent) 0,');
-    expect(selectedSessionRowBlock).toContain('color-mix(in srgb, var(--accent-primary) 16%, var(--surface-raised)) 28px,');
-    expect(selectedSessionRowBlock).not.toContain('box-shadow: inset');
+    expect(selectedSessionRowBlock).not.toContain('margin-left:');
+    expect(selectedSessionRowBlock).not.toContain('width: calc(');
+    expect(selectedSessionRowBlock).not.toContain('padding-left: 23px;');
+    const selectedBarBlock = stylesCss.match(/\.wide-session-row\.selected::before \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(selectedBarBlock).toContain('left: 2px;');
     const wideProjectActionBtnBlock = stylesCss.match(/\.wide-project-action-btn \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(wideProjectActionBtnBlock).toContain('opacity: 0.45;');
     expect(stylesCss).not.toContain('.mobile-project-actions .wide-project-action-btn {');
