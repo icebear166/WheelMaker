@@ -24,7 +24,7 @@ async function runPublish(deps) {
     await deps.prompt('是否包含 WheelMaker Android APK？[y/N] '),
   );
   const publish = affirmative(
-    await deps.prompt('是否发布到 public release 仓库？[y/N] '),
+    await deps.prompt('是否发布到 public release server？[y/N] '),
   );
 
   const args = [releaseScriptPath(deps)];

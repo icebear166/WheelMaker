@@ -27,17 +27,11 @@ jobs:
     steps:
       - name: Validate publishing credentials
         env:
-          WHEELMAKER_RELEASE_APP_ID: ${{ secrets.WHEELMAKER_RELEASE_APP_ID }}
-          WHEELMAKER_RELEASE_INSTALLATION_ID: ${{ secrets.WHEELMAKER_RELEASE_INSTALLATION_ID }}
-          WHEELMAKER_RELEASE_APP_PRIVATE_KEY: ${{ secrets.WHEELMAKER_RELEASE_APP_PRIVATE_KEY }}
+          WHEELMAKER_RELEASE_TOKEN: ${{ secrets.WHEELMAKER_RELEASE_TOKEN }}
         shell: bash
         run: |
-          missing=()
-          [[ -n "$WHEELMAKER_RELEASE_APP_ID" ]] || missing+=(WHEELMAKER_RELEASE_APP_ID)
-          [[ -n "$WHEELMAKER_RELEASE_INSTALLATION_ID" ]] || missing+=(WHEELMAKER_RELEASE_INSTALLATION_ID)
-          [[ -n "$WHEELMAKER_RELEASE_APP_PRIVATE_KEY" ]] || missing+=(WHEELMAKER_RELEASE_APP_PRIVATE_KEY)
-          if (( ${#missing[@]} > 0 )); then
-            echo "::error::Missing publishing credential(s): ${missing[*]}"
+          if [[ -z "$WHEELMAKER_RELEASE_TOKEN" ]]; then
+            echo "::error::Missing publishing credential: WHEELMAKER_RELEASE_TOKEN"
             exit 1
           fi
 
@@ -100,9 +94,7 @@ jobs:
 
       - name: Build and publish release
         env:
-          WHEELMAKER_RELEASE_APP_ID: ${{ secrets.WHEELMAKER_RELEASE_APP_ID }}
-          WHEELMAKER_RELEASE_INSTALLATION_ID: ${{ secrets.WHEELMAKER_RELEASE_INSTALLATION_ID }}
-          WHEELMAKER_RELEASE_APP_PRIVATE_KEY: ${{ secrets.WHEELMAKER_RELEASE_APP_PRIVATE_KEY }}
+          WHEELMAKER_RELEASE_TOKEN: ${{ secrets.WHEELMAKER_RELEASE_TOKEN }}
         shell: bash
         run: |
           args=(--publish)

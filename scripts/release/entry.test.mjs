@@ -51,7 +51,7 @@ test('local release entry asks three questions and defaults to build only', asyn
   assert.equal(deps.state.prompts.length, 3);
   assert.match(deps.state.prompts[0], /Desktop.*\[y\/N\]/i);
   assert.match(deps.state.prompts[1], /Android.*\[y\/N\]/i);
-  assert.match(deps.state.prompts[2], /public.*\[y\/N\]/i);
+  assert.match(deps.state.prompts[2], /public release server.*\[y\/N\]/i);
   assert.deepEqual(deps.state.commands[0].args, ['scripts/release.mjs']);
 });
 
@@ -176,7 +176,7 @@ test('two Windows BAT entrypoints delegate to the interactive release entry', as
   );
 });
 
-test('manual Action builds and publishes in one release invocation', async () => {
+test('manual Action builds and publishes in one release invocation with one server token', async () => {
   const workflow = await readFile(
     new URL('../../.github/workflows/publish-release.yml', import.meta.url),
     'utf8',
@@ -186,14 +186,11 @@ test('manual Action builds and publishes in one release invocation', async () =>
   const checkout = workflow.indexOf('name: Check out selected source');
   assert.equal(credentialCheck >= 0 && credentialCheck < checkout, true);
   const preflight = workflow.slice(credentialCheck, checkout);
-  for (const name of [
-    'WHEELMAKER_RELEASE_APP_ID',
-    'WHEELMAKER_RELEASE_INSTALLATION_ID',
-    'WHEELMAKER_RELEASE_APP_PRIVATE_KEY',
-  ]) {
-    assert.match(preflight, new RegExp(name));
-  }
+  assert.match(preflight, /WHEELMAKER_RELEASE_TOKEN/);
   assert.match(preflight, /missing publishing credential/i);
+  assert.doesNotMatch(workflow, /WHEELMAKER_RELEASE_APP_ID/);
+  assert.doesNotMatch(workflow, /WHEELMAKER_RELEASE_INSTALLATION_ID/);
+  assert.doesNotMatch(workflow, /WHEELMAKER_RELEASE_APP_PRIVATE_KEY/);
   assert.match(workflow, /args\+?=\(--publish\)/);
   assert.match(workflow, /with_android:/);
   assert.match(workflow, /if: \$\{\{ inputs\.with_android \}\}/);
