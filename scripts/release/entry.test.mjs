@@ -252,3 +252,14 @@ test('source checkout deployment wrappers and their dedicated tests are absent',
     );
   }
 });
+
+test('release server deployment wrapper delegates to Node and pauses', async () => {
+  const source = await readFile(
+    new URL('../../deploy-release-server.bat', import.meta.url),
+    'utf8',
+  );
+  assert.match(source, /scripts\\release-server\\deploy\.mjs/);
+  assert.match(source, /set "EXIT_CODE=%ERRORLEVEL%"/i);
+  assert.match(source, /pause/i);
+  assert.match(source, /exit \/b %EXIT_CODE%/i);
+});

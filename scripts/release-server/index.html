@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WheelMaker Releases</title>
+</head>
+<body>
+  <main>
+    <h1>WheelMaker</h1>
+    <p>Run the command for your platform from any directory.</p>
+    <h2>Windows PowerShell</h2>
+    <pre><code>$ErrorActionPreference='Stop'; $d=Join-Path $HOME '.wheelmaker'; New-Item -ItemType Directory -Force -Path $d | Out-Null; $m=Join-Path $d 'deploy.mjs'; Invoke-WebRequest 'https://release.wheelmaker.top/deploy.mjs' -OutFile $m; &amp; node $m migrate-uninstall; if ($LASTEXITCODE -eq 0) { &amp; node $m }</code></pre>
+    <h2>macOS / Linux</h2>
+    <pre><code>(d="$HOME/.wheelmaker" &amp;&amp; mkdir -p "$d" &amp;&amp; curl --fail --location --progress-bar --proto '=https' --tlsv1.2 'https://release.wheelmaker.top/deploy.mjs' --output "$d/deploy.mjs" &amp;&amp; node "$d/deploy.mjs" migrate-uninstall &amp;&amp; node "$d/deploy.mjs")</code></pre>
+  </main>
+</body>
+</html>
