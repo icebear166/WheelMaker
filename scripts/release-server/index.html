@@ -10,32 +10,30 @@
     :root {
       color-scheme: light dark;
       --bg: #fafaf9;
-      --surface: #f4f4f2;
-      --border: #e4e4e0;
-      --text: #1c1c1a;
-      --text-secondary: #57574f;
-      --tab-active-bg: #ffffff;
+      --border: #e3e3de;
+      --text: #1b1b19;
+      --text-secondary: #55554e;
       --accent: #047857;
       --accent-hover: #065f46;
       --accent-text: #ffffff;
-      --panel-bg: #1c1c1a;
-      --panel-border: #2e2e2a;
-      --panel-text: #e8e8e4;
+      --panel-bg: #191918;
+      --panel-border: #2b2b28;
+      --panel-text: #ececea;
+      --panel-head-text: #f5f5f2;
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg: #101010;
-        --surface: #1a1a19;
-        --border: #2e2e2a;
+        --bg: #0f0f0e;
+        --border: #282825;
         --text: #f0f0ec;
-        --text-secondary: #a3a398;
-        --tab-active-bg: #2e2e2a;
+        --text-secondary: #a2a297;
         --accent: #34d399;
         --accent-hover: #6ee7b7;
         --accent-text: #062e1f;
-        --panel-bg: #1a1a19;
-        --panel-border: #2e2e2a;
-        --panel-text: #e8e8e4;
+        --panel-bg: #171716;
+        --panel-border: #2b2b28;
+        --panel-text: #e6e6e1;
+        --panel-head-text: #f5f5f2;
       }
     }
 
@@ -44,172 +42,231 @@
     body {
       margin: 0;
       min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
       background: var(--bg);
       color: var(--text);
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       -webkit-font-smoothing: antialiased;
     }
 
-    .wrap {
-      max-width: 680px;
+    .shell {
+      width: 100%;
+      max-width: 1520px;
       margin: 0 auto;
-      padding: clamp(28px, 7vh, 72px) 24px 72px;
+      padding-inline: clamp(20px, 5vw, 72px);
     }
 
     @media (prefers-reduced-motion: no-preference) {
-      .wrap {
-        animation: enter 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      .hero, .commands, .what {
+        animation: enter 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
       }
-      .tab, .copy {
-        transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+      .commands { animation-delay: 0.08s; }
+      .what { animation-delay: 0.16s; }
+      .copy {
+        transition: background-color 0.15s ease, transform 0.1s ease;
       }
     }
     @keyframes enter {
-      from { opacity: 0; transform: translateY(8px); }
+      from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
+    .site-head {
+      border-bottom: 1px solid var(--border);
+    }
+    .site-head .shell {
+      height: 64px;
+      display: flex;
+      align-items: center;
+    }
     .wordmark {
       font-size: 15px;
       font-weight: 650;
       letter-spacing: -0.01em;
     }
 
-    h1 {
-      margin: 40px 0 0;
-      font-size: clamp(28px, 5.5vw, 40px);
-      font-weight: 650;
-      letter-spacing: -0.03em;
-      line-height: 1.1;
+    .hero {
+      padding-top: clamp(48px, 9vh, 92px);
     }
-
-    .sub {
-      margin: 14px 0 0;
-      max-width: 52ch;
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(40px, 6vw, 72px);
+      font-weight: 680;
+      letter-spacing: -0.035em;
+      line-height: 1.04;
+    }
+    .hero .sub {
+      margin: 20px 0 0;
+      max-width: 56ch;
       color: var(--text-secondary);
-      font-size: 16px;
+      font-size: clamp(16px, 1.4vw, 19px);
       line-height: 1.6;
     }
 
-    .installer { margin-top: 36px; }
+    .commands {
+      margin-top: clamp(40px, 6vh, 64px);
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+    }
+    @media (min-width: 900px) {
+      .commands { grid-template-columns: 1fr 1fr; gap: 24px; }
+    }
 
-    .tab-row {
+    .panel {
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .panel-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
-      flex-wrap: wrap;
+      gap: 16px;
+      padding: 18px 20px 0;
     }
-
-    .tabs {
-      display: inline-flex;
-      gap: 2px;
-      padding: 3px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-    }
-
-    .tab {
-      appearance: none;
-      border: 0;
+    .panel-head h2 {
       margin: 0;
-      padding: 6px 14px;
-      border-radius: 6px;
-      background: transparent;
-      color: var(--text-secondary);
-      font: inherit;
-      font-size: 13.5px;
-      font-weight: 550;
-      cursor: pointer;
+      color: var(--panel-head-text);
+      font-size: 15px;
+      font-weight: 620;
+      letter-spacing: -0.01em;
     }
-    .tab[aria-selected="true"] {
-      background: var(--tab-active-bg);
-      color: var(--text);
+    .panel pre {
+      margin: 14px 0 0;
+      padding: 18px 20px 22px;
+      border-top: 1px solid var(--panel-border);
+      overflow-x: auto;
+    }
+    .panel code {
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--panel-text);
+      white-space: pre;
     }
 
     .copy {
       appearance: none;
       border: 0;
       margin: 0;
-      padding: 8px 16px;
+      padding: 9px 18px;
       border-radius: 8px;
       background: var(--accent);
       color: var(--accent-text);
       font: inherit;
-      font-size: 13.5px;
-      font-weight: 600;
+      font-size: 14px;
+      font-weight: 620;
       cursor: pointer;
+      flex-shrink: 0;
     }
     .copy:hover { background: var(--accent-hover); }
     .copy:active { transform: translateY(1px); }
-
-    .tab:focus-visible, .copy:focus-visible {
+    .copy:focus-visible {
       outline: 2px solid var(--accent);
       outline-offset: 2px;
     }
 
-    .panel {
-      margin: 12px 0 0;
-      padding: 18px 20px;
-      background: var(--panel-bg);
-      border: 1px solid var(--panel-border);
-      border-radius: 8px;
-      overflow-x: auto;
-    }
-    .panel[hidden] { display: none; }
-    .panel code {
-      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
-      font-size: 13px;
-      line-height: 1.7;
-      color: var(--panel-text);
-      white-space: pre;
+    .note {
+      margin: 20px 0 0;
+      font-size: 14.5px;
+      color: var(--text-secondary);
     }
 
-    .note {
-      margin: 12px 0 0;
+    .what {
+      margin-top: clamp(64px, 10vh, 104px);
+      padding-top: clamp(36px, 5vh, 48px);
+      border-top: 1px solid var(--border);
+    }
+    .what h2 {
+      margin: 0;
+      font-size: clamp(20px, 2vw, 24px);
+      font-weight: 650;
+      letter-spacing: -0.02em;
+    }
+    .what ol {
+      list-style: none;
+      counter-reset: step;
+      margin: 28px 0 0;
+      padding: 0;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 24px;
+    }
+    @media (min-width: 768px) {
+      .what ol { grid-template-columns: repeat(3, 1fr); gap: 48px; }
+    }
+    .what li {
+      counter-increment: step;
+      color: var(--text-secondary);
+      font-size: 15.5px;
+      line-height: 1.6;
+    }
+    .what li::before {
+      content: counter(step);
+      display: block;
+      margin-bottom: 10px;
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+    .what li code {
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    .site-foot {
+      margin-top: auto;
+      border-top: 1px solid var(--border);
+    }
+    .site-foot .shell {
+      padding-top: 28px;
+      padding-bottom: 28px;
+    }
+    .site-foot p {
+      margin: 0;
       font-size: 13.5px;
       color: var(--text-secondary);
     }
 
-    .what { margin-top: 48px; }
-    .what h2 {
-      margin: 0;
-      font-size: 15px;
-      font-weight: 650;
-      letter-spacing: -0.01em;
-    }
-    .what ol {
-      margin: 12px 0 0;
-      padding-left: 22px;
-      color: var(--text-secondary);
-      font-size: 14.5px;
-      line-height: 1.65;
-    }
-    .what li::marker { color: var(--text-secondary); }
+    main { padding-bottom: clamp(64px, 10vh, 104px); }
   </style>
 </head>
 <body>
-  <main class="wrap">
-    <div class="wordmark">WheelMaker</div>
-
-    <h1>Install WheelMaker</h1>
-    <p class="sub">One command downloads the installer and sets up the latest release. Run it from any directory.</p>
-
-    <div class="installer">
-      <div class="tab-row">
-        <div class="tabs" role="tablist" aria-label="Platform">
-          <button class="tab" role="tab" id="tab-windows" aria-selected="false" aria-controls="panel-windows" type="button">Windows</button>
-          <button class="tab" role="tab" id="tab-unix" aria-selected="true" aria-controls="panel-unix" type="button">macOS / Linux</button>
-        </div>
-        <button class="copy" id="copy" type="button">Copy</button>
-      </div>
-
-      <pre class="panel" id="panel-windows" role="tabpanel" aria-labelledby="tab-windows" hidden><code>$ErrorActionPreference='Stop'; $d=Join-Path $HOME '.wheelmaker'; New-Item -ItemType Directory -Force -Path $d | Out-Null; $m=Join-Path $d 'deploy.mjs'; Invoke-WebRequest 'https://release.wheelmaker.top/deploy.mjs' -OutFile $m; &amp; node $m migrate-uninstall; if ($LASTEXITCODE -eq 0) { &amp; node $m }</code></pre>
-      <pre class="panel" id="panel-unix" role="tabpanel" aria-labelledby="tab-unix"><code>(d="$HOME/.wheelmaker" &amp;&amp; mkdir -p "$d" &amp;&amp; curl --fail --location --progress-bar --proto '=https' --tlsv1.2 'https://release.wheelmaker.top/deploy.mjs' --output "$d/deploy.mjs" &amp;&amp; node "$d/deploy.mjs" migrate-uninstall &amp;&amp; node "$d/deploy.mjs")</code></pre>
-
-      <p class="note">Requires Node.js. Older installations are migrated automatically.</p>
+  <header class="site-head">
+    <div class="shell">
+      <div class="wordmark">WheelMaker</div>
     </div>
+  </header>
+
+  <main class="shell">
+    <section class="hero">
+      <h1>Install WheelMaker</h1>
+      <p class="sub">One command downloads the installer and sets up the latest release. Run it from any directory.</p>
+    </section>
+
+    <section class="commands" aria-label="Install commands">
+      <article class="panel">
+        <div class="panel-head">
+          <h2>Windows PowerShell</h2>
+          <button class="copy" type="button" data-copy="cmd-windows">Copy</button>
+        </div>
+        <pre><code id="cmd-windows">$ErrorActionPreference='Stop'; $d=Join-Path $HOME '.wheelmaker'; New-Item -ItemType Directory -Force -Path $d | Out-Null; $m=Join-Path $d 'deploy.mjs'; Invoke-WebRequest 'https://release.wheelmaker.top/deploy.mjs' -OutFile $m; &amp; node $m migrate-uninstall; if ($LASTEXITCODE -eq 0) { &amp; node $m }</code></pre>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head">
+          <h2>macOS / Linux</h2>
+          <button class="copy" type="button" data-copy="cmd-unix">Copy</button>
+        </div>
+        <pre><code id="cmd-unix">(d="$HOME/.wheelmaker" &amp;&amp; mkdir -p "$d" &amp;&amp; curl --fail --location --progress-bar --proto '=https' --tlsv1.2 'https://release.wheelmaker.top/deploy.mjs' --output "$d/deploy.mjs" &amp;&amp; node "$d/deploy.mjs" migrate-uninstall &amp;&amp; node "$d/deploy.mjs")</code></pre>
+      </article>
+    </section>
+
+    <p class="note">Requires Node.js. Older installations are migrated automatically.</p>
 
     <section class="what" aria-labelledby="what-heading">
       <h2 id="what-heading">What happens</h2>
@@ -223,56 +280,16 @@
     <span id="copy-status" role="status" aria-live="polite" hidden></span>
   </main>
 
+  <footer class="site-foot">
+    <div class="shell">
+      <p>WheelMaker release server</p>
+    </div>
+  </footer>
+
   <script>
     (function () {
-      var tabs = {
-        windows: {
-          tab: document.getElementById('tab-windows'),
-          panel: document.getElementById('panel-windows')
-        },
-        unix: {
-          tab: document.getElementById('tab-unix'),
-          panel: document.getElementById('panel-unix')
-        }
-      };
-      var active = 'unix';
-      var copyButton = document.getElementById('copy');
       var status = document.getElementById('copy-status');
-
-      function select(name) {
-        active = name;
-        Object.keys(tabs).forEach(function (key) {
-          var selected = key === name;
-          tabs[key].tab.setAttribute('aria-selected', String(selected));
-          tabs[key].panel.hidden = !selected;
-        });
-      }
-
-      tabs.windows.tab.addEventListener('click', function () { select('windows'); });
-      tabs.unix.tab.addEventListener('click', function () { select('unix'); });
-
-      var platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.userAgent || '';
-      select(/win/i.test(platform) ? 'windows' : 'unix');
-
       var resetTimer = null;
-      copyButton.addEventListener('click', function () {
-        var command = tabs[active].panel.textContent;
-        function done() {
-          copyButton.textContent = 'Copied';
-          status.textContent = 'Command copied to clipboard';
-          clearTimeout(resetTimer);
-          resetTimer = setTimeout(function () {
-            copyButton.textContent = 'Copy';
-            status.textContent = '';
-          }, 1600);
-        }
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(command).then(done, function () { fallback(command); done(); });
-        } else {
-          fallback(command);
-          done();
-        }
-      });
 
       function fallback(text) {
         var area = document.createElement('textarea');
@@ -285,6 +302,29 @@
         try { document.execCommand('copy'); } catch (error) { /* no-op */ }
         document.body.removeChild(area);
       }
+
+      document.querySelectorAll('[data-copy]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          var target = document.getElementById(button.getAttribute('data-copy'));
+          if (!target) return;
+          var command = target.textContent;
+          function done() {
+            button.textContent = 'Copied';
+            status.textContent = 'Command copied to clipboard';
+            clearTimeout(resetTimer);
+            resetTimer = setTimeout(function () {
+              button.textContent = 'Copy';
+              status.textContent = '';
+            }, 1600);
+          }
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(command).then(done, function () { fallback(command); done(); });
+          } else {
+            fallback(command);
+            done();
+          }
+        });
+      });
     })();
   </script>
 </body>
