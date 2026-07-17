@@ -3214,7 +3214,6 @@ export function App() {
   const [projectSessionsByProjectId, setProjectSessionsByProjectId] = useState<Record<string, RegistryChatSession[]>>({});
   const [recentSessionSections, setRecentSessionSections] = useState<RecentChatSessionProjectSection[]>([]);
   const [recentSessionsTick, setRecentSessionsTick] = useState(0);
-  const [recentSessionsPinned, setRecentSessionsPinned] = useState(false);
   const projectSessionsByProjectIdRef = useRef<Record<string, RegistryChatSession[]>>({});
   const [draftSessionsByProjectId, setDraftSessionsByProjectId] = useState<Record<string, DraftChatSession[]>>({});
   const draftSessionsByProjectIdRef = useRef<Record<string, DraftChatSession[]>>({});
@@ -5114,7 +5113,7 @@ export function App() {
       setRecentSessionsTick(t => t + 1);
     }
   }, [allVisibleProjectsLoaded, projectSessionsByProjectId]);
-  const showPinnedRecentSessionsSurface = isWide && sidebarCollapsed && recentSessionsPinned && !archivedMode && !sessionSearchActive && recentSessionSections.length > 0;
+  const showPinnedRecentSessionsSurface = isWide && sidebarCollapsed && !archivedMode && !sessionSearchActive && recentSessionSections.length > 0;
   const chatMainClassName = isWide
     ? (chatViewWidth === 'fixed-800' ? `chat-main chat-view-width-fixed-800${showPinnedRecentSessionsSurface ? ' chat-view-width-fixed-800-pinned-recent' : ''}` : 'chat-main')
     : 'chat-main';
@@ -15415,7 +15414,7 @@ export function App() {
       <div
         className={`wide-project-section recent-sessions-section${mobile ? ' mobile-project-section' : ''}${
           recentCollapsed ? ' collapsed' : ''
-        }${recentSessionsPinned ? ' pinned' : ''}`}
+        }`}
       >
         <div className="wide-project-row">
           <button
@@ -15431,15 +15430,6 @@ export function App() {
             <span className="wide-project-title-group">
               <span className="wide-project-name">Recent Sessions</span>
             </span>
-          </button>
-          <button
-            type="button"
-            className={`recent-sessions-pin-btn${recentSessionsPinned ? ' active' : ''}`}
-            onClick={() => setRecentSessionsPinned(p => !p)}
-            title={recentSessionsPinned ? 'Unpin Recent Sessions' : 'Pin Recent Sessions to top'}
-            aria-pressed={recentSessionsPinned}
-          >
-            <span className="codicon codicon-pinned" aria-hidden="true" />
           </button>
         </div>
         {!recentCollapsed ? (
@@ -19260,7 +19250,6 @@ export function App() {
             <div className="chat-edge-surface-stack">
               {showPinnedRecentSessionsSurface ? (
                 <ChatRecentSessionsSurface
-                  onUnpin={() => setRecentSessionsPinned(false)}
                   sessionListDensity={sessionListDensity}
                 >
                   <div className="wide-project-session-list recent-sessions-list chat-recent-sessions-rows">

@@ -115,57 +115,24 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('recentSessionsTick');
   });
 
-  test('recent sessions has a pin toggle that sticks the block to the top', () => {
-    // Pin button toggles recentSessionsPinned state.
-    expect(mainTsx).toContain('recentSessionsPinned');
-    expect(mainTsx).toContain('setRecentSessionsPinned(p => !p)');
-    expect(mainTsx).toContain('recent-sessions-pin-btn');
-    // Pinned state adds the `pinned` class for sticky positioning.
-    expect(mainTsx).toContain("recentSessionsPinned ? ' pinned' : ''");
-    // Sticky styling lives in chat.css so the block stays at top while scrolling.
-    expect(chatCss).toContain('.recent-sessions-section.pinned');
-    expect(chatCss).toContain('position: sticky;');
-  });
-
-  test('keeps the same frameless geometry before and after pinning', () => {
-    const baseBlock = chatCss.match(/\.recent-sessions-section \{[\s\S]*?\n\}/)?.[0] ?? '';
-    const pinnedBlock = chatCss.match(/\.recent-sessions-section\.pinned \{[\s\S]*?\n\}/)?.[0] ?? '';
-
-    expect(baseBlock).toContain('margin: 0 0 5px;');
-    expect(baseBlock).not.toContain('border:');
-    expect(baseBlock).not.toContain('box-shadow:');
-    expect(baseBlock).not.toContain('padding:');
-    expect(baseBlock).not.toContain('position: sticky;');
-    expect(pinnedBlock).toContain('position: sticky;');
-    expect(pinnedBlock).not.toContain('margin:');
-    expect(pinnedBlock).not.toContain('padding:');
-    expect(pinnedBlock).not.toContain('border:');
-    expect(pinnedBlock).toContain('box-shadow: 0 8px 18px rgb(0 0 0 / 16%);');
-    expect(chatCss).not.toContain('.recent-sessions-section.pinned .recent-sessions-list');
-  });
-
-  test('uses a vertical pin and gives pinned recent sessions one contained graphite surface', () => {
-    expect(mainTsx).toContain('className="codicon codicon-pinned" aria-hidden="true"');
-    expect(mainTsx).not.toContain('className="codicon codicon-pin" aria-hidden="true"');
-
-    const pinnedBlock = chatCss.match(/\.recent-sessions-section\.pinned \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(pinnedBlock).toContain('top: 4px;');
-    expect(pinnedBlock).toContain('background: color-mix(in srgb, var(--surface-panel) 88%, var(--surface-sidebar));');
-    expect(pinnedBlock).toContain('box-shadow: 0 8px 18px rgb(0 0 0 / 16%);');
-    expect(pinnedBlock).not.toContain('backdrop-filter');
-
-    const activePinBlock = chatCss.match(/\.recent-sessions-pin-btn\.active \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(activePinBlock).toContain('color: var(--accent-primary);');
-    expect(activePinBlock).toContain('background: transparent;');
+  test('recent sessions is always sticky at the top without any pin state', () => {
+    expect(mainTsx).not.toContain('recentSessionsPinned');
+    expect(mainTsx).not.toContain('recent-sessions-pin-btn');
+    const sectionBlock = chatCss.match(/\.recent-sessions-section \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(sectionBlock).toContain('position: sticky;');
+    expect(sectionBlock).toContain('top: 4px;');
+    expect(sectionBlock).toContain('z-index: 5;');
+    expect(chatCss).not.toContain('.recent-sessions-section.pinned');
+    expect(chatCss).not.toContain('.recent-sessions-pin-btn');
   });
 
   test('renders the pinned recent surface only above desktop chat with a collapsed session rail', () => {
     expect(mainTsx).toContain("import {ChatRecentSessionsSurface} from '../chat/ChatRecentSessionsSurface';");
     expect(mainTsx).toContain(
-      'const showPinnedRecentSessionsSurface = isWide && sidebarCollapsed && recentSessionsPinned && !archivedMode && !sessionSearchActive && recentSessionSections.length > 0;',
+      'const showPinnedRecentSessionsSurface = isWide && sidebarCollapsed && !archivedMode && !sessionSearchActive && recentSessionSections.length > 0;',
     );
     expect(mainTsx).toContain('showPinnedRecentSessionsSurface ? (');
-    expect(mainTsx).toContain('onUnpin={() => setRecentSessionsPinned(false)}');
+    expect(mainTsx).not.toContain('onUnpin');
     expect(mainTsx).toContain('sessionListDensity={sessionListDensity}');
     expect(mainTsx).toContain('{recentSessionSections.map(section => renderRecentProjectSessionSection(section, false))}');
     expect(mainTsx).toContain('</ChatRecentSessionsSurface>');

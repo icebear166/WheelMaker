@@ -129,7 +129,7 @@ describe('ChatPlanSurface', () => {
     expect(renderer!.root.findAllByProps({className: 'chat-plan-surface-list'})).toHaveLength(1);
   });
 
-  test('keeps pinned recent sessions expanded until the user collapses or unpins them', async () => {
+  test('keeps recent sessions expanded until the user collapses them', async () => {
     const projectRoot = path.join(__dirname, '..');
     const surfacePath = path.join(projectRoot, 'web', 'src', 'chat', 'ChatRecentSessionsSurface.tsx');
 
@@ -137,16 +137,14 @@ describe('ChatPlanSurface', () => {
     const {ChatRecentSessionsSurface} = require(surfacePath) as {
       ChatRecentSessionsSurface: React.ComponentType<{
         children: React.ReactNode;
-        onUnpin: () => void;
         sessionListDensity: 'relaxed' | 'compact';
       }>;
     };
-    const onUnpin = jest.fn();
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
 
     await ReactTestRenderer.act(() => {
       renderer = ReactTestRenderer.create(
-        <ChatRecentSessionsSurface onUnpin={onUnpin} sessionListDensity="compact">
+        <ChatRecentSessionsSurface sessionListDensity="compact">
           <div data-test-id="recent-row">Recent row</div>
         </ChatRecentSessionsSurface>,
       );
@@ -168,11 +166,6 @@ describe('ChatPlanSurface', () => {
       expand.props.onClick();
     });
 
-    const unpin = renderer!.root.findByProps({'aria-label': 'Unpin recent sessions'});
-    await ReactTestRenderer.act(() => {
-      unpin.props.onClick();
-    });
-
-    expect(onUnpin).toHaveBeenCalledTimes(1);
+    expect(renderer!.root.findAllByProps({className: 'chat-recent-sessions-surface-list'})).toHaveLength(1);
   });
 });

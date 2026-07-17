@@ -4,13 +4,11 @@ import {useChatEdgeSurfaceGeometry} from './layout/chatEdgeSurfaceGeometry';
 
 export type ChatRecentSessionsSurfaceProps = {
   children: ReactNode;
-  onUnpin: () => void;
   sessionListDensity: SessionListDensity;
 };
 
 export const ChatRecentSessionsSurface = React.memo(function ChatRecentSessionsSurface({
   children,
-  onUnpin,
   sessionListDensity,
 }: ChatRecentSessionsSurfaceProps) {
   const [collapsed, setCollapsed] = React.useState(false);
@@ -64,15 +62,6 @@ export const ChatRecentSessionsSurface = React.memo(function ChatRecentSessionsS
             <span className="codicon codicon-chevron-up" aria-hidden="true" />
           </button>
           <span className="chat-recent-sessions-surface-title">Recent Sessions</span>
-          <button
-            type="button"
-            className="chat-recent-sessions-surface-unpin"
-            onClick={onUnpin}
-            aria-label="Unpin recent sessions"
-            title="Unpin recent sessions"
-          >
-            <span className="codicon codicon-pinned" aria-hidden="true" />
-          </button>
         </div>
         <div className="chat-recent-sessions-surface-list">{children}</div>
       </div>
