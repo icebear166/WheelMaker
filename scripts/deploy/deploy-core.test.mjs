@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { access, cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, cp, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -118,6 +118,62 @@ test('Linux files contain Hub service plus one-shot updater timer', () => {
   assert.match(unitSection, /StartLimitIntervalSec=300/);
   assert.match(unitSection, /StartLimitBurst=5/);
   assert.doesNotMatch(serviceSection, /StartLimit/);
+  assert.match(
+    files['wheelmaker-hub.service'],
+    /^EnvironmentFile=\/home\/alice\/\.wheelmaker\/systemd\.env$/m,
+  );
+  assert.match(
+    files['wheelmaker-updater.service'],
+    /^EnvironmentFile=\/home\/alice\/\.wheelmaker\/systemd\.env$/m,
+  );
+});
+
+test('Linux runtime configuration preserves HOME and PATH without starting Hub early', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-linux-runtime-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const home = join(root, '.wheelmaker');
+  const calls = [];
+  const adapter = createRuntimeAdapter({
+    environment: {
+      HOME: '/home/alice',
+      PATH: '/home/alice/.local/bin:/usr/bin',
+    },
+    paths: {
+      bin: join(home, 'bin'),
+      deploy: join(home, 'deploy.mjs'),
+      home,
+      hub: join(home, 'bin', 'wheelmaker'),
+      node: '/usr/bin/node',
+      systemdEnv: join(home, 'systemd.env'),
+      uid: 501,
+      userHome: root,
+    },
+    platform: 'linux',
+    runner: async (command, args) => {
+      calls.push({ args, command });
+      if (command === 'loginctl') {
+        return { code: 0, stderr: '', stdout: 'Linger=yes\n' };
+      }
+      return { code: 0, stderr: '', stdout: '' };
+    },
+  });
+
+  await adapter.configureRuntime();
+
+  const environmentPath = join(home, 'systemd.env');
+  assert.equal(await exists(environmentPath), true);
+  assert.equal(
+    await readFile(environmentPath, 'utf8'),
+    'HOME="/home/alice"\nPATH="/home/alice/.local/bin:/usr/bin"\n',
+  );
+  assert.equal(
+    calls.some((call) => call.args.join(' ') === '--user start wheelmaker-hub.service'),
+    false,
+  );
+  assert.equal(
+    calls.some((call) => call.args.join(' ') === '--user start wheelmaker-updater.timer'),
+    true,
+  );
 });
 
 test('macOS files keep Hub alive and schedule updater at 03:00', () => {
@@ -228,6 +284,51 @@ test('runtime adapter exposes only manual start and stop actions', () => {
   assert.equal(typeof adapter.stop, 'function');
   assert.equal(adapter.restart, undefined);
   assert.equal(adapter.status, undefined);
+});
+
+test('runtime health requires the registered task and an actual Hub worker', async () => {
+  let windowsHealthScript = '';
+  const windows = createRuntimeAdapter({
+    paths: RUNTIME_PATHS,
+    platform: 'win32',
+    runner: async (_command, args) => {
+      windowsHealthScript = args.at(-1);
+      return { code: 0, stderr: '', stdout: '' };
+    },
+  });
+  assert.equal(await windows.isHubRunning(), true);
+  assert.match(windowsHealthScript, /--hub-worker/);
+  assert.match(windowsHealthScript, /ExecutablePath/);
+
+  for (const platform of ['linux', 'darwin']) {
+    const calls = [];
+    const adapter = createRuntimeAdapter({
+      paths: {
+        ...RUNTIME_PATHS,
+        hub: '/home/alice/.wheelmaker/bin/wheelmaker',
+      },
+      platform,
+      runner: async (command, args) => {
+        calls.push({ args, command });
+        return {
+          code: command === 'pgrep' ? 1 : 0,
+          stderr: '',
+          stdout: '',
+        };
+      },
+    });
+    assert.equal(await adapter.isHubRunning(), false, platform);
+    assert.equal(
+      calls.some(
+        (call) =>
+          call.command === 'pgrep' &&
+          call.args.includes('-f') &&
+          call.args.some((argument) => argument.includes('--hub-worker')),
+      ),
+      true,
+      platform,
+    );
+  }
 });
 
 test('core rejects retired runtime actions even when an adapter defines them', async () => {
@@ -471,6 +572,104 @@ test('normal deploy applies Hub and Web to the existing layout', async (t) => {
   assert.match(config.registry.token, /^[A-Za-z0-9_-]{43}$/);
 });
 
+test('normal deploy migrates legacy config and secures it without losing user fields', async (t) => {
+  const fixture = await installFixture(t);
+  const configPath = join(fixture.home, 'config.json');
+  await mkdir(fixture.home, { recursive: true });
+  await writeFile(configPath, JSON.stringify({
+    custom: { keep: true },
+    monitor: { enabled: true },
+    projects: [{ name: 'Existing', path: 'D:\\Existing' }],
+    registry: {
+      hubId: 'existing-hub',
+      listen: false,
+      token: 'wheelmaker-local-token',
+    },
+  }));
+  const secured = [];
+  fixture.deps.secureConfigFile = async (path) => secured.push(path);
+
+  await runCore([], fixture.deps);
+
+  const config = JSON.parse(await readFile(configPath, 'utf8'));
+  assert.equal('monitor' in config, false);
+  assert.deepEqual(config.custom, { keep: true });
+  assert.deepEqual(config.projects, [{ name: 'Existing', path: 'D:\\Existing' }]);
+  assert.equal(config.registry.hubId, 'existing-hub');
+  assert.equal(config.registry.listen, false);
+  assert.notEqual(config.registry.token, 'wheelmaker-local-token');
+  assert.match(config.registry.token, /^[A-Za-z0-9_-]{43}$/);
+  assert.deepEqual(secured, [configPath]);
+});
+
+test('normal Linux deploy checks runtime prerequisites before staging files', async (t) => {
+  const fixture = await installFixture(t, { platform: 'linux' });
+  fixture.deps.runtime.checkPrerequisites = async () => {
+    fixture.events.push('prerequisites');
+    throw new Error('linger is disabled');
+  };
+
+  await assert.rejects(() => runCore([], fixture.deps), /linger is disabled/);
+
+  assert.deepEqual(fixture.events, ['prerequisites']);
+  assert.equal(await exists(join(fixture.home, 'staging', 'lock.json')), false);
+});
+
+test('Windows package apply retries a temporarily locked Hub binary', async (t) => {
+  const fixture = await installFixture(t);
+  const target = join(fixture.home, 'bin', 'wheelmaker.exe');
+  await mkdir(join(fixture.home, 'bin'), { recursive: true });
+  await writeFile(target, 'old-hub');
+  let removeAttempts = 0;
+  const delays = [];
+  fixture.deps.fileOperations = {
+    async remove(path, options) {
+      if (path === target) {
+        removeAttempts += 1;
+        if (removeAttempts < 3) {
+          const error = new Error('binary is still locked');
+          error.code = 'EPERM';
+          throw error;
+        }
+      }
+      return rm(path, options);
+    },
+    rename,
+  };
+  fixture.deps.replaceSleep = async (milliseconds) => delays.push(milliseconds);
+
+  await runCore(['update'], fixture.deps);
+
+  assert.equal(removeAttempts, 3);
+  assert.deepEqual(delays, [300, 300]);
+  assert.equal(await readFile(target, 'utf8'), 'new-hub');
+});
+
+test('Unix package apply atomically renames the Hub without deleting its target first', async (t) => {
+  const fixture = await installFixture(t, { platform: 'linux' });
+  const target = join(fixture.home, 'bin', 'wheelmaker');
+  await mkdir(join(fixture.home, 'bin'), { recursive: true });
+  await writeFile(target, 'old-hub');
+  let targetRemoveCalls = 0;
+  let targetRenameCalls = 0;
+  fixture.deps.fileOperations = {
+    async remove(path, options) {
+      if (path === target) targetRemoveCalls += 1;
+      return rm(path, options);
+    },
+    async rename(source, destination) {
+      if (destination === target) targetRenameCalls += 1;
+      return rename(source, destination);
+    },
+  };
+
+  await runCore(['update'], fixture.deps);
+
+  assert.equal(targetRemoveCalls, 0);
+  assert.equal(targetRenameCalls, 1);
+  assert.equal(await readFile(target, 'utf8'), 'new-hub');
+});
+
 test('Desktop update follows carried stable pointer', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-desktop-update-'));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -638,7 +837,15 @@ test('Windows legacy migration elevates scheduled task and service removal', () 
   );
   assert.match(elevatedBlock, /Unregister-ScheduledTask/);
   assert.match(elevatedBlock, /Get-Service/);
+  assert.match(elevatedBlock, /Get-CimInstance Win32_Process/);
+  assert.match(elevatedBlock, /CommandLine/);
+  assert.match(elevatedBlock, /Stop-Process/);
+  assert.match(elevatedBlock, /AddSeconds\(10\)/);
+  assert.match(elevatedBlock, /Timed out stopping WheelMaker runtime processes/);
   assert.match(script, /sc\.exe delete/);
+  assert.match(elevatedBlock, /for \(\$i = 0; \$i -lt 30; \$i\+\+\)/);
+  assert.match(elevatedBlock, /Timed out deleting service \$name/);
+  assert.match(script, /\$existingProcesses = @\(/);
   assert.match(script, /-Verb RunAs/);
 });
 
@@ -647,8 +854,9 @@ test('Windows legacy migration accepts a failed elevated exit when no registrati
   const exitCheck = script.indexOf('if ($process.ExitCode -ne 0)');
   const remainingTasks = script.indexOf('$remainingTasks = @(', exitCheck);
   const remainingServices = script.indexOf('$remainingServices = @(', exitCheck);
+  const remainingProcesses = script.indexOf('$remainingProcesses = @(', exitCheck);
   const remainingCheck = script.indexOf(
-    'if ($remainingTasks.Count -gt 0 -or $remainingServices.Count -gt 0)',
+    'if ($remainingTasks.Count -gt 0 -or $remainingServices.Count -gt 0 -or $remainingProcesses.Count -gt 0)',
     exitCheck,
   );
   const failure = script.indexOf('throw "legacy registration removal incomplete', exitCheck);
@@ -664,7 +872,8 @@ test('Windows legacy migration accepts a failed elevated exit when no registrati
   );
   assert.ok(remainingTasks > exitCheck);
   assert.ok(remainingServices > remainingTasks);
-  assert.ok(remainingCheck > remainingServices);
+  assert.ok(remainingProcesses > remainingServices);
+  assert.ok(remainingCheck > remainingProcesses);
   assert.ok(failure > remainingCheck);
   assert.match(script, /wheelmaker-migrate-uninstall-/);
   assert.match(script, /Get-Content -Raw -LiteralPath \$diagnosticPath/);
@@ -781,20 +990,49 @@ test('successful internal update writes release schema v2 without registration c
   assert.equal(await exists(join(fixture.home, 'staging', 'web-job')), false);
 });
 
-test('Linux internal update rewrites user units without rewriting wrappers', async (t) => {
+test('Linux legacy migration ignores missing units but propagates real systemctl failures', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-linux-migration-errors-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const paths = { ...RUNTIME_PATHS, userHome: root };
+
+  await createLegacyMigrationAdapter({
+    paths,
+    platform: 'linux',
+    runner: async (_command, args) => ({
+      code: args.includes('daemon-reload') ? 0 : 1,
+      stderr: 'Unit wheelmaker-hub.service does not exist.',
+      stdout: '',
+    }),
+  }).removeRuntime();
+
+  await assert.rejects(
+    () => createLegacyMigrationAdapter({
+      paths,
+      platform: 'linux',
+      runner: async () => ({
+        code: 1,
+        stderr: 'Failed to connect to bus: Permission denied',
+        stdout: '',
+      }),
+    }).removeRuntime(),
+    /Permission denied/,
+  );
+});
+
+test('Linux internal update does not rewrite user units or wrappers', async (t) => {
   const fixture = await installFixture(t, { platform: 'linux' });
 
   await runCore(['update'], fixture.deps);
 
-  assert.equal(fixture.events.includes('configure-runtime'), true);
+  assert.equal(fixture.events.includes('configure-runtime'), false);
   assert.equal(fixture.events.includes('write-wrappers'), false);
   assert.deepEqual(
     fixture.events.filter((event) =>
       ['stop', 'configure-runtime', 'start'].includes(event),
     ),
-    ['stop', 'configure-runtime', 'start'],
+    ['stop', 'start'],
   );
-  assert.equal(fixture.messages.includes('Configuring runtime'), true);
+  assert.equal(fixture.messages.includes('Configuring runtime'), false);
 });
 
 test('Hub health timeout persists failure and removes the update lock', async (t) => {

@@ -1634,7 +1634,7 @@ func TestUpdaterTriggerSpecUsesKnownCurrentUserRuntime(t *testing.T) {
 		t.Fatalf("windows spec=%+v", windows)
 	}
 	linux := updaterTriggerSpec("linux", "501")
-	if linux.Name != "systemctl" || !reflect.DeepEqual(linux.Args, []string{"--user", "start", "wheelmaker-updater.service"}) {
+	if linux.Name != "systemctl" || !reflect.DeepEqual(linux.Args, []string{"--user", "--no-block", "start", "wheelmaker-updater.service"}) {
 		t.Fatalf("linux spec=%+v", linux)
 	}
 	darwin := updaterTriggerSpec("darwin", "501")

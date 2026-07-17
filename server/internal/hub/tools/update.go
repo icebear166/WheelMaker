@@ -484,7 +484,7 @@ func updaterTriggerSpec(goos string, uid string) updateTriggerCommand {
 			Args: []string{"-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "Start-ScheduledTask -TaskName 'WheelMakerUpdater' -ErrorAction Stop"},
 		}
 	case "linux":
-		return updateTriggerCommand{Name: "systemctl", Args: []string{"--user", "start", "wheelmaker-updater.service"}}
+		return updateTriggerCommand{Name: "systemctl", Args: []string{"--user", "--no-block", "start", "wheelmaker-updater.service"}}
 	case "darwin":
 		return updateTriggerCommand{Name: "launchctl", Args: []string{"kickstart", "gui/" + uid + "/com.wheelmaker.updater"}}
 	default:

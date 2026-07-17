@@ -615,6 +615,7 @@ export function deploymentRuntimePaths({
     home,
     hub: join(bin, platform === 'win32' ? 'wheelmaker.exe' : 'wheelmaker'),
     node: nodePath,
+    systemdEnv: join(home, 'systemd.env'),
     uid,
     userHome,
   };
@@ -647,6 +648,8 @@ Register-ScheduledTask -TaskName 'WheelMakerUpdater' -Action $updaterAction -Tri
 }
 
 export function linuxRuntimeFiles(paths) {
+  const environmentFile =
+    paths.systemdEnv ?? `${paths.home.replace(/\/$/, '')}/systemd.env`;
   return {
     'wheelmaker-hub.service': `[Unit]
 Description=WheelMaker Hub
@@ -656,6 +659,7 @@ StartLimitBurst=5
 [Service]
 Type=simple
 WorkingDirectory=${paths.home}
+EnvironmentFile=${environmentFile}
 ExecStart=${systemdQuote(paths.hub)} -d
 Restart=always
 RestartSec=5
@@ -670,6 +674,7 @@ After=network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory=${paths.home}
+EnvironmentFile=${environmentFile}
 ExecStart=${systemdQuote(paths.node)} ${systemdQuote(paths.deploy)} update
 `,
     'wheelmaker-updater.timer': `[Unit]
@@ -839,9 +844,101 @@ async function runProcess(
 export function windowsLegacyMigrationScript(paths) {
   return `$ErrorActionPreference = 'Stop'
 $runtimeNames = @('WheelMaker', 'WheelMakerUpdater', 'WheelMakerMonitor')
+$legacyBinaries = @(
+  'wheelmaker.exe',
+  'wheelmaker-updater.exe',
+  'wheelmaker-deploy.exe',
+  'wheelmaker-monitor.exe'
+)
+$targetBinRoot = ([System.IO.Path]::GetFullPath(${psQuote(paths.bin)}).TrimEnd('\\') + '\\').ToLowerInvariant()
 
 $registrationRemoval = @'
 $ErrorActionPreference = 'Stop'
+$binRoot = ([System.IO.Path]::GetFullPath(${psQuote(paths.bin)}).TrimEnd('\\') + '\\').ToLowerInvariant()
+$legacyBinaries = @(
+  'wheelmaker.exe',
+  'wheelmaker-updater.exe',
+  'wheelmaker-deploy.exe',
+  'wheelmaker-monitor.exe'
+)
+
+function Test-WheelMakerLegacyProcess($process) {
+  $path = [string]$process.ExecutablePath
+  if (-not [string]::IsNullOrWhiteSpace($path)) {
+    $pathLower = $path.ToLowerInvariant()
+    if (
+      $pathLower.StartsWith($binRoot) -and
+      $legacyBinaries -contains [System.IO.Path]::GetFileName($pathLower)
+    ) {
+      return $true
+    }
+  }
+  $commandLine = [string]$process.CommandLine
+  if ([string]::IsNullOrWhiteSpace($commandLine)) {
+    return $false
+  }
+  $commandLineLower = $commandLine.ToLowerInvariant()
+  foreach ($binary in $legacyBinaries) {
+    if ($commandLineLower.Contains($binRoot + $binary)) {
+      return $true
+    }
+  }
+  return $false
+}
+
+function Get-WheelMakerLegacyProcesses {
+  return @(Get-CimInstance Win32_Process | Where-Object {
+    Test-WheelMakerLegacyProcess $_
+  })
+}
+
+function Stop-WheelMakerLegacyProcesses {
+  $stopErrors = @()
+  foreach ($process in @(Get-WheelMakerLegacyProcesses)) {
+    try {
+      Stop-Process -Id $process.ProcessId -Force -ErrorAction Stop
+    } catch {
+      if ($null -ne (Get-Process -Id $process.ProcessId -ErrorAction SilentlyContinue)) {
+        $stopErrors += ("PID {0} {1}: {2}" -f $process.ProcessId, $process.Name, $_.Exception.Message)
+      }
+    }
+  }
+  $deadline = (Get-Date).AddSeconds(10)
+  do {
+    $remaining = @(Get-WheelMakerLegacyProcesses)
+    if ($remaining.Count -eq 0) {
+      return
+    }
+    Start-Sleep -Milliseconds 200
+  } while ((Get-Date) -lt $deadline)
+  $remainingText = ($remaining | Select-Object ProcessId,Name,ExecutablePath,CommandLine | Format-List | Out-String).Trim()
+  if ($stopErrors.Count -gt 0) {
+    $remainingText += [Environment]::NewLine + 'Stop errors:' + [Environment]::NewLine + ($stopErrors -join [Environment]::NewLine)
+  }
+  throw ("Timed out stopping WheelMaker runtime processes:" + [Environment]::NewLine + $remainingText)
+}
+
+function Remove-WheelMakerLegacyService([string]$name) {
+  $service = Get-Service -Name $name -ErrorAction SilentlyContinue
+  if ($null -eq $service) {
+    return
+  }
+  if ($service.Status -ne 'Stopped') {
+    Stop-Service -Name $name -Force -ErrorAction Stop
+  }
+  & sc.exe delete $name | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    throw "failed to delete service $name"
+  }
+  for ($i = 0; $i -lt 30; $i++) {
+    Start-Sleep -Milliseconds 200
+    if ($null -eq (Get-Service -Name $name -ErrorAction SilentlyContinue)) {
+      return
+    }
+  }
+  throw "Timed out deleting service $name"
+}
+
 try {
   foreach ($name in @('WheelMaker', 'WheelMakerUpdater', 'WheelMakerMonitor')) {
     $task = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
@@ -849,17 +946,9 @@ try {
       Stop-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
       Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction Stop
     }
-    $service = Get-Service -Name $name -ErrorAction SilentlyContinue
-    if ($null -ne $service) {
-      if ($service.Status -ne 'Stopped') {
-        Stop-Service -Name $name -Force -ErrorAction Stop
-      }
-      & sc.exe delete $name | Out-Null
-      if ($LASTEXITCODE -ne 0) {
-        throw "failed to delete service $name"
-      }
-    }
+    Remove-WheelMakerLegacyService $name
   }
+  Stop-WheelMakerLegacyProcesses
 } catch {
   if (-not [string]::IsNullOrWhiteSpace($env:WHEELMAKER_MIGRATION_DIAGNOSTIC)) {
     try {
@@ -879,7 +968,10 @@ $existingTasks = @($runtimeNames | ForEach-Object {
   Get-ScheduledTask -TaskName $_ -ErrorAction SilentlyContinue
 })
 $existingServices = @(Get-Service -Name $runtimeNames -ErrorAction SilentlyContinue)
-if ($existingTasks.Count -gt 0 -or $existingServices.Count -gt 0) {
+$existingProcesses = @(Get-CimInstance Win32_Process | Where-Object {
+  $legacyBinaries -contains ([string]$_.Name).ToLowerInvariant()
+})
+if ($existingTasks.Count -gt 0 -or $existingServices.Count -gt 0 -or $existingProcesses.Count -gt 0) {
   $diagnosticName = "wheelmaker-migrate-uninstall-$([Guid]::NewGuid().ToString('N')).log"
   $diagnosticPath = Join-Path $env:TEMP $diagnosticName
   $registrationError = $null
@@ -917,10 +1009,27 @@ if ($existingTasks.Count -gt 0 -or $existingServices.Count -gt 0) {
     Get-ScheduledTask -TaskName $_ -ErrorAction SilentlyContinue
   })
   $remainingServices = @(Get-Service -Name $runtimeNames -ErrorAction SilentlyContinue)
-  if ($remainingTasks.Count -gt 0 -or $remainingServices.Count -gt 0) {
+  $remainingProcesses = @(Get-CimInstance Win32_Process | Where-Object {
+    $path = [string]$_.ExecutablePath
+    $commandLine = [string]$_.CommandLine
+    $pathMatches = -not [string]::IsNullOrWhiteSpace($path) -and
+      $path.ToLowerInvariant().StartsWith($targetBinRoot) -and
+      $legacyBinaries -contains [System.IO.Path]::GetFileName($path).ToLowerInvariant()
+    $commandMatches = $false
+    if (-not [string]::IsNullOrWhiteSpace($commandLine)) {
+      foreach ($binary in $legacyBinaries) {
+        if ($commandLine.ToLowerInvariant().Contains($targetBinRoot + $binary)) {
+          $commandMatches = $true
+        }
+      }
+    }
+    $pathMatches -or $commandMatches
+  })
+  if ($remainingTasks.Count -gt 0 -or $remainingServices.Count -gt 0 -or $remainingProcesses.Count -gt 0) {
     $remaining = @(
       $remainingTasks | ForEach-Object { "task:$($_.TaskPath)$($_.TaskName)" }
       $remainingServices | ForEach-Object { "service:$($_.Name)" }
+      $remainingProcesses | ForEach-Object { "process:$($_.ProcessId):$($_.Name)" }
     ) -join ', '
     $detail = if ([string]::IsNullOrWhiteSpace([string]$registrationError)) {
       ''
@@ -936,23 +1045,27 @@ $runKey = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'
 foreach ($name in $runtimeNames) {
   Remove-ItemProperty -Path $runKey -Name $name -ErrorAction SilentlyContinue
 }
-
-$binRoot = ([System.IO.Path]::GetFullPath(${psQuote(paths.bin)}).TrimEnd('\\') + '\\').ToLowerInvariant()
-$legacyBinaries = @(
-  'wheelmaker.exe',
-  'wheelmaker-updater.exe',
-  'wheelmaker-deploy.exe',
-  'wheelmaker-monitor.exe'
-)
-Get-CimInstance Win32_Process | Where-Object {
-  $path = [string]$_.ExecutablePath
-  -not [string]::IsNullOrWhiteSpace($path) -and
-  $path.ToLowerInvariant().StartsWith($binRoot) -and
-  $legacyBinaries -contains [System.IO.Path]::GetFileName($path).ToLowerInvariant()
-} | ForEach-Object {
-  Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop
-}
 `;
+}
+
+function missingRuntimeRegistration(result) {
+  if ((result?.code ?? 0) === 0) return false;
+  const output = `${result?.stdout ?? ''}\n${result?.stderr ?? ''}`.toLowerCase();
+  return [
+    'could not be found',
+    'does not exist',
+    'no such',
+    'not found',
+    'not loaded',
+  ].some((marker) => output.includes(marker));
+}
+
+function assertRuntimeRemovalResult(command, args, result) {
+  if ((result?.code ?? 0) === 0 || missingRuntimeRegistration(result)) return;
+  const detail = String(result?.stderr || result?.stdout || '').trim();
+  throw new Error(
+    `${command} ${args.join(' ')} failed${detail ? `: ${detail}` : ''}`,
+  );
 }
 
 export function createLegacyMigrationAdapter({
@@ -984,16 +1097,16 @@ export function createLegacyMigrationAdapter({
           'wheelmaker-monitor.service',
         ];
         for (const unit of units) {
-          await runner('systemctl', ['--user', 'disable', '--now', unit], {
+          const args = ['--user', 'disable', '--now', unit];
+          const result = await runner('systemctl', args, {
             allowFailure: true,
           });
+          assertRuntimeRemovalResult('systemctl', args, result);
           await rm(join(paths.userHome, '.config', 'systemd', 'user', unit), {
             force: true,
           });
         }
-        await runner('systemctl', ['--user', 'daemon-reload'], {
-          allowFailure: true,
-        });
+        await runner('systemctl', ['--user', 'daemon-reload']);
         return;
       }
       if (platform === 'darwin') {
@@ -1004,9 +1117,11 @@ export function createLegacyMigrationAdapter({
         ];
         const domain = `gui/${paths.uid}`;
         for (const label of labels) {
-          await runner('launchctl', ['bootout', `${domain}/${label}`], {
+          const args = ['bootout', `${domain}/${label}`];
+          const result = await runner('launchctl', args, {
             allowFailure: true,
           });
+          assertRuntimeRemovalResult('launchctl', args, result);
           await rm(join(paths.userHome, 'Library', 'LaunchAgents', `${label}.plist`), {
             force: true,
           });
@@ -1115,7 +1230,11 @@ async function executeDesktopUpdate(deps) {
     if (sha256Bytes(bytes) !== pointer.sha256) {
       throw new Error('Desktop executable SHA-256 verification failed');
     }
-    await rename(temporaryPath, targetPath);
+    await replaceInstalledFile(temporaryPath, targetPath, {
+      fileOperations: deps.fileOperations,
+      platform,
+      sleep: deps.replaceSleep,
+    });
   } finally {
     await rm(temporaryPath, { force: true });
   }
@@ -1154,7 +1273,29 @@ async function checkLinuxPrerequisites(runner) {
   }
 }
 
+function regexEscape(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function windowsHubHealthScript(paths) {
+  return `$task = Get-ScheduledTask -TaskName 'WheelMaker' -ErrorAction SilentlyContinue
+$hub = ${psQuote(paths.hub)}.ToLowerInvariant()
+$workers = @(Get-CimInstance Win32_Process | Where-Object {
+  $path = [string]$_.ExecutablePath
+  $commandLine = [string]$_.CommandLine
+  -not [string]::IsNullOrWhiteSpace($path) -and
+  $path.ToLowerInvariant() -eq $hub -and
+  $commandLine -match '(^|\s)--hub-worker(\s|$)'
+})
+if ($null -ne $task -and $task.State -eq 'Running' -and $workers.Count -gt 0) {
+  exit 0
+}
+exit 1
+`;
+}
+
 export function createRuntimeAdapter({
+  environment = process.env,
   paths,
   platform = process.platform,
   runner = runProcess,
@@ -1178,7 +1319,14 @@ export function createRuntimeAdapter({
       return;
     }
     if (platform === 'linux') {
-      await checkLinuxPrerequisites(runner);
+      const environmentFile = paths.systemdEnv ?? join(paths.home, 'systemd.env');
+      const environmentBody = [
+        `HOME=${JSON.stringify(environment.HOME ?? paths.userHome)}`,
+        `PATH=${JSON.stringify(environment.PATH ?? '')}`,
+        '',
+      ].join('\n');
+      await atomicWrite(environmentFile, Buffer.from(environmentBody), 0o600);
+      await chmod(environmentFile, 0o600);
       const unitDirectory = join(paths.userHome, '.config', 'systemd', 'user');
       for (const [name, body] of Object.entries(linuxRuntimeFiles(paths))) {
         await atomicWrite(join(unitDirectory, name), Buffer.from(body), 0o644);
@@ -1186,8 +1334,8 @@ export function createRuntimeAdapter({
       await runner('systemctl', ['--user', 'daemon-reload']);
       for (const unit of ['wheelmaker-hub.service', 'wheelmaker-updater.timer']) {
         await runner('systemctl', ['--user', 'enable', unit]);
-        await runner('systemctl', ['--user', 'start', unit]);
       }
+      await runner('systemctl', ['--user', 'start', 'wheelmaker-updater.timer']);
       return;
     }
     if (platform === 'darwin') {
@@ -1256,6 +1404,8 @@ export function createRuntimeAdapter({
   }
 
   return {
+    checkPrerequisites: () =>
+      platform === 'linux' ? checkLinuxPrerequisites(runner) : Promise.resolve(),
     configureRuntime,
     isHubRunning: async () => {
       if (platform === 'win32') {
@@ -1264,26 +1414,38 @@ export function createRuntimeAdapter({
           [
             '-NoProfile',
             '-Command',
-            "if ((Get-ScheduledTask -TaskName 'WheelMaker' -ErrorAction SilentlyContinue).State -eq 'Running') { exit 0 } else { exit 1 }",
+            windowsHubHealthScript(paths),
           ],
           { allowFailure: true },
         );
         return result.code === 0;
       }
       if (platform === 'linux') {
-        const result = await runner(
+        const registration = await runner(
           'systemctl',
           ['--user', 'is-active', '--quiet', 'wheelmaker-hub.service'],
           { allowFailure: true },
         );
-        return result.code === 0;
+        if (registration.code !== 0) return false;
+        const worker = await runner(
+          'pgrep',
+          ['-f', `${regexEscape(paths.hub)}.*--hub-worker`],
+          { allowFailure: true },
+        );
+        return worker.code === 0;
       }
-      const result = await runner(
+      const registration = await runner(
         'launchctl',
         ['print', `gui/${paths.uid}/com.wheelmaker.hub`],
         { allowFailure: true },
       );
-      return result.code === 0;
+      if (registration.code !== 0) return false;
+      const worker = await runner(
+        'pgrep',
+        ['-f', `${regexEscape(paths.hub)}.*--hub-worker`],
+        { allowFailure: true },
+      );
+      return worker.code === 0;
     },
     isUpdaterRunning: async () => {
       if (platform === 'win32') {
@@ -1336,31 +1498,136 @@ function resolveRuntime(deps) {
   return runtimeFactory({ paths, platform, runner: deps.runner });
 }
 
-async function ensureRuntimeConfig(home) {
-  const configPath = join(home, 'config.json');
-  if (await readJsonIfPresent(configPath)) {
-    return false;
+function windowsConfigSecurityScript(path) {
+  return `$ErrorActionPreference = 'Stop'
+$acl = New-Object System.Security.AccessControl.FileSecurity
+$acl.SetAccessRuleProtection($true, $false)
+$currentSid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+$systemSid = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-18')
+foreach ($sid in @($currentSid, $systemSid)) {
+  $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+    $sid,
+    [System.Security.AccessControl.FileSystemRights]::FullControl,
+    [System.Security.AccessControl.AccessControlType]::Allow
+  )
+  $acl.AddAccessRule($rule)
+}
+[System.IO.File]::SetAccessControl(${psQuote(path)}, $acl)
+`;
+}
+
+async function secureRuntimeConfig(path, platform, runner = runProcess) {
+  if (platform !== 'win32') {
+    await chmod(path, 0o600);
+    return;
   }
-  const config = {
-    projects: [],
-    registry: {
-      listen: true,
-      port: 9630,
-      server: '127.0.0.1',
-      token: randomBytes(32).toString('base64url'),
-      hubId: 'local-hub',
-    },
-    log: { level: 'warn' },
-  };
-  await atomicWrite(configPath, jsonBytes(config), 0o600);
-  return true;
+  await runner('powershell', [
+    '-NoProfile',
+    '-NonInteractive',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-Command',
+    windowsConfigSecurityScript(path),
+  ]);
+}
+
+async function ensureRuntimeConfig(home, deps, platform) {
+  const configPath = join(home, 'config.json');
+  let config = await readJsonIfPresent(configPath);
+  let changed = false;
+  if (config === null) {
+    config = {
+      projects: [],
+      registry: {
+        listen: true,
+        port: 9630,
+        server: '127.0.0.1',
+        token: randomBytes(32).toString('base64url'),
+        hubId: 'local-hub',
+      },
+      log: { level: 'warn' },
+    };
+    changed = true;
+  } else {
+    if (typeof config !== 'object' || Array.isArray(config)) {
+      throw new Error('config.json root must be an object');
+    }
+    if (Object.hasOwn(config, 'monitor')) {
+      delete config.monitor;
+      changed = true;
+    }
+    if (!Object.hasOwn(config, 'registry')) {
+      config.registry = {};
+      changed = true;
+    }
+    if (
+      typeof config.registry !== 'object' ||
+      config.registry === null ||
+      Array.isArray(config.registry)
+    ) {
+      throw new Error('config.json registry must be an object');
+    }
+    const token = config.registry.token;
+    if (token !== undefined && typeof token !== 'string') {
+      throw new Error('config.json registry.token must be a string');
+    }
+    if (!token?.trim() || token === 'wheelmaker-local-token') {
+      config.registry.token = randomBytes(32).toString('base64url');
+      changed = true;
+    }
+  }
+  if (changed) {
+    await atomicWrite(configPath, jsonBytes(config), 0o600);
+  }
+  const secureConfigFile =
+    deps.secureConfigFile ??
+    ((path) => secureRuntimeConfig(path, platform, deps.runner));
+  await secureConfigFile(configPath);
+  return changed;
+}
+
+function transientWindowsFileError(error) {
+  return ['EACCES', 'EBUSY', 'EPERM'].includes(error?.code);
+}
+
+async function replaceInstalledFile(
+  temporaryPath,
+  targetPath,
+  {
+    fileOperations = {},
+    platform = process.platform,
+    sleep = (milliseconds) =>
+      new Promise((resolveSleep) => setTimeout(resolveSleep, milliseconds)),
+  } = {},
+) {
+  const removeFile = fileOperations.remove ?? rm;
+  const renameFile = fileOperations.rename ?? rename;
+  if (platform !== 'win32') {
+    await renameFile(temporaryPath, targetPath);
+    return;
+  }
+  let lastError;
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    try {
+      await removeFile(targetPath, { force: true });
+      await renameFile(temporaryPath, targetPath);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (!transientWindowsFileError(error) || attempt === 9) break;
+      await sleep(300);
+    }
+  }
+  throw lastError;
 }
 
 async function applyStagedPackage({
   extractionDirectory,
+  fileOperations,
   home,
   jobId,
   platform,
+  replaceSleep,
 }) {
   const binaryName = platform === 'win32' ? 'wheelmaker.exe' : 'wheelmaker';
   const sourceBinary = join(extractionDirectory, 'hub', binaryName);
@@ -1381,8 +1648,11 @@ async function applyStagedPackage({
     await cp(sourceBinary, temporaryBinary);
     await chmod(temporaryBinary, 0o755);
     await cp(sourceWeb, temporaryWeb, { recursive: true });
-    await rm(targetBinary, { force: true });
-    await rename(temporaryBinary, targetBinary);
+    await replaceInstalledFile(temporaryBinary, targetBinary, {
+      fileOperations,
+      platform,
+      sleep: replaceSleep,
+    });
     await rm(targetWeb, { recursive: true, force: true });
     await rename(temporaryWeb, targetWeb);
   } finally {
@@ -1460,6 +1730,9 @@ async function executeDeployment(internalUpdate, deps, runtime) {
   }
   const home = resolve(deps.installDirectory);
   const platform = deps.platform ?? process.platform;
+  if (!internalUpdate && typeof runtime.checkPrerequisites === 'function') {
+    await runtime.checkPrerequisites();
+  }
   const stagingDirectory = join(home, 'staging');
   const { jobId, startedAt } = await resolveUpdateJob({
     deps,
@@ -1511,16 +1784,18 @@ async function executeDeployment(internalUpdate, deps, runtime) {
         deps.platformKey ?? currentPlatformKey(platform, deps.arch ?? process.arch),
     });
     if (phase !== 'verifying') await setState('verifying');
-    if (!internalUpdate) await ensureRuntimeConfig(home);
+    if (!internalUpdate) await ensureRuntimeConfig(home, deps, platform);
 
     await setState('applying');
     await runtime.stop();
     runtimeStopped = true;
     await applyStagedPackage({
       extractionDirectory: staged.extractionDirectory,
+      fileOperations: deps.fileOperations,
       home,
       jobId,
       platform,
+      replaceSleep: deps.replaceSleep,
     });
     await removeRetiredLifecycleWrappers(home);
     await writeInstalledRelease(
@@ -1529,7 +1804,7 @@ async function executeDeployment(internalUpdate, deps, runtime) {
       staged.manifestSha256,
       normalizeTime(now()),
     );
-    if (!internalUpdate || platform === 'linux') {
+    if (!internalUpdate) {
       deps.reportStatus?.('Configuring runtime');
       await runtime.configureRuntime();
     }
