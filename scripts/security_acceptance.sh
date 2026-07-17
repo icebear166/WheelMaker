@@ -98,8 +98,6 @@ node --test "$repo_root"/scripts/release/*.test.mjs "$repo_root"/scripts/deploy/
 
 gate 'Publish and deployment script tests'
 for script_test in \
-  scripts/test_deploy_bat.ps1 \
-  scripts/test_deploy_sh.ps1 \
   scripts/test_android_project_ps1.ps1 \
   scripts/test_android_release_signing.ps1 \
   scripts/test_security_hooks.ps1 \

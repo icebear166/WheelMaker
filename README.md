@@ -51,17 +51,7 @@ The target machine does not need the WheelMaker source tree, Git, Go, npm, or a 
 sudo loginctl enable-linger "$USER"
 ```
 
-For the one-time migration from the old source deployment, run the wrapper from the source checkout. It copies the lightweight launcher into `~/.wheelmaker`, removes old services/programs while preserving user data, and installs the current stable release:
-
-```bat
-deploy.bat
-```
-
-```bash
-bash deploy.sh
-```
-
-For a new installation, place the public `deploy.mjs` at `~/.wheelmaker/deploy.mjs` and run `node ~/.wheelmaker/deploy.mjs`. The launcher downloads `stable.json`, refreshes itself/core from the public release repository, and verifies the SHA-256 chain from stable to the manifest and platform archive before installation.
+For either a new installation or a one-time migration from the old source deployment, copy the command for your platform from the public [wheelmaker-release README](https://github.com/swm8023/wheelmaker-release#install-or-migrate). It can run from any directory: it downloads the launcher to `~/.wheelmaker`, removes legacy services/programs when present while preserving user data, and installs the current stable release. No WheelMaker source checkout is required.
 
 Every normal deploy replaces Hub and Web together. The resulting layout is:
 
@@ -84,7 +74,7 @@ Normal deployment registers only current-user runtimes and does not require admi
 - macOS LaunchAgents: `com.wheelmaker.hub` and `com.wheelmaker.updater` at 03:00.
 - Linux systemd user units: `wheelmaker-hub.service` plus `wheelmaker-updater.timer` at 03:00.
 
-The migration requests UAC on Windows only if legacy Windows Services actually exist. It also removes old tasks/HKCU Run values, updater/deploy/monitor executables, and `build/bootstrap`; it preserves `config.json`, databases, logs, Desktop, and other user data.
+The migration requests UAC on Windows only if legacy Windows Services actually exist. It also removes old tasks/HKCU Run values, updater/deploy/monitor executables, and the old `~/.wheelmaker/build` directory; it preserves `config.json`, databases, logs, Desktop, and other user data.
 
 `release.json` schema v2 records `version`, `publishedAt`, `sourceSha`, `manifestSha256`, and `installedAt`. App version reporting reads this file and public stable metadata; it does not infer the installed version from Git.
 
@@ -603,7 +593,7 @@ Release and script overview:
 - `publish-release-action.bat` — verify the current clean commit is pushed, then interactively trigger the manual Action with the source SHA, Desktop choice, and Android choice.
 - `node scripts/release.mjs [--with-desktop] [--with-android] [--publish]` — non-interactive equivalent; without `--publish` it builds the next public version locally.
 - `.github/workflows/publish-release.yml` — manual `workflow_dispatch` fallback with a source `ref`, optional Desktop, and optional Android; Android setup is skipped when unused, Web builds once, and Hub binaries cross-compile for Windows amd64, Linux amd64, and macOS arm64.
-- Source-root `deploy.bat` / `deploy.sh` — one-time legacy migration followed by stable deployment.
+- Public `wheelmaker-release` README command — download the launcher and perform a new install or one-time legacy migration from any directory.
 - Installed `~/.wheelmaker/deploy.bat` / `deploy.sh` — platform wrapper for a normal `node deploy.mjs`; the Windows wrapper pauses when it finishes.
 - Installed `~/.wheelmaker/update_exe.bat` — independently update `WheelMakerDesktop.exe` through the same stable SHA-256 chain.
 

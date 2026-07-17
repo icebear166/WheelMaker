@@ -96,6 +96,8 @@ foreach ($source in @($powershell, $shell)) {
     Assert-NotContains 'acceptance entry' $source 'test_update_publish'
     Assert-NotContains 'acceptance entry' $source 'test_publish_android_ps1.ps1'
     Assert-NotContains 'acceptance entry' $source 'test_publish_android_github_release_ps1.ps1'
+    Assert-NotContains 'acceptance entry' $source 'test_deploy_bat.ps1'
+    Assert-NotContains 'acceptance entry' $source 'test_deploy_sh.ps1'
 }
 Assert-Contains 'security_acceptance.ps1' $powershell 'scripts\release'
 Assert-Contains 'security_acceptance.sh' $shell 'scripts/release'

@@ -61,7 +61,7 @@ Hub 的查询接口只读取本机 `release.json` 与 job 状态；Web 全局读
 
 ### 迁移与 Desktop
 
-旧用户先让 `deploy.bat` 或 `deploy.sh` 复制 launcher，然后执行 `migrate-uninstall`，最后执行普通 deploy。迁移删除旧运行项、旧 EXE 和整个 `~/.wheelmaker/build/`，不删除用户数据。
+全新安装和旧用户都使用公开 `wheelmaker-release` README 中可在任意目录执行的一行命令：下载 launcher，执行 `migrate-uninstall`，再执行普通 deploy。源码仓库根目录不保留迁移 wrapper；迁移删除旧运行项、旧 EXE 和整个 `~/.wheelmaker/build/`，不删除用户数据。
 
 Desktop 更新独立于当前 Hub stable：即使当前 Hub 版本不含 EXE，`update_exe.bat` 也使用 stable 中继承的最近 EXE 指针下载正确资产。
 

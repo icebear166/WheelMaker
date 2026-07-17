@@ -175,3 +175,17 @@ test('obsolete standalone Android publishers and their script tests are absent',
     );
   }
 });
+
+test('source checkout deployment wrappers and their dedicated tests are absent', async () => {
+  for (const path of [
+    '../../deploy.bat',
+    '../../deploy.sh',
+    '../test_deploy_bat.ps1',
+    '../test_deploy_sh.ps1',
+  ]) {
+    await assert.rejects(
+      () => readFile(new URL(path, import.meta.url), 'utf8'),
+      /ENOENT/,
+    );
+  }
+});

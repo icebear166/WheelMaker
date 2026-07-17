@@ -304,16 +304,16 @@ App 的 Update 页面只展示一次全局最新版本、发布时间和发布�
 
 ### 旧版迁移
 
-旧版用户按顺序执行：
+全新安装和旧版用户都从公开 `wheelmaker-release` README 复制当前平台的一行命令；该命令可在任意目录执行，不依赖源码 checkout：
 
 ```text
-deploy.bat 或 deploy.sh
-  → 将源码仓库中的 deploy.mjs 复制到 ~/.wheelmaker/
+公开的一行命令
+  → 下载 wheelmaker-release/main/deploy.mjs 到 ~/.wheelmaker/
   → node deploy.mjs migrate-uninstall
   → node deploy.mjs
 ```
 
-`migrate-uninstall` 仅处理旧环境：停止并删除旧 Hub、Go updater、monitor 的服务/任务/启动项和旧 EXE，并删除整个旧 `~/.wheelmaker/build/`；保留 `config.json`、数据库、日志和用户数据。存在旧 Windows 系统服务时该命令请求管理员权限。其他盘符根目录的历史 Android 工作区由用户手动清理。正常 deploy/update 永不探测或兼容旧模式。
+源码仓库根目录不再保留 `deploy.bat` 或 `deploy.sh`。`migrate-uninstall` 仅处理旧环境：停止并删除旧 Hub、Go updater、monitor 的服务/任务/启动项和旧 EXE，并删除整个旧 `~/.wheelmaker/build/`；保留 `config.json`、数据库、日志和用户数据。存在旧 Windows 系统服务时该命令请求管理员权限。其他盘符根目录的历史 Android 工作区由用户手动清理。正常 deploy/update 永不探测或兼容旧模式。
 
 ### Desktop 更新
 

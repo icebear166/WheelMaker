@@ -47,25 +47,18 @@ sudo loginctl enable-linger "$USER"
 
 ## 2. 获取公共部署启动器
 
-全新安装不需要克隆私有源码仓库。把公共发布仓库中的 `deploy.mjs` 放到 `~/.wheelmaker/deploy.mjs`：
+全新安装和旧源码模式迁移都不需要克隆或进入源码仓库。以下整行命令可在任意目录执行：它把公共 `deploy.mjs` 下载到 `~/.wheelmaker/deploy.mjs`，先幂等清理可能存在的旧运行时，再安装当前 stable。
 
 Windows PowerShell：
 
 ```powershell
-$install = Join-Path $HOME '.wheelmaker'
-New-Item -ItemType Directory -Force -Path $install | Out-Null
-Invoke-WebRequest 'https://raw.githubusercontent.com/swm8023/wheelmaker-release/main/deploy.mjs' -OutFile (Join-Path $install 'deploy.mjs')
-node (Join-Path $install 'deploy.mjs')
+$ErrorActionPreference='Stop'; $d=Join-Path $HOME '.wheelmaker'; New-Item -ItemType Directory -Force -Path $d | Out-Null; $m=Join-Path $d 'deploy.mjs'; Invoke-WebRequest 'https://raw.githubusercontent.com/swm8023/wheelmaker-release/main/deploy.mjs' -OutFile $m; & node $m migrate-uninstall; if ($LASTEXITCODE -eq 0) { & node $m }
 ```
 
 macOS/Linux：
 
 ```bash
-mkdir -p "$HOME/.wheelmaker"
-curl --fail --location --proto '=https' --tlsv1.2 \
-  https://raw.githubusercontent.com/swm8023/wheelmaker-release/main/deploy.mjs \
-  --output "$HOME/.wheelmaker/deploy.mjs"
-node "$HOME/.wheelmaker/deploy.mjs"
+(d="$HOME/.wheelmaker" && mkdir -p "$d" && curl --fail --location --proto '=https' --tlsv1.2 'https://raw.githubusercontent.com/swm8023/wheelmaker-release/main/deploy.mjs' --output "$d/deploy.mjs" && node "$d/deploy.mjs" migrate-uninstall && node "$d/deploy.mjs")
 ```
 
 启动器通过 GitHub HTTPS 下载 `stable.json`，并按其中的固定 SHA-256 刷新自身核心，再按 stable → manifest → 平台包的 SHA-256 链验证下载内容。后续目标机版本判断只读公开 stable 和本地 schema v2 `release.json`，不读取 Git。发布安全边界是公开发布仓库的写权限，因此应严格保护该仓库及发布 GitHub App。
@@ -78,24 +71,12 @@ Registry 入口机和所有受信任 Worker 使用同一个 Token。入口机部
 
 ## 4. 首次部署
 
-全新安装已在第 2 节通过 `node ~/.wheelmaker/deploy.mjs` 完成。只有从旧源码发布模式迁移时，才在旧源码仓库根目录执行一次迁移 wrapper：
-
-Windows：
-
-```bat
-deploy.bat
-```
-
-macOS/Linux：
-
-```bash
-bash deploy.sh
-```
+全新安装或旧源码发布模式迁移都已由第 2 节的一行命令完成。源码仓库根目录不再提供迁移 wrapper，当前目录不会参与安装。
 
 说明：
 
-- wrapper 先把 `scripts/deploy/deploy.mjs` 复制到 `~/.wheelmaker/deploy.mjs`，调用 `migrate-uninstall`，再执行一次正常部署。后续不要再调用迁移模式。
-- 迁移会删除旧 Hub/updater/deploy/monitor 运行时和 `~/.wheelmaker/build/bootstrap`，但保留配置、数据库、日志和 Desktop。
+- 一行命令下载公共 launcher，调用一次 `migrate-uninstall`，再执行正常部署。后续日常部署不要再调用迁移模式。
+- 迁移会删除旧 Hub/updater/deploy/monitor 运行时和整个 `~/.wheelmaker/build`，但保留配置、数据库、日志和 Desktop。
 - Windows 只有发现旧 Windows Service 时才可能触发 UAC；新 Scheduled Task 使用当前用户、Limited 权限。
 - 正常部署下载并验证预编译 Hub + Web，始终一起替换到 `~/.wheelmaker/bin` 和 `~/.wheelmaker/web`，在缺失时创建 `config.json`，写 schema v2 `release.json`，并启动 Hub。
 - 正常部署会在安装目录生成当前平台的日常部署入口：Windows 双击 `~/.wheelmaker/deploy.bat`，macOS/Linux 执行 `~/.wheelmaker/deploy.sh`。两者只调用 `node deploy.mjs`，不执行迁移；Windows 完成后会暂停窗口以便查看结果。
@@ -111,7 +92,7 @@ bash deploy.sh
 ~/.wheelmaker/staging/   lock.json、status.json 和临时包
 ```
 
-安装目录 helper 保持原文件名：Windows 为 `deploy.bat`、`start.bat`、`stop.bat`、`restart.bat`、`status.bat`；macOS/Linux 为对应 `.sh`。Windows 另有 `update_exe.bat`。这里的 `deploy.bat/sh` 是日常部署入口，与旧源码仓库根目录的一次性迁移 wrapper 不是同一份脚本。
+安装目录 helper 保持原文件名：Windows 为 `deploy.bat`、`start.bat`、`stop.bat`、`restart.bat`、`status.bat`；macOS/Linux 为对应 `.sh`。Windows 另有 `update_exe.bat`。这里的 `deploy.bat/sh` 是日常部署入口；源码仓库根目录不再提供同名迁移 wrapper。
 
 ## 5. Registry 入口机配置
 
