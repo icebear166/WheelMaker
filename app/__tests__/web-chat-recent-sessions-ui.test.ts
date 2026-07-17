@@ -64,14 +64,13 @@ describe('web chat recent sessions', () => {
     expect(chatCss).not.toContain('content: none;');
   });
 
-  test('shares compact and relaxed row density with the pinned surface', () => {
+  test('shares row density tokens with the pinned surface', () => {
     expect(mainTsx).toContain('sessionListDensity={sessionListDensity}');
     expect(surfaceTsx).toContain('sessionListDensity: SessionListDensity;');
     expect(surfaceTsx).toContain('data-session-list-density={sessionListDensity}');
-    expect(chatCss).toContain("[data-session-list-density='compact'] .wide-session-row");
     expect(chatCss).toContain("[data-session-list-density='relaxed'] .wide-session-row");
-    expect(chatCss).toContain('min-height: 28px;');
     expect(chatCss).toContain('min-height: 30px;');
+    expect(chatCss).not.toContain("[data-session-list-density='compact'] .wide-session-row");
   });
 
   test('recent sessions refresh only on prompt start / done', () => {

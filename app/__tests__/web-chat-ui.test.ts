@@ -2047,7 +2047,7 @@ describe('web chat integration', () => {
     expect(stylesCss).not.toContain('.wide-project-section.active > .wide-project-row::before {');
     expect(stylesCss).not.toContain('.wide-project-section.pinned > .wide-project-row::before {');
     expect(stylesCss).toMatch(/\.wide-project-toggle \{[^}]*height: 30px;[^}]*\}/);
-    expect(stylesCss).toMatch(/\.wide-session-row \{[^}]*min-height: 24px;[^}]*\}/);
+    expect(stylesCss).toMatch(/\.wide-session-row \{[^}]*min-height: 28px;[^}]*\}/);
     const wideSessionRowBlock = stylesCss.match(/\.wide-session-row \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(wideSessionRowBlock).toContain('grid-template-columns: auto minmax(0, 1fr) auto auto;');
     expect(wideSessionRowBlock).toContain('gap: 4px;');
