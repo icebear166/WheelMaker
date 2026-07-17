@@ -19239,7 +19239,7 @@ export function App() {
               plan={selectedChatPlan}
             />
           ) : null}
-          <UsageCompactBar snapshot={usageSnapshot} onExpand={() => setUsagePanelOpen(true)} />
+          {isWide ? <UsageCompactBar snapshot={usageSnapshot} onExpand={() => setUsagePanelOpen(true)} /> : null}
           {usagePanelOpen ? (
             <UsageCardPanel
               snapshot={usageSnapshot}
