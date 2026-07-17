@@ -205,15 +205,27 @@ $publisherConfig = Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $repo
 if (-not $releaseDeploy.Contains('"listen":"127.0.0.1:9680"')) {
     throw 'release service deployment does not bind the application listener to loopback'
 }
-$apiStart = $releaseNginx.IndexOf('location ^~ /api/', [StringComparison]::Ordinal)
-$apiEnd = $releaseNginx.IndexOf('location = /stable.json', $apiStart, [StringComparison]::Ordinal)
-if ($apiStart -lt 0 -or $apiEnd -le $apiStart -or $releaseNginx.Substring($apiStart, $apiEnd - $apiStart).Contains('Access-Control-Allow-Origin')) {
+$apiStart = $releaseNginx.IndexOf('location /api/', [StringComparison]::Ordinal)
+if ($apiStart -lt 0) {
+    throw 'release publish API location is missing'
+}
+$apiEnd = $releaseNginx.IndexOf('location = /healthz', $apiStart, [StringComparison]::Ordinal)
+if ($apiEnd -le $apiStart -or $releaseNginx.Substring($apiStart, $apiEnd - $apiStart).Contains('Access-Control-Allow-Origin')) {
     throw 'release publish API must not expose wildcard CORS'
 }
 if (-not $publisherConfig.Contains("join(homeDirectory, '.wheelmaker')")) {
     throw 'publisher Token config is not rooted below the publisher user home'
 }
-if ($releaseDeploy -match '(?is)const files = \[.*?(release-server\.json|WHEELMAKER_RELEASE_TOKEN|identityFile)') {
+$uploadListStart = $releaseDeploy.IndexOf('const files = [', [StringComparison]::Ordinal)
+if ($uploadListStart -lt 0) {
+    throw 'release server deployment upload list is missing'
+}
+$uploadListEnd = $releaseDeploy.IndexOf('];', $uploadListStart, [StringComparison]::Ordinal)
+if ($uploadListEnd -le $uploadListStart) {
+    throw 'release server deployment upload list is malformed'
+}
+$uploadList = $releaseDeploy.Substring($uploadListStart, $uploadListEnd - $uploadListStart)
+if ($uploadList -match '(release-server\.json|WHEELMAKER_RELEASE_TOKEN|identityFile)') {
     throw 'release server deployment upload list contains a publishing credential or SSH private key'
 }
 $debugSigningFallback = 'signingConfigs.getByName("debug")'

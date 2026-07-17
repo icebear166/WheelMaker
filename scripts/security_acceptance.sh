@@ -130,7 +130,8 @@ release_deploy="$repo_root/scripts/release-server/deploy.mjs"
 release_nginx="$repo_root/scripts/release-server/nginx.conf"
 publisher_config="$repo_root/scripts/release/publisher-config.mjs"
 grep -F '"listen":"127.0.0.1:9680"' "$release_deploy" >/dev/null || fail 'release service application listener is not loopback-only'
-if sed -n '/location \^~ \/api\//,/location = \/stable.json/p' "$release_nginx" | grep -F 'Access-Control-Allow-Origin' >/dev/null; then
+grep -F 'location /api/' "$release_nginx" >/dev/null || fail 'release publish API location is missing'
+if sed -n '/location \/api\//,/location = \/healthz/p' "$release_nginx" | grep -F 'Access-Control-Allow-Origin' >/dev/null; then
   fail 'release publish API exposes wildcard CORS'
 fi
 grep -F "join(homeDirectory, '.wheelmaker')" "$publisher_config" >/dev/null || fail 'publisher Token config is not rooted below the publisher user home'
