@@ -68,3 +68,21 @@ test('parallel release tasks report their own completion', async () => {
     '[release] windows-amd64 completed (240ms)',
   ]);
 });
+
+test('release upload progress reports percentages without exposing request details', async () => {
+  const progressModule = await import('./progress.mjs');
+  const output = [];
+  const progress = progressModule.createReleaseProgress({
+    write: line => output.push(line),
+  });
+  const report = progress.upload('wheelmaker-v1.1-windows-amd64.tar.gz');
+  report({done: false, uploadedBytes: 0, totalBytes: 100});
+  report({done: false, uploadedBytes: 2, totalBytes: 100});
+  report({done: false, uploadedBytes: 5, totalBytes: 100});
+  report({done: true, uploadedBytes: 100, totalBytes: 100});
+  assert.deepEqual(output, [
+    '[release] Uploading wheelmaker-v1.1-windows-amd64.tar.gz: 0 B / 100 B (0%)',
+    '[release] Uploading wheelmaker-v1.1-windows-amd64.tar.gz: 5 B / 100 B (5%)',
+    '[release] Uploading wheelmaker-v1.1-windows-amd64.tar.gz: 100 B / 100 B (100%)',
+  ]);
+});

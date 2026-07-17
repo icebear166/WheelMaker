@@ -1,26 +1,28 @@
-import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
-import { promisify } from 'node:util';
-import { fileURLToPath } from 'node:url';
+import {execFile} from 'node:child_process';
+import {mkdir, mkdtemp, readFile, rm} from 'node:fs/promises';
+import {dirname, join, resolve} from 'node:path';
+import {promisify} from 'node:util';
+import {fileURLToPath} from 'node:url';
 
-import { buildRelease } from './build.mjs';
+import {buildRelease} from './build.mjs';
+import {validateReleaseChannel} from './channel.mjs';
 import {
-  githubAppCredentialsFromEnv,
-  requestInstallationToken,
-} from './github-app.mjs';
-import { GitHubApi } from './github-api.mjs';
-import {
+  encodeJsonBytes,
   nextV1Version,
   nextVersionFromStableBytes,
   stableVersionFromBytes,
 } from './metadata.mjs';
 import {createReleaseProgress} from './progress.mjs';
 import {
-  publishBuiltRelease,
+  createPublisherConfigDependencies,
+  resolvePublisherToken,
+} from './publisher-config.mjs';
+import {
   packageBuiltRelease,
+  publishBuiltRelease,
   ReleaseVersionConflictError,
 } from './publish.mjs';
+import {ReleaseServerApi} from './release-server-api.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -44,19 +46,35 @@ export function parseReleaseArgs(args) {
   for (const option of args) {
     if (option === '--with-desktop' && !withDesktop) {
       withDesktop = true;
-      continue;
-    }
-    if (option === '--publish' && !publish) {
-      publish = true;
-      continue;
-    }
-    if (option === '--with-android' && !withAndroid) {
+    } else if (option === '--with-android' && !withAndroid) {
       withAndroid = true;
-      continue;
+    } else if (option === '--publish' && !publish) {
+      publish = true;
+    } else {
+      throw new Error(`unknown option: ${option}`);
     }
-    throw new Error(`unknown option: ${option}`);
   }
-  return { publish, withAndroid, withDesktop };
+  return {publish, withAndroid, withDesktop};
+}
+
+function failureCode(phase, error) {
+  if (error instanceof ReleaseVersionConflictError) return 'version_conflict';
+  return {
+    building: 'build_failed',
+    committing: 'commit_failed',
+    packaging: 'packaging_failed',
+    uploading: 'upload_failed',
+    validating: 'validation_failed',
+  }[phase] ?? 'publish_failed';
+}
+
+async function failAndCancel(api, session, phase, error) {
+  await api.status(session.sessionId, {
+    errorCode: failureCode(phase, error),
+    phase,
+    state: 'failed',
+  }).catch(() => {});
+  await api.cancel(session.sessionId).catch(() => {});
 }
 
 export async function runRelease(options, deps) {
@@ -64,41 +82,58 @@ export async function runRelease(options, deps) {
     info() {},
     phase: (_label, action) => action(),
   };
-  const requireClean = options.publish;
   const sourceSha = await progress.phase(
     'Checking source',
-    () => deps.resolveSourceSha({requireClean}),
+    () => deps.resolveSourceSha({requireClean: options.publish}),
   );
-  const startedAt = deps.now();
+  let floorVersion;
   let api;
   let deploymentSources;
-  let floorVersion;
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const version = await progress.phase(
       'Resolving release version',
       () => deps.resolveNextVersion({floorVersion}),
     );
+    deploymentSources ??= await progress.phase(
+      'Loading deployment scripts',
+      () => deps.loadDeploymentSources(),
+    );
     progress.info(
       `${options.publish ? 'Publishing' : 'Building'} ${version} from ${sourceSha}`,
     );
+
     if (options.publish && !api) {
       api = await progress.phase(
-        'Authenticating release repository',
-        () => deps.createGitHubClient(),
+        'Authenticating release server',
+        () => deps.createReleaseClient(),
       );
-      deploymentSources ??= deps.loadDeploymentSources
-        ? await deps.loadDeploymentSources()
-        : {
-            coreBytes: deps.coreBytes,
-            deployMjsBytes: deps.deployMjsBytes,
-          };
     }
-    const stagingRoot = await progress.phase(
-      'Preparing release workspace',
-      () => deps.createReleaseWorkspace(version),
-    );
+
+    let currentPhase = 'building';
+    let session;
+    let stagingRoot;
     try {
+      if (options.publish) {
+        session = await progress.phase(
+          'Starting release session',
+          () => api.start({
+            publisher: deps.publisher,
+            sourceSha,
+            version,
+            withAndroid: options.withAndroid ?? false,
+            withDesktop: options.withDesktop ?? false,
+          }),
+        );
+        await api.status(session.sessionId, {
+          phase: currentPhase,
+          state: 'running',
+        });
+      }
+      stagingRoot = await progress.phase(
+        'Preparing release workspace',
+        () => deps.createReleaseWorkspace(version),
+      );
       const build = await progress.phase(
         'Building release assets',
         () => deps.buildRelease({
@@ -109,15 +144,25 @@ export async function runRelease(options, deps) {
           version,
           workRoot: deps.workRoot,
           withAndroid: options.withAndroid ?? false,
-          withDesktop: options.withDesktop,
+          withDesktop: options.withDesktop ?? false,
         }),
       );
-      const publishedAt = deps.now();
+
+      currentPhase = 'packaging';
+      if (session) {
+        await api.status(session.sessionId, {
+          phase: currentPhase,
+          state: 'running',
+        });
+      }
+      const publishedAt = session?.publishedAt ?? deps.now();
       const packaged = await progress.phase(
         'Packaging and verifying assets',
         () => deps.packageBuiltRelease({
           ...build,
           channel: deps.channel,
+          coreBytes: deploymentSources.coreBytes,
+          deployMjsBytes: deploymentSources.deployMjsBytes,
           outputRoot: deps.outputRoot,
           publishedAt,
           sourceSha,
@@ -126,59 +171,56 @@ export async function runRelease(options, deps) {
         }),
       );
       if (!options.publish) {
-        return { build: packaged, mode: 'build', sourceSha };
+        return {build: packaged, mode: 'build', sourceSha};
       }
 
+      currentPhase = 'uploading';
       const stable = await progress.phase(
         'Publishing release',
-        () => deps.publishBuiltRelease(
-          {
-            androidApk: build.androidApk,
-            channel: deps.channel,
-            coreBytes: deploymentSources.coreBytes,
-            deployMjsBytes: deploymentSources.deployMjsBytes,
-            desktopExe: build.desktopExe,
-            outputRoot: deps.outputRoot,
-            packaged,
-            platforms: build.platforms,
-            progress,
-            publishedAt,
-            publisher: deps.publisher,
-            sourceSha,
-            startedAt,
-            version,
-          },
-          api,
-        ),
+        () => deps.publishBuiltRelease({
+          onPhase(phase) { currentPhase = phase; },
+          packaged,
+          progress,
+          session,
+          version,
+        }, api),
       );
-      return { mode: 'publish', stable };
+      return {mode: 'publish', stable};
     } catch (error) {
+      if (error instanceof ReleaseVersionConflictError) {
+        currentPhase = 'committing';
+      }
+      if (session) {
+        await failAndCancel(api, session, currentPhase, error);
+      }
       if (!(error instanceof ReleaseVersionConflictError) || attempt === 2) {
         throw error;
       }
       floorVersion = error.version;
     } finally {
-      await progress.phase(
-        'Cleaning release workspace',
-        () => deps.cleanupReleaseWorkspace(stagingRoot),
-      );
+      if (stagingRoot) {
+        await progress.phase(
+          'Cleaning release workspace',
+          () => deps.cleanupReleaseWorkspace(stagingRoot),
+        );
+      }
     }
   }
   throw new Error('release retry limit reached');
 }
 
-async function resolveGitSourceSha(repoRoot, { requireClean }) {
+async function resolveGitSourceSha(repoRoot, {requireClean}) {
   if (requireClean) {
-    const { stdout: status } = await execFileAsync(
+    const {stdout: status} = await execFileAsync(
       'git',
       ['status', '--porcelain', '--untracked-files=normal'],
-      { cwd: repoRoot, encoding: 'utf8' },
+      {cwd: repoRoot, encoding: 'utf8'},
     );
     if (status.trim()) {
       throw new Error('publish requires a clean Git worktree');
     }
   }
-  const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], {
+  const {stdout} = await execFileAsync('git', ['rev-parse', 'HEAD'], {
     cwd: repoRoot,
     encoding: 'utf8',
   });
@@ -189,45 +231,20 @@ async function resolveGitSourceSha(repoRoot, { requireClean }) {
   return sourceSha;
 }
 
-export async function resolvePublishingToken({
-  env = process.env,
-  execGh = execFileAsync,
-  fetchImpl = fetch,
-  requestAppToken = requestInstallationToken,
-} = {}) {
-  if (env.GITHUB_ACTIONS === 'true') {
-    return requestAppToken({
-      ...githubAppCredentialsFromEnv(env),
-      fetchImpl,
-    });
-  }
-
-  try {
-    const { stdout } = await execGh('gh', ['auth', 'token'], {
-      encoding: 'utf8',
-    });
-    const token = stdout.trim();
-    if (!token) {
-      throw new Error('GitHub CLI returned an empty token');
-    }
-    return token;
-  } catch (error) {
-    throw new Error(
-      'local publishing requires GitHub CLI authentication; install GitHub CLI and run gh auth login first',
-      { cause: error },
-    );
-  }
-}
-
 export async function createDefaultReleaseDependencies({
   env = process.env,
   fetchImpl = fetch,
 } = {}) {
   const moduleDirectory = dirname(fileURLToPath(import.meta.url));
   const repoRoot = resolve(moduleDirectory, '..', '..');
-  const channel = JSON.parse(
+  const channel = validateReleaseChannel(JSON.parse(
     await readFile(join(moduleDirectory, 'channel.json'), 'utf8'),
-  );
+  ));
+  const actions = env.GITHUB_ACTIONS === 'true';
+  const anonymousApi = new ReleaseServerApi({
+    baseUrl: channel.baseUrl,
+    token: '',
+  });
 
   return {
     buildRelease,
@@ -237,10 +254,8 @@ export async function createDefaultReleaseDependencies({
     },
     outputRoot: join(repoRoot, '.release-out'),
     packageBuiltRelease,
-    progress: createReleaseProgress({
-      githubActions: env.GITHUB_ACTIONS === 'true',
-    }),
-    publisher: env.GITHUB_ACTIONS === 'true' ? 'github-actions' : 'local',
+    progress: createReleaseProgress({githubActions: actions}),
+    publisher: actions ? 'action' : 'local',
     repoRoot,
     async createReleaseWorkspace(version) {
       const temporaryRoot = join(repoRoot, '.release-work', 'tmp');
@@ -248,56 +263,39 @@ export async function createDefaultReleaseDependencies({
       return mkdtemp(join(temporaryRoot, `release-${version}-`));
     },
     workRoot: join(repoRoot, '.release-work'),
-    async createGitHubClient() {
-      const token = await resolvePublishingToken({
+    async createReleaseClient() {
+      const tokenDependencies = createPublisherConfigDependencies({
+        baseUrl: channel.baseUrl,
         env,
         fetchImpl,
       });
-      return new GitHubApi({
-        branch: channel.branch,
-        fetchImpl,
-        owner: channel.owner,
-        repository: channel.repository,
-        token,
-      });
+      const token = await resolvePublisherToken({actions}, tokenDependencies);
+      return new ReleaseServerApi({baseUrl: channel.baseUrl, token});
     },
     async loadDeploymentSources() {
       return {
-        coreBytes: await readFile(
-          join(repoRoot, 'scripts', 'deploy', 'deploy-core.mjs'),
-        ),
-        deployMjsBytes: await readFile(
-          join(repoRoot, 'scripts', 'deploy', 'deploy.mjs'),
-        ),
+        coreBytes: await readFile(join(repoRoot, 'scripts', 'deploy', 'deploy-core.mjs')),
+        deployMjsBytes: await readFile(join(repoRoot, 'scripts', 'deploy', 'deploy.mjs')),
       };
     },
     now: () => new Date().toISOString(),
     publishBuiltRelease,
     async resolveNextVersion({floorVersion} = {}) {
-      const stableUrl = new URL(
-        channel.stablePath,
-        `https://raw.githubusercontent.com/${channel.owner}/${channel.repository}/${channel.branch}/`,
-      );
-      const response = await fetchImpl(stableUrl, { cache: 'no-store' });
-      if (!response.ok) {
-        throw new Error(
-          `failed to query stable metadata: ${response.status} ${response.statusText}`,
-        );
-      }
-      const stableBytes = Buffer.from(await response.arrayBuffer());
-      if (!floorVersion) {
-        return nextVersionFromStableBytes(stableBytes);
-      }
-      const stableVersion = stableVersionFromBytes(stableBytes);
-      const stableNumber = Number(stableVersion.slice(3));
-      const floorNumber = Number(floorVersion.slice(3));
+      const stable = await anonymousApi.readStable();
+      const stableBytes = stable ? encodeJsonBytes(stable) : null;
+      if (!floorVersion) return nextVersionFromStableBytes(stableBytes);
       if (!/^v1\.(0|[1-9]\d*)$/.test(floorVersion)) {
         throw new Error(`invalid release version floor: ${floorVersion}`);
       }
+      const stableVersion = stableBytes
+        ? stableVersionFromBytes(stableBytes)
+        : 'v1.0';
+      const stableNumber = Number(stableVersion.slice(3));
+      const floorNumber = Number(floorVersion.slice(3));
       return nextV1Version(
         stableNumber > floorNumber ? stableVersion : floorVersion,
       );
     },
-    resolveSourceSha: (options) => resolveGitSourceSha(repoRoot, options),
+    resolveSourceSha: options => resolveGitSourceSha(repoRoot, options),
   };
 }

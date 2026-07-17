@@ -1,3 +1,5 @@
+import {createHash} from 'node:crypto';
+import {createReadStream} from 'node:fs';
 import {
   copyFile,
   mkdir,
@@ -7,235 +9,62 @@ import {
   stat,
   writeFile,
 } from 'node:fs/promises';
-import { join } from 'node:path';
+import {join} from 'node:path';
 
-import {
-  encodeJsonBytes,
-  nextV1Version,
-  sha256Bytes,
-} from './metadata.mjs';
-import { createTarGz } from './tar.mjs';
+import {encodeJsonBytes} from './metadata.mjs';
+import {validateReleaseChannel, versionAssetPath} from './channel.mjs';
+import {createTarGz} from './tar.mjs';
 
-const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
-const PHASE_ERROR_CODES = Object.freeze({
-  packaging: 'packaging_failed',
-  'publishing-release': 'release_publish_failed',
-  updating_stable: 'stable_update_failed',
-  'updating-stable': 'stable_update_failed',
-  uploading: 'asset_upload_failed',
-  validating: 'validation_failed',
-});
-
-function releaseAssetUrl(channel, version, name) {
-  return `https://github.com/${channel.owner}/${channel.repository}/releases/download/${version}/${encodeURIComponent(name)}`;
-}
-
-function rawScriptUrl(channel, commitSha, name) {
-  return `https://raw.githubusercontent.com/${channel.owner}/${channel.repository}/${commitSha}/${name}`;
-}
+const RELEASE_BASE_URL_MARKER = '__WHEELMAKER_RELEASE_BASE_URL__';
 
 function versionNumber(version) {
   const match = /^v1\.(0|[1-9]\d*)$/.exec(version ?? '');
   return match ? Number(match[1]) : -1;
 }
 
-function nextCandidate(previous, floorVersion) {
-  const previousVersion = previous?.version ?? 'v1.0';
-  const base =
-    versionNumber(floorVersion) > versionNumber(previousVersion)
-      ? floorVersion
-      : previousVersion;
-  return nextV1Version(base);
+function renderDeployLauncher(bytes, channel) {
+  const source = Buffer.from(bytes).toString('utf8');
+  const matches = source.split(RELEASE_BASE_URL_MARKER).length - 1;
+  if (matches !== 1) {
+    throw new Error('deploy.mjs must contain exactly one release base URL marker');
+  }
+  return Buffer.from(
+    source.replace(RELEASE_BASE_URL_MARKER, validateReleaseChannel(channel).baseUrl),
+    'utf8',
+  );
 }
 
-async function readStable(api, channel) {
-  const stableFile = await api.readFile(channel.stablePath, channel.branch);
-  if (!stableFile) {
-    return null;
-  }
-  const stable = JSON.parse(stableFile.bytes.toString('utf8'));
-  if (stable.schema !== 1 || versionNumber(stable.version) < 0) {
-    throw new Error('stable metadata schema is invalid');
-  }
-  return stable;
+async function inspectFile(path) {
+  const info = await stat(path);
+  const hash = createHash('sha256');
+  await new Promise((resolve, reject) => {
+    const input = createReadStream(path);
+    input.on('data', chunk => hash.update(chunk));
+    input.once('error', reject);
+    input.once('end', resolve);
+  });
+  return {sha256: hash.digest('hex'), size: info.size};
 }
 
-export function makeStable({ previous, release }) {
-  const version = release.version ?? nextCandidate(previous);
-  const stable = {
-    schema: 1,
-    version,
-    publishedAt: release.publishedAt,
-    sourceSha: release.sourceSha,
-    deploy: release.deploy,
-    release: {
-      manifestUrl: release.manifest.url,
-      manifestSha256: release.manifest.sha256,
-    },
-  };
-  const desktopExe = release.desktopExe ?? previous?.desktopExe;
-  if (desktopExe) {
-    stable.desktopExe = desktopExe;
-  }
-  const androidApk = release.androidApk ?? previous?.androidApk;
-  if (androidApk) {
-    stable.androidApk = androidApk;
-  }
-  return stable;
+async function addAsset(assets, path, name) {
+  assets.push({name, path, ...await inspectFile(path)});
 }
 
-export async function packageBuiltRelease(release) {
-  const {version} = release;
-  const versionRoot = join(release.outputRoot, version);
-  const packageRoot = join(release.stagingRoot, 'final-assets');
-  await rm(packageRoot, {force: true, recursive: true});
-  await mkdir(packageRoot, {recursive: true});
-
-  const artifacts = {};
-  const assets = [];
-  const platforms = [];
-  for (const platform of release.platforms) {
-    const name = `wheelmaker-${version}-${platform.key}.tar.gz`;
-    const path = join(packageRoot, name);
-    await createTarGz({ sourceDir: platform.directory, outputPath: path });
-    const bytes = await readFile(path);
-    const info = await stat(path);
-    artifacts[platform.key] = {
-      url: releaseAssetUrl(release.channel, version, name),
-      sha256: sha256Bytes(bytes),
-      size: info.size,
-    };
-    assets.push({ bytes, name });
-    platforms.push({archivePath: join(versionRoot, name), key: platform.key});
-  }
-
-  const manifest = {
-    schema: 1,
-    version,
-    publishedAt: release.publishedAt,
-    sourceSha: release.sourceSha,
-    artifacts,
-  };
-  const manifestBytes = encodeJsonBytes(manifest);
-  await writeFile(join(packageRoot, 'release-manifest.json'), manifestBytes);
-  assets.push({ bytes: manifestBytes, name: 'release-manifest.json' });
-
-  let desktopExe;
-  let desktopExePath;
-  if (release.desktopExe) {
-    const bytes = await readFile(release.desktopExe);
-    await copyFile(release.desktopExe, join(packageRoot, 'WheelMakerDesktop.exe'));
-    assets.push({ bytes, name: 'WheelMakerDesktop.exe' });
-    desktopExePath = join(versionRoot, 'WheelMakerDesktop.exe');
-    desktopExe = {
-      version,
-      url: releaseAssetUrl(
-        release.channel,
-        version,
-        'WheelMakerDesktop.exe',
-      ),
-      sha256: sha256Bytes(bytes),
-    };
-  }
-
-  let androidApk;
-  let androidApkPath;
-  let androidManifestPath;
-  if (release.androidApk) {
-    const apkBytes = await readFile(release.androidApk.apkPath);
-    const androidManifestBytes = await readFile(
-      release.androidApk.manifestPath,
-    );
-    let androidManifest;
-    try {
-      androidManifest = JSON.parse(androidManifestBytes.toString('utf8'));
-    } catch {
-      throw new Error('Android release manifest is invalid');
-    }
-    const apkSha256 = sha256Bytes(apkBytes);
-    if (
-      androidManifest?.schema !== 1 ||
-      androidManifest.platform !== 'android' ||
-      androidManifest.version !== version ||
-      androidManifest.versionName !== version.slice(1) ||
-      androidManifest.versionCode !== versionNumber(version) ||
-      androidManifest.sourceSha !== release.sourceSha ||
-      androidManifest.apk?.fileName !== 'WheelMakerAndroid.apk' ||
-      androidManifest.apk.sha256 !== apkSha256 ||
-      androidManifest.apk.size !== apkBytes.length ||
-      !Array.isArray(androidManifest.signing?.certificateSha256) ||
-      androidManifest.signing.certificateSha256.length === 0 ||
-      androidManifest.signing.certificateSha256.some(
-        digest => !/^[0-9a-f]{64}$/.test(digest),
-      )
-    ) {
-      throw new Error('Android release manifest does not match the built APK');
-    }
-    assets.push(
-      {bytes: apkBytes, name: 'WheelMakerAndroid.apk'},
-      {bytes: androidManifestBytes, name: 'android-release.json'},
-    );
-    await Promise.all([
-      copyFile(release.androidApk.apkPath, join(packageRoot, 'WheelMakerAndroid.apk')),
-      copyFile(release.androidApk.manifestPath, join(packageRoot, 'android-release.json')),
-    ]);
-    androidApkPath = join(versionRoot, 'WheelMakerAndroid.apk');
-    androidManifestPath = join(versionRoot, 'android-release.json');
-    androidApk = {
-      publishedAt: release.publishedAt,
-      sha256: apkSha256,
-      size: apkBytes.length,
-      sourceSha: release.sourceSha,
-      url: releaseAssetUrl(
-        release.channel,
-        version,
-        'WheelMakerAndroid.apk',
-      ),
-      version,
-      versionCode: androidManifest.versionCode,
-      versionName: androidManifest.versionName,
-    };
-  }
-
-  await rm(versionRoot, {force: true, recursive: true});
-  await mkdir(release.outputRoot, {recursive: true});
-  await rename(packageRoot, versionRoot);
-
-  return {
-    androidApk,
-    androidApkPath,
-    androidManifestPath,
-    assets: assets.map(asset => ({
-      ...asset,
-      path: join(versionRoot, asset.name),
-    })),
-    desktopExe,
-    desktopExePath,
-    manifestBytes,
-    manifestPath: join(versionRoot, 'release-manifest.json'),
-    platforms,
-    version,
-    versionRoot,
-  };
-}
-
-async function cleanOldDrafts(api, nowMilliseconds) {
-  const releases = await api.listReleases();
-  for (const release of releases) {
-    const createdAt = Date.parse(release.created_at ?? '');
-    if (
-      release.draft === true &&
-      /^v1\.(0|[1-9]\d*)$/.test(release.tag_name ?? '') &&
-      Number.isFinite(createdAt) &&
-      nowMilliseconds - createdAt > TWO_HOURS_MS
-    ) {
-      await api.deleteRelease(release.id);
-    }
-  }
-}
-
-function isTagCollision(error) {
-  return error?.status === 422;
+function validateAndroidManifest(manifest, apk, release) {
+  return (
+    manifest?.schema === 1 &&
+    manifest.platform === 'android' &&
+    manifest.version === release.version &&
+    manifest.versionName === release.version.slice(1) &&
+    manifest.versionCode === versionNumber(release.version) &&
+    manifest.sourceSha === release.sourceSha &&
+    manifest.apk?.fileName === 'WheelMakerAndroid.apk' &&
+    manifest.apk.sha256 === apk.sha256 &&
+    manifest.apk.size === apk.size &&
+    Array.isArray(manifest.signing?.certificateSha256) &&
+    manifest.signing.certificateSha256.length > 0 &&
+    manifest.signing.certificateSha256.every(digest => /^[0-9a-f]{64}$/.test(digest))
+  );
 }
 
 export class ReleaseVersionConflictError extends Error {
@@ -246,180 +75,126 @@ export class ReleaseVersionConflictError extends Error {
   }
 }
 
-function statusDocument(release, { errorCode, phase, state, version }) {
-  const status = {
-    schema: 1,
-    state,
-    phase,
-    version,
-    sourceSha: release.sourceSha,
-    publisher: release.publisher,
-    startedAt: release.startedAt,
-    updatedAt: release.now?.() ?? new Date().toISOString(),
-  };
-  if (errorCode) {
-    status.errorCode = errorCode;
+export async function packageBuiltRelease(release) {
+  if (versionNumber(release.version) < 1) {
+    throw new Error(`invalid release version: ${release.version}`);
   }
-  return status;
-}
+  const versionRoot = join(release.outputRoot, release.version);
+  const packageRoot = join(release.stagingRoot, 'final-assets');
+  await rm(packageRoot, {force: true, recursive: true});
+  await mkdir(packageRoot, {recursive: true});
 
-async function writeStatus(api, release, status) {
-  await api.writeFile(
-    release.channel.publishStatusPath,
-    encodeJsonBytes(statusDocument(release, status)),
-    `chore: update release status (${status.phase})`,
-    release.channel.branch,
+  const assets = [];
+  const artifacts = {};
+  const platforms = [];
+  for (const platform of release.platforms) {
+    const name = `wheelmaker-${release.version}-${platform.key}.tar.gz`;
+    const path = join(packageRoot, name);
+    await createTarGz({sourceDir: platform.directory, outputPath: path});
+    const identity = await inspectFile(path);
+    artifacts[platform.key] = {
+      path: versionAssetPath(release.version, name),
+      ...identity,
+    };
+    assets.push({name, path, ...identity});
+    platforms.push({archivePath: join(versionRoot, name), key: platform.key});
+  }
+
+  const deployMjsBytes = renderDeployLauncher(
+    release.deployMjsBytes,
+    release.channel,
   );
+  const deployMjsPath = join(packageRoot, 'deploy.mjs');
+  const corePath = join(packageRoot, 'deploy-core.mjs');
+  await Promise.all([
+    writeFile(deployMjsPath, deployMjsBytes),
+    writeFile(corePath, release.coreBytes),
+  ]);
+  await addAsset(assets, deployMjsPath, 'deploy.mjs');
+  await addAsset(assets, corePath, 'deploy-core.mjs');
+
+  const manifest = {
+    schema: 2,
+    version: release.version,
+    publishedAt: release.publishedAt,
+    sourceSha: release.sourceSha,
+    artifacts,
+  };
+  const manifestBytes = encodeJsonBytes(manifest);
+  const manifestPath = join(packageRoot, 'release-manifest.json');
+  await writeFile(manifestPath, manifestBytes);
+  await addAsset(assets, manifestPath, 'release-manifest.json');
+
+  let desktopExePath;
+  if (release.desktopExe) {
+    desktopExePath = join(packageRoot, 'WheelMakerDesktop.exe');
+    await copyFile(release.desktopExe, desktopExePath);
+    await addAsset(assets, desktopExePath, 'WheelMakerDesktop.exe');
+  }
+
+  let androidApkPath;
+  let androidManifestPath;
+  if (release.androidApk) {
+    androidApkPath = join(packageRoot, 'WheelMakerAndroid.apk');
+    androidManifestPath = join(packageRoot, 'android-release.json');
+    await Promise.all([
+      copyFile(release.androidApk.apkPath, androidApkPath),
+      copyFile(release.androidApk.manifestPath, androidManifestPath),
+    ]);
+    const apk = await inspectFile(androidApkPath);
+    let androidManifest;
+    try {
+      androidManifest = JSON.parse(await readFile(androidManifestPath, 'utf8'));
+    } catch {
+      throw new Error('Android release manifest is invalid');
+    }
+    if (!validateAndroidManifest(androidManifest, apk, release)) {
+      throw new Error('Android release manifest does not match the built APK');
+    }
+    assets.push({name: 'WheelMakerAndroid.apk', path: androidApkPath, ...apk});
+    await addAsset(assets, androidManifestPath, 'android-release.json');
+  }
+
+  await rm(versionRoot, {force: true, recursive: true});
+  await mkdir(release.outputRoot, {recursive: true});
+  await rename(packageRoot, versionRoot);
+  for (const asset of assets) {
+    asset.path = join(versionRoot, asset.name);
+  }
+
+  return {
+    androidApkPath: androidApkPath ? join(versionRoot, 'WheelMakerAndroid.apk') : undefined,
+    androidManifestPath: androidManifestPath ? join(versionRoot, 'android-release.json') : undefined,
+    assets,
+    desktopExePath: desktopExePath ? join(versionRoot, 'WheelMakerDesktop.exe') : undefined,
+    manifestBytes,
+    manifestPath: join(versionRoot, 'release-manifest.json'),
+    platforms,
+    version: release.version,
+    versionRoot,
+  };
 }
 
 export async function publishBuiltRelease(release, api) {
   const progress = release.progress ?? {info() {}};
-  let currentPhase = 'validating';
-  let version = release.version;
-  let draft = null;
-  let releaseIsPublic = false;
-  let previous = null;
-
+  const sessionId = release.session?.sessionId;
+  release.onPhase?.('uploading');
+  await api.status(sessionId, {phase: 'uploading', state: 'running'});
+  for (const [index, asset] of release.packaged.assets.entries()) {
+    progress.info(
+      `Uploading ${index + 1}/${release.packaged.assets.length} ${asset.name}`,
+    );
+    const report = progress.upload?.(asset.name) ?? (() => {});
+    await api.upload(sessionId, asset, report);
+  }
+  release.onPhase?.('committing');
+  await api.status(sessionId, {phase: 'committing', state: 'running'});
   try {
-    if (versionNumber(version) < 1) {
-      throw new Error(`invalid release version: ${version}`);
-    }
-    previous = await readStable(api, release.channel);
-    if (versionNumber(previous?.version) >= versionNumber(version)) {
-      throw new ReleaseVersionConflictError(version);
-    }
-    await writeStatus(api, release, {
-      phase: currentPhase,
-      state: 'running',
-      version,
-    });
-    await cleanOldDrafts(api, Date.parse(release.startedAt));
-
-    currentPhase = 'packaging';
-    await writeStatus(api, release, {
-      phase: currentPhase,
-      state: 'running',
-      version,
-    });
-    const packaged = release.packaged ?? await (
-      release.packageRelease?.() ?? packageBuiltRelease(release)
-    );
-
-    progress.info('Committing deployment scripts');
-    const scriptCommit = await api.commitFiles(
-      [
-        { path: 'deploy.mjs', bytes: release.deployMjsBytes },
-        { path: 'deploy-core.mjs', bytes: release.coreBytes },
-      ],
-      `chore: publish deployment scripts for ${version}`,
-      release.channel.branch,
-    );
-    const deploy = {
-      mjsUrl: rawScriptUrl(
-        release.channel,
-        scriptCommit.sha,
-        'deploy.mjs',
-      ),
-      mjsSha256: sha256Bytes(release.deployMjsBytes),
-      coreUrl: rawScriptUrl(
-        release.channel,
-        scriptCommit.sha,
-        'deploy-core.mjs',
-      ),
-      coreSha256: sha256Bytes(release.coreBytes),
-    };
-
-    currentPhase = 'uploading';
-    await writeStatus(api, release, {
-      phase: currentPhase,
-      state: 'running',
-      version,
-    });
-    try {
-      progress.info(`Creating draft release ${version}`);
-      draft = await api.createRelease({
-        draft: true,
-        name: `WheelMaker ${version}`,
-        prerelease: false,
-        tag_name: version,
-        target_commitish: scriptCommit.sha,
-      });
-    } catch (error) {
-      if (isTagCollision(error)) {
-        throw new ReleaseVersionConflictError(version, {cause: error});
-      }
-      throw error;
-    }
-
-    for (const [index, asset] of packaged.assets.entries()) {
-      progress.info(
-        `Uploading ${index + 1}/${packaged.assets.length} ${asset.name}`,
-      );
-      await api.uploadReleaseAsset(draft, asset);
-    }
-
-    currentPhase = 'publishing-release';
-    await writeStatus(api, release, {
-      phase: currentPhase,
-      state: 'running',
-      version,
-    });
-    progress.info(`Publishing GitHub Release ${version}`);
-    await api.updateRelease(draft.id, { draft: false });
-    releaseIsPublic = true;
-
-    currentPhase = 'updating-stable';
-    await writeStatus(api, release, {
-      phase: currentPhase,
-      state: 'running',
-      version,
-    });
-    const stable = makeStable({
-      previous,
-      release: {
-        deploy,
-        androidApk: packaged.androidApk,
-        desktopExe: packaged.desktopExe,
-        manifest: {
-          sha256: sha256Bytes(packaged.manifestBytes),
-          url: releaseAssetUrl(
-            release.channel,
-            version,
-            'release-manifest.json',
-          ),
-        },
-        publishedAt: release.publishedAt,
-        sourceSha: release.sourceSha,
-        version,
-      },
-    });
-    const stableBytes = encodeJsonBytes(stable);
-    progress.info(`Updating stable.json to ${version}`);
-    await api.commitFiles(
-      [{ path: release.channel.stablePath, bytes: stableBytes }],
-      `chore: publish stable ${version}`,
-      release.channel.branch,
-    );
-    await writeStatus(api, release, {
-      phase: currentPhase,
-      state: 'succeeded',
-      version,
-    });
-    return stable;
+    return await api.commit(sessionId);
   } catch (error) {
-    if (draft && !releaseIsPublic) {
-      await api.deleteRelease(draft.id).catch(() => {});
+    if (error?.status === 409) {
+      throw new ReleaseVersionConflictError(release.version, {cause: error});
     }
-    const errorCode =
-      currentPhase === 'uploading' && !draft
-        ? 'release_create_failed'
-        : PHASE_ERROR_CODES[currentPhase] ?? 'publish_failed';
-    await writeStatus(api, release, {
-      errorCode,
-      phase: currentPhase,
-      state: 'failed',
-      version,
-    }).catch(() => {});
     throw error;
   }
 }

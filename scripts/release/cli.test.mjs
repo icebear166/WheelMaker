@@ -1,357 +1,249 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {
-  parseReleaseArgs,
-  resolvePublishingToken,
-  runRelease,
-} from './cli.mjs';
-import * as cliModule from './cli.mjs';
+import {parseReleaseArgs, releaseBuildSummary, runRelease} from './cli.mjs';
 import {ReleaseVersionConflictError} from './publish.mjs';
 
 const SOURCE_SHA = '0123456789abcdef0123456789abcdef01234567';
 
 function fakeCliDeps() {
   const state = {
-    buildCalls: [],
-    cleanupCalls: [],
-    githubClientCalls: 0,
-    messages: [],
+    builds: [],
+    cleanups: [],
+    clientCalls: 0,
     order: [],
-    packageCalls: [],
+    packages: [],
     phases: [],
-    publishCalls: [],
-    sourceCalls: [],
-    versionCalls: 0,
-    workspaceCalls: [],
+    sessions: [],
+    statuses: [],
+    uploads: [],
   };
-  const deps = {
-    channel: {
-      branch: 'main',
-      owner: 'swm8023',
-      publishStatusPath: 'publish-status.json',
-      repository: 'wheelmaker-release',
-      stablePath: 'stable.json',
+  const api = {
+    async start(input) {
+      state.order.push('start');
+      state.sessions.push(input);
+      return {
+        publishedAt: `2026-07-17T09:00:0${state.sessions.length - 1}Z`,
+        sessionId: String(state.sessions.length).repeat(32),
+        version: input.version,
+      };
     },
+    async status(sessionId, value) {
+      state.order.push(`status:${value.phase}`);
+      state.statuses.push({sessionId, ...value});
+    },
+    async upload(sessionId, asset) {
+      state.order.push(`upload:${asset.name}`);
+      state.uploads.push({asset, sessionId});
+    },
+    async commit() {
+      state.order.push('commit');
+      return {schema: 2, version: state.sessions.at(-1).version};
+    },
+    async cancel(sessionId) {
+      state.order.push('cancel');
+      state.cancelled = sessionId;
+    },
+  };
+  return {
+    api,
+    channel: {baseUrl: 'https://release.wheelmaker.top'},
     coreBytes: Buffer.from('core'),
-    deployMjsBytes: Buffer.from('launcher'),
+    deployMjsBytes: Buffer.from('__WHEELMAKER_RELEASE_BASE_URL__'),
     outputRoot: 'D:\\repo\\.release-out',
     progress: {
-      info(message) {
-        state.messages.push(message);
-      },
+      info() {},
       async phase(label, action) {
         state.phases.push(label);
         return action();
       },
     },
+    publisher: 'local',
     repoRoot: 'D:\\repo',
-    workRoot: 'D:\\repo\\.release-work',
     state,
+    workRoot: 'D:\\repo\\.release-work',
     async cleanupReleaseWorkspace(path) {
-      state.cleanupCalls.push(path);
+      state.cleanups.push(path);
       state.order.push('cleanup');
     },
+    async createReleaseClient() {
+      state.clientCalls += 1;
+      state.order.push('client');
+      return api;
+    },
+    async createReleaseWorkspace(version) {
+      state.order.push('workspace');
+      return `D:\\repo\\.release-work\\tmp\\release-${version}-test`;
+    },
     async buildRelease(input) {
-      state.buildCalls.push(input);
       state.order.push('build');
+      state.builds.push(input);
       return {
-        desktopExe: input.withDesktop ? 'desktop.exe' : undefined,
         androidApk: input.withAndroid
           ? {apkPath: 'android.apk', manifestPath: 'android-release.json'}
           : undefined,
-        platforms: [{ directory: 'windows', key: 'windows-amd64' }],
-        versionRoot: `${input.outputRoot}\\${input.version}`,
+        desktopExe: input.withDesktop ? 'desktop.exe' : undefined,
+        platforms: [{directory: 'windows', key: 'windows-amd64'}],
       };
     },
-    async createGitHubClient() {
-      state.githubClientCalls += 1;
-      state.order.push('github');
-      return { kind: 'github-client' };
-    },
-    async createReleaseWorkspace(version) {
-      const path = `D:\\repo\\.release-work\\tmp\\release-${version}-test`;
-      state.workspaceCalls.push({path, version});
-      state.order.push('workspace');
-      return path;
-    },
-    now() {
-      return '2026-07-16T09:00:00.000Z';
-    },
-    async packageBuiltRelease(input) {
-      state.packageCalls.push(input);
-      state.order.push('package');
+    async loadDeploymentSources() {
+      state.order.push('sources');
       return {
-        assets: [{name: `wheelmaker-${input.version}-windows-amd64.tar.gz`}],
+        coreBytes: Buffer.from('core'),
+        deployMjsBytes: Buffer.from('__WHEELMAKER_RELEASE_BASE_URL__'),
+      };
+    },
+    now: () => '2026-07-17T08:00:00Z',
+    async packageBuiltRelease(input) {
+      state.order.push('package');
+      state.packages.push(input);
+      return {
+        assets: [
+          {name: 'deploy.mjs', path: 'deploy.mjs', sha256: 'a'.repeat(64), size: 1},
+        ],
         manifestPath: `${input.outputRoot}\\${input.version}\\release-manifest.json`,
-        platforms: [{
-          archivePath: `${input.outputRoot}\\${input.version}\\wheelmaker-${input.version}-windows-amd64.tar.gz`,
-          key: 'windows-amd64',
-        }],
-        version: input.version,
+        platforms: [{archivePath: 'archive.tar.gz', key: 'windows-amd64'}],
         versionRoot: `${input.outputRoot}\\${input.version}`,
       };
     },
-    async publishBuiltRelease(input, api) {
-      state.publishCalls.push({api, input});
+    async publishBuiltRelease(input, client) {
       state.order.push('publish');
-      return { version: 'v1.1' };
+      assert.equal(client, api);
+      await client.status(input.session.sessionId, {phase: 'uploading', state: 'running'});
+      for (const asset of input.packaged.assets) await client.upload(input.session.sessionId, asset);
+      await client.status(input.session.sessionId, {phase: 'committing', state: 'running'});
+      return client.commit(input.session.sessionId);
+    },
+    async resolveNextVersion({floorVersion} = {}) {
+      state.order.push('version');
+      return floorVersion === 'v1.24' ? 'v1.25' : 'v1.24';
     },
     async resolveSourceSha(options) {
-      state.sourceCalls.push(options);
+      state.sourceOptions = options;
       return SOURCE_SHA;
     },
-    async resolveNextVersion(options) {
-      state.versionCalls += 1;
-      state.order.push('version');
-      return options?.floorVersion === 'v1.24' ? 'v1.25' : 'v1.24';
-    },
   };
-  return deps;
 }
 
-test('CLI builds locally by default and accepts independent publish/Desktop flags', () => {
+test('CLI flags remain independent and reject retired command syntax', () => {
   assert.deepEqual(parseReleaseArgs([]), {
     publish: false,
     withAndroid: false,
     withDesktop: false,
   });
-  assert.deepEqual(parseReleaseArgs(['--with-desktop', '--with-android', '--publish']), {
-    publish: true,
-    withAndroid: true,
-    withDesktop: true,
-  });
-  assert.throws(
-    () => parseReleaseArgs(['--desktop-exe', 'x.exe']),
-    /unknown option/,
+  assert.deepEqual(
+    parseReleaseArgs(['--with-desktop', '--with-android', '--publish']),
+    {publish: true, withAndroid: true, withDesktop: true},
   );
   assert.throws(() => parseReleaseArgs(['build']), /unknown option/);
 });
 
-test('default mode builds the next stable version without constructing a GitHub client', async () => {
+test('local build reads public version and creates the identical final directory without auth or session', async () => {
   const deps = fakeCliDeps();
-  const result = await runRelease({ publish: false, withDesktop: false }, deps);
+  const result = await runRelease({publish: false, withDesktop: false}, deps);
 
-  assert.equal(deps.state.githubClientCalls, 0);
-  assert.equal(deps.state.publishCalls.length, 0);
-  assert.deepEqual(deps.state.sourceCalls, [{ requireClean: false }]);
-  assert.equal(deps.state.versionCalls, 1);
-  assert.equal(deps.state.buildCalls[0].version, 'v1.24');
-  assert.equal(deps.state.buildCalls[0].workRoot, 'D:\\repo\\.release-work');
+  assert.equal(deps.state.clientCalls, 0);
+  assert.equal(deps.state.sessions.length, 0);
+  assert.deepEqual(deps.state.sourceOptions, {requireClean: false});
+  assert.equal(deps.state.packages[0].publishedAt, '2026-07-17T08:00:00Z');
   assert.deepEqual(deps.state.order, [
     'version',
+    'sources',
     'workspace',
     'build',
     'package',
     'cleanup',
-  ]);
-  assert.equal(
-    deps.state.buildCalls[0].stagingRoot,
-    'D:\\repo\\.release-work\\tmp\\release-v1.24-test',
-  );
-  assert.equal(deps.state.packageCalls.length, 1);
-  assert.equal(deps.state.cleanupCalls.length, 1);
-  assert.deepEqual(deps.state.phases, [
-    'Checking source',
-    'Resolving release version',
-    'Preparing release workspace',
-    'Building release assets',
-    'Packaging and verifying assets',
-    'Cleaning release workspace',
   ]);
   assert.equal(result.mode, 'build');
-  assert.equal(
-    result.build.versionRoot,
-    'D:\\repo\\.release-out\\v1.24',
-  );
 });
 
-test('publish mode builds once and publishes that same build', async () => {
+test('publish starts its remote session before building and uses server publishedAt', async () => {
   const deps = fakeCliDeps();
-  const result = await runRelease({ publish: true, withDesktop: true }, deps);
+  const result = await runRelease(
+    {publish: true, withAndroid: true, withDesktop: true},
+    deps,
+  );
 
-  assert.deepEqual(deps.state.sourceCalls, [{ requireClean: true }]);
-  assert.equal(deps.state.githubClientCalls, 1);
-  assert.equal(deps.state.buildCalls.length, 1);
-  assert.equal(deps.state.buildCalls[0].withDesktop, true);
-  assert.equal(deps.state.buildCalls[0].withAndroid, false);
-  assert.equal(deps.state.publishCalls.length, 1);
-  assert.equal(deps.state.publishCalls[0].input.sourceSha, SOURCE_SHA);
-  assert.equal(deps.state.publishCalls[0].input.desktopExe, 'desktop.exe');
-  assert.deepEqual(deps.state.publishCalls[0].api, { kind: 'github-client' });
-  assert.equal(deps.state.publishCalls[0].input.version, 'v1.24');
+  assert.deepEqual(deps.state.sourceOptions, {requireClean: true});
+  assert.deepEqual(deps.state.sessions[0], {
+    publisher: 'local',
+    sourceSha: SOURCE_SHA,
+    version: 'v1.24',
+    withAndroid: true,
+    withDesktop: true,
+  });
+  assert.equal(deps.state.packages[0].publishedAt, '2026-07-17T09:00:00Z');
   assert.deepEqual(deps.state.order, [
     'version',
-    'github',
+    'sources',
+    'client',
+    'start',
+    'status:building',
     'workspace',
     'build',
+    'status:packaging',
     'package',
     'publish',
+    'status:uploading',
+    'upload:deploy.mjs',
+    'status:committing',
+    'commit',
     'cleanup',
   ]);
-  assert.equal(
-    deps.state.publishCalls[0].input.packaged.versionRoot,
-    'D:\\repo\\.release-out\\v1.24',
-  );
-  assert.deepEqual(deps.state.phases, [
-    'Checking source',
-    'Resolving release version',
-    'Authenticating release repository',
-    'Preparing release workspace',
-    'Building release assets',
-    'Packaging and verifying assets',
-    'Publishing release',
-    'Cleaning release workspace',
-  ]);
-  assert.deepEqual(result, { mode: 'publish', stable: { version: 'v1.1' } });
+  assert.deepEqual(result, {mode: 'publish', stable: {schema: 2, version: 'v1.24'}});
 });
 
-test('local build summary exposes final files instead of unpacked directories', () => {
-  assert.equal(typeof cliModule.releaseBuildSummary, 'function');
-  assert.deepEqual(
-    cliModule.releaseBuildSummary({
-      androidApkPath: 'D:\\out\\v1.24\\WheelMakerAndroid.apk',
-      desktopExePath: undefined,
-      manifestPath: 'D:\\out\\v1.24\\release-manifest.json',
-      platforms: [
-        {
-          archivePath: 'D:\\out\\v1.24\\wheelmaker-v1.24-windows-amd64.tar.gz',
-          key: 'windows-amd64',
-        },
-      ],
-      versionRoot: 'D:\\out\\v1.24',
-    }),
-    {
-      androidApk: 'D:\\out\\v1.24\\WheelMakerAndroid.apk',
-      desktopExe: null,
-      manifest: 'D:\\out\\v1.24\\release-manifest.json',
-      platforms: [
-        {
-          archive: 'D:\\out\\v1.24\\wheelmaker-v1.24-windows-amd64.tar.gz',
-          key: 'windows-amd64',
-        },
-      ],
-      versionRoot: 'D:\\out\\v1.24',
-    },
-  );
-});
-
-test('release workspace is removed when final packaging fails', async () => {
+test('a failed build exposes only a generic failed status and cancels the session', async () => {
   const deps = fakeCliDeps();
-  deps.packageBuiltRelease = async () => {
-    deps.state.order.push('package');
-    throw new Error('packaging failed');
+  deps.buildRelease = async () => {
+    deps.state.order.push('build');
+    throw new Error('compiler emitted a private path');
   };
-
   await assert.rejects(
-    () => runRelease({publish: false, withDesktop: false}, deps),
-    /packaging failed/,
+    runRelease({publish: true, withDesktop: false}, deps),
+    /compiler emitted a private path/,
   );
-  assert.deepEqual(deps.state.cleanupCalls, [
-    'D:\\repo\\.release-work\\tmp\\release-v1.24-test',
-  ]);
-  assert.deepEqual(deps.state.order, [
-    'version',
-    'workspace',
-    'build',
-    'package',
-    'cleanup',
-  ]);
+  assert.deepEqual(deps.state.statuses.at(-1), {
+    errorCode: 'build_failed',
+    phase: 'building',
+    sessionId: '1'.repeat(32),
+    state: 'failed',
+  });
+  assert.equal(deps.state.cancelled, '1'.repeat(32));
+  assert.equal(deps.state.cleanups.length, 1);
 });
 
-test('publish version conflict rebuilds every asset with a newly resolved version', async () => {
+test('commit conflict cancels and rebuilds all versioned assets in a new session', async () => {
   const deps = fakeCliDeps();
-  let publishAttempt = 0;
+  let attempts = 0;
   deps.publishBuiltRelease = async input => {
-    deps.state.publishCalls.push({input});
     deps.state.order.push('publish');
-    publishAttempt += 1;
-    if (publishAttempt === 1) {
-      throw new ReleaseVersionConflictError(input.version);
-    }
-    return {version: input.version};
+    attempts += 1;
+    if (attempts === 1) throw new ReleaseVersionConflictError(input.version);
+    return {schema: 2, version: input.version};
   };
-
   const result = await runRelease(
     {publish: true, withAndroid: true, withDesktop: false},
     deps,
   );
-
-  assert.deepEqual(
-    deps.state.buildCalls.map(({version, withAndroid}) => ({version, withAndroid})),
-    [
-      {version: 'v1.24', withAndroid: true},
-      {version: 'v1.25', withAndroid: true},
-    ],
-  );
-  assert.deepEqual(
-    deps.state.publishCalls.map(({input}) => ({
-      androidApk: input.androidApk,
-      version: input.version,
-    })),
-    [
-      {
-        androidApk: {apkPath: 'android.apk', manifestPath: 'android-release.json'},
-        version: 'v1.24',
-      },
-      {
-        androidApk: {apkPath: 'android.apk', manifestPath: 'android-release.json'},
-        version: 'v1.25',
-      },
-    ],
-  );
-  assert.deepEqual(result, {mode: 'publish', stable: {version: 'v1.25'}});
+  assert.deepEqual(deps.state.builds.map(build => build.version), ['v1.24', 'v1.25']);
+  assert.deepEqual(deps.state.sessions.map(session => session.version), ['v1.24', 'v1.25']);
+  assert.equal(deps.state.order.filter(value => value === 'cancel').length, 1);
+  assert.equal(result.stable.version, 'v1.25');
 });
 
-test('local publishing reuses the authenticated GitHub CLI token', async () => {
-  const calls = [];
-  const token = await resolvePublishingToken({
-    env: {},
-    async execGh(command, args, options) {
-      calls.push({ args, command, options });
-      return { stdout: 'local-gh-token\n' };
-    },
+test('build summary exposes only final release files', () => {
+  assert.deepEqual(releaseBuildSummary({
+    androidApkPath: undefined,
+    desktopExePath: 'D:\\out\\v1.1\\WheelMakerDesktop.exe',
+    manifestPath: 'D:\\out\\v1.1\\release-manifest.json',
+    platforms: [{archivePath: 'D:\\out\\v1.1\\package.tar.gz', key: 'windows-amd64'}],
+    versionRoot: 'D:\\out\\v1.1',
+  }), {
+    androidApk: null,
+    desktopExe: 'D:\\out\\v1.1\\WheelMakerDesktop.exe',
+    manifest: 'D:\\out\\v1.1\\release-manifest.json',
+    platforms: [{archive: 'D:\\out\\v1.1\\package.tar.gz', key: 'windows-amd64'}],
+    versionRoot: 'D:\\out\\v1.1',
   });
-
-  assert.equal(token, 'local-gh-token');
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].command, 'gh');
-  assert.deepEqual(calls[0].args, ['auth', 'token']);
-});
-
-test('local publishing gives an actionable error when gh is unavailable', async () => {
-  await assert.rejects(
-    () =>
-      resolvePublishingToken({
-        env: {},
-        async execGh() {
-          throw Object.assign(new Error('spawn gh ENOENT'), { code: 'ENOENT' });
-        },
-      }),
-    /install GitHub CLI.*gh auth login/i,
-  );
-});
-
-test('GitHub Actions publishing uses only the GitHub App installation token', async () => {
-  const appCalls = [];
-  const token = await resolvePublishingToken({
-    env: {
-      GITHUB_ACTIONS: 'true',
-      WHEELMAKER_RELEASE_APP_ID: '123',
-      WHEELMAKER_RELEASE_INSTALLATION_ID: '456',
-      WHEELMAKER_RELEASE_APP_PRIVATE_KEY: 'private-key',
-    },
-    async execGh() {
-      throw new Error('gh must not be used in Actions');
-    },
-    async requestAppToken(input) {
-      appCalls.push(input);
-      return 'app-installation-token';
-    },
-  });
-
-  assert.equal(token, 'app-installation-token');
-  assert.equal(appCalls.length, 1);
-  assert.equal(appCalls[0].appId, '123');
-  assert.equal(appCalls[0].installationId, '456');
 });
