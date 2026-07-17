@@ -114,18 +114,32 @@ func ScanTokenStats(ctx context.Context) (any, error) {
 func (c *tokenScanner) scanTokenStats(ctx context.Context) (tokenScanPayload, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	opencodeKeys, _ := readOpenCodeProviderKeys(defaultOpenCodeAuthPath())
-	providers := []tokenProviderScanResult{
-		c.scanCodexProfilesWithAppServer(ctx, discoverCodexAuthProfiles(), "", now),
+	driver := &streamDriver{}
+	if profiles := discoverCodexAuthProfiles(); len(profiles) > 0 {
+		profiles := profiles
+		driver.add(func() tokenProviderScanResult {
+			return c.scanCodexProfilesWithAppServer(ctx, profiles, "", now)
+		})
 	}
 	if key, ok := opencodeKeys["kimi-for-coding"]; ok {
-		providers = append(providers, scanKimiProvider(ctx, c.httpClient, key, "opencode:kimi-for-coding", now))
+		key := key
+		driver.add(func() tokenProviderScanResult {
+			return scanKimiProvider(ctx, c.httpClient, key, "opencode:kimi-for-coding", now)
+		})
 	}
 	if key, ok := opencodeKeys["zai-coding-plan"]; ok {
-		providers = append(providers, scanZAIProvider(ctx, c.httpClient, key, "opencode:zai-coding-plan", now))
+		key := key
+		driver.add(func() tokenProviderScanResult {
+			return scanZAIProvider(ctx, c.httpClient, key, "opencode:zai-coding-plan", now)
+		})
 	}
 	if key, ok := opencodeKeys["deepseek"]; ok {
-		providers = append(providers, scanDeepSeekProviderFromOpenCode(ctx, c.httpClient, key, "opencode:deepseek", now))
+		key := key
+		driver.add(func() tokenProviderScanResult {
+			return scanDeepSeekProviderFromOpenCode(ctx, c.httpClient, key, "opencode:deepseek", now)
+		})
 	}
+	providers := driver.run(nil) // publish hook wired in Task 2.3
 	return tokenScanPayload{
 		OK:        true,
 		UpdatedAt: now,
