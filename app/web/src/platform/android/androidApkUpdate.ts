@@ -1,3 +1,9 @@
+import {
+  getAndroidNativeRpcFacade,
+  type AndroidNativeMessageEnvironment,
+} from './androidNativeMessageBridge';
+import {wheelMakerReleaseUrl} from '../../settings/releaseChannel';
+
 export type AndroidApkLocalRelease = {
   supported: boolean;
   packageName: string;
@@ -53,7 +59,7 @@ export function parseAndroidStableRelease(input: unknown): AndroidApkLatestRelea
   const stable = input as Record<string, unknown>;
   const pointer = stable?.androidApk as Record<string, unknown> | undefined;
   if (
-    stable?.schema !== 1 ||
+    stable?.schema !== 2 ||
     !pointer ||
     typeof pointer.version !== 'string' ||
     !/^v1\.([1-9]\d*)$/.test(pointer.version) ||
@@ -63,8 +69,7 @@ export function parseAndroidStableRelease(input: unknown): AndroidApkLatestRelea
     !Number.isFinite(Date.parse(pointer.publishedAt)) ||
     typeof pointer.sourceSha !== 'string' ||
     !/^[0-9a-f]{40}$/.test(pointer.sourceSha) ||
-    typeof pointer.url !== 'string' ||
-    !pointer.url.startsWith('https://') ||
+    typeof pointer.path !== 'string' ||
     typeof pointer.sha256 !== 'string' ||
     !/^[0-9a-f]{64}$/.test(pointer.sha256) ||
     !Number.isSafeInteger(pointer.size) ||
@@ -72,11 +77,17 @@ export function parseAndroidStableRelease(input: unknown): AndroidApkLatestRelea
   ) {
     return null;
   }
+  let downloadUrl: string;
+  try {
+    downloadUrl = wheelMakerReleaseUrl(pointer.path as string);
+  } catch {
+    return null;
+  }
   return {
     tagName: pointer.version,
     publishedAt: pointer.publishedAt as string,
     apk: {
-      downloadUrl: pointer.url as string,
+      downloadUrl,
       sha256: pointer.sha256 as string,
       size: pointer.size as number,
     },
@@ -129,7 +140,3 @@ export function createAndroidApkUpdateBridge(
     ),
   };
 }
-import {
-  getAndroidNativeRpcFacade,
-  type AndroidNativeMessageEnvironment,
-} from './androidNativeMessageBridge';

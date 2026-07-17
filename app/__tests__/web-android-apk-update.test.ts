@@ -9,7 +9,7 @@ import {createAndroidNativeMessageTestHost} from '../testUtils/androidNativeMess
 describe('android apk update model', () => {
   test('parses carried Android APK pointer from stable metadata', () => {
     const latest = parseAndroidStableRelease({
-      schema: 1,
+      schema: 2,
       version: 'v1.24',
       androidApk: {
         version: 'v1.22',
@@ -17,7 +17,7 @@ describe('android apk update model', () => {
         versionCode: 22,
         publishedAt: '2026-05-31T03:49:50Z',
         sourceSha: 'a'.repeat(40),
-        url: 'https://example.com/WheelMakerAndroid.apk',
+        path: '/releases/v1.22/WheelMakerAndroid.apk',
         sha256: 'a'.repeat(64),
         size: 5408163,
       },
@@ -27,7 +27,7 @@ describe('android apk update model', () => {
       tagName: 'v1.22',
       publishedAt: '2026-05-31T03:49:50Z',
       apk: {
-        downloadUrl: 'https://example.com/WheelMakerAndroid.apk',
+        downloadUrl: 'https://release.wheelmaker.top/releases/v1.22/WheelMakerAndroid.apk',
         sha256: 'a'.repeat(64),
         size: 5408163,
       },
@@ -49,7 +49,7 @@ describe('android apk update model', () => {
       canRequestPackageInstalls: true,
     };
     const latest = parseAndroidStableRelease({
-      schema: 1,
+      schema: 2,
       version: 'v1.1',
       androidApk: {
         version: 'v1.1',
@@ -57,7 +57,7 @@ describe('android apk update model', () => {
         versionCode: 1,
         publishedAt: '2026-05-31T03:49:50Z',
         sourceSha: 'a'.repeat(40),
-        url: 'https://example.com/WheelMakerAndroid.apk',
+        path: '/releases/v1.1/WheelMakerAndroid.apk',
         sha256: 'abcdef'.padEnd(64, '0'),
         size: 1,
       },

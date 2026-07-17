@@ -90,34 +90,34 @@ class AndroidApkUpdateRuntimeTest {
     @Test
     fun apkDownloadRedirectsAllowBoundedHttpsHopsOnly() {
         assertEquals(
-            "https://release-assets.githubusercontent.com/github-production-release-asset/example.apk",
+            "https://cdn.example.test/WheelMakerAndroid.apk",
             resolveApkDownloadRedirect(
-                currentUrl = "https://github.com/swm8023/WheelMaker/releases/download/android-v1/WheelMakerAndroid.apk",
-                location = "https://release-assets.githubusercontent.com/github-production-release-asset/example.apk",
+                currentUrl = "https://release.wheelmaker.top/releases/v1.1/WheelMakerAndroid.apk",
+                location = "https://cdn.example.test/WheelMakerAndroid.apk",
                 hopCount = 1
             )
         )
         assertEquals(
-            "https://github.com/downloads/WheelMakerAndroid.apk",
+            "https://release.wheelmaker.top/downloads/WheelMakerAndroid.apk",
             resolveApkDownloadRedirect(
-                currentUrl = "https://github.com/swm8023/WheelMaker/releases/download/android-v1/WheelMakerAndroid.apk",
+                currentUrl = "https://release.wheelmaker.top/releases/v1.1/WheelMakerAndroid.apk",
                 location = "/downloads/WheelMakerAndroid.apk",
                 hopCount = 2
             )
         )
         assertNull(resolveApkDownloadRedirect(
-            currentUrl = "https://github.com/swm8023/WheelMaker/releases/download/android-v1/WheelMakerAndroid.apk",
-            location = "http://release-assets.githubusercontent.com/github-production-release-asset/example.apk",
+            currentUrl = "https://release.wheelmaker.top/releases/v1.1/WheelMakerAndroid.apk",
+            location = "http://cdn.example.test/WheelMakerAndroid.apk",
             hopCount = 1
         ))
         assertNull(resolveApkDownloadRedirect(
-            currentUrl = "https://github.com/swm8023/WheelMaker/releases/download/android-v1/WheelMakerAndroid.apk",
-            location = "https://user:pass@release-assets.githubusercontent.com/github-production-release-asset/example.apk",
+            currentUrl = "https://release.wheelmaker.top/releases/v1.1/WheelMakerAndroid.apk",
+            location = "https://user:pass@cdn.example.test/WheelMakerAndroid.apk",
             hopCount = 1
         ))
         assertNull(resolveApkDownloadRedirect(
-            currentUrl = "https://github.com/swm8023/WheelMaker/releases/download/android-v1/WheelMakerAndroid.apk",
-            location = "https://release-assets.githubusercontent.com/github-production-release-asset/example.apk",
+            currentUrl = "https://release.wheelmaker.top/releases/v1.1/WheelMakerAndroid.apk",
+            location = "https://cdn.example.test/WheelMakerAndroid.apk",
             hopCount = 6
         ))
     }

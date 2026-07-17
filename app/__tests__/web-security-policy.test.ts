@@ -7,7 +7,6 @@ const REQUIRED_CSP_DIRECTIVES = [
   "object-src 'none'",
   "frame-ancestors 'none'",
   "script-src 'self'",
-  "connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com",
   "img-src 'self' data: blob:",
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self'",
@@ -23,6 +22,7 @@ describe('web security policy', () => {
     for (const directive of REQUIRED_CSP_DIRECTIVES) {
       expect(html).toContain(directive);
     }
+    expect(html).toContain("connect-src 'self' wss: <%= releaseOrigin %>");
     expect(html).toContain('<meta name="referrer" content="no-referrer"');
     expect(html).not.toContain("script-src 'self' 'unsafe-inline'");
     expect(html).not.toContain("script-src 'self' 'unsafe-eval'");
@@ -37,6 +37,10 @@ describe('web security policy', () => {
     expect(devServer.host).toBe('127.0.0.1');
     expect(devServer.allowedHosts).toEqual(['localhost', '127.0.0.1']);
     expect(devServer.headers['Content-Security-Policy']).toContain("default-src 'self'");
+    expect(devServer.headers['Content-Security-Policy']).toContain(
+      "connect-src 'self' wss: https://release.wheelmaker.top",
+    );
+    expect(devServer.headers['Content-Security-Policy']).not.toContain('github.com');
     expect(devServer.headers['X-Content-Type-Options']).toBe('nosniff');
     expect(devServer.headers['X-Frame-Options']).toBe('DENY');
     expect(devServer.headers['Referrer-Policy']).toBe('no-referrer');

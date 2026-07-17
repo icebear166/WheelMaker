@@ -331,7 +331,7 @@ export function UpdateSettingsDetail({
           {wheelMakerReleaseHistoryLoading ? (
             <span className="muted">Loading...</span>
           ) : (
-            <span className="muted">{wheelMakerReleaseHistory.length} public releases</span>
+            <span className="muted">{wheelMakerReleaseHistory.length} releases</span>
           )}
         </div>
         {wheelMakerReleaseHistoryError ? (
@@ -353,7 +353,7 @@ export function UpdateSettingsDetail({
             ))}
           </div>
         ) : !wheelMakerReleaseHistoryLoading && !wheelMakerReleaseHistoryError ? (
-          <div className="muted">No public releases.</div>
+          <div className="muted">No releases.</div>
         ) : null}
       </section>
       {(wheelMakerUpdatesLoading || agentPackagesLoading || projectIndexLoading) && updateHubCards.length === 0 ? (

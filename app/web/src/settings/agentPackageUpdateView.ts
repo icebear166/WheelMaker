@@ -8,14 +8,15 @@ import type {
   RegistryWheelMakerUpdateJob,
   RegistryWheelMakerUpdateResponse,
 } from '../registry/registryTypes';
+import {wheelMakerReleaseUrl} from './releaseChannel';
 
 export const AGENT_PACKAGE_SCAN_TIMEOUT_MS = 65000;
 export const WHEELMAKER_RELEASE_HISTORY_URL =
-  'https://api.github.com/repos/swm8023/wheelmaker-release/releases';
+  wheelMakerReleaseUrl('/releases.json');
 export const WHEELMAKER_STABLE_URL =
-  'https://raw.githubusercontent.com/swm8023/wheelmaker-release/main/stable.json';
+  wheelMakerReleaseUrl('/stable.json');
 export const WHEELMAKER_PUBLISH_STATUS_URL =
-  'https://raw.githubusercontent.com/swm8023/wheelmaker-release/main/publish-status.json';
+  wheelMakerReleaseUrl('/publish-status.json');
 
 const ACTIVE_WHEELMAKER_UPDATE_STATES = new Set([
   'queued',
@@ -37,13 +38,13 @@ export type WheelMakerAndroidApkPointer = {
   versionCode: number;
   publishedAt: string;
   sourceSha: string;
-  url: string;
+  path: string;
   sha256: string;
   size: number;
 };
 
 export type WheelMakerStableMetadata = RegistryWheelMakerStableRelease & {
-  schema: 1;
+  schema: 2;
   androidApk?: WheelMakerAndroidApkPointer;
 };
 
@@ -189,7 +190,7 @@ export function parseWheelMakerStable(input: unknown): WheelMakerStableMetadata 
   if (
     !stable ||
     typeof stable !== 'object' ||
-    stable.schema !== 1 ||
+    stable.schema !== 2 ||
     typeof stable.version !== 'string' ||
     !/^v1\.(0|[1-9]\d*)$/.test(stable.version) ||
     typeof stable.publishedAt !== 'string' ||
@@ -207,7 +208,7 @@ export function parseWheelMakerStable(input: unknown): WheelMakerStableMetadata 
     androidApk = stable.androidApk;
   }
   return {
-    schema: 1,
+    schema: 2,
     version: stable.version,
     publishedAt: stable.publishedAt,
     sourceSha: stable.sourceSha,
@@ -262,13 +263,17 @@ function validAndroidPointer(input: unknown): input is WheelMakerAndroidApkPoint
     !Number.isFinite(Date.parse(pointer.publishedAt)) ||
     typeof pointer.sourceSha !== 'string' ||
     !/^[0-9a-f]{40}$/.test(pointer.sourceSha) ||
-    typeof pointer.url !== 'string' ||
-    !pointer.url.startsWith('https://') ||
+    typeof pointer.path !== 'string' ||
     typeof pointer.sha256 !== 'string' ||
     !/^[0-9a-f]{64}$/.test(pointer.sha256) ||
     !Number.isSafeInteger(pointer.size) ||
     Number(pointer.size) <= 0
   ) {
+    return false;
+  }
+  try {
+    wheelMakerReleaseUrl(pointer.path as string);
+  } catch {
     return false;
   }
   return true;
@@ -315,29 +320,59 @@ export async function fetchWheelMakerReleaseHistory(
   request: typeof fetch = globalThis.fetch.bind(globalThis),
 ): Promise<WheelMakerReleaseHistoryEntry[]> {
   const response = await request(WHEELMAKER_RELEASE_HISTORY_URL, {
-    headers: {Accept: 'application/vnd.github+json'},
+    cache: 'no-store',
   });
   if (!response.ok) {
     throw new Error(`Release history request failed (${response.status}).`);
   }
-  const payload = await response.json() as unknown;
-  if (!Array.isArray(payload)) {
+  const payload = await response.json() as Record<string, unknown>;
+  if (
+    !payload ||
+    typeof payload !== 'object' ||
+    payload.schema !== 1 ||
+    !Array.isArray(payload.releases)
+  ) {
     throw new Error('Release history response is invalid.');
   }
-  return payload
+  return payload.releases
     .filter((entry): entry is Record<string, unknown> => {
       return !!entry && typeof entry === 'object' &&
-        entry.draft !== true && entry.prerelease !== true &&
-        typeof entry.tag_name === 'string' && /^v1\.\d+$/.test(entry.tag_name) &&
-        typeof entry.published_at === 'string';
+        typeof entry.version === 'string' && /^v1\.([1-9]\d*)$/.test(entry.version) &&
+        typeof entry.publishedAt === 'string' && Number.isFinite(Date.parse(entry.publishedAt)) &&
+        typeof entry.sourceSha === 'string' && /^[0-9a-f]{40}$/.test(entry.sourceSha) &&
+        typeof entry.manifestSha256 === 'string' && /^[0-9a-f]{64}$/.test(entry.manifestSha256) &&
+        Array.isArray(entry.assets) && entry.assets.every((asset: unknown) => validHistoryAsset(asset));
     })
     .map(entry => ({
-      version: entry.tag_name as string,
-      publishedAt: entry.published_at as string,
-      url: typeof entry.html_url === 'string' ? entry.html_url : '',
+      version: entry.version as string,
+      publishedAt: entry.publishedAt as string,
+      url: wheelMakerReleaseUrl(`/releases/${entry.version}/release-manifest.json`),
     }))
     .sort((left, right) => right.publishedAt.localeCompare(left.publishedAt))
     .slice(0, 10);
+}
+
+function validHistoryAsset(input: unknown): boolean {
+  const asset = input as Record<string, unknown>;
+  if (
+    !asset ||
+    typeof asset !== 'object' ||
+    typeof asset.name !== 'string' ||
+    !asset.name ||
+    typeof asset.path !== 'string' ||
+    typeof asset.sha256 !== 'string' ||
+    !/^[0-9a-f]{64}$/.test(asset.sha256) ||
+    !Number.isSafeInteger(asset.size) ||
+    Number(asset.size) < 1
+  ) {
+    return false;
+  }
+  try {
+    wheelMakerReleaseUrl(asset.path as string);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function withAgentPackageTimeout<T>(

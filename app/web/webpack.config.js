@@ -4,13 +4,36 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const TerserPlugin = require('terser-webpack-plugin');
 
+const releaseChannelPath = path.resolve(
+  __dirname,
+  '..',
+  '..',
+  'scripts',
+  'release',
+  'channel.json',
+);
+const releaseChannel = require(releaseChannelPath);
+const releaseUrl = new URL(releaseChannel.baseUrl);
+if (
+  releaseUrl.protocol !== 'https:' ||
+  releaseUrl.username ||
+  releaseUrl.password ||
+  releaseUrl.pathname !== '/' ||
+  releaseUrl.search ||
+  releaseUrl.hash ||
+  releaseChannel.baseUrl !== releaseUrl.origin
+) {
+  throw new Error('Invalid WheelMaker release channel.');
+}
+const releaseOrigin = releaseUrl.origin;
+
 const WEB_SECURITY_POLICY = [
   "default-src 'self'",
   "base-uri 'none'",
   "object-src 'none'",
   "frame-ancestors 'none'",
   "script-src 'self'",
-  "connect-src 'self' wss: https://api.github.com https://raw.githubusercontent.com",
+  `connect-src 'self' wss: ${releaseOrigin}`,
   "img-src 'self' data: blob:",
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self'",
@@ -77,7 +100,11 @@ module.exports = (_env = {}, argv = {}) => {
         ? path.resolve(process.env.WHEELMAKER_WEBPACK_CACHE)
         : path.join(os.homedir(), '.wheelmaker', 'cache', 'webpack'),
       buildDependencies: {
-        config: [__filename, path.resolve(__dirname, '..', 'package-lock.json')],
+        config: [
+          __filename,
+          path.resolve(__dirname, '..', 'package-lock.json'),
+          releaseChannelPath,
+        ],
       },
     },
     resolve: {
@@ -124,6 +151,7 @@ module.exports = (_env = {}, argv = {}) => {
     plugins: [
       new HtmlWebpackPlugin({
         template: path.resolve(__dirname, 'public/index.html'),
+        templateParameters: {releaseOrigin},
         inject: 'body',
       }),
       ...(isProduction ? [new MiniCssExtractPlugin({

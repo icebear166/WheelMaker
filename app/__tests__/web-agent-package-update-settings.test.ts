@@ -6,6 +6,9 @@ import {
   fetchWheelMakerPublicMetadata,
   fetchWheelMakerReleaseHistory,
   parseWheelMakerStable,
+  WHEELMAKER_PUBLISH_STATUS_URL,
+  WHEELMAKER_RELEASE_HISTORY_URL,
+  WHEELMAKER_STABLE_URL,
   wheelMakerUpdateJobActive,
   wheelMakerUpdateStatusLabel,
   wheelMakerVersionCopy,
@@ -30,7 +33,7 @@ test('renders installed and stable WheelMaker release versions', () => {
   };
 
   const stable = parseWheelMakerStable({
-    schema: 1,
+    schema: 2,
     version: 'v1.23',
     publishedAt: '2026-07-16T09:00:00Z',
     sourceSha: 'b'.repeat(40),
@@ -66,7 +69,7 @@ test('loads strict public metadata once per global endpoint', async () => {
         ok: true,
         status: 200,
         json: async () => ({
-          schema: 1,
+          schema: 2,
           version: 'v1.24',
           publishedAt: '2026-07-17T09:00:00Z',
           sourceSha: 'a'.repeat(40),
@@ -91,25 +94,30 @@ test('loads strict public metadata once per global endpoint', async () => {
   });
   expect(requests.filter(url => url.endsWith('/stable.json'))).toHaveLength(1);
   expect(requests.filter(url => url.endsWith('/publish-status.json'))).toHaveLength(1);
-  expect(() => parseWheelMakerStable({schema: 2, version: 'v1.24'})).toThrow(/stable metadata/i);
+  expect(() => parseWheelMakerStable({schema: 1, version: 'v1.24'})).toThrow(/stable metadata/i);
 });
 
-test('loads only published WheelMaker release history', async () => {
+test('loads schema 2 metadata and release history from one origin', async () => {
+  expect(WHEELMAKER_STABLE_URL).toBe('https://release.wheelmaker.top/stable.json');
+  expect(WHEELMAKER_PUBLISH_STATUS_URL).toBe('https://release.wheelmaker.top/publish-status.json');
+  expect(WHEELMAKER_RELEASE_HISTORY_URL).toBe('https://release.wheelmaker.top/releases.json');
   const request = jest.fn().mockResolvedValue({
     ok: true,
     status: 200,
-    json: async () => [
-      {tag_name: 'v1.3', published_at: '2026-07-16T09:00:00Z', html_url: 'https://example.test/v1.3', draft: false, prerelease: false},
-      {tag_name: 'v1.4-rc', published_at: '2026-07-17T09:00:00Z', html_url: 'https://example.test/v1.4-rc', draft: false, prerelease: true},
-      {tag_name: 'desktop-v2', published_at: '2026-07-18T09:00:00Z', html_url: 'https://example.test/desktop-v2', draft: false, prerelease: false},
-      {tag_name: 'v1.2', published_at: '2026-07-15T09:00:00Z', html_url: 'https://example.test/v1.2', draft: false, prerelease: false},
-    ],
+    json: async () => ({
+      schema: 1,
+      releases: [
+        {version: 'v1.2', publishedAt: '2026-07-15T09:00:00Z', sourceSha: 'a'.repeat(40), manifestSha256: 'b'.repeat(64), assets: []},
+        {version: 'v1.3', publishedAt: '2026-07-16T09:00:00Z', sourceSha: 'c'.repeat(40), manifestSha256: 'd'.repeat(64), assets: []},
+      ],
+    }),
   }) as unknown as typeof fetch;
 
   await expect(fetchWheelMakerReleaseHistory(request)).resolves.toEqual([
-    {version: 'v1.3', publishedAt: '2026-07-16T09:00:00Z', url: 'https://example.test/v1.3'},
-    {version: 'v1.2', publishedAt: '2026-07-15T09:00:00Z', url: 'https://example.test/v1.2'},
+    {version: 'v1.3', publishedAt: '2026-07-16T09:00:00Z', url: 'https://release.wheelmaker.top/releases/v1.3/release-manifest.json'},
+    {version: 'v1.2', publishedAt: '2026-07-15T09:00:00Z', url: 'https://release.wheelmaker.top/releases/v1.2/release-manifest.json'},
   ]);
+  expect(request).toHaveBeenCalledWith(WHEELMAKER_RELEASE_HISTORY_URL, {cache: 'no-store'});
 });
 
 describe('agent package update settings UI source structure', () => {
