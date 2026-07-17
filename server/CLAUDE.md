@@ -25,7 +25,7 @@ Key types in `internal/hub/client/`:
 | SessionStore | session_store.go | Persistence interface for session snapshots |
 | SQLiteSessionStore | sqlite_store.go | SQLite-backed SessionStore (modernc.org/sqlite, CGo-free) |
 
-Full design: [../docs/architecture-3.0.md](../docs/architecture-3.0.md)
+Full design: [../docs/wiki/architecture/server-runtime.md](../docs/wiki/architecture/server-runtime.md)
 
 ## Package Map
 
@@ -79,5 +79,5 @@ node ../scripts/release.mjs build    # prebuilt Hub + Web packages, no publish
 
 ## Key Protocol Docs
 
-- ACP protocol: [../docs/acp-protocol-full.zh-CN.md](../docs/acp-protocol-full.zh-CN.md)
-- Remote Observe / Registry: [../docs/registry-server-remote-observe-protocol-v1.md](../docs/registry-server-remote-observe-protocol-v1.md)
+- ACP protocol: [../docs/wiki/protocols/acp.md](../docs/wiki/protocols/acp.md)
+- Registry protocol: [../docs/wiki/protocols/registry.md](../docs/wiki/protocols/registry.md)

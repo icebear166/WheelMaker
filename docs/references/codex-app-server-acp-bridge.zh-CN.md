@@ -9,7 +9,8 @@
 
 - OpenAI Codex app-server README：`https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md`
 - 当前本机运行时 schema：`codex-cli 0.129.0` 通过 `codex app-server generate-ts` 与 `generate-json-schema` 生成。
-- WheelMaker ACP 文档：`docs/acp-protocol-full.zh-CN.md`
+- WheelMaker ACP 当前边界：[`../wiki/protocols/acp.md`](../wiki/protocols/acp.md)
+- WheelMaker ACP 完整参考：[`acp-protocol-full.zh-CN.md`](acp-protocol-full.zh-CN.md)
 - 当前实现：`server/internal/hub/agent/codexapp_agent.go`、`server/internal/hub/agent/codexapp_convert.go`
 
 重要约束：GitHub `main` 文档可能领先于本机 Codex 版本。代码实现以本机生成 schema 为准，文档用 OpenAI README 校验生命周期和流程语义。

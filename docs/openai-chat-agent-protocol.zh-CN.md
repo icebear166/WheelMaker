@@ -22,7 +22,7 @@
 - Chat2API `src/main/proxy/routes/models.ts`：`GET /v1/models` 与 `GET /v1/models/:model`。
 - Chat2API `src/main/proxy/routes/completions.ts`：legacy `POST /v1/completions`。
 - Chat2API `src/main/proxy/types.ts`：当前兼容请求、响应、tool call、`reasoning_content` 扩展字段。
-- WheelMaker `docs/architecture-3.0.md` 与 `docs/codex-app-server-acp-bridge.zh-CN.md`：agent 层协议转换边界。
+- WheelMaker `docs/wiki/architecture/server-runtime.md` 与 `docs/references/codex-app-server-acp-bridge.zh-CN.md`：agent 层协议转换边界。
 
 ## 2. 设计结论
 

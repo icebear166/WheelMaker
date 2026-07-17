@@ -3083,7 +3083,7 @@ func TestCodexAppPromptMapsResourceLinks(t *testing.T) {
 		{Type: protocol.ContentBlockTypeText, Text: "what is this file for"},
 		{
 			Type:     protocol.ContentBlockTypeResourceLink,
-			URI:      "file:///D:/Code/WheelMaker/docs/acp-protocol-full.zh-CN.md",
+			URI:      "file:///D:/Code/WheelMaker/docs/references/acp-protocol-full.zh-CN.md",
 			Name:     "acp-protocol-full.zh-CN.md",
 			MimeType: "text/markdown",
 		},
@@ -3115,7 +3115,7 @@ func TestCodexAppPromptMapsResourceLinks(t *testing.T) {
 	}
 	for _, want := range []string{
 		"# Files mentioned by the user:",
-		"## acp-protocol-full.zh-CN.md: D:/Code/WheelMaker/docs/acp-protocol-full.zh-CN.md",
+		"## acp-protocol-full.zh-CN.md: D:/Code/WheelMaker/docs/references/acp-protocol-full.zh-CN.md",
 		"## pixel.png: D:/tmp/pixel.png",
 		"## My request for Codex:",
 		"what is this file for",

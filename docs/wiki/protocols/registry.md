@@ -1,4 +1,8 @@
+> 摘要：本页维护 WheelMaker Registry 2.6 的消息封装、方法域、路由、认证和版本约束。
+
 # WheelMaker Registry Protocol 2.6
+
+> 来源：本页由原路径 `docs/registry-protocol.md` 于 2026-07-17 全文迁入 wiki；本次迁移未修改协议版本或 payload。
 
 本文定义 WheelMaker Registry 2.6 协议。2.6 是一次硬切版本：Registry、Hub、App 的 `connect.init.payload.protocolVersion` 必须为 `2.6`，不保留旧端兼容入口。
 

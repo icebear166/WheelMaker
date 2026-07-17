@@ -1,4 +1,8 @@
+> 摘要：本页维护 WheelMaker App-only Session 运行时架构、组件职责和生命周期边界。
+
 # Architecture 3.0
+
+> 来源：本页由原路径 `docs/architecture-3.0.md` 于 2026-07-17 全文迁入 wiki。
 
 Updated: 2026-05-27  
 Status: **Implemented, App-only session runtime**
