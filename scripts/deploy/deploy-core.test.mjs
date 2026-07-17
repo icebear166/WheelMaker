@@ -544,8 +544,7 @@ test('migrate-uninstall removes legacy runtimes and preserves user data', async 
   assert.equal(await exists(join(home, 'bin', 'wheelmaker-deploy.exe')), false);
   assert.equal(await exists(join(home, 'bin', 'wheelmaker-monitor.exe')), false);
   assert.equal(await exists(join(home, 'build')), false);
-  assert.equal(await exists(join(home, 'cache', 'go-build')), false);
-  assert.equal(await exists(join(home, 'cache', 'wheelmaker', 'agent-entry')), true);
+  assert.equal(await exists(join(home, 'cache')), false);
   assert.equal(await exists(join(home, 'mobile')), false);
   assert.equal(await exists(join(home, 'tmp')), false);
   assert.equal(await exists(join(home, 'update-now.signal')), false);
