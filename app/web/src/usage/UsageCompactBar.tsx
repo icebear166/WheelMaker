@@ -1,5 +1,6 @@
 import React from 'react';
-import {UsageAccount, UsageSnapshot, remainingPercent, tightnessColor} from './usageTypes';
+import {UsageAccount, remainingPercent, tightnessColor} from './usageTypes';
+import type {UsageSnapshot} from './usageStream';
 
 interface Props {
   snapshot: UsageSnapshot;

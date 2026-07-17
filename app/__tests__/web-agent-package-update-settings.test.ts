@@ -616,7 +616,9 @@ describe('agent package update settings UI source structure', () => {
     expect(chatSessionHeaderStart).toBeGreaterThanOrEqual(0);
     expect(chatSessionHeaderEnd).toBeGreaterThan(chatSessionHeaderStart);
     const chatSessionHeader = mainTsx.slice(chatSessionHeaderStart, chatSessionHeaderEnd);
-    expect(chatSessionHeader).toContain('{!sessionSearchHeaderExpanded ? renderChatMenuSettingsButton() : null}');
+    expect(chatSessionHeader).toContain('{!sessionSearchHeaderExpanded ? (');
+    expect(chatSessionHeader).toContain('{renderChatMenuUsageButton()}');
+    expect(chatSessionHeader).toContain('{renderChatMenuSettingsButton()}');
     expect(chatSessionHeader).not.toContain('title="Update"');
     expect(chatSessionHeader).not.toContain('title="Port Relay"');
     expect(chatSessionHeader).not.toContain("openSettingsDetail('update')");

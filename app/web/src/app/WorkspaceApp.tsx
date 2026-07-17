@@ -326,6 +326,10 @@ import {
   tokenStatsFailureSummary,
   type TokenProviderSectionView,
 } from '../settings/tokenStatsView';
+import {UsageStream} from '../usage/usageStream';
+import type {UsageSnapshot} from '../usage/usageStream';
+import {UsageCompactBar} from '../usage/UsageCompactBar';
+import {UsageCardPanel} from '../usage/UsageCardPanel';
 import {
   AGENT_PACKAGE_SCAN_TIMEOUT_MS,
   deriveNpmPackageUpdateTargets,
@@ -2782,6 +2786,12 @@ export function App() {
   const [tokenStatsError, setTokenStatsError] = useState('');
   const [tokenStatsUpdatedAt, setTokenStatsUpdatedAt] = useState('');
   const [tokenStatsProviders, setTokenStatsProviders] = useState<TokenProviderSectionView[]>([]);
+  const usageStreamRef = useRef<UsageStream | null>(null);
+  if (usageStreamRef.current === null) {
+    usageStreamRef.current = new UsageStream();
+  }
+  const [usageSnapshot, setUsageSnapshot] = useState<UsageSnapshot>({accounts: [], updatedAt: 0});
+  const [usagePanelOpen, setUsagePanelOpen] = useState(false);
   const [wheelMakerUpdateHubs, setWheelMakerUpdateHubs] = useState<Record<string, WheelMakerUpdateHubView>>({});
   const [wheelMakerUpdatesLoading, setWheelMakerUpdatesLoading] = useState(false);
   const [wheelMakerUpdatesError, setWheelMakerUpdatesError] = useState('');
@@ -12690,6 +12700,33 @@ export function App() {
     refreshTokenStats().catch(() => undefined);
   }, [settingsDetailView, refreshTokenStats]);
 
+  useEffect(() => {
+    const stream = usageStreamRef.current;
+    if (!stream) {
+      return;
+    }
+    const refreshUsageAcrossHubs = () => {
+      service.listProjectSnapshot().then(snapshot => {
+        if (snapshot.projects.length > 0) {
+          setProjects(snapshot.projects);
+        }
+        setRegistryHubs(snapshot.hubs);
+        for (const hub of snapshot.hubs) {
+          service.scanTokenStats(hub.hubId).catch(() => undefined);
+        }
+      }).catch(() => undefined);
+    };
+    const offEvent = service.onEvent(env => stream.ingest(env as any));
+    const unsub = stream.subscribe(setUsageSnapshot);
+    refreshUsageAcrossHubs();
+    const interval = window.setInterval(refreshUsageAcrossHubs, 5 * 60 * 1000);
+    return () => {
+      offEvent();
+      unsub();
+      window.clearInterval(interval);
+    };
+  }, []);
+
   const agentPackageActionKey = useCallback((hubId: string, packageName: string): string => {
     return `${hubId}:${packageName}`;
   }, []);
@@ -17075,11 +17112,28 @@ export function App() {
     </button>
   );
 
+  const renderChatMenuUsageButton = () => (
+    <button
+      type="button"
+      className="chat-menu-icon-button chat-menu-usage-button"
+      onClick={() => setUsagePanelOpen(true)}
+      title="Agent usage"
+      aria-label="Agent usage"
+    >
+      <span className="codicon codicon-dashboard" aria-hidden="true" />
+    </button>
+  );
+
   const renderChatSessionHeader = (mobile: boolean) => {
     const chatSessionHeaderClassName = `sidebar-title-row chat-session-header${sessionSearchHeaderExpanded ? ' search-open' : ''}${mobile ? ' mobile' : ''}`;
     const chatSessionHeaderContent = (
       <>
-        {!sessionSearchHeaderExpanded ? renderChatMenuSettingsButton() : null}
+        {!sessionSearchHeaderExpanded ? (
+          <>
+            {renderChatMenuUsageButton()}
+            {renderChatMenuSettingsButton()}
+          </>
+        ) : null}
         <div className="chat-sidebar-title-actions">
           {renderChatHubSummary()}
           {renderChatArchiveControls()}
@@ -19279,6 +19333,24 @@ export function App() {
             <ChatPlanSurface
               mode="mobile"
               plan={selectedChatPlan}
+            />
+          ) : null}
+          <UsageCompactBar snapshot={usageSnapshot} onExpand={() => setUsagePanelOpen(true)} />
+          {usagePanelOpen ? (
+            <UsageCardPanel
+              snapshot={usageSnapshot}
+              onClose={() => setUsagePanelOpen(false)}
+              onRefresh={() => {
+                service.listProjectSnapshot().then(snapshot => {
+                  if (snapshot.projects.length > 0) {
+                    setProjects(snapshot.projects);
+                  }
+                  setRegistryHubs(snapshot.hubs);
+                  for (const hub of snapshot.hubs) {
+                    service.scanTokenStats(hub.hubId).catch(() => undefined);
+                  }
+                }).catch(() => undefined);
+              }}
             />
           ) : null}
           <div
