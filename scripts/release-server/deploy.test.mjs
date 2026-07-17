@@ -72,6 +72,8 @@ test('remote install script is idempotent and preserves public releases and conf
   assert.match(script, /systemctl daemon-reload/);
   assert.match(script, /certbot certonly --webroot/);
   assert.match(script, /nginx -t/);
+  assert.match(script, /for attempt in \$\(seq 1 15\)/);
+  assert.match(script, /sleep 1/);
   assert.doesNotMatch(script, /rm -rf[^\n]*public\/releases/);
   assert.doesNotMatch(script, /PRIVATE KEY|wheelmaker-release-server_ed25519/);
 });

@@ -149,7 +149,15 @@ install -o root -g root -m 0644 "$upload_dir/nginx.conf" "$site_available"
 ln -sfn "$site_available" "$site_enabled"
 nginx -t
 systemctl reload nginx
-curl --fail --silent --show-error "https://$domain/healthz" >/dev/null
+health_ready=0
+for attempt in $(seq 1 15); do
+  if curl --fail --silent --show-error "https://$domain/healthz" >/dev/null; then
+    health_ready=1
+    break
+  fi
+  sleep 1
+done
+[ "$health_ready" -eq 1 ] || { echo "release server HTTPS health check timed out" >&2; exit 1; }
 `;
 }
 
