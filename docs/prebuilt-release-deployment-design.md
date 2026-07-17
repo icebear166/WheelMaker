@@ -3,6 +3,12 @@
 日期：2026-07-16  
 状态：已实施
 
+> 2026-07-17 后续方案：公开 GitHub Release 托管将由
+> `https://release.wheelmaker.top` 自建发布服务取代。目标架构见
+> `docs/self-hosted-release-server-design.md`，已确认范围见
+> `docs/scope/2026-07-17-self-hosted-release-server/spec-self-hosted-release-server.md`。
+> 在该后续方案实施完成前，本文其余部分仍描述当前 GitHub 托管实现。
+
 ## 目标
 
 将 WheelMaker 从“目标机器拉取私有源码、安装构建工具并现场编译”的发布方式，迁移为“发布端构建、目标机器下载预构建产物”的方式。
