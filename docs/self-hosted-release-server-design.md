@@ -1,7 +1,8 @@
 # WheelMaker 自建发布服务器设计
 
 日期：2026-07-17
-状态：待实施
+状态：已实施
+生产验证：2026-07-17，`https://release.wheelmaker.top`
 
 ## 目标
 
