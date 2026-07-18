@@ -263,6 +263,27 @@ test('release homepage constrains long install commands on mobile', async () => 
   assert.match(html, /\.panel\s*\{[^}]*min-width:\s*0/s);
 });
 
+test('release homepage removes redundant explanatory sections', async () => {
+  const html = await readFile(new URL('./index.html', import.meta.url), 'utf8');
+
+  assert.doesNotMatch(html, />Latest clients</);
+  assert.doesNotMatch(html, />What happens</);
+  assert.match(
+    html,
+    /<section class="latest-clients" aria-label="Client downloads">/,
+  );
+});
+
+test('release homepage uses a compact two-column desktop layout', async () => {
+  const html = await readFile(new URL('./index.html', import.meta.url), 'utf8');
+
+  assert.match(
+    html,
+    /@media \(min-width: 1024px\)[\s\S]*?\.commands\s*\{\s*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/,
+  );
+  assert.match(html, /\.client-card\s*\{[^}]*min-height:\s*168px/s);
+});
+
 async function loadReleaseHomepage() {
   const source = await readFile(
     new URL('./release-home.js', import.meta.url),
