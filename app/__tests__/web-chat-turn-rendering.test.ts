@@ -273,7 +273,7 @@ describe('web chat turn rendering', () => {
     expect(styles).toContain('.chat-plan-surface.mobile.expanded');
   });
 
-  test('anchors desktop plan in the shared 360px left stack beside the 800px text column', () => {
+  test('anchors the desktop surface stack to the left edge of the chat area', () => {
     const styles = readStyles();
     const stackBlock = cssRuleBlock(styles, '.chat-edge-surface-stack');
     const fixedBlock = cssRuleBlock(styles, '.chat-view-width-fixed-800 .chat-edge-surface-stack');
@@ -285,8 +285,8 @@ describe('web chat turn rendering', () => {
     expect(styles).toContain('--chat-edge-surface-width: 360px;');
     expect(stackBlock).toContain('--chat-edge-surface-stack-width: var(--chat-edge-surface-width);');
     expect(stackBlock).toContain('width: var(--chat-edge-surface-stack-resolved-width);');
-    expect(fixedBlock).toContain('left: max(');
-    expect(fixedBlock).toContain('(100% - 800px) / 2 - var(--chat-edge-surface-stack-resolved-width)');
+    expect(fixedBlock).toContain('left: var(--chat-edge-surface-stack-edge-gap);');
+    expect(fixedBlock).not.toContain('(100% - 800px) / 2');
     expect(itemBlock).toContain('left: auto;');
     expect(itemBlock).toContain('right: auto;');
     expect(itemBlock).toContain('width: 100%;');

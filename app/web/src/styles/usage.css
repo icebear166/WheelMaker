@@ -27,10 +27,7 @@
 }
 
 .chat-view-width-fixed-800 .chat-function-surface.desktop {
-  left: max(
-    var(--chat-function-edge-gap),
-    calc((100% - 800px) / 2 - min(var(--chat-function-width), calc(100% - 20px)) - var(--chat-function-column-gap))
-  );
+  left: var(--chat-function-edge-gap);
 }
 
 .chat-function-surface-header {

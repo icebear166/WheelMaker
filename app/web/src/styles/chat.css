@@ -2770,12 +2770,7 @@
 }
 
 .chat-view-width-fixed-800 .chat-edge-surface-stack {
-  left: max(
-    var(--chat-edge-surface-stack-edge-gap),
-    calc(
-      (100% - 800px) / 2 - var(--chat-edge-surface-stack-resolved-width) - var(--chat-edge-surface-stack-column-gap)
-    )
-  );
+  left: var(--chat-edge-surface-stack-edge-gap);
 }
 
 .chat-recent-sessions-surface.desktop {
@@ -2803,12 +2798,7 @@
 }
 
 .chat-view-width-fixed-800 .chat-recent-sessions-surface.desktop {
-  left: max(
-    var(--chat-recent-sessions-edge-gap),
-    calc(
-      (100% - 800px) / 2 - var(--chat-recent-sessions-resolved-width) - var(--chat-recent-sessions-column-gap)
-    )
-  );
+  left: var(--chat-recent-sessions-edge-gap);
 }
 
 .chat-recent-sessions-surface-header {
@@ -2910,7 +2900,8 @@
   );
   position: absolute;
   top: 12px;
-  right: var(--chat-plan-edge-gap);
+  right: auto;
+  left: var(--chat-plan-edge-gap);
   z-index: 6;
   width: var(--chat-plan-resolved-width);
   max-height: min(42vh, 360px);
@@ -2927,10 +2918,7 @@
 }
 
 .chat-view-width-fixed-800 .chat-plan-surface.desktop {
-  left: min(
-    calc((100% + 800px) / 2 + var(--chat-plan-column-gap)),
-    calc(100% - var(--chat-plan-resolved-width) - var(--chat-plan-edge-gap))
-  );
+  left: var(--chat-plan-edge-gap);
   right: auto;
 }
 

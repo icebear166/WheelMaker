@@ -50,6 +50,8 @@ describe('ChatPlanSurface', () => {
     const projectRoot = path.join(__dirname, '..');
     const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles', 'chat.css'));
     const stackRule = cssRuleBlock(stylesCss, '.chat-edge-surface-stack');
+    const recentFixedRule = cssRuleBlock(stylesCss, '.chat-view-width-fixed-800 .chat-recent-sessions-surface.desktop');
+    const planFixedRule = cssRuleBlock(stylesCss, '.chat-view-width-fixed-800 .chat-plan-surface.desktop');
     const stackItemRule = cssRuleBlock(
       stylesCss,
       '.chat-edge-surface-stack > .chat-recent-sessions-surface.desktop,\n.chat-edge-surface-stack > .chat-plan-surface.desktop',
@@ -63,6 +65,10 @@ describe('ChatPlanSurface', () => {
     expect(stackItemRule).toContain('position: relative;');
     expect(stackItemRule).toContain('width: 100%;');
     expect(stackItemRule).toContain('pointer-events: auto;');
+    expect(recentFixedRule).toContain('left: var(--chat-recent-sessions-edge-gap);');
+    expect(recentFixedRule).not.toContain('(100% - 800px) / 2');
+    expect(planFixedRule).toContain('left: var(--chat-plan-edge-gap);');
+    expect(planFixedRule).not.toContain('(100% + 800px) / 2');
   });
 
   test('keeps mobile Plan outside the stack and restores only the hovered desktop panel', () => {
