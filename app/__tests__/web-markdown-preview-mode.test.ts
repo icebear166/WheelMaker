@@ -84,4 +84,24 @@ describe('web markdown preview mode', () => {
     expect(htmlPreviewFrameBlock).toContain('height: 100%;');
     expect(htmlPreviewFrameBlock).not.toContain('min-height: calc(100vh - 170px);');
   });
+
+  test('uses a vertical flex axis so the HTML iframe fills its preview wrapper', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+
+    const htmlPreviewBlock = stylesCss.match(/\.html-preview \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(htmlPreviewBlock).toContain('flex-direction: column;');
+  });
+
+  test('lets the Preview workbench HTML wrapper grow to the active tab height', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readWebStyles(projectRoot);
+
+    const workbenchHtmlPreviewBlock = stylesCss.match(
+      /\.preview-workbench-rendered-tab > \.html-preview \{[\s\S]*?\n\}/,
+    )?.[0] ?? '';
+    expect(workbenchHtmlPreviewBlock).toContain('flex: 1 1 auto;');
+    expect(workbenchHtmlPreviewBlock).toContain('height: auto;');
+    expect(workbenchHtmlPreviewBlock).toContain('min-height: 0;');
+  });
 });

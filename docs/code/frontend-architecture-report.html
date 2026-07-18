@@ -92,7 +92,7 @@
       pointer-events: none;
     }
     .masthead::after {
-      content: "WM / FRONTEND / SYSTEM MAP";
+      content: "WHEELMAKER / 前端 / 系统图";
       position: absolute;
       right: -35px;
       bottom: 34px;
@@ -843,18 +843,18 @@
 
   <header class="masthead">
     <div class="masthead-inner">
-      <p class="eyebrow">Architecture intelligence / static + build + runtime evidence</p>
+      <p class="eyebrow">架构情报 / 静态扫描 + 构建测量 + 运行时证据</p>
       <h1>WheelMaker<br>前端架构全景</h1>
       <p class="hero-deck">从 191 个源文件、7.1 万行代码和 353 条模块依赖出发，定位当前系统的真实边界、功能面、常驻成本与迭代切入点。</p>
       <div class="hero-meta">
-        <span>基线版本 feef1391</span>
+        <span>代码基线 main（截至 2026-07-19）</span>
         <span>分支 main</span>
         <span>分析日期 2026-07-19</span>
-        <span>范围 app/web/src + app/__tests__ + production build</span>
+        <span>范围 app/web/src + app/__tests__ + 正式生产构建</span>
       </div>
       <div class="hero-metrics" aria-label="核心指标">
         <div class="hero-metric"><strong>191</strong><span>前端源文件</span></div>
-        <div class="hero-metric"><strong>71,057</strong><span>源代码物理行数</span></div>
+        <div class="hero-metric"><strong>71,064</strong><span>源代码物理行数</span></div>
         <div class="hero-metric"><strong>21,942</strong><span>WorkspaceApp 单文件行数</span></div>
         <div class="hero-metric"><strong>353</strong><span>相对模块依赖边</span></div>
         <div class="hero-metric"><strong>2.35 MiB</strong><span>生产入口 JS + CSS</span></div>
@@ -865,7 +865,7 @@
 
   <div class="report-shell">
     <aside class="toc" aria-label="报告目录">
-      <div class="toc-mark">SYSTEM INDEX</div>
+      <div class="toc-mark">报告目录</div>
       <nav>
         <ol>
           <li><a href="#summary">执行摘要</a></li>
@@ -889,7 +889,7 @@
     <main id="main">
       <section id="summary">
         <div class="section-head">
-          <div class="section-no">01 / SUMMARY</div>
+          <div class="section-no">01 / 执行摘要</div>
           <div>
             <h2>执行摘要</h2>
             <p class="section-intro">WheelMaker 前端已经具备完整产品能力和明确的基础设施分层，但应用编排层没有同步演进，形成了“底层有边界、顶层过度集中”的结构。</p>
@@ -906,17 +906,17 @@
 
         <div class="finding-grid">
           <article class="finding strength">
-            <span class="index">01 / STRENGTH</span>
+            <span class="index">01 / 优势</span>
             <h3>基础层已经成形</h3>
             <p>Registry Client → Repository → Workspace Service → Store/Persistence 的职责大体清楚；平台桥接、按需加载、CSP、虚拟列表和 IndexedDB 都已有成熟实现。</p>
           </article>
           <article class="finding risk">
-            <span class="index">02 / BOTTLENECK</span>
+            <span class="index">02 / 瓶颈</span>
             <h3>根组件成为系统总线</h3>
             <p>单文件占全部前端 LOC 的 30.9%，内部导入 129 个模块，并承载 290 个 state、172 个 effect/layout effect 与 271 个 callback。任何局部功能都容易扩大根渲染与回归范围。</p>
           </article>
           <article class="finding direction">
-            <span class="index">03 / DIRECTION</span>
+            <span class="index">03 / 方向</span>
             <h3>渐进迁移，不做大爆炸重构</h3>
             <p>优先封顶缓存和性能预算，再按 Chat → Preview/Terminal → Settings/Port Relay 顺序抽取 feature runtime；保留现有 Registry、持久化和 UI 组件资产。</p>
           </article>
@@ -933,14 +933,14 @@
           <div class="ledger-item"><strong>120 MB</strong><span>IndexedDB 各域原始预算合计</span></div>
           <div class="ledger-item"><strong>5.17 MB</strong><span>4,303 turns 会话内存估算</span></div>
           <div class="ledger-item"><strong>4000</strong><span>Shiki inline cache 条目上限</span></div>
-          <div class="ledger-item"><strong>27,723</strong><span>测试代码行数</span></div>
+          <div class="ledger-item"><strong>27,743</strong><span>测试代码行数</span></div>
           <div class="ledger-item"><strong>5,427</strong><span>测试中的 toContain 断言</span></div>
         </div>
       </section>
 
       <section id="architecture">
         <div class="section-head">
-          <div class="section-no">02 / BACKBONE</div>
+          <div class="section-no">02 / 架构骨架</div>
           <div>
             <h2>架构骨架</h2>
             <p class="section-intro">点击下方任一层，可聚焦对应职责。当前系统已经有六层主干，但 WorkspaceApp 同时跨越 Shell、Feature Runtime 和部分 Domain Orchestration。</p>
@@ -948,62 +948,62 @@
         </div>
 
         <div class="backbone-wrap">
-          <div class="backbone-label">INTERACTIVE SYSTEM BACKBONE · CLICK A LAYER TO TRACE OWNERSHIP</div>
+          <div class="backbone-label">交互式系统主干 · 点击任一层查看职责归属</div>
           <div class="backbone" role="group" aria-label="交互式系统分层">
             <button class="layer" type="button" data-layer="platform" aria-pressed="false">
-              <span>L1</span><strong>Platform</strong><small>PWA / Desktop / Android / Native bridge</small>
+              <span>第 1 层</span><strong>平台适配</strong><small>PWA / 桌面端 / Android / 原生桥接</small>
             </button>
             <span class="arrow" aria-hidden="true">→</span>
             <button class="layer" type="button" data-layer="shell" aria-pressed="false">
-              <span>L2</span><strong>Shell</strong><small>main / WorkspaceApp / ResponsiveShell</small>
+              <span>第 2 层</span><strong>应用壳层</strong><small>main / WorkspaceApp / ResponsiveShell</small>
             </button>
             <span class="arrow" aria-hidden="true">→</span>
             <button class="layer" type="button" data-layer="feature" aria-pressed="false">
-              <span>L3</span><strong>Feature UI</strong><small>Chat / File / Git / Preview / Settings</small>
+              <span>第 3 层</span><strong>功能界面</strong><small>聊天 / 文件 / Git / 预览 / 设置</small>
             </button>
             <span class="arrow" aria-hidden="true">→</span>
             <button class="layer" type="button" data-layer="domain" aria-pressed="false">
-              <span>L4</span><strong>Domain</strong><small>WorkspaceController / Service / feature models</small>
+              <span>第 4 层</span><strong>领域服务</strong><small>WorkspaceController / Service / 功能模型</small>
             </button>
             <span class="arrow" aria-hidden="true">→</span>
             <button class="layer" type="button" data-layer="data" aria-pressed="false">
-              <span>L5</span><strong>Data</strong><small>WorkspaceStore / IndexedDB / runtime maps</small>
+              <span>第 5 层</span><strong>数据与缓存</strong><small>WorkspaceStore / IndexedDB / 运行时映射</small>
             </button>
             <span class="arrow" aria-hidden="true">→</span>
             <button class="layer" type="button" data-layer="transport" aria-pressed="false">
-              <span>L6</span><strong>Registry</strong><small>Client / Repository / WebSocket / Hub</small>
+              <span>第 6 层</span><strong>Registry 通信</strong><small>客户端 / Repository / WebSocket / Hub</small>
             </button>
           </div>
         </div>
 
         <div class="layer-notes" aria-live="polite">
           <article class="layer-note" data-layer-detail="platform">
-            <span class="mono">PLATFORM</span>
+            <span class="mono">平台适配</span>
             <h4>运行环境适配</h4>
             <p>Desktop、Android、Native 与 PWA 各自封装凭据、诊断、更新、通知、系统能力和持久化差异。</p>
           </article>
           <article class="layer-note" data-layer-detail="shell">
-            <span class="mono">SHELL</span>
+            <span class="mono">应用壳层</span>
             <h4>组合与导航</h4>
             <p><code>main.tsx</code> 完成启动；<code>WorkspaceApp.tsx</code> 负责绝大多数状态、订阅和命令编排；ResponsiveShell 分流桌面与移动布局。</p>
           </article>
           <article class="layer-note" data-layer-detail="feature">
-            <span class="mono">FEATURE UI</span>
+            <span class="mono">功能界面</span>
             <h4>产品功能面</h4>
             <p>Chat、文件、Git、终端、预览、设置、语音、用量与 Port Relay 已有独立目录和视图组件，但运行时状态仍大量上收。</p>
           </article>
           <article class="layer-note" data-layer-detail="domain">
-            <span class="mono">DOMAIN</span>
+            <span class="mono">领域服务</span>
             <h4>领域动作</h4>
             <p>WorkspaceController 负责连接、切换和刷新；RegistryWorkspaceService 提供项目语境下的 108 个便捷方法。</p>
           </article>
           <article class="layer-note" data-layer-detail="data">
-            <span class="mono">DATA</span>
+            <span class="mono">数据与缓存</span>
             <h4>缓存与持久化</h4>
             <p>WorkspaceStore 是 UI 面向的缓存门面；WorkspacePersistenceRepository 管理 IndexedDB、空间预算、淘汰与配额恢复。</p>
           </article>
           <article class="layer-note" data-layer-detail="transport">
-            <span class="mono">REGISTRY</span>
+            <span class="mono">REGISTRY 通信</span>
             <h4>协议与后端入口</h4>
             <p>RegistryClient 管连接和事件，Repository 的 109 个方法做协议归一化，最终通过 WebSocket 连接 Registry/Hub。</p>
           </article>
@@ -1045,16 +1045,16 @@
 
       <section id="inventory">
         <div class="section-head">
-          <div class="section-no">03 / INVENTORY</div>
+          <div class="section-no">03 / 目录盘点</div>
           <div>
             <h2>目录与文件分布</h2>
-            <p class="section-intro">前端源代码共 191 个文件、71,057 个物理行。TSX 占 46.5% 行数，CSS 占 22.2%，TS 占 31.4%。分布呈现出明显的根组件与全局样式集中。</p>
+            <p class="section-intro">前端源代码共 191 个文件、71,064 个物理行。TSX 占 46.5% 行数，CSS 占 22.2%，TS 占 31.4%。分布呈现出明显的根组件与全局样式集中。</p>
           </div>
         </div>
 
         <div class="chart" aria-label="目录代码行分布">
           <div class="bar-row"><span class="bar-label">app</span><span class="bar-track" style="--w:100%"></span><span class="bar-value">21,970 · 30.9%</span></div>
-          <div class="bar-row"><span class="bar-label">styles</span><span class="bar-track" style="--w:71.7%"></span><span class="bar-value">15,751 · 22.2%</span></div>
+          <div class="bar-row"><span class="bar-label">styles</span><span class="bar-track" style="--w:71.7%"></span><span class="bar-value">15,758 · 22.2%</span></div>
           <div class="bar-row"><span class="bar-label">chat</span><span class="bar-track" style="--w:38.4%"></span><span class="bar-value">8,441 · 11.9%</span></div>
           <div class="bar-row"><span class="bar-label">registry</span><span class="bar-track" style="--w:20.8%"></span><span class="bar-value">4,577 · 6.4%</span></div>
           <div class="bar-row"><span class="bar-label">settings</span><span class="bar-track" style="--w:18.3%"></span><span class="bar-value">4,027 · 5.7%</span></div>
@@ -1071,7 +1071,7 @@
             <thead><tr><th>目录</th><th>职责</th><th>文件</th><th>LOC</th><th>体积 KiB</th></tr></thead>
             <tbody>
               <tr><td class="path">app</td><td>应用编排、快捷键</td><td class="num">2</td><td class="num">21,970</td><td class="num">846.6</td></tr>
-              <tr><td class="path">styles</td><td>全局与功能样式</td><td class="num">15</td><td class="num">15,751</td><td class="num">359.0</td></tr>
+              <tr><td class="path">styles</td><td>全局与功能样式</td><td class="num">15</td><td class="num">15,758</td><td class="num">359.0</td></tr>
               <tr><td class="path">chat</td><td>会话、turn、composer、导出、通知</td><td class="num">53</td><td class="num">8,441</td><td class="num">268.0</td></tr>
               <tr><td class="path">registry</td><td>协议客户端、Repository、Workspace Service、类型</td><td class="num">10</td><td class="num">4,577</td><td class="num">149.5</td></tr>
               <tr><td class="path">settings</td><td>更新、技能、调试、设备、发布和导航</td><td class="num">18</td><td class="num">4,027</td><td class="num">154.9</td></tr>
@@ -1119,13 +1119,13 @@
         </div>
 
         <div class="callout warn">
-          <strong>集中度信号：</strong> 前四个 CSS 文件合计 12,470 行，占所有 CSS 的 79.2%；WorkspaceApp 一份文件约为第二至第六大 TS/TSX 文件之和的 3.3 倍。拆分优先级应由集中度和变更耦合决定，而不是按目录平均用力。
+          <strong>集中度信号：</strong> 前四个 CSS 文件合计 12,470 行，占所有 CSS 的 79.1%；WorkspaceApp 一份文件约为第二至第六大 TS/TSX 文件之和的 3.3 倍。拆分优先级应由集中度和变更耦合决定，而不是按目录平均用力。
         </div>
       </section>
 
       <section id="modules">
         <div class="section-head">
-          <div class="section-no">04 / MODULE MAP</div>
+          <div class="section-no">04 / 模块地图</div>
           <div>
             <h2>模块与调用方地图</h2>
             <p class="section-intro">176 个 TS/TSX 模块之间形成 353 条相对导入边，未发现静态导入环。依赖呈“单一超级入口 + 少数基础枢纽”的放射形态。</p>
@@ -1190,7 +1190,7 @@
 
       <section id="features">
         <div class="section-head">
-          <div class="section-no">05 / FEATURES</div>
+          <div class="section-no">05 / 功能地图</div>
           <div>
             <h2>功能地图</h2>
             <p class="section-intro">前端不是单一聊天页，而是围绕 Project、Session 和 Registry 组织的多工作台。功能面已经覆盖从代码浏览到发布与设备管理的完整链路。</p>
@@ -1251,7 +1251,7 @@
 
       <section id="flows">
         <div class="section-head">
-          <div class="section-no">06 / FLOWS</div>
+          <div class="section-no">06 / 数据流</div>
           <div>
             <h2>状态、数据与事件流</h2>
             <p class="section-intro">系统同时存在命令流、Registry 事件流、UI 本地状态和持久化缓存。性能与一致性问题主要发生在这些流在根组件交汇的位置。</p>
@@ -1260,20 +1260,20 @@
 
         <h3>用户命令流</h3>
         <div class="sequence">
-          <div class="sequence-step"><span class="who">FEATURE UI</span><div class="what"><strong>用户动作</strong>：发送 prompt、打开文件、查看 diff、启动终端或更新设置。</div></div>
-          <div class="sequence-step"><span class="who">WORKSPACE APP</span><div class="what"><strong>编排与取上下文</strong>：读取当前 project/session，更新 optimistic UI 或 loading 状态。</div></div>
-          <div class="sequence-step"><span class="who">SERVICE</span><div class="what"><strong>项目语境封装</strong>：RegistryWorkspaceService 把通用操作绑定到当前项目。</div></div>
-          <div class="sequence-step"><span class="who">REPOSITORY</span><div class="what"><strong>协议归一化</strong>：构造方法、参数并将响应转为前端类型。</div></div>
-          <div class="sequence-step"><span class="who">CLIENT / WS</span><div class="what"><strong>传输</strong>：RegistryClient 发出 request，经 WebSocket 到 Registry/Hub。</div></div>
+          <div class="sequence-step"><span class="who">功能界面</span><div class="what"><strong>用户动作</strong>：发送 prompt、打开文件、查看 diff、启动终端或更新设置。</div></div>
+          <div class="sequence-step"><span class="who">应用编排</span><div class="what"><strong>编排与取上下文</strong>：读取当前 project/session，更新 optimistic UI 或 loading 状态。</div></div>
+          <div class="sequence-step"><span class="who">领域服务</span><div class="what"><strong>项目语境封装</strong>：RegistryWorkspaceService 把通用操作绑定到当前项目。</div></div>
+          <div class="sequence-step"><span class="who">协议仓库</span><div class="what"><strong>协议归一化</strong>：构造方法、参数并将响应转为前端类型。</div></div>
+          <div class="sequence-step"><span class="who">客户端 / WS</span><div class="what"><strong>传输</strong>：RegistryClient 发出 request，经 WebSocket 到 Registry/Hub。</div></div>
         </div>
 
         <h3>消息接收与流式刷新</h3>
         <div class="sequence">
-          <div class="sequence-step"><span class="who">REGISTRY EVENT</span><div class="what"><strong>session.message / update</strong> 到达 RegistryClient 的事件入口。</div></div>
-          <div class="sequence-step"><span class="who">EVENT ROUTING</span><div class="what">当前主要在 WorkspaceApp 识别 project/session、修复 gap、同步状态，并写入运行时 Map/Ref。</div></div>
-          <div class="sequence-step"><span class="who">INCREMENTAL MODEL</span><div class="what">最近优化改为增量 upsert turn、prompt 状态索引，避免每个 token 重扫整个会话。</div></div>
-          <div class="sequence-step"><span class="who">RAF COMMIT</span><div class="what">同一帧内的流式事件合并为一次 UI commit；空闲时不保留常驻 requestAnimationFrame。</div></div>
-          <div class="sequence-step"><span class="who">VIRTUOSO</span><div class="what">虚拟列表只渲染视窗附近 turn；display height 使用 WeakMap 缓存，旧消息可被 GC。</div></div>
+          <div class="sequence-step"><span class="who">REGISTRY 事件</span><div class="what"><strong>session.message / update</strong> 到达 RegistryClient 的事件入口。</div></div>
+          <div class="sequence-step"><span class="who">事件路由</span><div class="what">当前主要在 WorkspaceApp 识别 project/session、修复 gap、同步状态，并写入运行时 Map/Ref。</div></div>
+          <div class="sequence-step"><span class="who">增量模型</span><div class="what">最近优化改为增量 upsert turn、prompt 状态索引，避免每个 token 重扫整个会话。</div></div>
+          <div class="sequence-step"><span class="who">逐帧提交</span><div class="what">同一帧内的流式事件合并为一次 UI commit；空闲时不保留常驻 requestAnimationFrame。</div></div>
+          <div class="sequence-step"><span class="who">虚拟列表</span><div class="what">React Virtuoso 只渲染视窗附近 turn；display height 使用 WeakMap 缓存，旧消息可被 GC。</div></div>
         </div>
 
         <div class="callout">
@@ -1308,7 +1308,7 @@
 
       <section id="build">
         <div class="section-head">
-          <div class="section-no">07 / BUILD</div>
+          <div class="section-no">07 / 构建运行</div>
           <div>
             <h2>构建、依赖与常驻运行时</h2>
             <p class="section-intro">技术栈是 React 19 + TypeScript 5.8 + webpack 5，富文本、虚拟列表、代码高亮、图表和终端均采用成熟库。生产构建成功，但入口体积仍有下降空间。</p>
@@ -1352,7 +1352,7 @@
         <h3>生产资产头部</h3>
         <div class="table-wrap">
           <table>
-            <caption>2026-07-19 production build 最大资产</caption>
+            <caption>2026-07-19 正式生产构建最大资产</caption>
             <thead><tr><th>资产</th><th>体积</th><th>判断</th></tr></thead>
             <tbody>
               <tr><td class="path">bundle.27e6287072b6818f62f5.js</td><td class="num">2,016.17 KiB</td><td>主入口；首轮预算应控制在 1.8 MiB 以内。</td></tr>
@@ -1360,7 +1360,7 @@
               <tr><td class="path">2300.41aec67d7ed7dbfafb84.js</td><td class="num">638.80 KiB</td><td>大型 vendor chunk。</td></tr>
               <tr><td class="path">8731.8834aca07a37663b086f.js</td><td class="num">589.23 KiB</td><td>大型 vendor chunk。</td></tr>
               <tr><td class="path">165.33f77a264e5e063eb0c0.js</td><td class="num">421.76 KiB</td><td>大型 vendor chunk。</td></tr>
-              <tr><td class="path">bundle.cdd82ce28201ad669743.css</td><td class="num">392.94 KiB</td><td>入口 CSS；全局样式集中导致未使用规则难按 feature 卸载。</td></tr>
+              <tr><td class="path">bundle.7bbe060a801b871603f0.css</td><td class="num">393.07 KiB</td><td>入口 CSS；全局样式集中导致未使用规则难按 feature 卸载。</td></tr>
               <tr><td class="path">settings.d552589e67d0736d928c.js</td><td class="num">86.60 KiB</td><td>设置域已独立为 lazy chunk，是可复制的切分模式。</td></tr>
             </tbody>
           </table>
@@ -1389,7 +1389,7 @@
 
       <section id="tests">
         <div class="section-head">
-          <div class="section-no">08 / TESTS</div>
+          <div class="section-no">08 / 测试架构</div>
           <div>
             <h2>测试架构与质量信号</h2>
             <p class="section-intro">测试数量充足、覆盖面广，但大量断言直接检查源码字符串，使测试更像结构快照而不是用户行为契约。</p>
@@ -1398,7 +1398,7 @@
 
         <div class="metric-ledger">
           <div class="ledger-item"><strong>194</strong><span>测试文件</span></div>
-          <div class="ledger-item"><strong>27,723</strong><span>测试 LOC</span></div>
+          <div class="ledger-item"><strong>27,743</strong><span>测试 LOC</span></div>
           <div class="ledger-item"><strong>283</strong><span>readFileSync 调用</span></div>
           <div class="ledger-item"><strong>5,427</strong><span>toContain 断言</span></div>
         </div>
@@ -1428,11 +1428,11 @@
 
         <h3>建议测试金字塔</h3>
         <div class="flow-grid">
-          <div class="flow-node"><strong>Pure model</strong><span>turn merge、prompt index、preview state、Git diff parser</span></div>
-          <div class="flow-node"><strong>Store contract</strong><span>runtime cache、IndexedDB、quota recovery、event reducers</span></div>
-          <div class="flow-node"><strong>Component behavior</strong><span>composer、turn view、settings navigation、terminal lifecycle</span></div>
-          <div class="flow-node"><strong>Integration</strong><span>fake Registry client 驱动完整 session event flow</span></div>
-          <div class="flow-node"><strong>Budget gates</strong><span>5k turns latency、heap cap、bundle/CSS、no import cycles</span></div>
+          <div class="flow-node"><strong>纯模型测试</strong><span>turn merge、prompt index、preview state、Git diff parser</span></div>
+          <div class="flow-node"><strong>存储契约测试</strong><span>runtime cache、IndexedDB、quota recovery、event reducers</span></div>
+          <div class="flow-node"><strong>组件行为测试</strong><span>composer、turn view、settings navigation、terminal lifecycle</span></div>
+          <div class="flow-node"><strong>集成测试</strong><span>fake Registry client 驱动完整 session event flow</span></div>
+          <div class="flow-node"><strong>预算门禁</strong><span>5k turns latency、heap cap、bundle/CSS、no import cycles</span></div>
         </div>
 
         <div class="callout warn">
@@ -1442,7 +1442,7 @@
 
       <section id="risks">
         <div class="section-head">
-          <div class="section-no">09 / RISK REGISTER</div>
+          <div class="section-no">09 / 风险登记</div>
           <div>
             <h2>风险登记与优先级</h2>
             <p class="section-intro">优先级综合了用户可感知性能、内存增长、变更爆炸半径和迁移前置关系。P0 应先封顶风险，不等同于立即大规模重构。</p>
@@ -1499,7 +1499,7 @@
               <tr>
                 <td><span class="risk-level p1">P1</span></td>
                 <td>CSS 全局集中</td>
-                <td>chat/settings/shell/file 占 CSS 79.2%。</td>
+                <td>chat/settings/shell/file 占 CSS 79.1%。</td>
                 <td>选择器冲突、未使用 CSS 常驻、功能删除难清理。</td>
                 <td>先 tokens + layers，再按 feature 入口导入，不要求立即引入 CSS Modules。</td>
               </tr>
@@ -1511,7 +1511,7 @@
                 <td>增加估算字节预算与 LRU 指标。</td>
               </tr>
               <tr>
-                <td><span class="risk-level good">GOOD</span></td>
+                <td><span class="risk-level good">良好</span></td>
                 <td>模块图无静态环</td>
                 <td>176 模块 / 353 边扫描未发现相对导入环。</td>
                 <td>为渐进式抽取提供安全窗口。</td>
@@ -1524,7 +1524,7 @@
 
       <section id="roadmap">
         <div class="section-head">
-          <div class="section-no">10 / ROADMAP</div>
+          <div class="section-no">10 / 迭代路线</div>
           <div>
             <h2>分阶段迭代建议</h2>
             <p class="section-intro">路线以“先建立资源边界，再迁移状态所有权，最后收敛基础设施”为顺序。每阶段都可以独立交付，不需要停摆式重构。</p>
@@ -1533,7 +1533,7 @@
 
         <div class="roadmap">
           <article class="phase">
-            <span class="time">0–2 WEEKS</span>
+            <span class="time">第 0–2 周</span>
             <h3>封顶风险与建立门禁</h3>
             <ul>
               <li>Registry debug 设 1,000 条 / 8 MB 双上限，改为面板局部订阅。</li>
@@ -1544,7 +1544,7 @@
             </ul>
           </article>
           <article class="phase">
-            <span class="time">2–6 WEEKS</span>
+            <span class="time">第 2–6 周</span>
             <h3>抽出 Chat Runtime</h3>
             <ul>
               <li>建立 <code>chat/runtime</code>：store、event reducer、commands、selectors。</li>
@@ -1555,7 +1555,7 @@
             </ul>
           </article>
           <article class="phase">
-            <span class="time">6–12 WEEKS</span>
+            <span class="time">第 6–12 周</span>
             <h3>按工作台迁移所有权</h3>
             <ul>
               <li>PreviewRuntime 接管 tab/loader/navigation；TerminalRuntime 接管会话生命周期。</li>
@@ -1566,7 +1566,7 @@
             </ul>
           </article>
           <article class="phase">
-            <span class="time">12+ WEEKS</span>
+            <span class="time">第 12 周以后</span>
             <h3>收敛目标架构</h3>
             <ul>
               <li>App 只做 Provider、路由与 ResponsiveShell 组合。</li>
@@ -1604,7 +1604,7 @@
 
       <section id="target">
         <div class="section-head">
-          <div class="section-no">11 / TARGET</div>
+          <div class="section-no">11 / 目标架构</div>
           <div>
             <h2>建议目标架构</h2>
             <p class="section-intro">目标不是追求目录漂亮，而是让一次 session.message 只唤醒 ChatRuntime 和当前可见 turn，让一次 Port Relay 轮询只影响 Port Relay，让 App 不再知道领域细节。</p>
@@ -1698,7 +1698,7 @@
 
       <section id="glossary">
         <div class="section-head">
-          <div class="section-no">12 / GLOSSARY</div>
+          <div class="section-no">12 / 领域词汇</div>
           <div>
             <h2>项目领域词汇</h2>
             <p class="section-intro">统一术语有助于后续拆分时避免把协议对象、UI 状态和运行时缓存混为一谈。</p>
@@ -1723,7 +1723,7 @@
 
       <section id="appendix">
         <div class="section-head">
-          <div class="section-no">13 / APPENDIX</div>
+          <div class="section-no">13 / 附录</div>
           <div>
             <h2>方法、证据与限制</h2>
             <p class="section-intro">本报告把可重复测量与架构推断分开。数字用于确定优先级，不替代真实用户设备上的浏览器 profiling。</p>
@@ -1737,7 +1737,7 @@
           <li><strong>构建：</strong>webpack production mode，输出到 <code>~/.wheelmaker/web</code>。</li>
           <li><strong>依赖图：</strong>176 个 TS/TSX 模块的相对静态 import；不包含运行时动态字符串依赖。</li>
           <li><strong>运行时：</strong>4,303 turns / 269 prompts 的本地长会话样本与 Jest/V8 微基准。</li>
-          <li><strong>版本：</strong>git revision <code>feef1391</code>，分支 <code>main</code>，分析日期 2026-07-19。</li>
+          <li><strong>版本：</strong>分支 <code>main</code>，基于 <code>36c1b780</code> 并包含本次 HTML Preview 布局修复，分析日期 2026-07-19。</li>
         </ul>
 
         <h3>关键命令</h3>
@@ -1747,6 +1747,21 @@ npm run report:web-assets
 rg --files app/web/src
 rg --files app/__tests__
 git diff --check</div>
+
+        <h3>合并后的执行与验证清单</h3>
+        <div class="table-wrap">
+          <table>
+            <caption>原独立执行计划已合并到本报告</caption>
+            <thead><tr><th>状态</th><th>工作项</th><th>完成证据</th></tr></thead>
+            <tbody>
+              <tr><td><span class="risk-level good">完成</span></td><td>冻结源码、依赖、测试和构建证据基线</td><td>文件、物理行、模块边、Hook 与生产资产均已重新统计。</td></tr>
+              <tr><td><span class="risk-level good">完成</span></td><td>建立架构、调用方、功能和领域词汇地图</td><td>报告第 2–6、12 节。</td></tr>
+              <tr><td><span class="risk-level good">完成</span></td><td>形成风险登记、阶段路线和目标架构</td><td>报告第 9–11 节，包含量化门槛。</td></tr>
+              <tr><td><span class="risk-level good">完成</span></td><td>验证单文件离线报告</td><td>HTML/CSS/脚本解析、内部锚点、响应式、打印和远程依赖检查。</td></tr>
+              <tr><td><span class="risk-level good">完成</span></td><td>修复 HTML Preview 全屏高度链</td><td>回归测试与真实 Edge 像素尺寸复测。</td></tr>
+            </tbody>
+          </table>
+        </div>
 
         <h3>证据可信度</h3>
         <div class="table-wrap">
@@ -1767,13 +1782,13 @@ git diff --check</div>
           <li>生产资产报告是未压缩落盘尺寸；网络传输会受 gzip/brotli 和缓存影响。</li>
           <li>state 域按变量名启发式分类，适合描述集中趋势，不适合逐个 Hook 审计。</li>
           <li>无导入环结论只覆盖相对静态 imports，不覆盖动态加载、事件回调或协议层逻辑环。</li>
-          <li>报告没有修改业务代码；建议指标需要在后续迭代中落成自动化脚本与 CI gate。</li>
+          <li>架构分析本身不改变业务行为；本次交付另包含已验证的 HTML Preview 高度链修复。建议指标仍需在后续迭代中落成自动化脚本与 CI 门禁。</li>
         </ul>
       </section>
 
       <footer class="report-footer">
-        <strong>WheelMaker Frontend Architecture Report</strong><br>
-        单文件离线报告 · 生成于 2026-07-19 · Evidence baseline feef1391<br>
+        <strong>WheelMaker 前端架构全景报告</strong><br>
+        单文件离线报告 · 生成于 2026-07-19 · 证据基线 main / 2026-07-19<br>
         建议每完成一个迁移阶段，重新生成目录、Hook、依赖图与生产资产基线。
       </footer>
     </main>
