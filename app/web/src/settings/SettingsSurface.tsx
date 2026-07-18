@@ -87,6 +87,8 @@ export function settingsDetailTitle(detail: SettingsDetailId): string {
       return 'Devices';
     case 'debugLogs':
       return 'Logs';
+    case 'releasePublish':
+      return 'Release publishing';
     case 'skillDetail':
       return 'Skill Detail';
   }

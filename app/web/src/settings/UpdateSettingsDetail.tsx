@@ -1,5 +1,4 @@
 import React from 'react';
-import {ReleasePublishSettings} from './ReleasePublishSettings';
 
 import {
   resolveAndroidApkUpdateStatus,
@@ -107,8 +106,6 @@ type UpdateSettingsDetailProps = {
   agentPackageActionKey: (hubId: string, packageName: string) => string;
   agentPackageActionLabel: (action: PackageAction) => string;
   projectFileIndexStatusLabel: (status: string) => string;
-  startReleasePublish: (hubId: string, input: Record<string, unknown>) => Promise<import('../registry/registryTypes').RegistryReleasePublishResponse>;
-  queryReleasePublish: (hubId: string, jobId: string) => Promise<import('../registry/registryTypes').RegistryReleasePublishResponse>;
 };
 
 export function UpdateSettingsDetail({
@@ -161,8 +158,6 @@ export function UpdateSettingsDetail({
   agentPackageActionKey,
   agentPackageActionLabel,
   projectFileIndexStatusLabel,
-  startReleasePublish,
-  queryReleasePublish,
 }: UpdateSettingsDetailProps) {
   const androidApkUpdateStatus = resolveAndroidApkUpdateStatus(androidApkLocalRelease, androidApkLatestRelease);
   const androidApkCurrentSha = androidApkLocalRelease?.apkSha256 || '';
@@ -205,7 +200,6 @@ export function UpdateSettingsDetail({
 
   return (
     <>
-      <ReleasePublishSettings hubIds={updateHubCards.map(card => card.hubId)} start={startReleasePublish} query={queryReleasePublish} />
       {androidApkUpdateSupported ? (
         <div className="settings-metadata-card android-apk-update-card">
           <div className="android-apk-update-heading">

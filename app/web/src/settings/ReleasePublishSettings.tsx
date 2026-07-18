@@ -36,15 +36,23 @@ export function ReleasePublishSettings({hubIds, start, query}: {
     } catch (value) { setError(value instanceof Error ? value.message : String(value)); } finally { setPending(false); }
   };
   const canStart = Boolean(settings.publisherHubId && settings.sourcePath) && !pending;
-  return <div className="settings-metadata-card">
-    <div className="android-apk-update-title-line"><span className="codicon codicon-cloud-upload" aria-hidden="true" /><span className="wheelmaker-update-scope">Release publishing</span></div>
-    <div className="settings-form-grid">
-      <label>Publishing Hub<select value={settings.publisherHubId} onChange={event => update({publisherHubId: event.target.value})}><option value="">Select Hub</option>{hubIds.map(id => <option key={id} value={id}>{id}</option>)}</select></label>
-      <label>Source path<input value={settings.sourcePath} onChange={event => update({sourcePath: event.target.value})} placeholder="Absolute source checkout path" /></label>
-      <label>Server Hub<select value={settings.serverHubId} onChange={event => update({serverHubId: event.target.value, autoPull: event.target.value ? settings.autoPull : false})}><option value="">No automatic apply</option>{hubIds.map(id => <option key={id} value={id}>{id}</option>)}</select></label>
-      <label><input type="checkbox" checked={settings.autoPull} disabled={!settings.serverHubId} onChange={event => update({autoPull: event.target.checked})} /> Auto pull after publish</label>
-    </div>
-    <div className="settings-inline-actions"><label><input type="checkbox" checked={settings.desktop} onChange={event => update({desktop: event.target.checked})} /> Desktop</label><label><input type="checkbox" checked={settings.android} onChange={event => update({android: event.target.checked})} /> Android</label><button type="button" disabled={!canStart} onClick={() => void submit('version')}>Publish version</button><button type="button" disabled={!canStart} onClick={() => void submit('debugWeb')}>Publish temporary Web</button></div>
-    {job ? <pre className="settings-code-block">{job.status}{job.targetState ? ` · Server Hub: ${job.targetState}` : ''}{job.log ? `\n${job.log}` : ''}</pre> : null}{error ? <div className="settings-inline-error">{error}</div> : null}
+  return <div className="release-publish-page">
+    <div className="release-publish-intro">Publish a version or the latest temporary Web build from a selected Hub.</div>
+    <section className="release-publish-section" aria-label="Publish target">
+      <div className="release-publish-section-title">Publish target</div>
+      <div className="release-publish-fields">
+        <label>Publishing Hub<select value={settings.publisherHubId} onChange={event => update({publisherHubId: event.target.value})}><option value="">Select Hub</option>{hubIds.map(id => <option key={id} value={id}>{id}</option>)}</select></label>
+        <label>Source path<input value={settings.sourcePath} onChange={event => update({sourcePath: event.target.value})} placeholder="Absolute source checkout path" /></label>
+        <label>Server Hub<select value={settings.serverHubId} onChange={event => update({serverHubId: event.target.value, autoPull: event.target.value ? settings.autoPull : false})}><option value="">No automatic apply</option>{hubIds.map(id => <option key={id} value={id}>{id}</option>)}</select></label>
+        <label className="release-publish-check"><input type="checkbox" checked={settings.autoPull} disabled={!settings.serverHubId} onChange={event => update({autoPull: event.target.checked})} /> Auto pull after publish</label>
+      </div>
+    </section>
+    <section className="release-publish-section" aria-label="Release options">
+      <div className="release-publish-section-title">Release options</div>
+      <div className="release-publish-options"><label><input type="checkbox" checked={settings.desktop} onChange={event => update({desktop: event.target.checked})} /> Include Desktop</label><label><input type="checkbox" checked={settings.android} onChange={event => update({android: event.target.checked})} /> Include Android</label></div>
+      <div className="release-publish-actions"><button type="button" disabled={!canStart} onClick={() => void submit('version')}>Publish version</button><button type="button" disabled={!canStart} onClick={() => void submit('debugWeb')}>Publish temporary Web</button></div>
+    </section>
+    {job ? <section className="release-publish-section release-publish-job" aria-label="Publish task"><div className="release-publish-section-title">Publish task</div><pre>{job.status}{job.targetState ? ` · Server Hub: ${job.targetState}` : ''}{job.log ? `\n${job.log}` : ''}</pre></section> : null}
+    {error ? <div className="settings-inline-error">{error}</div> : null}
   </div>;
 }

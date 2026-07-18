@@ -661,6 +661,17 @@ export function SettingsRootContent({
         <button
           type="button"
           className="settings-row settings-detail-row"
+          onClick={() => openSettingsChild('releasePublish')}
+        >
+          <span>
+            <span className="codicon codicon-cloud-upload settings-row-icon" aria-hidden="true" />
+            Release publishing
+          </span>
+          <span className="codicon codicon-chevron-right" />
+        </button>
+        <button
+          type="button"
+          className="settings-row settings-detail-row"
           onClick={() => openSettingsChild('database')}
         >
           <span>

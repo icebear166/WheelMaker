@@ -3,6 +3,14 @@ import React from 'react';
 import {act, create} from 'react-test-renderer';
 
 import {ReleasePublishSettings} from './ReleasePublishSettings';
+import {settingsDetailTitle} from './SettingsSurface';
+import {isSettingsChildDetail, isSettingsDetailId} from './settingsNavigation';
+
+test('exposes release publishing as a dedicated Debug detail', () => {
+  expect(isSettingsDetailId('releasePublish')).toBe(true);
+  expect(isSettingsChildDetail('releasePublish')).toBe(true);
+  expect(settingsDetailTitle('releasePublish')).toBe('Release publishing');
+});
 
 test('restores browser-only publishing settings without token or URL controls', async () => {
   const values = new Map<string, string>();
@@ -20,4 +28,14 @@ test('restores browser-only publishing settings without token or URL controls', 
   expect(inputs.some(input => input.props.type === 'checkbox' && input.props.disabled === true)).toBe(true);
   expect(JSON.stringify(tree!.toJSON()).toLowerCase()).not.toContain('token');
   expect(JSON.stringify(tree!.toJSON()).toLowerCase()).not.toContain('release server url');
+});
+
+test('uses a single-column publish page layout', async () => {
+  (global as typeof globalThis & {window: Window}).window = {
+    localStorage: {getItem: () => null, setItem: () => undefined},
+  } as unknown as Window;
+  let tree: ReturnType<typeof create>;
+  await act(async () => { tree = create(<ReleasePublishSettings hubIds={['publisher']} start={async () => ({ok: true, status: 'running'})} query={async () => ({ok: true, status: 'running'})} />); });
+  expect(tree!.root.findAllByProps({className: 'release-publish-page'})).toHaveLength(1);
+  expect(tree!.root.findAllByProps({className: 'release-publish-actions'})).toHaveLength(1);
 });

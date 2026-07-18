@@ -2873,6 +2873,137 @@ textarea,
   font-variant-numeric: tabular-nums;
 }
 
+.release-publish-page {
+  display: grid;
+  grid-template-columns: minmax(0, 760px);
+  gap: 14px;
+  width: min(100%, 760px);
+  padding: 4px 0 20px;
+}
+
+.release-publish-intro {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.release-publish-section {
+  display: grid;
+  gap: 12px;
+  padding: 15px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-panel);
+  background: color-mix(in srgb, var(--surface-raised) 82%, var(--surface-panel));
+  box-shadow: 0 1px 0 color-mix(in srgb, #fff 6%, transparent) inset;
+}
+
+.release-publish-section-title {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.release-publish-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.release-publish-fields > label {
+  display: grid;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.release-publish-fields select,
+.release-publish-fields input:not([type='checkbox']) {
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.release-publish-fields select:focus-visible,
+.release-publish-fields input:not([type='checkbox']):focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent-primary) 58%, var(--border-subtle));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 18%, transparent);
+}
+
+.release-publish-fields .release-publish-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.release-publish-options,
+.release-publish-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.release-publish-options {
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.release-publish-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.release-publish-actions {
+  padding-top: 2px;
+}
+
+.release-publish-actions button {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.release-publish-actions button:first-child {
+  border-color: color-mix(in srgb, var(--accent-primary) 52%, var(--border-subtle));
+  background: color-mix(in srgb, var(--accent-primary) 18%, var(--surface-panel));
+}
+
+.release-publish-actions button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-primary) 26%, var(--surface-panel));
+}
+
+.release-publish-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.release-publish-job pre {
+  max-height: 300px;
+  margin: 0;
+  overflow: auto;
+  padding: 10px;
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--surface-panel) 90%, #000 10%);
+  color: var(--text-secondary);
+  font: 11px/1.5 var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 900px) {
   .mobile-settings-screen .settings-row {
     min-height: 56px;

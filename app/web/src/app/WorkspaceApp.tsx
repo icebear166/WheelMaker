@@ -569,6 +569,9 @@ const PortRelaySettingsDetail = React.lazy(() => loadSettingsBundle().then(modul
 const UpdateSettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.UpdateSettingsDetail,
 })));
+const ReleasePublishSettings = React.lazy(() => loadSettingsBundle().then(module => ({
+  default: module.ReleasePublishSettings,
+})));
 const SkillsSettingsDetail = React.lazy(() => loadSettingsBundle().then(module => ({
   default: module.SkillsSettingsDetail,
 })));
@@ -16777,8 +16780,6 @@ export function App() {
           agentPackageActionKey={agentPackageActionKey}
           agentPackageActionLabel={agentPackageActionLabel}
           projectFileIndexStatusLabel={projectFileIndexStatusLabel}
-          startReleasePublish={startReleasePublish}
-          queryReleasePublish={queryReleasePublish}
         />
       </React.Suspense>,
       renderSettingsDetailActions('update'),
@@ -16850,6 +16851,20 @@ export function App() {
       options,
     );
 
+  const renderReleasePublishSettingsDetail = (options?: SettingsDetailShellOptions) =>
+    renderSettingsDetailShell(
+      'Release publishing',
+      <React.Suspense fallback={null}>
+        <ReleasePublishSettings
+          hubIds={updateHubCards.map(card => card.hubId)}
+          start={startReleasePublish}
+          query={queryReleasePublish}
+        />
+      </React.Suspense>,
+      undefined,
+      options,
+    );
+
   const renderConnectionStatusSettingsDetail = (options?: SettingsDetailShellOptions) =>
     renderSettingsDetailShell(
       'Connection Status',
@@ -16912,6 +16927,9 @@ export function App() {
     }
     if (detail === 'debugLogs') {
       return renderDebugLogsSettingsDetail(options);
+    }
+    if (detail === 'releasePublish') {
+      return renderReleasePublishSettingsDetail(options);
     }
     return null;
   };

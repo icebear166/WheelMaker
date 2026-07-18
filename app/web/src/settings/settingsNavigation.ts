@@ -7,6 +7,7 @@ export type SettingsChildDetail =
   | 'connectionStatus'
   | 'database'
   | 'debugLogs'
+  | 'releasePublish'
   | 'deviceSessions'
   | 'skillDetail';
 
@@ -23,6 +24,7 @@ export const SETTINGS_CHILD_DETAILS: readonly SettingsChildDetail[] = [
   'connectionStatus',
   'database',
   'debugLogs',
+  'releasePublish',
   'deviceSessions',
   'skillDetail',
 ];
