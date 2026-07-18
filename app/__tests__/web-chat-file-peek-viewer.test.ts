@@ -30,15 +30,11 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('beginPreviewTabLoad(');
   });
 
-  test('recognized chat file links render a file icon and a dedicated style hook', () => {
+  test('recognized chat file links keep their style hook without a decorative icon', () => {
     const mainTsx = readSourceText(mainPath);
 
     expect(mainTsx).toContain("isFileLink ? 'chat-file-link' : ''");
-    expect(mainTsx).toContain('<span className="chat-file-link-icon" aria-hidden="true">');
-    expect(mainTsx).toContain('<svg viewBox="0 0 16 16" focusable="false">');
-    expect(mainTsx).toContain('<rect x="1.75" y="1.75" width="12.5" height="12.5" rx="2.25" />');
-    expect(mainTsx).toContain('<path d="M5 8h6" />');
-    expect(mainTsx).not.toContain('codicon codicon-file chat-file-link-icon');
+    expect(mainTsx).not.toContain('chat-file-link-icon');
   });
 
   test('file mention preview reuses chat peek without inserting or closing the menu', () => {

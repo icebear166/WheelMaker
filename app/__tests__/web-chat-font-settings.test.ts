@@ -85,7 +85,7 @@ describe('web chat typography', () => {
     expect(stylesCss).not.toMatch(/\.chat-main-message \.wm-shiki-code \{[^}]*background:/);
   });
 
-  test('uses quiet chat links with a medium-weight file affordance', () => {
+  test('uses quiet chat links with a medium-weight text-only file affordance', () => {
     const stylesCss = readWebStyles(projectRoot);
 
     expect(stylesCss).toContain('--chat-link-text: #82b6df;');
@@ -98,12 +98,7 @@ describe('web chat typography', () => {
     expect(stylesCss).toMatch(
       /\.chat-main-message \.chat-file-link \{[\s\S]*font-weight: 500;[\s\S]*\}/,
     );
-    expect(stylesCss).toMatch(
-      /\.chat-file-link-icon \{[\s\S]*display: inline-flex;[\s\S]*width: 13px;[\s\S]*height: 13px;[\s\S]*vertical-align: -0\.125em;[\s\S]*\}/,
-    );
-    expect(stylesCss).toMatch(
-      /\.chat-file-link-icon svg \{[\s\S]*display: block;[\s\S]*stroke: currentColor;[\s\S]*stroke-width: 1\.5;[\s\S]*\}/,
-    );
+    expect(stylesCss).not.toContain('.chat-file-link-icon');
   });
 
   test('keeps composer typography independent from message typography', () => {
