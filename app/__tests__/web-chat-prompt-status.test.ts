@@ -1,4 +1,5 @@
 import {
+  buildPromptTurnStatusIndex,
   resolvePromptDoneStatus,
   resolvePromptTurnStatus,
   type ChatPromptStatus,
@@ -16,6 +17,23 @@ function message(turnIndex: number, method: string, sessionId = 's1'): RegistryC
 }
 
 describe('web chat prompt status', () => {
+  test('indexes prompt statuses for repeated lookup', () => {
+    const completedPrompt = message(1, 'prompt_request');
+    const openPrompt = message(4, 'prompt_request');
+
+    const index = buildPromptTurnStatusIndex([
+      message(5, 'agent_message_chunk'),
+      message(3, 'prompt_done'),
+      completedPrompt,
+      openPrompt,
+      message(2, 'agent_message_chunk'),
+    ]);
+
+    expect(index.statusFor(completedPrompt)).toBe(null);
+    expect(index.statusFor(openPrompt)).toBe('responding');
+    expect(index.hasOpenPrompt).toBe(true);
+  });
+
   test('shows responding dots for an unfinished prompt turn', () => {
     const status: ChatPromptStatus = resolvePromptTurnStatus([
       message(1, 'prompt_request'),

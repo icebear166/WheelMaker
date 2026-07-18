@@ -8,6 +8,11 @@ export type ChatPromptDoneStatus = {
   message: string;
 };
 
+export type ChatPromptTurnStatusIndex = {
+  hasOpenPrompt: boolean;
+  statusFor: (promptTurn: RegistryChatMessage) => ChatPromptStatus;
+};
+
 function positiveTurnIndex(message: RegistryChatMessage): number {
   const turnIndex = Number(message.turnIndex);
   return Number.isFinite(turnIndex) ? Math.max(0, Math.trunc(turnIndex)) : 0;
@@ -15,6 +20,52 @@ function positiveTurnIndex(message: RegistryChatMessage): number {
 
 function isPromptStart(message: RegistryChatMessage): boolean {
   return message.method === 'prompt_request' || message.method === 'user_message_chunk';
+}
+
+function promptStatusKey(message: RegistryChatMessage): string {
+  return `${message.sessionId}\u0000${positiveTurnIndex(message)}\u0000${message.method}`;
+}
+
+export function buildPromptTurnStatusIndex(
+  turns: RegistryChatMessage[],
+): ChatPromptTurnStatusIndex {
+  let ordered = turns;
+  for (let index = 1; index < turns.length; index += 1) {
+    if (positiveTurnIndex(turns[index - 1]) > positiveTurnIndex(turns[index])) {
+      ordered = [...turns].sort((left, right) => (
+        positiveTurnIndex(left) - positiveTurnIndex(right)
+      ));
+      break;
+    }
+  }
+  const statusByPromptKey = new Map<string, ChatPromptStatus>();
+  const openPromptBySession = new Map<string, string>();
+
+  for (const message of ordered) {
+    if (isPromptStart(message)) {
+      const key = promptStatusKey(message);
+      statusByPromptKey.set(key, 'responding');
+      if (positiveTurnIndex(message) > 0) {
+        openPromptBySession.set(message.sessionId, key);
+      }
+      continue;
+    }
+    if (message.method !== 'prompt_done') {
+      continue;
+    }
+    const openPromptKey = openPromptBySession.get(message.sessionId);
+    if (openPromptKey) {
+      statusByPromptKey.set(openPromptKey, null);
+      openPromptBySession.delete(message.sessionId);
+    }
+  }
+
+  return {
+    hasOpenPrompt: Array.from(statusByPromptKey.values()).some(status => status === 'responding'),
+    statusFor: promptTurn => isPromptStart(promptTurn)
+      ? statusByPromptKey.get(promptStatusKey(promptTurn)) ?? null
+      : null,
+  };
 }
 
 export function resolvePromptTurnStatus(

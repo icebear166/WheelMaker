@@ -364,14 +364,45 @@ export function estimateChatTurnHeight(
   return clampHeight(estimateAssistantTextHeight(text, metrics));
 }
 
+type ChatTurnHeightCacheEntry = {
+  layoutMetrics: Partial<ChatTurnHeightMetrics> | undefined;
+  promptStatus: ChatPromptStatus;
+  estimatedHeight: number;
+};
+
+const chatTurnHeightCache = new WeakMap<RegistryChatMessage, ChatTurnHeightCacheEntry>();
+
+function cachedChatTurnHeight(
+  message: RegistryChatMessage,
+  layoutMetrics: Partial<ChatTurnHeightMetrics> | undefined,
+  promptStatus: ChatPromptStatus,
+): number {
+  const cached = chatTurnHeightCache.get(message);
+  if (
+    cached &&
+    cached.layoutMetrics === layoutMetrics &&
+    cached.promptStatus === promptStatus
+  ) {
+    return cached.estimatedHeight;
+  }
+  const estimatedHeight = estimateChatTurnHeight(message, {layoutMetrics, promptStatus});
+  chatTurnHeightCache.set(message, {layoutMetrics, promptStatus, estimatedHeight});
+  return estimatedHeight;
+}
+
 export function buildChatDisplayIndex(
   messages: RegistryChatMessage[],
   options: ChatDisplayIndexOptions = {},
 ): ChatDisplayIndex {
   const sorted = messages
     .map((message, sourceIndex) => ({message, sourceIndex}))
-    .filter(item => positiveTurnIndex(item.message) > 0)
-    .sort((left, right) => positiveTurnIndex(left.message) - positiveTurnIndex(right.message));
+    .filter(item => positiveTurnIndex(item.message) > 0);
+  for (let index = 1; index < sorted.length; index += 1) {
+    if (positiveTurnIndex(sorted[index - 1].message) > positiveTurnIndex(sorted[index].message)) {
+      sorted.sort((left, right) => positiveTurnIndex(left.message) - positiveTurnIndex(right.message));
+      break;
+    }
+  }
   const items: ChatDisplayIndexItem[] = [];
   const latestOperationSourceIndex = new Map<string, number>();
   for (const item of sorted) {
@@ -395,10 +426,11 @@ export function buildChatDisplayIndex(
     if (!operationId && options.shouldRender && !options.shouldRender(item.message, promptStatus)) {
       continue;
     }
-    const estimatedHeight = estimateChatTurnHeight(item.message, {
-      layoutMetrics: options.layoutMetrics,
+    const estimatedHeight = cachedChatTurnHeight(
+      item.message,
+      options.layoutMetrics,
       promptStatus,
-    });
+    );
     items.push({
       kind: 'turn',
       key: displayKey(item.message),

@@ -14,6 +14,7 @@ import {
   normalizeSessionMessagePayload,
   normalizeSessionReadPayload,
   normalizeSessionWireTurn,
+  upsertDecodedSessionTurn,
 } from '../web/src/chat/chatWire';
 import type { RegistryChatMessage } from '../web/src/registry/registryTypes';
 
@@ -26,6 +27,35 @@ const message = (text: string): RegistryChatMessage => ({
 });
 
 describe('chat session read reconciliation', () => {
+  test('preserves unchanged messages when upserting a realtime turn', () => {
+    const first: RegistryChatMessage = {
+      sessionId: 'sess-1',
+      turnIndex: 1,
+      method: 'prompt_request',
+      param: {contentBlocks: []},
+      finished: true,
+    };
+    const live = message('partial');
+
+    const updated = upsertDecodedSessionTurn([first, live], 'sess-1', {
+      turnIndex: 2,
+      content: '{"method":"agent_message_chunk","param":{"text":"complete"}}',
+      finished: false,
+    });
+
+    expect(updated[0]).toBe(first);
+    expect(updated[1]).toEqual(message('complete'));
+
+    const appended = upsertDecodedSessionTurn(updated, 'sess-1', {
+      turnIndex: 3,
+      content: '{"method":"prompt_done","param":{}}',
+      finished: true,
+    });
+    expect(appended[0]).toBe(first);
+    expect(appended[1]).toBe(updated[1]);
+    expect(appended[2]).toMatchObject({turnIndex: 3, method: 'prompt_done', finished: true});
+  });
+
   test('normalizes raw session.message payload and rejects legacy flat payload', () => {
     const payload = {
       sessionId: 'sess-1',

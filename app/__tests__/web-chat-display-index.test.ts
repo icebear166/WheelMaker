@@ -161,6 +161,25 @@ describe('chat display index', () => {
     expect(index.items[0].estimatedHeight).toBeGreaterThan(index.items[1].estimatedHeight);
   });
 
+  test('reuses height estimates for unchanged message objects', () => {
+    const stableMessage = message(1, 'agent_message_chunk', 'streamed answer');
+    let paramReadCount = 0;
+    Object.defineProperty(stableMessage, 'param', {
+      get: () => {
+        paramReadCount += 1;
+        return {text: 'streamed answer'};
+      },
+    });
+    const layoutMetrics = {contentWidth: 720};
+
+    buildChatDisplayIndex([stableMessage], {layoutMetrics});
+    const readsAfterFirstBuild = paramReadCount;
+    buildChatDisplayIndex([stableMessage], {layoutMetrics});
+
+    expect(readsAfterFirstBuild).toBeGreaterThan(0);
+    expect(paramReadCount).toBe(readsAfterFirstBuild);
+  });
+
   test('does not keep a manual virtual range implementation', () => {
     const source = fs.readFileSync(
       path.join(__dirname, '..', 'web', 'src', 'chat', 'turns', 'chatDisplayIndex.ts'),

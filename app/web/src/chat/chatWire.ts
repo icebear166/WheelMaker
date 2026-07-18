@@ -107,3 +107,43 @@ export function decodeSessionTurnToMessage(
     };
   }
 }
+
+export function upsertDecodedSessionTurn(
+  messages: RegistrySessionMessage[],
+  sessionId: string,
+  turn: RegistrySessionTurn,
+): RegistrySessionMessage[] {
+  const decoded = decodeSessionTurnToMessage(sessionId, turn);
+  const turnIndex = Math.max(0, Math.trunc(turn.turnIndex ?? 0));
+  let low = 0;
+  let high = messages.length;
+  while (low < high) {
+    const middle = low + Math.floor((high - low) / 2);
+    const middleTurnIndex = Math.max(0, Math.trunc(messages[middle].turnIndex ?? 0));
+    if (middleTurnIndex < turnIndex) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+  const existingIndex = low < messages.length && messages[low].turnIndex === turnIndex
+    ? low
+    : -1;
+  if (!decoded) {
+    if (existingIndex < 0) return messages;
+    return [
+      ...messages.slice(0, existingIndex),
+      ...messages.slice(existingIndex + 1),
+    ];
+  }
+  if (existingIndex >= 0) {
+    const next = [...messages];
+    next[existingIndex] = decoded;
+    return next;
+  }
+  return [
+    ...messages.slice(0, low),
+    decoded,
+    ...messages.slice(low),
+  ];
+}

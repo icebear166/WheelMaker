@@ -117,7 +117,11 @@ import {extractLatestChatPlan} from '../chat/chatPlan';
 import { resolveChatSessionTitle } from '../chat/session/chatSessionTitle';
 import { buildProjectAgentChoices } from '../chat/projectAgents';
 import { chatConfigValueLabel, formatChatContextUsage, splitChatComposerStatusOptions } from '../chat/session/chatComposerStatus';
-import {decodeSessionTurnToMessage, normalizeSessionMessagePayload} from '../chat/chatWire';
+import {
+  decodeSessionTurnToMessage,
+  normalizeSessionMessagePayload,
+  upsertDecodedSessionTurn,
+} from '../chat/chatWire';
 import {
   applySessionReadResult,
   buildMergedRawTurns,
@@ -131,6 +135,10 @@ import {
 import {createChatDurablePersistQueue} from '../chat/turns/chatDurablePersist';
 import {createChatReadRepairQueue} from '../chat/turns/chatReadRepair';
 import {buildChatDisplayIndex, type ChatDisplayIndexItem} from '../chat/turns/chatDisplayIndex';
+import {
+  createChatRealtimeFlushScheduler,
+  type ChatRealtimeFlushScheduler,
+} from '../chat/turns/chatRealtimeFlush';
 import {
   buildSessionSearchSections,
   mergeSessionSearchResultsByProject,
@@ -214,7 +222,7 @@ import {
   shouldAutoScrollChatToBottom,
 } from '../chat/layout/chatScrollIntent';
 import { resolveChatScrollBottomButtonOffset } from '../chat/layout/chatScrollBottomButton';
-import { resolvePromptTurnStatus, type ChatPromptStatus } from '../chat/turns/chatPromptStatus';
+import { buildPromptTurnStatusIndex, type ChatPromptStatus } from '../chat/turns/chatPromptStatus';
 import {
   buildPromptCompletionNotification,
   promptCompletionNotificationKey,
@@ -3177,6 +3185,7 @@ export function App() {
   const chatSelectedLoadAttemptRuntimeKeyRef = useRef('');
   const chatFinishedCursorRef = useRef<Record<string, number>>({});
   const chatMessageStoreRef = useRef<Record<string, RegistryChatMessage[]>>({});
+  const chatRealtimeFlushSchedulerRef = useRef<ChatRealtimeFlushScheduler | null>(null);
   const chatTurnStoreRef = useRef<Record<string, ChatTurnStoreState>>({});
   const chatReadRepairQueueRef = useRef(createChatReadRepairQueue());
   const chatDurablePersistQueueRef = useRef(createChatDurablePersistQueue(runtimeKey => {
@@ -3450,9 +3459,13 @@ export function App() {
   }, []);
 
   const selectedFullChatMessages =
-    selectedChatEncodedKey
-      ? chatMessageStoreRef.current[selectedChatEncodedKey] ?? []
+    selectedChatEncodedKey && chatVisibleRuntimeKeyRef.current === selectedChatEncodedKey
+      ? chatMessages
       : [];
+  const selectedPromptTurnStatusIndex = useMemo(
+    () => buildPromptTurnStatusIndex(selectedFullChatMessages),
+    [selectedFullChatMessages],
+  );
   const selectedChatPlan = useMemo(
     () => tab === 'chat' && !archivedMode
       ? extractLatestChatPlan(selectedFullChatMessages)
@@ -3534,9 +3547,7 @@ export function App() {
   const chatDisplayIndex = useMemo(() => buildChatDisplayIndex(chatMessages, {
     hideToolCalls,
     layoutMetrics: chatLayoutMetrics,
-    promptStatus: message => isPromptStartMessage(message)
-      ? resolvePromptTurnStatus(selectedFullChatMessages, message)
-      : null,
+    promptStatus: selectedPromptTurnStatusIndex.statusFor,
     shouldRender: (message, promptStatus) => {
       const resolvedPromptStatus = isPromptStartMessage(message)
         ? promptStatus
@@ -3554,7 +3565,7 @@ export function App() {
     chatLayoutMetrics,
     hideToolCalls,
     selectedChatEncodedKey,
-    selectedFullChatMessages,
+    selectedPromptTurnStatusIndex,
     selectedPendingPrompt,
     selectedQueuedPrompts,
   ]);
@@ -3937,7 +3948,44 @@ export function App() {
     }
   }, []);
 
+  useEffect(() => {
+    const scheduler = createChatRealtimeFlushScheduler({
+      requestFrame: callback => window.requestAnimationFrame(callback),
+      cancelFrame: handle => window.cancelAnimationFrame(handle),
+      flush: runtimeKeys => {
+        runtimeKeys.forEach(runtimeKey => {
+          setVisibleChatMessagesForRuntimeKey(
+            runtimeKey,
+            chatMessageStoreRef.current[runtimeKey] ?? [],
+            {followLatest: chatAutoScrollFollowRef.current},
+          );
+        });
+      },
+    });
+    chatRealtimeFlushSchedulerRef.current = scheduler;
+    return () => {
+      scheduler.dispose();
+      if (chatRealtimeFlushSchedulerRef.current === scheduler) {
+        chatRealtimeFlushSchedulerRef.current = null;
+      }
+    };
+  }, [setVisibleChatMessagesForRuntimeKey]);
+
+  const scheduleVisibleChatMessagesForRuntimeKey = useCallback((runtimeKey: string) => {
+    const scheduler = chatRealtimeFlushSchedulerRef.current;
+    if (scheduler) {
+      scheduler.schedule(runtimeKey);
+      return;
+    }
+    setVisibleChatMessagesForRuntimeKey(
+      runtimeKey,
+      chatMessageStoreRef.current[runtimeKey] ?? [],
+      {followLatest: chatAutoScrollFollowRef.current},
+    );
+  }, [setVisibleChatMessagesForRuntimeKey]);
+
   const applySelectedChatKey = (key: ChatSessionKey | null) => {
+    chatRealtimeFlushSchedulerRef.current?.flushNow();
     selectedChatKeyRef.current = key;
     setSelectedChatKey(key);
     const sessionId = key?.sessionId ?? '';
@@ -16446,11 +16494,16 @@ export function App() {
 
         let merged: RegistryChatMessage[] | null = null;
         if (shouldMaterializeRealtimeSessionMessages(isSelectedSession)) {
-          merged = messagesFromTurnStore(runtimeKey, sessionId);
+          merged = upsertDecodedSessionTurn(
+            chatMessageStoreRef.current[runtimeKey] ?? [],
+            sessionId,
+            incomingTurn,
+          );
           chatMessageStoreRef.current[runtimeKey] = merged;
-          setVisibleChatMessagesForRuntimeKey(runtimeKey, merged, {
-            followLatest: chatAutoScrollFollowRef.current,
-          });
+          scheduleVisibleChatMessagesForRuntimeKey(runtimeKey);
+          if (message.method === 'prompt_done') {
+            chatRealtimeFlushSchedulerRef.current?.flushNow();
+          }
         }
         if (gapReadCursor) {
           chatReadRepairQueueRef.current.request(runtimeKey, gapReadCursor.turnIndex, async cursor => {
@@ -16487,6 +16540,7 @@ export function App() {
       }
     });
     const unsubscribeClose = service.onClose(() => {
+      chatRealtimeFlushSchedulerRef.current?.flushNow();
       connectedRef.current = false;
       setConnected(false);
       chatQueuedPromptsByKeyRef.current = {};
@@ -18308,10 +18362,7 @@ export function App() {
     );
   }, []);
 
-  const selectedChatHasOpenPromptTurn = selectedFullChatMessages.some(message =>
-    isPromptStartMessage(message) &&
-    resolvePromptTurnStatus(selectedFullChatMessages, message) === 'responding',
-  );
+  const selectedChatHasOpenPromptTurn = selectedPromptTurnStatusIndex.hasOpenPrompt;
   const selectedChatCompactionRunning = useMemo(() => {
     if (selectedChatEncodedKey && chatCompactingByKey[selectedChatEncodedKey] === true) {
       return true;
@@ -18402,9 +18453,7 @@ export function App() {
     const copyRange = message.method === 'prompt_done'
       ? buildPromptDoneCopyRange(selectedFullChatMessages, doneTurnIndex)
       : null;
-    const promptStatus = isPromptStartMessage(message)
-      ? resolvePromptTurnStatus(selectedFullChatMessages, message)
-      : null;
+    const promptStatus = selectedPromptTurnStatusIndex.statusFor(message);
     const text = msgText(message.method, message.param).trim();
     const optionReplies =
       message.method === 'agent_message_chunk' &&
@@ -18497,6 +18546,7 @@ export function App() {
     resolvePromptAttachmentThumbnail,
     selectedChatEncodedKey,
     selectedFullChatMessages,
+    selectedPromptTurnStatusIndex,
     sessionSearchTargetTurn,
     ttsState,
   ]);
