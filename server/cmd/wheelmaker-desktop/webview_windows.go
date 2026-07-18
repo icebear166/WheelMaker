@@ -68,6 +68,7 @@ func bindDesktopWindowBridge(w webview2.WebView, hwnd uintptr, desktopRuntime *d
 	if err != nil {
 		return err
 	}
+	updateController := newWindowsDesktopUpdateController()
 	maximizeController := newDesktopMaximizeController(hwnd, win32DesktopWindowOps{})
 	authorize := func(action desktopBridgeAction) error {
 		if !desktopRuntime.security.AuthorizeCurrent(action) {
@@ -142,6 +143,22 @@ func bindDesktopWindowBridge(w webview2.WebView, hwnd uintptr, desktopRuntime *d
 				return err
 			}
 			return desktopRuntime.RequestServerChange(context.Background())
+		}},
+		{desktopGetUpdateInfoBinding, func() (desktopUpdateInfo, error) {
+			if err := authorize(desktopBridgeGetUpdateInfo); err != nil {
+				return desktopUpdateInfo{}, err
+			}
+			return updateController.Info()
+		}},
+		{desktopRequestUpdateBinding, func() error {
+			if err := authorize(desktopBridgeRequestUpdate); err != nil {
+				return err
+			}
+			if err := updateController.Start(os.Getpid()); err != nil {
+				return err
+			}
+			postWindowClose(hwnd)
+			return nil
 		}},
 		{desktopEnterLocalDevBinding, func(sourcePath string) error {
 			if err := authorize(desktopBridgeEnterLocalDev); err != nil {

@@ -36,6 +36,8 @@ const (
 	desktopBridgeGetLocalDevState
 	desktopBridgeSaveLocalDevSource
 	desktopBridgeRunLocalDevOperation
+	desktopBridgeGetUpdateInfo
+	desktopBridgeRequestUpdate
 )
 
 type desktopNavigationAction uint8
@@ -109,7 +111,9 @@ func (p *desktopWebViewPolicy) AllowsBridge(mode desktopPageMode, rawURL string,
 		desktopBridgeRequestServerChange,
 		desktopBridgeEnterLocalDev,
 		desktopBridgeOpenProjectFileInVSCode,
-		desktopBridgeShowProjectFileInFolder:
+		desktopBridgeShowProjectFileInFolder,
+		desktopBridgeGetUpdateInfo,
+		desktopBridgeRequestUpdate:
 		return true
 	default:
 		return false

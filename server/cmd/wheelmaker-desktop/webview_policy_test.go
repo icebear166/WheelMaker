@@ -48,9 +48,15 @@ func TestDesktopBridgeAuthorization(t *testing.T) {
 		{name: "bootstrap cannot change server", mode: desktopBootstrapPage, url: "about:blank", mainFrame: true, action: desktopBridgeRequestServerChange},
 		{name: "bootstrap cannot open project file in VS Code", mode: desktopBootstrapPage, url: "about:blank", mainFrame: true, action: desktopBridgeOpenProjectFileInVSCode},
 		{name: "bootstrap cannot show project file in folder", mode: desktopBootstrapPage, url: "about:blank", mainFrame: true, action: desktopBridgeShowProjectFileInFolder},
+		{name: "bootstrap cannot read Desktop update info", mode: desktopBootstrapPage, url: "about:blank", mainFrame: true, action: desktopBridgeGetUpdateInfo},
+		{name: "bootstrap cannot request Desktop update", mode: desktopBootstrapPage, url: "about:blank", mainFrame: true, action: desktopBridgeRequestUpdate},
 		{name: "remote window control", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/projects", mainFrame: true, action: desktopBridgeClose, want: true},
 		{name: "remote server change", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/", mainFrame: true, action: desktopBridgeRequestServerChange, want: true},
 		{name: "remote device name", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/", mainFrame: true, action: desktopBridgeGetDeviceName, want: true},
+		{name: "remote Desktop update info", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/", mainFrame: true, action: desktopBridgeGetUpdateInfo, want: true},
+		{name: "remote Desktop update request", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/", mainFrame: true, action: desktopBridgeRequestUpdate, want: true},
+		{name: "old origin cannot request Desktop update", mode: desktopTrustedRemotePage, url: "https://old.example.com/wheelmaker/", mainFrame: true, action: desktopBridgeRequestUpdate},
+		{name: "iframe cannot request Desktop update", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/", mainFrame: false, action: desktopBridgeRequestUpdate},
 		{name: "remote open project file in VS Code", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/projects", mainFrame: true, action: desktopBridgeOpenProjectFileInVSCode, want: true},
 		{name: "remote show project file in folder", mode: desktopTrustedRemotePage, url: "https://example.com/wheelmaker/projects", mainFrame: true, action: desktopBridgeShowProjectFileInFolder, want: true},
 		{name: "old origin cannot open project file in VS Code", mode: desktopTrustedRemotePage, url: "https://old.example.com/wheelmaker/", mainFrame: true, action: desktopBridgeOpenProjectFileInVSCode},
@@ -113,6 +119,9 @@ func TestDesktopLocalDevPageOnlyAuthorizesWindowControls(t *testing.T) {
 	}
 	if state.Authorize(epoch, true, desktopBridgeOpenProjectFileInVSCode) {
 		t.Fatal("local Dev page authorized a remote file action")
+	}
+	if state.Authorize(epoch, true, desktopBridgeGetUpdateInfo) || state.Authorize(epoch, true, desktopBridgeRequestUpdate) {
+		t.Fatal("local Dev page authorized Desktop self-update")
 	}
 	if !state.Authorize(epoch, true, desktopBridgeGetLocalDevState) {
 		t.Fatal("local Dev page did not authorize its state action")
@@ -192,6 +201,8 @@ func TestDesktopFileActionsRequireCommittedTrustedNavigation(t *testing.T) {
 	actions := []desktopBridgeAction{
 		desktopBridgeOpenProjectFileInVSCode,
 		desktopBridgeShowProjectFileInFolder,
+		desktopBridgeGetUpdateInfo,
+		desktopBridgeRequestUpdate,
 	}
 
 	epoch := state.BeginTopLevelNavigation("https://example.com/wheelmaker/projects")

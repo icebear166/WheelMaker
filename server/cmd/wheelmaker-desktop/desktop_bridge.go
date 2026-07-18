@@ -18,6 +18,8 @@ const (
 	desktopRequestServerBinding           = "__wheelMakerDesktopRequestServerChange"
 	desktopOpenProjectFileInVSCodeBinding = "__wheelMakerDesktopOpenProjectFileInVSCode"
 	desktopShowProjectFileInFolderBinding = "__wheelMakerDesktopShowProjectFileInFolder"
+	desktopGetUpdateInfoBinding           = "__wheelMakerDesktopGetUpdateInfo"
+	desktopRequestUpdateBinding           = "__wheelMakerDesktopRequestUpdate"
 	desktopEnterLocalDevBinding           = "__wheelMakerDesktopEnterLocalDev"
 	desktopGetLocalDevStateBinding        = "__wheelMakerDesktopGetLocalDevState"
 	desktopSaveLocalDevSourceBinding      = "__wheelMakerDesktopSaveLocalDevSource"
@@ -59,6 +61,8 @@ func desktopRuntimeInitScript() string {
 		requestLocalDevMode: invoke('` + desktopEnterLocalDevBinding + `'),
 		openProjectFileInVSCode: invoke('` + desktopOpenProjectFileInVSCodeBinding + `'),
 		showProjectFileInFolder: invoke('` + desktopShowProjectFileInFolderBinding + `'),
+		getDesktopUpdateInfo: invoke('` + desktopGetUpdateInfoBinding + `'),
+		requestDesktopUpdate: invoke('` + desktopRequestUpdateBinding + `'),
     });
 	return;
 	}

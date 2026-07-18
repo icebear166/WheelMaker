@@ -79,6 +79,72 @@ func TestDesktopRuntimeFileActionBindings(t *testing.T) {
 	}
 }
 
+func TestDesktopRuntimeSelfUpdateBindingsStayRemoteAndCloseAfterLaunch(t *testing.T) {
+	script := desktopRuntimeInitScript()
+	for _, want := range []string{
+		"getDesktopUpdateInfo",
+		"requestDesktopUpdate",
+		desktopGetUpdateInfoBinding,
+		desktopRequestUpdateBinding,
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("desktop runtime script missing %q", want)
+		}
+	}
+
+	bootstrapStart := strings.Index(script, "window.wheelMakerBootstrap")
+	if bootstrapStart < 0 {
+		t.Fatal("desktop runtime bootstrap section was not found")
+	}
+	bootstrapEnd := strings.Index(script[bootstrapStart:], "return;")
+	if bootstrapEnd < 0 {
+		t.Fatal("desktop runtime bootstrap section end was not found")
+	}
+	remoteRelative := strings.Index(script[bootstrapStart+bootstrapEnd:], "window.WheelMakerDesktop = Object.freeze({")
+	if remoteRelative < 0 {
+		t.Fatal("desktop runtime remote section was not found")
+	}
+	remoteStart := bootstrapStart + bootstrapEnd + remoteRelative
+	localRelative := strings.Index(script[remoteStart+1:], "window.WheelMakerDesktop = Object.freeze({")
+	if localRelative < 0 {
+		t.Fatal("desktop runtime Local Dev section was not found")
+	}
+	localDevStart := remoteStart + 1 + localRelative
+	bootstrapSection := script[bootstrapStart : bootstrapStart+bootstrapEnd]
+	localDevSection := script[localDevStart:]
+	for _, privateName := range []string{desktopGetUpdateInfoBinding, desktopRequestUpdateBinding} {
+		if strings.Contains(bootstrapSection, privateName) {
+			t.Errorf("bootstrap object exposes Desktop update binding %q", privateName)
+		}
+		if strings.Contains(localDevSection, privateName) {
+			t.Errorf("Local Dev object exposes Desktop update binding %q", privateName)
+		}
+	}
+
+	source, err := os.ReadFile("webview_windows.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceText := string(source)
+	for _, want := range []string{
+		"authorize(desktopBridgeGetUpdateInfo)",
+		"authorize(desktopBridgeRequestUpdate)",
+		"updateController.Start(os.Getpid())",
+	} {
+		if !strings.Contains(sourceText, want) {
+			t.Errorf("Windows Desktop update binding source missing %q", want)
+		}
+	}
+	startIndex := strings.Index(sourceText, "updateController.Start(os.Getpid())")
+	if startIndex < 0 {
+		t.Fatal("Desktop updater start call was not found")
+	}
+	closeIndex := strings.Index(sourceText[startIndex:], "postWindowClose(hwnd)")
+	if closeIndex < 0 {
+		t.Fatal("Desktop close must occur after the updater starts")
+	}
+}
+
 func TestDesktopRuntimeExposesOnlyTheLocalDevEntryOnHTTPS(t *testing.T) {
 	script := desktopRuntimeInitScript()
 	if !strings.Contains(script, "requestLocalDevMode") || !strings.Contains(script, desktopEnterLocalDevBinding) {
