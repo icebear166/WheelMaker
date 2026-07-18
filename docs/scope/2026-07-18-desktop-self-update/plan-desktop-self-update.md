@@ -1005,7 +1005,7 @@ git commit -m "feat(app): surface Desktop self-update in the titlebar"
 
 **Files:**
 - Verify: `docs/scope/2026-07-18-desktop-self-update/spec-desktop-self-update.md`
-- Verify: `docs/wiki/features/desktop-self-update.md`
+- Verify: `docs/wiki/release-and-build/desktop-self-update.md`
 - Verify: all files changed in Tasks 1-6
 
 - [ ] **Step 1: Re-run focused acceptance suites**

@@ -106,7 +106,7 @@ desktop/
 └─ update.exe
 ```
 
-`update.exe` 每轮都构建，不受 `--with-desktop` 影响。`release-manifest.json` 记录各平台包的相对路径、大小和 SHA-256。`WheelMakerDesktop.exe` 和 Android 仍是独立可选资产，不放入 Hub/Web 平台包。
+`update.exe` 每轮都构建，不受 `--with-desktop` 影响。`release-manifest.json` 记录各平台包的相对路径、大小和 SHA-256。`WheelMakerDesktop.exe` 和 Android 仍是独立可选资产，不放入 Hub/Web 平台包。完整的 Desktop 更新边界见 [`desktop-self-update.md`](desktop-self-update.md)。
 
 ## 工作目录和缓存
 

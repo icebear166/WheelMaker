@@ -113,6 +113,8 @@
 
 自更新只支持标准安装目录，不接受 Web 提供的命令、路径或 URL。`update_exe.bat` 保留为旧 Desktop 第一次升级和故障恢复入口；旧版必须先手动更新到带原生自更新桥的 Desktop 一次。
 
+Desktop 自更新的用户状态、固定路径和可信调用链详见 [`desktop-self-update.md`](desktop-self-update.md)。
+
 ## Windows 计划任务
 
 Windows 完整安装维护两个当前用户计划任务：
