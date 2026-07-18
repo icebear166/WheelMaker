@@ -1761,7 +1761,7 @@
   height: 6px;
   flex: 0 0 6px;
   border-radius: 50%;
-  background: var(--danger);
+  background: var(--state-danger);
   box-shadow: 0 0 0 2px var(--surface-panel);
 }
 
