@@ -68,11 +68,17 @@ test('start stops the formal runtime before starting the Dev stack', async () =>
   await runDevLocal(['start'], deps);
 
   const stopFormal = deps.state.commands.findIndex(call => call.file === 'cmd.exe' && call.args.at(-1) === 'C:\\Users\\me\\.wheelmaker\\stop.bat');
-  const guardian = deps.state.commands.findIndex(call => call.spawned && call.args.includes('-d'));
+  const guardian = deps.state.commands.find(call => call.spawned && call.args.includes('-d'));
   const web = deps.state.commands.find(call => call.spawned && call.file === 'npm');
 	const desktop = deps.state.commands.find(call => call.spawned && /WheelMakerDesktop\.exe$/.test(call.file));
   assert.ok(stopFormal >= 0);
-  assert.ok(guardian > stopFormal);
+  assert.ok(deps.state.commands.indexOf(guardian) > stopFormal);
+  assert.deepEqual(guardian.args, [
+    '-d',
+    '--local-dev',
+    '--dir',
+    'C:\\Users\\me\\.wheelmaker',
+  ]);
   assert.equal(web.options.env.WHEELMAKER_WEB_TARGET, 'C:\\Users\\me\\.wheelmaker\\dev\\web');
   assert.ok(deps.state.writes.some(write => /dev-config\.json$/.test(write.path)));
   assert.ok(deps.state.writes.some(write => /runtime\.json$/.test(write.path)));

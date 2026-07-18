@@ -4,7 +4,10 @@ package main
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestWindowsLocalDevExecutorRequiresConfirmation(t *testing.T) {
@@ -43,5 +46,18 @@ func TestWindowsLocalDevExecutorUsesNodeScriptAndFixedOperation(t *testing.T) {
 	want := []string{`D:\Code\WheelMaker\scripts\dev-local.mjs`, "restart"}
 	if len(args) != len(want) || args[0] != want[0] || args[1] != want[1] {
 		t.Fatalf("args = %q, want %q", args, want)
+	}
+}
+
+func TestFormatWindowsLocalDevCommandErrorDropsInvalidOutputBytes(t *testing.T) {
+	err := formatWindowsLocalDevCommandError(
+		errors.New("exit status 1"),
+		[]byte{'[', 'd', 'e', 'v', ']', ' ', 'f', 'a', 'i', 'l', 'e', 'd', ' ', 0x81, 0x82},
+	)
+	if !utf8.ValidString(err.Error()) {
+		t.Fatalf("error is not valid UTF-8: %q", err)
+	}
+	if strings.ContainsRune(err.Error(), utf8.RuneError) {
+		t.Fatalf("error contains replacement glyphs: %q", err)
 	}
 }

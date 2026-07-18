@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -108,13 +109,59 @@ func TestGuardianWorkerSpecsSkipRegistryWorkerWhenRegistryListenDisabled(t *test
 		Server: "wss://registry.example/ws",
 		Port:   28800,
 	}
-	specs := guardianWorkerSpecs([]string{"--foo", "bar"}, cfg)
+	specs := guardianWorkerSpecs([]string{"--foo", "bar"}, cfg, false)
 
 	if len(specs) != 1 {
 		t.Fatalf("guardianWorkerSpecs() len=%d want 1 specs=%v", len(specs), specs)
 	}
 	if specs[0].markerFlag != hubWorkerArg {
 		t.Fatalf("guardianWorkerSpecs()[0].markerFlag=%q want %q", specs[0].markerFlag, hubWorkerArg)
+	}
+}
+
+func TestGuardianWorkerSpecsForceLocalRegistryForLocalDev(t *testing.T) {
+	cfg := shared.RegistryConfig{
+		Listen: false,
+		Server: "wss://registry.example/ws",
+		Port:   28800,
+	}
+	specs := guardianWorkerSpecs([]string{"--dir", `C:\Users\me\.wheelmaker`}, cfg, true)
+
+	if len(specs) != 2 {
+		t.Fatalf("guardianWorkerSpecs() len=%d want 2 specs=%v", len(specs), specs)
+	}
+	for _, spec := range specs {
+		if !slices.Contains(spec.args, localDevArg) {
+			t.Fatalf("guardianWorkerSpecs() args=%v missing %q", spec.args, localDevArg)
+		}
+	}
+	if specs[1].markerFlag != registryWorkerArg {
+		t.Fatalf("guardianWorkerSpecs()[1].markerFlag=%q want %q", specs[1].markerFlag, registryWorkerArg)
+	}
+}
+
+func TestLocalDevRuntimeConfigUsesFormalDataWithLoopbackRegistry(t *testing.T) {
+	original := &shared.AppConfig{Registry: shared.RegistryConfig{
+		Listen: false,
+		Server: "wss://registry.example/ws",
+		Port:   28800,
+		Token:  "formal-token",
+		HubID:  "formal-hub",
+	}}
+
+	got := localDevRuntimeConfig(original)
+
+	if got == original {
+		t.Fatal("localDevRuntimeConfig() mutated the loaded formal config")
+	}
+	if got.Registry.Server != "127.0.0.1" || got.Registry.Port != 9630 || !got.Registry.Listen {
+		t.Fatalf("localDevRuntimeConfig().Registry=%+v", got.Registry)
+	}
+	if got.Registry.Token != "formal-token" || got.Registry.HubID != "formal-hub" {
+		t.Fatalf("localDevRuntimeConfig() did not preserve formal identity: %+v", got.Registry)
+	}
+	if original.Registry.Server != "wss://registry.example/ws" || original.Registry.Listen {
+		t.Fatalf("formal config was mutated: %+v", original.Registry)
 	}
 }
 

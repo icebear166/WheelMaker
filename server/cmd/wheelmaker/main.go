@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"syscall"
 
 	"github.com/swm8023/wheelmaker/internal/hub"
@@ -22,6 +23,7 @@ import (
 const daemonWorkerArg = "--daemon-worker"
 const hubWorkerArg = "--hub-worker"
 const registryWorkerArg = "--registry-worker"
+const localDevArg = "--local-dev"
 const wheelmakerWindowsServiceName = "WheelMaker"
 const defaultRegistryAddr = "127.0.0.1:9630"
 
@@ -42,11 +44,15 @@ func run() error {
 	registryServer := fs.Bool("registry-server", false, "run registry websocket server mode")
 	registryAddr := fs.String("registry-addr", defaultRegistryAddr, "registry websocket listen address")
 	wmDir := fs.String("dir", "", "WheelMaker home directory (default: ~/.wheelmaker)")
+	localDev := fs.Bool("local-dev", false, "internal: run the Windows Local Dev Hub and Registry stack")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return err
 	}
+	if *localDev && runtime.GOOS != "windows" {
+		return fmt.Errorf("%s is supported only on Windows", localDevArg)
+	}
 
-	if !*registryServer && !*registryWorker && !*hubWorker && !*daemonWorker {
+	if !*localDev && !*registryServer && !*registryWorker && !*hubWorker && !*daemonWorker {
 		ranAsService, err := runAsWindowsServiceIfNeeded(fs.Args(), *wmDir)
 		if err != nil {
 			return err
@@ -60,20 +66,20 @@ func run() error {
 	case *registryServer:
 		return runRegistryServer(*registryAddr, *wmDir)
 	case *registryWorker:
-		return runRegistryWorker(*wmDir)
+		return runRegistryWorker(*wmDir, *localDev)
 	case *hubWorker:
-		return runHubWorker(*wmDir)
+		return runHubWorker(*wmDir, *localDev)
 	case *daemonWorker:
-		return runHubWorker(*wmDir)
+		return runHubWorker(*wmDir, *localDev)
 	case *daemonMode:
 		restoreStdio, err := redirectProcessStdioToDevNull()
 		if err != nil {
 			return err
 		}
 		defer restoreStdio()
-		return runGuardian(fs.Args(), *wmDir)
+		return runGuardian(fs.Args(), *wmDir, *localDev)
 	default:
-		return runHubWorker(*wmDir)
+		return runHubWorker(*wmDir, *localDev)
 	}
 }
 
@@ -106,7 +112,7 @@ func loadValidatedRuntimeConfig(baseDir string) (*logger.AppConfig, error) {
 	return cfg, nil
 }
 
-func runHubWorker(stateDir string) error {
+func runHubWorker(stateDir string, localDev bool) error {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("home dir: %w", err)
@@ -118,6 +124,9 @@ func runHubWorker(stateDir string) error {
 	cfg, err := loadValidatedRuntimeConfig(baseDir)
 	if err != nil {
 		return err
+	}
+	if localDev {
+		cfg = localDevRuntimeConfig(cfg)
 	}
 	cfgPath := filepath.Join(baseDir, "config.json")
 	hubLogPath := filepath.Join(baseDir, "log", "hub.log")
@@ -161,7 +170,7 @@ func runHubWorker(stateDir string) error {
 	return nil
 }
 
-func runRegistryWorker(stateDir string) error {
+func runRegistryWorker(stateDir string, localDev bool) error {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("home dir: %w", err)
@@ -170,6 +179,9 @@ func runRegistryWorker(stateDir string) error {
 	cfg, err := loadValidatedRuntimeConfig(baseDir)
 	if err != nil {
 		return err
+	}
+	if localDev {
+		cfg = localDevRuntimeConfig(cfg)
 	}
 	regLog := filepath.Join(baseDir, "log", "registry.log")
 
@@ -214,6 +226,14 @@ func registryServerConfig(addr, token, stateDir string) registry.Config {
 	}
 }
 
+func localDevRuntimeConfig(cfg *logger.AppConfig) *logger.AppConfig {
+	local := *cfg
+	local.Registry.Listen = true
+	local.Registry.Server = "127.0.0.1"
+	local.Registry.Port = 9630
+	return &local
+}
+
 func wheelmakerLogDir(home string) string {
 	return filepath.Join(home, ".wheelmaker", "log")
 }
@@ -223,7 +243,7 @@ func runAsWindowsServiceIfNeeded(workerArgs []string, stateDir string) (bool, er
 	return winsvc.RunIfWindowsService(
 		wheelmakerWindowsServiceName,
 		func(ctx context.Context) error {
-			return runGuardianWithContext(ctx, sanitizedArgs, stateDir)
+			return runGuardianWithContext(ctx, sanitizedArgs, stateDir, false)
 		},
 		nil,
 	)

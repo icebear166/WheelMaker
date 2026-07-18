@@ -104,7 +104,12 @@ async function startDev(deps) {
   const env = buildEnvironment(deps, paths);
   const started = [];
   try {
-    const guardian = await deps.spawn(paths.hub, ['-d'], {cwd: paths.devRoot, env});
+    const guardian = await deps.spawn(paths.hub, [
+      '-d',
+      '--local-dev',
+      '--dir',
+      paths.formalRoot,
+    ], {cwd: paths.devRoot, env});
     started.push(guardian.pid);
     const webServer = await spawnNpm(deps, ['run', 'web'], {
       cwd: paths.appRoot,
@@ -206,6 +211,7 @@ function devPaths(deps) {
     devConfig: join(devRoot, 'dev-config.json'),
     formalStart: join(deps.home, '.wheelmaker', 'start.bat'),
     formalStop: join(deps.home, '.wheelmaker', 'stop.bat'),
+    formalRoot: join(deps.home, '.wheelmaker'),
     hub: join(devRoot, 'bin', 'wheelmaker.exe'),
     runtime: join(devRoot, 'runtime.json'),
     serverRoot,

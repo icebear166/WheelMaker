@@ -27,13 +27,13 @@ type workerSpec struct {
 	keepPID    int
 }
 
-func runGuardian(workerArgs []string, stateDir string) error {
+func runGuardian(workerArgs []string, stateDir string, localDev bool) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	return runGuardianWithContext(ctx, workerArgs, stateDir)
+	return runGuardianWithContext(ctx, workerArgs, stateDir, localDev)
 }
 
-func runGuardianWithContext(ctx context.Context, workerArgs []string, stateDir string) error {
+func runGuardianWithContext(ctx context.Context, workerArgs []string, stateDir string, localDev bool) error {
 	releaseSingleton, err := acquireGuardianSingleton()
 	if err != nil {
 		return err
@@ -51,7 +51,7 @@ func runGuardianWithContext(ctx context.Context, workerArgs []string, stateDir s
 	if err != nil {
 		return err
 	}
-	specs := guardianWorkerSpecs(baseArgs, registryCfg)
+	specs := guardianWorkerSpecs(baseArgs, registryCfg, localDev)
 
 	reconcile := func() {
 		for _, spec := range specs {
@@ -92,11 +92,14 @@ func loadGuardianRegistryConfig(stateDir string) (shared.RegistryConfig, error) 
 	return cfg.Registry, nil
 }
 
-func guardianWorkerSpecs(baseArgs []string, registryCfg shared.RegistryConfig) []*workerSpec {
+func guardianWorkerSpecs(baseArgs []string, registryCfg shared.RegistryConfig, localDev bool) []*workerSpec {
+	if localDev {
+		baseArgs = append(append([]string{}, baseArgs...), localDevArg)
+	}
 	specs := []*workerSpec{
 		{name: "hub", markerFlag: hubWorkerArg, args: append(append([]string{}, baseArgs...), hubWorkerArg)},
 	}
-	if registryCfg.Listen {
+	if registryCfg.Listen || localDev {
 		specs = append(specs, &workerSpec{name: "registry", markerFlag: registryWorkerArg, args: append(append([]string{}, baseArgs...), registryWorkerArg)})
 	}
 	return specs

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -33,7 +34,7 @@ func newWindowsLocalDevController() (*localDevController, error) {
 			command.Dir = dir
 			command.Env = env
 			if output, err := command.CombinedOutput(); err != nil {
-				return fmt.Errorf("run local dev command: %w: %s", err, output)
+				return formatWindowsLocalDevCommandError(err, output)
 			}
 			return nil
 		},
@@ -43,6 +44,14 @@ func newWindowsLocalDevController() (*localDevController, error) {
 		executor,
 		filepath.Join(home, ".wheelmaker", "dev"),
 	), nil
+}
+
+func formatWindowsLocalDevCommandError(commandErr error, output []byte) error {
+	detail := strings.TrimSpace(strings.ToValidUTF8(string(output), ""))
+	if detail == "" {
+		return fmt.Errorf("run local dev command: %w", commandErr)
+	}
+	return fmt.Errorf("run local dev command: %w: %s", commandErr, detail)
 }
 
 func (e *windowsLocalDevExecutor) Run(ctx context.Context, root string, operation localDevOperation) error {
