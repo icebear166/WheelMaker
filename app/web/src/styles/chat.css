@@ -1218,7 +1218,7 @@
   align-items: center;
   gap: 5px;
   min-height: 16px;
-  margin: 4px 2px 1px 21px;
+  margin: 4px 2px 1px 14px;
   padding-top: 5px;
   border-top: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent);
 }
@@ -1275,7 +1275,7 @@
 
 .recent-project-session-list {
   position: relative;
-  padding: 1px 0 1px 21px;
+  padding: 1px 0 1px 14px;
 }
 
 .wide-project-actions {
@@ -1382,7 +1382,7 @@
 
 .wide-project-session-list {
   margin-top: -2px;
-  padding: 1px 0 1px 21px;
+  padding: 1px 0 1px 14px;
   animation: session-list-fade-in 180ms ease;
 }
 
@@ -1446,7 +1446,7 @@
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 4px;
-  padding: 0 5px 0 2px;
+  padding: 0 5px 0 8px;
   cursor: pointer;
   text-align: left;
   -webkit-touch-callout: none;
