@@ -7,9 +7,10 @@ import (
 )
 
 const (
-	hubToolMethodNPM    = "cmd.npm"
-	hubToolMethodUpdate = "cmd.update"
-	hubToolMethodSkills = "cmd.skills"
+	hubToolMethodNPM     = "cmd.npm"
+	hubToolMethodUpdate  = "cmd.update"
+	hubToolMethodSkills  = "cmd.skills"
+	hubToolMethodRelease = "cmd.release"
 )
 
 func (r *Reporter) hubStateSectionHandlers() map[string]hubStateSectionHandler {
@@ -21,6 +22,9 @@ func (r *Reporter) hubStateSectionHandlers() map[string]hubStateSectionHandler {
 		hubStateSectionWheelmakerUpdate: {
 			Refresh: r.refreshHubStateWheelmakerUpdate,
 			Action:  r.actionHubStateWheelmakerUpdate,
+		},
+		hubStateSectionReleasePublish: {
+			Action: r.actionHubStateReleasePublish,
 		},
 		hubStateSectionSkills: {
 			Refresh: r.refreshHubStateSkills,
@@ -76,6 +80,15 @@ func (r *Reporter) actionHubStateWheelmakerUpdate(ctx context.Context, action st
 		return r.runHubStateTool(ctx, hubToolMethodUpdate, hubStateToolPayload(r.cfg.HubID, "request", params))
 	default:
 		return nil, fmt.Errorf("unsupported %s action %q", hubStateSectionWheelmakerUpdate, action)
+	}
+}
+
+func (r *Reporter) actionHubStateReleasePublish(ctx context.Context, action string, params map[string]any) (any, error) {
+	switch action {
+	case "start", "status":
+		return r.runHubStateTool(ctx, hubToolMethodRelease, hubStateToolPayload(r.cfg.HubID, action, params))
+	default:
+		return nil, fmt.Errorf("unsupported %s action %q", hubStateSectionReleasePublish, action)
 	}
 }
 

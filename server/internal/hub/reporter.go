@@ -178,6 +178,7 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 		Projects:              cp,
 		StateDir:              stateDir,
 		OnSkillsOperationDone: r.refreshSkillsAgentProfiles,
+		ReleaseNotifier:       r,
 	})
 	r.hubStateManager = newHubStateManager(r.cfg.HubID, r.hubStateSectionHandlers())
 	r.usageService = usage.NewService(usage.ServiceOptions{
@@ -335,6 +336,74 @@ func (r *Reporter) UpdateProject(project ProjectInfo) error {
 		delete(r.pending, requestID)
 		r.mu.Unlock()
 		return fmt.Errorf("registry update timeout")
+	}
+}
+
+// NotifyRelease asks the Registry to deliver a completed publishing job to a
+// selected Server Hub. It carries no token or filesystem path.
+func (r *Reporter) NotifyRelease(ctx context.Context, targetHubID, kind, baseURL string) (tools.ReleaseTargetStatus, error) {
+	targetHubID = strings.TrimSpace(targetHubID)
+	if targetHubID == "" {
+		return tools.ReleaseTargetStatus{}, errors.New("target hub id is required")
+	}
+	if kind != "version" && kind != "debugWeb" {
+		return tools.ReleaseTargetStatus{}, errors.New("unsupported release kind")
+	}
+
+	r.mu.RLock()
+	conn := r.conn
+	r.mu.RUnlock()
+	if conn == nil {
+		return tools.ReleaseTargetStatus{}, errors.New("registry connection is unavailable")
+	}
+	requestID := r.requestSeq.Add(1)
+	waitCh := make(chan envelope, 1)
+	r.mu.Lock()
+	if r.conn != conn {
+		r.mu.Unlock()
+		return tools.ReleaseTargetStatus{}, errors.New("registry connection is unavailable")
+	}
+	r.pending[requestID] = waitCh
+	r.mu.Unlock()
+	if err := r.writeJSON(conn, "->", envelope{
+		RequestID: requestID,
+		Type:      rp.RegistryEnvelopeTypeRequest,
+		Method:    rp.RegistryMethodHubReleaseNotify,
+		HubID:     r.cfg.HubID,
+		Payload: rp.MustRaw(map[string]string{
+			"targetHubId": targetHubID,
+			"kind":        kind,
+			"baseUrl":     baseURL,
+		}),
+	}); err != nil {
+		r.mu.Lock()
+		delete(r.pending, requestID)
+		r.mu.Unlock()
+		return tools.ReleaseTargetStatus{}, fmt.Errorf("write release notification: %w", err)
+	}
+	select {
+	case response, ok := <-waitCh:
+		if !ok {
+			return tools.ReleaseTargetStatus{}, errors.New("registry connection closed")
+		}
+		if response.Type == rp.RegistryEnvelopeTypeError {
+			return tools.ReleaseTargetStatus{}, errors.New("registry rejected release notification")
+		}
+		var result tools.ReleaseTargetStatus
+		if err := json.Unmarshal(response.Payload, &result); err != nil || (result.Status != "accepted" && result.Status != "success" && result.Status != "failed") {
+			return tools.ReleaseTargetStatus{}, errors.New("invalid target hub release status")
+		}
+		return result, nil
+	case <-ctx.Done():
+		r.mu.Lock()
+		delete(r.pending, requestID)
+		r.mu.Unlock()
+		return tools.ReleaseTargetStatus{}, ctx.Err()
+	case <-time.After(60 * time.Second):
+		r.mu.Lock()
+		delete(r.pending, requestID)
+		r.mu.Unlock()
+		return tools.ReleaseTargetStatus{}, errors.New("release notification timeout")
 	}
 }
 
@@ -598,6 +667,10 @@ func validateHubStateAction(section string, action string) error {
 		},
 		hubStateSectionWheelmakerUpdate: {
 			"requestUpdate": {},
+		},
+		hubStateSectionReleasePublish: {
+			"start":  {},
+			"status": {},
 		},
 		hubStateSectionSkills: {
 			"listSource": {},

@@ -17,6 +17,8 @@ type ManagerConfig struct {
 	GlobalLockPath        string
 	HomeDir               string
 	OnSkillsOperationDone func(scope, projectName string)
+	ReleaseCommand        *ReleaseCommand
+	ReleaseNotifier       ReleaseNotifier
 }
 
 type CommandError struct {
@@ -37,9 +39,10 @@ func (e *CommandError) Error() string {
 type Manager struct {
 	cfg ManagerConfig
 
-	npmCommand    *NPMCommand
-	updateCommand *UpdateCommand
-	skillsCommand *SkillsCommand
+	npmCommand     *NPMCommand
+	updateCommand  *UpdateCommand
+	skillsCommand  *SkillsCommand
+	releaseCommand *ReleaseCommand
 }
 
 func NewManager(config ManagerConfig) *Manager {
@@ -62,6 +65,7 @@ func NewManager(config ManagerConfig) *Manager {
 			HomeDir:         config.HomeDir,
 			OnOperationDone: config.OnSkillsOperationDone,
 		}),
+		releaseCommand: config.ReleaseCommand,
 	}
 }
 
@@ -105,6 +109,12 @@ func (m *Manager) Handle(ctx context.Context, method string, payload json.RawMes
 		m.skillsCommand.SetProjects(m.cfg.Projects)
 		out, err := m.skillsCommand.Handle(ctx, payload)
 		return out, skillsErr(err)
+	case "cmd.release":
+		if m.releaseCommand == nil {
+			m.releaseCommand = newReleaseCommandWithDependencies(m.cfg.StateDir, execReleaseRunner{}, m.cfg.ReleaseNotifier)
+		}
+		out, err := m.releaseCommand.Handle(ctx, payload)
+		return out, releaseErr(err)
 	default:
 		return nil, &CommandError{Code: rp.CodeInvalidArgument, Message: "unsupported tools command"}
 	}
@@ -125,6 +135,13 @@ func updateErr(err *updateCommandError) *CommandError {
 }
 
 func skillsErr(err *skillsCommandError) *CommandError {
+	if err == nil {
+		return nil
+	}
+	return &CommandError{Code: err.Code, Message: err.Message}
+}
+
+func releaseErr(err *releaseCommandError) *CommandError {
 	if err == nil {
 		return nil
 	}
