@@ -1750,7 +1750,7 @@ describe('web chat integration', () => {
     expect(btnBlock).toContain('opacity: 0;');
   });
 
-  test('session rows show the state dot in the time slot instead of a marker column', () => {
+  test('session rows show the state dot in the leading gutter outside the selected frame', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const stylesCss = readWebStyles(projectRoot);
@@ -1758,16 +1758,17 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('session-state-unread');
     expect(mainTsx).not.toContain('renderDraftSessionStateMarker');
     expect(mainTsx).not.toContain('session-older-spacer');
-    expect(mainTsx).toContain('renderSessionTrailing(');
-    expect(mainTsx).toContain('session-state-trailing');
-    expect(stylesCss).toContain('.session-state-trailing.running .session-state-dot');
-    expect(stylesCss).toContain('.session-state-trailing.completed-unviewed .session-state-dot');
-    expect(stylesCss).toContain('.session-state-trailing.failed-unviewed .session-state-dot');
-    const trailingBlock = stylesCss.match(/\.session-state-trailing \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(trailingBlock).toContain('justify-content: center;');
+    expect(mainTsx).not.toContain('renderSessionTrailing(');
+    expect(mainTsx).toContain('renderSessionLeadingState(');
+    expect(mainTsx).toContain('session-state-leading');
+    expect(stylesCss).toContain('.session-state-leading.running .session-state-dot');
+    expect(stylesCss).toContain('.session-state-leading.completed-unviewed .session-state-dot');
+    expect(stylesCss).toContain('.session-state-leading.failed-unviewed .session-state-dot');
     expect(stylesCss).toContain('@keyframes session-state-breathe');
     expect(stylesCss).not.toContain('.session-state-unread');
+    expect(stylesCss).not.toContain('.session-state-trailing');
     expect(stylesCss).not.toContain('.session-older-spacer');
+    expect(stylesCss).not.toContain('.wide-session-row.selected::before');
   });
 
   test('project headers expose an explicit pin action alongside new/resume', () => {
@@ -2059,7 +2060,7 @@ describe('web chat integration', () => {
     const wideSessionRowBlock = stylesCss.match(/\.wide-session-row \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(wideSessionRowBlock).toContain('grid-template-columns: minmax(0, 1fr) auto auto;');
     expect(wideSessionRowBlock).toContain('gap: 4px;');
-    expect(wideSessionRowBlock).toContain('padding: 0 5px 0 9px;');
+    expect(wideSessionRowBlock).toContain('padding: 0 5px 0 6px;');
     const sessionStateMarkerBlock = stylesCss.match(/\.session-state-marker \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(sessionStateMarkerBlock).toContain('min-width: 9px;');
     expect(sessionStateMarkerBlock).toContain('flex: 0 0 auto;');
@@ -2078,8 +2079,7 @@ describe('web chat integration', () => {
     expect(selectedSessionRowBlock).not.toContain('margin-left:');
     expect(selectedSessionRowBlock).not.toContain('width: calc(');
     expect(selectedSessionRowBlock).not.toContain('padding-left: 23px;');
-    const selectedBarBlock = stylesCss.match(/\.wide-session-row\.selected::before \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(selectedBarBlock).toContain('left: 2px;');
+    expect(stylesCss).not.toContain('.wide-session-row.selected::before');
     const wideProjectActionBtnBlock = stylesCss.match(/\.wide-project-action-btn \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(wideProjectActionBtnBlock).toContain('opacity: 0.45;');
     expect(stylesCss).not.toContain('.mobile-project-actions .wide-project-action-btn {');
@@ -2489,9 +2489,7 @@ describe('web chat integration', () => {
     expect(stylesCss).toMatch(
       /\.wide-session-row\.selected \{[\s\S]*border-color: color-mix\(in srgb, var\(--accent-primary\) 32%, var\(--border-subtle\)\);[\s\S]*background: color-mix\(in srgb, var\(--accent-primary\) 11%, var\(--surface-panel\)\);[\s\S]*\}/,
     );
-    expect(stylesCss).toMatch(
-      /\.wide-session-row\.selected::before \{[\s\S]*content: ''\;[\s\S]*position: absolute;[\s\S]*width: 2px;[\s\S]*background: var\(--accent-primary\);[\s\S]*\}/,
-    );
+    expect(stylesCss).not.toContain('.wide-session-row.selected::before');
     expect(stylesCss).toMatch(
       /\.chat-composer:focus-within \.chat-composer-frame \{[\s\S]*border-color: color-mix\(in srgb, var\(--accent-primary\) 36%, var\(--border-subtle\)\);[\s\S]*0 0 0 1px color-mix\(in srgb, var\(--accent-primary\) 6%, transparent\);[\s\S]*\}/,
     );

@@ -53,7 +53,7 @@ describe('web chat recent sessions', () => {
     expect(chatCss).toContain('.recent-project-divider');
     expect(chatCss).toContain('.recent-project-divider-create');
     const dividerBlock = chatCss.match(/\.recent-project-divider \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(dividerBlock).toContain('margin: 4px 2px 1px 8px;');
+    expect(dividerBlock).toContain('margin: 4px 2px 1px 2px;');
   });
 
   test('removes colored cards, watermarks and floating create rail from recent groups', () => {
@@ -67,8 +67,9 @@ describe('web chat recent sessions', () => {
     expect(chatCss).not.toContain('.recent-project-session-group .recent-session-row.selected::before');
   });
 
-  test('recent session rows keep the shared selection indicator', () => {
-    expect(chatCss).toContain('.wide-session-row.selected::before');
+  test('recent session rows share the plain selection surface without a left bar', () => {
+    expect(chatCss).toContain('.wide-session-row.selected');
+    expect(chatCss).not.toContain('.wide-session-row.selected::before');
     expect(chatCss).not.toContain('content: none;');
   });
 

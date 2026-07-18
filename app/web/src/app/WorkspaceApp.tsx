@@ -9796,24 +9796,20 @@ export function App() {
     );
   };
 
-  const renderSessionTrailing = (session: RegistryChatSession, targetProjectId: string) => {
+  const renderSessionLeadingState = (session: RegistryChatSession, targetProjectId: string) => {
     const state = resolveSessionVisualState(session, targetProjectId);
-    if (state === 'running' || state === 'completed-unviewed' || state === 'failed-unviewed') {
-      const title =
-        state === 'running'
-          ? 'In progress'
-          : state === 'failed-unviewed'
-            ? 'Failed, click to view'
-            : 'Completed, click to view';
-      return (
-        <span className={`session-state-trailing ${state}`} title={title}>
-          <span className="session-state-dot" />
-        </span>
-      );
+    if (state !== 'running' && state !== 'completed-unviewed' && state !== 'failed-unviewed') {
+      return null;
     }
+    const title =
+      state === 'running'
+        ? 'In progress'
+        : state === 'failed-unviewed'
+          ? 'Failed, click to view'
+          : 'Completed, click to view';
     return (
-      <span className="wide-session-time" title={session.updatedAt || ''}>
-        {formatCompactRelativeAge(session.updatedAt)}
+      <span className={`session-state-leading ${state}`} title={title}>
+        <span className="session-state-dot" />
       </span>
     );
   };
@@ -14951,6 +14947,7 @@ export function App() {
         key={`${targetProjectId}:${mobile ? 'mobile-session' : 'wide-session'}:${session.sessionId}`}
         className={`project-session-row-wrap${sessionActionsOpen ? ' actions-open' : ''}`}
       >
+        {renderSessionLeadingState(session, targetProjectId)}
         <button
           type="button"
           className={`wide-session-row${mobile ? ' mobile-session-row' : ''}${
@@ -14989,7 +14986,9 @@ export function App() {
               {displaySessionAgent}
             </span>
           ) : null}
-          {renderSessionTrailing(session, targetProjectId)}
+          <span className="wide-session-time" title={session.updatedAt || ''}>
+            {formatCompactRelativeAge(session.updatedAt)}
+          </span>
         </button>
         {!mobile ? (
           <button
@@ -15030,6 +15029,7 @@ export function App() {
         key={`recent:${targetProjectId}:${session.sessionId}`}
         className={`project-session-row-wrap recent-session-row-wrap${sessionActionsOpen ? ' actions-open' : ''}`}
       >
+        {renderSessionLeadingState(liveSession, targetProjectId)}
         <button
           type="button"
           className={`wide-session-row recent-session-row${mobile ? ' mobile-session-row' : ''}${selected ? ' selected' : ''}`}
@@ -15058,7 +15058,9 @@ export function App() {
               {displaySessionAgent}
             </span>
           ) : null}
-          {renderSessionTrailing(liveSession, targetProjectId)}
+          <span className="wide-session-time" title={liveSession.updatedAt || ''}>
+            {formatCompactRelativeAge(liveSession.updatedAt)}
+          </span>
         </button>
         {!mobile ? (
           <button
@@ -15427,6 +15429,7 @@ export function App() {
         key={`${targetProjectId}:search:${row.session.sessionId}`}
         className="project-session-row-wrap session-search-row-wrap"
       >
+        {renderSessionLeadingState(row.session, targetProjectId)}
         <button
           type="button"
           className={`wide-session-row session-search-row${mobile ? ' mobile-session-row' : ''}${selected ? ' selected' : ''}`}
@@ -15445,7 +15448,9 @@ export function App() {
               {displaySessionAgent}
             </span>
           ) : null}
-          {renderSessionTrailing(row.session, targetProjectId)}
+          <span className="wide-session-time" title={row.session.updatedAt || ''}>
+            {formatCompactRelativeAge(row.session.updatedAt)}
+          </span>
         </button>
       </div>
     );
