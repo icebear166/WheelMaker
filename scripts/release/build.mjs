@@ -134,6 +134,27 @@ export async function buildRelease({
           GOOS: target.GOOS,
         },
       });
+      if (target.GOOS === 'windows') {
+        const updaterDirectory = join(directory, 'desktop');
+        const updaterPath = join(updaterDirectory, 'update.exe');
+        await mkdir(updaterDirectory, {recursive: true});
+        await runner('go', [
+          'build',
+          '-trimpath',
+          '-ldflags=-H windowsgui',
+          '-o',
+          updaterPath,
+          './cmd/wheelmaker-desktop-updater',
+        ], {
+          cwd: serverRoot,
+          env: {
+            CGO_ENABLED: '0',
+            ...buildEnvironment,
+            GOARCH: target.GOARCH,
+            GOOS: target.GOOS,
+          },
+        });
+      }
       await cp(webSource, join(directory, 'web'), { recursive: true });
       platforms[index] = {...target, binaryPath, directory};
     }));

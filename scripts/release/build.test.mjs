@@ -131,6 +131,7 @@ test('platform directories preserve the Hub and Web package layout', async () =>
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-layout-'));
   const repoRoot = join(root, 'repo');
   const outputRoot = join(root, 'out');
+  const runner = recordingRunner();
 
   try {
     await mkdir(join(repoRoot, 'app'), { recursive: true });
@@ -140,7 +141,7 @@ test('platform directories preserve the Hub and Web package layout', async () =>
       outputRoot,
       version: 'v1.7',
       withDesktop: false,
-      runner: recordingRunner(),
+      runner,
     });
 
     assert.deepEqual(
@@ -162,6 +163,26 @@ test('platform directories preserve the Hub and Web package layout', async () =>
         false,
       );
     }
+
+    const windows = result.platforms.find(platform => platform.key === 'windows-amd64');
+    assert.equal(
+      await readExists(join(windows.directory, 'desktop', 'update.exe')),
+      true,
+    );
+    for (const platform of result.platforms.filter(item => item.key !== 'windows-amd64')) {
+      assert.equal(
+        await readExists(join(platform.directory, 'desktop', 'update.exe')),
+        false,
+      );
+    }
+    const updaterBuilds = runner.calls.filter(
+      ({command, args}) =>
+        command === 'go' && args.at(-1) === './cmd/wheelmaker-desktop-updater',
+    );
+    assert.equal(updaterBuilds.length, 1);
+    assert.equal(updaterBuilds[0].options.env.GOOS, 'windows');
+    assert.equal(updaterBuilds[0].options.env.GOARCH, 'amd64');
+    assert.equal(updaterBuilds[0].args.includes('-ldflags=-H windowsgui'), true);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -208,7 +229,7 @@ test('release build routes Webpack and Go caches through the work root', async (
     const npmCalls = runner.calls.filter(({command}) => command === 'npm');
     const goCalls = runner.calls.filter(({command}) => command === 'go');
     assert.equal(npmCalls.length, 2);
-    assert.equal(goCalls.length, 4);
+    assert.equal(goCalls.length, 5);
     for (const call of npmCalls) {
       assert.equal(
         call.options.env.WHEELMAKER_WEBPACK_CACHE,
