@@ -472,7 +472,8 @@ describe('web responsive ui state', () => {
     expect(mainTsx).not.toContain('toggleHubVisibility(current, treeItem.projects');
     expect(mainTsx).toContain('resolveHubColor,');
     expect(mainTsx).toContain('resolveHubColorVariantIndex,');
-    expect(mainTsx).toContain("if (prefix === 'wide-project-hub' || prefix === 'token-stats-pill-hub') {");
+    expect(mainTsx).toContain("if (prefix === 'wide-project-hub') {");
+    expect(mainTsx).not.toContain('token-stats-pill-hub');
     expect(mainTsx).toContain('return `${prefix}-${resolveHubColorVariantIndex(normalized)}`;');
     expect(mainTsx).toContain('const color = resolveHubColor(hubColors, hubId);');
     expect(mainTsx).toContain('const currentHubColor = resolveHubColor(hubColors, hub.hubId);');

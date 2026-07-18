@@ -133,8 +133,6 @@ const (
 	RegistryMethodTerminalOutput  = "terminal.output"
 	RegistryMethodTerminalChanged = "terminal.changed"
 
-	RegistryMethodTokenStatsUpdate = "tokenStats.update"
-
 	LegacyRegistryMethodChatSend = "chat.send"
 )
 
@@ -154,7 +152,7 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodHubStateGet:                      registryHubStateMethod(RegistryMethodHubStateGet),
 	RegistryMethodHubStateRefresh:                  registryHubStateMethod(RegistryMethodHubStateRefresh),
 	RegistryMethodHubStateAction:                   registryHubStateMethod(RegistryMethodHubStateAction),
-	RegistryMethodHubStateUpdated:                  registryClientEventMethod(RegistryMethodHubStateUpdated),
+	RegistryMethodHubStateUpdated:                  registryMethod(RegistryMethodHubStateUpdated, RegistryRouteClientEvent, []RegistryRole{RegistryRoleHub}),
 	RegistryMethodDebugUploadLog:                   registryMethod(RegistryMethodDebugUploadLog, RegistryRouteDebug, []RegistryRole{RegistryRoleClient}),
 	RegistryMethodSecuritySessionList:              registryMethod(RegistryMethodSecuritySessionList, RegistryRouteSecuritySession, []RegistryRole{RegistryRoleClient}),
 	RegistryMethodSecuritySessionRevoke:            registryMethod(RegistryMethodSecuritySessionRevoke, RegistryRouteSecuritySession, []RegistryRole{RegistryRoleClient}),
@@ -236,8 +234,6 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodTerminalInput:   registryTerminalHubMethod(RegistryMethodTerminalInput, RegistryRoleClient, RegistryRouteTerminalClientEvent),
 	RegistryMethodTerminalOutput:  registryTerminalHubMethod(RegistryMethodTerminalOutput, RegistryRoleHub, RegistryRouteTerminalHubEvent),
 	RegistryMethodTerminalChanged: registryTerminalHubMethod(RegistryMethodTerminalChanged, RegistryRoleHub, RegistryRouteTerminalHubEvent),
-
-	RegistryMethodTokenStatsUpdate: registryTerminalHubMethod(RegistryMethodTokenStatsUpdate, RegistryRoleHub, RegistryRouteTerminalHubEvent),
 }
 
 func registryMethod(method string, route RegistryRouteKind, roles []RegistryRole) RegistryMethodDescriptor {

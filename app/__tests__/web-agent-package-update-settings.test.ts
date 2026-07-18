@@ -551,7 +551,8 @@ describe('agent package update settings UI source structure', () => {
     expect(mainTsx).toContain("flicker: 8");
     expect(mainTsx).not.toContain("codexapp: 3");
     expect(mainTsx).not.toContain(`${['my', 'flicker'].join('')}:`);
-    expect(mainTsx).toContain('if (prefix === \'wide-session-agent\' || prefix === \'token-stats-pill-agent\')');
+    expect(mainTsx).toContain("if (prefix === 'wide-session-agent')");
+    expect(mainTsx).not.toContain('token-stats-pill-agent');
 
     const agentTagBlock = stylesCss.match(/\.wide-session-agent-tag \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(agentTagBlock).toContain('display: inline-flex;');
@@ -563,7 +564,7 @@ describe('agent package update settings UI source structure', () => {
     expect(agentTagBlock).toContain('background: color-mix(in srgb, var(--agent-accent) 14%, transparent);');
     expect(agentTagBlock).toContain('text-transform: none;');
     expect(stylesCss).toContain('.wide-session-agent-8 { --agent-accent: #69db7c; }');
-    expect(stylesCss).toContain('.token-stats-pill-agent-8 { --pill-accent: #4fb86a; }');
+    expect(stylesCss).not.toContain('.token-stats-');
   });
 
   test('hides desktop shortcuts and shares the Settings shortcut bar across settings screens', () => {
@@ -624,7 +625,7 @@ describe('agent package update settings UI source structure', () => {
     expect(chatSessionHeaderEnd).toBeGreaterThan(chatSessionHeaderStart);
     const chatSessionHeader = mainTsx.slice(chatSessionHeaderStart, chatSessionHeaderEnd);
     expect(chatSessionHeader).toContain('{!sessionSearchHeaderExpanded ? (');
-    expect(chatSessionHeader).toContain('{renderChatMenuUsageButton()}');
+    expect(chatSessionHeader).not.toContain('{renderChatMenuUsageButton()}');
     expect(chatSessionHeader).toContain('{renderChatMenuSettingsButton()}');
     expect(chatSessionHeader).not.toContain('title="Update"');
     expect(chatSessionHeader).not.toContain('title="Port Relay"');
@@ -650,16 +651,15 @@ describe('agent package update settings UI source structure', () => {
     expect(mobileShortcutBarBlock).not.toContain('grid-template-columns: repeat(6');
     const mobileShortcutTrackBlock = stylesCss.match(/\.mobile-settings-shortcut-track \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(mobileShortcutTrackBlock).toContain('width: min(100%, 340px);');
-    expect(mobileShortcutTrackBlock).toContain('grid-template-columns: repeat(5, minmax(0, 1fr));');
+    expect(mobileShortcutTrackBlock).toContain('grid-template-columns: repeat(var(--settings-shortcut-count), minmax(0, 1fr));');
     const mobileShortcutButtonBlock = stylesCss.match(/\.mobile-settings-shortcut-button \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(mobileShortcutButtonBlock).toContain('height: 58px;');
     expect(mobileShortcutButtonBlock).toContain('flex-direction: column;');
     const mobileShortcutIndicatorBlock = stylesCss.match(/\.mobile-settings-shortcut-track::before \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(mobileShortcutIndicatorBlock).toContain('top: 0;');
-    expect(mobileShortcutIndicatorBlock).toContain('width: calc(100% / 5);');
+    expect(mobileShortcutIndicatorBlock).toContain('width: calc(100% / var(--settings-shortcut-count));');
     expect(mobileShortcutIndicatorBlock).toContain('transition: transform');
-    expect(stylesCss).toContain(".mobile-settings-shortcut-bar[data-active-index='4'] .mobile-settings-shortcut-track::before");
-    expect(stylesCss).not.toContain(".mobile-settings-shortcut-bar[data-active-index='5']");
+    expect(stylesCss).not.toContain(".mobile-settings-shortcut-bar[data-active-index='4'] .mobile-settings-shortcut-track::before");
     expect(stylesCss).not.toContain('.mobile-settings-shortcut-button.active::before');
     expect(stylesCss).not.toContain('.mobile-chat-toolbar-icon.active');
   });

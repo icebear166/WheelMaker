@@ -4,16 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
-
-	"github.com/swm8023/wheelmaker/internal/hub/tools"
 )
 
 const (
 	hubToolMethodNPM    = "cmd.npm"
 	hubToolMethodUpdate = "cmd.update"
 	hubToolMethodSkills = "cmd.skills"
-	hubToolMethodToken  = "cmd.token"
 )
 
 func (r *Reporter) hubStateSectionHandlers() map[string]hubStateSectionHandler {
@@ -32,13 +28,19 @@ func (r *Reporter) hubStateSectionHandlers() map[string]hubStateSectionHandler {
 		},
 		hubStateSectionTokenStats: {
 			Refresh: r.refreshHubStateTokenStats,
-			Action:  r.actionHubStateTokenStats,
 		},
 		hubStateSectionFileIndex: {
 			Refresh: r.refreshHubStateFileIndex,
 			Action:  r.actionHubStateFileIndex,
 		},
 	}
+}
+
+func (r *Reporter) refreshHubStateTokenStats(ctx context.Context, _ hubStateRefreshInput) (any, error) {
+	if r.usageService == nil {
+		return nil, fmt.Errorf("limits service is unavailable")
+	}
+	return r.usageService.Refresh(ctx)
 }
 
 func (r *Reporter) refreshHubStateAgentPackages(ctx context.Context, input hubStateRefreshInput) (any, error) {
@@ -98,29 +100,6 @@ func (r *Reporter) actionHubStateSkills(ctx context.Context, action string, para
 		return r.runHubStateTool(ctx, hubToolMethodSkills, hubStateToolPayload(r.cfg.HubID, "detail", params))
 	default:
 		return nil, fmt.Errorf("unsupported %s action %q", hubStateSectionSkills, action)
-	}
-}
-
-func (r *Reporter) refreshHubStateTokenStats(_ context.Context, input hubStateRefreshInput) (any, error) {
-	go r.runTokenStatsStream()
-	return map[string]any{"ok": true, "hubId": input.HubID, "streaming": true}, nil
-}
-
-// runTokenStatsStream runs the parallel scan with a streaming publish callback
-// that pushes each completed provider result as a tokenStats.update event.
-func (r *Reporter) runTokenStatsStream() {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	publish := func(v any) { _ = r.PublishTokenStatsEvent(v) }
-	_, _ = tools.ScanTokenStatsWithPublisher(ctx, publish)
-}
-
-func (r *Reporter) actionHubStateTokenStats(ctx context.Context, action string, params map[string]any) (any, error) {
-	switch action {
-	case "providers":
-		return r.runHubStateTool(ctx, hubToolMethodToken, hubStateToolPayload(r.cfg.HubID, "providers", params))
-	default:
-		return nil, fmt.Errorf("unsupported %s action %q", hubStateSectionTokenStats, action)
 	}
 }
 

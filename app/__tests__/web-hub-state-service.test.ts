@@ -74,37 +74,6 @@ describe('hub state registry service', () => {
     });
   });
 
-  test('runs tokenStats providers action', async () => {
-    const client = {
-      request: jest.fn().mockResolvedValue({
-        type: 'response',
-        payload: {
-          state: {
-            hubId: 'hub-a',
-            status: 'ready',
-            sections: {
-              tokenStats: {
-                status: 'ready',
-                data: {ok: true, providers: [{id: 'deepseek', name: 'DeepSeek', authMode: 'api_key'}]},
-              },
-            },
-          },
-        },
-      }),
-    } as unknown as RegistryClient;
-    const repository = new RegistryRepository(client);
-
-    const providers = await repository.listTokenProviders('hub-a:project-a');
-
-    expect(providers).toEqual([{id: 'deepseek', name: 'DeepSeek', authMode: 'api_key'}]);
-    expect(client.request).toHaveBeenCalledWith({
-      method: RegistryMethods.HubStateAction,
-      hubId: 'hub-a',
-      payload: {section: 'tokenStats', action: 'providers', params: {}},
-      timeoutMs: 60000,
-    });
-  });
-
   test('normalizes malformed hub state sections', async () => {
     const client = {
       request: jest.fn().mockResolvedValue({

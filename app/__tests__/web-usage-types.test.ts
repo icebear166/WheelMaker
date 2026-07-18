@@ -1,34 +1,16 @@
-import {remainingPercent, tightnessColor, mergeAccountsAcrossHubs} from '../web/src/usage/usageTypes';
+import {formatResetCountdown, formatUpdatedAgo, tightnessTone} from '../web/src/usage/usageTypes';
 
-describe('remainingPercent', () => {
-  it('converts usedPercent to remaining', () => {
-    expect(remainingPercent({id: '5h', label: '5h', usedPercent: 23})).toBe(77);
-    expect(remainingPercent({id: '5h', label: '5h', usedPercent: 100})).toBe(0);
-    expect(remainingPercent({id: '5h', label: '5h', usedPercent: 0})).toBe(100);
+describe('usage formatters', () => {
+  it('formats full reset timestamps without reparsing a partial date', () => {
+    const now = Date.parse('2027-01-01T00:00:00Z');
+    expect(formatResetCountdown('2027-01-01T02:14:00Z', now)).toBe('in 2h 14m');
   });
-});
 
-describe('tightnessColor', () => {
-  it('red below 10% remaining, yellow 10-30, default otherwise', () => {
-    expect(tightnessColor(5)).toBe('danger');
-    expect(tightnessColor(20)).toBe('warning');
-    expect(tightnessColor(77)).toBe('default');
-  });
-});
-
-describe('mergeAccountsAcrossHubs', () => {
-  it('dedupes same provider + email', () => {
-    const a = {provider: 'codex', identity: {email: 'x@y.z', accountId: 'a1'}, hubId: 'h1', status: 'ok' as const, limits: []};
-    const b = {provider: 'codex', identity: {email: 'x@y.z', accountId: 'a1'}, hubId: 'h2', status: 'ok' as const, limits: []};
-    const merged = mergeAccountsAcrossHubs([a, b]);
-    expect(merged).toHaveLength(1);
-    expect(merged[0].hubIds).toEqual(['h1', 'h2']);
-  });
-  it('keeps distinct providers', () => {
-    const merged = mergeAccountsAcrossHubs([
-      {provider: 'codex', identity: {email: 'x@y.z'}, hubId: 'h1', status: 'ok' as const, limits: []},
-      {provider: 'kimi', identity: {userId: 'u1'}, hubId: 'h1', status: 'ok' as const, limits: []},
-    ]);
-    expect(merged).toHaveLength(2);
+  it('formats freshness and threshold tones', () => {
+    const now = Date.parse('2027-01-01T00:00:00Z');
+    expect(formatUpdatedAgo('2026-12-31T23:57:00Z', now)).toBe('3m ago');
+    expect(tightnessTone(8)).toBe('danger');
+    expect(tightnessTone(24)).toBe('warning');
+    expect(tightnessTone(60)).toBe('normal');
   });
 });

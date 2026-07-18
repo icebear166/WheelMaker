@@ -338,7 +338,7 @@ HubState 是 Hub 内存缓存；Registry 只鉴权、路由、转发，不缓存
 
 ### `hub.state.updated`
 
-HubState 变化事件：
+HubState 变化事件由已认证且 `hubId` 匹配的 Hub 发出，Registry 按客户端 scope 通用转发：
 
 ```json
 {
@@ -360,7 +360,7 @@ HubState 变化事件：
 | `agentPackages` | 扫描 agent npm 包 | `install`、`installMany`、`uninstall` |
 | `wheelmakerUpdate` | 查询 WheelMaker 发布状态 | `updatePublish` |
 | `skills` | 扫描已安装 skills | `listSource`、`install`、`uninstall`、`update` |
-| `tokenStats` | 扫描 Hub token stats | `providers`、`deepseekStats` |
+| `tokenStats` | 返回 Hub 所有的完整 Limits 快照；自动扫描由 Hub 调度，手动 refresh 会等待同一轮扫描 | 无 |
 | `fileIndex` | 查询 Hub 内项目索引状态 | `rebuild` |
 
 `fileIndex.rebuild` 参数：
@@ -371,15 +371,7 @@ HubState 变化事件：
 }
 ```
 
-`tokenStats.deepseekStats` 参数：
-
-```json
-{
-  "apiKey": "sk-...",
-  "rangeType": "day",
-  "month": "2026-06"
-}
-```
+`tokenStats` 不接受 Provider action 或凭据参数。Kimi、ZAI、DeepSeek 凭据只在 Hub 本地从 OpenCode auth 读取；Registry 对 HubState payload 按字节透传，不注入、缓存或记录 Provider 密钥。
 
 ## 8. Session
 

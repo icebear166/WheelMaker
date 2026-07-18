@@ -24,6 +24,8 @@ import type {
   RegistryGitRev,
   RegistryGitStatus,
   RegistryHub,
+  RegistryHubState,
+  RegistryHubStateSectionName,
   RegistryNpmCommandResponse,
   RegistryPortRelayEnablePayload,
   RegistryPortRelaySnapshot,
@@ -66,7 +68,6 @@ import type {
   RegistrySpeechStartResponse,
 	RegistryTTSSynthesizePayload,
 	RegistryTTSSynthesizeResponse,
-  RegistryTokenScanResult,
   RegistryTerminalCreateResponse,
   RegistryTerminalGetResponse,
   RegistryTerminalInputEvent,
@@ -701,11 +702,18 @@ export class RegistryWorkspaceService {
     return this.repository.setSessionConfig(projectId, payload);
   }
 
-  async scanTokenStats(hubId: string): Promise<RegistryTokenScanResult> {
+  async getHubState(hubId: string, sections?: RegistryHubStateSectionName[]): Promise<RegistryHubState> {
     if (!this.repository) {
       throw new Error('session is not ready');
     }
-    return this.repository.scanTokenStats(hubId);
+    return this.repository.getHubState(hubId, sections);
+  }
+
+  async refreshHubState(hubId: string, sections: RegistryHubStateSectionName[]): Promise<RegistryHubState> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.refreshHubState(hubId, sections);
   }
 
   async scanNpmPackages(hubId: string): Promise<RegistryNpmCommandResponse> {

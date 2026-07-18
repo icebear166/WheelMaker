@@ -122,6 +122,18 @@ func (m *HubStateManager) get(sections []string) hubState {
 	return m.snapshotLocked(sectionNames)
 }
 
+func (m *HubStateManager) replaceSection(name string, section hubStateSection) hubState {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return m.get(nil)
+	}
+	m.mu.Lock()
+	m.state.Sections[name] = cloneHubStateSection(section)
+	state := m.snapshotLocked(nil)
+	m.mu.Unlock()
+	return state
+}
+
 func (m *HubStateManager) refresh(ctx context.Context, sections []string, force bool) (hubState, error) {
 	sectionNames := normalizeHubStateSections(sections)
 	if len(sectionNames) == 0 {

@@ -10,6 +10,25 @@ import (
 	"testing"
 )
 
+func TestTokenStatsUpdateMethodIsRemoved(t *testing.T) {
+	if descriptor, ok := RegistryMethod("tokenStats.update"); ok {
+		t.Fatalf("removed tokenStats.update method is still registered: %+v", descriptor)
+	}
+}
+
+func TestHubStateUpdatedAllowsHubOrigin(t *testing.T) {
+	descriptor, ok := RegistryMethod(RegistryMethodHubStateUpdated)
+	if !ok {
+		t.Fatal("hub.state.updated is not registered")
+	}
+	if !RegistryMethodAllowed(string(RegistryRoleHub), descriptor.Method) {
+		t.Fatal("hub role must be allowed to publish hub.state.updated")
+	}
+	if descriptor.Route != RegistryRouteClientEvent {
+		t.Fatalf("route=%q", descriptor.Route)
+	}
+}
+
 func TestRegistryDeviceSessionMethods(t *testing.T) {
 	methods := []string{
 		RegistryMethodSecuritySessionList,

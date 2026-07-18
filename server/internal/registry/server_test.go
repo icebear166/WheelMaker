@@ -8,7 +8,6 @@ import (
 	"errors"
 	"github.com/gorilla/websocket"
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
-	"github.com/swm8023/wheelmaker/internal/serverdata"
 	logger "github.com/swm8023/wheelmaker/internal/shared"
 	"net"
 	"net/http"
@@ -1779,69 +1778,16 @@ func TestHubStateForwardTimeoutsMatchOperationCost(t *testing.T) {
 	}
 }
 
-func TestRegistryDeepSeekSecretRejectsClientAPIKey(t *testing.T) {
+func TestHubStateDeepSeekSecretInjectionIsRemoved(t *testing.T) {
 	s := New(Config{})
-	_, requestErr := s.prepareHubStatePayload(envelope{
-		Method: rp.RegistryMethodHubStateAction,
-		Payload: rp.MustRaw(map[string]any{
-			"section": "tokenStats",
-			"action":  "deepseekStats",
-			"params": map[string]any{
-				"apiKey":    "client-secret-must-not-pass",
-				"rangeType": "month",
-			},
-		}),
+	original := rp.MustRaw(map[string]any{
+		"section": "tokenStats",
+		"action":  "deepseekStats",
+		"params":  map[string]any{"rangeType": "month"},
 	})
-	if requestErr == nil || requestErr.code != codeInvalidArgument {
-		t.Fatalf("requestErr=%v, want invalid argument", requestErr)
-	}
-	if strings.Contains(requestErr.message, "client-secret-must-not-pass") {
-		t.Fatalf("error leaked client secret: %q", requestErr.message)
-	}
-}
-
-func TestRegistryDeepSeekSecretIsInjectedOnlyForBackendForward(t *testing.T) {
-	store := serverdata.New(filepath.Join(t.TempDir(), "server-data.json"))
-	if err := store.UpdateSecret(serverdata.SecretDeepSeek, "set", "backend-only-secret", time.Now()); err != nil {
-		t.Fatal(err)
-	}
-
-	s := New(Config{ServerData: store})
-	prepared, requestErr := s.prepareHubStatePayload(envelope{
-		Method: rp.RegistryMethodHubStateAction,
-		Payload: rp.MustRaw(map[string]any{
-			"section": "tokenStats",
-			"action":  "deepseekStats",
-			"params":  map[string]any{"rangeType": "month", "month": "2026-06"},
-		}),
-	})
-	if requestErr != nil {
-		t.Fatalf("prepareHubStatePayload(): %v", requestErr)
-	}
-	var payload struct {
-		Params map[string]any `json:"params"`
-	}
-	if err := json.Unmarshal(prepared, &payload); err != nil {
-		t.Fatal(err)
-	}
-	if payload.Params["apiKey"] != "backend-only-secret" {
-		t.Fatalf("params=%#v, want backend secret injection", payload.Params)
-	}
-}
-
-func TestRegistryDeepSeekSecretMissingReturnsNotConfigured(t *testing.T) {
-	store := serverdata.New(filepath.Join(t.TempDir(), "server-data.json"))
-	s := New(Config{ServerData: store})
-	_, requestErr := s.prepareHubStatePayload(envelope{
-		Method: rp.RegistryMethodHubStateAction,
-		Payload: rp.MustRaw(map[string]any{
-			"section": "tokenStats",
-			"action":  "deepseekStats",
-			"params":  map[string]any{},
-		}),
-	})
-	if requestErr == nil || requestErr.code != "not_configured" {
-		t.Fatalf("requestErr=%v, want not_configured", requestErr)
+	prepared := s.prepareHubStatePayload(envelope{Method: rp.RegistryMethodHubStateAction, Payload: original})
+	if !bytes.Equal(prepared, original) {
+		t.Fatalf("Registry mutated HubState payload:\n got: %s\nwant: %s", prepared, original)
 	}
 }
 
@@ -2993,6 +2939,37 @@ func TestTerminalRoutingRejectsWrongDirectionEvents(t *testing.T) {
 	hubError := mustReadEnvelope(t, hub)
 	if hubError.Type != "error" || hubError.Payload["code"] != codeForbidden {
 		t.Fatalf("hub error=%+v", hubError)
+	}
+}
+
+func TestHubStateUpdatedIsForwardedWithoutMutation(t *testing.T) {
+	s := New(Config{})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+	hub := dialReportedHub(t, ts.URL+"/ws", "hub-limits")
+	defer hub.Close()
+	client := dialWS(t, ts.URL+"/ws")
+	defer client.Close()
+	connectRegistryClient(t, client)
+
+	payload := map[string]any{
+		"sections": []any{"tokenStats"},
+		"reason":   "snapshot",
+		"state": map[string]any{
+			"hubId": "hub-limits",
+			"sections": map[string]any{"tokenStats": map[string]any{
+				"status": "ready",
+				"data":   map[string]any{"hubId": "hub-limits", "generation": float64(2), "status": "ready", "providers": []any{}},
+			}},
+		},
+	}
+	mustWriteJSON(t, hub, testEnvelope{Type: "event", Method: rp.RegistryMethodHubStateUpdated, HubID: "hub-limits", Payload: payload})
+	forwarded := mustReadEnvelope(t, client)
+	if forwarded.Type != "event" || forwarded.Method != rp.RegistryMethodHubStateUpdated || forwarded.HubID != "hub-limits" {
+		t.Fatalf("forwarded=%+v", forwarded)
+	}
+	if !reflect.DeepEqual(forwarded.Payload, payload) {
+		t.Fatalf("Registry mutated HubState event:\n got: %#v\nwant: %#v", forwarded.Payload, payload)
 	}
 }
 

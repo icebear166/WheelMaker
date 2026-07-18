@@ -91,8 +91,6 @@ import type {
   RegistrySkillDetailPayload,
   RegistrySkillInstallPayload,
   RegistrySkillScopePayload,
-  RegistryTokenProvider,
-  RegistryTokenScanResult,
   RegistryTerminalCreateResponse,
   RegistryTerminalGetResponse,
   RegistryTerminalInputEvent,
@@ -1637,25 +1635,6 @@ export class RegistryRepository {
     };
   }
 
-  async listTokenProviders(projectId: string): Promise<RegistryTokenProvider[]> {
-    const hubId = hubIdFromProjectId(projectId);
-    const state = await this.runHubStateAction(hubId, 'tokenStats', 'providers');
-    const payload = hubStateSectionData<{providers?: unknown[]}>(state, 'tokenStats') ?? {};
-    return (Array.isArray(payload.providers) ? payload.providers : [])
-      .map(item => {
-        if (!item || typeof item !== 'object') return null;
-        const value = item as Record<string, unknown>;
-        const id = typeof value.id === 'string' ? value.id.trim() : '';
-        if (!id) return null;
-        return {
-          id,
-          name: typeof value.name === 'string' ? value.name : id,
-          authMode: typeof value.authMode === 'string' ? value.authMode : 'api_key',
-        } as RegistryTokenProvider;
-      })
-      .filter((item): item is RegistryTokenProvider => !!item);
-  }
-
   async getHubState(hubId: string, sections?: RegistryHubStateSectionName[]): Promise<RegistryHubState> {
     const resp = await this.client.request({
       method: RegistryMethods.HubStateGet,
@@ -1758,15 +1737,6 @@ export class RegistryRepository {
       hubId,
       payload,
     });
-  }
-
-  async scanTokenStats(hubId: string): Promise<RegistryTokenScanResult> {
-    const state = await this.refreshHubState(hubId, ['tokenStats']);
-    return hubStateSectionData<RegistryTokenScanResult>(state, 'tokenStats') ?? {
-      ok: false,
-      updatedAt: '',
-      providers: [],
-    };
   }
 
   async scanNpmPackages(hubId: string): Promise<RegistryNpmCommandResponse> {

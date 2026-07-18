@@ -222,33 +222,4 @@ describe('agent package update registry service', () => {
     expect(registryTypes).not.toContain('remoteRefreshRunning?: boolean;');
   });
 
-  test('refreshes tokenStats HubState section for token scans', async () => {
-    const client = {
-      request: jest.fn().mockResolvedValue({
-        type: 'response',
-        payload: {
-          state: {
-            hubId: 'hub-a',
-            status: 'ready',
-            sections: {
-              tokenStats: {
-                status: 'ready',
-                data: {ok: true, updatedAt: '2026-05-19T10:00:00Z', providers: []},
-              },
-            },
-          },
-        },
-      }),
-    } as unknown as RegistryClient;
-    const repository = new RegistryRepository(client);
-
-    await repository.scanTokenStats('hub-a');
-
-    expect(client.request).toHaveBeenCalledWith({
-      method: RegistryMethods.HubStateRefresh,
-      hubId: 'hub-a',
-      payload: {sections: ['tokenStats']},
-      timeoutMs: 60000,
-    });
-  });
 });

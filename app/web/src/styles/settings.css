@@ -144,9 +144,20 @@ textarea,
   height: 38px;
 }
 
-.mobile-settings-actions .token-stats-refresh-inline {
+.mobile-settings-actions .settings-detail-refresh {
   height: 34px;
   min-height: 34px;
+}
+
+.settings-detail-refresh {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 11px;
 }
 
 .mobile-settings-scroll {
@@ -351,7 +362,7 @@ textarea,
   position: relative;
   width: min(100%, 340px);
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--settings-shortcut-count), minmax(0, 1fr));
   align-items: center;
 }
 
@@ -361,7 +372,7 @@ textarea,
   left: 0;
   top: 0;
   z-index: 0;
-  width: calc(100% / 5);
+  width: calc(100% / var(--settings-shortcut-count));
   height: 2px;
   border-radius: 0 0 2px 2px;
   background: var(--accent-primary);
@@ -380,10 +391,6 @@ textarea,
 
 .mobile-settings-shortcut-bar[data-active-index='3'] .mobile-settings-shortcut-track::before {
   transform: translateX(300%);
-}
-
-.mobile-settings-shortcut-bar[data-active-index='4'] .mobile-settings-shortcut-track::before {
-  transform: translateX(400%);
 }
 
 .mobile-settings-shortcut-button {
@@ -2651,285 +2658,7 @@ textarea,
   opacity: 1;
 }
 
-.token-stats-page {
-  padding: 8px;
-}
-
-.token-stats-header-row {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.token-stats-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.token-stats-back-btn,
-.token-stats-refresh-btn,
-.token-stats-add-btn,
-.token-stats-provider-btn,
-.token-stats-login-btn,
-.token-stats-query-btn {
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  background: var(--surface-raised);
-  color: var(--text-primary);
-  min-height: 30px;
-  padding: 0 10px;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.token-stats-back-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.token-stats-add-btn {
-  width: 30px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.token-stats-provider-picker {
-  display: grid;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-
-.token-stats-provider-btn {
-  text-align: left;
-}
-
-.token-stats-card {
-  border: 1px solid var(--border-subtle);
-  background: var(--surface-panel);
-  border-radius: 8px;
-  padding: 8px;
-  display: grid;
-  gap: 6px;
-}
-
-.token-stats-card-title {
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.token-stats-field {
-  display: grid;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.token-stats-input,
-.token-stats-select,
-.token-stats-month {
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  background: var(--surface-panel);
-  color: var(--text-primary);
-  min-height: 30px;
-  padding: 0 8px;
-  outline: none;
-}
-
-.token-stats-actions {
-  display: grid;
-  grid-template-columns: 1fr 90px 130px 80px;
-  gap: 6px;
-}
-
-.token-stats-result {
-  display: grid;
-  gap: 8px;
-}
-
-.token-stats-subtitle {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-secondary);
-}
-
-.token-stats-balance-list {
-  display: grid;
-  gap: 6px;
-}
-
-.token-stats-balance-item {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
-  font-size: 12px;
-}
-
-.token-stats-table-wrap {
-  overflow: auto;
-}
-
-.token-stats-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-}
-
-.token-stats-table th,
-.token-stats-table td {
-  border-bottom: 1px solid var(--border-subtle);
-  text-align: left;
-  padding: 6px 4px;
-}
-
-.token-stats-error {
-  color: var(--state-danger);
-}
-
-.token-stats-account-list {
-  display: grid;
-  gap: 8px;
-}
-
-.token-stats-account-list-flat {
-  grid-template-columns: 1fr;
-}
-
-.token-stats-account-item {
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  background: var(--surface-raised);
-  padding: 6px;
-  display: grid;
-  gap: 4px;
-}
-
-.token-stats-account-item-flat {
-  padding: 8px;
-  gap: 6px;
-}
-
-.token-stats-card-line {
-  font-size: 11px;
-  line-height: 1.25;
-}
-
-.token-stats-card-line-primary {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-}
-
-.token-stats-card-line-tags {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.token-stats-pill {
-  --pill-accent: #7f8c9b;
-  display: inline-flex;
-  align-items: center;
-  min-height: 16px;
-  padding: 0 6px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--pill-accent) 48%, var(--border-subtle) 52%);
-  background: color-mix(in srgb, var(--pill-accent) 18%, var(--surface-raised) 82%);
-  color: color-mix(in srgb, var(--pill-accent) 70%, var(--text-primary) 30%);
-  font-size: 10px;
-  line-height: 1.1;
-  font-weight: 600;
-}
-
-.token-stats-pill-agent-0 { --pill-accent: #449dd1; }
-.token-stats-pill-agent-1 { --pill-accent: #5f8aff; }
-.token-stats-pill-agent-2 { --pill-accent: #2ca58d; }
-.token-stats-pill-agent-3 { --pill-accent: #57b65f; }
-.token-stats-pill-agent-4 { --pill-accent: #d65faf; }
-.token-stats-pill-agent-5 { --pill-accent: #d66f6f; }
-.token-stats-pill-agent-6 { --pill-accent: #ad7bd8; }
-.token-stats-pill-agent-7 { --pill-accent: #8c7fda; }
-.token-stats-pill-agent-8 { --pill-accent: #4fb86a; }
-
-.token-stats-pill-hub-0 { --pill-accent: #00a6a6; }
-.token-stats-pill-hub-1 { --pill-accent: #2f9e44; }
-.token-stats-pill-hub-2 { --pill-accent: #bc6c25; }
-.token-stats-pill-hub-3 { --pill-accent: #4f86c6; }
-.token-stats-pill-hub-4 { --pill-accent: #c879ff; }
-.token-stats-pill-hub-5 { --pill-accent: #d9480f; }
-.token-stats-pill-hub-6 { --pill-accent: #038c7f; }
-.token-stats-pill-hub-7 { --pill-accent: #7b6cb8; }
-
-.token-stats-account-header {
-  display: flex;
-  align-items: center;
-  min-height: 16px;
-}
-
-.token-stats-account-name {
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.2;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.token-stats-account-hub {
-  font-size: 10px;
-  line-height: 1.1;
-  color: var(--text-secondary);
-}
-
-.token-stats-account-footer {
-  display: flex;
-  align-items: center;
-  min-height: 12px;
-}
-
-.token-stats-account-error {
-  color: var(--state-danger);
-  font-size: 11px;
-}
-
-.token-stats-account-metrics {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, max-content));
-  gap: 4px 10px;
-  align-items: center;
-  font-size: 11px;
-  line-height: 1.2;
-}
-
-.token-stats-account-metrics-codex {
-  grid-template-columns: repeat(2, minmax(0, max-content));
-}
-
-.token-stats-header-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex: 0 0 auto;
-}
-
-.token-stats-refresh-inline {
-  min-height: 28px;
-  height: 28px;
-  padding: 0 10px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.settings-detail-header .token-stats-refresh-inline,
+.settings-detail-header .settings-detail-refresh,
 .settings-detail-header .git-section-btn {
   border: 1px solid color-mix(in srgb, var(--accent-primary) 26%, var(--border-subtle));
   border-radius: 999px;
@@ -2941,22 +2670,13 @@ textarea,
   transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
 }
 
-.settings-detail-header .token-stats-refresh-inline:hover:not(:disabled),
+.settings-detail-header .settings-detail-refresh:hover:not(:disabled),
 .settings-detail-header .git-section-btn:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent-primary) 14%, var(--surface-raised));
   border-color: color-mix(in srgb, var(--accent-primary) 50%, var(--border-subtle));
   color: var(--text-primary);
 }
 
-@media (max-width: 1100px) {
-  .token-stats-actions {
-    grid-template-columns: 1fr;
-  }
-
-  .token-stats-balance-item {
-    grid-template-columns: 1fr 1fr;
-  }
-}
 .database-panel {
   margin: 8px;
   border: 1px solid var(--border-subtle);
@@ -3141,7 +2861,6 @@ textarea,
 .settings-skills-scope,
 .settings-skills-install-panel,
 .settings-skills-detail-panel,
-.token-stats-account-item,
 .settings-database-dump {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-panel);
@@ -3150,8 +2869,7 @@ textarea,
 }
 
 .update-summary-value,
-.settings-database-storage-metric strong,
-.token-stats-account-metrics {
+.settings-database-storage-metric strong {
   font-variant-numeric: tabular-nums;
 }
 
