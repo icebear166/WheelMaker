@@ -84,8 +84,16 @@ func (s *Server) handleDebugWebStart(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "session_create_failed")
 			return
 		}
+		stagingRoot := filepath.Join(s.config.DataRoot, "staging", "debug-web")
+		if err := os.MkdirAll(stagingRoot, 0o700); err != nil {
+			writeError(w, http.StatusInternalServerError, "session_create_failed")
+			return
+		}
 		directory := s.debugWebStagingDirectory(id)
-		if err := os.MkdirAll(directory, 0o700); err != nil {
+		if err := os.Mkdir(directory, 0o700); err != nil {
+			if errors.Is(err, os.ErrExist) {
+				continue
+			}
 			writeError(w, http.StatusInternalServerError, "session_create_failed")
 			return
 		}
@@ -166,19 +174,41 @@ func (s *Server) handleDebugWebCommit(w http.ResponseWriter, sessionID string) {
 		return
 	}
 	archivePath := filepath.Join(archives, session.SHA256+".zip")
+	movedArchive := false
 	if _, err := os.Stat(archivePath); errors.Is(err, os.ErrNotExist) {
 		if err := os.Rename(source, archivePath); err != nil {
 			writeError(w, http.StatusInternalServerError, "commit_failed")
 			return
 		}
+		movedArchive = true
 	}
 	current := debugWebCurrent{Schema: 1, ArchivePath: "/debug-web/archives/" + session.SHA256 + ".zip", Size: session.Size, SHA256: session.SHA256, PublishedAt: s.now().UTC().Format(time.RFC3339)}
-	if err := s.writeJSON(filepath.Join(s.config.DataRoot, "public", "debug-web", "current.json"), current, 0o640); err != nil {
+	currentPath := filepath.Join(s.config.DataRoot, "public", "debug-web", "current.json")
+	previous, _ := readDebugWebCurrent(currentPath)
+	if err := s.writeJSON(currentPath, current, 0o640); err != nil {
+		if movedArchive {
+			_ = os.Remove(archivePath)
+		}
 		writeError(w, http.StatusInternalServerError, "commit_failed")
 		return
 	}
+	if previous != nil && previous.ArchivePath != current.ArchivePath {
+		_ = os.Remove(filepath.Join(s.config.DataRoot, "public", filepath.FromSlash(strings.TrimPrefix(previous.ArchivePath, "/"))))
+	}
 	_ = os.RemoveAll(s.debugWebStagingDirectory(sessionID))
 	writeJSON(w, http.StatusOK, current)
+}
+
+func readDebugWebCurrent(path string) (*debugWebCurrent, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var current debugWebCurrent
+	if err := json.Unmarshal(raw, &current); err != nil || current.Schema != 1 || !validLowerHex(current.SHA256, sha256.Size) || current.ArchivePath != "/debug-web/archives/"+current.SHA256+".zip" {
+		return nil, errors.New("invalid debug web current")
+	}
+	return &current, nil
 }
 
 func (s *Server) debugWebStagingDirectory(sessionID string) string {

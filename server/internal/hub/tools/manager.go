@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
 )
@@ -36,6 +39,17 @@ func (m *Manager) ApplyRelease(ctx context.Context, kind, baseURL string) (Relea
 		}
 		return ReleaseTargetStatus{Status: "accepted"}, nil
 	case "debugWeb":
+		leasePath := filepath.Join(m.cfg.StateDir, updateStagingDirectoryName, updateLeaseFileName)
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		jobID, createErr := newUpdateJobID()
+		if createErr != nil {
+			return ReleaseTargetStatus{Status: "failed", ErrorCode: "debug_web_apply_failed"}, &CommandError{Code: rp.CodeInternal, Message: "failed to allocate debug web apply"}
+		}
+		created, _, leaseErr := createUpdateLease(leasePath, updateLease{Schema: 1, JobID: jobID, Owner: "debug-web", State: "applying", StartedAt: now, HeartbeatAt: now})
+		if leaseErr != nil || !created {
+			return ReleaseTargetStatus{Status: "failed", ErrorCode: "update_busy"}, &CommandError{Code: rp.CodeConflict, Message: "another update is active"}
+		}
+		defer os.Remove(leasePath)
 		if err := ApplyDebugWeb(ctx, m.cfg.StateDir, baseURL, m.cfg.HTTPClient); err != nil {
 			return ReleaseTargetStatus{Status: "failed", ErrorCode: "debug_web_apply_failed"}, &CommandError{Code: rp.CodeInternal, Message: "debug web apply failed"}
 		}

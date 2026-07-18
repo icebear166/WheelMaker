@@ -73,6 +73,42 @@ func TestDebugWebRejectsBadDigestAndKeepsCurrentSnapshot(t *testing.T) {
 	}
 }
 
+func TestDebugWebCommitKeepsOnlyLatestArchive(t *testing.T) {
+	server, root := newAuthenticatedSessionTestServer(t)
+	first := []byte("first archive")
+	firstSession := startDebugWebTestSession(t, server, first)
+	uploadAndCommitDebugWeb(t, server, firstSession.SessionID, first)
+	second := []byte("second archive")
+	secondSession := startDebugWebTestSession(t, server, second)
+	uploadAndCommitDebugWeb(t, server, secondSession.SessionID, second)
+	if _, err := os.Stat(filepath.Join(root, "public", "debug-web", "archives", sha256BytesHex(first)+".zip")); !os.IsNotExist(err) {
+		t.Fatalf("old archive remains: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "public", "debug-web", "archives", sha256BytesHex(second)+".zip")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func uploadAndCommitDebugWeb(t *testing.T, server *Server, sessionID string, archive []byte) {
+	t.Helper()
+	upload := httptest.NewRequest(http.MethodPut, "/api/debug-web/"+sessionID+"/archive", bytes.NewReader(archive))
+	upload.ContentLength = int64(len(archive))
+	upload.Header.Set("Authorization", "Bearer "+testPublisherToken)
+	upload.Header.Set("X-WheelMaker-SHA256", sha256BytesHex(archive))
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, upload)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("upload=%d", response.Code)
+	}
+	commit := httptest.NewRequest(http.MethodPost, "/api/debug-web/"+sessionID+"/commit", nil)
+	commit.Header.Set("Authorization", "Bearer "+testPublisherToken)
+	response = httptest.NewRecorder()
+	server.ServeHTTP(response, commit)
+	if response.Code != http.StatusOK {
+		t.Fatalf("commit=%d", response.Code)
+	}
+}
+
 func startDebugWebTestSession(t *testing.T, server *Server, archive []byte) debugWebStartResponse {
 	t.Helper()
 	body, err := json.Marshal(debugWebStartRequest{Size: int64(len(archive)), SHA256: sha256BytesHex(archive)})
