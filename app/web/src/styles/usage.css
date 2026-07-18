@@ -1,113 +1,265 @@
-/* Agent usage compact bar — always-on footer in chat view (PC only) */
+/* Agent usage — provider quota instrumentation.
+   Signature: five-tick meters, one tick per 20% of remaining quota.
+   Healthy quotas stay accent-blue and quiet; color only appears when tight. */
+
+.usage-tone-default { color: var(--text-primary); }
+.usage-tone-warning { color: var(--state-warning); }
+.usage-tone-danger { color: var(--state-danger); }
+
+/* Quota meter (shared by compact bar and card panel) */
+.usage-meter {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.usage-meter-tick {
+  flex: 1 1 0;
+  height: 4px;
+  border-radius: 1px;
+  background: var(--border-subtle);
+  transition: background-color var(--motion-fast) var(--ease-standard);
+}
+.usage-meter--default .usage-meter-tick--lit { background: var(--accent-primary); }
+.usage-meter--warning .usage-meter-tick--lit { background: var(--state-warning); }
+.usage-meter--danger .usage-meter-tick--lit { background: var(--state-danger); }
+.usage-meter--compact { flex: 0 0 auto; gap: 2px; }
+.usage-meter--compact .usage-meter-tick {
+  flex: 0 0 auto;
+  width: 4px;
+  height: 3px;
+}
+
+/* Compact bar — always-on strip above the composer on wide layouts */
 .usage-compact-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 12px;
   align-items: center;
-  padding: 4px 10px;
-  background: var(--wm-bg-secondary, rgba(30, 30, 35, 0.92));
-  border-top: 1px solid var(--wm-border, rgba(255, 255, 255, 0.08));
+  row-gap: 2px;
+  padding: 4px 12px;
+  background: var(--surface-panel);
+  border-top: 1px solid var(--border-subtle);
   font-size: 11px;
-  line-height: 18px;
+  line-height: 20px;
+  color: var(--text-secondary);
   cursor: pointer;
   user-select: none;
+  transition: background-color var(--motion-fast) var(--ease-standard);
 }
-.usage-compact-bar:hover {
-  background: var(--wm-bg-hover, rgba(40, 40, 48, 0.95));
+.usage-compact-bar:hover { background: var(--surface-raised); }
+.usage-compact-bar:focus-visible {
+  outline: 2px solid var(--focus-ring-color);
+  outline-offset: -2px;
 }
-.usage-compact-row {
-  display: flex;
+.usage-chip {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding: 0 12px;
 }
-.usage-compact-provider {
+.usage-chip:first-child { padding-left: 0; }
+.usage-chip + .usage-chip { border-left: 1px solid var(--border-subtle); }
+.usage-chip-provider {
   font-weight: 600;
-  color: var(--wm-text, #d4d4d8);
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
 }
-.usage-compact-limits {
+.usage-chip-limits {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.usage-chip-limit {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.usage-chip-label { color: var(--text-tertiary); }
+.usage-chip-pct {
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 11px;
+}
+.usage-chip-balance {
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  color: var(--text-primary);
+}
+.usage-chip-dash { color: var(--text-tertiary); }
+.usage-chip--error .usage-chip-provider { color: var(--state-danger); }
+.usage-compact-empty { color: var(--text-tertiary); }
+
+/* Card panel — expanded dialog */
+.usage-panel-backdrop { animation: usage-fade var(--motion-fast) ease-out; }
+.usage-panel {
+  width: min(540px, calc(100vw - 32px));
+  max-height: min(78vh, 640px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-overlay);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-floating);
+  box-shadow: var(--shadow-overlay);
+  padding: 16px 18px;
+  outline: none;
+  animation: usage-panel-in var(--motion-emphasized) var(--ease-out);
+}
+.usage-panel-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.usage-panel-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+}
+.usage-panel-updated {
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.usage-panel-actions {
+  margin-left: auto;
   display: flex;
   gap: 8px;
 }
-.usage-compact-limit {
-  color: var(--wm-text-muted, #8b8b94);
-}
-.usage-compact-limit-warning {
-  color: #f0a020;
-}
-.usage-compact-limit-danger {
-  color: #e5484d;
-}
-.usage-compact-row-error .usage-compact-value-dash {
-  color: #6b6b73;
-}
-.usage-compact-row-danger .usage-compact-value {
-  color: #e5484d;
-}
-.usage-compact-empty {
-  color: var(--wm-text-muted, #6b6b73);
-  font-style: italic;
+.usage-panel-body {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-/* Agent usage card panel — expanded modal */
-.usage-card-panel {
-  position: relative;
-  width: min(560px, 92vw);
-  max-height: 80vh;
-  overflow-y: auto;
-  background: var(--wm-bg-dialog, #1e1e23);
-  border: 1px solid var(--wm-border, rgba(255, 255, 255, 0.1));
-  border-radius: 10px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  padding: 16px;
+.usage-account {
+  background: var(--surface-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-panel);
+  padding: 12px 14px;
 }
-.usage-card-panel-header {
+.usage-account--error {
+  border-color: color-mix(in srgb, var(--state-danger) 45%, transparent);
+  box-shadow: inset 2px 0 0 var(--state-danger);
+}
+.usage-account-head {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--wm-text, #d4d4d8);
-}
-.usage-card-panel-header button {
-  margin-left: 8px;
-}
-.usage-card {
-  border: 1px solid var(--wm-border, rgba(255, 255, 255, 0.06));
-  border-radius: 8px;
-  padding: 12px;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
   margin-bottom: 10px;
 }
-.usage-card-error {
-  border-color: #e5484d;
-}
-.usage-card-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-  flex-wrap: wrap;
-}
-.usage-card-provider {
-  font-weight: 600;
-  color: var(--wm-text, #d4d4d8);
-  font-size: 14px;
-}
-.usage-card-email {
-  color: var(--wm-text-muted, #8b8b94);
-  font-size: 12px;
-}
-.usage-card-hubs {
-  color: var(--wm-text-muted, #6b6b73);
-  font-size: 11px;
-  margin-left: auto;
-}
-.usage-card-error-message {
-  color: #e5484d;
-  font-size: 12px;
-}
-.usage-card-balance {
+.usage-account-provider {
   font-size: 13px;
-  color: var(--wm-text, #d4d4d8);
-  line-height: 1.6;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.usage-account-email {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.usage-account-hubs {
+  margin-left: auto;
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+
+.usage-limits {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.usage-limit-row {
+  display: grid;
+  grid-template-columns: minmax(76px, auto) 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+}
+.usage-limit-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.usage-limit-value {
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.usage-limit-value strong { font-weight: 600; }
+.usage-limit-value-word {
+  margin-left: 3px;
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+.usage-limit-reset {
+  min-width: 86px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.usage-balance { display: flex; flex-direction: column; gap: 4px; }
+.usage-balance-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.usage-balance-total {
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.usage-balance-breakdown {
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.usage-account-error-message {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--state-danger);
+}
+
+.usage-panel-empty {
+  padding: 24px 8px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.usage-panel-empty p { margin: 0; }
+.usage-panel-empty .usage-panel-empty-hint {
+  margin-top: 4px;
+  color: var(--text-tertiary);
+}
+
+@media (max-width: 480px) {
+  .usage-limit-row {
+    grid-template-columns: 1fr auto;
+    row-gap: 4px;
+  }
+  .usage-limit-row .usage-meter { grid-column: 1 / -1; }
+  .usage-limit-row .usage-limit-reset {
+    grid-column: 1 / -1;
+    min-width: 0;
+    text-align: left;
+  }
+}
+
+@keyframes usage-panel-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes usage-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .usage-panel,
+  .usage-panel-backdrop { animation: none; }
+  .usage-meter-tick,
+  .usage-compact-bar { transition: none; }
 }

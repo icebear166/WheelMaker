@@ -46,6 +46,46 @@ export function tightnessColor(remaining: number): Tightness {
   return 'default';
 }
 
+export function labelForProvider(provider: string): string {
+  switch (provider) {
+    case 'codex': return 'Codex';
+    case 'kimi': return 'Kimi';
+    case 'zai': return 'ZAI';
+    case 'deepseek': return 'DeepSeek';
+    default: return provider;
+  }
+}
+
+// formatResetCountdown renders a reset timestamp as a relative phrase
+// ("in 2h 14m"), which stays useful longer than an absolute locale string.
+export function formatResetCountdown(resetsAt: number | undefined, now: number): string | null {
+  if (!resetsAt) return null;
+  const deltaMs = resetsAt * 1000 - now;
+  if (deltaMs <= 0) return 'soon';
+  const minutes = Math.floor(deltaMs / 60000);
+  if (minutes < 1) return 'in <1m';
+  if (minutes < 60) return `in ${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) {
+    const remMinutes = minutes % 60;
+    return remMinutes > 0 ? `in ${hours}h ${remMinutes}m` : `in ${hours}h`;
+  }
+  const days = Math.floor(hours / 24);
+  const remHours = hours % 24;
+  return remHours > 0 ? `in ${days}d ${remHours}h` : `in ${days}d`;
+}
+
+// formatUpdatedAgo renders the snapshot refresh time as a short relative phrase.
+export function formatUpdatedAgo(updatedAt: number, now: number): string {
+  if (!updatedAt) return '';
+  const seconds = Math.max(0, Math.floor((now - updatedAt) / 1000));
+  if (seconds < 10) return 'just now';
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  return `${Math.floor(minutes / 60)}h ago`;
+}
+
 export function accountIdentityKey(provider: string, identity: UsageAccountIdentity): string {
   const id = identity.email ?? identity.accountId ?? identity.userId ?? identity.customerNumber ?? '';
   return `${provider}:${id.toLowerCase()}`;

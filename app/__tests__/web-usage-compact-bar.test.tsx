@@ -32,10 +32,18 @@ describe('UsageCompactBar', () => {
   it('renders limit percentages with tightness classes', () => {
     const json = renderJSON(snap);
     // codex 5h: 95% used → 5% remaining → danger
-    expect(json).toContain('usage-compact-limit-danger');
-    expect(json).toContain('usage-compact-limit-default');
+    expect(json).toContain('usage-meter--danger');
+    expect(json).toContain('usage-tone-danger');
+    expect(json).toContain('usage-meter--default');
     expect(json).toContain('"5h"');   // 5h label node
     expect(json).toContain('"周"');   // week label node (Chinese)
+  });
+  it('renders meter ticks for each limit', () => {
+    const json = renderJSON(snap);
+    expect(json).toContain('usage-meter-tick--lit');
+    // 5% remaining → 1 lit tick; 50% remaining → 3 lit ticks (5 ticks per meter)
+    expect(json).toContain('"aria-valuenow":5');
+    expect(json).toContain('"aria-valuenow":50');
   });
   it('renders DeepSeek balance text', () => {
     const json = renderJSON(snap);
@@ -44,7 +52,7 @@ describe('UsageCompactBar', () => {
   });
   it('renders error dash for failed provider', () => {
     const json = renderJSON(snap);
-    expect(json).toContain('usage-compact-value-dash');
+    expect(json).toContain('usage-chip-dash');
   });
   it('renders empty state when no accounts', () => {
     const json = renderJSON({accounts: [], updatedAt: 0});

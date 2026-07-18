@@ -1,20 +1,18 @@
 import React from 'react';
-import {UsageAccount, remainingPercent, tightnessColor} from './usageTypes';
+import {
+  UsageAccount,
+  UsageLimit,
+  formatResetCountdown,
+  labelForProvider,
+  remainingPercent,
+  tightnessColor,
+} from './usageTypes';
+import {UsageMeter} from './UsageMeter';
 import type {UsageSnapshot} from './usageStream';
 
 interface Props {
   snapshot: UsageSnapshot;
   onExpand: () => void;
-}
-
-function labelForProvider(provider: string): string {
-  switch (provider) {
-    case 'codex': return 'Codex';
-    case 'kimi': return 'Kimi';
-    case 'zai': return 'ZAI';
-    case 'deepseek': return 'DeepSeek';
-    default: return provider;
-  }
 }
 
 function labelForLimitId(id: string): string {
@@ -26,42 +24,54 @@ function labelForLimitId(id: string): string {
   }
 }
 
-function renderAccountRow(account: UsageAccount): React.ReactNode {
+function limitTitle(limit: UsageLimit): string {
+  const remaining = remainingPercent(limit);
+  const countdown = formatResetCountdown(limit.resetsAt, Date.now());
+  return `${limit.label} — ${remaining}% remaining${countdown ? `, resets ${countdown}` : ''}`;
+}
+
+function LimitChip({limit}: {limit: UsageLimit}): React.ReactElement {
+  const remaining = remainingPercent(limit);
+  const tone = tightnessColor(remaining);
+  return (
+    <span className="usage-chip-limit" title={limitTitle(limit)}>
+      <span className="usage-chip-label">{labelForLimitId(limit.id)}</span>
+      <UsageMeter remaining={remaining} tone={tone} label={limit.label} compact />
+      <span className={`usage-chip-pct usage-tone-${tone}`}>{remaining}%</span>
+    </span>
+  );
+}
+
+function AccountChip({account}: {account: UsageAccount}): React.ReactElement {
+  const provider = labelForProvider(account.provider);
   if (account.status === 'error') {
     return (
-      <div className="usage-compact-row usage-compact-row-error" title={account.message}>
-        <span className="usage-compact-provider">{labelForProvider(account.provider)}</span>
-        <span className="usage-compact-value usage-compact-value-dash">—</span>
-      </div>
+      <span className="usage-chip usage-chip--error" title={account.message ?? `${provider} usage unavailable`}>
+        <span className="usage-chip-provider">{provider}</span>
+        <span className="usage-chip-dash" aria-hidden="true">—</span>
+      </span>
     );
   }
   if (account.balance) {
-    const balanceText = account.balance.items
-      .map(item => `${item.currency} ${item.total}`)
-      .join(' · ');
-    const danger = !account.balance.isAvailable;
+    const balance = account.balance;
+    const text = balance.items.map(item => `${item.currency} ${item.total}`).join(' · ');
     return (
-      <div className={`usage-compact-row${danger ? ' usage-compact-row-danger' : ''}`}>
-        <span className="usage-compact-provider">{labelForProvider(account.provider)}</span>
-        <span className="usage-compact-value">{balanceText}</span>
-      </div>
+      <span
+        className={`usage-chip${balance.isAvailable ? '' : ' usage-chip--danger'}`}
+        title={balance.isAvailable ? text : 'Balance unavailable'}
+      >
+        <span className="usage-chip-provider">{provider}</span>
+        <span className={`usage-chip-balance${balance.isAvailable ? '' : ' usage-tone-danger'}`}>{text}</span>
+      </span>
     );
   }
   return (
-    <div className="usage-compact-row">
-      <span className="usage-compact-provider">{labelForProvider(account.provider)}</span>
-      <span className="usage-compact-limits">
-        {account.limits.map(limit => {
-          const remaining = remainingPercent(limit);
-          const tone = tightnessColor(remaining);
-          return (
-            <span key={limit.id} className={`usage-compact-limit usage-compact-limit-${tone}`}>
-              {labelForLimitId(limit.id)} {remaining}%
-            </span>
-          );
-        })}
+    <span className="usage-chip">
+      <span className="usage-chip-provider">{provider}</span>
+      <span className="usage-chip-limits">
+        {account.limits.map(limit => <LimitChip key={limit.id} limit={limit} />)}
       </span>
-    </div>
+    </span>
   );
 }
 
@@ -72,15 +82,23 @@ export function UsageCompactBar({snapshot, onExpand}: Props): React.ReactElement
       data-testid="usage-compact-bar"
       role="button"
       tabIndex={0}
+      title="Agent usage — open details"
       onClick={onExpand}
-      onKeyDown={e => { if (e.key === 'Enter') onExpand(); }}
+      onKeyDown={e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onExpand();
+        }
+      }}
     >
       {snapshot.accounts.map(account => (
-        <React.Fragment key={`${account.provider}:${JSON.stringify(account.identity)}`}>
-          {renderAccountRow(account)}
-        </React.Fragment>
+        <AccountChip key={`${account.provider}:${JSON.stringify(account.identity)}`} account={account} />
       ))}
-      {snapshot.accounts.length === 0 ? <div className="usage-compact-empty">Loading usage…</div> : null}
+      {snapshot.accounts.length === 0 ? (
+        <span className="usage-compact-empty">
+          {snapshot.updatedAt === 0 ? 'Loading usage…' : 'No agent accounts reported'}
+        </span>
+      ) : null}
     </div>
   );
 }

@@ -1,4 +1,33 @@
 import {UsageStream, parseLimitString} from '../web/src/usage/usageStream';
+import {formatResetCountdown, formatUpdatedAgo} from '../web/src/usage/usageTypes';
+
+describe('formatResetCountdown', () => {
+  const now = 1_000_000_000_000; // fixed ms reference
+  it('returns null without a reset time', () => {
+    expect(formatResetCountdown(undefined, now)).toBeNull();
+  });
+  it('returns "soon" for past resets', () => {
+    expect(formatResetCountdown(Math.floor(now / 1000) - 60, now)).toBe('soon');
+  });
+  it('formats minutes, hours, and days', () => {
+    expect(formatResetCountdown(Math.floor((now + 45 * 60000) / 1000), now)).toBe('in 45m');
+    expect(formatResetCountdown(Math.floor((now + (2 * 60 + 14) * 60000) / 1000), now)).toBe('in 2h 14m');
+    expect(formatResetCountdown(Math.floor((now + (3 * 24 * 60 + 4 * 60) * 60000) / 1000), now)).toBe('in 3d 4h');
+  });
+});
+
+describe('formatUpdatedAgo', () => {
+  const now = 1_000_000_000_000;
+  it('returns empty string when never updated', () => {
+    expect(formatUpdatedAgo(0, now)).toBe('');
+  });
+  it('formats recent and older updates', () => {
+    expect(formatUpdatedAgo(now - 5000, now)).toBe('just now');
+    expect(formatUpdatedAgo(now - 30000, now)).toBe('30s ago');
+    expect(formatUpdatedAgo(now - 3 * 60000, now)).toBe('3m ago');
+    expect(formatUpdatedAgo(now - 2 * 3600000, now)).toBe('2h ago');
+  });
+});
 
 describe('parseLimitString', () => {
   it('parses remaining percent with reset time', () => {

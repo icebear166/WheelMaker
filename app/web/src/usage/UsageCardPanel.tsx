@@ -1,5 +1,14 @@
-import React from 'react';
-import {UsageAccount, remainingPercent} from './usageTypes';
+import React, {useEffect, useRef, useState} from 'react';
+import {
+  UsageAccount,
+  UsageLimit,
+  formatResetCountdown,
+  formatUpdatedAgo,
+  labelForProvider,
+  remainingPercent,
+  tightnessColor,
+} from './usageTypes';
+import {UsageMeter} from './UsageMeter';
 import type {UsageSnapshot} from './usageStream';
 
 interface Props {
@@ -8,60 +17,114 @@ interface Props {
   onRefresh?: () => void;
 }
 
-function Card({account}: {account: UsageAccount}): React.ReactElement {
+function LimitRow({limit, now}: {limit: UsageLimit; now: number}): React.ReactElement {
+  const remaining = remainingPercent(limit);
+  const tone = tightnessColor(remaining);
+  const countdown = formatResetCountdown(limit.resetsAt, now);
   return (
-    <div className={`usage-card${account.status === 'error' ? ' usage-card-error' : ''}`}>
-      <div className="usage-card-header">
-        <span className="usage-card-provider">{account.provider}</span>
-        {account.identity.email ? <span className="usage-card-email">{account.identity.email}</span> : null}
-        <span className="usage-card-hubs">{account.hubIds.join(', ')}</span>
-      </div>
-      {account.status === 'error' ? (
-        <div className="usage-card-error-message">{account.message}</div>
-      ) : account.balance ? (
-        <div className="usage-card-balance">
-          {account.balance.items.map(item => (
-            <div key={item.currency}>{item.currency}: {item.total} (granted {item.granted}, topped up {item.toppedUp})</div>
-          ))}
-        </div>
-      ) : (
-        <div className="usage-card-limits">
-          {account.limits.map(limit => {
-            const remaining = remainingPercent(limit);
-            return (
-              <div key={limit.id} className="app-session-status-limit">
-                <div className="app-session-status-limit-heading">
-                  <span>{limit.label}</span>
-                  <strong>{remaining}% remaining</strong>
-                </div>
-                <div className="app-session-status-limit-track" role="progressbar" aria-valuenow={remaining} aria-valuemin={0} aria-valuemax={100}>
-                  <span className="app-session-status-limit-fill" style={{width: `${remaining}%`}} />
-                </div>
-                {limit.resetsAt ? <div className="app-session-status-muted">Resets {new Date(limit.resetsAt * 1000).toLocaleString()}</div> : null}
-              </div>
-            );
-          })}
-        </div>
-      )}
+    <div className="usage-limit-row">
+      <span className="usage-limit-label">{limit.label}</span>
+      <UsageMeter remaining={remaining} tone={tone} label={limit.label} />
+      <span className={`usage-limit-value usage-tone-${tone}`}>
+        <strong>{remaining}%</strong>
+        <span className="usage-limit-value-word">remaining</span>
+      </span>
+      <span className="usage-limit-reset">{countdown ? `Resets ${countdown}` : ''}</span>
     </div>
   );
 }
 
-export function UsageCardPanel({snapshot, onClose, onRefresh}: Props): React.ReactElement {
+function AccountCard({account, now}: {account: UsageAccount; now: number}): React.ReactElement {
+  const balance = account.balance;
   return (
-    <div className="app-confirm-backdrop" role="presentation" onPointerDown={onClose}>
-      <div className="usage-card-panel" role="dialog" aria-modal="true" onPointerDown={e => e.stopPropagation()}>
-        <div className="usage-card-panel-header">
-          <span>Agent Usage</span>
-          <div>
-            {onRefresh ? <button type="button" className="app-confirm-btn secondary" onClick={onRefresh}>Refresh</button> : null}
-            <button type="button" className="app-confirm-btn primary" onClick={onClose}>Close</button>
-          </div>
-        </div>
-        <div className="usage-card-panel-body">
-          {snapshot.accounts.map(account => (
-            <Card key={`${account.provider}:${JSON.stringify(account.identity)}`} account={account} />
+    <section className={`usage-account${account.status === 'error' ? ' usage-account--error' : ''}`}>
+      <header className="usage-account-head">
+        <span className="usage-account-provider">{labelForProvider(account.provider)}</span>
+        {account.identity.email ? <span className="usage-account-email">{account.identity.email}</span> : null}
+        <span className="usage-account-hubs">{account.hubIds.join(' · ')}</span>
+      </header>
+      {account.status === 'error' ? (
+        <p className="usage-account-error-message">{account.message ?? 'Usage scan failed.'}</p>
+      ) : balance ? (
+        <div className="usage-balance">
+          {balance.items.map(item => (
+            <div className="usage-balance-row" key={item.currency}>
+              <span className={`usage-balance-total${balance.isAvailable ? '' : ' usage-tone-danger'}`}>
+                {item.currency} {item.total}
+              </span>
+              <span className="usage-balance-breakdown">granted {item.granted} · topped up {item.toppedUp}</span>
+            </div>
           ))}
+          {balance.isAvailable ? null : (
+            <p className="usage-account-error-message">Balance unavailable — top up before assigning more tasks.</p>
+          )}
+        </div>
+      ) : (
+        <div className="usage-limits">
+          {account.limits.map(limit => <LimitRow key={limit.id} limit={limit} now={now} />)}
+        </div>
+      )}
+    </section>
+  );
+}
+
+export function UsageCardPanel({snapshot, onClose, onRefresh}: Props): React.ReactElement {
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    panelRef.current?.focus();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onCloseRef.current();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    const timer = window.setInterval(() => setNow(Date.now()), 30000);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      window.clearInterval(timer);
+      previouslyFocused?.focus();
+    };
+  }, []);
+
+  const updatedAgo = formatUpdatedAgo(snapshot.updatedAt, now);
+
+  return (
+    <div className="app-confirm-backdrop usage-panel-backdrop" role="presentation" onPointerDown={onClose}>
+      <div
+        className="usage-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Agent usage"
+        tabIndex={-1}
+        ref={panelRef}
+        onPointerDown={e => e.stopPropagation()}
+      >
+        <header className="usage-panel-header">
+          <h2 className="usage-panel-title">Agent usage</h2>
+          {updatedAgo ? <span className="usage-panel-updated">Updated {updatedAgo}</span> : null}
+          <div className="usage-panel-actions">
+            {onRefresh ? <button type="button" className="app-confirm-btn secondary" onClick={onRefresh}>Refresh</button> : null}
+            <button type="button" className="app-confirm-btn secondary" onClick={onClose}>Close</button>
+          </div>
+        </header>
+        <div className="usage-panel-body">
+          {snapshot.accounts.length === 0 ? (
+            <div className="usage-panel-empty">
+              <p>No agent accounts reported yet.</p>
+              <p className="usage-panel-empty-hint">Usage appears here after the first provider scan.</p>
+            </div>
+          ) : (
+            snapshot.accounts.map(account => (
+              <AccountCard key={`${account.provider}:${JSON.stringify(account.identity)}`} account={account} now={now} />
+            ))
+          )}
         </div>
       </div>
     </div>

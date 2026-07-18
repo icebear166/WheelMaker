@@ -22,21 +22,25 @@ function renderJSON(snapshot: UsageSnapshot) {
 describe('UsageCardPanel', () => {
   it('renders provider name + remaining percent', () => {
     const json = renderJSON(snap);
-    expect(json).toContain('codex');
+    expect(json).toContain('Codex');
     expect(json).toContain('77'); // 100 - 23 = 77 remaining
     expect(json).toContain('remaining');
   });
-  it('renders progress bar fill', () => {
+  it('renders quota meter with remaining value', () => {
     const json = renderJSON(snap);
-    expect(json).toContain('app-session-status-limit-fill');
-    expect(json).toContain('77%'); // width:77%
+    expect(json).toContain('usage-meter');
+    expect(json).toContain('"aria-valuenow":77');
   });
-  it('renders reset time', () => {
+  it('renders reset countdown', () => {
     const json = renderJSON(snap);
     expect(json).toContain('Resets');
   });
   it('renders Close button', () => {
     const json = renderJSON(snap);
     expect(json).toContain('Close');
+  });
+  it('renders empty state when no accounts', () => {
+    const json = renderJSON({accounts: [], updatedAt: 0});
+    expect(json).toContain('No agent accounts reported yet');
   });
 });
