@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import test from 'node:test';
+import vm from 'node:vm';
 
 import {
   buildRemoteInstallScript,
@@ -31,13 +32,14 @@ test('release server deploy uses fixed derived SSH defaults', async () => {
     user: 'root',
   }]);
   assert.equal(state.uploads.length, 1);
-  assert.equal(state.uploads[0].files.length, 5);
+  assert.equal(state.uploads[0].files.length, 6);
   assert.deepEqual(
     state.uploads[0].files.map(path => path.split(/[\\/]/).at(-1)).sort(),
     [
       'index.html',
       'nginx-bootstrap.conf',
       'nginx.conf',
+      'release-home.js',
       'wheelmaker-release-server',
       'wheelmaker-release-server.service',
     ],
@@ -74,6 +76,10 @@ test('remote install script is idempotent and preserves public releases and conf
   assert.match(script, /nginx -t/);
   assert.match(script, /for attempt in \$\(seq 1 15\)/);
   assert.match(script, /sleep 1/);
+  assert.match(
+    script,
+    /release-home\.js" \/srv\/wheelmaker-release\/public\/release-home\.js/,
+  );
   assert.doesNotMatch(script, /rm -rf[^\n]*public\/releases/);
   assert.doesNotMatch(script, /PRIVATE KEY|wheelmaker-release-server_ed25519/);
 });
@@ -93,9 +99,204 @@ test('templates enforce non-root loopback service and API without wildcard CORS'
   assert.match(api, /proxy_request_buffering off/);
   assert.doesNotMatch(api, /Access-Control-Allow-Origin/);
   assert.match(nginx, /ssl_certificate \/etc\/letsencrypt\/live\/release\.wheelmaker\.top\/fullchain\.pem/);
+  const homepageScript = nginx.slice(
+    nginx.indexOf('location = /release-home.js'),
+    nginx.indexOf('location ^~ /releases/'),
+  );
+  assert.match(homepageScript, /Cache-Control "no-cache"/);
   assert.match(bootstrap, /\.well-known\/acme-challenge/);
   assert.doesNotMatch(bootstrap, /ssl_certificate/);
 });
+
+test('release homepage resolves the latest same-origin client downloads', async () => {
+  const homepage = await loadReleaseHomepage();
+  const clients = homepage.resolveLatestClients({
+    androidApk: {
+      path: '/releases/v1.4/WheelMakerAndroid.apk',
+      size: 2_369_931,
+      version: 'v1.4',
+    },
+    desktopExe: {
+      path: '/releases/v1.3/WheelMakerDesktop.exe',
+      version: 'v1.3',
+    },
+  }, 'https://release.wheelmaker.top/');
+
+  assert.deepEqual(plainJSON(clients), {
+    android: {
+      href: 'https://release.wheelmaker.top/releases/v1.4/WheelMakerAndroid.apk',
+      size: '2.3 MB',
+      version: 'v1.4',
+    },
+    desktop: {
+      href: 'https://release.wheelmaker.top/releases/v1.3/WheelMakerDesktop.exe',
+      version: 'v1.3',
+    },
+  });
+  assert.throws(
+    () => homepage.resolveLatestClients({
+      desktopExe: {
+        path: 'https://downloads.example/WheelMakerDesktop.exe',
+        version: 'v1.3',
+      },
+    }, 'https://release.wheelmaker.top/'),
+    /Desktop download path is invalid/,
+  );
+});
+
+test('release homepage fetches stable metadata and renders both client actions', async () => {
+  const homepage = await loadReleaseHomepage();
+  const page = fakeReleaseHomepageDocument();
+  const requests = [];
+
+  await homepage.initialize({
+    document: page.document,
+    fetchImpl: async (url, options) => {
+      requests.push({options, url});
+      return {
+        ok: true,
+        async json() {
+          return {
+            androidApk: {
+              path: '/releases/v1.4/WheelMakerAndroid.apk',
+              size: 2_369_931,
+              version: 'v1.4',
+            },
+            desktopExe: {
+              path: '/releases/v1.3/WheelMakerDesktop.exe',
+              version: 'v1.3',
+            },
+          };
+        },
+      };
+    },
+    locationHref: 'https://release.wheelmaker.top/',
+  });
+
+  assert.deepEqual(plainJSON(requests), [{
+    options: {cache: 'no-store'},
+    url: 'https://release.wheelmaker.top/stable.json',
+  }]);
+  assert.equal(page.elements['android-client'].hidden, false);
+  assert.equal(page.elements['android-version'].textContent, 'v1.4');
+  assert.equal(page.elements['android-size'].textContent, '2.3 MB');
+  assert.equal(
+    page.elements['android-download'].href,
+    'https://release.wheelmaker.top/releases/v1.4/WheelMakerAndroid.apk',
+  );
+  assert.equal(page.elements['desktop-client'].hidden, false);
+  assert.equal(page.elements['desktop-version'].textContent, 'v1.3');
+  assert.equal(
+    page.elements['desktop-download'].href,
+    'https://release.wheelmaker.top/releases/v1.3/WheelMakerDesktop.exe',
+  );
+  assert.equal(page.elements['clients-status'].hidden, true);
+});
+
+test('release homepage keeps install commands usable when client metadata fails', async () => {
+  const homepage = await loadReleaseHomepage();
+  const page = fakeReleaseHomepageDocument();
+
+  await homepage.initialize({
+    document: page.document,
+    fetchImpl: async () => ({ok: false, status: 503}),
+    locationHref: 'https://release.wheelmaker.top/',
+  });
+
+  assert.equal(page.elements['android-client'].hidden, true);
+  assert.equal(page.elements['desktop-client'].hidden, true);
+  assert.equal(page.elements['clients-status'].hidden, false);
+  assert.equal(page.elements['clients-status'].dataset.state, 'error');
+  assert.match(page.elements['clients-status'].textContent, /temporarily unavailable/i);
+});
+
+test('release homepage shows an empty state before any client is published', async () => {
+  const homepage = await loadReleaseHomepage();
+  const page = fakeReleaseHomepageDocument();
+
+  await homepage.initialize({
+    document: page.document,
+    fetchImpl: async () => ({
+      ok: true,
+      async json() { return {}; },
+    }),
+    locationHref: 'https://release.wheelmaker.top/',
+  });
+
+  assert.equal(page.elements['android-client'].hidden, true);
+  assert.equal(page.elements['desktop-client'].hidden, true);
+  assert.equal(page.elements['clients-status'].hidden, false);
+  assert.equal(page.elements['clients-status'].dataset.state, 'empty');
+  assert.match(page.elements['clients-status'].textContent, /not been published/i);
+});
+
+test('release homepage declares direct downloads and Desktop update command', async () => {
+  const html = await readFile(new URL('./index.html', import.meta.url), 'utf8');
+
+  assert.match(html, /id="android-download"[^>]*>Download APK</);
+  assert.match(html, /id="desktop-download"[^>]*>Download EXE</);
+  assert.match(html, /data-copy="cmd-desktop-update"/);
+  assert.match(html, /deploy\.mjs[^<]*desktop-update/);
+  assert.match(html, /src="\/release-home\.js"/);
+});
+
+test('release homepage copy feedback restores each button label', async () => {
+  const html = await readFile(new URL('./index.html', import.meta.url), 'utf8');
+
+  assert.match(html, /var originalLabel = button\.textContent/);
+  assert.match(html, /button\.textContent = originalLabel/);
+});
+
+test('release homepage hidden states override layout display rules', async () => {
+  const html = await readFile(new URL('./index.html', import.meta.url), 'utf8');
+
+  assert.match(html, /\[hidden\]\s*\{\s*display:\s*none\s*!important;\s*\}/);
+});
+
+test('release homepage constrains long install commands on mobile', async () => {
+  const html = await readFile(new URL('./index.html', import.meta.url), 'utf8');
+
+  assert.match(
+    html,
+    /\.commands\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/s,
+  );
+  assert.match(html, /\.panel\s*\{[^}]*min-width:\s*0/s);
+});
+
+async function loadReleaseHomepage() {
+  const source = await readFile(
+    new URL('./release-home.js', import.meta.url),
+    'utf8',
+  );
+  const context = {};
+  vm.runInNewContext(source, context, {filename: 'release-home.js'});
+  return context.WheelMakerReleaseHome;
+}
+
+function fakeReleaseHomepageDocument() {
+  const elements = Object.fromEntries([
+    'android-client',
+    'android-download',
+    'android-size',
+    'android-version',
+    'clients-status',
+    'desktop-client',
+    'desktop-download',
+    'desktop-version',
+  ].map(id => [id, {dataset: {}, hidden: true, href: '', textContent: ''}]));
+  return {
+    document: {
+      getElementById(id) {
+        return elements[id] ?? null;
+      },
+    },
+    elements,
+  };
+}
+
+function plainJSON(value) {
+  return JSON.parse(JSON.stringify(value));
+}
 
 function recordingDependencies(state, overrides = {}) {
   return {

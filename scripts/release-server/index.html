@@ -16,6 +16,8 @@
       --accent: #047857;
       --accent-hover: #065f46;
       --accent-text: #ffffff;
+      --surface: #f3f3ef;
+      --surface-hover: #e9e9e3;
       --panel-bg: #191918;
       --panel-border: #2b2b28;
       --panel-text: #ececea;
@@ -29,6 +31,8 @@
         --accent: #34d399;
         --accent-hover: #6ee7b7;
         --accent-text: #062e1f;
+        --surface: #181817;
+        --surface-hover: #222220;
         --panel-bg: #171716;
         --panel-border: #2b2b28;
         --panel-text: #e6e6e1;
@@ -36,6 +40,7 @@
     }
 
     * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
 
     body {
       margin: 0;
@@ -56,18 +61,24 @@
     }
 
     @media (prefers-reduced-motion: no-preference) {
-      .hero, .commands, .what {
+      .hero, .commands, .latest-clients, .what {
         animation: enter 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
       }
       .commands { animation-delay: 0.08s; }
-      .what { animation-delay: 0.16s; }
-      .copy {
+      .latest-clients { animation-delay: 0.16s; }
+      .what { animation-delay: 0.24s; }
+      .copy, .client-action {
         transition: background-color 0.15s ease, transform 0.1s ease;
       }
+      .client-skeleton { animation: breathe 1.2s ease-in-out infinite alternate; }
     }
     @keyframes enter {
       from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes breathe {
+      from { opacity: 0.42; }
+      to { opacity: 0.72; }
     }
 
     .site-head {
@@ -115,11 +126,12 @@
     .commands {
       margin-top: clamp(28px, 4vh, 40px);
       display: grid;
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
       gap: 24px;
     }
 
     .panel {
+      min-width: 0;
       border: 1px solid var(--border);
       border-radius: 12px;
       overflow: hidden;
@@ -180,6 +192,130 @@
       color: var(--text-secondary);
     }
 
+    .latest-clients {
+      margin-top: clamp(36px, 5vh, 56px);
+      padding-top: clamp(24px, 3vh, 32px);
+      border-top: 1px solid var(--border);
+    }
+    .latest-clients h2 {
+      margin: 0;
+      font-size: clamp(20px, 2vw, 24px);
+      font-weight: 650;
+      letter-spacing: -0.02em;
+    }
+    .latest-clients > p {
+      max-width: 62ch;
+      margin: 10px 0 0;
+      color: var(--text-secondary);
+      font-size: 15.5px;
+      line-height: 1.6;
+    }
+    .client-grid, .client-loading {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      margin-top: 22px;
+    }
+    @media (min-width: 768px) {
+      .client-grid, .client-loading {
+        grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+      }
+    }
+    .client-skeleton {
+      min-height: 220px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+    }
+    .client-card {
+      min-height: 220px;
+      display: flex;
+      flex-direction: column;
+      padding: clamp(22px, 3vw, 32px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+    }
+    .client-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .client-head h3 {
+      margin: 0;
+      font-size: clamp(22px, 2.5vw, 30px);
+      font-weight: 660;
+      letter-spacing: -0.025em;
+    }
+    .client-version {
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .client-copy {
+      margin: 16px 0 0;
+      color: var(--text-secondary);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    .client-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      margin-top: auto;
+      padding-top: 28px;
+    }
+    .client-action {
+      min-height: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      padding: 10px 16px;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 640;
+      line-height: 1;
+      text-decoration: none;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .client-action.primary {
+      border: 1px solid var(--accent);
+      background: var(--accent);
+      color: var(--accent-text);
+    }
+    .client-action.primary:hover { background: var(--accent-hover); }
+    .client-action.secondary {
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
+    }
+    .client-action.secondary:hover { background: var(--surface-hover); }
+    .client-action:active { transform: translateY(1px); }
+    .client-action:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .client-size {
+      margin-right: auto;
+      color: var(--text-secondary);
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 13px;
+    }
+    #clients-status {
+      min-height: 48px;
+      margin: 22px 0 0;
+      display: flex;
+      align-items: center;
+      padding: 13px 16px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text-secondary);
+      font-size: 14.5px;
+    }
     .what {
       margin-top: clamp(36px, 5vh, 56px);
       padding-top: clamp(24px, 3vh, 32px);
@@ -305,6 +441,45 @@
 
     <p class="note">Requires Node.js. Older installations are migrated automatically.</p>
 
+    <section class="latest-clients" aria-labelledby="clients-heading">
+      <h2 id="clients-heading">Latest clients</h2>
+      <p>Download the latest Android app or Windows Desktop client published with WheelMaker.</p>
+
+      <div id="clients-loading" class="client-loading" aria-label="Loading latest clients">
+        <div class="client-skeleton" aria-hidden="true"></div>
+        <div class="client-skeleton" aria-hidden="true"></div>
+      </div>
+
+      <div class="client-grid">
+        <article id="android-client" class="client-card" hidden>
+          <div class="client-head">
+            <h3>Android</h3>
+            <span id="android-version" class="client-version"></span>
+          </div>
+          <p class="client-copy">Install the signed WheelMaker APK on an Android device.</p>
+          <div class="client-actions">
+            <span id="android-size" class="client-size"></span>
+            <a id="android-download" class="client-action primary" href="" download>Download APK</a>
+          </div>
+        </article>
+
+        <article id="desktop-client" class="client-card" hidden>
+          <div class="client-head">
+            <h3>Windows Desktop</h3>
+            <span id="desktop-version" class="client-version"></span>
+          </div>
+          <p class="client-copy">Download the EXE directly, or close Desktop and update an existing installation.</p>
+          <div class="client-actions">
+            <a id="desktop-download" class="client-action primary" href="" download>Download EXE</a>
+            <button class="client-action secondary" type="button" data-copy="cmd-desktop-update">Copy update command</button>
+          </div>
+        </article>
+      </div>
+
+      <p id="clients-status" role="status" aria-live="polite" hidden></p>
+      <code id="cmd-desktop-update" hidden>$ErrorActionPreference='Stop'; $m=Join-Path $HOME '.wheelmaker\deploy.mjs'; if (!(Test-Path -LiteralPath $m)) { throw 'WheelMaker is not installed' }; &amp; node $m desktop-update</code>
+    </section>
+
     <section class="what" aria-labelledby="what-heading">
       <h2 id="what-heading">What happens</h2>
       <ol>
@@ -323,6 +498,7 @@
     </div>
   </footer>
 
+  <script src="/release-home.js"></script>
   <script>
     (function () {
       var status = document.getElementById('copy-status');
@@ -345,12 +521,13 @@
           var target = document.getElementById(button.getAttribute('data-copy'));
           if (!target) return;
           var command = target.textContent;
+          var originalLabel = button.textContent;
           function done() {
             button.textContent = 'Copied';
             status.textContent = 'Command copied to clipboard';
             clearTimeout(resetTimer);
             resetTimer = setTimeout(function () {
-              button.textContent = 'Copy';
+              button.textContent = originalLabel;
               status.textContent = '';
             }, 1600);
           }

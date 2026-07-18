@@ -60,6 +60,7 @@ export async function deployReleaseServer(dependencies = createDefaultDependenci
       join(templateRoot, 'nginx.conf'),
       join(templateRoot, 'wheelmaker-release-server.service'),
       join(templateRoot, 'index.html'),
+      join(templateRoot, 'release-home.js'),
     ];
     dependencies.write(`Uploading release server files to ${remote.host}`);
     await dependencies.upload({files, remote, remoteDirectory});
@@ -132,6 +133,7 @@ mv -Tf /opt/wheelmaker-release-server/current.next /opt/wheelmaker-release-serve
 
 install -o root -g root -m 0644 "$upload_dir/wheelmaker-release-server.service" /etc/systemd/system/wheelmaker-release-server.service
 install -o wheelmaker-release -g www-data -m 0644 "$upload_dir/index.html" /srv/wheelmaker-release/public/index.html
+install -o wheelmaker-release -g www-data -m 0644 "$upload_dir/release-home.js" /srv/wheelmaker-release/public/release-home.js
 systemctl daemon-reload
 systemctl enable wheelmaker-release-server.service
 systemctl restart wheelmaker-release-server.service
