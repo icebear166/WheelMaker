@@ -26,6 +26,7 @@ import type {
   RegistryHub,
   RegistryHubState,
   RegistryHubStateSectionName,
+	RegistryReleasePublishResponse,
   RegistryNpmCommandResponse,
   RegistryPortRelayEnablePayload,
   RegistryPortRelaySnapshot,
@@ -784,6 +785,16 @@ export class RegistryWorkspaceService {
       throw new Error('session is not ready');
     }
     return this.repository.requestWheelMakerUpdate(hubId);
+  }
+
+  async startReleasePublish(hubId: string, input: Record<string, unknown>): Promise<RegistryReleasePublishResponse> {
+    if (!this.repository) throw new Error('session is not ready');
+    return this.repository.startReleasePublish(hubId, input);
+  }
+
+  async queryReleasePublish(hubId: string, jobId: string): Promise<RegistryReleasePublishResponse> {
+    if (!this.repository) throw new Error('session is not ready');
+    return this.repository.queryReleasePublish(hubId, jobId);
   }
 
   async scanSkills(hubId: string): Promise<RegistrySkillCommandResponse> {

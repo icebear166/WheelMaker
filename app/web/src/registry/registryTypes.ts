@@ -117,6 +117,7 @@ export type RegistryHubStateSectionName =
   | 'skills'
   | 'tokenStats'
   | 'fileIndex'
+	  | 'releasePublish'
   | string;
 
 export interface RegistryHubStateAction {
@@ -144,6 +145,26 @@ export interface RegistryHubState {
   status: RegistryHubStateStatus;
   updatedAt?: string;
   sections: Record<string, RegistryHubStateSection>;
+}
+
+export interface RegistryReleasePublishJob {
+  id: string;
+  hubId: string;
+  kind: 'version' | 'debugWeb';
+  status: string;
+  startedAt: string;
+  updatedAt: string;
+  finishedAt?: string;
+  errorCode?: string;
+  log?: string;
+  targetState?: 'accepted' | 'success' | 'failed' | string;
+}
+
+export interface RegistryReleasePublishResponse {
+  ok: boolean;
+  accepted?: boolean;
+  status: string;
+  job?: RegistryReleasePublishJob;
 }
 
 export interface RegistrySessionContentBlock {

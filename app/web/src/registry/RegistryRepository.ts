@@ -31,6 +31,7 @@ import type {
   RegistryHub,
   RegistryHubState,
   RegistryHubStateSectionName,
+	RegistryReleasePublishResponse,
   RegistryNpmCommandResponse,
   RegistryNpmHubSnapshot,
   RegistryNpmPackage,
@@ -1785,6 +1786,16 @@ export class RegistryRepository {
       canRequestUpdate: false,
       errorCode: 'missing_hub_state_response',
     };
+  }
+
+  async startReleasePublish(hubId: string, input: Record<string, unknown>): Promise<RegistryReleasePublishResponse> {
+    const state = await this.runHubStateAction(hubId, 'releasePublish', 'start', input);
+    return hubStateSectionData<RegistryReleasePublishResponse>(state, 'releasePublish') ?? {ok: false, status: 'missing_hub_state_response'};
+  }
+
+  async queryReleasePublish(hubId: string, jobId: string): Promise<RegistryReleasePublishResponse> {
+    const state = await this.runHubStateAction(hubId, 'releasePublish', 'status', {jobId});
+    return hubStateSectionData<RegistryReleasePublishResponse>(state, 'releasePublish') ?? {ok: false, status: 'missing_hub_state_response'};
   }
 
   async scanSkills(hubId: string): Promise<RegistrySkillCommandResponse> {
