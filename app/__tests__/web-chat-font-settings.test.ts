@@ -36,7 +36,7 @@ describe('web chat typography', () => {
       /\.chat-main-message \{[\s\S]*font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', 'Noto Sans CJK SC', 'Noto Sans', sans-serif;[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
-      /@media \(max-width: 900px\) \{[\s\S]*\.chat-main-message \{[\s\S]*font-family: 'Segoe UI', 'Microsoft YaHei', 'Microsoft YaHei UI', 'PingFang SC', 'Noto Sans CJK SC', 'Noto Sans', sans-serif;[\s\S]*\}/,
+      /@media \(max-width: 900px\) \{[\s\S]*\.chat-main-message \{[\s\S]*font-family: 'Segoe UI', 'Microsoft YaHei', 'Microsoft YaHei UI', 'PingFang SC', 'Noto Sans CJK SC', 'Noto Sans', sans-serif;[\s\S]*font-size: 14px;[\s\S]*letter-spacing: 0;[\s\S]*\}/,
     );
     expect(stylesCss).not.toContain('--chat-message-font-family');
   });
@@ -46,12 +46,13 @@ describe('web chat typography', () => {
     const messageRule = ruleBody(stylesCss, '.chat-main-message');
 
     expect(stylesCss).toContain('--chat-message-text: #d4d4d4;');
-    expect(messageRule).toContain('font-size: 14px;');
+    expect(messageRule).toContain('font-size: 13.5px;');
     expect(messageRule).toContain('line-height: 1.6;');
+    expect(messageRule).toContain('letter-spacing: 0.01em;');
     expect(messageRule).toContain('color: var(--chat-message-text, var(--text-primary));');
     expect(stylesCss).toMatch(/\.chat-main-message strong \{[\s\S]*font-weight: 600;[\s\S]*\}/);
     expect(stylesCss).toMatch(
-      /\.chat-main-message h1,[\s\S]*\.chat-main-message h6 \{[\s\S]*font-weight: 600;[\s\S]*\}/,
+      /\.chat-main-message h1,[\s\S]*\.chat-main-message h6 \{[\s\S]*font-weight: 600;[\s\S]*letter-spacing: 0;[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
       /\.chat-main-message p,[\s\S]*\.chat-main-message table \{[\s\S]*margin: 0 0 10px 0;[\s\S]*\}/,
@@ -68,6 +69,7 @@ describe('web chat typography', () => {
     expect(inlineCodeRule).toContain('background: var(--chat-inline-code-background);');
     expect(inlineCodeRule).toContain('padding: 1px 5px;');
     expect(inlineCodeRule).toContain('border-radius: 4px;');
+    expect(inlineCodeRule).toContain('letter-spacing: 0;');
     expect(stylesCss).not.toMatch(/\.chat-main-message \.wm-shiki-code \{[^}]*background:/);
   });
 

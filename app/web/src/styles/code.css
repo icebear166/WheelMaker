@@ -207,6 +207,7 @@
   border-radius: 4px;
   background: var(--chat-inline-code-background);
   color: var(--chat-inline-code-text);
+  letter-spacing: 0;
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
   white-space: break-spaces;
