@@ -78,9 +78,13 @@ export class UsageStore {
           const identityKind = account.identity.kind?.trim();
           const identityValue = account.identity.value?.trim();
           const localId = account.localId.trim();
+          const normalizedIdentityKind = identityKind?.toLowerCase();
+          const normalizedIdentityValue = normalizedIdentityKind === 'email'
+            ? identityValue?.toLowerCase()
+            : identityValue;
           const identityKey = identityKind && identityValue
-            ? `${provider.id}:${identityKind}:${identityValue}`
-            : identityKind === 'source' && localId
+            ? `${provider.id}:${normalizedIdentityKind}:${normalizedIdentityValue}`
+            : normalizedIdentityKind === 'source' && localId
               ? `${provider.id}:source:${localId}`
               : `${hubId}:${provider.id}:${account.localId}`;
           const existing = aggregate.accounts.get(identityKey);

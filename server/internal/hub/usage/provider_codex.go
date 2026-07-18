@@ -21,23 +21,47 @@ var newBackgroundCommand = func(ctx context.Context, name string, args ...string
 
 type CodexScanner struct{ Binary string }
 
+type codexUsagePayload struct {
+	Account    map[string]any
+	RateLimits map[string]any
+}
+
 func NewCodexScanner(binary string) *CodexScanner { return &CodexScanner{Binary: binary} }
 
 func (s *CodexScanner) Scan(ctx context.Context) ProviderSnapshot {
 	result := ProviderSnapshot{ID: ProviderCodex, Name: "Codex", Accounts: []Account{}}
-	payload, err := fetchCodexRateLimits(ctx, s.Binary)
+	payload, err := fetchCodexUsage(ctx, s.Binary)
 	if err != nil {
 		result.Status, result.Message = ProviderUnavailable, "not authenticated"
 		return result
 	}
-	limits, err := parseCodexRateLimits(payload)
+	limits, err := parseCodexRateLimits(payload.RateLimits)
 	if err != nil {
 		result.Status, result.Message = ProviderError, "invalid response"
 		return result
 	}
 	result.Status = ProviderOK
-	result.Accounts = []Account{{LocalID: "current", Identity: Identity{Kind: "profile", Label: "Current account"}, Status: ProviderOK, Limits: limits}}
+	result.Accounts = []Account{codexAccount(payload.Account, limits)}
 	return result
+}
+
+func codexAccount(payload map[string]any, limits []Limit) Account {
+	account := Account{
+		LocalID:  "current",
+		Identity: Identity{Kind: "profile", Label: "Current account"},
+		Status:   ProviderOK,
+		Limits:   limits,
+	}
+	profile, _ := payload["account"].(map[string]any)
+	if profileType, _ := profile["type"].(string); profileType == "chatgpt" {
+		email, _ := profile["email"].(string)
+		email = strings.TrimSpace(email)
+		if email != "" {
+			account.Identity = Identity{Kind: "email", Value: strings.ToLower(email), Label: email}
+		}
+		account.Plan, _ = profile["planType"].(string)
+	}
+	return account
 }
 
 func parseCodexRateLimits(payload map[string]any) ([]Limit, error) {
@@ -71,21 +95,21 @@ func parseCodexRateLimits(payload map[string]any) ([]Limit, error) {
 	return limits, nil
 }
 
-func fetchCodexRateLimits(ctx context.Context, binary string) (map[string]any, error) {
+func fetchCodexUsage(ctx context.Context, binary string) (codexUsagePayload, error) {
 	if strings.TrimSpace(binary) == "" {
 		binary = "codex"
 	}
 	cmd := newBackgroundCommand(ctx, binary, "app-server", "--listen", "stdio://")
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return nil, err
+		return codexUsagePayload{}, err
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, err
+		return codexUsagePayload{}, err
 	}
 	if err := cmd.Start(); err != nil {
-		return nil, err
+		return codexUsagePayload{}, err
 	}
 	defer func() {
 		_ = cmd.Process.Kill()
@@ -131,11 +155,15 @@ func fetchCodexRateLimits(ctx context.Context, binary string) (map[string]any, e
 		"clientInfo":   map[string]any{"name": "wheelmaker-hub", "version": "1.0"},
 		"capabilities": map[string]any{"experimentalApi": true},
 	}, nil); err != nil {
-		return nil, err
+		return codexUsagePayload{}, err
 	}
-	var payload map[string]any
-	if err := roundTrip("account/rateLimits/read", map[string]any{}, &payload); err != nil {
-		return nil, err
+	var account map[string]any
+	if err := roundTrip("account/read", map[string]any{"refreshToken": false}, &account); err != nil {
+		return codexUsagePayload{}, err
 	}
-	return payload, nil
+	var rateLimits map[string]any
+	if err := roundTrip("account/rateLimits/read", map[string]any{}, &rateLimits); err != nil {
+		return codexUsagePayload{}, err
+	}
+	return codexUsagePayload{Account: account, RateLimits: rateLimits}, nil
 }

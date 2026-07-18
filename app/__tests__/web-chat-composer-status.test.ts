@@ -422,7 +422,8 @@ describe('chat composer status helpers', () => {
 
     expect(temporaryLayerStyles).toContain('@property --chat-edge-hidden-alpha');
     expect(temporaryLayerStyles).toContain('.chat-edge-surface-glass,\n.chat-edge-surface-content {');
-    expect(temporaryLayerStyles).toContain('--chat-edge-hidden-alpha: 3%;');
+    expect(temporaryLayerStyles).toContain('--chat-edge-hidden-alpha: 0%;');
+    expect(temporaryLayerStyles).not.toContain('--chat-edge-hidden-alpha: 3%;');
     expect(temporaryLayerStyles).toContain('var(--chat-edge-fade-start)');
     expect(temporaryLayerStyles).toContain('var(--chat-edge-fade-end)');
     expect(temporaryLayerStyles).toContain('rgb(0 0 0 / var(--chat-edge-hidden-alpha))');
@@ -436,7 +437,11 @@ describe('chat composer status helpers', () => {
       'backdrop-filter: var(--workspace-temporary-layer-filter);',
     );
     expect(temporaryLayerStyles).toContain('@media (prefers-reduced-transparency: reduce)');
-    expect(temporaryLayerStyles).toContain('--chat-edge-hidden-alpha: 100%;');
+    const reducedTransparency = temporaryLayerStyles.slice(
+      temporaryLayerStyles.indexOf('@media (prefers-reduced-transparency: reduce)'),
+      temporaryLayerStyles.indexOf('@media (prefers-reduced-motion: reduce)'),
+    );
+    expect(reducedTransparency).not.toContain('--chat-edge-hidden-alpha: 100%;');
     expect(temporaryLayerStyles).toContain(
       '@media (prefers-reduced-motion: reduce) {\n  .chat-edge-surface-glass,\n  .chat-edge-surface-content {',
     );

@@ -1,5 +1,5 @@
 .chat-function-surface.desktop {
-  --chat-edge-hidden-alpha: 3%;
+  --chat-edge-hidden-alpha: 0%;
   --chat-edge-fade-start: calc(100% - 28px);
   --chat-edge-fade-end: 100%;
   --chat-function-width: var(--chat-edge-surface-width);
@@ -32,7 +32,8 @@
 
 .chat-function-surface-header {
   display: grid;
-  grid-template-columns: 20px auto auto minmax(0, 1fr);
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  width: min(100%, var(--chat-edge-fade-start));
   align-items: center;
   min-height: 36px;
   padding: 0 8px 0 10px;
@@ -70,7 +71,7 @@
 .usage-provider-name { font-size: 11px; font-weight: 650; }
 .usage-provider-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .usage-compact-limit { display: grid; gap: 4px; min-width: 0; }
-.usage-compact-limit-value { display: flex; align-items: baseline; gap: 3px; color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; font-size: 9px; font-variant-numeric: tabular-nums; }
+.usage-compact-limit-value { display: flex; align-items: baseline; justify-content: flex-end; gap: 3px; color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; font-size: 9px; font-variant-numeric: tabular-nums; }
 .usage-compact-limit-value strong { color: var(--text-primary); font-size: 10px; font-weight: 620; }
 .usage-provider-balance { overflow: hidden; color: var(--text-primary); font-family: 'JetBrains Mono', monospace; font-size: 10px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
 .usage-provider-empty { color: var(--text-secondary); font-size: 10px; }

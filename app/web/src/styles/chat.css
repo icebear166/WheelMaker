@@ -5622,7 +5622,7 @@
 @property --chat-edge-hidden-alpha {
   syntax: '<percentage>';
   inherits: true;
-  initial-value: 3%;
+  initial-value: 0%;
 }
 
 .chat-plan-surface.desktop,
@@ -5695,7 +5695,7 @@
 .chat-plan-surface.desktop,
 .chat-recent-sessions-surface.desktop,
 .chat-function-surface.desktop {
-  --chat-edge-hidden-alpha: 3%;
+  --chat-edge-hidden-alpha: 0%;
   border: 0;
   background: transparent;
   box-shadow: none;
@@ -5789,11 +5789,6 @@
     -webkit-backdrop-filter: none;
   }
 
-  .chat-plan-surface.desktop,
-  .chat-recent-sessions-surface.desktop,
-  .chat-function-surface.desktop {
-    --chat-edge-hidden-alpha: 100%;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

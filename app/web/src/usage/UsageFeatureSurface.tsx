@@ -27,6 +27,9 @@ function compactLimits(provider: UsageProviderView): UsageLimit[] {
     const existing = limits.get(limit.id);
     if (!existing || limit.remainingPercent < existing.remainingPercent) limits.set(limit.id, limit);
   }
+  if (limits.size > 0 && !limits.has('5h')) {
+    limits.set('5h', {id: '5h', label: '5 hours', remainingPercent: 100});
+  }
   const order = new Map([['5h', 0], ['week', 1], ['mcp-month', 2]]);
   return Array.from(limits.values())
     .sort((left, right) => (order.get(left.id) ?? 10) - (order.get(right.id) ?? 10))
@@ -78,17 +81,10 @@ function ProviderRail({provider}: {provider: UsageProviderView}) {
 }
 
 function ProviderDetails({provider}: {provider: UsageProviderView}) {
+  const accounts = provider.accounts.filter(account => account.status === 'ok');
   return (
     <section className="usage-detail-provider">
-      {provider.hubs?.filter(hub => hub.status !== 'ok').map(hub => (
-        <div className="usage-detail-hub-state" key={hub.hubId}>
-          <span>{hub.hubId}</span>
-          <span>{hub.message || (hub.status === 'error' ? 'Scan failed' : 'Not authenticated')}</span>
-        </div>
-      ))}
-      {provider.accounts.length === 0 ? (
-        <div className="usage-detail-empty">{provider.status === 'error' ? 'Scan failed' : 'Not authenticated on this Hub'}</div>
-      ) : provider.accounts.map(account => (
+      {accounts.map(account => (
         <div
           className="usage-account-card"
           data-usage-account={`${provider.id}:${account.localId}`}
@@ -136,6 +132,7 @@ export function UsageFeatureSurface({snapshot, onRefresh, onRequestHide}: Props)
   const [collapsed, setCollapsed] = React.useState(false);
   const [detail, setDetail] = React.useState(false);
   const mode = detail ? 'detail' : 'compact';
+  const detailProviders = snapshot.providers.filter(provider => provider.accounts.some(account => account.status === 'ok'));
   const actions = (
     <>
       <button
@@ -180,7 +177,11 @@ export function UsageFeatureSurface({snapshot, onRefresh, onRequestHide}: Props)
         {snapshot.providers.length === 0 ? (
           <div className="usage-feature-empty">Waiting for Hub limits</div>
         ) : detail ? (
-          <div className="usage-detail-list">{snapshot.providers.map(provider => <ProviderDetails key={provider.id} provider={provider} />)}</div>
+          detailProviders.length > 0 ? (
+            <div className="usage-detail-list">{detailProviders.map(provider => <ProviderDetails key={provider.id} provider={provider} />)}</div>
+          ) : (
+            <div className="usage-detail-empty">No limit details</div>
+          )
         ) : (
           <div className="usage-provider-list">{snapshot.providers.map(provider => <ProviderRail key={provider.id} provider={provider} />)}</div>
         )}

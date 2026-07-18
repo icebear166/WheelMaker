@@ -14,6 +14,7 @@ export type ChatEdgeSurfaceFadeStops = {
 };
 
 const DEFAULT_CHAT_EDGE_FADE_WIDTH = 28;
+const DEFAULT_CHAT_EDGE_TEXT_CLEARANCE = 10;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -24,20 +25,23 @@ export function resolveChatEdgeSurfaceFadeStops({
   surface,
   textColumn,
   fadeWidth = DEFAULT_CHAT_EDGE_FADE_WIDTH,
+  textClearance = DEFAULT_CHAT_EDGE_TEXT_CLEARANCE,
 }: {
   side: ChatEdgeSurfaceSide;
   surface: ChatEdgeSurfaceRect;
   textColumn: ChatEdgeSurfaceRect;
   fadeWidth?: number;
+  textClearance?: number;
 }): ChatEdgeSurfaceFadeStops {
   const width = Math.max(0, surface.width);
   const resolvedFadeWidth = Math.max(0, fadeWidth);
+  const resolvedTextClearance = Math.max(0, textClearance);
 
   if (side === 'left') {
     if (textColumn.left >= surface.right) {
       return {start: width, end: width};
     }
-    const boundary = clamp(textColumn.left - surface.left, 0, width);
+    const boundary = clamp(textColumn.left - surface.left - resolvedTextClearance, 0, width);
     return {
       start: Math.max(0, boundary - resolvedFadeWidth),
       end: boundary,
@@ -47,7 +51,7 @@ export function resolveChatEdgeSurfaceFadeStops({
   if (textColumn.right <= surface.left) {
     return {start: 0, end: 0};
   }
-  const boundary = clamp(textColumn.right - surface.left, 0, width);
+  const boundary = clamp(textColumn.right - surface.left + resolvedTextClearance, 0, width);
   return {
     start: boundary,
     end: Math.min(width, boundary + resolvedFadeWidth),

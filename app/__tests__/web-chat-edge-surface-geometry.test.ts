@@ -31,13 +31,13 @@ describe('chat edge surface geometry', () => {
       side: 'left',
       surface,
       textColumn: {left: 266, right: 1066, width: 800},
-    })).toEqual({start: 212, end: 240});
+    })).toEqual({start: 202, end: 230});
 
     expect(geometry.resolveChatEdgeSurfaceFadeStops({
       side: 'left',
       surface,
       textColumn: {left: 326, right: 1126, width: 800},
-    })).toEqual({start: 272, end: 300});
+    })).toEqual({start: 262, end: 290});
   });
 
   test('keeps the text side transparent and fades only across the outer 28 pixels', () => {
@@ -49,7 +49,7 @@ describe('chat edge surface geometry', () => {
       side: 'right',
       surface: {left: 946, right: 1266, width: 320},
       textColumn: {left: 266, right: 1066, width: 800},
-    })).toEqual({start: 120, end: 148});
+    })).toEqual({start: 130, end: 158});
   });
 
   test('shows a panel fully when it does not overlap the text column', () => {

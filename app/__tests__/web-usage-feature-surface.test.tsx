@@ -51,6 +51,30 @@ describe('UsageFeatureSurface', () => {
     expect(renderedText(deepSeek)).not.toContain('OpenCode');
   });
 
+  it('fills a missing five-hour quota with a full compact rail', () => {
+    const weeklyOnly: UsageViewSnapshot = {
+      refreshing: false,
+      providers: [{
+        id: 'codex', name: 'Codex', status: 'ok', accountCount: 1, remainingPercent: 64,
+        accounts: [{
+          localId: 'current', identity: {kind: 'email', value: 'a@example.com', label: 'a@example.com'},
+          status: 'ok', hubIds: ['hub-a'],
+          limits: [{id: 'week', label: 'Week', remainingPercent: 64}],
+        }],
+      }],
+    };
+    let view: TestRenderer.ReactTestRenderer;
+    act(() => {
+      view = TestRenderer.create(<UsageFeatureSurface snapshot={weeklyOnly} onRefresh={jest.fn()} onRequestHide={jest.fn()} />);
+    });
+
+    const metrics = view!.root.findAllByProps({'data-usage-compact-limit': true});
+    expect(metrics).toHaveLength(2);
+    expect(renderedText(metrics[0])).toContain('100% / 5h');
+    expect(metrics[0].findByProps({'data-usage-rail-fill': true}).props.style.width).toBe('100%');
+    expect(renderedText(metrics[1])).toContain('64% / 1W');
+  });
+
   it('toggles detail mode in place and keeps refresh separate', () => {
     const onRefresh = jest.fn();
     let view: TestRenderer.ReactTestRenderer;
@@ -70,6 +94,29 @@ describe('UsageFeatureSurface', () => {
     expect(renderedText(deepSeekAccount)).not.toContain('OpenCode');
     act(() => view!.root.findByProps({'aria-label': 'Refresh limits'}).props.onClick());
     expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('omits unauthenticated providers and accounts from detail mode', () => {
+    const unavailable: UsageViewSnapshot = {
+      ...fixtureSnapshot,
+      providers: [...fixtureSnapshot.providers, {
+        id: 'kimi', name: 'Kimi', status: 'unavailable', accountCount: 1,
+        accounts: [{
+          localId: 'opencode', identity: {kind: 'source', label: 'OpenCode'}, status: 'unavailable',
+          message: 'not authenticated', limits: [], hubIds: ['hub-a'],
+        }],
+        hubs: [{hubId: 'hub-a', status: 'unavailable', message: 'not authenticated'}],
+      }],
+    };
+    let view: TestRenderer.ReactTestRenderer;
+    act(() => {
+      view = TestRenderer.create(<UsageFeatureSurface snapshot={unavailable} onRefresh={jest.fn()} onRequestHide={jest.fn()} />);
+    });
+    act(() => view!.root.findByProps({'aria-label': 'Show limit details'}).props.onClick());
+
+    expect(renderedText(view!.root)).not.toContain('not authenticated');
+    expect(renderedText(view!.root)).not.toContain('Not authenticated');
+    expect(view!.root.findAllByProps({'data-usage-account': 'kimi:opencode'})).toHaveLength(0);
   });
 
   it('requests confirmation from the title-bar eye action', () => {
@@ -119,6 +166,7 @@ describe('UsageFeatureSurface', () => {
     const metricsRule = usageStyles.match(/\.usage-provider-metrics \{([^}]*)\}/)?.[1] ?? '';
     const hubRule = usageStyles.match(/\.usage-account-hub \{([^}]*)\}/)?.[1] ?? '';
     const headerRule = usageStyles.match(/\.chat-function-surface-header \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const compactValueRule = usageStyles.match(/\.usage-compact-limit-value \{([^}]*)\}/)?.[1] ?? '';
 
     expect(chatStyles).toContain('--chat-edge-surface-width: 360px;');
     expect(chatStyles).toContain('--chat-edge-surface-stack-width: var(--chat-edge-surface-width);');
@@ -131,7 +179,9 @@ describe('UsageFeatureSurface', () => {
     expect(detailRule).toContain('--usage-surface-max-height: min(48vh, 420px);');
     expect(metricsRule).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));');
     expect(hubRule).toContain('border-radius: 999px;');
-    expect(headerRule).toContain('grid-template-columns: 20px auto auto minmax(0, 1fr);');
+    expect(headerRule).toContain('grid-template-columns: 20px minmax(0, 1fr) auto;');
+    expect(headerRule).toContain('width: min(100%, var(--chat-edge-fade-start));');
+    expect(compactValueRule).toContain('justify-content: flex-end;');
     expect(chatStyles).toContain('.chat-recent-sessions-surface.desktop .chat-edge-surface-glass,');
     expect(chatStyles).toContain('.chat-function-surface.desktop .chat-edge-surface-glass,');
   });

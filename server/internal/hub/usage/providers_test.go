@@ -1,11 +1,13 @@
 package usage
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -51,6 +53,80 @@ func TestParseCodexRateLimitsByWindowDuration(t *testing.T) {
 	if err != nil || len(limits) != 2 || limits[0].RemainingPercent != 77 || limits[1].RemainingPercent != 42 {
 		t.Fatalf("limits=%+v err=%v", limits, err)
 	}
+}
+
+func TestCodexScannerReadsStableEmailWithoutPublishingCredential(t *testing.T) {
+	previousCommand := newBackgroundCommand
+	defer func() { newBackgroundCommand = previousCommand }()
+	newBackgroundCommand = func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
+		cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=TestCodexAppServerHelperProcess")
+		cmd.Env = append(os.Environ(), "WHEELMAKER_CODEX_HELPER=1")
+		return cmd
+	}
+
+	got := NewCodexScanner("codex").Scan(context.Background())
+	if got.Status != ProviderOK || len(got.Accounts) != 1 {
+		t.Fatalf("snapshot=%+v", got)
+	}
+	account := got.Accounts[0]
+	if account.Identity.Kind != "email" || account.Identity.Value != "user@example.com" || account.Identity.Label != "User@Example.com" {
+		t.Fatalf("identity=%+v", account.Identity)
+	}
+	if account.Plan != "plus" {
+		t.Fatalf("plan=%q", account.Plan)
+	}
+	raw, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "sk-private-test-key") {
+		t.Fatalf("Codex credential leaked into snapshot: %s", raw)
+	}
+}
+
+func TestCodexAppServerHelperProcess(t *testing.T) {
+	if os.Getenv("WHEELMAKER_CODEX_HELPER") != "1" {
+		return
+	}
+	accountRead := false
+	scanner := bufio.NewScanner(os.Stdin)
+	encoder := json.NewEncoder(os.Stdout)
+	for scanner.Scan() {
+		var request struct {
+			ID     int64          `json:"id"`
+			Method string         `json:"method"`
+			Params map[string]any `json:"params"`
+		}
+		if json.Unmarshal(scanner.Bytes(), &request) != nil {
+			os.Exit(2)
+		}
+		var result any
+		switch request.Method {
+		case "initialize":
+			result = map[string]any{}
+		case "account/read":
+			if refresh, _ := request.Params["refreshToken"].(bool); refresh {
+				os.Exit(3)
+			}
+			accountRead = true
+			result = map[string]any{"account": map[string]any{
+				"type": "chatgpt", "email": "User@Example.com", "planType": "plus", "apiKey": "sk-private-test-key",
+			}, "requiresOpenaiAuth": true}
+		case "account/rateLimits/read":
+			if !accountRead {
+				os.Exit(4)
+			}
+			result = map[string]any{"rateLimits": map[string]any{
+				"primary": map[string]any{"windowDurationMins": float64(300), "usedPercent": float64(23)},
+			}}
+		default:
+			os.Exit(5)
+		}
+		if encoder.Encode(map[string]any{"jsonrpc": "2.0", "id": request.ID, "result": result}) != nil {
+			os.Exit(6)
+		}
+	}
+	os.Exit(0)
 }
 
 func TestParseKimiUsageUsesLimitsAndWeeklyUsage(t *testing.T) {

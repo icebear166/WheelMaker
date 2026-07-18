@@ -54,6 +54,24 @@ describe('UsageStore', () => {
     expect(accounts[0].hubIds).toEqual(['hub-a', 'hub-b']);
   });
 
+  it('aggregates the same Codex email across Hubs without depending on case', () => {
+    const store = new UsageStore();
+    for (const [hubId, email] of [['windows', 'User@Example.com'], ['linux', 'user@example.com']] as const) {
+      store.replaceHub(hubId, {
+        hubId, generation: 1, status: 'ready', providers: [{
+          id: 'codex', name: 'Codex', status: 'ok', accounts: [{
+            localId: 'current', identity: {kind: 'email', value: email, label: email}, status: 'ok',
+            limits: [{id: 'week', label: 'Week', remainingPercent: 90}],
+          }],
+        }],
+      });
+    }
+
+    const accounts = store.snapshot().providers[0].accounts;
+    expect(accounts).toHaveLength(1);
+    expect(accounts[0].hubIds).toEqual(['linux', 'windows']);
+  });
+
   it('summarizes the account with the lowest remaining percentage', () => {
     const summary = summarizeProvider({
       id: 'codex', name: 'Codex', status: 'ok', accounts: [78, 9, 42].map((remainingPercent, index) => ({
