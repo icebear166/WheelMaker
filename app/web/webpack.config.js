@@ -162,6 +162,9 @@ module.exports = (_env = {}, argv = {}) => {
     devServer: {
 		host: '127.0.0.1',
       port: 8080,
+		devMiddleware: {
+			writeToDisk: true,
+		},
 		allowedHosts: ['localhost', '127.0.0.1'],
 		headers: {
 			'Content-Security-Policy': WEB_SECURITY_POLICY,
