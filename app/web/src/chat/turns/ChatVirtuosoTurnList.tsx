@@ -122,7 +122,7 @@ const ChatVirtuosoTurnListInner = React.forwardRef<
   displayIndex,
   runtimeKey,
   overscan = 8,
-  rowGap = 7,
+  rowGap = 10,
   bottomBuffer = DEFAULT_BOTTOM_BUFFER,
   atBottomThreshold = DEFAULT_AT_BOTTOM_THRESHOLD,
   onAtBottomChange,

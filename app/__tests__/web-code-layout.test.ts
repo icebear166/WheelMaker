@@ -60,10 +60,10 @@ describe('web code layout', () => {
     expect(stylesCss).toContain('.chat-main-message .wm-shiki-code {');
     expect(stylesCss).toContain('white-space: normal;');
     expect(stylesCss).toMatch(
-      /\.chat-main-message \{[\s\S]*line-height: 1\.55;[\s\S]*\}/,
+      /\.chat-main-message \{[\s\S]*line-height: 1\.6;[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
-      /\.chat-main-message p,[\s\S]*margin: 0 0 7px 0;[\s\S]*\}/,
+      /\.chat-main-message p,[\s\S]*margin: 0 0 10px 0;[\s\S]*\}/,
     );
   });
 });

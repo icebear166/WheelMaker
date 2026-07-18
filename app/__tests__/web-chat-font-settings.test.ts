@@ -1,80 +1,79 @@
 import fs from 'fs';
 import path from 'path';
-import {
-  CHAT_FONT_OPTIONS,
-  DEFAULT_CHAT_FONT,
-  isChatFontId,
-  resolveChatFontFamily,
-} from '../web/src/chat/chatTypography';
 
 import {readWebStyles} from '../testHelpers/webStyles';
-describe('web chat font settings', () => {
-  test('uses Microsoft YaHei chat text by default while keeping other fonts configurable', () => {
-    expect(DEFAULT_CHAT_FONT).toBe('microsoft-yahei');
-    expect(CHAT_FONT_OPTIONS.map(option => option.id)).toEqual([
-      'microsoft-yahei',
-      'system',
-      'ibm-plex',
-      'serif',
-    ]);
-    expect(CHAT_FONT_OPTIONS.map(option => option.label)).toContain('Microsoft YaHei');
-    expect(resolveChatFontFamily(DEFAULT_CHAT_FONT)).toContain('Segoe UI');
-    expect(resolveChatFontFamily(DEFAULT_CHAT_FONT)).toContain('Microsoft YaHei');
-    expect(resolveChatFontFamily(DEFAULT_CHAT_FONT).indexOf('Microsoft YaHei')).toBeLessThan(
-      resolveChatFontFamily(DEFAULT_CHAT_FONT).indexOf('Microsoft YaHei UI'),
-    );
-    expect(resolveChatFontFamily('ibm-plex')).toContain('IBM Plex Sans');
-    expect(resolveChatFontFamily('ibm-plex')).toContain('Microsoft YaHei');
-    expect(resolveChatFontFamily('system')).toContain('Segoe UI');
-    expect(resolveChatFontFamily('system')).toContain('Microsoft YaHei UI');
-    expect(isChatFontId('microsoft-yahei')).toBe(true);
-    expect(isChatFontId('system')).toBe(true);
-    expect(isChatFontId('bad-font')).toBe(false);
-  });
 
-  test('persists the chat font setting and exposes it only in Chat settings', () => {
-    const projectRoot = path.join(__dirname, '..');
+describe('web chat typography', () => {
+  const projectRoot = path.join(__dirname, '..');
+
+  const ruleBody = (stylesCss: string, selector: string): string => {
+    const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return stylesCss.match(new RegExp(`${escapedSelector} \\{([^}]*)\\}`))?.[1] ?? '';
+  };
+
+  test('removes configurable chat fonts from settings and persistence', () => {
     const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
-    const settingsRootTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
+    const settingsRootTsx = fs.readFileSync(
+      path.join(projectRoot, 'web', 'src', 'settings', 'SettingsRootContent.tsx'),
+      'utf8',
+    );
     const persistence = fs.readFileSync(
       path.join(projectRoot, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'),
       'utf8',
     );
 
-    expect(persistence).toContain('chatFont: ChatFontId;');
-    expect(persistence).toContain("chatFont: 'chatFont',");
-    expect(persistence).toContain('chatFont: DEFAULT_CHAT_FONT,');
-    expect(persistence).toContain("chatFont: typeof input.chatFont === 'string' && isChatFontId(input.chatFont) ? input.chatFont : base.chatFont");
-    expect(persistence).toContain('const rows = globalRowsForPatch(patch, next, now);');
-    expect(persistence).toContain(
-      '{k: GLOBAL_KEYS.chatFont, v: serialize(this.state.global.chatFont), updatedAt}',
-    );
-
-    expect(mainTsx).toContain('const [chatFont, setChatFont] = useState<ChatFontId>(');
-    expect(mainTsx).toContain('const chatFontFamily = useMemo(');
-    expect(mainTsx).toContain('chatFont,');
-    expect(settingsRootTsx).toContain("renderSettingsSection({id: 'chat'");
-    expect(settingsRootTsx).toContain('Chat Font');
-    expect(settingsRootTsx).toContain('value={chatFont}');
-    expect(settingsRootTsx).toContain('if (isChatFontId(next)) setChatFont(next);');
-    expect(settingsRootTsx).toContain('CHAT_FONT_OPTIONS.map(item => (');
-    expect(mainTsx).toContain('style={chatMainStyle}');
+    expect(mainTsx).not.toContain('chatFont');
+    expect(settingsRootTsx).not.toContain('chatFont');
+    expect(settingsRootTsx).not.toContain('Chat Font');
+    expect(persistence).not.toContain('chatFont');
+    expect(fs.existsSync(path.join(projectRoot, 'web', 'src', 'chat', 'chatTypography.ts'))).toBe(false);
   });
 
-  test('applies chat font through message CSS without changing code or composer fonts', () => {
-    const projectRoot = path.join(__dirname, '..');
-    const mainTsx = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
+  test('uses fixed desktop and mobile font stacks for chat messages', () => {
     const stylesCss = readWebStyles(projectRoot);
 
-    expect(mainTsx).toContain("'--chat-message-font-family': chatFontFamily,");
-    expect(stylesCss).toContain('--chat-message-text: #e0e0e0;');
-    expect(stylesCss).toContain('--chat-message-text: #2b2b2b;');
     expect(stylesCss).toMatch(
-      /\.chat-main-message \{[\s\S]*font-family: var\(--chat-message-font-family, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', 'Noto Sans CJK SC', 'Noto Sans', sans-serif\);[\s\S]*line-height: 1\.58;[\s\S]*color: var\(--chat-message-text, var\(--text-primary\)\);[\s\S]*letter-spacing: 0;[\s\S]*\}/,
+      /\.chat-main-message \{[\s\S]*font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', 'Noto Sans CJK SC', 'Noto Sans', sans-serif;[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
-      /\.chat-main-message code:not\(\.wm-shiki-code\) \{[\s\S]*font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;[\s\S]*\}/,
+      /@media \(max-width: 900px\) \{[\s\S]*\.chat-main-message \{[\s\S]*font-family: 'Segoe UI', 'Microsoft YaHei', 'Microsoft YaHei UI', 'PingFang SC', 'Noto Sans CJK SC', 'Noto Sans', sans-serif;[\s\S]*\}/,
     );
+    expect(stylesCss).not.toContain('--chat-message-font-family');
+  });
+
+  test('gives markdown text a softer hierarchy in both viewport modes', () => {
+    const stylesCss = readWebStyles(projectRoot);
+    const messageRule = ruleBody(stylesCss, '.chat-main-message');
+
+    expect(stylesCss).toContain('--chat-message-text: #d4d4d4;');
+    expect(messageRule).toContain('font-size: 14px;');
+    expect(messageRule).toContain('line-height: 1.6;');
+    expect(messageRule).toContain('color: var(--chat-message-text, var(--text-primary));');
+    expect(stylesCss).toMatch(/\.chat-main-message strong \{[\s\S]*font-weight: 600;[\s\S]*\}/);
+    expect(stylesCss).toMatch(
+      /\.chat-main-message h1,[\s\S]*\.chat-main-message h6 \{[\s\S]*font-weight: 600;[\s\S]*\}/,
+    );
+    expect(stylesCss).toMatch(
+      /\.chat-main-message p,[\s\S]*\.chat-main-message table \{[\s\S]*margin: 0 0 10px 0;[\s\S]*\}/,
+    );
+    expect(stylesCss).toMatch(/\.chat-main-message li \+ li \{[\s\S]*margin-top: 6px;[\s\S]*\}/);
+  });
+
+  test('styles inline markdown code without affecting Shiki code blocks', () => {
+    const stylesCss = readWebStyles(projectRoot);
+    const inlineCodeRule = ruleBody(stylesCss, '.chat-main-message code:not(.wm-shiki-code)');
+
+    expect(stylesCss).toContain('--chat-inline-code-background: #303030;');
+    expect(stylesCss).toContain('--chat-inline-code-background: #ececec;');
+    expect(inlineCodeRule).toContain('background: var(--chat-inline-code-background);');
+    expect(inlineCodeRule).toContain('padding: 1px 5px;');
+    expect(inlineCodeRule).toContain('border-radius: 4px;');
+    expect(stylesCss).not.toMatch(/\.chat-main-message \.wm-shiki-code \{[^}]*background:/);
+  });
+
+  test('keeps composer typography independent from message typography', () => {
+    const stylesCss = readWebStyles(projectRoot);
+
     expect(stylesCss).toMatch(
       /\.chat-composer-input \{[\s\S]*font: inherit;[\s\S]*font-size: 14px;[\s\S]*\}/,
     );

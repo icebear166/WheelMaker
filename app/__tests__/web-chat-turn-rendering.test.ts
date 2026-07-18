@@ -123,8 +123,8 @@ describe('web chat turn rendering', () => {
     const styles = readStyles();
     const paragraphMargin = styles.match(/\.chat-main-message p,[\s\S]*?margin: 0 0 (\d+)px 0;/)?.[1] ?? '';
 
-    expect(paragraphMargin).toBe('7');
-    expect(virtualList).toContain('rowGap = 7,');
+    expect(paragraphMargin).toBe('10');
+    expect(virtualList).toContain('rowGap = 10,');
     expect(virtualList).not.toContain('overscan = 12');
   });
 

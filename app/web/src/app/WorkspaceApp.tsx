@@ -154,12 +154,6 @@ import {useChatLayoutMetrics} from '../chat/layout/chatLayoutMetrics';
 import {resolveWideProjectActionPopoverPlacement, type WideProjectActionPopoverPlacement} from '../chat/layout/wideProjectActionPopover';
 import {ChatVirtuosoTurnList, type ChatVirtuosoTurnListHandle} from '../chat/turns/ChatVirtuosoTurnList';
 import {
-  DEFAULT_CHAT_FONT,
-  isChatFontId,
-  resolveChatFontFamily,
-  type ChatFontId,
-} from '../chat/chatTypography';
-import {
   normalizeChatViewWidth,
   type ChatViewWidth,
 } from '../chat/chatViewWidth';
@@ -2523,12 +2517,6 @@ export function App() {
   const [codeTabSize, setCodeTabSize] = useState<number>(
     clampCodeTabSize(Number(persistedGlobal.codeTabSize)),
   );
-  const [chatFont, setChatFont] = useState<ChatFontId>(
-    typeof persistedGlobal.chatFont === 'string' &&
-      isChatFontId(persistedGlobal.chatFont)
-      ? persistedGlobal.chatFont
-      : DEFAULT_CHAT_FONT,
-  );
   const [chatViewWidth, setChatViewWidth] = useState<ChatViewWidth>(
     normalizeChatViewWidth(persistedGlobal.chatViewWidth),
   );
@@ -2594,11 +2582,6 @@ export function App() {
     () => resolveCodeFontFamily(codeFont),
     [codeFont],
   );
-  const chatFontFamily = useMemo(
-    () => resolveChatFontFamily(chatFont),
-    [chatFont],
-  );
-
   const [windowWidth, setWindowWidth] = useState<number>(window.innerWidth);
   const [windowHeight, setWindowHeight] = useState<number>(window.innerHeight);
   const [safeAreaTopInset, setSafeAreaTopInset] = useState<number>(() => readSafeAreaTopInset());
@@ -4028,14 +4011,13 @@ export function App() {
 
   const chatMainStyle = useMemo(
     () => ({
-      '--chat-message-font-family': chatFontFamily,
       '--chat-scroll-bottom-offset': `${resolveChatScrollBottomButtonOffset({
         composerHeight: chatComposerHeight,
         keyboardInset: chatKeyboardInset,
       })}px`,
       ...(chatKeyboardInset > 0 ? { paddingBottom: `${chatKeyboardInset}px` } : {}),
     }) as React.CSSProperties,
-    [chatComposerHeight, chatFontFamily, chatKeyboardInset],
+    [chatComposerHeight, chatKeyboardInset],
   );
   useEffect(() => {
     if (!toastMessage) return undefined;
@@ -6114,7 +6096,6 @@ export function App() {
       codeFontSize,
       codeLineHeight,
       codeTabSize,
-      chatFont,
       chatViewWidth,
       sessionListDensity,
       mobileEnterKeyBehavior,
@@ -6142,7 +6123,6 @@ export function App() {
     codeFontSize,
     codeLineHeight,
     codeTabSize,
-    chatFont,
     chatViewWidth,
     sessionListDensity,
     mobileEnterKeyBehavior,
@@ -16946,8 +16926,6 @@ export function App() {
         serverSettingsBusy={serverSettingsBusy}
         serverSettingsError={serverSettingsError}
         updateServerSetting={updateServerSetting}
-        chatFont={chatFont}
-        setChatFont={setChatFont}
         openSettingsChild={openSettingsChild}
         codeTheme={codeTheme}
         setCodeTheme={setCodeTheme}

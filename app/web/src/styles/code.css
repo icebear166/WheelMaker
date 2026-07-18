@@ -202,6 +202,13 @@
 .chat-main-message code:not(.wm-shiki-code) {
   font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
   font-size: 0.9em;
+  line-height: 1.45;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--chat-inline-code-background);
+  color: var(--chat-inline-code-text);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
   white-space: break-spaces;
   overflow-wrap: anywhere;
   word-break: break-word;

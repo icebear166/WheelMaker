@@ -235,7 +235,7 @@ describe('chat virtuoso mount fallback', () => {
 
       const firstProps = mockVirtuosoProps[mockVirtuosoProps.length - 1];
       const firstHeightEstimates = firstProps.heightEstimates;
-      expect(firstHeightEstimates).toEqual([87]);
+      expect(firstHeightEstimates).toEqual([90]);
 
       await ReactTestRenderer.act(() => {
         renderer!.update(
@@ -252,7 +252,7 @@ describe('chat virtuoso mount fallback', () => {
 
       const latestProps = mockVirtuosoProps[mockVirtuosoProps.length - 1];
       expect(latestProps.heightEstimates).not.toBe(firstHeightEstimates);
-      expect(latestProps.heightEstimates).toEqual([247]);
+      expect(latestProps.heightEstimates).toEqual([250]);
     } finally {
       if (renderer) {
         await ReactTestRenderer.act(() => {

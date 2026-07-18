@@ -1,6 +1,5 @@
 import React from 'react';
 
-import {CHAT_FONT_OPTIONS, isChatFontId, type ChatFontId} from '../chat/chatTypography';
 import {CHAT_VIEW_WIDTH_OPTIONS, isChatViewWidth, type ChatViewWidth} from '../chat/chatViewWidth';
 import {
   SESSION_LIST_DENSITY_OPTIONS,
@@ -60,8 +59,6 @@ type SettingsRootContentProps = {
   serverSettingsBusy: boolean;
   serverSettingsError: string;
   updateServerSetting: (update: ServerSettingsUpdate) => Promise<void>;
-  chatFont: ChatFontId;
-  setChatFont: (value: ChatFontId) => void;
   openSettingsChild: (detail: SettingsChildDetail) => void;
   codeTheme: CodeThemeId;
   setCodeTheme: (value: CodeThemeId) => void;
@@ -192,8 +189,6 @@ export function SettingsRootContent({
   serverSettingsBusy,
   serverSettingsError,
   updateServerSetting,
-  chatFont,
-  setChatFont,
   openSettingsChild,
   codeTheme,
   setCodeTheme,
@@ -341,26 +336,6 @@ export function SettingsRootContent({
             </div>
           ) : null}
         </div>
-        <label className="settings-row sidebar-setting-row">
-          <span>
-            <span className="codicon codicon-text-size settings-row-icon" aria-hidden="true" />
-            Chat Font
-          </span>
-          <select
-            className="sidebar-setting-select"
-            value={chatFont}
-            onChange={event => {
-              const next = event.target.value;
-              if (isChatFontId(next)) setChatFont(next);
-            }}
-          >
-            {CHAT_FONT_OPTIONS.map(item => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </label>
         </>
         )})}
         {renderSettingsSection({id: 'server', title: 'Server', icon: 'server', rows: (
