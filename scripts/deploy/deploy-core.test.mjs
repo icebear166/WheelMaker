@@ -564,6 +564,10 @@ test('normal deploy applies Hub and Web to the existing layout', async (t) => {
     ),
     'desktop',
   );
+  assert.equal(
+    await readFile(join(fixture.home, 'desktop', 'update.exe'), 'utf8'),
+    'new-updater',
+  );
   assert.equal(await readFile(join(fixture.home, 'data', 'sessions.db'), 'utf8'), 'db');
   assert.equal(await readFile(join(fixture.home, 'logs', 'hub.log'), 'utf8'), 'log');
   for (const name of ['restart.bat', 'restart.sh', 'status.bat', 'status.sh']) {
@@ -970,6 +974,8 @@ test('Unix legacy migration disables registrations and removes their files', asy
 
 test('successful internal update writes release schema v2 without registration changes', async (t) => {
   const fixture = await installFixture(t);
+  await mkdir(join(fixture.home, 'desktop'), {recursive: true});
+  await writeFile(join(fixture.home, 'desktop', 'WheelMakerDesktop.exe'), 'desktop');
   await acquireUpdateLease(join(fixture.home, 'staging'), {
     jobId: 'web-job',
     now: fixture.installedAt,
@@ -991,6 +997,14 @@ test('successful internal update writes release schema v2 without registration c
   );
   assert.equal(fixture.events.includes('configure-runtime'), false);
   assert.equal(fixture.events.includes('write-wrappers'), false);
+  assert.equal(
+    await readFile(join(fixture.home, 'desktop', 'WheelMakerDesktop.exe'), 'utf8'),
+    'desktop',
+  );
+  assert.equal(
+    await readFile(join(fixture.home, 'desktop', 'update.exe'), 'utf8'),
+    'new-updater',
+  );
   assert.deepEqual(
     fixture.events.filter((event) => ['stop', 'start'].includes(event)),
     ['stop', 'start'],
@@ -1047,6 +1061,7 @@ test('Linux internal update does not rewrite user units or wrappers', async (t) 
     ['stop', 'start'],
   );
   assert.equal(fixture.messages.includes('Configuring runtime'), false);
+  assert.equal(await exists(join(fixture.home, 'desktop')), false);
 });
 
 test('Hub health timeout persists failure and removes the update lock', async (t) => {
@@ -1075,6 +1090,10 @@ async function installFixture(t, { hubRunning = true, platform = 'win32' } = {})
     'new-hub',
   );
   await writeFile(join(packageDirectory, 'web', 'index.html'), 'new-web');
+  if (platform === 'win32') {
+    await mkdir(join(packageDirectory, 'desktop'), {recursive: true});
+    await writeFile(join(packageDirectory, 'desktop', 'update.exe'), 'new-updater');
+  }
 
   const sourceSha = '1'.repeat(40);
   const manifestSha = '2'.repeat(64);

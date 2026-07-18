@@ -1641,22 +1641,35 @@ async function applyStagedPackage({
   const binaryName = platform === 'win32' ? 'wheelmaker.exe' : 'wheelmaker';
   const sourceBinary = join(extractionDirectory, 'hub', binaryName);
   const sourceWeb = join(extractionDirectory, 'web');
+  const sourceUpdater = platform === 'win32'
+    ? join(extractionDirectory, 'desktop', 'update.exe')
+    : null;
   await access(sourceBinary);
   await access(sourceWeb);
+  if (sourceUpdater) await access(sourceUpdater);
 
   const binDirectory = join(home, 'bin');
   const targetBinary = join(binDirectory, binaryName);
   const temporaryBinary = join(binDirectory, `.${binaryName}.${jobId}.tmp`);
   const targetWeb = join(home, 'web');
   const temporaryWeb = join(home, `.web.${jobId}.tmp`);
+  const desktopDirectory = join(home, 'desktop');
+  const targetUpdater = join(desktopDirectory, 'update.exe');
+  const temporaryUpdater = join(desktopDirectory, `.update.exe.${jobId}.tmp`);
   await mkdir(binDirectory, { recursive: true });
+  if (sourceUpdater) await mkdir(desktopDirectory, { recursive: true });
   await rm(temporaryBinary, { force: true });
   await rm(temporaryWeb, { recursive: true, force: true });
+  if (sourceUpdater) await rm(temporaryUpdater, { force: true });
 
   try {
     await cp(sourceBinary, temporaryBinary);
     await chmod(temporaryBinary, 0o755);
     await cp(sourceWeb, temporaryWeb, { recursive: true });
+    if (sourceUpdater) {
+      await cp(sourceUpdater, temporaryUpdater);
+      await chmod(temporaryUpdater, 0o755);
+    }
     await replaceInstalledFile(temporaryBinary, targetBinary, {
       fileOperations,
       platform,
@@ -1664,9 +1677,17 @@ async function applyStagedPackage({
     });
     await rm(targetWeb, { recursive: true, force: true });
     await rename(temporaryWeb, targetWeb);
+    if (sourceUpdater) {
+      await replaceInstalledFile(temporaryUpdater, targetUpdater, {
+        fileOperations,
+        platform,
+        sleep: replaceSleep,
+      });
+    }
   } finally {
     await rm(temporaryBinary, { force: true });
     await rm(temporaryWeb, { recursive: true, force: true });
+    if (sourceUpdater) await rm(temporaryUpdater, { force: true });
   }
 }
 
