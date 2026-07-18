@@ -1441,7 +1441,7 @@
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 4px;
-  padding: 0 5px 0 6px;
+  padding: 0 5px 0 9px;
   cursor: pointer;
   text-align: left;
   -webkit-touch-callout: none;
@@ -1511,7 +1511,7 @@
   height: 15px;
   display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   color: color-mix(in srgb, var(--text-primary) 38%, transparent);
 }
 

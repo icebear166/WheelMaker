@@ -1763,6 +1763,8 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.session-state-trailing.running .session-state-dot');
     expect(stylesCss).toContain('.session-state-trailing.completed-unviewed .session-state-dot');
     expect(stylesCss).toContain('.session-state-trailing.failed-unviewed .session-state-dot');
+    const trailingBlock = stylesCss.match(/\.session-state-trailing \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(trailingBlock).toContain('justify-content: center;');
     expect(stylesCss).toContain('@keyframes session-state-breathe');
     expect(stylesCss).not.toContain('.session-state-unread');
     expect(stylesCss).not.toContain('.session-older-spacer');
@@ -2057,7 +2059,7 @@ describe('web chat integration', () => {
     const wideSessionRowBlock = stylesCss.match(/\.wide-session-row \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(wideSessionRowBlock).toContain('grid-template-columns: minmax(0, 1fr) auto auto;');
     expect(wideSessionRowBlock).toContain('gap: 4px;');
-    expect(wideSessionRowBlock).toContain('padding: 0 5px 0 6px;');
+    expect(wideSessionRowBlock).toContain('padding: 0 5px 0 9px;');
     const sessionStateMarkerBlock = stylesCss.match(/\.session-state-marker \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(sessionStateMarkerBlock).toContain('min-width: 9px;');
     expect(sessionStateMarkerBlock).toContain('flex: 0 0 auto;');
