@@ -4,13 +4,7 @@
   --chat-edge-fade-end: 100%;
   --chat-function-width: var(--chat-edge-surface-width);
   --chat-function-column-gap: 12px;
-  --chat-function-edge-gap: max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px));
   --usage-surface-max-height: min(42vh, 360px);
-  position: absolute;
-  left: var(--chat-function-edge-gap);
-  bottom: var(--chat-scroll-bottom-offset, 92px);
-  z-index: 6;
-  width: min(var(--chat-function-width), calc(100% - 20px));
   max-height: var(--usage-surface-max-height);
   overflow: hidden;
   border-radius: 10px;
@@ -24,10 +18,6 @@
 .chat-function-surface.desktop.collapsed {
   max-height: 36px;
   border-radius: 999px;
-}
-
-.chat-view-width-fixed-800 .chat-function-surface.desktop {
-  left: var(--chat-function-edge-gap);
 }
 
 .chat-function-surface-header {

@@ -19187,7 +19187,7 @@ export function App() {
               </span>
             </button>
           ) : null}
-          {isWide && (showPinnedRecentSessionsSurface || selectedChatPlan) ? (
+          {isWide && (showPinnedRecentSessionsSurface || selectedChatPlan || (tab === 'chat' && showLimitsMonitor)) ? (
             <div className="chat-edge-surface-stack">
               {showPinnedRecentSessionsSurface ? (
                 <ChatRecentSessionsSurface
@@ -19204,6 +19204,13 @@ export function App() {
                 mode="desktop"
                 plan={selectedChatPlan}
               />
+              {tab === 'chat' && showLimitsMonitor ? (
+                <UsageFeatureSurface
+                  snapshot={usageSnapshot}
+                  onRefresh={() => { void refreshUsageAcrossHubs(); }}
+                  onRequestHide={() => setConfirmTarget({kind: 'hideLimitsMonitor'})}
+                />
+              ) : null}
             </div>
           ) : null}
           {sidebarCollapsed ? renderWideProjectActionMenu() : null}
@@ -19211,13 +19218,6 @@ export function App() {
             <ChatPlanSurface
               mode="mobile"
               plan={selectedChatPlan}
-            />
-          ) : null}
-          {isWide && tab === 'chat' && showLimitsMonitor ? (
-            <UsageFeatureSurface
-              snapshot={usageSnapshot}
-              onRefresh={() => { void refreshUsageAcrossHubs(); }}
-              onRequestHide={() => setConfirmTarget({kind: 'hideLimitsMonitor'})}
             />
           ) : null}
           <div

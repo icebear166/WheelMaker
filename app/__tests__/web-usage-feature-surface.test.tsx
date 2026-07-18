@@ -163,6 +163,7 @@ describe('UsageFeatureSurface', () => {
     const compactRule = usageStyles.match(/\.chat-function-surface\.desktop \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const detailRule = usageStyles.match(/\.chat-function-surface\.desktop\.detail \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const fixedRule = usageStyles.match(/\.chat-view-width-fixed-800 \.chat-function-surface\.desktop \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const stackItemRule = chatStyles.match(/\.chat-edge-surface-stack > \.chat-recent-sessions-surface\.desktop,\n\.chat-edge-surface-stack > \.chat-plan-surface\.desktop,\n\.chat-edge-surface-stack > \.chat-function-surface\.desktop \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const metricsRule = usageStyles.match(/\.usage-provider-metrics \{([^}]*)\}/)?.[1] ?? '';
     const hubRule = usageStyles.match(/\.usage-account-hub \{([^}]*)\}/)?.[1] ?? '';
     const headerRule = usageStyles.match(/\.chat-function-surface-header \{([\s\S]*?)\n\}/)?.[1] ?? '';
@@ -173,8 +174,12 @@ describe('UsageFeatureSurface', () => {
     expect(chatStyles).toContain('--chat-recent-sessions-width: var(--chat-edge-surface-width);');
     expect(chatStyles).toContain('--chat-plan-desktop-width: var(--chat-edge-surface-width);');
     expect(compactRule).toContain('--chat-function-width: var(--chat-edge-surface-width);');
-    expect(fixedRule).toContain('left: var(--chat-function-edge-gap);');
-    expect(fixedRule).not.toContain('(100% - 800px) / 2');
+    expect(compactRule).not.toContain('position: absolute;');
+    expect(compactRule).not.toContain('bottom:');
+    expect(fixedRule).toBe('');
+    expect(stackItemRule).toContain('position: relative;');
+    expect(stackItemRule).toContain('bottom: auto;');
+    expect(stackItemRule).toContain('width: 100%;');
     expect(detailRule).not.toContain('--chat-function-width:');
     expect(detailRule).toContain('--usage-surface-max-height: min(48vh, 420px);');
     expect(metricsRule).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));');

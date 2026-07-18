@@ -2925,10 +2925,12 @@
 }
 
 .chat-edge-surface-stack > .chat-recent-sessions-surface.desktop,
-.chat-edge-surface-stack > .chat-plan-surface.desktop {
+.chat-edge-surface-stack > .chat-plan-surface.desktop,
+.chat-edge-surface-stack > .chat-function-surface.desktop {
   position: relative;
   top: auto;
   right: auto;
+  bottom: auto;
   left: auto;
   z-index: auto;
   width: 100%;

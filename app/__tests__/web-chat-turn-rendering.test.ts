@@ -279,7 +279,7 @@ describe('web chat turn rendering', () => {
     const fixedBlock = cssRuleBlock(styles, '.chat-view-width-fixed-800 .chat-edge-surface-stack');
     const itemBlock = cssRuleBlock(
       styles,
-      '.chat-edge-surface-stack > .chat-recent-sessions-surface.desktop,\n.chat-edge-surface-stack > .chat-plan-surface.desktop',
+      '.chat-edge-surface-stack > .chat-recent-sessions-surface.desktop,\n.chat-edge-surface-stack > .chat-plan-surface.desktop,\n.chat-edge-surface-stack > .chat-function-surface.desktop',
     );
 
     expect(styles).toContain('--chat-edge-surface-width: 360px;');
@@ -289,6 +289,7 @@ describe('web chat turn rendering', () => {
     expect(fixedBlock).not.toContain('(100% - 800px) / 2');
     expect(itemBlock).toContain('left: auto;');
     expect(itemBlock).toContain('right: auto;');
+    expect(itemBlock).toContain('bottom: auto;');
     expect(itemBlock).toContain('width: 100%;');
   });
 

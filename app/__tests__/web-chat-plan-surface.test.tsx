@@ -32,18 +32,22 @@ function planSnapshot(): ChatPlanSnapshot {
 }
 
 describe('ChatPlanSurface', () => {
-  test('renders Recent Sessions before Plan in one desktop-only left stack', () => {
+  test('renders Recent Sessions, Plan, and Limits in one desktop-only left stack', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainSource = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const stackStart = mainSource.indexOf('className="chat-edge-surface-stack"');
-    const stackSource = stackStart >= 0 ? mainSource.slice(stackStart, stackStart + 1800) : '';
+    const stackSource = stackStart >= 0 ? mainSource.slice(stackStart, stackStart + 2600) : '';
 
     expect(stackStart).toBeGreaterThanOrEqual(0);
     expect(stackSource).toContain('showPinnedRecentSessionsSurface ? (');
     expect(stackSource.indexOf('<ChatRecentSessionsSurface')).toBeLessThan(
       stackSource.indexOf('<ChatPlanSurface'),
     );
-    expect(mainSource).toContain('isWide && (showPinnedRecentSessionsSurface || selectedChatPlan) ? (');
+    expect(stackSource.indexOf('<ChatPlanSurface')).toBeLessThan(
+      stackSource.indexOf('<UsageFeatureSurface'),
+    );
+    expect(stackSource).toContain("tab === 'chat' && showLimitsMonitor ? (");
+    expect(mainSource).toContain("isWide && (showPinnedRecentSessionsSurface || selectedChatPlan || (tab === 'chat' && showLimitsMonitor)) ? (");
   });
 
   test('uses one 360px stack width and an 8px gap without reserving a Recent placeholder', () => {
@@ -54,7 +58,7 @@ describe('ChatPlanSurface', () => {
     const planFixedRule = cssRuleBlock(stylesCss, '.chat-view-width-fixed-800 .chat-plan-surface.desktop');
     const stackItemRule = cssRuleBlock(
       stylesCss,
-      '.chat-edge-surface-stack > .chat-recent-sessions-surface.desktop,\n.chat-edge-surface-stack > .chat-plan-surface.desktop',
+      '.chat-edge-surface-stack > .chat-recent-sessions-surface.desktop,\n.chat-edge-surface-stack > .chat-plan-surface.desktop,\n.chat-edge-surface-stack > .chat-function-surface.desktop',
     );
 
     expect(stylesCss).toContain('--chat-edge-surface-width: 360px;');
@@ -63,6 +67,7 @@ describe('ChatPlanSurface', () => {
     expect(stackRule).toContain('flex-direction: column;');
     expect(stackRule).toContain('gap: 8px;');
     expect(stackItemRule).toContain('position: relative;');
+    expect(stackItemRule).toContain('bottom: auto;');
     expect(stackItemRule).toContain('width: 100%;');
     expect(stackItemRule).toContain('pointer-events: auto;');
     expect(recentFixedRule).toContain('left: var(--chat-recent-sessions-edge-gap);');
