@@ -9779,7 +9779,6 @@ export function App() {
 
   const renderSessionStateMarker = (session: RegistryChatSession, activeProjectId = projectIdRef.current) => {
     const state = resolveSessionVisualState(session, activeProjectId);
-    const unreadCount = Math.min(99, Math.max(0, Math.trunc(session.unreadCount ?? 0)));
     const title =
       state === 'running'
         ? 'In progress'
@@ -9790,15 +9789,31 @@ export function App() {
             : undefined;
     return (
       <span className={`session-state-marker ${state}`} title={title}>
-        {state === 'running' ? (
+        {state === 'running' || state === 'completed-unviewed' || state === 'failed-unviewed' ? (
           <span className="session-state-dot" />
-        ) : state === 'completed-unviewed' || state === 'failed-unviewed' ? (
-          unreadCount > 0 ? (
-            <span className="session-state-unread">{unreadCount}</span>
-          ) : (
-            <span className="session-state-dot" />
-          )
         ) : null}
+      </span>
+    );
+  };
+
+  const renderSessionTrailing = (session: RegistryChatSession, targetProjectId: string) => {
+    const state = resolveSessionVisualState(session, targetProjectId);
+    if (state === 'running' || state === 'completed-unviewed' || state === 'failed-unviewed') {
+      const title =
+        state === 'running'
+          ? 'In progress'
+          : state === 'failed-unviewed'
+            ? 'Failed, click to view'
+            : 'Completed, click to view';
+      return (
+        <span className={`session-state-trailing ${state}`} title={title}>
+          <span className="session-state-dot" />
+        </span>
+      );
+    }
+    return (
+      <span className="wide-session-time" title={session.updatedAt || ''}>
+        {formatCompactRelativeAge(session.updatedAt)}
       </span>
     );
   };
@@ -14865,25 +14880,6 @@ export function App() {
     }
   };
 
-  const renderDraftSessionStateMarker = (draft: DraftChatSession) => {
-    const failed = draft.status === 'failed';
-    const title =
-      draft.status === 'sendingFirstPrompt'
-        ? 'Creating session and sending first prompt'
-        : failed
-          ? draft.errorMessage || 'Create failed'
-          : 'Creating session';
-    return (
-      <span className={`session-state-marker draft ${draft.status}`} title={title}>
-        <span className={`codicon ${
-          failed
-            ? 'codicon-error'
-            : 'codicon-loading codicon-modifier-spin'
-        }`} />
-      </span>
-    );
-  };
-
   const renderDraftSessionRow = (
     targetProjectId: string,
     draft: DraftChatSession,
@@ -14913,7 +14909,6 @@ export function App() {
             });
           }}
         >
-          {renderDraftSessionStateMarker(draft)}
           <span className="wide-session-title">
             {draft.title}
           </span>
@@ -14986,7 +14981,6 @@ export function App() {
             ).catch(() => undefined);
           }}
         >
-          {renderSessionStateMarker(session, targetProjectId)}
           <span className="wide-session-title">
             {resolveSessionDisplayTitle(session) || session.sessionId}
           </span>
@@ -14995,9 +14989,7 @@ export function App() {
               {displaySessionAgent}
             </span>
           ) : null}
-          <span className="wide-session-time" title={session.updatedAt || ''}>
-            {formatCompactRelativeAge(session.updatedAt)}
-          </span>
+          {renderSessionTrailing(session, targetProjectId)}
         </button>
         {!mobile ? (
           <button
@@ -15058,7 +15050,6 @@ export function App() {
             }
           }}
         >
-          {renderSessionStateMarker(liveSession, targetProjectId)}
           <span className="wide-session-title">
             {resolveSessionDisplayTitle(liveSession) || liveSession.sessionId}
           </span>
@@ -15067,9 +15058,7 @@ export function App() {
               {displaySessionAgent}
             </span>
           ) : null}
-          <span className="wide-session-time" title={liveSession.updatedAt || ''}>
-            {formatCompactRelativeAge(liveSession.updatedAt)}
-          </span>
+          {renderSessionTrailing(liveSession, targetProjectId)}
         </button>
         {!mobile ? (
           <button
@@ -15414,7 +15403,6 @@ export function App() {
             className={`wide-session-row session-older-toggle${mobile ? ' mobile-session-row' : ''}`}
             onClick={() => toggleOlderSessionsExpanded(targetProjectId)}
           >
-            <span className="session-older-spacer" aria-hidden="true" />
             <span className="wide-session-title">
               {split.expanded ? 'Show less' : `Show ${hiddenOlderCount} old sessions...`}
             </span>
@@ -15449,7 +15437,6 @@ export function App() {
             }).catch(() => undefined);
           }}
         >
-          {renderSessionStateMarker(row.session, targetProjectId)}
           <span className="wide-session-title session-search-title">
             {renderSessionSearchHighlightedTitle(title, row)}
           </span>
@@ -15458,9 +15445,7 @@ export function App() {
               {displaySessionAgent}
             </span>
           ) : null}
-          <span className="wide-session-time" title={row.session.updatedAt || ''}>
-            {formatCompactRelativeAge(row.session.updatedAt)}
-          </span>
+          {renderSessionTrailing(row.session, targetProjectId)}
         </button>
       </div>
     );

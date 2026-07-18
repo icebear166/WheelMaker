@@ -1750,19 +1750,22 @@ describe('web chat integration', () => {
     expect(btnBlock).toContain('opacity: 0;');
   });
 
-  test('session markers render unread counts and a breathing running indicator', () => {
+  test('session rows show the state dot in the time slot instead of a marker column', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const stylesCss = readWebStyles(projectRoot);
 
-    expect(mainTsx).toContain('session-state-unread');
-    expect(mainTsx).toContain('Math.min(99, Math.max(0, Math.trunc(session.unreadCount ?? 0)))');
-    expect(stylesCss).toContain('.session-state-marker.running .session-state-dot');
+    expect(mainTsx).not.toContain('session-state-unread');
+    expect(mainTsx).not.toContain('renderDraftSessionStateMarker');
+    expect(mainTsx).not.toContain('session-older-spacer');
+    expect(mainTsx).toContain('renderSessionTrailing(');
+    expect(mainTsx).toContain('session-state-trailing');
+    expect(stylesCss).toContain('.session-state-trailing.running .session-state-dot');
+    expect(stylesCss).toContain('.session-state-trailing.completed-unviewed .session-state-dot');
+    expect(stylesCss).toContain('.session-state-trailing.failed-unviewed .session-state-dot');
     expect(stylesCss).toContain('@keyframes session-state-breathe');
-    expect(stylesCss).toContain('.session-state-marker.completed-unviewed .session-state-unread');
-    expect(stylesCss).toContain('.session-state-marker.failed-unviewed .session-state-unread');
-    const timeBlock = stylesCss.match(/\.wide-session-time \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(timeBlock).toContain('font-variant-numeric: tabular-nums;');
+    expect(stylesCss).not.toContain('.session-state-unread');
+    expect(stylesCss).not.toContain('.session-older-spacer');
   });
 
   test('project headers expose an explicit pin action alongside new/resume', () => {
@@ -2052,7 +2055,7 @@ describe('web chat integration', () => {
     expect(stylesCss).toMatch(/\.wide-project-toggle \{[^}]*height: 30px;[^}]*\}/);
     expect(stylesCss).toMatch(/\.wide-session-row \{[^}]*min-height: 28px;[^}]*\}/);
     const wideSessionRowBlock = stylesCss.match(/\.wide-session-row \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(wideSessionRowBlock).toContain('grid-template-columns: auto minmax(0, 1fr) auto auto;');
+    expect(wideSessionRowBlock).toContain('grid-template-columns: minmax(0, 1fr) auto auto;');
     expect(wideSessionRowBlock).toContain('gap: 4px;');
     expect(wideSessionRowBlock).toContain('padding: 0 5px 0 8px;');
     const sessionStateMarkerBlock = stylesCss.match(/\.session-state-marker \{[\s\S]*?\n\}/)?.[0] ?? '';
