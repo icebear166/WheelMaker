@@ -46,6 +46,14 @@ function fakeCliDeps() {
     },
   };
   return {
+    async acquireBuildLock(input) {
+      state.order.push(`lock:${input.owner}`);
+      return {
+        async release() {
+          state.order.push('unlock');
+        },
+      };
+    },
     api,
     channel: {baseUrl: 'https://release.wheelmaker.top'},
     coreBytes: Buffer.from('core'),
@@ -138,6 +146,23 @@ test('CLI flags remain independent and reject retired command syntax', () => {
   assert.throws(() => parseReleaseArgs(['build']), /unknown option/);
 });
 
+test('local release holds the shared build lock through asset construction', async () => {
+  const deps = fakeCliDeps();
+  deps.acquireBuildLock = async input => {
+    deps.state.order.push(`lock:${input.owner}`);
+    return {
+      async release() {
+        deps.state.order.push('unlock');
+      },
+    };
+  };
+
+  await runRelease({publish: false}, deps);
+
+  assert.ok(deps.state.order.indexOf('lock:release') < deps.state.order.indexOf('build'));
+  assert.ok(deps.state.order.indexOf('unlock') > deps.state.order.indexOf('package'));
+});
+
 test('local build reads public version and creates the identical final directory without auth or session', async () => {
   const deps = fakeCliDeps();
   const result = await runRelease({publish: false, withDesktop: false}, deps);
@@ -150,8 +175,10 @@ test('local build reads public version and creates the identical final directory
     'version',
     'sources',
     'workspace',
+    'lock:release',
     'build',
     'package',
+    'unlock',
     'cleanup',
   ]);
   assert.equal(result.mode, 'build');
@@ -180,6 +207,7 @@ test('publish starts its remote session before building and uses server publishe
     'start',
     'status:building',
     'workspace',
+    'lock:release',
     'build',
     'status:packaging',
     'package',
@@ -188,6 +216,7 @@ test('publish starts its remote session before building and uses server publishe
     'upload:deploy.mjs',
     'status:committing',
     'commit',
+    'unlock',
     'cleanup',
   ]);
   assert.deepEqual(result, {mode: 'publish', stable: {schema: 2, version: 'v1.24'}});

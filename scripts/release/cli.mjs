@@ -5,6 +5,7 @@ import {promisify} from 'node:util';
 import {fileURLToPath} from 'node:url';
 
 import {buildRelease} from './build.mjs';
+import {acquireBuildLock} from './build-lock.mjs';
 import {validateReleaseChannel} from './channel.mjs';
 import {
   encodeJsonBytes,
@@ -111,6 +112,7 @@ export async function runRelease(options, deps) {
     }
 
     let currentPhase = 'building';
+    let buildLock;
     let session;
     let stagingRoot;
     try {
@@ -134,6 +136,10 @@ export async function runRelease(options, deps) {
         'Preparing release workspace',
         () => deps.createReleaseWorkspace(version),
       );
+      buildLock = await deps.acquireBuildLock({
+        owner: 'release',
+        workRoot: deps.workRoot,
+      });
       const build = await progress.phase(
         'Building release assets',
         () => deps.buildRelease({
@@ -198,6 +204,9 @@ export async function runRelease(options, deps) {
       }
       floorVersion = error.version;
     } finally {
+      if (buildLock) {
+        await buildLock.release();
+      }
       if (stagingRoot) {
         await progress.phase(
           'Cleaning release workspace',
@@ -247,6 +256,7 @@ export async function createDefaultReleaseDependencies({
   });
 
   return {
+    acquireBuildLock,
     buildRelease,
     channel,
     async cleanupReleaseWorkspace(path) {
