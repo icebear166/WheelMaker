@@ -44,6 +44,246 @@ func TestManagerRoutesToolCommands(t *testing.T) {
 	}
 }
 
+func TestManagerRoutesReleaseCommand(t *testing.T) {
+	source := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(source, "scripts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "scripts", "release.mjs"), []byte("// test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runner := newBlockingReleaseRunner()
+	manager := NewManager(ManagerConfig{
+		HubID:          "hub-a",
+		StateDir:       t.TempDir(),
+		ReleaseCommand: newReleaseCommandWithDependencies(t.TempDir(), runner, nil),
+	})
+	response, commandErr := manager.Handle(context.Background(), "cmd.release", rawToolPayload(t, map[string]any{
+		"action": "start", "hubId": "hub-a", "kind": "version", "sourcePath": source, "baseUrl": "https://release.wheelmaker.top",
+	}))
+	if commandErr != nil {
+		t.Fatalf("Handle() error=%v", commandErr)
+	}
+	if !response.(releaseCommandResponse).Accepted {
+		t.Fatalf("response=%#v", response)
+	}
+	<-runner.calls
+	runner.complete(nil)
+}
+
+func TestReleaseCommandStartsVersionPublishAfterRequestReturns(t *testing.T) {
+	source := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(source, "scripts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "scripts", "release.mjs"), []byte("// test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runner := newBlockingReleaseRunner()
+	command := newReleaseCommandWithDependencies(t.TempDir(), runner, nil)
+
+	response, commandErr := command.Handle(context.Background(), rawToolPayload(t, map[string]any{
+		"action":     "start",
+		"hubId":      "publisher-hub",
+		"kind":       "version",
+		"sourcePath": source,
+		"baseUrl":    "https://release.wheelmaker.top",
+		"desktop":    true,
+		"android":    true,
+	}))
+	if commandErr != nil {
+		t.Fatalf("Handle() error=%v", commandErr)
+	}
+	accepted := response.(releaseCommandResponse)
+	if !accepted.Accepted || accepted.Status != "running" || accepted.Job == nil {
+		t.Fatalf("response=%#v", accepted)
+	}
+	select {
+	case call := <-runner.calls:
+		if call.WorkingDir != source {
+			t.Fatalf("workingDir=%q, want %q", call.WorkingDir, source)
+		}
+		if !reflect.DeepEqual(call.Args, []string{"scripts/release.mjs", "--publish", "--with-desktop", "--with-android"}) {
+			t.Fatalf("args=%#v", call.Args)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("release runner did not start after request returned")
+	}
+	runner.complete(nil)
+	assertReleaseStatus(t, command, accepted.Job.ID, "success")
+}
+
+func TestReleaseCommandRejectsMissingSourceEntryAndRedactsLogs(t *testing.T) {
+	command := newReleaseCommandWithDependencies(t.TempDir(), newBlockingReleaseRunner(), nil)
+	_, commandErr := command.Handle(context.Background(), rawToolPayload(t, map[string]any{
+		"action": "start", "hubId": "publisher-hub", "kind": "version", "sourcePath": t.TempDir(), "baseUrl": "https://release.wheelmaker.top",
+	}))
+	if commandErr == nil || commandErr.Code != rp.CodeInvalidArgument {
+		t.Fatalf("missing source error=%#v", commandErr)
+	}
+
+	source := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(source, "scripts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "scripts", "release.mjs"), []byte("// test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runner := newBlockingReleaseRunner()
+	command = newReleaseCommandWithDependencies(t.TempDir(), runner, nil)
+	response, commandErr := command.Handle(context.Background(), rawToolPayload(t, map[string]any{
+		"action": "start", "hubId": "publisher-hub", "kind": "version", "sourcePath": source, "baseUrl": "https://release.wheelmaker.top",
+	}))
+	if commandErr != nil {
+		t.Fatal(commandErr)
+	}
+	call := <-runner.calls
+	call.Log("Authorization: Bearer secret-release-token")
+	runner.complete(nil)
+	status := assertReleaseStatus(t, command, response.(releaseCommandResponse).Job.ID, "success")
+	if strings.Contains(status.Job.Log, "secret-release-token") || !strings.Contains(status.Job.Log, "[REDACTED]") {
+		t.Fatalf("job log was not redacted: %q", status.Job.Log)
+	}
+}
+
+func TestReleaseCommandDoesNotPersistSourcePathOrToken(t *testing.T) {
+	stateDir := t.TempDir()
+	source := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(source, "scripts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "scripts", "release.mjs"), []byte("// test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runner := newBlockingReleaseRunner()
+	command := newReleaseCommandWithDependencies(stateDir, runner, nil)
+	result, commandErr := command.Handle(context.Background(), rawToolPayload(t, map[string]any{
+		"action": "start", "hubId": "publisher-hub", "kind": "version", "sourcePath": source, "baseUrl": "https://release.wheelmaker.top",
+	}))
+	if commandErr != nil {
+		t.Fatal(commandErr)
+	}
+	jobID := result.(releaseCommandResponse).Job.ID
+	raw, err := os.ReadFile(filepath.Join(stateDir, releaseJobDirectoryName, jobID+".json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), source) || strings.Contains(strings.ToLower(string(raw)), "token") {
+		t.Fatalf("persistent job leaked browser configuration: %s", raw)
+	}
+	<-runner.calls
+	runner.complete(nil)
+}
+
+func TestReleaseCommandNotifiesTargetOnlyAfterSuccessfulAutoPullPublish(t *testing.T) {
+	source := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(source, "scripts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "scripts", "release.mjs"), []byte("// test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runner := newBlockingReleaseRunner()
+	notifier := &fakeReleaseNotifier{result: ReleaseTargetStatus{Status: "accepted"}}
+	command := newReleaseCommandWithDependencies(t.TempDir(), runner, notifier)
+	result, commandErr := command.Handle(context.Background(), rawToolPayload(t, map[string]any{
+		"action": "start", "hubId": "publisher-hub", "kind": "version", "sourcePath": source, "baseUrl": "https://release.wheelmaker.top",
+		"targetHubId": "server-hub", "autoPull": true,
+	}))
+	if commandErr != nil {
+		t.Fatal(commandErr)
+	}
+	<-runner.calls
+	runner.complete(nil)
+	status := assertReleaseStatus(t, command, result.(releaseCommandResponse).Job.ID, "success")
+	if status.Job.TargetState != "accepted" {
+		t.Fatalf("target state=%q", status.Job.TargetState)
+	}
+	if notifier.targetHubID != "server-hub" || notifier.kind != "version" || notifier.baseURL != "https://release.wheelmaker.top" {
+		t.Fatalf("notification=%#v", notifier)
+	}
+}
+
+func TestReleaseCommandSkipsTargetNotificationWhenAutoPullIsOff(t *testing.T) {
+	source := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(source, "scripts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "scripts", "release.mjs"), []byte("// test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runner := newBlockingReleaseRunner()
+	notifier := &fakeReleaseNotifier{result: ReleaseTargetStatus{Status: "accepted"}}
+	command := newReleaseCommandWithDependencies(t.TempDir(), runner, notifier)
+	result, commandErr := command.Handle(context.Background(), rawToolPayload(t, map[string]any{
+		"action": "start", "hubId": "publisher-hub", "kind": "version", "sourcePath": source, "baseUrl": "https://release.wheelmaker.top",
+		"targetHubId": "server-hub", "autoPull": false,
+	}))
+	if commandErr != nil {
+		t.Fatal(commandErr)
+	}
+	<-runner.calls
+	runner.complete(nil)
+	assertReleaseStatus(t, command, result.(releaseCommandResponse).Job.ID, "success")
+	if notifier.targetHubID != "" {
+		t.Fatalf("unexpected notification=%#v", notifier)
+	}
+}
+
+type fakeReleaseNotifier struct {
+	targetHubID string
+	kind        string
+	baseURL     string
+	result      ReleaseTargetStatus
+	err         error
+}
+
+func (n *fakeReleaseNotifier) NotifyRelease(_ context.Context, targetHubID, kind, baseURL string) (ReleaseTargetStatus, error) {
+	n.targetHubID, n.kind, n.baseURL = targetHubID, kind, baseURL
+	return n.result, n.err
+}
+
+type releaseRunnerCall struct {
+	WorkingDir string
+	Args       []string
+	Log        func(string)
+}
+
+type blockingReleaseRunner struct {
+	calls chan releaseRunnerCall
+	done  chan error
+}
+
+func newBlockingReleaseRunner() *blockingReleaseRunner {
+	return &blockingReleaseRunner{calls: make(chan releaseRunnerCall, 1), done: make(chan error, 1)}
+}
+
+func (r *blockingReleaseRunner) Run(_ context.Context, workingDir string, args []string, log func(string)) error {
+	r.calls <- releaseRunnerCall{WorkingDir: workingDir, Args: append([]string(nil), args...), Log: log}
+	return <-r.done
+}
+
+func (r *blockingReleaseRunner) complete(err error) { r.done <- err }
+
+func assertReleaseStatus(t *testing.T, command *ReleaseCommand, jobID, want string) releaseCommandResponse {
+	t.Helper()
+	var response releaseCommandResponse
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		result, commandErr := command.Handle(context.Background(), rawToolPayload(t, map[string]any{"action": "status", "jobId": jobID, "hubId": "publisher-hub"}))
+		if commandErr != nil {
+			t.Fatal(commandErr)
+		}
+		response = result.(releaseCommandResponse)
+		if response.Job != nil && response.Job.Status == want {
+			return response
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("job %s did not reach %s: %#v", jobID, want, response)
+	return releaseCommandResponse{}
+}
+
 func rawToolPayload(t *testing.T, payload map[string]any) json.RawMessage {
 	t.Helper()
 	raw, err := json.Marshal(payload)

@@ -3,7 +3,11 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
 )
@@ -17,6 +21,42 @@ type ManagerConfig struct {
 	GlobalLockPath        string
 	HomeDir               string
 	OnSkillsOperationDone func(scope, projectName string)
+	ReleaseCommand        *ReleaseCommand
+	ReleaseNotifier       ReleaseNotifier
+	HTTPClient            *http.Client
+}
+
+func (m *Manager) ApplyRelease(ctx context.Context, kind, baseURL string) (ReleaseTargetStatus, *CommandError) {
+	switch kind {
+	case "version":
+		if m.updateCommand == nil {
+			m.updateCommand = NewUpdateCommand(m.cfg.StateDir)
+		}
+		raw, _ := json.Marshal(map[string]string{"action": "request", "hubId": m.cfg.HubID})
+		_, err := m.updateCommand.Handle(ctx, raw)
+		if err != nil {
+			return ReleaseTargetStatus{Status: "failed", ErrorCode: err.Code}, updateErr(err)
+		}
+		return ReleaseTargetStatus{Status: "accepted"}, nil
+	case "debugWeb":
+		leasePath := filepath.Join(m.cfg.StateDir, updateStagingDirectoryName, updateLeaseFileName)
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		jobID, createErr := newUpdateJobID()
+		if createErr != nil {
+			return ReleaseTargetStatus{Status: "failed", ErrorCode: "debug_web_apply_failed"}, &CommandError{Code: rp.CodeInternal, Message: "failed to allocate debug web apply"}
+		}
+		created, _, leaseErr := createUpdateLease(leasePath, updateLease{Schema: 1, JobID: jobID, Owner: "debug-web", State: "applying", StartedAt: now, HeartbeatAt: now})
+		if leaseErr != nil || !created {
+			return ReleaseTargetStatus{Status: "failed", ErrorCode: "update_busy"}, &CommandError{Code: rp.CodeConflict, Message: "another update is active"}
+		}
+		defer os.Remove(leasePath)
+		if err := ApplyDebugWeb(ctx, m.cfg.StateDir, baseURL, m.cfg.HTTPClient); err != nil {
+			return ReleaseTargetStatus{Status: "failed", ErrorCode: "debug_web_apply_failed"}, &CommandError{Code: rp.CodeInternal, Message: "debug web apply failed"}
+		}
+		return ReleaseTargetStatus{Status: "success"}, nil
+	default:
+		return ReleaseTargetStatus{Status: "failed", ErrorCode: "invalid_release_kind"}, &CommandError{Code: rp.CodeInvalidArgument, Message: "unsupported release kind"}
+	}
 }
 
 type CommandError struct {
@@ -37,9 +77,10 @@ func (e *CommandError) Error() string {
 type Manager struct {
 	cfg ManagerConfig
 
-	npmCommand    *NPMCommand
-	updateCommand *UpdateCommand
-	skillsCommand *SkillsCommand
+	npmCommand     *NPMCommand
+	updateCommand  *UpdateCommand
+	skillsCommand  *SkillsCommand
+	releaseCommand *ReleaseCommand
 }
 
 func NewManager(config ManagerConfig) *Manager {
@@ -62,6 +103,7 @@ func NewManager(config ManagerConfig) *Manager {
 			HomeDir:         config.HomeDir,
 			OnOperationDone: config.OnSkillsOperationDone,
 		}),
+		releaseCommand: config.ReleaseCommand,
 	}
 }
 
@@ -105,6 +147,12 @@ func (m *Manager) Handle(ctx context.Context, method string, payload json.RawMes
 		m.skillsCommand.SetProjects(m.cfg.Projects)
 		out, err := m.skillsCommand.Handle(ctx, payload)
 		return out, skillsErr(err)
+	case "cmd.release":
+		if m.releaseCommand == nil {
+			m.releaseCommand = newReleaseCommandWithDependencies(m.cfg.StateDir, execReleaseRunner{}, m.cfg.ReleaseNotifier)
+		}
+		out, err := m.releaseCommand.Handle(ctx, payload)
+		return out, releaseErr(err)
 	default:
 		return nil, &CommandError{Code: rp.CodeInvalidArgument, Message: "unsupported tools command"}
 	}
@@ -125,6 +173,13 @@ func updateErr(err *updateCommandError) *CommandError {
 }
 
 func skillsErr(err *skillsCommandError) *CommandError {
+	if err == nil {
+		return nil
+	}
+	return &CommandError{Code: err.Code, Message: err.Message}
+}
+
+func releaseErr(err *releaseCommandError) *CommandError {
 	if err == nil {
 		return nil
 	}

@@ -599,6 +599,7 @@ func shouldHandleRegistryRequestAsync(method string) bool {
 	return rp.RegistryRelayControlMethod(method) ||
 		rp.RegistryServerDataMethod(method) ||
 		rp.RegistryTTSMethod(method) ||
+		rp.RegistryMethodHasRoute(method, rp.RegistryRouteHubReleaseNotify) ||
 		rp.RegistryHubStateMethod(method) || isTerminalHubRequestMethod(method) ||
 		isClientForwardMethod(method)
 }
@@ -631,6 +632,8 @@ func (s *Server) handleRequest(state *connectionState, in envelope) {
 		s.handleServerDataRequest(state.peer, state, in)
 	case in.Method == rp.RegistryMethodHubPing:
 		_ = s.writeResponse(state.peer, in.RequestID, in.Method, "", map[string]any{"ok": true})
+	case rp.RegistryMethodHasRoute(in.Method, rp.RegistryRouteHubReleaseNotify):
+		s.handleHubReleaseNotify(state.peer, state, in)
 	case rp.RegistryRelayControlMethod(in.Method):
 		s.handleRelayRequest(state.peer, state, in)
 	case rp.RegistryHubStateMethod(in.Method) || isTerminalHubRequestMethod(in.Method):

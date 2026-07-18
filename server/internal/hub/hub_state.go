@@ -40,6 +40,7 @@ const (
 const (
 	hubStateSectionAgentPackages    = "agentPackages"
 	hubStateSectionWheelmakerUpdate = "wheelmakerUpdate"
+	hubStateSectionReleasePublish   = "releasePublish"
 	hubStateSectionSkills           = "skills"
 	hubStateSectionTokenStats       = "tokenStats"
 	hubStateSectionFileIndex        = "fileIndex"

@@ -89,6 +89,7 @@ func (s *hubEventSink) stop() {
 type toolCommandHandler interface {
 	Handle(ctx context.Context, method string, payload json.RawMessage) (any, *tools.CommandError)
 	SetProjects(projects []ProjectInfo)
+	ApplyRelease(ctx context.Context, kind, baseURL string) (tools.ReleaseTargetStatus, *tools.CommandError)
 }
 
 // ReporterConfig controls hub->registry connection behavior.
@@ -178,6 +179,7 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 		Projects:              cp,
 		StateDir:              stateDir,
 		OnSkillsOperationDone: r.refreshSkillsAgentProfiles,
+		ReleaseNotifier:       r,
 	})
 	r.hubStateManager = newHubStateManager(r.cfg.HubID, r.hubStateSectionHandlers())
 	r.usageService = usage.NewService(usage.ServiceOptions{
@@ -338,6 +340,74 @@ func (r *Reporter) UpdateProject(project ProjectInfo) error {
 	}
 }
 
+// NotifyRelease asks the Registry to deliver a completed publishing job to a
+// selected Server Hub. It carries no token or filesystem path.
+func (r *Reporter) NotifyRelease(ctx context.Context, targetHubID, kind, baseURL string) (tools.ReleaseTargetStatus, error) {
+	targetHubID = strings.TrimSpace(targetHubID)
+	if targetHubID == "" {
+		return tools.ReleaseTargetStatus{}, errors.New("target hub id is required")
+	}
+	if kind != "version" && kind != "debugWeb" {
+		return tools.ReleaseTargetStatus{}, errors.New("unsupported release kind")
+	}
+
+	r.mu.RLock()
+	conn := r.conn
+	r.mu.RUnlock()
+	if conn == nil {
+		return tools.ReleaseTargetStatus{}, errors.New("registry connection is unavailable")
+	}
+	requestID := r.requestSeq.Add(1)
+	waitCh := make(chan envelope, 1)
+	r.mu.Lock()
+	if r.conn != conn {
+		r.mu.Unlock()
+		return tools.ReleaseTargetStatus{}, errors.New("registry connection is unavailable")
+	}
+	r.pending[requestID] = waitCh
+	r.mu.Unlock()
+	if err := r.writeJSON(conn, "->", envelope{
+		RequestID: requestID,
+		Type:      rp.RegistryEnvelopeTypeRequest,
+		Method:    rp.RegistryMethodHubReleaseNotify,
+		HubID:     r.cfg.HubID,
+		Payload: rp.MustRaw(map[string]string{
+			"targetHubId": targetHubID,
+			"kind":        kind,
+			"baseUrl":     baseURL,
+		}),
+	}); err != nil {
+		r.mu.Lock()
+		delete(r.pending, requestID)
+		r.mu.Unlock()
+		return tools.ReleaseTargetStatus{}, fmt.Errorf("write release notification: %w", err)
+	}
+	select {
+	case response, ok := <-waitCh:
+		if !ok {
+			return tools.ReleaseTargetStatus{}, errors.New("registry connection closed")
+		}
+		if response.Type == rp.RegistryEnvelopeTypeError {
+			return tools.ReleaseTargetStatus{}, errors.New("registry rejected release notification")
+		}
+		var result tools.ReleaseTargetStatus
+		if err := json.Unmarshal(response.Payload, &result); err != nil || (result.Status != "accepted" && result.Status != "success" && result.Status != "failed") {
+			return tools.ReleaseTargetStatus{}, errors.New("invalid target hub release status")
+		}
+		return result, nil
+	case <-ctx.Done():
+		r.mu.Lock()
+		delete(r.pending, requestID)
+		r.mu.Unlock()
+		return tools.ReleaseTargetStatus{}, ctx.Err()
+	case <-time.After(60 * time.Second):
+		r.mu.Lock()
+		delete(r.pending, requestID)
+		r.mu.Unlock()
+		return tools.ReleaseTargetStatus{}, errors.New("release notification timeout")
+	}
+}
+
 func (r *Reporter) runSession(ctx context.Context) error {
 	wsURL, err := buildWSURL(r.cfg.Server, r.cfg.Port)
 	if err != nil {
@@ -432,6 +502,8 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 		r.replyHubStateRefresh(conn, in)
 	case rp.RegistryMethodHubStateAction:
 		r.replyHubStateAction(conn, in)
+	case rp.RegistryMethodHubReleaseApply:
+		r.replyReleaseApply(conn, in)
 	case rp.RegistryMethodProjectFSList:
 		r.replyFSList(conn, in)
 	case rp.RegistryMethodProjectFSInfo:
@@ -477,6 +549,26 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 			}),
 		})
 	}
+}
+
+func (r *Reporter) replyReleaseApply(conn *websocket.Conn, req envelope) {
+	var payload struct {
+		Kind    string `json:"kind"`
+		BaseURL string `json:"baseUrl"`
+	}
+	if err := decodePayload(req.Payload, &payload); err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid hub.release.apply payload")
+		return
+	}
+	r.toolHandlerMu.Lock()
+	handler := r.ensureToolHandler()
+	result, err := handler.ApplyRelease(context.Background(), payload.Kind, payload.BaseURL)
+	r.toolHandlerMu.Unlock()
+	if err != nil {
+		_ = r.writeJSON(conn, "->", envelope{RequestID: req.RequestID, Type: rp.RegistryEnvelopeTypeResponse, Method: req.Method, HubID: r.cfg.HubID, Payload: rp.MustRaw(result)})
+		return
+	}
+	_ = r.writeJSON(conn, "->", envelope{RequestID: req.RequestID, Type: rp.RegistryEnvelopeTypeResponse, Method: req.Method, HubID: r.cfg.HubID, Payload: rp.MustRaw(result)})
 }
 
 func (r *Reporter) replyTerminal(conn *websocket.Conn, req envelope) {
@@ -598,6 +690,10 @@ func validateHubStateAction(section string, action string) error {
 		},
 		hubStateSectionWheelmakerUpdate: {
 			"requestUpdate": {},
+		},
+		hubStateSectionReleasePublish: {
+			"start":  {},
+			"status": {},
 		},
 		hubStateSectionSkills: {
 			"listSource": {},
@@ -1039,6 +1135,7 @@ func (r *Reporter) ensureToolHandler() toolCommandHandler {
 		Projects:              r.projectsSnapshot(),
 		StateDir:              r.cfg.StateDir,
 		OnSkillsOperationDone: r.refreshSkillsAgentProfiles,
+		ReleaseNotifier:       r,
 	})
 	return r.toolHandler
 }

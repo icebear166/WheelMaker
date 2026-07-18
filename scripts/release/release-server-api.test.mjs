@@ -121,6 +121,37 @@ test('client keeps stable anonymous and authenticates every publishing request',
   );
 });
 
+test('debug web client uses its isolated authenticated API without stable reads', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'wheelmaker-debug-web-api-'));
+  const path = join(root, 'web.zip');
+  const bytes = Buffer.from('debug-web-archive');
+  await writeFile(path, bytes);
+  const digest = createHash('sha256').update(bytes).digest('hex');
+  const requests = [];
+  const api = new ReleaseServerApi({
+    baseUrl: 'https://release.wheelmaker.top',
+    token: 'release-token',
+    requestImpl: recordingHttpsRequest(requests, [
+      {statusCode: 201, body: JSON.stringify({schema: 1, sessionId: 'd'.repeat(32)})},
+      {statusCode: 204},
+      {statusCode: 200, body: JSON.stringify({schema: 1, archivePath: `/debug-web/archives/${digest}.zip`, size: bytes.length, sha256: digest})},
+    ]),
+  });
+  try {
+    const session = await api.startDebugWeb({size: bytes.length, sha256: digest});
+    await api.uploadDebugWeb(session.sessionId, {path, size: bytes.length, sha256: digest});
+    await api.commitDebugWeb(session.sessionId);
+    assert.deepEqual(
+      requests.map(request => `${request.options.method} ${new URL(request.url).pathname}`),
+      ['POST /api/debug-web/start', `PUT /api/debug-web/${'d'.repeat(32)}/archive`, `POST /api/debug-web/${'d'.repeat(32)}/commit`],
+    );
+    assert.ok(requests.every(request => request.options.headers.Authorization === 'Bearer release-token'));
+    assert.equal(requests.some(request => request.url.includes('stable.json')), false);
+  } finally {
+    await rm(root, {force: true, recursive: true});
+  }
+});
+
 test('stable 404 is empty, while conflict and authentication failures are actionable', async () => {
   const requests = [];
   const api = new ReleaseServerApi({

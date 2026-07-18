@@ -177,6 +177,16 @@ export class ReleaseServerApi {
     });
   }
 
+  startDebugWeb({size, sha256}) {
+    if (!Number.isSafeInteger(size) || size <= 0 || !/^[0-9a-f]{64}$/.test(sha256 ?? '')) {
+      throw new Error('invalid debug web archive identity');
+    }
+    return this.request('/api/debug-web/start', {
+      body: {size, sha256},
+      method: 'POST',
+    });
+  }
+
   status(sessionId, status) {
     return this.request(`/api/publish/${validateSessionId(sessionId)}/status`, {
       body: status,
@@ -233,8 +243,44 @@ export class ReleaseServerApi {
     );
   }
 
+  uploadDebugWeb(sessionId, asset, onProgress = () => {}) {
+    validateSessionId(sessionId);
+    if (!Number.isSafeInteger(asset.size) || asset.size <= 0 || !/^[0-9a-f]{64}$/.test(asset.sha256 ?? '')) {
+      throw new Error('invalid debug web archive identity');
+    }
+    return this.request(`/api/debug-web/${sessionId}/archive`, {
+      headers: {
+        'Content-Length': asset.size,
+        'Content-Type': 'application/zip',
+        'X-WheelMaker-SHA256': asset.sha256,
+      },
+      method: 'PUT',
+      async writeBody(request) {
+        let uploadedBytes = 0;
+        const counter = new Transform({
+          transform(chunk, _encoding, callback) {
+            uploadedBytes += chunk.length;
+            onProgress({done: false, uploadedBytes, totalBytes: asset.size});
+            callback(null, chunk);
+          },
+        });
+        const input = createReadStream(asset.path);
+        input.once('error', error => request.destroy(error));
+        counter.once('error', error => request.destroy(error));
+        request.once('finish', () => onProgress({done: true, uploadedBytes, totalBytes: asset.size}));
+        input.pipe(counter).pipe(request);
+      },
+    });
+  }
+
   commit(sessionId) {
     return this.request(`/api/publish/${validateSessionId(sessionId)}/commit`, {
+      method: 'POST',
+    });
+  }
+
+  commitDebugWeb(sessionId) {
+    return this.request(`/api/debug-web/${validateSessionId(sessionId)}/commit`, {
       method: 'POST',
     });
   }

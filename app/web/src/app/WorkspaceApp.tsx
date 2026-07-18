@@ -14070,6 +14070,14 @@ export function App() {
     });
   }, []);
 
+  const startReleasePublish = useCallback((hubId: string, input: Record<string, unknown>) => (
+    service.startReleasePublish(hubId, input)
+  ), []);
+
+  const queryReleasePublish = useCallback((hubId: string, jobId: string) => (
+    service.queryReleasePublish(hubId, jobId)
+  ), []);
+
   const handleScanProjectIndex = useCallback(async (hubId: string, projectId: string) => {
     if (!hubId || !projectId || projectIndexScanPendingByProjectId[projectId]) {
       return;
@@ -16769,6 +16777,8 @@ export function App() {
           agentPackageActionKey={agentPackageActionKey}
           agentPackageActionLabel={agentPackageActionLabel}
           projectFileIndexStatusLabel={projectFileIndexStatusLabel}
+          startReleasePublish={startReleasePublish}
+          queryReleasePublish={queryReleasePublish}
         />
       </React.Suspense>,
       renderSettingsDetailActions('update'),

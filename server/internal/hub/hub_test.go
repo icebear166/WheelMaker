@@ -489,6 +489,10 @@ func (s *stubToolCommandHandler) SetProjects(projects []ProjectInfo) {
 	s.projects = append([]ProjectInfo(nil), projects...)
 }
 
+func (s *stubToolCommandHandler) ApplyRelease(_ context.Context, _ string, _ string) (tools.ReleaseTargetStatus, *tools.CommandError) {
+	return tools.ReleaseTargetStatus{Status: "accepted"}, nil
+}
+
 func (s *stubToolCommandHandler) snapshot() (string, string, []ProjectInfo) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -518,6 +522,10 @@ func (s *overlapDetectingToolCommandHandler) Handle(_ context.Context, _ string,
 }
 
 func (s *overlapDetectingToolCommandHandler) SetProjects([]ProjectInfo) {}
+
+func (s *overlapDetectingToolCommandHandler) ApplyRelease(_ context.Context, _ string, _ string) (tools.ReleaseTargetStatus, *tools.CommandError) {
+	return tools.ReleaseTargetStatus{Status: "accepted"}, nil
+}
 
 func (s *overlapDetectingToolCommandHandler) sawOverlap() bool {
 	s.mu.Lock()
@@ -672,6 +680,8 @@ func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 		{section: hubStateSectionAgentPackages, action: "installMany"},
 		{section: hubStateSectionAgentPackages, action: "uninstall"},
 		{section: hubStateSectionWheelmakerUpdate, action: "requestUpdate"},
+		{section: hubStateSectionReleasePublish, action: "start"},
+		{section: hubStateSectionReleasePublish, action: "status", params: map[string]any{"jobId": "release-job"}},
 		{section: hubStateSectionSkills, action: "listSource"},
 		{section: hubStateSectionSkills, action: "install"},
 		{section: hubStateSectionSkills, action: "uninstall"},
@@ -728,6 +738,78 @@ func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 	}
 	if body["action"] != "request" {
 		t.Fatalf("action=%v, want request (payload=%s)", body["action"], payload)
+	}
+
+	releaseHandler := handlers[hubStateSectionReleasePublish]
+	if _, err := releaseHandler.Action(context.Background(), "status", map[string]any{"jobId": "release-job"}); err != nil {
+		t.Fatalf("release status action: %v", err)
+	}
+	method, payload, _ = toolHandler.snapshot()
+	if method != hubToolMethodRelease {
+		t.Fatalf("method=%q, want %q", method, hubToolMethodRelease)
+	}
+	if err := json.Unmarshal([]byte(payload), &body); err != nil {
+		t.Fatalf("payload json: %v", err)
+	}
+	if body["action"] != "status" || body["jobId"] != "release-job" {
+		t.Fatalf("release payload=%s", payload)
+	}
+}
+
+func TestReporterNotifiesReleaseTargetThroughRegistry(t *testing.T) {
+	server := registry.New(registry.Config{})
+	ts := httptest.NewServer(server.Handler())
+	t.Cleanup(ts.Close)
+
+	target := dialWS(t, ts.URL+"/ws")
+	defer target.Close()
+	mustWriteJSON(t, target, testEnvelope{RequestID: 1, Type: "request", Method: rp.RegistryMethodConnectInit, Payload: map[string]any{
+		"clientName": "wheelmaker-hub", "clientVersion": "test", "protocolVersion": rp.DefaultProtocolVersion, "role": "hub", "hubId": "server-hub",
+	}})
+	init := mustReadEnvelope(t, target)
+	principal := init.Payload["principal"].(map[string]any)
+	mustWriteJSON(t, target, testEnvelope{RequestID: 2, Type: "request", Method: rp.RegistryMethodHubReportProjects, HubID: "server-hub", Payload: map[string]any{
+		"connectionEpoch": int64(principal["connectionEpoch"].(float64)), "projects": []any{},
+	}})
+	_ = mustReadEnvelope(t, target)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	reporter := NewReporter(ReporterConfig{Server: ts.URL, HubID: "publisher-hub", StateDir: t.TempDir(), ReconnectInterval: 10 * time.Millisecond}, nil)
+	done := make(chan error, 1)
+	go func() { done <- reporter.Run(ctx) }()
+	defer stopReporterForTest(t, cancel, done)
+	for deadline := time.Now().Add(time.Second); ; time.Sleep(time.Millisecond) {
+		reporter.mu.RLock()
+		connected := reporter.connectionEpoch != 0
+		reporter.mu.RUnlock()
+		if connected {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("publisher reporter did not connect")
+		}
+	}
+
+	resultCh := make(chan struct {
+		status tools.ReleaseTargetStatus
+		err    error
+	}, 1)
+	go func() {
+		status, err := reporter.NotifyRelease(context.Background(), "server-hub", "debugWeb", "https://release.wheelmaker.top")
+		resultCh <- struct {
+			status tools.ReleaseTargetStatus
+			err    error
+		}{status, err}
+	}()
+	_ = target.SetReadDeadline(time.Now().Add(time.Second))
+	forwarded := mustReadEnvelope(t, target)
+	if forwarded.Method != rp.RegistryMethodHubReleaseApply || forwarded.Payload["kind"] != "debugWeb" {
+		t.Fatalf("forwarded=%#v", forwarded)
+	}
+	mustWriteJSON(t, target, testEnvelope{RequestID: forwarded.RequestID, Type: "response", Method: rp.RegistryMethodHubReleaseApply, HubID: "server-hub", Payload: map[string]any{"status": "accepted"}})
+	result := <-resultCh
+	if result.err != nil || result.status.Status != "accepted" {
+		t.Fatalf("result=%#v", result)
 	}
 }
 

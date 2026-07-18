@@ -1,4 +1,4 @@
-> 摘要：本页维护 WheelMaker 公共发布控制面，以及目标机本地部署 MJS 的职责、命令、状态机和平台注册边界。
+> 摘要：本页维护 WheelMaker 公共与 Hub 驱动发布控制面，以及目标机本地部署 MJS 的职责、命令、状态机和平台注册边界。
 
 # 发布
 
@@ -20,6 +20,14 @@
 本地发布从 `~/.wheelmaker/release-server.json` 读取发布 Token。GitHub Action 从仓库 Secret `WHEELMAKER_RELEASE_TOKEN` 读取同一个 Token。匿名客户端可以读取 `stable.json`、发布历史、部署脚本和版本资产，但不能上传。
 
 如果提交时版本已存在，发布器重新读取 `stable.json`、分配下一个 `v1.x` 并重试，最多三次。
+
+## Hub 驱动发布与临时 Web
+
+Settings 可以选择一个拥有源码目录的发布 Hub 执行正式发布，或只构建并发布临时 Web。发布 Hub、源码目录、可选 Server Hub 与 auto pull 是浏览器本地设置；发布 Token 只保存在发布 Hub 的受保护配置中，前端不保存或传输它。已接受的发布任务在 Hub 内继续执行，页面重开后只恢复发布 Hub 的状态和日志。
+
+正式版本发布仍使用现有 `v1.x` 事务，并只保留 Desktop、Android 选项。临时 Web 使用 Release Server 的独立、鉴权上传通道，只保留一份经 SHA-256 校验的最新 ZIP 和公开当前指针；它不改写 `stable.json`、正式发布状态或历史。
+
+启用 auto pull 且绑定 Server Hub 时，发布 Hub 通过控制路由通知目标：正式版本触发现有 stable 更新，临时 Web 触发 Debug Web 拉取。Server Hub 仅用构建时 release channel 的 HTTPS origin 与固定元数据路径发现并校验临时 Web，再原子替换自身安装根下的 `web/`；它不接受前端提供的目录、包路径或下载 URL。关闭 auto pull 时不发送通知，也没有手动应用入口。Server Hub 只返回最终应用状态，不提供过程日志。
 
 ## 目标机部署代码
 

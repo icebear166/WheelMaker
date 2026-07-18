@@ -1586,6 +1586,82 @@ func TestHubStateGetForwardsByEnvelopeHubID(t *testing.T) {
 	}
 }
 
+func TestHubReleaseNotificationForwardsToTargetHub(t *testing.T) {
+	s := New(Config{})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	publisher := dialReportedHub(t, ts.URL+"/ws", "publisher-hub")
+	defer publisher.Close()
+	target := dialReportedHub(t, ts.URL+"/ws", "server-hub")
+	defer target.Close()
+
+	mustWriteJSON(t, publisher, testEnvelope{
+		RequestID: 3,
+		Type:      "request",
+		Method:    rp.RegistryMethodHubReleaseNotify,
+		HubID:     "publisher-hub",
+		Payload: map[string]any{
+			"targetHubId": "server-hub",
+			"kind":        "debugWeb",
+			"baseUrl":     "https://release.wheelmaker.top",
+		},
+	})
+
+	_ = target.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	forwarded := mustReadEnvelope(t, target)
+	if forwarded.Type != "request" || forwarded.Method != rp.RegistryMethodHubReleaseApply {
+		t.Fatalf("forwarded=%#v, want hub.release.apply request", forwarded)
+	}
+	if forwarded.HubID != "server-hub" {
+		t.Fatalf("forwarded.hubId=%q, want server-hub", forwarded.HubID)
+	}
+	if forwarded.Payload["kind"] != "debugWeb" || forwarded.Payload["baseUrl"] != "https://release.wheelmaker.top" {
+		t.Fatalf("forwarded.payload=%#v", forwarded.Payload)
+	}
+
+	mustWriteJSON(t, target, testEnvelope{
+		RequestID: forwarded.RequestID,
+		Type:      "response",
+		Method:    rp.RegistryMethodHubReleaseApply,
+		HubID:     "server-hub",
+		Payload:   map[string]any{"status": "accepted"},
+	})
+
+	result := mustReadEnvelope(t, publisher)
+	if result.Type != "response" || result.Method != rp.RegistryMethodHubReleaseNotify {
+		t.Fatalf("result=%#v, want hub.release.notify response", result)
+	}
+	if result.Payload["status"] != "accepted" {
+		t.Fatalf("result.payload=%#v", result.Payload)
+	}
+}
+
+func TestHubReleaseNotificationRejectsNonHTTPSBaseURL(t *testing.T) {
+	s := New(Config{})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	publisher := dialReportedHub(t, ts.URL+"/ws", "publisher-hub")
+	defer publisher.Close()
+	mustWriteJSON(t, publisher, testEnvelope{
+		RequestID: 3,
+		Type:      "request",
+		Method:    rp.RegistryMethodHubReleaseNotify,
+		HubID:     "publisher-hub",
+		Payload: map[string]any{
+			"targetHubId": "server-hub",
+			"kind":        "debugWeb",
+			"baseUrl":     "http://release.wheelmaker.top",
+		},
+	})
+
+	response := mustReadEnvelope(t, publisher)
+	if response.Type != "error" || response.Payload["code"] != codeInvalidArgument {
+		t.Fatalf("response=%#v, want invalid argument error", response)
+	}
+}
+
 func TestHubStateMissingEnvelopeHubIDIsRejected(t *testing.T) {
 	s := New(Config{})
 	ts := httptest.NewServer(s.Handler())
