@@ -73,6 +73,22 @@ describe('web chat typography', () => {
     expect(stylesCss).not.toMatch(/\.chat-main-message \.wm-shiki-code \{[^}]*background:/);
   });
 
+  test('uses quiet chat links with a medium-weight file affordance', () => {
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(stylesCss).toContain('--chat-link-text: #82b6df;');
+    expect(stylesCss).toMatch(
+      /\.chat-main-message a,[\s\S]*\.chat-main-message a:visited \{[\s\S]*color: var\(--chat-link-text\);[\s\S]*text-decoration: none;[\s\S]*\}/,
+    );
+    expect(stylesCss).toMatch(
+      /\.chat-main-message a:hover,[\s\S]*\.chat-main-message a:focus-visible \{[\s\S]*text-decoration: underline;[\s\S]*\}/,
+    );
+    expect(stylesCss).toMatch(
+      /\.chat-main-message \.chat-file-link \{[\s\S]*font-weight: 500;[\s\S]*\}/,
+    );
+    expect(stylesCss).toMatch(/\.chat-file-link-icon \{[\s\S]*font-size: 0\.88em;[\s\S]*\}/);
+  });
+
   test('keeps composer typography independent from message typography', () => {
     const stylesCss = readWebStyles(projectRoot);
 

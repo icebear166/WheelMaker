@@ -187,7 +187,8 @@ describe('port relay settings UI source structure', () => {
     expect(mainTsx).toContain("await openPortRelayWorkbenchTab(target, localUrl.path, {source: 'chat'});");
     expect(mainTsx).toContain('const relayLocalUrl = parsePortRelayLocalHttpUrl(linkHref);');
     expect(mainTsx).toContain('openChatPortRelayLink(relayLocalUrl).catch(() => undefined);');
-    expect(mainTsx).toContain('className={[rest.className, relayLocalUrl ? \'chat-relay-link\' : \'\'].filter(Boolean).join(\' \') || undefined}');
+    expect(mainTsx).toContain("isFileLink ? 'chat-file-link' : ''");
+    expect(mainTsx).toContain("relayLocalUrl ? 'chat-relay-link' : ''");
     expect(mainTsx).toContain('const renderChatInlineCode = useCallback');
     expect(mainTsx).toContain('const relayLocalUrl = parsePortRelayLocalHttpUrl(codeText);');
     expect(mainTsx).toContain("className=\"chat-relay-link chat-relay-code-link\"");

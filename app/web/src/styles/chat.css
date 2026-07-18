@@ -3219,9 +3219,24 @@
 
 .chat-main-message a,
 .chat-main-message a:visited {
-  color: color-mix(in srgb, var(--accent-primary) 82%, var(--text-primary));
-  text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--accent-primary) 60%, transparent);
+  color: var(--chat-link-text);
+  text-decoration: none;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  transition: color var(--motion-fast) var(--ease-standard);
+}
+
+.chat-main-message .chat-file-link {
+  font-weight: 500;
+}
+
+.chat-file-link-icon {
+  display: inline-block;
+  margin-right: 0.28em;
+  color: currentColor;
+  font-size: 0.88em;
+  line-height: 1;
+  vertical-align: -0.04em;
 }
 
 .chat-main-message .chat-file-link-line {
@@ -3352,11 +3367,19 @@
   white-space: normal;
   overflow-wrap: anywhere;
 }
-.chat-main-message a:hover {
-  color: color-mix(in srgb, var(--accent-primary) 92%, var(--text-primary));
+.chat-main-message a:hover,
+.chat-main-message a:focus-visible {
+  color: color-mix(in srgb, var(--chat-link-text) 82%, var(--text-primary));
+  text-decoration: underline;
+  text-decoration-color: currentColor;
 }
 
 .chat-main-message .chat-relay-code-link {
+  text-decoration: none;
+}
+
+.chat-main-message a.chat-relay-code-link:hover,
+.chat-main-message a.chat-relay-code-link:focus-visible {
   text-decoration: none;
 }
 

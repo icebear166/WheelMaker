@@ -17952,7 +17952,11 @@ export function App() {
         return (
           <a
             {...rest}
-            className={[rest.className, relayLocalUrl ? 'chat-relay-link' : ''].filter(Boolean).join(' ') || undefined}
+            className={[
+              rest.className,
+              isFileLink ? 'chat-file-link' : '',
+              relayLocalUrl ? 'chat-relay-link' : '',
+            ].filter(Boolean).join(' ') || undefined}
             href={fallbackHref}
             target={isFileLink || relayLocalUrl ? undefined : '_blank'}
             rel={isFileLink || relayLocalUrl ? undefined : 'noreferrer'}
@@ -17981,6 +17985,9 @@ export function App() {
             }}
           >
             <>
+              {isFileLink ? (
+                <span className="codicon codicon-file chat-file-link-icon" aria-hidden="true" />
+              ) : null}
               {children}
               {isFileLink && jumpLine && !textLine ? (
                 <span className="chat-file-link-line">:{jumpLine}</span>
