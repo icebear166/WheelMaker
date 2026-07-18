@@ -1285,7 +1285,7 @@ $workers = @(Get-CimInstance Win32_Process | Where-Object {
   $commandLine = [string]$_.CommandLine
   -not [string]::IsNullOrWhiteSpace($path) -and
   $path.ToLowerInvariant() -eq $hub -and
-  $commandLine -match '(^|\s)--hub-worker(\s|$)'
+  $commandLine -match '(^|\\s)--hub-worker(\\s|$)'
 })
 if ($null -ne $task -and $task.State -eq 'Running' -and $workers.Count -gt 0) {
   exit 0

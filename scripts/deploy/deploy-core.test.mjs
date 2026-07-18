@@ -297,7 +297,14 @@ test('runtime health requires the registered task and an actual Hub worker', asy
     },
   });
   assert.equal(await windows.isHubRunning(), true);
-  assert.match(windowsHealthScript, /--hub-worker/);
+  assert.match(
+    windowsHealthScript,
+    /\(\^\|\\s\)--hub-worker\(\\s\|\$\)/,
+  );
+  assert.doesNotMatch(
+    windowsHealthScript,
+    /\(\^\|s\)--hub-worker\(s\|\$\)/,
+  );
   assert.match(windowsHealthScript, /ExecutablePath/);
 
   for (const platform of ['linux', 'darwin']) {
