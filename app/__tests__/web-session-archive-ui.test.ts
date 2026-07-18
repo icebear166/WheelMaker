@@ -37,7 +37,7 @@ describe('session archive UI source integration', () => {
     const helperSource = main.slice(helperStart, helperEnd);
 
     expect(helperSource).toContain('session-older-toggle');
-    expect(helperSource).toContain('session-older-spacer');
+    expect(helperSource).not.toContain('session-older-spacer');
     expect(helperSource).toContain('Show ${hiddenOlderCount} old sessions...');
     expect(helperSource).not.toContain('session-older-leading');
     expect(helperSource).not.toContain('codicon-chevron-up');
