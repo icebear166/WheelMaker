@@ -129,7 +129,7 @@ describe('gesture navigation', () => {
       /\.gesture-nav-pill \{[\s\S]*width: 50px;[\s\S]*grid-template-rows: 48px;[\s\S]*padding: 0;[\s\S]*\}/,
     );
     expect(styles).toMatch(
-      /\.gesture-nav-control\[data-expanded='true'\] \.gesture-nav-pill \{[\s\S]*top: -41px;[\s\S]*height: 130px;[\s\S]*grid-template-rows: repeat\(3, 40px\);[\s\S]*padding: 4px;[\s\S]*\}/,
+      /\.gesture-nav-control\[data-expanded='true'\] \.gesture-nav-pill \{[\s\S]*top: -81px;[\s\S]*height: 210px;[\s\S]*grid-template-rows: repeat\(5, 40px\);[\s\S]*padding: 4px;[\s\S]*\}/,
     );
     expect(styles).toMatch(
       /\.gesture-nav-control\[data-expanded='false'\] \.gesture-nav-current-button \{[\s\S]*width: 50px;[\s\S]*height: 48px;[\s\S]*\}/,

@@ -62,4 +62,40 @@ describe('limits workspace integration', () => {
     expect(main).toContain("if (confirmTarget.kind === 'hideLimitsMonitor') {");
     expect(main).toContain('setShowLimitsMonitor(false);');
   });
+
+  test('adds an always-available Limits action to the five-button mobile shortcut', () => {
+    const pillStart = main.indexOf('className="gesture-nav-pill"');
+    const pillEnd = main.indexOf('</div>', pillStart);
+    const pill = pillStart >= 0 && pillEnd >= 0 ? main.slice(pillStart, pillEnd) : '';
+    const keys = Array.from(pill.matchAll(/key="([^"]+)"/g), match => match[1]);
+
+    expect(keys).toEqual(['preview', 'terminal', 'chat', 'limits', 'settings']);
+    expect(pill).not.toContain('showLimitsMonitor');
+    expect(pill).toContain('aria-label="Terminal"');
+    expect(pill).toContain('aria-label="Limits"');
+  });
+
+  test('uses cached usage in one exclusive mobile overlay and closes it first on native back', () => {
+    expect(main).toContain('const [mobileUsageOpen, setMobileUsageOpen] = useState(false);');
+    expect(main).toContain('const mobileUsageOverlay = !isWide && mobileUsageOpen ? (');
+    expect(main).toContain('<MobileUsageDialog');
+    expect(main).toContain('snapshot={usageSnapshot}');
+    expect(main).toContain('mobileOverlay={mobileUsageOverlay ?? terminalMobileOverlay ?? chatPreviewMobileOverlay}');
+
+    const limitsButtonStart = main.indexOf('key="limits"');
+    const limitsButtonEnd = main.indexOf('</button>', limitsButtonStart);
+    const limitsButton = limitsButtonStart >= 0 && limitsButtonEnd >= 0
+      ? main.slice(limitsButtonStart, limitsButtonEnd)
+      : '';
+    expect(limitsButton).toContain('setTerminalOpen(false);');
+    expect(limitsButton).toContain('closeChatPreview();');
+    expect(limitsButton).not.toContain('refreshUsageAcrossHubs');
+
+    const backStart = main.indexOf('const handleAndroidNativeBack');
+    const backEnd = main.indexOf('useEffect(() => {', backStart);
+    const backHandler = backStart >= 0 && backEnd >= 0 ? main.slice(backStart, backEnd) : '';
+    expect(backHandler.indexOf('mobileUsageOpen')).toBeGreaterThan(0);
+    expect(backHandler.indexOf('mobileUsageOpen')).toBeLessThan(backHandler.indexOf('terminalOpen'));
+    expect(backHandler).toContain('setMobileUsageOpen(false);');
+  });
 });
