@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -38,8 +39,13 @@ func TestDebugWebCommitPublishesVerifiedCurrentArchiveWithoutStableChanges(t *te
 	if current.Schema != 1 || current.ArchivePath != "/debug-web/archives/"+sha256BytesHex(archive)+".zip" || current.Size != int64(len(archive)) || current.SHA256 != sha256BytesHex(archive) {
 		t.Fatalf("current=%+v", current)
 	}
-	if _, err := os.Stat(filepath.Join(root, "public", "debug-web", "archives", sha256BytesHex(archive)+".zip")); err != nil {
+	archivePath := filepath.Join(root, "public", "debug-web", "archives", sha256BytesHex(archive)+".zip")
+	info, err := os.Stat(archivePath)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o640 {
+		t.Fatalf("public archive permissions = %04o, want 0640", info.Mode().Perm())
 	}
 	if _, err := os.Stat(filepath.Join(root, "public", "stable.json")); !os.IsNotExist(err) {
 		t.Fatalf("debug web changed stable metadata: %v", err)

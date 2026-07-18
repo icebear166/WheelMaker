@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -175,12 +176,15 @@ func (s *Server) handleDebugWebCommit(w http.ResponseWriter, sessionID string) {
 	}
 	archivePath := filepath.Join(archives, session.SHA256+".zip")
 	movedArchive := false
-	if _, err := os.Stat(archivePath); errors.Is(err, os.ErrNotExist) {
-		if err := os.Rename(source, archivePath); err != nil {
-			writeError(w, http.StatusInternalServerError, "commit_failed")
-			return
-		}
+	if _, err := os.Stat(archivePath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		writeError(w, http.StatusInternalServerError, "commit_failed")
+		return
+	} else if errors.Is(err, os.ErrNotExist) {
 		movedArchive = true
+	}
+	if err := copyDebugWebArchiveAtomic(source, archivePath); err != nil {
+		writeError(w, http.StatusInternalServerError, "commit_failed")
+		return
 	}
 	current := debugWebCurrent{Schema: 1, ArchivePath: "/debug-web/archives/" + session.SHA256 + ".zip", Size: session.Size, SHA256: session.SHA256, PublishedAt: s.now().UTC().Format(time.RFC3339)}
 	currentPath := filepath.Join(s.config.DataRoot, "public", "debug-web", "current.json")
@@ -197,6 +201,38 @@ func (s *Server) handleDebugWebCommit(w http.ResponseWriter, sessionID string) {
 	}
 	_ = os.RemoveAll(s.debugWebStagingDirectory(sessionID))
 	writeJSON(w, http.StatusOK, current)
+}
+
+func copyDebugWebArchiveAtomic(source, destination string) (retErr error) {
+	input, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer input.Close()
+	temporary, err := os.CreateTemp(filepath.Dir(destination), ".debug-web-*.tmp")
+	if err != nil {
+		return err
+	}
+	temporaryPath := temporary.Name()
+	defer func() {
+		_ = temporary.Close()
+		if retErr != nil {
+			_ = os.Remove(temporaryPath)
+		}
+	}()
+	if err := temporary.Chmod(0o640); err != nil {
+		return err
+	}
+	if _, err := io.Copy(temporary, input); err != nil {
+		return err
+	}
+	if err := temporary.Sync(); err != nil {
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	return os.Rename(temporaryPath, destination)
 }
 
 func readDebugWebCurrent(path string) (*debugWebCurrent, error) {
