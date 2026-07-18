@@ -29,6 +29,7 @@ type Server struct {
 	sessionLocks   map[string]*sync.Mutex
 	statusMu       sync.Mutex
 	commitMu       sync.Mutex
+	debugWebMu     sync.Mutex
 }
 
 func New(cfg Config) (*Server, error) {
