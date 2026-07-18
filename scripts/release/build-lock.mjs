@@ -2,6 +2,7 @@ import {mkdir, readFile, rm, writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 
 export async function acquireBuildLock({owner, workRoot}) {
+  await mkdir(workRoot, {recursive: true});
   const directory = join(workRoot, 'build.lock');
   try {
     await mkdir(directory);

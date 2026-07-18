@@ -63,7 +63,7 @@ describe('desktop window controls', () => {
     expect(close).toHaveBeenCalled();
   });
 
-  test('shows the Windows extensions menu before minimize and enters Local Dev', async () => {
+  test('opens a separate Local Dev configuration dialog from the extensions menu', async () => {
 	const requestLocalDevMode = jest.fn();
 	(global as typeof globalThis & { window?: unknown }).window = {
 		WheelMakerDesktop: {enabled: true, requestLocalDevMode},
@@ -79,12 +79,49 @@ describe('desktop window controls', () => {
 	await ReactTestRenderer.act(async () => {
 		root.findByProps({'aria-label': 'Windows extensions'}).props.onClick();
 	});
-	const menuItem = root.findByProps({role: 'menuitem'});
+	const menuItem = root.findByProps({role: 'menuitemcheckbox'});
+	expect(menuItem.props['aria-checked']).toBe(false);
 	expect(menuItem.findAllByType('span').some(span => span.children.includes('Dev Mode'))).toBe(true);
+	expect(root.findAllByProps({className: 'desktop-windows-extension-source'})).toHaveLength(0);
 	await ReactTestRenderer.act(async () => {
 		menuItem.props.onClick();
 	});
-	expect(requestLocalDevMode).toHaveBeenCalledWith('');
+	expect(requestLocalDevMode).not.toHaveBeenCalled();
+	const dialog = root.findByProps({'aria-label': 'Configure Local Dev'});
+	const sourceInput = dialog.findByProps({'aria-label': 'WheelMaker source directory'});
+	await ReactTestRenderer.act(async () => {
+		sourceInput.props.onChange({target: {value: 'E:\\_Code\\WheelMaker'}});
+	});
+	await ReactTestRenderer.act(async () => {
+		root.findByProps({'data-local-dev-enter': true}).props.onClick();
+	});
+	expect(requestLocalDevMode).toHaveBeenCalledWith('E:\\_Code\\WheelMaker');
+  });
+
+  test('marks Dev Mode as checked when the local native bridge is active', async () => {
+    (global as typeof globalThis & { window?: unknown }).window = {
+      WheelMakerDesktop: {
+        enabled: true,
+        localDev: {
+          getState: jest.fn(),
+          saveSource: jest.fn(),
+          run: jest.fn(),
+        },
+      },
+      dispatchEvent: jest.fn(),
+    };
+
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+    await ReactTestRenderer.act(async () => {
+      renderer = ReactTestRenderer.create(<DesktopWindowControls />);
+    });
+    const root = renderer!.root;
+    await ReactTestRenderer.act(async () => {
+      root.findByProps({'aria-label': 'Windows extensions'}).props.onClick();
+    });
+    const menuItem = root.findByProps({role: 'menuitemcheckbox'});
+    expect(menuItem.props['aria-checked']).toBe(true);
+    expect(menuItem.findByProps({'data-local-dev-check': true})).toBeDefined();
   });
 
   test('drags desktop title rows except interactive targets', async () => {

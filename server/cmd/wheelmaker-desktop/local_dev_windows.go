@@ -55,8 +55,8 @@ func (e *windowsLocalDevExecutor) Run(ctx context.Context, root string, operatio
 	}
 	return e.run(
 		ctx,
-		"cmd.exe",
-		[]string{"/d", "/s", "/c", filepath.Join(root, "dev-local.bat"), string(command)},
+		"node.exe",
+		[]string{filepath.Join(root, "scripts", "dev-local.mjs"), string(command)},
 		root,
 		append(os.Environ(), "WHEELMAKER_DEV_NO_DESKTOP=1"),
 	)

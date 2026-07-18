@@ -19,3 +19,15 @@ test('rejects a second owner and keeps owner metadata', async () => {
   assert.deepEqual(owner, {owner: 'dev', pid: process.pid});
   await first.release();
 });
+
+test('creates the release work root before taking the lock', async () => {
+  const parent = await mkdtemp(join(tmpdir(), 'wheelmaker-build-lock-parent-'));
+  const workRoot = join(parent, 'missing-release-work');
+
+  const lock = await acquireBuildLock({owner: 'dev', workRoot});
+  const owner = JSON.parse(
+    await readFile(join(workRoot, 'build.lock', 'owner.json'), 'utf8'),
+  );
+  assert.equal(owner.owner, 'dev');
+  await lock.release();
+});

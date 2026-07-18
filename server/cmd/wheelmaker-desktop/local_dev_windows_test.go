@@ -24,7 +24,7 @@ func TestWindowsLocalDevExecutorRequiresConfirmation(t *testing.T) {
 	}
 }
 
-func TestWindowsLocalDevExecutorUsesFixedBatchAndOperation(t *testing.T) {
+func TestWindowsLocalDevExecutorUsesNodeScriptAndFixedOperation(t *testing.T) {
 	var file string
 	var args []string
 	executor := &windowsLocalDevExecutor{
@@ -37,10 +37,11 @@ func TestWindowsLocalDevExecutorUsesFixedBatchAndOperation(t *testing.T) {
 	if err := executor.Run(context.Background(), `D:\Code\WheelMaker`, localDevRestart); err != nil {
 		t.Fatal(err)
 	}
-	if file != "cmd.exe" {
+	if file != "node.exe" {
 		t.Fatalf("file = %q", file)
 	}
-	if got := args[len(args)-1]; got != "restart" {
-		t.Fatalf("operation = %q", got)
+	want := []string{`D:\Code\WheelMaker\scripts\dev-local.mjs`, "restart"}
+	if len(args) != len(want) || args[0] != want[0] || args[1] != want[1] {
+		t.Fatalf("args = %q, want %q", args, want)
 	}
 }

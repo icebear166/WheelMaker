@@ -63,93 +63,135 @@ export function DesktopDragRegion({ className, children }: DesktopDragRegionProp
 export function DesktopWindowControls() {
   const bridge = getDesktopWindowBridge();
   const [extensionsOpen, setExtensionsOpen] = useState(false);
+  const [localDevDialogOpen, setLocalDevDialogOpen] = useState(false);
   const [localDevSource, setLocalDevSource] = useState('');
   const [localDevError, setLocalDevError] = useState('');
+  const [localDevBusy, setLocalDevBusy] = useState(false);
 
   if (!bridge) {
     return null;
   }
 
   const hasWindowsExtensions = Boolean(bridge.requestLocalDevMode || bridge.localDev);
-  const openLocalDev = async () => {
+  const selectLocalDev = () => {
+    setExtensionsOpen(false);
     if (bridge.localDev) {
-	  setExtensionsOpen(false);
       if (typeof window.dispatchEvent === 'function') {
         window.dispatchEvent(new Event(openLocalDevPanelEvent));
       }
       return;
     }
     setLocalDevError('');
+    setLocalDevDialogOpen(true);
+  };
+  const enterLocalDev = async () => {
+    const sourcePath = localDevSource.trim();
+    if (!sourcePath || localDevBusy) {
+      if (!sourcePath) setLocalDevError('Enter the WheelMaker source directory.');
+      return;
+    }
+    setLocalDevError('');
+    setLocalDevBusy(true);
     try {
-      await bridge.requestLocalDevMode?.(localDevSource.trim());
+      await bridge.requestLocalDevMode?.(sourcePath);
     } catch (error) {
       setLocalDevError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLocalDevBusy(false);
     }
   };
 
   return (
-    <div className="desktop-window-controls" data-desktop-window-controls={true}>
-      {hasWindowsExtensions ? (
-        <div className="desktop-windows-extension-root" data-desktop-window-interactive={true}>
-          <button
-            type="button"
-            className="desktop-titlebar-button desktop-windows-extension-button"
-            aria-label="Windows extensions"
-            aria-expanded={extensionsOpen}
-            title="Windows extensions"
-            onClick={() => setExtensionsOpen(open => !open)}
-          >
-            <span className="codicon codicon-extensions" aria-hidden="true" />
-          </button>
-          {extensionsOpen ? (
-            <div className="desktop-windows-extension-menu" role="menu" aria-label="Windows extensions">
-              {!bridge.localDev ? (
-                <label className="desktop-windows-extension-source">
-                  <span>Source directory</span>
-                  <input
-                    value={localDevSource}
-                    placeholder="D:\\Code\\WheelMaker"
-                    spellCheck={false}
-                    onChange={event => setLocalDevSource(event.target.value)}
+    <>
+      <div className="desktop-window-controls" data-desktop-window-controls={true}>
+        {hasWindowsExtensions ? (
+          <div className="desktop-windows-extension-root" data-desktop-window-interactive={true}>
+            <button
+              type="button"
+              className="desktop-titlebar-button desktop-windows-extension-button"
+              aria-label="Windows extensions"
+              aria-expanded={extensionsOpen}
+              title="Windows extensions"
+              onClick={() => setExtensionsOpen(open => !open)}
+            >
+              <span className="codicon codicon-extensions" aria-hidden="true" />
+            </button>
+            {extensionsOpen ? (
+              <div className="desktop-windows-extension-menu" role="menu" aria-label="Windows extensions">
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
+                  aria-checked={Boolean(bridge.localDev)}
+                  onClick={selectLocalDev}
+                >
+                  <span
+                    className={`codicon ${bridge.localDev ? 'codicon-check' : 'codicon-blank'}`}
+                    data-local-dev-check={Boolean(bridge.localDev) || undefined}
+                    aria-hidden="true"
                   />
-                </label>
-              ) : null}
-              <button type="button" role="menuitem" onClick={() => void openLocalDev()}>
-                <span className="codicon codicon-tools" aria-hidden="true" />
-                <span>Dev Mode</span>
+                  <span>Dev Mode</span>
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        <button
+          type="button"
+          className="desktop-titlebar-button"
+          aria-label="Minimize"
+          title="Minimize"
+          onClick={() => invokeDesktopAction(bridge.minimize)}
+        >
+          <span className="codicon codicon-chrome-minimize" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="desktop-titlebar-button"
+          aria-label="Maximize or restore"
+          title="Maximize or restore"
+          onClick={() => invokeDesktopAction(bridge.toggleMaximize)}
+        >
+          <span className="codicon codicon-chrome-maximize" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="desktop-titlebar-button desktop-titlebar-close"
+          aria-label="Close"
+          title="Close"
+          onClick={() => invokeDesktopAction(bridge.close)}
+        >
+          <span className="codicon codicon-chrome-close" aria-hidden="true" />
+        </button>
+      </div>
+      {localDevDialogOpen ? (
+        <div className="local-dev-entry-backdrop" data-desktop-window-interactive={true}>
+          <section className="local-dev-entry-dialog" role="dialog" aria-modal="true" aria-label="Configure Local Dev">
+            <header>
+              <span className="local-dev-entry-eyebrow">Windows extension</span>
+              <h2>Enter Dev Mode</h2>
+              <p>Build and run WheelMaker from a local source checkout.</p>
+            </header>
+            <label>
+              <span>Source directory</span>
+              <input
+                aria-label="WheelMaker source directory"
+                value={localDevSource}
+                placeholder="E:\\_Code\\WheelMaker"
+                spellCheck={false}
+                autoFocus
+                onChange={event => setLocalDevSource(event.target.value)}
+              />
+            </label>
+            {localDevError ? <p className="local-dev-entry-error" role="status">{localDevError}</p> : null}
+            <footer>
+              <button type="button" className="secondary" disabled={localDevBusy} onClick={() => setLocalDevDialogOpen(false)}>Cancel</button>
+              <button type="button" className="primary" data-local-dev-enter={true} disabled={localDevBusy} onClick={() => void enterLocalDev()}>
+                {localDevBusy ? 'Entering…' : 'Enter Dev Mode'}
               </button>
-              {localDevError ? <p className="desktop-windows-extension-error" role="status">{localDevError}</p> : null}
-            </div>
-          ) : null}
+            </footer>
+          </section>
         </div>
       ) : null}
-      <button
-        type="button"
-        className="desktop-titlebar-button"
-        aria-label="Minimize"
-        title="Minimize"
-        onClick={() => invokeDesktopAction(bridge.minimize)}
-      >
-        <span className="codicon codicon-chrome-minimize" aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        className="desktop-titlebar-button"
-        aria-label="Maximize or restore"
-        title="Maximize or restore"
-        onClick={() => invokeDesktopAction(bridge.toggleMaximize)}
-      >
-        <span className="codicon codicon-chrome-maximize" aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        className="desktop-titlebar-button desktop-titlebar-close"
-        aria-label="Close"
-        title="Close"
-        onClick={() => invokeDesktopAction(bridge.close)}
-      >
-        <span className="codicon codicon-chrome-close" aria-hidden="true" />
-      </button>
-    </div>
+    </>
   );
 }
