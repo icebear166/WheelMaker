@@ -15384,6 +15384,16 @@ export function App() {
               <span className="wide-project-name">Recent Sessions</span>
             </span>
           </button>
+          <button
+            type="button"
+            className="wide-project-action-btn recent-sessions-collapse-btn"
+            title={recentCollapsed ? 'Expand Recent Sessions' : 'Collapse Recent Sessions'}
+            aria-label={recentCollapsed ? 'Expand Recent Sessions' : 'Collapse Recent Sessions'}
+            aria-expanded={!recentCollapsed}
+            onClick={() => toggleWideProjectCollapsed(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)}
+          >
+            <span className={`codicon ${recentCollapsed ? 'codicon-chevron-down' : 'codicon-chevron-up'}`} aria-hidden="true" />
+          </button>
         </div>
         {!recentCollapsed ? (
           <div className={`wide-project-session-list recent-sessions-list${mobile ? ' mobile-project-session-list' : ''}`}>

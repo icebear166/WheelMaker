@@ -25,6 +25,12 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('codicon-history recent-sessions-icon');
   });
 
+  test('recent sessions header shows a chevron collapse affordance on the right', () => {
+    expect(mainTsx).toContain('recent-sessions-collapse-btn');
+    expect(mainTsx).toContain("recentCollapsed ? 'codicon-chevron-down' : 'codicon-chevron-up'");
+    expect(mainTsx).toContain('aria-expanded={!recentCollapsed}');
+  });
+
   test('recent sessions reuse the grouped shared builder with an 8-item cap', () => {
     expect(mainTsx).toContain('buildRecentChatSessionProjectSections({');
     expect(mainTsx).toContain('limit: 8,');
