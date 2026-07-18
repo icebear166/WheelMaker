@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 
+import {readWebStyles} from '../testHelpers/webStyles';
+
 type GeometryModule = typeof import('../web/src/chat/layout/chatEdgeSurfaceGeometry');
 
 function loadGeometryModule(): GeometryModule | null {
@@ -20,6 +22,17 @@ function loadGeometryModule(): GeometryModule | null {
 }
 
 describe('chat edge surface geometry', () => {
+  test('clips transparent desktop edge tails out of pointer hit testing until reveal', () => {
+    const stylesCss = readWebStyles(path.join(__dirname, '..'));
+
+    expect(stylesCss).toMatch(
+      /\.chat-plan-surface\.desktop,[\s\S]*\.chat-recent-sessions-surface\.desktop,[\s\S]*\.chat-function-surface\.desktop \{[\s\S]*clip-path: inset\(0 calc\(100% - var\(--chat-edge-fade-end\)\) 0 0\);[\s\S]*\}/,
+    );
+    expect(stylesCss).toMatch(
+      /\.chat-recent-sessions-surface\.desktop:is\(:hover, :focus-within\) \{[\s\S]*--chat-edge-hidden-alpha: 100%;[\s\S]*clip-path: none;[\s\S]*\}/,
+    );
+  });
+
   test('moves the recent sessions fade with the actual left edge of the text column', () => {
     const geometry = loadGeometryModule();
     expect(geometry).not.toBeNull();

@@ -5716,6 +5716,7 @@
   border: 0;
   background: transparent;
   box-shadow: none;
+  clip-path: inset(0 calc(100% - var(--chat-edge-fade-end)) 0 0);
 }
 
 .project-session-action-menu {
@@ -5783,6 +5784,7 @@
 
 .chat-recent-sessions-surface.desktop:is(:hover, :focus-within) {
   --chat-edge-hidden-alpha: 100%;
+  clip-path: none;
 }
 
 @media (prefers-reduced-transparency: reduce) {
