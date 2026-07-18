@@ -91,8 +91,9 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).not.toContain('recent-sessions-pin-btn');
     const sectionBlock = chatCss.match(/\.recent-sessions-section \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(sectionBlock).toContain('position: sticky;');
-    expect(sectionBlock).toContain('top: 4px;');
+    expect(sectionBlock).toContain('top: 0;');
     expect(sectionBlock).toContain('z-index: 5;');
+    expect(chatCss).not.toContain('.recent-sessions-section:not(.collapsed)');
     expect(chatCss).not.toContain('.recent-sessions-section.pinned');
     expect(chatCss).not.toContain('.recent-sessions-pin-btn');
   });

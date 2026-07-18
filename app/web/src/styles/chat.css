@@ -1149,7 +1149,7 @@
 
 .recent-sessions-section {
   position: sticky;
-  top: 4px;
+  top: 0;
   z-index: 5;
   margin: 0 0 8px;
   box-shadow: 0 8px 18px rgb(0 0 0 / 16%);
@@ -1192,11 +1192,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-tertiary);
-}
-
-.recent-sessions-section:not(.collapsed) {
-  padding-bottom: 4px;
-  margin-bottom: 8px;
 }
 
 .recent-sessions-icon {
