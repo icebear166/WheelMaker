@@ -52,9 +52,16 @@ func (h *Hub) Start(ctx context.Context) error {
 		}
 		return fmt.Errorf("hub db schema check: %w", err)
 	}
-	for _, pc := range h.cfg.Projects {
+	for i := range h.cfg.Projects {
+		pc := h.cfg.Projects[i]
+		cwd, err := resolveHubProjectPath(pc.Path)
+		if err != nil {
+			return fmt.Errorf("hub: project %q: resolve path: %w", pc.Name, err)
+		}
+		pc.Path = cwd
+		h.cfg.Projects[i] = pc
 		hubLogger(pc.Name).Info("build client runtime=app")
-		c, err := h.buildClient(ctx, pc)
+		c, err := h.buildProjectClient(ctx, pc, cwd)
 		if err != nil {
 			hubLogger(pc.Name).Error("build client failed err=%v", err)
 			return fmt.Errorf("hub: project %q: %w", pc.Name, err)
@@ -69,16 +76,39 @@ func (h *Hub) Start(ctx context.Context) error {
 
 // buildClient creates, configures, and starts a client.Client for one project.
 func (h *Hub) buildClient(ctx context.Context, pc logger.ProjectConfig) (*client.Client, error) {
-	// Resolve working directory.
-	cwd := pc.Path
-	if cwd == "" {
-		var err error
-		cwd, err = os.Getwd()
-		if err != nil {
-			cwd = "."
-		}
+	cwd, err := resolveHubProjectPath(pc.Path)
+	if err != nil {
+		return nil, fmt.Errorf("resolve project path: %w", err)
 	}
 	return h.buildProjectClient(ctx, pc, cwd)
+}
+
+func resolveHubProjectPath(configuredPath string) (string, error) {
+	path := strings.TrimSpace(configuredPath)
+	if path == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return "", err
+		}
+		path = cwd
+	}
+	if path == "~" || strings.HasPrefix(path, "~/") || strings.HasPrefix(path, `~\`) {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("user home: %w", err)
+		}
+		relative := strings.TrimLeft(path[1:], `/\`)
+		path = home
+		if relative != "" {
+			relative = strings.ReplaceAll(relative, `\`, "/")
+			path = filepath.Join(home, filepath.FromSlash(relative))
+		}
+	}
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	return absPath, nil
 }
 
 func (h *Hub) buildProjectClient(ctx context.Context, pc logger.ProjectConfig, cwd string) (*client.Client, error) {
@@ -269,17 +299,10 @@ func (h *terminalReporterHandler) HandleTerminalInput(event rp.TerminalInputEven
 }
 
 func (h *Hub) collectProjectInfo(cfgProject logger.ProjectConfig) ProjectInfo {
-	path := strings.TrimSpace(cfgProject.Path)
-	if path == "" {
-		if cwd, err := os.Getwd(); err == nil {
-			path = cwd
-		} else {
-			path = "."
-		}
-	}
-	absPath, err := filepath.Abs(path)
-	if err == nil {
-		path = absPath
+	path, err := resolveHubProjectPath(cfgProject.Path)
+	if err != nil {
+		path = strings.TrimSpace(cfgProject.Path)
+		hubLogger(cfgProject.Name).Warn("resolve project path failed path=%q err=%v", path, err)
 	}
 	info := ProjectInfo{
 		Name:   cfgProject.Name,

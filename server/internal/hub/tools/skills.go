@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +30,12 @@ var (
 )
 
 var fixedSkillAgents = []string{"codex", "claude-code", "opencode", "github-copilot"}
+
+const (
+	skillsCLIVersion       = "1.5.18"
+	skillsCLIPackage       = "skills@" + skillsCLIVersion
+	skillsMinimumNodeMajor = 22
+)
 
 type skillsCommandCall struct {
 	Dir  string
@@ -105,8 +112,12 @@ type SkillsCommand struct {
 	mu                     sync.RWMutex
 	projects               []ProjectInfo
 	operation              *skillsOperationSnapshot
+	skillsNodeMu           sync.Mutex
+	skillsNodeChecked      bool
+	skillsNodeError        string
 	skillsInstallMu        sync.Mutex
 	skillsInstallAttempted bool
+	skillsCLIReady         bool
 }
 
 func NewSkillsCommand(config skillsCommandConfig) *SkillsCommand {
@@ -1014,35 +1025,72 @@ func safeSkillRelativePath(root string, path string) (string, bool) {
 }
 
 func (c *SkillsCommand) runSkills(ctx context.Context, dir string, args ...string) skillsCommandResult {
+	if nodeError := c.ensureSkillsNode(ctx); nodeError != "" {
+		return skillsCommandResult{
+			Stderr:   nodeError,
+			ExitCode: 1,
+			Err:      errors.New(nodeError),
+		}
+	}
 	if c.ensureSkillsCLI(ctx) {
 		result := c.runner.Run(ctx, dir, "skills", args...)
 		if !skillsCommandUnavailable(result) {
 			return result
 		}
 	}
-	npxArgs := append([]string{"--yes", "skills"}, args...)
+	npxArgs := append([]string{"--yes", skillsCLIPackage}, args...)
 	return c.runner.Run(ctx, dir, "npx", npxArgs...)
 }
 
-func (c *SkillsCommand) ensureSkillsCLI(ctx context.Context) bool {
-	if c.skillsCLIAvailable() {
-		return true
+func (c *SkillsCommand) ensureSkillsNode(ctx context.Context) string {
+	c.skillsNodeMu.Lock()
+	defer c.skillsNodeMu.Unlock()
+	if c.skillsNodeChecked {
+		return c.skillsNodeError
 	}
+	c.skillsNodeChecked = true
 
+	result := c.runner.Run(ctx, "", "node", "--version")
+	if skillsCommandFailed(result) {
+		detail := strings.TrimSpace(skillsResultSummary(result))
+		c.skillsNodeError = fmt.Sprintf("Skills require Node.js %d+, but node --version failed: %s", skillsMinimumNodeMajor, detail)
+		return c.skillsNodeError
+	}
+	version := strings.TrimSpace(result.Stdout)
+	majorText := strings.TrimPrefix(version, "v")
+	if dot := strings.IndexByte(majorText, '.'); dot >= 0 {
+		majorText = majorText[:dot]
+	}
+	major, err := strconv.Atoi(majorText)
+	if err != nil || major < skillsMinimumNodeMajor {
+		if version == "" {
+			version = "unknown version"
+		}
+		c.skillsNodeError = fmt.Sprintf("Skills require Node.js %d+; found %s. Update Node.js and restart WheelMaker.", skillsMinimumNodeMajor, version)
+	}
+	return c.skillsNodeError
+}
+
+func (c *SkillsCommand) ensureSkillsCLI(ctx context.Context) bool {
 	c.skillsInstallMu.Lock()
 	defer c.skillsInstallMu.Unlock()
-	if c.skillsCLIAvailable() {
+	if c.skillsCLIReady {
+		return true
+	}
+	if c.skillsCLIAvailable() && c.skillsCLIVersionMatches(ctx) {
+		c.skillsCLIReady = true
 		return true
 	}
 	if c.skillsInstallAttempted {
 		return false
 	}
 	c.skillsInstallAttempted = true
-	result := c.runner.Run(ctx, "", "npm", "install", "-g", "skills")
+	result := c.runner.Run(ctx, "", "npm", "install", "-g", skillsCLIPackage)
 	if skillsCommandFailed(result) {
 		return false
 	}
-	return c.skillsCLIAvailable()
+	c.skillsCLIReady = c.skillsCLIAvailable() && c.skillsCLIVersionMatches(ctx)
+	return c.skillsCLIReady
 }
 
 func (c *SkillsCommand) skillsCLIAvailable() bool {
@@ -1051,6 +1099,19 @@ func (c *SkillsCommand) skillsCLIAvailable() bool {
 	}
 	_, err := c.lookPath("skills")
 	return err == nil
+}
+
+func (c *SkillsCommand) skillsCLIVersionMatches(ctx context.Context) bool {
+	result := c.runner.Run(ctx, "", "skills", "--version")
+	if skillsCommandFailed(result) {
+		return false
+	}
+	for _, field := range strings.Fields(result.Stdout) {
+		if strings.TrimPrefix(field, "v") == skillsCLIVersion {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *SkillsCommand) projectSnapshot() []ProjectInfo {

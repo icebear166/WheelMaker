@@ -46,6 +46,30 @@ func TestBuildClient_DefaultConfigStartsSessionClient(t *testing.T) {
 	t.Cleanup(func() { _ = c.Close() })
 }
 
+func TestStartExpandsHomeProjectPath(t *testing.T) {
+	home := t.TempDir()
+	projectRoot := filepath.Join(home, "WheelMaker")
+	if err := os.MkdirAll(projectRoot, 0o755); err != nil {
+		t.Fatalf("mkdir project: %v", err)
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	cfg := &logger.AppConfig{Projects: []logger.ProjectConfig{{
+		Name: "WheelMaker",
+		Path: "~/WheelMaker",
+	}}}
+	h := New(cfg, filepath.Join(t.TempDir(), "db", "client.sqlite3"))
+	if err := h.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { _ = h.Close() })
+
+	if got := filepath.Clean(cfg.Projects[0].Path); got != filepath.Clean(projectRoot) {
+		t.Fatalf("project path = %q, want expanded home path %q", got, projectRoot)
+	}
+}
+
 func TestBuildClientStartsWithSessionTurnStore(t *testing.T) {
 	baseDir := t.TempDir()
 	dbPath := filepath.Join(baseDir, "db", "client.sqlite3")

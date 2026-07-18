@@ -1045,6 +1045,7 @@ $runKey = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run'
 foreach ($name in $runtimeNames) {
   Remove-ItemProperty -Path $runKey -Name $name -ErrorAction SilentlyContinue
 }
+exit 0
 `;
 }
 

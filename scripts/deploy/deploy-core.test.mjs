@@ -854,6 +854,7 @@ test('Windows legacy migration elevates scheduled task and service removal', () 
   assert.match(elevatedBlock, /Timed out deleting service \$name/);
   assert.match(script, /\$existingProcesses = @\(/);
   assert.match(script, /-Verb RunAs/);
+  assert.equal(script.trimEnd().endsWith('exit 0'), true);
 });
 
 test('Windows legacy migration accepts a failed elevated exit when no registrations remain', () => {

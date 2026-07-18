@@ -595,6 +595,12 @@ func (f *fakeSkillsRunner) Run(_ context.Context, dir string, name string, args 
 	if ok {
 		return result
 	}
+	if name == "node" && reflect.DeepEqual(args, []string{"--version"}) {
+		return skillsCommandResult{ExitCode: 0, Stdout: "v22.20.0\n"}
+	}
+	if name == "skills" && reflect.DeepEqual(args, []string{"--version"}) {
+		return skillsCommandResult{ExitCode: 0, Stdout: "1.5.18\n"}
+	}
 	return skillsCommandResult{ExitCode: 0, Stdout: "[]"}
 }
 
@@ -680,7 +686,7 @@ func assertDirExists(t *testing.T, path string) {
 func TestSkillsCommandInstallsMissingSkillsCLIBeforeRunningCommand(t *testing.T) {
 	runner := newFakeSkillsRunner()
 	lookPath := func(name string) (string, error) {
-		if name == "skills" && runner.hasCall("", "npm", "install", "-g", "skills") {
+		if name == "skills" && runner.hasCall("", "npm", "install", "-g", "skills@1.5.18") {
 			return "C:/npm/skills.cmd", nil
 		}
 		return "", errors.New("not found")
@@ -701,20 +707,20 @@ func TestSkillsCommandInstallsMissingSkillsCLIBeforeRunningCommand(t *testing.T)
 	if !body.OK {
 		t.Fatalf("response=%#v, want successful scan", body)
 	}
-	runner.mu.Lock()
-	calls := append([]skillsCommandCall(nil), runner.calls...)
-	runner.mu.Unlock()
-	if len(calls) < 2 {
-		t.Fatalf("calls=%#v, want install then skills list", calls)
+	if !runner.hasCall("", "node", "--version") {
+		t.Fatalf("Node.js compatibility was not checked: %#v", runner.calls)
 	}
-	if !reflect.DeepEqual(calls[0], skillsCommandCall{Dir: "", Name: "npm", Args: []string{"install", "-g", "skills"}}) {
-		t.Fatalf("first call=%#v, want npm install -g skills", calls[0])
+	if !runner.hasCall("", "npm", "install", "-g", "skills@1.5.18") {
+		t.Fatalf("pinned skills CLI was not installed: %#v", runner.calls)
 	}
-	if !reflect.DeepEqual(calls[1], skillsCommandCall{Dir: "", Name: "skills", Args: []string{"list", "-g", "--json"}}) {
-		t.Fatalf("second call=%#v, want skills list -g --json", calls[1])
+	if !runner.hasCall("", "skills", "--version") {
+		t.Fatalf("installed skills CLI version was not verified: %#v", runner.calls)
 	}
-	if runner.hasCall("", "npx", "--yes", "skills", "list", "-g", "--json") {
-		t.Fatalf("npx fallback should not run after install succeeds: %#v", calls)
+	if !runner.hasCall("", "skills", "list", "-g", "--json") {
+		t.Fatalf("skills list was not called after install: %#v", runner.calls)
+	}
+	if runner.hasCall("", "npx", "--yes", "skills@1.5.18", "list", "-g", "--json") {
+		t.Fatalf("npx fallback should not run after install succeeds: %#v", runner.calls)
 	}
 }
 
@@ -725,7 +731,7 @@ func TestSkillsCommandFallsBackToNpxWhenAutoInstallFailsOnce(t *testing.T) {
 		t.Fatalf("mkdir project: %v", err)
 	}
 	runner := newFakeSkillsRunner()
-	runner.set("", "npm", []string{"install", "-g", "skills"}, skillsCommandResult{
+	runner.set("", "npm", []string{"install", "-g", "skills@1.5.18"}, skillsCommandResult{
 		ExitCode: 1,
 		Stderr:   "npm install failed",
 		Err:      errors.New("exit status 1"),
@@ -751,14 +757,67 @@ func TestSkillsCommandFallsBackToNpxWhenAutoInstallFailsOnce(t *testing.T) {
 	if !body.OK {
 		t.Fatalf("response=%#v, want npx fallback scan to succeed", body)
 	}
-	if got := countSkillsCalls(runner, "", "npm", "install", "-g", "skills"); got != 1 {
+	if got := countSkillsCalls(runner, "", "npm", "install", "-g", "skills@1.5.18"); got != 1 {
 		t.Fatalf("npm install calls=%d, want 1", got)
 	}
-	if !runner.hasCall("", "npx", "--yes", "skills", "list", "-g", "--json") {
+	if !runner.hasCall("", "npx", "--yes", "skills@1.5.18", "list", "-g", "--json") {
 		t.Fatalf("global npx fallback not called: %#v", runner.calls)
 	}
-	if !runner.hasCall(projectRoot, "npx", "--yes", "skills", "list", "--json") {
+	if !runner.hasCall(projectRoot, "npx", "--yes", "skills@1.5.18", "list", "--json") {
 		t.Fatalf("project npx fallback not called: %#v", runner.calls)
+	}
+}
+
+func TestSkillsCommandRejectsOldNodeBeforeRunningCLI(t *testing.T) {
+	runner := newFakeSkillsRunner()
+	runner.set("", "node", []string{"--version"}, skillsCommandResult{ExitCode: 0, Stdout: "v12.22.12\n"})
+	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{HubID: "hub-a"})
+
+	resp, cmdErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("Handle scan error: %#v", cmdErr)
+	}
+	body := resp.(skillsCommandResponse)
+	if body.OK || !strings.Contains(body.ErrorSummary, "Node.js 22+") {
+		t.Fatalf("response=%#v, want actionable old Node error", body)
+	}
+	if runner.hasCall("", "skills", "list", "-g", "--json") || runner.hasCall("", "npx", "--yes", "skills@1.5.18", "list", "-g", "--json") {
+		t.Fatalf("skills CLI should not run with old Node: %#v", runner.calls)
+	}
+}
+
+func TestSkillsCommandReplacesMismatchedGlobalCLIWithPinnedFallback(t *testing.T) {
+	runner := newFakeSkillsRunner()
+	runner.set("", "skills", []string{"--version"}, skillsCommandResult{ExitCode: 0, Stdout: "1.5.19\n"})
+	runner.set("", "npm", []string{"install", "-g", "skills@1.5.18"}, skillsCommandResult{
+		ExitCode: 1,
+		Stderr:   "global install denied",
+		Err:      errors.New("exit status 1"),
+	})
+	cmd := newSkillsCommandWithRunner(runner, skillsCommandConfig{HubID: "hub-a"})
+
+	resp, cmdErr := cmd.Handle(context.Background(), rawSkillsCommandPayload(t, map[string]any{
+		"action": "scan",
+		"hubId":  "hub-a",
+	}))
+	if cmdErr != nil {
+		t.Fatalf("Handle scan error: %#v", cmdErr)
+	}
+	body := resp.(skillsCommandResponse)
+	if !body.OK {
+		t.Fatalf("response=%#v, want pinned npx fallback scan to succeed", body)
+	}
+	if !runner.hasCall("", "npm", "install", "-g", "skills@1.5.18") {
+		t.Fatalf("mismatched global CLI was not replaced: %#v", runner.calls)
+	}
+	if !runner.hasCall("", "npx", "--yes", "skills@1.5.18", "list", "-g", "--json") {
+		t.Fatalf("pinned npx fallback not called: %#v", runner.calls)
+	}
+	if runner.hasCall("", "skills", "list", "-g", "--json") {
+		t.Fatalf("mismatched global CLI must not handle scan: %#v", runner.calls)
 	}
 }
 
@@ -1060,7 +1119,7 @@ func TestSkillsCommandOnOperationDoneNotCalledOnFailure(t *testing.T) {
 		ExitCode: 1,
 		Stderr:   "install failed",
 	})
-	runner.set("", "npx", []string{"--yes", "skills", "add", "mattpocock/skills", "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "tdd", "-y"}, skillsCommandResult{
+	runner.set("", "npx", []string{"--yes", "skills@1.5.18", "add", "mattpocock/skills", "-g", "--agent", "codex", "claude-code", "opencode", "github-copilot", "--skill", "tdd", "-y"}, skillsCommandResult{
 		ExitCode: 1,
 		Stderr:   "install failed",
 	})
@@ -1290,7 +1349,7 @@ func TestSkillsCommandFailureIncludesNpxExecErrorWhenFallbackOutputEmpty(t *test
 		ExitCode: -1,
 		Err:      errors.New(`exec: "skills": executable file not found in $PATH`),
 	})
-	runner.set("", "npx", []string{"--yes", "skills", "add", "mattpocock/skills", "--list"}, skillsCommandResult{
+	runner.set("", "npx", []string{"--yes", "skills@1.5.18", "add", "mattpocock/skills", "--list"}, skillsCommandResult{
 		ExitCode: -1,
 		Err:      errors.New(`exec: "npx": executable file not found in $PATH`),
 	})
