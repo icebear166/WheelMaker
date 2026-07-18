@@ -114,6 +114,14 @@ export async function resolvePublisherToken({actions}, deps) {
   return pendingDocument.token;
 }
 
+export async function readConfiguredPublisherToken(deps) {
+  const document = await deps.readFinal();
+  if (!document) {
+    throw new Error('publishing hub has no local release-server.json token configuration');
+  }
+  return validateTokenDocument(document, 'local release server configuration').token;
+}
+
 function spawnWithInput(command, args, input) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
