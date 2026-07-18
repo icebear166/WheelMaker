@@ -63,6 +63,30 @@ describe('desktop window controls', () => {
     expect(close).toHaveBeenCalled();
   });
 
+  test('shows the Windows extensions menu before minimize and enters Local Dev', async () => {
+	const requestLocalDevMode = jest.fn();
+	(global as typeof globalThis & { window?: unknown }).window = {
+		WheelMakerDesktop: {enabled: true, requestLocalDevMode},
+	};
+
+	let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+	await ReactTestRenderer.act(async () => {
+		renderer = ReactTestRenderer.create(<DesktopWindowControls />);
+	});
+	const root = renderer!.root;
+	const labels = root.findAllByType('button').map(button => button.props['aria-label']).filter(Boolean);
+	expect(labels).toEqual(['Windows extensions', 'Minimize', 'Maximize or restore', 'Close']);
+	await ReactTestRenderer.act(async () => {
+		root.findByProps({'aria-label': 'Windows extensions'}).props.onClick();
+	});
+	const menuItem = root.findByProps({role: 'menuitem'});
+	expect(menuItem.findAllByType('span').some(span => span.children.includes('Dev Mode'))).toBe(true);
+	await ReactTestRenderer.act(async () => {
+		menuItem.props.onClick();
+	});
+	expect(requestLocalDevMode).toHaveBeenCalledWith('');
+  });
+
   test('drags desktop title rows except interactive targets', async () => {
     const startDrag = jest.fn();
     const toggleMaximize = jest.fn();

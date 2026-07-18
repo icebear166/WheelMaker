@@ -38,8 +38,9 @@ describe('web security policy', () => {
     expect(devServer.allowedHosts).toEqual(['localhost', '127.0.0.1']);
     expect(devServer.headers['Content-Security-Policy']).toContain("default-src 'self'");
     expect(devServer.headers['Content-Security-Policy']).toContain(
-      "connect-src 'self' wss: https://release.wheelmaker.top",
+      "connect-src 'self' ws: wss: https://release.wheelmaker.top",
     );
+	 expect(devServer.headers['Content-Security-Policy']).not.toContain('upgrade-insecure-requests');
     expect(devServer.headers['Content-Security-Policy']).not.toContain('github.com');
     expect(devServer.headers['X-Content-Type-Options']).toBe('nosniff');
     expect(devServer.headers['X-Frame-Options']).toBe('DENY');

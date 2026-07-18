@@ -43,6 +43,10 @@ const WEB_SECURITY_POLICY = [
   'upgrade-insecure-requests',
 ].join('; ');
 
+const LOCAL_WEB_SECURITY_POLICY = WEB_SECURITY_POLICY
+  .replace("connect-src 'self' wss:", "connect-src 'self' ws: wss:")
+  .replace('; upgrade-insecure-requests', '');
+
 function envFlag(value) {
   return ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase());
 }
@@ -161,13 +165,20 @@ module.exports = (_env = {}, argv = {}) => {
     ],
     devServer: {
 		host: '127.0.0.1',
-      port: 8080,
+      port: 4173,
 		devMiddleware: {
 			writeToDisk: true,
 		},
 		allowedHosts: ['localhost', '127.0.0.1'],
+		proxy: [
+			{
+				context: ['/ws'],
+				target: 'http://127.0.0.1:9630',
+				ws: true,
+			},
+		],
 		headers: {
-			'Content-Security-Policy': WEB_SECURITY_POLICY,
+			'Content-Security-Policy': LOCAL_WEB_SECURITY_POLICY,
 			'Referrer-Policy': 'no-referrer',
 			'X-Content-Type-Options': 'nosniff',
 			'X-Frame-Options': 'DENY',

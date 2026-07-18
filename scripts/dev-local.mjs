@@ -42,15 +42,18 @@ async function buildDevAssets(deps) {
       deps.mkdir(paths.web),
       deps.mkdir(join(paths.workRoot, 'cache', 'webpack')),
     ]);
-    await deps.run('go', [
-      'build',
-      '-trimpath',
-      '-ldflags=-H windowsgui',
-      '-o',
-      paths.hub,
-      './cmd/wheelmaker',
-    ], {cwd: paths.serverRoot, env});
-    await buildDesktopExecutable(deps, paths, env);
+    await Promise.all([
+      deps.run('go', [
+        'build',
+        '-trimpath',
+        '-ldflags=-H windowsgui',
+        '-o',
+        paths.hub,
+        './cmd/wheelmaker',
+      ], {cwd: paths.serverRoot, env}),
+      buildDesktopExecutable(deps, paths, env),
+      runNpm(deps, ['run', 'build:web'], {cwd: paths.appRoot, env}),
+    ]);
   } finally {
     await lock.release();
   }
@@ -99,31 +102,74 @@ async function startDev(deps) {
   }
   await runWindowsBatch(deps, paths.formalStop);
   const env = buildEnvironment(deps, paths);
-  const guardian = await deps.spawn(paths.hub, ['-d'], {cwd: paths.devRoot, env});
-  const webServer = await deps.spawn('npm', ['run', 'web'], {
-    cwd: paths.appRoot,
-    env,
-  });
-  await deps.writeFile(paths.runtime, JSON.stringify({
-    guardianPid: guardian.pid,
-    webServerPid: webServer.pid,
-  }) + '\n');
-  if (deps.env.WHEELMAKER_DEV_NO_DESKTOP !== '1') {
-    await deps.spawn(paths.desktop, ['--local-dev'], {cwd: paths.devRoot, env});
+  const started = [];
+  try {
+    const guardian = await deps.spawn(paths.hub, ['-d'], {cwd: paths.devRoot, env});
+    started.push(guardian.pid);
+    const webServer = await spawnNpm(deps, ['run', 'web'], {
+      cwd: paths.appRoot,
+      env,
+    });
+    started.push(webServer.pid);
+    await deps.writeFile(paths.devConfig, JSON.stringify({sourcePath: deps.repoRoot}) + '\n');
+    await Promise.all([
+      deps.waitForURL('http://127.0.0.1:4173/'),
+      deps.waitForURL('http://127.0.0.1:9630/ws', 60_000, true),
+    ]);
+    await deps.writeFile(paths.runtime, JSON.stringify({
+      guardianPid: guardian.pid,
+      webServerPid: webServer.pid,
+    }) + '\n');
+    if (deps.env.WHEELMAKER_DEV_NO_DESKTOP !== '1') {
+      await deps.spawn(paths.desktop, ['--local-dev'], {cwd: paths.devRoot, env});
+    }
+  } catch (error) {
+    for (const pid of started.reverse()) {
+      await deps.run('taskkill.exe', ['/PID', String(pid), '/T', '/F'], {cwd: paths.devRoot, env: deps.env}).catch(() => undefined);
+    }
+    await deps.remove(paths.runtime);
+    await runWindowsBatch(deps, paths.formalStart).catch(() => undefined);
+    throw error;
   }
+}
+
+function runNpm(deps, args, options) {
+  if (deps.npmViaCmd) {
+    return deps.run('cmd.exe', ['/d', '/s', '/c', 'npm.cmd', ...args], options);
+  }
+  return deps.run('npm', args, options);
+}
+
+function spawnNpm(deps, args, options) {
+  if (deps.npmViaCmd) {
+    return deps.spawn('cmd.exe', ['/d', '/s', '/c', 'npm.cmd', ...args], options);
+  }
+  return deps.spawn('npm', args, options);
 }
 
 async function stopDev(deps) {
   const paths = devPaths(deps);
   const runtime = JSON.parse(await deps.readFile(paths.runtime, 'utf8'));
+  const failures = [];
   for (const pid of [runtime.webServerPid, runtime.guardianPid]) {
     if (!Number.isInteger(pid) || pid <= 0) {
       throw new Error(`invalid Dev runtime pid in ${paths.runtime}`);
     }
-    await deps.run('taskkill.exe', ['/PID', String(pid), '/T', '/F'], {cwd: paths.devRoot, env: deps.env});
+    try {
+      await deps.run('taskkill.exe', ['/PID', String(pid), '/T', '/F'], {cwd: paths.devRoot, env: deps.env});
+    } catch (error) {
+      failures.push(error);
+    }
   }
   await deps.remove(paths.runtime);
-  await runWindowsBatch(deps, paths.formalStart);
+  try {
+    await runWindowsBatch(deps, paths.formalStart);
+  } catch (error) {
+    failures.push(error);
+  }
+  if (failures.length > 0) {
+    throw new AggregateError(failures, `Local Dev stopped with cleanup errors: ${failures.map(error => error.message).join('; ')}`);
+  }
 }
 
 async function readDevStatus(deps) {
@@ -157,6 +203,7 @@ function devPaths(deps) {
     desktopCommandRoot,
     desktopResource: join(desktopCommandRoot, 'desktop_windows.syso'),
     devRoot,
+    devConfig: join(devRoot, 'dev-config.json'),
     formalStart: join(deps.home, '.wheelmaker', 'start.bat'),
     formalStop: join(deps.home, '.wheelmaker', 'stop.bat'),
     hub: join(devRoot, 'bin', 'wheelmaker.exe'),
@@ -186,6 +233,7 @@ export function createDefaultDevDependencies() {
     exists: async path => readFile(path).then(() => true).catch(error => error?.code === 'ENOENT' ? false : Promise.reject(error)),
     home: os.homedir(),
     mkdir: path => mkdir(path, {recursive: true}),
+	npmViaCmd: process.platform === 'win32',
     readFile,
     remove: path => rm(path, {force: true}),
     repoRoot,
@@ -198,6 +246,21 @@ export function createDefaultDevDependencies() {
         resolveSpawn({pid: child.pid});
       });
     }),
+	waitForURL: async (url, timeoutMs = 60_000, acceptAnyStatus = false) => {
+		const deadline = Date.now() + timeoutMs;
+		let lastError;
+		while (Date.now() < deadline) {
+			try {
+				const response = await fetch(url, {signal: AbortSignal.timeout(2_000)});
+				if (response.ok || acceptAnyStatus) return;
+				lastError = new Error(`HTTP ${response.status}`);
+			} catch (error) {
+				lastError = error;
+			}
+			await new Promise(resolveDelay => setTimeout(resolveDelay, 500));
+		}
+		throw new Error(`Local Web did not become ready at ${url}: ${lastError?.message ?? 'timeout'}`);
+	},
     writeFile,
   };
 }

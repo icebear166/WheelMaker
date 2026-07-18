@@ -14,6 +14,7 @@ type desktopPageMode uint8
 const (
 	desktopBootstrapPage desktopPageMode = iota
 	desktopTrustedRemotePage
+	desktopTrustedLocalDevPage
 )
 
 type desktopBridgeAction uint8
@@ -31,6 +32,10 @@ const (
 	desktopBridgeRequestServerChange
 	desktopBridgeOpenProjectFileInVSCode
 	desktopBridgeShowProjectFileInFolder
+	desktopBridgeEnterLocalDev
+	desktopBridgeGetLocalDevState
+	desktopBridgeSaveLocalDevSource
+	desktopBridgeRunLocalDevOperation
 )
 
 type desktopNavigationAction uint8
@@ -42,7 +47,8 @@ const (
 )
 
 type desktopWebViewPolicy struct {
-	baseURL *url.URL
+	baseURL  *url.URL
+	localDev bool
 }
 
 func newDesktopWebViewPolicy(baseURL string) (*desktopWebViewPolicy, error) {
@@ -57,6 +63,14 @@ func newDesktopWebViewPolicy(baseURL string) (*desktopWebViewPolicy, error) {
 	return &desktopWebViewPolicy{baseURL: parsed}, nil
 }
 
+func newDesktopLocalDevWebViewPolicy() (*desktopWebViewPolicy, error) {
+	baseURL, err := url.Parse(desktopLocalDevURL)
+	if err != nil {
+		return nil, err
+	}
+	return &desktopWebViewPolicy{baseURL: baseURL, localDev: true}, nil
+}
+
 func (p *desktopWebViewPolicy) AllowsBridge(mode desktopPageMode, rawURL string, mainFrame bool, action desktopBridgeAction) bool {
 	if !mainFrame {
 		return false
@@ -67,8 +81,24 @@ func (p *desktopWebViewPolicy) AllowsBridge(mode desktopPageMode, rawURL string,
 		}
 		return desktopBootstrapActionAllowed(action)
 	}
-	if mode != desktopTrustedRemotePage || !p.contains(rawURL) {
+	if (mode != desktopTrustedRemotePage && mode != desktopTrustedLocalDevPage) || !p.contains(rawURL) {
 		return false
+	}
+	if mode == desktopTrustedLocalDevPage {
+		switch action {
+		case desktopBridgeGetDeviceName,
+			desktopBridgeStartDrag,
+			desktopBridgeMinimize,
+			desktopBridgeToggleMaximize,
+			desktopBridgeClose:
+			return true
+		case desktopBridgeGetLocalDevState,
+			desktopBridgeSaveLocalDevSource,
+			desktopBridgeRunLocalDevOperation:
+			return true
+		default:
+			return false
+		}
 	}
 	switch action {
 	case desktopBridgeGetDeviceName,
@@ -77,6 +107,7 @@ func (p *desktopWebViewPolicy) AllowsBridge(mode desktopPageMode, rawURL string,
 		desktopBridgeToggleMaximize,
 		desktopBridgeClose,
 		desktopBridgeRequestServerChange,
+		desktopBridgeEnterLocalDev,
 		desktopBridgeOpenProjectFileInVSCode,
 		desktopBridgeShowProjectFileInFolder:
 		return true
@@ -104,7 +135,15 @@ func (p *desktopWebViewPolicy) DecideNavigation(rawURL string, mainFrame bool, c
 
 func (p *desktopWebViewPolicy) contains(rawURL string) bool {
 	parsed, err := url.Parse(rawURL)
-	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil {
+	if err != nil || parsed.Host == "" || parsed.User != nil {
+		return false
+	}
+	if p.localDev {
+		return parsed.Scheme == "http" && parsed.Host == "127.0.0.1:4173" &&
+			parsed.RawQuery == "" && parsed.Fragment == "" &&
+			(cleanURLPath(parsed.Path) == "/" || strings.HasPrefix(cleanURLPath(parsed.Path), "/"))
+	}
+	if parsed.Scheme != "https" {
 		return false
 	}
 	if !strings.EqualFold(parsed.Scheme, p.baseURL.Scheme) || !strings.EqualFold(parsed.Host, p.baseURL.Host) {
@@ -135,10 +174,22 @@ type desktopWebViewSecurityState struct {
 	committedURL   string
 }
 
+func (s *desktopWebViewSecurityState) Mode() desktopPageMode {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.mode
+}
+
 func newDesktopWebViewSecurityState(baseURL string, mode desktopPageMode) (*desktopWebViewSecurityState, error) {
 	state := &desktopWebViewSecurityState{mode: mode}
 	if mode == desktopTrustedRemotePage {
 		policy, err := newDesktopWebViewPolicy(baseURL)
+		if err != nil {
+			return nil, err
+		}
+		state.policy = policy
+	} else if mode == desktopTrustedLocalDevPage {
+		policy, err := newDesktopLocalDevWebViewPolicy()
 		if err != nil {
 			return nil, err
 		}
@@ -206,6 +257,21 @@ func (s *desktopWebViewSecurityState) Authorize(epoch uint64, mainFrame bool, ac
 		return mainFrame && isDesktopBootstrapDocumentURL(s.committedURL) && desktopBootstrapActionAllowed(action)
 	}
 	return s.policy != nil && s.policy.AllowsBridge(s.mode, s.committedURL, mainFrame, action)
+}
+
+func (s *desktopWebViewSecurityState) SetTrustedLocalDevPage() error {
+	policy, err := newDesktopLocalDevWebViewPolicy()
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.policy = policy
+	s.mode = desktopTrustedLocalDevPage
+	s.epoch++
+	s.committedEpoch = 0
+	s.committedURL = ""
+	return nil
 }
 
 func desktopBootstrapActionAllowed(action desktopBridgeAction) bool {

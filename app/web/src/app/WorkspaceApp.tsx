@@ -33,6 +33,7 @@ import { PortRelayFloatingButton, PortRelayFrameSurface } from '../portRelay/Por
 import { initializePWAFoundation } from '../platform/pwa';
 import {cleanupNativeWebViewPWA} from '../platform/pwa/nativePwaGuard';
 import { DesktopDragRegion, DesktopWindowControls } from '../shell/layouts/desktop/DesktopTitleBar';
+import {LocalDevModePanel} from '../shell/layouts/desktop/LocalDevModePanel';
 import {resolveDesktopChatQuickSwitchContextMenu} from '../shell/layouts/desktop/chatQuickSwitchContextMenu';
 import {
   getDesktopWindowBridge,
@@ -21742,6 +21743,7 @@ export function App() {
         drawerOpen={mobilePortRelayFrameOpen ? false : drawerOpen}
         onCloseDrawer={() => setDrawerOpen(false)}
       />
+      <LocalDevModePanel />
       {quickFileSearchOverlay}
       {previewSelectionContextMenu}
       {chatQuickSwitchMenuPlacement.kind === 'desktop' ? chatQuickSwitchMenu : null}

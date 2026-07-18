@@ -53,9 +53,17 @@ var (
 	procSendMessageW          = user32.NewProc("SendMessageW")
 	procPostMessageW          = user32.NewProc("PostMessageW")
 	procShowWindow            = user32.NewProc("ShowWindow")
+	procMessageBoxW           = user32.NewProc("MessageBoxW")
 	procIsZoomed              = user32.NewProc("IsZoomed")
 	procGetSystemMetrics      = user32.NewProc("GetSystemMetrics")
 	procDwmSetWindowAttribute = dwmapi.NewProc("DwmSetWindowAttribute")
+)
+
+const (
+	mbYesNo       = 0x00000004
+	mbIconWarning = 0x00000030
+	mbDefButton2  = 0x00000100
+	idYes         = 6
 )
 
 const monitorDefaultToNearest = 2

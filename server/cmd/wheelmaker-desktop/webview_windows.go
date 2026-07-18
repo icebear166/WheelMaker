@@ -64,6 +64,10 @@ func bindDesktopWindowBridge(w webview2.WebView, hwnd uintptr, desktopRuntime *d
 	if desktopRuntime == nil {
 		return errors.New("desktop runtime is unavailable")
 	}
+	localDevController, err := newWindowsLocalDevController()
+	if err != nil {
+		return err
+	}
 	maximizeController := newDesktopMaximizeController(hwnd, win32DesktopWindowOps{})
 	authorize := func(action desktopBridgeAction) error {
 		if !desktopRuntime.security.AuthorizeCurrent(action) {
@@ -138,6 +142,56 @@ func bindDesktopWindowBridge(w webview2.WebView, hwnd uintptr, desktopRuntime *d
 				return err
 			}
 			return desktopRuntime.RequestServerChange(context.Background())
+		}},
+		{desktopEnterLocalDevBinding, func(sourcePath string) error {
+			if err := authorize(desktopBridgeEnterLocalDev); err != nil {
+				return err
+			}
+			if sourcePath != "" {
+				root, err := validateLocalDevSourceRoot(sourcePath)
+				if err != nil {
+					return err
+				}
+				if !confirmWindowsLocalDevSource(root) {
+					return errors.New("local dev source change was cancelled")
+				}
+				if _, err := localDevController.SaveSource(root); err != nil {
+					return err
+				}
+			}
+			if _, err := localDevController.Run(context.Background(), "start"); err != nil {
+				return err
+			}
+			return desktopRuntime.EnterLocalDev()
+		}},
+		{desktopGetLocalDevStateBinding, func() (localDevState, error) {
+			if err := authorize(desktopBridgeGetLocalDevState); err != nil {
+				return localDevState{}, err
+			}
+			return localDevController.State()
+		}},
+		{desktopSaveLocalDevSourceBinding, func(sourcePath string) (localDevState, error) {
+			if err := authorize(desktopBridgeSaveLocalDevSource); err != nil {
+				return localDevState{}, err
+			}
+			root, err := validateLocalDevSourceRoot(sourcePath)
+			if err != nil {
+				return localDevState{}, err
+			}
+			if !confirmWindowsLocalDevSource(root) {
+				return localDevState{}, errors.New("local dev source change was cancelled")
+			}
+			return localDevController.SaveSource(root)
+		}},
+		{desktopRunLocalDevBinding, func(operation string) (localDevState, error) {
+			if err := authorize(desktopBridgeRunLocalDevOperation); err != nil {
+				return localDevState{}, err
+			}
+			state, err := localDevController.Run(context.Background(), operation)
+			if err == nil && operation == string(localDevExit) {
+				err = desktopRuntime.ExitLocalDev()
+			}
+			return state, err
 		}},
 		{desktopOpenProjectFileInVSCodeBinding, func(projectRoot, relativePath string) error {
 			if err := authorize(desktopBridgeOpenProjectFileInVSCode); err != nil {

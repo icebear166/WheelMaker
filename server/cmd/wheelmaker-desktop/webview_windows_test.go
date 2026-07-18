@@ -78,3 +78,33 @@ func TestDesktopRuntimeFileActionBindings(t *testing.T) {
 		}
 	}
 }
+
+func TestDesktopRuntimeExposesOnlyTheLocalDevEntryOnHTTPS(t *testing.T) {
+	script := desktopRuntimeInitScript()
+	if !strings.Contains(script, "requestLocalDevMode") || !strings.Contains(script, desktopEnterLocalDevBinding) {
+		t.Fatal("desktop runtime script is missing the Local Dev entry binding")
+	}
+	source, err := os.ReadFile("webview_windows.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(source), "authorize(desktopBridgeEnterLocalDev)") {
+		t.Fatal("Windows bridge does not authorize Local Dev entry")
+	}
+}
+
+func TestDesktopRuntimeInjectsLocalDevControlsOnlyForExactLoopback(t *testing.T) {
+	script := desktopRuntimeInitScript()
+	for _, want := range []string{
+		"location.hostname === '127.0.0.1'",
+		"location.port === '4173'",
+		"localDev: Object.freeze",
+		desktopGetLocalDevStateBinding,
+		desktopSaveLocalDevSourceBinding,
+		desktopRunLocalDevBinding,
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("desktop runtime script missing %q", want)
+		}
+	}
+}

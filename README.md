@@ -314,6 +314,27 @@ This developer command will:
 
 Production releases do not use this as a conditional target-side step: the release builder compiles Web once, includes it in every platform archive, and every normal deploy replaces `~/.wheelmaker/web`.
 
+### Windows local development
+
+Windows Desktop includes a Windows extensions button immediately before the window controls. Open it, choose **Dev Mode**, and provide the WheelMaker source directory on first use. The native shell validates and confirms that directory before it runs any command. In Local Dev, the panel can build, start, stop, restart, open the artifact directory, or return to the configured production server.
+
+The equivalent source entrypoint is:
+
+```bat
+dev-local.bat start
+```
+
+`build`, `stop`, `restart`, and `status` are also supported. The workflow builds from the configured source and writes only to:
+
+```text
+~/.wheelmaker/dev/
+  bin/wheelmaker.exe
+  bin/WheelMakerDesktop.exe
+  web/
+```
+
+The Dev Hub uses the normal `~/.wheelmaker` configuration and databases, so the script stops the formal runtime before starting Dev and restores it when Dev stops. Dev and release builds share one lock and reuse `.release-work/cache/{webpack,go-build,go-mod}`; Dev never writes `.release-out` or `.release-work/tmp`.
+
 ### 6. Build releases locally
 
 WheelMaker Android is a native Kotlin WebView shell under `mobile/android/`. It contains a dedicated bootstrap page where the user enters their HTTPS server Base URL, then loads the Workspace Web from that server. Changing servers clears state associated with the previous site.

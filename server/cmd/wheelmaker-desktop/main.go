@@ -14,9 +14,16 @@ func main() {
 }
 
 func run() error {
+	localDev := false
+	for _, arg := range os.Args[1:] {
+		if arg != "--local-dev" {
+			return fmt.Errorf("unsupported argument: %s", arg)
+		}
+		localDev = true
+	}
 	store, err := newDefaultDesktopConfigStore()
 	if err != nil {
 		return err
 	}
-	return runDesktopApp(context.Background(), newWebView2Launcher(), store, newDefaultDesktopBaseURLProber())
+	return runDesktopAppWithMode(context.Background(), newWebView2Launcher(), store, newDefaultDesktopBaseURLProber(), localDev)
 }

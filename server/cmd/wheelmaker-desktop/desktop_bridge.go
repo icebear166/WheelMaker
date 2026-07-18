@@ -18,6 +18,10 @@ const (
 	desktopRequestServerBinding           = "__wheelMakerDesktopRequestServerChange"
 	desktopOpenProjectFileInVSCodeBinding = "__wheelMakerDesktopOpenProjectFileInVSCode"
 	desktopShowProjectFileInFolderBinding = "__wheelMakerDesktopShowProjectFileInFolder"
+	desktopEnterLocalDevBinding           = "__wheelMakerDesktopEnterLocalDev"
+	desktopGetLocalDevStateBinding        = "__wheelMakerDesktopGetLocalDevState"
+	desktopSaveLocalDevSourceBinding      = "__wheelMakerDesktopSaveLocalDevSource"
+	desktopRunLocalDevBinding             = "__wheelMakerDesktopRunLocalDev"
 )
 
 func desktopRuntimeInitScript() string {
@@ -52,9 +56,26 @@ func desktopRuntimeInitScript() string {
       toggleMaximize: invoke('` + desktopToggleMaximizeBinding + `'),
       close: invoke('` + desktopCloseBinding + `'),
       requestServerChange: invoke('` + desktopRequestServerBinding + `'),
+		requestLocalDevMode: invoke('` + desktopEnterLocalDevBinding + `'),
 		openProjectFileInVSCode: invoke('` + desktopOpenProjectFileInVSCodeBinding + `'),
 		showProjectFileInFolder: invoke('` + desktopShowProjectFileInFolderBinding + `'),
     });
+	return;
+	}
+  if (location.protocol === 'http:' && location.hostname === '127.0.0.1' && location.port === '4173') {
+		window.WheelMakerDesktop = Object.freeze({
+			enabled: true,
+			getDeviceName: invoke('` + desktopGetDeviceNameBinding + `'),
+			startDrag: invoke('` + desktopStartDragBinding + `'),
+			minimize: invoke('` + desktopMinimizeBinding + `'),
+			toggleMaximize: invoke('` + desktopToggleMaximizeBinding + `'),
+			close: invoke('` + desktopCloseBinding + `'),
+			localDev: Object.freeze({
+				getState: invoke('` + desktopGetLocalDevStateBinding + `'),
+				saveSource: invoke('` + desktopSaveLocalDevSourceBinding + `'),
+				run: invoke('` + desktopRunLocalDevBinding + `'),
+			}),
+		});
   }
 })();`
 }

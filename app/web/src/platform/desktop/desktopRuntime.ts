@@ -5,9 +5,27 @@ export type DesktopWindowBridge = {
   minimize?: () => Promise<void> | void;
   toggleMaximize?: () => Promise<void> | void;
   close?: () => Promise<void> | void;
+  requestLocalDevMode?: (sourcePath: string) => Promise<void> | void;
+  localDev?: DesktopLocalDevBridge;
   openProjectFileInVSCode?: (projectRoot: string, relativePath: string) => Promise<void> | void;
   showProjectFileInFolder?: (projectRoot: string, relativePath: string) => Promise<void> | void;
 };
+
+export type DesktopLocalDevOperation = 'build' | 'start' | 'stop' | 'restart' | 'open-directory' | 'exit';
+
+export type DesktopLocalDevState = {
+  sourcePath: string;
+  running: boolean;
+  message?: string;
+};
+
+export type DesktopLocalDevBridge = {
+  getState: () => Promise<DesktopLocalDevState>;
+  saveSource: (sourcePath: string) => Promise<DesktopLocalDevState>;
+  run: (operation: DesktopLocalDevOperation) => Promise<DesktopLocalDevState>;
+};
+
+export const openLocalDevPanelEvent = 'wheelmaker:open-local-dev';
 
 export type DesktopProjectFileAction = 'vscode' | 'folder';
 

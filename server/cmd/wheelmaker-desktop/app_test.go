@@ -187,6 +187,25 @@ func TestDesktopBootstrapLaunchWithoutConfig(t *testing.T) {
 	}
 }
 
+func TestDesktopLocalDevLaunchUsesFixedLoopbackWithoutProbing(t *testing.T) {
+	launcher := &recordingLauncher{}
+	prober := &recordingDesktopProber{}
+	store := &memoryDesktopConfigStore{config: desktopConfig{BaseURL: "https://example.com/"}}
+
+	if err := runDesktopAppWithMode(context.Background(), launcher, store, prober, true); err != nil {
+		t.Fatalf("runDesktopAppWithMode: %v", err)
+	}
+	if launcher.target.URL != desktopLocalDevURL || launcher.target.HTML != "" {
+		t.Fatalf("target=%+v, want fixed Local Dev URL", launcher.target)
+	}
+	if prober.url != "" {
+		t.Fatalf("local Dev launch unexpectedly probed %q", prober.url)
+	}
+	if launcher.opts.Runtime.security.Mode() != desktopTrustedLocalDevPage {
+		t.Fatalf("mode=%v, want local Dev mode", launcher.opts.Runtime.security.Mode())
+	}
+}
+
 func TestDesktopBootstrapInitScriptRecognizesEmbeddedDocument(t *testing.T) {
 	script := desktopRuntimeInitScript()
 	if !strings.Contains(script, desktopBootstrapDocumentURL()) {

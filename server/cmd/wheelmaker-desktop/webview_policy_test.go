@@ -78,6 +78,112 @@ func TestDesktopBridgeAuthorization(t *testing.T) {
 	}
 }
 
+func TestDesktopLocalDevPolicyAcceptsOnlyExactLoopbackOrigin(t *testing.T) {
+	policy, err := newDesktopLocalDevWebViewPolicy()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !policy.contains("http://127.0.0.1:4173/") {
+		t.Fatal("local Dev policy rejected its origin")
+	}
+	if !policy.contains("http://127.0.0.1:4173/projects") {
+		t.Fatal("local Dev policy rejected a child path")
+	}
+	for _, raw := range []string{
+		"http://localhost:8080/",
+		"http://127.0.0.1:8081/",
+		"http://192.0.2.1:8080/",
+		"https://127.0.0.1:4173/",
+	} {
+		if policy.contains(raw) {
+			t.Fatalf("local Dev policy accepted %q", raw)
+		}
+	}
+}
+
+func TestDesktopLocalDevPageOnlyAuthorizesWindowControls(t *testing.T) {
+	state, err := newDesktopWebViewSecurityState("", desktopTrustedLocalDevPage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	epoch := state.BeginTopLevelNavigation("http://127.0.0.1:4173/")
+	state.CommitTopLevelNavigation(epoch, "http://127.0.0.1:4173/")
+	if !state.Authorize(epoch, true, desktopBridgeMinimize) {
+		t.Fatal("local Dev page did not authorize minimize")
+	}
+	if state.Authorize(epoch, true, desktopBridgeOpenProjectFileInVSCode) {
+		t.Fatal("local Dev page authorized a remote file action")
+	}
+	if !state.Authorize(epoch, true, desktopBridgeGetLocalDevState) {
+		t.Fatal("local Dev page did not authorize its state action")
+	}
+}
+
+func TestDesktopRemotePageCannotRunLocalDevOperations(t *testing.T) {
+	state, err := newDesktopWebViewSecurityState("https://example.com/", desktopTrustedRemotePage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	epoch := state.BeginTopLevelNavigation("https://example.com/")
+	state.CommitTopLevelNavigation(epoch, "https://example.com/")
+	if state.Authorize(epoch, true, desktopBridgeRunLocalDevOperation) {
+		t.Fatal("remote page authorized a Local Dev operation")
+	}
+}
+
+func TestDesktopRuntimeEntersOnlyTheFixedLocalDevOrigin(t *testing.T) {
+	state, err := newDesktopWebViewSecurityState("https://example.com/", desktopTrustedRemotePage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime := newDesktopRuntime(
+		&memoryDesktopConfigStore{config: desktopConfig{BaseURL: "https://example.com/"}},
+		&recordingDesktopProber{},
+		desktopConfig{BaseURL: "https://example.com/"},
+		desktopBootstrapState{},
+		state,
+	)
+	surface := &recordingDesktopRuntimeSurface{}
+	runtime.AttachSurface(surface)
+	if err := runtime.EnterLocalDev(); err != nil {
+		t.Fatal(err)
+	}
+	if surface.navigatedURL != "http://127.0.0.1:4173/" {
+		t.Fatalf("Navigate() = %q", surface.navigatedURL)
+	}
+	if state.DecideNavigation("https://example.com/", true, false) != desktopNavigationOpenExternal {
+		t.Fatal("Dev mode retained the remote HTTPS policy")
+	}
+}
+
+func TestDesktopRuntimeExitsLocalDevToConfiguredServer(t *testing.T) {
+	state, err := newDesktopWebViewSecurityState("https://example.com/app/", desktopTrustedRemotePage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime := newDesktopRuntime(
+		&memoryDesktopConfigStore{},
+		&recordingDesktopProber{},
+		desktopConfig{BaseURL: "https://example.com/app/"},
+		desktopBootstrapState{},
+		state,
+	)
+	surface := &recordingDesktopRuntimeSurface{}
+	runtime.AttachSurface(surface)
+	if err := runtime.EnterLocalDev(); err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.ExitLocalDev(); err != nil {
+		t.Fatal(err)
+	}
+	if surface.navigatedURL != "https://example.com/app/" {
+		t.Fatalf("navigated URL=%q", surface.navigatedURL)
+	}
+	if runtime.security.Mode() != desktopTrustedRemotePage {
+		t.Fatalf("mode=%v, want trusted remote", runtime.security.Mode())
+	}
+}
+
 func TestDesktopFileActionsRequireCommittedTrustedNavigation(t *testing.T) {
 	state, err := newDesktopWebViewSecurityState("https://example.com/wheelmaker/", desktopTrustedRemotePage)
 	if err != nil {

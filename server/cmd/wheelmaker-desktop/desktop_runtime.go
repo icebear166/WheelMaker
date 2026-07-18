@@ -152,6 +152,40 @@ func (r *desktopRuntime) ShowBootstrap() {
 	}
 }
 
+func (r *desktopRuntime) EnterLocalDev() error {
+	if err := r.security.SetTrustedLocalDevPage(); err != nil {
+		return err
+	}
+	r.mu.RLock()
+	surface := r.surface
+	r.mu.RUnlock()
+	if surface == nil {
+		return errors.New("Desktop WebView is not ready")
+	}
+	surface.Navigate(desktopLocalDevURL)
+	return nil
+}
+
+func (r *desktopRuntime) ExitLocalDev() error {
+	r.mu.RLock()
+	baseURL := r.config.BaseURL
+	surface := r.surface
+	r.mu.RUnlock()
+	if surface == nil {
+		return errors.New("Desktop WebView is not ready")
+	}
+	if baseURL == "" {
+		r.security.ShowBootstrap()
+		surface.ShowBootstrapHTML(desktopBootstrapHTML)
+		return nil
+	}
+	if err := r.security.SetTrustedBaseURL(baseURL); err != nil {
+		return err
+	}
+	surface.Navigate(baseURL)
+	return nil
+}
+
 func (r *desktopRuntime) fail(message string) desktopBootstrapResult {
 	r.mu.Lock()
 	r.state.Error = message

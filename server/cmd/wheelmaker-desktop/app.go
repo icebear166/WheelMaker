@@ -8,6 +8,8 @@ import (
 
 var errWebView2Unavailable = errors.New("Microsoft Edge WebView2 Runtime is required to run WheelMaker Desktop")
 
+const desktopLocalDevURL = "http://127.0.0.1:4173/"
+
 type desktopBootstrapState struct {
 	BaseURL string `json:"baseUrl"`
 	Error   string `json:"error"`
@@ -39,6 +41,10 @@ type desktopBaseURLProber interface {
 }
 
 func runDesktopApp(ctx context.Context, launcher desktopLauncher, store desktopConfigStore, prober desktopBaseURLProber) error {
+	return runDesktopAppWithMode(ctx, launcher, store, prober, false)
+}
+
+func runDesktopAppWithMode(ctx context.Context, launcher desktopLauncher, store desktopConfigStore, prober desktopBaseURLProber, localDev bool) error {
 	config, err := store.Load()
 	if err != nil {
 		return fmt.Errorf("load desktop config: %w", err)
@@ -46,7 +52,9 @@ func runDesktopApp(ctx context.Context, launcher desktopLauncher, store desktopC
 
 	target := desktopLaunchTarget{HTML: desktopBootstrapHTML}
 	state := desktopBootstrapState{BaseURL: config.BaseURL}
-	if config.BaseURL != "" {
+	if localDev {
+		target = desktopLaunchTarget{URL: desktopLocalDevURL}
+	} else if config.BaseURL != "" {
 		normalized, normalizeErr := normalizeDesktopBaseURL(config.BaseURL)
 		if normalizeErr != nil {
 			state.Error = "Invalid server address. Enter an HTTPS URL."
@@ -69,7 +77,9 @@ func runDesktopApp(ctx context.Context, launcher desktopLauncher, store desktopC
 	opts := defaultDesktopWindowOptions()
 	opts.BootstrapState = state
 	mode := desktopBootstrapPage
-	if target.URL != "" {
+	if localDev {
+		mode = desktopTrustedLocalDevPage
+	} else if target.URL != "" {
 		mode = desktopTrustedRemotePage
 	}
 	securityState, err := newDesktopWebViewSecurityState(target.URL, mode)
