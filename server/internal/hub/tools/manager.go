@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"strings"
 
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
@@ -19,6 +20,29 @@ type ManagerConfig struct {
 	OnSkillsOperationDone func(scope, projectName string)
 	ReleaseCommand        *ReleaseCommand
 	ReleaseNotifier       ReleaseNotifier
+	HTTPClient            *http.Client
+}
+
+func (m *Manager) ApplyRelease(ctx context.Context, kind, baseURL string) (ReleaseTargetStatus, *CommandError) {
+	switch kind {
+	case "version":
+		if m.updateCommand == nil {
+			m.updateCommand = NewUpdateCommand(m.cfg.StateDir)
+		}
+		raw, _ := json.Marshal(map[string]string{"action": "request", "hubId": m.cfg.HubID})
+		_, err := m.updateCommand.Handle(ctx, raw)
+		if err != nil {
+			return ReleaseTargetStatus{Status: "failed", ErrorCode: err.Code}, updateErr(err)
+		}
+		return ReleaseTargetStatus{Status: "accepted"}, nil
+	case "debugWeb":
+		if err := ApplyDebugWeb(ctx, m.cfg.StateDir, baseURL, m.cfg.HTTPClient); err != nil {
+			return ReleaseTargetStatus{Status: "failed", ErrorCode: "debug_web_apply_failed"}, &CommandError{Code: rp.CodeInternal, Message: "debug web apply failed"}
+		}
+		return ReleaseTargetStatus{Status: "success"}, nil
+	default:
+		return ReleaseTargetStatus{Status: "failed", ErrorCode: "invalid_release_kind"}, &CommandError{Code: rp.CodeInvalidArgument, Message: "unsupported release kind"}
+	}
 }
 
 type CommandError struct {

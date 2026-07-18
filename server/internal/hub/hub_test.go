@@ -489,6 +489,10 @@ func (s *stubToolCommandHandler) SetProjects(projects []ProjectInfo) {
 	s.projects = append([]ProjectInfo(nil), projects...)
 }
 
+func (s *stubToolCommandHandler) ApplyRelease(_ context.Context, _ string, _ string) (tools.ReleaseTargetStatus, *tools.CommandError) {
+	return tools.ReleaseTargetStatus{Status: "accepted"}, nil
+}
+
 func (s *stubToolCommandHandler) snapshot() (string, string, []ProjectInfo) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -518,6 +522,10 @@ func (s *overlapDetectingToolCommandHandler) Handle(_ context.Context, _ string,
 }
 
 func (s *overlapDetectingToolCommandHandler) SetProjects([]ProjectInfo) {}
+
+func (s *overlapDetectingToolCommandHandler) ApplyRelease(_ context.Context, _ string, _ string) (tools.ReleaseTargetStatus, *tools.CommandError) {
+	return tools.ReleaseTargetStatus{Status: "accepted"}, nil
+}
 
 func (s *overlapDetectingToolCommandHandler) sawOverlap() bool {
 	s.mu.Lock()

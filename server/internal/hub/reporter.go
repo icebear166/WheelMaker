@@ -89,6 +89,7 @@ func (s *hubEventSink) stop() {
 type toolCommandHandler interface {
 	Handle(ctx context.Context, method string, payload json.RawMessage) (any, *tools.CommandError)
 	SetProjects(projects []ProjectInfo)
+	ApplyRelease(ctx context.Context, kind, baseURL string) (tools.ReleaseTargetStatus, *tools.CommandError)
 }
 
 // ReporterConfig controls hub->registry connection behavior.
@@ -501,6 +502,8 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 		r.replyHubStateRefresh(conn, in)
 	case rp.RegistryMethodHubStateAction:
 		r.replyHubStateAction(conn, in)
+	case rp.RegistryMethodHubReleaseApply:
+		r.replyReleaseApply(conn, in)
 	case rp.RegistryMethodProjectFSList:
 		r.replyFSList(conn, in)
 	case rp.RegistryMethodProjectFSInfo:
@@ -546,6 +549,26 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 			}),
 		})
 	}
+}
+
+func (r *Reporter) replyReleaseApply(conn *websocket.Conn, req envelope) {
+	var payload struct {
+		Kind    string `json:"kind"`
+		BaseURL string `json:"baseUrl"`
+	}
+	if err := decodePayload(req.Payload, &payload); err != nil {
+		_ = r.writeError(conn, req.RequestID, codeInvalidArgument, "invalid hub.release.apply payload")
+		return
+	}
+	r.toolHandlerMu.Lock()
+	handler := r.ensureToolHandler()
+	result, err := handler.ApplyRelease(context.Background(), payload.Kind, payload.BaseURL)
+	r.toolHandlerMu.Unlock()
+	if err != nil {
+		_ = r.writeJSON(conn, "->", envelope{RequestID: req.RequestID, Type: rp.RegistryEnvelopeTypeResponse, Method: req.Method, HubID: r.cfg.HubID, Payload: rp.MustRaw(result)})
+		return
+	}
+	_ = r.writeJSON(conn, "->", envelope{RequestID: req.RequestID, Type: rp.RegistryEnvelopeTypeResponse, Method: req.Method, HubID: r.cfg.HubID, Payload: rp.MustRaw(result)})
 }
 
 func (r *Reporter) replyTerminal(conn *websocket.Conn, req envelope) {
@@ -1112,6 +1135,7 @@ func (r *Reporter) ensureToolHandler() toolCommandHandler {
 		Projects:              r.projectsSnapshot(),
 		StateDir:              r.cfg.StateDir,
 		OnSkillsOperationDone: r.refreshSkillsAgentProfiles,
+		ReleaseNotifier:       r,
 	})
 	return r.toolHandler
 }
