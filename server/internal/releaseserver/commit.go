@@ -170,10 +170,10 @@ func (s *Server) validateTransaction(session publishSession) (validatedTransacti
 	if err := decodeStrictJSON(bytesReader(manifestRaw), maxControlFileSize, &manifest); err != nil {
 		return validatedTransaction{}, errors.New("release manifest is invalid")
 	}
-	if manifest.Schema != 2 || manifest.Version != session.Version || manifest.PublishedAt != session.PublishedAt || manifest.SourceSHA != session.SourceSHA || len(manifest.Artifacts) != 3 {
+	if manifest.Schema != 2 || manifest.Version != session.Version || manifest.PublishedAt != session.PublishedAt || manifest.SourceSHA != session.SourceSHA || len(manifest.Artifacts) != len(releasePlatforms) {
 		return validatedTransaction{}, errors.New("release manifest identity does not match session")
 	}
-	for _, platform := range []string{"windows-amd64", "linux-amd64", "darwin-arm64"} {
+	for _, platform := range releasePlatforms {
 		name := "wheelmaker-" + session.Version + "-" + platform + ".tar.gz"
 		want := session.Files[name]
 		got, ok := manifest.Artifacts[platform]

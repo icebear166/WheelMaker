@@ -37,8 +37,8 @@ func TestStartSessionUsesServerIdentityAndFixedWhitelist(t *testing.T) {
 	if session.Version != "v1.1" || session.Publisher != "local" || !session.WithDesktop || !session.WithAndroid {
 		t.Fatalf("session = %+v", session)
 	}
-	if len(session.AllowedFiles) != 9 {
-		t.Fatalf("allowed file count = %d, want 9", len(session.AllowedFiles))
+	if len(session.AllowedFiles) != 10 {
+		t.Fatalf("allowed file count = %d, want 10", len(session.AllowedFiles))
 	}
 	if _, ok := session.AllowedFiles["WheelMakerDesktop.exe"]; !ok {
 		t.Fatal("Desktop file missing from whitelist")
@@ -121,6 +121,9 @@ func TestUploadRejectsDeclaredFileAndSessionLimitsBeforeReadingBody(t *testing.T
 	}
 
 	session := readTestSession(t, root, started.SessionID)
+	if _, ok := session.AllowedFiles["wheelmaker-v1.1-darwin-amd64.tar.gz"]; !ok {
+		t.Fatal("darwin-amd64 file missing from whitelist")
+	}
 	for _, name := range []string{
 		"wheelmaker-v1.1-windows-amd64.tar.gz",
 		"wheelmaker-v1.1-linux-amd64.tar.gz",

@@ -41,7 +41,7 @@ function recordingRunner() {
   return runner;
 }
 
-test('release build compiles Web once and exactly three Hub targets', async () => {
+test('release build compiles Web once and exactly four Hub targets', async () => {
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-build-'));
   const repoRoot = join(root, 'repo');
   const outputRoot = join(root, 'out');
@@ -79,6 +79,7 @@ test('release build compiles Web once and exactly three Hub targets', async () =
       }))
       .sort((left, right) => left.target.localeCompare(right.target));
     assert.deepEqual(hubTargets, [
+      { target: 'darwin/amd64', binary: 'wheelmaker' },
       { target: 'darwin/arm64', binary: 'wheelmaker' },
       { target: 'linux/amd64', binary: 'wheelmaker' },
       { target: 'windows/amd64', binary: 'wheelmaker.exe' },
@@ -207,7 +208,7 @@ test('release build routes Webpack and Go caches through the work root', async (
     const npmCalls = runner.calls.filter(({command}) => command === 'npm');
     const goCalls = runner.calls.filter(({command}) => command === 'go');
     assert.equal(npmCalls.length, 2);
-    assert.equal(goCalls.length, 3);
+    assert.equal(goCalls.length, 4);
     for (const call of npmCalls) {
       assert.equal(
         call.options.env.WHEELMAKER_WEBPACK_CACHE,
@@ -292,6 +293,7 @@ test('release build reports Web and platform subtask progress', async () => {
       'Building Web',
     ]);
     assert.deepEqual(labels.slice(2).sort(), [
+      'Building darwin-amd64',
       'Building darwin-arm64',
       'Building linux-amd64',
       'Building windows-amd64',

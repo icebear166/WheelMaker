@@ -42,15 +42,20 @@ func TestFirstCommitCreatesV11Schema2StableAndHistory(t *testing.T) {
 			t.Fatalf("missing derived file %s: %v", name, err)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(root, "public", "releases", "v1.1", "wheelmaker-v1.1-windows-amd64.tar.gz")); err != nil {
-		t.Fatalf("version asset missing: %v", err)
+	for _, name := range []string{
+		"wheelmaker-v1.1-windows-amd64.tar.gz",
+		"wheelmaker-v1.1-darwin-amd64.tar.gz",
+	} {
+		if _, err := os.Stat(filepath.Join(root, "public", "releases", "v1.1", name)); err != nil {
+			t.Fatalf("version asset %s missing: %v", name, err)
+		}
 	}
 	if _, err := os.Stat(filepath.Join(root, "staging", started.SessionID)); !os.IsNotExist(err) {
 		t.Fatalf("committed staging remains: %v", err)
 	}
 	var history releaseHistory
 	readJSONTestFile(t, filepath.Join(root, "public", "releases.json"), &history)
-	if history.Schema != 1 || len(history.Releases) != 1 || history.Releases[0].Version != "v1.1" || len(history.Releases[0].Assets) != 6 {
+	if history.Schema != 1 || len(history.Releases) != 1 || history.Releases[0].Version != "v1.1" || len(history.Releases[0].Assets) != 7 {
 		t.Fatalf("history = %+v", history)
 	}
 }
@@ -206,6 +211,7 @@ func prepareCompleteTestSession(t *testing.T, server *Server, request startReque
 		"deploy-core.mjs": []byte("export const core = true;\n"),
 		"wheelmaker-" + request.Version + "-windows-amd64.tar.gz": []byte("windows archive"),
 		"wheelmaker-" + request.Version + "-linux-amd64.tar.gz":   []byte("linux archive"),
+		"wheelmaker-" + request.Version + "-darwin-amd64.tar.gz":  []byte("darwin amd64 archive"),
 		"wheelmaker-" + request.Version + "-darwin-arm64.tar.gz":  []byte("darwin archive"),
 	}
 	if request.WithDesktop {
@@ -236,7 +242,7 @@ func prepareCompleteTestSession(t *testing.T, server *Server, request startReque
 	}
 
 	artifacts := map[string]artifact{}
-	for _, platform := range []string{"windows-amd64", "linux-amd64", "darwin-arm64"} {
+	for _, platform := range []string{"windows-amd64", "linux-amd64", "darwin-amd64", "darwin-arm64"} {
 		name := "wheelmaker-" + request.Version + "-" + platform + ".tar.gz"
 		body := files[name]
 		artifacts[platform] = artifact{

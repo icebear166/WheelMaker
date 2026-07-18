@@ -476,6 +476,7 @@ export function currentPlatformKey(
   const key = `${platform}/${architecture}`;
   if (key === 'win32/x64') return 'windows-amd64';
   if (key === 'linux/x64') return 'linux-amd64';
+  if (key === 'darwin/x64') return 'darwin-amd64';
   if (key === 'darwin/arm64') return 'darwin-arm64';
   throw new Error(`unsupported deployment platform: ${key}`);
 }
@@ -490,7 +491,14 @@ export async function stageVerifiedRelease({
   stagingDirectory,
 }) {
   validateJobId(jobId);
-  if (!['windows-amd64', 'linux-amd64', 'darwin-arm64'].includes(platform)) {
+  if (
+    ![
+      'windows-amd64',
+      'linux-amd64',
+      'darwin-amd64',
+      'darwin-arm64',
+    ].includes(platform)
+  ) {
     throw new Error(`unsupported deployment platform: ${platform}`);
   }
   const manifestUrl = resolveReleasePath(

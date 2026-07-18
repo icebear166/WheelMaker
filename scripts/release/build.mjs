@@ -18,6 +18,12 @@ export const RELEASE_TARGETS = Object.freeze([
     binary: 'wheelmaker',
   },
   {
+    key: 'darwin-amd64',
+    GOOS: 'darwin',
+    GOARCH: 'amd64',
+    binary: 'wheelmaker',
+  },
+  {
     key: 'darwin-arm64',
     GOOS: 'darwin',
     GOARCH: 'arm64',

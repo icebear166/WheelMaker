@@ -118,7 +118,7 @@ DELETE /api/publish/{session}
 
 `start` 只接收版本、源码 SHA、`local|action` 展示标识以及是否包含 Desktop/Android；开始时间来自服务器 UTC 时钟。服务端据此推导本轮固定文件白名单。每个文件的 `PUT` 请求使用 `Content-Length` 和 `X-WheelMaker-SHA256` 声明构建后才能确定的大小与摘要；文件名禁止路径分隔符、编码绕过和白名单外取值。上传按流处理，在写入 staging 的同时计算并复核大小与 SHA-256，不把大文件完整读入内存。Nginx 关闭请求缓冲，Go 服务先验证请求头再读取请求体。
 
-固定上限为每个 MJS/JSON 5 MiB、每个二进制资产 2 GiB、每个会话最多 9 个文件且总计不超过 8 GiB。客户端和代理不设置总时长截止，只对连接无数据活动设置超时，因此慢速但持续传输的上传不会被固定分钟数中断。
+固定上限为每个 MJS/JSON 5 MiB、每个二进制资产 2 GiB、每个会话最多 10 个文件且总计不超过 8 GiB。客户端和代理不设置总时长截止，只对连接无数据活动设置超时，因此慢速但持续传输的上传不会被固定分钟数中断。
 
 发布会话不是持久发布锁。相同版本可以并行准备，但 `commit` 在进程内短暂串行化，并要求提交版本严格等于当前 stable 的下一个 `v1.x`；先成功者生效，其他提交收到 `409 Conflict`。不存在需要人工删除的锁文件。超过 24 小时无活动的会话由维护任务标记为 `publisher_timeout` 并清理。
 
@@ -129,7 +129,7 @@ DELETE /api/publish/{session}
 ```text
 读取 stable，计算下一个 v1.x
   → start 会话并写 validating/building 状态
-  → 构建 Web、三平台 Hub 和可选 Desktop/Android
+  → 构建 Web、四平台 Hub 和可选 Desktop/Android
   → 打包并登记预期大小与 SHA-256
   → 流式上传全部文件
   → commit

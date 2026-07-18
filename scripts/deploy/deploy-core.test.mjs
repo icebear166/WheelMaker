@@ -8,6 +8,7 @@ import {
   acquireUpdateLease,
   createLegacyMigrationAdapter,
   createRuntimeAdapter,
+  currentPlatformKey,
   darwinRuntimeFiles,
   finishUpdate,
   linuxRuntimeFiles,
@@ -33,6 +34,11 @@ const RUNTIME_PATHS = {
   uid: 501,
   userHome: 'C:\\Users\\alice',
 };
+
+test('platform mapping includes Intel macOS releases', () => {
+  assert.equal(currentPlatformKey('darwin', 'x64'), 'darwin-amd64');
+  assert.equal(currentPlatformKey('darwin', 'arm64'), 'darwin-arm64');
+});
 
 test('Windows plan contains current-user tasks and fixed 03:00 updater', () => {
   const plan = windowsRuntimePlan(RUNTIME_PATHS);
@@ -446,7 +452,7 @@ test('manifest and completed archive are verified before extraction', async () =
   try {
     await mkdir(join(source, 'hub'), { recursive: true });
     await mkdir(join(source, 'web'), { recursive: true });
-    await writeFile(join(source, 'hub', 'wheelmaker.exe'), 'hub');
+    await writeFile(join(source, 'hub', 'wheelmaker'), 'hub');
     await writeFile(join(source, 'web', 'index.html'), 'web');
     await createTarGz({ outputPath: archivePath, sourceDir: source });
     const archiveBytes = await readFile(archivePath);
@@ -456,10 +462,10 @@ test('manifest and completed archive are verified before extraction', async () =
       publishedAt: '2026-07-16T09:00:00.000Z',
       sourceSha: '0'.repeat(40),
       artifacts: {
-        'windows-amd64': {
+        'darwin-amd64': {
           sha256: sha256Bytes(archiveBytes),
           size: archiveBytes.length,
-          path: '/releases/v1.7/wheelmaker-v1.7-windows-amd64.tar.gz',
+          path: '/releases/v1.7/wheelmaker-v1.7-darwin-amd64.tar.gz',
         },
       },
     };
@@ -483,7 +489,7 @@ test('manifest and completed archive are verified before extraction', async () =
     };
     const downloads = new Map([
       ['https://release.example/releases/v1.7/release-manifest.json', manifestBytes],
-      ['https://release.example/releases/v1.7/wheelmaker-v1.7-windows-amd64.tar.gz', archiveBytes],
+      ['https://release.example/releases/v1.7/wheelmaker-v1.7-darwin-amd64.tar.gz', archiveBytes],
     ]);
 
     const fetched = [];
@@ -493,32 +499,32 @@ test('manifest and completed archive are verified before extraction', async () =
         return downloads.get(url);
       },
       jobId: 'job-a',
-      platform: 'windows-amd64',
+      platform: 'darwin-amd64',
       releaseBaseUrl: 'https://release.example',
       stable,
       stagingDirectory: join(root, 'staging'),
     });
     assert.equal(
-      await readFile(join(result.extractionDirectory, 'hub', 'wheelmaker.exe'), 'utf8'),
+      await readFile(join(result.extractionDirectory, 'hub', 'wheelmaker'), 'utf8'),
       'hub',
     );
     assert.deepEqual(fetched, [
       {label: 'release manifest', url: 'https://release.example/releases/v1.7/release-manifest.json'},
       {
-        label: 'windows-amd64 release package',
-        url: 'https://release.example/releases/v1.7/wheelmaker-v1.7-windows-amd64.tar.gz',
+        label: 'darwin-amd64 release package',
+        url: 'https://release.example/releases/v1.7/wheelmaker-v1.7-darwin-amd64.tar.gz',
       },
     ]);
 
     const tamperedArchive = Buffer.from(archiveBytes);
     tamperedArchive[tamperedArchive.length - 1] ^= 0xff;
-    downloads.set('https://release.example/releases/v1.7/wheelmaker-v1.7-windows-amd64.tar.gz', tamperedArchive);
+    downloads.set('https://release.example/releases/v1.7/wheelmaker-v1.7-darwin-amd64.tar.gz', tamperedArchive);
     await assert.rejects(
       () =>
         stageVerifiedRelease({
           fetchBytes: async (url) => downloads.get(url),
           jobId: 'job-b',
-          platform: 'windows-amd64',
+          platform: 'darwin-amd64',
           releaseBaseUrl: 'https://release.example',
           stable,
           stagingDirectory: join(root, 'staging'),

@@ -355,13 +355,16 @@ It asks whether to include Desktop, Android, and whether to publish publicly. Al
 
 ```text
 .release-out/v1.x/
-  wheelmaker-v1.x-windows-amd64/
-  wheelmaker-v1.x-linux-amd64/
-  wheelmaker-v1.x-darwin-arm64/
-  desktop/                         # optional
-  android/                         # optional
-    WheelMakerAndroid.apk
-    android-release.json
+  wheelmaker-v1.x-windows-amd64.tar.gz
+  wheelmaker-v1.x-linux-amd64.tar.gz
+  wheelmaker-v1.x-darwin-amd64.tar.gz
+  wheelmaker-v1.x-darwin-arm64.tar.gz
+  deploy.mjs
+  deploy-core.mjs
+  release-manifest.json
+  WheelMakerDesktop.exe            # optional
+  WheelMakerAndroid.apk            # optional
+  android-release.json             # optional
 ```
 
 Reusable compiler state is kept separately from final output:
@@ -607,7 +610,7 @@ Release and script overview:
 - `publish-release.bat` — interactively choose Desktop, Android, and public publication. It invokes the release MJS once and always writes `.release-out/v1.x`.
 - `publish-release-action.bat` — verify the current clean commit is pushed, then interactively trigger the manual Action with the source SHA, Desktop choice, and Android choice.
 - `node scripts/release.mjs [--with-desktop] [--with-android] [--publish]` — non-interactive equivalent; without `--publish` it builds the next public version locally.
-- `.github/workflows/publish-release.yml` — manual `workflow_dispatch` fallback with a source `ref`, optional Desktop, and optional Android; Android setup is skipped when unused, Web builds once, and Hub binaries cross-compile for Windows amd64, Linux amd64, and macOS arm64.
+- `.github/workflows/publish-release.yml` — manual `workflow_dispatch` fallback with a source `ref`, optional Desktop, and optional Android; Android setup is skipped when unused, Web builds once, and Hub binaries cross-compile for Windows amd64, Linux amd64, macOS Intel (amd64), and macOS Apple Silicon (arm64).
 - [release.wheelmaker.top](https://release.wheelmaker.top/) command — download the launcher and perform a new install or one-time legacy migration from any directory.
 - Installed `~/.wheelmaker/deploy.bat` / `deploy.sh` — platform wrapper for a normal `node deploy.mjs`; the Windows wrapper pauses when it finishes.
 - Installed `~/.wheelmaker/update_exe.bat` — independently update `WheelMakerDesktop.exe` through the same stable SHA-256 chain.

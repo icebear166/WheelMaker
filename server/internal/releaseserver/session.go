@@ -33,6 +33,13 @@ const (
 var versionPattern = regexp.MustCompile(`^v1\.(0|[1-9]\d*)$`)
 var errorCodePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
+var releasePlatforms = [...]string{
+	"windows-amd64",
+	"linux-amd64",
+	"darwin-amd64",
+	"darwin-arm64",
+}
+
 type startRequest struct {
 	Version     string `json:"version"`
 	SourceSHA   string `json:"sourceSha"`
@@ -555,9 +562,10 @@ func allowedReleaseFiles(request startRequest) map[string]fileRule {
 		"deploy.mjs":            {MaxSize: maxControlFileSize},
 		"deploy-core.mjs":       {MaxSize: maxControlFileSize},
 		"release-manifest.json": {MaxSize: maxControlFileSize},
-		"wheelmaker-" + request.Version + "-windows-amd64.tar.gz": {MaxSize: maxBinaryFileSize},
-		"wheelmaker-" + request.Version + "-linux-amd64.tar.gz":   {MaxSize: maxBinaryFileSize},
-		"wheelmaker-" + request.Version + "-darwin-arm64.tar.gz":  {MaxSize: maxBinaryFileSize},
+	}
+	for _, platform := range releasePlatforms {
+		name := "wheelmaker-" + request.Version + "-" + platform + ".tar.gz"
+		files[name] = fileRule{MaxSize: maxBinaryFileSize}
 	}
 	if request.WithDesktop {
 		files["WheelMakerDesktop.exe"] = fileRule{MaxSize: maxBinaryFileSize}

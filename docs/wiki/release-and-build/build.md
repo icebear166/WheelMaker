@@ -64,11 +64,12 @@ npm ci --include=dev
 
 - `windows-amd64`：交叉编译 `wheelmaker.exe`，使用 Windows GUI subsystem。
 - `linux-amd64`：交叉编译 `wheelmaker`。
+- `darwin-amd64`：交叉编译 `wheelmaker`。
 - `darwin-arm64`：交叉编译 `wheelmaker`。
 - Desktop：可选，生成 Windows AMD64 GUI 程序 `WheelMakerDesktop.exe`。
 - Android：可选，生成已签名 APK 和 `android-release.json`。
 
-三个 Hub 构建都使用 `CGO_ENABLED=0`，并把同一份 `web-source` 复制到各平台目录。
+四个 Hub 构建都使用 `CGO_ENABLED=0`，并把同一份 `web-source` 复制到各平台目录。
 
 ## 产物
 
@@ -78,6 +79,7 @@ npm ci --include=dev
 .release-out/v1.x/
 ├─ wheelmaker-v1.x-windows-amd64.tar.gz
 ├─ wheelmaker-v1.x-linux-amd64.tar.gz
+├─ wheelmaker-v1.x-darwin-amd64.tar.gz
 ├─ wheelmaker-v1.x-darwin-arm64.tar.gz
 ├─ deploy.mjs
 ├─ deploy-core.mjs
