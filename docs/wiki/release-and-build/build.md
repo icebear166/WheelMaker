@@ -62,7 +62,7 @@ npm ci --include=dev
 
 随后以最大并发数 3 执行平台和可选资产任务：
 
-- `windows-amd64`：交叉编译 `wheelmaker.exe`，使用 Windows GUI subsystem。
+- `windows-amd64`：交叉编译 `wheelmaker.exe` 和一次性 Desktop 更新器 `update.exe`，两者都使用 Windows GUI subsystem。
 - `linux-amd64`：交叉编译 `wheelmaker`。
 - `darwin-amd64`：交叉编译 `wheelmaker`。
 - `darwin-arm64`：交叉编译 `wheelmaker`。
@@ -99,7 +99,14 @@ web/
 └─ 编译后的 Web 静态文件
 ```
 
-`release-manifest.json` 记录各平台包的相对路径、大小和 SHA-256。Desktop 和 Android 是独立资产，不放入 Hub/Web 平台包。
+Windows 平台包额外包含：
+
+```text
+desktop/
+└─ update.exe
+```
+
+`update.exe` 每轮都构建，不受 `--with-desktop` 影响。`release-manifest.json` 记录各平台包的相对路径、大小和 SHA-256。`WheelMakerDesktop.exe` 和 Android 仍是独立可选资产，不放入 Hub/Web 平台包。
 
 ## 工作目录和缓存
 

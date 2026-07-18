@@ -4,4 +4,5 @@
 
 ## 页面
 
+- [`desktop-self-update.md`](desktop-self-update.md)：Windows Desktop 启动检查、红点交互、一次性更新器和可信更新边界。
 - [`limits-monitoring.md`](limits-monitoring.md)：Agent Limits 监控的数据所有权、刷新机制、Provider 范围和桌面端展示约定。

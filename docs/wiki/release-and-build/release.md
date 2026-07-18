@@ -83,7 +83,7 @@
 → 初始化或迁移 config.json
 → 进入 applying
 → 停止 Hub
-→ 替换 bin/wheelmaker(.exe) 和 web/
+→ 替换 bin/wheelmaker(.exe)、web/ 和 Windows desktop/update.exe
 → 写入 release.json
 → 配置当前平台运行时
 → 生成包装脚本
@@ -95,7 +95,23 @@
 
 状态写入 `~/.wheelmaker/staging/status.json`，更新租约写入 `lock.json`。主要状态包括 `queued`、`downloading`、`verifying`、`applying`、`restarting`、`succeeded` 和 `failed`。
 
-目标机只替换 `bin/` 和 `web/`。Desktop 通过独立的 `desktop-update` 命令更新，不随每次 Hub/Web 部署更新。
+目标机替换 `bin/` 和 `web/`。Windows 平台还会把一次性 Desktop 更新器写入 `desktop/update.exe`，但不会清空或覆盖现有 `WheelMakerDesktop.exe`。Desktop 主程序仍通过独立的 `desktop-update` 命令更新，不随每次 Hub/Web 部署更新。
+
+## Windows Desktop 自更新边界
+
+标准安装目录中的 Desktop 使用以下固定布局：
+
+```text
+~/.wheelmaker/desktop/
+├─ WheelMakerDesktop.exe
+└─ update.exe
+```
+
+`update.exe` 是随每个 Windows 平台包部署的一次性 GUI 程序，使用当前用户权限，不请求管理员提权，也不注册服务、计划任务或常驻进程。Desktop 启动后由 Web 后台读取公共 stable 元数据，并通过受限原生桥比较当前 EXE SHA-256 与 `stable.desktopExe.sha256`。有更新时，Windows 扩展菜单显示红点和更新入口。
+
+用户确认更新后，原生层只允许启动固定目录的 `update.exe`，且只传入当前 Desktop PID。更新器等待 Desktop 退出，再隐藏调用 `node ~/.wheelmaker/deploy.mjs desktop-update`，复用部署 MJS 的下载、SHA 校验和原子替换逻辑。成功或失败都会重新打开 Desktop；失败时旧 EXE 保持不变并显示原生错误。
+
+自更新只支持标准安装目录，不接受 Web 提供的命令、路径或 URL。`update_exe.bat` 保留为旧 Desktop 第一次升级和故障恢复入口；旧版必须先手动更新到带原生自更新桥的 Desktop 一次。
 
 ## Windows 计划任务
 
