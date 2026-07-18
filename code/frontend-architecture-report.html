@@ -1,0 +1,1826 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>WheelMaker 前端架构全景报告</title>
+  <style>
+    :root {
+      --ink-950: #07151f;
+      --ink-900: #0b1d2a;
+      --ink-800: #122c3d;
+      --ink-700: #1c4055;
+      --ink-600: #315b70;
+      --paper: #f7f4ec;
+      --paper-deep: #eee8db;
+      --white: #fffdf7;
+      --line: #c8c2b4;
+      --line-strong: #8d968f;
+      --text: #17262d;
+      --muted: #5d6b70;
+      --cyan: #00a9b7;
+      --cyan-soft: #d8f2f1;
+      --amber: #d88618;
+      --amber-soft: #f7e7c6;
+      --red: #b8493f;
+      --red-soft: #f4dcd7;
+      --green: #2d7d62;
+      --green-soft: #dcecdf;
+      --blueprint: #103449;
+      --radius: 8px;
+      --shadow: 0 12px 38px rgba(7, 21, 31, .08);
+      --mono: "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      --sans: Inter, "Segoe UI Variable", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px),
+        var(--ink-950);
+      background-size: 24px 24px;
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.65;
+    }
+    a { color: inherit; }
+    code, .mono { font-family: var(--mono); }
+    code {
+      padding: .08rem .3rem;
+      border: 1px solid #d5d0c3;
+      border-radius: 3px;
+      background: #eeebe2;
+      font-size: .9em;
+    }
+    .skip-link {
+      position: fixed;
+      z-index: 100;
+      top: 10px;
+      left: 10px;
+      transform: translateY(-160%);
+      padding: .65rem 1rem;
+      border-radius: 4px;
+      background: var(--white);
+      color: var(--ink-950);
+      font-weight: 700;
+    }
+    .skip-link:focus { transform: translateY(0); }
+    :focus-visible {
+      outline: 3px solid var(--amber);
+      outline-offset: 3px;
+    }
+
+    .masthead {
+      position: relative;
+      overflow: hidden;
+      min-height: 440px;
+      border-bottom: 1px solid rgba(133, 214, 219, .25);
+      color: #edf8f6;
+    }
+    .masthead::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(90deg, rgba(7,21,31,.98) 0 18%, rgba(7,21,31,.76) 60%, rgba(7,21,31,.95)),
+        repeating-linear-gradient(90deg, transparent 0 79px, rgba(0,169,183,.13) 80px),
+        repeating-linear-gradient(0deg, transparent 0 79px, rgba(0,169,183,.13) 80px);
+      pointer-events: none;
+    }
+    .masthead::after {
+      content: "WM / FRONTEND / SYSTEM MAP";
+      position: absolute;
+      right: -35px;
+      bottom: 34px;
+      transform: rotate(-90deg);
+      transform-origin: right bottom;
+      color: rgba(197, 239, 238, .28);
+      font: 700 11px/1 var(--mono);
+      letter-spacing: .22em;
+    }
+    .masthead-inner {
+      position: relative;
+      width: min(1280px, calc(100% - 48px));
+      margin: 0 auto;
+      padding: 72px 0 58px;
+    }
+    .eyebrow {
+      margin: 0 0 18px;
+      color: #84d9dc;
+      font: 700 12px/1.4 var(--mono);
+      letter-spacing: .18em;
+      text-transform: uppercase;
+    }
+    h1 {
+      max-width: 920px;
+      margin: 0;
+      font-size: clamp(2.8rem, 7vw, 6.4rem);
+      font-weight: 720;
+      letter-spacing: -.055em;
+      line-height: .95;
+    }
+    .hero-deck {
+      max-width: 760px;
+      margin: 28px 0 0;
+      color: #bfd1d4;
+      font-size: clamp(1rem, 2vw, 1.25rem);
+    }
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 24px;
+      margin-top: 30px;
+      color: #8eacb2;
+      font: 600 12px/1.4 var(--mono);
+    }
+    .hero-meta span::before {
+      content: "◆";
+      margin-right: 8px;
+      color: var(--cyan);
+      font-size: 8px;
+    }
+    .hero-metrics {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(110px, 1fr));
+      gap: 1px;
+      margin-top: 46px;
+      border: 1px solid rgba(132,217,220,.28);
+      background: rgba(132,217,220,.2);
+    }
+    .hero-metric {
+      min-height: 108px;
+      padding: 20px 18px;
+      background: rgba(7,21,31,.83);
+    }
+    .hero-metric strong {
+      display: block;
+      color: #f6f2e8;
+      font: 700 clamp(1.35rem, 2.5vw, 2.2rem)/1 var(--mono);
+      letter-spacing: -.05em;
+    }
+    .hero-metric span {
+      display: block;
+      margin-top: 11px;
+      color: #91aab0;
+      font-size: .75rem;
+    }
+
+    .report-shell {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      width: min(1420px, calc(100% - 36px));
+      margin: 0 auto;
+      background: var(--paper);
+      box-shadow: 0 0 0 1px rgba(255,255,255,.08), var(--shadow);
+    }
+    .toc {
+      position: sticky;
+      top: 0;
+      align-self: start;
+      max-height: 100vh;
+      overflow: auto;
+      padding: 32px 24px 40px;
+      border-right: 1px solid var(--line);
+      background: var(--paper-deep);
+    }
+    .toc-mark {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 28px;
+      color: var(--ink-700);
+      font: 800 11px/1 var(--mono);
+      letter-spacing: .16em;
+    }
+    .toc-mark::before {
+      content: "";
+      width: 22px;
+      height: 22px;
+      border: 6px double var(--cyan);
+      transform: rotate(45deg);
+    }
+    .toc ol {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      counter-reset: toc;
+    }
+    .toc li { counter-increment: toc; }
+    .toc a {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 8px;
+      padding: 9px 8px;
+      border-left: 2px solid transparent;
+      color: #5b686c;
+      font-size: .82rem;
+      line-height: 1.3;
+      text-decoration: none;
+      transition: color .15s ease, border-color .15s ease, background .15s ease;
+    }
+    .toc a::before {
+      content: counter(toc, decimal-leading-zero);
+      color: #8b928e;
+      font: 600 10px/1.7 var(--mono);
+    }
+    .toc a:hover, .toc a[aria-current="true"] {
+      border-color: var(--cyan);
+      background: rgba(255,255,255,.62);
+      color: var(--ink-800);
+    }
+    .toc-note {
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px solid var(--line);
+      color: #777f7c;
+      font-size: .72rem;
+    }
+
+    main {
+      min-width: 0;
+      background: var(--paper);
+    }
+    section {
+      scroll-margin-top: 18px;
+      padding: 72px clamp(28px, 6vw, 82px);
+      border-bottom: 1px solid var(--line);
+    }
+    section:nth-child(even) { background: rgba(255,253,247,.56); }
+    .section-head {
+      display: grid;
+      grid-template-columns: 96px minmax(0, 1fr);
+      gap: 24px;
+      margin-bottom: 38px;
+    }
+    .section-no {
+      padding-top: 7px;
+      color: var(--cyan);
+      font: 800 12px/1 var(--mono);
+      letter-spacing: .15em;
+    }
+    .section-no::after {
+      content: "";
+      display: block;
+      width: 46px;
+      height: 2px;
+      margin-top: 12px;
+      background: var(--cyan);
+    }
+    h2 {
+      margin: 0;
+      color: var(--ink-900);
+      font-size: clamp(1.8rem, 3vw, 3rem);
+      letter-spacing: -.045em;
+      line-height: 1.08;
+    }
+    .section-intro {
+      max-width: 820px;
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: 1rem;
+    }
+    h3 {
+      margin: 42px 0 16px;
+      color: var(--ink-800);
+      font-size: 1.22rem;
+      letter-spacing: -.015em;
+    }
+    h4 {
+      margin: 0 0 8px;
+      color: var(--ink-800);
+      font-size: .98rem;
+    }
+    p { margin: 0 0 1rem; }
+    .lede {
+      max-width: 880px;
+      color: var(--ink-800);
+      font-size: clamp(1.25rem, 2.3vw, 2rem);
+      line-height: 1.42;
+      letter-spacing: -.025em;
+    }
+    .muted { color: var(--muted); }
+    .small { font-size: .79rem; }
+
+    .evidence-key {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 22px 0 30px;
+    }
+    .tag, .evidence {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 25px;
+      padding: 3px 8px;
+      border: 1px solid var(--line);
+      border-radius: 99px;
+      background: var(--white);
+      color: #5b686c;
+      font: 700 10px/1 var(--mono);
+      letter-spacing: .04em;
+      white-space: nowrap;
+    }
+    .evidence.measured { border-color: #70bbae; background: var(--green-soft); color: #255f4c; }
+    .evidence.static { border-color: #78b9c1; background: var(--cyan-soft); color: #17626a; }
+    .evidence.inferred { border-color: #dbb165; background: var(--amber-soft); color: #805513; }
+
+    .finding-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      border: 1px solid var(--line);
+      background: var(--line);
+    }
+    .finding {
+      min-height: 210px;
+      padding: 24px;
+      background: var(--white);
+    }
+    .finding .index {
+      color: var(--cyan);
+      font: 800 11px/1 var(--mono);
+    }
+    .finding h3 { margin: 22px 0 10px; }
+    .finding p { color: var(--muted); font-size: .88rem; }
+    .finding.risk { box-shadow: inset 0 4px 0 var(--amber); }
+    .finding.strength { box-shadow: inset 0 4px 0 var(--green); }
+    .finding.direction { box-shadow: inset 0 4px 0 var(--cyan); }
+
+    .callout {
+      margin: 30px 0;
+      padding: 22px 24px;
+      border-left: 4px solid var(--cyan);
+      background: #e8f1ef;
+    }
+    .callout.warn {
+      border-color: var(--amber);
+      background: var(--amber-soft);
+    }
+    .callout strong { color: var(--ink-800); }
+
+    .backbone-wrap {
+      padding: 26px;
+      border: 1px solid #305469;
+      background:
+        linear-gradient(rgba(107,196,202,.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(107,196,202,.06) 1px, transparent 1px),
+        var(--blueprint);
+      background-size: 20px 20px;
+      color: #d8eeee;
+      box-shadow: inset 0 0 0 6px rgba(7,21,31,.12);
+    }
+    .backbone-label {
+      margin-bottom: 18px;
+      color: #80cbd0;
+      font: 700 10px/1 var(--mono);
+      letter-spacing: .14em;
+    }
+    .backbone {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr auto 1fr auto 1fr;
+      align-items: stretch;
+      gap: 7px;
+    }
+    .layer {
+      min-width: 0;
+      min-height: 106px;
+      padding: 14px 10px;
+      border: 1px solid #527687;
+      border-radius: 3px;
+      background: rgba(7,21,31,.46);
+      color: #d8eeee;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+      transition: transform .16s ease, border-color .16s ease, background .16s ease;
+    }
+    .layer:hover { transform: translateY(-3px); border-color: #9ce1e0; }
+    .layer[aria-pressed="true"] {
+      border-color: var(--amber);
+      background: rgba(216,134,24,.14);
+      box-shadow: 0 0 0 1px var(--amber);
+    }
+    .layer span {
+      display: block;
+      color: #75c9cd;
+      font: 700 9px/1 var(--mono);
+      letter-spacing: .08em;
+    }
+    .layer strong {
+      display: block;
+      margin-top: 10px;
+      color: #f3f0e8;
+      font-size: .86rem;
+      line-height: 1.2;
+    }
+    .layer small {
+      display: block;
+      margin-top: 8px;
+      color: #91abb1;
+      font-size: .66rem;
+      line-height: 1.35;
+    }
+    .arrow {
+      align-self: center;
+      color: #5d8d99;
+      font: 700 16px/1 var(--mono);
+    }
+    .layer-notes {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      margin-top: 1px;
+      background: var(--line);
+      border: 1px solid var(--line);
+    }
+    .layer-note {
+      padding: 20px;
+      background: var(--white);
+      transition: opacity .16s ease, box-shadow .16s ease;
+    }
+    .layer-note.is-muted { opacity: .34; }
+    .layer-note.is-active { box-shadow: inset 0 3px 0 var(--amber); }
+    .layer-note .mono {
+      color: var(--cyan);
+      font-size: .7rem;
+    }
+    .layer-note p { margin: 8px 0 0; color: var(--muted); font-size: .8rem; }
+
+    .flow-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+      margin-top: 24px;
+    }
+    .flow-node {
+      position: relative;
+      min-height: 118px;
+      padding: 16px;
+      border-top: 3px solid var(--cyan);
+      background: var(--white);
+      box-shadow: 0 0 0 1px var(--line);
+    }
+    .flow-node:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      z-index: 2;
+      top: 44px;
+      right: -20px;
+      color: var(--amber);
+      font: 800 18px/1 var(--mono);
+    }
+    .flow-node strong { display: block; color: var(--ink-800); font-size: .86rem; }
+    .flow-node span { display: block; margin-top: 8px; color: var(--muted); font-size: .73rem; }
+
+    .chart {
+      display: grid;
+      gap: 10px;
+      margin: 26px 0 34px;
+    }
+    .bar-row {
+      display: grid;
+      grid-template-columns: 104px minmax(120px, 1fr) 120px;
+      align-items: center;
+      gap: 14px;
+    }
+    .bar-label {
+      color: var(--ink-800);
+      font: 700 12px/1 var(--mono);
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .bar-track {
+      position: relative;
+      height: 13px;
+      border: 1px solid #c1c6bf;
+      background: #e5e2d9;
+    }
+    .bar-track::after {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: var(--w);
+      background: var(--cyan);
+    }
+    .bar-row:first-child .bar-track::after { background: var(--amber); }
+    .bar-value {
+      color: var(--muted);
+      font: 600 11px/1 var(--mono);
+      text-align: right;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      margin: 22px 0;
+      border: 1px solid var(--line);
+      background: var(--white);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .82rem;
+    }
+    caption {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      background: var(--paper-deep);
+      color: var(--ink-700);
+      font-weight: 700;
+      text-align: left;
+    }
+    th, td {
+      padding: 11px 13px;
+      border-bottom: 1px solid #ddd8cc;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #eeebe2;
+      color: #45585f;
+      font: 700 10px/1.3 var(--mono);
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: #f6f1e5; }
+    td.num { font-family: var(--mono); text-align: right; white-space: nowrap; }
+    td.path { color: #254f5d; font-family: var(--mono); font-size: .76rem; }
+    .risk-level {
+      display: inline-block;
+      min-width: 56px;
+      padding: 3px 6px;
+      border-radius: 2px;
+      color: white;
+      font: 800 9px/1.2 var(--mono);
+      text-align: center;
+      letter-spacing: .06em;
+    }
+    .risk-level.p0 { background: var(--red); }
+    .risk-level.p1 { background: var(--amber); }
+    .risk-level.p2 { background: var(--ink-600); }
+    .risk-level.good { background: var(--green); }
+
+    .metric-ledger {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1px;
+      margin: 22px 0;
+      border: 1px solid var(--line);
+      background: var(--line);
+    }
+    .ledger-item { padding: 18px; background: var(--white); }
+    .ledger-item strong {
+      display: block;
+      color: var(--ink-800);
+      font: 750 1.65rem/1 var(--mono);
+    }
+    .ledger-item span {
+      display: block;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: .72rem;
+    }
+
+    .feature-matrix {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+    .feature-group {
+      padding: 22px;
+      border: 1px solid var(--line);
+      background: var(--white);
+    }
+    .feature-group h3 { margin: 0 0 12px; }
+    .feature-group p { color: var(--muted); font-size: .82rem; }
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 15px;
+    }
+    .chip {
+      padding: 4px 7px;
+      border: 1px solid #cbd3ce;
+      border-radius: 3px;
+      background: #f0f3ed;
+      color: #3e5a60;
+      font: 600 10px/1.2 var(--mono);
+    }
+
+    .sequence {
+      position: relative;
+      display: grid;
+      gap: 0;
+      margin: 24px 0;
+      padding-left: 28px;
+    }
+    .sequence::before {
+      content: "";
+      position: absolute;
+      top: 8px;
+      bottom: 8px;
+      left: 8px;
+      width: 2px;
+      background: var(--cyan);
+    }
+    .sequence-step {
+      position: relative;
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      gap: 18px;
+      padding: 0 0 24px 12px;
+    }
+    .sequence-step:last-child { padding-bottom: 0; }
+    .sequence-step::before {
+      content: "";
+      position: absolute;
+      top: 7px;
+      left: -25px;
+      width: 9px;
+      height: 9px;
+      border: 3px solid var(--paper);
+      border-radius: 50%;
+      background: var(--amber);
+      box-shadow: 0 0 0 1px var(--cyan);
+    }
+    .sequence-step .who {
+      color: var(--cyan);
+      font: 700 11px/1.5 var(--mono);
+    }
+    .sequence-step .what { color: var(--muted); font-size: .85rem; }
+    .sequence-step strong { color: var(--ink-800); }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    .panel {
+      padding: 22px;
+      border: 1px solid var(--line);
+      background: var(--white);
+    }
+    .panel h3 { margin-top: 0; }
+    .plain-list {
+      margin: 0;
+      padding-left: 1.2rem;
+    }
+    .plain-list li { margin: .48rem 0; color: var(--muted); font-size: .84rem; }
+
+    .roadmap {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1px;
+      margin-top: 28px;
+      border: 1px solid var(--line);
+      background: var(--line);
+    }
+    .phase {
+      min-width: 0;
+      padding: 22px;
+      background: var(--white);
+    }
+    .phase .time {
+      color: var(--cyan);
+      font: 800 11px/1 var(--mono);
+      letter-spacing: .08em;
+    }
+    .phase h3 { min-height: 3.2em; margin: 18px 0 12px; font-size: 1.05rem; }
+    .phase ul { margin: 0; padding-left: 1.1rem; }
+    .phase li { margin: .55rem 0; color: var(--muted); font-size: .79rem; }
+    .phase:first-child { box-shadow: inset 0 4px 0 var(--red); }
+    .phase:nth-child(2) { box-shadow: inset 0 4px 0 var(--amber); }
+    .phase:nth-child(3) { box-shadow: inset 0 4px 0 var(--cyan); }
+    .phase:nth-child(4) { box-shadow: inset 0 4px 0 var(--green); }
+
+    .target-tree {
+      margin: 24px 0;
+      padding: 24px;
+      overflow-x: auto;
+      border: 1px solid #325368;
+      background: var(--ink-900);
+      color: #c9e5e4;
+      font: 600 12px/1.8 var(--mono);
+      white-space: pre;
+    }
+    .decision-list {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    .decision {
+      padding: 18px;
+      border-top: 3px solid var(--cyan);
+      background: var(--white);
+      box-shadow: 0 0 0 1px var(--line);
+    }
+    .decision strong { color: var(--ink-800); font-size: .85rem; }
+    .decision p { margin: 8px 0 0; color: var(--muted); font-size: .76rem; }
+
+    .glossary {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1px;
+      border: 1px solid var(--line);
+      background: var(--line);
+    }
+    .term {
+      display: grid;
+      grid-template-columns: 118px 1fr;
+      gap: 14px;
+      padding: 17px;
+      background: var(--white);
+    }
+    .term dt {
+      color: var(--ink-700);
+      font: 800 11px/1.5 var(--mono);
+    }
+    .term dd { margin: 0; color: var(--muted); font-size: .8rem; }
+
+    .command-list {
+      margin: 20px 0;
+      padding: 18px 20px;
+      overflow-x: auto;
+      border-left: 4px solid var(--cyan);
+      background: var(--ink-900);
+      color: #cae7e4;
+      font: 600 12px/1.9 var(--mono);
+      white-space: pre;
+    }
+    .report-footer {
+      padding: 42px clamp(28px, 6vw, 82px);
+      background: var(--paper-deep);
+      color: var(--muted);
+      font-size: .75rem;
+    }
+    .report-footer strong { color: var(--ink-800); }
+
+    @media (max-width: 1120px) {
+      .hero-metrics { grid-template-columns: repeat(3, 1fr); }
+      .report-shell { grid-template-columns: 210px minmax(0, 1fr); }
+      .backbone { grid-template-columns: repeat(3, 1fr); }
+      .arrow { display: none; }
+      .layer-notes { grid-template-columns: repeat(2, 1fr); }
+      .roadmap { grid-template-columns: repeat(2, 1fr); }
+      .flow-grid { grid-template-columns: 1fr; }
+      .flow-node:not(:last-child)::after { content: "↓"; top: auto; right: 50%; bottom: -20px; }
+    }
+    @media (max-width: 780px) {
+      .masthead-inner { width: min(100% - 32px, 1280px); padding-top: 48px; }
+      .hero-metrics { grid-template-columns: repeat(2, 1fr); }
+      .report-shell { display: block; width: 100%; }
+      .toc {
+        position: relative;
+        z-index: 4;
+        max-height: none;
+        padding: 15px 16px;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .toc-mark, .toc-note { display: none; }
+      .toc ol { display: flex; gap: 5px; overflow-x: auto; scrollbar-width: thin; }
+      .toc li { flex: 0 0 auto; }
+      .toc a { display: block; padding: 8px 10px; border-left: 0; border-bottom: 2px solid transparent; white-space: nowrap; }
+      .toc a::before { margin-right: 6px; }
+      .toc a:hover, .toc a[aria-current="true"] { border-color: var(--cyan); }
+      section { padding: 54px 20px; }
+      .section-head { grid-template-columns: 1fr; gap: 10px; }
+      .section-no::after { display: inline-block; margin: 0 0 3px 10px; }
+      .finding-grid, .feature-matrix, .split, .glossary, .decision-list { grid-template-columns: 1fr; }
+      .backbone, .layer-notes, .roadmap { grid-template-columns: 1fr; }
+      .metric-ledger { grid-template-columns: repeat(2, 1fr); }
+      .bar-row { grid-template-columns: 88px minmax(80px, 1fr) 92px; gap: 8px; }
+      .sequence-step { grid-template-columns: 1fr; gap: 3px; }
+      .term { grid-template-columns: 96px 1fr; }
+    }
+    @media (max-width: 440px) {
+      h1 { font-size: 2.65rem; }
+      .hero-metrics, .metric-ledger { grid-template-columns: 1fr 1fr; }
+      .hero-metric { min-height: 92px; padding: 15px; }
+      .bar-row { grid-template-columns: 78px 1fr; }
+      .bar-value { grid-column: 2; text-align: left; }
+      .term { display: block; }
+      .term dt { margin-bottom: 6px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+      }
+    }
+    @media print {
+      body { background: white; color: black; }
+      .masthead { min-height: auto; color: black; border: 0; }
+      .masthead::before, .masthead::after { display: none; }
+      .masthead-inner { width: 100%; padding: 24px 0; }
+      .eyebrow, .hero-deck, .hero-meta, .hero-metric span { color: #333; }
+      .hero-metrics { border-color: #aaa; background: #aaa; }
+      .hero-metric { min-height: auto; background: white; }
+      .hero-metric strong { color: black; }
+      .report-shell { display: block; width: 100%; box-shadow: none; }
+      .toc { display: none; }
+      section { padding: 28px 0; break-inside: auto; }
+      .finding, .feature-group, .panel, .phase, .layer-note, table { break-inside: avoid; }
+      .backbone-wrap, .target-tree, .command-list { color: black; background: white; border-color: #777; }
+      .layer { color: black; background: white; border-color: #777; }
+      .layer strong, .layer span, .layer small, .backbone-label { color: black; }
+      .layer-note.is-muted { opacity: 1; }
+      .report-footer { padding: 24px 0; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#summary">跳到报告正文</a>
+
+  <header class="masthead">
+    <div class="masthead-inner">
+      <p class="eyebrow">Architecture intelligence / static + build + runtime evidence</p>
+      <h1>WheelMaker<br>前端架构全景</h1>
+      <p class="hero-deck">从 191 个源文件、7.1 万行代码和 353 条模块依赖出发，定位当前系统的真实边界、功能面、常驻成本与迭代切入点。</p>
+      <div class="hero-meta">
+        <span>基线版本 feef1391</span>
+        <span>分支 main</span>
+        <span>分析日期 2026-07-19</span>
+        <span>范围 app/web/src + app/__tests__ + production build</span>
+      </div>
+      <div class="hero-metrics" aria-label="核心指标">
+        <div class="hero-metric"><strong>191</strong><span>前端源文件</span></div>
+        <div class="hero-metric"><strong>71,057</strong><span>源代码物理行数</span></div>
+        <div class="hero-metric"><strong>21,942</strong><span>WorkspaceApp 单文件行数</span></div>
+        <div class="hero-metric"><strong>353</strong><span>相对模块依赖边</span></div>
+        <div class="hero-metric"><strong>2.35 MiB</strong><span>生产入口 JS + CSS</span></div>
+        <div class="hero-metric"><strong>194</strong><span>测试文件</span></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="report-shell">
+    <aside class="toc" aria-label="报告目录">
+      <div class="toc-mark">SYSTEM INDEX</div>
+      <nav>
+        <ol>
+          <li><a href="#summary">执行摘要</a></li>
+          <li><a href="#architecture">架构骨架</a></li>
+          <li><a href="#inventory">目录与文件分布</a></li>
+          <li><a href="#modules">模块与调用方</a></li>
+          <li><a href="#features">功能地图</a></li>
+          <li><a href="#flows">状态与数据流</a></li>
+          <li><a href="#build">构建与运行时</a></li>
+          <li><a href="#tests">测试架构</a></li>
+          <li><a href="#risks">风险登记</a></li>
+          <li><a href="#roadmap">迭代路线</a></li>
+          <li><a href="#target">目标架构</a></li>
+          <li><a href="#glossary">领域词汇</a></li>
+          <li><a href="#appendix">附录与方法</a></li>
+        </ol>
+      </nav>
+      <p class="toc-note">M = 实测<br>S = 静态扫描<br>I = 基于证据推断<br><br>报告为单文件，可离线打开与打印。</p>
+    </aside>
+
+    <main id="main">
+      <section id="summary">
+        <div class="section-head">
+          <div class="section-no">01 / SUMMARY</div>
+          <div>
+            <h2>执行摘要</h2>
+            <p class="section-intro">WheelMaker 前端已经具备完整产品能力和明确的基础设施分层，但应用编排层没有同步演进，形成了“底层有边界、顶层过度集中”的结构。</p>
+          </div>
+        </div>
+
+        <p class="lede">当前首要问题不是重写 React，也不是替换状态库，而是把 <code>WorkspaceApp.tsx</code> 中已经隐含存在的领域边界真正切开。</p>
+
+        <div class="evidence-key" aria-label="证据类型">
+          <span class="evidence measured">M 实测数据</span>
+          <span class="evidence static">S 静态扫描</span>
+          <span class="evidence inferred">I 证据推断</span>
+        </div>
+
+        <div class="finding-grid">
+          <article class="finding strength">
+            <span class="index">01 / STRENGTH</span>
+            <h3>基础层已经成形</h3>
+            <p>Registry Client → Repository → Workspace Service → Store/Persistence 的职责大体清楚；平台桥接、按需加载、CSP、虚拟列表和 IndexedDB 都已有成熟实现。</p>
+          </article>
+          <article class="finding risk">
+            <span class="index">02 / BOTTLENECK</span>
+            <h3>根组件成为系统总线</h3>
+            <p>单文件占全部前端 LOC 的 30.9%，内部导入 129 个模块，并承载 290 个 state、172 个 effect/layout effect 与 271 个 callback。任何局部功能都容易扩大根渲染与回归范围。</p>
+          </article>
+          <article class="finding direction">
+            <span class="index">03 / DIRECTION</span>
+            <h3>渐进迁移，不做大爆炸重构</h3>
+            <p>优先封顶缓存和性能预算，再按 Chat → Preview/Terminal → Settings/Port Relay 顺序抽取 feature runtime；保留现有 Registry、持久化和 UI 组件资产。</p>
+          </article>
+        </div>
+
+        <div class="callout">
+          <strong>核心判断：</strong> 结构债务集中在“应用编排与状态归属”，而不是散布在所有目录。静态依赖图没有发现相对导入环，说明现在仍处于可渐进拆分的窗口期。
+        </div>
+
+        <div class="metric-ledger" aria-label="架构健康快照">
+          <div class="ledger-item"><strong>0</strong><span>静态相对导入环</span></div>
+          <div class="ledger-item"><strong>129</strong><span>WorkspaceApp 内部导入</span></div>
+          <div class="ledger-item"><strong>109</strong><span>RegistryRepository 方法</span></div>
+          <div class="ledger-item"><strong>120 MB</strong><span>IndexedDB 各域原始预算合计</span></div>
+          <div class="ledger-item"><strong>5.17 MB</strong><span>4,303 turns 会话内存估算</span></div>
+          <div class="ledger-item"><strong>4000</strong><span>Shiki inline cache 条目上限</span></div>
+          <div class="ledger-item"><strong>27,723</strong><span>测试代码行数</span></div>
+          <div class="ledger-item"><strong>5,427</strong><span>测试中的 toContain 断言</span></div>
+        </div>
+      </section>
+
+      <section id="architecture">
+        <div class="section-head">
+          <div class="section-no">02 / BACKBONE</div>
+          <div>
+            <h2>架构骨架</h2>
+            <p class="section-intro">点击下方任一层，可聚焦对应职责。当前系统已经有六层主干，但 WorkspaceApp 同时跨越 Shell、Feature Runtime 和部分 Domain Orchestration。</p>
+          </div>
+        </div>
+
+        <div class="backbone-wrap">
+          <div class="backbone-label">INTERACTIVE SYSTEM BACKBONE · CLICK A LAYER TO TRACE OWNERSHIP</div>
+          <div class="backbone" role="group" aria-label="交互式系统分层">
+            <button class="layer" type="button" data-layer="platform" aria-pressed="false">
+              <span>L1</span><strong>Platform</strong><small>PWA / Desktop / Android / Native bridge</small>
+            </button>
+            <span class="arrow" aria-hidden="true">→</span>
+            <button class="layer" type="button" data-layer="shell" aria-pressed="false">
+              <span>L2</span><strong>Shell</strong><small>main / WorkspaceApp / ResponsiveShell</small>
+            </button>
+            <span class="arrow" aria-hidden="true">→</span>
+            <button class="layer" type="button" data-layer="feature" aria-pressed="false">
+              <span>L3</span><strong>Feature UI</strong><small>Chat / File / Git / Preview / Settings</small>
+            </button>
+            <span class="arrow" aria-hidden="true">→</span>
+            <button class="layer" type="button" data-layer="domain" aria-pressed="false">
+              <span>L4</span><strong>Domain</strong><small>WorkspaceController / Service / feature models</small>
+            </button>
+            <span class="arrow" aria-hidden="true">→</span>
+            <button class="layer" type="button" data-layer="data" aria-pressed="false">
+              <span>L5</span><strong>Data</strong><small>WorkspaceStore / IndexedDB / runtime maps</small>
+            </button>
+            <span class="arrow" aria-hidden="true">→</span>
+            <button class="layer" type="button" data-layer="transport" aria-pressed="false">
+              <span>L6</span><strong>Registry</strong><small>Client / Repository / WebSocket / Hub</small>
+            </button>
+          </div>
+        </div>
+
+        <div class="layer-notes" aria-live="polite">
+          <article class="layer-note" data-layer-detail="platform">
+            <span class="mono">PLATFORM</span>
+            <h4>运行环境适配</h4>
+            <p>Desktop、Android、Native 与 PWA 各自封装凭据、诊断、更新、通知、系统能力和持久化差异。</p>
+          </article>
+          <article class="layer-note" data-layer-detail="shell">
+            <span class="mono">SHELL</span>
+            <h4>组合与导航</h4>
+            <p><code>main.tsx</code> 完成启动；<code>WorkspaceApp.tsx</code> 负责绝大多数状态、订阅和命令编排；ResponsiveShell 分流桌面与移动布局。</p>
+          </article>
+          <article class="layer-note" data-layer-detail="feature">
+            <span class="mono">FEATURE UI</span>
+            <h4>产品功能面</h4>
+            <p>Chat、文件、Git、终端、预览、设置、语音、用量与 Port Relay 已有独立目录和视图组件，但运行时状态仍大量上收。</p>
+          </article>
+          <article class="layer-note" data-layer-detail="domain">
+            <span class="mono">DOMAIN</span>
+            <h4>领域动作</h4>
+            <p>WorkspaceController 负责连接、切换和刷新；RegistryWorkspaceService 提供项目语境下的 108 个便捷方法。</p>
+          </article>
+          <article class="layer-note" data-layer-detail="data">
+            <span class="mono">DATA</span>
+            <h4>缓存与持久化</h4>
+            <p>WorkspaceStore 是 UI 面向的缓存门面；WorkspacePersistenceRepository 管理 IndexedDB、空间预算、淘汰与配额恢复。</p>
+          </article>
+          <article class="layer-note" data-layer-detail="transport">
+            <span class="mono">REGISTRY</span>
+            <h4>协议与后端入口</h4>
+            <p>RegistryClient 管连接和事件，Repository 的 109 个方法做协议归一化，最终通过 WebSocket 连接 Registry/Hub。</p>
+          </article>
+        </div>
+
+        <h3>启动链路</h3>
+        <div class="flow-grid" aria-label="启动流程">
+          <div class="flow-node"><strong>Browser / Host</strong><span>加载 hash 资产与 index.html</span></div>
+          <div class="flow-node"><strong>main.tsx</strong><span>请求 persistent storage，等待 workspaceAppReady</span></div>
+          <div class="flow-node"><strong>App Mount</strong><span>创建 Registry、Workspace 与持久化单例</span></div>
+          <div class="flow-node"><strong>Controller</strong><span>连接 Registry、恢复项目与会话状态</span></div>
+          <div class="flow-node"><strong>ResponsiveShell</strong><span>按设备形态组合主视图与导航</span></div>
+        </div>
+
+        <h3>架构边界判断</h3>
+        <div class="split">
+          <div class="panel">
+            <h4>边界清晰的部分</h4>
+            <ul class="plain-list">
+              <li>Registry transport、协议归一化和项目服务分层。</li>
+              <li>IndexedDB 配额、预算、驱逐和恢复逻辑。</li>
+              <li>Desktop / Android / Native / PWA 平台适配。</li>
+              <li>Shiki、Mermaid、KaTeX、Git diff 等重功能按需加载。</li>
+              <li>聊天长列表由 React Virtuoso 虚拟化。</li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h4>边界模糊的部分</h4>
+            <ul class="plain-list">
+              <li>WorkspaceApp 同时承担状态容器、事件路由、命令协调与页面组合。</li>
+              <li>feature 目录拥有视图，却未完整拥有自己的 runtime/store。</li>
+              <li>RegistryRepository 与 RegistryWorkspaceService 方法面高度平行。</li>
+              <li>全局 CSS 体量大，feature 所有权依赖命名约定而非模块边界。</li>
+              <li>部分运行时 Map 缓存与持久化预算之间没有统一资源策略。</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="inventory">
+        <div class="section-head">
+          <div class="section-no">03 / INVENTORY</div>
+          <div>
+            <h2>目录与文件分布</h2>
+            <p class="section-intro">前端源代码共 191 个文件、71,057 个物理行。TSX 占 46.5% 行数，CSS 占 22.2%，TS 占 31.4%。分布呈现出明显的根组件与全局样式集中。</p>
+          </div>
+        </div>
+
+        <div class="chart" aria-label="目录代码行分布">
+          <div class="bar-row"><span class="bar-label">app</span><span class="bar-track" style="--w:100%"></span><span class="bar-value">21,970 · 30.9%</span></div>
+          <div class="bar-row"><span class="bar-label">styles</span><span class="bar-track" style="--w:71.7%"></span><span class="bar-value">15,751 · 22.2%</span></div>
+          <div class="bar-row"><span class="bar-label">chat</span><span class="bar-track" style="--w:38.4%"></span><span class="bar-value">8,441 · 11.9%</span></div>
+          <div class="bar-row"><span class="bar-label">registry</span><span class="bar-track" style="--w:20.8%"></span><span class="bar-value">4,577 · 6.4%</span></div>
+          <div class="bar-row"><span class="bar-label">settings</span><span class="bar-track" style="--w:18.3%"></span><span class="bar-value">4,027 · 5.7%</span></div>
+          <div class="bar-row"><span class="bar-label">workspace</span><span class="bar-track" style="--w:12.2%"></span><span class="bar-value">2,690 · 3.8%</span></div>
+          <div class="bar-row"><span class="bar-label">shell</span><span class="bar-track" style="--w:9.2%"></span><span class="bar-value">2,013 · 2.8%</span></div>
+          <div class="bar-row"><span class="bar-label">features</span><span class="bar-track" style="--w:8.6%"></span><span class="bar-value">1,882 · 2.6%</span></div>
+          <div class="bar-row"><span class="bar-label">code</span><span class="bar-track" style="--w:8.1%"></span><span class="bar-value">1,778 · 2.5%</span></div>
+          <div class="bar-row"><span class="bar-label">other</span><span class="bar-track" style="--w:36.1%"></span><span class="bar-value">7,928 · 11.2%</span></div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <caption>app/web/src 顶层目录全量分布</caption>
+            <thead><tr><th>目录</th><th>职责</th><th>文件</th><th>LOC</th><th>体积 KiB</th></tr></thead>
+            <tbody>
+              <tr><td class="path">app</td><td>应用编排、快捷键</td><td class="num">2</td><td class="num">21,970</td><td class="num">846.6</td></tr>
+              <tr><td class="path">styles</td><td>全局与功能样式</td><td class="num">15</td><td class="num">15,751</td><td class="num">359.0</td></tr>
+              <tr><td class="path">chat</td><td>会话、turn、composer、导出、通知</td><td class="num">53</td><td class="num">8,441</td><td class="num">268.0</td></tr>
+              <tr><td class="path">registry</td><td>协议客户端、Repository、Workspace Service、类型</td><td class="num">10</td><td class="num">4,577</td><td class="num">149.5</td></tr>
+              <tr><td class="path">settings</td><td>更新、技能、调试、设备、发布和导航</td><td class="num">18</td><td class="num">4,027</td><td class="num">154.9</td></tr>
+              <tr><td class="path">workspace</td><td>Controller、Store、Persistence、导航偏好</td><td class="num">6</td><td class="num">2,690</td><td class="num">94.7</td></tr>
+              <tr><td class="path">shell</td><td>桌面/移动壳层、对话框、缩放与刷新保护</td><td class="num">14</td><td class="num">2,013</td><td class="num">66.6</td></tr>
+              <tr><td class="path">features</td><td>语音输入、语音播放等跨界功能</td><td class="num">14</td><td class="num">1,882</td><td class="num">52.3</td></tr>
+              <tr><td class="path">code</td><td>Markdown/HTML 预览、Shiki 渲染</td><td class="num">4</td><td class="num">1,778</td><td class="num">57.4</td></tr>
+              <tr><td class="path">platform</td><td>Native、Desktop、Android、PWA 桥接与持久化</td><td class="num">14</td><td class="num">1,518</td><td class="num">50.5</td></tr>
+              <tr><td class="path">preview</td><td>预览工作台、目录加载、行定位和链接</td><td class="num">5</td><td class="num">1,472</td><td class="num">44.9</td></tr>
+              <tr><td class="path">debug</td><td>诊断、脱敏、Registry 消息查看器</td><td class="num">6</td><td class="num">1,386</td><td class="num">43.0</td></tr>
+              <tr><td class="path">git</td><td>状态、日志、diff、侧栏与刷新策略</td><td class="num">6</td><td class="num">1,008</td><td class="num">35.1</td></tr>
+              <tr><td class="path">terminal</td><td>xterm、会话同步与终端工作台</td><td class="num">4</td><td class="num">692</td><td class="num">26.3</td></tr>
+              <tr><td class="path">usage</td><td>用量状态与展示面</td><td class="num">4</td><td class="num">590</td><td class="num">22.4</td></tr>
+              <tr><td class="path">file</td><td>文件树、搜索、预览面板</td><td class="num">5</td><td class="num">567</td><td class="num">16.8</td></tr>
+              <tr><td class="path">portRelay</td><td>代理目标、URL 和内嵌页面</td><td class="num">3</td><td class="num">425</td><td class="num">12.9</td></tr>
+              <tr><td class="path">notifications</td><td>通知 payload 和 Provider</td><td class="num">2</td><td class="num">140</td><td class="num">4.5</td></tr>
+              <tr><td class="path">root + misc</td><td>入口、runtime、preferences、compatibility、types</td><td class="num">6</td><td class="num">130</td><td class="num">—</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>最大文件与集中度</h3>
+        <div class="table-wrap">
+          <table>
+            <caption>按代码行排序的前 15 个文件</caption>
+            <thead><tr><th>#</th><th>文件</th><th>LOC</th><th>观察</th></tr></thead>
+            <tbody>
+              <tr><td class="num">1</td><td class="path">app/WorkspaceApp.tsx</td><td class="num">21,942</td><td>占全前端 30.9%，是下一阶段的主要拆分对象。</td></tr>
+              <tr><td class="num">2</td><td class="path">styles/chat.css</td><td class="num">6,107</td><td>聊天样式单文件占全部 CSS 38.8%。</td></tr>
+              <tr><td class="num">3</td><td class="path">styles/settings.css</td><td class="num">3,011</td><td>设置域视觉规则集中。</td></tr>
+              <tr><td class="num">4</td><td class="path">styles/shell.css</td><td class="num">1,962</td><td>跨桌面/移动壳层样式。</td></tr>
+              <tr><td class="num">5</td><td class="path">registry/RegistryRepository.ts</td><td class="num">1,940</td><td>109 个协议门面方法。</td></tr>
+              <tr><td class="num">6</td><td class="path">workspace/WorkspacePersistence.ts</td><td class="num">1,862</td><td>IndexedDB、预算和恢复逻辑高度集中但职责内聚。</td></tr>
+              <tr><td class="num">7</td><td class="path">styles/file.css</td><td class="num">1,390</td><td>文件功能全局样式。</td></tr>
+              <tr><td class="num">8</td><td class="path">registry/registryTypes.ts</td><td class="num">1,005</td><td>被 53 个模块导入，是类型中心。</td></tr>
+              <tr><td class="num">9</td><td class="path">registry/RegistryWorkspaceService.ts</td><td class="num">960</td><td>108 个项目语境方法，和 Repository 高度平行。</td></tr>
+              <tr><td class="num">10</td><td class="path">preview/previewWorkbenchState.ts</td><td class="num">860</td><td>预览状态模型已经具备可独立迁移基础。</td></tr>
+              <tr><td class="num">11</td><td class="path">settings/SkillsSettingsDetail.tsx</td><td class="num">807</td><td>技能设置详情。</td></tr>
+              <tr><td class="num">12</td><td class="path">chat/ChatTurnView.tsx</td><td class="num">760</td><td>单个 turn 的主要渲染边界。</td></tr>
+              <tr><td class="num">13</td><td class="path">settings/SettingsRootContent.tsx</td><td class="num">710</td><td>设置首页组合。</td></tr>
+              <tr><td class="num">14</td><td class="path">chat/composer/chatComposerLexicalModel.tsx</td><td class="num">699</td><td>输入模型与 Lexical 集成。</td></tr>
+              <tr><td class="num">15</td><td class="path">code/shikiRenderer.ts</td><td class="num">687</td><td>高亮器加载与缓存。</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout warn">
+          <strong>集中度信号：</strong> 前四个 CSS 文件合计 12,470 行，占所有 CSS 的 79.2%；WorkspaceApp 一份文件约为第二至第六大 TS/TSX 文件之和的 3.3 倍。拆分优先级应由集中度和变更耦合决定，而不是按目录平均用力。
+        </div>
+      </section>
+
+      <section id="modules">
+        <div class="section-head">
+          <div class="section-no">04 / MODULE MAP</div>
+          <div>
+            <h2>模块与调用方地图</h2>
+            <p class="section-intro">176 个 TS/TSX 模块之间形成 353 条相对导入边，未发现静态导入环。依赖呈“单一超级入口 + 少数基础枢纽”的放射形态。</p>
+          </div>
+        </div>
+
+        <h3>核心模块、调用方与下游</h3>
+        <div class="table-wrap">
+          <table>
+            <caption>主要模块调用地图</caption>
+            <thead><tr><th>模块</th><th>主要调用方</th><th>下游 / 责任</th><th>架构判断</th></tr></thead>
+            <tbody>
+              <tr><td class="path">main.tsx</td><td>浏览器入口</td><td>persistent storage → workspaceAppReady → App</td><td>职责精简，保持。</td></tr>
+              <tr><td class="path">app/WorkspaceApp.tsx</td><td>main.tsx</td><td>129 个内部模块；绝大多数 feature、service、platform、shell</td><td><span class="risk-level p0">P0</span> 组合根过度承担运行时。</td></tr>
+              <tr><td class="path">shell/ResponsiveShell.tsx</td><td>WorkspaceApp</td><td>Desktop/Mobile shell 与布局 props</td><td>纯组合边界较好，可继续瘦化 props。</td></tr>
+              <tr><td class="path">workspace/WorkspaceController.ts</td><td>WorkspaceApp</td><td>Service + Store；连接、切换、刷新、目录校验</td><td>方法仅 5 个，适合作为 application service 种子。</td></tr>
+              <tr><td class="path">registry/RegistryWorkspaceService.ts</td><td>Controller、WorkspaceApp</td><td>Repository 生命周期与项目语境方法</td><td>边界清晰，但 108 方法需要领域切片。</td></tr>
+              <tr><td class="path">registry/RegistryRepository.ts</td><td>WorkspaceService</td><td>RegistryClient、协议类型、归一化</td><td>109 方法；建议 descriptor/codegen 降低重复。</td></tr>
+              <tr><td class="path">registry/RegistryClient.ts</td><td>Repository</td><td>WebSocket、request、event、close</td><td>12 方法，transport 边界健康。</td></tr>
+              <tr><td class="path">workspace/WorkspaceStore.ts</td><td>Controller、WorkspaceApp</td><td>Persistence + UI 面向缓存</td><td>可作为统一资源策略入口。</td></tr>
+              <tr><td class="path">workspace/WorkspacePersistence.ts</td><td>WorkspaceStore、启动流程</td><td>IndexedDB、预算、淘汰、quota recovery、dump</td><td>复杂但内聚，应补容量与迁移契约测试。</td></tr>
+              <tr><td class="path">registry/registryTypes.ts</td><td>53 个模块</td><td>协议与领域共享类型</td><td>最大入度枢纽；拆分时维持稳定公共契约。</td></tr>
+              <tr><td class="path">chat/ChatTurnView.tsx</td><td>聊天列表</td><td>turn 子视图、Markdown、函数面、计划、diff</td><td>长列表的关键渲染隔离边界。</td></tr>
+              <tr><td class="path">preview/previewWorkbenchState.ts</td><td>WorkspaceApp、Preview UI</td><td>tab、selection、loader、navigation</td><td>优先抽成 PreviewRuntime 的现成状态核心。</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>WorkspaceApp 负载账本</h3>
+        <div class="metric-ledger">
+          <div class="ledger-item"><strong>290</strong><span>useState</span></div>
+          <div class="ledger-item"><strong>202</strong><span>useRef</span></div>
+          <div class="ledger-item"><strong>168 + 4</strong><span>useEffect + useLayoutEffect</span></div>
+          <div class="ledger-item"><strong>80</strong><span>useMemo</span></div>
+          <div class="ledger-item"><strong>271</strong><span>useCallback</span></div>
+          <div class="ledger-item"><strong>1</strong><span>useReducer</span></div>
+          <div class="ledger-item"><strong>351</strong><span>memoized callables</span></div>
+          <div class="ledger-item"><strong>129</strong><span>内部模块导入</span></div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <caption>根组件 state 域启发式分布</caption>
+            <thead><tr><th>域</th><th>State 数</th><th>说明</th></tr></thead>
+            <tbody>
+              <tr><td>Other / mixed</td><td class="num">122</td><td>设置、更新、设备、诊断及无法可靠归类的状态。</td></tr>
+              <tr><td>Chat</td><td class="num">74</td><td>会话、消息、composer、selection、streaming 等。</td></tr>
+              <tr><td>Preview</td><td class="num">22</td><td>tab、文件、diff、附件和预览导航。</td></tr>
+              <tr><td>Port Relay</td><td class="num">17</td><td>目标、打开状态、frame 和连接反馈。</td></tr>
+              <tr><td>Settings</td><td class="num">15</td><td>设置层级与多个详情面。</td></tr>
+              <tr><td>Shell / Project</td><td class="num">15</td><td>项目、布局、侧栏与全局页面。</td></tr>
+              <tr><td>Connection</td><td class="num">8</td><td>Registry/Hub 连接与恢复。</td></tr>
+              <tr><td>Git</td><td class="num">7</td><td>状态、引用、提交和 diff。</td></tr>
+              <tr><td>Voice</td><td class="num">6</td><td>录音、识别与播放。</td></tr>
+              <tr><td>Terminal</td><td class="num">4</td><td>终端会话与工作台。</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="muted small">注：Hook 数来自 App 函数 AST 统计；state 域根据变量命名启发式归类，用于判断集中趋势，不等同于业务对象精确计数。</p>
+      </section>
+
+      <section id="features">
+        <div class="section-head">
+          <div class="section-no">05 / FEATURES</div>
+          <div>
+            <h2>功能地图</h2>
+            <p class="section-intro">前端不是单一聊天页，而是围绕 Project、Session 和 Registry 组织的多工作台。功能面已经覆盖从代码浏览到发布与设备管理的完整链路。</p>
+          </div>
+        </div>
+
+        <div class="feature-matrix">
+          <article class="feature-group">
+            <h3>Chat 工作台</h3>
+            <p>核心主路径。包含会话列表、消息/turn 虚拟化、富文本输入、附件、函数调用、计划、选项回复、diff、复制范围、导出与通知。</p>
+            <div class="chips"><span class="chip">sessions</span><span class="chip">turns</span><span class="chip">Lexical composer</span><span class="chip">Virtuoso</span><span class="chip">streaming</span><span class="chip">prompt diff</span></div>
+          </article>
+          <article class="feature-group">
+            <h3>File / Preview 工作台</h3>
+            <p>目录树、文件搜索、文件信息与读取、Markdown/HTML/代码预览、行定位、附件与 prompt diff 多标签工作台。</p>
+            <div class="chips"><span class="chip">explorer</span><span class="chip">search</span><span class="chip">preview tabs</span><span class="chip">Shiki</span><span class="chip">Mermaid</span><span class="chip">KaTeX</span></div>
+          </article>
+          <article class="feature-group">
+            <h3>Git 工作台</h3>
+            <p>仓库状态、refs、log、提交详情、工作区/提交 diff、分块渲染和按活动状态调度刷新。</p>
+            <div class="chips"><span class="chip">status</span><span class="chip">refs</span><span class="chip">log</span><span class="chip">diff</span><span class="chip">refresh policy</span></div>
+          </article>
+          <article class="feature-group">
+            <h3>Terminal 工作台</h3>
+            <p>终端创建、列表、重启、关闭、输入输出、尺寸同步，以及基于 xterm 的视图生命周期管理。</p>
+            <div class="chips"><span class="chip">xterm</span><span class="chip">PTY session</span><span class="chip">resize</span><span class="chip">I/O sync</span></div>
+          </article>
+          <article class="feature-group">
+            <h3>Settings 与运维</h3>
+            <p>连接状态、数据库、调试日志、版本更新、技能、Port Relay、发布、设备会话和技能详情。peer 与 child 两级导航已显式建模。</p>
+            <div class="chips"><span class="chip">update</span><span class="chip">skills</span><span class="chip">debug</span><span class="chip">release publish</span><span class="chip">devices</span></div>
+          </article>
+          <article class="feature-group">
+            <h3>语音、用量与平台能力</h3>
+            <p>语音录入、转写、取消、TTS、用量统计、通知、Android 凭据、Native 诊断、Desktop 更新和 PWA Service Worker。</p>
+            <div class="chips"><span class="chip">speech</span><span class="chip">TTS</span><span class="chip">usage</span><span class="chip">notifications</span><span class="chip">platform bridges</span></div>
+          </article>
+        </div>
+
+        <h3>Registry 协议功能面</h3>
+        <div class="table-wrap">
+          <table>
+            <caption>按领域聚合的远端能力</caption>
+            <thead><tr><th>领域</th><th>主要动作</th><th>前端消费面</th></tr></thead>
+            <tbody>
+              <tr><td>Security / Device</td><td>security sessions、device sessions、Android credential</td><td>连接、设备管理、平台登录</td></tr>
+              <tr><td>Project</td><td>list、report、filesystem list/info/read/search/index</td><td>项目切换、文件树、搜索、预览</td></tr>
+              <tr><td>Git</td><td>rev、refs、log、diffs、status</td><td>Git 侧栏与 diff 工作台</td></tr>
+              <tr><td>Session</td><td>list/read/search/create/send/status/compact/cancel/mark-read/config/resume/reload/archive/delete/rename</td><td>Chat 全生命周期</td></tr>
+              <tr><td>Session Content</td><td>artifact、attachments、message、message update</td><td>turn 渲染、附件、预览与 streaming</td></tr>
+              <tr><td>Speech</td><td>start/chunk/finish/cancel/transcript/error、TTS</td><td>语音输入与播放</td></tr>
+              <tr><td>Terminal</td><td>list/create/get/resize/close/restart/input/output/changed</td><td>终端工作台</td></tr>
+              <tr><td>Operations</td><td>npm scan/install/uninstall、update、release publish、skills、port relay、hub state</td><td>设置、更新与运维能力</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="flows">
+        <div class="section-head">
+          <div class="section-no">06 / FLOWS</div>
+          <div>
+            <h2>状态、数据与事件流</h2>
+            <p class="section-intro">系统同时存在命令流、Registry 事件流、UI 本地状态和持久化缓存。性能与一致性问题主要发生在这些流在根组件交汇的位置。</p>
+          </div>
+        </div>
+
+        <h3>用户命令流</h3>
+        <div class="sequence">
+          <div class="sequence-step"><span class="who">FEATURE UI</span><div class="what"><strong>用户动作</strong>：发送 prompt、打开文件、查看 diff、启动终端或更新设置。</div></div>
+          <div class="sequence-step"><span class="who">WORKSPACE APP</span><div class="what"><strong>编排与取上下文</strong>：读取当前 project/session，更新 optimistic UI 或 loading 状态。</div></div>
+          <div class="sequence-step"><span class="who">SERVICE</span><div class="what"><strong>项目语境封装</strong>：RegistryWorkspaceService 把通用操作绑定到当前项目。</div></div>
+          <div class="sequence-step"><span class="who">REPOSITORY</span><div class="what"><strong>协议归一化</strong>：构造方法、参数并将响应转为前端类型。</div></div>
+          <div class="sequence-step"><span class="who">CLIENT / WS</span><div class="what"><strong>传输</strong>：RegistryClient 发出 request，经 WebSocket 到 Registry/Hub。</div></div>
+        </div>
+
+        <h3>消息接收与流式刷新</h3>
+        <div class="sequence">
+          <div class="sequence-step"><span class="who">REGISTRY EVENT</span><div class="what"><strong>session.message / update</strong> 到达 RegistryClient 的事件入口。</div></div>
+          <div class="sequence-step"><span class="who">EVENT ROUTING</span><div class="what">当前主要在 WorkspaceApp 识别 project/session、修复 gap、同步状态，并写入运行时 Map/Ref。</div></div>
+          <div class="sequence-step"><span class="who">INCREMENTAL MODEL</span><div class="what">最近优化改为增量 upsert turn、prompt 状态索引，避免每个 token 重扫整个会话。</div></div>
+          <div class="sequence-step"><span class="who">RAF COMMIT</span><div class="what">同一帧内的流式事件合并为一次 UI commit；空闲时不保留常驻 requestAnimationFrame。</div></div>
+          <div class="sequence-step"><span class="who">VIRTUOSO</span><div class="what">虚拟列表只渲染视窗附近 turn；display height 使用 WeakMap 缓存，旧消息可被 GC。</div></div>
+        </div>
+
+        <div class="callout">
+          <strong>近期性能优化基线：</strong> 在 4,303 turns / 269 prompts 的长会话样本上，旧 prompt 扫描微基准约 1,723 ms；冷索引展示约 111 ms，热路径约 20 ms，单次增量 upsert 约 0.017 ms。该结果证明“索引 + 增量更新 + 帧合并”方向有效，但仍需浏览器内 Performance trace 作为持续门禁。
+        </div>
+
+        <h3>状态存放位置</h3>
+        <div class="table-wrap">
+          <table>
+            <caption>当前状态层级与生命周期</caption>
+            <thead><tr><th>位置</th><th>内容</th><th>生命周期</th><th>主要风险</th></tr></thead>
+            <tbody>
+              <tr><td>React state</td><td>页面、功能状态、loading、selection、配置</td><td>App 挂载期</td><td>集中在根组件，更新扇出大。</td></tr>
+              <tr><td>React ref / runtime Map</td><td>chat messages、turns、cursor、调度器、最新闭包数据</td><td>App 挂载期或会话期</td><td>部分缺少统一条目/字节上限和 LRU。</td></tr>
+              <tr><td>Feature model</td><td>preview state、composer Lexical model、Git diff model</td><td>功能视图期</td><td>已有模型但部分所有权仍上收。</td></tr>
+              <tr><td>WorkspaceStore</td><td>UI 面向项目/会话缓存</td><td>应用期</td><td>需成为 runtime 与 persistence 的资源政策协调点。</td></tr>
+              <tr><td>IndexedDB</td><td>chat、file、diff、project commits</td><td>跨启动</td><td>各域预算合计 120 MB，需可观测实际占用和驱逐。</td></tr>
+              <tr><td>Host / platform</td><td>凭据、更新状态、原生诊断、通知</td><td>宿主控制</td><td>平台差异需要契约测试。</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>长会话内存样本</h3>
+        <div class="metric-ledger">
+          <div class="ledger-item"><strong>1.87 MB</strong><span>原始 turns</span></div>
+          <div class="ledger-item"><strong>1.73 MB</strong><span>解析后 messages</span></div>
+          <div class="ledger-item"><strong>1.56 MB</strong><span>索引与高度缓存</span></div>
+          <div class="ledger-item"><strong>5.17 MB</strong><span>估算合计 / 4,303 turns</span></div>
+        </div>
+        <p class="muted small">这是 V8 对象近似测量，不包含 React Fiber、DOM、Shiki、图片、字体和浏览器内部开销；用于比较数据结构，不等同于 Chrome Task Manager 总内存。</p>
+      </section>
+
+      <section id="build">
+        <div class="section-head">
+          <div class="section-no">07 / BUILD</div>
+          <div>
+            <h2>构建、依赖与常驻运行时</h2>
+            <p class="section-intro">技术栈是 React 19 + TypeScript 5.8 + webpack 5，富文本、虚拟列表、代码高亮、图表和终端均采用成熟库。生产构建成功，但入口体积仍有下降空间。</p>
+          </div>
+        </div>
+
+        <div class="metric-ledger">
+          <div class="ledger-item"><strong>1.97 MiB</strong><span>入口 JS（minified，未压缩）</span></div>
+          <div class="ledger-item"><strong>393 KiB</strong><span>入口 CSS</span></div>
+          <div class="ledger-item"><strong>200</strong><span>生产资产文件</span></div>
+          <div class="ledger-item"><strong>9,500 KiB</strong><span>全部生产资产</span></div>
+        </div>
+
+        <div class="split">
+          <div class="panel">
+            <h3>核心依赖</h3>
+            <ul class="plain-list">
+              <li><strong>React 19.2.3</strong>：组件与并发渲染基础。</li>
+              <li><strong>Lexical 0.45</strong>：聊天富文本 composer。</li>
+              <li><strong>React Virtuoso 4.18.7</strong>：长会话虚拟化。</li>
+              <li><strong>Shiki 4</strong>：代码高亮；语言和主题动态加载。</li>
+              <li><strong>xterm 6</strong>：终端视图。</li>
+              <li><strong>Mermaid 11 / React Markdown / KaTeX</strong>：富内容渲染。</li>
+              <li><strong>webpack 5.105.4 / Babel / TypeScript 5.8.3</strong>：构建链。</li>
+              <li><strong>Jest 30.4.2</strong>：测试执行。</li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h3>已有按需加载</h3>
+            <ul class="plain-list">
+              <li>Settings 共享 lazy chunk 与 Registry Debug Panel。</li>
+              <li>文件图标、Shiki renderer、语言和主题。</li>
+              <li>Git diff rows、Mermaid、KaTeX/math。</li>
+              <li>html-to-image 等低频重依赖。</li>
+              <li>生产 JS/CSS 使用内容 hash；默认不发布 source map。</li>
+              <li>严格 CSP，开发环境 <code>/ws</code> 代理到本地 Registry。</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3>生产资产头部</h3>
+        <div class="table-wrap">
+          <table>
+            <caption>2026-07-19 production build 最大资产</caption>
+            <thead><tr><th>资产</th><th>体积</th><th>判断</th></tr></thead>
+            <tbody>
+              <tr><td class="path">bundle.27e6287072b6818f62f5.js</td><td class="num">2,016.17 KiB</td><td>主入口；首轮预算应控制在 1.8 MiB 以内。</td></tr>
+              <tr><td class="path">9452.36d2edb7d9712452f60b.js</td><td class="num">646.06 KiB</td><td>大型 vendor chunk，需用 stats 定位归属后决定预取。</td></tr>
+              <tr><td class="path">2300.41aec67d7ed7dbfafb84.js</td><td class="num">638.80 KiB</td><td>大型 vendor chunk。</td></tr>
+              <tr><td class="path">8731.8834aca07a37663b086f.js</td><td class="num">589.23 KiB</td><td>大型 vendor chunk。</td></tr>
+              <tr><td class="path">165.33f77a264e5e063eb0c0.js</td><td class="num">421.76 KiB</td><td>大型 vendor chunk。</td></tr>
+              <tr><td class="path">bundle.cdd82ce28201ad669743.css</td><td class="num">392.94 KiB</td><td>入口 CSS；全局样式集中导致未使用规则难按 feature 卸载。</td></tr>
+              <tr><td class="path">settings.d552589e67d0736d928c.js</td><td class="num">86.60 KiB</td><td>设置域已独立为 lazy chunk，是可复制的切分模式。</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>常驻与条件性消耗</h3>
+        <div class="table-wrap">
+          <table>
+            <caption>定时器、缓存与订阅审计</caption>
+            <thead><tr><th>对象</th><th>频率 / 上限</th><th>激活条件</th><th>结论</th></tr></thead>
+            <tbody>
+              <tr><td>Registry WebSocket 与事件订阅</td><td>事件驱动</td><td>连接期间</td><td>必要常驻；事件路由应从根组件下沉。</td></tr>
+              <tr><td>Chat rAF commit scheduler</td><td>有待提交更新时每帧一次</td><td>流式消息期间</td><td><span class="risk-level good">OK</span> 空闲时不保留 rAF。</td></tr>
+              <tr><td>Native diagnostics</td><td>20 s</td><td>Native 环境</td><td>低频，合理；页面隐藏时可暂停。</td></tr>
+              <tr><td>Voice sampling / UI</td><td>250 ms</td><td>录音激活时</td><td>条件性消耗，合理。</td></tr>
+              <tr><td>Port Relay opening check</td><td>1 s</td><td>打开流程</td><td>短时轮询，应确保所有退出路径清理。</td></tr>
+              <tr><td>Service Worker update</td><td>5 min</td><td>非 Native PWA</td><td>低频，合理。</td></tr>
+              <tr><td>Release publish polling</td><td>2 s</td><td>发布详情/任务活跃</td><td>条件性高频；后台页降频。</td></tr>
+              <tr><td>Shiki inline cache</td><td>最多 4,000 条</td><td>代码渲染</td><td><span class="risk-level p1">P1</span> 有条数上限，无字节预算。</td></tr>
+              <tr><td>Registry debug records</td><td>当前未见硬上限</td><td>手动开启调试</td><td><span class="risk-level p0">P0</span> 克隆记录并触发根更新，长时开启会增长。</td></tr>
+              <tr><td>IndexedDB cache</td><td>Chat 48 / File 32 / Diff 16 / Commits 24 MB</td><td>持久化启用</td><td>有预算与驱逐，总上限 120 MB。</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="tests">
+        <div class="section-head">
+          <div class="section-no">08 / TESTS</div>
+          <div>
+            <h2>测试架构与质量信号</h2>
+            <p class="section-intro">测试数量充足、覆盖面广，但大量断言直接检查源码字符串，使测试更像结构快照而不是用户行为契约。</p>
+          </div>
+        </div>
+
+        <div class="metric-ledger">
+          <div class="ledger-item"><strong>194</strong><span>测试文件</span></div>
+          <div class="ledger-item"><strong>27,723</strong><span>测试 LOC</span></div>
+          <div class="ledger-item"><strong>283</strong><span>readFileSync 调用</span></div>
+          <div class="ledger-item"><strong>5,427</strong><span>toContain 断言</span></div>
+        </div>
+
+        <div class="split">
+          <div class="panel">
+            <h3>优势</h3>
+            <ul class="plain-list">
+              <li>聊天约 47 个测试文件，是覆盖最密集的领域。</li>
+              <li>Registry、Session、Voice、File、Git、Terminal、平台适配均有专项测试。</li>
+              <li>Workspace persistence safety 有独立大测试文件。</li>
+              <li>性能优化已有长会话微基准和回归断言。</li>
+              <li>测试体量约为生产前端 LOC 的 39%，投入充分。</li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h3>结构风险</h3>
+            <ul class="plain-list">
+              <li>192 个测试集中在 <code>app/__tests__</code>，仅 2 个与源码共置。</li>
+              <li>源文本读取与 <code>toContain</code> 让重命名、抽取模块产生大面积无行为变化的失败。</li>
+              <li>粗略扫描到的 render 相关信号仅约 38 个，行为/交互比例偏低。</li>
+              <li>现有一项 settings navigation 测试与 <code>releasePublish</code> 当前实现发生漂移。</li>
+              <li>缺少明确的 bundle、长会话输入和 streaming frame CI 门禁。</li>
+            </ul>
+          </div>
+        </div>
+
+        <h3>建议测试金字塔</h3>
+        <div class="flow-grid">
+          <div class="flow-node"><strong>Pure model</strong><span>turn merge、prompt index、preview state、Git diff parser</span></div>
+          <div class="flow-node"><strong>Store contract</strong><span>runtime cache、IndexedDB、quota recovery、event reducers</span></div>
+          <div class="flow-node"><strong>Component behavior</strong><span>composer、turn view、settings navigation、terminal lifecycle</span></div>
+          <div class="flow-node"><strong>Integration</strong><span>fake Registry client 驱动完整 session event flow</span></div>
+          <div class="flow-node"><strong>Budget gates</strong><span>5k turns latency、heap cap、bundle/CSS、no import cycles</span></div>
+        </div>
+
+        <div class="callout warn">
+          <strong>迁移原则：</strong> 不需要一次重写 5,427 个断言。新功能与被拆分模块先采用行为契约；每次抽取时删除对应的源码字符串断言，用组件或 store contract 测试替代，逐步让测试结构跟随目标架构。
+        </div>
+      </section>
+
+      <section id="risks">
+        <div class="section-head">
+          <div class="section-no">09 / RISK REGISTER</div>
+          <div>
+            <h2>风险登记与优先级</h2>
+            <p class="section-intro">优先级综合了用户可感知性能、内存增长、变更爆炸半径和迁移前置关系。P0 应先封顶风险，不等同于立即大规模重构。</p>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <caption>风险、证据、影响与动作</caption>
+            <thead><tr><th>级别</th><th>风险</th><th>证据</th><th>影响</th><th>建议动作</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><span class="risk-level p0">P0</span></td>
+                <td>WorkspaceApp 编排单体</td>
+                <td>21,942 LOC；129 imports；290 state；172 effects</td>
+                <td>局部交互扩大根渲染，难并行迭代，回归面大。</td>
+                <td>先抽 ChatRuntime 与 Registry event router，再迁移 Preview/Terminal。</td>
+              </tr>
+              <tr>
+                <td><span class="risk-level p0">P0</span></td>
+                <td>Registry debug 无界记录</td>
+                <td>开启时克隆消息、保留 records、触发根更新；关闭才清空。</td>
+                <td>长时调试产生持续内存与渲染增长。</td>
+                <td>1,000 条 / 8 MB 双上限；面板局部 external store；批量通知。</td>
+              </tr>
+              <tr>
+                <td><span class="risk-level p0">P0</span></td>
+                <td>运行时 Chat Map 缺少统一 LRU</td>
+                <td>message/turn refs 未见与持久化同等级的硬预算；archive 清理路径不完全对称。</td>
+                <td>跨大量会话浏览后，应用期内存可能只增不降。</td>
+                <td>以 WorkspaceStore 统一当前 + 最近 5 会话和 32 MB 上限；archive/delete 全链路清理。</td>
+              </tr>
+              <tr>
+                <td><span class="risk-level p1">P1</span></td>
+                <td>测试与源文本耦合</td>
+                <td>283 readFileSync；5,427 toContain。</td>
+                <td>架构抽取导致大量非行为失败，抬高重构成本。</td>
+                <td>新增行为测试；按被迁移模块逐批淘汰字符串断言。</td>
+              </tr>
+              <tr>
+                <td><span class="risk-level p1">P1</span></td>
+                <td>入口 JS/CSS 偏大</td>
+                <td>1.97 MiB JS + 393 KiB CSS，未压缩生产资产。</td>
+                <td>冷启动解析、样式计算和低配设备加载成本。</td>
+                <td>生成 stats 基线；feature chunk + 路由预取；CSS layer/feature ownership。</td>
+              </tr>
+              <tr>
+                <td><span class="risk-level p1">P1</span></td>
+                <td>Repository / Service 重复方法面</td>
+                <td>109 vs 108 方法。</td>
+                <td>协议新增需跨层机械修改，类型漂移概率上升。</td>
+                <td>按领域拆分 descriptor，评估类型生成或声明式 method map。</td>
+              </tr>
+              <tr>
+                <td><span class="risk-level p1">P1</span></td>
+                <td>CSS 全局集中</td>
+                <td>chat/settings/shell/file 占 CSS 79.2%。</td>
+                <td>选择器冲突、未使用 CSS 常驻、功能删除难清理。</td>
+                <td>先 tokens + layers，再按 feature 入口导入，不要求立即引入 CSS Modules。</td>
+              </tr>
+              <tr>
+                <td><span class="risk-level p2">P2</span></td>
+                <td>缓存只按条数不按字节</td>
+                <td>Shiki inline cache 上限 4,000，但内容大小不均。</td>
+                <td>极端大代码块使条数上限失真。</td>
+                <td>增加估算字节预算与 LRU 指标。</td>
+              </tr>
+              <tr>
+                <td><span class="risk-level good">GOOD</span></td>
+                <td>模块图无静态环</td>
+                <td>176 模块 / 353 边扫描未发现相对导入环。</td>
+                <td>为渐进式抽取提供安全窗口。</td>
+                <td>在 CI 增加 no-cycle 门禁，保持这一优势。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="roadmap">
+        <div class="section-head">
+          <div class="section-no">10 / ROADMAP</div>
+          <div>
+            <h2>分阶段迭代建议</h2>
+            <p class="section-intro">路线以“先建立资源边界，再迁移状态所有权，最后收敛基础设施”为顺序。每阶段都可以独立交付，不需要停摆式重构。</p>
+          </div>
+        </div>
+
+        <div class="roadmap">
+          <article class="phase">
+            <span class="time">0–2 WEEKS</span>
+            <h3>封顶风险与建立门禁</h3>
+            <ul>
+              <li>Registry debug 设 1,000 条 / 8 MB 双上限，改为面板局部订阅。</li>
+              <li>Chat runtime Map 引入会话 LRU 与 32 MB 硬上限。</li>
+              <li>archive/delete 清理 messages、turns、cursor、height/index。</li>
+              <li>固化 5k turns 输入与 streaming 基准。</li>
+              <li>修正 releasePublish 测试漂移。</li>
+            </ul>
+          </article>
+          <article class="phase">
+            <span class="time">2–6 WEEKS</span>
+            <h3>抽出 Chat Runtime</h3>
+            <ul>
+              <li>建立 <code>chat/runtime</code>：store、event reducer、commands、selectors。</li>
+              <li>Registry session 事件先进入 domain router，再通知视图。</li>
+              <li>使用 useSyncExternalStore 或等价局部订阅控制更新扇出。</li>
+              <li>保持 composer 状态在输入边界内，不上收根组件。</li>
+              <li>WorkspaceApp 降到 &lt;8k LOC、&lt;120 state、&lt;80 effects。</li>
+            </ul>
+          </article>
+          <article class="phase">
+            <span class="time">6–12 WEEKS</span>
+            <h3>按工作台迁移所有权</h3>
+            <ul>
+              <li>PreviewRuntime 接管 tab/loader/navigation；TerminalRuntime 接管会话生命周期。</li>
+              <li>Settings、Port Relay、Voice 分别拥有异步任务与轮询。</li>
+              <li>Registry methods 按 session/project/git/ops 切片。</li>
+              <li>CSS 建 tokens/components/features layers。</li>
+              <li>WorkspaceApp 降到 &lt;3k LOC、&lt;40 state、&lt;25 effects。</li>
+            </ul>
+          </article>
+          <article class="phase">
+            <span class="time">12+ WEEKS</span>
+            <h3>收敛目标架构</h3>
+            <ul>
+              <li>App 只做 Provider、路由与 ResponsiveShell 组合。</li>
+              <li>每个 feature 通过 public API 暴露 Surface + Runtime。</li>
+              <li>所有缓存具备条目/字节/生命周期策略。</li>
+              <li>入口 JS ≤1.5 MiB、CSS ≤250 KiB（未压缩 minified）。</li>
+              <li>源码字符串测试减少 50% 以上，关键流有集成契约。</li>
+            </ul>
+          </article>
+        </div>
+
+        <h3>每阶段必须通过的量化门槛</h3>
+        <div class="table-wrap">
+          <table>
+            <caption>建议的工程验收指标</caption>
+            <thead><tr><th>指标</th><th>当前基线</th><th>阶段目标</th><th>验证方式</th></tr></thead>
+            <tbody>
+              <tr><td>长会话输入上屏 p95</td><td>需浏览器 trace 固化</td><td>≤16 ms @ 5k turns</td><td>Playwright/浏览器 Performance measure，固定样本。</td></tr>
+              <tr><td>流式 UI commit p95</td><td>rAF 合并已实现</td><td>≤24 ms @ 高频 chunk</td><td>event → commit performance marks。</td></tr>
+              <tr><td>WorkspaceApp LOC</td><td>21,942</td><td>8k → 3k → 1.5k</td><td>CI 行数预算。</td></tr>
+              <tr><td>根 useState / effects</td><td>290 / 172</td><td>120/80 → 40/25</td><td>AST 预算脚本。</td></tr>
+              <tr><td>Runtime Chat cache</td><td>无统一硬预算</td><td>≤32 MB，保留当前 + 最近 5 会话</td><td>缓存度量 + eviction contract test。</td></tr>
+              <tr><td>Debug viewer</td><td>未见硬上限</td><td>≤1,000 条且 ≤8 MB</td><td>长时事件压力测试。</td></tr>
+              <tr><td>入口 JS / CSS</td><td>1.97 MiB / 393 KiB</td><td>1.8 MiB/300 KiB → 1.5 MiB/250 KiB</td><td>webpack stats CI budget。</td></tr>
+              <tr><td>静态导入环</td><td>0</td><td>持续为 0</td><td>dependency graph check。</td></tr>
+              <tr><td>测试策略</td><td>5,427 toContain</td><td>新改动 behavior-first；最终减少 ≥50%</td><td>断言风格统计 + component/integration coverage。</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout warn">
+          <strong>不要先做的事：</strong> 不建议第一步更换 Redux/Zustand、重写所有 CSS 或合并 Registry 两层。没有 ownership 和预算门禁时，换技术只会把同一批状态搬到新的全局容器里。
+        </div>
+      </section>
+
+      <section id="target">
+        <div class="section-head">
+          <div class="section-no">11 / TARGET</div>
+          <div>
+            <h2>建议目标架构</h2>
+            <p class="section-intro">目标不是追求目录漂亮，而是让一次 session.message 只唤醒 ChatRuntime 和当前可见 turn，让一次 Port Relay 轮询只影响 Port Relay，让 App 不再知道领域细节。</p>
+          </div>
+        </div>
+
+        <div class="target-tree" aria-label="建议目录树">web/src/
+├─ app/
+│  ├─ App.tsx                    # providers + route composition only
+│  ├─ AppRuntime.ts              # start/stop domain runtimes
+│  └─ eventRouter.ts             # registry event → domain runtime
+├─ shell/
+│  ├─ ResponsiveShell.tsx
+│  └─ navigation/
+├─ features/
+│  ├─ chat/
+│  │  ├─ public.ts               # only exported contract
+│  │  ├─ ChatSurface.tsx
+│  │  ├─ runtime/                # store, reducer, commands, selectors
+│  │  ├─ composer/
+│  │  └─ turns/
+│  ├─ files/
+│  ├─ git/
+│  ├─ preview/
+│  ├─ terminal/
+│  ├─ settings/
+│  └─ port-relay/
+├─ domain/
+│  ├─ project/
+│  ├─ session/
+│  └─ workspace/
+├─ infrastructure/
+│  ├─ registry/
+│  │  ├─ transport/
+│  │  ├─ session/
+│  │  ├─ project/
+│  │  ├─ git/
+│  │  └─ operations/
+│  ├─ persistence/
+│  └─ platform/
+└─ styles/
+   ├─ tokens.css
+   ├─ reset.css
+   ├─ components/
+   └─ features/</div>
+
+        <h3>三条架构决策</h3>
+        <div class="decision-list">
+          <article class="decision">
+            <strong>1. Feature 拥有运行时</strong>
+            <p>目录不只放组件。每个工作台拥有事件 reducer、commands、selectors 与清理策略，通过 public API 对外。</p>
+          </article>
+          <article class="decision">
+            <strong>2. 事件先路由再渲染</strong>
+            <p>Registry 事件进入薄 eventRouter，按 domain 分发；根组件不解析 session.message 的业务细节。</p>
+          </article>
+          <article class="decision">
+            <strong>3. Store 选择服从订阅粒度</strong>
+            <p>优先复用 React 与 useSyncExternalStore；只有当跨域事务或调试需求证明必要时，再引入第三方状态库。</p>
+          </article>
+          <article class="decision">
+            <strong>4. 缓存都是产品能力</strong>
+            <p>每个缓存必须说明 key、所有者、条目上限、字节上限、淘汰策略、清理时机和可观测指标。</p>
+          </article>
+          <article class="decision">
+            <strong>5. 保留现有基础设施</strong>
+            <p>RegistryClient、Persistence、平台桥和重依赖 lazy loading 是可复用资产；以接口包裹，不做同步重写。</p>
+          </article>
+          <article class="decision">
+            <strong>6. 测试跟随公共契约</strong>
+            <p>测试 public API、用户行为和存储/事件契约，避免检查内部文件是否包含某一行源码。</p>
+          </article>
+        </div>
+
+        <h3>建议迁移切片</h3>
+        <div class="table-wrap">
+          <table>
+            <caption>按依赖与收益排序的迁移顺序</caption>
+            <thead><tr><th>顺序</th><th>切片</th><th>为什么先做</th><th>完成定义</th></tr></thead>
+            <tbody>
+              <tr><td class="num">1</td><td>Resource budgets</td><td>无需改 UI，立即消除无界增长。</td><td>Debug、Chat、Shiki 均有指标和淘汰测试。</td></tr>
+              <tr><td class="num">2</td><td>Session event router</td><td>切断 Registry 事件与根组件的直接耦合。</td><td>session 事件可在无 React 根的测试中驱动 store。</td></tr>
+              <tr><td class="num">3</td><td>ChatRuntime</td><td>性能敏感、state 最大、已有清晰的 turn/composer 子边界。</td><td>输入与 streaming 不触发无关 shell/settings 更新。</td></tr>
+              <tr><td class="num">4</td><td>PreviewRuntime + TerminalRuntime</td><td>已有独立状态模型，收益/风险比高。</td><td>生命周期、轮询、loader 由各自 runtime 管理。</td></tr>
+              <tr><td class="num">5</td><td>Settings / Port Relay / Voice</td><td>异步任务和条件轮询可从根组件退出。</td><td>隐藏/卸载时能独立 stop 并测试。</td></tr>
+              <tr><td class="num">6</td><td>Registry domain slices + CSS layers</td><td>在调用边界稳定后做基础设施收敛。</td><td>新增协议只修改对应 domain；feature 可独立加载样式。</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="glossary">
+        <div class="section-head">
+          <div class="section-no">12 / GLOSSARY</div>
+          <div>
+            <h2>项目领域词汇</h2>
+            <p class="section-intro">统一术语有助于后续拆分时避免把协议对象、UI 状态和运行时缓存混为一谈。</p>
+          </div>
+        </div>
+
+        <dl class="glossary">
+          <div class="term"><dt>Registry</dt><dd>前端连接的协议入口，负责请求/响应和事件分发；不是 React 状态库。</dd></div>
+          <div class="term"><dt>Hub</dt><dd>Registry 暴露的整体运行状态与协调语境，前端可读取 hub state。</dd></div>
+          <div class="term"><dt>Project</dt><dd>工作空间的顶层领域对象，为文件、Git、Session、Terminal 提供共同作用域。</dd></div>
+          <div class="term"><dt>Session</dt><dd>一次持续对话及其状态、配置、附件、消息、归档和恢复生命周期。</dd></div>
+          <div class="term"><dt>Turn</dt><dd>聊天时间线的渲染/组织单元，可包含用户输入、模型内容、函数调用、计划和 diff。</dd></div>
+          <div class="term"><dt>Prompt</dt><dd>用户向 Session 提交的一次输入；可由文本、富文本、附件或选项回复构成。</dd></div>
+          <div class="term"><dt>Artifact</dt><dd>Session 产生的可独立读取或预览的产物。</dd></div>
+          <div class="term"><dt>Preview</dt><dd>文件、prompt diff、附件、Port Relay 等内容共享的多标签查看工作台。</dd></div>
+          <div class="term"><dt>Workspace</dt><dd>前端对当前 Project、Session、导航、缓存和恢复流程的应用级组合语境。</dd></div>
+          <div class="term"><dt>Port Relay</dt><dd>把远端或本地服务目标映射成前端可打开 URL/Frame 的代理能力。</dd></div>
+          <div class="term"><dt>Runtime Store</dt><dd>应用运行期内存状态；应与跨启动的 IndexedDB Persistence 明确区分。</dd></div>
+          <div class="term"><dt>Gap Repair</dt><dd>事件丢失、游标不连续或恢复后，通过重新读取补齐 Session 状态的机制。</dd></div>
+        </dl>
+      </section>
+
+      <section id="appendix">
+        <div class="section-head">
+          <div class="section-no">13 / APPENDIX</div>
+          <div>
+            <h2>方法、证据与限制</h2>
+            <p class="section-intro">本报告把可重复测量与架构推断分开。数字用于确定优先级，不替代真实用户设备上的浏览器 profiling。</p>
+          </div>
+        </div>
+
+        <h3>分析范围</h3>
+        <ul class="plain-list">
+          <li><strong>源码：</strong><code>app/web/src/**/*.{ts,tsx,css}</code>，共 191 个文件。</li>
+          <li><strong>测试：</strong><code>app/__tests__</code> 与 2 个共置测试，共 194 个文件。</li>
+          <li><strong>构建：</strong>webpack production mode，输出到 <code>~/.wheelmaker/web</code>。</li>
+          <li><strong>依赖图：</strong>176 个 TS/TSX 模块的相对静态 import；不包含运行时动态字符串依赖。</li>
+          <li><strong>运行时：</strong>4,303 turns / 269 prompts 的本地长会话样本与 Jest/V8 微基准。</li>
+          <li><strong>版本：</strong>git revision <code>feef1391</code>，分支 <code>main</code>，分析日期 2026-07-19。</li>
+        </ul>
+
+        <h3>关键命令</h3>
+        <div class="command-list">git rev-parse --short HEAD
+npm run build:web
+npm run report:web-assets
+rg --files app/web/src
+rg --files app/__tests__
+git diff --check</div>
+
+        <h3>证据可信度</h3>
+        <div class="table-wrap">
+          <table>
+            <caption>结论的证据类型</caption>
+            <thead><tr><th>类型</th><th>适用数据</th><th>限制</th></tr></thead>
+            <tbody>
+              <tr><td><span class="evidence measured">M 实测</span></td><td>构建体积、文件数、LOC、微基准、V8 对象估算</td><td>微基准不等同于完整浏览器帧耗时。</td></tr>
+              <tr><td><span class="evidence static">S 静态</span></td><td>imports、hooks、方法数、测试断言、目录职责、定时器</td><td>动态调用与运行时分支需要 profiling/trace 补充。</td></tr>
+              <tr><td><span class="evidence inferred">I 推断</span></td><td>耦合风险、迁移顺序、目标预算</td><td>应通过阶段性指标验证并允许调整。</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>已知限制</h3>
+        <ul class="plain-list">
+          <li>未取得可复现的浏览器 headless runtime trace，因此输入 p95、stream commit p95 被定义为下一阶段门禁，而非本报告伪造的现状数据。</li>
+          <li>生产资产报告是未压缩落盘尺寸；网络传输会受 gzip/brotli 和缓存影响。</li>
+          <li>state 域按变量名启发式分类，适合描述集中趋势，不适合逐个 Hook 审计。</li>
+          <li>无导入环结论只覆盖相对静态 imports，不覆盖动态加载、事件回调或协议层逻辑环。</li>
+          <li>报告没有修改业务代码；建议指标需要在后续迭代中落成自动化脚本与 CI gate。</li>
+        </ul>
+      </section>
+
+      <footer class="report-footer">
+        <strong>WheelMaker Frontend Architecture Report</strong><br>
+        单文件离线报告 · 生成于 2026-07-19 · Evidence baseline feef1391<br>
+        建议每完成一个迁移阶段，重新生成目录、Hook、依赖图与生产资产基线。
+      </footer>
+    </main>
+  </div>
+
+  <script>
+    (function () {
+      var buttons = Array.prototype.slice.call(document.querySelectorAll("[data-layer]"));
+      var notes = Array.prototype.slice.call(document.querySelectorAll("[data-layer-detail]"));
+      var activeLayer = null;
+
+      function selectLayer(layer) {
+        activeLayer = activeLayer === layer ? null : layer;
+        buttons.forEach(function (button) {
+          button.setAttribute("aria-pressed", String(button.getAttribute("data-layer") === activeLayer));
+        });
+        notes.forEach(function (note) {
+          var isActive = note.getAttribute("data-layer-detail") === activeLayer;
+          note.classList.toggle("is-active", isActive);
+          note.classList.toggle("is-muted", Boolean(activeLayer) && !isActive);
+        });
+      }
+
+      buttons.forEach(function (button) {
+        button.addEventListener("click", function () {
+          selectLayer(button.getAttribute("data-layer"));
+        });
+      });
+
+      var navLinks = Array.prototype.slice.call(document.querySelectorAll(".toc a[href^='#']"));
+      var sections = navLinks.map(function (link) {
+        return document.querySelector(link.getAttribute("href"));
+      }).filter(Boolean);
+
+      if ("IntersectionObserver" in window) {
+        var observer = new IntersectionObserver(function (entries) {
+          var visible = entries
+            .filter(function (entry) { return entry.isIntersecting; })
+            .sort(function (a, b) { return b.intersectionRatio - a.intersectionRatio; })[0];
+          if (!visible) return;
+          navLinks.forEach(function (link) {
+            link.setAttribute("aria-current", String(link.getAttribute("href") === "#" + visible.target.id));
+          });
+        }, { rootMargin: "-15% 0px -68% 0px", threshold: [0, .1, .3, .6] });
+        sections.forEach(function (section) { observer.observe(section); });
+      }
+    }());
+  </script>
+</body>
+</html>
