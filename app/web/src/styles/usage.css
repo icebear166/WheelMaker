@@ -32,7 +32,7 @@
 
 .chat-function-surface-header {
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) auto;
+  grid-template-columns: 20px auto auto minmax(0, 1fr);
   align-items: center;
   min-height: 36px;
   padding: 0 8px 0 10px;

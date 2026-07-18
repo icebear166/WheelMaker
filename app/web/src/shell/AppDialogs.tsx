@@ -97,7 +97,8 @@ export type ConfirmTarget =
       hubId: string;
       terminalId: string;
       label: string;
-    };
+    }
+  | {kind: 'hideLimitsMonitor'};
 
 type AppConfirmDialogProps = {
   target: ConfirmTarget | null;
@@ -150,6 +151,7 @@ function agentPackageActionLabel(action: 'install' | 'update' | 'uninstall'): st
 }
 
 function resolveConfirmTitle(target: ConfirmTarget): string {
+  if (target.kind === 'hideLimitsMonitor') return 'Hide limits monitor?';
   if (target.kind === 'terminalClose') return 'Close running terminal?';
   if (target.kind === 'clearCache') return 'Clear local cache?';
   if (target.kind === 'archiveBatch') return `Archive sessions older than ${target.days} days?`;
@@ -167,6 +169,7 @@ function resolveConfirmTitle(target: ConfirmTarget): string {
 }
 
 function resolveConfirmName(target: ConfirmTarget): string {
+  if (target.kind === 'hideLimitsMonitor') return 'Limits monitor';
   if (target.kind === 'terminalClose') return target.label;
   if (target.kind === 'clearCache') return 'Settings will be preserved.';
   if (target.kind === 'archiveBatch') return `${target.candidates.length} sessions`;
@@ -186,6 +189,9 @@ function resolveConfirmName(target: ConfirmTarget): string {
 }
 
 function resolveConfirmCopy(target: ConfirmTarget): string {
+  if (target.kind === 'hideLimitsMonitor') {
+    return 'This hides limits from the chat workspace. You can show it again from Settings > Chat.';
+  }
   if (target.kind === 'terminalClose') {
     return 'This terminates the terminal process tree and removes the terminal from every connected device.';
   }
@@ -231,6 +237,7 @@ function resolveConfirmCopy(target: ConfirmTarget): string {
 }
 
 function resolveConfirmIcon(target: ConfirmTarget): string {
+  if (target.kind === 'hideLimitsMonitor') return 'codicon-eye-closed';
   if (target.kind === 'terminalClose') return 'codicon-debug-stop';
   if (target.kind === 'clearCache') return 'codicon-trash';
   if (target.kind === 'restoreArchived') return 'codicon-debug-restart';
@@ -249,6 +256,7 @@ function resolveConfirmIcon(target: ConfirmTarget): string {
 }
 
 function resolveConfirmPrimaryLabel(target: ConfirmTarget): string {
+  if (target.kind === 'hideLimitsMonitor') return 'Hide';
   if (target.kind === 'terminalClose') return 'Close Terminal';
   if (target.kind === 'clearCache') return 'Clear Cache';
   if (target.kind === 'restoreArchived') return 'Restore';

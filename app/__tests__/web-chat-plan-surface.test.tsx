@@ -71,7 +71,7 @@ describe('ChatPlanSurface', () => {
     expect(planFixedRule).not.toContain('(100% + 800px) / 2');
   });
 
-  test('keeps mobile Plan outside the stack and restores only the hovered desktop panel', () => {
+  test('keeps mobile Plan outside the stack and restores only hovered Recent Sessions', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainSource = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const planSource = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'ChatPlanSurface.tsx'));
@@ -82,9 +82,9 @@ describe('ChatPlanSurface', () => {
       '.chat-recent-sessions-surface.desktop .chat-edge-surface-content,\n.chat-plan-surface.desktop .chat-edge-surface-glass,\n.chat-plan-surface.desktop .chat-edge-surface-content,\n.chat-function-surface.desktop .chat-edge-surface-glass,\n.chat-function-surface.desktop .chat-edge-surface-content {',
     );
     expect(mainSource).toContain('<ChatPlanSurface\n              mode="mobile"');
-    expect(stylesCss).toContain(
-      '.chat-recent-sessions-surface.desktop:is(:hover, :focus-within),\n.chat-plan-surface.desktop:is(:hover, :focus-within),\n.chat-function-surface.desktop:is(:hover, :focus-within) {',
-    );
+    expect(stylesCss).toContain('.chat-recent-sessions-surface.desktop:is(:hover, :focus-within) {');
+    expect(stylesCss).not.toContain('.chat-plan-surface.desktop:is(:hover, :focus-within)');
+    expect(stylesCss).not.toContain('.chat-function-surface.desktop:is(:hover, :focus-within)');
     expect(stylesCss).not.toContain('.chat-edge-surface-stack:is(:hover, :focus-within)');
   });
 

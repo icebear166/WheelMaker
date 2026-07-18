@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import {UsageFeatureSurface} from '../web/src/usage/UsageFeatureSurface';
 import type {UsageViewSnapshot} from '../web/src/usage/usageTypes';
+import {AppConfirmDialog, type ConfirmTarget} from '../web/src/shell/AppDialogs';
 
 const fixtureSnapshot: UsageViewSnapshot = {
   refreshing: false,
@@ -35,7 +36,7 @@ describe('UsageFeatureSurface', () => {
   it('renders two compact quota columns and a one-line balance', () => {
     let view: TestRenderer.ReactTestRenderer;
     act(() => {
-      view = TestRenderer.create(<UsageFeatureSurface snapshot={fixtureSnapshot} onRefresh={jest.fn()} />);
+      view = TestRenderer.create(<UsageFeatureSurface snapshot={fixtureSnapshot} onRefresh={jest.fn()} onRequestHide={jest.fn()} />);
     });
     const codex = view!.root.findByProps({'data-usage-provider': 'codex'});
     const metrics = codex.findAllByProps({'data-usage-compact-limit': true});
@@ -54,7 +55,7 @@ describe('UsageFeatureSurface', () => {
     const onRefresh = jest.fn();
     let view: TestRenderer.ReactTestRenderer;
     act(() => {
-      view = TestRenderer.create(<UsageFeatureSurface snapshot={fixtureSnapshot} onRefresh={onRefresh} />);
+      view = TestRenderer.create(<UsageFeatureSurface snapshot={fixtureSnapshot} onRefresh={onRefresh} onRequestHide={jest.fn()} />);
     });
     act(() => view!.root.findByProps({'aria-label': 'Show limit details'}).props.onClick());
     expect(view!.root.findByProps({'data-mode': 'detail'})).toBeDefined();
@@ -71,6 +72,43 @@ describe('UsageFeatureSurface', () => {
     expect(onRefresh).toHaveBeenCalledTimes(1);
   });
 
+  it('requests confirmation from the title-bar eye action', () => {
+    const onRequestHide = jest.fn();
+    let view: TestRenderer.ReactTestRenderer;
+    act(() => {
+      view = TestRenderer.create(
+        <UsageFeatureSurface snapshot={fixtureSnapshot} onRefresh={jest.fn()} onRequestHide={onRequestHide} />,
+      );
+    });
+
+    act(() => view!.root.findByProps({'aria-label': 'Hide limits monitor'}).props.onClick());
+    expect(onRequestHide).toHaveBeenCalledTimes(1);
+  });
+
+  it('explains how to restore the monitor before hiding it', () => {
+    const onPrimary = jest.fn();
+    let view: TestRenderer.ReactTestRenderer;
+    act(() => {
+      view = TestRenderer.create(
+        <AppConfirmDialog
+          target={{kind: 'hideLimitsMonitor'} as ConfirmTarget}
+          busy={false}
+          error=""
+          onCancel={jest.fn()}
+          onPrimary={onPrimary}
+        />,
+      );
+    });
+
+    const text = renderedText(view!.root);
+    expect(text).toContain('Hide limits monitor?');
+    expect(text).toContain('Settings > Chat');
+    const primary = view!.root.findAllByType('button').find(button => renderedText(button).includes('Hide'));
+    expect(primary).toBeDefined();
+    act(() => primary!.props.onClick());
+    expect(onPrimary).toHaveBeenCalledTimes(1);
+  });
+
   it('shares the desktop edge width and keeps detail expansion vertical', () => {
     const projectRoot = path.join(__dirname, '..');
     const chatStyles = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles', 'chat.css'), 'utf8').replace(/\r\n/g, '\n');
@@ -80,6 +118,7 @@ describe('UsageFeatureSurface', () => {
     const fixedRule = usageStyles.match(/\.chat-view-width-fixed-800 \.chat-function-surface\.desktop \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const metricsRule = usageStyles.match(/\.usage-provider-metrics \{([^}]*)\}/)?.[1] ?? '';
     const hubRule = usageStyles.match(/\.usage-account-hub \{([^}]*)\}/)?.[1] ?? '';
+    const headerRule = usageStyles.match(/\.chat-function-surface-header \{([\s\S]*?)\n\}/)?.[1] ?? '';
 
     expect(chatStyles).toContain('--chat-edge-surface-width: 360px;');
     expect(chatStyles).toContain('--chat-edge-surface-stack-width: var(--chat-edge-surface-width);');
@@ -92,6 +131,7 @@ describe('UsageFeatureSurface', () => {
     expect(detailRule).toContain('--usage-surface-max-height: min(48vh, 420px);');
     expect(metricsRule).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));');
     expect(hubRule).toContain('border-radius: 999px;');
+    expect(headerRule).toContain('grid-template-columns: 20px auto auto minmax(0, 1fr);');
     expect(chatStyles).toContain('.chat-recent-sessions-surface.desktop .chat-edge-surface-glass,');
     expect(chatStyles).toContain('.chat-function-surface.desktop .chat-edge-surface-glass,');
   });

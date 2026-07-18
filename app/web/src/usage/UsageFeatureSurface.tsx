@@ -6,6 +6,7 @@ import {formatResetCountdown, formatResetUTC, formatUpdatedAgo, tightnessTone, t
 type Props = {
   snapshot: UsageViewSnapshot;
   onRefresh: () => void;
+  onRequestHide: () => void;
 };
 
 function accountLabel(account: UsageProviderView['accounts'][number]): string {
@@ -131,12 +132,21 @@ function ProviderDetails({provider}: {provider: UsageProviderView}) {
   );
 }
 
-export function UsageFeatureSurface({snapshot, onRefresh}: Props) {
+export function UsageFeatureSurface({snapshot, onRefresh, onRequestHide}: Props) {
   const [collapsed, setCollapsed] = React.useState(false);
   const [detail, setDetail] = React.useState(false);
   const mode = detail ? 'detail' : 'compact';
   const actions = (
     <>
+      <button
+        type="button"
+        className="chat-function-action"
+        aria-label="Hide limits monitor"
+        title="Hide limits monitor"
+        onClick={onRequestHide}
+      >
+        <span className="codicon codicon-eye-closed" aria-hidden="true" />
+      </button>
       <button
         type="button"
         className="chat-function-action"

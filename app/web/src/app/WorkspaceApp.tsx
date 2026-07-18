@@ -19235,6 +19235,7 @@ export function App() {
             <UsageFeatureSurface
               snapshot={usageSnapshot}
               onRefresh={() => { void refreshUsageAcrossHubs(); }}
+              onRequestHide={() => setConfirmTarget({kind: 'hideLimitsMonitor'})}
             />
           ) : null}
           <div
@@ -21554,6 +21555,12 @@ export function App() {
                     : false;
   const handleConfirmPrimary = () => {
     if (!confirmTarget) {
+      return;
+    }
+    if (confirmTarget.kind === 'hideLimitsMonitor') {
+      setShowLimitsMonitor(false);
+      setConfirmTarget(null);
+      setConfirmError('');
       return;
     }
     if (confirmTarget.kind === 'terminalClose') {

@@ -5764,9 +5764,7 @@
   );
 }
 
-.chat-recent-sessions-surface.desktop:is(:hover, :focus-within),
-.chat-plan-surface.desktop:is(:hover, :focus-within),
-.chat-function-surface.desktop:is(:hover, :focus-within) {
+.chat-recent-sessions-surface.desktop:is(:hover, :focus-within) {
   --chat-edge-hidden-alpha: 100%;
 }
 

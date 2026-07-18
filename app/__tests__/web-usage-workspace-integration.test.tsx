@@ -6,6 +6,7 @@ describe('limits workspace integration', () => {
   const main = fs.readFileSync(path.join(root, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
   const settings = fs.readFileSync(path.join(root, 'web', 'src', 'settings', 'SettingsRootContent.tsx'), 'utf8');
   const persistence = fs.readFileSync(path.join(root, 'web', 'src', 'workspace', 'WorkspacePersistence.ts'), 'utf8');
+  const dialogs = fs.readFileSync(path.join(root, 'web', 'src', 'shell', 'AppDialogs.tsx'), 'utf8');
   const settingsCss = fs.readFileSync(path.join(root, 'web', 'src', 'styles', 'settings.css'), 'utf8');
 
   test('loads cached tokenStats after Registry connection and never creates a usage interval', () => {
@@ -46,5 +47,15 @@ describe('limits workspace integration', () => {
     expect(main).toContain('setShowLimitsMonitor={setShowLimitsMonitor}');
     expect(main).toContain("{isWide && tab === 'chat' && showLimitsMonitor ? (");
     expect(main).toContain('showLimitsMonitor,');
+  });
+
+  test('routes title-bar hiding through the shared confirmation dialog', () => {
+    expect(dialogs).toContain("| {kind: 'hideLimitsMonitor'}");
+    expect(dialogs).toContain("if (target.kind === 'hideLimitsMonitor') return 'Hide limits monitor?';");
+    expect(dialogs).toContain('You can show it again from Settings > Chat.');
+    expect(dialogs).toContain("if (target.kind === 'hideLimitsMonitor') return 'Hide';");
+    expect(main).toContain("onRequestHide={() => setConfirmTarget({kind: 'hideLimitsMonitor'})}");
+    expect(main).toContain("if (confirmTarget.kind === 'hideLimitsMonitor') {");
+    expect(main).toContain('setShowLimitsMonitor(false);');
   });
 });
