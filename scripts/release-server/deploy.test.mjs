@@ -274,14 +274,29 @@ test('release homepage removes redundant explanatory sections', async () => {
   );
 });
 
-test('release homepage uses a compact two-column desktop layout', async () => {
+test('release homepage keeps install commands stacked on desktop', async () => {
   const html = await readFile(new URL('./index.html', import.meta.url), 'utf8');
 
-  assert.match(
+  assert.doesNotMatch(
     html,
-    /@media \(min-width: 1024px\)[\s\S]*?\.commands\s*\{\s*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/,
+    /grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/,
   );
   assert.match(html, /\.client-card\s*\{[^}]*min-height:\s*168px/s);
+});
+
+test('release homepage uses WheelMaker blue accent colors', async () => {
+  const html = await readFile(new URL('./index.html', import.meta.url), 'utf8');
+
+  assert.match(html, /--accent:\s*#1478ba;/);
+  assert.match(html, /--accent-hover:\s*#0d6ca9;/);
+  assert.match(
+    html,
+    /@media \(prefers-color-scheme: dark\)[\s\S]*?--accent:\s*#29a8ff;[\s\S]*?--accent-hover:\s*#48c1ff;[\s\S]*?--accent-text:\s*#021331;/,
+  );
+  assert.doesNotMatch(
+    html,
+    /#047857|#065f46|#34d399|#6ee7b7|#062e1f/i,
+  );
 });
 
 async function loadReleaseHomepage() {
