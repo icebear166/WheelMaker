@@ -223,6 +223,20 @@ function hubStateSectionData<T>(state: RegistryHubState, section: RegistryHubSta
   return state.sections[section]?.data as T | undefined;
 }
 
+function releasePublishStateResponse(state: RegistryHubState): RegistryReleasePublishResponse {
+  const section = state.sections.releasePublish;
+  const error = section?.action?.status === 'failed'
+    ? section.action.error || section.error
+    : section?.status === 'error'
+      ? section.error
+      : '';
+  if (error) {
+    return {ok: false, status: 'failed', error};
+  }
+  return hubStateSectionData<RegistryReleasePublishResponse>(state, 'releasePublish')
+    ?? {ok: false, status: 'missing_hub_state_response'};
+}
+
 export class RegistryRepository {
   constructor(private readonly client: RegistryClient) {}
 
@@ -1790,12 +1804,12 @@ export class RegistryRepository {
 
   async startReleasePublish(hubId: string, input: Record<string, unknown>): Promise<RegistryReleasePublishResponse> {
     const state = await this.runHubStateAction(hubId, 'releasePublish', 'start', input);
-    return hubStateSectionData<RegistryReleasePublishResponse>(state, 'releasePublish') ?? {ok: false, status: 'missing_hub_state_response'};
+    return releasePublishStateResponse(state);
   }
 
   async queryReleasePublish(hubId: string, jobId: string): Promise<RegistryReleasePublishResponse> {
     const state = await this.runHubStateAction(hubId, 'releasePublish', 'status', {jobId});
-    return hubStateSectionData<RegistryReleasePublishResponse>(state, 'releasePublish') ?? {ok: false, status: 'missing_hub_state_response'};
+    return releasePublishStateResponse(state);
   }
 
   async scanSkills(hubId: string): Promise<RegistrySkillCommandResponse> {

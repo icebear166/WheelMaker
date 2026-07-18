@@ -22,7 +22,7 @@ export function ReleasePublishSettings({hubIds, start, query}: {
   React.useEffect(() => {
     if (!settings.jobId || !settings.jobHubId) return;
     let stopped = false;
-    const refresh = async () => { try { const result = await query(settings.jobHubId, settings.jobId); if (!stopped) { setJob(result.job); setError(result.ok ? '' : result.status); } } catch (value) { if (!stopped) setError(value instanceof Error ? value.message : String(value)); } };
+    const refresh = async () => { try { const result = await query(settings.jobHubId, settings.jobId); if (!stopped) { setJob(result.job); setError(result.ok ? '' : result.error || result.status); } } catch (value) { if (!stopped) setError(value instanceof Error ? value.message : String(value)); } };
     void refresh(); const timer = window.setInterval(() => void refresh(), 2_000); return () => { stopped = true; window.clearInterval(timer); };
   }, [query, settings.jobHubId, settings.jobId]);
   const update = (patch: Partial<Settings>) => setSettings(current => ({...current, ...patch}));
@@ -31,7 +31,7 @@ export function ReleasePublishSettings({hubIds, start, query}: {
     setPending(true); setError('');
     try {
       const result = await start(settings.publisherHubId, {kind, sourcePath: settings.sourcePath, baseUrl: WHEELMAKER_RELEASE_BASE_URL, desktop: kind === 'version' && settings.desktop, android: kind === 'version' && settings.android, targetHubId: settings.serverHubId || undefined, autoPull: Boolean(settings.serverHubId && settings.autoPull)});
-      if (!result.ok || !result.job) throw new Error(result.status || 'publish task was rejected');
+      if (!result.ok || !result.job) throw new Error(result.error || result.status || 'publish task was rejected');
       setJob(result.job); update({jobId: result.job.id, jobHubId: settings.publisherHubId});
     } catch (value) { setError(value instanceof Error ? value.message : String(value)); } finally { setPending(false); }
   };

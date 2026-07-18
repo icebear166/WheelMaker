@@ -39,3 +39,24 @@ test('uses a single-column publish page layout', async () => {
   expect(tree!.root.findAllByProps({className: 'release-publish-page'})).toHaveLength(1);
   expect(tree!.root.findAllByProps({className: 'release-publish-actions'})).toHaveLength(1);
 });
+
+test('shows the publishing Hub failure instead of a missing state response', async () => {
+  const values = new Map<string, string>();
+  values.set('wheelmaker.settings.release-publish.v1', JSON.stringify({jobId: 'job-1', jobHubId: 'publisher'}));
+  (global as typeof globalThis & {window: Window}).window = {
+    localStorage: {getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value)},
+    setInterval: () => 1,
+    clearInterval: () => undefined,
+  } as unknown as Window;
+  let tree: ReturnType<typeof create>;
+  await act(async () => {
+    tree = create(<ReleasePublishSettings
+      hubIds={['publisher']}
+      start={async () => ({ok: true, status: 'running'})}
+      query={async () => ({ok: false, status: 'failed', error: 'release token is not configured'})}
+    />);
+    await Promise.resolve();
+  });
+  expect(JSON.stringify(tree!.toJSON())).toContain('release token is not configured');
+  tree!.unmount();
+});

@@ -164,6 +164,7 @@ export interface RegistryReleasePublishResponse {
   ok: boolean;
   accepted?: boolean;
   status: string;
+  error?: string;
   job?: RegistryReleasePublishJob;
 }
 
