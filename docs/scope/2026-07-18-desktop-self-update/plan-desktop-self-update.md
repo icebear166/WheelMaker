@@ -19,7 +19,7 @@
 - Test: `app/__tests__/web-agent-package-update-settings.test.ts`
 - Create: `app/__tests__/web-desktop-update.test.ts`
 
-- [ ] **Step 1: Write failing stable pointer parser tests**
+- [x] **Step 1: Write failing stable pointer parser tests**
 
 Extend the existing settings test with one valid Desktop pointer and invalid path/SHA cases:
 
@@ -54,7 +54,7 @@ test.each([
 });
 ```
 
-- [ ] **Step 2: Run the parser tests to verify RED**
+- [x] **Step 2: Run the parser tests to verify RED**
 
 Run:
 
@@ -65,7 +65,7 @@ npm test -- --runInBand __tests__/web-agent-package-update-settings.test.ts
 
 Expected: FAIL because `WheelMakerStableMetadata` drops `desktopExe` and does not validate it.
 
-- [ ] **Step 3: Add the Desktop pointer type and validation**
+- [x] **Step 3: Add the Desktop pointer type and validation**
 
 Add to `agentPackageUpdateView.ts`:
 
@@ -101,7 +101,7 @@ function validDesktopPointer(input: unknown): input is WheelMakerDesktopPointer 
 
 In `parseWheelMakerStable`, reject an invalid present pointer and include the validated pointer in the returned object.
 
-- [ ] **Step 4: Define the native update bridge contract**
+- [x] **Step 4: Define the native update bridge contract**
 
 Add to `desktopRuntime.ts`:
 
@@ -127,7 +127,7 @@ export type DesktopWindowBridge = {
 };
 ```
 
-- [ ] **Step 5: Write failing pure update-state tests**
+- [x] **Step 5: Write failing pure update-state tests**
 
 Create `web-desktop-update.test.ts` with injected fetch and bridge behavior:
 
@@ -195,7 +195,7 @@ test('reports current, and maps missing helper or request failures to failed', a
 });
 ```
 
-- [ ] **Step 6: Run the update-state test to verify RED**
+- [x] **Step 6: Run the update-state test to verify RED**
 
 Run:
 
@@ -206,7 +206,7 @@ npm test -- --runInBand __tests__/web-desktop-update.test.ts
 
 Expected: FAIL because `desktopUpdate.ts` does not exist.
 
-- [ ] **Step 7: Implement the pure checker**
+- [x] **Step 7: Implement the pure checker**
 
 Create `desktopUpdate.ts` with no React dependency:
 
@@ -245,7 +245,7 @@ export async function checkDesktopUpdate(
 }
 ```
 
-- [ ] **Step 8: Run Task 1 tests and typecheck**
+- [x] **Step 8: Run Task 1 tests and typecheck**
 
 Run:
 
@@ -257,7 +257,7 @@ npm run tsc:web
 
 Expected: both suites PASS; TypeScript exits 0.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```powershell
 git add app/web/src/settings/agentPackageUpdateView.ts app/web/src/platform/desktop/desktopRuntime.ts app/web/src/platform/desktop/desktopUpdate.ts app/__tests__/web-agent-package-update-settings.test.ts app/__tests__/web-desktop-update.test.ts
@@ -276,7 +276,7 @@ git commit -m "feat(app): model Desktop update availability"
 - Modify: `server/cmd/wheelmaker-desktop/webview_windows.go:60-215`
 - Modify: `server/cmd/wheelmaker-desktop/webview_windows_test.go:45-100`
 
-- [ ] **Step 1: Write failing controller tests for the fixed path and SHA**
+- [x] **Step 1: Write failing controller tests for the fixed path and SHA**
 
 Create `desktop_update_test.go` around an injected controller:
 
@@ -378,7 +378,7 @@ func TestDesktopUpdateStartPropagatesLauncherFailure(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run the controller tests to verify RED**
+- [x] **Step 2: Run the controller tests to verify RED**
 
 Run:
 
@@ -389,7 +389,7 @@ go test ./cmd/wheelmaker-desktop -run 'TestDesktopUpdate' -count=1
 
 Expected: FAIL because the controller types do not exist.
 
-- [ ] **Step 3: Implement fixed-path resolution and streaming SHA**
+- [x] **Step 3: Implement fixed-path resolution and streaming SHA**
 
 Create `desktop_update.go` with the JSON contract and injected boundaries:
 
@@ -464,7 +464,7 @@ func sha256File(path string) (string, error) {
 }
 ```
 
-- [ ] **Step 4: Implement the Windows updater launcher**
+- [x] **Step 4: Implement the Windows updater launcher**
 
 Create `desktop_update_windows.go`:
 
@@ -487,7 +487,7 @@ func newWindowsDesktopUpdateController() *desktopUpdateController {
 }
 ```
 
-- [ ] **Step 5: Write failing policy and injection assertions**
+- [x] **Step 5: Write failing policy and injection assertions**
 
 Add policy cases proving both update actions are allowed only for the trusted remote main frame and denied for bootstrap, Local Dev, stale origins and iframes. Extend `webview_windows_test.go` to require the binding source strings, their authorization calls, launcher error propagation, and source ordering that places `postWindowClose` after the successful `Start(os.Getpid())` branch.
 
@@ -496,7 +496,7 @@ Add policy cases proving both update actions are allowed only for the trusted re
 {name: "local dev cannot update Desktop", mode: desktopTrustedLocalDevPage, url: desktopLocalDevURL, mainFrame: true, action: desktopBridgeRequestUpdate},
 ```
 
-- [ ] **Step 6: Run policy tests to verify RED**
+- [x] **Step 6: Run policy tests to verify RED**
 
 Run:
 
@@ -507,7 +507,7 @@ go test ./cmd/wheelmaker-desktop -run 'TestDesktopWebViewPolicy|TestDesktopRunti
 
 Expected: FAIL because the actions and bindings are absent.
 
-- [ ] **Step 7: Add bridge constants, authorization, and no-argument Web methods**
+- [x] **Step 7: Add bridge constants, authorization, and no-argument Web methods**
 
 Add `desktopGetUpdateInfoBinding` and `desktopRequestUpdateBinding` to `desktop_bridge.go`. Expose only on the trusted HTTPS `WheelMakerDesktop` object:
 
@@ -535,7 +535,7 @@ In `bindDesktopWindowBridge`, construct one Windows controller and bind:
 
 The close call must remain after successful `Start`.
 
-- [ ] **Step 8: Run and format Desktop tests**
+- [x] **Step 8: Run and format Desktop tests**
 
 Run:
 
@@ -547,7 +547,7 @@ go test ./cmd/wheelmaker-desktop -count=1
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```powershell
 git add server/cmd/wheelmaker-desktop
@@ -562,7 +562,7 @@ git commit -m "feat(desktop): expose secure self-update bridge"
 - Create: `server/cmd/wheelmaker-desktop-updater/main_windows.go`
 - Create: `server/cmd/wheelmaker-desktop-updater/main_other.go`
 
-- [ ] **Step 1: Write failing orchestration tests**
+- [x] **Step 1: Write failing orchestration tests**
 
 Create `updater_test.go` with injected functions and ordered events:
 
@@ -604,7 +604,7 @@ func TestRunUpdaterShowsFailureAndRestartsOldDesktop(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run updater tests to verify RED**
+- [x] **Step 2: Run updater tests to verify RED**
 
 Run:
 
@@ -615,7 +615,7 @@ go test ./cmd/wheelmaker-desktop-updater -count=1
 
 Expected: FAIL because the package and `runUpdater` do not exist.
 
-- [ ] **Step 3: Implement pure ordered orchestration**
+- [x] **Step 3: Implement pure ordered orchestration**
 
 Create `updater.go`:
 
@@ -680,7 +680,7 @@ func TestRunUpdaterReturnsRestartFailure(t *testing.T) {
 }
 ```
 
-- [ ] **Step 4: Implement Windows fixed paths and process waiting**
+- [x] **Step 4: Implement Windows fixed paths and process waiting**
 
 Create `main_windows.go` with a strict two-argument parser that accepts `--parent-pid` followed by a positive decimal PID. Resolve only:
 
@@ -705,11 +705,11 @@ output, err := cmd.CombinedOutput()
 
 Wrap failures with the final non-empty UTF-8 output. Restart only `desktop` with `exec.Command(desktop).Start()`. Show errors using `MessageBoxW` with an error icon; do not open a console.
 
-- [ ] **Step 5: Add a non-Windows unsupported main**
+- [x] **Step 5: Add a non-Windows unsupported main**
 
 Create `main_other.go` behind `//go:build !windows` with a `main` that writes `WheelMaker Desktop updater is supported on Windows only` to stderr and exits non-zero. This keeps `go build ./...` valid on other development hosts without adding non-Windows behavior.
 
-- [ ] **Step 6: Format, test, and compile the GUI binary**
+- [x] **Step 6: Format, test, and compile the GUI binary**
 
 Run:
 
@@ -724,7 +724,7 @@ Remove-Item -LiteralPath ..\.tmp\update.exe -Force
 
 Expected: tests PASS and Windows GUI build exits 0.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add server/cmd/wheelmaker-desktop-updater
@@ -737,7 +737,7 @@ git commit -m "feat(desktop): add one-shot Windows updater"
 - Modify: `scripts/release/build.mjs:105-135`
 - Modify: `scripts/release/build.test.mjs:40-145,330-380`
 
-- [ ] **Step 1: Write a failing package-layout test**
+- [x] **Step 1: Write a failing package-layout test**
 
 Extend `platform directories preserve the Hub and Web package layout`:
 
@@ -756,13 +756,13 @@ assert.equal(updaterBuilds[0].args.includes('-ldflags=-H windowsgui'), true);
 
 Run the same assertion once with `withDesktop: false` and keep the existing optional Desktop test proving `WheelMakerDesktop.exe` remains separate.
 
-- [ ] **Step 2: Run the build test to verify RED**
+- [x] **Step 2: Run the build test to verify RED**
 
 Run: `node --test scripts/release/build.test.mjs`
 
 Expected: FAIL because the Windows platform directory lacks `desktop/update.exe`.
 
-- [ ] **Step 3: Build the updater inside the Windows platform job**
+- [x] **Step 3: Build the updater inside the Windows platform job**
 
 After the Windows Hub build and before assigning `platforms[index]`, add:
 
@@ -792,13 +792,13 @@ if (target.GOOS === 'windows') {
 
 Do not add a separate top-level build job; keep Hub and updater outputs owned by the Windows package task.
 
-- [ ] **Step 4: Run release build tests**
+- [x] **Step 4: Run release build tests**
 
 Run: `node --test scripts/release/build.test.mjs scripts/release/publish.test.mjs`
 
 Expected: PASS. The archive packager continues to include the complete platform directory recursively.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add scripts/release/build.mjs scripts/release/build.test.mjs
@@ -811,7 +811,7 @@ git commit -m "feat(release): package the Desktop updater on Windows"
 - Modify: `scripts/deploy/deploy-core.mjs:1625-1670`
 - Modify: `scripts/deploy/deploy-core.test.mjs:440-575,930-1045,1060-1130`
 
-- [ ] **Step 1: Extend the Windows fixture and write failing preservation assertions**
+- [x] **Step 1: Extend the Windows fixture and write failing preservation assertions**
 
 For `platform === 'win32'`, make `installFixture` create `package/desktop/update.exe` containing `new-updater`. Extend the normal deploy test:
 
@@ -828,13 +828,13 @@ assert.equal(
 
 Extend the successful internal update test with the same updater assertion, proving `node deploy.mjs update` installs the helper without runtime reconfiguration. Add a Linux assertion that no desktop directory is required or created.
 
-- [ ] **Step 2: Run deploy tests to verify RED**
+- [x] **Step 2: Run deploy tests to verify RED**
 
 Run: `node --test scripts/deploy/deploy-core.test.mjs`
 
 Expected: FAIL because `applyStagedPackage` ignores the packaged updater.
 
-- [ ] **Step 3: Stage and atomically replace only the Windows helper**
+- [x] **Step 3: Stage and atomically replace only the Windows helper**
 
 In `applyStagedPackage`, resolve and require the helper only on Windows:
 
@@ -851,7 +851,7 @@ const temporaryUpdater = join(desktopDirectory, `.update.exe.${jobId}.tmp`);
 
 Create `desktopDirectory`, copy and chmod the temporary updater, then call `replaceInstalledFile(temporaryUpdater, targetUpdater, ...)` in the same applying phase. Clean only `temporaryUpdater` in `finally`. Never remove `desktopDirectory` and never address `WheelMakerDesktop.exe` in this function.
 
-- [ ] **Step 4: Run deploy and launcher tests**
+- [x] **Step 4: Run deploy and launcher tests**
 
 Run:
 
@@ -861,7 +861,7 @@ node --test scripts/deploy/deploy-core.test.mjs scripts/deploy/deploy.test.mjs
 
 Expected: PASS; the existing `desktop-update` and `update_exe.bat` tests remain green.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add scripts/deploy/deploy-core.mjs scripts/deploy/deploy-core.test.mjs
@@ -875,7 +875,7 @@ git commit -m "feat(deploy): install the Desktop updater helper"
 - Modify: `app/web/src/styles/shell.css:165-200,1750-1795`
 - Modify: `app/__tests__/web-desktop-titlebar.test.tsx`
 
-- [ ] **Step 1: Write failing titlebar state and ordering tests**
+- [x] **Step 1: Write failing titlebar state and ordering tests**
 
 Add a fetch restore in `afterEach`, then test a bridge with both update methods. Assert initial checking, resolved available state, ordering after Dev Mode, both red-dot markers, and update invocation:
 
@@ -901,7 +901,7 @@ Add tests for:
 - Local Dev bridge and ordinary browser render no Desktop update entry;
 - rejected `requestDesktopUpdate` keeps the window alive and changes the item to retry state.
 
-- [ ] **Step 2: Run titlebar tests to verify RED**
+- [x] **Step 2: Run titlebar tests to verify RED**
 
 Run:
 
@@ -912,7 +912,7 @@ npm test -- --runInBand __tests__/web-desktop-titlebar.test.tsx
 
 Expected: FAIL because the menu has only Dev Mode and no update state.
 
-- [ ] **Step 3: Add one startup effect and retry/update handlers**
+- [x] **Step 3: Add one startup effect and retry/update handlers**
 
 Import `useCallback` and `useEffect`. Add these hooks before the existing `if (!bridge) return null` so browser and Desktop renders keep the same hook order. Enable the capability only when both native methods exist and `bridge.localDev` is absent, then include it in the existing Windows extensions visibility condition:
 
@@ -941,7 +941,7 @@ const hasWindowsExtensions = Boolean(
 
 Do not add an interval. The failed menu action calls `refreshDesktopUpdate`; the available action sets busy, calls the no-argument native method, and on rejection returns to `{status: 'failed'}`.
 
-- [ ] **Step 4: Render the permanent menu item directly after Dev Mode**
+- [x] **Step 4: Render the permanent menu item directly after Dev Mode**
 
 Use one button with `data-desktop-extension-action="desktop-update"`. Labels are exact:
 
@@ -954,7 +954,7 @@ failed: 'Check failed · Retry'
 
 Disable checking/current/busy states. Render a menu red-dot span only for `available`, and render a titlebar red-dot span inside the Windows extensions button only for `available`. Keep the item visible whenever `canUpdateDesktop` is true.
 
-- [ ] **Step 5: Style accessible WheelMaker red dots and disabled state**
+- [x] **Step 5: Style accessible WheelMaker red dots and disabled state**
 
 Add focused CSS without changing control width:
 
@@ -982,7 +982,7 @@ Add focused CSS without changing control width:
 
 Use the existing `--danger` token from `tokens.css`; do not introduce a hard-coded unrelated green or blue.
 
-- [ ] **Step 6: Run UI tests and typecheck**
+- [x] **Step 6: Run UI tests and typecheck**
 
 Run:
 
@@ -994,7 +994,7 @@ npm run tsc:web
 
 Expected: all suites PASS and TypeScript exits 0.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add app/web/src/shell/layouts/desktop/DesktopTitleBar.tsx app/web/src/styles/shell.css app/__tests__/web-desktop-titlebar.test.tsx
@@ -1008,33 +1008,33 @@ git commit -m "feat(app): surface Desktop self-update in the titlebar"
 - Verify: `docs/wiki/release-and-build/desktop-self-update.md`
 - Verify: all files changed in Tasks 1-6
 
-- [ ] **Step 1: Re-run focused acceptance suites**
+- [x] **Step 1: Re-run focused acceptance suites**
 
 Run:
 
 ```powershell
-cd D:\Code\WheelMaker\server
+cd D:\Code\WheelMaker-worktrees\desktop-self-update\server
 go test ./cmd/wheelmaker-desktop ./cmd/wheelmaker-desktop-updater -count=1
 
-cd D:\Code\WheelMaker
+cd D:\Code\WheelMaker-worktrees\desktop-self-update
 node --test scripts/release/build.test.mjs scripts/release/publish.test.mjs scripts/deploy/deploy-core.test.mjs scripts/deploy/deploy.test.mjs
 
-cd D:\Code\WheelMaker\app
+cd D:\Code\WheelMaker-worktrees\desktop-self-update\app
 npm test -- --runInBand __tests__/web-agent-package-update-settings.test.ts __tests__/web-desktop-update.test.ts __tests__/web-desktop-titlebar.test.tsx
 npm run tsc:web
 ```
 
 Expected: every command exits 0.
 
-- [ ] **Step 2: Run full Go and deployment/release regression suites**
+- [x] **Step 2: Run full Go and deployment/release regression suites**
 
 Run:
 
 ```powershell
-cd D:\Code\WheelMaker\server
+cd D:\Code\WheelMaker-worktrees\desktop-self-update\server
 go test ./... -count=1
 
-cd D:\Code\WheelMaker
+cd D:\Code\WheelMaker-worktrees\desktop-self-update
 $nodeTests = @(
   Get-ChildItem scripts/deploy -Filter *.test.mjs -File
   Get-ChildItem scripts/release -Filter *.test.mjs -File
@@ -1046,12 +1046,12 @@ git diff --check
 
 Expected: all Go packages and Node tests PASS; `git diff --check` emits no errors.
 
-- [ ] **Step 3: Build the actual Windows updater once**
+- [x] **Step 3: Build the actual Windows updater once**
 
 Run:
 
 ```powershell
-cd D:\Code\WheelMaker\server
+cd D:\Code\WheelMaker-worktrees\desktop-self-update\server
 New-Item -ItemType Directory -Force -Path ..\.tmp | Out-Null
 go build -trimpath -ldflags="-H windowsgui" -o ..\.tmp\update.exe ./cmd/wheelmaker-desktop-updater
 Get-Item ..\.tmp\update.exe | Select-Object Name,Length
@@ -1060,7 +1060,7 @@ Remove-Item -LiteralPath ..\.tmp\update.exe -Force
 
 Expected: `update.exe` exists with non-zero length before cleanup.
 
-- [ ] **Step 4: Check the approved scope line by line**
+- [x] **Step 4: Check the approved scope line by line**
 
 Confirm from tests and diff that:
 
@@ -1097,7 +1097,7 @@ Run the repository completion gate exactly:
 ```powershell
 git add -A
 git commit -m "feat: add Windows Desktop self-update"
-git push origin main
+git push origin feat/desktop-self-update
 ```
 
 Do not run `scripts/release.mjs --publish`, `publish-release.bat`, or any release-server upload command.
