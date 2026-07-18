@@ -29,6 +29,25 @@ func TestHubStateUpdatedAllowsHubOrigin(t *testing.T) {
 	}
 }
 
+func TestHubReleaseNotifyAllowsOnlyHubOriginWithoutProtocolVersionChange(t *testing.T) {
+	descriptor, ok := RegistryMethod(RegistryMethodHubReleaseNotify)
+	if !ok {
+		t.Fatal("hub.release.notify is not registered")
+	}
+	if descriptor.Route != RegistryRouteHubReleaseNotify {
+		t.Fatalf("route=%q, want %q", descriptor.Route, RegistryRouteHubReleaseNotify)
+	}
+	if !RegistryMethodAllowed(string(RegistryRoleHub), descriptor.Method) {
+		t.Fatal("hub role must be allowed to publish hub.release.notify")
+	}
+	if RegistryMethodAllowed(string(RegistryRoleClient), descriptor.Method) {
+		t.Fatal("client role must not be allowed to publish hub.release.notify")
+	}
+	if DefaultProtocolVersion != "2.6" {
+		t.Fatalf("DefaultProtocolVersion=%q, want 2.6", DefaultProtocolVersion)
+	}
+}
+
 func TestRegistryDeviceSessionMethods(t *testing.T) {
 	methods := []string{
 		RegistryMethodSecuritySessionList,

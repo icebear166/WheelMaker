@@ -23,6 +23,7 @@ const (
 	RegistryRouteHubControl             RegistryRouteKind = "hub_control"
 	RegistryRouteHubReport              RegistryRouteKind = "hub_report"
 	RegistryRouteHubState               RegistryRouteKind = "hub_state"
+	RegistryRouteHubReleaseNotify       RegistryRouteKind = "hub_release_notify"
 	RegistryRouteHubSessionEvent        RegistryRouteKind = "hub_session_event"
 	RegistryRouteProjectCache           RegistryRouteKind = "project_cache"
 	RegistryRouteProjectForward         RegistryRouteKind = "project_forward"
@@ -43,14 +44,16 @@ const (
 )
 
 const (
-	RegistryMethodConnectInit     = "connect.init"
-	RegistryMethodConnectClose    = "connect.close"
-	RegistryMethodHubPing         = "hub.ping"
-	RegistryMethodHubStateGet     = "hub.state.get"
-	RegistryMethodHubStateRefresh = "hub.state.refresh"
-	RegistryMethodHubStateAction  = "hub.state.action"
-	RegistryMethodHubStateUpdated = "hub.state.updated"
-	RegistryMethodDebugUploadLog  = "debug.uploadLog"
+	RegistryMethodConnectInit      = "connect.init"
+	RegistryMethodConnectClose     = "connect.close"
+	RegistryMethodHubPing          = "hub.ping"
+	RegistryMethodHubStateGet      = "hub.state.get"
+	RegistryMethodHubStateRefresh  = "hub.state.refresh"
+	RegistryMethodHubStateAction   = "hub.state.action"
+	RegistryMethodHubStateUpdated  = "hub.state.updated"
+	RegistryMethodHubReleaseNotify = "hub.release.notify"
+	RegistryMethodHubReleaseApply  = "hub.release.apply"
+	RegistryMethodDebugUploadLog   = "debug.uploadLog"
 
 	RegistryMethodHubReportProjects             = "hub.report.projects"
 	RegistryMethodHubReportProject              = "hub.report.project"
@@ -153,6 +156,7 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodHubStateRefresh:                  registryHubStateMethod(RegistryMethodHubStateRefresh),
 	RegistryMethodHubStateAction:                   registryHubStateMethod(RegistryMethodHubStateAction),
 	RegistryMethodHubStateUpdated:                  registryMethod(RegistryMethodHubStateUpdated, RegistryRouteClientEvent, []RegistryRole{RegistryRoleHub}),
+	RegistryMethodHubReleaseNotify:                 registryHubReleaseNotifyMethod(RegistryMethodHubReleaseNotify),
 	RegistryMethodDebugUploadLog:                   registryMethod(RegistryMethodDebugUploadLog, RegistryRouteDebug, []RegistryRole{RegistryRoleClient}),
 	RegistryMethodSecuritySessionList:              registryMethod(RegistryMethodSecuritySessionList, RegistryRouteSecuritySession, []RegistryRole{RegistryRoleClient}),
 	RegistryMethodSecuritySessionRevoke:            registryMethod(RegistryMethodSecuritySessionRevoke, RegistryRouteSecuritySession, []RegistryRole{RegistryRoleClient}),
@@ -260,6 +264,12 @@ func registryHubCommandMethod(method string) RegistryMethodDescriptor {
 
 func registryHubStateMethod(method string) RegistryMethodDescriptor {
 	desc := registryMethod(method, RegistryRouteHubState, []RegistryRole{RegistryRoleClient})
+	desc.RequiresHubID = true
+	return desc
+}
+
+func registryHubReleaseNotifyMethod(method string) RegistryMethodDescriptor {
+	desc := registryMethod(method, RegistryRouteHubReleaseNotify, []RegistryRole{RegistryRoleHub})
 	desc.RequiresHubID = true
 	return desc
 }
