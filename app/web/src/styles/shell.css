@@ -1752,6 +1752,30 @@
   height: 100%;
 }
 
+.desktop-windows-extension-button {
+  position: relative;
+}
+
+.desktop-update-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: var(--danger);
+  box-shadow: 0 0 0 2px var(--surface-panel);
+}
+
+.desktop-update-dot-titlebar {
+  position: absolute;
+  top: 8px;
+  right: 9px;
+}
+
+.desktop-update-dot-menu {
+  margin-inline: 4px 3px;
+  box-shadow: none;
+}
+
 .desktop-windows-extension-menu {
   position: absolute;
   top: calc(100% + 6px);
@@ -1786,6 +1810,16 @@
 .desktop-windows-extension-menu button:focus-visible {
   background: var(--hover);
   outline: none;
+}
+
+.desktop-windows-extension-menu button:disabled {
+  color: var(--text-secondary);
+  cursor: default;
+  opacity: 0.72;
+}
+
+.desktop-windows-extension-menu button:disabled:hover {
+  background: transparent;
 }
 
 .local-dev-entry-backdrop {

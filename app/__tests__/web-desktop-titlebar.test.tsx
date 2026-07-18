@@ -7,10 +7,28 @@ import {
 
 describe('desktop window controls', () => {
   const originalWindow = (global as typeof globalThis & { window?: unknown }).window;
+  const originalFetch = global.fetch;
 
   afterEach(() => {
     (global as typeof globalThis & { window?: unknown }).window = originalWindow;
+    global.fetch = originalFetch;
   });
+
+  const stableResponse = (sha256: string) => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      schema: 2,
+      version: 'v1.24',
+      publishedAt: '2026-07-18T09:00:00Z',
+      sourceSha: 'a'.repeat(40),
+      desktopExe: {
+        version: 'v1.22',
+        path: '/releases/v1.22/WheelMakerDesktop.exe',
+        sha256,
+      },
+    }),
+  }) as Response;
 
   test('renders nothing outside the desktop WebView runtime', async () => {
     (global as typeof globalThis & { window?: unknown }).window = {};
@@ -99,6 +117,7 @@ describe('desktop window controls', () => {
   });
 
   test('marks Dev Mode as checked when the local native bridge is active', async () => {
+    global.fetch = jest.fn() as unknown as typeof fetch;
     (global as typeof globalThis & { window?: unknown }).window = {
       WheelMakerDesktop: {
         enabled: true,
@@ -107,6 +126,8 @@ describe('desktop window controls', () => {
           saveSource: jest.fn(),
           run: jest.fn(),
         },
+        getDesktopUpdateInfo: jest.fn(),
+        requestDesktopUpdate: jest.fn(),
       },
       dispatchEvent: jest.fn(),
     };
@@ -122,6 +143,158 @@ describe('desktop window controls', () => {
     const menuItem = root.findByProps({role: 'menuitemcheckbox'});
     expect(menuItem.props['aria-checked']).toBe(true);
     expect(menuItem.findByProps({'data-local-dev-check': true})).toBeDefined();
+    expect(root.findAllByProps({'data-desktop-extension-action': 'desktop-update'})).toHaveLength(0);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  test('checks once and shows the Desktop update directly after Dev Mode', async () => {
+    let resolveStable: ((response: Response) => void) | undefined;
+    global.fetch = jest.fn(() => new Promise<Response>((resolve) => {
+      resolveStable = resolve;
+    })) as unknown as typeof fetch;
+    const requestDesktopUpdate = jest.fn(async () => undefined);
+    (global as typeof globalThis & { window?: unknown }).window = {
+      WheelMakerDesktop: {
+        enabled: true,
+        requestLocalDevMode: jest.fn(),
+        getDesktopUpdateInfo: jest.fn(async () => ({
+          sha256: 'a'.repeat(64),
+          updaterReady: true,
+        })),
+        requestDesktopUpdate,
+      },
+    };
+
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+    await ReactTestRenderer.act(async () => {
+      renderer = ReactTestRenderer.create(<DesktopWindowControls />);
+    });
+    const root = renderer!.root;
+    await ReactTestRenderer.act(async () => {
+      root.findByProps({'aria-label': 'Windows extensions'}).props.onClick();
+    });
+    expect(root.findByProps({'data-desktop-update-label': true}).children).toContain(
+      'Checking Desktop update…',
+    );
+
+    await ReactTestRenderer.act(async () => {
+      resolveStable!(stableResponse('b'.repeat(64)));
+    });
+
+    const menuItems = root.findAll(node =>
+      typeof node.props['data-desktop-extension-action'] === 'string',
+    );
+    expect(menuItems.map(item => item.props['data-desktop-extension-action'])).toEqual([
+      'local-dev',
+      'desktop-update',
+    ]);
+    expect(root.findByProps({'data-desktop-update-label': true}).children).toContain(
+      'Update Desktop to v1.22',
+    );
+    expect(root.findByProps({'data-desktop-update-dot': 'titlebar'})).toBeDefined();
+    expect(root.findByProps({'data-desktop-update-dot': 'menu'})).toBeDefined();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+
+    await ReactTestRenderer.act(async () => {
+      root.findByProps({'data-desktop-extension-action': 'desktop-update'}).props.onClick();
+    });
+    expect(requestDesktopUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  test('shows the current Desktop without an update dot when SHA matches', async () => {
+    global.fetch = jest.fn(async () => stableResponse('a'.repeat(64))) as unknown as typeof fetch;
+    (global as typeof globalThis & { window?: unknown }).window = {
+      WheelMakerDesktop: {
+        enabled: true,
+        getDesktopUpdateInfo: jest.fn(async () => ({
+          sha256: 'a'.repeat(64),
+          updaterReady: true,
+        })),
+        requestDesktopUpdate: jest.fn(),
+      },
+    };
+
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+    await ReactTestRenderer.act(async () => {
+      renderer = ReactTestRenderer.create(<DesktopWindowControls />);
+    });
+    const root = renderer!.root;
+    await ReactTestRenderer.act(async () => {
+      root.findByProps({'aria-label': 'Windows extensions'}).props.onClick();
+    });
+    const updateButton = root.findByProps({'data-desktop-extension-action': 'desktop-update'});
+    expect(root.findByProps({'data-desktop-update-label': true}).children).toContain(
+      'Desktop is up to date',
+    );
+    expect(updateButton.props.disabled).toBe(true);
+    expect(root.findAll(node => node.props['data-desktop-update-dot'] !== undefined)).toHaveLength(0);
+  });
+
+  test('retries a failed Desktop check from the menu', async () => {
+    global.fetch = jest.fn()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(stableResponse('a'.repeat(64))) as unknown as typeof fetch;
+    (global as typeof globalThis & { window?: unknown }).window = {
+      WheelMakerDesktop: {
+        enabled: true,
+        getDesktopUpdateInfo: jest.fn(async () => ({
+          sha256: 'a'.repeat(64),
+          updaterReady: true,
+        })),
+        requestDesktopUpdate: jest.fn(),
+      },
+    };
+
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+    await ReactTestRenderer.act(async () => {
+      renderer = ReactTestRenderer.create(<DesktopWindowControls />);
+    });
+    const root = renderer!.root;
+    await ReactTestRenderer.act(async () => {
+      root.findByProps({'aria-label': 'Windows extensions'}).props.onClick();
+    });
+    expect(root.findByProps({'data-desktop-update-label': true}).children).toContain(
+      'Check failed · Retry',
+    );
+    await ReactTestRenderer.act(async () => {
+      root.findByProps({'data-desktop-extension-action': 'desktop-update'}).props.onClick();
+    });
+    expect(root.findByProps({'data-desktop-update-label': true}).children).toContain(
+      'Desktop is up to date',
+    );
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  test('keeps the Desktop open and returns to retry when updater launch fails', async () => {
+    global.fetch = jest.fn(async () => stableResponse('b'.repeat(64))) as unknown as typeof fetch;
+    (global as typeof globalThis & { window?: unknown }).window = {
+      WheelMakerDesktop: {
+        enabled: true,
+        getDesktopUpdateInfo: jest.fn(async () => ({
+          sha256: 'a'.repeat(64),
+          updaterReady: true,
+        })),
+        requestDesktopUpdate: jest.fn(async () => {
+          throw new Error('start failed');
+        }),
+      },
+    };
+
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+    await ReactTestRenderer.act(async () => {
+      renderer = ReactTestRenderer.create(<DesktopWindowControls />);
+    });
+    const root = renderer!.root;
+    await ReactTestRenderer.act(async () => {
+      root.findByProps({'aria-label': 'Windows extensions'}).props.onClick();
+    });
+    await ReactTestRenderer.act(async () => {
+      root.findByProps({'data-desktop-extension-action': 'desktop-update'}).props.onClick();
+    });
+    expect(root.findByProps({'data-desktop-window-controls': true})).toBeDefined();
+    expect(root.findByProps({'data-desktop-update-label': true}).children).toContain(
+      'Check failed · Retry',
+    );
   });
 
   test('drags desktop title rows except interactive targets', async () => {

@@ -1,4 +1,5 @@
-import React, { type ReactNode, useState, useRef } from 'react';
+import React, { type ReactNode, useCallback, useEffect, useState, useRef } from 'react';
+import { checkDesktopUpdate, type DesktopUpdateCheck } from '../../../platform/desktop/desktopUpdate';
 import { getDesktopWindowBridge, openLocalDevPanelEvent } from '../../../platform/desktop/desktopRuntime';
 
 type DesktopDragRegionProps = {
@@ -67,12 +68,29 @@ export function DesktopWindowControls() {
   const [localDevSource, setLocalDevSource] = useState('');
   const [localDevError, setLocalDevError] = useState('');
   const [localDevBusy, setLocalDevBusy] = useState(false);
+  const [desktopUpdate, setDesktopUpdate] = useState<DesktopUpdateCheck>({status: 'checking'});
+  const [desktopUpdateBusy, setDesktopUpdateBusy] = useState(false);
+  const canUpdateDesktop = Boolean(
+    bridge?.getDesktopUpdateInfo && bridge.requestDesktopUpdate && !bridge.localDev,
+  );
+
+  const refreshDesktopUpdate = useCallback(async () => {
+    if (!bridge || !canUpdateDesktop) {
+      return;
+    }
+    setDesktopUpdate({status: 'checking'});
+    setDesktopUpdate(await checkDesktopUpdate(bridge));
+  }, [bridge, canUpdateDesktop]);
+
+  useEffect(() => {
+    void refreshDesktopUpdate();
+  }, [refreshDesktopUpdate]);
 
   if (!bridge) {
     return null;
   }
 
-  const hasWindowsExtensions = Boolean(bridge.requestLocalDevMode || bridge.localDev);
+  const hasWindowsExtensions = Boolean(bridge.requestLocalDevMode || bridge.localDev || canUpdateDesktop);
   const selectLocalDev = () => {
     setExtensionsOpen(false);
     if (bridge.localDev) {
@@ -100,6 +118,34 @@ export function DesktopWindowControls() {
       setLocalDevBusy(false);
     }
   };
+  const selectDesktopUpdate = async () => {
+    if (desktopUpdateBusy) {
+      return;
+    }
+    if (desktopUpdate.status === 'failed') {
+      await refreshDesktopUpdate();
+      return;
+    }
+    if (desktopUpdate.status !== 'available' || !bridge.requestDesktopUpdate) {
+      return;
+    }
+    setDesktopUpdateBusy(true);
+    try {
+      await bridge.requestDesktopUpdate();
+    } catch {
+      setDesktopUpdate({status: 'failed'});
+      setDesktopUpdateBusy(false);
+    }
+  };
+  const desktopUpdateLabel = desktopUpdateBusy
+    ? 'Starting Desktop update…'
+    : desktopUpdate.status === 'checking'
+      ? 'Checking Desktop update…'
+      : desktopUpdate.status === 'current'
+        ? 'Desktop is up to date'
+        : desktopUpdate.status === 'available'
+          ? `Update Desktop to ${desktopUpdate.version}`
+          : 'Check failed · Retry';
 
   return (
     <>
@@ -115,6 +161,13 @@ export function DesktopWindowControls() {
               onClick={() => setExtensionsOpen(open => !open)}
             >
               <span className="codicon codicon-extensions" aria-hidden="true" />
+              {canUpdateDesktop && desktopUpdate.status === 'available' ? (
+                <span
+                  className="desktop-update-dot desktop-update-dot-titlebar"
+                  data-desktop-update-dot="titlebar"
+                  aria-hidden="true"
+                />
+              ) : null}
             </button>
             {extensionsOpen ? (
               <div className="desktop-windows-extension-menu" role="menu" aria-label="Windows extensions">
@@ -122,6 +175,7 @@ export function DesktopWindowControls() {
                   type="button"
                   role="menuitemcheckbox"
                   aria-checked={Boolean(bridge.localDev)}
+                  data-desktop-extension-action="local-dev"
                   onClick={selectLocalDev}
                 >
                   <span
@@ -131,6 +185,26 @@ export function DesktopWindowControls() {
                   />
                   <span>Dev Mode</span>
                 </button>
+                {canUpdateDesktop ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-desktop-extension-action="desktop-update"
+                    disabled={desktopUpdateBusy || desktopUpdate.status === 'checking' || desktopUpdate.status === 'current'}
+                    onClick={() => void selectDesktopUpdate()}
+                  >
+                    {desktopUpdate.status === 'available' ? (
+                      <span
+                        className="desktop-update-dot desktop-update-dot-menu"
+                        data-desktop-update-dot="menu"
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <span className="codicon codicon-blank" aria-hidden="true" />
+                    )}
+                    <span data-desktop-update-label={true}>{desktopUpdateLabel}</span>
+                  </button>
+                ) : null}
               </div>
             ) : null}
           </div>
