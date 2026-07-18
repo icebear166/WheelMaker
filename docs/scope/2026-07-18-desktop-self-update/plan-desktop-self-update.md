@@ -1078,7 +1078,7 @@ update_exe.bat remains present
 no Registry protocol version changed
 ```
 
-- [ ] **Step 5: Mark the implementation plan complete**
+- [x] **Step 5: Mark the implementation plan complete**
 
 In `docs/scope/2026-07-18-desktop-self-update/plan-desktop-self-update.md`, change each completed step marker from `- [ ]` to `- [x]`, then run:
 
@@ -1090,7 +1090,7 @@ git diff --check
 
 Expected: `rg` has no matches, the plan file is part of the final source diff, and `git diff --check` emits no errors.
 
-- [ ] **Step 6: Push source only**
+- [x] **Step 6: Push source only**
 
 Run the repository completion gate exactly:
 
