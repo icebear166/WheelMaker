@@ -1291,9 +1291,11 @@
   transition: opacity 140ms ease;
 }
 
-.wide-project-pin-btn.active {
+.wide-project-pin-btn.active,
+.wide-project-section.active .wide-project-pin-btn.active {
   color: var(--accent-primary);
   opacity: 1;
+  background: color-mix(in srgb, var(--accent-primary) 14%, transparent);
 }
 
 .wide-project-action-btn {

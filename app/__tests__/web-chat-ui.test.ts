@@ -1774,6 +1774,8 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('aria-pressed={pinnedProject}');
     expect(mainTsx).toContain('togglePinnedProject(targetProjectId)');
     expect(stylesCss).toContain('.wide-project-pin-btn.active');
+    expect(stylesCss).toContain('.wide-project-section.active .wide-project-pin-btn.active');
+    expect(stylesCss).toContain('background: color-mix(in srgb, var(--accent-primary) 14%, transparent);');
   });
 
   test('wide layout uses a project session rail instead of the header project picker', () => {
