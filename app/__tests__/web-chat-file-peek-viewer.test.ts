@@ -289,7 +289,7 @@ describe('web chat file peek viewer', () => {
     expect(shellTsx).toContain('desktopPeek: ReactNode;');
     expect(shellTsx).toContain('{desktopPeek}');
     expect(mainTsx).toContain('desktopPeek={chatPreviewDesktopPane}');
-    expect(mainTsx).toContain('mobileOverlay={terminalMobileOverlay ?? chatPreviewMobileOverlay}');
+    expect(mainTsx).toContain('mobileOverlay={mobileUsageOverlay ?? terminalMobileOverlay ?? chatPreviewMobileOverlay}');
   });
 
   test('right preview workbench uses project-scoped directory listing without switching workspace project', () => {

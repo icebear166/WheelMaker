@@ -4,4 +4,4 @@
 
 ## 页面
 
-- [`limits-monitoring.md`](limits-monitoring.md)：Agent Limits 监控的数据所有权、刷新机制、Provider 范围和桌面端展示约定。
+- [`limits-monitoring.md`](limits-monitoring.md)：Agent Limits 监控的数据所有权、刷新机制、Provider 范围和桌面/移动端展示约定。

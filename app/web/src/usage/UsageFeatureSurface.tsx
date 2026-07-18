@@ -128,11 +128,25 @@ function ProviderDetails({provider}: {provider: UsageProviderView}) {
   );
 }
 
+export function UsageDetailContent({snapshot}: {snapshot: UsageViewSnapshot}) {
+  if (snapshot.providers.length === 0) {
+    return <div className="usage-feature-empty">Waiting for Hub limits</div>;
+  }
+  const providers = snapshot.providers.filter(provider => provider.accounts.some(account => account.status === 'ok'));
+  if (providers.length === 0) {
+    return <div className="usage-detail-empty">No limit details</div>;
+  }
+  return (
+    <div className="usage-detail-list">
+      {providers.map(provider => <ProviderDetails key={provider.id} provider={provider} />)}
+    </div>
+  );
+}
+
 export function UsageFeatureSurface({snapshot, onRefresh, onRequestHide}: Props) {
   const [collapsed, setCollapsed] = React.useState(false);
   const [detail, setDetail] = React.useState(false);
   const mode = detail ? 'detail' : 'compact';
-  const detailProviders = snapshot.providers.filter(provider => provider.accounts.some(account => account.status === 'ok'));
   const actions = (
     <>
       <button
@@ -177,11 +191,7 @@ export function UsageFeatureSurface({snapshot, onRefresh, onRequestHide}: Props)
         {snapshot.providers.length === 0 ? (
           <div className="usage-feature-empty">Waiting for Hub limits</div>
         ) : detail ? (
-          detailProviders.length > 0 ? (
-            <div className="usage-detail-list">{detailProviders.map(provider => <ProviderDetails key={provider.id} provider={provider} />)}</div>
-          ) : (
-            <div className="usage-detail-empty">No limit details</div>
-          )
+          <UsageDetailContent snapshot={snapshot} />
         ) : (
           <div className="usage-provider-list">{snapshot.providers.map(provider => <ProviderRail key={provider.id} provider={provider} />)}</div>
         )}

@@ -61,8 +61,12 @@ describe('terminal workspace integration', () => {
     const source = read('web/src/app/WorkspaceApp.tsx');
     expect(source).toContain('const terminalMobileOverlay = !isWide && terminalOpen ? (');
     expect(source).toContain('className="terminal-mobile-overlay"');
-    expect(source).toContain('mobileOverlay={terminalMobileOverlay ?? chatPreviewMobileOverlay}');
-    expect(source).toContain("if (!isWide) setTerminalOpen(false);");
+    expect(source).toContain('mobileOverlay={mobileUsageOverlay ?? terminalMobileOverlay ?? chatPreviewMobileOverlay}');
+    expect(source).toContain([
+      'if (!isWide) {',
+      '      setMobileUsageOpen(false);',
+      '      setTerminalOpen(false);',
+    ].join('\n'));
     expect(source).toContain('onCloseSurface={() => setTerminalOpen(false)}');
     expect(source).toContain('if (!isWide && terminalOpen) {');
   });

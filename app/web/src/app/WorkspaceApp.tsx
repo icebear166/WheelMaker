@@ -316,6 +316,7 @@ import {
 } from '../settings/SettingsSurface';
 import { installMobileViewportZoomGuard } from '../shell/layouts/mobile/mobileViewportZoomGuard';
 import { resolveLayoutMode } from '../shell/state/responsiveLayout';
+import {MobileUsageDialog} from '../usage/MobileUsageDialog';
 import {UsageFeatureSurface} from '../usage/UsageFeatureSurface';
 import {UsageStore, parseHubSnapshot} from '../usage/usageStore';
 import type {UsageViewSnapshot} from '../usage/usageTypes';
@@ -2841,6 +2842,7 @@ export function App() {
   );
   const [chatPreviewManualOpen, setChatPreviewManualOpen] = useState(false);
   const [chatPreviewManualCollapsed, setChatPreviewManualCollapsed] = useState(false);
+  const [mobileUsageOpen, setMobileUsageOpen] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalSync, setTerminalSync] = useState<TerminalSyncState>(() => createTerminalSyncState());
   const terminalSyncRef = useRef(terminalSync);
@@ -7379,6 +7381,10 @@ export function App() {
     closeChatPortRelayPreview();
   }, [closeChatAttachmentPreview, closeChatFilePeek, closeChatPortRelayPreview, closeChatPromptArtifactPreview]);
   const handleAndroidNativeBack = useCallback(() => {
+    if (!isWide && mobileUsageOpen) {
+      setMobileUsageOpen(false);
+      return true;
+    }
     if (!isWide && terminalOpen) {
       setTerminalOpen(false);
       return true;
@@ -7403,7 +7409,7 @@ export function App() {
       setSidebarSettingsOpen(false);
     }
     return true;
-  }, [chatPreviewOpen, closeChatPreview, isWide, setSidebarSettingsOpen, terminalOpen]);
+  }, [chatPreviewOpen, closeChatPreview, isWide, mobileUsageOpen, setSidebarSettingsOpen, terminalOpen]);
   useEffect(() => {
     window.WheelMakerAndroidBack = {
       handleBack: handleAndroidNativeBack,
@@ -18595,7 +18601,11 @@ export function App() {
   );
   const activeTerminal = activeTerminalKey ? terminalSync.terminals[activeTerminalKey] : undefined;
   const toggleChatPreviewFromTitle = useCallback(() => {
-    if (!isWide) setTerminalOpen(false);
+    if (!isWide) {
+      setMobileUsageOpen(false);
+      setTerminalOpen(false);
+      setSidebarSettingsOpen(false);
+    }
     if (chatPreviewOpen) {
       setChatPreviewManualOpen(false);
       setChatPreviewManualCollapsed(true);
@@ -18603,7 +18613,7 @@ export function App() {
     }
     setChatPreviewManualCollapsed(false);
     setChatPreviewManualOpen(open => !open);
-  }, [chatPreviewOpen, isWide]);
+  }, [chatPreviewOpen, isWide, setSidebarSettingsOpen]);
   const toggleTerminalFromTitle = useCallback(() => {
     setTerminalOpen(open => {
       const next = !open;
@@ -20536,6 +20546,27 @@ export function App() {
                   <span className="codicon codicon-layout-sidebar-right" aria-hidden="true" />
                 </button>
               ) : null}
+              {gestureNavigationExpanded ? (
+                <button
+                  key="terminal"
+                  type="button"
+                  className="gesture-nav-button gesture-nav-capsule"
+                  data-active={terminalOpen}
+                  onPointerDown={e => e.stopPropagation()}
+                  onClick={() => {
+                    cancelGestureNavigation();
+                    setMobileUsageOpen(false);
+                    closeChatPreview();
+                    setSidebarSettingsOpen(false);
+                    setTerminalOpen(true);
+                  }}
+                  title="Terminal"
+                  aria-label="Terminal"
+                  aria-pressed={terminalOpen}
+                >
+                  <span className="codicon codicon-terminal" aria-hidden="true" />
+                </button>
+              ) : null}
               <button
                 key="chat"
                 type="button"
@@ -20553,11 +20584,38 @@ export function App() {
               </button>
               {gestureNavigationExpanded ? (
                 <button
+                  key="limits"
+                  type="button"
+                  className="gesture-nav-button gesture-nav-capsule"
+                  data-active={mobileUsageOpen}
+                  onPointerDown={e => e.stopPropagation()}
+                  onClick={() => {
+                    cancelGestureNavigation();
+                    setTerminalOpen(false);
+                    closeChatPreview();
+                    setSidebarSettingsOpen(false);
+                    setMobileUsageOpen(true);
+                  }}
+                  title="Limits"
+                  aria-label="Limits"
+                  aria-pressed={mobileUsageOpen}
+                >
+                  <span className="codicon codicon-dashboard" aria-hidden="true" />
+                </button>
+              ) : null}
+              {gestureNavigationExpanded ? (
+                <button
                   key="settings"
                   type="button"
                   className="gesture-nav-button gesture-nav-capsule"
                   onPointerDown={e => e.stopPropagation()}
-                  onClick={() => { cancelGestureNavigation(); openSettingsRoot(); }}
+                  onClick={() => {
+                    cancelGestureNavigation();
+                    setMobileUsageOpen(false);
+                    setTerminalOpen(false);
+                    closeChatPreview();
+                    openSettingsRoot();
+                  }}
                   title="Settings"
                   aria-label="Settings"
                 >
@@ -21381,6 +21439,13 @@ export function App() {
       {renderPreviewWorkbenchSurface('mobile')}
     </div>
   ) : null;
+  const mobileUsageOverlay = !isWide && mobileUsageOpen ? (
+    <MobileUsageDialog
+      snapshot={usageSnapshot}
+      onRefresh={() => { void refreshUsageAcrossHubs(); }}
+      onClose={() => setMobileUsageOpen(false)}
+    />
+  ) : null;
   const terminalMobileOverlay = !isWide && terminalOpen ? (
     <div className="terminal-mobile-overlay" role="dialog" aria-modal="true" aria-label="Terminal">
       <TerminalWorkbench mode="mobile"
@@ -21712,7 +21777,7 @@ export function App() {
         floatingControlStack={floatingControlStack}
         floatingControlSide={floatingControlSide}
         mobileSettingsScreen={mobileSettingsScreen}
-        mobileOverlay={terminalMobileOverlay ?? chatPreviewMobileOverlay}
+        mobileOverlay={mobileUsageOverlay ?? terminalMobileOverlay ?? chatPreviewMobileOverlay}
         sidebar={renderSidebar()}
         main={renderMain()}
         sidebarCollapsed={sidebarCollapsed}

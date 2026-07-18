@@ -600,9 +600,9 @@
 }
 
 .gesture-nav-control[data-expanded='true'] .gesture-nav-pill {
-  top: -41px;
-  height: 130px;
-  grid-template-rows: repeat(3, 40px);
+  top: -81px;
+  height: 210px;
+  grid-template-rows: repeat(5, 40px);
   padding: 4px;
 }
 

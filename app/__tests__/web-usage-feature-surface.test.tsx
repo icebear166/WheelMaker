@@ -2,7 +2,8 @@ import React from 'react';
 import TestRenderer, {act} from 'react-test-renderer';
 import fs from 'fs';
 import path from 'path';
-import {UsageFeatureSurface} from '../web/src/usage/UsageFeatureSurface';
+import {UsageDetailContent, UsageFeatureSurface} from '../web/src/usage/UsageFeatureSurface';
+import {MobileUsageDialog} from '../web/src/usage/MobileUsageDialog';
 import type {UsageViewSnapshot} from '../web/src/usage/usageTypes';
 import {AppConfirmDialog, type ConfirmTarget} from '../web/src/shell/AppDialogs';
 
@@ -33,6 +34,31 @@ function renderedText(node: TestRenderer.ReactTestInstance): string {
 }
 
 describe('UsageFeatureSurface', () => {
+  it('renders reusable account details without unavailable account noise', () => {
+    const snapshot: UsageViewSnapshot = {
+      ...fixtureSnapshot,
+      providers: [...fixtureSnapshot.providers, {
+        id: 'kimi', name: 'Kimi', status: 'unavailable', accountCount: 1,
+        accounts: [{
+          localId: 'opencode', identity: {kind: 'source', label: 'OpenCode'}, status: 'unavailable',
+          message: 'not authenticated', limits: [], hubIds: ['hub-a'],
+        }],
+      }],
+    };
+    let view: TestRenderer.ReactTestRenderer;
+    act(() => {
+      view = TestRenderer.create(<UsageDetailContent snapshot={snapshot} />);
+    });
+
+    const codex = view!.root.findByProps({'data-usage-account': 'codex:acct-a'});
+    expect(renderedText(codex)).toContain('Codex / a@example.com');
+    expect(codex.findAllByProps({'data-usage-hub': true}).map(renderedText)).toEqual(['hub-a', 'hub-b']);
+    expect(renderedText(codex)).toContain('Reset');
+    expect(renderedText(view!.root)).toContain('CNY');
+    expect(renderedText(view!.root)).toContain('12.50');
+    expect(renderedText(view!.root)).not.toContain('not authenticated');
+  });
+
   it('renders two compact quota columns and a one-line balance', () => {
     let view: TestRenderer.ReactTestRenderer;
     act(() => {
@@ -130,6 +156,68 @@ describe('UsageFeatureSurface', () => {
 
     act(() => view!.root.findByProps({'aria-label': 'Hide limits monitor'}).props.onClick());
     expect(onRequestHide).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders mobile details and handles refresh, card, backdrop, and close actions', () => {
+    const onRefresh = jest.fn();
+    const onClose = jest.fn();
+    let view: TestRenderer.ReactTestRenderer;
+    act(() => {
+      view = TestRenderer.create(
+        <MobileUsageDialog snapshot={fixtureSnapshot} onRefresh={onRefresh} onClose={onClose} />,
+      );
+    });
+
+    const overlay = view!.root.findByProps({'data-mobile-usage-overlay': true});
+    expect(overlay.props.role).toBe('dialog');
+    expect(overlay.props['aria-modal']).toBe('true');
+    expect(overlay.props['aria-label']).toBe('Limits');
+    expect(view!.root.findByProps({'data-usage-account': 'codex:acct-a'})).toBeDefined();
+
+    act(() => view!.root.findByProps({'aria-label': 'Refresh limits'}).props.onClick());
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+
+    const stopPropagation = jest.fn();
+    act(() => view!.root.findByProps({'data-mobile-usage-card': true}).props.onPointerDown({stopPropagation}));
+    expect(stopPropagation).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+
+    act(() => overlay.props.onPointerDown());
+    act(() => view!.root.findByProps({'aria-label': 'Close limits'}).props.onClick());
+    expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it('disables and animates mobile refresh while a scan is active', () => {
+    let view: TestRenderer.ReactTestRenderer;
+    act(() => {
+      view = TestRenderer.create(
+        <MobileUsageDialog
+          snapshot={{...fixtureSnapshot, refreshing: true}}
+          onRefresh={jest.fn()}
+          onClose={jest.fn()}
+        />,
+      );
+    });
+
+    const refresh = view!.root.findByProps({'aria-label': 'Refresh limits'});
+    expect(refresh.props.disabled).toBe(true);
+    expect(refresh.findByProps({'aria-hidden': 'true'}).props.className).toContain('spinning');
+    expect(renderedText(view!.root)).toContain('Refreshing…');
+  });
+
+  it('uses a safe-area-aware full-screen mobile limits card', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const usageStyles = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles', 'usage.css'), 'utf8').replace(/\r\n/g, '\n');
+    const overlayRule = usageStyles.match(/\.usage-mobile-overlay \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const cardRule = usageStyles.match(/\.usage-mobile-dialog \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const bodyRule = usageStyles.match(/\.usage-mobile-body \{([\s\S]*?)\n\}/)?.[1] ?? '';
+
+    expect(overlayRule).toContain('position: fixed;');
+    expect(overlayRule).toContain('inset: 0;');
+    expect(overlayRule).toContain('env(safe-area-inset-top)');
+    expect(overlayRule).toContain('env(safe-area-inset-bottom)');
+    expect(cardRule).toContain('max-height:');
+    expect(bodyRule).toContain('overflow: auto;');
   });
 
   it('explains how to restore the monitor before hiding it', () => {
