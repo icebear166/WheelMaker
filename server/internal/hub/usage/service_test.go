@@ -2,6 +2,8 @@ package usage
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -124,5 +126,31 @@ func TestManualRefreshRestartsAutomaticInterval(t *testing.T) {
 	}
 	if got := collector.calls.Load(); got != 2 {
 		t.Fatalf("collector calls=%d, want 2", got)
+	}
+}
+
+func TestCloneSnapshotPreservesEmptyCollectionsAsJSONArrays(t *testing.T) {
+	snapshot := cloneSnapshot(Snapshot{Providers: []ProviderSnapshot{
+		{
+			ID: ProviderDeepSeek, Name: "DeepSeek", Status: ProviderOK,
+			Accounts: []Account{{LocalID: "opencode", Status: ProviderOK, Limits: []Limit{}}},
+		},
+		{ID: ProviderKimi, Name: "Kimi", Status: ProviderUnavailable, Accounts: []Account{}},
+	}})
+	raw, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatalf("marshal snapshot: %v", err)
+	}
+	for _, expected := range []string{`"limits":[]`, `"accounts":[]`} {
+		if !strings.Contains(string(raw), expected) {
+			t.Fatalf("snapshot JSON must contain %s: %s", expected, raw)
+		}
+	}
+	emptyRaw, err := json.Marshal(cloneSnapshot(Snapshot{Providers: []ProviderSnapshot{}}))
+	if err != nil {
+		t.Fatalf("marshal empty snapshot: %v", err)
+	}
+	if !strings.Contains(string(emptyRaw), `"providers":[]`) {
+		t.Fatalf("empty providers must remain an array: %s", emptyRaw)
 	}
 }

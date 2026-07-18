@@ -2,7 +2,7 @@
   --chat-edge-hidden-alpha: 3%;
   --chat-edge-fade-start: calc(100% - 28px);
   --chat-edge-fade-end: 100%;
-  --chat-function-width: 360px;
+  --chat-function-width: var(--chat-edge-surface-width);
   --chat-function-column-gap: 12px;
   --chat-function-edge-gap: max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px));
   position: absolute;
@@ -17,7 +17,6 @@
 }
 
 .chat-function-surface.desktop.detail {
-  --chat-function-width: 420px;
   max-height: min(58vh, 560px);
 }
 

@@ -2424,6 +2424,7 @@
 
 .chat-main {
   --chat-scrollbar-gutter-width: 8px;
+  --chat-edge-surface-width: 360px;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -2750,7 +2751,7 @@
 }
 
 .chat-edge-surface-stack {
-  --chat-edge-surface-stack-width: 360px;
+  --chat-edge-surface-stack-width: var(--chat-edge-surface-width);
   --chat-edge-surface-stack-column-gap: 12px;
   --chat-edge-surface-stack-edge-gap: max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px));
   --chat-edge-surface-stack-resolved-width: min(
@@ -2778,7 +2779,7 @@
 }
 
 .chat-recent-sessions-surface.desktop {
-  --chat-recent-sessions-width: 360px;
+  --chat-recent-sessions-width: var(--chat-edge-surface-width);
   --chat-recent-sessions-column-gap: 12px;
   --chat-recent-sessions-edge-gap: calc(18px + var(--chat-scrollbar-gutter-width, 8px));
   --chat-recent-sessions-resolved-width: min(
@@ -2900,7 +2901,7 @@
 }
 
 .chat-plan-surface.desktop {
-  --chat-plan-desktop-width: 320px;
+  --chat-plan-desktop-width: var(--chat-edge-surface-width);
   --chat-plan-column-gap: 12px;
   --chat-plan-edge-gap: calc(18px + var(--chat-scrollbar-gutter-width, 8px));
   --chat-plan-resolved-width: min(

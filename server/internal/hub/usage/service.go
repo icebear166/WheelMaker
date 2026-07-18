@@ -181,11 +181,11 @@ func (s *Service) publish(snapshot Snapshot) {
 
 func cloneSnapshot(snapshot Snapshot) Snapshot {
 	copySnapshot := snapshot
-	copySnapshot.Providers = append([]ProviderSnapshot(nil), snapshot.Providers...)
+	copySnapshot.Providers = append([]ProviderSnapshot{}, snapshot.Providers...)
 	for index := range copySnapshot.Providers {
-		copySnapshot.Providers[index].Accounts = append([]Account(nil), snapshot.Providers[index].Accounts...)
+		copySnapshot.Providers[index].Accounts = append([]Account{}, snapshot.Providers[index].Accounts...)
 		for accountIndex := range copySnapshot.Providers[index].Accounts {
-			copySnapshot.Providers[index].Accounts[accountIndex].Limits = append([]Limit(nil), snapshot.Providers[index].Accounts[accountIndex].Limits...)
+			copySnapshot.Providers[index].Accounts[accountIndex].Limits = append([]Limit{}, snapshot.Providers[index].Accounts[accountIndex].Limits...)
 		}
 	}
 	return copySnapshot
