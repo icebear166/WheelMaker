@@ -1143,11 +1143,7 @@
 .wide-project-hub-7 { --hub-accent: #7b6cb8; }
 
 .recent-sessions-section {
-  position: sticky;
-  top: 0;
-  z-index: 5;
   margin: 0 0 8px;
-  box-shadow: 0 8px 18px rgb(0 0 0 / 16%);
 }
 
 .chat-session-operation {

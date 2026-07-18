@@ -89,13 +89,14 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('recentSessionsTick');
   });
 
-  test('recent sessions is always sticky at the top without any pin state', () => {
+  test('recent sessions scrolls with the list without any pin state', () => {
     expect(mainTsx).not.toContain('recentSessionsPinned');
     expect(mainTsx).not.toContain('recent-sessions-pin-btn');
     const sectionBlock = chatCss.match(/\.recent-sessions-section \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(sectionBlock).toContain('position: sticky;');
-    expect(sectionBlock).toContain('top: 0;');
-    expect(sectionBlock).toContain('z-index: 5;');
+    expect(sectionBlock).not.toContain('position: sticky;');
+    expect(sectionBlock).not.toContain('top: 0;');
+    expect(sectionBlock).not.toContain('z-index');
+    expect(sectionBlock).not.toContain('box-shadow');
     expect(chatCss).not.toContain('.recent-sessions-section:not(.collapsed)');
     expect(chatCss).not.toContain('.recent-sessions-section.pinned');
     expect(chatCss).not.toContain('.recent-sessions-pin-btn');
