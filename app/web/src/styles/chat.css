@@ -3143,9 +3143,9 @@
   scrollbar-width: thin;
 }
 .chat-main-message {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', 'Noto Sans CJK SC', 'Noto Sans', sans-serif;
+  font-family: 'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', 'Noto Sans', sans-serif;
   line-height: 1.6;
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 400;
   color: var(--chat-message-text, var(--text-primary));
   letter-spacing: 0.01em;
@@ -3194,8 +3194,8 @@
 .chat-main-message h4,
 .chat-main-message h5,
 .chat-main-message h6 {
-  margin: 14px 0 9px 0;
-  line-height: 1.3;
+  margin: 16px 0 10px 0;
+  line-height: 1.25;
   font-weight: 600;
 }
 
@@ -3204,14 +3204,17 @@
 }
 
 .chat-main-message h2 {
-  font-size: 1.3em;
+  font-size: 1.35em;
 }
 
 .chat-main-message h3 {
-  font-size: 1.15em;
+  font-size: 1.2em;
 }
 
-.chat-main-message h4,
+.chat-main-message h4 {
+  font-size: 1.1em;
+}
+
 .chat-main-message h5,
 .chat-main-message h6 {
   font-size: 1em;
@@ -3231,12 +3234,26 @@
 }
 
 .chat-file-link-icon {
-  display: inline-block;
-  margin-right: 0.28em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  margin-right: 0.32em;
   color: currentColor;
-  font-size: 0.88em;
   line-height: 1;
-  vertical-align: -0.04em;
+  vertical-align: -0.125em;
+}
+
+.chat-file-link-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .chat-main-message .chat-file-link-line {
@@ -5870,6 +5887,20 @@
     font-family: 'Segoe UI', 'Microsoft YaHei', 'Microsoft YaHei UI', 'PingFang SC', 'Noto Sans CJK SC', 'Noto Sans', sans-serif;
     font-size: 14px;
     letter-spacing: 0;
+  }
+
+  .chat-main-message h2 {
+    font-size: 1.3em;
+  }
+
+  .chat-main-message h3 {
+    font-size: 1.15em;
+  }
+
+  .chat-main-message h4,
+  .chat-main-message h5,
+  .chat-main-message h6 {
+    font-size: 1em;
   }
 }
 

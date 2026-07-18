@@ -17986,7 +17986,12 @@ export function App() {
           >
             <>
               {isFileLink ? (
-                <span className="codicon codicon-file chat-file-link-icon" aria-hidden="true" />
+                <span className="chat-file-link-icon" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" focusable="false">
+                    <rect x="1.75" y="1.75" width="12.5" height="12.5" rx="2.25" />
+                    <path d="M5 8h6" />
+                  </svg>
+                </span>
               ) : null}
               {children}
               {isFileLink && jumpLine && !textLine ? (

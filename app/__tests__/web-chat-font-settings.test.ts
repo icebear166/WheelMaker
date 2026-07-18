@@ -33,7 +33,7 @@ describe('web chat typography', () => {
     const stylesCss = readWebStyles(projectRoot);
 
     expect(stylesCss).toMatch(
-      /\.chat-main-message \{[\s\S]*font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', 'Noto Sans CJK SC', 'Noto Sans', sans-serif;[\s\S]*\}/,
+      /\.chat-main-message \{[\s\S]*font-family: 'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', 'Noto Sans', sans-serif;[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
       /@media \(max-width: 900px\) \{[\s\S]*\.chat-main-message \{[\s\S]*font-family: 'Segoe UI', 'Microsoft YaHei', 'Microsoft YaHei UI', 'PingFang SC', 'Noto Sans CJK SC', 'Noto Sans', sans-serif;[\s\S]*font-size: 14px;[\s\S]*letter-spacing: 0;[\s\S]*\}/,
@@ -46,7 +46,7 @@ describe('web chat typography', () => {
     const messageRule = ruleBody(stylesCss, '.chat-main-message');
 
     expect(stylesCss).toContain('--chat-message-text: #d4d4d4;');
-    expect(messageRule).toContain('font-size: 13.5px;');
+    expect(messageRule).toContain('font-size: 14px;');
     expect(messageRule).toContain('line-height: 1.6;');
     expect(messageRule).toContain('letter-spacing: 0.01em;');
     expect(messageRule).toContain('color: var(--chat-message-text, var(--text-primary));');
@@ -58,6 +58,18 @@ describe('web chat typography', () => {
       /\.chat-main-message p,[\s\S]*\.chat-main-message table \{[\s\S]*margin: 0 0 10px 0;[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(/\.chat-main-message li \+ li \{[\s\S]*margin-top: 6px;[\s\S]*\}/);
+  });
+
+  test('uses a clearer desktop markdown heading scale while preserving mobile ratios', () => {
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(ruleBody(stylesCss, '.chat-main-message h1')).toContain('font-size: 1.5em;');
+    expect(ruleBody(stylesCss, '.chat-main-message h2')).toContain('font-size: 1.35em;');
+    expect(ruleBody(stylesCss, '.chat-main-message h3')).toContain('font-size: 1.2em;');
+    expect(ruleBody(stylesCss, '.chat-main-message h4')).toContain('font-size: 1.1em;');
+    expect(stylesCss).toMatch(
+      /@media \(max-width: 900px\) \{[\s\S]*\.chat-main-message h2 \{[\s\S]*font-size: 1\.3em;[\s\S]*\.chat-main-message h3 \{[\s\S]*font-size: 1\.15em;[\s\S]*\.chat-main-message h4,[\s\S]*\.chat-main-message h6 \{[\s\S]*font-size: 1em;[\s\S]*\}/,
+    );
   });
 
   test('styles inline markdown code without affecting Shiki code blocks', () => {
@@ -86,7 +98,12 @@ describe('web chat typography', () => {
     expect(stylesCss).toMatch(
       /\.chat-main-message \.chat-file-link \{[\s\S]*font-weight: 500;[\s\S]*\}/,
     );
-    expect(stylesCss).toMatch(/\.chat-file-link-icon \{[\s\S]*font-size: 0\.88em;[\s\S]*\}/);
+    expect(stylesCss).toMatch(
+      /\.chat-file-link-icon \{[\s\S]*display: inline-flex;[\s\S]*width: 13px;[\s\S]*height: 13px;[\s\S]*vertical-align: -0\.125em;[\s\S]*\}/,
+    );
+    expect(stylesCss).toMatch(
+      /\.chat-file-link-icon svg \{[\s\S]*display: block;[\s\S]*stroke: currentColor;[\s\S]*stroke-width: 1\.5;[\s\S]*\}/,
+    );
   });
 
   test('keeps composer typography independent from message typography', () => {
