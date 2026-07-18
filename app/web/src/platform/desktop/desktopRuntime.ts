@@ -1,3 +1,8 @@
+export type DesktopUpdateInfo = {
+  sha256: string;
+  updaterReady: boolean;
+};
+
 export type DesktopWindowBridge = {
   enabled: true;
   getDeviceName?: () => Promise<string> | string;
@@ -9,6 +14,8 @@ export type DesktopWindowBridge = {
   localDev?: DesktopLocalDevBridge;
   openProjectFileInVSCode?: (projectRoot: string, relativePath: string) => Promise<void> | void;
   showProjectFileInFolder?: (projectRoot: string, relativePath: string) => Promise<void> | void;
+  getDesktopUpdateInfo?: () => Promise<DesktopUpdateInfo>;
+  requestDesktopUpdate?: () => Promise<void>;
 };
 
 export type DesktopLocalDevOperation = 'build' | 'start' | 'stop' | 'restart' | 'open-directory' | 'exit';

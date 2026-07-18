@@ -43,9 +43,16 @@ export type WheelMakerAndroidApkPointer = {
   size: number;
 };
 
+export type WheelMakerDesktopPointer = {
+  version: string;
+  path: string;
+  sha256: string;
+};
+
 export type WheelMakerStableMetadata = RegistryWheelMakerStableRelease & {
   schema: 2;
   androidApk?: WheelMakerAndroidApkPointer;
+  desktopExe?: WheelMakerDesktopPointer;
 };
 
 export type WheelMakerPublicMetadata = {
@@ -207,12 +214,20 @@ export function parseWheelMakerStable(input: unknown): WheelMakerStableMetadata 
     }
     androidApk = stable.androidApk;
   }
+  let desktopExe: WheelMakerDesktopPointer | undefined;
+  if (stable.desktopExe !== undefined) {
+    if (!validDesktopPointer(stable.desktopExe)) {
+      throw new Error('WheelMaker stable metadata has an invalid Desktop pointer.');
+    }
+    desktopExe = stable.desktopExe;
+  }
   return {
     schema: 2,
     version: stable.version,
     publishedAt: stable.publishedAt,
     sourceSha: stable.sourceSha,
     ...(androidApk ? {androidApk} : {}),
+    ...(desktopExe ? {desktopExe} : {}),
   };
 }
 
@@ -249,6 +264,27 @@ export async function fetchWheelMakerPublicMetadata(
     ? parseWheelMakerPublishStatus(await publishStatusResponse.json())
     : null;
   return {publishStatus, stable};
+}
+
+function validDesktopPointer(input: unknown): input is WheelMakerDesktopPointer {
+  const pointer = input as Record<string, unknown>;
+  if (
+    !pointer ||
+    typeof pointer !== 'object' ||
+    typeof pointer.version !== 'string' ||
+    !/^v1\.([1-9]\d*)$/.test(pointer.version) ||
+    typeof pointer.path !== 'string' ||
+    typeof pointer.sha256 !== 'string' ||
+    !/^[0-9a-f]{64}$/.test(pointer.sha256)
+  ) {
+    return false;
+  }
+  try {
+    wheelMakerReleaseUrl(pointer.path);
+  } catch {
+    return false;
+  }
+  return true;
 }
 
 function validAndroidPointer(input: unknown): input is WheelMakerAndroidApkPointer {

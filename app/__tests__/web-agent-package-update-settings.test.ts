@@ -60,6 +60,36 @@ test('renders installed and stable WheelMaker release versions', () => {
   })).toBe(false);
 });
 
+test('stable metadata preserves a valid Desktop pointer', () => {
+  const stable = parseWheelMakerStable({
+    schema: 2,
+    version: 'v1.24',
+    publishedAt: '2026-07-18T09:00:00Z',
+    sourceSha: 'a'.repeat(40),
+    desktopExe: {
+      version: 'v1.22',
+      path: '/releases/v1.22/WheelMakerDesktop.exe',
+      sha256: 'b'.repeat(64),
+    },
+  });
+
+  expect(stable.desktopExe?.version).toBe('v1.22');
+  expect(stable.desktopExe?.sha256).toBe('b'.repeat(64));
+});
+
+test.each([
+  {version: 'v1.22', path: 'https://evil.example/Desktop.exe', sha256: 'b'.repeat(64)},
+  {version: 'v1.22', path: '/releases/v1.22/WheelMakerDesktop.exe', sha256: 'bad'},
+])('stable metadata rejects invalid Desktop pointers', desktopExe => {
+  expect(() => parseWheelMakerStable({
+    schema: 2,
+    version: 'v1.24',
+    publishedAt: '2026-07-18T09:00:00Z',
+    sourceSha: 'a'.repeat(40),
+    desktopExe,
+  })).toThrow(/Desktop pointer/);
+});
+
 test('loads strict public metadata once per global endpoint', async () => {
   const requests: string[] = [];
   const request = jest.fn(async (url: string) => {
