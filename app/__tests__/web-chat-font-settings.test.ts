@@ -85,7 +85,7 @@ describe('web chat typography', () => {
     expect(stylesCss).not.toMatch(/\.chat-main-message \.wm-shiki-code \{[^}]*background:/);
   });
 
-  test('uses quiet chat links with a medium-weight text-only file affordance', () => {
+  test('centers the Codicon file affordance beside quiet chat links', () => {
     const stylesCss = readWebStyles(projectRoot);
 
     expect(stylesCss).toContain('--chat-link-text: #82b6df;');
@@ -98,7 +98,12 @@ describe('web chat typography', () => {
     expect(stylesCss).toMatch(
       /\.chat-main-message \.chat-file-link \{[\s\S]*font-weight: 500;[\s\S]*\}/,
     );
-    expect(stylesCss).not.toContain('.chat-file-link-icon');
+    expect(stylesCss).toMatch(
+      /\.chat-main-message \.chat-file-link-icon \{[\s\S]*display: inline-flex;[\s\S]*align-items: center;[\s\S]*justify-content: center;[\s\S]*width: 13px;[\s\S]*height: 13px;[\s\S]*font-size: 13px;[\s\S]*line-height: 1;[\s\S]*vertical-align: -0\.125em;[\s\S]*\}/,
+    );
+    expect(stylesCss).toMatch(
+      /\.chat-main-message \.chat-file-link-icon::before \{[\s\S]*display: block;[\s\S]*width: 13px;[\s\S]*height: 13px;[\s\S]*line-height: 13px;[\s\S]*text-align: center;[\s\S]*\}/,
+    );
   });
 
   test('keeps composer typography independent from message typography', () => {

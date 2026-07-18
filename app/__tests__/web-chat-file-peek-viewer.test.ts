@@ -30,11 +30,14 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain('beginPreviewTabLoad(');
   });
 
-  test('recognized chat file links keep their style hook without a decorative icon', () => {
+  test('recognized chat file links render the centered Codicon file glyph', () => {
     const mainTsx = readSourceText(mainPath);
 
     expect(mainTsx).toContain("isFileLink ? 'chat-file-link' : ''");
-    expect(mainTsx).not.toContain('chat-file-link-icon');
+    expect(mainTsx).toContain(
+      '<span className="codicon codicon-file chat-file-link-icon" aria-hidden="true" />',
+    );
+    expect(mainTsx).not.toContain('<svg viewBox="0 0 16 16" focusable="false">');
   });
 
   test('file mention preview reuses chat peek without inserting or closing the menu', () => {

@@ -17970,6 +17970,9 @@ export function App() {
             }}
           >
             <>
+              {isFileLink ? (
+                <span className="codicon codicon-file chat-file-link-icon" aria-hidden="true" />
+              ) : null}
               {children}
               {isFileLink && jumpLine && !textLine ? (
                 <span className="chat-file-link-line">:{jumpLine}</span>
