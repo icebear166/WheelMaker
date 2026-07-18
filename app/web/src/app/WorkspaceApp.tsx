@@ -322,10 +322,9 @@ import {
 } from '../settings/SettingsSurface';
 import { installMobileViewportZoomGuard } from '../shell/layouts/mobile/mobileViewportZoomGuard';
 import { resolveLayoutMode } from '../shell/state/responsiveLayout';
-import {UsageStream} from '../usage/usageStream';
-import type {UsageSnapshot} from '../usage/usageStream';
-import {UsageCompactBar} from '../usage/UsageCompactBar';
-import {UsageCardPanel} from '../usage/UsageCardPanel';
+import {UsageFeatureSurface} from '../usage/UsageFeatureSurface';
+import {UsageStore, parseHubSnapshot} from '../usage/usageStore';
+import type {UsageViewSnapshot} from '../usage/usageTypes';
 import {
   AGENT_PACKAGE_SCAN_TIMEOUT_MS,
   deriveNpmPackageUpdateTargets,
@@ -1294,10 +1293,10 @@ function normalizeAgentTypeName(value?: string | null): string {
 
 function tagVariantClass(prefix: string, value: string): string {
   const normalized = normalizeAgentTypeName(value).toLowerCase();
-  if (prefix === 'wide-project-hub' || prefix === 'token-stats-pill-hub') {
+  if (prefix === 'wide-project-hub') {
     return `${prefix}-${resolveHubColorVariantIndex(normalized)}`;
   }
-  if (prefix === 'wide-session-agent' || prefix === 'token-stats-pill-agent') {
+  if (prefix === 'wide-session-agent') {
     const explicitIndex = AGENT_TAG_VARIANT_INDEX[normalized];
     if (typeof explicitIndex === 'number') {
       return `${prefix}-${explicitIndex}`;
@@ -2774,12 +2773,6 @@ export function App() {
   const settingsDetailViewRef = useRef<SettingsDetailView>(settingsDetailView);
   const [desktopSidebarResizing, setDesktopSidebarResizing] = useState(false);
   const [desktopSidebarDraftWidth, setDesktopSidebarDraftWidth] = useState<number | null>(null);
-  const usageStreamRef = useRef<UsageStream | null>(null);
-  if (usageStreamRef.current === null) {
-    usageStreamRef.current = new UsageStream();
-  }
-  const [usageSnapshot, setUsageSnapshot] = useState<UsageSnapshot>({accounts: [], updatedAt: 0});
-  const [usagePanelOpen, setUsagePanelOpen] = useState(false);
   const [wheelMakerUpdateHubs, setWheelMakerUpdateHubs] = useState<Record<string, WheelMakerUpdateHubView>>({});
   const [wheelMakerUpdatesLoading, setWheelMakerUpdatesLoading] = useState(false);
   const [wheelMakerUpdatesError, setWheelMakerUpdatesError] = useState('');
@@ -3086,6 +3079,8 @@ export function App() {
 
   const [projects, setProjects] = useState<RegistryProject[]>([]);
   const [registryHubs, setRegistryHubs] = useState<RegistryHub[]>([]);
+  const usageStore = useMemo(() => new UsageStore(), []);
+  const [usageSnapshot, setUsageSnapshot] = useState<UsageViewSnapshot>({refreshing: false, providers: []});
   const [projectId, setProjectId] = useState('');
   const projectIdRef = useRef('');
   const projectsRef = useRef<RegistryProject[]>([]);
@@ -12592,32 +12587,33 @@ export function App() {
     });
   }, [registryAuth.state, autoConnecting, connected]);
 
+  useEffect(() => usageStore.subscribe(setUsageSnapshot), [usageStore]);
+
   useEffect(() => {
-    const stream = usageStreamRef.current;
-    if (!stream) {
-      return;
-    }
-    const refreshUsageAcrossHubs = () => {
-      service.listProjectSnapshot().then(snapshot => {
-        if (snapshot.projects.length > 0) {
-          setProjects(snapshot.projects);
-        }
-        setRegistryHubs(snapshot.hubs);
-        for (const hub of snapshot.hubs) {
-          service.scanTokenStats(hub.hubId).catch(() => undefined);
-        }
+    const hubIds = registryHubs.map(hub => hub.hubId).filter(Boolean);
+    usageStore.retainHubs(hubIds);
+    if (!connected) return;
+    let cancelled = false;
+    for (const hub of registryHubs) {
+      service.getHubState(hub.hubId, ['tokenStats']).then(state => {
+        if (cancelled) return;
+        const snapshot = parseHubSnapshot(state.sections.tokenStats?.data);
+        if (snapshot) usageStore.replaceHub(hub.hubId, snapshot);
       }).catch(() => undefined);
-    };
-    const offEvent = service.onEvent(env => stream.ingest(env as any));
-    const unsub = stream.subscribe(setUsageSnapshot);
-    refreshUsageAcrossHubs();
-    const interval = window.setInterval(refreshUsageAcrossHubs, 5 * 60 * 1000);
+    }
     return () => {
-      offEvent();
-      unsub();
-      window.clearInterval(interval);
+      cancelled = true;
     };
-  }, []);
+  }, [connected, registryHubs, usageStore]);
+
+  const refreshUsageAcrossHubs = useCallback(() => {
+    return Promise.allSettled(registryHubs.map(hub =>
+      service.refreshHubState(hub.hubId, ['tokenStats']).then(state => {
+        const snapshot = parseHubSnapshot(state.sections.tokenStats?.data);
+        if (snapshot) usageStore.replaceHub(hub.hubId, snapshot);
+      }),
+    ));
+  }, [registryHubs, usageStore]);
 
   const agentPackageActionKey = useCallback((hubId: string, packageName: string): string => {
     return `${hubId}:${packageName}`;
@@ -16275,6 +16271,10 @@ export function App() {
 
   useEffect(() => {
     const unsubscribeEvent = service.onEvent(event => {
+      if (event.method === RegistryMethods.HubStateUpdated) {
+        usageStore.ingest(event);
+        return;
+      }
       if (event.method === RegistryMethods.TerminalOutput && event.hubId) {
         const result = receiveTerminalOutput(
           terminalSyncRef.current,
@@ -16598,7 +16598,7 @@ export function App() {
       return (
         <button
           type="button"
-          className="token-stats-refresh-btn token-stats-refresh-inline"
+          className="settings-detail-refresh"
           onClick={() => refreshSkillManagement().catch(() => undefined)}
           disabled={skillsLoading}
         >
@@ -16610,7 +16610,7 @@ export function App() {
       return (
         <button
           type="button"
-          className="token-stats-refresh-btn token-stats-refresh-inline"
+          className="settings-detail-refresh"
           onClick={() => {
             refreshWheelMakerUpdates().catch(() => undefined);
             refreshWheelMakerReleaseHistory().catch(() => undefined);
@@ -16639,7 +16639,7 @@ export function App() {
       return (
         <button
           type="button"
-          className="token-stats-refresh-btn token-stats-refresh-inline"
+          className="settings-detail-refresh"
           onClick={() => refreshPortRelayStatus().catch(() => undefined)}
           disabled={portRelayLoading}
         >
@@ -16988,25 +16988,12 @@ export function App() {
     </button>
   );
 
-  const renderChatMenuUsageButton = () => (
-    <button
-      type="button"
-      className="chat-menu-icon-button chat-menu-usage-button"
-      onClick={() => setUsagePanelOpen(true)}
-      title="Agent usage"
-      aria-label="Agent usage"
-    >
-      <span className="codicon codicon-dashboard" aria-hidden="true" />
-    </button>
-  );
-
   const renderChatSessionHeader = (mobile: boolean) => {
     const chatSessionHeaderClassName = `sidebar-title-row chat-session-header${sessionSearchHeaderExpanded ? ' search-open' : ''}${mobile ? ' mobile' : ''}`;
     const chatSessionHeaderContent = (
       <>
         {!sessionSearchHeaderExpanded ? (
           <>
-            {renderChatMenuUsageButton()}
             {renderChatMenuSettingsButton()}
           </>
         ) : null}
@@ -19240,22 +19227,10 @@ export function App() {
               plan={selectedChatPlan}
             />
           ) : null}
-          {isWide ? <UsageCompactBar snapshot={usageSnapshot} onExpand={() => setUsagePanelOpen(true)} /> : null}
-          {usagePanelOpen ? (
-            <UsageCardPanel
+          {isWide && tab === 'chat' ? (
+            <UsageFeatureSurface
               snapshot={usageSnapshot}
-              onClose={() => setUsagePanelOpen(false)}
-              onRefresh={() => {
-                service.listProjectSnapshot().then(snapshot => {
-                  if (snapshot.projects.length > 0) {
-                    setProjects(snapshot.projects);
-                  }
-                  setRegistryHubs(snapshot.hubs);
-                  for (const hub of snapshot.hubs) {
-                    service.scanTokenStats(hub.hubId).catch(() => undefined);
-                  }
-                }).catch(() => undefined);
-              }}
+              onRefresh={() => { void refreshUsageAcrossHubs(); }}
             />
           ) : null}
           <div

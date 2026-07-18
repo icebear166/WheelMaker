@@ -1,15 +1,25 @@
+export type UsageProviderId = 'codex' | 'kimi' | 'zai' | 'deepseek';
+export type UsageScanStatus = 'idle' | 'scanning' | 'ready' | 'error';
+export type UsageProviderStatus = 'ok' | 'unavailable' | 'error';
+
 export interface UsageLimit {
-  id: string;        // "5h" | "week" | "mcp-month"
-  label: string;     // "5h window" | "Weekly" | "MCP monthly"
-  usedPercent: number;
-  resetsAt?: number; // unix seconds
+  id: string;
+  label: string;
+  remainingPercent: number;
+  resetsAt?: string;
+}
+
+export interface UsageIdentity {
+  kind?: string;
+  value?: string;
+  label?: string;
 }
 
 export interface UsageBalanceItem {
   currency: string;
   total: string;
-  granted: string;
-  toppedUp: string;
+  granted?: string;
+  toppedUp?: string;
 }
 
 export interface UsageBalance {
@@ -17,68 +27,80 @@ export interface UsageBalance {
   items: UsageBalanceItem[];
 }
 
-export interface UsageAccountIdentity {
-  email?: string;
-  accountId?: string;
-  userId?: string;
-  customerNumber?: string;
-}
-
 export interface UsageAccount {
-  provider: string;
-  identity: UsageAccountIdentity;
-  status: 'ok' | 'error';
+  localId: string;
+  identity: UsageIdentity;
+  status: UsageProviderStatus;
+  plan?: string;
   message?: string;
   limits: UsageLimit[];
   balance?: UsageBalance;
+}
+
+export interface UsageProviderSnapshot {
+  id: UsageProviderId;
+  name: string;
+  status: UsageProviderStatus;
+  message?: string;
+  accounts: UsageAccount[];
+}
+
+export interface UsageHubSnapshot {
+  hubId: string;
+  generation: number;
+  status: UsageScanStatus;
+  startedAt?: string;
+  updatedAt?: string;
+  nextScanAt?: string;
+  message?: string;
+  providers: UsageProviderSnapshot[];
+}
+
+export interface UsageViewAccount extends UsageAccount {
   hubIds: string[];
 }
 
-export type Tightness = 'default' | 'warning' | 'danger';
-
-export function remainingPercent(limit: UsageLimit): number {
-  return Math.max(0, Math.min(100, 100 - limit.usedPercent));
+export interface UsageProviderView {
+  id: UsageProviderId;
+  name: string;
+  status: UsageProviderStatus;
+  accountCount: number;
+  remainingPercent?: number;
+  accounts: UsageViewAccount[];
+  hubs?: Array<{hubId: string; status: UsageProviderStatus; message?: string}>;
 }
 
-export function tightnessColor(remaining: number): Tightness {
-  if (remaining < 10) return 'danger';
-  if (remaining < 30) return 'warning';
-  return 'default';
+export interface UsageViewSnapshot {
+  refreshing: boolean;
+  updatedAt?: string;
+  providers: UsageProviderView[];
 }
 
-export function labelForProvider(provider: string): string {
-  switch (provider) {
-    case 'codex': return 'Codex';
-    case 'kimi': return 'Kimi';
-    case 'zai': return 'ZAI';
-    case 'deepseek': return 'DeepSeek';
-    default: return provider;
-  }
+export type UsageTone = 'normal' | 'warning' | 'danger';
+
+export function tightnessTone(remainingPercent: number): UsageTone {
+  if (remainingPercent < 10) return 'danger';
+  if (remainingPercent <= 30) return 'warning';
+  return 'normal';
 }
 
-// formatResetCountdown renders a reset timestamp as a relative phrase
-// ("in 2h 14m"), which stays useful longer than an absolute locale string.
-export function formatResetCountdown(resetsAt: number | undefined, now: number): string | null {
+export function formatResetCountdown(resetsAt?: string, now = Date.now()): string | null {
   if (!resetsAt) return null;
-  const deltaMs = resetsAt * 1000 - now;
-  if (deltaMs <= 0) return 'soon';
-  const minutes = Math.floor(deltaMs / 60000);
-  if (minutes < 1) return 'in <1m';
+  const reset = Date.parse(resetsAt);
+  if (!Number.isFinite(reset)) return null;
+  const minutes = Math.max(0, Math.ceil((reset - now) / 60_000));
+  if (minutes <= 0) return 'soon';
   if (minutes < 60) return `in ${minutes}m`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 48) {
-    const remMinutes = minutes % 60;
-    return remMinutes > 0 ? `in ${hours}h ${remMinutes}m` : `in ${hours}h`;
-  }
-  const days = Math.floor(hours / 24);
-  const remHours = hours % 24;
-  return remHours > 0 ? `in ${days}d ${remHours}h` : `in ${days}d`;
+  if (hours < 24) return `in ${hours}h ${minutes % 60}m`;
+  return `in ${Math.floor(hours / 24)}d ${hours % 24}h`;
 }
 
-// formatUpdatedAgo renders the snapshot refresh time as a short relative phrase.
-export function formatUpdatedAgo(updatedAt: number, now: number): string {
+export function formatUpdatedAgo(updatedAt?: string, now = Date.now()): string {
   if (!updatedAt) return '';
-  const seconds = Math.max(0, Math.floor((now - updatedAt) / 1000));
+  const updated = Date.parse(updatedAt);
+  if (!Number.isFinite(updated)) return '';
+  const seconds = Math.max(0, Math.floor((now - updated) / 1000));
   if (seconds < 10) return 'just now';
   if (seconds < 60) return `${seconds}s ago`;
   const minutes = Math.floor(seconds / 60);
@@ -86,29 +108,7 @@ export function formatUpdatedAgo(updatedAt: number, now: number): string {
   return `${Math.floor(minutes / 60)}h ago`;
 }
 
-export function accountIdentityKey(provider: string, identity: UsageAccountIdentity): string {
-  const id = identity.email ?? identity.accountId ?? identity.userId ?? identity.customerNumber ?? '';
-  return `${provider}:${id.toLowerCase()}`;
-}
-
-type HubAccount = Omit<UsageAccount, 'hubIds'> & {hubId: string};
-
-export function mergeAccountsAcrossHubs(accounts: HubAccount[]): UsageAccount[] {
-  const map = new Map<string, UsageAccount>();
-  for (const a of accounts) {
-    const key = accountIdentityKey(a.provider, a.identity);
-    const existing = map.get(key);
-    if (existing) {
-      if (!existing.hubIds.includes(a.hubId)) existing.hubIds.push(a.hubId);
-      if (existing.status === 'error' && a.status === 'ok') {
-        existing.status = 'ok';
-        existing.limits = a.limits;
-        existing.balance = a.balance;
-        existing.message = undefined;
-      }
-      continue;
-    }
-    map.set(key, {...a, hubIds: [a.hubId]});
-  }
-  return Array.from(map.values());
+export function formatResetUTC(resetsAt?: string): string {
+  if (!resetsAt || !Number.isFinite(Date.parse(resetsAt))) return '';
+  return resetsAt.replace('T', ' ').replace(/\.000Z$/, 'Z').replace(/Z$/, ' UTC');
 }

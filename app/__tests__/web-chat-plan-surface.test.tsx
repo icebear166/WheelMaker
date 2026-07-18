@@ -72,11 +72,11 @@ describe('ChatPlanSurface', () => {
 
     expect(planSource).toContain("useChatEdgeSurfaceGeometry('left'");
     expect(stylesCss).toContain(
-      '.chat-recent-sessions-surface.desktop .chat-edge-surface-content,\n.chat-plan-surface.desktop .chat-edge-surface-glass,\n.chat-plan-surface.desktop .chat-edge-surface-content {',
+      '.chat-recent-sessions-surface.desktop .chat-edge-surface-content,\n.chat-plan-surface.desktop .chat-edge-surface-glass,\n.chat-plan-surface.desktop .chat-edge-surface-content,\n.chat-function-surface.desktop .chat-edge-surface-glass,\n.chat-function-surface.desktop .chat-edge-surface-content {',
     );
     expect(mainSource).toContain('<ChatPlanSurface\n              mode="mobile"');
     expect(stylesCss).toContain(
-      '.chat-recent-sessions-surface.desktop:is(:hover, :focus-within),\n.chat-plan-surface.desktop:is(:hover, :focus-within) {',
+      '.chat-recent-sessions-surface.desktop:is(:hover, :focus-within),\n.chat-plan-surface.desktop:is(:hover, :focus-within),\n.chat-function-surface.desktop:is(:hover, :focus-within) {',
     );
     expect(stylesCss).not.toContain('.chat-edge-surface-stack:is(:hover, :focus-within)');
   });

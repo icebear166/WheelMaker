@@ -5,7 +5,21 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/swm8023/wheelmaker/internal/hub/usage"
 )
+
+func TestHubStateReplaceSectionAtomically(t *testing.T) {
+	manager := newHubStateManager("hub-a", nil)
+	manager.replaceSection("tokenStats", hubStateSection{
+		Status: hubStateSectionStatusReady,
+		Data:   usage.Snapshot{HubID: "hub-a", Generation: 2, Status: usage.ScanReady},
+	})
+	got := manager.get([]string{"tokenStats"}).Sections["tokenStats"]
+	if got.Status != hubStateSectionStatusReady {
+		t.Fatalf("status=%s", got.Status)
+	}
+}
 
 func TestHubStateManagerGetStartsEmpty(t *testing.T) {
 	manager := newHubStateManager("hub-a", nil)

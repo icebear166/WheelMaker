@@ -540,58 +540,11 @@ func TestReporterRespondsToHubStateGet(t *testing.T) {
 		if state["hubId"] != "hub-state-get" {
 			t.Fatalf("state hubId=%v, want hub-state-get", state["hubId"])
 		}
-		if state["status"] != "empty" {
-			t.Fatalf("state status=%v, want empty", state["status"])
+		if state["status"] != "refreshing" && state["status"] != "ready" {
+			t.Fatalf("state status=%v, want startup limits scan", state["status"])
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("did not receive hub.state.get response from reporter")
-	}
-}
-
-func TestReporterRespondsToHubStateRefresh(t *testing.T) {
-	respSeen := make(chan testEnvelope, 1)
-	errSeen := make(chan error, 1)
-
-	ts := newFakeReporterRegistry(t, "hub-state-refresh", testEnvelope{
-		RequestID: 100,
-		Type:      "request",
-		Method:    rp.RegistryMethodHubStateRefresh,
-		HubID:     "hub-state-refresh",
-		Payload: map[string]any{
-			"sections": []any{"tokenStats"},
-		},
-	}, respSeen, errSeen)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	toolHandler := &stubToolCommandHandler{response: map[string]any{"ok": true, "providers": []any{}}}
-	reporter := NewReporter(ReporterConfig{
-		Server:            strings.TrimPrefix(ts.URL, "http://"),
-		HubID:             "hub-state-refresh",
-		ReconnectInterval: 50 * time.Millisecond,
-		StateDir:          t.TempDir(),
-	}, nil)
-	reporter.toolHandler = toolHandler
-
-	done := make(chan error, 1)
-	go func() { done <- reporter.Run(ctx) }()
-	defer stopReporterForTest(t, cancel, done)
-
-	select {
-	case err := <-errSeen:
-		t.Fatalf("fake registry error: %v", err)
-	case resp := <-respSeen:
-		if resp.Type != "response" || resp.Method != rp.RegistryMethodHubStateRefresh {
-			t.Fatalf("unexpected hub.state.refresh response: %#v", resp)
-		}
-		// tokenStats refresh now runs async via streaming (tokenStats.update
-		// events). The immediate response just acks; no toolHandler call.
-		method, _, _ := toolHandler.snapshot()
-		if method != "" {
-			t.Fatalf("tokenStats refresh should not invoke toolHandler, got method=%q", method)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("did not receive hub.state.refresh response from reporter")
 	}
 }
 
@@ -658,7 +611,7 @@ func TestHubStateToolHandlingSerializesSharedHandler(t *testing.T) {
 	errCh := make(chan error, 20)
 	for i := 0; i < 20; i++ {
 		go func() {
-			_, err := reporter.runHubStateTool(context.Background(), hubToolMethodToken, map[string]any{
+			_, err := reporter.runHubStateTool(context.Background(), hubToolMethodNPM, map[string]any{
 				"action": "scan",
 				"hubId":  "hub-state-serialized",
 			})
@@ -700,7 +653,6 @@ func TestHubStateActionValidationMatchesAdapters(t *testing.T) {
 		{section: hubStateSectionSkills, action: "uninstall"},
 		{section: hubStateSectionSkills, action: "update"},
 		{section: hubStateSectionSkills, action: "detail", params: map[string]any{"scope": "hub", "skillName": "debug"}},
-		{section: hubStateSectionTokenStats, action: "providers"},
 		{
 			section: hubStateSectionFileIndex,
 			action:  "rebuild",
@@ -1304,8 +1256,8 @@ func TestReporterDebugEnvelopeRecursivelyRedactsSecretsForEveryMethod(t *testing
 
 func TestReporterTerminalPublishQueueIsBounded(t *testing.T) {
 	reporter := NewReporter(ReporterConfig{HubID: "hub-terminal-backlog"}, nil)
-	sink := newTerminalEventSink()
-	reporter.terminalEventSink = sink
+	sink := newHubEventSink()
+	reporter.hubEventSink = sink
 	for i := 0; i < cap(sink.events); i++ {
 		if err := reporter.PublishTerminalEvent(rp.RegistryMethodTerminalOutput, rp.TerminalOutputEvent{
 			TerminalID: "term-1", RunID: "run-1", Seq: uint64(i + 1), Data: "YQ==",

@@ -137,13 +137,15 @@ export function MobileSettingsShortcutBar({
   onRootSelect,
   onDetailSelect,
 }: MobileSettingsShortcutBarProps) {
+  const shortcutCount = MOBILE_SETTINGS_SHORTCUTS.length + 1;
+  const shortcutStyle = {'--settings-shortcut-count': shortcutCount} as React.CSSProperties;
   return (
     <nav
       className="mobile-settings-shortcut-bar"
       data-active-index={activeIndex}
       aria-label="Settings shortcuts"
     >
-      <div className="mobile-settings-shortcut-track">
+      <div className="mobile-settings-shortcut-track" style={shortcutStyle}>
         <button
           type="button"
           className={`mobile-settings-shortcut-button${rootActive ? ' active' : ''}`}

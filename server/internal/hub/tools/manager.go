@@ -40,7 +40,6 @@ type Manager struct {
 	npmCommand    *NPMCommand
 	updateCommand *UpdateCommand
 	skillsCommand *SkillsCommand
-	tokenCommand  *TokenCommand
 }
 
 func NewManager(config ManagerConfig) *Manager {
@@ -63,7 +62,6 @@ func NewManager(config ManagerConfig) *Manager {
 			HomeDir:         config.HomeDir,
 			OnOperationDone: config.OnSkillsOperationDone,
 		}),
-		tokenCommand: NewTokenCommand(),
 	}
 }
 
@@ -107,12 +105,6 @@ func (m *Manager) Handle(ctx context.Context, method string, payload json.RawMes
 		m.skillsCommand.SetProjects(m.cfg.Projects)
 		out, err := m.skillsCommand.Handle(ctx, payload)
 		return out, skillsErr(err)
-	case "cmd.token":
-		if m.tokenCommand == nil {
-			m.tokenCommand = NewTokenCommand()
-		}
-		out, err := m.tokenCommand.Handle(ctx, payload)
-		return out, tokenErr(err)
 	default:
 		return nil, &CommandError{Code: rp.CodeInvalidArgument, Message: "unsupported tools command"}
 	}
@@ -133,13 +125,6 @@ func updateErr(err *updateCommandError) *CommandError {
 }
 
 func skillsErr(err *skillsCommandError) *CommandError {
-	if err == nil {
-		return nil
-	}
-	return &CommandError{Code: err.Code, Message: err.Message}
-}
-
-func tokenErr(err *tokenCommandError) *CommandError {
 	if err == nil {
 		return nil
 	}

@@ -5661,7 +5661,8 @@
 }
 
 .chat-plan-surface.desktop,
-.chat-recent-sessions-surface.desktop {
+.chat-recent-sessions-surface.desktop,
+.chat-function-surface.desktop {
   --chat-edge-hidden-alpha: 3%;
   border: 0;
   background: transparent;
@@ -5675,7 +5676,8 @@
 }
 
 .chat-recent-sessions-surface.desktop,
-.chat-plan-surface.desktop {
+.chat-plan-surface.desktop,
+.chat-function-surface.desktop {
   --chat-edge-fade-start: calc(100% - 28px);
   --chat-edge-fade-end: 100%;
 }
@@ -5711,7 +5713,9 @@
 .chat-recent-sessions-surface.desktop .chat-edge-surface-glass,
 .chat-recent-sessions-surface.desktop .chat-edge-surface-content,
 .chat-plan-surface.desktop .chat-edge-surface-glass,
-.chat-plan-surface.desktop .chat-edge-surface-content {
+.chat-plan-surface.desktop .chat-edge-surface-content,
+.chat-function-surface.desktop .chat-edge-surface-glass,
+.chat-function-surface.desktop .chat-edge-surface-content {
   -webkit-mask-image: linear-gradient(
     to right,
     #000 0%,
@@ -5729,7 +5733,8 @@
 }
 
 .chat-recent-sessions-surface.desktop:is(:hover, :focus-within),
-.chat-plan-surface.desktop:is(:hover, :focus-within) {
+.chat-plan-surface.desktop:is(:hover, :focus-within),
+.chat-function-surface.desktop:is(:hover, :focus-within) {
   --chat-edge-hidden-alpha: 100%;
 }
 
@@ -5755,7 +5760,8 @@
   }
 
   .chat-plan-surface.desktop,
-  .chat-recent-sessions-surface.desktop {
+  .chat-recent-sessions-surface.desktop,
+  .chat-function-surface.desktop {
     --chat-edge-hidden-alpha: 100%;
   }
 }

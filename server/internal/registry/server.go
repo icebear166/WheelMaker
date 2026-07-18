@@ -20,7 +20,6 @@ import (
 	"github.com/swm8023/wheelmaker/internal/portrelay"
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
 	"github.com/swm8023/wheelmaker/internal/security"
-	"github.com/swm8023/wheelmaker/internal/serverdata"
 	speechprovider "github.com/swm8023/wheelmaker/internal/speech"
 	ttsprovider "github.com/swm8023/wheelmaker/internal/tts"
 )
@@ -282,18 +281,6 @@ type connectionState struct {
 	clientName      string
 	seenRequestIDs  *requestIDWindow
 	lastProjectSeq  map[string]int64
-}
-
-type hubStatePayloadError struct {
-	code    string
-	message string
-}
-
-func (e *hubStatePayloadError) Error() string {
-	if e == nil {
-		return ""
-	}
-	return e.message
 }
 
 type requestDispatcher struct {
@@ -701,9 +688,7 @@ func (s *Server) handleTerminalEvent(state *connectionState, in envelope) {
 	switch in.Method {
 	case rp.RegistryMethodTerminalInput:
 		s.forwardTerminalInput(state, in)
-	case rp.RegistryMethodTerminalOutput, rp.RegistryMethodTerminalChanged:
-		s.broadcastTerminalHubEvent(state, in)
-	case rp.RegistryMethodTokenStatsUpdate:
+	case rp.RegistryMethodTerminalOutput, rp.RegistryMethodTerminalChanged, rp.RegistryMethodHubStateUpdated:
 		s.broadcastHubEvent(state, in)
 	default:
 		_ = s.writeError(state.peer, 0, in.Method, codeInvalidArgument, "unsupported event method", map[string]any{"method": in.Method})
@@ -737,7 +722,7 @@ func (s *Server) forwardTerminalInput(state *connectionState, in envelope) {
 	}
 }
 
-func (s *Server) broadcastTerminalHubEvent(state *connectionState, in envelope) {
+func (s *Server) broadcastHubEvent(state *connectionState, in envelope) {
 	hubID := strings.TrimSpace(in.HubID)
 	if hubID == "" {
 		_ = s.writeError(state.peer, 0, in.Method, codeInvalidArgument, "hubId is required", nil)
@@ -771,42 +756,6 @@ func (s *Server) broadcastTerminalHubEvent(state *connectionState, in envelope) 
 		} else {
 			_ = peer.write(msg)
 		}
-	}
-}
-
-// broadcastHubEvent forwards a hub-originated event (e.g. tokenStats.update) to
-// all connected client peers whose scope matches the hub. Uses the generic
-// write path (no dedicated queue like terminal output).
-func (s *Server) broadcastHubEvent(state *connectionState, in envelope) {
-	hubID := strings.TrimSpace(in.HubID)
-	if hubID == "" {
-		_ = s.writeError(state.peer, 0, in.Method, codeInvalidArgument, "hubId is required", nil)
-		return
-	}
-	if state.hubID == "" || state.hubID != hubID {
-		_ = s.writeError(state.peer, 0, in.Method, codeForbidden, "hubId mismatch", nil)
-		return
-	}
-	s.mu.RLock()
-	peers := make([]*peerConn, 0, len(s.clientPeers))
-	for _, client := range s.clientPeers {
-		if client == nil || client.peer == nil {
-			continue
-		}
-		if client.scopeHubID != "" && client.scopeHubID != hubID {
-			continue
-		}
-		peers = append(peers, client.peer)
-	}
-	s.mu.RUnlock()
-	msg := envelope{
-		Type:    rp.RegistryEnvelopeTypeEvent,
-		Method:  in.Method,
-		HubID:   hubID,
-		Payload: in.Payload,
-	}
-	for _, peer := range peers {
-		_ = peer.write(msg)
 	}
 }
 
@@ -1239,13 +1188,7 @@ func (s *Server) executeHubStateRequest(state *connectionState, in envelope) env
 		resp.HubID = hubID
 		return resp
 	}
-	preparedPayload, payloadErr := s.prepareHubStatePayload(in)
-	if payloadErr != nil {
-		resp := s.errorEnvelope(in.Method, payloadErr.code, payloadErr.message, nil)
-		resp.HubID = hubID
-		return resp
-	}
-
+	preparedPayload := s.prepareHubStatePayload(in)
 	s.mu.RLock()
 	hub := s.hubs[hubID]
 	hubPeer := s.hubPeers[hubID]
@@ -1300,61 +1243,10 @@ func (s *Server) executeHubStateRequest(state *connectionState, in envelope) env
 	}
 }
 
-// prepareHubStatePayload injects backend credentials only for the one action
-// that requires them. Other hub-state requests pass through unchanged.
-func (s *Server) prepareHubStatePayload(in envelope) (json.RawMessage, *hubStatePayloadError) {
-	if in.Method != rp.RegistryMethodHubStateAction {
-		return in.Payload, nil
-	}
-	var selector struct {
-		Section string `json:"section"`
-		Action  string `json:"action"`
-	}
-	if err := decodePayload(in.Payload, &selector); err != nil ||
-		strings.TrimSpace(selector.Section) != "tokenStats" ||
-		strings.TrimSpace(selector.Action) != "deepseekStats" {
-		return in.Payload, nil
-	}
-
-	var request struct {
-		Section string          `json:"section"`
-		Action  string          `json:"action"`
-		Params  json.RawMessage `json:"params,omitempty"`
-	}
-	if err := decodeStrictPayload(in.Payload, &request); err != nil {
-		return nil, &hubStatePayloadError{code: codeInvalidArgument, message: "invalid DeepSeek stats payload"}
-	}
-	var params struct {
-		RangeType string `json:"rangeType,omitempty"`
-		Month     string `json:"month,omitempty"`
-	}
-	if err := decodeStrictPayload(request.Params, &params); err != nil {
-		return nil, &hubStatePayloadError{code: codeInvalidArgument, message: "DeepSeek stats params only allow rangeType and month"}
-	}
-
-	if s.serverData == nil {
-		return nil, &hubStatePayloadError{code: "not_configured", message: "DeepSeek is not configured"}
-	}
-	secret, _, err := s.serverData.Secret(serverdata.SecretDeepSeek)
-	if err != nil {
-		return nil, &hubStatePayloadError{code: codeInternal, message: "read DeepSeek backend secret failed"}
-	}
-	if secret == "" {
-		return nil, &hubStatePayloadError{code: "not_configured", message: "DeepSeek is not configured"}
-	}
-	prepared, err := json.Marshal(map[string]any{
-		"section": "tokenStats",
-		"action":  "deepseekStats",
-		"params": map[string]any{
-			"apiKey":    secret,
-			"rangeType": params.RangeType,
-			"month":     params.Month,
-		},
-	})
-	if err != nil {
-		return nil, &hubStatePayloadError{code: codeInternal, message: "prepare DeepSeek stats request failed"}
-	}
-	return prepared, nil
+// prepareHubStatePayload deliberately keeps the Registry transport-only. HubState
+// payloads, including provider-specific sections, are forwarded byte-for-byte.
+func (s *Server) prepareHubStatePayload(in envelope) json.RawMessage {
+	return in.Payload
 }
 
 func (s *Server) handleForwardRequest(clientPeer *peerConn, state *connectionState, in envelope) {

@@ -26,6 +26,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/swm8023/wheelmaker/internal/hub/tools"
+	"github.com/swm8023/wheelmaker/internal/hub/usage"
 	"github.com/swm8023/wheelmaker/internal/portrelay"
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
 	"github.com/swm8023/wheelmaker/internal/security"
@@ -70,33 +71,18 @@ type TerminalHandler interface {
 }
 
 var errTerminalPublishBacklog = errors.New("terminal publish backlog is full")
-var errTokenStatsPublishBacklog = errors.New("token stats publish backlog is full")
 
-type terminalEventSink struct {
+type hubEventSink struct {
 	events chan envelope
 	done   chan struct{}
 	once   sync.Once
 }
 
-func newTerminalEventSink() *terminalEventSink {
-	return &terminalEventSink{events: make(chan envelope, 256), done: make(chan struct{})}
+func newHubEventSink() *hubEventSink {
+	return &hubEventSink{events: make(chan envelope, 256), done: make(chan struct{})}
 }
 
-func (s *terminalEventSink) stop() {
-	s.once.Do(func() { close(s.done) })
-}
-
-type tokenStatsEventSink struct {
-	events chan envelope
-	done   chan struct{}
-	once   sync.Once
-}
-
-func newTokenStatsEventSink() *tokenStatsEventSink {
-	return &tokenStatsEventSink{events: make(chan envelope, 64), done: make(chan struct{})}
-}
-
-func (s *tokenStatsEventSink) stop() {
+func (s *hubEventSink) stop() {
 	s.once.Do(func() { close(s.done) })
 }
 
@@ -131,15 +117,15 @@ type Reporter struct {
 	requestSeq   atomic.Int64
 	updateSeq    atomic.Int64
 
-	connectionEpoch   int64
-	toolHandlerMu     sync.Mutex
-	toolHandler       toolCommandHandler
-	relayClient       *portrelay.HubClient
-	fileIndex         *projectFileIndexManager
-	hubStateManager   *HubStateManager
-	terminalHandler     TerminalHandler
-	terminalEventSink   *terminalEventSink
-	tokenStatsEventSink *tokenStatsEventSink
+	connectionEpoch int64
+	toolHandlerMu   sync.Mutex
+	toolHandler     toolCommandHandler
+	relayClient     *portrelay.HubClient
+	fileIndex       *projectFileIndexManager
+	hubStateManager *HubStateManager
+	usageService    *usage.Service
+	terminalHandler TerminalHandler
+	hubEventSink    *hubEventSink
 }
 
 // NewReporter creates a Reporter.
@@ -194,12 +180,22 @@ func NewReporter(cfg ReporterConfig, projects []ProjectInfo) *Reporter {
 		OnSkillsOperationDone: r.refreshSkillsAgentProfiles,
 	})
 	r.hubStateManager = newHubStateManager(r.cfg.HubID, r.hubStateSectionHandlers())
+	r.usageService = usage.NewService(usage.ServiceOptions{
+		HubID:     r.cfg.HubID,
+		Collector: usage.NewLocalCollector(""),
+		OnSnapshot: func(snapshot usage.Snapshot) {
+			r.updateUsageSnapshot(snapshot)
+		},
+	})
 	r.requestSeq.Store(2)
 	return r
 }
 
 // Run holds a persistent connection; reconnects on failure until ctx cancelled.
 func (r *Reporter) Run(ctx context.Context) error {
+	if r.usageService != nil {
+		r.usageService.Start(ctx)
+	}
 	for {
 		if err := r.runSession(ctx); err != nil && ctx.Err() == nil {
 			registryLogger("").Warn("reporter session ended: %v", err)
@@ -209,6 +205,37 @@ func (r *Reporter) Run(ctx context.Context) error {
 			return nil
 		case <-time.After(r.cfg.ReconnectInterval):
 		}
+	}
+}
+
+func (r *Reporter) updateUsageSnapshot(snapshot usage.Snapshot) {
+	section := hubStateSection{
+		Status: usageSectionStatus(snapshot.Status),
+		Data:   snapshot,
+		Error:  snapshot.Message,
+	}
+	if snapshot.StartedAt != nil {
+		section.StartedAt = formatHubStateTime(*snapshot.StartedAt)
+	}
+	if snapshot.UpdatedAt != nil {
+		section.UpdatedAt = formatHubStateTime(*snapshot.UpdatedAt)
+	}
+	state := r.ensureHubStateManager().replaceSection(hubStateSectionTokenStats, section)
+	_ = r.publishHubEvent(rp.RegistryMethodHubStateUpdated, map[string]any{
+		"state": state, "sections": []string{hubStateSectionTokenStats}, "reason": "snapshot",
+	})
+}
+
+func usageSectionStatus(status usage.ScanStatus) hubStateSectionStatus {
+	switch status {
+	case usage.ScanScanning:
+		return hubStateSectionStatusRefreshing
+	case usage.ScanReady:
+		return hubStateSectionStatusReady
+	case usage.ScanError:
+		return hubStateSectionStatusError
+	default:
+		return hubStateSectionStatusEmpty
 	}
 }
 
@@ -340,33 +367,19 @@ func (r *Reporter) runSession(ctx context.Context) error {
 	if err := r.handshake(conn); err != nil {
 		return err
 	}
-	sink := newTerminalEventSink()
+	sink := newHubEventSink()
 	r.mu.Lock()
-	r.terminalEventSink = sink
+	r.hubEventSink = sink
 	r.mu.Unlock()
 	defer func() {
 		sink.stop()
 		r.mu.Lock()
-		if r.terminalEventSink == sink {
-			r.terminalEventSink = nil
+		if r.hubEventSink == sink {
+			r.hubEventSink = nil
 		}
 		r.mu.Unlock()
 	}()
-	go r.runTerminalEventSink(conn, sink)
-
-	tokenSink := newTokenStatsEventSink()
-	r.mu.Lock()
-	r.tokenStatsEventSink = tokenSink
-	r.mu.Unlock()
-	defer func() {
-		tokenSink.stop()
-		r.mu.Lock()
-		if r.tokenStatsEventSink == tokenSink {
-			r.tokenStatsEventSink = nil
-		}
-		r.mu.Unlock()
-	}()
-	go r.runTokenStatsEventSink(conn, tokenSink)
+	go r.runHubEventSink(conn, sink)
 
 	keepaliveDone := make(chan struct{})
 	defer close(keepaliveDone)
@@ -595,10 +608,6 @@ func validateHubStateAction(section string, action string) error {
 		},
 		hubStateSectionFileIndex: {
 			"rebuild": {},
-		},
-		hubStateSectionTokenStats: {
-			"providers":     {},
-			"deepseekStats": {},
 		},
 	}
 	sectionActions, ok := allowedActions[section]
@@ -829,8 +838,12 @@ func (r *Reporter) PublishProjectEvent(projectID string, method string, payload 
 }
 
 func (r *Reporter) PublishTerminalEvent(method string, payload any) error {
+	return r.publishHubEvent(method, payload)
+}
+
+func (r *Reporter) publishHubEvent(method string, payload any) error {
 	r.mu.RLock()
-	sink := r.terminalEventSink
+	sink := r.hubEventSink
 	r.mu.RUnlock()
 	if sink == nil {
 		return nil
@@ -851,46 +864,7 @@ func (r *Reporter) PublishTerminalEvent(method string, payload any) error {
 	}
 }
 
-func (r *Reporter) runTerminalEventSink(conn *websocket.Conn, sink *terminalEventSink) {
-	for {
-		select {
-		case event := <-sink.events:
-			if err := r.writeJSON(conn, "->", event); err != nil {
-				_ = conn.Close()
-				return
-			}
-		case <-sink.done:
-			return
-		}
-	}
-}
-
-// PublishTokenStatsEvent pushes one token-stats incremental update to the
-// server. Non-blocking; drops on backlog (the next full refresh will recover).
-func (r *Reporter) PublishTokenStatsEvent(payload any) error {
-	r.mu.RLock()
-	sink := r.tokenStatsEventSink
-	r.mu.RUnlock()
-	if sink == nil {
-		return nil
-	}
-	event := envelope{
-		Type:    rp.RegistryEnvelopeTypeEvent,
-		Method:  "tokenStats.update",
-		HubID:   r.cfg.HubID,
-		Payload: rp.MustRaw(payload),
-	}
-	select {
-	case sink.events <- event:
-		return nil
-	case <-sink.done:
-		return nil
-	default:
-		return errTokenStatsPublishBacklog
-	}
-}
-
-func (r *Reporter) runTokenStatsEventSink(conn *websocket.Conn, sink *tokenStatsEventSink) {
+func (r *Reporter) runHubEventSink(conn *websocket.Conn, sink *hubEventSink) {
 	for {
 		select {
 		case event := <-sink.events:
