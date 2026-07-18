@@ -89,6 +89,7 @@ export type PersistedGlobalState = {
   wrapLines: boolean;
   showLineNumbers: boolean;
   hideToolCalls: boolean;
+  showLimitsMonitor: boolean;
   messageViewerEnabled: boolean;
   logLevel: PersistedLogLevel;
   disableFileCache: boolean;
@@ -317,6 +318,7 @@ const GLOBAL_KEYS = {
   wrapLines: 'wrapLines',
   showLineNumbers: 'showLineNumbers',
   hideToolCalls: 'hideToolCalls',
+  showLimitsMonitor: 'showLimitsMonitor',
   messageViewerEnabled: 'messageViewerEnabled',
   logLevel: 'logLevel',
   disableFileCache: 'disableFileCache',
@@ -355,6 +357,7 @@ function defaultGlobalState(): PersistedGlobalState {
     wrapLines: false,
     showLineNumbers: true,
     hideToolCalls: true,
+    showLimitsMonitor: true,
     messageViewerEnabled: false,
     logLevel: 'warning',
     disableFileCache: false,
@@ -599,6 +602,7 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
     wrapLines: typeof input.wrapLines === 'boolean' ? input.wrapLines : base.wrapLines,
     showLineNumbers: typeof input.showLineNumbers === 'boolean' ? input.showLineNumbers : base.showLineNumbers,
     hideToolCalls: typeof input.hideToolCalls === 'boolean' ? input.hideToolCalls : base.hideToolCalls,
+    showLimitsMonitor: typeof input.showLimitsMonitor === 'boolean' ? input.showLimitsMonitor : base.showLimitsMonitor,
     messageViewerEnabled: typeof input.messageViewerEnabled === 'boolean' ? input.messageViewerEnabled : base.messageViewerEnabled,
     logLevel: normalizePersistedLogLevel(input.logLevel, base.logLevel),
     disableFileCache: typeof input.disableFileCache === 'boolean' ? input.disableFileCache : base.disableFileCache,
@@ -1277,6 +1281,7 @@ export class WorkspacePersistenceRepository {
       {k: GLOBAL_KEYS.wrapLines, v: serialize(this.state.global.wrapLines), updatedAt},
       {k: GLOBAL_KEYS.showLineNumbers, v: serialize(this.state.global.showLineNumbers), updatedAt},
       {k: GLOBAL_KEYS.hideToolCalls, v: serialize(this.state.global.hideToolCalls), updatedAt},
+      {k: GLOBAL_KEYS.showLimitsMonitor, v: serialize(this.state.global.showLimitsMonitor), updatedAt},
       {k: GLOBAL_KEYS.messageViewerEnabled, v: serialize(this.state.global.messageViewerEnabled), updatedAt},
       {k: GLOBAL_KEYS.logLevel, v: serialize(this.state.global.logLevel), updatedAt},
       {k: GLOBAL_KEYS.disableFileCache, v: serialize(this.state.global.disableFileCache), updatedAt},

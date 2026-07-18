@@ -2537,6 +2537,11 @@ export function App() {
       ? persistedGlobal.hideToolCalls
       : true,
   );
+  const [showLimitsMonitor, setShowLimitsMonitor] = useState(
+    typeof persistedGlobal.showLimitsMonitor === 'boolean'
+      ? persistedGlobal.showLimitsMonitor
+      : true,
+  );
   const [messageViewerEnabled, setMessageViewerEnabled] = useState(
     typeof persistedGlobal.messageViewerEnabled === 'boolean'
       ? persistedGlobal.messageViewerEnabled
@@ -6102,6 +6107,7 @@ export function App() {
       wrapLines,
       showLineNumbers,
       hideToolCalls,
+      showLimitsMonitor,
       messageViewerEnabled,
       logLevel,
       promptCompletionNotificationsEnabled,
@@ -6129,6 +6135,7 @@ export function App() {
     wrapLines,
     showLineNumbers,
     hideToolCalls,
+    showLimitsMonitor,
     messageViewerEnabled,
     logLevel,
     promptCompletionNotificationsEnabled,
@@ -16918,6 +16925,8 @@ export function App() {
         setMobileEnterKeyBehavior={setMobileEnterKeyBehavior}
         hideToolCalls={hideToolCalls}
         setHideToolCalls={setHideToolCalls}
+        showLimitsMonitor={showLimitsMonitor}
+        setShowLimitsMonitor={setShowLimitsMonitor}
         promptCompletionNotificationsEnabled={promptCompletionNotificationsEnabled}
         setPromptCompletionNotificationsEnabled={setPromptCompletionNotificationsEnabled}
         handlePromptCompletionNotificationsChange={handlePromptCompletionNotificationsChange}
@@ -19215,7 +19224,7 @@ export function App() {
               plan={selectedChatPlan}
             />
           ) : null}
-          {isWide && tab === 'chat' ? (
+          {isWide && tab === 'chat' && showLimitsMonitor ? (
             <UsageFeatureSurface
               snapshot={usageSnapshot}
               onRefresh={() => { void refreshUsageAcrossHubs(); }}

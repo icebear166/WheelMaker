@@ -51,6 +51,8 @@ type SettingsRootContentProps = {
   setMobileEnterKeyBehavior: (value: MobileEnterKeyBehavior) => void;
   hideToolCalls: boolean;
   setHideToolCalls: (value: boolean) => void;
+  showLimitsMonitor: boolean;
+  setShowLimitsMonitor: (value: boolean) => void;
   promptCompletionNotificationsEnabled: boolean;
   setPromptCompletionNotificationsEnabled: (value: boolean) => void;
   handlePromptCompletionNotificationsChange: (enabled: boolean) => void;
@@ -181,6 +183,8 @@ export function SettingsRootContent({
   setMobileEnterKeyBehavior,
   hideToolCalls,
   setHideToolCalls,
+  showLimitsMonitor,
+  setShowLimitsMonitor,
   promptCompletionNotificationsEnabled,
   setPromptCompletionNotificationsEnabled,
   handlePromptCompletionNotificationsChange,
@@ -290,6 +294,19 @@ export function SettingsRootContent({
             onChange={e => setHideToolCalls(e.target.checked)}
           />
         </label>
+        {isWide ? (
+          <label className="settings-row sidebar-setting-row">
+            <span>
+              <span className="codicon codicon-graph settings-row-icon" aria-hidden="true" />
+              Show Limits Monitor
+            </span>
+            <input
+              type="checkbox"
+              checked={showLimitsMonitor}
+              onChange={e => setShowLimitsMonitor(e.target.checked)}
+            />
+          </label>
+        ) : null}
         {!isWide ? (
           <label className="settings-row sidebar-setting-row">
             <span>
