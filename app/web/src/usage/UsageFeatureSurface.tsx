@@ -1,7 +1,7 @@
 import React from 'react';
 
 import {ChatFunctionSurface} from '../chat/ChatFunctionSurface';
-import {formatResetCountdown, formatResetUTC, formatUpdatedAgo, tightnessTone, type UsageProviderView, type UsageViewSnapshot} from './usageTypes';
+import {formatResetCountdown, formatResetUTC, formatUpdatedAgo, tightnessTone, type UsageLimit, type UsageProviderView, type UsageViewSnapshot} from './usageTypes';
 
 type Props = {
   snapshot: UsageViewSnapshot;
@@ -9,22 +9,69 @@ type Props = {
 };
 
 function accountLabel(account: UsageProviderView['accounts'][number]): string {
-  return account.identity.label || account.identity.value || account.localId;
+  const label = account.identity.label || account.identity.value || account.localId;
+  return account.identity.kind === 'source' || label.toLowerCase() === 'opencode' ? 'Account' : label;
+}
+
+function shortLimitLabel(limit: UsageLimit): string {
+  if (limit.id === '5h') return '5h';
+  if (limit.id === 'week') return '1W';
+  if (limit.id === 'mcp-month') return 'MCP';
+  return limit.label;
+}
+
+function compactLimits(provider: UsageProviderView): UsageLimit[] {
+  const limits = new Map<string, UsageLimit>();
+  for (const limit of provider.accounts.flatMap(account => account.limits)) {
+    const existing = limits.get(limit.id);
+    if (!existing || limit.remainingPercent < existing.remainingPercent) limits.set(limit.id, limit);
+  }
+  const order = new Map([['5h', 0], ['week', 1], ['mcp-month', 2]]);
+  return Array.from(limits.values())
+    .sort((left, right) => (order.get(left.id) ?? 10) - (order.get(right.id) ?? 10))
+    .slice(0, 2);
+}
+
+function balanceSummary(provider: UsageProviderView): string {
+  const items = provider.accounts.flatMap(account => account.balance?.items ?? []);
+  return items.map(item => `${item.currency} ${item.total}`).join(' · ');
+}
+
+function QuotaRail({remainingPercent}: {remainingPercent: number}) {
+  return (
+    <span className="usage-quota-rail" aria-hidden="true">
+      <span data-usage-rail-fill={true} style={{width: `${remainingPercent}%`}} />
+    </span>
+  );
 }
 
 function ProviderRail({provider}: {provider: UsageProviderView}) {
-  const remaining = provider.remainingPercent;
-  const tone = remaining === undefined ? 'muted' : tightnessTone(remaining);
+  const limits = compactLimits(provider);
+  const balance = balanceSummary(provider);
   return (
-    <div className={`usage-provider-row tone-${tone}`}>
+    <div className="usage-provider-row" data-usage-provider={provider.id}>
       <span className="usage-provider-name">{provider.name}</span>
-      <span className="usage-provider-meta">
-        {provider.accountCount > 1 ? `${provider.accountCount} accounts` : provider.status === 'unavailable' ? 'Not connected' : ''}
-      </span>
-      <span className="usage-provider-value">{remaining === undefined ? '—' : `${Math.round(remaining)}%`}</span>
-      <span className="usage-quota-rail" aria-hidden="true">
-        <span style={{width: `${remaining ?? 0}%`}} />
-      </span>
+      {limits.length > 0 ? (
+        <span className="usage-provider-metrics">
+          {limits.map(limit => (
+            <span
+              className={`usage-compact-limit tone-${tightnessTone(limit.remainingPercent)}`}
+              data-usage-compact-limit={true}
+              key={limit.id}
+            >
+              <span className="usage-compact-limit-value">
+                <strong>{Math.round(limit.remainingPercent)}%</strong>
+                <span>{` / ${shortLimitLabel(limit)}`}</span>
+              </span>
+              <QuotaRail remainingPercent={limit.remainingPercent} />
+            </span>
+          ))}
+        </span>
+      ) : balance ? (
+        <span className="usage-provider-balance">{balance}</span>
+      ) : (
+        <span className="usage-provider-empty">{provider.status === 'error' ? 'Scan failed' : 'Not connected'}</span>
+      )}
     </div>
   );
 }
@@ -32,10 +79,6 @@ function ProviderRail({provider}: {provider: UsageProviderView}) {
 function ProviderDetails({provider}: {provider: UsageProviderView}) {
   return (
     <section className="usage-detail-provider">
-      <div className="usage-detail-provider-heading">
-        <strong>{provider.name}</strong>
-        <span>{provider.accountCount} {provider.accountCount === 1 ? 'account' : 'accounts'}</span>
-      </div>
       {provider.hubs?.filter(hub => hub.status !== 'ok').map(hub => (
         <div className="usage-detail-hub-state" key={hub.hubId}>
           <span>{hub.hubId}</span>
@@ -45,24 +88,41 @@ function ProviderDetails({provider}: {provider: UsageProviderView}) {
       {provider.accounts.length === 0 ? (
         <div className="usage-detail-empty">{provider.status === 'error' ? 'Scan failed' : 'Not authenticated on this Hub'}</div>
       ) : provider.accounts.map(account => (
-        <div className="usage-account-card" key={`${account.localId}:${account.hubIds.join(',')}`}>
+        <div
+          className="usage-account-card"
+          data-usage-account={`${provider.id}:${account.localId}`}
+          key={`${account.localId}:${account.hubIds.join(',')}`}
+        >
           <div className="usage-account-heading">
-            <span>{accountLabel(account)}</span>
-            <span>{account.plan || account.hubIds.join(', ')}</span>
+            <span className="usage-account-title">
+              <strong>{provider.name}</strong>
+              <span> / </span>
+              <span>{accountLabel(account)}</span>
+            </span>
+            <span className="usage-account-hubs">
+              {account.hubIds.map(hubId => <span className="usage-account-hub" data-usage-hub={true} key={hubId}>{hubId}</span>)}
+            </span>
           </div>
           {account.message ? <div className="usage-account-message">{account.message}</div> : null}
           {account.limits.map(limit => (
-            <div className="usage-limit-line" key={limit.id}>
-              <span>{limit.label}</span>
+            <div
+              className={`usage-limit-line tone-${tightnessTone(limit.remainingPercent)}`}
+              data-usage-detail-limit={true}
+              key={limit.id}
+            >
+              <span className="usage-limit-label">{shortLimitLabel(limit)}</span>
+              <QuotaRail remainingPercent={limit.remainingPercent} />
               <strong>{Math.round(limit.remainingPercent)}%</strong>
-              <span title={limit.resetsAt}>{limit.resetsAt ? `${formatResetCountdown(limit.resetsAt)} · ${formatResetUTC(limit.resetsAt)}` : 'No reset time'}</span>
+              <span className="usage-limit-reset" title={formatResetUTC(limit.resetsAt)}>
+                {limit.resetsAt ? `Reset ${formatResetCountdown(limit.resetsAt)}` : 'No reset'}
+              </span>
             </div>
           ))}
           {account.balance?.items.map(item => (
             <div className="usage-limit-line balance" key={item.currency}>
-              <span>{item.currency}</span>
+              <span className="usage-limit-label">{item.currency}</span>
               <strong>{item.total}</strong>
-              <span>available balance</span>
+              <span className="usage-limit-reset">Balance</span>
             </div>
           ))}
         </div>

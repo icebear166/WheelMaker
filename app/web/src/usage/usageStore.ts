@@ -75,9 +75,14 @@ export class UsageStore {
         aggregate.statuses.push(provider.status);
         aggregate.hubs.set(hubId, {hubId, status: provider.status, message: provider.message});
         for (const account of provider.accounts) {
-          const identityKey = account.identity.kind?.trim() && account.identity.value?.trim()
-            ? `${provider.id}:${account.identity.kind!.trim()}:${account.identity.value!.trim()}`
-            : `${hubId}:${provider.id}:${account.localId}`;
+          const identityKind = account.identity.kind?.trim();
+          const identityValue = account.identity.value?.trim();
+          const localId = account.localId.trim();
+          const identityKey = identityKind && identityValue
+            ? `${provider.id}:${identityKind}:${identityValue}`
+            : identityKind === 'source' && localId
+              ? `${provider.id}:source:${localId}`
+              : `${hubId}:${provider.id}:${account.localId}`;
           const existing = aggregate.accounts.get(identityKey);
           if (existing) {
             existing.hubIds = Array.from(new Set([...existing.hubIds, hubId])).sort();

@@ -33,6 +33,27 @@ describe('UsageStore', () => {
     expect(store.snapshot().providers[0].accounts).toHaveLength(2);
   });
 
+  it('aggregates the same source account across Hubs', () => {
+    const store = new UsageStore();
+    for (const hubId of ['hub-a', 'hub-b']) {
+      store.replaceHub(hubId, {
+        hubId, generation: 1, status: 'ready', providers: [{
+          id: 'kimi', name: 'Kimi', status: 'ok', accounts: [{
+            localId: 'opencode', identity: {kind: 'source', label: 'OpenCode'}, status: 'ok',
+            limits: [
+              {id: '5h', label: '5 hours', remainingPercent: 37},
+              {id: 'week', label: 'Week', remainingPercent: 90},
+            ],
+          }],
+        }],
+      });
+    }
+
+    const accounts = store.snapshot().providers[0].accounts;
+    expect(accounts).toHaveLength(1);
+    expect(accounts[0].hubIds).toEqual(['hub-a', 'hub-b']);
+  });
+
   it('summarizes the account with the lowest remaining percentage', () => {
     const summary = summarizeProvider({
       id: 'codex', name: 'Codex', status: 'ok', accounts: [78, 9, 42].map((remainingPercent, index) => ({
