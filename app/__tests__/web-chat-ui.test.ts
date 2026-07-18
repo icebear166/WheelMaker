@@ -2057,7 +2057,7 @@ describe('web chat integration', () => {
     const wideSessionRowBlock = stylesCss.match(/\.wide-session-row \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(wideSessionRowBlock).toContain('grid-template-columns: minmax(0, 1fr) auto auto;');
     expect(wideSessionRowBlock).toContain('gap: 4px;');
-    expect(wideSessionRowBlock).toContain('padding: 0 5px 0 8px;');
+    expect(wideSessionRowBlock).toContain('padding: 0 5px 0 6px;');
     const sessionStateMarkerBlock = stylesCss.match(/\.session-state-marker \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(sessionStateMarkerBlock).toContain('min-width: 9px;');
     expect(sessionStateMarkerBlock).toContain('flex: 0 0 auto;');
@@ -2083,7 +2083,10 @@ describe('web chat integration', () => {
     expect(stylesCss).not.toContain('.mobile-project-actions .wide-project-action-btn {');
     const wideProjectSessionListBlock = stylesCss.match(/\.wide-project-session-list \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(wideProjectSessionListBlock).toContain('margin-top: -2px;');
-    expect(wideProjectSessionListBlock).toContain('padding: 1px 0 1px 14px;');
+    expect(wideProjectSessionListBlock).toContain('padding: 1px 0 1px 8px;');
+    const mobileProjectSessionListBlock = stylesCss.match(/\.mobile-project-session-list \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(mobileProjectSessionListBlock).toContain('padding-left: 8px;');
+    expect(stylesCss).toMatch(/\.wide-project-row \{[^}]*padding: 0 5px 0 2px;[^}]*\}/);
     expect(stylesCss).not.toContain('.wide-session-row::after');
     expect(stylesCss).not.toContain('.project-session-row-wrap.actions-open .wide-session-row {');
     expect(stylesCss).not.toContain('.project-session-action-strip');
