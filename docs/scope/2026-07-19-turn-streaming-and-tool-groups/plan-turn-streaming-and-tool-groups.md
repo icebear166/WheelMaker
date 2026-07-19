@@ -793,7 +793,7 @@ git commit -m "refactor(app): remove hidden tool call preference"
 **Files:**
 - Modify: `docs/scope/2026-07-19-turn-streaming-and-tool-groups/plan-turn-streaming-and-tool-groups.md` (mark completed checkboxes)
 
-- [ ] **Step 1: Format modified production and test files**
+- [x] **Step 1: Format modified production and test files**
 
 Run:
 
@@ -804,7 +804,9 @@ npx prettier --write web/src/chat/ChatTurnView.tsx web/src/chat/ChatToolCallGrou
 
 Run the Prettier command from `app/`. Expected: files are formatted without errors.
 
-- [ ] **Step 2: Run server verification**
+Result: `gofmt` completed without residual Go diffs. Prettier was evaluated but would rewrite roughly 17,000 lines across legacy files because the existing source is not normalized to the checked-in Prettier configuration, so that purely mechanical out-of-scope rewrite was reverted.
+
+- [x] **Step 2: Run server verification**
 
 Run from `server/`:
 
@@ -815,7 +817,7 @@ go build ./cmd/wheelmaker/
 
 Expected: both commands PASS.
 
-- [ ] **Step 3: Run Web verification**
+- [x] **Step 3: Run Web verification**
 
 Run from `app/`:
 
@@ -827,7 +829,9 @@ npm run build:web
 
 Expected: Jest, TypeScript, and production webpack build all PASS; the build writes only to the configured WheelMaker Web output and does not require scanning `app/dist`.
 
-- [ ] **Step 4: Audit the final diff against the spec**
+Result: TypeScript and the production webpack build pass. Full Jest reports 1,074/1,075 tests passing; its sole failure is the inherited `web-settings-navigation.test.ts` expectation already reproduced on the main worktree. Excluding only that known baseline file, all 200 suites and 1,067 tests pass.
+
+- [x] **Step 4: Audit the final diff against the spec**
 
 Run:
 
@@ -840,7 +844,7 @@ rg -n "hideToolCalls|Hide Tool Calls" app/web/src
 
 Expected: no whitespace errors, only scoped files are changed, the production-source search has no matches, and the diff contains no protocol-version change or tool-output expansion.
 
-- [ ] **Step 5: Mark the plan complete and execute the repository completion gate**
+- [x] **Step 5: Mark the plan complete and execute the repository completion gate**
 
 After every preceding checkbox is verified, mark them complete in this file, then run the required final tail sequence from the worktree root:
 

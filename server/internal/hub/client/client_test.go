@@ -5307,6 +5307,53 @@ func TestSessionViewThoughtPromptDoneFlushesSuppressedContentAndPersistsIt(t *te
 	t.Fatal("persisted thought turn not found")
 }
 
+func TestSessionViewThoughtCancellationFlushesSuppressedContentBeforePromptDone(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	c.sessionRecorder.now = func() time.Time {
+		return time.Date(2026, 7, 19, 11, 30, 0, 0, time.UTC)
+	}
+	published := captureSessionMessageEvents(t, c)
+
+	for _, event := range []SessionViewEvent{
+		sessionViewCreatedEvent("sess-cancel", "Thought cancel"),
+		sessionViewPromptEvent("sess-cancel", "run", nil),
+		sessionViewUpdateEvent("sess-cancel", acp.SessionUpdate{
+			SessionUpdate: acp.SessionUpdateAgentThoughtChunk,
+			Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: "before"}),
+			Status:        "streaming",
+		}),
+		sessionViewUpdateEvent("sess-cancel", acp.SessionUpdate{
+			SessionUpdate: acp.SessionUpdateAgentThoughtChunk,
+			Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: " cancel"}),
+			Status:        "streaming",
+		}),
+		sessionViewPromptFinishedEvent("sess-cancel", acp.StopReasonCancelled),
+	} {
+		if err := c.RecordEvent(ctx, event); err != nil {
+			t.Fatalf("RecordEvent: %v", err)
+		}
+	}
+
+	thoughtTurns := publishedTurnsByMethod(t, *published, acp.SessionTurnMethodAgentThought)
+	if len(thoughtTurns) != 2 || !thoughtTurns[1].Finished {
+		t.Fatalf("published thoughts = %+v, want initial and final", thoughtTurns)
+	}
+	final := decodeTurnSessionUpdate(t, thoughtTurns[1].Content)
+	if text := extractTextChunk(final.Content); text != "before cancel" {
+		t.Fatalf("final thought snapshot = %q, want complete cancelled text", text)
+	}
+	lastTwo := (*published)[len(*published)-2:]
+	if decodeSessionTurnMessage(t, decodePublishedTurnMessage(t, lastTwo[0].payload).Content).Method != acp.SessionTurnMethodAgentThought {
+		t.Fatalf("event before cancelled prompt_done is not thought: %+v", lastTwo[0])
+	}
+	publishedPromptDone := decodePublishedTurnMessage(t, lastTwo[1].payload)
+	promptDone := decodeSessionTurnMessage(t, publishedPromptDone.Content)
+	if promptDone.Method != acp.SessionTurnMethodPromptDone || decodePromptDoneStopReason(t, publishedPromptDone.Content) != acp.StopReasonCancelled {
+		t.Fatalf("last event is not cancelled prompt_done: %+v", lastTwo[1])
+	}
+}
+
 func TestSessionViewThoughtThrottleIsIsolatedBySession(t *testing.T) {
 	c := newSessionViewTestClient(t)
 	ctx := context.Background()
