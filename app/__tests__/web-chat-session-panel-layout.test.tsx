@@ -5,8 +5,8 @@ const root = resolve(__dirname, '..');
 const workspaceAppSource = readFileSync(resolve(root, 'web/src/app/WorkspaceApp.tsx'), 'utf8');
 const responsiveShellSource = readFileSync(resolve(root, 'web/src/shell/ResponsiveShell.tsx'), 'utf8');
 const sessionGlobalBarSource = readFileSync(resolve(root, 'web/src/chat/ChatSessionGlobalBar.tsx'), 'utf8');
-const chatStyles = readFileSync(resolve(root, 'web/src/styles/chat.css'), 'utf8');
-const shellStyles = readFileSync(resolve(root, 'web/src/styles/shell.css'), 'utf8');
+const chatStyles = readFileSync(resolve(root, 'web/src/styles/chat.css'), 'utf8').replace(/\r\n/g, '\n');
+const shellStyles = readFileSync(resolve(root, 'web/src/styles/shell.css'), 'utf8').replace(/\r\n/g, '\n');
 
 function cssRuleBlock(source: string, selector: string): string {
   const start = source.indexOf(`${selector} {`);
@@ -101,16 +101,43 @@ describe('PC chat session-panel layout', () => {
     const floatingSource = workspaceAppSource.slice(floatingStart, floatingStart + 2200);
     expect(floatingSource).toContain('{renderRecentSessionsSection(false)}');
     expect(floatingSource).not.toContain('recentSessionSections.map(section => renderRecentProjectSessionSection(section, false))');
-    expect(cssRuleBlock(chatStyles, '.chat-recent-sessions-surface-list')).toContain('padding: 8px 7px 16px;');
   });
 
-  it('gives the expanded unpinned Recent surface the pinned flat sidebar material', () => {
-    expect(cssRuleBlock(chatStyles, '.chat-recent-sessions-surface.desktop.expanded')).toContain('border-radius: 0;');
+  it('fuses the floating Sessions header and Recent content into one inset card', () => {
+    const stackRule = cssRuleBlock(chatStyles, '.chat-edge-surface-stack');
+    expect(stackRule).toContain('box-sizing: border-box;');
+    expect(stackRule).toContain('padding: 0 8px 8px;');
+
+    expect(cssRuleBlock(chatStyles, '.chat-recent-sessions-surface.desktop.expanded')).toContain('border-radius: 8px;');
     const glassRule = cssRuleBlock(chatStyles, '.chat-recent-sessions-surface.desktop.expanded .chat-edge-surface-glass');
-    expect(glassRule).toContain('border: 0;');
+    expect(glassRule).toContain('border: 1px solid');
     expect(glassRule).toContain('box-shadow: none;');
-    expect(glassRule).toContain('background: var(--desktop-top-surface);');
+    expect(glassRule).toContain('background: color-mix(in srgb, var(--surface-panel) 88%, var(--surface-raised));');
     expect(glassRule).toContain('backdrop-filter: none;');
+
+    expect(cssRuleBlock(chatStyles, '.chat-recent-sessions-surface-list')).toContain('padding: 0 3px 8px;');
+    const recentSectionRule = cssRuleBlock(
+      chatStyles,
+      '.chat-recent-sessions-surface.desktop.expanded .wide-project-section.recent-sessions-section',
+    );
+    expect(recentSectionRule).toContain('margin-bottom: 0;');
+    expect(recentSectionRule).toContain('border: 0;');
+    expect(recentSectionRule).toContain('border-radius: 0;');
+    expect(recentSectionRule).toContain('background: transparent;');
+  });
+
+  it('gives expanded Sessions, Plan, and Limits cards the same width and radius', () => {
+    const stackItemRule = cssRuleBlock(
+      chatStyles,
+      '.chat-edge-surface-stack > .chat-recent-sessions-surface.desktop,\n.chat-edge-surface-stack > .chat-plan-surface.desktop,\n.chat-edge-surface-stack > .chat-function-surface.desktop',
+    );
+    expect(stackItemRule).toContain('width: 100%;');
+
+    const expandedCardRule = cssRuleBlock(
+      chatStyles,
+      '.chat-edge-surface-stack > .chat-recent-sessions-surface.desktop.expanded,\n.chat-edge-surface-stack > .chat-plan-surface.desktop.expanded,\n.chat-edge-surface-stack > .chat-function-surface.desktop:not(.collapsed)',
+    );
+    expect(expandedCardRule).toContain('border-radius: 8px;');
   });
 
   it('keeps the pin control in the first stable action slot', () => {
