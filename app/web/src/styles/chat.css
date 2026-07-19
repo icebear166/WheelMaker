@@ -4132,30 +4132,27 @@
   max-width: 62%;
 }
 
-.chat-view-width-fixed-800-pinned-recent {
-  --chat-pinned-recent-edge-gap: max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px));
-  --chat-pinned-recent-resolved-width: min(
-    360px,
-    calc(100% - var(--chat-pinned-recent-edge-gap) - var(--chat-pinned-recent-edge-gap))
+.chat-view-width-fixed-800-edge-surfaces {
+  --chat-edge-reserve-edge-gap: max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px));
+  /* R: reserved left width for the floating surface column (surface width + edge gap + 12px column gap). */
+  --chat-edge-reserved-left: calc(
+    min(360px, 100% - var(--chat-edge-reserve-edge-gap) - var(--chat-edge-reserve-edge-gap)) +
+    var(--chat-edge-reserve-edge-gap) + 12px
   );
-  --chat-pinned-recent-left: max(
-    var(--chat-pinned-recent-edge-gap),
-    calc((100% - 800px) / 2 - var(--chat-pinned-recent-resolved-width) - 12px)
-  );
-  --chat-pinned-recent-content-left: calc(
-    var(--chat-pinned-recent-left) +
-    var(--chat-pinned-recent-resolved-width) +
-    12px
-  );
+  /* Continuous three-phase margin (mirrors resolveFixedChatMarginLeft in chat/layout/fixedChatAlignment.ts):
+     centered -> docked to --chat-edge-reserved-left -> overlap with fade. */
+  --chat-fixed-column: min(800px, 100%);
+  --chat-fixed-centered: calc((100% - var(--chat-fixed-column)) / 2);
+  --chat-fixed-right-min: calc(100% - var(--chat-fixed-column) - var(--chat-edge-reserve-edge-gap));
 }
 
-.chat-view-width-fixed-800-pinned-recent .chat-view-content,
-.chat-view-width-fixed-800-pinned-recent .chat-composer-content {
-  margin-left: min(
-    calc(100% - min(800px, 100%) - var(--chat-pinned-recent-edge-gap)),
-    calc(
-      var(--chat-pinned-recent-content-left) +
-      max(0px, (100% - var(--chat-pinned-recent-content-left) - 800px) / 2)
+.chat-view-width-fixed-800-edge-surfaces .chat-view-content,
+.chat-view-width-fixed-800-edge-surfaces .chat-composer-content {
+  margin-left: max(
+    0px,
+    min(
+      max(var(--chat-fixed-centered), min(var(--chat-edge-reserved-left), var(--chat-fixed-right-min))),
+      var(--chat-fixed-right-min)
     )
   );
   margin-right: auto;

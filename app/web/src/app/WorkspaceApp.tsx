@@ -5147,8 +5147,9 @@ export function App() {
     }
   }, [allVisibleProjectsLoaded, projectSessionsByProjectId]);
   const showPinnedRecentSessionsSurface = isWide && sidebarCollapsed && !archivedMode && !sessionSearchActive && recentSessionSections.length > 0;
+  const showChatEdgeSurfaces = isWide && tab === 'chat' && (showPinnedRecentSessionsSurface || !!selectedChatPlan || showLimitsMonitor);
   const chatMainClassName = isWide
-    ? (chatViewWidth === 'fixed-800' ? `chat-main chat-view-width-fixed-800${showPinnedRecentSessionsSurface ? ' chat-view-width-fixed-800-pinned-recent' : ''}` : 'chat-main')
+    ? (chatViewWidth === 'fixed-800' ? `chat-main chat-view-width-fixed-800${showChatEdgeSurfaces ? ' chat-view-width-fixed-800-edge-surfaces' : ''}` : 'chat-main')
     : 'chat-main';
   const desktopChatFixedPreview = isWide && chatPreviewOpen && chatViewWidth === 'fixed-800';
   const closeSidebarTransientMenus = useCallback(() => {
