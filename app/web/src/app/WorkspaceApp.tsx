@@ -19313,8 +19313,16 @@ export function App() {
               </span>
             </button>
           ) : null}
-          {isWide && (showPinnedRecentSessionsSurface || selectedChatPlan || (tab === 'chat' && showLimitsMonitor)) ? (
+          {isWide && tab === 'chat' ? (
             <div className="chat-edge-surface-stack">
+              {sidebarCollapsed && !sidebarSettingsOpen ? (
+                <div className="chat-top-title-surface">
+                  <div className="chat-edge-surface-glass" aria-hidden="true" />
+                  <div className="chat-edge-surface-content">
+                    {renderChatSessionHeader(false)}
+                  </div>
+                </div>
+              ) : null}
               {showPinnedRecentSessionsSurface ? (
                 <ChatRecentSessionsSurface
                   collapsed={collapsedProjectIds.includes(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)}
@@ -19330,7 +19338,7 @@ export function App() {
                 mode="desktop"
                 plan={selectedChatPlan}
               />
-              {tab === 'chat' && showLimitsMonitor ? (
+              {showLimitsMonitor ? (
                 <UsageFeatureSurface
                   snapshot={usageSnapshot}
                   onRefresh={() => { void refreshUsageAcrossHubs(); }}

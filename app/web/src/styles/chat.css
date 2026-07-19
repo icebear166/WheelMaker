@@ -2939,6 +2939,19 @@
   pointer-events: auto;
 }
 
+.chat-top-title-surface {
+  position: relative;
+  width: 100%;
+  pointer-events: auto;
+}
+
+.chat-top-title-surface .chat-session-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+}
+
 .chat-plan-surface-header {
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr) auto;
