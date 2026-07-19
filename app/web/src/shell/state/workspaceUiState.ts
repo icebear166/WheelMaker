@@ -168,7 +168,7 @@ export function createWorkspaceUiState(input: WorkspaceUiStateInput = {}): Works
     },
     desktop: {
       sidebarCollapsed:
-        typeof input.sidebarCollapsed === 'boolean' ? input.sidebarCollapsed : false,
+        typeof input.sidebarCollapsed === 'boolean' ? input.sidebarCollapsed : true,
       sidebarWidth: sanitizeDesktopSidebarWidth(input.desktopSidebarWidth),
     },
     mobile: {
