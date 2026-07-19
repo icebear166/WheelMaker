@@ -2952,6 +2952,24 @@
   padding: 6px 8px;
 }
 
+.chat-top-title-overlay {
+  position: absolute;
+  top: 12px;
+  left: max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px));
+  z-index: 8;
+  width: min(var(--chat-edge-surface-width, 360px), calc(100% - 36px));
+  pointer-events: auto;
+}
+
+.chat-edge-surface-stack.below-top-bar {
+  top: 56px;
+}
+
+.chat-sidebar-top-spacer {
+  flex: none;
+  height: 46px;
+}
+
 .chat-session-global-bar {
   display: flex;
   align-items: center;
@@ -3000,16 +3018,26 @@
 
 .chat-session-nav-slideout {
   position: absolute;
-  top: 12px;
+  top: 56px;
   left: max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px));
   z-index: 7;
   width: min(var(--chat-edge-surface-width, 360px), calc(100% - 2 * max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px))));
-  max-height: calc(100% - 24px);
+  max-height: calc(100% - 68px);
   display: flex;
   flex-direction: column;
-  pointer-events: auto;
   border-radius: 10px;
   overflow: hidden;
+  transform: translateX(calc(-100% - 24px));
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform 180ms ease, visibility 0s linear 180ms;
+}
+
+.chat-session-nav-slideout.open {
+  transform: translateX(0);
+  visibility: visible;
+  pointer-events: auto;
+  transition: transform 180ms ease, visibility 0s;
 }
 
 .chat-session-nav-slideout-content {
