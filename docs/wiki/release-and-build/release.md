@@ -23,11 +23,13 @@
 
 ## Hub 驱动发布与临时 Web
 
-Settings 可以选择一个拥有源码目录的发布 Hub 执行正式发布，或只构建并发布临时 Web。发布 Hub、源码目录、可选 Server Hub 与 auto pull 是浏览器本地设置；发布 Token 只保存在发布 Hub 的受保护配置中，前端不保存或传输它。已接受的发布任务在 Hub 内继续执行，页面重开后只恢复发布 Hub 的状态和日志。
+Settings 可以选择一个拥有源码目录的发布 Hub 执行正式发布，或只构建并发布临时 Web。发布 Hub、源码目录、可选 Server Hub、Web Hub 与 auto pull 是浏览器本地设置；发布 Token 只保存在发布 Hub 的受保护配置中，前端不保存或传输它。已接受的发布任务在 Hub 内继续执行，页面关闭不会取消任务，重开后继续从发布 Hub 读取状态和日志。
 
-正式版本发布仍使用现有 `v1.x` 事务，并只保留 Desktop、Android 选项。临时 Web 使用 Release Server 的独立、鉴权上传通道，只保留一份经 SHA-256 校验的最新 ZIP 和公开当前指针；它不改写 `stable.json`、正式发布状态或历史。
+正式版本发布仍使用现有 `v1.x` 事务，并只保留 Desktop、Android 选项。临时 Web 不经过 Release Server：发布页面选择构建源码的 Target Hub 和独立的 Web Hub，Target Hub 构建 ZIP 后经 Registry 在线分块传给 Web Hub。它不改写 `stable.json`、正式发布状态或历史。
 
-启用 auto pull 且绑定 Server Hub 时，发布 Hub 通过控制路由通知目标：正式版本触发现有 stable 更新，临时 Web 触发 Debug Web 拉取。Server Hub 仅用构建时 release channel 的 HTTPS origin 与固定元数据路径发现并校验临时 Web，再原子替换自身安装根下的 `web/`；它不接受前端提供的目录、包路径或下载 URL。关闭 auto pull 时不发送通知，也没有手动应用入口。Server Hub 只返回最终应用状态，不提供过程日志。
+Registry 只认证、路由、转发并确认临时 Web 分块，不持久化 ZIP。每个分块最多 `4 MiB`，发送方逐块等待目标确认。Web Hub 必须在线；它在 `~/.wheelmaker/staging/debug-web-<jobId>/` 接收完整 ZIP，并复用更新租约防止与正式部署并发，校验声明的文件大小和 SHA-256 后才原子替换 `~/.wheelmaker/web`。离线、断线、顺序错误或摘要不符都会使任务失败且保留原 Web；Target Hub 保留 `~/.wheelmaker/release-jobs/<jobId>/debug-web.zip` 供之后显式重试。Target Hub 持久化任务状态与日志，因此页面关闭不影响构建或传输，页面重新打开后仍从 Target Hub 查询结果。
+
+正式版本的 auto pull 与 Server Hub 拉取稳定版本保持既有行为。临时 Web 请求只携带源码路径和 `webHubId`，不使用 Release Server URL、公开当前指针或下载回拉；Web Hub 只返回最终应用状态，过程日志仍归 Target Hub 所有。旧 `hub.release.notify(debugWeb)` 路径已禁用，避免临时 Web 重新落回 Release Server。
 
 ## 目标机部署代码
 

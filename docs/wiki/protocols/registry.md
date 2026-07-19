@@ -446,7 +446,24 @@ Registry 下发给 Hub 的内部方法：
 - `listenPort` 与 `targetPort` 必须在 `1..65535`。
 - `hubId` 必须指向在线 Hub。
 
-## 10. Server Data、Speech、TTS、Debug
+## 10. Hub 间临时 Web 传输
+
+临时 Debug Web 由构建源码的 Target Hub 通过 Registry 在线分块传给选定的 Web Hub。Registry 认证发送方与目标 Hub、维护短暂传输会话、按序转发分块并传回确认，但不在内存以外保存 ZIP，也不提供公开下载地址。
+
+Web Hub 必须在线。它把分块写到本地临时文件，只有在最终大小与 SHA-256 均匹配后才原子替换 `~/.wheelmaker/web`。任一 Hub 断线、分块失序或校验失败都会终止会话，且现有 Web 保持不变。源 Hub 持久化构建产物、任务状态和日志，以便用户之后重新发起传输。
+
+Target Hub 发给 Registry 的方法为：
+
+- `hub.debugWeb.transfer.start`：声明 `transferId`、`targetHubId`、`size` 和小写十六进制 `sha256`。
+- `hub.debugWeb.transfer.chunk`：携带 `transferId`、从 `0` 开始严格递增的 `sequence` 和 Base64 `data`。
+- `hub.debugWeb.transfer.finish`：通知 Web Hub 校验并应用归档。
+- `hub.debugWeb.transfer.abort`：中止并清理目标端临时文件。
+
+Registry 转给 Web Hub 的内部方法依次为 `hub.debugWeb.receive.start`、`hub.debugWeb.receive.chunk`、`hub.debugWeb.receive.finish` 和 `hub.debugWeb.receive.abort`。每个已解码分块最多 `4 MiB`，完整归档最多 `512 MiB`；发送方必须等待当前分块得到 Web Hub 确认后才能发送下一个分块。Registry 仅在内存保存传输 ID、两个 Hub ID、声明大小/摘要、已确认字节数和下一序号，不保存 ZIP 字节。
+
+这组方法是 Registry 2.6 的增量内部能力，没有改变协议版本。`hub.release.notify` / `hub.release.apply` 只用于正式 `version` 发布，不能再承载 `debugWeb`。
+
+## 11. Server Data、Speech、TTS、Debug
 
 Server Data 复用已认证的 Registry WebSocket，不新增 HTTP 或 Nginx 路径：
 
@@ -488,7 +505,7 @@ Debug：
 
 - `debug.uploadLog`
 
-## 11. 错误
+## 12. 错误
 
 错误 envelope：
 
@@ -519,7 +536,7 @@ Debug：
 | `TIMEOUT` | 超时 | 是 |
 | `INTERNAL` | 内部错误 | 是 |
 
-## 12. Hash 与版本戳
+## 13. Hash 与版本戳
 
 - Hash 算法：`sha256`。
 - Hash 输出：`sha256:<hex-lowercase>`。
@@ -529,7 +546,7 @@ Debug：
 - `worktreeRev`：由 `git status --porcelain` 归一生成。
 - `projectRev`：当前由 `gitRev + worktreeRev` 派生。
 
-## 13. 版本历史
+## 14. 版本历史
 
 ### 2.6 相比 2.5
 
