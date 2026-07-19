@@ -8,6 +8,7 @@ Wiki 只记录当前、稳定、跨任务仍然有效的项目知识。完整来
 
 - [`architecture/`](architecture/architecture.md)：系统架构、运行时职责以及 Session 生命周期与同步机制。
 - [`features/`](features/features.md)：面向用户的产品功能、稳定行为和跨模块边界。
+- [`frontend-interaction/`](frontend-interaction/frontend-interaction.md)：前端交互设计规则、布局模式和稳定的 UI 行为约定。
 - [`protocols/`](protocols/protocols.md)：WheelMaker 使用和实现的 ACP、Registry 等协议边界。
 - [`release-and-build/`](release-and-build/release-and-build.md)：源码侧构建、公开发布以及目标机本地部署流程。
 
