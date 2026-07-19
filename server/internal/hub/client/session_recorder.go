@@ -1493,7 +1493,11 @@ func parseSessionViewEvent(event SessionViewEvent) (parsedSessionViewEvent, erro
 			}
 			switch method {
 			case acp.SessionUpdateAgentMessageChunk, acp.SessionUpdateAgentThoughtChunk, acp.SessionUpdateUserMessageChunk:
-				parsed.setJSONMessage(method, acp.SessionTurnTextResult{Text: extractUpdateText(params.Update.Content)}, "")
+				text := extractUpdateText(params.Update.Content)
+				if method == acp.SessionUpdateAgentThoughtChunk && strings.TrimSpace(text) == "" {
+					return parsed, nil
+				}
+				parsed.setJSONMessage(method, acp.SessionTurnTextResult{Text: text}, "")
 			case acp.SessionUpdateToolCall, acp.SessionUpdateToolCallUpdate:
 				parsed.setJSONMessage(acp.SessionTurnMethodToolCall, acp.SessionTurnToolResult{
 					Cmd:    strings.TrimSpace(params.Update.Title),

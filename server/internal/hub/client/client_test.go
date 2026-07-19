@@ -5252,6 +5252,53 @@ func TestSessionViewThoughtSnapshotsAreThrottledAndBoundaryFlushed(t *testing.T)
 	}
 }
 
+func TestSessionViewEmptyThoughtChunksAreIgnored(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	published := captureSessionMessageEvents(t, c)
+
+	for _, event := range []SessionViewEvent{
+		sessionViewCreatedEvent("sess-empty-thought", "Empty thought"),
+		sessionViewPromptEvent("sess-empty-thought", "run", nil),
+		sessionViewUpdateEvent("sess-empty-thought", acp.SessionUpdate{
+			SessionUpdate: acp.SessionUpdateAgentThoughtChunk,
+			Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: " \n\t"}),
+			Status:        "streaming",
+		}),
+		sessionViewUpdateEvent("sess-empty-thought", acp.SessionUpdate{
+			SessionUpdate: acp.SessionUpdateToolCall,
+			ToolCallID:    "tool-1",
+			Title:         "Read files",
+			Status:        "completed",
+		}),
+		sessionViewPromptFinishedEvent("sess-empty-thought", acp.StopReasonEndTurn),
+	} {
+		if err := c.RecordEvent(ctx, event); err != nil {
+			t.Fatalf("RecordEvent: %v", err)
+		}
+	}
+
+	if thoughts := publishedTurnsByMethod(t, *published, acp.SessionTurnMethodAgentThought); len(thoughts) != 0 {
+		t.Fatalf("published empty thoughts = %+v, want none", thoughts)
+	}
+	_, turns, err := c.sessionRecorder.ReadSessionTurns(ctx, "sess-empty-thought", 0)
+	if err != nil {
+		t.Fatalf("ReadSessionTurns: %v", err)
+	}
+	methods := make([]string, 0, len(turns))
+	for _, turn := range turns {
+		methods = append(methods, decodeSessionTurnMessage(t, turn.Content).Method)
+	}
+	want := []string{
+		acp.SessionTurnMethodPromptRequest,
+		acp.SessionTurnMethodToolCall,
+		acp.SessionTurnMethodPromptDone,
+	}
+	if !reflect.DeepEqual(methods, want) {
+		t.Fatalf("persisted methods = %v, want %v", methods, want)
+	}
+}
+
 func TestSessionViewThoughtPromptDoneFlushesSuppressedContentAndPersistsIt(t *testing.T) {
 	c := newSessionViewTestClient(t)
 	ctx := context.Background()

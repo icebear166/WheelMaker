@@ -208,7 +208,7 @@ const CollapsibleThought = React.memo(function CollapsibleThought({
     .split('\n')
     .map(line => line.trim())
     .find(Boolean) || '';
-  const title = finished ? firstLine || 'Thinking' : 'Thinking';
+  const title = open ? 'Thinking' : finished ? firstLine || 'Thinking' : 'Thinking';
 
   return (
     <div className={`chat-thought-block${open ? ' chat-thought-open' : ''}${finished ? ' done' : ' streaming'}`}>
@@ -219,9 +219,8 @@ const CollapsibleThought = React.memo(function CollapsibleThought({
         aria-label={open ? 'Collapse thinking' : 'Expand thinking'}
         onClick={() => setOpen(current => !current)}
       >
-        <span className="codicon codicon-chevron-right chat-thought-chevron" aria-hidden="true" />
         <span className="codicon codicon-lightbulb chat-thought-icon" aria-hidden="true" />
-        <span className="chat-thought-title" title={finished ? firstLine : undefined}>
+        <span className="chat-thought-title" title={!open && finished ? firstLine : undefined}>
           {title}
         </span>
       </button>

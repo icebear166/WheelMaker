@@ -121,6 +121,36 @@ describe('chat display index', () => {
     expect(index.items[1].estimatedHeight).toBe(index.items[3].estimatedHeight);
   });
 
+  test('keeps a tool group open across hidden empty thinking turns', () => {
+    const source = [
+      message(1, 'prompt_request', 'hello'),
+      toolMessage(2, 'Read a'),
+      message(3, 'agent_thought_chunk', ' \n\t'),
+      toolMessage(4, 'Read b'),
+      message(5, 'agent_thought_chunk', 'visible reasoning'),
+      toolMessage(6, 'Run tests'),
+    ];
+    const index = buildChatDisplayIndex(source, {
+      shouldRender: message => message.method !== 'agent_thought_chunk' || Boolean(message.param.text.trim()),
+    });
+
+    expect(index.items.map(item => item.kind)).toEqual([
+      'turn',
+      'tool-group',
+      'turn',
+      'tool-group',
+    ]);
+    expect(index.items[1]).toMatchObject({
+      key: 'sess-1:2:tool-group',
+      turnIndex: 2,
+      endTurnIndex: 4,
+      sourceIndexes: [1, 3],
+      compact: true,
+    });
+    expect(index.items[2]).toMatchObject({compact: true});
+    expect(index.items[3]).toMatchObject({sourceIndexes: [5]});
+  });
+
   test('keeps structured plan updates out of the ordinary chat turn list', () => {
     const plan = message(2, 'agent_plan', '');
     plan.param = {

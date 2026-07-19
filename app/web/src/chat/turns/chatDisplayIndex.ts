@@ -8,6 +8,7 @@ import {promptAttachmentBlockCount} from '../composer/chatPromptAttachments';
 
 export type ChatDisplayIndexItem = {
   kind: 'turn' | 'tool-group' | 'pending' | 'queued';
+  compact?: boolean;
   key: string;
   turnIndex: number;
   endTurnIndex: number;
@@ -416,13 +417,25 @@ export function buildChatDisplayIndex(
   let activeToolGroup: ChatDisplayIndexItem | null = null;
   for (const item of sorted) {
     const turnIndex = positiveTurnIndex(item.message);
+    if (item.message.method === 'agent_plan') {
+      continue;
+    }
+    const operationId = sessionOperationId(item.message);
+    if (operationId && latestOperationSourceIndex.get(operationId) !== item.sourceIndex) {
+      continue;
+    }
+    const promptStatus = options.promptStatus?.(item.message) ?? null;
+    if (!operationId && options.shouldRender && !options.shouldRender(item.message, promptStatus)) {
+      continue;
+    }
     if (isToolCallMethod(item.message.method)) {
-      if (activeToolGroup && turnIndex === activeToolGroup.endTurnIndex + 1) {
+      if (activeToolGroup) {
         activeToolGroup.endTurnIndex = turnIndex;
         activeToolGroup.sourceIndexes.push(item.sourceIndex);
       } else {
         activeToolGroup = {
           kind: 'tool-group',
+          compact: true,
           key: `${item.message.sessionId}:${turnIndex}:tool-group`,
           turnIndex,
           endTurnIndex: turnIndex,
@@ -435,17 +448,6 @@ export function buildChatDisplayIndex(
       continue;
     }
     activeToolGroup = null;
-    if (item.message.method === 'agent_plan') {
-      continue;
-    }
-    const operationId = sessionOperationId(item.message);
-    if (operationId && latestOperationSourceIndex.get(operationId) !== item.sourceIndex) {
-      continue;
-    }
-    const promptStatus = options.promptStatus?.(item.message) ?? null;
-    if (!operationId && options.shouldRender && !options.shouldRender(item.message, promptStatus)) {
-      continue;
-    }
     const estimatedHeight = cachedChatTurnHeight(
       item.message,
       options.layoutMetrics,
@@ -453,6 +455,7 @@ export function buildChatDisplayIndex(
     );
     items.push({
       kind: 'turn',
+      ...(item.message.method === 'agent_thought_chunk' ? {compact: true} : {}),
       key: displayKey(item.message),
       turnIndex,
       endTurnIndex: turnIndex,

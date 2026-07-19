@@ -59,6 +59,7 @@ const ChatVirtuosoList: Components<ChatDisplayIndexItem, ChatVirtuosoContext>['L
 const ChatVirtuosoItem: Components<ChatDisplayIndexItem, ChatVirtuosoContext>['Item'] = ({
   children,
   context,
+  item,
   style,
   ...props
 }) => (
@@ -67,7 +68,7 @@ const ChatVirtuosoItem: Components<ChatDisplayIndexItem, ChatVirtuosoContext>['I
     className="chat-virtuoso-row"
     style={{
       ...style,
-      paddingBottom: `${context.rowGap}px`,
+      paddingBottom: `${resolveItemRowGap(item, context.rowGap)}px`,
     }}
   >
     {children}
@@ -92,8 +93,12 @@ const ChatVirtuosoComponents: Components<ChatDisplayIndexItem, ChatVirtuosoConte
   List: ChatVirtuosoList,
 };
 
+function resolveItemRowGap(item: ChatDisplayIndexItem | undefined, rowGap: number): number {
+  return item?.compact ? Math.min(4, rowGap) : rowGap;
+}
+
 function resolveEstimatedItemHeight(item: ChatDisplayIndexItem | undefined, rowGap: number): number {
-  return Math.max(1, Math.round((item?.estimatedHeight ?? 120) + rowGap));
+  return Math.max(1, Math.round((item?.estimatedHeight ?? 120) + resolveItemRowGap(item, rowGap)));
 }
 
 function resolveDefaultItemHeight(heightEstimates: number[], rowGap: number): number {

@@ -73,16 +73,19 @@ export const ChatToolCallGroup = React.memo(function ChatToolCallGroup({
         aria-expanded={open}
         aria-label={`${open ? 'Collapse' : 'Expand'} ${count} tool ${count === 1 ? 'call' : 'calls'}`}
         onClick={() => setOpen(current => !current)}
-        title={latest.title}
+        title={open ? undefined : latest.title}
       >
-        <span className="codicon codicon-chevron-right chat-tool-group-chevron" aria-hidden="true" />
         <span
           className={`codicon ${toolStatusIcon(latest.status)} chat-tool-group-status ${toolStatusClass(latest.status)}`}
           aria-hidden="true"
         />
         <span className="chat-tool-group-count">{countLabel}</span>
-        <span className="chat-tool-group-separator" aria-hidden="true">·</span>
-        <span className="chat-tool-group-latest">{latest.title}</span>
+        {!open ? (
+          <>
+            <span className="chat-tool-group-separator" aria-hidden="true">·</span>
+            <span className="chat-tool-group-latest">{latest.title}</span>
+          </>
+        ) : null}
       </button>
       {open ? (
         <div className="chat-tool-group-list">
