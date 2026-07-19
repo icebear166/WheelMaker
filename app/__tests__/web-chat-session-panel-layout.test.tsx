@@ -4,6 +4,7 @@ import {resolve} from 'node:path';
 const root = resolve(__dirname, '..');
 const workspaceAppSource = readFileSync(resolve(root, 'web/src/app/WorkspaceApp.tsx'), 'utf8');
 const responsiveShellSource = readFileSync(resolve(root, 'web/src/shell/ResponsiveShell.tsx'), 'utf8');
+const sessionGlobalBarSource = readFileSync(resolve(root, 'web/src/chat/ChatSessionGlobalBar.tsx'), 'utf8');
 const chatStyles = readFileSync(resolve(root, 'web/src/styles/chat.css'), 'utf8');
 const shellStyles = readFileSync(resolve(root, 'web/src/styles/shell.css'), 'utf8');
 
@@ -80,12 +81,42 @@ describe('PC chat session-panel layout', () => {
 
   it('positions desktop session surfaces from the chat area below the permanent title bar', () => {
     expect(chatStyles).not.toContain('.chat-edge-surface-stack.below-top-bar');
-    expect(cssRuleBlock(chatStyles, '.chat-edge-surface-stack')).toContain('--chat-edge-surface-stack-edge-gap: 0px;');
-    expect(cssRuleBlock(chatStyles, '.chat-edge-surface-stack')).toContain('left: 0;');
+    const stackRule = cssRuleBlock(chatStyles, '.chat-edge-surface-stack');
+    expect(stackRule).toContain('--chat-edge-surface-stack-edge-gap: 0px;');
+    expect(stackRule).toContain('top: 0;');
+    expect(stackRule).toContain('left: 0;');
     const slideoutRule = cssRuleBlock(chatStyles, '.chat-session-nav-slideout');
-    expect(slideoutRule).toContain('top: 12px;');
+    expect(slideoutRule).toContain('top: 0;');
     expect(slideoutRule).toContain('left: 0;');
-    expect(slideoutRule).toContain('height: calc(100% - 24px);');
+    expect(slideoutRule).toContain('height: 100%;');
+    expect(slideoutRule).toContain('border-radius: 0;');
+    const slideoutGlassRule = cssRuleBlock(chatStyles, '.chat-session-nav-slideout .chat-edge-surface-glass');
+    expect(slideoutGlassRule).toContain('border: 0;');
+    expect(slideoutGlassRule).toContain('box-shadow: none;');
+    expect(slideoutGlassRule).toContain('background: var(--desktop-top-surface);');
+  });
+
+  it('uses the pinned Recent project presentation inside the unpinned surface', () => {
+    const floatingStart = workspaceAppSource.indexOf('{showFloatingSessionPanel ? (');
+    const floatingSource = workspaceAppSource.slice(floatingStart, floatingStart + 2200);
+    expect(floatingSource).toContain('{renderRecentSessionsSection(false)}');
+    expect(floatingSource).not.toContain('recentSessionSections.map(section => renderRecentProjectSessionSection(section, false))');
+    expect(cssRuleBlock(chatStyles, '.chat-recent-sessions-surface-list')).toContain('padding: 8px 7px 16px;');
+  });
+
+  it('gives the expanded unpinned Recent surface the pinned flat sidebar material', () => {
+    expect(cssRuleBlock(chatStyles, '.chat-recent-sessions-surface.desktop.expanded')).toContain('border-radius: 0;');
+    const glassRule = cssRuleBlock(chatStyles, '.chat-recent-sessions-surface.desktop.expanded .chat-edge-surface-glass');
+    expect(glassRule).toContain('border: 0;');
+    expect(glassRule).toContain('box-shadow: none;');
+    expect(glassRule).toContain('background: var(--desktop-top-surface);');
+    expect(glassRule).toContain('backdrop-filter: none;');
+  });
+
+  it('keeps the pin control in the first stable action slot', () => {
+    expect(sessionGlobalBarSource.indexOf('{onTogglePin ? (')).toBeLessThan(
+      sessionGlobalBarSource.indexOf('{onToggleSlideOut ? ('),
+    );
   });
 
   it('adds three pixels of breathing room to every desktop session row', () => {
@@ -96,6 +127,8 @@ describe('PC chat session-panel layout', () => {
     expect(cssRuleBlock(chatStyles, '.chat-session-panel-pinned')).toContain('display: flex;');
     expect(cssRuleBlock(chatStyles, '.chat-session-panel-pinned')).toContain('min-height: 0;');
     expect(cssRuleBlock(chatStyles, '.chat-session-panel-scroll')).toContain('overflow-y: auto;');
-    expect(cssRuleBlock(chatStyles, '.chat-edge-surface-stack.beside-pinned-session-panel')).toContain('left: 0;');
+    const pinnedStackRule = cssRuleBlock(chatStyles, '.chat-edge-surface-stack.beside-pinned-session-panel');
+    expect(pinnedStackRule).toContain('top: 0;');
+    expect(pinnedStackRule).toContain('left: 0;');
   });
 });

@@ -200,7 +200,7 @@ describe('ChatPlanSurface', () => {
 
     expect(renderer!.root.findByProps({'aria-label': 'Recent sessions'}).props['data-session-list-density']).toBe('compact');
     expect(renderer!.root.findAllByProps({className: 'chat-recent-sessions-surface-list'})).toHaveLength(1);
-    expect(renderer!.root.findByProps({className: 'chat-session-panel-title'}).children).toEqual(['Recent Sessions']);
+    expect(renderer!.root.findByProps({className: 'chat-session-panel-title'}).children).toEqual(['Sessions']);
     const collapse = renderer!.root.findByProps({'aria-label': 'Collapse recent sessions'});
 
     await ReactTestRenderer.act(() => {

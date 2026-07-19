@@ -52,7 +52,7 @@ export const ChatRecentSessionsSurface = React.memo(function ChatRecentSessionsS
     <ChatSessionPanel
       ref={surfaceRef}
       mode="floating"
-      title="Recent Sessions"
+      title="Sessions"
       className="chat-recent-sessions-surface desktop expanded"
       ariaLabel="Recent sessions"
       sessionListDensity={sessionListDensity}

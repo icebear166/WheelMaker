@@ -19352,9 +19352,7 @@ export function App() {
                     />
                   }
                 >
-                  <div className="wide-project-session-list recent-sessions-list chat-recent-sessions-rows">
-                    {recentSessionSections.map(section => renderRecentProjectSessionSection(section, false))}
-                  </div>
+                  {renderRecentSessionsSection(false)}
                 </ChatRecentSessionsSurface>
               ) : null}
               <ChatPlanSurface

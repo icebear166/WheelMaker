@@ -22,5 +22,6 @@ describe('ChatRecentSessionsSurface', () => {
       typeof node.props.className === 'string' &&
       node.props.className.includes('chat-session-panel-floating'),
     )).toHaveLength(1);
+    expect(tree!.root.findByProps({className: 'chat-session-panel-title'}).children).toEqual(['Sessions']);
   });
 });

@@ -108,7 +108,7 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('showFloatingSessionPanel ? (');
     expect(mainTsx).not.toContain('onUnpin');
     expect(mainTsx).toContain('sessionListDensity={sessionListDensity}');
-    expect(mainTsx).toContain('{recentSessionSections.map(section => renderRecentProjectSessionSection(section, false))}');
+    expect(mainTsx).toContain('{renderRecentSessionsSection(false)}');
     expect(mainTsx).toContain('</ChatRecentSessionsSurface>');
   });
 

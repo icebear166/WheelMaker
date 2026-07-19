@@ -24,6 +24,19 @@ export const ChatSessionGlobalBar = React.memo(function ChatSessionGlobalBar({
   return (
     <div className={`chat-session-global-bar${slideOutOpen ? ' slide-out-open' : ''}`}>
       <div className="chat-session-global-bar-leading">
+        {title ? <span className="chat-session-global-bar-title">{title}</span> : null}
+        {onTogglePin ? (
+          <button
+            type="button"
+            className={`chat-session-global-bar-btn${pinActive ? ' active' : ''}`}
+            onClick={onTogglePin}
+            aria-pressed={!!pinActive}
+            aria-label={pinActive ? 'Unpin session sidebar' : 'Pin session sidebar'}
+            title={pinActive ? 'Unpin session sidebar' : 'Pin session sidebar'}
+          >
+            <span className="codicon codicon-pinned" aria-hidden="true" />
+          </button>
+        ) : null}
         {onToggleSlideOut ? (
           <button
             type="button"
@@ -37,19 +50,6 @@ export const ChatSessionGlobalBar = React.memo(function ChatSessionGlobalBar({
               className={`codicon ${slideOutOpen ? 'codicon-chevron-left' : 'codicon-list-flat'}`}
               aria-hidden="true"
             />
-          </button>
-        ) : null}
-        {title ? <span className="chat-session-global-bar-title">{title}</span> : null}
-        {onTogglePin ? (
-          <button
-            type="button"
-            className={`chat-session-global-bar-btn${pinActive ? ' active' : ''}`}
-            onClick={onTogglePin}
-            aria-pressed={!!pinActive}
-            aria-label={pinActive ? 'Unpin session sidebar' : 'Pin session sidebar'}
-            title={pinActive ? 'Unpin session sidebar' : 'Pin session sidebar'}
-          >
-            <span className="codicon codicon-pinned" aria-hidden="true" />
           </button>
         ) : null}
       </div>
