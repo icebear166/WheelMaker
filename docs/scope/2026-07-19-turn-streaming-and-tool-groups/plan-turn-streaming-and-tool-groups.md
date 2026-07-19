@@ -45,7 +45,7 @@ Expected: one docs commit on `feat/turn-streaming-ui`.
 - Modify: `server/internal/hub/client/session_recorder.go:679-745`
 - Test: `server/internal/hub/client/client_test.go:5124-5460`
 
-- [ ] **Step 1: Write failing recorder tests with a controlled clock**
+- [x] **Step 1: Write failing recorder tests with a controlled clock**
 
 Add tests next to the existing merged-turn/prompt-finish publish tests. The helper records only thought `session.message` events so prompt and summary events do not affect counts:
 
@@ -129,7 +129,7 @@ func TestSessionViewThoughtSnapshotsAreThrottledAndBoundaryFlushed(t *testing.T)
 
 Also add focused tests that (a) prompt completion immediately seals a suppressed thought before `prompt_done`, (b) two sessions each publish their first thought immediately, and (c) `session.read` after completion returns the concatenation of every suppressed chunk.
 
-- [ ] **Step 2: Run the new tests and verify the missing clock/gate fails**
+- [x] **Step 2: Run the new tests and verify the missing clock/gate fails**
 
 Run:
 
@@ -139,7 +139,7 @@ go test ./internal/hub/client -run "TestSessionViewThoughtSnapshots|TestSessionV
 
 Expected: FAIL because `SessionRecorder.now` and the throttle behavior do not exist.
 
-- [ ] **Step 3: Add per-session thinking publish state**
+- [x] **Step 3: Add per-session thinking publish state**
 
 Add the gate beside the existing recorder state:
 
@@ -167,7 +167,7 @@ thoughtPublishBySession: map[string]sessionThoughtPublishState{},
 
 Reset the map in `Close` and `ResetPromptState`, and delete its session entry in `RemovePromptState`.
 
-- [ ] **Step 4: Route live turns through the thinking-only gate**
+- [x] **Step 4: Route live turns through the thinking-only gate**
 
 Keep `publishSessionTurn` as the unconditional wire publisher and add:
 
@@ -198,7 +198,7 @@ func (r *SessionRecorder) clearThoughtPublishState(turn sessionTurnMessage) {
 
 Change `addMessageTurn` to call `publishLiveSessionTurn`. Keep `publishOpenTextTurnDone` unconditional, then call `clearThoughtPublishState(turn)` after publishing the final snapshot. This guarantees the seal event precedes a tool/message/prompt-done event and makes a later thinking block publish immediately.
 
-- [ ] **Step 5: Run recorder tests and the complete client package**
+- [x] **Step 5: Run recorder tests and the complete client package**
 
 Run:
 
@@ -209,7 +209,7 @@ go test ./internal/hub/client -count=1
 
 Expected: both commands PASS.
 
-- [ ] **Step 6: Commit the server change**
+- [x] **Step 6: Commit the server change**
 
 ```powershell
 git add server/internal/hub/client/session_recorder.go server/internal/hub/client/client_test.go
