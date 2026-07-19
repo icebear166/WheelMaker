@@ -113,6 +113,12 @@ import { ChatSurface } from '../chat/ChatSurface';
 import { ChatTurnView } from '../chat/ChatTurnView';
 import {ChatPlanSurface} from '../chat/ChatPlanSurface';
 import {ChatRecentSessionsSurface} from '../chat/ChatRecentSessionsSurface';
+import {ChatSessionGlobalBar} from '../chat/ChatSessionGlobalBar';
+import {
+  createSessionNavSlideOutState,
+  isSessionNavSlideOutCloseSuppressed,
+  sessionNavSlideOutReducer,
+} from '../chat/session/sessionNavSlideOutState';
 import {extractLatestChatPlan} from '../chat/chatPlan';
 import { resolveChatSessionTitle } from '../chat/session/chatSessionTitle';
 import { buildProjectAgentChoices } from '../chat/projectAgents';
@@ -2665,6 +2671,25 @@ export function App() {
   const floatingDragState = workspaceUiState.transient.floatingDragState as FloatingDragState | null;
   const floatingKeyboardOffset = workspaceUiState.transient.floatingKeyboardOffset;
   const sidebarCollapsed = workspaceUiState.desktop.sidebarCollapsed;
+  const [sessionNavSlideOut, dispatchSessionNavSlideOut] = useReducer(
+    sessionNavSlideOutReducer,
+    undefined,
+    createSessionNavSlideOutState,
+  );
+  const sessionNavSlideOutScrollRef = useRef<HTMLDivElement | null>(null);
+  const sessionNavSlideOutPointerDownRef = useRef(false);
+  useEffect(() => {
+    if (sessionNavSlideOut.open && sessionNavSlideOutScrollRef.current) {
+      sessionNavSlideOutScrollRef.current.scrollTop = sessionNavSlideOut.scrollTop;
+    }
+    // Restore once per open transition only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionNavSlideOut.open]);
+  useEffect(() => {
+    if (!sidebarCollapsed) {
+      dispatchSessionNavSlideOut({ type: 'forceReset' });
+    }
+  }, [sidebarCollapsed]);
   const desktopSidebarWidth = workspaceUiState.desktop.sidebarWidth;
   const collapsedProjectIds = workspaceUiState.shared.collapsedProjectIds;
   const pinnedProjectIds = workspaceUiState.shared.pinnedProjectIds;
@@ -5147,8 +5172,9 @@ export function App() {
     }
   }, [allVisibleProjectsLoaded, projectSessionsByProjectId]);
   const showPinnedRecentSessionsSurface = isWide && sidebarCollapsed && !archivedMode && !sessionSearchActive && recentSessionSections.length > 0;
+  const showChatEdgeSurfaces = isWide && tab === 'chat' && (showPinnedRecentSessionsSurface || !!selectedChatPlan || showLimitsMonitor);
   const chatMainClassName = isWide
-    ? (chatViewWidth === 'fixed-800' ? `chat-main chat-view-width-fixed-800${showPinnedRecentSessionsSurface ? ' chat-view-width-fixed-800-pinned-recent' : ''}` : 'chat-main')
+    ? (chatViewWidth === 'fixed-800' ? `chat-main chat-view-width-fixed-800${showChatEdgeSurfaces ? ' chat-view-width-fixed-800-edge-surfaces' : ''}` : 'chat-main')
     : 'chat-main';
   const desktopChatFixedPreview = isWide && chatPreviewOpen && chatViewWidth === 'fixed-800';
   const closeSidebarTransientMenus = useCallback(() => {
@@ -15412,6 +15438,7 @@ export function App() {
           recentCollapsed ? ' collapsed' : ''
         }`}
       >
+        {mobile ? (
         <div className="wide-project-row">
           <button
             type="button"
@@ -15438,6 +15465,29 @@ export function App() {
             <span className={`codicon ${recentCollapsed ? 'codicon-chevron-down' : 'codicon-chevron-up'}`} aria-hidden="true" />
           </button>
         </div>
+        ) : (
+        <ChatSessionGlobalBar
+          title="Recent Sessions"
+          pinActive={!sidebarCollapsed}
+          onTogglePin={() => setSidebarCollapsed(value => !value)}
+          trailing={
+            <>
+              <button
+                type="button"
+                className="wide-project-action-btn recent-sessions-collapse-btn"
+                title={recentCollapsed ? 'Expand Recent Sessions' : 'Collapse Recent Sessions'}
+                aria-label={recentCollapsed ? 'Expand Recent Sessions' : 'Collapse Recent Sessions'}
+                aria-expanded={!recentCollapsed}
+                onClick={() => toggleWideProjectCollapsed(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)}
+              >
+                <span className={`codicon ${recentCollapsed ? 'codicon-chevron-down' : 'codicon-chevron-up'}`} aria-hidden="true" />
+              </button>
+              {renderChatArchiveControls()}
+              {renderChatHeaderSearchControls()}
+            </>
+          }
+        />
+        )}
         {!recentCollapsed ? (
           <div className={`wide-project-session-list recent-sessions-list${mobile ? ' mobile-project-session-list' : ''}`}>
             {recentSessionSections.map(section => renderRecentProjectSessionSection(section, mobile))}
@@ -17074,8 +17124,12 @@ export function App() {
         ) : null}
         <div className="chat-sidebar-title-actions">
           {renderChatHubSummary()}
-          {renderChatArchiveControls()}
-          {renderChatHeaderSearchControls()}
+          {mobile ? (
+            <>
+              {renderChatArchiveControls()}
+              {renderChatHeaderSearchControls()}
+            </>
+          ) : null}
         </div>
       </>
     );
@@ -17479,7 +17533,7 @@ export function App() {
     );
   };
 
-  const renderWideProjectSessionNav = () => {
+  const renderWideProjectSessionNav = (options?: { includeRecent?: boolean }) => {
     return (
       <ChatSessionNav
         className="wide-project-session-nav"
@@ -17489,7 +17543,7 @@ export function App() {
         {projects.length === 0 ? (
           <div className="chat-empty-hint">No projects available.</div>
         ) : null}
-        {renderRecentSessionsSection(false)}
+        {options?.includeRecent === false ? null : renderRecentSessionsSection(false)}
         {archivedMode ? renderArchivedSessionRows(false) : sessionSearchActive ? renderSessionSearchResults(false) : visibleProjectItems.map(projectItem => {
           const targetProjectId = projectItem.projectId;
           const projectSessions = projectSessionsByProjectId[targetProjectId] ?? [];
@@ -19283,13 +19337,34 @@ export function App() {
               </span>
             </button>
           ) : null}
-          {isWide && (showPinnedRecentSessionsSurface || selectedChatPlan || (tab === 'chat' && showLimitsMonitor)) ? (
+          {isWide && tab === 'chat' ? (
             <div className="chat-edge-surface-stack">
+              {sidebarCollapsed && !sidebarSettingsOpen ? (
+                <div className="chat-top-title-surface">
+                  <div className="chat-edge-surface-glass" aria-hidden="true" />
+                  <div className="chat-edge-surface-content">
+                    {renderChatSessionHeader(false)}
+                  </div>
+                </div>
+              ) : null}
               {showPinnedRecentSessionsSurface ? (
                 <ChatRecentSessionsSurface
                   collapsed={collapsedProjectIds.includes(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)}
                   onToggleCollapsed={() => toggleWideProjectCollapsed(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)}
                   sessionListDensity={sessionListDensity}
+                  header={
+                    <ChatSessionGlobalBar
+                      title="Recent Sessions"
+                      slideOutOpen={sessionNavSlideOut.open}
+                      onToggleSlideOut={() =>
+                        dispatchSessionNavSlideOut(
+                          sessionNavSlideOut.open ? { type: 'requestClose', suppressed: false } : { type: 'open' },
+                        )
+                      }
+                      pinActive={false}
+                      onTogglePin={() => setSidebarCollapsed(false)}
+                    />
+                  }
                 >
                   <div className="wide-project-session-list recent-sessions-list chat-recent-sessions-rows">
                     {recentSessionSections.map(section => renderRecentProjectSessionSection(section, false))}
@@ -19300,13 +19375,57 @@ export function App() {
                 mode="desktop"
                 plan={selectedChatPlan}
               />
-              {tab === 'chat' && showLimitsMonitor ? (
+              {showLimitsMonitor ? (
                 <UsageFeatureSurface
                   snapshot={usageSnapshot}
                   onRefresh={() => { void refreshUsageAcrossHubs(); }}
                   onRequestHide={() => setConfirmTarget({kind: 'hideLimitsMonitor'})}
                 />
               ) : null}
+            </div>
+          ) : null}
+          {isWide && sidebarCollapsed && sessionNavSlideOut.open && tab === 'chat' ? (
+            <div
+              className="chat-session-nav-slideout"
+              onPointerLeave={() => {
+                dispatchSessionNavSlideOut({
+                  type: 'requestClose',
+                  suppressed: isSessionNavSlideOutCloseSuppressed({
+                    searchActive: sessionSearchActive || sessionSearchHeaderExpanded,
+                    menuOpen: sessionArchiveMenuOpen || !!wideProjectActionMenu || !!projectSessionActionMenu,
+                    pointerDownInList: sessionNavSlideOutPointerDownRef.current,
+                  }),
+                });
+              }}
+            >
+              <div className="chat-edge-surface-glass" aria-hidden="true" />
+              <div className="chat-session-nav-slideout-content">
+                <ChatSessionGlobalBar
+                  title="Sessions"
+                  slideOutOpen
+                  onToggleSlideOut={() => dispatchSessionNavSlideOut({ type: 'requestClose', suppressed: false })}
+                  pinActive={false}
+                  onTogglePin={() => setSidebarCollapsed(false)}
+                  trailing={
+                    <>
+                      {renderChatArchiveControls()}
+                      {renderChatHeaderSearchControls()}
+                    </>
+                  }
+                />
+                <div
+                  ref={sessionNavSlideOutScrollRef}
+                  className="chat-session-nav-slideout-scroll"
+                  onPointerDown={() => { sessionNavSlideOutPointerDownRef.current = true; }}
+                  onPointerUp={() => { sessionNavSlideOutPointerDownRef.current = false; }}
+                  onPointerCancel={() => { sessionNavSlideOutPointerDownRef.current = false; }}
+                  onScroll={event => {
+                    dispatchSessionNavSlideOut({ type: 'scroll', scrollTop: event.currentTarget.scrollTop });
+                  }}
+                >
+                  {renderWideProjectSessionNav({ includeRecent: false })}
+                </div>
+              </div>
             </div>
           ) : null}
           {sidebarCollapsed ? renderWideProjectActionMenu() : null}

@@ -1798,7 +1798,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('const togglePinnedProject = useCallback(');
     expect(mainTsx).toContain('const startProjectPinLongPress = useCallback(');
     expect(mainTsx).toContain('const consumeProjectPinLongPressClick = useCallback(');
-    expect(mainTsx).toContain('const renderWideProjectSessionNav = () => {');
+    expect(mainTsx).toContain('const renderWideProjectSessionNav = (options?: { includeRecent?: boolean }) => {');
     expect(mainTsx).toContain('className="wide-project-session-nav"');
     expect(mainTsx).toContain('className="wide-project-title-group"');
     expect(mainTsx).toContain("collapsed ? 'codicon-folder' : 'codicon-folder-opened'");
@@ -1963,7 +1963,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className={`desktop-sidebar-resize-handle${desktopSidebarResizing ?');
     expect(mainTsx).toContain('desktopSidebarWidth={effectiveDesktopSidebarWidth}');
 
-    const wideRailStart = mainTsx.indexOf('const renderWideProjectSessionNav = () => {');
+    const wideRailStart = mainTsx.indexOf('const renderWideProjectSessionNav = (options?: { includeRecent?: boolean }) => {');
     const wideRailEnd = mainTsx.indexOf('const renderSidebar = () => {', wideRailStart);
     expect(wideRailStart).toBeGreaterThanOrEqual(0);
     expect(wideRailEnd).toBeGreaterThan(wideRailStart);

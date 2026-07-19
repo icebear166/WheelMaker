@@ -2939,6 +2939,100 @@
   pointer-events: auto;
 }
 
+.chat-top-title-surface {
+  position: relative;
+  width: 100%;
+  pointer-events: auto;
+}
+
+.chat-top-title-surface .chat-session-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+}
+
+.chat-session-global-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 6px;
+}
+
+.chat-session-global-bar-leading,
+.chat-session-global-bar-trailing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.chat-session-global-bar-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-session-global-bar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.chat-session-global-bar-btn:hover,
+.chat-session-global-bar-btn.active {
+  background: var(--button-secondary-hover-background, rgba(128, 128, 128, 0.18));
+  color: var(--text-primary);
+}
+
+.chat-session-nav-slideout {
+  position: absolute;
+  top: 12px;
+  left: max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px));
+  z-index: 7;
+  width: min(var(--chat-edge-surface-width, 360px), calc(100% - 2 * max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px))));
+  max-height: calc(100% - 24px);
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.chat-session-nav-slideout-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: inherit;
+}
+
+.chat-session-nav-slideout-content > .chat-session-global-bar {
+  flex: none;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.chat-session-nav-slideout-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 .chat-plan-surface-header {
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr) auto;
@@ -4132,30 +4226,27 @@
   max-width: 62%;
 }
 
-.chat-view-width-fixed-800-pinned-recent {
-  --chat-pinned-recent-edge-gap: max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px));
-  --chat-pinned-recent-resolved-width: min(
-    360px,
-    calc(100% - var(--chat-pinned-recent-edge-gap) - var(--chat-pinned-recent-edge-gap))
+.chat-view-width-fixed-800-edge-surfaces {
+  --chat-edge-reserve-edge-gap: max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px));
+  /* R: reserved left width for the floating surface column (surface width + edge gap + 12px column gap). */
+  --chat-edge-reserved-left: calc(
+    min(360px, 100% - var(--chat-edge-reserve-edge-gap) - var(--chat-edge-reserve-edge-gap)) +
+    var(--chat-edge-reserve-edge-gap) + 12px
   );
-  --chat-pinned-recent-left: max(
-    var(--chat-pinned-recent-edge-gap),
-    calc((100% - 800px) / 2 - var(--chat-pinned-recent-resolved-width) - 12px)
-  );
-  --chat-pinned-recent-content-left: calc(
-    var(--chat-pinned-recent-left) +
-    var(--chat-pinned-recent-resolved-width) +
-    12px
-  );
+  /* Continuous three-phase margin (mirrors resolveFixedChatMarginLeft in chat/layout/fixedChatAlignment.ts):
+     centered -> docked to --chat-edge-reserved-left -> overlap with fade. */
+  --chat-fixed-column: min(800px, 100%);
+  --chat-fixed-centered: calc((100% - var(--chat-fixed-column)) / 2);
+  --chat-fixed-right-min: calc(100% - var(--chat-fixed-column) - var(--chat-edge-reserve-edge-gap));
 }
 
-.chat-view-width-fixed-800-pinned-recent .chat-view-content,
-.chat-view-width-fixed-800-pinned-recent .chat-composer-content {
-  margin-left: min(
-    calc(100% - min(800px, 100%) - var(--chat-pinned-recent-edge-gap)),
-    calc(
-      var(--chat-pinned-recent-content-left) +
-      max(0px, (100% - var(--chat-pinned-recent-content-left) - 800px) / 2)
+.chat-view-width-fixed-800-edge-surfaces .chat-view-content,
+.chat-view-width-fixed-800-edge-surfaces .chat-composer-content {
+  margin-left: max(
+    0px,
+    min(
+      max(var(--chat-fixed-centered), min(var(--chat-edge-reserved-left), var(--chat-fixed-right-min))),
+      var(--chat-fixed-right-min)
     )
   );
   margin-right: auto;
