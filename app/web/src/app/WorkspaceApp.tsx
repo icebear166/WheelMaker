@@ -113,6 +113,7 @@ import { ChatSurface } from '../chat/ChatSurface';
 import { ChatTurnView } from '../chat/ChatTurnView';
 import {ChatPlanSurface} from '../chat/ChatPlanSurface';
 import {ChatRecentSessionsSurface} from '../chat/ChatRecentSessionsSurface';
+import {ChatSessionGlobalBar} from '../chat/ChatSessionGlobalBar';
 import {extractLatestChatPlan} from '../chat/chatPlan';
 import { resolveChatSessionTitle } from '../chat/session/chatSessionTitle';
 import { buildProjectAgentChoices } from '../chat/projectAgents';
@@ -15413,6 +15414,7 @@ export function App() {
           recentCollapsed ? ' collapsed' : ''
         }`}
       >
+        {mobile ? (
         <div className="wide-project-row">
           <button
             type="button"
@@ -15439,6 +15441,29 @@ export function App() {
             <span className={`codicon ${recentCollapsed ? 'codicon-chevron-down' : 'codicon-chevron-up'}`} aria-hidden="true" />
           </button>
         </div>
+        ) : (
+        <ChatSessionGlobalBar
+          title="Recent Sessions"
+          pinActive={!sidebarCollapsed}
+          onTogglePin={() => setSidebarCollapsed(value => !value)}
+          trailing={
+            <>
+              <button
+                type="button"
+                className="wide-project-action-btn recent-sessions-collapse-btn"
+                title={recentCollapsed ? 'Expand Recent Sessions' : 'Collapse Recent Sessions'}
+                aria-label={recentCollapsed ? 'Expand Recent Sessions' : 'Collapse Recent Sessions'}
+                aria-expanded={!recentCollapsed}
+                onClick={() => toggleWideProjectCollapsed(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)}
+              >
+                <span className={`codicon ${recentCollapsed ? 'codicon-chevron-down' : 'codicon-chevron-up'}`} aria-hidden="true" />
+              </button>
+              {renderChatArchiveControls()}
+              {renderChatHeaderSearchControls()}
+            </>
+          }
+        />
+        )}
         {!recentCollapsed ? (
           <div className={`wide-project-session-list recent-sessions-list${mobile ? ' mobile-project-session-list' : ''}`}>
             {recentSessionSections.map(section => renderRecentProjectSessionSection(section, mobile))}
@@ -17075,8 +17100,12 @@ export function App() {
         ) : null}
         <div className="chat-sidebar-title-actions">
           {renderChatHubSummary()}
-          {renderChatArchiveControls()}
-          {renderChatHeaderSearchControls()}
+          {mobile ? (
+            <>
+              {renderChatArchiveControls()}
+              {renderChatHeaderSearchControls()}
+            </>
+          ) : null}
         </div>
       </>
     );
