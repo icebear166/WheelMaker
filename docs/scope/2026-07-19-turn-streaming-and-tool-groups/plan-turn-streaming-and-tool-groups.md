@@ -223,7 +223,7 @@ git commit -m "feat(hub): throttle live thinking snapshots"
 - Modify: `app/web/src/chat/turns/chatDisplayIndex.ts:393-480`
 - Test: `app/__tests__/web-chat-display-index.test.ts:1-125`
 
-- [ ] **Step 1: Replace hide-tool tests with grouping and range tests**
+- [x] **Step 1: Replace hide-tool tests with grouping and range tests**
 
 Add a tool-message helper and expectations for adjacent grouping, non-tool boundaries, stable keys, fixed estimates, and contained-turn navigation:
 
@@ -273,7 +273,7 @@ test('resolves every grouped tool turn to the same display item', () => {
 });
 ```
 
-- [ ] **Step 2: Run the display-index test and verify it fails**
+- [x] **Step 2: Run the display-index test and verify it fails**
 
 Run:
 
@@ -283,7 +283,7 @@ npm --prefix app test -- --runInBand __tests__/web-chat-display-index.test.ts
 
 Expected: FAIL because `tool-group`, range metadata, and `chatDisplayItemContainsTurn` do not exist.
 
-- [ ] **Step 3: Extend display metadata with turn ranges and source indexes**
+- [x] **Step 3: Extend display metadata with turn ranges and source indexes**
 
 Use one consistent lightweight shape for every item:
 
@@ -307,7 +307,7 @@ export function chatDisplayItemContainsTurn(
 }
 ```
 
-Remove `hideToolCalls` from `ChatDisplayIndexOptions`. During the sorted scan, clear the current tool-group reference before processing every non-tool item, including hidden plans. For a tool item, append its source index and extend `endTurnIndex` when a group is open; otherwise push a new item keyed from the first tool turn. Use `metrics.thoughtCollapsedHeight` for thoughts and `metrics.toolLineHeight` for every collapsed tool group, independent of content and group size.
+Keep `hideToolCalls` temporarily in `ChatDisplayIndexOptions` so the intermediate commit remains type-compatible with `WorkspaceApp`, but stop consulting it during projection; Task 6 removes the obsolete option and callers together. During the sorted scan, clear the current tool-group reference before processing every non-tool item, including hidden plans. For a tool item, append its source index and extend `endTurnIndex` when a group is open; otherwise push a new item keyed from the first tool turn. Use `metrics.thoughtCollapsedHeight` for thoughts and `metrics.toolLineHeight` for every collapsed tool group, independent of content and group size.
 
 Populate `endTurnIndex` and `sourceIndexes` for ordinary, pending, and queued items as well (`turnIndex`/`[sourceIndex]` for turns, `0`/`[]` for synthetic items) so consumers do not branch on missing metadata.
 
@@ -325,7 +325,7 @@ expect(Object.keys(index.items[0]).sort()).toEqual([
 ]);
 ```
 
-- [ ] **Step 4: Make scroll resolution range-aware**
+- [x] **Step 4: Make scroll resolution range-aware**
 
 Replace the exact-turn lookup with:
 
@@ -337,7 +337,7 @@ const exactIndex = displayIndex.items.findIndex(item =>
 
 Keep the existing nearest-following and last-item fallback behavior.
 
-- [ ] **Step 5: Run display-index tests and TypeScript**
+- [x] **Step 5: Run display-index tests and TypeScript**
 
 Run:
 
@@ -348,7 +348,7 @@ npm --prefix app run tsc:web
 
 Expected: display-index tests and TypeScript PASS. `WorkspaceApp` will not render the new group kind until Task 5, but its existing non-exhaustive branch remains type-safe.
 
-- [ ] **Step 6: Commit the display projection**
+- [x] **Step 6: Commit the display projection**
 
 ```powershell
 git add app/web/src/chat/turns/chatDisplayIndex.ts app/__tests__/web-chat-display-index.test.ts
