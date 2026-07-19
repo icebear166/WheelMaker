@@ -84,7 +84,8 @@ func (s *Server) handleHubDebugWebTransferStart(peer *peerConn, state *connectio
 	session := debugWebTransferSession{ID: payload.TransferID, SourceHubID: state.hubID, TargetHubID: payload.TargetHubID, Size: payload.Size, SHA256: payload.SHA256}
 	s.debugWebTransfers[payload.TransferID] = session
 	s.debugWebTransferMu.Unlock()
-	if !s.forwardDebugWebTransfer(peer, in, target, payload.TargetHubID, rp.RegistryMethodHubDebugWebReceiveStart) {
+	delivered, status := s.forwardDebugWebTransfer(peer, in, target, payload.TargetHubID, rp.RegistryMethodHubDebugWebReceiveStart)
+	if !delivered || status != "accepted" {
 		s.deleteDebugWebTransfer(payload.TransferID)
 	}
 }
@@ -114,8 +115,17 @@ func (s *Server) handleHubDebugWebTransferChunk(peer *peerConn, state *connectio
 	}
 	s.debugWebTransferMu.Unlock()
 	target := s.debugWebTarget(session.TargetHubID)
-	if target == nil || !s.forwardDebugWebTransfer(peer, in, target, session.TargetHubID, rp.RegistryMethodHubDebugWebReceiveChunk) {
+	if target == nil {
+		_ = s.writeError(peer, in.RequestID, in.Method, codeUnavailable, "target hub offline", nil)
 		s.deleteDebugWebTransfer(payload.TransferID)
+		return
+	}
+	delivered, status := s.forwardDebugWebTransfer(peer, in, target, session.TargetHubID, rp.RegistryMethodHubDebugWebReceiveChunk)
+	if !delivered {
+		s.deleteDebugWebTransfer(payload.TransferID)
+		return
+	}
+	if status != "accepted" {
 		return
 	}
 	s.debugWebTransferMu.Lock()
@@ -143,7 +153,7 @@ func (s *Server) handleHubDebugWebTransferFinish(peer *peerConn, state *connecti
 		_ = s.writeError(peer, in.RequestID, in.Method, codeUnavailable, "target hub offline", nil)
 		return
 	}
-	s.forwardDebugWebTransfer(peer, in, target, session.TargetHubID, rp.RegistryMethodHubDebugWebReceiveFinish)
+	_, _ = s.forwardDebugWebTransfer(peer, in, target, session.TargetHubID, rp.RegistryMethodHubDebugWebReceiveFinish)
 }
 
 func (s *Server) handleHubDebugWebTransferAbort(peer *peerConn, state *connectionState, in envelope) {
@@ -157,7 +167,7 @@ func (s *Server) handleHubDebugWebTransferAbort(peer *peerConn, state *connectio
 		_ = s.writeResponse(peer, in.RequestID, in.Method, "", map[string]string{"status": "aborted"})
 		return
 	}
-	s.forwardDebugWebTransfer(peer, in, target, session.TargetHubID, rp.RegistryMethodHubDebugWebReceiveAbort)
+	_, _ = s.forwardDebugWebTransfer(peer, in, target, session.TargetHubID, rp.RegistryMethodHubDebugWebReceiveAbort)
 }
 
 func (s *Server) debugWebTransferForRequest(peer *peerConn, state *connectionState, in envelope) (debugWebTransferSession, bool) {
@@ -176,35 +186,42 @@ func (s *Server) debugWebTransferForRequest(peer *peerConn, state *connectionSta
 	return session, true
 }
 
-func (s *Server) forwardDebugWebTransfer(source *peerConn, in envelope, target *peerConn, targetHubID, method string) bool {
+func (s *Server) forwardDebugWebTransfer(source *peerConn, in envelope, target *peerConn, targetHubID, method string) (bool, string) {
 	forwardID := s.nextForwardID.Add(1)
 	wait, err := target.registerPending(forwardID)
 	if err != nil {
 		_ = s.writeError(source, in.RequestID, in.Method, codeBusy, "target hub request backlog is full", nil)
-		return false
+		return false, ""
 	}
 	if err := target.write(envelope{RequestID: forwardID, Type: rp.RegistryEnvelopeTypeRequest, Method: method, HubID: targetHubID, Payload: in.Payload}); err != nil {
 		target.resolvePending(forwardID, envelope{})
 		_ = s.writeError(source, in.RequestID, in.Method, codeInternal, "target hub request write failed", nil)
-		return false
+		return false, ""
 	}
 	select {
 	case response, ok := <-wait:
 		if !ok || response.Type == rp.RegistryEnvelopeTypeError {
 			_ = s.writeError(source, in.RequestID, in.Method, codeUnavailable, "target hub rejected debug web transfer", nil)
-			return false
+			return false, ""
 		}
 		var payload any
 		if json.Unmarshal(response.Payload, &payload) != nil {
 			_ = s.writeError(source, in.RequestID, in.Method, codeInternal, "invalid target hub response", nil)
-			return false
+			return false, ""
+		}
+		var status struct {
+			Status string `json:"status"`
+		}
+		if json.Unmarshal(response.Payload, &status) != nil || status.Status == "" {
+			_ = s.writeError(source, in.RequestID, in.Method, codeInternal, "invalid target hub response", nil)
+			return false, ""
 		}
 		_ = s.writeResponse(source, in.RequestID, in.Method, "", payload)
-		return true
+		return true, status.Status
 	case <-time.After(debugWebTransferTimeout):
 		target.resolvePending(forwardID, envelope{})
 		_ = s.writeError(source, in.RequestID, in.Method, codeTimeout, "target hub timeout", nil)
-		return false
+		return false, ""
 	}
 }
 

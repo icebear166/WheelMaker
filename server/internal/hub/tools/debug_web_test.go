@@ -3,31 +3,20 @@ package tools
 import (
 	"archive/zip"
 	"bytes"
-	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
-	"fmt"
-	"net/http"
-	"net/http/httptest"
+	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	rp "github.com/swm8023/wheelmaker/internal/protocol"
 )
 
-func TestApplyDebugWebReplacesOnlyVerifiedArchive(t *testing.T) {
-	archive := debugWebZip(t, map[string]string{"index.html": "new"})
-	digest := debugWebDigest(archive)
-	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/debug-web/current.json":
-			fmt.Fprintf(w, `{"schema":1,"archivePath":"/debug-web/archives/%s.zip","size":%d,"sha256":"%s","publishedAt":"2026-07-19T00:00:00Z"}`, digest, len(archive), digest)
-		case "/debug-web/archives/" + digest + ".zip":
-			_, _ = w.Write(archive)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer server.Close()
+func TestDebugWebTransferReceiverAppliesVerifiedArchive(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, "web"), 0o755); err != nil {
 		t.Fatal(err)
@@ -35,25 +24,25 @@ func TestApplyDebugWebReplacesOnlyVerifiedArchive(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "web", "index.html"), []byte("old"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	archive := debugWebZip(t, map[string]string{"index.html": "new"})
+	receiver := newDebugWebTransferReceiver(root)
+	transferID := "transfer-verified"
+	mustHandleDebugWebTransfer(t, receiver, rp.RegistryMethodHubDebugWebReceiveStart, map[string]any{"transferId": transferID, "size": len(archive), "sha256": debugWebDigest(archive)}, "accepted")
+	middle := len(archive) / 2
+	mustHandleDebugWebTransfer(t, receiver, rp.RegistryMethodHubDebugWebReceiveChunk, map[string]any{"transferId": transferID, "sequence": 0, "data": base64.StdEncoding.EncodeToString(archive[:middle])}, "accepted")
+	mustHandleDebugWebTransfer(t, receiver, rp.RegistryMethodHubDebugWebReceiveChunk, map[string]any{"transferId": transferID, "sequence": 1, "data": base64.StdEncoding.EncodeToString(archive[middle:])}, "accepted")
+	mustHandleDebugWebTransfer(t, receiver, rp.RegistryMethodHubDebugWebReceiveFinish, map[string]any{"transferId": transferID}, "success")
 
-	if err := ApplyDebugWeb(context.Background(), root, server.URL, server.Client()); err != nil {
-		t.Fatal(err)
+	current, err := os.ReadFile(filepath.Join(root, "web", "index.html"))
+	if err != nil || string(current) != "new" {
+		t.Fatalf("web=%q err=%v", current, err)
 	}
-	bytes, err := os.ReadFile(filepath.Join(root, "web", "index.html"))
-	if err != nil || string(bytes) != "new" {
-		t.Fatalf("web=%q err=%v", bytes, err)
+	if _, err := os.Stat(filepath.Join(root, updateStagingDirectoryName, updateLeaseFileName)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("lease remains: %v", err)
 	}
 }
 
-func TestApplyDebugWebLeavesExistingWebOnDigestMismatch(t *testing.T) {
-	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/debug-web/current.json" {
-			_, _ = w.Write([]byte(`{"schema":1,"archivePath":"/debug-web/archives/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.zip","size":3,"sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","publishedAt":"2026-07-19T00:00:00Z"}`))
-			return
-		}
-		_, _ = w.Write([]byte("bad"))
-	}))
-	defer server.Close()
+func TestDebugWebTransferReceiverPreservesWebOnDigestMismatch(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, "web"), 0o755); err != nil {
 		t.Fatal(err)
@@ -61,12 +50,40 @@ func TestApplyDebugWebLeavesExistingWebOnDigestMismatch(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "web", "index.html"), []byte("old"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := ApplyDebugWeb(context.Background(), root, server.URL, server.Client()); err == nil {
-		t.Fatal("digest mismatch was accepted")
+	receiver := newDebugWebTransferReceiver(root)
+	mustHandleDebugWebTransfer(t, receiver, rp.RegistryMethodHubDebugWebReceiveStart, map[string]any{"transferId": "transfer-bad", "size": 3, "sha256": strings.Repeat("a", 64)}, "accepted")
+	mustHandleDebugWebTransfer(t, receiver, rp.RegistryMethodHubDebugWebReceiveChunk, map[string]any{"transferId": "transfer-bad", "sequence": 0, "data": base64.StdEncoding.EncodeToString([]byte("zip"))}, "accepted")
+	raw, _ := json.Marshal(map[string]any{"transferId": "transfer-bad"})
+	status, commandErr := receiver.Handle(rp.RegistryMethodHubDebugWebReceiveFinish, raw)
+	if commandErr == nil || status.ErrorCode != "debug_web_digest_mismatch" {
+		t.Fatalf("status=%#v err=%v", status, commandErr)
 	}
-	bytes, _ := os.ReadFile(filepath.Join(root, "web", "index.html"))
-	if string(bytes) != "old" {
-		t.Fatalf("old web was replaced: %q", bytes)
+	current, _ := os.ReadFile(filepath.Join(root, "web", "index.html"))
+	if string(current) != "old" {
+		t.Fatalf("existing web replaced: %q", current)
+	}
+}
+
+func TestDebugWebTransferReceiverRejectsOutOfOrderChunk(t *testing.T) {
+	receiver := newDebugWebTransferReceiver(t.TempDir())
+	mustHandleDebugWebTransfer(t, receiver, rp.RegistryMethodHubDebugWebReceiveStart, map[string]any{"transferId": "transfer-order", "size": 3, "sha256": debugWebDigest([]byte("zip"))}, "accepted")
+	raw, _ := json.Marshal(map[string]any{"transferId": "transfer-order", "sequence": 1, "data": base64.StdEncoding.EncodeToString([]byte("zip"))})
+	status, commandErr := receiver.Handle(rp.RegistryMethodHubDebugWebReceiveChunk, raw)
+	if commandErr == nil || status.ErrorCode != "debug_web_sequence_mismatch" {
+		t.Fatalf("status=%#v err=%v", status, commandErr)
+	}
+	mustHandleDebugWebTransfer(t, receiver, rp.RegistryMethodHubDebugWebReceiveAbort, map[string]any{"transferId": "transfer-order"}, "aborted")
+}
+
+func mustHandleDebugWebTransfer(t *testing.T, receiver *debugWebTransferReceiver, method string, payload map[string]any, want string) {
+	t.Helper()
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, commandErr := receiver.Handle(method, raw)
+	if commandErr != nil || status.Status != want {
+		t.Fatalf("method=%s status=%#v err=%v", method, status, commandErr)
 	}
 }
 

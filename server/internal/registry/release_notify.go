@@ -36,8 +36,8 @@ func (s *Server) handleHubReleaseNotify(peer *peerConn, state *connectionState, 
 		_ = s.writeError(peer, in.RequestID, in.Method, codeInvalidArgument, "targetHubId is required", nil)
 		return
 	}
-	if payload.Kind != "version" && payload.Kind != "debugWeb" {
-		_ = s.writeError(peer, in.RequestID, in.Method, codeInvalidArgument, "unsupported release kind", nil)
+	if payload.Kind != "version" {
+		_ = s.writeError(peer, in.RequestID, in.Method, codeInvalidArgument, "release notification only supports version releases", nil)
 		return
 	}
 	baseURL, err := cleanHTTPSOrigin(payload.BaseURL)

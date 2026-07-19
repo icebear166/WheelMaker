@@ -3,9 +3,9 @@ import React from 'react';
 import {WHEELMAKER_RELEASE_BASE_URL} from './releaseChannel';
 import type {RegistryReleasePublishResponse} from '../registry/registryTypes';
 
-type Settings = {publisherHubId: string; sourcePath: string; serverHubId: string; autoPull: boolean; desktop: boolean; android: boolean; jobId: string; jobHubId: string};
+type Settings = {publisherHubId: string; sourcePath: string; serverHubId: string; webHubId: string; autoPull: boolean; desktop: boolean; android: boolean; jobId: string; jobHubId: string};
 const key = 'wheelmaker.settings.release-publish.v1';
-const empty: Settings = {publisherHubId: '', sourcePath: '', serverHubId: '', autoPull: false, desktop: false, android: false, jobId: '', jobHubId: ''};
+const empty: Settings = {publisherHubId: '', sourcePath: '', serverHubId: '', webHubId: '', autoPull: false, desktop: false, android: false, jobId: '', jobHubId: ''};
 
 function load(): Settings { try { return {...empty, ...JSON.parse(window.localStorage.getItem(key) || '{}')}; } catch { return empty; } }
 
@@ -30,29 +30,43 @@ export function ReleasePublishSettings({hubIds, start, query}: {
     if (!settings.publisherHubId || !settings.sourcePath || pending) return;
     setPending(true); setError('');
     try {
-      const result = await start(settings.publisherHubId, {kind, sourcePath: settings.sourcePath, baseUrl: WHEELMAKER_RELEASE_BASE_URL, desktop: kind === 'version' && settings.desktop, android: kind === 'version' && settings.android, targetHubId: settings.serverHubId || undefined, autoPull: Boolean(settings.serverHubId && settings.autoPull)});
+      const input = kind === 'version'
+        ? {kind, sourcePath: settings.sourcePath, baseUrl: WHEELMAKER_RELEASE_BASE_URL, desktop: settings.desktop, android: settings.android, targetHubId: settings.serverHubId || undefined, autoPull: Boolean(settings.serverHubId && settings.autoPull)}
+        : {kind, sourcePath: settings.sourcePath, webHubId: settings.webHubId};
+      const result = await start(settings.publisherHubId, input);
       if (!result.ok || !result.job) throw new Error(result.error || result.status || 'publish task was rejected');
       setJob(result.job); update({jobId: result.job.id, jobHubId: settings.publisherHubId});
     } catch (value) { setError(value instanceof Error ? value.message : String(value)); } finally { setPending(false); }
   };
-  const canStart = Boolean(settings.publisherHubId && settings.sourcePath) && !pending;
+  const canStartVersion = Boolean(settings.publisherHubId && settings.sourcePath) && !pending;
+  const canStartDebugWeb = Boolean(settings.publisherHubId && settings.sourcePath && settings.webHubId) && !pending;
   return <div className="release-publish-page">
-    <div className="release-publish-intro">Publish a version or the latest temporary Web build from a selected Hub.</div>
-    <section className="release-publish-section" aria-label="Publish target">
-      <div className="release-publish-section-title">Publish target</div>
+    <div className="release-publish-intro">Run a persistent publishing task on the Hub that owns the source checkout.</div>
+    <section className="release-publish-section" aria-label="Publishing source">
+      <div className="release-publish-section-title">Publishing source</div>
       <div className="release-publish-fields">
         <label>Publishing Hub<select value={settings.publisherHubId} onChange={event => update({publisherHubId: event.target.value})}><option value="">Select Hub</option>{hubIds.map(id => <option key={id} value={id}>{id}</option>)}</select></label>
         <label>Source path<input value={settings.sourcePath} onChange={event => update({sourcePath: event.target.value})} placeholder="Absolute source checkout path" /></label>
+      </div>
+    </section>
+    <section className="release-publish-section" aria-label="Version release">
+      <div className="release-publish-section-title">Version release</div>
+      <div className="release-publish-fields">
         <label>Server Hub<select value={settings.serverHubId} onChange={event => update({serverHubId: event.target.value, autoPull: event.target.value ? settings.autoPull : false})}><option value="">No automatic apply</option>{hubIds.map(id => <option key={id} value={id}>{id}</option>)}</select></label>
         <label className="release-publish-check"><input type="checkbox" checked={settings.autoPull} disabled={!settings.serverHubId} onChange={event => update({autoPull: event.target.checked})} /> Auto pull after publish</label>
       </div>
-    </section>
-    <section className="release-publish-section" aria-label="Release options">
-      <div className="release-publish-section-title">Release options</div>
       <div className="release-publish-options"><label><input type="checkbox" checked={settings.desktop} onChange={event => update({desktop: event.target.checked})} /> Include Desktop</label><label><input type="checkbox" checked={settings.android} onChange={event => update({android: event.target.checked})} /> Include Android</label></div>
-      <div className="release-publish-actions"><button type="button" disabled={!canStart} onClick={() => void submit('version')}>Publish version</button><button type="button" disabled={!canStart} onClick={() => void submit('debugWeb')}>Publish temporary Web</button></div>
+      <div className="release-publish-actions"><button type="button" disabled={!canStartVersion} onClick={() => void submit('version')}>Publish version</button></div>
     </section>
-    {job ? <section className="release-publish-section release-publish-job" aria-label="Publish task"><div className="release-publish-section-title">Publish task</div><pre>{job.status}{job.targetState ? ` · Server Hub: ${job.targetState}` : ''}{job.log ? `\n${job.log}` : ''}</pre></section> : null}
+    <section className="release-publish-section" aria-label="Temporary Web">
+      <div className="release-publish-section-title">Temporary Web</div>
+      <div className="release-publish-note">Build Web only and apply it directly to an online Hub. Stable release metadata is not changed.</div>
+      <div className="release-publish-fields">
+        <label>Web Hub<select value={settings.webHubId} onChange={event => update({webHubId: event.target.value})}><option value="">Select Web Hub</option>{hubIds.map(id => <option key={id} value={id}>{id}</option>)}</select></label>
+      </div>
+      <div className="release-publish-actions"><button type="button" disabled={!canStartDebugWeb} onClick={() => void submit('debugWeb')}>Publish temporary Web</button></div>
+    </section>
+    {job ? <section className="release-publish-section release-publish-job" aria-label="Publish task"><div className="release-publish-section-title">Publish task</div><pre>{job.status}{job.targetState ? ` · ${job.kind === 'debugWeb' ? 'Web Hub' : 'Server Hub'}: ${job.targetState}` : ''}{job.log ? `\n${job.log}` : ''}</pre></section> : null}
     {error ? <div className="settings-inline-error">{error}</div> : null}
   </div>;
 }

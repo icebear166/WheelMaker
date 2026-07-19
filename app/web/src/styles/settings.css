@@ -2887,6 +2887,12 @@ textarea,
   line-height: 1.5;
 }
 
+.release-publish-note {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .release-publish-section {
   display: grid;
   gap: 12px;

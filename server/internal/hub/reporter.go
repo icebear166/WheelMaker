@@ -90,6 +90,7 @@ type toolCommandHandler interface {
 	Handle(ctx context.Context, method string, payload json.RawMessage) (any, *tools.CommandError)
 	SetProjects(projects []ProjectInfo)
 	ApplyRelease(ctx context.Context, kind, baseURL string) (tools.ReleaseTargetStatus, *tools.CommandError)
+	HandleDebugWebTransfer(method string, payload json.RawMessage) (tools.ReleaseTargetStatus, *tools.CommandError)
 }
 
 // ReporterConfig controls hub->registry connection behavior.
@@ -347,8 +348,8 @@ func (r *Reporter) NotifyRelease(ctx context.Context, targetHubID, kind, baseURL
 	if targetHubID == "" {
 		return tools.ReleaseTargetStatus{}, errors.New("target hub id is required")
 	}
-	if kind != "version" && kind != "debugWeb" {
-		return tools.ReleaseTargetStatus{}, errors.New("unsupported release kind")
+	if kind != "version" {
+		return tools.ReleaseTargetStatus{}, errors.New("release notification only supports version releases")
 	}
 
 	r.mu.RLock()
@@ -405,6 +406,129 @@ func (r *Reporter) NotifyRelease(ctx context.Context, targetHubID, kind, baseURL
 		delete(r.pending, requestID)
 		r.mu.Unlock()
 		return tools.ReleaseTargetStatus{}, errors.New("release notification timeout")
+	}
+}
+
+func (r *Reporter) TransferDebugWeb(ctx context.Context, targetHubID, transferID, archivePath string, size int64, expectedSHA256 string) (tools.ReleaseTargetStatus, error) {
+	if targetHubID == "" || transferID == "" || size <= 0 || expectedSHA256 == "" {
+		return tools.ReleaseTargetStatus{}, errors.New("invalid debug web transfer metadata")
+	}
+	file, err := os.Open(archivePath)
+	if err != nil {
+		return tools.ReleaseTargetStatus{}, err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || info.Size() != size {
+		return tools.ReleaseTargetStatus{}, errors.New("debug web archive size changed")
+	}
+	started := false
+	abort := func() {
+		if !started {
+			return
+		}
+		abortCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_, _ = r.sendDebugWebTransferRequest(abortCtx, rp.RegistryMethodHubDebugWebTransferAbort, map[string]any{"transferId": transferID})
+	}
+	start, err := r.sendDebugWebTransferRequest(ctx, rp.RegistryMethodHubDebugWebTransferStart, map[string]any{"transferId": transferID, "targetHubId": targetHubID, "size": size, "sha256": expectedSHA256})
+	if err != nil || start.Status != "accepted" {
+		if err == nil {
+			err = errors.New("target hub rejected debug web transfer")
+		}
+		return start, err
+	}
+	started = true
+	hasher := sha256.New()
+	buffer := make([]byte, tools.DebugWebTransferChunkSize)
+	var sequence int64
+	var written int64
+	for {
+		count, readErr := file.Read(buffer)
+		if count > 0 {
+			written += int64(count)
+			_, _ = hasher.Write(buffer[:count])
+			status, sendErr := r.sendDebugWebTransferRequest(ctx, rp.RegistryMethodHubDebugWebTransferChunk, map[string]any{"transferId": transferID, "sequence": sequence, "data": base64.StdEncoding.EncodeToString(buffer[:count])})
+			if sendErr != nil || status.Status != "accepted" {
+				abort()
+				if sendErr == nil {
+					sendErr = errors.New("target hub rejected debug web chunk")
+				}
+				return status, sendErr
+			}
+			sequence++
+		}
+		if errors.Is(readErr, io.EOF) {
+			break
+		}
+		if readErr != nil {
+			abort()
+			return tools.ReleaseTargetStatus{}, readErr
+		}
+	}
+	if written != size || hex.EncodeToString(hasher.Sum(nil)) != expectedSHA256 {
+		abort()
+		return tools.ReleaseTargetStatus{}, errors.New("debug web archive changed during transfer")
+	}
+	finish, err := r.sendDebugWebTransferRequest(ctx, rp.RegistryMethodHubDebugWebTransferFinish, map[string]any{"transferId": transferID})
+	if err != nil || finish.Status != "success" {
+		if err == nil {
+			err = errors.New("target hub failed to apply debug web")
+		}
+		return finish, err
+	}
+	return finish, nil
+}
+
+func (r *Reporter) sendDebugWebTransferRequest(ctx context.Context, method string, payload map[string]any) (tools.ReleaseTargetStatus, error) {
+	r.mu.RLock()
+	conn := r.conn
+	r.mu.RUnlock()
+	if conn == nil {
+		return tools.ReleaseTargetStatus{}, errors.New("registry connection is unavailable")
+	}
+	requestID := r.requestSeq.Add(1)
+	wait := make(chan envelope, 1)
+	r.mu.Lock()
+	if r.conn != conn {
+		r.mu.Unlock()
+		return tools.ReleaseTargetStatus{}, errors.New("registry connection is unavailable")
+	}
+	r.pending[requestID] = wait
+	r.mu.Unlock()
+	if err := r.writeJSON(conn, "->", envelope{RequestID: requestID, Type: rp.RegistryEnvelopeTypeRequest, Method: method, HubID: r.cfg.HubID, Payload: rp.MustRaw(payload)}); err != nil {
+		r.mu.Lock()
+		delete(r.pending, requestID)
+		r.mu.Unlock()
+		return tools.ReleaseTargetStatus{}, err
+	}
+	select {
+	case response, ok := <-wait:
+		if !ok {
+			return tools.ReleaseTargetStatus{}, errors.New("registry connection closed")
+		}
+		if response.Type == rp.RegistryEnvelopeTypeError {
+			var registryErr errorPayload
+			if decodePayload(response.Payload, &registryErr) == nil {
+				return tools.ReleaseTargetStatus{}, fmt.Errorf("%s: %s", registryErr.Code, registryErr.Message)
+			}
+			return tools.ReleaseTargetStatus{}, errors.New("registry rejected debug web transfer")
+		}
+		var status tools.ReleaseTargetStatus
+		if json.Unmarshal(response.Payload, &status) != nil || status.Status == "" {
+			return tools.ReleaseTargetStatus{}, errors.New("invalid debug web transfer response")
+		}
+		return status, nil
+	case <-ctx.Done():
+		r.mu.Lock()
+		delete(r.pending, requestID)
+		r.mu.Unlock()
+		return tools.ReleaseTargetStatus{}, ctx.Err()
+	case <-time.After(60 * time.Second):
+		r.mu.Lock()
+		delete(r.pending, requestID)
+		r.mu.Unlock()
+		return tools.ReleaseTargetStatus{}, errors.New("debug web transfer timeout")
 	}
 }
 
@@ -504,6 +628,9 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 		r.replyHubStateAction(conn, in)
 	case rp.RegistryMethodHubReleaseApply:
 		r.replyReleaseApply(conn, in)
+	case rp.RegistryMethodHubDebugWebReceiveStart, rp.RegistryMethodHubDebugWebReceiveChunk,
+		rp.RegistryMethodHubDebugWebReceiveFinish, rp.RegistryMethodHubDebugWebReceiveAbort:
+		r.replyDebugWebTransfer(conn, in)
 	case rp.RegistryMethodProjectFSList:
 		r.replyFSList(conn, in)
 	case rp.RegistryMethodProjectFSInfo:
@@ -568,6 +695,13 @@ func (r *Reporter) replyReleaseApply(conn *websocket.Conn, req envelope) {
 		_ = r.writeJSON(conn, "->", envelope{RequestID: req.RequestID, Type: rp.RegistryEnvelopeTypeResponse, Method: req.Method, HubID: r.cfg.HubID, Payload: rp.MustRaw(result)})
 		return
 	}
+	_ = r.writeJSON(conn, "->", envelope{RequestID: req.RequestID, Type: rp.RegistryEnvelopeTypeResponse, Method: req.Method, HubID: r.cfg.HubID, Payload: rp.MustRaw(result)})
+}
+
+func (r *Reporter) replyDebugWebTransfer(conn *websocket.Conn, req envelope) {
+	r.toolHandlerMu.Lock()
+	result, _ := r.ensureToolHandler().HandleDebugWebTransfer(req.Method, req.Payload)
+	r.toolHandlerMu.Unlock()
 	_ = r.writeJSON(conn, "->", envelope{RequestID: req.RequestID, Type: rp.RegistryEnvelopeTypeResponse, Method: req.Method, HubID: r.cfg.HubID, Payload: rp.MustRaw(result)})
 }
 

@@ -230,12 +230,116 @@ func TestReleaseCommandSkipsTargetNotificationWhenAutoPullIsOff(t *testing.T) {
 	}
 }
 
+func TestReleaseCommandBuildsAndTransfersDebugWebArtifact(t *testing.T) {
+	source := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(source, "scripts", "release"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "scripts", "release", "debug-web.mjs"), []byte("// test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stateDir := t.TempDir()
+	runner := newBlockingReleaseRunner()
+	notifier := &fakeReleaseNotifier{result: ReleaseTargetStatus{Status: "success"}}
+	command := newReleaseCommandWithDependencies(stateDir, runner, notifier)
+	result, commandErr := command.Handle(context.Background(), rawToolPayload(t, map[string]any{
+		"action": "start", "hubId": "publisher-hub", "kind": "debugWeb", "sourcePath": source, "webHubId": "web-hub",
+	}))
+	if commandErr != nil {
+		t.Fatal(commandErr)
+	}
+	jobID := result.(releaseCommandResponse).Job.ID
+	call := <-runner.calls
+	wantArchive := filepath.Join(stateDir, releaseJobDirectoryName, jobID, "debug-web.zip")
+	if !reflect.DeepEqual(call.Args, []string{"scripts/release/debug-web.mjs", "--output", wantArchive}) {
+		t.Fatalf("args=%#v", call.Args)
+	}
+	archive := debugWebZip(t, map[string]string{"index.html": "new"})
+	if err := os.MkdirAll(filepath.Dir(wantArchive), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(wantArchive, archive, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runner.complete(nil)
+	status := assertReleaseStatus(t, command, jobID, "success")
+	if status.Job.TargetState != "success" || notifier.transferTargetHubID != "web-hub" || notifier.transferID != jobID || notifier.transferPath != wantArchive || notifier.transferSize != int64(len(archive)) || notifier.transferSHA256 != debugWebDigest(archive) {
+		t.Fatalf("status=%#v notifier=%#v", status, notifier)
+	}
+	if _, err := os.Stat(wantArchive); err != nil {
+		t.Fatalf("debug web artifact was not retained: %v", err)
+	}
+}
+
+func TestReleaseCommandRetainsDebugWebArtifactWhenTransferFails(t *testing.T) {
+	source := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(source, "scripts", "release"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "scripts", "release", "debug-web.mjs"), []byte("// test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stateDir := t.TempDir()
+	runner := newBlockingReleaseRunner()
+	notifier := &fakeReleaseNotifier{result: ReleaseTargetStatus{Status: "failed", ErrorCode: "target_hub_offline"}}
+	command := newReleaseCommandWithDependencies(stateDir, runner, notifier)
+	result, commandErr := command.Handle(context.Background(), rawToolPayload(t, map[string]any{
+		"action": "start", "hubId": "publisher-hub", "kind": "debugWeb", "sourcePath": source, "webHubId": "web-hub",
+	}))
+	if commandErr != nil {
+		t.Fatal(commandErr)
+	}
+	jobID := result.(releaseCommandResponse).Job.ID
+	<-runner.calls
+	archivePath := filepath.Join(stateDir, releaseJobDirectoryName, jobID, "debug-web.zip")
+	archive := debugWebZip(t, map[string]string{"index.html": "new"})
+	if err := os.MkdirAll(filepath.Dir(archivePath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(archivePath, archive, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runner.complete(nil)
+	status := assertReleaseStatus(t, command, jobID, "failed")
+	if status.Job.ErrorCode != "target_hub_offline" || status.Job.TargetState != "failed" {
+		t.Fatalf("status=%#v", status)
+	}
+	if _, err := os.Stat(archivePath); err != nil {
+		t.Fatalf("failed transfer removed artifact: %v", err)
+	}
+}
+
+func TestReleaseCommandRequiresWebHubForDebugWeb(t *testing.T) {
+	source := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(source, "scripts", "release"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "scripts", "release", "debug-web.mjs"), []byte("// test"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	command := newReleaseCommandWithDependencies(t.TempDir(), newBlockingReleaseRunner(), &fakeReleaseNotifier{})
+	_, commandErr := command.Handle(context.Background(), rawToolPayload(t, map[string]any{"action": "start", "hubId": "publisher-hub", "kind": "debugWeb", "sourcePath": source}))
+	if commandErr == nil || commandErr.Code != rp.CodeInvalidArgument {
+		t.Fatalf("commandErr=%#v", commandErr)
+	}
+}
+
 type fakeReleaseNotifier struct {
-	targetHubID string
-	kind        string
-	baseURL     string
-	result      ReleaseTargetStatus
-	err         error
+	targetHubID         string
+	kind                string
+	baseURL             string
+	result              ReleaseTargetStatus
+	err                 error
+	transferTargetHubID string
+	transferID          string
+	transferPath        string
+	transferSize        int64
+	transferSHA256      string
+}
+
+func (n *fakeReleaseNotifier) TransferDebugWeb(_ context.Context, targetHubID, transferID, archivePath string, size int64, sha256 string) (ReleaseTargetStatus, error) {
+	n.transferTargetHubID, n.transferID, n.transferPath, n.transferSize, n.transferSHA256 = targetHubID, transferID, archivePath, size, sha256
+	return n.result, n.err
 }
 
 func (n *fakeReleaseNotifier) NotifyRelease(_ context.Context, targetHubID, kind, baseURL string) (ReleaseTargetStatus, error) {
