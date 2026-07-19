@@ -111,11 +111,13 @@ import {ChatQuickSwitchMenu} from '../chat/ChatQuickSwitchMenu';
 import { ChatSessionNav } from '../chat/ChatSessionNav';
 import { ChatSurface } from '../chat/ChatSurface';
 import { ChatTurnView } from '../chat/ChatTurnView';
+import {ChatToolCallGroup} from '../chat/ChatToolCallGroup';
 import {ChatPlanSurface} from '../chat/ChatPlanSurface';
 import {ChatRecentSessionsSurface} from '../chat/ChatRecentSessionsSurface';
 import {ChatSessionGlobalBar} from '../chat/ChatSessionGlobalBar';
 import {ChatSessionPanel} from '../chat/ChatSessionPanel';
 import {
+  createSessionNavSlideOutAutoClose,
   createSessionNavSlideOutState,
   isSessionNavSlideOutCloseSuppressed,
   sessionNavSlideOutReducer,
@@ -141,7 +143,11 @@ import {
 } from '../chat/turns/chatTurnStores';
 import {createChatDurablePersistQueue} from '../chat/turns/chatDurablePersist';
 import {createChatReadRepairQueue} from '../chat/turns/chatReadRepair';
-import {buildChatDisplayIndex, type ChatDisplayIndexItem} from '../chat/turns/chatDisplayIndex';
+import {
+  buildChatDisplayIndex,
+  chatDisplayItemContainsTurn,
+  type ChatDisplayIndexItem,
+} from '../chat/turns/chatDisplayIndex';
 import {
   createChatRealtimeFlushScheduler,
   type ChatRealtimeFlushScheduler,
@@ -881,6 +887,7 @@ const PROJECT_PIN_LONG_PRESS_MS = 450;
 const PROJECT_SESSION_LONG_PRESS_MS = 450;
 const DESKTOP_SIDEBAR_VIEWPORT_MAX_RATIO = 0.45;
 const CHAT_FIXED_VIEW_WIDTH = 800;
+const CHAT_SESSION_PANEL_WIDTH = 360;
 const CHAT_FILE_PEEK_WIDTH_DEFAULT = 520;
 const CHAT_FILE_PEEK_WIDTH_MIN = 360;
 const CHAT_FILE_PEEK_WIDTH_MAX = 1520;
@@ -1606,7 +1613,6 @@ async function writeTextToClipboard(text: string): Promise<void> {
 
 function shouldRenderChatTurn(
   message: RegistryChatMessage,
-  hideToolCalls: boolean,
   promptStatus: ChatPromptStatus,
 ): boolean {
   const text = msgText(message.method, message.param).trim();
@@ -1627,7 +1633,7 @@ function shouldRenderChatTurn(
   }
   const kind = msgKind(message.method);
   if (kind === 'tool') {
-    return !hideToolCalls && !!text;
+    return !!text;
   }
   if (kind === 'thought') {
     return !!text;
@@ -2551,11 +2557,6 @@ export function App() {
       ? persistedGlobal.showLineNumbers
       : true,
   );
-  const [hideToolCalls, setHideToolCalls] = useState(
-    typeof persistedGlobal.hideToolCalls === 'boolean'
-      ? persistedGlobal.hideToolCalls
-      : true,
-  );
   const [showLimitsMonitor, setShowLimitsMonitor] = useState(
     typeof persistedGlobal.showLimitsMonitor === 'boolean'
       ? persistedGlobal.showLimitsMonitor
@@ -2680,6 +2681,13 @@ export function App() {
   );
   const sessionNavSlideOutScrollRef = useRef<HTMLDivElement | null>(null);
   const sessionNavSlideOutPointerDownRef = useRef(false);
+  const sessionNavSlideOutAutoClose = useMemo(
+    () => createSessionNavSlideOutAutoClose(() => {
+      dispatchSessionNavSlideOut({ type: 'requestClose', suppressed: false });
+    }),
+    [],
+  );
+  useEffect(() => () => sessionNavSlideOutAutoClose.dispose(), [sessionNavSlideOutAutoClose]);
   useEffect(() => {
     if (sessionNavSlideOut.open && sessionNavSlideOutScrollRef.current) {
       sessionNavSlideOutScrollRef.current.scrollTop = sessionNavSlideOut.scrollTop;
@@ -2689,9 +2697,10 @@ export function App() {
   }, [sessionNavSlideOut.open]);
   useEffect(() => {
     if (!sidebarCollapsed) {
+      sessionNavSlideOutAutoClose.cancel();
       dispatchSessionNavSlideOut({ type: 'forceReset' });
     }
-  }, [sidebarCollapsed]);
+  }, [sessionNavSlideOutAutoClose, sidebarCollapsed]);
   const desktopSidebarWidth = workspaceUiState.desktop.sidebarWidth;
   const collapsedProjectIds = workspaceUiState.shared.collapsedProjectIds;
   const pinnedProjectIds = workspaceUiState.shared.pinnedProjectIds;
@@ -2700,6 +2709,12 @@ export function App() {
   const hubColors = workspaceUiState.shared.hubColors;
   const drawerOpen = workspaceUiState.mobile.drawerOpen;
   const sidebarSettingsOpen = workspaceUiState.shared.settingsOpen;
+  useEffect(() => {
+    if (tab !== 'chat' || sidebarSettingsOpen) {
+      sessionNavSlideOutAutoClose.cancel();
+      dispatchSessionNavSlideOut({ type: 'forceReset' });
+    }
+  }, [sessionNavSlideOutAutoClose, sidebarSettingsOpen, tab]);
   const chatConfigOverflowOpen = workspaceUiState.mobile.chatConfigOverflowOpen;
   const chatKeyboardInset = workspaceUiState.transient.chatKeyboardInset;
   const chatKeyboardInsetRef = useRef(chatKeyboardInset);
@@ -3572,14 +3587,13 @@ export function App() {
     : false;
 
   const chatDisplayIndex = useMemo(() => buildChatDisplayIndex(chatMessages, {
-    hideToolCalls,
     layoutMetrics: chatLayoutMetrics,
     promptStatus: selectedPromptTurnStatusIndex.statusFor,
     shouldRender: (message, promptStatus) => {
       const resolvedPromptStatus = isPromptStartMessage(message)
         ? promptStatus
         : null;
-      return shouldRenderChatTurn(message, hideToolCalls, resolvedPromptStatus);
+      return shouldRenderChatTurn(message, resolvedPromptStatus);
     },
     pendingKey: selectedPendingPrompt
       ? `${selectedChatEncodedKey}:pending:${selectedPendingPrompt.createdAt}`
@@ -3590,18 +3604,16 @@ export function App() {
   }), [
     chatMessages,
     chatLayoutMetrics,
-    hideToolCalls,
     selectedChatEncodedKey,
     selectedPromptTurnStatusIndex,
     selectedPendingPrompt,
     selectedQueuedPrompts,
   ]);
   const archivedChatDisplayIndex = useMemo(() => buildChatDisplayIndex(archivedPreview?.messages ?? [], {
-    hideToolCalls,
     layoutMetrics: chatLayoutMetrics,
     promptStatus: () => null,
-    shouldRender: (message, promptStatus) => shouldRenderChatTurn(message, hideToolCalls, promptStatus),
-  }), [archivedPreview?.messages, chatLayoutMetrics, hideToolCalls]);
+    shouldRender: (message, promptStatus) => shouldRenderChatTurn(message, promptStatus),
+  }), [archivedPreview?.messages, chatLayoutMetrics]);
 
   useEffect(() => {
     if (
@@ -3612,7 +3624,7 @@ export function App() {
       return;
     }
     const searchTargetTurnIsVisible = chatDisplayIndex.items.some(
-      item => item.turnIndex === sessionSearchTargetTurn.turnIndex,
+      item => chatDisplayItemContainsTurn(item, sessionSearchTargetTurn.turnIndex),
     );
     if (!searchTargetTurnIsVisible) {
       return;
@@ -6187,7 +6199,6 @@ export function App() {
       mobileEnterKeyBehavior,
       wrapLines,
       showLineNumbers,
-      hideToolCalls,
       showLimitsMonitor,
       messageViewerEnabled,
       logLevel,
@@ -6216,7 +6227,6 @@ export function App() {
     mobileEnterKeyBehavior,
     wrapLines,
     showLineNumbers,
-    hideToolCalls,
     showLimitsMonitor,
     messageViewerEnabled,
     logLevel,
@@ -7529,6 +7539,10 @@ export function App() {
     ),
     [clampDesktopSidebarWidthForViewport, desktopSidebarDraftWidth, desktopSidebarWidth],
   );
+  const desktopChatSessionPinned = isWide && tab === 'chat' && !sidebarSettingsOpen && !sidebarCollapsed;
+  const desktopLayoutSidebarWidth = desktopChatSessionPinned
+    ? CHAT_SESSION_PANEL_WIDTH
+    : effectiveDesktopSidebarWidth;
   const commitDesktopSidebarResize = useCallback(() => {
     const resizeState = desktopSidebarResizeRef.current;
     if (resizeState) {
@@ -7598,7 +7612,7 @@ export function App() {
     const viewportMax = windowWidth > 0
       ? Math.floor(windowWidth * CHAT_FILE_PEEK_VIEWPORT_MAX_RATIO)
       : CHAT_FILE_PEEK_WIDTH_MAX;
-    const occupiedWidth = sidebarCollapsed ? 48 : effectiveDesktopSidebarWidth + 48;
+    const occupiedWidth = sidebarCollapsed ? 48 : desktopLayoutSidebarWidth + 48;
     const middlePreservingMax = windowWidth > 0
       ? windowWidth - occupiedWidth - CHAT_FILE_PEEK_MAIN_MIN_WIDTH
       : CHAT_FILE_PEEK_WIDTH_MAX;
@@ -7613,9 +7627,9 @@ export function App() {
       maxWidth,
       Math.max(CHAT_FILE_PEEK_WIDTH_MIN, Math.round(width)),
     );
-  }, [effectiveDesktopSidebarWidth, sidebarCollapsed, windowWidth]);
+  }, [desktopLayoutSidebarWidth, sidebarCollapsed, windowWidth]);
   const fixedChatPreviewDefaultWidth = useMemo(() => {
-    const occupiedWidth = sidebarCollapsed ? 48 : effectiveDesktopSidebarWidth + 48;
+    const occupiedWidth = sidebarCollapsed ? 48 : desktopLayoutSidebarWidth + 48;
     const availableWidth = windowWidth > 0
       ? windowWidth - occupiedWidth
       : CHAT_FIXED_VIEW_WIDTH + CHAT_FILE_PEEK_WIDTH_DEFAULT;
@@ -7623,7 +7637,7 @@ export function App() {
       availableWidth - CHAT_FIXED_VIEW_WIDTH,
       true,
     );
-  }, [clampChatFilePeekWidthForViewport, effectiveDesktopSidebarWidth, sidebarCollapsed, windowWidth]);
+  }, [clampChatFilePeekWidthForViewport, desktopLayoutSidebarWidth, sidebarCollapsed, windowWidth]);
   const effectiveChatFilePeekWidth = useMemo(
     () => {
       const committedWidth = desktopChatFixedPreview && !chatFilePeekWidthResized
@@ -15442,6 +15456,12 @@ export function App() {
           recentCollapsed ? ' collapsed' : ''
         }`}
       >
+        {!mobile ? (
+          <div className="recent-sessions-section-heading">
+            <span className="codicon codicon-history" aria-hidden="true" />
+            <span>Recent</span>
+          </div>
+        ) : null}
         {mobile ? (
         <div className="wide-project-row">
           <button
@@ -17033,8 +17053,6 @@ export function App() {
         setSessionListDensity={setSessionListDensity}
         mobileEnterKeyBehavior={mobileEnterKeyBehavior}
         setMobileEnterKeyBehavior={setMobileEnterKeyBehavior}
-        hideToolCalls={hideToolCalls}
-        setHideToolCalls={setHideToolCalls}
         showLimitsMonitor={showLimitsMonitor}
         setShowLimitsMonitor={setShowLimitsMonitor}
         promptCompletionNotificationsEnabled={promptCompletionNotificationsEnabled}
@@ -17096,10 +17114,11 @@ export function App() {
   );
 
   const renderChatSessionHeader = (mobile: boolean) => {
-    const chatSessionHeaderClassName = `sidebar-title-row chat-session-header${sessionSearchHeaderExpanded ? ' search-open' : ''}${mobile ? ' mobile' : ''}`;
+    const searchHeaderExpanded = mobile && sessionSearchHeaderExpanded;
+    const chatSessionHeaderClassName = `sidebar-title-row chat-session-header${searchHeaderExpanded ? ' search-open' : ''}${mobile ? ' mobile' : ''}`;
     const chatSessionHeaderContent = (
       <>
-        {!sessionSearchHeaderExpanded ? (
+        {!searchHeaderExpanded ? (
           <>
             {renderChatMenuSettingsButton()}
           </>
@@ -17759,7 +17778,7 @@ export function App() {
     const mobileSidebarMain = !isWide
       ? tab === 'chat' && !isWide ? renderMobileChatSessionSheet() : renderSidebarMain()
       : null;
-    const showPinnedChatSessionPanel = isWide && tab === 'chat' && !sidebarSettingsOpen;
+    const showPinnedChatSessionPanel = desktopChatSessionPinned;
     const wideSidebarTitle = tab === 'chat'
       ? 'CHAT'
       : tab === 'file'
@@ -17823,7 +17842,7 @@ export function App() {
               <ChatSessionGlobalBar
                 pinActive
                 onTogglePin={() => setSidebarCollapsed(true)}
-                trailing={
+                leading={
                   <>
                     {renderChatArchiveControls()}
                     {renderChatHeaderSearchControls()}
@@ -17846,7 +17865,7 @@ export function App() {
             {isWide ? wideSidebarMain : mobileSidebarMain}
           </div>
         )}
-        {isWide ? (
+        {isWide && !showPinnedChatSessionPanel ? (
           <button
             type="button"
             className={`desktop-sidebar-resize-handle${desktopSidebarResizing ? ' resizing' : ''}`}
@@ -18519,7 +18538,7 @@ export function App() {
       optionReplies.length === 0
         ? latestSelectableAssistantReply.confirmationReply
         : null;
-    if (!shouldRenderChatTurn(message, hideToolCalls, promptStatus)) {
+    if (!shouldRenderChatTurn(message, promptStatus)) {
       return null;
     }
     const searchHighlighted =
@@ -18538,7 +18557,6 @@ export function App() {
           message={message}
           promptRequest={message.method === 'prompt_done' ? findPromptRequestForDone(doneTurnIndex) : undefined}
           promptStatus={promptStatus}
-          hideToolCalls={hideToolCalls}
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}
           copyDisabled={copyRange ? !copyRange.ok : true}
@@ -18587,7 +18605,6 @@ export function App() {
     exportingMarkdownImageTurnIndex,
     findPromptRequestForDone,
     handleSelectChatReply,
-    hideToolCalls,
     latestSelectableAssistantReply,
     latestSelectableOptionReplyMessageKey,
     loadPromptAttachmentThumbnail,
@@ -18604,7 +18621,7 @@ export function App() {
     ttsState,
   ]);
   const renderArchivedChatMessageTurn = useCallback((message: RegistryChatMessage) => {
-    if (!shouldRenderChatTurn(message, hideToolCalls, null)) {
+    if (!shouldRenderChatTurn(message, null)) {
       return null;
     }
     const runtimeKey = selectedArchivedKey
@@ -18618,7 +18635,6 @@ export function App() {
         <ChatTurnView
           message={message}
           promptStatus={null}
-          hideToolCalls={hideToolCalls}
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}
           onOpenPromptAttachment={openChatAttachmentPreview}
@@ -18633,7 +18649,6 @@ export function App() {
   }, [
     chatMarkdownComponents,
     chatMarkdownUrlTransform,
-    hideToolCalls,
     loadPromptAttachmentThumbnail,
     openChatAttachmentPreview,
     openPromptArtifactDiff,
@@ -18648,16 +18663,32 @@ export function App() {
     const sourceMessage = displayItem.kind === 'turn'
       ? sourceMessages[displayItem.sourceIndex]
       : undefined;
+    const sourceToolMessages = displayItem.kind === 'tool-group'
+      ? displayItem.sourceIndexes
+        .map(sourceIndex => sourceMessages[sourceIndex])
+        .filter((message): message is RegistryChatMessage => !!message && message.method === 'tool_call')
+      : [];
     const queuedPromptIndex = displayItem.kind === 'queued'
       ? selectedQueuedPrompts.findIndex(queuedPrompt => `${selectedChatEncodedKey}:queued:${queuedPrompt.id}` === displayItem.key)
       : -1;
     const queuedPrompt = queuedPromptIndex >= 0 ? selectedQueuedPrompts[queuedPromptIndex] : null;
-    const content = displayItem.kind === 'queued' && queuedPrompt && !chatReadOnlyPreview ? (
+    const toolGroupSearchHighlighted =
+      sessionSearchTargetTurn?.runtimeKey === selectedChatEncodedKey &&
+      chatDisplayItemContainsTurn(displayItem, sessionSearchTargetTurn.turnIndex);
+    const content = displayItem.kind === 'tool-group' && sourceToolMessages.length > 0 ? (
+      <div
+        className={[
+          'chat-view-content',
+          toolGroupSearchHighlighted ? 'chat-turn-search-highlight' : '',
+        ].filter(Boolean).join(' ')}
+      >
+        <ChatToolCallGroup messages={sourceToolMessages} />
+      </div>
+    ) : displayItem.kind === 'queued' && queuedPrompt && !chatReadOnlyPreview ? (
       <div className="chat-view-content">
         <ChatTurnView
           message={buildQueuedPromptMessage(queuedPrompt, queuedPromptTurnIndex(queuedPromptIndex))}
           promptStatus="queued"
-          hideToolCalls={hideToolCalls}
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}
           onCancelQueuedPrompt={() => cancelQueuedPrompt(selectedChatEncodedKey, queuedPrompt.id)}
@@ -18672,7 +18703,6 @@ export function App() {
         <ChatTurnView
           message={buildPendingPromptMessage(selectedPendingPrompt)}
           promptStatus={selectedPendingPrompt.status}
-          hideToolCalls={hideToolCalls}
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}
           onOpenPromptAttachment={openChatAttachmentPreview}
@@ -18696,7 +18726,6 @@ export function App() {
     chatMarkdownUrlTransform,
     chatMessages,
     editPendingChatPrompt,
-    hideToolCalls,
     loadPromptAttachmentThumbnail,
     openChatAttachmentPreview,
     prioritizeQueuedPrompt,
@@ -18708,6 +18737,7 @@ export function App() {
     selectedChatEncodedKey,
     selectedPendingPrompt,
     selectedQueuedPrompts,
+    sessionSearchTargetTurn,
   ]);
   const closePortRelayFrameFromChrome = useCallback(() => {
     const tab = activePreviewTab(previewWorkbenchRef.current);
@@ -18801,6 +18831,148 @@ export function App() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [isWide, isWindowsPlatform, setSidebarCollapsed, toggleChatPreviewFromTitle, toggleTerminalFromTitle]);
+  const chatReadOnlyPreview = archivedMode && archivedPreview !== null;
+  const activeChatMessages = chatReadOnlyPreview ? archivedPreview.messages : chatMessages;
+  const activeChatDisplayIndex = chatReadOnlyPreview ? archivedChatDisplayIndex : chatDisplayIndex;
+  const activeChatRuntimeKey = chatReadOnlyPreview && selectedArchivedKey
+    ? buildChatRuntimeKey(selectedArchivedKey.projectId, selectedArchivedKey.sessionId)
+    : selectedChatEncodedKey;
+  const activeChatDisplayTitle = chatReadOnlyPreview
+    ? resolveSessionDisplayTitle(archivedPreview.session) || archivedPreview.sessionId
+    : selectedChatDisplayTitle;
+  const archivedPreviewProjectName = selectedArchivedKey
+    ? projects.find(item => item.projectId === selectedArchivedKey.projectId)?.name ||
+      archivedPreview?.session.projectName ||
+      'Project'
+    : 'Project';
+  const activeChatBreadcrumbProjectName = chatReadOnlyPreview
+    ? archivedPreviewProjectName
+    : chatBreadcrumbProjectName;
+  const activeChatBreadcrumbLabel = chatReadOnlyPreview
+    ? `Archived - ${activeChatDisplayTitle || 'Session'}`
+    : chatBreadcrumbLabel;
+  const toggleChatTitlePromptMenu = () => {
+    if (!chatTitlePromptMenuAvailable) return;
+    setChatPromptMenuOpen(false);
+    setChatFileMentionMenuOpen(false);
+    setChatAttachmentTrayOpen(false);
+    setChatConfigMenuOptionId('');
+    setChatConfigOverflowOpen(false);
+    setChatHubMenuOpen(false);
+    setChatQuickSwitchMenuOpen(false);
+    setChatTitleProjectMenuOpen(false);
+    setChatTitlePromptMenuOpen(open => !open);
+  };
+  const renderDesktopChatBreadcrumbTitle = () => (
+    <div className="breadcrumb-title chat-breadcrumb-title">
+      <button
+        ref={chatTitleProjectButtonRef}
+        type="button"
+        className={`chat-title-project-button${chatTitleProjectMenuOpen ? ' open' : ''}`}
+        onPointerDown={event => event.stopPropagation()}
+        onClick={() => {
+          setChatTitlePromptMenuOpen(false);
+          setChatQuickSwitchMenuOpen(false);
+          setChatTitleProjectMenuOpen(open => !open);
+        }}
+        title="Switch project"
+        aria-label="Switch project"
+        aria-haspopup="menu"
+        aria-expanded={chatTitleProjectMenuOpen}
+      >
+        <span className="breadcrumb-project-name" title={activeChatBreadcrumbProjectName}>
+          {activeChatBreadcrumbProjectName}
+        </span>
+        <span className="codicon codicon-chevron-down" aria-hidden="true" />
+      </button>
+      <button
+        ref={chatTitlePromptButtonRef}
+        type="button"
+        className={`chat-title-prompt-icon-button${chatTitlePromptMenuOpen ? ' open' : ''}`}
+        title={chatTitlePromptMenuAvailable ? 'Show prompt history' : activeChatBreadcrumbLabel}
+        aria-label="Show prompt history"
+        aria-haspopup="menu"
+        aria-expanded={chatTitlePromptMenuOpen}
+        disabled={!chatTitlePromptMenuAvailable}
+        onClick={toggleChatTitlePromptMenu}
+      >
+        <span className="codicon codicon-history" aria-hidden="true" />
+      </button>
+      <span className="chat-title-session-text title-text breadcrumb-current" title={activeChatBreadcrumbLabel}>
+        {activeChatBreadcrumbLabel}
+      </span>
+    </div>
+  );
+  const renderMobileChatBreadcrumbTitle = () => (
+    <div className="breadcrumb-title chat-breadcrumb-title">
+      <button
+        ref={chatTitleProjectButtonRef}
+        type="button"
+        className={`chat-title-project-button${chatTitleProjectMenuOpen ? ' open' : ''}`}
+        onPointerDown={event => event.stopPropagation()}
+        onClick={() => {
+          setChatTitlePromptMenuOpen(false);
+          setChatQuickSwitchMenuOpen(false);
+          setChatTitleProjectMenuOpen(open => !open);
+        }}
+        title="Switch project"
+        aria-label="Switch project"
+        aria-haspopup="menu"
+        aria-expanded={chatTitleProjectMenuOpen}
+      >
+        <span className="breadcrumb-project-name" title={activeChatBreadcrumbProjectName}>
+          {activeChatBreadcrumbProjectName}
+        </span>
+        <span className="codicon codicon-chevron-down" aria-hidden="true" />
+      </button>
+      <button
+        ref={chatTitlePromptButtonRef}
+        type="button"
+        className={`chat-title-session-button chat-title-session-text title-text breadcrumb-current${chatTitlePromptMenuOpen ? ' open' : ''}`}
+        title={chatTitlePromptMenuAvailable ? 'Show prompt history' : activeChatBreadcrumbLabel}
+        aria-label="Show prompt history"
+        aria-haspopup="menu"
+        aria-expanded={chatTitlePromptMenuOpen}
+        aria-disabled={!chatTitlePromptMenuAvailable}
+        onClick={toggleChatTitlePromptMenu}
+      >
+        {activeChatBreadcrumbLabel}
+      </button>
+    </div>
+  );
+  const renderChatTitleBar = (mobile: boolean) => (
+    <DesktopDragRegion className="block-title chat-title-bar">
+      {!mobile ? renderChatSessionHeader(false) : null}
+      <div className="chat-title-context">
+        {mobile ? renderMobileChatBreadcrumbTitle() : renderDesktopChatBreadcrumbTitle()}
+      </div>
+      <div className="chat-title-actions">
+        <button
+          type="button"
+          className={`chat-terminal-toggle${terminalOpen ? ' active' : ''}`}
+          onClick={toggleTerminalFromTitle}
+          title={terminalOpen ? 'Hide terminal' : 'Show terminal'}
+          aria-label={terminalOpen ? 'Hide terminal' : 'Show terminal'}
+          aria-pressed={terminalOpen}
+        >
+          <span className="codicon codicon-terminal" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className={`chat-preview-toggle${chatPreviewOpen ? ' active' : ''}`}
+          onClick={toggleChatPreviewFromTitle}
+          title={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
+          aria-label={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
+          aria-pressed={chatPreviewOpen}
+        >
+          <span className="codicon codicon-layout-sidebar-right" aria-hidden="true" />
+          {!chatPreviewOpen && previewTabCount > 0 ? (
+            <span className="chat-preview-badge" aria-label={`${previewTabCount} preview tabs`}>{previewTabCount}</span>
+          ) : null}
+        </button>
+      </div>
+    </DesktopDragRegion>
+  );
   const renderMain = () => {
     const heavyDiffDeferred =
       !!selectedDiff &&
@@ -19100,151 +19272,10 @@ export function App() {
         </div>
       );
     };
-    const chatReadOnlyPreview = archivedMode && archivedPreview !== null;
-    const activeChatMessages = chatReadOnlyPreview ? archivedPreview.messages : chatMessages;
-    const activeChatDisplayIndex = chatReadOnlyPreview ? archivedChatDisplayIndex : chatDisplayIndex;
-    const activeChatRuntimeKey = chatReadOnlyPreview && selectedArchivedKey
-      ? buildChatRuntimeKey(selectedArchivedKey.projectId, selectedArchivedKey.sessionId)
-      : selectedChatEncodedKey;
-    const activeChatDisplayTitle = chatReadOnlyPreview
-      ? resolveSessionDisplayTitle(archivedPreview.session) || archivedPreview.sessionId
-      : selectedChatDisplayTitle;
-    const archivedPreviewProjectName = selectedArchivedKey
-      ? projects.find(item => item.projectId === selectedArchivedKey.projectId)?.name ||
-        archivedPreview?.session.projectName ||
-        'Project'
-      : 'Project';
-    const activeChatBreadcrumbProjectName = chatReadOnlyPreview
-      ? archivedPreviewProjectName
-      : chatBreadcrumbProjectName;
-    const activeChatBreadcrumbLabel = chatReadOnlyPreview
-      ? `Archived - ${activeChatDisplayTitle || 'Session'}`
-      : chatBreadcrumbLabel;
-    const toggleChatTitlePromptMenu = () => {
-      if (!chatTitlePromptMenuAvailable) return;
-      setChatPromptMenuOpen(false);
-      setChatFileMentionMenuOpen(false);
-      setChatAttachmentTrayOpen(false);
-      setChatConfigMenuOptionId('');
-      setChatConfigOverflowOpen(false);
-      setChatHubMenuOpen(false);
-      setChatQuickSwitchMenuOpen(false);
-      setChatTitleProjectMenuOpen(false);
-      setChatTitlePromptMenuOpen(open => !open);
-    };
-    const renderDesktopChatBreadcrumbTitle = () => (
-      <div className="breadcrumb-title chat-breadcrumb-title">
-        <button
-          ref={chatTitleProjectButtonRef}
-          type="button"
-          className={`chat-title-project-button${chatTitleProjectMenuOpen ? ' open' : ''}`}
-          onPointerDown={event => event.stopPropagation()}
-          onClick={() => {
-            setChatTitlePromptMenuOpen(false);
-            setChatQuickSwitchMenuOpen(false);
-            setChatTitleProjectMenuOpen(open => !open);
-          }}
-          title="Switch project"
-          aria-label="Switch project"
-          aria-haspopup="menu"
-          aria-expanded={chatTitleProjectMenuOpen}
-        >
-          <span className="breadcrumb-project-name" title={activeChatBreadcrumbProjectName}>
-            {activeChatBreadcrumbProjectName}
-          </span>
-          <span className="codicon codicon-chevron-down" aria-hidden="true" />
-        </button>
-        <button
-          ref={chatTitlePromptButtonRef}
-          type="button"
-          className={`chat-title-prompt-icon-button${chatTitlePromptMenuOpen ? ' open' : ''}`}
-          title={chatTitlePromptMenuAvailable ? 'Show prompt history' : activeChatBreadcrumbLabel}
-          aria-label="Show prompt history"
-          aria-haspopup="menu"
-          aria-expanded={chatTitlePromptMenuOpen}
-          disabled={!chatTitlePromptMenuAvailable}
-          onClick={toggleChatTitlePromptMenu}
-        >
-          <span className="codicon codicon-history" aria-hidden="true" />
-        </button>
-        <span className="chat-title-session-text title-text breadcrumb-current" title={activeChatBreadcrumbLabel}>
-          {activeChatBreadcrumbLabel}
-        </span>
-      </div>
-    );
-    const renderMobileChatBreadcrumbTitle = () => (
-      <div className="breadcrumb-title chat-breadcrumb-title">
-        <button
-          ref={chatTitleProjectButtonRef}
-          type="button"
-          className={`chat-title-project-button${chatTitleProjectMenuOpen ? ' open' : ''}`}
-          onPointerDown={event => event.stopPropagation()}
-          onClick={() => {
-            setChatTitlePromptMenuOpen(false);
-            setChatQuickSwitchMenuOpen(false);
-            setChatTitleProjectMenuOpen(open => !open);
-          }}
-          title="Switch project"
-          aria-label="Switch project"
-          aria-haspopup="menu"
-          aria-expanded={chatTitleProjectMenuOpen}
-        >
-          <span className="breadcrumb-project-name" title={activeChatBreadcrumbProjectName}>
-            {activeChatBreadcrumbProjectName}
-          </span>
-          <span className="codicon codicon-chevron-down" aria-hidden="true" />
-        </button>
-        <button
-          ref={chatTitlePromptButtonRef}
-          type="button"
-          className={`chat-title-session-button chat-title-session-text title-text breadcrumb-current${chatTitlePromptMenuOpen ? ' open' : ''}`}
-          title={chatTitlePromptMenuAvailable ? 'Show prompt history' : activeChatBreadcrumbLabel}
-          aria-label="Show prompt history"
-          aria-haspopup="menu"
-          aria-expanded={chatTitlePromptMenuOpen}
-          aria-disabled={!chatTitlePromptMenuAvailable}
-          onClick={toggleChatTitlePromptMenu}
-        >
-          {activeChatBreadcrumbLabel}
-        </button>
-      </div>
-    );
-    const renderChatBreadcrumbTitle = () => (isWide ? renderDesktopChatBreadcrumbTitle() : renderMobileChatBreadcrumbTitle());
-
     if (tab === 'chat') {
       return (
         <ChatSurface>
-          <DesktopDragRegion className="block-title chat-title-bar">
-            {isWide ? renderChatSessionHeader(false) : null}
-            <div className="chat-title-context">
-              {renderChatBreadcrumbTitle()}
-            </div>
-            <div className="chat-title-actions">
-              <button
-                type="button"
-                className={`chat-terminal-toggle${terminalOpen ? ' active' : ''}`}
-                onClick={toggleTerminalFromTitle}
-                title={terminalOpen ? 'Hide terminal' : 'Show terminal'}
-                aria-label={terminalOpen ? 'Hide terminal' : 'Show terminal'}
-                aria-pressed={terminalOpen}
-              >
-                <span className="codicon codicon-terminal" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                className={`chat-preview-toggle${chatPreviewOpen ? ' active' : ''}`}
-                onClick={toggleChatPreviewFromTitle}
-                title={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
-                aria-label={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
-                aria-pressed={chatPreviewOpen}
-              >
-                <span className="codicon codicon-layout-sidebar-right" aria-hidden="true" />
-                {!chatPreviewOpen && previewTabCount > 0 ? (
-                  <span className="chat-preview-badge" aria-label={`${previewTabCount} preview tabs`}>{previewTabCount}</span>
-                ) : null}
-              </button>
-            </div>
-          </DesktopDragRegion>
+          {!isWide ? renderChatTitleBar(true) : null}
           <div
             className={chatMainClassName}
             style={chatMainStyle}
@@ -19336,18 +19367,16 @@ export function App() {
                     <ChatSessionGlobalBar
                       slideOutOpen={sessionNavSlideOut.open}
                       onToggleSlideOut={() =>
-                        dispatchSessionNavSlideOut(
-                          sessionNavSlideOut.open ? { type: 'requestClose', suppressed: false } : { type: 'open' },
-                        )
+                        sessionNavSlideOut.open
+                          ? sessionNavSlideOutAutoClose.closeNow()
+                          : dispatchSessionNavSlideOut({ type: 'open' })
                       }
                       pinActive={false}
                       onTogglePin={() => setSidebarCollapsed(false)}
                     />
                   }
                 >
-                  <div className="wide-project-session-list recent-sessions-list chat-recent-sessions-rows">
-                    {recentSessionSections.map(section => renderRecentProjectSessionSection(section, false))}
-                  </div>
+                  {renderRecentSessionsSection(false)}
                 </ChatRecentSessionsSurface>
               ) : null}
               <ChatPlanSurface
@@ -19368,23 +19397,26 @@ export function App() {
               mode="slideout"
               title="Sessions"
               className={`chat-session-nav-slideout${sessionNavSlideOut.open ? ' open' : ''}`}
+              onPointerEnter={() => sessionNavSlideOutAutoClose.cancel()}
               onPointerLeave={() => {
-                dispatchSessionNavSlideOut({
-                  type: 'requestClose',
-                  suppressed: isSessionNavSlideOutCloseSuppressed({
+                sessionNavSlideOutAutoClose.schedule(
+                  isSessionNavSlideOutCloseSuppressed({
                     searchActive: sessionSearchActive || sessionSearchHeaderExpanded,
                     menuOpen: sessionArchiveMenuOpen || !!wideProjectActionMenu || !!projectSessionActionMenu,
                     pointerDownInList: sessionNavSlideOutPointerDownRef.current,
                   }),
-                });
+                );
               }}
               header={
                 <ChatSessionGlobalBar
                   slideOutOpen
-                  onToggleSlideOut={() => dispatchSessionNavSlideOut({ type: 'requestClose', suppressed: false })}
+                  onToggleSlideOut={() => sessionNavSlideOutAutoClose.closeNow()}
                   pinActive={false}
-                  onTogglePin={() => setSidebarCollapsed(false)}
-                  trailing={
+                  onTogglePin={() => {
+                    sessionNavSlideOutAutoClose.closeNow();
+                    setSidebarCollapsed(false);
+                  }}
+                  leading={
                     <>
                       {renderChatArchiveControls()}
                       {renderChatHeaderSearchControls()}
@@ -21934,19 +21966,21 @@ export function App() {
   const desktopWindowControls = desktopWindowControlsVisible ? (
     <DesktopWindowControls />
   ) : null;
+  const desktopTopBar = isWide && tab === 'chat' ? renderChatTitleBar(false) : null;
   return (
     <>
       <ResponsiveShell
         mode={layoutMode}
         themeMode={themeMode}
         setiFontCss={setiFontCss}
+        desktopTopBar={desktopTopBar}
         desktopWindowControls={desktopWindowControls}
         desktopWindowControlsVisible={desktopWindowControlsVisible}
         desktopSettingsScreen={desktopSettingsScreen}
         desktopPeek={chatPreviewDesktopPane}
         desktopChatFixedPreview={desktopChatFixedPreview}
         desktopChatPreviewOpen={isWide && chatPreviewOpen}
-        desktopSidebarWidth={effectiveDesktopSidebarWidth}
+        desktopSidebarWidth={desktopLayoutSidebarWidth}
         floatingControlStack={floatingControlStack}
         floatingControlSide={floatingControlSide}
         mobileSettingsScreen={mobileSettingsScreen}

@@ -73,6 +73,13 @@ type sessionTurnMessage struct {
 	finished  bool
 }
 
+const sessionThoughtPublishInterval = 60 * time.Second
+
+type sessionThoughtPublishState struct {
+	turnIndex       int64
+	lastPublishedAt time.Time
+}
+
 type sessionPromptState struct {
 	nextTurnIndex int64
 
@@ -114,6 +121,8 @@ type SessionRecorder struct {
 	nextTurnIndex    map[string]int64
 	finishedTurns    map[string][]sessionViewTurn
 	activeOperations map[string]map[string]struct{}
+	thoughtPublish   map[string]sessionThoughtPublishState
+	now              func() time.Time
 
 	modelLookup  func(sessionID string) string
 	actionLookup func(agentType string) acp.SessionActionCapabilities
@@ -128,6 +137,8 @@ func newSessionRecorder(projectName string, store Store, listSessions func(conte
 		nextTurnIndex:    map[string]int64{},
 		finishedTurns:    map[string][]sessionViewTurn{},
 		activeOperations: map[string]map[string]struct{}{},
+		thoughtPublish:   map[string]sessionThoughtPublishState{},
+		now:              time.Now,
 	}
 }
 
@@ -143,6 +154,7 @@ func (r *SessionRecorder) Close() {
 	r.nextTurnIndex = map[string]int64{}
 	r.finishedTurns = map[string][]sessionViewTurn{}
 	r.activeOperations = map[string]map[string]struct{}{}
+	r.thoughtPublish = map[string]sessionThoughtPublishState{}
 	r.writeMu.Unlock()
 }
 
@@ -155,6 +167,7 @@ func (r *SessionRecorder) ResetPromptState() {
 	r.nextTurnIndex = map[string]int64{}
 	r.finishedTurns = map[string][]sessionViewTurn{}
 	r.activeOperations = map[string]map[string]struct{}{}
+	r.thoughtPublish = map[string]sessionThoughtPublishState{}
 	r.writeMu.Unlock()
 }
 
@@ -171,6 +184,7 @@ func (r *SessionRecorder) RemovePromptState(sessionID string) {
 	delete(r.nextTurnIndex, sessionID)
 	delete(r.finishedTurns, sessionID)
 	delete(r.activeOperations, sessionID)
+	delete(r.thoughtPublish, sessionID)
 	r.writeMu.Unlock()
 }
 
@@ -725,7 +739,7 @@ func (r *SessionRecorder) addMessageTurn(state *sessionPromptState, event parsed
 	}
 
 	updateJSON := buildSessionTurnContentJSON(turn.method, turn.payload)
-	r.publishSessionTurn(turn, updateJSON)
+	r.publishLiveSessionTurn(turn, updateJSON)
 	state.updateTurn(turn, event.turnKey)
 	return nil
 }
@@ -742,6 +756,9 @@ func (r *SessionRecorder) publishOpenTextTurnDone(state *sessionPromptState) {
 	turn.finished = true
 	state.turns[idx] = turn
 	r.publishSessionTurn(turn, buildSessionTurnContentJSON(turn.method, turn.payload))
+	if turn.method == acp.SessionTurnMethodAgentThought {
+		delete(r.thoughtPublish, turn.sessionID)
+	}
 }
 
 func (r *SessionRecorder) handlePromptFinishedLocked(ctx context.Context, parsedEvent parsedSessionViewEvent) error {
@@ -865,6 +882,23 @@ func (r *SessionRecorder) publishSessionTurn(turn sessionTurnMessage, updateJSON
 			"finished":  turn.finished,
 		},
 	})
+}
+
+func (r *SessionRecorder) publishLiveSessionTurn(turn sessionTurnMessage, updateJSON string) {
+	if turn.method != acp.SessionTurnMethodAgentThought || turn.finished {
+		r.publishSessionTurn(turn, updateJSON)
+		return
+	}
+	now := r.now().UTC()
+	last, ok := r.thoughtPublish[turn.sessionID]
+	if ok && last.turnIndex == turn.turnIndex && now.Sub(last.lastPublishedAt) < sessionThoughtPublishInterval {
+		return
+	}
+	r.publishSessionTurn(turn, updateJSON)
+	r.thoughtPublish[turn.sessionID] = sessionThoughtPublishState{
+		turnIndex:       turn.turnIndex,
+		lastPublishedAt: now,
+	}
 }
 
 func (r *SessionRecorder) upsertSessionProjection(ctx context.Context, sessionID, agentType, title string, updatedAt time.Time, titleIfEmptyOnly bool) error {
@@ -1459,7 +1493,11 @@ func parseSessionViewEvent(event SessionViewEvent) (parsedSessionViewEvent, erro
 			}
 			switch method {
 			case acp.SessionUpdateAgentMessageChunk, acp.SessionUpdateAgentThoughtChunk, acp.SessionUpdateUserMessageChunk:
-				parsed.setJSONMessage(method, acp.SessionTurnTextResult{Text: extractUpdateText(params.Update.Content)}, "")
+				text := extractUpdateText(params.Update.Content)
+				if method == acp.SessionUpdateAgentThoughtChunk && strings.TrimSpace(text) == "" {
+					return parsed, nil
+				}
+				parsed.setJSONMessage(method, acp.SessionTurnTextResult{Text: text}, "")
 			case acp.SessionUpdateToolCall, acp.SessionUpdateToolCallUpdate:
 				parsed.setJSONMessage(acp.SessionTurnMethodToolCall, acp.SessionTurnToolResult{
 					Cmd:    strings.TrimSpace(params.Update.Title),

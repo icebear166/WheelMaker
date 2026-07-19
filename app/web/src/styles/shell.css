@@ -4,6 +4,7 @@
 .workspace {
   --desktop-window-controls-width: 176px;
   --desktop-top-surface: color-mix(in srgb, var(--surface-sidebar) 62%, var(--surface-panel));
+  --chat-session-panel-width: 360px;
   --chat-menu-header-height: 32px;
   --chat-menu-header-gap: 6px;
   --chat-menu-icon-button-size: 30px;
@@ -240,6 +241,23 @@
 .desktop-shell > .body {
   flex: 1 1 auto;
   min-width: 0;
+}
+
+.desktop-primary-workspace {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.desktop-primary-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
 }
 
 .header {

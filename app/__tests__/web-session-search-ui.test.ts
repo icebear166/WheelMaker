@@ -43,7 +43,7 @@ describe('web session search UI wiring', () => {
     expect(selectBody).toContain('revealTurnIndex: targetTurnIndex');
   });
 
-  test('moves session search controls into desktop and mobile chat headers', () => {
+  test('keeps session search controls in session panels and the mobile chat header', () => {
     const projectRoot = path.join(__dirname, '..');
     const main = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8');
     const styles = readWebStyles(projectRoot);
@@ -52,7 +52,8 @@ describe('web session search UI wiring', () => {
     expect(main).toContain('const renderSessionSearchStatusLine = () =>');
     expect(main).toContain('const sessionSearchHeaderExpanded = sessionSearchOpen || sessionSearchActive;');
     expect(main).toContain('const renderChatSessionHeader = (mobile: boolean) => {');
-    expect(main).toContain('const chatSessionHeaderClassName = `sidebar-title-row chat-session-header${sessionSearchHeaderExpanded ? \' search-open\' : \'\'}${mobile ? \' mobile\' : \'\'}`;');
+    expect(main).toContain('const searchHeaderExpanded = mobile && sessionSearchHeaderExpanded;');
+    expect(main).toContain('const chatSessionHeaderClassName = `sidebar-title-row chat-session-header${searchHeaderExpanded ? \' search-open\' : \'\'}${mobile ? \' mobile\' : \'\'}`;');
     expect(main).not.toContain('chatSidebarTitleSearchOpen');
 
     const sharedHeaderStart = main.indexOf('const renderChatSessionHeader = (mobile: boolean) => {');
@@ -63,7 +64,7 @@ describe('web session search UI wiring', () => {
     expect(sharedHeader).toContain('renderChatHeaderSearchControls()');
     expect(sharedHeader).toContain('renderChatHubSummary()');
     expect(sharedHeader).toContain('className="chat-sidebar-title-actions"');
-    expect(sharedHeader).toContain('{!sessionSearchHeaderExpanded ? (');
+    expect(sharedHeader).toContain('{!searchHeaderExpanded ? (');
     expect(sharedHeader).toContain('{renderChatMenuSettingsButton()}');
     expect(sharedHeader).not.toContain('renderChatMenuUsageButton');
     expect(sharedHeader.indexOf('renderChatHubSummary()')).toBeLessThan(sharedHeader.lastIndexOf('renderChatHeaderSearchControls()'));

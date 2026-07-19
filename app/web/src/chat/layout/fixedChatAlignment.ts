@@ -11,6 +11,16 @@ export type FixedChatAlignmentInput = {
   columnWidth?: number;
 };
 
+export type FixedChatLayoutInput = FixedChatAlignmentInput & {
+  /** Minimum visible width kept for floating edge surfaces before the chat column shrinks. */
+  minimumSurfaceReveal: number;
+};
+
+export type FixedChatLayout = {
+  marginLeft: number;
+  columnWidth: number;
+};
+
 /**
  * Continuous three-phase margin for the fixed-width chat column:
  * 1. centered while there is slack;
@@ -25,4 +35,17 @@ export function resolveFixedChatMarginLeft(input: FixedChatAlignmentInput): numb
   const docked = Math.min(input.surfaceReservedWidth, rightMin);
   const margin = Math.min(Math.max(centered, docked), rightMin);
   return Math.max(0, margin);
+}
+
+export function resolveFixedChatLayout(input: FixedChatLayoutInput): FixedChatLayout {
+  const preferredColumnWidth = input.columnWidth ?? FIXED_CHAT_COLUMN_WIDTH;
+  const minimumSurfaceReveal = input.surfaceReservedWidth > 0 ? input.minimumSurfaceReveal : 0;
+  const columnWidth = Math.min(
+    preferredColumnWidth,
+    Math.max(0, input.mainWidth - minimumSurfaceReveal),
+  );
+  return {
+    marginLeft: resolveFixedChatMarginLeft({...input, columnWidth}),
+    columnWidth,
+  };
 }

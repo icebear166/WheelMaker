@@ -1,6 +1,10 @@
 import fs from 'fs';
 import path from 'path';
-import {buildChatDisplayIndex, resolveChatDisplayScrollIndex} from '../web/src/chat/turns/chatDisplayIndex';
+import {
+  buildChatDisplayIndex,
+  chatDisplayItemContainsTurn,
+  resolveChatDisplayScrollIndex,
+} from '../web/src/chat/turns/chatDisplayIndex';
 import type {RegistryChatMessage} from '../web/src/registry/registryTypes';
 
 function message(
@@ -18,6 +22,20 @@ function message(
   };
 }
 
+function toolMessage(
+  turnIndex: number,
+  cmd: string,
+  status = 'completed',
+): RegistryChatMessage {
+  return {
+    sessionId: 'sess-1',
+    turnIndex,
+    method: 'tool_call',
+    param: {cmd, kind: 'read', status},
+    finished: true,
+  };
+}
+
 describe('chat display index', () => {
   test('stores lightweight sorted render metadata without copying message content', () => {
     const source = [
@@ -31,10 +49,12 @@ describe('chat display index', () => {
     expect(index.items.map(item => item.turnIndex)).toEqual([1, 2, 3]);
     expect(index.items.map(item => item.sourceIndex)).toEqual([1, 2, 0]);
     expect(Object.keys(index.items[0]).sort()).toEqual([
+      'endTurnIndex',
       'estimatedHeight',
       'key',
       'kind',
       'sourceIndex',
+      'sourceIndexes',
       'turnIndex',
     ]);
   });
@@ -74,18 +94,61 @@ describe('chat display index', () => {
     expect(narrow.items[0].estimatedHeight).toBeGreaterThan(wide.items[0].estimatedHeight);
   });
 
-  test('keeps tool calls compact when visible and removes them when hidden', () => {
+  test('groups consecutive tool calls with a stable first-turn key and fixed estimate', () => {
     const source = [
       message(1, 'prompt_request', 'hello'),
-      message(2, 'tool_call', 'x'.repeat(2000)),
-      message(3, 'agent_message_chunk', 'answer'),
+      toolMessage(2, 'Read a'),
+      toolMessage(3, 'Read b', 'in_progress'),
+      message(4, 'agent_thought_chunk', 'thinking'),
+      toolMessage(5, 'Run tests'),
     ];
-    const visible = buildChatDisplayIndex(source, {hideToolCalls: false});
-    const hidden = buildChatDisplayIndex(source, {hideToolCalls: true});
+    const index = buildChatDisplayIndex(source);
 
-    expect(visible.items.map(item => item.turnIndex)).toEqual([1, 2, 3]);
-    expect(hidden.items.map(item => item.turnIndex)).toEqual([1, 3]);
-    expect(visible.items[1].estimatedHeight).toBeLessThan(48);
+    expect(index.items.map(item => item.kind)).toEqual([
+      'turn',
+      'tool-group',
+      'turn',
+      'tool-group',
+    ]);
+    expect(index.items[1]).toMatchObject({
+      key: 'sess-1:2:tool-group',
+      turnIndex: 2,
+      endTurnIndex: 3,
+      sourceIndex: 1,
+      sourceIndexes: [1, 2],
+      estimatedHeight: 28,
+    });
+    expect(index.items[1].estimatedHeight).toBe(index.items[3].estimatedHeight);
+  });
+
+  test('keeps a tool group open across hidden empty thinking turns', () => {
+    const source = [
+      message(1, 'prompt_request', 'hello'),
+      toolMessage(2, 'Read a'),
+      message(3, 'agent_thought_chunk', ' \n\t'),
+      toolMessage(4, 'Read b'),
+      message(5, 'agent_thought_chunk', 'visible reasoning'),
+      toolMessage(6, 'Run tests'),
+    ];
+    const index = buildChatDisplayIndex(source, {
+      shouldRender: message => message.method !== 'agent_thought_chunk' || Boolean(message.param.text.trim()),
+    });
+
+    expect(index.items.map(item => item.kind)).toEqual([
+      'turn',
+      'tool-group',
+      'turn',
+      'tool-group',
+    ]);
+    expect(index.items[1]).toMatchObject({
+      key: 'sess-1:2:tool-group',
+      turnIndex: 2,
+      endTurnIndex: 4,
+      sourceIndexes: [1, 3],
+      compact: true,
+    });
+    expect(index.items[2]).toMatchObject({compact: true});
+    expect(index.items[3]).toMatchObject({sourceIndexes: [5]});
   });
 
   test('keeps structured plan updates out of the ordinary chat turn list', () => {
@@ -105,17 +168,20 @@ describe('chat display index', () => {
     expect(index.items.map(item => item.turnIndex)).toEqual([1, 3]);
   });
 
-  test('resolves turn jump to exact or nearest visible display item', () => {
+  test('resolves grouped tool turns to the same display item', () => {
     const source = [
       message(1, 'prompt_request', 'hello'),
-      message(2, 'tool_call', 'hidden tool'),
-      message(3, 'agent_message_chunk', 'answer'),
+      toolMessage(2, 'Read a'),
+      toolMessage(3, 'Read b'),
+      message(4, 'agent_message_chunk', 'answer'),
     ];
-    const index = buildChatDisplayIndex(source, {hideToolCalls: true});
+    const index = buildChatDisplayIndex(source);
 
     expect(resolveChatDisplayScrollIndex(index, 1)).toBe(0);
     expect(resolveChatDisplayScrollIndex(index, 2)).toBe(1);
-    expect(resolveChatDisplayScrollIndex(index, 4)).toBe(1);
+    expect(resolveChatDisplayScrollIndex(index, 3)).toBe(1);
+    expect(resolveChatDisplayScrollIndex(index, 5)).toBe(2);
+    expect(chatDisplayItemContainsTurn(index.items[1], 3)).toBe(true);
     expect(resolveChatDisplayScrollIndex({items: []}, 1)).toBe(null);
   });
 

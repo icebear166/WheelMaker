@@ -169,7 +169,7 @@ describe('agent package update settings UI source structure', () => {
     expect(codeDisplayStart).toBeGreaterThan(chatStart);
     const chatSection = settingsRootTsx.slice(chatStart, codeDisplayStart);
     expect(chatSection).not.toContain('Use Latest Prompt Title');
-    expect(chatSection).toContain('Hide Tool Calls');
+    expect(chatSection).not.toContain('Hide Tool Calls');
     expect(chatSection).not.toContain('Token Stats');
     expect(chatSection).not.toContain('CC Switch');
 
@@ -654,7 +654,7 @@ describe('agent package update settings UI source structure', () => {
     expect(chatSessionHeaderStart).toBeGreaterThanOrEqual(0);
     expect(chatSessionHeaderEnd).toBeGreaterThan(chatSessionHeaderStart);
     const chatSessionHeader = mainTsx.slice(chatSessionHeaderStart, chatSessionHeaderEnd);
-    expect(chatSessionHeader).toContain('{!sessionSearchHeaderExpanded ? (');
+    expect(chatSessionHeader).toContain('{!searchHeaderExpanded ? (');
     expect(chatSessionHeader).not.toContain('{renderChatMenuUsageButton()}');
     expect(chatSessionHeader).toContain('{renderChatMenuSettingsButton()}');
     expect(chatSessionHeader).not.toContain('title="Update"');

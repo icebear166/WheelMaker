@@ -45,6 +45,15 @@ function turnItem(turnIndex: number): ChatDisplayIndexItem {
   };
 }
 
+function compactTurnItem(turnIndex: number): ChatDisplayIndexItem {
+  return {
+    ...turnItem(turnIndex),
+    key: `sess-1:${turnIndex}:agent_thought_chunk`,
+    compact: true,
+    estimatedHeight: 28,
+  };
+}
+
 function installAnimationFrameQueue(): {
   frameCallbacks: Array<{callback: FrameRequestCallback; cancelled: boolean; id: number}>;
   restore: () => void;
@@ -526,6 +535,50 @@ describe('chat virtuoso mount fallback', () => {
         });
       }
       animationFrames.restore();
+    }
+  });
+
+  test('uses compact spacing in both rendered rows and virtual height budgets', async () => {
+    const scrollRef = {current: {} as HTMLElement};
+    let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
+
+    try {
+      await ReactTestRenderer.act(() => {
+        renderer = ReactTestRenderer.create(
+          <ChatVirtuosoTurnList
+            scrollRef={scrollRef}
+            displayIndex={{items: [compactTurnItem(1), turnItem(2)]}}
+            runtimeKey="project-a/session-a"
+            renderItem={item => <span>{item.key}</span>}
+          />,
+        );
+      });
+
+      const props = mockVirtuosoProps[mockVirtuosoProps.length - 1];
+      expect(props.heightEstimates).toEqual([32, 90]);
+
+      const Item = props.components.Item;
+      let compactRow!: ReactTestRenderer.ReactTestRenderer;
+      await ReactTestRenderer.act(() => {
+        compactRow = ReactTestRenderer.create(
+          <Item
+            data-index={0}
+            data-item-index={0}
+            data-known-size={32}
+            item={compactTurnItem(1)}
+            context={props.context}
+            style={{}}
+          >
+            compact
+          </Item>,
+        );
+      });
+      expect(compactRow.root.findByProps({className: 'chat-virtuoso-row'}).props.style)
+        .toEqual(expect.objectContaining({paddingBottom: '4px'}));
+    } finally {
+      if (renderer) {
+        await ReactTestRenderer.act(() => renderer!.unmount());
+      }
     }
   });
 

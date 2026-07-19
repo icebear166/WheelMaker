@@ -17,6 +17,8 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('renderRecentSessionsSection(true)');
     expect(mainTsx).toContain('recent-sessions-section');
     expect(mainTsx).toContain('recent-sessions-list');
+    expect(mainTsx).toContain('className="recent-sessions-section-heading"');
+    expect(mainTsx).toContain('<span>Recent</span>');
   });
 
   test('recent sessions section behaves like a collapsible block', () => {
@@ -76,7 +78,7 @@ describe('web chat recent sessions', () => {
   test('shares row density tokens with the pinned surface', () => {
     expect(mainTsx).toContain('sessionListDensity={sessionListDensity}');
     expect(surfaceTsx).toContain('sessionListDensity: SessionListDensity;');
-    expect(surfaceTsx).toContain('data-session-list-density={sessionListDensity}');
+    expect(surfaceTsx).toContain('sessionListDensity={sessionListDensity}');
     expect(chatCss).toContain("[data-session-list-density='relaxed'] .wide-session-row");
     expect(chatCss).toContain('min-height: 30px;');
     expect(chatCss).not.toContain("[data-session-list-density='compact'] .wide-session-row");
@@ -108,7 +110,7 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('showFloatingSessionPanel ? (');
     expect(mainTsx).not.toContain('onUnpin');
     expect(mainTsx).toContain('sessionListDensity={sessionListDensity}');
-    expect(mainTsx).toContain('{recentSessionSections.map(section => renderRecentProjectSessionSection(section, false))}');
+    expect(mainTsx).toContain('{renderRecentSessionsSection(false)}');
     expect(mainTsx).toContain('</ChatRecentSessionsSurface>');
   });
 
@@ -160,7 +162,7 @@ describe('web chat recent sessions', () => {
     const pinnedMainRule = chatCss.match(/\.chat-view-width-fixed-800-edge-surfaces \{[\s\S]*?\n\}/)?.[0] ?? '';
     const pinnedFixedRule = chatCss.match(/\.chat-view-width-fixed-800-edge-surfaces \.chat-view-content,[\s\S]*?\n\}/)?.[0] ?? '';
 
-    expect(stackRule).toContain('--chat-edge-surface-stack-edge-gap: max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px));');
+    expect(stackRule).toContain('--chat-edge-surface-stack-edge-gap: 0px;');
     expect(pinnedMainRule).toContain('--chat-edge-reserved-left:');
     expect(pinnedMainRule).toContain('--chat-edge-reserve-edge-gap:');
     expect(pinnedMainRule).toContain('--chat-fixed-centered:');
@@ -193,7 +195,7 @@ describe('web chat recent sessions', () => {
     const surfaceBlock = chatCss.match(/\.chat-recent-sessions-surface\.desktop \{[\s\S]*?\n\}/)?.[0] ?? '';
     const listBlock = chatCss.match(/\.chat-recent-sessions-surface-list \{[\s\S]*?\n\}/)?.[0] ?? '';
 
-    expect(chatCss).toContain('--chat-edge-surface-width: 360px;');
+    expect(chatCss).toContain('--chat-edge-surface-width: var(--chat-session-panel-width);');
     expect(surfaceBlock).toContain('--chat-recent-sessions-width: var(--chat-edge-surface-width);');
     expect(surfaceBlock).not.toContain('max-height:');
     expect(listBlock).not.toContain('max-height:');

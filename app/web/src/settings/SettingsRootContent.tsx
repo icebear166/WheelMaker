@@ -49,8 +49,6 @@ type SettingsRootContentProps = {
   setSessionListDensity: (value: SessionListDensity) => void;
   mobileEnterKeyBehavior: MobileEnterKeyBehavior;
   setMobileEnterKeyBehavior: (value: MobileEnterKeyBehavior) => void;
-  hideToolCalls: boolean;
-  setHideToolCalls: (value: boolean) => void;
   showLimitsMonitor: boolean;
   setShowLimitsMonitor: (value: boolean) => void;
   promptCompletionNotificationsEnabled: boolean;
@@ -181,8 +179,6 @@ export function SettingsRootContent({
   setSessionListDensity,
   mobileEnterKeyBehavior,
   setMobileEnterKeyBehavior,
-  hideToolCalls,
-  setHideToolCalls,
   showLimitsMonitor,
   setShowLimitsMonitor,
   promptCompletionNotificationsEnabled,
@@ -283,17 +279,6 @@ export function SettingsRootContent({
             </select>
           </label>
         ) : null}
-        <label className="settings-row sidebar-setting-row">
-          <span>
-            <span className="codicon codicon-tools settings-row-icon" aria-hidden="true" />
-            Hide Tool Calls
-          </span>
-          <input
-            type="checkbox"
-            checked={hideToolCalls}
-            onChange={e => setHideToolCalls(e.target.checked)}
-          />
-        </label>
         {isWide ? (
           <label className="settings-row sidebar-setting-row">
             <span>

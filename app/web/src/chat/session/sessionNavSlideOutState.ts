@@ -42,3 +42,42 @@ export function isSessionNavSlideOutCloseSuppressed(
 ): boolean {
   return input.searchActive || input.menuOpen || input.pointerDownInList;
 }
+
+export const SESSION_NAV_SLIDE_OUT_CLOSE_DELAY_MS = 2000;
+
+export type SessionNavSlideOutAutoClose = {
+  schedule: (suppressed: boolean) => void;
+  cancel: () => void;
+  closeNow: () => void;
+  dispose: () => void;
+};
+
+export function createSessionNavSlideOutAutoClose(
+  onClose: () => void,
+  delayMs = SESSION_NAV_SLIDE_OUT_CLOSE_DELAY_MS,
+): SessionNavSlideOutAutoClose {
+  let closeTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const cancel = () => {
+    if (closeTimer === null) return;
+    clearTimeout(closeTimer);
+    closeTimer = null;
+  };
+
+  return {
+    schedule(suppressed) {
+      cancel();
+      if (suppressed) return;
+      closeTimer = setTimeout(() => {
+        closeTimer = null;
+        onClose();
+      }, delayMs);
+    },
+    cancel,
+    closeNow() {
+      cancel();
+      onClose();
+    },
+    dispose: cancel,
+  };
+}

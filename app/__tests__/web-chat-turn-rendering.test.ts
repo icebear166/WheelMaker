@@ -25,6 +25,14 @@ function readChatTurnView(): string {
   );
 }
 
+function readChatToolCallGroup(): string {
+  const projectRoot = path.join(__dirname, '..');
+  return fs.readFileSync(
+    path.join(projectRoot, 'web', 'src', 'chat', 'ChatToolCallGroup.tsx'),
+    'utf8',
+  );
+}
+
 function readDisplayIndex(): string {
   const projectRoot = path.join(__dirname, '..');
   return fs.readFileSync(
@@ -99,7 +107,10 @@ describe('web chat turn rendering', () => {
     expect(virtualList).not.toContain('@tanstack/react-virtual');
     expect(virtualList).not.toContain('chatVirtualMeasurements');
     expect(virtualList).not.toContain('shouldAdjustChatVirtualItemSizeChange');
-    expect(main).toContain("import {buildChatDisplayIndex, type ChatDisplayIndexItem} from '../chat/turns/chatDisplayIndex';");
+    expect(main).toContain('buildChatDisplayIndex,');
+    expect(main).toContain('chatDisplayItemContainsTurn,');
+    expect(main).toContain('type ChatDisplayIndexItem,');
+    expect(main).toContain("} from '../chat/turns/chatDisplayIndex';");
     expect(main).toContain("import {ChatVirtuosoTurnList, type ChatVirtuosoTurnListHandle} from '../chat/turns/ChatVirtuosoTurnList';");
     expect(main).toContain('const chatVirtuosoListRef = useRef<ChatVirtuosoTurnListHandle | null>(null);');
     expect(main).toContain("chatVirtuosoListRef.current?.scrollToBottom('auto');");
@@ -133,7 +144,8 @@ describe('web chat turn rendering', () => {
     const chatTurn = readChatTurnView();
 
     expect(main).toContain("import { buildPromptTurnStatusIndex, type ChatPromptStatus } from '../chat/turns/chatPromptStatus';");
-    expect(main).toContain('chatVisibleRuntimeKeyRef.current === selectedChatEncodedKey\n      ? chatMessages');
+    expect(main).toContain('selectedChatEncodedKey && chatVisibleRuntimeKeyRef.current === selectedChatEncodedKey');
+    expect(main).toContain('? chatMessages');
     expect(main).toContain('const selectedPromptTurnStatusIndex = useMemo(');
     expect(main).toContain('promptStatus: selectedPromptTurnStatusIndex.statusFor,');
     expect(main).toContain('const selectedChatHasOpenPromptTurn = selectedPromptTurnStatusIndex.hasOpenPrompt;');
@@ -166,7 +178,7 @@ describe('web chat turn rendering', () => {
     const displayIndex = readDisplayIndex();
     const styles = readStyles();
 
-    expect(displayIndex).toContain("kind: 'turn' | 'pending' | 'queued';");
+    expect(displayIndex).toContain("kind: 'turn' | 'tool-group' | 'pending' | 'queued';");
     expect(displayIndex).toContain('queuedKeys?: string[];');
     expect(displayIndex).toContain("kind: 'queued'");
     expect(chatTurn).toContain("'queued'");
@@ -287,10 +299,10 @@ describe('web chat turn rendering', () => {
       '.chat-edge-surface-stack > .chat-recent-sessions-surface.desktop,\n.chat-edge-surface-stack > .chat-plan-surface.desktop,\n.chat-edge-surface-stack > .chat-function-surface.desktop',
     );
 
-    expect(styles).toContain('--chat-edge-surface-width: 360px;');
+    expect(styles).toContain('--chat-edge-surface-width: var(--chat-session-panel-width);');
     expect(stackBlock).toContain('--chat-edge-surface-stack-width: var(--chat-edge-surface-width);');
     expect(stackBlock).toContain('width: var(--chat-edge-surface-stack-resolved-width);');
-    expect(fixedBlock).toContain('left: var(--chat-edge-surface-stack-edge-gap);');
+    expect(fixedBlock).toContain('left: 0;');
     expect(fixedBlock).not.toContain('(100% - 800px) / 2');
     expect(itemBlock).toContain('left: auto;');
     expect(itemBlock).toContain('right: auto;');
@@ -320,15 +332,19 @@ describe('web chat turn rendering', () => {
     expect(main).toContain('chatUserScrollLockUntilRef.current = 0;');
   });
 
-  test('keeps tool calls single-line and plan updates outside message content', () => {
+  test('keeps collapsed tool groups fixed-height and plan updates outside message content', () => {
     const chatTurn = readChatTurnView();
+    const toolGroup = readChatToolCallGroup();
     const styles = readStyles();
-    expect(chatTurn).toContain('<div className="chat-tool-line" title={text}>');
+    expect(chatTurn).not.toContain('chat-tool-line');
+    expect(toolGroup).toContain('className="chat-tool-group-header"');
+    expect(toolGroup).toContain('className="chat-tool-group-count"');
+    expect(toolGroup).toContain('className="chat-tool-group-latest"');
     expect(chatTurn).toContain("if (message.method === 'agent_plan') {");
     expect(chatTurn).toMatch(/if \(message\.method === 'agent_plan'\) \{\s*return null;/);
     expect(styles).toContain('/* workspace-ui-targeted-evolution: chat reading */');
-    expect(styles).toMatch(/\.chat-tool-line\s*\{[^}]*min-width:\s*0;/s);
-    expect(styles).toMatch(/\.chat-tool-line span:last-child\s*\{[^}]*white-space:\s*nowrap;[^}]*text-overflow:\s*ellipsis;/s);
+    expect(styles).toMatch(/\.chat-tool-group-header\s*\{[^}]*height:\s*28px;/s);
+    expect(styles).toMatch(/\.chat-tool-group-latest,[\s\S]*?white-space:\s*nowrap;/s);
   });
 
   test('disables new message entry motion when reduced motion is requested', () => {

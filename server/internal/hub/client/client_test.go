@@ -2273,6 +2273,18 @@ func decodePublishedTurnMessage(t *testing.T, event map[string]any) sessionViewT
 	return out
 }
 
+func publishedTurnsByMethod(t *testing.T, published []publishedSessionEvent, method string) []sessionViewTurn {
+	t.Helper()
+	turns := make([]sessionViewTurn, 0)
+	for _, event := range published {
+		turn := decodePublishedTurnMessage(t, event.payload)
+		if decodeSessionTurnMessage(t, turn.Content).Method == method {
+			turns = append(turns, turn)
+		}
+	}
+	return turns
+}
+
 func decodeSessionTurnMessage(t *testing.T, content string) acp.SessionTurnMessage {
 	t.Helper()
 	var out acp.SessionTurnMessage
@@ -5173,6 +5185,247 @@ func TestSessionViewMergedTurnPublishesIncomingContentWithMergedIndices(t *testi
 	content, _ := turn["content"].(string)
 	if text := extractTextChunk(decodeTurnSessionUpdate(t, content).Content); text != "helloworld" {
 		t.Fatalf("published content text = %q, want helloworld", text)
+	}
+}
+
+func TestSessionViewThoughtSnapshotsAreThrottledAndBoundaryFlushed(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	now := time.Date(2026, 7, 19, 10, 0, 0, 0, time.UTC)
+	c.sessionRecorder.now = func() time.Time { return now }
+	published := captureSessionMessageEvents(t, c)
+	record := func(event SessionViewEvent) {
+		t.Helper()
+		if err := c.RecordEvent(ctx, event); err != nil {
+			t.Fatalf("RecordEvent: %v", err)
+		}
+	}
+	thought := func(text string) SessionViewEvent {
+		return sessionViewUpdateEvent("sess-1", acp.SessionUpdate{
+			SessionUpdate: acp.SessionUpdateAgentThoughtChunk,
+			Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: text}),
+			Status:        "streaming",
+		})
+	}
+
+	record(sessionViewCreatedEvent("sess-1", "Thought throttle"))
+	record(sessionViewPromptEvent("sess-1", "run", nil))
+	record(thought("one"))
+	now = now.Add(59 * time.Second)
+	record(thought(" two"))
+	if got := len(publishedTurnsByMethod(t, *published, acp.SessionTurnMethodAgentThought)); got != 1 {
+		t.Fatalf("thought publishes before interval = %d, want 1", got)
+	}
+
+	now = now.Add(time.Second)
+	record(thought(" three"))
+	thoughtTurns := publishedTurnsByMethod(t, *published, acp.SessionTurnMethodAgentThought)
+	if len(thoughtTurns) != 2 {
+		t.Fatalf("thought publishes at interval = %d, want 2", len(thoughtTurns))
+	}
+	second := decodeTurnSessionUpdate(t, thoughtTurns[1].Content)
+	if text := extractTextChunk(second.Content); text != "one two three" {
+		t.Fatalf("second thought snapshot = %q, want latest complete text", text)
+	}
+
+	record(thought(" four"))
+	record(sessionViewUpdateEvent("sess-1", acp.SessionUpdate{
+		SessionUpdate: acp.SessionUpdateToolCall,
+		ToolCallID:    "tool-1",
+		Title:         "Read files",
+		Status:        "in_progress",
+	}))
+	thoughtTurns = publishedTurnsByMethod(t, *published, acp.SessionTurnMethodAgentThought)
+	if len(thoughtTurns) != 3 || !thoughtTurns[2].Finished {
+		t.Fatalf("boundary thought publishes = %+v, want final finished snapshot", thoughtTurns)
+	}
+	final := decodeTurnSessionUpdate(t, thoughtTurns[2].Content)
+	if text := extractTextChunk(final.Content); text != "one two three four" {
+		t.Fatalf("final thought snapshot = %q, want complete text", text)
+	}
+	lastTwo := (*published)[len(*published)-2:]
+	if decodeSessionTurnMessage(t, decodePublishedTurnMessage(t, lastTwo[0].payload).Content).Method != acp.SessionTurnMethodAgentThought {
+		t.Fatalf("penultimate event is not sealed thought: %+v", lastTwo[0])
+	}
+	if decodeSessionTurnMessage(t, decodePublishedTurnMessage(t, lastTwo[1].payload).Content).Method != acp.SessionTurnMethodToolCall {
+		t.Fatalf("last event is not tool call: %+v", lastTwo[1])
+	}
+}
+
+func TestSessionViewEmptyThoughtChunksAreIgnored(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	published := captureSessionMessageEvents(t, c)
+
+	for _, event := range []SessionViewEvent{
+		sessionViewCreatedEvent("sess-empty-thought", "Empty thought"),
+		sessionViewPromptEvent("sess-empty-thought", "run", nil),
+		sessionViewUpdateEvent("sess-empty-thought", acp.SessionUpdate{
+			SessionUpdate: acp.SessionUpdateAgentThoughtChunk,
+			Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: " \n\t"}),
+			Status:        "streaming",
+		}),
+		sessionViewUpdateEvent("sess-empty-thought", acp.SessionUpdate{
+			SessionUpdate: acp.SessionUpdateToolCall,
+			ToolCallID:    "tool-1",
+			Title:         "Read files",
+			Status:        "completed",
+		}),
+		sessionViewPromptFinishedEvent("sess-empty-thought", acp.StopReasonEndTurn),
+	} {
+		if err := c.RecordEvent(ctx, event); err != nil {
+			t.Fatalf("RecordEvent: %v", err)
+		}
+	}
+
+	if thoughts := publishedTurnsByMethod(t, *published, acp.SessionTurnMethodAgentThought); len(thoughts) != 0 {
+		t.Fatalf("published empty thoughts = %+v, want none", thoughts)
+	}
+	_, turns, err := c.sessionRecorder.ReadSessionTurns(ctx, "sess-empty-thought", 0)
+	if err != nil {
+		t.Fatalf("ReadSessionTurns: %v", err)
+	}
+	methods := make([]string, 0, len(turns))
+	for _, turn := range turns {
+		methods = append(methods, decodeSessionTurnMessage(t, turn.Content).Method)
+	}
+	want := []string{
+		acp.SessionTurnMethodPromptRequest,
+		acp.SessionTurnMethodToolCall,
+		acp.SessionTurnMethodPromptDone,
+	}
+	if !reflect.DeepEqual(methods, want) {
+		t.Fatalf("persisted methods = %v, want %v", methods, want)
+	}
+}
+
+func TestSessionViewThoughtPromptDoneFlushesSuppressedContentAndPersistsIt(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	now := time.Date(2026, 7, 19, 11, 0, 0, 0, time.UTC)
+	c.sessionRecorder.now = func() time.Time { return now }
+	published := captureSessionMessageEvents(t, c)
+
+	if err := c.RecordEvent(ctx, sessionViewCreatedEvent("sess-1", "Thought done")); err != nil {
+		t.Fatalf("RecordEvent session created: %v", err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptEvent("sess-1", "run", nil)); err != nil {
+		t.Fatalf("RecordEvent prompt: %v", err)
+	}
+	for _, text := range []string{"alpha", " beta", " gamma"} {
+		if err := c.RecordEvent(ctx, sessionViewUpdateEvent("sess-1", acp.SessionUpdate{
+			SessionUpdate: acp.SessionUpdateAgentThoughtChunk,
+			Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: text}),
+			Status:        "streaming",
+		})); err != nil {
+			t.Fatalf("RecordEvent thought: %v", err)
+		}
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptFinishedEvent("sess-1", acp.StopReasonEndTurn)); err != nil {
+		t.Fatalf("RecordEvent prompt finished: %v", err)
+	}
+
+	thoughtTurns := publishedTurnsByMethod(t, *published, acp.SessionTurnMethodAgentThought)
+	if len(thoughtTurns) != 2 || !thoughtTurns[1].Finished {
+		t.Fatalf("published thoughts = %+v, want initial and final", thoughtTurns)
+	}
+	lastTwo := (*published)[len(*published)-2:]
+	if decodeSessionTurnMessage(t, decodePublishedTurnMessage(t, lastTwo[0].payload).Content).Method != acp.SessionTurnMethodAgentThought {
+		t.Fatalf("event before prompt_done is not thought: %+v", lastTwo[0])
+	}
+	if decodeSessionTurnMessage(t, decodePublishedTurnMessage(t, lastTwo[1].payload).Content).Method != acp.SessionTurnMethodPromptDone {
+		t.Fatalf("last event is not prompt_done: %+v", lastTwo[1])
+	}
+
+	_, turns, err := c.sessionRecorder.ReadSessionTurns(ctx, "sess-1", 0)
+	if err != nil {
+		t.Fatalf("ReadSessionTurns: %v", err)
+	}
+	for _, turn := range turns {
+		if decodeSessionTurnMessage(t, turn.Content).Method != acp.SessionTurnMethodAgentThought {
+			continue
+		}
+		update := decodeTurnSessionUpdate(t, turn.Content)
+		if text := extractTextChunk(update.Content); text != "alpha beta gamma" {
+			t.Fatalf("persisted thought = %q, want all chunks", text)
+		}
+		return
+	}
+	t.Fatal("persisted thought turn not found")
+}
+
+func TestSessionViewThoughtCancellationFlushesSuppressedContentBeforePromptDone(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	c.sessionRecorder.now = func() time.Time {
+		return time.Date(2026, 7, 19, 11, 30, 0, 0, time.UTC)
+	}
+	published := captureSessionMessageEvents(t, c)
+
+	for _, event := range []SessionViewEvent{
+		sessionViewCreatedEvent("sess-cancel", "Thought cancel"),
+		sessionViewPromptEvent("sess-cancel", "run", nil),
+		sessionViewUpdateEvent("sess-cancel", acp.SessionUpdate{
+			SessionUpdate: acp.SessionUpdateAgentThoughtChunk,
+			Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: "before"}),
+			Status:        "streaming",
+		}),
+		sessionViewUpdateEvent("sess-cancel", acp.SessionUpdate{
+			SessionUpdate: acp.SessionUpdateAgentThoughtChunk,
+			Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: " cancel"}),
+			Status:        "streaming",
+		}),
+		sessionViewPromptFinishedEvent("sess-cancel", acp.StopReasonCancelled),
+	} {
+		if err := c.RecordEvent(ctx, event); err != nil {
+			t.Fatalf("RecordEvent: %v", err)
+		}
+	}
+
+	thoughtTurns := publishedTurnsByMethod(t, *published, acp.SessionTurnMethodAgentThought)
+	if len(thoughtTurns) != 2 || !thoughtTurns[1].Finished {
+		t.Fatalf("published thoughts = %+v, want initial and final", thoughtTurns)
+	}
+	final := decodeTurnSessionUpdate(t, thoughtTurns[1].Content)
+	if text := extractTextChunk(final.Content); text != "before cancel" {
+		t.Fatalf("final thought snapshot = %q, want complete cancelled text", text)
+	}
+	lastTwo := (*published)[len(*published)-2:]
+	if decodeSessionTurnMessage(t, decodePublishedTurnMessage(t, lastTwo[0].payload).Content).Method != acp.SessionTurnMethodAgentThought {
+		t.Fatalf("event before cancelled prompt_done is not thought: %+v", lastTwo[0])
+	}
+	publishedPromptDone := decodePublishedTurnMessage(t, lastTwo[1].payload)
+	promptDone := decodeSessionTurnMessage(t, publishedPromptDone.Content)
+	if promptDone.Method != acp.SessionTurnMethodPromptDone || decodePromptDoneStopReason(t, publishedPromptDone.Content) != acp.StopReasonCancelled {
+		t.Fatalf("last event is not cancelled prompt_done: %+v", lastTwo[1])
+	}
+}
+
+func TestSessionViewThoughtThrottleIsIsolatedBySession(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	now := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)
+	c.sessionRecorder.now = func() time.Time { return now }
+	published := captureSessionMessageEvents(t, c)
+
+	for _, sessionID := range []string{"sess-1", "sess-2"} {
+		if err := c.RecordEvent(ctx, sessionViewCreatedEvent(sessionID, sessionID)); err != nil {
+			t.Fatalf("RecordEvent session created: %v", err)
+		}
+		if err := c.RecordEvent(ctx, sessionViewPromptEvent(sessionID, "run", nil)); err != nil {
+			t.Fatalf("RecordEvent prompt: %v", err)
+		}
+		if err := c.RecordEvent(ctx, sessionViewUpdateEvent(sessionID, acp.SessionUpdate{
+			SessionUpdate: acp.SessionUpdateAgentThoughtChunk,
+			Content:       mustJSON(acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: sessionID}),
+			Status:        "streaming",
+		})); err != nil {
+			t.Fatalf("RecordEvent thought: %v", err)
+		}
+	}
+	thoughtTurns := publishedTurnsByMethod(t, *published, acp.SessionTurnMethodAgentThought)
+	if len(thoughtTurns) != 2 {
+		t.Fatalf("first thought publish count = %d, want 2", len(thoughtTurns))
 	}
 }
 

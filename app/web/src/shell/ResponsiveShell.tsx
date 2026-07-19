@@ -11,6 +11,7 @@ type ShellContentProps = {
 };
 
 export type DesktopShellProps = ShellContentProps & {
+  desktopTopBar: ReactNode;
   desktopWindowControls: ReactNode;
   desktopWindowControlsVisible: boolean;
   desktopSettingsScreen: ReactNode;
@@ -19,8 +20,6 @@ export type DesktopShellProps = ShellContentProps & {
   desktopChatPreviewOpen: boolean;
   sidebarCollapsed: boolean;
   desktopSidebarWidth: number;
-  /** Floating top-left title bar (settings + hubs), permanent across sidebar modes. */
-  desktopTopBar?: ReactNode;
 };
 
 export type MobileShellProps = ShellContentProps & {
@@ -40,6 +39,7 @@ export type ResponsiveShellProps = DesktopShellProps &
 export function DesktopShell({
   themeMode,
   setiFontCss,
+  desktopTopBar,
   desktopWindowControls,
   desktopWindowControlsVisible,
   desktopSettingsScreen,
@@ -50,7 +50,6 @@ export function DesktopShell({
   main,
   sidebarCollapsed,
   desktopSidebarWidth,
-  desktopTopBar,
 }: DesktopShellProps) {
   return (
     <div className={`workspace theme-${themeMode}`}>
@@ -64,13 +63,17 @@ export function DesktopShell({
         style={{ '--desktop-sidebar-width': `${desktopSidebarWidth}px` } as React.CSSProperties}
       >
         <div className="body">
-          {!sidebarCollapsed ? (
-            <aside className="workspace-left">{sidebar}</aside>
-          ) : null}
-          <main className="workspace-right">{main}</main>
+          <div className="desktop-primary-workspace">
+            {desktopTopBar}
+            <div className="desktop-primary-body">
+              {!sidebarCollapsed ? (
+                <aside className="workspace-left">{sidebar}</aside>
+              ) : null}
+              <main className="workspace-right">{main}</main>
+            </div>
+          </div>
           {desktopPeek}
         </div>
-        {desktopTopBar}
       </div>
       {desktopSettingsScreen}
     </div>

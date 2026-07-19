@@ -1,5 +1,6 @@
 import React from 'react';
 
+import {ChatEdgeSurfaceHeader} from './ChatEdgeSurfaceHeader';
 import type {ChatPlanEntry, ChatPlanSnapshot} from './chatPlan';
 import {useChatEdgeSurfaceGeometry} from './layout/chatEdgeSurfaceGeometry';
 
@@ -113,42 +114,22 @@ export const ChatPlanSurface = React.memo(function ChatPlanSurface({
   const progressLabel = `${currentStep}/${plan.totalCount}`;
 
   if (mode === 'desktop') {
-    if (desktopCollapsed) {
-      return (
-        <aside ref={desktopSurfaceRef} className="chat-plan-surface desktop collapsed" aria-label="Current plan">
-          <div className="chat-edge-surface-glass" aria-hidden="true" />
-          <div className="chat-edge-surface-content">
-            {renderCompactTrigger({
-              activeEntry,
-              expanded: false,
-              mode,
-              onClick: () => setDesktopCollapsed(false),
-              progressLabel,
-            })}
-          </div>
-        </aside>
-      );
-    }
-
     return (
-      <aside ref={desktopSurfaceRef} className="chat-plan-surface desktop expanded" aria-label="Current plan">
+      <aside
+        ref={desktopSurfaceRef}
+        className={`chat-plan-surface desktop ${desktopCollapsed ? 'collapsed' : 'expanded'}`}
+        aria-label="Current plan"
+      >
         <div className="chat-edge-surface-glass" aria-hidden="true" />
         <div className="chat-edge-surface-content">
-          <div className="chat-plan-surface-header">
-            <button
-              type="button"
-              className="chat-plan-surface-toggle"
-              onClick={() => setDesktopCollapsed(true)}
-              aria-expanded={true}
-              aria-label="Collapse current plan"
-              title="Collapse current plan"
-            >
-              <span className="codicon codicon-chevron-up" aria-hidden="true" />
-            </button>
-            <span className="chat-plan-surface-title">Plan</span>
-            <span className="chat-plan-progress">{progressLabel}</span>
-          </div>
-          {renderPlanList(plan)}
+          <ChatEdgeSurfaceHeader
+            title="Plan"
+            collapsed={desktopCollapsed}
+            onToggleCollapsed={() => setDesktopCollapsed(value => !value)}
+            summary={desktopCollapsed ? activeEntry?.content : undefined}
+            actions={<span className="chat-plan-progress">{progressLabel}</span>}
+          />
+          {desktopCollapsed ? null : renderPlanList(plan)}
         </div>
       </aside>
     );

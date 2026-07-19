@@ -7,10 +7,13 @@ import {
 import {promptAttachmentBlockCount} from '../composer/chatPromptAttachments';
 
 export type ChatDisplayIndexItem = {
-  kind: 'turn' | 'pending' | 'queued';
+  kind: 'turn' | 'tool-group' | 'pending' | 'queued';
+  compact?: boolean;
   key: string;
   turnIndex: number;
+  endTurnIndex: number;
   sourceIndex: number;
+  sourceIndexes: number[];
   estimatedHeight: number;
 };
 
@@ -47,7 +50,6 @@ export type ChatTurnHeightContext = {
 
 export type ChatDisplayIndexOptions = {
   shouldRender?: (message: RegistryChatMessage, promptStatus: ChatPromptStatus) => boolean;
-  hideToolCalls?: boolean;
   layoutMetrics?: Partial<ChatTurnHeightMetrics>;
   promptStatus?: (message: RegistryChatMessage) => ChatPromptStatus;
   pendingKey?: string;
@@ -68,7 +70,7 @@ export const DEFAULT_CHAT_TURN_HEIGHT_METRICS: ChatTurnHeightMetrics = {
   promptGroupVerticalPadding: 22,
   promptGroupGap: 8,
   promptMaxWidth: 920,
-  toolLineHeight: 18,
+  toolLineHeight: 28,
   thoughtCollapsedHeight: 28,
   optionButtonMinHeight: 30,
   optionButtonMaxWidth: 560,
@@ -404,6 +406,7 @@ export function buildChatDisplayIndex(
     }
   }
   const items: ChatDisplayIndexItem[] = [];
+  const metrics = normalizeMetrics(options.layoutMetrics);
   const latestOperationSourceIndex = new Map<string, number>();
   for (const item of sorted) {
     const operationId = sessionOperationId(item.message);
@@ -411,11 +414,10 @@ export function buildChatDisplayIndex(
       latestOperationSourceIndex.set(operationId, item.sourceIndex);
     }
   }
+  let activeToolGroup: ChatDisplayIndexItem | null = null;
   for (const item of sorted) {
+    const turnIndex = positiveTurnIndex(item.message);
     if (item.message.method === 'agent_plan') {
-      continue;
-    }
-    if (options.hideToolCalls && isToolCallMethod(item.message.method)) {
       continue;
     }
     const operationId = sessionOperationId(item.message);
@@ -426,6 +428,26 @@ export function buildChatDisplayIndex(
     if (!operationId && options.shouldRender && !options.shouldRender(item.message, promptStatus)) {
       continue;
     }
+    if (isToolCallMethod(item.message.method)) {
+      if (activeToolGroup) {
+        activeToolGroup.endTurnIndex = turnIndex;
+        activeToolGroup.sourceIndexes.push(item.sourceIndex);
+      } else {
+        activeToolGroup = {
+          kind: 'tool-group',
+          compact: true,
+          key: `${item.message.sessionId}:${turnIndex}:tool-group`,
+          turnIndex,
+          endTurnIndex: turnIndex,
+          sourceIndex: item.sourceIndex,
+          sourceIndexes: [item.sourceIndex],
+          estimatedHeight: clampHeight(metrics.toolLineHeight),
+        };
+        items.push(activeToolGroup);
+      }
+      continue;
+    }
+    activeToolGroup = null;
     const estimatedHeight = cachedChatTurnHeight(
       item.message,
       options.layoutMetrics,
@@ -433,9 +455,12 @@ export function buildChatDisplayIndex(
     );
     items.push({
       kind: 'turn',
+      ...(item.message.method === 'agent_thought_chunk' ? {compact: true} : {}),
       key: displayKey(item.message),
-      turnIndex: positiveTurnIndex(item.message),
+      turnIndex,
+      endTurnIndex: turnIndex,
       sourceIndex: item.sourceIndex,
+      sourceIndexes: [item.sourceIndex],
       estimatedHeight,
     });
   }
@@ -445,7 +470,9 @@ export function buildChatDisplayIndex(
       kind: 'pending',
       key: pendingKey,
       turnIndex: 0,
+      endTurnIndex: 0,
       sourceIndex: -1,
+      sourceIndexes: [],
       estimatedHeight: Math.max(56, Math.trunc(options.pendingEstimatedHeight ?? 120)),
     });
   }
@@ -456,11 +483,23 @@ export function buildChatDisplayIndex(
       kind: 'queued',
       key,
       turnIndex: 0,
+      endTurnIndex: 0,
       sourceIndex: -1,
+      sourceIndexes: [],
       estimatedHeight: Math.max(72, Math.trunc(options.queuedEstimatedHeight ?? 128)),
     });
   }
   return {items};
+}
+
+export function chatDisplayItemContainsTurn(
+  item: ChatDisplayIndexItem,
+  turnIndex: number,
+): boolean {
+  const targetTurnIndex = Number.isFinite(turnIndex) ? Math.max(0, Math.trunc(turnIndex)) : 0;
+  return targetTurnIndex > 0 &&
+    targetTurnIndex >= item.turnIndex &&
+    targetTurnIndex <= item.endTurnIndex;
 }
 
 export function resolveChatDisplayScrollIndex(displayIndex: ChatDisplayIndex, turnIndex: number): number | null {
@@ -468,7 +507,9 @@ export function resolveChatDisplayScrollIndex(displayIndex: ChatDisplayIndex, tu
   if (targetTurnIndex <= 0 || displayIndex.items.length === 0) {
     return null;
   }
-  const exactIndex = displayIndex.items.findIndex(item => item.turnIndex === targetTurnIndex);
+  const exactIndex = displayIndex.items.findIndex(item =>
+    chatDisplayItemContainsTurn(item, targetTurnIndex),
+  );
   if (exactIndex >= 0) {
     return exactIndex;
   }

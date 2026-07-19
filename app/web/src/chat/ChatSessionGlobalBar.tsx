@@ -9,8 +9,8 @@ export type ChatSessionGlobalBarProps = {
   /** Show the pin toggle (pin = switch to the fixed sidebar mode). */
   pinActive?: boolean;
   onTogglePin?: () => void;
-  /** Right-side controls (search / archive), shown when expanded or in pinned mode. */
-  trailing?: ReactNode;
+  /** List controls (archive / search), kept next to the title. */
+  leading?: ReactNode;
 };
 
 export const ChatSessionGlobalBar = React.memo(function ChatSessionGlobalBar({
@@ -19,11 +19,15 @@ export const ChatSessionGlobalBar = React.memo(function ChatSessionGlobalBar({
   onToggleSlideOut,
   pinActive,
   onTogglePin,
-  trailing,
+  leading,
 }: ChatSessionGlobalBarProps) {
   return (
     <div className={`chat-session-global-bar${slideOutOpen ? ' slide-out-open' : ''}`}>
-      <div className="chat-session-global-bar-leading">
+      <div className="chat-session-global-bar-leading-actions">
+        {title ? <span className="chat-session-global-bar-title">{title}</span> : null}
+        {leading}
+      </div>
+      <div className="chat-session-global-bar-layout-actions">
         {onToggleSlideOut ? (
           <button
             type="button"
@@ -34,12 +38,11 @@ export const ChatSessionGlobalBar = React.memo(function ChatSessionGlobalBar({
             title={slideOutOpen ? 'Close all sessions' : 'Show all sessions'}
           >
             <span
-              className={`codicon ${slideOutOpen ? 'codicon-chevron-left' : 'codicon-list-flat'}`}
+              className={`codicon ${slideOutOpen ? 'codicon-layout-sidebar-left-off' : 'codicon-layout-sidebar-left'}`}
               aria-hidden="true"
             />
           </button>
         ) : null}
-        {title ? <span className="chat-session-global-bar-title">{title}</span> : null}
         {onTogglePin ? (
           <button
             type="button"
@@ -53,7 +56,6 @@ export const ChatSessionGlobalBar = React.memo(function ChatSessionGlobalBar({
           </button>
         ) : null}
       </div>
-      {trailing ? <div className="chat-session-global-bar-trailing">{trailing}</div> : null}
     </div>
   );
 });
