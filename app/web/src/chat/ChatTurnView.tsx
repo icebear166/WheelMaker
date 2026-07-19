@@ -193,10 +193,12 @@ function promptArtifactViewKey(message: RegistryChatMessage, artifact: RegistryS
 
 const CollapsibleThought = React.memo(function CollapsibleThought({
   text,
+  finished,
   markdownComponents,
   markdownUrlTransform,
 }: {
   text: string;
+  finished: boolean;
   markdownComponents: Components;
   markdownUrlTransform: (value: string) => string;
 }) {
@@ -206,22 +208,23 @@ const CollapsibleThought = React.memo(function CollapsibleThought({
     .split('\n')
     .map(line => line.trim())
     .find(Boolean) || '';
+  const title = finished ? firstLine || 'Thinking' : 'Thinking';
 
   return (
-    <div className={`chat-thought-block${open ? ' chat-thought-open' : ''}`}>
-      <div
+    <div className={`chat-thought-block${open ? ' chat-thought-open' : ''}${finished ? ' done' : ' streaming'}`}>
+      <button
+        type="button"
         className="chat-thought-header"
-        onClick={() => setOpen(!open)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(!open); } }}
+        aria-expanded={open}
+        aria-label={open ? 'Collapse thinking' : 'Expand thinking'}
+        onClick={() => setOpen(current => !current)}
       >
-        <span className="codicon codicon-chevron-right chat-thought-chevron" />
-        <span className="codicon codicon-lightbulb" />
-        {!open && firstLine ? (
-          <span className="chat-thought-preview">{firstLine}</span>
-        ) : null}
-      </div>
+        <span className="codicon codicon-chevron-right chat-thought-chevron" aria-hidden="true" />
+        <span className="codicon codicon-lightbulb chat-thought-icon" aria-hidden="true" />
+        <span className="chat-thought-title" title={finished ? firstLine : undefined}>
+          {title}
+        </span>
+      </button>
       {open ? (
         <div
           className="chat-thought-content"
@@ -648,6 +651,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
     return (
       <CollapsibleThought
         text={text}
+        finished={message.finished}
         markdownComponents={markdownComponents}
         markdownUrlTransform={markdownUrlTransform}
       />

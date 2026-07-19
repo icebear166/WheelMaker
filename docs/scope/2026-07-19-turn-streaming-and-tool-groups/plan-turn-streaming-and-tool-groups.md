@@ -364,7 +364,7 @@ git commit -m "feat(app): group tool calls in chat display index"
 - Test: `app/__tests__/web-chat-turn-groups.test.tsx`
 - Test: `app/__tests__/web-chat-ui.test.ts:670-700`
 
-- [ ] **Step 1: Add a failing interaction test for streaming and completed thinking**
+- [x] **Step 1: Add a failing interaction test for streaming and completed thinking**
 
 Create `web-chat-turn-groups.test.tsx` with shared message/render helpers and this test:
 
@@ -422,7 +422,7 @@ test('keeps thinking collapsed by default and preserves an active expansion', as
 });
 ```
 
-- [ ] **Step 2: Run the test and verify it fails**
+- [x] **Step 2: Run the test and verify it fails**
 
 Run:
 
@@ -432,7 +432,7 @@ npm --prefix app test -- --runInBand __tests__/web-chat-turn-groups.test.tsx
 
 Expected: FAIL because thinking does not receive `message.finished`, uses different title classes, and lacks the required aria labels.
 
-- [ ] **Step 3: Pass `finished` into the collapsible thought and render explicit states**
+- [x] **Step 3: Pass `finished` into the collapsible thought and render explicit states**
 
 Change the thought component contract to include `finished`. Keep `open` local and derive the closed label without changing component identity:
 
@@ -460,7 +460,7 @@ return (
 
 Pass `finished={message.finished}` from the thought branch. Leave the legacy `hideToolCalls` prop and single-tool branch in place until Task 6 removes the preference end to end; Task 5 will route display-index tool groups around that branch.
 
-- [ ] **Step 4: Replace blue thought styling with fixed-height neutral styling**
+- [x] **Step 4: Replace blue thought styling with fixed-height neutral styling**
 
 Update the active `.chat-thought-*` rules to enforce a 28px collapsed header:
 
@@ -505,7 +505,7 @@ Update the active `.chat-thought-*` rules to enforce a 28px collapsed header:
 
 Retain the rotating chevron for open state. Remove the accent-mixed left border and accent-mixed content background. Add `@keyframes chatThinkingPulse` near the component styles.
 
-- [ ] **Step 5: Run thinking interaction and UI style tests**
+- [x] **Step 5: Run thinking interaction and UI style tests**
 
 Run:
 
@@ -515,7 +515,7 @@ npm --prefix app test -- --runInBand __tests__/web-chat-turn-groups.test.tsx __t
 
 Expected: PASS, including source assertions that the thought header has a fixed height, single-line ellipsis, and no accent-mixed background/border.
 
-- [ ] **Step 6: Commit the thinking UI**
+- [x] **Step 6: Commit the thinking UI**
 
 ```powershell
 git add app/web/src/chat/ChatTurnView.tsx app/web/src/styles/chat.css app/__tests__/web-chat-turn-groups.test.tsx app/__tests__/web-chat-ui.test.ts
