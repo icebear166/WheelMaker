@@ -160,7 +160,7 @@ describe('web chat recent sessions', () => {
     const pinnedMainRule = chatCss.match(/\.chat-view-width-fixed-800-edge-surfaces \{[\s\S]*?\n\}/)?.[0] ?? '';
     const pinnedFixedRule = chatCss.match(/\.chat-view-width-fixed-800-edge-surfaces \.chat-view-content,[\s\S]*?\n\}/)?.[0] ?? '';
 
-    expect(stackRule).toContain('--chat-edge-surface-stack-edge-gap: max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px));');
+    expect(stackRule).toContain('--chat-edge-surface-stack-edge-gap: 0px;');
     expect(pinnedMainRule).toContain('--chat-edge-reserved-left:');
     expect(pinnedMainRule).toContain('--chat-edge-reserve-edge-gap:');
     expect(pinnedMainRule).toContain('--chat-fixed-centered:');

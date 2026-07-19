@@ -17821,30 +17821,25 @@ export function App() {
           </div>
         ) : null}
         {showPinnedChatSessionPanel ? (
-          <>
-            <DesktopDragRegion className="chat-pinned-title-bar">
-              {renderChatSessionHeader(false)}
-            </DesktopDragRegion>
-            <ChatSessionPanel
-              mode="pinned"
-              title="Sessions"
-              className="chat-pinned-session-panel"
-              header={
-                <ChatSessionGlobalBar
-                  pinActive
-                  onTogglePin={() => setSidebarCollapsed(true)}
-                  trailing={
-                    <>
-                      {renderChatArchiveControls()}
-                      {renderChatHeaderSearchControls()}
-                    </>
-                  }
-                />
-              }
-            >
-              {wideSidebarMain}
-            </ChatSessionPanel>
-          </>
+          <ChatSessionPanel
+            mode="pinned"
+            title="Sessions"
+            className="chat-pinned-session-panel"
+            header={
+              <ChatSessionGlobalBar
+                pinActive
+                onTogglePin={() => setSidebarCollapsed(true)}
+                trailing={
+                  <>
+                    {renderChatArchiveControls()}
+                    {renderChatHeaderSearchControls()}
+                  </>
+                }
+              />
+            }
+          >
+            {wideSidebarMain}
+          </ChatSessionPanel>
         ) : isWide ? (
           (
             <DesktopDragRegion className="sidebar-title-row">
@@ -18812,6 +18807,148 @@ export function App() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [isWide, isWindowsPlatform, setSidebarCollapsed, toggleChatPreviewFromTitle, toggleTerminalFromTitle]);
+  const chatReadOnlyPreview = archivedMode && archivedPreview !== null;
+  const activeChatMessages = chatReadOnlyPreview ? archivedPreview.messages : chatMessages;
+  const activeChatDisplayIndex = chatReadOnlyPreview ? archivedChatDisplayIndex : chatDisplayIndex;
+  const activeChatRuntimeKey = chatReadOnlyPreview && selectedArchivedKey
+    ? buildChatRuntimeKey(selectedArchivedKey.projectId, selectedArchivedKey.sessionId)
+    : selectedChatEncodedKey;
+  const activeChatDisplayTitle = chatReadOnlyPreview
+    ? resolveSessionDisplayTitle(archivedPreview.session) || archivedPreview.sessionId
+    : selectedChatDisplayTitle;
+  const archivedPreviewProjectName = selectedArchivedKey
+    ? projects.find(item => item.projectId === selectedArchivedKey.projectId)?.name ||
+      archivedPreview?.session.projectName ||
+      'Project'
+    : 'Project';
+  const activeChatBreadcrumbProjectName = chatReadOnlyPreview
+    ? archivedPreviewProjectName
+    : chatBreadcrumbProjectName;
+  const activeChatBreadcrumbLabel = chatReadOnlyPreview
+    ? `Archived - ${activeChatDisplayTitle || 'Session'}`
+    : chatBreadcrumbLabel;
+  const toggleChatTitlePromptMenu = () => {
+    if (!chatTitlePromptMenuAvailable) return;
+    setChatPromptMenuOpen(false);
+    setChatFileMentionMenuOpen(false);
+    setChatAttachmentTrayOpen(false);
+    setChatConfigMenuOptionId('');
+    setChatConfigOverflowOpen(false);
+    setChatHubMenuOpen(false);
+    setChatQuickSwitchMenuOpen(false);
+    setChatTitleProjectMenuOpen(false);
+    setChatTitlePromptMenuOpen(open => !open);
+  };
+  const renderDesktopChatBreadcrumbTitle = () => (
+    <div className="breadcrumb-title chat-breadcrumb-title">
+      <button
+        ref={chatTitleProjectButtonRef}
+        type="button"
+        className={`chat-title-project-button${chatTitleProjectMenuOpen ? ' open' : ''}`}
+        onPointerDown={event => event.stopPropagation()}
+        onClick={() => {
+          setChatTitlePromptMenuOpen(false);
+          setChatQuickSwitchMenuOpen(false);
+          setChatTitleProjectMenuOpen(open => !open);
+        }}
+        title="Switch project"
+        aria-label="Switch project"
+        aria-haspopup="menu"
+        aria-expanded={chatTitleProjectMenuOpen}
+      >
+        <span className="breadcrumb-project-name" title={activeChatBreadcrumbProjectName}>
+          {activeChatBreadcrumbProjectName}
+        </span>
+        <span className="codicon codicon-chevron-down" aria-hidden="true" />
+      </button>
+      <button
+        ref={chatTitlePromptButtonRef}
+        type="button"
+        className={`chat-title-prompt-icon-button${chatTitlePromptMenuOpen ? ' open' : ''}`}
+        title={chatTitlePromptMenuAvailable ? 'Show prompt history' : activeChatBreadcrumbLabel}
+        aria-label="Show prompt history"
+        aria-haspopup="menu"
+        aria-expanded={chatTitlePromptMenuOpen}
+        disabled={!chatTitlePromptMenuAvailable}
+        onClick={toggleChatTitlePromptMenu}
+      >
+        <span className="codicon codicon-history" aria-hidden="true" />
+      </button>
+      <span className="chat-title-session-text title-text breadcrumb-current" title={activeChatBreadcrumbLabel}>
+        {activeChatBreadcrumbLabel}
+      </span>
+    </div>
+  );
+  const renderMobileChatBreadcrumbTitle = () => (
+    <div className="breadcrumb-title chat-breadcrumb-title">
+      <button
+        ref={chatTitleProjectButtonRef}
+        type="button"
+        className={`chat-title-project-button${chatTitleProjectMenuOpen ? ' open' : ''}`}
+        onPointerDown={event => event.stopPropagation()}
+        onClick={() => {
+          setChatTitlePromptMenuOpen(false);
+          setChatQuickSwitchMenuOpen(false);
+          setChatTitleProjectMenuOpen(open => !open);
+        }}
+        title="Switch project"
+        aria-label="Switch project"
+        aria-haspopup="menu"
+        aria-expanded={chatTitleProjectMenuOpen}
+      >
+        <span className="breadcrumb-project-name" title={activeChatBreadcrumbProjectName}>
+          {activeChatBreadcrumbProjectName}
+        </span>
+        <span className="codicon codicon-chevron-down" aria-hidden="true" />
+      </button>
+      <button
+        ref={chatTitlePromptButtonRef}
+        type="button"
+        className={`chat-title-session-button chat-title-session-text title-text breadcrumb-current${chatTitlePromptMenuOpen ? ' open' : ''}`}
+        title={chatTitlePromptMenuAvailable ? 'Show prompt history' : activeChatBreadcrumbLabel}
+        aria-label="Show prompt history"
+        aria-haspopup="menu"
+        aria-expanded={chatTitlePromptMenuOpen}
+        aria-disabled={!chatTitlePromptMenuAvailable}
+        onClick={toggleChatTitlePromptMenu}
+      >
+        {activeChatBreadcrumbLabel}
+      </button>
+    </div>
+  );
+  const renderChatTitleBar = (mobile: boolean) => (
+    <DesktopDragRegion className="block-title chat-title-bar">
+      {!mobile ? renderChatSessionHeader(false) : null}
+      <div className="chat-title-context">
+        {mobile ? renderMobileChatBreadcrumbTitle() : renderDesktopChatBreadcrumbTitle()}
+      </div>
+      <div className="chat-title-actions">
+        <button
+          type="button"
+          className={`chat-terminal-toggle${terminalOpen ? ' active' : ''}`}
+          onClick={toggleTerminalFromTitle}
+          title={terminalOpen ? 'Hide terminal' : 'Show terminal'}
+          aria-label={terminalOpen ? 'Hide terminal' : 'Show terminal'}
+          aria-pressed={terminalOpen}
+        >
+          <span className="codicon codicon-terminal" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className={`chat-preview-toggle${chatPreviewOpen ? ' active' : ''}`}
+          onClick={toggleChatPreviewFromTitle}
+          title={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
+          aria-label={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
+          aria-pressed={chatPreviewOpen}
+        >
+          <span className="codicon codicon-layout-sidebar-right" aria-hidden="true" />
+          {!chatPreviewOpen && previewTabCount > 0 ? (
+            <span className="chat-preview-badge" aria-label={`${previewTabCount} preview tabs`}>{previewTabCount}</span>
+          ) : null}
+        </button>
+      </div>
+    </DesktopDragRegion>
+  );
   const renderMain = () => {
     const heavyDiffDeferred =
       !!selectedDiff &&
@@ -19111,151 +19248,10 @@ export function App() {
         </div>
       );
     };
-    const chatReadOnlyPreview = archivedMode && archivedPreview !== null;
-    const activeChatMessages = chatReadOnlyPreview ? archivedPreview.messages : chatMessages;
-    const activeChatDisplayIndex = chatReadOnlyPreview ? archivedChatDisplayIndex : chatDisplayIndex;
-    const activeChatRuntimeKey = chatReadOnlyPreview && selectedArchivedKey
-      ? buildChatRuntimeKey(selectedArchivedKey.projectId, selectedArchivedKey.sessionId)
-      : selectedChatEncodedKey;
-    const activeChatDisplayTitle = chatReadOnlyPreview
-      ? resolveSessionDisplayTitle(archivedPreview.session) || archivedPreview.sessionId
-      : selectedChatDisplayTitle;
-    const archivedPreviewProjectName = selectedArchivedKey
-      ? projects.find(item => item.projectId === selectedArchivedKey.projectId)?.name ||
-        archivedPreview?.session.projectName ||
-        'Project'
-      : 'Project';
-    const activeChatBreadcrumbProjectName = chatReadOnlyPreview
-      ? archivedPreviewProjectName
-      : chatBreadcrumbProjectName;
-    const activeChatBreadcrumbLabel = chatReadOnlyPreview
-      ? `Archived - ${activeChatDisplayTitle || 'Session'}`
-      : chatBreadcrumbLabel;
-    const toggleChatTitlePromptMenu = () => {
-      if (!chatTitlePromptMenuAvailable) return;
-      setChatPromptMenuOpen(false);
-      setChatFileMentionMenuOpen(false);
-      setChatAttachmentTrayOpen(false);
-      setChatConfigMenuOptionId('');
-      setChatConfigOverflowOpen(false);
-      setChatHubMenuOpen(false);
-      setChatQuickSwitchMenuOpen(false);
-      setChatTitleProjectMenuOpen(false);
-      setChatTitlePromptMenuOpen(open => !open);
-    };
-    const renderDesktopChatBreadcrumbTitle = () => (
-      <div className="breadcrumb-title chat-breadcrumb-title">
-        <button
-          ref={chatTitleProjectButtonRef}
-          type="button"
-          className={`chat-title-project-button${chatTitleProjectMenuOpen ? ' open' : ''}`}
-          onPointerDown={event => event.stopPropagation()}
-          onClick={() => {
-            setChatTitlePromptMenuOpen(false);
-            setChatQuickSwitchMenuOpen(false);
-            setChatTitleProjectMenuOpen(open => !open);
-          }}
-          title="Switch project"
-          aria-label="Switch project"
-          aria-haspopup="menu"
-          aria-expanded={chatTitleProjectMenuOpen}
-        >
-          <span className="breadcrumb-project-name" title={activeChatBreadcrumbProjectName}>
-            {activeChatBreadcrumbProjectName}
-          </span>
-          <span className="codicon codicon-chevron-down" aria-hidden="true" />
-        </button>
-        <button
-          ref={chatTitlePromptButtonRef}
-          type="button"
-          className={`chat-title-prompt-icon-button${chatTitlePromptMenuOpen ? ' open' : ''}`}
-          title={chatTitlePromptMenuAvailable ? 'Show prompt history' : activeChatBreadcrumbLabel}
-          aria-label="Show prompt history"
-          aria-haspopup="menu"
-          aria-expanded={chatTitlePromptMenuOpen}
-          disabled={!chatTitlePromptMenuAvailable}
-          onClick={toggleChatTitlePromptMenu}
-        >
-          <span className="codicon codicon-history" aria-hidden="true" />
-        </button>
-        <span className="chat-title-session-text title-text breadcrumb-current" title={activeChatBreadcrumbLabel}>
-          {activeChatBreadcrumbLabel}
-        </span>
-      </div>
-    );
-    const renderMobileChatBreadcrumbTitle = () => (
-      <div className="breadcrumb-title chat-breadcrumb-title">
-        <button
-          ref={chatTitleProjectButtonRef}
-          type="button"
-          className={`chat-title-project-button${chatTitleProjectMenuOpen ? ' open' : ''}`}
-          onPointerDown={event => event.stopPropagation()}
-          onClick={() => {
-            setChatTitlePromptMenuOpen(false);
-            setChatQuickSwitchMenuOpen(false);
-            setChatTitleProjectMenuOpen(open => !open);
-          }}
-          title="Switch project"
-          aria-label="Switch project"
-          aria-haspopup="menu"
-          aria-expanded={chatTitleProjectMenuOpen}
-        >
-          <span className="breadcrumb-project-name" title={activeChatBreadcrumbProjectName}>
-            {activeChatBreadcrumbProjectName}
-          </span>
-          <span className="codicon codicon-chevron-down" aria-hidden="true" />
-        </button>
-        <button
-          ref={chatTitlePromptButtonRef}
-          type="button"
-          className={`chat-title-session-button chat-title-session-text title-text breadcrumb-current${chatTitlePromptMenuOpen ? ' open' : ''}`}
-          title={chatTitlePromptMenuAvailable ? 'Show prompt history' : activeChatBreadcrumbLabel}
-          aria-label="Show prompt history"
-          aria-haspopup="menu"
-          aria-expanded={chatTitlePromptMenuOpen}
-          aria-disabled={!chatTitlePromptMenuAvailable}
-          onClick={toggleChatTitlePromptMenu}
-        >
-          {activeChatBreadcrumbLabel}
-        </button>
-      </div>
-    );
-    const renderChatBreadcrumbTitle = () => (isWide ? renderDesktopChatBreadcrumbTitle() : renderMobileChatBreadcrumbTitle());
-
     if (tab === 'chat') {
       return (
         <ChatSurface>
-          <DesktopDragRegion className="block-title chat-title-bar">
-            {isWide && !desktopChatSessionPinned ? renderChatSessionHeader(false) : null}
-            <div className="chat-title-context">
-              {renderChatBreadcrumbTitle()}
-            </div>
-            <div className="chat-title-actions">
-              <button
-                type="button"
-                className={`chat-terminal-toggle${terminalOpen ? ' active' : ''}`}
-                onClick={toggleTerminalFromTitle}
-                title={terminalOpen ? 'Hide terminal' : 'Show terminal'}
-                aria-label={terminalOpen ? 'Hide terminal' : 'Show terminal'}
-                aria-pressed={terminalOpen}
-              >
-                <span className="codicon codicon-terminal" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                className={`chat-preview-toggle${chatPreviewOpen ? ' active' : ''}`}
-                onClick={toggleChatPreviewFromTitle}
-                title={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
-                aria-label={chatPreviewOpen ? 'Hide preview' : 'Show preview'}
-                aria-pressed={chatPreviewOpen}
-              >
-                <span className="codicon codicon-layout-sidebar-right" aria-hidden="true" />
-                {!chatPreviewOpen && previewTabCount > 0 ? (
-                  <span className="chat-preview-badge" aria-label={`${previewTabCount} preview tabs`}>{previewTabCount}</span>
-                ) : null}
-              </button>
-            </div>
-          </DesktopDragRegion>
+          {!isWide ? renderChatTitleBar(true) : null}
           <div
             className={chatMainClassName}
             style={chatMainStyle}
@@ -21945,12 +21941,14 @@ export function App() {
   const desktopWindowControls = desktopWindowControlsVisible ? (
     <DesktopWindowControls />
   ) : null;
+  const desktopTopBar = isWide && tab === 'chat' ? renderChatTitleBar(false) : null;
   return (
     <>
       <ResponsiveShell
         mode={layoutMode}
         themeMode={themeMode}
         setiFontCss={setiFontCss}
+        desktopTopBar={desktopTopBar}
         desktopWindowControls={desktopWindowControls}
         desktopWindowControlsVisible={desktopWindowControlsVisible}
         desktopSettingsScreen={desktopSettingsScreen}

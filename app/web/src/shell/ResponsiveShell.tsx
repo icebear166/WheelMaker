@@ -11,6 +11,7 @@ type ShellContentProps = {
 };
 
 export type DesktopShellProps = ShellContentProps & {
+  desktopTopBar: ReactNode;
   desktopWindowControls: ReactNode;
   desktopWindowControlsVisible: boolean;
   desktopSettingsScreen: ReactNode;
@@ -38,6 +39,7 @@ export type ResponsiveShellProps = DesktopShellProps &
 export function DesktopShell({
   themeMode,
   setiFontCss,
+  desktopTopBar,
   desktopWindowControls,
   desktopWindowControlsVisible,
   desktopSettingsScreen,
@@ -61,10 +63,15 @@ export function DesktopShell({
         style={{ '--desktop-sidebar-width': `${desktopSidebarWidth}px` } as React.CSSProperties}
       >
         <div className="body">
-          {!sidebarCollapsed ? (
-            <aside className="workspace-left">{sidebar}</aside>
-          ) : null}
-          <main className="workspace-right">{main}</main>
+          <div className="desktop-primary-workspace">
+            {desktopTopBar}
+            <div className="desktop-primary-body">
+              {!sidebarCollapsed ? (
+                <aside className="workspace-left">{sidebar}</aside>
+              ) : null}
+              <main className="workspace-right">{main}</main>
+            </div>
+          </div>
           {desktopPeek}
         </div>
       </div>

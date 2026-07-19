@@ -3,6 +3,7 @@ import {resolve} from 'node:path';
 
 const root = resolve(__dirname, '..');
 const workspaceAppSource = readFileSync(resolve(root, 'web/src/app/WorkspaceApp.tsx'), 'utf8');
+const responsiveShellSource = readFileSync(resolve(root, 'web/src/shell/ResponsiveShell.tsx'), 'utf8');
 const chatStyles = readFileSync(resolve(root, 'web/src/styles/chat.css'), 'utf8');
 const shellStyles = readFileSync(resolve(root, 'web/src/styles/shell.css'), 'utf8');
 
@@ -14,16 +15,14 @@ function cssRuleBlock(source: string, selector: string): string {
 }
 
 describe('PC chat session-panel layout', () => {
-  it('keeps settings and Hub controls in the permanent chat title bar', () => {
-    const titleBarStart = workspaceAppSource.indexOf('<DesktopDragRegion className="block-title chat-title-bar">');
-    const titleBarSource = titleBarStart >= 0
-      ? workspaceAppSource.slice(titleBarStart, titleBarStart + 2600)
-      : '';
-
-    expect(titleBarStart).toBeGreaterThanOrEqual(0);
-    expect(titleBarSource).toContain('renderChatSessionHeader(false)');
-    expect(titleBarSource).not.toContain('chat-sidebar-toggle');
-    expect(workspaceAppSource).not.toContain('const desktopTopBar =');
+  it('renders one permanent desktop chat title bar above both the sidebar and chat body', () => {
+    expect(responsiveShellSource).toContain('desktopTopBar: ReactNode;');
+    expect(responsiveShellSource).toContain('<div className="desktop-primary-workspace">');
+    expect(responsiveShellSource).toContain('{desktopTopBar}');
+    expect(workspaceAppSource).toContain("const desktopTopBar = isWide && tab === 'chat' ? renderChatTitleBar(false) : null;");
+    expect(workspaceAppSource).toContain('desktopTopBar={desktopTopBar}');
+    expect(workspaceAppSource).not.toContain('chat-pinned-title-bar');
+    expect(workspaceAppSource).not.toContain('!desktopChatSessionPinned ? renderChatSessionHeader(false)');
   });
 
   it('keeps the desktop settings and Hub segment at the shared 360px panel width', () => {
@@ -31,6 +30,7 @@ describe('PC chat session-panel layout', () => {
     const addressRule = cssRuleBlock(chatStyles, '.chat-title-bar > .chat-session-header');
     expect(addressRule).toContain('flex: 0 0 var(--chat-session-panel-width);');
     expect(addressRule).toContain('width: var(--chat-session-panel-width);');
+    expect(addressRule).toContain('padding: 0 8px;');
     expect(cssRuleBlock(chatStyles, '.chat-main')).toContain('--chat-edge-surface-width: var(--chat-session-panel-width);');
   });
 
@@ -44,13 +44,12 @@ describe('PC chat session-panel layout', () => {
     expect(headerSource).toContain('{!searchHeaderExpanded ? (');
   });
 
-  it('keeps the pinned address bar visible above a top-aligned Sessions panel', () => {
+  it('keeps the pinned Sessions panel below the permanent shell title bar', () => {
     const pinnedStart = workspaceAppSource.indexOf('{showPinnedChatSessionPanel ? (');
     const pinnedSource = workspaceAppSource.slice(pinnedStart, pinnedStart + 2200);
 
-    expect(pinnedSource).toContain('className="chat-pinned-title-bar"');
-    expect(pinnedSource).toContain('{renderChatSessionHeader(false)}');
-    expect(workspaceAppSource).toContain('{isWide && !desktopChatSessionPinned ? renderChatSessionHeader(false) : null}');
+    expect(pinnedSource).not.toContain('className="chat-pinned-title-bar"');
+    expect(pinnedSource).not.toContain('{renderChatSessionHeader(false)}');
     expect(chatStyles).not.toContain('.chat-session-panel-pinned .chat-session-panel-header');
   });
 
@@ -81,15 +80,22 @@ describe('PC chat session-panel layout', () => {
 
   it('positions desktop session surfaces from the chat area below the permanent title bar', () => {
     expect(chatStyles).not.toContain('.chat-edge-surface-stack.below-top-bar');
+    expect(cssRuleBlock(chatStyles, '.chat-edge-surface-stack')).toContain('--chat-edge-surface-stack-edge-gap: 0px;');
+    expect(cssRuleBlock(chatStyles, '.chat-edge-surface-stack')).toContain('left: 0;');
     const slideoutRule = cssRuleBlock(chatStyles, '.chat-session-nav-slideout');
     expect(slideoutRule).toContain('top: 12px;');
+    expect(slideoutRule).toContain('left: 0;');
     expect(slideoutRule).toContain('height: calc(100% - 24px);');
+  });
+
+  it('adds three pixels of breathing room to every desktop session row', () => {
+    expect(cssRuleBlock(chatStyles, '.wide-project-session-list')).toContain('padding: 1px 0 1px 11px;');
   });
 
   it('keeps the pinned panel scrollable and positions auxiliary surfaces beside it', () => {
     expect(cssRuleBlock(chatStyles, '.chat-session-panel-pinned')).toContain('display: flex;');
     expect(cssRuleBlock(chatStyles, '.chat-session-panel-pinned')).toContain('min-height: 0;');
     expect(cssRuleBlock(chatStyles, '.chat-session-panel-scroll')).toContain('overflow-y: auto;');
-    expect(cssRuleBlock(chatStyles, '.chat-edge-surface-stack.beside-pinned-session-panel')).toContain('left: var(--chat-edge-surface-stack-edge-gap);');
+    expect(cssRuleBlock(chatStyles, '.chat-edge-surface-stack.beside-pinned-session-panel')).toContain('left: 0;');
   });
 });

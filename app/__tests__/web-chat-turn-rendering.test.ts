@@ -290,7 +290,7 @@ describe('web chat turn rendering', () => {
     expect(styles).toContain('--chat-edge-surface-width: var(--chat-session-panel-width);');
     expect(stackBlock).toContain('--chat-edge-surface-stack-width: var(--chat-edge-surface-width);');
     expect(stackBlock).toContain('width: var(--chat-edge-surface-stack-resolved-width);');
-    expect(fixedBlock).toContain('left: var(--chat-edge-surface-stack-edge-gap);');
+    expect(fixedBlock).toContain('left: 0;');
     expect(fixedBlock).not.toContain('(100% - 800px) / 2');
     expect(itemBlock).toContain('left: auto;');
     expect(itemBlock).toContain('right: auto;');

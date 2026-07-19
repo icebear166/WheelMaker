@@ -312,6 +312,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 6px;
+  padding-left: 0;
   background: var(--desktop-top-surface);
 }
 
@@ -323,7 +324,7 @@
   height: 100%;
   border-bottom: 0;
   background: transparent;
-  padding: 0;
+  padding: 0 8px;
   color: inherit;
   font-size: inherit;
   font-weight: inherit;
@@ -1279,7 +1280,7 @@
 
 .recent-project-session-list {
   position: relative;
-  padding: 1px 0 1px 8px;
+  padding: 1px 0 1px 11px;
 }
 
 .wide-project-actions {
@@ -1386,7 +1387,7 @@
 
 .wide-project-session-list {
   margin-top: -2px;
-  padding: 1px 0 1px 8px;
+  padding: 1px 0 1px 11px;
   animation: session-list-fade-in 180ms ease;
 }
 
@@ -2770,14 +2771,14 @@
 .chat-edge-surface-stack {
   --chat-edge-surface-stack-width: var(--chat-edge-surface-width);
   --chat-edge-surface-stack-column-gap: 12px;
-  --chat-edge-surface-stack-edge-gap: max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px));
+  --chat-edge-surface-stack-edge-gap: 0px;
   --chat-edge-surface-stack-resolved-width: min(
     var(--chat-edge-surface-stack-width),
-    calc(100% - var(--chat-edge-surface-stack-edge-gap) - var(--chat-edge-surface-stack-edge-gap))
+    100%
   );
   position: absolute;
   top: 12px;
-  left: var(--chat-edge-surface-stack-edge-gap);
+  left: 0;
   z-index: 6;
   width: var(--chat-edge-surface-stack-resolved-width);
   display: flex;
@@ -2787,7 +2788,7 @@
 }
 
 .chat-view-width-fixed-800 .chat-edge-surface-stack {
-  left: var(--chat-edge-surface-stack-edge-gap);
+  left: 0;
 }
 
 .chat-recent-sessions-surface.desktop {
@@ -2959,7 +2960,7 @@
 
 .chat-edge-surface-stack.beside-pinned-session-panel {
   top: 12px;
-  left: var(--chat-edge-surface-stack-edge-gap);
+  left: 0;
 }
 
 .chat-session-panel {
@@ -3015,26 +3016,6 @@
   display: flex;
   border-right: 1px solid var(--border-subtle);
   background: var(--desktop-top-surface);
-}
-
-.chat-pinned-title-bar {
-  flex: 0 0 var(--chat-menu-header-height);
-  width: 100%;
-  height: var(--chat-menu-header-height);
-  min-height: var(--chat-menu-header-height);
-  display: flex;
-  align-items: center;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--desktop-top-surface);
-}
-
-.chat-pinned-title-bar > .chat-session-header {
-  flex: 1 1 auto;
-  width: 100%;
-  min-width: 0;
-  height: 100%;
-  border-bottom: 0;
-  background: transparent;
 }
 
 .chat-session-panel-pinned .chat-edge-surface-glass {
@@ -3094,9 +3075,9 @@
 .chat-session-nav-slideout {
   position: absolute;
   top: 12px;
-  left: max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px));
+  left: 0;
   z-index: 7;
-  width: min(var(--chat-edge-surface-width, 360px), calc(100% - 2 * max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px))));
+  width: min(var(--chat-edge-surface-width, 360px), 100%);
   height: calc(100% - 24px);
   max-height: calc(100% - 24px);
   border-radius: 10px;
@@ -4314,10 +4295,10 @@
 }
 
 .chat-view-width-fixed-800-edge-surfaces {
-  --chat-edge-reserve-edge-gap: max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px));
+  --chat-edge-reserve-edge-gap: 0px;
   /* R: reserved left width for the floating surface column (surface width + edge gap + 12px column gap). */
   --chat-edge-reserved-left: calc(
-    min(360px, 100% - var(--chat-edge-reserve-edge-gap) - var(--chat-edge-reserve-edge-gap)) +
+    min(var(--chat-session-panel-width), 100%) +
     var(--chat-edge-reserve-edge-gap) + 12px
   );
   /* Continuous three-phase margin (mirrors resolveFixedChatMarginLeft in chat/layout/fixedChatAlignment.ts):

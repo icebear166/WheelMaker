@@ -26,6 +26,7 @@ describe('web responsive shell split', () => {
     expect(shellTsx).toContain("mode === 'desktop'");
     expect(shellTsx).toContain('desktopWindowControls: ReactNode;');
     expect(shellTsx).toContain('desktopWindowControlsVisible: boolean;');
+    expect(shellTsx).toContain('desktopTopBar: ReactNode;');
     expect(shellTsx).toContain('desktopSettingsScreen: ReactNode;');
     expect(shellTsx).toContain('desktopChatPreviewOpen: boolean;');
     expect(shellTsx).not.toContain('desktopActivityBar: ReactNode;');
@@ -73,6 +74,7 @@ describe('web responsive shell split', () => {
     expect(mainTsx).toContain('mode={layoutMode}');
     expect(mainTsx).toContain('desktopWindowControls={desktopWindowControls}');
     expect(mainTsx).toContain('desktopWindowControlsVisible={desktopWindowControlsVisible}');
+    expect(mainTsx).toContain('desktopTopBar={desktopTopBar}');
     expect(mainTsx).toContain('desktopSettingsScreen={desktopSettingsScreen}');
     expect(mainTsx).toContain('desktopChatPreviewOpen={isWide && chatPreviewOpen}');
     expect(mainTsx).not.toContain('desktopActivityBar={desktopActivityBar}');
@@ -165,9 +167,9 @@ describe('web responsive shell split', () => {
     const rightTitleBlock = cssRuleBlock(stylesCss, ".desktop-shell[data-desktop-window-controls='true'] .workspace-right .block-title");
     expect(rightTitleBlock).toContain('padding-right: calc(var(--desktop-window-controls-width) + 10px);');
 
-    const rightChatTitleBlock = cssRuleBlock(stylesCss, ".desktop-shell[data-desktop-window-controls='true']:not([data-chat-preview-open='true']) .workspace-right .chat-title-bar");
+    const rightChatTitleBlock = cssRuleBlock(stylesCss, ".desktop-shell[data-desktop-window-controls='true']:not([data-chat-preview-open='true']) .desktop-primary-workspace > .chat-title-bar");
     expect(rightChatTitleBlock).toContain('padding-right: calc(var(--desktop-window-controls-width) + 10px);');
-    const rightChatTitlePreviewOpenBlock = cssRuleBlock(stylesCss, ".desktop-shell[data-desktop-window-controls='true'][data-chat-preview-open='true'] .workspace-right .chat-title-bar");
+    const rightChatTitlePreviewOpenBlock = cssRuleBlock(stylesCss, ".desktop-shell[data-desktop-window-controls='true'][data-chat-preview-open='true'] .desktop-primary-workspace > .chat-title-bar");
     expect(rightChatTitlePreviewOpenBlock).toContain('padding-right: 10px;');
 
     const previewToolbarBlock = cssRuleBlock(stylesCss, ".desktop-shell[data-desktop-window-controls='true'] .preview-workbench-surface.desktop .preview-workbench-toolbar");

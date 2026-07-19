@@ -32,11 +32,11 @@
   padding-right: calc(var(--desktop-window-controls-width) + 10px);
 }
 
-.desktop-shell[data-desktop-window-controls='true']:not([data-chat-preview-open='true']) .workspace-right .chat-title-bar {
+.desktop-shell[data-desktop-window-controls='true']:not([data-chat-preview-open='true']) .desktop-primary-workspace > .chat-title-bar {
   padding-right: calc(var(--desktop-window-controls-width) + 10px);
 }
 
-.desktop-shell[data-desktop-window-controls='true'][data-chat-preview-open='true'] .workspace-right .chat-title-bar {
+.desktop-shell[data-desktop-window-controls='true'][data-chat-preview-open='true'] .desktop-primary-workspace > .chat-title-bar {
   padding-right: 10px;
 }
 
