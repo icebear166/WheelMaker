@@ -2,7 +2,7 @@ import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 
 const root = resolve(__dirname, '..');
-const workspaceAppSource = readFileSync(resolve(root, 'web/src/app/WorkspaceApp.tsx'), 'utf8');
+const workspaceAppSource = readFileSync(resolve(root, 'web/src/app/WorkspaceApp.tsx'), 'utf8').replace(/\r\n/g, '\n');
 const responsiveShellSource = readFileSync(resolve(root, 'web/src/shell/ResponsiveShell.tsx'), 'utf8');
 const sessionGlobalBarSource = readFileSync(resolve(root, 'web/src/chat/ChatSessionGlobalBar.tsx'), 'utf8');
 const chatStyles = readFileSync(resolve(root, 'web/src/styles/chat.css'), 'utf8').replace(/\r\n/g, '\n');
