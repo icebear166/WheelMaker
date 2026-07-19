@@ -116,6 +116,7 @@ describe('chat display index', () => {
       endTurnIndex: 3,
       sourceIndex: 1,
       sourceIndexes: [1, 2],
+      estimatedHeight: 28,
     });
     expect(index.items[1].estimatedHeight).toBe(index.items[3].estimatedHeight);
   });

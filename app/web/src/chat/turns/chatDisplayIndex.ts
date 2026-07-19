@@ -70,7 +70,7 @@ export const DEFAULT_CHAT_TURN_HEIGHT_METRICS: ChatTurnHeightMetrics = {
   promptGroupVerticalPadding: 22,
   promptGroupGap: 8,
   promptMaxWidth: 920,
-  toolLineHeight: 18,
+  toolLineHeight: 28,
   thoughtCollapsedHeight: 28,
   optionButtonMinHeight: 30,
   optionButtonMaxWidth: 560,

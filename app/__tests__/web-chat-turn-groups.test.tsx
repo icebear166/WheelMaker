@@ -21,6 +21,7 @@ jest.mock('../web/src/code/markdownPreview', () => ({
 }));
 
 import {ChatTurnView} from '../web/src/chat/ChatTurnView';
+import {ChatToolCallGroup} from '../web/src/chat/ChatToolCallGroup';
 import type {RegistryChatMessage} from '../web/src/registry/registryTypes';
 
 const markdownComponents = {};
@@ -33,6 +34,16 @@ function thought(text: string, finished: boolean): RegistryChatMessage {
     method: 'agent_thought_chunk',
     param: {text},
     finished,
+  };
+}
+
+function tool(turnIndex: number, cmd: string, status: string): RegistryChatMessage {
+  return {
+    sessionId: 'sess-1',
+    turnIndex,
+    method: 'tool_call',
+    param: {cmd, kind: 'read', status},
+    finished: true,
   };
 }
 
@@ -93,5 +104,72 @@ describe('chat turn groups', () => {
     expect(styles).toContain('.chat-thought-block.streaming .chat-thought-icon');
     expect(block).not.toContain('accent-primary');
     expect(content).not.toContain('background: color-mix');
+  });
+
+  test('summarizes the latest tool and stays expanded when the group grows', async () => {
+    let view!: ReactTestRenderer.ReactTestRenderer;
+    const first = [
+      tool(2, 'Read CLAUDE.md', 'completed'),
+      tool(3, 'Search turns', 'in_progress'),
+    ];
+    await ReactTestRenderer.act(() => {
+      view = ReactTestRenderer.create(<ChatToolCallGroup messages={first} />);
+    });
+
+    expect(view.root.findByProps({className: 'chat-tool-group-count'}).children).toEqual([
+      'Call 2 tools',
+    ]);
+    expect(view.root.findByProps({className: 'chat-tool-group-latest'}).children).toEqual([
+      'Search turns',
+    ]);
+    expect(view.root.findAllByProps({className: 'chat-tool-group-list'})).toHaveLength(0);
+
+    await ReactTestRenderer.act(() => {
+      view.root.findByProps({'aria-label': 'Expand 2 tool calls'}).props.onClick();
+    });
+    await ReactTestRenderer.act(() => {
+      view.update(
+        <ChatToolCallGroup
+          messages={[...first, tool(4, 'Run tests', 'completed')]}
+        />,
+      );
+    });
+
+    expect(view.root.findAllByProps({className: 'chat-tool-group-row'})).toHaveLength(3);
+    expect(view.root.findByProps({className: 'chat-tool-group-count'}).children).toEqual([
+      'Call 3 tools',
+    ]);
+    expect(view.root.findByProps({className: 'chat-tool-group-latest'}).children).toEqual([
+      'Run tests',
+    ]);
+  });
+
+  test('routes grouped tool ranges through the shared live and archive virtual item renderer', () => {
+    const workspace = fs.readFileSync(
+      path.join(__dirname, '..', 'web', 'src', 'app', 'WorkspaceApp.tsx'),
+      'utf8',
+    );
+
+    expect(workspace).toContain("import {ChatToolCallGroup} from '../chat/ChatToolCallGroup';");
+    expect(workspace).toContain("displayItem.kind === 'tool-group'");
+    expect(workspace).toContain('displayItem.sourceIndexes');
+    expect(workspace).toContain('<ChatToolCallGroup messages={sourceToolMessages} />');
+    expect(workspace).toContain(
+      'chatDisplayItemContainsTurn(item, sessionSearchTargetTurn.turnIndex)',
+    );
+  });
+
+  test('uses a fixed neutral collapsed tool-group row', () => {
+    const styles = fs.readFileSync(
+      path.join(__dirname, '..', 'web', 'src', 'styles', 'chat.css'),
+      'utf8',
+    );
+    const header = styles.match(/\.chat-tool-group-header \{([\s\S]*?)\}/)?.[1] ?? '';
+
+    expect(header).toContain('height: 28px;');
+    expect(header).toContain('background: transparent;');
+    expect(header).not.toContain('accent-primary');
+    expect(styles).toContain('.chat-tool-group-latest');
+    expect(styles).toContain('text-overflow: ellipsis;');
   });
 });

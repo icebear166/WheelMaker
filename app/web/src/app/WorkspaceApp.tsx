@@ -111,6 +111,7 @@ import {ChatQuickSwitchMenu} from '../chat/ChatQuickSwitchMenu';
 import { ChatSessionNav } from '../chat/ChatSessionNav';
 import { ChatSurface } from '../chat/ChatSurface';
 import { ChatTurnView } from '../chat/ChatTurnView';
+import {ChatToolCallGroup} from '../chat/ChatToolCallGroup';
 import {ChatPlanSurface} from '../chat/ChatPlanSurface';
 import {ChatRecentSessionsSurface} from '../chat/ChatRecentSessionsSurface';
 import {ChatSessionGlobalBar} from '../chat/ChatSessionGlobalBar';
@@ -141,7 +142,11 @@ import {
 } from '../chat/turns/chatTurnStores';
 import {createChatDurablePersistQueue} from '../chat/turns/chatDurablePersist';
 import {createChatReadRepairQueue} from '../chat/turns/chatReadRepair';
-import {buildChatDisplayIndex, type ChatDisplayIndexItem} from '../chat/turns/chatDisplayIndex';
+import {
+  buildChatDisplayIndex,
+  chatDisplayItemContainsTurn,
+  type ChatDisplayIndexItem,
+} from '../chat/turns/chatDisplayIndex';
 import {
   createChatRealtimeFlushScheduler,
   type ChatRealtimeFlushScheduler,
@@ -3613,7 +3618,7 @@ export function App() {
       return;
     }
     const searchTargetTurnIsVisible = chatDisplayIndex.items.some(
-      item => item.turnIndex === sessionSearchTargetTurn.turnIndex,
+      item => chatDisplayItemContainsTurn(item, sessionSearchTargetTurn.turnIndex),
     );
     if (!searchTargetTurnIsVisible) {
       return;
@@ -18659,11 +18664,28 @@ export function App() {
     const sourceMessage = displayItem.kind === 'turn'
       ? sourceMessages[displayItem.sourceIndex]
       : undefined;
+    const sourceToolMessages = displayItem.kind === 'tool-group'
+      ? displayItem.sourceIndexes
+        .map(sourceIndex => sourceMessages[sourceIndex])
+        .filter((message): message is RegistryChatMessage => !!message && message.method === 'tool_call')
+      : [];
     const queuedPromptIndex = displayItem.kind === 'queued'
       ? selectedQueuedPrompts.findIndex(queuedPrompt => `${selectedChatEncodedKey}:queued:${queuedPrompt.id}` === displayItem.key)
       : -1;
     const queuedPrompt = queuedPromptIndex >= 0 ? selectedQueuedPrompts[queuedPromptIndex] : null;
-    const content = displayItem.kind === 'queued' && queuedPrompt && !chatReadOnlyPreview ? (
+    const toolGroupSearchHighlighted =
+      sessionSearchTargetTurn?.runtimeKey === selectedChatEncodedKey &&
+      chatDisplayItemContainsTurn(displayItem, sessionSearchTargetTurn.turnIndex);
+    const content = displayItem.kind === 'tool-group' && sourceToolMessages.length > 0 ? (
+      <div
+        className={[
+          'chat-view-content',
+          toolGroupSearchHighlighted ? 'chat-turn-search-highlight' : '',
+        ].filter(Boolean).join(' ')}
+      >
+        <ChatToolCallGroup messages={sourceToolMessages} />
+      </div>
+    ) : displayItem.kind === 'queued' && queuedPrompt && !chatReadOnlyPreview ? (
       <div className="chat-view-content">
         <ChatTurnView
           message={buildQueuedPromptMessage(queuedPrompt, queuedPromptTurnIndex(queuedPromptIndex))}
@@ -18719,6 +18741,7 @@ export function App() {
     selectedChatEncodedKey,
     selectedPendingPrompt,
     selectedQueuedPrompts,
+    sessionSearchTargetTurn,
   ]);
   const closePortRelayFrameFromChrome = useCallback(() => {
     const tab = activePreviewTab(previewWorkbenchRef.current);

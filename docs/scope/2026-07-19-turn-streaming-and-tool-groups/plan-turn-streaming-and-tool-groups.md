@@ -533,7 +533,7 @@ git commit -m "feat(app): refine streaming thinking presentation"
 - Test: `app/__tests__/web-chat-turn-groups.test.tsx`
 - Test: `app/__tests__/web-chat-display-index.test.ts`
 
-- [ ] **Step 1: Add failing tool-group interaction tests**
+- [x] **Step 1: Add failing tool-group interaction tests**
 
 Extend `web-chat-turn-groups.test.tsx`:
 
@@ -569,7 +569,7 @@ test('summarizes the latest tool and stays expanded when the group grows', async
 });
 ```
 
-- [ ] **Step 2: Run the interaction test and verify it fails**
+- [x] **Step 2: Run the interaction test and verify it fails**
 
 Run:
 
@@ -579,7 +579,7 @@ npm --prefix app test -- --runInBand __tests__/web-chat-turn-groups.test.tsx
 
 Expected: FAIL because `ChatToolCallGroup` does not exist.
 
-- [ ] **Step 3: Implement the focused tool-group component**
+- [x] **Step 3: Implement the focused tool-group component**
 
 Create `ChatToolCallGroup.tsx` with a normalized view model:
 
@@ -617,7 +617,7 @@ function toolStatusIcon(status: string): string {
 
 The component owns `open`, renders a fixed-height button with chevron, latest-status icon, `Call X tool(s)`, separator, and latest title. When open, render every normalized call in turn order with status icon, title, and optional kind. Use `aria-expanded`, `Expand X tool calls`/`Collapse X tool calls`, and `title={latest.title}`.
 
-- [ ] **Step 4: Route `tool-group` display items through the new component**
+- [x] **Step 4: Route `tool-group` display items through the new component**
 
 Import `ChatToolCallGroup` and `chatDisplayItemContainsTurn` in `WorkspaceApp.tsx`. Remove `hideToolCalls` from both display-index option objects and from `shouldRenderChatTurn`; tool turns return `true` when considered individually.
 
@@ -651,7 +651,7 @@ displayItem.kind === 'tool-group' && sourceToolMessages.length > 0 ? (
 
 Use `chatDisplayItemContainsTurn` in the search-target visibility check so any grouped turn can trigger virtualizer scrolling. This same branch consumes `archivedPreview.messages`, giving live and archive views identical behavior.
 
-- [ ] **Step 5: Add neutral fixed-height tool-group styles**
+- [x] **Step 5: Add neutral fixed-height tool-group styles**
 
 Replace the old `.chat-tool-line` rules with:
 
@@ -696,7 +696,7 @@ Replace the old `.chat-tool-line` rules with:
 
 Add rotated-chevron, status color, kind text, and title truncation rules without a card background or accent border.
 
-- [ ] **Step 6: Run group, display-index, UI, and type tests**
+- [x] **Step 6: Run group, display-index, UI, and type tests**
 
 Run:
 
@@ -707,7 +707,7 @@ npm --prefix app run tsc:web
 
 Expected: all commands PASS.
 
-- [ ] **Step 7: Commit the grouped tool UI**
+- [x] **Step 7: Commit the grouped tool UI**
 
 ```powershell
 git add app/web/src/chat/ChatToolCallGroup.tsx app/web/src/app/WorkspaceApp.tsx app/web/src/styles/chat.css app/__tests__/web-chat-turn-groups.test.tsx app/__tests__/web-chat-display-index.test.ts
