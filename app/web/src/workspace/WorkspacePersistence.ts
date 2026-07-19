@@ -88,7 +88,6 @@ export type PersistedGlobalState = {
   mobileEnterKeyBehavior: MobileEnterKeyBehavior;
   wrapLines: boolean;
   showLineNumbers: boolean;
-  hideToolCalls: boolean;
   showLimitsMonitor: boolean;
   messageViewerEnabled: boolean;
   logLevel: PersistedLogLevel;
@@ -318,7 +317,6 @@ const GLOBAL_KEYS = {
   mobileEnterKeyBehavior: 'mobileEnterKeyBehavior',
   wrapLines: 'wrapLines',
   showLineNumbers: 'showLineNumbers',
-  hideToolCalls: 'hideToolCalls',
   showLimitsMonitor: 'showLimitsMonitor',
   messageViewerEnabled: 'messageViewerEnabled',
   logLevel: 'logLevel',
@@ -358,7 +356,6 @@ function defaultGlobalState(): PersistedGlobalState {
     mobileEnterKeyBehavior: DEFAULT_MOBILE_ENTER_KEY_BEHAVIOR,
     wrapLines: false,
     showLineNumbers: true,
-    hideToolCalls: true,
     showLimitsMonitor: true,
     messageViewerEnabled: false,
     logLevel: 'warning',
@@ -604,7 +601,6 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
     mobileEnterKeyBehavior: normalizeMobileEnterKeyBehavior(input.mobileEnterKeyBehavior, base.mobileEnterKeyBehavior),
     wrapLines: typeof input.wrapLines === 'boolean' ? input.wrapLines : base.wrapLines,
     showLineNumbers: typeof input.showLineNumbers === 'boolean' ? input.showLineNumbers : base.showLineNumbers,
-    hideToolCalls: typeof input.hideToolCalls === 'boolean' ? input.hideToolCalls : base.hideToolCalls,
     showLimitsMonitor: typeof input.showLimitsMonitor === 'boolean' ? input.showLimitsMonitor : base.showLimitsMonitor,
     messageViewerEnabled: typeof input.messageViewerEnabled === 'boolean' ? input.messageViewerEnabled : base.messageViewerEnabled,
     logLevel: normalizePersistedLogLevel(input.logLevel, base.logLevel),
@@ -1286,7 +1282,6 @@ export class WorkspacePersistenceRepository {
       {k: GLOBAL_KEYS.mobileEnterKeyBehavior, v: serialize(this.state.global.mobileEnterKeyBehavior), updatedAt},
       {k: GLOBAL_KEYS.wrapLines, v: serialize(this.state.global.wrapLines), updatedAt},
       {k: GLOBAL_KEYS.showLineNumbers, v: serialize(this.state.global.showLineNumbers), updatedAt},
-      {k: GLOBAL_KEYS.hideToolCalls, v: serialize(this.state.global.hideToolCalls), updatedAt},
       {k: GLOBAL_KEYS.showLimitsMonitor, v: serialize(this.state.global.showLimitsMonitor), updatedAt},
       {k: GLOBAL_KEYS.messageViewerEnabled, v: serialize(this.state.global.messageViewerEnabled), updatedAt},
       {k: GLOBAL_KEYS.logLevel, v: serialize(this.state.global.logLevel), updatedAt},

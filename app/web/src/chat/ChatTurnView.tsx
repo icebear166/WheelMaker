@@ -292,7 +292,6 @@ export type ChatTurnViewProps = {
   message: RegistryChatMessage;
   promptRequest?: RegistryChatMessage;
   promptStatus?: ChatPromptStatus;
-  hideToolCalls: boolean;
   markdownComponents: Components;
   markdownUrlTransform: (value: string) => string;
   copyDisabled?: boolean;
@@ -381,7 +380,6 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   message,
   promptRequest,
   promptStatus = null,
-  hideToolCalls,
   markdownComponents,
   markdownUrlTransform,
   copyDisabled = true,
@@ -635,17 +633,6 @@ export const ChatTurnView = React.memo(function ChatTurnView({
 
   if (message.method === 'agent_plan') {
     return null;
-  }
-  if (hideToolCalls && kind === 'tool') {
-    return null;
-  }
-  if (kind === 'tool') {
-    return (
-      <div className="chat-tool-line" title={text}>
-        <span className="codicon codicon-tools" />
-        <span>{text}</span>
-      </div>
-    );
   }
   if (kind === 'thought') {
     return (

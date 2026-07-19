@@ -49,7 +49,6 @@ export type ChatTurnHeightContext = {
 
 export type ChatDisplayIndexOptions = {
   shouldRender?: (message: RegistryChatMessage, promptStatus: ChatPromptStatus) => boolean;
-  hideToolCalls?: boolean;
   layoutMetrics?: Partial<ChatTurnHeightMetrics>;
   promptStatus?: (message: RegistryChatMessage) => ChatPromptStatus;
   pendingKey?: string;

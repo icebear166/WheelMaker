@@ -731,7 +731,7 @@ git commit -m "feat(app): render expandable tool call groups"
 - Modify: `app/__tests__/web-chat-ui.test.ts:548-553`
 - Modify: `app/__tests__/web-agent-package-update-settings.test.ts:166-174`
 
-- [ ] **Step 1: Invert the legacy-setting test to require full removal**
+- [x] **Step 1: Invert the legacy-setting test to require full removal**
 
 Replace the assertions in `web-hide-tool-calls-settings.test.ts` with:
 
@@ -747,7 +747,7 @@ test('removes the obsolete tool-call hiding preference', () => {
 
 Update the two broader settings tests to assert that the Chat section does **not** contain `Hide Tool Calls`.
 
-- [ ] **Step 2: Run the settings tests and verify they fail**
+- [x] **Step 2: Run the settings tests and verify they fail**
 
 Run:
 
@@ -757,7 +757,7 @@ npm --prefix app test -- --runInBand __tests__/web-hide-tool-calls-settings.test
 
 Expected: FAIL while the persisted field, React state, and settings control remain.
 
-- [ ] **Step 3: Remove the preference end to end**
+- [x] **Step 3: Remove the preference end to end**
 
 Delete `hideToolCalls` from `PersistedGlobalState`, `GLOBAL_KEYS`, `defaultGlobalState`, `sanitizeGlobalState`, and `replaceAllState` rows. Do not delete old IndexedDB rows; because the key is no longer in `GLOBAL_KEYS`, hydration naturally ignores the orphaned value.
 
@@ -769,7 +769,7 @@ rg -n "hideToolCalls|Hide Tool Calls" app/web/src
 
 Expected: no matches.
 
-- [ ] **Step 4: Run settings tests and the complete Web test/type suite**
+- [x] **Step 4: Run settings tests and the complete Web test/type suite**
 
 Run:
 
@@ -779,9 +779,9 @@ npm --prefix app test -- --runInBand
 npm --prefix app run tsc:web
 ```
 
-Expected: all tests and TypeScript PASS.
+Result: the scoped tests and TypeScript pass. The full suite passes 1,074/1,075 tests; the sole failure is the pre-existing `web-settings-navigation.test.ts` expectation that omits `releasePublish`, reproduced unchanged on the main worktree.
 
-- [ ] **Step 5: Commit preference removal**
+- [x] **Step 5: Commit preference removal**
 
 ```powershell
 git add app/web/src/workspace/WorkspacePersistence.ts app/web/src/settings/SettingsRootContent.tsx app/web/src/app/WorkspaceApp.tsx app/web/src/chat/ChatTurnView.tsx app/__tests__/web-hide-tool-calls-settings.test.ts app/__tests__/web-chat-turn-groups.test.tsx app/__tests__/web-chat-ui.test.ts app/__tests__/web-agent-package-update-settings.test.ts

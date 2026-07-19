@@ -54,7 +54,6 @@ describe('chat turn groups', () => {
       view = ReactTestRenderer.create(
         <ChatTurnView
           message={thought('Inspecting files', false)}
-          hideToolCalls={false}
           markdownComponents={markdownComponents}
           markdownUrlTransform={markdownUrlTransform}
         />,
@@ -75,7 +74,6 @@ describe('chat turn groups', () => {
       view.update(
         <ChatTurnView
           message={thought('Inspecting files\nFound the renderer', true)}
-          hideToolCalls={false}
           markdownComponents={markdownComponents}
           markdownUrlTransform={markdownUrlTransform}
         />,

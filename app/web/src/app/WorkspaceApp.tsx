@@ -1612,7 +1612,6 @@ async function writeTextToClipboard(text: string): Promise<void> {
 
 function shouldRenderChatTurn(
   message: RegistryChatMessage,
-  hideToolCalls: boolean,
   promptStatus: ChatPromptStatus,
 ): boolean {
   const text = msgText(message.method, message.param).trim();
@@ -1633,7 +1632,7 @@ function shouldRenderChatTurn(
   }
   const kind = msgKind(message.method);
   if (kind === 'tool') {
-    return !hideToolCalls && !!text;
+    return !!text;
   }
   if (kind === 'thought') {
     return !!text;
@@ -2555,11 +2554,6 @@ export function App() {
   const [showLineNumbers, setShowLineNumbers] = useState(
     typeof persistedGlobal.showLineNumbers === 'boolean'
       ? persistedGlobal.showLineNumbers
-      : true,
-  );
-  const [hideToolCalls, setHideToolCalls] = useState(
-    typeof persistedGlobal.hideToolCalls === 'boolean'
-      ? persistedGlobal.hideToolCalls
       : true,
   );
   const [showLimitsMonitor, setShowLimitsMonitor] = useState(
@@ -3578,14 +3572,13 @@ export function App() {
     : false;
 
   const chatDisplayIndex = useMemo(() => buildChatDisplayIndex(chatMessages, {
-    hideToolCalls,
     layoutMetrics: chatLayoutMetrics,
     promptStatus: selectedPromptTurnStatusIndex.statusFor,
     shouldRender: (message, promptStatus) => {
       const resolvedPromptStatus = isPromptStartMessage(message)
         ? promptStatus
         : null;
-      return shouldRenderChatTurn(message, hideToolCalls, resolvedPromptStatus);
+      return shouldRenderChatTurn(message, resolvedPromptStatus);
     },
     pendingKey: selectedPendingPrompt
       ? `${selectedChatEncodedKey}:pending:${selectedPendingPrompt.createdAt}`
@@ -3596,18 +3589,16 @@ export function App() {
   }), [
     chatMessages,
     chatLayoutMetrics,
-    hideToolCalls,
     selectedChatEncodedKey,
     selectedPromptTurnStatusIndex,
     selectedPendingPrompt,
     selectedQueuedPrompts,
   ]);
   const archivedChatDisplayIndex = useMemo(() => buildChatDisplayIndex(archivedPreview?.messages ?? [], {
-    hideToolCalls,
     layoutMetrics: chatLayoutMetrics,
     promptStatus: () => null,
-    shouldRender: (message, promptStatus) => shouldRenderChatTurn(message, hideToolCalls, promptStatus),
-  }), [archivedPreview?.messages, chatLayoutMetrics, hideToolCalls]);
+    shouldRender: (message, promptStatus) => shouldRenderChatTurn(message, promptStatus),
+  }), [archivedPreview?.messages, chatLayoutMetrics]);
 
   useEffect(() => {
     if (
@@ -6193,7 +6184,6 @@ export function App() {
       mobileEnterKeyBehavior,
       wrapLines,
       showLineNumbers,
-      hideToolCalls,
       showLimitsMonitor,
       messageViewerEnabled,
       logLevel,
@@ -6222,7 +6212,6 @@ export function App() {
     mobileEnterKeyBehavior,
     wrapLines,
     showLineNumbers,
-    hideToolCalls,
     showLimitsMonitor,
     messageViewerEnabled,
     logLevel,
@@ -17043,8 +17032,6 @@ export function App() {
         setSessionListDensity={setSessionListDensity}
         mobileEnterKeyBehavior={mobileEnterKeyBehavior}
         setMobileEnterKeyBehavior={setMobileEnterKeyBehavior}
-        hideToolCalls={hideToolCalls}
-        setHideToolCalls={setHideToolCalls}
         showLimitsMonitor={showLimitsMonitor}
         setShowLimitsMonitor={setShowLimitsMonitor}
         promptCompletionNotificationsEnabled={promptCompletionNotificationsEnabled}
@@ -18535,7 +18522,7 @@ export function App() {
       optionReplies.length === 0
         ? latestSelectableAssistantReply.confirmationReply
         : null;
-    if (!shouldRenderChatTurn(message, hideToolCalls, promptStatus)) {
+    if (!shouldRenderChatTurn(message, promptStatus)) {
       return null;
     }
     const searchHighlighted =
@@ -18554,7 +18541,6 @@ export function App() {
           message={message}
           promptRequest={message.method === 'prompt_done' ? findPromptRequestForDone(doneTurnIndex) : undefined}
           promptStatus={promptStatus}
-          hideToolCalls={hideToolCalls}
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}
           copyDisabled={copyRange ? !copyRange.ok : true}
@@ -18603,7 +18589,6 @@ export function App() {
     exportingMarkdownImageTurnIndex,
     findPromptRequestForDone,
     handleSelectChatReply,
-    hideToolCalls,
     latestSelectableAssistantReply,
     latestSelectableOptionReplyMessageKey,
     loadPromptAttachmentThumbnail,
@@ -18620,7 +18605,7 @@ export function App() {
     ttsState,
   ]);
   const renderArchivedChatMessageTurn = useCallback((message: RegistryChatMessage) => {
-    if (!shouldRenderChatTurn(message, hideToolCalls, null)) {
+    if (!shouldRenderChatTurn(message, null)) {
       return null;
     }
     const runtimeKey = selectedArchivedKey
@@ -18634,7 +18619,6 @@ export function App() {
         <ChatTurnView
           message={message}
           promptStatus={null}
-          hideToolCalls={hideToolCalls}
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}
           onOpenPromptAttachment={openChatAttachmentPreview}
@@ -18649,7 +18633,6 @@ export function App() {
   }, [
     chatMarkdownComponents,
     chatMarkdownUrlTransform,
-    hideToolCalls,
     loadPromptAttachmentThumbnail,
     openChatAttachmentPreview,
     openPromptArtifactDiff,
@@ -18690,7 +18673,6 @@ export function App() {
         <ChatTurnView
           message={buildQueuedPromptMessage(queuedPrompt, queuedPromptTurnIndex(queuedPromptIndex))}
           promptStatus="queued"
-          hideToolCalls={hideToolCalls}
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}
           onCancelQueuedPrompt={() => cancelQueuedPrompt(selectedChatEncodedKey, queuedPrompt.id)}
@@ -18705,7 +18687,6 @@ export function App() {
         <ChatTurnView
           message={buildPendingPromptMessage(selectedPendingPrompt)}
           promptStatus={selectedPendingPrompt.status}
-          hideToolCalls={hideToolCalls}
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}
           onOpenPromptAttachment={openChatAttachmentPreview}
@@ -18729,7 +18710,6 @@ export function App() {
     chatMarkdownUrlTransform,
     chatMessages,
     editPendingChatPrompt,
-    hideToolCalls,
     loadPromptAttachmentThumbnail,
     openChatAttachmentPreview,
     prioritizeQueuedPrompt,

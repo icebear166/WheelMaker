@@ -6112,19 +6112,6 @@
   color: var(--text-secondary);
 }
 
-.chat-tool-line {
-  min-width: 0;
-  max-width: 100%;
-  color: var(--text-secondary);
-}
-
-.chat-tool-line span:last-child {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
 @media (max-width: 900px) {
   .chat-block {
     padding: 14px 12px 0;

@@ -546,10 +546,9 @@ describe('web chat integration', () => {
     expect(settingsSurfaceTsx).toContain('<div className="mobile-settings-title">{title}</div>');
     expect(settingsSurfaceTsx).toContain('className="mobile-settings-group"');
     const chatSettingsStart = settingsRootTsx.indexOf("renderSettingsSection({id: 'chat'");
-    const hideToolCallsSettingStart = settingsRootTsx.indexOf('Hide Tool Calls', chatSettingsStart);
     expect(chatSettingsStart).toBeGreaterThanOrEqual(0);
     expect(settingsRootTsx).not.toContain('Use Latest Prompt Title');
-    expect(hideToolCallsSettingStart).toBeGreaterThan(chatSettingsStart);
+    expect(settingsRootTsx).not.toContain('Hide Tool Calls');
     expect(mainTsx).not.toContain('className="sidebar-footer"');
     expect(mainTsx).toContain('className="floating-control-stack"');
     expect(mainTsx).toContain('className="gesture-nav-control"');
