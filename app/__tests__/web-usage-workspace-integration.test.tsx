@@ -45,10 +45,10 @@ describe('limits workspace integration', () => {
     );
     expect(main).toContain('showLimitsMonitor={showLimitsMonitor}');
     expect(main).toContain('setShowLimitsMonitor={setShowLimitsMonitor}');
-    expect(main).toContain("isWide && (showPinnedRecentSessionsSurface || selectedChatPlan || (tab === 'chat' && showLimitsMonitor)) ? (");
+    expect(main).toContain("isWide && tab === 'chat' ? (");
     const stackStart = main.indexOf('className="chat-edge-surface-stack"');
     const stackSource = stackStart >= 0 ? main.slice(stackStart, stackStart + 2600) : '';
-    expect(stackSource).toContain("{tab === 'chat' && showLimitsMonitor ? (");
+    expect(stackSource).toContain("{showLimitsMonitor ? (");
     expect(stackSource).toContain('<UsageFeatureSurface');
     expect(main).toContain('showLimitsMonitor,');
   });

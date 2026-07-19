@@ -155,26 +155,27 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('setMobileProjectActionMenu(null);');
   });
 
-  test('reserves pinned Recent before centering the fixed 800px chat content and shifts edge panels left by 8px', () => {
-    expect(mainTsx).toContain("chatViewWidth === 'fixed-800' ? `chat-main chat-view-width-fixed-800${showPinnedRecentSessionsSurface ? ' chat-view-width-fixed-800-pinned-recent' : ''}` : 'chat-main'");
+  test('reserves the edge surfaces before centering the fixed 800px chat content with a continuous margin', () => {
+    expect(mainTsx).toContain("chatViewWidth === 'fixed-800' ? `chat-main chat-view-width-fixed-800${showChatEdgeSurfaces ? ' chat-view-width-fixed-800-edge-surfaces' : ''}` : 'chat-main'");
 
     const stackRule = chatCss.match(/\.chat-edge-surface-stack \{[\s\S]*?\n\}/)?.[0] ?? '';
-    const pinnedMainRule = chatCss.match(/\.chat-view-width-fixed-800-pinned-recent \{[\s\S]*?\n\}/)?.[0] ?? '';
-    const pinnedFixedRule = chatCss.match(/\.chat-view-width-fixed-800-pinned-recent \.chat-view-content,[\s\S]*?\n\}/)?.[0] ?? '';
+    const pinnedMainRule = chatCss.match(/\.chat-view-width-fixed-800-edge-surfaces \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const pinnedFixedRule = chatCss.match(/\.chat-view-width-fixed-800-edge-surfaces \.chat-view-content,[\s\S]*?\n\}/)?.[0] ?? '';
 
     expect(stackRule).toContain('--chat-edge-surface-stack-edge-gap: max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px));');
-    expect(pinnedMainRule).toContain('--chat-pinned-recent-content-left:');
-    expect(pinnedMainRule).toContain('--chat-pinned-recent-resolved-width:');
-    expect(pinnedMainRule).toContain('--chat-pinned-recent-left:');
-    expect(pinnedFixedRule).toContain('margin-left: min(');
+    expect(pinnedMainRule).toContain('--chat-edge-reserved-left:');
+    expect(pinnedMainRule).toContain('--chat-edge-reserve-edge-gap:');
+    expect(pinnedMainRule).toContain('--chat-fixed-centered:');
+    expect(pinnedMainRule).toContain('--chat-fixed-right-min:');
+    expect(pinnedFixedRule).toContain('margin-left: max(');
   });
 
   test('defines fixed Recent reservation on the chat main so sibling content can inherit it', () => {
-    const pinnedMainRule = chatCss.match(/\.chat-view-width-fixed-800-pinned-recent \{[\s\S]*?\n\}/)?.[0] ?? '';
-    const pinnedContentRule = chatCss.match(/\.chat-view-width-fixed-800-pinned-recent \.chat-view-content,[\s\S]*?\n\}/)?.[0] ?? '';
+    const pinnedMainRule = chatCss.match(/\.chat-view-width-fixed-800-edge-surfaces \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const pinnedContentRule = chatCss.match(/\.chat-view-width-fixed-800-edge-surfaces \.chat-view-content,[\s\S]*?\n\}/)?.[0] ?? '';
 
-    expect(pinnedMainRule).toContain('--chat-pinned-recent-edge-gap:');
-    expect(pinnedMainRule).toContain('--chat-pinned-recent-content-left:');
+    expect(pinnedMainRule).toContain('--chat-edge-reserve-edge-gap:');
+    expect(pinnedMainRule).toContain('--chat-edge-reserved-left:');
     expect(pinnedContentRule).not.toContain('--chat-edge-surface-stack-edge-gap');
     expect(pinnedContentRule).not.toContain('--chat-edge-surface-stack-resolved-width');
   });

@@ -114,6 +114,11 @@ import { ChatTurnView } from '../chat/ChatTurnView';
 import {ChatPlanSurface} from '../chat/ChatPlanSurface';
 import {ChatRecentSessionsSurface} from '../chat/ChatRecentSessionsSurface';
 import {ChatSessionGlobalBar} from '../chat/ChatSessionGlobalBar';
+import {
+  createSessionNavSlideOutState,
+  isSessionNavSlideOutCloseSuppressed,
+  sessionNavSlideOutReducer,
+} from '../chat/session/sessionNavSlideOutState';
 import {extractLatestChatPlan} from '../chat/chatPlan';
 import { resolveChatSessionTitle } from '../chat/session/chatSessionTitle';
 import { buildProjectAgentChoices } from '../chat/projectAgents';
@@ -2666,6 +2671,13 @@ export function App() {
   const floatingDragState = workspaceUiState.transient.floatingDragState as FloatingDragState | null;
   const floatingKeyboardOffset = workspaceUiState.transient.floatingKeyboardOffset;
   const sidebarCollapsed = workspaceUiState.desktop.sidebarCollapsed;
+  const [sessionNavSlideOut, dispatchSessionNavSlideOut] = useReducer(
+    sessionNavSlideOutReducer,
+    undefined,
+    createSessionNavSlideOutState,
+  );
+  const sessionNavSlideOutScrollRef = useRef<HTMLDivElement | null>(null);
+  const sessionNavSlideOutPointerDownRef = useRef(false);
   const desktopSidebarWidth = workspaceUiState.desktop.sidebarWidth;
   const collapsedProjectIds = workspaceUiState.shared.collapsedProjectIds;
   const pinnedProjectIds = workspaceUiState.shared.pinnedProjectIds;
@@ -19328,6 +19340,19 @@ export function App() {
                   collapsed={collapsedProjectIds.includes(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)}
                   onToggleCollapsed={() => toggleWideProjectCollapsed(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)}
                   sessionListDensity={sessionListDensity}
+                  header={
+                    <ChatSessionGlobalBar
+                      title="Recent Sessions"
+                      slideOutOpen={sessionNavSlideOut.open}
+                      onToggleSlideOut={() =>
+                        dispatchSessionNavSlideOut(
+                          sessionNavSlideOut.open ? { type: 'requestClose', suppressed: false } : { type: 'open' },
+                        )
+                      }
+                      pinActive={false}
+                      onTogglePin={() => setSidebarCollapsed(false)}
+                    />
+                  }
                 >
                   <div className="wide-project-session-list recent-sessions-list chat-recent-sessions-rows">
                     {recentSessionSections.map(section => renderRecentProjectSessionSection(section, false))}

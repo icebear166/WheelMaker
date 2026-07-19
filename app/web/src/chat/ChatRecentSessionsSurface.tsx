@@ -7,6 +7,8 @@ export type ChatRecentSessionsSurfaceProps = {
   collapsed: boolean;
   onToggleCollapsed: () => void;
   sessionListDensity: SessionListDensity;
+  /** Replaces the default expanded-state header (title + collapse toggle). */
+  header?: ReactNode;
 };
 
 export const ChatRecentSessionsSurface = React.memo(function ChatRecentSessionsSurface({
@@ -14,6 +16,7 @@ export const ChatRecentSessionsSurface = React.memo(function ChatRecentSessionsS
   collapsed,
   onToggleCollapsed,
   sessionListDensity,
+  header,
 }: ChatRecentSessionsSurfaceProps) {
   const surfaceRef = useChatEdgeSurfaceGeometry('left');
 
@@ -53,19 +56,21 @@ export const ChatRecentSessionsSurface = React.memo(function ChatRecentSessionsS
     >
       <div className="chat-edge-surface-glass" aria-hidden="true" />
       <div className="chat-edge-surface-content">
-        <div className="chat-recent-sessions-surface-header">
-          <button
-            type="button"
-            className="chat-recent-sessions-surface-toggle"
-            onClick={onToggleCollapsed}
-            aria-expanded={true}
-            aria-label="Collapse recent sessions"
-            title="Collapse recent sessions"
-          >
-            <span className="codicon codicon-chevron-up" aria-hidden="true" />
-          </button>
-          <span className="chat-recent-sessions-surface-title">Recent Sessions</span>
-        </div>
+        {header ?? (
+          <div className="chat-recent-sessions-surface-header">
+            <button
+              type="button"
+              className="chat-recent-sessions-surface-toggle"
+              onClick={onToggleCollapsed}
+              aria-expanded={true}
+              aria-label="Collapse recent sessions"
+              title="Collapse recent sessions"
+            >
+              <span className="codicon codicon-chevron-up" aria-hidden="true" />
+            </button>
+            <span className="chat-recent-sessions-surface-title">Recent Sessions</span>
+          </div>
+        )}
         <div className="chat-recent-sessions-surface-list">{children}</div>
       </div>
     </aside>
