@@ -116,6 +116,7 @@ import {ChatRecentSessionsSurface} from '../chat/ChatRecentSessionsSurface';
 import {ChatSessionGlobalBar} from '../chat/ChatSessionGlobalBar';
 import {ChatSessionPanel} from '../chat/ChatSessionPanel';
 import {
+  createSessionNavSlideOutAutoClose,
   createSessionNavSlideOutState,
   isSessionNavSlideOutCloseSuppressed,
   sessionNavSlideOutReducer,
@@ -2681,6 +2682,13 @@ export function App() {
   );
   const sessionNavSlideOutScrollRef = useRef<HTMLDivElement | null>(null);
   const sessionNavSlideOutPointerDownRef = useRef(false);
+  const sessionNavSlideOutAutoClose = useMemo(
+    () => createSessionNavSlideOutAutoClose(() => {
+      dispatchSessionNavSlideOut({ type: 'requestClose', suppressed: false });
+    }),
+    [],
+  );
+  useEffect(() => () => sessionNavSlideOutAutoClose.dispose(), [sessionNavSlideOutAutoClose]);
   useEffect(() => {
     if (sessionNavSlideOut.open && sessionNavSlideOutScrollRef.current) {
       sessionNavSlideOutScrollRef.current.scrollTop = sessionNavSlideOut.scrollTop;
@@ -2690,9 +2698,10 @@ export function App() {
   }, [sessionNavSlideOut.open]);
   useEffect(() => {
     if (!sidebarCollapsed) {
+      sessionNavSlideOutAutoClose.cancel();
       dispatchSessionNavSlideOut({ type: 'forceReset' });
     }
-  }, [sidebarCollapsed]);
+  }, [sessionNavSlideOutAutoClose, sidebarCollapsed]);
   const desktopSidebarWidth = workspaceUiState.desktop.sidebarWidth;
   const collapsedProjectIds = workspaceUiState.shared.collapsedProjectIds;
   const pinnedProjectIds = workspaceUiState.shared.pinnedProjectIds;
@@ -2701,6 +2710,12 @@ export function App() {
   const hubColors = workspaceUiState.shared.hubColors;
   const drawerOpen = workspaceUiState.mobile.drawerOpen;
   const sidebarSettingsOpen = workspaceUiState.shared.settingsOpen;
+  useEffect(() => {
+    if (tab !== 'chat' || sidebarSettingsOpen) {
+      sessionNavSlideOutAutoClose.cancel();
+      dispatchSessionNavSlideOut({ type: 'forceReset' });
+    }
+  }, [sessionNavSlideOutAutoClose, sidebarSettingsOpen, tab]);
   const chatConfigOverflowOpen = workspaceUiState.mobile.chatConfigOverflowOpen;
   const chatKeyboardInset = workspaceUiState.transient.chatKeyboardInset;
   const chatKeyboardInsetRef = useRef(chatKeyboardInset);
@@ -15447,6 +15462,12 @@ export function App() {
           recentCollapsed ? ' collapsed' : ''
         }`}
       >
+        {!mobile ? (
+          <div className="recent-sessions-section-heading">
+            <span className="codicon codicon-history" aria-hidden="true" />
+            <span>Recent</span>
+          </div>
+        ) : null}
         {mobile ? (
         <div className="wide-project-row">
           <button
@@ -17829,7 +17850,7 @@ export function App() {
               <ChatSessionGlobalBar
                 pinActive
                 onTogglePin={() => setSidebarCollapsed(true)}
-                trailing={
+                leading={
                   <>
                     {renderChatArchiveControls()}
                     {renderChatHeaderSearchControls()}
@@ -19343,9 +19364,9 @@ export function App() {
                     <ChatSessionGlobalBar
                       slideOutOpen={sessionNavSlideOut.open}
                       onToggleSlideOut={() =>
-                        dispatchSessionNavSlideOut(
-                          sessionNavSlideOut.open ? { type: 'requestClose', suppressed: false } : { type: 'open' },
-                        )
+                        sessionNavSlideOut.open
+                          ? sessionNavSlideOutAutoClose.closeNow()
+                          : dispatchSessionNavSlideOut({ type: 'open' })
                       }
                       pinActive={false}
                       onTogglePin={() => setSidebarCollapsed(false)}
@@ -19373,23 +19394,26 @@ export function App() {
               mode="slideout"
               title="Sessions"
               className={`chat-session-nav-slideout${sessionNavSlideOut.open ? ' open' : ''}`}
+              onPointerEnter={() => sessionNavSlideOutAutoClose.cancel()}
               onPointerLeave={() => {
-                dispatchSessionNavSlideOut({
-                  type: 'requestClose',
-                  suppressed: isSessionNavSlideOutCloseSuppressed({
+                sessionNavSlideOutAutoClose.schedule(
+                  isSessionNavSlideOutCloseSuppressed({
                     searchActive: sessionSearchActive || sessionSearchHeaderExpanded,
                     menuOpen: sessionArchiveMenuOpen || !!wideProjectActionMenu || !!projectSessionActionMenu,
                     pointerDownInList: sessionNavSlideOutPointerDownRef.current,
                   }),
-                });
+                );
               }}
               header={
                 <ChatSessionGlobalBar
                   slideOutOpen
-                  onToggleSlideOut={() => dispatchSessionNavSlideOut({ type: 'requestClose', suppressed: false })}
+                  onToggleSlideOut={() => sessionNavSlideOutAutoClose.closeNow()}
                   pinActive={false}
-                  onTogglePin={() => setSidebarCollapsed(false)}
-                  trailing={
+                  onTogglePin={() => {
+                    sessionNavSlideOutAutoClose.closeNow();
+                    setSidebarCollapsed(false);
+                  }}
+                  leading={
                     <>
                       {renderChatArchiveControls()}
                       {renderChatHeaderSearchControls()}

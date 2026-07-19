@@ -17,25 +17,9 @@
 
 .chat-function-surface.desktop.collapsed {
   max-height: 36px;
-  border-radius: 999px;
+  border-radius: 8px;
 }
 
-.chat-function-surface-header {
-  display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) auto;
-  width: min(100%, var(--chat-edge-fade-start));
-  align-items: center;
-  min-height: 36px;
-  padding: 0 8px 0 10px;
-  gap: 7px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
-}
-
-.chat-function-surface.collapsed .chat-function-surface-header { border-bottom: 0; }
-.chat-function-surface-title { font-size: 12px; font-weight: 680; letter-spacing: .01em; }
-.chat-function-surface-actions { display: inline-flex; gap: 2px; }
-
-.chat-function-surface-toggle,
 .chat-function-action {
   width: 24px;
   height: 24px;
@@ -50,7 +34,6 @@
   cursor: pointer;
 }
 
-.chat-function-surface-toggle:hover,
 .chat-function-action:hover { background: color-mix(in srgb, var(--accent-primary) 12%, transparent); color: var(--text-primary); }
 .chat-function-action:disabled { opacity: .52; cursor: default; }
 .chat-function-action .spinning { animation: usage-spin .9s linear infinite; }

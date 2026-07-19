@@ -1,4 +1,5 @@
 import React, {type HTMLAttributes, type PointerEventHandler, type ReactNode, type Ref, type UIEventHandler} from 'react';
+import {ChatEdgeSurfaceHeader} from './ChatEdgeSurfaceHeader';
 
 export type ChatSessionPanelMode = 'floating' | 'slideout' | 'pinned';
 
@@ -10,6 +11,10 @@ export type ChatSessionPanelProps = {
   className?: string;
   ariaLabel?: string;
   sessionListDensity?: string;
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
+  summary?: ReactNode;
+  onPointerEnter?: PointerEventHandler<HTMLElement>;
   onPointerLeave?: PointerEventHandler<HTMLElement>;
   scrollRef?: Ref<HTMLDivElement>;
   onScroll?: UIEventHandler<HTMLDivElement>;
@@ -24,6 +29,10 @@ export const ChatSessionPanel = React.memo(React.forwardRef<HTMLElement, ChatSes
   className,
   ariaLabel,
   sessionListDensity,
+  collapsed = false,
+  onToggleCollapsed,
+  summary,
+  onPointerEnter,
   onPointerLeave,
   scrollRef,
   onScroll,
@@ -39,6 +48,7 @@ export const ChatSessionPanel = React.memo(React.forwardRef<HTMLElement, ChatSes
     <aside
       ref={ref}
       className={panelClassName}
+      onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}
       aria-label={ariaLabel ?? title}
       data-session-list-density={sessionListDensity}
@@ -46,10 +56,17 @@ export const ChatSessionPanel = React.memo(React.forwardRef<HTMLElement, ChatSes
       <div className="chat-edge-surface-glass" aria-hidden="true" />
       <div className="chat-edge-surface-content chat-session-panel-content">
         <div className="chat-session-panel-header">
-          <span className="chat-session-panel-title">{title}</span>
-          {header}
+          <ChatEdgeSurfaceHeader
+            title={title}
+            collapsed={collapsed}
+            onToggleCollapsed={onToggleCollapsed}
+            summary={summary}
+            toolbar={header}
+          />
         </div>
-        <div ref={scrollRef} className="chat-session-panel-scroll" onScroll={onScroll} {...scrollProps}>{children}</div>
+        {collapsed ? null : (
+          <div ref={scrollRef} className="chat-session-panel-scroll" onScroll={onScroll} {...scrollProps}>{children}</div>
+        )}
       </div>
     </aside>
   );

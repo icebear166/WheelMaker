@@ -140,9 +140,47 @@ describe('PC chat session-panel layout', () => {
     expect(expandedCardRule).toContain('border-radius: 8px;');
   });
 
-  it('keeps the pin control in the first stable action slot', () => {
-    expect(sessionGlobalBarSource.indexOf('{onTogglePin ? (')).toBeLessThan(
-      sessionGlobalBarSource.indexOf('{onToggleSlideOut ? ('),
+  it('uses one shared title-bar typography and control geometry for all floating cards', () => {
+    const headerRule = cssRuleBlock(chatStyles, '.chat-edge-surface-header');
+    expect(headerRule).toContain('grid-template-columns: 22px auto minmax(0, 1fr) auto auto;');
+    expect(headerRule).toContain('min-height: 36px;');
+    const titleRule = cssRuleBlock(chatStyles, '.chat-edge-surface-title');
+    expect(titleRule).toContain('font-size: 11px;');
+    expect(titleRule).toContain('font-weight: 650;');
+    expect(titleRule).toContain('text-transform: uppercase;');
+    const actionRule = cssRuleBlock(
+      chatStyles,
+      '.chat-edge-surface-header .chat-session-global-bar-btn,\n.chat-edge-surface-header .session-search-icon-btn,\n.chat-edge-surface-header .chat-function-action',
+    );
+    expect(actionRule).toContain('width: 22px;');
+    expect(actionRule).toContain('height: 22px;');
+    expect(actionRule).toContain('border-radius: 5px;');
+  });
+
+  it('wires the slide-out panel to delayed pointer-leave closing', () => {
+    expect(workspaceAppSource).toContain('createSessionNavSlideOutAutoClose');
+    expect(workspaceAppSource).toContain('sessionNavSlideOutAutoClose.schedule(');
+    expect(workspaceAppSource).toContain('onPointerEnter={() => sessionNavSlideOutAutoClose.cancel()}');
+    expect(workspaceAppSource).toContain('sessionNavSlideOutAutoClose.closeNow()');
+    expect(workspaceAppSource).toContain(
+      "if (tab !== 'chat' || sidebarSettingsOpen) {\n      sessionNavSlideOutAutoClose.cancel();\n      dispatchSessionNavSlideOut({ type: 'forceReset' });\n    }\n  }, [sessionNavSlideOutAutoClose, sidebarSettingsOpen, tab]);",
+    );
+  });
+
+  it('keeps 100px of floating surfaces visible before shrinking the fixed chat column', () => {
+    const fixedRule = cssRuleBlock(chatStyles, '.chat-view-width-fixed-800-edge-surfaces');
+    expect(fixedRule).toContain('--chat-edge-min-visible: 100px;');
+    expect(fixedRule).toContain('max(0px, calc(100% - var(--chat-edge-min-visible)))');
+    const contentRule = cssRuleBlock(
+      chatStyles,
+      '.chat-view-width-fixed-800-edge-surfaces .chat-view-content,\n.chat-view-width-fixed-800-edge-surfaces .chat-composer-content',
+    );
+    expect(contentRule).toContain('width: var(--chat-fixed-column);');
+  });
+
+  it('keeps full-list expansion before Pin in the stable right action group', () => {
+    expect(sessionGlobalBarSource.indexOf('{onToggleSlideOut ? (')).toBeLessThan(
+      sessionGlobalBarSource.indexOf('{onTogglePin ? ('),
     );
   });
 

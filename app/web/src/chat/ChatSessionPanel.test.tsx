@@ -17,7 +17,7 @@ describe('ChatSessionPanel', () => {
       );
     });
 
-    expect(tree!.root.findByProps({className: 'chat-session-panel-title'}).children).toEqual(['Sessions']);
+    expect(tree!.root.findByProps({className: 'chat-edge-surface-title'}).children).toEqual(['Sessions']);
     expect(tree!.root.findByProps({className: 'chat-session-panel-scroll'}).children).toHaveLength(1);
     expect(tree!.root.findByProps({className: 'chat-session-panel chat-session-panel-slideout'})).toBeDefined();
   });

@@ -158,6 +158,21 @@ describe('UsageFeatureSurface', () => {
     expect(onRequestHide).toHaveBeenCalledTimes(1);
   });
 
+  it('uses the shared Limits header and collapses to the same title row', () => {
+    let view: TestRenderer.ReactTestRenderer;
+    act(() => {
+      view = TestRenderer.create(
+        <UsageFeatureSurface snapshot={fixtureSnapshot} onRefresh={jest.fn()} onRequestHide={jest.fn()} />,
+      );
+    });
+
+    expect(view!.root.findByProps({className: 'chat-edge-surface-title'}).children).toEqual(['Limits']);
+    act(() => view!.root.findByProps({'aria-label': 'Collapse Limits'}).props.onClick());
+    expect(view!.root.findAllByProps({className: 'usage-feature-body'})).toHaveLength(0);
+    const expand = view!.root.findByProps({'aria-label': 'Expand Limits'});
+    expect(expand.findByProps({'aria-hidden': 'true'}).props.className).toContain('codicon-chevron-right');
+  });
+
   it('renders mobile details and handles refresh, card, backdrop, and close actions', () => {
     const onRefresh = jest.fn();
     const onClose = jest.fn();
@@ -254,7 +269,7 @@ describe('UsageFeatureSurface', () => {
     const stackItemRule = chatStyles.match(/\.chat-edge-surface-stack > \.chat-recent-sessions-surface\.desktop,\n\.chat-edge-surface-stack > \.chat-plan-surface\.desktop,\n\.chat-edge-surface-stack > \.chat-function-surface\.desktop \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const metricsRule = usageStyles.match(/\.usage-provider-metrics \{([^}]*)\}/)?.[1] ?? '';
     const hubRule = usageStyles.match(/\.usage-account-hub \{([^}]*)\}/)?.[1] ?? '';
-    const headerRule = usageStyles.match(/\.chat-function-surface-header \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const headerRule = chatStyles.match(/\.chat-edge-surface-header \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const compactValueRule = usageStyles.match(/\.usage-compact-limit-value \{([^}]*)\}/)?.[1] ?? '';
 
     expect(chatStyles).toContain('--chat-edge-surface-width: var(--chat-session-panel-width);');
@@ -272,8 +287,8 @@ describe('UsageFeatureSurface', () => {
     expect(detailRule).toContain('--usage-surface-max-height: min(48vh, 420px);');
     expect(metricsRule).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));');
     expect(hubRule).toContain('border-radius: 999px;');
-    expect(headerRule).toContain('grid-template-columns: 20px minmax(0, 1fr) auto;');
-    expect(headerRule).toContain('width: min(100%, var(--chat-edge-fade-start));');
+    expect(headerRule).toContain('grid-template-columns: 22px auto minmax(0, 1fr) auto auto;');
+    expect(headerRule).toContain('min-height: 36px;');
     expect(compactValueRule).toContain('justify-content: flex-end;');
     expect(chatStyles).toContain('.chat-recent-sessions-surface.desktop .chat-edge-surface-glass,');
     expect(chatStyles).toContain('.chat-function-surface.desktop .chat-edge-surface-glass,');

@@ -103,15 +103,21 @@ describe('ChatPlanSurface', () => {
       path.join(projectRoot, 'web', 'src', 'chat', 'ChatRecentSessionsSurface.tsx'),
       'utf8',
     );
+    const panelSource = fs.readFileSync(
+      path.join(projectRoot, 'web', 'src', 'chat', 'ChatSessionPanel.tsx'),
+      'utf8',
+    );
 
-    [planSource, recentSource].forEach(source => {
-      expect(source).toContain('useChatEdgeSurfaceGeometry');
-      expect(source).toContain('className="chat-edge-surface-glass"');
-      expect(source).toContain('className="chat-edge-surface-content"');
-    });
+    expect(planSource).toContain('useChatEdgeSurfaceGeometry');
+    expect(planSource).toContain('className="chat-edge-surface-glass"');
+    expect(planSource).toContain('className="chat-edge-surface-content"');
+    expect(recentSource).toContain('useChatEdgeSurfaceGeometry');
+    expect(recentSource).toContain('<ChatSessionPanel');
+    expect(panelSource).toContain('className="chat-edge-surface-glass"');
+    expect(panelSource).toContain('className="chat-edge-surface-content chat-session-panel-content"');
   });
 
-  test('collapses desktop plan to a compact current-step row from the leading control', async () => {
+  test('collapses desktop plan into the shared header with a current-step summary', async () => {
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
 
     await ReactTestRenderer.act(() => {
@@ -124,15 +130,17 @@ describe('ChatPlanSurface', () => {
     });
 
     expect(renderer!.root.findAllByProps({className: 'chat-plan-surface-list'})).toHaveLength(1);
-    const toggle = renderer!.root.findByProps({'aria-label': 'Collapse current plan'});
+    expect(renderer!.root.findByProps({className: 'chat-edge-surface-title'}).children).toEqual(['Plan']);
+    const toggle = renderer!.root.findByProps({'aria-label': 'Collapse Plan'});
 
     await ReactTestRenderer.act(() => {
       toggle.props.onClick();
     });
 
     expect(renderer!.root.findAllByProps({className: 'chat-plan-surface-list'})).toHaveLength(0);
-    const expand = renderer!.root.findByProps({'aria-label': 'Expand current plan'});
-    expect(renderer!.root.findByProps({className: 'chat-plan-current'}).children).toEqual(['Patch the UI']);
+    const expand = renderer!.root.findByProps({'aria-label': 'Expand Plan'});
+    expect(expand.findByProps({'aria-hidden': 'true'}).props.className).toContain('codicon-chevron-right');
+    expect(renderer!.root.findByProps({className: 'chat-edge-surface-summary'}).children).toContain('Patch the UI');
 
     await ReactTestRenderer.act(() => {
       expand.props.onClick();
@@ -141,7 +149,7 @@ describe('ChatPlanSurface', () => {
     expect(renderer!.root.findAllByProps({className: 'chat-plan-surface-list'})).toHaveLength(1);
   });
 
-  test('renders the compact pill when collapsed and reports toggle clicks', async () => {
+  test('renders the shared Sessions header when collapsed and reports toggle clicks', async () => {
     const projectRoot = path.join(__dirname, '..');
     const surfacePath = path.join(projectRoot, 'web', 'src', 'chat', 'ChatRecentSessionsSurface.tsx');
 
@@ -166,7 +174,9 @@ describe('ChatPlanSurface', () => {
     });
 
     expect(renderer!.root.findAllByProps({className: 'chat-recent-sessions-surface-list'})).toHaveLength(0);
-    const trigger = renderer!.root.findByProps({className: 'chat-recent-sessions-compact-trigger'});
+    expect(renderer!.root.findByProps({className: 'chat-edge-surface-title'}).children).toEqual(['Sessions']);
+    const trigger = renderer!.root.findByProps({'aria-label': 'Expand Sessions'});
+    expect(trigger.findByProps({'aria-hidden': 'true'}).props.className).toContain('codicon-chevron-right');
 
     await ReactTestRenderer.act(() => {
       trigger.props.onClick();
@@ -200,8 +210,8 @@ describe('ChatPlanSurface', () => {
 
     expect(renderer!.root.findByProps({'aria-label': 'Recent sessions'}).props['data-session-list-density']).toBe('compact');
     expect(renderer!.root.findAllByProps({className: 'chat-recent-sessions-surface-list'})).toHaveLength(1);
-    expect(renderer!.root.findByProps({className: 'chat-session-panel-title'}).children).toEqual(['Sessions']);
-    const collapse = renderer!.root.findByProps({'aria-label': 'Collapse recent sessions'});
+    expect(renderer!.root.findByProps({className: 'chat-edge-surface-title'}).children).toEqual(['Sessions']);
+    const collapse = renderer!.root.findByProps({'aria-label': 'Collapse Sessions'});
 
     await ReactTestRenderer.act(() => {
       collapse.props.onClick();

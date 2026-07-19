@@ -3,6 +3,7 @@ import {
   isSessionNavSlideOutCloseSuppressed,
   sessionNavSlideOutReducer,
 } from './sessionNavSlideOutState';
+import * as slideOutStateModule from './sessionNavSlideOutState';
 
 describe('sessionNavSlideOutReducer', () => {
   it('opens from the closed state', () => {
@@ -46,5 +47,64 @@ describe('isSessionNavSlideOutCloseSuppressed', () => {
     expect(isSessionNavSlideOutCloseSuppressed({ searchActive: false, menuOpen: true, pointerDownInList: false })).toBe(true);
     expect(isSessionNavSlideOutCloseSuppressed({ searchActive: false, menuOpen: false, pointerDownInList: true })).toBe(true);
     expect(isSessionNavSlideOutCloseSuppressed({ searchActive: false, menuOpen: false, pointerDownInList: false })).toBe(false);
+  });
+});
+
+describe('session nav slide-out delayed close', () => {
+  it('waits two seconds and cancels when the pointer returns', () => {
+    jest.useFakeTimers();
+    const createAutoClose = (
+      slideOutStateModule as typeof slideOutStateModule & {
+        createSessionNavSlideOutAutoClose?: (onClose: () => void) => {
+          schedule: (suppressed: boolean) => void;
+          cancel: () => void;
+          closeNow: () => void;
+          dispose: () => void;
+        };
+      }
+    ).createSessionNavSlideOutAutoClose;
+    expect(createAutoClose).toBeDefined();
+    if (!createAutoClose) return;
+
+    const onClose = jest.fn();
+    const autoClose = createAutoClose(onClose);
+    autoClose.schedule(false);
+    jest.advanceTimersByTime(1999);
+    expect(onClose).not.toHaveBeenCalled();
+    autoClose.cancel();
+    jest.advanceTimersByTime(1);
+    expect(onClose).not.toHaveBeenCalled();
+
+    autoClose.schedule(false);
+    jest.advanceTimersByTime(2000);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    autoClose.dispose();
+    jest.useRealTimers();
+  });
+
+  it('keeps suppressed exits open and lets explicit close bypass the delay', () => {
+    jest.useFakeTimers();
+    const createAutoClose = (
+      slideOutStateModule as typeof slideOutStateModule & {
+        createSessionNavSlideOutAutoClose?: (onClose: () => void) => {
+          schedule: (suppressed: boolean) => void;
+          cancel: () => void;
+          closeNow: () => void;
+          dispose: () => void;
+        };
+      }
+    ).createSessionNavSlideOutAutoClose;
+    expect(createAutoClose).toBeDefined();
+    if (!createAutoClose) return;
+
+    const onClose = jest.fn();
+    const autoClose = createAutoClose(onClose);
+    autoClose.schedule(true);
+    jest.advanceTimersByTime(2000);
+    expect(onClose).not.toHaveBeenCalled();
+    autoClose.closeNow();
+    expect(onClose).toHaveBeenCalledTimes(1);
+    autoClose.dispose();
+    jest.useRealTimers();
   });
 });

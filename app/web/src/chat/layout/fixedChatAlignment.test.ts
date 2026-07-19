@@ -1,4 +1,5 @@
 import { resolveFixedChatMarginLeft } from './fixedChatAlignment';
+import * as fixedChatAlignmentModule from './fixedChatAlignment';
 
 const EDGE_GAP = 18;
 const R = 360 + EDGE_GAP + 12; // surface width + edge gap + column gap
@@ -50,5 +51,65 @@ describe('resolveFixedChatMarginLeft', () => {
 
   it('ignores the reservation when no surface is visible (pure centering)', () => {
     expect(resolveFixedChatMarginLeft({ mainWidth: 1200, surfaceReservedWidth: 0, edgeGap: EDGE_GAP })).toBe(200);
+  });
+});
+
+describe('resolveFixedChatLayout', () => {
+  it('keeps 100px of the floating cards visible before shrinking the chat column', () => {
+    const resolveLayout = (
+      fixedChatAlignmentModule as typeof fixedChatAlignmentModule & {
+        resolveFixedChatLayout?: (input: {
+          mainWidth: number;
+          surfaceReservedWidth: number;
+          edgeGap: number;
+          minimumSurfaceReveal: number;
+        }) => {marginLeft: number; columnWidth: number};
+      }
+    ).resolveFixedChatLayout;
+    expect(resolveLayout).toBeDefined();
+    if (!resolveLayout) return;
+
+    expect(resolveLayout({
+      mainWidth: 850,
+      surfaceReservedWidth: R,
+      edgeGap: 0,
+      minimumSurfaceReveal: 100,
+    })).toEqual({marginLeft: 100, columnWidth: 750});
+    expect(resolveLayout({
+      mainWidth: 1200,
+      surfaceReservedWidth: R,
+      edgeGap: 0,
+      minimumSurfaceReveal: 100,
+    })).toEqual({marginLeft: 390, columnWidth: 800});
+  });
+
+  it('changes continuously across the 100px reveal threshold', () => {
+    const resolveLayout = (
+      fixedChatAlignmentModule as typeof fixedChatAlignmentModule & {
+        resolveFixedChatLayout?: (input: {
+          mainWidth: number;
+          surfaceReservedWidth: number;
+          edgeGap: number;
+          minimumSurfaceReveal: number;
+        }) => {marginLeft: number; columnWidth: number};
+      }
+    ).resolveFixedChatLayout;
+    expect(resolveLayout).toBeDefined();
+    if (!resolveLayout) return;
+
+    const before = resolveLayout({mainWidth: 899, surfaceReservedWidth: R, edgeGap: 0, minimumSurfaceReveal: 100});
+    const after = resolveLayout({mainWidth: 901, surfaceReservedWidth: R, edgeGap: 0, minimumSurfaceReveal: 100});
+    expect(Math.abs(after.marginLeft - before.marginLeft)).toBeLessThanOrEqual(1);
+    expect(Math.abs(after.columnWidth - before.columnWidth)).toBeLessThanOrEqual(1);
+  });
+
+  it('does not reserve 100px when no floating surface is present', () => {
+    const resolveLayout = fixedChatAlignmentModule.resolveFixedChatLayout;
+    expect(resolveLayout({
+      mainWidth: 850,
+      surfaceReservedWidth: 0,
+      edgeGap: 0,
+      minimumSurfaceReveal: 100,
+    })).toEqual({marginLeft: 25, columnWidth: 800});
   });
 });

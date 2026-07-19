@@ -1,5 +1,6 @@
 import React from 'react';
 
+import {ChatEdgeSurfaceHeader} from './ChatEdgeSurfaceHeader';
 import {useChatEdgeSurfaceGeometry} from './layout/chatEdgeSurfaceGeometry';
 
 export type ChatFunctionSurfaceProps = {
@@ -22,19 +23,12 @@ export function ChatFunctionSurface({title, collapsed, mode, actions, onToggleCo
     >
       <div className="chat-edge-surface-glass" aria-hidden="true" />
       <div className="chat-edge-surface-content">
-        <header className="chat-function-surface-header">
-          <button
-            type="button"
-            className="chat-function-surface-toggle"
-            aria-label={collapsed ? 'Expand functions' : 'Collapse functions'}
-            aria-expanded={!collapsed}
-            onClick={onToggleCollapsed}
-          >
-            <span className={`codicon ${collapsed ? 'codicon-chevron-up' : 'codicon-chevron-down'}`} aria-hidden="true" />
-          </button>
-          <span className="chat-function-surface-title">{title}</span>
-          <span className="chat-function-surface-actions">{actions}</span>
-        </header>
+        <ChatEdgeSurfaceHeader
+          title={title}
+          collapsed={collapsed}
+          onToggleCollapsed={onToggleCollapsed}
+          actions={actions}
+        />
         {collapsed ? null : children}
       </div>
     </aside>

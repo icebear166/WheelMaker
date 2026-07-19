@@ -17,6 +17,8 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('renderRecentSessionsSection(true)');
     expect(mainTsx).toContain('recent-sessions-section');
     expect(mainTsx).toContain('recent-sessions-list');
+    expect(mainTsx).toContain('className="recent-sessions-section-heading"');
+    expect(mainTsx).toContain('<span>Recent</span>');
   });
 
   test('recent sessions section behaves like a collapsible block', () => {
@@ -76,7 +78,7 @@ describe('web chat recent sessions', () => {
   test('shares row density tokens with the pinned surface', () => {
     expect(mainTsx).toContain('sessionListDensity={sessionListDensity}');
     expect(surfaceTsx).toContain('sessionListDensity: SessionListDensity;');
-    expect(surfaceTsx).toContain('data-session-list-density={sessionListDensity}');
+    expect(surfaceTsx).toContain('sessionListDensity={sessionListDensity}');
     expect(chatCss).toContain("[data-session-list-density='relaxed'] .wide-session-row");
     expect(chatCss).toContain('min-height: 30px;');
     expect(chatCss).not.toContain("[data-session-list-density='compact'] .wide-session-row");
