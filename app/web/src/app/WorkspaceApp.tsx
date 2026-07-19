@@ -15465,34 +15465,12 @@ export function App() {
             <span className={`codicon ${recentCollapsed ? 'codicon-chevron-down' : 'codicon-chevron-up'}`} aria-hidden="true" />
           </button>
         </div>
-        ) : (
-        <ChatSessionGlobalBar
-          title="Recent Sessions"
-          pinActive={!sidebarCollapsed}
-          onTogglePin={() => setSidebarCollapsed(value => !value)}
-          trailing={
-            <>
-              <button
-                type="button"
-                className="wide-project-action-btn recent-sessions-collapse-btn"
-                title={recentCollapsed ? 'Expand Recent Sessions' : 'Collapse Recent Sessions'}
-                aria-label={recentCollapsed ? 'Expand Recent Sessions' : 'Collapse Recent Sessions'}
-                aria-expanded={!recentCollapsed}
-                onClick={() => toggleWideProjectCollapsed(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)}
-              >
-                <span className={`codicon ${recentCollapsed ? 'codicon-chevron-down' : 'codicon-chevron-up'}`} aria-hidden="true" />
-              </button>
-              {renderChatArchiveControls()}
-              {renderChatHeaderSearchControls()}
-            </>
-          }
-        />
-        )}
-        {!recentCollapsed ? (
+        ) : null}
+        {mobile && recentCollapsed ? null : (
           <div className={`wide-project-session-list recent-sessions-list${mobile ? ' mobile-project-session-list' : ''}`}>
             {recentSessionSections.map(section => renderRecentProjectSessionSection(section, mobile))}
           </div>
-        ) : null}
+        )}
       </div>
     );
   };
@@ -17837,7 +17815,19 @@ export function App() {
         ) : null}
         {isWide ? (
           tab === 'chat' && !sidebarSettingsOpen ? (
-            renderChatSessionHeader(false)
+            <>
+              <div className="chat-sidebar-top-spacer" aria-hidden="true" />
+              <ChatSessionGlobalBar
+                pinActive={!sidebarCollapsed}
+                onTogglePin={() => setSidebarCollapsed(value => !value)}
+                trailing={
+                  <>
+                    {renderChatArchiveControls()}
+                    {renderChatHeaderSearchControls()}
+                  </>
+                }
+              />
+            </>
           ) : (
             <DesktopDragRegion className="sidebar-title-row">
               <span className="sidebar-title-text">{wideSidebarTitle}</span>
@@ -19338,15 +19328,7 @@ export function App() {
             </button>
           ) : null}
           {isWide && tab === 'chat' ? (
-            <div className="chat-edge-surface-stack">
-              {sidebarCollapsed && !sidebarSettingsOpen ? (
-                <div className="chat-top-title-surface">
-                  <div className="chat-edge-surface-glass" aria-hidden="true" />
-                  <div className="chat-edge-surface-content">
-                    {renderChatSessionHeader(false)}
-                  </div>
-                </div>
-              ) : null}
+            <div className={`chat-edge-surface-stack${sidebarCollapsed ? ' below-top-bar' : ''}`}>
               {showPinnedRecentSessionsSurface ? (
                 <ChatRecentSessionsSurface
                   collapsed={collapsedProjectIds.includes(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)}
@@ -19354,7 +19336,6 @@ export function App() {
                   sessionListDensity={sessionListDensity}
                   header={
                     <ChatSessionGlobalBar
-                      title="Recent Sessions"
                       slideOutOpen={sessionNavSlideOut.open}
                       onToggleSlideOut={() =>
                         dispatchSessionNavSlideOut(
@@ -19384,9 +19365,10 @@ export function App() {
               ) : null}
             </div>
           ) : null}
-          {isWide && sidebarCollapsed && sessionNavSlideOut.open && tab === 'chat' ? (
+          {isWide && sidebarCollapsed && !sidebarSettingsOpen && tab === 'chat' ? (
             <div
-              className="chat-session-nav-slideout"
+              className={`chat-session-nav-slideout${sessionNavSlideOut.open ? ' open' : ''}`}
+              aria-hidden={!sessionNavSlideOut.open}
               onPointerLeave={() => {
                 dispatchSessionNavSlideOut({
                   type: 'requestClose',
@@ -19401,7 +19383,6 @@ export function App() {
               <div className="chat-edge-surface-glass" aria-hidden="true" />
               <div className="chat-session-nav-slideout-content">
                 <ChatSessionGlobalBar
-                  title="Sessions"
                   slideOutOpen
                   onToggleSlideOut={() => dispatchSessionNavSlideOut({ type: 'requestClose', suppressed: false })}
                   pinActive={false}
@@ -19423,7 +19404,7 @@ export function App() {
                     dispatchSessionNavSlideOut({ type: 'scroll', scrollTop: event.currentTarget.scrollTop });
                   }}
                 >
-                  {renderWideProjectSessionNav({ includeRecent: false })}
+                  {renderWideProjectSessionNav()}
                 </div>
               </div>
             </div>
@@ -21957,6 +21938,14 @@ export function App() {
   const desktopWindowControls = desktopWindowControlsVisible ? (
     <DesktopWindowControls />
   ) : null;
+  const desktopTopBar = isWide && tab === 'chat' && !sidebarSettingsOpen ? (
+    <div className="chat-top-title-surface chat-top-title-overlay">
+      <div className="chat-edge-surface-glass" aria-hidden="true" />
+      <div className="chat-edge-surface-content">
+        {renderChatSessionHeader(false)}
+      </div>
+    </div>
+  ) : null;
 
   return (
     <>
@@ -21971,6 +21960,7 @@ export function App() {
         desktopChatFixedPreview={desktopChatFixedPreview}
         desktopChatPreviewOpen={isWide && chatPreviewOpen}
         desktopSidebarWidth={effectiveDesktopSidebarWidth}
+        desktopTopBar={desktopTopBar}
         floatingControlStack={floatingControlStack}
         floatingControlSide={floatingControlSide}
         mobileSettingsScreen={mobileSettingsScreen}

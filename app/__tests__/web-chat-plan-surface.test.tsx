@@ -35,7 +35,7 @@ describe('ChatPlanSurface', () => {
   test('renders Recent Sessions, Plan, and Limits in one desktop-only left stack', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainSource = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
-    const stackStart = mainSource.indexOf('className="chat-edge-surface-stack"');
+    const stackStart = mainSource.indexOf('chat-edge-surface-stack');
     const stackSource = stackStart >= 0 ? mainSource.slice(stackStart, stackStart + 2600) : '';
 
     expect(stackStart).toBeGreaterThanOrEqual(0);

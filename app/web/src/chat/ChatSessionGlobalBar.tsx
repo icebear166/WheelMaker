@@ -1,7 +1,8 @@
 import React, { type ReactNode } from 'react';
 
 export type ChatSessionGlobalBarProps = {
-  title: string;
+  /** Optional title text; omitted in the PC session panel chrome. */
+  title?: string;
   /** Floating recent panel only: toggle the all-sessions slide-out. */
   slideOutOpen?: boolean;
   onToggleSlideOut?: () => void;
@@ -38,7 +39,7 @@ export const ChatSessionGlobalBar = React.memo(function ChatSessionGlobalBar({
             />
           </button>
         ) : null}
-        <span className="chat-session-global-bar-title">{title}</span>
+        {title ? <span className="chat-session-global-bar-title">{title}</span> : null}
         {onTogglePin ? (
           <button
             type="button"

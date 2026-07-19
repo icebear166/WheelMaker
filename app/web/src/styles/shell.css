@@ -234,6 +234,7 @@
   display: flex;
   overflow: hidden;
   background: var(--surface-canvas);
+  position: relative;
 }
 
 .desktop-shell > .body {
