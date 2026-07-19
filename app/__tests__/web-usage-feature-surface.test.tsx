@@ -257,7 +257,7 @@ describe('UsageFeatureSurface', () => {
     const headerRule = usageStyles.match(/\.chat-function-surface-header \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const compactValueRule = usageStyles.match(/\.usage-compact-limit-value \{([^}]*)\}/)?.[1] ?? '';
 
-    expect(chatStyles).toContain('--chat-edge-surface-width: 360px;');
+    expect(chatStyles).toContain('--chat-edge-surface-width: var(--chat-session-panel-width);');
     expect(chatStyles).toContain('--chat-edge-surface-stack-width: var(--chat-edge-surface-width);');
     expect(chatStyles).toContain('--chat-recent-sessions-width: var(--chat-edge-surface-width);');
     expect(chatStyles).toContain('--chat-plan-desktop-width: var(--chat-edge-surface-width);');

@@ -316,7 +316,8 @@
 }
 
 .chat-title-bar > .chat-session-header {
-  flex: 0 1 auto;
+  flex: 0 0 var(--chat-session-panel-width);
+  width: var(--chat-session-panel-width);
   min-width: 0;
   min-height: 0;
   height: 100%;
@@ -2440,7 +2441,7 @@
 
 .chat-main {
   --chat-scrollbar-gutter-width: 8px;
-  --chat-edge-surface-width: 360px;
+  --chat-edge-surface-width: var(--chat-session-panel-width);
   flex: 1;
   min-height: 0;
   display: flex;
@@ -3016,8 +3017,24 @@
   background: var(--desktop-top-surface);
 }
 
-.chat-session-panel-pinned .chat-session-panel-header {
-  margin-top: 46px;
+.chat-pinned-title-bar {
+  flex: 0 0 var(--chat-menu-header-height);
+  width: 100%;
+  height: var(--chat-menu-header-height);
+  min-height: var(--chat-menu-header-height);
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--desktop-top-surface);
+}
+
+.chat-pinned-title-bar > .chat-session-header {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  border-bottom: 0;
+  background: transparent;
 }
 
 .chat-session-panel-pinned .chat-edge-surface-glass {

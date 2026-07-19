@@ -193,7 +193,7 @@ describe('web chat recent sessions', () => {
     const surfaceBlock = chatCss.match(/\.chat-recent-sessions-surface\.desktop \{[\s\S]*?\n\}/)?.[0] ?? '';
     const listBlock = chatCss.match(/\.chat-recent-sessions-surface-list \{[\s\S]*?\n\}/)?.[0] ?? '';
 
-    expect(chatCss).toContain('--chat-edge-surface-width: 360px;');
+    expect(chatCss).toContain('--chat-edge-surface-width: var(--chat-session-panel-width);');
     expect(surfaceBlock).toContain('--chat-recent-sessions-width: var(--chat-edge-surface-width);');
     expect(surfaceBlock).not.toContain('max-height:');
     expect(listBlock).not.toContain('max-height:');

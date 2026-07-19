@@ -881,6 +881,7 @@ const PROJECT_PIN_LONG_PRESS_MS = 450;
 const PROJECT_SESSION_LONG_PRESS_MS = 450;
 const DESKTOP_SIDEBAR_VIEWPORT_MAX_RATIO = 0.45;
 const CHAT_FIXED_VIEW_WIDTH = 800;
+const CHAT_SESSION_PANEL_WIDTH = 360;
 const CHAT_FILE_PEEK_WIDTH_DEFAULT = 520;
 const CHAT_FILE_PEEK_WIDTH_MIN = 360;
 const CHAT_FILE_PEEK_WIDTH_MAX = 1520;
@@ -7529,6 +7530,10 @@ export function App() {
     ),
     [clampDesktopSidebarWidthForViewport, desktopSidebarDraftWidth, desktopSidebarWidth],
   );
+  const desktopChatSessionPinned = isWide && tab === 'chat' && !sidebarSettingsOpen && !sidebarCollapsed;
+  const desktopLayoutSidebarWidth = desktopChatSessionPinned
+    ? CHAT_SESSION_PANEL_WIDTH
+    : effectiveDesktopSidebarWidth;
   const commitDesktopSidebarResize = useCallback(() => {
     const resizeState = desktopSidebarResizeRef.current;
     if (resizeState) {
@@ -7598,7 +7603,7 @@ export function App() {
     const viewportMax = windowWidth > 0
       ? Math.floor(windowWidth * CHAT_FILE_PEEK_VIEWPORT_MAX_RATIO)
       : CHAT_FILE_PEEK_WIDTH_MAX;
-    const occupiedWidth = sidebarCollapsed ? 48 : effectiveDesktopSidebarWidth + 48;
+    const occupiedWidth = sidebarCollapsed ? 48 : desktopLayoutSidebarWidth + 48;
     const middlePreservingMax = windowWidth > 0
       ? windowWidth - occupiedWidth - CHAT_FILE_PEEK_MAIN_MIN_WIDTH
       : CHAT_FILE_PEEK_WIDTH_MAX;
@@ -7613,9 +7618,9 @@ export function App() {
       maxWidth,
       Math.max(CHAT_FILE_PEEK_WIDTH_MIN, Math.round(width)),
     );
-  }, [effectiveDesktopSidebarWidth, sidebarCollapsed, windowWidth]);
+  }, [desktopLayoutSidebarWidth, sidebarCollapsed, windowWidth]);
   const fixedChatPreviewDefaultWidth = useMemo(() => {
-    const occupiedWidth = sidebarCollapsed ? 48 : effectiveDesktopSidebarWidth + 48;
+    const occupiedWidth = sidebarCollapsed ? 48 : desktopLayoutSidebarWidth + 48;
     const availableWidth = windowWidth > 0
       ? windowWidth - occupiedWidth
       : CHAT_FIXED_VIEW_WIDTH + CHAT_FILE_PEEK_WIDTH_DEFAULT;
@@ -7623,7 +7628,7 @@ export function App() {
       availableWidth - CHAT_FIXED_VIEW_WIDTH,
       true,
     );
-  }, [clampChatFilePeekWidthForViewport, effectiveDesktopSidebarWidth, sidebarCollapsed, windowWidth]);
+  }, [clampChatFilePeekWidthForViewport, desktopLayoutSidebarWidth, sidebarCollapsed, windowWidth]);
   const effectiveChatFilePeekWidth = useMemo(
     () => {
       const committedWidth = desktopChatFixedPreview && !chatFilePeekWidthResized
@@ -17096,10 +17101,11 @@ export function App() {
   );
 
   const renderChatSessionHeader = (mobile: boolean) => {
-    const chatSessionHeaderClassName = `sidebar-title-row chat-session-header${sessionSearchHeaderExpanded ? ' search-open' : ''}${mobile ? ' mobile' : ''}`;
+    const searchHeaderExpanded = mobile && sessionSearchHeaderExpanded;
+    const chatSessionHeaderClassName = `sidebar-title-row chat-session-header${searchHeaderExpanded ? ' search-open' : ''}${mobile ? ' mobile' : ''}`;
     const chatSessionHeaderContent = (
       <>
-        {!sessionSearchHeaderExpanded ? (
+        {!searchHeaderExpanded ? (
           <>
             {renderChatMenuSettingsButton()}
           </>
@@ -17759,7 +17765,7 @@ export function App() {
     const mobileSidebarMain = !isWide
       ? tab === 'chat' && !isWide ? renderMobileChatSessionSheet() : renderSidebarMain()
       : null;
-    const showPinnedChatSessionPanel = isWide && tab === 'chat' && !sidebarSettingsOpen;
+    const showPinnedChatSessionPanel = desktopChatSessionPinned;
     const wideSidebarTitle = tab === 'chat'
       ? 'CHAT'
       : tab === 'file'
@@ -17815,25 +17821,30 @@ export function App() {
           </div>
         ) : null}
         {showPinnedChatSessionPanel ? (
-          <ChatSessionPanel
-            mode="pinned"
-            title="Sessions"
-            className="chat-pinned-session-panel"
-            header={
-              <ChatSessionGlobalBar
-                pinActive
-                onTogglePin={() => setSidebarCollapsed(true)}
-                trailing={
-                  <>
-                    {renderChatArchiveControls()}
-                    {renderChatHeaderSearchControls()}
-                  </>
-                }
-              />
-            }
-          >
-            {wideSidebarMain}
-          </ChatSessionPanel>
+          <>
+            <DesktopDragRegion className="chat-pinned-title-bar">
+              {renderChatSessionHeader(false)}
+            </DesktopDragRegion>
+            <ChatSessionPanel
+              mode="pinned"
+              title="Sessions"
+              className="chat-pinned-session-panel"
+              header={
+                <ChatSessionGlobalBar
+                  pinActive
+                  onTogglePin={() => setSidebarCollapsed(true)}
+                  trailing={
+                    <>
+                      {renderChatArchiveControls()}
+                      {renderChatHeaderSearchControls()}
+                    </>
+                  }
+                />
+              }
+            >
+              {wideSidebarMain}
+            </ChatSessionPanel>
+          </>
         ) : isWide ? (
           (
             <DesktopDragRegion className="sidebar-title-row">
@@ -17846,7 +17857,7 @@ export function App() {
             {isWide ? wideSidebarMain : mobileSidebarMain}
           </div>
         )}
-        {isWide ? (
+        {isWide && !showPinnedChatSessionPanel ? (
           <button
             type="button"
             className={`desktop-sidebar-resize-handle${desktopSidebarResizing ? ' resizing' : ''}`}
@@ -19215,7 +19226,7 @@ export function App() {
       return (
         <ChatSurface>
           <DesktopDragRegion className="block-title chat-title-bar">
-            {isWide ? renderChatSessionHeader(false) : null}
+            {isWide && !desktopChatSessionPinned ? renderChatSessionHeader(false) : null}
             <div className="chat-title-context">
               {renderChatBreadcrumbTitle()}
             </div>
@@ -21946,7 +21957,7 @@ export function App() {
         desktopPeek={chatPreviewDesktopPane}
         desktopChatFixedPreview={desktopChatFixedPreview}
         desktopChatPreviewOpen={isWide && chatPreviewOpen}
-        desktopSidebarWidth={effectiveDesktopSidebarWidth}
+        desktopSidebarWidth={desktopLayoutSidebarWidth}
         floatingControlStack={floatingControlStack}
         floatingControlSide={floatingControlSide}
         mobileSettingsScreen={mobileSettingsScreen}

@@ -61,7 +61,7 @@ describe('ChatPlanSurface', () => {
       '.chat-edge-surface-stack > .chat-recent-sessions-surface.desktop,\n.chat-edge-surface-stack > .chat-plan-surface.desktop,\n.chat-edge-surface-stack > .chat-function-surface.desktop',
     );
 
-    expect(stylesCss).toContain('--chat-edge-surface-width: 360px;');
+    expect(stylesCss).toContain('--chat-edge-surface-width: var(--chat-session-panel-width);');
     expect(stackRule).toContain('--chat-edge-surface-stack-width: var(--chat-edge-surface-width);');
     expect(stackRule).toContain('display: flex;');
     expect(stackRule).toContain('flex-direction: column;');

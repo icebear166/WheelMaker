@@ -4,6 +4,7 @@ import {resolve} from 'node:path';
 const root = resolve(__dirname, '..');
 const workspaceAppSource = readFileSync(resolve(root, 'web/src/app/WorkspaceApp.tsx'), 'utf8');
 const chatStyles = readFileSync(resolve(root, 'web/src/styles/chat.css'), 'utf8');
+const shellStyles = readFileSync(resolve(root, 'web/src/styles/shell.css'), 'utf8');
 
 function cssRuleBlock(source: string, selector: string): string {
   const start = source.indexOf(`${selector} {`);
@@ -23,6 +24,41 @@ describe('PC chat session-panel layout', () => {
     expect(titleBarSource).toContain('renderChatSessionHeader(false)');
     expect(titleBarSource).not.toContain('chat-sidebar-toggle');
     expect(workspaceAppSource).not.toContain('const desktopTopBar =');
+  });
+
+  it('keeps the desktop settings and Hub segment at the shared 360px panel width', () => {
+    expect(shellStyles).toMatch(/\.page,\r?\n\.workspace \{[\s\S]*?--chat-session-panel-width: 360px;/);
+    const addressRule = cssRuleBlock(chatStyles, '.chat-title-bar > .chat-session-header');
+    expect(addressRule).toContain('flex: 0 0 var(--chat-session-panel-width);');
+    expect(addressRule).toContain('width: var(--chat-session-panel-width);');
+    expect(cssRuleBlock(chatStyles, '.chat-main')).toContain('--chat-edge-surface-width: var(--chat-session-panel-width);');
+  });
+
+  it('does not let desktop session search change the settings and Hub segment', () => {
+    const headerStart = workspaceAppSource.indexOf('const renderChatSessionHeader = (mobile: boolean) => {');
+    const headerEnd = workspaceAppSource.indexOf('const renderMobileChatSessionSheet = () => {', headerStart);
+    const headerSource = workspaceAppSource.slice(headerStart, headerEnd);
+
+    expect(headerSource).toContain('const searchHeaderExpanded = mobile && sessionSearchHeaderExpanded;');
+    expect(headerSource).toContain("${searchHeaderExpanded ? ' search-open' : ''}");
+    expect(headerSource).toContain('{!searchHeaderExpanded ? (');
+  });
+
+  it('keeps the pinned address bar visible above a top-aligned Sessions panel', () => {
+    const pinnedStart = workspaceAppSource.indexOf('{showPinnedChatSessionPanel ? (');
+    const pinnedSource = workspaceAppSource.slice(pinnedStart, pinnedStart + 2200);
+
+    expect(pinnedSource).toContain('className="chat-pinned-title-bar"');
+    expect(pinnedSource).toContain('{renderChatSessionHeader(false)}');
+    expect(workspaceAppSource).toContain('{isWide && !desktopChatSessionPinned ? renderChatSessionHeader(false) : null}');
+    expect(chatStyles).not.toContain('.chat-session-panel-pinned .chat-session-panel-header');
+  });
+
+  it('pins the Chat session sidebar at 360px without changing resizable non-Chat sidebars', () => {
+    expect(workspaceAppSource).toContain('const CHAT_SESSION_PANEL_WIDTH = 360;');
+    expect(workspaceAppSource).toContain('const desktopLayoutSidebarWidth = desktopChatSessionPinned');
+    expect(workspaceAppSource).toContain('desktopSidebarWidth={desktopLayoutSidebarWidth}');
+    expect(workspaceAppSource).toContain('{isWide && !showPinnedChatSessionPanel ? (');
   });
 
   it('uses the shared panel for both fixed and slide-out session navigation', () => {

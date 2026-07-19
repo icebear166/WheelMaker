@@ -287,7 +287,7 @@ describe('web chat turn rendering', () => {
       '.chat-edge-surface-stack > .chat-recent-sessions-surface.desktop,\n.chat-edge-surface-stack > .chat-plan-surface.desktop,\n.chat-edge-surface-stack > .chat-function-surface.desktop',
     );
 
-    expect(styles).toContain('--chat-edge-surface-width: 360px;');
+    expect(styles).toContain('--chat-edge-surface-width: var(--chat-session-panel-width);');
     expect(stackBlock).toContain('--chat-edge-surface-stack-width: var(--chat-edge-surface-width);');
     expect(stackBlock).toContain('width: var(--chat-edge-surface-stack-resolved-width);');
     expect(fixedBlock).toContain('left: var(--chat-edge-surface-stack-edge-gap);');

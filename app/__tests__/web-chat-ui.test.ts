@@ -861,7 +861,7 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('chat-header-archive-control compact${mobile');
     expect(mainTsx).toContain('renderChatHubSummary()');
     expect(mainTsx).toMatch(
-      /const renderChatSessionHeader = \(mobile: boolean\) => \{[\s\S]*?const chatSessionHeaderClassName = `sidebar-title-row chat-session-header\$\{sessionSearchHeaderExpanded \? ' search-open' : ''\}\$\{mobile \? ' mobile' : ''\}`;[\s\S]*?\{!sessionSearchHeaderExpanded \? \([\s\S]*?\{renderChatMenuSettingsButton\(\)\}[\s\S]*?\) : null\}[\s\S]*?<div className="chat-sidebar-title-actions">[\s\S]*?\{renderChatHubSummary\(\)\}[\s\S]*?\{renderChatArchiveControls\(\)\}[\s\S]*?\{renderChatHeaderSearchControls\(\)\}/,
+      /const renderChatSessionHeader = \(mobile: boolean\) => \{[\s\S]*?const searchHeaderExpanded = mobile && sessionSearchHeaderExpanded;[\s\S]*?const chatSessionHeaderClassName = `sidebar-title-row chat-session-header\$\{searchHeaderExpanded \? ' search-open' : ''\}\$\{mobile \? ' mobile' : ''\}`;[\s\S]*?\{!searchHeaderExpanded \? \([\s\S]*?\{renderChatMenuSettingsButton\(\)\}[\s\S]*?\) : null\}[\s\S]*?<div className="chat-sidebar-title-actions">[\s\S]*?\{renderChatHubSummary\(\)\}[\s\S]*?\{renderChatArchiveControls\(\)\}[\s\S]*?\{renderChatHeaderSearchControls\(\)\}/,
     );
     expect(mainTsx).not.toContain('renderChatMenuUsageButton');
     const renderMainStart = mainTsx.indexOf('const renderMain = () => {');
@@ -1918,7 +1918,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('<DesktopDragRegion className="sidebar-title-row">');
     expect(mainTsx).toContain('<DesktopDragRegion className="block-title chat-title-bar">');
     expect(mainTsx).not.toContain('chat-sidebar-toggle');
-    expect(mainTsx).toContain('{isWide ? renderChatSessionHeader(false) : null}');
+    expect(mainTsx).toContain('{isWide && !desktopChatSessionPinned ? renderChatSessionHeader(false) : null}');
     expect(mainTsx).toContain('className={`chat-title-project-button${chatTitleProjectMenuOpen ? \' open\' : \'\'}`}');
     expect(mainTsx).toContain('onPointerDown={event => event.stopPropagation()}');
     expect(mainTsx).toContain('setChatTitleProjectMenuOpen(open => !open);');
@@ -1959,7 +1959,7 @@ describe('web chat integration', () => {
     expect(mainTsx).not.toContain('className={`title-text breadcrumb-current chat-title-prompt-button');
     expect(mainTsx).toContain('const beginDesktopSidebarResize = useCallback(');
     expect(mainTsx).toContain('className={`desktop-sidebar-resize-handle${desktopSidebarResizing ?');
-    expect(mainTsx).toContain('desktopSidebarWidth={effectiveDesktopSidebarWidth}');
+    expect(mainTsx).toContain('desktopSidebarWidth={desktopLayoutSidebarWidth}');
 
     const wideRailStart = mainTsx.indexOf('const renderWideProjectSessionNav = (options?: { includeRecent?: boolean }) => {');
     const wideRailEnd = mainTsx.indexOf('const renderSidebar = () => {', wideRailStart);
