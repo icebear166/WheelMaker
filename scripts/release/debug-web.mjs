@@ -1,25 +1,21 @@
 import {createHash} from 'node:crypto';
 import {lstat, mkdir, readFile, readdir, writeFile} from 'node:fs/promises';
-import {dirname, join, posix, relative} from 'node:path';
+import {dirname, isAbsolute, join, posix, relative} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {runCommand} from './commands.mjs';
 import {acquireBuildLock} from './build-lock.mjs';
-import {createPublisherConfigDependencies, readConfiguredPublisherToken} from './publisher-config.mjs';
-import {ReleaseServerApi} from './release-server-api.mjs';
 
-export async function publishDebugWeb({api, repoRoot, runner = runCommand, workRoot = join(repoRoot, '.release-work')}) {
+export async function buildDebugWeb({repoRoot, outputPath, runner = runCommand, workRoot = join(repoRoot, '.release-work')}) {
   const sourceDir = join(workRoot, 'tmp', 'debug-web', 'web-source');
   const environment = {WHEELMAKER_WEB_TARGET: sourceDir, WHEELMAKER_WEBPACK_CACHE: join(workRoot, 'cache', 'webpack')};
   await mkdir(sourceDir, {recursive: true});
   await mkdir(environment.WHEELMAKER_WEBPACK_CACHE, {recursive: true});
   await runner('npm', ['ci', '--include=dev'], {cwd: join(repoRoot, 'app'), env: environment});
   await runner('npm', ['run', 'build:web:release'], {cwd: join(repoRoot, 'app'), env: environment});
-  const archivePath = await createDebugWebZip({sourceDir, outputPath: join(workRoot, 'debug-web.zip')});
+  const archivePath = await createDebugWebZip({sourceDir, outputPath});
   const bytes = await readFile(archivePath);
   const asset = {path: archivePath, size: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex')};
-  const session = await api.startDebugWeb(asset);
-  await api.uploadDebugWeb(session.sessionId, asset);
-  return api.commitDebugWeb(session.sessionId);
+  return asset;
 }
 
 export async function createDebugWebZip({sourceDir, outputPath}) {
@@ -51,14 +47,12 @@ function crc32(bytes) { let value = 0xffffffff; for (const byte of bytes) { valu
 
 async function main() {
   const args = process.argv.slice(2);
-  if (args.length !== 2 || args[0] !== '--base-url') throw new Error('usage: node scripts/release/debug-web.mjs --base-url <https-origin>');
-  const baseUrl = args[1];
+  if (args.length !== 2 || args[0] !== '--output' || !isAbsolute(args[1])) throw new Error('usage: node scripts/release/debug-web.mjs --output <absolute-zip-path>');
   const repoRoot = dirname(dirname(dirname(fileURLToPath(import.meta.url))));
   const workRoot = join(repoRoot, '.release-work');
-  const token = await readConfiguredPublisherToken(createPublisherConfigDependencies({baseUrl}));
   const lock = await acquireBuildLock({owner: 'debug-web', workRoot});
   try {
-    await publishDebugWeb({api: new ReleaseServerApi({baseUrl, token}), repoRoot, workRoot});
+    await buildDebugWeb({repoRoot, outputPath: args[1], workRoot});
   } finally {
     await lock.release();
   }

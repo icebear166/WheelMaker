@@ -24,6 +24,7 @@ const (
 	RegistryRouteHubReport              RegistryRouteKind = "hub_report"
 	RegistryRouteHubState               RegistryRouteKind = "hub_state"
 	RegistryRouteHubReleaseNotify       RegistryRouteKind = "hub_release_notify"
+	RegistryRouteHubDebugWebTransfer    RegistryRouteKind = "hub_debug_web_transfer"
 	RegistryRouteHubSessionEvent        RegistryRouteKind = "hub_session_event"
 	RegistryRouteProjectCache           RegistryRouteKind = "project_cache"
 	RegistryRouteProjectForward         RegistryRouteKind = "project_forward"
@@ -44,16 +45,24 @@ const (
 )
 
 const (
-	RegistryMethodConnectInit      = "connect.init"
-	RegistryMethodConnectClose     = "connect.close"
-	RegistryMethodHubPing          = "hub.ping"
-	RegistryMethodHubStateGet      = "hub.state.get"
-	RegistryMethodHubStateRefresh  = "hub.state.refresh"
-	RegistryMethodHubStateAction   = "hub.state.action"
-	RegistryMethodHubStateUpdated  = "hub.state.updated"
-	RegistryMethodHubReleaseNotify = "hub.release.notify"
-	RegistryMethodHubReleaseApply  = "hub.release.apply"
-	RegistryMethodDebugUploadLog   = "debug.uploadLog"
+	RegistryMethodConnectInit               = "connect.init"
+	RegistryMethodConnectClose              = "connect.close"
+	RegistryMethodHubPing                   = "hub.ping"
+	RegistryMethodHubStateGet               = "hub.state.get"
+	RegistryMethodHubStateRefresh           = "hub.state.refresh"
+	RegistryMethodHubStateAction            = "hub.state.action"
+	RegistryMethodHubStateUpdated           = "hub.state.updated"
+	RegistryMethodHubReleaseNotify          = "hub.release.notify"
+	RegistryMethodHubReleaseApply           = "hub.release.apply"
+	RegistryMethodHubDebugWebTransferStart  = "hub.debugWeb.transfer.start"
+	RegistryMethodHubDebugWebTransferChunk  = "hub.debugWeb.transfer.chunk"
+	RegistryMethodHubDebugWebTransferFinish = "hub.debugWeb.transfer.finish"
+	RegistryMethodHubDebugWebTransferAbort  = "hub.debugWeb.transfer.abort"
+	RegistryMethodHubDebugWebReceiveStart   = "hub.debugWeb.receive.start"
+	RegistryMethodHubDebugWebReceiveChunk   = "hub.debugWeb.receive.chunk"
+	RegistryMethodHubDebugWebReceiveFinish  = "hub.debugWeb.receive.finish"
+	RegistryMethodHubDebugWebReceiveAbort   = "hub.debugWeb.receive.abort"
+	RegistryMethodDebugUploadLog            = "debug.uploadLog"
 
 	RegistryMethodHubReportProjects             = "hub.report.projects"
 	RegistryMethodHubReportProject              = "hub.report.project"
@@ -157,6 +166,10 @@ var RegistryMethodDescriptors = map[string]RegistryMethodDescriptor{
 	RegistryMethodHubStateAction:                   registryHubStateMethod(RegistryMethodHubStateAction),
 	RegistryMethodHubStateUpdated:                  registryMethod(RegistryMethodHubStateUpdated, RegistryRouteClientEvent, []RegistryRole{RegistryRoleHub}),
 	RegistryMethodHubReleaseNotify:                 registryHubReleaseNotifyMethod(RegistryMethodHubReleaseNotify),
+	RegistryMethodHubDebugWebTransferStart:         registryHubDebugWebTransferMethod(RegistryMethodHubDebugWebTransferStart),
+	RegistryMethodHubDebugWebTransferChunk:         registryHubDebugWebTransferMethod(RegistryMethodHubDebugWebTransferChunk),
+	RegistryMethodHubDebugWebTransferFinish:        registryHubDebugWebTransferMethod(RegistryMethodHubDebugWebTransferFinish),
+	RegistryMethodHubDebugWebTransferAbort:         registryHubDebugWebTransferMethod(RegistryMethodHubDebugWebTransferAbort),
 	RegistryMethodDebugUploadLog:                   registryMethod(RegistryMethodDebugUploadLog, RegistryRouteDebug, []RegistryRole{RegistryRoleClient}),
 	RegistryMethodSecuritySessionList:              registryMethod(RegistryMethodSecuritySessionList, RegistryRouteSecuritySession, []RegistryRole{RegistryRoleClient}),
 	RegistryMethodSecuritySessionRevoke:            registryMethod(RegistryMethodSecuritySessionRevoke, RegistryRouteSecuritySession, []RegistryRole{RegistryRoleClient}),
@@ -270,6 +283,12 @@ func registryHubStateMethod(method string) RegistryMethodDescriptor {
 
 func registryHubReleaseNotifyMethod(method string) RegistryMethodDescriptor {
 	desc := registryMethod(method, RegistryRouteHubReleaseNotify, []RegistryRole{RegistryRoleHub})
+	desc.RequiresHubID = true
+	return desc
+}
+
+func registryHubDebugWebTransferMethod(method string) RegistryMethodDescriptor {
+	desc := registryMethod(method, RegistryRouteHubDebugWebTransfer, []RegistryRole{RegistryRoleHub})
 	desc.RequiresHubID = true
 	return desc
 }
