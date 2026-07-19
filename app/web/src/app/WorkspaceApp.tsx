@@ -111,6 +111,7 @@ import {ChatQuickSwitchMenu} from '../chat/ChatQuickSwitchMenu';
 import { ChatSessionNav } from '../chat/ChatSessionNav';
 import { ChatSurface } from '../chat/ChatSurface';
 import { ChatTurnView } from '../chat/ChatTurnView';
+import {ChatToolCallGroup} from '../chat/ChatToolCallGroup';
 import {ChatPlanSurface} from '../chat/ChatPlanSurface';
 import {ChatRecentSessionsSurface} from '../chat/ChatRecentSessionsSurface';
 import {ChatSessionGlobalBar} from '../chat/ChatSessionGlobalBar';
@@ -142,7 +143,11 @@ import {
 } from '../chat/turns/chatTurnStores';
 import {createChatDurablePersistQueue} from '../chat/turns/chatDurablePersist';
 import {createChatReadRepairQueue} from '../chat/turns/chatReadRepair';
-import {buildChatDisplayIndex, type ChatDisplayIndexItem} from '../chat/turns/chatDisplayIndex';
+import {
+  buildChatDisplayIndex,
+  chatDisplayItemContainsTurn,
+  type ChatDisplayIndexItem,
+} from '../chat/turns/chatDisplayIndex';
 import {
   createChatRealtimeFlushScheduler,
   type ChatRealtimeFlushScheduler,
@@ -1608,7 +1613,6 @@ async function writeTextToClipboard(text: string): Promise<void> {
 
 function shouldRenderChatTurn(
   message: RegistryChatMessage,
-  hideToolCalls: boolean,
   promptStatus: ChatPromptStatus,
 ): boolean {
   const text = msgText(message.method, message.param).trim();
@@ -1629,7 +1633,7 @@ function shouldRenderChatTurn(
   }
   const kind = msgKind(message.method);
   if (kind === 'tool') {
-    return !hideToolCalls && !!text;
+    return !!text;
   }
   if (kind === 'thought') {
     return !!text;
@@ -2551,11 +2555,6 @@ export function App() {
   const [showLineNumbers, setShowLineNumbers] = useState(
     typeof persistedGlobal.showLineNumbers === 'boolean'
       ? persistedGlobal.showLineNumbers
-      : true,
-  );
-  const [hideToolCalls, setHideToolCalls] = useState(
-    typeof persistedGlobal.hideToolCalls === 'boolean'
-      ? persistedGlobal.hideToolCalls
       : true,
   );
   const [showLimitsMonitor, setShowLimitsMonitor] = useState(
@@ -3588,14 +3587,13 @@ export function App() {
     : false;
 
   const chatDisplayIndex = useMemo(() => buildChatDisplayIndex(chatMessages, {
-    hideToolCalls,
     layoutMetrics: chatLayoutMetrics,
     promptStatus: selectedPromptTurnStatusIndex.statusFor,
     shouldRender: (message, promptStatus) => {
       const resolvedPromptStatus = isPromptStartMessage(message)
         ? promptStatus
         : null;
-      return shouldRenderChatTurn(message, hideToolCalls, resolvedPromptStatus);
+      return shouldRenderChatTurn(message, resolvedPromptStatus);
     },
     pendingKey: selectedPendingPrompt
       ? `${selectedChatEncodedKey}:pending:${selectedPendingPrompt.createdAt}`
@@ -3606,18 +3604,16 @@ export function App() {
   }), [
     chatMessages,
     chatLayoutMetrics,
-    hideToolCalls,
     selectedChatEncodedKey,
     selectedPromptTurnStatusIndex,
     selectedPendingPrompt,
     selectedQueuedPrompts,
   ]);
   const archivedChatDisplayIndex = useMemo(() => buildChatDisplayIndex(archivedPreview?.messages ?? [], {
-    hideToolCalls,
     layoutMetrics: chatLayoutMetrics,
     promptStatus: () => null,
-    shouldRender: (message, promptStatus) => shouldRenderChatTurn(message, hideToolCalls, promptStatus),
-  }), [archivedPreview?.messages, chatLayoutMetrics, hideToolCalls]);
+    shouldRender: (message, promptStatus) => shouldRenderChatTurn(message, promptStatus),
+  }), [archivedPreview?.messages, chatLayoutMetrics]);
 
   useEffect(() => {
     if (
@@ -3628,7 +3624,7 @@ export function App() {
       return;
     }
     const searchTargetTurnIsVisible = chatDisplayIndex.items.some(
-      item => item.turnIndex === sessionSearchTargetTurn.turnIndex,
+      item => chatDisplayItemContainsTurn(item, sessionSearchTargetTurn.turnIndex),
     );
     if (!searchTargetTurnIsVisible) {
       return;
@@ -6203,7 +6199,6 @@ export function App() {
       mobileEnterKeyBehavior,
       wrapLines,
       showLineNumbers,
-      hideToolCalls,
       showLimitsMonitor,
       messageViewerEnabled,
       logLevel,
@@ -6232,7 +6227,6 @@ export function App() {
     mobileEnterKeyBehavior,
     wrapLines,
     showLineNumbers,
-    hideToolCalls,
     showLimitsMonitor,
     messageViewerEnabled,
     logLevel,
@@ -17059,8 +17053,6 @@ export function App() {
         setSessionListDensity={setSessionListDensity}
         mobileEnterKeyBehavior={mobileEnterKeyBehavior}
         setMobileEnterKeyBehavior={setMobileEnterKeyBehavior}
-        hideToolCalls={hideToolCalls}
-        setHideToolCalls={setHideToolCalls}
         showLimitsMonitor={showLimitsMonitor}
         setShowLimitsMonitor={setShowLimitsMonitor}
         promptCompletionNotificationsEnabled={promptCompletionNotificationsEnabled}
@@ -18546,7 +18538,7 @@ export function App() {
       optionReplies.length === 0
         ? latestSelectableAssistantReply.confirmationReply
         : null;
-    if (!shouldRenderChatTurn(message, hideToolCalls, promptStatus)) {
+    if (!shouldRenderChatTurn(message, promptStatus)) {
       return null;
     }
     const searchHighlighted =
@@ -18565,7 +18557,6 @@ export function App() {
           message={message}
           promptRequest={message.method === 'prompt_done' ? findPromptRequestForDone(doneTurnIndex) : undefined}
           promptStatus={promptStatus}
-          hideToolCalls={hideToolCalls}
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}
           copyDisabled={copyRange ? !copyRange.ok : true}
@@ -18614,7 +18605,6 @@ export function App() {
     exportingMarkdownImageTurnIndex,
     findPromptRequestForDone,
     handleSelectChatReply,
-    hideToolCalls,
     latestSelectableAssistantReply,
     latestSelectableOptionReplyMessageKey,
     loadPromptAttachmentThumbnail,
@@ -18631,7 +18621,7 @@ export function App() {
     ttsState,
   ]);
   const renderArchivedChatMessageTurn = useCallback((message: RegistryChatMessage) => {
-    if (!shouldRenderChatTurn(message, hideToolCalls, null)) {
+    if (!shouldRenderChatTurn(message, null)) {
       return null;
     }
     const runtimeKey = selectedArchivedKey
@@ -18645,7 +18635,6 @@ export function App() {
         <ChatTurnView
           message={message}
           promptStatus={null}
-          hideToolCalls={hideToolCalls}
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}
           onOpenPromptAttachment={openChatAttachmentPreview}
@@ -18660,7 +18649,6 @@ export function App() {
   }, [
     chatMarkdownComponents,
     chatMarkdownUrlTransform,
-    hideToolCalls,
     loadPromptAttachmentThumbnail,
     openChatAttachmentPreview,
     openPromptArtifactDiff,
@@ -18675,16 +18663,32 @@ export function App() {
     const sourceMessage = displayItem.kind === 'turn'
       ? sourceMessages[displayItem.sourceIndex]
       : undefined;
+    const sourceToolMessages = displayItem.kind === 'tool-group'
+      ? displayItem.sourceIndexes
+        .map(sourceIndex => sourceMessages[sourceIndex])
+        .filter((message): message is RegistryChatMessage => !!message && message.method === 'tool_call')
+      : [];
     const queuedPromptIndex = displayItem.kind === 'queued'
       ? selectedQueuedPrompts.findIndex(queuedPrompt => `${selectedChatEncodedKey}:queued:${queuedPrompt.id}` === displayItem.key)
       : -1;
     const queuedPrompt = queuedPromptIndex >= 0 ? selectedQueuedPrompts[queuedPromptIndex] : null;
-    const content = displayItem.kind === 'queued' && queuedPrompt && !chatReadOnlyPreview ? (
+    const toolGroupSearchHighlighted =
+      sessionSearchTargetTurn?.runtimeKey === selectedChatEncodedKey &&
+      chatDisplayItemContainsTurn(displayItem, sessionSearchTargetTurn.turnIndex);
+    const content = displayItem.kind === 'tool-group' && sourceToolMessages.length > 0 ? (
+      <div
+        className={[
+          'chat-view-content',
+          toolGroupSearchHighlighted ? 'chat-turn-search-highlight' : '',
+        ].filter(Boolean).join(' ')}
+      >
+        <ChatToolCallGroup messages={sourceToolMessages} />
+      </div>
+    ) : displayItem.kind === 'queued' && queuedPrompt && !chatReadOnlyPreview ? (
       <div className="chat-view-content">
         <ChatTurnView
           message={buildQueuedPromptMessage(queuedPrompt, queuedPromptTurnIndex(queuedPromptIndex))}
           promptStatus="queued"
-          hideToolCalls={hideToolCalls}
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}
           onCancelQueuedPrompt={() => cancelQueuedPrompt(selectedChatEncodedKey, queuedPrompt.id)}
@@ -18699,7 +18703,6 @@ export function App() {
         <ChatTurnView
           message={buildPendingPromptMessage(selectedPendingPrompt)}
           promptStatus={selectedPendingPrompt.status}
-          hideToolCalls={hideToolCalls}
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}
           onOpenPromptAttachment={openChatAttachmentPreview}
@@ -18723,7 +18726,6 @@ export function App() {
     chatMarkdownUrlTransform,
     chatMessages,
     editPendingChatPrompt,
-    hideToolCalls,
     loadPromptAttachmentThumbnail,
     openChatAttachmentPreview,
     prioritizeQueuedPrompt,
@@ -18735,6 +18737,7 @@ export function App() {
     selectedChatEncodedKey,
     selectedPendingPrompt,
     selectedQueuedPrompts,
+    sessionSearchTargetTurn,
   ]);
   const closePortRelayFrameFromChrome = useCallback(() => {
     const tab = activePreviewTab(previewWorkbenchRef.current);

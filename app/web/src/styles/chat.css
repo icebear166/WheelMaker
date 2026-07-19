@@ -2693,46 +2693,114 @@
   color: var(--state-danger);
 }
 
-.chat-tool-stack {
+.chat-tool-group {
+  margin: 2px 0;
+  color: var(--text-secondary);
+}
+
+.chat-tool-group-header {
+  width: 100%;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.chat-tool-group-header .codicon,
+.chat-tool-group-row .codicon {
+  font-size: 11px;
+  flex: 0 0 auto;
+}
+
+.chat-tool-group-chevron {
+  transition: transform 140ms ease;
+}
+
+.chat-tool-group-open .chat-tool-group-chevron {
+  transform: rotate(90deg);
+}
+
+.chat-tool-group-count {
+  flex: 0 0 auto;
+  font-size: 12px;
+}
+
+.chat-tool-group-separator,
+.chat-tool-group-kind {
+  color: var(--text-tertiary);
+}
+
+.chat-tool-group-latest,
+.chat-tool-group-row-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-tool-group-latest {
+  flex: 1;
+  font-size: 12px;
+}
+
+.chat-tool-group-list {
+  margin: 4px 0 0 28px;
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.chat-tool-line {
+.chat-tool-group-row {
+  min-height: 22px;
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 16px;
+  color: var(--text-secondary);
   font-size: 11px;
-  line-height: 1.25;
-  color: color-mix(in srgb, var(--text-secondary) 86%, var(--text-primary));
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.chat-tool-line .codicon {
-  font-size: 11px;
-  opacity: 0.82;
+.chat-tool-group-row-title {
+  flex: 0 1 auto;
 }
 
-.chat-tool-line span:last-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
+.chat-tool-group-kind {
+  flex: 0 0 auto;
+  font-size: 10px;
+}
+
+.chat-tool-group-status.completed {
+  color: var(--state-success);
+}
+
+.chat-tool-group-status.failed {
+  color: var(--state-danger);
 }
 
 .chat-thought-block {
   margin: 2px 0;
-  padding-left: 10px;
-  border-left: 2px solid color-mix(in srgb, var(--accent-primary) 30%, var(--border-subtle));
+  color: var(--text-secondary);
 }
 
 .chat-thought-header {
+  width: 100%;
+  height: 28px;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
@@ -2744,14 +2812,18 @@
   opacity: 0.88;
 }
 
-.chat-thought-preview {
+.chat-thought-title {
+  flex: 1;
+  min-width: 0;
   font-size: 12px;
   line-height: 1.35;
-  color: color-mix(in srgb, var(--text-primary) 68%, var(--text-secondary));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex: 1;
+}
+
+.chat-thought-block.streaming .chat-thought-icon {
+  animation: chatThinkingPulse 1.4s ease-in-out infinite;
 }
 
 .chat-thought-chevron {
@@ -2764,13 +2836,11 @@
 }
 
 .chat-thought-content {
-  margin-top: 6px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--surface-raised) 88%, var(--accent-primary));
+  margin: 4px 0 0 28px;
+  padding: 0;
   font-size: 12px;
   line-height: 1.55;
-  color: color-mix(in srgb, var(--text-primary) 74%, var(--text-secondary));
+  color: var(--text-secondary);
 }
 
 .chat-thought-content p {
@@ -2779,6 +2849,11 @@
 
 .chat-thought-content p:last-child {
   margin-bottom: 0;
+}
+
+@keyframes chatThinkingPulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
 }
 
 .chat-recent-sessions-surface {
@@ -6052,19 +6127,6 @@
 .thinking-header,
 .chat-prompt-done {
   color: var(--text-secondary);
-}
-
-.chat-tool-line {
-  min-width: 0;
-  max-width: 100%;
-  color: var(--text-secondary);
-}
-
-.chat-tool-line span:last-child {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 @media (max-width: 900px) {
