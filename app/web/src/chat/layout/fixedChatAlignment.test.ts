@@ -1,0 +1,54 @@
+import { resolveFixedChatMarginLeft } from './fixedChatAlignment';
+
+const EDGE_GAP = 18;
+const R = 360 + EDGE_GAP + 12; // surface width + edge gap + column gap
+
+describe('resolveFixedChatMarginLeft', () => {
+  it('centers the column when the main area is wide', () => {
+    // W=1600, C=800 -> centered = 400; rightMin = 782; min(R,782)=390; max(400,390)=400
+    expect(resolveFixedChatMarginLeft({ mainWidth: 1600, surfaceReservedWidth: R, edgeGap: EDGE_GAP })).toBe(400);
+  });
+
+  it('docks to the reserved surface width when centering would overlap it', () => {
+    // centered < R <= rightMin -> margin = R
+    // W=1300: centered=250 < 390; rightMin=482 >= 390
+    expect(resolveFixedChatMarginLeft({ mainWidth: 1300, surfaceReservedWidth: R, edgeGap: EDGE_GAP })).toBe(R);
+  });
+
+  it('shrinks below the reservation (overlap phase) once the right gutter hits its minimum', () => {
+    // W=1200: rightMin=382 < R=390 -> min(R,382)=382; max(centered=200,382)=382
+    expect(resolveFixedChatMarginLeft({ mainWidth: 1200, surfaceReservedWidth: R, edgeGap: EDGE_GAP })).toBe(382);
+  });
+
+  it('is continuous across the center/dock boundary', () => {
+    // boundary: centered == R -> W = 800 + 2R = 1580
+    const at = resolveFixedChatMarginLeft({ mainWidth: 1580, surfaceReservedWidth: R, edgeGap: EDGE_GAP });
+    const before = resolveFixedChatMarginLeft({ mainWidth: 1579, surfaceReservedWidth: R, edgeGap: EDGE_GAP });
+    const after = resolveFixedChatMarginLeft({ mainWidth: 1581, surfaceReservedWidth: R, edgeGap: EDGE_GAP });
+    expect(Math.abs(after - before)).toBeLessThanOrEqual(1);
+    expect(at).toBe(R);
+  });
+
+  it('is continuous across the dock/overlap boundary', () => {
+    // boundary: rightMin == R -> W = 800 + R + edgeGap = 1208
+    const before = resolveFixedChatMarginLeft({ mainWidth: 1207, surfaceReservedWidth: R, edgeGap: EDGE_GAP });
+    const after = resolveFixedChatMarginLeft({ mainWidth: 1209, surfaceReservedWidth: R, edgeGap: EDGE_GAP });
+    expect(Math.abs(after - before)).toBeLessThanOrEqual(1);
+  });
+
+  it('never moves the column more than the width change (continuity under resize)', () => {
+    for (let w = 900; w < 2000; w += 1) {
+      const a = resolveFixedChatMarginLeft({ mainWidth: w, surfaceReservedWidth: R, edgeGap: EDGE_GAP });
+      const b = resolveFixedChatMarginLeft({ mainWidth: w + 1, surfaceReservedWidth: R, edgeGap: EDGE_GAP });
+      expect(Math.abs(b - a)).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('returns 0 when the main area is narrower than the column', () => {
+    expect(resolveFixedChatMarginLeft({ mainWidth: 700, surfaceReservedWidth: R, edgeGap: EDGE_GAP })).toBe(0);
+  });
+
+  it('ignores the reservation when no surface is visible (pure centering)', () => {
+    expect(resolveFixedChatMarginLeft({ mainWidth: 1200, surfaceReservedWidth: 0, edgeGap: EDGE_GAP })).toBe(200);
+  });
+});
