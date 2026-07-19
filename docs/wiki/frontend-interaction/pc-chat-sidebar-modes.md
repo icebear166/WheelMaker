@@ -6,13 +6,13 @@ PC 端（宽屏 ≥900px）Chat 有浮动与 pin 两种会话面板模式。浮�
 
 ## 两条常驻标题栏
 
-- **顶部地址栏**只保留设置按钮与 hubs 下拉，搜索/archive 不在其中。它在浮动与 pin 两态都常驻、与会话列表状态无关：作为浮动元素固定在 desktop shell 左上角（不占布局宽度），渲染在 shell 层（`desktopTopBar`），不属于浮动面板堆栈。
+- **顶部地址栏**只保留设置按钮与 hubs 下拉，搜索/archive 和会话栏展开按钮不在其中。它直接位于 Chat 常驻标题栏（`.chat-title-bar`）左侧，与会话列表的浮动、滑出和 pin 状态无关；面包屑位于中部，终端/预览操作位于右侧。
 - **会话面板标题栏**由共享 `ChatSessionPanel` 提供，位于内容滚动区之外。浮动态显示 **Recent Sessions**；滑出态与 pin 态显示 **Sessions**。控制按钮复用同一套全局栏：浮动态提供展开和 pin，滑出态与 pin 态提供 pin、搜索和 archive。
 
 ## 浮动态滑出会话导航
 
 - 默认左侧悬浮列按 `Recent Sessions → Plan → Limits` 排列。Recent 列表为空时仍保留 Recent Sessions 面板，保证完整会话导航始终有入口。
-- 点「全部 session」滑出完整会话导航。滑出面板与 pin 态共用 `ChatSessionPanel` 框架、标题栏和滚动容器，宽度固定 360px，从左侧动画滑入/滑出，并覆盖整列 Recent/Plan/Limits 悬浮层。
+- 点「全部 session」滑出完整会话导航。滑出面板与 pin 态共用 `ChatSessionPanel` 框架、标题栏和滚动容器，宽度固定 360px，从聊天主区左侧动画滑入/滑出；打开期间整列 Recent/Plan/Limits 保持挂载但隐藏并禁用交互，避免两个悬浮层重叠。
 - 滑出面板常挂载，保留 scrollTop；鼠标移出自动滑回，但搜索框聚焦、菜单打开、拖拽滚动条期间抑制滑回。
 
 ## pin 模式

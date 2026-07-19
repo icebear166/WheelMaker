@@ -315,6 +315,21 @@
   background: var(--desktop-top-surface);
 }
 
+.chat-title-bar > .chat-session-header {
+  flex: 0 1 auto;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  border-bottom: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-transform: none;
+}
+
 .chat-title-context {
   min-width: 0;
   flex: 1 1 auto;
@@ -334,7 +349,6 @@
   overflow: hidden;
 }
 
-.chat-sidebar-toggle,
 .chat-title-prompt-icon-button,
 .chat-preview-toggle {
   appearance: none;
@@ -356,7 +370,6 @@
   user-select: none;
 }
 
-.chat-sidebar-toggle:hover,
 .chat-title-prompt-icon-button:hover,
 .chat-title-prompt-icon-button.open,
 .chat-preview-toggle:hover {
@@ -364,7 +377,6 @@
   color: color-mix(in srgb, var(--accent-primary) 96%, var(--text-primary));
 }
 
-.chat-sidebar-toggle.collapsed,
 .chat-preview-toggle.active {
   background: color-mix(in srgb, var(--accent-primary) 18%, transparent);
   color: color-mix(in srgb, var(--accent-primary) 96%, var(--text-primary));
@@ -2939,30 +2951,9 @@
   pointer-events: auto;
 }
 
-.chat-top-title-surface {
-  position: relative;
-  width: 100%;
-  pointer-events: auto;
-}
-
-.chat-top-title-surface .chat-session-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-}
-
-.chat-top-title-overlay {
-  position: absolute;
-  top: 12px;
-  left: max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px));
-  z-index: 8;
-  width: min(var(--chat-edge-surface-width, 360px), calc(100% - 36px));
-  pointer-events: auto;
-}
-
-.chat-edge-surface-stack.below-top-bar {
-  top: 56px;
+.chat-edge-surface-stack.covered-by-session-panel {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .chat-edge-surface-stack.beside-pinned-session-panel {
@@ -3085,12 +3076,12 @@
 
 .chat-session-nav-slideout {
   position: absolute;
-  top: 56px;
+  top: 12px;
   left: max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px));
   z-index: 7;
   width: min(var(--chat-edge-surface-width, 360px), calc(100% - 2 * max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px))));
-  height: calc(100% - 68px);
-  max-height: calc(100% - 68px);
+  height: calc(100% - 24px);
+  max-height: calc(100% - 24px);
   border-radius: 10px;
   overflow: hidden;
   transform: translateX(calc(-100% - 24px));

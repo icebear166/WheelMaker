@@ -17118,11 +17118,7 @@ export function App() {
     if (mobile) {
       return <div className={chatSessionHeaderClassName}>{chatSessionHeaderContent}</div>;
     }
-    return (
-      <DesktopDragRegion className={chatSessionHeaderClassName}>
-        {chatSessionHeaderContent}
-      </DesktopDragRegion>
-    );
+    return <div className={chatSessionHeaderClassName}>{chatSessionHeaderContent}</div>;
   };
 
   const renderMobileChatSessionSheet = () => {
@@ -19219,18 +19215,7 @@ export function App() {
       return (
         <ChatSurface>
           <DesktopDragRegion className="block-title chat-title-bar">
-            {isWide ? (
-              <button
-                type="button"
-                className={`chat-sidebar-toggle${sidebarCollapsed ? ' collapsed' : ''}`}
-                onClick={() => setSidebarCollapsed(value => !value)}
-                title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
-                aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
-                aria-pressed={sidebarCollapsed}
-              >
-                <span className="codicon codicon-layout-sidebar-left" aria-hidden="true" />
-              </button>
-            ) : null}
+            {isWide ? renderChatSessionHeader(false) : null}
             <div className="chat-title-context">
               {renderChatBreadcrumbTitle()}
             </div>
@@ -19341,7 +19326,7 @@ export function App() {
             </button>
           ) : null}
           {isWide && tab === 'chat' ? (
-            <div className={`chat-edge-surface-stack${sidebarCollapsed ? ' below-top-bar' : ' beside-pinned-session-panel'}`}>
+            <div className={`chat-edge-surface-stack${!sidebarCollapsed ? ' beside-pinned-session-panel' : ''}${sessionNavSlideOut.open ? ' covered-by-session-panel' : ''}`}>
               {showFloatingSessionPanel ? (
                 <ChatRecentSessionsSurface
                   collapsed={collapsedProjectIds.includes(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)}
@@ -21949,15 +21934,6 @@ export function App() {
   const desktopWindowControls = desktopWindowControlsVisible ? (
     <DesktopWindowControls />
   ) : null;
-  const desktopTopBar = isWide && tab === 'chat' && !sidebarSettingsOpen ? (
-    <div className="chat-top-title-surface chat-top-title-overlay">
-      <div className="chat-edge-surface-glass" aria-hidden="true" />
-      <div className="chat-edge-surface-content">
-        {renderChatSessionHeader(false)}
-      </div>
-    </div>
-  ) : null;
-
   return (
     <>
       <ResponsiveShell
@@ -21971,7 +21947,6 @@ export function App() {
         desktopChatFixedPreview={desktopChatFixedPreview}
         desktopChatPreviewOpen={isWide && chatPreviewOpen}
         desktopSidebarWidth={effectiveDesktopSidebarWidth}
-        desktopTopBar={desktopTopBar}
         floatingControlStack={floatingControlStack}
         floatingControlSide={floatingControlSide}
         mobileSettingsScreen={mobileSettingsScreen}

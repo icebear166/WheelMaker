@@ -1917,10 +1917,8 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('onClick={handleDesktopSettingsSelect}');
     expect(mainTsx).toContain('<DesktopDragRegion className="sidebar-title-row">');
     expect(mainTsx).toContain('<DesktopDragRegion className="block-title chat-title-bar">');
-    expect(mainTsx).toContain('className={`chat-sidebar-toggle${sidebarCollapsed ? \' collapsed\' : \'\'}`}');
-    expect(mainTsx).toContain('{isWide ? (');
-    expect(mainTsx).toContain('onClick={() => setSidebarCollapsed(value => !value)}');
-    expect(mainTsx).toContain('title={sidebarCollapsed ? \'Show sidebar\' : \'Hide sidebar\'}');
+    expect(mainTsx).not.toContain('chat-sidebar-toggle');
+    expect(mainTsx).toContain('{isWide ? renderChatSessionHeader(false) : null}');
     expect(mainTsx).toContain('className={`chat-title-project-button${chatTitleProjectMenuOpen ? \' open\' : \'\'}`}');
     expect(mainTsx).toContain('onPointerDown={event => event.stopPropagation()}');
     expect(mainTsx).toContain('setChatTitleProjectMenuOpen(open => !open);');
@@ -1989,7 +1987,7 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.desktop-window-source-panel {');
     expect(stylesCss).toContain('.chat-menu-icon-button {');
     expect(stylesCss).toContain('.desktop-drag-region {');
-    expect(stylesCss).toContain('.chat-sidebar-toggle,');
+    expect(stylesCss).not.toContain('.chat-sidebar-toggle');
     expect(stylesCss).toContain('.chat-title-prompt-icon-button,');
     expect(stylesCss).toContain('.chat-preview-toggle {');
     expect(stylesCss).toContain('.chat-title-project-menu {');
@@ -2187,7 +2185,7 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-title-actions {');
     expect(stylesCss).toContain('.chat-breadcrumb-title {');
     expect(stylesCss).toContain('.chat-title-session-button {');
-    expect(stylesCss).toContain('.chat-sidebar-toggle,');
+    expect(stylesCss).not.toContain('.chat-sidebar-toggle');
     expect(stylesCss).toContain('.chat-title-project-button {');
     expect(stylesCss).toContain('.chat-title-project-menu {');
     expect(stylesCss).toContain('.chat-title-prompt-icon-button,');

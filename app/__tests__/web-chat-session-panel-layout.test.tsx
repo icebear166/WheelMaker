@@ -13,6 +13,18 @@ function cssRuleBlock(source: string, selector: string): string {
 }
 
 describe('PC chat session-panel layout', () => {
+  it('keeps settings and Hub controls in the permanent chat title bar', () => {
+    const titleBarStart = workspaceAppSource.indexOf('<DesktopDragRegion className="block-title chat-title-bar">');
+    const titleBarSource = titleBarStart >= 0
+      ? workspaceAppSource.slice(titleBarStart, titleBarStart + 2600)
+      : '';
+
+    expect(titleBarStart).toBeGreaterThanOrEqual(0);
+    expect(titleBarSource).toContain('renderChatSessionHeader(false)');
+    expect(titleBarSource).not.toContain('chat-sidebar-toggle');
+    expect(workspaceAppSource).not.toContain('const desktopTopBar =');
+  });
+
   it('uses the shared panel for both fixed and slide-out session navigation', () => {
     expect(workspaceAppSource).toContain("import {ChatSessionPanel} from '../chat/ChatSessionPanel';");
     expect(workspaceAppSource).toMatch(/<ChatSessionPanel\s+mode="pinned"\s+title="Sessions"/);
@@ -22,6 +34,20 @@ describe('PC chat session-panel layout', () => {
   it('keeps a floating session entry point when there are no recent sessions', () => {
     expect(workspaceAppSource).toContain("const showFloatingSessionPanel = isWide && sidebarCollapsed && !archivedMode && !sessionSearchActive;");
     expect(workspaceAppSource).toContain('{showFloatingSessionPanel ? (');
+  });
+
+  it('hides the auxiliary surface stack while the full session panel is open', () => {
+    expect(workspaceAppSource).toContain("${sessionNavSlideOut.open ? ' covered-by-session-panel' : ''}");
+    const coveredRule = cssRuleBlock(chatStyles, '.chat-edge-surface-stack.covered-by-session-panel');
+    expect(coveredRule).toContain('visibility: hidden;');
+    expect(coveredRule).toContain('pointer-events: none;');
+  });
+
+  it('positions desktop session surfaces from the chat area below the permanent title bar', () => {
+    expect(chatStyles).not.toContain('.chat-edge-surface-stack.below-top-bar');
+    const slideoutRule = cssRuleBlock(chatStyles, '.chat-session-nav-slideout');
+    expect(slideoutRule).toContain('top: 12px;');
+    expect(slideoutRule).toContain('height: calc(100% - 24px);');
   });
 
   it('keeps the pinned panel scrollable and positions auxiliary surfaces beside it', () => {
