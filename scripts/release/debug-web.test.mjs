@@ -4,7 +4,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import test from 'node:test';
 
-import {createDebugWebZip, publishDebugWeb} from './debug-web.mjs';
+import {buildDebugWeb, createDebugWebZip} from './debug-web.mjs';
 
 test('debug web zip contains only safe release files in stable order', async () => {
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-debug-web-'));
@@ -21,22 +21,18 @@ test('debug web zip contains only safe release files in stable order', async () 
   } finally { await rm(root, {force: true, recursive: true}); }
 });
 
-test('debug web publisher builds only Web and uses isolated API', async () => {
+test('debug web build writes a local verified archive', async () => {
   const root = await mkdtemp(join(tmpdir(), 'wheelmaker-debug-web-publish-'));
   const calls = [];
-  const api = {
-    async startDebugWeb(value) { calls.push(['start', value]); return {sessionId: 'a'.repeat(32)}; },
-    async uploadDebugWeb(id, asset) { calls.push(['upload', id, asset]); },
-    async commitDebugWeb(id) { calls.push(['commit', id]); },
-  };
   const runner = async (_command, args, options) => {
     calls.push(['run', args, options]);
     if (args.includes('build:web:release')) await writeFile(join(options.env.WHEELMAKER_WEB_TARGET, 'index.html'), '<html/>');
   };
   try {
-    await publishDebugWeb({api, repoRoot: root, runner});
+    const archive = await buildDebugWeb({repoRoot: root, outputPath: join(root, 'job', 'debug-web.zip'), runner});
     assert.equal(calls.filter(([kind]) => kind === 'run').length, 2);
-    assert.deepEqual(calls.filter(([kind]) => kind !== 'run').map(([kind]) => kind), ['start', 'upload', 'commit']);
-    assert.equal(calls.some(call => JSON.stringify(call).includes('stable.json')), false);
+    assert.equal(archive.path, join(root, 'job', 'debug-web.zip'));
+    assert.equal(archive.size > 0, true);
+    assert.match(archive.sha256, /^[a-f0-9]{64}$/);
   } finally { await rm(root, {force: true, recursive: true}); }
 });

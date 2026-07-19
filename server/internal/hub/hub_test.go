@@ -3,7 +3,10 @@ package hub
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -493,6 +496,10 @@ func (s *stubToolCommandHandler) ApplyRelease(_ context.Context, _ string, _ str
 	return tools.ReleaseTargetStatus{Status: "accepted"}, nil
 }
 
+func (s *stubToolCommandHandler) HandleDebugWebTransfer(_ string, _ json.RawMessage) (tools.ReleaseTargetStatus, *tools.CommandError) {
+	return tools.ReleaseTargetStatus{Status: "accepted"}, nil
+}
+
 func (s *stubToolCommandHandler) snapshot() (string, string, []ProjectInfo) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -524,6 +531,10 @@ func (s *overlapDetectingToolCommandHandler) Handle(_ context.Context, _ string,
 func (s *overlapDetectingToolCommandHandler) SetProjects([]ProjectInfo) {}
 
 func (s *overlapDetectingToolCommandHandler) ApplyRelease(_ context.Context, _ string, _ string) (tools.ReleaseTargetStatus, *tools.CommandError) {
+	return tools.ReleaseTargetStatus{Status: "accepted"}, nil
+}
+
+func (s *overlapDetectingToolCommandHandler) HandleDebugWebTransfer(_ string, _ json.RawMessage) (tools.ReleaseTargetStatus, *tools.CommandError) {
 	return tools.ReleaseTargetStatus{Status: "accepted"}, nil
 }
 
@@ -795,7 +806,7 @@ func TestReporterNotifiesReleaseTargetThroughRegistry(t *testing.T) {
 		err    error
 	}, 1)
 	go func() {
-		status, err := reporter.NotifyRelease(context.Background(), "server-hub", "debugWeb", "https://release.wheelmaker.top")
+		status, err := reporter.NotifyRelease(context.Background(), "server-hub", "version", "https://release.wheelmaker.top")
 		resultCh <- struct {
 			status tools.ReleaseTargetStatus
 			err    error
@@ -803,13 +814,96 @@ func TestReporterNotifiesReleaseTargetThroughRegistry(t *testing.T) {
 	}()
 	_ = target.SetReadDeadline(time.Now().Add(time.Second))
 	forwarded := mustReadEnvelope(t, target)
-	if forwarded.Method != rp.RegistryMethodHubReleaseApply || forwarded.Payload["kind"] != "debugWeb" {
+	if forwarded.Method != rp.RegistryMethodHubReleaseApply || forwarded.Payload["kind"] != "version" {
 		t.Fatalf("forwarded=%#v", forwarded)
 	}
 	mustWriteJSON(t, target, testEnvelope{RequestID: forwarded.RequestID, Type: "response", Method: rp.RegistryMethodHubReleaseApply, HubID: "server-hub", Payload: map[string]any{"status": "accepted"}})
 	result := <-resultCh
 	if result.err != nil || result.status.Status != "accepted" {
 		t.Fatalf("result=%#v", result)
+	}
+}
+
+func TestReporterRejectsDebugWebReleaseNotification(t *testing.T) {
+	reporter := NewReporter(ReporterConfig{HubID: "publisher-hub"}, nil)
+	_, err := reporter.NotifyRelease(context.Background(), "server-hub", "debugWeb", "https://release.wheelmaker.top")
+	if err == nil || !strings.Contains(err.Error(), "version") {
+		t.Fatalf("err=%v, want version-only validation error", err)
+	}
+}
+
+func TestReporterTransfersDebugWebInAcknowledgedChunks(t *testing.T) {
+	server := registry.New(registry.Config{})
+	ts := httptest.NewServer(server.Handler())
+	t.Cleanup(ts.Close)
+	target := dialWS(t, ts.URL+"/ws")
+	defer target.Close()
+	mustWriteJSON(t, target, testEnvelope{RequestID: 1, Type: "request", Method: rp.RegistryMethodConnectInit, Payload: map[string]any{"clientName": "wheelmaker-hub", "clientVersion": "test", "protocolVersion": rp.DefaultProtocolVersion, "role": "hub", "hubId": "web-hub"}})
+	init := mustReadEnvelope(t, target)
+	principal := init.Payload["principal"].(map[string]any)
+	mustWriteJSON(t, target, testEnvelope{RequestID: 2, Type: "request", Method: rp.RegistryMethodHubReportProjects, HubID: "web-hub", Payload: map[string]any{"connectionEpoch": int64(principal["connectionEpoch"].(float64)), "projects": []any{}}})
+	_ = mustReadEnvelope(t, target)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	reporter := NewReporter(ReporterConfig{Server: ts.URL, HubID: "source-hub", StateDir: t.TempDir(), ReconnectInterval: 10 * time.Millisecond}, nil)
+	done := make(chan error, 1)
+	go func() { done <- reporter.Run(ctx) }()
+	defer stopReporterForTest(t, cancel, done)
+	for deadline := time.Now().Add(time.Second); ; time.Sleep(time.Millisecond) {
+		reporter.mu.RLock()
+		connected := reporter.connectionEpoch != 0
+		reporter.mu.RUnlock()
+		if connected {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("source reporter did not connect")
+		}
+	}
+
+	archive := bytes.Repeat([]byte("z"), tools.DebugWebTransferChunkSize+3)
+	archivePath := filepath.Join(t.TempDir(), "debug-web.zip")
+	if err := os.WriteFile(archivePath, archive, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	digestBytes := sha256.Sum256(archive)
+	digest := hex.EncodeToString(digestBytes[:])
+	result := make(chan struct {
+		status tools.ReleaseTargetStatus
+		err    error
+	}, 1)
+	go func() {
+		status, err := reporter.TransferDebugWeb(context.Background(), "web-hub", "transfer-1", archivePath, int64(len(archive)), digest)
+		result <- struct {
+			status tools.ReleaseTargetStatus
+			err    error
+		}{status: status, err: err}
+	}()
+
+	start := mustReadEnvelope(t, target)
+	if start.Method != rp.RegistryMethodHubDebugWebReceiveStart || start.Payload["size"] != float64(len(archive)) || start.Payload["sha256"] != digest {
+		t.Fatalf("start=%#v", start)
+	}
+	mustWriteJSON(t, target, testEnvelope{RequestID: start.RequestID, Type: "response", Method: start.Method, HubID: "web-hub", Payload: map[string]any{"status": "accepted"}})
+	for sequence := 0; sequence < 2; sequence++ {
+		chunk := mustReadEnvelope(t, target)
+		if chunk.Method != rp.RegistryMethodHubDebugWebReceiveChunk || chunk.Payload["sequence"] != float64(sequence) {
+			t.Fatalf("chunk=%#v", chunk)
+		}
+		decoded, err := base64.StdEncoding.DecodeString(chunk.Payload["data"].(string))
+		if err != nil || len(decoded) == 0 || len(decoded) > tools.DebugWebTransferChunkSize {
+			t.Fatalf("decoded chunk size=%d err=%v", len(decoded), err)
+		}
+		mustWriteJSON(t, target, testEnvelope{RequestID: chunk.RequestID, Type: "response", Method: chunk.Method, HubID: "web-hub", Payload: map[string]any{"status": "accepted"}})
+	}
+	finish := mustReadEnvelope(t, target)
+	if finish.Method != rp.RegistryMethodHubDebugWebReceiveFinish {
+		t.Fatalf("finish=%#v", finish)
+	}
+	mustWriteJSON(t, target, testEnvelope{RequestID: finish.RequestID, Type: "response", Method: finish.Method, HubID: "web-hub", Payload: map[string]any{"status": "success"}})
+	transfer := <-result
+	if transfer.err != nil || transfer.status.Status != "success" {
+		t.Fatalf("transfer=%#v", transfer)
 	}
 }
 

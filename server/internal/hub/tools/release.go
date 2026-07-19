@@ -2,9 +2,12 @@ package tools
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"os/exec"
@@ -27,12 +30,13 @@ type releaseRunner interface {
 }
 
 type ReleaseTargetStatus struct {
-	Status    string
-	ErrorCode string
+	Status    string `json:"status"`
+	ErrorCode string `json:"errorCode,omitempty"`
 }
 
 type ReleaseNotifier interface {
 	NotifyRelease(ctx context.Context, targetHubID, kind, baseURL string) (ReleaseTargetStatus, error)
+	TransferDebugWeb(ctx context.Context, targetHubID, transferID, archivePath string, size int64, sha256 string) (ReleaseTargetStatus, error)
 }
 
 type execReleaseRunner struct{}
@@ -66,6 +70,7 @@ type releaseCommandPayload struct {
 	Desktop     bool   `json:"desktop,omitempty"`
 	Android     bool   `json:"android,omitempty"`
 	TargetHubID string `json:"targetHubId,omitempty"`
+	WebHubID    string `json:"webHubId,omitempty"`
 	AutoPull    bool   `json:"autoPull,omitempty"`
 }
 
@@ -161,8 +166,15 @@ func (c *ReleaseCommand) start(payload releaseCommandPayload) (releaseCommandRes
 	if err != nil {
 		return releaseCommandResponse{}, &releaseCommandError{Code: rp.CodeInvalidArgument, Message: err.Error()}
 	}
-	if _, err := cleanReleaseHTTPSOrigin(payload.BaseURL); err != nil {
-		return releaseCommandResponse{}, &releaseCommandError{Code: rp.CodeInvalidArgument, Message: "baseUrl must be a clean HTTPS origin"}
+	if payload.Kind == "version" {
+		if _, err := cleanReleaseHTTPSOrigin(payload.BaseURL); err != nil {
+			return releaseCommandResponse{}, &releaseCommandError{Code: rp.CodeInvalidArgument, Message: "baseUrl must be a clean HTTPS origin"}
+		}
+	} else {
+		payload.WebHubID = strings.TrimSpace(payload.WebHubID)
+		if payload.WebHubID == "" {
+			return releaseCommandResponse{}, &releaseCommandError{Code: rp.CodeInvalidArgument, Message: "webHubId is required for debugWeb"}
+		}
 	}
 	jobID, err := newUpdateJobID()
 	if err != nil {
@@ -212,7 +224,7 @@ func (c *ReleaseCommand) run(jobID string, payload releaseCommandPayload, source
 	defer c.buildMu.Unlock()
 	args := []string{"scripts/release.mjs"}
 	if payload.Kind == "debugWeb" {
-		args = []string{"scripts/release/debug-web.mjs", "--base-url", strings.TrimSpace(payload.BaseURL)}
+		args = []string{"scripts/release/debug-web.mjs", "--output", c.debugWebArchivePath(jobID)}
 	} else {
 		args = append(args, "--publish")
 		if payload.Desktop {
@@ -223,6 +235,10 @@ func (c *ReleaseCommand) run(jobID string, payload releaseCommandPayload, source
 		}
 	}
 	err := c.runner.Run(context.Background(), sourcePath, args, func(text string) { c.appendLog(jobID, text) })
+	if payload.Kind == "debugWeb" {
+		c.completeDebugWeb(jobID, payload, err)
+		return
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	job := c.jobs[jobID]
@@ -257,6 +273,82 @@ func (c *ReleaseCommand) run(jobID string, payload releaseCommandPayload, source
 		}
 	}
 	_ = c.writeJobLocked(job)
+}
+
+func (c *ReleaseCommand) completeDebugWeb(jobID string, payload releaseCommandPayload, buildErr error) {
+	if buildErr != nil {
+		c.finishDebugWebJob(jobID, "failed", "publish_failed", "failed", buildErr.Error()+"\n")
+		return
+	}
+	archivePath := c.debugWebArchivePath(jobID)
+	size, digest, err := inspectDebugWebArchive(archivePath)
+	if err != nil {
+		c.finishDebugWebJob(jobID, "failed", "debug_web_artifact_invalid", "failed", err.Error()+"\n")
+		return
+	}
+	c.mu.Lock()
+	job := c.jobs[jobID]
+	if job == nil {
+		c.mu.Unlock()
+		return
+	}
+	job.Status = "transferring"
+	job.UpdatedAt = c.now().UTC().Format(time.RFC3339Nano)
+	c.appendLogLocked(job, "transferring debug web to "+payload.WebHubID+"\n")
+	_ = c.writeJobLocked(job)
+	c.mu.Unlock()
+	if c.notifier == nil {
+		c.finishDebugWebJob(jobID, "failed", "debug_web_transfer_unavailable", "failed", "registry transfer is unavailable\n")
+		return
+	}
+	target, transferErr := c.notifier.TransferDebugWeb(context.Background(), payload.WebHubID, jobID, archivePath, size, digest)
+	if transferErr != nil || target.Status != "success" {
+		errorCode := target.ErrorCode
+		if errorCode == "" {
+			errorCode = "debug_web_transfer_failed"
+		}
+		message := "debug web transfer failed\n"
+		if transferErr != nil {
+			message = transferErr.Error() + "\n"
+		}
+		c.finishDebugWebJob(jobID, "failed", errorCode, "failed", message)
+		return
+	}
+	c.finishDebugWebJob(jobID, "success", "", "success", "debug web applied\n")
+}
+
+func (c *ReleaseCommand) finishDebugWebJob(jobID, status, errorCode, targetState, log string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	job := c.jobs[jobID]
+	if job == nil {
+		return
+	}
+	job.Status = status
+	job.ErrorCode = errorCode
+	job.TargetState = targetState
+	job.UpdatedAt = c.now().UTC().Format(time.RFC3339Nano)
+	job.FinishedAt = job.UpdatedAt
+	c.appendLogLocked(job, log)
+	_ = c.writeJobLocked(job)
+}
+
+func (c *ReleaseCommand) debugWebArchivePath(jobID string) string {
+	return filepath.Join(c.stateDir, releaseJobDirectoryName, jobID, "debug-web.zip")
+}
+
+func inspectDebugWebArchive(path string) (int64, string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return 0, "", err
+	}
+	defer file.Close()
+	hasher := sha256.New()
+	size, err := io.Copy(hasher, io.LimitReader(file, maxDebugWebArchiveBytes+1))
+	if err != nil || size <= 0 || size > maxDebugWebArchiveBytes {
+		return 0, "", errors.New("invalid debug web artifact")
+	}
+	return size, hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
 func releaseSourcePath(raw, kind string) (string, error) {

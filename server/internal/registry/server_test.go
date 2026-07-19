@@ -1603,7 +1603,7 @@ func TestHubReleaseNotificationForwardsToTargetHub(t *testing.T) {
 		HubID:     "publisher-hub",
 		Payload: map[string]any{
 			"targetHubId": "server-hub",
-			"kind":        "debugWeb",
+			"kind":        "version",
 			"baseUrl":     "https://release.wheelmaker.top",
 		},
 	})
@@ -1616,7 +1616,7 @@ func TestHubReleaseNotificationForwardsToTargetHub(t *testing.T) {
 	if forwarded.HubID != "server-hub" {
 		t.Fatalf("forwarded.hubId=%q, want server-hub", forwarded.HubID)
 	}
-	if forwarded.Payload["kind"] != "debugWeb" || forwarded.Payload["baseUrl"] != "https://release.wheelmaker.top" {
+	if forwarded.Payload["kind"] != "version" || forwarded.Payload["baseUrl"] != "https://release.wheelmaker.top" {
 		t.Fatalf("forwarded.payload=%#v", forwarded.Payload)
 	}
 
@@ -1651,7 +1651,7 @@ func TestHubReleaseNotificationRejectsNonHTTPSBaseURL(t *testing.T) {
 		HubID:     "publisher-hub",
 		Payload: map[string]any{
 			"targetHubId": "server-hub",
-			"kind":        "debugWeb",
+			"kind":        "version",
 			"baseUrl":     "http://release.wheelmaker.top",
 		},
 	})
@@ -1659,6 +1659,153 @@ func TestHubReleaseNotificationRejectsNonHTTPSBaseURL(t *testing.T) {
 	response := mustReadEnvelope(t, publisher)
 	if response.Type != "error" || response.Payload["code"] != codeInvalidArgument {
 		t.Fatalf("response=%#v, want invalid argument error", response)
+	}
+}
+
+func TestHubReleaseNotificationRejectsLegacyDebugWebPath(t *testing.T) {
+	s := New(Config{})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	publisher := dialReportedHub(t, ts.URL+"/ws", "publisher-hub")
+	defer publisher.Close()
+	mustWriteJSON(t, publisher, testEnvelope{
+		RequestID: 3,
+		Type:      "request",
+		Method:    rp.RegistryMethodHubReleaseNotify,
+		HubID:     "publisher-hub",
+		Payload: map[string]any{
+			"targetHubId": "server-hub",
+			"kind":        "debugWeb",
+			"baseUrl":     "https://release.wheelmaker.top",
+		},
+	})
+
+	response := mustReadEnvelope(t, publisher)
+	if response.Type != "error" || response.Payload["code"] != codeInvalidArgument {
+		t.Fatalf("response=%#v, want invalid argument error", response)
+	}
+}
+
+func TestHubDebugWebTransferForwardsAcknowledgedChunks(t *testing.T) {
+	s := New(Config{})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	source := dialReportedHub(t, ts.URL+"/ws", "source-hub")
+	defer source.Close()
+	target := dialReportedHub(t, ts.URL+"/ws", "web-hub")
+	defer target.Close()
+
+	transferID := "transfer-1"
+	digest := strings.Repeat("a", 64)
+	steps := []struct {
+		method        string
+		payload       map[string]any
+		receiveMethod string
+		status        string
+	}{
+		{rp.RegistryMethodHubDebugWebTransferStart, map[string]any{"transferId": transferID, "targetHubId": "web-hub", "size": 3, "sha256": digest}, rp.RegistryMethodHubDebugWebReceiveStart, "accepted"},
+		{rp.RegistryMethodHubDebugWebTransferChunk, map[string]any{"transferId": transferID, "sequence": 0, "data": base64.StdEncoding.EncodeToString([]byte("zip"))}, rp.RegistryMethodHubDebugWebReceiveChunk, "accepted"},
+		{rp.RegistryMethodHubDebugWebTransferFinish, map[string]any{"transferId": transferID}, rp.RegistryMethodHubDebugWebReceiveFinish, "success"},
+	}
+	for index, step := range steps {
+		mustWriteJSON(t, source, testEnvelope{RequestID: int64(index + 10), Type: "request", Method: step.method, HubID: "source-hub", Payload: step.payload})
+		forwarded := mustReadEnvelope(t, target)
+		if forwarded.Method != step.receiveMethod || forwarded.HubID != "web-hub" || forwarded.Payload["transferId"] != transferID {
+			t.Fatalf("forwarded=%#v", forwarded)
+		}
+		mustWriteJSON(t, target, testEnvelope{RequestID: forwarded.RequestID, Type: "response", Method: forwarded.Method, HubID: "web-hub", Payload: map[string]any{"status": step.status}})
+		response := mustReadEnvelope(t, source)
+		if response.Type != "response" || response.Payload["status"] != step.status {
+			t.Fatalf("response=%#v", response)
+		}
+	}
+}
+
+func TestHubDebugWebTransferRejectsOutOfOrderChunk(t *testing.T) {
+	s := New(Config{})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+	source := dialReportedHub(t, ts.URL+"/ws", "source-hub")
+	defer source.Close()
+	target := dialReportedHub(t, ts.URL+"/ws", "web-hub")
+	defer target.Close()
+
+	mustWriteJSON(t, source, testEnvelope{RequestID: 10, Type: "request", Method: rp.RegistryMethodHubDebugWebTransferStart, HubID: "source-hub", Payload: map[string]any{"transferId": "transfer-2", "targetHubId": "web-hub", "size": 3, "sha256": strings.Repeat("b", 64)}})
+	start := mustReadEnvelope(t, target)
+	mustWriteJSON(t, target, testEnvelope{RequestID: start.RequestID, Type: "response", Method: start.Method, HubID: "web-hub", Payload: map[string]any{"status": "accepted"}})
+	_ = mustReadEnvelope(t, source)
+
+	mustWriteJSON(t, source, testEnvelope{RequestID: 11, Type: "request", Method: rp.RegistryMethodHubDebugWebTransferChunk, HubID: "source-hub", Payload: map[string]any{"transferId": "transfer-2", "sequence": 1, "data": base64.StdEncoding.EncodeToString([]byte("zip"))}})
+	response := mustReadEnvelope(t, source)
+	if response.Type != "error" || response.Payload["code"] != codeConflict {
+		t.Fatalf("response=%#v, want conflict", response)
+	}
+}
+
+func TestHubDebugWebTransferRejectsOfflineTarget(t *testing.T) {
+	s := New(Config{})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	source := dialReportedHub(t, ts.URL+"/ws", "source-hub")
+	defer source.Close()
+	mustWriteJSON(t, source, testEnvelope{RequestID: 10, Type: "request", Method: rp.RegistryMethodHubDebugWebTransferStart, HubID: "source-hub", Payload: map[string]any{
+		"transferId": "transfer-offline", "targetHubId": "offline-hub", "size": 3, "sha256": strings.Repeat("d", 64),
+	}})
+	response := mustReadEnvelope(t, source)
+	if response.Type != "error" || response.Payload["code"] != codeUnavailable {
+		t.Fatalf("response=%#v, want unavailable", response)
+	}
+}
+
+func TestHubDebugWebTransferReleasesSessionWhenReceiverRejectsStart(t *testing.T) {
+	s := New(Config{})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+
+	source := dialReportedHub(t, ts.URL+"/ws", "source-hub")
+	defer source.Close()
+	target := dialReportedHub(t, ts.URL+"/ws", "web-hub")
+	defer target.Close()
+	payload := map[string]any{"transferId": "transfer-retry", "targetHubId": "web-hub", "size": 3, "sha256": strings.Repeat("e", 64)}
+
+	mustWriteJSON(t, source, testEnvelope{RequestID: 10, Type: "request", Method: rp.RegistryMethodHubDebugWebTransferStart, HubID: "source-hub", Payload: payload})
+	first := mustReadEnvelope(t, target)
+	mustWriteJSON(t, target, testEnvelope{RequestID: first.RequestID, Type: "response", Method: first.Method, HubID: "web-hub", Payload: map[string]any{"status": "failed", "errorCode": "update_busy"}})
+	if response := mustReadEnvelope(t, source); response.Type != "response" || response.Payload["status"] != "failed" {
+		t.Fatalf("response=%#v, want receiver failure", response)
+	}
+
+	mustWriteJSON(t, source, testEnvelope{RequestID: 11, Type: "request", Method: rp.RegistryMethodHubDebugWebTransferStart, HubID: "source-hub", Payload: payload})
+	_ = target.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	second := mustReadEnvelope(t, target)
+	if second.Method != rp.RegistryMethodHubDebugWebReceiveStart {
+		t.Fatalf("second=%#v, want retried start", second)
+	}
+	mustWriteJSON(t, target, testEnvelope{RequestID: second.RequestID, Type: "response", Method: second.Method, HubID: "web-hub", Payload: map[string]any{"status": "failed", "errorCode": "update_busy"}})
+	_ = mustReadEnvelope(t, source)
+}
+
+func TestHubDebugWebTransferAbortsReceiverWhenSourceDisconnects(t *testing.T) {
+	s := New(Config{})
+	ts := httptest.NewServer(s.Handler())
+	t.Cleanup(ts.Close)
+	source := dialReportedHub(t, ts.URL+"/ws", "source-hub")
+	target := dialReportedHub(t, ts.URL+"/ws", "web-hub")
+	defer target.Close()
+
+	mustWriteJSON(t, source, testEnvelope{RequestID: 10, Type: "request", Method: rp.RegistryMethodHubDebugWebTransferStart, HubID: "source-hub", Payload: map[string]any{"transferId": "transfer-3", "targetHubId": "web-hub", "size": 3, "sha256": strings.Repeat("c", 64)}})
+	start := mustReadEnvelope(t, target)
+	mustWriteJSON(t, target, testEnvelope{RequestID: start.RequestID, Type: "response", Method: start.Method, HubID: "web-hub", Payload: map[string]any{"status": "accepted"}})
+	_ = mustReadEnvelope(t, source)
+	_ = source.Close()
+
+	_ = target.SetReadDeadline(time.Now().Add(time.Second))
+	abort := mustReadEnvelope(t, target)
+	if abort.Method != rp.RegistryMethodHubDebugWebReceiveAbort || abort.Payload["transferId"] != "transfer-3" {
+		t.Fatalf("abort=%#v", abort)
 	}
 }
 

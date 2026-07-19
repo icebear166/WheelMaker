@@ -245,11 +245,13 @@ type websocketWriter interface {
 type Server struct {
 	cfg Config
 
-	mu           sync.RWMutex
-	hubs         map[string]rp.HubSnapshot
-	projectToHub map[string]string
-	hubPeers     map[string]*peerConn
-	clientPeers  map[string]*connectionState
+	mu                 sync.RWMutex
+	hubs               map[string]rp.HubSnapshot
+	projectToHub       map[string]string
+	hubPeers           map[string]*peerConn
+	clientPeers        map[string]*connectionState
+	debugWebTransferMu sync.Mutex
+	debugWebTransfers  map[string]debugWebTransferSession
 
 	nextConnID    atomic.Int64
 	nextForwardID atomic.Int64
@@ -380,11 +382,12 @@ func New(cfg Config) *Server {
 		cfg.LogDir = defaultDebugUploadLogDir()
 	}
 	s := &Server{
-		cfg:          cfg,
-		hubs:         make(map[string]rp.HubSnapshot),
-		projectToHub: make(map[string]string),
-		hubPeers:     make(map[string]*peerConn),
-		clientPeers:  make(map[string]*connectionState),
+		cfg:               cfg,
+		hubs:              make(map[string]rp.HubSnapshot),
+		projectToHub:      make(map[string]string),
+		hubPeers:          make(map[string]*peerConn),
+		clientPeers:       make(map[string]*connectionState),
+		debugWebTransfers: make(map[string]debugWebTransferSession),
 		webSessions: newWebSessionStore(
 			rand.Reader,
 			time.Now,
@@ -600,11 +603,15 @@ func shouldHandleRegistryRequestAsync(method string) bool {
 		rp.RegistryServerDataMethod(method) ||
 		rp.RegistryTTSMethod(method) ||
 		rp.RegistryMethodHasRoute(method, rp.RegistryRouteHubReleaseNotify) ||
+		rp.RegistryMethodHasRoute(method, rp.RegistryRouteHubDebugWebTransfer) ||
 		rp.RegistryHubStateMethod(method) || isTerminalHubRequestMethod(method) ||
 		isClientForwardMethod(method)
 }
 
 func registryRequestQueueKey(method string) string {
+	if rp.RegistryMethodHasRoute(method, rp.RegistryRouteHubDebugWebTransfer) {
+		return "hub.debugWeb.transfer"
+	}
 	if rp.RegistryRelayControlMethod(method) {
 		return "registry.relay"
 	}
@@ -634,6 +641,8 @@ func (s *Server) handleRequest(state *connectionState, in envelope) {
 		_ = s.writeResponse(state.peer, in.RequestID, in.Method, "", map[string]any{"ok": true})
 	case rp.RegistryMethodHasRoute(in.Method, rp.RegistryRouteHubReleaseNotify):
 		s.handleHubReleaseNotify(state.peer, state, in)
+	case rp.RegistryMethodHasRoute(in.Method, rp.RegistryRouteHubDebugWebTransfer):
+		s.handleHubDebugWebTransfer(state.peer, state, in)
 	case rp.RegistryRelayControlMethod(in.Method):
 		s.handleRelayRequest(state.peer, state, in)
 	case rp.RegistryHubStateMethod(in.Method) || isTerminalHubRequestMethod(in.Method):
@@ -1466,6 +1475,7 @@ func (s *Server) unregisterHub(peer *peerConn, state *connectionState) {
 		}
 	}
 	s.mu.Unlock()
+	s.abortDebugWebTransfersForHub(state.hubID)
 	for _, item := range projects {
 		if strings.TrimSpace(item.Name) == "" || !item.Online {
 			continue

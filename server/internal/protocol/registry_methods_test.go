@@ -48,6 +48,18 @@ func TestHubReleaseNotifyAllowsOnlyHubOriginWithoutProtocolVersionChange(t *test
 	}
 }
 
+func TestHubDebugWebTransferAllowsOnlyHubOrigin(t *testing.T) {
+	for _, method := range []string{RegistryMethodHubDebugWebTransferStart, RegistryMethodHubDebugWebTransferChunk, RegistryMethodHubDebugWebTransferFinish, RegistryMethodHubDebugWebTransferAbort} {
+		descriptor, ok := RegistryMethod(method)
+		if !ok || descriptor.Route != RegistryRouteHubDebugWebTransfer || !descriptor.RequiresHubID {
+			t.Fatalf("descriptor for %q = %#v", method, descriptor)
+		}
+		if !RegistryMethodAllowed(string(RegistryRoleHub), method) || RegistryMethodAllowed(string(RegistryRoleClient), method) {
+			t.Fatalf("unexpected roles for %q", method)
+		}
+	}
+}
+
 func TestRegistryDeviceSessionMethods(t *testing.T) {
 	methods := []string{
 		RegistryMethodSecuritySessionList,
