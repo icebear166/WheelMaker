@@ -2678,6 +2678,18 @@ export function App() {
   );
   const sessionNavSlideOutScrollRef = useRef<HTMLDivElement | null>(null);
   const sessionNavSlideOutPointerDownRef = useRef(false);
+  useEffect(() => {
+    if (sessionNavSlideOut.open && sessionNavSlideOutScrollRef.current) {
+      sessionNavSlideOutScrollRef.current.scrollTop = sessionNavSlideOut.scrollTop;
+    }
+    // Restore once per open transition only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionNavSlideOut.open]);
+  useEffect(() => {
+    if (!sidebarCollapsed) {
+      dispatchSessionNavSlideOut({ type: 'forceReset' });
+    }
+  }, [sidebarCollapsed]);
   const desktopSidebarWidth = workspaceUiState.desktop.sidebarWidth;
   const collapsedProjectIds = workspaceUiState.shared.collapsedProjectIds;
   const pinnedProjectIds = workspaceUiState.shared.pinnedProjectIds;
@@ -17521,7 +17533,7 @@ export function App() {
     );
   };
 
-  const renderWideProjectSessionNav = () => {
+  const renderWideProjectSessionNav = (options?: { includeRecent?: boolean }) => {
     return (
       <ChatSessionNav
         className="wide-project-session-nav"
@@ -17531,7 +17543,7 @@ export function App() {
         {projects.length === 0 ? (
           <div className="chat-empty-hint">No projects available.</div>
         ) : null}
-        {renderRecentSessionsSection(false)}
+        {options?.includeRecent === false ? null : renderRecentSessionsSection(false)}
         {archivedMode ? renderArchivedSessionRows(false) : sessionSearchActive ? renderSessionSearchResults(false) : visibleProjectItems.map(projectItem => {
           const targetProjectId = projectItem.projectId;
           const projectSessions = projectSessionsByProjectId[targetProjectId] ?? [];
@@ -19370,6 +19382,50 @@ export function App() {
                   onRequestHide={() => setConfirmTarget({kind: 'hideLimitsMonitor'})}
                 />
               ) : null}
+            </div>
+          ) : null}
+          {isWide && sidebarCollapsed && sessionNavSlideOut.open && tab === 'chat' ? (
+            <div
+              className="chat-session-nav-slideout"
+              onPointerLeave={() => {
+                dispatchSessionNavSlideOut({
+                  type: 'requestClose',
+                  suppressed: isSessionNavSlideOutCloseSuppressed({
+                    searchActive: sessionSearchActive || sessionSearchHeaderExpanded,
+                    menuOpen: sessionArchiveMenuOpen || !!wideProjectActionMenu || !!projectSessionActionMenu,
+                    pointerDownInList: sessionNavSlideOutPointerDownRef.current,
+                  }),
+                });
+              }}
+            >
+              <div className="chat-edge-surface-glass" aria-hidden="true" />
+              <div className="chat-session-nav-slideout-content">
+                <ChatSessionGlobalBar
+                  title="Sessions"
+                  slideOutOpen
+                  onToggleSlideOut={() => dispatchSessionNavSlideOut({ type: 'requestClose', suppressed: false })}
+                  pinActive={false}
+                  onTogglePin={() => setSidebarCollapsed(false)}
+                  trailing={
+                    <>
+                      {renderChatArchiveControls()}
+                      {renderChatHeaderSearchControls()}
+                    </>
+                  }
+                />
+                <div
+                  ref={sessionNavSlideOutScrollRef}
+                  className="chat-session-nav-slideout-scroll"
+                  onPointerDown={() => { sessionNavSlideOutPointerDownRef.current = true; }}
+                  onPointerUp={() => { sessionNavSlideOutPointerDownRef.current = false; }}
+                  onPointerCancel={() => { sessionNavSlideOutPointerDownRef.current = false; }}
+                  onScroll={event => {
+                    dispatchSessionNavSlideOut({ type: 'scroll', scrollTop: event.currentTarget.scrollTop });
+                  }}
+                >
+                  {renderWideProjectSessionNav({ includeRecent: false })}
+                </div>
+              </div>
             </div>
           ) : null}
           {sidebarCollapsed ? renderWideProjectActionMenu() : null}
