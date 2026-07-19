@@ -77,6 +77,12 @@ type RegistrySessionTurn = {
 - 当下一个 turn 或 `prompt_done` 到来时，服务端用同一个 `turnIndex` 重发完整内容并标记 `finished=true`，再发布更大的 turn。
 - 如果新 prompt 到来时上一个 prompt 还没有 terminal turn，服务端先合成 `prompt_done(stopReason="interrupted")`，再开始新 prompt。
 
+### Thinking 实时发布频率
+
+`agent_thought_chunk` 的合并内容仍然实时进入 prompt state，但完整快照的 Registry 发布采用按 session 隔离的限频规则：首个 chunk 立即发布；同一 thinking turn 持续更新时，中间快照发布间隔不短于 60 秒；没有新内容时不重复发布。thinking 被其他 turn 打断、取消或 prompt 完成时，服务端必须先立即发布最新完整快照并标记 `finished=true`，再发布后续 turn。
+
+该规则只减少 `session.message` 实时事件数量，不改变 turn JSON、协议版本、内存合并结果、最终持久化内容或其他 turn 的实时性。来源：[`../../scope/2026-07-19-turn-streaming-and-tool-groups/spec-turn-streaming-and-tool-groups.md`](../../scope/2026-07-19-turn-streaming-and-tool-groups/spec-turn-streaming-and-tool-groups.md)。
+
 ## 3. 序列化
 
 完成一个 prompt 时，`SessionRecorder` 会把该 prompt 内尚未持久化的 turns 追加写入二进制 turn 文件，然后更新 `sessions.session_sync_json`。
