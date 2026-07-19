@@ -114,6 +114,7 @@ import { ChatTurnView } from '../chat/ChatTurnView';
 import {ChatPlanSurface} from '../chat/ChatPlanSurface';
 import {ChatRecentSessionsSurface} from '../chat/ChatRecentSessionsSurface';
 import {ChatSessionGlobalBar} from '../chat/ChatSessionGlobalBar';
+import {ChatSessionPanel} from '../chat/ChatSessionPanel';
 import {
   createSessionNavSlideOutState,
   isSessionNavSlideOutCloseSuppressed,
@@ -2647,6 +2648,7 @@ export function App() {
         tab: globalState.tab ?? 'chat',
         collapsedProjectIds: globalState.collapsedProjectIds ?? globalState.desktopCollapsedProjectIds ?? [],
         desktopSidebarWidth: globalState.desktopSidebarWidth,
+        sessionPanelPinned: globalState.sessionPanelPinned,
         pinnedProjectIds: globalState.pinnedProjectIds ?? [],
         hiddenProjectIds: globalState.hiddenProjectIds ?? [],
         expandedHubIds: globalState.expandedHubIds ?? [],
@@ -5171,8 +5173,8 @@ export function App() {
       setRecentSessionsTick(t => t + 1);
     }
   }, [allVisibleProjectsLoaded, projectSessionsByProjectId]);
-  const showPinnedRecentSessionsSurface = isWide && sidebarCollapsed && !archivedMode && !sessionSearchActive && recentSessionSections.length > 0;
-  const showChatEdgeSurfaces = isWide && tab === 'chat' && (showPinnedRecentSessionsSurface || !!selectedChatPlan || showLimitsMonitor);
+  const showFloatingSessionPanel = isWide && sidebarCollapsed && !archivedMode && !sessionSearchActive;
+  const showChatEdgeSurfaces = isWide && tab === 'chat' && (showFloatingSessionPanel || !!selectedChatPlan || showLimitsMonitor);
   const chatMainClassName = isWide
     ? (chatViewWidth === 'fixed-800' ? `chat-main chat-view-width-fixed-800${showChatEdgeSurfaces ? ' chat-view-width-fixed-800-edge-surfaces' : ''}` : 'chat-main')
     : 'chat-main';
@@ -6195,6 +6197,7 @@ export function App() {
       floatingControlYRatio,
       floatingControlSide,
       desktopSidebarWidth,
+      sessionPanelPinned: !sidebarCollapsed,
       collapsedProjectIds,
       pinnedProjectIds,
       hiddenProjectIds,
@@ -6223,6 +6226,7 @@ export function App() {
     floatingControlYRatio,
     floatingControlSide,
     desktopSidebarWidth,
+    sidebarCollapsed,
     collapsedProjectIds,
     pinnedProjectIds,
     hiddenProjectIds,
@@ -17759,6 +17763,7 @@ export function App() {
     const mobileSidebarMain = !isWide
       ? tab === 'chat' && !isWide ? renderMobileChatSessionSheet() : renderSidebarMain()
       : null;
+    const showPinnedChatSessionPanel = isWide && tab === 'chat' && !sidebarSettingsOpen;
     const wideSidebarTitle = tab === 'chat'
       ? 'CHAT'
       : tab === 'file'
@@ -17813,13 +17818,15 @@ export function App() {
             </div>
           </div>
         ) : null}
-        {isWide ? (
-          tab === 'chat' && !sidebarSettingsOpen ? (
-            <>
-              <div className="chat-sidebar-top-spacer" aria-hidden="true" />
+        {showPinnedChatSessionPanel ? (
+          <ChatSessionPanel
+            mode="pinned"
+            title="Sessions"
+            className="chat-pinned-session-panel"
+            header={
               <ChatSessionGlobalBar
-                pinActive={!sidebarCollapsed}
-                onTogglePin={() => setSidebarCollapsed(value => !value)}
+                pinActive
+                onTogglePin={() => setSidebarCollapsed(true)}
                 trailing={
                   <>
                     {renderChatArchiveControls()}
@@ -17827,16 +17834,22 @@ export function App() {
                   </>
                 }
               />
-            </>
-          ) : (
+            }
+          >
+            {wideSidebarMain}
+          </ChatSessionPanel>
+        ) : isWide ? (
+          (
             <DesktopDragRegion className="sidebar-title-row">
               <span className="sidebar-title-text">{wideSidebarTitle}</span>
             </DesktopDragRegion>
           )
         ) : null}
-        <div className="sidebar-scroll">
-          {isWide ? wideSidebarMain : mobileSidebarMain}
-        </div>
+        {showPinnedChatSessionPanel ? null : (
+          <div className="sidebar-scroll">
+            {isWide ? wideSidebarMain : mobileSidebarMain}
+          </div>
+        )}
         {isWide ? (
           <button
             type="button"
@@ -19328,8 +19341,8 @@ export function App() {
             </button>
           ) : null}
           {isWide && tab === 'chat' ? (
-            <div className={`chat-edge-surface-stack${sidebarCollapsed ? ' below-top-bar' : ''}`}>
-              {showPinnedRecentSessionsSurface ? (
+            <div className={`chat-edge-surface-stack${sidebarCollapsed ? ' below-top-bar' : ' beside-pinned-session-panel'}`}>
+              {showFloatingSessionPanel ? (
                 <ChatRecentSessionsSurface
                   collapsed={collapsedProjectIds.includes(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)}
                   onToggleCollapsed={() => toggleWideProjectCollapsed(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)}
@@ -19366,9 +19379,10 @@ export function App() {
             </div>
           ) : null}
           {isWide && sidebarCollapsed && !sidebarSettingsOpen && tab === 'chat' ? (
-            <div
+            <ChatSessionPanel
+              mode="slideout"
+              title="Sessions"
               className={`chat-session-nav-slideout${sessionNavSlideOut.open ? ' open' : ''}`}
-              aria-hidden={!sessionNavSlideOut.open}
               onPointerLeave={() => {
                 dispatchSessionNavSlideOut({
                   type: 'requestClose',
@@ -19379,9 +19393,7 @@ export function App() {
                   }),
                 });
               }}
-            >
-              <div className="chat-edge-surface-glass" aria-hidden="true" />
-              <div className="chat-session-nav-slideout-content">
+              header={
                 <ChatSessionGlobalBar
                   slideOutOpen
                   onToggleSlideOut={() => dispatchSessionNavSlideOut({ type: 'requestClose', suppressed: false })}
@@ -19394,20 +19406,19 @@ export function App() {
                     </>
                   }
                 />
-                <div
-                  ref={sessionNavSlideOutScrollRef}
-                  className="chat-session-nav-slideout-scroll"
-                  onPointerDown={() => { sessionNavSlideOutPointerDownRef.current = true; }}
-                  onPointerUp={() => { sessionNavSlideOutPointerDownRef.current = false; }}
-                  onPointerCancel={() => { sessionNavSlideOutPointerDownRef.current = false; }}
-                  onScroll={event => {
-                    dispatchSessionNavSlideOut({ type: 'scroll', scrollTop: event.currentTarget.scrollTop });
-                  }}
-                >
-                  {renderWideProjectSessionNav()}
-                </div>
-              </div>
-            </div>
+              }
+              scrollRef={sessionNavSlideOutScrollRef}
+              onScroll={event => {
+                dispatchSessionNavSlideOut({ type: 'scroll', scrollTop: event.currentTarget.scrollTop });
+              }}
+              scrollProps={{
+                onPointerDown: () => { sessionNavSlideOutPointerDownRef.current = true; },
+                onPointerUp: () => { sessionNavSlideOutPointerDownRef.current = false; },
+                onPointerCancel: () => { sessionNavSlideOutPointerDownRef.current = false; },
+              }}
+            >
+              {renderWideProjectSessionNav()}
+            </ChatSessionPanel>
           ) : null}
           {sidebarCollapsed ? renderWideProjectActionMenu() : null}
           {!isWide ? (

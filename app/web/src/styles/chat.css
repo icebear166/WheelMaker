@@ -2965,9 +2965,76 @@
   top: 56px;
 }
 
-.chat-sidebar-top-spacer {
+.chat-edge-surface-stack.beside-pinned-session-panel {
+  top: 12px;
+  left: var(--chat-edge-surface-stack-edge-gap);
+}
+
+.chat-session-panel {
+  position: relative;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chat-session-panel-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-session-panel-header {
   flex: none;
-  height: 46px;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
+}
+
+.chat-session-panel-title {
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.chat-session-panel-header > .chat-session-global-bar {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+}
+
+.chat-session-panel-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.chat-session-panel-pinned {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  border-right: 1px solid var(--border-subtle);
+  background: var(--desktop-top-surface);
+}
+
+.chat-session-panel-pinned .chat-session-panel-header {
+  margin-top: 46px;
+}
+
+.chat-session-panel-pinned .chat-edge-surface-glass {
+  border: 0;
+  box-shadow: none;
+  background: var(--desktop-top-surface);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .chat-session-global-bar {
@@ -3022,9 +3089,8 @@
   left: max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px));
   z-index: 7;
   width: min(var(--chat-edge-surface-width, 360px), calc(100% - 2 * max(10px, calc(18px + var(--chat-scrollbar-gutter-width, 8px) - 8px))));
+  height: calc(100% - 68px);
   max-height: calc(100% - 68px);
-  display: flex;
-  flex-direction: column;
   border-radius: 10px;
   overflow: hidden;
   transform: translateX(calc(-100% - 24px));
@@ -3040,25 +3106,10 @@
   transition: transform 180ms ease, visibility 0s;
 }
 
-.chat-session-nav-slideout-content {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  max-height: inherit;
-}
-
-.chat-session-nav-slideout-content > .chat-session-global-bar {
-  flex: none;
+.chat-session-nav-slideout .chat-session-panel-header {
   position: sticky;
   top: 0;
   z-index: 1;
-}
-
-.chat-session-nav-slideout-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
 }
 
 .chat-plan-surface-header {

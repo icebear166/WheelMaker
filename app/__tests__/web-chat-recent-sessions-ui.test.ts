@@ -102,12 +102,10 @@ describe('web chat recent sessions', () => {
     expect(chatCss).not.toContain('.recent-sessions-pin-btn');
   });
 
-  test('renders the pinned recent surface only above desktop chat with a collapsed session rail', () => {
+  test('renders the floating recent surface only above desktop chat with a collapsed session rail', () => {
     expect(mainTsx).toContain("import {ChatRecentSessionsSurface} from '../chat/ChatRecentSessionsSurface';");
-    expect(mainTsx).toContain(
-      'const showPinnedRecentSessionsSurface = isWide && sidebarCollapsed && !archivedMode && !sessionSearchActive && recentSessionSections.length > 0;',
-    );
-    expect(mainTsx).toContain('showPinnedRecentSessionsSurface ? (');
+    expect(mainTsx).toContain('const showFloatingSessionPanel = isWide && sidebarCollapsed && !archivedMode && !sessionSearchActive;');
+    expect(mainTsx).toContain('showFloatingSessionPanel ? (');
     expect(mainTsx).not.toContain('onUnpin');
     expect(mainTsx).toContain('sessionListDensity={sessionListDensity}');
     expect(mainTsx).toContain('{recentSessionSections.map(section => renderRecentProjectSessionSection(section, false))}');

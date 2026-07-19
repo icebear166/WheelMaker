@@ -101,6 +101,7 @@ export type PersistedGlobalState = {
   floatingControlYRatio: number;
   floatingControlSide: PersistedFloatingControlSide;
   desktopSidebarWidth: number;
+  sessionPanelPinned: boolean;
   collapsedProjectIds: string[];
   desktopCollapsedProjectIds: string[];
   pinnedProjectIds: string[];
@@ -331,6 +332,7 @@ const GLOBAL_KEYS = {
   floatingControlSlot: 'floatingControlSlot',
   floatingControlSide: 'floatingControlSide',
   desktopSidebarWidth: 'desktopSidebarWidth',
+  sessionPanelPinned: 'sessionPanelPinned',
   collapsedProjectIds: 'collapsedProjectIds',
   desktopCollapsedProjectIds: 'desktopCollapsedProjectIds',
   pinnedProjectIds: 'pinnedProjectIds',
@@ -369,6 +371,7 @@ function defaultGlobalState(): PersistedGlobalState {
     floatingControlYRatio: FLOATING_CONTROL_DEFAULT_Y_RATIO,
     floatingControlSide: 'right',
     desktopSidebarWidth: 380,
+    sessionPanelPinned: false,
     collapsedProjectIds: [],
     desktopCollapsedProjectIds: [],
     pinnedProjectIds: [],
@@ -614,6 +617,9 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
     floatingControlYRatio,
     floatingControlSide: sanitizeFloatingControlSide(input.floatingControlSide, base.floatingControlSide),
     desktopSidebarWidth: sanitizeDesktopSidebarWidth(input.desktopSidebarWidth, base.desktopSidebarWidth),
+    sessionPanelPinned: typeof input.sessionPanelPinned === 'boolean'
+      ? input.sessionPanelPinned
+      : base.sessionPanelPinned,
     collapsedProjectIds,
     desktopCollapsedProjectIds: collapsedProjectIds,
     pinnedProjectIds,
@@ -1293,6 +1299,7 @@ export class WorkspacePersistenceRepository {
       {k: GLOBAL_KEYS.floatingControlYRatio, v: serialize(this.state.global.floatingControlYRatio), updatedAt},
       {k: GLOBAL_KEYS.floatingControlSide, v: serialize(this.state.global.floatingControlSide), updatedAt},
       {k: GLOBAL_KEYS.desktopSidebarWidth, v: serialize(this.state.global.desktopSidebarWidth), updatedAt},
+      {k: GLOBAL_KEYS.sessionPanelPinned, v: serialize(this.state.global.sessionPanelPinned), updatedAt},
       {k: GLOBAL_KEYS.collapsedProjectIds, v: serialize(this.state.global.collapsedProjectIds), updatedAt},
       {k: GLOBAL_KEYS.desktopCollapsedProjectIds, v: serialize(this.state.global.desktopCollapsedProjectIds), updatedAt},
       {k: GLOBAL_KEYS.pinnedProjectIds, v: serialize(this.state.global.pinnedProjectIds), updatedAt},

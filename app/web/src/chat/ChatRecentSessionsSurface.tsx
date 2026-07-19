@@ -1,6 +1,7 @@
 import React, { type ReactNode } from 'react';
 import type {SessionListDensity} from './sessionListDensity';
 import {useChatEdgeSurfaceGeometry} from './layout/chatEdgeSurfaceGeometry';
+import {ChatSessionPanel} from './ChatSessionPanel';
 
 export type ChatRecentSessionsSurfaceProps = {
   children: ReactNode;
@@ -48,31 +49,29 @@ export const ChatRecentSessionsSurface = React.memo(function ChatRecentSessionsS
   }
 
   return (
-    <aside
+    <ChatSessionPanel
       ref={surfaceRef}
+      mode="floating"
+      title="Recent Sessions"
       className="chat-recent-sessions-surface desktop expanded"
-      data-session-list-density={sessionListDensity}
-      aria-label="Recent sessions"
+      ariaLabel="Recent sessions"
+      sessionListDensity={sessionListDensity}
+      header={header ?? (
+        <div className="chat-recent-sessions-surface-header">
+          <button
+            type="button"
+            className="chat-recent-sessions-surface-toggle"
+            onClick={onToggleCollapsed}
+            aria-expanded={true}
+            aria-label="Collapse recent sessions"
+            title="Collapse recent sessions"
+          >
+            <span className="codicon codicon-chevron-up" aria-hidden="true" />
+          </button>
+        </div>
+      )}
     >
-      <div className="chat-edge-surface-glass" aria-hidden="true" />
-      <div className="chat-edge-surface-content">
-        {header ?? (
-          <div className="chat-recent-sessions-surface-header">
-            <button
-              type="button"
-              className="chat-recent-sessions-surface-toggle"
-              onClick={onToggleCollapsed}
-              aria-expanded={true}
-              aria-label="Collapse recent sessions"
-              title="Collapse recent sessions"
-            >
-              <span className="codicon codicon-chevron-up" aria-hidden="true" />
-            </button>
-            <span className="chat-recent-sessions-surface-title">Recent Sessions</span>
-          </div>
-        )}
-        <div className="chat-recent-sessions-surface-list">{children}</div>
-      </div>
-    </aside>
+      <div className="chat-recent-sessions-surface-list">{children}</div>
+    </ChatSessionPanel>
   );
 });

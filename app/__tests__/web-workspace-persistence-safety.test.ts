@@ -278,6 +278,19 @@ describe('workspace persistence safety', () => {
     ]);
   });
 
+  test('persists the explicit desktop session-panel pin preference', async () => {
+    const db = new MemoryWorkspaceDatabase(seedWithGlobalSettings());
+    const repository = new WorkspacePersistenceRepository(db as never);
+    await repository.ready();
+    db.resetMutationLog();
+
+    repository.patchGlobalState({sessionPanelPinned: true} as never);
+    await repository.flushPendingWrites();
+
+    expect(repository.getGlobalState()).toMatchObject({sessionPanelPinned: true});
+    expect(rowValue(db.rows('wm_global_kv'), 'sessionPanelPinned')).toBe(true);
+  });
+
   test('clears only rebuildable caches and retries a setting after quota failure', async () => {
     const db = new MemoryWorkspaceDatabase(seedWithGlobalSettings({
       wm_project_state: [{projectId: 'p1', stateJson: '{}', updatedAt: Date.now()}],

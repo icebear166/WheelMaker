@@ -13,4 +13,9 @@ describe('createWorkspaceUiState desktop defaults', () => {
     expect(createWorkspaceUiState({ sidebarCollapsed: false }).desktop.sidebarCollapsed).toBe(false);
     expect(createWorkspaceUiState({ sidebarCollapsed: true }).desktop.sidebarCollapsed).toBe(true);
   });
+
+  it('opens the fixed session panel when the persisted pin preference is enabled', () => {
+    expect(createWorkspaceUiState({ sessionPanelPinned: true }).desktop.sidebarCollapsed).toBe(false);
+    expect(createWorkspaceUiState({ sessionPanelPinned: false }).desktop.sidebarCollapsed).toBe(true);
+  });
 });

@@ -55,6 +55,7 @@ export type WorkspaceUiState = {
 export type WorkspaceUiStateInput = {
   tab?: unknown;
   settingsOpen?: unknown;
+  sessionPanelPinned?: unknown;
   sidebarCollapsed?: unknown;
   desktopSidebarWidth?: unknown;
   collapsedProjectIds?: unknown;
@@ -168,7 +169,11 @@ export function createWorkspaceUiState(input: WorkspaceUiStateInput = {}): Works
     },
     desktop: {
       sidebarCollapsed:
-        typeof input.sidebarCollapsed === 'boolean' ? input.sidebarCollapsed : true,
+        typeof input.sessionPanelPinned === 'boolean'
+          ? !input.sessionPanelPinned
+          : typeof input.sidebarCollapsed === 'boolean'
+            ? input.sidebarCollapsed
+            : true,
       sidebarWidth: sanitizeDesktopSidebarWidth(input.desktopSidebarWidth),
     },
     mobile: {
