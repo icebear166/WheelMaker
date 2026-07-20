@@ -49,20 +49,47 @@ func (s *KimiScanner) Scan(ctx context.Context) ProviderSnapshot {
 		result.Status, result.Message = ProviderUnavailable, "not authenticated"
 		return result
 	}
+	mergedIndex := map[string]int{}
+	succeeded := 0
+	failures := []Account{}
 	for _, source := range s.sources {
 		payload, message := fetchProviderJSON(ctx, s.client, s.endpoint, source.Credential)
-		account := Account{LocalID: source.LocalID, Identity: Identity{Kind: "source", Label: source.Label}, Limits: []Limit{}}
 		if message != "" {
-			account.Status, account.Message = ProviderError, message
-		} else if limits, err := parseKimiLimits(payload); err != nil {
-			account.Status, account.Message = ProviderError, "invalid response"
-		} else {
-			account.Status, account.Limits = ProviderOK, limits
+			failures = append(failures, Account{LocalID: source.LocalID, Identity: Identity{Kind: "source", Label: source.Label}, Status: ProviderError, Message: message, Limits: []Limit{}})
+			continue
 		}
+		limits, err := parseKimiLimits(payload)
+		if err != nil {
+			failures = append(failures, Account{LocalID: source.LocalID, Identity: Identity{Kind: "source", Label: source.Label}, Status: ProviderError, Message: "invalid response", Limits: []Limit{}})
+			continue
+		}
+		succeeded++
+		userID := parseKimiUserID(payload)
+		mergeKey := userID
+		account := Account{LocalID: source.LocalID, Identity: Identity{Kind: "source", Label: source.Label}, Status: ProviderOK, Limits: limits}
+		if userID != "" {
+			account.LocalID = userID
+			account.Identity = Identity{Kind: "user", Value: userID, Label: userID}
+		} else {
+			mergeKey = "source:" + source.LocalID
+		}
+		if _, exists := mergedIndex[mergeKey]; exists {
+			continue
+		}
+		mergedIndex[mergeKey] = len(result.Accounts)
 		result.Accounts = append(result.Accounts, account)
+	}
+	if succeeded == 0 {
+		result.Accounts = failures
 	}
 	result.Status = providerStatus(result.Accounts)
 	return result
+}
+
+func parseKimiUserID(payload map[string]any) string {
+	user, _ := payload["user"].(map[string]any)
+	id, _ := user["userId"].(string)
+	return strings.TrimSpace(id)
 }
 
 func parseKimiLimits(payload map[string]any) ([]Limit, error) {

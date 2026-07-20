@@ -209,6 +209,78 @@ func TestKimiScannerReportsOneAccountPerCredentialSource(t *testing.T) {
 	}
 }
 
+func TestKimiScannerMergesSourcesWithSameUserID(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"user":{"userId":"u-shared"},"limits":[{"window":{"duration":300},"detail":{"limit":100,"used":25,"resetTime":"2026-07-20T20:00:00Z"}}],"usage":{"limit":1000,"remaining":750,"resetTime":"2026-07-27T00:00:00Z"}}`)
+	}))
+	defer server.Close()
+	scanner := NewKimiScanner([]KimiCredentialSource{
+		{LocalID: "opencode", Label: "OpenCode", Credential: "token-a"},
+		{LocalID: "kimi-code", Label: "Kimi Code", Credential: "token-b"},
+	}, server.Client(), server.URL)
+	got := scanner.Scan(context.Background())
+	if got.Status != ProviderOK || len(got.Accounts) != 1 {
+		t.Fatalf("snapshot=%+v", got)
+	}
+	account := got.Accounts[0]
+	if account.LocalID != "u-shared" {
+		t.Fatalf("localId=%q, want u-shared", account.LocalID)
+	}
+	if account.Identity.Kind != "user" || account.Identity.Value != "u-shared" || account.Identity.Label != "u-shared" {
+		t.Fatalf("identity=%+v", account.Identity)
+	}
+	if len(account.Limits) != 2 {
+		t.Fatalf("limits=%+v", account.Limits)
+	}
+}
+
+func TestKimiScannerKeepsDistinctUserIDsSeparate(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		userID := "u-a"
+		if r.Header.Get("Authorization") == "Bearer token-b" {
+			userID = "u-b"
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"user":{"userId":%q},"usage":{"limit":100,"remaining":50,"resetTime":"2026-07-27T00:00:00Z"}}`, userID)
+	}))
+	defer server.Close()
+	scanner := NewKimiScanner([]KimiCredentialSource{
+		{LocalID: "opencode", Label: "OpenCode", Credential: "token-a"},
+		{LocalID: "kimi-code", Label: "Kimi Code", Credential: "token-b"},
+	}, server.Client(), server.URL)
+	got := scanner.Scan(context.Background())
+	if got.Status != ProviderOK || len(got.Accounts) != 2 {
+		t.Fatalf("snapshot=%+v", got)
+	}
+	if got.Accounts[0].Identity.Value != "u-a" || got.Accounts[1].Identity.Value != "u-b" {
+		t.Fatalf("identities=%+v,%+v", got.Accounts[0].Identity, got.Accounts[1].Identity)
+	}
+}
+
+func TestKimiScannerMergesWhenOneSourceFails(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") == "Bearer token-bad" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"user":{"userId":"u-shared"},"usage":{"limit":100,"remaining":50,"resetTime":"2026-07-27T00:00:00Z"}}`)
+	}))
+	defer server.Close()
+	scanner := NewKimiScanner([]KimiCredentialSource{
+		{LocalID: "opencode", Label: "OpenCode", Credential: "token-bad"},
+		{LocalID: "kimi-code", Label: "Kimi Code", Credential: "token-good"},
+	}, server.Client(), server.URL)
+	got := scanner.Scan(context.Background())
+	if got.Status != ProviderOK || len(got.Accounts) != 1 {
+		t.Fatalf("snapshot=%+v", got)
+	}
+	if got.Accounts[0].Status != ProviderOK || got.Accounts[0].Identity.Value != "u-shared" {
+		t.Fatalf("account=%+v", got.Accounts[0])
+	}
+}
+
 func TestReadKimiCodeCredentialValidToken(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "kimi-code.json")
 	body := `{"access_token":"kimi-code-token","refresh_token":"ignored","expires_at":4102444800,"token_type":"Bearer"}`

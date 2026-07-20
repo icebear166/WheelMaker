@@ -17,7 +17,7 @@ Limits 监控统一展示 Codex、Kimi、ZAI 和 DeepSeek 的当前额度或余�
 
 Limits 使用 HubState 的 `tokenStats` section。客户端通过 `hub.state.get` 读取缓存、通过 `hub.state.refresh` 手动刷新，并通过通用 `hub.state.updated` 接收完整快照替换。Registry 只验证 Hub 身份和 scope、转发通用 HubState，不包含 Provider 业务或密钥注入逻辑。
 
-快照以 `generation` 原子替换，显式表达 `idle | scanning | ready | error` 扫描状态、Provider 的 `ok | unavailable | error` 状态、账号身份、额度窗口、完整 UTC reset timestamp 和可选余额。拿不到稳定账号身份时，不跨 Hub 合并账号。
+快照以 `generation` 原子替换，显式表达 `idle | scanning | ready | error` 扫描状态、Provider 的 `ok | unavailable | error` 状态、账号身份、额度窗口、完整 UTC reset timestamp 和可选余额。拿不到稳定账号身份时，不跨 Hub 合并账号。Kimi 以 usages 响应的 `user.userId` 作为稳定身份（`Identity{kind:"user"}`）：同一 userId 的多个凭证源（OpenCode、Kimi Code）在 Hub 扫描时合并为单个账户，全部源失败时才按源分别报错。
 
 ## 桌面端展示
 
