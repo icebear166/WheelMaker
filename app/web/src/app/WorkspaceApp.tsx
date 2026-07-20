@@ -236,7 +236,6 @@ import {
   resolveChatScrollToBottomVisibility,
   shouldAutoScrollChatToBottom,
 } from '../chat/layout/chatScrollIntent';
-import { resolveChatScrollBottomButtonOffset } from '../chat/layout/chatScrollBottomButton';
 import { buildPromptTurnStatusIndex, type ChatPromptStatus } from '../chat/turns/chatPromptStatus';
 import {
   buildPromptCompletionNotification,
@@ -2746,7 +2745,6 @@ export function App() {
   const [floatingControlStackHeight, setFloatingControlStackHeight] = useState(184);
   const chatComposerRef = useRef<HTMLDivElement | null>(null);
   const [chatComposerTop, setChatComposerTop] = useState<number | null>(null);
-  const [chatComposerHeight, setChatComposerHeight] = useState(0);
   const [floatingDefaultComposerTop, setFloatingDefaultComposerTop] = useState<number | null>(null);
   const floatingCooldownTimerRef = useRef<number | null>(null);
   const floatingClickCooldownUntilRef = useRef(0);
@@ -4150,13 +4148,9 @@ export function App() {
 
   const chatMainStyle = useMemo(
     () => ({
-      '--chat-scroll-bottom-offset': `${resolveChatScrollBottomButtonOffset({
-        composerHeight: chatComposerHeight,
-        keyboardInset: chatKeyboardInset,
-      })}px`,
       ...(chatKeyboardInset > 0 ? { paddingBottom: `${chatKeyboardInset}px` } : {}),
     }) as React.CSSProperties,
-    [chatComposerHeight, chatKeyboardInset],
+    [chatKeyboardInset],
   );
   useEffect(() => {
     if (!toastMessage) return undefined;
@@ -5614,9 +5608,7 @@ export function App() {
 
   const measureChatComposerTop = useCallback(() => {
     const rect = chatComposerRef.current?.getBoundingClientRect();
-    const nextHeight = rect ? Math.round(rect.height) : 0;
     setChatComposerTop(rect ? Math.round(rect.top) : null);
-    setChatComposerHeight(current => (current === nextHeight ? current : nextHeight));
   }, []);
   const shouldMeasureChatComposerLayout = tab === 'chat' && !isWide;
 
@@ -5630,7 +5622,6 @@ export function App() {
   useEffect(() => {
     if (!shouldMeasureChatComposerLayout) {
       setChatComposerTop(null);
-      setChatComposerHeight(0);
       return;
     }
     const measure = () => measureChatComposerTop();
@@ -19447,19 +19438,6 @@ export function App() {
                 />
               ) : null}
             </div>
-            {!archivedMode && chatShowScrollToBottom ? (
-            <button
-              type="button"
-              className="chat-scroll-bottom-button"
-              onClick={forceChatScrollToBottom}
-              title="Scroll to bottom"
-              aria-label="Scroll to bottom"
-            >
-              <span className="chat-scroll-bottom-glyph" aria-hidden="true">
-                <span className="codicon codicon-arrow-down" />
-              </span>
-            </button>
-          ) : null}
           {isWide && tab === 'chat' ? (
             <div className={`chat-edge-surface-stack${!chatSidebarCollapsed ? ' beside-pinned-session-panel' : ''}${sessionNavSlideOut.open ? ' covered-by-session-panel' : ''}`}>
               {showFloatingSessionPanel ? (
@@ -19555,6 +19533,19 @@ export function App() {
             hidden={archivedMode}
           >
             <div className="chat-composer-content">
+            {!archivedMode && chatShowScrollToBottom ? (
+              <button
+                type="button"
+                className="chat-scroll-bottom-button"
+                onClick={forceChatScrollToBottom}
+                title="Scroll to bottom"
+                aria-label="Scroll to bottom"
+              >
+                <span className="chat-scroll-bottom-glyph" aria-hidden="true">
+                  <span className="codicon codicon-arrow-down" />
+                </span>
+              </button>
+            ) : null}
             <input
               ref={chatFileInputRef}
               type="file"
