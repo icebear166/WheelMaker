@@ -2730,6 +2730,11 @@
   transform: rotate(90deg);
 }
 
+.chat-tool-group-summary-icon {
+  color: inherit;
+  opacity: 0.82;
+}
+
 .chat-tool-group-count {
   flex: 0 0 auto;
   font-size: 12px;

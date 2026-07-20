@@ -76,10 +76,7 @@ export const ChatToolCallGroup = React.memo(function ChatToolCallGroup({
         title={open ? undefined : latest.title}
       >
         <span className="codicon codicon-chevron-right chat-tool-group-chevron" aria-hidden="true" />
-        <span
-          className={`codicon ${toolStatusIcon(latest.status)} chat-tool-group-status ${toolStatusClass(latest.status)}`}
-          aria-hidden="true"
-        />
+        <span className="codicon codicon-tools chat-tool-group-summary-icon" aria-hidden="true" />
         <span className="chat-tool-group-count">{countLabel}</span>
         {!open ? (
           <>

@@ -133,6 +133,12 @@ describe('chat turn groups', () => {
     ]);
     expect(view.root.findAllByProps({className: 'codicon codicon-chevron-right chat-tool-group-chevron'}))
       .toHaveLength(1);
+    expect(view.root.findAllByProps({className: 'codicon codicon-tools chat-tool-group-summary-icon'}))
+      .toHaveLength(1);
+    expect(view.root.findAll(node => (
+      typeof node.props.className === 'string' &&
+      node.props.className.includes('chat-tool-group-status')
+    ))).toHaveLength(0);
     expect(view.root.findAllByProps({className: 'chat-tool-group-list'})).toHaveLength(0);
 
     await ReactTestRenderer.act(() => {
@@ -147,6 +153,10 @@ describe('chat turn groups', () => {
     });
 
     expect(view.root.findAllByProps({className: 'chat-tool-group-row'})).toHaveLength(3);
+    expect(view.root.findAll(node => (
+      typeof node.props.className === 'string' &&
+      node.props.className.includes('chat-tool-group-status')
+    ))).toHaveLength(3);
     expect(view.root.findByProps({className: 'chat-tool-group-count'}).children).toEqual([
       'Call 3 tools',
     ]);
@@ -183,6 +193,7 @@ describe('chat turn groups', () => {
     const header = styles.match(/\.chat-tool-group-header \{([\s\S]*?)\}/)?.[1] ?? '';
     const block = styles.match(/\.chat-tool-group \{([\s\S]*?)\}/)?.[1] ?? '';
     const chevron = styles.match(/\.chat-tool-group-chevron \{([\s\S]*?)\}/)?.[1] ?? '';
+    const summaryIcon = styles.match(/\.chat-tool-group-summary-icon \{([\s\S]*?)\}/)?.[1] ?? '';
 
     expect(header).toContain('height: 28px;');
     expect(block).toContain('margin: 0;');
@@ -191,6 +202,7 @@ describe('chat turn groups', () => {
     expect(styles).toContain('.chat-tool-group-latest');
     expect(styles).toContain('text-overflow: ellipsis;');
     expect(chevron).toContain('color: var(--text-tertiary);');
+    expect(summaryIcon).toContain('color: inherit;');
     expect(styles).toContain('.chat-tool-group-open .chat-tool-group-chevron');
   });
 });
