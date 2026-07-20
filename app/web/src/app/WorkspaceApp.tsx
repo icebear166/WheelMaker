@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
+import {createPortal} from 'react-dom';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import {resolveWindowsWorkspaceShortcut} from './workspaceShortcuts';
 
@@ -885,6 +886,16 @@ function estimateSessionReadPayloadBytes(result: RegistrySessionReadResponse): n
 const fileMemoryCacheKey = (activeProjectId: string, path: string) => `${activeProjectId}\n${path}`;
 const PROJECT_PIN_LONG_PRESS_MS = 450;
 const PROJECT_SESSION_LONG_PRESS_MS = 450;
+const SIDEBAR_TRANSIENT_MENU_SELECTOR = [
+  '.wide-project-action-popover',
+  '.project-session-action-menu',
+  '.mobile-project-sheet',
+  '.session-archive-menu',
+  '.chat-hub-popover',
+  '.chat-title-project-menu',
+  '.chat-title-prompt-menu',
+  '.chat-quick-switch-menu',
+].join(', ');
 const DESKTOP_SIDEBAR_VIEWPORT_MAX_RATIO = 0.45;
 const CHAT_FIXED_VIEW_WIDTH = 800;
 const CHAT_SESSION_PANEL_WIDTH = 360;
@@ -3403,6 +3414,7 @@ export function App() {
   const [chatHubMenuOpen, setChatHubMenuOpen] = useState(false);
   const [chatHubColorMenuHubId, setChatHubColorMenuHubId] = useState('');
   const chatHubMenuRef = useRef<HTMLDivElement | null>(null);
+  const chatHubPopoverRef = useRef<HTMLDivElement | null>(null);
   const [chatTitleProjectMenuOpen, setChatTitleProjectMenuOpen] = useState(false);
   const chatTitleProjectButtonRef = useRef<HTMLButtonElement | null>(null);
   const chatTitleProjectMenuRef = useRef<HTMLDivElement | null>(null);
@@ -3568,6 +3580,23 @@ export function App() {
       width: menuWidth,
     };
   }, [chatTitlePromptMenuAvailable, chatTitlePromptMenuOpen, isWide]);
+  const chatHubPopoverStyle = useMemo<React.CSSProperties | undefined>(() => {
+    if (!chatHubMenuOpen || typeof window === 'undefined') {
+      return undefined;
+    }
+    const anchor = chatHubMenuRef.current?.getBoundingClientRect();
+    if (!anchor) {
+      return undefined;
+    }
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+    const menuWidth = Math.min(340, Math.max(0, viewportWidth - 24));
+    const left = Math.max(12, Math.min(anchor.right - menuWidth, viewportWidth - menuWidth - 12));
+    return {
+      left,
+      top: Math.max(12, anchor.bottom + 6),
+      width: menuWidth,
+    };
+  }, [chatHubMenuOpen, isWide]);
 
   const selectedPendingPrompt = selectedChatEncodedKey
     ? chatPendingPromptsByKey[selectedChatEncodedKey]
@@ -5204,10 +5233,17 @@ export function App() {
     setChatTitlePromptMenuOpen(false);
     setChatQuickSwitchMenuOpen(false);
   }, []);
-  useEffect(() => {
-    window.addEventListener('scroll', closeSidebarTransientMenus, true);
-    return () => window.removeEventListener('scroll', closeSidebarTransientMenus, true);
+  const closeSidebarTransientMenusOnScroll = useCallback((event: Event) => {
+    const target = event.target;
+    if (target instanceof Element && target.closest(SIDEBAR_TRANSIENT_MENU_SELECTOR)) {
+      return;
+    }
+    closeSidebarTransientMenus();
   }, [closeSidebarTransientMenus]);
+  useEffect(() => {
+    window.addEventListener('scroll', closeSidebarTransientMenusOnScroll, true);
+    return () => window.removeEventListener('scroll', closeSidebarTransientMenusOnScroll, true);
+  }, [closeSidebarTransientMenusOnScroll]);
   useEffect(() => {
     const closeSidebarMenusOnOtherButton = (event: PointerEvent) => {
       const target = event.target as Element | null;
@@ -6034,8 +6070,11 @@ export function App() {
   useEffect(() => {
     if (!chatHubMenuOpen) return;
     const onPointerDown = (event: PointerEvent) => {
-      if (!chatHubMenuRef.current) return;
-      if (!chatHubMenuRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        !chatHubMenuRef.current?.contains(target) &&
+        !chatHubPopoverRef.current?.contains(target)
+      ) {
         setChatHubMenuOpen(false);
         setChatHubColorMenuHubId('');
 
@@ -6412,8 +6451,14 @@ export function App() {
           </span>
           <span className="codicon codicon-chevron-down" aria-hidden="true" />
         </button>
-        {chatHubMenuOpen ? (
-          <div className={`chat-hub-popover${chatHubColorMenuHubId ? ' no-overflow' : ''}`} role="dialog" aria-label="Hub and project display preferences">
+        {chatHubMenuOpen && typeof document !== 'undefined' ? createPortal(
+          <div
+            ref={chatHubPopoverRef}
+            className={`chat-hub-popover${chatHubColorMenuHubId ? ' no-overflow' : ''}`}
+            role="dialog"
+            aria-label="Hub and project display preferences"
+            style={chatHubPopoverStyle}
+          >
             {registryHubs.length > 0 ? (
               registryHubs.map(hub => {
                 const treeItem = chatHubTreeItems.find(item => item.hubId === hub.hubId) ?? {hubId: hub.hubId, projects: []};
@@ -6555,7 +6600,8 @@ export function App() {
             ) : (
               <div className="chat-hub-empty">No hubs</div>
             )}
-          </div>
+          </div>,
+          document.body,
         ) : null}
       </div>
     );
@@ -6564,6 +6610,7 @@ export function App() {
     applyHubColorSvPointer,
     chatHubColorMenuHubId,
     chatHubMenuOpen,
+    chatHubPopoverStyle,
     chatHubTreeItems,
     effectiveExpandedHubIds,
     hiddenProjectIdSet,
@@ -15110,7 +15157,6 @@ export function App() {
             <span className="codicon codicon-ellipsis" aria-hidden="true" />
           </button>
         ) : null}
-        {renderProjectSessionActionMenu(targetProjectId, session)}
       </div>
     );
   };
@@ -15182,7 +15228,6 @@ export function App() {
             <span className="codicon codicon-ellipsis" aria-hidden="true" />
           </button>
         ) : null}
-        {renderProjectSessionActionMenu(targetProjectId, liveSession)}
       </div>
     );
   };
@@ -16076,113 +16121,116 @@ export function App() {
     }
   };
 
-  const renderProjectSessionActionMenu = (targetProjectId: string, session: RegistrySessionSummary) => {
+  const renderProjectSessionActionMenu = () => {
+    if (!projectSessionActionMenu) {
+      return null;
+    }
+    const targetProjectId = projectSessionActionMenu.projectId;
+    const session = knownChatSessionsForProject(targetProjectId)
+      .find(item => item.sessionId === projectSessionActionMenu.sessionId);
+    if (!session) {
+      return null;
+    }
     const sessionId = session.sessionId;
     const sessionActionDisabled = !!session.running ||
       chatReloadingSessionId === sessionId ||
       chatArchivingSessionId === sessionId ||
       chatDeletingSessionId === sessionId;
     const renameActionDisabled = chatRenamingSessionId === sessionId;
-    const actionsOpen = projectSessionActionMenu?.projectId === targetProjectId &&
-      projectSessionActionMenu.sessionId === sessionId;
     return (
-      <>
-        {actionsOpen ? (
-          <div
-            className="project-session-action-menu"
-            role="menu"
-            style={projectSessionActionMenu.popover
-              ? {
-                  top: `${projectSessionActionMenu.popover.top}px`,
-                  left: `${projectSessionActionMenu.popover.left}px`,
-                  width: `${projectSessionActionMenu.popover.width}px`,
-                  maxHeight: `${projectSessionActionMenu.popover.maxHeight}px`,
-                  transform: projectSessionActionMenu.popover.placement === 'above'
-                    ? 'translateY(-100%)'
-                    : undefined,
-                }
-              : undefined}
-          >
-            <button
-              type="button"
-              className="project-session-menu-btn rename"
-              role="menuitem"
-              disabled={renameActionDisabled}
-              onClick={event => {
-                event.stopPropagation();
-                requestRenameProjectSession(targetProjectId, session);
-              }}
-            >
-              <span
-                className={`codicon ${
-                  chatRenamingSessionId === sessionId
-                    ? 'codicon-loading codicon-modifier-spin'
-                    : 'codicon-edit'
-                }`}
-              />
-              <span className="project-session-menu-label">Rename</span>
-            </button>
-            <button
-              type="button"
-              className="project-session-menu-btn archive"
-              role="menuitem"
-              disabled={sessionActionDisabled}
-              onClick={event => {
-                event.stopPropagation();
-                requestArchiveProjectSession(targetProjectId, session);
-              }}
-            >
-              <span
-                className={`codicon ${
-                  chatArchivingSessionId === sessionId
-                    ? 'codicon-loading codicon-modifier-spin'
-                    : 'codicon-archive'
-                }`}
-              />
-              <span className="project-session-menu-label">Archive</span>
-            </button>
-            <div className="project-session-menu-separator" aria-hidden="true" />
-            <button
-              type="button"
-              className="project-session-menu-btn reload"
-              role="menuitem"
-              disabled={sessionActionDisabled}
-              onClick={event => {
-                event.stopPropagation();
-                handleReloadProjectSession(targetProjectId, sessionId).catch(() => undefined);
-              }}
-            >
-              <span
-                className={`codicon ${
-                  chatReloadingSessionId === sessionId
-                    ? 'codicon-loading codicon-modifier-spin'
-                    : 'codicon-refresh'
-                }`}
-              />
-              <span className="project-session-menu-label">Reload</span>
-            </button>
-            <button
-              type="button"
-              className="project-session-menu-btn delete"
-              role="menuitem"
-              disabled={sessionActionDisabled}
-              onClick={event => {
-                event.stopPropagation();
-                requestDeleteProjectSession(targetProjectId, session);
-              }}
-            >
-              <span
-                className={`codicon ${
-                  chatDeletingSessionId === sessionId
-                    ? 'codicon-loading codicon-modifier-spin'
-                    : 'codicon-trash'
-                }`}
-              />
-              <span className="project-session-menu-label">Delete</span>
-            </button>
-          </div>
-        ) : null}
-      </>
+      <div
+        className="project-session-action-menu"
+        role="menu"
+        style={projectSessionActionMenu.popover
+          ? {
+              top: `${projectSessionActionMenu.popover.top}px`,
+              left: `${projectSessionActionMenu.popover.left}px`,
+              width: `${projectSessionActionMenu.popover.width}px`,
+              maxHeight: `${projectSessionActionMenu.popover.maxHeight}px`,
+              transform: projectSessionActionMenu.popover.placement === 'above'
+                ? 'translateY(-100%)'
+                : undefined,
+            }
+          : undefined}
+      >
+        <button
+          type="button"
+          className="project-session-menu-btn rename"
+          role="menuitem"
+          disabled={renameActionDisabled}
+          onClick={event => {
+            event.stopPropagation();
+            requestRenameProjectSession(targetProjectId, session);
+          }}
+        >
+          <span
+            className={`codicon ${
+              chatRenamingSessionId === sessionId
+                ? 'codicon-loading codicon-modifier-spin'
+                : 'codicon-edit'
+            }`}
+          />
+          <span className="project-session-menu-label">Rename</span>
+        </button>
+        <button
+          type="button"
+          className="project-session-menu-btn archive"
+          role="menuitem"
+          disabled={sessionActionDisabled}
+          onClick={event => {
+            event.stopPropagation();
+            requestArchiveProjectSession(targetProjectId, session);
+          }}
+        >
+          <span
+            className={`codicon ${
+              chatArchivingSessionId === sessionId
+                ? 'codicon-loading codicon-modifier-spin'
+                : 'codicon-archive'
+            }`}
+          />
+          <span className="project-session-menu-label">Archive</span>
+        </button>
+        <div className="project-session-menu-separator" aria-hidden="true" />
+        <button
+          type="button"
+          className="project-session-menu-btn reload"
+          role="menuitem"
+          disabled={sessionActionDisabled}
+          onClick={event => {
+            event.stopPropagation();
+            handleReloadProjectSession(targetProjectId, sessionId).catch(() => undefined);
+          }}
+        >
+          <span
+            className={`codicon ${
+              chatReloadingSessionId === sessionId
+                ? 'codicon-loading codicon-modifier-spin'
+                : 'codicon-refresh'
+            }`}
+          />
+          <span className="project-session-menu-label">Reload</span>
+        </button>
+        <button
+          type="button"
+          className="project-session-menu-btn delete"
+          role="menuitem"
+          disabled={sessionActionDisabled}
+          onClick={event => {
+            event.stopPropagation();
+            requestDeleteProjectSession(targetProjectId, session);
+          }}
+        >
+          <span
+            className={`codicon ${
+              chatDeletingSessionId === sessionId
+                ? 'codicon-loading codicon-modifier-spin'
+                : 'codicon-trash'
+            }`}
+          />
+          <span className="project-session-menu-label">Delete</span>
+        </button>
+      </div>
     );
   };
 
@@ -20612,6 +20660,7 @@ export function App() {
       onSelectSession={handleMobileChatQuickSwitchSelect}
     />
   ) : null;
+  const projectSessionActionMenuOverlay = renderProjectSessionActionMenu();
   const chatTitleProjectMenu = chatTitleProjectMenuOpen ? (
     <div
       ref={chatTitleProjectMenuRef}
@@ -21998,6 +22047,7 @@ export function App() {
       {quickFileSearchOverlay}
       {previewSelectionContextMenu}
       {chatQuickSwitchMenuPlacement.kind === 'desktop' ? chatQuickSwitchMenu : null}
+      {projectSessionActionMenuOverlay}
       {chatTitleProjectMenu}
       {chatTitlePromptMenu}
       {portRelayClearSiteDataFrame}

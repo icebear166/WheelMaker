@@ -501,12 +501,13 @@ describe('web responsive ui state', () => {
     expect(mainTsx).toContain('applyHubColorHuePointer(hub.hubId, currentHubHsv, event)');
     expect(mainTsx).not.toContain('type="color"');
     expect(mainTsx).not.toContain('className={`chat-hub-color-mode chat-hub-color-custom');
-    expect(mainTsx).toContain('if (!chatHubMenuRef.current.contains(event.target as Node)) {');
+    expect(mainTsx).toContain('!chatHubMenuRef.current?.contains(target) &&');
+    expect(mainTsx).toContain('!chatHubPopoverRef.current?.contains(target)');
     expect(mainTsx).toContain("setChatHubColorMenuHubId('');");
 
     const popoverBlock = Array.from(stylesCss.matchAll(/\.chat-hub-popover \{[\s\S]*?\n\}/g))
       .map(match => match[0])
-      .find(block => block.includes('position: absolute;')) ?? '';
+      .find(block => block.includes('position: fixed;')) ?? '';
     expect(popoverBlock).toContain('width: min(340px, calc(100vw - 24px));');
     expect(popoverBlock).toContain('min-width: 0;');
     expect(popoverBlock).toContain('--chat-hub-popover-viewport-offset: 96px;');

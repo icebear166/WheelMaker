@@ -69,10 +69,18 @@ describe('web chat recent sessions', () => {
     expect(chatCss).not.toContain('.recent-project-session-group .recent-session-row.selected::before');
   });
 
-  test('recent session rows share the plain selection surface without a left bar', () => {
+  test('insets the selected session surface without moving row content', () => {
     expect(chatCss).toContain('.wide-session-row.selected');
-    expect(chatCss).not.toContain('.wide-session-row.selected::before');
-    expect(chatCss).not.toContain('content: none;');
+    const selectedSessionRule = chatCss.match(/\.wide-session-row\.selected \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const selectedSessionSurfaceRule = chatCss.match(/\.wide-session-row\.selected::before \{[\s\S]*?\n\}/)?.[0] ?? '';
+
+    expect(selectedSessionRule).toContain('border-color: transparent;');
+    expect(selectedSessionRule).toContain('background: transparent;');
+    expect(selectedSessionRule).not.toContain('margin-left:');
+    expect(selectedSessionSurfaceRule).toContain('inset: 0 0 0 3px;');
+    expect(selectedSessionSurfaceRule).toContain('border: 1px solid');
+    expect(selectedSessionSurfaceRule).toContain('pointer-events: none;');
+    expect(chatCss).not.toContain('.wide-session-row.selected > .wide-session-title');
   });
 
   test('shares row density tokens with the pinned surface', () => {
@@ -142,10 +150,12 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('onContextMenu={event => openProjectSessionContextMenu(targetProjectId, session.sessionId, event)}');
   });
 
-  test('closes transient sidebar menus only after actual scroll events and when opening another sidebar action', () => {
+  test('keeps transient menus open while their own scroll containers move', () => {
     expect(mainTsx).toContain('const closeSidebarTransientMenus = useCallback(() => {');
-    expect(mainTsx).toContain("window.addEventListener('scroll', closeSidebarTransientMenus, true);");
-    expect(mainTsx).toContain("window.removeEventListener('scroll', closeSidebarTransientMenus, true);");
+    expect(mainTsx).toContain('const closeSidebarTransientMenusOnScroll = useCallback((event: Event) => {');
+    expect(mainTsx).toContain("target.closest(SIDEBAR_TRANSIENT_MENU_SELECTOR)");
+    expect(mainTsx).toContain("window.addEventListener('scroll', closeSidebarTransientMenusOnScroll, true);");
+    expect(mainTsx).toContain("window.removeEventListener('scroll', closeSidebarTransientMenusOnScroll, true);");
     expect(mainTsx).toContain("window.addEventListener('pointerdown', closeSidebarMenusOnOtherButton, true);");
     expect(mainTsx).toContain("window.removeEventListener('pointerdown', closeSidebarMenusOnOtherButton, true);");
     expect(mainTsx).toContain("target?.closest('button, [role=\"button\"]')");
@@ -153,6 +163,16 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('setProjectSessionActionMenu(null);');
     expect(mainTsx).toContain('setWideProjectActionMenu(null);');
     expect(mainTsx).toContain('setMobileProjectActionMenu(null);');
+  });
+
+  test('renders clipped hub and session action menus in the root overlay layer', () => {
+    expect(mainTsx).toContain("import {createPortal} from 'react-dom';");
+    expect(mainTsx).toContain("chatHubMenuOpen && typeof document !== 'undefined' ? createPortal(");
+    expect(mainTsx).toContain('document.body,');
+    expect(mainTsx).toContain('const projectSessionActionMenuOverlay = renderProjectSessionActionMenu();');
+    expect(mainTsx).toContain('{projectSessionActionMenuOverlay}');
+    expect(mainTsx).not.toContain('{renderProjectSessionActionMenu(targetProjectId, session)}');
+    expect(mainTsx).not.toContain('{renderProjectSessionActionMenu(targetProjectId, liveSession)}');
   });
 
   test('reserves the edge surfaces before centering the fixed 800px chat content with a continuous margin', () => {

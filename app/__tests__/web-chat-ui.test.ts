@@ -832,7 +832,8 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('if (!chatHubMenuOpen) return;');
     expect(mainTsx).toContain("if (event.key === 'Escape') {");
     expect(mainTsx).toContain("if (tab !== 'chat' || sidebarSettingsOpen) {");
-    expect(mainTsx).toContain('if (!chatHubMenuRef.current.contains(event.target as Node)) {');
+    expect(mainTsx).toContain('!chatHubMenuRef.current?.contains(target) &&');
+    expect(mainTsx).toContain('!chatHubPopoverRef.current?.contains(target)');
     expect(mainTsx).toContain("!targetElement.closest('.chat-hub-color-palette')");
     expect(mainTsx).toContain("!targetElement.closest('.chat-hub-color-square')");
     expect(mainTsx).toContain("aria-label={`Show connected hubs, ${chatHubSummaryLabel}, ${chatHubProjectLabel}`}");
@@ -1682,7 +1683,7 @@ describe('web chat integration', () => {
     expect(mobileSheet).not.toContain("openSettingsDetail('update')");
     expect(mobileSheet).not.toContain('className="project-wrap"');
     expect(mobileSheet).toContain('renderProjectSessionRowsWithOlderFolding(targetProjectId, projectSessions, true)');
-    expect(mainTsx).toContain('renderProjectSessionActionMenu(targetProjectId, session)');
+    expect(mainTsx).toContain('const projectSessionActionMenuOverlay = renderProjectSessionActionMenu();');
     expect(mainTsx).toContain('onPointerDown={event => startProjectSessionLongPress(targetProjectId, session.sessionId, event)}');
     expect(mobileSheet).not.toContain('chat-session-swipe-row');
     expect(mobileSheet).toContain("tagVariantClass('wide-project-hub', projectItem.hubId || 'local')");
@@ -1769,7 +1770,7 @@ describe('web chat integration', () => {
     expect(stylesCss).not.toContain('.session-state-unread');
     expect(stylesCss).not.toContain('.session-state-trailing');
     expect(stylesCss).not.toContain('.session-older-spacer');
-    expect(stylesCss).not.toContain('.wide-session-row.selected::before');
+    expect(stylesCss).toContain('.wide-session-row.selected::before');
   });
 
   test('project headers expose an explicit pin action alongside new/resume', () => {
@@ -1858,7 +1859,7 @@ describe('web chat integration', () => {
     const confirmDialog = appDialogsTsx.slice(confirmDialogStart, confirmDialogEnd);
     expect(confirmDialog).not.toContain('{archiveTarget ? (');
     expect(confirmDialog).not.toContain('projectId: archiveTarget.projectId');
-    expect(mainTsx).toContain('const renderProjectSessionActionMenu = (targetProjectId: string, session: RegistrySessionSummary) => {');
+    expect(mainTsx).toContain('const renderProjectSessionActionMenu = () => {');
     expect(mainTsx).not.toContain('className="project-session-more-btn"');
     expect(mainTsx).not.toContain('const openProjectSessionActionMenu = (');
     expect(mainTsx).toContain('className="project-session-action-menu"');
@@ -1894,7 +1895,7 @@ describe('web chat integration', () => {
     expect(reloadMenuIndex).toBeGreaterThan(archiveMenuIndex);
     expect(deleteMenuIndex).toBeGreaterThan(reloadMenuIndex);
     expect(mainTsx).toContain("if (target?.closest('.project-session-action-menu')) {");
-    expect(mainTsx).toContain('renderProjectSessionActionMenu(targetProjectId, session)');
+    expect(mainTsx).toContain('const projectSessionActionMenuOverlay = renderProjectSessionActionMenu();');
     expect(mainTsx).toContain('onPointerDown={event => startProjectSessionLongPress(targetProjectId, session.sessionId, event)}');
     expect(mainTsx).toContain('onContextMenu={event => openProjectSessionContextMenu(targetProjectId, session.sessionId, event)}');
     expect(mainTsx).toContain("tab === 'chat' && !isWide ? renderMobileChatSessionSheet() : renderSidebarMain()");
@@ -2083,7 +2084,7 @@ describe('web chat integration', () => {
     expect(selectedSessionRowBlock).not.toContain('margin-left:');
     expect(selectedSessionRowBlock).not.toContain('width: calc(');
     expect(selectedSessionRowBlock).not.toContain('padding-left: 23px;');
-    expect(stylesCss).not.toContain('.wide-session-row.selected::before');
+    expect(stylesCss).toContain('.wide-session-row.selected::before');
     const wideProjectActionBtnBlock = stylesCss.match(/\.wide-project-action-btn \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(wideProjectActionBtnBlock).toContain('opacity: 0.45;');
     expect(stylesCss).not.toContain('.mobile-project-actions .wide-project-action-btn {');
@@ -2492,9 +2493,8 @@ describe('web chat integration', () => {
     const stylesCss = readWebStyles(projectRoot);
 
     expect(stylesCss).toMatch(
-      /\.wide-session-row\.selected \{[\s\S]*border-color: color-mix\(in srgb, var\(--accent-primary\) 32%, var\(--border-subtle\)\);[\s\S]*background: color-mix\(in srgb, var\(--accent-primary\) 11%, var\(--surface-panel\)\);[\s\S]*\}/,
+      /\.wide-session-row\.selected::before \{[\s\S]*inset: 0 0 0 3px;[\s\S]*border: 1px solid color-mix\(in srgb, var\(--accent-primary\) 32%, var\(--border-subtle\)\);[\s\S]*background: color-mix\(in srgb, var\(--accent-primary\) 11%, var\(--surface-panel\)\);[\s\S]*\}/,
     );
-    expect(stylesCss).not.toContain('.wide-session-row.selected::before');
     expect(stylesCss).toMatch(
       /\.chat-composer:focus-within \.chat-composer-frame \{[\s\S]*border-color: color-mix\(in srgb, var\(--accent-primary\) 36%, var\(--border-subtle\)\);[\s\S]*0 0 0 1px color-mix\(in srgb, var\(--accent-primary\) 6%, transparent\);[\s\S]*\}/,
     );
