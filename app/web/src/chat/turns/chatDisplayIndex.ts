@@ -502,6 +502,23 @@ export function chatDisplayItemContainsTurn(
     targetTurnIndex <= item.endTurnIndex;
 }
 
+export function resolveActiveToolGroupKey(
+  displayIndex: ChatDisplayIndex,
+  promptRunning: boolean,
+): string {
+  if (!promptRunning) {
+    return '';
+  }
+  for (let index = displayIndex.items.length - 1; index >= 0; index -= 1) {
+    const item = displayIndex.items[index];
+    if (item.kind === 'pending' || item.kind === 'queued') {
+      continue;
+    }
+    return item.kind === 'tool-group' ? item.key : '';
+  }
+  return '';
+}
+
 export function resolveChatDisplayScrollIndex(displayIndex: ChatDisplayIndex, turnIndex: number): number | null {
   const targetTurnIndex = Number.isFinite(turnIndex) ? Math.max(0, Math.trunc(turnIndex)) : 0;
   if (targetTurnIndex <= 0 || displayIndex.items.length === 0) {

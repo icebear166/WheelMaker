@@ -147,6 +147,7 @@ import {createChatReadRepairQueue} from '../chat/turns/chatReadRepair';
 import {
   buildChatDisplayIndex,
   chatDisplayItemContainsTurn,
+  resolveActiveToolGroupKey,
   type ChatDisplayIndexItem,
 } from '../chat/turns/chatDisplayIndex';
 import {
@@ -18521,6 +18522,10 @@ export function App() {
       (selectedChatSession?.running === true && !selectedChatCompactionRunning) ||
       selectedChatHasOpenPromptTurn
     );
+  const selectedActiveToolGroupKey = useMemo(
+    () => resolveActiveToolGroupKey(chatDisplayIndex, selectedChatPromptRunning),
+    [chatDisplayIndex, selectedChatPromptRunning],
+  );
   const selectedChatExecutionRunning = selectedChatPromptRunning || selectedChatCompactionRunning;
   const chatSendDisabled = selectedChatSubmitPending || chatAttachmentUploadPending;
   const selectedChatPromptCancelling =
@@ -18738,6 +18743,10 @@ export function App() {
     const toolGroupSearchHighlighted =
       sessionSearchTargetTurn?.runtimeKey === selectedChatEncodedKey &&
       chatDisplayItemContainsTurn(displayItem, sessionSearchTargetTurn.turnIndex);
+    const toolGroupActive =
+      !chatReadOnlyPreview &&
+      displayItem.kind === 'tool-group' &&
+      displayItem.key === selectedActiveToolGroupKey;
     const content = displayItem.kind === 'tool-group' && sourceToolMessages.length > 0 ? (
       <div
         className={[
@@ -18745,7 +18754,7 @@ export function App() {
           toolGroupSearchHighlighted ? 'chat-turn-search-highlight' : '',
         ].filter(Boolean).join(' ')}
       >
-        <ChatToolCallGroup messages={sourceToolMessages} />
+        <ChatToolCallGroup messages={sourceToolMessages} active={toolGroupActive} />
       </div>
     ) : displayItem.kind === 'queued' && queuedPrompt && !chatReadOnlyPreview ? (
       <div className="chat-view-content">
@@ -18798,6 +18807,7 @@ export function App() {
     resolvePromptAttachmentThumbnail,
     retryPendingChatPrompt,
     selectedChatEncodedKey,
+    selectedActiveToolGroupKey,
     selectedPendingPrompt,
     selectedQueuedPrompts,
     sessionSearchTargetTurn,

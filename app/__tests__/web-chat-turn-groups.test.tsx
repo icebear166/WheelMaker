@@ -188,6 +188,31 @@ describe('chat turn groups', () => {
     ]);
   });
 
+  test('keeps a completed tail tool group active until the prompt moves on', async () => {
+    const messages = [
+      tool(2, 'Read CLAUDE.md', 'completed'),
+      tool(3, 'Search turns', 'completed'),
+    ];
+    let view!: ReactTestRenderer.ReactTestRenderer;
+    await ReactTestRenderer.act(() => {
+      view = ReactTestRenderer.create(
+        <ChatToolCallGroup messages={messages} active />,
+      );
+    });
+
+    expect(view.root.findByProps({className: 'chat-tool-group-count'}).children[0])
+      .toBe('Calling 2 tools');
+    expect(view.root.findAllByProps({className: 'chat-activity-dots'})).toHaveLength(1);
+
+    await ReactTestRenderer.act(() => {
+      view.update(<ChatToolCallGroup messages={messages} active={false} />);
+    });
+
+    expect(view.root.findByProps({className: 'chat-tool-group-count'}).children)
+      .toEqual(['Called 2 tools']);
+    expect(view.root.findAllByProps({className: 'chat-activity-dots'})).toHaveLength(0);
+  });
+
   test('routes grouped tool ranges through the shared live and archive virtual item renderer', () => {
     const workspace = fs.readFileSync(
       path.join(__dirname, '..', 'web', 'src', 'app', 'WorkspaceApp.tsx'),
@@ -197,7 +222,7 @@ describe('chat turn groups', () => {
     expect(workspace).toContain("import {ChatToolCallGroup} from '../chat/ChatToolCallGroup';");
     expect(workspace).toContain("displayItem.kind === 'tool-group'");
     expect(workspace).toContain('displayItem.sourceIndexes');
-    expect(workspace).toContain('<ChatToolCallGroup messages={sourceToolMessages} />');
+    expect(workspace).toContain('active={toolGroupActive}');
     expect(workspace).toContain(
       'chatDisplayItemContainsTurn(item, sessionSearchTargetTurn.turnIndex)',
     );

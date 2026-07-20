@@ -56,8 +56,10 @@ function toolCallRunning(status: string): boolean {
 
 export const ChatToolCallGroup = React.memo(function ChatToolCallGroup({
   messages,
+  active,
 }: {
   messages: RegistryChatMessage[];
+  active?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
   const calls = messages.map(toolCallView);
@@ -68,7 +70,7 @@ export const ChatToolCallGroup = React.memo(function ChatToolCallGroup({
     status: '',
   };
   const count = calls.length;
-  const running = calls.some(call => toolCallRunning(call.status));
+  const running = active ?? calls.some(call => toolCallRunning(call.status));
   const countLabel = `${running ? 'Calling' : 'Called'} ${count} ${count === 1 ? 'tool' : 'tools'}`;
 
   return (

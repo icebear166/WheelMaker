@@ -3,6 +3,7 @@ import path from 'path';
 import {
   buildChatDisplayIndex,
   chatDisplayItemContainsTurn,
+  resolveActiveToolGroupKey,
   resolveChatDisplayScrollIndex,
 } from '../web/src/chat/turns/chatDisplayIndex';
 import type {RegistryChatMessage} from '../web/src/registry/registryTypes';
@@ -149,6 +150,24 @@ describe('chat display index', () => {
     });
     expect(index.items[2]).toMatchObject({compact: true});
     expect(index.items[3]).toMatchObject({sourceIndexes: [5]});
+  });
+
+  test('activates only a tail tool group while its prompt is running', () => {
+    const tailToolIndex = buildChatDisplayIndex([
+      message(1, 'prompt_request', 'hello'),
+      toolMessage(2, 'Read a'),
+    ], {
+      queuedKeys: ['queued-1'],
+    });
+    const followedByThinking = buildChatDisplayIndex([
+      message(1, 'prompt_request', 'hello'),
+      toolMessage(2, 'Read a'),
+      message(3, 'agent_thought_chunk', 'checking result'),
+    ]);
+
+    expect(resolveActiveToolGroupKey(tailToolIndex, true)).toBe('sess-1:2:tool-group');
+    expect(resolveActiveToolGroupKey(tailToolIndex, false)).toBe('');
+    expect(resolveActiveToolGroupKey(followedByThinking, true)).toBe('');
   });
 
   test('keeps structured plan updates out of the ordinary chat turn list', () => {

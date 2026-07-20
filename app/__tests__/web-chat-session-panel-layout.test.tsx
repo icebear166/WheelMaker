@@ -141,10 +141,10 @@ describe('PC chat session-panel layout', () => {
     expect(floatingSource).not.toContain('recentSessionSections.map(section => renderRecentProjectSessionSection(section, false))');
   });
 
-  it('fuses the floating Sessions header and Recent content into one inset card', () => {
+  it('fuses the floating Sessions header and Recent content into one card aligned with the Hub edge', () => {
     const stackRule = cssRuleBlock(chatStyles, '.chat-edge-surface-stack');
     expect(stackRule).toContain('box-sizing: border-box;');
-    expect(stackRule).toContain('padding: 0 8px 8px;');
+    expect(stackRule).toContain('padding: 0 0 8px 8px;');
 
     expect(cssRuleBlock(chatStyles, '.chat-recent-sessions-surface.desktop.expanded')).toContain('border-radius: 8px;');
     const glassRule = cssRuleBlock(chatStyles, '.chat-recent-sessions-surface.desktop.expanded .chat-edge-surface-glass');
