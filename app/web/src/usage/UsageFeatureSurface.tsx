@@ -1,7 +1,7 @@
 import React from 'react';
 
 import {ChatFunctionSurface} from '../chat/ChatFunctionSurface';
-import {formatResetCountdown, formatResetUTC, formatUpdatedAgo, tightnessTone, type UsageLimit, type UsageProviderView, type UsageViewSnapshot} from './usageTypes';
+import {formatResetCountdown, formatResetUTC, formatUpdatedAgo, tightnessTone, type UsageLimit, type UsageProviderView, type UsageViewAccount, type UsageViewSnapshot} from './usageTypes';
 
 type Props = {
   snapshot: UsageViewSnapshot;
@@ -21,9 +21,9 @@ function shortLimitLabel(limit: UsageLimit): string {
   return limit.label;
 }
 
-function compactLimits(provider: UsageProviderView): UsageLimit[] {
+function compactLimits(account: UsageViewAccount): UsageLimit[] {
   const limits = new Map<string, UsageLimit>();
-  for (const limit of provider.accounts.flatMap(account => account.limits)) {
+  for (const limit of account.limits) {
     const existing = limits.get(limit.id);
     if (!existing || limit.remainingPercent < existing.remainingPercent) limits.set(limit.id, limit);
   }
@@ -36,8 +36,8 @@ function compactLimits(provider: UsageProviderView): UsageLimit[] {
     .slice(0, 2);
 }
 
-function balanceSummary(provider: UsageProviderView): string {
-  const items = provider.accounts.flatMap(account => account.balance?.items ?? []);
+function balanceSummary(account: UsageViewAccount): string {
+  const items = account.balance?.items ?? [];
   return items.map(item => `${item.currency} ${item.total}`).join(' · ');
 }
 
@@ -49,12 +49,17 @@ function QuotaRail({remainingPercent}: {remainingPercent: number}) {
   );
 }
 
-function ProviderRail({provider}: {provider: UsageProviderView}) {
-  const limits = compactLimits(provider);
-  const balance = balanceSummary(provider);
+function AccountRail({provider, account}: {provider: UsageProviderView; account: UsageViewAccount}) {
+  const limits = compactLimits(account);
+  const balance = balanceSummary(account);
+  const label = `${provider.name} / ${accountLabel(account)}`;
   return (
-    <div className="usage-provider-row" data-usage-provider={provider.id}>
-      <span className="usage-provider-name">{provider.name}</span>
+    <div
+      className="usage-provider-row"
+      data-usage-provider={provider.id}
+      data-usage-compact-account={`${provider.id}:${account.localId}`}
+    >
+      <span className="usage-provider-name" title={label}>{label}</span>
       {limits.length > 0 ? (
         <span className="usage-provider-metrics">
           {limits.map(limit => (
@@ -147,7 +152,11 @@ export function UsageFeatureSurface({snapshot, onRefresh, onRequestHide}: Props)
   const [collapsed, setCollapsed] = React.useState(false);
   const [detail, setDetail] = React.useState(false);
   const mode = detail ? 'detail' : 'compact';
-  const compactProviders = snapshot.providers.filter(provider => provider.accounts.some(account => account.status === 'ok'));
+  const compactAccounts = snapshot.providers.flatMap(provider =>
+    provider.accounts
+      .filter(account => account.status === 'ok')
+      .map(account => ({provider, account})),
+  );
   const actions = (
     <>
       <button
@@ -194,7 +203,15 @@ export function UsageFeatureSurface({snapshot, onRefresh, onRequestHide}: Props)
         ) : detail ? (
           <UsageDetailContent snapshot={snapshot} />
         ) : (
-          <div className="usage-provider-list">{compactProviders.map(provider => <ProviderRail key={provider.id} provider={provider} />)}</div>
+          <div className="usage-provider-list">
+            {compactAccounts.map(({provider, account}) => (
+              <AccountRail
+                key={`${provider.id}:${account.localId}:${account.hubIds.join(',')}`}
+                provider={provider}
+                account={account}
+              />
+            ))}
+          </div>
         )}
         <footer className="usage-feature-footer">
           <span>{snapshot.refreshing ? 'Refreshing…' : formatUpdatedAgo(snapshot.updatedAt) || 'Hub cache'}</span>

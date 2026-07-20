@@ -40,8 +40,8 @@
 
 .usage-feature-body { overflow: auto; max-height: calc(var(--usage-surface-max-height) - 36px); }
 .usage-provider-list { padding: 5px 8px 4px; }
-.usage-provider-row { display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: center; column-gap: 10px; min-height: 38px; padding: 3px 4px; }
-.usage-provider-name { font-size: 11px; font-weight: 650; }
+.usage-provider-row { display: grid; grid-template-columns: minmax(84px, 110px) minmax(0, 1fr); align-items: center; column-gap: 10px; min-height: 38px; padding: 3px 4px; }
+.usage-provider-name { overflow: hidden; font-size: 11px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .usage-provider-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .usage-compact-limit { display: grid; gap: 4px; min-width: 0; }
 .usage-compact-limit-value { display: flex; align-items: baseline; justify-content: flex-end; gap: 3px; color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; font-size: 9px; font-variant-numeric: tabular-nums; }

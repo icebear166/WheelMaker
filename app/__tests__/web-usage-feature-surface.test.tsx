@@ -103,6 +103,46 @@ describe('UsageFeatureSurface', () => {
     expect(view!.root.findAllByProps({'data-usage-provider': 'zai'})).toHaveLength(0);
   });
 
+  it('renders every usable account as its own compact row', () => {
+    const snapshot: UsageViewSnapshot = {
+      refreshing: false,
+      providers: [{
+        id: 'kimi', name: 'Kimi', status: 'ok', accountCount: 2, remainingPercent: 15,
+        accounts: [{
+          localId: 'kimi-a', identity: {kind: 'email', value: 'first@example.com', label: 'first@example.com'},
+          status: 'ok', hubIds: ['hub-a'],
+          limits: [
+            {id: '5h', label: '5 hours', remainingPercent: 15},
+            {id: 'week', label: 'Week', remainingPercent: 80},
+          ],
+        }, {
+          localId: 'kimi-b', identity: {kind: 'email', value: 'second@example.com', label: 'second@example.com'},
+          status: 'ok', hubIds: ['hub-b'],
+          limits: [
+            {id: '5h', label: '5 hours', remainingPercent: 74},
+            {id: 'week', label: 'Week', remainingPercent: 33},
+          ],
+        }],
+      }],
+    };
+    let view: TestRenderer.ReactTestRenderer;
+    act(() => {
+      view = TestRenderer.create(
+        <UsageFeatureSurface snapshot={snapshot} onRefresh={jest.fn()} onRequestHide={jest.fn()} />,
+      );
+    });
+
+    const first = view!.root.findByProps({'data-usage-compact-account': 'kimi:kimi-a'});
+    const second = view!.root.findByProps({'data-usage-compact-account': 'kimi:kimi-b'});
+    expect(renderedText(first)).toContain('Kimi / first@example.com');
+    expect(renderedText(first)).toContain('15% / 5h');
+    expect(renderedText(first)).toContain('80% / 1W');
+    expect(renderedText(second)).toContain('Kimi / second@example.com');
+    expect(renderedText(second)).toContain('74% / 5h');
+    expect(renderedText(second)).toContain('33% / 1W');
+    expect(view!.root.findAllByProps({'data-usage-provider': 'kimi'})).toHaveLength(2);
+  });
+
   it('fills a missing five-hour quota with a full compact rail', () => {
     const weeklyOnly: UsageViewSnapshot = {
       refreshing: false,
