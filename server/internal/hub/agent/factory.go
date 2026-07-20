@@ -94,6 +94,7 @@ func newACPFactoryWithDefaults() *ACPFactory {
 		{provider: protocol.ACPProviderMimo, build: func() ACPProvider { return NewMimoProvider() }},
 		{provider: protocol.ACPProviderCodeBuddy, build: func() ACPProvider { return NewCodeBuddyProvider() }},
 		{provider: protocol.ACPProviderFlicker, build: func() ACPProvider { return NewFlickerProvider() }},
+		{provider: protocol.ACPProviderKimi, build: func() ACPProvider { return NewKimiProvider() }},
 	}
 	for _, candidate := range candidates {
 		prov := candidate.build()

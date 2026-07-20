@@ -97,6 +97,14 @@ var (
 		SkillProjectDirs:       []string{".agents/skills"},
 		SkillUserDirs:          []string{"~/.agents/skills"},
 	}
+	KimiACPProviderPreset = ACPProviderPreset{
+		Name:                   "kimi",
+		BinaryName:             "kimi",
+		Args:                   []string{"acp"},
+		MissingPathErrTemplate: "kimi: binary not found (install Kimi Code CLI: https://code.kimi.com/kimi-code): %v",
+		SkillProjectDirs:       []string{".agents/skills", ".kimi-code/skills"},
+		SkillUserDirs:          []string{"~/.agents/skills", "~/.kimi-code/skills"},
+	}
 )
 
 // acpProvider is the unified implementation for all ACP providers.
@@ -144,6 +152,10 @@ func NewCodeBuddyProvider() *acpProvider {
 
 func NewFlickerProvider() *acpProvider {
 	return NewACPProvider(FlickerACPProviderPreset)
+}
+
+func NewKimiProvider() *acpProvider {
+	return NewACPProvider(KimiACPProviderPreset)
 }
 
 func (p *acpProvider) Name() string { return p.preset.Name }

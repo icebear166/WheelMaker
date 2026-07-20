@@ -4185,6 +4185,44 @@ func TestCodexPreset_IncludesAgentsUserSkillsDir(t *testing.T) {
 	}
 }
 
+func TestKimiProviderPreset(t *testing.T) {
+	preset := KimiACPProviderPreset
+	if preset.Name != "kimi" || preset.BinaryName != "kimi" {
+		t.Fatalf("preset=%+v", preset)
+	}
+	if len(preset.Args) != 1 || preset.Args[0] != "acp" {
+		t.Fatalf("args=%v, want [acp]", preset.Args)
+	}
+	if !strings.Contains(preset.MissingPathErrTemplate, "%v") {
+		t.Fatalf("missing-path template must consume the underlying error: %q", preset.MissingPathErrTemplate)
+	}
+	assertContainsDir := func(dirs []string, want string) {
+		t.Helper()
+		for _, dir := range dirs {
+			if strings.EqualFold(strings.TrimSpace(dir), want) {
+				return
+			}
+		}
+		t.Fatalf("dirs %v missing %q", dirs, want)
+	}
+	assertContainsDir(preset.SkillProjectDirs, ".agents/skills")
+	assertContainsDir(preset.SkillProjectDirs, ".kimi-code/skills")
+	assertContainsDir(preset.SkillUserDirs, "~/.agents/skills")
+	assertContainsDir(preset.SkillUserDirs, "~/.kimi-code/skills")
+
+	provider := NewKimiProvider()
+	if provider.Name() != "kimi" {
+		t.Fatalf("provider name=%q, want kimi", provider.Name())
+	}
+}
+
+func TestProviderPresetByNameKimi(t *testing.T) {
+	preset, ok := providerPresetByName("kimi")
+	if !ok || preset.Name != "kimi" {
+		t.Fatalf("providerPresetByName(kimi)=(%#v,%v), want kimi,true", preset, ok)
+	}
+}
+
 func TestClaudePreset_UsesClaudeUserSkillsDirOnly(t *testing.T) {
 	hasClaudeDir := false
 	for _, dir := range ClaudeACPProviderPreset.SkillUserDirs {
