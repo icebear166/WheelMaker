@@ -26,6 +26,9 @@ type PreviewWorkbenchChromeProps = {
   onActionsMenuToggle: () => void;
   onActionsMenuClose: () => void;
   onWorkbenchKeyDown?: React.KeyboardEventHandler<HTMLElement>;
+  onSearch?: () => void;
+  searchActive?: boolean;
+  searchDisabled?: boolean;
   onMobilePortRelayRefresh?: () => void;
   children: React.ReactNode;
 };
@@ -54,6 +57,9 @@ export function PreviewWorkbenchChrome({
   onActionsMenuToggle,
   onActionsMenuClose,
   onWorkbenchKeyDown,
+  onSearch,
+  searchActive = false,
+  searchDisabled = false,
   onMobilePortRelayRefresh,
   children,
 }: PreviewWorkbenchChromeProps) {
@@ -76,6 +82,19 @@ export function PreviewWorkbenchChrome({
         <span className={`codicon ${mode === 'mobile' ? 'codicon-arrow-left' : 'codicon-close'}`} />
       </button>
       <div className="preview-workbench-title" title={activeTitle}>{activeTitle}</div>
+      {onSearch ? (
+        <button
+          type="button"
+          className={`chat-preview-icon-button${searchActive ? ' active' : ''}`}
+          onClick={onSearch}
+          disabled={searchDisabled}
+          title="Search in preview"
+          aria-label="Search in preview"
+          aria-pressed={searchActive}
+        >
+          <span className="codicon codicon-search" aria-hidden="true" />
+        </button>
+      ) : null}
       {actions ? (
         <div ref={actionsMenuRef} className="preview-workbench-actions">
           <button

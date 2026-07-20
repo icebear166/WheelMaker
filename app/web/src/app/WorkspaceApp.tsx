@@ -3601,10 +3601,6 @@ export function App() {
     }
     window.requestAnimationFrame(() => openPreviewSearch());
   };
-  // Still used by the chat search bar switcher; removed together with the switcher.
-  const switchChatSearchTarget = (target: 'current' | 'sessions' | 'preview') => {
-    confirmSearchTarget(target);
-  };
 
 
   useEffect(() => {
@@ -19926,38 +19922,6 @@ export function App() {
         aria-label="Search current session"
       />
       <span className="chat-search-status">{chatSearchStatus}</span>
-      <div className="chat-search-switcher" role="group" aria-label="Search target">
-        <button
-          type="button"
-          className="chat-search-switcher-button active"
-          title="Current session"
-          aria-label="Search current session"
-          aria-pressed="true"
-        >
-          <span className="codicon codicon-comment-discussion" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className="chat-search-switcher-button"
-          onClick={() => switchChatSearchTarget('sessions')}
-          title="All sessions"
-          aria-label="Search all sessions"
-          aria-pressed="false"
-        >
-          <span className="codicon codicon-list-tree" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className="chat-search-switcher-button"
-          onClick={() => switchChatSearchTarget('preview')}
-          disabled={!chatPreviewOpen}
-          title={chatPreviewOpen ? 'File preview' : 'Open preview first'}
-          aria-label="Search file preview"
-          aria-pressed="false"
-        >
-          <span className="codicon codicon-go-to-file" aria-hidden="true" />
-        </button>
-      </div>
       <button
         type="button"
         className="chat-search-icon-button"
@@ -20031,6 +19995,9 @@ export function App() {
       onFileTreeClose={() => setPreviewWorkbench(current => ({...current, treeOpen: false}))}
       onActionsMenuToggle={() => setPreviewWorkbenchActionsMenuOpen(open => !open)}
       onActionsMenuClose={() => setPreviewWorkbenchActionsMenuOpen(false)}
+      searchActive={previewSearchOpen}
+      searchDisabled={!activeWorkbenchTab || !!previewSearchUnavailableMessage}
+      onSearch={() => openPreviewSearch()}
       onWorkbenchKeyDown={handlePreviewWorkbenchKeyDown}
       onMobilePortRelayRefresh={refreshActivePortRelayPreview}
     >
