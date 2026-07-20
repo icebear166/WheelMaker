@@ -4777,6 +4777,53 @@ func TestSessionPersistKeepsRecorderLastActiveAtAndStoresLocalOffset(t *testing.
 	}
 }
 
+func TestSessionPersistDoesNotAdvanceStoredLastActiveAt(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+
+	createdAt := mustRFC3339Time(t, "2026-05-06T12:00:00Z")
+	startedAt := mustRFC3339Time(t, "2026-05-06T12:01:02Z")
+	finishedAt := mustRFC3339Time(t, "2026-05-06T12:01:27Z")
+
+	created := sessionViewCreatedEvent("sess-1", "Timing")
+	created.UpdatedAt = createdAt
+	if err := c.RecordEvent(ctx, created); err != nil {
+		t.Fatalf("RecordEvent session created: %v", err)
+	}
+	started := sessionViewPromptEvent("sess-1", "measure", nil)
+	started.UpdatedAt = startedAt
+	if err := c.RecordEvent(ctx, started); err != nil {
+		t.Fatalf("RecordEvent prompt started: %v", err)
+	}
+	finished := sessionViewPromptFinishedEvent("sess-1", "end_turn")
+	finished.UpdatedAt = finishedAt
+	if err := c.RecordEvent(ctx, finished); err != nil {
+		t.Fatalf("RecordEvent prompt finished: %v", err)
+	}
+
+	sess, err := c.SessionByID(ctx, "sess-1")
+	if err != nil {
+		t.Fatalf("SessionByID: %v", err)
+	}
+	sess.mu.Lock()
+	sess.lastActiveAt = finishedAt.Add(10 * time.Minute)
+	sess.mu.Unlock()
+	if err := sess.persistSession(ctx); err != nil {
+		t.Fatalf("persistSession: %v", err)
+	}
+
+	rec, err := c.store.LoadSession(ctx, "proj1", "sess-1")
+	if err != nil {
+		t.Fatalf("LoadSession: %v", err)
+	}
+	if rec == nil {
+		t.Fatal("LoadSession returned nil record")
+	}
+	if !rec.LastActiveAt.Equal(finishedAt) {
+		t.Fatalf("session LastActiveAt = %q, want %q", rec.LastActiveAt.Format(time.RFC3339Nano), finishedAt.Format(time.RFC3339Nano))
+	}
+}
+
 func TestSessionViewPersistsLegacySystemEventsButIgnoresACPSystemEvents(t *testing.T) {
 	c := newSessionViewTestClient(t)
 	ctx := context.Background()
