@@ -606,7 +606,7 @@ describe('web chat file peek viewer', () => {
     });
   });
 
-  test('global shortcuts route Ctrl+F to chat search and gate preview shortcuts on preview open', () => {
+  test('global shortcuts keep preview keys gated and leave Ctrl+F to the Windows search picker', () => {
     const mainTsx = readSourceText(mainPath);
     const handlerStart = mainTsx.indexOf('const handleGlobalPreviewKeyDown = (event: KeyboardEvent) => {');
     expect(handlerStart).toBeGreaterThanOrEqual(0);
@@ -614,22 +614,37 @@ describe('web chat file peek viewer', () => {
     expect(handlerEnd).toBeGreaterThan(handlerStart);
     const handlerBody = mainTsx.slice(handlerStart, handlerEnd);
     const pShortcutIndex = handlerBody.indexOf("if (event.key.toLowerCase() === 'p' && (event.ctrlKey || event.metaKey)) {");
-    const fShortcutIndex = handlerBody.indexOf("if (event.key.toLowerCase() === 'f' && (event.ctrlKey || event.metaKey)) {");
     const previewOpenGateIndex = handlerBody.indexOf('if (!chatPreviewOpen) {');
 
     expect(handlerBody).toContain('if (!chatPreviewOpen) {');
     expect(pShortcutIndex).toBeGreaterThanOrEqual(0);
     expect(previewOpenGateIndex).toBeGreaterThan(pShortcutIndex);
-    expect(fShortcutIndex).toBeGreaterThan(pShortcutIndex);
-    expect(previewOpenGateIndex).toBeGreaterThan(fShortcutIndex);
-    expect(handlerBody).toContain('openChatSearch();');
-    expect(handlerBody).not.toContain('setPreviewSearchOpen(true);');
     expect(handlerBody).toContain("if (event.key === 'Tab' && (event.ctrlKey || event.metaKey)) {");
     expect(handlerBody).toContain("cyclePreviewTabId(previewWorkbenchTabs, activeWorkbenchTab?.id ?? '', event.shiftKey ? -1 : 1)");
     expect(handlerBody).toContain('activeTabIdByProjectId: {');
-    expect(handlerBody).toContain("if (event.key.toLowerCase() === 'p' && (event.ctrlKey || event.metaKey)) {");
+    expect(handlerBody).not.toContain("event.key.toLowerCase() === 'f'");
+    expect(handlerBody).not.toContain('openChatSearch();');
+    expect(handlerBody).not.toContain('setPreviewSearchOpen(true);');
     expect(mainTsx).toContain("window.addEventListener('keydown', handleGlobalPreviewKeyDown, true);");
     expect(mainTsx).toContain("window.removeEventListener('keydown', handleGlobalPreviewKeyDown, true);");
+    expect(
+      (mainTsx.match(/event\.key\.toLowerCase\(\) === 'f' && \(event\.ctrlKey \|\| event\.metaKey\)/g) ?? []).length,
+    ).toBe(1);
+  });
+
+  test('windows Ctrl+F opens a modal search target picker', () => {
+    const mainTsx = readSourceText(mainPath);
+    expect(mainTsx).toContain('if (!isWindowsPlatform) {');
+    expect(mainTsx).toContain('const handleGlobalSearchTargetKeyDown = (event: KeyboardEvent) => {');
+    expect(mainTsx).toContain("event.key.toLowerCase() === 'f' && (event.ctrlKey || event.metaKey)");
+    expect(mainTsx).toContain('firstEnabledChatSearchTarget(searchTargetAvailability)');
+    expect(mainTsx).toContain('setSearchTargetPickerOpen(true);');
+    expect(mainTsx).toContain("if (event.key === 'Escape') {");
+    expect(mainTsx).toContain('confirmSearchTarget(searchTargetPickerTarget);');
+    expect(mainTsx).toContain('cycleChatSearchTarget(current, delta, searchTargetAvailability)');
+    expect(mainTsx).toContain('CHAT_SEARCH_TARGET_ORDER.map(target => {');
+    expect(mainTsx).toContain('className="chat-search-target-backdrop"');
+    expect(mainTsx).toContain('className="chat-search-target-dialog"');
   });
 
   test('preview selection context menu preserves text selection through right click', () => {

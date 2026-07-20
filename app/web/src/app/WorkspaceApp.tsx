@@ -160,6 +160,14 @@ import {
 } from '../chat/session/sessionSearchState';
 import {useChatSearchController} from '../chat/search/useChatSearchController';
 import {
+  CHAT_SEARCH_TARGET_META,
+  CHAT_SEARCH_TARGET_ORDER,
+  cycleChatSearchTarget,
+  firstEnabledChatSearchTarget,
+  resolveChatSearchTargetAvailability,
+  type ChatSearchTarget,
+} from '../chat/search/searchTargetPicker';
+import {
   mergeChatSession,
   mergeChatSessionList,
   sortChatSessions,
@@ -3377,6 +3385,12 @@ export function App() {
     archivedMode,
     scrollToMatch: scrollToChatSearchMatch,
   });
+  const [searchTargetPickerOpen, setSearchTargetPickerOpen] = useState(false);
+  const [searchTargetPickerTarget, setSearchTargetPickerTarget] = useState<ChatSearchTarget>('current');
+  const searchTargetAvailability = useMemo(
+    () => resolveChatSearchTargetAvailability({previewAvailable: chatPreviewHasContent}),
+    [chatPreviewHasContent],
+  );
 
   const selectedChatSession = useMemo(
     () => {
@@ -3566,7 +3580,8 @@ export function App() {
     shouldRender: (message, promptStatus) => shouldRenderChatTurn(message, promptStatus),
   }), [archivedPreview?.messages, chatLayoutMetrics]);
 
-  const switchChatSearchTarget = (target: 'current' | 'sessions' | 'preview') => {
+  const confirmSearchTarget = (target: ChatSearchTarget) => {
+    setSearchTargetPickerOpen(false);
     if (target === 'current') {
       openChatSearch();
       return;
@@ -3585,6 +3600,10 @@ export function App() {
       toggleChatPreviewFromTitle();
     }
     window.requestAnimationFrame(() => openPreviewSearch());
+  };
+  // Still used by the chat search bar switcher; removed together with the switcher.
+  const switchChatSearchTarget = (target: 'current' | 'sessions' | 'preview') => {
+    confirmSearchTarget(target);
   };
 
 
@@ -17860,6 +17879,7 @@ export function App() {
             style={chatMainStyle}
           >
             {chatSearchBar}
+            {chatSearchTargetPickerOverlay}
             <div
               ref={chatScrollRef}
               className="scroll-panel chat-block"
@@ -18739,11 +18759,6 @@ export function App() {
       if (quickFileOpen) {
         return;
       }
-      if (event.key.toLowerCase() === 'f' && (event.ctrlKey || event.metaKey)) {
-        event.preventDefault();
-        openChatSearch();
-        return;
-      }
       if (!chatPreviewOpen) {
         return;
       }
@@ -18777,11 +18792,56 @@ export function App() {
   }, [
     activeWorkbenchTab?.id,
     chatPreviewOpen,
-    openChatSearch,
     openQuickFileSearch,
     previewWorkbenchTabs,
     quickFileOpen,
   ]);
+
+  useEffect(() => {
+    if (!isWindowsPlatform) {
+      return;
+    }
+    const handleGlobalSearchTargetKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) {
+        return;
+      }
+      if (quickFileOpen) {
+        return;
+      }
+      if (event.key.toLowerCase() === 'f' && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        setSearchTargetPickerTarget(firstEnabledChatSearchTarget(searchTargetAvailability));
+        setSearchTargetPickerOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalSearchTargetKeyDown, true);
+    return () => window.removeEventListener('keydown', handleGlobalSearchTargetKeyDown, true);
+  }, [isWindowsPlatform, quickFileOpen, searchTargetAvailability]);
+
+  useEffect(() => {
+    if (!searchTargetPickerOpen) {
+      return;
+    }
+    const handleSearchTargetPickerKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setSearchTargetPickerOpen(false);
+        return;
+      }
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        confirmSearchTarget(searchTargetPickerTarget);
+        return;
+      }
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Tab') {
+        event.preventDefault();
+        const delta = event.key === 'ArrowUp' || (event.key === 'Tab' && event.shiftKey) ? -1 : 1;
+        setSearchTargetPickerTarget(current => cycleChatSearchTarget(current, delta, searchTargetAvailability));
+      }
+    };
+    window.addEventListener('keydown', handleSearchTargetPickerKeyDown, true);
+    return () => window.removeEventListener('keydown', handleSearchTargetPickerKeyDown, true);
+  }, [confirmSearchTarget, searchTargetAvailability, searchTargetPickerOpen, searchTargetPickerTarget]);
 
   useEffect(() => {
     if (!previewSelectionMenu) {
@@ -19427,11 +19487,6 @@ export function App() {
       }
       return;
     }
-    if (event.key.toLowerCase() === 'f' && (event.ctrlKey || event.metaKey)) {
-      event.preventDefault();
-      openChatSearch();
-      return;
-    }
     if (event.key.toLowerCase() === 'p' && (event.ctrlKey || event.metaKey)) {
       event.preventDefault();
       openQuickFileSearch();
@@ -19819,6 +19874,38 @@ export function App() {
       >
         <span className="codicon codicon-close" />
       </button>
+    </div>
+  ) : null;
+  const chatSearchTargetPickerOverlay = searchTargetPickerOpen ? (
+    <div className="chat-search-target-backdrop" role="presentation" onClick={() => setSearchTargetPickerOpen(false)}>
+      <div
+        className="chat-search-target-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Choose search target"
+        onClick={event => event.stopPropagation()}
+      >
+        <div className="chat-search-target-title">Search</div>
+        {CHAT_SEARCH_TARGET_ORDER.map(target => {
+          const meta = CHAT_SEARCH_TARGET_META[target];
+          const enabled = searchTargetAvailability[target];
+          const selected = searchTargetPickerTarget === target;
+          return (
+            <button
+              key={target}
+              type="button"
+              className={`chat-search-target-option${selected ? ' selected' : ''}`}
+              disabled={!enabled}
+              onClick={() => confirmSearchTarget(target)}
+            >
+              <span className={`codicon ${meta.icon}`} aria-hidden="true" />
+              <span className="chat-search-target-label">{meta.label}</span>
+              <span className="chat-search-target-hint">{meta.hint}</span>
+            </button>
+          );
+        })}
+        <div className="chat-search-target-footer">Arrows / Tab to switch · Enter to open · Esc to close</div>
+      </div>
     </div>
   ) : null;
   const chatSearchStatus = chatSearchQuery
