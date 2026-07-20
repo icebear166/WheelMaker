@@ -104,7 +104,7 @@ describe('PC chat session-panel layout', () => {
   });
 
   it('keeps a floating session entry point when there are no recent sessions', () => {
-    expect(workspaceAppSource).toContain("const showFloatingSessionPanel = isWide && sidebarCollapsed && !archivedMode && !sessionSearchActive;");
+    expect(workspaceAppSource).toContain("const showFloatingSessionPanel = isWide && chatSidebarCollapsed && !archivedMode && !sessionSearchActive;");
     expect(workspaceAppSource).toContain('{showFloatingSessionPanel ? (');
   });
 
@@ -201,7 +201,7 @@ describe('PC chat session-panel layout', () => {
     expect(workspaceAppSource).toContain('onPointerEnter={() => sessionNavSlideOutAutoClose.cancel()}');
     expect(workspaceAppSource).toContain('sessionNavSlideOutAutoClose.closeNow()');
     expect(workspaceAppSource).toContain(
-      "if (tab !== 'chat' || sidebarSettingsOpen) {\n      sessionNavSlideOutAutoClose.cancel();\n      dispatchSessionNavSlideOut({ type: 'forceReset' });\n    }\n  }, [sessionNavSlideOutAutoClose, sidebarSettingsOpen, tab]);",
+      "if (tab !== 'chat' || sidebarSettingsOpen) {\n      setSessionPanelShortcutUnpinned(false);\n      sessionNavSlideOutAutoClose.cancel();\n      dispatchSessionNavSlideOut({ type: 'forceReset' });\n    }\n  }, [sessionNavSlideOutAutoClose, sidebarSettingsOpen, tab]);",
     );
   });
 

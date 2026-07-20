@@ -1,6 +1,9 @@
 import fs from 'fs';
 import path from 'path';
-import {resolveWindowsWorkspaceShortcut} from '../web/src/app/workspaceShortcuts';
+import {
+  resolveSessionsShortcutAction,
+  resolveWindowsWorkspaceShortcut,
+} from '../web/src/app/workspaceShortcuts';
 
 const root = path.join(__dirname, '..');
 const read = (relative: string) => fs.readFileSync(path.join(root, relative), 'utf8').replace(/\r\n/g, '\n');
@@ -24,6 +27,32 @@ describe('terminal workspace integration', () => {
     expect(resolveWindowsWorkspaceShortcut(shortcutEvent({code: 'Backquote'}), environment)).toBe('terminal');
   });
 
+  test('opens and closes the slide-out without Pin when the saved mode is unpinned', () => {
+    expect(resolveSessionsShortcutAction({
+      sessionPanelPinned: false,
+      temporarilyUnpinned: false,
+      slideOutOpen: false,
+    })).toBe('open-slideout');
+    expect(resolveSessionsShortcutAction({
+      sessionPanelPinned: false,
+      temporarilyUnpinned: false,
+      slideOutOpen: true,
+    })).toBe('close-slideout');
+  });
+
+  test('temporarily unpins and restores Pin when the saved mode is pinned', () => {
+    expect(resolveSessionsShortcutAction({
+      sessionPanelPinned: true,
+      temporarilyUnpinned: false,
+      slideOutOpen: false,
+    })).toBe('temporarily-unpin');
+    expect(resolveSessionsShortcutAction({
+      sessionPanelPinned: true,
+      temporarilyUnpinned: true,
+      slideOutOpen: false,
+    })).toBe('restore-pin');
+  });
+
   test('rejects old, shifted, non-Windows, mobile, and modified shortcuts', () => {
     const windowsDesktop = {isWindows: true, isWide: true};
     expect(resolveWindowsWorkspaceShortcut(shortcutEvent({code: 'KeyT'}), windowsDesktop)).toBeNull();
@@ -44,6 +73,45 @@ describe('terminal workspace integration', () => {
     expect(source).toContain("case 'preview':");
     expect(source).toContain("case 'terminal':");
     expect(source).not.toContain("event.key === 't' || event.key === 'T'");
+
+    const sessionsStart = source.indexOf("case 'sessions':");
+    const previewStart = source.indexOf("case 'preview':", sessionsStart);
+    const sessionsBlock = source.slice(sessionsStart, previewStart);
+    expect(sessionsBlock).toContain('resolveSessionsShortcutAction({');
+    expect(sessionsBlock).toContain('sessionPanelPinned: !sidebarCollapsed');
+    expect(sessionsBlock).toContain('temporarilyUnpinned: sessionPanelShortcutUnpinned');
+    expect(sessionsBlock).toContain('slideOutOpen: sessionNavSlideOut.open');
+    expect(sessionsBlock).not.toContain('setSidebarCollapsed(');
+
+    expect(source).toContain('const chatSidebarCollapsed = sidebarCollapsed || sessionPanelShortcutUnpinned;');
+    expect(source).toContain('sessionPanelPinned: !sidebarCollapsed,');
+    expect(source).not.toContain('sessionPanelPinned: !chatSidebarCollapsed,');
+  });
+
+  test('clears the temporary shortcut override when Pin is changed explicitly', () => {
+    const source = read('web/src/app/WorkspaceApp.tsx');
+    expect(source).toContain([
+      'const pinChatSessionPanel = useCallback(() => {',
+      '    setSessionPanelShortcutUnpinned(false);',
+      '    setSidebarCollapsed(false);',
+    ].join('\n'));
+    expect(source).toContain([
+      'const unpinChatSessionPanel = useCallback(() => {',
+      '    setSessionPanelShortcutUnpinned(false);',
+      '    setSidebarCollapsed(true);',
+    ].join('\n'));
+    expect(source).toContain('onTogglePin={unpinChatSessionPanel}');
+    expect(source).toContain('onTogglePin={pinChatSessionPanel}');
+    expect(source).toContain('pinChatSessionPanel();');
+  });
+
+  test('restores the saved Pin mode when leaving Chat or opening settings', () => {
+    const source = read('web/src/app/WorkspaceApp.tsx');
+    expect(source).toContain([
+      "if (tab !== 'chat' || sidebarSettingsOpen) {",
+      '      setSessionPanelShortcutUnpinned(false);',
+      '      sessionNavSlideOutAutoClose.cancel();',
+    ].join('\n'));
   });
 
   test('places Terminal before Preview and renders a desktop bottom panel', () => {

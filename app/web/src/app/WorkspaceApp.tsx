@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import {createPortal} from 'react-dom';
 import ReactMarkdown, { type Components } from 'react-markdown';
-import {resolveWindowsWorkspaceShortcut} from './workspaceShortcuts';
+import {resolveSessionsShortcutAction, resolveWindowsWorkspaceShortcut} from './workspaceShortcuts';
 
 declare global {
   interface Window {
@@ -2685,6 +2685,8 @@ export function App() {
   const floatingDragState = workspaceUiState.transient.floatingDragState as FloatingDragState | null;
   const floatingKeyboardOffset = workspaceUiState.transient.floatingKeyboardOffset;
   const sidebarCollapsed = workspaceUiState.desktop.sidebarCollapsed;
+  const [sessionPanelShortcutUnpinned, setSessionPanelShortcutUnpinned] = useState(false);
+  const chatSidebarCollapsed = sidebarCollapsed || sessionPanelShortcutUnpinned;
   const [sessionNavSlideOut, dispatchSessionNavSlideOut] = useReducer(
     sessionNavSlideOutReducer,
     undefined,
@@ -2722,6 +2724,7 @@ export function App() {
   const sidebarSettingsOpen = workspaceUiState.shared.settingsOpen;
   useEffect(() => {
     if (tab !== 'chat' || sidebarSettingsOpen) {
+      setSessionPanelShortcutUnpinned(false);
       sessionNavSlideOutAutoClose.cancel();
       dispatchSessionNavSlideOut({ type: 'forceReset' });
     }
@@ -2784,6 +2787,14 @@ export function App() {
   const setSidebarCollapsed = useCallback((next: WorkspaceUiStateValue<boolean>) => {
     dispatchWorkspaceUi({ type: 'desktop/setSidebarCollapsed', next });
   }, []);
+  const pinChatSessionPanel = useCallback(() => {
+    setSessionPanelShortcutUnpinned(false);
+    setSidebarCollapsed(false);
+  }, [setSidebarCollapsed]);
+  const unpinChatSessionPanel = useCallback(() => {
+    setSessionPanelShortcutUnpinned(false);
+    setSidebarCollapsed(true);
+  }, [setSidebarCollapsed]);
   const setDesktopSidebarWidth = useCallback((next: WorkspaceUiStateValue<number>) => {
     dispatchWorkspaceUi({ type: 'desktop/setSidebarWidth', next });
   }, []);
@@ -5214,7 +5225,7 @@ export function App() {
       setRecentSessionsTick(t => t + 1);
     }
   }, [allVisibleProjectsLoaded, projectSessionsByProjectId]);
-  const showFloatingSessionPanel = isWide && sidebarCollapsed && !archivedMode && !sessionSearchActive;
+  const showFloatingSessionPanel = isWide && chatSidebarCollapsed && !archivedMode && !sessionSearchActive;
   const showChatEdgeSurfaces = isWide && tab === 'chat' && (showFloatingSessionPanel || !!selectedChatPlan || showLimitsMonitor);
   const chatMainClassName = isWide
     ? (chatViewWidth === 'fixed-800' ? `chat-main chat-view-width-fixed-800${showChatEdgeSurfaces ? ' chat-view-width-fixed-800-edge-surfaces' : ''}` : 'chat-main')
@@ -7586,7 +7597,7 @@ export function App() {
     ),
     [clampDesktopSidebarWidthForViewport, desktopSidebarDraftWidth, desktopSidebarWidth],
   );
-  const desktopChatSessionPinned = isWide && tab === 'chat' && !sidebarSettingsOpen && !sidebarCollapsed;
+  const desktopChatSessionPinned = isWide && tab === 'chat' && !sidebarSettingsOpen && !chatSidebarCollapsed;
   const desktopLayoutSidebarWidth = desktopChatSessionPinned
     ? CHAT_SESSION_PANEL_WIDTH
     : effectiveDesktopSidebarWidth;
@@ -7659,7 +7670,7 @@ export function App() {
     const viewportMax = windowWidth > 0
       ? Math.floor(windowWidth * CHAT_FILE_PEEK_VIEWPORT_MAX_RATIO)
       : CHAT_FILE_PEEK_WIDTH_MAX;
-    const occupiedWidth = sidebarCollapsed ? 48 : desktopLayoutSidebarWidth + 48;
+    const occupiedWidth = chatSidebarCollapsed ? 48 : desktopLayoutSidebarWidth + 48;
     const middlePreservingMax = windowWidth > 0
       ? windowWidth - occupiedWidth - CHAT_FILE_PEEK_MAIN_MIN_WIDTH
       : CHAT_FILE_PEEK_WIDTH_MAX;
@@ -7674,9 +7685,9 @@ export function App() {
       maxWidth,
       Math.max(CHAT_FILE_PEEK_WIDTH_MIN, Math.round(width)),
     );
-  }, [desktopLayoutSidebarWidth, sidebarCollapsed, windowWidth]);
+  }, [chatSidebarCollapsed, desktopLayoutSidebarWidth, windowWidth]);
   const fixedChatPreviewDefaultWidth = useMemo(() => {
-    const occupiedWidth = sidebarCollapsed ? 48 : desktopLayoutSidebarWidth + 48;
+    const occupiedWidth = chatSidebarCollapsed ? 48 : desktopLayoutSidebarWidth + 48;
     const availableWidth = windowWidth > 0
       ? windowWidth - occupiedWidth
       : CHAT_FIXED_VIEW_WIDTH + CHAT_FILE_PEEK_WIDTH_DEFAULT;
@@ -7684,7 +7695,7 @@ export function App() {
       availableWidth - CHAT_FIXED_VIEW_WIDTH,
       true,
     );
-  }, [clampChatFilePeekWidthForViewport, desktopLayoutSidebarWidth, sidebarCollapsed, windowWidth]);
+  }, [chatSidebarCollapsed, clampChatFilePeekWidthForViewport, desktopLayoutSidebarWidth, windowWidth]);
   const effectiveChatFilePeekWidth = useMemo(
     () => {
       const committedWidth = desktopChatFixedPreview && !chatFilePeekWidthResized
@@ -17890,7 +17901,7 @@ export function App() {
             header={
               <ChatSessionGlobalBar
                 pinActive
-                onTogglePin={() => setSidebarCollapsed(true)}
+                onTogglePin={unpinChatSessionPanel}
                 leading={
                   <>
                     {renderChatArchiveControls()}
@@ -18867,7 +18878,26 @@ export function App() {
       event.preventDefault();
       switch (shortcut) {
         case 'sessions':
-          setSidebarCollapsed(value => !value);
+          switch (resolveSessionsShortcutAction({
+            sessionPanelPinned: !sidebarCollapsed,
+            temporarilyUnpinned: sessionPanelShortcutUnpinned,
+            slideOutOpen: sessionNavSlideOut.open,
+          })) {
+            case 'open-slideout':
+              dispatchSessionNavSlideOut({ type: 'open' });
+              break;
+            case 'close-slideout':
+              sessionNavSlideOutAutoClose.closeNow();
+              break;
+            case 'temporarily-unpin':
+              sessionNavSlideOutAutoClose.closeNow();
+              setSessionPanelShortcutUnpinned(true);
+              break;
+            case 'restore-pin':
+              sessionNavSlideOutAutoClose.closeNow();
+              setSessionPanelShortcutUnpinned(false);
+              break;
+          }
           return;
         case 'preview':
           toggleChatPreviewFromTitle();
@@ -18879,7 +18909,16 @@ export function App() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isWide, isWindowsPlatform, setSidebarCollapsed, toggleChatPreviewFromTitle, toggleTerminalFromTitle]);
+  }, [
+    isWide,
+    isWindowsPlatform,
+    sessionNavSlideOut.open,
+    sessionNavSlideOutAutoClose,
+    sessionPanelShortcutUnpinned,
+    sidebarCollapsed,
+    toggleChatPreviewFromTitle,
+    toggleTerminalFromTitle,
+  ]);
   const chatReadOnlyPreview = archivedMode && archivedPreview !== null;
   const activeChatMessages = chatReadOnlyPreview ? archivedPreview.messages : chatMessages;
   const activeChatDisplayIndex = chatReadOnlyPreview ? archivedChatDisplayIndex : chatDisplayIndex;
@@ -19408,7 +19447,7 @@ export function App() {
             </button>
           ) : null}
           {isWide && tab === 'chat' ? (
-            <div className={`chat-edge-surface-stack${!sidebarCollapsed ? ' beside-pinned-session-panel' : ''}${sessionNavSlideOut.open ? ' covered-by-session-panel' : ''}`}>
+            <div className={`chat-edge-surface-stack${!chatSidebarCollapsed ? ' beside-pinned-session-panel' : ''}${sessionNavSlideOut.open ? ' covered-by-session-panel' : ''}`}>
               {showFloatingSessionPanel ? (
                 <ChatRecentSessionsSurface
                   collapsed={collapsedProjectIds.includes(RECENT_SESSIONS_VIRTUAL_PROJECT_ID)}
@@ -19423,7 +19462,7 @@ export function App() {
                           : dispatchSessionNavSlideOut({ type: 'open' })
                       }
                       pinActive={false}
-                      onTogglePin={() => setSidebarCollapsed(false)}
+                      onTogglePin={pinChatSessionPanel}
                     />
                   }
                 >
@@ -19443,7 +19482,7 @@ export function App() {
               ) : null}
             </div>
           ) : null}
-          {isWide && sidebarCollapsed && !sidebarSettingsOpen && tab === 'chat' ? (
+          {isWide && chatSidebarCollapsed && !sidebarSettingsOpen && tab === 'chat' ? (
             <ChatSessionPanel
               mode="slideout"
               title="Sessions"
@@ -19465,7 +19504,7 @@ export function App() {
                   pinActive={false}
                   onTogglePin={() => {
                     sessionNavSlideOutAutoClose.closeNow();
-                    setSidebarCollapsed(false);
+                    pinChatSessionPanel();
                   }}
                   leading={
                     <>
@@ -19488,7 +19527,7 @@ export function App() {
               {renderWideProjectSessionNav()}
             </ChatSessionPanel>
           ) : null}
-          {sidebarCollapsed ? renderWideProjectActionMenu() : null}
+          {chatSidebarCollapsed ? renderWideProjectActionMenu() : null}
           {!isWide ? (
             <ChatPlanSurface
               mode="mobile"
@@ -22039,7 +22078,7 @@ export function App() {
         mobileOverlay={mobileUsageOverlay ?? terminalMobileOverlay ?? chatPreviewMobileOverlay}
         sidebar={renderSidebar()}
         main={renderMain()}
-        sidebarCollapsed={sidebarCollapsed}
+        sidebarCollapsed={chatSidebarCollapsed}
         drawerOpen={mobilePortRelayFrameOpen ? false : drawerOpen}
         onCloseDrawer={() => setDrawerOpen(false)}
       />
