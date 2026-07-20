@@ -189,6 +189,12 @@ export function buildRecentChatSessionProjectSections(
     section.sessions.push(row.session);
   }
 
+  for (const section of sections) {
+    section.sessions.sort((left, right) =>
+      compareUpdatedAtDesc(left.updatedAt || '', right.updatedAt || ''),
+    );
+  }
+
   const projectOrder = new Map(
     input.projects.map((project, projectIndex) => [project.projectId, projectIndex]),
   );

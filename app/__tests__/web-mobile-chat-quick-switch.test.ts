@@ -123,6 +123,22 @@ describe('mobile chat quick switch', () => {
     expect(sections.map(section => section.projectId)).toEqual(['p1', 'p2', 'p3']);
   });
 
+  test('sorts sessions within a project by newest update, ignoring priority', () => {
+    const sections = buildRecentChatSessionProjectSections({
+      projects: [project('p1', 'Alpha')],
+      sessionsByProjectId: {
+        p1: [
+          session('p1-newer', '2026-05-08T00:00:00.000Z'),
+          session('p1-unread-old', '2026-01-03T00:00:00.000Z', {unreadCount: 2}),
+        ],
+      },
+      limit: 8,
+    });
+
+    expect(sections).toHaveLength(1);
+    expect(sections[0].sessions.map(item => item.sessionId)).toEqual(['p1-newer', 'p1-unread-old']);
+  });
+
   test('returns an empty section list when no known sessions exist', () => {
     expect(buildMobileChatQuickSwitchSections({
       projects: [project('p1')],
