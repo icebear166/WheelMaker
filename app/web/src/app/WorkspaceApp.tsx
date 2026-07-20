@@ -19151,6 +19151,16 @@ export function App() {
       <div className="chat-title-actions">
         <button
           type="button"
+          className={`chat-search-toggle${chatSearchOpen ? ' active' : ''}`}
+          onClick={() => (chatSearchOpen ? closeChatSearch() : openChatSearch())}
+          title="Search current session (Ctrl+F)"
+          aria-label="Search current session"
+          aria-pressed={chatSearchOpen}
+        >
+          <span className="codicon codicon-search" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
           className={`chat-terminal-toggle${terminalOpen ? ' active' : ''}`}
           onClick={toggleTerminalFromTitle}
           title={terminalOpen ? 'Hide terminal' : 'Show terminal'}
@@ -20670,6 +20680,7 @@ export function App() {
   }, [
     activeWorkbenchTab?.id,
     chatPreviewOpen,
+    openChatSearch,
     openQuickFileSearch,
     previewWorkbenchTabs,
     quickFileOpen,
@@ -21356,7 +21367,7 @@ export function App() {
     }
     if (event.key.toLowerCase() === 'f' && (event.ctrlKey || event.metaKey)) {
       event.preventDefault();
-      openPreviewSearch();
+      openChatSearch();
       return;
     }
     if (event.key.toLowerCase() === 'p' && (event.ctrlKey || event.metaKey)) {
