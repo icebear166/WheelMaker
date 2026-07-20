@@ -311,12 +311,15 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('const forceChatScrollToBottom = useCallback(() => {');
     expect(mainTsx).toContain('chatAutoScrollFollowRef.current = true;');
     expect(mainTsx).toContain('scrollChatToBottom(true);');
-    expect(mainTsx).toContain("import { resolveChatScrollBottomButtonOffset } from '../chat/layout/chatScrollBottomButton';");
-    expect(mainTsx).toContain('const [chatComposerHeight, setChatComposerHeight] = useState(0);');
-    expect(mainTsx).toContain('setChatComposerHeight(current => (current === nextHeight ? current : nextHeight));');
-    expect(mainTsx).toContain("'--chat-scroll-bottom-offset': `${resolveChatScrollBottomButtonOffset({");
-    expect(mainTsx).toContain('composerHeight: chatComposerHeight,');
-    expect(mainTsx).toContain('keyboardInset: chatKeyboardInset,');
+    expect(mainTsx).not.toContain('chatScrollBottomButton');
+    expect(mainTsx).not.toContain('--chat-scroll-bottom-offset');
+    expect(mainTsx).not.toContain('const [chatComposerHeight, setChatComposerHeight] = useState(0);');
+    const composerContentStart = mainTsx.indexOf('className="chat-composer-content"');
+    expect(composerContentStart).toBeGreaterThan(-1);
+    const composerFrameStart = mainTsx.indexOf('chat-composer-frame', composerContentStart);
+    expect(composerFrameStart).toBeGreaterThan(composerContentStart);
+    const composerHeaderSlice = mainTsx.slice(composerContentStart, composerFrameStart);
+    expect(composerHeaderSlice).toContain('className="chat-scroll-bottom-button"');
     expect(mainTsx).toContain('useLayoutEffect(() => {');
     expect(mainTsx).toContain('resizeChatComposerTextarea();');
     expect(mainTsx).toContain('if (shouldMeasureChatComposerLayout) {');
@@ -1243,9 +1246,11 @@ describe('web chat integration', () => {
     expect(stylesCss).toMatch(
       /\.chat-send-button \.codicon \{[\s\S]*font-size: 17px;[\s\S]*\}/,
     );
-    expect(stylesCss).toContain('.chat-scroll-bottom-button {');
-    expect(stylesCss).toContain('bottom: var(--chat-scroll-bottom-offset, 92px);');
-    expect(stylesCss).not.toContain('bottom: 92px;');
+    expect(stylesCss).toMatch(
+      /\.chat-scroll-bottom-button \{[\s\S]*right: 0;[\s\S]*bottom: calc\(100% \+ 10px\);[\s\S]*\}/,
+    );
+    expect(stylesCss).toMatch(/\.chat-composer-content \{[\s\S]*position: relative;[\s\S]*\}/);
+    expect(stylesCss).not.toContain('--chat-scroll-bottom-offset');
     expect(stylesCss).not.toContain('.chat-title-tools {');
     expect(stylesCss).not.toContain('.chat-title-option {');
     expect(stylesCss).toContain('.chat-composer-toolbar {');

@@ -166,10 +166,7 @@ describe('web chat view width settings', () => {
     expect(stylesCss).toMatch(
       /\.chat-view-width-fixed-800 \.chat-composer \{[\s\S]*padding-left: 18px;[\s\S]*padding-right: calc\(8px \+ var\(--chat-scrollbar-gutter-width, 8px\)\);[\s\S]*\}/,
     );
-    const scrollBottomButtonBlock = cssRuleBlock(stylesCss, '.chat-view-width-fixed-800 .chat-scroll-bottom-button');
-    expect(scrollBottomButtonBlock).toContain('right: max(');
-    expect(scrollBottomButtonBlock).toContain('calc(18px + var(--chat-scrollbar-gutter-width, 8px)),');
-    expect(scrollBottomButtonBlock).toContain('calc((100% - 800px) / 2 + calc(var(--chat-scrollbar-gutter-width, 8px) / 2))');
+    expect(stylesCss).not.toContain('.chat-view-width-fixed-800 .chat-scroll-bottom-button');
   });
 
   test('keeps fixed-width chat centered while preserving preview resize', () => {
