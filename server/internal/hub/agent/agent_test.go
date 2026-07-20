@@ -464,6 +464,22 @@ func TestParseACPProviderCodexAliases(t *testing.T) {
 	}
 }
 
+func TestParseACPProviderKimi(t *testing.T) {
+	provider, ok := protocol.ParseACPProvider("Kimi")
+	if !ok || provider != protocol.ACPProviderKimi {
+		t.Fatalf("ParseACPProvider(Kimi)=(%q,%v), want %q,true", provider, ok, protocol.ACPProviderKimi)
+	}
+	found := false
+	for _, name := range protocol.ACPProviderNames() {
+		if name == string(protocol.ACPProviderKimi) {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("ACPProviderNames missing kimi: %v", protocol.ACPProviderNames())
+	}
+}
+
 func TestProviderPresetByNameRejectsRemovedProvider(t *testing.T) {
 	removedProviderName := strings.Join([]string{"my", "flicker"}, "")
 	if _, ok := providerPresetByName("codexapp"); ok {
