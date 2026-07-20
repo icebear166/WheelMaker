@@ -608,7 +608,7 @@ describe('web chat file peek viewer', () => {
     });
   });
 
-  test('preview workbench shortcuts are captured globally while preview is open', () => {
+  test('global shortcuts route Ctrl+F to chat search and gate preview shortcuts on preview open', () => {
     const mainTsx = readSourceText(mainPath);
     const handlerStart = mainTsx.indexOf('const handleGlobalPreviewKeyDown = (event: KeyboardEvent) => {');
     expect(handlerStart).toBeGreaterThanOrEqual(0);
@@ -616,16 +616,19 @@ describe('web chat file peek viewer', () => {
     expect(handlerEnd).toBeGreaterThan(handlerStart);
     const handlerBody = mainTsx.slice(handlerStart, handlerEnd);
     const pShortcutIndex = handlerBody.indexOf("if (event.key.toLowerCase() === 'p' && (event.ctrlKey || event.metaKey)) {");
+    const fShortcutIndex = handlerBody.indexOf("if (event.key.toLowerCase() === 'f' && (event.ctrlKey || event.metaKey)) {");
     const previewOpenGateIndex = handlerBody.indexOf('if (!chatPreviewOpen) {');
 
     expect(handlerBody).toContain('if (!chatPreviewOpen) {');
     expect(pShortcutIndex).toBeGreaterThanOrEqual(0);
     expect(previewOpenGateIndex).toBeGreaterThan(pShortcutIndex);
+    expect(fShortcutIndex).toBeGreaterThan(pShortcutIndex);
+    expect(previewOpenGateIndex).toBeGreaterThan(fShortcutIndex);
+    expect(handlerBody).toContain('openChatSearch();');
+    expect(handlerBody).not.toContain('setPreviewSearchOpen(true);');
     expect(handlerBody).toContain("if (event.key === 'Tab' && (event.ctrlKey || event.metaKey)) {");
     expect(handlerBody).toContain("cyclePreviewTabId(previewWorkbenchTabs, activeWorkbenchTab?.id ?? '', event.shiftKey ? -1 : 1)");
     expect(handlerBody).toContain('activeTabIdByProjectId: {');
-    expect(handlerBody).toContain("if (event.key.toLowerCase() === 'f' && (event.ctrlKey || event.metaKey)) {");
-    expect(handlerBody).toContain('setPreviewSearchOpen(true);');
     expect(handlerBody).toContain("if (event.key.toLowerCase() === 'p' && (event.ctrlKey || event.metaKey)) {");
     expect(mainTsx).toContain("window.addEventListener('keydown', handleGlobalPreviewKeyDown, true);");
     expect(mainTsx).toContain("window.removeEventListener('keydown', handleGlobalPreviewKeyDown, true);");
