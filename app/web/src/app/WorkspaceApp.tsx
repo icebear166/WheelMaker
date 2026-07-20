@@ -17709,8 +17709,6 @@ export function App() {
           const projectSessions = projectSessionsByProjectId[targetProjectId] ?? [];
           const collapsed = collapsedProjectIds.includes(targetProjectId);
           const pinnedProject = pinnedProjectIds.includes(targetProjectId);
-          const agents = getWideProjectAgents(projectItem, projectSessions);
-          const actionMenuOpen = wideProjectActionMenu?.projectId === targetProjectId;
           const projectHub = projectItem.hubId || 'local';
           const projectHubVariant = tagVariantClass('wide-project-hub', projectItem.hubId || 'local');
           return (
@@ -17802,124 +17800,6 @@ export function App() {
                     <span className="codicon codicon-pinned" />
                   </button>
                 </div>
-                {actionMenuOpen ? (
-                  <div
-                    ref={wideProjectActionMenuRef}
-                    className="wide-project-action-popover"
-                    style={wideProjectActionMenu.popover
-                      ? {
-                          top: `${wideProjectActionMenu.popover.top}px`,
-                          left: `${wideProjectActionMenu.popover.left}px`,
-                          width: `${wideProjectActionMenu.popover.width}px`,
-                          maxHeight: `${wideProjectActionMenu.popover.maxHeight}px`,
-                          transform: wideProjectActionMenu.popover.placement === 'above'
-                            ? 'translateY(-100%)'
-                            : undefined,
-                        }
-                      : undefined}
-                  >
-                    <div className="wide-project-action-title">
-                      <span
-                        className={`codicon ${
-                          wideProjectActionMenu.kind === 'new'
-                            ? 'codicon-add'
-                            : 'codicon-history'
-                        }`}
-                      />
-                      <span className="wide-project-action-title-copy">
-                        <span className="wide-project-action-title-main">
-                          {wideProjectActionMenu.kind === 'new' ? 'New Session' : 'Resume Session'}
-                        </span>
-                        <span className="wide-project-action-title-sub">
-                          {projectItem.name}
-                        </span>
-                      </span>
-                    </div>
-                    {wideProjectActionMenu.phase === 'agents' ? (
-                      <>
-                        {agents.map(agentType => (
-                          <button
-                            key={`${targetProjectId}:${wideProjectActionMenu.kind}:${agentType}`}
-                            type="button"
-                            className="wide-project-action-menu-item"
-                            onClick={() => {
-                              if (wideProjectActionMenu.kind === 'new') {
-                                handleWideProjectCreateSession(
-                                  targetProjectId,
-                                  agentType,
-                                ).catch(() => undefined);
-                              } else {
-                                handleWideProjectResumeAgent(
-                                  targetProjectId,
-                                  agentType,
-                                ).catch(() => undefined);
-                              }
-                            }}
-                          >
-                            <span className="codicon codicon-sparkle" />
-                            <span>{agentType}</span>
-                          </button>
-                        ))}
-                        {agents.length === 0 ? (
-                          <div className="wide-project-action-empty">
-                            <span className="codicon codicon-circle-slash" aria-hidden="true" />
-                            <span>No agents available.</span>
-                          </div>
-                        ) : null}
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          className="wide-project-action-back"
-                          onClick={() => {
-                            setResumeSessions([]);
-                            setResumeLoading(false);
-                            setWideProjectActionMenu({
-                              ...wideProjectActionMenu,
-                              phase: 'agents',
-                              agentType: '',
-                            });
-                          }}
-                        >
-                          <span className="codicon codicon-arrow-left" />
-                          <span>{wideProjectActionMenu.agentType}</span>
-                        </button>
-                        {resumeLoading ? (
-                          <div className="wide-project-action-empty">
-                            <span className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
-                            <span>Loading sessions...</span>
-                          </div>
-                        ) : null}
-                        {!resumeLoading
-                          ? resumeSessions.map(session => (
-                              <button
-                                key={`${targetProjectId}:resume:${session.sessionId}`}
-                                type="button"
-                                className="wide-project-action-menu-item"
-                                onClick={() => {
-                                  handleWideProjectResumeImport(
-                                    targetProjectId,
-                                    wideProjectActionMenu.agentType,
-                                    session.sessionId,
-                                  ).catch(() => undefined);
-                                }}
-                              >
-                                <span className="codicon codicon-history" />
-                                <span>{resolveSessionDisplayTitle(session) || session.sessionId}</span>
-                              </button>
-                            ))
-                          : null}
-                        {!resumeLoading && resumeSessions.length === 0 ? (
-                          <div className="wide-project-action-empty">
-                            <span className="codicon codicon-history" aria-hidden="true" />
-                            <span>No resumable sessions.</span>
-                          </div>
-                        ) : null}
-                      </>
-                    )}
-                  </div>
-                ) : null}
               </div>
               {!collapsed ? (
                 <div className="wide-project-session-list">
@@ -19637,7 +19517,7 @@ export function App() {
               {renderWideProjectSessionNav()}
             </ChatSessionPanel>
           ) : null}
-          {chatSidebarCollapsed ? renderWideProjectActionMenu() : null}
+          {isWide ? renderWideProjectActionMenu() : null}
           {!isWide ? (
             <ChatPlanSurface
               mode="mobile"

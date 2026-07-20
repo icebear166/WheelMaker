@@ -129,9 +129,10 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('</ChatRecentSessionsSurface>');
   });
 
-  test('keeps pinned Recent session actions available after the desktop sidebar unmounts', () => {
+  test('renders the wide project action menu once outside transformed session panels', () => {
     expect(mainTsx).toContain('const renderWideProjectActionMenu = (');
-    expect(mainTsx).toContain('chatSidebarCollapsed ? renderWideProjectActionMenu() : null');
+    expect(mainTsx.match(/className="wide-project-action-popover"/g)).toHaveLength(1);
+    expect(mainTsx).toContain('isWide ? renderWideProjectActionMenu() : null');
   });
 
   test('recent surface shares the rail collapse state', () => {
