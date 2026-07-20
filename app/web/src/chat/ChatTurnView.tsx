@@ -2,6 +2,7 @@ import React from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 
 import { useMarkdownCapabilityPlugins } from '../code/markdownPreview';
+import {ChatActivityDots} from './ChatActivityDots';
 import type {
   RegistryChatMessage,
   RegistrySessionContentBlock,
@@ -223,6 +224,7 @@ const CollapsibleThought = React.memo(function CollapsibleThought({
         <span className="codicon codicon-lightbulb chat-thought-icon" aria-hidden="true" />
         <span className="chat-thought-title" title={!open && finished ? firstLine : undefined}>
           {title}
+          {!finished ? <ChatActivityDots /> : null}
         </span>
       </button>
       {open ? (

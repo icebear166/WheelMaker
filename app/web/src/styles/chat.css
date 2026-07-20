@@ -2845,8 +2845,28 @@
   white-space: nowrap;
 }
 
-.chat-thought-block.streaming .chat-thought-icon {
-  animation: chatThinkingPulse 1.4s ease-in-out infinite;
+.chat-thought-block.streaming .chat-thought-icon,
+.chat-tool-group-running .chat-tool-group-summary-icon {
+  animation: chatActivityPulse 1.4s ease-in-out infinite;
+}
+
+.chat-activity-dots {
+  display: inline-flex;
+  width: 1.15em;
+  margin-left: 1px;
+  justify-content: space-between;
+}
+
+.chat-activity-dots > span {
+  animation: chatActivityDot 1.4s ease-in-out infinite;
+}
+
+.chat-activity-dots > span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.chat-activity-dots > span:nth-child(3) {
+  animation-delay: 0.4s;
 }
 
 .chat-thought-content {
@@ -2865,9 +2885,22 @@
   margin-bottom: 0;
 }
 
-@keyframes chatThinkingPulse {
+@keyframes chatActivityPulse {
   0%, 100% { opacity: 0.45; }
   50% { opacity: 1; }
+}
+
+@keyframes chatActivityDot {
+  0%, 20%, 100% { opacity: 0.2; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-thought-block.streaming .chat-thought-icon,
+  .chat-tool-group-running .chat-tool-group-summary-icon,
+  .chat-activity-dots > span {
+    animation: none;
+  }
 }
 
 .chat-recent-sessions-surface {

@@ -60,9 +60,9 @@ describe('chat turn groups', () => {
       );
     });
 
-    expect(view.root.findByProps({className: 'chat-thought-title'}).children).toEqual([
-      'Thinking',
-    ]);
+    expect(view.root.findByProps({className: 'chat-thought-title'}).children[0]).toBe('Thinking');
+    expect(view.root.findAllByProps({className: 'chat-activity-dots'})).toHaveLength(1);
+    expect(view.root.findByProps({className: 'chat-activity-dots'}).children).toHaveLength(3);
     expect(view.root.findAllByProps({className: 'codicon codicon-chevron-right chat-thought-chevron'}))
       .toHaveLength(1);
     expect(view.root.findAllByProps({className: 'chat-thought-content'})).toHaveLength(0);
@@ -71,9 +71,8 @@ describe('chat turn groups', () => {
       view.root.findByProps({'aria-label': 'Expand thinking'}).props.onClick();
     });
     expect(view.root.findAllByProps({className: 'chat-thought-content'})).toHaveLength(1);
-    expect(view.root.findByProps({className: 'chat-thought-title'}).children).toEqual([
-      'Thinking',
-    ]);
+    expect(view.root.findByProps({className: 'chat-thought-title'}).children[0]).toBe('Thinking');
+    expect(view.root.findAllByProps({className: 'chat-activity-dots'})).toHaveLength(1);
 
     await ReactTestRenderer.act(() => {
       view.update(
@@ -85,6 +84,7 @@ describe('chat turn groups', () => {
       );
     });
     expect(view.root.findAllByProps({className: 'chat-thought-content'})).toHaveLength(1);
+    expect(view.root.findAllByProps({className: 'chat-activity-dots'})).toHaveLength(0);
 
     await ReactTestRenderer.act(() => {
       view.root.findByProps({'aria-label': 'Collapse thinking'}).props.onClick();
@@ -107,6 +107,10 @@ describe('chat turn groups', () => {
 
     expect(header).toContain('height: 28px;');
     expect(styles).toContain('.chat-thought-block.streaming .chat-thought-icon');
+    expect(styles).toContain('.chat-thought-block.streaming .chat-thought-icon,');
+    expect(styles).toContain('.chat-tool-group-running .chat-tool-group-summary-icon');
+    expect(styles).toContain('.chat-activity-dots > span');
+    expect(styles).toContain('@keyframes chatActivityDot');
     expect(block).toContain('margin: 0;');
     expect(block).not.toContain('accent-primary');
     expect(content).not.toContain('background: color-mix');
@@ -125,9 +129,13 @@ describe('chat turn groups', () => {
       view = ReactTestRenderer.create(<ChatToolCallGroup messages={first} />);
     });
 
-    expect(view.root.findByProps({className: 'chat-tool-group-count'}).children).toEqual([
-      'Call 2 tools',
-    ]);
+    expect(view.root.findByProps({className: 'chat-tool-group-count'}).children[0]).toBe('Calling 2 tools');
+    expect(view.root.findAllByProps({className: 'chat-activity-dots'})).toHaveLength(1);
+    expect(view.root.find(node => (
+      typeof node.props.className === 'string' &&
+      node.props.className.split(' ').includes('chat-tool-group')
+    )).props.className)
+      .toContain('chat-tool-group-running');
     expect(view.root.findByProps({className: 'chat-tool-group-latest'}).children).toEqual([
       'Search turns',
     ]);
@@ -147,7 +155,11 @@ describe('chat turn groups', () => {
     await ReactTestRenderer.act(() => {
       view.update(
         <ChatToolCallGroup
-          messages={[...first, tool(4, 'Run tests', 'completed')]}
+          messages={[
+            tool(2, 'Read CLAUDE.md', 'completed'),
+            tool(3, 'Search turns', 'completed'),
+            tool(4, 'Run tests', 'completed'),
+          ]}
         />,
       );
     });
@@ -158,8 +170,14 @@ describe('chat turn groups', () => {
       node.props.className.includes('chat-tool-group-status')
     ))).toHaveLength(3);
     expect(view.root.findByProps({className: 'chat-tool-group-count'}).children).toEqual([
-      'Call 3 tools',
+      'Called 3 tools',
     ]);
+    expect(view.root.findAllByProps({className: 'chat-activity-dots'})).toHaveLength(0);
+    expect(view.root.find(node => (
+      typeof node.props.className === 'string' &&
+      node.props.className.split(' ').includes('chat-tool-group')
+    )).props.className)
+      .not.toContain('chat-tool-group-running');
     expect(view.root.findAllByProps({className: 'chat-tool-group-latest'})).toHaveLength(0);
 
     await ReactTestRenderer.act(() => {
@@ -203,6 +221,7 @@ describe('chat turn groups', () => {
     expect(styles).toContain('text-overflow: ellipsis;');
     expect(chevron).toContain('color: var(--text-tertiary);');
     expect(summaryIcon).toContain('color: inherit;');
+    expect(styles).toContain('.chat-tool-group-running .chat-tool-group-summary-icon');
     expect(styles).toContain('.chat-tool-group-open .chat-tool-group-chevron');
   });
 });

@@ -1,6 +1,7 @@
 import React from 'react';
 
 import type {RegistryChatMessage} from '../registry/registryTypes';
+import {ChatActivityDots} from './ChatActivityDots';
 
 type ToolCallView = {
   key: string;
@@ -49,6 +50,10 @@ function toolStatusClass(status: string): string {
   return 'unknown';
 }
 
+function toolCallRunning(status: string): boolean {
+  return status === 'in_progress' || status === 'pending' || status === 'running';
+}
+
 export const ChatToolCallGroup = React.memo(function ChatToolCallGroup({
   messages,
 }: {
@@ -63,10 +68,11 @@ export const ChatToolCallGroup = React.memo(function ChatToolCallGroup({
     status: '',
   };
   const count = calls.length;
-  const countLabel = `Call ${count} ${count === 1 ? 'tool' : 'tools'}`;
+  const running = calls.some(call => toolCallRunning(call.status));
+  const countLabel = `${running ? 'Calling' : 'Called'} ${count} ${count === 1 ? 'tool' : 'tools'}`;
 
   return (
-    <div className={`chat-tool-group${open ? ' chat-tool-group-open' : ''}`}>
+    <div className={`chat-tool-group${running ? ' chat-tool-group-running' : ''}${open ? ' chat-tool-group-open' : ''}`}>
       <button
         type="button"
         className="chat-tool-group-header"
@@ -77,7 +83,10 @@ export const ChatToolCallGroup = React.memo(function ChatToolCallGroup({
       >
         <span className="codicon codicon-chevron-right chat-tool-group-chevron" aria-hidden="true" />
         <span className="codicon codicon-tools chat-tool-group-summary-icon" aria-hidden="true" />
-        <span className="chat-tool-group-count">{countLabel}</span>
+        <span className="chat-tool-group-count">
+          {countLabel}
+          {running ? <ChatActivityDots /> : null}
+        </span>
         {!open ? (
           <>
             <span className="chat-tool-group-separator" aria-hidden="true">·</span>
