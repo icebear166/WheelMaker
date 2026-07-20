@@ -290,15 +290,8 @@ func (r *SessionRecorder) RecordSessionOperation(ctx context.Context, sessionID 
 	}
 	projection.LatestPersistedTurnIndex = turnIndex
 	rec.SessionSyncJSON = sessionSyncProjectionJSON(projection)
-	updatedAt := time.Now().UTC()
-	if payload.Status == acp.SessionOperationStatusStarted {
-		if parsed, err := time.Parse(time.RFC3339, payload.StartedAt); err == nil {
-			updatedAt = parsed.UTC()
-		}
-	} else if parsed, err := time.Parse(time.RFC3339, payload.CompletedAt); err == nil {
-		updatedAt = parsed.UTC()
-	}
-	rec.LastActiveAt = updatedAt
+	// Session operations (e.g. compact) are not prompt activity and must not
+	// advance LastActiveAt; only session create, prompt start and prompt done do.
 	if err := r.store.SaveSession(ctx, rec); err != nil {
 		return err
 	}
