@@ -6387,3 +6387,27 @@
   );
   margin-right: auto;
 }
+
+
+.chat-session-panel .chat-edge-surface-header {
+  position: relative;
+  grid-template-columns: 0 auto minmax(0, 1fr) auto auto;
+}
+
+.chat-session-panel .chat-edge-surface-toggle-spacer {
+  display: none;
+}
+
+.chat-session-panel .chat-header-search-wrap {
+  position: absolute;
+  top: 50%;
+  left: 8px;
+  right: 8px;
+  z-index: 2;
+  transform: translateY(-50%);
+  background: var(--surface-panel);
+}
+
+.chat-session-panel .chat-header-search-status {
+  display: none;
+}
