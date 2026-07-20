@@ -1,4 +1,4 @@
-> 摘要：本页维护 PC 端 Chat 的固定地址栏、复用的浮动/滑出/pin 会话面板，以及 Plan/Limits 悬浮列与 800px 对话列的布局规则。
+> 摘要：本页维护 PC 端 Chat 的固定地址栏、复用的浮动/滑出/pin 会话面板，以及 Plan/Limits 悬浮列与 800px 对话列的布局规则、搜索入口与 Archived 视图约定。
 
 # PC Chat 侧边栏模式
 
@@ -9,6 +9,8 @@ PC 端（宽屏 ≥900px）Chat 有浮动与 pin 两种会话面板模式。浮�
 - **顶部地址栏**保留设置按钮、当前 Project 下拉与 hubs 下拉，搜索/archive 和会话栏展开按钮不在其中。PC 左段固定 360px，与浮动/滑出/固定会话面板共用 `--chat-session-panel-width`，内部按「设置 → 8px 间距 → Project → 弹性空白 → Hubs」排列；Hubs 右边缘与下方 Sessions 卡片右边缘对齐。中部只保留 prompt 历史入口与标题，并独占可伸缩空间，终端/预览操作固定在右侧。桌面 Shell 在 Session 与 Chat 内容上方只渲染一个顶栏实例；浮动、滑出和 pin 只替换其下方的会话面板，不移动、卸载或重新挂载顶栏。地址栏不读取 session 搜索展开状态：搜索只改变 Sessions 面板标题栏和列表内容。右侧 Preview 是顶栏所属主工作区的同级区域，继续使用自己的标题栏。移动端继续使用原有 Project 与 session 标题组合。
 - **浮动卡片标题栏**统一由 `ChatEdgeSurfaceHeader` 提供，Sessions、Plan、Limits 都使用 36px 高度、左侧折叠按钮、11px uppercase 标题和右侧操作区。展开态使用向下 chevron，收起态使用向右 chevron；收起只隐藏正文。Plan 可以在收起标题栏中保留一行截断的当前步骤和进度。
 - **Sessions 布局操作**固定在标题栏右侧，顺序是完整会话栏、Pin；完整会话栏使用 `layout-sidebar-left`，打开后切换为 `layout-sidebar-left-off`。浮动态在完整会话栏图标左侧固定显示 **Ctrl+1**，强化该图标与键盘快捷键的对应关系；滑出态与 pin 态不显示这项提示。滑出态把 archive 与 search 放在标题后的左侧操作区，关闭完整栏与 Pin 保持右侧位置；pin 态只保留右侧高亮 Pin。浮动态标题显示 **Recent Sessions**，滑出与 pin 态继续显示 **Sessions**。
+
+- **Sessions 搜索展开**：搜索框弹出时向左展开，左边缘与侧栏左边框对齐；搜索展开模式下 Sessions 标题文字与左侧对齐。
 
 ## 浮动态滑出会话导航
 
@@ -26,11 +28,11 @@ Recent Sessions 的选取与排序规则跨 PC（浮动/滑出/pin）和移动�
 
 ## pin 模式
 
-pin 态把同构 Sessions 面板以 360px 固定宽度放进固定顶栏下方的左侧布局，不提供宽度拖拽；File/Git 等非 Chat 侧栏仍保留原有可调宽度。Sessions 标题栏位于固定顶栏下方，Pin 按钮保持强调色激活状态，完整会话导航使用余下空间独立滚动；顶部 Recent 内容保留强调分区，后面再接普通项目列表。浮动 Recent Sessions 面板隐藏。Plan 与 Limits 从左侧悬浮列移动到固定 Sessions 面板右侧的聊天主区左缘，上下堆叠、绝对定位，不参与聊天内容布局，并继续使用悬浮列统一的 8px 左右 padding。pin/unpin 切换继续复用相同的 Recent 内容渲染与行布局，但浮动态直接以 **RECENT SESSIONS** 作为卡片标题并隐藏重复的分区标题，pin 态则保持 **SESSIONS → RECENT** 的平直全高侧栏。
+pin 态把同构 Sessions 面板以 360px 固定宽度放进固定顶栏下方的左侧布局，不提供宽度拖拽；File/Git 等非 Chat 侧栏仍保留原有可调宽度。Sessions 标题栏位于固定顶栏下方，Pin 按钮保持强调色激活状态，完整会话导航使用余下空间独立滚动；顶部 Recent 内容保留强调分区，后面再接普通项目列表。浮动 Recent Sessions 面板隐藏。Plan 与 Limits 从左侧悬浮列移动到固定 Sessions 面板右侧的聊天主区左缘，上下堆叠、绝对定位，不参与聊天内容布局，并继续使用悬浮列统一的 8px 左右 padding，与固定顶栏下缘也保持与浮动态一致的 8px 顶部间距。pin/unpin 切换继续复用相同的 Recent 内容渲染与行布局，但浮动态直接以 **RECENT SESSIONS** 作为卡片标题并隐藏重复的分区标题，pin 态则保持 **SESSIONS → RECENT** 的平直全高侧栏。
 
 ## 800px 对话列连续对齐
 
-800px 视图模式下，文字列使用连续的 margin 与宽度公式。主窗口 W = 窗口宽 − preview 宽 − pin 侧边栏宽（浮动态为 0），R 为悬浮列预留宽（360px 浮动列宽 + 0px edge gap + 12px 列间距），V = 100px 为悬浮卡片最小可见宽度。文字列随 W 连续变化、无跳变：
+对话列固定为 800px，不再提供 full 宽度档与设置项，旧持久化宽度值直接忽略。文字列使用连续的 margin 与宽度公式。主窗口 W = 窗口宽 − preview 宽 − pin 侧边栏宽（浮动态为 0），R 为悬浮列预留宽（360px 浮动列宽 + 0px edge gap + 12px 列间距），V = 100px 为悬浮卡片最小可见宽度。文字列随 W 连续变化、无跳变：
 
 1. **居中段**：左 margin = (W − 800) / 2；
 2. **左贴段**：居中会侵入 R 时，左 margin 保持 R，右 gutter 继续收缩；
@@ -38,3 +40,9 @@ pin 态把同构 Sessions 面板以 360px 固定宽度放进固定顶栏下方�
 4. **压缩段**：浮窗只剩 V 可见时，左 margin 保持 V，对话列从 800px 开始随 W 压缩，不再继续遮挡浮窗。
 
 pin 态与浮动态共用同一公式。Plan/Limits 在 pin 态是聊天主区内的悬浮层；空间不足时覆盖并淡出对话左缘，而不额外占用对话布局宽度。
+
+## 搜索入口与 Archived 视图
+
+- 搜索入口按区域归属：chat 标题栏搜索按钮打开当前会话搜索，Sessions 标题栏搜索按钮打开跨会话搜索，Preview chrome 搜索按钮打开文件内搜索；会话搜索条只覆盖 800px 对话列上方，不提供多目标切换器。
+- Windows 上 Ctrl+F 为全局唯一入口：在聊天区居中弹出模态搜索选择器，列「当前会话 / 所有会话 / 文件预览」三个目标，↑/↓ 或 Tab/Shift+Tab 循环切换，Enter 进入对应搜索栏（目标未展开则自动展开，preview 无内容时目标禁用），Esc 关闭；各窗口不再单独监听 Ctrl+F。非 Windows 平台不拦截 Ctrl/Cmd+F，走系统或浏览器原生查找。
+- Archived 列表视图在会话面板内完整可见，不被右侧悬浮列等任何层遮挡；归档会话行保持一条一行，标题与操作不折行、不错位。
