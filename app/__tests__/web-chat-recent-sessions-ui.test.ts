@@ -36,8 +36,6 @@ describe('web chat recent sessions', () => {
   test('recent sessions reuse the grouped shared builder with an 8-item cap', () => {
     expect(mainTsx).toContain('buildRecentChatSessionProjectSections({');
     expect(mainTsx).toContain('limit: 8,');
-    // Right-click quick switch keeps its own 6-item cap.
-    expect(mainTsx).toContain('limit: 6,');
   });
 
   test('renders recent project context as a quiet micro divider between groups', () => {

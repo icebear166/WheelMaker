@@ -35,7 +35,6 @@ import { initializePWAFoundation } from '../platform/pwa';
 import {cleanupNativeWebViewPWA} from '../platform/pwa/nativePwaGuard';
 import { DesktopDragRegion, DesktopWindowControls } from '../shell/layouts/desktop/DesktopTitleBar';
 import {LocalDevModePanel} from '../shell/layouts/desktop/LocalDevModePanel';
-import {resolveDesktopChatQuickSwitchContextMenu} from '../shell/layouts/desktop/chatQuickSwitchContextMenu';
 import {
   getDesktopWindowBridge,
   invokeDesktopProjectFileAction,
@@ -103,12 +102,10 @@ import {
   type ChatSessionSlashOption,
 } from '../chat/session/chatSessionActions';
 import {
-  buildMobileChatQuickSwitchSections,
   buildRecentChatSessionProjectSections,
   hasCompletedUnreadChatSession,
   type RecentChatSessionProjectSection,
 } from '../chat/mobileChatQuickSwitch';
-import {ChatQuickSwitchMenu} from '../chat/ChatQuickSwitchMenu';
 import { ChatSessionNav } from '../chat/ChatSessionNav';
 import { ChatSurface } from '../chat/ChatSurface';
 import { ChatTurnView } from '../chat/ChatTurnView';
@@ -659,9 +656,6 @@ type ProjectSessionActionMenuState = {
   sessionId: string;
   popover?: WideProjectActionPopoverPlacement | null;
 };
-type ChatQuickSwitchMenuPlacement =
-  | {kind: 'mobile'}
-  | {kind: 'desktop'; style: React.CSSProperties};
 type SettingsDetailView = SettingsDetailId | null;
 const WHEELMAKER_UPDATE_JOB_POLL_DELAY_MS = 1500;
 type WheelMakerUpdateHubView = {
@@ -898,7 +892,6 @@ const SIDEBAR_TRANSIENT_MENU_SELECTOR = [
   '.chat-hub-popover',
   '.chat-title-project-menu',
   '.chat-title-prompt-menu',
-  '.chat-quick-switch-menu',
 ].join(', ');
 const DESKTOP_SIDEBAR_VIEWPORT_MAX_RATIO = 0.45;
 const CHAT_FIXED_VIEW_WIDTH = 800;
@@ -3455,11 +3448,7 @@ export function App() {
   const [chatTitlePromptMenuOpen, setChatTitlePromptMenuOpen] = useState(false);
   const chatTitlePromptButtonRef = useRef<HTMLButtonElement | null>(null);
   const chatTitlePromptMenuRef = useRef<HTMLDivElement | null>(null);
-  const [chatQuickSwitchMenuOpen, setChatQuickSwitchMenuOpen] = useState(false);
-  const [chatQuickSwitchMenuPlacement, setChatQuickSwitchMenuPlacement] = useState<ChatQuickSwitchMenuPlacement>({kind: 'mobile'});
-  const [chatQuickSwitchCreateProjectId, setChatQuickSwitchCreateProjectId] = useState('');
-  const [chatQuickSwitchCreatePendingKey, setChatQuickSwitchCreatePendingKey] = useState('');
-  const chatQuickSwitchMenuRef = useRef<HTMLDivElement | null>(null);
+
   const [chatSlashQuery, setChatSlashQuery] = useState<string | null>(null);
   const [chatSlashActiveIndex, setChatSlashActiveIndex] = useState(0);
   const chatFileMentionQuerySessionIdRef = useRef(`file-query-${Date.now()}`);
@@ -4215,10 +4204,7 @@ export function App() {
     });
     chatAutoScrollFollowRef.current = visibility.atBottom;
     setChatShowScrollToBottom(visibility.showScrollToBottom);
-    if (chatQuickSwitchMenuPlacement.kind === 'desktop') {
-      setChatQuickSwitchMenuOpen(false);
-    }
-  }, [chatQuickSwitchMenuPlacement.kind]);
+  }, []);
 
   const scrollChatToBottom = useCallback((force = false) => {
     if (!shouldAutoscrollChat(force)) {
@@ -4233,14 +4219,6 @@ export function App() {
       setChatShowScrollToBottom(false);
     });
   }, [shouldAutoscrollChat]);
-
-  useEffect(() => {
-    if (chatQuickSwitchMenuOpen) {
-      return;
-    }
-    setChatQuickSwitchCreateProjectId('');
-    setChatQuickSwitchCreatePendingKey('');
-  }, [chatQuickSwitchMenuOpen]);
 
   const forceChatScrollToBottom = useCallback(() => {
     const runtimeKey = encodeChatSessionKey(selectedChatKeyRef.current);
@@ -5285,14 +5263,6 @@ export function App() {
       olderSessionsExpandedByProjectId,
     );
   }, [olderSessionsExpandedByProjectId]);
-  const mobileChatQuickSwitchSections = useMemo(
-    () => buildMobileChatQuickSwitchSections({
-      projects: visibleProjectItems,
-      sessionsByProjectId: projectSessionsByProjectId,
-      limit: 6,
-    }),
-    [projectSessionsByProjectId, visibleProjectItems],
-  );
   const hasCompletedUnreadChatSessionIndicator = useMemo(
     () => hasCompletedUnreadChatSession({
       projects: visibleProjectItems,
@@ -5348,7 +5318,6 @@ export function App() {
     setChatHubColorMenuHubId('');
     setChatTitleProjectMenuOpen(false);
     setChatTitlePromptMenuOpen(false);
-    setChatQuickSwitchMenuOpen(false);
   }, []);
   const closeSidebarTransientMenusOnScroll = useCallback((event: Event) => {
     const target = event.target;
@@ -5365,7 +5334,7 @@ export function App() {
     const closeSidebarMenusOnOtherButton = (event: PointerEvent) => {
       const target = event.target as Element | null;
       if (target?.closest(
-        '.wide-project-action-popover, .project-session-action-menu, .mobile-project-sheet, .session-archive-menu, .chat-hub-popover, .chat-title-project-menu, .chat-title-prompt-menu, .chat-quick-switch-menu',
+        '.wide-project-action-popover, .project-session-action-menu, .mobile-project-sheet, .session-archive-menu, .chat-hub-popover, .chat-title-project-menu, .chat-title-prompt-menu',
       )) {
         return;
       }
@@ -5376,13 +5345,6 @@ export function App() {
     window.addEventListener('pointerdown', closeSidebarMenusOnOtherButton, true);
     return () => window.removeEventListener('pointerdown', closeSidebarMenusOnOtherButton, true);
   }, [closeSidebarTransientMenus]);
-
-  const mobileChatQuickSwitchMenuStyle = useMemo<React.CSSProperties>(() => ({
-    top: portRelayReady && portRelayFrameUrl ? 56 : 0,
-  }), [portRelayFrameUrl, portRelayReady]);
-  const chatQuickSwitchMenuStyle = chatQuickSwitchMenuPlacement.kind === 'desktop'
-    ? chatQuickSwitchMenuPlacement.style
-    : mobileChatQuickSwitchMenuStyle;
 
   useEffect(() => {
     projectIdRef.current = projectId;
@@ -6498,7 +6460,6 @@ export function App() {
     [selectedDiff],
   );
   const closeMobileDrawerCompanionOverlays = useCallback(() => {
-    setChatQuickSwitchMenuOpen(false);
     setPortRelayTargetMenuOpen(false);
     setChatPromptMenuOpen(false);
     setChatFileMentionMenuOpen(false);
@@ -6933,7 +6894,6 @@ export function App() {
   const floatingControlsIdle = floatingDragVisualState === 'idle'
     && !drawerOpen
     && !portRelayTargetMenuOpen
-    && !chatQuickSwitchMenuOpen
     && !mobilePortRelayFrameOpen;
   const clearGestureMoveLongPressTimer = useCallback(() => {
     if (gestureMoveLongPressTimerRef.current !== null) {
@@ -6985,39 +6945,6 @@ export function App() {
       floatingCooldownTimerRef.current = null;
     }, remaining);
   }, [clearFloatingCooldownTimer]);
-  useEffect(() => {
-    if (mobilePortRelayFrameOpen) {
-      setChatQuickSwitchMenuOpen(false);
-    }
-  }, [mobilePortRelayFrameOpen]);
-  useEffect(() => {
-    if (tab !== 'chat' || sidebarSettingsOpen) {
-      setChatQuickSwitchMenuOpen(false);
-    }
-  }, [sidebarSettingsOpen, tab]);
-  useEffect(() => {
-    if (!chatQuickSwitchMenuOpen) {
-      return;
-    }
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target instanceof Node ? event.target : null;
-      if (target && chatQuickSwitchMenuRef.current?.contains(target)) {
-        return;
-      }
-      setChatQuickSwitchMenuOpen(false);
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setChatQuickSwitchMenuOpen(false);
-      }
-    };
-    window.addEventListener('pointerdown', handlePointerDown);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('pointerdown', handlePointerDown);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [chatQuickSwitchMenuOpen]);
   const handleFloatingPointerMove = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       const current = floatingDragStateRef.current;
@@ -9072,7 +8999,6 @@ export function App() {
     });
     if (!isWide) {
       setDrawerOpen(false);
-      setChatQuickSwitchMenuOpen(false);
       if (!chatFilePeekHistoryActiveRef.current) {
         window.history.pushState(createChatFilePeekHistoryState(), '', window.location.href);
         chatFilePeekHistoryActiveRef.current = true;
@@ -9195,7 +9121,6 @@ export function App() {
     setError('');
     if (!isWide) {
       setDrawerOpen(false);
-      setChatQuickSwitchMenuOpen(false);
       if (!chatFilePeekHistoryActiveRef.current) {
         window.history.pushState(createChatFilePeekHistoryState(), '', window.location.href);
         chatFilePeekHistoryActiveRef.current = true;
@@ -13113,7 +13038,6 @@ export function App() {
     if (!isWide) {
       setDrawerOpen(false);
       setSidebarSettingsOpen(false);
-      setChatQuickSwitchMenuOpen(false);
       if (!chatFilePeekHistoryActiveRef.current) {
         window.history.pushState(createChatFilePeekHistoryState(), '', window.location.href);
         chatFilePeekHistoryActiveRef.current = true;
@@ -14869,7 +14793,6 @@ export function App() {
     }
     setChatTitleProjectMenuOpen(false);
     setChatTitlePromptMenuOpen(false);
-    setChatQuickSwitchMenuOpen(false);
     setSidebarSettingsOpen(false);
     setTab('chat');
     const targetSession = resolveChatTitleProjectSession(targetProjectId);
@@ -15989,38 +15912,6 @@ export function App() {
     return body;
   };
 
-  const handleMobileChatQuickSwitchSelect = useCallback(async (targetProjectId: string, session: RegistryChatSession) => {
-    setChatQuickSwitchMenuOpen(false);
-    setPortRelayTargetMenuOpen(false);
-    setSidebarSettingsOpen(false);
-    setDrawerOpen(false);
-    setTab('chat');
-    const currentKey = selectedChatKeyRef.current;
-    if (currentKey?.projectId === targetProjectId && currentKey.sessionId === session.sessionId) {
-      return;
-    }
-    await selectProjectChatSession(targetProjectId, session.sessionId, {closeMobileDrawer: true});
-  }, [selectProjectChatSession, setDrawerOpen, setSidebarSettingsOpen, setTab]);
-
-  const handleChatQuickSwitchContextMenu = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    const result = resolveDesktopChatQuickSwitchContextMenu({
-      desktopLayout: isWide,
-      target: event.target,
-      selectedText: window.getSelection()?.toString() ?? '',
-      clientX: event.clientX,
-      clientY: event.clientY,
-      viewportWidth: window.innerWidth,
-      viewportHeight: window.innerHeight,
-    });
-    if (!result.open) {
-      return;
-    }
-    event.preventDefault();
-    setPortRelayTargetMenuOpen(false);
-    setChatQuickSwitchMenuPlacement({kind: 'desktop', style: result.style});
-    setChatQuickSwitchMenuOpen(true);
-  }, [isWide]);
-
   const handleProjectCreateSession = async (
     targetProjectId: string,
     agentType: string,
@@ -16068,32 +15959,6 @@ export function App() {
   const handleMobileProjectCreateSession = async (targetProjectId: string, agentType: string) => {
     await handleProjectCreateSession(targetProjectId, agentType, {closeMobileDrawer: true});
   };
-
-  const getQuickSwitchProjectAgents = useCallback((targetProjectId: string): string[] => {
-    const projectItem = visibleProjectItems.find(item => item.projectId === targetProjectId);
-    if (!projectItem) {
-      return [];
-    }
-    return getWideProjectAgents(projectItem, projectSessionsByProjectId[targetProjectId] ?? []);
-  }, [getWideProjectAgents, projectSessionsByProjectId, visibleProjectItems]);
-
-  const handleQuickSwitchToggleCreateProject = useCallback((targetProjectId: string) => {
-    setChatQuickSwitchCreateProjectId(current => current === targetProjectId ? '' : targetProjectId);
-  }, []);
-
-  const handleQuickSwitchCreateSession = useCallback(async (targetProjectId: string, agentType: string) => {
-    const pendingKey = `${targetProjectId}:${agentType}`;
-    if (chatQuickSwitchCreatePendingKey) {
-      return;
-    }
-    setChatQuickSwitchCreatePendingKey(pendingKey);
-    const created = await handleProjectCreateSession(targetProjectId, agentType, {closeMobileDrawer: true});
-    if (created) {
-      setChatQuickSwitchMenuOpen(false);
-      setChatQuickSwitchCreateProjectId('');
-    }
-    setChatQuickSwitchCreatePendingKey(current => current === pendingKey ? '' : current);
-  }, [chatQuickSwitchCreatePendingKey, handleProjectCreateSession]);
 
   const handleWideProjectResumeAgent = async (targetProjectId: string, agentType: string) => {
     agentType = normalizeAgentTypeName(agentType);
@@ -18392,7 +18257,6 @@ export function App() {
     );
     if (!isWide) {
       setDrawerOpen(false);
-      setChatQuickSwitchMenuOpen(false);
       if (!chatFilePeekHistoryActiveRef.current) {
         window.history.pushState(createChatFilePeekHistoryState(), '', window.location.href);
         chatFilePeekHistoryActiveRef.current = true;
@@ -18950,7 +18814,6 @@ export function App() {
     setChatConfigMenuOptionId('');
     setChatConfigOverflowOpen(false);
     setChatHubMenuOpen(false);
-    setChatQuickSwitchMenuOpen(false);
     setChatTitleProjectMenuOpen(false);
     setChatTitlePromptMenuOpen(open => !open);
   };
@@ -18962,7 +18825,6 @@ export function App() {
       onPointerDown={event => event.stopPropagation()}
       onClick={() => {
         setChatTitlePromptMenuOpen(false);
-        setChatQuickSwitchMenuOpen(false);
         setChatTitleProjectMenuOpen(open => !open);
       }}
       title="Switch project"
@@ -19005,7 +18867,6 @@ export function App() {
         onPointerDown={event => event.stopPropagation()}
         onClick={() => {
           setChatTitlePromptMenuOpen(false);
-          setChatQuickSwitchMenuOpen(false);
           setChatTitleProjectMenuOpen(open => !open);
         }}
         title="Switch project"
@@ -19388,7 +19249,6 @@ export function App() {
               ref={chatScrollRef}
               className="scroll-panel chat-block"
               onScroll={handleChatScroll}
-              onContextMenu={handleChatQuickSwitchContextMenu}
               onWheel={event => { if (event.deltaY < 0) { markChatUserScrollIntent(); } }}
               onPointerDown={() => { chatPointerScrollingRef.current = true; }}
               onPointerUp={() => { chatPointerScrollingRef.current = false; }}
@@ -20690,28 +20550,6 @@ export function App() {
     <span className="codicon codicon-refresh" />
   );
 
-  const chatQuickSwitchMenuBlockedByPreview = chatPreviewOpen && (chatQuickSwitchMenuPlacement.kind !== 'desktop' || !isWide);
-  const chatQuickSwitchMenu = chatQuickSwitchMenuOpen && tab === 'chat' && !sidebarSettingsOpen && !mobilePortRelayFrameOpen && !chatQuickSwitchMenuBlockedByPreview ? (
-    <ChatQuickSwitchMenu
-      ref={chatQuickSwitchMenuRef}
-      sections={mobileChatQuickSwitchSections}
-      placement={chatQuickSwitchMenuPlacement.kind}
-      style={chatQuickSwitchMenuStyle}
-      createProjectId={chatQuickSwitchCreateProjectId}
-      createPendingKey={chatQuickSwitchCreatePendingKey}
-      isSessionSelected={(targetProjectId, session) =>
-        selectedChatEncodedKey === buildChatRuntimeKey(targetProjectId, session.sessionId)
-      }
-      renderSessionStateMarker={renderSessionStateMarker}
-      resolveSessionTitle={resolveSessionDisplayTitle}
-      formatSessionAge={formatCompactRelativeAge}
-      getProjectAgents={getQuickSwitchProjectAgents}
-      resolveProjectHubStyle={hubAccentStyle}
-      onToggleCreateProject={handleQuickSwitchToggleCreateProject}
-      onCreateSession={handleQuickSwitchCreateSession}
-      onSelectSession={handleMobileChatQuickSwitchSelect}
-    />
-  ) : null;
   const projectSessionActionMenuOverlay = renderProjectSessionActionMenu();
   const chatTitleProjectMenu = chatTitleProjectMenuOpen ? (
     <div
@@ -22179,7 +22017,6 @@ export function App() {
       <LocalDevModePanel />
       {quickFileSearchOverlay}
       {previewSelectionContextMenu}
-      {chatQuickSwitchMenuPlacement.kind === 'desktop' ? chatQuickSwitchMenu : null}
       {projectSessionActionMenuOverlay}
       {chatTitleProjectMenu}
       {chatTitlePromptMenu}
