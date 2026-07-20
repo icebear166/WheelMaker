@@ -48,6 +48,12 @@ describe('isSessionNavSlideOutCloseSuppressed', () => {
     expect(isSessionNavSlideOutCloseSuppressed({ searchActive: false, menuOpen: false, pointerDownInList: true })).toBe(true);
     expect(isSessionNavSlideOutCloseSuppressed({ searchActive: false, menuOpen: false, pointerDownInList: false })).toBe(false);
   });
+
+  it('is suppressed while the archived view is open', () => {
+    expect(isSessionNavSlideOutCloseSuppressed({ searchActive: false, menuOpen: false, pointerDownInList: false, archivedOpen: true })).toBe(true);
+    expect(isSessionNavSlideOutCloseSuppressed({ searchActive: false, menuOpen: false, pointerDownInList: false, archivedOpen: false })).toBe(false);
+    expect(isSessionNavSlideOutCloseSuppressed({ searchActive: false, menuOpen: false, pointerDownInList: false })).toBe(false);
+  });
 });
 
 describe('session nav slide-out delayed close', () => {

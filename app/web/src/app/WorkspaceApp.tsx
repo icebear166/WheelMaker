@@ -5109,7 +5109,7 @@ export function App() {
     }
   }, [allVisibleProjectsLoaded, projectSessionsByProjectId]);
   const showFloatingSessionPanel = isWide && chatSidebarCollapsed && !archivedMode && !sessionSearchActive;
-  const showChatEdgeSurfaces = isWide && (showFloatingSessionPanel || !!selectedChatPlan || showLimitsMonitor);
+  const showChatEdgeSurfaces = isWide && !archivedMode && (showFloatingSessionPanel || !!selectedChatPlan || showLimitsMonitor);
   const chatMainClassName = isWide
     ? `chat-main chat-view-width-fixed-800${showChatEdgeSurfaces ? ' chat-view-width-fixed-800-edge-surfaces' : ''}`
     : 'chat-main';
@@ -16398,7 +16398,7 @@ export function App() {
         {projects.length === 0 ? (
           <div className="chat-empty-hint">No projects available.</div>
         ) : null}
-        {options?.includeRecent === false ? null : renderRecentSessionsSection(false)}
+        {archivedMode || options?.includeRecent === false ? null : renderRecentSessionsSection(false)}
         {archivedMode ? renderArchivedSessionRows(false) : sessionSearchActive ? renderSessionSearchResults(false) : visibleProjectItems.map(projectItem => {
           const targetProjectId = projectItem.projectId;
           const projectSessions = projectSessionsByProjectId[targetProjectId] ?? [];
@@ -17938,7 +17938,7 @@ export function App() {
                 />
               ) : null}
             </div>
-          {isWide ? (
+          {isWide && !archivedMode ? (
             <div className={`chat-edge-surface-stack${!chatSidebarCollapsed ? ' beside-pinned-session-panel' : ''}${sessionNavSlideOut.open ? ' covered-by-session-panel' : ''}`}>
               {showFloatingSessionPanel ? (
                 <ChatRecentSessionsSurface
@@ -17987,6 +17987,7 @@ export function App() {
                     searchActive: sessionSearchActive || sessionSearchHeaderExpanded,
                     menuOpen: sessionArchiveMenuOpen || !!wideProjectActionMenu || !!projectSessionActionMenu,
                     pointerDownInList: sessionNavSlideOutPointerDownRef.current,
+                    archivedOpen: archivedMode,
                   }),
                 );
               }}

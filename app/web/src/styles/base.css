@@ -310,6 +310,10 @@ body,
   box-shadow: 0 14px 30px rgba(0, 0, 0, 0.3);
 }
 
+.wide-session-row.archived-session-row {
+  grid-template-columns: 9px minmax(0, 1fr) auto auto;
+}
+
 .archived-session-empty {
   display: inline-flex;
   align-items: center;

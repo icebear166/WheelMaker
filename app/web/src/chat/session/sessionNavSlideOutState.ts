@@ -35,12 +35,13 @@ export type SessionNavSlideOutSuppressionInput = {
   searchActive: boolean;
   menuOpen: boolean;
   pointerDownInList: boolean;
+  archivedOpen?: boolean;
 };
 
 export function isSessionNavSlideOutCloseSuppressed(
   input: SessionNavSlideOutSuppressionInput,
 ): boolean {
-  return input.searchActive || input.menuOpen || input.pointerDownInList;
+  return input.searchActive || input.menuOpen || input.pointerDownInList || input.archivedOpen === true;
 }
 
 export const SESSION_NAV_SLIDE_OUT_CLOSE_DELAY_MS = 2000;
