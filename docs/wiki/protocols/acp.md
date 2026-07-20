@@ -10,6 +10,8 @@ WheelMaker 把 ACP 作为 Client 与 Agent 之间的业务协议。协议类型�
 
 完整参考中标记为 unstable、特定工具版本、历史阶段或后续计划的内容不属于本页所述的当前稳定边界。
 
+内置 ACP provider 为 codex、claude、copilot、opencode、mimo、codebuddy、flicker、kimi；统一以 `ACPProviderPreset` 声明启动方式，kimi 走官方 Kimi Code CLI 的 `kimi acp` 子进程，登录由用户在 CLI 侧自行完成，WheelMaker 不触发 device-code 授权。
+
 ## 消息与初始化
 
 - ACP 使用双向 JSON-RPC 语义，stdio 传输时每条消息使用 UTF-8 JSON 并以换行分隔。
@@ -44,3 +46,7 @@ WheelMaker 把 ACP 作为 Client 与 Agent 之间的业务协议。协议类型�
 ## 完整参考的使用方式
 
 完整中文参考适合查阅字段示例、废弃 API 和来源链接，但其中的 unstable 草案、codex-acp 使用摘要、旧飞书阶段说明以及过期内部文件路径不能直接视为当前实现事实。需要更新本页时，应同时核对当前代码和上游稳定 schema。
+
+来源：
+
+- [`../../scope/2026-07-20-kimi-acp-provider/spec-kimi-acp-provider.md`](../../scope/2026-07-20-kimi-acp-provider/spec-kimi-acp-provider.md)

@@ -9,7 +9,7 @@ Limits 监控统一展示 Codex、Kimi、ZAI 和 DeepSeek 的当前额度或余�
 - Hub 是用量数据的唯一所有者，负责凭据发现、Provider 扫描、定时调度、singleflight 和完整快照缓存。
 - Hub 启动后立即扫描一次，之后从每轮完成时间起每 10 分钟扫描一次。
 - 前端不轮询 Provider，也不因客户端数量增加扫描次数；手动刷新对所有在线 Hub 发起，并复用 Hub 内正在运行的扫描。
-- Kimi、ZAI、DeepSeek 凭据只从 OpenCode auth 读取；Codex 使用 Codex 自身凭据。
+- ZAI、DeepSeek 凭据只从 OpenCode auth 读取；Kimi 除 OpenCode auth 外还读取 Kimi Code CLI 本地凭据（`~/.kimi-code/credentials/kimi-code.json`，尊重 `KIMI_CODE_HOME`），只读未过期的 `access_token`，不做 OAuth 刷新、不写凭据文件；Codex 使用 Codex 自身凭据。
 - API key、access token 和密钥片段不得进入 HubState、Registry 消息、Web 状态、日志或错误文本。
 - Codex `app-server` 等辅助进程必须通过后台命令构造器启动；Windows 使用隐藏窗口配置。
 
@@ -44,3 +44,4 @@ Provider 扫描启动的所有辅助进程都必须使用统一后台命令配�
 
 - [`../../scope/2026-07-18-agent-usage-rewrite/spec-agent-usage-rewrite.md`](../../scope/2026-07-18-agent-usage-rewrite/spec-agent-usage-rewrite.md)
 - [`../../scope/2026-07-18-mobile-limits-monitor/spec-mobile-limits-monitor.md`](../../scope/2026-07-18-mobile-limits-monitor/spec-mobile-limits-monitor.md)
+- [`../../scope/2026-07-20-kimi-acp-provider/spec-kimi-acp-provider.md`](../../scope/2026-07-20-kimi-acp-provider/spec-kimi-acp-provider.md)
