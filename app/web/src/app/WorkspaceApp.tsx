@@ -163,6 +163,10 @@ import {
   type SessionSearchSectionRow,
 } from '../chat/session/sessionSearchState';
 import {
+  buildChatSearchMatches,
+  type ChatSearchMatch,
+} from '../chat/search/chatSearchState';
+import {
   OLDER_SESSION_DAYS,
   buildArchivedSessionSections,
   collectArchiveCandidates,
@@ -1315,7 +1319,7 @@ const AGENT_TAG_VARIANT_INDEX: Record<string, number> = {
   opencode: 3,
   codebuddy: 4,
   mimo: 5,
-  kimi: 6,
+  kimi: 7,
   flicker: 8,
 };
 
@@ -2935,6 +2939,10 @@ export function App() {
   const [previewSearchQuery, setPreviewSearchQuery] = useState('');
   const [previewSearchActiveIndex, setPreviewSearchActiveIndex] = useState(0);
   const previewSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const [chatSearchOpen, setChatSearchOpen] = useState(false);
+  const [chatSearchQuery, setChatSearchQuery] = useState('');
+  const [chatSearchActiveIndex, setChatSearchActiveIndex] = useState(0);
+  const chatSearchInputRef = useRef<HTMLInputElement | null>(null);
   const [previewFileTreeSearchQuery, setPreviewFileTreeSearchQuery] = useState('');
   const [previewFileTreeSearchResults, setPreviewFileTreeSearchResults] = useState<RegistryFileIndexSearchResult[]>([]);
   const [previewFileTreeSearchLoading, setPreviewFileTreeSearchLoading] = useState(false);
@@ -3329,6 +3337,18 @@ export function App() {
   const [selectedChatId, setSelectedChatId] = useState('');
   const [selectedChatKey, setSelectedChatKey] = useState<ChatSessionKey | null>(null);
   const [chatMessages, setChatMessages] = useState<RegistryChatMessage[]>([]);
+  const chatSearchMatches = useMemo(
+    () => buildChatSearchMatches(chatMessages, chatSearchQuery),
+    [chatMessages, chatSearchQuery],
+  );
+  const chatSearchMatchedTurnIndexSet = useMemo(
+    () => new Set(chatSearchMatches.map(match => match.turnIndex)),
+    [chatSearchMatches],
+  );
+  const chatSearchActiveTurnIndex =
+    chatSearchOpen && chatSearchMatches.length > 0
+      ? chatSearchMatches[chatSearchActiveIndex]?.turnIndex ?? null
+      : null;
   const [chatLoading, setChatLoading] = useState(false);
   const [chatSubmittingByKey, setChatSubmittingByKey] = useState<Record<string, boolean>>({});
   const [chatShowScrollToBottom, setChatShowScrollToBottom] = useState(false);
@@ -3654,6 +3674,93 @@ export function App() {
     promptStatus: () => null,
     shouldRender: (message, promptStatus) => shouldRenderChatTurn(message, promptStatus),
   }), [archivedPreview?.messages, chatLayoutMetrics]);
+
+  const scrollToChatSearchMatch = (match: ChatSearchMatch) => {
+    chatVirtuosoListRef.current?.scrollToTurnIndex(match.turnIndex, 'smooth');
+  };
+  const activateChatSearchMatch = (index: number) => {
+    if (chatSearchMatches.length === 0) {
+      return;
+    }
+    const nextIndex = (index + chatSearchMatches.length) % chatSearchMatches.length;
+    setChatSearchActiveIndex(nextIndex);
+    scrollToChatSearchMatch(chatSearchMatches[nextIndex]);
+  };
+  const navigateChatSearchMatch = (delta: 1 | -1) => {
+    activateChatSearchMatch(chatSearchActiveIndex + delta);
+  };
+  const openChatSearch = () => {
+    setChatSearchOpen(true);
+    setChatSearchActiveIndex(0);
+    window.requestAnimationFrame(() => {
+      chatSearchInputRef.current?.focus();
+      chatSearchInputRef.current?.select();
+    });
+  };
+  const closeChatSearch = () => {
+    setChatSearchOpen(false);
+    setChatSearchQuery('');
+    setChatSearchActiveIndex(0);
+  };
+  const handleChatSearchInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeChatSearch();
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      navigateChatSearchMatch(event.shiftKey ? -1 : 1);
+    }
+  };
+  const switchChatSearchTarget = (target: 'current' | 'sessions' | 'preview') => {
+    if (target === 'current') {
+      openChatSearch();
+      return;
+    }
+    closeChatSearch();
+    if (target === 'sessions') {
+      setSessionSearchOpen(true);
+      window.requestAnimationFrame(() => {
+        sessionSearchInputRef.current?.focus();
+        sessionSearchInputRef.current?.select();
+      });
+      return;
+    }
+    // target === 'preview'
+    if (!chatPreviewOpen) {
+      toggleChatPreviewFromTitle();
+    }
+    window.requestAnimationFrame(() => openPreviewSearch());
+  };
+
+  const prevChatSearchKeyRef = useRef(selectedChatEncodedKey);
+  useEffect(() => {
+    if (prevChatSearchKeyRef.current !== selectedChatEncodedKey) {
+      prevChatSearchKeyRef.current = selectedChatEncodedKey;
+      setChatSearchOpen(false);
+      setChatSearchQuery('');
+      setChatSearchActiveIndex(0);
+    }
+  }, [selectedChatEncodedKey]);
+
+  useEffect(() => {
+    setChatSearchActiveIndex(current =>
+      Math.min(current, Math.max(0, chatSearchMatches.length - 1)),
+    );
+  }, [chatSearchMatches.length]);
+
+  useEffect(() => {
+    if (!chatSearchOpen || chatSearchMatches.length === 0) {
+      return;
+    }
+    setChatSearchActiveIndex(0);
+    const frameId = window.requestAnimationFrame(() => {
+      scrollToChatSearchMatch(chatSearchMatches[0]);
+    });
+    return () => window.cancelAnimationFrame(frameId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatSearchOpen, chatSearchQuery]);
 
   useEffect(() => {
     if (
@@ -20522,6 +20629,14 @@ export function App() {
         openQuickFileSearch();
         return;
       }
+      if (quickFileOpen) {
+        return;
+      }
+      if (event.key.toLowerCase() === 'f' && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        openChatSearch();
+        return;
+      }
       if (!chatPreviewOpen) {
         return;
       }
@@ -20547,17 +20662,6 @@ export function App() {
             };
           });
         }
-        return;
-      }
-      if (event.key.toLowerCase() === 'f' && (event.ctrlKey || event.metaKey)) {
-        event.preventDefault();
-        setPreviewSearchOpen(true);
-        setPreviewSearchActiveIndex(0);
-        setPreviewSelectionMenu(null);
-        window.requestAnimationFrame(() => {
-          previewSearchInputRef.current?.focus();
-          previewSearchInputRef.current?.select();
-        });
         return;
       }
     };
