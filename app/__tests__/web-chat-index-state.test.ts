@@ -113,6 +113,56 @@ describe('chat index state helpers', () => {
     });
   });
 
+  test('keeps session order when merged summaries do not change updatedAt', () => {
+    const existing = [
+      session('s-a', '2026-05-01T00:00:00.000Z'),
+      session('s-b', '2026-05-01T00:00:00.000Z'),
+      session('s-c', '2026-05-01T00:00:00.000Z'),
+    ];
+    const merged = mergeChatSessionList(existing, [
+      {...session('s-c', '2026-05-01T00:00:00.000Z'), preview: 'new preview'},
+      session('s-b', '2026-05-01T00:00:00.000Z'),
+      session('s-a', '2026-05-01T00:00:00.000Z'),
+    ]);
+
+    expect(merged.map(item => item.sessionId)).toEqual(['s-a', 's-b', 's-c']);
+    expect(merged[2].preview).toBe('new preview');
+  });
+
+  test('re-sorts when a merged summary changes updatedAt', () => {
+    const existing = [
+      session('s-top', '2026-05-01T00:00:00.000Z'),
+      session('s-low', '2026-03-01T00:00:00.000Z'),
+    ];
+    const merged = mergeChatSessionList(existing, [
+      session('s-top', '2026-05-01T00:00:00.000Z'),
+      session('s-low', '2026-06-01T00:00:00.000Z'),
+    ]);
+
+    expect(merged.map(item => item.sessionId)).toEqual(['s-low', 's-top']);
+  });
+
+  test('mergeChatIndexSession keeps position when updatedAt is unchanged', () => {
+    const state = {
+      ...createChatIndexState(),
+      projects: [project('p1', 'Project 1')],
+      sessionsByProjectId: {
+        p1: [
+          session('s-a', '2026-05-01T00:00:00.000Z'),
+          session('s-b', '2026-05-01T00:00:00.000Z'),
+        ],
+      },
+    };
+    const patched = mergeChatIndexSession(state, 'p1', {
+      sessionId: 's-b',
+      preview: 'patched',
+      updatedAt: '2026-05-01T00:00:00.000Z',
+    });
+
+    expect(patched.sessionsByProjectId.p1.map(item => item.sessionId)).toEqual(['s-a', 's-b']);
+    expect(patched.sessionsByProjectId.p1[1].preview).toBe('patched');
+  });
+
   test('classifies session events without falling back to workspace project', () => {
     const state = mergeChatIndexSession(
       {

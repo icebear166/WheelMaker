@@ -138,6 +138,15 @@ export function mergeChatIndexSession(
       session.usage ??
       (existing?.usage ? { ...existing.usage } : undefined),
   };
+  if (existing && (merged.updatedAt || '') === (existing.updatedAt || '')) {
+    return {
+      ...state,
+      sessionsByProjectId: {
+        ...state.sessionsByProjectId,
+        [projectId]: current.map(item => (item.sessionId === session.sessionId ? merged : item)),
+      },
+    };
+  }
   return {
     ...state,
     sessionsByProjectId: {
@@ -169,6 +178,15 @@ export function mergeChatSessionList(
           }
         : item;
     nextById.set(item.sessionId, merged);
+  }
+  const orderChanged =
+    nextById.size !== byId.size ||
+    existing.some(session => {
+      const next = nextById.get(session.sessionId);
+      return !next || (next.updatedAt || '') !== (session.updatedAt || '');
+    });
+  if (!orderChanged) {
+    return existing.map(session => nextById.get(session.sessionId) ?? session);
   }
   return sortChatSessions(Array.from(nextById.values()));
 }

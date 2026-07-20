@@ -1389,6 +1389,9 @@ function mergeChatSession(
       next.sessionActions ??
       existing?.sessionActions,
   };
+  if (existing && (merged.updatedAt || '') === (existing.updatedAt || '')) {
+    return list.map(item => (item.sessionId === next.sessionId ? merged : item));
+  }
   const filtered = list.filter(item => item.sessionId !== next.sessionId);
   return sortChatSessions([merged, ...filtered]);
 }
