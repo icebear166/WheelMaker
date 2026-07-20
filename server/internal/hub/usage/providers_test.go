@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestOpenCodeDiscoveryReadsOnlySupportedAPIEntries(t *testing.T) {
@@ -178,5 +179,61 @@ func TestKimiMissingCredentialIsUnavailable(t *testing.T) {
 	got := scanner.Scan(context.Background())
 	if got.Status != ProviderUnavailable || len(got.Accounts) != 0 {
 		t.Fatalf("snapshot=%+v", got)
+	}
+}
+
+func TestReadKimiCodeCredentialValidToken(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "kimi-code.json")
+	body := `{"access_token":"kimi-code-token","refresh_token":"ignored","expires_at":4102444800,"token_type":"Bearer"}`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := readKimiCodeCredential(path, time.Unix(1784519757, 0)); got != "kimi-code-token" {
+		t.Fatalf("credential=%q, want kimi-code-token", got)
+	}
+}
+
+func TestReadKimiCodeCredentialRejectsExpiredToken(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "kimi-code.json")
+	body := `{"access_token":"kimi-code-token","expires_at":1784520447}`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := readKimiCodeCredential(path, time.Unix(1784520447, 0)); got != "" {
+		t.Fatalf("expired credential=%q, want empty", got)
+	}
+}
+
+func TestReadKimiCodeCredentialHandlesMissingAndInvalidFiles(t *testing.T) {
+	if got := readKimiCodeCredential(filepath.Join(t.TempDir(), "absent.json"), time.Now()); got != "" {
+		t.Fatalf("missing file credential=%q, want empty", got)
+	}
+	path := filepath.Join(t.TempDir(), "broken.json")
+	if err := os.WriteFile(path, []byte(`{"access_token":`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := readKimiCodeCredential(path, time.Now()); got != "" {
+		t.Fatalf("invalid JSON credential=%q, want empty", got)
+	}
+	empty := filepath.Join(t.TempDir(), "empty.json")
+	if err := os.WriteFile(empty, []byte(`{"expires_at":4102444800}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := readKimiCodeCredential(empty, time.Now()); got != "" {
+		t.Fatalf("empty token credential=%q, want empty", got)
+	}
+}
+
+func TestDefaultKimiCodeCredentialsPathRespectsHomeOverride(t *testing.T) {
+	override := t.TempDir()
+	t.Setenv("KIMI_CODE_HOME", override)
+	got := defaultKimiCodeCredentialsPath()
+	want := filepath.Join(override, "credentials", "kimi-code.json")
+	if got != want {
+		t.Fatalf("path=%q, want %q", got, want)
+	}
+	t.Setenv("KIMI_CODE_HOME", "")
+	if path := defaultKimiCodeCredentialsPath(); path == "" || !strings.HasSuffix(path, filepath.Join("credentials", "kimi-code.json")) {
+		t.Fatalf("default path=%q", path)
 	}
 }
