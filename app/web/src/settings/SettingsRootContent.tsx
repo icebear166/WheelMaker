@@ -1,6 +1,5 @@
 import React from 'react';
 
-import {CHAT_VIEW_WIDTH_OPTIONS, isChatViewWidth, type ChatViewWidth} from '../chat/chatViewWidth';
 import {
   SESSION_LIST_DENSITY_OPTIONS,
   isSessionListDensity,
@@ -43,8 +42,6 @@ type SettingsRootContentProps = {
   themeMode: ThemeMode;
   setThemeMode: (value: ThemeMode) => void;
   isWide: boolean;
-  chatViewWidth: ChatViewWidth;
-  setChatViewWidth: (value: ChatViewWidth) => void;
   sessionListDensity: SessionListDensity;
   setSessionListDensity: (value: SessionListDensity) => void;
   mobileEnterKeyBehavior: MobileEnterKeyBehavior;
@@ -173,8 +170,6 @@ export function SettingsRootContent({
   themeMode,
   setThemeMode,
   isWide,
-  chatViewWidth,
-  setChatViewWidth,
   sessionListDensity,
   setSessionListDensity,
   mobileEnterKeyBehavior,
@@ -231,28 +226,6 @@ export function SettingsRootContent({
               }
             />
           </label>
-          {isWide ? (
-            <label className="settings-row sidebar-setting-row">
-              <span>
-                <span className="codicon codicon-layout settings-row-icon" aria-hidden="true" />
-                Chat View Width
-              </span>
-              <select
-                className="sidebar-setting-select"
-                value={chatViewWidth}
-                onChange={event => {
-                  const next = event.target.value;
-                  if (isChatViewWidth(next)) setChatViewWidth(next);
-                }}
-              >
-                {CHAT_VIEW_WIDTH_OPTIONS.map(item => (
-                  <option key={item.id} value={item.id}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
         </>
         )})}
         {renderSettingsSection({id: 'chat', title: 'Chat', icon: 'comment-discussion', rows: (

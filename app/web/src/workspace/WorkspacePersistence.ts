@@ -12,11 +12,6 @@ import {
   type CodeThemeId,
 } from '../code/shikiSettings';
 import {
-  DEFAULT_CHAT_VIEW_WIDTH,
-  normalizeChatViewWidth,
-  type ChatViewWidth,
-} from '../chat/chatViewWidth';
-import {
   DEFAULT_SESSION_LIST_DENSITY,
   normalizeSessionListDensity,
   type SessionListDensity,
@@ -64,7 +59,6 @@ export type PersistedGlobalState = {
   codeFontSize: number;
   codeLineHeight: number;
   codeTabSize: number;
-  chatViewWidth: ChatViewWidth;
   sessionListDensity: SessionListDensity;
   mobileEnterKeyBehavior: MobileEnterKeyBehavior;
   wrapLines: boolean;
@@ -283,7 +277,6 @@ const GLOBAL_KEYS = {
   codeFontSize: 'codeFontSize',
   codeLineHeight: 'codeLineHeight',
   codeTabSize: 'codeTabSize',
-  chatViewWidth: 'chatViewWidth',
   sessionListDensity: 'sessionListDensity',
   mobileEnterKeyBehavior: 'mobileEnterKeyBehavior',
   wrapLines: 'wrapLines',
@@ -321,7 +314,6 @@ function defaultGlobalState(): PersistedGlobalState {
     codeFontSize: DEFAULT_CODE_FONT_SIZE,
     codeLineHeight: DEFAULT_CODE_LINE_HEIGHT,
     codeTabSize: DEFAULT_CODE_TAB_SIZE,
-    chatViewWidth: DEFAULT_CHAT_VIEW_WIDTH,
     sessionListDensity: DEFAULT_SESSION_LIST_DENSITY,
     mobileEnterKeyBehavior: DEFAULT_MOBILE_ENTER_KEY_BEHAVIOR,
     wrapLines: false,
@@ -537,7 +529,6 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
     codeFontSize: typeof input.codeFontSize === 'number' && Number.isFinite(input.codeFontSize) ? input.codeFontSize : base.codeFontSize,
     codeLineHeight: typeof input.codeLineHeight === 'number' && Number.isFinite(input.codeLineHeight) ? input.codeLineHeight : base.codeLineHeight,
     codeTabSize: typeof input.codeTabSize === 'number' && Number.isFinite(input.codeTabSize) ? input.codeTabSize : base.codeTabSize,
-    chatViewWidth: normalizeChatViewWidth(input.chatViewWidth, base.chatViewWidth),
     sessionListDensity: normalizeSessionListDensity(input.sessionListDensity, base.sessionListDensity),
     mobileEnterKeyBehavior: normalizeMobileEnterKeyBehavior(input.mobileEnterKeyBehavior, base.mobileEnterKeyBehavior),
     wrapLines: typeof input.wrapLines === 'boolean' ? input.wrapLines : base.wrapLines,
@@ -1109,7 +1100,6 @@ export class WorkspacePersistenceRepository {
       {k: GLOBAL_KEYS.codeFontSize, v: serialize(this.state.global.codeFontSize), updatedAt},
       {k: GLOBAL_KEYS.codeLineHeight, v: serialize(this.state.global.codeLineHeight), updatedAt},
       {k: GLOBAL_KEYS.codeTabSize, v: serialize(this.state.global.codeTabSize), updatedAt},
-      {k: GLOBAL_KEYS.chatViewWidth, v: serialize(this.state.global.chatViewWidth), updatedAt},
       {k: GLOBAL_KEYS.sessionListDensity, v: serialize(this.state.global.sessionListDensity), updatedAt},
       {k: GLOBAL_KEYS.mobileEnterKeyBehavior, v: serialize(this.state.global.mobileEnterKeyBehavior), updatedAt},
       {k: GLOBAL_KEYS.wrapLines, v: serialize(this.state.global.wrapLines), updatedAt},

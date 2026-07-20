@@ -179,10 +179,6 @@ import {useChatLayoutMetrics} from '../chat/layout/chatLayoutMetrics';
 import {resolveWideProjectActionPopoverPlacement, type WideProjectActionPopoverPlacement} from '../chat/layout/wideProjectActionPopover';
 import {ChatVirtuosoTurnList, type ChatVirtuosoTurnListHandle} from '../chat/turns/ChatVirtuosoTurnList';
 import {
-  normalizeChatViewWidth,
-  type ChatViewWidth,
-} from '../chat/chatViewWidth';
-import {
   normalizeSessionListDensity,
   type SessionListDensity,
 } from '../chat/sessionListDensity';
@@ -2498,9 +2494,6 @@ export function App() {
   );
   const [codeTabSize, setCodeTabSize] = useState<number>(
     clampCodeTabSize(Number(persistedGlobal.codeTabSize)),
-  );
-  const [chatViewWidth, setChatViewWidth] = useState<ChatViewWidth>(
-    normalizeChatViewWidth(persistedGlobal.chatViewWidth),
   );
   const [sessionListDensity, setSessionListDensity] = useState<SessionListDensity>(
     normalizeSessionListDensity(persistedGlobal.sessionListDensity),
@@ -5103,9 +5096,9 @@ export function App() {
   const showFloatingSessionPanel = isWide && chatSidebarCollapsed && !archivedMode && !sessionSearchActive;
   const showChatEdgeSurfaces = isWide && (showFloatingSessionPanel || !!selectedChatPlan || showLimitsMonitor);
   const chatMainClassName = isWide
-    ? (chatViewWidth === 'fixed-800' ? `chat-main chat-view-width-fixed-800${showChatEdgeSurfaces ? ' chat-view-width-fixed-800-edge-surfaces' : ''}` : 'chat-main')
+    ? `chat-main chat-view-width-fixed-800${showChatEdgeSurfaces ? ' chat-view-width-fixed-800-edge-surfaces' : ''}`
     : 'chat-main';
-  const desktopChatFixedPreview = isWide && chatPreviewOpen && chatViewWidth === 'fixed-800';
+  const desktopChatFixedPreview = isWide && chatPreviewOpen;
   const closeSidebarTransientMenus = useCallback(() => {
     setProjectMenuOpen(false);
     setWorkspaceProjectMenuOpen(false);
@@ -6038,7 +6031,6 @@ export function App() {
       codeFontSize,
       codeLineHeight,
       codeTabSize,
-      chatViewWidth,
       sessionListDensity,
       mobileEnterKeyBehavior,
       wrapLines,
@@ -6065,7 +6057,6 @@ export function App() {
     codeFontSize,
     codeLineHeight,
     codeTabSize,
-    chatViewWidth,
     sessionListDensity,
     mobileEnterKeyBehavior,
     wrapLines,
@@ -15900,8 +15891,6 @@ export function App() {
         themeMode={themeMode}
         setThemeMode={setThemeMode}
         isWide={isWide}
-        chatViewWidth={chatViewWidth}
-        setChatViewWidth={setChatViewWidth}
         sessionListDensity={sessionListDensity}
         setSessionListDensity={setSessionListDensity}
         mobileEnterKeyBehavior={mobileEnterKeyBehavior}
