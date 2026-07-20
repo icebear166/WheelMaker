@@ -4423,6 +4423,54 @@ func TestSessionRecorderPersistsOperationLifecycle(t *testing.T) {
 	}
 }
 
+func TestSessionRecorderOperationDoesNotMoveSession(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	olderAt := mustRFC3339Time(t, "2026-05-22T01:00:00Z")
+	newerAt := mustRFC3339Time(t, "2026-05-22T02:00:00Z")
+
+	oldSession := sessionViewCreatedEvent("sess-old", "Old title")
+	oldSession.UpdatedAt = olderAt
+	if err := c.RecordEvent(ctx, oldSession); err != nil {
+		t.Fatalf("RecordEvent old session: %v", err)
+	}
+	newSession := sessionViewCreatedEvent("sess-new", "Newer title")
+	newSession.UpdatedAt = newerAt
+	if err := c.RecordEvent(ctx, newSession); err != nil {
+		t.Fatalf("RecordEvent new session: %v", err)
+	}
+
+	if err := c.sessionRecorder.RecordSessionOperation(ctx, "sess-old", acp.SessionOperationPayload{
+		OperationID: "op-1",
+		Type:        acp.SessionOperationTypeCompact,
+		Status:      acp.SessionOperationStatusStarted,
+		StartedAt:   time.Now().UTC().Format(time.RFC3339),
+	}); err != nil {
+		t.Fatalf("RecordSessionOperation(started): %v", err)
+	}
+
+	rec, err := c.store.LoadSession(ctx, "proj1", "sess-old")
+	if err != nil {
+		t.Fatalf("LoadSession: %v", err)
+	}
+	if rec == nil {
+		t.Fatal("LoadSession returned nil record")
+	}
+	if !rec.LastActiveAt.Equal(olderAt) {
+		t.Fatalf("LastActiveAt = %s, want %s", rec.LastActiveAt.Format(time.RFC3339), olderAt.Format(time.RFC3339))
+	}
+	sessions, err := c.listSessionViews(ctx)
+	if err != nil {
+		t.Fatalf("listSessionViews: %v", err)
+	}
+	if len(sessions) != 2 {
+		t.Fatalf("sessions len = %d, want 2", len(sessions))
+	}
+	if sessions[0].SessionID != "sess-new" || sessions[1].SessionID != "sess-old" {
+		t.Fatalf("session order = [%s %s], want [sess-new sess-old]", sessions[0].SessionID, sessions[1].SessionID)
+	}
+}
+
 func TestSessionViewListPreservesStoredProjectionMetadataForRuntimeSessions(t *testing.T) {
 	c := newSessionViewTestClient(t)
 
@@ -4774,6 +4822,53 @@ func TestSessionPersistKeepsRecorderLastActiveAtAndStoresLocalOffset(t *testing.
 	}
 	if !strings.HasSuffix(rawLastActiveAt, "+08:00") {
 		t.Fatalf("raw session last_active_at = %q, want +08:00 offset", rawLastActiveAt)
+	}
+}
+
+func TestSessionPersistDoesNotAdvanceStoredLastActiveAt(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+
+	createdAt := mustRFC3339Time(t, "2026-05-06T12:00:00Z")
+	startedAt := mustRFC3339Time(t, "2026-05-06T12:01:02Z")
+	finishedAt := mustRFC3339Time(t, "2026-05-06T12:01:27Z")
+
+	created := sessionViewCreatedEvent("sess-1", "Timing")
+	created.UpdatedAt = createdAt
+	if err := c.RecordEvent(ctx, created); err != nil {
+		t.Fatalf("RecordEvent session created: %v", err)
+	}
+	started := sessionViewPromptEvent("sess-1", "measure", nil)
+	started.UpdatedAt = startedAt
+	if err := c.RecordEvent(ctx, started); err != nil {
+		t.Fatalf("RecordEvent prompt started: %v", err)
+	}
+	finished := sessionViewPromptFinishedEvent("sess-1", "end_turn")
+	finished.UpdatedAt = finishedAt
+	if err := c.RecordEvent(ctx, finished); err != nil {
+		t.Fatalf("RecordEvent prompt finished: %v", err)
+	}
+
+	sess, err := c.SessionByID(ctx, "sess-1")
+	if err != nil {
+		t.Fatalf("SessionByID: %v", err)
+	}
+	sess.mu.Lock()
+	sess.lastActiveAt = finishedAt.Add(10 * time.Minute)
+	sess.mu.Unlock()
+	if err := sess.persistSession(ctx); err != nil {
+		t.Fatalf("persistSession: %v", err)
+	}
+
+	rec, err := c.store.LoadSession(ctx, "proj1", "sess-1")
+	if err != nil {
+		t.Fatalf("LoadSession: %v", err)
+	}
+	if rec == nil {
+		t.Fatal("LoadSession returned nil record")
+	}
+	if !rec.LastActiveAt.Equal(finishedAt) {
+		t.Fatalf("session LastActiveAt = %q, want %q", rec.LastActiveAt.Format(time.RFC3339Nano), finishedAt.Format(time.RFC3339Nano))
 	}
 }
 

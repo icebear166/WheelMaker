@@ -27,6 +27,23 @@ import {
   type ChatOptionReply,
 } from './chatOptionReplies';
 import { resolvePromptDoneStatus, type ChatPromptStatus } from './turns/chatPromptStatus';
+import {msgText} from './chatMessageText';
+import {splitChatSearchHighlightSegments} from './search/chatSearchState';
+
+function renderChatTextWithHighlight(text: string, query: string | undefined) {
+  if (!query) {
+    return text;
+  }
+  return splitChatSearchHighlightSegments(text, query).map((segment, index) =>
+    segment.match ? (
+      <mark key={index} className="chat-search-match">
+        {segment.text}
+      </mark>
+    ) : (
+      <span key={index}>{segment.text}</span>
+    ),
+  );
+}
 
 function msgKind(method: string): string {
   switch (method) {
@@ -39,68 +56,6 @@ function msgKind(method: string): string {
     default:
       return 'message';
   }
-}
-
-function extractTextFromACPContent(content: unknown): string {
-  if (typeof content === 'string') {
-    return content.trim();
-  }
-  if (!Array.isArray(content)) {
-    return '';
-  }
-  const chunks: string[] = [];
-  for (const item of content) {
-    if (!item || typeof item !== 'object') continue;
-    const entry = item as Record<string, unknown>;
-    if (typeof entry.text === 'string' && entry.text.trim()) {
-      chunks.push(entry.text.trim());
-    }
-  }
-  return chunks.join('\n').trim();
-}
-
-function extractTextFromSessionTurnParam(param: unknown): string {
-  if (typeof param === 'string') {
-    return param.trim();
-  }
-  if (Array.isArray(param)) {
-    const chunks = param
-      .map(item => {
-        if (!item || typeof item !== 'object') return '';
-        const entry = item as Record<string, unknown>;
-        return typeof entry.content === 'string' ? entry.content.trim() : '';
-      })
-      .filter(Boolean);
-    return chunks.join('\n').trim();
-  }
-  if (!param || typeof param !== 'object') {
-    return '';
-  }
-  const input = param as Record<string, unknown>;
-  if (typeof input.text === 'string') {
-    return input.text.trim();
-  }
-  if (typeof input.output === 'string') {
-    return input.output.trim();
-  }
-  if (typeof input.cmd === 'string') {
-    return input.cmd.trim();
-  }
-  if (Array.isArray(input.contentBlocks)) {
-    return extractTextFromACPContent(input.contentBlocks);
-  }
-  return '';
-}
-
-function msgText(method: string, param: Record<string, unknown>): string {
-  if (method === 'prompt_request') {
-    const blocks = Array.isArray(param.contentBlocks) ? param.contentBlocks : [];
-    return extractTextFromACPContent(blocks);
-  }
-  if (method === 'prompt_done') {
-    return typeof param.stopReason === 'string' ? param.stopReason : '';
-  }
-  return extractTextFromSessionTurnParam(param);
 }
 
 function sessionOperationView(param: Record<string, unknown>): {
@@ -318,6 +273,7 @@ export type ChatTurnViewProps = {
   onOpenPromptArtifact?: (artifact: RegistrySessionPromptArtifact, message: RegistryChatMessage, filePath?: string) => void;
   openingPromptArtifactKey?: string;
   promptArtifactErrors?: Record<string, string>;
+  highlightQuery?: string;
 };
 
 type PromptAttachmentChipProps = {
@@ -406,6 +362,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   onOpenPromptArtifact,
   openingPromptArtifactKey = '',
   promptArtifactErrors = {},
+  highlightQuery,
 }: ChatTurnViewProps) {
   const text = msgText(message.method, message.param).trim();
   const kind = msgKind(message.method);
@@ -433,7 +390,9 @@ export const ChatTurnView = React.memo(function ChatTurnView({
           <div className="chat-prompt-user-row">
             {text ? (
               <div className="chat-prompt-user">
-                {inlineParts.length > 0 ? renderPromptInlineParts(inlineParts) : text}
+                {inlineParts.length > 0
+                  ? renderPromptInlineParts(inlineParts)
+                  : renderChatTextWithHighlight(text, highlightQuery)}
               </div>
             ) : null}
             {promptStatus === 'responding' ? (

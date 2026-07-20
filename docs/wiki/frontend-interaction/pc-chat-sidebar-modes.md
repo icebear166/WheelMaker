@@ -20,6 +20,10 @@ PC 端（宽屏 ≥900px）Chat 有浮动与 pin 两种会话面板模式。浮�
 - **Ctrl+1** 按用户保存的 Pin 模式分流：保存为未 Pin 时只展开/收起滑出面板，不修改持久化偏好；保存为 Pin 时第一次临时 Unpin，第二次恢复 Pin。快捷键产生的临时覆盖不落盘，点击 Pin/Unpin 按钮仍是修改跨重启偏好的唯一入口；切换页面、打开设置或重启会清除临时覆盖并恢复保存模式。
 - 桌面会话列表的基础左缩进为 11px；Recent 分组内的会话行同样在原有基础上增加 3px，保持浮动、滑出和 pin 三种模式的行对齐一致。
 
+## Recent Sessions 选取与排序
+
+Recent Sessions 的选取与排序规则跨 PC（浮动/滑出/pin）和移动端一致：先在所有可见 Project 的 session 中按「unread/running 优先、再按 `updatedAt` 降序」选出 top 8，然后按 Project 分组展示；同一 Project 内的 session 严格按 `updatedAt` 降序排列，unread/running 优先级不再影响组内顺序。`updatedAt` 的口径是"最后一次 prompt start/done"（见 [`../architecture/session-management-and-sync.md`](../architecture/session-management-and-sync.md)），流式中间 turn 不改变排序。chat 区域没有右键/长按弹出的会话切换菜单，Recent Sessions 列表是唯一的快速切换入口。
+
 ## pin 模式
 
 pin 态把同构 Sessions 面板以 360px 固定宽度放进固定顶栏下方的左侧布局，不提供宽度拖拽；File/Git 等非 Chat 侧栏仍保留原有可调宽度。Sessions 标题栏位于固定顶栏下方，Pin 按钮保持强调色激活状态，完整会话导航使用余下空间独立滚动；顶部 Recent 内容保留强调分区，后面再接普通项目列表。浮动 Recent Sessions 面板隐藏。Plan 与 Limits 从左侧悬浮列移动到固定 Sessions 面板右侧的聊天主区左缘，上下堆叠、绝对定位，不参与聊天内容布局，并继续使用悬浮列统一的 8px 左右 padding。pin/unpin 切换继续复用相同的 Recent 内容渲染与行布局，但浮动态直接以 **RECENT SESSIONS** 作为卡片标题并隐藏重复的分区标题，pin 态则保持 **SESSIONS → RECENT** 的平直全高侧栏。

@@ -1,13 +1,5 @@
 import type {RegistryChatSession, RegistryProject} from '../registry/registryTypes';
 
-export type MobileChatQuickSwitchSection = {
-  projectId: string;
-  projectName: string;
-  projectHubId: string;
-  projectHubLabel: string;
-  sessions: RegistryChatSession[];
-};
-
 type BuildMobileChatQuickSwitchSectionsInput = {
   projects: RegistryProject[];
   sessionsByProjectId: Record<string, RegistryChatSession[]>;
@@ -150,8 +142,7 @@ export type RecentChatSessionProjectSection = {
 };
 
 // Flat, cross-project "recent sessions" list (global recency order), used by
-// the persistent Recent Sessions section. Shares the same candidate building and
-// sort as the right-click quick-switch menu (which keeps the grouped layout).
+// the persistent Recent Sessions section.
 export function buildRecentChatSessionRows({
   projects,
   sessionsByProjectId,
@@ -189,6 +180,12 @@ export function buildRecentChatSessionProjectSections(
     section.sessions.push(row.session);
   }
 
+  for (const section of sections) {
+    section.sessions.sort((left, right) =>
+      compareUpdatedAtDesc(left.updatedAt || '', right.updatedAt || ''),
+    );
+  }
+
   const projectOrder = new Map(
     input.projects.map((project, projectIndex) => [project.projectId, projectIndex]),
   );
@@ -196,36 +193,4 @@ export function buildRecentChatSessionProjectSections(
     (projectOrder.get(left.projectId) ?? Number.MAX_SAFE_INTEGER) -
     (projectOrder.get(right.projectId) ?? Number.MAX_SAFE_INTEGER)
   ));
-}
-
-export function buildMobileChatQuickSwitchSections({
-  projects,
-  sessionsByProjectId,
-  limit = 6,
-}: BuildMobileChatQuickSwitchSectionsInput): MobileChatQuickSwitchSection[] {
-  const selected = buildQuickSwitchCandidates(projects, sessionsByProjectId)
-    .sort(compareQuickSwitchCandidates)
-    .slice(0, Math.max(0, limit));
-  if (selected.length === 0) {
-    return [];
-  }
-
-  const sections: MobileChatQuickSwitchSection[] = [];
-  const sectionsByProjectId = new Map<string, MobileChatQuickSwitchSection>();
-  for (const candidate of selected) {
-    let section = sectionsByProjectId.get(candidate.projectId);
-    if (!section) {
-      section = {
-        projectId: candidate.projectId,
-        projectName: candidate.projectName,
-        projectHubId: candidate.projectHubId,
-        projectHubLabel: candidate.projectHubLabel,
-        sessions: [],
-      };
-      sectionsByProjectId.set(candidate.projectId, section);
-      sections.push(section);
-    }
-    section.sessions.push(candidate.session);
-  }
-  return sections;
 }

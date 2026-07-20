@@ -1819,9 +1819,9 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className="wide-project-action-btn"');
     expect(mainTsx).toContain('className="wide-project-action-popover"');
     expect(mainTsx).toContain("import {resolveWideProjectActionPopoverPlacement");
-    expect(mainTsx).toContain('style={wideProjectActionMenu.popover');
+    expect(mainTsx).toContain('style={actionMenu.popover');
     expect(mainTsx).toContain('className="wide-project-action-title"');
-    expect(mainTsx).toContain("wideProjectActionMenu.kind === 'new' ? 'New Session' : 'Resume Session'");
+    expect(mainTsx).toContain("actionMenu.kind === 'new' ? 'New Session' : 'Resume Session'");
     expect(mainTsx).toContain("const sessionAgent = (session.agentType || '').trim();");
     expect(mainTsx).toContain("tagVariantClass('wide-session-agent', sessionAgent)");
     expect(mainTsx).toContain('const [projectSessionActionMenu, setProjectSessionActionMenu] = useState<ProjectSessionActionMenuState | null>(null);');

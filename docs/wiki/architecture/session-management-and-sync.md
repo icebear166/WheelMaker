@@ -15,7 +15,7 @@ SQLite 只保存会话索引和热状态，不保存对话正文：
 - `sessions.status`：会话生命周期状态。
 - `sessions.agent_type` / `sessions.agent_json`：agent 类型和运行态快照。
 - `sessions.title`：会话标题，通常由最新用户 prompt 更新；服务端和 app 不再用 session id 或消息内容合成 fallback 标题。
-- `sessions.created_at` / `sessions.updated_at`：创建时间和最后活动时间。`updated_at` 在 prompt start 和 prompt done 时都会更新，保存时不会被更旧的事件时间回退。
+- `sessions.created_at` / `sessions.updated_at`：创建时间和最后活动时间。`updated_at` 只在 session 创建、prompt start 和 prompt done 时推进，保存时不会被更旧的事件时间回退；中间 turn、usage update 和 compact 等 session operation 都不推进。运行时快照持久化只保存 agent 状态，不回写推进 `updated_at`；内存中按 turn 推进的 `lastActiveAt` 仅供 Suspended 会话驱逐判断，不进入 `updated_at`。因此 `updated_at` 的排序、折叠、归档候选和 age 展示口径统一为"最后一次 prompt start/done"。
 - `sessions.session_sync_json`：同步投影，保存服务端内部落盘进度和会话级 read/done cursor：
 
 ```json

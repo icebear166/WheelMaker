@@ -281,7 +281,6 @@ describe('chat composer status helpers', () => {
       '.chat-title-project-menu',
       '.chat-title-prompt-menu',
       '.chat-hub-popover',
-      '.chat-quick-switch-menu',
       '.session-archive-menu',
       '.project-session-action-menu',
       '.wide-project-action-popover',

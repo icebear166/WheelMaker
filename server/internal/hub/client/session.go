@@ -917,9 +917,11 @@ func (s *Session) toRecord() (*SessionRecord, error) {
 		AgentJSON:   agentJSON,
 		// Session title is owned by SessionRecorder projection (latest prompt title).
 		// Keep snapshot writes title-neutral so runtime state does not overwrite recorder title.
-		Title:        "",
-		CreatedAt:    s.createdAt,
-		LastActiveAt: s.lastActiveAt,
+		Title: "",
+		// LastActiveAt is owned by the SessionRecorder projection (last prompt
+		// start/done). Runtime snapshots leave it zero so SaveSession keeps the
+		// stored value instead of advancing it with per-turn activity.
+		CreatedAt: s.createdAt,
 	}, nil
 }
 

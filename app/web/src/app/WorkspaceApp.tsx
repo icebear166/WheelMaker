@@ -35,7 +35,6 @@ import { initializePWAFoundation } from '../platform/pwa';
 import {cleanupNativeWebViewPWA} from '../platform/pwa/nativePwaGuard';
 import { DesktopDragRegion, DesktopWindowControls } from '../shell/layouts/desktop/DesktopTitleBar';
 import {LocalDevModePanel} from '../shell/layouts/desktop/LocalDevModePanel';
-import {resolveDesktopChatQuickSwitchContextMenu} from '../shell/layouts/desktop/chatQuickSwitchContextMenu';
 import {
   getDesktopWindowBridge,
   invokeDesktopProjectFileAction,
@@ -103,12 +102,10 @@ import {
   type ChatSessionSlashOption,
 } from '../chat/session/chatSessionActions';
 import {
-  buildMobileChatQuickSwitchSections,
   buildRecentChatSessionProjectSections,
   hasCompletedUnreadChatSession,
   type RecentChatSessionProjectSection,
 } from '../chat/mobileChatQuickSwitch';
-import {ChatQuickSwitchMenu} from '../chat/ChatQuickSwitchMenu';
 import { ChatSessionNav } from '../chat/ChatSessionNav';
 import { ChatSurface } from '../chat/ChatSurface';
 import { ChatTurnView } from '../chat/ChatTurnView';
@@ -162,6 +159,10 @@ import {
   type SessionSearchResultsByProjectId,
   type SessionSearchSectionRow,
 } from '../chat/session/sessionSearchState';
+import {
+  buildChatSearchMatches,
+  type ChatSearchMatch,
+} from '../chat/search/chatSearchState';
 import {
   OLDER_SESSION_DAYS,
   buildArchivedSessionSections,
@@ -655,9 +656,6 @@ type ProjectSessionActionMenuState = {
   sessionId: string;
   popover?: WideProjectActionPopoverPlacement | null;
 };
-type ChatQuickSwitchMenuPlacement =
-  | {kind: 'mobile'}
-  | {kind: 'desktop'; style: React.CSSProperties};
 type SettingsDetailView = SettingsDetailId | null;
 const WHEELMAKER_UPDATE_JOB_POLL_DELAY_MS = 1500;
 type WheelMakerUpdateHubView = {
@@ -894,7 +892,6 @@ const SIDEBAR_TRANSIENT_MENU_SELECTOR = [
   '.chat-hub-popover',
   '.chat-title-project-menu',
   '.chat-title-prompt-menu',
-  '.chat-quick-switch-menu',
 ].join(', ');
 const DESKTOP_SIDEBAR_VIEWPORT_MAX_RATIO = 0.45;
 const CHAT_FIXED_VIEW_WIDTH = 800;
@@ -1385,6 +1382,9 @@ function mergeChatSession(
       next.sessionActions ??
       existing?.sessionActions,
   };
+  if (existing && (merged.updatedAt || '') === (existing.updatedAt || '')) {
+    return list.map(item => (item.sessionId === next.sessionId ? merged : item));
+  }
   const filtered = list.filter(item => item.sessionId !== next.sessionId);
   return sortChatSessions([merged, ...filtered]);
 }
@@ -2935,6 +2935,10 @@ export function App() {
   const [previewSearchQuery, setPreviewSearchQuery] = useState('');
   const [previewSearchActiveIndex, setPreviewSearchActiveIndex] = useState(0);
   const previewSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const [chatSearchOpen, setChatSearchOpen] = useState(false);
+  const [chatSearchQuery, setChatSearchQuery] = useState('');
+  const [chatSearchActiveIndex, setChatSearchActiveIndex] = useState(0);
+  const chatSearchInputRef = useRef<HTMLInputElement | null>(null);
   const [previewFileTreeSearchQuery, setPreviewFileTreeSearchQuery] = useState('');
   const [previewFileTreeSearchResults, setPreviewFileTreeSearchResults] = useState<RegistryFileIndexSearchResult[]>([]);
   const [previewFileTreeSearchLoading, setPreviewFileTreeSearchLoading] = useState(false);
@@ -3329,6 +3333,18 @@ export function App() {
   const [selectedChatId, setSelectedChatId] = useState('');
   const [selectedChatKey, setSelectedChatKey] = useState<ChatSessionKey | null>(null);
   const [chatMessages, setChatMessages] = useState<RegistryChatMessage[]>([]);
+  const chatSearchMatches = useMemo(
+    () => buildChatSearchMatches(chatMessages, chatSearchQuery),
+    [chatMessages, chatSearchQuery],
+  );
+  const chatSearchMatchedTurnIndexSet = useMemo(
+    () => new Set(chatSearchMatches.map(match => match.turnIndex)),
+    [chatSearchMatches],
+  );
+  const chatSearchActiveTurnIndex =
+    chatSearchOpen && chatSearchMatches.length > 0
+      ? chatSearchMatches[chatSearchActiveIndex]?.turnIndex ?? null
+      : null;
   const [chatLoading, setChatLoading] = useState(false);
   const [chatSubmittingByKey, setChatSubmittingByKey] = useState<Record<string, boolean>>({});
   const [chatShowScrollToBottom, setChatShowScrollToBottom] = useState(false);
@@ -3432,11 +3448,7 @@ export function App() {
   const [chatTitlePromptMenuOpen, setChatTitlePromptMenuOpen] = useState(false);
   const chatTitlePromptButtonRef = useRef<HTMLButtonElement | null>(null);
   const chatTitlePromptMenuRef = useRef<HTMLDivElement | null>(null);
-  const [chatQuickSwitchMenuOpen, setChatQuickSwitchMenuOpen] = useState(false);
-  const [chatQuickSwitchMenuPlacement, setChatQuickSwitchMenuPlacement] = useState<ChatQuickSwitchMenuPlacement>({kind: 'mobile'});
-  const [chatQuickSwitchCreateProjectId, setChatQuickSwitchCreateProjectId] = useState('');
-  const [chatQuickSwitchCreatePendingKey, setChatQuickSwitchCreatePendingKey] = useState('');
-  const chatQuickSwitchMenuRef = useRef<HTMLDivElement | null>(null);
+
   const [chatSlashQuery, setChatSlashQuery] = useState<string | null>(null);
   const [chatSlashActiveIndex, setChatSlashActiveIndex] = useState(0);
   const chatFileMentionQuerySessionIdRef = useRef(`file-query-${Date.now()}`);
@@ -3654,6 +3666,93 @@ export function App() {
     promptStatus: () => null,
     shouldRender: (message, promptStatus) => shouldRenderChatTurn(message, promptStatus),
   }), [archivedPreview?.messages, chatLayoutMetrics]);
+
+  const scrollToChatSearchMatch = (match: ChatSearchMatch) => {
+    chatVirtuosoListRef.current?.scrollToTurnIndex(match.turnIndex, 'smooth');
+  };
+  const activateChatSearchMatch = (index: number) => {
+    if (chatSearchMatches.length === 0) {
+      return;
+    }
+    const nextIndex = (index + chatSearchMatches.length) % chatSearchMatches.length;
+    setChatSearchActiveIndex(nextIndex);
+    scrollToChatSearchMatch(chatSearchMatches[nextIndex]);
+  };
+  const navigateChatSearchMatch = (delta: 1 | -1) => {
+    activateChatSearchMatch(chatSearchActiveIndex + delta);
+  };
+  const openChatSearch = () => {
+    setChatSearchOpen(true);
+    setChatSearchActiveIndex(0);
+    window.requestAnimationFrame(() => {
+      chatSearchInputRef.current?.focus();
+      chatSearchInputRef.current?.select();
+    });
+  };
+  const closeChatSearch = () => {
+    setChatSearchOpen(false);
+    setChatSearchQuery('');
+    setChatSearchActiveIndex(0);
+  };
+  const handleChatSearchInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeChatSearch();
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      navigateChatSearchMatch(event.shiftKey ? -1 : 1);
+    }
+  };
+  const switchChatSearchTarget = (target: 'current' | 'sessions' | 'preview') => {
+    if (target === 'current') {
+      openChatSearch();
+      return;
+    }
+    closeChatSearch();
+    if (target === 'sessions') {
+      setSessionSearchOpen(true);
+      window.requestAnimationFrame(() => {
+        sessionSearchInputRef.current?.focus();
+        sessionSearchInputRef.current?.select();
+      });
+      return;
+    }
+    // target === 'preview'
+    if (!chatPreviewOpen) {
+      toggleChatPreviewFromTitle();
+    }
+    window.requestAnimationFrame(() => openPreviewSearch());
+  };
+
+  const prevChatSearchKeyRef = useRef(selectedChatEncodedKey);
+  useEffect(() => {
+    if (prevChatSearchKeyRef.current !== selectedChatEncodedKey) {
+      prevChatSearchKeyRef.current = selectedChatEncodedKey;
+      setChatSearchOpen(false);
+      setChatSearchQuery('');
+      setChatSearchActiveIndex(0);
+    }
+  }, [selectedChatEncodedKey]);
+
+  useEffect(() => {
+    setChatSearchActiveIndex(current =>
+      Math.min(current, Math.max(0, chatSearchMatches.length - 1)),
+    );
+  }, [chatSearchMatches.length]);
+
+  useEffect(() => {
+    if (!chatSearchOpen || chatSearchMatches.length === 0) {
+      return;
+    }
+    setChatSearchActiveIndex(0);
+    const frameId = window.requestAnimationFrame(() => {
+      scrollToChatSearchMatch(chatSearchMatches[0]);
+    });
+    return () => window.cancelAnimationFrame(frameId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatSearchOpen, chatSearchQuery]);
 
   useEffect(() => {
     if (
@@ -4105,10 +4204,7 @@ export function App() {
     });
     chatAutoScrollFollowRef.current = visibility.atBottom;
     setChatShowScrollToBottom(visibility.showScrollToBottom);
-    if (chatQuickSwitchMenuPlacement.kind === 'desktop') {
-      setChatQuickSwitchMenuOpen(false);
-    }
-  }, [chatQuickSwitchMenuPlacement.kind]);
+  }, []);
 
   const scrollChatToBottom = useCallback((force = false) => {
     if (!shouldAutoscrollChat(force)) {
@@ -4123,14 +4219,6 @@ export function App() {
       setChatShowScrollToBottom(false);
     });
   }, [shouldAutoscrollChat]);
-
-  useEffect(() => {
-    if (chatQuickSwitchMenuOpen) {
-      return;
-    }
-    setChatQuickSwitchCreateProjectId('');
-    setChatQuickSwitchCreatePendingKey('');
-  }, [chatQuickSwitchMenuOpen]);
 
   const forceChatScrollToBottom = useCallback(() => {
     const runtimeKey = encodeChatSessionKey(selectedChatKeyRef.current);
@@ -5175,14 +5263,6 @@ export function App() {
       olderSessionsExpandedByProjectId,
     );
   }, [olderSessionsExpandedByProjectId]);
-  const mobileChatQuickSwitchSections = useMemo(
-    () => buildMobileChatQuickSwitchSections({
-      projects: visibleProjectItems,
-      sessionsByProjectId: projectSessionsByProjectId,
-      limit: 6,
-    }),
-    [projectSessionsByProjectId, visibleProjectItems],
-  );
   const hasCompletedUnreadChatSessionIndicator = useMemo(
     () => hasCompletedUnreadChatSession({
       projects: visibleProjectItems,
@@ -5238,7 +5318,6 @@ export function App() {
     setChatHubColorMenuHubId('');
     setChatTitleProjectMenuOpen(false);
     setChatTitlePromptMenuOpen(false);
-    setChatQuickSwitchMenuOpen(false);
   }, []);
   const closeSidebarTransientMenusOnScroll = useCallback((event: Event) => {
     const target = event.target;
@@ -5255,7 +5334,7 @@ export function App() {
     const closeSidebarMenusOnOtherButton = (event: PointerEvent) => {
       const target = event.target as Element | null;
       if (target?.closest(
-        '.wide-project-action-popover, .project-session-action-menu, .mobile-project-sheet, .session-archive-menu, .chat-hub-popover, .chat-title-project-menu, .chat-title-prompt-menu, .chat-quick-switch-menu',
+        '.wide-project-action-popover, .project-session-action-menu, .mobile-project-sheet, .session-archive-menu, .chat-hub-popover, .chat-title-project-menu, .chat-title-prompt-menu',
       )) {
         return;
       }
@@ -5266,13 +5345,6 @@ export function App() {
     window.addEventListener('pointerdown', closeSidebarMenusOnOtherButton, true);
     return () => window.removeEventListener('pointerdown', closeSidebarMenusOnOtherButton, true);
   }, [closeSidebarTransientMenus]);
-
-  const mobileChatQuickSwitchMenuStyle = useMemo<React.CSSProperties>(() => ({
-    top: portRelayReady && portRelayFrameUrl ? 56 : 0,
-  }), [portRelayFrameUrl, portRelayReady]);
-  const chatQuickSwitchMenuStyle = chatQuickSwitchMenuPlacement.kind === 'desktop'
-    ? chatQuickSwitchMenuPlacement.style
-    : mobileChatQuickSwitchMenuStyle;
 
   useEffect(() => {
     projectIdRef.current = projectId;
@@ -6388,7 +6460,6 @@ export function App() {
     [selectedDiff],
   );
   const closeMobileDrawerCompanionOverlays = useCallback(() => {
-    setChatQuickSwitchMenuOpen(false);
     setPortRelayTargetMenuOpen(false);
     setChatPromptMenuOpen(false);
     setChatFileMentionMenuOpen(false);
@@ -6823,7 +6894,6 @@ export function App() {
   const floatingControlsIdle = floatingDragVisualState === 'idle'
     && !drawerOpen
     && !portRelayTargetMenuOpen
-    && !chatQuickSwitchMenuOpen
     && !mobilePortRelayFrameOpen;
   const clearGestureMoveLongPressTimer = useCallback(() => {
     if (gestureMoveLongPressTimerRef.current !== null) {
@@ -6875,39 +6945,6 @@ export function App() {
       floatingCooldownTimerRef.current = null;
     }, remaining);
   }, [clearFloatingCooldownTimer]);
-  useEffect(() => {
-    if (mobilePortRelayFrameOpen) {
-      setChatQuickSwitchMenuOpen(false);
-    }
-  }, [mobilePortRelayFrameOpen]);
-  useEffect(() => {
-    if (tab !== 'chat' || sidebarSettingsOpen) {
-      setChatQuickSwitchMenuOpen(false);
-    }
-  }, [sidebarSettingsOpen, tab]);
-  useEffect(() => {
-    if (!chatQuickSwitchMenuOpen) {
-      return;
-    }
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target instanceof Node ? event.target : null;
-      if (target && chatQuickSwitchMenuRef.current?.contains(target)) {
-        return;
-      }
-      setChatQuickSwitchMenuOpen(false);
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setChatQuickSwitchMenuOpen(false);
-      }
-    };
-    window.addEventListener('pointerdown', handlePointerDown);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('pointerdown', handlePointerDown);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [chatQuickSwitchMenuOpen]);
   const handleFloatingPointerMove = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       const current = floatingDragStateRef.current;
@@ -8962,7 +8999,6 @@ export function App() {
     });
     if (!isWide) {
       setDrawerOpen(false);
-      setChatQuickSwitchMenuOpen(false);
       if (!chatFilePeekHistoryActiveRef.current) {
         window.history.pushState(createChatFilePeekHistoryState(), '', window.location.href);
         chatFilePeekHistoryActiveRef.current = true;
@@ -9085,7 +9121,6 @@ export function App() {
     setError('');
     if (!isWide) {
       setDrawerOpen(false);
-      setChatQuickSwitchMenuOpen(false);
       if (!chatFilePeekHistoryActiveRef.current) {
         window.history.pushState(createChatFilePeekHistoryState(), '', window.location.href);
         chatFilePeekHistoryActiveRef.current = true;
@@ -13003,7 +13038,6 @@ export function App() {
     if (!isWide) {
       setDrawerOpen(false);
       setSidebarSettingsOpen(false);
-      setChatQuickSwitchMenuOpen(false);
       if (!chatFilePeekHistoryActiveRef.current) {
         window.history.pushState(createChatFilePeekHistoryState(), '', window.location.href);
         chatFilePeekHistoryActiveRef.current = true;
@@ -14759,7 +14793,6 @@ export function App() {
     }
     setChatTitleProjectMenuOpen(false);
     setChatTitlePromptMenuOpen(false);
-    setChatQuickSwitchMenuOpen(false);
     setSidebarSettingsOpen(false);
     setTab('chat');
     const targetSession = resolveChatTitleProjectSession(targetProjectId);
@@ -15879,38 +15912,6 @@ export function App() {
     return body;
   };
 
-  const handleMobileChatQuickSwitchSelect = useCallback(async (targetProjectId: string, session: RegistryChatSession) => {
-    setChatQuickSwitchMenuOpen(false);
-    setPortRelayTargetMenuOpen(false);
-    setSidebarSettingsOpen(false);
-    setDrawerOpen(false);
-    setTab('chat');
-    const currentKey = selectedChatKeyRef.current;
-    if (currentKey?.projectId === targetProjectId && currentKey.sessionId === session.sessionId) {
-      return;
-    }
-    await selectProjectChatSession(targetProjectId, session.sessionId, {closeMobileDrawer: true});
-  }, [selectProjectChatSession, setDrawerOpen, setSidebarSettingsOpen, setTab]);
-
-  const handleChatQuickSwitchContextMenu = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    const result = resolveDesktopChatQuickSwitchContextMenu({
-      desktopLayout: isWide,
-      target: event.target,
-      selectedText: window.getSelection()?.toString() ?? '',
-      clientX: event.clientX,
-      clientY: event.clientY,
-      viewportWidth: window.innerWidth,
-      viewportHeight: window.innerHeight,
-    });
-    if (!result.open) {
-      return;
-    }
-    event.preventDefault();
-    setPortRelayTargetMenuOpen(false);
-    setChatQuickSwitchMenuPlacement({kind: 'desktop', style: result.style});
-    setChatQuickSwitchMenuOpen(true);
-  }, [isWide]);
-
   const handleProjectCreateSession = async (
     targetProjectId: string,
     agentType: string,
@@ -15958,32 +15959,6 @@ export function App() {
   const handleMobileProjectCreateSession = async (targetProjectId: string, agentType: string) => {
     await handleProjectCreateSession(targetProjectId, agentType, {closeMobileDrawer: true});
   };
-
-  const getQuickSwitchProjectAgents = useCallback((targetProjectId: string): string[] => {
-    const projectItem = visibleProjectItems.find(item => item.projectId === targetProjectId);
-    if (!projectItem) {
-      return [];
-    }
-    return getWideProjectAgents(projectItem, projectSessionsByProjectId[targetProjectId] ?? []);
-  }, [getWideProjectAgents, projectSessionsByProjectId, visibleProjectItems]);
-
-  const handleQuickSwitchToggleCreateProject = useCallback((targetProjectId: string) => {
-    setChatQuickSwitchCreateProjectId(current => current === targetProjectId ? '' : targetProjectId);
-  }, []);
-
-  const handleQuickSwitchCreateSession = useCallback(async (targetProjectId: string, agentType: string) => {
-    const pendingKey = `${targetProjectId}:${agentType}`;
-    if (chatQuickSwitchCreatePendingKey) {
-      return;
-    }
-    setChatQuickSwitchCreatePendingKey(pendingKey);
-    const created = await handleProjectCreateSession(targetProjectId, agentType, {closeMobileDrawer: true});
-    if (created) {
-      setChatQuickSwitchMenuOpen(false);
-      setChatQuickSwitchCreateProjectId('');
-    }
-    setChatQuickSwitchCreatePendingKey(current => current === pendingKey ? '' : current);
-  }, [chatQuickSwitchCreatePendingKey, handleProjectCreateSession]);
 
   const handleWideProjectResumeAgent = async (targetProjectId: string, agentType: string) => {
     agentType = normalizeAgentTypeName(agentType);
@@ -17602,8 +17577,6 @@ export function App() {
           const projectSessions = projectSessionsByProjectId[targetProjectId] ?? [];
           const collapsed = collapsedProjectIds.includes(targetProjectId);
           const pinnedProject = pinnedProjectIds.includes(targetProjectId);
-          const agents = getWideProjectAgents(projectItem, projectSessions);
-          const actionMenuOpen = wideProjectActionMenu?.projectId === targetProjectId;
           const projectHub = projectItem.hubId || 'local';
           const projectHubVariant = tagVariantClass('wide-project-hub', projectItem.hubId || 'local');
           return (
@@ -17695,124 +17668,6 @@ export function App() {
                     <span className="codicon codicon-pinned" />
                   </button>
                 </div>
-                {actionMenuOpen ? (
-                  <div
-                    ref={wideProjectActionMenuRef}
-                    className="wide-project-action-popover"
-                    style={wideProjectActionMenu.popover
-                      ? {
-                          top: `${wideProjectActionMenu.popover.top}px`,
-                          left: `${wideProjectActionMenu.popover.left}px`,
-                          width: `${wideProjectActionMenu.popover.width}px`,
-                          maxHeight: `${wideProjectActionMenu.popover.maxHeight}px`,
-                          transform: wideProjectActionMenu.popover.placement === 'above'
-                            ? 'translateY(-100%)'
-                            : undefined,
-                        }
-                      : undefined}
-                  >
-                    <div className="wide-project-action-title">
-                      <span
-                        className={`codicon ${
-                          wideProjectActionMenu.kind === 'new'
-                            ? 'codicon-add'
-                            : 'codicon-history'
-                        }`}
-                      />
-                      <span className="wide-project-action-title-copy">
-                        <span className="wide-project-action-title-main">
-                          {wideProjectActionMenu.kind === 'new' ? 'New Session' : 'Resume Session'}
-                        </span>
-                        <span className="wide-project-action-title-sub">
-                          {projectItem.name}
-                        </span>
-                      </span>
-                    </div>
-                    {wideProjectActionMenu.phase === 'agents' ? (
-                      <>
-                        {agents.map(agentType => (
-                          <button
-                            key={`${targetProjectId}:${wideProjectActionMenu.kind}:${agentType}`}
-                            type="button"
-                            className="wide-project-action-menu-item"
-                            onClick={() => {
-                              if (wideProjectActionMenu.kind === 'new') {
-                                handleWideProjectCreateSession(
-                                  targetProjectId,
-                                  agentType,
-                                ).catch(() => undefined);
-                              } else {
-                                handleWideProjectResumeAgent(
-                                  targetProjectId,
-                                  agentType,
-                                ).catch(() => undefined);
-                              }
-                            }}
-                          >
-                            <span className="codicon codicon-sparkle" />
-                            <span>{agentType}</span>
-                          </button>
-                        ))}
-                        {agents.length === 0 ? (
-                          <div className="wide-project-action-empty">
-                            <span className="codicon codicon-circle-slash" aria-hidden="true" />
-                            <span>No agents available.</span>
-                          </div>
-                        ) : null}
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          className="wide-project-action-back"
-                          onClick={() => {
-                            setResumeSessions([]);
-                            setResumeLoading(false);
-                            setWideProjectActionMenu({
-                              ...wideProjectActionMenu,
-                              phase: 'agents',
-                              agentType: '',
-                            });
-                          }}
-                        >
-                          <span className="codicon codicon-arrow-left" />
-                          <span>{wideProjectActionMenu.agentType}</span>
-                        </button>
-                        {resumeLoading ? (
-                          <div className="wide-project-action-empty">
-                            <span className="codicon codicon-loading codicon-modifier-spin" aria-hidden="true" />
-                            <span>Loading sessions...</span>
-                          </div>
-                        ) : null}
-                        {!resumeLoading
-                          ? resumeSessions.map(session => (
-                              <button
-                                key={`${targetProjectId}:resume:${session.sessionId}`}
-                                type="button"
-                                className="wide-project-action-menu-item"
-                                onClick={() => {
-                                  handleWideProjectResumeImport(
-                                    targetProjectId,
-                                    wideProjectActionMenu.agentType,
-                                    session.sessionId,
-                                  ).catch(() => undefined);
-                                }}
-                              >
-                                <span className="codicon codicon-history" />
-                                <span>{resolveSessionDisplayTitle(session) || session.sessionId}</span>
-                              </button>
-                            ))
-                          : null}
-                        {!resumeLoading && resumeSessions.length === 0 ? (
-                          <div className="wide-project-action-empty">
-                            <span className="codicon codicon-history" aria-hidden="true" />
-                            <span>No resumable sessions.</span>
-                          </div>
-                        ) : null}
-                      </>
-                    )}
-                  </div>
-                ) : null}
               </div>
               {!collapsed ? (
                 <div className="wide-project-session-list">
@@ -18402,7 +18257,6 @@ export function App() {
     );
     if (!isWide) {
       setDrawerOpen(false);
-      setChatQuickSwitchMenuOpen(false);
       if (!chatFilePeekHistoryActiveRef.current) {
         window.history.pushState(createChatFilePeekHistoryState(), '', window.location.href);
         chatFilePeekHistoryActiveRef.current = true;
@@ -18602,8 +18456,11 @@ export function App() {
       return null;
     }
     const searchHighlighted =
-      sessionSearchTargetTurn?.runtimeKey === selectedChatEncodedKey &&
-      sessionSearchTargetTurn.turnIndex === (message.turnIndex ?? 0);
+      (sessionSearchTargetTurn?.runtimeKey === selectedChatEncodedKey &&
+        sessionSearchTargetTurn.turnIndex === (message.turnIndex ?? 0)) ||
+      (chatSearchOpen && chatSearchMatchedTurnIndexSet.has(message.turnIndex ?? 0));
+    const turnIsChatSearchActive =
+      chatSearchOpen && chatSearchActiveTurnIndex === (message.turnIndex ?? 0);
     return (
       <div
         key={`${selectedChatEncodedKey}:${message.turnIndex}:${message.method}`}
@@ -18653,12 +18510,17 @@ export function App() {
           }
           openingPromptArtifactKey={openingPromptArtifactKey}
           promptArtifactErrors={promptArtifactErrors}
+          highlightQuery={turnIsChatSearchActive ? chatSearchQuery : undefined}
         />
       </div>
     );
   }, [
     chatMarkdownComponents,
     chatMarkdownUrlTransform,
+    chatSearchActiveTurnIndex,
+    chatSearchMatchedTurnIndexSet,
+    chatSearchOpen,
+    chatSearchQuery,
     chatSendDisabled,
     copyPromptDoneMarkdownEvent,
     exportPromptDoneMarkdownImageEvent,
@@ -18952,7 +18814,6 @@ export function App() {
     setChatConfigMenuOptionId('');
     setChatConfigOverflowOpen(false);
     setChatHubMenuOpen(false);
-    setChatQuickSwitchMenuOpen(false);
     setChatTitleProjectMenuOpen(false);
     setChatTitlePromptMenuOpen(open => !open);
   };
@@ -18964,7 +18825,6 @@ export function App() {
       onPointerDown={event => event.stopPropagation()}
       onClick={() => {
         setChatTitlePromptMenuOpen(false);
-        setChatQuickSwitchMenuOpen(false);
         setChatTitleProjectMenuOpen(open => !open);
       }}
       title="Switch project"
@@ -19007,7 +18867,6 @@ export function App() {
         onPointerDown={event => event.stopPropagation()}
         onClick={() => {
           setChatTitlePromptMenuOpen(false);
-          setChatQuickSwitchMenuOpen(false);
           setChatTitleProjectMenuOpen(open => !open);
         }}
         title="Switch project"
@@ -19042,6 +18901,16 @@ export function App() {
         {mobile ? renderMobileChatBreadcrumbTitle() : renderDesktopChatBreadcrumbTitle()}
       </div>
       <div className="chat-title-actions">
+        <button
+          type="button"
+          className={`chat-search-toggle${chatSearchOpen ? ' active' : ''}`}
+          onClick={() => (chatSearchOpen ? closeChatSearch() : openChatSearch())}
+          title="Search current session (Ctrl+F)"
+          aria-label="Search current session"
+          aria-pressed={chatSearchOpen}
+        >
+          <span className="codicon codicon-search" aria-hidden="true" />
+        </button>
         <button
           type="button"
           className={`chat-terminal-toggle${terminalOpen ? ' active' : ''}`}
@@ -19375,11 +19244,11 @@ export function App() {
             className={chatMainClassName}
             style={chatMainStyle}
           >
+            {chatSearchBar}
             <div
               ref={chatScrollRef}
               className="scroll-panel chat-block"
               onScroll={handleChatScroll}
-              onContextMenu={handleChatQuickSwitchContextMenu}
               onWheel={event => { if (event.deltaY < 0) { markChatUserScrollIntent(); } }}
               onPointerDown={() => { chatPointerScrollingRef.current = true; }}
               onPointerUp={() => { chatPointerScrollingRef.current = false; }}
@@ -19520,7 +19389,7 @@ export function App() {
               {renderWideProjectSessionNav()}
             </ChatSessionPanel>
           ) : null}
-          {chatSidebarCollapsed ? renderWideProjectActionMenu() : null}
+          {isWide ? renderWideProjectActionMenu() : null}
           {!isWide ? (
             <ChatPlanSurface
               mode="mobile"
@@ -20522,6 +20391,14 @@ export function App() {
         openQuickFileSearch();
         return;
       }
+      if (quickFileOpen) {
+        return;
+      }
+      if (event.key.toLowerCase() === 'f' && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        openChatSearch();
+        return;
+      }
       if (!chatPreviewOpen) {
         return;
       }
@@ -20549,23 +20426,13 @@ export function App() {
         }
         return;
       }
-      if (event.key.toLowerCase() === 'f' && (event.ctrlKey || event.metaKey)) {
-        event.preventDefault();
-        setPreviewSearchOpen(true);
-        setPreviewSearchActiveIndex(0);
-        setPreviewSelectionMenu(null);
-        window.requestAnimationFrame(() => {
-          previewSearchInputRef.current?.focus();
-          previewSearchInputRef.current?.select();
-        });
-        return;
-      }
     };
     window.addEventListener('keydown', handleGlobalPreviewKeyDown, true);
     return () => window.removeEventListener('keydown', handleGlobalPreviewKeyDown, true);
   }, [
     activeWorkbenchTab?.id,
     chatPreviewOpen,
+    openChatSearch,
     openQuickFileSearch,
     previewWorkbenchTabs,
     quickFileOpen,
@@ -20683,28 +20550,6 @@ export function App() {
     <span className="codicon codicon-refresh" />
   );
 
-  const chatQuickSwitchMenuBlockedByPreview = chatPreviewOpen && (chatQuickSwitchMenuPlacement.kind !== 'desktop' || !isWide);
-  const chatQuickSwitchMenu = chatQuickSwitchMenuOpen && tab === 'chat' && !sidebarSettingsOpen && !mobilePortRelayFrameOpen && !chatQuickSwitchMenuBlockedByPreview ? (
-    <ChatQuickSwitchMenu
-      ref={chatQuickSwitchMenuRef}
-      sections={mobileChatQuickSwitchSections}
-      placement={chatQuickSwitchMenuPlacement.kind}
-      style={chatQuickSwitchMenuStyle}
-      createProjectId={chatQuickSwitchCreateProjectId}
-      createPendingKey={chatQuickSwitchCreatePendingKey}
-      isSessionSelected={(targetProjectId, session) =>
-        selectedChatEncodedKey === buildChatRuntimeKey(targetProjectId, session.sessionId)
-      }
-      renderSessionStateMarker={renderSessionStateMarker}
-      resolveSessionTitle={resolveSessionDisplayTitle}
-      formatSessionAge={formatCompactRelativeAge}
-      getProjectAgents={getQuickSwitchProjectAgents}
-      resolveProjectHubStyle={hubAccentStyle}
-      onToggleCreateProject={handleQuickSwitchToggleCreateProject}
-      onCreateSession={handleQuickSwitchCreateSession}
-      onSelectSession={handleMobileChatQuickSwitchSelect}
-    />
-  ) : null;
   const projectSessionActionMenuOverlay = renderProjectSessionActionMenu();
   const chatTitleProjectMenu = chatTitleProjectMenuOpen ? (
     <div
@@ -21252,7 +21097,7 @@ export function App() {
     }
     if (event.key.toLowerCase() === 'f' && (event.ctrlKey || event.metaKey)) {
       event.preventDefault();
-      openPreviewSearch();
+      openChatSearch();
       return;
     }
     if (event.key.toLowerCase() === 'p' && (event.ctrlKey || event.metaKey)) {
@@ -21650,6 +21495,87 @@ export function App() {
         type="button"
         className="chat-preview-icon-button"
         onClick={closePreviewSearch}
+        title="Close search"
+        aria-label="Close search"
+      >
+        <span className="codicon codicon-close" />
+      </button>
+    </div>
+  ) : null;
+  const chatSearchStatus = chatSearchQuery
+    ? chatSearchMatches.length > 0
+      ? `${chatSearchActiveIndex + 1}/${chatSearchMatches.length}`
+      : 'No results'
+    : 'Search current session';
+  const chatSearchBar = chatSearchOpen ? (
+    <div className="chat-search-bar">
+      <span className="codicon codicon-search" aria-hidden="true" />
+      <input
+        ref={chatSearchInputRef}
+        className="chat-search-input"
+        value={chatSearchQuery}
+        onChange={event => setChatSearchQuery(event.target.value)}
+        onKeyDown={handleChatSearchInputKeyDown}
+        placeholder="Search"
+        aria-label="Search current session"
+      />
+      <span className="chat-search-status">{chatSearchStatus}</span>
+      <div className="chat-search-switcher" role="group" aria-label="Search target">
+        <button
+          type="button"
+          className="chat-search-switcher-button active"
+          title="Current session"
+          aria-label="Search current session"
+          aria-pressed="true"
+        >
+          <span className="codicon codicon-comment-discussion" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="chat-search-switcher-button"
+          onClick={() => switchChatSearchTarget('sessions')}
+          title="All sessions"
+          aria-label="Search all sessions"
+          aria-pressed="false"
+        >
+          <span className="codicon codicon-list-tree" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="chat-search-switcher-button"
+          onClick={() => switchChatSearchTarget('preview')}
+          disabled={!chatPreviewOpen}
+          title={chatPreviewOpen ? 'File preview' : 'Open preview first'}
+          aria-label="Search file preview"
+          aria-pressed="false"
+        >
+          <span className="codicon codicon-go-to-file" aria-hidden="true" />
+        </button>
+      </div>
+      <button
+        type="button"
+        className="chat-search-icon-button"
+        onClick={() => navigateChatSearchMatch(-1)}
+        disabled={chatSearchMatches.length === 0}
+        title="Previous match"
+        aria-label="Previous match"
+      >
+        <span className="codicon codicon-chevron-up" />
+      </button>
+      <button
+        type="button"
+        className="chat-search-icon-button"
+        onClick={() => navigateChatSearchMatch(1)}
+        disabled={chatSearchMatches.length === 0}
+        title="Next match"
+        aria-label="Next match"
+      >
+        <span className="codicon codicon-chevron-down" />
+      </button>
+      <button
+        type="button"
+        className="chat-search-icon-button"
+        onClick={closeChatSearch}
         title="Close search"
         aria-label="Close search"
       >
@@ -22091,7 +22017,6 @@ export function App() {
       <LocalDevModePanel />
       {quickFileSearchOverlay}
       {previewSelectionContextMenu}
-      {chatQuickSwitchMenuPlacement.kind === 'desktop' ? chatQuickSwitchMenu : null}
       {projectSessionActionMenuOverlay}
       {chatTitleProjectMenu}
       {chatTitlePromptMenu}

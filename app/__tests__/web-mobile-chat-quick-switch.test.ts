@@ -1,5 +1,4 @@
 import {
-  buildMobileChatQuickSwitchSections,
   buildRecentChatSessionProjectSections,
   hasCompletedUnreadChatSession,
 } from '../web/src/chat/mobileChatQuickSwitch';
@@ -33,52 +32,7 @@ function session(
   };
 }
 
-describe('mobile chat quick switch', () => {
-  test('selects six sessions with unread and running first, then newest updates', () => {
-    const sections = buildMobileChatQuickSwitchSections({
-      projects: [project('p1', 'Alpha', 'hub-a'), project('p2', 'Beta', 'hub-b'), project('p3', 'Gamma', '')],
-      sessionsByProjectId: {
-        p1: [
-          session('p1-old-a', '2026-01-01T00:00:00.000Z'),
-          session('p1-old-b', '2026-01-02T00:00:00.000Z'),
-          session('p1-mid', '2026-05-04T00:00:00.000Z'),
-        ],
-        p2: [
-          session('p2-newest', '2026-05-08T00:00:00.000Z'),
-          session('p2-running-old', '2026-01-03T00:00:00.000Z', {running: true}),
-          session('p2-new', '2026-05-07T00:00:00.000Z'),
-        ],
-        p3: [
-          session('p3-unread-old', '2026-01-04T00:00:00.000Z', {unreadCount: 1}),
-          session('p3-recent', '2026-05-06T00:00:00.000Z'),
-          session('p3-newer', '2026-05-09T00:00:00.000Z'),
-          session('p3-old', '2026-01-05T00:00:00.000Z'),
-        ],
-      },
-    });
-
-    expect(sections.flatMap(section =>
-      section.sessions.map(item => `${section.projectId}:${item.sessionId}`),
-    )).toEqual([
-      'p3:p3-unread-old',
-      'p3:p3-newer',
-      'p3:p3-recent',
-      'p2:p2-running-old',
-      'p2:p2-newest',
-      'p2:p2-new',
-    ]);
-    expect(sections.flatMap(section => section.sessions)).toHaveLength(6);
-    expect(sections.map(section => ({
-      projectId: section.projectId,
-      projectName: section.projectName,
-      projectHubId: section.projectHubId,
-      projectHubLabel: section.projectHubLabel,
-    }))).toEqual([
-      {projectId: 'p3', projectName: 'Gamma', projectHubId: 'local', projectHubLabel: 'local'},
-      {projectId: 'p2', projectName: 'Beta', projectHubId: 'hub-b', projectHubLabel: 'hub-b'},
-    ]);
-  });
-
+describe('recent chat sessions', () => {
   test('groups selected recent sessions in stable project order', () => {
     const sections = buildRecentChatSessionProjectSections({
       projects: [
@@ -123,11 +77,20 @@ describe('mobile chat quick switch', () => {
     expect(sections.map(section => section.projectId)).toEqual(['p1', 'p2', 'p3']);
   });
 
-  test('returns an empty section list when no known sessions exist', () => {
-    expect(buildMobileChatQuickSwitchSections({
-      projects: [project('p1')],
-      sessionsByProjectId: {p1: []},
-    })).toEqual([]);
+  test('sorts sessions within a project by newest update, ignoring priority', () => {
+    const sections = buildRecentChatSessionProjectSections({
+      projects: [project('p1', 'Alpha')],
+      sessionsByProjectId: {
+        p1: [
+          session('p1-newer', '2026-05-08T00:00:00.000Z'),
+          session('p1-unread-old', '2026-01-03T00:00:00.000Z', {unreadCount: 2}),
+        ],
+      },
+      limit: 8,
+    });
+
+    expect(sections).toHaveLength(1);
+    expect(sections[0].sessions.map(item => item.sessionId)).toEqual(['p1-newer', 'p1-unread-old']);
   });
 
   test('detects completed unread sessions and ignores running sessions', () => {
