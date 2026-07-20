@@ -15498,7 +15498,10 @@ export function App() {
     );
   };
 
-  const renderRecentSessionsSection = (mobile: boolean) => {
+  const renderRecentSessionsSection = (
+    mobile: boolean,
+    options: {showHeading?: boolean} = {},
+  ) => {
     if (archivedMode || sessionSearchActive) {
       return null;
     }
@@ -15512,7 +15515,7 @@ export function App() {
           recentCollapsed ? ' collapsed' : ''
         }`}
       >
-        {!mobile ? (
+        {!mobile && options.showHeading !== false ? (
           <div className="recent-sessions-section-heading">
             <span className="codicon codicon-history" aria-hidden="true" />
             <span>Recent</span>
@@ -19455,6 +19458,7 @@ export function App() {
                   sessionListDensity={sessionListDensity}
                   header={
                     <ChatSessionGlobalBar
+                      showSlideOutShortcut
                       slideOutOpen={sessionNavSlideOut.open}
                       onToggleSlideOut={() =>
                         sessionNavSlideOut.open
@@ -19466,7 +19470,7 @@ export function App() {
                     />
                   }
                 >
-                  {renderRecentSessionsSection(false)}
+                  {renderRecentSessionsSection(false, {showHeading: false})}
                 </ChatRecentSessionsSurface>
               ) : null}
               <ChatPlanSurface

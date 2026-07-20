@@ -118,7 +118,14 @@ describe('web chat recent sessions', () => {
     expect(mainTsx).toContain('showFloatingSessionPanel ? (');
     expect(mainTsx).not.toContain('onUnpin');
     expect(mainTsx).toContain('sessionListDensity={sessionListDensity}');
-    expect(mainTsx).toContain('{renderRecentSessionsSection(false)}');
+    expect(mainTsx).toContain('{renderRecentSessionsSection(false, {showHeading: false})}');
+    expect(mainTsx).toContain('renderRecentSessionsSection(false)');
+    expect(mainTsx).toContain('renderRecentSessionsSection(true)');
+    const floatingStart = mainTsx.indexOf('{showFloatingSessionPanel ? (');
+    const floatingSource = mainTsx.slice(floatingStart, floatingStart + 2200);
+    expect(floatingSource).toContain('showSlideOutShortcut');
+    expect(mainTsx.match(/showSlideOutShortcut/g)).toHaveLength(1);
+    expect(surfaceTsx).toContain('title="Recent Sessions"');
     expect(mainTsx).toContain('</ChatRecentSessionsSurface>');
   });
 

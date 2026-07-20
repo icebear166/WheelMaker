@@ -134,10 +134,10 @@ describe('PC chat session-panel layout', () => {
     expect(slideoutHeaderRule).toContain('padding-top: 8px;');
   });
 
-  it('uses the pinned Recent project presentation inside the unpinned surface', () => {
+  it('reuses the Recent project renderer without the duplicate floating heading', () => {
     const floatingStart = workspaceAppSource.indexOf('{showFloatingSessionPanel ? (');
     const floatingSource = workspaceAppSource.slice(floatingStart, floatingStart + 2200);
-    expect(floatingSource).toContain('{renderRecentSessionsSection(false)}');
+    expect(floatingSource).toContain('{renderRecentSessionsSection(false, {showHeading: false})}');
     expect(floatingSource).not.toContain('recentSessionSections.map(section => renderRecentProjectSessionSection(section, false))');
   });
 
