@@ -18589,8 +18589,11 @@ export function App() {
       return null;
     }
     const searchHighlighted =
-      sessionSearchTargetTurn?.runtimeKey === selectedChatEncodedKey &&
-      sessionSearchTargetTurn.turnIndex === (message.turnIndex ?? 0);
+      (sessionSearchTargetTurn?.runtimeKey === selectedChatEncodedKey &&
+        sessionSearchTargetTurn.turnIndex === (message.turnIndex ?? 0)) ||
+      (chatSearchOpen && chatSearchMatchedTurnIndexSet.has(message.turnIndex ?? 0));
+    const turnIsChatSearchActive =
+      chatSearchOpen && chatSearchActiveTurnIndex === (message.turnIndex ?? 0);
     return (
       <div
         key={`${selectedChatEncodedKey}:${message.turnIndex}:${message.method}`}
@@ -18640,12 +18643,17 @@ export function App() {
           }
           openingPromptArtifactKey={openingPromptArtifactKey}
           promptArtifactErrors={promptArtifactErrors}
+          highlightQuery={turnIsChatSearchActive ? chatSearchQuery : undefined}
         />
       </div>
     );
   }, [
     chatMarkdownComponents,
     chatMarkdownUrlTransform,
+    chatSearchActiveTurnIndex,
+    chatSearchMatchedTurnIndexSet,
+    chatSearchOpen,
+    chatSearchQuery,
     chatSendDisabled,
     copyPromptDoneMarkdownEvent,
     exportPromptDoneMarkdownImageEvent,

@@ -28,6 +28,22 @@ import {
 } from './chatOptionReplies';
 import { resolvePromptDoneStatus, type ChatPromptStatus } from './turns/chatPromptStatus';
 import {msgText} from './chatMessageText';
+import {splitChatSearchHighlightSegments} from './search/chatSearchState';
+
+function renderChatTextWithHighlight(text: string, query: string | undefined) {
+  if (!query) {
+    return text;
+  }
+  return splitChatSearchHighlightSegments(text, query).map((segment, index) =>
+    segment.match ? (
+      <mark key={index} className="chat-search-match">
+        {segment.text}
+      </mark>
+    ) : (
+      <span key={index}>{segment.text}</span>
+    ),
+  );
+}
 
 function msgKind(method: string): string {
   switch (method) {
@@ -257,6 +273,7 @@ export type ChatTurnViewProps = {
   onOpenPromptArtifact?: (artifact: RegistrySessionPromptArtifact, message: RegistryChatMessage, filePath?: string) => void;
   openingPromptArtifactKey?: string;
   promptArtifactErrors?: Record<string, string>;
+  highlightQuery?: string;
 };
 
 type PromptAttachmentChipProps = {
@@ -345,6 +362,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   onOpenPromptArtifact,
   openingPromptArtifactKey = '',
   promptArtifactErrors = {},
+  highlightQuery,
 }: ChatTurnViewProps) {
   const text = msgText(message.method, message.param).trim();
   const kind = msgKind(message.method);
@@ -372,7 +390,9 @@ export const ChatTurnView = React.memo(function ChatTurnView({
           <div className="chat-prompt-user-row">
             {text ? (
               <div className="chat-prompt-user">
-                {inlineParts.length > 0 ? renderPromptInlineParts(inlineParts) : text}
+                {inlineParts.length > 0
+                  ? renderPromptInlineParts(inlineParts)
+                  : renderChatTextWithHighlight(text, highlightQuery)}
               </div>
             ) : null}
             {promptStatus === 'responding' ? (
