@@ -77,6 +77,32 @@ describe('UsageFeatureSurface', () => {
     expect(renderedText(deepSeek)).not.toContain('OpenCode');
   });
 
+  it('omits providers without a usable account from compact mode', () => {
+    const snapshot: UsageViewSnapshot = {
+      ...fixtureSnapshot,
+      providers: [...fixtureSnapshot.providers, {
+        id: 'kimi', name: 'Kimi', status: 'unavailable', accountCount: 1,
+        accounts: [{
+          localId: 'opencode', identity: {kind: 'source', label: 'OpenCode'}, status: 'unavailable',
+          message: 'not authenticated', limits: [], hubIds: ['hub-a'],
+        }],
+      }, {
+        id: 'zai', name: 'ZAI', status: 'error', accountCount: 0, accounts: [],
+      }],
+    };
+    let view: TestRenderer.ReactTestRenderer;
+    act(() => {
+      view = TestRenderer.create(
+        <UsageFeatureSurface snapshot={snapshot} onRefresh={jest.fn()} onRequestHide={jest.fn()} />,
+      );
+    });
+
+    expect(view!.root.findAllByProps({'data-usage-provider': 'codex'})).toHaveLength(1);
+    expect(view!.root.findAllByProps({'data-usage-provider': 'deepseek'})).toHaveLength(1);
+    expect(view!.root.findAllByProps({'data-usage-provider': 'kimi'})).toHaveLength(0);
+    expect(view!.root.findAllByProps({'data-usage-provider': 'zai'})).toHaveLength(0);
+  });
+
   it('fills a missing five-hour quota with a full compact rail', () => {
     const weeklyOnly: UsageViewSnapshot = {
       refreshing: false,

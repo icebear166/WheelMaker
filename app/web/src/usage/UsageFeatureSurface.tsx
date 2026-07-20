@@ -147,6 +147,7 @@ export function UsageFeatureSurface({snapshot, onRefresh, onRequestHide}: Props)
   const [collapsed, setCollapsed] = React.useState(false);
   const [detail, setDetail] = React.useState(false);
   const mode = detail ? 'detail' : 'compact';
+  const compactProviders = snapshot.providers.filter(provider => provider.accounts.some(account => account.status === 'ok'));
   const actions = (
     <>
       <button
@@ -193,7 +194,7 @@ export function UsageFeatureSurface({snapshot, onRefresh, onRequestHide}: Props)
         ) : detail ? (
           <UsageDetailContent snapshot={snapshot} />
         ) : (
-          <div className="usage-provider-list">{snapshot.providers.map(provider => <ProviderRail key={provider.id} provider={provider} />)}</div>
+          <div className="usage-provider-list">{compactProviders.map(provider => <ProviderRail key={provider.id} provider={provider} />)}</div>
         )}
         <footer className="usage-feature-footer">
           <span>{snapshot.refreshing ? 'Refreshing…' : formatUpdatedAgo(snapshot.updatedAt) || 'Hub cache'}</span>
