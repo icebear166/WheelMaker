@@ -26,13 +26,49 @@ describe('PC chat session-panel layout', () => {
     expect(workspaceAppSource).not.toContain('!desktopChatSessionPinned ? renderChatSessionHeader(false)');
   });
 
-  it('keeps the desktop settings and Hub segment at the shared 360px panel width', () => {
+  it('keeps settings, project, and Hub controls inside the shared 360px desktop segment', () => {
     expect(shellStyles).toMatch(/\.page,\r?\n\.workspace \{[\s\S]*?--chat-session-panel-width: 360px;/);
     const addressRule = cssRuleBlock(chatStyles, '.chat-title-bar > .chat-session-header');
     expect(addressRule).toContain('flex: 0 0 var(--chat-session-panel-width);');
     expect(addressRule).toContain('width: var(--chat-session-panel-width);');
     expect(addressRule).toContain('padding: 0 8px;');
+    expect(addressRule).toContain('gap: 8px;');
+    const projectRule = cssRuleBlock(
+      chatStyles,
+      '.chat-title-bar > .chat-session-header .chat-title-project-button',
+    );
+    expect(projectRule).toContain('max-width: 116px;');
+    expect(cssRuleBlock(chatStyles, '.chat-sidebar-title-actions')).toContain('margin-left: auto;');
     expect(cssRuleBlock(chatStyles, '.chat-main')).toContain('--chat-edge-surface-width: var(--chat-session-panel-width);');
+  });
+
+  it('orders desktop settings, project, and Hubs before the prompt without changing mobile project navigation', () => {
+    const headerStart = workspaceAppSource.indexOf('const renderChatSessionHeader = (mobile: boolean) => {');
+    const headerEnd = workspaceAppSource.indexOf('const renderMobileChatSessionSheet = () => {', headerStart);
+    const headerSource = workspaceAppSource.slice(headerStart, headerEnd);
+    const settingsIndex = headerSource.indexOf('{renderChatMenuSettingsButton()}');
+    const projectIndex = headerSource.indexOf('{!mobile ? renderDesktopChatProjectSelector() : null}');
+    const hubsIndex = headerSource.indexOf('{renderChatHubSummary()}');
+
+    expect(settingsIndex).toBeGreaterThanOrEqual(0);
+    expect(projectIndex).toBeGreaterThan(settingsIndex);
+    expect(hubsIndex).toBeGreaterThan(projectIndex);
+
+    const desktopProjectStart = workspaceAppSource.indexOf('const renderDesktopChatProjectSelector = () => (');
+    const desktopProjectEnd = workspaceAppSource.indexOf('const renderDesktopChatBreadcrumbTitle = () => (', desktopProjectStart);
+    const desktopProjectSource = workspaceAppSource.slice(desktopProjectStart, desktopProjectEnd);
+    expect(desktopProjectSource).toContain('className={`chat-title-project-button');
+    expect(desktopProjectSource).toContain('{activeChatBreadcrumbProjectName}');
+
+    const desktopBreadcrumbStart = desktopProjectEnd;
+    const mobileBreadcrumbStart = workspaceAppSource.indexOf('const renderMobileChatBreadcrumbTitle = () => (', desktopBreadcrumbStart);
+    const desktopBreadcrumbSource = workspaceAppSource.slice(desktopBreadcrumbStart, mobileBreadcrumbStart);
+    expect(desktopBreadcrumbSource).not.toContain('chat-title-project-button');
+    expect(desktopBreadcrumbSource).toContain('chat-title-prompt-icon-button');
+
+    const mobileBreadcrumbEnd = workspaceAppSource.indexOf('const renderChatTitleBar = (mobile: boolean) => (', mobileBreadcrumbStart);
+    const mobileBreadcrumbSource = workspaceAppSource.slice(mobileBreadcrumbStart, mobileBreadcrumbEnd);
+    expect(mobileBreadcrumbSource).toContain('chat-title-project-button');
   });
 
   it('does not let desktop session search change the settings and Hub segment', () => {
@@ -79,11 +115,11 @@ describe('PC chat session-panel layout', () => {
     expect(coveredRule).toContain('pointer-events: none;');
   });
 
-  it('positions desktop session surfaces from the chat area below the permanent title bar', () => {
+  it('adds an eight pixel desktop gap below the permanent title bar', () => {
     expect(chatStyles).not.toContain('.chat-edge-surface-stack.below-top-bar');
     const stackRule = cssRuleBlock(chatStyles, '.chat-edge-surface-stack');
     expect(stackRule).toContain('--chat-edge-surface-stack-edge-gap: 0px;');
-    expect(stackRule).toContain('top: 0;');
+    expect(stackRule).toContain('top: 8px;');
     expect(stackRule).toContain('left: 0;');
     const slideoutRule = cssRuleBlock(chatStyles, '.chat-session-nav-slideout');
     expect(slideoutRule).toContain('top: 0;');
@@ -94,6 +130,8 @@ describe('PC chat session-panel layout', () => {
     expect(slideoutGlassRule).toContain('border: 0;');
     expect(slideoutGlassRule).toContain('box-shadow: none;');
     expect(slideoutGlassRule).toContain('background: var(--desktop-top-surface);');
+    const slideoutHeaderRule = cssRuleBlock(chatStyles, '.chat-session-nav-slideout .chat-session-panel-header');
+    expect(slideoutHeaderRule).toContain('padding-top: 8px;');
   });
 
   it('uses the pinned Recent project presentation inside the unpinned surface', () => {

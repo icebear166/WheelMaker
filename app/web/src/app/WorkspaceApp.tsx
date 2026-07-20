@@ -17121,6 +17121,7 @@ export function App() {
         {!searchHeaderExpanded ? (
           <>
             {renderChatMenuSettingsButton()}
+            {!mobile ? renderDesktopChatProjectSelector() : null}
           </>
         ) : null}
         <div className="chat-sidebar-title-actions">
@@ -18863,28 +18864,30 @@ export function App() {
     setChatTitleProjectMenuOpen(false);
     setChatTitlePromptMenuOpen(open => !open);
   };
+  const renderDesktopChatProjectSelector = () => (
+    <button
+      ref={chatTitleProjectButtonRef}
+      type="button"
+      className={`chat-title-project-button${chatTitleProjectMenuOpen ? ' open' : ''}`}
+      onPointerDown={event => event.stopPropagation()}
+      onClick={() => {
+        setChatTitlePromptMenuOpen(false);
+        setChatQuickSwitchMenuOpen(false);
+        setChatTitleProjectMenuOpen(open => !open);
+      }}
+      title="Switch project"
+      aria-label="Switch project"
+      aria-haspopup="menu"
+      aria-expanded={chatTitleProjectMenuOpen}
+    >
+      <span className="breadcrumb-project-name" title={activeChatBreadcrumbProjectName}>
+        {activeChatBreadcrumbProjectName}
+      </span>
+      <span className="codicon codicon-chevron-down" aria-hidden="true" />
+    </button>
+  );
   const renderDesktopChatBreadcrumbTitle = () => (
     <div className="breadcrumb-title chat-breadcrumb-title">
-      <button
-        ref={chatTitleProjectButtonRef}
-        type="button"
-        className={`chat-title-project-button${chatTitleProjectMenuOpen ? ' open' : ''}`}
-        onPointerDown={event => event.stopPropagation()}
-        onClick={() => {
-          setChatTitlePromptMenuOpen(false);
-          setChatQuickSwitchMenuOpen(false);
-          setChatTitleProjectMenuOpen(open => !open);
-        }}
-        title="Switch project"
-        aria-label="Switch project"
-        aria-haspopup="menu"
-        aria-expanded={chatTitleProjectMenuOpen}
-      >
-        <span className="breadcrumb-project-name" title={activeChatBreadcrumbProjectName}>
-          {activeChatBreadcrumbProjectName}
-        </span>
-        <span className="codicon codicon-chevron-down" aria-hidden="true" />
-      </button>
       <button
         ref={chatTitlePromptButtonRef}
         type="button"

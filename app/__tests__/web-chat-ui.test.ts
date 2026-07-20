@@ -1785,7 +1785,7 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('background: color-mix(in srgb, var(--accent-primary) 14%, transparent);');
   });
 
-  test('wide layout uses a project session rail instead of the header project picker', () => {
+  test('wide layout uses a project session rail and keeps the project picker in the desktop address segment', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const appDialogsTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'shell', 'AppDialogs.tsx'));
@@ -1940,16 +1940,20 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className={`chat-title-prompt-icon-button${chatTitlePromptMenuOpen ? \' open\' : \'\'}`}');
     expect(mainTsx).toContain('aria-label="Show prompt history"');
     expect(mainTsx).toContain('<span className="chat-title-session-text title-text breadcrumb-current"');
-    const desktopTitleStart = mainTsx.indexOf('const renderDesktopChatBreadcrumbTitle = () => (');
+    const desktopProjectStart = mainTsx.indexOf('const renderDesktopChatProjectSelector = () => (');
+    const desktopTitleStart = mainTsx.indexOf('const renderDesktopChatBreadcrumbTitle = () => (', desktopProjectStart);
     const mobileTitleStart = mainTsx.indexOf('const renderMobileChatBreadcrumbTitle = () => (');
     const renderTitleStart = mainTsx.indexOf('const renderChatTitleBar = (mobile: boolean) => (', mobileTitleStart);
-    expect(desktopTitleStart).toBeGreaterThanOrEqual(0);
+    expect(desktopProjectStart).toBeGreaterThanOrEqual(0);
+    expect(desktopTitleStart).toBeGreaterThan(desktopProjectStart);
     expect(mobileTitleStart).toBeGreaterThan(desktopTitleStart);
     expect(renderTitleStart).toBeGreaterThan(mobileTitleStart);
+    const desktopProjectBlock = mainTsx.slice(desktopProjectStart, desktopTitleStart);
     const desktopTitleBlock = mainTsx.slice(desktopTitleStart, mobileTitleStart);
     const mobileTitleBlock = mainTsx.slice(mobileTitleStart, renderTitleStart);
+    expect(desktopProjectBlock).toContain('className={`chat-title-project-button${chatTitleProjectMenuOpen ? \' open\' : \'\'}`}');
     expect(desktopTitleBlock).toContain('className={`chat-title-prompt-icon-button${chatTitlePromptMenuOpen ? \' open\' : \'\'}`}');
-    expect(desktopTitleBlock).toContain('className={`chat-title-project-button${chatTitleProjectMenuOpen ? \' open\' : \'\'}`}');
+    expect(desktopTitleBlock).not.toContain('chat-title-project-button');
     expect(mobileTitleBlock).toContain('className={`chat-title-project-button${chatTitleProjectMenuOpen ? \' open\' : \'\'}`}');
     expect(mobileTitleBlock).toContain('className={`chat-title-session-button chat-title-session-text title-text breadcrumb-current${chatTitlePromptMenuOpen ? \' open\' : \'\'}`}');
     expect(mobileTitleBlock).toContain('ref={chatTitlePromptButtonRef}');

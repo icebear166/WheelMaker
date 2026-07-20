@@ -325,6 +325,7 @@
   border-bottom: 0;
   background: transparent;
   padding: 0 8px;
+  gap: 8px;
   color: inherit;
   font-size: inherit;
   font-weight: inherit;
@@ -413,6 +414,11 @@
   overflow: hidden;
   text-align: left;
   cursor: pointer;
+}
+
+.chat-title-bar > .chat-session-header .chat-title-project-button {
+  flex: 0 1 116px;
+  max-width: 116px;
 }
 
 .chat-title-project-button:hover,
@@ -2883,7 +2889,7 @@
     100%
   );
   position: absolute;
-  top: 0;
+  top: 8px;
   left: 0;
   z-index: 6;
   width: var(--chat-edge-surface-stack-resolved-width);
@@ -3262,6 +3268,7 @@
   position: sticky;
   top: 0;
   z-index: 1;
+  padding-top: 8px;
 }
 
 .chat-session-nav-slideout .chat-edge-surface-glass {
