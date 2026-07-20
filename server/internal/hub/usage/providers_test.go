@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,7 +34,7 @@ func TestOpenCodeDiscoveryReadsOnlySupportedAPIEntries(t *testing.T) {
 
 func TestSnapshotJSONNeverContainsProviderCredential(t *testing.T) {
 	secret := "sk-private-test-key"
-	scanner := NewKimiScanner(secret, &http.Client{}, "https://unused.invalid")
+	scanner := NewKimiScanner([]KimiCredentialSource{{LocalID: "opencode", Label: "OpenCode", Credential: secret}}, &http.Client{}, "https://unused.invalid")
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	result := scanner.Scan(ctx)
@@ -175,10 +177,35 @@ func TestProviderErrorNeverContainsCredential(t *testing.T) {
 }
 
 func TestKimiMissingCredentialIsUnavailable(t *testing.T) {
-	scanner := NewKimiScanner("", &http.Client{}, "https://unused.invalid")
+	scanner := NewKimiScanner(nil, &http.Client{}, "https://unused.invalid")
 	got := scanner.Scan(context.Background())
 	if got.Status != ProviderUnavailable || len(got.Accounts) != 0 {
 		t.Fatalf("snapshot=%+v", got)
+	}
+}
+
+func TestKimiScannerReportsOneAccountPerCredentialSource(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"limits":[{"window":{"duration":300},"detail":{"limit":100,"used":25,"resetTime":"2026-07-20T20:00:00Z"}}],"usage":{"limit":1000,"remaining":750,"resetTime":"2026-07-27T00:00:00Z"}}`)
+	}))
+	defer server.Close()
+	scanner := NewKimiScanner([]KimiCredentialSource{
+		{LocalID: "opencode", Label: "OpenCode", Credential: "token-a"},
+		{LocalID: "kimi-code", Label: "Kimi Code", Credential: "token-b"},
+	}, server.Client(), server.URL)
+	got := scanner.Scan(context.Background())
+	if got.Status != ProviderOK || len(got.Accounts) != 2 {
+		t.Fatalf("snapshot=%+v", got)
+	}
+	if got.Accounts[0].LocalID != "opencode" || got.Accounts[1].LocalID != "kimi-code" {
+		t.Fatalf("account order=%q,%q", got.Accounts[0].LocalID, got.Accounts[1].LocalID)
+	}
+	if got.Accounts[1].Identity.Label != "Kimi Code" {
+		t.Fatalf("kimi-code identity=%+v", got.Accounts[1].Identity)
+	}
+	if len(got.Accounts[0].Limits) != 2 || got.Accounts[0].Limits[0].RemainingPercent != 75 {
+		t.Fatalf("limits=%+v", got.Accounts[0].Limits)
 	}
 }
 

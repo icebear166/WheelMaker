@@ -7,10 +7,11 @@ import (
 )
 
 type LocalCollector struct {
-	AuthPath string
-	Client   *http.Client
-	Binary   string
-	Timeout  time.Duration
+	AuthPath                string
+	KimiCodeCredentialsPath string
+	Client                  *http.Client
+	Binary                  string
+	Timeout                 time.Duration
 }
 
 func NewLocalCollector(authPath string) *LocalCollector {
@@ -37,9 +38,20 @@ func (c *LocalCollector) Scan(ctx context.Context) []ProviderSnapshot {
 		authPath = defaultOpenCodeAuthPath()
 	}
 	credentials := readOpenCodeCredentials(authPath)
+	kimiSources := make([]KimiCredentialSource, 0, 2)
+	if credential := credentials[ProviderKimi]; credential != "" {
+		kimiSources = append(kimiSources, KimiCredentialSource{LocalID: "opencode", Label: "OpenCode", Credential: credential})
+	}
+	kimiCodePath := c.KimiCodeCredentialsPath
+	if kimiCodePath == "" {
+		kimiCodePath = defaultKimiCodeCredentialsPath()
+	}
+	if credential := readKimiCodeCredential(kimiCodePath, time.Now()); credential != "" {
+		kimiSources = append(kimiSources, KimiCredentialSource{LocalID: "kimi-code", Label: "Kimi Code", Credential: credential})
+	}
 	return (Collector{Scanners: []ProviderScanner{
 		NewCodexScanner(c.Binary),
-		NewKimiScanner(credentials[ProviderKimi], client, ""),
+		NewKimiScanner(kimiSources, client, ""),
 		NewZAIScanner(credentials[ProviderZAI], client, ""),
 		NewDeepSeekScanner(credentials[ProviderDeepSeek], client, ""),
 	}}).Scan(scanContext)

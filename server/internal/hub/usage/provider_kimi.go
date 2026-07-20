@@ -11,38 +11,56 @@ import (
 
 const defaultKimiEndpoint = "https://api.kimi.com/coding/v1/usages"
 
-type KimiScanner struct {
-	credential string
-	client     *http.Client
-	endpoint   string
+// KimiCredentialSource is one local credential origin feeding the Kimi
+// usage endpoint. Each source becomes one account in the snapshot.
+type KimiCredentialSource struct {
+	LocalID    string
+	Label      string
+	Credential string
 }
 
-func NewKimiScanner(credential string, client *http.Client, endpoint string) *KimiScanner {
+type KimiScanner struct {
+	sources  []KimiCredentialSource
+	client   *http.Client
+	endpoint string
+}
+
+func NewKimiScanner(sources []KimiCredentialSource, client *http.Client, endpoint string) *KimiScanner {
 	if client == nil {
 		client = http.DefaultClient
 	}
 	if strings.TrimSpace(endpoint) == "" {
 		endpoint = defaultKimiEndpoint
 	}
-	return &KimiScanner{credential: strings.TrimSpace(credential), client: client, endpoint: endpoint}
+	filtered := make([]KimiCredentialSource, 0, len(sources))
+	for _, source := range sources {
+		source.Credential = strings.TrimSpace(source.Credential)
+		if source.Credential == "" {
+			continue
+		}
+		filtered = append(filtered, source)
+	}
+	return &KimiScanner{sources: filtered, client: client, endpoint: endpoint}
 }
 
 func (s *KimiScanner) Scan(ctx context.Context) ProviderSnapshot {
 	result := ProviderSnapshot{ID: ProviderKimi, Name: "Kimi", Accounts: []Account{}}
-	if s == nil || s.credential == "" {
+	if s == nil || len(s.sources) == 0 {
 		result.Status, result.Message = ProviderUnavailable, "not authenticated"
 		return result
 	}
-	payload, message := fetchProviderJSON(ctx, s.client, s.endpoint, s.credential)
-	account := Account{LocalID: "opencode", Identity: Identity{Kind: "source", Label: "OpenCode"}, Limits: []Limit{}}
-	if message != "" {
-		account.Status, account.Message = ProviderError, message
-	} else if limits, err := parseKimiLimits(payload); err != nil {
-		account.Status, account.Message = ProviderError, "invalid response"
-	} else {
-		account.Status, account.Limits = ProviderOK, limits
+	for _, source := range s.sources {
+		payload, message := fetchProviderJSON(ctx, s.client, s.endpoint, source.Credential)
+		account := Account{LocalID: source.LocalID, Identity: Identity{Kind: "source", Label: source.Label}, Limits: []Limit{}}
+		if message != "" {
+			account.Status, account.Message = ProviderError, message
+		} else if limits, err := parseKimiLimits(payload); err != nil {
+			account.Status, account.Message = ProviderError, "invalid response"
+		} else {
+			account.Status, account.Limits = ProviderOK, limits
+		}
+		result.Accounts = append(result.Accounts, account)
 	}
-	result.Accounts = []Account{account}
 	result.Status = providerStatus(result.Accounts)
 	return result
 }
