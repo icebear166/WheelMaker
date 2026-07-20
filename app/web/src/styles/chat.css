@@ -2844,7 +2844,7 @@
 }
 
 .chat-edge-surface-stack.beside-pinned-session-panel {
-  top: 0;
+  top: 8px;
   left: 0;
 }
 
