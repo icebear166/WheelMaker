@@ -1316,6 +1316,7 @@ const AGENT_TAG_VARIANT_INDEX: Record<string, number> = {
   opencode: 3,
   codebuddy: 4,
   mimo: 5,
+  kimi: 6,
   flicker: 8,
 };
 
