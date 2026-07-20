@@ -186,7 +186,7 @@ describe('web responsive shell split', () => {
     expect(mainTsx).toContain('className="desktop-settings-screen"');
     expect(mainTsx).toContain('shortcutBar={settingsShortcutBar}');
     expect(mainTsx).toContain('onBackdropClick={handleMobileSettingsBackButton}');
-    expect(mainTsx).toContain("const wideSidebarMain = tab === 'chat' ? renderWideProjectSessionNav() : renderSidebarMain(false);");
+    expect(mainTsx).toContain('const wideSidebarMain = renderWideProjectSessionNav();');
     expect(mainTsx).not.toContain('const wideSidebarMain = sidebarSettingsOpen');
     expect(mainTsx).not.toContain('wideSettingsTitle');
     expect(mainTsx).not.toContain('const wideSidebarTitle = sidebarSettingsOpen');

@@ -11,25 +11,6 @@
   background: color-mix(in srgb, var(--accent-primary) 14%, transparent);
 }
 
-.markdown-preview-toggle {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
-.markdown-preview-toggle-text {
-  line-height: 1;
-}
-
-.html-preview-toggle {
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.html-preview-toggle-text {
-  line-height: 1;
-}
-
 .markdown-preview {
   padding: 12px 14px 18px;
   line-height: 1.6;
@@ -192,18 +173,6 @@
   word-break: break-word;
   font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
   font-size: 12px;
-}
-
-.file-code-area .code-wrap {
-  min-width: 100%;
-}
-
-.file-code-area .code-wrap.nowrap {
-  width: max-content;
-}
-
-.file-code-area .code-wrap.wrap {
-  width: 100%;
 }
 
 .chat-main-message code:not(.wm-shiki-code) {
@@ -385,62 +354,6 @@
   .tab-icon {
     font-size: 16px;
     opacity: 0.95;
-  }
-
-  .view-tools {
-    gap: 4px;
-  }
-
-  .view-tool {
-    height: 28px;
-    width: 28px;
-  }
-
-  .pinned-pin-toggle {
-    height: 28px;
-    width: 28px;
-  }
-
-  .view-tool-icon {
-    font-size: 14px;
-  }
-
-  .file-tools {
-    gap: 4px;
-    max-width: 62vw;
-    overflow-x: auto;
-  }
-
-  .file-pane {
-    flex-direction: column;
-  }
-
-  .file-action-panel {
-    right: calc(100% + 6px);
-    top: 0;
-    transform: translateX(6px);
-  }
-
-  .file-action-panel.open {
-    max-width: min(78vw, 340px);
-    transform: translateX(0);
-  }
-
-  .search-input {
-    width: 112px;
-  }
-
-  .goto-input {
-    width: 58px;
-  }
-
-  .pinned-strip {
-    padding: 4px 8px;
-    gap: 4px;
-  }
-
-  .pinned-open {
-    max-width: 120px;
   }
 
   .chat-config-options {

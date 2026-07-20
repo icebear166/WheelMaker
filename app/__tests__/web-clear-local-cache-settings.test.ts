@@ -38,7 +38,7 @@ describe('web clear local cache settings', () => {
 
     expect(workspacePersistence).not.toContain('LOCAL_ADDRESS_KEY');
     expect(workspacePersistence).not.toContain('LOCAL_TOKEN_KEY');
-    expect(workspacePersistence).toContain('const WORKSPACE_DB_VERSION = 6;');
+    expect(workspacePersistence).toContain('const WORKSPACE_DB_VERSION = 7;');
     expect(workspacePersistence).toContain('turnsJson');
     expect(workspacePersistence).not.toContain('messagesJson');
     expect(workspacePersistence).not.toContain('saveLocalIdentityState');

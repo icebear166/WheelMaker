@@ -20,7 +20,7 @@ describe('PC chat session-panel layout', () => {
     expect(responsiveShellSource).toContain('desktopTopBar: ReactNode;');
     expect(responsiveShellSource).toContain('<div className="desktop-primary-workspace">');
     expect(responsiveShellSource).toContain('{desktopTopBar}');
-    expect(workspaceAppSource).toContain("const desktopTopBar = isWide && tab === 'chat' ? renderChatTitleBar(false) : null;");
+    expect(workspaceAppSource).toContain('const desktopTopBar = isWide ? renderChatTitleBar(false) : null;');
     expect(workspaceAppSource).toContain('desktopTopBar={desktopTopBar}');
     expect(workspaceAppSource).not.toContain('chat-pinned-title-bar');
     expect(workspaceAppSource).not.toContain('!desktopChatSessionPinned ? renderChatSessionHeader(false)');
@@ -201,7 +201,7 @@ describe('PC chat session-panel layout', () => {
     expect(workspaceAppSource).toContain('onPointerEnter={() => sessionNavSlideOutAutoClose.cancel()}');
     expect(workspaceAppSource).toContain('sessionNavSlideOutAutoClose.closeNow()');
     expect(workspaceAppSource).toContain(
-      "if (tab !== 'chat' || sidebarSettingsOpen) {\n      setSessionPanelShortcutUnpinned(false);\n      sessionNavSlideOutAutoClose.cancel();\n      dispatchSessionNavSlideOut({ type: 'forceReset' });\n    }\n  }, [sessionNavSlideOutAutoClose, sidebarSettingsOpen, tab]);",
+      "if (sidebarSettingsOpen) {\n      setSessionPanelShortcutUnpinned(false);\n      sessionNavSlideOutAutoClose.cancel();\n      dispatchSessionNavSlideOut({ type: 'forceReset' });\n    }\n  }, [sessionNavSlideOutAutoClose, sidebarSettingsOpen]);",
     );
   });
 

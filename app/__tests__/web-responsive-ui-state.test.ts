@@ -195,13 +195,7 @@ describe('web responsive ui state', () => {
     expect(DESKTOP_SIDEBAR_WIDTH_DEFAULT).toBe(380);
     expect(DESKTOP_SIDEBAR_WIDTH_MIN).toBe(320);
     expect(DESKTOP_SIDEBAR_WIDTH_MAX).toBe(560);
-    expect(createWorkspaceUiState().shared.tab).toBe('chat');
-    expect(createWorkspaceUiState({ tab: 'invalid' }).shared.tab).toBe('chat');
-    expect(createWorkspaceUiState({ tab: 'file' }).shared.tab).toBe('file');
-    expect(createWorkspaceUiState({ tab: 'git' }).shared.tab).toBe('git');
-
     let state = createWorkspaceUiState({
-      tab: 'git',
       settingsOpen: true,
       sidebarCollapsed: true,
       desktopSidebarWidth: 420,
@@ -231,7 +225,6 @@ describe('web responsive ui state', () => {
     });
 
     expect(state.shared).toMatchObject({
-      tab: 'git',
       settingsOpen: true,
       collapsedProjectIds: ['project-a', 'project-b'],
       pinnedProjectIds: ['project-c', 'project-a'],
@@ -403,7 +396,7 @@ describe('web responsive ui state', () => {
       .readFileSync(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'), 'utf8')
       .replace(/\r\n/g, '\n');
 
-    expect(mainTsx).toContain('options?: {preserveFileView?: boolean; keepMobileDrawerOpen?: boolean}');
+    expect(mainTsx).toContain('options?: {keepMobileDrawerOpen?: boolean}');
     expect(mainTsx).toContain("if (!isWide && options?.keepMobileDrawerOpen !== true) setDrawerOpen(false);");
     expect(mainTsx).toContain("options?: {reason?: 'chat' | 'manual'; keepMobileDrawerOpen?: boolean}");
     expect(mainTsx).toContain('keepMobileDrawerOpen: options?.keepMobileDrawerOpen,');

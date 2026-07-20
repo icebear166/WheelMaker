@@ -1,107 +1,31 @@
 import React from 'react';
-import type { RegistryFsEntry, RegistryProject } from '../registry/registryTypes';
+import type { RegistryFsEntry } from '../registry/registryTypes';
 
 type FileResolvedIcon = {
   glyph: string;
   color: string;
 };
 
-type WorkspaceProjectSelectorProps = {
-  projects: RegistryProject[];
-  projectId: string;
-  currentProjectName: string;
-  sortedProjectItems: RegistryProject[];
-  workspaceProjectMenuOpen: boolean;
-  setWorkspaceProjectMenuOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  syncWorkspaceProject: (projectId: string, options: {reason: 'manual'}) => Promise<void>;
-};
-
-type FileExplorerTreeProps = WorkspaceProjectSelectorProps & {
-  isWide: boolean;
+type FileExplorerTreeProps = {
   showSectionTitle?: boolean;
   dirEntries: Record<string, RegistryFsEntry[]>;
   loadingDirs: Record<string, boolean>;
   selectedFile: string;
-  setSelectedFile: React.Dispatch<React.SetStateAction<string>>;
-  setDrawerOpen: (next: boolean) => void;
   isExpanded: (path: string) => boolean;
   toggleDirectory: (path: string) => void;
   resolveFileIcon: (name: string) => FileResolvedIcon;
-  onFileSelect?: (path: string) => void;
+  onFileSelect: (path: string) => void;
   depthIndent?: number;
   rootState?: 'ready' | 'loading' | 'error' | 'empty';
   rootError?: string;
   onRetryRoot?: () => void;
 };
 
-export function WorkspaceProjectSelector({
-  projects,
-  projectId,
-  currentProjectName,
-  sortedProjectItems,
-  workspaceProjectMenuOpen,
-  setWorkspaceProjectMenuOpen,
-  syncWorkspaceProject,
-}: WorkspaceProjectSelectorProps) {
-  const currentWorkspaceProject = projects.find(item => item.projectId === projectId);
-
-  return (
-    <div className="workspace-project-selector">
-      <div className="workspace-project-label">WORKSPACE</div>
-      <div className="workspace-project-control">
-        <button
-          type="button"
-          className="workspace-project-button"
-          onClick={() => setWorkspaceProjectMenuOpen(prev => !prev)}
-          title={currentWorkspaceProject?.path || currentProjectName}
-        >
-          <span className="workspace-project-name">
-            {currentWorkspaceProject?.name || currentProjectName}
-          </span>
-          <span className="codicon codicon-chevron-down" />
-        </button>
-        {workspaceProjectMenuOpen ? (
-          <div className="workspace-project-menu">
-            {sortedProjectItems.map(projectItem => (
-              <button
-                key={`workspace:${projectItem.projectId}`}
-                type="button"
-                className={`workspace-project-menu-item ${
-                  projectItem.projectId === projectId ? 'selected' : ''
-                }`}
-                onClick={() =>
-                  syncWorkspaceProject(projectItem.projectId, {reason: 'manual'}).catch(() => undefined)
-                }
-                title={projectItem.path || projectItem.projectId}
-              >
-                <span className="workspace-project-menu-name">{projectItem.name}</span>
-                <span className="workspace-project-menu-path">
-                  {projectItem.path || projectItem.hubId || projectItem.projectId}
-                </span>
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 export function FileExplorerTree({
-  isWide,
   showSectionTitle = true,
-  projects,
-  projectId,
-  currentProjectName,
-  sortedProjectItems,
-  workspaceProjectMenuOpen,
-  setWorkspaceProjectMenuOpen,
-  syncWorkspaceProject,
   dirEntries,
   loadingDirs,
   selectedFile,
-  setSelectedFile,
-  setDrawerOpen,
   isExpanded,
   toggleDirectory,
   resolveFileIcon,
@@ -152,9 +76,7 @@ export function FileExplorerTree({
           className={`item ${selectedFile === entry.path ? 'selected' : ''}`}
           style={{ paddingLeft: 10 + depth * depthIndent }}
           onClick={() => {
-            if (onFileSelect) onFileSelect(entry.path);
-            else setSelectedFile(entry.path);
-            if (!isWide) setDrawerOpen(false);
+            onFileSelect(entry.path);
           }}
         >
           <span className="caret placeholder" aria-hidden="true" />
@@ -172,17 +94,6 @@ export function FileExplorerTree({
 
   return (
     <>
-      {isWide ? (
-        <WorkspaceProjectSelector
-          projects={projects}
-          projectId={projectId}
-          currentProjectName={currentProjectName}
-          sortedProjectItems={sortedProjectItems}
-          workspaceProjectMenuOpen={workspaceProjectMenuOpen}
-          setWorkspaceProjectMenuOpen={setWorkspaceProjectMenuOpen}
-          syncWorkspaceProject={syncWorkspaceProject}
-        />
-      ) : null}
       {showSectionTitle ? <div className="section-title">EXPLORER</div> : null}
       <div className="list">
         {rootState === 'loading' ? (

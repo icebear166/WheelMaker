@@ -2658,8 +2658,7 @@ textarea,
   opacity: 1;
 }
 
-.settings-detail-header .settings-detail-refresh,
-.settings-detail-header .git-section-btn {
+.settings-detail-header .settings-detail-refresh {
   border: 1px solid color-mix(in srgb, var(--accent-primary) 26%, var(--border-subtle));
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent-primary) 6%, var(--surface-raised));
@@ -2670,8 +2669,7 @@ textarea,
   transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
 }
 
-.settings-detail-header .settings-detail-refresh:hover:not(:disabled),
-.settings-detail-header .git-section-btn:hover:not(:disabled) {
+.settings-detail-header .settings-detail-refresh:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent-primary) 14%, var(--surface-raised));
   border-color: color-mix(in srgb, var(--accent-primary) 50%, var(--border-subtle));
   color: var(--text-primary);

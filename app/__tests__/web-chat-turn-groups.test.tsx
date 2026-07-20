@@ -48,6 +48,30 @@ function tool(turnIndex: number, cmd: string, status: string): RegistryChatMessa
 }
 
 describe('chat turn groups', () => {
+  test('highlights matching characters inside structured prompt text', async () => {
+    let view!: ReactTestRenderer.ReactTestRenderer;
+    await ReactTestRenderer.act(() => {
+      view = ReactTestRenderer.create(
+        <ChatTurnView
+          message={{
+            sessionId: 'sess-1',
+            turnIndex: 1,
+            method: 'prompt_request',
+            param: {contentBlocks: [{type: 'text', text: 'find this phrase'}]},
+            finished: true,
+          }}
+          highlightQuery="this"
+          markdownComponents={markdownComponents}
+          markdownUrlTransform={markdownUrlTransform}
+        />,
+      );
+    });
+
+    const matches = view.root.findAllByProps({className: 'chat-search-match'});
+    expect(matches).toHaveLength(1);
+    expect(matches[0].children).toEqual(['this']);
+  });
+
   test('keeps thinking collapsed by default and preserves an active expansion', async () => {
     let view!: ReactTestRenderer.ReactTestRenderer;
     await ReactTestRenderer.act(() => {

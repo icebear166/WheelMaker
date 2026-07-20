@@ -2,8 +2,6 @@ import type {
   RegistryChatMessage,
   RegistryChatSession,
   RegistryFsEntry,
-  RegistryGitCommit,
-  RegistryGitCommitFile,
   RegistryProject,
   RegistrySessionTurn,
 } from '../registry/registryTypes';
@@ -21,30 +19,8 @@ import {
   type WorkspaceStorageError,
 } from './WorkspacePersistence';
 
-type ProjectSnapshot = {
-  expandedDirs: string[];
-  selectedFile: string;
-  pinnedFiles: string[];
-  gitCurrentBranch: string;
-  commits: RegistryGitCommit[];
-  selectedCommit: string;
-  commitFilesBySha: Record<string, RegistryGitCommitFile[]>;
-  selectedDiff: string;
-};
-
 export type HydratedProjectState = {
   projectId: string;
-  dirEntries: Record<string, RegistryFsEntry[]>;
-  expandedDirs: string[];
-  selectedFile: string;
-  pinnedFiles: string[];
-  gitCurrentBranch: string;
-  commits: RegistryGitCommit[];
-  selectedCommit: string;
-  commitFilesBySha: Record<string, RegistryGitCommitFile[]>;
-  selectedDiff: string;
-  selectedChatSessionId: string;
-  cachedDiffText: string;
 };
 
 export type CachedDirectory = {
@@ -86,22 +62,6 @@ function mergeCachedChatSessionSummary(
       next.usage ??
       (existing.usage ? { ...existing.usage } : undefined),
   };
-}
-
-function sortEntries(entries: RegistryFsEntry[]): RegistryFsEntry[] {
-  return [...entries].sort((a, b) => {
-    if (a.kind === 'dir' && b.kind !== 'dir') return -1;
-    if (a.kind !== 'dir' && b.kind === 'dir') return 1;
-    return a.name.localeCompare(b.name);
-  });
-}
-
-function uniqueStrings(items: string[]): string[] {
-  return [...new Set(items.filter(Boolean))];
-}
-
-function diffCacheKey(sha: string, path: string): string {
-  return `${sha}::${path}`;
 }
 
 function sanitizeCursor(cursor: Partial<PersistedChatCursor> | undefined): PersistedChatCursor {
@@ -153,80 +113,12 @@ export class WorkspaceStore {
     return fallbackProjectId;
   }
 
-  hydrateProject(projectId: string, rootEntries: RegistryFsEntry[], options?: {disableFileCache?: boolean}): HydratedProjectState {
-    const cachedProjectState = this.persistence.getProjectState(projectId);
-    const cachedCommitState = this.persistence.getProjectCommitsState(projectId);
-    const rootSorted = sortEntries(rootEntries);
-    const dirEntries: Record<string, RegistryFsEntry[]> = {
-      '.': rootSorted,
-    };
-    const expandedDirs: string[] = ['.'];
-    if (!options?.disableFileCache) {
-      for (const dirPath of uniqueStrings(cachedProjectState.expandedDirs)) {
-        if (!dirPath || dirPath === '.') continue;
-        const cachedDir = this.getCachedDirectory(projectId, dirPath);
-        if (!cachedDir) continue;
-        dirEntries[dirPath] = sortEntries(cachedDir.entries);
-        expandedDirs.push(dirPath);
-      }
-    }
-
-    const selectedFile = cachedProjectState.selectedFile || (rootSorted.find(item => item.kind === 'file')?.path ?? '');
-    const pinnedFiles = uniqueStrings(cachedProjectState.pinnedFiles.filter(path => !!path));
-    const cacheKey = cachedProjectState.selectedCommit && cachedProjectState.selectedDiff
-      ? diffCacheKey(cachedProjectState.selectedCommit, cachedProjectState.selectedDiff)
-      : '';
-    const cachedDiff = cacheKey ? this.persistence.getProjectDiff(projectId, cacheKey) : null;
-
-    return {
-      projectId,
-      dirEntries,
-      expandedDirs: expandedDirs.length > 0 ? expandedDirs : ['.'],
-      selectedFile,
-      pinnedFiles,
-      gitCurrentBranch: cachedProjectState.gitCurrentBranch || '',
-      commits: cachedCommitState.commits ?? [],
-      selectedCommit: cachedProjectState.selectedCommit || '',
-      commitFilesBySha: cachedCommitState.commitFilesBySha ?? {},
-      selectedDiff: cachedProjectState.selectedDiff || '',
-      selectedChatSessionId: cachedProjectState.selectedChatSessionId || '',
-      cachedDiffText: cachedDiff?.diff ?? '',
-    };
+  hydrateProject(projectId: string): HydratedProjectState {
+    return {projectId};
   }
 
-  hydrateCachedProject(projectId: string, options?: {disableFileCache?: boolean}): HydratedProjectState {
-    const cachedRoot = options?.disableFileCache ? null : this.getCachedDirectory(projectId, '.');
-    return this.hydrateProject(projectId, cachedRoot?.entries ?? [], options);
-  }
-
-  rememberProjectSnapshot(projectId: string, snapshot: ProjectSnapshot): void {
-    if (!projectId) return;
-    this.persistence.patchProjectState(projectId, {
-      expandedDirs: snapshot.expandedDirs,
-      selectedFile: snapshot.selectedFile,
-      pinnedFiles: snapshot.pinnedFiles,
-      gitCurrentBranch: snapshot.gitCurrentBranch,
-      selectedCommit: snapshot.selectedCommit,
-      selectedDiff: snapshot.selectedDiff,
-    });
-    this.persistence.patchProjectCommitsState(projectId, {
-      commits: snapshot.commits,
-      commitFilesBySha: snapshot.commitFilesBySha,
-    });
-  }
-
-  getCachedDiff(projectId: string, sha: string, path: string): string | null {
-    if (!projectId || !sha || !path) return null;
-    return this.persistence.getProjectDiff(projectId, diffCacheKey(sha, path))?.diff ?? null;
-  }
-
-  cacheDiff(projectId: string, sha: string, path: string, diff: string, isBinary: boolean, truncated: boolean): void {
-    if (!projectId || !sha || !path) return;
-    this.persistence.putProjectDiff(projectId, diffCacheKey(sha, path), {
-      diff,
-      isBinary,
-      truncated,
-    });
+  hydrateCachedProject(projectId: string): HydratedProjectState {
+    return this.hydrateProject(projectId);
   }
 
   getCachedDirectory(projectId: string, path: string): CachedDirectory | null {

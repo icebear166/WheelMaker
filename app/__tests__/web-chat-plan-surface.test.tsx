@@ -47,7 +47,7 @@ describe('ChatPlanSurface', () => {
       stackSource.indexOf('<UsageFeatureSurface'),
     );
     expect(stackSource).toContain("showLimitsMonitor ? (");
-    expect(mainSource).toContain("isWide && tab === 'chat' ? (");
+    expect(mainSource).toContain('isWide ? (');
   });
 
   test('uses one 360px stack width and an 8px gap without reserving a Recent placeholder', () => {

@@ -52,7 +52,7 @@ describe('workspace project lightweight UI wiring', () => {
     expect(projectMenuBlock).not.toContain('switchProject(projectItem.projectId)');
   });
 
-  test('chat session selection syncs workspace project without waiting for file/git loads', () => {
+  test('chat session selection syncs workspace project without a full workspace load', () => {
     const main = readMain();
     const body = extractFunctionBody(main, 'selectProjectChatSession');
     const syncBody = extractFunctionBody(main, 'syncWorkspaceProject');
@@ -60,43 +60,6 @@ describe('workspace project lightweight UI wiring', () => {
     expect(body).toContain('syncWorkspaceProject(targetProjectId');
     expect(body).toContain("reason: 'chat'");
     expect(body).not.toContain('switchProject(');
-    expect(syncBody).toContain("if (options?.reason !== 'chat') {");
-    const chatSkipBlock = syncBody.slice(syncBody.indexOf("if (options?.reason !== 'chat') {"));
-    expect(chatSkipBlock).toContain("tabRef.current === 'file'");
-    expect(chatSkipBlock).toContain("tabRef.current === 'git'");
-  });
-
-  test('pc file and git sidebars render the workspace selector above section titles', () => {
-    const main = readMain();
-    const fileSurface = readWebSource('file/FileExplorerTree.tsx');
-    const gitSurface = readWebSource('git/GitSidebar.tsx');
-
-    expect(main).not.toContain('const renderWorkspaceProjectSelector = () =>');
-    expect(main).toContain("import { FileExplorerTree, WorkspaceProjectSelector } from '../file/FileExplorerTree';");
-    expect(main).toContain("import { GitSidebar } from '../git/GitSidebar';");
-    expect(fileSurface).toContain('<WorkspaceProjectSelector');
-    expect(gitSurface).toContain('<WorkspaceProjectSelector');
-    expect(fileSurface).toContain('<div className="workspace-project-label">WORKSPACE</div>');
-    expect(fileSurface).toContain('workspace-project-menu');
-  });
-
-  test('hydrating a new workspace project clears stale directory hashes', () => {
-    const main = readMain();
-    const start = main.indexOf('const applyHydratedProjectState = (');
-    const end = main.indexOf('const togglePinSelectedFile', start);
-    expect(start).toBeGreaterThanOrEqual(0);
-    expect(end).toBeGreaterThan(start);
-
-    const body = main.slice(start, end);
-    expect(body).toContain('dirHashRef.current = {};');
-  });
-
-  test('workspace project selector has dedicated compact sidebar styles', () => {
-    const styles = readStyles();
-
-    expect(styles).toContain('.workspace-project-selector');
-    expect(styles).toContain('.workspace-project-button');
-    expect(styles).toContain('.workspace-project-menu');
-    expect(styles).toContain('.workspace-project-menu-item.selected');
+    expect(syncBody).toContain('workspaceController.switchProjectLightweight');
   });
 });

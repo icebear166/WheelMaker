@@ -1,7 +1,6 @@
 import type { LayoutMode } from './responsiveLayout';
 import type {
   PersistedFloatingControlSide,
-  PersistedTab,
 } from '../../workspace/WorkspacePersistence';
 import { sanitizeFloatingControlYRatio } from '../../preferences/floatingControlPreferences';
 import { sanitizeHubColorMap } from '../../workspace/hubProjectPreferences';
@@ -27,7 +26,6 @@ export type WorkspaceFloatingDragState = {
 
 export type WorkspaceUiState = {
   shared: {
-    tab: PersistedTab;
     settingsOpen: boolean;
     collapsedProjectIds: string[];
     pinnedProjectIds: string[];
@@ -53,7 +51,6 @@ export type WorkspaceUiState = {
 };
 
 export type WorkspaceUiStateInput = {
-  tab?: unknown;
   settingsOpen?: unknown;
   sessionPanelPinned?: unknown;
   sidebarCollapsed?: unknown;
@@ -74,7 +71,6 @@ export type WorkspaceUiStateInput = {
 };
 
 export type WorkspaceUiAction =
-  | { type: 'shared/setTab'; next: WorkspaceUiStateValue<PersistedTab> }
   | { type: 'shared/setSettingsOpen'; next: WorkspaceUiStateValue<boolean> }
   | { type: 'shared/setCollapsedProjectIds'; next: WorkspaceUiStateValue<string[]> }
   | { type: 'shared/setPinnedProjectIds'; next: WorkspaceUiStateValue<string[]> }
@@ -111,10 +107,6 @@ function resolveNext<T>(current: T, next: WorkspaceUiStateValue<T>): T {
   return typeof next === 'function'
     ? (next as (current: T) => T)(current)
     : next;
-}
-
-function sanitizeTab(value: unknown): PersistedTab {
-  return value === 'file' || value === 'git' ? value : 'chat';
 }
 
 function sanitizeFloatingControlSide(value: unknown): PersistedFloatingControlSide {
@@ -155,7 +147,6 @@ function resetTransientState(): WorkspaceUiState['transient'] {
 export function createWorkspaceUiState(input: WorkspaceUiStateInput = {}): WorkspaceUiState {
   return {
     shared: {
-      tab: sanitizeTab(input.tab),
       settingsOpen: typeof input.settingsOpen === 'boolean' ? input.settingsOpen : false,
       collapsedProjectIds: sanitizeStringList(
         Array.isArray(input.collapsedProjectIds)
@@ -198,14 +189,6 @@ export function workspaceUiReducer(
   action: WorkspaceUiAction,
 ): WorkspaceUiState {
   switch (action.type) {
-    case 'shared/setTab':
-      return {
-        ...state,
-        shared: {
-          ...state.shared,
-          tab: sanitizeTab(resolveNext(state.shared.tab, action.next)),
-        },
-      };
     case 'shared/setSettingsOpen':
       return {
         ...state,

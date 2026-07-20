@@ -1,4 +1,5 @@
 import type {RegistryChatSession, RegistryProject} from '../registry/registryTypes';
+import {compareChatSessionUpdatedAtDesc} from './session/chatSessionOrdering';
 
 type BuildMobileChatQuickSwitchSectionsInput = {
   projects: RegistryProject[];
@@ -53,19 +54,6 @@ export function hasCompletedUnreadChatSession(
   });
 }
 
-function compareUpdatedAtDesc(left: string, right: string): number {
-  if (left === right) {
-    return 0;
-  }
-  if (!left) {
-    return 1;
-  }
-  if (!right) {
-    return -1;
-  }
-  return right.localeCompare(left);
-}
-
 function compareQuickSwitchCandidates(
   left: MobileChatQuickSwitchCandidate,
   right: MobileChatQuickSwitchCandidate,
@@ -73,7 +61,7 @@ function compareQuickSwitchCandidates(
   if (left.priority !== right.priority) {
     return left.priority ? -1 : 1;
   }
-  const updatedAtDiff = compareUpdatedAtDesc(
+  const updatedAtDiff = compareChatSessionUpdatedAtDesc(
     left.session.updatedAt || '',
     right.session.updatedAt || '',
   );
@@ -182,7 +170,7 @@ export function buildRecentChatSessionProjectSections(
 
   for (const section of sections) {
     section.sessions.sort((left, right) =>
-      compareUpdatedAtDesc(left.updatedAt || '', right.updatedAt || ''),
+      compareChatSessionUpdatedAtDesc(left.updatedAt || '', right.updatedAt || ''),
     );
   }
 

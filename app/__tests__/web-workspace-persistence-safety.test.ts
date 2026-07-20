@@ -294,9 +294,7 @@ describe('workspace persistence safety', () => {
   test('clears only rebuildable caches and retries a setting after quota failure', async () => {
     const db = new MemoryWorkspaceDatabase(seedWithGlobalSettings({
       wm_project_state: [{projectId: 'p1', stateJson: '{}', updatedAt: Date.now()}],
-      wm_project_commits: [{projectId: 'p1', commitsJson: '[]', commitFilesByShaJson: '{}', updatedAt: Date.now()}],
       wm_file_cache: [{k: 'fc:p1:file:a.txt', hash: 'hash', v: 'cached', updatedAt: Date.now()}],
-      wm_diff_cache: [{k: 'dc:p1:sha:a.txt', v: JSON.stringify({diff: 'cached'}), updatedAt: Date.now()}],
     }));
     const repository = new WorkspacePersistenceRepository(db as never);
     await repository.ready();
@@ -309,10 +307,8 @@ describe('workspace persistence safety', () => {
     expect(rowValue(db.rows('wm_global_kv'), 'themeMode')).toBe('dark');
     expect(rowValue(db.rows('wm_global_kv'), 'deepseekApiKey')).toBeUndefined();
     expect(db.clearedStores()).toEqual(expect.arrayContaining([
-      'wm_project_commits',
       'wm_chat_session_index',
       'wm_chat_session_content',
-      'wm_diff_cache',
       'wm_file_cache',
     ]));
     expect(db.clearedStores()).not.toContain('wm_global_kv');
@@ -327,12 +323,6 @@ describe('workspace persistence safety', () => {
         {k: 'selectedChatProjectId', v: JSON.stringify('p1'), updatedAt: now},
         {k: 'selectedChatSessionId', v: JSON.stringify('s1'), updatedAt: now},
       ],
-      wm_project_commits: [{
-        projectId: 'p1',
-        commitsJson: JSON.stringify([{sha: 'abc'}]),
-        commitFilesByShaJson: '{}',
-        updatedAt: 1,
-      }],
       wm_chat_session_index: [{
         k: 'cs:p1:s1',
         projectId: 'p1',
@@ -356,16 +346,13 @@ describe('workspace persistence safety', () => {
         updatedAt: 1,
       }],
       wm_file_cache: [{k: 'fc:p1:file:a.txt', hash: 'hash', v: 'cached', updatedAt: 1}],
-      wm_diff_cache: [{k: 'dc:p1:sha:a.txt', v: JSON.stringify({diff: 'cached'}), updatedAt: 1}],
     }));
 
     const repository = new WorkspacePersistenceRepository(db as never);
     await repository.ready();
 
-    expect(db.rows('wm_project_commits')).toEqual([]);
     expect(db.rows('wm_chat_session_content')).toEqual([]);
     expect(db.rows('wm_file_cache')).toEqual([]);
-    expect(db.rows('wm_diff_cache')).toEqual([]);
     const indexRows = db.rows<Array<{cursorJson: string}>[number]>('wm_chat_session_index');
     expect(JSON.parse(indexRows[0].cursorJson)).toEqual({turnIndex: 0});
     expect(repository.getGlobalState()).toMatchObject({
@@ -382,17 +369,6 @@ describe('workspace persistence safety', () => {
       hash: `h${index}`,
       v: `file-${index}`,
       updatedAt: now - 1500 + index,
-    }));
-    const diffRows = Array.from({length: 600}, (_, index) => ({
-      k: `dc:p${index}:diff-${index}`,
-      v: JSON.stringify({diff: `diff-${index}`, isBinary: false, truncated: false}),
-      updatedAt: now - 600 + index,
-    }));
-    const projectCommitRows = Array.from({length: 40}, (_, index) => ({
-      projectId: `p${index}`,
-      commitsJson: '[]',
-      commitFilesByShaJson: '{}',
-      updatedAt: now - 40 + index,
     }));
     const chatIndexRows = Array.from({length: 251}, (_, index) => ({
       k: `cs:p-chat:s${index}`,
@@ -417,35 +393,23 @@ describe('workspace persistence safety', () => {
       updatedAt: now - 250 + index,
     }));
     const db = new MemoryWorkspaceDatabase(seedWithGlobalSettings({
-      wm_project_commits: projectCommitRows,
       wm_chat_session_index: chatIndexRows,
       wm_chat_session_content: chatContentRows,
       wm_file_cache: fileRows,
-      wm_diff_cache: diffRows,
     }));
     const repository = new WorkspacePersistenceRepository(db as never);
     await repository.ready();
     db.resetMutationLog();
 
-    repository.patchProjectCommitsState('p-new', {commits: [], commitFilesBySha: {}});
     repository.patchProjectChatSessionContent('p-chat', 's250', []);
-    repository.putProjectDiff('p-new', 'diff-new', {diff: 'new', isBinary: false, truncated: false});
     repository.putCachedFile('p-new', 'file', 'new.txt', 'new-hash', 'new-file');
-    await db.waitForMutations(4);
+    await db.waitForMutations(2);
 
-    const commitIds = db.rows<Array<{projectId: string}>[number]>('wm_project_commits').map(row => row.projectId);
     const chatKeys = db.rows<Array<{k: string}>[number]>('wm_chat_session_content').map(row => row.k);
-    const diffKeys = db.rows<Array<{k: string}>[number]>('wm_diff_cache').map(row => row.k);
     const fileKeys = db.rows<Array<{k: string}>[number]>('wm_file_cache').map(row => row.k);
-    expect(commitIds).toHaveLength(40);
-    expect(commitIds).not.toContain('p0');
-    expect(commitIds).toContain('p-new');
     expect(chatKeys).toHaveLength(250);
     expect(chatKeys).not.toContain('cs:p-chat:s0');
     expect(chatKeys).toContain('cs:p-chat:s250');
-    expect(diffKeys).toHaveLength(600);
-    expect(diffKeys).not.toContain('dc:p0:diff-0');
-    expect(diffKeys).toContain('dc:p-new:diff-new');
     expect(fileKeys).toHaveLength(1500);
     expect(fileKeys).not.toContain('fc:p0:file:f0.txt');
     expect(fileKeys).toContain('fc:p-new:file:new.txt');
@@ -457,17 +421,10 @@ describe('workspace persistence safety', () => {
       wm_project_state: [{
         projectId: 'p1',
         stateJson: JSON.stringify({
-          expandedDirs: ['.'],
-          selectedFile: 'a.txt',
-          pinnedFiles: ['a.txt'],
-          gitCurrentBranch: 'main',
-          selectedCommit: '',
-          selectedDiff: '',
           selectedChatSessionId: '',
         }),
         updatedAt: now,
       }],
-      wm_project_commits: [{projectId: 'p1', commitsJson: '[]', commitFilesByShaJson: '{}', updatedAt: now}],
       wm_chat_session_index: [{
         k: 'cs:p1:s1',
         projectId: 'p1',
@@ -478,7 +435,6 @@ describe('workspace persistence safety', () => {
       }],
       wm_chat_session_content: [{k: 'cs:p1:s1', projectId: 'p1', sessionId: 's1', turnsJson: '[]', updatedAt: now}],
       wm_file_cache: [{k: 'fc:p1:file:a.txt', hash: 'hash', v: 'cached', updatedAt: now}],
-      wm_diff_cache: [{k: 'dc:p1:sha:a.txt', v: JSON.stringify({diff: 'cached'}), updatedAt: now}],
     }));
     const repository = new WorkspacePersistenceRepository(db as never);
     await repository.ready();
@@ -493,15 +449,12 @@ describe('workspace persistence safety', () => {
       themeMode: 'light',
     });
     expect(repository.getProjectState('p1')).toMatchObject({
-      selectedFile: 'a.txt',
-      pinnedFiles: ['a.txt'],
+      selectedChatSessionId: '',
     });
     expect(db.rows('wm_global_kv')).toEqual(globalBefore);
     expect(db.rows('wm_project_state')).toEqual(projectsBefore);
-    expect(db.rows('wm_project_commits')).toEqual([]);
     expect(db.rows('wm_chat_session_index')).toEqual([]);
     expect(db.rows('wm_chat_session_content')).toEqual([]);
-    expect(db.rows('wm_diff_cache')).toEqual([]);
     expect(db.rows('wm_file_cache')).toEqual([]);
     expect(db.mutationsFor('wm_global_kv')).toEqual([]);
   });

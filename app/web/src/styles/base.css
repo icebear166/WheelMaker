@@ -406,86 +406,11 @@ body,
   padding: 10px;
 }
 
-.search-input {
-  width: 140px;
-}
-
-.search-count {
-  font-size: 11px;
-  color: var(--text-secondary);
-  min-width: 34px;
-  text-align: center;
-}
-
-.pinned-strip {
-  min-height: 30px;
-  border-bottom: 1px solid var(--border-subtle);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  overflow-x: auto;
-}
-
-.pinned-label {
-  color: var(--text-secondary);
-  font-size: 11px;
-  font-weight: 600;
-  flex: 0 0 auto;
-}
-
-.pinned-entry {
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  background: var(--surface-panel);
-  overflow: hidden;
-  flex: 0 0 auto;
-}
-
-.pinned-entry.active {
-  border-color: var(--accent-primary);
-  background: color-mix(in srgb, var(--accent-primary) 14%, transparent);
-}
-
-.pinned-open,
-.pinned-close {
-  border: 0;
-  background: transparent;
-  color: var(--text-primary);
-  cursor: pointer;
-  font-size: 11px;
-  line-height: 1;
-}
-
-.pinned-open {
-  padding: 4px 8px;
-  max-width: 180px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pinned-close {
-  width: 18px;
-  height: 18px;
-  color: var(--text-secondary);
-}
-
-.pinned-close:hover {
-  color: var(--text-primary);
-}
-
 .scroll-panel {
   flex: 1;
   min-height: 0;
   overflow: auto;
   overscroll-behavior-x: contain;
-}
-
-.side-action-group {
-  position: relative;
 }
 
 .empty-card {

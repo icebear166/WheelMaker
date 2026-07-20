@@ -45,7 +45,7 @@ describe('web chat integration', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
 
-    expect(mainTsx).toContain('const shouldMeasureChatComposerLayout = tab === \'chat\' && !isWide;');
+    expect(mainTsx).toContain('const shouldMeasureChatComposerLayout = !isWide;');
     expect(mainTsx).toContain('if (shouldMeasureChatComposerLayout) {');
     expect(mainTsx).toContain('}, [resizeChatComposerTextarea, measureChatComposerTop, chatComposerText, selectedChatId, currentChatDraftKey, shouldMeasureChatComposerLayout]);');
   });
@@ -326,7 +326,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('}, [resizeChatComposerTextarea, measureChatComposerTop, chatComposerText, selectedChatId, currentChatDraftKey, shouldMeasureChatComposerLayout]);');
     expect(mainTsx).not.toContain('const chatBottomFollowAction = resolveChatBottomFollowAction({');
     expect(mainTsx).not.toContain("if (chatBottomFollowAction === 'scrollToBottom') {");
-    expect(mainTsx).toContain('}, [tab, selectedChatId, chatMessages, chatPendingPromptsByKey, chatLoading, resizeChatComposerTextarea]);');
+    expect(mainTsx).toContain('}, [selectedChatId, chatMessages, chatPendingPromptsByKey, chatLoading, resizeChatComposerTextarea]);');
     expect(mainTsx).not.toContain('chatLoading, chatKeyboardInset, resizeChatComposerTextarea');
     expect(mainTsx).toContain('onScroll={handleChatScroll}');
     expect(mainTsx).toContain('onWheel={event => { if (event.deltaY < 0) { markChatUserScrollIntent(); } }}');
@@ -515,15 +515,9 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain("} from '../shell/layouts/mobile/floatingControls';");
     expect(mainTsx).not.toContain('navigator.vibrate?.(12)');
     expect(mainTsx).not.toContain('className="header-bubble"');
-    expect(mainTsx).toContain('className="drawer-project-header"');
-    expect(mainTsx).toContain('className="drawer-project-pill"');
-    expect(mainTsx).toContain('className="drawer-settings-icon-btn"');
-    expect(mainTsx).toMatch(
-      /className="drawer-project-header"[\s\S]*?className="drawer-settings-icon-btn"[\s\S]*?className="drawer-project-pill"[\s\S]*?className="project-wrap"/,
-    );
     expect(mainTsx).toContain('setSidebarSettingsOpen(true);');
-    expect(mainTsx).toContain("tab === 'chat' && !isWide ? renderMobileChatSessionSheet() : renderSidebarMain()");
-    expect(mainTsx).toContain("tab === 'chat' ? renderWideProjectSessionNav() : renderSidebarMain(false)");
+    expect(mainTsx).toContain('const mobileSidebarMain = !isWide ? renderMobileChatSessionSheet() : null;');
+    expect(mainTsx).toContain('const wideSidebarMain = renderWideProjectSessionNav();');
     expect(mainTsx).toContain('renderChatSessionHeader(false)');
     expect(mainTsx).not.toContain('chatSidebarTitleSearchOpen');
     expect(mainTsx).not.toContain('className="desktop-activity-bar"');
@@ -566,11 +560,8 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('const floatingSidePulseTimerRef = useRef<number | null>(null);');
     expect(mainTsx).toContain('const pulseFloatingControlSide = useCallback(');
     expect(mainTsx).toContain('const closeMobileDrawerCompanionOverlays = useCallback(() => {');
-    expect(mainTsx).toContain('const handleMobileBreadcrumbProjectClick = useCallback(() => {');
     expect(mainTsx).toContain('closeMobileDrawerCompanionOverlays();');
-    expect(mainTsx).toContain('setDrawerOpen(open => !open);');
-    expect(mainTsx).toContain('className="breadcrumb-project-button breadcrumb-project-name"');
-    expect(mainTsx).toContain('onClick={handleMobileBreadcrumbProjectClick}');
+    expect(mainTsx).toContain('className={`chat-title-project-button${chatTitleProjectMenuOpen ? \' open\' : \'\'}`}');
     expect(mainTsx).not.toContain('const handleFloatingControlButtonPointerDown = useCallback(');
     expect(mainTsx).not.toContain('const beginFloatingPress = useCallback(');
     expect(mainTsx).toContain('event.stopPropagation();');
@@ -602,17 +593,14 @@ describe('web chat integration', () => {
     expect(floatingMoveBlock).toContain('pulseFloatingControlSide(nextSide);');
     expect(floatingMoveBlock).toContain('closeMobileDrawerCompanionOverlays();');
     expect(mainTsx).not.toContain('style={narrowContentInsetStyle}');
-    expect(mainTsx).toContain('className="breadcrumb-title"');
-    expect(mainTsx).toContain('className="breadcrumb-project-button breadcrumb-project-name"');
+    expect(mainTsx).toContain('className="breadcrumb-title chat-breadcrumb-title"');
+    expect(mainTsx).toContain('className={`chat-title-project-button${chatTitleProjectMenuOpen ? \' open\' : \'\'}`}');
     expect(mainTsx).toContain('No Selected Session');
-    expect(mainTsx).toContain('No Selected Diff');
     expect(mainTsx).toContain('data-side-pulse={floatingSidePulse}');
     expect(mainTsx).toContain('className="floating-control-drag-backdrop"');
     expect(mainTsx).toContain('className="floating-control-dock-rail left"');
     expect(mainTsx).toContain('className="floating-control-dock-rail right"');
     expect(mainTsx).toContain('className="block-title chat-title-bar"');
-    expect(mainTsx).toContain("{selectedFile || 'Select a file'}");
-    expect(mainTsx).toContain("{selectedDiff || 'Select a changed file'}");
     expect(mainTsx).toContain('const chatConfigDisplay = useMemo(() => {');
     expect(mainTsx).toContain("className={`chat-config-options-shell${chatComposerStatusCompact ? ' compact' : ''}`}");
     expect(mainTsx).toContain('className="chat-config-options-wrap"');
@@ -696,9 +684,8 @@ describe('web chat integration', () => {
     expect(stylesCss).not.toContain('.chat-thought-label {');
     expect(stylesCss).toContain('.refresh-btn.has-update-badge::after {');
     expect(stylesCss).not.toContain('.header-bubble {');
-    expect(stylesCss).toContain('.drawer-project-header {');
-    expect(stylesCss).toContain('.drawer-project-pill {');
-    expect(stylesCss).toContain('.drawer-settings-icon-btn {');
+    expect(stylesCss).not.toContain('.drawer-project-header {');
+    expect(stylesCss).not.toContain('.drawer-project-pill {');
     expect(stylesCss).toContain('.mobile-settings-screen {');
     expect(stylesCss).toContain('.mobile-settings-nav {');
     expect(stylesCss).toContain('.mobile-settings-back {');
@@ -720,7 +707,6 @@ describe('web chat integration', () => {
       /\.header \.project-name \{[\s\S]*overflow: visible;[\s\S]*text-overflow: clip;[\s\S]*\}/,
     );
     expect(stylesCss).not.toContain('padding: calc(var(--wm-safe-area-top) + 8px) 8px 10px;');
-    expect(stylesCss).toContain('padding: calc(var(--wm-safe-area-top) + 6px) 7px 6px;');
     expect(stylesCss).toContain('.floating-control-stack {');
     expect(stylesCss).toContain('.floating-control-drag-backdrop {');
     expect(stylesCss).toContain('.floating-control-dock-rail {');
@@ -817,8 +803,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className="breadcrumb-title chat-breadcrumb-title"');
     expect(mainTsx).toContain('className={`chat-title-session-button chat-title-session-text title-text breadcrumb-current${chatTitlePromptMenuOpen ? \' open\' : \'\'}`}');
     expect(mainTsx).toContain('onClick={toggleChatTitlePromptMenu}');
-    expect(mainTsx).toContain('renderBreadcrumbTitle(breadcrumbProjectName, fileBreadcrumbLabel)');
-    expect(mainTsx).toContain('renderBreadcrumbTitle(breadcrumbProjectName, gitBreadcrumbLabel)');
+    expect(mainTsx).toContain('{activeChatBreadcrumbProjectName}');
   });
 
   test('chat drawer header keeps tools left and hub browser right', () => {
@@ -834,7 +819,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('const projectCount = projects.length;');
     expect(mainTsx).toContain('if (!chatHubMenuOpen) return;');
     expect(mainTsx).toContain("if (event.key === 'Escape') {");
-    expect(mainTsx).toContain("if (tab !== 'chat' || sidebarSettingsOpen) {");
+    expect(mainTsx).toContain('if (sidebarSettingsOpen) {');
     expect(mainTsx).toContain('!chatHubMenuRef.current?.contains(target) &&');
     expect(mainTsx).toContain('!chatHubPopoverRef.current?.contains(target)');
     expect(mainTsx).toContain("!targetElement.closest('.chat-hub-color-palette')");
@@ -869,8 +854,8 @@ describe('web chat integration', () => {
     );
     expect(mainTsx).not.toContain('renderChatMenuUsageButton');
     const renderMainStart = mainTsx.indexOf('const renderMain = () => {');
-    const chatMainStart = mainTsx.indexOf("if (tab === 'chat') {", renderMainStart);
-    const chatMainEnd = mainTsx.indexOf('if (tab === ', chatMainStart + 1);
+    const chatMainStart = mainTsx.indexOf('return (', renderMainStart);
+    const chatMainEnd = mainTsx.indexOf('const renderPreviewFileTreeSearchResults', chatMainStart);
     expect(renderMainStart).toBeGreaterThanOrEqual(0);
     expect(chatMainStart).toBeGreaterThan(renderMainStart);
     expect(chatMainEnd).toBeGreaterThan(chatMainStart);
@@ -922,28 +907,14 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.chat-hub-empty {');
   });
 
-  test('mobile file and git drawer project header matches the chat drawer height', () => {
+  test('does not render the retired File/Git drawer project header', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const stylesCss = readWebStyles(projectRoot);
 
-    expect(mainTsx).toContain("{!isWide && tab !== 'chat' ? (");
-    expect(mainTsx).toContain('className="drawer-project-header"');
-
-    const drawerProjectHeaderBlock = cssRuleBlock(stylesCss, '.drawer-project-header');
-    expect(drawerProjectHeaderBlock).toContain('height: calc(var(--wm-safe-area-top) + 50px);');
-    expect(drawerProjectHeaderBlock).toContain('min-height: calc(var(--wm-safe-area-top) + 50px);');
-    expect(drawerProjectHeaderBlock).toContain('max-height: calc(var(--wm-safe-area-top) + 50px);');
-    expect(drawerProjectHeaderBlock).toContain('padding: calc(var(--wm-safe-area-top) + 6px) 7px 6px;');
-    expect(drawerProjectHeaderBlock).not.toContain('+ 58px');
-
-    const drawerProjectPillBlock = cssRuleBlock(stylesCss, '.drawer-project-pill');
-    expect(drawerProjectPillBlock).toContain('height: 36px;');
-    expect(drawerProjectPillBlock).toContain('min-height: 36px;');
-
-    const drawerSettingsButtonBlock = cssRuleBlock(stylesCss, '.drawer-settings-icon-btn');
-    expect(drawerSettingsButtonBlock).toContain('width: 36px;');
-    expect(drawerSettingsButtonBlock).toContain('height: 36px;');
+    expect(mainTsx).not.toContain("tab !== 'chat'");
+    expect(mainTsx).not.toContain('className="drawer-project-header"');
+    expect(stylesCss).not.toContain('.drawer-project-header');
   });
 
   test('chat composer is a unified command frame with compact custom config pills', () => {
@@ -1619,8 +1590,7 @@ describe('web chat integration', () => {
     const settingsBundlePath = path.join(projectRoot, 'web', 'src', 'settings', 'SettingsBundle.ts');
     const settingsBundleTs = fs.existsSync(settingsBundlePath) ? readSourceText(settingsBundlePath) : '';
     const fileSurfaceTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'file', 'FileExplorerTree.tsx'));
-    const gitSurfaceTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'git', 'GitSidebar.tsx'));
-    const sidebarSurfaceSource = `${mainTsx}\n${fileSurfaceTsx}\n${gitSurfaceTsx}`;
+    const sidebarSurfaceSource = `${mainTsx}\n${fileSurfaceTsx}`;
     const stylesCss = readWebStyles(projectRoot);
 
     expect(mainTsx).toContain('type SettingsDetailView = SettingsDetailId | null;');
@@ -1639,8 +1609,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className="mobile-project-session-nav"');
     expect(mainTsx).toContain('className="mobile-project-sheet"');
     expect(mainTsx).toContain('className="mobile-project-session-error"');
-    expect(sidebarSurfaceSource).toContain('if (!isWide) setDrawerOpen(false);');
-    expect(mainTsx).toContain("tab === 'chat' && !isWide ? renderMobileChatSessionSheet() : renderSidebarMain()");
+    expect(mainTsx).toContain('const mobileSidebarMain = !isWide ? renderMobileChatSessionSheet() : null;');
     expect(mainTsx).not.toContain("if (detail === 'tokenStats') {");
     expect(mainTsx).not.toContain('renderTokenStatsSettingsDetail(options)');
     expect(mainTsx).toContain("const loadSettingsBundle = () => import(/* webpackChunkName: \"settings\" */ '../settings/SettingsBundle')");
@@ -1844,7 +1813,7 @@ describe('web chat integration', () => {
     expect(appDialogsTsx).toContain('maxLength={200}');
     expect(mainTsx).toContain("event.key !== 'F2'");
     expect(mainTsx).toContain('event.isComposing');
-    expect(mainTsx).toContain("if (!isWide || tab !== 'chat' || sidebarSettingsOpen || !selectedChatKey || !selectedChatSession || renameTarget || confirmTarget) {");
+    expect(mainTsx).toContain('if (!isWide || sidebarSettingsOpen || !selectedChatKey || !selectedChatSession || renameTarget || confirmTarget) {');
     expect(mainTsx).toContain('requestRenameProjectSession(selectedChatKey.projectId, selectedChatSession);');
     expect(mainTsx).toContain('const message = err instanceof Error ? err.message : String(err);');
     expect(mainTsx).toContain('setConfirmError(message);');
@@ -1903,9 +1872,8 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('const projectSessionActionMenuOverlay = renderProjectSessionActionMenu();');
     expect(mainTsx).toContain('onPointerDown={event => startProjectSessionLongPress(targetProjectId, session.sessionId, event)}');
     expect(mainTsx).toContain('onContextMenu={event => openProjectSessionContextMenu(targetProjectId, session.sessionId, event)}');
-    expect(mainTsx).toContain("tab === 'chat' && !isWide ? renderMobileChatSessionSheet() : renderSidebarMain()");
-    expect(mainTsx).toContain("tab === 'chat' ? renderWideProjectSessionNav() : renderSidebarMain(false)");
-    expect(mainTsx).toContain("const wideSidebarMain = tab === 'chat' ? renderWideProjectSessionNav() : renderSidebarMain(false);");
+    expect(mainTsx).toContain('const mobileSidebarMain = !isWide ? renderMobileChatSessionSheet() : null;');
+    expect(mainTsx).toContain('const wideSidebarMain = renderWideProjectSessionNav();');
     expect(mainTsx).not.toContain('const wideSidebarMain = sidebarSettingsOpen');
     expect(mainTsx).not.toContain("? renderSettingsContent(false, { hideDetailHeader: isSettingsPeerDetail(settingsDetailView) })");
     expect(mainTsx).not.toContain('const wideSidebarTitle = sidebarSettingsOpen');
@@ -2140,8 +2108,8 @@ describe('web chat integration', () => {
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const stylesCss = readWebStyles(projectRoot);
 
-    const chatSurfaceStart = mainTsx.indexOf('if (tab === \'chat\') {\n      return (');
-    const chatSurfaceEnd = mainTsx.indexOf('if (tab === \'file\') {', chatSurfaceStart);
+    const chatSurfaceStart = mainTsx.indexOf('const renderMain = () => {');
+    const chatSurfaceEnd = mainTsx.indexOf('const renderPreviewFileTreeSearchResults', chatSurfaceStart);
     expect(chatSurfaceStart).toBeGreaterThanOrEqual(0);
     expect(chatSurfaceEnd).toBeGreaterThan(chatSurfaceStart);
     const chatSurface = mainTsx.slice(chatSurfaceStart, chatSurfaceEnd);
@@ -2182,7 +2150,6 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('className={`chat-title-project-menu-item${selected ? \' selected\' : \'\'}`}');
     expect(mainTsx).toContain('className="chat-title-prompt-menu"');
     expect(mainTsx).toContain('className="chat-title-prompt-menu-item"');
-    expect(chatSurface).not.toContain('className="chat-title-prompt-menu"');
     expect(chatSurface).not.toContain('CHAT - ${selectedChatDisplayTitle || \'New Session\'}');
     expect(mainTsx).toContain('className="chat-title-actions"');
     expect(mainTsx).toContain('className={`chat-preview-toggle${chatPreviewOpen ? \' active\' : \'\'}`}');
@@ -2248,7 +2215,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('const selectWideProjectSession = async (targetProjectId: string, sessionId: string) => {');
     expect(mainTsx).toContain('const selectProjectChatSession = async (');
     expect(mainTsx).toContain('workspaceStore.rememberSelectedChatSessionKey(nextSelectedKey);');
-    expect(mainTsx).toContain("setTab('chat');");
+    expect(mainTsx).not.toContain("setTab('chat');");
     expect(mainTsx).toContain('loadChatSession(sessionId, targetProjectId, {');
     const selectProjectStart = mainTsx.indexOf('const selectProjectChatSession = async (');
     const selectProjectEnd = mainTsx.indexOf('const selectWideProjectSession = async', selectProjectStart);

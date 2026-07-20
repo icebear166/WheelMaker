@@ -6,7 +6,7 @@ function readSourceText(filePath: string): string {
 }
 
 describe('web chat startup defaults', () => {
-  test('defaults new startup state to Chat while preserving explicit non-chat tabs', () => {
+  test('removes persisted top-level workspace tabs', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const workspacePersistenceTs = readSourceText(
@@ -16,13 +16,10 @@ describe('web chat startup defaults', () => {
       path.join(projectRoot, 'web', 'src', 'shell', 'state', 'workspaceUiState.ts'),
     );
 
-    expect(mainTsx).toContain("tab: globalState.tab ?? 'chat'");
-    expect(workspacePersistenceTs).toContain("tab: 'chat'");
-    expect(workspacePersistenceTs).toContain(
-      "tab: input.tab === 'file' || input.tab === 'git' ? input.tab : 'chat'",
-    );
-    expect(workspaceUiStateTs).toContain(
-      "return value === 'file' || value === 'git' ? value : 'chat';",
-    );
+    expect(mainTsx).not.toContain('globalState.tab');
+    expect(workspacePersistenceTs).not.toContain('PersistedTab');
+    expect(workspacePersistenceTs).not.toContain("tab: 'chat'");
+    expect(workspaceUiStateTs).not.toContain("value === 'file'");
+    expect(workspaceUiStateTs).not.toContain("value === 'git'");
   });
 });

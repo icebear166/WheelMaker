@@ -62,14 +62,14 @@ describe('web chat refresh model', () => {
     expect(refreshChatIndexBody).not.toContain('setRefreshingProject(false)');
   });
 
-  test('project freshness polling is removed and Git refresh is gated by Git tab rev checks', () => {
+  test('project freshness polling and top-level Git refresh are removed', () => {
     const main = readMain();
 
     expect(main).not.toContain('PROJECT_REFRESH_POLL_INTERVAL_MS');
     expect(main).not.toContain('refreshProject({silent: true})');
     expect(main).not.toContain('service.syncCheck');
-    expect(main).toContain('const loadGitIfRevChanged = async');
-    expect(main).toContain('await service.getGitRev()');
+    expect(main).not.toContain('const loadGitIfRevChanged = async');
+    expect(main).not.toContain('await service.getGitRev()');
   });
 
   test('new project sessions are cached before selecting the session', () => {

@@ -16,11 +16,11 @@ describe('main surface boundaries', () => {
     expect(main).not.toContain('<ChatVirtuosoTurnList');
   });
 
-  test('workspace app delegates non-chat surfaces while keeping chat startup resident', () => {
+  test('workspace app keeps chat resident and Preview file support isolated', () => {
     expect(workspaceApp).toContain('AppConfirmDialog');
     expect(workspaceApp).toContain("} from '../shell/AppDialogs';");
-    expect(workspaceApp).toContain("import { FileExplorerTree, WorkspaceProjectSelector } from '../file/FileExplorerTree';");
-    expect(workspaceApp).toContain("import { GitSidebar } from '../git/GitSidebar';");
+    expect(workspaceApp).toContain("import { FileExplorerTree } from '../file/FileExplorerTree';");
+    expect(workspaceApp).not.toContain("../git/GitSidebar");
     expect(workspaceApp).toContain("import { PortRelayFloatingButton, PortRelayFrameSurface } from '../portRelay/PortRelayFrameSurface';");
 
     expect(workspaceApp).not.toContain('const renderFileTree = (');
@@ -33,8 +33,8 @@ describe('main surface boundaries', () => {
     expect(workspaceApp).not.toContain("portRelayFramePlacement === 'chatPreview'");
     expect(workspaceApp).not.toContain('className="port-relay-frame"');
 
-    expect(workspaceApp).toContain("if (tab === 'chat') {");
     expect(workspaceApp).toContain('<ChatVirtuosoTurnList');
+    expect(workspaceApp).toContain('<FileExplorerTree');
     expect(workspaceApp).toContain("import ReactMarkdown, { type Components } from 'react-markdown';");
     expect(workspaceApp).not.toContain('loadChatBundle');
     expect(workspaceApp).not.toContain("React.lazy(() => import('../chat");

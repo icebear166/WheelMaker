@@ -57,7 +57,6 @@ import {
   needsPromptTurnRefresh,
   shouldMaterializeRealtimeSessionMessages,
 } from '../chat/turns/chatSync';
-import { compareUpdatedAtDesc } from '../workspace/sessionTime';
 import {
   resolveChatSessionVisualState as resolveChatSessionVisualStateValue,
   type ChatSessionVisualState,
@@ -159,10 +158,12 @@ import {
   type SessionSearchResultsByProjectId,
   type SessionSearchSectionRow,
 } from '../chat/session/sessionSearchState';
+import {useChatSearchController} from '../chat/search/useChatSearchController';
 import {
-  buildChatSearchMatches,
-  type ChatSearchMatch,
-} from '../chat/search/chatSearchState';
+  mergeChatSession,
+  mergeChatSessionList,
+  sortChatSessions,
+} from '../chat/session/chatSessionOrdering';
 import {
   OLDER_SESSION_DAYS,
   buildArchivedSessionSections,
@@ -256,7 +257,7 @@ import {
   type AndroidApkLocalRelease,
   type AndroidApkUpdateStatus,
 } from '../platform/android/androidApkUpdate';
-import { mergeChatSessionList, shouldUpdateCurrentProjectSessions } from '../chat/session/chatIndexState';
+import { shouldUpdateCurrentProjectSessions } from '../chat/session/chatIndexState';
 import {
   resolveChatListSelection,
   resolveSelectedChatVisibilityRecovery,
@@ -447,7 +448,7 @@ import {
 } from '../features/speech/voiceInputDiagnostics';
 import {VoiceInputButton, type VoiceInputInteractionMode} from '../features/speech/VoiceInputButton';
 import {VoiceRecordingBar} from '../features/speech/VoiceRecordingBar';
-import { FileExplorerTree, WorkspaceProjectSelector } from '../file/FileExplorerTree';
+import { FileExplorerTree } from '../file/FileExplorerTree';
 import {
   buildFileSearchResultTree,
   flattenFileSearchResultTree,
@@ -493,22 +494,6 @@ import {
   schedulePreviewLineJump,
 } from '../preview/previewLineNavigation';
 import {resolvePreviewFileLink} from '../preview/previewFileLink';
-import { FilePreviewPane } from '../file/FilePreviewPane';
-import { FileSurface } from '../file/FileSurface';
-import { GitSurface } from '../git/GitSurface';
-import { GitSidebar } from '../git/GitSidebar';
-import {shouldLoadGitForRev} from '../git/gitRefreshPolicy';
-import {
-  buildWorkingTreeFiles,
-  isHeavyGeneratedDiffPath,
-  normalizeGitBranches,
-  pickGitSelectedBranches,
-  pickPreferredPath,
-  splitPathForDisplay,
-  type GitCommitPopoverState,
-  type GitDiffSource,
-  type WorkingTreeFileEntry,
-} from '../git/gitView';
 import {splitUnifiedDiffFileBlocks} from '../git/unifiedDiffFiles';
 import { WorkspaceController } from '../workspace/WorkspaceController';
 import { WorkspaceStore } from '../workspace/WorkspaceStore';
@@ -546,9 +531,6 @@ import type {
   RegistrySessionUsage,
   RegistrySessionTurn,
   RegistryFsEntry,
-  RegistryFsInfo,
-  RegistryGitCommit,
-  RegistryGitCommitFile,
   RegistryNpmHubSnapshot,
   RegistryNpmOperation,
   RegistryNpmPackage,
@@ -605,7 +587,6 @@ const SettingsRootContent = React.lazy(() => loadSettingsBundle().then(module =>
   default: module.SettingsRootContent,
 })));
 
-type Tab = 'chat' | 'file' | 'git';
 type ThemeMode = 'dark' | 'light';
 type FileResolvedIcon = {
   glyph: string;
@@ -1343,52 +1324,6 @@ function projectHubId(project: Pick<RegistryProject, 'hubId'>): string {
   return project.hubId || 'local';
 }
 
-function sortChatSessions(items: RegistryChatSession[]): RegistryChatSession[] {
-  return [...items].sort((a, b) => compareUpdatedAtDesc(a.updatedAt || '', b.updatedAt || ''));
-}
-
-function mergeChatSession(
-  list: RegistryChatSession[],
-  next: Partial<RegistryChatSession> & {sessionId: string},
-): RegistryChatSession[] {
-  const existing = list.find(item => item.sessionId === next.sessionId);
-  const merged: RegistryChatSession = {
-    sessionId: next.sessionId,
-    title: next.title ?? existing?.title ?? '',
-    preview: next.preview ?? existing?.preview ?? '',
-    updatedAt: next.updatedAt ?? existing?.updatedAt ?? '',
-    messageCount: next.messageCount ?? existing?.messageCount ?? 0,
-    unreadCount: next.unreadCount ?? existing?.unreadCount,
-    agentType: next.agentType ?? existing?.agentType,
-    latestTurnIndex: next.latestTurnIndex ?? existing?.latestTurnIndex,
-    running: next.running ?? existing?.running,
-    lastDoneTurnIndex: next.lastDoneTurnIndex ?? existing?.lastDoneTurnIndex,
-    lastDoneSuccess: next.lastDoneSuccess ?? existing?.lastDoneSuccess,
-    lastReadTurnIndex: next.lastReadTurnIndex ?? existing?.lastReadTurnIndex,
-    configOptions:
-      next.configOptions ??
-      (existing?.configOptions
-        ? [...existing.configOptions]
-        : undefined),
-    commands:
-      next.commands ??
-      (existing?.commands
-        ? [...existing.commands]
-        : undefined),
-    usage:
-      next.usage ??
-      (existing?.usage ? { ...existing.usage } : undefined),
-    sessionActions:
-      next.sessionActions ??
-      existing?.sessionActions,
-  };
-  if (existing && (merged.updatedAt || '') === (existing.updatedAt || '')) {
-    return list.map(item => (item.sessionId === next.sessionId ? merged : item));
-  }
-  const filtered = list.filter(item => item.sessionId !== next.sessionId);
-  return sortChatSessions([merged, ...filtered]);
-}
-
 function mergeProjectSessionMap(
   map: Record<string, RegistryChatSession[]>,
   projectId: string,
@@ -2081,6 +2016,18 @@ function promptArtifactPreviewCountLabel(fileCount: number): string {
   return `${fileCount} changed ${fileCount === 1 ? 'file' : 'files'}`;
 }
 
+function splitPathForDisplay(path: string): {fileName: string; parentPath: string} {
+  const normalized = path.replaceAll('\\', '/');
+  const separator = normalized.lastIndexOf('/');
+  if (separator < 0) {
+    return {fileName: normalized, parentPath: ''};
+  }
+  return {
+    fileName: normalized.slice(separator + 1),
+    parentPath: normalized.slice(0, separator),
+  };
+}
+
 type ChatFilePeekViewerProps = {
   peek: FilePreviewTab | null;
   mode: 'desktop' | 'mobile';
@@ -2098,7 +2045,6 @@ type ChatFilePeekViewerProps = {
   onLineClick?: (line: number, event: MouseEvent) => void;
   onClose: () => void;
   onCopyPath: () => void;
-  onOpenInFileTab: () => void;
   onTabSelect: (path: string) => void;
   onTabClose: (path: string) => void;
   onToggleTree: () => void;
@@ -2123,7 +2069,6 @@ const ChatFilePeekViewer = React.memo(function ChatFilePeekViewer({
   onLineClick,
   onClose,
   onCopyPath,
-  onOpenInFileTab,
   onTabSelect,
   onTabClose,
   onToggleTree,
@@ -2658,7 +2603,6 @@ export function App() {
     persistedGlobal,
     globalState =>
       createWorkspaceUiState({
-        tab: globalState.tab ?? 'chat',
         collapsedProjectIds: globalState.collapsedProjectIds ?? globalState.desktopCollapsedProjectIds ?? [],
         desktopSidebarWidth: globalState.desktopSidebarWidth,
         sessionPanelPinned: globalState.sessionPanelPinned,
@@ -2670,7 +2614,6 @@ export function App() {
         floatingControlSide: globalState.floatingControlSide ?? readPortRelayFloatingSide() ?? 'right',
       }),
   );
-  const tab = workspaceUiState.shared.tab as Tab;
   const [fileIconResources, setFileIconResources] = useState<FileIconResources | null>(null);
 
   const setiFontCss = useMemo(
@@ -2724,18 +2667,17 @@ export function App() {
   const drawerOpen = workspaceUiState.mobile.drawerOpen;
   const sidebarSettingsOpen = workspaceUiState.shared.settingsOpen;
   useEffect(() => {
-    if (tab !== 'chat' || sidebarSettingsOpen) {
+    if (sidebarSettingsOpen) {
       setSessionPanelShortcutUnpinned(false);
       sessionNavSlideOutAutoClose.cancel();
       dispatchSessionNavSlideOut({ type: 'forceReset' });
     }
-  }, [sessionNavSlideOutAutoClose, sidebarSettingsOpen, tab]);
+  }, [sessionNavSlideOutAutoClose, sidebarSettingsOpen]);
   const chatConfigOverflowOpen = workspaceUiState.mobile.chatConfigOverflowOpen;
   const chatKeyboardInset = workspaceUiState.transient.chatKeyboardInset;
   const chatKeyboardInsetRef = useRef(chatKeyboardInset);
   const chatKeyboardInsetSettleTimerRef = useRef<number | null>(null);
   const mobileKeyboardLayoutViewportHeightRef = useRef(0);
-  const tabRef = useRef<Tab>(tab);
   const floatingDragStateRef = useRef<FloatingDragState | null>(null);
   const [gestureNavState, setGestureNavState] = useState<GestureNavigationState | null>(null);
   const gestureNavStateRef = useRef<GestureNavigationState | null>(null);
@@ -2760,9 +2702,6 @@ export function App() {
   const projectSessionLongPressTimerRef = useRef<number | null>(null);
   const projectSessionLongPressTargetRef = useRef('');
   const layoutModeRef = useRef(layoutMode);
-  const setTab = useCallback((next: WorkspaceUiStateValue<Tab>) => {
-    dispatchWorkspaceUi({ type: 'shared/setTab', next });
-  }, []);
   const setFloatingControlYRatio = useCallback(
     (next: WorkspaceUiStateValue<number>) => {
       dispatchWorkspaceUi({ type: 'mobile/setFloatingControlYRatio', next });
@@ -2935,10 +2874,6 @@ export function App() {
   const [previewSearchQuery, setPreviewSearchQuery] = useState('');
   const [previewSearchActiveIndex, setPreviewSearchActiveIndex] = useState(0);
   const previewSearchInputRef = useRef<HTMLInputElement | null>(null);
-  const [chatSearchOpen, setChatSearchOpen] = useState(false);
-  const [chatSearchQuery, setChatSearchQuery] = useState('');
-  const [chatSearchActiveIndex, setChatSearchActiveIndex] = useState(0);
-  const chatSearchInputRef = useRef<HTMLInputElement | null>(null);
   const [previewFileTreeSearchQuery, setPreviewFileTreeSearchQuery] = useState('');
   const [previewFileTreeSearchResults, setPreviewFileTreeSearchResults] = useState<RegistryFileIndexSearchResult[]>([]);
   const [previewFileTreeSearchLoading, setPreviewFileTreeSearchLoading] = useState(false);
@@ -3007,12 +2942,9 @@ export function App() {
     }
   }, []);
   const mobilePortRelayFrameOpen = !isWide && portRelayWorkbenchOpen;
-  const fileIconResourcesNeeded = tab === 'file' ||
-    (
-      chatPreviewOpen &&
-      previewWorkbench.treeOpen &&
-      (!activeWorkbenchTab || activeWorkbenchTab.type === 'file')
-    );
+  const fileIconResourcesNeeded = chatPreviewOpen &&
+    previewWorkbench.treeOpen &&
+    (!activeWorkbenchTab || activeWorkbenchTab.type === 'file');
 
   useEffect(() => {
     if (!fileIconResourcesNeeded || fileIconResources) {
@@ -3153,39 +3085,10 @@ export function App() {
   const [projectId, setProjectId] = useState('');
   const projectIdRef = useRef('');
   const projectsRef = useRef<RegistryProject[]>([]);
-  const currentProjectRef = useRef<RegistryProject | null>(null);
-  const knownGitRevRef = useRef('');
-  const knownWorktreeRevRef = useRef('');
-  const gitRevCheckInFlightRef = useRef(false);
-  const failedGitRevLoadKeyRef = useRef('');
   const [loadingProject, setLoadingProject] = useState(false);
   const [refreshingProject, setRefreshingProject] = useState(false);
   const [hasPendingProjectUpdates, setHasPendingProjectUpdates] = useState(false);
 
-  const [dirEntries, setDirEntries] = useState<DirEntries>({ '.': [] });
-  const [expandedDirs, setExpandedDirs] = useState<string[]>(['.']);
-  const expandedDirsRef = useRef<string[]>(['.']);
-  const [loadingDirs, setLoadingDirs] = useState<Record<string, boolean>>({});
-  const [selectedFile, setSelectedFile] = useState('');
-  const selectedFileRef = useRef('');
-  const [pinnedFiles, setPinnedFiles] = useState<string[]>([]);
-  const [fileContent, setFileContent] = useState('');
-  const [fileInfo, setFileInfo] = useState<RegistryFsInfo | null>(null);
-  const [fileLoading, setFileLoading] = useState(false);
-  const [fileSearchQuery, setFileSearchQuery] = useState('');
-  const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
-  const [gotoLineInput, setGotoLineInput] = useState('');
-  const [pendingFileJump, setPendingFileJump] = useState<{
-    path: string;
-    line: number;
-  } | null>(null);
-  const [fileTabSelectedLines, setFileTabSelectedLines] = useState<Set<number>>(new Set());
-  const fileTabAnchorRef = useRef<number | null>(null);
-  const [searchToolsOpen, setSearchToolsOpen] = useState(false);
-  const [gotoToolsOpen, setGotoToolsOpen] = useState(false);
-  const [markdownPreviewEnabled, setMarkdownPreviewEnabled] = useState(false);
-  const [htmlPreviewEnabled, setHtmlPreviewEnabled] = useState(false);
-  const fileScrollRef = useRef<HTMLDivElement | null>(null);
   const [chatFilePreviewDirEntriesByProject, setChatFilePreviewDirEntriesByProject] =
     useState<Record<string, DirEntries>>({});
   const [chatFilePreviewLoadingDirsByProject, setChatFilePreviewLoadingDirsByProject] =
@@ -3217,17 +3120,7 @@ export function App() {
   const connectInFlightRef = useRef(false);
   const supervisorManagedCloseRef = useRef(false);
   const dirHashRef = useRef<Record<string, string>>({});
-  const fileHashRef = useRef<Record<string, string>>({});
-  const fileCacheRef = useRef<Record<string, string>>({});
-  const fileReadSeqRef = useRef(0);
-  const fileReadAbortControllerRef = useRef<AbortController | null>(null);
   const previewFileLoadControllersRef = useRef<Map<string, AbortController>>(new Map());
-  const fileScrollTopByPathRef = useRef<Record<string, number>>({});
-  const skipNextSelectedFileAutoReadRef = useRef(false);
-  const fileSideActionsRef = useRef<HTMLDivElement | null>(null);
-  const commitPopoverRef = useRef<HTMLDivElement | null>(null);
-  const gitBranchMenuRef = useRef<HTMLDivElement | null>(null);
-  const gitSelectedBranchesRef = useRef<string[]>([]);
   const chatFileInputRef = useRef<HTMLInputElement | null>(null);
   const chatImageInputRef = useRef<HTMLInputElement | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
@@ -3304,6 +3197,9 @@ export function App() {
   const [selectedArchivedKey, setSelectedArchivedKey] = useState<ChatSessionKey | null>(null);
   const [archivedPreview, setArchivedPreview] = useState<RegistrySessionArchiveReadResponse | null>(null);
   const [archivedRestoringSessionId, setArchivedRestoringSessionId] = useState('');
+  const scrollToChatSearchMatch = useCallback((match: {turnIndex: number}) => {
+    chatVirtuosoListRef.current?.scrollToTurnIndex(match.turnIndex, 'smooth');
+  }, []);
   const sessionSearchUnchangedPollsRef = useRef(0);
   const sessionSearchPollTimerRef = useRef<number | null>(null);
   const sessionSearchIdCounterRef = useRef(0);
@@ -3333,18 +3229,6 @@ export function App() {
   const [selectedChatId, setSelectedChatId] = useState('');
   const [selectedChatKey, setSelectedChatKey] = useState<ChatSessionKey | null>(null);
   const [chatMessages, setChatMessages] = useState<RegistryChatMessage[]>([]);
-  const chatSearchMatches = useMemo(
-    () => buildChatSearchMatches(chatMessages, chatSearchQuery),
-    [chatMessages, chatSearchQuery],
-  );
-  const chatSearchMatchedTurnIndexSet = useMemo(
-    () => new Set(chatSearchMatches.map(match => match.turnIndex)),
-    [chatSearchMatches],
-  );
-  const chatSearchActiveTurnIndex =
-    chatSearchOpen && chatSearchMatches.length > 0
-      ? chatSearchMatches[chatSearchActiveIndex]?.turnIndex ?? null
-      : null;
   const [chatLoading, setChatLoading] = useState(false);
   const [chatSubmittingByKey, setChatSubmittingByKey] = useState<Record<string, boolean>>({});
   const [chatShowScrollToBottom, setChatShowScrollToBottom] = useState(false);
@@ -3478,6 +3362,28 @@ export function App() {
     () => encodeChatSessionKey(selectedChatKey),
     [selectedChatKey],
   );
+  const {
+    open: chatSearchOpen,
+    query: chatSearchQuery,
+    setQuery: setChatSearchQuery,
+    activeIndex: chatSearchActiveIndex,
+    matches: chatSearchMatches,
+    matchedTurnIndexes: chatSearchMatchedTurnIndexSet,
+    activeTurnIndex: chatSearchActiveTurnIndex,
+    inputRef: chatSearchInputRef,
+    openSearch: openChatSearch,
+    closeSearch: closeChatSearch,
+    navigate: navigateChatSearchMatch,
+    handleInputKeyDown: handleChatSearchInputKeyDown,
+  } = useChatSearchController({
+    sourceKey: archivedMode
+      ? `archive:${encodeChatSessionKey(selectedArchivedKey)}`
+      : `live:${selectedChatEncodedKey}`,
+    liveMessages: chatMessages,
+    archivedMessages: archivedPreview?.messages ?? [],
+    archivedMode,
+    scrollToMatch: scrollToChatSearchMatch,
+  });
 
   const selectedChatSession = useMemo(
     () => {
@@ -3544,10 +3450,10 @@ export function App() {
     [selectedFullChatMessages],
   );
   const selectedChatPlan = useMemo(
-    () => tab === 'chat' && !archivedMode
+    () => !archivedMode
       ? extractLatestChatPlan(selectedFullChatMessages)
       : null,
-    [archivedMode, selectedFullChatMessages, tab],
+    [archivedMode, selectedFullChatMessages],
   );
   const selectedChatPromptHistory = useMemo(
     () =>
@@ -3567,7 +3473,7 @@ export function App() {
         .filter(item => item.turnIndex > 0),
     [selectedFullChatMessages],
   );
-  const activeChatPromptHistory = tab === 'chat' && !archivedMode ? selectedChatPromptHistory : [];
+  const activeChatPromptHistory = !archivedMode ? selectedChatPromptHistory : [];
   const chatTitlePromptMenuAvailable = activeChatPromptHistory.length > 0;
   const chatTitleProjectMenuStyle = useMemo<React.CSSProperties | undefined>(() => {
     if (!chatTitleProjectMenuOpen || typeof window === 'undefined') {
@@ -3667,44 +3573,6 @@ export function App() {
     shouldRender: (message, promptStatus) => shouldRenderChatTurn(message, promptStatus),
   }), [archivedPreview?.messages, chatLayoutMetrics]);
 
-  const scrollToChatSearchMatch = (match: ChatSearchMatch) => {
-    chatVirtuosoListRef.current?.scrollToTurnIndex(match.turnIndex, 'smooth');
-  };
-  const activateChatSearchMatch = (index: number) => {
-    if (chatSearchMatches.length === 0) {
-      return;
-    }
-    const nextIndex = (index + chatSearchMatches.length) % chatSearchMatches.length;
-    setChatSearchActiveIndex(nextIndex);
-    scrollToChatSearchMatch(chatSearchMatches[nextIndex]);
-  };
-  const navigateChatSearchMatch = (delta: 1 | -1) => {
-    activateChatSearchMatch(chatSearchActiveIndex + delta);
-  };
-  const openChatSearch = () => {
-    setChatSearchOpen(true);
-    setChatSearchActiveIndex(0);
-    window.requestAnimationFrame(() => {
-      chatSearchInputRef.current?.focus();
-      chatSearchInputRef.current?.select();
-    });
-  };
-  const closeChatSearch = () => {
-    setChatSearchOpen(false);
-    setChatSearchQuery('');
-    setChatSearchActiveIndex(0);
-  };
-  const handleChatSearchInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      closeChatSearch();
-      return;
-    }
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      navigateChatSearchMatch(event.shiftKey ? -1 : 1);
-    }
-  };
   const switchChatSearchTarget = (target: 'current' | 'sessions' | 'preview') => {
     if (target === 'current') {
       openChatSearch();
@@ -3726,33 +3594,6 @@ export function App() {
     window.requestAnimationFrame(() => openPreviewSearch());
   };
 
-  const prevChatSearchKeyRef = useRef(selectedChatEncodedKey);
-  useEffect(() => {
-    if (prevChatSearchKeyRef.current !== selectedChatEncodedKey) {
-      prevChatSearchKeyRef.current = selectedChatEncodedKey;
-      setChatSearchOpen(false);
-      setChatSearchQuery('');
-      setChatSearchActiveIndex(0);
-    }
-  }, [selectedChatEncodedKey]);
-
-  useEffect(() => {
-    setChatSearchActiveIndex(current =>
-      Math.min(current, Math.max(0, chatSearchMatches.length - 1)),
-    );
-  }, [chatSearchMatches.length]);
-
-  useEffect(() => {
-    if (!chatSearchOpen || chatSearchMatches.length === 0) {
-      return;
-    }
-    setChatSearchActiveIndex(0);
-    const frameId = window.requestAnimationFrame(() => {
-      scrollToChatSearchMatch(chatSearchMatches[0]);
-    });
-    return () => window.cancelAnimationFrame(frameId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatSearchOpen, chatSearchQuery]);
 
   useEffect(() => {
     if (
@@ -5037,49 +4878,8 @@ export function App() {
     }
   }, [currentChatDraftKey]);
 
-  const [gitLoading, setGitLoading] = useState(false);
-  const [gitError, setGitError] = useState('');
-  const [gitCurrentBranch, setGitCurrentBranch] = useState('');
-  const [gitBranches, setGitBranches] = useState<string[]>([]);
-  const [gitSelectedBranches, setGitSelectedBranches] = useState<string[]>([]);
-  const [gitBranchPickerOpen, setGitBranchPickerOpen] = useState(false);
-  const [gitLoadedProjectId, setGitLoadedProjectId] = useState('');
-  const [commits, setCommits] = useState<RegistryGitCommit[]>([]);
-  const [selectedCommit, setSelectedCommit] = useState('');
-  const [expandedCommitShas, setExpandedCommitShas] = useState<string[]>([]);
-  const [commitFilesBySha, setCommitFilesBySha] = useState<
-    Record<string, RegistryGitCommitFile[]>
-  >({});
-  const [workingTreeFiles, setWorkingTreeFiles] = useState<
-    WorkingTreeFileEntry[]
-  >([]);
-  const [worktreeExpanded, setWorktreeExpanded] = useState(true);
-  const [commitPopover, setCommitPopover] =
-    useState<GitCommitPopoverState | null>(null);
-  const [selectedDiffSource, setSelectedDiffSource] =
-    useState<GitDiffSource>('commit');
-  const [selectedDiffScope, setSelectedDiffScope] = useState<
-    'staged' | 'unstaged' | 'untracked'
-  >('unstaged');
-  const [selectedDiff, setSelectedDiff] = useState('');
-  const [allowHeavyDiffLoad, setAllowHeavyDiffLoad] = useState(false);
-  const [allowLargeDiffRender, setAllowLargeDiffRender] = useState(false);
-  const [diffText, setDiffText] = useState('');
-  const [diffLoading, setDiffLoading] = useState(false);
   const [openingPromptArtifactKey, setOpeningPromptArtifactKey] = useState('');
   const [promptArtifactErrors, setPromptArtifactErrors] = useState<Record<string, string>>({});
-  const setGitSelectedDiff = useCallback<React.Dispatch<React.SetStateAction<string>>>((next) => {
-    setSelectedDiff(next);
-  }, []);
-  const setGitSelectedDiffSource = useCallback<React.Dispatch<React.SetStateAction<GitDiffSource>>>((next) => {
-    setSelectedDiffSource(next);
-  }, []);
-  const setGitSelectedDiffScope = useCallback<React.Dispatch<React.SetStateAction<'staged' | 'unstaged' | 'untracked'>>>((next) => {
-    setSelectedDiffScope(next);
-  }, []);
-  const setGitSelectedCommit = useCallback<React.Dispatch<React.SetStateAction<string>>>((next) => {
-    setSelectedCommit(next);
-  }, []);
   const projectIdListKey = useMemo(
     () => projects.map(item => item.projectId).join('|'),
     [projects],
@@ -5090,7 +4890,6 @@ export function App() {
     [hiddenProjectIds, sortedProjectItems],
   );
   const visibleProjectItems = visibility.visibleProjects;
-  const chatFilePreviewProjects = visibleProjectItems;
   const chatPreviewProjectId = selectedChatKey?.projectId || projectId || projectIdRef.current;
   const hiddenProjectItems = visibility.hiddenProjects;
   const hiddenProjectIdSet = useMemo(() => new Set(hiddenProjectIds), [hiddenProjectIds]);
@@ -5302,7 +5101,7 @@ export function App() {
     }
   }, [allVisibleProjectsLoaded, projectSessionsByProjectId]);
   const showFloatingSessionPanel = isWide && chatSidebarCollapsed && !archivedMode && !sessionSearchActive;
-  const showChatEdgeSurfaces = isWide && tab === 'chat' && (showFloatingSessionPanel || !!selectedChatPlan || showLimitsMonitor);
+  const showChatEdgeSurfaces = isWide && (showFloatingSessionPanel || !!selectedChatPlan || showLimitsMonitor);
   const chatMainClassName = isWide
     ? (chatViewWidth === 'fixed-800' ? `chat-main chat-view-width-fixed-800${showChatEdgeSurfaces ? ' chat-view-width-fixed-800-edge-surfaces' : ''}` : 'chat-main')
     : 'chat-main';
@@ -5526,7 +5325,7 @@ export function App() {
   }, [cancelSessionSearch, exitSessionSearch, querySessionSearch, sessionSearchInput, visibleProjectItems]);
 
   useEffect(() => {
-    if (!activeSessionSearchId || tab !== 'chat') {
+    if (!activeSessionSearchId) {
       if (sessionSearchPollTimerRef.current !== null) {
         window.clearTimeout(sessionSearchPollTimerRef.current);
         sessionSearchPollTimerRef.current = null;
@@ -5565,7 +5364,7 @@ export function App() {
         sessionSearchPollTimerRef.current = null;
       }
     };
-  }, [activeSessionSearchId, querySessionSearch, visibleProjectItems, tab]);
+  }, [activeSessionSearchId, querySessionSearch, visibleProjectItems]);
   useEffect(() => {
     floatingDragStateRef.current = floatingDragState;
   }, [floatingDragState]);
@@ -5582,10 +5381,6 @@ export function App() {
     settingsDetailViewRef.current = settingsDetailView;
   }, [settingsDetailView]);
   useEffect(() => {
-    tabRef.current = tab;
-    if (tab !== 'chat') {
-      return;
-    }
     const activeProjectId = projectId || projectIdRef.current;
     if (!connected || !activeProjectId) {
       return;
@@ -5601,11 +5396,10 @@ export function App() {
       preferredChatKey?.projectId ?? activeProjectId,
       preferredChatKey?.sessionId ?? '',
     ).catch(() => undefined);
-  }, [tab, connected, projectId]);
+  }, [connected, projectId]);
 
   useEffect(() => {
-    const shouldHydrateProjectSessionIndex =
-      isWide || (!isWide && tab === 'chat' && drawerOpen);
+    const shouldHydrateProjectSessionIndex = isWide || (!isWide && drawerOpen);
     if (!shouldHydrateProjectSessionIndex || projects.length === 0) return;
     setProjectSessionsByProjectId(prev => {
       const next = {...prev};
@@ -5625,7 +5419,7 @@ export function App() {
       }
       return next;
     });
-  }, [isWide, tab, drawerOpen, projectIdListKey]);
+  }, [isWide, drawerOpen, projectIdListKey]);
 
   useEffect(() => {
     if (!connected || !isWide || projects.length === 0) return;
@@ -5682,7 +5476,7 @@ export function App() {
     const rect = chatComposerRef.current?.getBoundingClientRect();
     setChatComposerTop(rect ? Math.round(rect.top) : null);
   }, []);
-  const shouldMeasureChatComposerLayout = tab === 'chat' && !isWide;
+  const shouldMeasureChatComposerLayout = !isWide;
 
   useLayoutEffect(() => {
     resizeChatComposerTextarea();
@@ -5717,28 +5511,14 @@ export function App() {
   ]);
 
   useEffect(() => {
-    if (tab !== 'chat') {
-      return;
-    }
     forceChatScrollToBottom();
-  }, [tab, selectedChatId, forceChatScrollToBottom]);
+  }, [selectedChatId, forceChatScrollToBottom]);
 
   useEffect(() => {
-    if (tab !== 'chat') {
-      return;
-    }
     resizeChatComposerTextarea();
-  }, [tab, selectedChatId, chatMessages, chatPendingPromptsByKey, chatLoading, resizeChatComposerTextarea]);
+  }, [selectedChatId, chatMessages, chatPendingPromptsByKey, chatLoading, resizeChatComposerTextarea]);
 
   useEffect(() => {
-    if (tab !== 'chat') {
-      chatKeyboardInsetRef.current = chatKeyboardInset;
-      if (chatKeyboardInsetSettleTimerRef.current !== null) {
-        window.clearTimeout(chatKeyboardInsetSettleTimerRef.current);
-        chatKeyboardInsetSettleTimerRef.current = null;
-      }
-      return;
-    }
     const keyboardInsetScrollAction = resolveChatKeyboardInsetScrollAction({
       previousInset: chatKeyboardInsetRef.current,
       nextInset: chatKeyboardInset,
@@ -5764,20 +5544,7 @@ export function App() {
         chatKeyboardInsetSettleTimerRef.current = null;
       }
     };
-  }, [tab, chatKeyboardInset, scrollChatToBottom]);
-
-  useEffect(() => {
-    gitSelectedBranchesRef.current = gitSelectedBranches;
-  }, [gitSelectedBranches]);
-
-  useEffect(() => {
-    setMarkdownPreviewEnabled(isMarkdownPath(selectedFile));
-    setHtmlPreviewEnabled(isHtmlPath(selectedFile));
-  }, [selectedFile]);
-  useEffect(() => {
-    setAllowHeavyDiffLoad(false);
-    setAllowLargeDiffRender(false);
-  }, [selectedDiff, selectedCommit, selectedDiffSource, selectedDiffScope]);
+  }, [chatKeyboardInset, scrollChatToBottom]);
 
   useEffect(() => {
     const onResize = () => {
@@ -5817,11 +5584,10 @@ export function App() {
     gestureNavigationExpanded,
     projectId,
     projects.length,
-    tab,
   ]);
 
   useEffect(() => {
-    if (isWide || tab !== 'chat') {
+    if (isWide) {
       mobileKeyboardLayoutViewportHeightRef.current = 0;
       setChatKeyboardInset(0);
       setFloatingKeyboardOffset(0);
@@ -5898,10 +5664,10 @@ export function App() {
       window.removeEventListener('scroll', scheduleUpdate);
       window.removeEventListener('orientationchange', handleOrientationChange);
     };
-  }, [isWide, tab]);
+  }, [isWide]);
 
   useLayoutEffect(() => {
-    if (isWide || tab !== 'chat' || floatingKeyboardOffset > 0 || chatComposerTop === null) {
+    if (isWide || floatingKeyboardOffset > 0 || chatComposerTop === null) {
       return;
     }
     setFloatingDefaultComposerTop(current =>
@@ -5909,7 +5675,7 @@ export function App() {
         ? chatComposerTop
         : current,
     );
-  }, [chatComposerTop, floatingKeyboardOffset, isWide, tab]);
+  }, [chatComposerTop, floatingKeyboardOffset, isWide]);
 
   useEffect(() => {
     if (!isWide) {
@@ -5955,41 +5721,6 @@ export function App() {
     window.addEventListener('pointerdown', onPointer);
     return () => window.removeEventListener('pointerdown', onPointer);
   }, []);
-
-  useEffect(() => {
-    const onPointerDown = (event: PointerEvent) => {
-      if (!searchToolsOpen && !gotoToolsOpen) return;
-      const container = fileSideActionsRef.current;
-      if (!container) return;
-      const target = event.target as Node | null;
-      if (target && container.contains(target)) return;
-      setSearchToolsOpen(false);
-      setGotoToolsOpen(false);
-    };
-    window.addEventListener('pointerdown', onPointerDown);
-    return () => window.removeEventListener('pointerdown', onPointerDown);
-  }, [searchToolsOpen, gotoToolsOpen]);
-  useEffect(() => {
-    if (!commitPopover) return;
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as Node | null;
-      if (target && commitPopoverRef.current?.contains(target)) return;
-      setCommitPopover(null);
-    };
-    window.addEventListener('pointerdown', onPointerDown);
-    return () => window.removeEventListener('pointerdown', onPointerDown);
-  }, [commitPopover]);
-
-  useEffect(() => {
-    if (!gitBranchPickerOpen || !isWide) return;
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as Node | null;
-      if (target && gitBranchMenuRef.current?.contains(target)) return;
-      setGitBranchPickerOpen(false);
-    };
-    window.addEventListener('pointerdown', onPointerDown);
-    return () => window.removeEventListener('pointerdown', onPointerDown);
-  }, [gitBranchPickerOpen, isWide]);
 
   useEffect(() => {
     if (!chatPromptMenuOpen) return;
@@ -6183,11 +5914,11 @@ export function App() {
   }, [chatHubColorMenuHubId, chatHubMenuOpen]);
 
   useEffect(() => {
-    if (tab !== 'chat' || sidebarSettingsOpen) {
+    if (sidebarSettingsOpen) {
       setChatHubMenuOpen(false);
       setChatHubColorMenuHubId('');
     }
-  }, [sidebarSettingsOpen, tab]);
+  }, [sidebarSettingsOpen]);
 
   useEffect(() => {
     if (chatConfigDisplay.overflow.length === 0) {
@@ -6262,8 +5993,6 @@ export function App() {
     if (disableFileCache) {
       workspaceStore.clearFileCache();
       dirHashRef.current = {};
-      fileHashRef.current = {};
-      fileCacheRef.current = {};
     }
   }, [disableFileCache]);
 
@@ -6318,7 +6047,6 @@ export function App() {
       messageViewerEnabled,
       logLevel,
       promptCompletionNotificationsEnabled,
-      tab,
       selectedProjectId: projectId,
       floatingControlYRatio,
       floatingControlSide,
@@ -6346,7 +6074,6 @@ export function App() {
     messageViewerEnabled,
     logLevel,
     promptCompletionNotificationsEnabled,
-    tab,
     projectId,
     floatingControlYRatio,
     floatingControlSide,
@@ -6357,30 +6084,6 @@ export function App() {
     hiddenProjectIds,
     expandedHubIds,
     hubColors,
-  ]);
-
-  useEffect(() => {
-    if (!projectId) return;
-    workspaceStore.rememberProjectSnapshot(projectId, {
-      expandedDirs,
-      selectedFile,
-      pinnedFiles,
-      gitCurrentBranch,
-      commits,
-      selectedCommit,
-      commitFilesBySha,
-      selectedDiff,
-    });
-  }, [
-    projectId,
-    expandedDirs,
-    selectedFile,
-    pinnedFiles,
-    gitCurrentBranch,
-    commits,
-    selectedCommit,
-    commitFilesBySha,
-    selectedDiff,
   ]);
 
   const currentProjectName = useMemo(
@@ -6416,7 +6119,6 @@ export function App() {
       window.clearTimeout(timer);
     };
   }, []);
-  const project = currentProject;
   const breadcrumbProjectName = useMemo(
     () => (currentProjectName || '').trim() || 'Project',
     [currentProjectName],
@@ -6431,10 +6133,6 @@ export function App() {
       return selectedProjectName || 'Project';
     },
     [breadcrumbProjectName, projectId, projects, selectedChatKey?.projectId],
-  );
-  const fileBreadcrumbLabel = useMemo(
-    () => splitPathForDisplay(selectedFile).fileName || 'No Selected File',
-    [selectedFile],
   );
   const resolveSessionDisplayTitle = useCallback(
     (session?: Pick<RegistrySessionSummary, 'sessionId' | 'title'> | null) =>
@@ -6455,10 +6153,6 @@ export function App() {
     () => selectedChatDisplayTitle || 'No Selected Session',
     [selectedChatDisplayTitle],
   );
-  const gitBreadcrumbLabel = useMemo(
-    () => splitPathForDisplay(selectedDiff).fileName || 'No Selected Diff',
-    [selectedDiff],
-  );
   const closeMobileDrawerCompanionOverlays = useCallback(() => {
     setPortRelayTargetMenuOpen(false);
     setChatPromptMenuOpen(false);
@@ -6471,32 +6165,6 @@ export function App() {
     setChatTitleProjectMenuOpen(false);
     setChatTitlePromptMenuOpen(false);
   }, [setChatConfigOverflowOpen]);
-  const handleMobileBreadcrumbProjectClick = useCallback(() => {
-    closeMobileDrawerCompanionOverlays();
-    setDrawerOpen(open => !open);
-  }, [closeMobileDrawerCompanionOverlays, setDrawerOpen]);
-  const renderBreadcrumbTitle = useCallback(
-    (projectName: string, label: string) => (
-      <div className="breadcrumb-title">
-        <button
-          type="button"
-          className="breadcrumb-project-button breadcrumb-project-name"
-          onClick={handleMobileBreadcrumbProjectClick}
-          title="Toggle workspace drawer"
-          aria-label="Toggle workspace drawer"
-        >
-          {projectName}
-        </button>
-        <span className="breadcrumb-separator" aria-hidden="true">
-          &gt;
-        </span>
-        <span className="title-text breadcrumb-current" title={label}>
-          {label}
-        </span>
-      </div>
-    ),
-    [handleMobileBreadcrumbProjectClick],
-  );
   const renderChatHubSummary = useCallback(() => {
     const hubCount = registryHubs.length;
     const projectCount = projects.length;
@@ -7358,13 +7026,6 @@ export function App() {
     }
     openSettingsRoot();
   }, [closeSettingsPanel, openSettingsRoot, sidebarSettingsOpen, settingsDetailView]);
-  useEffect(() => {
-    if (!isWide || tab === 'chat') {
-      return;
-    }
-    setTab('chat');
-    setSidebarCollapsed(false);
-  }, [isWide, setSidebarCollapsed, setTab, tab]);
   const handlePortRelayFloatingPointerDown = useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
       event.stopPropagation();
@@ -7627,7 +7288,7 @@ export function App() {
     ),
     [clampDesktopSidebarWidthForViewport, desktopSidebarDraftWidth, desktopSidebarWidth],
   );
-  const desktopChatSessionPinned = isWide && tab === 'chat' && !sidebarSettingsOpen && !chatSidebarCollapsed;
+  const desktopChatSessionPinned = isWide && !sidebarSettingsOpen && !chatSidebarCollapsed;
   const desktopLayoutSidebarWidth = desktopChatSessionPinned
     ? CHAT_SESSION_PANEL_WIDTH
     : effectiveDesktopSidebarWidth;
@@ -8019,12 +7680,9 @@ export function App() {
       }),
     });
   };
-  currentProjectRef.current = currentProject;
   projectsRef.current = projects;
   terminalSyncRef.current = terminalSync;
   activeTerminalKeyRef.current = activeTerminalKey;
-  expandedDirsRef.current = expandedDirs;
-  selectedFileRef.current = selectedFile;
   previewWorkbenchRef.current = previewWorkbench;
   chatFilePeekRef.current = chatFilePeek;
 
@@ -8032,21 +7690,6 @@ export function App() {
     workspaceStore.rememberGlobalState({previewWorkbenchSnapshot: previewWorkbenchSnapshotFromState(previewWorkbench)});
   }, [previewWorkbench]);
 
-  useEffect(() => {
-    setFileTabSelectedLines(new Set());
-    fileTabAnchorRef.current = null;
-  }, [selectedFile]);
-
-  const worktreeActive = selectedDiffSource === 'worktree';
-
-  const isExpanded = (path: string) => expandedDirs.includes(path);
-  const selectedFileIsMarkdown = isMarkdownPath(selectedFile);
-  const selectedFileIsHtml = isHtmlPath(selectedFile);
-  const isSelectedFilePinned = selectedFile
-    ? pinnedFiles.includes(selectedFile)
-    : false;
-  const hasPinnedFiles = pinnedFiles.length > 0;
-  const fileLines = useMemo(() => fileContent.split('\n'), [fileContent]);
   const activePreviewProjectId = previewWorkbench.activeProjectId;
   const activePreviewProjectDirEntries =
     chatFilePreviewDirEntriesByProject[activePreviewProjectId];
@@ -8083,17 +7726,6 @@ export function App() {
   );
   const previewFileTreeSearchActivePath =
     previewFileTreeSearchVisibleResults[previewFileTreeSearchActiveIndex]?.path ?? '';
-  const fileSearchMatches = useMemo(() => {
-    const query = fileSearchQuery.trim().toLocaleLowerCase();
-    if (!query) return [] as number[];
-    const matches: number[] = [];
-    for (let i = 0; i < fileLines.length; i += 1) {
-      if (fileLines[i].toLocaleLowerCase().includes(query)) {
-        matches.push(i + 1);
-      }
-    }
-    return matches;
-  }, [fileContent, fileLines, fileSearchQuery]);
 
   useEffect(() => {
     setPreviewFileTreeSearchActiveIndex(current =>
@@ -8104,104 +7736,19 @@ export function App() {
   }, [previewFileTreeSearchVisibleResults.length]);
 
   const applyHydratedProjectState = (
-    hydrated: {
-      projectId: string;
-      dirEntries: Record<string, RegistryFsEntry[]>;
-      expandedDirs: string[];
-      selectedFile: string;
-      pinnedFiles: string[];
-      gitCurrentBranch: string;
-      commits: RegistryGitCommit[];
-      selectedCommit: string;
-      commitFilesBySha: Record<string, RegistryGitCommitFile[]>;
-      selectedDiff: string;
-      cachedDiffText: string;
-    },
-    options?: {preserveFileView?: boolean; keepMobileDrawerOpen?: boolean},
+    hydrated: {projectId: string},
+    options?: {keepMobileDrawerOpen?: boolean},
   ) => {
-    const preserveFileView =
-      options?.preserveFileView === true &&
-      hydrated.projectId === projectIdRef.current &&
-      hydrated.selectedFile === selectedFileRef.current &&
-      !!hydrated.selectedFile;
-
-    if (!preserveFileView) {
-      fileReadSeqRef.current += 1;
-      dirHashRef.current = {};
-      fileHashRef.current = {};
-      fileCacheRef.current = {};
-    }
-    const previousProjectId = projectIdRef.current;
-    if (hydrated.projectId !== previousProjectId) {
-      knownGitRevRef.current = '';
-      knownWorktreeRevRef.current = '';
-      failedGitRevLoadKeyRef.current = '';
-      setGitError('');
-    }
-    expandedDirsRef.current = hydrated.expandedDirs;
-    selectedFileRef.current = hydrated.selectedFile;
     projectIdRef.current = hydrated.projectId;
     setProjectId(hydrated.projectId);
-    setDirEntries(hydrated.dirEntries);
-    setExpandedDirs(hydrated.expandedDirs);
-    setSelectedFile(hydrated.selectedFile);
-    setPinnedFiles([]);
-    setPinnedFiles(hydrated.pinnedFiles);
-    if (!preserveFileView) {
-      setFileContent('');
-      setFileInfo(null);
-    }
-    setGitCurrentBranch(hydrated.gitCurrentBranch);
-    setGitBranches([]);
-    setGitSelectedBranches([]);
-    gitSelectedBranchesRef.current = [];
-    setGitBranchPickerOpen(false);
-    setCommits(hydrated.commits);
-    setSelectedCommit(hydrated.selectedCommit);
-    setExpandedCommitShas(hydrated.selectedCommit ? [hydrated.selectedCommit] : []);
-    setCommitFilesBySha(hydrated.commitFilesBySha);
-    setWorktreeExpanded(true);
-    setCommitPopover(null);
-    setSelectedDiff(hydrated.selectedDiff);
-    setDiffText(hydrated.cachedDiffText);
-    setWorkingTreeFiles([]);
-    setGitLoadedProjectId('');
     setProjectMenuOpen(false);
     setWorkspaceProjectMenuOpen(false);
     setSidebarSettingsOpen(false);
     if (!isWide && options?.keepMobileDrawerOpen !== true) setDrawerOpen(false);
   };
 
-  const togglePinSelectedFile = () => {
-    if (!selectedFile) return;
-    setPinnedFiles(prev =>
-      prev.includes(selectedFile)
-        ? prev.filter(path => path !== selectedFile)
-        : [...prev, selectedFile],
-    );
-  };
-
-  useEffect(() => {
-    if (fileSearchMatches.length === 0) {
-      setCurrentMatchIndex(0);
-      return;
-    }
-    setCurrentMatchIndex(prev => Math.min(prev, fileSearchMatches.length - 1));
-  }, [fileSearchMatches.length]);
-
-  useEffect(() => {
-    if (!searchToolsOpen) return;
-    const query = fileSearchQuery.trim();
-    if (!query || fileSearchMatches.length === 0) return;
-    setCurrentMatchIndex(0);
-    window.requestAnimationFrame(() => {
-      scrollToFileLine(fileSearchMatches[0]);
-    });
-  }, [fileSearchMatches, fileSearchQuery, searchToolsOpen]);
-
   useEffect(
     () => () => {
-      fileReadAbortControllerRef.current?.abort();
       for (const controller of previewFileLoadControllersRef.current.values()) {
         controller.abort();
       }
@@ -8217,92 +7764,6 @@ export function App() {
     },
     [],
   );
-
-  const captureSelectedFileScrollPosition = () => {
-    const path = selectedFileRef.current;
-    const container = fileScrollRef.current;
-    if (!path || !container) return;
-    fileScrollTopByPathRef.current[path] = container.scrollTop;
-  };
-
-  const scheduleRestoreSelectedFileScroll = (path: string) => {
-    const savedTop = fileScrollTopByPathRef.current[path];
-    if (!Number.isFinite(savedTop)) return;
-
-    const restoreOnNextFrame = (attempt: number) => {
-      const container = fileScrollRef.current;
-      if (!container) return;
-      if (selectedFileRef.current !== path) return;
-
-      const maxScrollTop = Math.max(
-        0,
-        container.scrollHeight - container.clientHeight,
-      );
-      if (maxScrollTop <= 0 && attempt < 8) {
-        window.requestAnimationFrame(() => restoreOnNextFrame(attempt + 1));
-        return;
-      }
-      container.scrollTop = Math.min(savedTop, maxScrollTop);
-    };
-
-    window.requestAnimationFrame(() => restoreOnNextFrame(0));
-  };
-
-  const jumpToFileLineNow = (
-    container: HTMLElement,
-    line: number,
-    options?: {content?: string},
-  ) => {
-    jumpToPreviewLineNow({
-      container,
-      line,
-      content: options?.content ?? '',
-      mode: 'code',
-      lineHeight: Math.max(12, codeFontSize * codeLineHeight),
-    });
-  };
-
-  const scrollToFileLine = (line: number) => {
-    const container = fileScrollRef.current;
-    if (!container) return;
-    jumpToFileLineNow(container, line, {content: fileContent});
-  };
-
-  useEffect(() => {
-    if (!pendingFileJump) return;
-    if (tab !== 'file') return;
-    if (selectedFileRef.current !== pendingFileJump.path) return;
-    if (fileLoading) return;
-
-    const targetPath = pendingFileJump.path;
-    const targetLine = pendingFileJump.line;
-    return schedulePreviewLineJump({
-      getContainer: () => fileScrollRef.current,
-      isCurrent: () => tab === 'file' && selectedFileRef.current === targetPath,
-      line: targetLine,
-      content: fileContent,
-      mode: 'code',
-      lineHeight: Math.max(12, codeFontSize * codeLineHeight),
-      onFinish: () => {
-        if (selectedFileRef.current !== targetPath) return;
-        fileTabAnchorRef.current = targetLine;
-        setFileTabSelectedLines(new Set([targetLine]));
-        setPendingFileJump(current =>
-          current && current.path === targetPath && current.line === targetLine
-            ? null
-            : current,
-        );
-      },
-    });
-  }, [
-    pendingFileJump,
-    tab,
-    fileLoading,
-    selectedFile,
-    fileContent,
-    codeFontSize,
-    codeLineHeight,
-  ]);
 
   useEffect(() => {
     if (!chatFilePeek || chatFilePeek.loading || chatFilePeek.error || !chatFilePeek.targetLine) return;
@@ -8331,99 +7792,6 @@ export function App() {
     codeLineHeight,
   ]);
 
-  const navigateSearchMatch = (delta: 1 | -1) => {
-    if (fileSearchMatches.length === 0) return;
-    const next =
-      (currentMatchIndex + delta + fileSearchMatches.length) %
-      fileSearchMatches.length;
-    setCurrentMatchIndex(next);
-    scrollToFileLine(fileSearchMatches[next]);
-  };
-
-  const triggerGoToLine = () => {
-    if (!selectedFile || fileLoading || !fileLines.length) return;
-    const raw = gotoLineInput.trim();
-    if (!raw) return;
-    if (!/^\d+$/.test(raw)) {
-      return;
-    }
-    const parsed = Number.parseInt(raw, 10);
-    if (!Number.isFinite(parsed) || parsed < 1) {
-      return;
-    }
-    const line = Math.max(1, Math.min(fileLines.length, parsed));
-    setGotoLineInput(String(line));
-    window.requestAnimationFrame(() => {
-      scrollToFileLine(line);
-    });
-  };
-
-  const loadDirectory = async (path: string, options?: {projectId?: string}) => {
-    if (loadingDirs[path]) return;
-    const targetProjectId = options?.projectId || projectIdRef.current || projectId;
-    const fileCacheDisabled = disableFileCache === true;
-    setLoadingDirs(prev => ({ ...prev, [path]: true }));
-    try {
-      const persistedCache = !fileCacheDisabled && targetProjectId
-        ? workspaceStore.getCachedDirectory(targetProjectId, path)
-        : null;
-      const knownHash = fileCacheDisabled ? '' :
-        dirHashRef.current[path] || persistedCache?.hash || '';
-      const result = await service.listDirectory(
-        path,
-        fileCacheDisabled ? undefined : knownHash || undefined,
-      );
-
-      if (result.notModified) {
-        const cachedEntries = persistedCache?.entries;
-        if (Array.isArray(cachedEntries)) {
-          setDirEntries(prev => ({ ...prev, [path]: sortEntries(cachedEntries) }));
-        }
-        if (result.hash) {
-          if (!fileCacheDisabled) {
-            dirHashRef.current[path] = result.hash;
-          }
-          if (!fileCacheDisabled && targetProjectId && Array.isArray(cachedEntries)) {
-            workspaceStore.cacheDirectory(targetProjectId, path, result.hash, cachedEntries);
-          }
-        }
-        return;
-      }
-
-      const entries = sortEntries(result.entries);
-      setDirEntries(prev => ({ ...prev, [path]: entries }));
-      const nextHash = result.hash || persistedCache?.hash || '';
-      if (!fileCacheDisabled && nextHash) {
-        dirHashRef.current[path] = nextHash;
-      }
-      if (!fileCacheDisabled && targetProjectId) {
-        workspaceStore.cacheDirectory(targetProjectId, path, nextHash, entries);
-      }
-    } finally {
-      setLoadingDirs(prev => {
-        const next = { ...prev };
-        delete next[path];
-        return next;
-      });
-    }
-  };
-
-  const toggleDirectory = async (path: string) => {
-    if (isExpanded(path)) {
-      setExpandedDirs(prev => prev.filter(item => item !== path));
-      return;
-    }
-    setExpandedDirs(prev => [...prev, path]);
-    if (!dirEntries[path]) {
-      try {
-        await loadDirectory(path);
-      } catch (err) {
-        setExpandedDirs(prev => prev.filter(item => item !== path));
-        const reason = err instanceof Error ? err.message : String(err);
-        setError(`Failed to load directory "${path}": ${reason}`);
-      }
-    }
-  };
 
   const loadPreviewDirectory = async (projectId: string, path: string) => {
     const targetProjectId = projectId;
@@ -8535,132 +7903,6 @@ export function App() {
     loadPreviewDirectory(targetProjectId, '.').catch(() => undefined);
   };
 
-  const readSelectedFile = async (path: string, options?: {restoreScroll?: boolean; silent?: boolean}) => {
-    if (!path) return;
-    const targetProjectId = projectIdRef.current || projectId;
-    if (!targetProjectId) return;
-    fileReadAbortControllerRef.current?.abort();
-    const controller = new AbortController();
-    fileReadAbortControllerRef.current = controller;
-    const requestSeq = fileReadSeqRef.current + 1;
-    fileReadSeqRef.current = requestSeq;
-    const silentRead = options?.silent === true;
-    if (!silentRead) {
-      setFileLoading(true);
-    }
-    const shouldRestoreScroll = options?.restoreScroll === true;
-    try {
-      const info = await service.getProjectFileInfo(targetProjectId, path, {signal: controller.signal});
-      if (requestSeq !== fileReadSeqRef.current || projectIdRef.current !== targetProjectId) return;
-      setFileInfo(info);
-      const cacheKey = fileMemoryCacheKey(targetProjectId, path);
-      const fileCacheDisabled = disableFileCache === true;
-      const persistedFile = fileCacheDisabled ? null : workspaceStore.getCachedFile(targetProjectId, path);
-      if (
-        !fileCacheDisabled &&
-        typeof persistedFile?.content === 'string' &&
-        fileCacheRef.current[cacheKey] === undefined
-      ) {
-        fileCacheRef.current[cacheKey] = persistedFile.content;
-      }
-      if (!fileCacheDisabled && persistedFile?.hash && !fileHashRef.current[cacheKey]) {
-        fileHashRef.current[cacheKey] = persistedFile.hash;
-      }
-      const cachedContent = fileCacheDisabled ? undefined : fileCacheRef.current[cacheKey] ?? persistedFile?.content;
-      const knownHash = !fileCacheDisabled && typeof cachedContent === 'string'
-        ? fileHashRef.current[cacheKey] || persistedFile?.hash || ''
-        : '';
-      const isFirstLoad = !knownHash;
-      if ((info.size ?? 0) > LARGE_FILE_CONFIRM_BYTES && isFirstLoad) {
-        const sizeMB = ((info.size ?? 0) / (1024 * 1024)).toFixed(1);
-        const confirmed = window.confirm(
-          `This file is ${sizeMB} MB. Load full content now?`,
-        );
-        if (!confirmed) {
-          setFileContent('');
-          return;
-        }
-      }
-      const result = await service.readProjectFile(path, targetProjectId, {
-        knownHash: fileCacheDisabled ? undefined : knownHash || undefined,
-        signal: controller.signal,
-      });
-      if (requestSeq !== fileReadSeqRef.current || projectIdRef.current !== targetProjectId) return;
-      if (result.notModified && fileCacheDisabled) {
-        const freshResult = await service.readProjectFile(path, targetProjectId, {signal: controller.signal});
-        if (requestSeq !== fileReadSeqRef.current || projectIdRef.current !== targetProjectId) return;
-        setFileContent(freshResult.content);
-        if (shouldRestoreScroll) {
-          scheduleRestoreSelectedFileScroll(path);
-        }
-        return;
-      }
-      if (result.notModified) {
-        if (typeof cachedContent !== 'string') {
-          const freshResult = await service.readProjectFile(path, targetProjectId, {signal: controller.signal});
-          if (requestSeq !== fileReadSeqRef.current || projectIdRef.current !== targetProjectId) return;
-          setFileContent(freshResult.content);
-          if (!fileCacheDisabled) {
-            fileCacheRef.current[cacheKey] = freshResult.content;
-          }
-          const freshHash = freshResult.hash || knownHash;
-          if (!fileCacheDisabled && freshHash) {
-            fileHashRef.current[cacheKey] = freshHash;
-          }
-          if (!fileCacheDisabled) {
-            workspaceStore.cacheFile(targetProjectId, path, freshHash, freshResult.content);
-          }
-          if (shouldRestoreScroll) {
-            scheduleRestoreSelectedFileScroll(path);
-          }
-          return;
-        }
-        setFileContent(cachedContent);
-        const nextHash = result.hash || knownHash;
-        if (!fileCacheDisabled && nextHash) {
-          fileHashRef.current[cacheKey] = nextHash;
-          workspaceStore.cacheFile(targetProjectId, path, nextHash, cachedContent);
-        }
-        if (shouldRestoreScroll) {
-          scheduleRestoreSelectedFileScroll(path);
-        }
-        return;
-      }
-      setFileContent(result.content);
-      if (!fileCacheDisabled) {
-        fileCacheRef.current[cacheKey] = result.content;
-      }
-      const nextHash = result.hash || knownHash;
-      if (!fileCacheDisabled && nextHash) {
-        fileHashRef.current[cacheKey] = nextHash;
-      }
-      if (!fileCacheDisabled) {
-        workspaceStore.cacheFile(targetProjectId, path, nextHash, result.content);
-      }
-      if (shouldRestoreScroll) {
-        scheduleRestoreSelectedFileScroll(path);
-      }
-    } catch (err) {
-      if (isAbortError(err)) return;
-      if (requestSeq !== fileReadSeqRef.current || projectIdRef.current !== targetProjectId) return;
-      if (!silentRead) {
-        setFileInfo(null);
-        setFileContent('');
-      }
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      if (fileReadAbortControllerRef.current === controller) {
-        fileReadAbortControllerRef.current = null;
-      }
-      if (
-        requestSeq === fileReadSeqRef.current &&
-        projectIdRef.current === targetProjectId &&
-        !silentRead
-      ) {
-        setFileLoading(false);
-      }
-    }
-  };
 
   const readChatFilePeek = useCallback(async (path: string, targetLine: number | null, targetProjectId: string) => {
     if (!path || !targetProjectId) return;
@@ -9081,25 +8323,6 @@ export function App() {
     [],
   );
 
-  const handleFileTabLineClick = useCallback(
-    (line: number, event: MouseEvent) => {
-      if (event.shiftKey && fileTabAnchorRef.current != null) {
-        setFileTabSelectedLines(buildLineRange(fileTabAnchorRef.current, line));
-      } else if (event.ctrlKey || event.metaKey) {
-        setFileTabSelectedLines(prev => {
-          const next = new Set(prev);
-          if (next.has(line)) next.delete(line);
-          else next.add(line);
-          return next;
-        });
-      } else {
-        fileTabAnchorRef.current = line;
-        setFileTabSelectedLines(new Set([line]));
-      }
-    },
-    [],
-  );
-
   const resolveChatFilePreviewProjectId = useCallback(
     (explicitProjectId = '') =>
       explicitProjectId ||
@@ -9492,21 +8715,6 @@ export function App() {
     isWide,
   ]);
 
-  const openPeekFileInFullFileTab = useCallback(() => {
-    if (!chatFilePeek) return;
-    const transferLine = chatFilePeek.targetLine;
-    const transferPath = chatFilePeek.path;
-    closeChatFilePeek();
-    chatFilePeekHistoryActiveRef.current = false;
-    setTab('file');
-    setSelectedFile(transferPath);
-    if (transferLine) {
-      setPendingFileJump({ path: transferPath, line: transferLine });
-    } else {
-      setPendingFileJump(null);
-    }
-  }, [chatFilePeek, closeChatFilePeek, setTab]);
-
   useEffect(() => {
     const handleChatFilePeekPopState = (event: PopStateEvent) => {
       if (!chatFilePeekHistoryActiveRef.current) return;
@@ -9524,234 +8732,6 @@ export function App() {
     }
   }, [isWide]);
 
-  useEffect(() => {
-    if (!selectedFile) {
-      fileReadAbortControllerRef.current?.abort();
-      fileReadAbortControllerRef.current = null;
-      fileReadSeqRef.current += 1;
-      setFileLoading(false);
-      setFileInfo(null);
-      setFileContent('');
-      return;
-    }
-    if (skipNextSelectedFileAutoReadRef.current) {
-      skipNextSelectedFileAutoReadRef.current = false;
-      return;
-    }
-    readSelectedFile(selectedFile).catch(() => undefined);
-  }, [projectId, selectedFile]);
-
-  const loadGit = async (preferredRefs?: string[]): Promise<boolean> => {
-    const targetProjectId = projectIdRef.current || projectId;
-    if (!targetProjectId) return false;
-    setGitLoading(true);
-    setGitError('');
-    failedGitRevLoadKeyRef.current = '';
-    try {
-      const [branchData, statusData] = await Promise.all([
-        service.listGitBranches(),
-        service.getGitStatus(),
-      ]);
-      const currentBranch = branchData.current || '';
-      const availableBranches = normalizeGitBranches(
-        branchData.branches ?? [],
-        currentBranch,
-      );
-      const selectedBranches = pickGitSelectedBranches(
-        preferredRefs ?? gitSelectedBranchesRef.current,
-        availableBranches,
-        currentBranch,
-      );
-      const commitData = await service.listGitCommits('HEAD', selectedBranches);
-
-      setGitCurrentBranch(currentBranch);
-      setGitBranches(availableBranches);
-      setGitSelectedBranches(selectedBranches);
-      gitSelectedBranchesRef.current = selectedBranches;
-      const working = buildWorkingTreeFiles(statusData);
-      setWorkingTreeFiles(working);
-      knownWorktreeRevRef.current = statusData.worktreeRev ?? '';
-      const loadedProject = currentProjectRef.current;
-      if (loadedProject?.projectId === targetProjectId && loadedProject.git?.gitRev) {
-        knownGitRevRef.current = loadedProject.git.gitRev;
-      }
-      setCommits(commitData);
-      setGitLoadedProjectId(targetProjectId);
-      const firstCommit = commitData[0]?.sha ?? '';
-      setSelectedCommit(prev => {
-        if (prev && commitData.some(item => item.sha === prev)) {
-          return prev;
-        }
-        return firstCommit;
-      });
-      setExpandedCommitShas(prev => {
-        const expanded = prev.find(sha => commitData.some(item => item.sha === sha));
-        if (expanded) return [expanded];
-        return firstCommit ? [firstCommit] : [];
-      });
-      setWorktreeExpanded(working.length > 0);
-      setCommitPopover(null);
-      if (!selectedDiff) {
-        if (working[0]) {
-          const preferredPath = pickPreferredPath(working);
-          const preferredFile =
-            working.find(item => item.path === preferredPath) ?? working[0];
-          setSelectedDiff(preferredFile.path);
-          setSelectedDiffSource('worktree');
-          setSelectedDiffScope(preferredFile.scope);
-        } else if (firstCommit) {
-          setSelectedDiffSource('commit');
-        }
-      }
-      return true;
-    } catch (err) {
-      setGitError(err instanceof Error ? err.message : String(err));
-      return false;
-    } finally {
-      setGitLoading(false);
-    }
-  };
-
-  const toggleGitBranchSelection = (branch: string) => {
-    const normalizedBranch = branch.trim();
-    if (!normalizedBranch) return;
-    const currentSelection = gitSelectedBranchesRef.current;
-    const nextSelection = currentSelection.includes(normalizedBranch)
-      ? currentSelection.filter(item => item !== normalizedBranch)
-      : [...currentSelection, normalizedBranch];
-    const fallbackBranch = gitCurrentBranch.trim() || normalizedBranch;
-    const effectiveSelection =
-      nextSelection.length > 0 ? nextSelection : [fallbackBranch];
-    setGitSelectedBranches(effectiveSelection);
-    gitSelectedBranchesRef.current = effectiveSelection;
-    setGitLoadedProjectId('');
-    loadGit(effectiveSelection).catch(err =>
-      setGitError(err instanceof Error ? err.message : String(err)),
-    );
-  };
-
-  const loadGitIfRevChanged = async (): Promise<boolean> => {
-    const targetProjectId = projectIdRef.current || projectId;
-    if (!connected || !targetProjectId || gitLoading) return false;
-    if (gitRevCheckInFlightRef.current) return false;
-    gitRevCheckInFlightRef.current = true;
-    try {
-      const nextRev = await service.getGitRev();
-      const revKey = `${targetProjectId}\n${nextRev.gitRev ?? ''}\n${nextRev.worktreeRev ?? ''}`;
-      if (gitError && failedGitRevLoadKeyRef.current === revKey) {
-        return false;
-      }
-      const currentRev = {
-        gitRev: knownGitRevRef.current,
-        worktreeRev: knownWorktreeRevRef.current,
-      };
-      const shouldLoad = shouldLoadGitForRev({
-        projectId: targetProjectId,
-        loadedProjectId: gitLoadedProjectId,
-        currentRev,
-        nextRev,
-        hasGitError: !!gitError,
-      });
-      if (!shouldLoad) {
-        knownGitRevRef.current = nextRev.gitRev ?? '';
-        knownWorktreeRevRef.current = nextRev.worktreeRev ?? '';
-        return false;
-      }
-      setGitLoadedProjectId('');
-      const loaded = await loadGit();
-      if (loaded) {
-        failedGitRevLoadKeyRef.current = '';
-        knownGitRevRef.current = nextRev.gitRev ?? '';
-        knownWorktreeRevRef.current = nextRev.worktreeRev ?? '';
-      } else {
-        failedGitRevLoadKeyRef.current = revKey;
-      }
-      return loaded;
-    } catch (err) {
-      setGitError(err instanceof Error ? err.message : String(err));
-      return false;
-    } finally {
-      gitRevCheckInFlightRef.current = false;
-    }
-  };
-
-  useEffect(() => {
-    if (!connected || tab !== 'git') return;
-    if (!projectId) return;
-    if (gitLoading) return;
-    loadGitIfRevChanged().catch(() => undefined);
-  }, [connected, tab, projectId, gitError, gitLoading, gitLoadedProjectId]);
-
-  useEffect(() => {
-    const run = async () => {
-      if (!selectedCommit) return;
-      if (commitFilesBySha[selectedCommit]) return;
-      const files = await service.listGitCommitFiles(selectedCommit);
-      setCommitFilesBySha(prev => ({ ...prev, [selectedCommit]: files }));
-      if (!selectedDiff && files[0]) {
-        setSelectedDiff(pickPreferredPath(files));
-        setSelectedDiffSource('commit');
-      }
-    };
-    run().catch(err =>
-      setGitError(err instanceof Error ? err.message : String(err)),
-    );
-  }, [selectedCommit, commitFilesBySha, selectedDiff]);
-
-  useEffect(() => {
-    const run = async () => {
-      if (!projectId || !selectedDiff) return;
-      if (isHeavyGeneratedDiffPath(selectedDiff) && !allowHeavyDiffLoad) {
-        setDiffText('');
-        return;
-      }
-      const cacheScope =
-        selectedDiffSource === 'worktree'
-          ? `WORKTREE:${selectedDiffScope}`
-          : selectedCommit;
-      if (!cacheScope) return;
-      const cachedDiff = workspaceStore.getCachedDiff(
-        projectId,
-        cacheScope,
-        selectedDiff,
-      );
-      if (cachedDiff !== null) {
-        setDiffText(cachedDiff);
-        return;
-      }
-      setDiffLoading(true);
-      try {
-        const diff =
-          selectedDiffSource === 'worktree'
-            ? await service.readWorkingTreeFileDiff(
-                selectedDiff,
-                selectedDiffScope,
-              )
-            : await service.readGitFileDiff(selectedCommit, selectedDiff);
-        setDiffText(diff.diff || '');
-        workspaceStore.cacheDiff(
-          projectId,
-          cacheScope,
-          selectedDiff,
-          diff.diff || '',
-          !!diff.isBinary,
-          !!diff.truncated,
-        );
-      } catch (err) {
-        setGitError(err instanceof Error ? err.message : String(err));
-      } finally {
-        setDiffLoading(false);
-      }
-    };
-    run().catch(() => undefined);
-  }, [
-    projectId,
-    selectedCommit,
-    selectedDiff,
-    selectedDiffSource,
-    selectedDiffScope,
-    allowHeavyDiffLoad,
-  ]);
 
   const clearReconnectTimer = () => {
     if (reconnectTimerRef.current !== null) {
@@ -10368,7 +9348,7 @@ export function App() {
     if (!selectedKey || !runtimeKey) {
       return;
     }
-    if (tab !== 'chat' || !connected || chatLoading) {
+    if (!connected || chatLoading) {
       return;
     }
     const shouldInspectCache =
@@ -10378,7 +9358,7 @@ export function App() {
       ? hydrateChatSessionContentFromCache(selectedKey.sessionId, selectedKey.projectId)
       : [];
     const selectedVisibilityRecovery = resolveSelectedChatVisibilityRecovery({
-      tab,
+      tab: 'chat',
       connected,
       chatLoading,
       selectedRuntimeKey: runtimeKey,
@@ -10413,7 +9393,7 @@ export function App() {
         }
       });
     }
-  }, [tab, connected, selectedChatEncodedKey, chatMessages.length, chatLoading, setVisibleChatMessagesForRuntimeKey]);
+  }, [connected, selectedChatEncodedKey, chatMessages.length, chatLoading, setVisibleChatMessagesForRuntimeKey]);
   const resetChatComposer = () => {
     chatAttachmentsRef.current.forEach(revokeChatAttachmentObjectUrl);
     chatComposerTextRef.current = '';
@@ -11097,7 +10077,7 @@ export function App() {
   };
 
   useEffect(() => {
-    if (!isWide || tab !== 'chat' || sidebarSettingsOpen || !selectedChatKey || !selectedChatSession || renameTarget || confirmTarget) {
+    if (!isWide || sidebarSettingsOpen || !selectedChatKey || !selectedChatSession || renameTarget || confirmTarget) {
       return;
     }
     const onKeyDown = (event: KeyboardEvent) => {
@@ -11126,7 +10106,6 @@ export function App() {
     sidebarSettingsOpen,
     selectedChatKey,
     selectedChatSession,
-    tab,
   ]);
 
   const requestArchiveProjectSession = (targetProjectId: string, session: RegistrySessionSummary) => {
@@ -12516,7 +11495,7 @@ export function App() {
     }
     try {
       await registryAuthController.requireSession();
-      const result = await workspaceController.connect(registryEndpoints.wsURL, {disableFileCache});
+      const result = await workspaceController.connect(registryEndpoints.wsURL);
       connectedProjectId = result.hydrated.projectId;
       const persistedSelectedChatKey = workspaceStore.migrateSelectedChatSessionKey(result.hydrated.projectId);
       const preferredSelectedChatKey =
@@ -12530,21 +11509,8 @@ export function App() {
       setProjects(result.projects);
       setRegistryHubs(result.hubs);
       setHasPendingProjectUpdates(false);
-      captureSelectedFileScrollPosition();
       dirHashRef.current = {};
-      if (!silentReconnect) {
-        fileHashRef.current = {};
-        fileCacheRef.current = {};
-      }
-      applyHydratedProjectState(result.hydrated, {
-        preserveFileView: silentReconnect,
-      });
-      const selectedFileToReload =
-        result.hydrated.selectedFile || selectedFileRef.current;
-      if (selectedFileToReload) {
-        skipNextSelectedFileAutoReadRef.current = true;
-        readSelectedFile(selectedFileToReload, { restoreScroll: true, silent: silentReconnect }).catch(() => undefined);
-      }
+      applyHydratedProjectState(result.hydrated);
       reconnectStartedAtRef.current = null;
       setReconnecting(false);
       setConnected(true);
@@ -12561,26 +11527,13 @@ export function App() {
       }
       if (silentReconnect) {
         syncChatSessionsAfterReconnect(preferredSelectedChatKey).catch(() => undefined);
-      } else if (tabRef.current === 'chat') {
+      } else {
         loadChatSessions(
           preferredSelectedChatKey?.projectId ?? result.hydrated.projectId,
           preferredSelectedChatId,
         ).catch(() => undefined);
       }
       schedulePostConnectProjectRefresh();
-      workspaceController
-        .validateExpandedDirectories(
-          result.hydrated.projectId,
-          result.rootEntries,
-          result.hydrated.expandedDirs,
-          {disableFileCache},
-        )
-        .then(validated => {
-          if (projectIdRef.current !== result.hydrated.projectId) return;
-          setDirEntries(validated.dirEntries);
-          setExpandedDirs(validated.expandedDirs);
-        })
-        .catch(() => undefined);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       connectError = message;
@@ -12714,7 +11667,7 @@ export function App() {
       projectId: activeProjectId,
       selectedRuntimeKey: encodeChatSessionKey(selectedChatKeyRef.current),
       documentVisibility,
-      activeTab: tabRef.current,
+      activeTab: 'chat',
     })) {
       return;
     }
@@ -14511,11 +13464,9 @@ export function App() {
       {
         wm_global_kv: dump.global,
         wm_project_state: dump.projects,
-        wm_project_commits: dump.projectCommits,
         wm_chat_session_index: dump.chatSessionIndex,
         wm_chat_session_content: dump.chatSessionContent,
         wm_file_cache: dump.fileCache,
-        wm_diff_cache: dump.diffCache,
         wm_meta: dump.meta,
         storage: dump.storage,
       },
@@ -14580,7 +13531,7 @@ export function App() {
       reason: syncReason,
       fromProjectId: projectIdRef.current,
       projectId: nextProjectId,
-      tab: tabRef.current,
+      tab: 'chat',
     });
     if (!nextProjectId || nextProjectId === projectIdRef.current) {
       setWorkspaceProjectMenuOpen(false);
@@ -14596,23 +13547,8 @@ export function App() {
       return;
     }
 
-    captureSelectedFileScrollPosition();
-    const previousProjectId = projectIdRef.current;
-    if (previousProjectId) {
-      workspaceStore.rememberProjectSnapshot(previousProjectId, {
-        expandedDirs: expandedDirsRef.current,
-        selectedFile: selectedFileRef.current,
-        pinnedFiles,
-        gitCurrentBranch,
-        commits,
-        selectedCommit,
-        commitFilesBySha,
-        selectedDiff,
-      });
-    }
-
     try {
-      const result = await workspaceController.switchProjectLightweight(nextProjectId, {disableFileCache});
+      const result = await workspaceController.switchProjectLightweight(nextProjectId);
       projectsRef.current = result.projects;
       setProjects(result.projects);
       setRegistryHubs(result.hubs);
@@ -14620,26 +13556,13 @@ export function App() {
       workspaceStore.rememberGlobalState({
         selectedProjectId: nextProjectId,
       });
-      skipNextSelectedFileAutoReadRef.current =
-        tabRef.current !== 'file' && !!result.hydrated.selectedFile;
       applyHydratedProjectState(result.hydrated, {
         keepMobileDrawerOpen: options?.keepMobileDrawerOpen,
       });
       setWorkspaceProjectMenuOpen(false);
       setError('');
 
-      if (options?.reason !== 'chat') {
-        if (tabRef.current === 'file') {
-          loadDirectory('.', {projectId: nextProjectId}).catch(err =>
-            setError(err instanceof Error ? err.message : String(err)),
-          );
-        } else if (tabRef.current === 'git') {
-          loadGitIfRevChanged().catch(err =>
-            setGitError(err instanceof Error ? err.message : String(err)),
-          );
-        }
-      }
-      finishSyncDiagnostic({ok: true, loadedSurface: options?.reason === 'chat' ? 'none' : tabRef.current});
+      finishSyncDiagnostic({ok: true, loadedSurface: 'none'});
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (options?.reason !== 'chat') {
@@ -14653,23 +13576,10 @@ export function App() {
   const switchProject = async (nextProjectId: string) => {
     setLoadingProject(true);
     try {
-      const result = await workspaceController.switchProject(nextProjectId, {disableFileCache});
+      const result = await workspaceController.switchProject(nextProjectId);
       setProjects(result.projects);
       setHasPendingProjectUpdates(false);
       applyHydratedProjectState(result.hydrated);
-      workspaceController
-        .validateExpandedDirectories(
-          result.hydrated.projectId,
-          result.rootEntries,
-          result.hydrated.expandedDirs,
-          {disableFileCache},
-        )
-        .then(validated => {
-          if (projectIdRef.current !== result.hydrated.projectId) return;
-          setDirEntries(validated.dirEntries);
-          setExpandedDirs(validated.expandedDirs);
-        })
-        .catch(() => undefined);
     } finally {
       setLoadingProject(false);
     }
@@ -14694,7 +13604,6 @@ export function App() {
     if (options?.closeMobileDrawer) {
       setDrawerOpen(false);
     }
-    setTab('chat');
     applySelectedChatKey(nextSelectedKey);
     const runtimeKey = encodeChatSessionKey(nextSelectedKey);
     chatMessageStoreRef.current[runtimeKey] = chatMessageStoreRef.current[runtimeKey] ?? [];
@@ -14706,7 +13615,7 @@ export function App() {
       {resetToLatest: true},
     );
     return true;
-  }, [setDrawerOpen, setTab, setVisibleChatMessagesForRuntimeKey, syncWorkspaceProject]);
+  }, [setDrawerOpen, setVisibleChatMessagesForRuntimeKey, syncWorkspaceProject]);
 
   const selectProjectChatSession = async (
     targetProjectId: string,
@@ -14735,7 +13644,6 @@ export function App() {
       if (options?.closeMobileDrawer) {
         setDrawerOpen(false);
       }
-      setTab('chat');
       applySelectedChatKey(nextSelectedKey);
       const runtimeKey = encodeChatSessionKey(nextSelectedKey);
       setVisibleChatMessagesForRuntimeKey(
@@ -14794,7 +13702,6 @@ export function App() {
     setChatTitleProjectMenuOpen(false);
     setChatTitlePromptMenuOpen(false);
     setSidebarSettingsOpen(false);
-    setTab('chat');
     const targetSession = resolveChatTitleProjectSession(targetProjectId);
     if (targetSession) {
       await selectProjectChatSession(targetProjectId, targetSession.sessionId);
@@ -14814,7 +13721,6 @@ export function App() {
     resolveChatTitleProjectSession,
     selectProjectChatSession,
     setSidebarSettingsOpen,
-    setTab,
     setVisibleChatMessagesForRuntimeKey,
     syncWorkspaceProject,
   ]);
@@ -14825,7 +13731,7 @@ export function App() {
 
   useEffect(() => {
     const selectedProjectId = selectedChatKey?.projectId ?? '';
-    if (tab !== 'chat' || !selectedProjectId || !hiddenProjectIdSet.has(selectedProjectId)) {
+    if (!selectedProjectId || !hiddenProjectIdSet.has(selectedProjectId)) {
       return;
     }
     const nextProject = findNextVisibleProject(sortedProjectItems, hiddenProjectIds, selectedProjectId);
@@ -14840,7 +13746,7 @@ export function App() {
     if (connected) {
       loadChatSessions(nextProject.projectId, '').catch(() => undefined);
     }
-  }, [chatHubMenuOpen, connected, hiddenProjectIdSet, hiddenProjectIds, selectedChatKey?.projectId, sortedProjectItems, tab]);
+  }, [chatHubMenuOpen, connected, hiddenProjectIdSet, hiddenProjectIds, selectedChatKey?.projectId, sortedProjectItems]);
 
   const handleSessionSearchResultClick = async (
     targetProjectId: string,
@@ -16019,7 +14925,6 @@ export function App() {
       chatMessageStoreRef.current[runtimeKey] = [];
       chatTurnStoreRef.current[runtimeKey] = createEmptyChatTurnStore();
       chatFinishedCursorRef.current[runtimeKey] = 0;
-      setTab('chat');
       applySelectedChatKey(selectedKey);
       setChatMessages([]);
       const loaded = await loadChatSession(importedSessionId, targetProjectId, { forceFull: true });
@@ -16225,28 +15130,16 @@ export function App() {
       silent: options?.silent === true,
     });
     let refreshProjectError = '';
-    let loadedSurface = 'file';
     refreshInFlightRef.current = true;
     const silent = !!options?.silent;
-    const latestExpandedDirs = expandedDirsRef.current;
-    const latestSelectedFile = selectedFileRef.current;
     if (!silent) {
       setRefreshingProject(true);
     }
     try {
       setProjects(await service.listProjects());
-      const validated = await workspaceController.refreshProject(activeProjectId, [
-        ...latestExpandedDirs,
-      ], {disableFileCache});
-      setDirEntries(validated.dirEntries);
-      setExpandedDirs(validated.expandedDirs);
       dirHashRef.current = {};
-      if (latestSelectedFile) {
-        await readSelectedFile(latestSelectedFile);
-      }
-      if (tabRef.current === 'git') {
-        const gitLoaded = await loadGitIfRevChanged();
-        loadedSurface = gitLoaded ? 'git' : 'file';
+      if (previewWorkbenchRef.current.activeProjectId === activeProjectId) {
+        await loadPreviewDirectory(activeProjectId, '.');
       }
       if (!silent) {
         setHasPendingProjectUpdates(false);
@@ -16261,7 +15154,7 @@ export function App() {
       }
       finishRefreshProjectDiagnostic({
         ok: !refreshProjectError,
-        loadedSurface,
+        loadedSurface: 'preview',
         ...(refreshProjectError ? {error: refreshProjectError} : {}),
       }, refreshProjectError ? 'error' : 'info');
     }
@@ -16663,76 +15556,6 @@ export function App() {
     };
   }, []);
 
-  const renderSidebarMain = (showSectionTitle = true) => {
-    if (tab === 'file') {
-      return (
-        <FileExplorerTree
-          isWide={isWide}
-          showSectionTitle={showSectionTitle}
-          projects={projects}
-          projectId={projectId}
-          currentProjectName={currentProjectName}
-          sortedProjectItems={sortedProjectItems}
-          workspaceProjectMenuOpen={workspaceProjectMenuOpen}
-          setWorkspaceProjectMenuOpen={setWorkspaceProjectMenuOpen}
-          syncWorkspaceProject={syncWorkspaceProject}
-          dirEntries={dirEntries}
-          loadingDirs={loadingDirs}
-          selectedFile={selectedFile}
-          setSelectedFile={setSelectedFile}
-          setDrawerOpen={setDrawerOpen}
-          isExpanded={isExpanded}
-          toggleDirectory={toggleDirectory}
-          resolveFileIcon={resolveFileIcon}
-        />
-      );
-    }
-    if (tab !== 'git') {
-      return null;
-    }
-
-    return (
-      <GitSidebar
-        isWide={isWide}
-        projects={projects}
-        projectId={projectId}
-        currentProjectName={currentProjectName}
-        sortedProjectItems={sortedProjectItems}
-        workspaceProjectMenuOpen={workspaceProjectMenuOpen}
-        setWorkspaceProjectMenuOpen={setWorkspaceProjectMenuOpen}
-        syncWorkspaceProject={syncWorkspaceProject}
-        gitBranchMenuRef={gitBranchMenuRef}
-        gitBranchPickerOpen={gitBranchPickerOpen}
-        setGitBranchPickerOpen={setGitBranchPickerOpen}
-        gitBranches={gitBranches}
-        gitCurrentBranch={gitCurrentBranch}
-        gitSelectedBranches={gitSelectedBranches}
-        toggleGitBranchSelection={toggleGitBranchSelection}
-        loadGit={loadGit}
-        gitLoading={gitLoading}
-        gitError={gitError}
-        workingTreeFiles={workingTreeFiles}
-        worktreeExpanded={worktreeExpanded}
-        setWorktreeExpanded={setWorktreeExpanded}
-        selectedDiff={selectedDiff}
-        selectedDiffScope={selectedDiffScope}
-        selectedDiffSource={selectedDiffSource}
-        setSelectedDiff={setGitSelectedDiff}
-        setSelectedDiffScope={setGitSelectedDiffScope}
-        setSelectedDiffSource={setGitSelectedDiffSource}
-        setDrawerOpen={setDrawerOpen}
-        commits={commits}
-        selectedCommit={selectedCommit}
-        setSelectedCommit={setGitSelectedCommit}
-        expandedCommitShas={expandedCommitShas}
-        setExpandedCommitShas={setExpandedCommitShas}
-        commitFilesBySha={commitFilesBySha}
-        commitPopover={commitPopover}
-        setCommitPopover={setCommitPopover}
-        commitPopoverRef={commitPopoverRef}
-      />
-    );
-  };
   const renderSettingsDetailActions = (detail: SettingsDetailId): React.ReactNode => {
     if (detail === 'skills') {
       return (
@@ -16766,7 +15589,7 @@ export function App() {
       return (
         <button
           type="button"
-          className="git-section-btn"
+          className="settings-detail-refresh"
           onClick={exportDatabaseDump}
           disabled={databaseLoading || !!databaseError || !databaseDumpText}
           title="Export current database dump"
@@ -17686,64 +16509,12 @@ export function App() {
   };
 
   const renderSidebar = () => {
-    const mobileSidebarMain = !isWide
-      ? tab === 'chat' && !isWide ? renderMobileChatSessionSheet() : renderSidebarMain()
-      : null;
+    const mobileSidebarMain = !isWide ? renderMobileChatSessionSheet() : null;
     const showPinnedChatSessionPanel = desktopChatSessionPinned;
-    const wideSidebarTitle = tab === 'chat'
-      ? 'CHAT'
-      : tab === 'file'
-      ? 'EXPLORER'
-      : 'SOURCE CONTROL';
-    const wideSidebarMain = tab === 'chat' ? renderWideProjectSessionNav() : renderSidebarMain(false);
+    const wideSidebarMain = renderWideProjectSessionNav();
 
     return (
       <>
-        {!isWide && tab !== 'chat' ? (
-          <div className="drawer-project-header">
-            <button
-              type="button"
-              className="drawer-settings-icon-btn"
-              onClick={() => {
-                setProjectMenuOpen(false);
-                setSettingsDetailView(null);
-                setSidebarSettingsOpen(true);
-              }}
-              title="Open settings"
-              aria-label="Open settings"
-            >
-              <span className="codicon codicon-settings-gear" />
-            </button>
-            <div className="drawer-project-pill">
-              <div
-                className="project-wrap"
-                onPointerDown={event => event.stopPropagation()}
-              >
-                <button
-                  className="project-btn drawer-project-button"
-                  onClick={() => setProjectMenuOpen(value => !value)}
-                >
-                  <span className="project-arrow codicon codicon-chevron-down" />
-                  <span className="project-name" title={currentProjectName}>
-                    {currentProjectName}
-                  </span>
-                  {loadingProject || refreshingProject || reconnecting ? (
-                    <span className="muted">...</span>
-                  ) : null}
-                </button>
-                {projectMenu}
-              </div>
-              <button
-                className={`header-btn refresh-btn drawer-project-refresh${hasPendingProjectUpdates && !refreshingProject && !reconnecting ? ' has-update-badge' : ''}`}
-                onClick={() => refreshProject().catch(() => undefined)}
-                title={reconnecting ? 'Reconnecting...' : 'Refresh project'}
-                disabled={refreshingProject || reconnecting}
-              >
-                {refreshButtonContent}
-              </button>
-            </div>
-          </div>
-        ) : null}
         {showPinnedChatSessionPanel ? (
           <ChatSessionPanel
             mode="pinned"
@@ -17767,7 +16538,7 @@ export function App() {
         ) : isWide ? (
           (
             <DesktopDragRegion className="sidebar-title-row">
-              <span className="sidebar-title-text">{wideSidebarTitle}</span>
+              <span className="sidebar-title-text">CHAT</span>
             </DesktopDragRegion>
           )
         ) : null}
@@ -17794,134 +16565,6 @@ export function App() {
     );
   };
 
-  const renderCodePane = (
-    content: string,
-    forceLineNumbers = false,
-    languageHint = '',
-    options?: {
-      highlightedLines?: Set<number>;
-      onLineClick?: (line: number, event: MouseEvent) => void;
-      forceNoWrap?: boolean;
-    },
-  ) => {
-    const numbersOn = forceLineNumbers || showLineNumbers;
-    const language = languageHint || detectCodeLanguage(selectedFile);
-    return (
-      <ShikiCodeBlock
-        content={content}
-        language={language}
-        wrap={options?.forceNoWrap ? false : wrapLines}
-        lineNumbers={numbersOn}
-        themeMode={themeMode}
-        codeTheme={codeTheme}
-        codeFont={codeFont}
-        codeFontSize={codeFontSize}
-        codeLineHeight={codeLineHeight}
-        codeTabSize={codeTabSize}
-        highlightedLines={options?.highlightedLines}
-        onLineClick={options?.onLineClick}
-      />
-    );
-  };
-
-  const renderViewTools = () => (
-    <>
-      {selectedFileIsMarkdown ? (
-        <button
-          type="button"
-          className={`view-tool markdown-preview-toggle ${
-            markdownPreviewEnabled ? 'active' : ''
-          }`}
-          onClick={() => setMarkdownPreviewEnabled(value => !value)}
-          title={
-            markdownPreviewEnabled
-              ? 'Switch to source mode'
-              : 'Switch to markdown preview'
-          }
-          aria-label="Toggle markdown preview"
-        >
-          <span className="markdown-preview-toggle-text">MD</span>
-        </button>
-      ) : null}
-      {selectedFileIsHtml ? (
-        <button
-          type="button"
-          className={`view-tool html-preview-toggle ${
-            htmlPreviewEnabled ? 'active' : ''
-          }`}
-          onClick={() => setHtmlPreviewEnabled(value => !value)}
-          title={
-            htmlPreviewEnabled
-              ? 'Switch to source mode'
-              : 'Switch to HTML preview'
-          }
-          aria-label="Toggle HTML preview"
-        >
-          <span className="html-preview-toggle-text">HTML</span>
-        </button>
-      ) : null}
-      <button
-        type="button"
-        className={`view-tool ${wrapLines ? 'active' : ''}`}
-        onClick={() => setWrapLines(value => !value)}
-        title="Toggle wrap line"
-        aria-label="Toggle wrap line"
-      >
-        <span className="codicon codicon-word-wrap view-tool-icon" />
-      </button>
-      <button
-        type="button"
-        className={`view-tool ${showLineNumbers ? 'active' : ''}`}
-        onClick={() => setShowLineNumbers(value => !value)}
-        title="Toggle line number"
-        aria-label="Toggle line number"
-      >
-        <span className="codicon codicon-list-ordered view-tool-icon" />
-      </button>
-    </>
-  );
-
-  const renderDiffPane = (content: string, diffPath = selectedDiff || selectedFile) => {
-    if (!content) return <div className="muted block">No diff available</div>;
-    const shouldDelayLargeRender =
-      !allowLargeDiffRender &&
-      isHeavyGeneratedDiffPath(diffPath || '') &&
-      content.length > MAX_AUTO_RENDER_DIFF_CHARS;
-    if (shouldDelayLargeRender) {
-      return (
-        <div className="muted block">
-          Large generated diff detected ({(content.length / 1024).toFixed(0)}{' '}
-          KB). Click to render when needed.
-          <div style={{ marginTop: 10 }}>
-            <button
-              type="button"
-              className="button"
-              onClick={() => setAllowLargeDiffRender(true)}
-            >
-              Render Diff
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    const language = detectCodeLanguage(diffPath);
-    return (
-      <ShikiDiffPane
-        content={content}
-        language={language}
-        wrap={wrapLines}
-        lineNumbers={showLineNumbers}
-        themeMode={themeMode}
-        codeTheme={codeTheme}
-        codeFont={codeFont}
-        codeFontFamily={codeFontFamily}
-        codeFontSize={codeFontSize}
-        codeLineHeight={codeLineHeight}
-        codeTabSize={codeTabSize}
-      />
-    );
-  };
 
   const resolveChatFileLink = (
     href: string,
@@ -18938,25 +17581,9 @@ export function App() {
     </DesktopDragRegion>
   );
   const renderMain = () => {
-    const heavyDiffDeferred =
-      !!selectedDiff &&
-      isHeavyGeneratedDiffPath(selectedDiff) &&
-      !allowHeavyDiffLoad;
     const chatConfigStatus = chatConfigDisplay.status;
     const chatConfigOptions = chatConfigStatus.secondaryOptions;
     const chatConfigOverflowOptions = chatConfigStatus.overflowOptions;
-    const selectedFileIsImage = isImageFile(
-      selectedFile,
-      fileInfo?.mimeType,
-    );
-    const selectedFileImageSrc = selectedFileIsImage
-      ? buildImageDataUrl({
-          content: fileContent,
-          path: selectedFile,
-          mimeType: fileInfo?.mimeType,
-          isBinary: fileInfo?.isBinary,
-        })
-      : '';
     const activeChatSlashCommand = chatSlashMenuVisible
       ? chatSlashMenuOptions[Math.max(0, Math.min(chatSlashActiveIndex, chatSlashMenuOptions.length - 1))]
       : null;
@@ -19236,8 +17863,7 @@ export function App() {
         </div>
       );
     };
-    if (tab === 'chat') {
-      return (
+    return (
         <ChatSurface>
           {!isWide ? renderChatTitleBar(true) : null}
           <div
@@ -19307,7 +17933,7 @@ export function App() {
                 />
               ) : null}
             </div>
-          {isWide && tab === 'chat' ? (
+          {isWide ? (
             <div className={`chat-edge-surface-stack${!chatSidebarCollapsed ? ' beside-pinned-session-panel' : ''}${sessionNavSlideOut.open ? ' covered-by-session-panel' : ''}`}>
               {showFloatingSessionPanel ? (
                 <ChatRecentSessionsSurface
@@ -19344,7 +17970,7 @@ export function App() {
               ) : null}
             </div>
           ) : null}
-          {isWide && chatSidebarCollapsed && !sidebarSettingsOpen && tab === 'chat' ? (
+          {isWide && chatSidebarCollapsed && !sidebarSettingsOpen ? (
             <ChatSessionPanel
               mode="slideout"
               title="Sessions"
@@ -19986,276 +18612,6 @@ export function App() {
           ) : null}
         </ChatSurface>
       );
-    }
-    if (tab === 'file') {
-      return (
-        <FileSurface>
-          <div className="block-title with-tools file-title-bar">
-            {isWide ? (
-              <span className="title-text">
-                {selectedFile || 'Select a file'}
-              </span>
-            ) : (
-              renderBreadcrumbTitle(breadcrumbProjectName, fileBreadcrumbLabel)
-            )}
-            <div className="view-tools">{renderViewTools()}</div>
-          </div>
-          <div className="file-pane">
-            <div className="file-main-col">
-              {hasPinnedFiles ? (
-                <div className="pinned-strip">
-                  <span className="pinned-label">Pinned</span>
-                  {pinnedFiles.map(path => (
-                    <div
-                      key={path}
-                      className={`pinned-entry ${
-                        selectedFile === path ? 'active' : ''
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        className="pinned-open"
-                        onClick={() => setSelectedFile(path)}
-                        title={path}
-                      >
-                        {path.split('/').pop() || path}
-                      </button>
-                      <button
-                        type="button"
-                        className="pinned-close"
-                        onClick={() =>
-                          setPinnedFiles(prev =>
-                            prev.filter(item => item !== path),
-                          )
-                        }
-                        aria-label={`Unpin ${path}`}
-                      >
-                        x
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-              <div className="file-code-area">
-                <div ref={fileSideActionsRef} className="file-side-actions">
-                  <button
-                    type="button"
-                    className={`pinned-pin-toggle file-pin-floating ${
-                      isSelectedFilePinned ? 'active' : ''
-                    }`}
-                    onClick={togglePinSelectedFile}
-                    disabled={!selectedFile}
-                    title={
-                      isSelectedFilePinned
-                        ? 'Unpin current file'
-                        : 'Pin current file'
-                    }
-                    aria-label={
-                      isSelectedFilePinned
-                        ? 'Unpin current file'
-                        : 'Pin current file'
-                    }
-                  >
-                    <span className="codicon codicon-pinned view-tool-icon" />
-                  </button>
-                  <div className="file-action-group side-action-group">
-                    <button
-                      type="button"
-                      className={`view-tool ${gotoToolsOpen ? 'active' : ''}`}
-                      onClick={() => {
-                        setGotoToolsOpen(value => {
-                          const next = !value;
-                          if (next) setSearchToolsOpen(false);
-                          return next;
-                        });
-                      }}
-                      title="Toggle go to line"
-                      aria-label="Toggle go to line"
-                    >
-                      <span className="codicon codicon-symbol-number view-tool-icon" />
-                    </button>
-                    <div
-                      className={`file-action-panel side-action-panel ${
-                        gotoToolsOpen ? 'open' : ''
-                      }`}
-                    >
-                      <input
-                        className="goto-input"
-                        value={gotoLineInput}
-                        onChange={event => setGotoLineInput(event.target.value)}
-                        onKeyDown={event => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault();
-                            triggerGoToLine();
-                          }
-                        }}
-                        inputMode="numeric"
-                        placeholder="Line"
-                      />
-                      <button
-                        type="button"
-                        className="view-tool goto-trigger"
-                        title="Go to line"
-                        onClick={triggerGoToLine}
-                      >
-                        <span className="codicon codicon-arrow-right view-tool-icon" />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="file-action-group side-action-group">
-                    <button
-                      type="button"
-                      className={`view-tool ${searchToolsOpen ? 'active' : ''}`}
-                      onClick={() => {
-                        setSearchToolsOpen(value => {
-                          const next = !value;
-                          if (next) setGotoToolsOpen(false);
-                          return next;
-                        });
-                      }}
-                      title="Toggle search"
-                      aria-label="Toggle search"
-                    >
-                      <span className="codicon codicon-search view-tool-icon" />
-                    </button>
-                    <div
-                      className={`file-action-panel side-action-panel ${
-                        searchToolsOpen ? 'open' : ''
-                      }`}
-                    >
-                      <input
-                        className="search-input"
-                        value={fileSearchQuery}
-                        onChange={event =>
-                          setFileSearchQuery(event.target.value)
-                        }
-                        onKeyDown={event => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault();
-                            navigateSearchMatch(1);
-                          }
-                        }}
-                        placeholder="Find in file"
-                      />
-                      <button
-                        type="button"
-                        className="view-tool search-nav"
-                        title="Previous match"
-                        onClick={() => navigateSearchMatch(-1)}
-                      >
-                        <span className="codicon codicon-chevron-up view-tool-icon" />
-                      </button>
-                      <button
-                        type="button"
-                        className="view-tool search-nav"
-                        title="Next match"
-                        onClick={() => navigateSearchMatch(1)}
-                      >
-                        <span className="codicon codicon-chevron-down view-tool-icon" />
-                      </button>
-                      <span className="search-count">
-                        {fileSearchMatches.length === 0
-                          ? '0/0'
-                          : `${currentMatchIndex + 1}/${
-                              fileSearchMatches.length
-                            }`}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <FilePreviewPane
-                  scrollRef={fileScrollRef}
-                  onScroll={event => {
-                    const path = selectedFileRef.current;
-                    if (!path) return;
-                    fileScrollTopByPathRef.current[path] = event.currentTarget.scrollTop;
-                  }}
-                >
-                  {fileLoading ? (
-                    <div className="muted block">Loading file...</div>
-                  ) : selectedFileIsImage ? (
-                    selectedFileImageSrc ? (
-                      <div className="file-image-preview-wrap">
-                        <img
-                          className="file-image-preview"
-                          src={selectedFileImageSrc}
-                          alt={selectedFile.split('/').pop() || 'image preview'}
-                        />
-                      </div>
-                    ) : (
-                      <div className="muted block">Image content is unavailable.</div>
-                    )
-                  ) : selectedFileIsMarkdown && markdownPreviewEnabled ? (
-                    <MarkdownPreview
-                      content={fileContent}
-                      themeMode={themeMode}
-                      codeTheme={codeTheme}
-                      codeFont={codeFont}
-                      codeFontSize={codeFontSize}
-                      codeLineHeight={codeLineHeight}
-                      codeTabSize={codeTabSize}
-                      wrap={wrapLines}
-                      lineNumbers={showLineNumbers}
-                    />
-                  ) : selectedFileIsHtml && htmlPreviewEnabled ? (
-                    <HtmlPreview
-                      key={selectedFile}
-                      content={fileContent}
-                    />
-                  ) : (
-                    renderCodePane(
-                      fileContent,
-                      false,
-                      detectCodeLanguage(selectedFile),
-                      {
-                        highlightedLines: fileTabSelectedLines,
-                        onLineClick: handleFileTabLineClick,
-                      },
-                    )
-                  )}
-                </FilePreviewPane>
-              </div>
-            </div>
-          </div>
-        </FileSurface>
-      );
-    }
-
-    return (
-      <GitSurface>
-        <div className="block-title with-tools">
-          {isWide ? (
-            <span className="title-text">
-              {selectedDiff || 'Select a changed file'}
-            </span>
-          ) : (
-            renderBreadcrumbTitle(breadcrumbProjectName, gitBreadcrumbLabel)
-          )}
-          <div className="view-tools">{renderViewTools()}</div>
-        </div>
-        <div className="scroll-panel">
-          {heavyDiffDeferred ? (
-            <div className="muted block">
-              Heavy generated file selected. Diff loading is paused to keep UI
-              responsive.
-              <div style={{ marginTop: 10 }}>
-                <button
-                  type="button"
-                  className="button"
-                  onClick={() => setAllowHeavyDiffLoad(true)}
-                >
-                  Load Diff
-                </button>
-              </div>
-            </div>
-          ) : diffLoading ? (
-            <div className="muted block">Loading diff...</div>
-          ) : (
-            renderDiffPane(diffText, selectedDiff)
-          )}
-        </div>
-      </GitSurface>
-    );
   };
 
   const scrollToPreviewSearchMatch = (match: PreviewSearchMatch) => {
@@ -20965,23 +19321,10 @@ export function App() {
         )
       ) : (
         <FileExplorerTree
-          isWide={false}
           showSectionTitle={false}
-          projects={projects}
-          projectId={previewWorkbench.activeProjectId}
-          currentProjectName={
-            projects.find(item => item.projectId === previewWorkbench.activeProjectId)?.name ??
-            currentProjectName
-          }
-          sortedProjectItems={chatFilePreviewProjects}
-          workspaceProjectMenuOpen={false}
-          setWorkspaceProjectMenuOpen={setWorkspaceProjectMenuOpen}
-          syncWorkspaceProject={syncWorkspaceProject}
           dirEntries={chatFilePreviewDirEntries}
           loadingDirs={chatFilePreviewLoadingDirs}
           selectedFile={chatFilePeek?.path ?? ''}
-          setSelectedFile={setSelectedFile}
-          setDrawerOpen={() => undefined}
           isExpanded={isPreviewDirectoryExpanded}
           toggleDirectory={path => {
             togglePreviewDirectory(path).catch(() => undefined);
@@ -21300,18 +19643,6 @@ export function App() {
               <span className="codicon codicon-clippy" aria-hidden="true" />
               <span>Copy absolute path</span>
             </button>
-            <button
-              type="button"
-              role="menuitem"
-              className="preview-workbench-action-menu-item"
-              onClick={() => {
-                openPeekFileInFullFileTab();
-                closeActionsMenu();
-              }}
-            >
-              <span className="codicon codicon-go-to-file" aria-hidden="true" />
-              <span>Open in File tab</span>
-            </button>
           </>
         ) : null}
         {tab.type === 'port-relay' ? (
@@ -21363,7 +19694,6 @@ export function App() {
           onLineClick={active ? handlePeekLineClick : undefined}
           onClose={closeChatFilePeekFromChrome}
           onCopyPath={copyChatFilePreviewPath}
-          onOpenInFileTab={openPeekFileInFullFileTab}
           onTabSelect={() => undefined}
           onTabClose={() => undefined}
           onToggleTree={toggleChatFilePreviewTree}
@@ -21989,7 +20319,7 @@ export function App() {
   const desktopWindowControls = desktopWindowControlsVisible ? (
     <DesktopWindowControls />
   ) : null;
-  const desktopTopBar = isWide && tab === 'chat' ? renderChatTitleBar(false) : null;
+  const desktopTopBar = isWide ? renderChatTitleBar(false) : null;
   return (
     <>
       <ResponsiveShell

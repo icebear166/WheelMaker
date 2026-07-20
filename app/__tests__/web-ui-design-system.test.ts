@@ -81,12 +81,12 @@ describe('workspace visual foundation', () => {
     expect(runtimeChrome).toContain('var(--state-info)');
   });
 
-  test('keeps File and Git out of page-specific redesign work', () => {
+  test('keeps Preview file styles and removes the retired Git page stylesheet', () => {
     const index = read('web/src/styles/index.css');
     expect(index).toContain("@import './file.css';");
-    expect(index).toContain("@import './git.css';");
+    expect(index).not.toContain("@import './git.css';");
     expect(read('web/src/styles/file.css')).not.toContain('workspace-ui-targeted-evolution');
-    expect(read('web/src/styles/git.css')).not.toContain('workspace-ui-targeted-evolution');
+    expect(fs.existsSync(path.join(appRoot, 'web/src/styles/git.css'))).toBe(false);
   });
 
   test('defines keyboard focus, disabled, loading, empty and error feedback', () => {

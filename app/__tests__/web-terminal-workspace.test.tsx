@@ -105,10 +105,10 @@ describe('terminal workspace integration', () => {
     expect(source).toContain('pinChatSessionPanel();');
   });
 
-  test('restores the saved Pin mode when leaving Chat or opening settings', () => {
+  test('restores the saved Pin mode when opening settings', () => {
     const source = read('web/src/app/WorkspaceApp.tsx');
     expect(source).toContain([
-      "if (tab !== 'chat' || sidebarSettingsOpen) {",
+      'if (sidebarSettingsOpen) {',
       '      setSessionPanelShortcutUnpinned(false);',
       '      sessionNavSlideOutAutoClose.cancel();',
     ].join('\n'));

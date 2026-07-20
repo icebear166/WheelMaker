@@ -225,10 +225,17 @@ function groupPromptAttachmentBlocks(msgs: RegistryChatMessage[]): RegistrySessi
   return blocks;
 }
 
-function renderPromptInlineParts(parts: ChatPromptInlinePart[]): React.ReactNode {
+function renderPromptInlineParts(
+  parts: ChatPromptInlinePart[],
+  highlightQuery: string | undefined,
+): React.ReactNode {
   return parts.map((part, index) => {
     if (part.type === 'text') {
-      return <React.Fragment key={`text:${index}`}>{part.text}</React.Fragment>;
+      return (
+        <React.Fragment key={`text:${index}`}>
+          {renderChatTextWithHighlight(part.text, highlightQuery)}
+        </React.Fragment>
+      );
     }
     return (
       <span
@@ -391,7 +398,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
             {text ? (
               <div className="chat-prompt-user">
                 {inlineParts.length > 0
-                  ? renderPromptInlineParts(inlineParts)
+                  ? renderPromptInlineParts(inlineParts, highlightQuery)
                   : renderChatTextWithHighlight(text, highlightQuery)}
               </div>
             ) : null}

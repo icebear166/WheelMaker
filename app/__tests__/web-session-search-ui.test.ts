@@ -72,7 +72,7 @@ describe('web session search UI wiring', () => {
     expect(main).toContain('renderChatSessionHeader(false)');
 
     const wideNavStart = main.indexOf('const renderWideProjectSessionNav = (options?: { includeRecent?: boolean }) =>');
-    const wideNavEnd = main.indexOf('const renderCodePane = (', wideNavStart);
+    const wideNavEnd = main.indexOf('const renderSidebar = () => {', wideNavStart);
     expect(wideNavStart).toBeGreaterThanOrEqual(0);
     expect(wideNavEnd).toBeGreaterThan(wideNavStart);
     const wideNav = main.slice(wideNavStart, wideNavEnd);

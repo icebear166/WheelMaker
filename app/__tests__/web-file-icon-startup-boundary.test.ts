@@ -21,7 +21,7 @@ describe('web file icon startup boundary', () => {
     expect(mainTsx).toMatch(
       /import\(\s*\/\* webpackChunkName: "file-icons" \*\/\s*'\.\.\/file\/fileIcons'\s*\)/,
     );
-    expect(mainTsx).toContain("const fileIconResourcesNeeded = tab === 'file' ||");
+    expect(mainTsx).toContain('const fileIconResourcesNeeded = chatPreviewOpen &&');
     expect(mainTsx).toContain('chatPreviewOpen &&');
     expect(mainTsx).toContain('previewWorkbench.treeOpen &&');
     expect(mainTsx).toContain("(!activeWorkbenchTab || activeWorkbenchTab.type === 'file')");

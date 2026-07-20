@@ -67,7 +67,7 @@ describe('browser credential hard cut', () => {
     const repository = source('web/src/registry/RegistryRepository.ts');
     const app = source('web/src/app/WorkspaceApp.tsx');
 
-    expect(controller).toMatch(/connect\(wsUrl: string, options\?/);
+    expect(controller).toMatch(/connect\(wsUrl: string\)/);
     expect(service).toMatch(/connect\(wsUrl: string\)/);
     expect(repository).toMatch(/initialize\(url: string, clientName: RegistryClientName\)/);
     const initialize = repository.match(/async initialize[\s\S]*?\n  }/)?.[0] ?? '';

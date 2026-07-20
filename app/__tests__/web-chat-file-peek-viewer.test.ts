@@ -149,7 +149,7 @@ describe('web chat file peek viewer', () => {
     expect(actionsBody).toContain('<span>Open with VS Code</span>');
     expect(actionsBody).toContain('<span>Show in File Explorer</span>');
     expect(actionsBody).toContain('<span>Copy absolute path</span>');
-    expect(actionsBody).toContain('<span>Open in File tab</span>');
+    expect(actionsBody).not.toContain('<span>Open in File tab</span>');
     expect(actionsBody).toContain("'Rebuild file index'");
     expect(runnerBody).toContain('closeActionsMenu();');
     expect(runnerBody).toContain("setToastMessage('');");
@@ -166,12 +166,10 @@ describe('web chat file peek viewer', () => {
     const vscodeLabelIndex = actionsBody.indexOf('<span>Open with VS Code</span>');
     const folderLabelIndex = actionsBody.indexOf('<span>Show in File Explorer</span>');
     const copyPathLabelIndex = actionsBody.indexOf('<span>Copy absolute path</span>');
-    const fileTabLabelIndex = actionsBody.indexOf('<span>Open in File tab</span>');
     const rebuildLabelIndex = actionsBody.indexOf("'Rebuild file index'");
     expect(vscodeLabelIndex).toBeLessThan(folderLabelIndex);
     expect(folderLabelIndex).toBeLessThan(copyPathLabelIndex);
-    expect(copyPathLabelIndex).toBeLessThan(fileTabLabelIndex);
-    expect(fileTabLabelIndex).toBeLessThan(rebuildLabelIndex);
+    expect(copyPathLabelIndex).toBeLessThan(rebuildLabelIndex);
     expect(disconnectedReturnStart).toBeGreaterThanOrEqual(0);
     expect(connectedReturnStart).toBeGreaterThan(disconnectedReturnStart);
     expect(connectedToastStart).toBeGreaterThan(connectedReturnStart);
@@ -762,19 +760,17 @@ describe('web chat file peek viewer', () => {
     expect(nowrapDiff).toContain('min-width: 100%;');
   });
 
-  test('peek viewer uses direct jumps and has an explicit File tab handoff', () => {
+  test('peek viewer uses direct jumps without a removed File tab handoff', () => {
     const mainTsx = readSourceText(mainPath);
+    const navigationTs = readSourceText(path.join(projectRoot, 'web', 'src', 'preview', 'previewLineNavigation.ts'));
 
-    expect(mainTsx).toContain('const jumpToFileLineNow = (');
-    expect(mainTsx).toContain('container.scrollTop =');
-    expect(mainTsx).toContain('const openPeekFileInFullFileTab = useCallback(');
-    expect(mainTsx).toContain("setTab('file');");
-    expect(mainTsx).toContain('setPendingFileJump({ path: transferPath, line: transferLine });');
+    expect(mainTsx).toContain('jumpToPreviewLineNow,');
+    expect(navigationTs).toContain('export function jumpToPreviewLineNow(');
+    expect(navigationTs).toContain('container.scrollTop =');
+    expect(mainTsx).not.toContain('const openPeekFileInFullFileTab = useCallback(');
+    expect(mainTsx).not.toContain("setTab('file');");
 
-    const jumpStart = mainTsx.indexOf('const jumpToFileLineNow = (');
-    const jumpEnd = mainTsx.indexOf('const scrollToFileLine =', jumpStart);
-    const jumpBody = mainTsx.slice(jumpStart, jumpEnd);
-    expect(jumpBody).not.toContain("behavior: 'smooth'");
+    expect(navigationTs).not.toContain("behavior: 'smooth'");
   });
 
   test('peek viewer renders preview modes, load errors, and mobile back state', () => {

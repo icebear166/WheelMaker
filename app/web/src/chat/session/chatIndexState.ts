@@ -5,6 +5,12 @@ import type {
   RegistryProject,
 } from '../../registry/registryTypes';
 import type { ChatSessionKey } from './chatSessionKey';
+import {
+  compareChatSessionUpdatedAtDesc,
+  mergeChatSession,
+  mergeChatSessionList as mergeOrderedChatSessionList,
+  sortChatSessions,
+} from './chatSessionOrdering';
 
 export type ChatIndexRefreshState = {
   fullRefreshInFlight: boolean;
@@ -49,25 +55,6 @@ export function shouldUpdateCurrentProjectSessions(
   return !!activeProjectId && activeProjectId === currentProjectId;
 }
 
-function compareUpdatedAtDesc(left: string, right: string): number {
-  if (left === right) {
-    return 0;
-  }
-  if (!left) {
-    return 1;
-  }
-  if (!right) {
-    return -1;
-  }
-  return right.localeCompare(left);
-}
-
-function sortChatSessions(items: RegistryChatSession[]): RegistryChatSession[] {
-  return [...items].sort((left, right) =>
-    compareUpdatedAtDesc(left.updatedAt || '', right.updatedAt || ''),
-  );
-}
-
 function latestSessionUpdatedAt(sessions: RegistryChatSession[] | undefined): string {
   return sortChatSessions(sessions ?? [])[0]?.updatedAt || '';
 }
@@ -96,7 +83,7 @@ export function sortChatIndexProjects(
       return leftHasActivity ? -1 : 1;
     }
     if (leftHasActivity && rightHasActivity) {
-      const updatedDiff = compareUpdatedAtDesc(leftUpdatedAt, rightUpdatedAt);
+      const updatedDiff = compareChatSessionUpdatedAtDesc(leftUpdatedAt, rightUpdatedAt);
       if (updatedDiff !== 0) {
         return updatedDiff;
       }
@@ -114,47 +101,11 @@ export function mergeChatIndexSession(
     return state;
   }
   const current = state.sessionsByProjectId[projectId] ?? [];
-  const existing = current.find(item => item.sessionId === session.sessionId);
-  const merged: RegistryChatSession = {
-    sessionId: session.sessionId,
-    title: session.title ?? existing?.title ?? '',
-    preview: session.preview ?? existing?.preview ?? '',
-    updatedAt: session.updatedAt ?? existing?.updatedAt ?? '',
-    messageCount: session.messageCount ?? existing?.messageCount ?? 0,
-    unreadCount: session.unreadCount ?? existing?.unreadCount,
-    agentType: session.agentType ?? existing?.agentType,
-    latestTurnIndex: session.latestTurnIndex ?? existing?.latestTurnIndex,
-    running: session.running ?? existing?.running,
-    lastDoneTurnIndex: session.lastDoneTurnIndex ?? existing?.lastDoneTurnIndex,
-    lastDoneSuccess: session.lastDoneSuccess ?? existing?.lastDoneSuccess,
-    lastReadTurnIndex: session.lastReadTurnIndex ?? existing?.lastReadTurnIndex,
-    configOptions:
-      session.configOptions ??
-      (existing?.configOptions ? [...existing.configOptions] : undefined),
-    commands:
-      session.commands ??
-      (existing?.commands ? [...existing.commands] : undefined),
-    usage:
-      session.usage ??
-      (existing?.usage ? { ...existing.usage } : undefined),
-  };
-  if (existing && (merged.updatedAt || '') === (existing.updatedAt || '')) {
-    return {
-      ...state,
-      sessionsByProjectId: {
-        ...state.sessionsByProjectId,
-        [projectId]: current.map(item => (item.sessionId === session.sessionId ? merged : item)),
-      },
-    };
-  }
   return {
     ...state,
     sessionsByProjectId: {
       ...state.sessionsByProjectId,
-      [projectId]: sortChatSessions([
-        merged,
-        ...current.filter(item => item.sessionId !== session.sessionId),
-      ]),
+      [projectId]: mergeChatSession(current, session),
     },
   };
 }
@@ -163,32 +114,7 @@ export function mergeChatSessionList(
   existing: RegistryChatSession[],
   incoming: RegistryChatSession[],
 ): RegistryChatSession[] {
-  const byId = new Map(existing.map(session => [session.sessionId, session]));
-  const nextById = new Map<string, RegistryChatSession>();
-  for (const item of incoming) {
-    const previous = nextById.get(item.sessionId) ?? byId.get(item.sessionId);
-    const merged =
-      previous &&
-      (item.configOptions === undefined || item.commands === undefined || item.usage === undefined)
-        ? {
-            ...item,
-            configOptions: item.configOptions ?? previous.configOptions,
-            commands: item.commands ?? previous.commands,
-            usage: item.usage ?? previous.usage,
-          }
-        : item;
-    nextById.set(item.sessionId, merged);
-  }
-  const orderChanged =
-    nextById.size !== byId.size ||
-    existing.some(session => {
-      const next = nextById.get(session.sessionId);
-      return !next || (next.updatedAt || '') !== (session.updatedAt || '');
-    });
-  if (!orderChanged) {
-    return existing.map(session => nextById.get(session.sessionId) ?? session);
-  }
-  return sortChatSessions(Array.from(nextById.values()));
+  return mergeOrderedChatSessionList(existing, incoming);
 }
 
 function projectKnown(state: ChatIndexState, projectId: string): boolean {

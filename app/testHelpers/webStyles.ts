@@ -9,7 +9,6 @@ const STYLE_ENTRY_ORDER = [
   'portRelay.css',
   'debug.css',
   'file.css',
-  'git.css',
   'chat.css',
   'code.css',
   'surfaces.css',

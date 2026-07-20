@@ -1,4 +1,4 @@
-import type {RegistryChatSession, RegistryGitCommit, RegistryGitCommitFile, RegistrySessionTurn} from '../registry/registryTypes';
+import type {RegistryChatSession, RegistrySessionTurn} from '../registry/registryTypes';
 import {obsoleteBrowserCredentialRows} from '../compatibility/browserCredentialCleanup';
 import {
   DEFAULT_CODE_FONT,
@@ -43,17 +43,9 @@ import {
 } from '../preferences/floatingControlPreferences';
 import { sanitizeHubColorMap } from './hubProjectPreferences';
 
-export type PersistedTab = 'chat' | 'file' | 'git';
 export type PersistedThemeMode = 'dark' | 'light';
 export type PersistedFloatingControlSide = 'left' | 'right';
 export type PersistedLogLevel = 'debug' | 'info' | 'warning' | 'error';
-
-export type DiffCacheEntry = {
-  diff: string;
-  isBinary: boolean;
-  truncated: boolean;
-  updatedAt: number;
-};
 
 export type FileCacheEntry = {
   hash: string;
@@ -62,18 +54,7 @@ export type FileCacheEntry = {
 };
 
 export type PersistedProjectState = {
-  expandedDirs: string[];
-  selectedFile: string;
-  pinnedFiles: string[];
-  gitCurrentBranch: string;
-  selectedCommit: string;
-  selectedDiff: string;
   selectedChatSessionId: string;
-};
-
-export type PersistedProjectCommitsState = {
-  commits: RegistryGitCommit[];
-  commitFilesBySha: Record<string, RegistryGitCommitFile[]>;
 };
 
 export type PersistedGlobalState = {
@@ -93,7 +74,6 @@ export type PersistedGlobalState = {
   logLevel: PersistedLogLevel;
   disableFileCache: boolean;
   promptCompletionNotificationsEnabled: boolean;
-  tab: PersistedTab;
   selectedProjectId: string;
   selectedChatProjectId: string;
   selectedChatSessionId: string;
@@ -134,11 +114,9 @@ type PersistedWorkspaceState = {
 export type WorkspaceDatabaseDump = {
   global: Array<{k: string; v: string; updatedAt: number}>;
   projects: Array<{projectId: string; stateJson: string; updatedAt: number}>;
-  projectCommits: Array<{projectId: string; commitsJson: string; commitFilesByShaJson: string; updatedAt: number}>;
   chatSessionIndex: Array<{k: string; projectId: string; sessionId: string; sessionJson: string; cursorJson: string; updatedAt: number}>;
   chatSessionContent: Array<{k: string; projectId: string; sessionId: string; turnsJson: string; updatedAt: number}>;
   fileCache: Array<{k: string; hash: string; v: string; updatedAt: number}>;
-  diffCache: Array<{k: string; v: string; updatedAt: number}>;
   meta: Array<{k: string; v: string; updatedAt: number}>;
   storage: WorkspaceDatabaseStorageStats;
   storageError: WorkspaceStorageError | null;
@@ -174,25 +152,18 @@ export type WorkspaceStorageError = {
 };
 
 const WORKSPACE_DB_NAME = 'wheelmaker.workspace.db';
-const WORKSPACE_DB_VERSION = 6;
+const WORKSPACE_DB_VERSION = 7;
 const TABLE_GLOBAL_KV = 'wm_global_kv';
 const TABLE_PROJECT_STATE = 'wm_project_state';
-const TABLE_PROJECT_COMMITS = 'wm_project_commits';
 const TABLE_CHAT_SESSION_INDEX = 'wm_chat_session_index';
 const TABLE_CHAT_SESSION_CONTENT = 'wm_chat_session_content';
 const TABLE_FILE_CACHE = 'wm_file_cache';
-const TABLE_DIFF_CACHE = 'wm_diff_cache';
 const TABLE_META = 'wm_meta';
-const DIFF_CACHE_LIMIT = 120;
 const CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const FILE_CACHE_MAX_ENTRIES = 1500;
 const FILE_CACHE_MAX_BYTES = 32 * 1024 * 1024;
-const DIFF_CACHE_MAX_ENTRIES = 600;
-const DIFF_CACHE_MAX_BYTES = 16 * 1024 * 1024;
 const CHAT_CONTENT_CACHE_MAX_ENTRIES = 250;
 const CHAT_CONTENT_CACHE_MAX_BYTES = 48 * 1024 * 1024;
-const PROJECT_COMMITS_CACHE_MAX_ENTRIES = 40;
-const PROJECT_COMMITS_CACHE_MAX_BYTES = 24 * 1024 * 1024;
 
 export type CacheBudgetEntry = {
   key: string;
@@ -322,7 +293,6 @@ const GLOBAL_KEYS = {
   logLevel: 'logLevel',
   disableFileCache: 'disableFileCache',
   promptCompletionNotificationsEnabled: 'promptCompletionNotificationsEnabled',
-  tab: 'tab',
   selectedProjectId: 'selectedProjectId',
   selectedChatProjectId: 'selectedChatProjectId',
   selectedChatSessionId: 'selectedChatSessionId',
@@ -361,7 +331,6 @@ function defaultGlobalState(): PersistedGlobalState {
     logLevel: 'warning',
     disableFileCache: false,
     promptCompletionNotificationsEnabled: true,
-    tab: 'chat',
     selectedProjectId: '',
     selectedChatProjectId: '',
     selectedChatSessionId: '',
@@ -384,20 +353,7 @@ function defaultGlobalState(): PersistedGlobalState {
 
 function defaultProjectState(): PersistedProjectState {
   return {
-    expandedDirs: ['.'],
-    selectedFile: '',
-    pinnedFiles: [],
-    gitCurrentBranch: '',
-    selectedCommit: '',
-    selectedDiff: '',
     selectedChatSessionId: '',
-  };
-}
-
-function defaultProjectCommitsState(): PersistedProjectCommitsState {
-  return {
-    commits: [],
-    commitFilesBySha: {},
   };
 }
 
@@ -528,22 +484,7 @@ function sanitizeProjectState(input: Partial<PersistedProjectState> | undefined)
   const base = defaultProjectState();
   if (!input) return base;
   return {
-    expandedDirs: Array.isArray(input.expandedDirs) && input.expandedDirs.length > 0 ? input.expandedDirs : base.expandedDirs,
-    selectedFile: typeof input.selectedFile === 'string' ? input.selectedFile : base.selectedFile,
-    pinnedFiles: Array.isArray(input.pinnedFiles) ? input.pinnedFiles.filter(item => typeof item === 'string') : base.pinnedFiles,
-    gitCurrentBranch: typeof input.gitCurrentBranch === 'string' ? input.gitCurrentBranch : base.gitCurrentBranch,
-    selectedCommit: typeof input.selectedCommit === 'string' ? input.selectedCommit : base.selectedCommit,
-    selectedDiff: typeof input.selectedDiff === 'string' ? input.selectedDiff : base.selectedDiff,
     selectedChatSessionId: typeof input.selectedChatSessionId === 'string' ? input.selectedChatSessionId : base.selectedChatSessionId,
-  };
-}
-
-function sanitizeProjectCommitsState(input: Partial<PersistedProjectCommitsState> | undefined): PersistedProjectCommitsState {
-  const base = defaultProjectCommitsState();
-  if (!input) return base;
-  return {
-    commits: Array.isArray(input.commits) ? input.commits : base.commits,
-    commitFilesBySha: typeof input.commitFilesBySha === 'object' && input.commitFilesBySha ? input.commitFilesBySha : base.commitFilesBySha,
   };
 }
 
@@ -606,7 +547,6 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
     logLevel: normalizePersistedLogLevel(input.logLevel, base.logLevel),
     disableFileCache: typeof input.disableFileCache === 'boolean' ? input.disableFileCache : base.disableFileCache,
     promptCompletionNotificationsEnabled: typeof input.promptCompletionNotificationsEnabled === 'boolean' ? input.promptCompletionNotificationsEnabled : base.promptCompletionNotificationsEnabled,
-    tab: input.tab === 'file' || input.tab === 'git' ? input.tab : 'chat',
     selectedProjectId: typeof input.selectedProjectId === 'string' ? input.selectedProjectId : base.selectedProjectId,
     selectedChatProjectId: typeof input.selectedChatProjectId === 'string' ? input.selectedChatProjectId : base.selectedChatProjectId,
     selectedChatSessionId: typeof input.selectedChatSessionId === 'string' ? input.selectedChatSessionId : base.selectedChatSessionId,
@@ -647,10 +587,6 @@ function tryParse<T>(value: string, fallback: T): T {
 
 function fileCacheKey(projectId: string, kind: 'file' | 'dir', path: string): string {
   return `fc:${projectId}:${kind}:${path}`;
-}
-
-function diffCacheKey(projectId: string, key: string): string {
-  return `dc:${projectId}:${key}`;
 }
 
 function chatSessionKey(projectId: string, sessionId: string): string {
@@ -707,13 +643,6 @@ type RawProjectStateRow = {
   updatedAt: number;
 };
 
-type RawProjectCommitsRow = {
-  projectId: string;
-  commitsJson: string;
-  commitFilesByShaJson: string;
-  updatedAt: number;
-};
-
 type RawChatSessionIndexRow = {
   k: string;
   projectId: string;
@@ -734,12 +663,6 @@ type RawChatSessionContentRow = {
 type RawFileCacheRow = {
   k: string;
   hash: string;
-  v: string;
-  updatedAt: number;
-};
-
-type RawDiffCacheRow = {
-  k: string;
   v: string;
   updatedAt: number;
 };
@@ -779,9 +702,6 @@ class WorkspaceDatabase implements WorkspaceDatabaseAdapter {
         if (!db.objectStoreNames.contains(TABLE_PROJECT_STATE)) {
           db.createObjectStore(TABLE_PROJECT_STATE, {keyPath: 'projectId'});
         }
-        if (!db.objectStoreNames.contains(TABLE_PROJECT_COMMITS)) {
-          db.createObjectStore(TABLE_PROJECT_COMMITS, {keyPath: 'projectId'});
-        }
         if (!db.objectStoreNames.contains(TABLE_CHAT_SESSION_INDEX)) {
           db.createObjectStore(TABLE_CHAT_SESSION_INDEX, {keyPath: 'k'});
         }
@@ -791,8 +711,11 @@ class WorkspaceDatabase implements WorkspaceDatabaseAdapter {
         if (!db.objectStoreNames.contains(TABLE_FILE_CACHE)) {
           db.createObjectStore(TABLE_FILE_CACHE, {keyPath: 'k'});
         }
-        if (!db.objectStoreNames.contains(TABLE_DIFF_CACHE)) {
-          db.createObjectStore(TABLE_DIFF_CACHE, {keyPath: 'k'});
+        if (db.objectStoreNames.contains('wm_project_commits')) {
+          db.deleteObjectStore('wm_project_commits');
+        }
+        if (db.objectStoreNames.contains('wm_diff_cache')) {
+          db.deleteObjectStore('wm_diff_cache');
         }
         if (!db.objectStoreNames.contains(TABLE_META)) {
           db.createObjectStore(TABLE_META, {keyPath: 'k'});
@@ -894,12 +817,9 @@ function compareUpdatedAtDesc(a: string, b: string): number {
 
 export class WorkspacePersistenceRepository {
   private state: PersistedWorkspaceState;
-  private readonly projectCommits: Record<string, PersistedProjectCommitsState> = {};
-  private readonly projectCommitUpdatedAt = new Map<string, number>();
   private readonly chatSessionIndex = new Map<string, PersistedChatSessionEntry>();
   private readonly chatSessionContent = new Map<string, PersistedChatSessionContent>();
   private readonly chatSessionContentUpdatedAt = new Map<string, number>();
-  private readonly diffCache = new Map<string, DiffCacheEntry>();
   private readonly fileCache = new Map<string, FileCacheEntry>();
   private readonly readyPromise: Promise<void>;
   private writeQueue: Promise<void> = Promise.resolve();
@@ -929,13 +849,11 @@ export class WorkspacePersistenceRepository {
   }
 
   private async initialize(): Promise<void> {
-    const [globalRows, projectRows, projectCommitRows, chatIndexRows, chatContentRows, diffRows, fileRows] = await Promise.all([
+    const [globalRows, projectRows, chatIndexRows, chatContentRows, fileRows] = await Promise.all([
       this.db.getAllRows<RawKVRow>(TABLE_GLOBAL_KV),
       this.db.getAllRows<RawProjectStateRow>(TABLE_PROJECT_STATE),
-      this.db.getAllRows<RawProjectCommitsRow>(TABLE_PROJECT_COMMITS),
       this.db.getAllRows<RawChatSessionIndexRow>(TABLE_CHAT_SESSION_INDEX),
       this.db.getAllRows<RawChatSessionContentRow>(TABLE_CHAT_SESSION_CONTENT),
-      this.db.getAllRows<RawDiffCacheRow>(TABLE_DIFF_CACHE),
       this.db.getAllRows<RawFileCacheRow>(TABLE_FILE_CACHE),
     ]);
 
@@ -953,10 +871,8 @@ export class WorkspacePersistenceRepository {
     const hasPersisted =
       globalRows.length > 0 ||
       projectRows.length > 0 ||
-      projectCommitRows.length > 0 ||
       chatIndexRows.length > 0 ||
       chatContentRows.length > 0 ||
-      diffRows.length > 0 ||
       fileRows.length > 0;
 
     if (!hasPersisted) {
@@ -966,14 +882,12 @@ export class WorkspacePersistenceRepository {
     }
 
     this.state = this.fromDbRows(globalRows, projectRows);
-    this.restoreProjectCommits(projectCommitRows);
     if (this.hasIncompatibleChatContentRows(chatContentRows)) {
       await this.resetPersistentCacheAfterIncompatibleSchema();
       return;
     }
 
     const repairedChatCache = this.restoreChatSessions(chatIndexRows, chatContentRows);
-    this.restoreDiffCache(diffRows);
     this.restoreFileCache(fileRows);
     if (repairedChatCache) {
       try {
@@ -1007,22 +921,6 @@ export class WorkspacePersistenceRepository {
       global: sanitizeGlobalState({...base.global, ...globalPatch}),
       projects,
     };
-  }
-
-  private restoreProjectCommits(rows: RawProjectCommitsRow[]): void {
-    for (const key of Object.keys(this.projectCommits)) {
-      delete this.projectCommits[key];
-    }
-    this.projectCommitUpdatedAt.clear();
-    for (const row of rows) {
-      const commits = tryParse<RegistryGitCommit[]>(row.commitsJson, []);
-      const commitFilesBySha = tryParse<Record<string, RegistryGitCommitFile[]>>(row.commitFilesByShaJson, {});
-      this.projectCommits[row.projectId] = sanitizeProjectCommitsState({
-        commits,
-        commitFilesBySha,
-      });
-      this.projectCommitUpdatedAt.set(row.projectId, row.updatedAt);
-    }
   }
 
   private restoreChatSessions(indexRows: RawChatSessionIndexRow[], contentRows: RawChatSessionContentRow[]): boolean {
@@ -1083,13 +981,11 @@ export class WorkspacePersistenceRepository {
     this.chatSessionIndex.clear();
     this.chatSessionContent.clear();
     this.chatSessionContentUpdatedAt.clear();
-    this.diffCache.clear();
     this.fileCache.clear();
     const now = Date.now();
     await this.db.clearStores([
       TABLE_CHAT_SESSION_INDEX,
       TABLE_CHAT_SESSION_CONTENT,
-      TABLE_DIFF_CACHE,
       TABLE_FILE_CACHE,
     ]);
     await this.db.putRow(TABLE_META, {
@@ -1103,19 +999,6 @@ export class WorkspacePersistenceRepository {
       updatedAt: now,
     });
   }
-  private restoreDiffCache(rows: RawDiffCacheRow[]): void {
-    this.diffCache.clear();
-    for (const row of rows) {
-      const payload = tryParse<{diff?: string; isBinary?: boolean; truncated?: boolean}>(row.v, {});
-      this.diffCache.set(row.k, {
-        diff: typeof payload.diff === 'string' ? payload.diff : '',
-        isBinary: !!payload.isBinary,
-        truncated: !!payload.truncated,
-        updatedAt: row.updatedAt,
-      });
-    }
-  }
-
   private restoreFileCache(rows: RawFileCacheRow[]): void {
     this.fileCache.clear();
     for (const row of rows) {
@@ -1127,27 +1010,11 @@ export class WorkspacePersistenceRepository {
     }
   }
 
-  private projectCommitBudgetEntries(): CacheBudgetEntry[] {
-    return Object.entries(this.projectCommits).map(([projectId, state]) => ({
-      key: projectId,
-      updatedAt: this.projectCommitUpdatedAt.get(projectId) ?? 0,
-      approximateBytes: approximateTextBytes(serialize(state)),
-    }));
-  }
-
   private chatContentBudgetEntries(): CacheBudgetEntry[] {
     return [...this.chatSessionContent.entries()].map(([key, content]) => ({
       key,
       updatedAt: this.chatSessionContentUpdatedAt.get(key) ?? 0,
       approximateBytes: approximateTextBytes(serialize(content.turns)),
-    }));
-  }
-
-  private diffBudgetEntries(): CacheBudgetEntry[] {
-    return [...this.diffCache.entries()].map(([key, entry]) => ({
-      key,
-      updatedAt: entry.updatedAt,
-      approximateBytes: approximateTextBytes(serialize(entry)),
     }));
   }
 
@@ -1171,20 +1038,6 @@ export class WorkspacePersistenceRepository {
       maxEntries,
       maxBytes,
     });
-  }
-
-  private evictProjectCommitEntries(now: number): string[] {
-    const keys = this.cacheEvictionKeys(
-      this.projectCommitBudgetEntries(),
-      PROJECT_COMMITS_CACHE_MAX_ENTRIES,
-      PROJECT_COMMITS_CACHE_MAX_BYTES,
-      now,
-    );
-    for (const projectId of keys) {
-      delete this.projectCommits[projectId];
-      this.projectCommitUpdatedAt.delete(projectId);
-    }
-    return keys;
   }
 
   private evictChatContentEntries(now: number): {keys: string[]; indexRows: RawChatSessionIndexRow[]} {
@@ -1215,17 +1068,6 @@ export class WorkspacePersistenceRepository {
     return {keys, indexRows};
   }
 
-  private evictDiffEntries(now: number): string[] {
-    const keys = this.cacheEvictionKeys(
-      this.diffBudgetEntries(),
-      DIFF_CACHE_MAX_ENTRIES,
-      DIFF_CACHE_MAX_BYTES,
-      now,
-    );
-    for (const key of keys) this.diffCache.delete(key);
-    return keys;
-  }
-
   private evictFileEntries(now: number): string[] {
     const keys = this.cacheEvictionKeys(
       this.fileBudgetEntries(),
@@ -1239,25 +1081,15 @@ export class WorkspacePersistenceRepository {
 
   private async pruneCachesAfterRestore(): Promise<void> {
     const now = Date.now();
-    const projectCommitKeys = this.evictProjectCommitEntries(now);
     const chatEvictions = this.evictChatContentEntries(now);
-    const diffKeys = this.evictDiffEntries(now);
     const fileKeys = this.evictFileEntries(now);
     const mutations: WorkspaceDatabaseMutation[] = [];
-
-    if (projectCommitKeys.length > 0) {
-      mutations.push({storeName: TABLE_PROJECT_COMMITS, deletes: projectCommitKeys});
-    }
 
     if (chatEvictions.keys.length > 0) {
       mutations.push({storeName: TABLE_CHAT_SESSION_CONTENT, deletes: chatEvictions.keys});
     }
     if (chatEvictions.indexRows.length > 0) {
       mutations.push({storeName: TABLE_CHAT_SESSION_INDEX, puts: chatEvictions.indexRows});
-    }
-
-    if (diffKeys.length > 0) {
-      mutations.push({storeName: TABLE_DIFF_CACHE, deletes: diffKeys});
     }
 
     if (fileKeys.length > 0) {
@@ -1287,7 +1119,6 @@ export class WorkspacePersistenceRepository {
       {k: GLOBAL_KEYS.logLevel, v: serialize(this.state.global.logLevel), updatedAt},
       {k: GLOBAL_KEYS.disableFileCache, v: serialize(this.state.global.disableFileCache), updatedAt},
       {k: GLOBAL_KEYS.promptCompletionNotificationsEnabled, v: serialize(this.state.global.promptCompletionNotificationsEnabled), updatedAt},
-      {k: GLOBAL_KEYS.tab, v: serialize(this.state.global.tab), updatedAt},
       {k: GLOBAL_KEYS.selectedProjectId, v: serialize(this.state.global.selectedProjectId), updatedAt},
       {k: GLOBAL_KEYS.selectedChatProjectId, v: serialize(this.state.global.selectedChatProjectId), updatedAt},
       {k: GLOBAL_KEYS.selectedChatSessionId, v: serialize(this.state.global.selectedChatSessionId), updatedAt},
@@ -1420,20 +1251,13 @@ export class WorkspacePersistenceRepository {
   }
 
   private async clearRebuildableCachesForStoragePressure(): Promise<void> {
-    for (const projectId of Object.keys(this.projectCommits)) {
-      delete this.projectCommits[projectId];
-    }
-    this.projectCommitUpdatedAt.clear();
     this.chatSessionIndex.clear();
     this.chatSessionContent.clear();
     this.chatSessionContentUpdatedAt.clear();
-    this.diffCache.clear();
     this.fileCache.clear();
     await this.db.mutateStores([
-      {storeName: TABLE_PROJECT_COMMITS, clear: true},
       {storeName: TABLE_CHAT_SESSION_INDEX, clear: true},
       {storeName: TABLE_CHAT_SESSION_CONTENT, clear: true},
-      {storeName: TABLE_DIFF_CACHE, clear: true},
       {storeName: TABLE_FILE_CACHE, clear: true},
     ]);
   }
@@ -1467,23 +1291,12 @@ export class WorkspacePersistenceRepository {
     return this.state.projects[projectId];
   }
 
-  private ensureProjectCommits(projectId: string): PersistedProjectCommitsState {
-    if (!this.projectCommits[projectId]) {
-      this.projectCommits[projectId] = defaultProjectCommitsState();
-    }
-    return this.projectCommits[projectId];
-  }
-
   getGlobalState(): PersistedGlobalState {
     return cloneState(this.state.global);
   }
 
   getProjectState(projectId: string): PersistedProjectState {
     return cloneState(this.state.projects[projectId] ?? defaultProjectState());
-  }
-
-  getProjectCommitsState(projectId: string): PersistedProjectCommitsState {
-    return cloneState(this.projectCommits[projectId] ?? defaultProjectCommitsState());
   }
 
   getProjectChatSessions(projectId: string): PersistedChatSessionEntry[] {
@@ -1680,75 +1493,6 @@ export class WorkspacePersistenceRepository {
     })).catch(() => undefined);
   }
 
-  patchProjectCommitsState(projectId: string, patch: Partial<PersistedProjectCommitsState>): void {
-    if (!projectId) return;
-    const current = this.ensureProjectCommits(projectId);
-    this.projectCommits[projectId] = sanitizeProjectCommitsState({...current, ...patch});
-    const now = Date.now();
-    this.projectCommitUpdatedAt.set(projectId, now);
-    const evictedKeys = this.evictProjectCommitEntries(now);
-    const retained = this.projectCommits[projectId];
-    this.enqueueCacheMutation('save project commit cache', [{
-      storeName: TABLE_PROJECT_COMMITS,
-      deletes: evictedKeys,
-      puts: retained ? [{
-        projectId,
-        commitsJson: serialize(retained.commits),
-        commitFilesByShaJson: serialize(retained.commitFilesBySha),
-        updatedAt: now,
-      }] : [],
-    }]);
-  }
-
-  getProjectDiff(projectId: string, key: string): DiffCacheEntry | null {
-    if (!projectId || !key) return null;
-    const entry = this.diffCache.get(diffCacheKey(projectId, key));
-    return entry ? cloneState(entry) : null;
-  }
-
-  putProjectDiff(projectId: string, key: string, entry: Omit<DiffCacheEntry, 'updatedAt'>): void {
-    if (!projectId || !key) return;
-    const now = Date.now();
-    const k = diffCacheKey(projectId, key);
-    this.diffCache.set(k, {
-      ...entry,
-      updatedAt: now,
-    });
-
-    const prefix = `dc:${projectId}:`;
-    const keysByNewest = [...this.diffCache.entries()]
-      .filter(([cacheKey]) => cacheKey.startsWith(prefix))
-      .sort((a, b) => b[1].updatedAt - a[1].updatedAt)
-      .slice(0, DIFF_CACHE_LIMIT)
-      .map(item => item[0]);
-
-    const keepSet = new Set(keysByNewest);
-    const evictedKeys = new Set<string>();
-    for (const cacheKey of [...this.diffCache.keys()]) {
-      if (!cacheKey.startsWith(prefix)) continue;
-      if (keepSet.has(cacheKey)) continue;
-      this.diffCache.delete(cacheKey);
-      evictedKeys.add(cacheKey);
-    }
-
-    for (const cacheKey of this.evictDiffEntries(now)) evictedKeys.add(cacheKey);
-
-    const payload = this.diffCache.get(k);
-    this.enqueueCacheMutation('save diff cache', [{
-      storeName: TABLE_DIFF_CACHE,
-      deletes: [...evictedKeys],
-      puts: payload ? [{
-        k,
-        v: serialize({
-          diff: payload.diff,
-          isBinary: payload.isBinary,
-          truncated: payload.truncated,
-        }),
-        updatedAt: payload.updatedAt,
-      }] : [],
-    }]);
-  }
-
   getCachedFile(projectId: string, kind: 'file' | 'dir', path: string): FileCacheEntry | null {
     if (!projectId || !path) return null;
     const entry = this.fileCache.get(fileCacheKey(projectId, kind, path));
@@ -1784,22 +1528,15 @@ export class WorkspacePersistenceRepository {
   }
 
   clearCache(): void {
-    for (const key of Object.keys(this.projectCommits)) {
-      delete this.projectCommits[key];
-    }
-    this.projectCommitUpdatedAt.clear();
     this.chatSessionIndex.clear();
     this.chatSessionContent.clear();
     this.chatSessionContentUpdatedAt.clear();
-    this.diffCache.clear();
     this.fileCache.clear();
 
     const now = Date.now();
     this.enqueueCacheMutation('clear local cache', [
-      {storeName: TABLE_PROJECT_COMMITS, clear: true},
       {storeName: TABLE_CHAT_SESSION_INDEX, clear: true},
       {storeName: TABLE_CHAT_SESSION_CONTENT, clear: true},
-      {storeName: TABLE_DIFF_CACHE, clear: true},
       {storeName: TABLE_FILE_CACHE, clear: true},
       {
         storeName: TABLE_META,
@@ -1814,14 +1551,12 @@ export class WorkspacePersistenceRepository {
 
   async dumpDatabase(): Promise<WorkspaceDatabaseDump> {
     await this.flushPendingWrites();
-    const [global, projects, projectCommits, chatSessionIndex, chatSessionContent, fileCache, diffCache, meta] = await Promise.all([
+    const [global, projects, chatSessionIndex, chatSessionContent, fileCache, meta] = await Promise.all([
       this.db.getAllRows<{k: string; v: string; updatedAt: number}>(TABLE_GLOBAL_KV),
       this.db.getAllRows<{projectId: string; stateJson: string; updatedAt: number}>(TABLE_PROJECT_STATE),
-      this.db.getAllRows<{projectId: string; commitsJson: string; commitFilesByShaJson: string; updatedAt: number}>(TABLE_PROJECT_COMMITS),
       this.db.getAllRows<{k: string; projectId: string; sessionId: string; sessionJson: string; cursorJson: string; updatedAt: number}>(TABLE_CHAT_SESSION_INDEX),
       this.db.getAllRows<{k: string; projectId: string; sessionId: string; turnsJson: string; updatedAt: number}>(TABLE_CHAT_SESSION_CONTENT),
       this.db.getAllRows<{k: string; hash: string; v: string; updatedAt: number}>(TABLE_FILE_CACHE),
-      this.db.getAllRows<{k: string; v: string; updatedAt: number}>(TABLE_DIFF_CACHE),
       this.db.getAllRows<{k: string; v: string; updatedAt: number}>(TABLE_META),
     ]);
     const storageManager = globalThis.navigator?.storage;
@@ -1837,11 +1572,9 @@ export class WorkspacePersistenceRepository {
       {
         [TABLE_GLOBAL_KV]: global,
         [TABLE_PROJECT_STATE]: projects,
-        [TABLE_PROJECT_COMMITS]: projectCommits,
         [TABLE_CHAT_SESSION_INDEX]: chatSessionIndex,
         [TABLE_CHAT_SESSION_CONTENT]: chatSessionContent,
         [TABLE_FILE_CACHE]: fileCache,
-        [TABLE_DIFF_CACHE]: diffCache,
         [TABLE_META]: meta,
       },
       estimate as WorkspaceBrowserStorageEstimate | null,
@@ -1850,11 +1583,9 @@ export class WorkspacePersistenceRepository {
     return {
       global: sortByKey(redactGlobalDumpRows(global)),
       projects: sortByProjectId(projects),
-      projectCommits: sortByProjectId(projectCommits),
       chatSessionIndex: sortByKey(chatSessionIndex),
       chatSessionContent: sortByKey(chatSessionContent),
       fileCache: sortByKey(fileCache),
-      diffCache: sortByKey(diffCache),
       meta: sortByKey(meta),
       storage,
       storageError: this.lastStorageError ? cloneState(this.lastStorageError) : null,

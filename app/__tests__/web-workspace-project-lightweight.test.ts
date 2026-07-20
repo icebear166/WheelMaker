@@ -12,7 +12,7 @@ import { WorkspaceController } from '../web/src/workspace/WorkspaceController';
 import { WorkspaceStore } from '../web/src/workspace/WorkspaceStore';
 
 describe('workspace lightweight project switching', () => {
-  test('hydrates cached workspace state without loading root files', async () => {
+  test('switches project identity without loading root files', async () => {
     const service = {
       selectProjectLightweight: jest.fn().mockResolvedValue({
         projects: [
@@ -26,15 +26,8 @@ describe('workspace lightweight project switching', () => {
     };
     const store = new WorkspaceStore({
       getProjectState: jest.fn((projectId: string) => ({
-        expandedDirs: ['.'],
-        selectedFile: projectId === 'p2' ? 'cached.ts' : '',
-        pinnedFiles: [],
-        gitCurrentBranch: '',
-        selectedCommit: '',
-        selectedDiff: '',
         selectedChatSessionId: '',
       })),
-      getProjectCommitsState: jest.fn(() => ({ commits: [], commitFilesBySha: {} })),
       getCachedFile: jest.fn((projectId: string, kind: string, path: string) => {
         if (projectId === 'p2' && kind === 'dir' && path === '.') {
           return {
@@ -44,9 +37,7 @@ describe('workspace lightweight project switching', () => {
         }
         return null;
       }),
-      getProjectDiff: jest.fn(() => null),
       patchProjectState: jest.fn(),
-      patchProjectCommitsState: jest.fn(),
     } as any);
     const controller = new WorkspaceController(service as any, store);
 
@@ -55,11 +46,8 @@ describe('workspace lightweight project switching', () => {
     expect(service.selectProjectLightweight).toHaveBeenCalledWith('p2');
     expect(service.listDirectory).not.toHaveBeenCalled();
     expect(result.hydrated.projectId).toBe('p2');
-    expect(result.hydrated.selectedFile).toBe('cached.ts');
-    expect(result.hydrated.dirEntries['.']).toEqual([
-      { name: 'cached-root.ts', path: 'cached-root.ts', kind: 'file' },
-    ]);
-    expect(result.rootEntries).toEqual([]);
+    expect(result.hydrated).toEqual({projectId: 'p2'});
+    expect(result).not.toHaveProperty('rootEntries');
   });
 
   test('rememberGlobalState preserves chat selection while persisting workspace project', () => {
