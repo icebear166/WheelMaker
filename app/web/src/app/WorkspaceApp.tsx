@@ -19372,6 +19372,7 @@ export function App() {
             className={chatMainClassName}
             style={chatMainStyle}
           >
+            {chatSearchBar}
             <div
               ref={chatScrollRef}
               className="scroll-panel chat-block"
@@ -21645,6 +21646,87 @@ export function App() {
         type="button"
         className="chat-preview-icon-button"
         onClick={closePreviewSearch}
+        title="Close search"
+        aria-label="Close search"
+      >
+        <span className="codicon codicon-close" />
+      </button>
+    </div>
+  ) : null;
+  const chatSearchStatus = chatSearchQuery
+    ? chatSearchMatches.length > 0
+      ? `${chatSearchActiveIndex + 1}/${chatSearchMatches.length}`
+      : 'No results'
+    : 'Search current session';
+  const chatSearchBar = chatSearchOpen ? (
+    <div className="chat-search-bar">
+      <span className="codicon codicon-search" aria-hidden="true" />
+      <input
+        ref={chatSearchInputRef}
+        className="chat-search-input"
+        value={chatSearchQuery}
+        onChange={event => setChatSearchQuery(event.target.value)}
+        onKeyDown={handleChatSearchInputKeyDown}
+        placeholder="Search"
+        aria-label="Search current session"
+      />
+      <span className="chat-search-status">{chatSearchStatus}</span>
+      <div className="chat-search-switcher" role="group" aria-label="Search target">
+        <button
+          type="button"
+          className="chat-search-switcher-button active"
+          title="Current session"
+          aria-label="Search current session"
+          aria-pressed="true"
+        >
+          <span className="codicon codicon-comment-discussion" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="chat-search-switcher-button"
+          onClick={() => switchChatSearchTarget('sessions')}
+          title="All sessions"
+          aria-label="Search all sessions"
+          aria-pressed="false"
+        >
+          <span className="codicon codicon-list-tree" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="chat-search-switcher-button"
+          onClick={() => switchChatSearchTarget('preview')}
+          disabled={!chatPreviewOpen}
+          title={chatPreviewOpen ? 'File preview' : 'Open preview first'}
+          aria-label="Search file preview"
+          aria-pressed="false"
+        >
+          <span className="codicon codicon-go-to-file" aria-hidden="true" />
+        </button>
+      </div>
+      <button
+        type="button"
+        className="chat-search-icon-button"
+        onClick={() => navigateChatSearchMatch(-1)}
+        disabled={chatSearchMatches.length === 0}
+        title="Previous match"
+        aria-label="Previous match"
+      >
+        <span className="codicon codicon-chevron-up" />
+      </button>
+      <button
+        type="button"
+        className="chat-search-icon-button"
+        onClick={() => navigateChatSearchMatch(1)}
+        disabled={chatSearchMatches.length === 0}
+        title="Next match"
+        aria-label="Next match"
+      >
+        <span className="codicon codicon-chevron-down" />
+      </button>
+      <button
+        type="button"
+        className="chat-search-icon-button"
+        onClick={closeChatSearch}
         title="Close search"
         aria-label="Close search"
       >
