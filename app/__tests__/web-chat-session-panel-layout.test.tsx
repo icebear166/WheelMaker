@@ -231,7 +231,7 @@ describe('PC chat session-panel layout', () => {
     expect(cssRuleBlock(chatStyles, '.chat-session-panel-pinned')).toContain('min-height: 0;');
     expect(cssRuleBlock(chatStyles, '.chat-session-panel-scroll')).toContain('overflow-y: auto;');
     const pinnedStackRule = cssRuleBlock(chatStyles, '.chat-edge-surface-stack.beside-pinned-session-panel');
-    expect(pinnedStackRule).toContain('top: 0;');
+    expect(pinnedStackRule).toContain('top: 8px;');
     expect(pinnedStackRule).toContain('left: 0;');
   });
 });
