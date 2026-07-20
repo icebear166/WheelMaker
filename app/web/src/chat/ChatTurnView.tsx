@@ -219,6 +219,7 @@ const CollapsibleThought = React.memo(function CollapsibleThought({
         aria-label={open ? 'Collapse thinking' : 'Expand thinking'}
         onClick={() => setOpen(current => !current)}
       >
+        <span className="codicon codicon-chevron-right chat-thought-chevron" aria-hidden="true" />
         <span className="codicon codicon-lightbulb chat-thought-icon" aria-hidden="true" />
         <span className="chat-thought-title" title={!open && finished ? firstLine : undefined}>
           {title}

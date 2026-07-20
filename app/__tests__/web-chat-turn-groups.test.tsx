@@ -63,7 +63,8 @@ describe('chat turn groups', () => {
     expect(view.root.findByProps({className: 'chat-thought-title'}).children).toEqual([
       'Thinking',
     ]);
-    expect(view.root.findAllByProps({className: 'chat-thought-chevron'})).toHaveLength(0);
+    expect(view.root.findAllByProps({className: 'codicon codicon-chevron-right chat-thought-chevron'}))
+      .toHaveLength(1);
     expect(view.root.findAllByProps({className: 'chat-thought-content'})).toHaveLength(0);
 
     await ReactTestRenderer.act(() => {
@@ -101,12 +102,17 @@ describe('chat turn groups', () => {
     const header = styles.match(/\.chat-thought-header \{([\s\S]*?)\}/)?.[1] ?? '';
     const block = styles.match(/\.chat-thought-block \{([\s\S]*?)\}/)?.[1] ?? '';
     const content = styles.match(/\.chat-thought-content \{([\s\S]*?)\}/)?.[1] ?? '';
+    const chevron = styles.match(/\.chat-thought-chevron \{([\s\S]*?)\}/)?.[1] ?? '';
+    const chevronTone = styles.match(/\.chat-thought-header \.chat-thought-chevron \{([\s\S]*?)\}/)?.[1] ?? '';
 
     expect(header).toContain('height: 28px;');
     expect(styles).toContain('.chat-thought-block.streaming .chat-thought-icon');
     expect(block).toContain('margin: 0;');
     expect(block).not.toContain('accent-primary');
     expect(content).not.toContain('background: color-mix');
+    expect(chevron).toContain('color: var(--text-tertiary);');
+    expect(chevronTone).toContain('opacity: 0.72;');
+    expect(styles).toContain('.chat-thought-open .chat-thought-chevron');
   });
 
   test('summarizes the latest tool and stays expanded when the group grows', async () => {
@@ -125,7 +131,8 @@ describe('chat turn groups', () => {
     expect(view.root.findByProps({className: 'chat-tool-group-latest'}).children).toEqual([
       'Search turns',
     ]);
-    expect(view.root.findAllByProps({className: 'chat-tool-group-chevron'})).toHaveLength(0);
+    expect(view.root.findAllByProps({className: 'codicon codicon-chevron-right chat-tool-group-chevron'}))
+      .toHaveLength(1);
     expect(view.root.findAllByProps({className: 'chat-tool-group-list'})).toHaveLength(0);
 
     await ReactTestRenderer.act(() => {
@@ -175,6 +182,7 @@ describe('chat turn groups', () => {
     );
     const header = styles.match(/\.chat-tool-group-header \{([\s\S]*?)\}/)?.[1] ?? '';
     const block = styles.match(/\.chat-tool-group \{([\s\S]*?)\}/)?.[1] ?? '';
+    const chevron = styles.match(/\.chat-tool-group-chevron \{([\s\S]*?)\}/)?.[1] ?? '';
 
     expect(header).toContain('height: 28px;');
     expect(block).toContain('margin: 0;');
@@ -182,5 +190,7 @@ describe('chat turn groups', () => {
     expect(header).not.toContain('accent-primary');
     expect(styles).toContain('.chat-tool-group-latest');
     expect(styles).toContain('text-overflow: ellipsis;');
+    expect(chevron).toContain('color: var(--text-tertiary);');
+    expect(styles).toContain('.chat-tool-group-open .chat-tool-group-chevron');
   });
 });
