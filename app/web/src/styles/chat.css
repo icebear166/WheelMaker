@@ -6299,7 +6299,7 @@
 }
 
 .chat-search-target-dialog {
-  width: 300px;
+  width: 320px;
   padding: 12px;
   display: grid;
   gap: 4px;
@@ -6354,6 +6354,13 @@
 
 .chat-search-target-option.selected .codicon {
   color: var(--accent-primary);
+}
+
+.chat-search-target-label {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chat-search-target-hint {

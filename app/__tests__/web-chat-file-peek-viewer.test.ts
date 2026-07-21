@@ -639,9 +639,10 @@ describe('web chat file peek viewer', () => {
     expect(mainTsx).toContain("event.key.toLowerCase() === 'f' && (event.ctrlKey || event.metaKey)");
     expect(mainTsx).toContain('firstEnabledChatSearchTarget(searchTargetAvailability)');
     expect(mainTsx).toContain('setSearchTargetPickerOpen(true);');
-    expect(mainTsx).toContain("if (event.key === 'Escape') {");
+    expect(mainTsx).toContain('resolveChatSearchTargetPickerKey(event)');
     expect(mainTsx).toContain('confirmSearchTarget(searchTargetPickerTarget);');
-    expect(mainTsx).toContain('cycleChatSearchTarget(current, delta, searchTargetAvailability)');
+    expect(mainTsx).toContain('cycleChatSearchTarget(current, action.delta, searchTargetAvailability)');
+    expect(mainTsx).toContain('seedSearchQuery(searchTargetPickerTarget, action.text);');
     expect(mainTsx).toContain('CHAT_SEARCH_TARGET_ORDER.map(target => {');
     expect(mainTsx).toContain('className="chat-search-target-backdrop"');
     expect(mainTsx).toContain('className="chat-search-target-dialog"');

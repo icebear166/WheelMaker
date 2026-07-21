@@ -165,6 +165,7 @@ import {
   cycleChatSearchTarget,
   firstEnabledChatSearchTarget,
   resolveChatSearchTargetAvailability,
+  resolveChatSearchTargetPickerKey,
   resolveSessionSearchExpansion,
   type ChatSearchTarget,
 } from '../chat/search/searchTargetPicker';
@@ -3609,6 +3610,17 @@ export function App() {
       toggleChatPreviewFromTitle();
     }
     window.requestAnimationFrame(() => openPreviewSearch());
+  };
+  const seedSearchQuery = (target: ChatSearchTarget, text: string) => {
+    if (target === 'current') {
+      setChatSearchQuery(text);
+      return;
+    }
+    if (target === 'sessions') {
+      setSessionSearchInput(text);
+      return;
+    }
+    setPreviewSearchQuery(text);
   };
 
 
@@ -18846,20 +18858,22 @@ export function App() {
       return;
     }
     const handleSearchTargetPickerKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
+      const action = resolveChatSearchTargetPickerKey(event);
+      if (!action) {
+        return;
+      }
+      event.preventDefault();
+      if (action.type === 'close') {
         setSearchTargetPickerOpen(false);
         return;
       }
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        confirmSearchTarget(searchTargetPickerTarget);
+      if (action.type === 'cycle') {
+        setSearchTargetPickerTarget(current => cycleChatSearchTarget(current, action.delta, searchTargetAvailability));
         return;
       }
-      if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Tab') {
-        event.preventDefault();
-        const delta = event.key === 'ArrowUp' || (event.key === 'Tab' && event.shiftKey) ? -1 : 1;
-        setSearchTargetPickerTarget(current => cycleChatSearchTarget(current, delta, searchTargetAvailability));
+      confirmSearchTarget(searchTargetPickerTarget);
+      if (action.type === 'type-text') {
+        seedSearchQuery(searchTargetPickerTarget, action.text);
       }
     };
     window.addEventListener('keydown', handleSearchTargetPickerKeyDown, true);
@@ -19927,7 +19941,7 @@ export function App() {
             </button>
           );
         })}
-        <div className="chat-search-target-footer">Arrows / Tab to switch · Enter to open · Esc to close</div>
+        <div className="chat-search-target-footer">Arrows / Tab to switch · Enter to open · Type to search · Esc to close</div>
       </div>
     </div>
   ) : null;

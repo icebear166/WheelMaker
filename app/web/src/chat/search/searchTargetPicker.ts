@@ -13,17 +13,17 @@ export const CHAT_SEARCH_TARGET_META: Record<
   current: {
     label: 'Current session',
     icon: 'codicon-comment-discussion',
-    hint: 'Search messages in this chat',
+    hint: 'This chat',
   },
   sessions: {
     label: 'All sessions',
     icon: 'codicon-list-tree',
-    hint: 'Search session titles',
+    hint: 'Session titles',
   },
   preview: {
     label: 'File preview',
     icon: 'codicon-go-to-file',
-    hint: 'Search in the open file',
+    hint: 'Open file',
   },
 };
 
@@ -69,4 +69,41 @@ export function resolveSessionSearchExpansion(input: {
   slideOutOpen: boolean;
 }): SessionSearchExpansion {
   return input.sessionPanelPinned || input.slideOutOpen ? 'focus-only' : 'open-slideout';
+}
+
+export type ChatSearchTargetPickerKeyAction =
+  | {type: 'cycle'; delta: 1 | -1}
+  | {type: 'confirm'}
+  | {type: 'close'}
+  | {type: 'type-text'; text: string};
+
+// Keyboard model for the picker modal: arrows/Tab cycle, Enter confirms,
+// Esc closes, and any printable character confirms the current target and
+// seeds its search input with the typed text (type-to-search).
+export function resolveChatSearchTargetPickerKey(event: {
+  key: string;
+  shiftKey?: boolean;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+  altKey?: boolean;
+}): ChatSearchTargetPickerKeyAction | null {
+  if (event.ctrlKey || event.metaKey || event.altKey) {
+    return null;
+  }
+  if (event.key === 'Escape') {
+    return {type: 'close'};
+  }
+  if (event.key === 'Enter') {
+    return {type: 'confirm'};
+  }
+  if (event.key === 'ArrowDown' || (event.key === 'Tab' && !event.shiftKey)) {
+    return {type: 'cycle', delta: 1};
+  }
+  if (event.key === 'ArrowUp' || (event.key === 'Tab' && event.shiftKey)) {
+    return {type: 'cycle', delta: -1};
+  }
+  if (event.key.length === 1) {
+    return {type: 'type-text', text: event.key};
+  }
+  return null;
 }
