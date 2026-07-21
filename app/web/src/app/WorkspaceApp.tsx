@@ -165,6 +165,7 @@ import {
   cycleChatSearchTarget,
   firstEnabledChatSearchTarget,
   resolveChatSearchTargetAvailability,
+  resolveSessionSearchExpansion,
   type ChatSearchTarget,
 } from '../chat/search/searchTargetPicker';
 import {
@@ -3588,6 +3589,14 @@ export function App() {
     }
     closeChatSearch();
     if (target === 'sessions') {
+      if (
+        resolveSessionSearchExpansion({
+          sessionPanelPinned: desktopChatSessionPinned,
+          slideOutOpen: sessionNavSlideOut.open,
+        }) === 'open-slideout'
+      ) {
+        dispatchSessionNavSlideOut({ type: 'open' });
+      }
       setSessionSearchOpen(true);
       window.requestAnimationFrame(() => {
         sessionSearchInputRef.current?.focus();

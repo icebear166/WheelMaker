@@ -3,6 +3,7 @@ import {
   cycleChatSearchTarget,
   firstEnabledChatSearchTarget,
   resolveChatSearchTargetAvailability,
+  resolveSessionSearchExpansion,
 } from '../web/src/chat/search/searchTargetPicker';
 
 describe('chat search target picker', () => {
@@ -45,5 +46,11 @@ describe('chat search target picker', () => {
     const availability = {current: false, sessions: true, preview: true};
     expect(cycleChatSearchTarget('current', 1, availability)).toBe('sessions');
     expect(cycleChatSearchTarget('current', -1, availability)).toBe('preview');
+  });
+
+  test('session search opens the slideout only when no panel is visible', () => {
+    expect(resolveSessionSearchExpansion({sessionPanelPinned: true, slideOutOpen: false})).toBe('focus-only');
+    expect(resolveSessionSearchExpansion({sessionPanelPinned: false, slideOutOpen: true})).toBe('focus-only');
+    expect(resolveSessionSearchExpansion({sessionPanelPinned: false, slideOutOpen: false})).toBe('open-slideout');
   });
 });

@@ -58,3 +58,15 @@ export function cycleChatSearchTarget(
   }
   return current;
 }
+
+export type SessionSearchExpansion = 'open-slideout' | 'focus-only';
+
+// Opening the sessions search only makes sense when a panel that hosts the
+// search input is visible. If neither the pinned panel nor the slideout is
+// open, the caller must open the slideout first.
+export function resolveSessionSearchExpansion(input: {
+  sessionPanelPinned: boolean;
+  slideOutOpen: boolean;
+}): SessionSearchExpansion {
+  return input.sessionPanelPinned || input.slideOutOpen ? 'focus-only' : 'open-slideout';
+}
