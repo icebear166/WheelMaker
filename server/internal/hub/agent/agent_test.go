@@ -373,15 +373,22 @@ func TestFlickerLoaderPatchesInstalledMyFlickerBundleWhenAvailable(t *testing.T)
 	}
 
 	patched := runFlickerLoaderPatch(t, distPath)
-	for _, snippet := range []string{
-		"function WMF(",
-		"configOptions:WMF(",
-		"async unstable_resumeSession(A){return await this.loadSession(A)}",
-		"async unstable_setSessionConfigOption(A){let Q=A.configId,B=A.value;",
-	} {
-		if !strings.Contains(patched, snippet) {
-			t.Fatalf("patched installed bundle missing %q", snippet)
-		}
+	// Resume must be shimmed for every known bundle shape.
+	if !strings.Contains(patched, "async unstable_resumeSession(A){return await this.loadSession(A)}") {
+		t.Fatalf("patched installed bundle missing resume shim")
+	}
+	// configOptions must be available: built either by our legacy WMF helper
+	// or by the upstream bundle's own builder (e.g. @myflicker/cli 0.3.x).
+	if !strings.Contains(patched, "configOptions:WMF(") &&
+		!strings.Contains(patched, "configOptions:this.buildSessionConfigOptions") {
+		t.Fatalf("patched installed bundle missing configOptions")
+	}
+	// The unimplemented stubs must be gone after patching.
+	if strings.Contains(patched, "unstable_resumeSession(A){throw Error(\"Method not implemented.\")}") {
+		t.Fatalf("patched installed bundle still has unimplemented resume stub")
+	}
+	if strings.Contains(patched, "unstable_setSessionConfigOption(A){throw Error(\"Method not implemented.\")}") {
+		t.Fatalf("patched installed bundle still has unimplemented setSessionConfigOption stub")
 	}
 	if strings.Contains(patched, "this.connection.sessionUpdate({sessionId:Q,update:{sessionUpdate:w,content:{type:\"text\",text:z}}})") {
 		t.Fatalf("latest patch should preserve upstream loadSession flow")

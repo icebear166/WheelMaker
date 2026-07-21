@@ -92,6 +92,22 @@ function replaceMethodOnceRegex(source, signature, pattern, replacement, label) 
 }
 
 function patchMyFlickerBundle(source) {
+  const legacyConfigShape = /models:(\w+)\|\|void 0/.test(source);
+  const legacySetConfigStub = source.includes('unstable_setSessionConfigOption(A){throw Error("Method not implemented.")}');
+  const isLegacy = legacyConfigShape && legacySetConfigStub;
+  if (!isLegacy) {
+    // Newer bundles (e.g. @myflicker/cli 0.3.x) build configOptions and implement
+    // setSessionConfigOption natively. Only shim the still-missing resume.
+    if (source.includes('unstable_resumeSession(A){throw Error("Method not implemented.")}')) {
+      source = replaceOnce(
+        source,
+        "unstable_resumeSession(A){throw Error(\"Method not implemented.\")}",
+        "async unstable_resumeSession(A){return await this.loadSession(A)}",
+        "resumeSession"
+      );
+    }
+    return source;
+  }
   source = replaceOnceRegex(
     source,
     /}(class \w+\{connection;sessions=new Map;messageBus;nodeBridge;context;defaultCwd;contextCreateOpts;clientFsCapabilities;)/,
