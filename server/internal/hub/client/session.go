@@ -640,6 +640,24 @@ func configPreferenceFromACPOptions(options []acp.ConfigOption) []PreferenceConf
 	return out
 }
 
+func normalizeStoredConfigPreferences(agentName string, options []PreferenceConfigOption) []PreferenceConfigOption {
+	normalized := append([]PreferenceConfigOption(nil), options...)
+	if !strings.EqualFold(strings.TrimSpace(agentName), string(acp.ACPProviderFlicker)) {
+		return normalized
+	}
+	for index := range normalized {
+		option := &normalized[index]
+		if !strings.EqualFold(strings.TrimSpace(option.ID), "effort") {
+			continue
+		}
+		option.ID = "thought_level"
+		if strings.EqualFold(option.CurrentValue, "maxOrXhigh") {
+			option.CurrentValue = "xhigh"
+		}
+	}
+	return normalized
+}
+
 func mergeConfigOptions(current []acp.ConfigOption, updated []acp.ConfigOption) []acp.ConfigOption {
 	if len(updated) == 0 {
 		return append([]acp.ConfigOption(nil), current...)

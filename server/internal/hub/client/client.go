@@ -221,7 +221,7 @@ func loadProjectAgentPreferenceState(store Store, projectName string, agentName 
 		hubLogger(projectName).Warn("decode agent preference failed agent=%s err=%v", agentName, err)
 		return PreferenceState{}
 	}
-	pref.ConfigOptions = sanitizePreferenceConfigOptions(pref.ConfigOptions)
+	pref.ConfigOptions = normalizeStoredConfigPreferences(agentName, sanitizePreferenceConfigOptions(pref.ConfigOptions))
 	return pref
 }
 

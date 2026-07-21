@@ -327,34 +327,18 @@ func TestFlickerACPProvider_LaunchArgs(t *testing.T) {
 	}
 }
 
-func TestFlickerLoaderPatchesLatestMyFlickerBundleShape(t *testing.T) {
+func TestFlickerLoaderRejectsLegacyMyFlickerBundleShape(t *testing.T) {
 	tempDir := t.TempDir()
-	fixturePath := filepath.Join(tempDir, "myflicker-latest-fragment.mjs")
+	fixturePath := filepath.Join(tempDir, "myflicker-legacy-fragment.mjs")
 	if err := os.WriteFile(fixturePath, []byte(myFlickerLatestBundleFragment), 0o644); err != nil {
 		t.Fatalf("write fixture: %v", err)
 	}
-	patched := runFlickerLoaderPatch(t, fixturePath)
-	wantSnippets := []string{
-		"function WMF(",
-		"{sessionId:Q,configOptions:WMF(D,this.__wmfConfig)}",
-		"return await $.replay(B),rG(\"Session loaded successfully:\",A.sessionId),{configOptions:WMF(J,this.__wmfConfig)}",
-		"async unstable_resumeSession(A){return await this.loadSession(A)}",
-		"async unstable_setSessionConfigOption(A){let Q=A.configId,B=A.value;",
+	out, err := runFlickerLoaderPatchCommand(t, fixturePath)
+	if err == nil {
+		t.Fatal("0.3.11-only loader unexpectedly patched the legacy bundle shape")
 	}
-	for _, snippet := range wantSnippets {
-		if !strings.Contains(patched, snippet) {
-			t.Fatalf("patched source missing %q:\n%s", snippet, patched)
-		}
-	}
-	for _, staleSnippet := range []string{
-		"{sessionId:Q,models:D||void 0}",
-		"return await $.replay(B),rG(\"Session loaded successfully:\",A.sessionId),{models:J||void 0}",
-		"unstable_setSessionConfigOption(A){throw Error(\"Method not implemented.\")}",
-		"session.messages.list",
-	} {
-		if strings.Contains(patched, staleSnippet) {
-			t.Fatalf("patched source still contains stale snippet %q:\n%s", staleSnippet, patched)
-		}
+	if !strings.Contains(string(out), "0.3.11 config options") {
+		t.Fatalf("legacy bundle failed for an unexpected reason: %s", out)
 	}
 }
 
@@ -377,11 +361,17 @@ func TestFlickerLoaderPatchesInstalledMyFlickerBundleWhenAvailable(t *testing.T)
 	if !strings.Contains(patched, "async unstable_resumeSession(A){return await this.loadSession(A)}") {
 		t.Fatalf("patched installed bundle missing resume shim")
 	}
-	// configOptions must be available: built either by our legacy WMF helper
-	// or by the upstream bundle's own builder (e.g. @myflicker/cli 0.3.x).
-	if !strings.Contains(patched, "configOptions:WMF(") &&
-		!strings.Contains(patched, "configOptions:this.buildSessionConfigOptions") {
-		t.Fatalf("patched installed bundle missing configOptions")
+	if !strings.Contains(patched, "function WMFA(") {
+		t.Fatal("patched installed bundle missing WheelMaker access config option")
+	}
+	if !strings.Contains(patched, "return WMFA(Q,this.__wmfConfig)") {
+		t.Fatal("patched installed bundle does not augment native config options with access")
+	}
+	if !strings.Contains(patched, "if(Q===\"access\")return await WMFS(this,B);") {
+		t.Fatal("patched installed bundle missing access config handler")
+	}
+	if !strings.Contains(patched, "configOptions:this.buildSessionConfigOptions") {
+		t.Fatalf("patched installed bundle missing native config options")
 	}
 	// The unimplemented stubs must be gone after patching.
 	if strings.Contains(patched, "unstable_resumeSession(A){throw Error(\"Method not implemented.\")}") {
@@ -392,6 +382,18 @@ func TestFlickerLoaderPatchesInstalledMyFlickerBundleWhenAvailable(t *testing.T)
 	}
 	if strings.Contains(patched, "this.connection.sessionUpdate({sessionId:Q,update:{sessionUpdate:w,content:{type:\"text\",text:z}}})") {
 		t.Fatalf("latest patch should preserve upstream loadSession flow")
+	}
+}
+
+func TestFlickerLoaderTargetsMyFlicker011Only(t *testing.T) {
+	for _, legacySnippet := range []string{
+		"legacyConfigShape",
+		"legacySetConfigStub",
+		"function WMF(A,Q)",
+	} {
+		if strings.Contains(flickerACPLoaderSource, legacySnippet) {
+			t.Fatalf("0.3.11-only loader still contains legacy compatibility code %q", legacySnippet)
+		}
 	}
 }
 
