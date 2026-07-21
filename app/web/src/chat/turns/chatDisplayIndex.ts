@@ -5,6 +5,7 @@ import {
   splitChatOptionReplyText,
 } from '../chatOptionReplies';
 import {promptAttachmentBlockCount} from '../composer/chatPromptAttachments';
+import type {ChatPermissionState} from '../permission/chatPermissionState';
 
 export type ChatDisplayIndexItem = {
   kind: 'turn' | 'tool-group' | 'pending' | 'queued';
@@ -56,6 +57,7 @@ export type ChatDisplayIndexOptions = {
   pendingEstimatedHeight?: number;
   queuedKeys?: string[];
   queuedEstimatedHeight?: number;
+  permissionState?: ChatPermissionState;
 };
 
 export const DEFAULT_CHAT_TURN_HEIGHT_METRICS: ChatTurnHeightMetrics = {
@@ -350,6 +352,9 @@ export function estimateChatTurnHeight(
   if (message.method === 'session_operation') {
     return 44;
   }
+  if (message.method === 'permission_request') {
+    return 36;
+  }
   if (message.method === 'prompt_done') {
     return clampHeight(38 + (promptDoneHasResultLine(message) ? 18 : 0));
   }
@@ -417,6 +422,15 @@ export function buildChatDisplayIndex(
   let activeToolGroup: ChatDisplayIndexItem | null = null;
   for (const item of sorted) {
     const turnIndex = positiveTurnIndex(item.message);
+    if (item.message.method === 'permission_response' && options.permissionState?.hiddenTurnIndexes.has(turnIndex)) {
+      continue;
+    }
+    if (item.message.method === 'permission_request') {
+      const permission = options.permissionState?.byRequestTurnIndex.get(turnIndex);
+      if (!permission || permission.status === 'pending') {
+        continue;
+      }
+    }
     if (item.message.method === 'agent_plan') {
       continue;
     }
@@ -425,7 +439,9 @@ export function buildChatDisplayIndex(
       continue;
     }
     const promptStatus = options.promptStatus?.(item.message) ?? null;
-    if (!operationId && options.shouldRender && !options.shouldRender(item.message, promptStatus)) {
+    const terminalPermission = item.message.method === 'permission_request' &&
+      options.permissionState?.byRequestTurnIndex.get(turnIndex)?.status !== 'pending';
+    if (!operationId && !terminalPermission && options.shouldRender && !options.shouldRender(item.message, promptStatus)) {
       continue;
     }
     if (isToolCallMethod(item.message.method)) {
@@ -455,7 +471,7 @@ export function buildChatDisplayIndex(
     );
     items.push({
       kind: 'turn',
-      ...(item.message.method === 'agent_thought_chunk' ? {compact: true} : {}),
+      ...(item.message.method === 'agent_thought_chunk' || item.message.method === 'permission_request' ? {compact: true} : {}),
       key: displayKey(item.message),
       turnIndex,
       endTurnIndex: turnIndex,

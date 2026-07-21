@@ -30,6 +30,7 @@ import type {
   RegistryNpmCommandResponse,
   RegistryPortRelayEnablePayload,
   RegistryPortRelaySnapshot,
+  RegistryPermissionRespondResponse,
   RegistryProject,
   RegistryProjectListResponse,
   RegistrySessionAttachmentCancelPayload,
@@ -589,6 +590,18 @@ export class RegistryWorkspaceService {
       throw new Error('session is not ready');
     }
     return this.repository.cancelSession(projectId, sessionId);
+  }
+
+  async respondProjectSessionPermission(
+    projectId: string,
+    sessionId: string,
+    permissionId: string,
+    optionId: string,
+  ): Promise<RegistryPermissionRespondResponse> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.respondSessionPermission(projectId, sessionId, permissionId, optionId);
   }
 
   async archiveSession(sessionId: string): Promise<{ok: boolean; sessionId: string; warning?: string}> {

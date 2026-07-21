@@ -40,6 +40,7 @@ import type {
   RegistryProjectListResponse,
   RegistryPortRelayEnablePayload,
   RegistryPortRelaySnapshot,
+  RegistryPermissionRespondResponse,
   RegistryResumableSession,
   RegistryArchivedSessionSummary,
   RegistrySessionArchiveReadResponse,
@@ -480,6 +481,9 @@ export class RegistryRepository {
         ? Math.max(0, Math.trunc(input.latestTurnIndex))
         : undefined,
       running: input.running === true,
+      pendingPermissionCount: typeof input.pendingPermissionCount === 'number' && Number.isFinite(input.pendingPermissionCount)
+        ? Math.max(0, Math.trunc(input.pendingPermissionCount))
+        : undefined,
       lastDoneTurnIndex: typeof input.lastDoneTurnIndex === 'number' && Number.isFinite(input.lastDoneTurnIndex)
         ? Math.max(0, Math.trunc(input.lastDoneTurnIndex))
         : undefined,
@@ -1805,6 +1809,27 @@ export class RegistryRepository {
   async startReleasePublish(hubId: string, input: Record<string, unknown>): Promise<RegistryReleasePublishResponse> {
     const state = await this.runHubStateAction(hubId, 'releasePublish', 'start', input);
     return releasePublishStateResponse(state);
+  }
+
+  async respondSessionPermission(
+    projectId: string,
+    sessionId: string,
+    permissionId: string,
+    optionId: string,
+  ): Promise<RegistryPermissionRespondResponse> {
+    const resp = await this.client.request({
+      method: RegistryMethods.SessionPermissionRespond,
+      projectId,
+      payload: {sessionId, permissionId, optionId},
+      timeoutMs: 15000,
+    });
+    const body = (resp.payload ?? {}) as Partial<RegistryPermissionRespondResponse>;
+    return {
+      accepted: body.accepted === true,
+      permissionId: typeof body.permissionId === 'string' ? body.permissionId : permissionId,
+      outcome: typeof body.outcome === 'string' ? body.outcome : '',
+      optionId: typeof body.optionId === 'string' ? body.optionId : optionId,
+    };
   }
 
   async queryReleasePublish(hubId: string, jobId: string): Promise<RegistryReleasePublishResponse> {

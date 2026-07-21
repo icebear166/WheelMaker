@@ -466,6 +466,7 @@ export interface RegistrySessionSummary {
   createRequestId?: string;
   latestTurnIndex?: number;
   running?: boolean;
+  pendingPermissionCount?: number;
   lastDoneTurnIndex?: number;
   lastDoneSuccess?: boolean;
   lastReadTurnIndex?: number;
@@ -473,6 +474,13 @@ export interface RegistrySessionSummary {
   commands?: RegistrySessionCommand[];
   usage?: RegistrySessionUsage;
   sessionActions?: RegistrySessionActionCapabilities;
+}
+
+export interface RegistryPermissionRespondResponse {
+  accepted: boolean;
+  permissionId: string;
+  outcome: 'selected' | string;
+  optionId: string;
 }
 
 export interface RegistryArchivedSessionSummary extends RegistrySessionSummary {

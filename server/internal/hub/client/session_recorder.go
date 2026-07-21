@@ -468,6 +468,10 @@ func (r *SessionRecorder) RecordPermissionRequest(ctx context.Context, sessionID
 			return 0, fmt.Errorf("permission request already exists: %s", payload.PermissionID)
 		}
 	}
+	rec, err := r.loadSessionForSummaryLocked(ctx, sessionID)
+	if err != nil {
+		return 0, err
+	}
 	turn := sessionTurnMessage{
 		sessionID: sessionID,
 		method:    acp.SessionTurnMethodPermissionRequest,
@@ -478,9 +482,7 @@ func (r *SessionRecorder) RecordPermissionRequest(ctx context.Context, sessionID
 	r.publishOpenTextTurnDone(state)
 	state.updateTurn(turn, "")
 	r.publishSessionTurn(turn, buildSessionTurnContentJSON(turn.method, turn.payload))
-	if err := r.publishCurrentSessionSummaryLocked(ctx, sessionID); err != nil {
-		return 0, err
-	}
+	r.publishSessionUpdated(r.sessionViewSummaryFromRecordLocked(*rec))
 	return turn.turnIndex, nil
 }
 
@@ -516,6 +518,10 @@ func (r *SessionRecorder) RecordPermissionResponse(ctx context.Context, sessionI
 	if !requestFound {
 		return 0, fmt.Errorf("permission request not found: %s", payload.PermissionID)
 	}
+	rec, err := r.loadSessionForSummaryLocked(ctx, sessionID)
+	if err != nil {
+		return 0, err
+	}
 	turn := sessionTurnMessage{
 		sessionID: sessionID,
 		method:    acp.SessionTurnMethodPermissionResponse,
@@ -526,22 +532,19 @@ func (r *SessionRecorder) RecordPermissionResponse(ctx context.Context, sessionI
 	r.publishOpenTextTurnDone(state)
 	state.updateTurn(turn, "")
 	r.publishSessionTurn(turn, buildSessionTurnContentJSON(turn.method, turn.payload))
-	if err := r.publishCurrentSessionSummaryLocked(ctx, sessionID); err != nil {
-		return 0, err
-	}
+	r.publishSessionUpdated(r.sessionViewSummaryFromRecordLocked(*rec))
 	return turn.turnIndex, nil
 }
 
-func (r *SessionRecorder) publishCurrentSessionSummaryLocked(ctx context.Context, sessionID string) error {
+func (r *SessionRecorder) loadSessionForSummaryLocked(ctx context.Context, sessionID string) (*SessionRecord, error) {
 	rec, err := r.store.LoadSession(ctx, r.projectName, sessionID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if rec == nil {
-		return fmt.Errorf("session not found: %s", sessionID)
+		return nil, fmt.Errorf("session not found: %s", sessionID)
 	}
-	r.publishSessionUpdated(r.sessionViewSummaryFromRecordLocked(*rec))
-	return nil
+	return rec, nil
 }
 
 func (r *SessionRecorder) handleSessionInfoUpdateLocked(ctx context.Context, event parsedSessionViewEvent) error {

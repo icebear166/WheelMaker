@@ -35,7 +35,7 @@ SQLite 只保存会话索引和热状态，不保存对话正文：
 
 ## 2. Turn 语义
 
-一个 session 内所有消息共享单调递增的 `turnIndex`，从 1 开始。`prompt_request`、agent message、thought、plan、tool call、`prompt_done` 都是普通 turn。
+一个 session 内所有消息共享单调递增的 `turnIndex`，从 1 开始。`prompt_request`、agent message、thought、plan、tool call、permission request/response、`prompt_done` 都是普通 turn。
 
 服务端、app source store、IndexedDB 都使用同一个 raw turn shape：
 
@@ -76,6 +76,29 @@ type RegistrySessionTurn = {
 - 文本/思考流式 turn 可以先以 `finished=false` 发布；服务端必须保证一个 session 最多只有当前尾部 turn 是 `finished=false`，不能出现中间 unfinished。
 - 当下一个 turn 或 `prompt_done` 到来时，服务端用同一个 `turnIndex` 重发完整内容并标记 `finished=true`，再发布更大的 turn。
 - 如果新 prompt 到来时上一个 prompt 还没有 terminal turn，服务端先合成 `prompt_done(stopReason="interrupted")`，再开始新 prompt。
+
+### Request Permission Turn
+
+该行为由 [`../../scope/2026-07-21-request-permission/spec-request-permission.md`](../../scope/2026-07-21-request-permission/spec-request-permission.md) 定义。
+
+ACP `session/request_permission` 不映射为 ToolCall，而是在当前 prompt 内追加一个 `permission_request` turn。用户实际选择后再追加 `permission_response` turn；两个事件使用不同的连续 turnIndex，存储层不原地覆盖 request，显示层按 `permissionId` 折叠为一条紧凑记录。
+
+```json
+{"method":"permission_request","param":{"permissionId":"perm_...","title":"Choose","detailsText":"...","options":[{"optionId":"a","name":"Continue","kind":"allow_once"}],"createdAt":"..."}}
+```
+
+```json
+{"method":"permission_response","param":{"permissionId":"perm_...","requestTurnIndex":20,"outcome":"selected","optionId":"a","optionName":"Continue","respondedAt":"..."}}
+```
+
+规则：
+
+- request 和 response 都是完整不可变事件，以 `finished=true` 发布；permission 是否 unresolved 由 prompt 内 turn 序列推导，不复用 turn 的 `finished` 字段。
+- `permission_request` 只保存当前 ACP request 的有界展示投影，不保存完整 ToolCallUpdate 或 provider 私有结构。
+- `permission_response` 只代表真实用户选择；cancel、failed、interrupted 和 Hub close 不生成伪造 response。
+- Web 顺序扫描 prompt：request 加入 unresolved，matching response 移除，`prompt_done` 清空剩余 unresolved。只有最新未结束 prompt 中 unmatched request 才可打开交互。
+- 多个 unresolved request 按 request turnIndex FIFO；非当前 session 的列表提示使用 summary 中由 recorder live turns 推导的 `pendingPermissionCount`，不要求预读所有 turns。
+- permission 交互复用 `session.message`、`session.read` 和 finished cursor，不增加 permission 专属 read、revision 或 pending-id snapshot。
 
 ### Thinking 实时发布频率
 
@@ -122,7 +145,8 @@ type RegistrySessionTurn = {
 1. `session/new` 更新或创建 `sessions` 投影。
 2. `session/prompt` params 生成 `prompt_request` turn。
 3. `session/update` 生成 agent/tool/thought/plan/user chunk turn。
-4. `session/prompt` result 生成 `prompt_done` turn，并触发本 prompt 的 turn 文件落盘。
+4. `session/request_permission` 生成 `permission_request`；用户选择通过 Registry `session.permission.respond` 生成 `permission_response` 并完成等待中的 ACP request。
+5. `session/prompt` result 生成 `prompt_done` turn，并触发本 prompt 的 turn 文件落盘。
 
 `session.read` 请求：
 
@@ -197,8 +221,15 @@ type Cursor = { turnIndex: number };
 - `session.read` 返回的 turns 视为服务端权威结果，覆盖响应区间，并和等待期间收到的实时消息 reconcile，避免旧缓存覆盖新流式内容。
 - `session.message` 只更新 turn store，不更新 title、preview、running、done、read、unread 状态。
 - UI 列表状态只看 Session Summary：`running=true` 显示进行中；否则当 `lastDoneTurnIndex > lastReadTurnIndex` 时，`lastDoneSuccess=false` 显示失败未查看，其他情况显示完成未查看。
+- Session resume、load 或 Registry reconnect 时，permission modal 必须等本次 `session.read` 与本地缓存 reconcile 完成后再由 turn 状态机决定；读取失败或连接断开时不从旧缓存打开 modal。Web 可以为 runtimeKey 保存一个不含 permission identity、也不持久化的 read-ready 门禁，但 pending 真相仍只来自 turns。
 - 选中 session 的显示视图由 raw source store 派生完整轻量 Display Index，再由 `react-virtuoso` 只挂载 visible + overscan items。上滑/下滑只改变 virtualizer range，不触发 server read。
 - 尾部锁定时新 turn 和 streaming 高度增长跟随到底；用户离开底部后保持当前锚点并显示回到底部 affordance。
+
+### Permission 的关闭与强关恢复
+
+正常 prompt cancel 或 Agent failure 由 `prompt_done(cancelled/failed)` 关闭该 prompt 内所有 unmatched permission。协议层可以向等待中的 ACP request 返回 cancelled，但 turn history 不把它记录成用户 response。
+
+permission turns 与所在 prompt 共用持久化边界。Hub 强关时尚未 terminal 的 prompt tail 仍只存在于 recorder 内存；重启后的 `latestTurnIndex` 回退到 `latestPersistedTurnIndex`。如果客户端缓存 cursor 领先服务端，既有 stale read repair 会清除该 live tail并全量重读，因此不会在 resume/load 后留下可操作的幽灵 permission。Registry 短暂断线但原 Hub 仍存活时，live tail 不回退，重连 read 完成后可以重新显示仍 unmatched 的 request。
 
 打开项目、切换 tab、切换 session 时，补读流程异步执行，不阻塞 UI 交互。
 

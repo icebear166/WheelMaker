@@ -285,6 +285,35 @@ func (s *noopStore) SaveAgentPreference(context.Context, AgentPreferenceRecord) 
 func (s *noopStore) DeleteSession(context.Context, string, string) error              { return nil }
 func (s *noopStore) Close() error                                                     { return nil }
 
+type failingLoadStore struct {
+	Store
+	err error
+}
+
+func (s *failingLoadStore) LoadSession(context.Context, string, string) (*SessionRecord, error) {
+	return nil, s.err
+}
+
+func TestPermissionRecorderDoesNotAppendBeforeSummaryPrerequisitesLoad(t *testing.T) {
+	loadErr := errors.New("load failed")
+	recorder := newSessionRecorder("proj1", &failingLoadStore{Store: &noopStore{}, err: loadErr}, nil)
+	state := &sessionPromptState{nextTurnIndex: 2}
+	state.ensureMaps()
+	recorder.promptState["sess-atomic"] = state
+
+	_, err := recorder.RecordPermissionRequest(context.Background(), "sess-atomic", acp.SessionTurnPermissionRequest{
+		PermissionID: "perm-atomic",
+		Title:        "Choose",
+		Options:      []acp.SessionTurnPermissionOption{{OptionID: "allow", Name: "Allow"}},
+	})
+	if !errors.Is(err, loadErr) {
+		t.Fatalf("RecordPermissionRequest error=%v, want %v", err, loadErr)
+	}
+	if len(state.turns) != 0 || state.nextTurnIndex != 2 {
+		t.Fatalf("permission turn mutated before prerequisites loaded: turns=%d next=%d", len(state.turns), state.nextTurnIndex)
+	}
+}
+
 func TestIsAgentExitError(t *testing.T) {
 	cases := []string{
 		"acp rpc error -1: agent process exited",
@@ -570,6 +599,99 @@ func TestSessionPermissionRespondRequestIsFirstWinsAndIdempotent(t *testing.T) {
 	var registryErr *acp.RegistryRequestError
 	if !errors.As(err, &registryErr) || registryErr.Code != acp.CodeConflict {
 		t.Fatalf("different-option error=%#v", err)
+	}
+}
+
+func TestSessionPermissionRespondConcurrentChoicesHaveOneWinner(t *testing.T) {
+	s := mustNewSession(t, "sess-race", "/tmp", "claude")
+	sink := newPermissionCaptureSink()
+	s.viewSink = sink
+	agentResult := make(chan acp.PermissionResult, 1)
+	go func() {
+		result, _ := s.SessionRequestPermission(context.Background(), 1, acp.PermissionRequestParams{
+			SessionID: "sess-race",
+			ToolCall:  acp.ToolCallRef{ToolCallID: "call-race", Title: "Choose"},
+			Options: []acp.PermissionOption{
+				{OptionID: "allow", Name: "Allow", Kind: "allow_once"},
+				{OptionID: "reject", Name: "Reject", Kind: "reject_once"},
+			},
+		})
+		agentResult <- result
+	}()
+	request := <-sink.requests
+
+	type choiceResult struct {
+		result acp.PermissionResult
+		err    error
+	}
+	choices := make(chan choiceResult, 2)
+	for _, optionID := range []string{"allow", "reject"} {
+		go func(optionID string) {
+			result, err := s.RespondPermission(context.Background(), request.PermissionID, optionID)
+			choices <- choiceResult{result: result, err: err}
+		}(optionID)
+	}
+
+	var winner acp.PermissionResult
+	conflicts := 0
+	for range 2 {
+		choice := <-choices
+		if choice.err == nil {
+			winner = choice.result
+			continue
+		}
+		var registryErr *acp.RegistryRequestError
+		if errors.As(choice.err, &registryErr) && registryErr.Code == acp.CodeConflict {
+			conflicts++
+			continue
+		}
+		t.Fatalf("unexpected choice error: %v", choice.err)
+	}
+	if winner.Outcome != "selected" || conflicts != 1 {
+		t.Fatalf("winner=%+v conflicts=%d", winner, conflicts)
+	}
+	if response := <-sink.responses; response.OptionID != winner.OptionID {
+		t.Fatalf("response=%+v, winner=%+v", response, winner)
+	}
+	select {
+	case duplicate := <-sink.responses:
+		t.Fatalf("unexpected duplicate response: %+v", duplicate)
+	default:
+	}
+	if result := <-agentResult; result != winner {
+		t.Fatalf("agent result=%+v, winner=%+v", result, winner)
+	}
+}
+
+func TestSessionPromptCancelEndsPermissionWithoutResponse(t *testing.T) {
+	s := mustNewSession(t, "sess-cancel", "/tmp", "claude")
+	sink := newPermissionCaptureSink()
+	s.viewSink = sink
+	promptCtx, cancelPromptContext := context.WithCancel(context.Background())
+	s.mu.Lock()
+	s.prompt.ctx = promptCtx
+	s.prompt.cancel = cancelPromptContext
+	s.mu.Unlock()
+	resultCh := make(chan acp.PermissionResult, 1)
+	go func() {
+		result, _ := s.SessionRequestPermission(context.Background(), 1, acp.PermissionRequestParams{
+			SessionID: "sess-cancel",
+			ToolCall:  acp.ToolCallRef{ToolCallID: "call-cancel"},
+			Options:   []acp.PermissionOption{{OptionID: "allow", Name: "Allow", Kind: "allow_once"}},
+		})
+		resultCh <- result
+	}()
+	<-sink.requests
+	if err := s.cancelPrompt(); err != nil {
+		t.Fatalf("cancelPrompt: %v", err)
+	}
+	if result := <-resultCh; result.Outcome != "cancelled" {
+		t.Fatalf("result=%+v, want cancelled", result)
+	}
+	select {
+	case response := <-sink.responses:
+		t.Fatalf("cancel wrote a user response: %+v", response)
+	default:
 	}
 }
 
