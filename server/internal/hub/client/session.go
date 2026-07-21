@@ -81,6 +81,7 @@ type Session struct {
 	mu            sync.Mutex
 	promptMu      sync.Mutex
 	executionKind string
+	permissions   sessionPermissionState
 }
 
 // newSession creates a Session with sensible defaults.
@@ -856,6 +857,7 @@ func (s *Session) promptStream(ctx context.Context, blocks []acp.ContentBlock) (
 // cancelPrompt emits tool_call_cancelled updates then sends session/cancel.
 
 func (s *Session) cancelPrompt() error {
+	s.cancelAllPendingPermissions()
 	s.mu.Lock()
 	sessID := s.acpSessionID
 	ready := s.ready
@@ -874,6 +876,7 @@ func (s *Session) cancelPrompt() error {
 }
 
 func (s *Session) recordPromptDone(stopReason string, message string) {
+	s.cancelAllPendingPermissions()
 	s.recordSessionViewEvent(SessionViewEvent{
 		Type:      SessionViewEventTypeACP,
 		SessionID: s.acpSessionID,
@@ -1127,33 +1130,6 @@ func (s *Session) SessionUpdate(params acp.SessionUpdateParams) {
 	case ch <- params:
 	case <-promptCtx.Done():
 	}
-}
-
-// SessionRequestPermission responds to session/request_permission agent requests.
-func (s *Session) SessionRequestPermission(ctx context.Context, requestID int64, params acp.PermissionRequestParams) (acp.PermissionResult, error) {
-	_ = ctx
-	_ = requestID
-
-	// Prefer persistent allow semantics, then one-shot allow semantics.
-	fallback := ""
-	for _, option := range params.Options {
-		kind := strings.ToLower(strings.TrimSpace(option.Kind))
-		optionID := strings.TrimSpace(option.OptionID)
-		name := strings.ToLower(strings.TrimSpace(option.Name))
-		if optionID == "" {
-			continue
-		}
-		if kind == "allow_always" || kind == "always" {
-			return acp.PermissionResult{Outcome: "selected", OptionID: optionID}, nil
-		}
-		if fallback == "" && (kind == "allow_once" || kind == "allow" || kind == "once" || strings.HasPrefix(kind, "allow") || strings.EqualFold(optionID, "allow") || strings.Contains(name, "allow")) {
-			fallback = optionID
-		}
-	}
-	if fallback != "" {
-		return acp.PermissionResult{Outcome: "selected", OptionID: fallback}, nil
-	}
-	return acp.PermissionResult{Outcome: "cancelled"}, nil
 }
 
 // handlePrompt sends text to the active (or lazily initialized) session and streams the reply.
