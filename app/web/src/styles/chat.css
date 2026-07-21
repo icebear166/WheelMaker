@@ -522,7 +522,7 @@
   top: calc(100% + 6px);
   right: 0;
   z-index: 95;
-  width: min(196px, calc(100vw - 18px));
+  width: min(264px, calc(100vw - 18px));
   padding: 5px;
   border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
   border-radius: 8px;
@@ -6437,4 +6437,87 @@
 .chat-session-panel-slideout .session-archive-menu {
   right: auto;
   left: 0;
+}
+
+
+.session-archive-menu {
+  transform-origin: top left;
+}
+
+.session-archive-menu-title {
+  padding: 3px 8px 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.session-archive-menu-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.session-archive-menu-item:hover {
+  background: var(--hover);
+}
+
+.session-archive-menu-item:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-primary) 58%, transparent);
+  outline-offset: 1px;
+}
+
+.session-archive-menu-item-icon {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+  color: color-mix(in srgb, var(--accent-primary) 78%, var(--text-primary));
+  transition: background 120ms ease;
+}
+
+.session-archive-menu-item:hover .session-archive-menu-item-icon {
+  background: color-mix(in srgb, var(--accent-primary) 20%, transparent);
+}
+
+.session-archive-menu-item-text {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.session-archive-menu-item-label {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-archive-menu-item-description {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-archive-menu-separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border-subtle);
 }

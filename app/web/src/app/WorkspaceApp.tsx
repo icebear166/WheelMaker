@@ -13930,32 +13930,49 @@ export function App() {
         </button>
         {sessionArchiveMenuOpen ? (
           <div className="session-archive-menu" role="menu" aria-label="Archive sessions">
+            <div className="session-archive-menu-title">Archive</div>
             <button
               type="button"
-              className="wide-project-action-menu-item"
+              className="session-archive-menu-item"
               onClick={() => requestArchiveOlderSessions(7)}
               role="menuitem"
             >
-              <span className="codicon codicon-archive" />
-              <span>Archive &gt; 7 days</span>
+              <span className="session-archive-menu-item-icon" aria-hidden="true">
+                <span className="codicon codicon-archive" />
+              </span>
+              <span className="session-archive-menu-item-text">
+                <span className="session-archive-menu-item-label">Archive &gt; 7 days</span>
+                <span className="session-archive-menu-item-description">Sessions idle for a week or more</span>
+              </span>
             </button>
             <button
               type="button"
-              className="wide-project-action-menu-item"
+              className="session-archive-menu-item"
               onClick={() => requestArchiveOlderSessions(14)}
               role="menuitem"
             >
-              <span className="codicon codicon-archive" />
-              <span>Archive &gt; 14 days</span>
+              <span className="session-archive-menu-item-icon" aria-hidden="true">
+                <span className="codicon codicon-archive" />
+              </span>
+              <span className="session-archive-menu-item-text">
+                <span className="session-archive-menu-item-label">Archive &gt; 14 days</span>
+                <span className="session-archive-menu-item-description">Sessions idle for two weeks or more</span>
+              </span>
             </button>
+            <div className="session-archive-menu-separator" role="separator" />
             <button
               type="button"
-              className="wide-project-action-menu-item"
+              className="session-archive-menu-item"
               onClick={() => enterArchivedMode().catch(() => undefined)}
               role="menuitem"
             >
-              <span className="codicon codicon-history" />
-              <span>Recover...</span>
+              <span className="session-archive-menu-item-icon" aria-hidden="true">
+                <span className="codicon codicon-history" />
+              </span>
+              <span className="session-archive-menu-item-text">
+                <span className="session-archive-menu-item-label">Recover...</span>
+                <span className="session-archive-menu-item-description">Browse and restore archived sessions</span>
+              </span>
             </button>
           </div>
         ) : null}

@@ -58,4 +58,26 @@ describe('session archive UI source integration', () => {
     expect(main).toContain('setArchiveBatchProgress(null);');
     expect(main).toContain("setArchiveBatchSummary('');");
   });
+
+  test('renders a rich two-line archive menu with icon badges and descriptions', () => {
+    const menuStart = main.indexOf('const renderChatArchiveControls = () =>');
+    const menuEnd = main.indexOf('const toggleOlderSessionsExpanded = (', menuStart);
+    const menuSource = main.slice(menuStart, menuEnd);
+
+    expect(menuSource).toContain('className="session-archive-menu-title"');
+    expect(menuSource.match(/className="session-archive-menu-item"/g)?.length).toBe(3);
+    expect(menuSource.match(/className="session-archive-menu-item-icon"/g)?.length).toBe(3);
+    expect(menuSource.match(/className="session-archive-menu-item-description"/g)?.length).toBe(3);
+    expect(menuSource).toContain('Sessions idle for a week or more');
+    expect(menuSource).toContain('Sessions idle for two weeks or more');
+    expect(menuSource).toContain('Browse and restore archived sessions');
+    expect(menuSource).toContain('className="session-archive-menu-separator"');
+    expect(menuSource).not.toContain('className="wide-project-action-menu-item"');
+
+    const styles = fs.readFileSync(path.join(__dirname, '../web/src/styles/chat.css'), 'utf8');
+    expect(styles).toContain('.session-archive-menu-item-icon');
+    expect(styles).toContain('.session-archive-menu-item-description');
+    expect(styles).toContain('.session-archive-menu-separator');
+    expect(styles).toContain('transform-origin: top left;');
+  });
 });
