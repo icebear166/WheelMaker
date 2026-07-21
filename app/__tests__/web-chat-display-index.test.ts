@@ -7,6 +7,7 @@ import {
   resolveChatDisplayScrollIndex,
 } from '../web/src/chat/turns/chatDisplayIndex';
 import type {RegistryChatMessage} from '../web/src/registry/registryTypes';
+import {deriveChatPermissionState} from '../web/src/chat/permission/chatPermissionState';
 
 function message(
   turnIndex: number,
@@ -38,6 +39,29 @@ function toolMessage(
 }
 
 describe('chat display index', () => {
+  test('folds a permission response into one compact request item and hides pending requests', () => {
+    const pendingMessages: RegistryChatMessage[] = [
+      message(1, 'prompt_request', 'run'),
+      {sessionId: 'sess-1', turnIndex: 2, method: 'permission_request', param: {permissionId: 'perm-1'}, finished: true},
+    ];
+    const pendingState = deriveChatPermissionState(pendingMessages);
+    expect(buildChatDisplayIndex(pendingMessages, {permissionState: pendingState}).items.map(item => item.turnIndex)).toEqual([1]);
+
+    const resolvedMessages: RegistryChatMessage[] = [
+      ...pendingMessages,
+      {sessionId: 'sess-1', turnIndex: 3, method: 'permission_response', param: {
+        permissionId: 'perm-1', requestTurnIndex: 2, outcome: 'selected', optionId: 'allow', optionName: 'Allow',
+      }, finished: true},
+    ];
+    const resolvedState = deriveChatPermissionState(resolvedMessages);
+    const index = buildChatDisplayIndex(resolvedMessages, {
+      permissionState: resolvedState,
+      shouldRender: () => false,
+    });
+    expect(index.items.map(item => item.turnIndex)).toEqual([2]);
+    expect(index.items[0]).toMatchObject({kind: 'turn', compact: true, estimatedHeight: 36});
+  });
+
   test('stores lightweight sorted render metadata without copying message content', () => {
     const source = [
       message(3, 'prompt_done', 'done'),

@@ -58,6 +58,7 @@ describe('registry workspace project-scoped chat service methods', () => {
       readSession: jest.fn().mockResolvedValue({ messages: [], latestTurnIndex: 0 }),
       sendSessionMessage: jest.fn().mockResolvedValue({ ok: true, sessionId: 's1' }),
       cancelSession: jest.fn().mockResolvedValue({ ok: true, sessionId: 's1' }),
+      respondSessionPermission: jest.fn().mockResolvedValue({accepted: true, permissionId: 'perm-1', outcome: 'selected', optionId: 'allow'}),
       setSessionConfig: jest.fn().mockResolvedValue({ ok: true, sessionId: 's1', configOptions: [] }),
       renameSession: jest.fn().mockResolvedValue({ ok: true, sessionId: 's1', session: { sessionId: 's1', title: 'Manual title', updatedAt: '' } }),
       deleteSession: jest.fn().mockResolvedValue({ ok: true, sessionId: 's1' }),
@@ -83,6 +84,7 @@ describe('registry workspace project-scoped chat service methods', () => {
       text: 'hello',
     });
     await (service as any).cancelProjectSession('chat-project', 's1');
+    await (service as any).respondProjectSessionPermission('chat-project', 's1', 'perm-1', 'allow');
     await (service as any).setProjectSessionConfig('chat-project', {
       sessionId: 's1',
       configId: 'model',
@@ -121,6 +123,7 @@ describe('registry workspace project-scoped chat service methods', () => {
       text: 'hello',
     });
     expect(repository.cancelSession).toHaveBeenCalledWith('chat-project', 's1');
+    expect(repository.respondSessionPermission).toHaveBeenCalledWith('chat-project', 's1', 'perm-1', 'allow');
     expect(repository.setSessionConfig).toHaveBeenCalledWith('chat-project', {
       sessionId: 's1',
       configId: 'model',

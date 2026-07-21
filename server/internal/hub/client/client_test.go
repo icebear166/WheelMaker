@@ -285,6 +285,35 @@ func (s *noopStore) SaveAgentPreference(context.Context, AgentPreferenceRecord) 
 func (s *noopStore) DeleteSession(context.Context, string, string) error              { return nil }
 func (s *noopStore) Close() error                                                     { return nil }
 
+type failingLoadStore struct {
+	Store
+	err error
+}
+
+func (s *failingLoadStore) LoadSession(context.Context, string, string) (*SessionRecord, error) {
+	return nil, s.err
+}
+
+func TestPermissionRecorderDoesNotAppendBeforeSummaryPrerequisitesLoad(t *testing.T) {
+	loadErr := errors.New("load failed")
+	recorder := newSessionRecorder("proj1", &failingLoadStore{Store: &noopStore{}, err: loadErr}, nil)
+	state := &sessionPromptState{nextTurnIndex: 2}
+	state.ensureMaps()
+	recorder.promptState["sess-atomic"] = state
+
+	_, err := recorder.RecordPermissionRequest(context.Background(), "sess-atomic", acp.SessionTurnPermissionRequest{
+		PermissionID: "perm-atomic",
+		Title:        "Choose",
+		Options:      []acp.SessionTurnPermissionOption{{OptionID: "allow", Name: "Allow"}},
+	})
+	if !errors.Is(err, loadErr) {
+		t.Fatalf("RecordPermissionRequest error=%v, want %v", err, loadErr)
+	}
+	if len(state.turns) != 0 || state.nextTurnIndex != 2 {
+		t.Fatalf("permission turn mutated before prerequisites loaded: turns=%d next=%d", len(state.turns), state.nextTurnIndex)
+	}
+}
+
 func TestIsAgentExitError(t *testing.T) {
 	cases := []string{
 		"acp rpc error -1: agent process exited",
@@ -337,6 +366,14 @@ func (f *failingSessionViewSink) RecordSessionOperation(context.Context, string,
 	return errors.New("session view sink failed")
 }
 
+func (f *failingSessionViewSink) RecordPermissionRequest(context.Context, string, acp.SessionTurnPermissionRequest) (int64, error) {
+	return 0, errors.New("session view sink failed")
+}
+
+func (f *failingSessionViewSink) RecordPermissionResponse(context.Context, string, acp.SessionTurnPermissionResponse) (int64, error) {
+	return 0, errors.New("session view sink failed")
+}
+
 type recordingSessionViewSink struct {
 	events []SessionViewEvent
 }
@@ -350,6 +387,14 @@ func (s *recordingSessionViewSink) RecordSessionOperation(context.Context, strin
 	return nil
 }
 
+func (s *recordingSessionViewSink) RecordPermissionRequest(context.Context, string, acp.SessionTurnPermissionRequest) (int64, error) {
+	return 1, nil
+}
+
+func (s *recordingSessionViewSink) RecordPermissionResponse(context.Context, string, acp.SessionTurnPermissionResponse) (int64, error) {
+	return 2, nil
+}
+
 func recordedSystemContents(events []SessionViewEvent) []string {
 	out := make([]string, 0, len(events))
 	for _, event := range events {
@@ -360,20 +405,293 @@ func recordedSystemContents(events []SessionViewEvent) []string {
 	return out
 }
 
-func TestSessionRequestPermissionRecognizesLegacyOnceKind(t *testing.T) {
+type permissionCaptureSink struct {
+	requests  chan acp.SessionTurnPermissionRequest
+	responses chan acp.SessionTurnPermissionResponse
+}
+
+func newPermissionCaptureSink() *permissionCaptureSink {
+	return &permissionCaptureSink{
+		requests:  make(chan acp.SessionTurnPermissionRequest, 8),
+		responses: make(chan acp.SessionTurnPermissionResponse, 8),
+	}
+}
+
+func (s *permissionCaptureSink) RecordEvent(context.Context, SessionViewEvent) error { return nil }
+func (s *permissionCaptureSink) RecordSessionOperation(context.Context, string, acp.SessionOperationPayload) error {
+	return nil
+}
+func (s *permissionCaptureSink) RecordPermissionRequest(_ context.Context, _ string, payload acp.SessionTurnPermissionRequest) (int64, error) {
+	s.requests <- payload
+	return 2, nil
+}
+func (s *permissionCaptureSink) RecordPermissionResponse(_ context.Context, _ string, payload acp.SessionTurnPermissionResponse) (int64, error) {
+	s.responses <- payload
+	return 3, nil
+}
+
+func TestSessionRequestPermissionWaitsForUserResponse(t *testing.T) {
 	s := mustNewSession(t, "sess-1", "/tmp", "claude")
-	result, err := s.SessionRequestPermission(context.Background(), 1, acp.PermissionRequestParams{
-		Options: []acp.PermissionOption{{
-			OptionID: "allow",
-			Name:     "Allow",
-			Kind:     "once",
-		}},
-	})
+	sink := newPermissionCaptureSink()
+	s.viewSink = sink
+	resultCh := make(chan acp.PermissionResult, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		result, err := s.SessionRequestPermission(context.Background(), 1, acp.PermissionRequestParams{
+			SessionID: "sess-1",
+			ToolCall:  acp.ToolCallRef{ToolCallID: "call-1", Title: "Choose"},
+			Options: []acp.PermissionOption{{
+				OptionID: "allow",
+				Name:     "Allow",
+				Kind:     "allow_once",
+			}},
+		})
+		resultCh <- result
+		errCh <- err
+	}()
+	request := <-sink.requests
+	if request.PermissionID == "" || request.Title != "Choose" {
+		t.Fatalf("request=%+v", request)
+	}
+	select {
+	case result := <-resultCh:
+		t.Fatalf("permission returned before user response: %+v", result)
+	default:
+	}
+	accepted, err := s.RespondPermission(context.Background(), request.PermissionID, "allow")
 	if err != nil {
+		t.Fatalf("RespondPermission: %v", err)
+	}
+	if accepted.Outcome != "selected" || accepted.OptionID != "allow" {
+		t.Fatalf("accepted=%+v", accepted)
+	}
+	if response := <-sink.responses; response.RequestTurnIndex != 2 || response.OptionID != "allow" {
+		t.Fatalf("response=%+v", response)
+	}
+	if err := <-errCh; err != nil {
 		t.Fatalf("SessionRequestPermission: %v", err)
 	}
-	if result.Outcome != "selected" || result.OptionID != "allow" {
-		t.Fatalf("permission result = %+v, want selected allow", result)
+	if result := <-resultCh; result != accepted {
+		t.Fatalf("permission result=%+v, want %+v", result, accepted)
+	}
+}
+
+func TestSessionRequestPermissionDoesNotAutoAllow(t *testing.T) {
+	s := mustNewSession(t, "sess-1", "/tmp", "claude")
+	sink := newPermissionCaptureSink()
+	s.viewSink = sink
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	resultCh := make(chan acp.PermissionResult, 1)
+	go func() {
+		result, _ := s.SessionRequestPermission(ctx, 1, acp.PermissionRequestParams{
+			SessionID: "sess-1",
+			ToolCall:  acp.ToolCallRef{ToolCallID: "call-1"},
+			Options: []acp.PermissionOption{{
+				OptionID: "always",
+				Name:     "Always allow",
+				Kind:     "allow_always",
+			}},
+		})
+		resultCh <- result
+	}()
+	<-sink.requests
+	select {
+	case result := <-resultCh:
+		t.Fatalf("permission auto-selected: %+v", result)
+	default:
+	}
+	cancel()
+	if result := <-resultCh; result.Outcome != "cancelled" {
+		t.Fatalf("result=%+v, want cancelled", result)
+	}
+}
+
+func TestSessionRequestPermissionNormalizesTextAndRejectsInvalidOptions(t *testing.T) {
+	s := mustNewSession(t, "sess-1", "/tmp", "claude")
+	sink := newPermissionCaptureSink()
+	s.viewSink = sink
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		_, _ = s.SessionRequestPermission(ctx, 1, acp.PermissionRequestParams{
+			SessionID: "sess-1",
+			ToolCall: acp.ToolCallRef{
+				ToolCallID: "call-1",
+				Content: []acp.ToolCallContent{
+					{Type: "content", Content: &acp.ContentBlock{Type: acp.ContentBlockTypeText, Text: "Question text"}},
+					{Type: "content", Content: &acp.ContentBlock{Type: acp.ContentBlockTypeImage, Data: "private"}},
+					{Type: "diff", Path: "secret", NewText: "private"},
+				},
+			},
+			Options: []acp.PermissionOption{{
+				OptionID: "continue",
+				Name:     "Continue",
+				Kind:     "allow_once",
+			}},
+		})
+	}()
+	request := <-sink.requests
+	if request.DetailsText != "Question text" {
+		t.Fatalf("detailsText=%q", request.DetailsText)
+	}
+	encoded := mustJSON(request)
+	if strings.Contains(string(encoded), "private") || strings.Contains(string(encoded), "secret") {
+		t.Fatalf("request retained rich/private content: %s", encoded)
+	}
+	cancel()
+
+	result, err := s.SessionRequestPermission(context.Background(), 2, acp.PermissionRequestParams{
+		SessionID: "sess-1",
+		ToolCall:  acp.ToolCallRef{ToolCallID: "call-2"},
+		Options: []acp.PermissionOption{
+			{OptionID: "duplicate", Name: "One"},
+			{OptionID: "duplicate", Name: "Two"},
+		},
+	})
+	if err != nil || result.Outcome != "cancelled" {
+		t.Fatalf("invalid options result=%+v err=%v", result, err)
+	}
+}
+
+func TestSessionPermissionRespondRequestIsFirstWinsAndIdempotent(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	s := mustNewSession(t, "sess-route", "/tmp", "claude")
+	sink := newPermissionCaptureSink()
+	s.viewSink = sink
+	c.mu.Lock()
+	c.sessions["sess-route"] = s
+	c.mu.Unlock()
+	resultCh := make(chan acp.PermissionResult, 1)
+	go func() {
+		result, _ := s.SessionRequestPermission(context.Background(), 1, acp.PermissionRequestParams{
+			SessionID: "sess-route",
+			ToolCall:  acp.ToolCallRef{ToolCallID: "call-route", Title: "Choose"},
+			Options: []acp.PermissionOption{
+				{OptionID: "one", Name: "One", Kind: "allow_once"},
+				{OptionID: "two", Name: "Two", Kind: "reject_once"},
+			},
+		})
+		resultCh <- result
+	}()
+	request := <-sink.requests
+	payload := mustJSON(map[string]any{
+		"sessionId": "sess-route", "permissionId": request.PermissionID, "optionId": "one",
+	})
+	response, err := c.HandleSessionRequest(context.Background(), acp.RegistryMethodSessionPermissionRespond, "proj1", payload)
+	if err != nil {
+		t.Fatalf("HandleSessionRequest: %v", err)
+	}
+	body := response.(map[string]any)
+	if body["accepted"] != true || body["optionId"] != "one" {
+		t.Fatalf("response=%#v", body)
+	}
+	if result := <-resultCh; result.OptionID != "one" {
+		t.Fatalf("agent result=%+v", result)
+	}
+	if _, err := c.HandleSessionRequest(context.Background(), acp.RegistryMethodSessionPermissionRespond, "proj1", payload); err != nil {
+		t.Fatalf("same-option retry: %v", err)
+	}
+	conflictPayload := mustJSON(map[string]any{
+		"sessionId": "sess-route", "permissionId": request.PermissionID, "optionId": "two",
+	})
+	_, err = c.HandleSessionRequest(context.Background(), acp.RegistryMethodSessionPermissionRespond, "proj1", conflictPayload)
+	var registryErr *acp.RegistryRequestError
+	if !errors.As(err, &registryErr) || registryErr.Code != acp.CodeConflict {
+		t.Fatalf("different-option error=%#v", err)
+	}
+}
+
+func TestSessionPermissionRespondConcurrentChoicesHaveOneWinner(t *testing.T) {
+	s := mustNewSession(t, "sess-race", "/tmp", "claude")
+	sink := newPermissionCaptureSink()
+	s.viewSink = sink
+	agentResult := make(chan acp.PermissionResult, 1)
+	go func() {
+		result, _ := s.SessionRequestPermission(context.Background(), 1, acp.PermissionRequestParams{
+			SessionID: "sess-race",
+			ToolCall:  acp.ToolCallRef{ToolCallID: "call-race", Title: "Choose"},
+			Options: []acp.PermissionOption{
+				{OptionID: "allow", Name: "Allow", Kind: "allow_once"},
+				{OptionID: "reject", Name: "Reject", Kind: "reject_once"},
+			},
+		})
+		agentResult <- result
+	}()
+	request := <-sink.requests
+
+	type choiceResult struct {
+		result acp.PermissionResult
+		err    error
+	}
+	choices := make(chan choiceResult, 2)
+	for _, optionID := range []string{"allow", "reject"} {
+		go func(optionID string) {
+			result, err := s.RespondPermission(context.Background(), request.PermissionID, optionID)
+			choices <- choiceResult{result: result, err: err}
+		}(optionID)
+	}
+
+	var winner acp.PermissionResult
+	conflicts := 0
+	for range 2 {
+		choice := <-choices
+		if choice.err == nil {
+			winner = choice.result
+			continue
+		}
+		var registryErr *acp.RegistryRequestError
+		if errors.As(choice.err, &registryErr) && registryErr.Code == acp.CodeConflict {
+			conflicts++
+			continue
+		}
+		t.Fatalf("unexpected choice error: %v", choice.err)
+	}
+	if winner.Outcome != "selected" || conflicts != 1 {
+		t.Fatalf("winner=%+v conflicts=%d", winner, conflicts)
+	}
+	if response := <-sink.responses; response.OptionID != winner.OptionID {
+		t.Fatalf("response=%+v, winner=%+v", response, winner)
+	}
+	select {
+	case duplicate := <-sink.responses:
+		t.Fatalf("unexpected duplicate response: %+v", duplicate)
+	default:
+	}
+	if result := <-agentResult; result != winner {
+		t.Fatalf("agent result=%+v, winner=%+v", result, winner)
+	}
+}
+
+func TestSessionPromptCancelEndsPermissionWithoutResponse(t *testing.T) {
+	s := mustNewSession(t, "sess-cancel", "/tmp", "claude")
+	sink := newPermissionCaptureSink()
+	s.viewSink = sink
+	promptCtx, cancelPromptContext := context.WithCancel(context.Background())
+	s.mu.Lock()
+	s.prompt.ctx = promptCtx
+	s.prompt.cancel = cancelPromptContext
+	s.mu.Unlock()
+	resultCh := make(chan acp.PermissionResult, 1)
+	go func() {
+		result, _ := s.SessionRequestPermission(context.Background(), 1, acp.PermissionRequestParams{
+			SessionID: "sess-cancel",
+			ToolCall:  acp.ToolCallRef{ToolCallID: "call-cancel"},
+			Options:   []acp.PermissionOption{{OptionID: "allow", Name: "Allow", Kind: "allow_once"}},
+		})
+		resultCh <- result
+	}()
+	<-sink.requests
+	if err := s.cancelPrompt(); err != nil {
+		t.Fatalf("cancelPrompt: %v", err)
+	}
+	if result := <-resultCh; result.Outcome != "cancelled" {
+		t.Fatalf("result=%+v, want cancelled", result)
+	}
+	select {
+	case response := <-sink.responses:
+		t.Fatalf("cancel wrote a user response: %+v", response)
+	default:
 	}
 }
 
@@ -5882,6 +6200,102 @@ func TestSessionViewReadSkipsPermissionRequestTurns(t *testing.T) {
 	}
 	if method := decodeTurnMethod(t, messages[1].Content); method != acp.SessionUpdateAgentMessageChunk {
 		t.Fatalf("messages[1] method = %q, want %q", method, acp.SessionUpdateAgentMessageChunk)
+	}
+}
+
+func TestSessionRecorderAppendsPermissionRequestAndResponseTurns(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	if err := c.RecordEvent(ctx, sessionViewCreatedEvent("sess-permission", "Permission")); err != nil {
+		t.Fatalf("RecordEvent created: %v", err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptEvent("sess-permission", "run protected", nil)); err != nil {
+		t.Fatalf("RecordEvent prompt: %v", err)
+	}
+
+	requestIndex, err := c.RecordPermissionRequest(ctx, "sess-permission", acp.SessionTurnPermissionRequest{
+		PermissionID: "perm-1",
+		Title:        "Choose",
+		Options:      []acp.SessionTurnPermissionOption{{OptionID: "allow", Name: "Allow", Kind: "allow_once"}},
+		CreatedAt:    "2026-07-21T10:00:00Z",
+	})
+	if err != nil {
+		t.Fatalf("RecordPermissionRequest: %v", err)
+	}
+	if requestIndex != 2 {
+		t.Fatalf("requestIndex=%d, want 2", requestIndex)
+	}
+	responseIndex, err := c.RecordPermissionResponse(ctx, "sess-permission", acp.SessionTurnPermissionResponse{
+		PermissionID:     "perm-1",
+		RequestTurnIndex: requestIndex,
+		Outcome:          "selected",
+		OptionID:         "allow",
+		OptionName:       "Allow",
+		RespondedAt:      "2026-07-21T10:01:00Z",
+	})
+	if err != nil {
+		t.Fatalf("RecordPermissionResponse: %v", err)
+	}
+	if responseIndex != 3 {
+		t.Fatalf("responseIndex=%d, want 3", responseIndex)
+	}
+
+	latest, turns, err := c.sessionRecorder.ReadSessionTurns(ctx, "sess-permission", 1)
+	if err != nil {
+		t.Fatalf("ReadSessionTurns: %v", err)
+	}
+	if latest != 3 || len(turns) != 2 {
+		t.Fatalf("latest=%d turns=%#v", latest, turns)
+	}
+	for _, turn := range turns {
+		if !turn.Finished {
+			t.Fatalf("permission turn is not finished: %#v", turn)
+		}
+	}
+	if method := decodeTurnMethod(t, turns[0].Content); method != acp.SessionTurnMethodPermissionRequest {
+		t.Fatalf("request method=%q", method)
+	}
+	if method := decodeTurnMethod(t, turns[1].Content); method != acp.SessionTurnMethodPermissionResponse {
+		t.Fatalf("response method=%q", method)
+	}
+}
+
+func TestSessionRecorderPermissionSummaryCountTracksLiveTurns(t *testing.T) {
+	c := newSessionViewTestClient(t)
+	ctx := context.Background()
+	if err := c.RecordEvent(ctx, sessionViewCreatedEvent("sess-count", "Permission Count")); err != nil {
+		t.Fatalf("RecordEvent created: %v", err)
+	}
+	if err := c.RecordEvent(ctx, sessionViewPromptEvent("sess-count", "run", nil)); err != nil {
+		t.Fatalf("RecordEvent prompt: %v", err)
+	}
+	requestIndex, err := c.RecordPermissionRequest(ctx, "sess-count", acp.SessionTurnPermissionRequest{
+		PermissionID: "perm-count",
+		Title:        "Choose",
+		Options:      []acp.SessionTurnPermissionOption{{OptionID: "one", Name: "One", Kind: "allow_once"}},
+		CreatedAt:    "2026-07-21T10:00:00Z",
+	})
+	if err != nil {
+		t.Fatalf("RecordPermissionRequest: %v", err)
+	}
+	summary, err := c.sessionRecorder.ReadSessionSummary(ctx, "sess-count")
+	if err != nil {
+		t.Fatalf("ReadSessionSummary: %v", err)
+	}
+	if summary.PendingPermissionCount != 1 {
+		t.Fatalf("pendingPermissionCount=%d, want 1", summary.PendingPermissionCount)
+	}
+	if _, err := c.RecordPermissionResponse(ctx, "sess-count", acp.SessionTurnPermissionResponse{
+		PermissionID: "perm-count", RequestTurnIndex: requestIndex, Outcome: "selected", OptionID: "one", OptionName: "One",
+	}); err != nil {
+		t.Fatalf("RecordPermissionResponse: %v", err)
+	}
+	summary, err = c.sessionRecorder.ReadSessionSummary(ctx, "sess-count")
+	if err != nil {
+		t.Fatalf("ReadSessionSummary after response: %v", err)
+	}
+	if summary.PendingPermissionCount != 0 {
+		t.Fatalf("pendingPermissionCount=%d, want 0", summary.PendingPermissionCount)
 	}
 }
 

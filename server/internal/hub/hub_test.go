@@ -1120,7 +1120,7 @@ func TestReporterRun_RegistersAndServesFSRequests(t *testing.T) {
 	}
 }
 
-func TestReporterRespondsToSessionRequests(t *testing.T) {
+func TestReporterRespondsToSessionPermissionRespondRequests(t *testing.T) {
 	upgrader := websocket.Upgrader{}
 	reqSeen := make(chan testEnvelope, 1)
 	respSeen := make(chan testEnvelope, 1)
@@ -1176,11 +1176,12 @@ func TestReporterRespondsToSessionRequests(t *testing.T) {
 		request := testEnvelope{
 			RequestID: 100,
 			Type:      "request",
-			Method:    "session.send",
+			Method:    rp.RegistryMethodSessionPermissionRespond,
 			ProjectID: "hub-session:proj1",
 			Payload: map[string]any{
-				"sessionId": "sess-1",
-				"text":      "hello session",
+				"sessionId":    "sess-1",
+				"permissionId": "perm-1",
+				"optionId":     "allow",
 			},
 		}
 		mustWriteJSON(t, ws, request)
@@ -1224,14 +1225,14 @@ func TestReporterRespondsToSessionRequests(t *testing.T) {
 	case err := <-errSeen:
 		t.Fatalf("fake registry error: %v", err)
 	case resp := <-respSeen:
-		if resp.Type != "response" || resp.Method != "session.send" {
-			t.Fatalf("unexpected session.send response: %#v", resp)
+		if resp.Type != "response" || resp.Method != rp.RegistryMethodSessionPermissionRespond {
+			t.Fatalf("unexpected permission response: %#v", resp)
 		}
-		if handler.lastMethod != "session.send" || !strings.Contains(handler.lastBody, "\"sessionId\":\"sess-1\"") {
+		if handler.lastMethod != rp.RegistryMethodSessionPermissionRespond || !strings.Contains(handler.lastBody, "\"permissionId\":\"perm-1\"") {
 			t.Fatalf("handler saw method=%q body=%q", handler.lastMethod, handler.lastBody)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("did not receive session.send response from reporter")
+		t.Fatal("did not receive session.permission.respond response from reporter")
 	}
 
 }

@@ -33,8 +33,20 @@ WheelMaker 把 ACP 作为 Client 与 Agent 之间的业务协议。协议类型�
 - `text` 和 `resource_link` 是基础 ContentBlock；`image`、`audio` 和嵌入式 `resource` 受 prompt capabilities 门禁。
 - 工具调用使用 `tool_call` 建立，再通过 `tool_call_update` 更新。稳定状态集合是 `pending`、`in_progress`、`completed`、`failed`。
 - Agent 可以通过 `session/request_permission` 请求用户授权；回合取消时，待处理的权限请求也必须得到取消结果。
+- `session/request_permission.params` 包含 `sessionId`、`toolCall: ToolCallUpdate` 和 `options`。`toolCall` 是当前请求携带的操作详情，不要求 Client 把 permission 转换成 ToolCall，也不保证 `content` 是专门的问题字段。
 - `plan` 和 `config_option_update` 携带完整快照，消费者应替换对应状态，不把它们当成增量 patch。
 - `session/set_config_option` 返回完整配置项列表。Session Modes 只作为 legacy 输入字段保留，新路径使用 `configOptions`。
+
+### WheelMaker Request Permission
+
+该行为由 [`../../scope/2026-07-21-request-permission/spec-request-permission.md`](../../scope/2026-07-21-request-permission/spec-request-permission.md) 定义。
+
+- WheelMaker 对所有 provider 使用同一 permission 路径，不识别 Kimi `AskUserQuestion` 或其他 provider 私有工具名。
+- Client 只从当前 request 投影 title、标准 text content 和 permission options；不关联已有 ToolCall，不保存完整 `ToolCallUpdate`、raw input/output 或富内容。
+- permission request 在当前 prompt 中成为 `permission_request` turn；只有用户实际选择才产生 `permission_response` turn。两者是追加事件，UI 可以按 `permissionId` 折叠展示。
+- 用户选择通过 WheelMaker Registry `session.permission.respond` 回到持有 ACP request 的 Hub Session；它不是新的 `session/prompt` 或 user message。
+- prompt cancel 时，ACP waiter 返回 `cancelled`，但历史中不伪造用户 response；`prompt_done` 是未回答 permission 的 terminal 边界。
+- Hub 重启不恢复旧 permission waiter。未完成 prompt tail 按 WheelMaker 现有 turn rollback 语义清理，session resume/load 不因历史 request 打开交互。
 
 ## WheelMaker 实现边界
 
@@ -50,3 +62,4 @@ WheelMaker 把 ACP 作为 Client 与 Agent 之间的业务协议。协议类型�
 来源：
 
 - [`../../scope/2026-07-20-kimi-acp-provider/spec-kimi-acp-provider.md`](../../scope/2026-07-20-kimi-acp-provider/spec-kimi-acp-provider.md)
+- [`../../scope/2026-07-21-request-permission/spec-request-permission.md`](../../scope/2026-07-21-request-permission/spec-request-permission.md)

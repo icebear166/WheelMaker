@@ -501,6 +501,14 @@ func (c *Client) RecordSessionOperation(ctx context.Context, sessionID string, p
 	return c.sessionRecorder.RecordSessionOperation(ctx, sessionID, payload)
 }
 
+func (c *Client) RecordPermissionRequest(ctx context.Context, sessionID string, payload acp.SessionTurnPermissionRequest) (int64, error) {
+	return c.sessionRecorder.RecordPermissionRequest(ctx, sessionID, payload)
+}
+
+func (c *Client) RecordPermissionResponse(ctx context.Context, sessionID string, payload acp.SessionTurnPermissionResponse) (int64, error) {
+	return c.sessionRecorder.RecordPermissionResponse(ctx, sessionID, payload)
+}
+
 func (c *Client) HandleSessionRequest(ctx context.Context, method string, projectID string, payload json.RawMessage) (any, error) {
 	switch strings.TrimSpace(method) {
 	case acp.RegistryMethodSessionList:
@@ -834,6 +842,35 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 			return nil, err
 		}
 		return map[string]any{"ok": true, "sessionId": sessionID}, nil
+	case acp.RegistryMethodSessionPermissionRespond:
+		var req struct {
+			SessionID    string `json:"sessionId"`
+			PermissionID string `json:"permissionId"`
+			OptionID     string `json:"optionId"`
+		}
+		if err := decodeSessionRequestPayload(payload, &req); err != nil {
+			return nil, &acp.RegistryRequestError{Code: acp.CodeInvalidArgument, Message: "invalid session.permission.respond payload"}
+		}
+		sessionID := strings.TrimSpace(req.SessionID)
+		if sessionID == "" || req.PermissionID == "" || req.OptionID == "" {
+			return nil, &acp.RegistryRequestError{Code: acp.CodeInvalidArgument, Message: "sessionId, permissionId and optionId are required"}
+		}
+		c.mu.Lock()
+		sess := c.sessions[sessionID]
+		c.mu.Unlock()
+		if sess == nil {
+			return nil, &acp.RegistryRequestError{Code: acp.CodeNotFound, Message: "live permission session not found"}
+		}
+		result, err := sess.RespondPermission(ctx, req.PermissionID, req.OptionID)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{
+			"accepted":     true,
+			"permissionId": req.PermissionID,
+			"outcome":      result.Outcome,
+			"optionId":     result.OptionID,
+		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported session method: %s", method)
 	}

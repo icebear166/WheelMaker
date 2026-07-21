@@ -108,6 +108,15 @@ import {
 import { ChatSessionNav } from '../chat/ChatSessionNav';
 import { ChatSurface } from '../chat/ChatSurface';
 import { ChatTurnView } from '../chat/ChatTurnView';
+import {ChatPermissionDialog} from '../chat/permission/ChatPermissionDialog';
+import {
+  deriveChatPermissionState,
+  permissionRequestView,
+} from '../chat/permission/chatPermissionState';
+import {
+  ChatPermissionReadGate,
+  type ChatPermissionReadToken,
+} from '../chat/permission/chatPermissionReadGate';
 import {ChatToolCallGroup} from '../chat/ChatToolCallGroup';
 import {ChatPlanSurface} from '../chat/ChatPlanSurface';
 import {ChatRecentSessionsSurface} from '../chat/ChatRecentSessionsSurface';
@@ -2468,6 +2477,14 @@ export function App() {
   }), []);
   const registryAddress = registryEndpoints.wsURL;
   const [connected, setConnected] = useState(false);
+  const permissionReadGateRef = useRef(new ChatPermissionReadGate());
+  const [permissionReadRevision, setPermissionReadRevision] = useState(0);
+  const [permissionSubmission, setPermissionSubmission] = useState({
+    runtimeKey: '',
+    permissionId: '',
+    optionId: '',
+    error: '',
+  });
   const [error, setError] = useState('');
   const registryAuthController = useMemo(() => {
     const endpoints = deriveRegistryEndpoints(document.baseURI, {
@@ -3454,6 +3471,30 @@ export function App() {
     selectedChatEncodedKey && chatVisibleRuntimeKeyRef.current === selectedChatEncodedKey
       ? chatMessages
       : [];
+  const selectedPermissionState = useMemo(
+    () => deriveChatPermissionState(selectedFullChatMessages),
+    [selectedFullChatMessages],
+  );
+  const archivedPermissionState = useMemo(
+    () => deriveChatPermissionState(archivedPreview?.messages ?? []),
+    [archivedPreview?.messages],
+  );
+  const selectedActivePermission = useMemo(() => {
+    void permissionReadRevision;
+    if (
+      !connected ||
+      archivedMode ||
+      !selectedChatEncodedKey ||
+      !permissionReadGateRef.current.isReady(selectedChatEncodedKey)
+    ) {
+      return null;
+    }
+    return selectedPermissionState.active;
+  }, [archivedMode, connected, permissionReadRevision, selectedChatEncodedKey, selectedPermissionState]);
+  const selectedActivePermissionView = useMemo(
+    () => selectedActivePermission ? permissionRequestView(selectedActivePermission.request) : null,
+    [selectedActivePermission],
+  );
   const selectedPromptTurnStatusIndex = useMemo(
     () => buildPromptTurnStatusIndex(selectedFullChatMessages),
     [selectedFullChatMessages],
@@ -3555,6 +3596,7 @@ export function App() {
 
   const chatDisplayIndex = useMemo(() => buildChatDisplayIndex(chatMessages, {
     layoutMetrics: chatLayoutMetrics,
+    permissionState: selectedPermissionState,
     promptStatus: selectedPromptTurnStatusIndex.statusFor,
     shouldRender: (message, promptStatus) => {
       const resolvedPromptStatus = isPromptStartMessage(message)
@@ -3575,12 +3617,14 @@ export function App() {
     selectedPromptTurnStatusIndex,
     selectedPendingPrompt,
     selectedQueuedPrompts,
+    selectedPermissionState,
   ]);
   const archivedChatDisplayIndex = useMemo(() => buildChatDisplayIndex(archivedPreview?.messages ?? [], {
     layoutMetrics: chatLayoutMetrics,
+    permissionState: archivedPermissionState,
     promptStatus: () => null,
     shouldRender: (message, promptStatus) => shouldRenderChatTurn(message, promptStatus),
-  }), [archivedPreview?.messages, chatLayoutMetrics]);
+  }), [archivedPreview?.messages, archivedPermissionState, chatLayoutMetrics]);
 
   const confirmSearchTarget = (target: ChatSearchTarget) => {
     setSearchTargetPickerOpen(false);
@@ -3704,6 +3748,19 @@ export function App() {
     activeProjectId: string,
     sessionId: string,
   ): string => encodeChatSessionKey(chatSessionKeyFromParts(activeProjectId, sessionId));
+
+  const markPermissionReadPending = (runtimeKey: string): ChatPermissionReadToken => {
+    const wasReady = permissionReadGateRef.current.isReady(runtimeKey);
+    const token = permissionReadGateRef.current.begin(runtimeKey);
+    if (wasReady) setPermissionReadRevision(revision => revision + 1);
+    return token;
+  };
+
+  const markPermissionReadReady = (runtimeKey: string, token: ChatPermissionReadToken) => {
+    if (permissionReadGateRef.current.complete(runtimeKey, token)) {
+      setPermissionReadRevision(revision => revision + 1);
+    }
+  };
 
   const commitDraftSessionsByProjectId = (next: Record<string, DraftChatSession[]>) => {
     draftSessionsByProjectIdRef.current = next;
@@ -8991,6 +9048,23 @@ export function App() {
   };
 
   const renderSessionLeadingState = (session: RegistryChatSession, targetProjectId: string) => {
+    const pendingPermissionCount = Math.max(0, Math.trunc(session.pendingPermissionCount ?? 0));
+    if (pendingPermissionCount > 0) {
+      return (
+        <span
+          className="session-state-leading permission-pending"
+          title={`${pendingPermissionCount} decision${pendingPermissionCount === 1 ? '' : 's'} waiting`}
+          aria-label={`${pendingPermissionCount} decision${pendingPermissionCount === 1 ? '' : 's'} waiting`}
+        >
+          <span className="codicon codicon-question" aria-hidden="true" />
+          {pendingPermissionCount > 1 ? (
+            <span className="session-permission-count" aria-hidden="true">
+              {pendingPermissionCount > 9 ? '9+' : pendingPermissionCount}
+            </span>
+          ) : null}
+        </span>
+      );
+    }
     const state = resolveSessionVisualState(session, targetProjectId);
     if (state !== 'running' && state !== 'completed-unviewed' && state !== 'failed-unviewed') {
       return null;
@@ -9055,6 +9129,7 @@ export function App() {
   ) => {
     if (!activeProjectId || !sessionId) return false;
     const runtimeKey = buildChatRuntimeKey(activeProjectId, sessionId);
+    const permissionReadEpoch = markPermissionReadPending(runtimeKey);
     const finishLoadDiagnostic = startWorkspaceDiagnosticSpan('load_chat_session', {
       projectId: activeProjectId,
       sessionId,
@@ -9163,6 +9238,7 @@ export function App() {
           }),
         );
       }
+      markPermissionReadReady(resultRuntimeKey, permissionReadEpoch);
       persistChatSessionContent(resultSessionId, activeProjectId, result.session);
       const knownSession =
         resultSession ??
@@ -9202,6 +9278,7 @@ export function App() {
   ) => {
     if (!activeProjectId || !sessionId) return false;
     const runtimeKey = buildChatRuntimeKey(activeProjectId, sessionId);
+    const permissionReadEpoch = markPermissionReadPending(runtimeKey);
     try {
       const turnState = ensureChatTurnStore(runtimeKey);
       const checkpointTurnIndex = turnState.cursor.turnIndex;
@@ -9238,6 +9315,7 @@ export function App() {
       if (encodeChatSessionKey(selectedChatKeyRef.current) === resultRuntimeKey) {
         setVisibleChatMessagesForRuntimeKey(resultRuntimeKey, nextMessages);
       }
+      markPermissionReadReady(resultRuntimeKey, permissionReadEpoch);
       persistChatSessionContent(resultSessionId, activeProjectId, result.session);
       if (
         encodeChatSessionKey(selectedChatKeyRef.current) === resultRuntimeKey &&
@@ -10253,6 +10331,9 @@ export function App() {
     preserveComposer?: boolean;
   } = {}) => {
     if (voiceAwaitingFinalRef.current) {
+      return;
+    }
+    if (selectedActivePermission) {
       return;
     }
     const sourceAttachments = options.attachmentsOverride ?? chatAttachments;
@@ -15561,6 +15642,9 @@ export function App() {
     const unsubscribeClose = service.onClose(() => {
       chatRealtimeFlushSchedulerRef.current?.flushNow();
       connectedRef.current = false;
+      permissionReadGateRef.current.disconnect();
+      setPermissionReadRevision(revision => revision + 1);
+      setPermissionSubmission({runtimeKey: '', permissionId: '', optionId: '', error: ''});
       setConnected(false);
       chatQueuedPromptsByKeyRef.current = {};
       setChatQueuedPromptsByKey({});
@@ -17058,7 +17142,61 @@ export function App() {
     [chatDisplayIndex, selectedChatPromptRunning],
   );
   const selectedChatExecutionRunning = selectedChatPromptRunning || selectedChatCompactionRunning;
-  const chatSendDisabled = selectedChatSubmitPending || chatAttachmentUploadPending;
+  const chatSendDisabled = selectedChatSubmitPending || chatAttachmentUploadPending || !!selectedActivePermission;
+  const submitChatPermission = useCallback(async (optionId: string) => {
+    const activePermission = selectedActivePermission;
+    const selectedKey = selectedChatKey;
+    if (
+      !connected ||
+      !activePermission ||
+      !selectedKey ||
+      permissionSubmission.optionId
+    ) {
+      return;
+    }
+    const runtimeKey = encodeChatSessionKey(selectedKey);
+    setPermissionSubmission({
+      runtimeKey,
+      permissionId: activePermission.permissionId,
+      optionId,
+      error: '',
+    });
+    try {
+      await service.respondProjectSessionPermission(
+        selectedKey.projectId,
+        selectedKey.sessionId,
+        activePermission.permissionId,
+        optionId,
+      );
+      await refreshSessionTurns(selectedKey.sessionId, selectedKey.projectId, runtimeKey);
+    } catch (err) {
+      const responseError = err instanceof Error ? err.message : String(err);
+      await refreshSessionTurns(selectedKey.sessionId, selectedKey.projectId, runtimeKey);
+      setPermissionSubmission(current => (
+        current.runtimeKey === runtimeKey && current.permissionId === activePermission.permissionId
+          ? {...current, optionId: '', error: responseError}
+          : current
+      ));
+    }
+  }, [
+    connected,
+    permissionSubmission.optionId,
+    selectedActivePermission,
+    selectedChatKey,
+  ]);
+
+  useEffect(() => {
+    const runtimeKey = selectedChatKey ? encodeChatSessionKey(selectedChatKey) : '';
+    if (
+      !selectedActivePermission ||
+      permissionSubmission.runtimeKey !== runtimeKey ||
+      permissionSubmission.permissionId !== selectedActivePermission.permissionId
+    ) {
+      if (permissionSubmission.runtimeKey || permissionSubmission.permissionId || permissionSubmission.optionId || permissionSubmission.error) {
+        setPermissionSubmission({runtimeKey: '', permissionId: '', optionId: '', error: ''});
+      }
+    }
+  }, [permissionSubmission, selectedActivePermission, selectedChatKey]);
   const selectedChatPromptCancelling =
     !!selectedChatEncodedKey && chatCancellingRuntimeKey === selectedChatEncodedKey;
   const chatComposerStopTriggerClassName = `chat-tool-button chat-composer-stop-trigger${selectedChatPromptRunning ? ' active' : ''}${selectedChatPromptCancelling ? ' cancelling' : ''}`;
@@ -17121,6 +17259,9 @@ export function App() {
 
   const renderChatMessageTurn = useCallback((message: RegistryChatMessage) => {
     const doneTurnIndex = message.turnIndex ?? 0;
+    const permissionRecord = message.method === 'permission_request'
+      ? selectedPermissionState.byRequestTurnIndex.get(doneTurnIndex)
+      : undefined;
     const copyRange = message.method === 'prompt_done'
       ? buildPromptDoneCopyRange(selectedFullChatMessages, doneTurnIndex)
       : null;
@@ -17137,7 +17278,7 @@ export function App() {
       optionReplies.length === 0
         ? latestSelectableAssistantReply.confirmationReply
         : null;
-    if (!shouldRenderChatTurn(message, promptStatus)) {
+    if (!permissionRecord && !shouldRenderChatTurn(message, promptStatus)) {
       return null;
     }
     const searchHighlighted =
@@ -17157,6 +17298,7 @@ export function App() {
       >
         <ChatTurnView
           message={message}
+          permissionRecord={permissionRecord}
           promptRequest={message.method === 'prompt_done' ? findPromptRequestForDone(doneTurnIndex) : undefined}
           promptStatus={promptStatus}
           markdownComponents={chatMarkdownComponents}
@@ -17223,12 +17365,17 @@ export function App() {
     resolvePromptAttachmentThumbnail,
     selectedChatEncodedKey,
     selectedFullChatMessages,
+    selectedPermissionState,
     selectedPromptTurnStatusIndex,
     sessionSearchTargetTurn,
     ttsState,
   ]);
   const renderArchivedChatMessageTurn = useCallback((message: RegistryChatMessage) => {
-    if (!shouldRenderChatTurn(message, null)) {
+    const turnIndex = message.turnIndex ?? 0;
+    const permissionRecord = message.method === 'permission_request'
+      ? archivedPermissionState.byRequestTurnIndex.get(turnIndex)
+      : undefined;
+    if (!permissionRecord && !shouldRenderChatTurn(message, null)) {
       return null;
     }
     const runtimeKey = selectedArchivedKey
@@ -17241,6 +17388,7 @@ export function App() {
       >
         <ChatTurnView
           message={message}
+          permissionRecord={permissionRecord}
           promptStatus={null}
           markdownComponents={chatMarkdownComponents}
           markdownUrlTransform={chatMarkdownUrlTransform}
@@ -17254,6 +17402,7 @@ export function App() {
       </div>
     );
   }, [
+    archivedPermissionState,
     chatMarkdownComponents,
     chatMarkdownUrlTransform,
     loadPromptAttachmentThumbnail,
@@ -18609,6 +18758,24 @@ export function App() {
             </div>
           </div>
           </div>
+          {selectedActivePermission && selectedActivePermissionView ? (
+            <ChatPermissionDialog
+              title={selectedActivePermissionView.title}
+              detailsText={selectedActivePermissionView.detailsText}
+              options={selectedActivePermissionView.options}
+              submittingOptionId={
+                permissionSubmission.permissionId === selectedActivePermission.permissionId
+                  ? permissionSubmission.optionId
+                  : ''
+              }
+              error={
+                permissionSubmission.permissionId === selectedActivePermission.permissionId
+                  ? permissionSubmission.error
+                  : ''
+              }
+              onSelect={optionId => { void submitChatPermission(optionId); }}
+            />
+          ) : null}
           </div>
           {isWide && terminalOpen ? (
             <>

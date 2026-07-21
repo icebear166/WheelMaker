@@ -34,22 +34,25 @@ type SessionViewEvent struct {
 type SessionViewSink interface {
 	RecordEvent(ctx context.Context, event SessionViewEvent) error
 	RecordSessionOperation(ctx context.Context, sessionID string, payload acp.SessionOperationPayload) error
+	RecordPermissionRequest(ctx context.Context, sessionID string, payload acp.SessionTurnPermissionRequest) (int64, error)
+	RecordPermissionResponse(ctx context.Context, sessionID string, payload acp.SessionTurnPermissionResponse) (int64, error)
 }
 
 type sessionViewSummary struct {
-	SessionID         string                        `json:"sessionId"`
-	Title             string                        `json:"title"`
-	UpdatedAt         string                        `json:"updatedAt"`
-	AgentType         string                        `json:"agentType,omitempty"`
-	CreateRequestID   string                        `json:"createRequestId,omitempty"`
-	LatestTurnIndex   int64                         `json:"latestTurnIndex"`
-	Running           bool                          `json:"running"`
-	LastDoneTurnIndex int64                         `json:"lastDoneTurnIndex"`
-	LastDoneSuccess   bool                          `json:"lastDoneSuccess"`
-	LastReadTurnIndex int64                         `json:"lastReadTurnIndex"`
-	ConfigOptions     []acp.ConfigOption            `json:"configOptions,omitempty"`
-	Usage             *acp.SessionUsage             `json:"usage,omitempty"`
-	SessionActions    acp.SessionActionCapabilities `json:"sessionActions"`
+	SessionID              string                        `json:"sessionId"`
+	Title                  string                        `json:"title"`
+	UpdatedAt              string                        `json:"updatedAt"`
+	AgentType              string                        `json:"agentType,omitempty"`
+	CreateRequestID        string                        `json:"createRequestId,omitempty"`
+	LatestTurnIndex        int64                         `json:"latestTurnIndex"`
+	Running                bool                          `json:"running"`
+	LastDoneTurnIndex      int64                         `json:"lastDoneTurnIndex"`
+	LastDoneSuccess        bool                          `json:"lastDoneSuccess"`
+	LastReadTurnIndex      int64                         `json:"lastReadTurnIndex"`
+	ConfigOptions          []acp.ConfigOption            `json:"configOptions,omitempty"`
+	Usage                  *acp.SessionUsage             `json:"usage,omitempty"`
+	SessionActions         acp.SessionActionCapabilities `json:"sessionActions"`
+	PendingPermissionCount int                           `json:"pendingPermissionCount,omitempty"`
 }
 
 type sessionTitleFacts struct {
@@ -442,6 +445,106 @@ func (r *SessionRecorder) RecordEvent(ctx context.Context, event SessionViewEven
 	default:
 		return nil
 	}
+}
+
+func (r *SessionRecorder) RecordPermissionRequest(ctx context.Context, sessionID string, payload acp.SessionTurnPermissionRequest) (int64, error) {
+	if r == nil {
+		return 0, fmt.Errorf("session recorder is required")
+	}
+	if strings.TrimSpace(sessionID) == "" || strings.TrimSpace(payload.PermissionID) == "" {
+		return 0, fmt.Errorf("permission request identity is required")
+	}
+	r.writeMu.Lock()
+	defer r.writeMu.Unlock()
+	state, err := r.currentPromptStateLocked(ctx, sessionID)
+	if err != nil {
+		return 0, err
+	}
+	if state == nil || sessionPromptStateTerminal(state) {
+		return 0, fmt.Errorf("session %s has no active prompt", sessionID)
+	}
+	for _, existing := range state.turns {
+		if request, ok := existing.payload.(acp.SessionTurnPermissionRequest); ok && request.PermissionID == payload.PermissionID {
+			return 0, fmt.Errorf("permission request already exists: %s", payload.PermissionID)
+		}
+	}
+	rec, err := r.loadSessionForSummaryLocked(ctx, sessionID)
+	if err != nil {
+		return 0, err
+	}
+	turn := sessionTurnMessage{
+		sessionID: sessionID,
+		method:    acp.SessionTurnMethodPermissionRequest,
+		payload:   payload,
+		turnIndex: state.nextTurnIndex,
+		finished:  true,
+	}
+	r.publishOpenTextTurnDone(state)
+	state.updateTurn(turn, "")
+	r.publishSessionTurn(turn, buildSessionTurnContentJSON(turn.method, turn.payload))
+	r.publishSessionUpdated(r.sessionViewSummaryFromRecordLocked(*rec))
+	return turn.turnIndex, nil
+}
+
+func (r *SessionRecorder) RecordPermissionResponse(ctx context.Context, sessionID string, payload acp.SessionTurnPermissionResponse) (int64, error) {
+	if r == nil {
+		return 0, fmt.Errorf("session recorder is required")
+	}
+	if strings.TrimSpace(sessionID) == "" || strings.TrimSpace(payload.PermissionID) == "" || payload.RequestTurnIndex <= 0 {
+		return 0, fmt.Errorf("permission response identity is required")
+	}
+	r.writeMu.Lock()
+	defer r.writeMu.Unlock()
+	state, err := r.currentPromptStateLocked(ctx, sessionID)
+	if err != nil {
+		return 0, err
+	}
+	if state == nil || sessionPromptStateTerminal(state) {
+		return 0, fmt.Errorf("session %s has no active prompt", sessionID)
+	}
+	requestFound := false
+	for _, existing := range state.turns {
+		switch value := existing.payload.(type) {
+		case acp.SessionTurnPermissionRequest:
+			if existing.turnIndex == payload.RequestTurnIndex && value.PermissionID == payload.PermissionID {
+				requestFound = true
+			}
+		case acp.SessionTurnPermissionResponse:
+			if value.PermissionID == payload.PermissionID {
+				return 0, fmt.Errorf("permission response already exists: %s", payload.PermissionID)
+			}
+		}
+	}
+	if !requestFound {
+		return 0, fmt.Errorf("permission request not found: %s", payload.PermissionID)
+	}
+	rec, err := r.loadSessionForSummaryLocked(ctx, sessionID)
+	if err != nil {
+		return 0, err
+	}
+	turn := sessionTurnMessage{
+		sessionID: sessionID,
+		method:    acp.SessionTurnMethodPermissionResponse,
+		payload:   payload,
+		turnIndex: state.nextTurnIndex,
+		finished:  true,
+	}
+	r.publishOpenTextTurnDone(state)
+	state.updateTurn(turn, "")
+	r.publishSessionTurn(turn, buildSessionTurnContentJSON(turn.method, turn.payload))
+	r.publishSessionUpdated(r.sessionViewSummaryFromRecordLocked(*rec))
+	return turn.turnIndex, nil
+}
+
+func (r *SessionRecorder) loadSessionForSummaryLocked(ctx context.Context, sessionID string) (*SessionRecord, error) {
+	rec, err := r.store.LoadSession(ctx, r.projectName, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if rec == nil {
+		return nil, fmt.Errorf("session not found: %s", sessionID)
+	}
+	return rec, nil
 }
 
 func (r *SessionRecorder) handleSessionInfoUpdateLocked(ctx context.Context, event parsedSessionViewEvent) error {
@@ -984,7 +1087,26 @@ func (r *SessionRecorder) sessionViewSummaryFromRecordLocked(rec SessionRecord) 
 	if r.actionLookup != nil {
 		summary.SessionActions = r.actionLookup(summary.AgentType)
 	}
+	summary.PendingPermissionCount = pendingPermissionCountFromPromptState(r.promptState[rec.ID])
 	return summary
+}
+
+func pendingPermissionCountFromPromptState(state *sessionPromptState) int {
+	if state == nil || sessionPromptStateTerminal(state) {
+		return 0
+	}
+	pending := map[string]struct{}{}
+	for _, turn := range sortedSessionTurns(state.turns) {
+		switch value := turn.payload.(type) {
+		case acp.SessionTurnPermissionRequest:
+			if value.PermissionID != "" {
+				pending[value.PermissionID] = struct{}{}
+			}
+		case acp.SessionTurnPermissionResponse:
+			delete(pending, value.PermissionID)
+		}
+	}
+	return len(pending)
 }
 
 func (r *SessionRecorder) publishSessionUpdated(summary sessionViewSummary) {

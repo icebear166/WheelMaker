@@ -13,10 +13,12 @@ const (
 	SessionTurnMethodSessionInfo   = "session_info"
 
 	// Outbound session update methods.
-	SessionTurnMethodAgentMessage = SessionUpdateAgentMessageChunk
-	SessionTurnMethodAgentThought = SessionUpdateAgentThoughtChunk
-	SessionTurnMethodAgentPlan    = "agent_plan"
-	SessionTurnMethodToolCall     = SessionUpdateToolCall
+	SessionTurnMethodAgentMessage       = SessionUpdateAgentMessageChunk
+	SessionTurnMethodAgentThought       = SessionUpdateAgentThoughtChunk
+	SessionTurnMethodAgentPlan          = "agent_plan"
+	SessionTurnMethodToolCall           = SessionUpdateToolCall
+	SessionTurnMethodPermissionRequest  = "permission_request"
+	SessionTurnMethodPermissionResponse = "permission_response"
 )
 
 // SessionTurnMessage is the persisted session event payload.
@@ -85,6 +87,29 @@ type SessionTurnPlanPayload struct {
 type SessionTurnPlanResult struct {
 	Content string `json:"content"`
 	Status  string `json:"status"`
+}
+
+type SessionTurnPermissionOption struct {
+	OptionID string `json:"optionId"`
+	Name     string `json:"name"`
+	Kind     string `json:"kind"`
+}
+
+type SessionTurnPermissionRequest struct {
+	PermissionID string                        `json:"permissionId"`
+	Title        string                        `json:"title"`
+	DetailsText  string                        `json:"detailsText,omitempty"`
+	Options      []SessionTurnPermissionOption `json:"options"`
+	CreatedAt    string                        `json:"createdAt"`
+}
+
+type SessionTurnPermissionResponse struct {
+	PermissionID     string `json:"permissionId"`
+	RequestTurnIndex int64  `json:"requestTurnIndex"`
+	Outcome          string `json:"outcome"`
+	OptionID         string `json:"optionId"`
+	OptionName       string `json:"optionName"`
+	RespondedAt      string `json:"respondedAt"`
 }
 
 func NormalizeSessionTurnMethod(method string) string {

@@ -610,7 +610,7 @@ func (r *Reporter) handleRegistryRequest(conn *websocket.Conn, in envelope) {
 		rp.RegistryMethodSessionArtifactRead, rp.RegistryMethodSessionDelete,
 		rp.RegistryMethodSessionRename, rp.RegistryMethodSessionSend, rp.RegistryMethodSessionCancel,
 		rp.RegistryMethodSessionMarkRead, rp.RegistryMethodSessionConfig,
-		rp.RegistryMethodSessionStatus, rp.RegistryMethodSessionCompact,
+		rp.RegistryMethodSessionStatus, rp.RegistryMethodSessionCompact, rp.RegistryMethodSessionPermissionRespond,
 		rp.RegistryMethodSessionAttachmentStart, rp.RegistryMethodSessionAttachmentChunk,
 		rp.RegistryMethodSessionAttachmentFinish, rp.RegistryMethodSessionAttachmentCancel,
 		rp.RegistryMethodSessionAttachmentDelete, rp.RegistryMethodSessionAttachmentThumbnail,
@@ -1310,6 +1310,11 @@ func (r *Reporter) replySession(conn *websocket.Conn, req envelope) {
 
 	payload, err := handler.HandleSessionRequest(context.Background(), req.Method, projectID, req.Payload)
 	if err != nil {
+		var requestErr *rp.RegistryRequestError
+		if errors.As(err, &requestErr) {
+			_ = r.writeError(conn, req.RequestID, requestErr.Code, requestErr.Message)
+			return
+		}
 		_ = r.writeError(conn, req.RequestID, codeInternal, err.Error())
 		return
 	}

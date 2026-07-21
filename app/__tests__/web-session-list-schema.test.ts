@@ -24,6 +24,8 @@ describe('web session list schema', () => {
     expect(registryTypes).toContain('lastDoneTurnIndex?: number;');
     expect(registryTypes).toContain('lastDoneSuccess?: boolean;');
     expect(registryTypes).toContain('lastReadTurnIndex?: number;');
+    expect(registryTypes).toContain('pendingPermissionCount?: number;');
+    expect(repositoryTs).toContain('pendingPermissionCount: typeof input.pendingPermissionCount');
     expect(mainTsx).toContain('const renderSessionStateMarker = (session: RegistryChatSession, activeProjectId = projectIdRef.current) => {');
     expect(mainTsx).toContain('return resolveChatSessionVisualStateValue(session);');
     expect(mainTsx).not.toContain('resolveChatSessionVisualStateValue(session, {');

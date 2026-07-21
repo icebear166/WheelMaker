@@ -2395,7 +2395,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('const [chatQueuedPromptsByKey, setChatQueuedPromptsByKey] = useState<QueuedChatPromptsByKey>({});');
     expect(mainTsx).toContain('const chatQueuedPromptsByKeyRef = useRef<QueuedChatPromptsByKey>({});');
     expect(mainTsx).toContain('const selectedChatSubmitPending = selectedChatEncodedKey');
-    expect(mainTsx).toContain('const chatSendDisabled = selectedChatSubmitPending || chatAttachmentUploadPending;');
+    expect(mainTsx).toContain('const chatSendDisabled = selectedChatSubmitPending || chatAttachmentUploadPending || !!selectedActivePermission;');
     expect(mainTsx).toContain('enqueueSelectedChatPrompt(');
     expect(mainTsx).toContain('drainNextQueuedChatItem(selectedChatEncodedKey)');
     expect(mainTsx).toContain('cancelQueuedPrompt(selectedChatEncodedKey, queuedPrompt.id)');

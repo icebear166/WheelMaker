@@ -65,6 +65,18 @@ type ErrorPayload struct {
 	Details map[string]any `json:"details,omitempty"`
 }
 
+type RegistryRequestError struct {
+	Code    string
+	Message string
+}
+
+func (e *RegistryRequestError) Error() string {
+	if e == nil {
+		return ""
+	}
+	return e.Message
+}
+
 type ConnectInitPayload struct {
 	ClientName      string `json:"clientName"`
 	ClientVersion   string `json:"clientVersion"`

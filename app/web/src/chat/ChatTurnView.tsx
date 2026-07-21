@@ -30,6 +30,7 @@ import { resolvePromptDoneStatus, type ChatPromptStatus } from './turns/chatProm
 import {msgText} from './chatMessageText';
 import {splitChatSearchHighlightSegments} from './search/chatSearchState';
 import {createChatSearchHighlightPlugin} from './search/chatSearchHighlightPlugin';
+import type {ChatPermissionRecord} from './permission/chatPermissionState';
 
 function renderChatTextWithHighlight(text: string, query: string | undefined) {
   if (!query) {
@@ -255,6 +256,7 @@ function renderPromptInlineParts(
 
 export type ChatTurnViewProps = {
   message: RegistryChatMessage;
+  permissionRecord?: ChatPermissionRecord;
   promptRequest?: RegistryChatMessage;
   promptStatus?: ChatPromptStatus;
   markdownComponents: Components;
@@ -344,6 +346,7 @@ const PromptAttachmentChip = React.memo(function PromptAttachmentChip({
 
 export const ChatTurnView = React.memo(function ChatTurnView({
   message,
+  permissionRecord,
   promptRequest,
   promptStatus = null,
   markdownComponents,
@@ -381,6 +384,25 @@ export const ChatTurnView = React.memo(function ChatTurnView({
       : markdownCapabilities.rehypePlugins,
     [markdownCapabilities.rehypePlugins, highlightQuery],
   );
+
+  if (message.method === 'permission_request' && permissionRecord && permissionRecord.status !== 'pending') {
+    const reasonLabels: Record<NonNullable<ChatPermissionRecord['unansweredReason']>, string> = {
+      cancelled: 'Cancelled',
+      failed: 'Failed',
+      interrupted: 'Interrupted',
+      ended: 'Unanswered',
+    };
+    const summary = permissionRecord.status === 'selected'
+      ? `Selected: ${permissionRecord.optionName || permissionRecord.optionId || 'Unknown option'}`
+      : reasonLabels[permissionRecord.unansweredReason ?? 'ended'];
+    return (
+      <div className="chat-permission-history-row" role="status">
+        <span className="codicon codicon-question chat-permission-history-icon" aria-hidden="true" />
+        <span className="chat-permission-history-label">Permission</span>
+        <span className="chat-permission-history-summary">{summary}</span>
+      </div>
+    );
+  }
 
   if (message.method === 'session_operation') {
     const operation = sessionOperationView(message.param);
