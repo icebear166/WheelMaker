@@ -195,6 +195,30 @@ describe('PC chat session-panel layout', () => {
     expect(actionRule).toContain('border-radius: 5px;');
   });
 
+  it('drops the toggle column in session panels and expands the search form in flow', () => {
+    const panelHeaderRule = cssRuleBlock(chatStyles, '.chat-session-panel .chat-edge-surface-header');
+    expect(panelHeaderRule).toContain('grid-template-columns: auto minmax(0, 1fr) auto auto;');
+    const panelToolbarRule = cssRuleBlock(chatStyles, '.chat-session-panel .chat-edge-surface-toolbar');
+    expect(panelToolbarRule).toContain('grid-column: 2 / -1;');
+    const spacerRule = cssRuleBlock(chatStyles, '.chat-session-panel .chat-edge-surface-toggle-spacer');
+    expect(spacerRule).toContain('display: none;');
+
+    const searchOpenSelector =
+      '.chat-session-panel .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-edge-surface-title,\n' +
+      '.chat-session-panel .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-header-archive-control,\n' +
+      '.chat-session-panel .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-session-global-bar-layout-actions';
+    const searchOpenHiddenRule = cssRuleBlock(chatStyles, searchOpenSelector);
+    expect(searchOpenHiddenRule).toContain('display: none;');
+    const searchOpenToolbarRule = cssRuleBlock(
+      chatStyles,
+      '.chat-session-panel .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-edge-surface-toolbar',
+    );
+    expect(searchOpenToolbarRule).toContain('grid-column: 1 / -1;');
+    const wrapRule = cssRuleBlock(chatStyles, '.chat-session-panel .chat-header-search-wrap');
+    expect(wrapRule).toContain('width: 100%;');
+    expect(wrapRule).not.toContain('position: absolute;');
+  });
+
   it('wires the slide-out panel to delayed pointer-leave closing', () => {
     expect(workspaceAppSource).toContain('createSessionNavSlideOutAutoClose');
     expect(workspaceAppSource).toContain('sessionNavSlideOutAutoClose.schedule(');

@@ -2298,10 +2298,9 @@
 
 .chat-turn-search-highlight {
   border-radius: 8px;
-  outline: 1px solid color-mix(in srgb, #ffd166 70%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--accent-primary) 58%, var(--border-subtle));
   outline-offset: 2px;
-  background: color-mix(in srgb, #ffd166 9%, transparent);
-  transition: background 160ms ease, outline-color 160ms ease;
+  transition: outline-color 160ms ease;
 }
 
 .chat-prompt-group + .chat-prompt-group {
@@ -6372,8 +6371,9 @@
 
 .chat-view-width-fixed-800 .chat-search-bar {
   width: min(800px, 100%);
-  margin-left: auto;
-  margin-right: auto;
+  margin: 4px auto 0;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 78%, transparent);
+  border-radius: 8px;
 }
 
 .chat-view-width-fixed-800-edge-surfaces .chat-search-bar {
@@ -6390,22 +6390,33 @@
 
 
 .chat-session-panel .chat-edge-surface-header {
-  position: relative;
-  grid-template-columns: 0 auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+
+.chat-session-panel .chat-edge-surface-toolbar {
+  grid-column: 2 / -1;
 }
 
 .chat-session-panel .chat-edge-surface-toggle-spacer {
   display: none;
 }
 
+.chat-session-panel .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-edge-surface-title,
+.chat-session-panel .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-header-archive-control,
+.chat-session-panel .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-session-global-bar-layout-actions {
+  display: none;
+}
+
+.chat-session-panel .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-edge-surface-toolbar {
+  grid-column: 1 / -1;
+}
+
+.chat-session-panel .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-session-global-bar-leading-actions {
+  flex: 1 1 auto;
+}
+
 .chat-session-panel .chat-header-search-wrap {
-  position: absolute;
-  top: 50%;
-  left: 8px;
-  right: 8px;
-  z-index: 2;
-  transform: translateY(-50%);
-  background: var(--surface-panel);
+  width: 100%;
 }
 
 .chat-session-panel .chat-header-search-status {
