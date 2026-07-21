@@ -162,6 +162,25 @@ func TestRegistryDefaultProtocolVersionIs26(t *testing.T) {
 	}
 }
 
+func TestSessionPermissionRespondIsClientProjectForwardWithoutVersionChange(t *testing.T) {
+	descriptor, ok := RegistryMethod(RegistryMethodSessionPermissionRespond)
+	if !ok {
+		t.Fatal("session.permission.respond is not registered")
+	}
+	if descriptor.Route != RegistryRouteSessionForward || !descriptor.RequiresProjectID {
+		t.Fatalf("descriptor=%+v", descriptor)
+	}
+	if !RegistryMethodAllowed(string(RegistryRoleClient), descriptor.Method) {
+		t.Fatal("client role cannot respond to permission")
+	}
+	if RegistryMethodAllowed(string(RegistryRoleHub), descriptor.Method) {
+		t.Fatal("hub role can invoke session.permission.respond")
+	}
+	if DefaultProtocolVersion != "2.6" {
+		t.Fatalf("DefaultProtocolVersion=%q, want 2.6", DefaultProtocolVersion)
+	}
+}
+
 func TestRegistrySessionActionMethods(t *testing.T) {
 	for _, method := range []string{RegistryMethodSessionStatus, RegistryMethodSessionCompact} {
 		desc, ok := RegistryMethod(method)

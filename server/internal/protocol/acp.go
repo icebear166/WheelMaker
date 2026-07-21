@@ -273,10 +273,11 @@ type ContentBlock struct {
 // Per ACP §5.5, includes identifying fields beyond the ID so the client
 // can render a meaningful permission dialog.
 type ToolCallRef struct {
-	ToolCallID string `json:"toolCallId"`
-	Title      string `json:"title,omitempty"`
-	Status     string `json:"status,omitempty"`
-	Kind       string `json:"kind,omitempty"`
+	ToolCallID string            `json:"toolCallId"`
+	Title      string            `json:"title,omitempty"`
+	Status     string            `json:"status,omitempty"`
+	Kind       string            `json:"kind,omitempty"`
+	Content    []ToolCallContent `json:"content,omitempty"`
 }
 
 // PermissionRequestParams is sent by the agent when it needs permission to use a tool.
