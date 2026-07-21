@@ -17,23 +17,21 @@ function accountLabel(account: UsageProviderView['accounts'][number]): string {
 function shortLimitLabel(limit: UsageLimit): string {
   if (limit.id === '5h') return '5h';
   if (limit.id === 'week') return '1W';
+  if (limit.id === 'month') return '1M';
   if (limit.id === 'mcp-month') return 'MCP';
   return limit.label;
 }
 
-function compactLimits(account: UsageViewAccount): UsageLimit[] {
+type CompactLimit = UsageLimit | null;
+
+function compactLimits(account: UsageViewAccount): CompactLimit[] {
   const limits = new Map<string, UsageLimit>();
   for (const limit of account.limits) {
     const existing = limits.get(limit.id);
     if (!existing || limit.remainingPercent < existing.remainingPercent) limits.set(limit.id, limit);
   }
-  if (limits.size > 0 && !limits.has('5h')) {
-    limits.set('5h', {id: '5h', label: '5 hours', remainingPercent: 100});
-  }
-  const order = new Map([['5h', 0], ['week', 1], ['mcp-month', 2]]);
-  return Array.from(limits.values())
-    .sort((left, right) => (order.get(left.id) ?? 10) - (order.get(right.id) ?? 10))
-    .slice(0, 2);
+  const secondary = limits.get('week') ?? limits.get('month') ?? limits.get('mcp-month') ?? null;
+  return [limits.get('5h') ?? null, secondary];
 }
 
 function balanceSummary(account: UsageViewAccount): string {
@@ -60,19 +58,23 @@ function AccountRail({provider, account}: {provider: UsageProviderView; account:
       data-usage-compact-account={`${provider.id}:${account.localId}`}
     >
       <span className="usage-provider-name" title={label}>{label}</span>
-      {limits.length > 0 ? (
+      {limits.some(limit => limit !== null) ? (
         <span className="usage-provider-metrics">
-          {limits.map(limit => (
+          {limits.map((limit, index) => (
             <span
-              className={`usage-compact-limit tone-${tightnessTone(limit.remainingPercent)}`}
+              className={`usage-compact-limit ${limit ? `tone-${tightnessTone(limit.remainingPercent)}` : ''}`}
               data-usage-compact-limit={true}
-              key={limit.id}
+              key={limit?.id ?? `empty-${index}`}
             >
               <span className="usage-compact-limit-value">
-                <strong>{Math.round(limit.remainingPercent)}%</strong>
-                <span>{` / ${shortLimitLabel(limit)}`}</span>
+                {limit ? (
+                  <>
+                    <strong>{Math.round(limit.remainingPercent)}%</strong>
+                    {index === 1 ? <span>{` / ${shortLimitLabel(limit)}`}</span> : null}
+                  </>
+                ) : <strong>--/--</strong>}
               </span>
-              <QuotaRail remainingPercent={limit.remainingPercent} />
+              <QuotaRail remainingPercent={limit?.remainingPercent ?? 0} />
             </span>
           ))}
         </span>

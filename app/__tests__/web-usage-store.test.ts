@@ -1,6 +1,28 @@
 import {UsageStore, summarizeProvider} from '../web/src/usage/usageStore';
 
 describe('UsageStore', () => {
+  it('accepts MyFlicker monthly limits from HubState', () => {
+    const store = new UsageStore();
+    expect(store.ingest({
+      method: 'hub.state.updated',
+      payload: {
+        sections: ['tokenStats'],
+        state: {sections: {tokenStats: {data: {
+          hubId: 'hub-a', generation: 1, status: 'ready', providers: [{
+            id: 'flicker', name: 'MyFlicker', status: 'ok', accounts: [{
+              localId: 'user-1', identity: {kind: 'user', value: 'user-1', label: 'Account'},
+              status: 'ok', limits: [{id: 'month', label: 'Month', remainingPercent: 50.38}],
+            }],
+          }],
+        }}}},
+      },
+    })).toBe(true);
+    expect(store.snapshot().providers[0]).toMatchObject({
+      id: 'flicker',
+      accounts: [{limits: [{id: 'month', remainingPercent: 50.38}]}],
+    });
+  });
+
   it('atomically replaces one Hub and removes disappeared accounts', () => {
     const store = new UsageStore();
     store.replaceHub('hub-a', {

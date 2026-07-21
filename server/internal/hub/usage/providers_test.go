@@ -16,6 +16,53 @@ import (
 	"time"
 )
 
+func TestFlickerScannerReadsMonthlyCreditWithoutPublishingCredential(t *testing.T) {
+	var authorization, takumiToken, version, userName string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authorization = r.Header.Get("Authorization")
+		takumiToken = r.Header.Get("x-takumi-token")
+		version = r.Header.Get("x-takumi-version")
+		userName = r.Header.Get("x-takumi-userName")
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"success":true,"data":{"userId":"user-1","creditTotal":8000,"creditUsed":3969.719569,"creditAvailable":4030.280431,"availableRatio":50.38,"weeklyCreditsTotal":0,"weeklyCreditsUsed":0,"weeklyCreditsAvailable":0,"weeklyAvailableRatio":0}}`)
+	}))
+	defer server.Close()
+
+	credential := FlickerCredential{Token: "private-token", UserName: "tester"}
+	got := NewFlickerScanner(credential, server.Client(), server.URL, "0.3.11").Scan(context.Background())
+	if got.Status != ProviderOK || len(got.Accounts) != 1 {
+		t.Fatalf("snapshot=%+v", got)
+	}
+	account := got.Accounts[0]
+	if account.Identity.Kind != "user" || account.Identity.Value != "user-1" {
+		t.Fatalf("identity=%+v", account.Identity)
+	}
+	if len(account.Limits) != 1 || account.Limits[0].ID != "month" || account.Limits[0].RemainingPercent != 50.38 {
+		t.Fatalf("limits=%+v", account.Limits)
+	}
+	if authorization != "Bearer private-token" || takumiToken != "private-token" || version != "0.3.11" || userName != "tester" {
+		t.Fatalf("headers authorization=%q takumi=%q version=%q username=%q", authorization, takumiToken, version, userName)
+	}
+	raw, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), credential.Token) {
+		t.Fatalf("credential leaked into snapshot: %s", raw)
+	}
+}
+
+func TestReadFlickerCredential(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "ai-token.json")
+	if err := os.WriteFile(path, []byte(`{"userInfo":{"token":"private-token","userName":{"userName":"tester"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got := readFlickerCredential(path)
+	if got.Token != "private-token" || got.UserName != "tester" {
+		t.Fatalf("credential=%+v", got)
+	}
+}
+
 func TestOpenCodeDiscoveryReadsOnlySupportedAPIEntries(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "auth.json")
 	if err := os.WriteFile(path, []byte(`{

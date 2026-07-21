@@ -67,7 +67,7 @@ describe('UsageFeatureSurface', () => {
     const codex = view!.root.findByProps({'data-usage-provider': 'codex'});
     const metrics = codex.findAllByProps({'data-usage-compact-limit': true});
     expect(metrics).toHaveLength(2);
-    expect(renderedText(metrics[0])).toContain('37% / 5h');
+    expect(renderedText(metrics[0])).toBe('37%');
     expect(renderedText(metrics[1])).toContain('90% / 1W');
     expect(metrics[0].findByProps({'data-usage-rail-fill': true}).props.style.width).toBe('37%');
     expect(metrics[1].findByProps({'data-usage-rail-fill': true}).props.style.width).toBe('90%');
@@ -135,15 +135,17 @@ describe('UsageFeatureSurface', () => {
     const first = view!.root.findByProps({'data-usage-compact-account': 'kimi:kimi-a'});
     const second = view!.root.findByProps({'data-usage-compact-account': 'kimi:kimi-b'});
     expect(renderedText(first)).toContain('Kimi / first@example.com');
-    expect(renderedText(first)).toContain('15% / 5h');
+    expect(renderedText(first)).toContain('15%');
+    expect(renderedText(first)).not.toContain('/ 5h');
     expect(renderedText(first)).toContain('80% / 1W');
     expect(renderedText(second)).toContain('Kimi / second@example.com');
-    expect(renderedText(second)).toContain('74% / 5h');
+    expect(renderedText(second)).toContain('74%');
+    expect(renderedText(second)).not.toContain('/ 5h');
     expect(renderedText(second)).toContain('33% / 1W');
     expect(view!.root.findAllByProps({'data-usage-provider': 'kimi'})).toHaveLength(2);
   });
 
-  it('fills a missing five-hour quota with a full compact rail', () => {
+  it('renders a missing five-hour quota as an empty compact rail', () => {
     const weeklyOnly: UsageViewSnapshot = {
       refreshing: false,
       providers: [{
@@ -162,9 +164,33 @@ describe('UsageFeatureSurface', () => {
 
     const metrics = view!.root.findAllByProps({'data-usage-compact-limit': true});
     expect(metrics).toHaveLength(2);
-    expect(renderedText(metrics[0])).toContain('100% / 5h');
-    expect(metrics[0].findByProps({'data-usage-rail-fill': true}).props.style.width).toBe('100%');
+    expect(renderedText(metrics[0])).toBe('--/--');
+    expect(metrics[0].findByProps({'data-usage-rail-fill': true}).props.style.width).toBe('0%');
     expect(renderedText(metrics[1])).toContain('64% / 1W');
+  });
+
+  it('renders MyFlicker monthly credit in the second compact slot', () => {
+    const flicker: UsageViewSnapshot = {
+      refreshing: false,
+      providers: [{
+        id: 'flicker', name: 'MyFlicker', status: 'ok', accountCount: 1, remainingPercent: 50.38,
+        accounts: [{
+          localId: 'user-1', identity: {kind: 'user', value: 'user-1', label: 'Account'},
+          status: 'ok', hubIds: ['hub-a'],
+          limits: [{id: 'month', label: 'Month', remainingPercent: 50.38}],
+        }],
+      }],
+    };
+    let view: TestRenderer.ReactTestRenderer;
+    act(() => {
+      view = TestRenderer.create(<UsageFeatureSurface snapshot={flicker} onRefresh={jest.fn()} onRequestHide={jest.fn()} />);
+    });
+
+    const metrics = view!.root.findAllByProps({'data-usage-compact-limit': true});
+    expect(metrics).toHaveLength(2);
+    expect(renderedText(metrics[0])).toBe('--/--');
+    expect(renderedText(metrics[1])).toContain('50% / 1M');
+    expect(metrics[1].findByProps({'data-usage-rail-fill': true}).props.style.width).toBe('50.38%');
   });
 
   it('toggles detail mode in place and keeps refresh separate', () => {

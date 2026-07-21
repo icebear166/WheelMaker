@@ -1,4 +1,4 @@
-export type UsageProviderId = 'codex' | 'kimi' | 'zai' | 'deepseek';
+export type UsageProviderId = 'codex' | 'flicker' | 'kimi' | 'zai' | 'deepseek';
 export type UsageScanStatus = 'idle' | 'scanning' | 'ready' | 'error';
 export type UsageProviderStatus = 'ok' | 'unavailable' | 'error';
 

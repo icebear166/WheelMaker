@@ -42,13 +42,15 @@ func providerOrder(id ProviderID) int {
 	switch id {
 	case ProviderCodex:
 		return 0
-	case ProviderKimi:
+	case ProviderFlicker:
 		return 1
-	case ProviderZAI:
+	case ProviderKimi:
 		return 2
-	case ProviderDeepSeek:
+	case ProviderZAI:
 		return 3
-	default:
+	case ProviderDeepSeek:
 		return 4
+	default:
+		return 5
 	}
 }

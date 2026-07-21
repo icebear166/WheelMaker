@@ -6,6 +6,7 @@ type ProviderID string
 
 const (
 	ProviderCodex    ProviderID = "codex"
+	ProviderFlicker  ProviderID = "flicker"
 	ProviderKimi     ProviderID = "kimi"
 	ProviderZAI      ProviderID = "zai"
 	ProviderDeepSeek ProviderID = "deepseek"

@@ -8,6 +8,7 @@ import (
 
 type LocalCollector struct {
 	AuthPath                string
+	FlickerCredentialPath   string
 	KimiCodeCredentialsPath string
 	Client                  *http.Client
 	Binary                  string
@@ -49,8 +50,13 @@ func (c *LocalCollector) Scan(ctx context.Context) []ProviderSnapshot {
 	if credential := readKimiCodeCredential(kimiCodePath, time.Now()); credential != "" {
 		kimiSources = append(kimiSources, KimiCredentialSource{LocalID: "kimi-code", Label: "Kimi Code", Credential: credential})
 	}
+	flickerPath := c.FlickerCredentialPath
+	if flickerPath == "" {
+		flickerPath = defaultFlickerCredentialPath()
+	}
 	return (Collector{Scanners: []ProviderScanner{
 		NewCodexScanner(c.Binary),
+		NewFlickerScanner(readFlickerCredential(flickerPath), client, "", ""),
 		NewKimiScanner(kimiSources, client, ""),
 		NewZAIScanner(credentials[ProviderZAI], client, ""),
 		NewDeepSeekScanner(credentials[ProviderDeepSeek], client, ""),

@@ -2,7 +2,7 @@
 
 # Limits 监控
 
-Limits 监控统一展示 Codex、Kimi、ZAI 和 DeepSeek 的当前额度或余额，不包含 Copilot、历史趋势和费用预测。
+Limits 监控统一展示 Codex、MyFlicker、Kimi、ZAI 和 DeepSeek 的当前额度或余额，不包含 Copilot、历史趋势和费用预测。
 
 ## 数据所有权
 
@@ -10,6 +10,7 @@ Limits 监控统一展示 Codex、Kimi、ZAI 和 DeepSeek 的当前额度或余�
 - Hub 启动后立即扫描一次，之后从每轮完成时间起每 10 分钟扫描一次。
 - 前端不轮询 Provider，也不因客户端数量增加扫描次数；手动刷新对所有在线 Hub 发起，并复用 Hub 内正在运行的扫描。
 - ZAI、DeepSeek 凭据只从 OpenCode auth 读取；Kimi 除 OpenCode auth 外还读取 Kimi Code CLI 本地凭据（`~/.kimi-code/credentials/kimi-code.json`，尊重 `KIMI_CODE_HOME`），只读未过期的 `access_token`，不做 OAuth 刷新、不写凭据文件；Codex 使用 Codex 自身凭据。
+- MyFlicker 只读 `~/.myflicker/ai-token.json` 中的登录 token 和 username，调用 Takumi `GET /rest/codeflicker/credit-alert` 获取账号额度；当前只发布总额大于零的月度额度，周额度为零时不生成额度窗口。
 - API key、access token 和密钥片段不得进入 HubState、Registry 消息、Web 状态、日志或错误文本。
 - Codex `app-server` 等辅助进程必须通过后台命令构造器启动；Windows 使用隐藏窗口配置。
 
@@ -24,7 +25,7 @@ Limits 使用 HubState 的 `tokenStats` section。客户端通过 `hub.state.get
 - Chat 文字区左上方依次排列 Recent Sessions、Plan 和 Limits；缺少前一项时，后一项自动上移补位。
 - 三类浮层共用左边界、宽度、间距、毛玻璃背景和正文交界处的渐隐规则，侧栏展开或收起不改变水平几何。
 - 标题栏支持折叠，右侧提供详情和刷新操作。
-- 紧凑模式每个 Provider 一行；多账号摘要显示最紧张账号及账号数量。
+- 紧凑模式每个可用账号一行，固定展示两个额度槽位：第一槽为 5 小时额度，只显示百分比和进度条；缺失时显示 `--/--` 和空轨道。第二槽显示较长周期额度，Codex/Kimi 周额度标记为 `1W`，MyFlicker 月额度标记为 `1M`。
 - 详情模式保持相同宽度，展示聚合后的账号、所属 Hub、额度窗口、重置时间、余额和刷新状态。
 - 桌面 Chat 设置保留 Limits 显示开关，标题栏的隐藏操作会提示用户可从该设置重新打开；Limits 不恢复已移除的独立设置页面入口。
 

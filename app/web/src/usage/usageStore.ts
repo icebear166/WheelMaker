@@ -9,7 +9,7 @@ import type {
   UsageViewSnapshot,
 } from './usageTypes';
 
-const providerOrder: UsageProviderId[] = ['codex', 'kimi', 'zai', 'deepseek'];
+const providerOrder: UsageProviderId[] = ['codex', 'flicker', 'kimi', 'zai', 'deepseek'];
 const scanPhaseOrder: Record<UsageHubSnapshot['status'], number> = {
   idle: 0,
   scanning: 1,

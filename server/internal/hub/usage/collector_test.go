@@ -11,11 +11,12 @@ import (
 func TestCollectorReturnsStableProviderOrder(t *testing.T) {
 	collector := Collector{Scanners: []ProviderScanner{
 		ScannerFunc(func(context.Context) ProviderSnapshot { return ProviderSnapshot{ID: ProviderZAI} }),
+		ScannerFunc(func(context.Context) ProviderSnapshot { return ProviderSnapshot{ID: ProviderFlicker} }),
 		ScannerFunc(func(context.Context) ProviderSnapshot { return ProviderSnapshot{ID: ProviderCodex} }),
 	}}
 	got := collector.Scan(context.Background())
-	if got[0].ID != ProviderCodex || got[1].ID != ProviderZAI {
-		t.Fatalf("provider order=%v", []ProviderID{got[0].ID, got[1].ID})
+	if got[0].ID != ProviderCodex || got[1].ID != ProviderFlicker || got[2].ID != ProviderZAI {
+		t.Fatalf("provider order=%v", []ProviderID{got[0].ID, got[1].ID, got[2].ID})
 	}
 }
 
