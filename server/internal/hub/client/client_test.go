@@ -1500,6 +1500,30 @@ func TestApplyStoredConfigOptions_ReplaysByExactConfigID(t *testing.T) {
 	}
 }
 
+func TestApplyStoredConfigOptionsMigratesFlickerLegacyEffort(t *testing.T) {
+	inst := &testInjectedInstance{name: "flicker"}
+	inst.setConfigFn = func(_ context.Context, p acp.SessionSetConfigOptionParams) ([]acp.ConfigOption, error) {
+		if p.ConfigID != "thought_level" {
+			t.Fatalf("config id=%q, want thought_level", p.ConfigID)
+		}
+		if p.Value != "xhigh" {
+			t.Fatalf("config value=%q, want xhigh", p.Value)
+		}
+		return []acp.ConfigOption{{ID: p.ConfigID, CurrentValue: p.Value}}, nil
+	}
+
+	current := []acp.ConfigOption{{ID: "thought_level", CurrentValue: "low"}}
+	target := normalizeStoredConfigPreferences("flicker", []PreferenceConfigOption{{
+		ID:           "effort",
+		CurrentValue: "maxOrXhigh",
+	}})
+	updated := applyStoredConfigOptions(context.Background(), "proj", inst, "session-1", current, target)
+
+	if got := findCurrentValue(updated, "thought_level"); got != "xhigh" {
+		t.Fatalf("thought_level=%q, want xhigh", got)
+	}
+}
+
 func TestSessionSetConfigOption_ResolvesCategoryAliasToOptionID(t *testing.T) {
 	inst := &testInjectedInstance{name: "codex", alive: true}
 	inst.setConfigFn = func(_ context.Context, p acp.SessionSetConfigOptionParams) ([]acp.ConfigOption, error) {

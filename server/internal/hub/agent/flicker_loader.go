@@ -92,53 +92,31 @@ function replaceMethodOnceRegex(source, signature, pattern, replacement, label) 
 }
 
 function patchMyFlickerBundle(source) {
-  const legacyConfigShape = /models:(\w+)\|\|void 0/.test(source);
-  const legacySetConfigStub = source.includes('unstable_setSessionConfigOption(A){throw Error("Method not implemented.")}');
-  const isLegacy = legacyConfigShape && legacySetConfigStub;
-  if (!isLegacy) {
-    // Newer bundles (e.g. @myflicker/cli 0.3.x) build configOptions and implement
-    // setSessionConfigOption natively. Only shim the still-missing resume.
-    if (source.includes('unstable_resumeSession(A){throw Error("Method not implemented.")}')) {
-      source = replaceOnce(
-        source,
-        "unstable_resumeSession(A){throw Error(\"Method not implemented.\")}",
-        "async unstable_resumeSession(A){return await this.loadSession(A)}",
-        "resumeSession"
-      );
-    }
-    return source;
-  }
   source = replaceOnceRegex(
     source,
     /}(class \w+\{connection;sessions=new Map;messageBus;nodeBridge;context;defaultCwd;contextCreateOpts;clientFsCapabilities;)/,
-    "}function WMF(A,Q){Q=Q||{};let B=Q.access||\"yolo\",D=Q.effort||\"xhigh\",J=(A?.availableModels||[]).map(($)=>{let Y=$.modelId||$.id||$.value;return Y?{value:Y,name:$.name||Y}:null}).filter(Boolean),$=Q.model||A?.currentModelId||J[0]?.value||\"\",Y=[{id:\"access\",name:\"Access\",category:\"access\",type:\"select\",currentValue:B,options:[{value:\"default\",name:\"Default\"},{value:\"autoEdit\",name:\"Auto Edit\"},{value:\"auto\",name:\"Auto\"},{value:\"yolo\",name:\"Yolo\"},{value:\"plan\",name:\"Plan\"},{value:\"dontAsk\",name:\"Dont Ask\"}]}];if(J.length>0)Y.push({id:\"model\",name:\"Model\",category:\"model\",type:\"select\",currentValue:$,options:J});Y.push({id:\"effort\",name:\"Effort\",category:\"effort\",type:\"select\",currentValue:D,options:[{value:\"low\",name:\"Low\"},{value:\"medium\",name:\"Medium\"},{value:\"high\",name:\"High\"},{value:\"max\",name:\"Max\"},{value:\"xhigh\",name:\"XHigh\"},{value:\"maxOrXhigh\",name:\"Max Or XHigh\"}]});return Y}async function WMFS(A,Q,B){if(!A.messageBus)throw Error(\"Agent not initialized\");A.__wmfConfig={...A.__wmfConfig,[Q]:B};if(Q===\"model\")await A.unstable_setSessionModel({modelId:B});else{let D=Q===\"access\"?\"approvalMode\":Q===\"effort\"?\"thinkingLevel\":Q;await A.messageBus.request(\"config.set\",{cwd:A.defaultCwd,key:D,value:B,isGlobal:!0}),await A.messageBus.request(\"project.clearContext\",{})}let D=await A.getCanUseModels();return{configOptions:WMF(D,A.__wmfConfig)}}$1",
-    "flicker config helpers"
+    "}function WMFA(A,Q){Q=Q||{};let B=Q.access||\"yolo\";return[{id:\"access\",name:\"Access\",category:\"access\",type:\"select\",currentValue:B,options:[{value:\"default\",name:\"Default\"},{value:\"autoEdit\",name:\"Auto Edit\"},{value:\"auto\",name:\"Auto\"},{value:\"yolo\",name:\"Yolo\"},{value:\"plan\",name:\"Plan\"},{value:\"dontAsk\",name:\"Dont Ask\"}]},...(Array.isArray(A)?A:[])]}async function WMFS(A,Q){if(!A.messageBus)throw Error(\"Agent not initialized\");A.__wmfConfig={...A.__wmfConfig,access:Q};await A.messageBus.request(\"config.set\",{cwd:A.defaultCwd,key:\"approvalMode\",value:Q,isGlobal:!0}),await A.messageBus.request(\"project.clearContext\",{});let B=await A.getCanUseModels();return{configOptions:WMFA(A.buildSessionConfigOptions(B),A.__wmfConfig)}}$1",
+    "0.3.11 access config helpers"
   );
   source = replaceMethodOnceRegex(
     source,
-    "async newSession(A){if(!this.messageBus)throw Error(\"Agent not initialized\");",
-    /models:(\w+)\|\|void 0/,
-    "configOptions:WMF($1,this.__wmfConfig)",
-    "newSession config options"
+    "buildSessionConfigOptions(A){",
+    /return Q}/,
+    "return WMFA(Q,this.__wmfConfig)}",
+    "0.3.11 config options"
   );
   source = replaceMethodOnceRegex(
     source,
-    "async loadSession(A){if(!this.messageBus)throw Error(\"Agent not initialized\");",
-    /models:(\w+)\|\|void 0/,
-    "configOptions:WMF($1,this.__wmfConfig)",
-    "loadSession config options"
+    "async unstable_setSessionConfigOption(A){if(!this.messageBus)throw Error(\"Agent not initialized\");",
+    /let\{configId:Q,value:B\}=A,D=this\.sessions\.get\(A\.sessionId\);if\(Q===\"model\"\)/,
+    "let{configId:Q,value:B}=A,D=this.sessions.get(A.sessionId);if(Q===\"access\")return await WMFS(this,B);if(Q===\"model\")",
+    "0.3.11 access config handler"
   );
   source = replaceOnce(
     source,
     "unstable_resumeSession(A){throw Error(\"Method not implemented.\")}",
     "async unstable_resumeSession(A){return await this.loadSession(A)}",
     "resumeSession"
-  );
-  source = replaceOnce(
-    source,
-    "unstable_setSessionConfigOption(A){throw Error(\"Method not implemented.\")}",
-    "async unstable_setSessionConfigOption(A){let Q=A.configId,B=A.value;if(!Q)throw Error(\"configId is required\");if(Q===\"model\"||Q===\"access\"||Q===\"effort\")return await WMFS(this,Q,B);throw Error(\"Unsupported config option \"+Q)}",
-    "setSessionConfigOption"
   );
   return source;
 }
