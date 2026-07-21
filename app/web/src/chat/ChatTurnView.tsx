@@ -29,6 +29,7 @@ import {
 import { resolvePromptDoneStatus, type ChatPromptStatus } from './turns/chatPromptStatus';
 import {msgText} from './chatMessageText';
 import {splitChatSearchHighlightSegments} from './search/chatSearchState';
+import {createChatSearchHighlightPlugin} from './search/chatSearchHighlightPlugin';
 
 function renderChatTextWithHighlight(text: string, query: string | undefined) {
   if (!query) {
@@ -374,6 +375,12 @@ export const ChatTurnView = React.memo(function ChatTurnView({
   const text = msgText(message.method, message.param).trim();
   const kind = msgKind(message.method);
   const markdownCapabilities = useMarkdownCapabilityPlugins(text);
+  const highlightRehypePlugins = React.useMemo(
+    () => highlightQuery
+      ? [...markdownCapabilities.rehypePlugins, createChatSearchHighlightPlugin(highlightQuery)]
+      : markdownCapabilities.rehypePlugins,
+    [markdownCapabilities.rehypePlugins, highlightQuery],
+  );
 
   if (message.method === 'session_operation') {
     const operation = sessionOperationView(message.param);
@@ -637,7 +644,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
                 key={`markdown:${index}`}
                 remarkPlugins={markdownCapabilities.remarkPlugins}
                 urlTransform={markdownUrlTransform}
-                rehypePlugins={markdownCapabilities.rehypePlugins}
+                rehypePlugins={highlightRehypePlugins}
                 components={markdownComponents}
               >
                 {part.text}
@@ -679,7 +686,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
                 key={`markdown:${index}`}
                 remarkPlugins={markdownCapabilities.remarkPlugins}
                 urlTransform={markdownUrlTransform}
-                rehypePlugins={markdownCapabilities.rehypePlugins}
+                rehypePlugins={highlightRehypePlugins}
                 components={markdownComponents}
               >
                 {part.text}
@@ -708,7 +715,7 @@ export const ChatTurnView = React.memo(function ChatTurnView({
         <ReactMarkdown
           remarkPlugins={markdownCapabilities.remarkPlugins}
           urlTransform={markdownUrlTransform}
-          rehypePlugins={markdownCapabilities.rehypePlugins}
+          rehypePlugins={highlightRehypePlugins}
           components={markdownComponents}
         >
           {text}
