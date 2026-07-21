@@ -6389,36 +6389,52 @@
 }
 
 
-.chat-session-panel .chat-edge-surface-header {
+.chat-session-panel-pinned .chat-edge-surface-header,
+.chat-session-panel-slideout .chat-edge-surface-header {
   grid-template-columns: auto minmax(0, 1fr) auto auto;
 }
 
-.chat-session-panel .chat-edge-surface-toolbar {
+.chat-session-panel-pinned .chat-edge-surface-toolbar,
+.chat-session-panel-slideout .chat-edge-surface-toolbar {
   grid-column: 2 / -1;
 }
 
-.chat-session-panel .chat-edge-surface-toggle-spacer {
+.chat-session-panel-pinned .chat-edge-surface-toggle-spacer,
+.chat-session-panel-slideout .chat-edge-surface-toggle-spacer {
   display: none;
 }
 
-.chat-session-panel .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-edge-surface-title,
-.chat-session-panel .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-header-archive-control,
-.chat-session-panel .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-session-global-bar-layout-actions {
+.chat-session-panel-pinned .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-edge-surface-title,
+.chat-session-panel-pinned .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-header-archive-control,
+.chat-session-panel-pinned .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-session-global-bar-layout-actions,
+.chat-session-panel-slideout .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-edge-surface-title,
+.chat-session-panel-slideout .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-header-archive-control,
+.chat-session-panel-slideout .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-session-global-bar-layout-actions {
   display: none;
 }
 
-.chat-session-panel .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-edge-surface-toolbar {
+.chat-session-panel-pinned .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-edge-surface-toolbar,
+.chat-session-panel-slideout .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-edge-surface-toolbar {
   grid-column: 1 / -1;
 }
 
-.chat-session-panel .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-session-global-bar-leading-actions {
+.chat-session-panel-pinned .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-session-global-bar-leading-actions,
+.chat-session-panel-slideout .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-session-global-bar-leading-actions {
   flex: 1 1 auto;
 }
 
-.chat-session-panel .chat-header-search-wrap {
+.chat-session-panel-pinned .chat-header-search-wrap,
+.chat-session-panel-slideout .chat-header-search-wrap {
   width: 100%;
 }
 
-.chat-session-panel .chat-header-search-status {
+.chat-session-panel-pinned .chat-header-search-status,
+.chat-session-panel-slideout .chat-header-search-status {
   display: none;
+}
+
+.chat-session-panel-pinned .session-archive-menu,
+.chat-session-panel-slideout .session-archive-menu {
+  right: auto;
+  left: 0;
 }

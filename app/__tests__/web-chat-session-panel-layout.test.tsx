@@ -195,28 +195,50 @@ describe('PC chat session-panel layout', () => {
     expect(actionRule).toContain('border-radius: 5px;');
   });
 
-  it('drops the toggle column in session panels and expands the search form in flow', () => {
-    const panelHeaderRule = cssRuleBlock(chatStyles, '.chat-session-panel .chat-edge-surface-header');
+  it('drops the toggle column in pinned and slideout session panels and expands the search form in flow', () => {
+    const panelHeaderRule = cssRuleBlock(
+      chatStyles,
+      '.chat-session-panel-pinned .chat-edge-surface-header,\n.chat-session-panel-slideout .chat-edge-surface-header',
+    );
     expect(panelHeaderRule).toContain('grid-template-columns: auto minmax(0, 1fr) auto auto;');
-    const panelToolbarRule = cssRuleBlock(chatStyles, '.chat-session-panel .chat-edge-surface-toolbar');
+    const panelToolbarRule = cssRuleBlock(
+      chatStyles,
+      '.chat-session-panel-pinned .chat-edge-surface-toolbar,\n.chat-session-panel-slideout .chat-edge-surface-toolbar',
+    );
     expect(panelToolbarRule).toContain('grid-column: 2 / -1;');
-    const spacerRule = cssRuleBlock(chatStyles, '.chat-session-panel .chat-edge-surface-toggle-spacer');
+    const spacerRule = cssRuleBlock(
+      chatStyles,
+      '.chat-session-panel-pinned .chat-edge-surface-toggle-spacer,\n.chat-session-panel-slideout .chat-edge-surface-toggle-spacer',
+    );
     expect(spacerRule).toContain('display: none;');
 
     const searchOpenSelector =
-      '.chat-session-panel .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-edge-surface-title,\n' +
-      '.chat-session-panel .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-header-archive-control,\n' +
-      '.chat-session-panel .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-session-global-bar-layout-actions';
+      '.chat-session-panel-pinned .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-edge-surface-title,\n' +
+      '.chat-session-panel-pinned .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-header-archive-control,\n' +
+      '.chat-session-panel-pinned .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-session-global-bar-layout-actions,\n' +
+      '.chat-session-panel-slideout .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-edge-surface-title,\n' +
+      '.chat-session-panel-slideout .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-header-archive-control,\n' +
+      '.chat-session-panel-slideout .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-session-global-bar-layout-actions';
     const searchOpenHiddenRule = cssRuleBlock(chatStyles, searchOpenSelector);
     expect(searchOpenHiddenRule).toContain('display: none;');
     const searchOpenToolbarRule = cssRuleBlock(
       chatStyles,
-      '.chat-session-panel .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-edge-surface-toolbar',
+      '.chat-session-panel-pinned .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-edge-surface-toolbar,\n.chat-session-panel-slideout .chat-edge-surface-header:has(.chat-header-search-wrap) .chat-edge-surface-toolbar',
     );
     expect(searchOpenToolbarRule).toContain('grid-column: 1 / -1;');
-    const wrapRule = cssRuleBlock(chatStyles, '.chat-session-panel .chat-header-search-wrap');
+    const wrapRule = cssRuleBlock(
+      chatStyles,
+      '.chat-session-panel-pinned .chat-header-search-wrap,\n.chat-session-panel-slideout .chat-header-search-wrap',
+    );
     expect(wrapRule).toContain('width: 100%;');
     expect(wrapRule).not.toContain('position: absolute;');
+
+    const archiveMenuRule = cssRuleBlock(
+      chatStyles,
+      '.chat-session-panel-pinned .session-archive-menu,\n.chat-session-panel-slideout .session-archive-menu',
+    );
+    expect(archiveMenuRule).toContain('left: 0;');
+    expect(archiveMenuRule).toContain('right: auto;');
   });
 
   it('wires the slide-out panel to delayed pointer-leave closing', () => {
