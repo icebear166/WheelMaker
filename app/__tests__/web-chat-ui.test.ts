@@ -2629,3 +2629,28 @@ describe('provider-aware session labels', () => {
     expect(mainTsx).toContain('agentType = normalizeAgentTypeName(agentType);');
   });
 });
+
+describe('Claude-compatible agent choice menu', () => {
+  test('shares one split menu implementation across mobile and wide new/resume entry points', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+
+    expect(mainTsx).toContain("from '../chat/AgentChoiceMenu';");
+    expect(mainTsx).toContain('<AgentChoiceMenu');
+    expect(mainTsx).toContain('variant="mobile"');
+    expect(mainTsx).toContain('variant="wide"');
+    expect(mainTsx).toContain('handleMobileProjectCreateSession(');
+    expect(mainTsx).toContain('handleMobileProjectResumeAgent(');
+    expect(mainTsx).toContain('handleWideProjectCreateSession(');
+    expect(mainTsx).toContain('handleWideProjectResumeAgent(');
+    expect(mainTsx).not.toContain('sheetAgents.map(agentType => (');
+    expect(mainTsx).not.toContain('agents.map(agentType => (');
+
+    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles', 'chat.css'));
+    expect(stylesCss).toContain('.agent-choice-row');
+    expect(stylesCss).toContain('.agent-choice-expand');
+    expect(stylesCss).toContain('flex: 0 0 30px;');
+    expect(stylesCss).toContain('.agent-choice-child');
+    expect(stylesCss).toContain('padding-left: 28px;');
+  });
+});

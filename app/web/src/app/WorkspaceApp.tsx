@@ -122,6 +122,7 @@ import {ChatPlanSurface} from '../chat/ChatPlanSurface';
 import {ChatRecentSessionsSurface} from '../chat/ChatRecentSessionsSurface';
 import {ChatSessionGlobalBar} from '../chat/ChatSessionGlobalBar';
 import {ChatSessionPanel} from '../chat/ChatSessionPanel';
+import {AgentChoiceMenu} from '../chat/AgentChoiceMenu';
 import {
   createSessionNavSlideOutAutoClose,
   createSessionNavSlideOutState,
@@ -16415,29 +16416,18 @@ export function App() {
                     </button>
                   ) : sheetMenu.phase === 'agents' ? (
                     <>
-                      {sheetAgents.map(agentType => (
-                        <button
-                          key={`${sheetMenu.projectId}:sheet:${sheetMenu.kind}:${agentType}`}
-                          type="button"
-                          className="wide-project-action-menu-item mobile-project-sheet-item"
-                          onClick={() => {
-                            if (sheetMenu.kind === 'new') {
-                              handleMobileProjectCreateSession(
-                                sheetMenu.projectId,
-                                agentType,
-                              ).catch(() => undefined);
-                            } else {
-                              handleMobileProjectResumeAgent(
-                                sheetMenu.projectId,
-                                agentType,
-                              ).catch(() => undefined);
-                            }
-                          }}
-                        >
-                          <span className="codicon codicon-sparkle" />
-                          <span className="mobile-project-sheet-item-label">{agentType}</span>
-                        </button>
-                      ))}
+                      <AgentChoiceMenu
+                        key={`${sheetMenu.projectId}:sheet:${sheetMenu.kind}:agents`}
+                        agents={sheetAgents}
+                        variant="mobile"
+                        onSelect={agentType => {
+                          if (sheetMenu.kind === 'new') {
+                            handleMobileProjectCreateSession(sheetMenu.projectId, agentType).catch(() => undefined);
+                          } else {
+                            handleMobileProjectResumeAgent(sheetMenu.projectId, agentType).catch(() => undefined);
+                          }
+                        }}
+                      />
                       {sheetAgents.length === 0 ? (
                         <div className="wide-project-action-empty">
                           <span className="codicon codicon-circle-slash" aria-hidden="true" />
@@ -16550,23 +16540,18 @@ export function App() {
         </div>
         {actionMenu.phase === 'agents' ? (
           <>
-            {agents.map(agentType => (
-              <button
-                key={`${targetProjectId}:${actionMenu.kind}:${agentType}`}
-                type="button"
-                className="wide-project-action-menu-item"
-                onClick={() => {
-                  if (actionMenu.kind === 'new') {
-                    handleWideProjectCreateSession(targetProjectId, agentType).catch(() => undefined);
-                  } else {
-                    handleWideProjectResumeAgent(targetProjectId, agentType).catch(() => undefined);
-                  }
-                }}
-              >
-                <span className="codicon codicon-sparkle" />
-                <span>{agentType}</span>
-              </button>
-            ))}
+            <AgentChoiceMenu
+              key={`${targetProjectId}:${actionMenu.kind}:agents`}
+              agents={agents}
+              variant="wide"
+              onSelect={agentType => {
+                if (actionMenu.kind === 'new') {
+                  handleWideProjectCreateSession(targetProjectId, agentType).catch(() => undefined);
+                } else {
+                  handleWideProjectResumeAgent(targetProjectId, agentType).catch(() => undefined);
+                }
+              }}
+            />
             {agents.length === 0 ? (
               <div className="wide-project-action-empty">
                 <span className="codicon codicon-circle-slash" aria-hidden="true" />
