@@ -438,8 +438,10 @@ type testEnvelope struct {
 }
 
 type stubSessionHandler struct {
-	lastMethod string
-	lastBody   string
+	lastMethod  string
+	lastProject string
+	lastBody    string
+	calls       int
 }
 
 type stubTerminalHandler struct {
@@ -460,8 +462,10 @@ func (s *stubTerminalHandler) HandleTerminalInput(event rp.TerminalInputEvent) {
 	}
 }
 
-func (s *stubSessionHandler) HandleSessionRequest(_ context.Context, method string, _ string, payload json.RawMessage) (any, error) {
+func (s *stubSessionHandler) HandleSessionRequest(_ context.Context, method string, projectID string, payload json.RawMessage) (any, error) {
+	s.calls++
 	s.lastMethod = method
+	s.lastProject = projectID
 	s.lastBody = string(payload)
 	return map[string]any{"ok": true, "sessionId": "sess-1"}, nil
 }
@@ -2360,6 +2364,153 @@ func TestReporterForwardsSessionRenameRequests(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("did not receive session.rename response from reporter")
+	}
+}
+
+func TestReporterForwardsSessionPinToProjectHandlerAndRequiresProjectID(t *testing.T) {
+	reqSeen := make(chan struct{}, 1)
+	respSeen := make(chan testEnvelope, 2)
+	errSeen := make(chan error, 1)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		upgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+		ws, err := upgrader.Upgrade(w, req, nil)
+		if err != nil {
+			errSeen <- err
+			return
+		}
+		defer ws.Close()
+
+		initReq := mustReadEnvelope(t, ws)
+		if initReq.Method != "connect.init" {
+			errSeen <- fmt.Errorf("init method=%q", initReq.Method)
+			return
+		}
+		mustWriteJSON(t, ws, testEnvelope{
+			RequestID: initReq.RequestID,
+			Type:      "response",
+			Method:    "connect.init",
+			Payload: map[string]any{
+				"ok": true,
+				"principal": map[string]any{
+					"role":            "hub",
+					"hubId":           "hub-session-pin",
+					"connectionEpoch": 1,
+				},
+				"serverInfo": map[string]any{
+					"serverVersion":   "test",
+					"protocolVersion": rp.DefaultProtocolVersion,
+				},
+				"features":       map[string]any{},
+				"hashAlgorithms": []string{"sha256"},
+			},
+		})
+
+		reportReq := mustReadEnvelope(t, ws)
+		if reportReq.Method != "hub.report.projects" {
+			errSeen <- fmt.Errorf("report method=%q", reportReq.Method)
+			return
+		}
+		mustWriteJSON(t, ws, testEnvelope{
+			RequestID: reportReq.RequestID,
+			Type:      "response",
+			Method:    "hub.report.projects",
+			Payload:   map[string]any{"ok": true},
+		})
+
+		mustWriteJSON(t, ws, testEnvelope{
+			RequestID: 104,
+			Type:      "request",
+			Method:    rp.RegistryMethodSessionPin,
+			ProjectID: "hub-session-pin:proj1",
+			Payload: map[string]any{
+				"sessionId": "sess-1",
+				"pinned":    true,
+			},
+		})
+		reqSeen <- struct{}{}
+		_ = ws.SetReadDeadline(time.Now().Add(1500 * time.Millisecond))
+		respSeen <- mustReadEnvelope(t, ws)
+
+		mustWriteJSON(t, ws, testEnvelope{
+			RequestID: 105,
+			Type:      "request",
+			Method:    rp.RegistryMethodSessionPin,
+			Payload: map[string]any{
+				"sessionId": "sess-1",
+				"pinned":    false,
+			},
+		})
+		respSeen <- mustReadEnvelope(t, ws)
+	}))
+
+	t.Cleanup(ts.Close)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	reporter := NewReporter(ReporterConfig{
+		Server:            strings.TrimPrefix(ts.URL, "http://"),
+		HubID:             "hub-session-pin",
+		ReconnectInterval: 50 * time.Millisecond,
+	}, []ProjectInfo{
+		{Name: "proj1", Path: t.TempDir(), Online: true},
+		{Name: "proj2", Path: t.TempDir(), Online: true},
+	})
+	target := &stubSessionHandler{}
+	other := &stubSessionHandler{}
+	reporter.RegisterSessionHandler(rp.ProjectID("hub-session-pin", "proj1"), target)
+	reporter.RegisterSessionHandler(rp.ProjectID("hub-session-pin", "proj2"), other)
+
+	done := make(chan error, 1)
+	go func() { done <- reporter.Run(ctx) }()
+	defer func() {
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Fatal("reporter did not stop")
+		}
+	}()
+
+	select {
+	case err := <-errSeen:
+		t.Fatalf("fake registry error: %v", err)
+	case <-reqSeen:
+	case <-time.After(2 * time.Second):
+		t.Fatal("did not receive session.pin request")
+	}
+
+	select {
+	case err := <-errSeen:
+		t.Fatalf("fake registry error: %v", err)
+	case resp := <-respSeen:
+		if resp.Type != "response" || resp.Method != rp.RegistryMethodSessionPin || resp.ProjectID != "hub-session-pin:proj1" {
+			t.Fatalf("unexpected session.pin response: %#v", resp)
+		}
+		if resp.Payload["ok"] != true || resp.Payload["sessionId"] != "sess-1" {
+			t.Fatalf("session.pin response payload=%#v, want ok sessionId", resp.Payload)
+		}
+		if target.calls != 1 || target.lastMethod != rp.RegistryMethodSessionPin || target.lastProject != "hub-session-pin:proj1" || !strings.Contains(target.lastBody, `"pinned":true`) {
+			t.Fatalf("target handler calls=%d method=%q project=%q body=%q", target.calls, target.lastMethod, target.lastProject, target.lastBody)
+		}
+		if other.calls != 0 {
+			t.Fatalf("other project handler calls=%d, want 0", other.calls)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("did not receive session.pin response from reporter")
+	}
+
+	select {
+	case err := <-errSeen:
+		t.Fatalf("fake registry error: %v", err)
+	case resp := <-respSeen:
+		if resp.Type != "error" || resp.Payload["message"] != "projectId is required" {
+			t.Fatalf("missing projectId response=%#v", resp)
+		}
+		if target.calls != 1 || other.calls != 0 {
+			t.Fatalf("missing projectId routed to a handler: target=%d other=%d", target.calls, other.calls)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("did not receive missing projectId error")
 	}
 }
 
