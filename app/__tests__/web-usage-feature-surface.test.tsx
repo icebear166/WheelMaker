@@ -471,8 +471,12 @@ describe('UsageFeatureSurface', () => {
 
     expect(desktopTrack).toContain('background: color-mix(in srgb, var(--surface-root) 68%, transparent);');
     expect(desktopSelected).toContain('inset 0 0 0 1px');
+    expect(desktopSelected).toContain('color: var(--accent-primary);');
+    expect(desktopSelected).toContain('var(--accent-primary) 18%');
     expect(mobileTrack).toContain('border: 1px solid');
     expect(mobileSelected).toContain('inset 0 0 0 1px');
+    expect(mobileSelected).toContain('color: var(--accent-primary);');
+    expect(mobileSelected).toContain('var(--accent-primary) 18%');
   });
 
   it('explains how to restore the monitor before hiding it', () => {

@@ -119,12 +119,14 @@ describe('ModelEfficiency styling', () => {
     const metaRule = styles.match(/\.model-efficiency-meta span \{([\s\S]*?)\n\}/)?.[1] ?? '';
     expect(recommendationRule).toContain('grid-template-areas:');
     expect(recommendationRule).toContain('grid-template-rows: 20px 34px;');
-    expect(recommendationRule).toContain('grid-template-columns: minmax(0, 1fr) 52px;');
+    expect(recommendationRule).toContain('grid-template-columns: minmax(0, 1fr) 47px;');
     expect(recommendationRule).toContain('var(--model-efficiency-family-color) 20%');
     expect(recommendationRule).toContain('var(--model-efficiency-family-color) 5%');
     expect(recommendationRule).toContain('inset 3px 0 0');
     expect(familyRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr));');
-    expect(modelNameRule).toContain('font-size: 10px;');
+    expect(modelNameRule).toContain('padding: 7px 3px 1px 6px;');
+    expect(modelNameRule).toContain('font-size: 9.5px;');
+    expect(modelNameRule).not.toContain('text-overflow: ellipsis;');
     expect(scoreRule).toContain('font-size: clamp(18px, 1.35vw, 20px);');
     expect(scoreRule).toContain('var(--model-efficiency-family-color) 58%');
     expect(metaRule).toContain('font-size: 10.5px;');
