@@ -49,4 +49,40 @@ describe('web project agent choices', () => {
 
     expect(choices).toEqual(['Claude']);
   });
+
+  test('projects flat Claude-compatible agents into one ordered display group', () => {
+    const {buildAgentChoiceNodes} = loadProjectAgentsModule();
+
+    expect(buildAgentChoiceNodes(['codex', 'claude', 'cc-glm', 'cc-kimi', 'kimi'])).toEqual([
+      {kind: 'agent', agentType: 'codex', label: 'codex'},
+      {
+        kind: 'claude-group',
+        agentType: 'claude',
+        label: 'Claude',
+        children: [
+          {agentType: 'cc-glm', label: 'GLM'},
+          {agentType: 'cc-kimi', label: 'Kimi'},
+        ],
+      },
+      {kind: 'agent', agentType: 'kimi', label: 'kimi'},
+    ]);
+  });
+
+  test('keeps a compatible child selectable when the native Claude entry is absent', () => {
+    const {buildAgentChoiceNodes, agentDisplayLabel} = loadProjectAgentsModule();
+
+    expect(buildAgentChoiceNodes(['cc-glm'])).toEqual([
+      {kind: 'agent', agentType: 'cc-glm', label: 'CC · GLM'},
+    ]);
+    expect(buildAgentChoiceNodes(['claude', 'cc-kimi'])).toEqual([
+      {
+        kind: 'claude-group',
+        agentType: 'claude',
+        label: 'Claude',
+        children: [{agentType: 'cc-kimi', label: 'Kimi'}],
+      },
+    ]);
+    expect(agentDisplayLabel('cc-glm')).toBe('CC · GLM');
+    expect(agentDisplayLabel('cc-kimi')).toBe('CC · Kimi');
+  });
 });

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -41,6 +42,7 @@ type promptStreamEvent struct {
 type Client struct {
 	projectName string
 	cwd         string
+	stateDir    string
 
 	registry *agent.ACPFactory
 
@@ -63,12 +65,34 @@ type Client struct {
 	viewSink        SessionViewSink
 }
 
+// RuntimeConfig binds Hub-scoped runtime dependencies to one Client.
+type RuntimeConfig struct {
+	AgentFactory *agent.ACPFactory
+	StateDir     string
+}
+
 // New creates a Client for the given project.
 func New(store Store, projectName string, cwd string) *Client {
+	return NewWithRuntime(store, projectName, cwd, RuntimeConfig{
+		AgentFactory: agent.DefaultACPFactory(),
+		StateDir:     defaultClientStateDir(),
+	})
+}
+
+// NewWithRuntime creates a Client with an explicit Hub runtime configuration.
+func NewWithRuntime(store Store, projectName string, cwd string, runtime RuntimeConfig) *Client {
+	if runtime.AgentFactory == nil {
+		runtime.AgentFactory = agent.DefaultACPFactory()
+	}
+	stateDir := ""
+	if strings.TrimSpace(runtime.StateDir) != "" {
+		stateDir = filepath.Clean(runtime.StateDir)
+	}
 	c := &Client{
 		projectName:    projectName,
 		cwd:            cwd,
-		registry:       agent.DefaultACPFactory(),
+		stateDir:       stateDir,
+		registry:       runtime.AgentFactory,
 		store:          store,
 		sessions:       make(map[string]*Session),
 		suspendTimeout: 5 * time.Minute,
@@ -112,6 +136,14 @@ func New(store Store, projectName string, cwd string) *Client {
 	}
 	c.viewSink = c.sessionRecorder
 	return c
+}
+
+func defaultClientStateDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
+		return ""
+	}
+	return filepath.Join(home, ".wheelmaker")
 }
 
 func unsupportedSessionActionReason(supported bool) string {

@@ -28,6 +28,7 @@ var sensitiveKeySuffixes = []string{
 	"password",
 	"setcookie",
 	"appsecret",
+	"apikeys",
 	"apikey",
 	"cookie",
 	"secret",

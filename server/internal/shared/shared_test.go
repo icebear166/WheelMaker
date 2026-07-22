@@ -172,8 +172,31 @@ func TestLoadConfig_FeishuLegacyFieldVariantsAreAcceptedAsIgnoredConfig(t *testi
 
 func TestLoadConfig_ConfigExampleIsValid(t *testing.T) {
 	path := filepath.Join("..", "..", "config.example.json")
-	if _, err := LoadConfig(path); err != nil {
+	cfg, err := LoadConfig(path)
+	if err != nil {
 		t.Fatalf("LoadConfig(config.example.json) error = %v", err)
+	}
+	if cfg.APIKeys.Kimi != "" || cfg.APIKeys.ZAI != "" {
+		t.Fatalf("config.example.json contains credentials: %#v", cfg.APIKeys)
+	}
+}
+
+func TestLoadConfigAcceptsClaudeCompatibleAPIKeys(t *testing.T) {
+	path := writeTempConfig(t, `{"projects":[],"apiKeys":{"kimi":"kimi-test-key","zai":"zai-test-key"}}`)
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.APIKeys.Kimi != "kimi-test-key" || cfg.APIKeys.ZAI != "zai-test-key" {
+		t.Fatalf("APIKeys = %#v", cfg.APIKeys)
+	}
+}
+
+func TestLoadConfigRejectsUnknownAPIKeyField(t *testing.T) {
+	path := writeTempConfig(t, `{"projects":[],"apiKeys":{"unknown":"value"}}`)
+	_, err := LoadConfig(path)
+	if err == nil || !strings.Contains(err.Error(), `unknown field "unknown"`) {
+		t.Fatalf("LoadConfig() error = %v, want unknown nested API key field", err)
 	}
 }
 

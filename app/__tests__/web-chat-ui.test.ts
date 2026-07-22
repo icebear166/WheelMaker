@@ -2616,3 +2616,43 @@ describe('workspace session actions', () => {
     expect(requestBody).toContain('throw errorValue;');
   });
 });
+
+describe('provider-aware session labels', () => {
+  test('uses the shared display label helper for session badges while preserving request normalization', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+
+    expect(mainTsx).toContain("from '../chat/projectAgents'");
+    expect((mainTsx.match(/agentDisplayLabel\(/g) || []).length).toBeGreaterThanOrEqual(5);
+    expect(mainTsx).not.toContain('normalizeAgentTypeName(draft.agentType)');
+    expect(mainTsx).not.toContain('normalizeAgentTypeName(sessionAgent)');
+    expect(mainTsx).toContain('{agentDisplayLabel(sheetMenu.agentType)}');
+    expect(mainTsx).toContain('{agentDisplayLabel(actionMenu.agentType)}');
+    expect(mainTsx).toContain('agentType = normalizeAgentTypeName(agentType);');
+  });
+});
+
+describe('Claude-compatible agent choice menu', () => {
+  test('shares one split menu implementation across mobile and wide new/resume entry points', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+
+    expect(mainTsx).toContain("from '../chat/AgentChoiceMenu';");
+    expect(mainTsx).toContain('<AgentChoiceMenu');
+    expect(mainTsx).toContain('variant="mobile"');
+    expect(mainTsx).toContain('variant="wide"');
+    expect(mainTsx).toContain('handleMobileProjectCreateSession(');
+    expect(mainTsx).toContain('handleMobileProjectResumeAgent(');
+    expect(mainTsx).toContain('handleWideProjectCreateSession(');
+    expect(mainTsx).toContain('handleWideProjectResumeAgent(');
+    expect(mainTsx).not.toContain('sheetAgents.map(agentType => (');
+    expect(mainTsx).not.toContain('agents.map(agentType => (');
+
+    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles', 'chat.css'));
+    expect(stylesCss).toContain('.agent-choice-row');
+    expect(stylesCss).toContain('.agent-choice-expand');
+    expect(stylesCss).toContain('flex: 0 0 30px;');
+    expect(stylesCss).toContain('.agent-choice-child');
+    expect(stylesCss).toContain('padding-left: 28px;');
+  });
+});

@@ -122,6 +122,7 @@ import {ChatPlanSurface} from '../chat/ChatPlanSurface';
 import {ChatRecentSessionsSurface} from '../chat/ChatRecentSessionsSurface';
 import {ChatSessionGlobalBar} from '../chat/ChatSessionGlobalBar';
 import {ChatSessionPanel} from '../chat/ChatSessionPanel';
+import {AgentChoiceMenu} from '../chat/AgentChoiceMenu';
 import {
   createSessionNavSlideOutAutoClose,
   createSessionNavSlideOutState,
@@ -130,7 +131,7 @@ import {
 } from '../chat/session/sessionNavSlideOutState';
 import {extractLatestChatPlan} from '../chat/chatPlan';
 import { resolveChatSessionTitle } from '../chat/session/chatSessionTitle';
-import { buildProjectAgentChoices } from '../chat/projectAgents';
+import { agentDisplayLabel, buildProjectAgentChoices } from '../chat/projectAgents';
 import { chatConfigValueLabel, formatChatContextUsage, splitChatComposerStatusOptions } from '../chat/session/chatComposerStatus';
 import {
   decodeSessionTurnToMessage,
@@ -14171,7 +14172,7 @@ export function App() {
   ) => {
     const selected = selectedChatEncodedKey === buildChatRuntimeKey(targetProjectId, draft.draftId);
     const failed = draft.status === 'failed';
-    const displaySessionAgent = normalizeAgentTypeName(draft.agentType);
+    const displaySessionAgent = agentDisplayLabel(draft.agentType);
     const statusLabel =
       draft.status === 'sendingFirstPrompt'
         ? 'Sending...'
@@ -14226,7 +14227,7 @@ export function App() {
     mobile: boolean,
   ) => {
     const sessionAgent = (session.agentType || '').trim();
-    const displaySessionAgent = normalizeAgentTypeName(sessionAgent);
+    const displaySessionAgent = agentDisplayLabel(sessionAgent);
     return (
       <div
         key={`${targetProjectId}:${mobile ? 'mobile-session' : 'wide-session'}:${session.sessionId}`}
@@ -14316,7 +14317,7 @@ export function App() {
         item => item.sessionId === session.sessionId,
       ) ?? session;
     const sessionAgent = (liveSession.agentType || '').trim();
-    const displaySessionAgent = normalizeAgentTypeName(sessionAgent);
+    const displaySessionAgent = agentDisplayLabel(sessionAgent);
     const selected = selectedChatEncodedKey === buildChatRuntimeKey(targetProjectId, liveSession.sessionId);
     return (
       <div
@@ -14737,7 +14738,7 @@ export function App() {
     mobile: boolean,
   ) => {
     const sessionAgent = (row.session.agentType || '').trim();
-    const displaySessionAgent = normalizeAgentTypeName(sessionAgent);
+    const displaySessionAgent = agentDisplayLabel(sessionAgent);
     const title = resolveSessionDisplayTitle(row.session) || row.session.sessionId;
     const selected =
       selectedChatEncodedKey === buildChatRuntimeKey(targetProjectId, row.session.sessionId);
@@ -14955,7 +14956,7 @@ export function App() {
                 {section.rows.map(row => {
                   const session = row.session;
                   const sessionAgent = (session.agentType || '').trim();
-                  const displaySessionAgent = normalizeAgentTypeName(sessionAgent);
+                  const displaySessionAgent = agentDisplayLabel(sessionAgent);
                   const selected =
                     selectedArchivedKey?.projectId === section.project.projectId &&
                     selectedArchivedKey.sessionId === session.sessionId;
@@ -16415,29 +16416,18 @@ export function App() {
                     </button>
                   ) : sheetMenu.phase === 'agents' ? (
                     <>
-                      {sheetAgents.map(agentType => (
-                        <button
-                          key={`${sheetMenu.projectId}:sheet:${sheetMenu.kind}:${agentType}`}
-                          type="button"
-                          className="wide-project-action-menu-item mobile-project-sheet-item"
-                          onClick={() => {
-                            if (sheetMenu.kind === 'new') {
-                              handleMobileProjectCreateSession(
-                                sheetMenu.projectId,
-                                agentType,
-                              ).catch(() => undefined);
-                            } else {
-                              handleMobileProjectResumeAgent(
-                                sheetMenu.projectId,
-                                agentType,
-                              ).catch(() => undefined);
-                            }
-                          }}
-                        >
-                          <span className="codicon codicon-sparkle" />
-                          <span className="mobile-project-sheet-item-label">{agentType}</span>
-                        </button>
-                      ))}
+                      <AgentChoiceMenu
+                        key={`${sheetMenu.projectId}:sheet:${sheetMenu.kind}:agents`}
+                        agents={sheetAgents}
+                        variant="mobile"
+                        onSelect={agentType => {
+                          if (sheetMenu.kind === 'new') {
+                            handleMobileProjectCreateSession(sheetMenu.projectId, agentType).catch(() => undefined);
+                          } else {
+                            handleMobileProjectResumeAgent(sheetMenu.projectId, agentType).catch(() => undefined);
+                          }
+                        }}
+                      />
                       {sheetAgents.length === 0 ? (
                         <div className="wide-project-action-empty">
                           <span className="codicon codicon-circle-slash" aria-hidden="true" />
@@ -16461,7 +16451,7 @@ export function App() {
                         }}
                       >
                         <span className="codicon codicon-arrow-left" />
-                        <span className="mobile-project-sheet-item-label">{sheetMenu.agentType}</span>
+                        <span className="mobile-project-sheet-item-label">{agentDisplayLabel(sheetMenu.agentType)}</span>
                       </button>
                       {resumeLoading ? (
                         <div className="wide-project-action-empty">
@@ -16550,23 +16540,18 @@ export function App() {
         </div>
         {actionMenu.phase === 'agents' ? (
           <>
-            {agents.map(agentType => (
-              <button
-                key={`${targetProjectId}:${actionMenu.kind}:${agentType}`}
-                type="button"
-                className="wide-project-action-menu-item"
-                onClick={() => {
-                  if (actionMenu.kind === 'new') {
-                    handleWideProjectCreateSession(targetProjectId, agentType).catch(() => undefined);
-                  } else {
-                    handleWideProjectResumeAgent(targetProjectId, agentType).catch(() => undefined);
-                  }
-                }}
-              >
-                <span className="codicon codicon-sparkle" />
-                <span>{agentType}</span>
-              </button>
-            ))}
+            <AgentChoiceMenu
+              key={`${targetProjectId}:${actionMenu.kind}:agents`}
+              agents={agents}
+              variant="wide"
+              onSelect={agentType => {
+                if (actionMenu.kind === 'new') {
+                  handleWideProjectCreateSession(targetProjectId, agentType).catch(() => undefined);
+                } else {
+                  handleWideProjectResumeAgent(targetProjectId, agentType).catch(() => undefined);
+                }
+              }}
+            />
             {agents.length === 0 ? (
               <div className="wide-project-action-empty">
                 <span className="codicon codicon-circle-slash" aria-hidden="true" />
@@ -16586,7 +16571,7 @@ export function App() {
               }}
             >
               <span className="codicon codicon-arrow-left" />
-              <span>{actionMenu.agentType}</span>
+              <span>{agentDisplayLabel(actionMenu.agentType)}</span>
             </button>
             {resumeLoading ? (
               <div className="wide-project-action-empty">

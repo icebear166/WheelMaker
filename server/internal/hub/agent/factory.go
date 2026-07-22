@@ -21,6 +21,13 @@ type SessionActionSupport struct {
 	Compact bool
 }
 
+// ACPFactoryOptions contains one Hub's local provider configuration.
+type ACPFactoryOptions struct {
+	StateDir   string
+	KimiAPIKey string
+	ZAIAPIKey  string
+}
+
 type projectNameContextKey struct{}
 
 func WithProjectName(ctx context.Context, projectName string) context.Context {
@@ -63,6 +70,12 @@ func DefaultACPFactory() *ACPFactory {
 	return defaultACPFactory
 }
 
+// NewConfiguredACPFactory creates an ACP factory using one Hub's local keys.
+// Provider availability is evaluated once during construction.
+func NewConfiguredACPFactory(options ACPFactoryOptions) *ACPFactory {
+	return newACPFactoryWithOptions(options, isProviderAvailable)
+}
+
 // NewACPFactory returns an empty ACP factory with no providers registered.
 // Use Register to bind only the providers you need. Tests use this to build a
 // deterministic registry independent of which CLIs happen to be installed on
@@ -75,12 +88,19 @@ func NewACPFactory() *ACPFactory {
 }
 
 func newACPFactoryWithDefaults() *ACPFactory {
+	return newACPFactoryWithOptions(ACPFactoryOptions{}, isProviderAvailable)
+}
+
+func newACPFactoryWithOptions(options ACPFactoryOptions, available func(ACPProvider) bool) *ACPFactory {
 	f := &ACPFactory{
 		creators:       map[protocol.ACPProvider]InstanceCreator{},
 		sessionActions: map[protocol.ACPProvider]SessionActionSupport{},
 	}
+	if available == nil {
+		available = isProviderAvailable
+	}
 	codexProvider := NewCodexProvider()
-	if isProviderAvailable(codexProvider) {
+	if available(codexProvider) {
 		f.Register(protocol.ACPProviderCodex, codexappInstanceCreator(codexProvider))
 		f.RegisterSessionActions(protocol.ACPProviderCodex, SessionActionSupport{Status: true, Compact: true})
 	}
@@ -98,7 +118,7 @@ func newACPFactoryWithDefaults() *ACPFactory {
 	}
 	for _, candidate := range candidates {
 		prov := candidate.build()
-		if !isProviderAvailable(prov) {
+		if !available(prov) {
 			continue
 		}
 		if candidate.provider == protocol.ACPProviderFlicker {
@@ -107,10 +127,23 @@ func newACPFactoryWithDefaults() *ACPFactory {
 		}
 		f.Register(candidate.provider, providerInstanceCreator(prov))
 	}
+	if kimiKey := strings.TrimSpace(options.KimiAPIKey); kimiKey != "" {
+		registerConfiguredProvider(f, protocol.ACPProviderCCKimi, NewCCKimiProvider(options.StateDir, kimiKey), available)
+	}
+	if zaiKey := strings.TrimSpace(options.ZAIAPIKey); zaiKey != "" {
+		registerConfiguredProvider(f, protocol.ACPProviderCCGLM, NewCCGLMProvider(options.StateDir, zaiKey), available)
+	}
 	if len(f.Names()) == 0 {
 		agentLogger().Warn("no available ACP providers detected")
 	}
 	return f
+}
+
+func registerConfiguredProvider(f *ACPFactory, provider protocol.ACPProvider, configured ACPProvider, available func(ACPProvider) bool) {
+	if !available(configured) {
+		return
+	}
+	f.Register(provider, providerInstanceCreator(configured))
 }
 
 // Clone returns a shallow copy of the creator registry.

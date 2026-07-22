@@ -46,6 +46,12 @@ DeepSeek、Volcengine ASR 和 MiMo TTS 统一在设置页的 `Server` 分组配�
 
 Server 配置由 Registry 入口机写入 `~/.wheelmaker/db/server-data.json`。这是运行时必须读取的明文 JSON，不是加密保险箱；安全边界来自仅当前 OS 用户可访问的 private file permissions、原子替换写入和受限协议。备份该文件等同于备份所有第三方 Key，必须使用同等级的访问控制，不得上传 Git、诊断包或普通云盘。能控制当前 OS 用户或管理员权限的攻击者仍在已知风险范围内。
 
+Claude-compatible agent 的 Hub 本地 Key 是独立于 Server Data 的明确例外。每个 Hub 可以在自己的 `<stateDir>/config.json` 顶层 `apiKeys.kimi`、`apiKeys.zai` 保存 Kimi Code 与 Z.AI Key；默认 `stateDir` 为 `~/.wheelmaker`。这些字段只供 Hub 构建 `cc-kimi`、`cc-glm` provider 使用，不经 Server 设置接口、Registry project snapshot 或浏览器返回，也不向其他 Hub 下发。配置在 Hub 启动时读取，变更需要重启 Hub。
+
+`config.json` 同样是受私有文件权限保护的明文配置，不是加密保险箱。Hub 只能把 Key 注入对应 `claude-agent-acp` 子进程环境，禁止放入 argv、ACP payload、Session 数据库、错误详情或日志；配置对象和环境诊断必须经过递归脱敏。`<stateDir>/.data/cc-glm`、`<stateDir>/.data/cc-kimi` 用于隔离 Claude SDK 配置和 Session 历史，不应复制 API Key。备份 `config.json` 等同于备份 Registry Token 与这些第三方 Key。
+
+来源：[`scope/2026-07-23-claude-compatible-agents/spec-claude-compatible-agents.md`](scope/2026-07-23-claude-compatible-agents/spec-claude-compatible-agents.md)。
+
 Android direct speech（直连语音）是唯一的明文读取例外。APK 先通过 HTTPS 页面和浏览器 Session Cookie 接入 Registry；只有声明为 `wheelmaker-android` 的已认证 client 才能读取 Volcengine ASR 的 Key、版本和模型，不能读取 DeepSeek 或 TTS Key。这个 client-name gate 可以被自制客户端伪装，本项目在 single-user、所有客户端均受信任的边界内明确接受（accepted）该风险，不能把它当成多租户授权。
 
 Key 由 Web 通过受限 Native Bridge 交给 Android，只保存在 APK 进程内存，不写 SharedPreferences、数据库或文件。相同版本不会重复获取；Key 变化、服务器切换、退出登录、服务端变为未配置、认证失败或进程死亡会触发清理/重新同步。Android 随后直连 Volcengine firehose endpoint 并把 transcript 返回页面，不把 PCM 音频发给 Registry。Web 和 Desktop 不取得第三方 Key，语音识别与 TTS 仍由服务端 provider 调用。

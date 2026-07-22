@@ -5,6 +5,10 @@
       "path": "/path/to/WheelMaker"
     }
   ],
+  "apiKeys": {
+    "kimi": "",
+    "zai": ""
+  },
   "registry": {
     "listen": true,
     "port": 9630,
