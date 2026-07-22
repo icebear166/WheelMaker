@@ -221,9 +221,17 @@ func claudeCompatibleEnvironment(
 	autoCompactWindow, maxContextTokens string, models []string,
 	extra ...string,
 ) []string {
+	otherAuthName := "ANTHROPIC_API_KEY"
+	if authName == otherAuthName {
+		otherAuthName = "ANTHROPIC_AUTH_TOKEN"
+	}
 	env := []string{
 		"CLAUDE_CONFIG_DIR=" + filepath.Join(stateDir, ".data", providerName),
 		"ANTHROPIC_BASE_URL=" + endpoint,
+		otherAuthName + "=",
+		"CLAUDE_CODE_USE_BEDROCK=",
+		"CLAUDE_CODE_USE_VERTEX=",
+		"CLAUDE_CODE_USE_FOUNDRY=",
 		authName + "=" + apiKey,
 		"ANTHROPIC_MODEL=" + defaultModel,
 		"ANTHROPIC_DEFAULT_FABLE_MODEL=" + defaultModel,

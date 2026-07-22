@@ -16451,7 +16451,7 @@ export function App() {
                         }}
                       >
                         <span className="codicon codicon-arrow-left" />
-                        <span className="mobile-project-sheet-item-label">{sheetMenu.agentType}</span>
+                        <span className="mobile-project-sheet-item-label">{agentDisplayLabel(sheetMenu.agentType)}</span>
                       </button>
                       {resumeLoading ? (
                         <div className="wide-project-action-empty">
@@ -16571,7 +16571,7 @@ export function App() {
               }}
             >
               <span className="codicon codicon-arrow-left" />
-              <span>{actionMenu.agentType}</span>
+              <span>{agentDisplayLabel(actionMenu.agentType)}</span>
             </button>
             {resumeLoading ? (
               <div className="wide-project-action-empty">

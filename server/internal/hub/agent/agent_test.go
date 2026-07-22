@@ -206,6 +206,10 @@ func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 				"CLAUDE_CONFIG_DIR":               filepath.Join(stateDir, ".data", "cc-kimi"),
 				"ANTHROPIC_BASE_URL":              "https://api.kimi.com/coding/",
 				"ANTHROPIC_API_KEY":               "kimi-test-key",
+				"ANTHROPIC_AUTH_TOKEN":            "",
+				"CLAUDE_CODE_USE_BEDROCK":         "",
+				"CLAUDE_CODE_USE_VERTEX":          "",
+				"CLAUDE_CODE_USE_FOUNDRY":         "",
 				"ANTHROPIC_MODEL":                 "k3[1m]",
 				"ANTHROPIC_DEFAULT_FABLE_MODEL":   "k3[1m]",
 				"ANTHROPIC_DEFAULT_OPUS_MODEL":    "k3[1m]",
@@ -227,6 +231,10 @@ func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 				"CLAUDE_CONFIG_DIR":                        filepath.Join(stateDir, ".data", "cc-glm"),
 				"ANTHROPIC_BASE_URL":                       "https://api.z.ai/api/anthropic",
 				"ANTHROPIC_AUTH_TOKEN":                     "zai-test-key",
+				"ANTHROPIC_API_KEY":                        "",
+				"CLAUDE_CODE_USE_BEDROCK":                  "",
+				"CLAUDE_CODE_USE_VERTEX":                   "",
+				"CLAUDE_CODE_USE_FOUNDRY":                  "",
 				"ANTHROPIC_MODEL":                          "glm-5.2[1m]",
 				"ANTHROPIC_DEFAULT_FABLE_MODEL":            "glm-5.2[1m]",
 				"ANTHROPIC_DEFAULT_OPUS_MODEL":             "glm-5.2[1m]",
@@ -266,8 +274,12 @@ func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 			}
 			gotEnv := testEnvironmentMap(t, env)
 			for name, want := range tt.wantEnv {
-				if gotEnv[name] != want {
-					t.Fatalf("env[%q] = %q, want %q; env=%v", name, gotEnv[name], want, gotEnv)
+				got, ok := gotEnv[name]
+				if !ok {
+					t.Fatalf("env[%q] is missing, want %q; env=%v", name, want, gotEnv)
+				}
+				if got != want {
+					t.Fatalf("env[%q] = %q, want %q; env=%v", name, got, want, gotEnv)
 				}
 			}
 			modelConfig := struct {

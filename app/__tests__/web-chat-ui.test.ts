@@ -2626,6 +2626,8 @@ describe('provider-aware session labels', () => {
     expect((mainTsx.match(/agentDisplayLabel\(/g) || []).length).toBeGreaterThanOrEqual(5);
     expect(mainTsx).not.toContain('normalizeAgentTypeName(draft.agentType)');
     expect(mainTsx).not.toContain('normalizeAgentTypeName(sessionAgent)');
+    expect(mainTsx).toContain('{agentDisplayLabel(sheetMenu.agentType)}');
+    expect(mainTsx).toContain('{agentDisplayLabel(actionMenu.agentType)}');
     expect(mainTsx).toContain('agentType = normalizeAgentTypeName(agentType);');
   });
 });
