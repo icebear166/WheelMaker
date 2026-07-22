@@ -6297,6 +6297,13 @@ func TestSessionRecorderPermissionSummaryCountTracksLiveTurns(t *testing.T) {
 	if summary.PendingPermissionCount != 0 {
 		t.Fatalf("pendingPermissionCount=%d, want 0", summary.PendingPermissionCount)
 	}
+	encodedSummary, err := json.Marshal(summary)
+	if err != nil {
+		t.Fatalf("marshal summary: %v", err)
+	}
+	if !strings.Contains(string(encodedSummary), `"pendingPermissionCount":0`) {
+		t.Fatalf("zero pendingPermissionCount omitted from session summary: %s", encodedSummary)
+	}
 }
 
 func TestSessionViewReadReturnsMergedStreamingTurn(t *testing.T) {

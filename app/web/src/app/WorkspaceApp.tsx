@@ -18217,10 +18217,28 @@ export function App() {
           ) : null}
           <div
             ref={chatComposerRef}
-            className={`chat-composer${chatCoreConfigMenuOpen || chatConfigMenuOptionId || chatConfigOverflowOpen || chatContextUsageOpen ? ' config-menu-open' : ''}${chatSlashMenuVisible || chatFileMentionMenuOpen ? ' trigger-menu-open' : ''}`}
+            className={`chat-composer${selectedActivePermission ? ' permission-open' : ''}${chatCoreConfigMenuOpen || chatConfigMenuOptionId || chatConfigOverflowOpen || chatContextUsageOpen ? ' config-menu-open' : ''}${chatSlashMenuVisible || chatFileMentionMenuOpen ? ' trigger-menu-open' : ''}`}
             hidden={archivedMode}
           >
             <div className="chat-composer-content">
+            {selectedActivePermission && selectedActivePermissionView ? (
+              <ChatPermissionDialog
+                title={selectedActivePermissionView.title}
+                detailsText={selectedActivePermissionView.detailsText}
+                options={selectedActivePermissionView.options}
+                submittingOptionId={
+                  permissionSubmission.permissionId === selectedActivePermission.permissionId
+                    ? permissionSubmission.optionId
+                    : ''
+                }
+                error={
+                  permissionSubmission.permissionId === selectedActivePermission.permissionId
+                    ? permissionSubmission.error
+                    : ''
+                }
+                onSelect={optionId => { void submitChatPermission(optionId); }}
+              />
+            ) : null}
             {!archivedMode && chatShowScrollToBottom ? (
               <button
                 type="button"
@@ -18758,24 +18776,6 @@ export function App() {
             </div>
           </div>
           </div>
-          {selectedActivePermission && selectedActivePermissionView ? (
-            <ChatPermissionDialog
-              title={selectedActivePermissionView.title}
-              detailsText={selectedActivePermissionView.detailsText}
-              options={selectedActivePermissionView.options}
-              submittingOptionId={
-                permissionSubmission.permissionId === selectedActivePermission.permissionId
-                  ? permissionSubmission.optionId
-                  : ''
-              }
-              error={
-                permissionSubmission.permissionId === selectedActivePermission.permissionId
-                  ? permissionSubmission.error
-                  : ''
-              }
-              onSelect={optionId => { void submitChatPermission(optionId); }}
-            />
-          ) : null}
           </div>
           {isWide && terminalOpen ? (
             <>

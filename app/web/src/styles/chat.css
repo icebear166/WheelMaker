@@ -3919,6 +3919,10 @@
   background: transparent;
 }
 
+.chat-composer.permission-open {
+  z-index: 31;
+}
+
 .chat-composer.config-menu-open {
   z-index: 32;
 }
@@ -6040,21 +6044,15 @@
   white-space: nowrap;
 }
 
-.chat-permission-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 40;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  background: color-mix(in srgb, var(--surface-workspace-content) 74%, transparent);
-  backdrop-filter: blur(6px);
-}
-
 .chat-permission-dialog {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  z-index: 40;
   width: min(520px, 100%);
-  max-height: min(680px, calc(100% - 24px));
+  max-height: min(60vh, 680px);
   overflow: auto;
+  transform: translateX(-50%);
   padding: 22px;
   border: 1px solid color-mix(in srgb, var(--accent-primary) 32%, var(--border-subtle));
   border-radius: var(--radius-floating);
@@ -6129,14 +6127,9 @@
 }
 
 @media (max-width: 900px) {
-  .chat-permission-overlay {
-    align-items: end;
-    padding: 12px;
-  }
-
   .chat-permission-dialog {
     width: 100%;
-    max-height: min(72vh, 680px);
+    max-height: min(55vh, 680px);
     padding: 18px;
   }
 }

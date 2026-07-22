@@ -60,6 +60,20 @@ describe('chat session ordering', () => {
     });
   });
 
+  test('preserves pending permission count across partial patches and accepts an explicit zero', () => {
+    const waiting = {
+      ...session('waiting', '2026-07-20T05:00:00Z'),
+      running: true,
+      pendingPermissionCount: 1,
+    };
+
+    const patched = mergeChatSession([waiting], {sessionId: 'waiting', preview: 'still waiting'});
+    expect(patched[0].pendingPermissionCount).toBe(1);
+
+    const answered = mergeChatSession(patched, {sessionId: 'waiting', pendingPermissionCount: 0});
+    expect(answered[0].pendingPermissionCount).toBe(0);
+  });
+
   test('list refresh preserves optional metadata and reorders changed activity', () => {
     const existing = [{
       ...session('old', '2026-07-19T05:00:00Z'),
