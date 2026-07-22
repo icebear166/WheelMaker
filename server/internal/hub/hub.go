@@ -26,6 +26,8 @@ import (
 type Hub struct {
 	cfg             *logger.AppConfig
 	dbPath          string
+	stateDir        string
+	agentFactory    *agent.ACPFactory
 	clients         []*client.Client
 	regSync         *Reporter
 	terminalManager *terminalpkg.Manager
@@ -35,9 +37,27 @@ type Hub struct {
 // New creates a Hub from the given config and client DB path.
 // hub.Start() must be called before hub.Run().
 func New(cfg *logger.AppConfig, dbPath string) *Hub {
+	stateDir := filepath.Dir(filepath.Dir(dbPath))
+	apiKeys := logger.APIKeysConfig{}
+	if cfg != nil {
+		apiKeys = cfg.APIKeys
+	}
+	return newHubWithFactory(cfg, dbPath, agent.NewConfiguredACPFactory(agent.ACPFactoryOptions{
+		StateDir:   stateDir,
+		KimiAPIKey: apiKeys.Kimi,
+		ZAIAPIKey:  apiKeys.ZAI,
+	}))
+}
+
+func newHubWithFactory(cfg *logger.AppConfig, dbPath string, factory *agent.ACPFactory) *Hub {
+	if factory == nil {
+		factory = agent.DefaultACPFactory()
+	}
 	return &Hub{
 		cfg:           cfg,
 		dbPath:        dbPath,
+		stateDir:      filepath.Dir(filepath.Dir(dbPath)),
+		agentFactory:  factory,
 		clientsByName: map[string]*client.Client{},
 	}
 }
@@ -118,7 +138,10 @@ func (h *Hub) buildProjectClient(ctx context.Context, pc logger.ProjectConfig, c
 		hubLogger(pc.Name).Error("open store failed err=%v", err)
 		return nil, fmt.Errorf("new store: %w", err)
 	}
-	c := client.New(store, pc.Name, cwd)
+	c := client.NewWithRuntime(store, pc.Name, cwd, client.RuntimeConfig{
+		AgentFactory: h.acpFactory(),
+		StateDir:     h.stateDir,
+	})
 	c.SetSessionHistoryRoot(filepath.Join(filepath.Dir(h.dbPath), "session"))
 	c.SetSessionViewSink(c)
 	h.clientsByName[pc.Name] = c
@@ -310,15 +333,23 @@ func (h *Hub) collectProjectInfo(cfgProject logger.ProjectConfig) ProjectInfo {
 		Online: true,
 		Agent:  "auto",
 	}
-	if preferred := strings.TrimSpace(agent.DefaultACPFactory().PreferredName()); preferred != "" {
+	factory := h.acpFactory()
+	if preferred := strings.TrimSpace(factory.PreferredName()); preferred != "" {
 		info.Agent = preferred
 	}
-	info.Agents = append([]string(nil), agent.DefaultACPFactory().Names()...)
+	info.Agents = append([]string(nil), factory.Names()...)
 	info.AgentProfiles = collectProjectAgentProfiles(cfgProject.Name, path, info.Agents)
 	gitState := collectGitState(path)
 	info.Git = gitState
 	info.ProjectRev = hubHashLines(gitState.GitRev, gitState.WorktreeRev)
 	return info
+}
+
+func (h *Hub) acpFactory() *agent.ACPFactory {
+	if h != nil && h.agentFactory != nil {
+		return h.agentFactory
+	}
+	return agent.DefaultACPFactory()
 }
 
 func collectProjectAgentProfiles(projectName, projectPath string, agentNames []string) []rp.ProjectAgentProfile {

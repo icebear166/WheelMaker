@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gorilla/websocket"
+	"github.com/swm8023/wheelmaker/internal/hub/agent"
 	clientpkg "github.com/swm8023/wheelmaker/internal/hub/client"
 	"github.com/swm8023/wheelmaker/internal/hub/tools"
 	rp "github.com/swm8023/wheelmaker/internal/protocol"
@@ -3378,4 +3379,56 @@ func querySessionCandidateIndexCountForTest(manager *projectFileIndexManager) in
 		total += len(session.indexes)
 	}
 	return total
+}
+
+func TestHubUsesOneConfiguredFactoryForProjectInfoAndClient(t *testing.T) {
+	projectPath := t.TempDir()
+	dbPath := filepath.Join(t.TempDir(), "db", "client.sqlite3")
+	factory := agent.NewACPFactory()
+	creator := func(context.Context, string) (agent.Instance, error) { return nil, nil }
+	factory.Register(rp.ACPProviderClaude, creator)
+	factory.Register(rp.ACPProviderCCGLM, creator)
+	factory.Register(rp.ACPProviderCCKimi, creator)
+
+	cfg := &logger.AppConfig{
+		Projects: []logger.ProjectConfig{{Name: "project", Path: projectPath}},
+		APIKeys:  logger.APIKeysConfig{Kimi: "kimi-test-key", ZAI: "zai-test-key"},
+	}
+	h := newHubWithFactory(cfg, dbPath, factory)
+	info := h.collectProjectInfo(cfg.Projects[0])
+
+	if got, want := info.Agent, "claude"; got != want {
+		t.Fatalf("ProjectInfo.Agent = %q, want %q", got, want)
+	}
+	if got, want := info.Agents, []string{"cc-glm", "cc-kimi", "claude"}; !equalStringsForClaudeTest(got, want) {
+		t.Fatalf("ProjectInfo.Agents = %v, want %v", got, want)
+	}
+	encoded, err := json.Marshal(info)
+	if err != nil {
+		t.Fatalf("json.Marshal(ProjectInfo): %v", err)
+	}
+	if strings.Contains(string(encoded), "kimi-test-key") || strings.Contains(string(encoded), "zai-test-key") {
+		t.Fatalf("ProjectInfo leaked API key: %s", encoded)
+	}
+
+	c, err := h.buildProjectClient(context.Background(), cfg.Projects[0], projectPath)
+	if err != nil {
+		t.Fatalf("buildProjectClient: %v", err)
+	}
+	defer c.Close()
+	if c == nil {
+		t.Fatal("buildProjectClient returned nil Client")
+	}
+}
+
+func equalStringsForClaudeTest(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
 }

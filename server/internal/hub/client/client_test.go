@@ -2238,6 +2238,27 @@ func newSessionViewTestClient(t *testing.T) *Client {
 	return c
 }
 
+func TestNewWithRuntimeUsesConfiguredFactoryAndStateDir(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	factory := agent.NewACPFactory()
+	stateDir := filepath.Join(t.TempDir(), "state")
+	c := NewWithRuntime(store, "proj1", t.TempDir(), RuntimeConfig{
+		AgentFactory: factory,
+		StateDir:     stateDir,
+	})
+	defer c.Close()
+
+	if c.registry != factory {
+		t.Fatalf("Client registry = %p, want configured factory %p", c.registry, factory)
+	}
+	if c.stateDir != stateDir {
+		t.Fatalf("Client stateDir = %q, want %q", c.stateDir, stateDir)
+	}
+}
+
 func addRuntimeSession(c *Client, sessionID, title, agent string, createdAt, lastActiveAt time.Time) {
 	sess, err := c.newWiredSession(sessionID, agent)
 	if err != nil {

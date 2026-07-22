@@ -4491,3 +4491,40 @@ func TestFactorySessionActionsAreProviderSpecific(t *testing.T) {
 		t.Fatalf("cloned codex session actions = %+v", got)
 	}
 }
+
+func TestConfiguredACPFactoryClaudeCompatibleRegistrationMatrix(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "state")
+	tests := []struct {
+		name      string
+		kimiKey   string
+		zaiKey    string
+		available bool
+		wantNames []string
+	}{
+		{name: "adapter missing", kimiKey: "kimi-key", zaiKey: "zai-key", wantNames: []string{}},
+		{name: "keys missing", available: true, wantNames: []string{}},
+		{name: "kimi only", kimiKey: "kimi-key", available: true, wantNames: []string{"cc-kimi"}},
+		{name: "zai only", zaiKey: "zai-key", available: true, wantNames: []string{"cc-glm"}},
+		{name: "both", kimiKey: "kimi-key", zaiKey: "zai-key", available: true, wantNames: []string{"cc-glm", "cc-kimi"}},
+		{name: "trimmed input", kimiKey: "  kimi-key  ", available: true, wantNames: []string{"cc-kimi"}},
+		{name: "whitespace only", kimiKey: "   ", zaiKey: "\t", available: true, wantNames: []string{}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			factory := newACPFactoryWithOptions(ACPFactoryOptions{
+				StateDir:   stateDir,
+				KimiAPIKey: tt.kimiKey,
+				ZAIAPIKey:  tt.zaiKey,
+			}, func(provider ACPProvider) bool {
+				return tt.available && (provider.Name() == "cc-glm" || provider.Name() == "cc-kimi")
+			})
+			if got := factory.Names(); !reflect.DeepEqual(got, tt.wantNames) {
+				t.Fatalf("factory.Names() = %v, want %v", got, tt.wantNames)
+			}
+			if preferred := factory.PreferredName(); preferred == "cc-glm" || preferred == "cc-kimi" {
+				t.Fatalf("PreferredName() selected Claude-compatible provider: %q", preferred)
+			}
+		})
+	}
+}
