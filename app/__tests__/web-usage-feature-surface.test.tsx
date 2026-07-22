@@ -194,6 +194,7 @@ describe('UsageFeatureSurface', () => {
       view = TestRenderer.create(<UsageCompactContent snapshot={fixtureSnapshot} />);
     });
     const codex = view!.root.findByProps({'data-usage-provider': 'codex'});
+    expect(renderedText(codex.findByProps({className: 'usage-provider-name'}))).toBe('Codex');
     const metrics = codex.findAllByProps({'data-usage-compact-limit': true});
     expect(metrics).toHaveLength(2);
     expect(renderedText(metrics[0])).toBe('37%');
@@ -202,6 +203,7 @@ describe('UsageFeatureSurface', () => {
     expect(metrics[1].findByProps({'data-usage-rail-fill': true}).props.style.width).toBe('90%');
 
     const deepSeek = view!.root.findByProps({'data-usage-provider': 'deepseek'});
+    expect(renderedText(deepSeek.findByProps({className: 'usage-provider-name'}))).toBe('DeepSeek');
     expect(renderedText(deepSeek)).toContain('CNY 12.50');
     expect(renderedText(deepSeek)).not.toContain('OpenCode');
   });
@@ -263,11 +265,11 @@ describe('UsageFeatureSurface', () => {
 
     const first = view!.root.findByProps({'data-usage-compact-account': 'kimi:kimi-a'});
     const second = view!.root.findByProps({'data-usage-compact-account': 'kimi:kimi-b'});
-    expect(renderedText(first)).toContain('Kimi / first@example.com');
+    expect(renderedText(first.findByProps({className: 'usage-provider-name'}))).toBe('Kimi-1');
     expect(renderedText(first)).toContain('15%');
     expect(renderedText(first)).not.toContain('/ 5h');
     expect(renderedText(first)).toContain('80% / 1W');
-    expect(renderedText(second)).toContain('Kimi / second@example.com');
+    expect(renderedText(second.findByProps({className: 'usage-provider-name'}))).toBe('Kimi-2');
     expect(renderedText(second)).toContain('74%');
     expect(renderedText(second)).not.toContain('/ 5h');
     expect(renderedText(second)).toContain('33% / 1W');
@@ -293,7 +295,7 @@ describe('UsageFeatureSurface', () => {
 
     const metrics = view!.root.findAllByProps({'data-usage-compact-limit': true});
     expect(metrics).toHaveLength(2);
-    expect(renderedText(metrics[0])).toBe('--/--');
+    expect(renderedText(metrics[0])).toBe('-/-');
     expect(metrics[0].findByProps({'data-usage-rail-fill': true}).props.style.width).toBe('0%');
     expect(renderedText(metrics[1])).toContain('64% / 1W');
   });
@@ -317,7 +319,7 @@ describe('UsageFeatureSurface', () => {
 
     const metrics = view!.root.findAllByProps({'data-usage-compact-limit': true});
     expect(metrics).toHaveLength(2);
-    expect(renderedText(metrics[0])).toBe('--/--');
+    expect(renderedText(metrics[0])).toBe('-/-');
     expect(renderedText(metrics[1])).toContain('50% / 1M');
     expect(metrics[1].findByProps({'data-usage-rail-fill': true}).props.style.width).toBe('50.38%');
   });
@@ -457,6 +459,20 @@ describe('UsageFeatureSurface', () => {
     const efficiencyStyles = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles', 'modelEfficiency.css'), 'utf8').replace(/\r\n/g, '\n');
     const detailTableRule = efficiencyStyles.match(/\.model-efficiency-detail-family table \{([\s\S]*?)\n\}/)?.[1] ?? '';
     expect(detailTableRule).toContain('table-layout: fixed;');
+  });
+
+  it('renders Monitor tabs as visible segmented toggles on desktop and mobile', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const styles = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles', 'usage.css'), 'utf8').replace(/\r\n/g, '\n');
+    const desktopTrack = styles.match(/\.monitor-tabs \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const desktopSelected = styles.match(/\.monitor-tabs button\[aria-selected='true'\] \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const mobileTrack = styles.match(/\.usage-mobile-tabs \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const mobileSelected = styles.match(/\.usage-mobile-tabs button\[aria-selected='true'\] \{([\s\S]*?)\n\}/)?.[1] ?? '';
+
+    expect(desktopTrack).toContain('background: color-mix(in srgb, var(--surface-root) 68%, transparent);');
+    expect(desktopSelected).toContain('inset 0 0 0 1px');
+    expect(mobileTrack).toContain('border: 1px solid');
+    expect(mobileSelected).toContain('inset 0 0 0 1px');
   });
 
   it('explains how to restore the monitor before hiding it', () => {

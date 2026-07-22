@@ -16,7 +16,7 @@ const FAMILY_LABELS: Record<ModelEfficiencyFamily, string> = {
 };
 
 function formatScore(score: number): string {
-  return Number.isInteger(score) ? String(score) : score.toFixed(1);
+  return String(Math.round(score));
 }
 
 export function formatModelEfficiencyCost(averageCostUsd?: number): string {

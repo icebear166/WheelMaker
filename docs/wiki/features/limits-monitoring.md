@@ -24,9 +24,9 @@ Limits 使用 HubState 的 `tokenStats` section。客户端通过 `hub.state.get
 
 - Chat 文字区左上方依次排列 Recent Sessions、Plan 和 Monitor；缺少前一项时，后一项自动上移补位。
 - 三类浮层共用左边界、宽度、间距、毛玻璃背景和正文交界处的渐隐规则，侧栏展开或收起不改变水平几何。
-- Monitor 在同一标题行提供 `Limits / IQ` Tab，以及共享的折叠、隐藏、Simple/Detail 和刷新操作。默认选择 Limits 和 Simple；切换 Tab 保持 Monitor 级 Simple/Detail 状态。
+- Monitor 在同一标题行提供带明确容器与选中态的 `Limits / IQ` 分段 Toggle，以及共享的折叠、隐藏、Simple/Detail 和刷新操作。默认选择 Limits 和 Simple；切换 Tab 保持 Monitor 级 Simple/Detail 状态。
 - 共享刷新同时触发 Limits 与 IQ 的刷新入口。任一数据源刷新时图标旋转；两条数据链路继续独立处理快照和错误。
-- 紧凑模式每个可用账号一行，固定展示两个额度槽位：第一槽为 5 小时额度，只显示百分比和进度条；缺失时显示 `--/--` 和空轨道。第二槽显示较长周期额度，Codex/Kimi 周额度标记为 `1W`，MyFlicker 月额度标记为 `1M`。
+- 紧凑模式每个可用账号一行，单账号只显示 Provider 名；同一 Provider 有多个账号时按当前列表顺序显示为 `Kimi-1`、`Kimi-2`。每行固定展示两个额度槽位：第一槽为 5 小时额度，只显示百分比和进度条；缺失时显示 `-/-` 和空轨道。第二槽显示较长周期额度，Codex/Kimi 周额度标记为 `1W`，MyFlicker 月额度标记为 `1M`。
 - 详情模式保持相同宽度，展示聚合后的账号、所属 Hub、额度窗口、重置时间、余额和刷新状态。
 - 桌面 Chat 设置只保留 `Show Monitor`。新偏好键不存在时，旧 Limits 或 Model efficiency 任一显示偏好为 true 就迁移为显示；迁移后只写新键。标题栏隐藏仅关闭桌面 Monitor，可从该设置恢复。
 
@@ -34,7 +34,7 @@ Limits 使用 HubState 的 `tokenStats` section。客户端通过 `hub.state.get
 
 - 展开移动快捷菜单后，从上到下固定为 Preview、Terminal、Chat、Monitor、Settings；收起时仍只显示 Chat。
 - Terminal 复用现有移动全屏终端，不自动创建终端。Monitor 入口始终可见，不受桌面 `Show Monitor` 开关控制。
-- Monitor 使用覆盖移动视口的遮罩和保留安全区间距的大型详情卡片。标题栏同一行固定提供 `Monitor`、`Limits / IQ` Tab、刷新和关闭；每次打开默认选择 Limits，两个 Tab 都直接使用 Detail 正文，不提供 Simple/Detail 按钮和底部状态栏。
+- Monitor 使用覆盖移动视口的遮罩和保留安全区间距的大型详情卡片。标题栏同一行固定提供 `Monitor`、带明确容器与选中态的 `Limits / IQ` 分段 Toggle、刷新和关闭；每次打开默认选择 Limits，两个 Tab 都直接使用 Detail 正文，不提供 Simple/Detail 按钮和底部状态栏。
 - 标题栏提供共享刷新和关闭操作。共享刷新同时触发现有跨 Hub 强制刷新与 IQ 前端 store 刷新；打开 Monitor 本身只读取当前缓存，不额外触发请求。
 - 点击卡片外遮罩、关闭按钮或移动端系统返回会关闭 Monitor；卡片内部点击不关闭。Terminal、Preview、Settings 和 Monitor 全屏层互斥。
 

@@ -40,17 +40,24 @@ function QuotaRail({remainingPercent}: {remainingPercent: number}) {
   );
 }
 
-function AccountRail({provider, account}: {provider: UsageProviderView; account: UsageViewAccount}) {
+function AccountRail({
+  provider,
+  account,
+  displayName,
+}: {
+  provider: UsageProviderView;
+  account: UsageViewAccount;
+  displayName: string;
+}) {
   const limits = compactLimits(account);
   const balance = balanceSummary(account);
-  const label = `${provider.name} / ${accountLabel(account)}`;
   return (
     <div
       className="usage-provider-row"
       data-usage-provider={provider.id}
       data-usage-compact-account={`${provider.id}:${account.localId}`}
     >
-      <span className="usage-provider-name" title={label}>{label}</span>
+      <span className="usage-provider-name" title={displayName}>{displayName}</span>
       {limits.some(limit => limit !== null) ? (
         <span className="usage-provider-metrics">
           {limits.map((limit, index) => (
@@ -65,7 +72,7 @@ function AccountRail({provider, account}: {provider: UsageProviderView; account:
                     <strong>{Math.round(limit.remainingPercent)}%</strong>
                     {index === 1 ? <span>{` / ${shortLimitLabel(limit)}`}</span> : null}
                   </>
-                ) : <strong>--/--</strong>}
+                ) : <strong>-/-</strong>}
               </span>
               <QuotaRail remainingPercent={limit?.remainingPercent ?? 0} />
             </span>
@@ -147,18 +154,22 @@ export function UsageCompactContent({snapshot}: {snapshot: UsageViewSnapshot}) {
   if (snapshot.providers.length === 0) {
     return <div className="usage-feature-empty">Waiting for Hub limits</div>;
   }
-  const compactAccounts = snapshot.providers.flatMap(provider =>
-    provider.accounts
-      .filter(account => account.status === 'ok')
-      .map(account => ({provider, account})),
-  );
+  const compactAccounts = snapshot.providers.flatMap(provider => {
+    const accounts = provider.accounts.filter(account => account.status === 'ok');
+    return accounts.map((account, index) => ({
+      provider,
+      account,
+      displayName: accounts.length > 1 ? `${provider.name}-${index + 1}` : provider.name,
+    }));
+  });
   return (
     <div className="usage-provider-list">
-      {compactAccounts.map(({provider, account}) => (
+      {compactAccounts.map(({provider, account, displayName}) => (
         <AccountRail
           key={`${provider.id}:${account.localId}:${account.hubIds.join(',')}`}
           provider={provider}
           account={account}
+          displayName={displayName}
         />
       ))}
     </div>

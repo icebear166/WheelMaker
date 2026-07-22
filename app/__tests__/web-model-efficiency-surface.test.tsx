@@ -10,8 +10,8 @@ import {
 import type {ModelEfficiencyItem} from '../web/src/modelEfficiency/modelEfficiencyTypes';
 
 const items: ModelEfficiencyItem[] = [
-  {family: 'gpt-5.6-sol', effort: 'max', score: 142, averageCostUsd: 3.2, averageTaskSeconds: 410},
-  {family: 'gpt-5.6-sol', effort: 'xhigh', score: 140, averageCostUsd: 2.4, averageTaskSeconds: 360},
+  {family: 'gpt-5.6-sol', effort: 'max', score: 142.4, averageCostUsd: 3.2, averageTaskSeconds: 410},
+  {family: 'gpt-5.6-sol', effort: 'xhigh', score: 139.6, averageCostUsd: 2.4, averageTaskSeconds: 360},
   {family: 'gpt-5.6-sol', effort: 'high', score: 135, averageCostUsd: 1.4, averageTaskSeconds: 270},
   {family: 'gpt-5.6-sol', effort: 'medium', score: 130, averageCostUsd: 0.9, averageTaskSeconds: 210},
   {family: 'gpt-5.6-sol', effort: 'low', score: 118, averageCostUsd: 0.5, averageTaskSeconds: 120},
@@ -19,7 +19,7 @@ const items: ModelEfficiencyItem[] = [
   {family: 'gpt-5.6-terra', effort: 'medium', score: 124, averageCostUsd: 0.9, averageTaskSeconds: 210},
   {family: 'gpt-5.6-terra', effort: 'low', score: 110, averageCostUsd: 0.35, averageTaskSeconds: 90},
   {family: 'gpt-5.6-luna', effort: 'max', score: 128, averageCostUsd: 1.8, averageTaskSeconds: 330},
-  {family: 'gpt-5.6-luna', effort: 'high', score: 120},
+  {family: 'gpt-5.6-luna', effort: 'high', score: 120.6},
   {family: 'gpt-5.6-luna', effort: 'low', score: 104, averageCostUsd: 0.2, averageTaskSeconds: 80},
 ];
 
@@ -48,7 +48,10 @@ describe('ModelEfficiencyContent', () => {
     expect(solCards).toHaveLength(3);
     expect(solCards.map(card => card.findByProps({className: 'model-efficiency-model-name'}).children.join('')))
       .toEqual(['Sol Max', 'Sol Xhigh', 'Sol High']);
+    expect(solCards.map(card => renderedText(card.findByProps({className: 'model-efficiency-score'}))))
+      .toEqual(['142', '140', '135']);
     expect(renderedText(rows[0])).toContain('142');
+    expect(renderedText(rows[0])).not.toContain('142.4');
     expect(renderedText(rows[0])).not.toContain('IQ');
     expect(renderedText(rows[0])).toContain('$3.20');
     expect(renderedText(rows[0])).toContain('7m');
@@ -97,12 +100,12 @@ describe('ModelEfficiencyContent', () => {
       'low',
     ]);
     const lunaHigh = tables[2].findByProps({'data-model-efficiency-effort': 'high'});
-    expect(renderedText(lunaHigh)).toBe('high120——');
+    expect(renderedText(lunaHigh)).toBe('high121——');
   });
 });
 
 describe('ModelEfficiency styling', () => {
-  test('uses compact source-inspired score cards without right-edge positioning', () => {
+  test('uses compact split score cards with muted side accents', () => {
     const projectRoot = path.join(__dirname, '..');
     const styles = fs.readFileSync(
       path.join(projectRoot, 'web', 'src', 'styles', 'modelEfficiency.css'),
@@ -115,15 +118,15 @@ describe('ModelEfficiency styling', () => {
     const scoreRule = styles.match(/\.model-efficiency-score \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const metaRule = styles.match(/\.model-efficiency-meta span \{([\s\S]*?)\n\}/)?.[1] ?? '';
     expect(recommendationRule).toContain('grid-template-areas:');
-    expect(recommendationRule).toContain('grid-template-rows: 18px 31px;');
-    expect(recommendationRule).toContain('grid-template-columns: minmax(0, 1fr) 46px;');
-    expect(recommendationRule).toContain('var(--model-efficiency-family-color) 24%');
-    expect(recommendationRule).toContain('var(--model-efficiency-family-color) 4%');
-    expect(recommendationRule).toContain('inset 0 2px 0');
+    expect(recommendationRule).toContain('grid-template-rows: 20px 34px;');
+    expect(recommendationRule).toContain('grid-template-columns: minmax(0, 1fr) 52px;');
+    expect(recommendationRule).toContain('var(--model-efficiency-family-color) 20%');
+    expect(recommendationRule).toContain('var(--model-efficiency-family-color) 5%');
+    expect(recommendationRule).toContain('inset 3px 0 0');
     expect(familyRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr));');
-    expect(modelNameRule).toContain('font-size: 9px;');
-    expect(scoreRule).toContain('font-size: clamp(16px, 1.2vw, 18px);');
-    expect(scoreRule).toContain('var(--model-efficiency-family-color) 72%');
-    expect(metaRule).toContain('font-size: 9.5px;');
+    expect(modelNameRule).toContain('font-size: 10px;');
+    expect(scoreRule).toContain('font-size: clamp(18px, 1.35vw, 20px);');
+    expect(scoreRule).toContain('var(--model-efficiency-family-color) 58%');
+    expect(metaRule).toContain('font-size: 10.5px;');
   });
 });
