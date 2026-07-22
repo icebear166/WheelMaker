@@ -10,7 +10,7 @@ describe('AgentChoiceMenu', () => {
 
     await ReactTestRenderer.act(() => {
       renderer = ReactTestRenderer.create(
-        <AgentChoiceMenu agents={['claude', 'cc-glm', 'cc-kimi']} variant="wide" onSelect={onSelect} />,
+        <AgentChoiceMenu agents={['claude', 'cc-deepseek', 'cc-glm', 'cc-kimi']} variant="wide" onSelect={onSelect} />,
       );
     });
 
@@ -29,7 +29,7 @@ describe('AgentChoiceMenu', () => {
     });
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(renderer!.root.findByProps({'aria-label': 'Collapse Claude agents'}).props['aria-expanded']).toBe(true);
-    expect(renderer!.root.findAllByProps({className: 'agent-choice-child'})).toHaveLength(2);
+    expect(renderer!.root.findAllByProps({className: 'agent-choice-child'})).toHaveLength(3);
   });
 
   test('selects each compatible child by its internal agent ID', async () => {
@@ -38,7 +38,7 @@ describe('AgentChoiceMenu', () => {
 
     await ReactTestRenderer.act(() => {
       renderer = ReactTestRenderer.create(
-        <AgentChoiceMenu agents={['claude', 'cc-glm', 'cc-kimi']} variant="mobile" onSelect={onSelect} />,
+        <AgentChoiceMenu agents={['claude', 'cc-deepseek', 'cc-glm', 'cc-kimi']} variant="mobile" onSelect={onSelect} />,
       );
     });
     await ReactTestRenderer.act(() => {
@@ -46,12 +46,13 @@ describe('AgentChoiceMenu', () => {
     });
 
     const children = renderer!.root.findAllByProps({className: 'agent-choice-child'});
-    expect(children).toHaveLength(2);
+    expect(children).toHaveLength(3);
     await ReactTestRenderer.act(() => {
       children[0].props.onClick();
       children[1].props.onClick();
+      children[2].props.onClick();
     });
-    expect(onSelect.mock.calls).toEqual([['cc-glm'], ['cc-kimi']]);
+    expect(onSelect.mock.calls).toEqual([['cc-deepseek'], ['cc-glm'], ['cc-kimi']]);
     expect(renderer!.root.findByProps({className: 'agent-choice-menu mobile'})).toBeTruthy();
   });
 

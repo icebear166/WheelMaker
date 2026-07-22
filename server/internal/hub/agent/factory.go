@@ -23,9 +23,10 @@ type SessionActionSupport struct {
 
 // ACPFactoryOptions contains one Hub's local provider configuration.
 type ACPFactoryOptions struct {
-	StateDir   string
-	KimiAPIKey string
-	ZAIAPIKey  string
+	StateDir       string
+	DeepSeekAPIKey string
+	KimiAPIKey     string
+	ZAIAPIKey      string
 }
 
 type projectNameContextKey struct{}
@@ -126,6 +127,9 @@ func newACPFactoryWithOptions(options ACPFactoryOptions, available func(ACPProvi
 			continue
 		}
 		f.Register(candidate.provider, providerInstanceCreator(prov))
+	}
+	if deepseekKey := strings.TrimSpace(options.DeepSeekAPIKey); deepseekKey != "" {
+		registerConfiguredProvider(f, protocol.ACPProviderCCDeepSeek, NewCCDeepSeekProvider(options.StateDir, deepseekKey), available)
 	}
 	if kimiKey := strings.TrimSpace(options.KimiAPIKey); kimiKey != "" {
 		registerConfiguredProvider(f, protocol.ACPProviderCCKimi, NewCCKimiProvider(options.StateDir, kimiKey), available)

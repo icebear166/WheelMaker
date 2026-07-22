@@ -53,13 +53,14 @@ describe('web project agent choices', () => {
   test('projects flat Claude-compatible agents into one ordered display group', () => {
     const {buildAgentChoiceNodes} = loadProjectAgentsModule();
 
-    expect(buildAgentChoiceNodes(['codex', 'claude', 'cc-glm', 'cc-kimi', 'kimi'])).toEqual([
+    expect(buildAgentChoiceNodes(['codex', 'claude', 'cc-deepseek', 'cc-glm', 'cc-kimi', 'kimi'])).toEqual([
       {kind: 'agent', agentType: 'codex', label: 'codex'},
       {
         kind: 'claude-group',
         agentType: 'claude',
         label: 'Claude',
         children: [
+          {agentType: 'cc-deepseek', label: 'DeepSeek'},
           {agentType: 'cc-glm', label: 'GLM'},
           {agentType: 'cc-kimi', label: 'Kimi'},
         ],
@@ -84,5 +85,6 @@ describe('web project agent choices', () => {
     ]);
     expect(agentDisplayLabel('cc-glm')).toBe('CC · GLM');
     expect(agentDisplayLabel('cc-kimi')).toBe('CC · Kimi');
+    expect(agentDisplayLabel('cc-deepseek')).toBe('CC · DeepSeek');
   });
 });

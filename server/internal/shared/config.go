@@ -17,8 +17,9 @@ type AppConfig struct {
 
 // APIKeysConfig contains provider credentials local to one Hub.
 type APIKeysConfig struct {
-	Kimi string `json:"kimi,omitempty"`
-	ZAI  string `json:"zai,omitempty"`
+	DeepSeek string `json:"deepseek,omitempty"`
+	Kimi     string `json:"kimi,omitempty"`
+	ZAI      string `json:"zai,omitempty"`
 }
 
 type rawAppConfig struct {

@@ -2,6 +2,7 @@ package shared
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -172,6 +173,13 @@ func TestLoadConfig_FeishuLegacyFieldVariantsAreAcceptedAsIgnoredConfig(t *testi
 
 func TestLoadConfig_ConfigExampleIsValid(t *testing.T) {
 	path := filepath.Join("..", "..", "config.example.json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read config.example.json: %v", err)
+	}
+	if !bytes.Contains(raw, []byte(`"deepseek": ""`)) {
+		t.Fatalf("config.example.json missing empty deepseek API key field")
+	}
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig(config.example.json) error = %v", err)
@@ -182,13 +190,20 @@ func TestLoadConfig_ConfigExampleIsValid(t *testing.T) {
 }
 
 func TestLoadConfigAcceptsClaudeCompatibleAPIKeys(t *testing.T) {
-	path := writeTempConfig(t, `{"projects":[],"apiKeys":{"kimi":"kimi-test-key","zai":"zai-test-key"}}`)
+	path := writeTempConfig(t, `{"projects":[],"apiKeys":{"deepseek":"deepseek-test-key","kimi":"kimi-test-key","zai":"zai-test-key"}}`)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
 	if cfg.APIKeys.Kimi != "kimi-test-key" || cfg.APIKeys.ZAI != "zai-test-key" {
 		t.Fatalf("APIKeys = %#v", cfg.APIKeys)
+	}
+	encoded, err := json.Marshal(cfg.APIKeys)
+	if err != nil {
+		t.Fatalf("json.Marshal(APIKeys) error = %v", err)
+	}
+	if !strings.Contains(string(encoded), `"deepseek":"deepseek-test-key"`) {
+		t.Fatalf("APIKeys JSON = %s, want deepseek key", encoded)
 	}
 }
 

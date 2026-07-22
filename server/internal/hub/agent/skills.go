@@ -40,6 +40,8 @@ func providerPresetByName(name string) (ACPProviderPreset, bool) {
 		return FlickerACPProviderPreset, true
 	case KimiACPProviderPreset.Name:
 		return KimiACPProviderPreset, true
+	case ClaudeCompatibleDeepSeekProviderPreset.Name:
+		return ClaudeCompatibleDeepSeekProviderPreset, true
 	case ClaudeCompatibleGLMProviderPreset.Name:
 		return ClaudeCompatibleGLMProviderPreset, true
 	case ClaudeCompatibleKimiProviderPreset.Name:

@@ -3421,6 +3421,37 @@ func TestHubUsesOneConfiguredFactoryForProjectInfoAndClient(t *testing.T) {
 	}
 }
 
+func TestNewWiresDeepSeekAPIKeyIntoHubFactory(t *testing.T) {
+	binDir := t.TempDir()
+	binaryName := "claude-agent-acp"
+	if runtime.GOOS == "windows" {
+		binaryName += ".cmd"
+	}
+	if err := os.WriteFile(filepath.Join(binDir, binaryName), []byte("@exit /b 0\n"), 0o755); err != nil {
+		t.Fatalf("write fake claude-agent-acp: %v", err)
+	}
+	t.Setenv("PATH", binDir)
+
+	projectPath := t.TempDir()
+	cfg := &logger.AppConfig{
+		Projects: []logger.ProjectConfig{{Name: "project", Path: projectPath}},
+		APIKeys:  logger.APIKeysConfig{DeepSeek: "deepseek-test-key"},
+	}
+	h := New(cfg, filepath.Join(t.TempDir(), "db", "client.sqlite3"))
+	info := h.collectProjectInfo(cfg.Projects[0])
+
+	found := false
+	for _, name := range info.Agents {
+		if name == "cc-deepseek" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("ProjectInfo.Agents = %v, want cc-deepseek", info.Agents)
+	}
+}
+
 func equalStringsForClaudeTest(got, want []string) bool {
 	if len(got) != len(want) {
 		return false

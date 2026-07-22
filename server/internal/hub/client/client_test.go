@@ -7639,6 +7639,7 @@ func TestClaudeFamilyRecoveryUsesIsolatedProjectsDirs(t *testing.T) {
 	t.Setenv("USERPROFILE", homeDir)
 
 	writeClaudeSessionFixtureAtProjectsDir(t, filepath.Join(homeDir, ".claude", "projects"), "native", "sess-native", cwd, "Native Claude", "native preview")
+	writeClaudeSessionFixtureAtProjectsDir(t, filepath.Join(stateDir, ".data", "cc-deepseek", "projects"), "deepseek", "sess-deepseek", cwd, "DeepSeek", "deepseek preview")
 	writeClaudeSessionFixtureAtProjectsDir(t, filepath.Join(stateDir, ".data", "cc-glm", "projects"), "glm", "sess-glm", cwd, "GLM", "glm preview")
 	writeClaudeSessionFixtureAtProjectsDir(t, filepath.Join(stateDir, ".data", "cc-kimi", "projects"), "kimi", "sess-kimi", cwd, "Kimi", "kimi preview")
 
@@ -7654,6 +7655,7 @@ func TestClaudeFamilyRecoveryUsesIsolatedProjectsDirs(t *testing.T) {
 		sessionID string
 	}{
 		{agentType: "claude", sessionID: "sess-native"},
+		{agentType: "cc-deepseek", sessionID: "sess-deepseek"},
 		{agentType: "cc-glm", sessionID: "sess-glm"},
 		{agentType: "cc-kimi", sessionID: "sess-kimi"},
 	} {
@@ -7671,6 +7673,40 @@ func TestClaudeFamilyRecoveryUsesIsolatedProjectsDirs(t *testing.T) {
 			}
 			if sessions[0].AgentType != testCase.agentType {
 				t.Fatalf("session AgentType = %q, want %q", sessions[0].AgentType, testCase.agentType)
+			}
+		})
+	}
+}
+
+func TestDeepSeekPromptBlocksAllowText(t *testing.T) {
+	s := mustNewSession(t, "sess-deepseek-text", t.TempDir(), "cc-deepseek")
+	blocks := []acp.ContentBlock{{Type: acp.ContentBlockTypeText, Text: "inspect the repository"}}
+
+	got, err := s.promptBlocksForAgent(blocks)
+	if err != nil {
+		t.Fatalf("promptBlocksForAgent(text) error = %v", err)
+	}
+	if !reflect.DeepEqual(got, blocks) {
+		t.Fatalf("promptBlocksForAgent(text) = %#v, want %#v", got, blocks)
+	}
+}
+
+func TestDeepSeekPromptBlocksRejectImages(t *testing.T) {
+	tests := []struct {
+		name  string
+		block acp.ContentBlock
+	}{
+		{name: "inline image", block: acp.ContentBlock{Type: acp.ContentBlockTypeImage, MimeType: "image/png", Data: "abc123"}},
+		{name: "image resource", block: acp.ContentBlock{Type: acp.ContentBlockTypeResourceLink, MimeType: "image/jpeg", URI: "file:///tmp/photo.jpg"}},
+		{name: "unsupported image mime resource", block: acp.ContentBlock{Type: acp.ContentBlockTypeResourceLink, MimeType: "image/svg+xml", URI: "file:///tmp/diagram.svg"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := mustNewSession(t, "sess-deepseek-image", t.TempDir(), "cc-deepseek")
+			_, err := s.promptBlocksForAgent([]acp.ContentBlock{tt.block})
+			if err == nil || !strings.Contains(err.Error(), "cc-deepseek does not support image input") {
+				t.Fatalf("promptBlocksForAgent(image) error = %v, want unsupported image error", err)
 			}
 		})
 	}

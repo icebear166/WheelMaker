@@ -107,6 +107,14 @@ var (
 		SkillProjectDirs:       []string{".agents/skills", ".kimi-code/skills"},
 		SkillUserDirs:          []string{"~/.agents/skills", "~/.kimi-code/skills"},
 	}
+	ClaudeCompatibleDeepSeekProviderPreset = ACPProviderPreset{
+		Name:                   "cc-deepseek",
+		BinaryName:             "claude-agent-acp",
+		Args:                   []string{"--hide-claude-auth"},
+		InstallHint:            "@agentclientprotocol/claude-agent-acp",
+		SkillProjectDirs:       []string{".claude/skills"},
+		SkillProjectParentDirs: []string{".claude/skills"},
+	}
 	ClaudeCompatibleGLMProviderPreset = ACPProviderPreset{
 		Name:                   "cc-glm",
 		BinaryName:             "claude-agent-acp",
@@ -176,6 +184,12 @@ func NewKimiProvider() *acpProvider {
 	return NewACPProvider(KimiACPProviderPreset)
 }
 
+func NewCCDeepSeekProvider(stateDir, apiKey string) *acpProvider {
+	preset := ClaudeCompatibleDeepSeekProviderPreset
+	preset.Env = claudeCompatibleDeepSeekEnvironment(stateDir, apiKey)
+	return NewACPProvider(preset)
+}
+
 func NewCCGLMProvider(stateDir, apiKey string) *acpProvider {
 	preset := ClaudeCompatibleGLMProviderPreset
 	preset.Env = claudeCompatibleGLMEnvironment(stateDir, apiKey)
@@ -217,7 +231,7 @@ func claudeModelConfigJSON(models []string) string {
 }
 
 func claudeCompatibleEnvironment(
-	stateDir, providerName, endpoint, authName, apiKey, defaultModel, haikuModel string,
+	stateDir, providerName, endpoint, authName, apiKey, defaultModel, haikuModel, subagentModel string,
 	autoCompactWindow, maxContextTokens string, models []string,
 	extra ...string,
 ) []string {
@@ -238,7 +252,7 @@ func claudeCompatibleEnvironment(
 		"ANTHROPIC_DEFAULT_OPUS_MODEL=" + defaultModel,
 		"ANTHROPIC_DEFAULT_SONNET_MODEL=" + defaultModel,
 		"ANTHROPIC_DEFAULT_HAIKU_MODEL=" + haikuModel,
-		"CLAUDE_CODE_SUBAGENT_MODEL=" + defaultModel,
+		"CLAUDE_CODE_SUBAGENT_MODEL=" + subagentModel,
 		"CLAUDE_CODE_AUTO_COMPACT_WINDOW=" + autoCompactWindow,
 		"CLAUDE_CODE_MAX_CONTEXT_TOKENS=" + maxContextTokens,
 		"CLAUDE_MODEL_CONFIG=" + claudeModelConfigJSON(models),
@@ -255,11 +269,30 @@ func claudeCompatibleKimiEnvironment(stateDir, apiKey string) []string {
 		apiKey,
 		"k3[1m]",
 		"k3[1m]",
+		"k3[1m]",
 		"1048576",
 		"1048576",
 		[]string{"k3[1m]", "k3", "kimi-for-coding", "kimi-for-coding-highspeed"},
 	)
 	return append(env, "CLAUDE_CODE_EFFORT_LEVEL=high")
+}
+
+func claudeCompatibleDeepSeekEnvironment(stateDir, apiKey string) []string {
+	return claudeCompatibleEnvironment(
+		stateDir,
+		ClaudeCompatibleDeepSeekProviderPreset.Name,
+		"https://api.deepseek.com/anthropic",
+		"ANTHROPIC_AUTH_TOKEN",
+		apiKey,
+		"deepseek-v4-pro[1m]",
+		"deepseek-v4-flash",
+		"deepseek-v4-flash",
+		"1000000",
+		"1000000",
+		[]string{"deepseek-v4-pro[1m]", "deepseek-v4-pro", "deepseek-v4-flash"},
+		"CLAUDE_CODE_EFFORT_LEVEL=max",
+		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1",
+	)
 }
 
 func claudeCompatibleGLMEnvironment(stateDir, apiKey string) []string {
@@ -271,6 +304,7 @@ func claudeCompatibleGLMEnvironment(stateDir, apiKey string) []string {
 		apiKey,
 		"glm-5.2[1m]",
 		"glm-4.5-air",
+		"glm-5.2[1m]",
 		"1000000",
 		"1000000",
 		[]string{"glm-5.2[1m]", "glm-5.2", "glm-4.7", "glm-4.5-air"},

@@ -10,7 +10,10 @@ export type AgentChoiceNode =
       kind: 'claude-group';
       agentType: 'claude';
       label: 'Claude';
-      children: Array<{agentType: 'cc-glm' | 'cc-kimi'; label: 'GLM' | 'Kimi'}>;
+      children: Array<{
+        agentType: 'cc-deepseek' | 'cc-glm' | 'cc-kimi';
+        label: 'DeepSeek' | 'GLM' | 'Kimi';
+      }>;
     };
 
 export function agentDisplayLabel(agentType?: string | null): string {
@@ -18,6 +21,8 @@ export function agentDisplayLabel(agentType?: string | null): string {
   switch (normalized.toLowerCase()) {
     case 'claude':
       return 'Claude';
+    case 'cc-deepseek':
+      return 'CC · DeepSeek';
     case 'cc-glm':
       return 'CC · GLM';
     case 'cc-kimi':
@@ -42,15 +47,19 @@ export function buildAgentChoiceNodes(agentTypes: string[]): AgentChoiceNode[] {
 
   const hasClaude = normalizedTypes.some(agentType => agentType.toLowerCase() === 'claude');
   const children = normalizedTypes
-    .filter(agentType => agentType.toLowerCase() === 'cc-glm' || agentType.toLowerCase() === 'cc-kimi')
-    .map(agentType => ({
-      agentType: agentType.toLowerCase() as 'cc-glm' | 'cc-kimi',
-      label: agentType.toLowerCase() === 'cc-glm' ? ('GLM' as const) : ('Kimi' as const),
-    }));
+    .filter(agentType => {
+      const key = agentType.toLowerCase();
+      return key === 'cc-deepseek' || key === 'cc-glm' || key === 'cc-kimi';
+    })
+    .map(agentType => {
+      const key = agentType.toLowerCase() as 'cc-deepseek' | 'cc-glm' | 'cc-kimi';
+      const label = key === 'cc-deepseek' ? ('DeepSeek' as const) : key === 'cc-glm' ? ('GLM' as const) : ('Kimi' as const);
+      return {agentType: key, label};
+    });
 
   return normalizedTypes.reduce<AgentChoiceNode[]>((nodes, agentType) => {
     const key = agentType.toLowerCase();
-    if (hasClaude && (key === 'cc-glm' || key === 'cc-kimi')) {
+    if (hasClaude && (key === 'cc-deepseek' || key === 'cc-glm' || key === 'cc-kimi')) {
       return nodes;
     }
     if (key === 'claude' && children.length > 0) {

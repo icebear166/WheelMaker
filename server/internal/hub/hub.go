@@ -43,9 +43,10 @@ func New(cfg *logger.AppConfig, dbPath string) *Hub {
 		apiKeys = cfg.APIKeys
 	}
 	return newHubWithFactory(cfg, dbPath, agent.NewConfiguredACPFactory(agent.ACPFactoryOptions{
-		StateDir:   stateDir,
-		KimiAPIKey: apiKeys.Kimi,
-		ZAIAPIKey:  apiKeys.ZAI,
+		StateDir:       stateDir,
+		DeepSeekAPIKey: apiKeys.DeepSeek,
+		KimiAPIKey:     apiKeys.Kimi,
+		ZAIAPIKey:      apiKeys.ZAI,
 	}))
 }
 

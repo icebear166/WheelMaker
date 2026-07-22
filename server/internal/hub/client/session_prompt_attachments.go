@@ -21,6 +21,20 @@ func (s *Session) promptBlocksForAgent(blocks []acp.ContentBlock) ([]acp.Content
 	caps := s.agentState.AgentCapabilities
 	s.mu.Unlock()
 
+	if strings.EqualFold(agentType, string(acp.ACPProviderCCDeepSeek)) {
+		for _, block := range blocks {
+			if block.Type == acp.ContentBlockTypeImage {
+				return nil, fmt.Errorf("cc-deepseek does not support image input")
+			}
+			if block.Type == acp.ContentBlockTypeResourceLink {
+				mimeType := strings.ToLower(strings.TrimSpace(block.MimeType))
+				_, supportedImage := promptImageMimeType(block.MimeType, block.Name, block.URI)
+				if strings.HasPrefix(mimeType, "image/") || supportedImage {
+					return nil, fmt.Errorf("cc-deepseek does not support image input")
+				}
+			}
+		}
+	}
 	if strings.EqualFold(agentType, string(acp.ACPProviderCodex)) {
 		return blocks, nil
 	}
