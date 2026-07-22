@@ -61,6 +61,7 @@ WheelMaker 把 ACP 作为 Client 与 Agent 之间的业务协议。协议类型�
 
 - provider 只在 Hub 启动时、`claude-agent-acp` 与对应 Key 都存在时注册；Registry 只接收平铺的可用 agent ID，不接触 Key。
 - 模型选择由 provider 注入 `availableModels` 和默认模型，App 不增加 provider 私有模型协议。
+- `cc-kimi` 的模型白名单是 `k3[1m]`、`k3`、`kimi-for-coding`、`kimi-for-coding-highspeed`，默认 `k3[1m]`；`cc-glm` 的模型白名单是 `glm-5.2[1m]`、`glm-5.2`、`glm-4.7`、`glm-4.5-air`，默认 `glm-5.2[1m]`。Claude ACP 无法移除的 `Default` 条目仍可能出现，但会解析到对应 provider 默认模型。
 - 状态与上游 Session 分别位于 `<stateDir>/.data/cc-glm`、`<stateDir>/.data/cc-kimi`；它们与 `~/.claude` 之间不共享历史或用户配置。
 - Session 恢复以 agent ID 和各自 projects 目录为边界，不允许在 Claude、GLM、Kimi 间跨 provider 导入或恢复。
 - App 可以把平铺 ID 投影为 Claude 主项旁的展开子项，但分组只属于展示层，不进入 ACP 或 Registry wire schema。
