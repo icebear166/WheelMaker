@@ -56,6 +56,19 @@ describe('web chat recent sessions', () => {
     expect(dividerBlock).toContain('margin: 4px 2px 1px 2px;');
   });
 
+  test('recent rows reuse live session pin state without changing recent selection', () => {
+    const recentStart = mainTsx.indexOf('const renderRecentSessionRow = (');
+    const recentEnd = mainTsx.indexOf('const renderRecentProjectSessionSection =', recentStart);
+    const recentRow = mainTsx.slice(recentStart, recentEnd);
+
+    expect(recentRow).toContain("liveSession.pinned ? ' has-pin-action' : ''");
+    expect(recentRow).toContain('className="wide-session-pin-btn"');
+    expect(recentRow).toContain('handlePinProjectSession(targetProjectId, liveSession.sessionId, false)');
+    expect(recentRow).toContain('!liveSession.pinned ? (');
+    expect(mainTsx).toContain('buildRecentChatSessionProjectSections({');
+    expect(mainTsx).not.toContain('pinned: liveSession.pinned');
+  });
+
   test('removes colored cards, watermarks and floating create rail from recent groups', () => {
     expect(mainTsx).not.toContain('recent-project-session-watermark');
     expect(mainTsx).not.toContain('recent-project-session-create');

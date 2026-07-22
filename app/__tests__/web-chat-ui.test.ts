@@ -1726,6 +1726,33 @@ describe('web chat integration', () => {
     expect(btnBlock).toContain('opacity: 0;');
   });
 
+  test('session pin actions use the shared menu and an independent trailing button', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const stylesCss = readWebStyles(projectRoot);
+
+    expect(mainTsx).toContain("const [chatPinningSessionKey, setChatPinningSessionKey] = useState('');");
+    expect(mainTsx).toContain('service.pinProjectSession(targetProjectId, normalizedSessionId, pinned)');
+    expect(mainTsx).toContain('className="project-session-menu-btn pin"');
+    expect(mainTsx).toContain("session.pinned ? 'Unpin' : 'Pin'");
+    expect(mainTsx).toContain('className="wide-session-pin-btn"');
+    expect(mainTsx).toContain('aria-pressed={true}');
+    expect(mainTsx).toContain('handlePinProjectSession(targetProjectId, session.sessionId, false)');
+    expect(mainTsx).toContain("setChatPinningSessionKey(current => current === actionKey ? '' : current)");
+    expect(stylesCss).toContain('.project-session-row-wrap.has-pin-action .wide-session-row');
+    expect(stylesCss).toContain('.wide-session-pin-btn');
+    expect(stylesCss).toContain('.mobile-session-row + .wide-session-pin-btn');
+
+    const pinHandlerStart = mainTsx.indexOf('const handlePinProjectSession = async (');
+    const pinHandlerEnd = mainTsx.indexOf('const handleRenameProjectSession = async', pinHandlerStart);
+    const pinHandler = mainTsx.slice(pinHandlerStart, pinHandlerEnd);
+    expect(pinHandler).toContain('rememberChatSessionSummary(targetProjectId, result.session);');
+    expect(pinHandler).not.toContain('pinned: pinned');
+    expect(pinHandler.indexOf('await service.pinProjectSession')).toBeLessThan(
+      pinHandler.indexOf('rememberChatSessionSummary'),
+    );
+  });
+
   test('session rows show the state dot in the leading gutter outside the selected frame', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
@@ -1846,6 +1873,7 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('right: event.clientX,');
     expect(mainTsx).toContain("align: 'start',");
     expect(mainTsx).toContain('className="project-session-menu-btn reload"');
+    expect(mainTsx).toContain('className="project-session-menu-btn pin"');
     expect(mainTsx).toContain('className="project-session-menu-btn rename"');
     expect(mainTsx).toContain('className="project-session-menu-btn archive"');
     expect(mainTsx).toContain('className="project-session-menu-btn delete"');
