@@ -1,4 +1,4 @@
-> 摘要：本页维护 PC 端 Chat 的固定地址栏、复用的浮动/滑出/pin 会话面板，以及 Plan/Limits 悬浮列与 800px 对话列的布局规则、搜索入口与 Archived 视图约定。
+> 摘要：本页维护 PC 端 Chat 的固定地址栏、浮动/滑出/pin 会话面板、左右功能卡片与 800px 对话列的布局规则、搜索入口和 Archived 视图约定。
 
 # PC Chat 侧边栏模式
 
@@ -40,6 +40,13 @@ pin 态把同构 Sessions 面板以 360px 固定宽度放进固定顶栏下方�
 4. **压缩段**：浮窗只剩 V 可见时，左 margin 保持 V，对话列从 800px 开始随 W 压缩，不再继续遮挡浮窗。
 
 pin 态与浮动态共用同一公式。Plan/Limits 在 pin 态是聊天主区内的悬浮层；空间不足时覆盖并淡出对话左缘，而不额外占用对话布局宽度。
+
+## 右侧 Model efficiency 卡片
+
+- Model efficiency 独立锚定在 Chat 主区右缘，宽度与左侧 Limits 卡片列一致，不加入 Recent Sessions、Plan、Limits 的左侧堆叠顺序。
+- 卡片默认使用 Simple 矩阵，支持折叠、Detail、手动刷新和隐藏；其显示偏好独立于 Limits，标题栏和表面样式继续复用 edge surface 约定。
+- Preview 打开时卡片跟随缩小后的 Chat 主区右缘，不自动隐藏、折叠或关闭 Preview。卡片与 800px 对话列相交时使用 `right` 方向的 edge-surface 几何淡出正文交界，卡片操作区保持可交互。
+- Simple/Detail 内容和数据边界见 [`../features/model-efficiency.md`](../features/model-efficiency.md)。
 
 ## 搜索入口与 Archived 视图
 

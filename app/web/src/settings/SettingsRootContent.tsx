@@ -48,6 +48,8 @@ type SettingsRootContentProps = {
   setMobileEnterKeyBehavior: (value: MobileEnterKeyBehavior) => void;
   showLimitsMonitor: boolean;
   setShowLimitsMonitor: (value: boolean) => void;
+  showModelEfficiency: boolean;
+  setShowModelEfficiency: (value: boolean) => void;
   promptCompletionNotificationsEnabled: boolean;
   setPromptCompletionNotificationsEnabled: (value: boolean) => void;
   handlePromptCompletionNotificationsChange: (enabled: boolean) => void;
@@ -176,6 +178,8 @@ export function SettingsRootContent({
   setMobileEnterKeyBehavior,
   showLimitsMonitor,
   setShowLimitsMonitor,
+  showModelEfficiency,
+  setShowModelEfficiency,
   promptCompletionNotificationsEnabled,
   setPromptCompletionNotificationsEnabled,
   handlePromptCompletionNotificationsChange,
@@ -262,6 +266,19 @@ export function SettingsRootContent({
               type="checkbox"
               checked={showLimitsMonitor}
               onChange={e => setShowLimitsMonitor(e.target.checked)}
+            />
+          </label>
+        ) : null}
+        {isWide ? (
+          <label className="settings-row sidebar-setting-row">
+            <span>
+              <span className="codicon codicon-dashboard settings-row-icon" aria-hidden="true" />
+              Show Model Efficiency
+            </span>
+            <input
+              type="checkbox"
+              checked={showModelEfficiency}
+              onChange={e => setShowModelEfficiency(e.target.checked)}
             />
           </label>
         ) : null}

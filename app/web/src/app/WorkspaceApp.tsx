@@ -359,6 +359,9 @@ import {MobileUsageDialog} from '../usage/MobileUsageDialog';
 import {UsageFeatureSurface} from '../usage/UsageFeatureSurface';
 import {UsageStore, parseHubSnapshot} from '../usage/usageStore';
 import type {UsageViewSnapshot} from '../usage/usageTypes';
+import {ModelEfficiencySurface} from '../modelEfficiency/ModelEfficiencySurface';
+import {ModelEfficiencyStore} from '../modelEfficiency/modelEfficiencyStore';
+import type {ModelEfficiencySnapshot} from '../modelEfficiency/modelEfficiencyTypes';
 import {
   AGENT_PACKAGE_SCAN_TIMEOUT_MS,
   deriveNpmPackageUpdateTargets,
@@ -2539,6 +2542,11 @@ export function App() {
       ? persistedGlobal.showLimitsMonitor
       : true,
   );
+  const [showModelEfficiency, setShowModelEfficiency] = useState(
+    typeof persistedGlobal.showModelEfficiency === 'boolean'
+      ? persistedGlobal.showModelEfficiency
+      : true,
+  );
   const [messageViewerEnabled, setMessageViewerEnabled] = useState(
     typeof persistedGlobal.messageViewerEnabled === 'boolean'
       ? persistedGlobal.messageViewerEnabled
@@ -3102,6 +3110,10 @@ export function App() {
   const [registryHubs, setRegistryHubs] = useState<RegistryHub[]>([]);
   const usageStore = useMemo(() => new UsageStore(), []);
   const [usageSnapshot, setUsageSnapshot] = useState<UsageViewSnapshot>({refreshing: false, providers: []});
+  const modelEfficiencyStore = useMemo(() => new ModelEfficiencyStore(), []);
+  const [modelEfficiencySnapshot, setModelEfficiencySnapshot] = useState<ModelEfficiencySnapshot>(
+    () => modelEfficiencyStore.snapshot(),
+  );
   const [projectId, setProjectId] = useState('');
   const projectIdRef = useRef('');
   const projectsRef = useRef<RegistryProject[]>([]);
@@ -6129,6 +6141,7 @@ export function App() {
       wrapLines,
       showLineNumbers,
       showLimitsMonitor,
+      showModelEfficiency,
       messageViewerEnabled,
       logLevel,
       promptCompletionNotificationsEnabled,
@@ -6155,6 +6168,7 @@ export function App() {
     wrapLines,
     showLineNumbers,
     showLimitsMonitor,
+    showModelEfficiency,
     messageViewerEnabled,
     logLevel,
     promptCompletionNotificationsEnabled,
@@ -11835,6 +11849,15 @@ export function App() {
 
   useEffect(() => usageStore.subscribe(setUsageSnapshot), [usageStore]);
 
+  useEffect(
+    () => modelEfficiencyStore.subscribe(setModelEfficiencySnapshot),
+    [modelEfficiencyStore],
+  );
+
+  useEffect(() => {
+    void modelEfficiencyStore.refresh();
+  }, [modelEfficiencyStore]);
+
   useEffect(() => {
     const hubIds = registryHubs.map(hub => hub.hubId).filter(Boolean);
     usageStore.retainHubs(hubIds);
@@ -16034,6 +16057,8 @@ export function App() {
         setMobileEnterKeyBehavior={setMobileEnterKeyBehavior}
         showLimitsMonitor={showLimitsMonitor}
         setShowLimitsMonitor={setShowLimitsMonitor}
+        showModelEfficiency={showModelEfficiency}
+        setShowModelEfficiency={setShowModelEfficiency}
         promptCompletionNotificationsEnabled={promptCompletionNotificationsEnabled}
         setPromptCompletionNotificationsEnabled={setPromptCompletionNotificationsEnabled}
         handlePromptCompletionNotificationsChange={handlePromptCompletionNotificationsChange}
@@ -18162,6 +18187,13 @@ export function App() {
               ) : null}
             </div>
           ) : null}
+          {isWide && !archivedMode && showModelEfficiency ? (
+            <ModelEfficiencySurface
+              snapshot={modelEfficiencySnapshot}
+              onRefresh={() => void modelEfficiencyStore.refresh()}
+              onRequestHide={() => setConfirmTarget({kind: 'hideModelEfficiency'})}
+            />
+          ) : null}
           {isWide && chatSidebarCollapsed && !sidebarSettingsOpen ? (
             <ChatSessionPanel
               mode="slideout"
@@ -20252,7 +20284,9 @@ export function App() {
   const mobileUsageOverlay = !isWide && mobileUsageOpen ? (
     <MobileUsageDialog
       snapshot={usageSnapshot}
+      efficiencySnapshot={modelEfficiencySnapshot}
       onRefresh={() => { void refreshUsageAcrossHubs(); }}
+      onRefreshEfficiency={() => void modelEfficiencyStore.refresh()}
       onClose={() => setMobileUsageOpen(false)}
     />
   ) : null;
@@ -20424,6 +20458,12 @@ export function App() {
     }
     if (confirmTarget.kind === 'hideLimitsMonitor') {
       setShowLimitsMonitor(false);
+      setConfirmTarget(null);
+      setConfirmError('');
+      return;
+    }
+    if (confirmTarget.kind === 'hideModelEfficiency') {
+      setShowModelEfficiency(false);
       setConfirmTarget(null);
       setConfirmError('');
       return;

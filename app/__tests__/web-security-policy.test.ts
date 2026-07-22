@@ -22,7 +22,9 @@ describe('web security policy', () => {
     for (const directive of REQUIRED_CSP_DIRECTIVES) {
       expect(html).toContain(directive);
     }
-    expect(html).toContain("connect-src 'self' wss: <%= releaseOrigin %>");
+    expect(html).toContain(
+      "connect-src 'self' wss: <%= releaseOrigin %> https://codexradar.com",
+    );
     expect(html).toContain('<meta name="referrer" content="no-referrer"');
     expect(html).not.toContain("script-src 'self' 'unsafe-inline'");
     expect(html).not.toContain("script-src 'self' 'unsafe-eval'");
@@ -38,7 +40,7 @@ describe('web security policy', () => {
     expect(devServer.allowedHosts).toEqual(['localhost', '127.0.0.1']);
     expect(devServer.headers['Content-Security-Policy']).toContain("default-src 'self'");
     expect(devServer.headers['Content-Security-Policy']).toContain(
-      "connect-src 'self' ws: wss: https://release.wheelmaker.top",
+      "connect-src 'self' ws: wss: https://release.wheelmaker.top https://codexradar.com",
     );
 	 expect(devServer.headers['Content-Security-Policy']).not.toContain('upgrade-insecure-requests');
     expect(devServer.headers['Content-Security-Policy']).not.toContain('github.com');
@@ -53,6 +55,7 @@ describe('web security policy', () => {
       fs.readFileSync(path.resolve('../INSTALL.md'), 'utf8'),
     ].join('\n');
     expect(docs).toContain('Content-Security-Policy');
+    expect(docs).toContain('https://codexradar.com');
     expect(docs).toContain('X-Content-Type-Options "nosniff" always');
     expect(docs).toContain('X-Frame-Options "DENY" always');
     expect(docs).toContain('Referrer-Policy "no-referrer" always');

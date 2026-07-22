@@ -5,6 +5,7 @@ import path from 'path';
 import {UsageDetailContent, UsageFeatureSurface} from '../web/src/usage/UsageFeatureSurface';
 import {MobileUsageDialog} from '../web/src/usage/MobileUsageDialog';
 import type {UsageViewSnapshot} from '../web/src/usage/usageTypes';
+import type {ModelEfficiencySnapshot} from '../web/src/modelEfficiency/modelEfficiencyTypes';
 import {AppConfirmDialog, type ConfirmTarget} from '../web/src/shell/AppDialogs';
 
 const fixtureSnapshot: UsageViewSnapshot = {
@@ -27,6 +28,17 @@ const fixtureSnapshot: UsageViewSnapshot = {
       balance: {isAvailable: true, items: [{currency: 'CNY', total: '12.50'}]},
     }],
   }],
+};
+
+const efficiencySnapshot: ModelEfficiencySnapshot = {
+  status: 'ready',
+  refreshing: false,
+  updatedAt: '2026-07-22T09:30:00Z',
+  items: [
+    {family: 'gpt-5.6-sol', effort: 'max', score: 142, averageCostUsd: 3.2, averageTaskSeconds: 410},
+    {family: 'gpt-5.6-terra', effort: 'high', score: 130, averageCostUsd: 1.9, averageTaskSeconds: 300},
+    {family: 'gpt-5.6-luna', effort: 'low', score: 104, averageCostUsd: 0.2, averageTaskSeconds: 80},
+  ],
 };
 
 function renderedText(node: TestRenderer.ReactTestInstance): string {
@@ -267,11 +279,18 @@ describe('UsageFeatureSurface', () => {
 
   it('renders mobile details and handles refresh, card, backdrop, and close actions', () => {
     const onRefresh = jest.fn();
+    const onRefreshEfficiency = jest.fn();
     const onClose = jest.fn();
     let view: TestRenderer.ReactTestRenderer;
     act(() => {
       view = TestRenderer.create(
-        <MobileUsageDialog snapshot={fixtureSnapshot} onRefresh={onRefresh} onClose={onClose} />,
+        <MobileUsageDialog
+          snapshot={fixtureSnapshot}
+          efficiencySnapshot={efficiencySnapshot}
+          onRefresh={onRefresh}
+          onRefreshEfficiency={onRefreshEfficiency}
+          onClose={onClose}
+        />,
       );
     });
 
@@ -280,9 +299,19 @@ describe('UsageFeatureSurface', () => {
     expect(overlay.props['aria-modal']).toBe('true');
     expect(overlay.props['aria-label']).toBe('Limits');
     expect(view!.root.findByProps({'data-usage-account': 'codex:acct-a'})).toBeDefined();
+    expect(view!.root.findByProps({role: 'tab', 'aria-label': 'Limits'}).props['aria-selected']).toBe(true);
 
     act(() => view!.root.findByProps({'aria-label': 'Refresh limits'}).props.onClick());
     expect(onRefresh).toHaveBeenCalledTimes(1);
+    expect(onRefreshEfficiency).not.toHaveBeenCalled();
+
+    act(() => view!.root.findByProps({role: 'tab', 'aria-label': 'Model efficiency'}).props.onClick());
+    expect(view!.root.findByProps({role: 'tab', 'aria-label': 'Model efficiency'}).props['aria-selected']).toBe(true);
+    expect(view!.root.findByProps({'aria-label': 'Sol model efficiency'})).toBeDefined();
+    expect(view!.root.findAllByProps({'data-usage-account': 'codex:acct-a'})).toHaveLength(0);
+    act(() => view!.root.findByProps({'aria-label': 'Refresh model efficiency'}).props.onClick());
+    expect(onRefreshEfficiency).toHaveBeenCalledTimes(1);
+    expect(renderedText(view!.root)).toContain('Data from CodexRadar');
 
     const stopPropagation = jest.fn();
     act(() => view!.root.findByProps({'data-mobile-usage-card': true}).props.onPointerDown({stopPropagation}));
@@ -300,7 +329,9 @@ describe('UsageFeatureSurface', () => {
       view = TestRenderer.create(
         <MobileUsageDialog
           snapshot={{...fixtureSnapshot, refreshing: true}}
+          efficiencySnapshot={efficiencySnapshot}
           onRefresh={jest.fn()}
+          onRefreshEfficiency={jest.fn()}
           onClose={jest.fn()}
         />,
       );
@@ -312,19 +343,53 @@ describe('UsageFeatureSurface', () => {
     expect(renderedText(view!.root)).toContain('Refreshing…');
   });
 
+  it('routes mobile loading and refresh state to the active Model efficiency tab', () => {
+    const onRefreshEfficiency = jest.fn();
+    let view: TestRenderer.ReactTestRenderer;
+    act(() => {
+      view = TestRenderer.create(
+        <MobileUsageDialog
+          snapshot={fixtureSnapshot}
+          efficiencySnapshot={{...efficiencySnapshot, refreshing: true}}
+          onRefresh={jest.fn()}
+          onRefreshEfficiency={onRefreshEfficiency}
+          onClose={jest.fn()}
+        />,
+      );
+    });
+
+    expect(view!.root.findByProps({'aria-label': 'Refresh limits'}).props.disabled).toBe(false);
+    act(() => view!.root.findByProps({role: 'tab', 'aria-label': 'Model efficiency'}).props.onClick());
+    const refresh = view!.root.findByProps({'aria-label': 'Refresh model efficiency'});
+    expect(refresh.props.disabled).toBe(true);
+    expect(refresh.findByProps({'aria-hidden': 'true'}).props.className).toContain('spinning');
+    expect(renderedText(view!.root)).toContain('Refreshing…');
+  });
+
   it('uses a safe-area-aware full-screen mobile limits card', () => {
     const projectRoot = path.join(__dirname, '..');
     const usageStyles = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles', 'usage.css'), 'utf8').replace(/\r\n/g, '\n');
     const overlayRule = usageStyles.match(/\.usage-mobile-overlay \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const cardRule = usageStyles.match(/\.usage-mobile-dialog \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const bodyRule = usageStyles.match(/\.usage-mobile-body \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const tabsRule = usageStyles.match(/\.usage-mobile-tabs \{([\s\S]*?)\n\}/)?.[1] ?? '';
 
     expect(overlayRule).toContain('position: fixed;');
     expect(overlayRule).toContain('inset: 0;');
     expect(overlayRule).toContain('env(safe-area-inset-top)');
     expect(overlayRule).toContain('env(safe-area-inset-bottom)');
     expect(cardRule).toContain('max-height:');
+    expect(cardRule).toContain('max-width: 100%;');
+    expect(cardRule).toContain('min-width: 0;');
+    expect(cardRule).toContain('100vw - 24px');
+    expect(cardRule).toContain('env(safe-area-inset-left)');
+    expect(cardRule).toContain('env(safe-area-inset-right)');
     expect(bodyRule).toContain('overflow: auto;');
+    expect(tabsRule).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));');
+
+    const efficiencyStyles = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles', 'modelEfficiency.css'), 'utf8').replace(/\r\n/g, '\n');
+    const detailTableRule = efficiencyStyles.match(/\.model-efficiency-simple-table,\n\.model-efficiency-detail-family table \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    expect(detailTableRule).toContain('table-layout: fixed;');
   });
 
   it('explains how to restore the monitor before hiding it', () => {

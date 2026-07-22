@@ -1,4 +1,4 @@
-> 摘要：本页维护 Agent Limits 监控的数据所有权、刷新机制、Provider 范围和桌面/移动端展示约定。
+> 摘要：本页维护 Agent Limits 监控的数据所有权、刷新机制、Provider 范围、桌面展示以及与 Model efficiency 共用的窄屏入口约定。
 
 # Limits 监控
 
@@ -33,8 +33,8 @@ Limits 使用 HubState 的 `tokenStats` section。客户端通过 `hub.state.get
 
 - 展开移动快捷菜单后，从上到下固定为 Preview、Terminal、Chat、Limits、Settings；收起时仍只显示 Chat。
 - Terminal 复用现有移动全屏终端，不自动创建终端。Limits 入口始终可见，不受桌面 Limits 显示开关控制。
-- Limits 使用覆盖移动视口的遮罩和保留安全区间距的大型详情卡片，正文复用桌面详情模式的账号聚合与额度展示。
-- 详情卡片标题栏提供刷新和关闭操作；打开时只读取当前 Hub 缓存，只有手动刷新才触发现有跨 Hub 强制刷新。
+- Limits 使用覆盖移动视口的遮罩和保留安全区间距的大型详情卡片。卡片内固定提供 `Limits` 与 `Model efficiency` 两个 Tab，每次打开默认选择 Limits；Limits 正文继续复用桌面详情模式的账号聚合与额度展示，Model efficiency 直接使用其完整分组表格。
+- 详情卡片标题栏提供刷新和关闭操作；刷新只作用于当前 Tab。Limits 打开时只读取当前 Hub 缓存，手动刷新触发现有跨 Hub 强制刷新；Model efficiency 使用独立的前端数据 store，不进入 Limits HubState。
 - 点击卡片外遮罩、关闭按钮或移动端系统返回会关闭 Limits；卡片内部点击不关闭。Terminal、Preview、Settings 和 Limits 全屏层互斥。
 
 ## Windows 子进程
@@ -46,3 +46,4 @@ Provider 扫描启动的所有辅助进程都必须使用统一后台命令配�
 - [`../../scope/2026-07-18-agent-usage-rewrite/spec-agent-usage-rewrite.md`](../../scope/2026-07-18-agent-usage-rewrite/spec-agent-usage-rewrite.md)
 - [`../../scope/2026-07-18-mobile-limits-monitor/spec-mobile-limits-monitor.md`](../../scope/2026-07-18-mobile-limits-monitor/spec-mobile-limits-monitor.md)
 - [`../../scope/2026-07-20-kimi-acp-provider/spec-kimi-acp-provider.md`](../../scope/2026-07-20-kimi-acp-provider/spec-kimi-acp-provider.md)
+- [`model-efficiency.md`](model-efficiency.md)

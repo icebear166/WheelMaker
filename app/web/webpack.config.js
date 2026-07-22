@@ -26,6 +26,7 @@ if (
   throw new Error('Invalid WheelMaker release channel.');
 }
 const releaseOrigin = releaseUrl.origin;
+const codexRadarOrigin = 'https://codexradar.com';
 
 const WEB_SECURITY_POLICY = [
   "default-src 'self'",
@@ -33,7 +34,7 @@ const WEB_SECURITY_POLICY = [
   "object-src 'none'",
   "frame-ancestors 'none'",
   "script-src 'self'",
-  `connect-src 'self' wss: ${releaseOrigin}`,
+  `connect-src 'self' wss: ${releaseOrigin} ${codexRadarOrigin}`,
   "img-src 'self' data: blob:",
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self'",

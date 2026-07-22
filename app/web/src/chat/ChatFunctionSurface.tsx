@@ -1,7 +1,10 @@
 import React from 'react';
 
 import {ChatEdgeSurfaceHeader} from './ChatEdgeSurfaceHeader';
-import {useChatEdgeSurfaceGeometry} from './layout/chatEdgeSurfaceGeometry';
+import {
+  useChatEdgeSurfaceGeometry,
+  type ChatEdgeSurfaceSide,
+} from './layout/chatEdgeSurfaceGeometry';
 
 export type ChatFunctionSurfaceProps = {
   title: string;
@@ -10,15 +13,27 @@ export type ChatFunctionSurfaceProps = {
   actions: React.ReactNode;
   onToggleCollapsed: () => void;
   children: React.ReactNode;
+  side?: ChatEdgeSurfaceSide;
+  className?: string;
 };
 
-export function ChatFunctionSurface({title, collapsed, mode, actions, onToggleCollapsed, children}: ChatFunctionSurfaceProps) {
-  const surfaceRef = useChatEdgeSurfaceGeometry('left');
+export function ChatFunctionSurface({
+  title,
+  collapsed,
+  mode,
+  actions,
+  onToggleCollapsed,
+  children,
+  side = 'left',
+  className = '',
+}: ChatFunctionSurfaceProps) {
+  const surfaceRef = useChatEdgeSurfaceGeometry(side);
   return (
     <aside
       ref={surfaceRef}
-      className={`chat-function-surface desktop ${mode}${collapsed ? ' collapsed' : ''}`}
+      className={`chat-function-surface desktop side-${side} ${mode}${collapsed ? ' collapsed' : ''}${className ? ` ${className}` : ''}`}
       data-mode={mode}
+      data-side={side}
       aria-label={title}
     >
       <div className="chat-edge-surface-glass" aria-hidden="true" />
