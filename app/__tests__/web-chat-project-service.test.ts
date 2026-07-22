@@ -61,6 +61,7 @@ describe('registry workspace project-scoped chat service methods', () => {
       respondSessionPermission: jest.fn().mockResolvedValue({accepted: true, permissionId: 'perm-1', outcome: 'selected', optionId: 'allow'}),
       setSessionConfig: jest.fn().mockResolvedValue({ ok: true, sessionId: 's1', configOptions: [] }),
       renameSession: jest.fn().mockResolvedValue({ ok: true, sessionId: 's1', session: { sessionId: 's1', title: 'Manual title', updatedAt: '' } }),
+      pinSession: jest.fn().mockResolvedValue({ ok: true, sessionId: 's1', session: { sessionId: 's1', pinned: true, updatedAt: '' } }),
       deleteSession: jest.fn().mockResolvedValue({ ok: true, sessionId: 's1' }),
       startSessionAttachment: jest.fn().mockResolvedValue({ ok: true, sessionId: 's1', uploadId: 'upload-1', chunkSize: 1048576 }),
       uploadSessionAttachmentChunk: jest.fn().mockResolvedValue({ ok: true, sessionId: 's1', uploadId: 'upload-1', received: 1 }),
@@ -91,6 +92,7 @@ describe('registry workspace project-scoped chat service methods', () => {
       value: 'x',
     });
     await (service as any).renameProjectSession('chat-project', 's1', 'Manual title');
+    await (service as any).pinProjectSession('chat-project', 's1', true);
     await (service as any).deleteProjectSession('chat-project', 's1');
     await (service as any).startProjectSessionAttachment('chat-project', {
       sessionId: 's1',
@@ -130,6 +132,7 @@ describe('registry workspace project-scoped chat service methods', () => {
       value: 'x',
     });
     expect(repository.renameSession).toHaveBeenCalledWith('chat-project', 's1', 'Manual title');
+    expect(repository.pinSession).toHaveBeenCalledWith('chat-project', 's1', true);
     expect(repository.deleteSession).toHaveBeenCalledWith('chat-project', 's1');
     expect(repository.startSessionAttachment).toHaveBeenCalledWith('chat-project', {
       sessionId: 's1',

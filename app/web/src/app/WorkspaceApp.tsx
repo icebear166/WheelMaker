@@ -181,7 +181,7 @@ import {
 import {
   mergeChatSession,
   mergeChatSessionList,
-  sortChatSessions,
+  sortProjectChatSessions,
 } from '../chat/session/chatSessionOrdering';
 import {
   OLDER_SESSION_DAYS,
@@ -649,7 +649,15 @@ type WideProjectActionMenuState = {
   agentType: string;
   popover?: WideProjectActionPopoverPlacement | null;
 };
-type MobileProjectActionMenuState = WideProjectActionMenuState;
+type MobileProjectActionMenuState =
+  | WideProjectActionMenuState
+  | {
+      projectId: string;
+      kind: 'actions';
+      phase: 'actions';
+      agentType: '';
+      popover: null;
+    };
 type ProjectSessionActionMenuState = {
   projectId: string;
   sessionId: string;
@@ -3268,6 +3276,7 @@ export function App() {
   const [chatArchivingSessionId, setChatArchivingSessionId] = useState('');
   const [chatDeletingSessionId, setChatDeletingSessionId] = useState('');
   const [chatRenamingSessionId, setChatRenamingSessionId] = useState('');
+  const [chatPinningSessionKey, setChatPinningSessionKey] = useState('');
   const [renameTarget, setRenameTarget] = useState<RenameSessionTarget | null>(null);
   const [renameTitleDraft, setRenameTitleDraft] = useState('');
   const [renameError, setRenameError] = useState('');
@@ -5505,7 +5514,7 @@ export function App() {
         const cachedSessions = workspaceStore
           .hydrateChatSessions(projectItem.projectId)
           .map(entry => entry.session);
-        const sortedCachedSessions = sortChatSessions(cachedSessions);
+        const sortedCachedSessions = sortProjectChatSessions(cachedSessions);
         if (sortedCachedSessions.length > 0) {
           next[projectItem.projectId] = mergeChatSessionList(
             next[projectItem.projectId] ?? [],
@@ -5527,7 +5536,7 @@ export function App() {
         .listProjectSessions(projectItem.projectId)
         .then(sessions => {
           if (cancelled) return;
-          const sortedSessions = sortChatSessions(sessions);
+          const sortedSessions = sortProjectChatSessions(sessions);
           const knownSessions = knownChatSessionsForProject(projectItem.projectId);
           const mergedSessions = mergeChatSessionList(knownSessions, sortedSessions);
           setProjectSessionsByProjectId(prev => ({
@@ -7586,6 +7595,38 @@ export function App() {
     },
     [setPinnedProjectIds],
   );
+  const resetProjectResumeState = useCallback(() => {
+    setResumeSessions([]);
+    setResumeLoading(false);
+  }, []);
+  const openMobileProjectActionMenu = useCallback((
+    targetProjectId: string,
+    kind: 'new' | 'resume' | 'actions',
+  ) => {
+    closeSidebarTransientMenus();
+    resetProjectResumeState();
+    setMobileProjectActionMenu(current => {
+      if (current?.projectId === targetProjectId && current.kind === kind) {
+        return null;
+      }
+      if (kind === 'actions') {
+        return {
+          projectId: targetProjectId,
+          kind: 'actions',
+          phase: 'actions',
+          agentType: '',
+          popover: null,
+        };
+      }
+      return {
+        projectId: targetProjectId,
+        kind,
+        phase: 'agents',
+        agentType: '',
+        popover: null,
+      };
+    });
+  }, [closeSidebarTransientMenus, resetProjectResumeState]);
   const startProjectPinLongPress = useCallback(
     (targetProjectId: string, event: React.PointerEvent<HTMLButtonElement>) => {
       if (isWide) {
@@ -7608,10 +7649,10 @@ export function App() {
         projectPinLongPressTimerRef.current = null;
         projectPinLongPressTargetRef.current = targetProjectId;
         triggerMobileHaptic();
-        togglePinnedProject(targetProjectId);
+        openMobileProjectActionMenu(targetProjectId, 'actions');
       }, PROJECT_PIN_LONG_PRESS_MS);
     },
-    [clearProjectPinLongPress, isWide, togglePinnedProject],
+    [clearProjectPinLongPress, isWide, openMobileProjectActionMenu],
   );
   const finishProjectPinLongPress = useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -8914,7 +8955,7 @@ export function App() {
     const sessionRows = cachedSessions.map(item => item.session);
     const sortedSessionRows = mergeChatSessionList(
       knownChatSessionsForProject(activeProjectId),
-      sortChatSessions(sessionRows),
+      sortProjectChatSessions(sessionRows),
     );
     if (shouldUpdateCurrentProjectSessions(activeProjectId, projectIdRef.current)) {
       setChatSessions(prev => mergeChatSessionList(prev, sortedSessionRows));
@@ -9388,7 +9429,7 @@ export function App() {
     let sessionCount = 0;
     let loadListError = '';
     try {
-      const listedSessions = sortChatSessions(await service.listProjectSessions(activeProjectId));
+      const listedSessions = sortProjectChatSessions(await service.listProjectSessions(activeProjectId));
       sessionCount = listedSessions.length;
       const knownSessions = knownChatSessionsForProject(activeProjectId);
       const nextSessions = mergeChatSessionList(knownSessions, listedSessions);
@@ -9849,11 +9890,6 @@ export function App() {
     }
   };
 
-  const resetProjectResumeState = () => {
-    setResumeSessions([]);
-    setResumeLoading(false);
-  };
-
   const openWideProjectActionMenu = (
     targetProjectId: string,
     kind: 'new' | 'resume',
@@ -9872,25 +9908,6 @@ export function App() {
         viewportHeight: window.innerHeight,
       }),
     });
-  };
-
-  const openMobileProjectActionMenu = (
-    targetProjectId: string,
-    kind: 'new' | 'resume',
-  ) => {
-    closeSidebarTransientMenus();
-    resetProjectResumeState();
-    setMobileProjectActionMenu(current =>
-      current?.projectId === targetProjectId && current.kind === kind
-        ? null
-        : {
-            projectId: targetProjectId,
-            kind,
-            phase: 'agents',
-            agentType: '',
-            popover: null,
-          },
-    );
   };
 
   const removeProjectChatSessionFromState = (
@@ -10142,6 +10159,38 @@ export function App() {
       setError(message);
     } finally {
       setChatDeletingSessionId('');
+    }
+  };
+
+  const handlePinProjectSession = async (
+    targetProjectId: string,
+    sessionId: string,
+    pinned: boolean,
+  ) => {
+    const normalizedSessionId = sessionId.trim();
+    const actionKey = projectSessionActionKey(targetProjectId, normalizedSessionId);
+    if (!targetProjectId || !normalizedSessionId || chatPinningSessionKey === actionKey) {
+      return;
+    }
+    setError('');
+    setChatPinningSessionKey(actionKey);
+    try {
+      const result = await service.pinProjectSession(targetProjectId, normalizedSessionId, pinned);
+      if (!result.ok) {
+        throw new Error('session.pin returned ok=false');
+      }
+      rememberChatSessionSummary(targetProjectId, result.session);
+      const runtimeKey = buildChatRuntimeKey(targetProjectId, result.session.sessionId);
+      workspaceStore.rememberChatSession(
+        targetProjectId,
+        mergeKnownChatSessionForProject(targetProjectId, result.session),
+        {turnIndex: chatFinishedCursorRef.current[runtimeKey] ?? 0},
+      );
+      setProjectSessionActionMenu(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setChatPinningSessionKey(current => current === actionKey ? '' : current);
     }
   };
 
@@ -14192,7 +14241,7 @@ export function App() {
     return (
       <div
         key={`${targetProjectId}:${mobile ? 'mobile-session' : 'wide-session'}:${session.sessionId}`}
-        className={`project-session-row-wrap${sessionActionsOpen ? ' actions-open' : ''}`}
+        className={`project-session-row-wrap${session.pinned ? ' has-pin-action' : ''}${sessionActionsOpen ? ' actions-open' : ''}`}
       >
         {renderSessionLeadingState(session, targetProjectId)}
         <button
@@ -14233,10 +14282,34 @@ export function App() {
               {displaySessionAgent}
             </span>
           ) : null}
-          <span className="wide-session-time" title={session.updatedAt || ''}>
-            {formatCompactRelativeAge(session.updatedAt)}
-          </span>
+          {!session.pinned ? (
+            <span className="wide-session-time" title={session.updatedAt || ''}>
+              {formatCompactRelativeAge(session.updatedAt)}
+            </span>
+          ) : null}
         </button>
+        {session.pinned ? (
+          <button
+            type="button"
+            className="wide-session-pin-btn"
+            title="Unpin session"
+            aria-label={`Unpin session ${resolveSessionDisplayTitle(session) || session.sessionId}`}
+            aria-pressed={true}
+            disabled={chatPinningSessionKey === projectSessionActionKey(targetProjectId, session.sessionId)}
+            onPointerDown={event => event.stopPropagation()}
+            onClick={event => {
+              event.preventDefault();
+              event.stopPropagation();
+              handlePinProjectSession(targetProjectId, session.sessionId, false).catch(() => undefined);
+            }}
+          >
+            <span className={`codicon ${
+              chatPinningSessionKey === projectSessionActionKey(targetProjectId, session.sessionId)
+                ? 'codicon-loading codicon-modifier-spin'
+                : 'codicon-pinned'
+            }`} aria-hidden="true" />
+          </button>
+        ) : null}
         {!mobile ? (
           <button
             type="button"
@@ -14273,7 +14346,7 @@ export function App() {
     return (
       <div
         key={`recent:${targetProjectId}:${session.sessionId}`}
-        className={`project-session-row-wrap recent-session-row-wrap${sessionActionsOpen ? ' actions-open' : ''}`}
+        className={`project-session-row-wrap recent-session-row-wrap${liveSession.pinned ? ' has-pin-action' : ''}${sessionActionsOpen ? ' actions-open' : ''}`}
       >
         {renderSessionLeadingState(liveSession, targetProjectId)}
         <button
@@ -14304,10 +14377,34 @@ export function App() {
               {displaySessionAgent}
             </span>
           ) : null}
-          <span className="wide-session-time" title={liveSession.updatedAt || ''}>
-            {formatCompactRelativeAge(liveSession.updatedAt)}
-          </span>
+          {!liveSession.pinned ? (
+            <span className="wide-session-time" title={liveSession.updatedAt || ''}>
+              {formatCompactRelativeAge(liveSession.updatedAt)}
+            </span>
+          ) : null}
         </button>
+        {liveSession.pinned ? (
+          <button
+            type="button"
+            className="wide-session-pin-btn"
+            title="Unpin session"
+            aria-label={`Unpin session ${resolveSessionDisplayTitle(liveSession) || liveSession.sessionId}`}
+            aria-pressed={true}
+            disabled={chatPinningSessionKey === projectSessionActionKey(targetProjectId, liveSession.sessionId)}
+            onPointerDown={event => event.stopPropagation()}
+            onClick={event => {
+              event.preventDefault();
+              event.stopPropagation();
+              handlePinProjectSession(targetProjectId, liveSession.sessionId, false).catch(() => undefined);
+            }}
+          >
+            <span className={`codicon ${
+              chatPinningSessionKey === projectSessionActionKey(targetProjectId, liveSession.sessionId)
+                ? 'codicon-loading codicon-modifier-spin'
+                : 'codicon-pinned'
+            }`} aria-hidden="true" />
+          </button>
+        ) : null}
         {!mobile ? (
           <button
             type="button"
@@ -15172,6 +15269,7 @@ export function App() {
       chatArchivingSessionId === sessionId ||
       chatDeletingSessionId === sessionId;
     const renameActionDisabled = chatRenamingSessionId === sessionId;
+    const pinActionDisabled = chatPinningSessionKey === projectSessionActionKey(targetProjectId, sessionId);
     return (
       <div
         className="project-session-action-menu"
@@ -15188,6 +15286,23 @@ export function App() {
             }
           : undefined}
       >
+        <button
+          type="button"
+          className="project-session-menu-btn pin"
+          role="menuitem"
+          disabled={pinActionDisabled}
+          onClick={event => {
+            event.stopPropagation();
+            handlePinProjectSession(targetProjectId, sessionId, session.pinned !== true).catch(() => undefined);
+          }}
+        >
+          <span
+            className={`codicon ${pinActionDisabled
+              ? 'codicon-loading codicon-modifier-spin'
+              : 'codicon-pinned'}`}
+          />
+          <span className="project-session-menu-label">{session.pinned ? 'Unpin' : 'Pin'}</span>
+        </button>
         <button
           type="button"
           className="project-session-menu-btn rename"
@@ -15312,7 +15427,7 @@ export function App() {
     targetProjectId: string,
     sessions: RegistryChatSession[],
   ) => {
-    const listedSessions = sortChatSessions(sessions);
+    const listedSessions = sortProjectChatSessions(sessions);
     reconcileCreatedDraftSessions(targetProjectId, listedSessions);
     const knownSessions = knownChatSessionsForProject(targetProjectId);
     const nextSessions = mergeChatSessionList(knownSessions, listedSessions);
@@ -16241,20 +16356,6 @@ export function App() {
                     >
                       <span className="codicon codicon-history" />
                     </button>
-                    <button
-                      type="button"
-                      className={`wide-project-action-btn wide-project-pin-btn${pinnedProject ? ' active' : ''}`}
-                      title={pinnedProject ? 'Unpin project' : 'Pin project to top'}
-                      aria-label={pinnedProject ? `Unpin project ${projectItem.name}` : `Pin project ${projectItem.name}`}
-                      aria-pressed={pinnedProject}
-                      onPointerDown={event => event.stopPropagation()}
-                      onClick={event => {
-                        event.stopPropagation();
-                        togglePinnedProject(targetProjectId);
-                      }}
-                    >
-                      <span className="codicon codicon-pinned" />
-                    </button>
                   </div>
                 </div>
                 {sessionError ? (
@@ -16289,6 +16390,17 @@ export function App() {
           if (!sheetProject) return null;
           const sheetProjectSessions = projectSessionsByProjectId[sheetMenu.projectId] ?? [];
           const sheetAgents = getWideProjectAgents(sheetProject, sheetProjectSessions);
+          const sheetIsActions = sheetMenu.kind === 'actions';
+          const sheetTitle = sheetIsActions
+            ? 'Project Actions'
+            : sheetMenu.kind === 'new'
+              ? 'New Session'
+              : 'Resume Session';
+          const sheetIcon = sheetIsActions
+            ? 'codicon-list-selection'
+            : sheetMenu.kind === 'new'
+              ? 'codicon-add'
+              : 'codicon-history';
           return (
             <>
               <div
@@ -16300,17 +16412,17 @@ export function App() {
                 className="mobile-project-sheet"
                 role="dialog"
                 aria-modal="true"
-                aria-label={sheetMenu.kind === 'new' ? 'New session' : 'Resume session'}
+                aria-label={sheetIsActions ? 'Project actions' : sheetMenu.kind === 'new' ? 'New session' : 'Resume session'}
               >
                 <div className="mobile-project-sheet-grip" aria-hidden="true" />
                 <div className="mobile-project-sheet-header">
                   <span
-                    className={`codicon ${sheetMenu.kind === 'new' ? 'codicon-add' : 'codicon-history'} mobile-project-sheet-icon`}
+                    className={`codicon ${sheetIcon} mobile-project-sheet-icon`}
                     aria-hidden="true"
                   />
                   <span className="mobile-project-sheet-title-copy">
                     <span className="mobile-project-sheet-title">
-                      {sheetMenu.kind === 'new' ? 'New Session' : 'Resume Session'}
+                      {sheetTitle}
                     </span>
                     <span className="mobile-project-sheet-subtitle">{sheetProject.name}</span>
                   </span>
@@ -16325,7 +16437,21 @@ export function App() {
                   </button>
                 </div>
                 <div className="mobile-project-sheet-body">
-                  {sheetMenu.phase === 'agents' ? (
+                  {sheetMenu.kind === 'actions' ? (
+                    <button
+                      type="button"
+                      className="wide-project-action-menu-item mobile-project-sheet-item"
+                      onClick={() => {
+                        togglePinnedProject(sheetMenu.projectId);
+                        setMobileProjectActionMenu(null);
+                      }}
+                    >
+                      <span className="codicon codicon-pinned" aria-hidden="true" />
+                      <span className="mobile-project-sheet-item-label">
+                        {pinnedProjectIds.includes(sheetMenu.projectId) ? 'Unpin Project' : 'Pin Project'}
+                      </span>
+                    </button>
+                  ) : sheetMenu.phase === 'agents' ? (
                     <>
                       {sheetAgents.map(agentType => (
                         <button

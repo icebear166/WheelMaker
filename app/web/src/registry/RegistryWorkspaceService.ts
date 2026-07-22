@@ -660,6 +660,17 @@ export class RegistryWorkspaceService {
     return this.repository.renameSession(projectId, sessionId, title);
   }
 
+  async pinProjectSession(
+    projectId: string,
+    sessionId: string,
+    pinned: boolean,
+  ): Promise<{ok: boolean; sessionId: string; session: RegistrySessionSummary}> {
+    if (!this.repository) {
+      throw new Error('session is not ready');
+    }
+    return this.repository.pinSession(projectId, sessionId, pinned);
+  }
+
   async listResumableSessions(agentType: string): Promise<RegistryResumableSession[]> {
     if (!this.session || !this.repository) {
       return [];

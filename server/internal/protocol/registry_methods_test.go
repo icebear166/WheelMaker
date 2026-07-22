@@ -181,6 +181,25 @@ func TestSessionPermissionRespondIsClientProjectForwardWithoutVersionChange(t *t
 	}
 }
 
+func TestSessionPinIsClientProjectForwardWithoutVersionChange(t *testing.T) {
+	if DefaultProtocolVersion != "2.6" {
+		t.Fatalf("DefaultProtocolVersion=%q, want 2.6", DefaultProtocolVersion)
+	}
+	descriptor, ok := RegistryMethod(RegistryMethodSessionPin)
+	if !ok {
+		t.Fatal("session.pin is not registered")
+	}
+	if descriptor.Route != RegistryRouteSessionForward || !descriptor.RequiresProjectID {
+		t.Fatalf("descriptor=%+v", descriptor)
+	}
+	if !RegistryMethodAllowed(string(RegistryRoleClient), descriptor.Method) {
+		t.Fatal("client role cannot pin a session")
+	}
+	if RegistryMethodAllowed(string(RegistryRoleHub), descriptor.Method) {
+		t.Fatal("hub role can invoke session.pin")
+	}
+}
+
 func TestRegistrySessionActionMethods(t *testing.T) {
 	for _, method := range []string{RegistryMethodSessionStatus, RegistryMethodSessionCompact} {
 		desc, ok := RegistryMethod(method)

@@ -470,6 +470,7 @@ export interface RegistrySessionSummary {
   lastDoneTurnIndex?: number;
   lastDoneSuccess?: boolean;
   lastReadTurnIndex?: number;
+  pinned?: boolean;
   configOptions?: RegistrySessionConfigOption[];
   commands?: RegistrySessionCommand[];
   usage?: RegistrySessionUsage;

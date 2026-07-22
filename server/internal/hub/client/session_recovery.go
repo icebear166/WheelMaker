@@ -127,7 +127,8 @@ func (r *sessionRecovery) ReloadSession(ctx context.Context, sessionID string) (
 		return nil, fmt.Errorf("load session: %w", err)
 	}
 	if rec != nil {
-		rec.SessionSyncJSON = sessionSyncJSON(0)
+		projection := sessionSyncProjectionFromJSON(rec.SessionSyncJSON)
+		rec.SessionSyncJSON = sessionSyncProjectionJSON(sessionSyncProjection{Pinned: projection.Pinned})
 		if err := r.client.store.SaveSession(ctx, rec); err != nil {
 			return nil, fmt.Errorf("reset session sync: %w", err)
 		}

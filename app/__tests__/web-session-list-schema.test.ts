@@ -19,11 +19,15 @@ describe('web session list schema', () => {
     expect(repositoryTs).toContain('typeof input.lastDoneTurnIndex ===');
     expect(repositoryTs).toContain('typeof input.lastDoneSuccess ===');
     expect(repositoryTs).toContain('typeof input.lastReadTurnIndex ===');
+    expect(repositoryTs).toContain('pinned: input.pinned === true');
+    expect(repositoryTs).toContain('RegistryMethods.SessionPin');
     expect(serviceTs).toContain('async markProjectSessionRead(');
+    expect(serviceTs).toContain('async pinProjectSession(');
     expect(registryTypes).toContain('running?: boolean;');
     expect(registryTypes).toContain('lastDoneTurnIndex?: number;');
     expect(registryTypes).toContain('lastDoneSuccess?: boolean;');
     expect(registryTypes).toContain('lastReadTurnIndex?: number;');
+    expect(registryTypes).toContain('pinned?: boolean;');
     expect(registryTypes).toContain('pendingPermissionCount?: number;');
     expect(repositoryTs).toContain('pendingPermissionCount: typeof input.pendingPermissionCount');
     expect(mainTsx).toContain('const renderSessionStateMarker = (session: RegistryChatSession, activeProjectId = projectIdRef.current) => {');
