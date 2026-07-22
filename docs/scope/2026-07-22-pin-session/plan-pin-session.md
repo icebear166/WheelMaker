@@ -20,7 +20,7 @@
 - Add: `docs/wiki/frontend-interaction/session-list.md`
 - Modify: `docs/wiki/frontend-interaction/frontend-interaction.md`
 
-- [ ] **Step 1: 检查文档范围与链接**
+- [x] **Step 1: 检查文档范围与链接**
 
 Run（仓库根目录）：
 
@@ -31,7 +31,7 @@ rg -n "session-list\.md" docs/wiki/frontend-interaction/frontend-interaction.md
 
 Expected：spec、plan、session list wiki 均明确协议不升级、SQLite 不改 schema、Recent 不被 pin 排序、移动端从菜单执行；wiki 索引包含新页面。
 
-- [ ] **Step 2: 检查文档质量与 diff**
+- [x] **Step 2: 检查文档质量与 diff**
 
 Run（仓库根目录）：
 
@@ -42,7 +42,7 @@ git diff --check
 
 Expected：第一条无输出；`git diff --check` 退出码为 0。
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```powershell
 git add docs/scope/2026-07-22-pin-session docs/wiki/frontend-interaction/frontend-interaction.md docs/wiki/frontend-interaction/session-list.md
@@ -59,7 +59,7 @@ git commit -m "docs: specify shared session pinning"
 - Modify: `app/web/src/registry/registryMethods.ts`
 - Test: `app/__tests__/web-session-actions-service.test.ts`
 
-- [ ] **Step 1: 写 Go 协议失败测试**
+- [x] **Step 1: 写 Go 协议失败测试**
 
 在 `server/internal/protocol/registry_methods_test.go` 增加：
 
@@ -87,7 +87,7 @@ func TestSessionPinIsClientProjectForwardWithoutVersionChange(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run（`server/`）：
 
@@ -97,7 +97,7 @@ go test ./internal/protocol -run 'TestSessionPinIsClientProjectForwardWithoutVer
 
 Expected：编译或测试失败，因为 `RegistryMethodSessionPin` 尚未定义。
 
-- [ ] **Step 3: 注册服务端 method**
+- [x] **Step 3: 注册服务端 method**
 
 在 `registry_methods.go` 的 Session 常量和 descriptor map 中分别加入：
 
@@ -111,7 +111,7 @@ RegistryMethodSessionPin: registryProjectMethod(RegistryMethodSessionPin, Regist
 
 不得修改 `DefaultProtocolVersion`。
 
-- [ ] **Step 4: 增加 Web method 常量和 source contract**
+- [x] **Step 4: 增加 Web method 常量和 source contract**
 
 在 `app/web/src/registry/registryMethods.ts` 的 Session methods 中加入：
 
@@ -126,7 +126,7 @@ expect(RegistryProtocolVersion).toBe('2.6');
 expect(RegistryMethods.SessionPin).toBe('session.pin');
 ```
 
-- [ ] **Step 5: 运行协议测试**
+- [x] **Step 5: 运行协议测试**
 
 Run：
 
@@ -142,7 +142,7 @@ npx jest __tests__/web-session-actions-service.test.ts --runInBand
 
 Expected：全部 PASS，协议仍为 2.6。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add server/internal/protocol/registry_methods.go server/internal/protocol/registry_methods_test.go app/web/src/registry/registryMethods.ts app/__tests__/web-session-actions-service.test.ts
@@ -162,7 +162,7 @@ git commit -m "feat(protocol): register project-scoped session pin method"
 
 **约束:** 不修改 `server/internal/hub/client/sqlite_store.go` 的 table DDL、`expectedStoreSchemaColumns`、schema version 或 migration。`pinned` 仅属于 `SessionSyncJSON`。
 
-- [ ] **Step 1: 写 recorder/request 失败测试**
+- [x] **Step 1: 写 recorder/request 失败测试**
 
 在 `server/internal/hub/client/client_test.go` 使用 `newSessionViewTestClient(t)` 和现有 request helper 增加覆盖：
 
@@ -222,7 +222,7 @@ func TestHandleSessionPinPersistsSummaryWithoutPublishingUpdate(t *testing.T) {
 
 同文件再增加表驱动测试，覆盖空 `sessionId`、不存在 session、另一个 project 下存在同 ID 时均返回错误且不创建/修改当前 project 记录；增加 running prompt 后调用 pin 成功的用例，证明未复用 archive/reload/delete 的 running guard。
 
-- [ ] **Step 2: 写 projection 生命周期失败测试**
+- [x] **Step 2: 写 projection 生命周期失败测试**
 
 新增或扩展测试以依次证明：
 
@@ -248,7 +248,7 @@ if !summary.Pinned {
 
 使用现有 package-private constructor，不引入仅用于测试的生产 API。
 
-- [ ] **Step 3: 运行 Hub 测试确认失败**
+- [x] **Step 3: 运行 Hub 测试确认失败**
 
 Run（`server/`）：
 
@@ -258,7 +258,7 @@ go test ./internal/hub/client -run 'TestHandleSessionPin|TestSessionPin|TestSess
 
 Expected：编译或测试失败，因为 summary/projection/handler 尚无 pin。
 
-- [ ] **Step 4: 扩展 summary 与 projection**
+- [x] **Step 4: 扩展 summary 与 projection**
 
 在 `sessionViewSummary` 和 `sessionSyncProjection` 增加：
 
@@ -278,7 +278,7 @@ summary.Pinned = projection.Pinned
 
 现有 `sessionSyncProjectionFromJSON` / `sessionSyncProjectionJSON` 会让 mark-read、prompt 和 operation cursor 更新自然保留该字段。
 
-- [ ] **Step 5: 实现 recorder 写入且不广播**
+- [x] **Step 5: 实现 recorder 写入且不广播**
 
 在 `MarkSessionRead` 附近加入：
 
@@ -307,7 +307,7 @@ func (r *SessionRecorder) SetSessionPinned(ctx context.Context, sessionID string
 
 该方法不得调用 `publishSessionUpdated`。
 
-- [ ] **Step 6: 实现 `session.pin` request handler**
+- [x] **Step 6: 实现 `session.pin` request handler**
 
 在 `client.go` 的 mark-read/rename 分支附近加入：
 
@@ -329,7 +329,7 @@ case acp.RegistryMethodSessionPin:
 
 不要调用 `sessionIsRunning`，project 隔离由 recorder 的 `r.projectName` store lookup 保证。
 
-- [ ] **Step 7: reload/reset 保留 pin**
+- [x] **Step 7: reload/reset 保留 pin**
 
 把 `session_recovery.go` 中：
 
@@ -348,7 +348,7 @@ rec.SessionSyncJSON = sessionSyncProjectionJSON(sessionSyncProjection{
 
 这样 cursor、done/read 状态归零，但 pin 原样保留。Archive/Delete 继续删除活跃 row，Restore 继续用默认 projection，无需 schema 或 migration 修改。
 
-- [ ] **Step 8: 增加 Hub forwarding 测试**
+- [x] **Step 8: 增加 Hub forwarding 测试**
 
 在 `server/internal/hub/hub_test.go` 复制现有 rename/delete forwarding 测试结构，发送：
 
@@ -359,7 +359,7 @@ map[string]any{"sessionId": "sess-1", "pinned": true}
 
 断言请求只转发给 envelope `projectId` 对应 client，response 返回调用方；未携带 `projectId` 的请求按现有 project-scoped 验证返回错误。
 
-- [ ] **Step 9: 运行 Hub/协议测试**
+- [x] **Step 9: 运行 Hub/协议测试**
 
 Run（`server/`）：
 
@@ -370,7 +370,7 @@ go test ./internal/protocol ./internal/hub/client ./internal/hub -v
 
 Expected：全部 PASS；`git diff -- server/internal/hub/client/sqlite_store.go` 无输出。
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```powershell
 git add server/internal/hub/client/client.go server/internal/hub/client/session_recorder.go server/internal/hub/client/session_recovery.go server/internal/hub/client/client_test.go server/internal/hub/hub_test.go
@@ -389,7 +389,7 @@ git commit -m "feat(hub): persist shared session pin state"
 - Modify: `app/__tests__/web-chat-project-service.test.ts`
 - Modify: `app/__tests__/web-session-list-schema.test.ts`
 
-- [ ] **Step 1: 写 repository/service 失败测试**
+- [x] **Step 1: 写 repository/service 失败测试**
 
 在 `web-session-actions-service.test.ts` 按现有 fake request 模式增加：
 
@@ -425,7 +425,7 @@ test('pins a project session and normalizes pinned summaries', async () => {
 
 再让 fake response 省略 `pinned`，断言 `result.session.pinned === false`。在 `web-chat-project-service.test.ts` 增加 `pinProjectSession('p1','s1',false)` 委托到 repository `pinSession` 的断言。
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run（`app/`）：
 
@@ -435,7 +435,7 @@ npx jest __tests__/web-session-actions-service.test.ts __tests__/web-chat-projec
 
 Expected：类型或测试失败，因为 method/type/repository/service 尚未完整实现。
 
-- [ ] **Step 3: 扩展 summary 和 normalize**
+- [x] **Step 3: 扩展 summary 和 normalize**
 
 在 `RegistrySessionSummary` 增加：
 
@@ -458,7 +458,7 @@ expect(repositoryTs).toContain('RegistryMethods.SessionPin');
 expect(serviceTs).toContain('async pinProjectSession(');
 ```
 
-- [ ] **Step 4: 实现 repository 和 project-scoped service**
+- [x] **Step 4: 实现 repository 和 project-scoped service**
 
 在 `RegistryRepository.renameSession` 附近加入：
 
@@ -504,7 +504,7 @@ async pinProjectSession(
 
 不新增 browser local persistence。
 
-- [ ] **Step 5: 运行 Web service 测试和类型检查**
+- [x] **Step 5: 运行 Web service 测试和类型检查**
 
 Run（`app/`）：
 
@@ -515,7 +515,7 @@ npx tsc -p web/tsconfig.web.json --noEmit
 
 Expected：全部 PASS。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add app/web/src/registry/registryTypes.ts app/web/src/registry/RegistryRepository.ts app/web/src/registry/RegistryWorkspaceService.ts app/__tests__/web-session-actions-service.test.ts app/__tests__/web-chat-project-service.test.ts app/__tests__/web-session-list-schema.test.ts
@@ -532,7 +532,7 @@ git commit -m "feat(app): add session pin registry service"
 - Modify: `app/__tests__/web-chat-session-ordering.test.ts`
 - Test: `app/__tests__/web-mobile-chat-quick-switch.test.ts`
 
-- [ ] **Step 1: 写排序与 merge 失败测试**
+- [x] **Step 1: 写排序与 merge 失败测试**
 
 在 `web-chat-session-ordering.test.ts` 增加：
 
@@ -580,7 +580,7 @@ test('preserves pin when a partial session patch omits it', () => {
 
 同时增加 unpin 后回到更新时间位置、list refresh 在 pinned 变化时重排、相同 key 稳定排序的断言。
 
-- [ ] **Step 2: 运行排序测试确认失败**
+- [x] **Step 2: 运行排序测试确认失败**
 
 Run（`app/`）：
 
@@ -590,7 +590,7 @@ npx jest __tests__/web-chat-session-ordering.test.ts --runInBand
 
 Expected：失败，因为 `sortProjectChatSessions` 不存在且 merge 未处理 pin。
 
-- [ ] **Step 3: 实现两套排序语义**
+- [x] **Step 3: 实现两套排序语义**
 
 保留 `sortChatSessions` 的纯时间行为，并新增：
 
@@ -614,13 +614,13 @@ pinned: next.pinned ?? existing?.pinned ?? false,
 
 `mergeChatSession` 的原位替换条件改成 `updatedAt` 与 `pinned` 均未改变；否则调用 `sortProjectChatSessions`。`mergeChatSessionList` 的 `orderChanged` 比较同样加入 `next.pinned !== session.pinned`，并用 project sorter 返回。
 
-- [ ] **Step 4: Project 列表入口改用 project sorter**
+- [x] **Step 4: Project 列表入口改用 project sorter**
 
 在 `WorkspaceApp.tsx` 导入 `sortProjectChatSessions`。把下列完整 project Session list 路径从 `sortChatSessions` 改为 `sortProjectChatSessions`：cached sessions、`session.list` refresh、session event list、active project refresh、target project refresh。
 
 不得修改 `chatIndexState.ts` 的 `latestSessionUpdatedAt`；它继续使用 `sortChatSessions`，确保 project 最近活跃时间不被 pin 改写。`mobileChatQuickSwitch.ts` 的候选选择和 section 排序也不调用 project sorter。
 
-- [ ] **Step 5: 运行排序与 Recent 回归**
+- [x] **Step 5: 运行排序与 Recent 回归**
 
 Run（`app/`）：
 
@@ -631,7 +631,7 @@ npx tsc -p web/tsconfig.web.json --noEmit
 
 Expected：全部 PASS；Recent 的候选数量、优先级、project 分组与组内时间顺序没有因 pin 改变。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add app/web/src/chat/session/chatSessionOrdering.ts app/web/src/app/WorkspaceApp.tsx app/__tests__/web-chat-session-ordering.test.ts
@@ -648,7 +648,7 @@ git commit -m "feat(app): pin sessions within project lists"
 - Modify: `app/__tests__/web-chat-ui.test.ts`
 - Modify: `app/__tests__/web-chat-recent-sessions-ui.test.ts`
 
-- [ ] **Step 1: 写 UI contract 失败测试**
+- [x] **Step 1: 写 UI contract 失败测试**
 
 在现有 source-contract 测试中增加断言，覆盖：
 
@@ -666,7 +666,7 @@ expect(stylesCss).toContain('.project-session-row-wrap.has-pin-action');
 
 Recent UI test 断言 `liveSession.pinned` 控制同一个 pin button 和菜单动作；draft renderer 与 archive renderer 片段中不出现 `wide-session-pin-btn` 或 `handlePinProjectSession`。若测试已有 helper 可抽取函数片段，使用函数边界断言，避免全文件 `not.toContain` 误判。
 
-- [ ] **Step 2: 运行 UI 测试确认失败**
+- [x] **Step 2: 运行 UI 测试确认失败**
 
 Run（`app/`）：
 
@@ -676,7 +676,7 @@ npx jest __tests__/web-chat-ui.test.ts __tests__/web-chat-recent-sessions-ui.tes
 
 Expected：新增断言 FAIL。
 
-- [ ] **Step 3: 增加 per-project/session 请求状态和 handler**
+- [x] **Step 3: 增加 per-project/session 请求状态和 handler**
 
 在 Session mutation states 旁加入：
 
@@ -718,7 +718,7 @@ const handlePinProjectSession = async (
 
 若 `rememberChatSessionSummary` 已同时更新 `projectSessionsByProjectId`，保留单一状态更新路径，避免重复 merge；无论采用哪条现有 helper，必须用服务端 response summary，不能先 optimistic toggle。
 
-- [ ] **Step 4: Session 菜单增加 Pin/Unpin**
+- [x] **Step 4: Session 菜单增加 Pin/Unpin**
 
 在 Rename 之前加入 menu item。禁用条件仅为当前 action key 正在请求，不包含 `session.running`：
 
@@ -744,7 +744,7 @@ const handlePinProjectSession = async (
 
 桌面右键和 ellipsis 已复用此 menu，不新增第二套菜单。
 
-- [ ] **Step 5: Project 与 Recent 行渲染独立 pin button**
+- [x] **Step 5: Project 与 Recent 行渲染独立 pin button**
 
 在两个活跃行 wrapper 加 `${session.pinned ? ' has-pin-action' : ''}`（Recent 使用 `liveSession.pinned`）。Pinned 时不渲染 `.wide-session-time`，改在 row `<button>` 的 sibling 位置渲染：
 
@@ -775,7 +775,7 @@ const handlePinProjectSession = async (
 
 Recent 版本替换为 `liveSession`。按钮必须是 row button 的 sibling，禁止嵌套 `<button>`；点击 icon 不触发选择或打开 Session。未 pinned 时仍在 row 内显示 `.wide-session-time`。
 
-- [ ] **Step 6: 添加样式并协调 ellipsis**
+- [x] **Step 6: 添加样式并协调 ellipsis**
 
 在 `chat.css` 的 `.project-session-row-wrap` 区域加入：
 
@@ -819,7 +819,7 @@ Recent 版本替换为 `liveSession`。按钮必须是 row button 的 sibling，
 
 结合现有 mobile selector 调整 padding，保证 mobile 无 ellipsis 时 icon 占用原时间位置；desktop pin icon 位于 ellipsis 左侧。以实际 CSS cascade 为准，但不得覆盖 session title 或状态 marker。
 
-- [ ] **Step 7: 运行 UI 测试、类型检查**
+- [x] **Step 7: 运行 UI 测试、类型检查**
 
 Run（`app/`）：
 
@@ -830,7 +830,7 @@ npx tsc -p web/tsconfig.web.json --noEmit
 
 Expected：全部 PASS；失败请求测试证明本地 summary 未被错误翻转，running session menu 中 Pin 仍 enabled。
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add app/web/src/app/WorkspaceApp.tsx app/web/src/styles/chat.css app/__tests__/web-chat-ui.test.ts app/__tests__/web-chat-recent-sessions-ui.test.ts
@@ -846,7 +846,7 @@ git commit -m "feat(app): add session pin menu and row control"
 - Modify: `app/__tests__/web-chat-recent-sessions-ui.test.ts`
 - Modify: `app/__tests__/web-chat-ui.test.ts`
 
-- [ ] **Step 1: 更新移动端交互失败测试**
+- [x] **Step 1: 更新移动端交互失败测试**
 
 把现有“project long press 直接 toggle pin”的断言改为：
 
@@ -859,7 +859,7 @@ expect(mainTsx).toContain("pinnedProjectIds.includes(sheetMenu.projectId) ? 'Unp
 
 并断言 mobile project row action buttons 中不再出现直接 `togglePinnedProject(targetProjectId)` 的 pin button；desktop project pin 入口保持原样。Session mobile long press 继续打开 `projectSessionActionMenu`，其中已包含 Task 6 的 Pin/Unpin。
 
-- [ ] **Step 2: 运行移动端 UI 测试确认失败**
+- [x] **Step 2: 运行移动端 UI 测试确认失败**
 
 Run（`app/`）：
 
@@ -869,7 +869,7 @@ npx jest __tests__/web-chat-recent-sessions-ui.test.ts __tests__/web-chat-ui.tes
 
 Expected：旧实现因 long press 直接 toggle 而失败。
 
-- [ ] **Step 3: 扩展 mobile action menu state**
+- [x] **Step 3: 扩展 mobile action menu state**
 
 把别名改成 discriminated union：
 
@@ -887,7 +887,7 @@ type MobileProjectActionMenuState =
 
 `openMobileProjectActionMenu` 的 `kind` 扩为 `'new' | 'resume' | 'actions'`；actions 分支写入 `{projectId, kind:'actions', phase:'actions', agentType:'', popover:null}`，new/resume 分支保持原有 agents state。
 
-- [ ] **Step 4: long press 改为开菜单**
+- [x] **Step 4: long press 改为开菜单**
 
 timer callback 改为：
 
@@ -902,7 +902,7 @@ projectPinLongPressTimerRef.current = window.setTimeout(() => {
 
 处理 callback 声明顺序：若 `openMobileProjectActionMenu` 当前定义在 callback 之后，将其改为 `useCallback` 并移动到 long-press block 之前，或让 long-press callback 调用一个先定义的稳定 helper；禁止通过关闭 exhaustive-deps 或使用 `any` 绕过。
 
-- [ ] **Step 5: actions sheet 渲染 Project Pin/Unpin**
+- [x] **Step 5: actions sheet 渲染 Project Pin/Unpin**
 
 Sheet 的 `aria-label`、icon、title 增加 actions 分支：`Project actions`、`codicon-list-selection`、`Project Actions`。body 在 agents/sessions 分支之前处理：
 
@@ -930,11 +930,11 @@ Sheet 的 `aria-label`、icon、title 增加 actions 分支：`Project actions`�
 
 实现时保留现有 JSX 内容，不把注释字面量写入生产代码。
 
-- [ ] **Step 6: 删除 mobile project 行上的直接 pin button**
+- [x] **Step 6: 删除 mobile project 行上的直接 pin button**
 
 删除 mobile project row action group 中 `.wide-project-pin-btn` 的按钮；desktop project row 的 pin button 不删。Project 和 Session 在 mobile 上均由长按菜单提供 Pin/Unpin。
 
-- [ ] **Step 7: 运行移动端和全套相关 UI 测试**
+- [x] **Step 7: 运行移动端和全套相关 UI 测试**
 
 Run（`app/`）：
 
@@ -945,7 +945,7 @@ npx tsc -p web/tsconfig.web.json --noEmit
 
 Expected：全部 PASS；Project 长按只打开菜单，普通点击/折叠行为不变，Session 长按仍打开 Session actions。
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add app/web/src/app/WorkspaceApp.tsx app/__tests__/web-chat-recent-sessions-ui.test.ts app/__tests__/web-chat-ui.test.ts
@@ -959,7 +959,12 @@ git commit -m "feat(app): unify mobile pin actions in menus"
 **Files:**
 - Modify: `docs/scope/2026-07-22-pin-session/plan-pin-session.md`（勾选实际完成项并记录任何与计划不同但已验证的实现）
 
-- [ ] **Step 1: Server 全量验证**
+**Implementation notes:**
+- Hub forwarding 测试首次运行暴露 `Reporter.handleRegistryRequest` 未分发 `session.pin`；已补入现有 session request 白名单，并验证只路由到目标 project handler、缺少 `projectId` 返回错误。
+- Active summary 支持 `pinned`；archive normalize 会显式移除该字段，保证归档与恢复语义仍为 unpinned。
+- 最终基于最新 `origin/main` 验证：Server `go test ./...` 通过；App 206 suites / 1151 tests 通过；TypeScript no-emit 检查和 production Web build 通过。
+
+- [x] **Step 1: Server 全量验证**
 
 Run（`server/`）：
 
@@ -969,7 +974,7 @@ go test ./...
 
 Expected：全部 PASS。
 
-- [ ] **Step 2: App 相关测试、全量测试、类型检查和 production build**
+- [x] **Step 2: App 相关测试、全量测试、类型检查和 production build**
 
 Run（`app/`）：
 
@@ -982,7 +987,7 @@ npm run build:web
 
 Expected：全部 PASS；build 成功。不得扫描或提交 `dist` 产物。
 
-- [ ] **Step 3: 静态边界检查**
+- [x] **Step 3: 静态边界检查**
 
 Run（仓库根目录）：
 
@@ -995,7 +1000,7 @@ git status --short
 
 Expected：diff check 通过；SQLite store diff 无输出；protocol 仍为 2.6；status 只包含计划勾选/最终预期变更，不包含 build artifacts。
 
-- [ ] **Step 4: 与远端 main rebase，重新运行风险相关验证**
+- [x] **Step 4: 与远端 main rebase，重新运行风险相关验证**
 
 Run（feature worktree）：
 
@@ -1006,7 +1011,7 @@ git rebase origin/main
 
 若发生冲突，按 spec 保留双方有效改动，重新运行 Step 1–3；不得使用 `git reset --hard` 或丢弃用户改动。
 
-- [ ] **Step 5: Feature branch 最终提交与推送**
+- [x] **Step 5: Feature branch 最终提交与推送**
 
 在 plan 中勾选所有已实际完成步骤后执行：
 
