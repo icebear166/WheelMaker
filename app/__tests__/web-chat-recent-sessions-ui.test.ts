@@ -165,8 +165,17 @@ describe('web chat recent sessions', () => {
     );
 
     expect(pinLongPressStart).toContain('if (isWide) {');
+    expect(pinLongPressStart).toContain("openMobileProjectActionMenu(targetProjectId, 'actions');");
+    expect(pinLongPressStart).not.toContain('togglePinnedProject(targetProjectId);');
     expect(sessionLongPressStart).toContain('if (isWide) {');
     expect(mainTsx).toContain('onContextMenu={event => openProjectSessionContextMenu(targetProjectId, session.sessionId, event)}');
+    expect(mainTsx).toContain("sheetMenu.kind === 'actions'");
+    expect(mainTsx).toContain("pinnedProjectIds.includes(sheetMenu.projectId) ? 'Unpin Project' : 'Pin Project'");
+
+    const mobileSheetStart = mainTsx.indexOf('const renderMobileChatSessionSheet = () => {');
+    const mobileSheetEnd = mainTsx.indexOf('const renderWideProjectActionMenu = (', mobileSheetStart);
+    const mobileSheet = mainTsx.slice(mobileSheetStart, mobileSheetEnd);
+    expect(mobileSheet).not.toContain('wide-project-pin-btn');
   });
 
   test('keeps transient menus open while their own scroll containers move', () => {

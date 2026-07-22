@@ -1799,6 +1799,9 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain('const sortedProjectItems = useMemo(() => sortProjectsByPin(projects, pinnedProjectIds), [projects, pinnedProjectIds]);');
     expect(mainTsx).toContain('const togglePinnedProject = useCallback(');
     expect(mainTsx).toContain('const startProjectPinLongPress = useCallback(');
+    expect(mainTsx).toContain("openMobileProjectActionMenu(targetProjectId, 'actions');");
+    expect(mainTsx).toContain("kind: 'actions';");
+    expect(mainTsx).toContain("phase: 'actions';");
     expect(mainTsx).toContain('const consumeProjectPinLongPressClick = useCallback(');
     expect(mainTsx).toContain('const renderWideProjectSessionNav = (options?: { includeRecent?: boolean }) => {');
     expect(mainTsx).toContain('className="wide-project-session-nav"');

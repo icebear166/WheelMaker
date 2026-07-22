@@ -649,7 +649,15 @@ type WideProjectActionMenuState = {
   agentType: string;
   popover?: WideProjectActionPopoverPlacement | null;
 };
-type MobileProjectActionMenuState = WideProjectActionMenuState;
+type MobileProjectActionMenuState =
+  | WideProjectActionMenuState
+  | {
+      projectId: string;
+      kind: 'actions';
+      phase: 'actions';
+      agentType: '';
+      popover: null;
+    };
 type ProjectSessionActionMenuState = {
   projectId: string;
   sessionId: string;
@@ -7587,6 +7595,38 @@ export function App() {
     },
     [setPinnedProjectIds],
   );
+  const resetProjectResumeState = useCallback(() => {
+    setResumeSessions([]);
+    setResumeLoading(false);
+  }, []);
+  const openMobileProjectActionMenu = useCallback((
+    targetProjectId: string,
+    kind: 'new' | 'resume' | 'actions',
+  ) => {
+    closeSidebarTransientMenus();
+    resetProjectResumeState();
+    setMobileProjectActionMenu(current => {
+      if (current?.projectId === targetProjectId && current.kind === kind) {
+        return null;
+      }
+      if (kind === 'actions') {
+        return {
+          projectId: targetProjectId,
+          kind: 'actions',
+          phase: 'actions',
+          agentType: '',
+          popover: null,
+        };
+      }
+      return {
+        projectId: targetProjectId,
+        kind,
+        phase: 'agents',
+        agentType: '',
+        popover: null,
+      };
+    });
+  }, [closeSidebarTransientMenus, resetProjectResumeState]);
   const startProjectPinLongPress = useCallback(
     (targetProjectId: string, event: React.PointerEvent<HTMLButtonElement>) => {
       if (isWide) {
@@ -7609,10 +7649,10 @@ export function App() {
         projectPinLongPressTimerRef.current = null;
         projectPinLongPressTargetRef.current = targetProjectId;
         triggerMobileHaptic();
-        togglePinnedProject(targetProjectId);
+        openMobileProjectActionMenu(targetProjectId, 'actions');
       }, PROJECT_PIN_LONG_PRESS_MS);
     },
-    [clearProjectPinLongPress, isWide, togglePinnedProject],
+    [clearProjectPinLongPress, isWide, openMobileProjectActionMenu],
   );
   const finishProjectPinLongPress = useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -9850,11 +9890,6 @@ export function App() {
     }
   };
 
-  const resetProjectResumeState = () => {
-    setResumeSessions([]);
-    setResumeLoading(false);
-  };
-
   const openWideProjectActionMenu = (
     targetProjectId: string,
     kind: 'new' | 'resume',
@@ -9873,25 +9908,6 @@ export function App() {
         viewportHeight: window.innerHeight,
       }),
     });
-  };
-
-  const openMobileProjectActionMenu = (
-    targetProjectId: string,
-    kind: 'new' | 'resume',
-  ) => {
-    closeSidebarTransientMenus();
-    resetProjectResumeState();
-    setMobileProjectActionMenu(current =>
-      current?.projectId === targetProjectId && current.kind === kind
-        ? null
-        : {
-            projectId: targetProjectId,
-            kind,
-            phase: 'agents',
-            agentType: '',
-            popover: null,
-          },
-    );
   };
 
   const removeProjectChatSessionFromState = (
@@ -16340,20 +16356,6 @@ export function App() {
                     >
                       <span className="codicon codicon-history" />
                     </button>
-                    <button
-                      type="button"
-                      className={`wide-project-action-btn wide-project-pin-btn${pinnedProject ? ' active' : ''}`}
-                      title={pinnedProject ? 'Unpin project' : 'Pin project to top'}
-                      aria-label={pinnedProject ? `Unpin project ${projectItem.name}` : `Pin project ${projectItem.name}`}
-                      aria-pressed={pinnedProject}
-                      onPointerDown={event => event.stopPropagation()}
-                      onClick={event => {
-                        event.stopPropagation();
-                        togglePinnedProject(targetProjectId);
-                      }}
-                    >
-                      <span className="codicon codicon-pinned" />
-                    </button>
                   </div>
                 </div>
                 {sessionError ? (
@@ -16388,6 +16390,17 @@ export function App() {
           if (!sheetProject) return null;
           const sheetProjectSessions = projectSessionsByProjectId[sheetMenu.projectId] ?? [];
           const sheetAgents = getWideProjectAgents(sheetProject, sheetProjectSessions);
+          const sheetIsActions = sheetMenu.kind === 'actions';
+          const sheetTitle = sheetIsActions
+            ? 'Project Actions'
+            : sheetMenu.kind === 'new'
+              ? 'New Session'
+              : 'Resume Session';
+          const sheetIcon = sheetIsActions
+            ? 'codicon-list-selection'
+            : sheetMenu.kind === 'new'
+              ? 'codicon-add'
+              : 'codicon-history';
           return (
             <>
               <div
@@ -16399,17 +16412,17 @@ export function App() {
                 className="mobile-project-sheet"
                 role="dialog"
                 aria-modal="true"
-                aria-label={sheetMenu.kind === 'new' ? 'New session' : 'Resume session'}
+                aria-label={sheetIsActions ? 'Project actions' : sheetMenu.kind === 'new' ? 'New session' : 'Resume session'}
               >
                 <div className="mobile-project-sheet-grip" aria-hidden="true" />
                 <div className="mobile-project-sheet-header">
                   <span
-                    className={`codicon ${sheetMenu.kind === 'new' ? 'codicon-add' : 'codicon-history'} mobile-project-sheet-icon`}
+                    className={`codicon ${sheetIcon} mobile-project-sheet-icon`}
                     aria-hidden="true"
                   />
                   <span className="mobile-project-sheet-title-copy">
                     <span className="mobile-project-sheet-title">
-                      {sheetMenu.kind === 'new' ? 'New Session' : 'Resume Session'}
+                      {sheetTitle}
                     </span>
                     <span className="mobile-project-sheet-subtitle">{sheetProject.name}</span>
                   </span>
@@ -16424,7 +16437,21 @@ export function App() {
                   </button>
                 </div>
                 <div className="mobile-project-sheet-body">
-                  {sheetMenu.phase === 'agents' ? (
+                  {sheetMenu.kind === 'actions' ? (
+                    <button
+                      type="button"
+                      className="wide-project-action-menu-item mobile-project-sheet-item"
+                      onClick={() => {
+                        togglePinnedProject(sheetMenu.projectId);
+                        setMobileProjectActionMenu(null);
+                      }}
+                    >
+                      <span className="codicon codicon-pinned" aria-hidden="true" />
+                      <span className="mobile-project-sheet-item-label">
+                        {pinnedProjectIds.includes(sheetMenu.projectId) ? 'Unpin Project' : 'Pin Project'}
+                      </span>
+                    </button>
+                  ) : sheetMenu.phase === 'agents' ? (
                     <>
                       {sheetAgents.map(agentType => (
                         <button
