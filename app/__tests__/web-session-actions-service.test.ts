@@ -75,6 +75,7 @@ describe('web session action protocol', () => {
       timeoutMs: 30000,
     });
     expect(RegistryProtocolVersion).toBe('2.6');
+    expect(RegistryMethods.SessionPin).toBe('session.pin');
   });
 
   test('workspace delegates project-scoped status and compact actions', async () => {
