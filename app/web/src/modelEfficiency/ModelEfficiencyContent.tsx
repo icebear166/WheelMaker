@@ -25,14 +25,8 @@ export function formatModelEfficiencyCost(averageCostUsd?: number): string {
 
 export function formatModelEfficiencyDuration(averageTaskSeconds?: number): string {
   if (averageTaskSeconds === undefined) return '—';
-  const seconds = Math.max(0, Math.round(averageTaskSeconds));
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  if (minutes < 60) return remainingSeconds ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-  return remainingMinutes ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+  const minutes = Math.max(0, Math.round(averageTaskSeconds / 60));
+  return `${minutes}m`;
 }
 
 function formatEffortLabel(effort: ModelEfficiencyItem['effort']): string {

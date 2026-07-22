@@ -55,7 +55,7 @@
   grid-template-areas:
     'model meta'
     'score meta';
-  grid-template-columns: minmax(0, 1fr) 40px;
+  grid-template-columns: minmax(0, 1fr) 46px;
   grid-template-rows: 18px 31px;
   min-height: 49px;
   overflow: hidden;
@@ -85,7 +85,7 @@
   padding: 0 5px 2px;
   overflow: hidden;
   color: color-mix(in srgb, var(--model-efficiency-family-color) 72%, var(--text-primary));
-  font-size: clamp(17px, 1.35vw, 20px);
+  font-size: clamp(16px, 1.2vw, 18px);
   font-weight: 760;
   letter-spacing: -.055em;
   text-overflow: clip;
@@ -107,7 +107,7 @@
   padding: 2px;
   place-items: center;
   overflow: hidden;
-  font-size: 8.5px;
+  font-size: 9.5px;
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;

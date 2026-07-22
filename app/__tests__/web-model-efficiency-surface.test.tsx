@@ -62,7 +62,8 @@ describe('ModelEfficiencyContent', () => {
     expect(renderedText(rows[0])).toContain('142');
     expect(renderedText(rows[0])).not.toContain('IQ');
     expect(renderedText(rows[0])).toContain('$3.20');
-    expect(renderedText(rows[0])).toContain('6m 50s');
+    expect(renderedText(rows[0])).toContain('7m');
+    expect(renderedText(rows[0])).not.toContain('50s');
     expect(renderedText(rows[0])).not.toContain('Medium');
     expect(renderedText(rows[0])).not.toContain('Low');
   });
@@ -211,14 +212,14 @@ describe('ModelEfficiencySurface', () => {
     expect(surfaceRule).not.toContain('right: 0;');
     expect(recommendationRule).toContain('grid-template-areas:');
     expect(recommendationRule).toContain('grid-template-rows: 18px 31px;');
-    expect(recommendationRule).toContain('grid-template-columns: minmax(0, 1fr) 40px;');
+    expect(recommendationRule).toContain('grid-template-columns: minmax(0, 1fr) 46px;');
     expect(recommendationRule).toContain('var(--model-efficiency-family-color) 24%');
     expect(recommendationRule).toContain('var(--model-efficiency-family-color) 4%');
     expect(recommendationRule).toContain('inset 0 2px 0');
     expect(familyRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr));');
     expect(modelNameRule).toContain('font-size: 9px;');
-    expect(scoreRule).toContain('font-size: clamp(17px, 1.35vw, 20px);');
+    expect(scoreRule).toContain('font-size: clamp(16px, 1.2vw, 18px);');
     expect(scoreRule).toContain('var(--model-efficiency-family-color) 72%');
-    expect(metaRule).toContain('font-size: 8.5px;');
+    expect(metaRule).toContain('font-size: 9.5px;');
   });
 });
