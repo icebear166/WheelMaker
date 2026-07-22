@@ -78,18 +78,69 @@ describe('web session action protocol', () => {
     expect(RegistryMethods.SessionPin).toBe('session.pin');
   });
 
+  test('requests session pin and normalizes shared pin state', async () => {
+    const request = jest.fn().mockResolvedValue({
+      payload: {
+        ok: true,
+        sessionId: 's1',
+        session: {
+          sessionId: 's1',
+          title: 'One',
+          preview: '',
+          updatedAt: '2026-07-22T10:00:00Z',
+          messageCount: 1,
+          pinned: true,
+        },
+      },
+    });
+    const repository = new RegistryRepository({request} as never);
+
+    const result = await repository.pinSession('project-a', 's1', true);
+
+    expect(request).toHaveBeenCalledWith({
+      method: RegistryMethods.SessionPin,
+      projectId: 'project-a',
+      payload: {sessionId: 's1', pinned: true},
+      timeoutMs: 15000,
+    });
+    expect(result.session.pinned).toBe(true);
+  });
+
+  test('defaults a missing session pin field to false', async () => {
+    const request = jest.fn().mockResolvedValue({
+      payload: {
+        ok: true,
+        session: {
+          sessionId: 's1',
+          title: 'One',
+          preview: '',
+          updatedAt: '2026-07-22T10:00:00Z',
+          messageCount: 1,
+        },
+      },
+    });
+    const repository = new RegistryRepository({request} as never);
+
+    const result = await repository.pinSession('project-a', 's1', false);
+
+    expect(result.session.pinned).toBe(false);
+  });
+
   test('workspace delegates project-scoped status and compact actions', async () => {
     const repository = {
       statusSession: jest.fn().mockResolvedValue({ok: true, sessionId: 's1', limits: [], updatedAt: ''}),
       compactSession: jest.fn().mockResolvedValue({ok: true, accepted: true, sessionId: 's1', operationId: 'op-1'}),
+      pinSession: jest.fn().mockResolvedValue({ok: true, sessionId: 's1', session: {sessionId: 's1', pinned: true}}),
     };
     const service = new RegistryWorkspaceService();
     Object.assign(service as unknown as {repository: unknown}, {repository});
 
     await service.statusProjectSession('project-a', 's1');
     await service.compactProjectSession('project-a', 's1');
+    await service.pinProjectSession('project-a', 's1', true);
 
     expect(repository.statusSession).toHaveBeenCalledWith('project-a', 's1');
     expect(repository.compactSession).toHaveBeenCalledWith('project-a', 's1');
+    expect(repository.pinSession).toHaveBeenCalledWith('project-a', 's1', true);
   });
 });

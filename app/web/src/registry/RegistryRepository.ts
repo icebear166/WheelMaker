@@ -491,6 +491,7 @@ export class RegistryRepository {
       lastReadTurnIndex: typeof input.lastReadTurnIndex === 'number' && Number.isFinite(input.lastReadTurnIndex)
         ? Math.max(0, Math.trunc(input.lastReadTurnIndex))
         : undefined,
+      pinned: input.pinned === true,
       configOptions: Array.isArray(input.configOptions)
         ? input.configOptions
             .map(item => this.normalizeSessionConfigOption(item))
@@ -1573,6 +1574,33 @@ export class RegistryRepository {
       preview: '',
       updatedAt: '',
       messageCount: 0,
+    };
+    return {
+      ok: body.ok ?? false,
+      sessionId: body.sessionId ?? session.sessionId ?? sessionId,
+      session,
+    };
+  }
+
+  async pinSession(
+    projectId: string,
+    sessionId: string,
+    pinned: boolean,
+  ): Promise<{ok: boolean; sessionId: string; session: RegistrySessionSummary}> {
+    const resp = await this.client.request({
+      method: RegistryMethods.SessionPin,
+      projectId,
+      payload: {sessionId, pinned},
+      timeoutMs: 15000,
+    });
+    const body = (resp.payload ?? {}) as {ok?: boolean; sessionId?: string; session?: unknown};
+    const session = this.normalizeSessionSummary(body.session) ?? {
+      sessionId,
+      title: '',
+      preview: '',
+      updatedAt: '',
+      messageCount: 0,
+      pinned,
     };
     return {
       ok: body.ok ?? false,
