@@ -49,6 +49,7 @@ type sessionViewSummary struct {
 	LastDoneTurnIndex      int64                         `json:"lastDoneTurnIndex"`
 	LastDoneSuccess        bool                          `json:"lastDoneSuccess"`
 	LastReadTurnIndex      int64                         `json:"lastReadTurnIndex"`
+	Pinned                 bool                          `json:"pinned"`
 	ConfigOptions          []acp.ConfigOption            `json:"configOptions,omitempty"`
 	Usage                  *acp.SessionUsage             `json:"usage,omitempty"`
 	SessionActions         acp.SessionActionCapabilities `json:"sessionActions"`
@@ -66,6 +67,7 @@ type sessionSyncProjection struct {
 	LastDoneTurnIndex        int64 `json:"lastDoneTurnIndex,omitempty"`
 	LastDoneSuccess          *bool `json:"lastDoneSuccess,omitempty"`
 	LastReadTurnIndex        int64 `json:"lastReadTurnIndex,omitempty"`
+	Pinned                   bool  `json:"pinned,omitempty"`
 }
 
 type sessionTurnMessage struct {
@@ -725,6 +727,27 @@ func (r *SessionRecorder) MarkSessionRead(ctx context.Context, sessionID string,
 	return r.sessionViewSummaryFromRecord(*rec), nil
 }
 
+func (r *SessionRecorder) SetSessionPinned(ctx context.Context, sessionID string, pinned bool) (sessionViewSummary, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return sessionViewSummary{}, fmt.Errorf("sessionId is required")
+	}
+	rec, err := r.store.LoadSession(ctx, r.projectName, sessionID)
+	if err != nil {
+		return sessionViewSummary{}, err
+	}
+	if rec == nil {
+		return sessionViewSummary{}, fmt.Errorf("session not found: %s", sessionID)
+	}
+	projection := sessionSyncProjectionFromJSON(rec.SessionSyncJSON)
+	projection.Pinned = pinned
+	rec.SessionSyncJSON = sessionSyncProjectionJSON(projection)
+	if err := r.store.SaveSession(ctx, rec); err != nil {
+		return sessionViewSummary{}, err
+	}
+	return r.sessionViewSummaryFromRecord(*rec), nil
+}
+
 func (r *SessionRecorder) RenameSessionTitle(ctx context.Context, sessionID string, title string) (sessionViewSummary, error) {
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
@@ -1076,6 +1099,7 @@ func (r *SessionRecorder) sessionViewSummaryFromRecordLocked(rec SessionRecord) 
 		projection.LastDoneSuccess != nil && *projection.LastDoneSuccess,
 		projection.LastReadTurnIndex,
 	)
+	summary.Pinned = projection.Pinned
 	var agentState SessionAgentState
 	if strings.TrimSpace(rec.AgentJSON) != "" && json.Unmarshal([]byte(rec.AgentJSON), &agentState) == nil {
 		summary.CreateRequestID = agentState.CreateRequestID

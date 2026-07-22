@@ -573,6 +573,19 @@ func (c *Client) HandleSessionRequest(ctx context.Context, method string, projec
 			return nil, err
 		}
 		return map[string]any{"ok": true, "session": summary}, nil
+	case acp.RegistryMethodSessionPin:
+		var req struct {
+			SessionID string `json:"sessionId"`
+			Pinned    bool   `json:"pinned"`
+		}
+		if err := decodeSessionRequestPayload(payload, &req); err != nil {
+			return nil, fmt.Errorf("invalid session.pin payload: %w", err)
+		}
+		summary, err := c.sessionRecorder.SetSessionPinned(ctx, req.SessionID, req.Pinned)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"ok": true, "sessionId": summary.SessionID, "session": summary}, nil
 	case acp.RegistryMethodSessionRename:
 		var req struct {
 			SessionID string `json:"sessionId"`
