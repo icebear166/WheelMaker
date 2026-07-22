@@ -76,6 +76,14 @@ describe('ChatPlanSurface', () => {
     expect(planFixedRule).not.toContain('(100% + 800px) / 2');
   });
 
+  test('keeps wrapped plan steps from shrinking inside the scrollable list', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles', 'chat.css'));
+    const planStepRule = cssRuleBlock(stylesCss, '.chat-plan-step');
+
+    expect(planStepRule).toContain('flex: 0 0 auto;');
+  });
+
   test('keeps mobile Plan outside the stack and restores only hovered Recent Sessions', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainSource = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));

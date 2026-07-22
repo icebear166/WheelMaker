@@ -3181,6 +3181,7 @@
   align-items: flex-start;
   gap: 8px;
   min-height: 21px;
+  flex: 0 0 auto;
   color: color-mix(in srgb, var(--text-primary) 82%, var(--text-secondary));
   font-size: 12px;
   line-height: 1.4;
