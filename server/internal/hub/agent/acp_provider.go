@@ -2,6 +2,7 @@ package agent
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -22,6 +23,7 @@ type ACPProviderPreset struct {
 	Name                   string
 	BinaryName             string
 	Args                   []string
+	Env                    []string
 	MissingPathErrTemplate string
 	InstallHint            string
 	SkillProjectDirs       []string
@@ -105,6 +107,22 @@ var (
 		SkillProjectDirs:       []string{".agents/skills", ".kimi-code/skills"},
 		SkillUserDirs:          []string{"~/.agents/skills", "~/.kimi-code/skills"},
 	}
+	ClaudeCompatibleGLMProviderPreset = ACPProviderPreset{
+		Name:                   "cc-glm",
+		BinaryName:             "claude-agent-acp",
+		Args:                   []string{"--hide-claude-auth"},
+		InstallHint:            "@agentclientprotocol/claude-agent-acp",
+		SkillProjectDirs:       []string{".claude/skills"},
+		SkillProjectParentDirs: []string{".claude/skills"},
+	}
+	ClaudeCompatibleKimiProviderPreset = ACPProviderPreset{
+		Name:                   "cc-kimi",
+		BinaryName:             "claude-agent-acp",
+		Args:                   []string{"--hide-claude-auth"},
+		InstallHint:            "@agentclientprotocol/claude-agent-acp",
+		SkillProjectDirs:       []string{".claude/skills"},
+		SkillProjectParentDirs: []string{".claude/skills"},
+	}
 )
 
 // acpProvider is the unified implementation for all ACP providers.
@@ -158,10 +176,23 @@ func NewKimiProvider() *acpProvider {
 	return NewACPProvider(KimiACPProviderPreset)
 }
 
+func NewCCGLMProvider(stateDir, apiKey string) *acpProvider {
+	preset := ClaudeCompatibleGLMProviderPreset
+	preset.Env = claudeCompatibleGLMEnvironment(stateDir, apiKey)
+	return NewACPProvider(preset)
+}
+
+func NewCCKimiProvider(stateDir, apiKey string) *acpProvider {
+	preset := ClaudeCompatibleKimiProviderPreset
+	preset.Env = claudeCompatibleKimiEnvironment(stateDir, apiKey)
+	return NewACPProvider(preset)
+}
+
 func (p *acpProvider) Name() string { return p.preset.Name }
 
 func (p *acpProvider) Launch() (string, []string, []string, error) {
 	defaultArgs := cloneArgs(p.preset.Args)
+	defaultEnv := cloneArgs(p.preset.Env)
 
 	exePath, err := p.resolveBinary(p.preset.BinaryName, "", p.preset.InstallHint)
 	if err != nil {
@@ -173,7 +204,71 @@ func (p *acpProvider) Launch() (string, []string, []string, error) {
 	if p.preset.Name == FlickerACPProviderPreset.Name {
 		return p.launchFlicker(exePath)
 	}
-	return exePath, defaultArgs, nil, nil
+	return exePath, defaultArgs, defaultEnv, nil
+}
+
+type claudeModelConfig struct {
+	AvailableModels []string `json:"availableModels"`
+}
+
+func claudeModelConfigJSON(models []string) string {
+	data, _ := json.Marshal(claudeModelConfig{AvailableModels: models})
+	return string(data)
+}
+
+func claudeCompatibleEnvironment(
+	stateDir, providerName, endpoint, authName, apiKey, defaultModel, haikuModel string,
+	autoCompactWindow, maxContextTokens string, models []string,
+	extra ...string,
+) []string {
+	env := []string{
+		"CLAUDE_CONFIG_DIR=" + filepath.Join(stateDir, ".data", providerName),
+		"ANTHROPIC_BASE_URL=" + endpoint,
+		authName + "=" + apiKey,
+		"ANTHROPIC_MODEL=" + defaultModel,
+		"ANTHROPIC_DEFAULT_FABLE_MODEL=" + defaultModel,
+		"ANTHROPIC_DEFAULT_OPUS_MODEL=" + defaultModel,
+		"ANTHROPIC_DEFAULT_SONNET_MODEL=" + defaultModel,
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL=" + haikuModel,
+		"CLAUDE_CODE_SUBAGENT_MODEL=" + defaultModel,
+		"CLAUDE_CODE_AUTO_COMPACT_WINDOW=" + autoCompactWindow,
+		"CLAUDE_CODE_MAX_CONTEXT_TOKENS=" + maxContextTokens,
+		"CLAUDE_MODEL_CONFIG=" + claudeModelConfigJSON(models),
+	}
+	return append(env, extra...)
+}
+
+func claudeCompatibleKimiEnvironment(stateDir, apiKey string) []string {
+	env := claudeCompatibleEnvironment(
+		stateDir,
+		ClaudeCompatibleKimiProviderPreset.Name,
+		"https://api.kimi.com/coding/",
+		"ANTHROPIC_API_KEY",
+		apiKey,
+		"k3[1m]",
+		"k3[1m]",
+		"1048576",
+		"1048576",
+		[]string{"k3[1m]", "k3", "kimi-for-coding", "kimi-for-coding-highspeed"},
+	)
+	return append(env, "CLAUDE_CODE_EFFORT_LEVEL=high")
+}
+
+func claudeCompatibleGLMEnvironment(stateDir, apiKey string) []string {
+	return claudeCompatibleEnvironment(
+		stateDir,
+		ClaudeCompatibleGLMProviderPreset.Name,
+		"https://api.z.ai/api/anthropic",
+		"ANTHROPIC_AUTH_TOKEN",
+		apiKey,
+		"glm-5.2[1m]",
+		"glm-4.5-air",
+		"1000000",
+		"1000000",
+		[]string{"glm-5.2[1m]", "glm-5.2", "glm-4.7", "glm-4.5-air"},
+		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1",
+		"API_TIMEOUT_MS=3000000",
+	)
 }
 
 func (p *acpProvider) launchFlicker(myflickerPath string) (string, []string, []string, error) {

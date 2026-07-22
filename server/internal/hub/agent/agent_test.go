@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -183,6 +184,136 @@ func TestClaudeACPProvider_UsesGlobalBinaryByDefault(t *testing.T) {
 	if len(args) != 0 {
 		t.Fatalf("args=%v, want empty", args)
 	}
+}
+
+func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "state")
+	tests := []struct {
+		name        string
+		newProvider func(string, string) *acpProvider
+		key         string
+		wantArgs    []string
+		wantEnv     map[string]string
+		wantModels  []string
+	}{
+		{
+			name:        "kimi",
+			newProvider: NewCCKimiProvider,
+			key:         "kimi-test-key",
+			wantArgs:    []string{"--hide-claude-auth"},
+			wantModels:  []string{"k3[1m]", "k3", "kimi-for-coding", "kimi-for-coding-highspeed"},
+			wantEnv: map[string]string{
+				"CLAUDE_CONFIG_DIR":               filepath.Join(stateDir, ".data", "cc-kimi"),
+				"ANTHROPIC_BASE_URL":              "https://api.kimi.com/coding/",
+				"ANTHROPIC_API_KEY":               "kimi-test-key",
+				"ANTHROPIC_MODEL":                 "k3[1m]",
+				"ANTHROPIC_DEFAULT_FABLE_MODEL":   "k3[1m]",
+				"ANTHROPIC_DEFAULT_OPUS_MODEL":    "k3[1m]",
+				"ANTHROPIC_DEFAULT_SONNET_MODEL":  "k3[1m]",
+				"ANTHROPIC_DEFAULT_HAIKU_MODEL":   "k3[1m]",
+				"CLAUDE_CODE_SUBAGENT_MODEL":      "k3[1m]",
+				"CLAUDE_CODE_EFFORT_LEVEL":        "high",
+				"CLAUDE_CODE_AUTO_COMPACT_WINDOW": "1048576",
+				"CLAUDE_CODE_MAX_CONTEXT_TOKENS":  "1048576",
+			},
+		},
+		{
+			name:        "glm",
+			newProvider: NewCCGLMProvider,
+			key:         "zai-test-key",
+			wantArgs:    []string{"--hide-claude-auth"},
+			wantModels:  []string{"glm-5.2[1m]", "glm-5.2", "glm-4.7", "glm-4.5-air"},
+			wantEnv: map[string]string{
+				"CLAUDE_CONFIG_DIR":                        filepath.Join(stateDir, ".data", "cc-glm"),
+				"ANTHROPIC_BASE_URL":                       "https://api.z.ai/api/anthropic",
+				"ANTHROPIC_AUTH_TOKEN":                     "zai-test-key",
+				"ANTHROPIC_MODEL":                          "glm-5.2[1m]",
+				"ANTHROPIC_DEFAULT_FABLE_MODEL":            "glm-5.2[1m]",
+				"ANTHROPIC_DEFAULT_OPUS_MODEL":             "glm-5.2[1m]",
+				"ANTHROPIC_DEFAULT_SONNET_MODEL":           "glm-5.2[1m]",
+				"ANTHROPIC_DEFAULT_HAIKU_MODEL":            "glm-4.5-air",
+				"CLAUDE_CODE_SUBAGENT_MODEL":               "glm-5.2[1m]",
+				"CLAUDE_CODE_AUTO_COMPACT_WINDOW":          "1000000",
+				"CLAUDE_CODE_MAX_CONTEXT_TOKENS":           "1000000",
+				"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+				"API_TIMEOUT_MS":                           "3000000",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			provider := tt.newProvider(stateDir, tt.key)
+			provider.resolveBinary = func(name, configuredPath, installHint string) (string, error) {
+				if name != "claude-agent-acp" {
+					t.Fatalf("resolveBinary name=%q, want claude-agent-acp", name)
+				}
+				if configuredPath != "" {
+					t.Fatalf("resolveBinary configuredPath=%q, want empty", configuredPath)
+				}
+				return "/usr/bin/claude-agent-acp", nil
+			}
+
+			exe, args, env, err := provider.Launch()
+			if err != nil {
+				t.Fatalf("Launch() error = %v", err)
+			}
+			if exe != "/usr/bin/claude-agent-acp" {
+				t.Fatalf("executable = %q", exe)
+			}
+			if !reflect.DeepEqual(args, tt.wantArgs) {
+				t.Fatalf("args = %v, want %v", args, tt.wantArgs)
+			}
+			gotEnv := testEnvironmentMap(t, env)
+			for name, want := range tt.wantEnv {
+				if gotEnv[name] != want {
+					t.Fatalf("env[%q] = %q, want %q; env=%v", name, gotEnv[name], want, gotEnv)
+				}
+			}
+			modelConfig := struct {
+				AvailableModels []string `json:"availableModels"`
+			}{}
+			if err := json.Unmarshal([]byte(gotEnv["CLAUDE_MODEL_CONFIG"]), &modelConfig); err != nil {
+				t.Fatalf("CLAUDE_MODEL_CONFIG is invalid JSON: %v", err)
+			}
+			if !reflect.DeepEqual(modelConfig.AvailableModels, tt.wantModels) {
+				t.Fatalf("availableModels = %v, want %v", modelConfig.AvailableModels, tt.wantModels)
+			}
+			joinedArgs := strings.Join(args, " ")
+			if strings.Contains(joinedArgs, tt.key) || strings.Contains(exe, tt.key) {
+				t.Fatalf("provider key leaked into executable/args: exe=%q args=%v", exe, args)
+			}
+		})
+	}
+}
+
+func TestClaudeCompatibleProviderLaunchErrorDoesNotLeakKey(t *testing.T) {
+	const key = "zai-test-key"
+	provider := NewCCGLMProvider(filepath.Join(t.TempDir(), "state"), key)
+	provider.resolveBinary = func(name, configuredPath, installHint string) (string, error) {
+		return "", fmt.Errorf("binary %s is unavailable", name)
+	}
+
+	_, _, _, err := provider.Launch()
+	if err == nil {
+		t.Fatal("Launch() error = nil, want binary resolution error")
+	}
+	if strings.Contains(err.Error(), key) {
+		t.Fatalf("Launch() error leaked provider key: %v", err)
+	}
+}
+
+func testEnvironmentMap(t *testing.T, values []string) map[string]string {
+	t.Helper()
+	result := make(map[string]string, len(values))
+	for _, value := range values {
+		name, content, ok := strings.Cut(value, "=")
+		if !ok || name == "" {
+			t.Fatalf("invalid environment entry %q", value)
+		}
+		result[name] = content
+	}
+	return result
 }
 
 func TestCopilotACPProvider_LaunchArgs(t *testing.T) {
@@ -4300,6 +4431,28 @@ func TestProviderPresetByNameKimi(t *testing.T) {
 	preset, ok := providerPresetByName("kimi")
 	if !ok || preset.Name != "kimi" {
 		t.Fatalf("providerPresetByName(kimi)=(%#v,%v), want kimi,true", preset, ok)
+	}
+}
+
+func TestClaudeCompatibleProviderPresetsUseProjectClaudeSkillsOnly(t *testing.T) {
+	for _, name := range []string{"cc-glm", "cc-kimi"} {
+		t.Run(name, func(t *testing.T) {
+			preset, ok := providerPresetByName(name)
+			if !ok || preset.Name != name {
+				t.Fatalf("providerPresetByName(%q)=(%#v,%v), want matching preset", name, preset, ok)
+			}
+			if !reflect.DeepEqual(preset.SkillProjectDirs, []string{".claude/skills"}) {
+				t.Fatalf("project skill dirs = %v, want [.claude/skills]", preset.SkillProjectDirs)
+			}
+			if !reflect.DeepEqual(preset.SkillProjectParentDirs, []string{".claude/skills"}) {
+				t.Fatalf("parent skill dirs = %v, want [.claude/skills]", preset.SkillProjectParentDirs)
+			}
+			for _, dir := range preset.SkillUserDirs {
+				if strings.EqualFold(strings.TrimSpace(dir), "~/.claude/skills") {
+					t.Fatalf("provider should not scan native Claude user skills: %v", preset.SkillUserDirs)
+				}
+			}
+		})
 	}
 }
 
