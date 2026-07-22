@@ -2616,3 +2616,16 @@ describe('workspace session actions', () => {
     expect(requestBody).toContain('throw errorValue;');
   });
 });
+
+describe('provider-aware session labels', () => {
+  test('uses the shared display label helper for session badges while preserving request normalization', () => {
+    const projectRoot = path.join(__dirname, '..');
+    const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+
+    expect(mainTsx).toContain("from '../chat/projectAgents'");
+    expect((mainTsx.match(/agentDisplayLabel\(/g) || []).length).toBeGreaterThanOrEqual(5);
+    expect(mainTsx).not.toContain('normalizeAgentTypeName(draft.agentType)');
+    expect(mainTsx).not.toContain('normalizeAgentTypeName(sessionAgent)');
+    expect(mainTsx).toContain('agentType = normalizeAgentTypeName(agentType);');
+  });
+});

@@ -130,7 +130,7 @@ import {
 } from '../chat/session/sessionNavSlideOutState';
 import {extractLatestChatPlan} from '../chat/chatPlan';
 import { resolveChatSessionTitle } from '../chat/session/chatSessionTitle';
-import { buildProjectAgentChoices } from '../chat/projectAgents';
+import { agentDisplayLabel, buildProjectAgentChoices } from '../chat/projectAgents';
 import { chatConfigValueLabel, formatChatContextUsage, splitChatComposerStatusOptions } from '../chat/session/chatComposerStatus';
 import {
   decodeSessionTurnToMessage,
@@ -14171,7 +14171,7 @@ export function App() {
   ) => {
     const selected = selectedChatEncodedKey === buildChatRuntimeKey(targetProjectId, draft.draftId);
     const failed = draft.status === 'failed';
-    const displaySessionAgent = normalizeAgentTypeName(draft.agentType);
+    const displaySessionAgent = agentDisplayLabel(draft.agentType);
     const statusLabel =
       draft.status === 'sendingFirstPrompt'
         ? 'Sending...'
@@ -14226,7 +14226,7 @@ export function App() {
     mobile: boolean,
   ) => {
     const sessionAgent = (session.agentType || '').trim();
-    const displaySessionAgent = normalizeAgentTypeName(sessionAgent);
+    const displaySessionAgent = agentDisplayLabel(sessionAgent);
     return (
       <div
         key={`${targetProjectId}:${mobile ? 'mobile-session' : 'wide-session'}:${session.sessionId}`}
@@ -14316,7 +14316,7 @@ export function App() {
         item => item.sessionId === session.sessionId,
       ) ?? session;
     const sessionAgent = (liveSession.agentType || '').trim();
-    const displaySessionAgent = normalizeAgentTypeName(sessionAgent);
+    const displaySessionAgent = agentDisplayLabel(sessionAgent);
     const selected = selectedChatEncodedKey === buildChatRuntimeKey(targetProjectId, liveSession.sessionId);
     return (
       <div
@@ -14737,7 +14737,7 @@ export function App() {
     mobile: boolean,
   ) => {
     const sessionAgent = (row.session.agentType || '').trim();
-    const displaySessionAgent = normalizeAgentTypeName(sessionAgent);
+    const displaySessionAgent = agentDisplayLabel(sessionAgent);
     const title = resolveSessionDisplayTitle(row.session) || row.session.sessionId;
     const selected =
       selectedChatEncodedKey === buildChatRuntimeKey(targetProjectId, row.session.sessionId);
@@ -14955,7 +14955,7 @@ export function App() {
                 {section.rows.map(row => {
                   const session = row.session;
                   const sessionAgent = (session.agentType || '').trim();
-                  const displaySessionAgent = normalizeAgentTypeName(sessionAgent);
+                  const displaySessionAgent = agentDisplayLabel(sessionAgent);
                   const selected =
                     selectedArchivedKey?.projectId === section.project.projectId &&
                     selectedArchivedKey.sessionId === session.sessionId;
