@@ -51,6 +51,7 @@ Keep ACP payload unchanged while enabling true multi-session concurrency and cle
 8. Agent switching is a session behavior: Session snapshots current agent state, creates new AgentInstance, restores previously saved state if available.
 9. Multiple Sessions can be Active concurrently; each has independent promptMu.
 10. Session persistence: Active -> Suspended -> Persisted (SQLite). Restore by `session.read` / `session.send` session id access.
+11. Provider 可用性依赖 Hub 本地运行时配置时，AgentFactory 必须是 Hub-scoped 实例；项目上报与 Session 创建必须使用同一个 Factory，不能从进程级全局 Factory 重新推导。
 
 ## 3. Responsibilities
 
@@ -98,6 +99,8 @@ Keep ACP payload unchanged while enabling true multi-session concurrency and cle
 - Select and inject AgentConn policy (shared or owned) automatically.
 - If shared: maintain one shared AgentConn internally; multiple `CreateInstance` calls reuse it.
 - If owned: each `CreateInstance` creates an independent AgentConn.
+- Own the Hub-local provider registry used by both project capability reporting and every project Client.
+- Keep runtime-configured credentials inside provider launch configuration; do not project them into Registry-facing provider metadata.
 
 ### AgentInstance
 
@@ -205,6 +208,21 @@ Active -> Closed (cancel + cleanup, no persistence)
 - Retired chat adapter runtimes have been removed.
 - Route binding DB table remains as inert migration schema only; production code does not query or expose it.
 
-## 8. Historical Context
+## 8. Claude-compatible Provider Isolation
+
+Claude、`cc-glm`、`cc-kimi` 使用三个稳定 agent ID。两个 `cc-*` provider 都通过 owned connection 启动 `claude-agent-acp`，因此每个 Active WheelMaker Session 仍独占一个 adapter process；provider-specific endpoint、Key、模型和配置目录只存在于该子进程环境。
+
+```text
+Hub-scoped AgentFactory
+  ├─ claude  ──► ~/.claude
+  ├─ cc-glm  ──► <stateDir>/.data/cc-glm
+  └─ cc-kimi ──► <stateDir>/.data/cc-kimi
+```
+
+Client 持久化 agent ID 与上游 ACP Session ID。恢复扫描器按 agent ID 选择对应 projects 目录，因而 provider 切换不会把一个上游的 transcript 交给另一个上游。Registry 仍只负责平铺 agent ID 的路由和广播；App 的 Claude 二级展示不改变运行时所有权。
+
+来源：[`../../scope/2026-07-23-claude-compatible-agents/spec-claude-compatible-agents.md`](../../scope/2026-07-23-claude-compatible-agents/spec-claude-compatible-agents.md)。
+
+## 9. Historical Context
 
 The original Architecture 3.0 rollout used chat route keys and command routing while multi-session support was being introduced. That design has been retired. Current code should be read through the App-only Registry/session model above.

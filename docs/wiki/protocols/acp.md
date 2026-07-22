@@ -55,6 +55,18 @@ WheelMaker 把 ACP 作为 Client 与 Agent 之间的业务协议。协议类型�
 - Agent/provider 层负责外部运行时与 ACP 的转换。Session、Registry 和 recorder 不应依赖 provider 私有 thread、turn 或 item 字段。
 - ACP 负责 Agent 交互语义；App 侧跨机器路由、项目归属和 Session 事件广播属于 [Registry 协议](registry.md)。
 
+### Claude-compatible provider 约定
+
+`cc-glm`、`cc-kimi` 复用 `claude-agent-acp` 与 Claude Agent SDK，不在 WheelMaker 内重新实现 Anthropic Messages。两者是独立 ACP provider：使用不同的 Hub 本地 Key、Anthropic-compatible endpoint、模型白名单和 `CLAUDE_CONFIG_DIR`，但继续复用 owned ACP process、权限请求、工具调用和通用 `configOptions` 链路。
+
+- provider 只在 Hub 启动时、`claude-agent-acp` 与对应 Key 都存在时注册；Registry 只接收平铺的可用 agent ID，不接触 Key。
+- 模型选择由 provider 注入 `availableModels` 和默认模型，App 不增加 provider 私有模型协议。
+- 状态与上游 Session 分别位于 `<stateDir>/.data/cc-glm`、`<stateDir>/.data/cc-kimi`；它们与 `~/.claude` 之间不共享历史或用户配置。
+- Session 恢复以 agent ID 和各自 projects 目录为边界，不允许在 Claude、GLM、Kimi 间跨 provider 导入或恢复。
+- App 可以把平铺 ID 投影为 Claude 主项旁的展开子项，但分组只属于展示层，不进入 ACP 或 Registry wire schema。
+
+来源：[`../../scope/2026-07-23-claude-compatible-agents/spec-claude-compatible-agents.md`](../../scope/2026-07-23-claude-compatible-agents/spec-claude-compatible-agents.md)。
+
 ## 完整参考的使用方式
 
 完整中文参考适合查阅字段示例、废弃 API 和来源链接，但其中的 unstable 草案、codex-acp 使用摘要、旧飞书阶段说明以及过期内部文件路径不能直接视为当前实现事实。需要更新本页时，应同时核对当前代码和上游稳定 schema。
@@ -63,3 +75,4 @@ WheelMaker 把 ACP 作为 Client 与 Agent 之间的业务协议。协议类型�
 
 - [`../../scope/2026-07-20-kimi-acp-provider/spec-kimi-acp-provider.md`](../../scope/2026-07-20-kimi-acp-provider/spec-kimi-acp-provider.md)
 - [`../../scope/2026-07-21-request-permission/spec-request-permission.md`](../../scope/2026-07-21-request-permission/spec-request-permission.md)
+- [`../../scope/2026-07-23-claude-compatible-agents/spec-claude-compatible-agents.md`](../../scope/2026-07-23-claude-compatible-agents/spec-claude-compatible-agents.md)
