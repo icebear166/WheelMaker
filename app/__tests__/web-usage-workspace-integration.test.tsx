@@ -22,57 +22,69 @@ describe('limits workspace integration', () => {
     expect(settingsCss).not.toContain("data-active-index='4'");
   });
 
-  test('shows the limits monitor by default and persists its Chat setting', () => {
-    expect(persistence).toContain('showLimitsMonitor: boolean;');
+  test('shows Monitor by default and migrates the legacy visibility settings', () => {
+    expect(persistence).toContain('showMonitor: boolean;');
+    expect(persistence).toContain("showMonitor: 'showMonitor',");
     expect(persistence).toContain("showLimitsMonitor: 'showLimitsMonitor',");
-    expect(persistence).toContain('showLimitsMonitor: true,');
+    expect(persistence).toContain("showModelEfficiency: 'showModelEfficiency',");
+    expect(persistence).toContain('showMonitor: true,');
+    expect(persistence).toContain("const hasLegacyMonitorVisibility = typeof input.showLimitsMonitor === 'boolean'");
+    expect(persistence).toContain("const showMonitor = typeof input.showMonitor === 'boolean'");
+    expect(persistence).toContain('input.showLimitsMonitor === true || input.showModelEfficiency === true');
     expect(persistence).toContain(
-      "showLimitsMonitor: typeof input.showLimitsMonitor === 'boolean' ? input.showLimitsMonitor : base.showLimitsMonitor",
+      '{k: GLOBAL_KEYS.showMonitor, v: serialize(this.state.global.showMonitor), updatedAt}',
     );
-    expect(persistence).toContain(
-      '{k: GLOBAL_KEYS.showLimitsMonitor, v: serialize(this.state.global.showLimitsMonitor), updatedAt}',
-    );
+    expect(persistence).not.toContain('this.state.global.showLimitsMonitor');
+    expect(persistence).not.toContain('this.state.global.showModelEfficiency');
 
     const chatStart = settings.indexOf("renderSettingsSection({id: 'chat'");
     const connectionStart = settings.indexOf("renderSettingsSection({id: 'connection'");
     const chatSection = settings.slice(chatStart, connectionStart);
-    expect(chatSection).toContain('Show Limits Monitor');
-    expect(chatSection).toContain('checked={showLimitsMonitor}');
-    expect(chatSection).toContain('setShowLimitsMonitor(e.target.checked)');
+    expect(chatSection).toContain('Show Monitor');
+    expect(chatSection).toContain('checked={showMonitor}');
+    expect(chatSection).toContain('setShowMonitor(e.target.checked)');
+    expect(chatSection).not.toContain('Show Limits Monitor');
+    expect(chatSection).not.toContain('Show Model Efficiency');
 
     expect(main).toMatch(
-      /typeof persistedGlobal\.showLimitsMonitor === 'boolean'\r?\n\s*\? persistedGlobal\.showLimitsMonitor\r?\n\s*: true/,
+      /typeof persistedGlobal\.showMonitor === 'boolean'\r?\n\s*\? persistedGlobal\.showMonitor\r?\n\s*: true/,
     );
-    expect(main).toContain('showLimitsMonitor={showLimitsMonitor}');
-    expect(main).toContain('setShowLimitsMonitor={setShowLimitsMonitor}');
+    expect(main).toContain('showMonitor={showMonitor}');
+    expect(main).toContain('setShowMonitor={setShowMonitor}');
     expect(main).toContain('isWide ? (');
     const stackStart = main.indexOf('chat-edge-surface-stack');
     const stackSource = stackStart >= 0 ? main.slice(stackStart, stackStart + 2600) : '';
-    expect(stackSource).toContain("{showLimitsMonitor ? (");
-    expect(stackSource).toContain('<UsageFeatureSurface');
-    expect(main).toContain('showLimitsMonitor,');
+    expect(stackSource).toContain("{showMonitor ? (");
+    expect(stackSource).toContain('<MonitorSurface');
+    expect(stackSource).toContain('usageSnapshot={usageSnapshot}');
+    expect(stackSource).toContain('efficiencySnapshot={modelEfficiencySnapshot}');
+    expect(stackSource).not.toContain('<UsageFeatureSurface');
+    expect(stackSource).not.toContain('<ModelEfficiencySurface');
+    expect(main).toContain('showMonitor,');
   });
 
   test('routes title-bar hiding through the shared confirmation dialog', () => {
-    expect(dialogs).toContain("| {kind: 'hideLimitsMonitor'}");
-    expect(dialogs).toContain("if (target.kind === 'hideLimitsMonitor') return 'Hide limits monitor?';");
+    expect(dialogs).toContain("| {kind: 'hideMonitor'}");
+    expect(dialogs).toContain("if (target.kind === 'hideMonitor') return 'Hide monitor?';");
     expect(dialogs).toContain('You can show it again from Settings > Chat.');
-    expect(dialogs).toContain("if (target.kind === 'hideLimitsMonitor') return 'Hide';");
-    expect(main).toContain("onRequestHide={() => setConfirmTarget({kind: 'hideLimitsMonitor'})}");
-    expect(main).toContain("if (confirmTarget.kind === 'hideLimitsMonitor') {");
-    expect(main).toContain('setShowLimitsMonitor(false);');
+    expect(dialogs).toContain("if (target.kind === 'hideMonitor') return 'Hide';");
+    expect(dialogs).not.toContain("kind: 'hideLimitsMonitor'");
+    expect(dialogs).not.toContain("kind: 'hideModelEfficiency'");
+    expect(main).toContain("onRequestHide={() => setConfirmTarget({kind: 'hideMonitor'})}");
+    expect(main).toContain("if (confirmTarget.kind === 'hideMonitor') {");
+    expect(main).toContain('setShowMonitor(false);');
   });
 
-  test('adds an always-available Limits action to the five-button mobile shortcut', () => {
+  test('adds an always-available Monitor action to the five-button mobile shortcut', () => {
     const pillStart = main.indexOf('className="gesture-nav-pill"');
     const pillEnd = main.indexOf('</div>', pillStart);
     const pill = pillStart >= 0 && pillEnd >= 0 ? main.slice(pillStart, pillEnd) : '';
     const keys = Array.from(pill.matchAll(/key="([^"]+)"/g), match => match[1]);
 
-    expect(keys).toEqual(['preview', 'terminal', 'chat', 'limits', 'settings']);
-    expect(pill).not.toContain('showLimitsMonitor');
+    expect(keys).toEqual(['preview', 'terminal', 'chat', 'monitor', 'settings']);
+    expect(pill).not.toContain('showMonitor');
     expect(pill).toContain('aria-label="Terminal"');
-    expect(pill).toContain('aria-label="Limits"');
+    expect(pill).toContain('aria-label="Monitor"');
   });
 
   test('uses cached usage in one exclusive mobile overlay and closes it first on native back', () => {
@@ -82,14 +94,14 @@ describe('limits workspace integration', () => {
     expect(main).toContain('snapshot={usageSnapshot}');
     expect(main).toContain('mobileOverlay={mobileUsageOverlay ?? terminalMobileOverlay ?? chatPreviewMobileOverlay}');
 
-    const limitsButtonStart = main.indexOf('key="limits"');
-    const limitsButtonEnd = main.indexOf('</button>', limitsButtonStart);
-    const limitsButton = limitsButtonStart >= 0 && limitsButtonEnd >= 0
-      ? main.slice(limitsButtonStart, limitsButtonEnd)
+    const monitorButtonStart = main.indexOf('key="monitor"');
+    const monitorButtonEnd = main.indexOf('</button>', monitorButtonStart);
+    const monitorButton = monitorButtonStart >= 0 && monitorButtonEnd >= 0
+      ? main.slice(monitorButtonStart, monitorButtonEnd)
       : '';
-    expect(limitsButton).toContain('setTerminalOpen(false);');
-    expect(limitsButton).toContain('closeChatPreview();');
-    expect(limitsButton).not.toContain('refreshUsageAcrossHubs');
+    expect(monitorButton).toContain('setTerminalOpen(false);');
+    expect(monitorButton).toContain('closeChatPreview();');
+    expect(monitorButton).not.toContain('refreshUsageAcrossHubs');
 
     const backStart = main.indexOf('const handleAndroidNativeBack');
     const backEnd = main.indexOf('useEffect(() => {', backStart);

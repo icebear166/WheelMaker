@@ -46,10 +46,8 @@ type SettingsRootContentProps = {
   setSessionListDensity: (value: SessionListDensity) => void;
   mobileEnterKeyBehavior: MobileEnterKeyBehavior;
   setMobileEnterKeyBehavior: (value: MobileEnterKeyBehavior) => void;
-  showLimitsMonitor: boolean;
-  setShowLimitsMonitor: (value: boolean) => void;
-  showModelEfficiency: boolean;
-  setShowModelEfficiency: (value: boolean) => void;
+  showMonitor: boolean;
+  setShowMonitor: (value: boolean) => void;
   promptCompletionNotificationsEnabled: boolean;
   setPromptCompletionNotificationsEnabled: (value: boolean) => void;
   handlePromptCompletionNotificationsChange: (enabled: boolean) => void;
@@ -176,10 +174,8 @@ export function SettingsRootContent({
   setSessionListDensity,
   mobileEnterKeyBehavior,
   setMobileEnterKeyBehavior,
-  showLimitsMonitor,
-  setShowLimitsMonitor,
-  showModelEfficiency,
-  setShowModelEfficiency,
+  showMonitor,
+  setShowMonitor,
   promptCompletionNotificationsEnabled,
   setPromptCompletionNotificationsEnabled,
   handlePromptCompletionNotificationsChange,
@@ -260,25 +256,12 @@ export function SettingsRootContent({
           <label className="settings-row sidebar-setting-row">
             <span>
               <span className="codicon codicon-graph settings-row-icon" aria-hidden="true" />
-              Show Limits Monitor
+              Show Monitor
             </span>
             <input
               type="checkbox"
-              checked={showLimitsMonitor}
-              onChange={e => setShowLimitsMonitor(e.target.checked)}
-            />
-          </label>
-        ) : null}
-        {isWide ? (
-          <label className="settings-row sidebar-setting-row">
-            <span>
-              <span className="codicon codicon-dashboard settings-row-icon" aria-hidden="true" />
-              Show Model Efficiency
-            </span>
-            <input
-              type="checkbox"
-              checked={showModelEfficiency}
-              onChange={e => setShowModelEfficiency(e.target.checked)}
+              checked={showMonitor}
+              onChange={e => setShowMonitor(e.target.checked)}
             />
           </label>
         ) : null}

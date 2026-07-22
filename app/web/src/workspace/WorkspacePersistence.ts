@@ -63,8 +63,7 @@ export type PersistedGlobalState = {
   mobileEnterKeyBehavior: MobileEnterKeyBehavior;
   wrapLines: boolean;
   showLineNumbers: boolean;
-  showLimitsMonitor: boolean;
-  showModelEfficiency: boolean;
+  showMonitor: boolean;
   messageViewerEnabled: boolean;
   logLevel: PersistedLogLevel;
   disableFileCache: boolean;
@@ -282,6 +281,7 @@ const GLOBAL_KEYS = {
   mobileEnterKeyBehavior: 'mobileEnterKeyBehavior',
   wrapLines: 'wrapLines',
   showLineNumbers: 'showLineNumbers',
+  showMonitor: 'showMonitor',
   showLimitsMonitor: 'showLimitsMonitor',
   showModelEfficiency: 'showModelEfficiency',
   messageViewerEnabled: 'messageViewerEnabled',
@@ -320,8 +320,7 @@ function defaultGlobalState(): PersistedGlobalState {
     mobileEnterKeyBehavior: DEFAULT_MOBILE_ENTER_KEY_BEHAVIOR,
     wrapLines: false,
     showLineNumbers: true,
-    showLimitsMonitor: true,
-    showModelEfficiency: true,
+    showMonitor: true,
     messageViewerEnabled: false,
     logLevel: 'warning',
     disableFileCache: false,
@@ -499,6 +498,8 @@ function sanitizePreviewWorkbenchSnapshot(input: unknown): PreviewWorkbenchSnaps
 
 type PersistedGlobalStateInput = Partial<PersistedGlobalState> & {
   floatingControlSlot?: unknown;
+  showLimitsMonitor?: unknown;
+  showModelEfficiency?: unknown;
 };
 
 function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): PersistedGlobalState {
@@ -525,6 +526,13 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
   };
   const sanitizeFloatingControlSide = (value: unknown, fallback: PersistedFloatingControlSide): PersistedFloatingControlSide =>
     value === 'left' || value === 'right' ? value : fallback;
+  const hasLegacyMonitorVisibility = typeof input.showLimitsMonitor === 'boolean'
+    || typeof input.showModelEfficiency === 'boolean';
+  const showMonitor = typeof input.showMonitor === 'boolean'
+    ? input.showMonitor
+    : hasLegacyMonitorVisibility
+      ? input.showLimitsMonitor === true || input.showModelEfficiency === true
+      : base.showMonitor;
   return {
     themeMode: input.themeMode === 'light' ? 'light' : 'dark',
     codeTheme: typeof input.codeTheme === 'string' && isCodeThemeId(input.codeTheme) ? input.codeTheme : base.codeTheme,
@@ -536,8 +544,7 @@ function sanitizeGlobalState(input: PersistedGlobalStateInput | undefined): Pers
     mobileEnterKeyBehavior: normalizeMobileEnterKeyBehavior(input.mobileEnterKeyBehavior, base.mobileEnterKeyBehavior),
     wrapLines: typeof input.wrapLines === 'boolean' ? input.wrapLines : base.wrapLines,
     showLineNumbers: typeof input.showLineNumbers === 'boolean' ? input.showLineNumbers : base.showLineNumbers,
-    showLimitsMonitor: typeof input.showLimitsMonitor === 'boolean' ? input.showLimitsMonitor : base.showLimitsMonitor,
-    showModelEfficiency: typeof input.showModelEfficiency === 'boolean' ? input.showModelEfficiency : base.showModelEfficiency,
+    showMonitor,
     messageViewerEnabled: typeof input.messageViewerEnabled === 'boolean' ? input.messageViewerEnabled : base.messageViewerEnabled,
     logLevel: normalizePersistedLogLevel(input.logLevel, base.logLevel),
     disableFileCache: typeof input.disableFileCache === 'boolean' ? input.disableFileCache : base.disableFileCache,
@@ -900,7 +907,7 @@ export class WorkspacePersistenceRepository {
 
   private fromDbRows(globalRows: RawKVRow[], projectRows: RawProjectStateRow[]): PersistedWorkspaceState {
     const base = defaultWorkspaceState();
-    const globalPatch: Partial<PersistedGlobalState> = {};
+    const globalPatch: PersistedGlobalStateInput = {};
     for (const row of globalRows) {
       if (!(row.k in GLOBAL_KEYS)) continue;
       (globalPatch as Record<string, unknown>)[row.k] = tryParse(row.v, row.v);
@@ -913,7 +920,7 @@ export class WorkspacePersistenceRepository {
     }
 
     return {
-      global: sanitizeGlobalState({...base.global, ...globalPatch}),
+      global: sanitizeGlobalState(globalPatch),
       projects,
     };
   }
@@ -1108,8 +1115,7 @@ export class WorkspacePersistenceRepository {
       {k: GLOBAL_KEYS.mobileEnterKeyBehavior, v: serialize(this.state.global.mobileEnterKeyBehavior), updatedAt},
       {k: GLOBAL_KEYS.wrapLines, v: serialize(this.state.global.wrapLines), updatedAt},
       {k: GLOBAL_KEYS.showLineNumbers, v: serialize(this.state.global.showLineNumbers), updatedAt},
-      {k: GLOBAL_KEYS.showLimitsMonitor, v: serialize(this.state.global.showLimitsMonitor), updatedAt},
-      {k: GLOBAL_KEYS.showModelEfficiency, v: serialize(this.state.global.showModelEfficiency), updatedAt},
+      {k: GLOBAL_KEYS.showMonitor, v: serialize(this.state.global.showMonitor), updatedAt},
       {k: GLOBAL_KEYS.messageViewerEnabled, v: serialize(this.state.global.messageViewerEnabled), updatedAt},
       {k: GLOBAL_KEYS.logLevel, v: serialize(this.state.global.logLevel), updatedAt},
       {k: GLOBAL_KEYS.disableFileCache, v: serialize(this.state.global.disableFileCache), updatedAt},

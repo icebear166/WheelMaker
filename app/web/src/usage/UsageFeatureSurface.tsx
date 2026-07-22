@@ -1,13 +1,6 @@
 import React from 'react';
 
-import {ChatFunctionSurface} from '../chat/ChatFunctionSurface';
-import {formatResetCountdown, formatResetUTC, formatUpdatedAgo, tightnessTone, type UsageLimit, type UsageProviderView, type UsageViewAccount, type UsageViewSnapshot} from './usageTypes';
-
-type Props = {
-  snapshot: UsageViewSnapshot;
-  onRefresh: () => void;
-  onRequestHide: () => void;
-};
+import {formatResetCountdown, formatResetUTC, tightnessTone, type UsageLimit, type UsageProviderView, type UsageViewAccount, type UsageViewSnapshot} from './usageTypes';
 
 function accountLabel(account: UsageProviderView['accounts'][number]): string {
   const label = account.identity.label || account.identity.value || account.localId;
@@ -150,73 +143,24 @@ export function UsageDetailContent({snapshot}: {snapshot: UsageViewSnapshot}) {
   );
 }
 
-export function UsageFeatureSurface({snapshot, onRefresh, onRequestHide}: Props) {
-  const [collapsed, setCollapsed] = React.useState(false);
-  const [detail, setDetail] = React.useState(false);
-  const mode = detail ? 'detail' : 'compact';
+export function UsageCompactContent({snapshot}: {snapshot: UsageViewSnapshot}) {
+  if (snapshot.providers.length === 0) {
+    return <div className="usage-feature-empty">Waiting for Hub limits</div>;
+  }
   const compactAccounts = snapshot.providers.flatMap(provider =>
     provider.accounts
       .filter(account => account.status === 'ok')
       .map(account => ({provider, account})),
   );
-  const freshness = formatUpdatedAgo(snapshot.updatedAt) || 'Hub cache';
-  const actions = (
-    <>
-      <button
-        type="button"
-        className="chat-function-action"
-        aria-label="Hide limits monitor"
-        title="Hide limits monitor"
-        onClick={onRequestHide}
-      >
-        <span className="codicon codicon-eye-closed" aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        className="chat-function-action"
-        aria-label={detail ? 'Hide limit details' : 'Show limit details'}
-        title={detail ? 'Compact limits' : 'Show limit details'}
-        onClick={() => setDetail(value => !value)}
-      >
-        <span className={`codicon ${detail ? 'codicon-list-flat' : 'codicon-layout'}`} aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        className="chat-function-action"
-        aria-label="Refresh limits"
-        title={snapshot.refreshing ? 'Refreshing limits' : `Refresh limits · ${freshness}`}
-        disabled={snapshot.refreshing}
-        onClick={onRefresh}
-      >
-        <span className={`codicon codicon-refresh${snapshot.refreshing ? ' spinning' : ''}`} aria-hidden="true" />
-      </button>
-    </>
-  );
   return (
-    <ChatFunctionSurface
-      title="Limits"
-      collapsed={collapsed}
-      mode={mode}
-      actions={actions}
-      onToggleCollapsed={() => setCollapsed(value => !value)}
-    >
-      <div className="usage-feature-body">
-        {snapshot.providers.length === 0 ? (
-          <div className="usage-feature-empty">Waiting for Hub limits</div>
-        ) : detail ? (
-          <UsageDetailContent snapshot={snapshot} />
-        ) : (
-          <div className="usage-provider-list">
-            {compactAccounts.map(({provider, account}) => (
-              <AccountRail
-                key={`${provider.id}:${account.localId}:${account.hubIds.join(',')}`}
-                provider={provider}
-                account={account}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    </ChatFunctionSurface>
+    <div className="usage-provider-list">
+      {compactAccounts.map(({provider, account}) => (
+        <AccountRail
+          key={`${provider.id}:${account.localId}:${account.hubIds.join(',')}`}
+          provider={provider}
+          account={account}
+        />
+      ))}
+    </div>
   );
 }

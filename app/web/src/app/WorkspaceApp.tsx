@@ -356,10 +356,9 @@ import {
 import { installMobileViewportZoomGuard } from '../shell/layouts/mobile/mobileViewportZoomGuard';
 import { resolveLayoutMode } from '../shell/state/responsiveLayout';
 import {MobileUsageDialog} from '../usage/MobileUsageDialog';
-import {UsageFeatureSurface} from '../usage/UsageFeatureSurface';
+import {MonitorSurface} from '../usage/MonitorSurface';
 import {UsageStore, parseHubSnapshot} from '../usage/usageStore';
 import type {UsageViewSnapshot} from '../usage/usageTypes';
-import {ModelEfficiencySurface} from '../modelEfficiency/ModelEfficiencySurface';
 import {ModelEfficiencyStore} from '../modelEfficiency/modelEfficiencyStore';
 import type {ModelEfficiencySnapshot} from '../modelEfficiency/modelEfficiencyTypes';
 import {
@@ -2545,14 +2544,9 @@ export function App() {
       ? persistedGlobal.showLineNumbers
       : true,
   );
-  const [showLimitsMonitor, setShowLimitsMonitor] = useState(
-    typeof persistedGlobal.showLimitsMonitor === 'boolean'
-      ? persistedGlobal.showLimitsMonitor
-      : true,
-  );
-  const [showModelEfficiency, setShowModelEfficiency] = useState(
-    typeof persistedGlobal.showModelEfficiency === 'boolean'
-      ? persistedGlobal.showModelEfficiency
+  const [showMonitor, setShowMonitor] = useState(
+    typeof persistedGlobal.showMonitor === 'boolean'
+      ? persistedGlobal.showMonitor
       : true,
   );
   const [messageViewerEnabled, setMessageViewerEnabled] = useState(
@@ -5208,7 +5202,7 @@ export function App() {
     }
   }, [allVisibleProjectsLoaded, projectSessionsByProjectId]);
   const showFloatingSessionPanel = isWide && chatSidebarCollapsed && !archivedMode && !sessionSearchActive;
-  const showChatEdgeSurfaces = isWide && !archivedMode && (showFloatingSessionPanel || !!selectedChatPlan || showLimitsMonitor || showModelEfficiency);
+  const showChatEdgeSurfaces = isWide && !archivedMode && (showFloatingSessionPanel || !!selectedChatPlan || showMonitor);
   const chatMainClassName = isWide
     ? `chat-main chat-view-width-fixed-800${showChatEdgeSurfaces ? ' chat-view-width-fixed-800-edge-surfaces' : ''}`
     : 'chat-main';
@@ -6149,8 +6143,7 @@ export function App() {
       mobileEnterKeyBehavior,
       wrapLines,
       showLineNumbers,
-      showLimitsMonitor,
-      showModelEfficiency,
+      showMonitor,
       messageViewerEnabled,
       logLevel,
       promptCompletionNotificationsEnabled,
@@ -6176,8 +6169,7 @@ export function App() {
     mobileEnterKeyBehavior,
     wrapLines,
     showLineNumbers,
-    showLimitsMonitor,
-    showModelEfficiency,
+    showMonitor,
     messageViewerEnabled,
     logLevel,
     promptCompletionNotificationsEnabled,
@@ -16170,10 +16162,8 @@ export function App() {
         setSessionListDensity={setSessionListDensity}
         mobileEnterKeyBehavior={mobileEnterKeyBehavior}
         setMobileEnterKeyBehavior={setMobileEnterKeyBehavior}
-        showLimitsMonitor={showLimitsMonitor}
-        setShowLimitsMonitor={setShowLimitsMonitor}
-        showModelEfficiency={showModelEfficiency}
-        setShowModelEfficiency={setShowModelEfficiency}
+        showMonitor={showMonitor}
+        setShowMonitor={setShowMonitor}
         promptCompletionNotificationsEnabled={promptCompletionNotificationsEnabled}
         setPromptCompletionNotificationsEnabled={setPromptCompletionNotificationsEnabled}
         handlePromptCompletionNotificationsChange={handlePromptCompletionNotificationsChange}
@@ -18304,18 +18294,13 @@ export function App() {
                 mode="desktop"
                 plan={selectedChatPlan}
               />
-              {showLimitsMonitor ? (
-                <UsageFeatureSurface
-                  snapshot={usageSnapshot}
-                  onRefresh={() => { void refreshUsageAcrossHubs(); }}
-                  onRequestHide={() => setConfirmTarget({kind: 'hideLimitsMonitor'})}
-                />
-              ) : null}
-              {showModelEfficiency ? (
-                <ModelEfficiencySurface
-                  snapshot={modelEfficiencySnapshot}
-                  onRefresh={() => void modelEfficiencyStore.refresh()}
-                  onRequestHide={() => setConfirmTarget({kind: 'hideModelEfficiency'})}
+              {showMonitor ? (
+                <MonitorSurface
+                  usageSnapshot={usageSnapshot}
+                  efficiencySnapshot={modelEfficiencySnapshot}
+                  onRefreshLimits={() => { void refreshUsageAcrossHubs(); }}
+                  onRefreshIq={() => { void modelEfficiencyStore.refresh(); }}
+                  onRequestHide={() => setConfirmTarget({kind: 'hideMonitor'})}
                 />
               ) : null}
             </div>
@@ -19499,7 +19484,7 @@ export function App() {
               </button>
               {gestureNavigationExpanded ? (
                 <button
-                  key="limits"
+                  key="monitor"
                   type="button"
                   className="gesture-nav-button gesture-nav-capsule"
                   data-active={mobileUsageOpen}
@@ -19511,8 +19496,8 @@ export function App() {
                     setSidebarSettingsOpen(false);
                     setMobileUsageOpen(true);
                   }}
-                  title="Limits"
-                  aria-label="Limits"
+                  title="Monitor"
+                  aria-label="Monitor"
                   aria-pressed={mobileUsageOpen}
                 >
                   <span className="codicon codicon-dashboard" aria-hidden="true" />
@@ -20582,14 +20567,8 @@ export function App() {
     if (!confirmTarget) {
       return;
     }
-    if (confirmTarget.kind === 'hideLimitsMonitor') {
-      setShowLimitsMonitor(false);
-      setConfirmTarget(null);
-      setConfirmError('');
-      return;
-    }
-    if (confirmTarget.kind === 'hideModelEfficiency') {
-      setShowModelEfficiency(false);
+    if (confirmTarget.kind === 'hideMonitor') {
+      setShowMonitor(false);
       setConfirmTarget(null);
       setConfirmError('');
       return;

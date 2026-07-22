@@ -2,7 +2,8 @@ import React from 'react';
 import TestRenderer, {act} from 'react-test-renderer';
 import fs from 'fs';
 import path from 'path';
-import {UsageDetailContent, UsageFeatureSurface} from '../web/src/usage/UsageFeatureSurface';
+import {UsageCompactContent, UsageDetailContent} from '../web/src/usage/UsageFeatureSurface';
+import {MonitorSurface} from '../web/src/usage/MonitorSurface';
 import {MobileUsageDialog} from '../web/src/usage/MobileUsageDialog';
 import type {UsageViewSnapshot} from '../web/src/usage/usageTypes';
 import type {ModelEfficiencySnapshot} from '../web/src/modelEfficiency/modelEfficiencyTypes';
@@ -45,6 +46,122 @@ function renderedText(node: TestRenderer.ReactTestInstance): string {
   return node.children.map(child => typeof child === 'string' ? child : renderedText(child)).join('');
 }
 
+describe('MonitorSurface module', () => {
+  it('has a dedicated shared desktop surface', () => {
+    expect(fs.existsSync(path.join(
+      __dirname,
+      '..',
+      'web',
+      'src',
+      'usage',
+      'MonitorSurface.tsx',
+    ))).toBe(true);
+  });
+
+  it('shares one detail mode across the Limits and IQ tabs', () => {
+    let view: TestRenderer.ReactTestRenderer;
+    act(() => {
+      view = TestRenderer.create(
+        <MonitorSurface
+          usageSnapshot={fixtureSnapshot}
+          efficiencySnapshot={efficiencySnapshot}
+          onRefreshLimits={jest.fn()}
+          onRefreshIq={jest.fn()}
+          onRequestHide={jest.fn()}
+        />,
+      );
+    });
+
+    expect(view!.root.findByProps({'aria-label': 'Monitor'}).props['data-mode']).toBe('compact');
+    expect(view!.root.findByProps({role: 'tab', 'aria-label': 'Limits'}).props['aria-selected']).toBe(true);
+    expect(view!.root.findByProps({role: 'tab', 'aria-label': 'IQ'}).props['aria-selected']).toBe(false);
+    expect(view!.root.findAllByProps({'aria-label': 'Data from CodexRadar'})).toHaveLength(0);
+
+    act(() => view!.root.findByProps({'aria-label': 'Show monitor details'}).props.onClick());
+    act(() => view!.root.findByProps({role: 'tab', 'aria-label': 'IQ'}).props.onClick());
+    expect(view!.root.findByProps({'aria-label': 'Monitor'}).props['data-mode']).toBe('detail');
+    expect(view!.root.findByProps({'aria-label': 'Sol model efficiency'})).toBeDefined();
+  });
+
+  it('refreshes both data sources from one action', () => {
+    const onRefreshLimits = jest.fn();
+    const onRefreshIq = jest.fn();
+    let view: TestRenderer.ReactTestRenderer;
+    act(() => {
+      view = TestRenderer.create(
+        <MonitorSurface
+          usageSnapshot={fixtureSnapshot}
+          efficiencySnapshot={efficiencySnapshot}
+          onRefreshLimits={onRefreshLimits}
+          onRefreshIq={onRefreshIq}
+          onRequestHide={jest.fn()}
+        />,
+      );
+    });
+
+    act(() => view!.root.findByProps({'aria-label': 'Refresh monitor'}).props.onClick());
+    expect(onRefreshLimits).toHaveBeenCalledTimes(1);
+    expect(onRefreshIq).toHaveBeenCalledTimes(1);
+  });
+
+  it('spins when either source refreshes and disables only when both refresh', () => {
+    let view: TestRenderer.ReactTestRenderer;
+    act(() => {
+      view = TestRenderer.create(
+        <MonitorSurface
+          usageSnapshot={{...fixtureSnapshot, refreshing: true}}
+          efficiencySnapshot={efficiencySnapshot}
+          onRefreshLimits={jest.fn()}
+          onRefreshIq={jest.fn()}
+          onRequestHide={jest.fn()}
+        />,
+      );
+    });
+
+    let refresh = view!.root.findByProps({'aria-label': 'Refresh monitor'});
+    expect(refresh.props.disabled).toBe(false);
+    expect(refresh.findByProps({'aria-hidden': 'true'}).props.className).toContain('spinning');
+    expect(refresh.props.title).toContain('Limits: Hub cache');
+    expect(refresh.props.title).toContain('IQ: 2026-07-22 09:30 UTC');
+
+    act(() => view!.update(
+      <MonitorSurface
+        usageSnapshot={{...fixtureSnapshot, refreshing: true}}
+        efficiencySnapshot={{...efficiencySnapshot, refreshing: true}}
+        onRefreshLimits={jest.fn()}
+        onRefreshIq={jest.fn()}
+        onRequestHide={jest.fn()}
+      />,
+    ));
+    refresh = view!.root.findByProps({'aria-label': 'Refresh monitor'});
+    expect(refresh.props.disabled).toBe(true);
+  });
+
+  it('keeps tabs and shared actions available while collapsed', () => {
+    const onRequestHide = jest.fn();
+    let view: TestRenderer.ReactTestRenderer;
+    act(() => {
+      view = TestRenderer.create(
+        <MonitorSurface
+          usageSnapshot={fixtureSnapshot}
+          efficiencySnapshot={efficiencySnapshot}
+          onRefreshLimits={jest.fn()}
+          onRefreshIq={jest.fn()}
+          onRequestHide={onRequestHide}
+        />,
+      );
+    });
+
+    act(() => view!.root.findByProps({'aria-label': 'Collapse Monitor'}).props.onClick());
+    expect(view!.root.findAll(node => typeof node.props.className === 'string' && node.props.className.includes('monitor-body')))
+      .toHaveLength(0);
+    act(() => view!.root.findByProps({role: 'tab', 'aria-label': 'IQ'}).props.onClick());
+    expect(view!.root.findByProps({role: 'tab', 'aria-label': 'IQ'}).props['aria-selected']).toBe(true);
+    act(() => view!.root.findByProps({'aria-label': 'Hide monitor'}).props.onClick());
+    expect(onRequestHide).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('UsageFeatureSurface', () => {
   it('renders reusable account details without unavailable account noise', () => {
     const snapshot: UsageViewSnapshot = {
@@ -74,7 +191,7 @@ describe('UsageFeatureSurface', () => {
   it('renders two compact quota columns and a one-line balance', () => {
     let view: TestRenderer.ReactTestRenderer;
     act(() => {
-      view = TestRenderer.create(<UsageFeatureSurface snapshot={fixtureSnapshot} onRefresh={jest.fn()} onRequestHide={jest.fn()} />);
+      view = TestRenderer.create(<UsageCompactContent snapshot={fixtureSnapshot} />);
     });
     const codex = view!.root.findByProps({'data-usage-provider': 'codex'});
     const metrics = codex.findAllByProps({'data-usage-compact-limit': true});
@@ -105,7 +222,7 @@ describe('UsageFeatureSurface', () => {
     let view: TestRenderer.ReactTestRenderer;
     act(() => {
       view = TestRenderer.create(
-        <UsageFeatureSurface snapshot={snapshot} onRefresh={jest.fn()} onRequestHide={jest.fn()} />,
+        <UsageCompactContent snapshot={snapshot} />,
       );
     });
 
@@ -140,7 +257,7 @@ describe('UsageFeatureSurface', () => {
     let view: TestRenderer.ReactTestRenderer;
     act(() => {
       view = TestRenderer.create(
-        <UsageFeatureSurface snapshot={snapshot} onRefresh={jest.fn()} onRequestHide={jest.fn()} />,
+        <UsageCompactContent snapshot={snapshot} />,
       );
     });
 
@@ -171,7 +288,7 @@ describe('UsageFeatureSurface', () => {
     };
     let view: TestRenderer.ReactTestRenderer;
     act(() => {
-      view = TestRenderer.create(<UsageFeatureSurface snapshot={weeklyOnly} onRefresh={jest.fn()} onRequestHide={jest.fn()} />);
+      view = TestRenderer.create(<UsageCompactContent snapshot={weeklyOnly} />);
     });
 
     const metrics = view!.root.findAllByProps({'data-usage-compact-limit': true});
@@ -195,7 +312,7 @@ describe('UsageFeatureSurface', () => {
     };
     let view: TestRenderer.ReactTestRenderer;
     act(() => {
-      view = TestRenderer.create(<UsageFeatureSurface snapshot={flicker} onRefresh={jest.fn()} onRequestHide={jest.fn()} />);
+      view = TestRenderer.create(<UsageCompactContent snapshot={flicker} />);
     });
 
     const metrics = view!.root.findAllByProps({'data-usage-compact-limit': true});
@@ -203,44 +320,6 @@ describe('UsageFeatureSurface', () => {
     expect(renderedText(metrics[0])).toBe('--/--');
     expect(renderedText(metrics[1])).toContain('50% / 1M');
     expect(metrics[1].findByProps({'data-usage-rail-fill': true}).props.style.width).toBe('50.38%');
-  });
-
-  it('toggles detail mode in place and keeps refresh separate', () => {
-    const onRefresh = jest.fn();
-    let view: TestRenderer.ReactTestRenderer;
-    act(() => {
-      view = TestRenderer.create(<UsageFeatureSurface snapshot={fixtureSnapshot} onRefresh={onRefresh} onRequestHide={jest.fn()} />);
-    });
-    act(() => view!.root.findByProps({'aria-label': 'Show limit details'}).props.onClick());
-    expect(view!.root.findByProps({'data-mode': 'detail'})).toBeDefined();
-    const codexAccount = view!.root.findByProps({'data-usage-account': 'codex:acct-a'});
-    expect(renderedText(codexAccount)).toContain('Codex / a@example.com');
-    expect(codexAccount.findAllByProps({'data-usage-hub': true}).map(item => renderedText(item))).toEqual(['hub-a', 'hub-b']);
-    expect(codexAccount.findAllByProps({'data-usage-detail-limit': true})).toHaveLength(2);
-    expect(renderedText(codexAccount)).toContain('Reset');
-
-    const deepSeekAccount = view!.root.findByProps({'data-usage-account': 'deepseek:opencode'});
-    expect(renderedText(deepSeekAccount)).toContain('DeepSeek / Account');
-    expect(renderedText(deepSeekAccount)).not.toContain('OpenCode');
-    act(() => view!.root.findByProps({'aria-label': 'Refresh limits'}).props.onClick());
-    expect(onRefresh).toHaveBeenCalledTimes(1);
-  });
-
-  it('keeps freshness in the refresh tooltip without a desktop footer', () => {
-    let view: TestRenderer.ReactTestRenderer;
-    act(() => {
-      view = TestRenderer.create(
-        <UsageFeatureSurface
-          snapshot={fixtureSnapshot}
-          onRefresh={jest.fn()}
-          onRequestHide={jest.fn()}
-        />,
-      );
-    });
-
-    expect(view!.root.findAllByProps({className: 'usage-feature-footer'})).toHaveLength(0);
-    expect(view!.root.findByProps({'aria-label': 'Refresh limits'}).props.title)
-      .toBe('Refresh limits · Hub cache');
   });
 
   it('omits unauthenticated providers and accounts from detail mode', () => {
@@ -257,41 +336,12 @@ describe('UsageFeatureSurface', () => {
     };
     let view: TestRenderer.ReactTestRenderer;
     act(() => {
-      view = TestRenderer.create(<UsageFeatureSurface snapshot={unavailable} onRefresh={jest.fn()} onRequestHide={jest.fn()} />);
+      view = TestRenderer.create(<UsageDetailContent snapshot={unavailable} />);
     });
-    act(() => view!.root.findByProps({'aria-label': 'Show limit details'}).props.onClick());
 
     expect(renderedText(view!.root)).not.toContain('not authenticated');
     expect(renderedText(view!.root)).not.toContain('Not authenticated');
     expect(view!.root.findAllByProps({'data-usage-account': 'kimi:opencode'})).toHaveLength(0);
-  });
-
-  it('requests confirmation from the title-bar eye action', () => {
-    const onRequestHide = jest.fn();
-    let view: TestRenderer.ReactTestRenderer;
-    act(() => {
-      view = TestRenderer.create(
-        <UsageFeatureSurface snapshot={fixtureSnapshot} onRefresh={jest.fn()} onRequestHide={onRequestHide} />,
-      );
-    });
-
-    act(() => view!.root.findByProps({'aria-label': 'Hide limits monitor'}).props.onClick());
-    expect(onRequestHide).toHaveBeenCalledTimes(1);
-  });
-
-  it('uses the shared Limits header and collapses to the same title row', () => {
-    let view: TestRenderer.ReactTestRenderer;
-    act(() => {
-      view = TestRenderer.create(
-        <UsageFeatureSurface snapshot={fixtureSnapshot} onRefresh={jest.fn()} onRequestHide={jest.fn()} />,
-      );
-    });
-
-    expect(view!.root.findByProps({className: 'chat-edge-surface-title'}).children).toEqual(['Limits']);
-    act(() => view!.root.findByProps({'aria-label': 'Collapse Limits'}).props.onClick());
-    expect(view!.root.findAllByProps({className: 'usage-feature-body'})).toHaveLength(0);
-    const expand = view!.root.findByProps({'aria-label': 'Expand Limits'});
-    expect(expand.findByProps({'aria-hidden': 'true'}).props.className).toContain('codicon-chevron-right');
   });
 
   it('renders mobile details and handles refresh, card, backdrop, and close actions', () => {
@@ -314,21 +364,24 @@ describe('UsageFeatureSurface', () => {
     const overlay = view!.root.findByProps({'data-mobile-usage-overlay': true});
     expect(overlay.props.role).toBe('dialog');
     expect(overlay.props['aria-modal']).toBe('true');
-    expect(overlay.props['aria-label']).toBe('Limits');
+    expect(overlay.props['aria-label']).toBe('Monitor');
+    const header = view!.root.findByProps({className: 'usage-mobile-header'});
+    expect(renderedText(header.findByProps({className: 'usage-mobile-title'}))).toBe('Monitor');
+    expect(header.findByProps({role: 'tablist', 'aria-label': 'Usage views'})).toBeDefined();
     expect(view!.root.findByProps({'data-usage-account': 'codex:acct-a'})).toBeDefined();
     expect(view!.root.findByProps({role: 'tab', 'aria-label': 'Limits'}).props['aria-selected']).toBe(true);
 
-    act(() => view!.root.findByProps({'aria-label': 'Refresh limits'}).props.onClick());
+    act(() => view!.root.findByProps({'aria-label': 'Refresh monitor'}).props.onClick());
     expect(onRefresh).toHaveBeenCalledTimes(1);
-    expect(onRefreshEfficiency).not.toHaveBeenCalled();
+    expect(onRefreshEfficiency).toHaveBeenCalledTimes(1);
 
-    act(() => view!.root.findByProps({role: 'tab', 'aria-label': 'Model efficiency'}).props.onClick());
-    expect(view!.root.findByProps({role: 'tab', 'aria-label': 'Model efficiency'}).props['aria-selected']).toBe(true);
+    act(() => view!.root.findByProps({role: 'tab', 'aria-label': 'IQ'}).props.onClick());
+    expect(view!.root.findByProps({role: 'tab', 'aria-label': 'IQ'}).props['aria-selected']).toBe(true);
     expect(view!.root.findByProps({'aria-label': 'Sol model efficiency'})).toBeDefined();
     expect(view!.root.findAllByProps({'data-usage-account': 'codex:acct-a'})).toHaveLength(0);
-    act(() => view!.root.findByProps({'aria-label': 'Refresh model efficiency'}).props.onClick());
-    expect(onRefreshEfficiency).toHaveBeenCalledTimes(1);
-    expect(renderedText(view!.root)).toContain('Data from CodexRadar');
+    expect(view!.root.findAllByProps({className: 'usage-mobile-footer'})).toHaveLength(0);
+    expect(renderedText(view!.root)).not.toContain('Data from CodexRadar');
+    expect(view!.root.findAllByProps({'aria-label': 'Show monitor details'})).toHaveLength(0);
 
     const stopPropagation = jest.fn();
     act(() => view!.root.findByProps({'data-mobile-usage-card': true}).props.onPointerDown({stopPropagation}));
@@ -336,11 +389,11 @@ describe('UsageFeatureSurface', () => {
     expect(onClose).not.toHaveBeenCalled();
 
     act(() => overlay.props.onPointerDown());
-    act(() => view!.root.findByProps({'aria-label': 'Close limits'}).props.onClick());
+    act(() => view!.root.findByProps({'aria-label': 'Close monitor'}).props.onClick());
     expect(onClose).toHaveBeenCalledTimes(2);
   });
 
-  it('disables and animates mobile refresh while a scan is active', () => {
+  it('keeps mobile refresh available while only one source is active', () => {
     let view: TestRenderer.ReactTestRenderer;
     act(() => {
       view = TestRenderer.create(
@@ -354,36 +407,33 @@ describe('UsageFeatureSurface', () => {
       );
     });
 
-    const refresh = view!.root.findByProps({'aria-label': 'Refresh limits'});
-    expect(refresh.props.disabled).toBe(true);
+    const refresh = view!.root.findByProps({'aria-label': 'Refresh monitor'});
+    expect(refresh.props.disabled).toBe(false);
     expect(refresh.findByProps({'aria-hidden': 'true'}).props.className).toContain('spinning');
-    expect(renderedText(view!.root)).toContain('Refreshing…');
+    expect(renderedText(view!.root)).not.toContain('Refreshing…');
   });
 
-  it('routes mobile loading and refresh state to the active Model efficiency tab', () => {
-    const onRefreshEfficiency = jest.fn();
+  it('disables mobile refresh only while both sources refresh', () => {
     let view: TestRenderer.ReactTestRenderer;
     act(() => {
       view = TestRenderer.create(
         <MobileUsageDialog
-          snapshot={fixtureSnapshot}
+          snapshot={{...fixtureSnapshot, refreshing: true}}
           efficiencySnapshot={{...efficiencySnapshot, refreshing: true}}
           onRefresh={jest.fn()}
-          onRefreshEfficiency={onRefreshEfficiency}
+          onRefreshEfficiency={jest.fn()}
           onClose={jest.fn()}
         />,
       );
     });
 
-    expect(view!.root.findByProps({'aria-label': 'Refresh limits'}).props.disabled).toBe(false);
-    act(() => view!.root.findByProps({role: 'tab', 'aria-label': 'Model efficiency'}).props.onClick());
-    const refresh = view!.root.findByProps({'aria-label': 'Refresh model efficiency'});
+    const refresh = view!.root.findByProps({'aria-label': 'Refresh monitor'});
     expect(refresh.props.disabled).toBe(true);
     expect(refresh.findByProps({'aria-hidden': 'true'}).props.className).toContain('spinning');
-    expect(renderedText(view!.root)).toContain('Refreshing…');
+    expect(view!.root.findByProps({role: 'tab', 'aria-label': 'Limits'}).props['aria-selected']).toBe(true);
   });
 
-  it('uses a safe-area-aware full-screen mobile limits card', () => {
+  it('uses a safe-area-aware full-screen mobile Monitor card', () => {
     const projectRoot = path.join(__dirname, '..');
     const usageStyles = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles', 'usage.css'), 'utf8').replace(/\r\n/g, '\n');
     const overlayRule = usageStyles.match(/\.usage-mobile-overlay \{([\s\S]*?)\n\}/)?.[1] ?? '';
@@ -415,7 +465,7 @@ describe('UsageFeatureSurface', () => {
     act(() => {
       view = TestRenderer.create(
         <AppConfirmDialog
-          target={{kind: 'hideLimitsMonitor'} as ConfirmTarget}
+          target={{kind: 'hideMonitor'} as ConfirmTarget}
           busy={false}
           error=""
           onCancel={jest.fn()}
@@ -425,7 +475,7 @@ describe('UsageFeatureSurface', () => {
     });
 
     const text = renderedText(view!.root);
-    expect(text).toContain('Hide limits monitor?');
+    expect(text).toContain('Hide monitor?');
     expect(text).toContain('Settings > Chat');
     const primary = view!.root.findAllByType('button').find(button => renderedText(button).includes('Hide'));
     expect(primary).toBeDefined();

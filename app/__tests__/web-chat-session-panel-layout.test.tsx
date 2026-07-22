@@ -164,7 +164,7 @@ describe('PC chat session-panel layout', () => {
     expect(recentSectionRule).toContain('background: transparent;');
   });
 
-  it('gives expanded Sessions, Plan, and Limits cards the same width and radius', () => {
+  it('gives expanded Sessions, Plan, and Monitor cards the same width and radius', () => {
     const stackItemRule = cssRuleBlock(
       chatStyles,
       '.chat-edge-surface-stack > .chat-recent-sessions-surface.desktop,\n.chat-edge-surface-stack > .chat-plan-surface.desktop,\n.chat-edge-surface-stack > .chat-function-surface.desktop',

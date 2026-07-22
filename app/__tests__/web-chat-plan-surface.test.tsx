@@ -32,7 +32,7 @@ function planSnapshot(): ChatPlanSnapshot {
 }
 
 describe('ChatPlanSurface', () => {
-  test('renders Recent Sessions, Plan, and Limits in one desktop-only left stack', () => {
+  test('renders Recent Sessions, Plan, and Monitor in one desktop-only left stack', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainSource = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const stackStart = mainSource.indexOf('chat-edge-surface-stack');
@@ -44,9 +44,9 @@ describe('ChatPlanSurface', () => {
       stackSource.indexOf('<ChatPlanSurface'),
     );
     expect(stackSource.indexOf('<ChatPlanSurface')).toBeLessThan(
-      stackSource.indexOf('<UsageFeatureSurface'),
+      stackSource.indexOf('<MonitorSurface'),
     );
-    expect(stackSource).toContain("showLimitsMonitor ? (");
+    expect(stackSource).toContain("showMonitor ? (");
     expect(mainSource).toContain('isWide ? (');
   });
 

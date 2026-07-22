@@ -38,6 +38,70 @@
 .chat-function-action:disabled { opacity: .52; cursor: default; }
 .chat-function-action .spinning { animation: usage-spin .9s linear infinite; }
 
+.monitor-toolbar {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.monitor-tabs {
+  display: grid;
+  min-width: 84px;
+  height: 24px;
+  padding: 2px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 62%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface-raised) 34%, transparent);
+}
+
+.monitor-tabs button {
+  min-width: 0;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 9px;
+  font-weight: 620;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease, transform 120ms ease;
+}
+
+.monitor-tabs button:hover {
+  color: var(--text-primary);
+}
+
+.monitor-tabs button:active {
+  transform: translateY(1px);
+}
+
+.monitor-tabs button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-primary) 52%, transparent);
+  outline-offset: 1px;
+}
+
+.monitor-tabs button[aria-selected='true'] {
+  background: color-mix(in srgb, var(--surface-panel) 76%, var(--accent-primary) 7%);
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--surface-root) 38%, transparent);
+}
+
+.monitor-actions {
+  display: inline-flex;
+  margin-left: auto;
+  align-items: center;
+  gap: 2px;
+}
+
+.monitor-body {
+  max-height: calc(var(--usage-surface-max-height) - 36px);
+  overflow: auto;
+}
+
 .usage-feature-body { overflow: auto; max-height: calc(var(--usage-surface-max-height) - 36px); }
 .usage-provider-list { padding: 5px 8px 4px; }
 .usage-provider-row { display: grid; grid-template-columns: minmax(84px, 110px) minmax(0, 1fr); align-items: center; column-gap: 10px; min-height: 38px; padding: 3px 4px; }
@@ -142,17 +206,18 @@
 
 .usage-mobile-tabs {
   display: grid;
+  width: min(180px, 42vw);
+  min-width: 108px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin: 9px 10px 0;
   padding: 3px;
-  flex: 0 0 auto;
+  flex: 0 1 180px;
   gap: 3px;
   border-radius: 9px;
   background: color-mix(in srgb, var(--surface-raised) 58%, transparent);
 }
 
 .usage-mobile-tabs button {
-  min-height: 32px;
+  min-height: 28px;
   padding: 0 8px;
   border: 0;
   border-radius: 7px;
@@ -173,22 +238,6 @@
 .usage-mobile-body .usage-detail-list { padding: 10px; gap: 8px; }
 .usage-mobile-body .usage-account-card { padding: 10px 11px 9px; border-radius: 10px; }
 .usage-mobile-body .usage-limit-line { min-height: 30px; }
-.usage-mobile-footer {
-  display: flex;
-  min-height: 34px;
-  padding: 0 14px;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 58%, transparent);
-  color: var(--text-secondary);
-  font-size: 9px;
-  letter-spacing: .02em;
-}
-.usage-mobile-footer a { color: inherit; text-decoration: none; }
-.usage-mobile-footer a:active { color: var(--text-primary); }
-
 @keyframes usage-spin { to { transform: rotate(360deg); } }
 
 @media (prefers-reduced-motion: reduce) {

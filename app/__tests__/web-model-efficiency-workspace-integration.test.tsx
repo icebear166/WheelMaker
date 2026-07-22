@@ -17,31 +17,27 @@ describe('model efficiency workspace integration', () => {
   const dialogs = fs.readFileSync(path.join(root, 'web', 'src', 'shell', 'AppDialogs.tsx'), 'utf8');
   const store = fs.readFileSync(path.join(root, 'web', 'src', 'modelEfficiency', 'modelEfficiencyStore.ts'), 'utf8');
   const model = fs.readFileSync(path.join(root, 'web', 'src', 'modelEfficiency', 'modelEfficiencyModel.ts'), 'utf8');
+  const usageSurface = fs.readFileSync(path.join(root, 'web', 'src', 'usage', 'UsageFeatureSurface.tsx'), 'utf8');
 
-  test('defaults the independent Chat setting on and persists boolean changes', () => {
-    expect(persistence).toContain('showModelEfficiency: boolean;');
-    expect(persistence).toContain("showModelEfficiency: 'showModelEfficiency',");
-    expect(persistence).toContain('showModelEfficiency: true,');
+  test('uses the shared Monitor preference without an independent IQ setting', () => {
+    expect(persistence).toContain('showMonitor: boolean;');
+    expect(persistence).not.toContain('showModelEfficiency: boolean;');
     expect(persistence).toContain(
-      "showModelEfficiency: typeof input.showModelEfficiency === 'boolean' ? input.showModelEfficiency : base.showModelEfficiency",
-    );
-    expect(persistence).toContain(
-      '{k: GLOBAL_KEYS.showModelEfficiency, v: serialize(this.state.global.showModelEfficiency), updatedAt}',
+      '{k: GLOBAL_KEYS.showMonitor, v: serialize(this.state.global.showMonitor), updatedAt}',
     );
 
     const chatStart = settings.indexOf("renderSettingsSection({id: 'chat'");
     const connectionStart = settings.indexOf("renderSettingsSection({id: 'connection'");
     const chatSection = settings.slice(chatStart, connectionStart);
-    expect(chatSection).toContain('Show Model Efficiency');
-    expect(chatSection).toContain('checked={showModelEfficiency}');
-    expect(chatSection).toContain('setShowModelEfficiency(e.target.checked)');
+    expect(chatSection).toContain('Show Monitor');
+    expect(chatSection).not.toContain('Show Model Efficiency');
 
     expect(main).toMatch(
-      /typeof persistedGlobal\.showModelEfficiency === 'boolean'\r?\n\s*\? persistedGlobal\.showModelEfficiency\r?\n\s*: true/,
+      /typeof persistedGlobal\.showMonitor === 'boolean'\r?\n\s*\? persistedGlobal\.showMonitor\r?\n\s*: true/,
     );
-    expect(main).toContain('showModelEfficiency={showModelEfficiency}');
-    expect(main).toContain('setShowModelEfficiency={setShowModelEfficiency}');
-    expect(main).toContain('showModelEfficiency,');
+    expect(main).toContain('showMonitor={showMonitor}');
+    expect(main).toContain('setShowMonitor={setShowMonitor}');
+    expect(main).not.toContain('showModelEfficiency={showModelEfficiency}');
   });
 
   test('creates one frontend store, subscribes once, and performs only startup/manual refreshes', () => {
@@ -57,21 +53,34 @@ describe('model efficiency workspace integration', () => {
     expect(model).not.toContain('selectedModel');
   });
 
-  test('mounts the desktop card directly below Limits in the shared edge stack', () => {
-    expect(main).toContain("import {ModelEfficiencySurface} from '../modelEfficiency/ModelEfficiencySurface';");
-    expect(main).toContain('showModelEfficiency ? (');
-    expect(main).toContain('<ModelEfficiencySurface');
-    expect(main).toContain('snapshot={modelEfficiencySnapshot}');
-    expect(main).toContain('onRefresh={() => void modelEfficiencyStore.refresh()}');
+  test('mounts IQ inside the shared desktop Monitor card', () => {
+    expect(main).toContain("import {MonitorSurface} from '../usage/MonitorSurface';");
+    expect(main).not.toContain("import {ModelEfficiencySurface} from '../modelEfficiency/ModelEfficiencySurface';");
+    expect(main).toContain('showMonitor ? (');
+    expect(main).toContain('<MonitorSurface');
+    expect(main).toContain('efficiencySnapshot={modelEfficiencySnapshot}');
+    expect(main).toContain('onRefreshIq={() => { void modelEfficiencyStore.refresh(); }}');
 
     const edgeVisibilityLine = main.split(/\r?\n/).find(line => line.includes('const showChatEdgeSurfaces')) ?? '';
-    expect(edgeVisibilityLine).toContain('showModelEfficiency');
+    expect(edgeVisibilityLine).toContain('showMonitor');
 
     const stackStart = main.indexOf('className={`chat-edge-surface-stack');
     const stackEnd = main.indexOf('{isWide && chatSidebarCollapsed', stackStart);
     const leftStack = stackStart >= 0 && stackEnd >= 0 ? main.slice(stackStart, stackEnd) : '';
-    expect(leftStack).toContain('ModelEfficiencySurface');
-    expect(leftStack.indexOf('UsageFeatureSurface')).toBeLessThan(leftStack.indexOf('ModelEfficiencySurface'));
+    expect(leftStack).toContain('MonitorSurface');
+    expect(leftStack).not.toContain('UsageFeatureSurface');
+    expect(leftStack).not.toContain('ModelEfficiencySurface');
+  });
+
+  test('removes the obsolete independent desktop card shells', () => {
+    expect(fs.existsSync(path.join(
+      root,
+      'web',
+      'src',
+      'modelEfficiency',
+      'ModelEfficiencySurface.tsx',
+    ))).toBe(false);
+    expect(usageSurface).not.toContain('export function UsageFeatureSurface');
   });
 
   test('passes the same snapshot and manual refresh into the existing mobile dialog', () => {
@@ -86,18 +95,18 @@ describe('model efficiency workspace integration', () => {
   });
 
   test('routes hiding through the shared confirmation dialog and Settings recovery copy', () => {
-    expect(dialogs).toContain("| {kind: 'hideModelEfficiency'}");
-    expect(dialogs).toContain("if (target.kind === 'hideModelEfficiency') return 'Hide model efficiency?';");
-    expect(dialogs).toContain("if (target.kind === 'hideModelEfficiency') return 'Hide';");
-    expect(main).toContain("onRequestHide={() => setConfirmTarget({kind: 'hideModelEfficiency'})}");
-    expect(main).toContain("if (confirmTarget.kind === 'hideModelEfficiency') {");
-    expect(main).toContain('setShowModelEfficiency(false);');
+    expect(dialogs).toContain("| {kind: 'hideMonitor'}");
+    expect(dialogs).toContain("if (target.kind === 'hideMonitor') return 'Hide monitor?';");
+    expect(dialogs).toContain("if (target.kind === 'hideMonitor') return 'Hide';");
+    expect(main).toContain("onRequestHide={() => setConfirmTarget({kind: 'hideMonitor'})}");
+    expect(main).toContain("if (confirmTarget.kind === 'hideMonitor') {");
+    expect(main).toContain('setShowMonitor(false);');
 
     let view: TestRenderer.ReactTestRenderer;
     act(() => {
       view = TestRenderer.create(
         <AppConfirmDialog
-          target={{kind: 'hideModelEfficiency'} as ConfirmTarget}
+          target={{kind: 'hideMonitor'} as ConfirmTarget}
           busy={false}
           error=""
           onCancel={jest.fn()}

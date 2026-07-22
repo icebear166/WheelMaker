@@ -10,7 +10,8 @@ export type ChatFunctionSurfaceProps = {
   title: string;
   collapsed: boolean;
   mode: 'compact' | 'detail';
-  actions: React.ReactNode;
+  actions?: React.ReactNode;
+  toolbar?: React.ReactNode;
   onToggleCollapsed: () => void;
   children: React.ReactNode;
   side?: ChatEdgeSurfaceSide;
@@ -22,6 +23,7 @@ export function ChatFunctionSurface({
   collapsed,
   mode,
   actions,
+  toolbar,
   onToggleCollapsed,
   children,
   side = 'left',
@@ -43,6 +45,7 @@ export function ChatFunctionSurface({
           collapsed={collapsed}
           onToggleCollapsed={onToggleCollapsed}
           actions={actions}
+          toolbar={toolbar}
         />
         {collapsed ? null : children}
       </div>

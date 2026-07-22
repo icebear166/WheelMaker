@@ -7,11 +7,7 @@ import {
   ModelEfficiencyDetailContent,
   ModelEfficiencySimpleContent,
 } from '../web/src/modelEfficiency/ModelEfficiencyContent';
-import {ModelEfficiencySurface} from '../web/src/modelEfficiency/ModelEfficiencySurface';
-import type {
-  ModelEfficiencyItem,
-  ModelEfficiencySnapshot,
-} from '../web/src/modelEfficiency/modelEfficiencyTypes';
+import type {ModelEfficiencyItem} from '../web/src/modelEfficiency/modelEfficiencyTypes';
 
 const items: ModelEfficiencyItem[] = [
   {family: 'gpt-5.6-sol', effort: 'max', score: 142, averageCostUsd: 3.2, averageTaskSeconds: 410},
@@ -26,13 +22,6 @@ const items: ModelEfficiencyItem[] = [
   {family: 'gpt-5.6-luna', effort: 'high', score: 120},
   {family: 'gpt-5.6-luna', effort: 'low', score: 104, averageCostUsd: 0.2, averageTaskSeconds: 80},
 ];
-
-const snapshot: ModelEfficiencySnapshot = {
-  status: 'ready',
-  refreshing: false,
-  items,
-  updatedAt: '2026-07-22T09:30:00Z',
-};
 
 function renderedText(node: TestRenderer.ReactTestInstance): string {
   return node.children.map(child => typeof child === 'string' ? child : renderedText(child)).join('');
@@ -112,89 +101,7 @@ describe('ModelEfficiencyContent', () => {
   });
 });
 
-describe('ModelEfficiencySurface', () => {
-  test('defaults to Simple and toggles Detail, refresh, hide, and collapse independently', () => {
-    const onRefresh = jest.fn();
-    const onRequestHide = jest.fn();
-    let view: TestRenderer.ReactTestRenderer;
-    act(() => {
-      view = TestRenderer.create(
-        <ModelEfficiencySurface
-          snapshot={snapshot}
-          onRefresh={onRefresh}
-          onRequestHide={onRequestHide}
-        />,
-      );
-    });
-
-    const surface = view!.root.findByProps({'aria-label': 'Model efficiency'});
-    expect(surface.props['data-mode']).toBe('compact');
-    expect(surface.props['data-side']).toBe('left');
-    expect(surface.props.className).toContain('model-efficiency-surface');
-    expect(view!.root.findByProps({'aria-label': 'Model efficiency top scores'})).toBeDefined();
-
-    const modeButton = view!.root.findByProps({'aria-label': 'Show model efficiency details'});
-    expect(modeButton.findByProps({'aria-hidden': 'true'}).props.className).toContain('codicon-layout');
-    act(() => modeButton.props.onClick());
-    expect(view!.root.findByProps({'aria-label': 'Model efficiency'}).props['data-mode']).toBe('detail');
-    expect(view!.root.findByProps({'aria-label': 'Sol model efficiency'})).toBeDefined();
-    expect(view!.root.findByProps({'aria-label': 'Hide model efficiency details'})
-      .findByProps({'aria-hidden': 'true'}).props.className).toContain('codicon-list-flat');
-
-    act(() => view!.root.findByProps({'aria-label': 'Refresh model efficiency'}).props.onClick());
-    act(() => view!.root.findByProps({'aria-label': 'Hide model efficiency'}).props.onClick());
-    expect(onRefresh).toHaveBeenCalledTimes(1);
-    expect(onRequestHide).toHaveBeenCalledTimes(1);
-
-    act(() => view!.root.findByProps({'aria-label': 'Collapse Model efficiency'}).props.onClick());
-    expect(view!.root.findAllByProps({className: 'model-efficiency-body'})).toHaveLength(0);
-  });
-
-  test('shows errors while keeping source time and attribution in header actions', () => {
-    const onRefresh = jest.fn();
-    let view: TestRenderer.ReactTestRenderer;
-    act(() => {
-      view = TestRenderer.create(
-        <ModelEfficiencySurface
-          snapshot={{status: 'loading', refreshing: true, items: []}}
-          onRefresh={onRefresh}
-          onRequestHide={jest.fn()}
-        />,
-      );
-    });
-    expect(renderedText(view!.root)).toContain('Loading CodexRadar data…');
-    expect(view!.root.findByProps({'aria-label': 'Refresh model efficiency'}).props.disabled).toBe(true);
-
-    act(() => view!.update(
-      <ModelEfficiencySurface
-        snapshot={{status: 'error', refreshing: false, items: [], error: 'Network offline'}}
-        onRefresh={onRefresh}
-        onRequestHide={jest.fn()}
-      />,
-    ));
-    expect(renderedText(view!.root)).toContain('Network offline');
-    act(() => view!.root.findByProps({'aria-label': 'Retry model efficiency'}).props.onClick());
-    expect(onRefresh).toHaveBeenCalledTimes(1);
-
-    act(() => view!.update(
-      <ModelEfficiencySurface
-        snapshot={{...snapshot, error: 'Latest refresh failed'}}
-        onRefresh={onRefresh}
-        onRequestHide={jest.fn()}
-      />,
-    ));
-    expect(renderedText(view!.root)).toContain('Latest refresh failed');
-    expect(view!.root.findAllByProps({className: 'model-efficiency-footer'})).toHaveLength(0);
-    expect(view!.root.findByProps({'aria-label': 'Refresh model efficiency'}).props.title)
-      .toBe('Refresh model efficiency · Updated 2026-07-22 09:30 UTC');
-    const source = view!.root.findByProps({'aria-label': 'Data from CodexRadar'});
-    expect(source.type).toBe('a');
-    expect(source.props.href).toBe('https://codexradar.com/');
-    expect(source.props.target).toBe('_blank');
-    expect(source.findByProps({'aria-hidden': 'true'}).props.className)
-      .toContain('codicon-link-external');
-  });
-
+describe('ModelEfficiency styling', () => {
   test('uses compact source-inspired score cards without right-edge positioning', () => {
     const projectRoot = path.join(__dirname, '..');
     const styles = fs.readFileSync(
@@ -202,14 +109,11 @@ describe('ModelEfficiencySurface', () => {
       'utf8',
     ).replace(/\r\n/g, '\n');
 
-    const surfaceRule = styles.match(/\.model-efficiency-surface\.desktop \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const recommendationRule = styles.match(/\.model-efficiency-recommendation \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const familyRule = styles.match(/\.model-efficiency-family-row \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const modelNameRule = styles.match(/\.model-efficiency-model-name \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const scoreRule = styles.match(/\.model-efficiency-score \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const metaRule = styles.match(/\.model-efficiency-meta span \{([\s\S]*?)\n\}/)?.[1] ?? '';
-    expect(surfaceRule).not.toContain('position: absolute;');
-    expect(surfaceRule).not.toContain('right: 0;');
     expect(recommendationRule).toContain('grid-template-areas:');
     expect(recommendationRule).toContain('grid-template-rows: 18px 31px;');
     expect(recommendationRule).toContain('grid-template-columns: minmax(0, 1fr) 46px;');
