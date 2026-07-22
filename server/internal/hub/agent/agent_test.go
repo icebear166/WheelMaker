@@ -4174,6 +4174,53 @@ func TestListSkillsForPreset_NestedSkillNameUsesLeafDirectoryName(t *testing.T) 
 		t.Fatalf("skill name = %q, want %q", skills[0].Name, "B")
 	}
 }
+
+func TestListSkillsForPreset_LinkedUserRoot(t *testing.T) {
+	targetRoot := filepath.Join(t.TempDir(), "skills-target")
+	skillDir := filepath.Join(targetRoot, "linked-skill")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	skillFile := filepath.Join(skillDir, "SKILL.md")
+	if err := os.WriteFile(skillFile, []byte("---\nname: linked-skill\n---\ncontent"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	linkRoot := filepath.Join(t.TempDir(), "skills")
+	createAgentSkillDirLink(t, targetRoot, linkRoot)
+
+	skills, err := listSkillsForPreset(context.Background(), ACPProviderPreset{
+		SkillUserDirs: []string{linkRoot},
+	}, "")
+	if err != nil {
+		t.Fatalf("listSkillsForPreset: %v", err)
+	}
+	if len(skills) != 1 {
+		t.Fatalf("skills len = %d, want 1", len(skills))
+	}
+	if skills[0].Name != "linked-skill" {
+		t.Fatalf("skill name = %q, want %q", skills[0].Name, "linked-skill")
+	}
+	wantPath := filepath.Join(linkRoot, "linked-skill", "SKILL.md")
+	if skills[0].Path != wantPath {
+		t.Fatalf("skill path = %q, want logical path %q", skills[0].Path, wantPath)
+	}
+}
+
+func createAgentSkillDirLink(t *testing.T, target, link string) {
+	t.Helper()
+	if os.PathSeparator == '\\' {
+		output, err := exec.Command("cmd", "/c", "mklink", "/J", link, target).CombinedOutput()
+		if err != nil {
+			t.Skipf("unable to create junction: %v (%s)", err, strings.TrimSpace(string(output)))
+		}
+		return
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("unable to create directory symlink: %v", err)
+	}
+}
+
 func TestInstanceListSkills_UnknownProvider(t *testing.T) {
 	inst := NewInstance("unknown-agent", nil)
 	_, err := inst.ListSkills(context.Background(), t.TempDir())

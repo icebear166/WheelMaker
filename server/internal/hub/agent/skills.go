@@ -210,7 +210,7 @@ func walkSkillRoot(root string, emit func(skill SkillDescriptor)) error {
 		return nil
 	}
 
-	return filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
+	visit := func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			if d != nil && d.IsDir() {
 				return filepath.SkipDir
@@ -233,7 +233,16 @@ func walkSkillRoot(root string, emit func(skill SkillDescriptor)) error {
 		}
 		emit(SkillDescriptor{Name: name, Path: abs})
 		return nil
-	})
+	}
+
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil
+	}
+	for _, entry := range entries {
+		_ = filepath.WalkDir(filepath.Join(root, entry.Name()), visit)
+	}
+	return nil
 }
 
 func skillNameFromRelativePath(root, skillFile string) string {
