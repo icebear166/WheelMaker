@@ -149,7 +149,7 @@ describe('ModelEfficiencySurface', () => {
     expect(view!.root.findAllByProps({className: 'model-efficiency-body'})).toHaveLength(0);
   });
 
-  test('shows loading, first-load error, stale error, source time, and attribution', () => {
+  test('shows errors while keeping source time and attribution in header actions', () => {
     const onRefresh = jest.fn();
     let view: TestRenderer.ReactTestRenderer;
     act(() => {
@@ -183,11 +183,15 @@ describe('ModelEfficiencySurface', () => {
       />,
     ));
     expect(renderedText(view!.root)).toContain('Latest refresh failed');
-    expect(renderedText(view!.root)).toContain('Updated 2026-07-22 09:30 UTC');
-    const source = view!.root.findByType('a');
-    expect(renderedText(source)).toBe('Data from CodexRadar');
+    expect(view!.root.findAllByProps({className: 'model-efficiency-footer'})).toHaveLength(0);
+    expect(view!.root.findByProps({'aria-label': 'Refresh model efficiency'}).props.title)
+      .toBe('Refresh model efficiency · Updated 2026-07-22 09:30 UTC');
+    const source = view!.root.findByProps({'aria-label': 'Data from CodexRadar'});
+    expect(source.type).toBe('a');
     expect(source.props.href).toBe('https://codexradar.com/');
     expect(source.props.target).toBe('_blank');
+    expect(source.findByProps({'aria-hidden': 'true'}).props.className)
+      .toContain('codicon-link-external');
   });
 
   test('uses compact source-inspired score cards without right-edge positioning', () => {

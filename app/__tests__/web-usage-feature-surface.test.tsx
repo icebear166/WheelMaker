@@ -226,6 +226,23 @@ describe('UsageFeatureSurface', () => {
     expect(onRefresh).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps freshness in the refresh tooltip without a desktop footer', () => {
+    let view: TestRenderer.ReactTestRenderer;
+    act(() => {
+      view = TestRenderer.create(
+        <UsageFeatureSurface
+          snapshot={fixtureSnapshot}
+          onRefresh={jest.fn()}
+          onRequestHide={jest.fn()}
+        />,
+      );
+    });
+
+    expect(view!.root.findAllByProps({className: 'usage-feature-footer'})).toHaveLength(0);
+    expect(view!.root.findByProps({'aria-label': 'Refresh limits'}).props.title)
+      .toBe('Refresh limits · Hub cache');
+  });
+
   it('omits unauthenticated providers and accounts from detail mode', () => {
     const unavailable: UsageViewSnapshot = {
       ...fixtureSnapshot,

@@ -159,6 +159,7 @@ export function UsageFeatureSurface({snapshot, onRefresh, onRequestHide}: Props)
       .filter(account => account.status === 'ok')
       .map(account => ({provider, account})),
   );
+  const freshness = formatUpdatedAgo(snapshot.updatedAt) || 'Hub cache';
   const actions = (
     <>
       <button
@@ -183,7 +184,7 @@ export function UsageFeatureSurface({snapshot, onRefresh, onRequestHide}: Props)
         type="button"
         className="chat-function-action"
         aria-label="Refresh limits"
-        title="Refresh limits"
+        title={snapshot.refreshing ? 'Refreshing limits' : `Refresh limits · ${freshness}`}
         disabled={snapshot.refreshing}
         onClick={onRefresh}
       >
@@ -215,10 +216,6 @@ export function UsageFeatureSurface({snapshot, onRefresh, onRequestHide}: Props)
             ))}
           </div>
         )}
-        <footer className="usage-feature-footer">
-          <span>{snapshot.refreshing ? 'Refreshing…' : formatUpdatedAgo(snapshot.updatedAt) || 'Hub cache'}</span>
-          <span>10 min cadence</span>
-        </footer>
       </div>
     </ChatFunctionSurface>
   );

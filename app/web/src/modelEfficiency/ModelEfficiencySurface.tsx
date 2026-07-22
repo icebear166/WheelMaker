@@ -17,9 +17,20 @@ export function ModelEfficiencySurface({snapshot, onRefresh, onRequestHide}: Pro
   const [collapsed, setCollapsed] = React.useState(false);
   const [detail, setDetail] = React.useState(false);
   const mode = detail ? 'detail' : 'compact';
+  const freshness = formatModelEfficiencyUpdatedAt(snapshot.updatedAt) || 'Not updated';
 
   const actions = (
     <>
+      <a
+        className="chat-function-action"
+        aria-label="Data from CodexRadar"
+        title="Data from CodexRadar"
+        href="https://codexradar.com/"
+        target="_blank"
+        rel="noreferrer"
+      >
+        <span className="codicon codicon-link-external" aria-hidden="true" />
+      </a>
       <button
         type="button"
         className="chat-function-action"
@@ -42,7 +53,9 @@ export function ModelEfficiencySurface({snapshot, onRefresh, onRequestHide}: Pro
         type="button"
         className="chat-function-action"
         aria-label="Refresh model efficiency"
-        title="Refresh model efficiency"
+        title={snapshot.refreshing
+          ? 'Refreshing model efficiency'
+          : `Refresh model efficiency · ${freshness}`}
         disabled={snapshot.refreshing}
         onClick={onRefresh}
       >
@@ -66,12 +79,6 @@ export function ModelEfficiencySurface({snapshot, onRefresh, onRequestHide}: Pro
           mode={detail ? 'detail' : 'simple'}
           onRetry={onRefresh}
         />
-        <footer className="model-efficiency-footer">
-          <span>{snapshot.refreshing
-            ? 'Refreshing…'
-            : formatModelEfficiencyUpdatedAt(snapshot.updatedAt) || 'Not updated'}</span>
-          <a href="https://codexradar.com/" target="_blank" rel="noreferrer">Data from CodexRadar</a>
-        </footer>
       </div>
     </ChatFunctionSurface>
   );
