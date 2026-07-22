@@ -14227,13 +14227,10 @@ export function App() {
   ) => {
     const sessionAgent = (session.agentType || '').trim();
     const displaySessionAgent = normalizeAgentTypeName(sessionAgent);
-    const sessionActionsOpen =
-      projectSessionActionMenu?.projectId === targetProjectId &&
-      projectSessionActionMenu.sessionId === session.sessionId;
     return (
       <div
         key={`${targetProjectId}:${mobile ? 'mobile-session' : 'wide-session'}:${session.sessionId}`}
-        className={`project-session-row-wrap${session.pinned ? ' has-pin-action' : ''}${sessionActionsOpen ? ' actions-open' : ''}`}
+        className={`project-session-row-wrap${session.pinned ? ' has-pin-action' : ''}`}
       >
         {renderSessionLeadingState(session, targetProjectId)}
         <button
@@ -14302,17 +14299,6 @@ export function App() {
             }`} aria-hidden="true" />
           </button>
         ) : null}
-        {!mobile ? (
-          <button
-            type="button"
-            className="wide-session-more-btn"
-            title="Session actions"
-            aria-label="Session actions"
-            onClick={event => openProjectSessionContextMenu(targetProjectId, session.sessionId, event)}
-          >
-            <span className="codicon codicon-ellipsis" aria-hidden="true" />
-          </button>
-        ) : null}
       </div>
     );
   };
@@ -14332,13 +14318,10 @@ export function App() {
     const sessionAgent = (liveSession.agentType || '').trim();
     const displaySessionAgent = normalizeAgentTypeName(sessionAgent);
     const selected = selectedChatEncodedKey === buildChatRuntimeKey(targetProjectId, liveSession.sessionId);
-    const sessionActionsOpen =
-      projectSessionActionMenu?.projectId === targetProjectId &&
-      projectSessionActionMenu.sessionId === liveSession.sessionId;
     return (
       <div
         key={`recent:${targetProjectId}:${session.sessionId}`}
-        className={`project-session-row-wrap recent-session-row-wrap${liveSession.pinned ? ' has-pin-action' : ''}${sessionActionsOpen ? ' actions-open' : ''}`}
+        className={`project-session-row-wrap recent-session-row-wrap${liveSession.pinned ? ' has-pin-action' : ''}`}
       >
         {renderSessionLeadingState(liveSession, targetProjectId)}
         <button
@@ -14395,17 +14378,6 @@ export function App() {
                 ? 'codicon-loading codicon-modifier-spin'
                 : 'codicon-pinned'
             }`} aria-hidden="true" />
-          </button>
-        ) : null}
-        {!mobile ? (
-          <button
-            type="button"
-            className="wide-session-more-btn"
-            title="Session actions"
-            aria-label="Session actions"
-            onClick={event => openProjectSessionContextMenu(targetProjectId, liveSession.sessionId, event)}
-          >
-            <span className="codicon codicon-ellipsis" aria-hidden="true" />
           </button>
         ) : null}
       </div>

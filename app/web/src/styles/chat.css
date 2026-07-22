@@ -1208,15 +1208,15 @@
 
 .wide-session-pin-btn {
   position: absolute;
-  right: 27px;
+  right: 4px;
   top: 50%;
   width: 20px;
   height: 20px;
   padding: 0;
   border: none;
   border-radius: 5px;
-  background: transparent;
-  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--state-warning) 12%, transparent);
+  color: var(--state-warning);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1227,49 +1227,13 @@
 
 .wide-session-pin-btn:hover,
 .wide-session-pin-btn:focus-visible {
-  color: var(--text-primary);
-  background: var(--hover);
+  color: color-mix(in srgb, var(--state-warning) 78%, white);
+  background: color-mix(in srgb, var(--state-warning) 20%, transparent);
 }
 
 .wide-session-pin-btn:disabled {
   cursor: default;
   opacity: 0.65;
-}
-
-.mobile-session-row + .wide-session-pin-btn {
-  right: 4px;
-}
-
-.wide-session-more-btn {
-  position: absolute;
-  right: 3px;
-  top: 50%;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: none;
-  border-radius: 5px;
-  background: color-mix(in srgb, var(--surface-panel) 92%, var(--hover));
-  color: var(--text-secondary);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  opacity: 0;
-  transform: translateY(-50%);
-  transition: opacity 120ms ease;
-  z-index: 2;
-}
-
-.project-session-row-wrap:hover .wide-session-more-btn,
-.project-session-row-wrap.actions-open .wide-session-more-btn,
-.wide-session-more-btn:focus-visible {
-  opacity: 1;
-}
-
-.wide-session-more-btn:hover {
-  background: var(--hover);
-  color: var(--text-primary);
 }
 
 .wide-session-row {
@@ -1295,10 +1259,6 @@
 }
 
 .project-session-row-wrap.has-pin-action .wide-session-row {
-  padding-right: 48px;
-}
-
-.project-session-row-wrap.has-pin-action .mobile-session-row {
   padding-right: 28px;
 }
 

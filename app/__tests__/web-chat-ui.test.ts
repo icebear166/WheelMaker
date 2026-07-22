@@ -1713,17 +1713,14 @@ describe('web chat integration', () => {
     }
   });
 
-  test('desktop session rows reveal a hover more-action that opens the same context menu', () => {
+  test('desktop session rows keep context menus without rendering a hover more-action', () => {
     const projectRoot = path.join(__dirname, '..');
     const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
     const stylesCss = readWebStyles(projectRoot);
 
-    expect(mainTsx).toContain('wide-session-more-btn');
-    expect(mainTsx).toContain('codicon codicon-ellipsis');
-    expect(stylesCss).toContain('.project-session-row-wrap:hover .wide-session-more-btn');
-    const btnBlock = stylesCss.match(/\.wide-session-more-btn \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(btnBlock).toContain('position: absolute;');
-    expect(btnBlock).toContain('opacity: 0;');
+    expect(mainTsx).toContain('onContextMenu={event => openProjectSessionContextMenu');
+    expect(mainTsx).not.toContain('wide-session-more-btn');
+    expect(stylesCss).not.toContain('.wide-session-more-btn');
   });
 
   test('session pin actions use the shared menu and an independent trailing button', () => {
@@ -1741,7 +1738,15 @@ describe('web chat integration', () => {
     expect(mainTsx).toContain("setChatPinningSessionKey(current => current === actionKey ? '' : current)");
     expect(stylesCss).toContain('.project-session-row-wrap.has-pin-action .wide-session-row');
     expect(stylesCss).toContain('.wide-session-pin-btn');
-    expect(stylesCss).toContain('.mobile-session-row + .wide-session-pin-btn');
+
+    const pinButtonBlock = stylesCss.match(/\.wide-session-pin-btn \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(pinButtonBlock).toContain('right: 4px;');
+    expect(pinButtonBlock).toContain('color: var(--state-warning);');
+    expect(pinButtonBlock).toContain('background: color-mix(in srgb, var(--state-warning) 12%, transparent);');
+
+    const pinnedRowBlock = stylesCss.match(/\.project-session-row-wrap\.has-pin-action \.wide-session-row \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(pinnedRowBlock).toContain('padding-right: 28px;');
+    expect(stylesCss).not.toContain('.mobile-session-row + .wide-session-pin-btn');
 
     const pinHandlerStart = mainTsx.indexOf('const handlePinProjectSession = async (');
     const pinHandlerEnd = mainTsx.indexOf('const handleRenameProjectSession = async', pinHandlerStart);
