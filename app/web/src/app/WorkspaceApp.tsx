@@ -181,7 +181,7 @@ import {
 import {
   mergeChatSession,
   mergeChatSessionList,
-  sortChatSessions,
+  sortProjectChatSessions,
 } from '../chat/session/chatSessionOrdering';
 import {
   OLDER_SESSION_DAYS,
@@ -5505,7 +5505,7 @@ export function App() {
         const cachedSessions = workspaceStore
           .hydrateChatSessions(projectItem.projectId)
           .map(entry => entry.session);
-        const sortedCachedSessions = sortChatSessions(cachedSessions);
+        const sortedCachedSessions = sortProjectChatSessions(cachedSessions);
         if (sortedCachedSessions.length > 0) {
           next[projectItem.projectId] = mergeChatSessionList(
             next[projectItem.projectId] ?? [],
@@ -5527,7 +5527,7 @@ export function App() {
         .listProjectSessions(projectItem.projectId)
         .then(sessions => {
           if (cancelled) return;
-          const sortedSessions = sortChatSessions(sessions);
+          const sortedSessions = sortProjectChatSessions(sessions);
           const knownSessions = knownChatSessionsForProject(projectItem.projectId);
           const mergedSessions = mergeChatSessionList(knownSessions, sortedSessions);
           setProjectSessionsByProjectId(prev => ({
@@ -8914,7 +8914,7 @@ export function App() {
     const sessionRows = cachedSessions.map(item => item.session);
     const sortedSessionRows = mergeChatSessionList(
       knownChatSessionsForProject(activeProjectId),
-      sortChatSessions(sessionRows),
+      sortProjectChatSessions(sessionRows),
     );
     if (shouldUpdateCurrentProjectSessions(activeProjectId, projectIdRef.current)) {
       setChatSessions(prev => mergeChatSessionList(prev, sortedSessionRows));
@@ -9388,7 +9388,7 @@ export function App() {
     let sessionCount = 0;
     let loadListError = '';
     try {
-      const listedSessions = sortChatSessions(await service.listProjectSessions(activeProjectId));
+      const listedSessions = sortProjectChatSessions(await service.listProjectSessions(activeProjectId));
       sessionCount = listedSessions.length;
       const knownSessions = knownChatSessionsForProject(activeProjectId);
       const nextSessions = mergeChatSessionList(knownSessions, listedSessions);
@@ -15312,7 +15312,7 @@ export function App() {
     targetProjectId: string,
     sessions: RegistryChatSession[],
   ) => {
-    const listedSessions = sortChatSessions(sessions);
+    const listedSessions = sortProjectChatSessions(sessions);
     reconcileCreatedDraftSessions(targetProjectId, listedSessions);
     const knownSessions = knownChatSessionsForProject(targetProjectId);
     const nextSessions = mergeChatSessionList(knownSessions, listedSessions);

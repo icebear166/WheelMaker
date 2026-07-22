@@ -3,6 +3,7 @@ import {
   mergeChatSession,
   mergeChatSessionList,
   sortChatSessions,
+  sortProjectChatSessions,
 } from '../web/src/chat/session/chatSessionOrdering';
 import type {RegistryChatSession} from '../web/src/registry/registryTypes';
 
@@ -35,6 +36,53 @@ describe('chat session ordering', () => {
     ];
 
     expect(sortChatSessions(items).map(item => item.sessionId)).toEqual(['a', 'b']);
+  });
+
+  test('sorts project sessions by pinned group then updatedAt descending', () => {
+    const result = sortProjectChatSessions([
+      session('new-unpinned', '2026-07-22T12:00:00Z'),
+      {...session('old-pinned', '2026-07-20T12:00:00Z'), pinned: true},
+      {...session('new-pinned', '2026-07-21T12:00:00Z'), pinned: true},
+      session('old-unpinned', '2026-07-19T12:00:00Z'),
+    ]);
+
+    expect(result.map(item => item.sessionId)).toEqual([
+      'new-pinned',
+      'old-pinned',
+      'new-unpinned',
+      'old-unpinned',
+    ]);
+  });
+
+  test('keeps pure recency sorting available for Recent', () => {
+    const result = sortChatSessions([
+      {...session('old-pinned', '2026-07-20T12:00:00Z'), pinned: true},
+      session('new-unpinned', '2026-07-22T12:00:00Z'),
+    ]);
+
+    expect(result.map(item => item.sessionId)).toEqual(['new-unpinned', 'old-pinned']);
+  });
+
+  test('reorders when pin changes without updatedAt changing', () => {
+    const existing = [
+      session('newer', '2026-07-22T12:00:00Z'),
+      session('older', '2026-07-20T12:00:00Z'),
+    ];
+
+    const pinned = mergeChatSession(existing, {sessionId: 'older', pinned: true});
+    expect(pinned.map(item => item.sessionId)).toEqual(['older', 'newer']);
+
+    const unpinned = mergeChatSession(pinned, {sessionId: 'older', pinned: false});
+    expect(unpinned.map(item => item.sessionId)).toEqual(['newer', 'older']);
+  });
+
+  test('preserves pin when a partial session patch omits it', () => {
+    const merged = mergeChatSession(
+      [{...session('s1', '2026-07-22T12:00:00Z'), pinned: true}],
+      {sessionId: 's1', preview: 'patched'},
+    );
+
+    expect(merged[0].pinned).toBe(true);
   });
 
   test('patches metadata without moving a session when updatedAt is unchanged', () => {
@@ -98,5 +146,19 @@ describe('chat session ordering', () => {
     expect(merged.map(item => item.sessionId)).toEqual(['old', 'new']);
     expect(merged[0].configOptions).toEqual(existing[0].configOptions);
     expect(merged[0].sessionActions).toEqual(existing[0].sessionActions);
+  });
+
+  test('list refresh reorders when only pinned changes', () => {
+    const existing = [
+      session('newer', '2026-07-22T12:00:00Z'),
+      session('older', '2026-07-20T12:00:00Z'),
+    ];
+    const incoming = [
+      session('newer', '2026-07-22T12:00:00Z'),
+      {...session('older', '2026-07-20T12:00:00Z'), pinned: true},
+    ];
+
+    expect(mergeChatSessionList(existing, incoming).map(item => item.sessionId))
+      .toEqual(['older', 'newer']);
   });
 });
