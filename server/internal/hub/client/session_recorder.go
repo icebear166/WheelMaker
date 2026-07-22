@@ -52,7 +52,7 @@ type sessionViewSummary struct {
 	ConfigOptions          []acp.ConfigOption            `json:"configOptions,omitempty"`
 	Usage                  *acp.SessionUsage             `json:"usage,omitempty"`
 	SessionActions         acp.SessionActionCapabilities `json:"sessionActions"`
-	PendingPermissionCount int                           `json:"pendingPermissionCount,omitempty"`
+	PendingPermissionCount int                           `json:"pendingPermissionCount"`
 }
 
 type sessionTitleFacts struct {

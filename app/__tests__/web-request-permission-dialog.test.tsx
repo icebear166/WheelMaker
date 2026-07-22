@@ -24,6 +24,7 @@ describe('request permission dialog', () => {
     });
 
     expect(renderer!.root.findByProps({className: 'chat-permission-dialog-title'}).children).toContain('Choose how to continue');
+    expect(renderer!.root.findAllByProps({className: 'chat-permission-overlay'})).toHaveLength(0);
     expect(renderer!.root.findAllByProps({className: 'chat-permission-option'})).toHaveLength(2);
     await ReactTestRenderer.act(() => {
       renderer!.root.findAllByProps({className: 'chat-permission-option'})[1].props.onClick();

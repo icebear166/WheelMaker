@@ -53,6 +53,7 @@ function mergeSessionSummary(
     lastDoneTurnIndex: next.lastDoneTurnIndex ?? existing?.lastDoneTurnIndex,
     lastDoneSuccess: next.lastDoneSuccess ?? existing?.lastDoneSuccess,
     lastReadTurnIndex: next.lastReadTurnIndex ?? existing?.lastReadTurnIndex,
+    pendingPermissionCount: next.pendingPermissionCount ?? existing?.pendingPermissionCount ?? 0,
     configOptions: next.configOptions ?? existing?.configOptions,
     commands: next.commands ?? existing?.commands,
     usage: next.usage ?? existing?.usage,
