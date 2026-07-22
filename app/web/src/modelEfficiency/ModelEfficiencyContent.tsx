@@ -1,13 +1,12 @@
 import React from 'react';
 
-import {selectModelRecommendations} from './modelEfficiencyModel';
+import {selectTopModelEfficiencyItems} from './modelEfficiencyModel';
 import {
   EFFORT_ORDER,
   MODEL_FAMILIES,
   type ModelEfficiencyFamily,
   type ModelEfficiencyItem,
   type ModelEfficiencySnapshot,
-  type RecommendationRole,
 } from './modelEfficiencyTypes';
 
 const FAMILY_LABELS: Record<ModelEfficiencyFamily, string> = {
@@ -15,15 +14,6 @@ const FAMILY_LABELS: Record<ModelEfficiencyFamily, string> = {
   'gpt-5.6-terra': 'Terra',
   'gpt-5.6-luna': 'Luna',
 };
-
-const RECOMMENDATION_ROLES: Array<{
-  id: RecommendationRole;
-  label: string;
-}> = [
-  {id: 'quality', label: 'Quality'},
-  {id: 'balanced', label: 'Balanced'},
-  {id: 'economy', label: 'Economy'},
-];
 
 function formatScore(score: number): string {
   return Number.isInteger(score) ? String(score) : score.toFixed(1);
@@ -45,62 +35,51 @@ export function formatModelEfficiencyDuration(averageTaskSeconds?: number): stri
   return remainingMinutes ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
 }
 
-function RecommendationCell({
+function formatEffortLabel(effort: ModelEfficiencyItem['effort']): string {
+  return `${effort.charAt(0).toUpperCase()}${effort.slice(1)}`;
+}
+
+function ScoreCard({
   item,
-  role,
+  familyLabel,
 }: {
-  item: ModelEfficiencyItem | null;
-  role: RecommendationRole;
+  item: ModelEfficiencyItem;
+  familyLabel: string;
 }) {
   return (
-    <td className={`model-efficiency-simple-cell role-${role}`} data-model-efficiency-role={role}>
-      {item ? (
-        <span className="model-efficiency-recommendation">
-          <span className="model-efficiency-effort">{item.effort}</span>
-          <strong className="model-efficiency-score">{formatScore(item.score)}</strong>
-          <span className="model-efficiency-meta">
-            <span>{formatModelEfficiencyCost(item.averageCostUsd)}</span>
-            <span>{formatModelEfficiencyDuration(item.averageTaskSeconds)}</span>
-          </span>
-        </span>
-      ) : <span className="model-efficiency-missing">—</span>}
-    </td>
+    <article className="model-efficiency-recommendation" data-model-efficiency-card={true}>
+      <span className="model-efficiency-model-name">
+        {familyLabel} {formatEffortLabel(item.effort)}
+      </span>
+      <strong className="model-efficiency-score">{formatScore(item.score)}</strong>
+      <span className="model-efficiency-meta">
+        <span>{formatModelEfficiencyCost(item.averageCostUsd)}</span>
+        <span>{formatModelEfficiencyDuration(item.averageTaskSeconds)}</span>
+      </span>
+    </article>
   );
 }
 
 export function ModelEfficiencySimpleContent({items}: {items: readonly ModelEfficiencyItem[]}) {
   return (
-    <table className="model-efficiency-simple-table" aria-label="Model efficiency recommendations">
-      <colgroup>
-        <col className="model-efficiency-model-column" />
-        <col span={3} />
-      </colgroup>
-      <thead>
-        <tr>
-          <th scope="col">Model</th>
-          {RECOMMENDATION_ROLES.map(role => <th scope="col" key={role.id}>{role.label}</th>)}
-        </tr>
-      </thead>
-      <tbody>
-        {MODEL_FAMILIES.map(family => {
-          const recommendations = selectModelRecommendations(
-            items.filter(item => item.family === family),
-          );
-          return (
-            <tr data-model-efficiency-family={family} key={family}>
-              <th scope="row">{FAMILY_LABELS[family]}</th>
-              {RECOMMENDATION_ROLES.map(role => (
-                <RecommendationCell
-                  item={recommendations[role.id]}
-                  role={role.id}
-                  key={role.id}
-                />
-              ))}
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <div className="model-efficiency-simple-list" aria-label="Model efficiency top scores">
+      {MODEL_FAMILIES.map(family => (
+        <section
+          className="model-efficiency-family-row"
+          data-model-efficiency-family={family}
+          aria-label={`${FAMILY_LABELS[family]} top scores`}
+          key={family}
+        >
+          {selectTopModelEfficiencyItems(items.filter(item => item.family === family)).map(item => (
+            <ScoreCard
+              item={item}
+              familyLabel={FAMILY_LABELS[family]}
+              key={item.effort}
+            />
+          ))}
+        </section>
+      ))}
+    </div>
   );
 }
 

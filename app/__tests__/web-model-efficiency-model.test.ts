@@ -1,8 +1,7 @@
 import {
-  calculateCombinedCost,
   normalizeModelEfficiencyPayload,
   readModelEfficiencyUpdatedAt,
-  selectModelRecommendations,
+  selectTopModelEfficiencyItems,
 } from '../web/src/modelEfficiency/modelEfficiencyModel';
 import type {ModelEfficiencyItem} from '../web/src/modelEfficiency/modelEfficiencyTypes';
 
@@ -94,56 +93,16 @@ describe('model efficiency normalization', () => {
   });
 });
 
-describe('model efficiency recommendations', () => {
-  test('calculates the approved duration-weighted combined cost', () => {
-    expect(calculateCombinedCost(item('max', 100, 2, 600))).toBeCloseTo(2);
-    expect(calculateCombinedCost(item('max', 100, 2, 810))).toBeCloseTo(5);
-    expect(calculateCombinedCost(item('max', 100, undefined, 600))).toBeUndefined();
-    expect(calculateCombinedCost(item('max', 100, 2, undefined))).toBeUndefined();
-  });
-
-  test('selects unique quality, economy, and Pareto-balanced efforts', () => {
-    const recommendations = selectModelRecommendations([
+describe('model efficiency top scores', () => {
+  test('takes the three highest scores without cost weighting and uses effort strength for ties', () => {
+    const selected = selectTopModelEfficiencyItems([
+      item('low', 60, 1, 60),
+      item('high', 95),
+      item('xhigh', 95, 99, 9999),
       item('max', 100, 20, 600),
-      item('xhigh', 80, 5, 600),
-      item('high', 95, 4, 600),
-      item('medium', 70, 2, 600),
-      item('low', 60, 1, 600),
-    ]);
+      item('medium', 70, 2, 120),
+    ]).map(entry => entry.effort);
 
-    expect(recommendations.quality?.effort).toBe('max');
-    expect(recommendations.balanced?.effort).toBe('high');
-    expect(recommendations.economy?.effort).toBe('low');
-    expect(new Set(Object.values(recommendations).map((entry) => entry?.effort)).size).toBe(3);
-    expect(Object.values(recommendations).some((entry) => entry?.effort === 'xhigh')).toBe(false);
-  });
-
-  test('uses lower cost, higher IQ, then stronger effort as deterministic tie breakers', () => {
-    const qualityTie = selectModelRecommendations([
-      item('max', 100, 3, 600),
-      item('xhigh', 100, 4, 600),
-      item('high', 90, 2, 600),
-      item('low', 80, 1, 600),
-    ]);
-    expect(qualityTie.quality?.effort).toBe('max');
-
-    const strengthTie = selectModelRecommendations([
-      item('max', 100, 5, 600),
-      item('xhigh', 90, 2, 600),
-      item('high', 90, 2, 600),
-      item('low', 80, 1, 600),
-    ]);
-    expect(strengthTie.balanced?.effort).toBe('xhigh');
-  });
-
-  test('does not fill recommendation roles from incomplete or duplicate rows', () => {
-    expect(selectModelRecommendations([
-      item('max', 100, 5, 600),
-      item('high', 90),
-    ])).toEqual({
-      quality: expect.objectContaining({effort: 'max'}),
-      balanced: null,
-      economy: null,
-    });
+    expect(selected).toEqual(['max', 'xhigh', 'high']);
   });
 });

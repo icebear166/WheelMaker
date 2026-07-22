@@ -15,7 +15,9 @@ import type {
 
 const items: ModelEfficiencyItem[] = [
   {family: 'gpt-5.6-sol', effort: 'max', score: 142, averageCostUsd: 3.2, averageTaskSeconds: 410},
+  {family: 'gpt-5.6-sol', effort: 'xhigh', score: 140, averageCostUsd: 2.4, averageTaskSeconds: 360},
   {family: 'gpt-5.6-sol', effort: 'high', score: 135, averageCostUsd: 1.4, averageTaskSeconds: 270},
+  {family: 'gpt-5.6-sol', effort: 'medium', score: 130, averageCostUsd: 0.9, averageTaskSeconds: 210},
   {family: 'gpt-5.6-sol', effort: 'low', score: 118, averageCostUsd: 0.5, averageTaskSeconds: 120},
   {family: 'gpt-5.6-terra', effort: 'xhigh', score: 134, averageCostUsd: 2.1, averageTaskSeconds: 360},
   {family: 'gpt-5.6-terra', effort: 'medium', score: 124, averageCostUsd: 0.9, averageTaskSeconds: 210},
@@ -37,20 +39,15 @@ function renderedText(node: TestRenderer.ReactTestInstance): string {
 }
 
 describe('ModelEfficiencyContent', () => {
-  test('renders a three-family by three-role Simple matrix with compact metrics', () => {
+  test('renders each family as three score-ranked cards without a model column or role headers', () => {
     let view: TestRenderer.ReactTestRenderer;
     act(() => {
       view = TestRenderer.create(<ModelEfficiencySimpleContent items={items} />);
     });
 
-    const table = view!.root.findByProps({'aria-label': 'Model efficiency recommendations'});
-    expect(table.type).toBe('table');
-    expect(table.findByType('thead').findAllByType('th').map(renderedText)).toEqual([
-      'Model',
-      'Quality',
-      'Balanced',
-      'Economy',
-    ]);
+    const list = view!.root.findByProps({'aria-label': 'Model efficiency top scores'});
+    expect(list.type).toBe('div');
+    expect(list.findAllByType('th')).toHaveLength(0);
 
     const rows = view!.root.findAll(node => node.props['data-model-efficiency-family']);
     expect(rows.map(row => row.props['data-model-efficiency-family'])).toEqual([
@@ -58,27 +55,29 @@ describe('ModelEfficiencyContent', () => {
       'gpt-5.6-terra',
       'gpt-5.6-luna',
     ]);
-    expect(renderedText(rows[0])).toContain('Sol');
-    expect(renderedText(rows[0])).toContain('max');
+    const solCards = rows[0].findAll(node => node.props['data-model-efficiency-card']);
+    expect(solCards).toHaveLength(3);
+    expect(solCards.map(card => card.findByProps({className: 'model-efficiency-model-name'}).children.join('')))
+      .toEqual(['Sol Max', 'Sol Xhigh', 'Sol High']);
     expect(renderedText(rows[0])).toContain('142');
     expect(renderedText(rows[0])).not.toContain('IQ');
     expect(renderedText(rows[0])).toContain('$3.20');
     expect(renderedText(rows[0])).toContain('6m 50s');
-    expect(rows[0].findAll(node => node.props['data-model-efficiency-role'])).toHaveLength(3);
+    expect(renderedText(rows[0])).not.toContain('Medium');
+    expect(renderedText(rows[0])).not.toContain('Low');
   });
 
-  test('keeps all families visible and uses a dash when a role has no complete candidate', () => {
+  test('keeps all families visible without adding placeholder cards', () => {
     let view: TestRenderer.ReactTestRenderer;
     act(() => {
-      view = TestRenderer.create(<ModelEfficiencySimpleContent items={items.slice(-3)} />);
+      view = TestRenderer.create(<ModelEfficiencySimpleContent items={[items.at(-1)!]} />);
     });
 
     const rows = view!.root.findAll(node => node.props['data-model-efficiency-family']);
     expect(rows).toHaveLength(3);
-    expect(renderedText(rows[0])).toContain('———');
-    expect(renderedText(rows[2])).toContain('max');
-    expect(renderedText(rows[2])).toContain('low');
-    expect(renderedText(rows[2])).toContain('—');
+    expect(rows[0].findAll(node => node.props['data-model-efficiency-card'])).toHaveLength(0);
+    expect(rows[2].findAll(node => node.props['data-model-efficiency-card'])).toHaveLength(1);
+    expect(renderedText(rows[2])).not.toContain('—');
   });
 
   test('renders Detail tables in fixed family and effort order with missing values', () => {
@@ -100,7 +99,13 @@ describe('ModelEfficiencyContent', () => {
       'Time',
     ]);
     const solRows = tables[0].findAll(node => node.props['data-model-efficiency-effort']);
-    expect(solRows.map(row => row.props['data-model-efficiency-effort'])).toEqual(['max', 'high', 'low']);
+    expect(solRows.map(row => row.props['data-model-efficiency-effort'])).toEqual([
+      'max',
+      'xhigh',
+      'high',
+      'medium',
+      'low',
+    ]);
     const lunaHigh = tables[2].findByProps({'data-model-efficiency-effort': 'high'});
     expect(renderedText(lunaHigh)).toBe('high120——');
   });
@@ -125,7 +130,7 @@ describe('ModelEfficiencySurface', () => {
     expect(surface.props['data-mode']).toBe('compact');
     expect(surface.props['data-side']).toBe('left');
     expect(surface.props.className).toContain('model-efficiency-surface');
-    expect(view!.root.findByProps({'aria-label': 'Model efficiency recommendations'})).toBeDefined();
+    expect(view!.root.findByProps({'aria-label': 'Model efficiency top scores'})).toBeDefined();
 
     const modeButton = view!.root.findByProps({'aria-label': 'Show model efficiency details'});
     expect(modeButton.findByProps({'aria-hidden': 'true'}).props.className).toContain('codicon-layout');
@@ -194,10 +199,13 @@ describe('ModelEfficiencySurface', () => {
 
     const surfaceRule = styles.match(/\.model-efficiency-surface\.desktop \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const recommendationRule = styles.match(/\.model-efficiency-recommendation \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const familyRule = styles.match(/\.model-efficiency-family-row \{([\s\S]*?)\n\}/)?.[1] ?? '';
     const scoreRule = styles.match(/\.model-efficiency-score \{([\s\S]*?)\n\}/)?.[1] ?? '';
     expect(surfaceRule).not.toContain('position: absolute;');
     expect(surfaceRule).not.toContain('right: 0;');
     expect(recommendationRule).toContain('grid-template-areas:');
+    expect(recommendationRule).toContain('grid-template-rows: 18px 31px;');
+    expect(familyRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr));');
     expect(scoreRule).toContain('font-size:');
   });
 });

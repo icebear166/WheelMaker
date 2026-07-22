@@ -4,15 +4,9 @@ import {
   type ModelEfficiencyEffort,
   type ModelEfficiencyFamily,
   type ModelEfficiencyItem,
-  type ModelEfficiencyRecommendations,
 } from './modelEfficiencyTypes';
 
 type JsonRecord = Record<string, unknown>;
-
-type CostedItem = {
-  item: ModelEfficiencyItem;
-  combinedCost: number;
-};
 
 const familyOrder = new Map<ModelEfficiencyFamily, number>(
   MODEL_FAMILIES.map((family, index) => [family, index]),
@@ -100,103 +94,10 @@ export function readModelEfficiencyUpdatedAt(payload: unknown): string | undefin
     : undefined;
 }
 
-export function calculateCombinedCost(
-  item: Pick<ModelEfficiencyItem, 'averageCostUsd' | 'averageTaskSeconds'>,
-): number | undefined {
-  const {averageCostUsd, averageTaskSeconds} = item;
-  if (
-    averageCostUsd === undefined
-    || averageTaskSeconds === undefined
-    || !Number.isFinite(averageCostUsd)
-    || !Number.isFinite(averageTaskSeconds)
-    || averageCostUsd < 0
-    || averageTaskSeconds <= 0
-  ) {
-    return undefined;
-  }
-
-  const exponent = Math.log(2.5) / Math.log(1.35);
-  return averageCostUsd * Math.pow(averageTaskSeconds / 60 / 10, exponent);
-}
-
-function compareQuality(left: CostedItem, right: CostedItem): number {
-  return right.item.score - left.item.score
-    || left.combinedCost - right.combinedCost
-    || compareEffort(left.item, right.item);
-}
-
-function compareEconomy(left: CostedItem, right: CostedItem): number {
-  return left.combinedCost - right.combinedCost
-    || right.item.score - left.item.score
-    || compareEffort(left.item, right.item);
-}
-
-function isDominated(candidate: CostedItem, items: readonly CostedItem[]): boolean {
-  return items.some((other) => other !== candidate
-    && other.item.score >= candidate.item.score
-    && other.combinedCost <= candidate.combinedCost
-    && (
-      other.item.score > candidate.item.score
-      || other.combinedCost < candidate.combinedCost
-    ));
-}
-
-function selectBalanced(
-  remaining: readonly CostedItem[],
-  all: readonly CostedItem[],
-): ModelEfficiencyItem | null {
-  const frontier = remaining.filter((candidate) => !isDominated(candidate, remaining));
-  if (frontier.length === 0) return null;
-
-  const scores = all.map(({item}) => item.score);
-  const logCosts = all.map(({combinedCost}) => Math.log(Math.max(combinedCost, Number.EPSILON)));
-  const minScore = Math.min(...scores);
-  const maxScore = Math.max(...scores);
-  const minLogCost = Math.min(...logCosts);
-  const maxLogCost = Math.max(...logCosts);
-
-  const scored = frontier.map((candidate) => {
-    const scoreRange = maxScore - minScore;
-    const costRange = maxLogCost - minLogCost;
-    const normalizedScore = scoreRange === 0
-      ? 1
-      : (candidate.item.score - minScore) / scoreRange;
-    const normalizedCost = costRange === 0
-      ? 0
-      : (Math.log(Math.max(candidate.combinedCost, Number.EPSILON)) - minLogCost) / costRange;
-    return {
-      ...candidate,
-      distance: Math.hypot(1 - normalizedScore, normalizedCost),
-    };
-  });
-
-  scored.sort((left, right) => left.distance - right.distance
-    || right.item.score - left.item.score
-    || left.combinedCost - right.combinedCost
-    || compareEffort(left.item, right.item));
-  return scored[0]?.item ?? null;
-}
-
-export function selectModelRecommendations(
+export function selectTopModelEfficiencyItems(
   items: readonly ModelEfficiencyItem[],
-): ModelEfficiencyRecommendations {
-  const complete: CostedItem[] = items.flatMap((item) => {
-    const combinedCost = calculateCombinedCost(item);
-    return combinedCost === undefined ? [] : [{item, combinedCost}];
-  });
-
-  const quality = [...complete].sort(compareQuality)[0] ?? null;
-  const afterQuality = quality
-    ? complete.filter((candidate) => candidate.item.effort !== quality.item.effort)
-    : complete;
-  const economy = [...afterQuality].sort(compareEconomy)[0] ?? null;
-  const remaining = economy
-    ? afterQuality.filter((candidate) => candidate.item.effort !== economy.item.effort)
-    : afterQuality;
-
-  return {
-    quality: quality?.item ?? null,
-    balanced: selectBalanced(remaining, complete),
-    economy: economy?.item ?? null,
-  };
+): ModelEfficiencyItem[] {
+  return [...items]
+    .sort((left, right) => right.score - left.score || compareEffort(left, right))
+    .slice(0, 3);
 }

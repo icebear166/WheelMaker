@@ -15,7 +15,6 @@ export const EFFORT_ORDER = [
 
 export type ModelEfficiencyFamily = (typeof MODEL_FAMILIES)[number];
 export type ModelEfficiencyEffort = (typeof EFFORT_ORDER)[number];
-export type RecommendationRole = 'quality' | 'balanced' | 'economy';
 
 export type ModelEfficiencyItem = {
   family: ModelEfficiencyFamily;
@@ -24,11 +23,6 @@ export type ModelEfficiencyItem = {
   averageCostUsd?: number;
   averageTaskSeconds?: number;
 };
-
-export type ModelEfficiencyRecommendations = Record<
-  RecommendationRole,
-  ModelEfficiencyItem | null
->;
 
 export type ModelEfficiencySnapshot = {
   status: 'idle' | 'loading' | 'ready' | 'error';

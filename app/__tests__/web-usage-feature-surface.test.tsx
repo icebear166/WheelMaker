@@ -388,7 +388,7 @@ describe('UsageFeatureSurface', () => {
     expect(tabsRule).toContain('grid-template-columns: repeat(2, minmax(0, 1fr));');
 
     const efficiencyStyles = fs.readFileSync(path.join(projectRoot, 'web', 'src', 'styles', 'modelEfficiency.css'), 'utf8').replace(/\r\n/g, '\n');
-    const detailTableRule = efficiencyStyles.match(/\.model-efficiency-simple-table,\n\.model-efficiency-detail-family table \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const detailTableRule = efficiencyStyles.match(/\.model-efficiency-detail-family table \{([\s\S]*?)\n\}/)?.[1] ?? '';
     expect(detailTableRule).toContain('table-layout: fixed;');
   });
 

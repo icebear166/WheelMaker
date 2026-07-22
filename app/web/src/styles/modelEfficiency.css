@@ -14,7 +14,6 @@
   overflow: auto;
 }
 
-.model-efficiency-simple-table,
 .model-efficiency-detail-family table {
   width: 100%;
   table-layout: fixed;
@@ -26,54 +25,39 @@
   font-variant-numeric: tabular-nums;
 }
 
-.model-efficiency-simple-table {
-  table-layout: fixed;
-  padding: 7px 7px 8px;
+.model-efficiency-simple-list {
+  display: grid;
+  gap: 4px;
+  padding: 6px 7px 7px;
 }
 
-.model-efficiency-model-column { width: 43px; }
-
-.model-efficiency-simple-table th {
-  height: 21px;
-  padding: 0 2px;
-  overflow: hidden;
-  font-family: 'IBM Plex Sans', sans-serif;
-  font-size: 9px;
-  font-weight: 620;
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.model-efficiency-family-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  min-width: 0;
 }
 
-.model-efficiency-simple-table tbody th {
-  color: var(--text-primary);
-  font-size: 10px;
-  font-weight: 680;
-  text-align: left;
-}
-
-.model-efficiency-simple-table tr[data-model-efficiency-family='gpt-5.6-sol'] {
+.model-efficiency-family-row[data-model-efficiency-family='gpt-5.6-sol'] {
   --model-efficiency-family-color: #eab308;
 }
 
-.model-efficiency-simple-table tr[data-model-efficiency-family='gpt-5.6-terra'] {
+.model-efficiency-family-row[data-model-efficiency-family='gpt-5.6-terra'] {
   --model-efficiency-family-color: #4f83ff;
 }
 
-.model-efficiency-simple-table tr[data-model-efficiency-family='gpt-5.6-luna'] {
+.model-efficiency-family-row[data-model-efficiency-family='gpt-5.6-luna'] {
   --model-efficiency-family-color: #c8d6ea;
 }
-
-.model-efficiency-simple-cell { padding: 3px 2px; }
 
 .model-efficiency-recommendation {
   display: grid;
   grid-template-areas:
-    'effort meta'
+    'model meta'
     'score meta';
-  grid-template-columns: minmax(0, 1fr) 34px;
-  grid-template-rows: 22px 38px;
-  min-height: 60px;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  grid-template-rows: 18px 31px;
+  min-height: 49px;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--model-efficiency-family-color) 38%, var(--border-subtle));
   border-radius: 7px;
@@ -82,14 +66,14 @@
   line-height: 1;
 }
 
-.model-efficiency-effort {
-  grid-area: effort;
+.model-efficiency-model-name {
+  grid-area: model;
   min-width: 0;
-  padding: 9px 5px 2px;
+  padding: 7px 5px 1px;
   overflow: hidden;
   color: color-mix(in srgb, var(--model-efficiency-family-color) 82%, var(--text-primary));
   font-family: 'IBM Plex Sans', sans-serif;
-  font-size: 8px;
+  font-size: 7.5px;
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -98,7 +82,7 @@
 .model-efficiency-score {
   grid-area: score;
   align-self: center;
-  padding: 0 5px 3px;
+  padding: 0 5px 2px;
   overflow: hidden;
   color: var(--model-efficiency-family-color);
   font-size: clamp(17px, 1.35vw, 20px);
@@ -131,13 +115,6 @@
 
 .model-efficiency-meta span + span {
   border-top: 1px solid color-mix(in srgb, var(--model-efficiency-family-color) 26%, var(--border-subtle));
-}
-
-.model-efficiency-missing {
-  display: grid;
-  min-height: 58px;
-  place-items: center;
-  color: color-mix(in srgb, var(--text-secondary) 52%, transparent);
 }
 
 .model-efficiency-detail-list {
