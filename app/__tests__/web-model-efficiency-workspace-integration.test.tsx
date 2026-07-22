@@ -48,7 +48,7 @@ describe('model efficiency workspace integration', () => {
     expect(main).toContain('const modelEfficiencyStore = useMemo(() => new ModelEfficiencyStore(), []);');
     expect(main).toContain('modelEfficiencyStore.subscribe(setModelEfficiencySnapshot)');
     expect(main).toContain('void modelEfficiencyStore.refresh();');
-    expect(store).toContain("https://codexradar.com/current.json");
+    expect(store).toContain("https://codexradar.com/data/intelligence-efficiency.json");
     expect(store).not.toContain('localStorage');
     expect(store).not.toContain('sessionStorage');
     expect(store).not.toContain('setInterval');
@@ -57,20 +57,21 @@ describe('model efficiency workspace integration', () => {
     expect(model).not.toContain('selectedModel');
   });
 
-  test('mounts the desktop card on the right without joining left reservation logic', () => {
+  test('mounts the desktop card directly below Limits in the shared edge stack', () => {
     expect(main).toContain("import {ModelEfficiencySurface} from '../modelEfficiency/ModelEfficiencySurface';");
-    expect(main).toContain('isWide && !archivedMode && showModelEfficiency ? (');
+    expect(main).toContain('showModelEfficiency ? (');
     expect(main).toContain('<ModelEfficiencySurface');
     expect(main).toContain('snapshot={modelEfficiencySnapshot}');
     expect(main).toContain('onRefresh={() => void modelEfficiencyStore.refresh()}');
 
     const edgeVisibilityLine = main.split(/\r?\n/).find(line => line.includes('const showChatEdgeSurfaces')) ?? '';
-    expect(edgeVisibilityLine).not.toContain('showModelEfficiency');
+    expect(edgeVisibilityLine).toContain('showModelEfficiency');
 
     const stackStart = main.indexOf('className={`chat-edge-surface-stack');
-    const stackEnd = main.indexOf('</div>', stackStart);
+    const stackEnd = main.indexOf('{isWide && chatSidebarCollapsed', stackStart);
     const leftStack = stackStart >= 0 && stackEnd >= 0 ? main.slice(stackStart, stackEnd) : '';
-    expect(leftStack).not.toContain('ModelEfficiencySurface');
+    expect(leftStack).toContain('ModelEfficiencySurface');
+    expect(leftStack.indexOf('UsageFeatureSurface')).toBeLessThan(leftStack.indexOf('ModelEfficiencySurface'));
   });
 
   test('passes the same snapshot and manual refresh into the existing mobile dialog', () => {

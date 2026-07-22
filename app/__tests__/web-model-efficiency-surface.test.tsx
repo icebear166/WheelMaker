@@ -60,7 +60,8 @@ describe('ModelEfficiencyContent', () => {
     ]);
     expect(renderedText(rows[0])).toContain('Sol');
     expect(renderedText(rows[0])).toContain('max');
-    expect(renderedText(rows[0])).toContain('IQ 142');
+    expect(renderedText(rows[0])).toContain('142');
+    expect(renderedText(rows[0])).not.toContain('IQ');
     expect(renderedText(rows[0])).toContain('$3.20');
     expect(renderedText(rows[0])).toContain('6m 50s');
     expect(rows[0].findAll(node => node.props['data-model-efficiency-role'])).toHaveLength(3);
@@ -94,7 +95,7 @@ describe('ModelEfficiencyContent', () => {
     ]);
     expect(tables[0].findAllByType('th').map(renderedText)).toEqual([
       'Effort',
-      'IQ',
+      'Score',
       'Cost',
       'Time',
     ]);
@@ -122,13 +123,17 @@ describe('ModelEfficiencySurface', () => {
 
     const surface = view!.root.findByProps({'aria-label': 'Model efficiency'});
     expect(surface.props['data-mode']).toBe('compact');
-    expect(surface.props['data-side']).toBe('right');
+    expect(surface.props['data-side']).toBe('left');
     expect(surface.props.className).toContain('model-efficiency-surface');
     expect(view!.root.findByProps({'aria-label': 'Model efficiency recommendations'})).toBeDefined();
 
-    act(() => view!.root.findByProps({'aria-label': 'Show model efficiency details'}).props.onClick());
+    const modeButton = view!.root.findByProps({'aria-label': 'Show model efficiency details'});
+    expect(modeButton.findByProps({'aria-hidden': 'true'}).props.className).toContain('codicon-layout');
+    act(() => modeButton.props.onClick());
     expect(view!.root.findByProps({'aria-label': 'Model efficiency'}).props['data-mode']).toBe('detail');
     expect(view!.root.findByProps({'aria-label': 'Sol model efficiency'})).toBeDefined();
+    expect(view!.root.findByProps({'aria-label': 'Hide model efficiency details'})
+      .findByProps({'aria-hidden': 'true'}).props.className).toContain('codicon-list-flat');
 
     act(() => view!.root.findByProps({'aria-label': 'Refresh model efficiency'}).props.onClick());
     act(() => view!.root.findByProps({'aria-label': 'Hide model efficiency'}).props.onClick());
@@ -180,7 +185,7 @@ describe('ModelEfficiencySurface', () => {
     expect(source.props.target).toBe('_blank');
   });
 
-  test('positions and masks the card from the right edge', () => {
+  test('uses compact source-inspired score cards without right-edge positioning', () => {
     const projectRoot = path.join(__dirname, '..');
     const styles = fs.readFileSync(
       path.join(projectRoot, 'web', 'src', 'styles', 'modelEfficiency.css'),
@@ -188,13 +193,11 @@ describe('ModelEfficiencySurface', () => {
     ).replace(/\r\n/g, '\n');
 
     const surfaceRule = styles.match(/\.model-efficiency-surface\.desktop \{([\s\S]*?)\n\}/)?.[1] ?? '';
-    const rightMaskRule = styles.match(/\.chat-function-surface\.desktop\.side-right \.chat-edge-surface-glass,[\s\S]*?\{([\s\S]*?)\n\}/)?.[1] ?? '';
-    const matrixRule = styles.match(/\.model-efficiency-simple-table \{([\s\S]*?)\n\}/)?.[1] ?? '';
-    expect(surfaceRule).toContain('position: absolute;');
-    expect(surfaceRule).toContain('right: 0;');
-    expect(surfaceRule).toContain('width: var(--chat-edge-surface-width);');
-    expect(rightMaskRule).toContain('linear-gradient(');
-    expect(rightMaskRule).toContain('var(--chat-edge-fade-start)');
-    expect(matrixRule).toContain('table-layout: fixed;');
+    const recommendationRule = styles.match(/\.model-efficiency-recommendation \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    const scoreRule = styles.match(/\.model-efficiency-score \{([\s\S]*?)\n\}/)?.[1] ?? '';
+    expect(surfaceRule).not.toContain('position: absolute;');
+    expect(surfaceRule).not.toContain('right: 0;');
+    expect(recommendationRule).toContain('grid-template-areas:');
+    expect(scoreRule).toContain('font-size:');
   });
 });

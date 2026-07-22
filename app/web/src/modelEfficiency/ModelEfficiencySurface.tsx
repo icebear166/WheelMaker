@@ -32,11 +32,11 @@ export function ModelEfficiencySurface({snapshot, onRefresh, onRequestHide}: Pro
       <button
         type="button"
         className="chat-function-action"
-        aria-label={detail ? 'Show simple model efficiency' : 'Show model efficiency details'}
-        title={detail ? 'Simple model efficiency' : 'Show model efficiency details'}
+        aria-label={detail ? 'Hide model efficiency details' : 'Show model efficiency details'}
+        title={detail ? 'Compact model efficiency' : 'Show model efficiency details'}
         onClick={() => setDetail(value => !value)}
       >
-        <span className={`codicon ${detail ? 'codicon-table' : 'codicon-list-flat'}`} aria-hidden="true" />
+        <span className={`codicon ${detail ? 'codicon-list-flat' : 'codicon-layout'}`} aria-hidden="true" />
       </button>
       <button
         type="button"
@@ -58,7 +58,6 @@ export function ModelEfficiencySurface({snapshot, onRefresh, onRequestHide}: Pro
       mode={mode}
       actions={actions}
       onToggleCollapsed={() => setCollapsed(value => !value)}
-      side="right"
       className="model-efficiency-surface"
     >
       <div className="model-efficiency-body">

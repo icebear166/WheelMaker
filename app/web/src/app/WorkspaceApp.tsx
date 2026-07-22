@@ -5199,7 +5199,7 @@ export function App() {
     }
   }, [allVisibleProjectsLoaded, projectSessionsByProjectId]);
   const showFloatingSessionPanel = isWide && chatSidebarCollapsed && !archivedMode && !sessionSearchActive;
-  const showChatEdgeSurfaces = isWide && !archivedMode && (showFloatingSessionPanel || !!selectedChatPlan || showLimitsMonitor);
+  const showChatEdgeSurfaces = isWide && !archivedMode && (showFloatingSessionPanel || !!selectedChatPlan || showLimitsMonitor || showModelEfficiency);
   const chatMainClassName = isWide
     ? `chat-main chat-view-width-fixed-800${showChatEdgeSurfaces ? ' chat-view-width-fixed-800-edge-surfaces' : ''}`
     : 'chat-main';
@@ -18185,14 +18185,14 @@ export function App() {
                   onRequestHide={() => setConfirmTarget({kind: 'hideLimitsMonitor'})}
                 />
               ) : null}
+              {showModelEfficiency ? (
+                <ModelEfficiencySurface
+                  snapshot={modelEfficiencySnapshot}
+                  onRefresh={() => void modelEfficiencyStore.refresh()}
+                  onRequestHide={() => setConfirmTarget({kind: 'hideModelEfficiency'})}
+                />
+              ) : null}
             </div>
-          ) : null}
-          {isWide && !archivedMode && showModelEfficiency ? (
-            <ModelEfficiencySurface
-              snapshot={modelEfficiencySnapshot}
-              onRefresh={() => void modelEfficiencyStore.refresh()}
-              onRequestHide={() => setConfirmTarget({kind: 'hideModelEfficiency'})}
-            />
           ) : null}
           {isWide && chatSidebarCollapsed && !sidebarSettingsOpen ? (
             <ChatSessionPanel

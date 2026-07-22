@@ -56,10 +56,12 @@ function RecommendationCell({
     <td className={`model-efficiency-simple-cell role-${role}`} data-model-efficiency-role={role}>
       {item ? (
         <span className="model-efficiency-recommendation">
-          <strong>{item.effort}</strong>
-          <span>IQ {formatScore(item.score)}</span>
-          <span>{formatModelEfficiencyCost(item.averageCostUsd)}</span>
-          <span>{formatModelEfficiencyDuration(item.averageTaskSeconds)}</span>
+          <span className="model-efficiency-effort">{item.effort}</span>
+          <strong className="model-efficiency-score">{formatScore(item.score)}</strong>
+          <span className="model-efficiency-meta">
+            <span>{formatModelEfficiencyCost(item.averageCostUsd)}</span>
+            <span>{formatModelEfficiencyDuration(item.averageTaskSeconds)}</span>
+          </span>
         </span>
       ) : <span className="model-efficiency-missing">—</span>}
     </td>
@@ -122,7 +124,7 @@ function DetailFamily({
         <thead>
           <tr>
             <th scope="col">Effort</th>
-            <th scope="col">IQ</th>
+            <th scope="col">Score</th>
             <th scope="col">Cost</th>
             <th scope="col">Time</th>
           </tr>

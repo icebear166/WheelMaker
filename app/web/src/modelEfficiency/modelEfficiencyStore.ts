@@ -4,7 +4,7 @@ import {
 } from './modelEfficiencyModel';
 import type {ModelEfficiencySnapshot} from './modelEfficiencyTypes';
 
-export const CODEX_RADAR_CURRENT_URL = 'https://codexradar.com/current.json';
+export const CODEX_RADAR_EFFICIENCY_URL = 'https://codexradar.com/data/intelligence-efficiency.json';
 
 export type ModelEfficiencyFetchResponse = {
   ok: boolean;
@@ -59,7 +59,7 @@ export class ModelEfficiencyStore {
 
   private async load(): Promise<void> {
     try {
-      const response = await this.fetcher(CODEX_RADAR_CURRENT_URL);
+      const response = await this.fetcher(CODEX_RADAR_EFFICIENCY_URL);
       if (!response.ok) {
         throw new Error(`CodexRadar request failed (${response.status}).`);
       }

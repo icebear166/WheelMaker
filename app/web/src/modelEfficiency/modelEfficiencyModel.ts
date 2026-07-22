@@ -9,12 +9,6 @@ import {
 
 type JsonRecord = Record<string, unknown>;
 
-type CandidateRecord = {
-  item: ModelEfficiencyItem;
-  date?: string;
-  root: boolean;
-};
-
 type CostedItem = {
   item: ModelEfficiencyItem;
   combinedCost: number;
@@ -56,48 +50,24 @@ function positiveNumber(value: unknown): number | undefined {
   return result !== undefined && result > 0 ? result : undefined;
 }
 
-function parseCandidate(value: unknown, root: boolean): CandidateRecord | null {
+function parsePoint(value: unknown): ModelEfficiencyItem | null {
   if (!isRecord(value)) return null;
 
   const family = value.model;
-  const effort = value.reasoning_effort;
-  const score = finiteNumber(value.score);
+  const effort = value.effort;
+  const score = finiteNumber(value.iq);
   if (!isFamily(family) || !isEffort(effort) || score === undefined) return null;
 
-  const averageCostUsd = nonNegativeNumber(value.average_cost_usd);
-  const averageTaskSeconds = positiveNumber(value.average_task_seconds);
-  const date = typeof value.date === 'string' ? value.date : undefined;
+  const averageCostUsd = nonNegativeNumber(value.average_price_usd);
+  const averageMinutes = positiveNumber(value.average_minutes);
 
   return {
-    item: {
-      family,
-      effort,
-      score,
-      ...(averageCostUsd === undefined ? {} : {averageCostUsd}),
-      ...(averageTaskSeconds === undefined ? {} : {averageTaskSeconds}),
-    },
-    date,
-    root,
+    family,
+    effort,
+    score,
+    ...(averageCostUsd === undefined ? {} : {averageCostUsd}),
+    ...(averageMinutes === undefined ? {} : {averageTaskSeconds: averageMinutes * 60}),
   };
-}
-
-function dateTimestamp(date: string | undefined): number | undefined {
-  if (!date) return undefined;
-  const timestamp = Date.parse(date);
-  return Number.isFinite(timestamp) ? timestamp : undefined;
-}
-
-function shouldReplace(existing: CandidateRecord, incoming: CandidateRecord): boolean {
-  const existingDate = dateTimestamp(existing.date);
-  const incomingDate = dateTimestamp(incoming.date);
-
-  if (existingDate !== undefined && incomingDate !== undefined) {
-    if (incomingDate !== existingDate) return incomingDate > existingDate;
-    return incoming.root && !existing.root;
-  }
-
-  if (existing.root !== incoming.root) return incoming.root;
-  return false;
 }
 
 function compareEffort(left: ModelEfficiencyItem, right: ModelEfficiencyItem): number {
@@ -106,31 +76,17 @@ function compareEffort(left: ModelEfficiencyItem, right: ModelEfficiencyItem): n
 }
 
 export function normalizeModelEfficiencyPayload(payload: unknown): ModelEfficiencyItem[] {
-  if (!isRecord(payload) || !isRecord(payload.model_iq)) return [];
+  if (!isRecord(payload) || !Array.isArray(payload.points)) return [];
 
-  const modelIq = payload.model_iq;
-  const candidates: CandidateRecord[] = [];
-  const root = parseCandidate(modelIq.latest, true);
-  if (root) candidates.push(root);
-
-  if (isRecord(modelIq.comparisons)) {
-    for (const comparison of Object.values(modelIq.comparisons)) {
-      if (!isRecord(comparison)) continue;
-      const candidate = parseCandidate(comparison.latest, false);
-      if (candidate) candidates.push(candidate);
-    }
+  const deduplicated = new Map<string, ModelEfficiencyItem>();
+  for (const value of payload.points) {
+    const item = parsePoint(value);
+    if (!item) continue;
+    const key = `${item.family}:${item.effort}`;
+    if (!deduplicated.has(key)) deduplicated.set(key, item);
   }
 
-  const deduplicated = new Map<string, CandidateRecord>();
-  for (const candidate of candidates) {
-    const key = `${candidate.item.family}:${candidate.item.effort}`;
-    const existing = deduplicated.get(key);
-    if (!existing || shouldReplace(existing, candidate)) {
-      deduplicated.set(key, candidate);
-    }
-  }
-
-  return Array.from(deduplicated.values(), ({item}) => item).sort((left, right) => {
+  return Array.from(deduplicated.values()).sort((left, right) => {
     const familyDifference = (familyOrder.get(left.family) ?? Number.MAX_SAFE_INTEGER)
       - (familyOrder.get(right.family) ?? Number.MAX_SAFE_INTEGER);
     return familyDifference || compareEffort(left, right);
@@ -138,9 +94,9 @@ export function normalizeModelEfficiencyPayload(payload: unknown): ModelEfficien
 }
 
 export function readModelEfficiencyUpdatedAt(payload: unknown): string | undefined {
-  if (!isRecord(payload) || !isRecord(payload.model_iq)) return undefined;
-  return typeof payload.model_iq.updated_at === 'string'
-    ? payload.model_iq.updated_at
+  if (!isRecord(payload)) return undefined;
+  return typeof payload.source_updated_at === 'string'
+    ? payload.source_updated_at
     : undefined;
 }
 

@@ -1,20 +1,18 @@
 import {
-  CODEX_RADAR_CURRENT_URL,
+  CODEX_RADAR_EFFICIENCY_URL,
   ModelEfficiencyStore,
   type ModelEfficiencyFetcher,
 } from '../web/src/modelEfficiency/modelEfficiencyStore';
 
 const successfulPayload = {
-  model_iq: {
-    updated_at: '2026-07-22T09:30:00Z',
-    latest: {
-      model: 'gpt-5.6-sol',
-      reasoning_effort: 'max',
-      score: 142,
-      average_cost_usd: 3.2,
-      average_task_seconds: 410,
-    },
-  },
+  source_updated_at: '2026-07-22T13:58:55+08:00',
+  points: [{
+    model: 'gpt-5.6-sol',
+    effort: 'max',
+    iq: 103.12,
+    average_price_usd: 8.87,
+    average_minutes: 34.1,
+  }],
 };
 
 function response(payload: unknown, ok = true, status = 200) {
@@ -49,17 +47,17 @@ describe('ModelEfficiencyStore', () => {
 
     await refresh;
 
-    expect(fetcher).toHaveBeenCalledWith(CODEX_RADAR_CURRENT_URL);
+    expect(fetcher).toHaveBeenCalledWith(CODEX_RADAR_EFFICIENCY_URL);
     expect(store.snapshot()).toEqual({
       status: 'ready',
       refreshing: false,
-      updatedAt: '2026-07-22T09:30:00Z',
+      updatedAt: '2026-07-22T13:58:55+08:00',
       items: [{
         family: 'gpt-5.6-sol',
         effort: 'max',
-        score: 142,
-        averageCostUsd: 3.2,
-        averageTaskSeconds: 410,
+        score: 103.12,
+        averageCostUsd: 8.87,
+        averageTaskSeconds: 2046,
       }],
     });
   });
