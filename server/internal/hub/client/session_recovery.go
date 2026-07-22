@@ -182,7 +182,22 @@ func (r *sessionRecovery) managedSessionIDs(ctx context.Context) (map[string]boo
 func (r *sessionRecovery) sourceFor(agentType string) (recoverySource, error) {
 	switch agentType {
 	case "claude":
-		return claudeRecoverySource{}, nil
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, err
+		}
+		return claudeRecoverySource{
+			agentType:   agentType,
+			projectsDir: filepath.Join(home, ".claude", "projects"),
+		}, nil
+	case "cc-glm", "cc-kimi":
+		if r.client.stateDir == "" {
+			return nil, fmt.Errorf("state directory is required for %s recovery", agentType)
+		}
+		return claudeRecoverySource{
+			agentType:   agentType,
+			projectsDir: filepath.Join(r.client.stateDir, ".data", agentType, "projects"),
+		}, nil
 	case "codex":
 		return codexRecoverySource{}, nil
 	case "copilot":
@@ -371,17 +386,15 @@ func extractRecoveryUpdateText(raw json.RawMessage) string {
 	return ""
 }
 
-type claudeRecoverySource struct{}
+type claudeRecoverySource struct {
+	agentType   string
+	projectsDir string
+}
 
-func (claudeRecoverySource) AgentType() string { return "claude" }
+func (s claudeRecoverySource) AgentType() string { return s.agentType }
 
-func (claudeRecoverySource) List(projectCWD string, managedIDs map[string]bool) ([]recoverySession, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, err
-	}
-	projectsDir := filepath.Join(home, ".claude", "projects")
-	entries, err := os.ReadDir(projectsDir)
+func (s claudeRecoverySource) List(projectCWD string, managedIDs map[string]bool) ([]recoverySession, error) {
+	entries, err := os.ReadDir(s.projectsDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
@@ -394,7 +407,7 @@ func (claudeRecoverySource) List(projectCWD string, managedIDs map[string]bool) 
 		if !entry.IsDir() {
 			continue
 		}
-		jsonlFiles, err := filepath.Glob(filepath.Join(projectsDir, entry.Name(), "*.jsonl"))
+		jsonlFiles, err := filepath.Glob(filepath.Join(s.projectsDir, entry.Name(), "*.jsonl"))
 		if err != nil {
 			continue
 		}
@@ -403,6 +416,7 @@ func (claudeRecoverySource) List(projectCWD string, managedIDs map[string]bool) 
 			if err != nil || info == nil {
 				continue
 			}
+			info.AgentType = s.agentType
 			results = append(results, *info)
 		}
 	}

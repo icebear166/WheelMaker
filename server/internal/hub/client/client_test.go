@@ -2685,7 +2685,12 @@ func sessionSummaryMap(t *testing.T, summary any) map[string]any {
 
 func writeClaudeSessionFixture(t *testing.T, homeDir, projectDirName, sessionID, cwd, title, assistant string) {
 	t.Helper()
-	projectDir := filepath.Join(homeDir, ".claude", "projects", projectDirName)
+	writeClaudeSessionFixtureAtProjectsDir(t, filepath.Join(homeDir, ".claude", "projects"), projectDirName, sessionID, cwd, title, assistant)
+}
+
+func writeClaudeSessionFixtureAtProjectsDir(t *testing.T, projectsDir, projectDirName, sessionID, cwd, title, assistant string) {
+	t.Helper()
+	projectDir := filepath.Join(projectsDir, projectDirName)
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll(%q): %v", projectDir, err)
 	}
@@ -7623,6 +7628,51 @@ func TestCodexRecoveryListMatchesEquivalentWindowsCWDSeparators(t *testing.T) {
 	}
 	if len(items) != 1 || items[0].SessionID != "sess-mixed-cwd" {
 		t.Fatalf("items = %+v, want sess-mixed-cwd", items)
+	}
+}
+
+func TestClaudeFamilyRecoveryUsesIsolatedProjectsDirs(t *testing.T) {
+	homeDir := t.TempDir()
+	stateDir := t.TempDir()
+	cwd := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+
+	writeClaudeSessionFixtureAtProjectsDir(t, filepath.Join(homeDir, ".claude", "projects"), "native", "sess-native", cwd, "Native Claude", "native preview")
+	writeClaudeSessionFixtureAtProjectsDir(t, filepath.Join(stateDir, ".data", "cc-glm", "projects"), "glm", "sess-glm", cwd, "GLM", "glm preview")
+	writeClaudeSessionFixtureAtProjectsDir(t, filepath.Join(stateDir, ".data", "cc-kimi", "projects"), "kimi", "sess-kimi", cwd, "Kimi", "kimi preview")
+
+	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	c := NewWithRuntime(store, "proj1", cwd, RuntimeConfig{StateDir: stateDir})
+	defer c.Close()
+
+	for _, testCase := range []struct {
+		agentType string
+		sessionID string
+	}{
+		{agentType: "claude", sessionID: "sess-native"},
+		{agentType: "cc-glm", sessionID: "sess-glm"},
+		{agentType: "cc-kimi", sessionID: "sess-kimi"},
+	} {
+		t.Run(testCase.agentType, func(t *testing.T) {
+			response, err := c.recovery().ListResumableSessions(context.Background(), testCase.agentType)
+			if err != nil {
+				t.Fatalf("ListResumableSessions(%q): %v", testCase.agentType, err)
+			}
+			sessions, ok := response["sessions"].([]recoverySession)
+			if !ok {
+				t.Fatalf("sessions response = %#v, want []recoverySession", response["sessions"])
+			}
+			if len(sessions) != 1 || sessions[0].SessionID != testCase.sessionID {
+				t.Fatalf("sessions = %+v, want only %s", sessions, testCase.sessionID)
+			}
+			if sessions[0].AgentType != testCase.agentType {
+				t.Fatalf("session AgentType = %q, want %q", sessions[0].AgentType, testCase.agentType)
+			}
+		})
 	}
 }
 
