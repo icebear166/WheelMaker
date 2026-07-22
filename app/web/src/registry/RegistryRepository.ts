@@ -517,8 +517,9 @@ export class RegistryRepository {
     if (!archivedAt) {
       return null;
     }
+    const {pinned: _activeSessionPin, ...archivedBase} = base;
     return {
-      ...base,
+      ...archivedBase,
       projectName: typeof input.projectName === 'string' ? input.projectName : undefined,
       createdAt: typeof input.createdAt === 'string' ? input.createdAt : undefined,
       archivedAt,
