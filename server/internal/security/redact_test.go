@@ -40,6 +40,30 @@ func TestRedactDiagnosticValueRedactsNestedAndObfuscatedSecretKeys(t *testing.T)
 	}
 }
 
+func TestRedactDiagnosticValueRedactsAPIKeysContainer(t *testing.T) {
+	input := map[string]any{
+		"apiKeys": map[string]any{
+			"kimi": "kimi-test-secret",
+			"zai":  "zai-test-secret",
+		},
+	}
+	want := map[string]any{"apiKeys": RedactedValue}
+	if got := RedactDiagnosticValue(input); !reflect.DeepEqual(got, want) {
+		t.Fatalf("RedactDiagnosticValue() = %#v, want %#v", got, want)
+	}
+
+	type configWithAPIKeys struct {
+		APIKeys map[string]string `json:"apiKeys"`
+	}
+	structInput := configWithAPIKeys{APIKeys: map[string]string{
+		"kimi": "kimi-test-secret",
+		"zai":  "zai-test-secret",
+	}}
+	if got := RedactDiagnosticValue(structInput); !reflect.DeepEqual(got, want) {
+		t.Fatalf("RedactDiagnosticValue(struct) = %#v, want %#v", got, want)
+	}
+}
+
 func TestRedactDiagnosticValueTerminatesAtDepthAndNodeLimits(t *testing.T) {
 	deep := map[string]any{"value": "root"}
 	cursor := deep

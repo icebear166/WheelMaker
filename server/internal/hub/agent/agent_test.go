@@ -489,6 +489,30 @@ func TestParseACPProviderKimi(t *testing.T) {
 	}
 }
 
+func TestParseACPProviderClaudeCompatible(t *testing.T) {
+	provider, ok := protocol.ParseACPProvider("CC-GLM")
+	if !ok || provider != protocol.ACPProviderCCGLM {
+		t.Fatalf("ParseACPProvider(CC-GLM) = (%q, %v), want (%q, true)", provider, ok, protocol.ACPProviderCCGLM)
+	}
+
+	provider, ok = protocol.ParseACPProvider("cc-kimi")
+	if !ok || provider != protocol.ACPProviderCCKimi {
+		t.Fatalf("ParseACPProvider(cc-kimi) = (%q, %v), want (%q, true)", provider, ok, protocol.ACPProviderCCKimi)
+	}
+
+	names := protocol.ACPProviderNames()
+	counts := map[string]int{}
+	for _, name := range names {
+		counts[name]++
+	}
+	if counts[string(protocol.ACPProviderCCGLM)] != 1 || counts[string(protocol.ACPProviderCCKimi)] != 1 {
+		t.Fatalf("ACPProviderNames() = %v, want one entry for each Claude-compatible provider", names)
+	}
+	if names[len(names)-2] != string(protocol.ACPProviderCCGLM) || names[len(names)-1] != string(protocol.ACPProviderCCKimi) {
+		t.Fatalf("ACPProviderNames() = %v, want Claude-compatible IDs at the end in stable order", names)
+	}
+}
+
 func TestProviderPresetByNameRejectsRemovedProvider(t *testing.T) {
 	removedProviderName := strings.Join([]string{"my", "flicker"}, "")
 	if _, ok := providerPresetByName("codexapp"); ok {

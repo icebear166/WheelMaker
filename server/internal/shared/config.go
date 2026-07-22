@@ -12,6 +12,13 @@ type AppConfig struct {
 	Projects []ProjectConfig `json:"projects"`
 	Registry RegistryConfig  `json:"registry,omitempty"`
 	Log      LogConfig       `json:"log,omitempty"`
+	APIKeys  APIKeysConfig   `json:"apiKeys,omitempty"`
+}
+
+// APIKeysConfig contains provider credentials local to one Hub.
+type APIKeysConfig struct {
+	Kimi string `json:"kimi,omitempty"`
+	ZAI  string `json:"zai,omitempty"`
 }
 
 type rawAppConfig struct {
