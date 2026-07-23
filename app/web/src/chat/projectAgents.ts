@@ -9,10 +9,10 @@ export type AgentChoiceNode =
   | {
       kind: 'claude-group';
       agentType: 'claude';
-      label: 'Claude';
+      label: 'claude';
       children: Array<{
-        agentType: 'cc-deepseek' | 'cc-glm' | 'cc-kimi';
-        label: 'DeepSeek' | 'GLM' | 'Kimi';
+        agentType: 'claude' | 'cc-deepseek' | 'cc-glm' | 'cc-kimi';
+        label: 'default' | 'deepseek' | 'glm' | 'kimi';
       }>;
     };
 
@@ -20,13 +20,13 @@ export function agentDisplayLabel(agentType?: string | null): string {
   const normalized = normalizeAgentTypeName(agentType);
   switch (normalized.toLowerCase()) {
     case 'claude':
-      return 'Claude';
+      return 'claude';
     case 'cc-deepseek':
-      return 'CC · DeepSeek';
+      return 'cc · deepseek';
     case 'cc-glm':
-      return 'CC · GLM';
+      return 'cc · glm';
     case 'cc-kimi':
-      return 'CC · Kimi';
+      return 'cc · kimi';
     default:
       return normalized;
   }
@@ -46,24 +46,28 @@ export function buildAgentChoiceNodes(agentTypes: string[]): AgentChoiceNode[] {
   }
 
   const hasClaude = normalizedTypes.some(agentType => agentType.toLowerCase() === 'claude');
-  const children = normalizedTypes
+  const compatibleChildren = normalizedTypes
     .filter(agentType => {
       const key = agentType.toLowerCase();
       return key === 'cc-deepseek' || key === 'cc-glm' || key === 'cc-kimi';
     })
     .map(agentType => {
       const key = agentType.toLowerCase() as 'cc-deepseek' | 'cc-glm' | 'cc-kimi';
-      const label = key === 'cc-deepseek' ? ('DeepSeek' as const) : key === 'cc-glm' ? ('GLM' as const) : ('Kimi' as const);
+      const label = key === 'cc-deepseek' ? ('deepseek' as const) : key === 'cc-glm' ? ('glm' as const) : ('kimi' as const);
       return {agentType: key, label};
     });
+  const claudeChildren: Extract<AgentChoiceNode, {kind: 'claude-group'}>['children'] = [
+    {agentType: 'claude', label: 'default'},
+    ...compatibleChildren,
+  ];
 
   return normalizedTypes.reduce<AgentChoiceNode[]>((nodes, agentType) => {
     const key = agentType.toLowerCase();
     if (hasClaude && (key === 'cc-deepseek' || key === 'cc-glm' || key === 'cc-kimi')) {
       return nodes;
     }
-    if (key === 'claude' && children.length > 0) {
-      nodes.push({kind: 'claude-group', agentType: 'claude', label: 'Claude', children});
+    if (key === 'claude' && compatibleChildren.length > 0) {
+      nodes.push({kind: 'claude-group', agentType: 'claude', label: 'claude', children: claudeChildren});
       return nodes;
     }
     nodes.push({kind: 'agent', agentType, label: agentDisplayLabel(agentType)});

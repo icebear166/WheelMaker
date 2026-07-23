@@ -58,11 +58,12 @@ describe('web project agent choices', () => {
       {
         kind: 'claude-group',
         agentType: 'claude',
-        label: 'Claude',
+        label: 'claude',
         children: [
-          {agentType: 'cc-deepseek', label: 'DeepSeek'},
-          {agentType: 'cc-glm', label: 'GLM'},
-          {agentType: 'cc-kimi', label: 'Kimi'},
+          {agentType: 'claude', label: 'default'},
+          {agentType: 'cc-deepseek', label: 'deepseek'},
+          {agentType: 'cc-glm', label: 'glm'},
+          {agentType: 'cc-kimi', label: 'kimi'},
         ],
       },
       {kind: 'agent', agentType: 'kimi', label: 'kimi'},
@@ -73,18 +74,22 @@ describe('web project agent choices', () => {
     const {buildAgentChoiceNodes, agentDisplayLabel} = loadProjectAgentsModule();
 
     expect(buildAgentChoiceNodes(['cc-glm'])).toEqual([
-      {kind: 'agent', agentType: 'cc-glm', label: 'CC · GLM'},
+      {kind: 'agent', agentType: 'cc-glm', label: 'cc · glm'},
     ]);
     expect(buildAgentChoiceNodes(['claude', 'cc-kimi'])).toEqual([
       {
         kind: 'claude-group',
         agentType: 'claude',
-        label: 'Claude',
-        children: [{agentType: 'cc-kimi', label: 'Kimi'}],
+        label: 'claude',
+        children: [
+          {agentType: 'claude', label: 'default'},
+          {agentType: 'cc-kimi', label: 'kimi'},
+        ],
       },
     ]);
-    expect(agentDisplayLabel('cc-glm')).toBe('CC · GLM');
-    expect(agentDisplayLabel('cc-kimi')).toBe('CC · Kimi');
-    expect(agentDisplayLabel('cc-deepseek')).toBe('CC · DeepSeek');
+    expect(agentDisplayLabel('claude')).toBe('claude');
+    expect(agentDisplayLabel('cc-glm')).toBe('cc · glm');
+    expect(agentDisplayLabel('cc-kimi')).toBe('cc · kimi');
+    expect(agentDisplayLabel('cc-deepseek')).toBe('cc · deepseek');
   });
 });

@@ -17,6 +17,7 @@ describe('AgentChoiceMenu', () => {
     expect(renderer!.root.findAllByProps({className: 'agent-choice-child'})).toHaveLength(0);
     const main = renderer!.root.findByProps({className: 'agent-choice-main'});
     const expand = renderer!.root.findByProps({'aria-label': 'Expand Claude agents'});
+    expect(main.findByType('span').children).toEqual(['claude']);
 
     await ReactTestRenderer.act(() => {
       main.props.onClick();
@@ -29,10 +30,12 @@ describe('AgentChoiceMenu', () => {
     });
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(renderer!.root.findByProps({'aria-label': 'Collapse Claude agents'}).props['aria-expanded']).toBe(true);
-    expect(renderer!.root.findAllByProps({className: 'agent-choice-child'})).toHaveLength(3);
+    const children = renderer!.root.findAllByProps({className: 'agent-choice-child'});
+    expect(children).toHaveLength(4);
+    expect(children.map(child => child.findByType('span').children[0])).toEqual(['default', 'deepseek', 'glm', 'kimi']);
   });
 
-  test('selects each compatible child by its internal agent ID', async () => {
+  test('selects default and each compatible child by its internal agent ID', async () => {
     const onSelect = jest.fn();
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
 
@@ -46,17 +49,18 @@ describe('AgentChoiceMenu', () => {
     });
 
     const children = renderer!.root.findAllByProps({className: 'agent-choice-child'});
-    expect(children).toHaveLength(3);
+    expect(children).toHaveLength(4);
     await ReactTestRenderer.act(() => {
       children[0].props.onClick();
       children[1].props.onClick();
       children[2].props.onClick();
+      children[3].props.onClick();
     });
-    expect(onSelect.mock.calls).toEqual([['cc-deepseek'], ['cc-glm'], ['cc-kimi']]);
+    expect(onSelect.mock.calls).toEqual([['claude'], ['cc-deepseek'], ['cc-glm'], ['cc-kimi']]);
     expect(renderer!.root.findByProps({className: 'agent-choice-menu mobile'})).toBeTruthy();
   });
 
-  test('renders one child and falls back to direct Claude when no child exists', async () => {
+  test('renders default with one compatible child and falls back to direct Claude when no child exists', async () => {
     const onSelect = jest.fn();
     let renderer: ReactTestRenderer.ReactTestRenderer | undefined;
 
@@ -68,7 +72,7 @@ describe('AgentChoiceMenu', () => {
     await ReactTestRenderer.act(() => {
       renderer!.root.findByProps({'aria-label': 'Expand Claude agents'}).props.onClick();
     });
-    expect(renderer!.root.findAllByProps({className: 'agent-choice-child'})).toHaveLength(1);
+    expect(renderer!.root.findAllByProps({className: 'agent-choice-child'})).toHaveLength(2);
 
     await ReactTestRenderer.act(() => {
       renderer = ReactTestRenderer.create(<AgentChoiceMenu agents={['claude']} variant="wide" onSelect={onSelect} />);
