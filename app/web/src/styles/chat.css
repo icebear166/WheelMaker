@@ -1650,16 +1650,16 @@
 .wide-project-action-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
-  padding: 6px 7px 9px;
-  margin-bottom: 4px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
+  padding: 3px 6px 7px;
+  margin-bottom: 3px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent);
 }
 
 .wide-project-action-title .codicon {
-  color: color-mix(in srgb, var(--text-primary) 74%, var(--accent-primary));
-  font-size: 15px;
+  color: color-mix(in srgb, var(--text-primary) 68%, var(--accent-primary));
+  font-size: 14px;
 }
 
 .wide-project-action-title-copy {
@@ -1671,7 +1671,7 @@
 
 .wide-project-action-title-main {
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.2;
 }
 
@@ -1719,10 +1719,10 @@
   align-items: center;
   gap: 6px;
   min-height: 30px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid color-mix(in srgb, var(--agent-accent, var(--accent-primary)) 32%, var(--border-subtle));
   border-radius: 999px;
   padding: 4px 12px;
-  background: transparent;
+  background: color-mix(in srgb, var(--agent-accent, var(--accent-primary)) 10%, transparent);
   color: var(--text-primary);
   font: inherit;
   font-size: 13px;
@@ -1732,14 +1732,15 @@
   transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
 
-.agent-choice-pill:hover,
-.agent-choice-pill.active {
-  background: var(--hover);
-  border-color: color-mix(in srgb, var(--accent-primary) 45%, var(--border-subtle));
+.agent-choice-pill:hover {
+  background: color-mix(in srgb, var(--agent-accent, var(--accent-primary)) 18%, transparent);
+  border-color: color-mix(in srgb, var(--agent-accent, var(--accent-primary)) 48%, var(--border-subtle));
 }
 
 .agent-choice-pill.active {
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-primary) 55%, transparent);
+  background: color-mix(in srgb, var(--agent-accent, var(--accent-primary)) 22%, transparent);
+  border-color: color-mix(in srgb, var(--agent-accent, var(--accent-primary)) 60%, var(--border-subtle));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--agent-accent, var(--accent-primary)) 55%, transparent);
 }
 
 .agent-choice-pill:focus-visible {

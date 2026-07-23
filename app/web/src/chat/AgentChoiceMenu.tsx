@@ -102,7 +102,7 @@ export function AgentChoiceMenu({agents, defaultAgent, variant, onSelect, onClos
           <button
             key={pill.agentType}
             type="button"
-            className={`agent-choice-pill${isActive ? ' active' : ''}`}
+            className={`agent-choice-pill ${agentTagVariantClass(pill.agentType)}${isActive ? ' active' : ''}`}
             role="option"
             aria-selected={isActive}
             onClick={() => onSelect(pill.agentType)}
