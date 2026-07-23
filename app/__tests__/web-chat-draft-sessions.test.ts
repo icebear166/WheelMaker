@@ -234,6 +234,18 @@ describe('web chat draft sessions', () => {
     expect(draftRowBody).not.toContain('startProjectSessionLongPress');
   });
 
+  test('never reads frontend draft sessions from the backend', () => {
+    const root = projectRoot();
+    const mainTsx = readSourceText(path.join(root, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
+    const loadBody = extractConstFunctionBody(mainTsx, 'loadChatSession');
+    const guardIndex = loadBody.indexOf('if (isDraftChatSessionId(sessionId)) return false;');
+    const diagnosticIndex = loadBody.indexOf("startWorkspaceDiagnosticSpan('load_chat_session'");
+    const readIndex = loadBody.indexOf('await readProjectSessionWithStaleCacheRepair(');
+    expect(guardIndex).toBeGreaterThanOrEqual(0);
+    expect(diagnosticIndex).toBeGreaterThan(guardIndex);
+    expect(readIndex).toBeGreaterThan(guardIndex);
+  });
+
   test('keeps session.create RPC alive long enough for slow Codex startup drafts', () => {
     const root = projectRoot();
     const repositoryTs = readSourceText(path.join(root, 'web', 'src', 'registry', 'RegistryRepository.ts'));

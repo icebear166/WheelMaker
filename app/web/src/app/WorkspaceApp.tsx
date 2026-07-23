@@ -9176,6 +9176,9 @@ export function App() {
     },
   ) => {
     if (!activeProjectId || !sessionId) return false;
+    // Draft sessions are frontend-only placeholders; the backend has no
+    // session data for them until session.create resolves a real id.
+    if (isDraftChatSessionId(sessionId)) return false;
     const runtimeKey = buildChatRuntimeKey(activeProjectId, sessionId);
     const permissionReadEpoch = markPermissionReadPending(runtimeKey);
     const finishLoadDiagnostic = startWorkspaceDiagnosticSpan('load_chat_session', {
