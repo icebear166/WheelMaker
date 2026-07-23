@@ -1718,15 +1718,15 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 28px;
+  min-height: 30px;
   border: 1px solid var(--border-subtle);
   border-radius: 999px;
-  padding: 3px 10px;
+  padding: 4px 12px;
   background: transparent;
   color: var(--text-primary);
   font: inherit;
-  font-size: 11.5px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
   text-transform: lowercase;
   cursor: pointer;
   transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
@@ -1757,8 +1757,8 @@
 
 .agent-choice-menu.mobile .agent-choice-pill {
   min-height: 40px;
-  font-size: 14px;
-  padding: 5px 12px;
+  font-size: 15px;
+  padding: 6px 14px;
 }
 
 .mobile-project-session-nav {
