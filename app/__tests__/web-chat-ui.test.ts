@@ -2044,10 +2044,9 @@ describe('web chat integration', () => {
     expect(stylesCss).toContain('.project-session-row-wrap {');
     expect(stylesCss).not.toContain('.project-session-more-btn');
     expect(stylesCss).toContain('.project-session-action-menu {');
-    expect(stylesCss).toContain('.project-session-menu-btn.reload {');
-    expect(stylesCss).toContain('.project-session-menu-btn.rename {');
-    expect(stylesCss).toContain('.project-session-menu-btn.archive {');
-    expect(stylesCss).toContain('.project-session-menu-btn.delete {');
+    expect(stylesCss).not.toContain('.project-session-menu-btn.reload {');
+    expect(stylesCss).not.toContain('.project-session-menu-btn.rename {');
+    expect(stylesCss).not.toContain('.project-session-menu-btn.archive {');
     expect(stylesCss).toContain('.app-confirm-backdrop {');
     expect(stylesCss).toContain('.app-confirm-dialog {');
     expect(stylesCss).toContain('.app-confirm-error {');
@@ -2100,13 +2099,13 @@ describe('web chat integration', () => {
     expect(stylesCss).not.toContain('.project-session-action-strip');
     expect(stylesCss).not.toContain('.project-session-row-wrap:hover .project-session-more-btn');
     expect(stylesCss).toMatch(
-      /\.project-session-action-menu \{[^}]*position: fixed;[^}]*left: 0;[^}]*width: min\(156px, calc\(100vw - 16px\)\);[^}]*max-height: min\(190px, calc\(100vh - 16px\)\);[^}]*overflow-y: auto;[^}]*\}/,
+      /\.project-session-action-menu \{[^}]*min-width: 148px;[^}]*\}/,
     );
     expect(stylesCss).toMatch(
-      /\.project-session-menu-btn \{[^}]*height: 30px;[^}]*gap: 8px;[^}]*padding: 0 9px;[^}]*\}/,
+      /\.project-session-menu-btn \{[^}]*gap: 8px;[^}]*padding: 6px 8px;[^}]*font-size: 12px;[^}]*\}/,
     );
     expect(stylesCss).toMatch(
-      /\.project-session-menu-btn\.delete \{[^}]*color: #fca5a5;[^}]*\}/,
+      /\.project-session-menu-btn\.delete:hover:not\(:disabled\) \{[^}]*color: var\(--state-danger\);[^}]*\}/,
     );
     expect(stylesCss).toMatch(
       /\.wide-session-row\.selected \.wide-session-title \{[\s\S]*font-weight: 500;[\s\S]*\}/,
@@ -2631,7 +2630,7 @@ describe('Agent choice menu', () => {
     expect(mainTsx).not.toContain('sheetAgents.map(agentType => (');
     expect(mainTsx).not.toContain('agents.map(agentType => (');
 
-    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles', 'chat.css'));
+    const stylesCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles', 'sessionlist.css'));
     expect(stylesCss).toContain('.agent-choice-pill');
     expect(stylesCss).toContain('.agent-choice-pill-dot');
     expect(stylesCss).toContain('border-radius: 999px;');

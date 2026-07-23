@@ -226,15 +226,13 @@ describe('web chat recent sessions', () => {
     expect(pinnedContentRule).not.toContain('--chat-edge-surface-stack-resolved-width');
   });
 
-  test('uses an opaque session context menu above the pinned Recent surface', () => {
-    const overrideStart = chatCss.lastIndexOf('.project-session-action-menu {');
-    const contextMenuOverride = overrideStart >= 0
-      ? chatCss.slice(overrideStart, chatCss.indexOf('\n}', overrideStart) + 2)
-      : '';
+  test('styles the session context menu with the shared glass tokens', () => {
+    const menuBlock = sessionlistCss.match(/\.project-session-action-menu,\n\.wide-project-action-popover \{[\s\S]*?border: 1px solid var\(--border-faint\);[\s\S]*?\n\}/)?.[0] ?? '';
 
-    expect(contextMenuOverride).toContain('background: var(--surface-overlay);');
-    expect(contextMenuOverride).toContain('backdrop-filter: none;');
-    expect(contextMenuOverride).toContain('-webkit-backdrop-filter: none;');
+    expect(menuBlock).toContain('border: 1px solid var(--border-faint);');
+    expect(menuBlock).toContain('box-shadow: var(--shadow-overlay);');
+    expect(menuBlock).toContain('backdrop-filter: blur(12px) saturate(1.1);');
+    expect(sessionlistCss).toContain('prefers-reduced-transparency');
   });
 
   test('lets the pinned recent surface expand naturally at the standard session density', () => {
