@@ -42,18 +42,18 @@ func TestRedactDiagnosticValueRedactsNestedAndObfuscatedSecretKeys(t *testing.T)
 
 func TestRedactDiagnosticValueRedactsAPIKeysContainer(t *testing.T) {
 	input := map[string]any{
-		"apiKeys": map[string]any{
+		"api_keys": map[string]any{
 			"kimi": "kimi-test-secret",
 			"zai":  "zai-test-secret",
 		},
 	}
-	want := map[string]any{"apiKeys": RedactedValue}
+	want := map[string]any{"api_keys": RedactedValue}
 	if got := RedactDiagnosticValue(input); !reflect.DeepEqual(got, want) {
 		t.Fatalf("RedactDiagnosticValue() = %#v, want %#v", got, want)
 	}
 
 	type configWithAPIKeys struct {
-		APIKeys map[string]string `json:"apiKeys"`
+		APIKeys map[string]string `json:"api_keys"`
 	}
 	structInput := configWithAPIKeys{APIKeys: map[string]string{
 		"kimi": "kimi-test-secret",

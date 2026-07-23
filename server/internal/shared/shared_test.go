@@ -180,6 +180,9 @@ func TestLoadConfig_ConfigExampleIsValid(t *testing.T) {
 	if !bytes.Contains(raw, []byte(`"deepseek": ""`)) {
 		t.Fatalf("config.example.json missing empty deepseek API key field")
 	}
+	if !bytes.Contains(raw, []byte(`"api_keys"`)) {
+		t.Fatalf("config.example.json missing canonical api_keys field")
+	}
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig(config.example.json) error = %v", err)
@@ -190,7 +193,7 @@ func TestLoadConfig_ConfigExampleIsValid(t *testing.T) {
 }
 
 func TestLoadConfigAcceptsClaudeCompatibleAPIKeys(t *testing.T) {
-	path := writeTempConfig(t, `{"projects":[],"apiKeys":{"deepseek":"deepseek-test-key","kimi":"kimi-test-key","zai":"zai-test-key"}}`)
+	path := writeTempConfig(t, `{"projects":[],"api_keys":{"deepseek":"deepseek-test-key","kimi":"kimi-test-key","zai":"zai-test-key"}}`)
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
@@ -207,8 +210,32 @@ func TestLoadConfigAcceptsClaudeCompatibleAPIKeys(t *testing.T) {
 	}
 }
 
+func TestAppConfigMarshalsCanonicalAPIKeysField(t *testing.T) {
+	encoded, err := json.Marshal(AppConfig{
+		Projects: []ProjectConfig{},
+		APIKeys:  APIKeysConfig{ZAI: "zai-test-key"},
+	})
+	if err != nil {
+		t.Fatalf("json.Marshal(AppConfig) error = %v", err)
+	}
+	if !strings.Contains(string(encoded), `"api_keys":{"zai":"zai-test-key"}`) {
+		t.Fatalf("AppConfig JSON = %s, want canonical api_keys field", encoded)
+	}
+	if strings.Contains(string(encoded), `"apiKeys"`) {
+		t.Fatalf("AppConfig JSON = %s, contains removed apiKeys field", encoded)
+	}
+}
+
+func TestLoadConfigRejectsRemovedAPIKeysField(t *testing.T) {
+	path := writeTempConfig(t, `{"projects":[],"apiKeys":{"zai":"zai-test-key"}}`)
+	_, err := LoadConfig(path)
+	if err == nil || !strings.Contains(err.Error(), `unknown field "apiKeys"`) {
+		t.Fatalf("LoadConfig() error = %v, want removed apiKeys field rejected", err)
+	}
+}
+
 func TestLoadConfigRejectsUnknownAPIKeyField(t *testing.T) {
-	path := writeTempConfig(t, `{"projects":[],"apiKeys":{"unknown":"value"}}`)
+	path := writeTempConfig(t, `{"projects":[],"api_keys":{"unknown":"value"}}`)
 	_, err := LoadConfig(path)
 	if err == nil || !strings.Contains(err.Error(), `unknown field "unknown"`) {
 		t.Fatalf("LoadConfig() error = %v, want unknown nested API key field", err)

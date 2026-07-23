@@ -5,7 +5,7 @@
       "path": "/path/to/WheelMaker"
     }
   ],
-  "apiKeys": {
+  "api_keys": {
     "deepseek": "",
     "kimi": "",
     "zai": ""

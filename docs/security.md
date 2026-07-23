@@ -46,7 +46,7 @@ DeepSeek、Volcengine ASR 和 MiMo TTS 统一在设置页的 `Server` 分组配�
 
 Server 配置由 Registry 入口机写入 `~/.wheelmaker/db/server-data.json`。这是运行时必须读取的明文 JSON，不是加密保险箱；安全边界来自仅当前 OS 用户可访问的 private file permissions、原子替换写入和受限协议。备份该文件等同于备份所有第三方 Key，必须使用同等级的访问控制，不得上传 Git、诊断包或普通云盘。能控制当前 OS 用户或管理员权限的攻击者仍在已知风险范围内。
 
-Claude-compatible agent 的 Hub 本地 Key 是独立于 Server Data 的明确例外。每个 Hub 可以在自己的 `<stateDir>/config.json` 顶层 `apiKeys.kimi`、`apiKeys.zai` 保存 Kimi Code 与 Z.AI Key；默认 `stateDir` 为 `~/.wheelmaker`。这些字段只供 Hub 构建 `cc-kimi`、`cc-glm` provider 使用，不经 Server 设置接口、Registry project snapshot 或浏览器返回，也不向其他 Hub 下发。配置在 Hub 启动时读取，变更需要重启 Hub。
+Claude-compatible agent 的 Hub 本地 Key 是独立于 Server Data 的明确例外。每个 Hub 可以在自己的 `<stateDir>/config.json` 顶层 `api_keys.deepseek`、`api_keys.kimi`、`api_keys.zai` 保存 DeepSeek、Kimi Code 与 Z.AI Key；默认 `stateDir` 为 `~/.wheelmaker`。这些字段只供 Hub 构建 `cc-deepseek`、`cc-kimi`、`cc-glm` provider 使用，不经 Server 设置接口、Registry project snapshot 或浏览器返回，也不向其他 Hub 下发。配置在 Hub 启动时读取，变更需要重启 Hub。
 
 `config.json` 同样是受私有文件权限保护的明文配置，不是加密保险箱。Hub 只能把 Key 注入对应 `claude-agent-acp` 子进程环境，禁止放入 argv、ACP payload、Session 数据库、错误详情或日志；配置对象和环境诊断必须经过递归脱敏。`<stateDir>/.data/cc-glm`、`<stateDir>/.data/cc-kimi` 用于隔离 Claude SDK 配置和 Session 历史，不应复制 API Key。备份 `config.json` 等同于备份 Registry Token 与这些第三方 Key。
 
