@@ -2655,6 +2655,9 @@ describe('Claude-compatible agent choice menu', () => {
     expect(stylesCss).toContain('.agent-choice-child');
     expect(stylesCss).toContain('padding-left: 28px;');
 
+    const choiceMenuBlock = cssRuleBlock(stylesCss, '.agent-choice-menu');
+    expect(choiceMenuBlock).toContain('text-transform: lowercase;');
+
     const wideChoiceBlock = cssRuleBlockContainingSelector(stylesCss, '.agent-choice-item');
     expect(wideChoiceBlock).toContain('min-height: 26px;');
 
