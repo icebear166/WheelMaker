@@ -1,10 +1,27 @@
-> 摘要：本页维护 Project、Recent 与移动端 Session 列表的排序、菜单、pin 状态和生命周期交互约定。
+> 摘要：本页维护 Project、Recent 与移动端 Session 列表的排序、菜单、pin 状态、层级呈现、动作可见性和生命周期交互约定。
 
 # Session 列表交互
 
-> 来源：[`../../scope/2026-07-22-pin-session/spec-pin-session.md`](../../scope/2026-07-22-pin-session/spec-pin-session.md)
+> 来源：[`../../scope/2026-07-22-pin-session/spec-pin-session.md`](../../scope/2026-07-22-pin-session/spec-pin-session.md)、[`../../scope/2026-07-24-session-list-visual-upgrade/spec-session-list-visual-upgrade.md`](../../scope/2026-07-24-session-list-visual-upgrade/spec-session-list-visual-upgrade.md)
 
-本页用于持续记录 Session 列表层面的稳定交互。对话内容、Turn 展示和侧边栏容器布局分别由其他前端交互页面维护。
+本页用于持续记录 Session 列表层面的稳定交互。对话内容、Turn 展示和侧边栏容器布局分别由其他前端交互页面维护；图标、动效和配色等视觉语言约定见 [`visual-language.md`](visual-language.md)。
+
+## 层级呈现
+
+- 列表保留二级结构：一级是 Recent 分区与 Project 分组，二级是具体 session 行；不做信息架构重组，项目与 session 保持全量展示。
+- 一级分组行强、二级 session 行弱：分组行靠字重/字号对比和 hub 色色彩锚点（跟随 `--hub-accent`，不为单项目配色）强化辨识度；session 行缩进并使用次级色。
+- 层级强化不得显著增加行高，一屏 session 数量不减少。
+- 密度按平台分化：PC relaxed、移动端 compact，density token 两端生效。
+
+## 行内动作可见性
+
+- 「+」（新建 session）在 PC 与移动端都常驻可见，保证快速直达。
+- 项目/会话行的其余动作：PC 端 hover 或 focus-within 行时淡入；移动端收进长按菜单（PC 也可经右键菜单到达）。
+- pin 角标常驻显示，点击直接 unpin（见「Pin 展示与取消」）。
+
+## 菜单族
+
+- 右键/长按上下文菜单、「+」agent 选择菜单、Resume 菜单共享同一套视觉与结构语言（分组、每项配图标、统一进退场动画）；菜单结构允许随视觉升级重排，但功能项不增删。
 
 ## 列表表面
 
