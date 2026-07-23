@@ -124,6 +124,53 @@ export function deriveNpmPackageUpdateTargets(packages: RegistryNpmPackage[]): N
     }));
 }
 
+export type UpdateStatusIconKind = 'update' | 'current' | 'checking' | 'failed' | 'missing';
+
+export const UPDATE_STATUS_ICON_CODICON: Record<UpdateStatusIconKind, string> = {
+  update: 'codicon-arrow-up',
+  current: 'codicon-check',
+  checking: 'codicon-loading codicon-modifier-spin',
+  failed: 'codicon-error',
+  missing: 'codicon-circle-outline',
+};
+
+export function wheelMakerHubStatusIcon(
+  status: string,
+  loading: boolean,
+  jobActive: boolean,
+): UpdateStatusIconKind {
+  if (loading || jobActive) return 'checking';
+  if (status === 'update_available' || status === 'update_pending') return 'update';
+  if (status === 'up_to_date' || status === 'local_newer') return 'current';
+  return 'failed';
+}
+
+export function androidApkStatusIcon(status: string, loading: boolean): UpdateStatusIconKind {
+  if (loading) return 'checking';
+  if (status === 'update_available') return 'update';
+  if (status === 'up_to_date') return 'current';
+  return 'failed';
+}
+
+export function projectIndexStatusIcon(status: string, pending: boolean): UpdateStatusIconKind {
+  if (pending) return 'checking';
+  if (status === 'indexed') return 'current';
+  if (status === 'error' || status === 'failed') return 'failed';
+  if (status === 'missing') return 'missing';
+  return 'checking';
+}
+
+export function deriveNpmUpdatableTargets(packages: RegistryNpmPackage[]): NpmPackageUpdateTarget[] {
+  return packages
+    .filter(pkg => pkg.canUpdate)
+    .map(pkg => ({
+      packageName: pkg.packageName,
+      displayName: pkg.displayName,
+      installedVersion: pkg.installedVersion,
+      latestVersion: pkg.latestVersion,
+    }));
+}
+
 export function npmPackageUpdateSummary(count: number): string {
   if (count <= 0) return 'No npm updates';
   return `${count} npm ${count === 1 ? 'update' : 'updates'}`;
