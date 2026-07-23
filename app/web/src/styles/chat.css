@@ -253,21 +253,58 @@
   width: 100%;
   min-height: 42px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 3px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px;
   align-items: center;
-  border: 0;
   border-radius: 6px;
-  padding: 6px 8px;
+  padding: 4px 6px 4px 8px;
   background: transparent;
   color: var(--text-primary);
   text-align: left;
-  cursor: pointer;
 }
 
 .chat-title-project-menu-item:hover,
 .chat-title-project-menu-item.selected {
   background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+}
+
+.chat-title-project-menu-select {
+  min-width: 0;
+  min-height: 34px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  border: 0;
+  padding: 2px 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-title-project-menu-create {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.chat-title-project-menu-create .codicon {
+  font-size: 14px;
+}
+
+.chat-title-project-menu-create:hover {
+  background: color-mix(in srgb, var(--accent-primary) 16%, transparent);
+  color: var(--accent-primary);
 }
 
 .chat-title-project-menu-name {

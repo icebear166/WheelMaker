@@ -19254,20 +19254,42 @@ export function App() {
         const selectedProjectId = selectedChatKey?.projectId || projectId;
         const selected = projectItem.projectId === selectedProjectId;
         return (
-          <button
+          <div
             key={`chat-title-project:${projectItem.projectId}`}
-            type="button"
             className={`chat-title-project-menu-item${selected ? ' selected' : ''}`}
-            role="menuitemradio"
-            aria-checked={selected}
             title={projectItem.path || projectItem.projectId}
-            onClick={() => handleChatTitleProjectSelect(projectItem.projectId).catch(() => undefined)}
           >
-            <span className="chat-title-project-menu-name">{projectItem.name}</span>
-            <span className="chat-title-project-menu-path">
-              {projectItem.path || projectItem.hubId || projectItem.projectId}
-            </span>
-          </button>
+            <button
+              type="button"
+              className="chat-title-project-menu-select"
+              role="menuitemradio"
+              aria-checked={selected}
+              onClick={() => handleChatTitleProjectSelect(projectItem.projectId).catch(() => undefined)}
+            >
+              <span className="chat-title-project-menu-name">{projectItem.name}</span>
+              <span className="chat-title-project-menu-path">
+                {projectItem.path || projectItem.hubId || projectItem.projectId}
+              </span>
+            </button>
+            <button
+              type="button"
+              className="chat-title-project-menu-create"
+              role="menuitem"
+              aria-label={`New session in ${projectItem.name}`}
+              title="New session"
+              onPointerDown={event => event.stopPropagation()}
+              onClick={event => {
+                event.stopPropagation();
+                if (isWide) {
+                  openWideProjectActionMenu(projectItem.projectId, 'new', event.currentTarget);
+                } else {
+                  openMobileProjectActionMenu(projectItem.projectId, 'new');
+                }
+              }}
+            >
+              <span className="codicon codicon-add" aria-hidden="true" />
+            </button>
+          </div>
         );
       })}
     </div>
