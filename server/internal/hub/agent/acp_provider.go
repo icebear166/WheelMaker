@@ -118,6 +118,7 @@ var (
 		InstallHint:            "@agentclientprotocol/claude-agent-acp",
 		SkillProjectDirs:       []string{".claude/skills"},
 		SkillProjectParentDirs: []string{".claude/skills"},
+		SkillUserDirs:          []string{"~/.claude/skills"},
 	}
 	ClaudeCompatibleGLMProviderPreset = ACPProviderPreset{
 		Name:                   "cc-glm",
@@ -126,6 +127,7 @@ var (
 		InstallHint:            "@agentclientprotocol/claude-agent-acp",
 		SkillProjectDirs:       []string{".claude/skills"},
 		SkillProjectParentDirs: []string{".claude/skills"},
+		SkillUserDirs:          []string{"~/.claude/skills"},
 	}
 	ClaudeCompatibleKimiProviderPreset = ACPProviderPreset{
 		Name:                   "cc-kimi",
@@ -134,6 +136,7 @@ var (
 		InstallHint:            "@agentclientprotocol/claude-agent-acp",
 		SkillProjectDirs:       []string{".claude/skills"},
 		SkillProjectParentDirs: []string{".claude/skills"},
+		SkillUserDirs:          []string{"~/.claude/skills"},
 	}
 	ClaudeCompatibleQwenProviderPreset = ACPProviderPreset{
 		Name:                   "cc-qwen",
@@ -142,6 +145,7 @@ var (
 		InstallHint:            "@agentclientprotocol/claude-agent-acp",
 		SkillProjectDirs:       []string{".claude/skills"},
 		SkillProjectParentDirs: []string{".claude/skills"},
+		SkillUserDirs:          []string{"~/.claude/skills"},
 	}
 )
 
@@ -250,6 +254,9 @@ func (p *acpProvider) Launch() (string, []string, []string, error) {
 		return p.launchFlicker(exePath)
 	}
 	if p.claudeSettings != nil {
+		if err := ensureClaudeCompatibleSkills(p.claudeSettings.configDir); err != nil {
+			return "", nil, nil, fmt.Errorf("%s: prepare Claude skills: %w", p.preset.Name, err)
+		}
 		if err := ensureClaudeCompatibleSettings(*p.claudeSettings); err != nil {
 			return "", nil, nil, fmt.Errorf("%s: prepare Claude settings: %w", p.preset.Name, err)
 		}
@@ -266,7 +273,7 @@ type claudeCompatibleProfile struct {
 	settingsEnv     map[string]string
 }
 
-var claudeCompatibleSettingsMu sync.Mutex
+var claudeCompatibleConfigMu sync.Mutex
 
 func claudeCompatibleLaunchEnvironment(profile claudeCompatibleProfile, apiKey string) []string {
 	otherAuthName := "ANTHROPIC_API_KEY"
@@ -372,8 +379,8 @@ func claudeCompatibleQwenProfile(stateDir string) claudeCompatibleProfile {
 }
 
 func ensureClaudeCompatibleSettings(profile claudeCompatibleProfile) error {
-	claudeCompatibleSettingsMu.Lock()
-	defer claudeCompatibleSettingsMu.Unlock()
+	claudeCompatibleConfigMu.Lock()
+	defer claudeCompatibleConfigMu.Unlock()
 
 	settingsPath := filepath.Join(profile.configDir, "settings.json")
 	existing, err := os.ReadFile(settingsPath)
@@ -419,6 +426,80 @@ func ensureClaudeCompatibleSettings(profile claudeCompatibleProfile) error {
 		return fmt.Errorf("write %s: %w", settingsPath, err)
 	}
 	return nil
+}
+
+func ensureClaudeCompatibleSkills(configDir string) error {
+	claudeCompatibleConfigMu.Lock()
+	defer claudeCompatibleConfigMu.Unlock()
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("resolve user home: %w", err)
+	}
+	nativeSkillsDir := filepath.Join(homeDir, ".claude", "skills")
+	if err := os.MkdirAll(nativeSkillsDir, 0o755); err != nil {
+		return fmt.Errorf("prepare native Claude skills directory %s: %w", nativeSkillsDir, err)
+	}
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		return fmt.Errorf("prepare Claude config directory %s: %w", configDir, err)
+	}
+
+	sharedSkillsDir := filepath.Join(configDir, "skills")
+	info, err := os.Lstat(sharedSkillsDir)
+	if os.IsNotExist(err) {
+		return createDirectoryLink(nativeSkillsDir, sharedSkillsDir)
+	}
+	if err != nil {
+		return fmt.Errorf("inspect Claude-compatible skills path %s: %w", sharedSkillsDir, err)
+	}
+	if linkTarget, linkErr := os.Readlink(sharedSkillsDir); linkErr == nil {
+		if !filepath.IsAbs(linkTarget) {
+			linkTarget = filepath.Join(filepath.Dir(sharedSkillsDir), linkTarget)
+		}
+		resolved, err := filepath.EvalSymlinks(linkTarget)
+		if err != nil {
+			return fmt.Errorf("resolve Claude-compatible skills link target %s: %w", linkTarget, err)
+		}
+		nativeResolved, err := filepath.EvalSymlinks(nativeSkillsDir)
+		if err != nil {
+			return fmt.Errorf("resolve native Claude skills directory %s: %w", nativeSkillsDir, err)
+		}
+		if samePath(resolved, nativeResolved) {
+			return nil
+		}
+		return fmt.Errorf("Claude-compatible skills path %s links to %s, want %s", sharedSkillsDir, resolved, nativeResolved)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("Claude-compatible skills path %s exists and is not a directory link", sharedSkillsDir)
+	}
+
+	entries, err := os.ReadDir(sharedSkillsDir)
+	if err != nil {
+		return fmt.Errorf("read Claude-compatible skills directory %s: %w", sharedSkillsDir, err)
+	}
+	if len(entries) != 0 {
+		return fmt.Errorf("Claude-compatible skills directory %s is not empty; preserve its contents and link it manually", sharedSkillsDir)
+	}
+	if err := os.Remove(sharedSkillsDir); err != nil {
+		return fmt.Errorf("remove empty Claude-compatible skills directory %s: %w", sharedSkillsDir, err)
+	}
+	if err := createDirectoryLink(nativeSkillsDir, sharedSkillsDir); err != nil {
+		_ = os.MkdirAll(sharedSkillsDir, 0o755)
+		return err
+	}
+	return nil
+}
+
+func samePath(left, right string) bool {
+	leftAbs, leftErr := filepath.Abs(left)
+	rightAbs, rightErr := filepath.Abs(right)
+	if leftErr != nil || rightErr != nil {
+		return false
+	}
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(filepath.Clean(leftAbs), filepath.Clean(rightAbs))
+	}
+	return filepath.Clean(leftAbs) == filepath.Clean(rightAbs)
 }
 
 func removeClaudeCompatibleManagedEnv(env map[string]any) {

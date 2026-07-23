@@ -188,6 +188,16 @@ func TestClaudeACPProvider_UsesGlobalBinaryByDefault(t *testing.T) {
 
 func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 	stateDir := filepath.Join(t.TempDir(), "state")
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+	globalSkillDir := filepath.Join(homeDir, ".claude", "skills", "shared-skill")
+	if err := os.MkdirAll(globalSkillDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll global skill: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(globalSkillDir, "SKILL.md"), []byte("# Shared skill\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile global skill: %v", err)
+	}
 	tests := []struct {
 		name         string
 		newProvider  func(string, string) *acpProvider
@@ -391,6 +401,14 @@ func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 			if !reflect.DeepEqual(gotSettings, tt.wantSettings) {
 				t.Fatalf("settings = %#v, want %#v", gotSettings, tt.wantSettings)
 			}
+			sharedSkillPath := filepath.Join(gotEnv["CLAUDE_CONFIG_DIR"], "skills", "shared-skill", "SKILL.md")
+			sharedSkillData, err := os.ReadFile(sharedSkillPath)
+			if err != nil {
+				t.Fatalf("read shared global skill through provider config: %v", err)
+			}
+			if string(sharedSkillData) != "# Shared skill\n" {
+				t.Fatalf("shared global skill = %q, want %q", sharedSkillData, "# Shared skill\n")
+			}
 			if tt.name == "glm" {
 				for _, model := range gotSettings["availableModels"].([]any) {
 					if model == "glm-5.2" {
@@ -403,6 +421,132 @@ func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 				t.Fatalf("provider key leaked into executable/args: exe=%q args=%v", exe, args)
 			}
 		})
+	}
+}
+
+func TestEnsureClaudeCompatibleSkillsSharesWholeNativeDirectory(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+	nativeSkillsDir := filepath.Join(homeDir, ".claude", "skills")
+	if err := os.MkdirAll(nativeSkillsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll native skills: %v", err)
+	}
+
+	configDir := filepath.Join(t.TempDir(), "state", ".data", "cc-glm")
+	if err := ensureClaudeCompatibleSkills(configDir); err != nil {
+		t.Fatalf("ensureClaudeCompatibleSkills() error = %v", err)
+	}
+	if err := ensureClaudeCompatibleSkills(configDir); err != nil {
+		t.Fatalf("ensureClaudeCompatibleSkills() second call error = %v", err)
+	}
+
+	skillDir := filepath.Join(nativeSkillsDir, "added-after-link")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll skill: %v", err)
+	}
+	want := []byte("# Added after link\n")
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), want, 0o600); err != nil {
+		t.Fatalf("WriteFile skill: %v", err)
+	}
+	got, err := os.ReadFile(filepath.Join(configDir, "skills", "added-after-link", "SKILL.md"))
+	if err != nil {
+		t.Fatalf("read skill through shared directory: %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("shared skill = %q, want %q", got, want)
+	}
+}
+
+func TestEnsureClaudeCompatibleSkillsReplacesEmptyDirectory(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+	nativeSkillsDir := filepath.Join(homeDir, ".claude", "skills")
+	if err := os.MkdirAll(nativeSkillsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll native skills: %v", err)
+	}
+
+	configDir := filepath.Join(t.TempDir(), "state", ".data", "cc-kimi")
+	sharedSkillsDir := filepath.Join(configDir, "skills")
+	if err := os.MkdirAll(sharedSkillsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll empty provider skills: %v", err)
+	}
+	if err := ensureClaudeCompatibleSkills(configDir); err != nil {
+		t.Fatalf("ensureClaudeCompatibleSkills() error = %v", err)
+	}
+
+	skillDir := filepath.Join(nativeSkillsDir, "visible-after-migration")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll skill: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# Visible\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile skill: %v", err)
+	}
+	if _, err := os.ReadFile(filepath.Join(sharedSkillsDir, "visible-after-migration", "SKILL.md")); err != nil {
+		t.Fatalf("read skill through migrated directory: %v", err)
+	}
+}
+
+func TestEnsureClaudeCompatibleSkillsPreservesNonEmptyDirectory(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+
+	configDir := filepath.Join(t.TempDir(), "state", ".data", "cc-deepseek")
+	sharedSkillsDir := filepath.Join(configDir, "skills")
+	if err := os.MkdirAll(sharedSkillsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll provider skills: %v", err)
+	}
+	localSkillPath := filepath.Join(sharedSkillsDir, "local-only", "SKILL.md")
+	if err := os.MkdirAll(filepath.Dir(localSkillPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll local skill: %v", err)
+	}
+	if err := os.WriteFile(localSkillPath, []byte("# Keep me\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile local skill: %v", err)
+	}
+
+	err := ensureClaudeCompatibleSkills(configDir)
+	if err == nil || !strings.Contains(err.Error(), "not empty") {
+		t.Fatalf("ensureClaudeCompatibleSkills() error = %v, want non-empty directory error", err)
+	}
+	got, readErr := os.ReadFile(localSkillPath)
+	if readErr != nil {
+		t.Fatalf("read preserved local skill: %v", readErr)
+	}
+	if string(got) != "# Keep me\n" {
+		t.Fatalf("preserved local skill = %q, want %q", got, "# Keep me\n")
+	}
+}
+
+func TestEnsureClaudeCompatibleSkillsPreservesDifferentLink(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+	nativeSkillsDir := filepath.Join(homeDir, ".claude", "skills")
+	if err := os.MkdirAll(nativeSkillsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll native skills: %v", err)
+	}
+
+	configDir := filepath.Join(t.TempDir(), "state", ".data", "cc-qwen")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll config: %v", err)
+	}
+	otherSkillsDir := filepath.Join(t.TempDir(), "other-skills")
+	if err := os.MkdirAll(otherSkillsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll other skills: %v", err)
+	}
+	sharedSkillsDir := filepath.Join(configDir, "skills")
+	if err := createDirectoryLink(otherSkillsDir, sharedSkillsDir); err != nil {
+		t.Fatalf("createDirectoryLink: %v", err)
+	}
+
+	err := ensureClaudeCompatibleSkills(configDir)
+	if err == nil || !strings.Contains(err.Error(), "links to") {
+		t.Fatalf("ensureClaudeCompatibleSkills() error = %v, want different link error", err)
+	}
+	if _, readlinkErr := os.Readlink(sharedSkillsDir); readlinkErr != nil {
+		t.Fatalf("different link was not preserved: %v", readlinkErr)
 	}
 }
 
@@ -4673,7 +4817,7 @@ func TestProviderPresetByNameKimi(t *testing.T) {
 	}
 }
 
-func TestClaudeCompatibleProviderPresetsUseProjectClaudeSkillsOnly(t *testing.T) {
+func TestClaudeCompatibleProviderPresetsShareClaudeUserSkills(t *testing.T) {
 	for _, name := range []string{"cc-deepseek", "cc-glm", "cc-kimi", "cc-qwen"} {
 		t.Run(name, func(t *testing.T) {
 			preset, ok := providerPresetByName(name)
@@ -4686,10 +4830,41 @@ func TestClaudeCompatibleProviderPresetsUseProjectClaudeSkillsOnly(t *testing.T)
 			if !reflect.DeepEqual(preset.SkillProjectParentDirs, []string{".claude/skills"}) {
 				t.Fatalf("parent skill dirs = %v, want [.claude/skills]", preset.SkillProjectParentDirs)
 			}
-			for _, dir := range preset.SkillUserDirs {
-				if strings.EqualFold(strings.TrimSpace(dir), "~/.claude/skills") {
-					t.Fatalf("provider should not scan native Claude user skills: %v", preset.SkillUserDirs)
+			if !reflect.DeepEqual(preset.SkillUserDirs, []string{"~/.claude/skills"}) {
+				t.Fatalf("user skill dirs = %v, want [~/.claude/skills]", preset.SkillUserDirs)
+			}
+		})
+	}
+}
+
+func TestListProviderSkills_ClaudeCompatibleIncludesClaudeUserSkills(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
+	skillDir := filepath.Join(homeDir, ".claude", "skills", "shared-global")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll skill: %v", err)
+	}
+	skillPath := filepath.Join(skillDir, "SKILL.md")
+	if err := os.WriteFile(skillPath, []byte("---\nname: shared-global\n---\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile skill: %v", err)
+	}
+
+	for _, name := range []string{"cc-deepseek", "cc-glm", "cc-kimi", "cc-qwen"} {
+		t.Run(name, func(t *testing.T) {
+			skills, err := ListProviderSkills(context.Background(), name, t.TempDir())
+			if err != nil {
+				t.Fatalf("ListProviderSkills(%q) error = %v", name, err)
+			}
+			found := false
+			for _, skill := range skills {
+				if skill.Name == "shared-global" && skill.Path == skillPath {
+					found = true
+					break
 				}
+			}
+			if !found {
+				t.Fatalf("ListProviderSkills(%q) = %#v, want shared global skill at %s", name, skills, skillPath)
 			}
 		})
 	}
