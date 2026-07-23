@@ -5788,11 +5788,18 @@
 .wide-project-row {
   min-height: 34px;
   color: var(--text-secondary);
+  background: color-mix(in srgb, var(--surface-raised) 55%, transparent);
 }
 
 .wide-project-name {
   color: var(--text-primary);
-  font-weight: 500;
+  font-weight: 600;
+}
+
+.wide-project-session-list:not(.recent-sessions-list) {
+  margin-top: 3px;
+  padding-top: 4px;
+  border-top: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent);
 }
 
 .wide-project-hub-tag {
