@@ -5550,7 +5550,10 @@ export function App() {
     if (!wideProjectActionMenu) return;
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null;
-      if (target && wideProjectActionMenuRef.current?.contains(target)) {
+      if (target && (
+        wideProjectActionMenuRef.current?.contains(target) ||
+        chatTitleProjectMenuRef.current?.contains(target)
+      )) {
         return;
       }
       setWideProjectActionMenu(null);
@@ -5835,15 +5838,25 @@ export function App() {
       if (
         target &&
         (chatTitleProjectMenuRef.current?.contains(target) ||
-          chatTitleProjectButtonRef.current?.contains(target))
+          chatTitleProjectButtonRef.current?.contains(target) ||
+          wideProjectActionMenuRef.current?.contains(target))
       ) {
+        return;
+      }
+      // While the agent popover is open, outside clicks are handled by the
+      // popover's own dismiss; keep the dropdown mounted underneath.
+      if (wideProjectActionMenuRef.current) {
         return;
       }
       setChatTitleProjectMenuOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setChatTitleProjectMenuOpen(false);
+        if (wideProjectActionMenuRef.current) {
+          setWideProjectActionMenu(null);
+        } else {
+          setChatTitleProjectMenuOpen(false);
+        }
       }
     };
     window.addEventListener('pointerdown', onPointerDown);
@@ -19272,7 +19285,10 @@ export function App() {
               className="chat-title-project-menu-select"
               role="menuitemradio"
               aria-checked={selected}
-              onClick={() => handleChatTitleProjectSelect(projectItem.projectId).catch(() => undefined)}
+              onClick={() => {
+                setWideProjectActionMenu(null);
+                handleChatTitleProjectSelect(projectItem.projectId).catch(() => undefined);
+              }}
             >
               <span className="chat-title-project-menu-name">{projectItem.name}</span>
               <span className="chat-title-project-menu-path">
@@ -19290,6 +19306,7 @@ export function App() {
                 event.stopPropagation();
                 if (isWide) {
                   openWideProjectActionMenu(projectItem.projectId, 'new', event.currentTarget);
+                  setChatTitleProjectMenuOpen(true);
                 } else {
                   openMobileProjectActionMenu(projectItem.projectId, 'new');
                 }

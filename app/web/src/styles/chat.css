@@ -1660,7 +1660,7 @@
   max-height: min(280px, calc(100vh - 16px));
   overflow-y: auto;
   overscroll-behavior: contain;
-  z-index: 80;
+  z-index: 90;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   background: var(--surface-panel);
