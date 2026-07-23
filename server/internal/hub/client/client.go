@@ -281,6 +281,54 @@ func sanitizePreferenceConfigOptions(options []PreferenceConfigOption) []Prefere
 	return out
 }
 
+func configPreferencesWithAgentDefaults(
+	agentName string,
+	current []acp.ConfigOption,
+	stored []PreferenceConfigOption,
+) []PreferenceConfigOption {
+	resolved := append([]PreferenceConfigOption(nil), stored...)
+	defaultEffort := ""
+	switch strings.ToLower(strings.TrimSpace(agentName)) {
+	case string(acp.ACPProviderCCDeepSeek), string(acp.ACPProviderCCGLM):
+		defaultEffort = "max"
+	case string(acp.ACPProviderCCKimi):
+		defaultEffort = "high"
+	}
+	if defaultEffort == "" || hasStoredThoughtPreference(stored) {
+		return resolved
+	}
+	for _, option := range current {
+		if !isThoughtConfigOption(option.ID, option.Category) {
+			continue
+		}
+		resolved = append(resolved, PreferenceConfigOption{
+			ID:           option.ID,
+			CurrentValue: defaultEffort,
+		})
+		break
+	}
+	return resolved
+}
+
+func hasStoredThoughtPreference(options []PreferenceConfigOption) bool {
+	for _, option := range options {
+		if isThoughtConfigOption(option.ID, "") {
+			return true
+		}
+	}
+	return false
+}
+
+func isThoughtConfigOption(id, category string) bool {
+	for _, value := range []string{id, category} {
+		switch strings.ToLower(strings.TrimSpace(value)) {
+		case "effort", acp.ConfigOptionIDThoughtLevel, acp.ConfigOptionIDReasoningEffort:
+			return true
+		}
+	}
+	return false
+}
+
 func (c *Client) createSessionState(ctx context.Context, agentType, title, createRequestID string) (*createdSessionState, error) {
 	agentType = normalizeAgentType(agentType)
 	if _, ok := acp.ParseACPProvider(agentType); !ok {
@@ -343,8 +391,9 @@ func (c *Client) createSessionState(ctx context.Context, agentType, title, creat
 	}
 
 	resolved := append([]acp.ConfigOption(nil), newResult.ConfigOptions...)
-	if len(preference.ConfigOptions) > 0 {
-		resolved = applyStoredConfigOptions(ctx, c.projectName, inst, sessionID, resolved, preference.ConfigOptions)
+	targetConfig := configPreferencesWithAgentDefaults(agentType, resolved, preference.ConfigOptions)
+	if len(targetConfig) > 0 {
+		resolved = applyStoredConfigOptions(ctx, c.projectName, inst, sessionID, resolved, targetConfig)
 	}
 
 	sessionTitle := strings.TrimSpace(newResult.Title)

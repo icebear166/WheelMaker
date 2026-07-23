@@ -1519,6 +1519,135 @@ func TestCreateSession_ReappliesProjectAgentBaseline(t *testing.T) {
 
 }
 
+func TestCreateSession_AppliesClaudeCompatibleDefaultEffort(t *testing.T) {
+	tests := []struct {
+		agentType  acp.ACPProvider
+		wantEffort string
+	}{
+		{agentType: acp.ACPProviderCCDeepSeek, wantEffort: "max"},
+		{agentType: acp.ACPProviderCCGLM, wantEffort: "max"},
+		{agentType: acp.ACPProviderCCKimi, wantEffort: "high"},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.agentType), func(t *testing.T) {
+			store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
+			if err != nil {
+				t.Fatalf("NewStore: %v", err)
+			}
+			defer store.Close()
+
+			inst := &testInjectedInstance{
+				name: string(tt.agentType),
+				initResult: acp.InitializeResult{
+					ProtocolVersion:   "0.1",
+					AgentCapabilities: acp.AgentCapabilities{},
+				},
+				newResult: &acp.SessionNewResult{
+					SessionID: "acp-new",
+					ConfigOptions: []acp.ConfigOption{{
+						ID:           "effort",
+						Category:     acp.ConfigOptionCategoryThoughtLv,
+						CurrentValue: "default",
+					}},
+				},
+			}
+			client := New(store, "proj1", t.TempDir())
+			client.registry = agent.NewACPFactory()
+			client.registry.Register(tt.agentType, func(context.Context, string) (agent.Instance, error) {
+				return inst, nil
+			})
+
+			if _, err := client.CreateSession(context.Background(), string(tt.agentType), ""); err != nil {
+				t.Fatalf("CreateSession: %v", err)
+			}
+			if len(inst.setCalls) != 1 {
+				t.Fatalf("set calls = %v, want one effort default", inst.setCalls)
+			}
+			if got := inst.setCalls[0]; got.ConfigID != "effort" || got.Value != tt.wantEffort {
+				t.Fatalf("set call = %+v, want effort=%s", got, tt.wantEffort)
+			}
+		})
+	}
+}
+
+func TestCreateSession_ClaudeCompatibleStoredEffortOverridesDefault(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+	if err := store.SaveAgentPreference(context.Background(), AgentPreferenceRecord{
+		ProjectName: "proj1",
+		AgentType:   string(acp.ACPProviderCCGLM),
+		PreferenceJSON: string(mustJSON(PreferenceState{ConfigOptions: []PreferenceConfigOption{{
+			ID:           "effort",
+			CurrentValue: "low",
+		}}})),
+	}); err != nil {
+		t.Fatalf("SaveAgentPreference: %v", err)
+	}
+
+	inst := &testInjectedInstance{
+		name: string(acp.ACPProviderCCGLM),
+		initResult: acp.InitializeResult{
+			ProtocolVersion:   "0.1",
+			AgentCapabilities: acp.AgentCapabilities{},
+		},
+		newResult: &acp.SessionNewResult{
+			SessionID: "acp-new",
+			ConfigOptions: []acp.ConfigOption{{
+				ID:           "effort",
+				Category:     acp.ConfigOptionCategoryThoughtLv,
+				CurrentValue: "default",
+			}},
+		},
+	}
+	client := New(store, "proj1", t.TempDir())
+	client.registry = agent.NewACPFactory()
+	client.registry.Register(acp.ACPProviderCCGLM, func(context.Context, string) (agent.Instance, error) {
+		return inst, nil
+	})
+
+	if _, err := client.CreateSession(context.Background(), string(acp.ACPProviderCCGLM), ""); err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	if len(inst.setCalls) != 1 {
+		t.Fatalf("set calls = %v, want stored effort only", inst.setCalls)
+	}
+	if got := inst.setCalls[0]; got.ConfigID != "effort" || got.Value != "low" {
+		t.Fatalf("set call = %+v, want stored effort=low", got)
+	}
+}
+
+func TestCreateSession_ClaudeCompatibleDefaultEffortSkipsUnsupportedOption(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+	inst := &testInjectedInstance{
+		name: string(acp.ACPProviderCCDeepSeek),
+		initResult: acp.InitializeResult{
+			ProtocolVersion:   "0.1",
+			AgentCapabilities: acp.AgentCapabilities{},
+		},
+		newResult: &acp.SessionNewResult{SessionID: "acp-new"},
+	}
+	client := New(store, "proj1", t.TempDir())
+	client.registry = agent.NewACPFactory()
+	client.registry.Register(acp.ACPProviderCCDeepSeek, func(context.Context, string) (agent.Instance, error) {
+		return inst, nil
+	})
+
+	if _, err := client.CreateSession(context.Background(), string(acp.ACPProviderCCDeepSeek), ""); err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	if len(inst.setCalls) != 0 {
+		t.Fatalf("set calls = %v, want none when effort is unsupported", inst.setCalls)
+	}
+}
+
 func TestEnsureReady_SessionLoadSuccess_ReplaysStoredConfigValuesByID(t *testing.T) {
 	s := mustNewSession(t, "acp-old", "/tmp", "claude")
 	s.projectName = "proj1"

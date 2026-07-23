@@ -189,37 +189,43 @@ func TestClaudeACPProvider_UsesGlobalBinaryByDefault(t *testing.T) {
 func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 	stateDir := filepath.Join(t.TempDir(), "state")
 	tests := []struct {
-		name        string
-		newProvider func(string, string) *acpProvider
-		key         string
-		wantArgs    []string
-		wantEnv     map[string]string
-		wantModels  []string
+		name         string
+		newProvider  func(string, string) *acpProvider
+		key          string
+		wantArgs     []string
+		wantEnv      map[string]string
+		wantSettings map[string]any
 	}{
 		{
 			name:        "deepseek",
 			newProvider: NewCCDeepSeekProvider,
 			key:         "deepseek-test-key",
 			wantArgs:    []string{"--hide-claude-auth"},
-			wantModels:  []string{"deepseek-v4-pro[1m]", "deepseek-v4-pro", "deepseek-v4-flash"},
 			wantEnv: map[string]string{
-				"CLAUDE_CONFIG_DIR":                        filepath.Join(stateDir, ".data", "cc-deepseek"),
-				"ANTHROPIC_BASE_URL":                       "https://api.deepseek.com/anthropic",
-				"ANTHROPIC_AUTH_TOKEN":                     "deepseek-test-key",
-				"ANTHROPIC_API_KEY":                        "",
-				"CLAUDE_CODE_USE_BEDROCK":                  "",
-				"CLAUDE_CODE_USE_VERTEX":                   "",
-				"CLAUDE_CODE_USE_FOUNDRY":                  "",
-				"ANTHROPIC_MODEL":                          "deepseek-v4-pro[1m]",
-				"ANTHROPIC_DEFAULT_FABLE_MODEL":            "deepseek-v4-pro[1m]",
-				"ANTHROPIC_DEFAULT_OPUS_MODEL":             "deepseek-v4-pro[1m]",
-				"ANTHROPIC_DEFAULT_SONNET_MODEL":           "deepseek-v4-pro[1m]",
-				"ANTHROPIC_DEFAULT_HAIKU_MODEL":            "deepseek-v4-flash",
-				"CLAUDE_CODE_SUBAGENT_MODEL":               "deepseek-v4-flash",
-				"CLAUDE_CODE_EFFORT_LEVEL":                 "max",
-				"CLAUDE_CODE_AUTO_COMPACT_WINDOW":          "1000000",
-				"CLAUDE_CODE_MAX_CONTEXT_TOKENS":           "1000000",
-				"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+				"CLAUDE_CONFIG_DIR":       filepath.Join(stateDir, ".data", "cc-deepseek"),
+				"ANTHROPIC_BASE_URL":      "https://api.deepseek.com/anthropic",
+				"ANTHROPIC_AUTH_TOKEN":    "deepseek-test-key",
+				"ANTHROPIC_API_KEY":       "",
+				"CLAUDE_CODE_USE_BEDROCK": "",
+				"CLAUDE_CODE_USE_VERTEX":  "",
+				"CLAUDE_CODE_USE_FOUNDRY": "",
+			},
+			wantSettings: map[string]any{
+				"model":                  "deepseek-v4-pro[1m]",
+				"availableModels":        []any{"deepseek-v4-pro[1m]", "deepseek-v4-flash[1m]"},
+				"enforceAvailableModels": true,
+				"env": map[string]any{
+					"ANTHROPIC_DEFAULT_FABLE_MODEL":            "deepseek-v4-pro[1m]",
+					"ANTHROPIC_DEFAULT_FABLE_MODEL_NAME":       "DeepSeek V4 Pro (1M)",
+					"ANTHROPIC_DEFAULT_OPUS_MODEL":             "deepseek-v4-pro[1m]",
+					"ANTHROPIC_DEFAULT_OPUS_MODEL_NAME":        "DeepSeek V4 Pro (1M)",
+					"ANTHROPIC_DEFAULT_SONNET_MODEL":           "deepseek-v4-pro[1m]",
+					"ANTHROPIC_DEFAULT_SONNET_MODEL_NAME":      "DeepSeek V4 Pro (1M)",
+					"ANTHROPIC_DEFAULT_HAIKU_MODEL":            "deepseek-v4-flash[1m]",
+					"ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME":       "DeepSeek V4 Flash (1M)",
+					"CLAUDE_CODE_SUBAGENT_MODEL":               "deepseek-v4-flash[1m]",
+					"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+				},
 			},
 		},
 		{
@@ -227,24 +233,30 @@ func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 			newProvider: NewCCKimiProvider,
 			key:         "kimi-test-key",
 			wantArgs:    []string{"--hide-claude-auth"},
-			wantModels:  []string{"k3[1m]", "k3", "kimi-for-coding", "kimi-for-coding-highspeed"},
 			wantEnv: map[string]string{
-				"CLAUDE_CONFIG_DIR":               filepath.Join(stateDir, ".data", "cc-kimi"),
-				"ANTHROPIC_BASE_URL":              "https://api.kimi.com/coding/",
-				"ANTHROPIC_API_KEY":               "kimi-test-key",
-				"ANTHROPIC_AUTH_TOKEN":            "",
-				"CLAUDE_CODE_USE_BEDROCK":         "",
-				"CLAUDE_CODE_USE_VERTEX":          "",
-				"CLAUDE_CODE_USE_FOUNDRY":         "",
-				"ANTHROPIC_MODEL":                 "k3[1m]",
-				"ANTHROPIC_DEFAULT_FABLE_MODEL":   "k3[1m]",
-				"ANTHROPIC_DEFAULT_OPUS_MODEL":    "k3[1m]",
-				"ANTHROPIC_DEFAULT_SONNET_MODEL":  "k3[1m]",
-				"ANTHROPIC_DEFAULT_HAIKU_MODEL":   "k3[1m]",
-				"CLAUDE_CODE_SUBAGENT_MODEL":      "k3[1m]",
-				"CLAUDE_CODE_EFFORT_LEVEL":        "high",
-				"CLAUDE_CODE_AUTO_COMPACT_WINDOW": "1048576",
-				"CLAUDE_CODE_MAX_CONTEXT_TOKENS":  "1048576",
+				"CLAUDE_CONFIG_DIR":       filepath.Join(stateDir, ".data", "cc-kimi"),
+				"ANTHROPIC_BASE_URL":      "https://api.kimi.com/coding/",
+				"ANTHROPIC_API_KEY":       "kimi-test-key",
+				"ANTHROPIC_AUTH_TOKEN":    "",
+				"CLAUDE_CODE_USE_BEDROCK": "",
+				"CLAUDE_CODE_USE_VERTEX":  "",
+				"CLAUDE_CODE_USE_FOUNDRY": "",
+			},
+			wantSettings: map[string]any{
+				"model":                  "k3[1m]",
+				"availableModels":        []any{"k3[1m]", "k3", "kimi-for-coding", "kimi-for-coding-highspeed"},
+				"enforceAvailableModels": true,
+				"env": map[string]any{
+					"ANTHROPIC_DEFAULT_FABLE_MODEL":       "k3[1m]",
+					"ANTHROPIC_DEFAULT_FABLE_MODEL_NAME":  "Kimi K3 (1M)",
+					"ANTHROPIC_DEFAULT_OPUS_MODEL":        "k3",
+					"ANTHROPIC_DEFAULT_OPUS_MODEL_NAME":   "Kimi K3 (256K)",
+					"ANTHROPIC_DEFAULT_SONNET_MODEL":      "kimi-for-coding",
+					"ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": "Kimi for Coding",
+					"ANTHROPIC_DEFAULT_HAIKU_MODEL":       "kimi-for-coding-highspeed",
+					"ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME":  "Kimi for Coding Highspeed",
+					"CLAUDE_CODE_SUBAGENT_MODEL":          "k3[1m]",
+				},
 			},
 		},
 		{
@@ -252,25 +264,32 @@ func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 			newProvider: NewCCGLMProvider,
 			key:         "zai-test-key",
 			wantArgs:    []string{"--hide-claude-auth"},
-			wantModels:  []string{"glm-5.2[1m]", "glm-5.2", "glm-4.7", "glm-4.5-air"},
 			wantEnv: map[string]string{
-				"CLAUDE_CONFIG_DIR":                        filepath.Join(stateDir, ".data", "cc-glm"),
-				"ANTHROPIC_BASE_URL":                       "https://api.z.ai/api/anthropic",
-				"ANTHROPIC_AUTH_TOKEN":                     "zai-test-key",
-				"ANTHROPIC_API_KEY":                        "",
-				"CLAUDE_CODE_USE_BEDROCK":                  "",
-				"CLAUDE_CODE_USE_VERTEX":                   "",
-				"CLAUDE_CODE_USE_FOUNDRY":                  "",
-				"ANTHROPIC_MODEL":                          "glm-5.2[1m]",
-				"ANTHROPIC_DEFAULT_FABLE_MODEL":            "glm-5.2[1m]",
-				"ANTHROPIC_DEFAULT_OPUS_MODEL":             "glm-5.2[1m]",
-				"ANTHROPIC_DEFAULT_SONNET_MODEL":           "glm-5.2[1m]",
-				"ANTHROPIC_DEFAULT_HAIKU_MODEL":            "glm-4.5-air",
-				"CLAUDE_CODE_SUBAGENT_MODEL":               "glm-5.2[1m]",
-				"CLAUDE_CODE_AUTO_COMPACT_WINDOW":          "1000000",
-				"CLAUDE_CODE_MAX_CONTEXT_TOKENS":           "1000000",
-				"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-				"API_TIMEOUT_MS":                           "3000000",
+				"CLAUDE_CONFIG_DIR":       filepath.Join(stateDir, ".data", "cc-glm"),
+				"ANTHROPIC_BASE_URL":      "https://api.z.ai/api/anthropic",
+				"ANTHROPIC_AUTH_TOKEN":    "zai-test-key",
+				"ANTHROPIC_API_KEY":       "",
+				"CLAUDE_CODE_USE_BEDROCK": "",
+				"CLAUDE_CODE_USE_VERTEX":  "",
+				"CLAUDE_CODE_USE_FOUNDRY": "",
+			},
+			wantSettings: map[string]any{
+				"model":                  "glm-5.2[1m]",
+				"availableModels":        []any{"glm-5.2[1m]", "glm-5-turbo", "glm-4.7"},
+				"enforceAvailableModels": true,
+				"env": map[string]any{
+					"ANTHROPIC_DEFAULT_FABLE_MODEL":            "glm-5.2[1m]",
+					"ANTHROPIC_DEFAULT_FABLE_MODEL_NAME":       "GLM-5.2 (1M)",
+					"ANTHROPIC_DEFAULT_OPUS_MODEL":             "glm-5.2[1m]",
+					"ANTHROPIC_DEFAULT_OPUS_MODEL_NAME":        "GLM-5.2 (1M)",
+					"ANTHROPIC_DEFAULT_SONNET_MODEL":           "glm-5-turbo",
+					"ANTHROPIC_DEFAULT_SONNET_MODEL_NAME":      "GLM-5-Turbo",
+					"ANTHROPIC_DEFAULT_HAIKU_MODEL":            "glm-4.7",
+					"ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME":       "GLM-4.7",
+					"CLAUDE_CODE_SUBAGENT_MODEL":               "glm-4.7",
+					"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+					"API_TIMEOUT_MS":                           "3000000",
+				},
 			},
 		},
 	}
@@ -308,20 +327,147 @@ func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 					t.Fatalf("env[%q] = %q, want %q; env=%v", name, got, want, gotEnv)
 				}
 			}
-			modelConfig := struct {
-				AvailableModels []string `json:"availableModels"`
-			}{}
-			if err := json.Unmarshal([]byte(gotEnv["CLAUDE_MODEL_CONFIG"]), &modelConfig); err != nil {
-				t.Fatalf("CLAUDE_MODEL_CONFIG is invalid JSON: %v", err)
+			for _, forbidden := range []string{
+				"ANTHROPIC_MODEL",
+				"CLAUDE_MODEL_CONFIG",
+				"CLAUDE_CODE_EFFORT_LEVEL",
+				"CLAUDE_CODE_AUTO_COMPACT_WINDOW",
+				"CLAUDE_CODE_MAX_CONTEXT_TOKENS",
+			} {
+				if _, ok := gotEnv[forbidden]; ok {
+					t.Fatalf("launch environment unexpectedly contains %s", forbidden)
+				}
 			}
-			if !reflect.DeepEqual(modelConfig.AvailableModels, tt.wantModels) {
-				t.Fatalf("availableModels = %v, want %v", modelConfig.AvailableModels, tt.wantModels)
+			settingsPath := filepath.Join(gotEnv["CLAUDE_CONFIG_DIR"], "settings.json")
+			settingsData, err := os.ReadFile(settingsPath)
+			if err != nil {
+				t.Fatalf("read generated settings: %v", err)
+			}
+			if strings.Contains(string(settingsData), tt.key) {
+				t.Fatalf("generated settings leaked provider API key: %s", settingsData)
+			}
+			var gotSettings map[string]any
+			if err := json.Unmarshal(settingsData, &gotSettings); err != nil {
+				t.Fatalf("generated settings are invalid JSON: %v", err)
+			}
+			if !reflect.DeepEqual(gotSettings, tt.wantSettings) {
+				t.Fatalf("settings = %#v, want %#v", gotSettings, tt.wantSettings)
 			}
 			joinedArgs := strings.Join(args, " ")
 			if strings.Contains(joinedArgs, tt.key) || strings.Contains(exe, tt.key) {
 				t.Fatalf("provider key leaked into executable/args: exe=%q args=%v", exe, args)
 			}
 		})
+	}
+}
+
+func TestClaudeCompatibleProviderSettingsMergePreservesUserFields(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "state")
+	settingsDir := filepath.Join(stateDir, ".data", "cc-glm")
+	if err := os.MkdirAll(settingsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	settingsPath := filepath.Join(settingsDir, "settings.json")
+	existing := `{
+  "permissions": {"allow": ["Bash(go test ./...)"]},
+  "model": "old-model",
+  "availableModels": ["old-model"],
+  "env": {
+    "CUSTOM_SETTING": "keep-me",
+    "CLAUDE_CODE_EFFORT_LEVEL": "low",
+    "ANTHROPIC_MODEL": "old-model"
+  }
+}`
+	if err := os.WriteFile(settingsPath, []byte(existing), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	provider := NewCCGLMProvider(stateDir, "secret-key")
+	provider.resolveBinary = func(string, string, string) (string, error) {
+		return "/usr/bin/claude-agent-acp", nil
+	}
+	if _, _, _, err := provider.Launch(); err != nil {
+		t.Fatalf("Launch: %v", err)
+	}
+
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	var settings map[string]any
+	if err := json.Unmarshal(data, &settings); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	permissions, ok := settings["permissions"].(map[string]any)
+	if !ok || !reflect.DeepEqual(permissions["allow"], []any{"Bash(go test ./...)"}) {
+		t.Fatalf("permissions were not preserved: %#v", settings["permissions"])
+	}
+	env, ok := settings["env"].(map[string]any)
+	if !ok {
+		t.Fatalf("env = %#v, want object", settings["env"])
+	}
+	if env["CUSTOM_SETTING"] != "keep-me" {
+		t.Fatalf("custom env was not preserved: %#v", env)
+	}
+	for _, removed := range []string{"CLAUDE_CODE_EFFORT_LEVEL", "ANTHROPIC_MODEL"} {
+		if _, exists := env[removed]; exists {
+			t.Fatalf("obsolete managed env %s was not removed: %#v", removed, env)
+		}
+	}
+}
+
+func TestClaudeCompatibleProviderSettingsRejectMalformedJSONWithoutOverwrite(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "state")
+	settingsDir := filepath.Join(stateDir, ".data", "cc-kimi")
+	if err := os.MkdirAll(settingsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	settingsPath := filepath.Join(settingsDir, "settings.json")
+	malformed := []byte(`{"model":`)
+	if err := os.WriteFile(settingsPath, malformed, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	provider := NewCCKimiProvider(stateDir, "secret-key")
+	provider.resolveBinary = func(string, string, string) (string, error) {
+		return "/usr/bin/claude-agent-acp", nil
+	}
+	if _, _, _, err := provider.Launch(); err == nil {
+		t.Fatal("Launch error = nil, want malformed settings error")
+	}
+	got, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if !bytes.Equal(got, malformed) {
+		t.Fatalf("malformed settings were overwritten: got %q, want %q", got, malformed)
+	}
+}
+
+func TestClaudeCompatibleProviderSettingsWriteIsIdempotent(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "state")
+	provider := NewCCDeepSeekProvider(stateDir, "secret-key")
+	provider.resolveBinary = func(string, string, string) (string, error) {
+		return "/usr/bin/claude-agent-acp", nil
+	}
+	if _, _, _, err := provider.Launch(); err != nil {
+		t.Fatalf("first Launch: %v", err)
+	}
+	settingsPath := filepath.Join(stateDir, ".data", "cc-deepseek", "settings.json")
+	before, err := os.Stat(settingsPath)
+	if err != nil {
+		t.Fatalf("Stat before: %v", err)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if _, _, _, err := provider.Launch(); err != nil {
+		t.Fatalf("second Launch: %v", err)
+	}
+	after, err := os.Stat(settingsPath)
+	if err != nil {
+		t.Fatalf("Stat after: %v", err)
+	}
+	if !after.ModTime().Equal(before.ModTime()) {
+		t.Fatalf("settings file was rewritten: before=%v after=%v", before.ModTime(), after.ModTime())
 	}
 }
 

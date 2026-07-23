@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
+
+	"github.com/swm8023/wheelmaker/internal/shared"
 )
 
 // ACPProvider resolves launch details for one ACP agent type.
@@ -135,7 +139,8 @@ var (
 
 // acpProvider is the unified implementation for all ACP providers.
 type acpProvider struct {
-	preset ACPProviderPreset
+	preset         ACPProviderPreset
+	claudeSettings *claudeCompatibleProfile
 
 	resolveBinary       func(name, configuredPath, installHint string) (string, error)
 	lookPath            func(file string) (string, error)
@@ -185,21 +190,30 @@ func NewKimiProvider() *acpProvider {
 }
 
 func NewCCDeepSeekProvider(stateDir, apiKey string) *acpProvider {
+	profile := claudeCompatibleDeepSeekProfile(stateDir)
 	preset := ClaudeCompatibleDeepSeekProviderPreset
-	preset.Env = claudeCompatibleDeepSeekEnvironment(stateDir, apiKey)
-	return NewACPProvider(preset)
+	preset.Env = claudeCompatibleLaunchEnvironment(profile, apiKey)
+	provider := NewACPProvider(preset)
+	provider.claudeSettings = &profile
+	return provider
 }
 
 func NewCCGLMProvider(stateDir, apiKey string) *acpProvider {
+	profile := claudeCompatibleGLMProfile(stateDir)
 	preset := ClaudeCompatibleGLMProviderPreset
-	preset.Env = claudeCompatibleGLMEnvironment(stateDir, apiKey)
-	return NewACPProvider(preset)
+	preset.Env = claudeCompatibleLaunchEnvironment(profile, apiKey)
+	provider := NewACPProvider(preset)
+	provider.claudeSettings = &profile
+	return provider
 }
 
 func NewCCKimiProvider(stateDir, apiKey string) *acpProvider {
+	profile := claudeCompatibleKimiProfile(stateDir)
 	preset := ClaudeCompatibleKimiProviderPreset
-	preset.Env = claudeCompatibleKimiEnvironment(stateDir, apiKey)
-	return NewACPProvider(preset)
+	preset.Env = claudeCompatibleLaunchEnvironment(profile, apiKey)
+	provider := NewACPProvider(preset)
+	provider.claudeSettings = &profile
+	return provider
 }
 
 func (p *acpProvider) Name() string { return p.preset.Name }
@@ -218,99 +232,176 @@ func (p *acpProvider) Launch() (string, []string, []string, error) {
 	if p.preset.Name == FlickerACPProviderPreset.Name {
 		return p.launchFlicker(exePath)
 	}
+	if p.claudeSettings != nil {
+		if err := ensureClaudeCompatibleSettings(*p.claudeSettings); err != nil {
+			return "", nil, nil, fmt.Errorf("%s: prepare Claude settings: %w", p.preset.Name, err)
+		}
+	}
 	return exePath, defaultArgs, defaultEnv, nil
 }
 
-type claudeModelConfig struct {
-	AvailableModels []string `json:"availableModels"`
+type claudeCompatibleProfile struct {
+	configDir       string
+	endpoint        string
+	authName        string
+	defaultModel    string
+	availableModels []string
+	settingsEnv     map[string]string
 }
 
-func claudeModelConfigJSON(models []string) string {
-	data, _ := json.Marshal(claudeModelConfig{AvailableModels: models})
-	return string(data)
-}
+var claudeCompatibleSettingsMu sync.Mutex
 
-func claudeCompatibleEnvironment(
-	stateDir, providerName, endpoint, authName, apiKey, defaultModel, haikuModel, subagentModel string,
-	autoCompactWindow, maxContextTokens string, models []string,
-	extra ...string,
-) []string {
+func claudeCompatibleLaunchEnvironment(profile claudeCompatibleProfile, apiKey string) []string {
 	otherAuthName := "ANTHROPIC_API_KEY"
-	if authName == otherAuthName {
+	if profile.authName == otherAuthName {
 		otherAuthName = "ANTHROPIC_AUTH_TOKEN"
 	}
-	env := []string{
-		"CLAUDE_CONFIG_DIR=" + filepath.Join(stateDir, ".data", providerName),
-		"ANTHROPIC_BASE_URL=" + endpoint,
+	return []string{
+		"CLAUDE_CONFIG_DIR=" + profile.configDir,
+		"ANTHROPIC_BASE_URL=" + profile.endpoint,
 		otherAuthName + "=",
 		"CLAUDE_CODE_USE_BEDROCK=",
 		"CLAUDE_CODE_USE_VERTEX=",
 		"CLAUDE_CODE_USE_FOUNDRY=",
-		authName + "=" + apiKey,
-		"ANTHROPIC_MODEL=" + defaultModel,
-		"ANTHROPIC_DEFAULT_FABLE_MODEL=" + defaultModel,
-		"ANTHROPIC_DEFAULT_OPUS_MODEL=" + defaultModel,
-		"ANTHROPIC_DEFAULT_SONNET_MODEL=" + defaultModel,
-		"ANTHROPIC_DEFAULT_HAIKU_MODEL=" + haikuModel,
-		"CLAUDE_CODE_SUBAGENT_MODEL=" + subagentModel,
-		"CLAUDE_CODE_AUTO_COMPACT_WINDOW=" + autoCompactWindow,
-		"CLAUDE_CODE_MAX_CONTEXT_TOKENS=" + maxContextTokens,
-		"CLAUDE_MODEL_CONFIG=" + claudeModelConfigJSON(models),
+		profile.authName + "=" + apiKey,
 	}
-	return append(env, extra...)
 }
 
-func claudeCompatibleKimiEnvironment(stateDir, apiKey string) []string {
-	env := claudeCompatibleEnvironment(
-		stateDir,
-		ClaudeCompatibleKimiProviderPreset.Name,
-		"https://api.kimi.com/coding/",
-		"ANTHROPIC_API_KEY",
-		apiKey,
-		"k3[1m]",
-		"k3[1m]",
-		"k3[1m]",
-		"1048576",
-		"1048576",
-		[]string{"k3[1m]", "k3", "kimi-for-coding", "kimi-for-coding-highspeed"},
-	)
-	return append(env, "CLAUDE_CODE_EFFORT_LEVEL=high")
+func claudeCompatibleKimiProfile(stateDir string) claudeCompatibleProfile {
+	return claudeCompatibleProfile{
+		configDir:       filepath.Join(stateDir, ".data", ClaudeCompatibleKimiProviderPreset.Name),
+		endpoint:        "https://api.kimi.com/coding/",
+		authName:        "ANTHROPIC_API_KEY",
+		defaultModel:    "k3[1m]",
+		availableModels: []string{"k3[1m]", "k3", "kimi-for-coding", "kimi-for-coding-highspeed"},
+		settingsEnv: map[string]string{
+			"ANTHROPIC_DEFAULT_FABLE_MODEL":       "k3[1m]",
+			"ANTHROPIC_DEFAULT_FABLE_MODEL_NAME":  "Kimi K3 (1M)",
+			"ANTHROPIC_DEFAULT_OPUS_MODEL":        "k3",
+			"ANTHROPIC_DEFAULT_OPUS_MODEL_NAME":   "Kimi K3 (256K)",
+			"ANTHROPIC_DEFAULT_SONNET_MODEL":      "kimi-for-coding",
+			"ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": "Kimi for Coding",
+			"ANTHROPIC_DEFAULT_HAIKU_MODEL":       "kimi-for-coding-highspeed",
+			"ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME":  "Kimi for Coding Highspeed",
+			"CLAUDE_CODE_SUBAGENT_MODEL":          "k3[1m]",
+		},
+	}
 }
 
-func claudeCompatibleDeepSeekEnvironment(stateDir, apiKey string) []string {
-	return claudeCompatibleEnvironment(
-		stateDir,
-		ClaudeCompatibleDeepSeekProviderPreset.Name,
-		"https://api.deepseek.com/anthropic",
-		"ANTHROPIC_AUTH_TOKEN",
-		apiKey,
-		"deepseek-v4-pro[1m]",
-		"deepseek-v4-flash",
-		"deepseek-v4-flash",
-		"1000000",
-		"1000000",
-		[]string{"deepseek-v4-pro[1m]", "deepseek-v4-pro", "deepseek-v4-flash"},
-		"CLAUDE_CODE_EFFORT_LEVEL=max",
-		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1",
-	)
+func claudeCompatibleDeepSeekProfile(stateDir string) claudeCompatibleProfile {
+	return claudeCompatibleProfile{
+		configDir:       filepath.Join(stateDir, ".data", ClaudeCompatibleDeepSeekProviderPreset.Name),
+		endpoint:        "https://api.deepseek.com/anthropic",
+		authName:        "ANTHROPIC_AUTH_TOKEN",
+		defaultModel:    "deepseek-v4-pro[1m]",
+		availableModels: []string{"deepseek-v4-pro[1m]", "deepseek-v4-flash[1m]"},
+		settingsEnv: map[string]string{
+			"ANTHROPIC_DEFAULT_FABLE_MODEL":            "deepseek-v4-pro[1m]",
+			"ANTHROPIC_DEFAULT_FABLE_MODEL_NAME":       "DeepSeek V4 Pro (1M)",
+			"ANTHROPIC_DEFAULT_OPUS_MODEL":             "deepseek-v4-pro[1m]",
+			"ANTHROPIC_DEFAULT_OPUS_MODEL_NAME":        "DeepSeek V4 Pro (1M)",
+			"ANTHROPIC_DEFAULT_SONNET_MODEL":           "deepseek-v4-pro[1m]",
+			"ANTHROPIC_DEFAULT_SONNET_MODEL_NAME":      "DeepSeek V4 Pro (1M)",
+			"ANTHROPIC_DEFAULT_HAIKU_MODEL":            "deepseek-v4-flash[1m]",
+			"ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME":       "DeepSeek V4 Flash (1M)",
+			"CLAUDE_CODE_SUBAGENT_MODEL":               "deepseek-v4-flash[1m]",
+			"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+		},
+	}
 }
 
-func claudeCompatibleGLMEnvironment(stateDir, apiKey string) []string {
-	return claudeCompatibleEnvironment(
-		stateDir,
-		ClaudeCompatibleGLMProviderPreset.Name,
-		"https://api.z.ai/api/anthropic",
-		"ANTHROPIC_AUTH_TOKEN",
-		apiKey,
-		"glm-5.2[1m]",
-		"glm-4.5-air",
-		"glm-5.2[1m]",
-		"1000000",
-		"1000000",
-		[]string{"glm-5.2[1m]", "glm-5.2", "glm-4.7", "glm-4.5-air"},
-		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1",
-		"API_TIMEOUT_MS=3000000",
-	)
+func claudeCompatibleGLMProfile(stateDir string) claudeCompatibleProfile {
+	return claudeCompatibleProfile{
+		configDir:       filepath.Join(stateDir, ".data", ClaudeCompatibleGLMProviderPreset.Name),
+		endpoint:        "https://api.z.ai/api/anthropic",
+		authName:        "ANTHROPIC_AUTH_TOKEN",
+		defaultModel:    "glm-5.2[1m]",
+		availableModels: []string{"glm-5.2[1m]", "glm-5-turbo", "glm-4.7"},
+		settingsEnv: map[string]string{
+			"ANTHROPIC_DEFAULT_FABLE_MODEL":            "glm-5.2[1m]",
+			"ANTHROPIC_DEFAULT_FABLE_MODEL_NAME":       "GLM-5.2 (1M)",
+			"ANTHROPIC_DEFAULT_OPUS_MODEL":             "glm-5.2[1m]",
+			"ANTHROPIC_DEFAULT_OPUS_MODEL_NAME":        "GLM-5.2 (1M)",
+			"ANTHROPIC_DEFAULT_SONNET_MODEL":           "glm-5-turbo",
+			"ANTHROPIC_DEFAULT_SONNET_MODEL_NAME":      "GLM-5-Turbo",
+			"ANTHROPIC_DEFAULT_HAIKU_MODEL":            "glm-4.7",
+			"ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME":       "GLM-4.7",
+			"CLAUDE_CODE_SUBAGENT_MODEL":               "glm-4.7",
+			"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+			"API_TIMEOUT_MS":                           "3000000",
+		},
+	}
+}
+
+func ensureClaudeCompatibleSettings(profile claudeCompatibleProfile) error {
+	claudeCompatibleSettingsMu.Lock()
+	defer claudeCompatibleSettingsMu.Unlock()
+
+	settingsPath := filepath.Join(profile.configDir, "settings.json")
+	existing, err := os.ReadFile(settingsPath)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("read %s: %w", settingsPath, err)
+	}
+	settings := make(map[string]any)
+	if len(existing) > 0 {
+		if err := json.Unmarshal(existing, &settings); err != nil {
+			return fmt.Errorf("decode %s: %w", settingsPath, err)
+		}
+		if settings == nil {
+			return fmt.Errorf("decode %s: expected JSON object", settingsPath)
+		}
+	}
+
+	env := make(map[string]any)
+	if rawEnv, exists := settings["env"]; exists {
+		var ok bool
+		env, ok = rawEnv.(map[string]any)
+		if !ok {
+			return fmt.Errorf("decode %s: env must be a JSON object", settingsPath)
+		}
+	}
+	removeClaudeCompatibleManagedEnv(env)
+	for name, value := range profile.settingsEnv {
+		env[name] = value
+	}
+	settings["model"] = profile.defaultModel
+	settings["availableModels"] = append([]string(nil), profile.availableModels...)
+	settings["enforceAvailableModels"] = true
+	settings["env"] = env
+
+	data, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode %s: %w", settingsPath, err)
+	}
+	data = append(data, '\n')
+	if bytes.Equal(existing, data) {
+		return shared.SecureConfigFile(settingsPath)
+	}
+	if err := shared.WriteConfigFile(settingsPath, data); err != nil {
+		return fmt.Errorf("write %s: %w", settingsPath, err)
+	}
+	return nil
+}
+
+func removeClaudeCompatibleManagedEnv(env map[string]any) {
+	for name := range env {
+		if strings.HasPrefix(name, "ANTHROPIC_DEFAULT_FABLE_MODEL") ||
+			strings.HasPrefix(name, "ANTHROPIC_DEFAULT_OPUS_MODEL") ||
+			strings.HasPrefix(name, "ANTHROPIC_DEFAULT_SONNET_MODEL") ||
+			strings.HasPrefix(name, "ANTHROPIC_DEFAULT_HAIKU_MODEL") {
+			delete(env, name)
+		}
+	}
+	for _, name := range []string{
+		"ANTHROPIC_MODEL",
+		"CLAUDE_MODEL_CONFIG",
+		"CLAUDE_CODE_SUBAGENT_MODEL",
+		"CLAUDE_CODE_EFFORT_LEVEL",
+		"CLAUDE_CODE_AUTO_COMPACT_WINDOW",
+		"CLAUDE_CODE_MAX_CONTEXT_TOKENS",
+	} {
+		delete(env, name)
+	}
 }
 
 func (p *acpProvider) launchFlicker(myflickerPath string) (string, []string, []string, error) {
