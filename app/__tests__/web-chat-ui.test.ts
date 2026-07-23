@@ -2654,5 +2654,11 @@ describe('Claude-compatible agent choice menu', () => {
     expect(stylesCss).toContain('flex: 0 0 30px;');
     expect(stylesCss).toContain('.agent-choice-child');
     expect(stylesCss).toContain('padding-left: 28px;');
+
+    const wideChoiceBlock = cssRuleBlockContainingSelector(stylesCss, '.agent-choice-item');
+    expect(wideChoiceBlock).toContain('min-height: 26px;');
+
+    const mobileChoiceBlock = cssRuleBlockContainingSelector(stylesCss, '.agent-choice-menu.mobile .agent-choice-item');
+    expect(mobileChoiceBlock).toContain('min-height: 40px;');
   });
 });

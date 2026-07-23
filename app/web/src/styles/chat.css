@@ -1573,7 +1573,7 @@
   font-weight: 600;
   letter-spacing: 0;
   line-height: 1.25;
-  text-transform: none;
+  text-transform: lowercase;
 }
 
 .wide-session-agent-0 { --agent-accent: #5aa9e6; }
@@ -1706,7 +1706,7 @@
 .agent-choice-main,
 .agent-choice-expand,
 .agent-choice-child {
-  min-height: 30px;
+  min-height: 26px;
   border: none;
   border-radius: 6px;
   background: transparent;
@@ -1758,7 +1758,7 @@
 .agent-choice-menu.mobile .agent-choice-main,
 .agent-choice-menu.mobile .agent-choice-expand,
 .agent-choice-menu.mobile .agent-choice-child {
-  min-height: 48px;
+  min-height: 40px;
   font-size: 14px;
   border-radius: 8px;
   padding-left: 12px;
