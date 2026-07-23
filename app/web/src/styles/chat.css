@@ -1762,7 +1762,7 @@
   background: color-mix(in srgb, var(--agent-accent, var(--accent-primary)) 10%, transparent);
   color: var(--text-primary);
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   text-transform: lowercase;
   cursor: pointer;
@@ -1791,12 +1791,6 @@
   border-radius: 50%;
   background: var(--agent-accent, var(--accent-primary));
   flex: 0 0 auto;
-}
-
-.agent-choice-menu.mobile .agent-choice-pill {
-  min-height: 40px;
-  font-size: 14px;
-  padding: 5px 12px;
 }
 
 .mobile-project-session-nav {

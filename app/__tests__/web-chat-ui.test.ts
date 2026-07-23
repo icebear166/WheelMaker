@@ -2656,7 +2656,7 @@ describe('Agent choice menu', () => {
     const choiceMenuBlock = cssRuleBlock(stylesCss, '.agent-choice-menu');
     expect(choiceMenuBlock).toContain('flex-wrap: wrap;');
 
-    const mobilePillBlock = cssRuleBlockContainingSelector(stylesCss, '.agent-choice-menu.mobile .agent-choice-pill');
-    expect(mobilePillBlock).toContain('min-height: 40px;');
+    // Mobile pills share the desktop specs (no separate mobile override).
+    expect(stylesCss).not.toContain('.agent-choice-menu.mobile .agent-choice-pill');
   });
 });
