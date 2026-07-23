@@ -9,3 +9,9 @@ paths = [
   '''^\.release-out([\\/]|$)''',
   '''^\.release-work([\\/]|$)''',
 ]
+
+[[allowlists]]
+description = "Local runtime diagnostic logs (generated message/trace/device ids, no secrets)"
+paths = [
+  '''wheelmaker_diag_out\.log$''',
+]
