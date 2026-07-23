@@ -273,7 +273,7 @@ func claudeCompatibleKimiProfile(stateDir string) claudeCompatibleProfile {
 		endpoint:        "https://api.kimi.com/coding/",
 		authName:        "ANTHROPIC_API_KEY",
 		defaultModel:    "k3[1m]",
-		availableModels: []string{"k3[1m]", "k3", "kimi-for-coding", "kimi-for-coding-highspeed"},
+		availableModels: []string{"k3[1m]"},
 		settingsEnv: map[string]string{
 			"ANTHROPIC_DEFAULT_FABLE_MODEL":       "k3[1m]",
 			"ANTHROPIC_DEFAULT_FABLE_MODEL_NAME":  "Kimi K3 (1M)",
@@ -284,6 +284,8 @@ func claudeCompatibleKimiProfile(stateDir string) claudeCompatibleProfile {
 			"ANTHROPIC_DEFAULT_HAIKU_MODEL":       "k3[1m]",
 			"ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME":  "Kimi K3 (1M)",
 			"CLAUDE_CODE_SUBAGENT_MODEL":          "k3[1m]",
+			"CLAUDE_CODE_AUTO_COMPACT_WINDOW":     "1048576",
+			"CLAUDE_CODE_MAX_CONTEXT_TOKENS":      "1048576",
 		},
 	}
 }

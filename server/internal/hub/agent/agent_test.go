@@ -244,7 +244,7 @@ func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 			},
 			wantSettings: map[string]any{
 				"model":                  "k3[1m]",
-				"availableModels":        []any{"k3[1m]", "k3", "kimi-for-coding", "kimi-for-coding-highspeed"},
+				"availableModels":        []any{"k3[1m]"},
 				"enforceAvailableModels": true,
 				"env": map[string]any{
 					"ANTHROPIC_DEFAULT_FABLE_MODEL":       "k3[1m]",
@@ -256,6 +256,8 @@ func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 					"ANTHROPIC_DEFAULT_HAIKU_MODEL":       "k3[1m]",
 					"ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME":  "Kimi K3 (1M)",
 					"CLAUDE_CODE_SUBAGENT_MODEL":          "k3[1m]",
+					"CLAUDE_CODE_AUTO_COMPACT_WINDOW":     "1048576",
+					"CLAUDE_CODE_MAX_CONTEXT_TOKENS":      "1048576",
 				},
 			},
 		},
