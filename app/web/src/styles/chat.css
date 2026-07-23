@@ -1754,15 +1754,15 @@
 .agent-choice-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-height: 30px;
+  gap: 5px;
+  min-height: 28px;
   border: 1px solid color-mix(in srgb, var(--agent-accent, var(--accent-primary)) 32%, var(--border-subtle));
   border-radius: 999px;
-  padding: 4px 12px;
+  padding: 3px 10px;
   background: color-mix(in srgb, var(--agent-accent, var(--accent-primary)) 10%, transparent);
   color: var(--text-primary);
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: lowercase;
   cursor: pointer;
@@ -1795,8 +1795,8 @@
 
 .agent-choice-menu.mobile .agent-choice-pill {
   min-height: 40px;
-  font-size: 15px;
-  padding: 6px 14px;
+  font-size: 14px;
+  padding: 5px 12px;
 }
 
 .mobile-project-session-nav {
