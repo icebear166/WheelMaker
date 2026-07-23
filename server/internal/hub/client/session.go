@@ -185,7 +185,7 @@ func configValueByID(options []acp.ConfigOption, targetID string) string {
 func (s *Session) CurrentConfigOptions() []acp.ConfigOption {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return append([]acp.ConfigOption(nil), s.agentState.ConfigOptions...)
+	return normalizeAgentConfigOptions(s.agentType, s.agentState.ConfigOptions)
 }
 
 func (s *Session) SetConfigOption(ctx context.Context, configID, value string) ([]acp.ConfigOption, error) {
@@ -210,10 +210,14 @@ func (s *Session) SetConfigOption(ctx context.Context, configID, value string) (
 
 	s.mu.Lock()
 	sessionID := s.acpSessionID
+	agentType := s.agentType
 	current := append([]acp.ConfigOption(nil), s.agentState.ConfigOptions...)
 	s.mu.Unlock()
 
 	configID = resolveConfigOptionID(current, configID)
+	if strings.EqualFold(agentType, string(acp.ACPProviderCCGLM)) && isThoughtConfigOption(configID, "") {
+		value = normalizeGLMEffortValue(value)
+	}
 	updated, err := s.instance.SessionSetConfigOption(ctx, acp.SessionSetConfigOptionParams{
 		SessionID: sessionID,
 		ConfigID:  configID,
@@ -232,9 +236,9 @@ func (s *Session) SetConfigOption(ctx context.Context, configID, value string) (
 			CurrentValue: value,
 		}})
 	}
+	next = normalizeAgentConfigOptions(agentType, next)
 
 	s.mu.Lock()
-	agentType := s.agentType
 	s.agentState.ConfigOptions = append([]acp.ConfigOption(nil), next...)
 	s.mu.Unlock()
 
@@ -422,7 +426,7 @@ func (s *Session) ensureReady(ctx context.Context) error {
 	agentName := s.agentType
 	savedSID := s.acpSessionID
 	cwd := s.cwd
-	persistedConfigOptions := append([]acp.ConfigOption(nil), s.agentState.ConfigOptions...)
+	persistedConfigOptions := normalizeAgentConfigOptions(agentName, s.agentState.ConfigOptions)
 	persistedCommands := append([]acp.AvailableCommand(nil), s.agentState.Commands...)
 	s.mu.Unlock()
 
@@ -452,7 +456,7 @@ func (s *Session) ensureReady(ctx context.Context) error {
 		return fmt.Errorf("ensureReady: session/load: %w", loadErr)
 	}
 
-	resolved := append([]acp.ConfigOption(nil), loadResult.ConfigOptions...)
+	resolved := normalizeAgentConfigOptions(agentName, loadResult.ConfigOptions)
 	targetConfig := configPreferenceFromACPOptions(persistedConfigOptions)
 	if len(resolved) > 0 {
 		if len(targetConfig) > 0 {
@@ -461,6 +465,7 @@ func (s *Session) ensureReady(ctx context.Context) error {
 	} else if len(persistedConfigOptions) > 0 {
 		resolved = append([]acp.ConfigOption(nil), persistedConfigOptions...)
 	}
+	resolved = normalizeAgentConfigOptions(agentName, resolved)
 	resolvedCommands := append([]acp.AvailableCommand(nil), persistedCommands...)
 
 	s.mu.Lock()
@@ -643,6 +648,14 @@ func configPreferenceFromACPOptions(options []acp.ConfigOption) []PreferenceConf
 
 func normalizeStoredConfigPreferences(agentName string, options []PreferenceConfigOption) []PreferenceConfigOption {
 	normalized := append([]PreferenceConfigOption(nil), options...)
+	if strings.EqualFold(strings.TrimSpace(agentName), string(acp.ACPProviderCCGLM)) {
+		for index := range normalized {
+			if isThoughtConfigOption(normalized[index].ID, "") {
+				normalized[index].CurrentValue = normalizeGLMEffortValue(normalized[index].CurrentValue)
+			}
+		}
+		return normalized
+	}
 	if !strings.EqualFold(strings.TrimSpace(agentName), string(acp.ACPProviderFlicker)) {
 		return normalized
 	}
@@ -657,6 +670,46 @@ func normalizeStoredConfigPreferences(agentName string, options []PreferenceConf
 		}
 	}
 	return normalized
+}
+
+func normalizeAgentConfigOptions(agentName string, options []acp.ConfigOption) []acp.ConfigOption {
+	normalized := append([]acp.ConfigOption(nil), options...)
+	for index := range normalized {
+		normalized[index].Options = append([]acp.ConfigOptionValue(nil), normalized[index].Options...)
+	}
+	if !strings.EqualFold(strings.TrimSpace(agentName), string(acp.ACPProviderCCGLM)) {
+		return normalized
+	}
+	for index := range normalized {
+		option := &normalized[index]
+		if !isThoughtConfigOption(option.ID, option.Category) {
+			continue
+		}
+		option.CurrentValue = normalizeGLMEffortValue(option.CurrentValue)
+		if len(option.Options) == 0 {
+			continue
+		}
+		actual := make([]acp.ConfigOptionValue, 0, 2)
+		for _, value := range option.Options {
+			switch strings.ToLower(strings.TrimSpace(value.Value)) {
+			case "high", "max":
+				actual = append(actual, value)
+			}
+		}
+		option.Options = actual
+	}
+	return normalized
+}
+
+func normalizeGLMEffortValue(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "default", "auto", "low", "medium", "high":
+		return "high"
+	case "xhigh", "max", "ultracode":
+		return "max"
+	default:
+		return value
+	}
 }
 
 func mergeConfigOptions(current []acp.ConfigOption, updated []acp.ConfigOption) []acp.ConfigOption {
@@ -1067,7 +1120,7 @@ func (s *Session) SessionUpdate(params acp.SessionUpdateParams) {
 			}
 		case acp.SessionUpdateConfigOptionUpdate:
 			if len(update.ConfigOptions) > 0 {
-				state.ConfigOptions = update.ConfigOptions
+				state.ConfigOptions = normalizeAgentConfigOptions(s.agentType, update.ConfigOptions)
 				changed = true
 			}
 		case acp.SessionUpdateSessionInfoUpdate:

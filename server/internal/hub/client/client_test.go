@@ -1149,6 +1149,15 @@ func findCurrentValue(options []acp.ConfigOption, id string) string {
 	return ""
 }
 
+func configOptionByID(options []acp.ConfigOption, id string) *acp.ConfigOption {
+	for index := range options {
+		if strings.EqualFold(options[index].ID, id) {
+			return &options[index]
+		}
+	}
+	return nil
+}
+
 func TestSessionFromRecord_RestoresSingleAgentState(t *testing.T) {
 	rec := &SessionRecord{
 		ID:          "sess-restored",
@@ -1571,7 +1580,68 @@ func TestCreateSession_AppliesClaudeCompatibleDefaultEffort(t *testing.T) {
 	}
 }
 
-func TestCreateSession_ClaudeCompatibleStoredEffortOverridesDefault(t *testing.T) {
+func TestCreateSession_CCGLMExposesOnlyActualEffortLevels(t *testing.T) {
+	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+
+	claudeEffort := acp.ConfigOption{
+		ID:           "effort",
+		Category:     acp.ConfigOptionCategoryThoughtLv,
+		CurrentValue: "default",
+		Options: []acp.ConfigOptionValue{
+			{Value: "default", Name: "Default"},
+			{Value: "low", Name: "Low"},
+			{Value: "medium", Name: "Medium"},
+			{Value: "high", Name: "High"},
+			{Value: "xhigh", Name: "Xhigh"},
+			{Value: "max", Name: "Max"},
+		},
+	}
+	inst := &testInjectedInstance{
+		name: string(acp.ACPProviderCCGLM),
+		newResult: &acp.SessionNewResult{
+			SessionID: "acp-new",
+			ConfigOptions: []acp.ConfigOption{
+				{
+					ID:           acp.ConfigOptionIDModel,
+					Category:     acp.ConfigOptionCategoryModel,
+					CurrentValue: "glm-5.2[1m]",
+				},
+				claudeEffort,
+			},
+		},
+	}
+	inst.setConfigFn = func(_ context.Context, p acp.SessionSetConfigOptionParams) ([]acp.ConfigOption, error) {
+		claudeEffort.CurrentValue = p.Value
+		return []acp.ConfigOption{claudeEffort}, nil
+	}
+	client := New(store, "proj1", t.TempDir())
+	client.registry = agent.NewACPFactory()
+	client.registry.Register(acp.ACPProviderCCGLM, func(context.Context, string) (agent.Instance, error) {
+		return inst, nil
+	})
+
+	sess, err := client.CreateSession(context.Background(), string(acp.ACPProviderCCGLM), "")
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	effort := configOptionByID(sess.CurrentConfigOptions(), "effort")
+	if effort == nil {
+		t.Fatal("effort option is missing")
+	}
+	if effort.CurrentValue != "max" {
+		t.Fatalf("effort current value = %q, want max", effort.CurrentValue)
+	}
+	want := []acp.ConfigOptionValue{{Value: "high", Name: "High"}, {Value: "max", Name: "Max"}}
+	if !reflect.DeepEqual(effort.Options, want) {
+		t.Fatalf("effort options = %#v, want %#v", effort.Options, want)
+	}
+}
+
+func TestCreateSession_CCGLMMapsStoredClaudeEffortToActualLevel(t *testing.T) {
 	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
@@ -1609,14 +1679,15 @@ func TestCreateSession_ClaudeCompatibleStoredEffortOverridesDefault(t *testing.T
 		return inst, nil
 	})
 
-	if _, err := client.CreateSession(context.Background(), string(acp.ACPProviderCCGLM), ""); err != nil {
+	sess, err := client.CreateSession(context.Background(), string(acp.ACPProviderCCGLM), "")
+	if err != nil {
 		t.Fatalf("CreateSession: %v", err)
 	}
-	if len(inst.setCalls) != 1 {
-		t.Fatalf("set calls = %v, want stored effort only", inst.setCalls)
+	if len(inst.setCalls) != 0 {
+		t.Fatalf("set calls = %v, want none when stored low and ACP default both map to GLM high", inst.setCalls)
 	}
-	if got := inst.setCalls[0]; got.ConfigID != "effort" || got.Value != "low" {
-		t.Fatalf("set call = %+v, want stored effort=low", got)
+	if got := findCurrentValue(sess.CurrentConfigOptions(), "effort"); got != "high" {
+		t.Fatalf("effort = %q, want normalized stored effort high", got)
 	}
 }
 
@@ -2000,6 +2071,31 @@ func TestSessionSetConfigOption_ResolvesCategoryAliasToOptionID(t *testing.T) {
 	}
 	if got := findCurrentValue(opts, acp.ConfigOptionIDReasoningEffort); got != "high" {
 		t.Fatalf("reasoning_effort=%q, want high", got)
+	}
+}
+
+func TestSessionSetConfigOption_CCGLMMapsClaudeEffortToActualLevel(t *testing.T) {
+	inst := &testInjectedInstance{name: string(acp.ACPProviderCCGLM), alive: true}
+	s := mustNewSession(t, "sess-glm-effort", t.TempDir(), string(acp.ACPProviderCCGLM))
+	s.mu.Lock()
+	s.instance = inst
+	s.ready = true
+	s.agentState.ConfigOptions = []acp.ConfigOption{{
+		ID:           "effort",
+		Category:     acp.ConfigOptionCategoryThoughtLv,
+		CurrentValue: "high",
+	}}
+	s.mu.Unlock()
+
+	opts, err := s.SetConfigOption(context.Background(), "effort", "xhigh")
+	if err != nil {
+		t.Fatalf("SetConfigOption: %v", err)
+	}
+	if len(inst.setCalls) != 1 || inst.setCalls[0].Value != "max" {
+		t.Fatalf("set calls = %+v, want GLM effort max", inst.setCalls)
+	}
+	if got := findCurrentValue(opts, "effort"); got != "max" {
+		t.Fatalf("effort = %q, want max", got)
 	}
 }
 

@@ -390,11 +390,12 @@ func (c *Client) createSessionState(ctx context.Context, agentType, title, creat
 		return nil, fmt.Errorf("create session new: empty session id")
 	}
 
-	resolved := append([]acp.ConfigOption(nil), newResult.ConfigOptions...)
+	resolved := normalizeAgentConfigOptions(agentType, newResult.ConfigOptions)
 	targetConfig := configPreferencesWithAgentDefaults(agentType, resolved, preference.ConfigOptions)
 	if len(targetConfig) > 0 {
 		resolved = applyStoredConfigOptions(ctx, c.projectName, inst, sessionID, resolved, targetConfig)
 	}
+	resolved = normalizeAgentConfigOptions(agentType, resolved)
 
 	sessionTitle := strings.TrimSpace(newResult.Title)
 	if sessionTitle == "" {

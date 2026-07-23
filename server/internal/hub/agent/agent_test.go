@@ -275,18 +275,19 @@ func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 			},
 			wantSettings: map[string]any{
 				"model":                  "glm-5.2[1m]",
-				"availableModels":        []any{"glm-5.2[1m]", "glm-5-turbo", "glm-4.7"},
+				"availableModels":        []any{"glm-5.2[1m]", "glm-5-turbo", "glm-5v-turbo", "glm-5.1", "glm-4.7", "glm-4.5-air"},
 				"enforceAvailableModels": true,
 				"env": map[string]any{
 					"ANTHROPIC_DEFAULT_FABLE_MODEL":            "glm-5.2[1m]",
 					"ANTHROPIC_DEFAULT_FABLE_MODEL_NAME":       "GLM-5.2 (1M)",
 					"ANTHROPIC_DEFAULT_OPUS_MODEL":             "glm-5.2[1m]",
 					"ANTHROPIC_DEFAULT_OPUS_MODEL_NAME":        "GLM-5.2 (1M)",
-					"ANTHROPIC_DEFAULT_SONNET_MODEL":           "glm-5-turbo",
-					"ANTHROPIC_DEFAULT_SONNET_MODEL_NAME":      "GLM-5-Turbo",
-					"ANTHROPIC_DEFAULT_HAIKU_MODEL":            "glm-4.7",
-					"ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME":       "GLM-4.7",
+					"ANTHROPIC_DEFAULT_SONNET_MODEL":           "glm-5.2[1m]",
+					"ANTHROPIC_DEFAULT_SONNET_MODEL_NAME":      "GLM-5.2 (1M)",
+					"ANTHROPIC_DEFAULT_HAIKU_MODEL":            "glm-4.5-air",
+					"ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME":       "GLM-4.5-Air",
 					"CLAUDE_CODE_SUBAGENT_MODEL":               "glm-4.7",
+					"CLAUDE_CODE_AUTO_COMPACT_WINDOW":          "1000000",
 					"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
 					"API_TIMEOUT_MS":                           "3000000",
 				},
@@ -352,6 +353,13 @@ func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 			}
 			if !reflect.DeepEqual(gotSettings, tt.wantSettings) {
 				t.Fatalf("settings = %#v, want %#v", gotSettings, tt.wantSettings)
+			}
+			if tt.name == "glm" {
+				for _, model := range gotSettings["availableModels"].([]any) {
+					if model == "glm-5.2" {
+						t.Fatal("GLM model picker unexpectedly contains the non-1M glm-5.2 variant")
+					}
+				}
 			}
 			joinedArgs := strings.Join(args, " ")
 			if strings.Contains(joinedArgs, tt.key) || strings.Contains(exe, tt.key) {
