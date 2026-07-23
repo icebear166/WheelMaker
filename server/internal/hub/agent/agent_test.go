@@ -284,7 +284,7 @@ func TestClaudeCompatibleProvidersLaunchEnvironment(t *testing.T) {
 					"ANTHROPIC_DEFAULT_SONNET_MODEL_NAME":      "GLM-5.2 (1M)",
 					"ANTHROPIC_DEFAULT_HAIKU_MODEL":            "glm-4.5-air",
 					"ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME":       "GLM-4.5-Air",
-					"CLAUDE_CODE_SUBAGENT_MODEL":               "glm-4.7",
+					"CLAUDE_CODE_SUBAGENT_MODEL":               "glm-5.2[1m]",
 					"CLAUDE_CODE_AUTO_COMPACT_WINDOW":          "1000000",
 					"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
 					"API_TIMEOUT_MS":                           "3000000",
