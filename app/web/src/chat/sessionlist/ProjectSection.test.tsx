@@ -51,7 +51,7 @@ describe('ProjectSection', () => {
     expect(collapsed.tree.root.findAllByProps({className: 'child-row'})).toHaveLength(0);
 
     const pinned = await renderSection({pinned: true});
-    expect(pinned.tree.root.findAll(node => typeof node.props.className === 'string' && node.props.className.includes('wide-project-pin-badge'))).toHaveLength(1);
+    expect(pinned.tree.root.findAll(node => node.type === 'svg' && typeof node.props.className === 'string' && node.props.className.includes('wide-project-pin-badge'))).toHaveLength(1);
     expect(pinned.tree.root.findByProps({title: 'Unpin project'}).props.className).toContain('active');
   });
 });
