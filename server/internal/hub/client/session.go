@@ -215,8 +215,8 @@ func (s *Session) SetConfigOption(ctx context.Context, configID, value string) (
 	s.mu.Unlock()
 
 	configID = resolveConfigOptionID(current, configID)
-	if strings.EqualFold(agentType, string(acp.ACPProviderCCGLM)) && isThoughtConfigOption(configID, "") {
-		value = normalizeGLMEffortValue(value)
+	if claudeCompatibleEffortValues(agentType) != nil && isThoughtConfigOption(configID, "") {
+		value = normalizeClaudeCompatibleEffortValue(agentType, value)
 	}
 	updated, err := s.instance.SessionSetConfigOption(ctx, acp.SessionSetConfigOptionParams{
 		SessionID: sessionID,
@@ -648,10 +648,10 @@ func configPreferenceFromACPOptions(options []acp.ConfigOption) []PreferenceConf
 
 func normalizeStoredConfigPreferences(agentName string, options []PreferenceConfigOption) []PreferenceConfigOption {
 	normalized := append([]PreferenceConfigOption(nil), options...)
-	if strings.EqualFold(strings.TrimSpace(agentName), string(acp.ACPProviderCCGLM)) {
+	if claudeCompatibleEffortValues(agentName) != nil {
 		for index := range normalized {
 			if isThoughtConfigOption(normalized[index].ID, "") {
-				normalized[index].CurrentValue = normalizeGLMEffortValue(normalized[index].CurrentValue)
+				normalized[index].CurrentValue = normalizeClaudeCompatibleEffortValue(agentName, normalized[index].CurrentValue)
 			}
 		}
 		return normalized
@@ -677,22 +677,26 @@ func normalizeAgentConfigOptions(agentName string, options []acp.ConfigOption) [
 	for index := range normalized {
 		normalized[index].Options = append([]acp.ConfigOptionValue(nil), normalized[index].Options...)
 	}
-	if !strings.EqualFold(strings.TrimSpace(agentName), string(acp.ACPProviderCCGLM)) {
+	actualValues := claudeCompatibleEffortValues(agentName)
+	if actualValues == nil {
 		return normalized
+	}
+	allowed := make(map[string]struct{}, len(actualValues))
+	for _, value := range actualValues {
+		allowed[value] = struct{}{}
 	}
 	for index := range normalized {
 		option := &normalized[index]
 		if !isThoughtConfigOption(option.ID, option.Category) {
 			continue
 		}
-		option.CurrentValue = normalizeGLMEffortValue(option.CurrentValue)
+		option.CurrentValue = normalizeClaudeCompatibleEffortValue(agentName, option.CurrentValue)
 		if len(option.Options) == 0 {
 			continue
 		}
-		actual := make([]acp.ConfigOptionValue, 0, 2)
+		actual := make([]acp.ConfigOptionValue, 0, len(actualValues))
 		for _, value := range option.Options {
-			switch strings.ToLower(strings.TrimSpace(value.Value)) {
-			case "high", "max":
+			if _, ok := allowed[strings.ToLower(strings.TrimSpace(value.Value))]; ok {
 				actual = append(actual, value)
 			}
 		}
@@ -701,15 +705,38 @@ func normalizeAgentConfigOptions(agentName string, options []acp.ConfigOption) [
 	return normalized
 }
 
-func normalizeGLMEffortValue(value string) string {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "default", "auto", "low", "medium", "high":
-		return "high"
-	case "xhigh", "max", "ultracode":
-		return "max"
+func claudeCompatibleEffortValues(agentName string) []string {
+	switch strings.ToLower(strings.TrimSpace(agentName)) {
+	case string(acp.ACPProviderCCKimi):
+		return []string{"low", "high", "max"}
+	case string(acp.ACPProviderCCDeepSeek), string(acp.ACPProviderCCGLM):
+		return []string{"high", "max"}
 	default:
-		return value
+		return nil
 	}
+}
+
+func normalizeClaudeCompatibleEffortValue(agentName, value string) string {
+	normalizedValue := strings.ToLower(strings.TrimSpace(value))
+	switch strings.ToLower(strings.TrimSpace(agentName)) {
+	case string(acp.ACPProviderCCKimi):
+		switch normalizedValue {
+		case "default", "auto", "medium", "high":
+			return "high"
+		case "xhigh", "max", "ultracode":
+			return "max"
+		case "low":
+			return "low"
+		}
+	case string(acp.ACPProviderCCDeepSeek), string(acp.ACPProviderCCGLM):
+		switch normalizedValue {
+		case "default", "auto", "low", "medium", "high":
+			return "high"
+		case "xhigh", "max", "ultracode":
+			return "max"
+		}
+	}
+	return value
 }
 
 func mergeConfigOptions(current []acp.ConfigOption, updated []acp.ConfigOption) []acp.ConfigOption {

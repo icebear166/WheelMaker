@@ -1530,11 +1530,12 @@ func TestCreateSession_ReappliesProjectAgentBaseline(t *testing.T) {
 
 func TestCreateSession_AppliesClaudeCompatibleDefaultEffort(t *testing.T) {
 	tests := []struct {
-		agentType  acp.ACPProvider
-		wantEffort string
+		agentType       acp.ACPProvider
+		wantEffort      string
+		wantExplicitSet bool
 	}{
-		{agentType: acp.ACPProviderCCDeepSeek, wantEffort: "max"},
-		{agentType: acp.ACPProviderCCGLM, wantEffort: "max"},
+		{agentType: acp.ACPProviderCCDeepSeek, wantEffort: "max", wantExplicitSet: true},
+		{agentType: acp.ACPProviderCCGLM, wantEffort: "max", wantExplicitSet: true},
 		{agentType: acp.ACPProviderCCKimi, wantEffort: "high"},
 	}
 
@@ -1567,8 +1568,18 @@ func TestCreateSession_AppliesClaudeCompatibleDefaultEffort(t *testing.T) {
 				return inst, nil
 			})
 
-			if _, err := client.CreateSession(context.Background(), string(tt.agentType), ""); err != nil {
+			sess, err := client.CreateSession(context.Background(), string(tt.agentType), "")
+			if err != nil {
 				t.Fatalf("CreateSession: %v", err)
+			}
+			if got := findCurrentValue(sess.CurrentConfigOptions(), "effort"); got != tt.wantEffort {
+				t.Fatalf("current effort = %q, want %q", got, tt.wantEffort)
+			}
+			if !tt.wantExplicitSet {
+				if len(inst.setCalls) != 0 {
+					t.Fatalf("set calls = %v, want none when Claude default already maps to %s", inst.setCalls, tt.wantEffort)
+				}
+				return
 			}
 			if len(inst.setCalls) != 1 {
 				t.Fatalf("set calls = %v, want one effort default", inst.setCalls)
@@ -1580,64 +1591,125 @@ func TestCreateSession_AppliesClaudeCompatibleDefaultEffort(t *testing.T) {
 	}
 }
 
-func TestCreateSession_CCGLMExposesOnlyActualEffortLevels(t *testing.T) {
-	store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
-	if err != nil {
-		t.Fatalf("NewStore: %v", err)
-	}
-	defer store.Close()
-
-	claudeEffort := acp.ConfigOption{
-		ID:           "effort",
-		Category:     acp.ConfigOptionCategoryThoughtLv,
-		CurrentValue: "default",
-		Options: []acp.ConfigOptionValue{
-			{Value: "default", Name: "Default"},
-			{Value: "low", Name: "Low"},
-			{Value: "medium", Name: "Medium"},
-			{Value: "high", Name: "High"},
-			{Value: "xhigh", Name: "Xhigh"},
-			{Value: "max", Name: "Max"},
+func TestCreateSession_ClaudeCompatibleProvidersExposeOnlyActualEffortLevels(t *testing.T) {
+	tests := []struct {
+		agentType   acp.ACPProvider
+		model       string
+		wantCurrent string
+		wantOptions []acp.ConfigOptionValue
+	}{
+		{
+			agentType:   acp.ACPProviderCCDeepSeek,
+			model:       "deepseek-v4-pro[1m]",
+			wantCurrent: "max",
+			wantOptions: []acp.ConfigOptionValue{{Value: "high", Name: "High"}, {Value: "max", Name: "Max"}},
 		},
-	}
-	inst := &testInjectedInstance{
-		name: string(acp.ACPProviderCCGLM),
-		newResult: &acp.SessionNewResult{
-			SessionID: "acp-new",
-			ConfigOptions: []acp.ConfigOption{
-				{
-					ID:           acp.ConfigOptionIDModel,
-					Category:     acp.ConfigOptionCategoryModel,
-					CurrentValue: "glm-5.2[1m]",
-				},
-				claudeEffort,
+		{
+			agentType:   acp.ACPProviderCCGLM,
+			model:       "glm-5.2[1m]",
+			wantCurrent: "max",
+			wantOptions: []acp.ConfigOptionValue{{Value: "high", Name: "High"}, {Value: "max", Name: "Max"}},
+		},
+		{
+			agentType:   acp.ACPProviderCCKimi,
+			model:       "k3[1m]",
+			wantCurrent: "high",
+			wantOptions: []acp.ConfigOptionValue{
+				{Value: "low", Name: "Low"},
+				{Value: "high", Name: "High"},
+				{Value: "max", Name: "Max"},
 			},
 		},
 	}
-	inst.setConfigFn = func(_ context.Context, p acp.SessionSetConfigOptionParams) ([]acp.ConfigOption, error) {
-		claudeEffort.CurrentValue = p.Value
-		return []acp.ConfigOption{claudeEffort}, nil
-	}
-	client := New(store, "proj1", t.TempDir())
-	client.registry = agent.NewACPFactory()
-	client.registry.Register(acp.ACPProviderCCGLM, func(context.Context, string) (agent.Instance, error) {
-		return inst, nil
-	})
 
-	sess, err := client.CreateSession(context.Background(), string(acp.ACPProviderCCGLM), "")
-	if err != nil {
-		t.Fatalf("CreateSession: %v", err)
+	for _, tt := range tests {
+		t.Run(string(tt.agentType), func(t *testing.T) {
+			store, err := NewStore(filepath.Join(t.TempDir(), "client.sqlite3"))
+			if err != nil {
+				t.Fatalf("NewStore: %v", err)
+			}
+			defer store.Close()
+
+			claudeEffort := acp.ConfigOption{
+				ID:           "effort",
+				Category:     acp.ConfigOptionCategoryThoughtLv,
+				CurrentValue: "default",
+				Options: []acp.ConfigOptionValue{
+					{Value: "default", Name: "Default"},
+					{Value: "low", Name: "Low"},
+					{Value: "medium", Name: "Medium"},
+					{Value: "high", Name: "High"},
+					{Value: "xhigh", Name: "Xhigh"},
+					{Value: "max", Name: "Max"},
+				},
+			}
+			inst := &testInjectedInstance{
+				name: string(tt.agentType),
+				newResult: &acp.SessionNewResult{
+					SessionID: "acp-new",
+					ConfigOptions: []acp.ConfigOption{
+						{
+							ID:           acp.ConfigOptionIDModel,
+							Category:     acp.ConfigOptionCategoryModel,
+							CurrentValue: tt.model,
+						},
+						claudeEffort,
+					},
+				},
+			}
+			inst.setConfigFn = func(_ context.Context, p acp.SessionSetConfigOptionParams) ([]acp.ConfigOption, error) {
+				claudeEffort.CurrentValue = p.Value
+				return []acp.ConfigOption{claudeEffort}, nil
+			}
+			client := New(store, "proj1", t.TempDir())
+			client.registry = agent.NewACPFactory()
+			client.registry.Register(tt.agentType, func(context.Context, string) (agent.Instance, error) {
+				return inst, nil
+			})
+
+			sess, err := client.CreateSession(context.Background(), string(tt.agentType), "")
+			if err != nil {
+				t.Fatalf("CreateSession: %v", err)
+			}
+			effort := configOptionByID(sess.CurrentConfigOptions(), "effort")
+			if effort == nil {
+				t.Fatal("effort option is missing")
+			}
+			if effort.CurrentValue != tt.wantCurrent {
+				t.Fatalf("effort current value = %q, want %q", effort.CurrentValue, tt.wantCurrent)
+			}
+			if !reflect.DeepEqual(effort.Options, tt.wantOptions) {
+				t.Fatalf("effort options = %#v, want %#v", effort.Options, tt.wantOptions)
+			}
+		})
 	}
-	effort := configOptionByID(sess.CurrentConfigOptions(), "effort")
-	if effort == nil {
-		t.Fatal("effort option is missing")
+}
+
+func TestNormalizeStoredClaudeCompatibleEffortPreferences(t *testing.T) {
+	tests := []struct {
+		name      string
+		agentType acp.ACPProvider
+		input     string
+		want      string
+	}{
+		{name: "deepseek low", agentType: acp.ACPProviderCCDeepSeek, input: "low", want: "high"},
+		{name: "deepseek xhigh", agentType: acp.ACPProviderCCDeepSeek, input: "xhigh", want: "max"},
+		{name: "glm medium", agentType: acp.ACPProviderCCGLM, input: "medium", want: "high"},
+		{name: "kimi low", agentType: acp.ACPProviderCCKimi, input: "low", want: "low"},
+		{name: "kimi medium", agentType: acp.ACPProviderCCKimi, input: "medium", want: "high"},
+		{name: "kimi xhigh", agentType: acp.ACPProviderCCKimi, input: "xhigh", want: "max"},
 	}
-	if effort.CurrentValue != "max" {
-		t.Fatalf("effort current value = %q, want max", effort.CurrentValue)
-	}
-	want := []acp.ConfigOptionValue{{Value: "high", Name: "High"}, {Value: "max", Name: "Max"}}
-	if !reflect.DeepEqual(effort.Options, want) {
-		t.Fatalf("effort options = %#v, want %#v", effort.Options, want)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := normalizeStoredConfigPreferences(string(tt.agentType), []PreferenceConfigOption{{
+				ID:           "effort",
+				CurrentValue: tt.input,
+			}})
+			if len(got) != 1 || got[0].CurrentValue != tt.want {
+				t.Fatalf("normalized preferences = %#v, want effort=%q", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -2074,28 +2146,46 @@ func TestSessionSetConfigOption_ResolvesCategoryAliasToOptionID(t *testing.T) {
 	}
 }
 
-func TestSessionSetConfigOption_CCGLMMapsClaudeEffortToActualLevel(t *testing.T) {
-	inst := &testInjectedInstance{name: string(acp.ACPProviderCCGLM), alive: true}
-	s := mustNewSession(t, "sess-glm-effort", t.TempDir(), string(acp.ACPProviderCCGLM))
-	s.mu.Lock()
-	s.instance = inst
-	s.ready = true
-	s.agentState.ConfigOptions = []acp.ConfigOption{{
-		ID:           "effort",
-		Category:     acp.ConfigOptionCategoryThoughtLv,
-		CurrentValue: "high",
-	}}
-	s.mu.Unlock()
+func TestSessionSetConfigOption_ClaudeCompatibleProvidersMapEffortToActualLevel(t *testing.T) {
+	tests := []struct {
+		name      string
+		agentType acp.ACPProvider
+		input     string
+		want      string
+	}{
+		{name: "deepseek low", agentType: acp.ACPProviderCCDeepSeek, input: "low", want: "high"},
+		{name: "deepseek xhigh", agentType: acp.ACPProviderCCDeepSeek, input: "xhigh", want: "max"},
+		{name: "glm xhigh", agentType: acp.ACPProviderCCGLM, input: "xhigh", want: "max"},
+		{name: "kimi low", agentType: acp.ACPProviderCCKimi, input: "low", want: "low"},
+		{name: "kimi medium", agentType: acp.ACPProviderCCKimi, input: "medium", want: "high"},
+		{name: "kimi xhigh", agentType: acp.ACPProviderCCKimi, input: "xhigh", want: "max"},
+	}
 
-	opts, err := s.SetConfigOption(context.Background(), "effort", "xhigh")
-	if err != nil {
-		t.Fatalf("SetConfigOption: %v", err)
-	}
-	if len(inst.setCalls) != 1 || inst.setCalls[0].Value != "max" {
-		t.Fatalf("set calls = %+v, want GLM effort max", inst.setCalls)
-	}
-	if got := findCurrentValue(opts, "effort"); got != "max" {
-		t.Fatalf("effort = %q, want max", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			inst := &testInjectedInstance{name: string(tt.agentType), alive: true}
+			s := mustNewSession(t, "sess-effort", t.TempDir(), string(tt.agentType))
+			s.mu.Lock()
+			s.instance = inst
+			s.ready = true
+			s.agentState.ConfigOptions = []acp.ConfigOption{{
+				ID:           "effort",
+				Category:     acp.ConfigOptionCategoryThoughtLv,
+				CurrentValue: "high",
+			}}
+			s.mu.Unlock()
+
+			opts, err := s.SetConfigOption(context.Background(), "effort", tt.input)
+			if err != nil {
+				t.Fatalf("SetConfigOption: %v", err)
+			}
+			if len(inst.setCalls) != 1 || inst.setCalls[0].Value != tt.want {
+				t.Fatalf("set calls = %+v, want effort %q", inst.setCalls, tt.want)
+			}
+			if got := findCurrentValue(opts, "effort"); got != tt.want {
+				t.Fatalf("effort = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 
