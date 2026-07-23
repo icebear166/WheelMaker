@@ -103,6 +103,7 @@ describe('workspace visual foundation', () => {
     const styles = [
       read('web/src/styles/base.css'),
       read('web/src/styles/chat.css'),
+      read('web/src/styles/sessionlist.css'),
       read('web/src/styles/settings.css'),
     ].join('\n');
     for (const selector of [

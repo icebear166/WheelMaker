@@ -588,13 +588,11 @@ describe('agent package update settings UI source structure', () => {
 
     const agentTagBlock = stylesCss.match(/\.wide-session-agent-tag \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(agentTagBlock).toContain('display: inline-flex;');
-    expect(agentTagBlock).toContain('min-height: 20px;');
-    expect(agentTagBlock).toContain('max-width: 80px;');
-    expect(agentTagBlock).toContain('padding: 1px 7px;');
+    expect(agentTagBlock).toContain('max-width: 96px;');
+    expect(agentTagBlock).toContain('padding: 0 7px;');
     expect(agentTagBlock).toContain('font-size: 10.5px;');
-    expect(agentTagBlock).toContain('font-weight: 600;');
-    expect(agentTagBlock).toContain('background: color-mix(in srgb, var(--agent-accent) 14%, transparent);');
-    expect(agentTagBlock).toContain('text-transform: lowercase;');
+    expect(agentTagBlock).toContain('border-radius: 999px;');
+    expect(agentTagBlock).toContain('background: color-mix(in srgb, var(--agent-accent, #666) 14%, transparent);');
     expect(stylesCss).toContain('.wide-session-agent-8 { --agent-accent: #69db7c; }');
     expect(stylesCss).not.toContain('.token-stats-');
   });

@@ -1,0 +1,310 @@
+/* Session list visual system — refined dark tool style.
+   Applies to both desktop and mobile navs; density is driven by
+   [data-session-list-density] (compact on mobile, user setting on PC). */
+
+/* ---------- density tokens ---------- */
+.wide-project-session-nav,
+.mobile-project-session-nav,
+.chat-recent-sessions-surface,
+.chat-pinned-session-panel {
+  --sl-row-py: 5px;
+  --sl-row-font: 12.5px;
+  --sl-section-gap: 12px;
+  --sl-indent: 22px;
+}
+[data-session-list-density="compact"] {
+  --sl-row-py: 3px;
+  --sl-row-font: 12px;
+  --sl-section-gap: 9px;
+}
+
+/* ---------- project section (level 1: strong) ---------- */
+.wide-project-section {
+  margin-top: var(--sl-section-gap);
+}
+.wide-project-section:first-child {
+  margin-top: 0;
+}
+.wide-project-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px;
+}
+.wide-project-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 6px;
+  border: 0;
+  background: none;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: background-color var(--motion-fast) var(--ease-standard);
+}
+.wide-project-toggle:hover {
+  background: var(--hover);
+}
+.wide-project-folder-icon {
+  color: var(--hub-accent, var(--text-tertiary));
+  flex: none;
+}
+.wide-project-folder-wrap {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+.wide-project-pin-badge {
+  position: absolute;
+  right: -4px;
+  bottom: -3px;
+  color: var(--accent-primary);
+}
+.wide-project-title-group {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.wide-project-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wide-project-hub-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--hub-accent, var(--text-tertiary));
+  opacity: 0.85;
+  flex: none;
+}
+.wide-project-hub-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--hub-accent, var(--text-tertiary));
+}
+.wide-project-hub-label {
+  text-transform: uppercase;
+}
+
+/* ---------- project row actions: "+" always visible, rest hover-reveal ---------- */
+.wide-project-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+.wide-project-action-btn {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: none;
+  border-radius: var(--radius-control);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: color var(--motion-fast) var(--ease-standard), background-color var(--motion-fast) var(--ease-standard), opacity var(--motion-fast) var(--ease-standard);
+}
+.wide-project-action-btn:hover {
+  color: var(--text-primary);
+  background: var(--hover);
+}
+.wide-project-action-btn.wide-project-pin-btn.active {
+  color: var(--accent-primary);
+  opacity: 1;
+}
+.sl-action-secondary {
+  opacity: 0;
+}
+.wide-project-row:hover .sl-action-secondary,
+.wide-project-row:focus-within .sl-action-secondary {
+  opacity: 1;
+}
+@media (hover: none) {
+  .wide-project-row .sl-action-secondary {
+    display: none;
+  }
+}
+
+/* ---------- session rows (level 2: quiet, indented) ---------- */
+.wide-project-session-list {
+  margin-top: 2px;
+}
+.project-session-row-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.wide-session-row {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: var(--sl-row-py) 8px var(--sl-row-py) var(--sl-indent);
+  border: 0;
+  background: none;
+  border-radius: var(--radius-control);
+  font-size: var(--sl-row-font);
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: background-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard), transform var(--motion-fast) var(--ease-standard);
+}
+.wide-session-row:hover {
+  background: var(--hover);
+  color: var(--text-primary);
+}
+.wide-session-row:active {
+  transform: scale(0.992);
+}
+.wide-session-row.selected {
+  background: var(--accent-soft-bg);
+  color: var(--text-primary);
+}
+.wide-session-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wide-session-row.selected .wide-session-title {
+  font-weight: 500;
+}
+.wide-session-time {
+  flex: none;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.wide-session-pin-btn {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: none;
+  border-radius: var(--radius-control);
+  color: var(--accent-primary);
+  cursor: pointer;
+  margin-right: 4px;
+}
+.wide-session-pin-btn:hover {
+  background: var(--hover);
+}
+
+/* ---------- agent pill (refined) ---------- */
+.wide-session-agent-tag {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  line-height: 16px;
+  padding: 0 7px;
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--agent-accent, var(--text-tertiary)) 88%, white);
+  background: color-mix(in srgb, var(--agent-accent, #666) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--agent-accent, #666) 26%, transparent);
+}
+.theme-light .wide-session-agent-tag {
+  color: color-mix(in srgb, var(--agent-accent, #666) 82%, black);
+}
+
+/* ---------- recent block ---------- */
+.recent-project-divider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px 3px 10px;
+  color: var(--text-tertiary);
+}
+.recent-project-divider-icon {
+  flex: none;
+}
+.recent-project-divider-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recent-project-divider-create {
+  margin-left: auto;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: none;
+  border-radius: var(--radius-control);
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+.recent-project-divider-create:hover {
+  color: var(--text-primary);
+  background: var(--hover);
+}
+.recent-sessions-list .wide-session-row {
+  padding-left: calc(var(--sl-indent) - 4px);
+}
+
+/* ---------- misc ---------- */
+.wide-project-empty {
+  padding: 4px 8px 4px var(--sl-indent);
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+}
+.project-session-menu-btn {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.session-older-toggle {
+  font-style: normal;
+  color: var(--text-tertiary);
+}
+.sl-icon {
+  display: block;
+  flex: none;
+}
+.sl-icon-spin {
+  animation: sl-icon-rotate 0.9s linear infinite;
+}
+@keyframes sl-icon-rotate {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wide-session-row,
+  .wide-project-toggle,
+  .wide-project-action-btn,
+  .sl-action-secondary {
+    transition: none;
+  }
+  .sl-icon-spin {
+    animation-duration: 1.8s;
+  }
+}

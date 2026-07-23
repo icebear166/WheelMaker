@@ -9,6 +9,7 @@ describe('web chat recent sessions', () => {
   const projectRoot = path.join(__dirname, '..');
   const mainTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'app', 'WorkspaceApp.tsx'));
   const chatCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles', 'chat.css'));
+  const sessionlistCss = readSourceText(path.join(projectRoot, 'web', 'src', 'styles', 'sessionlist.css'));
   const surfaceTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'ChatRecentSessionsSurface.tsx'));
   const recentSectionTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'sessionlist', 'RecentSessionsSection.tsx'));
   const sessionRowTsx = readSourceText(path.join(projectRoot, 'web', 'src', 'chat', 'sessionlist', 'SessionRow.tsx'));
@@ -53,10 +54,10 @@ describe('web chat recent sessions', () => {
     expect(listViewTsx).toContain('onContextMenu: event => props.onOpenSessionContextMenu(projectId, session.sessionId, event)');
     expect(mainTsx).toContain('onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => startProjectSessionLongPress(targetProjectId, sessionId, event)');
     expect(sessionRowTsx).toContain('wide-session-agent-tag');
-    expect(chatCss).toContain('.recent-project-divider');
-    expect(chatCss).toContain('.recent-project-divider-create');
-    const dividerBlock = chatCss.match(/\.recent-project-divider \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(dividerBlock).toContain('margin: 4px 2px 1px 2px;');
+    expect(sessionlistCss).toContain('.recent-project-divider');
+    expect(sessionlistCss).toContain('.recent-project-divider-create');
+    const dividerBlock = sessionlistCss.match(/\.recent-project-divider \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(dividerBlock).toContain('display: flex;');
   });
 
   test('recent rows reuse live session pin state without changing recent selection', () => {
@@ -82,26 +83,21 @@ describe('web chat recent sessions', () => {
   });
 
   test('insets the selected session surface without moving row content', () => {
-    expect(chatCss).toContain('.wide-session-row.selected');
-    const selectedSessionRule = chatCss.match(/\.wide-session-row\.selected \{[\s\S]*?\n\}/)?.[0] ?? '';
-    const selectedSessionSurfaceRule = chatCss.match(/\.wide-session-row\.selected::before \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(sessionlistCss).toContain('.wide-session-row.selected');
+    const selectedSessionRule = sessionlistCss.match(/\.wide-session-row\.selected \{[\s\S]*?\n\}/)?.[0] ?? '';
 
-    expect(selectedSessionRule).toContain('border-color: transparent;');
-    expect(selectedSessionRule).toContain('background: transparent;');
+    expect(selectedSessionRule).toContain('background: var(--accent-soft-bg);');
     expect(selectedSessionRule).not.toContain('margin-left:');
-    expect(selectedSessionSurfaceRule).toContain('inset: 0 0 0 3px;');
-    expect(selectedSessionSurfaceRule).toContain('border: 1px solid');
-    expect(selectedSessionSurfaceRule).toContain('pointer-events: none;');
-    expect(chatCss).not.toContain('.wide-session-row.selected > .wide-session-title');
+    expect(sessionlistCss).not.toContain('.wide-session-row.selected::before');
   });
 
   test('shares row density tokens with the pinned surface', () => {
     expect(mainTsx).toContain('sessionListDensity={sessionListDensity}');
     expect(surfaceTsx).toContain('sessionListDensity: SessionListDensity;');
     expect(surfaceTsx).toContain('sessionListDensity={sessionListDensity}');
-    expect(chatCss).toContain("[data-session-list-density='relaxed'] .wide-session-row");
-    expect(chatCss).toContain('min-height: 30px;');
-    expect(chatCss).not.toContain("[data-session-list-density='compact'] .wide-session-row");
+    expect(sessionlistCss).toContain('[data-session-list-density="compact"]');
+    expect(sessionlistCss).toContain('--sl-row-py: 3px;');
+    expect(sessionlistCss).toContain('--sl-row-py: 5px;');
   });
 
   test('recent sessions refresh only on prompt start / done', () => {

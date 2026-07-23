@@ -354,10 +354,6 @@ body,
   box-shadow: 0 0 0 2px color-mix(in srgb, #8a63d2 18%, transparent);
 }
 
-.mobile-session-row {
-  min-height: 30px;
-}
-
 .label {
   min-width: 0;
   overflow: hidden;

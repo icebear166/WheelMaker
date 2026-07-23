@@ -269,8 +269,10 @@ describe('PC chat session-panel layout', () => {
     );
   });
 
-  it('adds three pixels of breathing room to every desktop session row', () => {
-    expect(cssRuleBlock(chatStyles, '.wide-project-session-list')).toContain('padding: 1px 0 1px 11px;');
+  it('adds breathing room to every desktop session row', () => {
+    const sessionlistStyles = readFileSync(resolve(root, 'web/src/styles/sessionlist.css'), 'utf8').replace(/\r\n/g, '\n');
+    expect(sessionlistStyles).toContain('--sl-row-py: 5px;');
+    expect(cssRuleBlock(sessionlistStyles, '.wide-session-row')).toContain('padding: var(--sl-row-py) 8px var(--sl-row-py) var(--sl-indent);');
   });
 
   it('keeps the pinned panel scrollable and positions auxiliary surfaces beside it', () => {

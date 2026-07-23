@@ -10,6 +10,7 @@ const STYLE_ENTRY_ORDER = [
   'debug.css',
   'file.css',
   'chat.css',
+  'sessionlist.css',
   'code.css',
   'surfaces.css',
 ] as const;

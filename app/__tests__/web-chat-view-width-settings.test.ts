@@ -67,26 +67,13 @@ describe('web chat fixed 800px layout', () => {
     expect(densitySettingStart).toBeGreaterThan(chatStart);
     expect(settingsRootTsx.slice(chatStart, densitySettingStart)).toContain('isWide ? (');
 
-    const relaxedRow = cssRuleBlock(
-      stylesCss,
-      ".wide-project-session-nav[data-session-list-density='relaxed'] .wide-session-row",
-    );
-    const compactRow = cssRuleBlock(
-      stylesCss,
-      '.wide-session-row',
-    );
-    const relaxedTitle = cssRuleBlock(
-      stylesCss,
-      ".wide-project-session-nav[data-session-list-density='relaxed'] .wide-session-title",
-    );
-    const compactTitle = stylesCss.match(/\n\.wide-session-title \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(relaxedRow).toContain('min-height: 30px;');
-    expect(compactRow).toContain('min-height: 28px;');
-    expect(relaxedTitle).toContain('font-size: 13.5px;');
-    expect(relaxedTitle).toContain('line-height: 1.25;');
-    expect(compactTitle).toContain('font-size: 13px;');
-    expect(compactTitle).toContain('line-height: 1.35;');
-    expect(cssRuleBlock(stylesCss, '.mobile-session-row')).toContain('min-height: 30px;');
+    const relaxedTokens = stylesCss.match(/\.wide-project-session-nav,[\s\S]*?\{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(relaxedTokens).toContain('--sl-row-py: 5px;');
+    expect(relaxedTokens).toContain('--sl-row-font: 12.5px;');
+    const compactTokens = cssRuleBlock(stylesCss, '[data-session-list-density="compact"]');
+    expect(compactTokens).toContain('--sl-row-py: 3px;');
+    expect(compactTokens).toContain('--sl-row-font: 12px;');
+    expect(cssRuleBlock(stylesCss, '.mobile-project-session-nav')).not.toContain('min-height: 30px;');
   });
 
   test('removes the chat view width setting and always uses the fixed 800px layout', () => {

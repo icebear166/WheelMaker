@@ -1740,16 +1740,14 @@ describe('web chat integration', () => {
     expect(sessionRowTsx).toContain('aria-pressed={true}');
     expect(mainTsx).toContain('handlePinProjectSession(targetProjectId, sessionId, false)');
     expect(mainTsx).toContain("setChatPinningSessionKey(current => current === actionKey ? '' : current)");
-    expect(stylesCss).toContain('.project-session-row-wrap.has-pin-action .wide-session-row');
     expect(stylesCss).toContain('.wide-session-pin-btn');
 
     const pinButtonBlock = stylesCss.match(/\.wide-session-pin-btn \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(pinButtonBlock).toContain('right: 4px;');
-    expect(pinButtonBlock).toContain('color: var(--state-warning);');
-    expect(pinButtonBlock).toContain('background: color-mix(in srgb, var(--state-warning) 12%, transparent);');
+    expect(pinButtonBlock).toContain('color: var(--accent-primary);');
+    expect(pinButtonBlock).toContain('place-items: center;');
 
-    const pinnedRowBlock = stylesCss.match(/\.project-session-row-wrap\.has-pin-action \.wide-session-row \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(pinnedRowBlock).toContain('padding-right: 28px;');
+    const wrapBlock = stylesCss.match(/\.project-session-row-wrap \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(wrapBlock).toContain('display: flex;');
     expect(stylesCss).not.toContain('.mobile-session-row + .wide-session-pin-btn');
 
     const pinHandlerStart = mainTsx.indexOf('const handlePinProjectSession = async (');
@@ -1780,7 +1778,7 @@ describe('web chat integration', () => {
     expect(stylesCss).not.toContain('.session-state-unread');
     expect(stylesCss).not.toContain('.session-state-trailing');
     expect(stylesCss).not.toContain('.session-older-spacer');
-    expect(stylesCss).toContain('.wide-session-row.selected::before');
+    expect(stylesCss).toContain('.wide-session-row.selected');
   });
 
   test('project headers expose an explicit pin action alongside new/resume', () => {
@@ -1793,8 +1791,7 @@ describe('web chat integration', () => {
     expect(projectSectionTsx).toContain('aria-pressed={pinned}');
     expect(mainTsx).toContain('onTogglePinnedProject: togglePinnedProject');
     expect(stylesCss).toContain('.wide-project-pin-btn.active');
-    expect(stylesCss).toContain('.wide-project-section.active .wide-project-pin-btn.active');
-    expect(stylesCss).toContain('background: color-mix(in srgb, var(--accent-primary) 14%, transparent);');
+    expect(stylesCss).toContain('color: var(--accent-primary);');
   });
 
   test('wide layout uses a project session rail and keeps the project picker in the desktop address segment', () => {
@@ -2062,50 +2059,42 @@ describe('web chat integration', () => {
     expect(stylesCss).toMatch(
       /\.wide-project-action-popover \{[\s\S]*position: fixed;[\s\S]*overflow-y: auto;[\s\S]*overscroll-behavior: contain;[\s\S]*\}/,
     );
-    expect(stylesCss).toMatch(/\.wide-project-row \{[^}]*min-height: 32px;[^}]*\}/);
+    expect(stylesCss).toMatch(/\.wide-project-row \{[^}]*display: flex;[^}]*\}/);
     const wideProjectSectionBlock = stylesCss.match(/\.wide-project-section \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(wideProjectSectionBlock).toContain('margin-bottom: 8px;');
-    expect(wideProjectSectionBlock).toContain('border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);');
-    expect(wideProjectSectionBlock).toContain('background: color-mix(in srgb, var(--surface-panel) 88%, var(--surface-raised));');
-    expect(wideProjectSectionBlock).toContain('padding: 3px;');
-    const mobileProjectSectionBlock = stylesCss.match(/\.mobile-project-section \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(mobileProjectSectionBlock).toContain('margin-bottom: 4px;');
+    expect(wideProjectSectionBlock).toContain('margin-top: var(--sl-section-gap);');
+    expect(wideProjectSectionBlock).not.toContain('border:');
+    expect(wideProjectSectionBlock).not.toContain('background:');
     expect(stylesCss).not.toContain('.wide-project-section.active > .wide-project-row::before {');
     expect(stylesCss).not.toContain('.wide-project-section.pinned > .wide-project-row::before {');
-    expect(stylesCss).toMatch(/\.wide-project-toggle \{[^}]*height: 30px;[^}]*\}/);
-    expect(stylesCss).toMatch(/\.wide-session-row \{[^}]*min-height: 28px;[^}]*\}/);
+    expect(stylesCss).toMatch(/\.wide-project-toggle \{[^}]*padding: 4px 6px;[^}]*\}/);
+    expect(stylesCss).toMatch(/\.wide-session-row \{[^}]*font-size: var\(--sl-row-font\);[^}]*\}/);
     const wideSessionRowBlock = stylesCss.match(/\.wide-session-row \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(wideSessionRowBlock).toContain('grid-template-columns: minmax(0, 1fr) auto auto;');
-    expect(wideSessionRowBlock).toContain('gap: 4px;');
-    expect(wideSessionRowBlock).toContain('padding: 0 5px 0 6px;');
+    expect(wideSessionRowBlock).toContain('display: flex;');
+    expect(wideSessionRowBlock).toContain('gap: 8px;');
+    expect(wideSessionRowBlock).toContain('padding: var(--sl-row-py) 8px var(--sl-row-py) var(--sl-indent);');
     const sessionStateMarkerBlock = stylesCss.match(/\.session-state-marker \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(sessionStateMarkerBlock).toContain('min-width: 9px;');
     expect(sessionStateMarkerBlock).toContain('flex: 0 0 auto;');
     expect(sessionStateMarkerBlock).not.toContain('transform: translateX');
     const sessionStateRunningBlock = stylesCss.match(/\.session-state-marker\.running \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(sessionStateRunningBlock).toContain('font-size: 11px;');
-    expect(stylesCss).toMatch(/\.mobile-session-row \{[^}]*min-height: 30px;[^}]*\}/);
+    expect(stylesCss).not.toMatch(/\.mobile-session-row \{[^}]*min-height: 30px;[^}]*\}/);
     expect(stylesCss).not.toMatch(/@media \(max-width: 900px\) \{[\s\S]*?\.mobile-session-row \{[\s\S]*?min-height: 40px;[\s\S]*?\}[\s\S]*?\}/);
     expect(stylesCss).toContain('font-size: 10.5px;');
-    expect(stylesCss).toContain('.wide-project-folder-icon.codicon-folder {');
-    expect(stylesCss).toContain('.wide-project-folder-icon.codicon-folder-opened {');
-    expect(stylesCss).toMatch(
-      /\.wide-project-folder-icon\.codicon-folder-opened \{[\s\S]*color: color-mix\(in srgb, var\(--hub-accent\) 82%, var\(--text-primary\)\);[\s\S]*\}/,
-    );
+    expect(stylesCss).not.toContain('.wide-project-folder-icon.codicon-folder');
+    const folderIconBlock = stylesCss.match(/\.wide-project-folder-icon \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(folderIconBlock).toContain('color: var(--hub-accent, var(--text-tertiary));');
     const selectedSessionRowBlock = stylesCss.match(/\.wide-session-row\.selected \{[\s\S]*?\n\}/)?.[0] ?? '';
     expect(selectedSessionRowBlock).not.toContain('margin-left:');
     expect(selectedSessionRowBlock).not.toContain('width: calc(');
     expect(selectedSessionRowBlock).not.toContain('padding-left: 23px;');
-    expect(stylesCss).toContain('.wide-session-row.selected::before');
+    expect(stylesCss).not.toContain('.wide-session-row.selected::before');
     const wideProjectActionBtnBlock = stylesCss.match(/\.wide-project-action-btn \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(wideProjectActionBtnBlock).toContain('opacity: 0.45;');
+    expect(wideProjectActionBtnBlock).toContain('place-items: center;');
     expect(stylesCss).not.toContain('.mobile-project-actions .wide-project-action-btn {');
     const wideProjectSessionListBlock = stylesCss.match(/\.wide-project-session-list \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(wideProjectSessionListBlock).toContain('margin-top: -2px;');
-    expect(wideProjectSessionListBlock).toContain('padding: 1px 0 1px 11px;');
-    const mobileProjectSessionListBlock = stylesCss.match(/\.mobile-project-session-list \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(mobileProjectSessionListBlock).toContain('padding-left: 8px;');
-    expect(stylesCss).toMatch(/\.wide-project-row \{[^}]*padding: 0 5px 0 2px;[^}]*\}/);
+    expect(wideProjectSessionListBlock).toContain('margin-top: 2px;');
+    expect(stylesCss).toMatch(/\.wide-project-row \{[^}]*padding: 0 4px;[^}]*\}/);
     expect(stylesCss).not.toContain('.wide-session-row::after');
     expect(stylesCss).not.toContain('.project-session-row-wrap.actions-open .wide-session-row {');
     expect(stylesCss).not.toContain('.project-session-action-strip');
@@ -2120,25 +2109,21 @@ describe('web chat integration', () => {
       /\.project-session-menu-btn\.delete \{[^}]*color: #fca5a5;[^}]*\}/,
     );
     expect(stylesCss).toMatch(
-      /\.wide-session-title \{[\s\S]*font-weight: 400;[\s\S]*\}/,
+      /\.wide-session-row\.selected \.wide-session-title \{[\s\S]*font-weight: 500;[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
-      /\.wide-project-hub-tag \{[\s\S]*border: none;[\s\S]*background: transparent;[\s\S]*\}/,
+      /\.wide-project-hub-tag \{[\s\S]*font-size: 10px;[\s\S]*\}/,
     );
     const wideProjectTitleGroupBlock = stylesCss.match(/\.wide-project-title-group \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(wideProjectTitleGroupBlock).toContain('overflow: hidden;');
+    expect(wideProjectTitleGroupBlock).toContain('min-width: 0;');
     const wideProjectNameBlock = stylesCss.match(/\.wide-project-name \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(wideProjectNameBlock).toContain('flex: 0 0 auto;');
-    expect(wideProjectNameBlock).toContain('max-width: 100%;');
+    expect(wideProjectNameBlock).toContain('font-weight: 600;');
     const wideProjectHubTagBlock = stylesCss.match(/(?:^|\n)\.wide-project-hub-tag \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(wideProjectHubTagBlock).toContain('flex: 1 1 0;');
-    expect(wideProjectHubTagBlock).toContain('min-width: 0;');
-    expect(wideProjectHubTagBlock).toContain('max-width: max-content;');
-    expect(wideProjectHubTagBlock).toContain('overflow: hidden;');
+    expect(wideProjectHubTagBlock).toContain('display: inline-flex;');
     const wideProjectHubLabelBlock = stylesCss.match(/\.wide-project-hub-label \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(wideProjectHubLabelBlock).toContain('flex: 1 1 auto;');
+    expect(wideProjectHubLabelBlock).toContain('text-transform: uppercase;');
     expect(stylesCss).toMatch(
-      /\.wide-project-pin-badge \{[\s\S]*position: absolute;[\s\S]*right: -4px;[\s\S]*top: -5px;[\s\S]*\}/,
+      /\.wide-project-pin-badge \{[\s\S]*position: absolute;[\s\S]*right: -4px;[\s\S]*bottom: -3px;[\s\S]*\}/,
     );
   });
 
@@ -2505,7 +2490,7 @@ describe('web chat integration', () => {
     const stylesCss = readWebStyles(projectRoot);
 
     expect(stylesCss).toMatch(
-      /\.wide-session-row\.selected::before \{[\s\S]*inset: 0 0 0 3px;[\s\S]*border: 1px solid color-mix\(in srgb, var\(--accent-primary\) 32%, var\(--border-subtle\)\);[\s\S]*background: color-mix\(in srgb, var\(--accent-primary\) 11%, var\(--surface-panel\)\);[\s\S]*\}/,
+      /\.wide-session-row\.selected \{[\s\S]*background: var\(--accent-soft-bg\);[\s\S]*\}/,
     );
     expect(stylesCss).toMatch(
       /\.chat-composer:focus-within \.chat-composer-frame \{[\s\S]*border-color: color-mix\(in srgb, var\(--accent-primary\) 36%, var\(--border-subtle\)\);[\s\S]*0 0 0 1px color-mix\(in srgb, var\(--accent-primary\) 6%, transparent\);[\s\S]*\}/,
@@ -2520,9 +2505,9 @@ describe('web chat integration', () => {
     const promptBlocks = cssRuleBlocksContainingSelector(stylesCss, '.chat-prompt-user');
     const promptBlock = promptBlocks[promptBlocks.length - 1] ?? '';
 
-    expect(agentTagBlock).toContain('border: 1px solid color-mix(in srgb, var(--agent-accent) 40%, var(--border-subtle));');
-    expect(agentTagBlock).toContain('background: color-mix(in srgb, var(--agent-accent) 14%, transparent);');
-    expect(agentTagBlock).toContain('color: color-mix(in srgb, var(--agent-accent) 70%, var(--text-primary));');
+    expect(agentTagBlock).toContain('border: 1px solid color-mix(in srgb, var(--agent-accent, #666) 26%, transparent);');
+    expect(agentTagBlock).toContain('background: color-mix(in srgb, var(--agent-accent, #666) 14%, transparent);');
+    expect(agentTagBlock).toContain('color: color-mix(in srgb, var(--agent-accent, var(--text-tertiary)) 88%, white);');
     expect(promptBlock).toContain('border: 1px solid color-mix(in srgb, var(--accent-primary) 26%, var(--border-subtle));');
     expect(promptBlock).toContain('background: color-mix(in srgb, var(--accent-primary) 12%, var(--surface-workspace-content));');
   });
@@ -2530,18 +2515,12 @@ describe('web chat integration', () => {
   test('tightens relaxed session rows', () => {
     const projectRoot = path.join(__dirname, '..');
     const stylesCss = readWebStyles(projectRoot);
-    const relaxedRow = cssRuleBlock(
-      stylesCss,
-      ".wide-project-session-nav[data-session-list-density='relaxed'] .wide-session-row",
-    );
-    const relaxedTitle = cssRuleBlock(
-      stylesCss,
-      ".wide-project-session-nav[data-session-list-density='relaxed'] .wide-session-title",
-    );
 
-    expect(relaxedRow).toContain('min-height: 30px;');
-    expect(relaxedTitle).toContain('font-size: 13.5px;');
-    expect(relaxedTitle).toContain('line-height: 1.25;');
+    expect(stylesCss).toContain('--sl-row-py: 5px;');
+    expect(stylesCss).toContain('--sl-row-font: 12.5px;');
+    expect(stylesCss).toContain('[data-session-list-density="compact"]');
+    expect(stylesCss).toContain('--sl-row-py: 3px;');
+    expect(stylesCss).toContain('--sl-row-font: 12px;');
     expect(stylesCss).not.toContain('.recent-project-session-hub.wide-project-hub-tag');
   });
 });
